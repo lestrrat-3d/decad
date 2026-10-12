@@ -21,7 +21,7 @@ func TestUnstitchNoPayloadIsDegenerate(t *testing.T) {
 	b := &Body{doc: d, kind: BodySheet}
 	d.bodies = append(d.bodies, b)
 
-	_, err := b.Unstitch(t.Context())
+	_, err := Unstitch(t.Context(), b)
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.Len(t, d.Bodies(), 1)
 	require.Same(t, b, d.Bodies()[0])
@@ -44,7 +44,7 @@ func unstitchOneChamferBand(t *testing.T) (src *Face, results []*Body, idx int) 
 	idx = slices.Index(wantFaces, band.face)
 	require.GreaterOrEqual(t, idx, 0, "the band face must be one of its own body's faces")
 
-	results, err := body.Unstitch(t.Context())
+	results, err := Unstitch(t.Context(), body)
 	require.NoError(t, err)
 	return band.face, results, idx
 }

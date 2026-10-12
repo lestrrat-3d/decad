@@ -40,7 +40,7 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		{"Body.Shell", func(ctx context.Context) error { _, err := body.Shell(ctx, nil, units.Value{}); return err }},
 		{"Body.Thicken", func(ctx context.Context) error { _, err := body.Thicken(ctx, units.Value{}); return err }},
 		{"Body.Offset", func(ctx context.Context) error { _, err := body.Offset(ctx, units.Value{}); return err }},
-		{"Body.Unstitch", func(ctx context.Context) error { _, err := body.Unstitch(ctx); return err }},
+		{"Unstitch", func(ctx context.Context) error { _, err := decad.Unstitch(ctx, body); return err }},
 		{"Body.Tessellate", func(ctx context.Context) error { _, err := body.Tessellate(ctx, units.Value{}); return err }},
 		{"Body.Trim", func(ctx context.Context) error { _, err := body.Trim(ctx, nil, 0); return err }},
 		{"Body.Extend", func(ctx context.Context) error { _, err := body.Extend(ctx, nil, nil); return err }},

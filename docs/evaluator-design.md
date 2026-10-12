@@ -443,7 +443,7 @@ body's and every face's `Area` and every edge's `Length` by e·(|x| + bound)
 the draft, the cap blend, the stacked prism (and the cup built on it) and the
 class-B brep take it as their last step; a brep's face frames are signed
 permutations of its first, so the first face's map stands for all. A face copy
-(`Body.Unstitch`, `Body.Patch`) carries its source's readings through its
+(`Unstitch`, `Body.Patch`) carries its source's readings through its
 placement alone and takes the placement's own charge; a `Body.Patch` face
 fitted to a rim takes its fitted frame's, and one fitted to a straight-edged
 rim instead bounds its area directly against the polygon its own vertices

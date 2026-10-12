@@ -529,7 +529,7 @@ func TestBodyPatchCopyKeepsBandNormalBound(t *testing.T) {
 	body := concentricDiskWithHole(t, 4, 1.5, 6)
 	chamfered, err := body.Chamfer(t.Context(), capLoopEdgesOn(body, true), units.Millimeters(0.5))
 	require.NoError(t, err)
-	sheets, err := chamfered.Unstitch(t.Context())
+	sheets, err := decad.Unstitch(t.Context(), chamfered)
 	require.NoError(t, err)
 	band := func(f *decad.Face) bool {
 		for _, o := range f.Origins() {
@@ -593,7 +593,7 @@ func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {
 	require.NoError(t, err)
 	capSelector := capEndFace(plate)
 	startSelector := capStartFace(plate)
-	sheets, err := plate.Unstitch(t.Context())
+	sheets, err := decad.Unstitch(t.Context(), plate)
 	require.NoError(t, err)
 	var capSheet *decad.Body
 	var box []*decad.Body

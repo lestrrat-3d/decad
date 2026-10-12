@@ -251,7 +251,7 @@ func TestCoilUnstitchCarriesTheRimCurveBound(t *testing.T) {
 		require.True(t, e.Edge().curveBounded)
 		want = e.Edge().curveBound
 	}
-	sheets, err := b.Unstitch(t.Context())
+	sheets, err := Unstitch(t.Context(), b)
 	require.NoError(t, err)
 	found := false
 	for _, sh := range sheets {
