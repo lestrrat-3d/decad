@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"reflect"
 	"slices"
 
 	"github.com/lestrrat-3d/sketch"
@@ -64,10 +65,6 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 		uniqueResultSourceFace(proof.tooth, proof.trim.heelCapGroup) != circle.capFace {
 		return nil, false, nil
 	}
-	loop, simple, err := revolveLoftFacesSimpleSourceLoop(ctx, proof.trim)
-	if err != nil || !simple || loop == nil || !loop.ccw {
-		return nil, false, err
-	}
 	vertical, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, circle.span)
 	if err != nil || outcome != revolveLoftFacesVerticalContact || vertical == nil {
 		return nil, false, err
@@ -79,9 +76,38 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 		vertical.yzAffine.det.Sign() <= 0 {
 		return nil, false, nil
 	}
+	return revolveLoftFacesHeelOccupiedFromSource(ctx, proof, circle,
+		vertical.revolveLoftFacesConstantXSource)
+}
+
+// Both vertical and sloped blank generators meet a heel tool cap at a
+// constant-X circle. Exact source cells and a simple true boundary determine
+// the occupied angular arc independently of the generator slope.
+func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
+	proof *revolveLoftFacesSourceCertificate, circle revolveLoftFacesToolCapCircle,
+	section *revolveLoftFacesConstantXSource) (
+	*revolveLoftFacesToolCapOccupiedArc, bool, error,
+) {
+	if proof == nil || proof.trim == nil || circle.x == nil || circle.radius == nil ||
+		section == nil || section.x == nil || section.upper == nil ||
+		section.band < 0 || section.band >= len(proof.sourceRefs) ||
+		section.x.Cmp(circle.x) != 0 ||
+		section.upper.Cmp(circle.radius) != 0 || !section.hasRetained ||
+		section.yzAffine == nil || section.yzAffine.det == nil ||
+		section.yzAffine.det.Sign() <= 0 {
+		return nil, false, nil
+	}
+	current, err := revolveLoftFacesToolCapSourceCurrent(ctx, proof, circle, section)
+	if err != nil || !current {
+		return nil, false, err
+	}
+	loop, simple, err := revolveLoftFacesSimpleSourceLoop(ctx, proof.trim)
+	if err != nil || !simple || loop == nil || !loop.ccw {
+		return nil, false, err
+	}
 	outer := proof.trim.source.source.profile.Outer
 	var negative, positive *revolveLoftFacesToolCapBoundary
-	for _, cell := range vertical.cells {
+	for _, cell := range section.cells {
 		if cell.segment < 0 || cell.segment >= len(outer) {
 			return nil, false, nil
 		}
@@ -103,7 +129,7 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 			return nil, false, nil
 		}
 		edge := outer[cell.segment]
-		if proof.sourceRefs[vertical.band][cell.segment] != cell.ref {
+		if proof.sourceRefs[section.band][cell.segment] != cell.ref {
 			return nil, false, nil
 		}
 		outward, oriented := revolveLoftFacesToolBoundaryOutward(edge, cell.upper)
@@ -129,6 +155,65 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 	return &revolveLoftFacesToolCapOccupiedArc{circle: circle,
 		negativeZ: *negative, positiveZ: *positive,
 		throughPositiveY: negative.outward}, true, nil
+}
+
+// An occupied arc must use the current circle and the full live source
+// classification. Checking only the two root boxes would miss changed side
+// signs, which can reverse the selected occupied arc.
+func revolveLoftFacesToolCapSourceCurrent(ctx context.Context,
+	proof *revolveLoftFacesSourceCertificate, circle revolveLoftFacesToolCapCircle,
+	section *revolveLoftFacesConstantXSource) (bool, error) {
+	if ctx == nil || proof == nil || proof.trim == nil || section == nil ||
+		circle.x == nil || circle.radius == nil || circle.tool != 1 {
+		return false, nil
+	}
+	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
+	if !ok {
+		return false, nil
+	}
+	matched := false
+	for _, live := range sides.circles {
+		if live.blankFace == circle.blankFace && live.capFace == circle.capFace &&
+			live.capOrigin == circle.capOrigin && live.span == circle.span &&
+			live.tool == circle.tool && live.sourceMiss == circle.sourceMiss &&
+			live.x.Cmp(circle.x) == 0 && live.radius.Cmp(circle.radius) == 0 {
+			matched = true
+			break
+		}
+	}
+	if !matched || circle.sourceMiss || circle.span < 0 ||
+		circle.span >= len(proof.section.spans) {
+		return false, nil
+	}
+	span := proof.section.spans[circle.span]
+	var fresh *revolveLoftFacesConstantXSource
+	if span.start.U == span.end.U {
+		vertical, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, circle.span)
+		if err != nil || outcome != revolveLoftFacesVerticalContact || vertical == nil ||
+			vertical.face != circle.blankFace || vertical.x.Cmp(circle.x) != 0 ||
+			vertical.upper.Cmp(circle.radius) != 0 {
+			return false, err
+		}
+		fresh = vertical.revolveLoftFacesConstantXSource
+	} else {
+		if !revolveLoftFacesSlopedRadialInside(proof.section, circle.span,
+			circle.x, circle.radius) || proof.trim.toe == nil ||
+			proof.trim.toe.apex == nil || proof.trim.toe.slope == nil ||
+			proof.trim.toe.slope.Sign() <= 0 {
+			return false, nil
+		}
+		lower := lfZero()
+		if circle.x.Cmp(proof.trim.toe.apex) < 0 {
+			lower = lfDiv(lfSub(proof.trim.toe.apex, circle.x), proof.trim.toe.slope)
+		}
+		var err error
+		fresh, ok, err = revolveLoftFacesConstantXSourceCells(ctx, proof,
+			circle.x, lower, circle.radius)
+		if err != nil || !ok {
+			return false, err
+		}
+	}
+	return reflect.DeepEqual(section, fresh), nil
 }
 
 func revolveLoftFacesToolCapFaceOriginCurrent(circle revolveLoftFacesToolCapCircle) bool {
