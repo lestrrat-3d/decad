@@ -8,8 +8,8 @@
 # Shard totals at the last measurement:
 #   shard 0:  227.31s over 9 tests
 #   shard 1:   33.21s over 161 tests
-#   shard 2:   58.72s over 219 tests
-#   shard 3:  100.14s over 232 tests
+#   shard 2:   85.81s over 220 tests
+#   shard 3:   73.05s over 231 tests
 #   shard 4:   83.13s over 220 tests
 #   shard 5:  120.40s over 202 tests
 #   shard 6:   90.77s over 195 tests
@@ -197,6 +197,7 @@
 2	0.00	TestBodyPatchFillsARevolvedDiskRim
 2	0.73	TestBooleanAreaBoundsCoverShallowCrossing
 2	0.02	TestBrepLoopChamferPublicBossRoot
+2	27.09	TestBrepRoundedEdgeFilletQuarterRadius
 2	0.04	TestCapBlendAsymmetricBox
 2	0.01	TestCapBlendBothCapsBuildsWhenClear
 2	0.06	TestCapBlendCapContourVertexBoundEncloses
@@ -425,7 +426,6 @@
 3	0.02	TestBrepPartialChamferBlindPocket
 3	0.02	TestBrepPartialChamferCrossDrilledBar
 3	0.02	TestBrepPartialChamferMirroredCrossDrilledBar
-3	27.09	TestBrepRoundedEdgeFilletQuarterRadius
 3	6.00	TestBrepRoundedEdgeFilletPublicAdmission
 3	6.00	TestBrepRoundedEdgeFilletPublicP8
 3	0.02	TestBrepShellRemovesRoundThroughWall
