@@ -53,7 +53,7 @@
 1	0.00	TestRevolveLoftFacesSlopedRadialInsideNeedsUniqueOuterCrossing
 1	0.00	TestRevolveLoftFacesSlopedRadialInsideRequiresAxisWalkDirection
 0	2.76	TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource
-4	12.00	TestRevolveLoftFacesToolCapArcBindsLiveSourceCells
+7	12.00	TestRevolveLoftFacesToolCapArcBindsLiveSourceCells
 4	0.00	TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence
 4	7.20	TestCurvedSourcePairCensusCoversLiveFaces
 8	4.00	TestCurvedSourcePairCensusRefusesUnownedRetainedFace
@@ -646,11 +646,11 @@
 4	0.49	TestFreeformLengthScratchMatchesOriginalSplit
 4	0.02	TestFreeformWalkRefusedByAnalyticConsumers
 4	0.17	TestGateDiameterReadsArcWallStations
-4	15.51	TestHeldGateCertifiesEachUnionsRimCeiling
+9	15.51	TestHeldGateCertifiesEachUnionsRimCeiling
 4	0.00	TestHeldGateReadsFacetsWithinThePrePassSlack
 4	0.06	TestInvoluteFitSplineJointNoiseNeverRefusesUnanimousSpans
 4	0.00	TestJointBoxStuckRule
-4	10.14	TestLineWalkBoundsDyadicMatchRational
+5	10.14	TestLineWalkBoundsDyadicMatchRational
 4	0.01	TestLinkageConstantPlacementIsReused
 4	0.32	TestLoftArcWedgeBoxSoundness
 4	0.94	TestLoftAuditCandidateCeilingRefuses
@@ -762,7 +762,7 @@
 5	1.83	TestClassBChain
 5	0.02	TestClassBCrossingSlotFloorCornersReadConcave
 5	0.91	TestCoilFractionalTurnCentroid
-4	10.13	TestCoilFullTurnArcClosesLikeACircle
+9	10.13	TestCoilFullTurnArcClosesLikeACircle
 8	36.61	TestCoilInternalThread
 5	1.95	TestCoilMeshProofsEncloseTheBody
 5	0.02	TestCupMassChargesDisplacement
