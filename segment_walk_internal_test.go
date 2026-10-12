@@ -90,10 +90,11 @@ func ratSqrtIntervalError(lengthSquared *big.Rat, held float64) float64 {
 // TestLineWalkBoundsDyadicMatchRational pins lineWalkBounds,
 // lineWalkTangentBound and lineWalkEndBound, computed over dyadics, to the
 // big.Rat computation they replaced, bit for bit, on every output. The
-// segments mix integer, eighth-unit, 1e-6, 1e2 and 1e6 coordinates, natural,
-// midpoint and random parameters, and a non-finite coordinate now and then.
-// Each is read at the walk's own held values and at a held length one ulp
-// high, which exercises the inexact rounding paths.
+// Focused segments pin the exact-length and nearest-up rounding paths. A
+// seeded sample also mixes integer, eighth-unit, 1e-6, 1e2 and 1e6
+// coordinates, natural, midpoint and random parameters, and non-finite
+// coordinates. Each is read at its own held values and at a held length one
+// ulp high.
 //
 // Shown to fail: publishing through dyFloatUp instead of dyNearestUp turns the
 // test red on an inexact value whose nearest float rounded up, in
@@ -102,6 +103,18 @@ func ratSqrtIntervalError(lengthSquared *big.Rat, held float64) float64 {
 // turns it red on an exact-length segment.
 func TestLineWalkBoundsDyadicMatchRational(t *testing.T) {
 	t.Parallel()
+	segments := []lineSeg{
+		// An exact Pythagorean length takes the early return.
+		{Start: Point2{}, End: Point2{U: 3, V: 4}, TStart: 0, TEnd: 1},
+		// The nearest float rounds upward, so the L1 upper steps again.
+		{Start: Point2{U: 742738.6080317994, V: -412993.430223764},
+			End: Point2{U: 93525.59566117924, V: -1.214321966296021e-06}, TStart: 0.5, TEnd: 0},
+		// The tangent error also needs that extra upward step.
+		{Start: Point2{U: -14, V: 564957.3992155936},
+			End: Point2{U: -45, V: -41.555421284777154}, TStart: 0.146174813846073, TEnd: 1},
+		// A non-finite endpoint remains unbounded.
+		{Start: Point2{U: math.Inf(1)}, End: Point2{U: 1, V: 2}, TStart: 0, TEnd: 1},
+	}
 	rng := rand.New(rand.NewPCG(7, 9))
 	coord := func() float64 {
 		switch rng.IntN(5) {
@@ -129,7 +142,7 @@ func TestLineWalkBoundsDyadicMatchRational(t *testing.T) {
 			return rng.Float64()
 		}
 	}
-	for i := range 40000 {
+	for i := range 2048 {
 		seg := lineSeg{
 			Start: Point2{U: coord(), V: coord()}, End: Point2{U: coord(), V: coord()},
 			TStart: param(), TEnd: param(),
@@ -137,6 +150,9 @@ func TestLineWalkBoundsDyadicMatchRational(t *testing.T) {
 		if i%97 == 0 {
 			seg.Start.U = math.Inf(1)
 		}
+		segments = append(segments, seg)
+	}
+	for _, seg := range segments {
 		u0, v0 := lerp2(seg.Start, seg.End, seg.TStart)
 		u1, v1 := lerp2(seg.Start, seg.End, seg.TEnd)
 		du, dv := u1-u0, v1-v0
