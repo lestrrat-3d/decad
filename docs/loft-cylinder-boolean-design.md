@@ -417,6 +417,9 @@ homotopy. The portion inside the disk belongs to the exact blank. Thus a
 middle facet either already borders `S∩C` or reaches its boundary along
 that certified inward path. The unchanged bore wall and inner cap loop use
 Cut's local `boreBound` correspondence and exact outer-band separation.
+The source-circle proof depends only on the immutable tooth and blank radius.
+The middle-side audit retains each successful proof for later facets of that
+tooth; every facet still runs its own wall, height, and inward-patch checks.
 
 For the opposite boundary direction, any point of `∂(S∩C)` inside `C`
 belongs to `∂S`; the original two-way joined or bored boundary bound takes

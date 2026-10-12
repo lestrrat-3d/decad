@@ -50,6 +50,7 @@ func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
 	}
 	toothParity := make(map[*Body]*meshbool.ParityMesh)
 	toothIndices := make(map[*Body][]int)
+	toothCircles := make(map[*Body]loftCylinderSourceCircle)
 	for i := middle[0]; i < middle[1]; i++ {
 		if i%32 == 0 && ctx.Err() != nil {
 			return ctx.Err()
@@ -101,7 +102,7 @@ func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
 						toothIndices[face.body] = indices
 					}
 					if err := loftCylinderChamferMiddleToothSource(ctx, q, face,
-						parity, toothIndices[face.body], source.blankRadius); err != nil {
+						parity, toothIndices[face.body], source.blankRadius, toothCircles); err != nil {
 						last = err.Error()
 						continue
 					}
@@ -198,7 +199,7 @@ func loftCylinderChamferMiddleBlank(q [3]proofarith.Xpt, radius float64) bool {
 // hidden root walls meet it, use the exact blank disk for that part instead.
 func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.Xpt,
 	face loftCylinderChamferToothFace, parity *meshbool.ParityMesh, indices []int,
-	blankRadius float64) error {
+	blankRadius float64, circles map[*Body]loftCylinderSourceCircle) error {
 	lp := face.loft
 	if lp.walls <= 0 || lp.walls > len(lp.tris) || face.root < 3 ||
 		face.scale == nil || face.scale.Sign() <= 0 ||
@@ -238,9 +239,14 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 	// The original root arc is hidden by the blank over this middle slab.
 	// Both matched held and true root patches must remain in the convex disk;
 	// their entire same-height homotopy then stays in that disk too.
-	circle, err := loftCylinderSourceCircleOf(lp, blankRadius)
-	if err != nil {
-		return err
+	circle, ok := circles[face.body]
+	if !ok {
+		var err error
+		circle, err = loftCylinderSourceCircleOf(lp, blankRadius)
+		if err != nil {
+			return err
+		}
+		circles[face.body] = circle
 	}
 	zLo, zHi := meshbool.RatCoordOf(q[0], 2), meshbool.RatCoordOf(q[0], 2)
 	for _, p := range q[1:] {
