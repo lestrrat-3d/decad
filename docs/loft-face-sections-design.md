@@ -397,6 +397,38 @@ repeats the exact crossing, Euler, and volume audits. LoftFaces wall and cap
 facets need separate source-curve, chord,
 and rounding bounds before they can be welded to these vertices.
 
+Between two occupied heel circles, a source-only cap-region certificate
+rederives the pair census, live Sketch loop and exact cone meridian. It uses
+only float-representable points on the authenticated cone as a finite witness;
+an unrepresentable upper circle refuses this bounded class. Every mapped cap
+in the interval has source-independent, increasing X, and the exact quadratic
+Bernstein controls of its Y/Z affine determinant stay positive. Each exact
+time point and open interval between source-cell boundaries has a complete
+source-parameter partition and exactly two transverse circle crossings with
+opposite signs in the counter-clockwise loop walk. Adjacent intervals share
+the same crossing span or one authenticated source vertex. A fitted-to-line
+vertex contributes two source cells but owns one crossing; exact open time
+ends assign the transfer to that vertex. Its two cells have the same exact
+endpoint residual polynomial, strict equal derivative direction, and
+opposite far-end signs throughout the root bracket. These conditions prove
+one crossing exists across the two cells at every time in that bracket.
+The first and last crossing pairs
+must match the two live occupied-arc endpoints and their outward signs.
+The simple-loop proof and these continuous, nonmerging crossings keep the
+occupied angular arc connected between the two cap circles.
+
+The same certificate partitions the live Revolve section at every vertex X
+between those circles. On each open slice, the axis and exactly one outer
+side are the only section crossings, with opposite walk directions. The
+outer radius exceeds the heel-cone radius at every slice end except the
+lower authenticated contact circle, where they are exactly equal. The upper
+contact belongs to the live vertical blank face. Exact toe and heel cone
+limits leave a strict retained radial interval throughout. Thus the whole
+occupied heel cap region between the circles lies inside the blank; the
+certificate still does not choose held facets or admit public Union. It
+refuses interior radial steps, extra section crossings, ambiguous source
+events, or a cone witness outside its exact finite bounds.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
