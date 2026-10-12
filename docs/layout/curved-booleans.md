@@ -51,4 +51,6 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_cap_cut_path.go` | Cuts the held heel cap at certified X planes and bounds source-aligned circle vertices. See loft-face-sections design. |
 | `revolve_loft_faces_cap_ray_order.go` | Checks inserted cap rays against source-box angular order. See loft-face-sections design. |
 | `revolve_loft_faces_heel_track.go` | Builds two bounded, ordered held heel-cap boundary tracks from live moving-root boxes. See loft-face-sections design. |
+| `revolve_loft_faces_heel_retained_track.go` | Keeps live source owners for every retained heel-cap root slab and places the terminal Arc stations. See loft-face-sections design. |
+| `revolve_loft_faces_heel_retained_patch.go` | Builds open retained heel-cone patches on source root tracks and shared blank circle vertices. See loft-face-sections design. |
 | `revolve_loft_faces_shell_manifest.go` | Compares every retained Revolve and LoftFaces source-side cell against current producers. See loft-face-sections design. |

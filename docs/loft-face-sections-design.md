@@ -509,3 +509,22 @@ exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
 and complete-contact audits have not been built. The same producer remains
 unchanged after that refusal.
+
+
+## Open retained heel-cone patches
+
+The retained-cap constructor rederives the live tip-Arc birth, root-Arc
+terminal, and strict right-tail certificates. It retains each raw moving-root
+box and its source parameter, face, and origin even when rounded stations
+merge. It places both terminal Arc station sets from their certified time
+brackets. The lower and upper contact-circle rows reuse vertex IDs from the
+closed Revolve shell. Every added triangle carries the live heel-cap origin.
+
+The neutral nine-cap producer yields two open cone patches with 399 triangles.
+Their source-only crossing audit passes. Exact rational Z/Y intervals bound
+each triangle's angular span; the cone chord charge uses the largest cone
+radius times one eighth of that span squared. The root-curve charge uses
+twice the largest exact moving-root box radius. Point displacement and final
+rounding are charged separately, and every triangle must stay below 0.1 mm.
+These are construction bounds only. Adjacent LoftFaces walls, full closure,
+occupied volume, and the public `VerifyAll` proof remain to be built.
