@@ -68,6 +68,9 @@ type facetedPayload struct {
 	// interval. Its held vertical boundary chains retain a Z direction for
 	// selectors even though their curve type remains bounded FacetedCurve.
 	axialSectionJoin bool
+	// prismPatternJoin retains immutable source and shell records for a later
+	// certified local corner rewrite. Placement drops this source relation.
+	prismPatternJoin *prismPatternJoinRecord
 	// prismScale marks a certified similar image of a line/circular
 	// prism. Rigid copies retain it; booleans and modify rewrites do not.
 	prismScale bool
@@ -195,6 +198,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	}
 	next := fp
 	next.axialSectionJoin = false
+	next.prismPatternJoin = nil
 	next.xform = composed
 	next.lowerSupport = nil
 	next.pointCone = nil

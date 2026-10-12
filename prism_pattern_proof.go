@@ -18,7 +18,7 @@ import (
 // mesh's already certified boundary and occupied-volume error.
 func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	blank *Body, source *prismPatternSource, parts []prismPatternPart,
-	mesh *joinedMesh, groups [3]int, maxStep, ringRound float64) (*Body, error) {
+	mesh *joinedMesh, outlines [2][]int, groups [3]int, maxStep, ringRound float64) (*Body, error) {
 	radius := source.blankRadius
 	toothBound, toothVolume, toothArea := 0.0, 0.0, 0.0
 	connectorReach, rootHeldExcess := 0.0, 0.0
@@ -105,7 +105,10 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	}
 	fp := facetedPayload{verts: mesh.verts, tris: mesh.tris, src: mesh.src, groups: mesh.groups,
 		axialSectionJoin: true,
-		vertexBound:      vertexBound, contactAudited: true,
+		prismPatternJoin: &prismPatternJoinRecord{blank: blank, source: source, parts: parts,
+			outlines: outlines, groups: groups, maxStep: maxStep, ringRound: ringRound,
+			mesh: mesh},
+		vertexBound: vertexBound, contactAudited: true,
 		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
 		dPair: facetedSourceDiameterUpper(mesh.verts, bound), xform: r3.Identity()}
 	if proofbound.IsNonFinite(fp.dPair) {

@@ -28,6 +28,20 @@ type prismPatternPart struct {
 	vertex    [][]int
 }
 
+// The Union keeps its authenticated sources and complete held shell so a
+// later operation can prove a local rewrite without inferring source curves
+// from faceted edges. These slices are immutable after the Union commits.
+type prismPatternJoinRecord struct {
+	blank     *Body
+	source    *prismPatternSource
+	parts     []prismPatternPart
+	outlines  [2][]int
+	groups    [3]int
+	maxStep   float64
+	ringRound float64
+	mesh      *joinedMesh
+}
+
 // tryPrismPatternUnionMany admits only an authenticated circular prism and
 // rigid copies of one extruded section. Each later proof stage may refuse;
 // the public Union commits only a fully audited result.
@@ -106,12 +120,12 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 			return nil, true, fmt.Errorf("%w: copied-prism root sectors have no ordered circular gap", ErrUnsupported)
 		}
 	}
-	mesh, _, groups, step, round, err := prismPatternShell(ctx, operands[0], source, parts)
+	mesh, outlines, groups, step, round, err := prismPatternShell(ctx, operands[0], source, parts)
 	if err != nil {
 		return nil, true, err
 	}
 	body, err := prismPatternJoinedBody(ctx, d, ref, operands[0], source, parts,
-		mesh, groups, step, round)
+		mesh, outlines, groups, step, round)
 	return body, true, err
 }
 

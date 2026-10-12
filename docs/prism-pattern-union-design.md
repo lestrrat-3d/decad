@@ -79,3 +79,36 @@ stationary, reversed, and unproved faceted chains have no selector direction.
 The edge remains a bounded `FacetedCurve`; this certificate does not make its
 held XY position exact. A rigid placement drops the source-specific axial
 selector certificate until that placed result has its own proof.
+
+## Local root Fillet
+
+The joined body retains its authenticated circular blank, copied section
+records, source meshes and audited shell. `Body.Fillet` admits selected
+source-root axial chains on that body. Other faceted chains and placed joins
+refuse. The radius must have zero input displacement.
+
+For each selected corner, exact dyadic connector and placement coordinates
+define an outward line. Its material-side offset by the requested radius
+meets the circle of radius `R+r` at the outward quadratic root. Rational
+interval arithmetic brackets the center, the line foot and the circle foot.
+The line foot must lie beyond the blank and before the next source vertex;
+the circle foot must lie within the first shared-ring step. The entire
+tangent arc fits within `3r` of the source root. The source control-hull
+certificate keeps every nonconnector wall outside `R+3r+oldBound`, and all
+root disks are pairwise separate after charging source mesh displacement.
+
+The shell moves each selected connector endpoint to its line foot, splits
+the shared ring at the circle foot, and joins them with a sampled circular
+wall. The edge retains its bounded faceted type. Endpoint angle intervals,
+trigonometric intervals and chord sagitta bound every new arc station and
+facet. The rebuilt shell must be connected and orientable with paired edges,
+pass the full exact triangle-crossing audit, tile both caps exactly, and
+keep the omitted source-root chords inside its caps.
+
+Unchanged source and ring walls keep the Union boundary bound. The new
+boundary bound adds the arc station and sagitta allowance and must stay
+within 0.1 mm. The occupied-volume certificate adds two complete `3r`
+cylindrical disks per selected root to the old Union certificate, enlarging
+the held disk by the old boundary and arc bounds. The area allowance charges
+both old and new walls and caps in those disks. `Tessellate(VerifyAll)` checks
+the detached result before Fillet commits and retires its input.

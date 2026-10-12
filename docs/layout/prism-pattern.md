@@ -12,3 +12,7 @@ The rules for rows live in `docs/layout.md`.
 | `prism_pattern_shell.go` | Builds and audits the shared wall and caps. See prism-pattern-union design. |
 | `prism_pattern_cap.go` | Checks omitted root chords inside each joined cap. See prism-pattern-union design. |
 | `prism_pattern_proof.go` | Charges seam boundary and occupied-volume bounds. See prism-pattern-union design. |
+| `prism_pattern_fillet_admission.go` | Matches source roots and checks local clearance. See prism-pattern-union design. |
+| `prism_pattern_fillet_contact.go` | Brackets exact connector/circle fillet contacts. See prism-pattern-union design. |
+| `prism_pattern_fillet_shell.go` | Builds and audits rounded local bands and caps. See prism-pattern-union design. |
+| `prism_pattern_fillet_proof.go` | Charges rounded boundary, area and occupied volume. See prism-pattern-union design. |
