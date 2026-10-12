@@ -194,10 +194,12 @@ The ordinary public `Union` also checks a bounded LoftFaces result after
 its authenticated toe Cut and heel Intersect against a finite, unplaced,
 full world-X Revolve. The Revolve section must have one axial span and
 whole straight source edges. Its candidate conical roots keep their source
-faces and exact rational meridians. A placed or off-axis Revolve refuses
-this gate. The LoftFaces record must still name the live whole-entity Sketch
-profile, the same exact maps and source bounds, and two surviving tool
-caps. A stale, partial or foreign profile refuses.
+faces and exact rational meridians. Every non-axis face must retain the
+surface tag and orientation reconstructed from its straight source run.
+A placed or off-axis Revolve refuses this gate. The LoftFaces record must
+still name the live whole-entity Sketch profile, the same exact maps and
+source bounds, and two surviving tool caps. A stale, partial or foreign
+profile refuses.
 The copied station groups and every cap-bound term must still equal the
 original LoftFaces cap record. Every crossing source group that has retained
 triangles must map to one live result face carrying its origin, and each
