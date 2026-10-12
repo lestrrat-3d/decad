@@ -40,6 +40,9 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 	bore := circleBodyAtZ(t, doc, 0, 0.5, -1, 4)
 	cut, err := decad.Cut(t.Context(), joined, bore)
 	require.NoError(t, err)
+	_, err = cut.Chamfer(t.Context(), decad.Edges(decad.OuterLoopOf(decad.CapStart(cut))),
+		units.Millimeters(0.03))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
 	outerCaps := decad.Edges(decad.OuterLoopOf(decad.CapStart(cut))).
 		Or(decad.OuterLoopOf(decad.CapEnd(cut)))
 	chamfered, err := cut.Chamfer(t.Context(), outerCaps, units.Millimeters(0.03))
@@ -49,7 +52,23 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
+	require.Equal(t, 0, loftMirrorChamferEuler(mesh))
 	require.Len(t, doc.Bodies(), 1)
+}
+
+func loftMirrorChamferEuler(mesh *decad.Mesh) int {
+	edges := make(map[[2]int]struct{})
+	tris := mesh.Triangles()
+	for _, tri := range tris {
+		for i := range 3 {
+			a, b := tri[i], tri[(i+1)%3]
+			if a > b {
+				a, b = b, a
+			}
+			edges[[2]int{a, b}] = struct{}{}
+		}
+	}
+	return len(mesh.Vertices()) - len(edges) + len(tris)
 }
 
 // A broad radial lobe gives its rounded side a resolvable inward offset while
