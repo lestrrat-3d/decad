@@ -55,6 +55,7 @@ The rules for rows live in `docs/layout.md`.
 | `prism_extent.go` | Adapts prism extents and box readings. See evaluator §5. |
 | `revolve.go` | `Document.Revolve`: `Axis` variants, options, angular extents. See evaluator §6. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
+| `revolve_cap_edge_fillet.go` | Bounded quarter-turn radial cap-rim fillet and its faceted proof. See modify-reach §7.2. |
 | `revolve_axis.go` | Adapts the public axis and bounded profile scan to `internal/revolveaxis/`. See evaluator §6. |
 | `revolve_build.go` | Builds a revolve's solid or sheet body and its measurements. See evaluator §6. |
 | `revolve_extent.go` | Adapts revolve extent and box readings to `internal/revolveaxis/`. See evaluator §6. |
