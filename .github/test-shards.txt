@@ -417,7 +417,9 @@
 2	0.01	TestPointConeOutsideWitnessRejectsUncertainContact
 2	0.01	TestPointConeUpperFarPlaneNodeRequiresCapCharge
 2	0.01	TestPointConeSourceMustClearFiniteFarCap
+2	0.30	TestPointConeFactorMatchesRationalForm
 2	0.01	TestPointConeTriangleBoundIncludesReciprocalCurvature
+2	0.30	TestPointConeTriangleBoundMatchesRationalForm
 2	0.01	TestPointPlaneScaleCarriesSourceThroughLaterPlacement
 2	0.50	TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace
 2	0.00	TestPrismBooleanGateG2AdmitsAReflectedOperand

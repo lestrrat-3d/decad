@@ -36,6 +36,33 @@ type pairMaximum struct {
 
 const pointBlockSize = 64
 
+// skipMargin scales the best float distance found so far into the threshold
+// below which the scans skip a block pair or a single pair. The scan returns
+// the pair with the largest float Len under the (i, j) tie-break and then reads
+// that one pair exactly, so the answer is unchanged by any margin that skips
+// only pairs whose float Len is strictly below the best, because such a pair
+// can never win betterPair.
+//
+// The margin is sound for a margin m = 1 - 2^-16 by this rounding argument.
+// For a pair (p, q) in a skipped block pair, let D be its exact distance and U
+// the exact squared extent of the two boxes, so D^2 <= U. The float
+// blockPairDistanceUpperSq forms three differences (one rounding each; abs and
+// max are exact), three squares and two sums of non-negative terms, so at most
+// eight roundings of relative size 2^-53 each, and the computed value is at
+// least U(1 - 2^-49). The skip fires when that value is below skipSq, which is
+// (best*m)^2 rounded twice and at most best^2 m^2 (1 + 2^-52). Hence
+// D^2 < best^2 m^2 (1 + 2^-52)/(1 - 2^-49). The float Len of the pair's Sub
+// is D times at most (1 + 2^-49) by the same count of roundings (three
+// differences, three squares, two sums, one square root; outside the ordinary
+// range r3 uses math.Hypot, within an ulp, which the slack also covers). So Len < best*m*(1 +
+// 2^-47) < best, since m*(1 + 2^-47) < 1. The per-pair test
+// dx*dx+dy*dy+dz*dz < skipSq has the same shape. The 2^-16 gap is nine
+// orders of magnitude wider than the rounding, so no float Len at or above
+// best is ever skipped. The thresholds are armed only for best in (1e-100,
+// 1e100), where no square or sum above underflows or overflows a normal
+// float64 for a pair that is not already far below best.
+const skipMargin = 1 - 1.0/65536
+
 type pointBlock struct {
 	min, max r3.Vec
 }
@@ -96,7 +123,7 @@ func pointsContextParallel(ctx context.Context, points []r3.Vec) (float64, bool,
 			best := seed
 			skipSq := 0.0
 			if best.distance > 1e-100 && best.distance < 1e100 {
-				limit := best.distance * 0.9
+				limit := best.distance * skipMargin
 				skipSq = limit * limit
 			}
 			work := 0
@@ -108,8 +135,8 @@ func pointsContextParallel(ctx context.Context, points []r3.Vec) (float64, bool,
 					if work%proofbound.WorkPollInterval == 0 && ctx.Err() != nil {
 						return
 					}
-					// Each box encloses every point in its leaf. The 0.9 margin
-					// keeps the floating upper bound safely above skipped pairs.
+					// Each box encloses every point in its leaf. skipMargin
+					// keeps the floating upper bound above skipped pairs.
 					if skipSq > 0 && blockPairDistanceUpperSq(a.box, b.box) < skipSq {
 						count := (a.end - a.begin) * (b.end - b.begin)
 						if ai == bi {
@@ -144,7 +171,7 @@ func pointsContextParallel(ctx context.Context, points []r3.Vec) (float64, bool,
 							if betterPair(candidate, best) {
 								best = candidate
 								if distance > 1e-100 && distance < 1e100 {
-									limit := distance * 0.9
+									limit := distance * skipMargin
 									skipSq = limit * limit
 								} else {
 									skipSq = 0
@@ -238,7 +265,7 @@ func PointsWithBudget(budget *proofbound.WorkBudget, points []r3.Vec) (float64, 
 				if distance > best {
 					best, bestI, bestJ = distance, i, j
 					if best > 1e-100 && best < 1e100 {
-						limit := best * 0.9
+						limit := best * skipMargin
 						skipSq = limit * limit
 					} else {
 						skipSq = 0

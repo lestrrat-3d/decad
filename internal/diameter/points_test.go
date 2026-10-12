@@ -76,6 +76,16 @@ func TestPointsKeepsExhaustiveWitness(t *testing.T) {
 			check(fmt.Sprintf("random-%g-%d", scale, scene), points)
 		}
 	}
+	// A slender tilted rod prunes badly under a loose skip margin; a few far
+	// pairs sit within an ulp-scale distance of each other.
+	rod := make([]r3.Vec, 1200)
+	for i := range rod {
+		s := float64(i) / float64(len(rod)-1)
+		rod[i] = r3.NewVec(40*s+1e-3*rng.Float64(), 20*s+1e-3*rng.Float64(), 10*s+1e-3*rng.Float64())
+	}
+	rod[len(rod)-2] = rod[len(rod)-1].Add(r3.NewVec(1e-12, 0, 0))
+	rod[1] = rod[0].Add(r3.NewVec(-1e-12, 0, 0))
+	check("parallel slender rod", rod)
 	check("duplicate", []r3.Vec{r3.NewVec(1, 2, 3), r3.NewVec(1, 2, 3)})
 	check("overflow", []r3.Vec{r3.NewVec(math.MaxFloat64, 0, 0), r3.NewVec(-math.MaxFloat64, 0, 0)})
 	check("nonfinite", []r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(math.NaN(), 0, 0)})
