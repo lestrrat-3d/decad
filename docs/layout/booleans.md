@@ -36,8 +36,8 @@ The rules for rows live in `docs/layout.md`.
 | `bevel_join_two.go` | Rebuilds two separate point-loft teeth on one bevel blank root ring. See loft-point design. |
 | `bevel_join_pattern.go` | Rebuilds separate point-loft teeth on one bevel blank root ring. See loft-point design. |
 | `circular_bore_ring.go` | Samples and bounds the circular bore rings used by bevel and Loft/cylinder Cuts. See loft-point and loft-cylinder-boolean designs. |
-| `bevel_join_bore.go` | Admits a certified centered through-bore after a complete bevel join. See loft-point design. |
-| `bevel_join_bore_toe.go` | Cuts a centered bore through the narrow toe flank of an authenticated combined bevel join. See loft-point design. |
+| `bevel_join_bore.go` | Classifies a centered through-bore from retained straight-join geometry and rebuilds annular caps. See loft-point design. |
+| `bevel_join_bore_toe.go` | Rebuilds a straight toe-flank crossing after an authenticated join. See loft-point design. |
 | `loft_cut.go` | Preserves a matching axial loft through a certified coaxial circle-bore Cut. See loft §18. |
 | `loft_mirror_union.go` | Joins one authenticated axial Loft to its end-cap reflection. See loft-mirror-boolean design. |
 | `loft_mirror_cylinder_union.go` | Joins repeated reflected Loft pairs to a centered cylinder, including one-pass Union and bounded axial placement. See loft-mirror-boolean design. |

@@ -14,17 +14,58 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-const bevelBoreSideRole = "side(0,0)"
+const (
+	bevelBoreSideRole          = "side(0,0)"
+	bevelBoreMaxStations       = 2_304
+	bevelBoreMaxAuditTriangles = 1_321_696
+	bevelBoreMaxAuditScans     = uint64(400_000_000)
+)
 
-func bevelBorePatternKind(placed int) (toeClipped, ok bool) {
-	switch placed {
-	case 3, 7, 15:
-		return false, true
-	case 11:
-		return true, true
-	default:
-		return false, false
+// The bore rewrite needs the original six straight meridian edges even if
+// another Join class later broadens the common blank matcher.
+func matchBevelBoreBlankSection(body *Body) (*bevelBlankSource, bool) {
+	rp, ok := body.payload.(revolvePayload)
+	if !ok || !rp.full || rp.surfaceResult || rp.sectionDelta != 0 ||
+		rp.xform != r3.Identity() || len(rp.profile.Holes) != 0 ||
+		len(rp.profile.Outer.Segments) != 6 ||
+		rp.frame.Origin() != (r3.Vec{}) || rp.frame.U() != (r3.Vec{X: 1}) ||
+		rp.frame.V() != (r3.Vec{Y: 1}) ||
+		rp.ax.AU != 0 || rp.ax.AV != 0 || rp.ax.DU != 1 || rp.ax.DV != 0 ||
+		rp.ax.AUBound != 0 || rp.ax.AVBound != 0 ||
+		rp.ax.DUBound != 0 || rp.ax.DVBound != 0 {
+		return nil, false
 	}
+	blank, ok := matchBevelBlankSection(body, false)
+	if !ok || blank.toeAxis.V != 0 || blank.heelAxis.V != 0 ||
+		blank.toeOuter.U != blank.toeAxis.U || blank.heelOuter.U != blank.heelAxis.U ||
+		!(blank.toeRoot.U < blank.toeAxis.U && blank.toeAxis.U < blank.ded.U &&
+			blank.ded.U < blank.heelAxis.U) ||
+		min(blank.toeOuter.V, blank.toeRoot.V, blank.ded.V, blank.heelOuter.V) <= 0 {
+		return nil, false
+	}
+	cycle := [6]Point2{blank.toeAxis, blank.heelAxis, blank.heelOuter,
+		blank.ded, blank.toeRoot, blank.toeOuter}
+	var seen [6]bool
+	for _, segment := range rp.profile.Outer.Segments {
+		line, ok := segment.(lineSeg)
+		if !ok || !((line.TStart == 0 && line.TEnd == 1) ||
+			(line.TStart == 1 && line.TEnd == 0)) {
+			return nil, false
+		}
+		matched := false
+		for i := range cycle {
+			a, b := cycle[i], cycle[(i+1)%len(cycle)]
+			if !seen[i] && ((line.Start == a && line.End == b) ||
+				(line.Start == b && line.End == a)) {
+				seen[i], matched = true, true
+				break
+			}
+		}
+		if !matched {
+			return nil, false
+		}
+	}
+	return blank, true
 }
 
 // tryBevelPostJoinBoreCut cuts a coaxial, spanning circle from a complete
@@ -36,18 +77,13 @@ func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, nil
 	}
 	joined, ok := target.payload.(facetedPayload)
-	expectToeClipped, patternOK := false, false
-	if ok && joined.bevelJoin != nil {
-		expectToeClipped, patternOK = bevelBorePatternKind(len(joined.bevelJoin.placed))
-	}
-	if !ok || joined.bevelJoin == nil || joined.bevelJoin.capRing == nil ||
-		!patternOK ||
+	if !ok || joined.bevelJoin == nil || joined.bevelJoin.blank == nil ||
+		joined.bevelJoin.capRing == nil ||
 		joined.xform != r3.Identity() ||
 		!joined.contactAudited {
 		return nil, false, nil
 	}
-	blank, ok := matchBevelBlankSection(joined.bevelJoin.blank,
-		len(joined.bevelJoin.placed) == 7)
+	blank, ok := matchBevelBoreBlankSection(joined.bevelJoin.blank)
 	if !ok {
 		return nil, false, nil
 	}
@@ -86,7 +122,7 @@ func tryBevelPostJoinBoreCut(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, nil
 	}
 	toeClipped := radius > blank.toeOuter.V
-	if radius == blank.toeOuter.V || toeClipped != expectToeClipped {
+	if radius == blank.toeOuter.V {
 		return nil, false, nil
 	}
 	var wall *Face
@@ -171,16 +207,14 @@ func buildBevelPostJoinBore(ctx context.Context, d *Document, ref producerID,
 	joined facetedPayload, blank *bevelBlankSource, ring *bevelCapRingRecord,
 	radius float64, wall *Face) (*Body, error) {
 	n := len(ring.angles)
-	teeth := len(joined.bevelJoin.placed) + 1
-	maxRingStations := 1_536
-	if teeth == 4 {
-		maxRingStations = 2_304
-	}
-	if n < 16 || len(ring.heel) != n || len(ring.toe) != n ||
-		n > maxRingStations ||
+	if n < 16 || len(ring.heel) != n || len(ring.toeRoot) != n || len(ring.toe) != n ||
+		n > bevelBoreMaxStations ||
 		len(joined.tris) != len(joined.src) || len(joined.verts) != len(joined.vertexBound) ||
 		ring.heelAxis == ring.toeAxis {
 		return nil, fmt.Errorf("%w: bevel bore has no complete cap-ring record", ErrUnsupported)
+	}
+	if len(joined.tris) > bevelBoreMaxAuditTriangles-4*n {
+		return nil, fmt.Errorf("%w: bevel bore exceeds its bounded mesh work", ErrUnsupported)
 	}
 	heelPos, toePos := make(map[int]int, n), make(map[int]int, n)
 	for i := range n {
@@ -284,26 +318,14 @@ func buildBevelPostJoinBore(ctx context.Context, d *Document, ref producerID,
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
 		return nil, err
 	}
-	// The annular strips and inward wall add four net triangles per station
-	// after the old axis fans are removed.
-	maxPatternAuditTriangles := 44_480 + 22_000*(teeth-2)
-	maxAuditScans := uint64(128_000_000)
-	if teeth == 4 {
-		// The two-pass cap source already proved by pattern Union can contribute
-		// at most two final caps of 120,000 cells per tooth.
-		maxPatternAuditTriangles += 2 * bevelCombineCapFinalLimit * teeth
-		maxAuditScans = uint64(80_000_000 * teeth)
+	// Complete fan census proves exactly two old triangles leave each station.
+	// The annuli and wall add six, so the net change is four per station.
+	if len(mesh.tris) != len(joined.tris)+4*n {
+		return nil, fmt.Errorf("%w: bevel bore triangle census changed", ErrUnsupported)
 	}
-	if teeth == 16 {
-		// Pattern Union's one-pass cap refinement adds at most three children
-		// per source cell on each of two caps per tooth.
-		maxPatternAuditTriangles += 6 * bevelCombineCapOnePassLimit * teeth
-		maxAuditScans = uint64(25_000_000 * teeth)
-	}
-	maxAuditTriangles := maxPatternAuditTriangles + 4*n
 	if err := loftmesh.LoftCrossingAuditBounded(
 		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
-		maxAuditTriangles, maxAuditScans); err != nil {
+		bevelBoreMaxAuditTriangles, bevelBoreMaxAuditScans); err != nil {
 		return nil, err
 	}
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(

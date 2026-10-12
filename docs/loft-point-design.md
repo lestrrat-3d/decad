@@ -331,8 +331,8 @@ cylinder by its held bound and the new circle bound. It checks one axis-fan
 triangle per angular sector on each cap, replaces both fans with annular
 strips, and sews the cylindrical wall between their inner rings. Directed
 edges, vertex links, and exact nonadjacent triangle contacts are checked
-again. The 1,280-station bore mesh has 176,896 triangles, below its bounded
-181,600-triangle audit limit, and uses a 128-million-pair scan limit.
+again. The 1,280-station bore mesh has 176,896 triangles. The shared Cut audit
+allows at most 1,321,696 triangles and 400 million pair scans.
 
 The original joined body's occupied-volume allowance remains valid when
 the exact cylinder is removed from both the true and held solids. The
@@ -413,8 +413,8 @@ and 235,749,725 scans, below its 1,048,480-triangle and 320-million-scan
 ceilings, and passed 0.1 mm `VerifyAll`. The boundary allowance scales cap
 interpolation and far-node rounding by the held placement's certified stretch.
 The existing source-volume and swept-area allowances and exact volume check
-still apply. The eight-tooth serial Union and its centered bore keep their
-separate admission rules.
+still apply. A centered bore after a serial or combined Union uses the same
+retained-geometry admission described below.
 
 The real sixteen-tooth source yielded 736,512 triangles and 250,972,281 scans,
 below its 1,312,480-triangle and 400-million-scan ceilings. Its 0.092906 mm
@@ -429,6 +429,34 @@ crossings. Its gallery producer passed the 0.1 mm `VerifyAll` boundary and
 volume checks with one connected closed shell. The capped local run took
 274 seconds of test time and reached 3,444,152 KiB peak RSS.
 
+## Centered bore after a certified straight join
+
+`Cut` reads the joined body's retained blank, source teeth, cap-ring stations,
+and contact audit. Tooth count does not select the bore rewrite. The tool must
+be a centered, axis-X, full-circle prism whose exact held ends extend beyond
+both blank caps. The blank must reproduce its recorded six-line meridian.
+The bore radius must lie strictly below the toe outer radius, or strictly
+between the toe outer and toe-root radii. A radius on either station refuses
+the structural route. The existing minimum-radius check also keeps the bore
+below the heel outer and dedendum radii.
+
+Every cap-ring list must cover its angular stations. Both original axis fans
+must contribute one triangle per station; the toe-crossing route additionally
+requires the exact two-triangle toe band at each station. An untouched tooth
+or blank facet must clear the cylinder after the joined mesh and new circle
+bounds are added. The toe crossing is solved against the recorded straight
+flank with rational arithmetic. Either rewrite keeps its source faces and
+occupied-volume allowance, adds the local bore and toe-band allowances, and
+checks directed edges, vertex links, and exact nonadjacent triangle contacts.
+
+The ring has at most 2,304 stations. The joined triangle count plus four per
+station for an annular bore, or plus two for a toe crossing, must stay within
+1,321,696 triangles. The exact contact audit stops after 400 million pair
+scans. These are Cut limits; a joined body above them can still pass its own
+`VerifyAll` check. The six-tab fitted-source test exercises both bore shapes
+through public `Cut`, including a near-toe clearance refusal and atomic
+failure behavior.
+
 The sixteen-tooth driving member's default centered bore has radius 8 mm,
 inside the recorded toe outer radius. A post-pattern-Union Cut with fifteen
 placed teeth uses the annular-cap rewrite above. It requires the complete
@@ -440,10 +468,9 @@ those fans and connects two annular strips to an inward cylindrical wall.
 It checks directed edges, vertex links and exact nonadjacent triangle
 contacts before returning the body.
 
-The adaptive sixteen-tooth Join ceiling plus four triangles per ring station
-bounds the bore audit. The real driving member has 1,408 stations and
-742,144 triangles, below its 1,318,112-triangle ceiling. Its audit scanned
-309,823,933 pairs under the 400-million limit of 25 million per tooth.
+The real driving member has 1,408 stations and 742,144 triangles, below the
+shared 1,321,696-triangle ceiling. Its audit scanned 309,823,933 pairs under
+the 400-million limit.
 The existing cylinder-shell volume charge spans the exact blank caps. The
 real source passes `Tessellate(0.1 mm, VerifyAll)` with a 0.092906 mm
 boundary bound and a 788.859944 mm³ occupied-volume allowance.
@@ -452,10 +479,8 @@ boundary bound and a 788.859944 mm³ occupied-volume allowance.
 
 The module-4, four-tooth member's source-default bore has radius 2 mm, inside
 its 2.666667 mm toe outer radius. Its two-pass combined Join records 2,304
-angular cap stations, so this annular Cut admits at most 2,304 stations; the
-other annular cases keep their 1,536-station limit. The original cap-fan,
-contact, and cylinder-shell volume proofs apply without changing their
-geometry.
+angular cap stations, the shared Cut limit. The original cap-fan, contact,
+and cylinder-shell volume proofs apply without changing their geometry.
 
 An untouched facet whose Y and Z coordinate boxes both meet the bore's
 surrounding square is checked by the exact-dyadic minimum radius of its whole
@@ -464,9 +489,9 @@ bounds refuses the Cut. The real source has 76 such toe-flank facets; their
 smallest certified held radius is 2.6664658715710501 mm, above the charged
 2.0918973931155183 mm clearance.
 
-The two-pass Join ceiling plus four triangles per angular station bounds the
-Cut at 1,057,696 triangles and 320 million scanned pairs. The real source
-has 876,000 triangles and scans 285,455,819 pairs. The complete gallery
+The two-pass Join ceiling plus four triangles per angular station bounds this
+source at 1,057,696 triangles. The real source has 876,000 triangles and
+scans 285,455,819 pairs under the shared 400-million cap. The complete gallery
 `Build` → centered `Cut` → `Tessellate(0.1 mm, VerifyAll)` produces one
 through-hole.
 
@@ -479,7 +504,7 @@ recorded straight toe flank at X = 28.833333 mm. The source bore tool extends
 beyond both blank ends. The annular-cap rewrite does not apply to
 this crossing.
 
-The Cut requires the retained pattern-Union source, its eleven placed teeth,
+The Cut requires a retained certified straight Join source and all its placed teeth,
 both cap rings and the toe-root ring, a centered full-circle axis-X prism,
 and the same exact six-line blank meridian. It proves the bore falls strictly
 between the toe outer and toe-root radii. Every untouched blank and tooth
@@ -493,10 +518,9 @@ a shorter toe-flank band ending at the intersection circle, and the inward
 cylinder wall. The new toe ring shares the original angular stations, and the
 toe-root ring keeps the tooth and blank patches sewn. Directed edge pairing,
 vertex links, and exact triangle contacts are checked on the resulting mesh.
-The new triangle count is the joined count plus two per angular station. Its
-finite triangle ceiling is the combined-join ceiling plus at most 3,072. The
+The new triangle count is the joined count plus two per angular station. The
 real 1,464-station pinion has 660,624 triangles and its exact audit scans
-221,081,767 pairs, below its 987,408-triangle and 300-million-scan limits.
+221,081,767 pairs, below the shared Cut limits.
 
 The joined body's occupied-volume allowance survives subtraction of the same
 exact cylinder from its true and held solids. A separate local allowance

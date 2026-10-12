@@ -23,7 +23,6 @@
 0	0.01	TestLoftMirrorCylinderLevelsRequireExactMidpoint
 0	0.01	TestLoftMirrorCylinderPairKeepsAuthenticatedSource
 0	0.01	TestBevelBoreCapFanRequiresAdjacentRingVertices
-0	0.01	TestBevelBorePatternKindRequiresMatchingToeTopology
 0	0.01	TestBevelBoreTriangleClearKeepsOnlyOutsideFacets
 0	0.01	TestBevelCapRefinementKeepsSharedEdgesAndBoundaryGroups
 0	0.01	TestBevelPatternAngularGapUsesCircularSeam
@@ -35,6 +34,7 @@
 0	0.01	TestBevelSourceRequiresPositivePublicConeBranch
 0	0.01	TestBevelToeBoreIntersectionUsesRecordedFlank
 0	0.01	TestBevelTrimmedTeethRequireSeparatedCertifiedRanges
+0	12.09	TestCenteredBoreUsesRetainedBevelJoinGeometryForSixTabs
 0	0.70	TestObliqueBossJunctionFilletDiagonalTiltPublicWorkflow
 0	0.71	TestObliqueBossJunctionFilletPublicWorkflow
 0	0.69	TestObliqueBossJunctionFilletXTiltPublicWorkflow

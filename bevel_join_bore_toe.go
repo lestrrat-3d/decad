@@ -72,11 +72,14 @@ func buildBevelPostJoinToeBore(ctx context.Context, d *Document, ref producerID,
 	joined facetedPayload, blank *bevelBlankSource, ring *bevelCapRingRecord,
 	radius float64, wall *Face) (*Body, error) {
 	n := len(ring.angles)
-	if n < 16 || n > 1_536 || len(ring.heel) != n || len(ring.toeRoot) != n ||
+	if n < 16 || n > bevelBoreMaxStations || len(ring.heel) != n || len(ring.toeRoot) != n ||
 		len(ring.toe) != n || len(joined.tris) != len(joined.src) ||
 		len(joined.verts) != len(joined.vertexBound) ||
 		ring.heelAxis == ring.toeAxis {
 		return nil, fmt.Errorf("%w: bevel toe bore has no complete cap-ring record", ErrUnsupported)
+	}
+	if len(joined.tris) > bevelBoreMaxAuditTriangles-2*n {
+		return nil, fmt.Errorf("%w: bevel toe bore exceeds its bounded mesh work", ErrUnsupported)
 	}
 	// The recorded six-line meridian supplies the exact intersection with the
 	// bore circle. It must be strictly inside the toe flank, away from both
@@ -274,13 +277,13 @@ func buildBevelPostJoinToeBore(ctx context.Context, d *Document, ref producerID,
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
 		return nil, err
 	}
-	// The local rewrite removes four old blank triangles and adds six per
-	// station. The joined pattern already proved its adaptive cap-cell ceiling.
-	// Its 25-million-per-tooth scan budget also covers the local bore rewrite:
-	// the real twelve-tooth source scans 221,081,767 pairs under 300 million.
-	maxAuditTriangles := 44_480 + 22_000*(12-2) + 6*bevelCombineCapOnePassLimit*12 + 2*n
+	// Complete cap-fan and toe-band census proves four old triangles leave each
+	// station. The rebuilt annulus, flank and wall add six.
+	if len(mesh.tris) != len(joined.tris)+2*n {
+		return nil, fmt.Errorf("%w: bevel toe bore triangle census changed", ErrUnsupported)
+	}
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
-		mesh.verts, mesh.tris, maxAuditTriangles, 25_000_000*12); err != nil {
+		mesh.verts, mesh.tris, bevelBoreMaxAuditTriangles, bevelBoreMaxAuditScans); err != nil {
 		return nil, err
 	}
 	// The original joined solid and its held mesh keep their symmetric-volume
