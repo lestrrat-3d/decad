@@ -1078,10 +1078,13 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     float, and coincident roundings weld as above. A held vertex is MOVED when
     it differs from an exact vertex it stands for, and only a facet with a
     moved vertex can meet anything differently from the exact mesh. Each such
-    facet is checked against every held facet near it, found through a uniform
-    grid over the facet boxes, with the exact predicates over the held
-    binary64 values: no shared vertex means no contact, one shared vertex means
-    contact only there, one shared edge means contact only along it.
+    facet is checked against every held facet whose box overlaps it. For at
+    least 4096 query facets, the read-only first scan uses a tree of unchanged
+    facet boxes; repair uses a uniform grid whose padded cells still cover
+    each permitted vertex move. Smaller checks use that grid directly.
+    Both scans use exact predicates over the held binary64 values: no shared
+    vertex means no contact, one shared vertex means contact only there, one
+    shared edge means contact only along it.
   - **Move a failing vertex within its float box.** Each movable vertex of a
     failing pair — one that stands for exactly one exact vertex — may take
     another corner of its exact point's float box: per coordinate the float at

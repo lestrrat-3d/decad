@@ -157,7 +157,7 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 	return len(moved), nil
 }
 
-// parallelClean tests each pair involving an unchanged query facet once. A
+// parallelClean tests each box-overlapping pair involving a query facet once. A
 // failing pair sends the caller through the original ordered repair scan.
 // Each worker polls after at most 256/workers operations, so their combined
 // unchecked work stays below one polling interval.
@@ -170,6 +170,7 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	for _, i := range query {
 		queryFacet[i] = true
 	}
+	tree := newHeldBoxTree(e)
 	clean := make([]bool, workers)
 	errors := make([]error, workers)
 	locals := make([]*heldEmbedding, workers)
@@ -197,7 +198,7 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 					return
 				}
 				end := min(start+chunkSize, len(query))
-				clean[worker], errors[worker] = local.cleanPairs(query[start:end], queryFacet)
+				clean[worker], errors[worker] = local.cleanPairs(query[start:end], queryFacet, &tree)
 				if !clean[worker] || errors[worker] != nil {
 					return
 				}
@@ -220,26 +221,33 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	return true, nil
 }
 
-func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool) (bool, error) {
+func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBoxTree) (bool, error) {
+	stack := make([]int, 0, 64)
 	for _, i := range query {
 		if _, _, n := e.facet(i); zeroXpt(n) {
 			return false, nil
 		}
 		box := e.triBox(i)
-		candidates, err := e.candidates(i)
-		if err != nil {
-			return false, err
+		if len(tree.nodes) == 0 {
+			continue
 		}
-		for _, j := range candidates {
+		stack = append(stack[:0], 0)
+		for len(stack) > 0 {
+			last := len(stack) - 1
+			node := tree.nodes[stack[last]]
+			stack = stack[:last]
 			if err := e.scanStep(); err != nil {
 				return false, err
 			}
-			if j == i || j < i && queryFacet[j] {
+			if !BoxesOverlap(box, node.box) {
 				continue
 			}
-			// Grid cells and wide-facet registration include disjoint boxes.
-			// This is pairEmbedded's exact reject-only first gate.
-			if !BoxesOverlap(box, e.triBox(j)) {
+			if node.facet < 0 {
+				stack = append(stack, node.right, node.left)
+				continue
+			}
+			j := node.facet
+			if j == i || j < i && queryFacet[j] {
 				continue
 			}
 			if !e.pairEmbedded(i, j) {
@@ -264,8 +272,8 @@ func (e *heldEmbedding) scanStep() error {
 	return e.pollErr()
 }
 
-// readOnlyScanCopy shares the immutable grid and incident-facet lists, while
-// each worker writes only its own predicate caches.
+// readOnlyScanCopy shares the immutable facet boxes and incident-facet lists,
+// while each worker writes only its own predicate caches.
 func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *heldEmbedding {
 	local := *e
 	local.pollErr = ctx.Err
@@ -287,11 +295,10 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *held
 	local.projected = make([]heldProjectedFacet, len(e.projected))
 	local.projectedOK = make([]bool, len(e.projectedOK))
 	local.sideSigns = make(map[[2]int]int)
-	local.stamp = make([]int, len(e.stamp))
-	local.stampID = 0
+	local.stamp = nil
 	local.cands = nil
 	// buildGrid filled every box before the read-only first scan. Repair
-	// starts only after all workers have joined, so sharing is safe here.
+	// starts only after all workers have joined.
 	local.box = e.box
 	local.boxOK = e.boxOK
 	local.pairs = nil
