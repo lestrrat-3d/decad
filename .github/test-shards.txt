@@ -63,6 +63,7 @@
 10	13.20	TestCurvedArcSeamRefusesChangedStationAndIncompleteRun
 10	23.00	TestCurvedSourceArcSplitsClosedRevolveShell
 10	11.30	TestCurvedSourceCapCirclesSplitClosedBlankShell
+2	5.10	TestCurvedHeelCapEndpointsHaveSourceBounds
 2	0.10	TestCurvedHeelArcSideTieTimeEndpointOwnership
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops

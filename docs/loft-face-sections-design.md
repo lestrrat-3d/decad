@@ -373,6 +373,12 @@ the crossing, Euler, volume, and face-bound audits. A changed arc refuses.
 The neutral producer yields two cap rings, 658 vertices, and 1312 triangles.
 The shell still does not admit `Union`.
 
+For each occupied heel arc, the endpoint builder rederives its live source
+record. It projects each source-box center onto the exact circle and bounds
+the full movement to every point in that box, including float rounding.
+The focused neutral test requires all four endpoint bounds below 0.1 mm.
+These points are not yet welded to the blank rings or LoftFaces walls.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
