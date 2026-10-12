@@ -1,9 +1,9 @@
-# Smooth Three-Section Loft Design
+# Smooth Section Loft Design
 
-`Document.LoftSections` builds one smooth solid through exactly three recorded
+`Document.LoftSections` builds one smooth solid through three or four recorded
 Sketch profiles. `docs/loft-design.md` continues to own the two-profile ruled
-`Document.Loft`. This document owns the separate quadratic construction, its
-admission gates, and the proof attached to its held mesh.
+`Document.Loft`. This document owns the separate smooth constructions, their
+admission gates, and the proofs attached to their held meshes.
 
 ## 1. Public operation and admitted class
 
@@ -16,8 +16,8 @@ type LoftSection struct {
 func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*Body, error)
 ```
 
-The call requires exactly three sections. Each passes the ordinary profile
-seam and area falsifier in argument order. The quadratic-scale route admits
+The call requires three or four sections. Each passes the ordinary profile
+seam and area falsifier in argument order. The three-section quadratic-scale route admits
 one outer loop with the same number and order of whole `LineSeg` records on
 all three profiles. Every line may walk forward or backward according to its
 recorded full-domain range; the walked vertices must meet exactly. Holes,
@@ -25,6 +25,7 @@ trimmed lines, curved segments, and differing segment counts return
 `ErrUnsupported` on that route. Section 6 owns a separate constant-section
 route for exactly matching curved records. Section 7 admits linearly varying
 four-arc circles. Section 8 admits varying fitted flanks with fixed arcs.
+Section 9 admits four non-affine rounded-rectangle sections.
 
 All three planes have world-XY `U` and `V` axes, the same XY origin, and
 strictly increasing Z origins with the middle Z exactly halfway between the
@@ -145,9 +146,9 @@ wall remains `ErrUnsupported`, as for every `NURBSSurface`.
 
 The admitted classes are increments, not a claim that general multi-section
 interpolation is determined by profile boundaries. Nonhomothetic profiles,
-varying curved profiles outside §§7–8, arbitrary planes, guides, centerlines,
+varying curved profiles outside §§7–9, arbitrary planes, guides, centerlines,
 and hole loops remain `ErrUnsupported`. Nil context or document, or a section count
-other than three, returns `ErrDegenerate`. A seam failure returns its own
+other than three or four, returns `ErrDegenerate`. A seam failure returns its own
 sentinel and leaves the document unchanged.
 
 ## 6. Exact constant curved sections
@@ -364,3 +365,78 @@ volume proof above remains local and much tighter. A finite XY/Z extent
 bounds the diameter used by faceted centroid and bounds readings. A
 non-finite proof term or a resource ceiling returns `ErrUnsupported`; no
 zero is inferred from successful mesh construction alone.
+
+## 9. Four rounded-rectangle sections with cubic width
+
+Four real Sketch profiles may define a non-affine rounded-rectangle loft.
+Each authenticated, hole-free outer loop contains four whole `LineSeg` and
+four whole `ArcSeg` records in counterclockwise alternating order. The
+records must exactly describe an axis-aligned rounded rectangle centered on
+the common plane origin, with half-width `w_i`, half-height `h`, and corner
+radius `r`. All sections have the same positive `h` and `r`, while their
+half-widths may differ. Each line/arc join is a shared recorded endpoint;
+the four arcs have exact cardinal quarter turns. A cyclic change in the
+first recorded edge does not change the shape. A reversed walk, trimmed
+record, hole, or mismatch returns `ErrUnsupported`.
+
+The four world-XY planes share one XY origin and have strictly increasing,
+equally spaced Z levels. The total height is at most 32 mm. The exact
+recorded values satisfy `1 <= r < h <= 32` mm and `r < w_i <= 32` mm.
+The corresponding cubic Bernstein width controls `B_0,...,B_3` interpolate
+the four exact widths at normalized heights `0,1/3,2/3,1`. Require either
+`B_0 <= B_1 <= B_2 <= B_3` or the reverse, and require every control to be
+strictly greater than `r`. At least one interior width differs from the
+straight interpolation of the end widths. These exact rational tests prove
+`w(t)>r`, monotonic width, and a convex rounded-rectangle section for every
+height. The outer loop stays simple because the width never closes the
+horizontal straight edges. Source profiles outside this class refuse.
+
+The denoted solid has a rounded-rectangle section with width
+`w(t)=sum_j B_j binomial(3,j)t^j(1-t)^(3-j)` at each normalized height `t`.
+Every source line and arc is met at its supplied height. The eight side
+patches inherit the first profile's segment roles and report
+`NURBSSurface`; the two end caps report `Plane`. Intermediate profiles do
+not create seam faces. A first-to-last ruled Loft differs whenever an
+interior width differs from its straight interpolation.
+
+The held mesh uses a certified convex 96-gon inside the unit disk. Its four
+cardinal vertices equal the source arc endpoints. The other dyadic
+vertices are proposed numerically, then exact rational checks require them
+inside the disk, in their named quadrants, with positive turns and every
+supporting edge at radius at least `1023/1024`. Each rounded corner uses
+one quarter of this polygon; exact straight segments connect the corners.
+Every ring uses the exact cubic width at a dyadic height and shares its
+vertices with the next band and the end caps. A station or level that cannot
+be held exactly as float64 returns `ErrUnsupported`. A fixed diagonal splits
+each wall quad. Both its vertices on one circular or vertical side move by
+the same horizontal amount; a horizontal side has constant Y. Therefore
+every held quad is planar and its two triangles tile the linear-width
+polygon wall exactly. A closed oriented audit and a full facet-contact
+audit run before the faceted body commits.
+
+Let `M=6 max(|B_2-2B_1+B_0|, |B_3-2B_2+B_1|)`. Linear interpolation
+of the cubic width over `N` equal bands differs by at most `M/(8N^2)`.
+The two-sided boundary bound is at most this width term plus `r/1024`.
+Choose a power-of-two `N` from 16 through 128 with a bound at most
+0.05 mm; otherwise return `ErrUnsupported`. The faceted payload publishes
+that bound, each live side/cap source face, and the completed mesh audits.
+
+At one height, two rounded rectangles with the same `h,r` and different
+widths are nested. Their symmetric-difference area is exactly
+`4h |w_a-w_b|`. The held quarter-arc polygon lies inside its corresponding
+round corner. If `A_P` is the certified unit 96-gon's exact area, its area
+deficit is at most `r^2 (pi_upper-A_P)`. Thus the occupied-volume
+symmetric difference between the denoted body and the held mesh is at most
+
+```text
+H * (4h M/(8N^2) + r^2 (pi_upper-A_P)).
+```
+
+This non-cancelling bound goes to `facetedPayload.volSymDiff` for
+`VerifyAll`, placement, and booleans. A source-area upper bound uses the
+maximum rounded-rectangle perimeter times `H+max|w'|`, plus both cap
+areas. The exact held-triangle area uppers join it as conservative
+`areaSlack`. A finite box enclosing the source and held mesh supplies the
+diameter bound. General four-section free-form profiles, changing corner
+radius or half-height, and non-monotone width controls remain
+`ErrUnsupported`.

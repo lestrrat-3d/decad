@@ -22,20 +22,24 @@ type LoftSection struct {
 	Profile *sketch.Profile
 }
 
-// LoftSections builds one solid through exactly three Sketch
-// profiles. The quadratic route admits positive homothetic whole-line loops
+// LoftSections builds one solid through three or four Sketch profiles.
+// The three-section quadratic route admits positive homothetic whole-line loops
 // star-shaped about their common origin. A varying four-arc circular section
 // can build as a ruled cone; exactly matching curved records build as a
 // straight prism. Two varying fitted flanks with unchanged circular arcs
-// use the source interpolants' quadratic height wall. All routes require ascending, equally spaced world-XY
-// planes and interpolate the middle section exactly
+// use the source interpolants' quadratic height wall. Four rounded rectangles
+// with a common radius and height use a cubic-width wall. All routes require
+// ascending, equally spaced world-XY planes and interpolate every section exactly
 // (docs/loft-sections-design.md). Other shapes refuse.
 func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*Body, error) {
-	if ctx == nil || d == nil || len(sections) != 3 {
-		return nil, fmt.Errorf("%w: LoftSections needs a context, document and exactly three sections", ErrDegenerate)
+	if ctx == nil || d == nil || (len(sections) != 3 && len(sections) != 4) {
+		return nil, fmt.Errorf("%w: LoftSections needs a context, document and three or four sections", ErrDegenerate)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if len(sections) == 4 {
+		return d.buildFourRoundedSections(ctx, sections)
 	}
 	var records [3]profileRecord
 	var planes [3]planeRecord
@@ -78,11 +82,39 @@ func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*
 	if err != nil {
 		return nil, err
 	}
-	frameStart, err := r3.NewFrame(planes[0].Origin, planes[0].U, planes[0].V)
+	return d.buildSmoothSectionBody(ctx, built, planes[0], planes[2])
+}
+
+func (d *Document) buildFourRoundedSections(ctx context.Context, sections []LoftSection) (*Body, error) {
+	var records [4]profileRecord
+	var planes [4]planeRecord
+	for i, section := range sections {
+		if section.Sketch == nil || section.Profile == nil {
+			return nil, fmt.Errorf("%w: LoftSections section %d needs a sketch and profile", ErrDegenerate, i)
+		}
+		profile, plane, sketchArea, err := recordProfile(section.Sketch, section.Profile)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := falsifyRecordedArea(profile, sketchArea, freeform.NewFreeformWork()); err != nil {
+			return nil, err
+		}
+		records[i], planes[i] = profile, plane
+	}
+	built, err := smoothloft.BuildFourRounded(ctx, records, planes)
+	if err != nil {
+		return nil, err
+	}
+	return d.buildSmoothSectionBody(ctx, built, planes[0], planes[3])
+}
+
+func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.Build,
+	start, end planeRecord) (*Body, error) {
+	frameStart, err := r3.NewFrame(start.Origin, start.U, start.V)
 	if err != nil {
 		return nil, fmt.Errorf("%w: the first loft section has no frame: %s", ErrDegenerate, err)
 	}
-	frameEnd, err := r3.NewFrame(planes[2].Origin, planes[2].U, planes[2].V)
+	frameEnd, err := r3.NewFrame(end.Origin, end.U, end.V)
 	if err != nil {
 		return nil, fmt.Errorf("%w: the last loft section has no frame: %s", ErrDegenerate, err)
 	}
@@ -91,8 +123,8 @@ func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*
 	for i := range built.EdgeCount {
 		groups[i] = facetGroup{origins: []FeatureRef{{producer: ref,
 			Role: fmt.Sprintf("side(0,%d)", i)}}, surface: NURBSSurface{}}
-		if built.ArcRadii[i] > 0 {
-			groups[i].surface = Cylinder{Origin: planes[0].Origin, Axis: r3.Vec{Z: 1},
+		if i < len(built.ArcRadii) && built.ArcRadii[i] > 0 {
+			groups[i].surface = Cylinder{Origin: start.Origin, Axis: r3.Vec{Z: 1},
 				Radius: units.Millimeters(built.ArcRadii[i])}
 		}
 	}
