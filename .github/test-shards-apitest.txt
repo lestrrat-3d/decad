@@ -708,6 +708,10 @@
 4	0.12	TestShellSideOpeningOblique
 4	0.00	TestShellSideOpeningRefusals
 4	0.04	TestStackedBlindCutReusesExactInterface
+4	0.01	TestStraightPrismScaledAtAcceptsPlacedSource
+4	0.01	TestStraightPrismScaledAtKeepsPolygonHole
+4	0.01	TestStraightPrismScaledAtPreservesVolumeAndCapRoles
+4	0.01	TestStraightPrismScaledAtRefusesCurvedAndSheetSources
 4	0.01	TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof
 4	1.80	TestStitchCurvedRevolveSurfaceKindsTessellate
 4	0.02	TestStitchCurvedVolumeBoundEncloses
