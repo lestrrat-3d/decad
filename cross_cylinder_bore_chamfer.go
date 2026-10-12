@@ -38,8 +38,8 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	if _, ok := edges[0].curve.(FacetedCurve); !ok {
 		return nil, true, fmt.Errorf("%w: the selected cross-bore mouth has no faceted edge witness", ErrUnsupported)
 	}
-	outer, outerOK := crossBoreFaceGroup(rec.target, loftCylinderBlankSideRole)
-	bore, boreOK := crossBoreFaceGroup(rec.tool, loftCylinderBlankSideRole)
+	outer, outerOK := crossBoreFaceGroup(rec.target, prismOuterFirstSideRole)
+	bore, boreOK := crossBoreFaceGroup(rec.tool, prismOuterFirstSideRole)
 	if !outerOK || !boreOK || !crossBoreEdgeHasOrigins(edges[0], outer, bore) ||
 		!(edges[0].start.position.X > rec.radius/2) {
 		return nil, true, fmt.Errorf("%w: the selected edge is not the positive cross-bore mouth", ErrUnsupported)

@@ -112,7 +112,7 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 		return nil, fmt.Errorf("%w: the selected oblique junction has no faceted edge witness", ErrUnsupported)
 	}
 	plateTop, topOK := obliqueBossFaceGroup(rec.plate, roleCapEnd)
-	bossSide, sideOK := obliqueBossFaceGroup(rec.boss, loftCylinderBlankSideRole)
+	bossSide, sideOK := obliqueBossFaceGroup(rec.boss, prismOuterFirstSideRole)
 	if !topOK || !sideOK || len(edges[0].faces) != 2 {
 		return nil, fmt.Errorf("%w: the selected edge is not the complete plate-to-cylinder junction", ErrUnsupported)
 	}
@@ -298,7 +298,7 @@ func buildObliqueBossFilletMesh(ctx context.Context,
 		{rec.plate, wallRoles[0]}, {rec.plate, wallRoles[1]},
 		{rec.plate, wallRoles[2]}, {rec.plate, wallRoles[3]},
 		{rec.plate, roleCapEnd},
-		{rec.boss, loftCylinderBlankSideRole}, {rec.boss, roleCapEnd},
+		{rec.boss, prismOuterFirstSideRole}, {rec.boss, roleCapEnd},
 	}
 	for _, role := range roles {
 		group, ok := obliqueBossFaceGroup(role.body, role.role)
