@@ -247,6 +247,7 @@
 1	0.01	TestPrismBooleanWholeSourceSegmentsChargeNothing
 1	0.00	TestPrismGroupGateDiameterSpansEveryLump
 1	0.00	TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange
+1	0.01	TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections
 1	0.01	TestPrismReflectedOperandChargesItsWalk
 1	0.00	TestPrismUnionPreservesEndDisplacements
 1	0.00	TestProvePatchChainPlaneAdmitsABoundedCoLevelChain
