@@ -76,6 +76,10 @@ leave every pair in the exact audit. Separate cap families and all cap-wall
 and wall-wall pairs always remain in the audit. A family-aware box tree
 counts its node visits and leaf comparisons under the existing per-call
 scan ceiling before allocating candidate pairs.
+After the bounded candidate list is built, the exact pair audit lifts only
+triangles named by that list. Its index tables still address the full mesh.
+The collapse check and projected-cap proof inspect every triangle first;
+structured Loft audits continue to prepare their complete exact tables.
 The audit triangle allowance follows the section-ring and cap cell counts,
 with a one-million-triangle memory ceiling. The crossing scan allowance is
 the smaller of all triangle pairs and 25 million scans per admitted sector.
