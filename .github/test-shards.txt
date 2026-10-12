@@ -222,6 +222,8 @@
 1	0.00	TestLoftChordCalibrationSweep
 1	0.00	TestLoftCrossingAuditBroadPhaseSkipsFarApartPairs
 1	0.00	TestLoftCrossingAuditPollsAfterFinalPair
+1	0.96	TestLoftCylinderBoreCentroidDiameter
+1	0.65	TestLoftCylinderUnionCentroidDiameter
 1	0.00	TestLoftExactPlaneSignsMatchDifferencePredicate
 1	0.00	TestLoftMassAccumulatorAreaNeverExact
 1	0.00	TestLoftPairingsAlignmentRotatesCorrespondence

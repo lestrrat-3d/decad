@@ -556,21 +556,6 @@ func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSectio
 	return out, nil
 }
 
-func lfHeldDiameter(verts []r3.Vec, departure float64) float64 {
-	lo, hi := [3]float64{math.Inf(1), math.Inf(1), math.Inf(1)},
-		[3]float64{math.Inf(-1), math.Inf(-1), math.Inf(-1)}
-	for _, vertex := range verts {
-		coords := [3]float64{vertex.X, vertex.Y, vertex.Z}
-		for i, v := range coords {
-			lo[i] = min(lo[i], v)
-			hi[i] = max(hi[i], v)
-		}
-	}
-	return proofbound.AbsSumUpper(proofbound.DvLenUpper(proofbound.HeldDelta(
-		r3.NewVec(hi[0], hi[1], hi[2]), r3.NewVec(lo[0], lo[1], lo[2]))),
-		proofbound.ProductUpper(2, departure))
-}
-
 // proveLoftFaceBounds composes source-region, projective parameter, ruled
 // wall, bilinear twist and held-station rounding bounds without replacing
 // the authenticated fitted source by sampled cap edges.
@@ -661,7 +646,7 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 	mesh.meshBound = meshBound
 	mesh.volSymDiff = volumeGap
 	mesh.areaSlack = areaSlack
-	mesh.dPair = lfHeldDiameter(mesh.verts, meshBound)
+	mesh.dPair = facetedSourceDiameterUpper(mesh.verts, meshBound)
 	mesh.contactAudited = true
 	return mesh, nil
 }
