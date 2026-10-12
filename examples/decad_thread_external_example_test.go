@@ -83,7 +83,7 @@ func Example_decad_thread_external() {
 		fmt.Printf("failed to draw the groove: %s\n", err)
 		return
 	}
-	tool, err := doc.Coil(context.Background(), gs, gp, axis, units.Millimeters(1.5), units.Scalar(1))
+	tool, err := decad.Coil(context.Background(), doc, gs, gp, axis, units.Millimeters(1.5), units.Scalar(1))
 	if err != nil {
 		fmt.Printf("failed to coil: %s\n", err)
 		return

@@ -49,7 +49,7 @@ The rules for rows live in `docs/layout.md`.
 | `sweep_mitre.go` | Mitred options, entry adapters, payload, placement and restatement. See sweep §16. |
 | `sweep_mitre_build.go` | Adapts mitred construction and runs the SM8 audit. See sweep §16.3–§16.4. |
 | `sweep_mitre_body.go` | Builds Table BM's topology and publishes §16.6's readings. See sweep §16.5–§16.6. |
-| `coil.go` | `Document.Coil`, `CoilOption`, Table CS gates, payload and placement. See helix §2, §4, §5.6. |
+| `coil.go` | `Coil`, `CoilOption`, Table CS gates, payload and placement. See helix §2, §4, §5.6. |
 | `coil_body.go` | The coil's Table CB topology and Table CM readings. See helix §6–§7. |
 | `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
 | `prism_payload.go` | `prismPayload` and coordinate adapters. See evaluator §5. |

@@ -58,7 +58,7 @@ func Example_decad_thread_internal() {
 		return
 	}
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
-	tool, err := doc.Coil(context.Background(), gs, gp, axis, units.Millimeters(1.5), units.Scalar(1))
+	tool, err := decad.Coil(context.Background(), doc, gs, gp, axis, units.Millimeters(1.5), units.Scalar(1))
 	if err != nil {
 		fmt.Printf("failed to coil: %s\n", err)
 		return

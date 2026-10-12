@@ -1,6 +1,6 @@
 # Helix Design
 
-`Document.Coil` builds one solid by moving a closed planar profile along a
+`Coil` builds one solid by moving a closed planar profile along a
 screw motion about an axis that lies in the profile's own plane: the section
 turns about the axis and slides along it at a stated pitch, staying in the
 axis plane throughout. A thread cutter, a spring and a coil are this one
@@ -92,8 +92,9 @@ pitch (CS4) rather than reducing to it.
 // MUST lie in the sketch plane, and the profile MUST lie strictly on one
 // side of it. The section stays in the axis plane throughout, so a thread
 // profile drawn beside the axis cuts the thread it draws.
-func (d *Document) Coil(
+func Coil(
     ctx context.Context,
+    doc *Document,
     s *sketch.Sketch,
     p *sketch.Profile,
     axis Axis,
@@ -667,7 +668,7 @@ the cylinder wall transversally and nothing is coplanar. `doc.Cut(ctx,
 cylinder, coil)`.
 
 ```go
-coil, err := doc.Coil(ctx, s, s.Profiles()[0], decad.SketchLine{Start: a, End: b},
+coil, err := decad.Coil(ctx, doc, s, s.Profiles()[0], decad.SketchLine{Start: a, End: b},
     units.Millimeters(1.5), units.Scalar(8))
 threaded, err := doc.Cut(ctx, cylinder, coil)
 ```
@@ -766,7 +767,7 @@ touches it.
 
 | PR | Model | Lands | Still staged |
 |---|---|---|---|
-| **1** | Opus (proof spec) | `Document.Coil`, `CoilOption`, `WithLeftHand`; Table CS; §5's construction over a `LineSeg`-only profile; Table CB; Table CM with `proofbound.LnInterval`/`AsinhInterval`; CD1 and CD7; the design doc, its layout row, `doc.go`'s support map, `docs/missing-features.md`; the executable example `examples/decad_coil_example_test.go` (a square-wire spring: `Volume`, `Centroid`, face count, `Verify` status). **This row is landed.** | CD2–CD5, CD9, arcs, threads |
+| **1** | Opus (proof spec) | `Coil`, `CoilOption`, `WithLeftHand`; Table CS; §5's construction over a `LineSeg`-only profile; Table CB; Table CM with `proofbound.LnInterval`/`AsinhInterval`; CD1 and CD7; the design doc, its layout row, `doc.go`'s support map, `docs/missing-features.md`; the executable example `examples/decad_coil_example_test.go` (a square-wire spring: `Volume`, `Centroid`, face count, `Verify` status). **This row is landed.** | CD2–CD5, CD9, arcs, threads |
 | **2** | Opus (proof spec) | `tessellate_coil.go`: CD2 with §5.4's `β`, §8.1, §8.2; CD3, CD4, CD9 follow; the `coilPayload` row in `docs/tessellation-design.md` §2 and `docs/payload-verification-design.md` §1. The thread examples `examples/decad_thread_external_example_test.go` and `..._internal_...`. **This row is landed.** | arcs, CD5 |
 | **3** | Opus (proof spec) | `ArcSeg`/`CircleSeg` profile segments: the profile station chain for an arc ruling (loft §5.1's chord chain, so a cell is chorded in both directions), `sag` folding the profile chord's own sagitta, the arc wall area by the Taylor-model bracket of §11.1, `Arc3` rim edges; the round-wire spring example `examples/decad_coil_round_wire_example_test.go`. **This row is landed**, with three choices the row left open: the chord count is a fixed `coilArcChordsPerTurn = 16` per turn of arc (§5.3), where loft §5.1 walks a count up to a sagitta target, since the crossing audit's triangle ceiling, not the sagitta, decides what a coil of several turns can hold; a whole circle's rim is a closed `Circle3`, the edge contract every builder follows for a closed circle, where §13 names `Arc3`; and a profile with an arc reads its region moments from the recorded region's bounded plane integrals (§7) | CD5 |
 | **4** | Sonnet (file-by-file) | CD5: `coilPayload` in `planarPairAdmits` and the planar snapshot; the `Verify` clearance fixture against a prism. **This row is landed.** | `CoilChain`, `WithSurfaceResult()`, modify |

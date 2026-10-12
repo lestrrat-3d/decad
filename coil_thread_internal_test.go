@@ -46,7 +46,7 @@ func threadClippedMoment(root, mouth, r float64) *big.Rat {
 func threadTool(t *testing.T, doc *Document, root, mouth, z0, turns float64) *Body {
 	t.Helper()
 	gs, gp := coilLoopsSketch(t, [][2]float64{{root, z0}, {mouth, z0 - threadHalfWidth}, {mouth, z0 + threadHalfWidth}})
-	tool, err := doc.Coil(t.Context(), gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(turns))
+	tool, err := Coil(t.Context(), doc, gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(turns))
 	require.NoError(t, err)
 	return tool
 }
@@ -228,7 +228,7 @@ func TestCoilThreadRunsOutOfTheEnd(t *testing.T) {
 	require.NoError(t, err)
 	const z0 = -0.375
 	gs, gp := coilLoopsSketch(t, [][2]float64{{4.1, z0}, {5.3, z0 - threadHalfWidth}, {5.3, z0 + threadHalfWidth}})
-	tool, err := doc.Coil(t.Context(), gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(3))
+	tool, err := Coil(t.Context(), doc, gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(3))
 	require.NoError(t, err)
 	res, err := Cut(t.Context(), cylinder, tool)
 	require.NoError(t, err)
@@ -266,7 +266,7 @@ func TestCoilCapFlushWithAnAxialFaceRefuses(t *testing.T) {
 		half, err := doc.Revolve(cs, cpf, coilAxisV, AngleExtent{A: units.Degrees(180), Dir: dir})
 		require.NoError(t, err)
 		gs, gp := coilLoopsSketch(t, [][2]float64{{4.1, 3}, {5.3, 3 - threadHalfWidth}, {5.3, 3 + threadHalfWidth}})
-		tool, err := doc.Coil(t.Context(), gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+		tool, err := Coil(t.Context(), doc, gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 		require.NoError(t, err)
 		_, err = Cut(t.Context(), half, tool)
 		require.ErrorIs(t, err, ErrUnsupported)
