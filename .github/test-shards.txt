@@ -64,6 +64,8 @@
 2	23.00	TestCurvedSourceArcSplitsClosedRevolveShell
 2	11.30	TestCurvedSourceCapCirclesSplitClosedBlankShell
 2	5.10	TestCurvedHeelCapEndpointsHaveSourceBounds
+1	0.00	TestCurvedCapRayOrderRequiresSeparatedSourceBoxes
+1	0.00	TestCurvedCapRayRejectsGridCollapse
 2	0.10	TestCurvedHeelArcSideTieTimeEndpointOwnership
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops

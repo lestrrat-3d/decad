@@ -375,7 +375,17 @@ For each occupied heel arc, the endpoint builder rederives its live source
 record. It projects each source-box center onto the exact circle and bounds
 the full movement to every point in that box, including float rounding.
 The focused neutral test requires all four endpoint bounds below 0.1 mm.
-These points are not yet welded to the blank rings or LoftFaces walls.
+The builder inserts those four angular rays into every blank ring and uses
+the same bounded held point on each owning heel circle. Each cap source box
+must stay strictly between its neighboring rays, including another cap ray
+or a seam ray with its source movement bound. A collision with a grid, seam,
+or cap ray refuses. The two occupied ring walks follow the source arc's
+positive-Y selection and retain live side-cell ties. Adding rays cannot
+increase the blank circle chord gap; endpoint movement enters the shell's
+face bound. The cap-ring constructor requires that bound below 0.1 mm and
+repeats the exact crossing, Euler, and volume audits. LoftFaces wall and cap
+facets need separate source-curve, chord,
+and rounding bounds before they can be welded to these vertices.
 
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
