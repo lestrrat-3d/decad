@@ -149,19 +149,14 @@ func revolveLoftFacesHeelRetainedTrackFromCurrent(ctx context.Context,
 	if arcIndex < 0 {
 		return nil, false, nil
 	}
-	var stations []int
-	for index, segment := range proof.trim.stationGroup {
-		if segment == arcIndex {
-			stations = append(stations, index)
-		}
-	}
-	if len(stations) < 2 {
+	// Birth and terminal certificates bind the unique finite root bracket.
+	// The live station groups must also form the complete Arc run.
+	stations, ok := revolveLoftFacesCompleteArcRun(proof.trim, arcIndex)
+	if !ok {
 		return nil, false, nil
 	}
-	stations = append(stations, (stations[len(stations)-1]+1)%len(proof.trim.stationGroup))
-	var ok bool
 	var err error
-	track.arc, ok, err = revolveLoftFacesArcSeamVertices(ctx, proof.trim,
+	track.arc, ok, err = revolveLoftFacesArcSeamVerticesUnchecked(ctx, proof.trim,
 		band, stations, root, meridian)
 	if err != nil || !ok || len(track.arc) < 2 {
 		return nil, false, err

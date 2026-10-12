@@ -104,8 +104,8 @@ func revolveLoftFacesHeelRootBrackets(ctx context.Context,
 			return [2]*revolveLoftFacesHeelRootEnclosure{}, false
 		}
 		ref := proof.sourceRefs[band][segment]
-		face, duplicate := revolveLoftFacesLiveSourceFace(proof.tooth, ref)
-		if duplicate || face == nil {
+		face := revolveLoftFacesVerticalLiveFace(proof.tooth, ref)
+		if face == nil {
 			return [2]*revolveLoftFacesHeelRootEnclosure{}, false
 		}
 		event := -1
@@ -141,7 +141,7 @@ func revolveLoftFacesHeelJointSliverBox(first, last loftFaceMap,
 	}
 	m, b := revolveLoftFacesMeridian(meridian)
 	q := spiralRootPolynomial(first, last, span, m, b)
-	for depth := 0; depth <= 32; depth++ {
+	for depth := range 33 {
 		width := big.NewRat(1, int64(1)<<depth)
 		sLo, sHi := lfZero(), width
 		if atEnd {
