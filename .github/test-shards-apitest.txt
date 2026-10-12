@@ -914,6 +914,7 @@
 5	0.00	TestLinkageConfiguration
 5	0.00	TestLoftChainRefusesANonParallelOrNegativePlanePair
 5	9.97	TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder
+5	0.29	TestLoftFacesTwoAndThreeCapsFromPointSlabs
 5	0.00	TestLoftFrustumVolumeMatchesClosedForm
 5	0.01	TestLoftPlacedNearMaxFloatSectionRefusesUnsupported
 5	0.00	TestLoftSeamGates

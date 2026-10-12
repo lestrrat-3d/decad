@@ -10,11 +10,14 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// LoftFaces builds one solid through nine ordered complete caps of the same
+const maxLoftFacesSections = 32
+
+// LoftFaces builds one solid through ordered complete caps of the same
 // authenticated point-loft Split source (docs/loft-face-sections-design.md).
 func (d *Document) LoftFaces(ctx context.Context, sections ...*Face) (*Body, error) {
-	if ctx == nil || d == nil || len(sections) != 9 {
-		return nil, fmt.Errorf("%w: LoftFaces needs a context, document and exactly nine cap faces", ErrDegenerate)
+	if ctx == nil || d == nil || len(sections) < 2 || len(sections) > maxLoftFacesSections {
+		return nil, fmt.Errorf("%w: LoftFaces needs a context, document and 2 to %d cap faces",
+			ErrDegenerate, maxLoftFacesSections)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

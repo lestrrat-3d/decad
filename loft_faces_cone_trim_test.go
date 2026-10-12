@@ -59,6 +59,25 @@ func TestLoftCapToeConeProofUsesWholeSourceBox(t *testing.T) {
 	}
 }
 
+func TestLoftFacesCapRecordChecksVariableSourceShape(t *testing.T) {
+	source := &pointSectionRecord{sourceStation: make([]Point2, 4)}
+	record := &loftFacesCapRecord{source: source, stationGroup: make([]int, 4)}
+	for _, count := range []int{2, 3, 9, maxLoftFacesSections} {
+		record.maps = make([]loftFaceMap, count)
+		record.bounds = make([]loftFaceCapBounds, count)
+		require.True(t, loftFacesCapRecordReady(record), "cap count %d", count)
+	}
+	record.bounds = record.bounds[:len(record.bounds)-1]
+	require.False(t, loftFacesCapRecordReady(record))
+	record.maps = make([]loftFaceMap, maxLoftFacesSections+1)
+	record.bounds = make([]loftFaceCapBounds, len(record.maps))
+	require.False(t, loftFacesCapRecordReady(record))
+	record.maps = make([]loftFaceMap, 3)
+	record.bounds = make([]loftFaceCapBounds, 3)
+	record.stationGroup = record.stationGroup[:3]
+	require.False(t, loftFacesCapRecordReady(record))
+}
+
 func TestLoftCapConeRecordDoesNotSurviveRoundTripPlacement(t *testing.T) {
 	doc := New()
 	plate := internalBoxBody(t, doc, 0, 0, 20, 20, 8)
