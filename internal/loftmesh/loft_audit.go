@@ -126,6 +126,9 @@ func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int)
 		Planes:      make([]LoftExactPlane, len(tris)),
 		Projections: make([][3]meshbool.Xp2, len(tris)),
 	}
+	// Neighboring triangles reuse a vertex's exact projection on the same plane.
+	var projected [3][]meshbool.Xp2
+	axes := [3][2]int{{0, 1}, {2, 0}, {1, 2}}
 	for i, tri := range tris {
 		d.Corners[i] = LoftTriCorners(verts, tri)
 		d.Xtris[i] = [3]proof.Xpt{d.Xverts[tri[0]], d.Xverts[tri[1]], d.Xverts[tri[2]]}
@@ -133,15 +136,15 @@ func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int)
 		d.floatNorms[i] = d.Norms[i].Vec()
 		d.Planes[i] = NewLoftExactPlane(d.Xtris[i][0], d.Norms[i])
 		projection := ProjectionPairIndex(meshbool.ProjAxes(d.Norms[i]))
-		for j, p := range d.Xtris[i] {
-			switch projection {
-			case 0:
-				d.Projections[i][j] = meshbool.NewXP2FromXpt(p, 0, 1)
-			case 1:
-				d.Projections[i][j] = meshbool.NewXP2FromXpt(p, 2, 0)
-			default:
-				d.Projections[i][j] = meshbool.NewXP2FromXpt(p, 1, 2)
+		if projected[projection] == nil {
+			projected[projection] = make([]meshbool.Xp2, len(exact))
+		}
+		for j, vi := range tri {
+			if projected[projection][vi].U == nil {
+				uv := axes[projection]
+				projected[projection][vi] = meshbool.NewXP2FromXpt(exact[vi], uv[0], uv[1])
 			}
+			d.Projections[i][j] = projected[projection][vi]
 		}
 	}
 	return d
