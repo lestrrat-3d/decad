@@ -973,7 +973,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	if err != nil {
 		return nil, err
 	}
-	shellCap, err := faceOfRole("shellCap")
+	shellCap, err := faceOfRole(roleShellCap)
 	if err != nil {
 		return nil, err
 	}

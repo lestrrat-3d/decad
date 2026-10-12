@@ -117,6 +117,9 @@ type revolvePayload struct {
 	// five-segment meridian, side(0,1) is the far cap and side(0,4) the
 	// near cap. Placement re-evaluates this same meridian and roles.
 	draftCircleCaps bool
+	// draftCircleShellRoles stamps a drafted circular cup's kept cap, open
+	// rim, cavity floor and cavity wall after the meridian revolution.
+	draftCircleShellRoles bool
 }
 
 // requireExactRevolveSection is the reject-only guard an operation that
@@ -520,6 +523,11 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	}
 	if rp.draftCircleCaps {
 		if err := addDraftCircleCapRoles(ctx, body, ref); err != nil {
+			return nil, err
+		}
+	}
+	if rp.draftCircleShellRoles {
+		if err := addDraftCircleShellRoles(ctx, body, ref); err != nil {
 			return nil, err
 		}
 	}

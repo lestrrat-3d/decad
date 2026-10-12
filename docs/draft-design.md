@@ -410,7 +410,7 @@ nothing else.
 | **DD11** | `MassProperties` and `dynamics` | the verified-mesh path (`verifiedMeshMassProperties`) over DD1's mesh; `ErrUnsupported` where the band admission refuses | 2 |
 | **DD12** | `Placed`, `Duplicate`, `PlacedCopy`, `Mirrored`, `MirroredCopy` | the payload implements `transform()` and `placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `WithJoin` refuses (it rewrites a prism's or stacked prism's section) | 1 |
 | **DD13** | `Patterned` | `placedInstance` and a boolean `Union` (the mesh path); the frame-keeping arm does not take the class | 2 |
-| **DD14** | `Fillet`, `Chamfer`, `Shell` | A positive-taper, one-sided, full circular solid admits one complete far-cap outer rim fillet (§10.4) or symmetric chamfer (§10.5). Other fillets, chamfers and shells remain modify S3, `ErrUnsupported`. A shell of a draft body — the molded cup — needs a cavity drafted by the same angle over the section offset by `t / cos α`, floored `t` above the kept cap | — |
+| **DD14** | `Fillet`, `Chamfer`, `Shell` | A positive-taper, one-sided, full circular solid admits one complete far-cap outer rim fillet (§10.4), symmetric chamfer (§10.5), or inward shell with that cap removed (§10.6). Other selections and draft shapes remain modify S3, `ErrUnsupported` | — |
 | **DD15** | `Draft` of a draft body | SD23 | — |
 | **DD16** | `Thicken`, `Offset`, `Patch`, `Stitch`, `Trim`/`Extend`/`Split` | not reached: a draft body is a solid (SD12 refuses the sheet form) | — |
 | **DD17** | Motion and linkage bounds | `motion_bound.go` reads near and widened far section bounds. `internal/motionbound/record_radius.go` reads each segment's carrier and walk. | 2 |
@@ -641,6 +641,40 @@ proof. The removed volume has the independent closed form
 `πc²/n · [r + c(k/n−1)/3]`. The far circle survives as a smaller cap rim,
 and the new cone meets the source cone at one whole circular junction.
 
+### 10.6 One circular drafted cup (DD14)
+
+`Shell` admits the same positive-taper full-circle source as §10.4 when the
+one selected opening is its far cap and the sense is inward. The source must
+have one near-start draft slab, no hole or kept wall, and an exact signed-axis
+sketch frame. `WithNoOpenings`, outward shelling, another cap, a partial
+circle and an additional region remain S3.
+
+Let the source's near radius be `R`, height `h`, inward draft amount `d`,
+`k = d/h`, and shell thickness `t`. The outer cone has radius `R−kz`.
+The cavity floor is at `z=t`; its conical wall has radius
+`R−kz−t√(1+k²)`. Its top opening therefore has radius
+`R−d−t√(1+k²)`. The build requires positive interval lower bounds for
+`h−t`, that opening radius, and the offset. A six-line meridian records the
+axis segment below the floor, floor, cavity cone, top annulus, outer cone and
+kept near cap. Its full revolution has one shell and five faces.
+
+The near circle, far offset interval, far-contour displacement and source
+frame come from the authenticated `draftPayload`. Bounded arithmetic encloses
+the floor and both cone endpoints. The largest endpoint, frame-lift and
+far-contour displacement receives a 64-fold whole-section charge; the
+gate also requires that charge to be less than one sixteenth of the floor,
+cavity and rim clearances. Each denoted meridian segment pairs with a held
+line of the same kind by its affine parameter, so its interior displacement
+does not exceed its endpoint displacement. `evalRevolve` applies its mass,
+face, placement and occupied-volume proofs to the charged meridian. The
+result adds `capStart`, `rim(0)`, `shellCap` and `shellSide(0,0)` roles to
+its own revolved faces; placement re-mints them.
+
+The independent remaining-volume formula is the difference of two conical
+frusta. With `r=R−d`, `c0=R−kt−t√(1+k²)`, and
+`c1=r−t√(1+k²)`, it is
+`π/3·[h(R²+Rr+r²)−(h−t)(c0²+c0c1+c1²)]`.
+
 ## 11. Required tests
 
 Every fixture asserts computed geometry against a closed form and asserts
@@ -677,8 +711,17 @@ and F7 with `d` closing the ring), SD7 (a thin rectangle whose short walls'
 miters cross), SD8 (a plate whose off-centre hole widens across the outer
 wall), SD12, SD13 (an angle of
 `1e-14°` on a 1 mm sweep). SD15 is pinned in `internal/offset2d/sharp_test.go`
-(§5). Beside them, a draft body's requests outside §10.4–§10.5 refuse it by
+(§5). Beside them, a draft body's requests outside §10.4–§10.6 refuse it by
 name (DD14), and `MirroredCopy` builds it (DD12).
+
+**Circular shell fixtures** (`apitest/draft_circle_shell_test.go`): a
+Sketch-produced radius-8 circle drafted at `5°` over 10 mm has its far cap
+removed inward at `t=1`. Its one-shell result has a kept cap, top rim,
+cavity cone and floor with their own roles. Its bounded volume covers
+§10.6's frustum difference; its 0.1 mm `VerifyAll` mesh proves its boundary
+and occupied volume. Placement preserves those roles and the volume.
+Thickness that consumes the opening, a near-cap selection, outward sense,
+negative taper and a holed section refuse.
 
 **`Draft` fixtures** (`apitest/draft_test.go`, `draft_internal_test.go`):
 
@@ -836,9 +879,9 @@ draft body, `Draft`'s included:
 | 4 | landed | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20 |
 | 5 | landed | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |
 | 6 | landed | DD8; SD3, SD4, two-sided SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); `NeutralFrame` and the interior neutral level |
-| 7 | landed | DD8; SD3, SD4, SD12, SD20; two-sided undercut survey; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); `NeutralFrame` and the interior neutral level |
+| 7 | landed | DD8; SD3, SD4, SD12, SD20; two-sided undercut survey; clearance carriers (DD9); DD14 outside §10.4–§10.6; `NeutralFrame` and the interior neutral level |
 
 The unscheduled reach, in the order a later design should take it: the
-drafted shell (DD14, the molded cup), the interior neutral level, the mitered circular
+interior neutral level, the mitered circular
 corner as modify-reach §8.3's ruled stand-in, the wall and concave-radius
 surveys (DD8), and the clearance carriers (DD9).

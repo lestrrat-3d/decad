@@ -19,6 +19,8 @@ import (
 // shellBoxHeight is the sweep height of the plate every shell test hollows.
 const shellBoxHeight = 20.0
 
+const roleRim0 = "rim(0)"
+
 // shellBox extrudes the 100×60 plate by shellBoxHeight — a straight prism whose
 // two caps are the faces a shell removes.
 func shellBox(t *testing.T) (*decad.Document, *decad.Body) {
@@ -424,7 +426,7 @@ func TestShellCupInwardBox(t *testing.T) {
 	roles := shellRoleSet(body)
 	require.Contains(t, roles, roleCapStart)
 	require.Contains(t, roles, "shellCap")
-	require.Contains(t, roles, "rim(0)")
+	require.Contains(t, roles, roleRim0)
 	require.Contains(t, roles, "side(0,0)")
 	require.Contains(t, roles, "shellSide(0,0)")
 
@@ -611,7 +613,7 @@ func TestShellCupHoledInward(t *testing.T) {
 	// Roles are minted from the RESULT's own record (§11): a rim per loop, and
 	// the hole's own wall (loop 1) in both the outer and the cavity index space.
 	roles := shellRoleSet(body)
-	for _, want := range []string{roleCapStart, "shellCap", "rim(0)", "rim(1)", "side(0,0)", "side(1,0)", "shellSide(0,0)", "shellSide(1,0)"} {
+	for _, want := range []string{roleCapStart, "shellCap", roleRim0, "rim(1)", "side(0,0)", "side(1,0)", "shellSide(0,0)", "shellSide(1,0)"} {
 		require.Contains(t, roles, want, `missing role %q`, want)
 	}
 
@@ -676,7 +678,7 @@ func TestShellCupHoledRimLoopOrder(t *testing.T) {
 	body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(th))
 	require.NoError(t, err)
 
-	for _, role := range []string{"rim(0)", "rim(1)"} {
+	for _, role := range []string{roleRim0, "rim(1)"} {
 		rim := rimByRole(t, body, role)
 		loops := rim.Loops()
 		require.Len(t, loops, 2, `%s is a rim annulus with two loops`, role)
@@ -711,7 +713,7 @@ func TestShellCupHoledTwoPosts(t *testing.T) {
 
 	// A rim per loop: outer plus one per post.
 	roles := shellRoleSet(body)
-	for _, want := range []string{"rim(0)", "rim(1)", "rim(2)", "shellSide(1,0)", "shellSide(2,0)"} {
+	for _, want := range []string{roleRim0, "rim(1)", "rim(2)", "shellSide(1,0)", "shellSide(2,0)"} {
 		require.Contains(t, roles, want, `missing role %q`, want)
 	}
 
