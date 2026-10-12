@@ -3,8 +3,11 @@ package decad
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -137,4 +140,81 @@ func loftCylinderTabProfile(t *testing.T, ctx context.Context, world *sketch.Wor
 	require.True(t, s.Profiles()[0].Valid)
 	require.Len(t, s.Profiles()[0].Outer, 6)
 	return s, s.Profiles()[0]
+}
+
+// loftCylinderTriangleMinRadiusReference is the rational minimum projected
+// radius loftCylinderTriangleMinRadius reads: the nearest point on each closed
+// edge, or zero when the origin is inside.
+func loftCylinderTriangleMinRadiusReference(verts []r3.Vec, tri [3]int) float64 {
+	type point struct{ x, y *big.Rat }
+	var p [3]point
+	for i, index := range tri {
+		p[i] = point{proofarith.FloatRat(verts[index].X), proofarith.FloatRat(verts[index].Y)}
+	}
+	best := new(big.Rat)
+	for i := range 3 {
+		a, b := p[i], p[(i+1)%3]
+		dx, dy := new(big.Rat).Sub(b.x, a.x), new(big.Rat).Sub(b.y, a.y)
+		den := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
+		t := new(big.Rat)
+		if den.Sign() > 0 {
+			num := new(big.Rat).Neg(new(big.Rat).Add(
+				new(big.Rat).Mul(a.x, dx), new(big.Rat).Mul(a.y, dy)))
+			t.Quo(num, den)
+			if t.Sign() < 0 {
+				t.SetInt64(0)
+			} else if t.Cmp(big.NewRat(1, 1)) > 0 {
+				t.SetInt64(1)
+			}
+		}
+		qx := new(big.Rat).Add(a.x, new(big.Rat).Mul(t, dx))
+		qy := new(big.Rat).Add(a.y, new(big.Rat).Mul(t, dy))
+		q := new(big.Rat).Add(new(big.Rat).Mul(qx, qx), new(big.Rat).Mul(qy, qy))
+		if i == 0 || q.Cmp(best) < 0 {
+			best = q
+		}
+	}
+	var signs [3]int
+	for i := range 3 {
+		a, b := p[i], p[(i+1)%3]
+		cross := new(big.Rat).Sub(new(big.Rat).Mul(a.x, b.y), new(big.Rat).Mul(a.y, b.x))
+		signs[i] = cross.Sign()
+	}
+	if (signs[0] > 0 && signs[1] > 0 && signs[2] > 0) ||
+		(signs[0] < 0 && signs[1] < 0 && signs[2] < 0) {
+		return 0
+	}
+	return proofbound.RatSqrtDown(best)
+}
+
+// TestLoftCylinderTriangleMinRadiusMatchesRational covers an origin inside,
+// on an edge and on a vertex, a nearest vertex, a nearest edge interior, a
+// degenerate edge, and coordinates with very different binary exponents.
+func TestLoftCylinderTriangleMinRadiusMatchesRational(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		tri  [3]r3.Vec
+	}{
+		{"origin inside", [3]r3.Vec{{X: -1, Y: -1}, {X: 2, Y: -1}, {X: 0, Y: 3}}},
+		{"origin on edge", [3]r3.Vec{{X: -1, Y: 0}, {X: 1, Y: 0}, {X: 0, Y: 3}}},
+		{"origin on vertex", [3]r3.Vec{{X: 0, Y: 0}, {X: 1, Y: 0}, {X: 0, Y: 3}}},
+		{"nearest vertex", [3]r3.Vec{{X: 3, Y: 4}, {X: 6, Y: 4}, {X: 5, Y: 9}}},
+		{"nearest edge interior", [3]r3.Vec{{X: 2, Y: -5}, {X: 2, Y: 5}, {X: 9, Y: 0.5}}},
+		{"degenerate edge", [3]r3.Vec{{X: 3, Y: 1}, {X: 3, Y: 1}, {X: 5, Y: 8}}},
+		{"mixed exponents", [3]r3.Vec{{X: 1e-3, Y: 3e2}, {X: 3e2, Y: 1e-3}, {X: 4e2, Y: 5e2}}},
+		{"tiny and large", [3]r3.Vec{{X: 1e-9, Y: 2e-9}, {X: 7e3, Y: 1e-7}, {X: 1e-5, Y: 9e3}}},
+		{"dyadic fractions", [3]r3.Vec{{X: 0.1, Y: 0.7}, {X: 0.3, Y: -0.9}, {X: 1.1, Y: 0.2}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			verts := tc.tri[:]
+			tri := [3]int{0, 1, 2}
+			require.Equal(t, loftCylinderTriangleMinRadiusReference(verts, tri),
+				loftCylinderTriangleMinRadius(verts, tri))
+			// An edge-only call (the repeated index form used by seams).
+			edge := [3]int{0, 1, 1}
+			require.Equal(t, loftCylinderTriangleMinRadiusReference(verts, edge),
+				loftCylinderTriangleMinRadius(verts, edge))
+		})
+	}
 }

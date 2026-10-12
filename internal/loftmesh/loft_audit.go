@@ -448,22 +448,30 @@ func LoftPlaneSeparated(ta, tb [3]r3.Vec) bool {
 // loftPlaneSeparatedPrepared reuses the audit's exact lifts and normals if
 // the same adaptive float sign as LoftPlaneSeparated needs an exact fallback.
 func loftPlaneSeparatedPrepared(data *LoftAuditData, i, j int) bool {
+	separated, _, _ := loftPlaneSeparatedSigns(data, i, j)
+	return separated
+}
+
+// loftPlaneSeparatedSigns is loftPlaneSeparatedPrepared with the exact signs
+// it decided handed back: sa is triangle i's corners against plane j and sb
+// triangle j's against plane i, the same values TrianglePlaneSigns forms.
+// Both triples are complete only when the pair is not separated.
+func loftPlaneSeparatedSigns(data *LoftAuditData, i, j int) (bool, [3]int, [3]int) {
 	ta, tb := data.corners(i), data.corners(j)
 	xta, xtb := data.xtri(i), data.xtri(j)
-	var sb [3]int
+	var sa, sb [3]int
 	for k := range sb {
 		sb[k] = proof.OrientSignPrepared(ta[0], ta[1], ta[2], tb[k],
 			xta[0], xtb[k], data.Norms[i])
 	}
 	if meshbool.AllOneSide(sb) {
-		return true
+		return true, sa, sb
 	}
-	var sa [3]int
 	for k := range sa {
 		sa[k] = proof.OrientSignPrepared(tb[0], tb[1], tb[2], ta[k],
 			xtb[0], xta[k], data.Norms[j])
 	}
-	return meshbool.AllOneSide(sa)
+	return meshbool.AllOneSide(sa), sa, sb
 }
 
 // AuditLoftPair classifies one triangle pair against its recorded adjacency
@@ -540,6 +548,14 @@ func AuditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
 // vertex; the first stays entirely on its own side. Convexity confines their
 // intersection to that vertex. A zero sign falls through to classification.
 func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts) (LoftPairOutcome, error) {
+	return auditLoftPairDataSigned(data, tris, i, j, shortcuts, nil, nil)
+}
+
+// auditLoftPairDataSigned is AuditLoftPairData for a pair whose exact plane
+// signs the broad phase already decided (loftPlaneSeparatedSigns). The
+// signs are read only for a pair sharing no vertex; nil means compute them.
+func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts,
+	knownA, knownB *[3]int) (LoftPairOutcome, error) {
 	ta := data.corners(i)
 	tb := data.corners(j)
 	xta := data.xtri(i)
@@ -561,7 +577,12 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 		}
 	}
 
-	signsB := TrianglePlaneSigns(data.Planes[i], xtb)
+	var signsB [3]int
+	if knownB != nil && sharedCount == 0 {
+		signsB = *knownB
+	} else {
+		signsB = data.planeSigns(i, xtb, tb)
+	}
 	if shortcuts.Certificates && sharedCount == 1 && meshbool.CountZero(signsB) == 3 &&
 		CoplanarIsolatedSharedVertex(data, tris[i], tris[j], i, j, shared[0]) {
 		return LoftPairVertexCertificate, nil
@@ -569,7 +590,12 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 	if shortcuts.Certificates && sharedCount == 1 && IsolatedSharedVertex(tris[j], shared[0], signsB) {
 		return LoftPairVertexCertificate, nil
 	}
-	signsA := TrianglePlaneSigns(data.Planes[j], xta)
+	var signsA [3]int
+	if knownA != nil && sharedCount == 0 {
+		signsA = *knownA
+	} else {
+		signsA = data.planeSigns(j, xta, ta)
+	}
 	if shortcuts.Certificates && sharedCount == 1 && IsolatedSharedVertex(tris[i], shared[0], signsA) {
 		return LoftPairVertexCertificate, nil
 	}
@@ -704,6 +730,21 @@ func TrianglePlaneSigns(plane LoftExactPlane, other [3]proof.Xpt) [3]int {
 	var sum, term big.Int
 	for i, p := range other {
 		signs[i] = plane.Sign(p, &sum, &term)
+	}
+	return signs
+}
+
+// planeSigns is TrianglePlaneSigns(data.Planes[i], xother) with the float
+// corners other of the same triangle: each sign is the exact sign of
+// Norms[i] . (point - anchor), which is what the cached plane evaluates, so
+// the adaptive float filter decides the generic corner and the exact lift
+// decides the rest.
+func (d *LoftAuditData) planeSigns(i int, xother [3]proof.Xpt, other [3]r3.Vec) [3]int {
+	t := d.corners(i)
+	xt := d.xtri(i)
+	var signs [3]int
+	for k := range signs {
+		signs[k] = proof.OrientSignPrepared(t[0], t[1], t[2], other[k], xt[0], xother[k], d.Norms[i])
 	}
 	return signs
 }

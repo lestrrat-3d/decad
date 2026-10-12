@@ -418,46 +418,70 @@ func loftCylinderRootCollar(lp loftPayload, radius, height float64) (float64, bo
 // A triangle's minimum projected radius is computed over its whole convex
 // patch using exact dyadic inputs, not from its sampled corner radii.
 func loftCylinderTriangleMinRadius(verts []r3.Vec, tri [3]int) float64 {
-	type point struct{ x, y *big.Rat }
-	var p [3]point
+	return proofbound.RatSqrtDown(loftCylinderTriangleMinRadius2(verts, tri))
+}
+
+// loftCylinderTriangleMinRadius2 is the exact squared distance from the axis
+// to the projected triangle: zero when the origin lies inside, otherwise the
+// minimum over the three edges of the squared distance to the closed edge.
+// Every coordinate is a float, so its denominator is a power of two and the
+// largest one is common to all six; the algebra then runs in integers and one
+// rational is formed at the end.
+func loftCylinderTriangleMinRadius2(verts []r3.Vec, tri [3]int) *big.Rat {
+	var coords [3][2]*big.Rat
+	den := big.NewInt(1)
 	for i, index := range tri {
-		p[i] = point{proofarith.FloatRat(verts[index].X), proofarith.FloatRat(verts[index].Y)}
-	}
-	best := new(big.Rat)
-	for i := range 3 {
-		a, b := p[i], p[(i+1)%3]
-		dx, dy := new(big.Rat).Sub(b.x, a.x), new(big.Rat).Sub(b.y, a.y)
-		den := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
-		t := new(big.Rat)
-		if den.Sign() > 0 {
-			num := new(big.Rat).Neg(new(big.Rat).Add(
-				new(big.Rat).Mul(a.x, dx), new(big.Rat).Mul(a.y, dy)))
-			t.Quo(num, den)
-			if t.Sign() < 0 {
-				t.SetInt64(0)
-			} else if t.Cmp(big.NewRat(1, 1)) > 0 {
-				t.SetInt64(1)
+		coords[i] = [2]*big.Rat{proofarith.FloatRat(verts[index].X), proofarith.FloatRat(verts[index].Y)}
+		for _, c := range coords[i] {
+			if c.Denom().Cmp(den) > 0 {
+				den = c.Denom()
 			}
 		}
-		qx := new(big.Rat).Add(a.x, new(big.Rat).Mul(t, dx))
-		qy := new(big.Rat).Add(a.y, new(big.Rat).Mul(t, dy))
-		q := new(big.Rat).Add(new(big.Rat).Mul(qx, qx), new(big.Rat).Mul(qy, qy))
-		if i == 0 || q.Cmp(best) < 0 {
-			best = q
+	}
+	var p [3][2]*big.Int
+	for i := range coords {
+		for k, c := range coords[i] {
+			p[i][k] = new(big.Int).Mul(c.Num(), new(big.Int).Quo(den, c.Denom()))
 		}
 	}
 	// If the origin lies inside the projected triangle, its distance is zero.
 	var signs [3]int
 	for i := range 3 {
 		a, b := p[i], p[(i+1)%3]
-		cross := new(big.Rat).Sub(new(big.Rat).Mul(a.x, b.y), new(big.Rat).Mul(a.y, b.x))
+		cross := new(big.Int).Sub(new(big.Int).Mul(a[0], b[1]), new(big.Int).Mul(a[1], b[0]))
 		signs[i] = cross.Sign()
 	}
 	if (signs[0] > 0 && signs[1] > 0 && signs[2] > 0) ||
 		(signs[0] < 0 && signs[1] < 0 && signs[2] < 0) {
-		return 0
+		return new(big.Rat)
 	}
-	return proofbound.RatSqrtDown(best)
+	den2 := new(big.Int).Mul(den, den)
+	norm2 := func(x, y *big.Int) *big.Int {
+		return new(big.Int).Add(new(big.Int).Mul(x, x), new(big.Int).Mul(y, y))
+	}
+	var bestNum, bestDen *big.Int
+	for i := range 3 {
+		a, b := p[i], p[(i+1)%3]
+		dx, dy := new(big.Int).Sub(b[0], a[0]), new(big.Int).Sub(b[1], a[1])
+		dd := norm2(dx, dy)
+		num := new(big.Int).Add(new(big.Int).Mul(a[0], dx), new(big.Int).Mul(a[1], dy))
+		num.Neg(num)
+		var qNum, qDen *big.Int
+		switch {
+		case dd.Sign() == 0 || num.Sign() <= 0:
+			qNum, qDen = norm2(a[0], a[1]), den2
+		case num.Cmp(dd) >= 0:
+			qNum, qDen = norm2(b[0], b[1]), den2
+		default:
+			// |a|^2 - (a.d)^2/|d|^2 at the foot of the perpendicular.
+			qNum = new(big.Int).Sub(new(big.Int).Mul(norm2(a[0], a[1]), dd), new(big.Int).Mul(num, num))
+			qDen = new(big.Int).Mul(dd, den2)
+		}
+		if i == 0 || new(big.Int).Mul(qNum, bestDen).Cmp(new(big.Int).Mul(bestNum, qDen)) < 0 {
+			bestNum, bestDen = qNum, qDen
+		}
+	}
+	return new(big.Rat).SetFrac(bestNum, bestDen)
 }
 
 // Whole fitted-flank facets stay outside the circle after the source mesh's
@@ -821,24 +845,36 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	innerInset, outerExcess, rootCollar, connectorReach := seamInset, ringRound, 0.0, 0.0
 	crossingShift, rootAngular := 0.0, 0.0
 	allReach := true
+	// RatSqrtDown, RatSqrtUp and RatFloatUp are monotone, so the exact extreme
+	// over the ring is converted once instead of once per triangle.
+	var ringMin2, ringMax2 *big.Rat
 	for i, tri := range mesh.tris {
 		if mesh.src[i] != blankGroups[0] {
 			continue
 		}
-		minimum := loftCylinderTriangleMinRadius(mesh.verts, tri)
+		minimum2 := loftCylinderTriangleMinRadius2(mesh.verts, tri)
+		if ringMin2 == nil || minimum2.Cmp(ringMin2) < 0 {
+			ringMin2 = minimum2
+		}
+		for _, index := range tri {
+			p := mesh.verts[index]
+			x, y := proofarith.FloatRat(p.X), proofarith.FloatRat(p.Y)
+			q := new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y))
+			if ringMax2 == nil || q.Cmp(ringMax2) > 0 {
+				ringMax2 = q
+			}
+		}
+	}
+	if ringMin2 != nil {
+		minimum := proofbound.RatSqrtDown(ringMin2)
 		if minimum <= 0 {
 			return nil, fmt.Errorf("%w: circular ring reaches the axis", ErrUnsupported)
 		}
 		innerInset = max(innerInset, proofbound.RatFloatUp(new(big.Rat).Sub(
 			proofarith.FloatRat(radius), proofarith.FloatRat(minimum))))
-		for _, index := range tri {
-			p := mesh.verts[index]
-			x, y := proofarith.FloatRat(p.X), proofarith.FloatRat(p.Y)
-			q := new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y))
-			maximum := proofbound.RatSqrtUp(q)
-			outerExcess = max(outerExcess, proofbound.RatFloatUp(new(big.Rat).Sub(
-				proofarith.FloatRat(maximum), proofarith.FloatRat(radius))))
-		}
+		maximum := proofbound.RatSqrtUp(ringMax2)
+		outerExcess = max(outerExcess, proofbound.RatFloatUp(new(big.Rat).Sub(
+			proofarith.FloatRat(maximum), proofarith.FloatRat(radius))))
 	}
 	for _, part := range parts {
 		allReach = allReach && part.reachOK
@@ -901,12 +937,18 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf("%w: circular join root chord leaves its cap", ErrUnsupported)
 		}
 	}
-	minSideRadius := math.Inf(1)
+	var sideMin2 *big.Rat
 	for i, tri := range mesh.tris {
 		if mesh.src[i] == blankGroups[1] || mesh.src[i] == blankGroups[2] {
 			continue
 		}
-		minSideRadius = min(minSideRadius, loftCylinderTriangleMinRadius(mesh.verts, tri))
+		if q := loftCylinderTriangleMinRadius2(mesh.verts, tri); sideMin2 == nil || q.Cmp(sideMin2) < 0 {
+			sideMin2 = q
+		}
+	}
+	minSideRadius := math.Inf(1)
+	if sideMin2 != nil {
+		minSideRadius = proofbound.RatSqrtDown(sideMin2)
 	}
 	if minSideRadius <= 0 || proofbound.IsNonFinite(minSideRadius) {
 		return nil, fmt.Errorf("%w: circular join has no side clearance certificate", ErrUnsupported)

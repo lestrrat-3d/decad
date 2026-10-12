@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -201,6 +202,37 @@ func loftCylinderOrient(a, b, c loftCylinderXY) *big.Rat {
 	return new(big.Rat).Sub(new(big.Rat).Mul(abx, acy), new(big.Rat).Mul(aby, acx))
 }
 
+// loftCylinderEdgesMeetXP decides the same closed-segment contact as
+// loftCylinderEdgesMeet. Every outline coordinate is a float lifted exactly,
+// so comparing the float images is the same total order as comparing the
+// rationals, and meshbool.Cross2xSign returns the exact orientation sign,
+// deciding from floats only where its error bound proves the sign. A point
+// without a finite float image takes the rational body.
+func loftCylinderEdgesMeetXP(a, b, c, d meshbool.Xp2) bool {
+	if !a.FloatFinite || !b.FloatFinite || !c.FloatFinite || !d.FloatFinite {
+		return loftCylinderEdgesMeet(loftCylinderXY{a.U, a.V}, loftCylinderXY{b.U, b.V},
+			loftCylinderXY{c.U, c.V}, loftCylinderXY{d.U, d.V})
+	}
+	between := func(a, b, p float64) bool {
+		return (a <= p && p <= b) || (b <= p && p <= a)
+	}
+	if a.Fu > c.Fu && a.Fu > d.Fu && b.Fu > c.Fu && b.Fu > d.Fu ||
+		a.Fu < c.Fu && a.Fu < d.Fu && b.Fu < c.Fu && b.Fu < d.Fu ||
+		a.Fv > c.Fv && a.Fv > d.Fv && b.Fv > c.Fv && b.Fv > d.Fv ||
+		a.Fv < c.Fv && a.Fv < d.Fv && b.Fv < c.Fv && b.Fv < d.Fv {
+		return false
+	}
+	abc, abd := meshbool.Cross2xSign(a, b, c), meshbool.Cross2xSign(a, b, d)
+	cda, cdb := meshbool.Cross2xSign(c, d, a), meshbool.Cross2xSign(c, d, b)
+	if abc == 0 && between(a.Fu, b.Fu, c.Fu) && between(a.Fv, b.Fv, c.Fv) ||
+		abd == 0 && between(a.Fu, b.Fu, d.Fu) && between(a.Fv, b.Fv, d.Fv) ||
+		cda == 0 && between(c.Fu, d.Fu, a.Fu) && between(c.Fv, d.Fv, a.Fv) ||
+		cdb == 0 && between(c.Fu, d.Fu, b.Fu) && between(c.Fv, d.Fv, b.Fv) {
+		return true
+	}
+	return abc != abd && cda != cdb
+}
+
 func loftCylinderEdgesMeet(a, b, c, d loftCylinderXY) bool {
 	between := func(a, b, p *big.Rat) bool {
 		return (a.Cmp(p) <= 0 && p.Cmp(b) <= 0) ||
@@ -236,6 +268,7 @@ func loftCylinderAuditCap(ctx context.Context, mesh *joinedMesh,
 		return false
 	}
 	points := make([]loftCylinderXY, n)
+	xpoints := make([]meshbool.Xp2, n)
 	seen := make(map[int]struct{}, n)
 	for i, index := range outline {
 		if index < 0 || index >= len(mesh.verts) || mesh.verts[index].Z != z {
@@ -246,6 +279,7 @@ func loftCylinderAuditCap(ctx context.Context, mesh *joinedMesh,
 		}
 		seen[index] = struct{}{}
 		points[i] = loftCylinderExactXY(mesh.verts[index])
+		xpoints[i] = meshbool.NewXP2(points[i].x, points[i].y)
 	}
 	polyTwice := new(big.Rat)
 	inside := false
@@ -278,7 +312,7 @@ func loftCylinderAuditCap(ctx context.Context, mesh *joinedMesh,
 			if j%256 == 0 && ctx.Err() != nil {
 				return false
 			}
-			if loftCylinderEdgesMeet(a, b, points[j], points[(j+1)%n]) {
+			if loftCylinderEdgesMeetXP(xpoints[i], xpoints[(i+1)%n], xpoints[j], xpoints[(j+1)%n]) {
 				return false
 			}
 		}

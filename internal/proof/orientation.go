@@ -60,6 +60,13 @@ func OrientSignFloat(a, b, c, d r3.Vec) (int, bool) {
 	bax, bay, baz := b.X-a.X, b.Y-a.Y, b.Z-a.Z
 	cax, cay, caz := c.X-a.X, c.Y-a.Y, c.Z-a.Z
 	dax, day, daz := d.X-a.X, d.Y-a.Y, d.Z-a.Z
+	// A finite float difference is zero exactly when its operands are equal,
+	// so three zero differences on one axis put all four points in one
+	// coordinate plane: the exact determinant has a zero column and is zero.
+	if bax == 0 && cax == 0 && dax == 0 || bay == 0 && cay == 0 && day == 0 ||
+		baz == 0 && caz == 0 && daz == 0 {
+		return 0, true
+	}
 	det := bax*(cay*daz-caz*day) + bay*(caz*dax-cax*daz) + baz*(cax*day-cay*dax)
 	perm := math.Abs(bax)*(math.Abs(cay)*math.Abs(daz)+math.Abs(caz)*math.Abs(day)) +
 		math.Abs(bay)*(math.Abs(caz)*math.Abs(dax)+math.Abs(cax)*math.Abs(daz)) +

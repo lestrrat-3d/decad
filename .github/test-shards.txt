@@ -1394,3 +1394,6 @@
 9	0.21	TestWallNormalDecisionEnclosesExactComponent
 9	0.03	TestXHPLerpDenotesTheSameCoordinate
 10	0.00	Example_decad_quickstart
+10	0.01	TestLoftCylinderEdgesMeetXPAgreesWithRational
+10	0.01	TestLoftCylinderSourceCrossingBoxMatchesRationalBisection
+10	0.01	TestLoftCylinderTriangleMinRadiusMatchesRational

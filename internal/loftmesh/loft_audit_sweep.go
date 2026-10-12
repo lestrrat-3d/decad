@@ -403,17 +403,20 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 			return err
 		}
 		_, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
+		var knownA, knownB *[3]int
 		if shortcuts.BroadPhase && sharedCount == 0 {
 			if !meshbool.BoxesOverlap(boxes[i], boxes[j]) {
 				work.Skips++
 				return nil
 			}
-			if loftPlaneSeparatedPrepared(data, i, j) {
+			separated, sa, sb := loftPlaneSeparatedSigns(data, i, j)
+			if separated {
 				work.Skips++
 				return nil
 			}
+			knownA, knownB = &sa, &sb
 		}
-		outcome, err := AuditLoftPairData(data, tris, i, j, shortcuts)
+		outcome, err := auditLoftPairDataSigned(data, tris, i, j, shortcuts, knownA, knownB)
 		switch outcome {
 		case LoftPairEdgeCertificate:
 			work.EdgeCerts++
@@ -511,14 +514,20 @@ func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]
 				}
 				j := int(cands.js[k])
 				_, shared := tessellation.SharedVertexIndices(tris[i], tris[j])
+				var knownA, knownB *[3]int
 				if shortcuts.BroadPhase && shared == 0 {
-					if !meshbool.BoxesOverlap(boxes[i], boxes[j]) ||
-						loftPlaneSeparatedPrepared(data, i, j) {
+					if !meshbool.BoxesOverlap(boxes[i], boxes[j]) {
 						results[k] = pairSkipped
 						continue
 					}
+					separated, sa, sb := loftPlaneSeparatedSigns(data, i, j)
+					if separated {
+						results[k] = pairSkipped
+						continue
+					}
+					knownA, knownB = &sa, &sb
 				}
-				outcome, err := AuditLoftPairData(data, tris, i, j, shortcuts)
+				outcome, err := auditLoftPairDataSigned(data, tris, i, j, shortcuts, knownA, knownB)
 				switch outcome {
 				case LoftPairEdgeCertificate:
 					results[k] = pairEdgeCertified
