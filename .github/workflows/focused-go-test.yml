@@ -44,8 +44,19 @@ jobs:
           DECAD_COMMIT: ${{ inputs.commit }}
         run: test "$(git rev-parse HEAD)" = "$DECAD_COMMIT"
 
+      - name: Require named root-package test
+        shell: bash
+        env:
+          TEST_NAME: ${{ inputs.test_name }}
+        run: go test -list "^${TEST_NAME}$" . | grep -Fqx "$TEST_NAME"
+
       - name: Run named root-package test
         shell: bash
         env:
           TEST_NAME: ${{ inputs.test_name }}
-        run: go test -count=1 -timeout 8m -run "^${TEST_NAME}$" -v .
+        run: |
+          go test -json -count=1 -timeout 8m -run "^${TEST_NAME}$" . |
+            tee "$RUNNER_TEMP/focused-go-test.json"
+          ! grep -Fq '"Action":"skip"' "$RUNNER_TEMP/focused-go-test.json"
+          grep -F '"Action":"pass"' "$RUNNER_TEMP/focused-go-test.json" |
+            grep -Fq "\"Test\":\"${TEST_NAME}\""
