@@ -101,46 +101,52 @@ func FacetedAreaGeom(delta, perimeterUpper, facetAllow float64) float64 {
 // exact arithmetic and rounded up; only a vertex whose own bound reaches past
 // the extreme can widen it beyond the extreme vertex's own figure.
 func FacetedExtremeError(budget *proofbound.WorkBudget, verts []r3.Vec, beta, B []float64, lo, hi r3.Vec) (float64, error) {
-	worst := new(big.Rat)
-	widen := func(gap *big.Rat) {
-		if gap.Cmp(worst) > 0 {
+	// Held coordinates and bounds are binary floats. Dyadic keeps their
+	// extrema exact without allocating a rational at every vertex.
+	var worst proof.Dyadic
+	widen := func(gap proof.Dyadic) {
+		if proof.DyCmp(gap, worst) > 0 {
 			worst = gap
 		}
 	}
 	for axis := range 3 {
-		m := [2]*big.Rat{new(big.Rat).SetFloat64(meshbool.CoordOf(lo, axis)), new(big.Rat).SetFloat64(meshbool.CoordOf(hi, axis))}
+		m := [2]proof.Dyadic{
+			proof.MustDyOf(meshbool.CoordOf(lo, axis)), proof.MustDyOf(meshbool.CoordOf(hi, axis)),
+		}
 		// reach[side] is the extreme a true point can reach past the held
 		// one; held[side] the extreme some true point is proven to attain.
-		var reach, held [2]*big.Rat
+		var reach, held [2]proof.Dyadic
+		seen := false
 		for i, v := range verts {
 			if err := budget.Step(); err != nil {
 				return 0, err
 			}
-			c := new(big.Rat).SetFloat64(meshbool.CoordOf(v, axis))
-			b := new(big.Rat).SetFloat64(B[i])
-			own := new(big.Rat).SetFloat64(beta[i])
-			if out := new(big.Rat).Sub(c, b); reach[0] == nil || out.Cmp(reach[0]) < 0 {
+			c := proof.MustDyOf(meshbool.CoordOf(v, axis))
+			b := proof.MustDyOf(B[i])
+			own := proof.MustDyOf(beta[i])
+			if out := proof.DySubScalar(c, b); !seen || proof.DyCmp(out, reach[0]) < 0 {
 				reach[0] = out
 			}
-			if out := new(big.Rat).Add(c, b); reach[1] == nil || out.Cmp(reach[1]) > 0 {
+			if out := proof.DyAdd(c, b); !seen || proof.DyCmp(out, reach[1]) > 0 {
 				reach[1] = out
 			}
-			if in := new(big.Rat).Add(c, own); held[0] == nil || in.Cmp(held[0]) < 0 {
+			if in := proof.DyAdd(c, own); !seen || proof.DyCmp(in, held[0]) < 0 {
 				held[0] = in
 			}
-			if in := new(big.Rat).Sub(c, own); held[1] == nil || in.Cmp(held[1]) > 0 {
+			if in := proof.DySubScalar(c, own); !seen || proof.DyCmp(in, held[1]) > 0 {
 				held[1] = in
 			}
+			seen = true
 		}
-		widen(new(big.Rat).Sub(m[0], reach[0]))
-		widen(new(big.Rat).Sub(held[0], m[0]))
-		widen(new(big.Rat).Sub(reach[1], m[1]))
-		widen(new(big.Rat).Sub(m[1], held[1]))
+		widen(proof.DySubScalar(m[0], reach[0]))
+		widen(proof.DySubScalar(held[0], m[0]))
+		widen(proof.DySubScalar(reach[1], m[1]))
+		widen(proof.DySubScalar(m[1], held[1]))
 	}
 	if worst.Sign() == 0 {
 		return 0, nil
 	}
-	w, _ := worst.Float64()
+	w, _ := worst.Rat().Float64()
 	return proofbound.ProvenUpRound(w), nil
 }
 
