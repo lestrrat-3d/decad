@@ -197,7 +197,7 @@ func TestSurfaceExtrudeRolesResolveThroughFaceCreatedBy(t *testing.T) {
 }
 
 // TestSurfaceExtrudeStaysASheetThroughPlacement is §4.2's Placed/Duplicate/
-// PlacedCopy claim: each re-evaluates the payload and reproduces the sheet
+// Copy claim: each re-evaluates the payload and reproduces the sheet
 // with no further code, and Placed's box is the sheet's own translated.
 func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()
@@ -220,13 +220,13 @@ func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	require.Equal(t, sheetBox.Min.Add(offset), placedBox.Min)
 	require.Equal(t, sheetBox.Max.Add(offset), placedBox.Max)
 
-	dup, err := placed.Duplicate(t.Context())
+	dup, err := decad.Copy(t.Context(), placed)
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, dup)
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := dup.PlacedCopy(t.Context(), copyMotion)
+	copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(copyMotion))
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, copied)
 }

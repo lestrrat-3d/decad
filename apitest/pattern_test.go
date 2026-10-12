@@ -202,7 +202,7 @@ func TestPatternCopiesRotationSense(t *testing.T) {
 
 // TestPatternCopiesNonCoDirectional is §8's non-co-directional row: a peg
 // patterned along its own sweep, or about an axis in its plane, instances
-// through PlacedCopy, with each centroid where the motion puts it.
+// through Copy, with each centroid where the motion puts it.
 func TestPatternCopiesNonCoDirectional(t *testing.T) {
 	t.Parallel()
 	t.Run("along the sweep", func(t *testing.T) {
@@ -227,7 +227,7 @@ func TestPatternCopiesNonCoDirectional(t *testing.T) {
 		require.Len(t, copies, 1)
 		centroid, err := copies[0].Centroid()
 		require.NoError(t, err)
-		// A PlacedCopy instance denotes its held placement: the receiver's
+		// A Copy instance denotes its held placement: the receiver's
 		// identity composed with RotationAround's transform, whose float
 		// trig makes it a turn of nearly, not exactly, 180°. The reference
 		// is that transform applied exactly to the receiver's Exact centroid.
@@ -264,7 +264,7 @@ func TestPatternCopiesStacked(t *testing.T) {
 	}
 }
 
-// TestPatternCopiesGates covers the spec's own gates and PlacedCopy's: every
+// TestPatternCopiesGates covers the spec's own gates and Copy's: every
 // refusal leaves the document unchanged.
 func TestPatternCopiesGates(t *testing.T) {
 	t.Parallel()
@@ -333,7 +333,7 @@ func exactApplyBig(t r3.Transform, p r3.Vec) [3]*big.Float {
 // changes between its slabs: a 10 mm plate 5 mm thick with a 4 mm square boss
 // 5 mm tall. An integer step moves the record exactly and keeps it Exact
 // (580 mm³); a 0.3 in step would round the two outers apart by its own
-// rounding, so it copies through PlacedCopy and lands where the step puts it.
+// rounding, so it copies through Copy and lands where the step puts it.
 //
 // Shown to fail with stackedInterfaces re-deriving a changed-outer interface
 // from exclusive holes: the moved stack's floor record is then missing and
@@ -347,7 +347,7 @@ func TestPatternCopiesUnionStack(t *testing.T) {
 		Exact bool
 	}{
 		{Name: "integer step", Step: units.Millimeters(20), Shift: big.NewRat(20, 1), Exact: true},
-		// The PlacedCopy instance denotes its held placement: a translation by
+		// The Copy instance denotes its held placement: a translation by
 		// the step's held millimetre float along the unit Dir.
 		{Name: "inch step", Step: units.Inches(0.3), Shift: heldMillimeters(t, units.Inches(0.3))},
 	} {

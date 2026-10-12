@@ -57,7 +57,7 @@ func TestBodyPatchPlanarMeshPlacementAndVerification(t *testing.T) {
 
 	motion, err := r3.Translation(r3.NewVec(3, 4, 5))
 	require.NoError(t, err)
-	placed, err := filled.PlacedCopy(t.Context(), motion)
+	placed, err := decad.Copy(t.Context(), filled, decad.WithCopyPlacement(motion))
 	require.NoError(t, err)
 	mesh, err := placed.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestBodyPatchPlanarMeshPlacementAndVerification(t *testing.T) {
 	require.NoError(t, err)
 	reflection, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	reflected, err := filled.PlacedCopy(t.Context(), reflection)
+	reflected, err := decad.Copy(t.Context(), filled, decad.WithCopyPlacement(reflection))
 	require.NoError(t, err)
 	reflMesh, err := reflected.Tessellate(t.Context(), tol)
 	require.NoError(t, err)

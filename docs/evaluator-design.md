@@ -737,7 +737,9 @@ its own snapshot. That is what lets a `Remove` run beside a `Verify`. The lock g
 feature's check-then-commit are still unguarded, which is why the document as a whole stays unsafe
 for concurrent mutation (core §12).
 
-`Body.Placed`, `Body.Duplicate`, and `Body.PlacedCopy` pass the caller's context through payload re-evaluation. Faceted placement polls that context while transforming vertices, auditing and rebuilding topology, and recomputing measurements.
+`Body.Placed` and `Copy` pass the caller's context through payload re-evaluation.
+Faceted placement polls that context while transforming vertices, auditing and
+rebuilding topology, and recomputing measurements.
 For a faceted payload, the stored binary64 placement basis is read as an
 exact rational map. Its certified length stretch multiplies every old vertex
 bound; its determinant charge multiplies the old occupied-volume gap. The
@@ -854,8 +856,8 @@ scaled around the caller's anchor. A circular source wall becomes a `Faceted`
 face with the inherited boundary bound; this path has no scaled curved-normal
 certificate. The result is not a new `prismPayload`.
 
-The faceted payload marks this source class so a later `Placed`, `PlacedCopy`,
-`Duplicate` or `ScaledAt` can repeat the proof from its held mesh and bounds.
+The faceted payload marks this source class so a later `Placed`, `Copy` or
+`ScaledAt` can repeat the proof from its held mesh and bounds.
 Booleans and modify rewrites do not carry that marker. A failed embedding,
 non-finite bound or canceled context returns without retiring the receiver.
 

@@ -792,7 +792,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 // smallSweepWedgeSketch builds a two-line-plus-one-arc wedge (radius 5, a
 // 30-degree sweep — about 21 stations at the shipped loftmesh.ChordFraction, per
 // a10-plan.md's own Fixture sizing note: station count scales with sweep,
-// so a small-sweep arc keeps the repeated-PlacedCopy build cheap) on plane.
+// so a small-sweep arc keeps the repeated-Copy build cheap) on plane.
 func smallSweepWedgeSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
 	t.Helper()
 	const sweep = math.Pi / 6 // 30 degrees
@@ -825,7 +825,7 @@ func TestLoftPlacedArcWedgeCarriesBothDisplacements(t *testing.T) {
 
 	moved, err := r3.Translation(r3.NewVec(3, -2, 1))
 	require.NoError(t, err)
-	placed, err := body.PlacedCopy(t.Context(), moved)
+	placed, err := Copy(t.Context(), body, WithCopyPlacement(moved))
 	require.NoError(t, err)
 
 	loaded, ok := placed.payload.(loftPayload)
@@ -835,7 +835,7 @@ func TestLoftPlacedArcWedgeCarriesBothDisplacements(t *testing.T) {
 }
 
 // TestLoftPlacedCopyTenTimesSectionDeltaUnchanged is the ask's own line: ten
-// successive PlacedCopy motions leave sectionDelta UNCHANGED, proving it is
+// successive Copy motions leave sectionDelta UNCHANGED, proving it is
 // a record property and not an accumulating one.
 func TestLoftPlacedCopyTenTimesSectionDeltaUnchanged(t *testing.T) {
 	t.Parallel()
@@ -854,7 +854,7 @@ func TestLoftPlacedCopyTenTimesSectionDeltaUnchanged(t *testing.T) {
 	for i := range 10 {
 		motion, err := r3.Translation(r3.NewVec(float64(i+1), 0, 0))
 		require.NoError(t, err)
-		body, err = body.PlacedCopy(t.Context(), motion)
+		body, err = Copy(t.Context(), body, WithCopyPlacement(motion))
 		require.NoError(t, err)
 		loaded, ok := body.payload.(loftPayload)
 		require.True(t, ok)

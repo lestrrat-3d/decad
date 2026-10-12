@@ -56,7 +56,7 @@ import (
 // (a test fixture, or an extent this evaluator cannot yet denote exactly)
 // falls back to the same magnitude envelope every consumer published before
 // this field existed. Being a payload field it re-evaluates with the
-// payload, so Placed and Duplicate carry it unchanged.
+// payload, so Placed and Copy carry it unchanged.
 //
 // surfaceResult is WithSurfaceResult's own flag (docs/surface-design.md §4):
 // true when the build must publish a sheet instead of a solid. A full
@@ -64,8 +64,8 @@ import (
 // only when full is false — a partial sweep omits its two caps — while it
 // changes Kind() and every measurement derived from solid vs. sheet in every
 // case, full sweep included (Table W). It is part of the re-evaluable record
-// for the same reason prismPayload.surfaceResult is, so Placed, Duplicate and
-// PlacedCopy reproduce the sheet with no further code; a plain revolve leaves
+// for the same reason prismPayload.surfaceResult is, so Placed and Copy
+// reproduce the sheet with no further code; a plain revolve leaves
 // it false. sweep_arc.go and sweep_composite_measure.go also build a
 // revolvePayload literal and leave this field at its zero value.
 type revolvePayload struct {
@@ -108,7 +108,7 @@ type revolvePayload struct {
 	// (revolve_blend.go) records, per loop, the segment indices of its
 	// rewritten record that are blend connectors, and blendKind is "fillet" or
 	// "chamfer". The build gives each such wall a second kind(i,j) role beside
-	// its side(i,j) one. They ride on the payload so Placed and Duplicate
+	// its side(i,j) one. They ride on the payload so Placed and Copy
 	// re-mint the same roles; a path replacing the profile must clear them.
 	blendSegs []map[int]struct{}
 	blendKind string

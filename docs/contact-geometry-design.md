@@ -198,7 +198,7 @@ stronger earlier certificate.
 
 Build both transient bodies through the same private payload placement path
 that `VerifyMotion` uses. Reserve a transient producer identity; never call
-public `Placed`, `PlacedCopy`, `Duplicate`, `Intersect`, or `commit`. The true
+public `Placed`, `Copy`, `Intersect`, or `commit`. The true
 query pose is the exact composition of the read `r3.Transform` entries with
 the body's read placement entries. Bound the difference between that exact
 composition and the float transient payload with the existing

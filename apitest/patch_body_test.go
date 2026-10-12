@@ -248,7 +248,7 @@ func TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet(t *testing.T) {
 }
 
 // TestBodyPatchReproducesThroughPlacement is §5.2's Placed/Duplicate/
-// PlacedCopy claim: each re-evaluates the payload and reproduces the patch
+// Copy claim: each re-evaluates the payload and reproduces the patch
 // with no further code, on the same terms Document.Patch's own
 // TestPatchReproducesThroughPlacement (patch_test.go) proves for a single
 // patch face.
@@ -275,13 +275,13 @@ func TestBodyPatchReproducesThroughPlacement(t *testing.T) {
 	_, err = decad.Edges(decad.Free()).SelectEdges(placed)
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 
-	dup, err := placed.Duplicate(t.Context())
+	dup, err := decad.Copy(t.Context(), placed)
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, dup, units.SquareMillimeters(3200+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := dup.PlacedCopy(t.Context(), copyMotion)
+	copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(copyMotion))
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, copied, units.SquareMillimeters(3200+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
 	decadtest.MeasuresBounds(t, copied, r3.NewVec(50, 50, 0), r3.NewVec(150, 110, 10), decadtest.WithinRel(units.Scalar(1e-6)))

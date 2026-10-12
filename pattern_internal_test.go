@@ -74,7 +74,7 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 		peg := patternPrism(t, 0, 0, 5, 5, 0)
 		copies, err := peg.PatternCopies(t.Context(), LinearPattern{Dir: r3.NewVec(0, 0, 1), Step: units.Millimeters(10), Count: 2})
 		require.NoError(t, err)
-		require.NotEqual(t, r3.Identity(), patternInstance(t, copies[0]).xform, "a PlacedCopy instance carries the motion in its placement")
+		require.NotEqual(t, r3.Identity(), patternInstance(t, copies[0]).xform, "a placed Copy instance carries the motion in its placement")
 	})
 	t.Run("quarter turns", func(t *testing.T) {
 		t.Parallel()
@@ -145,7 +145,7 @@ func TestPatternLinearMotionUsesTheDenotedStep(t *testing.T) {
 
 // TestPatternCopiesUnionStackArm pins which arm a union-built stack takes:
 // an exact integer step keeps the frame and the receiver's placement, and a
-// rounding 0.3 in step copies through PlacedCopy, whose placement carries the
+// rounding 0.3 in step copies through Copy, whose placement carries the
 // motion.
 func TestPatternCopiesUnionStackArm(t *testing.T) {
 	t.Parallel()

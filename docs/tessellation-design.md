@@ -125,8 +125,8 @@ place this split can go wrong silently.
 
 The cache pointer is mutable implementation state only. It does not change the
 body's logical geometry, topology, measurements, or payload,
-and a cached mesh remains read-only through the public API. `Placed`,
-`Duplicate`, and `PlacedCopy` construct new bodies with independent cache state;
+and a cached mesh remains read-only through the public API. `Placed`
+and `Copy` construct new bodies with independent cache state;
 their face pointers differ, so they never inherit the source body's entry.
 
 `Verify` also holds a cache of its own for the length of one call. It meshes

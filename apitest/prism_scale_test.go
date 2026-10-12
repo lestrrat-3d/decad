@@ -51,7 +51,7 @@ func TestStraightPrismScaledAtPreservesVolumeAndCapRoles(t *testing.T) {
 
 	shift, err := r3.Translation(r3.NewVec(3, -2, 1))
 	require.NoError(t, err)
-	placed, err := scaled.PlacedCopy(t.Context(), shift)
+	placed, err := decad.Copy(t.Context(), scaled, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
 	again, err := placed.ScaledAt(t.Context(), r3.NewVec(0, 0, 0), units.Scalar(0.75))
 	require.NoError(t, err)

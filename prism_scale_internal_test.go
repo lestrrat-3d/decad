@@ -40,7 +40,7 @@ func TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding(t *testing.T) 
 
 	shift, err := r3.Translation(r3.NewVec(1.25, -2.5, 3.75))
 	require.NoError(t, err)
-	placed, err := scaled.PlacedCopy(t.Context(), shift)
+	placed, err := Copy(t.Context(), scaled, WithCopyPlacement(shift))
 	require.NoError(t, err)
 	placedPayload := placed.payload.(facetedPayload)
 	require.GreaterOrEqual(t, placedPayload.dPair,

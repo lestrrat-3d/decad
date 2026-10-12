@@ -85,7 +85,7 @@
 1	0.00	TestOffsetPrismNeckRefusal
 1	0.00	TestPatchReproducesThroughPlacement
 1	0.01	TestPatchWithHoleNetArea
-1	0.00	TestPlacedCopyZeroTransformRejected
+1	0.00	TestCopyPlacementOptions
 1	0.01	TestPlacementContextCancelsAnalyticProvenanceAssembly
 1	0.01	TestPrismCutAgainstToolOnOffsetPlaneIsAnalytic
 1	0.01	TestPrismGroupCutNotchesTheEdge
@@ -877,7 +877,7 @@
 5	0.02	TestDraftMassProperties
 5	0.30	TestDraftMeshPlacedAndMirrored
 5	0.01	TestDraftSubsetChargesTheTangentSpan
-5	0.00	TestDuplicate
+5	0.00	TestCopyIdentity
 5	0.03	TestExactPlanarPairAdmitsStitchedSolid
 5	0.31	TestExportBytesAreIdenticalAcrossVerificationLevels
 5	0.00	TestExtrudeBoxBoundsEnclosesTranslatedCorner
@@ -1715,7 +1715,7 @@
 9	0.01	TestOuterCapChamferKeepsBoreCircular
 9	0.00	TestPatchRejections
 9	0.01	TestPatternedEnclosedVoidTakesMeshPath
-9	0.00	TestPlacedCopy
+9	0.00	TestCopyPlacement
 9	0.02	TestPlacementContextCancelsAnalyticAssembly
 9	1.60	TestPlacementContextChecksCancellationBeforeCommit
 9	0.01	TestPlanarManifoldNonConvexGuestBehind

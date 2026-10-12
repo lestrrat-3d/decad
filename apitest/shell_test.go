@@ -956,7 +956,7 @@ func TestShellInwardSectionWorkBudget(t *testing.T) {
 	require.Contains(t, err.Error(), "work budget")
 	require.Contains(t, err.Error(), "candidate-family visits")
 	require.Equal(t, before.bodies, doc.Bodies(), `a refused shell must preserve live body membership and order`)
-	_, err = box.Duplicate(t.Context())
+	_, err = decad.Copy(t.Context(), box)
 	require.NoError(t, err, `the receiver must remain live after a work-budget refusal`)
 }
 

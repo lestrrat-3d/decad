@@ -935,7 +935,7 @@ change what another reads, and none changes a value.
 After validation, check `ctx` before each pose and at each subdivision;
 pass it into the contact kernel. Cancellation returns `ctx.Err()` and a nil
 report, even if an earlier prefix was clear. A contact-kernel invariant error
-also returns no report. Never call public `Placed`, `PlacedCopy`, `Intersect`,
+also returns no report. Never call public `Placed`, `Copy`, `Intersect`,
 or a commit path. Snapshot tests must show that document membership/order,
 body liveness, and next producer identity are unchanged after clear, impact,
 undecided, error, and cancellation results.

@@ -74,11 +74,11 @@ func TestSweepCompositePlacedCopyKeepsSourceReplay(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(20, -10, 3))
 	require.NoError(t, err)
-	placedCopy, err := source.PlacedCopy(t.Context(), move)
+	placedCopy, err := decad.Copy(t.Context(), source, decad.WithCopyPlacement(move))
 	require.NoError(t, err)
 	decadtest.MeasuresCentroid(t, placedCopy, move.Apply(sourceCentroid.Value))
 
-	replayedSource, err := source.Duplicate(t.Context())
+	replayedSource, err := decad.Copy(t.Context(), source)
 	require.NoError(t, err)
 	decadtest.MeasuresCentroid(t, replayedSource, sourceCentroid.Value)
 	decadtest.MeasuresBounds(t, replayedSource, r3.NewVec(-1, -1, 0), r3.NewVec(21, 5, 6))

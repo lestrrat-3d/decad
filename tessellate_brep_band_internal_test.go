@@ -237,7 +237,7 @@ func TestTessellateBrepBandsPlaced(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(5, -7, 3))
 	require.NoError(t, err)
-	moved, err := out.PlacedCopy(t.Context(), move)
+	moved, err := Copy(t.Context(), out, WithCopyPlacement(move))
 	require.NoError(t, err)
 	plane, err := r3.NewFrame(r3.NewVec(0, 0, -3), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func TestTessellateBrepBandsPlaced(t *testing.T) {
 
 	boss := internalRoundBoss(t)
 	rim, _ := chamferLoopOf(t, boss, routeEZ, r3.NewVec(0, 0, 25), 0, 1)
-	copyOf, err := rim.PlacedCopy(t.Context(), move)
+	copyOf, err := Copy(t.Context(), rim, WithCopyPlacement(move))
 	require.NoError(t, err)
 	m, err := tessellateContext(t.Context(), copyOf, units.Millimeters(chord), VerifyAll)
 	require.NoError(t, err)

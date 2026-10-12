@@ -236,37 +236,47 @@ func (b *Body) Placed(ctx context.Context, t r3.Transform) (*Body, error) {
 	return placed, nil
 }
 
-// Duplicate returns a new live body carrying the receiver's geometry
-// unchanged, leaving the receiver LIVE (core §8): the source is depended on,
-// never consumed. It is PlacedCopy with no motion — the identity placement —
-// so the copy is identical, independent geometry at a fresh body identity. A
-// body this evaluator did not build is ErrUnsupported. A canceled context
+// CopyOption configures Copy. Only WithCopyPlacement changes the copy's
+// placement. An option from another package cannot implement this sealed tier.
+type CopyOption interface{ copyOption() }
+
+type copyPlacementOption struct{ motion r3.Transform }
+
+func (copyPlacementOption) copyOption() {}
+
+// WithCopyPlacement places a new copy under t. A zero or otherwise invalid
+// transform is ErrDegenerate when Copy evaluates the option.
+func WithCopyPlacement(t r3.Transform) CopyOption {
+	return copyPlacementOption{motion: t}
+}
+
+// Copy returns a new live body carrying source's geometry and leaves source
+// live. With no options, the copy has source's placement. WithCopyPlacement
+// composes a rigid motion onto it; repeated placement options use the last
+// value. The copy gets a new body identity and reproduces source provenance.
+// source MUST NOT be nil. A body this evaluator did not build is
+// ErrUnsupported. Invalid or nil options are ErrDegenerate. A canceled context
 // stops the rebuild before the document changes.
-func (b *Body) Duplicate(ctx context.Context) (*Body, error) {
+func Copy(ctx context.Context, source *Body, opts ...CopyOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a copy`, ErrDegenerate)
 	}
-	return b.copyUnder(ctx, r3.Identity())
-}
-
-// PlacedCopy returns a new live body carrying the receiver's geometry
-// under the rigid motion t, leaving the receiver LIVE (core §8): the source is
-// depended on, never consumed. The payload re-evaluates under the composed
-// motion exactly as Placed does, so the centroid moves by t; the zero transform
-// is invalid and is ErrDegenerate, and r3.Identity() is a valid no-op. A body
-// this evaluator did not build is ErrUnsupported. A canceled context stops the
-// rebuild before the document changes.
-func (b *Body) PlacedCopy(ctx context.Context, t r3.Transform) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a copy`, ErrDegenerate)
+	motion := r3.Identity()
+	for _, opt := range opts {
+		if opt == nil {
+			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
+		placement, ok := opt.(copyPlacementOption)
+		if !ok {
+			return nil, fmt.Errorf(`%w: the copy option is not a decad copy option (%T)`, ErrDegenerate, opt)
+		}
+		motion = placement.motion
 	}
-	return b.copyUnder(ctx, t)
+	return source.copyUnder(ctx, motion)
 }
 
-// copyUnder is the shared non-consuming copy path behind Duplicate and
-// PlacedCopy. It mirrors Placed's gate order and commit while leaving the source
-// live, so a body can be modelled once and instanced many times
-// (core §8, docs/api-design.md H4).
+// copyUnder leaves its source live while re-evaluating at a new identity.
+// It mirrors Placed's gate order and commit (core §8, docs/api-design.md H4).
 func (b *Body) copyUnder(ctx context.Context, motion r3.Transform) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)

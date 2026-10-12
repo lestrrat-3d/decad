@@ -25,7 +25,7 @@ func TestLoftChainVerifyValidityAfterAudit(t *testing.T) {
 				if mode == "placed" {
 					body, err = body.Placed(t.Context(), motion)
 				} else {
-					body, err = body.PlacedCopy(t.Context(), motion)
+					body, err = decad.Copy(t.Context(), body, decad.WithCopyPlacement(motion))
 				}
 				require.NoError(t, err)
 			}

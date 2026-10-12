@@ -385,7 +385,7 @@ func requireOpenAgreesWithFreeEdges(t *testing.T, b *decad.Body) {
 }
 
 // TestSurfaceRevolveStaysASheetThroughPlacement is §4.2's Placed/Duplicate/
-// PlacedCopy claim for Revolve: each re-evaluates the payload and reproduces
+// Copy claim for Revolve: each re-evaluates the payload and reproduces
 // the sheet with no further code.
 func TestSurfaceRevolveStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()
@@ -402,13 +402,13 @@ func TestSurfaceRevolveStaysASheetThroughPlacement(t *testing.T) {
 	require.NoError(t, err)
 	requireRevolveSheetWithFreeEdges(t, placed, 8)
 
-	dup, err := placed.Duplicate(t.Context())
+	dup, err := decad.Copy(t.Context(), placed)
 	require.NoError(t, err)
 	requireRevolveSheetWithFreeEdges(t, dup, 8)
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := dup.PlacedCopy(t.Context(), copyMotion)
+	copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(copyMotion))
 	require.NoError(t, err)
 	requireRevolveSheetWithFreeEdges(t, copied, 8)
 }

@@ -1121,7 +1121,7 @@ func TestBrepLoopFilletBoundFixture(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(1e6, 1e6, 1e6))
 	require.NoError(t, err)
-	placed, err := out.PlacedCopy(t.Context(), move)
+	placed, err := Copy(t.Context(), out, WithCopyPlacement(move))
 	require.NoError(t, err)
 	requireCentroidPi(t, placed.centroid, mBody, v, [3]*big.Rat{q(1000000, 1), q(1000000, 1), q(1000000, 1)})
 }
@@ -1379,7 +1379,7 @@ func TestBrepLoopFilletConsumers(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(5, -7, 3))
 	require.NoError(t, err)
-	placed, err := out.PlacedCopy(t.Context(), move)
+	placed, err := Copy(t.Context(), out, WithCopyPlacement(move))
 	require.NoError(t, err)
 	require.Equal(t, out.volume.Value.Base(), placed.volume.Value.Base())
 	require.InDelta(t, out.area.Value.Base(), placed.area.Value.Base(), 1e-9)
@@ -1394,7 +1394,7 @@ func TestBrepLoopFilletConsumers(t *testing.T) {
 
 	turn, err := r3.Rotation(r3.NewVec(0, 1, 0), units.Degrees(45))
 	require.NoError(t, err)
-	turned, err := out.PlacedCopy(t.Context(), turn)
+	turned, err := Copy(t.Context(), out, WithCopyPlacement(turn))
 	require.NoError(t, err)
 	// The x = 40 patch's farthest point along x after the turn is its
 	// (1, 0, 1)/√2 stationary point.

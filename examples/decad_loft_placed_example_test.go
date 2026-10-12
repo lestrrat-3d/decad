@@ -10,7 +10,7 @@ import (
 )
 
 // Example_decad_loft_placed builds one tapered tooth as a Loft, then
-// PlacedCopy's a mirror of it into a herringbone pair — the target case
+// Copy's a mirror of it into a herringbone pair — the target case
 // docs/loft-design.md names for PR 2a. The tooth occupies x in [0, 40]; the
 // mirror, reflected across the x=0 plane, occupies x in [-40, 0], so the
 // pair meets at the shared root.
@@ -73,7 +73,7 @@ func Example_decad_loft_placed() {
 		fmt.Printf("failed to build the reflection: %s\n", err)
 		return
 	}
-	other, err := tooth.PlacedCopy(context.Background(), mirror)
+	other, err := decad.Copy(context.Background(), tooth, decad.WithCopyPlacement(mirror))
 	if err != nil {
 		fmt.Printf("failed to mirror the tooth: %s\n", err)
 		return

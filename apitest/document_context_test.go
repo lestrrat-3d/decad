@@ -92,15 +92,15 @@ func TestPlacementContextVariantsCancelFacetedRebuild(t *testing.T) {
 			},
 		},
 		{
-			name: "Duplicate",
+			name: "CopyIdentity",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.Duplicate(ctx)
+				return decad.Copy(ctx, body)
 			},
 		},
 		{
-			name: "PlacedCopy",
+			name: "CopyPlacement",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.PlacedCopy(ctx, shift)
+				return decad.Copy(ctx, body, decad.WithCopyPlacement(shift))
 			},
 		},
 	}
@@ -143,17 +143,17 @@ func TestPlacementContextChecksCancellationBeforeCommit(t *testing.T) {
 			},
 		},
 		{
-			name:   "Duplicate",
+			name:   "CopyIdentity",
 			target: "copyUnder",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.Duplicate(ctx)
+				return decad.Copy(ctx, body)
 			},
 		},
 		{
-			name:   "PlacedCopy",
+			name:   "CopyPlacement",
 			target: "copyUnder",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.PlacedCopy(ctx, shift)
+				return decad.Copy(ctx, body, decad.WithCopyPlacement(shift))
 			},
 		},
 	}
@@ -563,14 +563,14 @@ func countRolePrefix(b *decad.Body, prefix string) int {
 	return n
 }
 
-func TestDuplicate(t *testing.T) {
+func TestCopyIdentity(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	inst, err := body.Duplicate(t.Context())
+	inst, err := decad.Copy(t.Context(), body)
 	require.NoError(t, err)
 	require.NotSame(t, body, inst, `a duplicate is a fresh body identity`)
 
@@ -591,14 +591,14 @@ func TestDuplicate(t *testing.T) {
 	srcVol, err := body.Volume()
 	require.NoError(t, err)
 	require.True(t, srcVol.Value.Equal(units.CubicMillimeters(60000), 1e-9))
-	again, err := body.Duplicate(t.Context())
+	again, err := decad.Copy(t.Context(), body)
 	require.NoError(t, err, `the source takes further ops — it was never retired`)
 	require.NotNil(t, again)
 
 	require.NotEqual(t, body.Origin(), inst.Origin(), `a duplicate has fresh provenance`)
 }
 
-func TestPlacedCopy(t *testing.T) {
+func TestCopyPlacement(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
@@ -608,7 +608,7 @@ func TestPlacedCopy(t *testing.T) {
 	shift, err := r3.Translation(r3.NewVec(200, 0, 0))
 	require.NoError(t, err)
 
-	inst, err := body.PlacedCopy(t.Context(), shift)
+	inst, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
 
 	// The motion is rigid: volume is untouched and the centroid MOVES by t.
@@ -633,7 +633,7 @@ func TestPlacedCopy(t *testing.T) {
 	// A second placed instance reuses the same source — the bolt-pattern case.
 	shift2, err := r3.Translation(r3.NewVec(-200, 0, 0))
 	require.NoError(t, err)
-	copy2, err := body.PlacedCopy(t.Context(), shift2)
+	copy2, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(shift2))
 	require.NoError(t, err)
 	c2, err := copy2.Centroid()
 	require.NoError(t, err)
@@ -642,31 +642,45 @@ func TestPlacedCopy(t *testing.T) {
 	require.NotEqual(t, body.Origin(), inst.Origin(), `a placed copy has fresh provenance`)
 }
 
-func TestPlacedCopyZeroTransformRejected(t *testing.T) {
+func TestCopyPlacementOptions(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	_, err = body.PlacedCopy(t.Context(), r3.Transform{})
+	_, err = decad.Copy(t.Context(), body, decad.WithCopyPlacement(r3.Transform{}))
 	require.ErrorIs(t, err, decad.ErrDegenerate, `the zero transform names no placement`)
+	_, err = decad.Copy(t.Context(), body, nil)
+	require.ErrorIs(t, err, decad.ErrDegenerate, `a nil option names no placement`)
+	_, err = decad.Copy(t.Context(), nil)
+	require.ErrorIs(t, err, decad.ErrDegenerate, `a nil source names no body`)
 
 	// The identity is a valid no-op motion — the same geometry at a new identity.
-	inst, err := body.PlacedCopy(t.Context(), r3.Identity())
+	inst, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(r3.Identity()))
 	require.NoError(t, err)
 	c, err := inst.Centroid()
 	require.NoError(t, err)
 	require.InDelta(t, 50.0, c.Value.X, 1e-9)
 
-	// The rejection left the source live and registered only the valid identity copy.
-	require.Equal(t, []*decad.Body{body, inst}, doc.Bodies())
+	shift, err := r3.Translation(r3.NewVec(200, 0, 0))
+	require.NoError(t, err)
+	last, err := decad.Copy(t.Context(), body,
+		decad.WithCopyPlacement(shift), decad.WithCopyPlacement(r3.Identity()))
+	require.NoError(t, err)
+	lastCentroid, err := last.Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, 50.0, lastCentroid.Value.X, 1e-9,
+		`the last placement option replaces the earlier placement`)
+
+	// The refusals left the source live and registered only the valid copies.
+	require.Equal(t, []*decad.Body{body, inst, last}, doc.Bodies())
 }
 
 func TestDuplicatePreservesFilletRoles(t *testing.T) {
 	t.Parallel()
 	// A filleted prism's blend-role provenance is part of its re-evaluable
-	// record, so a Duplicate re-mints its own fillet(i,j) roles: the copy has
+	// record, so a Copy re-mints its own fillet(i,j) roles: the copy has
 	// the SAME count of fillet-role faces as the source (modify §9).
 	_, box := filletBox(t)
 	src, err := box.Fillet(t.Context(), verticalEdges(), units.Millimeters(10))
@@ -674,7 +688,7 @@ func TestDuplicatePreservesFilletRoles(t *testing.T) {
 	srcFillets := countRolePrefix(src, "fillet(")
 	require.Equal(t, 4, srcFillets, `the source has one fillet role per rounded corner`)
 
-	inst, err := src.Duplicate(t.Context())
+	inst, err := decad.Copy(t.Context(), src)
 	require.NoError(t, err)
 	require.Equal(t, srcFillets, countRolePrefix(inst, "fillet("),
 		`the duplicate re-mints the same fillet roles from its own record`)
@@ -698,7 +712,7 @@ func TestDuplicatePreservesFilletRoles(t *testing.T) {
 
 func TestPlacedCopyPreservesFilletRoles(t *testing.T) {
 	t.Parallel()
-	// The same guarantee under a non-identity placement: PlacedCopy re-evaluates
+	// The same guarantee under a non-identity placement: Copy re-evaluates
 	// the payload under the composed motion and re-mints the fillet roles.
 	_, box := filletBox(t)
 	src, err := box.Fillet(t.Context(), verticalEdges(), units.Millimeters(10))
@@ -708,7 +722,7 @@ func TestPlacedCopyPreservesFilletRoles(t *testing.T) {
 
 	shift, err := r3.Translation(r3.NewVec(300, 0, 0))
 	require.NoError(t, err)
-	inst, err := src.PlacedCopy(t.Context(), shift)
+	inst, err := decad.Copy(t.Context(), src, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
 	require.Equal(t, srcFillets, countRolePrefix(inst, "fillet("),
 		`the placed copy re-mints the same fillet roles`)
@@ -727,12 +741,12 @@ func TestPlacedCopyPreservesChamferRoles(t *testing.T) {
 
 	shift, err := r3.Translation(r3.NewVec(0, 300, 0))
 	require.NoError(t, err)
-	inst, err := src.PlacedCopy(t.Context(), shift)
+	inst, err := decad.Copy(t.Context(), src, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
 	require.Equal(t, srcChamfers, countRolePrefix(inst, "chamfer("),
 		`the placed copy re-mints the same chamfer roles`)
 
-	dup, err := src.Duplicate(t.Context())
+	dup, err := decad.Copy(t.Context(), src)
 	require.NoError(t, err)
 	require.Equal(t, srcChamfers, countRolePrefix(dup, "chamfer("),
 		`the duplicate re-mints the same chamfer roles`)
@@ -749,7 +763,7 @@ func TestDuplicatePlainExtrudeHasNoBlendRoles(t *testing.T) {
 	require.Zero(t, countRolePrefix(body, "fillet("))
 	require.Zero(t, countRolePrefix(body, "chamfer("))
 
-	inst, err := body.Duplicate(t.Context())
+	inst, err := decad.Copy(t.Context(), body)
 	require.NoError(t, err)
 	require.Zero(t, countRolePrefix(inst, "fillet("), `a plain extrude copy has no fillet roles`)
 	require.Zero(t, countRolePrefix(inst, "chamfer("), `a plain extrude copy has no chamfer roles`)
@@ -773,7 +787,7 @@ func TestDuplicatePreservesFacetedProvenance(t *testing.T) {
 	}
 	require.NotEmpty(t, want)
 
-	inst, err := cut.Duplicate(t.Context())
+	inst, err := decad.Copy(t.Context(), cut)
 	require.NoError(t, err)
 	require.Equal(t, "body", inst.Origin().Role)
 

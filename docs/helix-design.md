@@ -566,7 +566,7 @@ rationals against `math.Log`/`math.Asinh` (enclosure contains, width below
 | **CD4** | interference | landed through `Verify`'s read-only mesh intersection (`docs/interference-design.md` §5) for every partner the mesh boolean admits; a partner the chain-depth gate refuses reads the pair as unsupported staging |
 | **CD5** | clearance | landed: `WithClearances` reads the exact planar arm (`clearance_planar.go`; `planarCoilSolid` in `contact_faceted_pair.go` lifts the held shell with `δ` the payload's) against a prism or a stitched solid, the held gap widened by `δ` outward; a held touch or a gap or overlap within `δ` stays undecided. `Suspect` against every other payload, a mitred sweep, a faceted result and another coil included |
 | **CD6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with the unsupported-survey diagnostic |
-| **CD7** | `Placed`, `Duplicate`, `PlacedCopy` | §5.6 |
+| **CD7** | `Placed`, `Copy` | §5.6 |
 | **CD8** | modify operations | `ErrUnsupported`; no receiver row |
 | **CD9** | mass properties (`dynamics`) | landed through the verified-mesh ladder (`mass_properties_mesh.go`): the restated mesh settles at its first step, its occupied volume widened by §8.2's `volSymDiff` |
 | **CD10** | STEP | the faceted AP214 writer: a `Faceted` wall has no analytic arm, so the whole body writes as held facets, which `docs/step-export-design.md` already states for any body with a non-planar, non-cylindrical face |

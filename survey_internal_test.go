@@ -1424,7 +1424,7 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 		b := body
 		if pl.xform != nil {
 			var err error
-			b, err = b.PlacedCopy(t.Context(), *pl.xform)
+			b, err = Copy(t.Context(), b, WithCopyPlacement(*pl.xform))
 			require.NoError(t, err)
 		}
 		pp, ok := b.payload.(prismPayload)

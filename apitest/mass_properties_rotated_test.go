@@ -88,7 +88,7 @@ func TestMassPropertiesTiltedFrameBox(t *testing.T) {
 
 	pose, err := r3.RotationAround(r3.NewVec(-1, 0, 4), r3.NewVec(0, 1, 2), units.Degrees(50))
 	require.NoError(t, err)
-	placed, err := body.PlacedCopy(t.Context(), pose)
+	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(pose))
 	require.NoError(t, err)
 	turned, err := placed.MassProperties(t.Context(), density)
 	require.NoError(t, err)

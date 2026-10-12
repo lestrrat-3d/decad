@@ -91,8 +91,9 @@ func (b *Body) Mirrored(ctx context.Context, plane MirrorPlane, opts ...MirrorOp
 }
 
 // MirroredCopy returns a new live body carrying the receiver's mirror image
-// across plane, leaving the receiver LIVE. It is [Body.PlacedCopy] under
-// r3.Reflection of the resolved plane, with the gates [Body.Mirrored] states.
+// across plane, leaving the receiver LIVE. It calls [Copy] with
+// [WithCopyPlacement] under r3.Reflection of the resolved plane, with the
+// gates [Body.Mirrored] states.
 func (b *Body) MirroredCopy(ctx context.Context, plane MirrorPlane) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a mirror`, ErrDegenerate)
@@ -101,7 +102,7 @@ func (b *Body) MirroredCopy(ctx context.Context, plane MirrorPlane) (*Body, erro
 	if err != nil {
 		return nil, err
 	}
-	return b.PlacedCopy(ctx, t)
+	return Copy(ctx, b, WithCopyPlacement(t))
 }
 
 // mirrorTransform runs the receiver's identity gates, then resolves plane to

@@ -155,7 +155,7 @@ these arms:
   difference of their composed origins has zero exact cross product with
   the exact linear image of the stored frame normal. The exact rational
   shift `s` satisfies `X_B(originB) − X_A(originA) = s·(R·N)`. This admits
-  `PlacedCopy` along the common sweep axis without re-expressing either profile.
+  `Copy` along the common sweep axis without re-expressing either profile.
   This new arm additionally requires zero section and axial displacement
   and two hole-free, full-line, axis-aligned rectangular profiles. `Union`
   and `Intersect` require identical rectangle bounds; `Cut` requires the
@@ -1122,7 +1122,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
   of `RotationAround`'s known under-triggering (§3.3).
 - **§3.1 G3's axis arms admit only equal stored `U`/`V` and transform bases
   with an exact composed-origin difference along the transformed normal.**
-  `CreateOffsetPlane` on an axis-aligned datum and `PlacedCopy` along that
+  `CreateOffsetPlane` on an axis-aligned datum and `Copy` along that
   axis both qualify. No orthonormality assumption on the stored frame enters
   the proof: the shared section coefficients are identical term for term.
   A general nonidentity re-expression is still excluded because its rounded

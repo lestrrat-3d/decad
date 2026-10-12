@@ -506,7 +506,7 @@ func TestCapBlendOverlapReadsSuspect(t *testing.T) {
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: 5, Y: 2, Z: 0})
 	require.NoError(t, err)
-	overlapping, err := chamfered.PlacedCopy(t.Context(), shift)
+	overlapping, err := decad.Copy(t.Context(), chamfered, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
 	require.NotNil(t, overlapping)
 

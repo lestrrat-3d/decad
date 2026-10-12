@@ -374,7 +374,7 @@ func TestLinkagePairGapCarriesBothDeviations(t *testing.T) {
 
 // TestVerifyLinkageKeepsTheNextProducerIdentity is the document identity half
 // of §11's non-mutation test: transient link placements mint no live
-// producer, level or curve identity, and a Duplicate after the call receives
+// producer, level or curve identity, and a Copy after the call receives
 // the next producer.
 func TestVerifyLinkageKeepsTheNextProducerIdentity(t *testing.T) {
 	t.Parallel()
@@ -393,7 +393,7 @@ func TestVerifyLinkageKeepsTheNextProducerIdentity(t *testing.T) {
 	require.Equal(t, before, doc.nextProducerID())
 	require.Equal(t, levelBefore, doc.nextLevel)
 	require.Equal(t, curveBefore, doc.nextCurve)
-	dup, err := cube.Duplicate(t.Context())
+	dup, err := Copy(t.Context(), cube)
 	require.NoError(t, err)
 	require.Equal(t, before, dup.originProducer())
 }
@@ -841,11 +841,11 @@ func TestLinkageHullPointsInsideRestBox(t *testing.T) {
 	require.NoError(t, err)
 	lifted, err := turn.Then(up)
 	require.NoError(t, err)
-	turned, err := internalBoxBody(t, doc, 5, 5, 15, 15, 7).PlacedCopy(t.Context(), lifted)
+	turned, err := Copy(t.Context(), internalBoxBody(t, doc, 5, 5, 15, 15, 7), WithCopyPlacement(lifted))
 	require.NoError(t, err)
 	tilt, err := r3.RotationAround(r3.NewVec(3, -2, 1), r3.NewVec(1, 1, 1), units.Radians(0.7))
 	require.NoError(t, err)
-	tilted, err := internalBoxBody(t, doc, 0, 0, 10, 10, 5).PlacedCopy(t.Context(), tilt)
+	tilted, err := Copy(t.Context(), internalBoxBody(t, doc, 0, 0, 10, 10, 5), WithCopyPlacement(tilt))
 	require.NoError(t, err)
 	frame := canonicalPrismFrame(t)
 	inner := prismPayload{profile: profileRecord{Outer: synthRectLoop(2, 2, 8, 8)}, frame: frame, z0: 0, z1: 10, xform: r3.Identity()}

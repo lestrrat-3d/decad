@@ -68,7 +68,7 @@ func TestLoftMirrorCylinderUnionJoinsRepeatedRadialTabs(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	quarterTurn, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(90))
 	require.NoError(t, err)
-	turnedPair, err := pair.PlacedCopy(t.Context(), quarterTurn)
+	turnedPair, err := decad.Copy(t.Context(), pair, decad.WithCopyPlacement(quarterTurn))
 	require.NoError(t, err)
 	blank := circleBodyAtZ(t, doc, 0, 3, 0, 2)
 	joined, err := decad.Union(t.Context(), blank, pair)

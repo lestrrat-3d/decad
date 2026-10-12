@@ -337,7 +337,7 @@ func TestMassPropertiesCompositeSweepPlaced(t *testing.T) {
 	// The composite replay certifies its span joins under this turn about X
 	// through the origin; it refuses several other turns of this path.
 	pose := composedRotation(t, r3.Vec{}, r3.NewVec(1, 0, 0), 30, 8)
-	placed, err := body.PlacedCopy(t.Context(), pose)
+	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(pose))
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
 	got, err := placed.MassProperties(t.Context(), density)

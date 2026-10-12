@@ -135,7 +135,7 @@ func outcomeOf(t *testing.T, b *decad.Body, err error) unionOutcome {
 // spec on a twin document. Two discs crossing about the origin join; pegs that
 // overlap or share a wall join analytically through general-boolean class A3,
 // into one prism of 625 or 500 mm³; pegs stacked end to end along their own
-// sweep (the non-co-directional row) instance through PlacedCopy, whose
+// sweep (the non-co-directional row) instance through Copy, whose
 // placement keeps them off the analytic stacked union, and reach the mesh
 // path's coplanar refusal. The two peg rows fail on a sketch that leaves
 // coincident line carriers unresolved. A refusal leaves the

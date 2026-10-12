@@ -45,7 +45,7 @@ func patternedGroup(t *testing.T, b *Body) stackedPrismPayload {
 // TestPatternedGroupDisplacement is §8's N-hole row read on the records: six
 // Ø4 discs at integer 10 mm steps are a group with a displacement of exactly
 // zero, and the plate they cut keeps it zero. The fixture is shown to fail
-// with the group tool replaced by six PlacedCopy cuts: each placed tool
+// with the group tool replaced by six Copy cuts: each placed tool
 // re-expresses into the plate's frame, and the plate publishes a positive
 // displacement.
 func TestPatternedGroupDisplacement(t *testing.T) {
@@ -67,7 +67,7 @@ func TestPatternedGroupDisplacement(t *testing.T) {
 		require.Len(t, pp.profile.Holes, 6)
 		require.Zero(t, pp.sectionDelta)
 	})
-	t.Run("six PlacedCopy cuts", func(t *testing.T) {
+	t.Run("six placed Copy cuts", func(t *testing.T) {
 		t.Parallel()
 		doc := New()
 		part := patternedPrism(t, doc, 0, -20, 60, 20, 0)
@@ -75,7 +75,7 @@ func TestPatternedGroupDisplacement(t *testing.T) {
 		for i := range 6 {
 			shift, err := r3.Translation(r3.NewVec(10*float64(i), 0, 0))
 			require.NoError(t, err)
-			inst, err := disc.PlacedCopy(t.Context(), shift)
+			inst, err := Copy(t.Context(), disc, WithCopyPlacement(shift))
 			require.NoError(t, err)
 			part, err = Cut(t.Context(), part, inst)
 			require.NoError(t, err)

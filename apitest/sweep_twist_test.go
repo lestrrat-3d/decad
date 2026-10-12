@@ -289,7 +289,7 @@ func TestSweepTwistCompositeCardinalArc(t *testing.T) {
 	require.NoError(t, err)
 	mirror, err := r3.Reflection(mirrorFrame)
 	require.NoError(t, err)
-	reflected, err := placed.PlacedCopy(t.Context(), mirror)
+	reflected, err := decad.Copy(t.Context(), placed, decad.WithCopyPlacement(mirror))
 	require.NoError(t, err)
 	reflectedMesh, err := reflected.Tessellate(t.Context(), units.Millimeters(0.5),
 		decad.WithVerification(decad.VerifyAll))

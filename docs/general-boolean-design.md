@@ -63,7 +63,7 @@ its source surface tags.
 | S4a | plate `Cut` through hole, both on XY | analytic | 7 faces, bound 8e-13 mm³ |
 | S4b | 20×20×10 plate with Ø4 through hole, then `Cut` Ø8 counterbore from z = 7 | analytic | 9 faces, volume 4000 − 76π mm³ within a 2.9e-13 mm³ bound |
 | S4c/d | the same counterbore first, then the Ø4 through hole inside it | analytic | the same 9 faces and bounded volume |
-| S5 | plate `Cut` by six `PlacedCopy`-translated cylinders | analytic | six results, bound 5e-10 mm³, `sectionDelta > 0`: `Fillet` refuses, wall `undecided` |
+| S5 | plate `Cut` by six `Copy`-translated cylinders | analytic | six results, bound 5e-10 mm³, `sectionDelta > 0`: `Fillet` refuses, wall `undecided` |
 | S5b | the six holes each drawn in a sketch | analytic | bound 2e-12 mm³, `Fillet` OK |
 | S6a | filleted box `Cut` by a cross cylinder | mesh | 11 `Faceted` faces, bound 1.71 mm³ |
 | S6b | filleted box `Cut` by a same-plane cylinder | analytic | 11 faces, bound 3e-12 mm³ |
@@ -307,7 +307,7 @@ same gate and scene, so a reflected pair the analytic `Intersect` resolves is
 measured instead of reaching the mesh path's `unsupported_pair_contact`.
 A pair with equal transform bases whose composed origins differ only along
 the sweep axis also needs no section re-expression; G3 computes that shift
-exactly for a `PlacedCopy` operand. The placed-axis arm requires zero section
+exactly for a `Copy` operand. The placed-axis arm requires zero section
 and axial displacement and two hole-free, full-line, axis-aligned rectangles.
 `Union` and `Intersect` require identical bounds; `Cut` requires the tool's
 bounds to lie strictly inside the target's bounds.
@@ -798,7 +798,7 @@ ordinary mesh-path operand and export input.
 | Consumer | Behaviour |
 |---|---|
 | `Union`/`Cut`/`Intersect` with a prism, stacked or brep partner | class B again over the face view (§5), so a cross-drilled plate takes a second cross hole and a coplanar blind cut alike; a co-directional `Union` on an A1 result reads its `stack` and is A1 again (§3); a pair outside both takes the mesh path over §4.4's mesh |
-| `Body.Placed` / `Duplicate` / `PlacedCopy` / `Mirrored` | re-lifts every face frame under the composed motion; a reflection flips `outward` and every wall's winding, exactly as `prismPayload.reflected()` does |
+| `Body.Placed` / `Copy` / `Mirrored` | re-lifts every face frame under the composed motion; a reflection flips `outward` and every wall's winding, exactly as `prismPayload.reflected()` does |
 | `Fillet` / `Chamfer` / `Shell` | `docs/brep-modify-design.md`: a brep that reads as a prism along a reference axis takes the prism's own ops (route P); an axis-parallel straight edge takes the brep rewrite (route E) and the result is a `brepPayload`; every other call refuses by that document's Table SB |
 | `ThroughAll` / `ToFace` stops | a planar face's level is its frame and `z0`; a directional extent reads the per-face extremes (§4.3), and refuses a record carrying a `delta` as a prism's does |
 | `Verify` validity | by construction (§4.2); the structural audit runs |

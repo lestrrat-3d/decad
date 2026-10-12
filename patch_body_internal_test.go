@@ -319,7 +319,7 @@ func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 // TestBodyPatchRejectsAReceiverWithNoPayload is Table R row R19: a live body
 // this evaluator did not build (payload nil) — unreachable through the
 // public seam, since every builder here always sets one, on the same terms
-// Placed/PlacedCopy/Duplicate already require.
+// Placed/Copy already require.
 func TestBodyPatchRejectsAReceiverWithNoPayload(t *testing.T) {
 	t.Parallel()
 	d := New()

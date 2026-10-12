@@ -51,7 +51,7 @@ func TestLoftMirrorUnionSealsTheSharedCap(t *testing.T) {
 
 	spin, err := r3.RotationAround(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(45))
 	require.NoError(t, err)
-	placed, err := joined.PlacedCopy(t.Context(), spin)
+	placed, err := decad.Copy(t.Context(), joined, decad.WithCopyPlacement(spin))
 	require.NoError(t, err)
 	copyMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))

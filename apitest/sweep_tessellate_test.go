@@ -313,7 +313,7 @@ func TestSweepCompositePlacedMesh(t *testing.T) {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(0.1, 0.2, 0.3))
 	require.NoError(t, err)
-	placed, err := base.PlacedCopy(t.Context(), move)
+	placed, err := decad.Copy(t.Context(), base, decad.WithCopyPlacement(move))
 	require.NoError(t, err)
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)

@@ -38,7 +38,7 @@ import (
 //
 // A metered set outlives the evaluation that resolved it. evalPrismContext
 // publishes the one it resolved onto the body's own prismPayload, so a rigid
-// re-evaluation of that record — Placed, Duplicate, PlacedCopy — reads the
+// re-evaluation of that record — Placed, Copy — reads the
 // plane-local walks back instead of bracketing every free-form arc again. What
 // makes that sound is that a walk holds NOTHING placement-dependent: walkOf
 // answers in the section's own (u, v), and the frame, the placement and the

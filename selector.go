@@ -417,7 +417,7 @@ func FaceCreatedBy(f FeatureRef) FacePredicate {
 // literal a typo could break. It reads b.Origin().producer (§6) and pairs it with
 // the fixed role. The role exists only where the feature mints it — an extrude, a
 // partial revolve, a shell that built a tube, an authenticated axial
-// Loft/cylinder join or its centered bore Cut, or a Placed/PlacedCopy/Duplicate
+// Loft/cylinder join or its centered bore Cut, or a Placed/Copy
 // of one; on any other body the ref is still well-formed and simply matches
 // nothing (an ordinary ErrNoMatch at resolve). An ordinary mesh boolean
 // preserves only its operands' cap origins, so name those with

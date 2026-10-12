@@ -224,7 +224,7 @@ func TestPrismReflectedOperandChargesItsWalk(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	cell := prismSplitLeftCellBody(t, doc)
-	image, err := cell.PlacedCopy(t.Context(), prismMirrorAcrossX(t, 0))
+	image, err := Copy(t.Context(), cell, WithCopyPlacement(prismMirrorAcrossX(t, 0)))
 	require.NoError(t, err)
 	box := prismRectBody(t, doc, -10, -2, 10, 12)
 

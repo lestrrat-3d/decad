@@ -24,7 +24,7 @@ import (
 // The receiver stays LIVE. An offset depends on its source and consumes
 // nothing — the two are the pair a caller stitches, thickens or measures a
 // clearance between — so the result registers on the non-consuming terms
-// PlacedCopy and Duplicate already take (document.go's copyUnder,
+// Copy already takes (document.go's copyUnder,
 // docs/api-design.md §6). Nothing sums the pair: Volume and Centroid are
 // ErrNotSolid on a sheet by kind (§8), and Union/Cut/Intersect refuse a sheet
 // permanently (Table X), so the two live bodies can never be combined into a
@@ -145,7 +145,7 @@ func (b *Body) Offset(ctx context.Context, distance units.Value, opts ...OffsetO
 // sheet's one face already publishes. It mints no geometry — a planar region
 // carried along its own normal is congruent to itself — so the recorded
 // profile, its frame axes and every plane-local coordinate travel unchanged and
-// the rebuild is the identical one PlacedCopy performs, charging the identical
+// the rebuild is the identical one Copy performs, charging the identical
 // placement rounding.
 //
 // A millimetre conversion that displaces the distance is R39. patchPayload
