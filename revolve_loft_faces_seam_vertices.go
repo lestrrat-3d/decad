@@ -19,13 +19,13 @@ type revolveLoftFacesSeamVertex struct {
 	loftBound  float64
 }
 
-// revolveLoftFacesArcSeamVertices places a held ring at one rational time
+// revolveLoftFacesArcSeamVerticesUnchecked places a held ring at one rational time
 // inside a certified root bracket. The caller must authenticate that every
 // station belongs, in order, to one whole radial Sketch Arc and that the
 // supplied bracket encloses its unique finite crossing for the complete arc.
 // It does not infer contact from held facets or promote station coincidence
 // to a source certificate.
-func revolveLoftFacesArcSeamVertices(ctx context.Context, trim *loftFacesTrimRecord,
+func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFacesTrimRecord,
 	band int, stations []int, root loftFaceInterval, section revolveSectionSpan,
 ) ([]revolveLoftFacesSeamVertex, bool, error) {
 	if ctx == nil || trim == nil || trim.source == nil ||

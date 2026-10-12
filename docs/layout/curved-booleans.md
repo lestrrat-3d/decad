@@ -35,3 +35,4 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_cap_side_tie.go` | Binds occupied heel cap arc endpoints to unique live LoftFaces wall contact cells. See loft-face-sections design. |
 | `revolve_loft_faces_seam_vertices.go` | Places one shared held vertex row inside a certified radial arc root bracket and bounds each source side. See loft-face-sections design. |
 | `revolve_loft_faces_seam_patch.go` | Splits open Revolve and LoftFaces source strips through shared seam vertices. See loft-face-sections design. |
+| `revolve_loft_faces_seam_checked.go` | Rechecks live source face pairs and the complete radial arc station run before building open seam patches. See loft-face-sections design. |

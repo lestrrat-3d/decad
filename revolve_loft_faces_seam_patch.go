@@ -19,13 +19,13 @@ type revolveLoftFacesSeamPatch struct {
 	seam         []int
 }
 
-// revolveLoftFacesArcPatches splits the two source parameter strips at the
+// revolveLoftFacesArcPatchesUnchecked splits the two source parameter strips at the
 // same certified radial-arc crossing. The blank strip is rebuilt from its
 // exact straight meridian; the LoftFaces strip uses the original cap maps.
 // Every middle-row coordinate is copied from the same seam vertex. These
 // open patches are construction pieces, not a Boolean result or a contact
 // admission; their outer edges still need the adjacent caps and side cells.
-func revolveLoftFacesArcPatches(ctx context.Context, trim *loftFacesTrimRecord,
+func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTrimRecord,
 	band, segment int, section revolveSectionSpan, seam []revolveLoftFacesSeamVertex,
 ) (revolveLoftFacesSeamPatch, revolveLoftFacesSeamPatch, bool, error) {
 	var blank, loft revolveLoftFacesSeamPatch
