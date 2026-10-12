@@ -19,6 +19,8 @@ type prismPatternFilletContact struct {
 	center        r3.Vec
 	pointError    float64
 	tubeRadius    float64
+	lineIV        prismPatternIVPoint
+	centerIV      prismPatternIVPoint
 	circleIV      prismPatternIVPoint
 }
 
@@ -177,7 +179,7 @@ func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
 	}
 	result = prismPatternFilletContact{part: partIndex, station: station,
 		tubeRadius: proofbound.RatFloatUp(new(big.Rat).Add(centerDistance.Hi, r)),
-		circleIV:   circleFoot}
+		lineIV:     lineFoot, centerIV: center, circleIV: circleFoot}
 	result.line, _, err = prismPatternIVHeld(lineFoot, heldRoot.Z)
 	if err != nil {
 		return prismPatternFilletContact{}, err

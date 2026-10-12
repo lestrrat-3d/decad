@@ -94,12 +94,14 @@ interval arithmetic brackets the center, the line foot and the circle foot.
 The line foot must lie beyond the blank and before the next source vertex;
 the circle foot must lie within the first shared-ring step. The entire
 tangent arc fits within `3r` of the source root. The source control-hull
-certificate keeps every nonconnector wall outside `R+3r+oldBound`, and all
-root disks are pairwise separate after charging source mesh displacement.
-Each other copied connector must also clear every root disk. Exact dyadic
-point-to-segment distance checks both endpoints and the interior projection
-against `3r+oldBound`; equality refuses. The connector belonging to that
-root is the only exception.
+certificate keeps every nonconnector wall beyond `R+2r`, the farthest radial
+reach of the whole fillet circle. Pinned source arcs charge their radial
+residual. The exact contact center, line foot and source root define a narrow
+polar sector for the connector cutback, circular-wall cutback and short
+fillet arc. The circle's tangent cone bounds the complete arc. Sectors of
+selected contacts and all other copied connectors must be strictly separate
+modulo a full turn. The connector belonging to each selected root is the only
+exception. Sector overlap or an ambiguous angle refuses.
 
 The shell moves each selected connector endpoint to its line foot, splits
 the shared ring at the circle foot, and joins them with a sampled circular
@@ -111,8 +113,9 @@ keep the omitted source-root chords inside its caps.
 
 Unchanged source and ring walls keep the Union boundary bound. The new
 boundary bound adds the arc station and sagitta allowance and must stay
-within 0.1 mm. The occupied-volume certificate adds two complete `3r`
-cylindrical disks per selected root to the old Union certificate, enlarging
-the held disk by the old boundary and arc bounds. The area allowance charges
-both old and new walls and caps in those disks. `Tessellate(VerifyAll)` checks
-the detached result before Fillet commits and retires its input.
+within 0.1 mm. The occupied-volume certificate sums two complete `3r`
+cylindrical disks per selected root over the old Union certificate, enlarging
+the held disk by the old boundary and arc bounds. These disks may overlap;
+the sum remains an upper bound. The area allowance charges both old and new
+walls and caps in those disks. `Tessellate(VerifyAll)` checks the detached
+result before Fillet commits and retires its input.

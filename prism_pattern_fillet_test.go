@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -30,40 +31,89 @@ func TestPrismPatternFilletOfCopiedExtrudes(t *testing.T) {
 	require.Less(t, mesh.Bound().Base(), 0.1)
 }
 
-func TestPrismPatternFilletConnectorDiskClearance(t *testing.T) {
-	point := func(x, y *big.Rat) prismPatternIVPoint { return prismPatternIVPointOf(x, y) }
-	root := point(big.NewRat(3, 1), big.NewRat(0, 1))
-	otherRoot := point(big.NewRat(149, 50), big.NewRat(33, 100))
-	far := point(big.NewRat(61, 20), big.NewRat(0, 1))
-	// The two roots clear their 0.15 mm disks, and the other connector
-	// moves outward across the 3 mm blank, but it enters the first disk.
-	require.Greater(t, math.Hypot(0.02, 0.33), 0.3)
-	require.Less(t, math.Hypot(2.98, 0.33), 3.0)
-	require.Greater(t, math.Hypot(3.05, 0), 3.0)
-	require.False(t, prismPatternSegmentClearsDisk(root, otherRoot, far, 0.15))
-	require.True(t, prismPatternSegmentClearsDisk(root, otherRoot,
-		point(big.NewRat(16, 5), big.NewRat(1, 100)), 0.15))
-	// A tangency is not enough clearance for a later proof.
-	require.False(t, prismPatternSegmentClearsDisk(
-		point(big.NewRat(0, 1), big.NewRat(0, 1)),
-		point(big.NewRat(-1, 1), big.NewRat(1, 1)),
-		point(big.NewRat(1, 1), big.NewRat(1, 1)), 1))
-	// The nearest point is b, so a's distance must not be added to b's.
-	require.False(t, prismPatternSegmentClearsDisk(
-		point(big.NewRat(0, 1), big.NewRat(0, 1)),
-		point(big.NewRat(2, 1), big.NewRat(0, 1)),
-		point(big.NewRat(1, 1), big.NewRat(0, 1)), 1.5))
-	// Both roots are inside the 3 mm blank and more than 6r apart. The
-	// outward connector ends beyond the blank inside the other root's disk.
-	selectedRoot := point(big.NewRat(599, 200), big.NewRat(-1, 10))
-	connectorRoot := point(big.NewRat(149, 50), big.NewRat(33, 100))
-	connectorFar := point(big.NewRat(61, 20), big.NewRat(1, 100))
-	require.Less(t, math.Hypot(2.995, -0.1), 3.0)
-	require.Less(t, math.Hypot(2.98, 0.33), 3.0)
-	require.Greater(t, math.Hypot(3.05, 0.01), 3.0)
-	require.Greater(t, math.Hypot(2.995-2.98, -0.1-0.33), 0.3)
-	require.False(t, prismPatternSegmentClearsDisk(
-		selectedRoot, connectorRoot, connectorFar, 0.15))
+func TestPrismPatternFilletSectorBeyondRootDisk(t *testing.T) {
+	doc, blank, section, rotated := prismPatternNarrowTabBodies(t)
+	joined, err := Union(t.Context(), blank, section, rotated)
+	require.NoError(t, err)
+	// The old 3r disk reaches the fitted flank. The analytic arc and its
+	// connector cutback stay inside a narrower radial and angular envelope.
+	const radius = 0.055
+	require.Greater(t, 3+3*radius, 3.15)
+	require.Greater(t, 2*3*math.Sin(0.14), 6*radius)
+	rounded, err := joined.Fillet(t.Context(), prismPatternRootSelection(t, joined),
+		units.Millimeters(radius))
+	require.NoError(t, err)
+	require.Len(t, doc.Bodies(), 1)
+	mesh, err := rounded.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
+func prismPatternNarrowTabBodies(t *testing.T) (*Document, *Body, *Body, *Body) {
+	t.Helper()
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	point := func(radius, angle float64) *sketch.Point {
+		p := s.CreatePoint(radius*math.Cos(angle), radius*math.Sin(angle))
+		s.Fix(p)
+		return p
+	}
+	rootRight, rootLeft := point(3, -0.14), point(3, 0.14)
+	right := []*sketch.Point{point(3.15, -0.14), point(3.55, -0.137),
+		point(3.75, -0.13), point(4, -0.12)}
+	left := []*sketch.Point{point(3.15, 0.14), point(3.55, 0.137),
+		point(3.75, 0.13), point(4, 0.12)}
+	s.CreateLine(rootRight, right[0])
+	_, err = s.CreateFitSpline(right...)
+	require.NoError(t, err)
+	s.CreateArc(center, right[len(right)-1], left[len(left)-1])
+	_, err = s.CreateFitSpline(left...)
+	require.NoError(t, err)
+	s.CreateLine(left[0], rootLeft)
+	s.CreateArc(center, rootRight, rootLeft)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	doc := New()
+	section, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+	require.NoError(t, err)
+	blankSketch, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	c := blankSketch.CreatePoint(0, 0)
+	blankSketch.Fix(c)
+	blankSketch.CreateCircle(c, math.Nextafter(3, math.Inf(1)))
+	_, err = blankSketch.Solve(t.Context())
+	require.NoError(t, err)
+	blank, err := doc.Extrude(blankSketch, blankSketch.Profiles()[0],
+		Distance{D: units.Millimeters(2), Dir: Along})
+	require.NoError(t, err)
+	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/2))
+	require.NoError(t, err)
+	rotated, err := Copy(t.Context(), section, WithCopyPlacement(turn))
+	require.NoError(t, err)
+	return doc, blank, section, rotated
+}
+
+func TestPrismPatternFilletSectorRejectsAnotherConnector(t *testing.T) {
+	// Both roots lie inside R=3 and clear one another's 0.15 mm disks.
+	// The other connector ends outside R inside this selected sector.
+	require.Greater(t, math.Hypot(2.995-2.98, 0.33), 0.3)
+	part := prismPatternPart{prism: prismPayload{xform: r3.Identity()}}
+	connector, err := prismPatternFilletConnectorSector(part, lineSeg{
+		Start: Point2{U: 2.98, V: 0.33}, End: Point2{U: 3.05, V: 0.01}})
+	require.NoError(t, err)
+	selected := prismPatternFilletSector{lo: big.NewRat(0, 1), hi: big.NewRat(1, 20)}
+	require.False(t, prismPatternFilletSectorsSeparate(selected, connector))
+	require.True(t, prismPatternFilletSectorsSeparate(
+		prismPatternFilletSector{lo: big.NewRat(-2, 25), hi: big.NewRat(-33, 1000)}, connector))
+	// The same physical angular interval can straddle the -pi/pi reading.
+	require.False(t, prismPatternFilletSectorsSeparate(
+		prismPatternFilletSector{lo: big.NewRat(31, 10), hi: big.NewRat(16, 5)},
+		prismPatternFilletSector{lo: big.NewRat(-159, 50), hi: big.NewRat(-77, 25)}))
 }
 
 func TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius(t *testing.T) {

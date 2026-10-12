@@ -14,5 +14,6 @@ The rules for rows live in `docs/layout.md`.
 | `prism_pattern_proof.go` | Charges seam boundary and occupied-volume bounds. See prism-pattern-union design. |
 | `prism_pattern_fillet_admission.go` | Matches source roots and checks local clearance. See prism-pattern-union design. |
 | `prism_pattern_fillet_contact.go` | Brackets exact connector/circle fillet contacts. See prism-pattern-union design. |
+| `prism_pattern_fillet_sector.go` | Bounds rounded contacts and copied connectors by certified polar sectors. See prism-pattern-union design. |
 | `prism_pattern_fillet_shell.go` | Builds and audits rounded local bands and caps. See prism-pattern-union design. |
 | `prism_pattern_fillet_proof.go` | Charges rounded boundary, area and occupied volume. See prism-pattern-union design. |

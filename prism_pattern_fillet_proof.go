@@ -11,7 +11,8 @@ import (
 
 // The joined-prism Fillet changes only the authenticated connector/circle
 // junctions. Their true and held old-to-new symmetric differences each fit
-// inside disjoint 3r disks, enlarged by the source mesh bound for held disks.
+// inside 3r disks, enlarged by the source mesh bound for held disks. The
+// disks may overlap; summing their complete volumes remains an upper bound.
 // The new arc's line/circle contacts and sampling bound apply inside them;
 // every unchanged source facet keeps the Union's existing displacement bound.
 func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
