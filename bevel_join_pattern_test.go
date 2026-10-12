@@ -14,7 +14,7 @@ func TestBevelPatternRingAnglesKeepCapStationsAcrossHalfTurn(t *testing.T) {
 	for i, sector := range sectors {
 		plans[i] = bevelTwoPlan{
 			lo: sector[0], hi: sector[1],
-			placed: []bevelPathNode{
+			placed: []sectorPathNode{
 				{angle: sector[0], rootBoundary: true},
 				{},
 				{angle: sector[1], rootBoundary: true},
@@ -56,7 +56,7 @@ func TestBevelPatternRingKeepsSixteenSeparateRootSectors(t *testing.T) {
 	for i := range plans {
 		center := 2 * math.Pi * float64(i) / toothCount
 		lo, hi := center-halfWidth, center+halfWidth
-		plans[i] = bevelTwoPlan{lo: lo, hi: hi, placed: []bevelPathNode{
+		plans[i] = bevelTwoPlan{lo: lo, hi: hi, placed: []sectorPathNode{
 			{angle: lo, rootBoundary: true}, {}, {angle: hi, rootBoundary: true},
 		}}
 	}

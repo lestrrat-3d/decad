@@ -56,6 +56,133 @@ func TestUnionTaperedHubAndFittedRadialLug(t *testing.T) {
 	requireRevolveLugSourceFaces(t, joined, splitCap)
 }
 
+// The outer shoulder adds a non-collinear meridian face away from the root.
+// Public Union must preserve that face while joining the same real lug.
+func TestUnionShoulderedHubAndRadialLug(t *testing.T) {
+	_, hub, trimmed := shoulderedHubAndRadialLug(t)
+	hubVolume, err := hub.Volume()
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), hub, trimmed)
+	require.NoError(t, err)
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	volume, err := joined.Volume()
+	require.NoError(t, err)
+	require.Greater(t, volume.Value.Base()-volume.Bound.Base(),
+		hubVolume.Value.Base()+hubVolume.Bound.Base())
+	require.Equal(t, 2, revolveLugEuler(mesh))
+}
+
+func TestUnionShoulderedHubAndTwoRadialLugs(t *testing.T) {
+	_, hub, trimmed := shoulderedHubAndRadialLug(t)
+	hubVolume, err := hub.Volume()
+	require.NoError(t, err)
+	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
+	require.NoError(t, err)
+	second, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), hub, trimmed)
+	require.NoError(t, err)
+	joined, err = decad.Union(t.Context(), joined, second)
+	require.NoError(t, err)
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Equal(t, 2, revolveLugEuler(mesh))
+	volume, err := joined.Volume()
+	require.NoError(t, err)
+	require.Greater(t, volume.Value.Base()-volume.Bound.Base(),
+		hubVolume.Value.Base()+hubVolume.Bound.Base())
+}
+
+func TestUnionShoulderedHubAndTwoRadialLugsVariadic(t *testing.T) {
+	_, hub, trimmed := shoulderedHubAndRadialLug(t)
+	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
+	require.NoError(t, err)
+	second, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), hub, trimmed, second)
+	require.NoError(t, err)
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Equal(t, 2, revolveLugEuler(mesh))
+}
+
+func TestUnionShoulderedHubAndThreeRadialLugsVariadic(t *testing.T) {
+	_, hub, trimmed := shoulderedHubAndRadialLug(t)
+	hubVolume, err := hub.Volume()
+	require.NoError(t, err)
+	placed := make([]*decad.Body, 2)
+	for i, degrees := range []float64{120, 240} {
+		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(degrees))
+		require.NoError(t, err)
+		placed[i], err = decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+		require.NoError(t, err)
+	}
+	joined, err := decad.Union(t.Context(), hub, trimmed, placed[0], placed[1])
+	require.NoError(t, err)
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Equal(t, 2, revolveLugEuler(mesh))
+	volume, err := joined.Volume()
+	require.NoError(t, err)
+	require.Greater(t, volume.Value.Base()-volume.Bound.Base(),
+		hubVolume.Value.Base()+hubVolume.Bound.Base())
+}
+
+func TestUnionShoulderedHubOverlappingLugsLeaveInputsLive(t *testing.T) {
+	doc, hub, trimmed := shoulderedHubAndRadialLug(t)
+	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(5))
+	require.NoError(t, err)
+	second, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+	require.NoError(t, err)
+	before := doc.Bodies()
+	_, err = decad.Union(t.Context(), hub, trimmed, second)
+	require.Error(t, err)
+	require.Equal(t, before, doc.Bodies())
+}
+
+func shoulderedHubAndRadialLug(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
+	t.Helper()
+	doc, priorHub, trimmed, sourceSketch, sourceRoles := taperedHubAndRadialLug(t, 9, 7.5, 4.3, false)
+	require.NotNil(t, priorHub)
+	require.NotNil(t, sourceSketch)
+	require.Len(t, sourceRoles, 2)
+	world := sketch.NewWorld()
+	section, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	outline := []decad.Point2{{U: 6}, {U: 9}, {U: 9.2, V: 1.5},
+		{U: 9, V: 3}, {U: 8, V: 4}, {U: 5, V: 2.5}, {U: 6, V: 1.5}}
+	points := make([]*sketch.Point, len(outline))
+	for i, point := range outline {
+		points[i] = section.CreatePoint(point.U, point.V)
+		section.Fix(points[i])
+	}
+	for i := range points {
+		section.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	_, err = section.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := section.Profiles()
+	require.Len(t, profiles, 1)
+	hub, err := doc.Revolve(section, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	require.NoError(t, err)
+	require.Greater(t, len(hub.Faces()), 5, "the shoulder must add an effective meridian side")
+	return doc, hub, trimmed
+}
+
 func requireRevolveLugSourceFaces(t *testing.T, joined *decad.Body, splitCap []decad.FeatureRef) {
 	t.Helper()
 	var splitCapFace, rootConeFace bool

@@ -111,7 +111,7 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 	}
 	witness := boundary.outsideWitness
 	if witness < 0 || witness >= len(source.entities) || witness == boundary.insideSegment {
-		return nil, 0, fmt.Errorf("%w: tooth has no certified outside segment", ErrUnsupported)
+		return nil, 0, fmt.Errorf("%w: trimmed Loft has no certified outside segment", ErrUnsupported)
 	}
 	forward := make([]revolveSectorNode, 0, len(full))
 	for i := crossPosition[0]; ; i = (i + 1) % len(full) {

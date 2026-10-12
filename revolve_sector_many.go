@@ -1,0 +1,434 @@
+package decad
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math"
+
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
+	"github.com/lestrrat-3d/r3"
+)
+
+type revolveSectorPlan struct {
+	nodes                      []sectorPathNode
+	sector                     [2]float64
+	rootNode                   []int
+	motion                     r3.Transform
+	charge                     massmoment.MapCharge
+	placedRound, crossingBound float64
+	nodeRound, snap            float64
+	capGroups                  [2]int
+}
+
+type revolveSectorVolumeRefineError struct{ gain, bound float64 }
+
+func (r *revolveSectorVolumeRefineError) Error() string {
+	return fmt.Sprintf("%v: joined sectors have no certified occupied volume", ErrUnsupported)
+}
+
+type revolveSectorContactRefineError struct{ cause error }
+
+func (r *revolveSectorContactRefineError) Error() string { return r.cause.Error() }
+func (r *revolveSectorContactRefineError) Unwrap() error { return r.cause }
+
+// buildRevolveLoftSectorsJoin reconstructs all admitted sectors against one
+// authenticated Revolve source. The joined mesh is never an input geometry.
+func buildRevolveLoftSectorsJoin(ctx context.Context, d *Document, ref producerID,
+	cert *revolveLoftSectorCertificate, sources []facetedPayload) (*Body, *revolvedSectionRing, error) {
+	if cert == nil || cert.trim == nil || cert.blank == nil ||
+		len(sources) == 0 || len(sources) > 128 ||
+		!revolvePointSourceCurrent(cert.trim.base.pointSection) {
+		return nil, nil, fmt.Errorf("%w: sector source is incomplete or stale", ErrUnsupported)
+	}
+	sag := 0.01
+	for attempt := range 8 {
+		body, ring, err := buildRevolveLoftSectorsAtSag(ctx, d, ref, cert, sources, sag)
+		if err == nil {
+			return body, ring, nil
+		}
+		if _, contact := err.(*revolveSectorContactRefineError); contact {
+			if attempt == 7 {
+				return nil, nil, err
+			}
+			sag *= 0.25
+			continue
+		}
+		refine, ok := err.(*revolveSectorVolumeRefineError)
+		if !ok || refine.gain <= 0 || refine.bound <= 0 || attempt == 7 {
+			return nil, nil, err
+		}
+		factor := max(0.1, min(0.5, 0.5*refine.gain/refine.bound))
+		next := sag * factor
+		if next <= 0 || next >= sag || math.IsNaN(next) {
+			return nil, nil, err
+		}
+		sag = next
+	}
+	return nil, nil, fmt.Errorf("%w: sector angular refinement ended without a volume proof", ErrUnsupported)
+}
+
+func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producerID,
+	cert *revolveLoftSectorCertificate, sources []facetedPayload,
+	sagAllowance float64) (*Body, *revolvedSectionRing, error) {
+	section, record, base := cert.section, cert.trim, cert.base
+	regularSource, sourceSector, err := revolveSectionAngles(section, cert.sector, sagAllowance)
+	if err != nil {
+		return nil, nil, err
+	}
+	path := make([]sectorPathNode, len(cert.loop))
+	for i, node := range cert.loop {
+		path[i] = sectorPathNode{p: node.point, groupToNext: node.groupToNext,
+			crossing: node.crossing, rootBoundary: node.rootBoundary, angle: node.angle}
+	}
+	original, err := revolveSectorCapBoundary(path, section,
+		base.pointSection.source.frame, regularSource, sourceSector)
+	if err != nil {
+		return nil, nil, err
+	}
+	caps, err := sectorCapTriangulate(ctx, original, base.pointSection.source.frame)
+	if err != nil {
+		return nil, nil, triangulation.WrapLoftError(err)
+	}
+	original, caps, edges, farRound, err := sectorSubdivideCap(ctx, original, caps, 4)
+	if err != nil {
+		return nil, nil, err
+	}
+	motions := make([]r3.Transform, len(sources))
+	charges := make([]massmoment.MapCharge, len(sources))
+	motions[0] = r3.Identity()
+	if sources[0].pointCone != record || sources[0].xform != r3.Identity() {
+		return nil, nil, fmt.Errorf("%w: first sector lost its source", ErrUnsupported)
+	}
+	for i := 1; i < len(sources); i++ {
+		placed := sources[i]
+		if placed.revolveLoftSector == nil || placed.revolveLoftSector.source != record ||
+			placed.xform != placed.revolveLoftSector.motion {
+			return nil, nil, fmt.Errorf("%w: placed sector lost its source", ErrUnsupported)
+		}
+		motions[i] = placed.revolveLoftSector.motion
+		charges[i], err = revolvePlacementCharge(motions[i])
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	seam, err := revolveSectorSeam(cert.loop, motions)
+	if err != nil {
+		return nil, nil, err
+	}
+	plans := make([]revolveSectorPlan, len(sources))
+	for i := range plans {
+		plan := &plans[i]
+		plan.motion, plan.charge = motions[i], charges[i]
+		plan.nodes = append([]sectorPathNode(nil), original...)
+		for j, node := range original {
+			point := motions[i].Apply(node.p)
+			if !proofbound.FiniteVec(point) {
+				return nil, nil, fmt.Errorf("%w: placed cap has a non-finite station", ErrUnsupported)
+			}
+			plan.nodes[j].p = point
+			if node.rootBoundary {
+				plan.nodes[j].angle = revolveAngleAt(point, seam)
+			}
+			if i != 0 {
+				maxAbs := max(math.Abs(node.p.X), math.Abs(node.p.Y), math.Abs(node.p.Z))
+				plan.placedRound = max(plan.placedRound, proofbound.AbsSumUpper(
+					proofbound.RigidRoundAllow(maxAbs, 0),
+					proofbound.ProductUpper(charges[i].Stretch, proofbound.Radius3D(maxAbs))))
+			}
+		}
+		a, b := plan.nodes[0].angle, plan.nodes[len(path)-1].angle
+		if a == b || math.Abs(a-b) >= math.Pi {
+			return nil, nil, fmt.Errorf("%w: placed root contacts cross the angular seam", ErrUnsupported)
+		}
+		plan.sector = [2]float64{min(a, b), max(a, b)}
+		plan.crossingBound = proofbound.AbsSumUpper(
+			revolvePlacedBound(cert.crossingBound, charges[i]), plan.placedRound)
+		if !revolveRootEdgeOrdered(plan.nodes, edges, plan.sector) {
+			return nil, nil, fmt.Errorf("%w: placed root stations lose angular order", ErrUnsupported)
+		}
+	}
+	minRadius := min(section.rootStart.V, section.rootEnd.V)
+	for i := range plans {
+		for j := i + 1; j < len(plans); j++ {
+			seamCost := proofbound.AbsSumUpper(plans[i].crossingBound,
+				plans[j].crossingBound,
+				revolvePlacedBound(sources[i].meshBound, charges[i]),
+				revolvePlacedBound(sources[j].meshBound, charges[j]))
+			if !(minRadius > 0 && seamCost < minRadius/2) {
+				return nil, nil, fmt.Errorf("%w: root sectors have no angular error bound", ErrUnsupported)
+			}
+			angleCost := proofbound.DivUpper(proofbound.ProductUpper(2, seamCost), minRadius)
+			if !(revolveSectorAngularGap(plans[i].sector, plans[j].sector) > angleCost) {
+				return nil, nil, fmt.Errorf("%w: root sectors are not separate", ErrUnsupported)
+			}
+		}
+	}
+	stations := len(regularSource) - 2
+	if stations < 16 || stations > 8192 {
+		return nil, nil, fmt.Errorf("%w: sector has no bounded angular plan", ErrUnsupported)
+	}
+	regular := make([]float64, 0, stations+2*len(plans))
+	for i := range stations {
+		regular = append(regular, seam+2*math.Pi*float64(i)/float64(stations))
+	}
+	for _, plan := range plans {
+		regular = append(regular, plan.sector[:]...)
+	}
+	outside := regular[:0]
+	for _, angle := range regular {
+		covered := false
+		for _, plan := range plans {
+			covered = covered || plan.sector[0] < angle && angle < plan.sector[1]
+		}
+		if !covered {
+			outside = append(outside, angle)
+		}
+	}
+	angles := outside
+	for i := range plans {
+		angles, _, err = sectorMergedAngles(angles, plans[i].nodes)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	for i := range plans {
+		_, plans[i].rootNode, err = sectorMergedAngles(angles, plans[i].nodes)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	sectors := make([][2]float64, len(plans))
+	for i := range plans {
+		sectors[i] = plans[i].sector
+	}
+	mesh := &joinedMesh{}
+	ring, sectionSag, err := buildRevolvedSectionRing(mesh, section, angles, sectors, sagAllowance)
+	if err != nil {
+		return nil, nil, err
+	}
+	toolGap, ok := revolveSectionToolGap(section, record)
+	if !ok {
+		return nil, nil, fmt.Errorf("%w: cone tools do not meet the recorded meridian", ErrUnsupported)
+	}
+	far := make([]r3.Vec, len(original))
+	for i, node := range original {
+		far[i] = node.p
+	}
+	upperBound, upperLip, err := pointConeCapBound(far, caps, record.upper)
+	if err != nil {
+		return nil, nil, err
+	}
+	lowerBound, lowerLip, err := pointConeCapBound(far, caps, record.lower)
+	if err != nil {
+		return nil, nil, err
+	}
+	lip := proofbound.AbsSumUpper(1, upperLip, lowerLip)
+	capArea := pointConeCapArea(far, caps)
+	capFactor := max(1, proofbound.ProductUpper(upperLip, upperLip),
+		proofbound.ProductUpper(lowerLip, lowerLip))
+	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.verts,
+		base.tris, base.meshBound)
+	if err != nil {
+		return nil, nil, err
+	}
+	localBound, localRound, sourceVolume, sourceArea := 0.0, 0.0, 0.0, 0.0
+	for i := range plans {
+		plan := &plans[i]
+		var placedGroups []facetGroup
+		if i != 0 {
+			placedGroups = sources[i].groups
+		}
+		baseGroup := len(mesh.groups)
+		plan.capGroups = [2]int{baseGroup + len(record.base.groups) - 1,
+			baseGroup + len(record.base.groups)}
+		plan.nodeRound, plan.snap, err = buildRevolveSectorMesh(mesh, ring, section,
+			plan.nodes, original, caps, edges, plan.rootNode, record, plan.motion, placedGroups)
+		if err != nil {
+			return nil, nil, err
+		}
+		seamAllowance := proofbound.AbsSumUpper(base.meshBound, sectionSag,
+			section.coneGap, plan.crossingBound, toolGap, plan.placedRound)
+		if plan.snap > seamAllowance {
+			return nil, nil, fmt.Errorf("%w: placed cap misses the finite root patch (sector %d snap %.9g allowance %.9g)",
+				ErrUnsupported, i, plan.snap, seamAllowance)
+		}
+		stretch := proofbound.AbsSumUpper(1, plan.charge.Stretch)
+		localBound = max(localBound, proofbound.AbsSumUpper(plan.snap, plan.nodeRound,
+			proofbound.ProductUpper(proofbound.ProductUpper(farRound, stretch), lip),
+			proofbound.ProductUpper(proofbound.AbsSumUpper(
+				revolvePlacedBound(base.meshBound, plan.charge),
+				plan.crossingBound, plan.placedRound), lip),
+			proofbound.ProductUpper(max(upperBound, lowerBound), stretch),
+			section.coneGap, toolGap))
+		localRound = max(localRound, proofbound.AbsSumUpper(plan.snap, plan.nodeRound,
+			proofbound.ProductUpper(proofbound.ProductUpper(farRound, stretch), lip),
+			proofbound.ProductUpper(proofbound.AbsSumUpper(
+				plan.crossingBound, plan.placedRound), lip), section.coneGap, toolGap))
+		volumePart := proofbound.AbsSumUpper(base.volSymDiff,
+			proofbound.ProductUpper(proofbound.ProductUpper(capArea,
+				proofbound.AbsSumUpper(upperBound, lowerBound)), capFactor))
+		areaPart := proofbound.AbsSumUpper(baseArea, base.areaSlack,
+			proofbound.ProductUpper(proofbound.AbsSumUpper(1,
+				proofbound.ProductUpper(upperLip, upperLip),
+				proofbound.ProductUpper(lowerLip, lowerLip)),
+				proofbound.AbsSumUpper(capArea, base.areaSlack)))
+		if i != 0 {
+			volumePart = proofbound.ProductUpper(
+				proofbound.AbsSumUpper(1, plan.charge.Volume), volumePart)
+			areaPart = proofbound.ProductUpper(stretch, areaPart)
+		}
+		sourceVolume = proofbound.AbsSumUpper(sourceVolume, volumePart)
+		sourceArea = proofbound.AbsSumUpper(sourceArea, areaPart)
+	}
+	bound := proofbound.AbsSumUpper(sectionSag, localBound)
+	if proofbound.IsNonFinite(bound) || bound > 0.1 {
+		return nil, nil, fmt.Errorf("%w: joined sectors cannot meet the 0.1 mm boundary proof", ErrUnsupported)
+	}
+	if err := orientJoinedMesh(mesh); err != nil {
+		return nil, nil, err
+	}
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
+		return nil, nil, err
+	}
+	count := len(mesh.tris)
+	ringLimit := uint64(2) * uint64(len(section.spans)-1) * uint64(len(angles))
+	capLimit := uint64(len(sources)) * uint64(2*len(caps)+2*len(edges))
+	maxTriangles, sumOK := proofbound.WallCheckedAdd(ringLimit, capLimit)
+	if !sumOK || count == 0 || uint64(count) > maxTriangles || maxTriangles > 1_000_000 {
+		return nil, nil, fmt.Errorf("%w: joined sectors exceed the audit mesh limit", ErrUnsupported)
+	}
+	pairCount, pairOK := proofbound.WallChoose2(uint64(count))
+	workCeiling, workOK := proofbound.WallCheckedMul(25_000_000, uint64(len(sources)))
+	if !pairOK || !workOK {
+		return nil, nil, fmt.Errorf("%w: joined sectors exceed the audit work limit", ErrUnsupported)
+	}
+	scans := min(pairCount, workCeiling)
+	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
+		mesh.verts, mesh.tris, count, scans); err != nil {
+		if revolveRootCapContact(mesh, ring, section, plans, err) {
+			return nil, nil, &revolveSectorContactRefineError{cause: err}
+		}
+		return nil, nil, err
+	}
+	roundEnvelope := proofbound.AbsSumUpper(sectionSag, localRound)
+	area, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts,
+		mesh.tris, roundEnvelope)
+	if err != nil {
+		return nil, nil, err
+	}
+	volumeGap := proofbound.AbsSumUpper(sourceVolume,
+		proofbound.SweptVolumeAllow(roundEnvelope, area))
+	areaForArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts,
+		mesh.tris, bound)
+	if err != nil {
+		return nil, nil, err
+	}
+	blankArea, err := cert.blank.Area()
+	if err != nil {
+		return nil, nil, err
+	}
+	areaSlack := proofbound.AbsSumUpper(areaForArea,
+		blankArea.Value.Base(), blankArea.Bound.Base(), sourceArea)
+	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
+		return nil, nil, fmt.Errorf("%w: joined sectors have no finite measure proof", ErrUnsupported)
+	}
+	vertexBound := make([]float64, len(mesh.verts))
+	for i := range vertexBound {
+		vertexBound[i] = bound
+	}
+	payload := facetedPayload{verts: mesh.verts, tris: mesh.tris, src: mesh.src,
+		groups: mesh.groups, vertexBound: vertexBound, contactAudited: true,
+		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
+		dPair: base.dPair, xform: r3.Identity()}
+	body, err := buildFacetedBody(ctx, d, ref, payload)
+	if err != nil {
+		return nil, nil, err
+	}
+	blankVolume, err := cert.blank.Volume()
+	if err != nil {
+		return nil, nil, err
+	}
+	joinedVolume, err := body.Volume()
+	if err != nil {
+		return nil, nil, err
+	}
+	gain := joinedVolume.Value.Base() - blankVolume.Value.Base() - blankVolume.Bound.Base()
+	if gain <= joinedVolume.Bound.Base() {
+		return nil, nil, &revolveSectorVolumeRefineError{gain: gain, bound: joinedVolume.Bound.Base()}
+	}
+	return body, &ring, nil
+}
+
+func revolveRootEdgeOrdered(nodes []sectorPathNode, edges []sectorCapEdge,
+	sector [2]float64) bool {
+	if len(edges) < 1 || !(sector[0] < sector[1]) {
+		return false
+	}
+	started, ascending, lastVertex, lastAngle := false, false, -1, 0.0
+	for _, edge := range edges {
+		if edge.group != -1 {
+			if started {
+				return false
+			}
+			continue
+		}
+		if edge.u < 0 || edge.u >= len(nodes) || edge.v < 0 || edge.v >= len(nodes) ||
+			!nodes[edge.u].rootBoundary || !nodes[edge.v].rootBoundary {
+			return false
+		}
+		if !started {
+			lastAngle = nodes[edge.u].angle
+			ascending = lastAngle == sector[0]
+			if lastAngle != sector[0] && lastAngle != sector[1] {
+				return false
+			}
+			started = true
+		} else if edge.u != lastVertex || nodes[edge.u].angle != lastAngle {
+			return false
+		}
+		angle := nodes[edge.v].angle
+		if proofbound.IsNonFinite(angle) || angle < sector[0] || angle > sector[1] ||
+			(ascending && angle <= lastAngle) || (!ascending && angle >= lastAngle) {
+			return false
+		}
+		lastAngle, lastVertex = angle, edge.v
+	}
+	return started && ((ascending && lastAngle == sector[1]) ||
+		(!ascending && lastAngle == sector[0]))
+}
+
+// A retry is permitted only for a mapped cap contacting the Revolve face
+// adjacent to its authenticated root span. Every candidate faces the full
+// contact, topology, and measure audit again.
+func revolveRootCapContact(mesh *joinedMesh, ring revolvedSectionRing,
+	section revolveSectionCertificate, plans []revolveSectorPlan, err error) bool {
+	var contact *loftmesh.LoftContactError
+	if !errors.As(err, &contact) ||
+		contact.Reason != "share no recorded vertex, but make contact" ||
+		contact.I < 0 || contact.J < 0 ||
+		contact.I >= len(mesh.src) || contact.J >= len(mesh.src) ||
+		len(plans) == 0 || section.rootSpan < 0 ||
+		section.rootSpan >= len(ring.groups) {
+		return false
+	}
+	prev := (section.rootSpan + len(ring.groups) - 1) % len(ring.groups)
+	next := (section.rootSpan + 1) % len(ring.groups)
+	isNeighbor := func(group int) bool {
+		return group >= 0 && (group == ring.groups[prev] || group == ring.groups[next])
+	}
+	isCap := func(group int) bool {
+		for _, plan := range plans {
+			if group == plan.capGroups[0] || group == plan.capGroups[1] {
+				return true
+			}
+		}
+		return false
+	}
+	a, b := mesh.src[contact.I], mesh.src[contact.J]
+	return isCap(a) && isNeighbor(b) || isCap(b) && isNeighbor(a)
+}
