@@ -335,6 +335,29 @@ func (c loftCylinderSourceConnector) point(s, t *big.Rat) loftCylinderXY {
 	return loftCylinderSourceLerp(p0, p1, t)
 }
 
+type loftCylinderSourceTimeSlice struct {
+	a, d, f loftCylinderXY
+}
+
+// Exact bilinear interpolation gives the same point whichever parameter is
+// interpolated first. A time slice keeps the three connector corners fixed
+// throughout the circle-crossing bisection.
+func (c loftCylinderSourceConnector) timeSlice(t *big.Rat) loftCylinderSourceTimeSlice {
+	return loftCylinderSourceTimeSlice{
+		a: loftCylinderSourceLerp(c.a[0], c.a[1], t),
+		d: loftCylinderSourceLerp(c.d[0], c.d[1], t),
+		f: loftCylinderSourceLerp(c.f[0], c.f[1], t),
+	}
+}
+
+func (slice loftCylinderSourceTimeSlice) point(s *big.Rat) loftCylinderXY {
+	if s.Cmp(big.NewRat(1, 1)) <= 0 {
+		return loftCylinderSourceLerp(slice.a, slice.d, s)
+	}
+	u := new(big.Rat).Sub(s, big.NewRat(1, 1))
+	return loftCylinderSourceLerp(slice.d, slice.f, u)
+}
+
 func loftCylinderSourceBoxOf(points ...loftCylinderXY) loftCylinderSourceXYBox {
 	box := loftCylinderSourceXYBox{
 		lo: loftCylinderXY{x: new(big.Rat).Set(points[0].x), y: new(big.Rat).Set(points[0].y)},
@@ -362,10 +385,11 @@ func loftCylinderSourceUnionBox(a, b loftCylinderSourceXYBox) loftCylinderSource
 }
 
 func (c loftCylinderSourceConnector) crossingBox(tLo, tHi, radius2 *big.Rat) loftCylinderSourceXYBox {
+	atLo, atHi := c.timeSlice(tLo), c.timeSlice(tHi)
 	low, high := big.NewRat(0, 1), big.NewRat(2, 1)
 	for range 52 {
 		mid := new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1))
-		p0, p1 := c.point(mid, tLo), c.point(mid, tHi)
+		p0, p1 := atLo.point(mid), atHi.point(mid)
 		q0, q1 := loftCylinderSourceDot(p0, p0), loftCylinderSourceDot(p1, p1)
 		if q0.Cmp(radius2) < 0 && q1.Cmp(radius2) < 0 {
 			low = mid
@@ -381,10 +405,10 @@ func (c loftCylinderSourceConnector) crossingBox(tLo, tHi, radius2 *big.Rat) lof
 		break
 	}
 	box := loftCylinderSourceBoxOf(
-		c.point(low, tLo), c.point(low, tHi), c.point(high, tLo), c.point(high, tHi))
+		atLo.point(low), atHi.point(low), atLo.point(high), atHi.point(high))
 	if low.Cmp(big.NewRat(1, 1)) < 0 && high.Cmp(big.NewRat(1, 1)) > 0 {
 		middle := big.NewRat(1, 1)
-		box = loftCylinderSourceUnionBox(box, loftCylinderSourceBoxOf(c.point(middle, tLo), c.point(middle, tHi)))
+		box = loftCylinderSourceUnionBox(box, loftCylinderSourceBoxOf(atLo.point(middle), atHi.point(middle)))
 	}
 	return box
 }
