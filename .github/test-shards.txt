@@ -55,6 +55,8 @@
 0	2.76	TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource
 4	12.00	TestRevolveLoftFacesToolCapArcBindsLiveSourceCells
 4	0.00	TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence
+4	7.20	TestCurvedSourcePairCensusCoversLiveFaces
+8	4.00	TestCurvedSourcePairCensusRefusesUnownedRetainedFace
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
 1	0.00	TestAddRevolveFacesPreservesMeridianErrorMapping

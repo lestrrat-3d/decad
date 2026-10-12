@@ -31,3 +31,4 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_tool_cap_sloped.go` | Proves radial fill and occupied heel tool-cap arcs on sloped Revolve sides. See loft-face-sections design. |
 | `revolve_loft_faces_tool_cap_current.go` | Rechecks recorded heel tool-cap arcs against live source and circle producers. See loft-face-sections design. |
 | `revolve_loft_faces_tool_cap_cells.go` | Compares complete constant-X source cells before cap-arc endpoints are used. See loft-face-sections design. |
+| `revolve_loft_faces_pair_census.go` | Classifies every live finite Revolve and trimmed LoftFaces face pair from current source records. See loft-face-sections design. |
