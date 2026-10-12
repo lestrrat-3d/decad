@@ -168,7 +168,7 @@ func loftMirrorCylinderTwoTabs(t *testing.T, nearAxial bool) (*decad.Document, *
 	}
 	quarterTurn, err := r3.Rotation(r3.Vec{Z: 1}, angle)
 	require.NoError(t, err)
-	turnedPair, err := pair.PlacedCopy(t.Context(), quarterTurn)
+	turnedPair, err := decad.Copy(t.Context(), pair, decad.WithCopyPlacement(quarterTurn))
 	require.NoError(t, err)
 	blank := circleBodyAtZ(t, doc, 0, 3, 0, 2)
 	if nearAxial {
