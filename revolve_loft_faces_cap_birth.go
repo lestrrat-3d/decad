@@ -520,7 +520,7 @@ func revolveLoftFacesHeelBirthBoxBudget(trim *loftFacesTrimRecord,
 	}
 	corners := lfBoxCorners(source)
 	budget := lfOne()
-	for axis := 0; axis < 3; axis++ {
+	for axis := range 3 {
 		row := loftFaceRatVec{lfZero(), lfZero(), lfZero()}
 		row[axis] = lfOne()
 		for _, m := range [...]loftFaceMap{trim.maps[band], trim.maps[band+1]} {

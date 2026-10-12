@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,6 +12,24 @@ func TestCurvedHeelBirthUsesLiveTipArc(t *testing.T) {
 	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
 	require.NoError(t, err)
 	require.True(t, ok)
+	region, ok, err := certifyRevolveLoftFacesHeelRegion(t.Context(), proof)
+	require.NoError(t, err)
+	require.True(t, ok)
+	for _, arc := range []*revolveLoftFacesToolCapOccupiedArc{region.lower, region.upper} {
+		cut, built, cutErr := revolveLoftFacesHeldCapCutPath(t.Context(), proof, arc)
+		require.NoError(t, cutErr)
+		require.True(t, built)
+		require.NotEmpty(t, cut.points)
+	}
+	track, built, err := revolveLoftFacesHeelTrackOf(t.Context(), proof, big.NewRat(1, 50))
+	require.NoError(t, err)
+	require.True(t, built)
+	require.Greater(t, len(track.stations), 2)
+	terminal, ok, err := certifyRevolveLoftFacesHeelTerminal(t.Context(), proof)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.True(t, region.upper.circle.x.Cmp(terminal.rootX.lo) < 0)
+
 	birth, ok, err := certifyRevolveLoftFacesHeelBirth(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -34,6 +53,23 @@ func TestCurvedHeelBirthUsesLiveTipArc(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, classified)
 	require.True(t, revolveLoftFacesHeelBirthCells(trim, loop, cells, birth))
+	changedOverlap := *birth
+	changedOverlap.root.hi = birth.lower.time
+	require.False(t, revolveLoftFacesHeelBirthCells(trim, loop, cells, &changedOverlap))
+	tipRefused := false
+	for i := range cells {
+		if cells[i].band == birth.lower.band &&
+			cells[i].jointKind == revolveLoftFacesWholeArcContact &&
+			cells[i].jointArc == birth.arc {
+			arc := cells[i].jointArc
+			cells[i].jointArc = nil
+			require.False(t, revolveLoftFacesHeelBirthCells(trim, loop, cells, birth))
+			cells[i].jointArc = arc
+			tipRefused = true
+			break
+		}
+	}
+	require.True(t, tipRefused)
 	changedSide := false
 	for i := range cells {
 		if cells[i].band == birth.lower.band && cells[i].side == revolveLoftFacesInside &&
@@ -66,6 +102,14 @@ func TestCurvedHeelBirthUsesLiveTipArc(t *testing.T) {
 	changed.section.spans = append([]revolveSectionSpan(nil), proof.section.spans...)
 	changed.section.spans[birth.lower.circle.span].end.V += 0.125
 	rejected, ok, err := certifyRevolveLoftFacesHeelBirth(t.Context(), &changed)
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Nil(t, rejected)
+
+	originalRevision := trim.source.source.revision
+	trim.source.source.revision++
+	defer func() { trim.source.source.revision = originalRevision }()
+	rejected, ok, err = certifyRevolveLoftFacesHeelBirth(t.Context(), proof)
 	require.NoError(t, err)
 	require.False(t, ok)
 	require.Nil(t, rejected)
