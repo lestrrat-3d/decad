@@ -324,6 +324,15 @@ roles, duplicate pairs and undecidable side values refuse the whole census.
 Later mesh consumers must rederive the census before using its mutable cells.
 These source verdicts do not prove a shared seam, retained patch or volume.
 
+Each occupied heel cap arc endpoint also binds to one live source-side cell.
+For a sloped Revolve side, the cap radial and side meridian polynomials
+coincide at the authenticated LoftFaces band time; the selected transverse
+cell has one root. For a vertical side, the cap and source cell share the
+same exact root bracket and mapped XYZ box. The check rederives the arc and
+all face-pair verdicts from current producers, requires one live face and
+source reference for each endpoint, and refuses ambiguous ownership or an
+excluded time boundary. It does not place a mesh vertex or admit `Union`.
+
 This source certificate does not change the held mesh or grant a contact
 exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
