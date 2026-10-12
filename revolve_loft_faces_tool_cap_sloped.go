@@ -20,7 +20,8 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 		circle.span < 0 || circle.span >= len(proof.section.spans) ||
 		circle.blankFace == nil || circle.capFace == nil ||
 		circle.capFace != proof.heelFace ||
-		!revolveLoftFacesSectionCurrent(proof) {
+		!revolveLoftFacesSectionCurrent(proof) ||
+		!revolveLoftFacesSectionFacesComplete(proof) {
 		return nil, false, nil
 	}
 	if err := ctx.Err(); err != nil {

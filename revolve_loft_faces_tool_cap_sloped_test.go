@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -63,6 +64,30 @@ func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
 		require.NotNil(t, arc)
 		require.Negative(t, arc.negativeZ.box[2].hi.Sign())
 		require.Positive(t, arc.positiveZ.box[2].lo.Sign())
+		lower := lfZero()
+		if circle.x.Cmp(proof.trim.toe.apex) < 0 {
+			lower = lfDiv(lfSub(proof.trim.toe.apex, circle.x), proof.trim.toe.slope)
+		}
+		section, sourceOK, sourceErr := revolveLoftFacesConstantXSourceCells(t.Context(), proof,
+			circle.x, lower, circle.radius)
+		require.NoError(t, sourceErr)
+		require.True(t, sourceOK)
+		changedSection := *section
+		changedSection.cells = slices.Clone(section.cells)
+		changedRoots := 0
+		for i := range changedSection.cells {
+			limit := &changedSection.cells[i].upper
+			if limit.root.lo == nil {
+				continue
+			}
+			limit.before, limit.after = limit.after, limit.before
+			changedRoots++
+		}
+		require.Equal(t, 2, changedRoots)
+		_, certified, arcErr = revolveLoftFacesHeelOccupiedFromSource(t.Context(), proof,
+			circle, &changedSection)
+		require.NoError(t, arcErr)
+		require.False(t, certified, "changed crossing signs cannot select another arc")
 		changed := circle
 		changed.x = new(big.Rat).Add(circle.x, big.NewRat(1, 16))
 		_, certified, arcErr = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, changed)
@@ -80,6 +105,16 @@ func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
 		require.NoError(t, arcErr)
 		require.False(t, certified, "a replaced live cap-face origin cannot own the arc")
 		circle.capFace.origins = originalOrigins
+		shell := blank.Shells()[0]
+		originalFaces := shell.faces
+		t.Cleanup(func() { shell.faces = originalFaces })
+		shell.faces = append(slices.Clone(originalFaces), &Face{
+			body: blank, origins: []FeatureRef{{Role: "unmatched side"}},
+		})
+		_, certified, arcErr = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, circle)
+		require.NoError(t, arcErr)
+		require.False(t, certified, "an unclassified live blank face cannot own the arc")
+		shell.faces = originalFaces
 		found++
 	}
 	require.Positive(t, found)
