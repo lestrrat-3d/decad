@@ -1368,10 +1368,20 @@ before the candidate pass and keeps the smallest, the sweep on a tie:
 That pass steps the budget once per unit of the chosen enumeration's work and
 refuses under S8 the moment the count passes the ceiling; the count is at
 least the candidate count, which is refused against the same ceiling. The
-work before an S8 refusal is therefore `O(F log² F + ceiling)`. The second
-pass builds the list, sorts each triangle's partners so the pairwise pass
-tests them in lexicographic order whichever enumeration ran, and the pairwise
-pass tests it, stepping the budget once per pair.
+work before an S8 refusal is therefore `O(F log² F + ceiling)`.
+
+For at most 1,000,000 candidates, the second pass builds the list and sorts
+each triangle's partners. A larger unstructured audit first checks a second
+box tree, one triangle row at a time, against the same work ceiling and every
+per-row candidate count. It then repeats that tree query and classifies
+complete rows in batches of at most 1,000,000 pairs, except that one row may
+hold up to `F-1` pairs. The tree skips a node when its box is disjoint or its
+largest triangle index is no greater than the current row index. Each row
+sorts its partners, so both paths replay verdicts in lexicographic order and
+stop at the same first failing pair. The batch path does not allocate storage
+for the complete candidate list or its complete verdict list. Both row scans
+step the shared budget for each node visit and leaf comparison; the classifier
+steps it once per replayed pair.
 
 `Loft` threads a shared `workBudget` (`internal/proofbound/budget.go`) through the audit,
 polling at `workPollInterval` exactly as `Fillet` / `Chamfer`

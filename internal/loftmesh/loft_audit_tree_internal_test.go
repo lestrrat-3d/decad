@@ -49,6 +49,57 @@ func TestTreeScanEnumeratesEveryOverlappingPairOnce(t *testing.T) {
 	}
 }
 
+func TestTreeScanRowsMatchPairCandidatesAndBoundWork(t *testing.T) {
+	t.Parallel()
+	for _, fixture := range gridFixtures() {
+		t.Run(fixture.name, func(t *testing.T) {
+			members := make([]int, 0, len(fixture.boxes))
+			for i := range fixture.boxes {
+				if i%7 != 3 {
+					members = append(members, i)
+				}
+			}
+			tree := newTreeScan(fixture.boxes, members)
+			want := map[[2]int]struct{}{}
+			_, exceeded, err := tree.visit(proofbound.NewWorkBudget(t.Context()), math.MaxUint64,
+				func(i, j int) { want[[2]int{i, j}] = struct{}{} })
+			require.NoError(t, err)
+			require.False(t, exceeded)
+			got := map[[2]int]struct{}{}
+			var total uint64
+			for _, i := range members {
+				row := make([]int, 0)
+				scanned, over, err := tree.visitRow(proofbound.NewWorkBudget(t.Context()), i,
+					math.MaxUint64, func(j int) { row = append(row, j) })
+				require.NoError(t, err)
+				require.False(t, over)
+				total += scanned
+				for _, j := range row {
+					require.Less(t, i, j)
+					pair := [2]int{i, j}
+					_, duplicate := got[pair]
+					require.False(t, duplicate, "pair %v repeated", pair)
+					got[pair] = struct{}{}
+				}
+			}
+			require.Equal(t, want, got)
+			if total > 0 {
+				var capped uint64
+				for _, i := range members {
+					scanned, over, err := tree.visitRow(proofbound.NewWorkBudget(t.Context()), i,
+						total-1-capped, func(int) {})
+					require.NoError(t, err)
+					capped += scanned
+					if over {
+						break
+					}
+				}
+				require.Equal(t, total, capped)
+			}
+		})
+	}
+}
+
 func TestPairScanChoosesTheLowestWork(t *testing.T) {
 	t.Parallel()
 	for _, fixture := range gridFixtures() {
