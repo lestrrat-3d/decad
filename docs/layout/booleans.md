@@ -14,6 +14,8 @@ The rules for rows live in `docs/layout.md`.
 | `loft_faces_cone_trim.go` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation. See loft-face-sections design. |
 | `bevel_join_source.go` | Matches the finite six-line blank for the curved LoftFaces join. See loft-face-sections design. |
 | `spiral_join_source.go` | Certifies a cone-trimmed nine-section tooth's continuous flank crossings against a finite bevel blank. See loft-face-sections design. |
+| `spiral_bernstein_int.go` | Exact Bernstein evaluation, splitting, product and root bisection over one integer denominator. See loft-face-sections design. |
+| `spiral_bernstein_row.go` | Integer-row Bernstein chain (add, scale, derivative, product) that converts to `big.Rat` once per coefficient. See loft-face-sections design. |
 | `spiral_join_heel_seam.go` | Bounds the source root arc's intersection with the blank heel cap. See loft-face-sections design. |
 | `spiral_join_toe_seam.go` | Bounds the source root arc's intersection with the blank toe cap. See loft-face-sections design. |
 | `spiral_join_short.go` | Bounds fitted-flank and connector intersections with both finite blank end caps. See loft-face-sections design. |

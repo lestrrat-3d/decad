@@ -39,11 +39,11 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 		spiralBernValue(q[1], endpoint),
 		spiralBernValue(q[2], endpoint),
 	}
-	loSign, hiSign := spiralBernValue(endQ, root.time.lo).Sign(),
-		spiralBernValue(endQ, root.time.hi).Sign()
+	loSign, hiSign := spiralBernSign(endQ, root.time.lo),
+		spiralBernSign(endQ, root.time.hi)
 	if root.time.lo.Cmp(root.time.hi) == 0 {
 		if loSign != 0 ||
-			spiralBernValue(spiralDeriv(endQ), root.time.lo).Sign() != root.direction {
+			spiralBernSign(spiralDeriv(endQ), root.time.lo) != root.direction {
 			return empty, false
 		}
 	} else if loSign != -root.direction || hiSign != root.direction {
