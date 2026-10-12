@@ -22,6 +22,7 @@ type prismPatternFilletContact struct {
 	lineIV        prismPatternIVPoint
 	centerIV      prismPatternIVPoint
 	circleIV      prismPatternIVPoint
+	ringCut       prismPatternFilletRingCut
 }
 
 type prismPatternIVPoint struct{ x, y proofbound.RatInterval }

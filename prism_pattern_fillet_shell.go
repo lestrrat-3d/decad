@@ -20,17 +20,96 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 	contacts []prismPatternFilletContact, radius float64, ref producerID,
 ) (*joinedMesh, [2][]int, float64, error) {
 	var outlines [2][]int
+	// A contact may consume several original circular-wall stations. Keep
+	// the final bracket facet and move its near endpoint to the circle foot.
+	positionByVertex := make(map[int]int, 2*len(rec.outlines[0]))
+	for _, outline := range rec.outlines {
+		for position, vertex := range outline {
+			positionByVertex[vertex] = position
+		}
+	}
+	consumed := make(map[int]bool)
+	dropPairs := make(map[[2]int]bool)
+	farStations := make([]int, 0, len(contacts))
+	for _, contact := range contacts {
+		cut := contact.ringCut
+		if len(cut.positions) == 0 {
+			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet lost its ring bracket", ErrUnsupported)
+		}
+		for i, position := range cut.positions {
+			if consumed[position] {
+				return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring cuts overlap", ErrUnsupported)
+			}
+			consumed[position] = true
+			if i > 0 {
+				pair := [2]int{cut.positions[i-1], position}
+				if pair[0] > pair[1] {
+					pair[0], pair[1] = pair[1], pair[0]
+				}
+				dropPairs[pair] = true
+			}
+		}
+		farStations = append(farStations, cut.far)
+	}
+	for _, far := range farStations {
+		if consumed[far] {
+			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring brackets overlap", ErrUnsupported)
+		}
+	}
+	dropCounts := make(map[[2]int]int, len(dropPairs))
 	mesh := &joinedMesh{verts: append([]r3.Vec(nil), rec.mesh.verts...),
 		groups: append([]facetGroup(nil), rec.mesh.groups...)}
 	for i, tri := range rec.mesh.tris {
-		if group := rec.mesh.src[i]; group != rec.groups[1] && group != rec.groups[2] {
-			mesh.add(tri, group)
+		group := rec.mesh.src[i]
+		if group == rec.groups[1] || group == rec.groups[2] {
+			continue
+		}
+		if group == rec.groups[0] {
+			pair := [2]int{-1, -1}
+			for _, vertex := range tri {
+				position, ok := positionByVertex[vertex]
+				if !ok {
+					return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet lost its station", ErrUnsupported)
+				}
+				if position == pair[0] || position == pair[1] {
+					continue
+				}
+				if pair[0] == -1 {
+					pair[0] = position
+				} else if pair[1] == -1 {
+					pair[1] = position
+				} else {
+					return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet spans three stations", ErrUnsupported)
+				}
+			}
+			if pair[1] < 0 {
+				return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet has no paired stations", ErrUnsupported)
+			}
+			gap := (pair[1] - pair[0] + len(rec.outlines[0])) % len(rec.outlines[0])
+			if gap != 1 && gap != len(rec.outlines[0])-1 {
+				return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet skips a station", ErrUnsupported)
+			}
+			if pair[0] > pair[1] {
+				pair[0], pair[1] = pair[1], pair[0]
+			}
+			if dropPairs[pair] {
+				dropCounts[pair]++
+				continue
+			}
+		}
+		mesh.add(tri, group)
+	}
+	for pair := range dropPairs {
+		if dropCounts[pair] != 2 {
+			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring cut loses a facet pair", ErrUnsupported)
 		}
 	}
 	retainedWalls := len(mesh.tris)
 	var replacement [2]map[int][]int
+	var skip [2]map[int]bool
 	for capIndex := range replacement {
 		replacement[capIndex] = make(map[int][]int)
+		skip[capIndex] = make(map[int]bool)
 	}
 	ringReplacement := make(map[int]int)
 	arcBound := 0.0
@@ -54,7 +133,12 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		for capIndex := range 2 {
 			old := part.vertex[capIndex][station]
 			last := path[capIndex][len(path[capIndex])-1]
-			ringReplacement[old] = last
+			cut := contact.ringCut
+			lastConsumed := rec.outlines[capIndex][cut.positions[len(cut.positions)-1]]
+			ringReplacement[lastConsumed] = last
+			for _, position := range cut.positions[1:] {
+				skip[capIndex][rec.outlines[capIndex][position]] = true
+			}
 			walk := path[capIndex]
 			if station == 0 {
 				walk = append([]int(nil), walk...)
@@ -86,6 +170,9 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 	}
 	for capIndex, original := range rec.outlines {
 		for _, index := range original {
+			if skip[capIndex][index] {
+				continue
+			}
 			if expanded, ok := replacement[capIndex][index]; ok {
 				outlines[capIndex] = append(outlines[capIndex], expanded...)
 			} else {

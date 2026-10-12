@@ -31,6 +31,30 @@ func TestPrismPatternFilletOfCopiedExtrudes(t *testing.T) {
 	require.Less(t, mesh.Bound().Base(), 0.1)
 }
 
+func TestPrismPatternFilletAcrossCircularWallStations(t *testing.T) {
+	doc, blank, section, rotated := prismPatternTabBodies(t, math.Nextafter(3, math.Inf(1)))
+	joined, err := Union(t.Context(), blank, section, rotated)
+	require.NoError(t, err)
+	selection := prismPatternRootSelection(t, joined)
+	edges, err := selection.SelectEdges(joined)
+	require.NoError(t, err)
+	contacts, err := prismPatternFilletContactsOf(t.Context(), joined, edges, 0.14)
+	require.NoError(t, err)
+	multiStation := false
+	for _, contact := range contacts {
+		multiStation = multiStation || len(contact.ringCut.positions) > 2
+	}
+	require.True(t, multiStation)
+	rounded, err := joined.Fillet(t.Context(), selection,
+		units.Millimeters(0.14))
+	require.NoError(t, err)
+	require.Len(t, doc.Bodies(), 1)
+	mesh, err := rounded.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
 func TestPrismPatternFilletSectorBeyondRootDisk(t *testing.T) {
 	doc, blank, section, rotated := prismPatternNarrowTabBodies(t)
 	joined, err := Union(t.Context(), blank, section, rotated)

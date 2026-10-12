@@ -92,8 +92,10 @@ define an outward line. Its material-side offset by the requested radius
 meets the circle of radius `R+r` at the outward quadratic root. Rational
 interval arithmetic brackets the center, the line foot and the circle foot.
 The line foot must lie beyond the blank and before the next source vertex;
-the circle foot must lie within the first shared-ring step. The entire
-tangent arc fits within `3r` of the source root. The source control-hull
+the circle foot must lie in a strictly bracketed shared-ring step. The bracket
+may follow several consumed ring stations. Held station order and source
+circle station order must both be certified, including ring-point rounding.
+The entire tangent arc fits within `3r` of the source root. The source control-hull
 certificate keeps every nonconnector wall beyond `R+2r`, the farthest radial
 reach of the whole fillet circle. Pinned source arcs charge their radial
 residual. The exact contact center, line foot and source root define a narrow
@@ -103,9 +105,12 @@ selected contacts and all other copied connectors must be strictly separate
 modulo a full turn. The connector belonging to each selected root is the only
 exception. Sector overlap or an ambiguous angle refuses.
 
-The shell moves each selected connector endpoint to its line foot, splits
-the shared ring at the circle foot, and joins them with a sampled circular
-wall. The edge retains its bounded faceted type. Endpoint angle intervals,
+The shell moves each selected connector endpoint to its line foot, removes
+the ring facet pairs before the circle foot, and moves the near endpoint of
+the retained bracket pair to that foot. It removes the consumed stations
+from both cap outlines, then joins the feet with a sampled circular wall.
+Overlapping cuts and missing facet pairs refuse. The edge retains its bounded
+faceted type. Endpoint angle intervals,
 trigonometric intervals and chord sagitta bound every new arc station and
 facet. The rebuilt shell must be connected and orientable with paired edges,
 pass the full exact triangle-crossing audit, tile both caps exactly, and

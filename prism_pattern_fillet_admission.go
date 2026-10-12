@@ -48,9 +48,9 @@ func prismPatternFilletContactsOf(ctx context.Context, body *Body, edges []*Edge
 				if err != nil {
 					return nil, err
 				}
-				if !prismPatternFilletContactFitsRing(rec, contact) {
-					return nil, fmt.Errorf("%w: joined-prism fillet circle contact passes its first ring station",
-						ErrUnsupported)
+				contact.ringCut, err = prismPatternFilletRingCutOf(rec, contact)
+				if err != nil {
+					return nil, err
 				}
 				seen[key] = struct{}{}
 				contacts = append(contacts, contact)
@@ -159,34 +159,4 @@ func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecor
 		}
 	}
 	return nil
-}
-
-func prismPatternFilletContactFitsRing(rec *prismPatternJoinRecord,
-	contact prismPatternFilletContact) bool {
-	part := rec.parts[contact.part]
-	old := part.vertex[0][contact.station]
-	outline := rec.outlines[0]
-	position := -1
-	for i, index := range outline {
-		if index == old {
-			position = i
-			break
-		}
-	}
-	if position < 0 {
-		return false
-	}
-	q := rec.mesh.verts[old]
-	qIV := prismPatternIVPointOf(proofarith.FloatRat(q.X), proofarith.FloatRat(q.Y))
-	cross := func(a, b prismPatternIVPoint) proofbound.RatInterval {
-		return proofbound.IntervalSub(proofbound.IntervalMul(a.x, b.y), proofbound.IntervalMul(a.y, b.x))
-	}
-	if contact.station == 0 {
-		previous := rec.mesh.verts[outline[(position+len(outline)-1)%len(outline)]]
-		nIV := prismPatternIVPointOf(proofarith.FloatRat(previous.X), proofarith.FloatRat(previous.Y))
-		return cross(nIV, contact.circleIV).Lo.Sign() > 0 && cross(contact.circleIV, qIV).Lo.Sign() > 0
-	}
-	next := rec.mesh.verts[outline[(position+1)%len(outline)]]
-	nIV := prismPatternIVPointOf(proofarith.FloatRat(next.X), proofarith.FloatRat(next.Y))
-	return cross(qIV, contact.circleIV).Lo.Sign() > 0 && cross(contact.circleIV, nIV).Lo.Sign() > 0
 }
