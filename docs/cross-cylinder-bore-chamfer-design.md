@@ -67,7 +67,11 @@ audit checks it. At each angular cell, paired source and held wall points
 use the same height or axial fraction. The band uses the same transverse
 fraction. Three cell coordinate diagonals enclose the source-to-facet
 departure, with separate charges for held sample rounding, source-circle
-displacement, and outer/bore cylinder chord sagitta. The bore sagitta uses
+displacement, and outer/bore cylinder chord sagitta. Every outer-ring vertex
+is compared with an outward trigonometric interval at its recorded angle;
+this charges radius and angle-conversion rounding. Exact rational differences
+between consecutive recorded angles, including the full-turn wrap, bound
+each outer chord. The bore sagitta uses
 the angular change *across* the bore wall as well as the station gap.
 The resulting bound must be below 0.1 mm.
 

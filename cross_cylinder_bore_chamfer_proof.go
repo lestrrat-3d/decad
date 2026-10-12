@@ -229,8 +229,12 @@ func proveCrossBoreChamfer(ctx context.Context, rec *crossCylinderBoreRecord,
 		proofbound.ProductUpper(2, rec.sourceBound))
 	collar := proofbound.ProductUpper(width, proofbound.ProductUpper(span, span))
 	piUpper := proofbound.RatFloatUp(proofbound.PiUpper)
-	outerStep := proofbound.DivUpper(proofbound.ProductUpper(2, piUpper), crossBoreRestStations)
-	outerChord := proofbound.ProductUpper(R, proofbound.ProductUpper(outerStep, outerStep)/8)
+	// The mesh builder certifies the maximum exact angular gap of every
+	// station, including the mouth schedules and the full-turn wrap. It also
+	// encloses every held outer-ring vertex against that source-circle
+	// parameter, covering both radius and angle-conversion rounding.
+	outerChord := proofbound.ProductUpper(R,
+		proofbound.DivUpper(proofbound.ProductUpper(mesh.outerAngularGap, mesh.outerAngularGap), 8))
 	// The bore wall is a ruled cylinder patch whose far loop rotates by
 	// delta_b=d*cos(theta)*sin(theta)/Q. A triangle spans the station gap
 	// PLUS that cross-wall twist. |cos*sin|<=1/2 and Q>=xMin, so twice the
@@ -239,17 +243,18 @@ func proveCrossBoreChamfer(ctx context.Context, rec *crossCylinderBoreRecord,
 	boreStep := proofbound.AbsSumUpper(
 		proofbound.DivUpper(proofbound.ProductUpper(2, piUpper), n),
 		proofbound.DivUpper(d, xMin))
-	boreChord := proofbound.ProductUpper(r, proofbound.ProductUpper(boreStep, boreStep)/8)
+	boreChord := proofbound.ProductUpper(r,
+		proofbound.DivUpper(proofbound.ProductUpper(boreStep, boreStep), 8))
 	bound := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(3, proofbound.Radius3D(maximum.width)),
 		maximum.sampleError, proofbound.ProductUpper(4, rec.sourceBound),
-		outerChord, boreChord)
+		mesh.outerStationError, outerChord, boreChord)
 	if !(bound < 0.1) || proofbound.IsNonFinite(bound) {
 		return 0, 0, 0, fmt.Errorf("%w: the cross-bore chamfer exceeds its 0.1 mm proof plan", ErrUnsupported)
 	}
 	outerShell := proofbound.ProductUpper(4*piUpper,
 		proofbound.ProductUpper(R, proofbound.ProductUpper(H,
-			proofbound.AbsSumUpper(outerChord, rec.sourceBound))))
+			proofbound.AbsSumUpper(outerChord, mesh.outerStationError, rec.sourceBound))))
 	boreShell := proofbound.ProductUpper(8*piUpper,
 		proofbound.ProductUpper(R, proofbound.ProductUpper(r,
 			proofbound.AbsSumUpper(boreChord, rec.sourceBound))))

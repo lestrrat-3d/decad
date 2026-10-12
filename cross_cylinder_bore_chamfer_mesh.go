@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -16,10 +18,26 @@ const (
 )
 
 type crossBoreMesh struct {
-	verts  []r3.Vec
-	tris   [][3]int
-	src    []int
-	groups []facetGroup
+	verts             []r3.Vec
+	tris              [][3]int
+	src               []int
+	groups            []facetGroup
+	outerStationError float64
+	outerAngularGap   float64
+}
+
+// crossBoreStationError bounds a held outer-ring vertex against the exact
+// source circle at this station's recorded angle. It covers both radial
+// rounding and the angle conversion used to build a cap or outer-wall ring.
+func crossBoreStationError(p r3.Vec, radius *big.Rat, phi float64) (float64, bool) {
+	s, c, ok := proofbound.RadSinCosSpan(proofbound.PointInterval(proofarith.FloatRat(phi)))
+	if !ok {
+		return 0, false
+	}
+	x := proofbound.IntervalMul(c, proofbound.PointInterval(radius))
+	y := proofbound.IntervalMul(s, proofbound.PointInterval(radius))
+	err := max(proofbound.IntervalFloatError(x, p.X), proofbound.IntervalFloatError(y, p.Y))
+	return proofbound.Radius3D(err), true
 }
 
 func (m *crossBoreMesh) point(p r3.Vec) int {
@@ -164,6 +182,37 @@ func crossBoreStationPlan(rec *crossCylinderBoreRecord, setback float64) ([]cros
 	return stations, nil
 }
 
+// crossBoreStationGap certifies the largest source-cylinder angle covered
+// by one outer-wall panel, including the wrap across a full turn. It uses
+// each held station angle as an exact rational parameter and keeps the
+// full-turn endpoint outward because π is irrational.
+func crossBoreStationGap(stations []crossBoreStation) (float64, error) {
+	maximum := new(big.Rat)
+	for i := 0; i+1 < len(stations); i++ {
+		gap := new(big.Rat).Sub(proofarith.FloatRat(stations[i+1].phi),
+			proofarith.FloatRat(stations[i].phi))
+		if gap.Sign() <= 0 {
+			return 0, fmt.Errorf("%w: an outer-ring angle is not increasing", ErrUnsupported)
+		}
+		if gap.Cmp(maximum) > 0 {
+			maximum = gap
+		}
+	}
+	start := proofarith.FloatRat(stations[0].phi)
+	end := proofarith.FloatRat(stations[len(stations)-1].phi)
+	wrapLower := new(big.Rat).Add(new(big.Rat).Mul(proofbound.PiLower, big.NewRat(2, 1)), start)
+	wrapLower.Sub(wrapLower, end)
+	if wrapLower.Sign() <= 0 {
+		return 0, fmt.Errorf("%w: an outer-ring wrap is not increasing", ErrUnsupported)
+	}
+	wrapUpper := new(big.Rat).Add(new(big.Rat).Mul(proofbound.PiUpper, big.NewRat(2, 1)), start)
+	wrapUpper.Sub(wrapUpper, end)
+	if wrapUpper.Cmp(maximum) > 0 {
+		maximum = wrapUpper
+	}
+	return proofbound.RatFloatUp(maximum), nil
+}
+
 func buildCrossBoreChamferMesh(ctx context.Context,
 	rec *crossCylinderBoreRecord, setback float64) (*crossBoreMesh, error) {
 	groups, err := crossBoreMeshGroups(rec)
@@ -174,7 +223,13 @@ func buildCrossBoreChamferMesh(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	outerGap, err := crossBoreStationGap(stations)
+	if err != nil {
+		return nil, err
+	}
 	m := &crossBoreMesh{groups: groups}
+	m.outerAngularGap = outerGap
+	radiusRat := proofarith.FloatRat(rec.radius)
 	bottom := make([]int, len(stations))
 	lower := make([]int, len(stations))
 	upper := make([]int, len(stations))
@@ -195,6 +250,13 @@ func buildCrossBoreChamferMesh(ctx context.Context,
 			upper[i] = m.point(station.upper)
 		}
 		top[i] = m.point(r3.Vec{X: x, Y: y, Z: rec.height})
+		for _, vertex := range []int{bottom[i], lower[i], upper[i], top[i]} {
+			err, ok := crossBoreStationError(m.verts[vertex], radiusRat, station.phi)
+			if !ok || proofbound.IsNonFinite(err) {
+				return nil, fmt.Errorf("%w: an outer-ring station has no circular bound", ErrUnsupported)
+			}
+			m.outerStationError = max(m.outerStationError, err)
+		}
 		if station.kind == crossBorePositive {
 			positiveOuter[station.j] = upper[i]
 			positiveOuter[(n-station.j)%n] = lower[i]

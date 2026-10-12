@@ -5,12 +5,18 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
 func crossCylinderBore(t *testing.T, radius, bore, height, centerZ float64) (*decad.Document, *decad.Body, *decad.Body) {
+	return crossCylinderBoreAt(t, radius, bore, height, centerZ, 0)
+}
+
+func crossCylinderBoreAt(t *testing.T, radius, bore, height, centerZ, toolY float64) (
+	*decad.Document, *decad.Body, *decad.Body) {
 	t.Helper()
 	doc := decad.New()
 	w := sketch.NewWorld()
@@ -29,7 +35,7 @@ func crossCylinderBore(t *testing.T, radius, bore, height, centerZ float64) (*de
 	tw := sketch.NewWorld()
 	ts, err := tw.CreateSketch(tw.YZ())
 	require.NoError(t, err)
-	toolCenter := ts.CreatePoint(0, centerZ)
+	toolCenter := ts.CreatePoint(toolY, centerZ)
 	ts.Fix(toolCenter)
 	ts.CreateCircle(toolCenter, bore)
 	_, err = ts.Solve(t.Context())
@@ -107,19 +113,42 @@ func TestCrossCylinderBoreMouthChamferVerified(t *testing.T) {
 
 func TestCrossCylinderBoreMouthChamferRefusesUnprovedCases(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		positive bool
-		setback  float64
+		name                    string
+		positive                bool
+		setback, centerZ, toolY float64
+		asymmetric, placed      bool
 	}{
-		{name: "other mouth", positive: false, setback: 0.5},
-		{name: "large setback", positive: true, setback: 0.6},
+		{name: "other mouth", positive: false, setback: 0.5, centerZ: 5},
+		{name: "large setback", positive: true, setback: 0.6, centerZ: 5},
+		{name: "cap contact", positive: true, setback: 0.5, centerZ: 1.5},
+		{name: "offset tool", positive: true, setback: 0.5, centerZ: 5, toolY: 0.5},
+		{name: "asymmetric setback", positive: true, setback: 0.5, centerZ: 5, asymmetric: true},
+		{name: "placed result", positive: true, setback: 0.5, centerZ: 5, placed: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			doc, _, bored := crossCylinderBore(t, 5, 1, 10, 5)
-			_, err := bored.Chamfer(t.Context(),
-				crossBoreMouth(t, bored, 5, 1, tc.positive), units.Millimeters(tc.setback))
+			doc, target, bored := crossCylinderBoreAt(t, 5, 1, 10, tc.centerZ, tc.toolY)
+			receiver := bored
+			centerZ := tc.centerZ
+			if tc.placed {
+				motion, err := r3.Translation(r3.NewVec(0, 0, 1))
+				require.NoError(t, err)
+				receiver, err = bored.PlacedCopy(t.Context(), motion)
+				require.NoError(t, err)
+				centerZ++
+			}
+			var opts []decad.ChamferOption
+			if tc.asymmetric {
+				sides, err := decad.Faces(decad.Cylindrical()).Exactly(1).SelectFaces(target)
+				require.NoError(t, err)
+				require.Len(t, sides[0].Origins(), 1)
+				side := sides[0].Origins()[0]
+				opts = append(opts, decad.WithAsymmetricChamfer(
+					decad.Faces(decad.FaceCreatedBy(side)).Exactly(1), units.Millimeters(0.25)))
+			}
+			_, err := receiver.Chamfer(t.Context(),
+				crossBoreMouth(t, receiver, centerZ, 1, tc.positive), units.Millimeters(tc.setback), opts...)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
-			require.Equal(t, []*decad.Body{bored}, doc.Bodies())
+			require.Equal(t, receiver, doc.Bodies()[len(doc.Bodies())-1])
 		})
 	}
 }
