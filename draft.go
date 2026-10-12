@@ -11,10 +11,10 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is Body.Draft (docs/draft-design.md §10): the face draft of an
+// This file is Draft (docs/draft-design.md §10): the face draft of an
 // existing prism. It resolves the neutral cap and the wall selection against
-// the receiver, then builds the same draftPayload a tapered Extrude builds
-// (draft_build.go) over the receiver's recorded section.
+// b, then builds the same draftPayload a tapered Extrude builds
+// (draft_build.go) over b's recorded section.
 
 // roleSidePrefix opens every wall role a sweep mints, side(i, j). Walls(b)
 // and the complete-wall-set test of Draft read it.
@@ -40,9 +40,9 @@ type NeutralPlane interface{ neutralPlane() }
 // faces is [ErrCardinality] with Expected "exactly 1"; a curved face is
 // [ErrDegenerate]; a flat face with no analytic [Plane] surface, such as a
 // mesh-boolean [Faceted] face, is [ErrUnsupported]. Body MUST be a live body
-// of the receiver's document ([ErrForeignBody], [ErrRetiredBody]). This
-// evaluator drafts about a cap of the receiver only, so Body must be the
-// receiver and the face its capStart or capEnd; any other face is
+// of b's document ([ErrForeignBody], [ErrRetiredBody]). This
+// evaluator drafts about a cap of b only, so Body must be
+// b and the face its capStart or capEnd; any other face is
 // [ErrUnsupported].
 type NeutralFace struct {
 	Body *Body
@@ -60,7 +60,7 @@ type NeutralFrame struct {
 func (NeutralFace) neutralPlane()  {}
 func (NeutralFrame) neutralPlane() {}
 
-// DraftOption is a placeholder option tier for [Body.Draft]. It carries no
+// DraftOption is a placeholder option tier for [Draft]. It carries no
 // option today and reserves the signature for a later draft option.
 type DraftOption interface {
 	option.Interface
@@ -72,32 +72,32 @@ type DraftOption interface {
 var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 
 // Draft returns a new body whose walls lean by angle from the sweep axis about
-// the neutral plane, retiring the receiver (docs/draft-design.md §10). A
+// the neutral plane, retiring b (docs/draft-design.md §10). A
 // positive angle narrows the body with distance from the neutral plane and a
 // negative one widens it; the angle is a signed [units.Angle] outside
 // [ErrNegativeMagnitude] (core §12). sel names the walls to lean, about one
-// of the receiver's caps. Faces(Walls(b)) names every wall, and the result is
+// of b's caps. Faces(Walls(b)) names every wall, and the result is
 // the body a tapered [Document.Extrude] of the same section and sweep builds.
 // A subset leans only the walls it names: each moved wall's far trace is its
 // own moved line or circle, a kept wall stays vertical, and a corner between a
 // moved and a kept line is the intersection of the two
 // (docs/draft-design.md §10.2).
 //
-// The receiver is a live straight prism: an extrude, a filleted or chamfered
+// b is a live straight prism: an extrude, a filleted or chamfered
 // extrude, a tube, or any of these placed, whose recorded section is the
 // section it denotes. The gates run in docs/draft-design.md §5's order, and a
 // refused call leaves the document unchanged, including on ctx.Err():
 //
 //   - an angle that is not an angle is [ErrUnitKind], one that is not finite
 //     [ErrNotFinite], and one at or past a right angle [ErrDegenerate];
-//   - a retired or foreign receiver is [ErrRetiredBody] or [ErrForeignBody],
+//   - a retired or foreign b is [ErrRetiredBody] or [ErrForeignBody],
 //     and a sheet is [ErrUnsupported];
-//   - a zero angle is [ErrDegenerate] (the draft is the receiver);
+//   - a zero angle is [ErrDegenerate] (the draft is b);
 //   - a neutral selector resolving to zero or several faces is [ErrCardinality],
 //     a curved neutral face [ErrDegenerate];
-//   - a receiver that is not a prism, a section carrying a displacement, an
+//   - b that is not a prism, a section carrying a displacement, an
 //     already drafted body, a [NeutralFrame], a neutral face that is not a cap
-//     of the receiver, and a selected face that is no wall of the receiver
+//     of b, and a selected face that is no wall of b
 //     are each [ErrUnsupported];
 //   - a selected cap is [ErrDegenerate], and an empty selection is the
 //     selector's [ErrNoMatch];
@@ -108,10 +108,10 @@ var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 //     stays whole.
 //
 // The far section's own gates (draft SD5 to SD16) are those of a tapered
-// extrude. ctx, sel and neutral MUST NOT be nil; a nil one is [ErrDegenerate].
+// extrude. ctx, b, sel and neutral MUST NOT be nil; a nil one is [ErrDegenerate].
 // Every measurement of the result is Approximate: the tangent of the angle is
 // only ever enclosed.
-func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralPlane, angle units.Value, opts ...DraftOption) (*Body, error) {
+func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane, angle units.Value, opts ...DraftOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a draft`, ErrDegenerate)
 	}
@@ -184,7 +184,7 @@ func (b *Body) Draft(ctx context.Context, sel FaceSelector, neutral NeutralPlane
 		return nil, err
 	}
 
-	// Stages 3 to 7 are the tapered extrude's, over the receiver's section.
+	// Stages 3 to 7 are the tapered extrude's, over b's section.
 	ref := d.nextProducerID()
 	body, err := evalDraftContext(ctx, d, ref, draftPayload{
 		profile:    pp.profile,
@@ -252,7 +252,7 @@ func (d *Document) resolveNeutralFace(nf NeutralFace) (*Face, error) {
 	return selectImpliedOneFace(nf.Body, nf.Face, "the neutral face")
 }
 
-// draftReceiver is SD23: the receiver's payload must be a straight prism whose
+// draftReceiver is SD23: b's payload must be a straight prism whose
 // recorded section is the section it denotes. A draft body is refused by name,
 // since a second draft is SX10's composition rule.
 func draftReceiver(b *Body) (prismPayload, error) {
@@ -283,7 +283,7 @@ func requireFlatAnalyticNeutral(f *Face) error {
 }
 
 // neutralCap is SD20 for a NeutralFace: the face must be a cap of the
-// receiver itself. It reports whether the neutral cap is the start cap, which
+// b itself. It reports whether the neutral cap is the start cap, which
 // is the end of the sweep the draft's near section sits at.
 func neutralCap(f *Face, b *Body) (bool, error) {
 	if f.body != b {
@@ -304,10 +304,10 @@ func (f *Face) hasRole(producer producerID, role string) bool {
 
 // draftKeptWalls is SD22 then SD21 (docs/draft-design.md §10.2): a selected
 // cap has no trace on the neutral plane to tilt about (ErrDegenerate), and a
-// selected face that is no wall of the receiver names nothing to tilt
+// selected face that is no wall of b names nothing to tilt
 // (ErrUnsupported). It returns the recorded segments of every wall the
 // selection leaves out, read from their side(i, j) roles under producer,
-// empty when the selection is the receiver's complete wall set. Whether a
+// empty when the selection is b's complete wall set. Whether a
 // subset's corners admit the draft is stage 3's question (SD4).
 func draftKeptWalls(b *Body, producer producerID, selected []*Face) (map[draftWall]struct{}, error) {
 	for _, f := range selected {

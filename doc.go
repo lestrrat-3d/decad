@@ -93,10 +93,10 @@
 //	  Tessellate/export/boolean/mass of a draft body          builds
 //	  boolean/mass of one with an inexact G1 join or a
 //	    trimmed segment (draft §9.1)                          ErrUnsupported
-//	Body.Draft    prism receiver, its complete wall set or a
+//	Draft    prism operand, its complete wall set or a
 //	  subset, about one of its caps (draft design PR 3, 5)    builds
 //	  subset moving one of two walls at a circular corner,
-//	    NeutralFrame, non-cap neutral face, receiver other
+//	    NeutralFrame, non-cap neutral face, operand other
 //	    than a straight prism                                 ErrUnsupported
 //	Sweep         zero-twist LineTo / ArcThrough paths         builds
 //	  composite path without exact transported frames or
@@ -247,7 +247,7 @@
 // and WithTaper drafts an extrude's walls by a signed angle, a positive one
 // narrowing the body away from the sketch plane (docs/draft-design.md); a
 // taper the support map does not list is [ErrUnsupported], returned before
-// the document changes. Body.Draft leans an existing prism's walls, all of
+// the document changes. Draft leans an existing prism's walls, all of
 // them or a selected subset, the same way about one of its caps.
 // WithSweepTwist names a sweep's distributed twist. Its admitted straight
 // and cardinal curved polygon cases are described in docs/sweep-design.md §17.

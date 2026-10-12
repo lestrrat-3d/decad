@@ -364,14 +364,14 @@ func TestDraftMeshPlacedAndMirrored(t *testing.T) {
 	}
 }
 
-// TestDraftMeshOfBodyDraft meshes a Body.Draft result about its end cap, whose
+// TestDraftMeshOfBodyDraft meshes a Draft result about its end cap, whose
 // far section is the start cap: the same band mesh serves it, closed and
 // proving its volume, which sits at F1's closed form.
 func TestDraftMeshOfBodyDraft(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := plainBox(t, doc, decad.Along)
-	got, err := box.Draft(t.Context(), decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapEnd), units.Degrees(5))
+	got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapEnd), units.Degrees(5))
 	require.NoError(t, err)
 	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)

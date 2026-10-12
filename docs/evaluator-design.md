@@ -1279,7 +1279,7 @@ silent pass.
 | 4 | tessellation per `docs/tessellation-design.md` + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ`; supplies the geometry and bounds shared by public booleans and read-only interference evaluation |
 | 5 | fillet/chamfer on analytic prism edges, shell |
 | 6 | broader evaluator coverage, property tests, and fuzz tests for structural record validation |
-| 7 | tapered extrude and `Body.Draft`, per `docs/draft-design.md` §14's count-free five-PR plan |
+| 7 | tapered extrude and `Draft`, per `docs/draft-design.md` §14's count-free five-PR plan |
 
 Free-form support is `docs/spline-design.md`'s own increment plan (§10 there).
 Its stages do not consume a global evaluator increment number.
@@ -1333,7 +1333,7 @@ numbers.
   through any upstream ask.
 - **Tapered extrude is decided.** `docs/draft-design.md` owns it: the sharp
   offset family, the admitted profile class, the audit that refuses a
-  self-intersecting or collapsed far section, and `Body.Draft`.
+  self-intersecting or collapsed far section, and `Draft`.
 - **Modify reach is decided.** `docs/modify-reach-design.md` extends increment
   5's modify ops with staged sub-items (RX/SX/BX/DX), including exact admitted
   cases and permanent `ErrUnsupported` boundaries; these stages do not consume a
