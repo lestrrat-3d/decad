@@ -67,7 +67,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_sections.go` | Public three- and four-section loft entry point and source-face assembly. See loft-sections design. |
 | `loft_faces.go` | Bounded source-cap loft admission and held wall assembly. See loft-face-sections design. |
 | `loft_faces_proof.go` | Exact cap-map, band embedding and occupied-volume proof for face-fed lofts. See loft-face-sections design. |
-| `loft_point.go` | Point-section Loft entry, apex fan and proof. See loft-point design. |
+| `loft_point.go` | Point-section Loft entry, live Sketch source check, apex fan and proof. See loft-point design. |
 | `loft_build.go` | Loft payload, evaluation, placement and tessellation adapter. See loft §5, §8, §12. |
 | `loft_topology.go` | Adapts loft assembly and builds `Body` topology. See loft §5.1, §7. |
 | `loft_moments.go` | Loft mass adapters and chord proofs. See loft §8, §12. |

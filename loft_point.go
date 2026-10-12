@@ -44,6 +44,36 @@ type pointSectionSource struct {
 	entities []sketch.Entity
 }
 
+// pointSourceCurrent checks the source identity held when LoftFromPoint
+// recorded the profile. Certificate getters are checked separately at use.
+func pointSourceCurrent(record *pointSectionRecord) bool {
+	if record == nil || record.source == nil {
+		return false
+	}
+	src := record.source
+	if src.sketch == nil || src.profile == nil || src.profile.Sketch() != src.sketch ||
+		src.profile.IsStale() || src.sketch.Revision() != src.revision ||
+		src.profile.Revision() != src.revision ||
+		len(src.entities) != len(record.profile.Outer.Segments) ||
+		len(src.profile.Outer) != len(src.entities) {
+		return false
+	}
+	if _, _, _, err := recordProfile(src.sketch, src.profile); err != nil {
+		return false
+	}
+	frame, err := src.sketch.Plane().Frame()
+	if err != nil || frame.Origin() != src.frame.Origin() ||
+		frame.U() != src.frame.U() || frame.V() != src.frame.V() {
+		return false
+	}
+	for i, entity := range src.entities {
+		if entity == nil || src.profile.Outer[i].Entity != entity {
+			return false
+		}
+	}
+	return true
+}
+
 // LoftFromPoint builds a solid from one exact world point to a closed Sketch
 // profile. The apex is in millimetres. This operation accepts one outer loop
 // and no holes; every fitted flank remains the recorded Sketch curve. The
