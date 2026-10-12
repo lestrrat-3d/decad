@@ -173,9 +173,9 @@ func revolveLoftFacesHeelTrackPlace(station *revolveLoftFacesHeelTrackStation,
 		station.box[0][2].lo.Sign() <= 0 || station.box[1][2].hi.Sign() >= 0 {
 		return false
 	}
-	angular := mappedArcIntervalSub(
-		mappedArcIntervalMul(station.box[1][1], station.box[0][2]),
-		mappedArcIntervalMul(station.box[1][2], station.box[0][1]))
+	angular := lfIntervalSub(
+		revolveLoftFacesCapCutIntervalMul(station.box[1][1], station.box[0][2]),
+		revolveLoftFacesCapCutIntervalMul(station.box[1][2], station.box[0][1]))
 	return angular.lo.Sign() > 0 &&
 		station.point[1].Y*station.point[0].Z-
 			station.point[1].Z*station.point[0].Y > 0

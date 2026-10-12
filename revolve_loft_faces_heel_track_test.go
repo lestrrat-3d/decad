@@ -45,6 +45,23 @@ func TestCurvedHeelTrackUsesLiveMovingRoots(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, built)
 	require.Nil(t, refused)
+
+	changed := *proof
+	changed.section = proof.section
+	changed.section.spans = append([]revolveSectionSpan(nil), proof.section.spans...)
+	changed.section.spans[track.region.blank[0].outer].end.V += 0.125
+	refused, built, err = revolveLoftFacesHeelTrackOf(t.Context(), &changed, budget)
+	require.NoError(t, err)
+	require.False(t, built)
+	require.Nil(t, refused)
+
+	originalRevision := proof.trim.source.source.revision
+	proof.trim.source.source.revision++
+	defer func() { proof.trim.source.source.revision = originalRevision }()
+	refused, built, err = revolveLoftFacesHeelTrackOf(t.Context(), proof, budget)
+	require.NoError(t, err)
+	require.False(t, built)
+	require.Nil(t, refused)
 }
 
 func TestCurvedHeelTrackRefusesRoundedAwaySides(t *testing.T) {
