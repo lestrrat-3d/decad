@@ -343,16 +343,16 @@ removed cap discs and the new cylindrical wall.
 body with a through-bore. Decad checks cap-fan sector pairing and bore
 clearance decisions in `bevel_join_bore_test.go`.
 
-## Straight-tooth combined join
+## Private straight-tooth combined join proof
 
-`Union` with three or more operands accepts three to thirty-one copies of one authenticated point-loft
-tooth against the original finite revolve blank. The first tool carries the
-cone-trim record; every later tool must be a recorded near-axis rotation of
-that same source. Pairwise exact projections of the held tooth vertices,
-expanded by each body's certified mesh bound, prove the complete source
-solids disjoint. The original Sketch boundary certificates are checked again
-before rebuilding. The source axial interval, including its mesh allowance,
-must lie on the positive side of the public root cone's `Origin.X`.
+`buildBevelPatternJoin` retains an adaptive branch for three to thirty-one
+copies of an authenticated point-loft tooth against one finite revolve blank.
+Public variadic `Union` does not dispatch this branch: the blank and three or
+more cone-trimmed point-loft teeth return `ErrUnsupported`. Serial two-body
+`Union` still uses the private builder for three through eight teeth. The
+original Sketch boundary certificates are checked again before rebuilding.
+The source axial interval, including its mesh allowance, must lie on the
+positive side of the public root cone's `Origin.X`.
 
 For an embedded fitted flank, Sketch certifies one transverse root-cone
 crossing on each complete spline and a strict inside side for both connector
@@ -418,21 +418,21 @@ separate admission rules.
 
 The real sixteen-tooth source yielded 736,512 triangles and 250,972,281 scans,
 below its 1,312,480-triangle and 400-million-scan ceilings. Its 0.092906 mm
-boundary bound meets the 0.1 mm contract. Both members of the complete 16/12
-module-4 straight pair and their `VerifyAll` checks live in
-`decad-gallery/models/bevelgear`, where the real producer and consumer run
-together. Decad's focused tests cover cap conformity, root station order,
-and complete source-solid separation.
+boundary bound meets the 0.1 mm contract. The complete 16/12 module-4 straight
+pair in `decad-gallery/models/bevelgear` cannot pass variadic `Union` while
+this private builder is unselected. Decad's focused tests cover cap
+conformity, root station order, and the retained private cap and bore checks.
 
 The real unbored 31-tooth straight member uses two embedded fitted-flank
-crossings. Its gallery producer passed the 0.1 mm `VerifyAll` boundary and
-volume checks with one connected closed shell. The capped local run took
-274 seconds of test time and reached 3,444,152 KiB peak RSS.
+crossings. Its gallery producer reaches `ErrUnsupported` at variadic `Union`;
+the private proof's recorded boundary and volume checks do not admit that
+call. The capped local run took 274 seconds of test time and reached
+3,444,152 KiB peak RSS.
 
 The sixteen-tooth driving member's default centered bore has radius 8 mm,
-inside the recorded toe outer radius. A post-pattern-Union Cut with fifteen
-placed teeth uses the annular-cap rewrite above. It requires the complete
-source record, both cap rings, the finite six-line blank meridian and a
+inside the recorded toe outer radius. The retained private post-pattern Cut
+with fifteen placed teeth uses the annular-cap rewrite above. It requires the
+complete source record, both cap rings, the finite six-line blank meridian and a
 spanning axis-X circle. Each non-cap facet must clear the bore after the
 joined boundary and new circle bounds are charged. The two original cap
 fans must each cover every angular sector exactly once. The rewrite removes
@@ -445,8 +445,8 @@ bounds the bore audit. The real driving member has 1,408 stations and
 742,144 triangles, below its 1,318,112-triangle ceiling. Its audit scanned
 309,823,933 pairs under the 400-million limit of 25 million per tooth.
 The existing cylinder-shell volume charge spans the exact blank caps. The
-real source passes `Tessellate(0.1 mm, VerifyAll)` with a 0.092906 mm
-boundary bound and a 788.859944 mm³ occupied-volume allowance.
+private proof records a 0.092906 mm boundary bound and a 788.859944 mm³
+occupied-volume allowance for this source.
 
 ## Small straight member's annular bore
 
@@ -466,9 +466,8 @@ smallest certified held radius is 2.6664658715710501 mm, above the charged
 
 The two-pass Join ceiling plus four triangles per angular station bounds the
 Cut at 1,057,696 triangles and 320 million scanned pairs. The real source
-has 876,000 triangles and scans 285,455,819 pairs. The complete gallery
-`Build` → centered `Cut` → `Tessellate(0.1 mm, VerifyAll)` produces one
-through-hole.
+has 876,000 triangles and scans 285,455,819 pairs. The gallery cannot reach
+this private Cut through variadic `Union`.
 
 ## Bore through the straight pinion's narrow toe
 
@@ -506,7 +505,8 @@ difference in their circle-crossing positions. The circle-chord shell is
 charged over the certified toe-root-to-heel height, which also bounds the
 new cylinder wall area. The boundary allowance includes the rational-to-float
 intersection and trigonometric rounding at every new ring vertex.
-The real pinion passes `Tessellate(0.1 mm, VerifyAll)` with a 0.091775 mm
-boundary allowance. Its occupied-volume allowance is 538.690250 mm³,
+The retained private pinion proof computes a 0.091775 mm boundary allowance;
+variadic `Union` does not produce its input body. Its occupied-volume
+allowance is 538.690250 mm³,
 including 1.458015 mm³ for the rebuilt side shell, 0.170380 mm³ for the seam
 slab, and 0.499613 mm³ for the bore circle shell.

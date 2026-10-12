@@ -924,18 +924,17 @@ result, and proves the shared cap, source boundary and occupied volume.
 One-float-step axial placement differences receive explicit boundary and
 swept-volume allowances.
 
-The bounded straight-bevel class accepts a finite revolve blank and
-three to thirty-one separate copies of one authenticated, cone-trimmed point-loft
-tooth. It rebuilds their caps against one blank ring and checks the resulting
-solid's boundary, volume and topology. The bounded spiral-bevel class accepts
-an exact finite revolve blank and separate rigid copies of one authenticated,
-cone-trimmed nine-section tooth. The tool sectors must be proven disjoint. The
+The bounded spiral-bevel class accepts an exact finite revolve blank and
+separate rigid copies of one authenticated, cone-trimmed nine-section tooth.
+The tool sectors must be proven disjoint. The
 evaluator cuts the blank and all spiral tools in one mesh Boolean, certifies
 each root and cap contact against its original tooth source, and commits one
 body only after the complete output passes the boundary, volume and topology
-audits. Other multi-body classes return `ErrUnsupported`. A call with no
-`others` returns `ErrDegenerate`; a zero-body call does not compile. A failed
-or canceled call leaves every operand live.
+audits. A finite revolve blank with three or more cone-trimmed point-loft teeth
+returns `ErrUnsupported` in the multi-body call. Other multi-body classes also
+return `ErrUnsupported`. A call with no `others` returns `ErrDegenerate`; a
+zero-body call does not compile. A failed or canceled call leaves every
+operand live.
 
 No `*Document` appears in those signatures, and none is needed: a `*Body` carries
 its owning document (§6), so each call retires its operands and registers its

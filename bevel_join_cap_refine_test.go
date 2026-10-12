@@ -1,7 +1,6 @@
 package decad
 
 import (
-	"math"
 	"math/big"
 	"testing"
 
@@ -95,36 +94,6 @@ func TestBevelCapRefinementKeepsSharedEdgesAndBoundaryGroups(t *testing.T) {
 			require.Equal(t, 2, count, "interior edge %v must be shared", edge)
 		}
 	}
-}
-
-func TestBevelPatternSourceProjectionChargesWholeBodyBounds(t *testing.T) {
-	turn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(180))
-	require.NoError(t, err)
-	first := &Body{payload: facetedPayload{
-		verts:     []r3.Vec{r3.NewVec(0, 4, -1), r3.NewVec(0, 6, 1)},
-		meshBound: 0.1, xform: r3.Identity(),
-	}}
-	second := &Body{payload: facetedPayload{
-		verts:     []r3.Vec{r3.NewVec(0, -6, -1), r3.NewVec(0, -4, 1)},
-		meshBound: 0.1, xform: turn,
-	}}
-	separate, err := bevelPatternSourcesSeparate(t.Context(), []*Body{first, second})
-	require.NoError(t, err)
-	require.True(t, separate)
-	second.payload = facetedPayload{
-		verts:     []r3.Vec{r3.NewVec(0, -6, -1), r3.NewVec(0, -4, 1)},
-		meshBound: 8, xform: turn,
-	}
-	separate, err = bevelPatternSourcesSeparate(t.Context(), []*Body{first, second})
-	require.NoError(t, err)
-	require.False(t, separate)
-	second.payload = facetedPayload{
-		verts:     []r3.Vec{r3.NewVec(0, -6, -1), r3.NewVec(0, -4, 1)},
-		meshBound: math.MaxFloat64, xform: turn,
-	}
-	separate, err = bevelPatternSourcesSeparate(t.Context(), []*Body{first, second})
-	require.NoError(t, err)
-	require.False(t, separate)
 }
 
 func TestBevelSourceRequiresPositivePublicConeBranch(t *testing.T) {
