@@ -639,7 +639,7 @@ func loftCylinderSeparate(parts []loftCylinderTooth) bool {
 
 func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	blank *Body, pp prismPayload, radius float64, parts []loftCylinderTooth) (*Body, error) {
-	mesh := &bevelJoinedMesh{}
+	mesh := &joinedMesh{}
 	blankFaces := blank.Faces()
 	if len(blankFaces) != 3 {
 		return nil, fmt.Errorf("%w: a circular blank has changed face topology", ErrUnsupported)
@@ -878,7 +878,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	if proofbound.IsNonFinite(bound) || bound > 0.1 {
 		return nil, fmt.Errorf("%w: circular join exceeds the 0.1 mm boundary proof: bound %g blank %g tooth %g inset %g round %g twist %g step %g", ErrUnsupported, bound, blankMesh.Bound().Base(), toothBound, seamInset, ringRound, maximumTwist, maximumStep)
 	}
-	if err := bevelOrientMesh(mesh); err != nil {
+	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, err
 	}
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
@@ -979,7 +979,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 // chord stays in that polygon if one interior point is strictly inside and
 // the chord has no interior contact with its outline. Matched source root
 // arcs then use their authenticated Loft departure to reach the cap.
-func loftCylinderRootChordsInsideCap(ctx context.Context, mesh *bevelJoinedMesh,
+func loftCylinderRootChordsInsideCap(ctx context.Context, mesh *joinedMesh,
 	outline []int, parts []loftCylinderTooth, capIndex int) bool {
 	if capIndex < 0 || capIndex > 1 || len(outline) < 3 {
 		return false

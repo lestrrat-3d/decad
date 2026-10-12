@@ -115,7 +115,7 @@ func loftMirrorCylinderChamferReflectionReserve(lower facetedPayload,
 
 func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPayload,
 	record *loftMirrorCylinderBoreRecord, edges []*Edge) error {
-	mesh := &bevelJoinedMesh{verts: fp.verts, tris: fp.tris, src: fp.src, groups: fp.groups}
+	mesh := &joinedMesh{verts: fp.verts, tris: fp.tris, src: fp.src, groups: fp.groups}
 	var caps [2]*Face
 	for _, face := range b.Faces() {
 		for _, origin := range face.origins {
@@ -304,7 +304,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	for i, index := range half.inner[0] {
 		inner[1][i] = mapUpper[index]
 	}
-	mesh := &bevelJoinedMesh{verts: verts, tris: tris, src: src, groups: groups}
+	mesh := &joinedMesh{verts: verts, tris: tris, src: src, groups: groups}
 	for cap, group := range capGroups {
 		z := blank.z0
 		if cap == 1 {
@@ -369,7 +369,7 @@ func loftMirrorCylinderChamferSeam(ctx context.Context, lower, upper facetedPayl
 		}
 	}
 	for side, payload := range []facetedPayload{lower, upper} {
-		mesh := &bevelJoinedMesh{verts: payload.verts, tris: payload.tris,
+		mesh := &joinedMesh{verts: payload.verts, tris: payload.tris,
 			src: payload.src, groups: payload.groups}
 		if !loftCylinderAuditAnnulus(ctx, mesh, half.outer[1], half.inner[1],
 			half.capGroups[1], middle, side == 1) {
@@ -412,7 +412,7 @@ func loftMirrorCylinderChamferSeam(ctx context.Context, lower, upper facetedPayl
 	return nil
 }
 
-func loftMirrorCylinderChamferBoreUnchanged(old facetedPayload, mesh *bevelJoinedMesh,
+func loftMirrorCylinderChamferBoreUnchanged(old facetedPayload, mesh *joinedMesh,
 	oldGroups, newGroups [2]int) error {
 	type triangle [3]r3.Vec
 	collect := func(verts []r3.Vec, tris [][3]int, src []int, groups [2]int) map[triangle]int {

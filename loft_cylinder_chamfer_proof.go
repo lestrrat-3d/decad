@@ -31,7 +31,7 @@ func loftCylinderChamferRingEdges(ring []int) map[[2]int]struct{} {
 // The band is one triangle-connected annulus. Its only free edges are the
 // recorded side section and inset; the full shell's vertex-link audit then
 // rules out a pinch at any of their shared vertices.
-func loftCylinderChamferBandBoundary(mesh *bevelJoinedMesh, band [2]int,
+func loftCylinderChamferBandBoundary(mesh *joinedMesh, band [2]int,
 	side, inset []int) (map[[2]int]struct{}, error) {
 	if band[0] < 0 || band[1] > len(mesh.tris) || band[0] >= band[1] ||
 		len(side) < 3 || len(inset) < 3 {
@@ -98,7 +98,7 @@ func loftCylinderChamferBandBoundary(mesh *bevelJoinedMesh, band [2]int,
 // Every open band facet lies strictly between the source cap and its side
 // section. Its only cap-plane edges belong to the inset loop, so the old cap
 // disk/annulus can meet the ideal cutter only on that recorded inset rim.
-func loftCylinderChamferIdealBandLevels(mesh *bevelJoinedMesh,
+func loftCylinderChamferIdealBandLevels(mesh *joinedMesh,
 	xverts []proofarith.Xpt, band [2]int, inset []int, capLevel, sideLevel *big.Rat) error {
 	if capLevel == nil || sideLevel == nil || capLevel.Cmp(sideLevel) == 0 {
 		return fmt.Errorf("%w: ideal cap band has no axial slab", ErrUnsupported)
@@ -250,7 +250,7 @@ func loftCylinderChamferIdealVertices(verts []r3.Vec, side loftCylinderChamferSi
 // The only facets not inherited from the old embedded shell or an audited
 // planar inset cap are the two bands. Check their exact rational geometry,
 // including every pair that could meet after the side section is rounded.
-func loftCylinderChamferIdealBandAudit(ctx context.Context, mesh *bevelJoinedMesh,
+func loftCylinderChamferIdealBandAudit(ctx context.Context, mesh *joinedMesh,
 	xverts []proofarith.Xpt, bands [2][2]int, clipBound float64) error {
 	if len(xverts) != len(mesh.verts) || proofbound.IsNonFinite(clipBound) || clipBound < 0 {
 		return fmt.Errorf("%w: ideal cap band has no finite station proof", ErrUnsupported)
@@ -321,7 +321,7 @@ func loftCylinderChamferIdealBandAudit(ctx context.Context, mesh *bevelJoinedMes
 	return budget.Err()
 }
 
-func loftCylinderChamferIdealOrientation(ctx context.Context, mesh *bevelJoinedMesh,
+func loftCylinderChamferIdealOrientation(ctx context.Context, mesh *joinedMesh,
 	xverts []proofarith.Xpt) error {
 	volume6 := new(big.Rat)
 	for i, tri := range mesh.tris {

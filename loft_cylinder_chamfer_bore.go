@@ -10,7 +10,7 @@ import (
 // source correspondence remains valid because the new outer cap bands stay
 // clear of the entire source bore shell and both cap annuli keep their inner
 // loops. The caller audits the rebuilt annuli before publishing the result.
-func loftCylinderChamferBoreInheritance(fp facetedPayload, mesh *bevelJoinedMesh,
+func loftCylinderChamferBoreInheritance(fp facetedPayload, mesh *joinedMesh,
 	source loftCylinderChamferSource) error {
 	if source.boreGroup < 0 {
 		if fp.loftCylinderBore != nil || len(source.inner[0]) != 0 || len(source.inner[1]) != 0 {

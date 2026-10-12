@@ -13,7 +13,7 @@ import (
 // edge. Thus all cap pairs have exactly the indexed contact of that tiling;
 // the exact pair audit only needs the non-cap triangles. This avoids the
 // quadratic box scan among the many coplanar cap triangles.
-func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *bevelJoinedMesh,
+func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *joinedMesh,
 	source loftCylinderChamferSource, outer [2][]int, maxTriangles int) error {
 	if len(mesh.tris) > maxTriangles || len(mesh.src) != len(mesh.tris) ||
 		source.z0 >= source.z1 || source.capGroups[0] == source.capGroups[1] {

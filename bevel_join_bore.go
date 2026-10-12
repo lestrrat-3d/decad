@@ -207,7 +207,7 @@ func buildBevelPostJoinBore(ctx context.Context, d *Document, ref producerID,
 	}
 	clearance := proofbound.AbsSumUpper(radius, joined.meshBound, boreBound)
 	heelSeen, toeSeen := make([]bool, n), make([]bool, n)
-	mesh := &bevelJoinedMesh{
+	mesh := &joinedMesh{
 		verts:  append([]r3.Vec(nil), joined.verts...),
 		groups: append([]facetGroup(nil), joined.groups...),
 	}
@@ -278,7 +278,7 @@ func buildBevelPostJoinBore(ctx context.Context, d *Document, ref producerID,
 		mesh.add([3]int{innerToe[i], innerHeel[i], innerHeel[j]}, wallGroup)
 		mesh.add([3]int{innerToe[i], innerHeel[j], innerToe[j]}, wallGroup)
 	}
-	if err := bevelOrientMesh(mesh); err != nil {
+	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, err
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {

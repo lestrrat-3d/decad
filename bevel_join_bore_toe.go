@@ -14,7 +14,7 @@ import (
 )
 
 // bevelSortedTriangle ignores winding only while checking the retained blank
-// band's exact cell census. bevelOrientMesh checks winding after reconstruction.
+// band's exact cell census. orientJoinedMesh checks winding after reconstruction.
 func bevelSortedTriangle(t [3]int) [3]int {
 	if t[0] > t[1] {
 		t[0], t[1] = t[1], t[0]
@@ -184,7 +184,7 @@ func buildBevelPostJoinToeBore(ctx context.Context, d *Document, ref producerID,
 	}
 	clearance := proofbound.AbsSumUpper(radius, joined.meshBound, boreBound)
 	heelSeen, toeSeen := make([]bool, n), make([]bool, n)
-	mesh := &bevelJoinedMesh{verts: append([]r3.Vec(nil), joined.verts...),
+	mesh := &joinedMesh{verts: append([]r3.Vec(nil), joined.verts...),
 		groups: append([]facetGroup(nil), joined.groups...)}
 	for i, tri := range joined.tris {
 		if err := ctx.Err(); err != nil {
@@ -268,7 +268,7 @@ func buildBevelPostJoinToeBore(ctx context.Context, d *Document, ref producerID,
 		mesh.add([3]int{ring.toe[i], innerHeel[i], innerHeel[j]}, wallGroup)
 		mesh.add([3]int{ring.toe[i], innerHeel[j], ring.toe[j]}, wallGroup)
 	}
-	if err := bevelOrientMesh(mesh); err != nil {
+	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, err
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {

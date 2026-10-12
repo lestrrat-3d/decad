@@ -96,7 +96,7 @@ func loftCylinderTagBridgedTop(pp *facetedPayload, topGroup int, axialBridge []f
 // balance of one rebuilt cap. The old disk audit supplies the outer loop; the
 // bore ring and side-clearance gates supply a disjoint inner loop. The whole
 // shell crossing audit excludes overlapping or folded cap facets.
-func loftCylinderAuditAnnulus(ctx context.Context, mesh *bevelJoinedMesh,
+func loftCylinderAuditAnnulus(ctx context.Context, mesh *joinedMesh,
 	outer, inner []int, group int, z float64, bottom bool) bool {
 	if len(outer) < 3 || len(inner) < 3 {
 		return false
@@ -229,7 +229,7 @@ func loftCylinderEdgesMeet(a, b, c, d loftCylinderXY) bool {
 
 // The cap group must tile exactly one simple CCW outline, with the origin
 // strictly inside. A later centered bore may use that outline as its source.
-func loftCylinderAuditCap(ctx context.Context, mesh *bevelJoinedMesh,
+func loftCylinderAuditCap(ctx context.Context, mesh *joinedMesh,
 	outline []int, group int, z float64, bottom bool) bool {
 	n := len(outline)
 	if n < 3 {
