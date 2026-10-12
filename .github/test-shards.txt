@@ -10,13 +10,13 @@
 #   shard 1:    5.32s over 285 tests
 #   shard 2:   10.22s over 137 tests
 #   shard 3:   58.31s over 135 tests
-#   shard 4:  188.10s over 140 tests
+#   shard 4:  172.10s over 138 tests
 #   shard 5:   48.16s over 128 tests
 #   shard 6:   85.03s over 133 tests
 #   shard 7:   83.02s over 128 tests
 #   shard 8:   77.99s over 133 tests
 #   shard 9:   57.75s over 126 tests
-#   shard 10:   0.00s over 1 tests
+#   shard 10:  16.00s over 3 tests
 #
 0	0.01	TestLoftMirrorCylinderCapsMustTileWithOppositeWinding
 0	0.01	TestLoftMirrorCylinderLevelsRequireExactMidpoint
@@ -55,9 +55,9 @@
 0	2.76	TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource
 7	12.00	TestRevolveLoftFacesToolCapArcBindsLiveSourceCells
 4	0.00	TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence
-4	7.20	TestCurvedSourcePairCensusCoversLiveFaces
+10	7.20	TestCurvedSourcePairCensusCoversLiveFaces
 8	4.00	TestCurvedSourcePairCensusRefusesUnownedRetainedFace
-4	8.80	TestCurvedHeelArcEndpointsBindToLiveSideCells
+10	8.80	TestCurvedHeelArcEndpointsBindToLiveSideCells
 8	8.80	TestCurvedHeelArcSideTiesRejectChangedSourceRecord
 2	0.10	TestCurvedHeelArcSideTieTimeEndpointOwnership
 1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
