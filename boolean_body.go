@@ -113,7 +113,11 @@ type facetedPayload struct {
 	bevelJoin *bevelJoinRecord
 	// bevelTooth identifies a single placed copy of a certified trimmed tooth.
 	bevelTooth *bevelToothPlacement
-	verts      []r3.Vec
+	// revolveLoftJoin retains a geometry-certified section/sector source.
+	revolveLoftJoin *revolveLoftJoinRecord
+	// revolveLoftTooth identifies one rigid copy of a trimmed point loft.
+	revolveLoftTooth *revolveLoftToothPlacement
+	verts            []r3.Vec
 	// vertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
 	// §2, §4.1), composed by the boolean that built the payload (§3) and
 	// carried through every placement. The boolean always writes it; a nil
@@ -198,6 +202,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	// centroid ranking, but cannot become a new structural Split source.
 	next.pointPlaneSourceEligible = false
 	next.bevelJoin = nil
+	next.revolveLoftJoin = nil
 	next.obliqueBoss = nil
 	next.crossCylinderBore = nil
 	next.loftCylinderJoin = nil
@@ -207,6 +212,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.loftMirrorCylinderJoin = nil
 	next.loftMirrorCylinderBore = nil
 	next.bevelTooth = nil
+	next.revolveLoftTooth = nil
 	if fp.loftMirrorJoin != nil && fp.xform == r3.Identity() {
 		next.loftMirrorCopy = &loftMirrorPlacementRecord{source: fp.loftMirrorJoin, motion: composed}
 	} else if fp.loftMirrorCopy != nil {
@@ -214,6 +220,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	}
 	if fp.pointCone != nil && fp.xform == r3.Identity() {
 		next.bevelTooth = &bevelToothPlacement{source: fp.pointCone, motion: composed}
+		next.revolveLoftTooth = &revolveLoftToothPlacement{source: fp.pointCone, motion: composed}
 	}
 	if fp.loftFacesTrim != nil && fp.xform == r3.Identity() {
 		next.spiralTooth = &spiralToothPlacement{source: fp.loftFacesTrim, motion: composed}

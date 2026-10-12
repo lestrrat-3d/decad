@@ -32,6 +32,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/loft-sections-design.md` | Three-section smooth lofts and four-section cubic-width rounded lofts, held meshes and proofs. |
 | `docs/loft-face-sections-design.md` | Source-cap nine-section loft, cap correspondence, embedding, occupied-volume proof and two-cone continuation. |
 | `docs/loft-point-design.md` | Point-to-profile solid loft, its apex topology and mesh proof. |
+| `docs/revolve-loft-sector-design.md` | Finite Revolve and trimmed point-Loft source certificate, first Union class and removal ledger. |
 | `docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
 | `docs/loft-cylinder-boolean-design.md` | Certified axial Loft and centered cylinder Union, cap record, seam and volume bounds. |
 | `docs/loft-mirror-boolean-design.md` | Certified end-cap reflection of one axial Loft and its sewn three-ring Union. |
