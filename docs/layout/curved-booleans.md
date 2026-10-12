@@ -28,3 +28,4 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_simple_source.go` | Certifies a live Sketch source boundary as one simple, oriented curve walk. See loft-face-sections design. |
 | `revolve_loft_faces_simple_arc.go` | Bounds exact short Sketch arcs and their one-sided endpoint contacts for the simple source walk. See loft-face-sections design. |
 | `revolve_loft_faces_tool_cap_occupancy.go` | Certifies one occupied heel tool-cap arc on a vertical Revolve side from live source cells. See loft-face-sections design. |
+| `revolve_loft_faces_tool_cap_sloped.go` | Proves radial fill and occupied heel tool-cap arcs on sloped Revolve sides. See loft-face-sections design. |

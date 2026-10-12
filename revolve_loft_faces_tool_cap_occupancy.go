@@ -64,10 +64,6 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 		uniqueResultSourceFace(proof.tooth, proof.trim.heelCapGroup) != circle.capFace {
 		return nil, false, nil
 	}
-	loop, simple, err := revolveLoftFacesSimpleSourceLoop(ctx, proof.trim)
-	if err != nil || !simple || loop == nil || !loop.ccw {
-		return nil, false, err
-	}
 	vertical, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, circle.span)
 	if err != nil || outcome != revolveLoftFacesVerticalContact || vertical == nil {
 		return nil, false, err
@@ -79,9 +75,34 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 		vertical.yzAffine.det.Sign() <= 0 {
 		return nil, false, nil
 	}
+	return revolveLoftFacesHeelOccupiedFromSource(ctx, proof, circle,
+		vertical.revolveLoftFacesConstantXSource)
+}
+
+// Both vertical and sloped blank generators meet a heel tool cap at a
+// constant-X circle. Exact source cells and a simple true boundary determine
+// the occupied angular arc independently of the generator slope.
+func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
+	proof *revolveLoftFacesSourceCertificate, circle revolveLoftFacesToolCapCircle,
+	section *revolveLoftFacesConstantXSource) (
+	*revolveLoftFacesToolCapOccupiedArc, bool, error,
+) {
+	if proof == nil || proof.trim == nil || circle.x == nil || circle.radius == nil ||
+		section == nil || section.x == nil || section.upper == nil ||
+		section.band < 0 || section.band >= len(proof.sourceRefs) ||
+		section.x.Cmp(circle.x) != 0 ||
+		section.upper.Cmp(circle.radius) != 0 || !section.hasRetained ||
+		section.yzAffine == nil || section.yzAffine.det == nil ||
+		section.yzAffine.det.Sign() <= 0 {
+		return nil, false, nil
+	}
+	loop, simple, err := revolveLoftFacesSimpleSourceLoop(ctx, proof.trim)
+	if err != nil || !simple || loop == nil || !loop.ccw {
+		return nil, false, err
+	}
 	outer := proof.trim.source.source.profile.Outer
 	var negative, positive *revolveLoftFacesToolCapBoundary
-	for _, cell := range vertical.cells {
+	for _, cell := range section.cells {
 		if cell.segment < 0 || cell.segment >= len(outer) {
 			return nil, false, nil
 		}
@@ -103,7 +124,7 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 			return nil, false, nil
 		}
 		edge := outer[cell.segment]
-		if proof.sourceRefs[vertical.band][cell.segment] != cell.ref {
+		if proof.sourceRefs[section.band][cell.segment] != cell.ref {
 			return nil, false, nil
 		}
 		outward, oriented := revolveLoftFacesToolBoundaryOutward(edge, cell.upper)

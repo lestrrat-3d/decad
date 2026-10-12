@@ -1,0 +1,86 @@
+package decad
+
+import (
+	"math/big"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestRevolveLoftFacesSlopedRadialInsideNeedsUniqueOuterCrossing(t *testing.T) {
+	points := []Point2{{U: 3.2}, {U: 6}, {U: 6, V: 3.5},
+		{U: 5.8, V: 3.3}, {U: 5.7, V: 2.28},
+		{U: 4.7, V: 1.88}, {U: 3.2, V: 3.2}}
+	section := revolveSectionCertificate{axisSpan: 0}
+	for i, start := range points {
+		section.spans = append(section.spans, revolveSectionSpan{
+			start: start, end: points[(i+1)%len(points)]})
+	}
+	x := lfF(5.75)
+	fraction := lfDiv(lfSub(x, lfF(5.8)), lfSub(lfF(5.7), lfF(5.8)))
+	radius := lfAdd(lfF(3.3), lfMul(fraction, lfSub(lfF(2.28), lfF(3.3))))
+	require.True(t, revolveLoftFacesSlopedRadialInside(section, 3, x, radius))
+	require.False(t, revolveLoftFacesSlopedRadialInside(section, 3, lfF(5.7), lfF(2.28)),
+		"a section vertex at the circle X needs another proof")
+	require.False(t, revolveLoftFacesSlopedRadialInside(section, 2, x, radius),
+		"the selected face must be the sole positive-radius crossing")
+	section.spans[5].start.U = 5.9
+	require.False(t, revolveLoftFacesSlopedRadialInside(section, 3, x, radius),
+		"another side crossing leaves the radial fill undecided")
+}
+
+func TestRevolveLoftFacesSlopedRadialInsideRequiresAxisWalkDirection(t *testing.T) {
+	section := revolveSectionCertificate{axisSpan: 0,
+		spans: []revolveSectionSpan{
+			{start: Point2{U: 3}, end: Point2{U: 6}},
+			{start: Point2{U: 6, V: 2}, end: Point2{U: 3, V: 2}},
+		}}
+	require.True(t, revolveLoftFacesSlopedRadialInside(section, 1, lfF(4), lfF(2)))
+	section.spans[0].start.U, section.spans[0].end.U = 6, 3
+	require.False(t, revolveLoftFacesSlopedRadialInside(section, 1, lfF(4), lfF(2)))
+}
+
+func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
+	blank, tooth, _ := neutralArcSeamSource(t)
+	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	require.NoError(t, err)
+	require.True(t, ok)
+	loop, simple, err := revolveLoftFacesSimpleSourceLoop(t.Context(), proof.trim)
+	require.NoError(t, err)
+	require.True(t, simple)
+	require.Len(t, loop.cells, 8)
+	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
+	require.True(t, ok)
+	found := 0
+	for _, circle := range sides.circles {
+		span := proof.section.spans[circle.span]
+		if circle.tool != 1 || circle.sourceMiss || span.start.U == span.end.U {
+			continue
+		}
+		arc, certified, arcErr := revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, circle)
+		require.NoError(t, arcErr)
+		require.True(t, certified, "sloped heel circle at X=%s", circle.x.RatString())
+		require.NotNil(t, arc)
+		require.Negative(t, arc.negativeZ.box[2].hi.Sign())
+		require.Positive(t, arc.positiveZ.box[2].lo.Sign())
+		changed := circle
+		changed.x = new(big.Rat).Add(circle.x, big.NewRat(1, 16))
+		_, certified, arcErr = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, changed)
+		require.NoError(t, arcErr)
+		require.False(t, certified, "the occupied arc must use the live sloped circle")
+		changed = circle
+		changed.capOrigin = FeatureRef{}
+		_, certified, arcErr = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, changed)
+		require.NoError(t, arcErr)
+		require.False(t, certified, "the occupied arc must name its live cap origin")
+		originalOrigins := circle.capFace.origins
+		t.Cleanup(func() { circle.capFace.origins = originalOrigins })
+		circle.capFace.origins = []FeatureRef{{Role: "unrelated cap"}}
+		_, certified, arcErr = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, circle)
+		require.NoError(t, arcErr)
+		require.False(t, certified, "a replaced live cap-face origin cannot own the arc")
+		circle.capFace.origins = originalOrigins
+		found++
+	}
+	require.Positive(t, found)
+}
