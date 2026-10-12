@@ -36,6 +36,7 @@ The rules for rows live in `docs/layout.md`.
 | `bevel_join_bore_toe.go` | Cuts a centered bore through the narrow toe flank of an authenticated combined bevel join. See loft-point design. |
 | `loft_cut.go` | Preserves a matching axial loft through a certified coaxial circle-bore Cut. See loft §18. |
 | `loft_mirror_union.go` | Joins one authenticated axial Loft to its end-cap reflection. See loft-mirror-boolean design. |
+| `loft_mirror_cylinder_union.go` | Joins repeated reflected Loft pairs to a centered cylinder. See loft-mirror-boolean design. |
 | `loft_cylinder_union.go` | Joins a source Loft tooth pattern to a coaxial cylinder with certified seam and volume bounds. See loft-cylinder-boolean design. |
 | `loft_cylinder_axial_bridge.go` | Bounds a one-ulp axial placement difference between original Loft sources and private Union proof copies. See loft-cylinder-boolean design. |
 | `loft_cylinder_separation.go` | Proves twisted Loft teeth remain separated at every height. See loft-cylinder-boolean design. |

@@ -19,6 +19,7 @@
 #   shard 10:   0.01s over 1 test
 #
 0	0.01	TestLoftEmbeddedFitFlanksKeepOriginalCurve
+0	2.70	TestLoftMirrorCylinderUnionJoinsRepeatedRadialTabs
 1	0.01	TestBlindPocketPlacedAndVerified
 1	0.02	TestBodyPatchCircularPrismNestedFillMeshRefuses
 1	0.02	TestBodyPatchCircularPrismOneRimTessellates

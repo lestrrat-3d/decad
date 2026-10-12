@@ -19,6 +19,9 @@
 #   shard 10:   0.00s over 1 tests
 #
 0	0.01	TestBevelAxisRotationRequiresPureNonidentityXTurn
+0	0.01	TestLoftMirrorCylinderCapsMustTileWithOppositeWinding
+0	0.01	TestLoftMirrorCylinderLevelsRequireExactMidpoint
+0	0.01	TestLoftMirrorCylinderPairKeepsAuthenticatedSource
 0	0.01	TestBevelBoreCapFanRequiresAdjacentRingVertices
 0	0.01	TestBevelBorePatternKindRequiresMatchingToeTopology
 0	0.01	TestBevelBoreTriangleClearKeepsOnlyOutsideFacets
