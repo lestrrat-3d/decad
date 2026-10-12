@@ -72,6 +72,8 @@ type facetedPayload struct {
 	obliqueBoss      *obliqueBossRecord
 	loftCylinderJoin *loftCylinderJoinRecord
 	loftCylinderBore *loftCylinderBoreRecord
+	loftMirrorJoin   *loftMirrorJoinRecord
+	loftMirrorCopy   *loftMirrorPlacementRecord
 	// contactAudited records a whole-mesh exact contact audit at construction.
 	// PlaceMesh preserves it by checking every rounded facet after placement.
 	contactAudited bool
@@ -195,7 +197,14 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.obliqueBoss = nil
 	next.loftCylinderJoin = nil
 	next.loftCylinderBore = nil
+	next.loftMirrorJoin = nil
+	next.loftMirrorCopy = nil
 	next.bevelTooth = nil
+	if fp.loftMirrorJoin != nil && fp.xform == r3.Identity() {
+		next.loftMirrorCopy = &loftMirrorPlacementRecord{source: fp.loftMirrorJoin, motion: composed}
+	} else if fp.loftMirrorCopy != nil {
+		next.loftMirrorCopy = &loftMirrorPlacementRecord{source: fp.loftMirrorCopy.source, motion: composed}
+	}
 	if fp.pointCone != nil && fp.xform == r3.Identity() {
 		next.bevelTooth = &bevelToothPlacement{source: fp.pointCone, motion: composed}
 	}
@@ -203,6 +212,19 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 		next.spiralTooth = &spiralToothPlacement{source: fp.loftFacesTrim, motion: composed}
 	}
 	next.groups = append([]facetGroup(nil), fp.groups...)
+	if next.loftMirrorCopy != nil {
+		for cap, group := range next.loftMirrorCopy.source.capGroups {
+			if group < 0 || group >= len(next.groups) {
+				return nil, fmt.Errorf("%w: placed mirror join lost an outer cap", ErrUnsupported)
+			}
+			role := roleCapStart
+			if cap == 1 {
+				role = roleCapEnd
+			}
+			origins := append([]FeatureRef(nil), next.groups[group].origins...)
+			next.groups[group].origins = append(origins, FeatureRef{producer: ref, Role: role})
+		}
+	}
 	for i := range next.groups {
 		if next.groups[i].hasCentroid {
 			reading, err := placedCapCentroid(next.groups[i].centroid, delta)

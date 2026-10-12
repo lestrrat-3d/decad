@@ -66,6 +66,8 @@
 1	0.01	TestLinkagePoseAtWaypoints
 1	0.00	TestLoftChainMultiCellRibbonFreeEdgesAndArea
 1	0.00	TestLoftDuplicateIsMeasurementIdentical
+1	0.01	TestLoftMirrorUnionKeepsUnrelatedSourcesSeparate
+1	0.01	TestLoftMirrorUnionSealsTheSharedCap
 1	0.00	TestLoftPlacedReflectionHerringbone
 1	0.01	TestLoftPlacedVerifySound
 1	0.08	TestLoftSectionsVaryingCirclesRefuseOtherShapes
