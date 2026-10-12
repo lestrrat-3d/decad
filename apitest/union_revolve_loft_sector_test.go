@@ -120,6 +120,61 @@ func TestUnionShoulderedHubAndTwoRadialLugs(t *testing.T) {
 		hubVolume.Value.Base()+hubVolume.Bound.Base())
 }
 
+// A six-span hub also has a previously admitted serial construction route.
+// The public build keeps that route available while the wider sector class
+// uses the generic constructor.
+func TestUnionSixSpanHubSerialRadialLugs(t *testing.T) {
+	doc, sourceHub, trimmed, _, sourceFaces := taperedHubAndRadialLug(t, 9, 7.5, 4.3, false)
+	require.NotNil(t, sourceHub)
+	require.Len(t, sourceFaces, 2)
+	world := sketch.NewWorld()
+	section, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	outline := []decad.Point2{{U: 6}, {U: 9}, {U: 9, V: 3},
+		{U: 8, V: 4}, {U: 5, V: 2.5}, {U: 6, V: 1.5}}
+	points := make([]*sketch.Point, len(outline))
+	for i, point := range outline {
+		points[i] = section.CreatePoint(point.U, point.V)
+		section.Fix(points[i])
+	}
+	for i := range points {
+		section.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	_, err = section.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := section.Profiles()
+	require.Len(t, profiles, 1)
+	hub, err := doc.Revolve(section, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	require.NoError(t, err)
+	hubVolume, err := hub.Volume()
+	require.NoError(t, err)
+	placed := make([]*decad.Body, 0, 2)
+	for _, degrees := range []float64{120, 240} {
+		turn, turnErr := r3.Rotation(r3.Vec{X: 1}, units.Degrees(degrees))
+		require.NoError(t, turnErr)
+		placedCopy, copyErr := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+		require.NoError(t, copyErr)
+		placed = append(placed, placedCopy)
+	}
+	joined, err := decad.Union(t.Context(), hub, trimmed)
+	require.NoError(t, err)
+	for _, placedCopy := range placed {
+		joined, err = decad.Union(t.Context(), joined, placedCopy)
+		require.NoError(t, err)
+	}
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Equal(t, 2, revolveLugEuler(mesh))
+	volume, err := joined.Volume()
+	require.NoError(t, err)
+	require.Greater(t, volume.Value.Base()-volume.Bound.Base(),
+		hubVolume.Value.Base()+hubVolume.Bound.Base())
+}
+
 func TestUnionShoulderedHubAndTwoRadialLugsVariadic(t *testing.T) {
 	_, hub, trimmed := shoulderedHubAndRadialLug(t)
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
