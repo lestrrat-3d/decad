@@ -16,7 +16,7 @@ import (
 func certifyRevolveFitBoundary(record *pointSectionRecord,
 	section revolveSectionCertificate, base facetedPayload) (revolveSectorBoundary, bool) {
 	var empty revolveSectorBoundary
-	if !revolvePointSourceCurrent(record) ||
+	if !pointSourceCurrent(record) ||
 		len(record.profile.Outer.Segments) < 4 || len(record.profile.Outer.Segments) > 128 {
 		return empty, false
 	}

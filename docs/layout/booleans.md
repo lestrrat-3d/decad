@@ -12,7 +12,7 @@ The rules for rows live in `docs/layout.md`.
 | `boolean_many_prism.go` | Arranges identical-interval line prisms in one Sketch scene. See prism-boolean §4.6. |
 | `point_cone_trim.go` | Retains point-loft and cone source faces through coaxial Cut/Intersect. See loft-point design. |
 | `loft_faces_cone_trim.go` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation. See loft-face-sections design. |
-| `bevel_join_source.go` | Matches the finite six-line blank for the curved LoftFaces join and checks live point-Loft sources. See loft-face-sections design. |
+| `bevel_join_source.go` | Matches the finite six-line blank for the curved LoftFaces join. See loft-face-sections design. |
 | `spiral_join_source.go` | Certifies a cone-trimmed nine-section tooth's continuous flank crossings against a finite bevel blank. See loft-face-sections design. |
 | `spiral_join_heel_seam.go` | Bounds the source root arc's intersection with the blank heel cap. See loft-face-sections design. |
 | `spiral_join_toe_seam.go` | Bounds the source root arc's intersection with the blank toe cap. See loft-face-sections design. |
