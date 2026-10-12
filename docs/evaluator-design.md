@@ -820,27 +820,35 @@ Feature tests cover every example model and operation. Repeated construction
 preserves live-body order and provenance roles. Later evaluators may build a
 different topology split but must preserve role/query meaning.
 
-### Positive uniform scale of a straight prism
+### Positive uniform scale of a line or circular prism
 
 `Body.ScaledAt` admits a solid `prismPayload` whose outer and hole loops contain
-only whole `LineSeg` records and whose section and sweep levels carry zero
-displacement. Rigid placement of such a prism is admitted. The source prism's
+only whole `LineSeg`, `CircleSeg`, and `ArcSeg` records and whose section and
+sweep levels carry zero displacement. A `CircleSeg` fills its loop alone.
+Rigid placement of such a prism is admitted. The source prism's
 `Tessellate(VerifyAll)` result must report both boundary and occupied-volume
-proofs. Its per-facet source face supplies each output group with the same
-origins and a planar surface tag. A sheet, curved or trimmed segment, displaced
-section or level, and an incomplete source proof return `ErrUnsupported`.
+proofs. A sheet, other curve kind, trimmed segment, displaced section or level,
+and an incomplete source proof return `ErrUnsupported`.
+
+An all-line source uses a 0.1 mm tessellation chord. A source with a circle or
+arc uses `nextafter(0.05/max(1, factor), 0)` mm. The smaller target leaves
+room for source chording after scale and held-vertex rounding; an unrepresentable
+target refuses. A later scale of the faceted result does not rechord it, so a
+caller may need a tolerance above the accumulated `Mesh.Bound()`.
 
 The verified prism mesh already has shared-edge, closed and embedded topology.
 A positive similarity preserves its exact topology. `facetproof.ScaleMesh`
 maps every held vertex through an exact rational similarity, audits the rounded
-image for embedding, multiplies each source vertex displacement by the scale,
+image for embedding, multiplies each source vertex displacement by the scale
+(including each circular face's chord departure derived from its source bound),
 and adds the image's rounding. It multiplies the source area allowance by the
 scale squared and the occupied-volume difference by the scale cubed, then
 charges the rounded boundary's area and swept volume. `buildFacetedBody`
 audits the image's topology and rebuilds bounded volume and area readings.
 The source-face groups keep their origin roles; each planar frame's origin is
-scaled around the caller's anchor. The result is a faceted body with planar
-tags, not a new `prismPayload`.
+scaled around the caller's anchor. A circular source wall becomes a `Faceted`
+face with the inherited boundary bound; this path has no scaled curved-normal
+certificate. The result is not a new `prismPayload`.
 
 The faceted payload marks this source class so a later `Placed`, `PlacedCopy`,
 `Duplicate` or `ScaledAt` can repeat the proof from its held mesh and bounds.

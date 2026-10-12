@@ -72,7 +72,7 @@ The rules for rows live in `docs/layout.md`.
 | `surface_trim.go` / `surface_split_revolve.go` | Surface body gates and revolve `Split`. See surface-intersection §2–§3. |
 | `point_plane_split.go` | Splits a point loft by a planar chain sheet. See loft-point design. |
 | `point_plane_scale.go` | Dispatches certified similar bodies and carries Split-slab source maps. See loft-point design and evaluator §8. |
-| `prism_scale.go` | Admits an exact all-line prism as a certified similarity source. See evaluator §8. |
+| `prism_scale.go` | Admits an exact line/circular prism as a certified similarity source. See evaluator §8. |
 | `point_cap_centroid.go` | Certifies far and planar Split cap centroids and maps them through rigid placement. See loft-point design. |
 | `point_cap_extremes.go` | Bounds side-face centroid projections and selects the extreme Split cap faces. See loft-point design. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |

@@ -11,16 +11,27 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// straightPrismScaleSource turns an authenticated all-line prism into the
+// prismScaleSource turns an authenticated line/circular prism into the
 // certified faceted source consumed by ScaleMesh. The prism tessellator gives
-// its shared-edge topology, source-face map and occupied-volume proof; no
-// sampled geometry is promoted to a certificate here.
-func straightPrismScaleSource(ctx context.Context, b *Body, prism prismPayload) (facetedPayload, error) {
+// its shared-edge topology, source-face map and occupied-volume proof. A
+// curved face becomes Faceted because this path has no scaled normal proof.
+func prismScaleSource(ctx context.Context, b *Body, prism prismPayload, factor float64) (facetedPayload, error) {
+	curved, eligible := prismScaleProfile(prism.profile)
 	if prism.surfaceResult || prism.sectionDelta != 0 || prism.z0Delta != 0 || prism.z1Delta != 0 ||
-		!prism.xform.IsValid() || !straightPrismProfile(prism.profile) {
-		return facetedPayload{}, fmt.Errorf("%w: scale needs an exact all-line solid prism", ErrUnsupported)
+		!prism.xform.IsValid() || !eligible {
+		return facetedPayload{}, fmt.Errorf("%w: scale needs an exact line/circular solid prism", ErrUnsupported)
 	}
-	mesh, err := tessellateContext(ctx, b, units.Millimeters(0.1), VerifyAll)
+	chord := 0.1
+	if curved {
+		// The source's curved-face displacement grows by factor. Reserve half
+		// of the 0.1 mm target for its chord and half for construction rounding.
+		// A subsequent similarity cannot refine this first held mesh.
+		chord = math.Nextafter(0.05/math.Max(1, factor), 0)
+		if chord <= 0 {
+			return facetedPayload{}, fmt.Errorf("%w: the scale leaves no representable curved-source chord", ErrUnsupported)
+		}
+	}
+	mesh, err := tessellateContext(ctx, b, units.Millimeters(chord), VerifyAll)
 	if err != nil {
 		return facetedPayload{}, err
 	}
@@ -38,11 +49,16 @@ func straightPrismScaleSource(ctx context.Context, b *Body, prism prismPayload) 
 		if err := ctx.Err(); err != nil {
 			return facetedPayload{}, err
 		}
-		plane, ok := face.Surface().(Plane)
-		if !ok {
-			return facetedPayload{}, fmt.Errorf("%w: an all-line prism has a nonplanar face", ErrUnsupported)
+		switch surface := face.Surface().(type) {
+		case Plane:
+			groups[i] = facetGroup{origins: face.Origins(), surface: surface, planar: true}
+		case Cylinder:
+			// The source mesh supplies the curved-face displacement. Its group
+			// keeps origins but publishes Faceted after the similarity.
+			groups[i] = facetGroup{origins: face.Origins()}
+		default:
+			return facetedPayload{}, fmt.Errorf("%w: the prism has an unproved scaled surface", ErrUnsupported)
 		}
-		groups[i] = facetGroup{origins: face.Origins(), surface: plane, planar: true}
 		faceID[face] = i
 	}
 	source, err := sourceIDs(ctx, mesh, faceID)
@@ -63,34 +79,48 @@ func straightPrismScaleSource(ctx context.Context, b *Body, prism prismPayload) 
 		return facetedPayload{}, fmt.Errorf("%w: the prism has no finite diameter bound", ErrUnsupported)
 	}
 	return facetedPayload{
-		straightPrismScale: true,
-		contactAudited:     true,
-		verts:              mesh.vertices,
-		vertexBound:        vertexBound,
-		tris:               mesh.triangles,
-		src:                source,
-		groups:             groups,
-		meshBound:          facetproof.FacetBoundMax(mesh.triangles, vertexBound),
-		volSymDiff:         mesh.volSymDiff,
-		areaSlack:          mesh.areaSlack,
-		dPair:              diameter,
-		xform:              r3.Identity(),
+		prismScale:     true,
+		contactAudited: true,
+		verts:          mesh.vertices,
+		vertexBound:    vertexBound,
+		tris:           mesh.triangles,
+		src:            source,
+		groups:         groups,
+		meshBound:      facetproof.FacetBoundMax(mesh.triangles, vertexBound),
+		volSymDiff:     mesh.volSymDiff,
+		areaSlack:      mesh.areaSlack,
+		dPair:          diameter,
+		xform:          r3.Identity(),
 	}, nil
 }
 
-func straightPrismProfile(profile profileRecord) bool {
+// prismScaleProfile admits only complete source edges. A partial Sketch edge
+// needs its own source certificate even if its visible curve is circular.
+func prismScaleProfile(profile profileRecord) (curved, eligible bool) {
 	loops := append([]loopRecord{profile.Outer}, profile.Holes...)
 	for _, loop := range loops {
-		if len(loop.Segments) < 3 {
-			return false
+		if len(loop.Segments) == 0 {
+			return false, false
 		}
 		for _, segment := range loop.Segments {
-			line, ok := segment.(lineSeg)
-			if !ok || !((line.TStart == 0 && line.TEnd == 1) ||
-				(line.TStart == 1 && line.TEnd == 0)) {
-				return false
+			var start, end float64
+			switch s := segment.(type) {
+			case lineSeg:
+				start, end = s.TStart, s.TEnd
+			case circleSeg:
+				if len(loop.Segments) != 1 {
+					return false, false
+				}
+				start, end, curved = s.TStart, s.TEnd, true
+			case arcSeg:
+				start, end, curved = s.TStart, s.TEnd, true
+			default:
+				return false, false
+			}
+			if !((start == 0 && end == 1) || (start == 1 && end == 0)) {
+				return false, false
 			}
 		}
 	}
-	return true
+	return curved, true
 }
