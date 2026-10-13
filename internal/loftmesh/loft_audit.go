@@ -101,6 +101,10 @@ type LoftAuditData struct {
 	exactLifts bool
 	projUV     [3][]float64
 	projFinite [3][]bool
+	// fans is the exact angle table of the large flat fans, or nil. It is
+	// built only by NewLoftAuditData and newCompactLoftAuditData, whose lifts
+	// are the float vertices' own, and never written after.
+	fans *loftAuditFans
 }
 
 // LoftExactPlane is an owned integer numerator for the oriented plane through
@@ -128,7 +132,9 @@ func (plane LoftExactPlane) Sign(p proof.Xpt, sum, term *big.Int) int {
 
 func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 	workers := loftDataWorkers(verts, len(tris))
-	return newLoftAuditDataSelected(verts, liftLoftVertices(verts, nil, workers), tris, nil, false, workers)
+	d := newLoftAuditDataSelected(verts, liftLoftVertices(verts, nil, workers), tris, nil, false, workers)
+	d.fans = newLoftAuditFans(d, tris)
+	return d
 }
 
 // NewLoftAuditDataWithExact audits a rational construction whose float
@@ -145,7 +151,9 @@ func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int)
 // streamed S7 path reconstructs triangle triples from these immutable tables.
 func newCompactLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 	workers := loftDataWorkers(verts, len(tris))
-	return newLoftAuditDataSelected(verts, liftLoftVertices(verts, nil, workers), tris, nil, true, workers)
+	d := newLoftAuditDataSelected(verts, liftLoftVertices(verts, nil, workers), tris, nil, true, workers)
+	d.fans = newLoftAuditFans(d, tris)
+	return d
 }
 
 // newLoftAuditDataForCandidates keeps full-length index tables while lifting
@@ -635,6 +643,14 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts,
 	knownA, knownB *[3]int) (LoftPairOutcome, error) {
 	shared, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
+	if shortcuts.Certificates && sharedCount == 1 && data.fans != nil {
+		// Both triangles are flat at the common vertex's z, so they are exactly
+		// coplanar and the table's value is CoplanarIsolatedSharedVertex's.
+		// A false value falls through to the unchanged path.
+		if v, ok := data.fans.vertexCertificate(i, j, shared[0]); ok && v {
+			return LoftPairVertexCertificate, nil
+		}
+	}
 	if shortcuts.Certificates && sharedCount == 1 && data.vertexCertificateFloat(tris, i, j, shared[0]) {
 		return LoftPairVertexCertificate, nil
 	}
