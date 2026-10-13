@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -89,7 +90,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	if !ok {
 		return nil, true, fmt.Errorf("%w: section ring has no bounded angular plan", ErrUnsupported)
 	}
-	inner, boreBound, err := certifiedCircularBoreRingAtStep(ctx, radius, ring.angles, maxStep)
+	inner, boreBound, err := circularbounds.BoreRingAtStep(ctx, radius, ring.angles, maxStep)
 	if err != nil {
 		return nil, true, err
 	}

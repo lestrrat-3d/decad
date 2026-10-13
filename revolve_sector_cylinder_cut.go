@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -256,7 +257,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	if !ok {
 		return nil, true, fmt.Errorf("%w: joined section ring has no bounded station plan", ErrUnsupported)
 	}
-	inner, boreBound, err := certifiedCircularBoreRingAtStep(ctx, radius, ring.angles, maxStep)
+	inner, boreBound, err := circularbounds.BoreRingAtStep(ctx, radius, ring.angles, maxStep)
 	if err != nil {
 		return nil, true, err
 	}
