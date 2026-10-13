@@ -285,7 +285,6 @@
 1	0.20	TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius
 1	0.25	TestPrismPatternFilletSectorBeyondRootDisk
 1	0.00	TestPrismPatternFilletSectorRejectsAnotherConnector
-1	0.00	TestPrismPatternRootNeedsExactInwardOverlap
 1	0.01	TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections
 1	0.15	TestPrismPatternUnionOfCopiedExtrudes
 1	0.02	TestPrismPatternUnionRefusesOutwardRootWithoutRetiringSources
