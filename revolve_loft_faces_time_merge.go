@@ -16,10 +16,11 @@ const (
 	revolveLoftFacesFitKnotContact revolveLoftFacesJointKind = iota + 1
 	revolveLoftFacesRadialArcContact
 	revolveLoftFacesWholeArcContact
+	revolveLoftFacesFitLineContact
 )
 
-// Each root owns one live source endpoint. The knot and radial-arc records
-// remain distinct even when their time brackets occupy one fitted span.
+// Each root owns one live source endpoint. Fit-knot, radial-arc and fit-line
+// records remain distinct even when their time brackets occupy one span.
 type revolveLoftFacesOwnedRoot struct {
 	root  revolveLoftFacesEndpointRoot
 	cell  revolveLoftFacesJointCell
@@ -74,7 +75,7 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 	segment, spanIndex, band int, span freeform.BezierSpan,
 	roots []revolveLoftFacesOwnedRoot) ([]revolveLoftFacesMappedCell, bool, error) {
 	if ctx == nil || trim == nil || band < 0 || band+1 >= len(trim.maps) ||
-		len(roots) < 2 || len(roots) > 4 || len(span) == 0 {
+		len(roots) == 0 || len(roots) > 4 || len(span) == 0 {
 		return nil, false, nil
 	}
 	if !revolveLoftFacesOrderOwnedRoots(roots) {
@@ -141,7 +142,7 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 }
 
 func revolveLoftFacesOrderOwnedRoots(roots []revolveLoftFacesOwnedRoot) bool {
-	if len(roots) < 2 || len(roots) > 4 {
+	if len(roots) == 0 || len(roots) > 4 {
 		return false
 	}
 	for _, owned := range roots {
@@ -156,7 +157,8 @@ func revolveLoftFacesOrderOwnedRoots(roots []revolveLoftFacesOwnedRoot) bool {
 	for _, owned := range roots {
 		root, cell := owned.root, owned.cell
 		if owned.point == nil || owned.kind != revolveLoftFacesFitKnotContact &&
-			owned.kind != revolveLoftFacesRadialArcContact ||
+			owned.kind != revolveLoftFacesRadialArcContact &&
+			owned.kind != revolveLoftFacesFitLineContact ||
 			root.time.lo == nil || root.time.hi == nil || cell.time.lo == nil ||
 			cell.time.hi == nil || cell.sLo == nil || cell.sHi == nil ||
 			root.time.lo.Cmp(previous) <= 0 ||
