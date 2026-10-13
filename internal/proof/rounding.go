@@ -23,12 +23,20 @@ func FloatRat(value float64) *big.Rat {
 	if value == 0 {
 		return new(big.Rat)
 	}
-	// value = frac × 2^exp exactly, frac in [0.5, 1) with at most 53
-	// significant bits, so frac × 2^53 is an exact signed integer. Frexp is
-	// exact for a subnormal too.
-	frac, exp := math.Frexp(value)
-	mant := int64(frac * (1 << 53))
-	exp -= 53
+	// value = mant × 2^exp exactly, read from the bit pattern: a subnormal
+	// has no implicit leading bit and the exponent of the smallest normal.
+	raw := math.Float64bits(value)
+	mant := int64(raw & (1<<52 - 1))
+	exp := int(raw>>52) & 0x7ff
+	if exp == 0 {
+		exp = -1074
+	} else {
+		mant |= 1 << 52
+		exp -= 1075
+	}
+	if raw>>63 != 0 {
+		mant = -mant
+	}
 	// A negative mantissa has the same trailing zeros as its magnitude, so the
 	// arithmetic shift leaves it odd with its sign intact.
 	tz := bits.TrailingZeros64(uint64(mant))
@@ -49,7 +57,7 @@ func RationalFloatError(exact *big.Rat, held float64) float64 {
 	if exact == nil || heldRat == nil {
 		return math.Inf(1)
 	}
-	d := new(big.Rat).Sub(exact, heldRat)
+	d := SubRat(new(big.Rat), exact, heldRat)
 	d.Abs(d)
 	out, exactFloat := d.Float64()
 	// Float64 can report exact even when a positive subnormal fraction flushed
