@@ -916,6 +916,9 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
+	// The mesh audit and occupied-volume reading certify this Boolean result
+	// as a source for a later positive similarity. No unbuilt result is marked.
+	payload.booleanSimilaritySource = true
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}

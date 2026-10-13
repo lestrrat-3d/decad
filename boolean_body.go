@@ -74,6 +74,10 @@ type facetedPayload struct {
 	// similaritySource marks a certified similar image of a prism or full
 	// Revolve. Rigid copies retain it; booleans and modify rewrites do not.
 	similaritySource bool
+	// booleanSimilaritySource marks the certified held mesh and source groups
+	// produced by the generic mesh Boolean after its topology and volume audit.
+	// Rigid placement and positive similarity retain this certificate.
+	booleanSimilaritySource bool
 	// obliqueBoss retains the two authenticated prism sources for one complete
 	// plate-to-cylinder junction. A later Fillet rebuilds from these records.
 	obliqueBoss            *obliqueBossRecord
