@@ -36,7 +36,7 @@ func dividedSquareUnion(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 
 func TestExtrudeAuthenticatedUnionProfile(t *testing.T) {
 	s, p := dividedSquareUnion(t)
-	body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	volume, err := body.Volume()
@@ -47,13 +47,13 @@ func TestExtrudeAuthenticatedUnionProfile(t *testing.T) {
 func TestUnionProfileRejectsTamperedBoundary(t *testing.T) {
 	s, p := dividedSquareUnion(t)
 	p.Outer[0].TStart += 0.01
-	_, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrInvalidProfile)
 }
 
 func TestUnionProfileRejectsStaleSelection(t *testing.T) {
 	s, p := dividedSquareUnion(t)
 	s.CreatePoint(20, 20)
-	_, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 }

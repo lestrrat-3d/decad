@@ -179,7 +179,7 @@ func TestUnstitchRestitchRoundTripClosesABoundedBox(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := offAxisPlateSketch(t)
-	wall, err := doc.Extrude(s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	capped, err := wall.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
@@ -497,9 +497,9 @@ func TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap(t *testing.T) {
 	s, plateProf, pinProf := plateAndPin(t)
 
 	doc1 := decad.New()
-	plate, err := doc1.Extrude(s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc1, s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along})
 	require.NoError(t, err)
-	pin, err := doc1.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate)})
+	pin, err := decad.Extrude(t.Context(), doc1, s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate)})
 	require.NoError(t, err)
 	want, err := pin.Bounds()
 	require.NoError(t, err)
@@ -507,7 +507,7 @@ func TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap(t *testing.T) {
 		"the inch-stated depth's own unit-conversion rounding must actually reach the stop")
 
 	doc2 := decad.New()
-	plate2, err := doc2.Extrude(s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along})
+	plate2, err := decad.Extrude(t.Context(), doc2, s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along})
 	require.NoError(t, err)
 	capSelector := capEndFace(plate2)
 	sheets, err := decad.Unstitch(t.Context(), plate2)
@@ -521,7 +521,7 @@ func TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap(t *testing.T) {
 	}
 	require.NotNil(t, capSheet, "one of the six unstitched sheets must be the cap")
 
-	pin2, err := doc2.Extrude(s, pinProf, decad.ToFace{Body: capSheet, Face: decad.Faces()})
+	pin2, err := decad.Extrude(t.Context(), doc2, s, pinProf, decad.ToFace{Body: capSheet, Face: decad.Faces()})
 	require.NoError(t, err)
 	got, err := pin2.Bounds()
 	require.NoError(t, err)

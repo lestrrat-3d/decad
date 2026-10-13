@@ -221,7 +221,7 @@ func TestUndercutCapBlendReceiverWallsBoundedLikePatches(t *testing.T) {
 	t.Parallel()
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {3, 9}, {-6, 12}, {-9, 3}})
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(1))
 	require.NoError(t, err)

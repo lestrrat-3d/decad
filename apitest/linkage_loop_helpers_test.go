@@ -39,7 +39,7 @@ func polyPrismAtZ(t *testing.T, doc *decad.Document, pts [][2]float64, z0, h flo
 	require.NoError(t, err)
 	profs := s.Profiles()
 	require.Len(t, profs, 1)
-	body, err := doc.Extrude(s, profs[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, profs[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

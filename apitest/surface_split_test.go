@@ -42,7 +42,7 @@ func requireSplitVolumeSumEncloses(t *testing.T, a, b decad.Measurement, want *b
 func splitBlock(t testing.TB, d *decad.Document) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
-	b, err := d.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	b, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return b
 }
@@ -58,7 +58,7 @@ func splitRibbon(t testing.TB, d *decad.Document, endU float64) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	b, err := d.ExtrudeChain(s, s.Chains()[0], decad.TwoSided{
+	b, err := decad.Extrude(t.Context(), d, s, s.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
 	})
@@ -125,7 +125,7 @@ func TestSurfaceSplitCirclePartitionsBlock(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	tool, err := d.Extrude(s, s.Profiles()[0], decad.TwoSided{
+	tool, err := decad.Extrude(t.Context(), d, s, s.Profiles()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
 	}, decad.WithSurfaceResult())
@@ -207,7 +207,7 @@ func TestSurfaceSplitCoincidentBoundarySeparatesNothing(t *testing.T) {
 	s.CreateLine(a, s.CreatePoint(100, 0))
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := d.ExtrudeChain(s, s.Chains()[0], decad.TwoSided{
+	tool, err := decad.Extrude(t.Context(), d, s, s.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
 	})

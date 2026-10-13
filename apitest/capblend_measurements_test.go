@@ -61,7 +61,7 @@ func starPrismBody(t *testing.T, points int, ro, ri, h float64) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -204,7 +204,7 @@ func tallPlateWithDiskHole(t *testing.T, r, h float64) *decad.Body {
 	require.NotNil(t, prof, `the rectangle-with-disk region should exist`)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -717,7 +717,7 @@ func tangentFilletChamfer(t *testing.T, motion *r3.Transform) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	rounded, err := box.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()), units.Millimeters(r))
 	require.NoError(t, err)
@@ -1098,7 +1098,7 @@ func circularSegmentBody(t *testing.T, r, chordV, h float64) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -1132,7 +1132,7 @@ func circularSectorBodyAt(t *testing.T, cx, cy, r, phi float64, ext decad.Extent
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], ext)
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], ext)
 	require.NoError(t, err)
 	return body
 }
@@ -1325,7 +1325,7 @@ func roundedRectBodyAt(t *testing.T, x0, y0, l, w, h, r float64) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 
 	lateral := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
@@ -1623,7 +1623,7 @@ func dHoleBody(t *testing.T, cx, cy, r, phi0Deg, phi1Deg float64, minor bool) *d
 	require.NotNil(t, prof, `the rectangle-with-D-hole region should exist`)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

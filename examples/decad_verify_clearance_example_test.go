@@ -30,7 +30,7 @@ func Example_decad_verify_clearances() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
-		return doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	}
 
 	doc := decad.New()

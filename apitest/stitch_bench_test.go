@@ -23,7 +23,7 @@ func BenchmarkStitchPatchCappedTube(b *testing.B) {
 		_, err = s.Solve(b.Context())
 		require.NoError(b, err)
 		doc := decad.New()
-		sheet, err := doc.Extrude(s, s.Profiles()[0],
+		sheet, err := decad.Extrude(b.Context(), doc, s, s.Profiles()[0],
 			decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 			decad.WithSurfaceResult())
 		require.NoError(b, err)

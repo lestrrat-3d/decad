@@ -27,8 +27,7 @@ func Example_decad_unionMany() {
 		if len(profiles) != 1 {
 			return nil, fmt.Errorf("rectangle has %d profiles", len(profiles))
 		}
-		//nolint:contextcheck // Extrude has no context parameter.
-		return doc.Extrude(s, profiles[0],
+		return decad.Extrude(ctx, doc, s, profiles[0],
 			decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 	}
 	var bodies []*decad.Body

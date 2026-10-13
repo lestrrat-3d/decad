@@ -23,7 +23,7 @@ func makeBox(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, height float
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(height), Dir: decad.Along,
 	})
 	require.NoError(t, err)

@@ -236,7 +236,7 @@ func (lp chainLoftPayload) placed(ctx context.Context, d *Document, ref producer
 // s1), registers it, and returns the new body. c0 is the FROM walk and c1 the
 // TO walk, the same argument order Loft uses for its two sections and the
 // order §16.2's plane gate reads its positive normal from. Both chains pass
-// the identical seam gates ExtrudeChain runs (RecordChain,
+// the identical seam gates chain Extrude runs (RecordChain,
 // docs/surface-design.md §13.3), in argument order, and the seam's own
 // sentinel wins before any shape gate.
 //

@@ -41,7 +41,7 @@ func BenchmarkVerifyHalfDiscPlate(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		doc := decad.New()
-		if _, err := doc.Extrude(s, prof,
+		if _, err := decad.Extrude(b.Context(), doc, s, prof,
 			decad.Distance{D: units.Millimeters(200), Dir: decad.Along},
 		); err != nil {
 			b.Fatal(err)

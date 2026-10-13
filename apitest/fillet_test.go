@@ -23,7 +23,7 @@ func filletBox(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(filletBoxHeight), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(filletBoxHeight), Dir: decad.Along})
 	require.NoError(t, err)
 	return doc, body
 }
@@ -47,7 +47,7 @@ func manySidedPrism(t *testing.T, sides int) (*decad.Document, *decad.Body) {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(filletBoxHeight), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(filletBoxHeight), Dir: decad.Along})
 	require.NoError(t, err)
 	return doc, body
 }
@@ -314,7 +314,7 @@ func TestFilletConcaveEdgeReadsMinRadius(t *testing.T) {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	// Exactly one concave lateral edge — the reflex corner.
@@ -376,7 +376,7 @@ func TestFilletLineArcCorner(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 	origVol, err := body.Volume()
 	require.NoError(t, err)
@@ -433,7 +433,7 @@ func TestFilletArcArcCorner(t *testing.T) {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 	origVol, err := body.Volume()
 	require.NoError(t, err)
@@ -510,7 +510,7 @@ func TestFilletTooLargeRadius(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()).AtLeast(1)
@@ -563,7 +563,7 @@ func plateWithSquareHole(t *testing.T, off float64) (*decad.Document, *decad.Bod
 	require.NotNil(t, prof, `the rectangle-with-square-hole region should exist`)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 	return doc, body
 }
@@ -641,7 +641,7 @@ func plateWithDiskHole(t *testing.T, cx, cy, rho float64) (*decad.Document, *dec
 	require.NotNil(t, prof, `the rectangle-with-disk region should exist`)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return doc, body
 }
@@ -736,7 +736,7 @@ func scaledDiskInCornerFillet(t *testing.T, k, gapMult float64) error {
 	require.NotNil(t, prof, `the plate-with-disk region should exist`)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(20 * k), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(20 * k), Dir: decad.Along})
 	require.NoError(t, err)
 
 	_, err = body.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()), units.Millimeters(r*k))
@@ -949,7 +949,7 @@ func TestFilletSmallRadiusArcRadiiRoundApart(t *testing.T) {
 				_, err = s.Solve(t.Context())
 				require.NoError(t, err)
 				doc := decad.New()
-				prism, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+				prism, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 				require.NoError(t, err)
 
 				body, err := prism.Fillet(t.Context(), verticalEdges(), units.Millimeters(r))

@@ -35,7 +35,7 @@ func Example_decad_quickstart() {
 	// failure wraps a sentinel from the package error vocabulary, so a caller
 	// branches on it with errors.Is instead of parsing the message.
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		if errors.Is(err, decad.ErrUnsupported) {
 			fmt.Println("this evaluator does not build that combination")

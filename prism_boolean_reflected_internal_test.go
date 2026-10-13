@@ -49,7 +49,7 @@ func prismReflectDiscBody(t *testing.T, doc *Document, cx, cy, r float64) *Body 
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -322,7 +322,7 @@ func prismToothBody(t *testing.T, doc *Document, z0, h float64) *Body {
 	s.CreateLine(p4, p1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -355,7 +355,7 @@ func prismOvershootQuadBody(t *testing.T, doc *Document, corners [][2]float64, o
 			best = i
 		}
 	}
-	body, err := doc.Extrude(s, profs[best], Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, profs[best], Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
 	require.NoError(t, err)
 	return body
 }

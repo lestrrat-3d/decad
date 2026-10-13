@@ -229,7 +229,7 @@ func TestArcFragmentPrismReadingsAreTight(t *testing.T) {
 			t.Parallel()
 			s := arcFragmentCapSketch(t)
 			doc := decad.New()
-			body, err := doc.Extrude(s, arcFragmentProfile(t, s, tc.sketchA),
+			body, err := decad.Extrude(t.Context(), doc, s, arcFragmentProfile(t, s, tc.sketchA),
 				decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 			require.NoError(t, err)
 			volume, err := body.Volume()

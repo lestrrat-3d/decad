@@ -82,7 +82,7 @@ func TestVerifyJointBoxSlotKeepsItsBox(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	slot, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	slot, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	boxBodyAtZ(t, doc, -100, 95, 100, 105, -10, 30)
 	l := decad.NewLinkage()

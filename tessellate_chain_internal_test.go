@@ -30,7 +30,7 @@ func internalChainRibbonBody(t *testing.T, doc *Document) *Body {
 	require.NoError(t, err)
 	chains := s.Chains()
 	require.Len(t, chains, 1)
-	body, err := doc.ExtrudeChain(s, chains[0], Distance{D: units.Millimeters(10), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, chains[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 	return body
 }

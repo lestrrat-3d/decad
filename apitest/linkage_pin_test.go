@@ -55,7 +55,7 @@ func holedBar(t *testing.T, doc *decad.Document, x0, y0, x1, y1, cx, cy, bore, z
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -74,7 +74,7 @@ func pinPrism(t *testing.T, doc *decad.Document, cx, cy, r, z0, h float64) *deca
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

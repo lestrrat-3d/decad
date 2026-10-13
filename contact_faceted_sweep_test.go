@@ -30,7 +30,7 @@ func internalCrossingFramedBox(t *testing.T, doc *Document) *Body {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along})
 	require.NoError(t, err)
 	return body
 }

@@ -24,7 +24,7 @@ func TestChainGateDiameterCurvedExtrudeVerify(t *testing.T) {
 	chains := s.Chains()
 	require.Len(t, chains, 1)
 	doc := decad.New()
-	body, err := doc.ExtrudeChain(s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, body.Kind())
 	require.Len(t, body.Faces(), 1)

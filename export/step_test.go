@@ -29,11 +29,11 @@ func box(t *testing.T, sheet bool) *decad.Body {
 	require.NoError(t, err)
 	doc := decad.New()
 	if sheet {
-		body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along}, decad.WithSurfaceResult())
+		body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along}, decad.WithSurfaceResult())
 		require.NoError(t, err)
 		return body
 	}
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -110,7 +110,7 @@ func TestNewSTEPFilePlateWithHoleAnalytic(t *testing.T) {
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.New().Extrude(s, profile, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, profile, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
 	require.NoError(t, err)
@@ -158,7 +158,7 @@ func TestNewSTEPFileCylinderAnalytic(t *testing.T) {
 	s.Fix(center)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
 	require.NoError(t, err)
@@ -208,7 +208,7 @@ func TestNewSTEPFileArcPrismsAnalytic(t *testing.T) {
 		require.NoError(t, err)
 		profiles := s.Profiles()
 		require.Len(t, profiles, 1)
-		body, err := decad.New().Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 		require.NoError(t, err)
 		return body
 	}
@@ -289,7 +289,7 @@ func lPrism(t *testing.T, start int) *decad.Body {
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := decad.New().Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -350,7 +350,7 @@ func classBCut(t *testing.T, draw func(s *sketch.Sketch)) *decad.Body {
 	base.Fix(rect.A)
 	_, err = base.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := doc.Extrude(base, base.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, base, base.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 	plane, err := w.CreateOffsetPlane(w.XZ(), -10)
 	require.NoError(t, err)
@@ -359,7 +359,7 @@ func classBCut(t *testing.T, draw func(s *sketch.Sketch)) *decad.Body {
 	draw(s)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
+	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
 	require.NoError(t, err)
 	result, err := decad.Cut(t.Context(), box, tool)
 	require.NoError(t, err)
@@ -485,7 +485,7 @@ func TestSTEPBlindPocketOneShell(t *testing.T) {
 	plateSketch.Fix(plateRect.A)
 	_, err = plateSketch.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := doc.Extrude(plateSketch, plateSketch.Profiles()[0],
+	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	toolPlane, err := w.CreateOffsetPlane(w.XY(), 6)
@@ -496,7 +496,7 @@ func TestSTEPBlindPocketOneShell(t *testing.T) {
 	toolSketch.Fix(toolRect.A)
 	_, err = toolSketch.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := doc.Extrude(toolSketch, toolSketch.Profiles()[0],
+	tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 	require.NoError(t, err)
 	pocket, err := decad.Cut(t.Context(), plate, tool)
@@ -614,7 +614,7 @@ func TestNewSTEPFileShellSideOpeningAnalytic(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	body, err := box.Shell(t.Context(), decad.Faces(decad.Facing(r3.NewVec(-1, 0, 0))), units.Millimeters(2))
 	require.NoError(t, err)
@@ -655,7 +655,7 @@ func TestNewSTEPFileShellObliqueOpeningAnalytic(t *testing.T) {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tri, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	tri, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	body, err := tri.Shell(t.Context(), decad.Faces(decad.Facing(r3.NewVec(3, 4, 0))), units.Millimeters(3))
 	require.NoError(t, err)
@@ -686,7 +686,7 @@ func flushBossUnion(t *testing.T, draw func(s *sketch.Sketch)) *decad.Body {
 	base.Fix(rect.A)
 	_, err = base.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := doc.Extrude(base, base.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, base, base.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	plane, err := w.CreateOffsetPlane(w.XY(), 10)
 	require.NoError(t, err)
@@ -695,7 +695,7 @@ func flushBossUnion(t *testing.T, draw func(s *sketch.Sketch)) *decad.Body {
 	draw(s)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	boss, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
+	boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
 	require.NoError(t, err)
 	result, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
@@ -759,7 +759,7 @@ func TestNewSTEPFileRootedCrossingBossAnalytic(t *testing.T) {
 	base.Fix(rect.A)
 	_, err = base.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := doc.Extrude(base, base.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, base, base.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	plane, err := w.CreateOffsetPlane(w.XY(), 5)
 	require.NoError(t, err)
@@ -770,7 +770,7 @@ func TestNewSTEPFileRootedCrossingBossAnalytic(t *testing.T) {
 	s.CreateCircle(c, 5)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	boss, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 	body, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)

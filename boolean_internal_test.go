@@ -400,7 +400,7 @@ func internalOctagonPrism(t *testing.T, doc *Document, frame r3.Transform, l, r,
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(l), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(l), Dir: Along})
 	require.NoError(t, err)
 	body, err = Transform(t.Context(), body, frame)
 	require.NoError(t, err)
@@ -671,7 +671,7 @@ func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	wedge, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10 * scale), Dir: Along})
+	wedge, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(10 * scale), Dir: Along})
 	require.NoError(t, err)
 
 	s2, err := w.CreateSketch(w.XY())
@@ -680,7 +680,7 @@ func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
 	s2.Fix(rect.A)
 	_, err = s2.Solve(t.Context())
 	require.NoError(t, err)
-	bar, err := doc.Extrude(s2, s2.Profiles()[0], Symmetric{D: units.Millimeters(5 * scale)})
+	bar, err := Extrude(t.Context(), doc, s2, s2.Profiles()[0], Symmetric{D: units.Millimeters(5 * scale)})
 	require.NoError(t, err)
 	for _, operand := range []*Body{wedge, bar} {
 		mesh, meshErr := tessellateContext(t.Context(), operand, units.Millimeters(1), VerifyAll)
@@ -880,7 +880,7 @@ func internalDiscBody(t testing.TB, doc *Document, r, h float64) *Body {
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -907,7 +907,7 @@ func internalWasherBodySymmetric(t testing.TB, doc *Document, outer, inner, half
 		}
 	}
 	require.NotNil(t, prof, `the washer's holed region should exist`)
-	body, err := doc.Extrude(s, prof, Symmetric{D: units.Millimeters(half)})
+	body, err := Extrude(t.Context(), doc, s, prof, Symmetric{D: units.Millimeters(half)})
 	require.NoError(t, err)
 	return body
 }

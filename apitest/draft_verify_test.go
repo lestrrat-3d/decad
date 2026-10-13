@@ -181,7 +181,7 @@ func TestDraftUndercutBodyDraft(t *testing.T) {
 	t.Parallel()
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
 	doc := decad.New()
-	box, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(boxHeight), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(boxHeight), Dir: decad.Along})
 	require.NoError(t, err)
 	b, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5))
 	require.NoError(t, err)

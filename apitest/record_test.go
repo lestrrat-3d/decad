@@ -369,7 +369,7 @@ func TestRecordProfileRejectsForeignBoundaryEntity(t *testing.T) {
 	// distinguish it from the profile that came from s.
 	prof.Outer = foreign.Profiles()[0].Outer
 	doc := decad.New()
-	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrForeignProfile)
 	require.Empty(t, doc.Bodies())
 	require.Empty(t, doc.Bodies())
@@ -521,7 +521,7 @@ func TestRecordProfileRejectsUnclosedLoop(t *testing.T) {
 
 			// The same refusal reaches the solid evaluator, which used to
 			// publish a 100 mm3 Exact volume over the same open loop.
-			_, err = decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			_, err = decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 			require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 		})
 	}

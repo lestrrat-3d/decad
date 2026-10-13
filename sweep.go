@@ -62,7 +62,7 @@ func WithSweepTwist(angle units.Value) SweepOption {
 // the Sweep design states the bounded nonzero-twist reach. Sections 3.3–3.5
 // admit bounded closed-path classes.
 //
-// A chain section is gated exactly as [Document.ExtrudeChain] gates it
+// A chain section is gated exactly as a chain [Extrude] gates it
 // (docs/surface-design.md §13.3); the seam's own sentinel wins before any path
 // geometry is read. The path must start in the sketch plane with its initial
 // tangent codirectional with that plane's positive normal (ErrDegenerate). The
@@ -349,7 +349,7 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 // winding — and §15.2 states why a ONE-SPAN path needs no such rule at all: it
 // has no join, so its whole build is the recorded walk transported over that
 // one span. This increment builds the one-span STRAIGHT case, which reduces to
-// the chain prism ExtrudeChain already builds, over the path's own height
+// the chain prism that chain Extrude already builds, over the path's own height
 // rather than a resolved Extent. The arc reduction and every composite path
 // stay ErrUnsupported (Table SC rows SC7 and SC9, docs/surface-design.md R34).
 
@@ -453,7 +453,7 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 		return nil, err
 	}
 
-	// ONE free-form work counter for the whole call, exactly as ExtrudeChain
+	// ONE free-form work counter for the whole call, exactly as chain Extrude
 	// opens for its own build (docs/spline-design.md §5.2).
 	work := freeform.NewFreeformWork()
 	ref := d.nextProducerID()
@@ -461,7 +461,7 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 	// sketch plane by construction and the path starts there (S5's own gate
 	// above). Only the far level is derived, and z1Delta is where the path's
 	// composed length bound lands — the term §15.2 names as the one thing a
-	// chain sweep carries that the same walk's ExtrudeChain reading may not.
+	// chain sweep carries that the same walk's chain Extrude reading may not.
 	reduction := chainPayload{
 		chains:  []chainRecord{chain},
 		frame:   frame,

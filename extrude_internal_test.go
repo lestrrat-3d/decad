@@ -456,7 +456,7 @@ func involuteFitPrismPayload(t *testing.T) prismPayload {
 // record by exactly one moments-preflight charge (16,192,
 // evaluatorIntegralsUncheckedContext's own — see evaluatorIntegralsUncheckedContext's
 // call in evalPrismContext): the requester's number was measured through the
-// public Document.Extrude path, whose RecordProfile seam runs its own
+// public Extrude path, whose RecordProfile seam runs its own
 // independent-implementation area check (§5.2's "sketch computes its own
 // free-form area... decad integrates its OWN records... the two agreeing is
 // the §1 falsifier") before Extrude's own evalPrismContext runs its own

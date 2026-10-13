@@ -28,10 +28,10 @@ func Example_decad_asymmetric_brep_chamfer() {
 		}
 		rect := s.CreateRectangle(0, 0, width, 20)
 		s.Fix(rect.A)
-		if _, err := s.Solve(context.Background()); err != nil {
+		if _, err := s.Solve(ctx); err != nil {
 			return nil, err
 		}
-		return doc.Extrude(s, s.Profiles()[0],
+		return decad.Extrude(ctx, doc, s, s.Profiles()[0],
 			decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	}
 	plate, err := block(40, 0)

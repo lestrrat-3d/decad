@@ -107,7 +107,7 @@ func internalPolyPrismBodyAtZ(t *testing.T, doc *Document, pts [][2]float64, z0,
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := doc.Extrude(s, profiles[0], Distance{D: units.Millimeters(h), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, profiles[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -302,7 +302,7 @@ func TestStackedUnionBrepMisses(t *testing.T) {
 		s.Fix(rect.A)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		boss, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(25), Dir: Along})
+		boss, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(25), Dir: Along})
 		require.NoError(t, err)
 		require.Zero(t, boss.payload.(prismPayload).sectionDelta)
 		_, ok, err := tryStackedUnion(t.Context(), plate, boss)

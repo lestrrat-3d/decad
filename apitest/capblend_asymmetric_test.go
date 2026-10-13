@@ -367,7 +367,7 @@ func TestCapBlendAsymmetricUnrepresentableSetbackRefused(t *testing.T) {
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
 		doc := decad.New()
-		tower, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(H), Dir: decad.Along})
+		tower, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(H), Dir: decad.Along})
 		require.NoError(t, err)
 		sides := decad.Faces(decad.NormalTo(r3.NewVec(1, 0, 0))).Or(decad.NormalTo(r3.NewVec(0, 1, 0)))
 		_, err = asymChamfer(t, tower, capLoopEdges(tower), tiny, 1e-3, sides)

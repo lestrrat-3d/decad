@@ -199,7 +199,7 @@ func TestStitchTessellateClassBoundIsIndependentOfPlacement(t *testing.T) {
 	t.Parallel()
 	s, p := stitchInternalOffAxisPlateSketch(t)
 	doc := New()
-	wall, err := doc.Extrude(s, p, Symmetric{D: units.Inches(2.5)}, WithSurfaceResult())
+	wall, err := Extrude(t.Context(), doc, s, p, Symmetric{D: units.Inches(2.5)}, WithSurfaceResult())
 	require.NoError(t, err)
 
 	capped, err := wall.Patch(t.Context(), Edges(Free()).Exactly(8))
@@ -238,7 +238,7 @@ func internalStitchedBox(t *testing.T, doc *Document) *Body {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	walls, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}, WithSurfaceResult())
+	walls, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}, WithSurfaceResult())
 	require.NoError(t, err)
 
 	bs, err := w.CreateSketch(w.XY())
@@ -317,7 +317,7 @@ func TestTessellateStitchDoesNotPublishSymDiffForAnOpenSheet(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	walls, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}, WithSurfaceResult())
+	walls, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}, WithSurfaceResult())
 	require.NoError(t, err)
 
 	sheet, err := Stitch(t.Context(), walls)

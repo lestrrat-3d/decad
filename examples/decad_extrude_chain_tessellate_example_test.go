@@ -39,7 +39,7 @@ func Example_decad_extrude_chain_tessellate() {
 	}
 
 	doc := decad.New()
-	body, err := doc.ExtrudeChain(s, s.Chains()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(context.Background(), doc, s, s.Chains()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude chain: %s\n", err)
 		return

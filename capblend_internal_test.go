@@ -648,7 +648,7 @@ func chamferedCircularBand(t *testing.T, section func(*sketch.Sketch), h, d floa
 	require.Len(t, s.Profiles(), 1)
 
 	doc := New()
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
 	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
@@ -728,7 +728,7 @@ func chamferedRectFlatPatches(t *testing.T, motion r3.Transform) []bandUnderTest
 	require.Len(t, s.Profiles(), 1)
 
 	doc := New()
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
 	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(3))
 	require.NoError(t, err)
@@ -1077,7 +1077,7 @@ func TestAsymmetricCapSetbacksRefuseMixedPicks(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
+	box, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
 	caps := prismCapsOf(box)
 	startEdges, err := Edges(CreatedBy(CapStart(box))).SelectEdges(box)
@@ -1273,7 +1273,7 @@ func TestCapBandConeAreaBoundEnclosesBuiltRuledPatch(t *testing.T) {
 					prof = p
 				}
 			}
-			body, err := New().Extrude(s, prof, Distance{D: units.Millimeters(tc.h), Dir: Along})
+			body, err := Extrude(t.Context(), New(), s, prof, Distance{D: units.Millimeters(tc.h), Dir: Along})
 			require.NoError(t, err)
 			out, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(tc.dc),
 				WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(tc.ds)))
@@ -1335,7 +1335,7 @@ func TestCapBandConePatchChargesItsCornerSlivers(t *testing.T) {
 			concaveSideSection(20, 4)(s)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(100), Dir: Along})
+			body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(100), Dir: Along})
 			require.NoError(t, err)
 			out, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(tc.dc),
 				WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(tc.ds)))
@@ -1419,7 +1419,7 @@ func TestCapBlendAuditReadsTheSetbackSpan(t *testing.T) {
 				}
 			}
 			require.Len(t, prof.Holes, 2)
-			body, err := New().Extrude(s, prof, Distance{D: units.Millimeters(20), Dir: Along})
+			body, err := Extrude(t.Context(), New(), s, prof, Distance{D: units.Millimeters(20), Dir: Along})
 			require.NoError(t, err)
 			pp, ok := body.payload.(prismPayload)
 			require.True(t, ok)

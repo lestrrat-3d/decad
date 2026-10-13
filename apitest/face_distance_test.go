@@ -66,7 +66,7 @@ func TestFaceDistanceFromSheet(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	sheet, err := decad.New().Extrude(s, s.Profiles()[0],
+	sheet, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())

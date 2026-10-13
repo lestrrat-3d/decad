@@ -83,7 +83,7 @@ func ValidateChainLoftRecords(c0, c1 sectionrecord.ChainRecord, pl0, pl1 section
 // build states instead is per wall: each cell's LOWER triangle is wound so its
 // own normal agrees with T x N0, T the from-walk's chord direction across that
 // cell and N0 = U0 x V0 the from-plane's positive normal — the identical
-// vector ExtrudeChain's wall over the same recorded segment publishes
+// vector chain Extrude's wall over the same recorded segment publishes
 // (docs/surface-design.md Table G). That winding agrees with T x N0 exactly
 // when the rule vector from a from-station to the paired to-station has a
 // strictly positive component along N0, and exactly parallel planes give that

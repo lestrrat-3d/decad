@@ -1867,3 +1867,7 @@
 10	0.00	TestRevolveChainOptionRefusalFollowsTheSeam
 10	0.00	TestRevolveChainRefusesSurfaceResult
 10	0.00	TestRevolveTypedNilSectionIsDegenerate
+10	0.00	TestExtrudeTypedNilSectionIsDegenerate
+10	0.00	TestExtrudeCanceledContextLeavesDocumentUnchanged
+10	0.00	TestExtrudeChainRefusesProfileOnlyOptions
+10	0.00	TestExtrudeChainOptionRefusalFollowsTheSeam

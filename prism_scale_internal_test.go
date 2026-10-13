@@ -20,7 +20,7 @@ func TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding(t *testing.T) 
 	_, err = profile.Solve(t.Context())
 	require.NoError(t, err)
 	doc := New()
-	source, err := doc.Extrude(profile, profile.Profiles()[0],
+	source, err := Extrude(t.Context(), doc, profile, profile.Profiles()[0],
 		Distance{D: units.Millimeters(2), Dir: Along})
 	require.NoError(t, err)
 	scaled, err := source.ScaledAt(t.Context(), r3.NewVec(1e6, -2e6, 3e6), units.Scalar(1.3))

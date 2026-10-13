@@ -37,12 +37,12 @@ func Example_decad_error_recovery() {
 	// repair is to request a solid instead.
 	doc := decad.New()
 	prof := s.Profiles()[0]
-	body, err := doc.Extrude(s, prof,
+	body, err := decad.Extrude(context.Background(), doc, s, prof,
 		decad.Symmetric{D: units.Millimeters(10)},
 		decad.WithTaper(units.Degrees(5)), decad.WithSurfaceResult())
 	if errors.Is(err, decad.ErrUnsupported) {
 		fmt.Println("tapered surface unsupported: retrying as a solid")
-		body, err = doc.Extrude(s, prof, decad.Symmetric{D: units.Millimeters(10)},
+		body, err = decad.Extrude(context.Background(), doc, s, prof, decad.Symmetric{D: units.Millimeters(10)},
 			decad.WithTaper(units.Degrees(5)))
 	}
 	if err != nil {

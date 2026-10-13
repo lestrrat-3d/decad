@@ -40,7 +40,7 @@ func Example_decad_linkageLoop() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
-		return doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	}
 	// bar is a link 8 mm wide from p to q, 8 mm tall from z0.
 	bar := func(doc *decad.Document, p, q [2]float64, z0 float64) (*decad.Body, error) {

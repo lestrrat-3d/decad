@@ -200,7 +200,7 @@ func fdExtrudeLoop(t *testing.T, frame r3.Frame, loop [][2]float64, opts ...Extr
 	pl, err := w.CreatePlaneFromFrame(frame)
 	require.NoError(t, err)
 	s, p := fdSketch(t, w, pl, loop)
-	b, err := New().Extrude(s, p, Distance{D: units.Millimeters(2), Dir: Along}, opts...)
+	b, err := Extrude(t.Context(), New(), s, p, Distance{D: units.Millimeters(2), Dir: Along}, opts...)
 	require.NoError(t, err)
 	return b
 }
@@ -213,9 +213,9 @@ func fdTwoPrisms(t *testing.T, f r3.Frame, h0, h1 float64) (*Body, *Body) {
 	s0, p0 := fdSketch(t, w, pl, fdRect)
 	s1, p1 := fdSketch(t, w, pl, [][2]float64{{3, 1.5}, {4, 1.5}, {4, 2.5}, {3, 2.5}})
 	doc := New()
-	a, err := doc.Extrude(s0, p0, Distance{D: units.Millimeters(h0), Dir: Along})
+	a, err := Extrude(t.Context(), doc, s0, p0, Distance{D: units.Millimeters(h0), Dir: Along})
 	require.NoError(t, err)
-	b, err := doc.Extrude(s1, p1, Distance{D: units.Millimeters(h1), Dir: Along})
+	b, err := Extrude(t.Context(), doc, s1, p1, Distance{D: units.Millimeters(h1), Dir: Along})
 	require.NoError(t, err)
 	return a, b
 }
@@ -305,7 +305,7 @@ func fdSlotSheet(t *testing.T, f r3.Frame, length, r float64) *Body {
 	s.CreateLine(p2l, p1l)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along}, WithSurfaceResult())
+	b, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along}, WithSurfaceResult())
 	require.NoError(t, err)
 	return b
 }
@@ -355,7 +355,7 @@ func fdSlotSolid(t *testing.T, f r3.Frame) *Body {
 	s.CreateLine(p2l, p1l)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+	b, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
 	require.NoError(t, err)
 	return b
 }
@@ -437,7 +437,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			s.CreateLine(b, c)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			return New().ExtrudeChain(s, s.Chains()[0], Distance{D: units.Millimeters(2), Dir: Along})
+			return Extrude(t.Context(), New(), s, s.Chains()[0], Distance{D: units.Millimeters(2), Dir: Along})
 		}},
 		{name: "mirror", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			mf, err := r3.NewFrame(r3.NewVec(0.3, -2, 1), r3.NewVec(1, 0.2, 0.1), r3.NewVec(0, 1, -0.3))
@@ -505,7 +505,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			w := sketch.NewWorld()
 			s0, p0 := fdSketch(t, w, w.XY(), [][2]float64{{0, 0}, {40, 0}, {40, 20}, {0, 20}})
 			doc := New()
-			box, err := doc.Extrude(s0, p0, Distance{D: units.Millimeters(20), Dir: Along})
+			box, err := Extrude(t.Context(), doc, s0, p0, Distance{D: units.Millimeters(20), Dir: Along})
 			require.NoError(t, err)
 			xz, err := w.CreateOffsetPlane(w.XZ(), -10)
 			require.NoError(t, err)
@@ -516,7 +516,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			ts.CreateCircle(c, 3)
 			_, err = ts.Solve(t.Context())
 			require.NoError(t, err)
-			drill, err := doc.Extrude(ts, ts.Profiles()[0], Symmetric{D: units.Millimeters(11)})
+			drill, err := Extrude(t.Context(), doc, ts, ts.Profiles()[0], Symmetric{D: units.Millimeters(11)})
 			require.NoError(t, err)
 			got, err := Cut(t.Context(), box, drill)
 			require.NoError(t, err)

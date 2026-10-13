@@ -32,7 +32,7 @@ func Example_decad_facing() {
 		return
 	}
 	doc := decad.New()
-	plate, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

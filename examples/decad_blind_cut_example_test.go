@@ -29,8 +29,7 @@ func Example_decad_blind_cut() {
 		if _, err := s.Solve(ctx); err != nil {
 			return nil, err
 		}
-		//nolint:contextcheck // Extrude has no context parameter.
-		return doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+		return decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	}
 	plate, err := build(0, 0, 10, 10, 0, 10)
 	if err != nil {

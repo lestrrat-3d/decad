@@ -140,7 +140,7 @@ func TestShellClosedPrismCylinder(t *testing.T) {
 	s.CreateCircle(center, 10)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	rod, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	rod, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 	closed, err := rod.Shell(t.Context(), nil, units.Millimeters(2), decad.WithNoOpenings())
 	require.NoError(t, err)

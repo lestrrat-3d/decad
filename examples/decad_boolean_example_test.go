@@ -41,12 +41,12 @@ func Example_decad_cut() {
 	}
 
 	doc := decad.New()
-	plate, err := doc.Extrude(plateSketch, plateSketch.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	plate, err := decad.Extrude(context.Background(), doc, plateSketch, plateSketch.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude plate: %s\n", err)
 		return
 	}
-	pin, err := doc.Extrude(holeSketch, holeSketch.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	pin, err := decad.Extrude(context.Background(), doc, holeSketch, holeSketch.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude tool: %s\n", err)
 		return

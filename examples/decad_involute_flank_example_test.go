@@ -70,7 +70,7 @@ func Example_decad_involuteFlank() {
 	}
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

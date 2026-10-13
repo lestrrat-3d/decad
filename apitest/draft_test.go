@@ -18,7 +18,7 @@ import (
 func plainBox(t *testing.T, doc *decad.Document, dir decad.Direction) *decad.Body {
 	t.Helper()
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
-	b, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(boxHeight), Dir: dir})
+	b, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(boxHeight), Dir: dir})
 	require.NoError(t, err)
 	return b
 }
@@ -333,7 +333,7 @@ func TestDraftSymmetricReceiver(t *testing.T) {
 	for _, neutralStart := range []bool{true, false} {
 		doc := decad.New()
 		s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
-		box, err := doc.Extrude(s, p, decad.Symmetric{D: units.Millimeters(boxHeight / 2)})
+		box, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Millimeters(boxHeight / 2)})
 		require.NoError(t, err)
 		bounds, err := box.Bounds()
 		require.NoError(t, err)

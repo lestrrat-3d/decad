@@ -31,7 +31,7 @@ func pruneRod(t *testing.T, doc *Document, cx, cy, r float64) *Body {
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
 	return body
 }

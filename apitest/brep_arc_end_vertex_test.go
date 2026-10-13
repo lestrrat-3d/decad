@@ -56,7 +56,7 @@ func offRadiusSection(t *testing.T, doc *decad.Document, h float64, draw func(*s
 	arc := arcs[0]
 	require.Equal(t, [2]float64{0, 1}, [2]float64{arc.TStart, arc.TEnd}, `the arc is whole and counter-clockwise`)
 	require.NotEqual(t, math.Hypot(arc.Start.U, arc.Start.V), math.Hypot(arc.End.U, arc.End.V), `End is off Start's radius`)
-	body, err := doc.Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, profiles[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body, arc
 }
@@ -102,7 +102,7 @@ func drilledTombstone(t *testing.T, doc *decad.Document) (*decad.Body, sectionre
 	c := s.CreatePoint(-30, 5)
 	s.Fix(c)
 	s.CreateCircle(c, 2)
-	drill, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(40)})
+	drill, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(40)})
 	require.NoError(t, err)
 	cut, err := decad.Cut(t.Context(), tomb, drill)
 	require.NoError(t, err)

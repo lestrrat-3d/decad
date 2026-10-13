@@ -287,7 +287,7 @@ func TestRevolveChainFullTurnStaysOpen(t *testing.T) {
 }
 
 // TestRevolveChainRunsTheSeamGates confirms chain Revolve runs RecordChain's
-// own gates exactly as ExtrudeChain does (docs/sketch-seam-design.md §2.2):
+// own gates exactly as chain Extrude does (docs/sketch-seam-design.md §2.2):
 // a stale chain is ErrStaleProfile, and an invalid one is ErrInvalidProfile,
 // neither ever reaching the axis or extent resolution.
 func TestRevolveChainRunsTheSeamGates(t *testing.T) {

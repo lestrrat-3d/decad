@@ -29,7 +29,7 @@ func Example_decad_verify_surveys() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return err
 		}
-		_, err = doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		_, err = decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 		return err
 	}
 
@@ -110,7 +110,7 @@ func Example_decad_verify_surveys() {
 			holedProfile = p
 		}
 	}
-	if _, err := holed.Extrude(hs, holedProfile, decad.Distance{D: units.Millimeters(20), Dir: decad.Along}); err != nil {
+	if _, err := decad.Extrude(context.Background(), holed, hs, holedProfile, decad.Distance{D: units.Millimeters(20), Dir: decad.Along}); err != nil {
 		fmt.Printf("failed to build: %s\n", err)
 		return
 	}

@@ -137,7 +137,7 @@ func vertexGatePoints(budget *proofbound.WorkBudget, body *Body, extraAllow floa
 	return g, true, nil
 }
 
-// chainGatePoints lists an ExtrudeChain body's vertices beside the stations
+// chainGatePoints lists a chain Extrude body's vertices beside the stations
 // along its chains at both levels. The vertices carry their published bounds
 // plus the section displacement and the walk-end rounding the topology does
 // not charge (diameter.ChainWalkEndpointAllow). Vertices alone read only an arc's two
@@ -313,7 +313,7 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 // diameter arm reads where that arm reads points: a faceted, loft, mitred
 // sweep or stitched body's held vertex table with its published delta, a
 // coil's held station table with its largest station rounding, an
-// ExtrudeChain body's vertices and stations, a brep's vertices and face
+// chain Extrude body's vertices and stations, a brep's vertices and face
 // stations, a draft body's stations on both caps, a cap-loop chamfer's side
 // levels, whole cap circles and vertices, an analytic prism's or a revolve's stations, and the stations of
 // the witness prisms fallbackGateDiameter reads. Every other body, and any of

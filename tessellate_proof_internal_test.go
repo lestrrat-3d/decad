@@ -46,7 +46,7 @@ func internalHoledPlateBody(t *testing.T, doc *Document) *Body {
 		}
 	}
 	require.NotNil(t, prof)
-	body, err := doc.Extrude(s, prof, Distance{D: units.Millimeters(8), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, prof, Distance{D: units.Millimeters(8), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -318,7 +318,7 @@ func internalFreeformArchBody(t *testing.T, doc *Document, height float64) *Body
 	s.CreateLine(end, start)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := doc.Extrude(s, profiles[0], Distance{D: units.Millimeters(height), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, profiles[0], Distance{D: units.Millimeters(height), Dir: Along})
 	require.NoError(t, err)
 	return body
 }

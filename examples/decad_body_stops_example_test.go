@@ -41,13 +41,13 @@ func Example_decad_extrude_through_all() {
 
 	doc := decad.New()
 	// Step 0: the plate, 10 mm thick — the body the through-all sweep meets.
-	if _, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {
+	if _, err := decad.Extrude(context.Background(), doc, s, plateProfile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {
 		fmt.Printf("failed to extrude plate: %s\n", err)
 		return
 	}
 	// Step 1: the pin, through all — it stops at the plate's far side, so
 	// its height is exactly the plate's thickness.
-	pin, err := doc.Extrude(s, pinProfile, decad.ThroughAll{Dir: decad.Along})
+	pin, err := decad.Extrude(context.Background(), doc, s, pinProfile, decad.ThroughAll{Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude pin: %s\n", err)
 		return

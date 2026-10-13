@@ -43,7 +43,7 @@ func TestLoftFacesTwoAndThreeCapsFromPointSlabs(t *testing.T) {
 		sheetSketch.CreateLine(a, b)
 		_, err = sheetSketch.Solve(t.Context())
 		require.NoError(t, err)
-		sheet, err := doc.ExtrudeChain(sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
+		sheet, err := decad.Extrude(t.Context(), doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
 			One: decad.DistanceSide{D: units.Millimeters(20)},
 			Two: decad.DistanceSide{D: units.Millimeters(20)},
 		})

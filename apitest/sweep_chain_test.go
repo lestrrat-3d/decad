@@ -29,7 +29,7 @@ func straightSweepPath(tb testing.TB, h float64) *decad.Path {
 // T190: the same 40 mm line chain T130 extrudes, swept instead along a
 // one-span LineTo path 10 mm up the sketch plane's positive normal. Every
 // structural reading is T130's, and the Area comparison against the
-// ExtrudeChain reading is the row's own assertion: the two calls denote one
+// chain Extrude reading is the row's own assertion: the two calls denote one
 // ribbon and reach it through two different height derivations — a resolved
 // Extent on one side and the path's two recorded points on the other — so
 // their agreement pins the new derivation to the landed one, which neither
@@ -59,10 +59,10 @@ func TestSweepChainOneLineRibbonMatchesExtrudeChain(t *testing.T) {
 		require.True(t, e.IsFree())
 	}
 
-	// The same walk through ExtrudeChain, in its own document so neither build
+	// The same walk through chain Extrude, in its own document so neither build
 	// can observe the other.
 	sibling := decad.New()
-	ribbon, err := sibling.ExtrudeChain(s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	ribbon, err := decad.Extrude(t.Context(), sibling, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	sweptArea, err := body.Area()
@@ -70,7 +70,7 @@ func TestSweepChainOneLineRibbonMatchesExtrudeChain(t *testing.T) {
 	ribbonArea, err := ribbon.Area()
 	require.NoError(t, err)
 	require.Equal(t, ribbonArea, sweptArea,
-		"a chain sweep and the same walk's ExtrudeChain denote one ribbon, so their areas agree in value, exactness and bound")
+		"a chain sweep and the same walk's chain Extrude denote one ribbon, so their areas agree in value, exactness and bound")
 
 	// D7: a placement re-evaluates the payload's own record under the composed
 	// motion, so the ribbon's area is unmoved and its box translates with it.
@@ -87,7 +87,7 @@ func TestSweepChainOneLineRibbonMatchesExtrudeChain(t *testing.T) {
 // TestSweepChainRibbonReadsValid is docs/surface-design.md §9.1's fourth
 // validity leg, restated for a chain-fed sweep: the one-span straight
 // reduction builds through the identical evalChainExtrudeContext a plain
-// ExtrudeChain does, so it earns the same construction proof
+// chain Extrude does, so it earns the same construction proof
 // payloadProvesSimple's chainPayload arm does, re-read off the
 // chainSweepPayload it wraps that build in — never ValidityUndecided, which
 // is what a payload without this leg's own arm would read instead.
@@ -103,7 +103,7 @@ func TestSweepChainRibbonReadsValid(t *testing.T) {
 	br, err := rep.ForBody(body)
 	require.NoError(t, err)
 	require.Equal(t, decad.ValidityValid, br.Validity.Outcome,
-		"a chain-fed sweep's one-span straight reduction earns the fourth leg exactly as ExtrudeChain's own does")
+		"a chain-fed sweep's one-span straight reduction earns the fourth leg exactly as chain Extrude's own does")
 	require.Empty(t, br.Validity.Diagnostics)
 }
 
@@ -203,7 +203,7 @@ func tiltedLineChainSketch(tb testing.TB) (*sketch.Sketch, *sketch.Chain) {
 
 // TestSweepChainTiltedPathAreaBoundEnclosesAnalyticValue is
 // docs/surface-design.md's T192: the one term a chain sweep carries that the
-// same walk's ExtrudeChain reading does not is the path's own composed height
+// same walk's chain Extrude reading does not is the path's own composed height
 // bound (docs/sweep-design.md §15.2). On an axis-aligned frame every term of
 // that bound is exactly zero, which is why T190 asserts an Exact reading
 // instead; here the path runs 7*sqrt(2) mm up a tilted normal, so the bound is

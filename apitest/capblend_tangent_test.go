@@ -30,7 +30,7 @@ func TestTangentJoinedOffsetsBuildBothFeatures(t *testing.T) {
 				s.Fix(rect.A)
 				_, err = s.Solve(t.Context())
 				require.NoError(t, err)
-				box, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+				box, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 				require.NoError(t, err)
 				rounded, err := box.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(radius))
 				require.NoError(t, err)
@@ -71,7 +71,7 @@ func TestTangentJoinedSlotChamferAtOffsetOrigin(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
 
 	for _, setback := range []float64{0.505, 1.005} {
@@ -87,7 +87,7 @@ func TestTangentJoinedSlotChamferAtOffsetOrigin(t *testing.T) {
 		// A feature consumes its receiver. Rebuild from the still-live sketch
 		// before the next setback.
 		if setback != 1.005 {
-			body, err = decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+			body, err = decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 			require.NoError(t, err)
 		}
 	}
@@ -121,7 +121,7 @@ func TestTangentJoinedRotatedSlotChamfer(t *testing.T) {
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
 			require.Len(t, s.Profiles(), 1)
-			body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+			body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 			require.NoError(t, err)
 			for _, v := range body.Vertices() {
 				p := v.Position().Value
@@ -180,7 +180,7 @@ func TestCapLoopChamferRefusesNearTangentCorner(t *testing.T) {
 		_, err := s.Solve(t.Context())
 		require.NoError(t, err)
 		require.Len(t, s.Profiles(), 1)
-		body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 		require.NoError(t, err)
 		return body
 	}

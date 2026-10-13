@@ -888,7 +888,7 @@ func prismSplitLeftCellBody(t *testing.T, doc *Document) *Body {
 	}
 	require.NotNil(t, left, "the split rectangle's left cell must exist")
 
-	body, err := doc.Extrude(s, left, Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, left, Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
 	require.NoError(t, err)
 	prismRequireSplitWallRange(t, body.payload.(prismPayload).profile)
 	return body
@@ -926,7 +926,7 @@ func prismRectBody(t *testing.T, doc *Document, x0, y0, x1, y1 float64) *Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -1777,7 +1777,7 @@ func crossingDiscBody(t *testing.T, doc *Document, cx, r float64, e Extent) *Bod
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], e)
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], e)
 	require.NoError(t, err)
 	return body
 }
@@ -1890,7 +1890,7 @@ func internalPolyPrismBody(t *testing.T, doc *Document, pts [][2]float64, h floa
 	require.NoError(t, err)
 	profs := s.Profiles()
 	require.Len(t, profs, 1)
-	body, err := doc.Extrude(s, profs[0], Distance{D: units.Millimeters(h), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, profs[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -2113,7 +2113,7 @@ func TestPrismUnionEnclosedVoidIsUnresolved(t *testing.T) {
 		}
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+		body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 		require.NoError(t, err)
 		return body
 	}

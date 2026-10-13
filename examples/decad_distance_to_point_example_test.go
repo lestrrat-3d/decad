@@ -23,7 +23,7 @@ func Example_decad_distance_to_point() {
 		fmt.Printf("failed to solve sketch: %s\n", err)
 		return
 	}
-	box, err := decad.New().Extrude(s, s.Profiles()[0],
+	box, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude box: %s\n", err)

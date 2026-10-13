@@ -33,7 +33,7 @@ func twoHolePlate(t *testing.T) *decad.Body {
 		}
 	}
 	require.NotNil(t, prof)
-	body, err := decad.New().Extrude(s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

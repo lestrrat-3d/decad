@@ -73,7 +73,7 @@ func chainSlot(t *testing.T) *Body {
 	s.CreateArc(fixed(0, 5), p3, p0)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -128,7 +128,7 @@ func TestTangentContinuesFaceSheets(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+	box, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
 
 	var e *Edge

@@ -55,7 +55,7 @@ func alongX(to float64) decad.Prismatic {
 func lWall(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, profile := polygonSketch(t, [][2]float64{{45, -10}, {55, -10}, {55, 60}, {0, 60}, {0, 50}, {45, 50}})
-	body, err := doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

@@ -820,7 +820,7 @@ func TestRevolveEdgeAxisGates(t *testing.T) {
 	s, p := annularSketch(t)
 	doc := decad.New()
 	es, ep := plateSketch(t)
-	host, err := doc.Extrude(es, ep, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	host, err := decad.Extrude(t.Context(), doc, es, ep, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	t.Run("CountMissIsErrCardinality", func(t *testing.T) {
@@ -872,7 +872,7 @@ func TestRevolveEdgeAxisGates(t *testing.T) {
 	t.Run("RetiredBody", func(t *testing.T) {
 		es2, ep2 := plateSketch(t)
 		doc2 := decad.New()
-		old, err := doc2.Extrude(es2, ep2, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		old, err := decad.Extrude(t.Context(), doc2, es2, ep2, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(1, 0, 0))
 		require.NoError(t, err)
@@ -900,7 +900,7 @@ func trianglePrismHost(t *testing.T, doc *decad.Document) *decad.Body {
 	s.CreateLine(c, a)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	host, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	host, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return host
 }

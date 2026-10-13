@@ -19,7 +19,7 @@ func conservationBox(t *testing.T, doc *decad.Document, x0, x1 float64) *decad.B
 	profile.Fix(rectangle.A)
 	_, err = profile.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(profile, profile.Profiles()[0], decad.Distance{
+	body, err := decad.Extrude(t.Context(), doc, profile, profile.Profiles()[0], decad.Distance{
 		D: units.Millimeters(10), Dir: decad.Along,
 	})
 	require.NoError(t, err)
@@ -102,7 +102,7 @@ func TestTorqueDrivenFloorImpactChecksAngularEvent(t *testing.T) {
 	profile.Fix(rectangle.A)
 	_, err = profile.Solve(t.Context())
 	require.NoError(t, err)
-	floor, err := doc.Extrude(profile, profile.Profiles()[0], decad.Distance{
+	floor, err := decad.Extrude(t.Context(), doc, profile, profile.Profiles()[0], decad.Distance{
 		D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	box := conservationBox(t, doc, -5, 5)

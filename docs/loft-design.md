@@ -583,7 +583,7 @@ stations a side, and `m = 1` is reachable only on an open one. Table B's
 **Station generation reuses the existing circular-walk primitives, never new
 trigonometry, and the value it walks up against is the CERTIFIED one.** The
 loft runs `chordCount`'s own walk-up SHAPE, the identical closed-form
-recompute-and-increment `Document.Extrude`'s circular side walls already
+recompute-and-increment `Extrude`'s circular side walls already
 use — evaluate the per-cell sagitta at a candidate station count, increment
 until the value is at or below the target, so the depth is measured at every
 step rather than sized from a rate. What it evaluates at each candidate is
@@ -2020,7 +2020,7 @@ against this budget.
 - **Same-kind circular pairs (§5.1, §5.2)**: a 90° radius-5 arc paired with
   itself between `z=0` and `z=10` at the calibrated `loftChordFraction` (§14)
   builds, and `|Volume.Value - (π·25/4)·10| <= Volume.Bound` against the
-  closed-form quarter-wedge volume; `Document.Extrude` on the same untwisted
+  closed-form quarter-wedge volume; `Extrude` on the same untwisted
   congruent section is an independent oracle whose measurement interval
   overlaps this one. A pair with different radii and sweeps on its two sides
   takes the shared `m` the joint walk-up settles on, and each side's
@@ -2502,7 +2502,7 @@ admits only the poses on which that statement holds.** The rule has two halves:
 - **The stated side.** Each chord cell's LOWER wall triangle is wound so its
   own normal agrees with `T × N0` — `T` the from-walk's chord direction across
   that cell and `N0` the from-plane's positive normal `U0 × V0`. That is the
-  identical vector `ExtrudeChain`'s wall over the same recorded segment
+  identical vector chain `Extrude`'s wall over the same recorded segment
   publishes (`docs/surface-design.md` Table G), so a chain loft and a chain
   prism over one from-chain publish one side. The UPPER triangle takes the
   sense its shared diagonal gives it under the construction's own coedge

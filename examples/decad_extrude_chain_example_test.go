@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// ExtrudeChain sweeps an open sketch chain — an ordered run of boundary
+// Extrude over a chain sweeps an open sketch chain — an ordered run of boundary
 // edges whose two ends are free, sketch.Sketch.Chains' own counterpart of a
 // closed Profile — into a ribbon: one wall face per recorded segment, with
 // no cap and no closing face. The result is always a sheet body, since an
@@ -43,7 +43,7 @@ func Example_decad_extrude_chain() {
 	fmt.Printf("profiles: %d, chains: %d, edges: %d\n", len(s.Profiles()), len(chains), len(chains[0].Edges))
 
 	doc := decad.New()
-	body, err := doc.ExtrudeChain(s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(context.Background(), doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude chain: %s\n", err)
 		return

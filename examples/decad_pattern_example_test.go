@@ -30,7 +30,7 @@ func Example_decad_pattern() {
 		return
 	}
 	doc := decad.New()
-	block, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	block, err := decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

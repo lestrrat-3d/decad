@@ -155,7 +155,7 @@ func TestMirrorJoinKeepsHolesAndTheirImages(t *testing.T) {
 	}
 	require.NotNil(t, profile)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, profile, mirrorAlong(4))
+	plate, err := decad.Extrude(t.Context(), doc, s, profile, mirrorAlong(4))
 	require.NoError(t, err)
 
 	joined, err := plate.Mirrored(t.Context(), decad.MirrorFace{
@@ -391,7 +391,7 @@ func joinBulgeBody(t *testing.T, sc *mirrorScene) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := sc.doc.Extrude(s, s.Profiles()[0], mirrorAlong(5))
+	body, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], mirrorAlong(5))
 	require.NoError(t, err)
 	return body
 }

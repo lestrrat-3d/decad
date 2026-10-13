@@ -43,7 +43,7 @@ func TestLoftFitSplineWedgeMatchesExtrude(t *testing.T) {
 	require.NoError(t, err)
 
 	extDoc := New()
-	ext, err := extDoc.Extrude(s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
+	ext, err := Extrude(t.Context(), extDoc, s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
 	require.NoError(t, err)
 
 	vol, err := body.Volume()
@@ -429,7 +429,7 @@ func TestLoftFreeformWedgePlacedAndTessellated(t *testing.T) {
 	doc := New()
 	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
-	ext, err := New().Extrude(s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
+	ext, err := Extrude(t.Context(), New(), s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
 	require.NoError(t, err)
 	extVol, err := ext.Volume()
 	require.NoError(t, err)

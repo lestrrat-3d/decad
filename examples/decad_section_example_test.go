@@ -22,7 +22,7 @@ func Example_decad_section() {
 		fmt.Printf("failed to solve sketch: %s\n", err)
 		return
 	}
-	body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{
+	body, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(5), Dir: decad.Along,
 	})
 	if err != nil {

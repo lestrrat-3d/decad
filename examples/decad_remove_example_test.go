@@ -28,7 +28,7 @@ func Example_decad_remove() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
-		cube, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		cube, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		if err != nil {
 			return nil, err
 		}

@@ -30,7 +30,7 @@ func circularScaleSource(t *testing.T, quarter bool) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	b, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 	require.NoError(t, err)
 	return b
 }

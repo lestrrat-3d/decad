@@ -586,7 +586,7 @@ caps. A far station also carries `farDelta`, the far contour's displacement
 from the one the sweep and taper denote. A 3° taper on a disc of radius 5
 swept 8 mm reads its antipodal rims, where its vertices alone read the seam.
 
-**An `ExtrudeChain` sheet and a `brepPayload` read wall stations too.** A
+**A chain `Extrude` sheet and a `brepPayload` read wall stations too.** A
 chain sheet's vertices sit only at its segments' ends, so an open 240° arc
 would read its chord, `√3·R`, against its own diameter `2R`.
 `chainGatePoints` adds the stations along the chains at both levels, read

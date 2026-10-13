@@ -40,7 +40,7 @@ func Example_decad_extend() {
 		return
 	}
 	doc := decad.New()
-	ribbon, err := doc.ExtrudeChain(s, left, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	ribbon, err := decad.Extrude(ctx, doc, s, left, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude chain: %s\n", err)
 		return
@@ -56,7 +56,7 @@ func Example_decad_extend() {
 		fmt.Printf("failed to solve tool: %s\n", err)
 		return
 	}
-	tool, err := doc.Extrude(toolSketch, toolSketch.Profiles()[0], decad.TwoSided{
+	tool, err := decad.Extrude(ctx, doc, toolSketch, toolSketch.Profiles()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
 	})

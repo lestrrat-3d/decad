@@ -37,7 +37,7 @@ func hubBody(t *testing.T, doc *decad.Document, r, h float64) *decad.Body {
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -66,7 +66,7 @@ func toothBody(t *testing.T, doc *decad.Document, r, r2, th1, th2, h float64) *d
 	require.NoError(t, err)
 	profs := s.Profiles()
 	require.Len(t, profs, 1)
-	body, err := doc.Extrude(s, profs[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, profs[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -119,7 +119,7 @@ func overshootQuadBody(t *testing.T, doc *decad.Document, corners [][2]float64, 
 			best = i
 		}
 	}
-	body, err := doc.Extrude(s, profs[best], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, profs[best], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -365,7 +365,7 @@ func TestPrismUnionIndependentlyConstructedCoplanarFrames(t *testing.T) {
 	sB.Fix(rectB.A)
 	_, err = sB.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := doc.Extrude(sB, sB.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	b, err := decad.Extrude(t.Context(), doc, sB, sB.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	_, err = decad.Union(t.Context(), a, b)
@@ -573,7 +573,7 @@ func discBody(t testing.TB, doc *decad.Document, cx, r, h float64) *decad.Body {
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

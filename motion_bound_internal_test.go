@@ -27,7 +27,7 @@ func TestPrismMoverRecordRadiusReadsArcsTightly(t *testing.T) {
 	s.Fix(slot.C2)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	b, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 	radius := moverRecordRadius(t.Context(), b)
 	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.01))

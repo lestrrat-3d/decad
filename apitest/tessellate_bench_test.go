@@ -41,7 +41,7 @@ func benchRect(w *sketch.World, x0, y0, x1, y1 float64) *sketch.Sketch {
 func benchBox() *decad.Body {
 	w := sketch.NewWorld()
 	s := benchRect(w, 0, 0, 40, 24)
-	return must(decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(12), Dir: decad.Along}))
+	return must(decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(12), Dir: decad.Along}))
 }
 
 func benchFreeformPrism() *decad.Body {
@@ -59,7 +59,7 @@ func benchFreeformPrism() *decad.Body {
 			break
 		}
 	}
-	return must(decad.New().Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}))
+	return must(decad.Extrude(context.Background(), decad.New(), s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}))
 }
 
 func benchRevolve(build func(s *sketch.Sketch), ext decad.AngularExtent) *decad.Body {
@@ -86,13 +86,13 @@ func benchCut() *decad.Body {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	plate := benchRect(w, 0, 0, 60, 40)
-	pb := must(doc.Extrude(plate, plate.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along}))
+	pb := must(decad.Extrude(context.Background(), doc, plate, plate.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along}))
 	hs := must(w.CreateSketch(w.XY()))
 	center := hs.CreatePoint(30, 20)
 	hs.Fix(center)
 	hs.CreateCircle(center, 8)
 	must(hs.Solve(context.Background()))
-	tool := must(doc.Extrude(hs, hs.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}))
+	tool := must(decad.Extrude(context.Background(), doc, hs, hs.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}))
 	return must(decad.Cut(context.Background(), pb, tool))
 }
 

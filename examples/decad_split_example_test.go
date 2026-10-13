@@ -24,7 +24,7 @@ func Example_decad_split() {
 		return
 	}
 	doc := decad.New()
-	block, err := doc.Extrude(blockSketch, blockSketch.Profiles()[0],
+	block, err := decad.Extrude(context.Background(), doc, blockSketch, blockSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude block: %s\n", err)
@@ -43,7 +43,7 @@ func Example_decad_split() {
 		fmt.Printf("failed to solve tool sketch: %s\n", err)
 		return
 	}
-	tool, err := doc.ExtrudeChain(toolSketch, toolSketch.Chains()[0], decad.TwoSided{
+	tool, err := decad.Extrude(context.Background(), doc, toolSketch, toolSketch.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
 	})

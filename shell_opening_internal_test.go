@@ -339,7 +339,7 @@ func internalDSectionPrism(t *testing.T) (prismPayload, int, int) {
 	s.CreateLine(b, a)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 	pp := body.payload.(prismPayload)
 	arc, chord := -1, -1
@@ -516,7 +516,7 @@ func TestSideOpeningRegionsArcArcCut(t *testing.T) {
 	s.CreateLine(pts["g"], pts["a"])
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 	pp := body.payload.(prismPayload)
 	removed := map[int]struct{}{}
@@ -565,7 +565,7 @@ func internalArcSectionPrism(t *testing.T, build func(s *sketch.Sketch)) (prismP
 	build(s)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 	pp := body.payload.(prismPayload)
 	removed := map[int]struct{}{}

@@ -68,7 +68,7 @@ func hexPrismBody(t *testing.T, doc *decad.Document) *decad.Body {
 	s, profile := polygonSketch(t, [][2]float64{
 		{0, 0}, {5.75, -10}, {17.25, -10}, {23, 0}, {17.25, 10}, {5.75, 10},
 	})
-	body, err := doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

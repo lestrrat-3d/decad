@@ -153,7 +153,7 @@ func roundedDrilledPlateWithBoreZ(t *testing.T, boreZ float64) *decad.Body {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 	rounded, err := box.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4),
 		units.Millimeters(3))
@@ -167,7 +167,7 @@ func roundedDrilledPlateWithBoreZ(t *testing.T, boreZ float64) *decad.Body {
 	ds.CreateCircle(c, 3)
 	_, err = ds.Solve(t.Context())
 	require.NoError(t, err)
-	drill, err := doc.Extrude(ds, ds.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
+	drill, err := decad.Extrude(t.Context(), doc, ds, ds.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
 	require.NoError(t, err)
 	out, err := decad.Cut(t.Context(), rounded, drill)
 	require.NoError(t, err)

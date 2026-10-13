@@ -35,7 +35,7 @@
 //	}
 //
 //	doc := decad.New()
-//	body, err := doc.Extrude(s, s.Profiles()[0],
+//	body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
 //		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 //	if err != nil {
 //		// Every failure wraps a sentinel from errors.go — branch with
@@ -93,6 +93,8 @@
 //	  Tessellate/export/boolean/mass of a draft body          builds
 //	  boolean/mass of one with an inexact G1 join or a
 //	    trimmed segment (draft §9.1)                          ErrUnsupported
+//	  open chain section                                      builds a sheet
+//	  chain section with WithTaper or WithSurfaceResult       ErrUnsupported
 //	Draft    prism operand, its complete wall set or a
 //	  subset, about one of its caps (draft design PR 3, 5)    builds
 //	  subset moving one of two walls at a circular corner,

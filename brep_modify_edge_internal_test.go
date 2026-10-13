@@ -80,7 +80,7 @@ func internalFlushBossUnion(t *testing.T, pts [][2]float64) (*Document, *Body) {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	boss, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(15), Dir: Along})
+	boss, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(15), Dir: Along})
 	require.NoError(t, err)
 	union, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)

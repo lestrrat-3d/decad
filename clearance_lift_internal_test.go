@@ -37,7 +37,7 @@ func liftOriginBodies(t *testing.T, o r3.Vec, shift float64) map[string]*Body {
 	t.Helper()
 	extrude := func(doc *Document, h float64, draw func(s *sketch.Sketch)) *Body {
 		s, p := liftOriginSketch(t, o, draw)
-		b, err := doc.Extrude(s, p, Distance{D: units.Millimeters(h), Dir: Along})
+		b, err := Extrude(t.Context(), doc, s, p, Distance{D: units.Millimeters(h), Dir: Along})
 		require.NoError(t, err)
 		return b
 	}

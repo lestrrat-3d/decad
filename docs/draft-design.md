@@ -202,6 +202,14 @@ the audit's decided nesting row, not SD8. No recorded profile holds a cusp
 between two lines, and a cusp at a circular walk is SD4 first, so Extrude never
 reaches SD15; `internal/offset2d/sharp_test.go` pins it.
 
+**A chain section never reaches this build.** `Extrude` over an open
+`*sketch.Chain` returns `ErrUnsupported` for `WithTaper` at any angle, zero
+included, after the chain's seam gates and before extent resolution
+(`docs/surface-design.md` §13.2), so none of Table SD applies to a chain.
+`Extrude` threads its `ctx` through the extent resolution and both slab builds
+of a profile with a nonzero taper; a canceled `ctx` returns `ctx.Err()` before
+commit, unwrapped by the stage names the two-sided build adds to other errors.
+
 **Gate order.** Each stage needs the one before it, and where two gates read
 one constructed section the existence question is asked first (modify §4).
 

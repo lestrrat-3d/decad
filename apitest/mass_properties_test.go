@@ -18,7 +18,7 @@ const testNegative = "negative"
 func TestMassPropertiesTrianglePrism(t *testing.T) {
 	doc := decad.New()
 	sketch, profile := polygonSketch(t, [][2]float64{{0, 0}, {6, 0}, {0, 8}})
-	body, err := doc.Extrude(sketch, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, sketch, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(0.001)
 	got, err := body.MassProperties(t.Context(), density)

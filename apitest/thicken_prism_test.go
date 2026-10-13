@@ -33,7 +33,7 @@ func TestThickenPrismCircle(t *testing.T) {
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
 			doc := decad.New()
-			sheet, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{
+			sheet, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{
 				D: units.Millimeters(10), Dir: decad.Along,
 			}, decad.WithSurfaceResult())
 			require.NoError(t, err)
@@ -56,7 +56,7 @@ func TestThickenPrismRectangle(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
+	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 		decad.WithSurfaceResult())
 	require.NoError(t, err)
 	solid, err := sheet.Thicken(t.Context(), units.Millimeters(5),
@@ -122,7 +122,7 @@ func TestThickenStraightSweepSheetSidesMatchExtrude(t *testing.T) {
 			sweepSheet, err := decad.Sweep(t.Context(), decad.New(), s, profile, sweepLinePath(t),
 				decad.WithSurfaceResult())
 			require.NoError(t, err)
-			extrudeSheet, err := decad.New().Extrude(s, profile,
+			extrudeSheet, err := decad.Extrude(t.Context(), decad.New(), s, profile,
 				decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
 			require.NoError(t, err)
 			got, err := sweepSheet.Thicken(t.Context(), units.Millimeters(2), decad.WithThickenSide(tc.side))
@@ -165,7 +165,7 @@ func TestThickenPrismRectangleRoundedSides(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, p := plateSketch(t)
 			doc := decad.New()
-			sheet, err := doc.Extrude(s, p, decad.Distance{
+			sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{
 				D: units.Millimeters(10), Dir: decad.Along,
 			}, decad.WithSurfaceResult())
 			require.NoError(t, err)
@@ -238,7 +238,7 @@ func thickenNeckSheet(t testing.TB) (*decad.Document, *decad.Body) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	sheet, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{
+	sheet, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(10), Dir: decad.Along,
 	}, decad.WithSurfaceResult())
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func TestThickenPrismUnrepresentablePublicOffset(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	sheet, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{
+	sheet, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(10), Dir: decad.Along,
 	}, decad.WithSurfaceResult())
 	require.NoError(t, err)

@@ -104,7 +104,7 @@ func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body,
 // The loop indexes b.lumps and reads pp.chains at the SAME index, which assumes
 // the body's i-th lump is the payload's i-th chain. That holds because every
 // chainPayload a body carrying zero section displacement can hold comes from
-// one of two producers — ExtrudeChain (extrude.go) and this file's own Extend —
+// one of two producers — chain Extrude (extrude.go) and this file's own Extend —
 // and both build exactly one lump per chain in chain order through
 // evalChainExtrudeContext; Trim's chainPayload is the only other one, and S7
 // already refused it for its nonzero sectionDelta. What would break it: a
@@ -202,7 +202,7 @@ func (s TrimSide) String() string {
 // one sheet body (docs/surface-intersection-design.md §8). The receiver and
 // tool are consumed on the document's uniform terms (core §6); a refusal
 // consumes neither. It admits a pair whose two sweeps share ONE generator —
-// both the prism family (a straight Extrude/ExtrudeChain sweep) or both the
+// both the prism family (a straight Extrude/chain Extrude sweep) or both the
 // revolve family (a Revolve/chain Revolve spin about one axis,
 // docs/api-design.md's evaluator §5). A mixed pair, or any condition §2.1's
 // S1-S7 states, is [ErrUnsupported] at the call, never a fallback: a sheet's
@@ -289,7 +289,7 @@ const (
 
 // trimFamilyName is what a refusal message names — the generator, never the
 // payload class (T181): "a straight sweep" or "a revolve" reads the same
-// whether the body came from Extrude or ExtrudeChain, Revolve or
+// whether the body came from Extrude or chain Extrude, Revolve or
 // chain Revolve.
 func trimFamilyName(f trimSweepFamily) string {
 	switch f {
@@ -411,7 +411,7 @@ func trimProfileFullyWhole(budget *proofbound.WorkBudget, p profileRecord) (bool
 // end-cut fixture). The decision reads only the two recorded floats — never a
 // coordinate comparison, never whether a value "looks like" it moved.
 //
-// This is never called for a plain ExtrudeChain ribbon: evalChainExtrudeContext
+// This is never called for a plain chain Extrude ribbon: evalChainExtrudeContext
 // gates it on pp.sectionDelta != 0, which no construction but this design's
 // Trim ever sets, so an ordinary ribbon keeps resolving through walkOf with
 // no augmentation.

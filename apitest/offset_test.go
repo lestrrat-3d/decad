@@ -25,7 +25,7 @@ func offsetPrismSheet(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
+	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 		decad.WithSurfaceResult())
 	require.NoError(t, err)
 	return doc, sheet
@@ -43,7 +43,7 @@ func offsetCircleSheet(t testing.TB, doc *decad.Document, radius float64) *decad
 	s.Fix(c)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	sheet, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{
+	sheet, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(10), Dir: decad.Along,
 	}, decad.WithSurfaceResult())
 	require.NoError(t, err)
@@ -327,7 +327,7 @@ func TestOffsetStagedFamilies(t *testing.T) {
 	require.NoError(t, err)
 	chain := cs.Chains()[0]
 
-	ribbon, err := doc.ExtrudeChain(cs, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	ribbon, err := decad.Extrude(t.Context(), doc, cs, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 	shell, err := decad.Revolve(t.Context(), doc, cs, chain, axis, decad.FullRevolution{})
@@ -345,7 +345,7 @@ func TestOffsetStagedFamilies(t *testing.T) {
 	require.Equal(t, decad.BodySheet, stitched.Kind())
 
 	ss, sp := plateSketch(t)
-	solid, err := doc.Extrude(ss, sp, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	solid, err := decad.Extrude(t.Context(), doc, ss, sp, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	before := doc.Bodies()
@@ -460,7 +460,7 @@ func TestOffsetPrismCarriesTheSourceAxialDisplacement(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Extrude(s, p, decad.Distance{D: units.Inches(0.1), Dir: decad.Along},
+	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Inches(0.1), Dir: decad.Along},
 		decad.WithSurfaceResult())
 	require.NoError(t, err)
 	sourceBox, err := sheet.Bounds()

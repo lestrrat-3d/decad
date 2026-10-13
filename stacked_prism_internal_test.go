@@ -25,7 +25,7 @@ func internalOffsetBox(t *testing.T, doc *Document, x0, y0, x1, y1, z float64, e
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], extent)
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], extent)
 	require.NoError(t, err)
 	return body
 }

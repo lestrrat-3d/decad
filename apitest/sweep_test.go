@@ -31,7 +31,7 @@ func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 	body, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithSweepTwist(units.Degrees(0)))
 	require.NoError(t, err)
 	extrudeDoc := decad.New()
-	extruded, err := extrudeDoc.Extrude(
+	extruded, err := decad.Extrude(t.Context(), extrudeDoc,
 		s,
 		profile,
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},

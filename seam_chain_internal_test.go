@@ -16,7 +16,7 @@ import (
 // (chains.go's compareChains), so a rename never actually re-ranks it — the
 // one construction that DOES re-rank is sketch's own coincident-duplicate
 // fixture (chains_test.go's TestChainsRenameReranksWithoutStaleness), whose
-// chains are Chain.Valid == false and so never reach ExtrudeChain at all.
+// chains are Chain.Valid == false and so never reach chain Extrude at all.
 // sketchrecord.AuthenticateChain runs before that Valid gate, so it is exercised directly
 // here, over exactly that fixture.
 

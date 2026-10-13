@@ -23,7 +23,7 @@ func TestSectionSketchFeedsExtrude(t *testing.T) {
 	require.NoError(t, err)
 
 	sourceDoc := decad.New()
-	source, err := sourceDoc.Extrude(s, s.Profiles()[0], decad.Distance{
+	source, err := decad.Extrude(t.Context(), sourceDoc, s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(5), Dir: decad.Along,
 	})
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestSectionSketchFeedsExtrude(t *testing.T) {
 	require.Equal(t, units.SquareMillimeters(100), area.Value)
 	require.Equal(t, decad.Exact, area.Exactness)
 
-	child, err := decad.New().Extrude(section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
 	})
 	require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestSectionPlacedPrismKeepsHole(t *testing.T) {
 	}
 	require.NotNil(t, sourceProfile)
 	doc := decad.New()
-	source, err := doc.Extrude(s, sourceProfile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	source, err := decad.Extrude(t.Context(), doc, s, sourceProfile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 	move, err := r3.FromBasis(r3.Basis{
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
@@ -104,7 +104,7 @@ func TestSectionPlacedPrismKeepsHole(t *testing.T) {
 	area, err := measured.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-(100-4*math.Pi)), area.Bound.Base()+1e-12)
-	child, err := decad.New().Extrude(section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
 	})
 	require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestSectionRefusesInvalidOrNonparallelPlane(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 	capFrame, err := w.XY().Frame()
 	require.NoError(t, err)
@@ -146,7 +146,7 @@ func TestSectionRefusesInvalidOrNonparallelPlane(t *testing.T) {
 	_, _, err = body.Section(canceled, capFrame)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
-	sheet, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{
+	sheet, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(5), Dir: decad.Along,
 	}, decad.WithSurfaceResult())
 	require.NoError(t, err)

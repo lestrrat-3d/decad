@@ -145,13 +145,13 @@ func assembleCompositeSweepBodyWithJoinMode(
 			parts[join].body,
 			sewnEdges,
 		); err != nil {
-			return nil, fmt.Errorf(`sweep path join %d: %w`, join+1, err)
+			return nil, wrapStageError(fmt.Sprintf(`sweep path join %d`, join+1), err)
 		}
 	}
 	if closed {
 		last := parts[len(parts)-1]
 		if err := joinSpans(ctx, last.endCap, parts[0].startCap, last.body, sewnEdges); err != nil {
-			return nil, fmt.Errorf(`sweep path closure: %w`, err)
+			return nil, wrapStageError(`sweep path closure`, err)
 		}
 	}
 

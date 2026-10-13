@@ -213,7 +213,7 @@ func TestContactPairRulingRefusals(t *testing.T) {
 		}},
 		{name: "arc end", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			halfSketch, halfProfile := semicircleSketch(t)
-			half, err := doc.Extrude(halfSketch, halfProfile,
+			half, err := decad.Extrude(t.Context(), doc, halfSketch, halfProfile,
 				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 			require.NoError(t, err)
 			return boxBodyAtZ(t, doc, 10, -20, 30, 20, -5, 20), half
@@ -283,7 +283,7 @@ func channelBody(t *testing.T, doc *decad.Document) *decad.Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -302,7 +302,7 @@ func verticalCylinder(t *testing.T, doc *decad.Document, cx, cy, r float64) *dec
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

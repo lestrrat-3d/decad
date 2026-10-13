@@ -173,7 +173,7 @@ func heroPlate(ctx context.Context) (*decad.Body, error) {
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	slab, err := decad.New().Extrude(s, profile, decad.Symmetric{D: units.Millimeters(plateDepth)}) //nolint:contextcheck
+	slab, err := decad.Extrude(ctx, decad.New(), s, profile, decad.Symmetric{D: units.Millimeters(plateDepth)})
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +276,7 @@ func xzPrism(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	return decad.New().Extrude(s, profile, extent) //nolint:contextcheck
+	return decad.Extrude(ctx, decad.New(), s, profile, extent)
 }
 
 // letterBody extrudes one letter profile letterDepth toward the camera, then

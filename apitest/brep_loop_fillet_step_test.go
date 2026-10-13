@@ -49,7 +49,7 @@ func TestBrepLoopFilletPublicSTEP(t *testing.T) {
 		s.CreateCircle(c, 5)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		boss, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
+		boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
 		require.NoError(t, err)
 		part, err := decad.Union(t.Context(), plate, boss)
 		require.NoError(t, err)

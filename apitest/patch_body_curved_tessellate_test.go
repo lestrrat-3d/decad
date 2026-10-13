@@ -49,7 +49,7 @@ func circularPatchTube(t *testing.T) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	tube, err := doc.Extrude(s, s.Profiles()[0],
+	tube, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	return tube

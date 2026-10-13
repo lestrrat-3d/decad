@@ -54,7 +54,7 @@ func arcEndPie(t *testing.T, doc *Document) *Body {
 	s.CreateLine(o, start)
 	s.CreateArc(o, start, end)
 	s.CreateLine(end, o)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -160,7 +160,7 @@ func arcEndTombstone(t *testing.T) *Body {
 	s.CreateLine(e, f)
 	s.CreateLine(f, g)
 	s.CreateLine(g, a)
-	tomb, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	tomb, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 	dw := sketch.NewWorld()
 	ds, err := dw.CreateSketch(dw.XZ())
@@ -168,7 +168,7 @@ func arcEndTombstone(t *testing.T) *Body {
 	c := ds.CreatePoint(-30, 5)
 	ds.Fix(c)
 	ds.CreateCircle(c, 2)
-	drill, err := doc.Extrude(ds, ds.Profiles()[0], Symmetric{D: units.Millimeters(40)})
+	drill, err := Extrude(t.Context(), doc, ds, ds.Profiles()[0], Symmetric{D: units.Millimeters(40)})
 	require.NoError(t, err)
 	cut, err := Cut(t.Context(), tomb, drill)
 	require.NoError(t, err)

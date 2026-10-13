@@ -25,7 +25,7 @@ import (
 // driven through Body.Extend at all today. Only a CircleSeg is affected in
 // practice: a circle fragment always separates the disk's interior from the
 // exterior, so it is never a bridge in sketch's arrangement and never reaches
-// Chains() — and ExtrudeChain is the one producer of an undisplaced
+// Chains() — and chain Extrude is the one producer of an undisplaced
 // chainPayload, Trim's always carrying the nonzero sectionDelta S7 refuses. The
 // arm stays because a receiver's non-extended segments may be circles and a
 // future producer may reach it; it is proven here rather than left unexercised.

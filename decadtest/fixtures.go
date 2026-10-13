@@ -80,7 +80,7 @@ func NewPrism(tb testing.TB, doc *decad.Document, s *sketch.Sketch, p *sketch.Pr
 		return nil
 	}
 
-	body, err := doc.Extrude(s, p, decad.Distance{D: height, Dir: decad.Along})
+	body, err := decad.Extrude(tb.Context(), doc, s, p, decad.Distance{D: height, Dir: decad.Along})
 	if err != nil {
 		tb.Fatalf("decadtest.NewPrism: extruding by %s failed: %v", height, err)
 		return nil

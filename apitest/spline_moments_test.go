@@ -1398,7 +1398,7 @@ func TestExtrudeClosedSplineProfileBuilds(t *testing.T) {
 	require.NoError(t, err)
 
 	d := decad.New()
-	body, err := d.Extrude(s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), d, s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	require.NotNil(t, body)
 	require.NotEmpty(t, d.Bodies(), "a built extrude registers a body")
@@ -1462,7 +1462,7 @@ func TestExtrudeSplineProfileSpendsOneWorkCeiling(t *testing.T) {
 	d := decad.New()
 	var body *decad.Body
 	allocated := allocatedBy(func() {
-		body, err = d.Extrude(s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		body, err = decad.Extrude(t.Context(), d, s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	})
 
 	require.Error(t, err)

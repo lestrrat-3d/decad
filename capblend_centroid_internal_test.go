@@ -439,7 +439,7 @@ func TestCapBandCoordUpperCoversTheCornerLoci(t *testing.T) {
 		}
 	}
 	require.Len(t, prof.Holes, 1)
-	body, err := New().Extrude(s, prof, Distance{D: units.Millimeters(20), Dir: Along})
+	body, err := Extrude(t.Context(), New(), s, prof, Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
 	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)

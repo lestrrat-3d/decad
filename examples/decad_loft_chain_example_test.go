@@ -17,7 +17,7 @@ import (
 //
 // The two sketch planes must be exactly parallel with the second on the first
 // plane's positive side. That is what states which way the ribbon faces: each
-// wall publishes the normal an ExtrudeChain wall over the same recorded
+// wall publishes the normal a chain Extrude wall over the same recorded
 // segment publishes. Swapping the two arguments puts the planes the wrong way
 // round, and the call says so instead of quietly building a ribbon facing the
 // other way.

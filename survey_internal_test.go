@@ -1401,7 +1401,7 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := New()
-	rectBody, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	rectBody, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 	body, err := rectBody.Fillet(t.Context(), Edges(ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6))
 	require.NoError(t, err)

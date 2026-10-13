@@ -23,7 +23,7 @@ func internalClassBTool(t *testing.T, doc *Document, w *sketch.World, plane *ske
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := doc.Extrude(s, profiles[0], Symmetric{D: units.Millimeters(depth)})
+	body, err := Extrude(t.Context(), doc, s, profiles[0], Symmetric{D: units.Millimeters(depth)})
 	require.NoError(t, err)
 	return body
 }

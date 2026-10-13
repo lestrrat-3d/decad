@@ -99,7 +99,7 @@ func originRectSketch(t *testing.T, o r3.Vec, u0, v0, u1, v1 float64) (*sketch.S
 func originBox(t *testing.T, doc *decad.Document, o r3.Vec, u0, v0, u1, v1, h float64, dir decad.Direction) *decad.Body {
 	t.Helper()
 	s, p := originRectSketch(t, o, u0, v0, u1, v1)
-	b, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(h), Dir: dir})
+	b, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: dir})
 	require.NoError(t, err)
 	return b
 }
@@ -320,7 +320,7 @@ func TestVertexIntegerOriginBoundStaysZero(t *testing.T) {
 	extrude := func(t *testing.T, doc *decad.Document, u0, v0, u1, v1, h float64) *decad.Body {
 		t.Helper()
 		s, p := intRect(t, u0, v0, u1, v1)
-		b, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		b, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 		require.NoError(t, err)
 		return b
 	}

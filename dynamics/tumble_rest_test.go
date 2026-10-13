@@ -124,7 +124,7 @@ func tumblePrism(t *testing.T, doc *decad.Document, corners [][2]float64, height
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

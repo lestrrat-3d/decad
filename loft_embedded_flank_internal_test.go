@@ -151,7 +151,7 @@ func TestLoftEmbeddedFlankRecordsSurviveFilletAndBore(t *testing.T) {
 	toolSketch.CreateCircle(center, 0.25)
 	_, err = toolSketch.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := doc.Extrude(toolSketch, toolSketch.Profiles()[0], Distance{
+	tool, err := Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0], Distance{
 		D: units.Millimeters(4), Dir: Along,
 	})
 	require.NoError(t, err)

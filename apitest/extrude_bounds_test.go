@@ -52,7 +52,7 @@ func TestExtrudeNGonPrismBoundsTighten(t *testing.T) {
 
 		s, p := regularNGonSketch(t, n, r)
 		doc := decad.New()
-		body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 		require.NoErrorf(t, err, "n=%d", n)
 
 		area, err := body.Area()
@@ -89,7 +89,7 @@ func TestExtrudeCirclePrismBoundsTighten(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	area, err := body.Area()
@@ -139,7 +139,7 @@ func TestExtrudeArcSegPrismBoundsTighten(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 
 	area, err := body.Area()
@@ -198,7 +198,7 @@ func TestExtrudeArcSegPrismReadingsBitIdenticalAcrossAtanCarrier(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 
 	area, err := body.Area()
@@ -248,7 +248,7 @@ func TestExtrudeCircularReadingsStayApproximate(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	area, err := body.Area()
@@ -344,7 +344,7 @@ func TestExtrudeSquarePrismStaysExact(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	area, err := body.Area()
@@ -372,7 +372,7 @@ func TestExtrudeSquarePrismStaysExact(t *testing.T) {
 func TestExtrudeArcSectionBoxEnclosesArcApex(t *testing.T) {
 	t.Parallel()
 	s, p := arcApexSketch(t, 1, 6)
-	body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	box, err := body.Bounds()
@@ -395,7 +395,7 @@ func TestExtrudeBoundsSweepEnclosesArcApex(t *testing.T) {
 			u, v := 0.7*float64(i), 1.3*float64(j)
 			t.Run(fmt.Sprintf("u=%g/v=%g", u, v), func(t *testing.T) {
 				s, p := arcApexSketch(t, u, v)
-				body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+				body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 				require.NoError(t, err)
 				box, err := body.Bounds()
 				require.NoError(t, err)
@@ -456,7 +456,7 @@ func TestExtrudeBoxBoundsEnclosesPlacedCorners(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
@@ -532,7 +532,7 @@ func TestExtrudeBoxBoundsEnclosesTranslatedCorner(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	shift, err := r3.Translation(r3.NewVec(0.1, 0, 0))

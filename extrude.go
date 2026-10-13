@@ -38,7 +38,8 @@ import (
 // measurements throughout. Exactly representable results retain zero bounds.
 // A nonzero taper leaves this file for draft_build.go's extrudeDraft.
 
-// ExtrudeOption configures Extrude.
+// ExtrudeOption configures Extrude. A chain section accepts none of them: both
+// WithTaper and WithSurfaceResult return ErrUnsupported on a chain.
 type ExtrudeOption interface {
 	option.Interface
 	extrudeOption()
@@ -50,45 +51,98 @@ type ExtrudeOption interface {
 // one widens it (docs/draft-design.md §2). An angle at or past a right angle
 // is [ErrDegenerate]. A nonzero taper builds over Distance, ToFace,
 // ThroughAll, Symmetric or TwoSided. WithSurfaceResult is [ErrUnsupported],
-// returned before commit. A zero taper builds the straight prism.
+// returned before commit. A zero taper builds the straight prism. A chain
+// section returns [ErrUnsupported] for WithTaper at any angle, zero included.
 func WithTaper(a units.Value) ExtrudeOption {
 	return extrudeOptionValue{featureoption.WithTaper(a)}
 }
 
-// Extrude sweeps a profile of s along the sketch plane's normal per the
-// linear extent e, and registers the new body. p MUST be a profile of s
-// (ErrForeignProfile) and a current, unaltered snapshot (ErrStaleProfile or
-// ErrInvalidProfile); an invalid profile is also ErrInvalidProfile, and a
-// boundary decad cannot record exactly is ErrUnrecordableProfile (core §7).
-// This evaluator builds a straight prism from a profile of line, circle, arc
-// and Tier A free-form segments (a spline, a closed spline, a fit spline, or a
-// unit-weight NURBS curve — docs/spline-design.md Table F); a Tier B or Tier C
-// free-form segment (a conic, a whole ellipse, or a NURBS curve with unequal
-// weights) is [ErrUnsupported]. A Tier A kind is
-// admitted but not thereby built: each free-form wall edge must also prove ONE
-// curvature sign across every span and joint of its chain
-// (docs/spline-design.md §6.5), and the whole profile's free-form work must fit
-// the fixed budget. A chain whose curvature genuinely changes sign, or whose
-// certificate the fixed subdivision depth does not close, is [ErrUnsupported]
-// (Table R row R19), as is a profile past the budget (row R7). A free-form curve
-// must meet its neighbours at shared endpoints unless sketch certifies a
-// fit-spline/circle trim (docs/spline-design.md §2.1). Other crossing
-// fragments are rejected as ErrUnrecordableProfile before this runs. The
-// evaluator converts the profile and plane to structural records; a failed
-// evaluation leaves the document untouched. WithSurfaceResult() omits the two
-// caps and publishes a sheet body instead of a solid (docs/surface-design.md §4).
+// Extrude sweeps the section sec of sketch s along the sketch plane's normal
+// per the linear extent e, registers the new body, and returns it. sec is a
+// closed [*sketch.Profile], which extrudes to a solid (sheet under
+// [WithSurfaceResult]), or an open [*sketch.Chain], which extrudes to a
+// ribbon sheet. Both are recorded from s; the type argument S is inferred.
 //
-// A nonzero WithTaper builds a draft body instead (docs/draft-design.md): the
-// far cap is the profile offset by h·tan α with every straight corner
-// mitered, each straight wall a Plane leaning by the taper and each circular
-// wall a Cone. Its profile must hold line, arc and circle segments only, and a
-// circular wall must meet each neighbour tangentially; anything else, and
-// every other row of that design's Table SD, is [ErrUnsupported] or
-// [ErrDegenerate] as the row states. Every measurement of a draft body is
-// Approximate, since the taper's tangent is only ever enclosed.
-func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error) {
+// A profile section MUST be a profile of s (ErrForeignProfile) and a
+// current, unaltered snapshot (ErrStaleProfile or ErrInvalidProfile); an
+// invalid profile is also ErrInvalidProfile, and a boundary decad cannot
+// record exactly is ErrUnrecordableProfile (core §7). This evaluator builds a
+// straight prism from a profile of line, circle, arc and Tier A free-form
+// segments (a spline, a closed spline, a fit spline, or a unit-weight NURBS
+// curve — docs/spline-design.md Table F); a Tier B or Tier C free-form
+// segment (a conic, a whole ellipse, or a NURBS curve with unequal weights) is
+// [ErrUnsupported]. A Tier A kind is admitted but not thereby built: each
+// free-form wall edge must also prove ONE curvature sign across every span and
+// joint of its chain (docs/spline-design.md §6.5), and the whole profile's
+// free-form work must fit the fixed budget. A chain whose curvature genuinely
+// changes sign, or whose certificate the fixed subdivision depth does not
+// close, is [ErrUnsupported] (Table R row R19), as is a profile past the
+// budget (row R7). A free-form curve must meet its neighbours at shared
+// endpoints unless sketch certifies a fit-spline/circle trim
+// (docs/spline-design.md §2.1). Other crossing fragments are rejected as
+// ErrUnrecordableProfile before this runs. WithSurfaceResult() omits the two
+// caps and publishes a sheet body instead of a solid (docs/surface-design.md
+// §4).
+//
+// A nonzero [WithTaper] on a profile builds a draft body instead
+// (docs/draft-design.md): the far cap is the profile offset by h·tan α with
+// every straight corner mitered, each straight wall a Plane leaning by the
+// taper and each circular wall a Cone. Its profile must hold line, arc and
+// circle segments only, and a circular wall must meet each neighbour
+// tangentially; anything else, and every other row of that design's Table SD,
+// is [ErrUnsupported] or [ErrDegenerate] as the row states. Every measurement
+// of a draft body is Approximate, since the taper's tangent is only ever
+// enclosed.
+//
+// A chain section MUST be a chain of s and a current, unaltered snapshot,
+// with the same sentinels (ErrForeignProfile, ErrStaleProfile,
+// ErrInvalidProfile, ErrUnrecordableProfile; an invalid or self-intersecting
+// chain is also ErrInvalidProfile; docs/sketch-seam-design.md §2.2). The
+// result is always a sheet — Kind() == BodySheet — one wall face per recorded
+// segment (docs/surface-design.md §13.4, Table G), with no cap and no closing
+// face. A chain of any segment count and kind builds — a line wall Exact, an
+// arc or circle fragment wall carrying rθ's own bound, a Tier A free-form
+// wall carrying internal/freeform/spline_length.go's proven bracket
+// (docs/spline-design.md); a Tier B or Tier C free-form segment is
+// ErrUnsupported, exactly as a profile's own wall refuses it. A chain section
+// returns ErrUnsupported for [WithSurfaceResult], which has no solid to
+// toggle, and for [WithTaper] of any angle, zero included, since a chain
+// extrude has no draft build. Both refusals follow the chain's seam gate and
+// precede extent resolution (docs/surface-design.md §13.2).
+//
+// A nil context, document, sketch or section returns ErrDegenerate. The
+// context is checked at entry, between recording the section, resolving the
+// extent and building the body, and inside the evaluators; a canceled context
+// returns ctx.Err() unchanged. Every failure and cancellation leaves the
+// document unchanged.
+func Extrude[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, e Extent,
+	opts ...ExtrudeOption) (*Body, error) {
+	switch v := any(sec).(type) {
+	case *sketch.Profile:
+		return extrudeProfile(ctx, d, s, v, e, opts)
+	case *sketch.Chain:
+		return extrudeChain(ctx, d, s, v, e, opts)
+	default:
+		return nil, fmt.Errorf(`%w: Extrude section %T is not a profile or chain`, ErrDegenerate, sec)
+	}
+}
+
+// extrudeProfile is the profile-fed Extrude body (docs/evaluator-design.md
+// §5). Its refusals run in this order: the record, the recorded-area
+// falsifier, the options, the taper checks, then the extent.
+func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, e Extent,
+	opts []ExtrudeOption) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control an extrude`, ErrDegenerate)
+	}
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
+	}
+	if s == nil || p == nil {
+		return nil, fmt.Errorf(`%w: Extrude requires a non-nil sketch and profile`, ErrDegenerate)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	profile, plane, profileArea, err := recordProfile(s, p)
 	if err != nil {
@@ -100,7 +154,10 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	// (docs/spline-design.md §5.2). A counter per phase would give the same
 	// record a fresh full ceiling in each.
 	work := freeform.NewFreeformWork()
-	if _, err := falsifyRecordedArea(profile, profileArea, work); err != nil {
+	if _, err := falsifyRecordedAreaContext(ctx, profile, profileArea, work); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
@@ -127,15 +184,18 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	if taper.Mag() != 0 {
 		// A nonzero taper builds a draft body (docs/draft-design.md), never a
 		// straight prism.
-		return d.extrudeDraft(profile, frame, e, alpha, alphaDelta, surfaceResult)
+		return d.extrudeDraft(ctx, profile, frame, e, alpha, alphaDelta, surfaceResult)
 	}
 	sweep, err := d.resolveLinearExtent(e, frame)
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	ref := d.nextProducerID()
-	body, err := evalPrism(d, ref, prismPayload{
+	body, err := evalPrismContext(ctx, d, ref, prismPayload{
 		profile:       profile,
 		frame:         frame,
 		z0:            sweep.z0,
@@ -146,6 +206,9 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 		surfaceResult: surfaceResult,
 	}, work)
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	d.commit(body)
@@ -168,12 +231,30 @@ func falsifyRecordedArea(profile profileRecord, sketchArea float64, work *freefo
 	if err != nil {
 		return 0, err
 	}
-	scale := math.Max(1, math.Abs(sketchArea))
-	if math.Abs(ig.Area-sketchArea) > 1e-9*scale {
-		return 0, fmt.Errorf(`%w: the recorded boundary's area %v does not reproduce sketch's %v; report upstream as a bug`,
-			ErrUnrecordableProfile, ig.Area, sketchArea)
+	return compareRecordedArea(ig.Area, sketchArea)
+}
+
+// falsifyRecordedAreaContext is falsifyRecordedArea with the record's
+// integration polling ctx; a canceled ctx returns ctx.Err() unchanged.
+func falsifyRecordedAreaContext(ctx context.Context, profile profileRecord, sketchArea float64,
+	work *freeform.FreeformWork) (float64, error) {
+	ig, err := profile.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
+	if err != nil {
+		return 0, err
 	}
-	return ig.Area, nil
+	return compareRecordedArea(ig.Area, sketchArea)
+}
+
+// compareRecordedArea rejects a recorded area that differs from sketch's by
+// more than 1e-9 of the larger of 1 and sketch's magnitude, and returns the
+// recorded area otherwise.
+func compareRecordedArea(recorded, sketchArea float64) (float64, error) {
+	scale := math.Max(1, math.Abs(sketchArea))
+	if math.Abs(recorded-sketchArea) > 1e-9*scale {
+		return 0, fmt.Errorf(`%w: the recorded boundary's area %v does not reproduce sketch's %v; report upstream as a bug`,
+			ErrUnrecordableProfile, recorded, sketchArea)
+	}
+	return recorded, nil
 }
 
 // linearSweep is a resolved linear extent: the signed sweep interval [z0, z1]
@@ -327,7 +408,7 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 	}
 }
 
-// This section is ExtrudeChain of docs/surface-design.md §13: the open sketch
+// This section is the chain-fed Extrude of docs/surface-design.md §13: the open sketch
 // chain's own sweep into a ribbon. It reuses resolveLinearExtent unchanged —
 // the extent vocabulary and the frame it resolves against are identical to
 // Extrude's — and reads its recorded walk through recordChain (seam.go)
@@ -336,23 +417,11 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // (prism_build.go's buildWallGeometry, shared with the profile-fed prism
 // build) — the same evaluator, over an open rather than a closed walk.
 
-// ChainExtrudeOption configures ExtrudeChain. It is its own sealed tier
-// rather than [ExtrudeOption]: WithSurfaceResult() does not implement it, so
-// the compiler refuses that option outright rather than accepting it as a
-// no-op — a chain-fed sweep always returns a sheet, so there is no "build a
-// solid instead" state for the option to toggle (docs/surface-design.md
-// §13.2). This placeholder tier has no member yet; it reserves the call for
-// a later chain-only option.
-type ChainExtrudeOption interface {
-	option.Interface
-	chainExtrudeOption()
-}
-
-// chainPayload is ExtrudeChain's own record of a ribbon body: the recorded
+// chainPayload is chain Extrude's own record of a ribbon body: the recorded
 // walk SET, the plane frame it lifts through, the signed sweep interval, and
-// the accumulated rigid placement — chainPayload is to ExtrudeChain what
+// the accumulated rigid placement — chainPayload is to chain Extrude what
 // prismPayload is to Extrude (docs/surface-design.md §13.4). A plain
-// ExtrudeChain builds the one-walk case; docs/surface-intersection-design.md
+// chain Extrude builds the one-walk case; docs/surface-intersection-design.md
 // §3.4 is what first builds more than one, one lump per surviving walk, and
 // sets sectionDelta beside them.
 type chainPayload struct {
@@ -365,7 +434,7 @@ type chainPayload struct {
 	// sectionDelta is prismPayload's own §7 term (docs/prism-boolean-design.md),
 	// carried here on the identical terms: the proven upper bound on how far
 	// any recorded boundary coordinate sits from the section its construction
-	// denotes. Zero for every walk a caller draws through ExtrudeChain.
+	// denotes. Zero for every walk a caller draws through chain Extrude.
 	sectionDelta float64
 }
 
@@ -417,33 +486,39 @@ func (pp chainPayload) placed(ctx context.Context, d *Document, ref producerID, 
 	return evalChainExtrudeContext(ctx, d, ref, pp, freeform.NewFreeformWork())
 }
 
-// ExtrudeChain sweeps the open chain ch of sketch s along the sketch plane's
-// normal per the linear extent e, and registers the new ribbon body. ch MUST
-// be a chain of s (ErrForeignProfile) and a current, unaltered snapshot
-// (ErrStaleProfile or ErrInvalidProfile); an invalid or self-intersecting
-// chain is also ErrInvalidProfile, and a walk decad cannot record exactly is
-// ErrUnrecordableProfile (docs/sketch-seam-design.md §2.2). The result is
-// always a sheet — Kind() == BodySheet — one wall face per recorded segment
-// (docs/surface-design.md §13.4, Table G), with no cap and no closing face:
-// WithSurfaceResult() does not compile against this call. A chain of any
-// segment count and kind builds — a line wall Exact, an arc or circle
-// fragment wall carrying rθ's own bound, a Tier A free-form wall carrying
-// internal/freeform/spline_length.go's proven bracket (docs/spline-design.md); a Tier B or
-// Tier C free-form segment is ErrUnsupported, exactly as Extrude's own
-// profile-fed wall refuses it. A failed evaluation leaves the document
-// untouched.
-func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error) {
+// extrudeChain is the chain-fed Extrude body (docs/surface-design.md §13).
+// Its refusals run in this order: the nil-option check, the seam gates, the
+// option refusal, then the extent.
+func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, e Extent,
+	opts []ExtrudeOption) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control an extrude`, ErrDegenerate)
+	}
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
+	}
+	if s == nil || ch == nil {
+		return nil, fmt.Errorf(`%w: Extrude requires a non-nil sketch and chain`, ErrDegenerate)
 	}
 	for _, o := range opts {
 		if o == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	chain, plane, err := recordChain(s, ch)
 	if err != nil {
+		return nil, err
+	}
+	// The option refusal follows the seam gate and precedes the extent work,
+	// so a repair the caller makes in the sketch is named first.
+	if err := refuseChainExtrudeOptions(opts); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
@@ -460,14 +535,17 @@ func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, op
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
-	// ONE free-form work counter for this whole call, exactly as Extrude
-	// opens for its own profile-fed build (docs/spline-design.md §5.2):
+	// ONE free-form work counter for this whole call, exactly as the profile
+	// form opens for its own build (docs/spline-design.md §5.2):
 	// buildChainSides's own walkOf calls and the final bounds reading below
 	// spend from the same ceiling rather than each opening a fresh one.
 	work := freeform.NewFreeformWork()
 	ref := d.nextProducerID()
-	body, err := evalChainExtrudeContext(context.Background(), d, ref, chainPayload{
+	body, err := evalChainExtrudeContext(ctx, d, ref, chainPayload{
 		chains:  []chainRecord{chain},
 		frame:   frame,
 		z0:      sweep.z0,
@@ -479,8 +557,31 @@ func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, op
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	d.commit(body)
 	return body, nil
+}
+
+// refuseChainExtrudeOptions refuses every option a chain section cannot
+// honour with ErrUnsupported. A chain extrude always returns a sheet, so
+// WithSurfaceResult has no solid to toggle, and it has no draft build, so
+// WithTaper is refused at any angle, zero included. opts holds no nil element.
+func refuseChainExtrudeOptions(opts []ExtrudeOption) error {
+	for _, o := range opts {
+		switch o.(type) {
+		case surfaceResultOptionValue:
+			return fmt.Errorf(`%w: a chain extrude always returns a sheet; WithSurfaceResult has no solid to toggle`,
+				ErrUnsupported)
+		case extrudeOptionValue:
+			return fmt.Errorf(`%w: a chain extrude has no draft build; WithTaper builds a solid from a profile only`,
+				ErrUnsupported)
+		default:
+			return fmt.Errorf(`%w: the extrude option %T builds a solid from a profile only`, ErrUnsupported, o)
+		}
+	}
+	return nil
 }
 
 // evalChainExtrudeContext builds the ribbon body: one wall face per recorded
@@ -542,7 +643,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	// construction that ever sets it, docs/surface-intersection-design.md
 	// §3.4) reads its extent through walks that charge §7's δ_cut into
 	// exactly the endpoint a cut produced, never into one the record states
-	// verbatim (trimBoundsWalks, surface_trim.go). A plain ExtrudeChain
+	// verbatim (trimBoundsWalks, surface_trim.go). A plain chain Extrude
 	// ribbon has zero sectionDelta and reuses the walks resolved for its sides.
 	view := pp.prism()
 	var boundsWalks *momentinput.ProfileWalks
@@ -614,7 +715,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	// displacement of the section it denotes, so each segment's own length
 	// carries that displacement too — buildLoopSidesAs's identical charge,
 	// prism-boolean §7's 12·π·δ per walk (internal/proofbound/bounds.go's
-	// proofbound.SectionDisplacementLength), zero for every payload ExtrudeChain builds
+	// proofbound.SectionDisplacementLength), zero for every payload chain Extrude builds
 	// directly.
 	walkLenAllow := proofbound.SectionDisplacementLength(pp.sectionDelta, 1)
 	raw := make([]survey2d.SideWalk, len(chain.Segments))
@@ -651,7 +752,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	// rimVertex places one rim post at (u, v) on level z, whose own axial
 	// displacement is zDelta, beside the post's own exact frame lift and
 	// placement rounding (prismPayload.liftedVertex) — zero wherever that lift
-	// is exact, which is what keeps a plain ExtrudeChain's rim vertices Exact,
+	// is exact, which is what keeps a plain chain Extrude's rim vertices Exact,
 	// mirroring buildLoopSidesAs's own rimVertex.
 	rimVertex := func(u, v, z, zDelta, extra float64) *Vertex {
 		held, lift := prismView.liftedVertex(u, v, z)

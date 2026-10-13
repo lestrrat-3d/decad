@@ -31,7 +31,7 @@ func Example_body_thicken_ribbon() {
 		return
 	}
 	doc := decad.New()
-	ribbon, err := doc.ExtrudeChain(s, s.Chains()[0], decad.Distance{
+	ribbon, err := decad.Extrude(context.Background(), doc, s, s.Chains()[0], decad.Distance{
 		D: units.Millimeters(10), Dir: decad.Along,
 	})
 	if err != nil {

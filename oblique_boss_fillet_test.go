@@ -24,7 +24,7 @@ func buildObliqueBossSources(t *testing.T, center, tiltAxis r3.Vec) (*Body, *Bod
 	if _, err := plateSketch.Solve(ctx); err != nil {
 		t.Fatal(err)
 	}
-	plate, err := doc.Extrude(plateSketch, plateSketch.Profiles()[0],
+	plate, err := Extrude(ctx, doc, plateSketch, plateSketch.Profiles()[0],
 		Distance{D: units.Millimeters(5), Dir: Along})
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +39,7 @@ func buildObliqueBossSources(t *testing.T, center, tiltAxis r3.Vec) (*Body, *Bod
 	if _, err := bossSketch.Solve(ctx); err != nil {
 		t.Fatal(err)
 	}
-	boss, err := doc.Extrude(bossSketch, bossSketch.Profiles()[0],
+	boss, err := Extrude(ctx, doc, bossSketch, bossSketch.Profiles()[0],
 		Distance{D: units.Millimeters(6), Dir: Along})
 	if err != nil {
 		t.Fatal(err)

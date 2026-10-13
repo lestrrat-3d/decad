@@ -676,7 +676,7 @@ func TestBrepCoordinateEnvelopeReadsArcsTightly(t *testing.T) {
 	s.Fix(slot.C2)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	prism, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	prism, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 	bp, err := brepOfPrism(prism.payload.(prismPayload))
 	require.NoError(t, err)

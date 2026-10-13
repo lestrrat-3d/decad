@@ -27,7 +27,7 @@ func Example_export_step_header() {
 		fmt.Printf("failed to solve sketch: %s\n", err)
 		return
 	}
-	body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	body, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
