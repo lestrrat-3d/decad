@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegroup"
 )
@@ -311,16 +311,11 @@ func rewriteCompositeEdge(body *Body, old, replacement *Edge) {
 
 func rewriteCompositeSideRoles(face *Face, span int) {
 	for i, origin := range face.origins {
-		suffix, ok := strings.CutPrefix(origin.Role, "side(")
+		role, ok := compositesweep.RewriteSideRole(origin.Role, span)
 		if !ok {
 			continue
 		}
-		// A single-span reduction has already inserted span 0. Replace it
-		// instead of nesting another path index around it.
-		if rest, found := strings.CutPrefix(suffix, "0,"); found && strings.Count(suffix, ",") >= 2 {
-			suffix = rest
-		}
-		origin.Role = fmt.Sprintf("side(%d,%s", span, suffix)
+		origin.Role = role
 		face.origins[i] = origin
 	}
 }
