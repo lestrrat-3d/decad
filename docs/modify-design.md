@@ -152,7 +152,7 @@ a retired body is S17, by core §6's retire rule.
 | **R6** | `brepPayload`, or `stackedPrismPayload` through its face view | `docs/brep-modify-design.md` Table RB | Table RB |
 | **R7** | `loftPayload` with matching, hole-free, axially translated sections | `Fillet` on recorded analytic corners (loft §17); `Chamfer` is S3 | S3 |
 | **R8** | One-sided positive-taper full-circle `draftPayload`, near section at start, no holes or kept walls | Far-rim `Fillet` or symmetric `Chamfer` builds per draft §10.4–§10.5; otherwise S3 | Inward far-cap removal builds draft §10.6's cup; otherwise S3 |
-| **R9** | `sweepPayload` from one zero-twist straight `LineTo` profile span, including rigid placement | S3 | CapStart, CapEnd, or both use the exact prism reduction and the matching R1 cap construction; a hole-free section also takes `WithNoOpenings`. Side openings and other sweeps are S3. |
+| **R9** | `sweepPayload` from one zero-twist straight `LineTo` profile span, including rigid placement | S3 | CapStart, CapEnd, or both use the exact prism reduction and the matching R1 cap construction; a hole-free section also takes `WithNoOpenings`. Side openings are S2; other sweeps are S3. |
 
 A full-circle loop is a single closed wall with **no** lateral edge at all
 (evaluator §5 emits no seam), so a cylinder has no edge the corner rewrite can
