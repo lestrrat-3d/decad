@@ -1,6 +1,7 @@
 package meshbool_test
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -59,4 +60,17 @@ func TestCross2xSignMatchesExactValue(t *testing.T) {
 		meshbool.Cross2xSign(hom[0], hom[1], hom[2]))
 	require.Equal(t, meshbool.Cross2x(hom[0], hom[1], base).Sign(),
 		meshbool.Cross2xSign(hom[0], hom[1], base))
+}
+
+// TestCross2xSignNonFiniteFloatsFallBackToExact poisons the float mirrors so the
+// filter must decline and the exact rational path decides.
+func TestCross2xSignNonFiniteFloatsFallBackToExact(t *testing.T) {
+	for i, bad := range []float64{math.NaN(), math.Inf(1), math.Inf(-1), math.MaxFloat64} {
+		a := meshbool.NewXP2(big.NewRat(1, 3), big.NewRat(2, 5))
+		b := meshbool.NewXP2(big.NewRat(2, 3), big.NewRat(1, 5))
+		c := meshbool.NewXP2(big.NewRat(1, 7), big.NewRat(9, 5))
+		want := meshbool.Cross2x(a, b, c).Sign()
+		a.Fu, b.Fv, c.Fu = bad, bad, bad
+		require.Equal(t, want, meshbool.Cross2xSign(a, b, c), "case %d", i)
+	}
 }

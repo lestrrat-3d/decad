@@ -178,7 +178,7 @@ func Cross2xSign(a, b, c Xp2) int {
 		scale := (proof.Abs(bu)+proof.Abs(au))*(proof.Abs(cv)+proof.Abs(av)) +
 			(proof.Abs(bv)+proof.Abs(av))*(proof.Abs(cu)+proof.Abs(au))
 		err := 1e-12 * scale
-		if !math.IsNaN(det) && !math.IsInf(det, 0) && !math.IsInf(err, 0) && err > 0 {
+		if det == det && det <= math.MaxFloat64 && det >= -math.MaxFloat64 && err <= math.MaxFloat64 && err > 0 {
 			if det > err {
 				return 1
 			}

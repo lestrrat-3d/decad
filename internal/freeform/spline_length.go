@@ -718,5 +718,5 @@ func DownRound(x float64) float64 {
 	if x <= 0 || proofbound.IsNonFinite(x) {
 		return x
 	}
-	return math.Nextafter(x, 0)
+	return proofarith.NextDown(x)
 }

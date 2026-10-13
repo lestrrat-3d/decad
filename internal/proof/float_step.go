@@ -24,6 +24,9 @@ func NextUp(x float64) float64 {
 	if x <= -0x1p-969 && x >= -math.MaxFloat64 {
 		return x - float64(x*0x1p-53)
 	}
+	if x == 0 {
+		return 0x1p-1074
+	}
 	return math.Nextafter(x, math.Inf(1))
 }
 
@@ -38,6 +41,9 @@ func NextDown(x float64) float64 {
 	}
 	if x >= 0x1p-969 && x <= math.MaxFloat64 {
 		return x - float64(x*0x1p-53)
+	}
+	if x == 0 {
+		return -0x1p-1074
 	}
 	return math.Nextafter(x, math.Inf(-1))
 }

@@ -8,4 +8,6 @@ func UlpOf(x float64) float64 {
 	return math.Nextafter(ax, math.Inf(1)) - ax
 }
 
-func IsNonFinite(f float64) bool { return math.IsNaN(f) || math.IsInf(f, 0) }
+// IsNonFinite reports NaN or +-Inf. It compares instead of calling math.IsInf, whose
+// math.Abs bit cast costs a checkptr call under -race.
+func IsNonFinite(f float64) bool { return f != f || f > math.MaxFloat64 || f < -math.MaxFloat64 }
