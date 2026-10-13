@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -61,7 +62,7 @@ func roundedTwistLocalAreaSource(t *testing.T) (*Document, *Body, twistedSweepPa
 // both whole positive wall areas for a later Boolean subset.
 func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	doc, body, source := roundedTwistLocalAreaSource(t)
-	poly, err := twistPolygonOf(source.profile)
+	poly, err := twistsweep.TwistPolygonOf(source.profile)
 	require.NoError(t, err)
 	angleIv, ok := revolveangle.FromValue(source.angle).Enclosure()
 	require.True(t, ok)
@@ -111,7 +112,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	e := proofbound.AbsSumUpper(held.delta,
 		math.Max(stations[0].pointError, stations[1].pointError))
 	bound := twistWallCellAreaL1(vLo, vHi, wLo, wHi, claim, e,
-		poly.maxRadiusL1, proofbound.DivUpper(proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), float64(cells)),
+		poly.MaxRadiusL1, proofbound.DivUpper(proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), float64(cells)),
 		proofbound.DivUpper(source.path.End().Z, float64(cells)))
 	require.True(t, !proofbound.IsNonFinite(bound))
 	t.Logf("cells=%d source_segment=%d cell=%d bound=%g arc=%g energy=%g matched=%g endpoint=%g",
@@ -198,7 +199,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	t.Logf("all wall-cell absolute area allowance=%g", wallBound)
 	require.Less(t, wallBound, 20.0)
 	comparison, _, heldByFace, err := compositeTwistMesh(t.Context(), body, heldCells,
-		len(poly.points), make([]int, cells), source.delta, source.volSymDiff)
+		len(poly.Points), make([]int, cells), source.delta, source.volSymDiff)
 	require.NoError(t, err)
 	require.Equal(t, source.mesh.vertices, comparison.vertices)
 	require.Equal(t, source.mesh.triangles, comparison.triangles)

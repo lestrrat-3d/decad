@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -23,32 +24,32 @@ func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 		return nil, fmt.Errorf(`%w: twisted shell needs one straight axial sweep, a top opening, and exact inward thickness`, ErrUnsupported)
 	}
 	height := p.path.End().Z
-	source, err := twistOffsetSource(p.profile, height, p.angle, thickness, thicknessDelta)
+	source, err := twistsweep.TwistOffsetSource(p.profile, height, p.angle, thickness, thicknessDelta)
 	if err != nil {
 		return nil, err
 	}
-	stations, err := twistOffsetSampleStations(p.profile, height, p.angle,
+	stations, err := twistsweep.TwistOffsetSampleStations(p.profile, height, p.angle,
 		thickness, thicknessDelta, 8, 16)
 	if err != nil {
 		return nil, err
 	}
-	poly, err := twistPolygonOf(p.profile)
+	poly, err := twistsweep.TwistPolygonOf(p.profile)
 	if err != nil {
 		return nil, err
 	}
 	ref := b.doc.nextProducerID()
-	held, err := twistShellSampledMesh(ctx, stations, height, thickness,
-		p.angle, poly.areaInterval)
+	held, err := twistsweep.TwistShellSampledMesh(ctx, stations, height, thickness,
+		p.angle, poly.AreaInterval)
 	if err != nil {
 		return nil, err
 	}
 	out, err := twistShellFacetedBody(ctx, b.doc, ref, held,
-		poly.areaInterval, source.area, height, thickness)
+		poly.AreaInterval, source.Area, height, thickness)
 	if err != nil {
 		return nil, err
 	}
 	if p.xform != r3.Identity() {
-		gap, proofErr := twistShellPlacedProof(p.profile, height, thickness,
+		gap, proofErr := twistsweep.TwistShellPlacedProof(p.profile, height, thickness,
 			p.angle, source, p.xform)
 		if proofErr != nil {
 			return nil, proofErr
@@ -59,11 +60,11 @@ func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 		}
 		facets.vertexBound = append([]float64(nil), facets.vertexBound...)
 		for i := range facets.vertexBound {
-			facets.vertexBound[i] = proofbound.AbsSumUpper(facets.vertexBound[i], gap.boundary)
+			facets.vertexBound[i] = proofbound.AbsSumUpper(facets.vertexBound[i], gap.Boundary)
 		}
-		facets.meshBound = proofbound.AbsSumUpper(facets.meshBound, gap.boundary)
-		facets.volSymDiff = proofbound.AbsSumUpper(facets.volSymDiff, gap.volume)
-		facets.areaSlack = proofbound.AbsSumUpper(facets.areaSlack, gap.area)
+		facets.meshBound = proofbound.AbsSumUpper(facets.meshBound, gap.Boundary)
+		facets.volSymDiff = proofbound.AbsSumUpper(facets.volSymDiff, gap.Volume)
+		facets.areaSlack = proofbound.AbsSumUpper(facets.areaSlack, gap.Area)
 		out, err = facets.placed(ctx, b.doc, ref, p.xform)
 		if err != nil {
 			return nil, err
