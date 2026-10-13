@@ -157,7 +157,7 @@ func TestStackedUnionBrepLBossReflexCornerReadsConcave(t *testing.T) {
 // TestStackedUnionBrepFlushEdgeBoss is the flush edge boss: the boss shares
 // the plate's wall x = 20 along its middle, so that wall is one T-shaped
 // face of eight segments. The body has 10 faces and the same exact 17500 mm³
-// and 5400 mm². Shown to fail with cutsOnLine returning nothing (the floor's
+// and 5400 mm². Shown to fail with stackedbrep.Engine.CutsOnLine returning nothing (the floor's
 // x = 20 edges then ran whole and did not pair with the wall's pieces).
 func TestStackedUnionBrepFlushEdgeBoss(t *testing.T) {
 	t.Parallel()
@@ -238,7 +238,7 @@ func TestStackedUnionBrepCrossingBoss(t *testing.T) {
 // plate's outline recorded in fragments split at the boss's corners, and the
 // vertical edge at the shared corner (20, −20) runs the whole 25 mm as one
 // edge: no face has a vertex at z = 5 or z = 10 there. Shown to fail with
-// joinCollinear's merge deleted (the edge then split at both slab levels and
+// brepgeom.joinStackedWallCollinear's merge deleted (the edge then split at both slab levels and
 // the body carried 25 edges).
 func TestStackedUnionBrepRootedFlushBoss(t *testing.T) {
 	t.Parallel()

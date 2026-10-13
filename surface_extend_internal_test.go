@@ -158,7 +158,7 @@ func TestExtendFullDomainSceneSharesTheRecordParameterisation(t *testing.T) {
 	}
 }
 
-// TestExtendSetBoundWidensOnlyTheNamedEnd covers extendSetBound's three arms on
+// TestExtendSetBoundWidensOnlyTheNamedEnd covers prismcells.ExtendSetBound's three arms on
 // computed geometry: the widened segment must reach the new parameter's own
 // point and leave the other end's recorded coordinate exactly where it was.
 func TestExtendSetBoundWidensOnlyTheNamedEnd(t *testing.T) {

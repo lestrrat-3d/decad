@@ -22,7 +22,7 @@ var ErrTooManyChords = fmt.Errorf(`%w: the chord tolerance asks for more than %d
 // modelled proportionally more geometry, and docs/interference-design.md §7
 // answers large work with cancellation rather than a work cap: the read-only
 // path polls its context at least once per proofbound.WorkPollInterval candidate
-// operations, so chordLoop, bridgeHole and earClip all abandon a large profile
+// operations, so tessellation.ChordLoop, triangulation.BridgeHole and triangulation.EarClip all abandon a large profile
 // promptly. A total cap would instead refuse a profile this evaluator can
 // build correctly.
 const MaxChordsPerWalk = 1 << 14

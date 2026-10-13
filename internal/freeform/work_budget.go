@@ -179,7 +179,7 @@ func (w *FreeformWork) Step(n uint64) error {
 	return nil
 }
 
-// reconstructionStep spends the record's sketch reconstruction counter before
+// ReconstructionStep spends the record's sketch reconstruction counter before
 // sketch arranges the scene.
 func (w *FreeformWork) ReconstructionStep(n uint64) error {
 	if w == nil {
@@ -252,7 +252,7 @@ const (
 )
 
 // FreeformReconstruction is the whole-RECORD model of the sketch reconstruction
-// momentRecordMatchesSketch runs (moments_validate.go) — the pass that asks
+// momentinput.FieldPreflight.matchesSketch runs — the pass that asks
 // sketch to decide the recorded region's topology.
 //
 // That pass is neither cheap nor cancellable, and its cost belongs to the record
@@ -270,7 +270,7 @@ const (
 // The pass also runs the arrangement MORE THAN ONCE. It arranges the scene to
 // list the candidate profiles, RecordProfile arranges it again for each
 // candidate it authenticates (Sketch.Profiles rebuilds the arrangement on every
-// call), and validateMomentRecord repeats the whole pass on a rescaled record.
+// call), and momentinput.validateRecord repeats the whole pass on a rescaled record.
 // The cost is therefore one arrangement's quadratic times the number of
 // arrangements, which is what makes an uncharged record CUBIC in its source
 // count rather than quadratic.

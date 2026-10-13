@@ -47,7 +47,7 @@ import (
 // while a COMPUTED level carries the computation's own proven rounding: a ToFace
 // or ThroughAll stop resolves its level by float arithmetic over another body's
 // face (stops.go), a magnitude in a non-base unit rounds in its rescale to
-// millimetres (magnitudeInBounded), and a chamfered end pulls its level in by the
+// millimetres (extent.MagnitudeInBounded), and a chamfered end pulls its level in by the
 // setback (capblend_moments.go). The two displacements are tracked apart and
 // neither ever stands in for the other — SectionDelta moves a boundary coordinate
 // IN the plane, these move a level ALONG the normal — while a reading both of them

@@ -14,7 +14,7 @@ import (
 // docs/shell-opening-design.md: Shell on an exact straight prism reduction
 // that removes one proper connected run R of its outer
 // side faces, with or without its caps. The kept walks K are offset as an open
-// chain (shell_chain.go) whose two ends close by Table RO's rim, the removed
+// chain (internal/offset2d/open_chain.go) whose two ends close by Table RO's rim, the removed
 // walk's own carrier cut by the offset. Three regions follow (§3): the wall
 // section W, the cavity section C and the cap slabs' region (P inward, the
 // outer region O outward), and each faces modify §5's audit and an exact area

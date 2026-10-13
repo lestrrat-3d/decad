@@ -240,7 +240,7 @@ func Radius2D(x, y float64) float64 {
 // (internal/capband's conePatchFluxInterval for its volume flux and
 // phaseSumInterval for its first moments) REPLACE the
 // envelope wherever they build, since each encloses the whole closed form
-// over exact rationals with radSinCosInterval's certified trig factors. The
+// over exact rationals with RadSinCosInterval's certified trig factors. The
 // envelope stands only in the flux's non-finite fallback; the moments'
 // non-finite fallback publishes an infinite bound.
 func AnalyticRoundBound(scale float64) float64 {

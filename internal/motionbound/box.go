@@ -32,7 +32,7 @@ func BoxCornersExact(box measurement.Box, extra *big.Rat) (RatVec, RatVec, bool)
 // startCorners is the eight corners of the mover's Bounds box inflated by its
 // own Bound, as exact rationals, each mapped to where the path STARTS:
 // unchanged for a Revolute and a Prismatic, whose parameter 0 is the mover at
-// rest, and through the between's From exactly for a Between (placeFrom). The
+// rest, and through the between's From exactly for a Between (MotionFrame.PlaceFrom). The
 // true body at the start lies inside the convex hull of these eight points.
 func startCorners(box measurement.Box, mf MotionFrame) ([8]RatVec, bool) {
 	lo, hi, ok := BoxCornersExact(box, new(big.Rat))

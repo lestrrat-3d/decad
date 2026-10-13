@@ -191,7 +191,7 @@ func LoftCertifiedChordLower(radius, sweep proofbound.RatInterval, enclosed bool
 // same-kind circular pair and answers the count it settles on, together with
 // each side's own certified per-cell sagitta AT that count.
 //
-// chordCount picks each side's OWN count against target independently, and
+// tessellation.ChordCount picks each side's OWN count against target independently, and
 // max(m0, m1) only SEEDS the walk: from there BOTH sides' certified sagittae
 // are recomputed at each candidate and the count increments until both are at
 // or below the target. Settling that way needs no monotonicity claim about the
@@ -203,9 +203,9 @@ func LoftCertifiedChordLower(radius, sweep proofbound.RatInterval, enclosed bool
 // construction phase will, with no station built and no triangle assembled.
 //
 // The two refusals it raises are the two docs/loft-design.md §4's gate-order
-// paragraph assigns to this walk-up: errLoftSagittaUnderivable is S14's
+// paragraph assigns to this walk-up: ErrLoftSagittaUnderivable is S14's
 // DERIVATION arm — a candidate count whose certified sagitta has no derivation
-// from the record — and freeform.ErrTooManyChords is the per-walk ceiling chordCount
+// from the record — and freeform.ErrTooManyChords is the per-walk ceiling tessellation.ChordCount
 // itself enforces, raised again here because the certified sagitta shrinks
 // with m but is floored by its own enclosure width, so a target below that
 // floor would otherwise walk forever. That per-walk ceiling is NOT the station
@@ -239,7 +239,7 @@ func LoftSettleStationCount(a, b LoftCircularSide, target float64) (int, float64
 
 // LoftCircularStationChain walks this segment's own uniform-angle stations of w,
 // at parameter t_k = k/m — its OWN interior stations, excluding its shared end
-// point (loftCellStations' own doc comment states why), so the chain holds the
+// point (RecordCellStations' own doc comment states why), so the chain holds the
 // entries a loop's own count under docs/loft-design.md §7 needs from it rather
 // than a count stated here.
 //
@@ -319,7 +319,7 @@ func LoftCircularStationChain(side LoftCircularSide, m int) ([]LoftStation, floa
 //
 // What the walk-up compares against the target, and what this arm publishes,
 // is CertifiedSagittaUpper's enclosure over the RECORD's own radius and
-// sweep brackets — never the held float chordCount itself returns. That float
+// sweep brackets — never the held float tessellation.ChordCount itself returns. That float
 // is computed from the walk's math.Hypot radius and its math.Atan2 sweep, with
 // no enclosure and no outward rounding, so it can decide a COUNT and nothing
 // more (docs/loft-design.md §5.2's third rule). A candidate count whose
@@ -339,7 +339,7 @@ func LoftCircularStationChain(side LoftCircularSide, m int) ([]LoftStation, floa
 // while the station displacement is a rounding term of the generator's own
 // arithmetic, read once the count has settled.
 //
-// It also discharges loftCellStations' own
+// It also discharges RecordCellStations' own
 // PARAMETER-MATCHED obligation: stations are placed at uniform PARAMETER t_k =
 // TStart + (k/m)*(TEnd-TStart), which for a circular walk is uniform in ANGLE
 // because t is the walk's own sweep fraction — and under that uniform-angle
@@ -358,7 +358,7 @@ func LoftCircularStationChain(side LoftCircularSide, m int) ([]LoftStation, floa
 // EXACT rational parameter, never a float rounding of one (circularPointBound)
 // — is what keeps both halves readings of the same quantity.
 //
-// matchedDelta is loftCellStations' own per-cell obligation — the CHORD-TO-
+// matchedDelta is RecordCellStations' own per-cell obligation — the CHORD-TO-
 // CURVE half of docs/loft-design.md §5.2's matchedDelta row, which the
 // consumer composes with the build's own delta (ChordCellDeltaUpper), never
 // the whole row: this arm's sagitta discharges that half EXACTLY (the

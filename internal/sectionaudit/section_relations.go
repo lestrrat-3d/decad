@@ -246,7 +246,7 @@ func Nesting(budget *proofbound.WorkBudget, segs []Entry, nLoops int) error {
 }
 
 // elemOf converts a segment walk into a survey2d boundary element. It is
-// walkElem under this file's own name; the conversion lives in one place so a
+// survey2d.WalkElem under this file's own name; the conversion lives in one place so a
 // new walk kind is decided once (survey.go).
 func elemOf(w survey2d.SegmentWalk) (survey2d.SurveyElem, bool) { return survey2d.WalkElem(w) }
 

@@ -353,7 +353,7 @@ func TestBrepShellThroughCutP1(t *testing.T) {
 // keeps both levels, so it grows by the bottom slab 36·16·2 the dilated hole
 // does not reach, and the volume is 5632 + 220π − 1152 = 4480 + 220π, with a
 // rim at each level. A translated P1 shells to the same volume. Shown to
-// fail with removedCaps reading the bottom as kept (the floor stayed, and the
+// fail with throughCut.removedFaces reading the bottom as kept (the floor stayed, and the
 // volume read 5632 + 220π) and with the rim assembled at the top alone (an
 // edge then bounded one face use and the build refused).
 func TestBrepShellThroughCutBothCaps(t *testing.T) {
@@ -842,9 +842,9 @@ func requireShellSound(t *testing.T, result *Body, a, b *big.Rat) {
 // and its mesh's occupied-volume proof covers the figure. Shown to fail with
 // throughshell.SweptTrace reporting no trace (the U-channel kept the cavity's face
 // on the removed carrier beside a rim holding no hole, and the cavity closed
-// into a second lump), with throughRimRegions cancelling no piece (the
+// into a second lump), with throughshell.RimRegions cancelling no piece (the
 // touching rims read as R's loop holding a hole that meets it, and S7 refused
-// them), and with openingThroughSection handing sideOpeningRegions one
+// them), and with openingThroughSection handing prismshell.SideOpeningRegions one
 // removed wall alone (the two-wall run then kept the x = 0 wall's cavity face
 // whole, and SG7 found no cavity hole to partner the port there).
 func TestBrepShellThroughCutWallRun(t *testing.T) {

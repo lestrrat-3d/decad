@@ -178,7 +178,7 @@ func TestExtrudeArcSegPrismBoundsTighten(t *testing.T) {
 // fmt.Sprintf("%b", ...) — the exact binary float64 representation, not a
 // rounded decimal — so a mismatch here means the carrier swap moved a
 // published value or bound, not merely that a tolerance loosened. The
-// centroid bound's golden carries prismPointBound's lift factor, exactly 1 for
+// centroid bound's golden carries prismrecord.Payload.PointBound's lift factor, exactly 1 for
 // this unplaced axis-aligned prism.
 func TestExtrudeArcSegPrismReadingsBitIdenticalAcrossAtanCarrier(t *testing.T) {
 	t.Parallel()

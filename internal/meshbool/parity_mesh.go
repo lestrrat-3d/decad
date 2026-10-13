@@ -158,7 +158,7 @@ func (b *ParityFacetBox) Rejects(fu, fv float64) bool {
 		(fu < b.MinU || fu > b.MaxU || fv < b.MinV || fv > b.MaxV)
 }
 
-// buildFacetBox builds facet ti's box on the (u, v) plane a ray sweeping axis
+// BuildFacetBox builds facet ti's box on the (u, v) plane a ray sweeping axis
 // leaves. A non-finite coordinate leaves nondegenerate false: the box would not
 // bound anything, and an unusable box costs only the rejections it does not
 // make.
@@ -200,7 +200,7 @@ func (pm *ParityMesh) BuildFacetBox(axis, u, v, ti int) ParityFacetBox {
 	return box
 }
 
-// facetBoxes returns the per-facet projected-box slice for one swept axis,
+// FacetBoxes returns the per-facet projected-box slice for one swept axis,
 // allocating it on that axis's first sweep. Both rays of an axis project onto
 // the same plane (AxisRays), so one slice serves both senses.
 func (pm *ParityMesh) FacetBoxes(axis int) []ParityFacetBox {
@@ -218,7 +218,7 @@ func NewParityMesh(verts []r3.Vec, tris [][3]int) *ParityMesh {
 	return &ParityMesh{Verts: verts, Tris: tris}
 }
 
-// vertexProjection returns vertex vi projected onto the (u, v) plane a ray
+// VertexProjection returns vertex vi projected onto the (u, v) plane a ray
 // sweeping axis leaves, constructing it on first use and caching it unchanged.
 // The returned Xp2 is read-only: its rationals are the cache's own, so a caller
 // must never make one the destination of an arithmetic operation.

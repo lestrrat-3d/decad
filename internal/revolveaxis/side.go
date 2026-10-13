@@ -57,7 +57,7 @@ type SideResult struct {
 // exists to close one level up, only here it feeds the gate that decides
 // which side the region is admitted on, not a review AFTER the fact. Reading
 // the offset through proofbound.BoundedMul/proofbound.BoundedAdd/proofbound.BoundedSub (the same vocabulary
-// axisFrame.toAxisRhoBound already uses for the identical ρ formula at one
+// Frame.ToAxisRhoBound already uses for the identical ρ formula at one
 // point) charges every one of those roundings into rloB/rhiB, so the strict
 // admission gate below reads a number the accompanying bound provably covers.
 //
@@ -94,7 +94,7 @@ func ResolveSide(line Line2, readings SideExtremes) (SideResult, error) {
 	// displacement, a circular candidate's own enclosure) but NOT the
 	// multiply-and-sum arithmetic of evaluating gu·u + gv·v itself for a
 	// direction that is not exactly 0, 1 or −1 — the identical gap
-	// axisExtremeContext closes for its own, structurally identical scan
+	// axisExtreme closes for its own, structurally identical scan
 	// through proofbound.PlaneDotDecompositionRoundAllow (internal/proofbound/bounds.go). A profile vertex
 	// the record states verbatim therefore still commits real rounding
 	// forming its dot with a tilted axis's own (nU, nV)/(dU, dV), and that
@@ -102,7 +102,7 @@ func ResolveSide(line Line2, readings SideExtremes) (SideResult, error) {
 	// left uncharged, the SAME recorded profile can compute as provably
 	// negative on one platform and merely uncertain on another, for a region
 	// whose true radial minimum is exactly zero. Folding it in here — once,
-	// for THIS scan, never composed with axisExtremeContext's own copy of the
+	// for THIS scan, never composed with axisExtreme's own copy of the
 	// identical charge on a different reading — is what makes the admission
 	// decision agree across platforms: the charge is zero for an axis-aligned
 	// direction (proofbound.PlaneDotDecompositionRoundAllow's own trivial-coefficient

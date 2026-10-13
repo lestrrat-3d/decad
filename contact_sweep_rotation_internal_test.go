@@ -395,7 +395,7 @@ func pointDeviationSquaredCommonDenom(p rotationalSweepPath, pose r3.Transform,
 //
 // Legs shown to fail: the shift taken over the staged points alone, the
 // half-integer source points need a negative shift and the scaling panics;
-// dyScaledNum shifting by the shift alone, dropping the exponent, the first
+// motionbound.dyScaledNumInto shifting by the shift alone, dropping the exponent, the first
 // box pose differs.
 func TestPointDeviationMatchesCommonDenomForm(t *testing.T) {
 	t.Parallel()

@@ -477,14 +477,14 @@ type boxCell struct {
 	// cell has no δ_j, so no pair of it has a τ_half.
 	delta map[int]*big.Rat
 	// depReach is, per dependent joint, its centre and half-span for the
-	// projection bound's expansion over the cell (dependentReach).
+	// projection bound's expansion over the cell (linkagebound.DependentCellReach).
 	depReach map[int]linkagebound.CellReach
 	gate     string
 	gateLoop *loopDrive
 	// projShares holds, for each evaluated pair whose bound over the cell is
 	// the projection bound (docs/linkage-check-design.md §5.8), every axis's
 	// share of that bound's defect; a pair absent here takes the travel
-	// bound's shares, pairShares.
+	// bound's shares, linkagebound.SumTerms over boxRun.pairTerms.
 	projShares map[[2]int]map[int]*big.Rat
 }
 
@@ -842,7 +842,7 @@ func (b *boxRun) classify(c *boxCell) {
 // to a float; the largest separation along the six coordinate directions. A
 // loop's dependent joint is read at its centre, the midpoint of its
 // enclosure at the cell's centre, with h_i the farthest that centre sits
-// from the hull of the cell's hull and that enclosure (dependentReach), and
+// from the hull of the cell's hull and that enclosure (linkagebound.DependentCellReach), and
 // its share is charged to its driver. It returns the bound and each axis's
 // share of its defect, or nil when a dependent's readings are missing, as on
 // a gated cell, or a box cannot be read exactly. readings
@@ -954,7 +954,7 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 
 // cellReadingKey names one corner reading at a cell's centre: a mover's
 // body under the joints on its path from position below on, read at its box
-// corners or at its hull points (bodyHullPoints).
+// corners or at its hull points (linkagebound.PrismHullPoints).
 type cellReadingKey struct {
 	mover, below int
 	hull         bool

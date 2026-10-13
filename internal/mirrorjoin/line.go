@@ -290,7 +290,7 @@ func sqDist(a, b Point2) *big.Rat {
 }
 
 // ReverseRun is a run of segments' image across the line walked back:
-// rewindLoop's rule (internal/prismcells/rewind.go) under the exact reflection, so the
+// prismcells.RewindLoop's rule (internal/prismcells/rewind.go) under the exact reflection, so the
 // image of the run's last segment comes first and walks from the run's end
 // back to its start. Per kind, a line becomes the whole line from m(walk end)
 // to m(walk start), an arc {C, S, E} becomes {m(C), m(E), m(S)} over the same

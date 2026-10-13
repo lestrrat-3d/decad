@@ -381,7 +381,7 @@ func wedgeContains(q, p, r, m Point2) bool {
 // between them, so the occurrence whose wedge holds the direction to m is the
 // only one that keeps the merged polygon from crossing itself there. Splicing
 // at any other occurrence leaves two bridge channels interleaved at the shared
-// point — a boundary earClip then, correctly, cannot reduce.
+// point — a boundary EarClip then, correctly, cannot reduce.
 //
 // A vertex that appears once is left exactly as the caller chose it: there is no
 // second occurrence to prefer, so this makes no judgement about it and cannot

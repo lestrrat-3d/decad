@@ -85,7 +85,7 @@ func meshFreeChainCount(t *testing.T, mesh *decad.Mesh) int {
 // top-level function rather than a closure over parent: a self-referential
 // closure cannot be declared and assigned in one statement (staticcheck
 // S1021 does not account for the recursion), the same reason
-// surface.go's own vertexChainRoot is a top-level
+// surfacegroup.root is a top-level
 // functions instead of closures.
 func meshFreeChainRoot(parent map[int]int, v int) int {
 	if _, ok := parent[v]; !ok {

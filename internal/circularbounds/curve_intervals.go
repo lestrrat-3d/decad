@@ -227,7 +227,7 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (proofbound.RatInterv
 		uTerm := proofbound.IntervalScale(proofbound.IntervalSub(s1, s0), new(big.Rat).Mul(centerU, r))
 		vTerm := proofbound.IntervalScale(proofbound.IntervalSub(c1, c0), new(big.Rat).Mul(centerV, r))
 		// A = ½ ( r²·dθ + c_u·r·(sin θ1 − sin θ0) − c_v·r·(cos θ1 − cos θ0) ) —
-		// addCircular's own closed form (moments.go:1505), every non-trig
+		// momentregion.State.AddCircular's own closed form, every non-trig
 		// factor exact and every trig factor enclosed.
 		return proofbound.IntervalScale(proofbound.IntervalSub(proofbound.IntervalAdd(sector, uTerm), vTerm), big.NewRat(1, 2)), true
 	case ArcSeg:
@@ -457,7 +457,7 @@ func circularLengthInterval(seg CurveSegment) (proofbound.RatInterval, bool) {
 // a walk's own endpoint converts its held float parameter (floatRat) at the
 // call; one generating a point at a parameter the record's own arithmetic
 // states — a uniform station division t_k = TStart + (k/m)·(TEnd − TStart)
-// (loft_build.go's circularStationChain) — hands that value in unrounded,
+// (loftmesh.CircularStationChain) — hands that value in unrounded,
 // because rounding it to a float first would enclose the curve at a
 // NEIGHBOURING parameter and prove a bound about a point no construction
 // named.

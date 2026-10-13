@@ -278,7 +278,7 @@ func spinningDrift(t *testing.T, start, velocity, spin r3.Vec) decad.RigidDriftS
 //     zeroing the Z displacement moves the transverse bracket off the
 //     closed-form root;
 //   - the bracket search over the exact squared center distance: dropping
-//     the doubled cross term of squaredGap loses the transverse bracket and
+//     the doubled cross term of spherepath.PairMotion.SquaredGap loses the transverse bracket and
 //     TestSweepPairRotatingSourceSpheresDepart's rotating graze;
 //   - the center-path deviation charged in transferManifold: neither the
 //     separation bound nor the witness bounds cover the exact ideal pair;

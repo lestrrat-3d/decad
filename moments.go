@@ -18,7 +18,7 @@ import (
 // with its own doc comment: internal/proofbound/bounded.go the bounded-scalar arithmetic every
 // published reading is composed in, internal/proofbound/rat_interval.go the exact rational
 // interval arithmetic the certified terms are proven in, and
-// moments_circular.go the circular segment's own enclosures.
+// internal/circularbounds/moments.go the circular segment's own enclosures.
 
 // SecondMoments is a region's bounded second moments of area about the plane
 // origin. Each reading has Kind SecondMomentOfArea (mm⁴). Re-reference them to

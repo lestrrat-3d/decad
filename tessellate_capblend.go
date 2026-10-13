@@ -174,7 +174,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	}
 
 	// faceExtra is every displacement a face carries BESIDE its own vertices'
-	// store term, which composeCapBlendBounds adds per face at the end.
+	// store term, which tessellation.ComposeCapBlendBounds adds per face at the end.
 	faceExtra := map[*Face]float64{}
 	bump := func(f *Face, v float64) {
 		if v > faceExtra[f] {
@@ -328,7 +328,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 // motion, built only when proveVolume, is §7's per-vertex displacement from
 // the ideal polyhedron B1, a parallel array: the vertex's plane-local
 // displacement (the side station's own bound, or the cap station's capMotion),
-// the rounding exactPrismPointRound measures, and the proven bound on the level
+// the rounding prismrecord.Payload.PointRound measures, and the proven bound on the level
 // it stands at, summed outward. The rounding is measured once per vertex and
 // read by both arrays.
 func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl prismPayload, lms []capBlendLoopMesh, mesh *Mesh, proveVolume bool) ([]float64, []float64, error) {
@@ -684,7 +684,7 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 	}
 	// This cap's own chord-versus-curve deficit: the planar area between each
 	// bounding ring and the curve it chords, one term per loop, the same charge
-	// walkAreaSlack makes per cap for a prism.
+	// tessellation.WalkAreaSlack makes per cap for a prism.
 	for li := range lms {
 		lm := &lms[li]
 		chamfered := lm.onStart

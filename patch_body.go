@@ -340,13 +340,13 @@ func provePatchChainPlaneLevel(edges []*Edge) (levelToken, float64, bool) {
 // chance to admit instead.
 //
 // Three or more vertices that are not all collinear give the plane a
-// determinant to take: patchPlaneFromVertices searches for two vertex
+// determinant to take: patchchain.planeFromVertices searches for two vertex
 // differences from a common point whose exact cross product is nonzero, and
 // that cross product IS the plane's (unoriented) normal. Under three
 // independent vertices — a lone closed circular edge has exactly one, a
 // two-edge chain of two arcs has exactly two — there is no such determinant,
 // and §5.2 is silent on what decides the plane there; this evaluator decides
-// it from a curved edge's own carrier plane instead (patchPlaneFromCarrier):
+// it from a curved edge's own carrier plane instead (patchchain.planeFromCarrier):
 // a Circle3 or Arc3's Center and Axis already state a plane, and that is the
 // only plane its whole curve — not just its two endpoints — can lie in.
 //

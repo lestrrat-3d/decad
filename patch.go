@@ -285,7 +285,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 	// zero; they are composed anyway, exactly as buildLoopSidesAs composes its
 	// rim vertices, so a later field this payload gains is charged the same way
 	// rather than silently skipped. Beside them every rim vertex carries its
-	// own exact frame lift and placement rounding (prismPayload.liftedVertex),
+	// own exact frame lift and placement rounding (prismPayload.LiftedVertex),
 	// zero wherever that lift is exact for the coordinates at hand.
 	rimVertex := func(u, v, extra float64) *Vertex {
 		held, lift := pp.LiftedVertex(u, v, pp.Z0)

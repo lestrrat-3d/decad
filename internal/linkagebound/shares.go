@@ -50,7 +50,7 @@ func Remainder(rho, h []*big.Rat) *big.Rat {
 	return sum
 }
 
-// AddHullShares is addProjectionShares along any direction n with |n| at
+// AddHullShares is AddAxisShares along any direction n with |n| at
 // most norm: at the point attaining the body's extent along sense·n, each
 // joint i on its relative path takes |n·v_{i,c}|·h_i/norm + Σ_j B_ij·h_i·h_j,
 // charged to axes[i]. The shares decide cost alone, never soundness.
@@ -105,8 +105,8 @@ func AddHullShares(shares map[int]*big.Rat, s Side, rho []*big.Rat, axes []int, 
 }
 
 // AttainedDirection is the coordinate axis and sense, ±1, of the direction
-// n = sense·e_axis along which projectionLower attained bound: the first, in
-// projectionLower's own order, whose separation equals it.
+// n = sense·e_axis along which Lower attained bound: the first, in
+// Lower's own order, whose separation equals it.
 func AttainedDirection(a, p Side, bound *big.Rat) (int, int) {
 	aUp, aDown := a.Extents()
 	pUp, pDown := p.Extents()

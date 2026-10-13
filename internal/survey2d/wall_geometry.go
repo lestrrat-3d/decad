@@ -68,7 +68,7 @@ func RadianTrigBounds(x float64) (proofbound.BoundedScalar, proofbound.BoundedSc
 // quadratic form divides by 2A, so an A whose interval spans zero leaves
 // proofbound.BoundedQuotient no positive clearance and it answers +Inf — not a wide bound
 // but no bound at all, and a candidate carrying one silences the whole survey
-// through runBudget's aggregate. What a straddling A really says is that the
+// through WallKernel.RunBudget's aggregate. What a straddling A really says is that the
 // equation is linear to within its own error, so the root this kernel wants is
 // the degenerate one, −C/B, whose own denominator is generally well separated:
 // that root is emitted here instead of the pair the vanishing denominator would
@@ -77,7 +77,7 @@ func RadianTrigBounds(x float64) (proofbound.BoundedScalar, proofbound.BoundedSc
 // down — coefficients whose arithmetic cannot separate a denominator from zero
 // name no isolated disk, and the family they describe reaches the sink through
 // the pair criticals and SolveParallelPair. The refusal stays local to the
-// triple: runBudget's aggregate still refuses any unbounded candidate it is
+// triple: WallKernel.RunBudget's aggregate still refuses any unbounded candidate it is
 // handed, which is what stops a survey publishing an interval it cannot prove.
 func QuadRootsBounded(A, B, C proofbound.BoundedScalar) []proofbound.BoundedScalar {
 	// The degenerate linear root, emitted wherever the quadratic form's own
@@ -197,7 +197,7 @@ type SurveyElem struct {
 	// radius, a few ulp of it; the kernel's own scale is never smaller than an
 	// element radius, so rrBound is at most 2^-50·scale ≈ 8.9e-16·scale, while
 	// the weakest slack any of those readings concedes is k.tol = 1e-9·scale.
-	// That is six decades of headroom, seven against contactTol's 8·k.tol, so
+	// That is six decades of headroom, seven against WallKernel.ContactTol's 8·k.tol, so
 	// widening the readings by rrBound would move nothing any of them decides.
 	// TestArcWalkRadiusBoundStaysUnderTheKernelSlack pins both halves of that
 	// chain so the argument cannot rot unnoticed.
@@ -218,7 +218,7 @@ type SurveyElem struct {
 	MatInside  bool
 }
 
-// rrBS is the element's radius with its own proven bound — the one spelling
+// RrBS is the element's radius with its own proven bound — the one spelling
 // every candidate derivation reads the radius through.
 func (e SurveyElem) RrBS() proofbound.BoundedScalar {
 	return proofbound.MeasuredScalar(e.Rr, e.RrBound)
@@ -252,7 +252,7 @@ func ArcElem(qx, qy, rr, th0, th1 float64, closed bool) (SurveyElem, bool) {
 	}, true
 }
 
-// arcRange is the walked angular range in ascending order.
+// ArcRange is the walked angular range in ascending order.
 func (e SurveyElem) ArcRange() (float64, float64) {
 	if e.Th1 >= e.Th0 {
 		return e.Th0, e.Th1
@@ -260,7 +260,7 @@ func (e SurveyElem) ArcRange() (float64, float64) {
 	return e.Th1, e.Th0
 }
 
-// arcContains reports whether angle θ lies on the walked range, modulo 2π.
+// ArcContains reports whether angle θ lies on the walked range, modulo 2π.
 func (e SurveyElem) ArcContains(th float64) bool {
 	if e.Closed {
 		return true

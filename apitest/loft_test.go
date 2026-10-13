@@ -524,7 +524,7 @@ func TestLoftDuplicateAlignmentOption(t *testing.T) {
 func TestLoftEmptyAlignmentPayload(t *testing.T) {
 	t.Parallel()
 	// A one-loop pair needs exactly one offset; WithLoftAlignment() with no
-	// arguments must reach validateLoftRecords as a non-nil, length-0 slice
+	// arguments must reach loftmesh.ValidateLoftRecords as a non-nil, length-0 slice
 	// so it refuses as S4 (wrong length) rather than silently defaulting.
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()

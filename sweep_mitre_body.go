@@ -34,7 +34,7 @@ func mitredOrientSign(a, b, c, d sweepRatVec) int {
 }
 
 // mitredJunctionConvex decides a junction edge's convexity the way
-// junctionConvex does for a loft rung, over the rational vertices: primary's
+// loftmesh.JunctionConvex does for a loft rung, over the rational vertices: primary's
 // outward-wound triangle against the apex of other's. Zero is a decided flat,
 // non-convex edge.
 func mitredJunctionConvex(exact []sweepRatVec, primary, other [3]int, a, b int) bool {

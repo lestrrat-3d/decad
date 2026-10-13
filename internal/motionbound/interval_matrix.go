@@ -68,7 +68,7 @@ func NewScaledIvMat(m IvMat) ScaledIvMat {
 	return s
 }
 
-// applyScaled is IvMat.apply on the exact point whose coordinates are n/q,
+// ApplyScaled is IvMat.apply on the exact point whose coordinates are n/q,
 // for integer numerators n over a positive q: the endpoint numerators of each
 // row over den·q. The interval product of an entry with a point coordinate v
 // is [lo·v, hi·v] for v ≥ 0 and [hi·v, lo·v] for v < 0 (MulInterval), and a
@@ -90,7 +90,7 @@ func (s ScaledIvMat) ApplyScaled(n [3]*big.Int) ([3]*big.Int, [3]*big.Int) {
 	return lo, hi
 }
 
-// mulPoints is IvMat.mul with a right factor o whose entries are all points,
+// MulPoints is IvMat.mul with a right factor o whose entries are all points,
 // as ExactTransform's are: the interval product of an entry with a point v is
 // [lo·v, hi·v] for v ≥ 0 and [hi·v, lo·v] for v < 0 (MulInterval), so each
 // result endpoint is one integer dot product over den times o's own shared

@@ -216,7 +216,7 @@ func tiltedLineChainSketch(tb testing.TB) (*sketch.Sketch, *sketch.Chain) {
 // nothing else, so it reads Exact at a zero bound the moment the leg is gone.
 //
 // Shown-to-fail: dropping validateStraightSweepPath's composed height bound —
-// straightEdgeBound's square-root error against the exact rational squared
+// capcontour.StraightEdgeBound's square-root error against the exact rational squared
 // length, plus each dyadicFloatError between the recorded tangent and the held
 // sweep vector — turns the two sweep-edge assertions below red. See this PR's
 // report for the exact failure text.

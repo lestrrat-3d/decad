@@ -158,7 +158,7 @@ func PrismWallReading(
 	best, bestBound, ok := agg.Resolve()
 	if !ok {
 		// A candidate this reading relied on could not be bounded: the answer
-		// is not one this evaluator can stand behind (see runBudget's own doc
+		// is not one this evaluator can stand behind (see WallKernel.RunBudget's own doc
 		// comment), so it is undecided rather than published with an unusable
 		// bound.
 		return WallReading{}, nil

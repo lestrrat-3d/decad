@@ -304,7 +304,7 @@ func ratSqrtIv(t *testing.T, x *big.Rat) ratIv {
 // charging the last included one instead is more conservative still.
 //
 // No π enters anywhere, so nothing here depends on a platform's libm, and
-// this must never call internal/surfacenormal/normal_bound.go's radSinCosInterval: the point of this
+// this must never call proofbound.RadSinCosInterval: the point of this
 // reference is an independent witness, not the code under test agreeing with
 // itself. Every cone half angle this file feeds it lands in range: it is an
 // angle between an axis and a wall, read out in radians.
@@ -391,7 +391,7 @@ func ratIvVecSub(a, b ratIvVec) ratIvVec {
 // r̂·cos(h) − â·sin(h), the closed form internal/surfacenormal/normal_bound.go's ConeAllow
 // states. r̂ and â are this file's own proven unit enclosures of the radial
 // and axis directions, h's sine and cosine are this file's own series, and
-// nothing here reads internal/surfacenormal/normal_bound.go's radSinCosInterval or UnitVec3.
+// nothing here reads proofbound.RadSinCosInterval or UnitVec3.
 func coneDefectSq(t *testing.T, s decad.Cone, p, n r3.Vec) *big.Rat {
 	t.Helper()
 	radial := axialRadialOf(p, s.Origin, s.Axis)

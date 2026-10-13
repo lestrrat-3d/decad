@@ -42,7 +42,7 @@ func LoopSignedArea(budget *proofbound.WorkBudget, loop LoopRecord) (float64, er
 }
 
 // analyticSignedArea evaluates only the area term of the same Green's-theorem
-// integral used by regionIntegrals.addAnalytic. Keep its float operations in
+// integral used by momentinput.Integrals.AddAnalytic. Keep its float operations in
 // the same order: S8 compares the held signed areas, including near zero.
 func analyticSignedArea(segment CurveSegment) (float64, error) {
 	segment, err := sectionrecord.NormalizeSegment(segment)

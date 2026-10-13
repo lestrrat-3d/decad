@@ -47,11 +47,11 @@ import (
 //     outward-rounding contract the dense-sample tests are too coarse (a few
 //     ulps) to catch on their own.
 //   - Return the last examined cell's own sagitta instead of the running
-//     maximum in walkCell: TestPairStationsSagittaUpperIsAMaximumNeverTheLast
+//     maximum in freeform.SagittaStationWalk.WalkCell: TestPairStationsSagittaUpperIsAMaximumNeverTheLast
 //     Cell went red — a chain whose FIRST span bulges far off its chord and
 //     whose SECOND is nearly flat reported the second span's tiny sagitta
 //     instead of the first span's large one.
-//   - Charge only work0, never work1, in walkCell: TestPairStationsChargesBoth
+//   - Charge only work0, never work1, in freeform.SagittaStationWalk.WalkCell: TestPairStationsChargesBoth
 //     CountersSeparately went red — work1.spent stayed exactly 0 after a build
 //     that visibly subdivided.
 //   - Charge work1's cost using n0 (side 0's control count) instead of n1:
@@ -71,7 +71,7 @@ import (
 //     visible falsification signal, and removing the length check and running
 //     that single test was confirmed to panic before the gate was restored.
 //   - Charge the hard cap per cell VISITED instead of per chord ACCEPTED
-//     (count every walkCell entry against freeform.MaxChordsPerWalk):
+//     (count every freeform.SagittaStationWalk.WalkCell entry against freeform.MaxChordsPerWalk):
 //     TestPairStationsAcceptsTheStatedChordCap went red — a walk needing
 //     exactly freeform.MaxChordsPerWalk chords was refused with freeform.ErrTooManyChords
 //     barely halfway through, because a binary refinement visits 2L−m cells
@@ -119,19 +119,19 @@ import (
 //     accepted whole with side 1's reading (5.0) far above side 0's (~1e-4)
 //     reported sagittaUpper ~1e-4 instead of ~5.0, a four-orders-of-magnitude
 //     under-report of the published bound.
-//   - A4: walkCell's own left-then-right recursion order swapped to
+//   - A4: freeform.SagittaStationWalk.WalkCell's own left-then-right recursion order swapped to
 //     right-then-left: TestPairStationsStationsAdvanceMonotonicallyAlongTheChain
 //     went red — a quarter circle's own returned stations no longer advanced
 //     monotonically in angle, regressing partway through the chain exactly as
 //     a scrambled walk order predicts.
-//   - A5: the accept branch's own c0.ratPointAt(0)/c1.ratPointAt(0) swapped
-//     for c0.ratPointAt(len-1)/c1.ratPointAt(len-1) (each cell's LAST control
+//   - A5: the accept branch's own c0.RatPointAt(0)/c1.RatPointAt(0) swapped
+//     for c0.RatPointAt(len-1)/c1.RatPointAt(len-1) (each cell's LAST control
 //     point instead of its FIRST):
 //     TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly went red
 //     — stations[0] no longer equaled the chain's own start control point,
 //     exactly.
 //   - A6: the cost model charged one flat 8 units per control point for both
-//     readings, left ratPointAt's reconstruction, freeform.DyadicSpanOf's conversion
+//     readings, left freeform.DyadicSpan.RatPointAt's reconstruction, freeform.DyadicSpanOf's conversion
 //     and the per-call proofbound.RatSqrtUp entirely free, and so was not the upper
 //     bound its own doc comment claimed. Each charge is now counted on its own
 //     code path. Five mutations were each run red against the new fixtures:
@@ -147,11 +147,11 @@ import (
 //     — a ratio-only fixture cannot see a rescaled or missing cost at all.
 //   - B1: freeform.DyadicSpanSagittaUpper's own n==0 guard was already dead-ended —
 //     nothing in freeform.PairStations prevented a zero-control-point span from
-//     reaching walkCell, whose accept branch then panicked on
-//     c0.ratPointAt(0)'s empty slice. Removing the new entry-level guard and
+//     reaching freeform.SagittaStationWalk.WalkCell, whose accept branch then panicked on
+//     c0.RatPointAt(0)'s empty slice. Removing the new entry-level guard and
 //     running TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking
 //     reproduced exactly that panic (index out of range on
-//     freeform.DyadicSpan.ratPointAt); freeform.PairStations now refuses a zero-control span on
+//     freeform.DyadicSpan.RatPointAt); freeform.PairStations now refuses a zero-control span on
 //     either side with ErrDegenerate before any cell is walked, so the
 //     dead-ended guard's own 0 answer is no longer reachable from this walk.
 //   - B2: the final station's own append reverted from a fresh
@@ -159,7 +159,7 @@ import (
 //     to appending the caller's own last control point freeform.RatPoint directly:
 //     TestPairStationsFinalStationDoesNotAliasTheInputSpan went red —
 //     mutating the returned station's own *big.Rat in place changed the
-//     caller's input span, violating ratPointAt's own non-aliasing contract
+//     caller's input span, violating freeform.DyadicSpan.RatPointAt's own non-aliasing contract
 //     every OTHER station in the two returned lists already carries.
 //
 // THIRD PASS — the cost model moved from caller-side aggregates into the
@@ -201,7 +201,7 @@ import (
 //   - C10: freeform.RatChordFrame renamed without renaming it in the guard's own metered
 //     set: TestSplineSagittaRunsNoExactArithmeticOutsideAMeteredPrimitive went
 //     red, so a primitive cannot be silently dropped out of the metered surface.
-//   - C11: an unmetered new(big.Rat).Add added to walkCell: the same guard went
+//   - C11: an unmetered new(big.Rat).Add added to freeform.SagittaStationWalk.WalkCell: the same guard went
 //     red on all four exact-arithmetic sites, naming the function and the
 //     operation. This is the leg that keeps the class closed rather than the
 //     numbers repaired.
@@ -1002,7 +1002,7 @@ func TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly(t *testing.T
 // derivation and not against itself.
 func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
 	t.Parallel()
-	// ratPointAt: 1 big.Int.Lsh, then 2 big.Rat.SetFrac, each NORMALISING (a
+	// freeform.DyadicSpan.RatPointAt: 1 big.Int.Lsh, then 2 big.Rat.SetFrac, each NORMALISING (a
 	// GCD plus a division of numerator and of denominator).
 	const ratPointAtOps = 1 + 3 + 3
 	require.Equal(t, ratPointAtOps, freeform.RatPointReconstructCost,
@@ -1315,9 +1315,9 @@ func TestPairStationsBudgetBindsAtTheWholeChargedTotal(t *testing.T) {
 
 // TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking pins the fix for
 // freeform.DyadicSpanSagittaUpper's own dead-ended n==0 guard: with no entry-level
-// gate, a zero-control span reaches walkCell, both sides' sagitta reads 0
+// gate, a zero-control span reaches freeform.SagittaStationWalk.WalkCell, both sides' sagitta reads 0
 // (freeform.DyadicSpanSagittaUpper's own guard), the accept test passes trivially,
-// and the accept branch's own c0.ratPointAt(0) panics with an index out of
+// and the accept branch's own c0.RatPointAt(0) panics with an index out of
 // range on the empty points slice. freeform.PairStations must refuse this input
 // cleanly, on either side, before any cell is ever walked.
 func TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking(t *testing.T) {
@@ -1341,7 +1341,7 @@ func TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking(t *testing.T) {
 
 // TestPairStationsFinalStationDoesNotAliasTheInputSpan mutates a RETURNED
 // station's own *big.Rat in place and checks the caller's input span is
-// unaffected. ratPointAt's own doc comment guarantees non-aliasing for every
+// unaffected. freeform.DyadicSpan.RatPointAt's own doc comment guarantees non-aliasing for every
 // OTHER station; the final station (appended after the recursive walk,
 // straight off the original chain's own last control point) must carry the
 // same guarantee.

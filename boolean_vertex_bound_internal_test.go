@@ -322,7 +322,7 @@ func TestBooleanVertexBoundsChargeEachRimItsWeld(t *testing.T) {
 // first operand whose tolerance is finer than that bound is refused by the
 // gate, quoting the bound and the tolerance; a tolerance above it, or an
 // ungated operand, leaves the near-miss to the pre-pass's own refusal.
-// Shown to fail: with facesNearMiss's gate calls removed, the gated case
+// Shown to fail: with meshbool.FacesNearMiss's gate calls removed, the gated case
 // returned the near-miss verdict and no CoarseHeldContactError.
 func TestHeldGateReadsFacetsWithinThePrePassSlack(t *testing.T) {
 	t.Parallel()

@@ -1750,7 +1750,7 @@ func TestShellCupWallThicknessCarriesConversionDelta(t *testing.T) {
 	t.Parallel()
 	// A cup whose shell thickness is stated in a non-millimetre unit: the
 	// wall reading is exactly the shell theorem's own t, but that t's own
-	// unit conversion (magnitudeInBounded, shell.go) carries a displacement
+	// unit conversion (extent.MagnitudeInBounded, shell.go) carries a displacement
 	// cupWall now composes (docs/payload-verification-design.md §4.1)
 	// instead of asserting Exact. A millimetre thickness stays Exact — see
 	// TestShellCupWallThickness and this file's other cylinderCup cases, all

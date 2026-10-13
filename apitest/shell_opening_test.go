@@ -710,7 +710,7 @@ func dClosedForm(base, p, a, r int64, high bool) *big.Rat {
 // (3, ±4), the rims are arcs about the origin, and the cavity is the circular
 // segment beyond x = 3, area 25·acos(3/5) − 12, over [3, 7]. Shown to fail:
 // the arc removed inward and outward with the removed arc stated whole in P
-// and R' (splitAtCuts false for an arc: the area identity failed, SO5); the
+// and R' (offset2d.SplitAtCuts false for an arc: the area identity failed, SO5); the
 // arc removed outward's tessellation with every wall column holding both
 // side lines' splits (the mesh did not close); the
 // float cut under a kept cap with requireRemovedArcKey deleted (the engine
@@ -1058,7 +1058,7 @@ func halfLensSection(s *sketch.Sketch) {
 //
 // Shown to fail: with the circle–circle junction missing again, both arc
 // fixtures with a kept cap refused (SO5); with the arc–arc end corner refused
-// again in sideOpeningRegions, both notch fixtures refused; with the
+// again in prismshell.SideOpeningRegions, both notch fixtures refused; with the
 // line–circle junction at one recorded point deleted, the slanted wall
 // refused (SO5).
 func TestShellSideOpeningCircleJunctions(t *testing.T) {
@@ -1244,7 +1244,7 @@ func notchEndSection(s *sketch.Sketch) {
 //     slant's cut trims the offset arc to the angle 59.8°, past the
 //     extended end at 61.9°, so the trimmed arc runs backward (S11a).
 //
-// Shown to fail: with offsetOpenChain reading every walk through WalkConsumed
+// Shown to fail: with offset2d.OffsetOpenChain reading every walk through WalkConsumed
 // again, every building fixture here refused S11a.
 func TestShellSideOpeningArcExtension(t *testing.T) {
 	t.Parallel()

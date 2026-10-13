@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ratSquaredDistance3Oracle and ratStraightEdgeBound are ratSquaredDistance3
-// and straightEdgeBound as they were computed over big.Rat before the dyadic
+// ratSquaredDistance3Oracle and ratStraightEdgeBound are proof.RatSquaredDistance3
+// and capcontour.StraightEdgeBound as they were computed over big.Rat before the dyadic
 // rewrite, kept verbatim as the oracles below.
 
 func ratSquaredDistance3Oracle(a0, a1, a2, b0, b1, b2 float64) *big.Rat {
@@ -41,19 +41,19 @@ func ratStraightEdgeBound(held float64, squared *big.Rat, endpointDeltas ...floa
 	return proofbound.AbsSumUpper(append([]float64{ratSqrtIntervalError(squared, held)}, endpointDeltas...)...)
 }
 
-// TestStraightEdgeBoundDyadicMatchesRational pins straightEdgeBound and its
+// TestStraightEdgeBoundDyadicMatchesRational pins capcontour.StraightEdgeBound and its
 // squared length, computed over dyadics, to the big.Rat computation they
 // replaced, bit for bit, on random 3D point pairs of mixed magnitudes with a
 // non-finite coordinate now and then. It reads every caller's spelling: the
-// general three-coordinate form (capSlantEdge, loftEdgeLength,
-// compositeLineSweepSpan), capEdgeLengthBound's plane form, the big.Rat that
-// ratSquaredDistance3 still hands its dividing callers, and the dot product of
+// general three-coordinate form (capSlantEdge, loftmesh.EdgeLength,
+// compositeLineSweepSpan), capcontour.CapEdgeLengthBound's plane form, the big.Rat that
+// proof.RatSquaredDistance3 still hands its dividing callers, and the dot product of
 // the exact tangent validateStraightSweepPath substitutes for the distance.
 //
-// Shown to fail: dropping dySquaredDistance3's third coordinate turns the
+// Shown to fail: dropping proof.DySquaredDistance3's third coordinate turns the
 // squared-length leg red; answering a finite bound where the squared length
 // could not be stated turns a non-finite pair at held length 1 red; passing
-// capEdgeLengthBound's delta for one endpoint only turns the plane leg red;
+// capcontour.CapEdgeLengthBound's delta for one endpoint only turns the plane leg red;
 // publishing through dyFloatUp instead of dyNearestUp in dyRoundedFloatError
 // turns an inexact gap at held length 1 red. Without the held length of 1 the
 // last two stay green: a held length computed from a non-finite pair is itself
@@ -128,7 +128,7 @@ func TestStraightEdgeBoundDyadicMatchesRational(t *testing.T) {
 	}
 }
 
-// TestStraightEdgeBoundExactSquareSkipsTheBracket pins straightEdgeBound's
+// TestStraightEdgeBoundExactSquareSkipsTheBracket pins capcontour.StraightEdgeBound's
 // exact-square shortcut to the rational computation it skips. A non-negative
 // held length whose exact square is the squared length must read a zero
 // square-root term, where the oracle may read zero or at most one ulp; every

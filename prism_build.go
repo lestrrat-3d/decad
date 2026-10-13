@@ -128,7 +128,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	}
 	// pw resolves every boundary segment's walk exactly ONCE for this whole
 	// build (internal/momentinput/profile_walks.go): buildLoopSides below,
-	// prismCentroidGeometryBound and prismBoundsContext's three per-axis
+	// prismrecord.Payload.CentroidGeometryBound and prismBoundsContext's three per-axis
 	// extentBoundedAlong calls all read it back instead of each calling
 	// walkOf itself, which is what let one free-form segment's §5.2 charge be
 	// spent eight times over in a single evalPrismContext call.
@@ -236,7 +236,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	zc := proofbound.BoundedDiv(proofbound.BoundedAdd(pp.Z0Scalar(), pp.Z1Scalar()), proofbound.ExactScalar(2))
 	centroidValue := pp.Point(cu.Value, cv.Value, zc.Value)
 	// A displaced section moves its own centroid, so the displacement enters the
-	// plane-local source term prismPointBound already carries through the frame
+	// plane-local source term prismrecord.Payload.PointBound already carries through the frame
 	// and placement (docs/prism-boolean-design.md §7). The geometry envelope is a
 	// separate proof — the centroid lies inside the prism — so it takes the same
 	// displacement rather than being allowed to undercut the formula bound with a
@@ -544,7 +544,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// plane, and its own end's, which moves it along the normal. Each is zero for
 	// a coordinate the payload recorded from what the caller stated. Beside them
 	// every rim vertex carries its OWN frame lift and accumulated placement
-	// rounding, measured exactly for that vertex (prismPayload.liftedVertex;
+	// rounding, measured exactly for that vertex (prismPayload.LiftedVertex;
 	// topology.go's Vertex.Position contract) — zero wherever the lift is exact
 	// for the coordinates at hand, which is what keeps an ordinary extrude's
 	// vertices Exact. None of the three is a claim about another's axis, so

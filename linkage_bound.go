@@ -122,7 +122,7 @@ func readLinkBounds(spec *linkageSpec, frames []motionbound.MotionFrame) ([]link
 // above its ancestor L, while the fraction runs from a to b — the telescoping
 // sum over the joints on its path strictly below L of ρ_{ik}·|Δq_i| for a
 // revolute and |Δq_i| for a prismatic, |Δq_i| taken by jointSpan, or for a
-// loop's dependent by dependentSpan over the readings intervalGate took; nil
+// loop's dependent by linkagebound.SpanUpper over the readings intervalGate took; nil
 // when a dependent's readings are missing. below is the position on the path
 // of the first joint below L: 0 when L is the ground.
 func chainTravel(spec *linkageSpec, b linkBound, below int, sa, sb *big.Rat) *big.Rat {

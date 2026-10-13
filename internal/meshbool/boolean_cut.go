@@ -261,7 +261,7 @@ type ChainPath struct {
 	Verts []int
 }
 
-// chainProbe is an exact point strictly inside the chain's carrier piece:
+// ChainProbe is an exact point strictly inside the chain's carrier piece:
 // an interior chain vertex when one exists, else the midpoint of the first
 // edge.
 func (tc *TriCutter) ChainProbe(ch ChainPath) (Xp2, error) {
@@ -292,7 +292,7 @@ func (tc *TriCutter) PolyPoints(poly []int) ([]Xp2, error) {
 	return out, nil
 }
 
-// openLoops builds the chain decomposition, and while any chain is a closed
+// OpenLoops builds the chain decomposition, and while any chain is a closed
 // loop, adds a vertical split line through the loop — through no existing
 // vertex, so every crossing is transversal — splitting the chain edges it
 // crosses. It returns the split lines and the final all-open chains.
@@ -324,7 +324,7 @@ func (tc *TriCutter) OpenLoops() ([]*big.Rat, []ChainPath, error) {
 	}
 }
 
-// buildChains walks the contact edges into maximal chains, breaking at
+// BuildChains walks the contact edges into maximal chains, breaking at
 // boundary vertices; a walk that returns to its start through interior
 // vertices only is a closed loop. A branching interior vertex means the
 // intersection curves cross on this facet — a contact the predicates refuse.
@@ -429,7 +429,7 @@ func (tc *TriCutter) BuildChains() ([]ChainPath, []ChainPath, error) {
 	return chains, loops, nil
 }
 
-// chooseSplitU picks a vertical line u = c strictly inside the loop's span
+// ChooseSplitU picks a vertical line u = c strictly inside the loop's span
 // that passes through no existing vertex, bisecting toward the span's low
 // end until it clears — finitely many vertex ordinates, so it terminates.
 func (tc *TriCutter) ChooseSplitU(loop ChainPath) (*big.Rat, error) {
@@ -473,7 +473,7 @@ func (tc *TriCutter) ChooseSplitU(loop ChainPath) (*big.Rat, error) {
 	return nil, fmt.Errorf(`%w: no vertex-free split line found`, decaderr.ErrBooleanFailed)
 }
 
-// splitEdgesAtU splits every chain edge strictly straddling u = c at the
+// SplitEdgesAtU splits every chain edge strictly straddling u = c at the
 // exact crossing, which becomes a boundary vertex — a chain break.
 func (tc *TriCutter) SplitEdgesAtU(c *big.Rat) error {
 	var out []CutEdge
@@ -504,7 +504,7 @@ func (tc *TriCutter) SplitEdgesAtU(c *big.Rat) error {
 	return nil
 }
 
-// splitConvexByU splits a convex polygon along u = c. A side that would be
+// SplitConvexByU splits a convex polygon along u = c. A side that would be
 // empty returns nil, leaving the piece whole on the other side.
 func (tc *TriCutter) SplitConvexByU(piece []int, c *big.Rat) ([]int, []int, error) {
 	n := len(piece)
@@ -562,7 +562,7 @@ func (tc *TriCutter) SplitConvexByU(piece []int, c *big.Rat) ([]int, []int, erro
 	return left, right, nil
 }
 
-// splitByChains splits one piece polygon along its assigned chains,
+// SplitByChains splits one piece polygon along its assigned chains,
 // returning the final region polygons.
 func (tc *TriCutter) SplitByChains(piece []int, chains []ChainPath) ([][]int, error) {
 	type work struct {
@@ -691,7 +691,7 @@ func (tc *TriCutter) SplitByChains(piece []int, chains []ChainPath) ([][]int, er
 	return out, nil
 }
 
-// insertOnBoundary ensures the vertex appears on the polygon boundary,
+// InsertOnBoundary ensures the vertex appears on the polygon boundary,
 // splicing it into the edge whose interior it lies on. Identity is the
 // vertex id — subdivision vertices are interned by exact coordinates.
 func (tc *TriCutter) InsertOnBoundary(poly []int, vi int) ([]int, error) {
@@ -735,7 +735,7 @@ func (tc *TriCutter) IndexOf(poly []int, vi int) (int, error) {
 	return -1, nil
 }
 
-// regionOf triangulates one final region polygon and finds its
+// RegionOf triangulates one final region polygon and finds its
 // classification anchor: the region triangle adjacent to a chain edge, whose
 // exact centroid probes the partner facet's plane side.
 func (tc *TriCutter) RegionOf(poly []int, chainEdges map[[2]int]ChainAnchor) (CutRegion, error) {
@@ -782,7 +782,7 @@ func (tc *TriCutter) RegionOf(poly []int, chainEdges map[[2]int]ChainAnchor) (Cu
 	return reg, nil
 }
 
-// collectP2 is the projected-point view of the vertex table, as EarClipX
+// CollectP2 is the projected-point view of the vertex table, as EarClipX
 // wants it.
 func (tc *TriCutter) CollectP2() ([]Xp2, error) {
 	out := make([]Xp2, len(tc.Verts))

@@ -307,10 +307,10 @@ var rulingGramLimit = proofarith.MustDyOf(1.0 / 16)
 // plane. M's least height above it is the lesser of its end disks', since
 // height is affine along the axis, and each disk's is its center's height
 // less r·|P·Bᵀn̂|: exactly the lesser H± when the pose is a signed-axis
-// permutation, which proves a touch or a gap; otherwise within sectionDrift
+// permutation, which proves a touch or a gap; otherwise within placedruling.Cylinder.SectionDrift
 // of it. With δ = r·gram + r·α² + |α|·L, L the axial length, a least height
 // above δ is a gap and one within δ of zero is a ContactBand of half-width
-// c₀ = max|H±| + sectionDrift. The lowest rim points lie within rimDrift of
+// c₀ = max|H±| + placedruling.Cylinder.SectionDrift. The lowest rim points lie within placedruling.Cylinder.RimDrift of
 // c± − r·n̂, whose feet must stay inside S's face with that margin: the
 // support plane then holds the whole contact ruling, and the gap is the least
 // height.

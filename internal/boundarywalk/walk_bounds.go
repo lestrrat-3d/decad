@@ -77,7 +77,7 @@ func circularWalkEndBound(seg CurveSegment, t, heldU, heldV float64) proofbound.
 // parameter rather than a held float, and owns the derivation both spellings
 // share. It exists for a caller that generates a point at a parameter the
 // record's own arithmetic states exactly — a uniform station division
-// t_k = TStart + (k/m)·(TEnd − TStart) (loft_build.go's circularStationChain)
+// t_k = TStart + (k/m)·(TEnd − TStart) (loftmesh.CircularStationChain)
 // is the one such caller today. Rounding that parameter to a float first would
 // enclose the recorded curve at a NEIGHBOURING parameter, and the bound would
 // then be a proof about a point the construction never named: the cells either

@@ -26,7 +26,7 @@ func patchFirstMomentFlux(g Patch) (mu, mv, mz proofbound.BoundedScalar) {
 // SAME two triangles patchRawFlux/patchAreaOf use (v0v1v2, v0v2v3): exact
 // rationally wherever every coordinate lifts (exactPlanePatchMoment), the
 // float fallback only for a patch whose coordinates do not (mirroring
-// patchRawFlux's own exactPlanePatchFlux/float split, capblend_moments.go).
+// patchRawFlux's own ExactPlaneFlux/float split).
 func planePatchMoment(g Patch) (mu, mv, mz proofbound.BoundedScalar) {
 	v0 := r3.NewVec(g.SideA.U, g.SideA.V, g.SideZ)
 	v1 := r3.NewVec(g.SideB.U, g.SideB.V, g.SideZ)
@@ -44,7 +44,7 @@ func planePatchMoment(g Patch) (mu, mv, mz proofbound.BoundedScalar) {
 }
 
 // exactPlanePatchMoment is the flat quad patch's first moment — the per-axis
-// sibling of exactPlanePatchFlux (capblend_moments.go) — as exact rationals:
+// sibling of ExactPlaneFlux — as exact rationals:
 // for a triangle a, b, c with unnormalized normal N = (b−a)×(c−a),
 //
 //	∫_T (x²/2)·n_x dA = N_x·(x_a²+x_b²+x_c²+x_a·x_b+x_b·x_c+x_c·x_a) / 24
@@ -60,11 +60,11 @@ func planePatchMoment(g Patch) (mu, mv, mz proofbound.BoundedScalar) {
 // closed over the rationals — so this is the true moment of the quad the
 // topology actually built, with no rounding anywhere on the way; its one
 // caller rounds each component to a float64 once and reports that single
-// rounding as the bound, exactly as exactPlanePatchFlux's caller does for the
+// rounding as the bound, exactly as ExactPlaneFlux's caller does for the
 // flux.
 //
 // It reports ok=false rather than panicking where a coordinate does not
-// lift, mirroring exactPlanePatchFlux: a public measurement must refuse or
+// lift, mirroring ExactPlaneFlux: a public measurement must refuse or
 // bound, never abort.
 func exactPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz *big.Rat, ok bool) {
 	lift := func(v r3.Vec) (proofarith.DyV3, bool) {
@@ -104,7 +104,7 @@ func exactPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz *big.Rat, ok bool)
 
 // floatPlanePatchMoment is exactPlanePatchMoment's float fallback for a patch
 // whose coordinates do not lift to exact rationals (non-finite geometry) —
-// the identical rare case exactPlanePatchFlux's own float arm covers, no
+// the identical rare case ExactPlaneFlux's own float arm covers, no
 // better served by rational arithmetic here either. The bound is a generous,
 // never-tight structural envelope in the SAME spirit as tripleProductUpper:
 // each axis's own six-term square sum is at most 6·coordMax², and the

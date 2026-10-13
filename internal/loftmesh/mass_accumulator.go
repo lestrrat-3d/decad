@@ -18,7 +18,7 @@ import (
 // contribution folds only the triangles whose wall flag is true, since a
 // cap's own contribution is the exact rational shoelace area of the SAME
 // polygon its triangulation was built from (loft_build.go's
-// capPolygonAreaRat), never the sum of its triangulation's own float areas.
+// CapPolygonAreaRat), never the sum of its triangulation's own float areas.
 type MassAccumulator struct {
 	anchor  proofarith.Xpt
 	anchorF r3.Vec
@@ -537,7 +537,7 @@ func (m *MassAccumulator) Area(capAreas ...*big.Rat) (float64, float64) {
 	// ComputeLoftChordedAllow's own doc comment): the corrected wall value above
 	// uses bilinear patches, and the true wall surface a circular cell denotes
 	// differs by at most areaExcess; capFloat
-	// above is capPolygonAreaRat, the built polygon's own exact rational, and
+	// above is CapPolygonAreaRat, the built polygon's own exact rational, and
 	// the region the loft's construction actually denotes is the CURVED
 	// region the per-cell cap tube bounds the gap to on EITHER cap
 	// (capAreaExcess, docs/loft-gear-bounds-design.md §4). Both are gated on sectionDelta > 0 OR

@@ -131,7 +131,7 @@ func TestSideOpeningRegionsLPrism(t *testing.T) {
 // denoted ones by the conversion gap, so every face's section displacement
 // and the floor level's displacement must cover that gap, and the volume's
 // bound the denoted volume 8000 − (40 − t*)(20 − 2t*)(10 − 2t*). Shown to fail
-// with sideOpeningRegions' offset2d.ChainSectionDelta leg zeroed (every face delta 0)
+// with prismshell.SideOpeningRegions' offset2d.ChainSectionDelta leg zeroed (every face delta 0)
 // and with shellLevel's tDelta term deleted (the floor level's delta 0).
 func TestSideOpeningBrepChargesInexactThickness(t *testing.T) {
 	t.Parallel()
@@ -613,8 +613,8 @@ func internalFixedArcSection(center, start, end [2]float64, rest ...[2]float64) 
 //     float cut q with 17·q.v + 140 = 2√38, so with both caps removed the
 //     displacement is nonzero and covers the held cut's distance from it.
 //
-// Shown to fail with chainSectionDelta's reach zeroed (the t = 4 displacement
-// then 0), and with offsetOpenChain reading every walk through WalkConsumed
+// Shown to fail with offset2d.ChainSectionDelta's reach zeroed (the t = 4 displacement
+// then 0), and with offset2d.OffsetOpenChain reading every walk through WalkConsumed
 // (both fixtures then S11a).
 func TestSideOpeningRegionsArcExtension(t *testing.T) {
 	t.Parallel()

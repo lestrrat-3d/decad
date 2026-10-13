@@ -118,7 +118,6 @@ func UnchangedGroupPatch(ctx context.Context, base GroupedMesh, groupCount, grou
 
 // SortedTriangle returns triangle's vertex indices in ascending order and
 // the sign of the sorting permutation: +1 for even, -1 for odd.
-// (From loftMirrorSortedTriangle.)
 func SortedTriangle(triangle [3]int) ([3]int, int) {
 	sign := 1
 	if triangle[0] > triangle[1] {

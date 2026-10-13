@@ -263,7 +263,7 @@ func XhpStripTwosOwned(p Xhp) Xhp {
 // representation otherwise exists to avoid, so it is reserved for the one
 // place a homogeneous point's many spellings must collapse to one —
 // vertex-emission identity (key, welding) — and must NEVER be called per
-// arithmetic operation: measured, a depth-3 xhpLerp chain drops from
+// arithmetic operation: measured, a depth-3 XhpLerp chain drops from
 // big.Rat's 31.4us to 9.6us with xhpStripTwos alone, but only to 23.4us with
 // a full XhpCanon on every construction — nearly the whole win, given back.
 func XhpCanon(p Xhp) Xhp {

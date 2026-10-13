@@ -62,8 +62,8 @@ func RatOf(f float64) (*big.Rat, bool) {
 // A q past the float64 range has no such rounding: Float64 saturates to an
 // infinity, which each returns unchanged rather than stepping to a finite
 // neighbour it cannot prove. That infinity is a REFUSAL, never a bound, so no
-// caller may fold it — freeformExtremeFloats is the one conversion the fold
-// runs, and it is what turns the saturation into errFreeformExtremeUnrepresentable.
+// caller may fold it — freeform.FreeformExtremeFloats is the one conversion the fold
+// runs, and it is what turns the saturation into freeform.ErrFreeformExtremeUnrepresentable.
 func RatFloatDown(q *big.Rat) float64 {
 	f, _ := q.Float64()
 	if IsNonFinite(f) {
@@ -136,7 +136,7 @@ func RatSqrtDown(q *big.Rat) float64 {
 
 // RatSqrtUp returns a float f with f*f >= q, proven by exact comparison. It
 // returns +Inf only where sqrt(q) genuinely exceeds MaxFloat64, which
-// freeformArcLength refuses as R15 rather than report.
+// freeform.FreeformArcLength refuses as R15 rather than report.
 func RatSqrtUp(q *big.Rat) float64 {
 	if q.Sign() <= 0 {
 		return 0

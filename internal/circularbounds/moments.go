@@ -37,7 +37,7 @@ func ratScale(value *big.Rat, num, den int64) *big.Rat {
 // standing in for one the record could not state.
 
 // axisComponentInterval encloses one axis-frame scalar — the anchor's aU/aV
-// or the outward normal's nU/nV (nU = −dV, nV = dU, axisMoments' own pairing,
+// or the outward normal's nU/nV (nU = −dV, nV = dU, revolvemass.AxisMoments' own pairing,
 // revolve_build.go) — as an interval centred on its held float and widened by
 // its own proven bound: junctionRadiusInterval's construction
 // (revolve_build.go), generalized from a junction's radial coordinate to the
@@ -69,7 +69,7 @@ func axisComponentInterval(value, bound float64) (proofbound.RatInterval, bool) 
 //	M = nU·∫(u−aU) ds + nV·∫(v−aV) ds
 //
 // lo, hi are the segment's own two angles in ascending order and Δθ = hi−lo
-// is UNSIGNED, mirroring walkAxisMoment's pre-existing axis-frame arm
+// is UNSIGNED, mirroring revolvemass.WallAxisMoment's pre-existing axis-frame arm
 // (lo, hi := min(w.th0, w.th1), max(...)): M sums an unsigned arc-length
 // element, never a signed area, so it takes no direction sign the way
 // circularAreaInterval's shoelace form does. Ascending T order decides lo/hi
@@ -183,13 +183,13 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (proofbound.RatI
 // moment about each axis is its centroid times its area: every odd trig
 // moment over a whole period cancels exactly, leaving mu = c.U·r²·π·dt and
 // mv = c.V·r²·π·dt (dt the signed turn count). A fractional turn instead
-// restates addCircular's own mu/mv closed forms (moments.go:1511/1516) with
+// restates momentregion.State.AddCircular's own mu/mv closed forms with
 // every sine/cosine factor enclosed by internal/proofbound/turn_trig.go's proofbound.TurnSinCosInterval
 // and every other factor — the radius, the recentred centre coordinates, the
 // swept angle — taken as an exact rational: the same substitution
 // circularAreaInterval's fractional arm makes, one order higher.
 //
-// An ArcSeg restates addCircular's own mu/mv closed forms
+// An ArcSeg restates momentregion.State.AddCircular's own mu/mv closed forms
 // (0.5·r·(c.U²·intCos + 2·c.U·r·intCos2 + r²·intCos3), and the mv analogue)
 // with r·sinθ, r·cosθ at each walk end read as the radius-scaled offsets
 // arcWalkOffsets encloses — for a whole arc the exact recorded differences —
@@ -329,7 +329,7 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (proofbound.Ra
 // circularSecondMomentInterval brackets one circular walk's exact
 // second-moment contributions (∫u² dA, ∫u·v dA, ∫v² dA) about the walk
 // anchor, admitted under exactly the same conditions as its first-moment
-// sibling circularFirstMomentInterval and restating addCircular's own
+// sibling circularFirstMomentInterval and restating momentregion.State.AddCircular's own
 // muu/muv/mvv closed forms one order higher still: a CircleSeg over any
 // recorded range, whole or fractional, and an ArcSeg over any recorded range,
 // whole or narrowed, forward or reverse.
@@ -339,7 +339,7 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (proofbound.Ra
 // muu = π·dt·(c.U²·r² + r⁴/4), mvv = π·dt·(c.V²·r² + r⁴/4), muv = π·dt·c.U·c.V·r²
 // (dt the signed turn count) — the disc's own second moments about its
 // centre, shifted by the parallel-axis theorem. A fractional turn instead
-// restates addCircular's own muu/muv/mvv formulas with every sine/cosine
+// restates momentregion.State.AddCircular's own muu/muv/mvv formulas with every sine/cosine
 // factor enclosed by internal/proofbound/turn_trig.go's proofbound.TurnSinCosInterval, and every
 // higher trig multiple — sin(2θ), cos(2θ), sin(4θ) — taken as an exact
 // DOUBLE-ANGLE algebraic combination of that same enclosure (sin2θ = 2·sinθ·cosθ,
@@ -352,7 +352,7 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (proofbound.Ra
 // arcWalkOffsets, which for a whole arc is an exact rational coordinate
 // difference, the same substitution circularFirstMomentInterval's own ArcSeg
 // arm makes for mu/mv; a narrowed end's is the enclosure
-// r·(cos θ(t), sin θ(t)) instead. Expanding addCircular's muu/muv/mvv this
+// r·(cos θ(t), sin θ(t)) instead. Expanding momentregion.State.AddCircular's muu/muv/mvv this
 // way leaves exactly one term that does not collapse to a rational: the
 // piece proportional to the swept angle dθ itself (a rational COEFFICIENT
 // times the proofbound.Atan2Interval-bracketed sweep), mirroring mu/mv's own

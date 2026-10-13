@@ -172,7 +172,7 @@ func referenceConeFlux(g capPatchGeom) float64 {
 	return poly + origin + cross*intCos
 }
 
-// referencePhaseTerm is phaseTerm with float coefficients, the type the float
+// referencePhaseTerm is capband.PhaseTerm with float coefficients, the type the float
 // reference below builds.
 type referencePhaseTerm struct {
 	k, m   int

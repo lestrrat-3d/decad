@@ -125,7 +125,7 @@ type ArcStation struct {
 // (boundarywalk's walkOf): an ArcSeg's counter-clockwise sweep from Start's
 // angle to End's, a CircleSeg's whole turn from angle zero. The answer lies in
 // [0, 2π/sweep) for an arc and [0, 1) for a circle; it is a float solve, and
-// the caller charges the point it names (sideOpeningSection.cutGap).
+// the caller charges the point it names (prismshell.Section.CutGap).
 func arcParam(seg CurveSegment, p Point2) (float64, bool) {
 	turn := func(a float64) float64 {
 		a = math.Mod(a, 2*math.Pi)

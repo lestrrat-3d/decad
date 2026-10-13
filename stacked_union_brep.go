@@ -582,8 +582,8 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 // stackedBrepRecord states an engine's slabs and horizontal faces as a
 // brepPayload in reference frame ref under xform, every face carrying the
 // section displacement delta: the horizontal faces, every curved or oblique
-// wall piece (stackedBrepSweptFaces) and every axis-aligned wall plane
-// (stackedBrepWallFaces). Each planar face record then faces modify §5's audit
+// wall piece (stackedbrep.Engine.sweptFaces) and every axis-aligned wall plane
+// (stackedbrep.Engine.wallFaces). Each planar face record then faces modify §5's audit
 // (simplicity, orientation and nesting; general-boolean §5), roles are
 // assigned, and the record must close by counting (§4.2). geom has read
 // every slab loop and horizontal face and recorded its junctions. A topology

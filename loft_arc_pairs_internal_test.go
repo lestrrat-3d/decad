@@ -532,7 +532,7 @@ func TestLoftArcToFitSplineStillRefusesS3(t *testing.T) {
 
 // TestLoftCircleSegOppositeCCWRefusesStructuralArmNotAudit is the ask's own
 // line: two paired CircleSegs with opposite CCW refuse at S7's STRUCTURAL
-// arm (loftSameKindGate), never at S7's AUDIT arm (the build-time crossing
+// arm (loftmesh.SameKindGate), never at S7's AUDIT arm (the build-time crossing
 // audit). Both arms answer one existence question and so carry one sentinel,
 // ErrDegenerate (docs/loft-design.md Table S row S7) — so the assertion pins
 // the arm by POSITION, calling the record-only gate directly, with no
@@ -559,9 +559,9 @@ func TestLoftCircleSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 // th1 = a0 + TEnd*sweep — so the pair's effective directions genuinely
 // disagree and must refuse at the SAME cheap structural arm, never fall
 // through to S7's AUDIT arm three build phases later. This is the one
-// pairing that reaches loftCircularSegmentCCW's own ArcSeg arm with a
+// pairing that reaches loftmesh.circularSegmentCCW's own ArcSeg arm with a
 // disagreement, now that an ArcSeg can only ever be paired with another
-// ArcSeg (loftSameKindGate).
+// ArcSeg (loftmesh.SameKindGate).
 func TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 	t.Parallel()
 	ccwArc := arcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
@@ -661,7 +661,7 @@ func arcSquaredRadii(arc arcSeg) (*big.Rat, *big.Rat) {
 
 // TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta is the ask's
 // own m=1 line: a curved pair chorded at ONE station (no interior computed
-// station at all — chordCount picks m=1 for a sweep tiny enough that even
+// station at all — tessellation.ChordCount picks m=1 for a sweep tiny enough that even
 // one chord meets the target) publishes delta == 0 and an UNSHRUNK
 // bodyGateDiameter reference, with sectionDelta > 0 (the chord still
 // departs from the arc it denotes).

@@ -40,7 +40,7 @@ import (
 //
 //	H'(0) = n̂·(v_M − v_S + ω×(c − c_M))           exact
 //	|H''| <= |ω|·|ω×(c − c_M)|                    c'' = R(u)·(ω×(ω×(c − c_M))); S only translates
-//	|r − r·|P·Bᵀ(u)n̂|| <= r·(gram + α(u)²)        sectionDrift
+//	|r − r·|P·Bᵀ(u)n̂|| <= r·(gram + α(u)²)        placedruling.Cylinder.SectionDrift
 //	|α(u)| <= |α| + β·u                           |R(u)ã − ã| <= β·u
 //
 // so each end satisfies |g(u)| <= c₀ + (|H'(0)| + 2·r·β·|α|)·u + (K + r·β²)·u²
@@ -48,7 +48,7 @@ import (
 // the band depth is that bound at h for the larger coefficients of the two
 // ends. The cylinder's lowest point is one of the two rims', so the whole body
 // stays above −depth. Each rim's lowest point lies within
-// r·(3·gram + (3/2)·|α(u)|) of c − r·n̂ while |α(u)| <= 1/4 (rimDrift); the
+// r·(3·gram + (3/2)·|α(u)|) of c − r·n̂ while |α(u)| <= 1/4 (placedruling.Cylinder.RimDrift); the
 // foot check and ManifoldAt charge that drift. A signed-axis start with α = 0
 // has gram = c₀ = 0, and its drift r·√(2·(1 − s)) <= (3/2)·r·β·u, s the cosine
 // of the axis tilt, holds with no gate.
@@ -270,12 +270,12 @@ func (r *rollingPairSweep) undecided(from, to *big.Rat, cause SweepCause) *Sweep
 // quadratic·t², and the rim drift's, lateralBase + lateral·t. With ã the
 // staged axis column, α = n̂·ã, β = |ω×ã| and both ends' H±:
 //
-//	constant  = max|H±(0)| + r·gram + r·α²   (sectionDrift)
+//	constant  = max|H±(0)| + r·gram + r·α²   (placedruling.Cylinder.SectionDrift)
 //	rate      = max|H±'(0)| + 2·r·β·|α|
 //	quadratic = max K + r·β²
 //
 // since |α(u)| <= |α| + β·u. The drift is r·(3·gram + (3/2)·|α(u)|)
-// (rimDrift), which needs gram <= 1/16 and |α(u)| <= 1/4. An exact start, a
+// (placedruling.Cylinder.RimDrift), which needs gram <= 1/16 and |α(u)| <= 1/4. An exact start, a
 // signed-axis pose with α = 0, has a zero constant and lateralBase, and its
 // drift r·√(2·(1 − s)) <= (3/2)·r·β·u holds with no gate.
 type rollingCoefficients = planarsweep.RollingCoefficients

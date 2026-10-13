@@ -148,7 +148,7 @@ func chamferTop(o r3.Vec) []liftCand {
 // requires every vertex to sit within its published bound of the exact
 // rational lift of the point it denotes.
 //
-// Shown to fail: with the lift term dropped from prismPayload.liftedVertex and
+// Shown to fail: with the lift term dropped from prismPayload.LiftedVertex and
 // the comparison dropped from revolvePayload.sweptVertex (answering 0, the old
 // axis-aligned exemption that ignored the frame origin), every subtest below
 // goes red — extrude, revolve, chamfer, pocket at both origins (vertices claim
@@ -219,7 +219,7 @@ func TestVertexFrameOriginBoundEnclosesLift(t *testing.T) {
 // The vertices end up near the world origin, but they rounded at the far lift,
 // and their bounds must cover that.
 //
-// Shown to fail: with the lift term dropped from prismPayload.liftedVertex
+// Shown to fail: with the lift term dropped from prismPayload.LiftedVertex
 // (the old charge read the PLACED origin's magnitude, about 0.1), the box
 // vertices publish a bound near 2.5e-14 against a 2.33e-11 error and both
 // subtests go red.
@@ -296,7 +296,7 @@ func TestClearanceFrameOriginGapEnclosesExactGap(t *testing.T) {
 // keeps Exact with a zero bound (clearance_lift_internal_test.go pins the
 // same for the clearance kernel's carriers). Shown to fail: replacing the
 // exact measurement with a magnitude charge (proofbound.RigidRoundAllow at the
-// coordinate and origin envelope) in prismPayload.liftedVertex turns the prism
+// coordinate and origin envelope) in prismPayload.LiftedVertex turns the prism
 // and chamfer subtests red, and in revolvePayload.sweptVertex the revolve
 // subtest.
 func TestVertexIntegerOriginBoundStaysZero(t *testing.T) {

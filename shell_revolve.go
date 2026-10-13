@@ -31,7 +31,7 @@ import (
 // (revolve_build.go's fullRevolveShellsContext). A side opening — a connected
 // run of generated side faces removed, on a full turn or beside both removed
 // angular caps — sweeps the open-chain wall region closed at each opening by
-// docs/shell-opening-design.md's Table RO rim instead (revolveShellSideWall).
+// docs/shell-opening-design.md's Table RO rim instead (revolveshell.SideWall).
 // Every other selection refuses before a face is made: a kept angular cap and
 // a holed meridian are SX8, and so is an effective meridian whose mirror union
 // would hold a hole or whose offset reaches across the axis, a removed run that

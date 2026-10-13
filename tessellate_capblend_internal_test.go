@@ -510,7 +510,7 @@ func TestCapBlendMeshMotionCarriesEachLevelBound(t *testing.T) {
 
 // TestCapBlendMeshMotionCarriesPlacementRounding guards the rounding leg: a
 // placed plate's every coordinate is computed, and its only motion is the
-// rounding exactPrismPointRound measures, so a zero there would publish an
+// rounding prismrecord.Payload.PointRound measures, so a zero there would publish an
 // exact proof the placement never earned.
 func TestCapBlendMeshMotionCarriesPlacementRounding(t *testing.T) {
 	t.Parallel()

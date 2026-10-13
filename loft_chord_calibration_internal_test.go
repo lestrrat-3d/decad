@@ -384,7 +384,7 @@ func (e wedgeAreaExcess) total() float64 { return e.wall + e.cap }
 // arc at a forced station count m: 2r*sin^2(sweep/m/4) over the fixture's own
 // wedgeRadius/wedgeSweep. It is NOT this file's sectionDelta stand-in — that is
 // wedgeArcChords' own production reading — and has exactly one caller left:
-// wedgePinStations' seed-straddle assertion, which contrasts chordCount's
+// wedgePinStations' seed-straddle assertion, which contrasts tessellation.ChordCount's
 // deliberately conservative r*sweep^2/(8n^2) against this exact value to show
 // WHY the joint walk-up seeds one station above the grid point.
 // tessellate.go publishes the proven upper bound on that displacement
@@ -1050,7 +1050,7 @@ func wedgeArcRecord(t *testing.T) (arcSeg, survey2d.SegmentWalk) {
 // docs/loft-design.md §13's build cost model paragraph owns.
 //
 // The fit-spline wedge is chorded at that SAME count. There is no shipped
-// generator arm to ask for a free-form pairing — loftCellStations has no
+// generator arm to ask for a free-form pairing — loftmesh.RecordCellStations has no
 // free-form arm (loft_build.go) — so the two fixtures share the arc arm's own
 // production count, which is what makes their two margins comparable readings
 // of one constant.

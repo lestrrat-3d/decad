@@ -144,7 +144,7 @@ func loftCylinderTabProfile(t *testing.T, ctx context.Context, world *sketch.Wor
 }
 
 // loftCylinderTriangleMinRadiusReference is the rational minimum projected
-// radius loftCylinderTriangleMinRadius reads: the nearest point on each closed
+// radius loftcylinder.TriangleMinRadius reads: the nearest point on each closed
 // edge, or zero when the origin is inside.
 func loftCylinderTriangleMinRadiusReference(verts []r3.Vec, tri [3]int) float64 {
 	type point struct{ x, y *big.Rat }

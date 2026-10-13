@@ -158,7 +158,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 
 	// capVertexAt places one cap-level vertex at p, bounded by base beside the
 	// vertex's own exact frame lift and placement rounding
-	// (prismPayload.liftedVertex; topology.go's Vertex.Position contract) —
+	// (prismPayload.LiftedVertex; topology.go's Vertex.Position contract) —
 	// zero wherever that lift is exact, which is what keeps an ordinary
 	// chamfer's cap-level vertices Exact. The lift term widens only the VERTEX
 	// bound, never capLevelDelta itself, which the band's slant and cap edges
@@ -225,7 +225,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		capLevelDelta := proofbound.AbsSumUpper(delta, capDelta)
 		// wholeCircleEdge's own delta parameter feeds ONLY its seam vertex's
 		// bound — its returned Edge's own lengthBound comes from
-		// capCircleLengthBound instead — and the seam vertex adds its own
+		// capcontour.CapCircleLengthBound instead — and the seam vertex adds its own
 		// exact lift rounding there.
 		var capEdge *Edge
 		if suppliedCap != nil {
@@ -269,7 +269,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// the construction rather than something an offset solve computed. The
 		// only inexactness is the wall's own float representation of a full
 		// turn, bracketed against 2π's own exact rational constants — the same
-		// bracket capCircleLengthBound already takes for this circle's
+		// bracket capcontour.CapCircleLengthBound already takes for this circle's
 		// circumference.
 		dthHeld := gth1 - gth0
 		capThAllow := proofbound.IntervalFloatError(proofbound.TwoPiInterval(), dthHeld)
@@ -520,8 +520,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			proofbound.AbsSumUpper(slantIn[i].length, slantInHeld[i]),
 		)
 		// CapThAllow: this apex patch's own connector runs pA -> pB (the same
-		// capApexArcBound bracket capApexArcBound already builds for the
-		// connector's own arc LENGTH above), so capSweepAllow reads the
+		// capcontour.CapApexArcBound bracket capcontour.CapApexArcBound already builds for the
+		// connector's own arc LENGTH above), so capcontour.CapSweepAllow reads the
 		// identical proofbound.Atan2Interval enclosure and reports it against the raw
 		// sweep gth1-gth0 = arcTh0[i]-arcTh1[i] instead of against d*sweep.
 		// start/end are passed as (pB, pA) so the bracket's own end-minus-start
@@ -585,11 +585,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// radialShift is how far every radius the cap arc denotes sits
 			// from the held capRadius: the offset radius R ∓ dc rounds even
 			// for a setback stated in millimetres, and dc's own conversion
-			// rounding widens it further. capWallArcBound charges it once per
+			// rounding widens it further. capcontour.CapWallArcBound charges it once per
 			// radian the arc sweeps.
 			radialShift = proofbound.IntervalFloatError(radius, capRadius)
 			capTh0, capTh1, wraps = capband.WallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
-			// capThAllow is capSweepAllow's own enclosure of THIS sweep
+			// capThAllow is capcontour.CapSweepAllow's own enclosure of THIS sweep
 			// (capTh1-capTh0), computed here where start/end/wraps are still
 			// the ones capband.WallSweep just resolved: patchAreaOf's later swap of
 			// g.CapTh0/g.CapTh1 (below) negates the raw difference but not its
@@ -874,11 +874,11 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt, delta, capDe
 // bullet). Where either wall is circular, dc's own offset range [0, dc]
 // (capband.MiterLocusUpper widens it by dc's unit-conversion rounding dcDelta) is
 // split into capband.MiterLocusSubdivisions sub-ranges, each enclosed through
-// miterLocusSpeedUpper and turned into that sub-range's own locus-length
+// capcontour.MiterLocusSpeedUpper and turned into that sub-range's own locus-length
 // upper bound via proofbound.ChordLocusLengthAllow (called with a zero chordUpper, which
 // reduces it to the raw product); the sub-range bounds sum to the whole
 // locus's own upper bound, and the excess over the held chord is charged
-// once, at the end. Splitting matters most for miterLocusSpeedUpper's own
+// once, at the end. Splitting matters most for capcontour.MiterLocusSpeedUpper's own
 // circle-circle case, whose enclosure of the two carriers' own offset ranges
 // is decorrelated (capcontour.CircleCircleLocusSpeedUpper's doc comment) and can
 // inflate the published bound past the held chord itself on a sizeable
@@ -939,7 +939,7 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex
 // encloses every radius it denotes, so the seam vertex publishes the displacement it
 // actually has (its own coordinate is a float SUM of the centre and that
 // radius, which rounds once more, and its own lift through pl's frame and
-// placement rounds by what prismPayload.liftedVertex measures) and the
+// placement rounds by what prismPayload.LiftedVertex measures) and the
 // circumference is bounded against π's own rational bracket.
 func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta float64, exactRadius proofbound.RatInterval) *Edge {
 	seamU := cu + r
@@ -977,7 +977,7 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 // the wall's own (th0, th1) for a whole-circle band, the cap-level
 // (capTh0, capTh1) capband.WallSweep resolved for a regular wall's own trimmed
 // arc. length is the held sweep r*|th1-th0| and lengthBound is
-// capWallArcBound's (or capCircleLengthBound's) proven bound on it — the
+// capcontour.CapWallArcBound's (or capcontour.CapCircleLengthBound's) proven bound on it — the
 // caller forms the two together so the bound is never computed against a
 // value spelled a second time.
 func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1, length, lengthBound float64) *Edge {

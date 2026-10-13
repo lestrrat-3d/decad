@@ -152,7 +152,7 @@ func TestTessellateContextReachesCapTriangulationCancellation(t *testing.T) {
 // entirely in big.Float, run for a fixed 200 terms — no libm call anywhere,
 // so it carries none of Go's math.Sin's own missing accuracy contract. It
 // assumes |x| stays comfortably under pi, which every caller here meets:
-// chordSagitta's own argument sweep/(4n) never reaches pi/2 for n>=1 and a
+// tessellation.ChordSagitta's own argument sweep/(4n) never reaches pi/2 for n>=1 and a
 // sweep under one full turn.
 func bigSinTaylor(x float64, prec uint) *big.Float {
 	bx := new(big.Float).SetPrec(prec).SetFloat64(x)
@@ -170,9 +170,9 @@ func bigSinTaylor(x float64, prec uint) *big.Float {
 
 // bigSagittaReference computes the TRUE closed-form sagitta,
 // 2*radius*sin(sweep/n/4)^2 — a chord's own exact deviation from its arc,
-// NOT chordSagitta's own deliberately looser proven-upper-bound formula —
+// NOT tessellation.ChordSagitta's own deliberately looser proven-upper-bound formula —
 // entirely in big.Float at prec bits, so the comparisons this file's
-// chordSagitta tests draw never lean on any accuracy claim about float64
+// tessellation.ChordSagitta tests draw never lean on any accuracy claim about float64
 // arithmetic or Go's Sin.
 func bigSagittaReference(radius, sweep float64, n int, prec uint) *big.Float {
 	s := bigSinTaylor(sweep/float64(n)/4, prec)
@@ -182,7 +182,7 @@ func bigSagittaReference(radius, sweep float64, n int, prec uint) *big.Float {
 }
 
 // TestChordSagittaNeverUnderstatesTheHighPrecisionReference is what makes
-// chordSagitta's own doc-comment claim — PROVEN, so it may be conservative
+// tessellation.ChordSagitta's own doc-comment claim — PROVEN, so it may be conservative
 // but must never be understated — true rather than merely stated: it checks
 // the published sagitta against a from-scratch 300-bit-precision reference
 // (bigSagittaReference, which never calls Go's math.Sin either) over a
@@ -219,8 +219,8 @@ func TestChordSagittaNeverUnderstatesTheHighPrecisionReference(t *testing.T) {
 }
 
 // TestChordSagittaCoarsestClosedWalkStaysProven pins the OTHER end of
-// chordSagitta's own conservatism, at the coarsest chording a CLOSED walk
-// can ever reach: chordCount never admits fewer than 3 chords for a closed
+// tessellation.ChordSagitta's own conservatism, at the coarsest chording a CLOSED walk
+// can ever reach: tessellation.ChordCount never admits fewer than 3 chords for a closed
 // walk, and a full 2*pi sweep split 3 ways is the widest single-chord angle
 // this package ever asks the bound to cover. The sin(x)<=x reduction is
 // loosest exactly where x is largest, so this is where the (x/sin x)^2
@@ -235,7 +235,7 @@ func TestChordSagittaNeverUnderstatesTheHighPrecisionReference(t *testing.T) {
 // form in float64 and calling the result PROVEN.
 //
 // The measured ratio is pinned against pi^2/9, the same exact figure
-// docs/tessellation-design.md Sec 3, [Body.Tessellate] and chordSagitta
+// docs/tessellation-design.md Sec 3, [Body.Tessellate] and tessellation.ChordSagitta
 // itself state for this worst case.
 func TestChordSagittaCoarsestClosedWalkStaysProven(t *testing.T) {
 	t.Parallel()
@@ -260,7 +260,7 @@ func TestChordSagittaCoarsestClosedWalkStaysProven(t *testing.T) {
 }
 
 // TestChordCountRefusesTheToleranceWindowAtTheMeshCap pins the caller-facing
-// half of that same conservatism, at its exact boundary. chordCount decides
+// half of that same conservatism, at its exact boundary. tessellation.ChordCount decides
 // on the PROVEN bound, so the finest tolerance a full circle can be chorded
 // to is that bound's value at freeform.MaxChordsPerWalk — not the smaller true
 // sagitta there. Every tolerance in between, a window whose relative width
@@ -313,7 +313,7 @@ func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
 }
 
 // TestChordSagittaRefusesRatherThanUnderstatesOnBrokenClaims pins
-// chordSagitta's own three failure arms (its doc comment): a negative sweep
+// tessellation.ChordSagitta's own three failure arms (its doc comment): a negative sweep
 // and a non-positive n each answer +Inf rather than a silently-understated
 // 0, since proofbound.ProductUpper's own a<=0 guard would otherwise read a negative
 // sweep as a zero sagitta when the true sagitta is positive. A negative
@@ -334,7 +334,7 @@ func TestChordSagittaRefusesRatherThanUnderstatesOnBrokenClaims(t *testing.T) {
 // sweep·sweep product can fall below the smallest denormal on its own, and
 // the final quotient can land on zero even when the numerator survived. A
 // published zero for a positive radius, sweep and n is a bound below the
-// deviation it claims to dominate — chordCount hands it on as the walk's
+// deviation it claims to dominate — tessellation.ChordCount hands it on as the walk's
 // proven sagitta, Mesh.Bound publishes it, and the walk-up loop exits on it.
 func TestChordSagittaNeverUnderflowsToZero(t *testing.T) {
 	t.Parallel()
@@ -368,7 +368,7 @@ func TestChordSagittaNeverUnderflowsToZero(t *testing.T) {
 // ------------------------------------- chording a published walk resolution
 
 // TestChordLoopReadsResolvedWalks is the observable half of the tessellation's
-// own reuse: handed the resolution the build published, chordLoop returns the
+// own reuse: handed the resolution the build published, tessellation.ChordLoop returns the
 // chording it produces from a fresh resolution, field for field, and it does
 // NOT spend the resolution's charge a second time. The two counters differ by
 // exactly momentinput.ResolveProfileWalks' own figure for this record, which proves the
@@ -404,7 +404,7 @@ func TestChordLoopReadsResolvedWalks(t *testing.T) {
 }
 
 // TestChordLoopRefusesMismatchedResolvedWalks pins the guard on that read:
-// a resolution of another record is a plumbing bug, and chordLoop refuses it
+// a resolution of another record is a plumbing bug, and tessellation.ChordLoop refuses it
 // rather than chording one section's geometry as another's — buildLoopSidesAs'
 // own refusal, on the same exact-comparison terms.
 func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {

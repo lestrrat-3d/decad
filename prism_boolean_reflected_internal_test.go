@@ -380,7 +380,7 @@ func prismOvershootQuadBody(t *testing.T, doc *Document, corners [][2]float64, o
 //     the same RB9 sends the pair to the mesh path instead.
 //
 // Shown to fail with prismcells.AmplifiedFallback returning every error (the
-// crossing quadrilateral returned RB9), and with sharedSpansBounded always
+// crossing quadrilateral returned RB9), and with prismcells.SceneDelta.SharedSpansBounded always
 // reporting true (the tooth's Union built analytically).
 func TestPrismAmplifiedCutsFallBack(t *testing.T) {
 	t.Parallel()

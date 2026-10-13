@@ -25,7 +25,7 @@ type CircEq struct {
 	A, B, E, F  proofbound.BoundedScalar
 }
 
-// tripleEquations builds the material-side-pinned tangency equation of every
+// TripleEquations builds the material-side-pinned tangency equation of every
 // item: elements, vertices, and the wedge.
 func (k *WallKernel) TripleEquations(budget *proofbound.WorkBudget) ([]CircEq, error) {
 	var eqs []CircEq
@@ -143,7 +143,7 @@ func SolveTriple(eqs [3]CircEq, scale float64, add func(x, y, r, rBound float64)
 	// state. Dropping THIS generator's candidate here is local — the pair's own
 	// reading came from SolveParallelPair a few lines above, which is why the
 	// straddle runs both — and it is what keeps one straddled triple from
-	// handing runBudget's aggregate an unbounded candidate and leaving the whole
+	// handing WallKernel.RunBudget's aggregate an unbounded candidate and leaving the whole
 	// survey undecided.
 	if proofbound.IsNonFinite(pxBS.Bound) || proofbound.IsNonFinite(pyBS.Bound) || proofbound.IsNonFinite(qxBS.Bound) || proofbound.IsNonFinite(qyBS.Bound) {
 		return

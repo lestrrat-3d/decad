@@ -20,7 +20,7 @@ import (
 
 // chargeProbeAxis is a unit axis along +v anchored at the plane origin, with
 // zero proven bounds on all four fields: the axis every T180-shaped fixture
-// resolves, and the one that makes toAxisRhoBound answer zero so a widening
+// resolves, and the one that makes revolveaxis.Frame.ToAxisRhoBound answer zero so a widening
 // shows up undiluted.
 func chargeProbeAxis() axisFrame {
 	return axisFrame{AU: 0, AV: 0, DU: 0, DV: 1}
@@ -77,7 +77,7 @@ func TestAxisFrameWalkChargeWidensEveryFieldItTouches(t *testing.T) {
 	require.Greater(t, startOnly.LengthBound, plain.LengthBound)
 	require.Greater(t, startOnly.LengthUpper, plain.LengthUpper)
 	require.Greater(t, startOnly.CoordUpper, plain.CoordUpper)
-	// The envelope has to widen with it, or walkAxisMoment's own math.Min
+	// The envelope has to widen with it, or revolvemass.WallAxisMoment's own math.Min
 	// against proofbound.ConservativeValueError(value, axisMomentUpper) would clamp the
 	// charge straight back off (§7.1).
 	require.Greater(t, startOnly.AxisMomentUpper, plain.AxisMomentUpper)

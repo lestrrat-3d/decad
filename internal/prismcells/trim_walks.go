@@ -10,7 +10,7 @@ import (
 
 // TrimProfileWalks resolves profile's Outer-then-Holes walks for a trimmed
 // ribbon's own Bounds reading (docs/surface-intersection-design.md §7),
-// charging trimCutChargeUV into exactly the endpoint bound whose OWN
+// charging TrimCutChargeUV into exactly the endpoint bound whose OWN
 // recorded parameter is not a natural bound (0 or 1, per field — never per
 // segment, since a segment cut on only one side keeps its natural end exact)
 // — the coordinate the arrangement computed for that end, never one the

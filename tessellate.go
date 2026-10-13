@@ -674,7 +674,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 	// chording — watertightness by construction.
 	var mesh Mesh
 	var chorded []tessellation.PrismLoop[*Face]
-	// One free-form counter for the whole chorded record (see chordLoop).
+	// One free-form counter for the whole chorded record (see tessellation.ChordLoop).
 	work := freeform.NewFreeformWork()
 	if freeformTarget > 0 {
 		work.RaiseLimit(compositeFitSweepWorkLimit)
@@ -729,7 +729,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 	// vertexStore is docs/tessellation-reach-design.md §3's deltaStore, one
 	// entry per mesh vertex: the sample's own plane-local enclosure gap carried
 	// through the frame (proofbound.WalkEndBoundAllow) plus the rounding the frame and
-	// placement write commits (exactPrismPointRound). Both are zero for a
+	// placement write commits (prismrecord.Payload.PointRound). Both are zero for a
 	// recorded line vertex under an axis-aligned identity payload; neither is
 	// ever assumed zero for anything else.
 	vertexStore := make([]float64, 0, 2*len(pts2))
@@ -980,7 +980,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	}
 
 	// One free-form counter for the whole chorded record — the cup's outer region
-	// and its cavity are the two halves of one section (see chordLoop).
+	// and its cavity are the two halves of one section (see tessellation.ChordLoop).
 	work := freeform.NewFreeformWork()
 	oLoops := append([]loopRecord{cp.outer.Outer}, cp.outer.Holes...)
 	cLoops := append([]loopRecord{cp.cavity.Outer}, cp.cavity.Holes...)

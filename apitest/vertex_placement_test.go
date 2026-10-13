@@ -282,7 +282,7 @@ func TestVertexPlacedCapBlendBoundEnclosesDisplacement(t *testing.T) {
 // every vertex Exact with a zero bound. Shown-to-fail: replacing the exact
 // lift measurement with a magnitude charge (proofbound.RigidRoundAllow at the
 // coordinate envelope, nonzero whenever a coordinate is) in
-// prismPayload.liftedVertex turns the prism and capBlend subtests red, and in
+// prismPayload.LiftedVertex turns the prism and capBlend subtests red, and in
 // revolvePayload.sweptVertex the revolve subtest.
 func TestVertexAxisAlignedUnplacedBoundStaysZero(t *testing.T) {
 	t.Parallel()

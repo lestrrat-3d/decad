@@ -87,7 +87,7 @@ func RatBitWidth(rs ...*big.Rat) int {
 	return widest
 }
 
-// RatPointReconstructCost is DyadicSpan.ratPointAt's own per-CALL operation
+// RatPointReconstructCost is DyadicSpan.RatPointAt's own per-CALL operation
 // count: one big.Int.Lsh for the shared scale, then two big.Rat.SetFrac.
 // SetFrac NORMALISES — a GCD plus a division of each of numerator and
 // denominator — so it is charged 3, making it the heaviest single operation on
@@ -333,7 +333,7 @@ func ChargedRatSqrtDown(w *FreeformWork, q *big.Rat) (float64, error) {
 	return proofbound.RatSqrtDown(q), nil
 }
 
-// ratPointAt reconstructs split value i's exact rational coordinate:
+// RatPointAt reconstructs split value i's exact rational coordinate:
 // numerator / (den · 2^exp), the inverse of the factored form DyadicSpanOf
 // and split (spline_length.go) build it in. Every value that form holds is
 // exact — a den·2^exp scaling and an integer numerator, never a normalised
@@ -360,11 +360,11 @@ func (s DyadicSpan) RatPointAt(w *FreeformWork, i int) (RatPoint, error) {
 
 // BezierSpan reconstructs a DyadicSpan's own control points as a BezierSpan —
 // the form SpanMatchedDeltaUpper/SpanHodographGapUpper read — by calling
-// ratPointAt over every index. It is ratPointAt's own doc comment's
+// RatPointAt over every index. It is DyadicSpan.RatPointAt's own doc comment's
 // "reconstruction" extended to a whole span rather than one point: every
 // value is exact and the result shares no storage with s.
 //
-// It holds no charge of its own; every unit it spends is ratPointAt's, spent
+// It holds no charge of its own; every unit it spends is DyadicSpan.RatPointAt's, spent
 // once per index it actually reconstructs.
 func (s DyadicSpan) BezierSpan(w *FreeformWork) (BezierSpan, error) {
 	span := make(BezierSpan, len(s.Points))
@@ -462,7 +462,7 @@ func DyadicSpanSagittaUpper(w *FreeformWork, s DyadicSpan) (float64, error) {
 // reconstructs the exact control points once, uses them for the sagitta, and
 // returns the same BezierSpan to the accepted cell's matched-delta reading.
 // Rejected cells discard the reconstructed span after this call, but accepted
-// cells avoid a second full ratPointAt pass before SpanMatchedDeltaUpper.
+// cells avoid a second full DyadicSpan.RatPointAt pass before SpanMatchedDeltaUpper.
 //
 // This helper holds no charge of its own. The reconstruction, projection,
 // comparison and rounding each charge the primitive that performs them, just

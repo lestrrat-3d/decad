@@ -872,7 +872,7 @@ func TestVerifyDiagnosticsInterference(t *testing.T) {
 // coplanarContactPairDocument builds two 10×10×10 boxes, the second
 // translated to (0,5,5): they overlap with positive volume while sharing
 // coplanar side faces, so the read-only intersect stages the face-on-face
-// contact (booleanExpectedContact).
+// contact (meshbool.BooleanExpectedContact).
 func coplanarContactPairDocument(t *testing.T) *decad.Document {
 	t.Helper()
 	ws := sketch.NewWorld()
@@ -971,7 +971,7 @@ func TestVerifyUnsupportedPairEmitsOneCause(t *testing.T) {
 // sharing the container's own coplanar base plane. Before
 // docs/prism-boolean-design.md §14 PR4 this exact pair staged a boolean
 // contact (DiagUnsupportedPairContact, Suspect) because
-// measuredInterference never reached the analytic opIntersect dispatch. Now
+// measuredInterference never reached the analytic meshbool.OpIntersect dispatch. Now
 // it resolves analytically, so neither contact diagnostic fires and the
 // report reads Interfering with a DiagInterference row instead.
 func TestVerifyDiagnosticsAdmittedCoplanarPrismPairHasNoContactDiagnostic(t *testing.T) {

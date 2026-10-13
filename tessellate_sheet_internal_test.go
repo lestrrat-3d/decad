@@ -120,7 +120,7 @@ func TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture(t *testing.T) {
 
 // TestRequireSheetMeshRejectsBrokenFreeEdgeAttribution is the free-edge
 // attribution's own falsifier. The public API can never construct a mesh
-// whose free boundary is attributed to the wrong face — chordLoop always
+// whose free boundary is attributed to the wrong face — tessellation.ChordLoop always
 // attributes a wall's own triangles to its own face — so this test hand-
 // corrupts a real mesh's SourceFaces to prove requireSheetMesh actually
 // refuses the mismatch it exists to catch, rather than passing vacuously.

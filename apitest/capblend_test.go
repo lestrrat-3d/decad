@@ -175,7 +175,7 @@ func TestCapBlendBothCapsBuildsWhenClear(t *testing.T) {
 // is missing; the cap-blend call site is the one that translates it, and
 // shell_test.go's own "outward offset erasing a hole is S11a" subtest is the
 // other half — it still reads ErrUnsupported, which a global re-sentinelling
-// of errOffsetDrop would have broken.
+// of offset2d.ErrDrop would have broken.
 func TestCapBlendCarrierCollapseRefused(t *testing.T) {
 	t.Parallel()
 	for _, d := range []float64{4.0, 5.0} {
@@ -275,7 +275,7 @@ func TestCapBlendReflexCornerBuilds(t *testing.T) {
 
 // TestCapBlendReflexApexPatchRolesDistinct pins Table BX row BX3's `p` as the
 // patch's own order in the result's `capBlendPayload`: an apex patch is keyed
-// by a CORNER and a wall patch by a WALL, and capOffsetJoins puts corner i at
+// by a CORNER and a wall patch by a WALL, and capband.OffsetJoins puts corner i at
 // walks[i].start, so keying either role by that index puts two faces on one
 // role string. Every last-wins reader then collapses onto whichever face was
 // built second — facesByRole, FaceCreatedBy, and the survey's role lookup.

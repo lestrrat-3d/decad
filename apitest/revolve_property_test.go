@@ -442,7 +442,7 @@ func newCone(rng *rand.Rand) setup {
 //
 // It is pinned EMPTY: once resolveAxisSide also charges its own scan
 // arithmetic (planeDotDecompositionRoundAllow, the same mechanism
-// axisExtremeContext already uses for the structurally identical scan,
+// revolveaxis.axisExtreme already uses for the structurally identical scan,
 // closing the gap a real-geometry end-to-end test found — T95,
 // docs/surface-design.md), every one of these 60 draws' computed radial
 // extremes provably straddles zero rather than reading as proven negative:

@@ -724,7 +724,7 @@ func TestExtrudeRescaledDistanceCarriesConversionRounding(t *testing.T) {
 // plateSketch's four-line rectangle, the call shape ratLerp's endpoint fast
 // path (moments.go) targets: every whole LineSeg's TStart/TEnd is exactly 0
 // and 1 (seam.go carries sketch's range through unchanged), so
-// exactLineMoments and lineWalkBounds each take the fast path twice per
+// momentline.ExactLineMoments and lineWalkBounds each take the fast path twice per
 // segment.
 func BenchmarkExtrudePlate(b *testing.B) {
 	s, p := plateSketch(b)

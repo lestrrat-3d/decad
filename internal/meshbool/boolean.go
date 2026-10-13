@@ -21,7 +21,7 @@ const (
 	BooleanExpectedEmpty BooleanExpectedKind = iota
 	// BooleanExpectedContact is a TRUE contact/proximity refusal of the boolean
 	// geometry itself: an unclassifiable tangent contact (ErrUnclassifiableContact
-	// / MeshBoolean) or an undecidable near-miss (refuseUndecidableProximity). It
+	// / MeshBoolean) or an undecidable near-miss (refuseUndecidableProximityWithConeCap). It
 	// maps to the public BooleanUnsupportedContact.
 	BooleanExpectedContact
 	// BooleanExpectedUnsupported is an in-pipeline reach of the boolean geometry
@@ -124,7 +124,7 @@ type NearContacts struct {
 
 // GatherNearContacts classifies every facet pair of two faces whose boxes come
 // within slack and collects the pairs that meet or stay within slack. deferred
-// reports a coplanar face-on-face overlap, which facesNearMiss leaves to the
+// reports a coplanar face-on-face overlap, which FacesNearMiss leaves to the
 // mesh pass's own refusal.
 func GatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo) (NearContacts, bool, error) {
 	var nc NearContacts
@@ -191,7 +191,7 @@ type ContactSpan struct {
 	P0, P1 proof.Xpt
 }
 
-// MaxDepthWitnessFacets caps how many contacting facets deepWitnessInside
+// MaxDepthWitnessFacets caps how many contacting facets DeepWitnessInside
 // probes at their fixed sample points on each side of a face pair, and
 // MaxDepthWitnessSpans caps how many contact segments SpanWitness walks from.
 // The fixed samples sit wherever the tessellation put the facet's corners, so a

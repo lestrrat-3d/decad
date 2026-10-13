@@ -107,7 +107,7 @@ type LoftChordedAllow struct {
 // That table owns the composition's derivation and its rounding direction, and
 // this helper adds no mechanism of its own to either. What the code here does
 // state is that both terms are read at the same s, which is what keeps the
-// published bound PARAMETER-MATCHED (loftCellStations' own doc comment).
+// published bound PARAMETER-MATCHED (RecordCellStations' own doc comment).
 //
 // Either term underivable answers +Inf, the answer §5.2's table assigns those
 // rows, and the caller refuses on it.

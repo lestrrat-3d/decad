@@ -45,7 +45,7 @@ import (
 //     states a radius outright, and a recorded CircleSeg, both give zero; a
 //     walk built from a recorded ArcSeg holds a math.Hypot radius and gives
 //     extrude.go's arcWalkRadiusBound. Every candidate radius derived from an
-//     element radius reads it through SurveyElem.rrBS, never as a leaf.
+//     element radius reads it through SurveyElem.RrBS, never as a leaf.
 //   - WallKernel's wedgeS, the partial-revolve cap half-angle's SINE, which
 //     its caller proves from a certified trig interval.
 //
@@ -54,7 +54,7 @@ import (
 //
 // A candidate's own bound is on its RADIUS, while the kernel's answer is a
 // spanning DIAMETER (WallSurveyOut.span = 2r), so the bound is doubled with
-// the value it accompanies. runBudget performs that conversion at the single
+// the value it accompanies. WallKernel.RunBudget performs that conversion at the single
 // point where a candidate enters the answer, so every field of
 // WallSurveyOut that carries a bound already speaks in the answer's own
 // units and no consumer restates the factor.
@@ -72,7 +72,7 @@ type DiskCand struct{ X, Y, R, RBound float64 }
 //
 // wedgeS is one of the two kernel inputs that are NOT exact leaves (the kernel
 // comment names both; the other is an element's own radius): it is a sine, so
-// its caller (survey.go's revolveWall) proves it from a certified trig
+// its caller (wallsurvey.RevolveWall) proves it from a certified trig
 // interval and hands it over as a proofbound.BoundedScalar. Every wedge-derived radius
 // composes that bound through the same bounded arithmetic the rest of the kernel
 // uses, so a candidate the wedge produced publishes an interval that contains
@@ -154,7 +154,7 @@ func NewWallKernelBudget(budget *proofbound.WorkBudget, elems, containOnly []Sur
 // held order off the truth.
 //
 // span and spanBound speak in the spanning DIAMETER, not in the candidate
-// radius each generator actually bounded: runBudget doubles a candidate's
+// radius each generator actually bounded: WallKernel.RunBudget doubles a candidate's
 // value and its bound together as it feeds the aggregate, at the single point
 // where a candidate enters the answer, so no consumer restates the factor.
 type WallSurveyOut struct {
@@ -191,7 +191,7 @@ func (k *WallKernel) Run() WallSurveyOut {
 	return out
 }
 
-// runBudget streams and validates candidates under one shared Verify budget,
+// RunBudget streams and validates candidates under one shared Verify budget,
 // folding each admitted candidate into the two §9.2 aggregates the kernel
 // publishes — the least spanning diameter and the greatest empty radius.
 // Neither extremum is taken by comparing held values: a candidate's own bound
@@ -204,7 +204,7 @@ func (k *WallKernel) Run() WallSurveyOut {
 //
 // A candidate whose own generator could not derive a finite bound never
 // widens the published interval silently: it makes the whole survey
-// undecided instead (the same refusal prismWall already takes for a
+// undecided instead (the same refusal wallsurvey.PrismWall already takes for a
 // displaced section), since a reading with no proven bound is not one this
 // evaluator may stand behind. The aggregate itself carries that refusal, so a
 // candidate that loses the extremum cannot smuggle an unbounded figure past
@@ -291,7 +291,7 @@ func (k *WallKernel) RunBudget(budget *proofbound.WorkBudget) (WallSurveyOut, er
 //
 // Resolving that way, rather than into the undecided channel, is a decision
 // the numbers force and it is worth stating why. These guards compare against
-// slacks the survey DECLARES — k.tol and contactTol() are 1e-9 and 8e-9 of the
+// slacks the survey DECLARES — k.tol and WallKernel.ContactTol() are 1e-9 and 8e-9 of the
 // section's own scale — but the intervals read against them are NOT ulp-scale:
 // a T3 angle-limit candidate composes the draft allowance's certified trig
 // enclosure through a division, and on a 100 mm section its radius bound comes
@@ -307,7 +307,7 @@ func (k *WallKernel) RunBudget(budget *proofbound.WorkBudget) (WallSurveyOut, er
 // own published interval up to the declared slack — the same slack the held
 // comparison already conceded. Where an element cannot be proven clear of the
 // rim, a disk inside that interval really does touch it. What the interval
-// cannot absorb is a bound that is not a number at all: runBudget's aggregate
+// cannot absorb is a bound that is not a number at all: WallKernel.RunBudget's aggregate
 // refuses a candidate whose generator could derive no finite bound, and that
 // is the reading's undecided channel.
 func (k *WallKernel) Validate(c DiskCand, budget *proofbound.WorkBudget) (bool, bool, bool, error) {
@@ -423,10 +423,10 @@ func (k *WallKernel) Validate(c DiskCand, budget *proofbound.WorkBudget) (bool, 
 	return spanning, true, true, nil
 }
 
-// clearRadius and contactRadius are the two bands validate reads an element's
+// ClearRadius and WallKernel.ContactRadius are the two bands validate reads an element's
 // distance against, each carrying the candidate's own proven radius bound: an
-// element nearer than clearRadius cuts into the disk, one no further than
-// contactRadius touches it. The slacks themselves are the survey's declared
+// element nearer than WallKernel.ClearRadius cuts into the disk, one no further than
+// ContactRadius touches it. The slacks themselves are the survey's declared
 // lines, not measurements, so they enter as exact leaves.
 func (k *WallKernel) ClearRadius(c DiskCand) proofbound.BoundedScalar {
 	return proofbound.BoundedSub(proofbound.MeasuredScalar(c.R, c.RBound), proofbound.ExactScalar(k.Tol))
@@ -436,7 +436,7 @@ func (k *WallKernel) ContactRadius(c DiskCand) proofbound.BoundedScalar {
 	return proofbound.BoundedAdd(proofbound.MeasuredScalar(c.R, c.RBound), proofbound.ExactScalar(k.ContactTol()))
 }
 
-// contactTol is the slack for counting an element as a contact.
+// ContactTol is the slack for counting an element as a contact.
 func (k *WallKernel) ContactTol() float64 { return 8 * k.Tol }
 
 // AngleReadGuard is the survey's DECLARED conservative allowance on one
@@ -450,10 +450,10 @@ func (k *WallKernel) ContactTol() float64 { return 8 * k.Tol }
 // library never promised.
 const AngleReadGuard = 1e-14
 
-// hasWedge reports whether this kernel carries a partial revolve's cap wedge at
+// HasWedge reports whether this kernel carries a partial revolve's cap wedge at
 // all. It is a STRUCTURAL question, not a numeric one: a full turn's caller
 // states proofbound.ExactScalar(0), a proven zero, and a partial sweep's caller
-// (survey.go's revolveWall) proves its own half-angle sine positive before
+// (wallsurvey.RevolveWall) proves its own half-angle sine positive before
 // handing it over — so the reading is never taken on a sine that cannot be
 // told from zero, and the proofbound.SurvAdmit answer below is the only one a built
 // kernel reaches.

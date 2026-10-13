@@ -453,7 +453,7 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 
 // admitSplitPair applies S1-S4, S6 and S7 to a solid prism target and a
 // prism-family sheet. S5 belongs to Trim alone: Split reads no tool side.
-// The closed-sheet and chain-sheet views share buildPrismScene's input shape.
+// The closed-sheet and chain-sheet views share prismcells.BuildScene's input shape.
 func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPayload, prismPayload, error) {
 	rf, tf := bodyTrimFamily(target), bodyTrimFamily(tool)
 	if rf != tf || rf != trimFamilyPrism {
@@ -491,7 +491,7 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 // This section is the revolve family's arm of the gate and of Trim
 // (docs/surface-intersection-design.md §11's PR4). Only S1's routing, S4's
 // generator test and S6's span relation differ from the prism arm; §3's whole
-// resolution — buildPrismScene, prismcells.Classify, the survivor chaining and
+// resolution — prismcells.BuildScene, prismcells.Classify, the survivor chaining and
 // the cut-displacement reading — is consumed VERBATIM over the two operands'
 // MERIDIAN views, which is what §3.1 claims and what revolvePayload.meridian
 // supplies.

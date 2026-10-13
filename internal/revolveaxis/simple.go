@@ -83,7 +83,7 @@ import (
 // this leg exists to close in resolveAxisSide's build-time tolerance, only
 // smaller. proofbound.BoundedMul/proofbound.BoundedAdd/proofbound.BoundedSub charge both the operands' own
 // proven bounds and this arithmetic's own commissioned rounding (the same
-// vocabulary axisFrame.toAxisRhoBound already uses for the identical ρ
+// vocabulary Frame.ToAxisRhoBound already uses for the identical ρ
 // formula at a single point), so the bound handed to proofbound.AdmitBelow below
 // provably covers every operation between the extremes call and the
 // comparison — never a number the accompanying bound does not cover.

@@ -1155,7 +1155,7 @@ func TestFreeformPrismSelectorNeverMatchesEdge(t *testing.T) {
 // direction only: the same hump through the same three points and the same
 // closing chord, but authored so the profile loop walks the spline against the
 // curve's own parametrization. The region, and so every measurement of it, is
-// identical; only walkFreeform's reversed flag differs.
+// identical; only survey2d.WalkFreeform's reversed flag differs.
 func reversedArchSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 	t.Helper()
 	w := sketch.NewWorld()

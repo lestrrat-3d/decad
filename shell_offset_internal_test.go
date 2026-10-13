@@ -34,7 +34,7 @@ import (
 //     the outward rectangle misses a foot whose only error is the conversion.
 //
 // Two legs cannot be exhibited here. A recorded arc whose end sits off the
-// circle its start fixes (circularWalkEndGap) needs an inconsistent arc
+// circle its start fixes (capcontour.CircularWalkEndGap) needs an inconsistent arc
 // record, and no sketch solve this test can drive produces one at a
 // measurable distance. The factor three covers points INSIDE a recorded arc,
 // which a vertex check does not reach; offsetSectionDelta's doc comment

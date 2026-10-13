@@ -151,7 +151,7 @@ func WallReading(
 	if !out.Ok {
 		return survey2d.WallReading{}, nil
 	}
-	// The arms reduce through the same §9.2 aggregate prismWall uses. Here the
+	// The arms reduce through the same §9.2 aggregate wallsurvey.PrismWall uses. Here the
 	// only non-zero arm is the section's spanning diameter — the pinch and the
 	// axis-meeting cap pair each contribute an exact zero, which no
 	// non-negative interval can reach below — so the aggregate agrees with the

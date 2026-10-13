@@ -231,7 +231,7 @@ func (sd Sweep) HalfTurnExcessFor(phi0, phi1 float64) (proofbound.RatInterval, b
 // EndSinCos encloses sin(held)/cos(held) for one sweep endpoint: the
 // published value is always math.Sincos(held), the twin the partial-sweep
 // centroid used to compose from boundedSin/proofbound.BoundedCos alone (proofbound.BoundedCos
-// survives in internal/proofbound/bounded.go for walkAxisMoment's circular arm).
+// survives in internal/proofbound/bounded.go for revolvemass.WallAxisMoment's circular arm).
 // The bound is the smaller of the existing ≥1
 // magnitude envelope and the denoted angle's own certified enclosure
 // (Angle.SinCosFor), gated on d.Valid() rather than SinCosFor's own

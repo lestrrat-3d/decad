@@ -617,7 +617,7 @@ func (ax RevolveSepAxis) SideOf(o RevolveOffset, offsetDrift float64) (int, bool
 	return ax.SideOfExact(o.V, o.Length, offsetDrift)
 }
 
-// sideOfExact is sideOf over the exact Dyadic dot product alone.
+// SideOfExact is sideOf over the exact Dyadic dot product alone.
 func (ax RevolveSepAxis) SideOfExact(offset proofarith.DyV3, offsetLen, offsetDrift float64) (int, bool) {
 	h := proofarith.DvDot(ax.G, offset)
 	if h.IsZero() {

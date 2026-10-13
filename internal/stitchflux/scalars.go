@@ -32,7 +32,7 @@ func PiScalar() proofbound.BoundedScalar {
 // Circle3 and Cylinder carry Radius as a bare units.Value with no bound
 // field of its own, and this evaluator's own construction does not make
 // that value exact in general: revolve_axis.go's axisFrame.walk re-expresses
-// a recorded profile point in axis coordinates through toAxisRhoBound, which
+// a recorded profile point in axis coordinates through revolveaxis.Frame.ToAxisRhoBound, which
 // folds in the resolved axis's own anchor and direction bounds
 // (aUBound/aVBound/dUBound/dVBound) — exactly zero only when the axis is
 // coordinate-aligned and passes through the origin (every product is by 0 or
@@ -202,7 +202,7 @@ func AxisDistanceFromApex(apexX, apexY, apexZ proofbound.BoundedScalar, axis, po
 // radius from its already-proven area/areaBound (Area = 4πR², inverted)
 // rather than trusting Sphere.Radius directly. CircleRadius (the
 // Cylinder/Cone arms' own route) reads a RIM EDGE's own proven
-// circumference, but sphereFaceFluxAndMoment's own scope restriction admits
+// circumference, but SphereFaceFluxAndMoment's own scope restriction admits
 // a Sphere face only when it carries NO boundary loop at all (this file's
 // only reachable Sphere fixture — docs/surface-design.md's own T50 — mints
 // no latitude circle for either of its two on-axis pole junctions,
@@ -210,7 +210,7 @@ func AxisDistanceFromApex(apexX, apexY, apexZ proofbound.BoundedScalar, axis, po
 // circumference from at all, not merely one this file declines to trust.
 // The face's own area, by contrast, is ALREADY a proven reading regardless
 // of loop count: it is set at construction time from the profile's own
-// closed-form Pappus integral (revolve_build.go's faceArea, walkAxisMoment),
+// closed-form Pappus integral (revolve_build.go's faceArea, revolvemass.WallAxisMoment),
 // the identical value docs/surface-design.md §6.4's Area-sum block already
 // trusts unconditionally for every face kind. Inverting Area = 4πR² through
 // proofbound.BoundedQuotient and proofbound.BoundedSqrt is therefore a reuse of an
@@ -246,7 +246,7 @@ func SphereRadius(area, areaBound float64) (proofbound.BoundedScalar, error) {
 // that is automatically zero in the aligned case without a separate gate.
 //
 // A Torus has no such uniform, axis-independent derivation for Major and
-// Minor (torusFaceFluxAndMoment's own doc comment proves why: the two rims
+// Minor (TorusFaceFluxAndMoment's own doc comment proves why: the two rims
 // of a symmetric tube zone do not determine them, even together with the
 // face's own proven area — the system is genuinely under-determined, not
 // merely hard). So this file cannot avoid reading Torus.Major/Torus.Minor

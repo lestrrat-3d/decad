@@ -192,7 +192,7 @@ func TestWallKernelBudgetedRunKeepsNormalResult(t *testing.T) {
 }
 
 // TestWallKernelPublishesDiameterBounds pins the unit relation both wall-survey
-// consumers inherit: prismWall and revolveWall each publish out.span beside
+// consumers inherit: wallsurvey.PrismWall and wallsurvey.RevolveWall each publish out.span beside
 // out.spanBound as a DIAMETER and its half-width, so both must speak in the
 // diameter and not in the candidate radius each generator actually bounded.
 // The re-derivation below reads the generators directly, folds their radii
@@ -891,7 +891,7 @@ func TestWallKernelInradiusAggregatesRivalCandidates(t *testing.T) {
 	require.Greater(t, out.InradiusBound, 0.0)
 }
 
-// TestWallKernelFitGateReadsTheCandidateInterval pins the third of runBudget's
+// TestWallKernelFitGateReadsTheCandidateInterval pins the third of survey2d.WallKernel.RunBudget's
 // readings on the candidate's own interval: whether a spanning disk is narrow
 // enough to lift out of the section into the sweep. The gate rejects only a
 // disk PROVEN wider than the sweep, because dropping one whose interval still
@@ -1000,7 +1000,7 @@ func TestWallKernelStraddledLeadingCoefficientStaysDecided(t *testing.T) {
 // really be parallel, and it may really not be — but the independent branch
 // divides the affine centre by that same determinant, so proofbound.BoundedQuotient hands
 // it +Inf and the candidate it builds would refuse the whole survey through
-// runBudget's aggregate. That one candidate is dropped, and only it.
+// survey2d.WallKernel.RunBudget's aggregate. That one candidate is dropped, and only it.
 //
 // The fixture is two facing lines 10 mm apart, the second a hair off parallel
 // under a bound its own arithmetic cannot resolve, plus a circular hole between

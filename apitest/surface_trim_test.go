@@ -112,10 +112,10 @@ func TestSurfaceTrimKeepOutsideSplitsIntoTwoRibbons(t *testing.T) {
 	// The bound must clear the incidental float-summation noise a two-level
 	// per-lump-then-across-lumps boundedAdd carries even at zero
 	// sectionDelta (measured at 2.8e-13 mm² for this fixture, forcing
-	// resolveTrim's own cutDelta to zero) — otherwise this assertion would
+	// prismcells.ResolveSurfaceTrim's own cutDelta to zero) — otherwise this assertion would
 	// pass on that noise alone and prove nothing about δ_cut. The proven
 	// bound charging cutDelta measures 4.0e-10 mm² here, three orders above
-	// that floor. Shown-to-fail: forcing resolveTrim's returned cutDelta to
+	// that floor. Shown-to-fail: forcing prismcells.ResolveSurfaceTrim's returned cutDelta to
 	// 0 drops this bound under 1e-11 and turns this assertion red.
 	require.Greater(t, area.Bound.Base(), 1e-11)
 	decadtest.MeasuresArea(t, trimmed, units.SquareMillimeters(2800))

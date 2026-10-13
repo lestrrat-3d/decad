@@ -196,7 +196,7 @@ type preciseArcWedge struct {
 	endU, endV       *big.Float
 }
 
-// preciseLineMoment is addLine's own first- and second-moment contribution of
+// preciseLineMoment is momentregion.State.AddLine's own first- and second-moment contribution of
 // one line segment, in 256-bit arithmetic.
 type preciseLineMoment struct {
 	mu, mv, muu, muv, mvv *big.Float
@@ -263,7 +263,7 @@ func newPreciseArcWedge(t *testing.T, center, start, end decad.Point2) preciseAr
 	}
 }
 
-// preciseLineMoments evaluates addLine's own first- and second-moment
+// preciseLineMoments evaluates momentregion.State.AddLine's own first- and second-moment
 // closed forms for the segment (u0, v0)→(u1, v1) in 256-bit arithmetic.
 func preciseLineMoments(u0, v0, u1, v1 *big.Float) preciseLineMoment {
 	six, twelve := preciseFloat64(6), preciseFloat64(12)
@@ -290,7 +290,7 @@ func preciseLineMoments(u0, v0, u1, v1 *big.Float) preciseLineMoment {
 	return preciseLineMoment{mu: mu, mv: mv, muu: muu, muv: muv, mvv: mvv}
 }
 
-// arcTrigIntegrals are addCircular's own trig integrals over [0, θ1] in
+// arcTrigIntegrals are momentregion.State.AddCircular's own trig integrals over [0, θ1] in
 // 256-bit arithmetic, every higher multiple taken through the double-angle
 // identities.
 type arcTrigIntegrals struct {
@@ -336,7 +336,7 @@ func (w preciseArcWedge) trigIntegrals() arcTrigIntegrals {
 }
 
 // preciseGreenArcFirstMoments is preciseGreenArcArea's first-moment sibling:
-// addCircular's own mu/mv trig closed forms over the denoted arc plus addLine's
+// momentregion.State.AddCircular's own mu/mv trig closed forms over the denoted arc plus momentregion.State.AddLine's
 // over End→Center and Center→Start, all in 256-bit arithmetic. It evaluates the
 // trig closed form independently of the rational substitution the bracket
 // under test makes.
@@ -367,8 +367,8 @@ func preciseGreenArcFirstMoments(t *testing.T, center, start, end decad.Point2) 
 }
 
 // preciseGreenArcSecondMoments is the second-moment sibling of
-// preciseGreenArcFirstMoments: addCircular's own muu/muv/mvv trig closed forms
-// plus addLine's, in 256-bit arithmetic.
+// preciseGreenArcFirstMoments: momentregion.State.AddCircular's own muu/muv/mvv trig closed forms
+// plus momentregion.State.AddLine's, in 256-bit arithmetic.
 func preciseGreenArcSecondMoments(t *testing.T, center, start, end decad.Point2) (*big.Float, *big.Float, *big.Float) {
 	t.Helper()
 	w := newPreciseArcWedge(t, center, start, end)
@@ -876,7 +876,7 @@ func TestRegionMomentsRequestedOrderControlsOverflow(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 }
 
-// The measured defect behind publishExact's per-field publication. The exact
+// The measured defect behind momentinput.Integrals.PublishExact's per-field publication. The exact
 // rational accumulator holds all six moments whatever order the caller asked
 // for, so a region whose SECOND moment has no float64 image still has an exact
 // area rational in hand. Publishing the six together abandoned every one of
@@ -1001,7 +1001,7 @@ func TestSecondMomentsOffsetCircle(t *testing.T) {
 // semicircleSketch's own profile record published a UV bound of 38385.42 mm⁴
 // against a 416.67 mm⁴ value before this fix — 92 times the value itself,
 // never mind hundreds — and UU/VV were wider still (188201.04 against
-// 1227.18, 98751.38 against 245.44). moments_circular.go's
+// 1227.18, 98751.38 against 245.44). internal/circularbounds/moments.go's
 // circularSecondMomentInterval now brackets all three exactly, so every
 // bound shrinks to a tiny fraction of its own value.
 //
@@ -1124,7 +1124,7 @@ func TestArcSegExactQuarterDisk(t *testing.T) {
 	require.Equal(t, decad.Approximate, moments.UU.Exactness)
 	// UV collapses to a rational with no swept-angle term at all (center on
 	// the origin cancels muv's own dth coefficient,
-	// moments_circular.go's circularSecondMomentInterval doc comment), so it
+	// internal/circularbounds/moments.go's circularSecondMomentInterval doc comment), so it
 	// is Exact with a zero bound — unlike UU/VV, whose true value carries pi.
 	require.Equal(t, decad.Exact, moments.UV.Exactness)
 	require.Zero(t, moments.UV.Bound.Base())

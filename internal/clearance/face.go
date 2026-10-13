@@ -79,13 +79,13 @@ func AdmitState(cs ...int) int {
 	return out
 }
 
-// planeCoords maps a world point into the plane face's 2D frame.
+// PlaneCoords maps a world point into the plane face's 2D frame.
 func (f *CFace) PlaneCoords(p r3.Vec) (float64, float64) {
 	rel := p.Sub(f.O)
 	return rel.Dot(f.U), rel.Dot(f.V)
 }
 
-// planeOffset is the face plane's offset along its unit normal.
+// PlaneOffset is the face plane's offset along its unit normal.
 func (f *CFace) PlaneOffset() float64 { return f.N.Dot(f.O) }
 
 // axisCoords maps a world point into (z along axis from anchor, ρ, azimuth).
@@ -119,7 +119,7 @@ func (f *CFace) ConeMeridian(z, rho float64) (float64, float64) {
 	return math.Abs(rho*f.Run-z*f.Rise) / l, (z*f.Run + rho*f.Rise) / l
 }
 
-// admitPoint classifies a world point claimed to lie on the face's carrier
+// AdmitPoint classifies a world point claimed to lie on the face's carrier
 // against the trim: +1 admitted with margin, −1 rejected with margin, 0
 // ambiguous. margin is a length.
 func (f *CFace) AdmitPoint(p r3.Vec, margin float64) int {
@@ -223,7 +223,7 @@ func FaceFootExtent(f *CFace) float64 {
 // Cauchy–Schwarz bounds by |n−n_true|·|p−o|. proofbound.DirRoundAllow bounds the first
 // factor for the frame/placement composition every such normal is built
 // through (a unit-scale input, since every direction the carrier model feeds it
-// is a unit or axis vector); the ×4 safety factor is prismPointBound's own rule
+// is a unit or axis vector); the ×4 safety factor is prismrecord.Payload.PointBound's own rule
 // for a value that passes through more than one held linear map — here the
 // frame lift, a cross product and a normalize — before publication, so it is
 // sound rather than tight. FaceFootExtent bounds the second factor.

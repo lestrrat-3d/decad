@@ -20,7 +20,7 @@ import (
 // consumer within a single prism evaluation reads the same resolution back
 // instead of paying walkOf's own §5.2 charge again for it. Within one
 // evalPrismContext call, buildLoopSidesAs, CoordinateEnvelope (called
-// from prismCentroidGeometryBound and, four times over, from
+// from prismrecord.Payload.CentroidGeometryBound and, four times over, from
 // prismBoundsContext's per-axis extentBoundedAlong) and
 // prismextent.ProfileBoundaryExtremes (three times, also from extentBoundedAlong)
 // each used to call walkOf on the SAME recorded segment — eight resolutions of

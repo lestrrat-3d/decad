@@ -70,7 +70,7 @@ func (ax Frame) ToAxisRhoBound(u, v float64) float64 {
 // whole difference between the two: |p−a| ≤ |p| + |a|, with the anchor read
 // through its own recorded bounds. Every reading whose error scales with ρ —
 // a walk's swept radius and moment envelopes, and the sweep-extreme
-// perturbation sweepBoundAlong charges — takes its envelope from here, because a
+// perturbation SweepBoundAlong charges — takes its envelope from here, because a
 // caller that charges the frame-origin envelope instead understates the
 // reading without limit as the axis moves away from the frame origin.
 func (ax Frame) RadialUpper(coordUpper float64) float64 {
@@ -84,7 +84,7 @@ func (ax Frame) RadialUpper(coordUpper float64) float64 {
 // PlaneDirection is the PLANE-LOCAL direction whose extreme over the recorded
 // boundary is the extreme of the axis-coordinate functional wg·z + k·ρ. It is
 // the rotation that carries (z, ρ) back to (u, v), spelled once here so the
-// reading that evaluates the extreme (axisExtremeContext) and any later reading
+// reading that evaluates the extreme (axisExtreme) and any later reading
 // over the same functional cannot drift apart by spelling it twice.
 func (ax Frame) PlaneDirection(wg, k float64) (float64, float64) {
 	return wg*ax.DU - k*ax.DV, wg*ax.DV + k*ax.DU
@@ -177,7 +177,7 @@ func (ax Frame) axisCharge(c proofbound.WalkEndBound) (float64, float64) {
 
 // WalkCharged is walk with a section displacement folded in, per endpoint.
 // startCharge and endCharge are the plane-local per-component displacements
-// docs/surface-intersection-design.md §7.1 charges — trimCutChargeUV's own
+// docs/surface-intersection-design.md §7.1 charges — prismcells.TrimCutChargeUV's own
 // figures, taken at exactly the endpoint whose recorded parameter is not a
 // natural bound, and at neither endpoint of a segment the arrangement did not
 // cut. Both zero is the ordinary revolve, and every fold below is skipped.

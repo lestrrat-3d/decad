@@ -456,7 +456,7 @@ func TestSweepPairPlanarClearReplay(t *testing.T) {
 //   - the lifted term of the band's depth (planarSupport.depthAt):
 //     TestSweepPairSupportSetBand's BandAt no longer encloses the far edge's
 //     height;
-//   - the lifted vertices' lower height bound (clearAt over the lifted set):
+//   - the lifted vertices' lower height bound (planarsweep.ClearAt over the lifted set):
 //     TestSweepPairSupportSetArrivalEndsTrack's track runs to the duration,
 //     past the far edge's arrival.
 
@@ -608,13 +608,13 @@ func TestSweepPairSupportSetArrivalEndsTrack(t *testing.T) {
 //
 // Legs shown to fail (each deleted or changed in turn, fixture red, then
 // restored):
-//   - the rested skip in the band's clearAt:
+//   - the rested skip in the band's planarsweep.ClearAt:
 //     TestSweepPairRestedVertexHoldsTwoSided's track ends at the far edge's
 //     arrival;
 //   - the rested vertex's |h'(0)|·t term in the band's depth:
 //     TestSweepPairRestedVertexHoldsTwoSided's BandAt no longer encloses the
 //     sunk far edge;
-//   - the rested skip copied into the departure's clearAt:
+//   - the rested skip copied into the departure's planarsweep.ClearAt:
 //     TestSweepPairRestedVertexHoldsTwoSided's departure reaches the duration
 //     with a far corner below the floor;
 //   - the per-vertex p'' term replaced by §10.2's |ω_M|²·ρ_M:

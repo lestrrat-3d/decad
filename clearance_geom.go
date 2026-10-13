@@ -326,7 +326,7 @@ func prismCarrierFrame(pp prismPayload) clearance.PrismCarrierFrame {
 // addBrepFaces builds a brep body's carrier faces from its own record
 // (docs/general-boolean-design.md §4.5's clearance row), each face over its
 // own frame through the prism builders addPrismFaces uses: a swept face is
-// prismWallCFace over its wall walk and interval, a planar face a plane at
+// clearance.PrismWallCarrier over its wall walk and interval, a planar face a plane at
 // its level whose trim region is its own loops' (outer and holes, crossing
 // parity decides membership), its normal the frame's N turned outward.
 //

@@ -300,7 +300,7 @@ func TestUndercutNearAntiparallelPull(t *testing.T) {
 // (dot exactly -1). Before the fix both were listed as proven undercuts, read
 // off the raw float components -4.6811112914356013e-17 and
 // -0.99999999999999989 — neither of which is 0 or -1, but both fell inside
-// opposesPull's open interval. The exact answer is the empty proven all-clear.
+// survey2d.OpposesPull's open interval. The exact answer is the empty proven all-clear.
 func TestUndercutExactlyPerpendicularWallIsNotOpposed(t *testing.T) {
 	t.Parallel()
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {3, 9}, {-6, 12}, {-9, 3}})
@@ -915,7 +915,7 @@ func TestWallReadingBoundEnclosesCurvedWeb(t *testing.T) {
 	t.Parallel()
 	// The 100×60×20 mm plate with two r=1 holes at (48.5, 28.5) and
 	// (51.5, 31.5): the web between them is hypot(3,3) − 2 = 3√2 − 2, which no
-	// float64 holds exactly. The reading carries the arcArcCands centerline
+	// float64 holds exactly. The reading carries the survey2d.WallKernel.ArcArcCands centerline
 	// candidate's own proven bound instead of asserting Exact.
 	ws := sketch.NewWorld()
 	s, err := ws.CreateSketch(ws.XY())
@@ -962,7 +962,7 @@ func TestWallReadingBoundIsOnTheSpanningDiameter(t *testing.T) {
 	// 100 mm thick with two equal holes of radius 132665.06800135397 mm whose
 	// centres sit (264148.72380984796, 25043.885926669256) apart, so the web
 	// between them is ~3.1346451310243 mm while the coordinates feeding
-	// arcArcCands' own division are ~1e5 — the bound comes out near 3e-11,
+	// survey2d.WallKernel.ArcArcCands' own division are ~1e5 — the bound comes out near 3e-11,
 	// five orders of magnitude past the reading's own float64 rounding.
 	//
 	// survey2d's candidates bound their RADIUS and the reading is the spanning
@@ -1054,7 +1054,7 @@ func TestWallHeightCarriesAxialDelta(t *testing.T) {
 	t.Parallel()
 	// A 10×10 mm plate extruded units.Inches(0.1): the sweep level's own unit
 	// conversion carries a nonzero displacement (docs/evaluator-design.md §5),
-	// which prismWall's height arm composes into the reading instead of
+	// which wallsurvey.PrismWall's height arm composes into the reading instead of
 	// dropping. Without that composition the reported height with an
 	// ulp-scale bound fails this by construction.
 	ws := sketch.NewWorld()
@@ -1760,7 +1760,7 @@ func TestRevolveMinRadiusExactCandidatesStayExact(t *testing.T) {
 	require.Equal(t, decad.Exact, br.ConcaveRadius.Minimum.Exactness)
 }
 
-// TestWallHeightArmAggregatesAgainstTheSectionSpan pins prismWall's two
+// TestWallHeightArmAggregatesAgainstTheSectionSpan pins wallsurvey.PrismWall's two
 // non-zero arms — the section's spanning diameter and the cap-to-cap height —
 // as candidates of ONE §9.2 minimum rather than as a comparison of held
 // values. The fixture is the case that comparison cannot see: a 2.54×100 mm

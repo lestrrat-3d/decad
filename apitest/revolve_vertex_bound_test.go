@@ -305,7 +305,7 @@ func fullRevolveTiltedCentroid(ax, ay, x0, y0, x1, y1 *big.Rat) [3]*big.Rat {
 // far-frame-anchor red, and its A3 rounding term alone far-tilted-frame. The
 // sketch-line and construction-axis subtests passed before the charge: the
 // direction terms are smaller than the axial coordinate's own bound, which
-// axisMoments already widens by dUBound/dVBound, in every fixture here, so
+// revolvemass.AxisMoments already widens by dUBound/dVBound, in every fixture here, so
 // no subtest isolates them.
 func TestRevolveCentroidBoundCoversTiltedAxis(t *testing.T) {
 	t.Parallel()

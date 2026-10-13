@@ -464,7 +464,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		// §4.3: a surface result's area is the solid's area minus the two
 		// omitted caps'. Each cap's area and bound are read back from the
 		// Face fields buildLoftTopology stamped, which already compose the
-		// cap's own placement allowance (capTriangleAreaAllow) — never
+		// cap's own placement allowance (loftmesh.CapTriangleAreaAllow) — never
 		// re-derived here — and the subtraction runs LAST, after the mass
 		// accumulator's own area (walls plus both caps) has been read, so
 		// nothing after this point still widens capStart's or capEnd's own

@@ -273,7 +273,7 @@ func TestStitchDisplacedPatchStaysASheet(t *testing.T) {
 // (TestStitchDisplacedPatchStaysASheet already covers J4's bit-identical
 // coordinate match with two zero-bound patches). A wall extruded 5 inches
 // Along carries a top rim computed from that unit conversion
-// (document.go's magnitudeInBounded): 5 inches does not convert to
+// (extent.MagnitudeInBounded): 5 inches does not convert to
 // millimetres exactly, so the rim's z coordinate holds a nonzero bound even
 // though the held float64 value prints as the round number 127. A patch
 // built directly at z = 127 mm — a stated, recorded coordinate — carries a
@@ -752,7 +752,7 @@ func TestStitchBoxReachesAProvenClearanceGap(t *testing.T) {
 // ever consulted that verdict. A CLOSED, all-planar, zero-vertex-bound
 // stitched solid no longer hits that refusal, so the pair now resolves
 // through the ordinary mesh boolean (measuredInterference's own
-// evaluateBoolean(opIntersect) fallback) to a real, bounded volume.
+// evaluateBoolean(meshbool.OpIntersect) fallback) to a real, bounded volume.
 //
 // The overlap here is a clean crossing rather than T66's own fixture: T66's
 // block shared the box's own y ∈ [0, 60] extent and its z = 0 base plane,

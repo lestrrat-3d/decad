@@ -824,7 +824,7 @@ func (ld *loopDrive) checkLimits(spec *linkageSpec) error {
 }
 
 // pointValues is every dependent's value range at the exact fraction s, read
-// on the sub-segment subAt picks, or the refusal that makes the pose
+// on the sub-segment linkagebound.DriverSegments.At picks, or the refusal that makes the pose
 // unbuildable.
 func (ld *loopDrive) pointValues(ctx context.Context, s *big.Rat) ([][2]motionbound.MotionParam, error) {
 	ld.mu.Lock()
@@ -852,7 +852,7 @@ func (ld *loopDrive) intervalSpans(ctx context.Context, a, b *big.Rat) ([][]loop
 		func(err error) error { return ld.unbuildable(err) })
 }
 
-// span is a dependent joint's |Δq| over [sa, sb]: the sum of dependentSpan
+// span is a dependent joint's |Δq| over [sa, sb]: the sum of linkagebound.SpanUpper
 // over the pieces intervalGate read the interval in, which bounds the joint's
 // total variation since that is additive over the cuts; nil when there are no
 // readings.

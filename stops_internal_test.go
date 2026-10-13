@@ -168,7 +168,7 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 	// |N·w| = 0 and the plane's offset from a3 is 0. Loop closure is not part
 	// of what this test drives: faceHalfPlane walks face.Edges(), a flat
 	// concat over loops, and neither it nor boundaryProbes nor
-	// rejectAxisCrossing reads a loop's closure.
+	// extent.RejectAxisCrossing reads a loop's closure.
 	planeFrame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
 	st := angularStops{

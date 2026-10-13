@@ -37,7 +37,7 @@ import (
 //
 // NON-FINITE INPUTS AND OUTPUTS ABSTAIN, NEVER PROPAGATE. Every method checks
 // every intermediate it forms for finiteness before trusting it, and returns
-// FivAbstain the moment one fails — mirroring SegFilter.tooFar's own
+// FivAbstain the moment one fails — mirroring SegFilter.TooFar's own
 // "saturation is tested, not argued" discipline. A saturated intermediate
 // does not merely widen an answer, it can flip which branch a later decision
 // takes (Inf compares false against everything finite), so nothing downstream

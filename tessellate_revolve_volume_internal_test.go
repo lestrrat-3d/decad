@@ -307,7 +307,7 @@ func TestPairChordToleranceClearsARevolveCoordinateReservation(t *testing.T) {
 		`the reservation, not the pair diameter, is what set this tolerance`)
 
 	// The raised tolerance is one the revolve can actually be meshed at, which
-	// is the whole point: without it planRevolve refuses before it chords.
+	// is the whole point: without it planRevolveWithRoles refuses before it chords.
 	mesh, err := tessellateContext(t.Context(), placed, units.Millimeters(tol), VerifyAll)
 	require.NoError(t, err)
 	require.True(t, mesh.symDiffOK)

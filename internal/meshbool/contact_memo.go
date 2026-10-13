@@ -2,7 +2,7 @@ package meshbool
 
 // ContactMemo caches TriTriClassify's answer per facet-index pair for ONE
 // operand pair, so the second ask a call reaches — the tangency gate
-// (facesNearMiss) and the mesh pass (MeshBoolean) walk the same two prepared
+// (FacesNearMiss) and the mesh pass (MeshBoolean) walk the same two prepared
 // tessellations — is served from the store instead of recomputed.
 // TriTriClassify is a pure function of the two facets' float corners, exact
 // lifts and exact normals, all read-only fields of ma/mb, so a stored answer
