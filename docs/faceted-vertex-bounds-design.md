@@ -371,14 +371,15 @@ chain (core §8), and is never the reason for a refusal.
 
 **The rule.** The boolean asks a RESTATING operand for its mesh at
 `max(tol, heldFloor)`, where `heldFloor` is the payload's own `meshBound`
-(`facetedPayload`) or `delta` (`mitredSweepPayload`, `coilPayload`), read by a
+(`facetedPayload`) or `delta` (`mitredSweepPayload`, `coilPayload`,
+`twistedSweepPayload`), read by a
 `heldFloorOf(body)` reader beside `sectionDisplacementOf`; a restatement
 returns the same vertices at any tolerance at or above its floor, so the mesh
 is the one the boolean needs and the request never refuses.
 
 **A held primitive raises the pair's tolerance.** An operand built as one
-fixed held mesh — a coil or a mitred sweep with proven `delta`, or one
-certified `LoftFaces` result with proven `meshBound` — raises the
+fixed held mesh — a coil, mitred sweep, or twisted sweep with proven `delta`,
+or one certified `LoftFaces` result with proven `meshBound` — raises the
 pair's chord tolerance itself to that bound, as a displaced prism section
 already raises it past twice its displacement (`pairChordFrom`, through
 `heldPrimitiveFloorOf` beside `sectionDisplacementOf`). Every facet such an

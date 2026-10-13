@@ -120,3 +120,76 @@ func TestSweepTwistRoundedProfileAxisRefusalIsAtomic(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Bodies())
 }
+
+func TestSweepTwistRoundedProfileUnionKeepsHeldProof(t *testing.T) {
+	doc, swept, box := roundedTwistUnionOperands(t, 1, 2.5)
+	joined, err := decad.Union(t.Context(), swept, box)
+	require.NoError(t, err)
+	require.Len(t, doc.Bodies(), 1)
+	volume, err := joined.Volume()
+	require.NoError(t, err)
+	// This checks the published bound against possible true occupancy. The
+	// rounded section's x support stays below 2.2 at z=2..3, so at least
+	// 0.24 mm³ of the box is exterior. Its x=1..1.2, y=-0.1..0.1 slab lies
+	// inside the rotated 3×1 mm inner rectangle, so at least 0.04 mm³ overlaps.
+	// The broad source bound cannot measure the exact overlap from these limits.
+	sweptVolume := 5 * (7 + math.Pi/4)
+	lower := volume.Value.Base() - volume.Bound.Base()
+	upper := volume.Value.Base() + volume.Bound.Base()
+	require.LessOrEqual(t, lower, sweptVolume+1.16)
+	require.GreaterOrEqual(t, upper, sweptVolume+0.24)
+	require.Less(t, volume.Bound.Base(), 10.0)
+
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.2),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Greater(t, mesh.Bound().Base(), 0.1)
+	require.Less(t, mesh.Bound().Base(), 0.2)
+	_, err = joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+}
+
+func TestSweepTwistRoundedProfileUnionRefusesNearContact(t *testing.T) {
+	doc, swept, box := roundedTwistUnionOperands(t, 2.1, 3.6)
+	_, err := decad.Union(t.Context(), swept, box)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "held facets come within the chord tolerance")
+	var booleanErr *decad.BooleanError
+	require.ErrorAs(t, err, &booleanErr)
+	require.Equal(t, decad.BooleanUnsupportedContact, booleanErr.Code)
+	require.Len(t, doc.Bodies(), 2)
+}
+
+func roundedTwistUnionOperands(t *testing.T, boxMinX, boxMaxX float64) (*decad.Document, *decad.Body, *decad.Body) {
+	t.Helper()
+	s, profile := roundedTwistProfile(t, 0)
+	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
+	require.NoError(t, err)
+	doc := decad.New()
+	swept, err := decad.Sweep(t.Context(), doc, s, profile, path,
+		decad.WithSweepTwist(units.Degrees(30)))
+	require.NoError(t, err)
+
+	boxWorld := sketch.NewWorld()
+	boxSketch, err := boxWorld.CreateSketch(boxWorld.XY())
+	require.NoError(t, err)
+	boxProfile := boxSketch.CreateRectangle(boxMinX, -0.4, boxMaxX, 0.4)
+	boxSketch.Fix(boxProfile.A)
+	_, err = boxSketch.Solve(t.Context())
+	require.NoError(t, err)
+	box, err := decad.Extrude(t.Context(), doc, boxSketch, boxSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(0, 0, 2))
+	require.NoError(t, err)
+	box, err = decad.Transform(t.Context(), box, shift)
+	require.NoError(t, err)
+
+	return doc, swept, box
+}
