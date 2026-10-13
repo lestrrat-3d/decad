@@ -14,7 +14,7 @@ import (
 // each X against its exact source meridian. The caller separately proves
 // this face is a full radial graph with spiralHeldBlankCellGraph.
 func spiralHeldBlankRadialAllowance(ctx context.Context, blank *Body,
-	held *meshbool.BoolMesh, source *bevelBlankSource, edge int) (float64, bool, error) {
+	held *meshbool.BoolMesh, source *spiralBlankSource, edge int) (float64, bool, error) {
 	if ctx == nil || blank == nil || held == nil || source == nil ||
 		edge < 0 || edge >= len(source.edgeIndex) || len(held.Src) != len(held.Tris) {
 		return 0, false, nil

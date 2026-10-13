@@ -14,6 +14,107 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
+// spiralBlankSource is the legacy six-side view of one authenticated Revolve
+// section. The generic certificate owns the source walk, faces, and cone gap;
+// these named corners only map the older spiral join's fixed cap roles.
+type spiralBlankSource struct {
+	section           revolveSectionCertificate
+	toeAxis, heelAxis Point2
+	toeOuter, toeRoot Point2
+	ded, heelOuter    Point2
+	edgeIndex         [6]int
+	rootFace          *Face
+}
+
+func exactSpiralBlank(blank *Body) (*spiralBlankSource, bool) {
+	for _, section := range revolveRootCandidates(blank) {
+		source, ok := spiralSixSideBlank(section)
+		if ok {
+			return source, true
+		}
+	}
+	return nil, false
+}
+
+func spiralSixSideBlank(section revolveSectionCertificate) (*spiralBlankSource, bool) {
+	if len(section.spans) != 6 || section.axisSpan < 0 ||
+		section.axisSpan >= len(section.spans) ||
+		section.rootSpan < 0 || section.rootSpan >= len(section.spans) {
+		return nil, false
+	}
+	result := &spiralBlankSource{section: section,
+		rootFace: section.spans[section.rootSpan].face}
+	if result.rootFace == nil {
+		return nil, false
+	}
+	axis := section.spans[section.axisSpan]
+	result.toeAxis, result.heelAxis = axis.start, axis.end
+	if result.toeAxis.U > result.heelAxis.U {
+		result.toeAxis, result.heelAxis = result.heelAxis, result.toeAxis
+	}
+	var interior []Point2
+	for _, span := range section.spans {
+		if len(span.sourceEdges) != 1 {
+			return nil, false
+		}
+		point := span.start
+		if point.V == 0 {
+			continue
+		}
+		switch point.U {
+		case result.toeAxis.U:
+			if result.toeOuter != (Point2{}) {
+				return nil, false
+			}
+			result.toeOuter = point
+		case result.heelAxis.U:
+			if result.heelOuter != (Point2{}) {
+				return nil, false
+			}
+			result.heelOuter = point
+		default:
+			interior = append(interior, point)
+		}
+	}
+	if len(interior) != 2 || result.toeOuter == (Point2{}) ||
+		result.heelOuter == (Point2{}) {
+		return nil, false
+	}
+	if interior[0].U > interior[1].U {
+		interior[0], interior[1] = interior[1], interior[0]
+	}
+	result.toeRoot, result.ded = interior[0], interior[1]
+	if !(result.toeRoot.U < result.toeAxis.U &&
+		result.toeAxis.U < result.ded.U && result.ded.U < result.heelAxis.U) {
+		return nil, false
+	}
+	cycle := [6]Point2{result.toeAxis, result.heelAxis, result.heelOuter,
+		result.ded, result.toeRoot, result.toeOuter}
+	var seen [6]bool
+	for _, span := range section.spans {
+		matched := false
+		for edge := range cycle {
+			start, end := cycle[edge], cycle[(edge+1)%len(cycle)]
+			forward := span.start == start && span.end == end
+			reverse := span.start == end && span.end == start
+			if !forward && !reverse {
+				continue
+			}
+			if seen[edge] || edge == 3 && span.face != result.rootFace {
+				return nil, false
+			}
+			seen[edge] = true
+			result.edgeIndex[edge] = span.sourceEdges[0]
+			matched = true
+			break
+		}
+		if !matched {
+			return nil, false
+		}
+	}
+	return result, seen[3]
+}
+
 // A bounded box around one true flank/root/tool triple junction. The true
 // point has X=the corresponding exact toeX or heelX; s and t remain enclosed
 // separately because their algebraic roots need not be rational.
@@ -28,7 +129,7 @@ type spiralJunction struct {
 // the original unplaced blank and cone-trimmed LoftFaces tooth. The matcher
 // below rechecks the live Sketch source and the exact finite blank meridian.
 type spiralFirstJoinSource struct {
-	blank      *bevelBlankSource
+	blank      *spiralBlankSource
 	tooth      *loftFacesTrimRecord
 	rootM      *big.Rat
 	rootB      *big.Rat
@@ -67,7 +168,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		trim.toeCapGroup, trim.heelCapGroup) {
 		return nil, false, nil
 	}
-	m, b := section.meridianEquation()
+	m, b := section.section.meridianEquation()
 	if !spiralSourcePhysicalSector(trim, m, b) {
 		return nil, false, nil
 	}

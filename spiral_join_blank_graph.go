@@ -64,7 +64,7 @@ func spiralSortedGraphTri(a, b, c int) spiralGraphTri {
 	return t
 }
 
-func spiralBlankFaceGroup(blank *Body, source *bevelBlankSource, edge int) int {
+func spiralBlankFaceGroup(blank *Body, source *spiralBlankSource, edge int) int {
 	if blank == nil || source == nil || edge < 0 || edge >= len(source.edgeIndex) {
 		return -1
 	}
@@ -88,7 +88,7 @@ func spiralBlankFaceGroup(blank *Body, source *bevelBlankSource, edge int) int {
 // establishes the world-X six-line profile; this gate checks the emitted
 // rings and fixed cell diagonal rather than assuming float ring homothety.
 func spiralHeldBlankCellGraph(ctx context.Context, blank *Body, held *meshbool.BoolMesh,
-	source *bevelBlankSource, edge int) (bool, error) {
+	source *spiralBlankSource, edge int) (bool, error) {
 	if ctx == nil || blank == nil || held == nil || source == nil ||
 		edge < 0 || edge >= len(source.edgeIndex) {
 		return false, nil
