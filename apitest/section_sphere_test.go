@@ -70,6 +70,30 @@ func TestSectionCardinalSphereFeedsVerifiedExtrude(t *testing.T) {
 	require.Less(t, mesh.Bound().Base(), 0.1)
 }
 
+func TestSectionCardinalSphereNonSquareFeedsVerifiedExtrude(t *testing.T) {
+	sphere := sectionSphereSource(t)
+	section, profiles, err := sphere.Section(t.Context(), sectionSpherePlane(t, 2))
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	require.True(t, profiles[0].Valid)
+	_, err = decad.MeasureProfile(section, profiles[0])
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+		D: units.Millimeters(2), Dir: decad.Along,
+	})
+	require.NoError(t, err)
+	volume, err := child.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-42*math.Pi), volume.Bound.Base())
+	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Less(t, mesh.Bound().Base(), 0.1)
+}
+
 func TestSectionCardinalSphereCutsAcrossRevolveAxis(t *testing.T) {
 	sphere := sectionSphereSource(t)
 	frame, err := r3.NewFrame(r3.Vec{X: 1}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
@@ -105,6 +129,31 @@ func TestSectionCardinalSpherePlacementAndPlaneSense(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-16*math.Pi), area.Bound.Base())
 }
 
+func TestSectionCardinalSphereNonSquarePlacementAndPlaneSense(t *testing.T) {
+	sphere := sectionSphereSource(t)
+	motion, err := r3.FromBasis(r3.Basis{
+		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
+	}, r3.Vec{X: 7, Y: 11, Z: 13})
+	require.NoError(t, err)
+	placed, err := decad.Transform(t.Context(), sphere, motion)
+	require.NoError(t, err)
+	frame, err := r3.NewFrame(r3.Vec{X: 7, Y: 11, Z: 15}, r3.Vec{X: -1}, r3.Vec{Y: -1})
+	require.NoError(t, err)
+	section, profiles, err := placed.Section(t.Context(), frame)
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	sectionFrame, err := section.Plane().Frame()
+	require.NoError(t, err)
+	require.Equal(t, frame, sectionFrame)
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+		D: units.Millimeters(2), Dir: decad.Along,
+	})
+	require.NoError(t, err)
+	volume, err := child.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-42*math.Pi), volume.Bound.Base())
+}
+
 func TestSectionCardinalSphereRefusesUnprovedCuts(t *testing.T) {
 	sphere := sectionSphereSource(t)
 	oblique, err := r3.NewFrame(r3.Vec{Z: 3}, r3.Vec{X: 1}, r3.Vec{Y: 1, Z: 1})
@@ -113,7 +162,6 @@ func TestSectionCardinalSphereRefusesUnprovedCuts(t *testing.T) {
 		name  string
 		plane r3.Frame
 	}{
-		{name: "non-square radius", plane: sectionSpherePlane(t, 1)},
 		{name: "tangent", plane: sectionSpherePlane(t, 5)},
 		{name: "exterior", plane: sectionSpherePlane(t, 6)},
 		{name: "oblique", plane: oblique},

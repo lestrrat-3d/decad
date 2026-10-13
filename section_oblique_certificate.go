@@ -117,11 +117,11 @@ func recordExtrudeProfile(s *sketch.Sketch, p *sketch.Profile) (
 	return profile, plane, area, certificate, nil
 }
 
-func reconstructObliqueSection(ctx context.Context, polygon []Point2, frame r3.Frame, delta float64) (
+func reconstructBoundedSection(ctx context.Context, polygon []Point2, frame r3.Frame, delta float64) (
 	*sketch.Sketch, *sketch.Profile, error,
 ) {
 	if len(polygon) < 3 || delta < 0 {
-		return nil, nil, fmt.Errorf("%w: oblique Section has no bounded polygon", ErrUnsupported)
+		return nil, nil, fmt.Errorf("%w: Section has no bounded polygon", ErrUnsupported)
 	}
 	world := sketch.NewWorld()
 	plane, err := world.CreatePlaneFromFrame(frame)
@@ -145,7 +145,7 @@ func reconstructObliqueSection(ctx context.Context, polygon []Point2, frame r3.F
 		next := (i + 1) % len(polygon)
 		lines[i], err = s.CreateReferenceLine(points[i], points[next], obliqueSectionSource)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%w: oblique Section reference line: %v", ErrUnsupported, err)
+			return nil, nil, fmt.Errorf("%w: bounded Section reference line: %v", ErrUnsupported, err)
 		}
 		segments[i] = lineSeg{Start: polygon[i], End: polygon[next], TStart: 0, TEnd: 1}
 	}
@@ -174,7 +174,7 @@ func reconstructObliqueSection(ctx context.Context, polygon []Point2, frame r3.F
 		}
 		return s, profile, nil
 	}
-	return nil, nil, fmt.Errorf("%w: Sketch did not certify oblique Section polygon", ErrUnsupported)
+	return nil, nil, fmt.Errorf("%w: Sketch did not certify bounded Section polygon", ErrUnsupported)
 }
 
 func sectionSameLineRing(recorded profileRecord, polygon []Point2) bool {
