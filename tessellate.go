@@ -1325,8 +1325,8 @@ func requireRecordWalkClearance(ctx context.Context, pts []sectionrecord.Point2,
 		msg += `; retry with a finer chord tolerance to reduce the gate`
 	}
 	return &sectionClearanceError{
-		err:  tessellation.NewExpectedError(fmt.Errorf(`%w: %s`, ErrDegenerate, msg)),
-		loop: failure.Loop, a: failure.ChordA, b: failure.ChordB,
+		Err:  tessellation.NewExpectedError(fmt.Errorf(`%w: %s`, ErrDegenerate, msg)),
+		Loop: failure.Loop, A: failure.ChordA, B: failure.ChordB,
 	}
 }
 
@@ -1337,9 +1337,9 @@ func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sa
 // sectionClearanceError names the two chords requireWalkClearance refused and
 // the loop they belong to, so deterministic refinement can choose them.
 type sectionClearanceError struct {
-	err        error
-	loop, a, b int
+	Err        error
+	Loop, A, B int
 }
 
-func (e *sectionClearanceError) Error() string { return e.err.Error() }
-func (e *sectionClearanceError) Unwrap() error { return e.err }
+func (e *sectionClearanceError) Error() string { return e.Err.Error() }
+func (e *sectionClearanceError) Unwrap() error { return e.Err }

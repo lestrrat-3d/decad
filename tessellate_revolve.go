@@ -544,15 +544,15 @@ func revolveSectionRetry(loops []revLoopMesh, err error) error {
 		return err
 	}
 	var named *sectionClearanceError
-	if errors.As(err, &named) && named.loop < len(loops) {
-		lm := loops[named.loop]
-		for _, j := range [2]int{named.a, named.b} {
+	if errors.As(err, &named) && named.Loop < len(loops) {
+		lm := loops[named.Loop]
+		for _, j := range [2]int{named.A, named.B} {
 			if j < 0 || j >= len(lm.samples) {
 				continue
 			}
 			k := lm.samples[j].Walk
 			if lm.resolved.Walks[k].IsCircular() {
-				return &revolveRefineError{err: err, retry: revolveplan.Refinement{Loop: named.loop, Walk: k}}
+				return &revolveRefineError{err: err, retry: revolveplan.Refinement{Loop: named.Loop, Walk: k}}
 			}
 		}
 	}
