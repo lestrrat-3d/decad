@@ -921,12 +921,13 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
 - **Tessellate both operands** with an evaluator-internal chord tolerance —
   a documented default derived from the pair's own diameter, raised past either
   operand's own section displacement, which no mesh of that operand can go
-  below (`docs/prism-boolean-design.md` §7, tessellation §5), and past a coil's
-  or a mitred sweep's held `delta`, or a certified `LoftFaces` result's held
-  `meshBound`, which coarsens the partner's mesh but
+  below (`docs/prism-boolean-design.md` §7, tessellation §5), and past a coil's,
+  mitred sweep's, or twisted sweep's held `delta`, or a certified
+  `LoftFaces` result's held `meshBound`, which coarsens the partner's mesh but
   leaves its published bounds proven (`docs/faceted-vertex-bounds-design.md`
   §5). An operand that
-  restates a held mesh (a boolean result or a mitred sweep) is asked at that
+  restates a held mesh (a boolean result, coil, mitred sweep, or twisted sweep)
+  is asked at that
   tolerance raised to its own held floor, which its restatement always meets,
   so the request never refuses; which of its facets the pair may cut is the
   rim bullet's gate below (`docs/faceted-vertex-bounds-design.md` §5).

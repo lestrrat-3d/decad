@@ -1943,3 +1943,5 @@
 10	0.00	TestLoftSectionsManyRectanglesRefuseExcessSections
 10	0.00	TestSweepTwistRoundedProfileAxisRefusalIsAtomic
 10	0.00	TestSweepTwistRoundedProfileVerifyAll
+10	0.00	TestSweepTwistRoundedProfileUnionKeepsHeldProof
+10	0.00	TestSweepTwistRoundedProfileUnionRefusesNearContact

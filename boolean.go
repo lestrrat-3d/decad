@@ -148,6 +148,8 @@ func heldFloorOf(b *Body) (floor float64, restating bool) {
 		return p.delta, true
 	case coilPayload:
 		return p.delta, true
+	case twistedSweepPayload:
+		return p.delta, true
 	default:
 		return 0, false
 	}
@@ -1292,7 +1294,8 @@ func chordOperandOf(ctx context.Context, b *Body) (meshbool.ChordOperand, error)
 }
 
 // heldPrimitiveFloorOf is the proven held bound of an operand built as a
-// fixed held mesh in one construction — a LoftFaces meshBound, or a coil's or a mitred sweep's delta
+// fixed held mesh in one construction — a LoftFaces meshBound, or a coil's,
+// mitred sweep's, or twisted sweep's delta
 // (docs/faceted-vertex-bounds-design.md §5). Its restatement cannot be
 // meshed closer than that, and every facet it touches the partner with holds
 // at most that bound, so raising the pair tolerance to it is what lets the
@@ -1309,6 +1312,8 @@ func heldPrimitiveFloorOf(b *Body) float64 {
 	case coilPayload:
 		return p.delta
 	case mitredSweepPayload:
+		return p.delta
+	case twistedSweepPayload:
 		return p.delta
 	default:
 		return 0

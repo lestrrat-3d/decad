@@ -1490,6 +1490,9 @@ corners in Sketch, sweeps it 5 mm with a 30° twist, and asks for
 `5*(7+π/4) mm³`; the mesh reports both boundary and volume verified.
 The focused tests also cover all eight source wall roles, placement,
 negative twist and an off-axis source refusal without a document commit.
-An overlapping Boolean still refuses when its own pair tolerance is finer
-than this Sweep's certified held boundary. Section 17.4 does not raise the
-Boolean's pair tolerance.
+An overlapping Boolean raises its pair tolerance to this Sweep's certified
+held boundary. The rounded-profile example unions with an overlapping
+1.5×0.8×1 mm extruded box and passes `VerifyAll` at 0.2 mm. Its result's
+fixed mesh bound is 0.144733 mm, so a 0.1 mm request refuses. The default
+`Document.Verify` reads `Suspect` because the source Sweep's area and volume
+bounds remain too broad for that separate oracle's tolerance.
