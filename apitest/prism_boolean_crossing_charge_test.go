@@ -108,7 +108,7 @@ func exactResidualUp(reported float64, truth *big.Rat) float64 {
 // prism, and its volume bound contains the exact residual against the
 // intersection of the two recorded squares, the rotated one placed through
 // its stored transform over math/big.Rat. Shown to fail with the §3.4
-// split-boundary reroute restored in resolvePrismCrossingCells.
+// split-boundary reroute restored in prismcells.ResolveCrossingCells.
 func TestPrismIntersectRotatedBoxBuildsAnalyticOctagon(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -145,7 +145,7 @@ func TestPrismIntersectRotatedBoxBuildsAnalyticOctagon(t *testing.T) {
 // crossing charge covers the re-expression rounding they can amplify, and
 // the union builds analytically with the closed-form volume
 // 10·(400π + 75 − (1.5·√397.75 + 400·asin 0.075)) within its bound. Shown
-// to fail with the §3.4 split-boundary reroute restored in resolvePrismUnion.
+// to fail with the §3.4 split-boundary reroute restored in prismcells.ResolveUnion.
 func TestPrismUnionRotatedToothBuildsAnalytic(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()

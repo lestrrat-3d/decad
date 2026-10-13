@@ -19,7 +19,7 @@ import (
 
 // This file is docs/general-boolean-design.md §3 A4's white-box suite: the
 // reflected operand admitted in place of prism-boolean G2, the re-wound
-// record buildPrismScene builds a reflected operand B from, the tags it
+// record prismcells.BuildScene builds a reflected operand B from, the tags it
 // derives from that record, its walk charge, and the shared-axis arm that
 // admits two operands reflected by one placement with no re-expression.
 // apitest/prism_boolean_reflected_test.go covers the public booleans and
@@ -174,7 +174,7 @@ func TestPrismReexpressionRewound(t *testing.T) {
 // for a box A and a box B whose reflected image [5, 15]² crosses A, then
 // reads prismcells.Classify's cells straight off it: the cells A keeps
 // without B, both keep, and B keeps without A have the exact areas 75, 25
-// and 75. Shown to fail with buildPrismScene adding B through
+// and 75. Shown to fail with prismcells.BuildScene adding B through
 // reexpress.point without rewound: B's walls then wind clockwise, B's
 // membership flips, and the A-without-B selection measures less than 75.
 func TestPrismReflectedSceneClassifiesTheRewoundWinding(t *testing.T) {
@@ -187,7 +187,7 @@ func TestPrismReflectedSceneClassifiesTheRewoundWinding(t *testing.T) {
 	require.True(t, re.Reflected)
 
 	budget := proofbound.NewWorkBudget(t.Context())
-	s, tags, _, err := buildPrismScene(budget, pa, pb, re)
+	s, tags, _, err := prismcells.BuildScene(budget, pa.profile, pb.profile, re)
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	matterA, matterB, resolved, err := prismcells.Classify(budget, tags, profiles)
@@ -215,10 +215,10 @@ func TestPrismReflectedSceneClassifiesTheRewoundWinding(t *testing.T) {
 // TestPrismReflectedOperandChargesItsWalk pins the narrowed-line arm of A4's
 // re-wound record on a live operand: the split-left-cell fixture, whose
 // bottom and top walls are recorded over narrowed ranges, reflected across
-// x = 0 and set strictly inside a box. buildPrismScene's walk charge for B
+// x = 0 and set strictly inside a box. prismcells.BuildScene's walk charge for B
 // must equal the largest prismcells.WalkChargeOf over B's own recorded segments, the
 // same charge the unreflected path takes, and the union must publish a
-// sectionDelta covering it. Shown to fail with buildPrismScene's fold of
+// sectionDelta covering it. Shown to fail with prismcells.BuildScene's fold of
 // rewound's charge into sceneDelta.B deleted: sceneDelta.B read 0.
 func TestPrismReflectedOperandChargesItsWalk(t *testing.T) {
 	t.Parallel()
@@ -243,7 +243,7 @@ func TestPrismReflectedOperandChargesItsWalk(t *testing.T) {
 	re, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	require.NoError(t, err)
 	require.True(t, re.Reflected)
-	_, _, sceneDelta, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, re)
+	_, _, sceneDelta, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), pa.profile, pb.profile, re)
 	require.NoError(t, err)
 	require.Zero(t, sceneDelta.A, "the box is drawn whole")
 	require.Equal(t, want, sceneDelta.B)

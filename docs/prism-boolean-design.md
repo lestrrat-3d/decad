@@ -214,7 +214,7 @@ plane 0.1 mm below a target and a tool 0.3 mm tall put B's cap at the exact
 rational `fl(0.1) + fl(0.3)`, which is no float; G5 compares it as it is, and
 only `Intersect`'s result rounds it, charged (§7).
 
-The two blind `Cut` rows require whole-loop scene matches. `resolvePrismCut`
+The two blind `Cut` rows require whole-loop scene matches. `prismcells.ResolveCut`
 proves a tool disjoint from the target's existing holes. An enclosing tool
 uses two cells: the target's outer with the tool and any outside holes, then
 the tool's outer with precisely the holes it encloses. The cut slab keeps
@@ -342,7 +342,7 @@ For an admitted pair, decad builds one private `sketch.Sketch` (the same
   this is the same reduction `momentRecordScene` uses for a single record's
   own self-consistency check, and it is why a `Partial` fragment is recreated
   over its own WALKED portion rather than its source curve's whole extent
-  (buildPrismScene's own doc comment). A segment whose recorded range is the
+  (prismcells.BuildScene's own doc comment). A segment whose recorded range is the
   entity's own full domain walks to the record's own coordinates verbatim —
   `momentregion.Lerp2` and `pinArcWalkEnds` both special-case the natural bounds `t=0`/
   `t=1` to return the record's own `Point2`, and a `CircleSeg` recorded over
@@ -600,7 +600,7 @@ decision.
 **Entry.** Identical to `Intersect`'s own, and shared with it unchanged: G1–G4
 (`admitPrismPairBudget`), the trimmed-circular refusal
 (`prismProfileHasTrimmedCircularSource`), G6's hole-free arms, G5's Intersect
-z-relation (§3.2), the arrangement cap, the re-expression, `buildPrismScene`,
+z-relation (§3.2), the arrangement cap, the re-expression, `prismcells.BuildScene`,
 `prismcells.Classify`, `prismcells.Select` under `Intersect`'s own `keep`,
 and §3.4's crossing charge. The reading begins where `prismcells.Merge`
 would have been called, and replaces only that tail.
@@ -825,7 +825,7 @@ parameterisation: the chord for a line, `2πR` for a circle or an arc.
 `δ_cut` is the largest such allowance over the surviving fragments, and zero
 when every survivor is a whole edge.
 
-**The walk charge, `δ_walk`.** `buildPrismScene` builds every entity from its
+**The walk charge, `δ_walk`.** `prismcells.BuildScene` builds every entity from its
 segment's own WALKED geometry (`walkOf`, §4.1), never from the record's
 `Point2` fields directly. For a segment whose recorded range is the entity's
 own full domain that walk restates the record's own coordinates exactly —
@@ -1264,7 +1264,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    names the operand and states that a boolean takes no tolerance. Tests:
    §15's offset-plane rows.
 7. **PR7 — the blind `Cut`**, after the shared-axis offset-plane arm of G3
-   and the exact rational G5 it brings. §3.2's two blind rows over `resolvePrismCut`'s
+   and the exact rational G5 it brings. §3.2's two blind rows over `prismcells.ResolveCut`'s
    clean-nesting match, the `stackedPrismPayload` they build, its body,
    measurements and tessellation, and a spanning `Cut` on a stacked target
    that runs the match once per slab. `tryPrismBoolean` returns the admitted

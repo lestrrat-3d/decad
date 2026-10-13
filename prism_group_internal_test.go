@@ -176,7 +176,7 @@ func TestPrismGroupDisplacedToolChargesTheCrossing(t *testing.T) {
 		re, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(toolOp.proxy))
 		require.NoError(t, err)
 		require.False(t, re.Identity)
-		s, _, _, err := buildPrismSceneRegions(proofbound.NewWorkBudget(t.Context()), []profileRecord{target.profile}, toolOp.regions, re)
+		s, _, _, err := prismcells.BuildProfileScene(proofbound.NewWorkBudget(t.Context()), []profileRecord{target.profile}, toolOp.regions, re)
 		require.NoError(t, err)
 		split, err := prismcells.HasSplitBoundary(proofbound.NewWorkBudget(t.Context()), s.Profiles())
 		require.NoError(t, err)

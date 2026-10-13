@@ -51,7 +51,7 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 	if !reexpress.Identity {
 		return nil, false, nil
 	}
-	s, tags, sceneDelta, err := buildPrismScene(budget, ra.meridian(), rb.meridian(), reexpress)
+	s, tags, sceneDelta, err := prismcells.BuildScene(budget, ra.profile, rb.profile, reexpress)
 	if err != nil {
 		return nil, false, err
 	}

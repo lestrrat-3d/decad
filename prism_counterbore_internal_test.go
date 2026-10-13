@@ -25,7 +25,7 @@ func TestCounterboreArrangementPreservesWholeLoops(t *testing.T) {
 	require.True(t, admitted)
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(cutter))
 	require.NoError(t, err)
-	scene, tags, _, err := buildPrismScene(budget, target, cutter, reexpress)
+	scene, tags, _, err := prismcells.BuildScene(budget, target.profile, cutter.profile, reexpress)
 	require.NoError(t, err)
 	profiles, err := prismcells.ProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestCounterboreReverseArrangementProvesEmptyCut(t *testing.T) {
 	target.profile = sp.slabs[1].Regions[0]
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(cutter))
 	require.NoError(t, err)
-	scene, tags, _, err := buildPrismScene(budget, target, cutter, reexpress)
+	scene, tags, _, err := prismcells.BuildScene(budget, target.profile, cutter.profile, reexpress)
 	require.NoError(t, err)
 	profiles, err := prismcells.ProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)

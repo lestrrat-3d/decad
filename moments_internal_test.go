@@ -697,7 +697,7 @@ func ratLerp(start, end, t float64) *big.Rat {
 // (TStart == 0 or TEnd == 1) off the record rather than off sketch's node.
 //
 // Reproducing the endpoint matters to every consumer that rebuilds geometry
-// from a walk and then compares it against the record: buildPrismScene
+// from a walk and then compares it against the record: prismcells.BuildScene
 // (prism_boolean.go) creates one sketch point per walked endpoint, so a walk
 // that missed a whole segment's own vertex by an ulp would hand sketch two
 // distinct points where the record states one, and the region sketch then

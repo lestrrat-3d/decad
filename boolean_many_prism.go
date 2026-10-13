@@ -80,7 +80,7 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 			}
 		}
 	}
-	s, tags, charge, err := prismcells.BuildSceneRegions(budget, sceneProfiles(profiles), nil,
+	s, tags, charge, err := prismcells.BuildSceneRegions(budget, prismcells.SceneProfiles(profiles), nil,
 		&prismcells.Reexpression{Identity: true})
 	if err != nil {
 		return nil, true, err

@@ -487,7 +487,7 @@ func TestVerifyCancellationInsideReadOnlyIntersection(t *testing.T) {
 // This file pins docs/prism-boolean-design.md §3.4's crossing charge as it
 // reaches Verify's interference reading (§4.5, shared with the crossing
 // sub-case's own selection, prism_boolean_crossing.go's
-// resolvePrismCrossingCells): a coplanar pair whose 2D outlines genuinely
+// prismcells.ResolveCrossingCells): a coplanar pair whose 2D outlines genuinely
 // cross is measured whether or not one of the charge's three independent
 // causes fires — a section displacement on either operand, a walk charge on
 // either operand, or a nonidentity re-expression between the two frames.
@@ -505,7 +505,7 @@ func TestVerifyCancellationInsideReadOnlyIntersection(t *testing.T) {
 // splitCellBody is the walk-charge half: the SAME [1,5]x[0,10] footprint a
 // plain rectangle draws, but cut out of the larger rectangle [1,11]x[0,10] by
 // a line through (5,-2)-(5,14), so its bottom and top walls are Partial
-// fragments whose narrowed range makes buildPrismScene compute their shared
+// fragments whose narrowed range makes prismcells.BuildScene compute their shared
 // corner instead of reading it off the record (§7's walk charge). Nothing is
 // placed and nothing is displaced: the pair is fully seated and carries the
 // walk charge alone.
@@ -600,7 +600,7 @@ func TestVerifyCrossingPairSeatedAndPlacedResolve(t *testing.T) {
 	// A6 (docs/general-boolean-design.md §3) charges the crossings a
 	// nonidentity re-expression can move, so a placed section is measured
 	// as the seated one is. Shown to fail with the §3.4 split-boundary
-	// reroute restored in resolvePrismCrossingCells.
+	// reroute restored in prismcells.ResolveCrossingCells.
 	t.Run("placed section resolves through the crossing charge", func(t *testing.T) {
 		doc := decad.New()
 		a, b := crossingBoxPairPlaced(t, doc)
@@ -661,7 +661,7 @@ func TestVerifyCrossingPairSeatedAndPlacedResolve(t *testing.T) {
 // re-expression is pinned white-box by
 // TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing
 // (prism_boolean_internal_test.go). Shown to fail with the §3.4 split-boundary
-// reroute restored in resolvePrismCrossingCells.
+// reroute restored in prismcells.ResolveCrossingCells.
 func TestVerifySeatedWalkChargedPairIsMeasured(t *testing.T) {
 	t.Parallel()
 	const h = 5.0

@@ -76,22 +76,22 @@ func TrimBoundsWalks(outerLoop sectionrecord.LoopRecord, holeLoops []sectionreco
 // ONE space and no map runs between them. This is not decad re-deriving a 2D
 // answer: the cut parameter stays sketch's, and the only thing settled here is
 // which of decad's own two parameterisations of decad's own recorded entity the
-// scene is built in. The derivation is per kind, off buildPrismScene's own
+// scene is built in. The derivation is per kind, off BuildScene's own
 // entity creation (prism_boolean.go), which reads walkOf's walked geometry of
 // exactly the segment handed to it:
 //
-//   - LineSeg. buildPrismScene creates CreateLine(P(TStart), P(TEnd)). At
+//   - LineSeg. BuildScene creates CreateLine(P(TStart), P(TEnd)). At
 //     (0, 1) those are the record's own Start and End, so the scene line runs
 //     Start to End and sketch's parameter is the record's own lerp parameter:
 //     the identity. At (1, 0) it would run End to Start and the scene parameter
 //     would be 1 − t, which is why the order is fixed here rather than mapped
 //     back later.
-//   - CircleSeg. buildPrismScene creates CreateCircle(centre, radius) from the
+//   - CircleSeg. BuildScene creates CreateCircle(centre, radius) from the
 //     record's own two fields, so no walk direction reaches the entity at all.
 //     walkOf indexes the record's t as the angle 2πt and sketch indexes its own
 //     the same way, so the map is the identity in either sense; CCW is set true
 //     only because walkOf refuses a CCW flag contradicting an ascending range.
-//   - ArcSeg. buildPrismScene creates CreateArc(centre, lo, hi) with lo and hi
+//   - ArcSeg. BuildScene creates CreateArc(centre, lo, hi) with lo and hi
 //     the walked endpoints put in ascending-angle order. At (0, 1)
 //     pinArcWalkEnds (internal/boundarywalk/walk.go) pins them to the record's own Start and
 //     End verbatim and th1 > th0 leaves them unswapped, so the scene arc sweeps
