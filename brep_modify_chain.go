@@ -33,10 +33,10 @@ func selectedStraightEdgesShareVertex(edges []*Edge) bool {
 }
 
 // partialSelectedLoop finds one planar loop that contains every selected edge
-// as a proper subset. Route E has already taken independent straight edges,
-// so a successful reading contains at least one shared vertex.
+// as a proper subset. A Fillet of one route E edge whose endpoint-face
+// corner has the wrong material wedge may also reach this reading.
 func (r *brepLoopRead) partialSelectedLoop() (brepLoopSel, []bool, bool) {
-	if len(r.matched) < 2 || r.matched[0] < 0 {
+	if len(r.matched) == 0 || r.matched[0] < 0 {
 		return brepLoopSel{}, nil, false
 	}
 	for _, firstUse := range r.topo.edges[r.matched[0]] {
@@ -147,8 +147,29 @@ func brepFilletPartialLoop(ctx context.Context, d *Document, bp brepPayload, cal
 	if err := r.matchEdges(); err != nil {
 		return nil, err
 	}
-	_, again, ok := r.partialSelectedLoop()
-	if !ok || !slices.Equal(selected, again) {
+	planar := r.topo.planar[sel.face]
+	if sel.loop >= len(planar) || len(planar[sel.loop]) != len(selected) {
+		return nil, r.refuse("SL1", `restating the straight walls changed the selected planar loop`)
+	}
+	again := make([]bool, len(selected))
+	for _, ei := range r.matched {
+		if ei < 0 {
+			return nil, r.refuse("SL1", `restating the straight walls lost a selected edge`)
+		}
+		found := false
+		for _, ui := range r.topo.edges[ei] {
+			u := r.topo.uses[ui]
+			if u.Face == sel.face && u.Loop == sel.loop && u.Part == brepLoopSeg &&
+				u.Seg >= 0 && u.Seg < len(again) {
+				again[u.Seg] = true
+				found = true
+			}
+		}
+		if !found {
+			return nil, r.refuse("SL1", `restating the straight walls moved a selected edge off its planar loop`)
+		}
+	}
+	if !slices.Equal(selected, again) {
 		return nil, r.refuse("SL1", `restating the straight walls changed the selected partial loop`)
 	}
 	return r.buildPartialFillet(ctx, d, sel, selected, blends)

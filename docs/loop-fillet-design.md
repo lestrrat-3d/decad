@@ -150,7 +150,12 @@ where its chamfer returns BX3's `capStart`/`side(i,j)`/`chamferCap`. §9.
 Selection: Table LB unchanged. A `Fillet` whose matched edges are whole loops
 of planar faces, of any segment count, takes the fillet arm; a single whole
 circle no longer goes on to route E (SB4). Route E keeps every selection of
-single straight edges along axes (`singleStraightEdges`).
+single straight edges along axes (`singleStraightEdges`) whose endpoint-face
+corners agree with the interior material wedge (brep-modify EB8). One straight
+edge that fails EB8 takes the selected planar-loop band if that edge belongs
+to a proper subset of a planar face's loop. The selected face and loop stay
+fixed when restatement turns the wall beside the edge into another planar
+face. If no partial band admits the edge, EB8 refuses the call.
 
 ## 4. Construction
 

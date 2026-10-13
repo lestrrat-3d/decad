@@ -40,9 +40,10 @@ record modify §2 rewrites. So a modify op on a brep is one of two things:
   lateral fillets, complete cap-loop chamfers (the hole-mouth deburr), tubes
   and cups.
 - **Route E — an axis-parallel straight edge.** The edge's two end faces are
-  planar faces across the edge's axis, so the blend is modify §6's corner
-  rewrite in each of them, and the blend surface is one more swept face. The
-  result stays a `brepPayload`.
+  planar faces across the edge's axis. Their corner rewrites build the blend
+  only when their material wedge agrees with the wedge between the adjacent
+  faces at the edge. The blend surface is one more swept face. The result
+  stays a `brepPayload`.
 
 Scenes (general-boolean §2, §9) and what each route unlocks:
 
@@ -201,6 +202,7 @@ edge `e` must satisfy EB1–EB6 and the set must satisfy EB7.
 | **EB5** | Every segment of `G0`, `G1` and the adjacent faces is over its natural range (`LineSeg` 0→1 or 1→0, `ArcSeg` likewise, `CircleSeg` whole), and no loop of those faces holds two consecutive segments on one carrier (collinear lines; co-circular arcs of one centre, radius and sense). | SB8 |
 | **EB6** | `G0`'s two loop segments at `V0` are the traces of the two adjacent faces — each pairs, in the receiver's topology, with that face's rim (sw) or with its segment next to `e` (pl) — and they make a corner there (modify S4 otherwise). `G1` likewise at `V1`. | SB8 / S4 |
 | **EB7** | No two edges of `E` share a vertex. | SB5 |
+| **EB8** | For a Fillet, the corner in each end face, or its complement when the other end face lies on its outer side, has the same convex or reflex turn as the solid between the two faces beside `e`. | SB8 |
 
 EB5's second half exists because the corner rewrite re-emits a coalesced walk as
 one segment (`rewriteLoop`), and a vertex another face placed inside that walk
@@ -294,6 +296,15 @@ faces `G0`, `G1`:
    recomputed blend, so its connector is already walked in `G1`'s loop sense;
    nothing is transported from `G0` into `G1`'s record. Steps 4 and 5 read
    `G0`'s feet and centre.
+   Before a route E Fillet rewrites a face, EB8 compares each corner's turn
+   with the interior material wedge. The adjacent faces' outward normals
+   `n0` and `n1` and the first face's oriented solid-boundary tangent `t` make the material
+   turn `sign((n0 × n1) · t)`: positive is convex, negative is reflex. An inward
+   planar face reverses its recorded loop tangent for this test. A turn
+   within `1e-9` of tangent is undecided and refused. `Edge.IsConvex()` is a
+   walked-boundary reading, so it does not make this decision. A single edge
+   that fails EB8 may instead take route L's selected planar-loop band; a
+   failed band leaves the call refused.
 3. **Rewrite `G0` and `G1`.** `rewriteProfileBudget` over the face's
    `cornerLoop`s and its `blendAt` map, as the prism does. A face may carry
    several corners from several edges of `E`.
@@ -375,7 +386,7 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | **SB5** | selected single straight edges share a vertex outside route V's complete-loop or selected-chain fillet (`docs/vertex-blend-design.md` §2); a mixed `Chamfer` still takes SL1 | yes | `ErrUnsupported` (SL1's text) |
 | **SB6** | an edge vertex with other than three incident edges, or an edge that is one piece of a split side line | yes | `ErrUnsupported` |
 | **SB7** | the third face at an edge vertex cannot be restated as a plane across its axis | yes outside P8's exact front top edge (§4.3c); complete-loop fillets have their own route | `ErrUnsupported` |
-| **SB8** | an adjacent face outside EB4/EB5: a rim-adjacent wall that is oblique, split or level-displaced, a (pl) face whose neighbours at `e` are not straight and across the axis, a narrowed range, consecutive segments on one carrier | yes | `ErrUnsupported` |
+| **SB8** | an adjacent face outside EB4/EB5, or a Fillet whose end-face corners disagree with the interior material wedge (EB8) or whose wedge turn is undecided | yes | `ErrUnsupported` |
 | **SB9** | the two end faces' blends disagree in reference coordinates | — (a falsifier) | `ErrUnsupported` |
 | **SB10** | Shell of a brep that reads as a prism along no axis and as no through-cut record (modify-general Table TC) | yes; the three-dimensional offset puts a sphere at a reflex vertex, a torus around a reflex circle and an elliptical edge where two reflex edges meet, none of which this record holds | `ErrUnsupported`, with SG3's reason |
 
@@ -397,7 +408,7 @@ record gate; a mismatch falls through to the table unchanged:
 | 2b. route P | P1–P5 per axis; the prism path's own stage 2 onward where an axis admits; a shell with no admitting axis takes route S at 2c, and SB3 where a prism read and route S reads none |
 | 2c. route E entry | route S (Shell; modify-general §3.4); independent straight edges take route E; a `Fillet` of complete loops with independent straight edges takes route V (`docs/vertex-blend-design.md` §2); other selections take route L or refuse; EB1/SB4 and EB7/SB5 apply to route E's set |
 | 3. edge topology | EB2/SB6; the restatement passes (§5.2): EB3/SB7, then EB4/SB8; EB5/SB8; EB6 |
-| 4. construction | per edge: S4, S5 in `G0`; the recomputation in `G1`, SB9 |
+| 4. construction | per edge: S4, S5 in `G0`; the recomputation in `G1`, SB9; EB8/SB8 before rewriting |
 | 5. audit | per planar face: S8, S6, S7, S9; per trimmed wall: S6 |
 | 6. closure | `falsifyBrepPayload`, `brepTopologyContext`, `evalBrepContext` |
 

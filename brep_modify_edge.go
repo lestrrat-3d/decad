@@ -75,6 +75,12 @@ type brepEdgeRoute struct {
 	terminals map[[3]float64]bool
 }
 
+// brepMaterialWedgeMismatchError marks the route E corner-model refusal that a
+// selected partial planar loop may be able to build through route L instead.
+type brepMaterialWedgeMismatchError struct{ error }
+
+func (e *brepMaterialWedgeMismatchError) Unwrap() error { return e.error }
+
 // newBrepEdgeRoute reads one record for route E: its topology's loop-segment
 // uses are indexed once, and corner walks are read on demand.
 func newBrepEdgeRoute(bp brepPayload, topo *brepTopology, call brepModifyRequest, budget *proofbound.WorkBudget) *brepEdgeRoute {
@@ -102,6 +108,13 @@ func brepBlendEdges(ctx context.Context, d *Document, bp brepPayload, call brepM
 	if err != nil {
 		return nil, err
 	}
+	if call.loopKind == brepBandFillet {
+		for _, blend := range blends {
+			if err := r.requireFilletMaterialWedge(blend); err != nil {
+				return nil, err
+			}
+		}
+	}
 	out, err := r.rewrite(blends)
 	if err != nil {
 		return nil, err
@@ -122,6 +135,36 @@ func brepBlendEdges(ctx context.Context, d *Document, bp brepPayload, call brepM
 			ErrDegenerate, call.blend.kind, call.sel, selectedEdgesContext(call.edges))
 	}
 	return body, nil
+}
+
+// requireFilletMaterialWedge checks route E's section premise at both ends.
+// A face across an edge may have a convex corner while the material between
+// the end faces has a reflex corner, as at one edge of a stacked boss root.
+// Its corner blend would remove material where the requested fillet fills it.
+func (r *brepEdgeRoute) requireFilletMaterialWedge(eb *brepEdgeBlend) error {
+	materialConvex, decided := brepgeom.MaterialWedgeConvex(eb.pair, r.topo.uses,
+		r.topo.embeds, r.topo.walls)
+	if !decided {
+		return r.refuse(eb, "SB8", `the interior material wedge has no decided turn`)
+	}
+	for k, end := range eb.end {
+		loops, err := r.cornerLoops(end.face)
+		if err != nil {
+			return err
+		}
+		walks := loops[end.loop].walks
+		previous := walks[(end.corner+len(walks)-1)%len(walks)]
+		current := walks[end.corner]
+		cornerConvex := previous.TanOutU*current.TanInV-previous.TanOutV*current.TanInU > 0
+		face := r.bp.faces[end.face]
+		other := r.topo.embeds[end.face].Local(eb.v[1-k])
+		inner := (other[2] > face.z0) != face.outward
+		if materialConvex != (cornerConvex == inner) {
+			return &brepMaterialWedgeMismatchError{r.refuse(eb, "SB8",
+				`the endpoint face corner differs from the interior material wedge`)}
+		}
+	}
+	return nil
 }
 
 // prepareBrepEdgeBlends reads the route E edges and their corner blends

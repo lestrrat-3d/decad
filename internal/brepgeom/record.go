@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -455,6 +456,57 @@ func Convex(pair [2]int, uses []Use, embeds []Embed, walls map[int]survey2d.Segm
 		}
 		return planarInward(other, embeds).Dot(planarOutward(owner, embeds)) < 0, nil
 	}
+}
+
+// MaterialWedgeConvex reads the solid angle across a straight edge from the
+// two oriented adjacent faces. This is distinct from Convex's walked-boundary
+// reading. The first face's edge walk gives the tangent; crossing its outward
+// normal with the second face's outward normal gives the convex turn sense.
+// A nearly tangent pair has no decided wedge at this precision.
+func MaterialWedgeConvex(pair [2]int, uses []Use, embeds []Embed,
+	walls map[int]survey2d.SegmentWalk) (bool, bool) {
+	outward := func(u Use) (r3.Vec, bool) {
+		switch u.Part {
+		case LoopSeg:
+			return planarOutward(u, embeds), true
+		case Side0, Side1:
+			_, ok := walls[u.Face]
+			if !ok {
+				return r3.Vec{}, false
+			}
+			return sweptOutward(u, embeds, walls), true
+		default:
+			return r3.Vec{}, false
+		}
+	}
+	first, second := uses[pair[0]], uses[pair[1]]
+	n0, ok0 := outward(first)
+	n1, ok1 := outward(second)
+	if !ok0 || !ok1 {
+		return false, false
+	}
+	// From/To follow the recorded face boundary. An inward planar face walks
+	// that boundary in reverse when viewed from the solid exterior. A Side0
+	// use walks down even though DirFrom/DirTo name its line upwards.
+	from, to := first.From, first.To
+	if first.Part == LoopSeg && !first.Outward {
+		from, to = to, from
+	}
+	// The dyadic triple product decides the sign of the held normals and points.
+	start, stop := proof.DyVec(vec(from)), proof.DyVec(vec(to))
+	direction := proof.DvSub(stop, start)
+	turnSign := proof.DvDot(proof.DvCross(proof.DyVec(n0), proof.DyVec(n1)), direction).Sign()
+	if turnSign == 0 {
+		return false, false
+	}
+	tangent := vec(to).Sub(vec(from))
+	turn := n0.Cross(n1).Dot(tangent)
+	scale := n0.Len() * n1.Len() * tangent.Len()
+	if scale == 0 || math.IsInf(scale, 0) || math.IsNaN(scale) || math.IsInf(turn, 0) || math.IsNaN(turn) ||
+		math.Abs(turn) <= 1e-9*scale {
+		return false, false
+	}
+	return turnSign > 0, true
 }
 
 // sweptOutward is a swept wall's outward normal at the side line a use

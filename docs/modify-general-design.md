@@ -498,9 +498,10 @@ axis before it refuses.
 ### 4.1 Table LB — the admitted selection
 
 Route L runs for `Chamfer` and `Fillet` on a brep or stacked receiver when
-route P takes no axis and the selection is not route E's single straight
-edges — every edge a straight line along a reference axis (EB1), no two
-sharing a vertex (EB7). A `Fillet` builds its loops with the fillet arm of
+route P takes no axis and the selection is not route E's admitted independent
+straight edges. A single straight Fillet edge whose end-face corner differs
+from the interior material wedge (brep-modify EB8) takes route L when it is
+part of a planar-face loop. A `Fillet` builds its loops with the fillet arm of
 `docs/loop-fillet-design.md`, whose band is a pipe where this section's is
 ruled; Table LB, the record rewrite and SL1, SL2 hold for both. A record carrying
 route L bands reads as no prism, so route P takes no axis of it. Each selected edge is matched to one
@@ -721,8 +722,9 @@ SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
 
 For a `Fillet`, §4.3c tries the exact P8 cap edge before the brep receiver.
 Route V also partitions complete loops and independent
-straight edges before LB1/LB2. A selected straight-edge chain on part of
-one planar-face loop, including a swept wall restated as a plane, takes the partial fillet route
+straight edges before LB1/LB2. A selected straight-edge chain or one EB8
+single edge on part of one planar-face loop, including a swept wall restated
+as a plane, takes the partial fillet route
 (`docs/vertex-blend-design.md` §2).
 | 3. topology | LB3, LB4, LB6 (SL2); LB5 (SX7) |
 | 4. existence | SX6, SX13 per band as the contour is built |
