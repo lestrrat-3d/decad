@@ -65,6 +65,8 @@
 10	11.70	TestCurvedContactGraphRejectsStaleSourceEvents
 10	10.10	TestCurvedMultiRunShellConsumesLiveGraph
 10	0.00	TestCurvedMultiRunShellRayOwnersRefuseCollisions
+10	6.81	TestCurvedClearPatchCertifiesRealTrimmedTool
+10	7.78	TestCurvedClearPatchRefusesUnprovedClaims
 10	4.00	TestCurvedSourcePairCensusRefusesUnownedRetainedFace
 10	8.80	TestCurvedHeelArcEndpointsBindToLiveSideCells
 10	8.80	TestCurvedHeelArcSideTiesRejectChangedSourceRecord

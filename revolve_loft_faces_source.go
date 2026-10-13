@@ -35,6 +35,7 @@ type revolveLoftFacesCrossing struct {
 type revolveLoftFacesSourceCertificate struct {
 	blank      *Body
 	tooth      *Body
+	toolProof  *revolveLoftFacesToolPayloadSnapshot
 	section    revolveSectionCertificate
 	trim       *loftFacesTrimRecord
 	rootM      *big.Rat
@@ -76,6 +77,9 @@ func certifyRevolveLoftFacesSource(ctx context.Context, blank, tooth *Body) (
 			return nil, false, nil
 		}
 		selected = proof
+	}
+	if selected != nil {
+		selected.toolProof = newRevolveLoftFacesToolPayloadSnapshot(tooth, p)
 	}
 	return selected, selected != nil, nil
 }
