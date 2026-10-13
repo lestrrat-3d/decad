@@ -54,7 +54,7 @@ func MergeWithChain(budget *proofbound.WorkBudget, selected []*sketch.Profile,
 	if !resolved {
 		return momentinput.Profile{}, 0, nil, false, nil // §4.4: the survivors do not close into one simple loop
 	}
-	loop, cutDelta, err := recordChain(budget, chain)
+	loop, cutDelta, err := recordChain(budget, chain, nil)
 	if err != nil {
 		return momentinput.Profile{}, 0, nil, false, err
 	}
@@ -69,6 +69,18 @@ func MergeWithChain(budget *proofbound.WorkBudget, selected []*sketch.Profile,
 // bound disjoint lumps is the caller's to prove. cutDelta is the largest
 // over every loop.
 func MergeLoops(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName string) ([]sectionrecord.LoopRecord, float64, bool, error) {
+	return mergeLoops(budget, nil, selected, opName)
+}
+
+// MergeLoopsExactLineCuts is reserved for an A1 BRep Union of authenticated
+// source slabs. Other Boolean consumers retain their original cut charge.
+func MergeLoopsExactLineCuts(budget *proofbound.WorkBudget, scene *sketch.Sketch, selected []*sketch.Profile,
+	opName string) ([]sectionrecord.LoopRecord, float64, bool, error) {
+	return mergeLoops(budget, scene, selected, opName)
+}
+
+func mergeLoops(budget *proofbound.WorkBudget, scene *sketch.Sketch, selected []*sketch.Profile,
+	opName string) ([]sectionrecord.LoopRecord, float64, bool, error) {
 	survivors, resolved, err := mergeSurvivors(budget, selected, opName)
 	if err != nil || !resolved {
 		return nil, 0, false, err
@@ -80,7 +92,7 @@ func MergeLoops(budget *proofbound.WorkBudget, selected []*sketch.Profile, opNam
 	loops := make([]sectionrecord.LoopRecord, 0, len(chains))
 	cutDelta := 0.0
 	for _, chain := range chains {
-		loop, d, err := recordChain(budget, chain)
+		loop, d, err := recordChain(budget, chain, scene)
 		if err != nil {
 			return nil, 0, false, err
 		}
@@ -148,10 +160,10 @@ func mergeSurvivors(budget *proofbound.WorkBudget, selected []*sketch.Profile, o
 
 // recordChain records one chained loop. Past the chaining every problem is
 // genuine: a rejected TExact fragment (§9's RB8) or a non-closing loop (RB9).
-func recordChain(budget *proofbound.WorkBudget, chain []sketch.BoundaryEdge) (sectionrecord.LoopRecord, float64, error) {
+func recordChain(budget *proofbound.WorkBudget, chain []sketch.BoundaryEdge,
+	scene *sketch.Sketch) (sectionrecord.LoopRecord, float64, error) {
 	segs := make([]sectionrecord.CurveSegment, len(chain))
 	joins := make([]sketchrecord.LoopJoin, len(chain))
-	cutDelta := 0.0
 	for i, e := range chain {
 		if err := budget.Step(); err != nil {
 			return sectionrecord.LoopRecord{}, 0, err
@@ -166,11 +178,6 @@ func recordChain(budget *proofbound.WorkBudget, chain []sketch.BoundaryEdge) (se
 			return sectionrecord.LoopRecord{}, 0, err
 		}
 		joins[i] = join
-		d, err := CutDelta(e, seg)
-		if err != nil {
-			return sectionrecord.LoopRecord{}, 0, err
-		}
-		cutDelta = math.Max(cutDelta, d)
 	}
 	// §6's closure row (RB9): the seam's own junction falsifier, run on the
 	// merged chain's recorded coordinates. recordLoop is not called here — it
@@ -179,7 +186,159 @@ func recordChain(budget *proofbound.WorkBudget, chain []sketch.BoundaryEdge) (se
 	if err := sketchrecord.FalsifyLoopJoins("merged loop", joins); err != nil {
 		return sectionrecord.LoopRecord{}, 0, err
 	}
+	if scene != nil {
+		if exact, ok := reparameterizeExactLineLoop(scene, chain, segs); ok {
+			return sectionrecord.LoopRecord{Segments: exact}, 0, nil
+		}
+	}
+	cutDelta := 0.0
+	for i, edge := range chain {
+		d, err := CutDelta(edge, segs[i])
+		if err != nil {
+			return sectionrecord.LoopRecord{}, 0, err
+		}
+		cutDelta = math.Max(cutDelta, d)
+	}
 	return sectionrecord.LoopRecord{Segments: segs}, cutDelta, nil
+}
+
+// reparameterizeExactLineLoop uses Sketch's paired analytic crossing witness,
+// never a rounded cut parameter, to state an exact all-line loop. Exact
+// rational membership independently checks that each witnessed point is on
+// both Decad source lines; strict order preserves each fragment's walk.
+// A mixed or ambiguous loop keeps its original fragments and cut allowance.
+func reparameterizeExactLineLoop(scene *sketch.Sketch, chain []sketch.BoundaryEdge,
+	segments []sectionrecord.CurveSegment) ([]sectionrecord.CurveSegment, bool) {
+	n := len(chain)
+	if scene == nil || n < 3 || len(segments) != n {
+		return nil, false
+	}
+	lines := make([]sectionrecord.LineSeg, n)
+	for i, segment := range segments {
+		line, ok := segment.(sectionrecord.LineSeg)
+		if !ok {
+			return nil, false
+		}
+		lines[i] = line
+	}
+	nodes := make([]sectionrecord.Point2, n)
+	certified := make([]bool, n)
+	cutCount := 0
+	for i := range n {
+		j := (i + 1) % n
+		left, right := lines[i], lines[j]
+		leftCut := chain[i].Partial && left.TEnd != 0 && left.TEnd != 1
+		rightCut := chain[j].Partial && right.TStart != 0 && right.TStart != 1
+		if !leftCut && !rightCut {
+			continue
+		}
+		cutCount++
+		if !leftCut || !rightCut || !chain[i].TExact || !chain[j].TExact {
+			return nil, false
+		}
+		cross, ok := scene.CertifyLineLineJunction(chain[i], chain[j])
+		if !ok {
+			return nil, false
+		}
+		p := sectionrecord.Point2{U: cross[0], V: cross[1]}
+		if _, ok := sourceLineParameter(left, p); !ok {
+			return nil, false
+		}
+		if _, ok := sourceLineParameter(right, p); !ok || !sourceLinesCross(left, right) {
+			return nil, false
+		}
+		nodes[i], certified[i] = p, true
+	}
+	if cutCount == 0 {
+		return nil, false
+	}
+	exact := make([]sectionrecord.CurveSegment, n)
+	var firstStart, previousEnd sectionrecord.Point2
+	for i, line := range lines {
+		start, ok := exactLineEnd(line, line.TStart, nodes[(i+n-1)%n], certified[(i+n-1)%n])
+		if !ok {
+			return nil, false
+		}
+		end, ok := exactLineEnd(line, line.TEnd, nodes[i], certified[i])
+		if !ok {
+			return nil, false
+		}
+		startT, ok := sourceLineParameter(line, start)
+		if !ok {
+			return nil, false
+		}
+		endT, ok := sourceLineParameter(line, end)
+		if !ok || (line.TStart < line.TEnd && startT.Cmp(endT) >= 0) ||
+			(line.TStart > line.TEnd && startT.Cmp(endT) <= 0) {
+			return nil, false
+		}
+		if i == 0 {
+			firstStart = start
+		} else if previousEnd != start {
+			return nil, false
+		}
+		previousEnd = end
+		exact[i] = sectionrecord.LineSeg{Start: start, End: end, TStart: 0, TEnd: 1}
+	}
+	if previousEnd != firstStart {
+		return nil, false
+	}
+	return exact, true
+}
+
+func exactLineEnd(line sectionrecord.LineSeg, t float64, cut sectionrecord.Point2,
+	certified bool) (sectionrecord.Point2, bool) {
+	switch t {
+	case 0:
+		return line.Start, true
+	case 1:
+		return line.End, true
+	default:
+		return cut, certified
+	}
+}
+
+// sourceLineParameter is an exact rational membership and finite-interval
+// check. No floating-point closeness test can admit a cut here.
+func sourceLineParameter(line sectionrecord.LineSeg, p sectionrecord.Point2) (*big.Rat, bool) {
+	u0, v0 := proofarith.FloatRat(line.Start.U), proofarith.FloatRat(line.Start.V)
+	u1, v1 := proofarith.FloatRat(line.End.U), proofarith.FloatRat(line.End.V)
+	pu, pv := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
+	if u0 == nil || v0 == nil || u1 == nil || v1 == nil || pu == nil || pv == nil {
+		return nil, false
+	}
+	du, dv := new(big.Rat).Sub(u1, u0), new(big.Rat).Sub(v1, v0)
+	var t *big.Rat
+	switch {
+	case du.Sign() != 0:
+		t = new(big.Rat).Quo(new(big.Rat).Sub(pu, u0), du)
+	case dv.Sign() != 0:
+		t = new(big.Rat).Quo(new(big.Rat).Sub(pv, v0), dv)
+	default:
+		return nil, false
+	}
+	if t.Sign() < 0 || t.Cmp(big.NewRat(1, 1)) > 0 ||
+		new(big.Rat).Add(u0, new(big.Rat).Mul(t, du)).Cmp(pu) != 0 ||
+		new(big.Rat).Add(v0, new(big.Rat).Mul(t, dv)).Cmp(pv) != 0 {
+		return nil, false
+	}
+	return t, true
+}
+
+func sourceLinesCross(a, b sectionrecord.LineSeg) bool {
+	a0u, a0v := proofarith.FloatRat(a.Start.U), proofarith.FloatRat(a.Start.V)
+	a1u, a1v := proofarith.FloatRat(a.End.U), proofarith.FloatRat(a.End.V)
+	b0u, b0v := proofarith.FloatRat(b.Start.U), proofarith.FloatRat(b.Start.V)
+	b1u, b1v := proofarith.FloatRat(b.End.U), proofarith.FloatRat(b.End.V)
+	if a0u == nil || a0v == nil || a1u == nil || a1v == nil ||
+		b0u == nil || b0v == nil || b1u == nil || b1v == nil {
+		return false
+	}
+	aU := new(big.Rat).Sub(a1u, a0u)
+	aV := new(big.Rat).Sub(a1v, a0v)
+	bU := new(big.Rat).Sub(b1u, b0u)
+	bV := new(big.Rat).Sub(b1v, b0v)
+	return new(big.Rat).Sub(new(big.Rat).Mul(aU, bV), new(big.Rat).Mul(aV, bU)).Sign() != 0
 }
 
 // CutDelta is §7's cut charge for one surviving boundary edge: how

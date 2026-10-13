@@ -179,7 +179,7 @@ reaching it: each operand's regions in its slab there.
 
 **Scenes.** A slab both operands reach arranges every record reaching it,
 operand A's as the scene's A regions and operand B's as its B regions, and
-its regions are the select-all merge's loops (`prismcells.MergeLoops`): one
+its regions are the select-all merge's loops (`prismcells.MergeLoopsExactLineCuts`): one
 loop, or several when the records are apart in that slab, each an outer
 walked counter-clockwise, with prism-boolean §4.2's enclosed-void check and
 §6's audit per loop. A slab one operand reaches keeps that operand's
@@ -189,6 +189,12 @@ both sides enters once and counts on both. The scene is cached by its
 record set, so a slab merge and an interface over the same records share
 one arrangement and its cut points, and two scenes that cut one carrier
 pair record the crossing once through the keyed table below.
+Only this authenticated A1 BRep Union path can re-express a complete
+all-line loop at certified exact line crossings. Each crossing must have
+one paired Sketch event, an exactly representable binary64 coordinate,
+and strict source-range and walk-order checks. Any failed check keeps the
+original fragments and cut charge. Ordinary Union, Cut, Intersect, and
+class-B paths use `prismcells.MergeLoops` or `MergeWithChain` unchanged.
 `prismcells.ClassifyRegions` names each cell's membership in every record
 of the scene — prism-boolean §4.2's flag comparison and propagation, run
 per record rather than per operand, with a span two records share
@@ -246,8 +252,9 @@ oblique line with a vertex strictly inside it misses.
 
 **Displacements.** Every level carries its own `z0Delta`/`z1Delta`. Every
 face carries one section displacement: §7's stacked formula over the
-slab merges (their cut charge, since every incoming and walk term is zero
-by admission) plus the largest allowance of any canonical vertex. Every
+slab merges (their cut charge, except for A1's certified exact line rewrite,
+since every incoming and walk term is zero by admission) plus the largest
+allowance of any canonical vertex. Every
 vertex lies on exact carriers — an axis-aligned plane at its recorded
 level, a circle about its recorded centre — within that distance of the
 crossing it denotes, so each planar region and each pinned arc is within
@@ -402,7 +409,8 @@ Each consumer reads the span as a boundary of both operands:
   that is not exactly one selected cell's boundary takes the mesh path.
 
 A union of two boxes sharing a wall whole, drawn on one carrier, cuts nothing
-and is `Exact`; a partial shared wall is `Approximate` with the cut charge.
+and is `Exact`. A partial shared wall keeps the cut charge unless A1's entire
+all-line loop passes the paired Sketch-event and exact crossing proof above.
 
 #### A5 — multi-region operands and results
 
@@ -491,7 +499,8 @@ distance instead of prism-boolean §3.4 rerouting the pair
 With A6 a rotated tooth whose root sits inside the hub builds analytically
 with a bound of a few ulps times `1/sin θ`, `Approximate`; `Fillet` on that
 result refuses (prism-boolean §13's displaced-receiver rule), as it does for
-every cut-bearing merge. P1's own tooth does not build. Its root arc lies on
+every cut-bearing merge without A1's exact line-junction proof. P1's own tooth
+does not build. Its root arc lies on
 the hub's circle (a coincident carrier, which `sketch` merges), the rotation
 displaces the tooth, and the shared arc lies inside the union, where A3 has
 no charge for the two true walls parting: the pair falls back to the mesh

@@ -23,6 +23,8 @@ import (
 // a rectangular prism cut by an interior cardinal vertical plane, and
 // a bounded oblique cut of an exact rectangular or whole-circle prism,
 // including a certified crossing of one circle-prism cap. The
+// exact slab profiles of a stack-backed BRep can be cut strictly inside one
+// slab by a plane preserving their recorded coordinates. The
 // bounded result enters only straight solid Extrude with an independent Distance.
 // Other body or plane classes return [ErrUnsupported]. A nil body or context,
 // or an invalid plane, returns [ErrDegenerate]. A sheet or unsound solid returns
@@ -74,6 +76,13 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		}
 		return reconstructExactSection(ctx, profile, plane)
 	}
+	if _, ok := b.payload.(brepPayload); ok {
+		operand, admitted := stackedUnionOperandOf(b)
+		if !admitted {
+			return nil, nil, fmt.Errorf(`%w: section needs an authenticated BRep slab`, ErrUnsupported)
+		}
+		return sectionBrepStack(ctx, operand, plane)
+	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok || pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 {
 		return nil, nil, fmt.Errorf(`%w: section needs an exact straight prism`, ErrUnsupported)
@@ -104,6 +113,33 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		}
 	}
 	return reconstructExactSection(ctx, profile, plane)
+}
+
+// sectionBrepStack reads only the certified slab profiles of an A1 Union.
+// The same exact frame and strict interior-level check used for a prism
+// applies to each slab separately. An interface level names two different
+// sections, so neither slab admits it.
+func sectionBrepStack(ctx context.Context, operand stackedUnionOperand, plane r3.Frame) (
+	*sketch.Sketch, []*sketch.Profile, error,
+) {
+	if operand.proxy.SectionDelta != 0 {
+		return nil, nil, fmt.Errorf(`%w: BRep section has a displaced source profile`, ErrUnsupported)
+	}
+	for _, slab := range operand.slabs {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		candidate := operand.proxy
+		candidate.Z0, candidate.Z1 = slab.Z0, slab.Z1
+		if !candidate.SectionPlaneInside(plane) {
+			continue
+		}
+		if slab.Z0Delta != 0 || slab.Z1Delta != 0 || len(slab.Regions) != 1 {
+			return nil, nil, fmt.Errorf(`%w: BRep section needs one exact slab region`, ErrUnsupported)
+		}
+		return reconstructExactSection(ctx, slab.Regions[0], plane)
+	}
+	return nil, nil, fmt.Errorf(`%w: section plane lies outside BRep slab interiors`, ErrUnsupported)
 }
 
 func reconstructExactSection(ctx context.Context, profile profileRecord, plane r3.Frame) (

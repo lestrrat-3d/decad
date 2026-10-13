@@ -53,6 +53,7 @@ type ubRef struct {
 // prismcells.CoincidentEdgesRegions whichever operand each belongs to.
 type ubScene struct {
 	refsA, refsB []ubRef
+	sketch       *sketch.Sketch
 	profiles     []*sketch.Profile
 	tags         map[sketch.Entity]prismcells.Origin
 	delta        prismSceneDelta
@@ -298,7 +299,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 		return nil, errUBMiss
 	}
 	b.walk = math.Max(b.walk, math.Max(delta.A, delta.B))
-	sc := &ubScene{refsA: refsA, refsB: refsB, profiles: profiles, tags: tags, delta: delta}
+	sc := &ubScene{refsA: refsA, refsB: refsB, sketch: s, profiles: profiles, tags: tags, delta: delta}
 	b.scenes[key] = sc
 	return sc, nil
 }
@@ -366,7 +367,7 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, erro
 		}
 		return nil, errUBMiss
 	}
-	loops, cutDelta, resolved, err := prismcells.MergeLoops(b.st.budget, sc.profiles, "union")
+	loops, cutDelta, resolved, err := prismcells.MergeLoopsExactLineCuts(b.st.budget, sc.sketch, sc.profiles, "union")
 	if err != nil {
 		return nil, err
 	}

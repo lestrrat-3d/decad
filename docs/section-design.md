@@ -43,6 +43,23 @@ the prism record. A source segment that cannot be recreated or whose
 trim Sketch does not certify returns `ErrUnsupported`. A reconstructed profile
 that does not match the source never becomes a section result.
 
+## Exact slab of an authenticated Boolean BRep
+
+An A1 planar `Union` may return a BRep with an authenticated stack of prism
+slabs. `Body.Section` reads that stack through `stackedUnionOperandOf`, rather
+than inferring a section from the visible faces. It requires zero global
+section displacement and zero displacement at both ends of the selected slab.
+The slab must contain exactly one recorded region. A BRep without this stack,
+or a stack whose profile carries a displacement, returns `ErrUnsupported`.
+
+For each slab, use the parallel prism gate above with its recorded frame,
+placement and two levels. The requested plane must lie strictly inside one
+slab; an interface, cap, exterior level or unsupported frame is refused.
+The selected region is reconstructed on a fresh Sketch and checked against its
+record through the same seam proof as an exact prism. This is an exact planar
+section, including any recorded holes, and can enter ordinary profile
+consumers. It does not treat a tessellated BRep face as a source profile.
+
 ## Cardinal plane of an authenticated source sphere
 
 This class reads the occupied-ball certificate from `sourceSphereAtPose` for a
