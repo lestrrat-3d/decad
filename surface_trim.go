@@ -7,7 +7,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 )
@@ -75,7 +74,7 @@ func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body,
 			return nil, err
 		}
 		widened, delta, err := prismcells.ResolveSurfaceExtend(ctx, budget,
-			surfacePrismOperand(rcv.prism()), surfacePrismOperand(tl), chains[ci].Segments[si], atStart)
+			prismcells.SurfaceOperandOf(rcv.prism().Payload), prismcells.SurfaceOperandOf(tl.Payload), chains[ci].Segments[si], atStart)
 		if err != nil {
 			return nil, err
 		}
@@ -162,15 +161,10 @@ func admitExtendPair(budget *proofbound.WorkBudget, receiver, tool *Body) (chain
 	}
 	view := rcv.prism()
 	if err := prismcells.AdmitSurfacePair(budget, prismcells.SurfaceExtend,
-		surfacePrismOperand(view), surfacePrismOperand(tl)); err != nil {
+		prismcells.SurfaceOperandOf(view.Payload), prismcells.SurfaceOperandOf(tl.Payload)); err != nil {
 		return chainPayload{}, prismPayload{}, err
 	}
 	return rcv, tl, nil
-}
-
-// Adapt a root payload to the neutral surface gate's input.
-func surfacePrismOperand(p prismPayload) prismcells.SurfaceOperand {
-	return prismcells.SurfaceOperand{Profile: p.Profile, Placement: p.PlacementOperand()}
 }
 
 // TrimSide names which pieces of the receiver a Trim keeps
@@ -247,7 +241,7 @@ func (b *Body) Trim(ctx context.Context, tool *Body, side TrimSide) (*Body, erro
 	}
 
 	chains, sectionDelta, err := prismcells.ResolveSurfaceTrim(ctx, budget,
-		surfacePrismOperand(rcv), surfacePrismOperand(tl), side == KeepInside)
+		prismcells.SurfaceOperandOf(rcv.Payload), prismcells.SurfaceOperandOf(tl.Payload), side == KeepInside)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +377,7 @@ func admitTrimPair(budget *proofbound.WorkBudget, receiver, tool *Body) (rcv, tl
 	}
 
 	if err := prismcells.AdmitSurfacePair(budget, prismcells.SurfaceTrim,
-		surfacePrismOperand(rcv), surfacePrismOperand(tl)); err != nil {
+		prismcells.SurfaceOperandOf(rcv.Payload), prismcells.SurfaceOperandOf(tl.Payload)); err != nil {
 		return prismPayload{}, prismPayload{}, err
 	}
 
@@ -435,7 +429,7 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 	if err != nil {
 		return nil, err
 	}
-	pieces, err := resolveSplit(ctx, budget, rcv, tl)
+	pieces, err := prismcells.SplitPieces(ctx, budget, rcv.Payload, tl.Payload)
 	if err != nil {
 		return nil, err
 	}
@@ -445,7 +439,7 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		bodies[i], err = evalPrismContext(ctx, d, ref+producerID(i), piece, freeform.NewFreeformWork())
+		bodies[i], err = evalPrismContext(ctx, d, ref+producerID(i), prismPayload{Payload: piece}, freeform.NewFreeformWork())
 		if err != nil {
 			return nil, err
 		}
@@ -488,33 +482,10 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 			`%w: Split does not admit an operand carrying its own section displacement`, ErrUnsupported)
 	}
 	if err := prismcells.AdmitSurfacePair(budget, prismcells.SurfaceSplit,
-		surfacePrismOperand(rcv), surfacePrismOperand(tl)); err != nil {
+		prismcells.SurfaceOperandOf(rcv.Payload), prismcells.SurfaceOperandOf(tl.Payload)); err != nil {
 		return prismPayload{}, prismPayload{}, err
 	}
 	return rcv, tl, nil
-}
-
-// resolveSplit asks sketch for the bounded cells of the private scene, keeps
-// precisely the cells on the target's material side, and records each selected
-// cell from that arrangement as a prismPayload over the target's sweep fields,
-// carrying the cell's own δ_cut. The revolve arm passes MERIDIAN views, whose
-// sweep fields are zero, and reads only each cell's profile and displacement.
-func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload) ([]prismPayload, error) {
-	selected, err := prismcells.ResolveSurfaceSplit(ctx, budget,
-		surfacePrismOperand(target), surfacePrismOperand(tool))
-	if err != nil {
-		return nil, err
-	}
-	result := make([]prismPayload, len(selected))
-	for i, cell := range selected {
-		result[i] = prismPayload{Payload: prismrecord.Payload{
-			Profile: cell.Profile, Frame: target.Frame, Xform: target.Xform,
-			Z0: target.Z0, Z1: target.Z1,
-			Z0Delta: target.Z0Delta, Z1Delta: target.Z1Delta,
-			SectionDelta: cell.CutDelta,
-		}}
-	}
-	return result, nil
 }
 
 // This section is the revolve family's arm of the gate and of Trim
@@ -538,7 +509,7 @@ func (b *Body) trimRevolve(ctx context.Context, budget *proofbound.WorkBudget, t
 		return nil, err
 	}
 	chains, sectionDelta, err := prismcells.ResolveSurfaceTrim(ctx, budget,
-		surfacePrismOperand(rcvView), surfacePrismOperand(tlView), keepInside)
+		prismcells.SurfaceOperandOf(rcvView.Payload), prismcells.SurfaceOperandOf(tlView.Payload), keepInside)
 	if err != nil {
 		return nil, err
 	}
@@ -760,7 +731,7 @@ func (b *Body) extendRevolve(ctx context.Context, budget *proofbound.WorkBudget,
 			return nil, err
 		}
 		widened, delta, err := prismcells.ResolveSurfaceExtend(ctx, budget,
-			surfacePrismOperand(rcvView), surfacePrismOperand(tlView), chains[ci].Segments[si], atStart)
+			prismcells.SurfaceOperandOf(rcvView.Payload), prismcells.SurfaceOperandOf(tlView.Payload), chains[ci].Segments[si], atStart)
 		if err != nil {
 			return nil, err
 		}

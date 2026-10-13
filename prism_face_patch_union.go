@@ -6,7 +6,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/r3"
 )
 
 // tryPrismFacePatchUnion admits two exact rectangular prisms whose interiors
@@ -28,11 +27,11 @@ func tryPrismFacePatchUnion(ctx context.Context, a, b *Body) (featurePayload, bo
 			if x.Frame.N() == y.Frame.N() || x.Frame.N() == y.Frame.N().Scale(-1) {
 				continue // class A already reads co-directional boxes.
 			}
-			xBox, ok := exactPrismBoxInFrame(x, x.Frame)
+			xBox, ok := x.ExactBoxInFrame(x.Frame)
 			if !ok {
 				continue
 			}
-			yBox, ok := exactPrismBoxInFrame(y, x.Frame)
+			yBox, ok := y.ExactBoxInFrame(x.Frame)
 			if !ok || !prismplacement.BoxesShareFacePatch(xBox, yBox, 2) {
 				continue
 			}
@@ -61,15 +60,4 @@ func tryPrismFacePatchUnion(ctx context.Context, a, b *Body) (featurePayload, bo
 		}
 	}
 	return nil, false, nil
-}
-
-// exactPrismBoxInFrame admits only an authenticated, undisplaced rectangular
-// source prism and asks prismplacement.ExactBoxInFrame for its exact box in ref.
-func exactPrismBoxInFrame(source prismPayload, ref r3.Frame) (prismplacement.Box, bool) {
-	r, ok := axisRectangle(source.Profile)
-	if !ok || source.SectionDelta != 0 || source.Z0Delta != 0 || source.Z1Delta != 0 ||
-		source.BlendKind != "" || len(source.BlendSegs) != 0 || source.Z0 >= source.Z1 {
-		return prismplacement.Box{}, false
-	}
-	return prismplacement.ExactBoxInFrame(r.u0, r.u1, r.v0, r.v1, source.Z0, source.Z1, source.Frame, ref)
 }

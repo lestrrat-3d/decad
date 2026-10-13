@@ -3,6 +3,7 @@ package decad
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -11,7 +12,7 @@ import (
 // junction. The generic Union still proves its own mesh and contact.
 type obliqueBossRecord struct {
 	plate, boss  *Body
-	rect         axisRect
+	rect         momentinput.AxisRect
 	bottom, top  float64
 	base         r3.Vec
 	axis, ex, ey r3.Vec
@@ -41,7 +42,7 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 		len(cp.Profile.Outer.Segments) != 1 || pp.Z1 <= pp.Z0 || cp.Z0 != 0 || cp.Z1 <= 0 {
 		return nil
 	}
-	rect, ok := axisRectangle(pp.Profile)
+	rect, ok := momentinput.AxisRectangle(pp.Profile)
 	if !ok {
 		return nil
 	}
@@ -55,9 +56,9 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 	if !proofbound.FiniteVec(cp.Point(0, 0, cp.Z0)) || radius <= 0 ||
 		proofbound.IsNonFinite(radius) || proofbound.IsNonFinite(length) || length < radius ||
 		radius > 100 || length > 100 || math.Abs(pp.Z0) > 10_000 ||
-		math.Abs(pp.Z1) > 10_000 || math.Abs(rect.u0) > 10_000 ||
-		math.Abs(rect.u1) > 10_000 || math.Abs(rect.v0) > 10_000 ||
-		math.Abs(rect.v1) > 10_000 {
+		math.Abs(pp.Z1) > 10_000 || math.Abs(rect.U0) > 10_000 ||
+		math.Abs(rect.U1) > 10_000 || math.Abs(rect.V0) > 10_000 ||
+		math.Abs(rect.V1) > 10_000 {
 		return nil
 	}
 	base := cp.Point(0, 0, cp.Z0)
@@ -117,8 +118,8 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 		return nil
 	}
 	for _, center := range []r3.Vec{base, end} {
-		if !(center.X-margin > rect.u0 && center.X+margin < rect.u1 &&
-			center.Y-margin > rect.v0 && center.Y+margin < rect.v1) {
+		if !(center.X-margin > rect.U0 && center.X+margin < rect.U1 &&
+			center.Y-margin > rect.V0 && center.Y+margin < rect.V1) {
 			return nil
 		}
 	}
