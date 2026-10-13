@@ -131,33 +131,6 @@ func certifyRevolveFitBoundary(record *pointSectionRecord,
 	return result, true
 }
 
-// revolveFitWorldBox maps Sketch's outward-rounded local curve bounds through
-// the exact binary64 coefficients of its recorded frame. It does not use a
-// rounded world point to decide which side of a cone contains the curve.
-func revolveFitWorldBox(frame r3.Frame, origin r3.Vec,
-	lower, upper [2]float64) ([3]proofbound.RatInterval, bool) {
-	var world [3]proofbound.RatInterval
-	if !proofbound.FiniteVec(r3.Vec{X: lower[0], Y: lower[1], Z: upper[0]}) ||
-		!proofbound.FiniteVec(r3.Vec{X: upper[1]}) ||
-		lower[0] > upper[0] || lower[1] > upper[1] {
-		return world, false
-	}
-	u := proofbound.Interval(proofarith.FloatRat(lower[0]), proofarith.FloatRat(upper[0]))
-	v := proofbound.Interval(proofarith.FloatRat(lower[1]), proofarith.FloatRat(upper[1]))
-	for i, axis := range [3][3]float64{
-		{origin.X, frame.U().X, frame.V().X},
-		{origin.Y, frame.U().Y, frame.V().Y},
-		{origin.Z, frame.U().Z, frame.V().Z},
-	} {
-		world[i] = proofbound.IntervalAdd(
-			proofbound.PointInterval(proofarith.FloatRat(axis[0])),
-			proofbound.IntervalAdd(
-				proofbound.IntervalScale(u, proofarith.FloatRat(axis[1])),
-				proofbound.IntervalScale(v, proofarith.FloatRat(axis[2]))))
-	}
-	return world, true
-}
-
 // revolveFitMeridianDifference bounds F_blank-F_cone and its parameter
 // derivative over one certified fitted-spline range. The blank's recorded
 // meridian is R(x)=m*x+b, while Sketch certifies
@@ -173,11 +146,11 @@ func revolveFitMeridianDifference(section revolveSectionCertificate, cone sketch
 		math.IsNaN(cone.Slope) || math.IsInf(cone.Slope, 0) {
 		return nil, nil, empty, false
 	}
-	point, ok := revolveFitWorldBox(frame, frame.Origin(), pointLo, pointHi)
+	point, ok := proofbound.FrameBoxWorld(frame, frame.Origin(), pointLo, pointHi)
 	if !ok {
 		return nil, nil, empty, false
 	}
-	tangent, ok := revolveFitWorldBox(frame, r3.Vec{}, tangentLo, tangentHi)
+	tangent, ok := proofbound.FrameBoxWorld(frame, r3.Vec{}, tangentLo, tangentHi)
 	if !ok {
 		return nil, nil, empty, false
 	}
@@ -207,27 +180,6 @@ func revolveFitMeridianDifference(section revolveSectionCertificate, cone sketch
 	derivative := proofbound.IntervalScale(
 		proofbound.IntervalMul(coefficient, tangent[0]), big.NewRat(2, 1))
 	return proofbound.IntervalAbsUpper(difference), proofbound.IntervalAbsUpper(derivative), point, true
-}
-
-// revolveFitWorldStation chooses a held mesh station inside a proven world box
-// and returns a spatial allowance containing every exact point in that box.
-func revolveFitWorldStation(box [3]proofbound.RatInterval) (r3.Vec, float64, bool) {
-	var held [3]float64
-	maxError := 0.0
-	for i, interval := range box {
-		if interval.Lo == nil || interval.Hi == nil || interval.Lo.Cmp(interval.Hi) > 0 {
-			return r3.Vec{}, 0, false
-		}
-		mid := new(big.Rat).Quo(new(big.Rat).Add(interval.Lo, interval.Hi), big.NewRat(2, 1))
-		held[i], _ = mid.Float64()
-		if math.IsNaN(held[i]) || math.IsInf(held[i], 0) {
-			return r3.Vec{}, 0, false
-		}
-		maxError = max(maxError, proofbound.IntervalFloatError(interval, held[i]))
-	}
-	bound := proofbound.Radius3D(maxError)
-	return r3.Vec{X: held[0], Y: held[1], Z: held[2]},
-		bound, !proofbound.IsNonFinite(bound)
 }
 
 // revolveFitSeatPoint encloses the unique crossing with the blank's recorded
@@ -295,7 +247,7 @@ func revolveFitSeatPoint(src *pointSectionSource, cert sketch.ConeFitCrossing,
 				(cert.BeforeSide() != sketch.ConeOutside || cert.AfterSide() != sketch.ConeInside) {
 			return r3.Vec{}, 0, [2]float64{}, false
 		}
-		point, bound, stationOK := revolveFitWorldStation(box)
+		point, bound, stationOK := proofbound.BoxMidStation(box)
 		if !stationOK {
 			return r3.Vec{}, 0, [2]float64{}, false
 		}

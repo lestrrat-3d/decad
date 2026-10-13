@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/prismextent"
 
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/r3"
@@ -52,7 +53,7 @@ func denseSpanExtreme(t *testing.T, spans []freeform.BezierSpan, gu, gv float64,
 }
 
 // splineProfile wraps a single cubic SplineSeg as an (open) one-segment
-// profile — boundaryExtremesBoundedContext reads segment geometry alone and
+// profile — prismextent.ProfileBoundaryExtremes reads segment geometry alone and
 // needs no closed loop.
 func splineProfile(control []Point2) profileRecord {
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
@@ -77,7 +78,7 @@ func TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
 	profile := splineProfile(control)
 
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 0, 1, freeform.NewFreeformWork(), nil)
+	lo, hi, bound, err := prismextent.ProfileBoundaryExtremes(t.Context(), profile, 0, 1, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Positive(t, bound, "an extreme held by an irrational interior root carries the bracket's own width")
 	require.Less(t, lo, hi)
@@ -103,7 +104,7 @@ func TestBoundaryExtremesBoundedEndpointExtremeIsExact(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
 	profile := splineProfile(control)
 
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 0, freeform.NewFreeformWork(), nil)
+	lo, hi, bound, err := prismextent.ProfileBoundaryExtremes(t.Context(), profile, 1, 0, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Zero(t, bound, "an extreme held by a recorded control coordinate carries no bound")
 	require.Equal(t, control[0].U, lo, "the minimum is the first control point's own U")
@@ -206,7 +207,7 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{seg}}}
 	gu, gv := 1.0, 2.0
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, gu, gv, freeform.NewFreeformWork(), nil)
+	lo, hi, bound, err := prismextent.ProfileBoundaryExtremes(t.Context(), profile, gu, gv, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 
 	denseLo, denseHi := denseSpanExtreme(t, spans, gu, gv, 20_000)
@@ -286,7 +287,7 @@ func TestBoundaryExtremesBoundedNonFiniteDirectionRefuses(t *testing.T) {
 		{"Inf gv", 0, math.Inf(1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, _, err := boundaryExtremesBoundedContext(t.Context(), profile, tc.gu, tc.gv, freeform.NewFreeformWork(), nil)
+			_, _, _, err := prismextent.ProfileBoundaryExtremes(t.Context(), profile, tc.gu, tc.gv, freeform.NewFreeformWork(), nil)
 			require.Error(t, err)
 			require.ErrorIs(t, err, ErrNotFinite)
 		})
@@ -386,7 +387,7 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	// V (not U) has an interior extreme on this fixture (see the comment on
 	// TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate).
-	_, _, bound, err := boundaryExtremesBoundedContext(t.Context(), splineProfile(control), 0, 1, freeform.NewFreeformWork(), nil)
+	_, _, bound, err := prismextent.ProfileBoundaryExtremes(t.Context(), splineProfile(control), 0, 1, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Greater(t, bound, 0.0, "an interior free-form extreme is held by a bracket, never exactly")
 
@@ -424,7 +425,7 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 	}
 	profile := splineProfile(control)
 
-	satLo, satHi, satBound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 1, freeform.NewFreeformWork(), nil)
+	satLo, satHi, satBound, err := prismextent.ProfileBoundaryExtremes(t.Context(), profile, 1, 1, freeform.NewFreeformWork(), nil)
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.NotErrorIs(t, err, ErrDegenerate,
@@ -454,7 +455,7 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 	// The identical fixture read along a direction whose enclosure IS
 	// representable still answers, so the refusal is the range's and not the
 	// fixture's.
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 0, freeform.NewFreeformWork(), nil)
+	lo, hi, bound, err := prismextent.ProfileBoundaryExtremes(t.Context(), profile, 1, 0, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, control[0].U, lo, "U is monotone here, so the minimum is the first control point's own U")
 	require.Equal(t, control[len(control)-1].U, hi)
@@ -501,7 +502,7 @@ func TestBoundaryExtremesBoundedContextCancellation(t *testing.T) {
 	}}}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, profile, 1, 0, freeform.NewFreeformWork(), nil)
+	lo, hi, bound, err := prismextent.ProfileBoundaryExtremes(ctx, profile, 1, 0, freeform.NewFreeformWork(), nil)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Zero(t, lo)
 	require.Zero(t, hi)

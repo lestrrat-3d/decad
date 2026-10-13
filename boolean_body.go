@@ -790,7 +790,7 @@ func buildFacetedTopology(
 		}
 		if axialSectionJoin {
 			e.selectorDirection, e.selectorDirectionProven =
-				axialFacetedChainDirection(verts, chain.Vertices)
+				facetedtopology.AxialChainDirection(verts, chain.Vertices)
 		}
 		edgeObj[chain] = e
 	}
@@ -803,62 +803,6 @@ func buildFacetedTopology(
 			}
 			f.loops = append(f.loops, loop)
 		}
-	}
-	return nil
-}
-
-// axialFacetedChainDirection proves that every held chord has one exact
-// Cartesian Z direction. Callers must separately prove the represented
-// source boundary is an axial extrusion; a straight held chain alone cannot
-// make that claim for an arbitrary FacetedCurve.
-func axialFacetedChainDirection(verts []r3.Vec, chain []int) (r3.Vec, bool) {
-	if len(chain) < 2 || chain[0] < 0 || chain[0] >= len(verts) {
-		return r3.Vec{}, false
-	}
-	first := verts[chain[0]]
-	if proofbound.IsNonFinite(first.X) || proofbound.IsNonFinite(first.Y) ||
-		proofbound.IsNonFinite(first.Z) {
-		return r3.Vec{}, false
-	}
-	previous := first.Z
-	direction := 0.0
-	for _, index := range chain[1:] {
-		if index < 0 || index >= len(verts) {
-			return r3.Vec{}, false
-		}
-		v := verts[index]
-		if v.X != first.X || v.Y != first.Y || proofbound.IsNonFinite(v.Z) || v.Z == previous {
-			return r3.Vec{}, false
-		}
-		step := 1.0
-		if v.Z < previous {
-			step = -1
-		}
-		if direction != 0 && direction != step {
-			return r3.Vec{}, false
-		}
-		direction, previous = step, v.Z
-	}
-	return r3.Vec{Z: direction}, true
-}
-
-// refuseRimPastPair refuses a boolean whose largest rim bound has stopped
-// bounding anything. A rim vertex is not a point of either operand's surface:
-// it is the exact crossing of an operand A facet's PLANE with an operand B
-// facet's, and the true intersection curve lies anywhere within δ(t_A) of the
-// one and δ(t_B) of the other — a tube of half-width (δ(t_A) + δ(t_B))/sin θ
-// about the crossing line (meshbool.RimBound), which grows without limit as
-// the two facets approach tangency. maxRim is the largest such bound any rim
-// vertex of the operation takes. Once it is not finite, or reaches the pair's
-// own diameter, the operation is refused (ErrUnsupported) rather than
-// reported with a bound nobody can use — decad never understates a bound, and
-// never fakes one (docs/faceted-vertex-bounds-design.md §3.2).
-func refuseRimPastPair(maxRim, dPair float64) error {
-	if proofbound.IsNonFinite(maxRim) {
-		return fmt.Errorf(`%w: the operands' facets meet at an angle this evaluator cannot bound`, ErrUnsupported)
-	}
-	if maxRim > 0 && maxRim >= dPair {
-		return fmt.Errorf(`%w: the operands cross too shallowly — the rim's proven displacement bound reaches the pair's own diameter, so no measurement of the result would be trustworthy`, ErrUnsupported)
 	}
 	return nil
 }

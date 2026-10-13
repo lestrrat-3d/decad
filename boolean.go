@@ -134,22 +134,6 @@ func Intersect(ctx context.Context, a, b *Body) (*Body, error) {
 	return performBoolean(ctx, meshbool.OpIntersect, a, b)
 }
 
-// booleanOperandStaging restates the local chain-depth gate's refusal
-// (meshbool.CoarseHeldContactError; docs/faceted-vertex-bounds-design.md §5)
-// in the boolean's own terms (docs/api-design.md §8, "The chain depth"): it
-// names the operand, quotes the bound of the held facets the pair touches and
-// the pair's chord tolerance, and says that a boolean takes no tolerance.
-// Every other error passes through unchanged.
-func booleanOperandStaging(op meshbool.OperationKind, err error) error {
-	var held *meshbool.CoarseHeldContactError
-	if !errors.As(err, &held) {
-		return err
-	}
-	return meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedStaging, held.Operand,
-		fmt.Errorf(`%w: %s's %s holds its mesh, where this pair meets it, only within a bound of %s, coarser than this pair's chord tolerance %s; a boolean takes no tolerance, so the chain cannot continue through that geometry: place the new contact away from the earlier booleans' rims, reshape the construction with fewer booleans over that region, or draw the pair so the analytic prism path admits it (docs/api-design.md §8, "The chain depth")`,
-			ErrUnsupported, op, booleanOperandRole(op, held.Operand), units.Millimeters(held.Bound), units.Millimeters(held.Tol)))
-}
-
 // heldFloorOf is the bound below which a RESTATING operand cannot give a mesh
 // (docs/faceted-vertex-bounds-design.md §5): a boolean result's meshBound, or
 // a mitred sweep's or a coil's delta (docs/helix-design.md Table CD row CD3). Its restatement returns the same vertices at any
@@ -177,21 +161,6 @@ func tessellateBooleanOperand(ctx context.Context, b *Body, tolMM float64) (*Mes
 	floor, restating := heldFloorOf(b)
 	m, err := tessellateContext(ctx, b, units.Millimeters(max(tolMM, floor)), VerifyAll)
 	return m, restating, err
-}
-
-// booleanOperandRole names an operand the way the public signatures do: Cut's
-// target and tool, otherwise first and second operand.
-func booleanOperandRole(op meshbool.OperationKind, operand int) string {
-	switch {
-	case op == meshbool.OpCut && operand == 0:
-		return "target"
-	case op == meshbool.OpCut:
-		return "tool"
-	case operand == 0:
-		return "first operand"
-	default:
-		return "second operand"
-	}
 }
 
 func asExpectedBoolean(err error) (*meshbool.BooleanExpectedError, bool) {
@@ -785,7 +754,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	}
 	if err := refuseUndecidableProximityWithConeCap(ctx, ma, mb, bmA, bmB, memo,
 		capFace, coneFace, spiralPairs); err != nil {
-		err = booleanOperandStaging(op, err)
+		err = meshbool.StagingError(op, err)
 		if errors.Is(err, ErrUnsupported) {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedContact, err)
 		}
@@ -818,7 +787,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	}
 	kept, maxRim, err := meshbool.MeshBoolean(ctx, op, bmA, bmB, memo)
 	if err != nil {
-		return booleanEvaluation{}, booleanOperandStaging(op, err)
+		return booleanEvaluation{}, meshbool.StagingError(op, err)
 	}
 	if len(kept) == 0 {
 		return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedEmpty,
@@ -849,7 +818,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	// PLANES, so it is displaced by its own facet pair's trim-amplified
 	// (δ(t_A) + δ(t_B))/sin θ, not by δ, and the stitch adds each vertex's own
 	// weld. The amplification is refused where it reaches the pair diameter.
-	if err := refuseRimPastPair(maxRim, dPair); err != nil {
+	if err := meshbool.RefuseRimPastPair(maxRim, dPair); err != nil {
 		return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
 	}
 	symA, err := operandSymDiff(ma)

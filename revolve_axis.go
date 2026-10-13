@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismextent"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 
 	"github.com/lestrrat-3d/r3"
@@ -69,11 +70,11 @@ const (
 // audits each walk for axis contact and charges any snapped endpoint.
 func resolveAxisSide(ctx context.Context, profile profileRecord, line revolveaxis.Line2, work *freeform.FreeformWork) (axisFrame, float64, error) {
 	nU, nV := -line.DV, line.DU
-	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work, nil)
+	rlo, rhi, rBound, err := prismextent.ProfileBoundaryExtremes(ctx, profile, nU, nV, work, nil)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
-	zlo, zhi, zBound, err := boundaryExtremesBoundedContext(ctx, profile, line.DU, line.DV, work, nil)
+	zlo, zhi, zBound, err := prismextent.ProfileBoundaryExtremes(ctx, profile, line.DU, line.DV, work, nil)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}

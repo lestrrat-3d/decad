@@ -755,7 +755,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 
 	// Prove loop clearance before both caps reuse the wall rings' vertices.
 	if err := tessellation.PrismCaps(ctx, &topology, sheet, capStart, capEnd,
-		pp.z0Delta, pp.z1Delta, requireRecordLoopClearance, triangulation.Triangulate); err != nil {
+		pp.z0Delta, pp.z1Delta, tessellation.RequireLoopClearance, triangulation.Triangulate); err != nil {
 		return nil, err
 	}
 	mesh.triangles, mesh.source = topology.Triangles, topology.Sources
@@ -1121,7 +1121,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	}
 	rimFace := func(i int) (*Face, error) { return faceOfRole(fmt.Sprintf("rim(%d)", i)) }
 	assembled, err := tessellation.AssembleCup(ctx, oTopology, cTopology, openIsMax, capStart, shellCap,
-		rimFace, requireRecordLoopClearance, triangulation.Triangulate, faceTrim, faceAxial,
+		rimFace, tessellation.RequireLoopClearance, triangulation.Triangulate, faceTrim, faceAxial,
 		cp.zOuterDelta, cp.zCavDelta, cp.zOpenDelta)
 	if err != nil {
 		return nil, err
@@ -1285,61 +1285,10 @@ func (m *Mesh) addTriangle(tri [3]int, src *Face) {
 	m.source = append(m.source, src)
 }
 
-// requireLoopClearance maps the first cross-loop clearance failure to the
-// caller's typed tessellation refusal.
-func requireRecordLoopClearance(ctx context.Context, pts []sectionrecord.Point2,
-	loopIdx [][]int, loopSag []float64) error {
-	failure, failed, err := tessellation.SectionLoopClearance(ctx, pts, loopIdx, loopSag)
-	if err != nil || !failed {
-		return err
-	}
-	gate := failure.ChordGate + failure.Floor
-	msg := fmt.Sprintf(
-		`cap boundary loops %d and %d have measured distance %s; distance must exceed the required clearance gate %s`,
-		failure.LoopA, failure.LoopB, units.Millimeters(failure.Distance), units.Millimeters(gate),
-	)
-	if failure.Distance > failure.Floor && failure.ChordGate > 0 {
-		msg += `; retry with a finer chord tolerance to reduce the gate`
-	}
-	return tessellation.NewExpectedError(fmt.Errorf(`%w: %s`, ErrDegenerate, msg))
-}
-
 func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, loopSag []float64) error {
-	return requireRecordLoopClearance(ctx, point2ToRecordSlice(pts), loopIdx, loopSag)
-}
-
-// requireWalkClearance maps the first within-loop clearance failure to the
-// indexed refusal that deterministic meridian refinement reads.
-func requireRecordWalkClearance(ctx context.Context, pts []sectionrecord.Point2,
-	loopIdx [][]int, sag [][]float64) error {
-	failure, failed, err := tessellation.SectionWalkClearance(ctx, pts, loopIdx, sag)
-	if err != nil || !failed {
-		return err
-	}
-	gate := failure.ChordGate + failure.Floor
-	msg := fmt.Sprintf(
-		`chords %d and %d of section loop %d have measured distance %s; distance must exceed the required clearance gate %s`,
-		failure.ChordA, failure.ChordB, failure.Loop, units.Millimeters(failure.Distance), units.Millimeters(gate),
-	)
-	if failure.Distance > failure.Floor && failure.ChordGate > 0 {
-		msg += `; retry with a finer chord tolerance to reduce the gate`
-	}
-	return &sectionClearanceError{
-		Err:  tessellation.NewExpectedError(fmt.Errorf(`%w: %s`, ErrDegenerate, msg)),
-		Loop: failure.Loop, A: failure.ChordA, B: failure.ChordB,
-	}
+	return tessellation.RequireLoopClearance(ctx, point2ToRecordSlice(pts), loopIdx, loopSag)
 }
 
 func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sag [][]float64) error {
-	return requireRecordWalkClearance(ctx, point2ToRecordSlice(pts), loopIdx, sag)
+	return tessellation.RequireWalkClearance(ctx, point2ToRecordSlice(pts), loopIdx, sag)
 }
-
-// sectionClearanceError names the two chords requireWalkClearance refused and
-// the loop they belong to, so deterministic refinement can choose them.
-type sectionClearanceError struct {
-	Err        error
-	Loop, A, B int
-}
-
-func (e *sectionClearanceError) Error() string { return e.Err.Error() }
-func (e *sectionClearanceError) Unwrap() error { return e.Err }

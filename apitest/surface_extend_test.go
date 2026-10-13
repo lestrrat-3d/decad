@@ -146,7 +146,7 @@ func TestSurfaceExtendReversedFragmentToNearestCut(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, 30, bounds.Min.X, bounds.Bound.Base())
 	require.InDelta(t, 100, bounds.Max.X, bounds.Bound.Base())
-	// Without trimBoundsWalks's per-component cut charge this bounds interval
+	// Without prismcells.TrimProfileWalks's per-component cut charge this bounds interval
 	// measures 7.105427357601008e-15 mm; with it, 1.8474111129762615e-13 mm.
 	require.Greater(t, bounds.Bound.Base(), 5e-14,
 		"extended bounds interval must include the cut endpoint displacement")
@@ -283,7 +283,7 @@ func TestSurfaceExtendArcReceiverToNearestCut(t *testing.T) {
 	decadtest.Encloses(t, "extended arc bounds", bounds, r3.NewVec(-60, 80, 10))
 	require.InDelta(t, -60, bounds.Min.X, bounds.Bound.Base())
 	require.InDelta(t, 100, bounds.Max.Y, bounds.Bound.Base())
-	// Without trimBoundsWalks's per-component cut charge this bounds interval
+	// Without prismcells.TrimProfileWalks's per-component cut charge this bounds interval
 	// measures 2.842170943040403e-14 mm; with it, 1.1439738045737621e-12 mm.
 	require.Greater(t, bounds.Bound.Base(), 1e-13,
 		"extended arc bounds interval must include the cut endpoint displacement")
@@ -327,7 +327,7 @@ func TestSurfaceExtendLeftFragmentToNearestCut(t *testing.T) {
 	require.NoError(t, err)
 	decadtest.Encloses(t, "extended bounds", bounds, r3.NewVec(70, 0, 10))
 	require.InDelta(t, 70, bounds.Max.X, bounds.Bound.Base())
-	// Without trimBoundsWalks's per-component cut charge, this bounds
+	// Without prismcells.TrimProfileWalks's per-component cut charge, this bounds
 	// interval measures 1.4210854715202016e-14 mm; with it, 1.9895196601282815e-13 mm.
 	require.Greater(t, bounds.Bound.Base(), 5e-14,
 		"extended bounds interval must include the cut endpoint displacement")

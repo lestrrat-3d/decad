@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismextent"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 
 	"github.com/lestrrat-3d/r3"
@@ -69,7 +70,7 @@ func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work 
 func (rp revolvePayload) extentBoundedAlongProfile(
 	ctx context.Context, g r3.Vec, work *freeform.FreeformWork, profile *revolveaxis.ExtentProfile,
 ) (float64, float64, float64, error) {
-	return revolveaxis.ExtentAlong(ctx, rp.extentInput(), g, work, profile, boundaryExtremesBoundedContext)
+	return revolveaxis.ExtentAlong(ctx, rp.extentInput(), g, work, profile, prismextent.ProfileBoundaryExtremes)
 }
 
 func (rp revolvePayload) extentInput() revolveaxis.ExtentInput {
@@ -85,7 +86,7 @@ func (rp revolvePayload) extentInput() revolveaxis.ExtentInput {
 // Each axis's bound includes its full displacement before the box takes the
 // largest, so the box and through-all stops use the same extent proof.
 func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeform.FreeformWork) (Box, error) {
-	low, high, bound, err := revolveaxis.Bounds(ctx, rp.extentInput(), work, boundaryExtremesBoundedContext)
+	low, high, bound, err := revolveaxis.Bounds(ctx, rp.extentInput(), work, prismextent.ProfileBoundaryExtremes)
 	if err != nil {
 		return Box{}, err
 	}

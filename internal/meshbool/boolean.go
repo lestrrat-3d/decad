@@ -80,7 +80,7 @@ func ExpectedBooleanForOperand(kind BooleanExpectedKind, operand int, err error)
 // CoarseHeldContactError is RefuseCoarseHeldContact's refusal: operand
 // Operand's facets where the pair meets carry a bound of Bound, coarser than
 // the pair's chord tolerance Tol. The root restates it in the boolean's own
-// terms (boolean.go, booleanOperandStaging).
+// terms (StagingError).
 type CoarseHeldContactError struct {
 	Operand    int
 	Bound, Tol float64

@@ -158,7 +158,7 @@ func boxPtrToInternal(b *Box) *measurement.Box {
 // already refuses earlier, with its own Table R sentinel, before this runs: a
 // length bracket that cannot be enclosed is R15 inside freeform.FreeformArcLength, a
 // directional extreme past float64 range is R18 inside
-// boundaryExtremesBoundedContext (both consumed building Area/Bounds), and a
+// prismextent.ProfileBoundaryExtremes (both consumed building Area/Bounds), and a
 // walk endpoint bound that cannot be derived is the "no span" case
 // freeformEndpointBounds already turned into ErrDegenerate before a
 // survey2d.SegmentWalk exists to fold into a Vertex at all (boundarywalk.JunctionVertexAt,

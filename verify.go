@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
+	"github.com/lestrrat-3d/decad/internal/prismextent"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
@@ -885,7 +886,7 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 // arm through revolveaxis.ProvesSimple (its comment holds the argument).
 func revolvePayloadProvesSimple(ctx context.Context, rp revolvePayload) bool {
 	return revolveaxis.ProvesSimple(ctx, rp.profile, rp.ax, rp.full, rp.radialProof,
-		rp.sectionDelta, boundaryExtremesBoundedContext)
+		rp.sectionDelta, prismextent.ProfileBoundaryExtremes)
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint
