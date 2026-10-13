@@ -1990,3 +1990,8 @@
 10	0.00	TestFacetedUnionNestedBossShellVerified
 10	0.00	TestFacetedUnionNestedBossShellRefusesInsufficientClearance
 10	0.00	TestFacetedUnionNestedBossShellRefusesPlacedSourceRelation
+10	0.00	TestFacetedPrismUnionUntouchedOuterEdgeChamfer
+10	0.00	TestFacetedPrismUnionChamferReversedSources
+10	0.00	TestFacetedPrismUnionChamferRefusesToolInCornerBand
+10	0.00	TestFacetedPrismUnionChamferRefusesPlacedUnion
+10	0.00	TestFacetedPrismUnionChamferRefusesInexactFoot
