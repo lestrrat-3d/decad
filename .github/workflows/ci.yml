@@ -185,7 +185,13 @@ jobs:
       # disk is in no shard.
       #
       # run_shard runs a binary from its package directory, as go test does,
-      # so a test reading a path relative to its package finds it.
+      # so a test reading a path relative to its package finds it. Both
+      # binaries run at the same time, each in a background subshell writing
+      # to its own log, because each keeps only about 1.5 of the runner's
+      # four cores busy. The step waits for both, prints each log whole under
+      # its own group so the output is not interleaved, and fails when either
+      # binary failed. A shard whose regex selects no test for a binary fails
+      # in that binary's subshell, as it does when run alone.
       - name: Run race tests (Ubuntu shard)
         shell: bash
         run: |
@@ -217,8 +223,29 @@ jobs:
             (cd "$dir" && "$bin" -test.timeout "$timeout" -test.run "^(${tests})$")
           }
           start=$SECONDS
-          run_shard decad.test .github/test-shards.txt .
-          run_shard apitest.test .github/test-shards-apitest.txt apitest
+          logdir="$(mktemp -d)"
+          (
+            run_shard decad.test .github/test-shards.txt .
+          ) >"$logdir/decad.log" 2>&1 &
+          decad_pid=$!
+          (
+            run_shard apitest.test .github/test-shards-apitest.txt apitest
+          ) >"$logdir/apitest.log" 2>&1 &
+          apitest_pid=$!
+          decad_rc=0
+          apitest_rc=0
+          wait "$decad_pid" || decad_rc=$?
+          wait "$apitest_pid" || apitest_rc=$?
+          echo "::group::decad.test"
+          cat "$logdir/decad.log"
+          echo "::endgroup::"
+          echo "::group::apitest.test"
+          cat "$logdir/apitest.log"
+          echo "::endgroup::"
+          if [ "$decad_rc" -ne 0 ] || [ "$apitest_rc" -ne 0 ]; then
+            echo "::error::shard ${{ matrix.shard }} failed: decad.test exit ${decad_rc}, apitest.test exit ${apitest_rc}"
+            exit 1
+          fi
           elapsed=$(( SECONDS - start ))
           echo "shard ${{ matrix.shard }} finished in ${elapsed}s"
           # Shard 0 holds a two-tooth bevel join. Shard 10 holds
