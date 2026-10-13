@@ -533,7 +533,7 @@ prevents a false `Sound` report.
 | **D5** | clearance | box separation may settle the partition, but `WithClearances` stays `Suspect` until a sweep boundary adapter lands |
 | **D6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload` until non-constant-section proofs land |
 | **D7** | `Transform`, `Copy` | re-evaluates the payload under the composed rigid motion and reruns the applicable construction proof; every displacement and measurement is recomputed |
-| **D8** | Fillet, Chamfer and Shell | One straight solid profile span admits lateral Fillet and equal-setback Chamfer, cap and side-opening Shell, and hole-free closed Shell (modify R9). A smooth symmetric rounded profile on a one-line twisted Sweep admits inward top-cap Shell (modify R10). Other Sweep kinds and targets refuse. One-span sheets take Thicken (surface §16.8). |
+| **D8** | Fillet, Chamfer and Shell | Straight solid profile: lateral Fillet/Chamfer, one Route E cap-edge Chamfer, and Shell (modify R9). Twisted line: inward top-cap Shell (R10). Other targets refuse; sheets may Thicken (§16.8). |
 
 The composite tessellator chooses the largest required profile chord count
 from its prism and Revolve span plans for each recorded segment. Each span

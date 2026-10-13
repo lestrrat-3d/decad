@@ -48,6 +48,43 @@ func TestStraightSweepChamferSelectedWallsAndVerifyAll(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 }
 
+func TestStraightSweepChamferSingleCapEdgeAndVerifyAll(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		shift r3.Vec
+	}{
+		{name: "source"},
+		{name: "translated", shift: r3.NewVec(5, -3, 7)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc, source := straightSweepChamferBox(t)
+			if tc.shift != (r3.Vec{}) {
+				motion, err := r3.Translation(tc.shift)
+				require.NoError(t, err)
+				source, err = decad.Copy(t.Context(), source, decad.WithCopyPlacement(motion))
+				require.NoError(t, err)
+			}
+			corner := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
+				decad.EndpointAt(r3.NewVec(0, 0, 10).Add(tc.shift))).Exactly(1)
+			edges, err := corner.SelectEdges(source)
+			require.NoError(t, err)
+			require.Len(t, edges, 1)
+			beveled, err := source.Chamfer(t.Context(), corner, units.Millimeters(1))
+			require.NoError(t, err)
+			decadtest.MeasuresVolume(t, beveled, units.CubicMillimeters(3990), decadtest.Exactly())
+			require.Len(t, beveled.Faces(), 7)
+			mesh, err := beveled.Tessellate(t.Context(), units.Millimeters(0.1),
+				decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			require.True(t, mesh.BoundaryVerified())
+			require.True(t, mesh.VolumeVerified())
+			require.Contains(t, doc.Bodies(), beveled)
+			require.NotContains(t, doc.Bodies(), source)
+		})
+	}
+}
+
 func TestStraightSweepChamferOneEdgeAndPlacedReplay(t *testing.T) {
 	t.Parallel()
 	doc, source := straightSweepChamferBox(t)
