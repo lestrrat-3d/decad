@@ -36,9 +36,10 @@ import (
 // (revolve_blend.go, docs/modify-reach-design.md §7), and a brep or stacked
 // boolean result takes routes P and E of docs/brep-modify-design.md and route
 // L of docs/modify-general-design.md (brep_modify.go); any other non-prism
-// receiver is S3 (ErrUnsupported), except the bounded tapered full-circle
-// far-rim case in docs/draft-design.md §10.5 and the source-authenticated
-// perpendicular cylindrical bore mouth in docs/cross-cylinder-bore-chamfer-design.md.
+// receiver is S3 (ErrUnsupported), except a one-span straight solid Sweep's
+// selected lateral edges, the bounded tapered full-circle far-rim case in
+// docs/draft-design.md §10.5, and the source-authenticated perpendicular
+// cylindrical bore mouth in docs/cross-cylinder-bore-chamfer-design.md.
 //
 // Chamfer also takes docs/modify-reach-design.md §8.3's second receiver class,
 // which the fillet does not: a selection covering every geometric edge of one
@@ -75,6 +76,9 @@ type ChamferOption interface{ chamferOption() }
 // A one-sided positive-taper circular extrude also accepts one complete
 // far-cap rim at an equal setback on its disk and cone (draft §10.5).
 //
+// A one-span straight solid Sweep takes selected lateral edges through its
+// stored exact prism reduction. Its cap edges and asymmetric reference roles
+// remain unsupported; other Sweep kinds are S3 (ErrUnsupported).
 // A receiver outside the admitted classes is S3 (ErrUnsupported).
 //
 // WithTangentChain expands the edges sel resolves to as Fillet's does
@@ -311,16 +315,25 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if route.prism != nil {
 		pp, ok, caps = *route.prism, true, route.caps
 	}
+	// The selector has already resolved on the published Sweep. Only the
+	// certified one-line solid reads through its stored exact prism.
+	sweepStraight := false
+	if reduction, admitted := straightSweepPrismReduction(b.payload); admitted {
+		pp, ok, sweepStraight = reduction, true, true
+	}
 	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism or a revolve only; selector %s matched [%s]`,
+		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only; selector %s matched [%s]`,
 			ErrUnsupported, sel, selectedEdgesContext(edges))
+	}
+	if sweepStraight && asym != nil {
+		return nil, fmt.Errorf(`%w: an asymmetric chamfer of a Sweep wall has no mapped reference-face role`, ErrUnsupported)
 	}
 	if err := requireExactSection(pp, "chamfers"); err != nil {
 		return nil, err
 	}
 	// A single straight cap edge takes the bounded cutter or route E's corner
 	// rewrite in the prism's face view. Complete loops keep the cap-band route.
-	if straightPrismCapEdge(caps, edges) {
+	if !sweepStraight && straightPrismCapEdge(caps, edges) {
 		if original, ok := b.payload.(prismPayload); ok {
 			if out, recognized, err := tryObliqueCapEdgeChamfer(ctx, b, original, edges, dmm, dDelta, asym); recognized {
 				return out, err
@@ -336,6 +349,9 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	startLoops, endLoops, lateral, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
 	if err != nil {
 		return nil, err
+	}
+	if sweepStraight && !lateral {
+		return nil, fmt.Errorf(`%w: this straight Sweep chamfers only lateral edges; selector %s`, ErrUnsupported, sel)
 	}
 	if !lateral {
 		// An equal chamfer sets both caps back d across the cap and d down the

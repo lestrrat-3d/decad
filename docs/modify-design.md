@@ -152,7 +152,11 @@ a retired body is S17, by core §6's retire rule.
 | **R6** | `brepPayload`, or `stackedPrismPayload` through its face view | `docs/brep-modify-design.md` Table RB | Table RB |
 | **R7** | `loftPayload` with matching, hole-free, axially translated sections | `Fillet` on recorded analytic corners (loft §17); `Chamfer` is S3 | S3 |
 | **R8** | One-sided positive-taper full-circle `draftPayload`, near section at start, no holes or kept walls | Far-rim `Fillet` or symmetric `Chamfer` builds per draft §10.4–§10.5; otherwise S3 | Inward far-cap removal builds draft §10.6's cup; otherwise S3 |
-| **R9** | `sweepPayload` from one zero-twist straight `LineTo` profile span, including rigid placement | `Fillet` of selected lateral edges uses the exact prism reduction and B1's section rewrite; cap edges are S1. `Chamfer` is S3. | CapStart, CapEnd, or both use the exact prism reduction and the matching R1 cap construction; a hole-free section also takes `WithNoOpenings`. Side openings are S2; other sweeps are S3. |
+| **R9** | One straight solid profile `sweepPayload` (§6–§7) | Lateral `Fillet` and equal-setback `Chamfer` use the exact prism reduction. | Shell on either or both caps uses that reduction; closed Shell needs a hole-free section. |
+
+R9 includes rigid placement and only a zero-twist, one-span `LineTo` path.
+Fillet cap edges are S1. Chamfer cap edges, mixed selections and asymmetric
+setbacks refuse. Shell side openings are S2, and other Sweep kinds are S3.
 
 A full-circle loop is a single closed wall with **no** lateral edge at all
 (evaluator §5 emits no seam), so a cylinder has no edge the corner rewrite can
@@ -465,6 +469,14 @@ setback option would be a second one.
 ```go
 func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
 ```
+
+For R9's straight Sweep, `Chamfer` resolves the selector on the published
+Sweep edges and maps each selected lateral edge to the stored prism corner.
+Equal setbacks use the ordinary section rewrite, audit and B1 build, carrying
+the same frame, interval, endpoint displacement and placement. The resulting
+`prismPayload` takes later R1 operations. A cap edge, a mixed cap/lateral
+selection or `WithAsymmetricChamfer` is `ErrUnsupported`; other Sweep kinds
+remain S3. `WithTangentChain` retains its usual selector expansion.
 
 The same edge class, the same gates, one simpler surface. **The bevel of a
 lateral edge is a plane**: in the section, the corner is cut off by a straight
