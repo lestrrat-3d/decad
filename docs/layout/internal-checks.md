@@ -11,7 +11,7 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `internal/stackedrecord/` | Derives and audits slab interfaces, wall columns, and exposed patch rings. See stacked-prism §2.2–§3. |
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
-| `internal/compositesweep/` | Composite Sweep limits, bounded measurements, separation audit, rim-join certificate, and span side-role renumbering and cap-role swaps. See sweep §7, §9. |
+| `internal/compositesweep/` | Composite Sweep limits, bounded measurements, separation and cross-span facet audits, rim-join certificate, and span side-role renumbering and cap-role swaps. See sweep §7, §9. |
 | `internal/diameter/` | Lower-bound diameter of held witness points, including vertex and axis-extreme witnesses. See verification §3. |
 | `internal/tolerance/` | Relative tolerance comparisons, body reference formulas, and reading diagnostics. See verification §2-§3. |
 | `internal/verifyoption/` | Verify options. See verification §2. |
@@ -22,7 +22,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/prismplacement/` | Exact prism axis shifts, sweep spans and relative placement. See prism-boolean §3. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, moment and arc-box bounds over neutral records. |
 | `internal/prismcells/` | Prism admission, scene budgets, cells, cuts, charges and trim walks. See prism-boolean §4. |
-| `internal/mirrorjoin/` | Exact line admission, reflection and record splice. See mirror-pattern §5. |
+| `internal/mirrorjoin/` | Exact line admission, reflection, record splice and joined-section audit. See mirror-pattern §5. |
 | `internal/patternrecord/` | Pattern spec gates, instance motion and record mapping. See mirror-pattern §4.3, §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |

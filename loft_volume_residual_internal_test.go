@@ -16,7 +16,7 @@ import (
 
 // This file tests docs/loft-gear-bounds-design.md §2's volume residual —
 // sweptLeg + wallLeg + skirtLeg — and §4's per-cell cap tube, over the
-// production path: loftmesh.ValidateLoftRecords, loftmesh.PairRecords, assembleLoft and
+// production path: loftmesh.ValidateLoftRecords, loftmesh.PairRecords, loftmesh.AssembleTriangulated and
 // buildLoftMass, the same steps evalLoft runs, at a chord target the test
 // chooses.
 
@@ -52,7 +52,7 @@ func loftMassAtTarget(t *testing.T, pl loftPayload, target float64) loftMassBuil
 	}
 	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
-	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
 	return loftMassBuild{
 		mass: buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta), a: a, pairs: pairs,

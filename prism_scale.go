@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -17,7 +18,7 @@ import (
 // its shared-edge topology, source-face map and occupied-volume proof. A
 // curved face becomes Faceted because this path has no scaled normal proof.
 func prismScaleSource(ctx context.Context, b *Body, prism prismPayload, factor float64) (facetedPayload, error) {
-	curved, eligible := prismScaleProfile(prism.profile)
+	curved, eligible := prismcells.ScaleSourceProfile(prism.profile)
 	if prism.surfaceResult || prism.sectionDelta != 0 || prism.z0Delta != 0 || prism.z1Delta != 0 ||
 		!prism.xform.IsValid() || !eligible {
 		return facetedPayload{}, fmt.Errorf("%w: scale needs an exact line/circular solid prism", ErrUnsupported)
@@ -93,35 +94,4 @@ func prismScaleSource(ctx context.Context, b *Body, prism prismPayload, factor f
 		dPair:          diameter,
 		xform:          r3.Identity(),
 	}, nil
-}
-
-// prismScaleProfile admits only complete source edges. A partial Sketch edge
-// needs its own source certificate even if its visible curve is circular.
-func prismScaleProfile(profile profileRecord) (curved, eligible bool) {
-	loops := append([]loopRecord{profile.Outer}, profile.Holes...)
-	for _, loop := range loops {
-		if len(loop.Segments) == 0 {
-			return false, false
-		}
-		for _, segment := range loop.Segments {
-			var start, end float64
-			switch s := segment.(type) {
-			case lineSeg:
-				start, end = s.TStart, s.TEnd
-			case circleSeg:
-				if len(loop.Segments) != 1 {
-					return false, false
-				}
-				start, end, curved = s.TStart, s.TEnd, true
-			case arcSeg:
-				start, end, curved = s.TStart, s.TEnd, true
-			default:
-				return false, false
-			}
-			if !((start == 0 && end == 1) || (start == 1 && end == 0)) {
-				return false, false
-			}
-		}
-	}
-	return curved, true
 }

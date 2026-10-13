@@ -22,7 +22,7 @@ import (
 // evaluator (loft_build.go). It owns the LoftOption surface, gates S9-S10,
 // and the atomic record->evaluate->commit tail (§10). internal/featureoption
 // owns S11 and S4's arity half. The other gates — S1-S8 and S13's coordinate-range
-// gate — is loftmesh.ValidateLoftRecords', assembleLoft's and loftmesh.LoftCrossingAuditStructured's, run
+// gate — is loftmesh.ValidateLoftRecords', loftmesh.AssembleTriangulated's and loftmesh.LoftCrossingAuditStructured's, run
 // inside evalLoft in §4's stated order.
 
 // LoftOption configures Loft.
@@ -337,12 +337,12 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	}
 
 	// S13, decided before the first coordinate is lifted into an exact dyadic,
-	// exactly as assembleLoft decides it: tessellation.OrientationSign is not run here,
+	// exactly as loftmesh.AssembleTriangulated decides it: tessellation.OrientationSign is not run here,
 	// but the mass accumulator and the audit both lift every vertex through
 	// dyVec, whose mustDyOf PANICS on a non-finite float.
 	anchor := lp.xform.Apply(lp.plane0.Origin)
 	if !proofbound.FiniteVec(anchor) {
-		return nil, errLoftPointUnrepresentable("placed plane origin")
+		return nil, loftmesh.ErrPointUnrepresentable("placed plane origin")
 	}
 
 	verts := make([]r3.Vec, 0, 2*len(v))
@@ -360,7 +360,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 			maxInputAbs = math.Max(maxInputAbs, proofbound.VecMaxAbs(lifted))
 			placed := lp.xform.Apply(lifted)
 			if !proofbound.FiniteVec(placed) {
-				return nil, errLoftPointUnrepresentable(fmt.Sprintf("placed station %d on the %s walk", j, side.what))
+				return nil, loftmesh.ErrPointUnrepresentable(fmt.Sprintf("placed station %d on the %s walk", j, side.what))
 			}
 			verts = append(verts, placed)
 		}
@@ -368,7 +368,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 
 	// placeAllow is zero exactly when xform is the identity transform — an
 	// exact struct comparison, never a tolerance — and stationRound is the
-	// independent leg beside it, exactly as assembleLoft composes the two.
+	// independent leg beside it, exactly as loftmesh.AssembleTriangulated composes the two.
 	placeAllow := 0.0
 	if lp.xform != r3.Identity() {
 		placeAllow = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(lp.xform.Translation()))

@@ -10,41 +10,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
-	"github.com/lestrrat-3d/sketch"
 )
-
-// The structural match already proved that every retained target loop survives whole.
-// Keep those records verbatim so a wall shared across slabs stays one column;
-// take only the new tool hole from the authenticated arranged profile.
-func canonicalizeStackedCutProfile(budget *proofbound.WorkBudget, target profileRecord, match *sketch.Profile,
-	tags map[sketch.Entity]prismcells.Origin, candidate profileRecord) (profileRecord, error) {
-	if len(match.Holes) != len(candidate.Holes) || len(candidate.Holes) != len(target.Holes)+1 {
-		return profileRecord{}, fmt.Errorf(`%w: the cut profile has an unexpected hole count`, ErrUnsupported)
-	}
-	toolEntities, err := prismcells.LoopEntitySet(budget, tags, true, -1)
-	if err != nil {
-		return profileRecord{}, err
-	}
-	toolIndex := -1
-	for j, hole := range match.Holes {
-		isTool, err := prismcells.LoopMatchesOrigin(budget, hole, toolEntities)
-		if err != nil {
-			return profileRecord{}, err
-		}
-		if isTool {
-			if toolIndex >= 0 {
-				return profileRecord{}, fmt.Errorf(`%w: more than one result hole matches the tool`, ErrUnsupported)
-			}
-			toolIndex = j
-		}
-	}
-	if toolIndex < 0 {
-		return profileRecord{}, fmt.Errorf(`%w: no result hole matches the tool`, ErrUnsupported)
-	}
-	result := profileRecord{Outer: target.Outer, Holes: append([]loopRecord(nil), target.Holes...)}
-	result.Holes = append(result.Holes, candidate.Holes[toolIndex])
-	return result, nil
-}
 
 // tryBlindStackedCut admits a cleanly nested blind tool against a prism,
 // including one that encloses existing holes. The private sketch scene proves
@@ -130,7 +96,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 			kept.Holes = append(kept.Holes, target.profile.Holes[i])
 		}
 	}
-	cutRegion, err = canonicalizeStackedCutProfile(budget, kept, match, tags, cutRegion)
+	cutRegion, err = prismcells.CanonicalStackedCut(budget, kept, match, tags, cutRegion)
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
@@ -394,7 +360,7 @@ func cutStackedSlabs(ctx context.Context, budget *proofbound.WorkBudget, sp stac
 		if err != nil {
 			return stackedPrismPayload{}, false, err
 		}
-		profile, err = canonicalizeStackedCutProfile(budget, target.profile, match, tags, profile)
+		profile, err = prismcells.CanonicalStackedCut(budget, target.profile, match, tags, profile)
 		if err != nil {
 			return stackedPrismPayload{}, false, err
 		}

@@ -706,7 +706,7 @@ func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
 // wall-and-cap triangle set — the very verts/tris loftmesh.LoftCrossingAudit is handed
 // inside a Document.Loft of that shape — by running the same pipeline evalLoft
 // runs ahead of the audit (recordProfile, loftmesh.ValidateLoftRecords, loftmesh.PairRecords,
-// assembleLoft) and stopping at its output. It reuses
+// loftmesh.AssembleTriangulated) and stopping at its output. It reuses
 // loft_chord_calibration_internal_test.go's wedgePlanes/chordedWedgeProfile
 // harness, so the geometry is that file's own m=112-station wedge.
 //
@@ -743,7 +743,7 @@ func chordedWedgeAssembly(t testing.TB, pts [][2]float64) loftmesh.Assembly {
 	frame1, err := r3.NewFrame(plane1.Origin, plane1.U, plane1.V)
 	require.NoError(t, err)
 
-	a, err := assembleLoft(t.Context(), pairs, frame0, frame1, plane0, r3.Identity(), stationRound)
+	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, frame0, frame1, plane0, r3.Identity(), stationRound)
 	require.NoError(t, err)
 	return a
 }
@@ -918,7 +918,7 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 //     for a manifold proof the REFERENCE never needed — it is a plain
 //     surface-area sum, not a solid this file certifies watertight.
 //     denseChordedArea below computes the identical Table B geometry
-//     (loft_build.go's assembleLoft: the diagonal-split lower/upper
+//     (`loftmesh.AssembleTriangulated`: the diagonal-split lower/upper
 //     triangle pair per cell, both caps' own shoelace) directly, in plain
 //     float64 arithmetic, with no sketch and no Document.Loft call at all —
 //     which is also a cleaner independence for a reference to have, and
@@ -996,7 +996,7 @@ func shoelace2DAbs(ring [][2]float64) float64 {
 // denseChordedArea computes the SAME wall-plus-cap area a hand-chorded
 // LineSeg-only wedge loft (chordedWedgeProfile's own outline: origin ->
 // botPts[0] -> ... -> botPts[m] -> origin, bottom and top) would publish
-// through the real Document.Loft/Body.Area() — loft_build.go's assembleLoft
+// through the real Document.Loft/Body.Area() — `loftmesh.AssembleTriangulated`
 // own Table B construction (the diagonal-split lower/upper triangle pair
 // per wall cell, `{vj,vjn,wjn}` then `{vj,wjn,wj}`) and both caps' own
 // shoelace area — computed DIRECTLY, with no sketch and no Document.Loft

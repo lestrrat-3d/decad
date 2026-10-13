@@ -764,7 +764,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	// ends. A free end charges its one walk end's own bound against the point
 	// its segment denotes there (boundarywalk.DenotedStartBound and
 	// DenotedEndBound); an interior post charges both neighbours' ends
-	// (junctionVertexAt), exactly as buildLoopSidesAs does for a closed
+	// (boundarywalk.JunctionVertexAt), exactly as buildLoopSidesAs does for a closed
 	// loop's junctions.
 	bottomV := make([]*Vertex, n+1)
 	topV := make([]*Vertex, n+1)
@@ -782,7 +782,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 			u, v = walks[0].StartU, walks[0].StartV
 			extra = proofbound.WalkEndBoundAllow(boundarywalk.DenotedStartBound(chain.Segments[walks[0].Segs[0]], walks[0].SegmentWalk))
 		default:
-			u, v, extra = junctionVertexAt(chain.Segments, walks[i-1], walks[i])
+			u, v, extra = boundarywalk.JunctionVertexAt(chain.Segments, walks[i-1], walks[i])
 		}
 		bottomV[i] = rimVertex(u, v, pp.z0, pp.z0Delta, extra)
 		topV[i] = rimVertex(u, v, pp.z1, pp.z1Delta, extra)
@@ -814,7 +814,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		}
 		// holeLoop is always false: a chain has no hole, and the whole walk
 		// takes the loop-0 (outer) convention (docs/surface-design.md §13.4).
-		convex, err := rimConvexity(ctx, w, false, work)
+		convex, err := boundarywalk.RimConvexity(ctx, w, false, work)
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}

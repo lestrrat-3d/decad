@@ -295,7 +295,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 	var verts []*Vertex
 	if singleClosed {
 		w := walks[0]
-		seam = rimVertex(junctionVertexAt(loop.Segments, w, w))
+		seam = rimVertex(boundarywalk.JunctionVertexAt(loop.Segments, w, w))
 	} else {
 		verts = make([]*Vertex, n)
 		for i, w := range walks {
@@ -303,7 +303,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 				return nil, err
 			}
 			prev := walks[(i+n-1)%n]
-			verts[i] = rimVertex(junctionVertexAt(loop.Segments, prev, w))
+			verts[i] = rimVertex(boundarywalk.JunctionVertexAt(loop.Segments, prev, w))
 		}
 	}
 
@@ -318,7 +318,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 		} else {
 			start, end = verts[i], verts[(i+1)%n]
 		}
-		convex, err := rimConvexity(ctx, w, holeLoop, work)
+		convex, err := boundarywalk.RimConvexity(ctx, w, holeLoop, work)
 		if err != nil {
 			return nil, err
 		}

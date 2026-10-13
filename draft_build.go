@@ -475,7 +475,7 @@ func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord,
 	verts := make([]*Vertex, n)
 	for i, w := range walks {
 		prev := walks[(i+n-1)%n]
-		u, v, extra := junctionVertexAt(loop.Segments, prev, w)
+		u, v, extra := boundarywalk.JunctionVertexAt(loop.Segments, prev, w)
 		verts[i] = rimVertex(u, v, extra)
 	}
 	co := make([]coedge, n)
@@ -487,7 +487,7 @@ func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord,
 		if singleClosed {
 			end = start
 		}
-		convex, err := rimConvexity(ctx, w, li != 0, work)
+		convex, err := boundarywalk.RimConvexity(ctx, w, li != 0, work)
 		if err != nil {
 			return nil, err
 		}

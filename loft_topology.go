@@ -6,8 +6,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -26,53 +24,6 @@ import (
 // paired sections denote is reached through the payload's proven
 // displacement, never by publishing a ruled patch nothing constructed. See
 // docs/loft-design.md §5.1 and §7.
-
-// assembleLoft lifts every recorded point once, emits the 2*sum(n_i) wall
-// triangles in Table B's order and winding, triangulates both caps through
-// internal/triangulation's polygon-with-holes triangulator with capStart's
-// triples reversed and capEnd's retained (§5's cap seeding), and orients the
-// complete shell once from the signed tetrahedron sum anchored at the placed
-// p0 origin (§5's whole-shell rule). It also owns Table S row S13: every
-// placed coordinate it emits, the anchor among them, is proven finite before
-// any of them is lifted into an exact dyadic.
-//
-// stationRound is loftmesh.PairRecords' own accumulated Table S row S14 term
-// (a10-plan.md Part 3 PR 6): the proven rounding every COMPUTED circular
-// station commits, composed into delta beside the placement's own
-// proofbound.RigidRoundAllow term.
-func assembleLoft(ctx context.Context, pairs []loftmesh.LoopPair, f0, f1 r3.Frame, plane0 planeRecord, xform r3.Transform, stationRound float64) (loftmesh.Assembly, error) {
-	triangulate := func(ctx context.Context, pts []sectionrecord.Point2, loops [][]int) ([][3]int, error) {
-		tris, err := triangulation.Triangulate(ctx, pts, loops)
-		return tris, triangulation.WrapLoftError(err)
-	}
-	return loftmesh.Assemble(ctx, pairs, f0, f1, plane0, xform, stationRound,
-		triangulate, errLoftPointUnrepresentable)
-}
-
-// errLoftPointUnrepresentable is docs/loft-design.md Table S row S13: a
-// coordinate this build emits — a recorded section point lifted through its
-// own frame and carried by the composed placement, or the orientation anchor
-// — runs past the representable float64 range.
-//
-// The sentinel is ErrUnsupported and never ErrNotFinite. Every INPUT is
-// finite: both records' coordinates cleared the seam gates, the plane origins
-// are recorded floats, and r3 validates a Transform's own composed
-// translation before it ever reaches this evaluator. What runs off float64 is
-// decad's OWN evaluation of the lift, and the body EXISTS — it is the rigid
-// image of a body this evaluator already built — so modify §1's existence
-// test reads "a body this evaluator cannot build". internal/freeform/spline_length.go's R15 and
-// spline_fit.go's R16 draw the identical line for a finite input whose
-// derived magnitude runs off float64; errors.go scopes ErrNotFinite to a
-// non-finite PARAMETER or a derived non-finite MEASUREMENT, and
-// validateLoftBodyMeasurements already owns that second case.
-//
-// The gate runs BEFORE the first exact-dyadic lift, never after it:
-// tessellation.OrientationSign lifts the anchor and every vertex through dyVec, whose
-// mustDyOf PANICS on a non-finite float, so a check placed any later is a
-// panic out of a public method rather than a returned error.
-func errLoftPointUnrepresentable(what string) error {
-	return fmt.Errorf(`%w: the loft's %s runs past the representable float64 range`, ErrUnsupported, what)
-}
 
 // loftVertex builds a vertex at a recorded (or lifted-from-recorded)
 // coordinate: every loft vertex position comes from Plane.Origin + p.U*Plane.U

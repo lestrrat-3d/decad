@@ -1052,7 +1052,7 @@ func pullStationsInward(a, b ruledArc, delta float64) (r3.Vec, r3.Vec, r3.Vec, r
 	return vLo, vHi, wLo, wHi
 }
 
-// heldTrianglePairArea is the area assembleLoft's own two wall triangles carry
+// heldTrianglePairArea is the area loftmesh.AssembleTriangulated's own two wall triangles carry
 // over one cell, in the Table B split loft_build.go builds: (vLo, vHi, wHi) and
 // (vLo, wHi, wLo). It is the T_held term of the three-leg composition.
 func heldTrianglePairArea(vLo, vHi, wLo, wHi r3.Vec) float64 {

@@ -12,7 +12,7 @@ The rules for rows live in `docs/layout.md`.
 | `topology.go` | Topology types from `Body` to `Vertex` and public surface and curve variants. See API §6.1 and evaluator §3. |
 | `document.go` | `Document`: live body set, commit, `Remove`, liveness gates, `Transform` and `Copy`. See evaluator §8. |
 | `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
-| `mirror_join.go` | `WithJoin` adapters and section audit. See mirror-pattern §5. |
+| `mirror_join.go` | `WithJoin` adapters over `internal/mirrorjoin/`'s splice and section audit. See mirror-pattern §5. |
 | `pattern.go` | Public pattern specs, entry points and payload adapters. See mirror-pattern §4.3, §6. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, shell/lump and free-edge adapters over `internal/surfacegroup/`. See surface §2-§4, §7, §11. |
 | `feature_options.go` | Public feature option tiers and adapters to `internal/featureoption/`. See surface §4, sweep §2 and loft §2. |
@@ -71,7 +71,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_faces_gate_grid.go` | Band injectivity gate that evaluates each cap map once per tile-grid node. See loft-face-sections design. |
 | `loft_point.go` | Point-section Loft entry, live Sketch source check, apex fan and proof. See loft-point design. |
 | `loft_build.go` | Loft payload, evaluation, placement and tessellation adapter. See loft §5, §8, §12. |
-| `loft_topology.go` | Adapts loft assembly and builds `Body` topology. See loft §5.1, §7. |
+| `loft_topology.go` | Builds loft `Body` topology over `internal/loftmesh/` assembly. See loft §5.1, §7. |
 | `loft_moments.go` | Loft mass adapters and chord proofs. See loft §8, §12. |
 
 ### Cap-loop chamfer

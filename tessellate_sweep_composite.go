@@ -195,7 +195,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		return nil, err
 	}
 	if verify >= VerifyBoundary {
-		if err := compositeCrossSpanContactAudit(auditBudget, auditTris, mesh.triangles, triangleSpan, coordinateBound); err != nil {
+		if err := compositesweep.CrossSpanContactAudit(auditBudget, auditTris, mesh.triangles, triangleSpan, coordinateBound); err != nil {
 			return nil, err
 		}
 	}
@@ -244,39 +244,6 @@ func compositeSpanRings(ctx context.Context, span sweepSpanPayload, mesh *Mesh,
 		}
 	}
 	return start, end, mesh.coordBound, nil
-}
-
-// compositeCrossSpanContactAudit checks only pairs whose triangles came from
-// different spans. Each reduced span already audited its own facet pairs at
-// VerifyBoundary; the shared grid introduces only these new pairs.
-func compositeCrossSpanContactAudit(budget *proofbound.WorkBudget, data []revolvemesh.RevolveAuditTri,
-	triangles [][3]int, spanOf []int, delta float64) error {
-	if len(data) != len(triangles) || len(spanOf) != len(triangles) {
-		return fmt.Errorf(`%w: the composite sweep's facet audit has inconsistent triangle records`, ErrUnsupported)
-	}
-	pairs, ok := proofbound.WallChoose2(uint64(len(triangles)))
-	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		return fmt.Errorf(`%w: the composite sweep's facet-pair audit exceeds its fixed work ceiling`, ErrUnsupported)
-	}
-	margin := proofbound.ProductUpper(2, delta)
-	for i := range triangles {
-		for j := i + 1; j < len(triangles); j++ {
-			if spanOf[i] == spanOf[j] {
-				continue
-			}
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			shared, count := tessellation.SharedVertexIndices(triangles[i], triangles[j])
-			if count == 0 && revolvemesh.BoxGapExceeds(data[i].Box, data[j].Box, margin) {
-				continue
-			}
-			if err := revolvemesh.AuditRevolvePair(data, triangles, shared, count, i, j, delta); err != nil {
-				return err
-			}
-		}
-	}
-	return budget.Err()
 }
 
 func compositeSpanFaceRole(face *Face, span int, reverseCaps bool) (string, error) {

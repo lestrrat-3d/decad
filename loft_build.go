@@ -371,7 +371,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		}
 	}
 
-	a, err := assembleLoft(ctx, pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	a, err := loftmesh.AssembleTriangulated(ctx, pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	if err != nil {
 		return nil, err
 	}

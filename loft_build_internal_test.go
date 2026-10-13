@@ -1144,7 +1144,7 @@ func exactLoftVertexLifts(t *testing.T, pl loftPayload) [][3]*big.Rat {
 	require.NoError(t, err)
 	pairs, _, _, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
-	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
 	require.Equal(t, pl.verts, a.Verts)
 	lift := func(f r3.Frame, p Point2) [3]*big.Rat {
@@ -1187,7 +1187,7 @@ func exactRatMeshVolume(verts [][3]*big.Rat, tris [][3]int) *big.Rat {
 // --- capPolygonAreaRat: docs/loft-design.md §8's cap-polygon shoelace ---
 
 // assembleLoftFixture runs evalLoft's own pairing/assembly prefix
-// (loftmesh.ValidateLoftRecords, loftmesh.PairRecords, assembleLoft) and stops there, so a
+// (loftmesh.ValidateLoftRecords, loftmesh.PairRecords, loftmesh.AssembleTriangulated) and stops there, so a
 // test can inspect the assembled cap polygon (pts0/loopIdx0, pts1/loopIdx1)
 // directly rather than only the published body.
 func assembleLoftFixture(t *testing.T, pl loftPayload) loftmesh.Assembly {
@@ -1196,7 +1196,7 @@ func assembleLoftFixture(t *testing.T, pl loftPayload) loftmesh.Assembly {
 	require.NoError(t, err)
 	pairs, _, _, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
-	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
 	return a
 }
@@ -1222,7 +1222,7 @@ func triangleAreaRat2D(pts []Point2, tri [3]int) *big.Rat {
 // profile (every segment's TStart/TEnd is the natural 0/1, so lerp2 and
 // moments.go's own ratLerp both return the record's own endpoint verbatim,
 // with no rounding on either side) the shoelace of the cap polygon
-// assembleLoft actually built must equal moments.go's own region-level exact
+// loftmesh.AssembleTriangulated actually built must equal moments.go's own region-level exact
 // rational EXACTLY — a big.Rat.Cmp, not a float comparison, since both sides
 // are genuinely the same rational here.
 func TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg(t *testing.T) {
@@ -1269,7 +1269,7 @@ func trimmedLineTriangleProfile() profileRecord {
 // TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg is the counterpart
 // of the untrimmed case above, and the acceptance line for the case where
 // the two rationals genuinely disagree. On a TRIMMED LineSeg profile the
-// corner assembleLoft walks into the cap's own triangles is NOT the corner
+// corner loftmesh.AssembleTriangulated walks into the cap's own triangles is NOT the corner
 // moments.go's record-level integral reads (this file's
 // trimmedLineTriangleProfile doc comment), and the cap reading has to follow
 // the walked one: the published cap Area equals, EXACTLY, the sum of the
@@ -1299,7 +1299,7 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 
 	// The other rational this cap could have been read from: moments.go's
 	// own region-level integral of the record, independent of whatever
-	// assembleLoft actually walked.
+	// loftmesh.AssembleTriangulated actually walked.
 	ig, err := p.IntegralsTo(freeform.MomentAreaOrder)
 	require.NoError(t, err)
 	require.False(t, ig.ExactDead)
@@ -1393,7 +1393,7 @@ func loftPayloadFor(t *testing.T, p0, p1 profileRecord, o0, o1 r3.Vec) loftPaylo
 // rigid placement, so the table also covers the delta > 0 arm of
 // loftMassAccumulator.area (its perturbAreaSum term, docs/loft-design.md §12
 // PR 2a). The cap polygon itself is PLANE-LOCAL and so is untouched by the
-// placement (assembleLoft's pts0/pts1 are the pairs' own (U, V) points), which
+// placement (loftmesh.AssembleTriangulated's pts0/pts1 are the pairs' own (U, V) points), which
 // is exactly why a placed row still admits the same exact-rational equality.
 func placedHoleLoftPayload(t *testing.T) loftPayload {
 	t.Helper()
@@ -1422,7 +1422,7 @@ func placedHoleLoftPayload(t *testing.T) loftPayload {
 //
 // The two halves:
 //
-//   - capPolygonAreaRat over the polygon assembleLoft ACTUALLY assembled must
+//   - capPolygonAreaRat over the polygon loftmesh.AssembleTriangulated ACTUALLY assembled must
 //     equal, as an exact rational, moments.go's own region-level integral of
 //     the same record — and that integral nets holes out per loop already
 //     (integrateMomentRecordWithPoll walks Outer then every hole). Dropping a

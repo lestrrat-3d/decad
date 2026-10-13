@@ -171,7 +171,7 @@ func loftCentroidRebuild(t *testing.T, pl loftPayload) (*loftMassAccumulator, lo
 	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
 	require.True(t, sectionDelta > 0 || sectionMatchedDelta > 0, "the fixture must be chorded")
-	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
 	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
 	matchedDelta := loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.Delta)

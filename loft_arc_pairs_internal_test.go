@@ -306,7 +306,7 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	chorded := loftmesh.ComputeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, 0, false)
 
 	// The independent reference: the quarter lateral frustum's own closed
-	// form, and the SAME two-triangle split assembleLoft's own Table B uses,
+	// form, and the SAME two-triangle split loftmesh.AssembleTriangulated's own Table B uses,
 	// summed by hand over the identical stations.
 	slant := math.Hypot(r0-r1, h)
 	trueWall := math.Pi / 4 * (r0 + r1) * slant
