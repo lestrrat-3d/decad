@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismextent"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -354,7 +355,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		// (extrude.go's circularExtremeInterval) — and it displaces the reading
 		// IN PLANE, so it composes with the axial terms above rather than
 		// replacing either.
-		l, h, planeAllow, err := boundaryExtremesBoundedContext(ctx, profileRecord{Outer: loop}, gu, gv, work, nil)
+		l, h, planeAllow, err := prismextent.ProfileBoundaryExtremes(ctx, profileRecord{Outer: loop}, gu, gv, work, nil)
 		if err != nil {
 			return 0, 0, 0, err
 		}
@@ -378,7 +379,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		if err != nil {
 			return 0, 0, 0, err
 		}
-		cl, ch, contourPlaneAllow, err := boundaryExtremesBoundedContext(ctx, profileRecord{Outer: contour}, gu, gv, work, nil)
+		cl, ch, contourPlaneAllow, err := prismextent.ProfileBoundaryExtremes(ctx, profileRecord{Outer: contour}, gu, gv, work, nil)
 		if err != nil {
 			return 0, 0, 0, err
 		}

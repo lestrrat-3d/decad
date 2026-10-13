@@ -61,7 +61,7 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 		trim = math.Max(trim, cl.MaxSag)
 		capSlack = proofbound.AbsSumUpper(capSlack, cl.CapSlack)
 	}
-	if err := requireRecordLoopClearance(ctx, points, loopIndices, loopSag); err != nil {
+	if err := tessellation.RequireLoopClearance(ctx, points, loopIndices, loopSag); err != nil {
 		return nil, err
 	}
 	triangles, err := triangulation.Triangulate(ctx, points, loopIndices)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismextent"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -275,7 +276,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 			require.Less(t, w.StartBound.U, 1e-15,
 				`the bound is this endpoint's own displacement, not the circle's extent`)
 
-			lo, hi, bound, err := boundaryExtremesBoundedContext(
+			lo, hi, bound, err := prismextent.ProfileBoundaryExtremes(
 				t.Context(), oneSegmentProfile(tc.seg), 1, 0, freeform.NewFreeformWork(), nil)
 			require.NoError(t, err)
 			require.Positive(t, bound)
@@ -303,7 +304,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		require.Positive(t, w.StartBound.U)
 		require.Equal(t, proofbound.WalkEndBound{}, w.EndBound, `t = 1 names the recorded End`)
 
-		lo, hi, bound, err := boundaryExtremesBoundedContext(
+		lo, hi, bound, err := prismextent.ProfileBoundaryExtremes(
 			t.Context(), oneSegmentProfile(seg), 1, 0, freeform.NewFreeformWork(), nil)
 		require.NoError(t, err)
 		require.Positive(t, bound)
@@ -324,7 +325,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, w.StartBound.Derivable())
 
-		_, _, _, err = boundaryExtremesBoundedContext(
+		_, _, _, err = prismextent.ProfileBoundaryExtremes(
 			t.Context(), oneSegmentProfile(seg), 1, 0, freeform.NewFreeformWork(), nil)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
@@ -365,7 +366,7 @@ func TestBoundaryExtremesKeepAProvenZero(t *testing.T) {
 		{name: "whole circle", profile: oneSegmentProfile(wholeCircle), lo: -1, hi: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			lo, hi, bound, err := boundaryExtremesBoundedContext(
+			lo, hi, bound, err := prismextent.ProfileBoundaryExtremes(
 				t.Context(), tc.profile, 1, 0, freeform.NewFreeformWork(), nil)
 			require.NoError(t, err)
 			require.Equal(t, 0.0, bound, `every candidate here is a value the record states exactly`)
@@ -403,7 +404,7 @@ func walkEndFromModel(w survey2d.SegmentWalk) Point2 {
 // within ONE evalPrismContext call, buildLoopSidesAs,
 // momentinput.CoordinateEnvelope (via prismCentroidGeometryBound and, four times
 // over, prismBoundsContext's per-axis extentBoundedAlong) and
-// boundaryExtremesBoundedContext (three times, also via extentBoundedAlong)
+// prismextent.ProfileBoundaryExtremes (three times, also via extentBoundedAlong)
 // each used to call walkOf on the SAME recorded segment, so one free-form
 // segment's conversion-and-bracket charge was spent eight times over instead
 // of once. momentinput.ProfileWalks (extrude.go) resolves every segment's walk exactly
@@ -547,8 +548,8 @@ func TestProfileWalksMismatchRefuses(t *testing.T) {
 		_, err := momentinput.CoordinateUpper(involute, freeform.NewFreeformWork(), wrongWalks)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
-	t.Run("boundaryExtremesBoundedContext", func(t *testing.T) {
-		_, _, _, err := boundaryExtremesBoundedContext(t.Context(), involute, 1, 0, freeform.NewFreeformWork(), wrongWalks)
+	t.Run("ProfileBoundaryExtremes", func(t *testing.T) {
+		_, _, _, err := prismextent.ProfileBoundaryExtremes(t.Context(), involute, 1, 0, freeform.NewFreeformWork(), wrongWalks)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 }
@@ -603,8 +604,8 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 		_, err := momentinput.CoordinateUpper(far, freeform.NewFreeformWork(), pw)
 		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
-	t.Run("boundaryExtremesBoundedContext", func(t *testing.T) {
-		_, _, _, err := boundaryExtremesBoundedContext(t.Context(), far, 1, 0, freeform.NewFreeformWork(), pw)
+	t.Run("ProfileBoundaryExtremes", func(t *testing.T) {
+		_, _, _, err := prismextent.ProfileBoundaryExtremes(t.Context(), far, 1, 0, freeform.NewFreeformWork(), pw)
 		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
 	t.Run("buildLoopSidesAs", func(t *testing.T) {

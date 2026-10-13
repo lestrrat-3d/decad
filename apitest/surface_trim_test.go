@@ -192,10 +192,10 @@ func TestSurfaceTrimBoundsChargesAnExtremeWonByACut(t *testing.T) {
 	// The bound must clear the incidental float-evaluation noise
 	// lineWalkEndBound's own lerp2-vs-exact-rational comparison carries even
 	// with no δ_cut charge at all (measured at 7.1e-15 mm for this fixture,
-	// gating trimBoundsWalks's own augmentation off) — a bare > 0 assertion
+	// gating prismcells.TrimProfileWalks's own augmentation off) — a bare > 0 assertion
 	// would pass on that noise alone and prove nothing about δ_cut. The
 	// proven bound charging it measures 1.8e-13 mm here, over an order above
-	// that floor. Shown-to-fail: gating trimBoundsWalks off drops this bound
+	// that floor. Shown-to-fail: gating prismcells.TrimProfileWalks off drops this bound
 	// under 5e-14 and turns this assertion red.
 	require.Greater(t, bounds.Bound.Base(), 5e-14)
 	// The y-extremes (0 and 60) are won either by an untouched corner or by

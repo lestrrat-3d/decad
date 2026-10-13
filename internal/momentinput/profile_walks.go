@@ -22,7 +22,7 @@ import (
 // evalPrismContext call, buildLoopSidesAs, CoordinateEnvelope (called
 // from prismCentroidGeometryBound and, four times over, from
 // prismBoundsContext's per-axis extentBoundedAlong) and
-// boundaryExtremesBoundedContext (three times, also from extentBoundedAlong)
+// prismextent.ProfileBoundaryExtremes (three times, also from extentBoundedAlong)
 // each used to call walkOf on the SAME recorded segment — eight resolutions of
 // one segment, each recharging §5.2's exact-rational counter in full. On a
 // 15-point involute fit spline that alone charged 230,168 units eight times

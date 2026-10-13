@@ -165,7 +165,7 @@ import (
 //     while staying the rounding it is.
 //   - the same plane-local dot product gu·u + gv·v evaluated at every CANDIDATE
 //     the boundary-extreme scan folds (extrude.go's
-//     boundaryExtremesBoundedContext), where no single u and v is available to
+//     prismextent.ProfileBoundaryExtremes), where no single u and v is available to
 //     measure against → PlaneDotDecompositionRoundAllow, ExactPlaneDotRound's
 //     envelope-scaled sibling: the anchor helper answers for ONE stated point,
 //     this one for a whole scan, at the SECTION's own coordinate envelope
@@ -2983,7 +2983,7 @@ func DirectionalPerturbationAllow(dirBound, envelopeUpper float64) float64 {
 // A charged component answers zero exactly where its bound is zero or its
 // coefficient is: a coordinate the record states verbatim, read through a
 // direction this evaluator reads as an exact leaf, has no width for a directed
-// rounding to invent (boundaryExtremesBoundedContext's own convention). A
+// rounding to invent (prismextent.ProfileBoundaryExtremes's own convention). A
 // non-finite bound answers +Inf, never 0, so an absent bound never reads as a
 // small one.
 func PointPerturbationAllow(bound WalkEndBound, gu, gv float64) float64 {
@@ -3118,7 +3118,7 @@ func ExactPlaneDotRound(gu, gv, u, v, held float64) float64 {
 
 // PlaneDotDecompositionRoundAllow bounds the rounding the boundary-extreme
 // scan's OWN evaluation of gu·u + gv·v commits over every candidate it folds
-// (extrude.go's boundaryExtremesBoundedContext), given gu and gv themselves
+// (extrude.go's prismextent.ProfileBoundaryExtremes), given gu and gv themselves
 // already proven against the frame, axis and placement chain that produced them
 // — the caller's own coefficient terms. It is ExactPlaneDotRound scaled to a
 // whole scan: that helper measures ONE stated (u, v) exactly, and the scan

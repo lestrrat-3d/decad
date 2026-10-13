@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -480,7 +481,7 @@ func (pp chainPayload) z1Scalar() proofbound.BoundedScalar {
 // trimmed ribbon's UNTOUCHED extremes too — exactly the ones T170 requires to
 // stay bit-identical to the untrimmed sheet's own. The tight, per-extreme
 // charge this design actually needs is carried instead by the WALKS
-// evalChainExtrudeContext resolves through trimBoundsWalks
+// evalChainExtrudeContext resolves through prismcells.TrimProfileWalks
 // (surface_trim.go) when pp.sectionDelta != 0, never by this view's own
 // field. The first chain stands in for a profile's outer loop, the rest for
 // its holes — extentBoundedAlong reads every one the same way, caring only
@@ -668,13 +669,13 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	// construction that ever sets it, docs/surface-intersection-design.md
 	// §3.4) reads its extent through walks that charge §7's δ_cut into
 	// exactly the endpoint a cut produced, never into one the record states
-	// verbatim (trimBoundsWalks, surface_trim.go). A plain chain Extrude
+	// verbatim (prismcells.TrimProfileWalks). A plain chain Extrude
 	// ribbon has zero sectionDelta and reuses the walks resolved for its sides.
 	view := pp.prism()
 	var boundsWalks *momentinput.ProfileWalks
 	if pp.sectionDelta != 0 {
 		var err error
-		boundsWalks, err = trimBoundsWalks(view.profile, work)
+		boundsWalks, err = prismcells.TrimProfileWalks(view.profile, work)
 		if err != nil {
 			return nil, err
 		}

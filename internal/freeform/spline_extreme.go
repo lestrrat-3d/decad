@@ -148,7 +148,7 @@ var ErrFreeformExtremeUnrepresentable = fmt.Errorf(
 )
 
 // FreeformExtremeFloats is the ONE conversion from a span's exact rational
-// enclosure into the float64 interval boundaryExtremesBoundedContext folds,
+// enclosure into the float64 interval prismextent.ProfileBoundaryExtremes folds,
 // and it is where an enclosure the float64 range cannot state refuses.
 //
 // Rounding outward is not enough on its own: an enclosure past MaxFloat64

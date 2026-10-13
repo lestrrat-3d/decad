@@ -89,7 +89,7 @@ func ResolveSide(line Line2, readings SideExtremes) (SideResult, error) {
 	rlo, rhi, rBound := readings.RLo, readings.RHi, readings.RBound
 	zlo, zhi, zBound := readings.ZLo, readings.ZHi, readings.ZBound
 	coordUpper := readings.CoordUpper
-	// boundaryExtremesBoundedContext's own returned bound charges each
+	// prismextent.ProfileBoundaryExtremes's own returned bound charges each
 	// candidate's POSITIONAL uncertainty (a walked endpoint's own proven
 	// displacement, a circular candidate's own enclosure) but NOT the
 	// multiply-and-sum arithmetic of evaluating gu·u + gv·v itself for a

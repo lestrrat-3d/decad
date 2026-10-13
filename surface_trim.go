@@ -5,13 +5,10 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
 // This file implements Body.Trim, Body.Extend and Document.Split. Their §2.1
@@ -395,43 +392,6 @@ func admitTrimPair(budget *proofbound.WorkBudget, receiver, tool *Body) (rcv, tl
 // The trim record's cut charges are shared with revolve callers.
 func trimProfileFullyWhole(budget *proofbound.WorkBudget, p profileRecord) (bool, error) {
 	return prismcells.TrimProfileFullyWhole(budget, p.Outer, p.Holes)
-}
-
-// trimBoundsWalks resolves profile's Outer-then-Holes walks for a trimmed
-// ribbon's own Bounds reading (docs/surface-intersection-design.md §7),
-// charging trimCutChargeUV into exactly the endpoint bound whose OWN
-// recorded parameter is not a natural bound (0 or 1, per field — never per
-// segment, since a segment cut on only one side keeps its natural end exact)
-// — the coordinate the arrangement computed for that end, never one the
-// record states verbatim. An endpoint whose own parameter IS natural gets no
-// charge, whether or not the segment's OTHER end was cut, which is what lets
-// an extreme won by an untouched vertex stay exactly as tight as the
-// untrimmed sheet's own (T170) while an extreme won by a genuine cut point
-// carries the bound its own construction owes (docs/surface-design.md's
-// end-cut fixture). The decision reads only the two recorded floats — never a
-// coordinate comparison, never whether a value "looks like" it moved.
-//
-// This is never called for a plain chain Extrude ribbon: evalChainExtrudeContext
-// gates it on pp.sectionDelta != 0, which no construction but this design's
-// Trim ever sets, so an ordinary ribbon keeps resolving through walkOf with
-// no augmentation.
-func trimBoundsWalks(profile profileRecord, work *freeform.FreeformWork) (*momentinput.ProfileWalks, error) {
-	before, beforeRecon := boundarywalk.WorkSpent(work)
-	outer, holes, err := prismcells.TrimBoundsWalks(profile.Outer, profile.Holes, func(seg curveSegment) (survey2d.SegmentWalk, error) {
-		return boundarywalk.WalkOf(seg, work)
-	})
-	if err != nil {
-		return nil, err
-	}
-	after, afterRecon := boundarywalk.WorkSpent(work)
-	return &momentinput.ProfileWalks{
-		Profile:             profile,
-		Outer:               outer,
-		Holes:               holes,
-		Spent:               after - before,
-		ReconstructionSpent: afterRecon - beforeRecon,
-		Metered:             true,
-	}, nil
 }
 
 // Split cuts target with tool and returns one solid per arranged target cell

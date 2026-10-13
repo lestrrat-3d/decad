@@ -8,8 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismextent"
 
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -91,7 +89,7 @@ func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *f
 		Profile: pp.profile, Frame: pp.frame, Transform: pp.xform,
 		Z0: pp.z0, Z1: pp.z1, Base: base, GU: gu, GV: gv, GZ: gz,
 		Direction: g,
-	}, work, walks, boundaryExtremesBoundedContext)
+	}, work, walks, prismextent.ProfileBoundaryExtremes)
 }
 
 // prismPlacementCoeffAllow adapts the held prism frame for prismextent.
@@ -112,22 +110,4 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeform.Fre
 		Exactness: exactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}, nil
-}
-
-// boundaryExtremesBoundedContext adapts recorded profile walks for prismextent.
-func boundaryExtremesBoundedContext(ctx context.Context, profile profileRecord, gu, gv float64, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, float64, float64, error) {
-	if err := freeform.RequireFiniteDirection(gu, gv); err != nil {
-		return 0, 0, 0, err
-	}
-	if walks != nil && !walks.Matches(profile) {
-		return 0, 0, 0, momentinput.ErrResolvedWalksMismatch
-	}
-	loops := append([]loopRecord{profile.Outer}, profile.Holes...)
-	counts := make([]int, len(loops))
-	for li, loop := range loops {
-		counts[li] = len(loop.Segments)
-	}
-	return prismextent.BoundaryExtremesBoundedContext(ctx, gu, gv, work, counts, func(li, si int) (survey2d.SegmentWalk, error) {
-		return momentinput.ResolveOrRead(loops[li].Segments[si], work, walks, li, si)
-	})
 }

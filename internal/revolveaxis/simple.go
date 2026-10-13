@@ -68,7 +68,7 @@ import (
 // profile) is read as un-proven rather than as an error: this leg only ever
 // admits, so withholding admission is always the safe outcome.
 //
-// boundaryExtremesBoundedContext reads the raw functional nU*u+nV*v over the
+// prismextent.ProfileBoundaryExtremes reads the raw functional nU*u+nV*v over the
 // profile boundary and charges every rounding IT commits into rBound. It does
 // NOT charge the axis anchor's own offset, roff = nU*aU+nV*aV, which this leg
 // still has to subtract to reach the axis-relative ρ axisFrame's own doc
@@ -88,7 +88,7 @@ import (
 // provably covers every operation between the extremes call and the
 // comparison — never a number the accompanying bound does not cover.
 //
-// scan is the root's profile extreme reader (boundaryExtremesBoundedContext),
+// scan is the root's profile extreme reader (prismextent.ProfileBoundaryExtremes),
 // injected as ExtentAlong's is.
 func ProvesSimple(ctx context.Context, profile momentinput.Profile, ax Frame, full, radialProof bool,
 	sectionDelta float64, scan ExtentScan) bool {

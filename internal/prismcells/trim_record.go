@@ -225,7 +225,7 @@ func SegmentParamRange(seg CurveSegment) (t0, t1 float64, err error) {
 	}
 }
 
-// TrimCutChargeUV is trimBoundsWalks's own per-component reading of §7's
+// TrimCutChargeUV is TrimProfileWalks's own per-component reading of §7's
 // δ_cut: how far a cut endpoint's u and v coordinates can EACH sit from the
 // crossing they denote, given proofbound.CutDisplacementAllow's own parameter-to-
 // coordinate scaling (internal/proofbound/bounds.go). A CircleSeg/ArcSeg's position varies with
@@ -259,7 +259,7 @@ func TrimCutChargeUV(seg CurveSegment) (chargeU, chargeV float64, err error) {
 	return charge, charge, nil
 }
 
-// TrimRevolveSegmentCharges is trimBoundsWalks's own per-endpoint rule, read
+// TrimRevolveSegmentCharges is TrimProfileWalks's own per-endpoint rule, read
 // for the revolve family (docs/surface-intersection-design.md §7.1): the
 // per-component charge trimCutChargeUV states lands at exactly the endpoint
 // whose OWN recorded parameter is not a natural bound (0 or 1, per field —
