@@ -688,7 +688,9 @@ input section must have no holes, zero section displacement, and only whole
 refused because this path has no proof for their shared source span. A
 circular prism joined to radial copies of one fitted section has a separate
 certified path in `docs/prism-pattern-union-design.md`. Other multi-prism
-classes return `ErrUnsupported` while all inputs remain live.
+classes enter `Union`'s certified two-body evaluator in source order after
+the specialized multi-body gates miss. A pair refusal leaves every original
+operand live.
 
 Every source region enters `BuildSceneRegions` once, in the same plane. The
 work cap applies to the sum of all input segments. `SplitRuns` resolves
@@ -701,6 +703,13 @@ the maximum of the inputs' axial endpoint bounds and one cut-parameter
 section charge. A group also carries its disjointness walk charge. One
 document commit retires every input after result evaluation succeeds and
 the context remains live.
+
+The sequential prism fallback builds every intermediate body without
+registering or retiring it. It assigns a distinct producer identity to each
+pair result and reserves the full identity span when the final result commits.
+It does not retry an error from the one-scene or specialized evaluator. Its
+output may be analytic or faceted according to the pair evaluator; every pair
+must pass its existing boundary and occupied-volume proof.
 
 ## 5. Authentication
 

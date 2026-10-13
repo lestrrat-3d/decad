@@ -1026,7 +1026,10 @@ builds one result and retires every input together. The exact prism class
 accepts hole-free whole-line sections on the identical recorded plane and
 sweep interval, with distinct source line carriers. It arranges every section
 in one Sketch scene, audits the resulting boundary, and charges its cuts
-once. Other prism placements and profiles return `ErrUnsupported`.
+once. Other prism inputs enter the two-body evaluator in source order after
+the specialized multi-body classes miss. Each intermediate result stays
+transient; the final result commits only if every pair passes its proof.
+A pair can still return `ErrUnsupported`.
 
 The bounded mirrored-Loft class accepts one exact centered circular prism
 and up to thirty-two copies of an authenticated three-station reflected Loft
@@ -1048,7 +1051,8 @@ The tool sectors must be proven disjoint. The
 evaluator cuts the blank and all spiral tools in one mesh Boolean, certifies
 each root and cap contact against its original tooth source, and commits one
 body only after the complete output passes the boundary, volume and topology
-audits. Other multi-body classes return `ErrUnsupported`.
+audits. Multi-body inputs outside these classes and the prism pair chain
+return `ErrUnsupported`.
 A call with no `others` returns `ErrDegenerate`; a
 zero-body call does not compile. A failed or canceled call leaves every
 operand live.
