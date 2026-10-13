@@ -2,6 +2,7 @@ package loftmesh
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -89,6 +90,13 @@ type LoftAuditData struct {
 	tris        [][3]int
 	projAxes    []uint8
 	projected   [3][]meshbool.Xp2
+	// certAxes, projUV and projFinite are the dense float copies of the
+	// projections vertexCertificateFloat reads: per triangle the axis pair,
+	// per (axis pair, vertex) the Fu, Fv of its Xp2 (two floats) and its
+	// FloatFinite. They are built in the constructor and never written after.
+	certAxes   []uint8
+	projUV     [3][]float64
+	projFinite [3][]bool
 }
 
 // LoftExactPlane is an owned integer numerator for the oriented plane through
@@ -249,13 +257,19 @@ func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
 	for p := range need {
 		if need[p] != nil {
 			projected[p] = make([]meshbool.Xp2, len(exact))
+			d.projUV[p] = make([]float64, 2*len(exact))
+			d.projFinite[p] = make([]bool, len(exact))
 		}
 	}
+	d.certAxes = projAxes
 	axes := [3][2]int{{0, 1}, {2, 0}, {1, 2}}
 	_, _ = orderedwork.Each(len(exact), workers, 512, nil, func(vi int) error {
 		for p := range need {
 			if need[p] != nil && need[p][vi] {
-				projected[p][vi] = meshbool.NewXP2FromXpt(exact[vi], axes[p][0], axes[p][1])
+				x := meshbool.NewXP2FromXpt(exact[vi], axes[p][0], axes[p][1])
+				projected[p][vi] = x
+				d.projUV[p][2*vi], d.projUV[p][2*vi+1] = x.Fu, x.Fv
+				d.projFinite[p][vi] = x.FloatFinite
 			}
 		}
 		return nil
@@ -614,13 +628,16 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 // signs are read only for a pair sharing no vertex; nil means compute them.
 func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts,
 	knownA, knownB *[3]int) (LoftPairOutcome, error) {
+	shared, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
+	if shortcuts.Certificates && sharedCount == 1 && data.vertexCertificateFloat(tris, i, j, shared[0]) {
+		return LoftPairVertexCertificate, nil
+	}
 	ta := data.corners(i)
 	tb := data.corners(j)
 	xta := data.xtri(i)
 	xtb := data.xtri(j)
 	na := data.Norms[i]
 	nb := data.Norms[j]
-	shared, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
 	if sharedCount == 2 {
 		edgeA, edgeB := data.Xverts[shared[0]], data.Xverts[shared[1]]
 		apex := data.Xverts[tessellation.TriangleApexIndex(tris[j], shared[0], shared[1])]
@@ -696,6 +713,147 @@ func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, short
 	default:
 		return LoftPairClassified, ErrLoftContact(i, j, "share an unexpected vertex count")
 	}
+}
+
+// vertexCertificateFloat replays the one-shared-vertex certificates
+// (coplanar, then j isolated by plane i, then i isolated by plane j) on
+// float-certain signs only. It returns true when one fires; false sends
+// the pair down the unchanged exact path.
+//
+// Soundness: every sign it uses is one the exact path also uses, obtained the
+// same way. A plane side is proof.OrientSignFloat's sign, which the exact
+// path's planeSigns returns whenever that filter is certain (its error bound
+// is stated on OrientSignFloat). The one corner whose float sign may be
+// uncertain is the shared vertex itself: it is a corner of the plane's own
+// triangle, so the exact fallback (n . (v - a) for the exact normal n of that
+// triangle and v one of its exact corners) is identically zero, and the sign
+// is taken as 0. A line side is meshbool.Cross2xSign's float filter, run on
+// the same Fu, Fv and FloatFinite values (copied from the same Xp2) with the
+// same det, scale, 1e-12 and range tests, which Cross2xSign returns whenever
+// it decides. Only a decided sign is consumed, and the certificate is the same
+// boolean function of those signs as the exact path's, evaluated in the same
+// order. An undecided sign returns false, so the pair takes the exact path and
+// the answer never depends on a guess.
+func (d *LoftAuditData) vertexCertificateFloat(tris [][3]int, i, j, shared int) bool {
+	ti, tj := d.corners(i), d.corners(j)
+	signsB, ok := floatPlaneSigns(ti, tj, tris[j], shared)
+	if !ok {
+		return false
+	}
+	if meshbool.CountZero(signsB) == 3 {
+		res, ok := d.coplanarVertexCertificateFloat(tris[i], tris[j], i, j, shared)
+		if !ok {
+			return false
+		}
+		if res {
+			return true
+		}
+	}
+	if IsolatedSharedVertex(tris[j], shared, signsB) {
+		return true
+	}
+	signsA, ok := floatPlaneSigns(tj, ti, tris[i], shared)
+	if !ok {
+		return false
+	}
+	return IsolatedSharedVertex(tris[i], shared, signsA)
+}
+
+// floatPlaneSigns is the float-certain sign of each corner of other (whose
+// vertex indices are otherTri) against the plane of plane's triangle, which
+// has the corner with index shared in common. The shared corner reads 0 when
+// its float sign is uncertain, as vertexCertificateFloat documents.
+func floatPlaneSigns(plane, other [3]r3.Vec, otherTri [3]int, shared int) ([3]int, bool) {
+	var signs [3]int
+	for k := range signs {
+		s, ok := proof.OrientSignFloat(plane[0], plane[1], plane[2], other[k])
+		if ok {
+			signs[k] = s
+			continue
+		}
+		if otherTri[k] != shared {
+			return signs, false
+		}
+	}
+	return signs, true
+}
+
+// coplanarVertexCertificateFloat is CoplanarIsolatedSharedVertex over the
+// dense float projections. ok is false when a sign it needed was undecided.
+func (d *LoftAuditData) coplanarVertexCertificateFloat(a, b [3]int, i, j, shared int) (bool, bool) {
+	if len(d.certAxes) == 0 {
+		return false, false
+	}
+	pa, pb := d.certAxes[i], d.certAxes[j]
+	uvA, uvB := d.projUV[pa], d.projUV[pb]
+	finA, finB := d.projFinite[pa], d.projFinite[pb]
+	if uvA == nil || uvB == nil {
+		return false, false
+	}
+	var aOther, bOther [2]int
+	countA, countB := 0, 0
+	for _, vertex := range a {
+		if vertex != shared {
+			aOther[countA] = vertex
+			countA++
+		}
+	}
+	for _, vertex := range b {
+		if vertex != shared {
+			bOther[countB] = vertex
+			countB++
+		}
+	}
+	for k := range 2 {
+		side, ok := crossSignFloat(uvA, finA, shared, aOther[k], aOther[1-k], uvA, finA)
+		if !ok {
+			return false, false
+		}
+		if side == 0 {
+			continue
+		}
+		s0, ok := crossSignFloat(uvA, finA, shared, aOther[k], bOther[0], uvB, finB)
+		if !ok {
+			return false, false
+		}
+		if s0 != -side {
+			continue
+		}
+		s1, ok := crossSignFloat(uvA, finA, shared, aOther[k], bOther[1], uvB, finB)
+		if !ok {
+			return false, false
+		}
+		if s1 == -side {
+			return true, true
+		}
+	}
+	return false, true
+}
+
+// crossSignFloat is meshbool.Cross2xSign's float filter on dense vertex
+// projections: points v and p come from the table (uv, fin), the third point c
+// from (uvC, finC). The second result is false when the filter does not decide.
+func crossSignFloat(uv []float64, fin []bool, va, vb, vc int, uvC []float64, finC []bool) (int, bool) {
+	if !fin[va] || !fin[vb] || !finC[vc] {
+		return 0, false
+	}
+	au, av := uv[2*va], uv[2*va+1]
+	bu, bv := uv[2*vb], uv[2*vb+1]
+	cu, cv := uvC[2*vc], uvC[2*vc+1]
+	det := (bu-au)*(cv-av) - (bv-av)*(cu-au)
+	scale := (proof.Abs(bu)+proof.Abs(au))*(proof.Abs(cv)+proof.Abs(av)) +
+		(proof.Abs(bv)+proof.Abs(av))*(proof.Abs(cu)+proof.Abs(au))
+	err := 1e-12 * scale
+	if det != det || det > math.MaxFloat64 || det < -math.MaxFloat64 || err > math.MaxFloat64 || err <= 0 {
+		return 0, false
+	}
+	if det > err {
+		return 1, true
+	}
+	if det < -err {
+		return -1, true
+	}
+	return 0, false
 }
 
 // CoplanarIsolatedSharedVertex proves that two coplanar triangles meet only
