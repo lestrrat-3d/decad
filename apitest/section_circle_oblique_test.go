@@ -80,9 +80,87 @@ func TestSectionObliqueCylinderPlacementAndReverseAxis(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 }
 
-func TestSectionObliqueCylinderRefusesCapCrossing(t *testing.T) {
+func TestSectionObliqueCylinderCapCrossingFeedsVerifiedExtrude(t *testing.T) {
 	_, source := circleSectionSourceSized(t, 0, 0, 2, 10)
 	frame := obliqueCylinderPlane(t, r3.NewVec(0, 0, 9), r3.NewVec(1, 0, 0))
+	section, profiles, err := source.Section(t.Context(), frame)
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	require.True(t, profiles[0].Valid)
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+		D: units.Millimeters(2), Dir: decad.Along,
+	})
+	require.NoError(t, err)
+	volume, err := child.Volume()
+	require.NoError(t, err)
+	want := 2 * math.Sqrt2 * (8*math.Pi/3 + math.Sqrt(3))
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-want), volume.Bound.Base())
+	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Less(t, mesh.Bound().Base(), 0.1)
+	t.Logf("cap crossing: child volume %.12f, volume bound %.12f, mesh bound %.12f",
+		volume.Value.Base(), volume.Bound.Base(), mesh.Bound().Base())
+}
+
+func TestSectionObliqueCylinderRefusesTwoCapCrossing(t *testing.T) {
+	_, source := circleSectionSourceSized(t, 0, 0, 2, 2)
+	frame := obliqueCylinderPlane(t, r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0))
+	section, profiles, err := source.Section(t.Context(), frame)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Nil(t, section)
+	require.Nil(t, profiles)
+}
+
+func TestSectionObliqueCylinderBottomCapCrossingFeedsVerifiedExtrude(t *testing.T) {
+	_, source := circleSectionSourceSized(t, 0, 0, 2, 10)
+	frame := obliqueCylinderPlane(t, r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0))
+	section, profiles, err := source.Section(t.Context(), frame)
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+		D: units.Millimeters(2), Dir: decad.Along,
+	})
+	require.NoError(t, err)
+	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
+func TestSectionObliqueCylinderPlacedCapCrossingFeedsVerifiedExtrude(t *testing.T) {
+	_, source := circleSectionSourceSized(t, 1, -2, 2, 10)
+	placement, err := r3.FromBasis(r3.Basis{
+		EX: r3.Vec{X: 1}, EY: r3.Vec{Y: 1}, EZ: r3.Vec{Z: 1},
+	}, r3.NewVec(3, 4, 7))
+	require.NoError(t, err)
+	placed, err := decad.Transform(t.Context(), source, placement)
+	require.NoError(t, err)
+	frame := obliqueCylinderPlane(t, r3.NewVec(4, 2, 16), r3.NewVec(1, 0, 0))
+	section, profiles, err := placed.Section(t.Context(), frame)
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+		D: units.Millimeters(2), Dir: decad.Along,
+	})
+	require.NoError(t, err)
+	volume, err := child.Volume()
+	require.NoError(t, err)
+	want := 2 * math.Sqrt2 * (8*math.Pi/3 + math.Sqrt(3))
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-want), volume.Bound.Base())
+	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
+func TestSectionObliqueCylinderRefusesCapTangent(t *testing.T) {
+	_, source := circleSectionSourceSized(t, 0, 0, 2, 10)
+	frame := obliqueCylinderPlane(t, r3.NewVec(0, 0, 8), r3.NewVec(1, 0, 0))
 	section, profiles, err := source.Section(t.Context(), frame)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Nil(t, section)
