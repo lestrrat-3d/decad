@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -85,25 +86,15 @@ func indexOfFace(faces []*Face, want *Face) int {
 // one connected cap only, so retain the record only for one surviving face.
 func uniqueResultSourceFace(body *Body, source int) *Face {
 	p, ok := body.payload.(facetedPayload)
-	if !ok || source < 0 || len(p.faceOf) != len(p.src) {
+	if !ok {
 		return nil
 	}
 	faces := body.Faces()
-	var result *Face
-	for i, group := range p.src {
-		if group != source {
-			continue
-		}
-		faceIndex := p.faceOf[i]
-		if faceIndex < 0 || faceIndex >= len(faces) {
-			return nil
-		}
-		if result != nil && result != faces[faceIndex] {
-			return nil
-		}
-		result = faces[faceIndex]
+	index, ok := facetedtopology.UniqueGroupFace(p.src, p.faceOf, len(faces), source)
+	if !ok {
+		return nil
 	}
-	return result
+	return faces[index]
 }
 
 func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) error {
@@ -186,113 +177,21 @@ func loftIntervalSquareMax(i loftFaceInterval) *big.Rat {
 	return b
 }
 
-type loftCapTriangle [3]r3.Vec
-
-func loftCapTriangleOf(v []r3.Vec, t [3]int) loftCapTriangle {
-	out := loftCapTriangle{v[t[0]], v[t[1]], v[t[2]]}
-	less := func(a, b r3.Vec) bool {
-		if a.X != b.X {
-			return a.X < b.X
-		}
-		if a.Y != b.Y {
-			return a.Y < b.Y
-		}
-		return a.Z < b.Z
-	}
-	if less(out[1], out[0]) {
-		out[0], out[1] = out[1], out[0]
-	}
-	if less(out[2], out[1]) {
-		out[1], out[2] = out[2], out[1]
-	}
-	if less(out[1], out[0]) {
-		out[0], out[1] = out[1], out[0]
-	}
-	return out
-}
-
 // A Cut may keep only part of a cap. Require the exact held triangle multiset
 // and one unchanged source patch before carrying the cap's true-map proof.
 func unchangedLoftCap(ctx context.Context, source, result *Body, base facetedPayload, group int) (*Face, bool, error) {
-	if group < 0 || group >= len(base.groups) || len(base.faceOf) != len(base.tris) {
-		return nil, false, nil
+	resultFaces := result.Faces()
+	var held *facetedtopology.GroupedMesh
+	if p, ok := result.payload.(facetedPayload); ok {
+		held = &facetedtopology.GroupedMesh{Verts: p.verts, Tris: p.tris, Src: p.src, FaceOf: p.faceOf}
 	}
-	sourceFaces, resultFaces := source.Faces(), result.Faces()
-	var sourceFace *Face
-	want := map[loftCapTriangle]int{}
-	for i, tri := range base.tris {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, false, err
-			}
-		}
-		if base.src[i] != group {
-			continue
-		}
-		faceIndex := base.faceOf[i]
-		if faceIndex < 0 || faceIndex >= len(sourceFaces) {
-			return nil, false, nil
-		}
-		face := sourceFaces[faceIndex]
-		if sourceFace != nil && sourceFace != face {
-			return nil, false, nil
-		}
-		sourceFace = face
-		want[loftCapTriangleOf(base.verts, tri)]++
+	index, ok, err := facetedtopology.UnchangedGroupPatch(ctx,
+		facetedtopology.GroupedMesh{Verts: base.verts, Tris: base.tris, Src: base.src, FaceOf: base.faceOf},
+		len(base.groups), group, len(source.Faces()), held, len(resultFaces))
+	if err != nil || !ok {
+		return nil, false, err
 	}
-	if sourceFace == nil {
-		return nil, false, nil
-	}
-	sourceIndex := -1
-	for i, face := range sourceFaces {
-		if face == sourceFace {
-			sourceIndex = i
-			break
-		}
-	}
-	if sourceIndex < 0 {
-		return nil, false, nil
-	}
-	p, ok := result.payload.(facetedPayload)
-	if !ok {
-		return nil, false, nil
-	}
-	var resultFace *Face
-	count := 0
-	for i, tri := range p.tris {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, false, err
-			}
-		}
-		if p.src[i] != sourceIndex {
-			continue
-		}
-		faceIndex := p.faceOf[i]
-		if faceIndex < 0 || faceIndex >= len(resultFaces) {
-			return nil, false, nil
-		}
-		face := resultFaces[faceIndex]
-		if resultFace != nil && resultFace != face {
-			return nil, false, nil
-		}
-		resultFace = face
-		key := loftCapTriangleOf(p.verts, tri)
-		if want[key] == 0 {
-			return nil, false, nil
-		}
-		want[key]--
-		count++
-	}
-	for _, remaining := range want {
-		if remaining != 0 {
-			return nil, false, nil
-		}
-	}
-	if count == 0 {
-		return nil, false, nil
-	}
-	return resultFace, true, nil
+	return resultFaces[index], true, nil
 }
 
 func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Document,

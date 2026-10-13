@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -231,35 +232,18 @@ func loftMirrorCapTrianglesMatch(lower, upper loftPayload) bool {
 	start := lower.walls + lower.capStartCount
 	indices := make(map[[3]int]int, len(lower.tris)-start)
 	for _, triangle := range lower.tris[start:] {
-		key, sign := loftMirrorSortedTriangle(triangle)
+		key, sign := facetedtopology.SortedTriangle(triangle)
 		if indices[key] != 0 {
 			return false
 		}
 		indices[key] = sign
 	}
 	for _, triangle := range upper.tris[start:] {
-		key, sign := loftMirrorSortedTriangle(triangle)
+		key, sign := facetedtopology.SortedTriangle(triangle)
 		if indices[key] != -sign {
 			return false
 		}
 		delete(indices, key)
 	}
 	return len(indices) == 0
-}
-
-func loftMirrorSortedTriangle(triangle [3]int) ([3]int, int) {
-	sign := 1
-	if triangle[0] > triangle[1] {
-		triangle[0], triangle[1] = triangle[1], triangle[0]
-		sign = -sign
-	}
-	if triangle[1] > triangle[2] {
-		triangle[1], triangle[2] = triangle[2], triangle[1]
-		sign = -sign
-	}
-	if triangle[0] > triangle[1] {
-		triangle[0], triangle[1] = triangle[1], triangle[0]
-		sign = -sign
-	}
-	return triangle, sign
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
@@ -68,7 +69,8 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		return nil, false, nil
 	}
 	trim := p.loftFacesTrim
-	if !spiralTrimSourceCurrent(trim) || !spiralTrimCapGroupsCurrent(p, trim) {
+	if !spiralTrimSourceCurrent(trim) || !facetedtopology.CapGroupsPresent(p.src, p.faceOf, len(p.groups),
+		trim.toeCapGroup, trim.heelCapGroup) {
 		return nil, false, nil
 	}
 	m, b := section.meridianEquation()
@@ -291,21 +293,6 @@ func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
 		}
 	}
 	return true
-}
-
-func spiralTrimCapGroupsCurrent(p facetedPayload, trim *loftFacesTrimRecord) bool {
-	if trim.toeCapGroup < 0 || trim.heelCapGroup < 0 ||
-		trim.toeCapGroup == trim.heelCapGroup ||
-		trim.toeCapGroup >= len(p.groups) || trim.heelCapGroup >= len(p.groups) ||
-		len(p.faceOf) != len(p.src) {
-		return false
-	}
-	toeSeen, heelSeen := false, false
-	for _, group := range p.src {
-		toeSeen = toeSeen || group == trim.toeCapGroup
-		heelSeen = heelSeen || group == trim.heelCapGroup
-	}
-	return toeSeen && heelSeen
 }
 
 // The whole ruled source stays in positive Y and above zero signed radius
