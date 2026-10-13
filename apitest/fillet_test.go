@@ -836,7 +836,7 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 
 		_, err = booleanRimBody(t, decad.New()).Chamfer(t.Context(), decad.Edges(), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		requireReasonLeads(t, err, `this evaluator chamfers a straight prism or a revolve only`)
+		requireReasonLeads(t, err, `this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only`)
 	})
 
 	t.Run(`cap edge`, func(t *testing.T) {
