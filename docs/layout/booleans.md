@@ -57,12 +57,10 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_chamfer_proof.go` | Checks cutter containment, source contacts and volume witnesses. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_near.go` | Bounds band points through a source-occupied split ring. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_crossing.go` | Checks cap tiling and localized non-cap crossings for one-cap Chamfer. See loft-cylinder-boolean design. |
-| `loft_cylinder_chamfer_clearance.go` | Supplies exact triangle clearance for source-wall checks. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_cap.go` | Bounds cap root slits and the retained inset region. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_cap_source.go` | Matches inset cap edges to the original tooth contours. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_bore.go` | Preserves the centered bore wall and inner loops. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_side.go` | Certifies retained middle-side reach into the source union. See loft-cylinder-boolean design. |
-| `loft_cylinder_chamfer_spatial.go` | Prunes old side facets with an exact XY grid before the retained-side contact audit. See loft-cylinder-boolean design. |
 | `prism_boolean.go` | Analytic booleans of co-directional prisms. See `docs/prism-boolean-design.md`. |
 | `revolve_boolean.go` | Arranges authenticated common-axis full-Revolve meridians for public `Union`, `Cut` and `Intersect`. See general-boolean design. |
 | `prism_boolean_placed_axis.go` | Restricts placed-axis prism pairs by section and operation. See prism-boolean G3. |
