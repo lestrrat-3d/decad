@@ -509,19 +509,54 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]r3.Vec,
 	data *LoftAuditData, shortcuts LoftAuditShortcuts, cands loftCandidates,
 	work *LoftAuditWork) (int, int, error) {
-	const (
-		pairSkipped uint8 = iota + 1
-		pairClassified
-		pairEdgeCertified
-		pairVertexCertified
-	)
-	workers := min(runtime.GOMAXPROCS(0), 4)
+	classify := func(i, j int) (uint8, error) {
+		_, shared := tessellation.SharedVertexIndices(tris[i], tris[j])
+		var knownA, knownB *[3]int
+		if shortcuts.BroadPhase && shared == 0 {
+			if !meshbool.BoxesOverlap(boxes[i], boxes[j]) {
+				return pairSkipped, nil
+			}
+			separated, sa, sb := loftPlaneSeparatedSigns(data, i, j)
+			if separated {
+				return pairSkipped, nil
+			}
+			knownA, knownB = &sa, &sb
+		}
+		outcome, err := auditLoftPairDataSigned(data, tris, i, j, shortcuts, knownA, knownB)
+		switch outcome {
+		case LoftPairEdgeCertificate:
+			return pairEdgeCertified, err
+		case LoftPairVertexCertificate:
+			return pairVertexCertified, err
+		default:
+			return pairClassified, err
+		}
+	}
+	return parallelLoftPairsWorkers(budget, min(runtime.GOMAXPROCS(0), 4), cands, classify, work)
+}
+
+// Outcomes of one candidate pair in parallelLoftPairs.
+const (
+	pairSkipped uint8 = iota + 1
+	pairClassified
+	pairEdgeCertified
+	pairVertexCertified
+)
+
+// parallelLoftPairsWorkers is parallelLoftPairs with an explicit worker count
+// and the per-pair classification as classify, which workers call
+// concurrently and which must not touch budget.
+func parallelLoftPairsWorkers(budget *proofbound.WorkBudget, workers int, cands loftCandidates,
+	classify func(i, j int) (uint8, error), work *LoftAuditWork) (int, int, error) {
 	results := make([]uint8, len(cands.js))
 	type failure struct {
 		index int
 		err   error
 	}
 	failures := make([]failure, workers)
+	// tallies[w] counts worker w's outcomes up to and including its first
+	// failure, so the caller need not walk results again.
+	tallies := make([]loftPairTally, workers)
 	var stopped atomic.Bool
 	var group sync.WaitGroup
 	group.Add(workers)
@@ -531,6 +566,8 @@ func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]
 		failures[worker].index = end
 		go func() {
 			defer group.Done()
+			var tally loftPairTally
+			defer func() { tallies[worker] = tally }()
 			i := sort.Search(len(cands.starts)-1, func(row int) bool {
 				return cands.starts[row+1] > start
 			}) + cands.baseRow
@@ -541,30 +578,9 @@ func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]
 				for k >= cands.starts[i-cands.baseRow+1] {
 					i++
 				}
-				j := int(cands.js[k])
-				_, shared := tessellation.SharedVertexIndices(tris[i], tris[j])
-				var knownA, knownB *[3]int
-				if shortcuts.BroadPhase && shared == 0 {
-					if !meshbool.BoxesOverlap(boxes[i], boxes[j]) {
-						results[k] = pairSkipped
-						continue
-					}
-					separated, sa, sb := loftPlaneSeparatedSigns(data, i, j)
-					if separated {
-						results[k] = pairSkipped
-						continue
-					}
-					knownA, knownB = &sa, &sb
-				}
-				outcome, err := auditLoftPairDataSigned(data, tris, i, j, shortcuts, knownA, knownB)
-				switch outcome {
-				case LoftPairEdgeCertificate:
-					results[k] = pairEdgeCertified
-				case LoftPairVertexCertificate:
-					results[k] = pairVertexCertified
-				default:
-					results[k] = pairClassified
-				}
+				outcome, err := classify(i, int(cands.js[k]))
+				results[k] = outcome
+				tally.add(outcome)
 				if err != nil {
 					failures[worker] = failure{index: k, err: err}
 					return
@@ -592,35 +608,72 @@ func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]
 		}
 	}
 	first := len(cands.js)
+	firstWorker := workers
 	var firstErr error
-	for _, f := range failures {
+	for w, f := range failures {
 		if f.err != nil && f.index < first {
-			first, firstErr = f.index, f.err
+			first, firstErr, firstWorker = f.index, f.err, w
 		}
 	}
-	i := 0
-	for k := 0; k < len(cands.js) && k <= first; k++ {
-		for k >= cands.starts[i+1] {
-			i++
-		}
-		if err := budget.Step(); err != nil {
-			return -1, -1, err
-		}
-		switch results[k] {
-		case pairSkipped:
-			work.Skips++
-		case pairEdgeCertified:
-			work.EdgeCerts++
-		case pairVertexCertified:
-			work.VertexCerts++
-		default:
-			work.Classifications++
-		}
-		if k == first {
-			return cands.baseRow + i, int(cands.js[k]), firstErr
-		}
+	if len(cands.js) == 0 {
+		return -1, -1, nil
 	}
-	return -1, -1, nil
+	// The serial loop steps the budget once per pair up to and including the
+	// failing one, and counts a pair's outcome after its step succeeds.
+	last := min(first, len(cands.js)-1)
+	stepped, err := budget.StepN(uint64(last + 1))
+	if err != nil {
+		var tally loftPairTally
+		for _, r := range results[:stepped] {
+			tally.add(r)
+		}
+		tally.addTo(work)
+		return -1, -1, err
+	}
+	// Workers below the failing one ran to the end of their ranges; the
+	// failing worker's tally stops at its failure.
+	var total loftPairTally
+	for w := range min(firstWorker+1, workers) {
+		total.merge(tallies[w])
+	}
+	total.addTo(work)
+	if first == len(cands.js) {
+		return -1, -1, nil
+	}
+	i := sort.Search(len(cands.starts)-1, func(row int) bool { return cands.starts[row+1] > first })
+	return cands.baseRow + i, int(cands.js[first]), firstErr
+}
+
+// loftPairTally counts parallelLoftPairs' pair outcomes.
+type loftPairTally struct {
+	skips, edgeCerts, vertexCerts, classifications int
+}
+
+func (t *loftPairTally) add(outcome uint8) {
+	switch outcome {
+	case pairSkipped:
+		t.skips++
+	case pairEdgeCertified:
+		t.edgeCerts++
+	case pairVertexCertified:
+		t.vertexCerts++
+	default:
+		t.classifications++
+	}
+}
+
+func (t *loftPairTally) merge(o loftPairTally) {
+	t.skips += o.skips
+	t.edgeCerts += o.edgeCerts
+	t.vertexCerts += o.vertexCerts
+	t.classifications += o.classifications
+}
+
+func (t loftPairTally) addTo(work *LoftAuditWork) {
+	work.Skips += t.skips
+	work.EdgeCerts += t.edgeCerts
+	work.VertexCerts += t.vertexCerts
+	work.Classifications += t.classifications
 }
 
 // loftAuditLookback tests every decided pair that precedes the failing pair

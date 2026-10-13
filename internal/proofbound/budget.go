@@ -183,6 +183,65 @@ const MaxFacetPairTestsPerCall = 8_000_000
 type WorkBudget struct {
 	StepFn func() error
 	ErrFn  func() error
+	poll   *workPoll // NewPollWorkBudget's counter; used only while StepFn is nil
+}
+
+// workPoll is NewWorkBudget's step counter as a value: a step increments
+// work and polls ctx when work reaches a multiple of WorkPollInterval.
+type workPoll struct {
+	err  func() error // the context's Err
+	work uint64
+}
+
+func (p *workPoll) step() error {
+	p.work++
+	if p.work%WorkPollInterval == 0 {
+		return p.err()
+	}
+	return nil
+}
+
+// stepN is n calls of step, stopping at the first error. It advances work to
+// each multiple of WorkPollInterval in one move and polls ctx there. A failing
+// poll counts its step in work, as step does, and is not a successful step.
+func (p *workPoll) stepN(n uint64) (uint64, error) {
+	var done uint64
+	for done < n {
+		next := WorkPollInterval - p.work%WorkPollInterval
+		if n-done < next {
+			p.work += n - done
+			return n, nil
+		}
+		p.work += next
+		done += next
+		if err := p.err(); err != nil {
+			return done - 1, err
+		}
+	}
+	return n, nil
+}
+
+// NewPollWorkBudget is NewWorkBudget with StepFn nil: Step and StepN count
+// on the budget's own counter and poll ctx when it reaches a multiple of
+// WorkPollInterval, exactly as NewWorkBudget's StepFn does. Code that reads
+// StepFn of this budget gets nil.
+func NewPollWorkBudget(ctx context.Context) *WorkBudget {
+	return &WorkBudget{ErrFn: ctx.Err, poll: &workPoll{err: ctx.Err}}
+}
+
+// StepN is n calls of Step stopping at the first error; it returns how many
+// succeeded and that error. A budget made by NewPollWorkBudget skips the
+// per-step calls; every other budget loops Step.
+func (b *WorkBudget) StepN(n uint64) (uint64, error) {
+	if b.StepFn == nil && b.poll != nil {
+		return b.poll.stepN(n)
+	}
+	for s := range n {
+		if err := b.Step(); err != nil {
+			return s, err
+		}
+	}
+	return n, nil
 }
 
 func NewWorkBudget(ctx context.Context) *WorkBudget {
@@ -201,7 +260,12 @@ func NewWorkBudget(ctx context.Context) *WorkBudget {
 
 // step counts one candidate operation and returns ctx.Err() on the polling
 // interval.
-func (b *WorkBudget) Step() error { return b.StepFn() }
+func (b *WorkBudget) Step() error {
+	if b.StepFn == nil && b.poll != nil {
+		return b.poll.step()
+	}
+	return b.StepFn()
+}
 
 // err polls the context unconditionally — the phase-boundary check.
 func (b *WorkBudget) Err() error { return b.ErrFn() }

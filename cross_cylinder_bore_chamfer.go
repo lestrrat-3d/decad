@@ -58,7 +58,7 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	if err != nil {
 		return nil, true, err
 	}
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
+	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewPollWorkBudget(ctx),
 		mesh.verts, mesh.tris, loftmesh.MaxLoftAuditTriangles, crossBoreAuditScans); err != nil {
 		return nil, true, err
 	}
