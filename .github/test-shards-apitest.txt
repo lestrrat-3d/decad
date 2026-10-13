@@ -1927,3 +1927,8 @@
 10	0.00	TestSweepLineFilletCapEdgeRefuses
 10	0.00	TestSweepLineFilletPlacedReceiver
 10	0.00	TestSweepFilletRefusesArcCompositeAndMitredPaths
+10	0.00	TestStraightSweepChamferSelectedWallsAndVerifyAll
+10	0.00	TestStraightSweepChamferOneEdgeAndPlacedReplay
+10	0.00	TestStraightSweepChamferRefusesOtherEdges
+10	0.00	TestStraightSweepChamferRefusesAsymmetricReference
+10	0.00	TestStraightSweepChamferRefusesOtherSweeps

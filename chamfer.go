@@ -311,16 +311,26 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if route.prism != nil {
 		pp, ok, caps = *route.prism, true, route.caps
 	}
+	// A one-span straight Sweep is built from an exact prism, but keeps its
+	// own payload so other sweep kinds cannot enter the prism modify route.
+	sweepStraight := false
+	if sp, sweep := b.payload.(sweepPayload); sweep && !sp.arc && len(sp.spans) == 0 &&
+		!sp.closedCircle && !sp.closedComposite && !sp.surfaceResult {
+		pp, ok, sweepStraight = sp.prism, true, true
+	}
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism or a revolve only; selector %s matched [%s]`,
 			ErrUnsupported, sel, selectedEdgesContext(edges))
+	}
+	if sweepStraight && asym != nil {
+		return nil, fmt.Errorf(`%w: an asymmetric chamfer of a Sweep wall has no mapped reference-face role`, ErrUnsupported)
 	}
 	if err := requireExactSection(pp, "chamfers"); err != nil {
 		return nil, err
 	}
 	// A single straight cap edge takes the bounded cutter or route E's corner
 	// rewrite in the prism's face view. Complete loops keep the cap-band route.
-	if straightPrismCapEdge(caps, edges) {
+	if !sweepStraight && straightPrismCapEdge(caps, edges) {
 		if original, ok := b.payload.(prismPayload); ok {
 			if out, recognized, err := tryObliqueCapEdgeChamfer(ctx, b, original, edges, dmm, dDelta, asym); recognized {
 				return out, err
@@ -336,6 +346,9 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	startLoops, endLoops, lateral, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
 	if err != nil {
 		return nil, err
+	}
+	if sweepStraight && !lateral {
+		return nil, fmt.Errorf(`%w: this straight Sweep chamfers only lateral edges; selector %s`, ErrUnsupported, sel)
 	}
 	if !lateral {
 		// An equal chamfer sets both caps back d across the cap and d down the
