@@ -78,7 +78,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// this build places at z0/z1 can later prove Body.Patch's bounded-chain
 	// gate coplanar by shared identity alone, never by comparing a
 	// coordinate (docs/surface-design.md §5.2). The token's own origin/normal
-	// are read off the SAME frame-derived construction capFrame uses below
+	// are read off the SAME frame-derived construction Payload.CapFrame uses below
 	// for the solid's own caps (pp.point/pp.dir), never fitted to held vertex
 	// coordinates — the two ends share one normal (a prism does not tilt
 	// between them), so it is computed once.
@@ -93,11 +93,11 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	var faces []*Face
 	// The start cap faces −N (its outward normal leaves the material at the
 	// bottom), so its frame swaps the in-plane axes; the end cap keeps them.
-	startFrame, err := capFrame(pp, pp.Z0, true)
+	startFrame, err := pp.CapFrame(pp.Z0, true)
 	if err != nil {
 		return nil, err
 	}
-	endFrame, err := capFrame(pp, pp.Z1, false)
+	endFrame, err := pp.CapFrame(pp.Z1, false)
 	if err != nil {
 		return nil, err
 	}
@@ -307,27 +307,6 @@ func attachFaceLoopsContext(ctx context.Context, faces []*Face) error {
 		}
 	}
 	return nil
-}
-
-// capFrame is the plane frame of a cap at height z, under the placement;
-// flip swaps the in-plane axes so the frame's normal is the cap's OUTWARD
-// normal, and a reflected placement swaps once more (a reflection flips the
-// cross product's handedness). The payload frame is orthonormal and the
-// placement rigid, so the transformed axes cannot be degenerate; NewFrame
-// re-validates anyway and the error propagates rather than being discarded.
-func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
-	if pp.Reflected() {
-		flip = !flip
-	}
-	u, v := pp.Dir(1, 0, 0), pp.Dir(0, 1, 0)
-	if flip {
-		u, v = v, u
-	}
-	f, err := r3.NewFrame(pp.Point(0, 0, z), u, v)
-	if err != nil {
-		return r3.Frame{}, fmt.Errorf(`%w: the placed cap frame is degenerate: %s`, ErrDegenerate, err)
-	}
-	return f, nil
 }
 
 // buildWallGeometry builds one wall's two rim curves and the surface it

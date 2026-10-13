@@ -252,11 +252,11 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	}
 
 	pl := prismPayload{Payload: prismrecord.Payload{Frame: cbp.frame, Xform: cbp.xform}}
-	startFrame, err := capFrame(pl, cbp.z0, true)
+	startFrame, err := pl.CapFrame(cbp.z0, true)
 	if err != nil {
 		return nil, err
 	}
-	endFrame, err := capFrame(pl, cbp.z1, false)
+	endFrame, err := pl.CapFrame(cbp.z1, false)
 	if err != nil {
 		return nil, err
 	}

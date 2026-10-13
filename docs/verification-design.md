@@ -545,7 +545,7 @@ model gives a circular wall only two witnesses, the mid-angle point at
 mid-height and `th0` at `z0`; with the arc's end vertex that is three
 angles. An arc closed by its chord is worst at a 240° sweep, where those
 three angles sit `2R·sin(120°)` apart against the wall's own diameter `2R`,
-a factor of `2/√3`. `prismStationWitnesses` (`verify_gate.go`) places points
+a factor of `2/√3`. `diameter.PrismStationWitnesses` (`internal/diameter/prism.go`) places points
 on every wall at both `z0` and `z1`: each line wall's two walk ends, and on
 each circular wall the points at evenly spaced fractions of its recorded
 parameter range, at most 15° apart, plus the points opposite its start and
@@ -688,8 +688,8 @@ has no arm for a `prismPayload` whose own `sectionDelta` is zero, so the body
 ends with no tolerance reference at all and its bounded readings read
 `Suspect`. That is the sound direction to fail in — an absent reference
 tightens nothing and admits nothing — but it is a real outcome, not one this
-arm's existence rules out. `freeformSectionGateDiameter`'s own doc comment
-(`verify_gate.go`) owns the complete list of the paths it withholds on; it is
+arm's existence rules out. `diameter.PrismFreeformSection`'s own doc comment
+(`internal/diameter/prism.go`) owns the complete list of the paths it withholds on; it is
 deliberately not restated here.
 
 Those span endpoints are read off `docs/spline-design.md` §5.1's own

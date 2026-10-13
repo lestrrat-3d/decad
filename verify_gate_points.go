@@ -7,7 +7,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -32,7 +31,7 @@ func stationGateDiameter(budget *proofbound.WorkBudget, prisms []prismPayload, d
 }
 
 // prismGatePoints lists the station witnesses of prisms
-// (prismStationWitnesses). Each station is held within a proven gap of a
+// (diameter.PrismStationWitnesses). Each station is held within a proven gap of a
 // point of its prism's recorded walls, and the recorded walls lie within
 // displacement of the walls the payload denotes, so allow is displacement
 // plus the widest gap. ok is false, with no error, when any prism's stations
@@ -51,7 +50,7 @@ func prismGatePoints(budget *proofbound.WorkBudget, prisms []prismPayload, displ
 	work := freeform.NewFreeformWork()
 	var g gatePoints
 	for _, pp := range prisms {
-		stations, stationAllow, read, err := prismStationWitnesses(budget, pp, work)
+		stations, stationAllow, read, err := diameter.PrismStationWitnesses(budget, pp.Payload, work)
 		if err != nil || !read {
 			return gatePoints{}, false, err
 		}
@@ -59,38 +58,6 @@ func prismGatePoints(budget *proofbound.WorkBudget, prisms []prismPayload, displ
 	}
 	g.Allow = proofbound.AbsSumUpper(displacement, g.Allow)
 	return g, true, nil
-}
-
-// prismStationWitnesses lifts the stations diameter.SectionStations lists on pp's
-// walls to both z0 and z1. allow is
-// the widest proven distance from a held point to the point of pp's recorded
-// walls it stands for: the station's own gap carried through the frame and
-// placement by prismPointBound, together with the lift's own rounding.
-//
-// read is false, with no error, wherever diameter.SectionStations' is, and for a lift
-// whose gap the proof cannot state. Cancellation through budget returns the
-// error.
-func prismStationWitnesses(budget *proofbound.WorkBudget, pp prismPayload, work *freeform.FreeformWork) ([]r3.Vec, float64, bool, error) {
-	stations, ok, err := diameter.SectionStations(budget, append([]loopRecord{pp.Profile.Outer}, pp.Profile.Holes...), work)
-	if err != nil || !ok {
-		return nil, 0, false, err
-	}
-	pts := make([]r3.Vec, 0, 2*len(stations))
-	allow := 0.0
-	factor := pp.LiftFactor()
-	for _, s := range stations {
-		for _, z := range [2]float64{pp.Z0, pp.Z1} {
-			a := pp.PointBoundWith(factor, proofbound.MeasuredScalar(s.U, s.Bound.U), proofbound.MeasuredScalar(s.V, s.Bound.V),
-				proofbound.MeasuredScalar(z, 0))
-
-			if !tolerance.UsableMagnitude(a) {
-				return nil, 0, false, nil
-			}
-			allow = math.Max(allow, a)
-			pts = append(pts, pp.Point(s.U, s.V, z))
-		}
-	}
-	return pts, allow, true, nil
 }
 
 // revolveGateDiameter reads a revolvePayload's diameter from the points
@@ -272,7 +239,7 @@ func brepGateDiameter(ctx context.Context, body *Body, bp brepPayload) (float64,
 
 // brepGatePoints lists every body vertex, held within its published
 // Position().Bound of the point it denotes, and on every face the stations
-// prismStationWitnesses places on the face's prism view. A swept face is its
+// diameter.PrismStationWitnesses places on the face's prism view. A swept face is its
 // wall swept over the whole of [z0, z1]: its side splits add vertices on the
 // side lines and remove nothing, and its two rims are the whole wall at z0
 // and z1, so every station on it is a point of the face. A planar face's
@@ -289,7 +256,7 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 	}
 	work := freeform.NewFreeformWork()
 	for _, f := range bp.faces {
-		stations, stationAllow, read, err := prismStationWitnesses(budget, f.view(bp.xform), work)
+		stations, stationAllow, read, err := diameter.PrismStationWitnesses(budget, f.view(bp.xform).Payload, work)
 		if err != nil {
 			return gatePoints{}, false, err
 		}

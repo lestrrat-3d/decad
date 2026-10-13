@@ -232,11 +232,11 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 	if dp.nearStart {
 		startLoops, endLoops = nearLoops, farLoops
 	}
-	startFrame, err := capFrame(pl, dp.z0, true)
+	startFrame, err := pl.CapFrame(dp.z0, true)
 	if err != nil {
 		return nil, err
 	}
-	endFrame, err := capFrame(pl, dp.z1, false)
+	endFrame, err := pl.CapFrame(dp.z1, false)
 	if err != nil {
 		return nil, err
 	}
