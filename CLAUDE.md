@@ -118,6 +118,9 @@ APIs are design-only.**
 - Go style, testing and file-layout rules: `~/.claude/docs/go.md`. Tests use
   `testify/require` (never `assert`), `t.Context()`. Exported-API-only test →
   `apitest/`.
+- New unexported root helpers take plain data (`r3.Vec`, floats, slices), NEVER
+  `*Document`/`*Body`/`*Face`/`*Edge`/`*Mesh`, to fit `internal/`. Root keeps
+  wrappers; topology code stays. Narrow leaf helpers in PRs.
 - User-facing usage → executable Go examples in `examples/` with verified
   `// Output:` blocks. NEVER README-only snippets.
 - Docs state **current state only** — no changelogs, no "was X, now Y".
