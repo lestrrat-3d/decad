@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -131,8 +132,8 @@ func loftCylinderChamferIdealBandLevels(mesh *joinedMesh,
 	return nil
 }
 
-func loftCylinderChamferExactXY(p proofarith.Xpt) loftCylinderXY {
-	return loftCylinderXY{x: meshbool.RatCoordOf(p, 0), y: meshbool.RatCoordOf(p, 1)}
+func loftCylinderChamferExactXY(p proofarith.Xpt) loftcylinder.XY {
+	return loftcylinder.XY{X: meshbool.RatCoordOf(p, 0), Y: meshbool.RatCoordOf(p, 1)}
 }
 
 // Every decision uses the rational side-section vertex, not its rounded
@@ -142,14 +143,14 @@ func loftCylinderChamferExactRingSimple(ctx context.Context, xverts []proofarith
 	if n < 3 {
 		return false
 	}
-	points := make([]loftCylinderXY, n)
+	points := make([]loftcylinder.XY, n)
 	filtered := make([]meshbool.Xp2, n)
 	for i, index := range ring {
 		if index < 0 || index >= len(xverts) {
 			return false
 		}
 		points[i] = loftCylinderChamferExactXY(xverts[index])
-		filtered[i] = meshbool.NewXP2(points[i].x, points[i].y)
+		filtered[i] = meshbool.NewXP2(points[i].X, points[i].Y)
 	}
 	area2 := new(big.Rat)
 	inside := false
@@ -158,14 +159,14 @@ func loftCylinderChamferExactRingSimple(ctx context.Context, xverts []proofarith
 			return false
 		}
 		a, b := points[i], points[(i+1)%n]
-		if a.x.Cmp(b.x) == 0 && a.y.Cmp(b.y) == 0 {
+		if a.X.Cmp(b.X) == 0 && a.Y.Cmp(b.Y) == 0 {
 			return false
 		}
 		area2.Add(area2, new(big.Rat).Sub(
-			new(big.Rat).Mul(a.x, b.y), new(big.Rat).Mul(a.y, b.x)))
-		if (a.y.Sign() > 0) != (b.y.Sign() > 0) {
-			x := new(big.Rat).Sub(a.x, new(big.Rat).Quo(new(big.Rat).Mul(a.y,
-				new(big.Rat).Sub(b.x, a.x)), new(big.Rat).Sub(b.y, a.y)))
+			new(big.Rat).Mul(a.X, b.Y), new(big.Rat).Mul(a.Y, b.X)))
+		if (a.Y.Sign() > 0) != (b.Y.Sign() > 0) {
+			x := new(big.Rat).Sub(a.X, new(big.Rat).Quo(new(big.Rat).Mul(a.Y,
+				new(big.Rat).Sub(b.X, a.X)), new(big.Rat).Sub(b.Y, a.Y)))
 			if x.Sign() == 0 {
 				return false
 			}
@@ -177,7 +178,7 @@ func loftCylinderChamferExactRingSimple(ctx context.Context, xverts []proofarith
 			if j == i+1 || i == 0 && j == n-1 {
 				continue
 			}
-			if loftCylinderEdgesMeetXP(filtered[i], filtered[(i+1)%n],
+			if loftcylinder.EdgesMeetXP(filtered[i], filtered[(i+1)%n],
 				filtered[j], filtered[(j+1)%n]) {
 				return false
 			}
@@ -199,7 +200,7 @@ func loftCylinderChamferExactNested(ctx context.Context, xverts []proofarith.Xpt
 			}
 		}
 		p := loftCylinderChamferExactXY(xverts[index])
-		outerFiltered[i] = meshbool.NewXP2(p.x, p.y)
+		outerFiltered[i] = meshbool.NewXP2(p.X, p.Y)
 	}
 	innerFiltered := make([]meshbool.Xp2, len(inner))
 	for i, index := range inner {
@@ -209,7 +210,7 @@ func loftCylinderChamferExactNested(ctx context.Context, xverts []proofarith.Xpt
 			}
 		}
 		p := loftCylinderChamferExactXY(xverts[index])
-		innerFiltered[i] = meshbool.NewXP2(p.x, p.y)
+		innerFiltered[i] = meshbool.NewXP2(p.X, p.Y)
 	}
 	for i := range outerFiltered {
 		for j := range innerFiltered {
@@ -218,7 +219,7 @@ func loftCylinderChamferExactNested(ctx context.Context, xverts []proofarith.Xpt
 					return false, err
 				}
 			}
-			if loftCylinderEdgesMeetXP(outerFiltered[i], outerFiltered[(i+1)%len(outerFiltered)],
+			if loftcylinder.EdgesMeetXP(outerFiltered[i], outerFiltered[(i+1)%len(outerFiltered)],
 				innerFiltered[j], innerFiltered[(j+1)%len(innerFiltered)]) {
 				return false, nil
 			}

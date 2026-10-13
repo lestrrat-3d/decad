@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -351,8 +352,8 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 func loftMirrorCylinderChamferSeam(ctx context.Context, lower, upper facetedPayload,
 	half loftCylinderOneCapData, middle float64) error {
 	if half.capGroups[1] < 0 || len(half.outer[1]) < 3 || len(half.inner[1]) < 3 ||
-		!loftCylinderBoreRingSimple(ctx, lower.verts, half.outer[1]) ||
-		!loftCylinderBoreRingSimple(ctx, lower.verts, half.inner[1]) {
+		!loftcylinder.BoreRingSimple(ctx, lower.verts, half.outer[1]) ||
+		!loftcylinder.BoreRingSimple(ctx, lower.verts, half.inner[1]) {
 		return fmt.Errorf("%w: mirrored cap chamfer has no simple middle loops", ErrUnsupported)
 	}
 	nested, err := loftCylinderChamferRingNested(ctx, lower.verts, half.outer[1], half.inner[1])

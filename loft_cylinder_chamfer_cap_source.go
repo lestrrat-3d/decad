@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -12,7 +13,7 @@ import (
 )
 
 type loftCylinderChamferCapTooth struct {
-	points []loftCylinderXY
+	points []loftcylinder.XY
 	poly   []meshbool.Xp2
 	bound2 *big.Rat
 }
@@ -88,7 +89,7 @@ func loftCylinderChamferCapToothOf(body *Body, capIndex int, z float64) (loftCyl
 	}
 	first := capIndex * n
 	result := loftCylinderChamferCapTooth{
-		points: make([]loftCylinderXY, n), poly: make([]meshbool.Xp2, n),
+		points: make([]loftcylinder.XY, n), poly: make([]meshbool.Xp2, n),
 		bound2: new(big.Rat).Mul(proofarith.FloatRat(lp.proof.FacetDeparture),
 			proofarith.FloatRat(lp.proof.FacetDeparture)),
 	}
@@ -96,8 +97,8 @@ func loftCylinderChamferCapToothOf(body *Body, capIndex int, z float64) (loftCyl
 		if p.Z != z {
 			return loftCylinderChamferCapTooth{}, fmt.Errorf("%w: source tooth cap leaves the blank plane", ErrUnsupported)
 		}
-		result.points[i] = loftCylinderExactXY(p)
-		result.poly[i] = meshbool.NewXP2(result.points[i].x, result.points[i].y)
+		result.points[i] = loftcylinder.ExactXY(p)
+		result.poly[i] = meshbool.NewXP2(result.points[i].X, result.points[i].Y)
 	}
 	return result, nil
 }
@@ -105,11 +106,11 @@ func loftCylinderChamferCapToothOf(body *Body, capIndex int, z float64) (loftCyl
 // A rational point just below the outer band circle leaves the certified
 // exterior part whole. The small overlap makes root-circle bisection error a
 // reason to refuse, rather than an uncharged gap in source coverage.
-func loftCylinderChamferExteriorPart(a, b loftCylinderXY, outer2, overlap2 *big.Rat) (
-	loftCylinderXY, loftCylinderXY, bool, error) {
-	qa, qb := loftCylinderSourceDot(a, a), loftCylinderSourceDot(b, b)
+func loftCylinderChamferExteriorPart(a, b loftcylinder.XY, outer2, overlap2 *big.Rat) (
+	loftcylinder.XY, loftcylinder.XY, bool, error) {
+	qa, qb := loftcylinder.SourceDot(a, a), loftcylinder.SourceDot(b, b)
 	if qa.Cmp(outer2) == 0 || qb.Cmp(outer2) == 0 {
-		return loftCylinderXY{}, loftCylinderXY{}, false,
+		return loftcylinder.XY{}, loftcylinder.XY{}, false,
 			fmt.Errorf("%w: cap inset touches the radial split vertex", ErrUnsupported)
 	}
 	max2 := qa
@@ -117,44 +118,44 @@ func loftCylinderChamferExteriorPart(a, b loftCylinderXY, outer2, overlap2 *big.
 		max2 = qb
 	}
 	if max2.Cmp(outer2) < 0 {
-		return loftCylinderXY{}, loftCylinderXY{}, false, nil
+		return loftcylinder.XY{}, loftcylinder.XY{}, false, nil
 	}
-	if loftCylinderSourceRadiusMin2(a, b).Cmp(outer2) > 0 {
+	if loftcylinder.SourceRadiusMin2(a, b).Cmp(outer2) > 0 {
 		return a, b, true, nil
 	}
 	if qa.Cmp(outer2) > 0 && qb.Cmp(outer2) > 0 {
-		return loftCylinderXY{}, loftCylinderXY{}, false,
+		return loftcylinder.XY{}, loftcylinder.XY{}, false,
 			fmt.Errorf("%w: cap inset returns through its radial split", ErrUnsupported)
 	}
 	if qa.Cmp(outer2) > 0 {
 		a, b = b, a
 	}
-	if loftCylinderSourceDot(a, a).Cmp(outer2) >= 0 ||
-		loftCylinderSourceDot(b, b).Cmp(outer2) <= 0 {
-		return loftCylinderXY{}, loftCylinderXY{}, false,
+	if loftcylinder.SourceDot(a, a).Cmp(outer2) >= 0 ||
+		loftcylinder.SourceDot(b, b).Cmp(outer2) <= 0 {
+		return loftcylinder.XY{}, loftcylinder.XY{}, false,
 			fmt.Errorf("%w: cap inset has no exterior radial interval", ErrUnsupported)
 	}
-	d := loftCylinderSourceSub(b, a)
-	len2 := loftCylinderSourceDot(d, d)
-	der0 := new(big.Rat).Mul(big.NewRat(2, 1), loftCylinderSourceDot(a, d))
+	d := loftcylinder.SourceSub(b, a)
+	len2 := loftcylinder.SourceDot(d, d)
+	der0 := new(big.Rat).Mul(big.NewRat(2, 1), loftcylinder.SourceDot(a, d))
 	der1 := new(big.Rat).Add(der0, new(big.Rat).Mul(big.NewRat(2, 1), len2))
 	if der0.Sign() <= 0 || der1.Sign() <= 0 {
-		return loftCylinderXY{}, loftCylinderXY{}, false,
+		return loftcylinder.XY{}, loftcylinder.XY{}, false,
 			fmt.Errorf("%w: cap exterior radial interval is not monotone", ErrUnsupported)
 	}
 	low, high := big.NewRat(0, 1), big.NewRat(1, 1)
 	for range 64 {
 		mid := new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1))
-		p := loftCylinderSourceLerp(a, b, mid)
-		if loftCylinderSourceDot(p, p).Cmp(outer2) < 0 {
+		p := loftcylinder.SourceLerp(a, b, mid)
+		if loftcylinder.SourceDot(p, p).Cmp(outer2) < 0 {
 			low = mid
 		} else {
 			high = mid
 		}
 	}
-	p := loftCylinderSourceLerp(a, b, low)
-	if loftCylinderSourceDot(p, p).Cmp(overlap2) <= 0 {
-		return loftCylinderXY{}, loftCylinderXY{}, false,
+	p := loftcylinder.SourceLerp(a, b, low)
+	if loftcylinder.SourceDot(p, p).Cmp(overlap2) <= 0 {
+		return loftcylinder.XY{}, loftcylinder.XY{}, false,
 			fmt.Errorf("%w: cap radial split has no certified overlap", ErrUnsupported)
 	}
 	return p, b, true, nil
@@ -199,8 +200,8 @@ func loftCylinderChamferExteriorRimInside(ctx context.Context, source loftCylind
 				return err
 			}
 		}
-		a := loftCylinderExactXY(verts[index])
-		b := loftCylinderExactXY(verts[ring[(i+1)%len(ring)]])
+		a := loftcylinder.ExactXY(verts[index])
+		b := loftcylinder.ExactXY(verts[ring[(i+1)%len(ring)]])
 		a, b, yes, err := loftCylinderChamferExteriorPart(a, b, outer2, overlap2)
 		if err != nil {
 			return err
@@ -208,11 +209,11 @@ func loftCylinderChamferExteriorRimInside(ctx context.Context, source loftCylind
 		if !yes {
 			continue
 		}
-		middle := loftCylinderSourceLerp(a, b, big.NewRat(1, 2))
+		middle := loftcylinder.SourceLerp(a, b, big.NewRat(1, 2))
 		occupied := false
 		for _, tooth := range teeth {
 			inside, on, err := meshbool.PointInPoly2(proofbound.NewWorkBudget(ctx), tooth.poly,
-				meshbool.NewXP2(middle.x, middle.y))
+				meshbool.NewXP2(middle.X, middle.Y))
 			if err != nil {
 				return err
 			}

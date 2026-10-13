@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -100,52 +101,6 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 	return body, true, err
 }
 
-// The circular stations must bound one disk around the axis. Combined with
-// the radial shell bound, this makes the polygonal bore differ from the exact
-// cylinder only inside that shell, including its occupied volume.
-func loftCylinderBoreRingSimple(ctx context.Context, verts []r3.Vec, ring []int) bool {
-	n := len(ring)
-	if n < 3 {
-		return false
-	}
-	points := make([]loftCylinderXY, n)
-	filtered := make([]meshbool.Xp2, n)
-	for i, index := range ring {
-		points[i] = loftCylinderExactXY(verts[index])
-		filtered[i] = meshbool.NewXP2(points[i].x, points[i].y)
-	}
-	area2 := new(big.Rat)
-	inside := false
-	for i := range points {
-		if i%32 == 0 && ctx.Err() != nil {
-			return false
-		}
-		a, b := points[i], points[(i+1)%n]
-		area2.Add(area2, new(big.Rat).Sub(
-			new(big.Rat).Mul(a.x, b.y), new(big.Rat).Mul(a.y, b.x)))
-		if (a.y.Sign() > 0) != (b.y.Sign() > 0) {
-			x := new(big.Rat).Sub(a.x, new(big.Rat).Quo(new(big.Rat).Mul(a.y,
-				new(big.Rat).Sub(b.x, a.x)), new(big.Rat).Sub(b.y, a.y)))
-			if x.Sign() == 0 {
-				return false
-			}
-			if x.Sign() > 0 {
-				inside = !inside
-			}
-		}
-		for j := i + 1; j < n; j++ {
-			if j == i+1 || i == 0 && j == n-1 {
-				continue
-			}
-			if loftCylinderEdgesMeetXP(filtered[i], filtered[(i+1)%n],
-				filtered[j], filtered[(j+1)%n]) {
-				return false
-			}
-		}
-	}
-	return area2.Sign() > 0 && inside
-}
-
 func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	joined facetedPayload, radius float64, wall *Face) (*Body, error) {
 	record := joined.loftCylinderJoin
@@ -214,7 +169,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 			mesh.verts = append(mesh.verts, r3.Vec{X: point.U, Y: point.V, Z: z})
 			vertexBound = append(vertexBound, boreBound)
 		}
-		if cap == 0 && !loftCylinderBoreRingSimple(ctx, mesh.verts, inner[cap]) {
+		if cap == 0 && !loftcylinder.BoreRingSimple(ctx, mesh.verts, inner[cap]) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -26,11 +27,11 @@ func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *joinedMesh,
 		if cap == 1 {
 			z = source.z1
 		}
-		if !loftCylinderBoreRingSimple(ctx, mesh.verts, outer[cap]) {
+		if !loftcylinder.BoreRingSimple(ctx, mesh.verts, outer[cap]) {
 			return fmt.Errorf("%w: cap %d has no simple outer loop", ErrUnsupported, cap)
 		}
 		if len(source.inner[cap]) > 0 {
-			if !loftCylinderBoreRingSimple(ctx, mesh.verts, source.inner[cap]) {
+			if !loftcylinder.BoreRingSimple(ctx, mesh.verts, source.inner[cap]) {
 				return fmt.Errorf("%w: cap %d has no simple bore loop", ErrUnsupported, cap)
 			}
 			nested, err := loftCylinderChamferRingNested(ctx, mesh.verts, outer[cap], source.inner[cap])

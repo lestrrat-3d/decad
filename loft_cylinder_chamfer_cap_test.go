@@ -5,11 +5,12 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/stretchr/testify/require"
 )
 
-func chamferSegmentGapAboveReference(a, b, c, d loftCylinderXY, bound2 *big.Rat) bool {
-	if loftCylinderEdgesMeet(a, b, c, d) {
+func chamferSegmentGapAboveReference(a, b, c, d loftcylinder.XY, bound2 *big.Rat) bool {
+	if loftcylinder.EdgesMeet(a, b, c, d) {
 		return false
 	}
 	for _, gap2 := range [4]*big.Rat{
@@ -26,21 +27,21 @@ func chamferSegmentGapAboveReference(a, b, c, d loftCylinderXY, bound2 *big.Rat)
 }
 
 func TestLoftCylinderChamferSegmentGapAboveMatchesExact(t *testing.T) {
-	point := func(x, y int64) loftCylinderXY {
-		return loftCylinderXY{x: big.NewRat(x, 1), y: big.NewRat(y, 1)}
+	point := func(x, y int64) loftcylinder.XY {
+		return loftcylinder.XY{X: big.NewRat(x, 1), Y: big.NewRat(y, 1)}
 	}
 	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 100))
-	near := loftCylinderXY{x: new(big.Rat).Add(big.NewRat(1, 1), tiny), y: big.NewRat(0, 1)}
+	near := loftcylinder.XY{X: new(big.Rat).Add(big.NewRat(1, 1), tiny), Y: big.NewRat(0, 1)}
 	for _, tc := range []struct {
 		name       string
-		a, b, c, d loftCylinderXY
+		a, b, c, d loftcylinder.XY
 		bound2     *big.Rat
 		want       bool
 	}{
 		{"separated axis", point(0, 0), point(0, 1), point(3, 0), point(3, 1), big.NewRat(1, 1), true},
 		{"equal bound", point(0, 0), point(0, 1), point(1, 0), point(1, 1), big.NewRat(1, 1), false},
 		{"rational near miss", point(0, 0), point(0, 1), near,
-			loftCylinderXY{x: near.x, y: big.NewRat(1, 1)}, big.NewRat(1, 1), true},
+			loftcylinder.XY{X: near.X, Y: big.NewRat(1, 1)}, big.NewRat(1, 1), true},
 		{"crossing", point(0, 0), point(2, 2), point(0, 2), point(2, 0), big.NewRat(1, 1), false},
 		{"degenerate", point(0, 0), point(0, 0), point(3, 0), point(3, 1), big.NewRat(1, 1), false},
 	} {
@@ -50,10 +51,10 @@ func TestLoftCylinderChamferSegmentGapAboveMatchesExact(t *testing.T) {
 		})
 	}
 	rng := rand.New(rand.NewSource(38))
-	randomPoint := func() loftCylinderXY {
-		return loftCylinderXY{
-			x: big.NewRat(int64(rng.Intn(41)-20), int64(rng.Intn(5)+1)),
-			y: big.NewRat(int64(rng.Intn(41)-20), int64(rng.Intn(5)+1)),
+	randomPoint := func() loftcylinder.XY {
+		return loftcylinder.XY{
+			X: big.NewRat(int64(rng.Intn(41)-20), int64(rng.Intn(5)+1)),
+			Y: big.NewRat(int64(rng.Intn(41)-20), int64(rng.Intn(5)+1)),
 		}
 	}
 	for i := range 200 {
