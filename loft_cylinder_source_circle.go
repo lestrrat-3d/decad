@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -52,7 +53,7 @@ func loftCylinderSourceCircleOf(lp loftPayload, radius float64) (loftcylinder.So
 	if root < 3 || root >= n-1 {
 		return refuse("source circle has no paired root connectors")
 	}
-	gap, ok := loftCylinderRootRadiusGap(lp, radius)
+	gap, ok := loftcylinder.RootRadiusGap(lp.xform, [2]momentinput.Profile{lp.profile0, lp.profile1}, radius)
 	if !ok {
 		return refuse("source root has no radial gap bound")
 	}

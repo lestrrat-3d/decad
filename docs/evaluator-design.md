@@ -580,7 +580,8 @@ contact tolerance is snapped onto the axis (a `Sphere`), a segment within the
 classifier's 1e-9 slope of parallel or perpendicular is tagged a `Cylinder` or
 a `Plane`, and a `Cone`'s half angle is a float `atan2` of rounded runs. The
 build stores the denoted surface beside the tag (`Face.denoted`,
-`surfacenormal.Revolved`, built by `revolvePayload.wallDenotation` through
+`surfacenormal.Revolved`, built by
+`revolveaxis.DenotationInput.WallDenotation` through
 `revolvemesh.RevolveLift.StraightWallNormal`/`CircularWallNormal`): a
 straight wall's recorded segments, each as its exact run (dz, dρ), and a
 circular wall's recorded centre, re-expressed about the axis anchor and
@@ -602,7 +603,7 @@ surface the displaced record denotes. A plain float `atan2` was not seen to
 break the tag's own bound on its own; the snapped centre, a near-parallel or
 near-perpendicular segment, and a far or tilted axis do
 (`apitest/revolve_normal_bound_test.go`). A partial sweep's cap carries its
-denoted plane the same way (`revolvePayload.capDenotation`,
+denoted plane the same way (`revolveaxis.DenotationInput.CapDenotation`,
 `revolvemesh.RevolveLift.CapNormal`): the plane through the recorded axis at
 the angle its end's record states, with outward normal (−sin φ, cos φ) on
 (E0, E1) at the end cap and its negation at the start cap, sin φ and cos φ

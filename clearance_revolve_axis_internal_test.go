@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -16,7 +17,8 @@ func revolveAxisGap(t *testing.T, b *Body) float64 {
 	t.Helper()
 	rp, ok := b.payload.(revolvePayload)
 	require.True(t, ok)
-	in, ok, err := revolveCarrierInput(proofbound.NewWorkBudget(t.Context()), rp)
+	in, ok, err := wallsurvey.RevolveCarrierInput(proofbound.NewWorkBudget(t.Context()), rp.profile, rp.ax,
+		rp.lift(), rp.axisBound(), rp.xform, rp.full, rp.phi0, rp.phi1)
 	require.NoError(t, err)
 	require.True(t, ok)
 	return clearance.BuildRevolveCarriers(in).AxisGap

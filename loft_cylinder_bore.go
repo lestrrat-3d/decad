@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -131,7 +132,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	for i := range angles {
 		angles[i] = 2 * math.Pi * float64(i) / stations
 	}
-	innerStations, boreBound, err := certifiedCircularBoreRing(ctx, radius, angles)
+	innerStations, boreBound, err := circularbounds.BoreRing(ctx, radius, angles)
 	if err != nil {
 		return nil, err
 	}

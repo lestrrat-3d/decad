@@ -35,7 +35,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
 | `internal/prismshell/` | Prism side-opening sections, shell wall bands, slab levels and stack faces. See shell-opening §3–§5, modify-reach §9.2. |
-| `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, and extent readings. See evaluator §6. |
+| `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, extent readings, the simple-revolution radial proof, and wall and cap denotations. See evaluator §6. |
 | `internal/revolveshell/` | Effective-meridian survey, removed-run and side-segment role checks, and shell wall sections and displacement. See modify-reach §9.3. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
@@ -48,15 +48,15 @@ The rules for rows live in `docs/layout.md`.
 | `internal/momentinput/` | Profile records, exact record comparison, rectangle bounds, moments, loop enclosed areas and first moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
-| `internal/tessellation/` | Recorded-loop and band chording, mesh topology, bounds and audits. See tessellation-design. |
+| `internal/tessellation/` | Recorded-loop and band chording, mesh topology and joined-mesh orientation, bounds and audits. See tessellation-design. |
 | `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines, and exact partial-chamfer quad gates and mass. See loop-fillet §7.1, modify-general §4.3a. |
 | `internal/stationbound/` | Bounds circular chord stations, offset cap stations and chain-sweep arc stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums, projected cap proof, body reading finiteness gate, mirrored-cylinder bridge terms and reserve, cap chamfer source bound, split-ring and collar grids, triangle clearance and middle-collar proofs, and grouped contact scans. |
 | `internal/smoothloft/` | Three-section homothety, independent rectangles, varying curves, and four-section rounded-rectangle gates, held meshes and bounds. |
 | `internal/loftfillet/` | Loft fit/circle root-fillet candidate, tangent-root certificate, connector and carrier departures, section contact audits and circle-bore containment. See loft §17–§18. |
-| `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs, and quarter-turn cap-rim blend stations and bounds. |
+| `internal/revolvemesh/` | Revolve rings, cells, caps, cap frames, construction and area proofs, quarter-turn cap-rim blend stations and bounds, and sector-bore cap fans, station steps and projected patches. |
 | `internal/revolveplan/` | Revolve mesh walk resolution, coordinate ceilings and chord counts. See tessellation §8. |
 | `internal/revolvesampling/` | Revolve meridian junctions, stations, samples and section readings. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
-| `internal/loftcylinder/` | Exact cap XY audits, source circle crossings, connector gates and reach, ring-to-wall distances, split-ring cycles and occupancy, cap chamfer clearance and band audits, triangle radii, and radial and wedge gates of the loft/cylinder Union. See loft-cylinder-boolean design. |
+| `internal/loftcylinder/` | Exact cap XY audits, source circle and connector gates, ring distances and occupancy, cap chamfer clearance, triangles, band strips, compaction and audits, triangle radii, root radius gaps, and radial and wedge gates of the loft/cylinder Union. See loft-cylinder-boolean design. |

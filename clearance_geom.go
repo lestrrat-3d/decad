@@ -11,8 +11,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/revolveaxis"
-	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
@@ -422,7 +420,8 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 		// so the pair stays undecided.
 		return false, nil
 	}
-	in, ok, err := revolveCarrierInput(budget, rp)
+	in, ok, err := wallsurvey.RevolveCarrierInput(budget, rp.profile, rp.ax, rp.lift(), rp.axisBound(),
+		rp.xform, rp.full, rp.phi0, rp.phi1)
 	if err != nil || !ok {
 		return false, err
 	}
@@ -462,51 +461,6 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 		g.carrierDelta = proofbound.AbsSumUpper(g.carrierDelta, built.AxisGap)
 	}
 	return true, nil
-}
-
-// revolveCarrierInput resolves rp's meridian walks, each beside the recorded
-// plane-local walks it was re-expressed from, into the carrier builder's
-// input. ok is false for a meridian this kernel cannot decompose, which
-// leaves the body with no model.
-func revolveCarrierInput(budget *proofbound.WorkBudget, rp revolvePayload) (clearance.RevolveCarrierInput, bool, error) {
-	loops, planes, err := wallsurvey.RevolveLoopsPlane(budget, rp.profile, rp.ax)
-	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return clearance.RevolveCarrierInput{}, false, err
-		}
-		if errors.Is(err, ErrUnsupported) {
-			// An undecomposable meridian is an unsupported payload, not a
-			// failure: newBodyGeom answers with no model rather than a partial
-			// one. Other errors remain visible to the caller.
-			return clearance.RevolveCarrierInput{}, false, nil
-		}
-		return clearance.RevolveCarrierInput{}, false, err
-	}
-	var walls []clearance.RevolveWall
-	for li, loop := range loops {
-		for _, w := range loop {
-			if err := budget.Step(); err != nil {
-				return clearance.RevolveCarrierInput{}, false, err
-			}
-			wall := clearance.RevolveWall{
-				Walk: w, Kind: revolveaxis.Classify(w.SegmentWalk, rp.ax.SnapTol),
-				First: planes[li][w.Segs[0]], Last: planes[li][w.Segs[len(w.Segs)-1]],
-			}
-			for _, seg := range w.Segs[1:] {
-				rec := planes[li][seg]
-				at := rp.ax.Walk(rec)
-				wall.Joints = append(wall.Joints, clearance.RevolveJoint{
-					Z: at.StartU, Rho: at.StartV,
-					Rec: revolvemesh.RecordedMeridian{U: rec.StartU, V: rec.StartV, UV: rec.StartBound},
-				})
-			}
-			walls = append(walls, wall)
-		}
-	}
-	return clearance.RevolveCarrierInput{
-		Lift: rp.lift(), Axis: rp.axisBound(), Transform: rp.xform, Full: rp.full,
-		Phi0: rp.phi0, Phi1: rp.phi1, Walls: walls,
-	}, true, nil
 }
 
 // addStitchFaces builds one exact planar carrier per live face of a CLOSED,

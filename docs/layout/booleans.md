@@ -30,7 +30,6 @@ The rules for rows live in `docs/layout.md`.
 | `spiral_combine.go` | Builds and validates a multi-tool spiral-bevel join. See faceted-vertex-bounds §3.7. |
 | `spiral_combine_sector.go` | Proves source and held tooth sectors disjoint before the combined join. See faceted-vertex-bounds §3.7. |
 | `joined_mesh.go` | Collects source-labeled join facets and checks closed, connected orientation before geometric audits. See tessellation §4. |
-| `circular_bore_ring.go` | Samples and bounds circular bore rings for Revolve/sector and Loft/cylinder Cuts. See revolve-loft-sector and loft-cylinder-boolean designs. |
 | `loft_cut.go` | Preserves a matching axial loft through a certified coaxial circle-bore Cut. See loft §18. |
 | `loft_mirror_union.go` | Joins one authenticated axial Loft to its end-cap reflection. See loft-mirror-boolean design. |
 | `loft_mirror_cylinder_union.go` | Joins repeated reflected Loft pairs to a centered cylinder, including one-pass Union and bounded axial placement. See loft-mirror-boolean design. |

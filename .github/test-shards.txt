@@ -159,8 +159,6 @@
 1	0.00	TestChordStationBoundRefusesWhatItCannotEnclose
 1	0.00	TestChordedBoundsNeverPublishAFlushedZero
 1	0.00	TestChordingRefusalsSplitFromOperandDegeneracy
-1	0.01	TestCircularBoreRingAcceptsCertifiedWiderStepAndBoundsEveryChord
-1	0.00	TestCircularBoreRingBoundsShiftedStationChord
 1	0.00	TestCircularStationChainRefusesAnUnenclosableRecord
 1	0.00	TestClampedConversionCostIsQuadratic
 1	0.01	TestClassBCutCrossSlot
@@ -301,7 +299,6 @@
 1	0.00	TestRevolveFreeformDisplacedSectionRefuses
 1	1.05	TestRevolveFreeformPartialCapAreaSlack
 1	0.00	TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift
-1	0.01	TestRevolveSectorCapFanRequiresAdjacentCompleteSourceRing
 1	0.01	TestRevolveSectorNearUnitAxisPlacement
 1	0.01	TestRevolveSectorProjectionRefusesOverlap
 1	0.01	TestRevolveSectorProjectionSeparatesRotatedSources

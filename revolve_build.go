@@ -15,7 +15,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 
-	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -379,11 +378,11 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// Partial sweeps get two planar cap faces; a full revolution has none.
 	var capStart, capEnd *Face
 	if !rp.full {
-		startFrame, err := rp.capFrame(b, rp.phi0, true)
+		startFrame, err := revolvemesh.CapFrame(b, rp.xform, rp.phi0, true)
 		if err != nil {
 			return nil, err
 		}
-		endFrame, err := rp.capFrame(b, rp.phi1, false)
+		endFrame, err := revolvemesh.CapFrame(b, rp.xform, rp.phi1, false)
 		if err != nil {
 			return nil, err
 		}
@@ -412,7 +411,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			area:        ig.Area,
 			areaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
 			normalBound: rp.phi0Delta(),
-			denoted:     rp.capDenotation(rp.end0(), true),
+			denoted:     rp.denotationInput().CapDenotation(rp.den.Phi0, rp.phi0, true),
 		}
 		capEnd = &Face{
 			surface:     Plane{Frame: endFrame},
@@ -421,7 +420,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			area:        ig.Area,
 			areaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
 			normalBound: rp.phi1Delta(),
-			denoted:     rp.capDenotation(rp.end1(), false),
+			denoted:     rp.denotationInput().CapDenotation(rp.den.Phi1, rp.phi1, false),
 		}
 	}
 
@@ -608,30 +607,6 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	}
 	body.payload = rp
 	return body, nil
-}
-
-// capFrame is the plane frame of a cap at sweep angle φ, under the
-// placement. The start cap's outward (material-leaving) normal points
-// against the sweep, the end cap's along it; the axes are ordered so the
-// frame's normal IS the outward normal, and a reflected placement swaps them
-// once more (a reflection flips the cross product's handedness).
-func (rp revolvePayload) capFrame(b revolvemesh.RevolveBasis, phi float64, start bool) (r3.Frame, error) {
-	sin, cos := math.Sincos(phi)
-	radial := b.E0.Scale(cos).Add(b.E1.Scale(sin))
-	// (w, radial) has w × radial = the rotated plane normal — the sweep
-	// velocity direction, the END cap's outward normal.
-	u3, v3 := b.W, radial
-	if start {
-		u3, v3 = v3, u3
-	}
-	if rp.reflected() {
-		u3, v3 = v3, u3
-	}
-	f, err := r3.NewFrame(rp.xform.Apply(b.A3), rp.xform.ApplyDir(u3), rp.xform.ApplyDir(v3))
-	if err != nil {
-		return r3.Frame{}, fmt.Errorf(`%w: the placed cap frame is degenerate: %s`, ErrDegenerate, err)
-	}
-	return f, nil
 }
 
 // revLoopParts is what one recorded loop contributes to the revolved body.
@@ -914,7 +889,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			area:      faceArea.Value,
 			areaBound: faceArea.Bound,
 			reversed:  reversed,
-			denoted:   rp.wallDenotation(w, kinds[i], resolved.Plane),
+			denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
 		}
 		switch {
 		case rp.full && singleClosed:
@@ -1079,7 +1054,7 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	axis := rp.xform.ApplyDir(normal).Scale(sign)
 	center := rp.point(b, w.CU, w.CV, end.phi)
 	radius := units.Millimeters(w.Radius)
-	e.curveBound, e.curveBounded = rp.capArcCurveBound(plane, end, center, axis, w.Radius)
+	e.curveBound, e.curveBounded = rp.denotationInput().CapArcCurveBound(plane, end.den, end.phi, center, axis, w.Radius)
 	if closed {
 		v := rp.sweptVertex(b, w.StartU, w.StartV, seam, curveToken{}, end)
 		e.curve = Circle3{Center: center, Axis: axis, Radius: radius}
@@ -1089,40 +1064,6 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	e.curve = Arc3{Center: center, Axis: axis, Radius: radius}
 	e.start, e.end = vs, ve
 	return e
-}
-
-// capArcCurveBound is an Edge's curveBound for a partial sweep's cap copy of
-// a recorded circular walk: plane holds the plane-local walks of the
-// recorded segments the copy covers, every one on one circle, whose centre
-// is recorded and whose radius sits within its walk's RadiusBound; a
-// whole-section displacement widens both (revolvemesh.RevolveLift.CapArcGap).
-// An end with no denotation, a walk set that is not one circle, or a bound
-// not below half the held radius answers false.
-func (rp revolvePayload) capArcCurveBound(plane []survey2d.SegmentWalk, end sweptEnd, center, axis r3.Vec, radius float64) (float64, bool) {
-	if len(plane) == 0 || !end.den.Valid() {
-		return 0, false
-	}
-	sin, cos, ok := end.den.SinCosFor(end.phi)
-	if !ok {
-		return 0, false
-	}
-	first := plane[0]
-	radiusBound := 0.0
-	for _, pw := range plane {
-		if !pw.IsCircular() || pw.CU != first.CU || pw.CV != first.CV || pw.Radius != first.Radius {
-			return 0, false
-		}
-		radiusBound = math.Max(radiusBound, pw.RadiusBound)
-	}
-	charge := revolveaxis.SectionWholeCharges(rp.sectionWhole, rp.sectionDelta)
-	if charge.U != 0 {
-		radiusBound = proofbound.AbsSumUpper(radiusBound, rp.sectionDelta)
-	}
-	gap := rp.lift().CapArcGap(rp.axisBound(), rp.xform, first.CU, first.CV, charge, first.Radius, radiusBound, sin, cos, center, axis, radius)
-	if proofbound.IsNonFinite(gap) || !(proofbound.ProductUpper(2, gap) < radius) {
-		return 0, false
-	}
-	return gap, true
 }
 
 // latitudeCurveBound is an Edge's curveBound for the latitude circle or the
@@ -1207,62 +1148,11 @@ func (rp revolvePayload) wallSurface(b revolvemesh.RevolveBasis, w survey2d.Segm
 	}
 }
 
-// wallDenotation encloses the surface the wall w denotes: its recorded
-// segments, read off the plane-local walks they were re-expressed from, swept
-// about the recorded axis and placed (surfacenormal.Revolved). A straight
-// wall reads each recorded segment's own two ends, in walk order; a circular
-// wall reads each segment's recorded centre and radius. Face.NormalAt judges
-// the wall's normal against it, and Stitch's flux path admits the wall only
-// where its tag is exactly this surface (docs/evaluator-design.md §6,
-// docs/surface-design.md §6.4).
-func (rp revolvePayload) wallDenotation(w survey2d.SideWalk, kind wallKind, plane []survey2d.SegmentWalk) *surfacenormal.Revolved {
-	if kind == wallFreeform {
-		return nil
-	}
-	lift, ab := rp.lift(), rp.axisBound()
-	section := revolveaxis.SectionWholeCharges(rp.sectionWhole, rp.sectionDelta)
-	var den surfacenormal.Revolved
-	switch kind {
-	case wallSphere, wallTorus:
-		circles := make([]revolvemesh.RecordedMeridian, len(w.Segs))
-		for i, si := range w.Segs {
-			pw := plane[si]
-			circles[i] = revolvemesh.RecordedMeridian{
-				U: pw.CU, V: pw.CV, UV: revolveaxis.DenotedBound(proofbound.WalkEndBound{}, section),
-				R: pw.Radius, RBound: revolveaxis.DenotedRadiusBound(pw.RadiusBound, section),
-			}
-		}
-		den = lift.CircularWallNormal(ab, rp.xform, circles)
-	default:
-		ends := make([][2]revolvemesh.RecordedMeridian, len(w.Segs))
-		for i, si := range w.Segs {
-			pw := plane[si]
-			ends[i] = [2]revolvemesh.RecordedMeridian{
-				{U: pw.StartU, V: pw.StartV, UV: revolveaxis.DenotedBound(pw.StartBound, section)},
-				{U: pw.EndU, V: pw.EndV, UV: revolveaxis.DenotedBound(pw.EndBound, section)},
-			}
-		}
-		den = lift.StraightWallNormal(ab, rp.xform, ends)
-	}
-	return &den
-}
-
-// capDenotation encloses the plane a partial sweep's cap at end denotes: the
-// plane through the recorded axis at the angle end's record states, placed
-// (revolvemesh.RevolveLift.CapNormal). An end with no denotation — a
-// ToFaceAngular stop, or a payload literal built without one — states no
-// angle, so it returns nil and the cap keeps its tag's proof composed with
-// its normalBound, which is +Inf there.
-func (rp revolvePayload) capDenotation(end sweptEnd, start bool) *surfacenormal.Revolved {
-	if !end.den.Valid() {
-		return nil
-	}
-	sin, cos, ok := end.den.SinCosFor(end.phi)
-	if !ok {
-		return nil
-	}
-	den := rp.lift().CapNormal(rp.axisBound(), rp.xform, sin, cos, start)
-	return &den
+// denotationInput is what revolveaxis.DenotationInput reads off rp to
+// enclose the surfaces its walls and caps denote.
+func (rp revolvePayload) denotationInput() revolveaxis.DenotationInput {
+	return revolveaxis.DenotationInput{Lift: rp.lift(), Axis: rp.axisBound(), Xform: rp.xform,
+		SectionWhole: rp.sectionWhole, SectionDelta: rp.sectionDelta}
 }
 
 // This section is chain Revolve's own build (docs/surface-design.md §13.4):
@@ -1487,7 +1377,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			area:      faceArea.Value,
 			areaBound: faceArea.Bound,
 			reversed:  reversed,
-			denoted:   rp.wallDenotation(w, kinds[i], resolved.Plane),
+			denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
 		}
 		if rp.full {
 			face.loops = fullRevLoops(js[i], js[i+1], kinds[i])

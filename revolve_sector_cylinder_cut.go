@@ -3,21 +3,21 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
 const (
-	revolveSectorBoreMaxStations       = 2_304
 	revolveSectorBoreMaxAuditTriangles = 1_321_696
 	revolveSectorBoreMaxAuditScans     = uint64(400_000_000)
 )
@@ -49,7 +49,7 @@ func revolveSectorBoreCapRecord(joined facetedPayload) (revolveSectorBoreCaps, b
 	count, n := len(spans), len(ring.angles)
 	if count < 4 || len(ring.rings) != count || len(ring.groups) != count ||
 		section.axisSpan < 0 || section.axisSpan >= count ||
-		n < 16 || n > revolveSectorBoreMaxStations ||
+		n < 16 || n > revolvemesh.SectorBoreMaxStations ||
 		len(joined.tris) != len(joined.src) ||
 		len(joined.verts) != len(joined.vertexBound) {
 		return caps, false
@@ -169,42 +169,6 @@ func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
 	return nil, true, fmt.Errorf("%w: bore has no certified section crossing", ErrUnsupported)
 }
 
-// revolveSectorCapFan returns an angular cell only for a complete, source-
-// labeled axis fan triangle on the retained outer ring.
-func revolveSectorCapFan(t [3]int, src, axis, group int,
-	positions map[int]int, n int) (int, bool, error) {
-	if t[0] != axis && t[1] != axis && t[2] != axis {
-		return 0, false, nil
-	}
-	other := [2]int{}
-	k := 0
-	for _, v := range t {
-		if v == axis {
-			continue
-		}
-		if k >= 2 {
-			return 0, false, fmt.Errorf("%w: cap fan repeats its axis", ErrUnsupported)
-		}
-		other[k] = v
-		k++
-	}
-	if k != 2 || src != group {
-		return 0, false, fmt.Errorf("%w: cap axis belongs to another face", ErrUnsupported)
-	}
-	a, aOK := positions[other[0]]
-	b, bOK := positions[other[1]]
-	if !aOK || !bOK {
-		return 0, false, fmt.Errorf("%w: cap fan misses its outer ring", ErrUnsupported)
-	}
-	if (a+1)%n == b {
-		return a, true, nil
-	}
-	if (b+1)%n == a {
-		return b, true, nil
-	}
-	return 0, false, fmt.Errorf("%w: cap fan crosses angular stations", ErrUnsupported)
-}
-
 func revolveSectorTriangleClear(t [3]int, verts []r3.Vec, clearance float64) bool {
 	a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 	loY, hiY := min(a.Y, b.Y, c.Y), max(a.Y, b.Y, c.Y)
@@ -216,34 +180,6 @@ func revolveSectorTriangleClear(t [3]int, verts []r3.Vec, clearance float64) boo
 	return loftcylinder.TriangleMinRadius(projected[:], [3]int{0, 1, 2}) > clearance
 }
 
-// revolveSectorRingMaxStep rechecks the retained Union station order and
-// encloses the wrap interval using the upper side of the 2π certificate.
-func revolveSectorRingMaxStep(angles []float64) (float64, bool) {
-	if len(angles) < 16 || len(angles) > revolveSectorBoreMaxStations {
-		return 0, false
-	}
-	maxStep := 0.0
-	for i, angle := range angles {
-		if proofbound.IsNonFinite(angle) {
-			return 0, false
-		}
-		j := (i + 1) % len(angles)
-		var step *big.Rat
-		if j == 0 {
-			step = new(big.Rat).Add(proofbound.TwoPiInterval().Hi,
-				new(big.Rat).Sub(proofarith.FloatRat(angles[0]), proofarith.FloatRat(angle)))
-		} else {
-			step = new(big.Rat).Sub(proofarith.FloatRat(angles[j]), proofarith.FloatRat(angle))
-		}
-		upper := proofbound.RatFloatUp(step)
-		if step.Sign() <= 0 || proofbound.IsNonFinite(upper) || upper > math.Pi/2 {
-			return 0, false
-		}
-		maxStep = max(maxStep, upper)
-	}
-	return maxStep, true
-}
-
 func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producerID,
 	joined facetedPayload, caps revolveSectorBoreCaps, radius float64, wall *Face) (*Body, bool, error) {
 	ring := joined.revolveLoftJoin.capRing
@@ -252,11 +188,11 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		radius >= min(caps.lowRadius, caps.highRadius) {
 		return nil, true, fmt.Errorf("%w: bore does not fit inside both radial caps", ErrUnsupported)
 	}
-	maxStep, ok := revolveSectorRingMaxStep(ring.angles)
+	maxStep, ok := revolvemesh.SectorRingMaxStep(ring.angles)
 	if !ok {
 		return nil, true, fmt.Errorf("%w: joined section ring has no bounded station plan", ErrUnsupported)
 	}
-	inner, boreBound, err := certifiedCircularBoreRingAtStep(ctx, radius, ring.angles, maxStep)
+	inner, boreBound, err := circularbounds.BoreRingAtStep(ctx, radius, ring.angles, maxStep)
 	if err != nil {
 		return nil, true, err
 	}
@@ -294,7 +230,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
 		}
-		cell, fan, err := revolveSectorCapFan(tri, joined.src[i], caps.lowAxis,
+		cell, fan, err := revolvemesh.SectorCapFan(tri, joined.src[i], caps.lowAxis,
 			caps.lowGroup, lowPos, n)
 		if err != nil {
 			return nil, true, err
@@ -306,7 +242,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 			lowSeen[cell] = true
 			continue
 		}
-		cell, fan, err = revolveSectorCapFan(tri, joined.src[i], caps.highAxis,
+		cell, fan, err = revolvemesh.SectorCapFan(tri, joined.src[i], caps.highAxis,
 			caps.highGroup, highPos, n)
 		if err != nil {
 			return nil, true, err
@@ -368,7 +304,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	if len(mesh.tris) != len(joined.tris)+4*n {
 		return nil, true, fmt.Errorf("%w: cap and wall triangle census changed", ErrUnsupported)
 	}
-	patches := revolveSectorBorePatches(mesh, oldCount, n, false, caps, -1, wallGroup)
+	patches := revolvemesh.SectorBorePatches(mesh.src, oldCount, n, false, caps.lowGroup, caps.highGroup, -1, wallGroup)
 	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
 		mesh.verts, mesh.tris, patches, revolveSectorBoreMaxAuditTriangles,
 		revolveSectorBoreMaxAuditScans); err != nil {

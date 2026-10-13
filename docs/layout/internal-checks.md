@@ -20,7 +20,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/orderedwork/` | Runs independent jobs and returns results in input order. |
 | `internal/prismextent/` | Prism extremes, bounds and extent readings. See evaluator §5. |
 | `internal/prismplacement/` | Exact prism axis shifts, sweep spans, relative placement and exact rectangular boxes in a reference frame. See prism-boolean §3. |
-| `internal/circularbounds/` | Circular endpoints, lengths, area, moment and arc-box bounds over neutral records. |
+| `internal/circularbounds/` | Circular endpoints, lengths, area, moment and arc-box bounds over neutral records, and certified circular bore rings. |
 | `internal/prismcells/` | Prism admission, scene budgets, scene construction, §4.2 union, cut, intersect and crossing resolution, cells, charges and trim walks. See prism-boolean §4. |
 | `internal/prismpattern/` | Prism-pattern Union radial source gaps, outward wall certificates, interval fillet contact points, polar angles and ring points. See prism-pattern-union design. |
 | `internal/mirrorjoin/` | Exact line admission, reflection, record splice and joined-section audit. See mirror-pattern §5. |
@@ -36,7 +36,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/survey2d/` | 2D disks, prism readers, walks, Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Holds certified section pairs and checks offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve wall, undercut and concave-radius readers. See verification §6. |
-| `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings. See verification §6. |
+| `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings, and the revolve clearance carrier input. See verification §6, clearance §2. |
 | `internal/radiussurvey/` | Prism, revolve, cup and BRep concave-radius readings. See verification §6. |
 | `internal/motionbound/` | Motion variants, exact parameters, poses, box bounds, pair certificates, record radii, overlap transfer and sweeps. |
 | `internal/motionoption/` | Motion options. See motion-check §3. |

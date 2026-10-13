@@ -1,9 +1,11 @@
-package decad
+package circularbounds_test
 
 import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,7 +17,7 @@ func TestCircularBoreRingBoundsShiftedStationChord(t *testing.T) {
 	for i := range angles {
 		angles[i] = phase + 2*math.Pi*float64(i)/count
 	}
-	points, bound, err := certifiedCircularBoreRing(t.Context(), radius, angles)
+	points, bound, err := circularbounds.BoreRing(t.Context(), radius, angles)
 	require.NoError(t, err)
 	require.Len(t, points, count)
 	require.Greater(t, bound, 0.0)
@@ -26,8 +28,8 @@ func TestCircularBoreRingBoundsShiftedStationChord(t *testing.T) {
 	}
 	// A repeated phase leaves a zero-width chord and cannot certify a ring.
 	angles[1] = angles[0]
-	_, _, err = certifiedCircularBoreRing(t.Context(), radius, angles)
-	require.ErrorIs(t, err, ErrUnsupported)
+	_, _, err = circularbounds.BoreRing(t.Context(), radius, angles)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }
 
 func TestCircularBoreRingAcceptsCertifiedWiderStepAndBoundsEveryChord(t *testing.T) {
@@ -37,9 +39,9 @@ func TestCircularBoreRingAcceptsCertifiedWiderStepAndBoundsEveryChord(t *testing
 	for i := range angles {
 		angles[i] = -0.03 + 2*math.Pi*float64(i)/count
 	}
-	_, _, err := certifiedCircularBoreRing(t.Context(), radius, angles)
-	require.ErrorIs(t, err, ErrUnsupported)
-	points, bound, err := certifiedCircularBoreRingAtStep(t.Context(), radius, angles, 0.1)
+	_, _, err := circularbounds.BoreRing(t.Context(), radius, angles)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	points, bound, err := circularbounds.BoreRingAtStep(t.Context(), radius, angles, 0.1)
 	require.NoError(t, err)
 	require.Less(t, bound, 0.1)
 	for i, point := range points {
@@ -47,6 +49,6 @@ func TestCircularBoreRingAcceptsCertifiedWiderStepAndBoundsEveryChord(t *testing
 		midU, midV := (point.U+next.U)/2, (point.V+next.V)/2
 		require.LessOrEqual(t, radius-math.Hypot(midU, midV), bound)
 	}
-	_, _, err = certifiedCircularBoreRingAtStep(t.Context(), radius, angles, 0.08)
-	require.ErrorIs(t, err, ErrUnsupported)
+	_, _, err = circularbounds.BoreRingAtStep(t.Context(), radius, angles, 0.08)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }
