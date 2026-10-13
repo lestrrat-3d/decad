@@ -1409,3 +1409,5 @@
 10	0.01	TestLoftCylinderEdgesMeetXPAgreesWithRational
 10	0.01	TestLoftCylinderSourceCrossingBoxMatchesRationalBisection
 10	0.01	TestLoftCylinderTriangleMinRadiusMatchesRational
+10	0.00	TestPointConeCapGeometryMatchesPerConeBound
+10	0.00	TestPointConeMidpointRoundMatchesRational

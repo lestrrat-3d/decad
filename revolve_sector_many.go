@@ -255,11 +255,12 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	for i, node := range original {
 		far[i] = node.p
 	}
-	upperBound, upperLip, err := pointConeCapBound(far, caps, record.upper)
+	capGeom := pointConeCapGeometry(far, caps)
+	upperBound, upperLip, err := pointConeCapBoundGeom(capGeom, record.upper)
 	if err != nil {
 		return nil, nil, err
 	}
-	lowerBound, lowerLip, err := pointConeCapBound(far, caps, record.lower)
+	lowerBound, lowerLip, err := pointConeCapBoundGeom(capGeom, record.lower)
 	if err != nil {
 		return nil, nil, err
 	}
