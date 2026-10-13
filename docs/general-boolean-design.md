@@ -273,6 +273,37 @@ the turn: an L boss's reflex corner reads concave. A line a floor and a wall
 share reads the owner's loop role, so the floor's edges along the boss's
 walls read convex, as the stacked body's rims along a square boss do.
 
+#### A1 face patch from perpendicular rectangular prisms
+
+Two authenticated rectangular prisms can share part of one planar face even
+when their original sweep axes differ. Before class B's B8 gate, Union admits
+this pair when both profiles are complete axis-aligned four-line rectangles,
+both sections and levels have zero displacement, the transforms are identical,
+and each source axis is bit-identical to a signed axis of one exact orthonormal
+reference frame. The source rectangles and sweep intervals define boxes in
+that frame. Each projected box coordinate is evaluated as an exact dyadic
+rational and must be representable as a float. Exactly one box-axis interval
+ends where the other starts; the other two intervals must overlap with
+positive length. The reference prism's sweep axis must be one of those
+in-plane axes. This proves a positive-area common face patch, disjoint
+interiors, and one connected solid without a sampled contact test.
+
+The second box is restated as a rectangular prism in the first box's frame.
+This restatement preserves its exact source solid because the signed-axis
+permutation and every coordinate passed the rational check. Equal sweep
+intervals use the existing co-directional prism Union. Unequal intervals use
+A1's slabs and, for a partly shared wall, its BRep result. Both routes use
+private Sketch scenes to classify the footprints and remove the shared face
+patch. A1 also splits the exposed interface faces at the two levels. The
+prism or BRep topology audit closes the result, and its volume reading equals
+the sum of the disjoint source volumes. Their ordinary tessellators supply
+closed-boundary and occupied-volume proofs at `VerifyAll`. If one reference
+frame silently misses, the pair is tried in the other's frame, since that
+changes the slab axis. An unequal-level A1 frame is tried before an equal-level
+prism frame, so a planar box join keeps its exact BRep volume when available.
+A nonrectangular, displaced, rounded-frame or edge-only pair misses this path
+and reaches the unchanged later dispatch.
+
 #### A4 — the reflected re-expression
 
 G2 is replaced by "the relative map's determinant decides nothing": operand
