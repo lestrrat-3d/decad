@@ -2,14 +2,97 @@ package decad
 
 import (
 	"context"
+	"maps"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/pointquery"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
+
+// The source certificate fixes the faceted tool payload that existed when
+// its source records were accepted. A changed payload cannot borrow that
+// certificate or a cached VerifyAll mesh.
+type revolveLoftFacesToolPayloadSnapshot struct {
+	verts       []r3.Vec
+	tris        [][3]int
+	vertexBound []float64
+	src         []int
+	faceOf      []int
+	faces       []*Face
+	meshBound   float64
+	volSymDiff  float64
+	areaSlack   float64
+}
+
+func newRevolveLoftFacesToolPayloadSnapshot(tooth *Body,
+	p facetedPayload) *revolveLoftFacesToolPayloadSnapshot {
+	return &revolveLoftFacesToolPayloadSnapshot{
+		verts: slices.Clone(p.verts), tris: slices.Clone(p.tris),
+		vertexBound: slices.Clone(p.vertexBound), src: slices.Clone(p.src),
+		faceOf: slices.Clone(p.faceOf), faces: tooth.Faces(),
+		meshBound: p.meshBound, volSymDiff: p.volSymDiff, areaSlack: p.areaSlack,
+	}
+}
+
+func (s *revolveLoftFacesToolPayloadSnapshot) current(tooth *Body,
+	p facetedPayload) bool {
+	return s != nil && tooth != nil && slices.Equal(s.verts, p.verts) &&
+		slices.Equal(s.tris, p.tris) && slices.Equal(s.vertexBound, p.vertexBound) &&
+		slices.Equal(s.src, p.src) && slices.Equal(s.faceOf, p.faceOf) &&
+		slices.Equal(s.faces, tooth.Faces()) && s.meshBound == p.meshBound &&
+		s.volSymDiff == p.volSymDiff && s.areaSlack == p.areaSlack
+}
+
+func cloneRevolveLoftFacesProofMesh(m *Mesh) *Mesh {
+	cloned := *m
+	cloned.vertices = slices.Clone(m.vertices)
+	cloned.triangles = slices.Clone(m.triangles)
+	cloned.source = slices.Clone(m.source)
+	cloned.vertexBound = slices.Clone(m.vertexBound)
+	cloned.faceBound = maps.Clone(m.faceBound)
+	return &cloned
+}
+
+func sameRevolveLoftFacesProofMesh(a, b *Mesh) bool {
+	return a != nil && b != nil && slices.Equal(a.vertices, b.vertices) &&
+		slices.Equal(a.triangles, b.triangles) && slices.Equal(a.source, b.source) &&
+		slices.Equal(a.vertexBound, b.vertexBound) && maps.Equal(a.faceBound, b.faceBound) &&
+		a.bound == b.bound && a.coordBound == b.coordBound &&
+		a.areaSlack == b.areaSlack && a.volSymDiff == b.volSymDiff &&
+		a.symDiffOK == b.symDiffOK
+}
+
+func cloneRevolveLoftFacesClearShell(shell *revolveLoftFacesBlankSeamShell) *revolveLoftFacesBlankSeamShell {
+	cloned := *shell
+	cloned.mesh.verts = slices.Clone(shell.mesh.verts)
+	cloned.mesh.tris = slices.Clone(shell.mesh.tris)
+	cloned.mesh.src = slices.Clone(shell.mesh.src)
+	cloned.mesh.groups = slices.Clone(shell.mesh.groups)
+	for i := range cloned.mesh.groups {
+		cloned.mesh.groups[i].origins = slices.Clone(shell.mesh.groups[i].origins)
+	}
+	cloned.vertexBounds = slices.Clone(shell.vertexBounds)
+	cloned.triangleCells = slices.Clone(shell.triangleCells)
+	cloned.sectionRings = make([][][]int, len(shell.sectionRings))
+	for i, section := range shell.sectionRings {
+		cloned.sectionRings[i] = make([][]int, len(section))
+		for j, ring := range section {
+			cloned.sectionRings[i][j] = slices.Clone(ring)
+		}
+	}
+	cloned.seams = make([][]int, len(shell.seams))
+	for i, seam := range shell.seams {
+		cloned.seams[i] = slices.Clone(seam)
+	}
+	if len(cloned.seams) != 0 {
+		cloned.seam = cloned.seams[0]
+	}
+	return &cloned
+}
 
 // This private context owns the real producers consumed by every candidate
 // triangle. Construction checks the complete contact graph and shell once.
@@ -25,9 +108,9 @@ func newRevolveLoftFacesClearPatchContext(ctx context.Context,
 	if ctx == nil || source == nil || source.tooth == nil {
 		return nil, false, nil
 	}
-	shell, _, ok, err := revolveLoftFacesBlankShellWithAllRuns(ctx, source)
-	if err != nil || !ok {
-		return nil, false, err
+	payload, ok := source.tooth.payload.(facetedPayload)
+	if !ok || !source.toolProof.current(source.tooth, payload) {
+		return nil, false, nil
 	}
 	tool, err := tessellateContext(ctx, source.tooth, chord, VerifyAll)
 	if err != nil || tool == nil || !tool.boundaryOK || !tool.symDiffOK ||
@@ -35,7 +118,19 @@ func newRevolveLoftFacesClearPatchContext(ctx context.Context,
 		proofbound.IsNonFinite(tool.volSymDiff) || tool.volSymDiff < 0 {
 		return nil, false, err
 	}
-	return &revolveLoftFacesClearPatchContext{source: source, shell: shell, tool: tool}, true, nil
+	fresh, err := tessellateFaceted(ctx, source.tooth, payload, payload.meshBound)
+	if err != nil || !sameRevolveLoftFacesProofMesh(tool, fresh) ||
+		!source.toolProof.current(source.tooth, payload) {
+		return nil, false, err
+	}
+	shell, _, ok, err := revolveLoftFacesBlankShellWithAllRuns(ctx, source)
+	if err != nil || !ok || !source.toolProof.current(source.tooth, payload) {
+		return nil, false, err
+	}
+	return &revolveLoftFacesClearPatchContext{
+		source: source, shell: cloneRevolveLoftFacesClearShell(shell),
+		tool: cloneRevolveLoftFacesProofMesh(tool),
+	}, true, nil
 }
 
 func (c *revolveLoftFacesClearPatchContext) classify(ctx context.Context,
@@ -43,15 +138,15 @@ func (c *revolveLoftFacesClearPatchContext) classify(ctx context.Context,
 	if c == nil {
 		return pointquery.Undecided, false, nil
 	}
-	return revolveLoftFacesClearPatch(ctx, c.source, c.shell, c.tool, index)
+	return c.classifyClearPatch(ctx, index)
 }
 
 // A clear-patch certificate transfers one point's tool occupancy to an
 // entire audited blank-shell triangle only after every tool facet is proved
 // farther away than the two complete boundary departure bounds.
-func revolveLoftFacesClearPatch(ctx context.Context, source *revolveLoftFacesSourceCertificate,
-	shell *revolveLoftFacesBlankSeamShell, tool *Mesh, index int,
-) (pointquery.Location, bool, error) {
+func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Context,
+	index int) (pointquery.Location, bool, error) {
+	source, shell, tool := c.source, c.shell, c.tool
 	if ctx == nil || source == nil || shell == nil || tool == nil ||
 		source.tooth == nil || source.trim == nil ||
 		!revolveLoftFacesSectionCurrent(source) ||

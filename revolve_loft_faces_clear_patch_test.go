@@ -57,7 +57,7 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	shell, tool := classifier.shell, classifier.tool
 	index := -1
 	for i := range shell.mesh.tris {
-		location, certified, checkErr := revolveLoftFacesClearPatch(t.Context(), source, shell, tool, i)
+		location, certified, checkErr := classifier.classify(t.Context(), i)
 		require.NoError(t, checkErr)
 		if certified {
 			require.Equal(t, pointquery.Outside, location)
@@ -66,56 +66,106 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, index, 0)
-	refuses := func(t *testing.T, shell *revolveLoftFacesBlankSeamShell, tool *Mesh) {
+	refuses := func(t *testing.T, classifier *revolveLoftFacesClearPatchContext) {
 		t.Helper()
-		location, certified, checkErr := revolveLoftFacesClearPatch(t.Context(), source, shell, tool, index)
+		location, certified, checkErr := classifier.classify(t.Context(), index)
 		require.NoError(t, checkErr)
 		require.False(t, certified)
 		require.Equal(t, pointquery.Undecided, location)
+	}
+	refusesEntry := func(t *testing.T) {
+		t.Helper()
+		_, built, buildErr := newRevolveLoftFacesClearPatchContext(t.Context(), source, units.Millimeters(0.1))
+		require.NoError(t, buildErr)
+		require.False(t, built)
 	}
 	t.Run("stale producer", func(t *testing.T) {
 		original := trim.stationGroup[0]
 		trim.stationGroup[0] = original + 1
 		defer func() { trim.stationGroup[0] = original }()
-		refuses(t, shell, tool)
+		refusesEntry(t)
+	})
+	t.Run("changed body facet", func(t *testing.T) {
+		original := trimmed.payload
+		changed := original.(facetedPayload)
+		changed.verts = slices.Clone(changed.verts)
+		changed.verts[0].X += 1
+		trimmed.payload = changed
+		defer func() { trimmed.payload = original }()
+		refusesEntry(t)
+	})
+	t.Run("changed cached facet", func(t *testing.T) {
+		original := trimmed.tessellationCache.Load()
+		changed := *tool
+		changed.vertices = slices.Clone(tool.vertices)
+		changed.vertices[0].X += 1
+		trimmed.tessellationCache.Store(&tessellationCacheEntry{
+			chordBits: math.Float64bits(0.1), verify: VerifyAll, mesh: &changed})
+		defer trimmed.tessellationCache.Store(original)
+		refusesEntry(t)
+	})
+	t.Run("understated positive cached bound", func(t *testing.T) {
+		require.Positive(t, tool.bound)
+		original := trimmed.tessellationCache.Load()
+		changed := *tool
+		changed.bound = math.Nextafter(tool.bound, 0)
+		require.Positive(t, changed.bound)
+		trimmed.tessellationCache.Store(&tessellationCacheEntry{
+			chordBits: math.Float64bits(0.1), verify: VerifyAll, mesh: &changed})
+		defer trimmed.tessellationCache.Store(original)
+		refusesEntry(t)
 	})
 	t.Run("small face bound", func(t *testing.T) {
 		changed := *shell
 		changed.faceBound = 0
-		refuses(t, &changed, tool)
+		modified := *classifier
+		modified.shell = &changed
+		refuses(t, &modified)
 	})
 	t.Run("wrong triangle provenance", func(t *testing.T) {
 		changed := *shell
 		changed.triangleCells = slices.Clone(shell.triangleCells)
 		changed.triangleCells[index].section = len(source.section.spans)
-		refuses(t, &changed, tool)
+		modified := *classifier
+		modified.shell = &changed
+		refuses(t, &modified)
 	})
 	t.Run("wrong source group", func(t *testing.T) {
 		changed := *shell
 		changed.mesh = shell.mesh
 		changed.mesh.src = slices.Clone(shell.mesh.src)
 		changed.mesh.src[index] = len(shell.mesh.groups)
-		refuses(t, &changed, tool)
+		modified := *classifier
+		modified.shell = &changed
+		refuses(t, &modified)
 	})
 	t.Run("understated corner bound", func(t *testing.T) {
 		changed := *shell
 		changed.vertexBounds = slices.Clone(shell.vertexBounds)
 		changed.vertexBounds[shell.mesh.tris[index][0]] = shell.faceBound + 1
-		refuses(t, &changed, tool)
+		modified := *classifier
+		modified.shell = &changed
+		refuses(t, &modified)
 	})
 	t.Run("insufficient separation", func(t *testing.T) {
 		changed := *tool
 		changed.bound = 1000
-		refuses(t, shell, &changed)
+		modified := *classifier
+		modified.tool = &changed
+		refuses(t, &modified)
 	})
 	t.Run("undecided point location", func(t *testing.T) {
 		changed := *tool
 		changed.volSymDiff = math.MaxFloat64
-		refuses(t, shell, &changed)
+		modified := *classifier
+		modified.tool = &changed
+		refuses(t, &modified)
 	})
 	t.Run("unverified tool", func(t *testing.T) {
 		changed := *tool
 		changed.symDiffOK = false
-		refuses(t, shell, &changed)
+		modified := *classifier
+		modified.tool = &changed
+		refuses(t, &modified)
 	})
 }

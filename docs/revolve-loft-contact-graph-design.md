@@ -67,6 +67,11 @@ must retain its source section, face origins, ring band, angular interval,
 held vertices and sufficient face bound. The tool mesh must publish an embedded
 boundary and an occupied-volume proof. A missing or changed producer,
 provenance record, bound or proof leaves the candidate unclassified.
+The source certificate records the trimmed body's faceted proof data by value.
+The consumer compares its `VerifyAll` mesh with a fresh payload restatement,
+then copies the audited shell and mesh into its private classification context.
+Candidate distance and point queries read only those copies; each candidate
+also rechecks the source records.
 
 For every tool facet, exact triangle-distance predicates must prove a gap
 strictly greater than the sum of the shell's complete face bound and the
