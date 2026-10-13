@@ -60,3 +60,4 @@ The rules for rows live in `docs/layout.md`.
 | `internal/stitchweld/` | Stitch welds, topology and bounds. See surface §6.2–6.4. |
 | `internal/denotation/` | Level and curve identity certificates. See surface §5.2, §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
+| `internal/spiralsector/` | Spiral-tooth sector, slab and held-shell separation proofs and inverse copy placement. See faceted-vertex-bounds §3.7. |
