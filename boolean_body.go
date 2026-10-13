@@ -71,9 +71,9 @@ type facetedPayload struct {
 	// prismPatternJoin retains immutable source and shell records for a later
 	// certified local corner rewrite. Placement drops this source relation.
 	prismPatternJoin *prismPatternJoinRecord
-	// prismScale marks a certified similar image of a line/circular
-	// prism. Rigid copies retain it; booleans and modify rewrites do not.
-	prismScale bool
+	// similaritySource marks a certified similar image of a prism or full
+	// Revolve. Rigid copies retain it; booleans and modify rewrites do not.
+	similaritySource bool
 	// obliqueBoss retains the two authenticated prism sources for one complete
 	// plate-to-cylinder junction. A later Fillet rebuilds from these records.
 	obliqueBoss            *obliqueBossRecord

@@ -1327,17 +1327,18 @@ an ambient assembly context (§4). The zero `Transform{}` is invalid
 (`Transform.IsValid`) and is `ErrDegenerate` (§12). `Transform` checks `ctx` through any
 faceted-payload rebuild and returns its error without changing the document.
 
-`ScaledAt` retires an authenticated point-loft planar Split slab or an exact
-line/circular solid prism after a positive, finite, dimensionless uniform scale
-around `anchor` in millimetres. It accepts rigidly placed and previously scaled
-copies of either class. A Split slab keeps its original cap origins,
-face-centroid certificates and rational source cut maps. A prism keeps its
-source-face roles and planar tags, while circular wall faces become `Faceted`;
-later operations that require an analytic prism can refuse it. Both classes
-rebuild the held mesh with scaled vertex, area and occupied-volume bounds. A
-nonpositive factor is `ErrDegenerate`, a length factor is `ErrUnitKind`, and an
-unsupported body is `ErrUnsupported`. Cancellation and proof refusal leave the
-receiver live.
+`ScaledAt` retires an authenticated point-loft planar Split slab, an exact
+line/circular solid prism, or a complete solid Revolve whose section has no
+displacement after a positive, finite, dimensionless uniform scale around
+`anchor` in millimetres. It accepts rigidly placed and previously scaled copies
+of these classes. A Split slab keeps its original cap origins, face-centroid
+certificates and rational source cut maps. A prism or Revolve keeps its
+source-face roles and planar tags, while curved faces become `Faceted`;
+later operations that require an analytic source can refuse it. All three
+classes rebuild the held mesh with scaled vertex, area and occupied-volume
+bounds. A nonpositive factor is `ErrDegenerate`, and a length factor is
+`ErrUnitKind`. A partial or sheet Revolve and any other unsupported body return
+`ErrUnsupported`. Cancellation and proof refusal leave the receiver live.
 
 **A body can be copied without consuming it.** `Transform` retires its input, so
 modelling a part once and placing several instances — a bolt pattern, several

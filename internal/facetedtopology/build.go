@@ -118,7 +118,41 @@ func build(
 		}
 	}
 	if len(boundaryEdges) == 0 {
-		return fmt.Errorf(`%w: a faceted body carries no face boundaries`, decaderr.ErrBooleanFailed)
+		// A closed one-face patch, such as a whole sphere, has no B-rep
+		// edges or loops. Check closure and edge connectivity before naming
+		// that topology; disconnected shells must not collapse to one face.
+		if len(tris) == 0 || len(facetFace) != len(tris) || len(halfOwner) != 3*len(tris) {
+			return fmt.Errorf(`%w: a faceted body carries no face boundaries`, decaderr.ErrBooleanFailed)
+		}
+		face := facetFace[0]
+		seen := map[int]struct{}{0: {}}
+		queue := []int{0}
+		for len(queue) > 0 {
+			if err := budget.Step(); err != nil {
+				return err
+			}
+			i := queue[len(queue)-1]
+			queue = queue[:len(queue)-1]
+			if facetFace[i] != face {
+				return fmt.Errorf(`%w: a faceted body carries no face boundaries`, decaderr.ErrBooleanFailed)
+			}
+			tri := tris[i]
+			for k := range 3 {
+				twin, ok := halfOwner[[2]int{tri[(k+1)%3], tri[k]}]
+				if !ok || facetFace[twin] != face {
+					return fmt.Errorf(`%w: a faceted body carries no face boundaries`, decaderr.ErrBooleanFailed)
+				}
+				if _, ok := seen[twin]; !ok {
+					seen[twin] = struct{}{}
+					queue = append(queue, twin)
+				}
+			}
+		}
+		if len(seen) != len(tris) {
+			return fmt.Errorf(`%w: a faceted body carries no face boundaries`, decaderr.ErrBooleanFailed)
+		}
+		result.FaceLoops = map[int][]*Loop{face: nil}
+		return nil
 	}
 
 	// Chain the boundary edges: a vertex continues a chain when exactly two
