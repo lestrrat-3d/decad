@@ -28,9 +28,9 @@
 // as its own cost. Serialising the measurement gives each test its own weight,
 // which is what the fill needs to balance them.
 //
-// A test the cost file does not mention is recorded at zero and packed anyway,
-// so a newly added test lands in the lightest shard rather than being dropped;
-// re-measure to give it its real weight.
+// A test the cost file does not mention is recorded at zero and assigned to
+// the last shard, so a newly added test is not dropped and does not pile into
+// the lightest shard; re-measure to give it its real weight.
 package main
 
 import (
@@ -218,6 +218,8 @@ type testUnit struct {
 	pkg   int
 	names []string
 	cost  float64
+	// unmeasured is set when the cost file does not mention the test.
+	unmeasured bool
 }
 
 func testUnits(pkg int, names []string, costs map[string]float64) []testUnit {
@@ -228,9 +230,13 @@ func testUnits(pkg int, names []string, costs map[string]float64) []testUnit {
 			grouped.pkg = pkg
 			grouped.names = append(grouped.names, name)
 			grouped.cost += costs[name]
+			if _, ok := costs[name]; !ok {
+				grouped.unmeasured = true
+			}
 			continue
 		}
-		units = append(units, testUnit{pkg: pkg, names: []string{name}, cost: costs[name]})
+		_, ok := costs[name]
+		units = append(units, testUnit{pkg: pkg, names: []string{name}, cost: costs[name], unmeasured: !ok})
 	}
 	if len(grouped.names) != 0 {
 		slices.Sort(grouped.names)
@@ -267,6 +273,18 @@ func pack(rootNames []string, rootCosts map[string]float64, apitestNames []strin
 		assigned[u.pkg][shard] = append(assigned[u.pkg][shard], u.names...)
 		totals[u.pkg][shard] += u.cost
 	}
+
+	// A test the cost file does not mention goes to the last shard, which has
+	// the largest time budget, instead of the lightest one.
+	var measured []testUnit
+	for _, u := range units {
+		if u.unmeasured {
+			assign(shardCount-1, u)
+		} else {
+			measured = append(measured, u)
+		}
+	}
+	units = measured
 
 	firstRegularShard := 0
 	if len(units) != 0 && units[0].cost > total/(2*shardCount) {
@@ -355,6 +373,9 @@ func write(path, pkgDir string, assigned [][]string, totals []float64, costs map
 		b.WriteString("# by measured cost so the shards stay level as the suite grows. Regenerate\n")
 	}
 	b.WriteString("# with the command in _shardgen/main.go's doc comment.\n")
+	b.WriteString("#\n")
+	b.WriteString("# A new test that has not been measured goes in shard 10, never in the lightest\n")
+	b.WriteString("# shard. Rebalance only by regenerating from measured costs.\n")
 	b.WriteString("#\n")
 	b.WriteString("# Shard totals at the last measurement:\n")
 	for i, t := range totals {

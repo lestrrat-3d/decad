@@ -22,3 +22,6 @@ examples, or changing CI shards.
   `.github/test-shards-apitest.txt` for `apitest/` tests.
 - ALWAYS run `go test . ./apitest/ -run '^TestCI'` before pushing any
   test-name change.
+- A new test that has not been measured goes in shard 10, never in the lightest
+  shard. Shards are rebalanced only by regenerating them with `_shardgen` from
+  measured costs.

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -170,7 +171,15 @@ func TestPackSpreadsZeroCostTests(t *testing.T) {
 		rootNames = append(rootNames, fmt.Sprintf("TestRoot%02d", i))
 		apiNames = append(apiNames, fmt.Sprintf("TestAPI%02d", i))
 	}
-	assigned, _, err := pack(rootNames, nil, apiNames, nil)
+	rootCosts := make(map[string]float64)
+	apiCosts := make(map[string]float64)
+	for _, name := range rootNames {
+		rootCosts[name] = 0
+	}
+	for _, name := range apiNames {
+		apiCosts[name] = 0
+	}
+	assigned, _, err := pack(rootNames, rootCosts, apiNames, apiCosts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,5 +189,31 @@ func TestPackSpreadsZeroCostTests(t *testing.T) {
 		if count != want {
 			t.Fatalf("shard %d has %d zero-cost tests, want %d", shard, count, want)
 		}
+	}
+}
+
+func TestPackSendsUnmeasuredTestsToLastShard(t *testing.T) {
+	var rootNames, apiNames []string
+	rootCosts := make(map[string]float64)
+	apiCosts := make(map[string]float64)
+	for i := range shardCount * 3 {
+		root := fmt.Sprintf("TestRoot%02d", i)
+		api := fmt.Sprintf("TestAPI%02d", i)
+		rootNames = append(rootNames, root)
+		apiNames = append(apiNames, api)
+		rootCosts[root] = float64(i + 1)
+		apiCosts[api] = float64(i + 1)
+	}
+	rootNames = append(rootNames, "TestRootNew")
+	apiNames = append(apiNames, "TestAPINew")
+	assigned, _, err := pack(rootNames, rootCosts, apiNames, apiCosts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(assigned[0][shardCount-1], "TestRootNew") {
+		t.Fatalf("unmeasured root test is not in shard %d", shardCount-1)
+	}
+	if !slices.Contains(assigned[1][shardCount-1], "TestAPINew") {
+		t.Fatalf("unmeasured apitest test is not in shard %d", shardCount-1)
 	}
 }
