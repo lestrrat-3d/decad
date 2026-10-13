@@ -197,6 +197,10 @@ type loftPayload struct {
 	// consumers that must omit a source wall without inferring its identity
 	// from its sampled coordinates.
 	segment [][]int
+	// twistAreaCells retains only the certified per-cell readings needed by a
+	// private twisted Sweep comparison Loft. Ordinary Loft payloads omit them.
+	twistAreaCells       [][]twistAreaCellClaims
+	retainTwistAreaCells bool
 
 	// proof is the mesh proof record docs/tessellation-design.md §2 states for
 	// this payload, composed by evalLoft from the same build the triangle set
@@ -256,6 +260,7 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref producerID, c
 	// from the re-lifted records, and a stale copy surviving the re-evaluation
 	// is exactly the disagreement the payload's own doc comment forbids.
 	next.capStartCount, next.cell, next.side, next.segment = 0, nil, nil, nil
+	next.twistAreaCells = nil
 	next.proof = loftmesh.MeshProof{}
 	return evalLoft(ctx, d, ref, next, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 }
@@ -499,6 +504,19 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	pl.segment = make([][]int, len(pairs))
 	for i := range pairs {
 		pl.segment[i] = append([]int(nil), pairs[i].Segment...)
+	}
+	if pl.retainTwistAreaCells {
+		pl.twistAreaCells = make([][]twistAreaCellClaims, len(pairs))
+		for i, pair := range pairs {
+			pl.twistAreaCells[i] = make([]twistAreaCellClaims, len(pair.Segment))
+			for j := range pair.Segment {
+				pl.twistAreaCells[i][j] = twistAreaCellClaims{
+					arcLength: max(pair.ArcUpperV[j], pair.ArcUpperW[j]),
+					energy:    max(pair.TangentEnergyV[j], pair.TangentEnergyW[j]),
+					matched:   pair.MatchedDelta[j],
+				}
+			}
+		}
 	}
 	pl.proof = loftmesh.MeshProofOf(a, mass.MassAccumulator, sectionMatchedDelta)
 	pl.delta = a.Delta
