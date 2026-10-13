@@ -89,7 +89,11 @@ func ChamferMiddleHeldRootInside(verts []r3.Vec, tris [][3]int, walls, root int,
 		return false
 	}
 	r := proofarith.FloatRat(radius)
-	r2 := new(big.Rat).Mul(r, r)
+	rn2 := new(big.Int).Mul(r.Num(), r.Num())
+	rd2 := new(big.Int).Mul(r.Denom(), r.Denom())
+	loN, loD := zLo.Num(), zLo.Denom()
+	hiN, hiD := zHi.Num(), zHi.Denom()
+	var lhs, rhs, t big.Int
 	for j := 2 * root; j < walls; j++ {
 		tri := tris[j]
 		poly := []proofarith.Xpt{
@@ -97,12 +101,16 @@ func ChamferMiddleHeldRootInside(verts []r3.Vec, tris [][3]int, walls, root int,
 			proofarith.XptOf(verts[tri[1]]),
 			proofarith.XptOf(verts[tri[2]]),
 		}
-		poly = chamferMiddleClipZ(poly, zLo, true)
-		poly = chamferMiddleClipZ(poly, zHi, false)
+		poly = chamferMiddleClipZ(poly, loN, loD, true)
+		poly = chamferMiddleClipZ(poly, hiN, hiD, false)
 		for _, p := range poly {
-			x, y := meshbool.RatCoordOf(p, 0), meshbool.RatCoordOf(p, 1)
-			radius2 := new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y))
-			if radius2.Cmp(r2) >= 0 {
+			lhs.Mul(p.X, p.X)
+			t.Mul(p.Y, p.Y)
+			lhs.Add(&lhs, &t)
+			lhs.Mul(&lhs, rd2)
+			rhs.Mul(p.W, p.W)
+			rhs.Mul(&rhs, rn2)
+			if lhs.Cmp(&rhs) >= 0 {
 				return false
 			}
 		}
@@ -110,13 +118,20 @@ func ChamferMiddleHeldRootInside(verts []r3.Vec, tris [][3]int, walls, root int,
 	return true
 }
 
-func chamferMiddleClipZ(poly []proofarith.Xpt, level *big.Rat,
+// chamferMiddleZCmp is the sign of p.z − n/d for a positive d.
+func chamferMiddleZCmp(p proofarith.Xpt, n, d *big.Int) int {
+	a := new(big.Int).Mul(p.Z, d)
+	b := new(big.Int).Mul(n, p.W)
+	return a.Cmp(b)
+}
+
+func chamferMiddleClipZ(poly []proofarith.Xpt, n, d *big.Int,
 	keepAbove bool) []proofarith.Xpt {
 	if len(poly) == 0 {
 		return nil
 	}
 	inside := func(p proofarith.Xpt) bool {
-		cmp := meshbool.RatCoordOf(p, 2).Cmp(level)
+		cmp := chamferMiddleZCmp(p, n, d)
 		return keepAbove && cmp >= 0 || !keepAbove && cmp <= 0
 	}
 	var out []proofarith.Xpt
@@ -124,9 +139,14 @@ func chamferMiddleClipZ(poly []proofarith.Xpt, level *big.Rat,
 		b := poly[(i+1)%len(poly)]
 		inA, inB := inside(a), inside(b)
 		if inA != inB {
-			za, zb := meshbool.RatCoordOf(a, 2), meshbool.RatCoordOf(b, 2)
-			t := new(big.Rat).Quo(new(big.Rat).Sub(level, za), new(big.Rat).Sub(zb, za))
-			out = append(out, proofarith.Xlerp(a, b, t.Num(), t.Denom()))
+			// t = (n/d − za)/(zb − za) = (n·Wa − Za·d)·Wb / (d·(Zb·Wa − Za·Wb)).
+			tn := new(big.Int).Mul(n, a.W)
+			tn.Sub(tn, new(big.Int).Mul(a.Z, d))
+			tn.Mul(tn, b.W)
+			td := new(big.Int).Mul(b.Z, a.W)
+			td.Sub(td, new(big.Int).Mul(a.Z, b.W))
+			td.Mul(td, d)
+			out = append(out, proofarith.Xlerp(a, b, tn, td))
 		}
 		if inB {
 			out = append(out, b)
