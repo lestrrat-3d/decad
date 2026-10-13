@@ -25,26 +25,26 @@ type prismPatternFilletContact struct {
 	ringCut       prismPatternFilletRingCut
 }
 
-type prismPatternIVPoint struct{ x, y proofbound.RatInterval }
+type prismPatternIVPoint struct{ X, Y proofbound.RatInterval }
 
 func prismPatternIVPointOf(x, y *big.Rat) prismPatternIVPoint {
 	return prismPatternIVPoint{proofbound.PointInterval(x), proofbound.PointInterval(y)}
 }
 
-func (p prismPatternIVPoint) add(q prismPatternIVPoint) prismPatternIVPoint {
-	return prismPatternIVPoint{proofbound.IntervalAdd(p.x, q.x), proofbound.IntervalAdd(p.y, q.y)}
+func (p prismPatternIVPoint) Add(q prismPatternIVPoint) prismPatternIVPoint {
+	return prismPatternIVPoint{proofbound.IntervalAdd(p.X, q.X), proofbound.IntervalAdd(p.Y, q.Y)}
 }
 
-func (p prismPatternIVPoint) sub(q prismPatternIVPoint) prismPatternIVPoint {
-	return prismPatternIVPoint{proofbound.IntervalSub(p.x, q.x), proofbound.IntervalSub(p.y, q.y)}
+func (p prismPatternIVPoint) Sub(q prismPatternIVPoint) prismPatternIVPoint {
+	return prismPatternIVPoint{proofbound.IntervalSub(p.X, q.X), proofbound.IntervalSub(p.Y, q.Y)}
 }
 
-func (p prismPatternIVPoint) scale(s proofbound.RatInterval) prismPatternIVPoint {
-	return prismPatternIVPoint{proofbound.IntervalMul(p.x, s), proofbound.IntervalMul(p.y, s)}
+func (p prismPatternIVPoint) Scale(s proofbound.RatInterval) prismPatternIVPoint {
+	return prismPatternIVPoint{proofbound.IntervalMul(p.X, s), proofbound.IntervalMul(p.Y, s)}
 }
 
-func (p prismPatternIVPoint) dot(q prismPatternIVPoint) proofbound.RatInterval {
-	return proofbound.IntervalAdd(proofbound.IntervalMul(p.x, q.x), proofbound.IntervalMul(p.y, q.y))
+func (p prismPatternIVPoint) Dot(q prismPatternIVPoint) proofbound.RatInterval {
+	return proofbound.IntervalAdd(proofbound.IntervalMul(p.X, q.X), proofbound.IntervalMul(p.Y, q.Y))
 }
 
 func prismPatternIVSqrt(a proofbound.RatInterval) (proofbound.RatInterval, error) {
@@ -70,13 +70,13 @@ func prismPatternIVHeld(p prismPatternIVPoint, z float64) (r3.Vec, float64, erro
 		value, _ := mid.Float64()
 		return value
 	}
-	x, y := read(p.x), read(p.y)
+	x, y := read(p.X), read(p.Y)
 	point := r3.Vec{X: x, Y: y, Z: z}
 	if !proofbound.FiniteVec(point) {
 		return r3.Vec{}, 0, fmt.Errorf("%w: joined-prism fillet contact is non-finite", ErrUnsupported)
 	}
-	errorBound := proofbound.AbsSumUpper(proofbound.IntervalFloatError(p.x, x),
-		proofbound.IntervalFloatError(p.y, y))
+	errorBound := proofbound.AbsSumUpper(proofbound.IntervalFloatError(p.X, x),
+		proofbound.IntervalFloatError(p.Y, y))
 	return point, errorBound, nil
 }
 
@@ -117,21 +117,21 @@ func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
 	q := prismPatternExactPlacedPoint(part, near)
 	f := prismPatternExactPlacedPoint(part, far)
 	heldRoot := part.mesh.vertices[2*station]
-	rootError := proofbound.AbsSumUpper(proofbound.IntervalFloatError(q.x, heldRoot.X),
-		proofbound.IntervalFloatError(q.y, heldRoot.Y))
+	rootError := proofbound.AbsSumUpper(proofbound.IntervalFloatError(q.X, heldRoot.X),
+		proofbound.IntervalFloatError(q.Y, heldRoot.Y))
 	if rootError > part.mesh.Bound().Base() {
 		return result, fmt.Errorf("%w: joined-prism fillet root is not tied to its source", ErrUnsupported)
 	}
-	d := f.sub(q)
-	length, err := prismPatternIVSqrt(d.dot(d))
+	d := f.Sub(q)
+	length, err := prismPatternIVSqrt(d.Dot(d))
 	if err != nil || length.Lo.Sign() <= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet connector has no positive length", ErrUnsupported)
 	}
-	ux, err := prismPatternIVQuo(d.x, length)
+	ux, err := prismPatternIVQuo(d.X, length)
 	if err != nil {
 		return result, err
 	}
-	uy, err := prismPatternIVQuo(d.y, length)
+	uy, err := prismPatternIVQuo(d.Y, length)
 	if err != nil {
 		return result, err
 	}
@@ -141,11 +141,11 @@ func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
 	r, R := proofarith.FloatRat(radius), proofarith.FloatRat(blankRadius)
 	rIV := proofbound.PointInterval(r)
 	RIV := proofbound.PointInterval(R)
-	L := q.add(n.scale(rIV))
-	a := L.dot(u)
+	L := q.Add(n.Scale(rIV))
+	a := L.Dot(u)
 	Rplus := proofbound.IntervalAdd(RIV, rIV)
 	disc := proofbound.IntervalSub(proofbound.IntervalSquare(a),
-		proofbound.IntervalSub(L.dot(L), proofbound.IntervalSquare(Rplus)))
+		proofbound.IntervalSub(L.Dot(L), proofbound.IntervalSquare(Rplus)))
 	if disc.Lo.Sign() <= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet offset has no distinct outer contact", ErrUnsupported)
 	}
@@ -157,24 +157,24 @@ func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
 	if t.Lo.Sign() <= 0 || proofbound.IntervalSub(length, t).Lo.Sign() <= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet contact escapes its connector", ErrUnsupported)
 	}
-	center := L.add(u.scale(t))
-	lineFoot := q.add(u.scale(t))
-	if lineFoot.dot(lineFoot).Lo.Cmp(prismPatternRadiusSq(blankRadius)) <= 0 {
+	center := L.Add(u.Scale(t))
+	lineFoot := q.Add(u.Scale(t))
+	if lineFoot.Dot(lineFoot).Lo.Cmp(prismPatternRadiusSq(blankRadius)) <= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet line foot stays inside the blank", ErrUnsupported)
 	}
 	step, err := prismPatternIVQuo(RIV, Rplus)
 	if err != nil {
 		return result, err
 	}
-	circleFoot := center.scale(step)
-	cross := proofbound.IntervalSub(proofbound.IntervalMul(q.x, circleFoot.y),
-		proofbound.IntervalMul(q.y, circleFoot.x))
+	circleFoot := center.Scale(step)
+	cross := proofbound.IntervalSub(proofbound.IntervalMul(q.X, circleFoot.Y),
+		proofbound.IntervalMul(q.Y, circleFoot.X))
 	if side < 0 && cross.Hi.Sign() >= 0 || side > 0 && cross.Lo.Sign() <= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet contact leaves its circular gap", ErrUnsupported)
 	}
 	// A source corner, both tangent feet, and the complete radius-r arc fit in
 	// one 3r disk. Later clearance and volume proofs charge only these disks.
-	centerDistance, err := prismPatternIVSqrt(center.sub(q).dot(center.sub(q)))
+	centerDistance, err := prismPatternIVSqrt(center.Sub(q).Dot(center.Sub(q)))
 	if err != nil || new(big.Rat).Add(centerDistance.Hi, r).Cmp(new(big.Rat).Mul(r, big.NewRat(3, 1))) >= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet escapes its local disk", ErrUnsupported)
 	}

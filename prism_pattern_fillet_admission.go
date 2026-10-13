@@ -134,8 +134,8 @@ func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecor
 		root := prismPatternExactPlacedPoint(part, rootPoint)
 		held := part.mesh.vertices[2*station]
 		rootError := proofbound.AbsSumUpper(
-			proofbound.IntervalFloatError(root.x, held.X),
-			proofbound.IntervalFloatError(root.y, held.Y))
+			proofbound.IntervalFloatError(root.X, held.X),
+			proofbound.IntervalFloatError(root.Y, held.Y))
 		if rootError > part.mesh.Bound().Base() {
 			return fmt.Errorf("%w: joined-prism fillet contact %d lost its source station", ErrUnsupported, i)
 		}

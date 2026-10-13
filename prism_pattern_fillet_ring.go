@@ -69,13 +69,13 @@ func prismPatternFilletRingCutOf(rec *prismPatternJoinRecord,
 		}
 		widen := proofarith.FloatRat(rec.ringRound)
 		return prismPatternIVPoint{
-			x: proofbound.IntervalWiden(held.x, widen),
-			y: proofbound.IntervalWiden(held.y, widen),
+			X: proofbound.IntervalWiden(held.X, widen),
+			Y: proofbound.IntervalWiden(held.Y, widen),
 		}
 	}
 	cross := func(a, b prismPatternIVPoint) proofbound.RatInterval {
-		return proofbound.IntervalSub(proofbound.IntervalMul(a.x, b.y),
-			proofbound.IntervalMul(a.y, b.x))
+		return proofbound.IntervalSub(proofbound.IntervalMul(a.X, b.Y),
+			proofbound.IntervalMul(a.Y, b.X))
 	}
 	cut := prismPatternFilletRingCut{}
 	for step := 0; step < len(outline) && step < 512; step++ {

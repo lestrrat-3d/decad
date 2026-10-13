@@ -27,16 +27,16 @@ func prismPatternFilletSectorOf(rec *prismPatternJoinRecord,
 	// Q is the nearest point of the fillet circle to the blank center.
 	// P lies on its near half. Therefore the short P-to-Q arc remains on
 	// one side of the center ray and inside that circle's tangent cone.
-	if center.dot(line.sub(center)).Hi.Sign() >= 0 {
+	if center.Dot(line.Sub(center)).Hi.Sign() >= 0 {
 		return empty, fmt.Errorf("%w: joined-prism fillet has no near-side arc", ErrUnsupported)
 	}
-	cross := proofbound.IntervalSub(proofbound.IntervalMul(center.x, line.y),
-		proofbound.IntervalMul(center.y, line.x))
+	cross := proofbound.IntervalSub(proofbound.IntervalMul(center.X, line.Y),
+		proofbound.IntervalMul(center.Y, line.X))
 	if contact.station == 0 && cross.Lo.Sign() <= 0 ||
 		contact.station == part.rootStart && cross.Hi.Sign() >= 0 {
 		return empty, fmt.Errorf("%w: joined-prism fillet arc has no sided polar sweep", ErrUnsupported)
 	}
-	centerNorm, err := prismPatternIVSqrt(center.dot(center))
+	centerNorm, err := prismPatternIVSqrt(center.Dot(center))
 	r := proofarith.FloatRat(radius)
 	if err != nil || centerNorm.Lo.Cmp(r) <= 0 {
 		return empty, fmt.Errorf("%w: joined-prism fillet circle reaches the axis", ErrUnsupported)
@@ -116,11 +116,11 @@ func prismPatternFilletConnectorSector(part prismPatternPart,
 }
 
 func prismPatternFilletExactAngle(p prismPatternIVPoint) (proofbound.RatInterval, error) {
-	if p.x.Lo.Cmp(p.x.Hi) != 0 || p.y.Lo.Cmp(p.y.Hi) != 0 ||
-		p.x.Lo.Sign() == 0 && p.y.Lo.Sign() == 0 {
+	if p.X.Lo.Cmp(p.X.Hi) != 0 || p.Y.Lo.Cmp(p.Y.Hi) != 0 ||
+		p.X.Lo.Sign() == 0 && p.Y.Lo.Sign() == 0 {
 		return proofbound.RatInterval{}, fmt.Errorf("%w: joined-prism fillet has no exact polar point", ErrUnsupported)
 	}
-	return proofbound.Atan2Interval(p.y.Lo, p.x.Lo, false), nil
+	return proofbound.Atan2Interval(p.Y.Lo, p.X.Lo, false), nil
 }
 
 func prismPatternFilletHeldAngle(p r3.Vec, errorBound float64) (proofbound.RatInterval, error) {
