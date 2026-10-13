@@ -70,3 +70,27 @@ func TestDyQuoFloatErrorMatchesRationalFloatError(t *testing.T) {
 		require.Equal(t, math.Float64bits(want), math.Float64bits(got), "n/d=%s held=%g", q.FloatString(30), held)
 	}
 }
+
+// TestDyQuoFloatBinades sweeps quotients through every normal binade, so both the
+// power-of-two table and the Ldexp fallback of the scaling run.
+func TestDyQuoFloatBinades(t *testing.T) {
+	t.Parallel()
+	r := rand.New(rand.NewPCG(13, 17))
+	for i := range 8000 {
+		e := i%2040 - 1020
+		n := proof.MustDyOf(math.Ldexp(r.Float64()+0.5, e))
+		d := proof.MustDyOf(r.Float64() + 0.5)
+		q := new(big.Rat).Quo(n.Rat(), d.Rat())
+		want := ratFloatUpRef(q)
+		got := proof.DyQuoFloatUp(n, d)
+		require.Equal(t, math.Float64bits(want), math.Float64bits(got), "n/d=%s", q.FloatString(30))
+
+		held, _ := q.Float64()
+		if i%3 == 0 {
+			held = math.Nextafter(held, math.Inf(1))
+		}
+		wantErr := proof.RationalFloatError(q, held)
+		gotErr := proof.DyQuoFloatError(n, d, held)
+		require.Equal(t, math.Float64bits(wantErr), math.Float64bits(gotErr), "n/d=%s held=%x", q.FloatString(30), held)
+	}
+}

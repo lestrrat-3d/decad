@@ -65,6 +65,9 @@ func dyQuoRound(n, d Dyadic, up bool) (float64, bool, bool) {
 	if top := scale + 52; top < -1022 || top > 1023 {
 		return 0, false, false
 	}
+	if scale >= -dyPow2Bias && scale <= dyPow2Bias {
+		return float64(mant) * dyPow2[scale+dyPow2Bias], exact, true
+	}
 	return math.Ldexp(float64(mant), scale), exact, true
 }
 
@@ -98,7 +101,7 @@ func DyQuoFloatError(n, d Dyadic, held float64) float64 {
 	num := DyAbs(DySubScalar(n, DyMul(heldDy, d)))
 	if f, exact, ok := dyQuoRound(num, d, false); ok {
 		if !exact {
-			f = math.Nextafter(f, math.Inf(1))
+			f = NextUp(f)
 		}
 		return f
 	}

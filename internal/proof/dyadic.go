@@ -243,7 +243,7 @@ func bigOfWords(words []uint64, neg bool) *big.Int {
 // splits the value into a fraction in [0.5, 1) and a binary exponent, and
 // scaling that fraction by 2^53 makes it an integer without moving a bit.
 func DyOf(f float64) (Dyadic, bool) {
-	if math.IsNaN(f) || math.IsInf(f, 0) {
+	if f != f || f > math.MaxFloat64 || f < -math.MaxFloat64 {
 		return Dyadic{}, false
 	}
 	if f == 0 {
