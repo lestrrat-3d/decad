@@ -27,7 +27,10 @@ type revolveSectorPlan struct {
 	capGroups                  [2]int
 }
 
-const revolveSectorMaxAuditTriangles = 1_200_000
+const (
+	revolveSectorMaxAuditTriangles = 1_200_000
+	revolveSectorStreamTriangles   = 1_000_000
+)
 
 type revolveSectorVolumeRefineError struct{ gain, bound float64 }
 
@@ -377,8 +380,11 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 			patches[patch].Triangles = append(patches[patch].Triangles, i)
 		}
 	}
-	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatches(proofbound.NewWorkBudget(ctx),
-		mesh.verts, mesh.tris, patches, count, scans); err != nil {
+	audit := loftmesh.LoftCrossingAuditBoundedProjectedPatches
+	if count > revolveSectorStreamTriangles {
+		audit = loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming
+	}
+	if err := audit(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris, patches, count, scans); err != nil {
 		if revolveRootCapContact(mesh, ring, section, plans, err) {
 			return nil, nil, &revolveSectorContactRefineError{cause: err}
 		}
