@@ -17,6 +17,7 @@ type revolveLoftFacesSeamPatch struct {
 	vertexBounds []float64
 	origins      []FeatureRef
 	seam         []int
+	stationIDs   []int
 }
 
 // revolveLoftFacesArcPatchesUnchecked splits the two source parameter strips at the

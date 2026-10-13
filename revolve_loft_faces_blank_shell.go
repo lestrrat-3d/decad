@@ -19,19 +19,22 @@ type revolveLoftFacesBlankSeamShell struct {
 	mesh         joinedMesh
 	vertexBounds []float64
 	seam         []int
+	seamIDs      []int
 	capRings     []revolveLoftFacesShellCapRing
 	chordBound   float64
 	faceBound    float64
 }
 
 type revolveLoftFacesShellCapRing struct {
-	sectionIndex  int
-	arc           *revolveLoftFacesToolCapOccupiedArc
-	vertices      []int
-	endpoints     [2]int
-	occupied      []int
-	endpointProof [2]revolveLoftFacesCapSeamVertex
-	ties          *revolveLoftFacesHeelArcSideTies
+	sectionIndex     int
+	arc              *revolveLoftFacesToolCapOccupiedArc
+	vertices         []int
+	endpoints        [2]int
+	occupied         []int
+	endpointProof    [2]revolveLoftFacesCapSeamVertex
+	ties             *revolveLoftFacesHeelArcSideTies
+	endpointGraphIDs [2]int
+	endpointCellIDs  [2]int
 }
 
 type revolveLoftFacesShellCut struct {

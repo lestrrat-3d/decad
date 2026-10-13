@@ -60,6 +60,8 @@
 7	12.00	TestRevolveLoftFacesToolCapArcBindsLiveSourceCells
 4	0.00	TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence
 10	7.20	TestCurvedSourcePairCensusCoversLiveFaces
+10	13.90	TestCurvedContactGraphHeldAnchors
+10	11.70	TestCurvedContactGraphRejectsStaleSourceEvents
 10	4.00	TestCurvedSourcePairCensusRefusesUnownedRetainedFace
 10	8.80	TestCurvedHeelArcEndpointsBindToLiveSideCells
 10	8.80	TestCurvedHeelArcSideTiesRejectChangedSourceRecord

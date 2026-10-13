@@ -22,7 +22,7 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 	if err != nil || !ok {
 		return nil, empty, empty, false, err
 	}
-	census, ok, err := revolveLoftFacesCensus(ctx, proof)
+	graph, ok, err := revolveLoftFacesContactGraphOf(ctx, proof)
 	if err != nil || !ok || sectionIndex >= len(proof.section.spans) {
 		return nil, empty, empty, false, err
 	}
@@ -30,34 +30,31 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 	if section.face == nil || section.start.U == section.end.U {
 		return nil, empty, empty, false, nil
 	}
-	matches := 0
-	for _, pair := range census.pairs {
-		if pair.sectionIndex != sectionIndex || pair.blankFace != section.face ||
-			pair.verdict != revolveLoftFacesPairSourceCandidate {
+	var selected *revolveLoftFacesGraphRun
+	for i := range graph.runs {
+		run := &graph.runs[i]
+		cell := graph.cells[run.cellID]
+		if cell.sectionIndex != sectionIndex || cell.blankFace != section.face ||
+			cell.pairID < 0 || cell.source == nil ||
+			graph.pairs[cell.pairID].verdict != revolveLoftFacesPairSourceCandidate {
 			continue
 		}
-		for _, cell := range pair.sourceCells {
-			mapped := cell.mapped
-			if mapped.segment != segment || mapped.band != band ||
-				mapped.side != revolveLoftFacesJointContact ||
-				mapped.jointKind != revolveLoftFacesWholeArcContact ||
-				mapped.jointArc == nil || mapped.tLo == nil || mapped.tHi == nil ||
-				mapped.tLo.Cmp(root.Lo) != 0 || mapped.tHi.Cmp(root.Hi) != 0 ||
-				cell.face != pair.trimmedFace {
-				continue
-			}
-			matches++
+		mapped := cell.source.mapped
+		if mapped.segment != segment || mapped.band != band ||
+			mapped.jointArc == nil || mapped.tLo == nil || mapped.tHi == nil ||
+			mapped.tLo.Cmp(root.Lo) != 0 || mapped.tHi.Cmp(root.Hi) != 0 {
+			continue
 		}
+		if selected != nil {
+			return nil, empty, empty, false, nil
+		}
+		selected = run
 	}
-	if matches != 1 {
-		return nil, empty, empty, false, nil
-	}
-	want, ok := revolveLoftFacesCompleteArcRun(proof.trim, segment)
-	if !ok || !slices.Equal(stations, want) {
+	if selected == nil || !slices.Equal(stations, selected.stations) {
 		return nil, empty, empty, false, nil
 	}
 	seam, ok, err := revolveLoftFacesArcSeamVerticesUnchecked(ctx, proof.trim,
-		band, want, root, section)
+		band, selected.stations, root, section)
 	if err != nil || !ok {
 		return nil, empty, empty, false, err
 	}
@@ -65,6 +62,9 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 		band, segment, section, seam)
 	if err != nil || !ok {
 		return nil, empty, empty, false, err
+	}
+	if !graph.bindOpenPatches(selected, seam, &blankPatch, &loftPatch) {
+		return nil, empty, empty, false, nil
 	}
 	return seam, blankPatch, loftPatch, true, nil
 }

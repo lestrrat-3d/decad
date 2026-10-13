@@ -31,6 +31,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
 | `docs/loft-sections-design.md` | Three-section smooth lofts and four-section cubic-width rounded lofts, held meshes and proofs. |
 | `docs/loft-face-sections-design.md` | Source-cap nine-section loft, cap correspondence, embedding, occupied-volume proof and two-cone continuation. |
+| `docs/revolve-loft-contact-graph-design.md` | Source-event ownership and held anchors for finite Revolve and trimmed LoftFaces contacts. |
 | `docs/loft-point-design.md` | Point-to-profile solid loft, its apex topology and mesh proof. |
 | `docs/revolve-loft-sector-design.md` | Finite Revolve and trimmed point-Loft source certificate, first Union class and removal ledger. |
 | `docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
