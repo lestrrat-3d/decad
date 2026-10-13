@@ -315,15 +315,14 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if route.prism != nil {
 		pp, ok, caps = *route.prism, true, route.caps
 	}
-	// A one-span straight Sweep is built from an exact prism, but keeps its
-	// own payload so other sweep kinds cannot enter the prism modify route.
+	// The selector has already resolved on the published Sweep. Only the
+	// certified one-line solid reads through its stored exact prism.
 	sweepStraight := false
-	if sp, sweep := b.payload.(sweepPayload); sweep && !sp.arc && len(sp.spans) == 0 &&
-		!sp.closedCircle && !sp.closedComposite && !sp.surfaceResult {
-		pp, ok, sweepStraight = sp.prism, true, true
+	if reduction, admitted := straightSweepPrismReduction(b.payload); admitted {
+		pp, ok, sweepStraight = reduction, true, true
 	}
 	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism or a revolve only; selector %s matched [%s]`,
+		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only; selector %s matched [%s]`,
 			ErrUnsupported, sel, selectedEdgesContext(edges))
 	}
 	if sweepStraight && asym != nil {

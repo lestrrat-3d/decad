@@ -116,7 +116,7 @@ func TestStraightSweepChamferRefusesOtherSweeps(t *testing.T) {
 		name  string
 		build func(*testing.T) (*decad.Document, *decad.Body)
 	}{
-		{"arc", func(t *testing.T) (*decad.Document, *decad.Body) {
+		{"one arc path", func(t *testing.T) (*decad.Document, *decad.Body) {
 			s, profile := plateSketch(t)
 			path, err := decad.NewPath(r3.NewVec(0, 5, 0), decad.ArcThrough{
 				Through: r3.NewVec(0, 3, 4), End: r3.NewVec(0, 0, 5)})
