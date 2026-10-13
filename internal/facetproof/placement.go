@@ -78,7 +78,7 @@ func PlaceMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Ve
 		next.VertexBound[i] = proofbound.AbsSumUpper(proofbound.ProductUpper(lengthStretch, beta), a)
 	}
 	next.MeshBound = FacetBoundMax(next.Tris, next.VertexBound)
-	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, next.Verts, next.Tris, allow)
+	areaUpper, allows, err := proofbound.PerturbedAreaUpperAllowsContext(ctx, next.Verts, next.Tris, allow)
 	if err != nil {
 		return PlacedMesh{}, err
 	}
@@ -86,17 +86,11 @@ func PlaceMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Ve
 		proofbound.ProductUpper(proofbound.AbsSumUpper(1, volumeCharge), volSymDiff),
 		proofbound.SweptVolumeAllow(allow, areaUpper))
 	areaRound := 0.0
-	for _, tri := range next.Tris {
+	for i := range next.Tris {
 		if err := budget.Step(); err != nil {
 			return PlacedMesh{}, err
 		}
-		a, b, c := next.Verts[tri[0]], next.Verts[tri[1]], next.Verts[tri[2]]
-		u, v := proofbound.HeldDelta(b, a), proofbound.HeldDelta(c, a)
-		term := proofbound.AbsSumUpper(
-			proofbound.ProductUpper(allow,
-				proofbound.AbsSumUpper(proofbound.DvLenUpper(u), proofbound.DvLenUpper(v))),
-			proofbound.ProductUpper(2, proofbound.ProductUpper(allow, allow)))
-		areaRound = proofbound.AbsSumUpper(areaRound, term)
+		areaRound = proofbound.AbsSumUpper(areaRound, allows[i])
 	}
 	// True and held tangent planes can gain opposite area changes under the
 	// same nearly orthonormal map. Charge each against its own area: if their
