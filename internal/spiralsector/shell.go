@@ -1,22 +1,32 @@
-// Package spiralsector proves rigid copies of one spiral-bevel tooth disjoint
-// before their combined Union and maps a copy's stitched result back to the
-// first tooth's frame. See docs/faceted-vertex-bounds-design.md §3.7.
+// Package spiralsector checks the spiral first-join and inverse-copy gates.
+// Bounded shell separation is delegated to shellseparation.
 package spiralsector
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/shellseparation"
 	"github.com/lestrrat-3d/r3"
 )
 
-// Shell is one tooth's held mesh as the sector proofs read it: vertices,
-// facets, the per-vertex bound β and the largest facet bound.
-type Shell struct {
-	Verts       []r3.Vec
-	Tris        [][3]int
-	VertexBound []float64
-	MeshBound   float64
+// Shell keeps the existing spiral caller shape while using the neutral proof.
+type Shell = shellseparation.Shell
+
+// HeldCopy keeps the spiral caller's provenance check at its source gate.
+type HeldCopy = shellseparation.HeldCopy
+
+func Separate(ctx context.Context, shells []Shell, moves []r3.Transform, held bool) bool {
+	kind := shellseparation.SourceShell
+	if held {
+		kind = shellseparation.HeldCopyShell
+	}
+	return shellseparation.Separate(ctx, shells, moves, kind, shellseparation.AxisX, true)
+}
+
+func PlacedHeldShells(ctx context.Context, copies []HeldCopy, moves []r3.Transform) ([]Shell, error) {
+	return shellseparation.PlacedHeldShells(ctx, copies, moves)
 }
 
 func ratZero() *big.Rat { return new(big.Rat) }
