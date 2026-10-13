@@ -1329,13 +1329,15 @@ an ambient assembly context (§4). The zero `Transform{}` is invalid
 faceted-payload rebuild and returns its error without changing the document.
 
 `ScaledAt` retires an authenticated point-loft planar Split slab, an exact
-line/circular solid prism, or a complete solid Revolve whose section has no
-displacement after a positive, finite, dimensionless uniform scale around
-`anchor` in millimetres. It accepts rigidly placed and previously scaled copies
-of these classes. A Split slab keeps its original cap origins, face-centroid
-certificates and rational source cut maps. A prism or Revolve keeps its
-source-face roles and planar tags, while curved faces become `Faceted`;
-later operations that require an analytic source can refuse it. All three
+line/circular solid prism, a complete solid Revolve whose section has no
+displacement, or a faceted result of the generic mesh Boolean after a positive,
+finite, dimensionless uniform scale around `anchor` in millimetres. It accepts
+rigidly placed and previously scaled copies of these classes. A Split slab
+keeps its original cap origins, face-centroid certificates and rational source
+cut maps. A prism or Revolve keeps its source-face roles and planar tags, while
+curved faces become `Faceted`; later operations that require an analytic source
+can refuse it. A faceted Boolean keeps its source-face roles and any retained
+planar tags, but loses structural Boolean source records after scale. These
 classes rebuild the held mesh with scaled vertex, area and occupied-volume
 bounds. A nonpositive factor is `ErrDegenerate`, and a length factor is
 `ErrUnitKind`. A partial or sheet Revolve and any other unsupported body return

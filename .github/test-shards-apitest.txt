@@ -1995,3 +1995,5 @@
 10	0.00	TestFacetedPrismUnionChamferRefusesToolInCornerBand
 10	0.00	TestFacetedPrismUnionChamferRefusesPlacedUnion
 10	0.00	TestFacetedPrismUnionChamferRefusesInexactFoot
+10	0.00	TestFacetedBooleanScaledAtCarriesVolumeRolesAndVerification
+10	0.00	TestFacetedBooleanScaledAtAfterPlacementAndRepeat

@@ -28,10 +28,10 @@ type pointPlaneSimilarityStep struct {
 }
 
 // ScaledAt returns the positive uniform image of an authenticated point-loft
-// Split slab, exact line/circular solid prism or complete solid Revolve about
-// anchor, then retires the receiver. Source roles and certified boundary and
-// occupied-volume bounds follow the image. A refused or canceled call leaves
-// the document unchanged.
+// Split slab, exact line/circular solid prism, complete solid Revolve, or
+// audited faceted Boolean result about anchor, then retires the receiver.
+// Source roles and certified boundary and occupied-volume bounds follow the
+// image. A refused or canceled call leaves the document unchanged.
 func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("%w: a nil context cannot control a scale", ErrDegenerate)
@@ -72,9 +72,13 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 		}
 	}
 	pointSlab := fp.pointPlane != nil && fp.pointPlane.base.pointSection != nil
-	if (!pointSlab && !fp.similaritySource) || !fp.xform.IsValid() ||
+	booleanSource := fp.booleanSimilaritySource && b.Kind() == BodySolid && b.IsSolid()
+	if (!pointSlab && !fp.similaritySource && !booleanSource) || !fp.xform.IsValid() ||
 		len(fp.verts) == 0 || len(fp.vertexBound) != len(fp.verts) {
 		return nil, fmt.Errorf("%w: this body has no certified similarity source", ErrUnsupported)
+	}
+	if booleanSource && !certifiedBooleanSimilaritySource(fp, len(b.Faces())) {
+		return nil, fmt.Errorf("%w: the Boolean similarity source has no complete proof", ErrUnsupported)
 	}
 	if fp.pointSimilarity != nil && fp.pointSimilarity.slice != fp.pointPlane {
 		return nil, fmt.Errorf("%w: the slab similarity source does not match its Split source", ErrUnsupported)
@@ -104,6 +108,25 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 		facetedSourceDiameterUpper(next.verts, next.meshBound))
 	next.xform = r3.Identity()
 	next.pointPlaneSourceEligible = false
+	next.axialSectionJoin = false
+	next.prismPatternJoin = nil
+	next.obliqueBoss = nil
+	next.prismUnionFillet = nil
+	next.crossCylinderBore = nil
+	next.loftCylinderJoin = nil
+	next.loftCylinderBore = nil
+	next.loftMirrorJoin = nil
+	next.loftMirrorCopy = nil
+	next.loftMirrorCylinderJoin = nil
+	next.loftMirrorCylinderBore = nil
+	next.revolveLoftJoin = nil
+	next.revolveLoftSector = nil
+	next.loftFacesPrimitive = false
+	next.loftFacesCap = nil
+	next.loftFacesToe = nil
+	next.loftFacesTrim = nil
+	next.copyLineage = nil
+	next.spiralTools = nil
 	if pointSlab {
 		next.pointPlaneCapDisplacement = proofbound.AbsSumUpper(
 			proofbound.ProductUpper(fp.pointPlaneCapDisplacement, s), mesh.Round)
@@ -162,6 +185,42 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 	}
 	d.commit(scaled, b)
 	return scaled, nil
+}
+
+// certifiedBooleanSimilaritySource checks the private Boolean result's
+// geometry, proof terms, and source-group mapping before ScaleMesh consumes it.
+func certifiedBooleanSimilaritySource(fp facetedPayload, faceCount int) bool {
+	if len(fp.tris) == 0 || len(fp.tris) != len(fp.src) ||
+		len(fp.tris) != len(fp.faceOf) || len(fp.groups) == 0 || faceCount == 0 ||
+		fp.meshBound < 0 || fp.volSymDiff < 0 || fp.areaSlack < 0 || fp.dPair <= 0 ||
+		proofbound.IsNonFinite(fp.meshBound) || proofbound.IsNonFinite(fp.volSymDiff) ||
+		proofbound.IsNonFinite(fp.areaSlack) || proofbound.IsNonFinite(fp.dPair) {
+		return false
+	}
+	for _, beta := range fp.vertexBound {
+		if beta < 0 || proofbound.IsNonFinite(beta) {
+			return false
+		}
+	}
+	if fp.meshBound < facetproof.FacetBoundMax(fp.tris, fp.vertexBound) {
+		return false
+	}
+	for _, source := range fp.src {
+		if source < 0 || source >= len(fp.groups) {
+			return false
+		}
+	}
+	for _, face := range fp.faceOf {
+		if face < 0 || face >= faceCount {
+			return false
+		}
+	}
+	for _, group := range fp.groups {
+		if len(group.origins) == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func similarCapCentroid(source VecMeasurement, anchor r3.Vec, factor float64) (VecMeasurement, error) {

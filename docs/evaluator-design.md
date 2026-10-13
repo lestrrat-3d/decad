@@ -844,7 +844,7 @@ Feature tests cover every example model and operation. Repeated construction
 preserves live-body order and provenance roles. Later evaluators may build a
 different topology split but must preserve role/query meaning.
 
-### Positive uniform scale of a prism or full Revolve
+### Positive uniform scale of a prism, full Revolve, or faceted Boolean
 
 `Body.ScaledAt` admits a solid `prismPayload` whose outer and hole loops contain
 only whole `LineSeg`, `CircleSeg`, and `ArcSeg` records and whose section and
@@ -890,8 +890,24 @@ source without complete mesh proofs, refuse without retiring the source.
 
 The faceted payload marks this source class so a later `Transform`, `Copy` or
 `ScaledAt` can repeat the proof from its held mesh and bounds.
-Booleans and modify rewrites do not carry that marker. A failed embedding,
-non-finite bound or canceled context returns without retiring the receiver.
+Booleans and modify rewrites do not inherit that prism/Revolve marker. A failed
+embedding, non-finite bound or canceled context returns without retiring the
+receiver.
+
+The generic mesh `Union`, `Cut`, and `Intersect` also mark their faceted result
+after the exact-predicate topology audit and occupied-volume reading succeed.
+Their payload stores the stitched triangles, per-vertex boundary bounds,
+occupied-volume difference, area slack, source-group ids and original face
+roles. Before scale, require a solid result, finite nonnegative proof terms,
+one bound per vertex, one valid source group and built face id per triangle,
+and a mesh bound at least as large as every facet's vertex bound. Refuse a
+source group without an origin role. Also refuse one with a denoted surface or
+a retained curved surface. `facetproof.ScaleMesh` then applies the same rational similarity,
+embedding audit and area/volume charges to the Boolean mesh. The scaled
+result carries source-face roles and any retained planar frames, but drops
+structural Boolean records whose original coordinates would no longer name
+the scaled body. A rigid placement and another positive scale can repeat this
+proof; a failed source gate, embedding audit or build leaves the receiver live.
 
 ## 9. The boolean — where exactness dies, and how
 

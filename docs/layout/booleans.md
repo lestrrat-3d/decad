@@ -7,7 +7,7 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `boolean.go` | Public `Union`/`Cut`/`Intersect` and the `BooleanError` mapping. See evaluator §9. |
+| `boolean.go` | Public `Union`/`Cut`/`Intersect`, `BooleanError` mapping, and audited scale-source marking. See evaluator §9. |
 | `boolean_many.go` | Validates and commits a multi-body Union, including transient prism pair chains. See API §8. |
 | `boolean_many_prism.go` | Arranges identical-interval line prisms in one Sketch scene. See prism-boolean §4.6. |
 | `point_cone_trim.go` | Retains point-loft and cone source faces through coaxial Cut/Intersect. See loft-point design. |
@@ -69,11 +69,11 @@ The rules for rows live in `docs/layout.md`.
 | `cross_cylinder_bore_source.go` | Retains two circular prism sources after a perpendicular cylinder Cut. See cross-cylinder-bore-chamfer design. |
 | `surface_trim.go` / `surface_split_revolve.go` | Surface body gates and revolve `Split`. See surface-intersection §2–§3. |
 | `point_plane_split.go` | Splits a point loft by a planar chain sheet. See loft-point design. |
-| `point_plane_scale.go` | Dispatches certified similar bodies and carries Split-slab source maps. See loft-point design and evaluator §8. |
+| `point_plane_scale.go` | Dispatches certified similar bodies, authenticates Boolean mesh sources, and carries Split-slab maps. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |
 | `point_cap_centroid.go` | Certifies far and planar Split cap centroids and maps them through rigid placement. See loft-point design. |
 | `point_cap_extremes.go` | Bounds side-face centroid projections and selects the extreme Split cap faces. See loft-point design. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |
-| `boolean_body.go` | Builds faceted bodies and readings from an audited mesh. See evaluator §9. |
+| `boolean_body.go` | Builds faceted bodies, readings, and source roles from an audited mesh. See evaluator §9. |
 | `faceted_copy_lineage.go` | Binds live faceted copies to source faces, recorded motion, and separate source and held shells. See faceted-vertex-bounds §3.7. |
 | `faceted_copy_proxy.go` | Places a source-certified proxy under generic copied-tool motions and proves proxy shell separation. See faceted-vertex-bounds §3.7. |
