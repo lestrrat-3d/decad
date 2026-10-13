@@ -97,11 +97,11 @@ func RadialGate(verts []r3.Vec, tris [][3]int, segment [][]int, root int, radius
 			}
 			if j == 0 || j >= root {
 				x, y := proofarith.FloatRat(p.X), proofarith.FloatRat(p.Y)
-				q := new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y))
+				q := proofarith.AddRat(new(big.Rat), proofarith.MulRat(new(big.Rat), x, x), proofarith.MulRat(new(big.Rat), y, y))
 				radLo, radHi := proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q)
 				allow := proofbound.AbsSumUpper(bound, rootGap)
-				lower := new(big.Rat).Sub(proofarith.FloatRat(radius), proofarith.FloatRat(allow))
-				upper := new(big.Rat).Add(proofarith.FloatRat(radius), proofarith.FloatRat(allow))
+				lower := proofarith.SubRat(new(big.Rat), proofarith.FloatRat(radius), proofarith.FloatRat(allow))
+				upper := proofarith.AddRat(new(big.Rat), proofarith.FloatRat(radius), proofarith.FloatRat(allow))
 				if proofarith.FloatRat(radLo).Cmp(lower) < 0 || proofarith.FloatRat(radHi).Cmp(upper) > 0 {
 					return 0, false
 				}
@@ -115,12 +115,12 @@ func RadialGate(verts []r3.Vec, tris [][3]int, segment [][]int, root int, radius
 		for side := range 2 {
 			lo := TriangleMinRadius(verts, tris[2*j+side])
 			if j > 0 && j < root-1 {
-				threshold := new(big.Rat).Add(proofarith.FloatRat(radius), proofarith.FloatRat(bound))
+				threshold := proofarith.AddRat(new(big.Rat), proofarith.FloatRat(radius), proofarith.FloatRat(bound))
 				if proofarith.FloatRat(lo).Cmp(threshold) <= 0 {
 					return 0, false
 				}
 			} else {
-				radialGap := new(big.Rat).Sub(proofarith.FloatRat(radius), proofarith.FloatRat(lo))
+				radialGap := proofarith.SubRat(new(big.Rat), proofarith.FloatRat(radius), proofarith.FloatRat(lo))
 				if radialGap.Sign() < 0 {
 					radialGap.SetInt64(0)
 				}
@@ -148,9 +148,9 @@ func WedgeGate(verts []r3.Vec, tris [][3]int, root int, z0, z1 float64) (float64
 		return 0, false
 	}
 	cross := func(a, b r3.Vec) *big.Rat {
-		return new(big.Rat).Sub(
-			new(big.Rat).Mul(proofarith.FloatRat(a.X), proofarith.FloatRat(b.Y)),
-			new(big.Rat).Mul(proofarith.FloatRat(a.Y), proofarith.FloatRat(b.X)))
+		return proofarith.SubRat(new(big.Rat),
+			proofarith.MulRat(new(big.Rat), proofarith.FloatRat(a.X), proofarith.FloatRat(b.Y)),
+			proofarith.MulRat(new(big.Rat), proofarith.FloatRat(a.Y), proofarith.FloatRat(b.X)))
 	}
 	departure := 0.0
 	for _, tri := range tris {
@@ -171,18 +171,18 @@ func WedgeGate(verts []r3.Vec, tris [][3]int, root int, z0, z1 float64) (float64
 			for j := i; j < 3; j++ {
 				left, right := cross(a[i], p[j]), cross(p[i], b[j])
 				if i != j {
-					left.Add(left, cross(a[j], p[i]))
-					left.Quo(left, big.NewRat(2, 1))
-					right.Add(right, cross(p[j], b[i]))
-					right.Quo(right, big.NewRat(2, 1))
+					proofarith.AddRat(left, left, cross(a[j], p[i]))
+					proofarith.QuoRat(left, left, big.NewRat(2, 1))
+					proofarith.AddRat(right, right, cross(p[j], b[i]))
+					proofarith.QuoRat(right, right, big.NewRat(2, 1))
 				}
 				if left.Sign() < 0 {
 					departure = max(departure, proofbound.RatFloatUp(
-						new(big.Rat).Quo(new(big.Rat).Neg(left), proofarith.FloatRat(minStart))))
+						proofarith.QuoRat(new(big.Rat), new(big.Rat).Neg(left), proofarith.FloatRat(minStart))))
 				}
 				if right.Sign() < 0 {
 					departure = max(departure, proofbound.RatFloatUp(
-						new(big.Rat).Quo(new(big.Rat).Neg(right), proofarith.FloatRat(minEnd))))
+						proofarith.QuoRat(new(big.Rat), new(big.Rat).Neg(right), proofarith.FloatRat(minEnd))))
 				}
 			}
 		}
@@ -196,13 +196,13 @@ func WedgeGate(verts []r3.Vec, tris [][3]int, root int, z0, z1 float64) (float64
 // intermediate angular ray between its ordered endpoints.
 func RingOrder(b0, b1, t0, t1 r3.Vec) bool {
 	cross := func(a, b r3.Vec) *big.Rat {
-		return new(big.Rat).Sub(
-			new(big.Rat).Mul(proofarith.FloatRat(a.X), proofarith.FloatRat(b.Y)),
-			new(big.Rat).Mul(proofarith.FloatRat(a.Y), proofarith.FloatRat(b.X)))
+		return proofarith.SubRat(new(big.Rat),
+			proofarith.MulRat(new(big.Rat), proofarith.FloatRat(a.X), proofarith.FloatRat(b.Y)),
+			proofarith.MulRat(new(big.Rat), proofarith.FloatRat(a.Y), proofarith.FloatRat(b.X)))
 	}
 	if cross(b0, b1).Sign() <= 0 || cross(t0, t1).Sign() <= 0 {
 		return false
 	}
-	middle := new(big.Rat).Add(cross(b0, t1), cross(t0, b1))
+	middle := proofarith.AddRat(new(big.Rat), cross(b0, t1), cross(t0, b1))
 	return middle.Sign() > 0
 }

@@ -41,8 +41,8 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 	refuse := func(reason string) (RingOccupancy, error) {
 		return result, fmt.Errorf("%w: %s", decaderr.ErrUnsupported, reason)
 	}
-	r2 := new(big.Rat).Mul(proofarith.FloatRat(blankRadius), proofarith.FloatRat(blankRadius))
-	bore2 := new(big.Rat).Mul(proofarith.FloatRat(boreRadius), proofarith.FloatRat(boreRadius))
+	r2 := proofarith.MulRat(new(big.Rat), proofarith.FloatRat(blankRadius), proofarith.FloatRat(blankRadius))
+	bore2 := proofarith.MulRat(new(big.Rat), proofarith.FloatRat(boreRadius), proofarith.FloatRat(boreRadius))
 	witness := false
 	for edgeIndex, edge := range edges {
 		if err := ctx.Err(); err != nil {
@@ -92,8 +92,8 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 				sectorCount++
 			}
 			for _, connector := range tooth.Circle.Connector {
-				t := new(big.Rat).Quo(new(big.Rat).Sub(tooth.Level, tooth.Circle.Z0),
-					new(big.Rat).Sub(tooth.Circle.Z1, tooth.Circle.Z0))
+				t := new(big.Rat).Quo(proofarith.SubRat(new(big.Rat), tooth.Level, tooth.Circle.Z0),
+					proofarith.SubRat(new(big.Rat), tooth.Circle.Z1, tooth.Circle.Z0))
 				inner := sourceLerp(connector.a[0], connector.a[1], t)
 				middle := sourceLerp(connector.d[0], connector.d[1], t)
 				outer := sourceLerp(connector.f[0], connector.f[1], t)

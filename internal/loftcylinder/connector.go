@@ -27,7 +27,7 @@ func ConnectorGate(verts []r3.Vec, tris [][3]int, segments [][]int,
 		a := [2]r3.Vec{verts[near], verts[n+near]}
 		f := [2]r3.Vec{verts[far], verts[n+far]}
 		minimum := TriangleMinRadius(f[:], [3]int{0, 1, 1})
-		threshold := new(big.Rat).Add(proofarith.FloatRat(radius), proofarith.FloatRat(sourceBound))
+		threshold := proofarith.AddRat(new(big.Rat), proofarith.FloatRat(radius), proofarith.FloatRat(sourceBound))
 		if proofarith.FloatRat(minimum).Cmp(threshold) <= 0 {
 			return 0, false
 		}
@@ -71,39 +71,39 @@ func ConnectorGate(verts []r3.Vec, tris [][3]int, segments [][]int,
 
 func heldRadialMonotone(u, v [2]r3.Vec) bool {
 	dot := func(a, b XY) *big.Rat {
-		return new(big.Rat).Add(
-			new(big.Rat).Mul(a.X, b.X), new(big.Rat).Mul(a.Y, b.Y))
+		return proofarith.AddRat(new(big.Rat),
+			proofarith.MulRat(new(big.Rat), a.X, b.X), proofarith.MulRat(new(big.Rat), a.Y, b.Y))
 	}
 	delta := func(a, b XY) XY {
-		return XY{new(big.Rat).Sub(b.X, a.X), new(big.Rat).Sub(b.Y, a.Y)}
+		return XY{proofarith.SubRat(new(big.Rat), b.X, a.X), proofarith.SubRat(new(big.Rat), b.Y, a.Y)}
 	}
 	u0, u1 := ExactXY(u[0]), ExactXY(u[1])
 	d0, d1 := delta(u0, ExactXY(v[0])), delta(u1, ExactXY(v[1]))
 	g0, g2 := dot(u0, d0), dot(u1, d1)
-	g1 := new(big.Rat).Add(dot(u0, d1), dot(u1, d0))
+	g1 := proofarith.AddRat(new(big.Rat), dot(u0, d1), dot(u1, d0))
 	return g0.Sign() >= 0 && g1.Sign() >= 0 && g2.Sign() >= 0
 }
 
 func heldRootCollar(near [2]r3.Vec, radius, height float64) (float64, bool) {
 	q := func(p XY) *big.Rat {
-		return new(big.Rat).Add(new(big.Rat).Mul(p.X, p.X), new(big.Rat).Mul(p.Y, p.Y))
+		return proofarith.AddRat(new(big.Rat), proofarith.MulRat(new(big.Rat), p.X, p.X), proofarith.MulRat(new(big.Rat), p.Y, p.Y))
 	}
 	a, b := ExactXY(near[0]), ExactXY(near[1])
 	r := proofarith.FloatRat(radius)
-	r2 := new(big.Rat).Mul(r, r)
+	r2 := proofarith.MulRat(new(big.Rat), r, r)
 	if q(a).Cmp(r2) <= 0 && q(b).Cmp(r2) <= 0 {
 		return 0, true
 	}
 	for shift := 52; shift >= 8; shift-- {
 		epsilon := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), uint(shift)))
-		oneMinus := new(big.Rat).Sub(big.NewRat(1, 1), epsilon)
+		oneMinus := proofarith.SubRat(new(big.Rat), big.NewRat(1, 1), epsilon)
 		bottom := XY{
-			X: new(big.Rat).Add(new(big.Rat).Mul(oneMinus, a.X), new(big.Rat).Mul(epsilon, b.X)),
-			Y: new(big.Rat).Add(new(big.Rat).Mul(oneMinus, a.Y), new(big.Rat).Mul(epsilon, b.Y)),
+			X: proofarith.AddRat(new(big.Rat), proofarith.MulRat(new(big.Rat), oneMinus, a.X), proofarith.MulRat(new(big.Rat), epsilon, b.X)),
+			Y: proofarith.AddRat(new(big.Rat), proofarith.MulRat(new(big.Rat), oneMinus, a.Y), proofarith.MulRat(new(big.Rat), epsilon, b.Y)),
 		}
 		top := XY{
-			X: new(big.Rat).Add(new(big.Rat).Mul(epsilon, a.X), new(big.Rat).Mul(oneMinus, b.X)),
-			Y: new(big.Rat).Add(new(big.Rat).Mul(epsilon, a.Y), new(big.Rat).Mul(oneMinus, b.Y)),
+			X: proofarith.AddRat(new(big.Rat), proofarith.MulRat(new(big.Rat), epsilon, a.X), proofarith.MulRat(new(big.Rat), oneMinus, b.X)),
+			Y: proofarith.AddRat(new(big.Rat), proofarith.MulRat(new(big.Rat), epsilon, a.Y), proofarith.MulRat(new(big.Rat), oneMinus, b.Y)),
 		}
 		if q(bottom).Cmp(r2) < 0 && q(top).Cmp(r2) < 0 {
 			collar := proofbound.ProductUpper(proofbound.RatFloatUp(epsilon), height)
@@ -131,25 +131,25 @@ func ConnectorReach(verts []r3.Vec, tris [][3]int, segments [][]int,
 		return 0, 0, 0, false
 	}
 	z0, z1 := proofarith.FloatRat(verts[0].Z), proofarith.FloatRat(verts[n].Z)
-	height := new(big.Rat).Sub(z1, z0)
+	height := proofarith.SubRat(new(big.Rat), z1, z0)
 	if height.Sign() <= 0 {
 		return 0, 0, 0, false
 	}
-	lo := new(big.Rat).Quo(proofarith.FloatRat(collar), height)
-	hi := new(big.Rat).Sub(big.NewRat(1, 1), lo)
+	lo := proofarith.QuoRat(new(big.Rat), proofarith.FloatRat(collar), height)
+	hi := proofarith.SubRat(new(big.Rat), big.NewRat(1, 1), lo)
 	if lo.Cmp(hi) >= 0 {
 		return 0, 0, 0, false
 	}
 	r := proofarith.FloatRat(radius)
-	r2 := new(big.Rat).Mul(r, r)
+	r2 := proofarith.MulRat(new(big.Rat), r, r)
 	delta := proofarith.FloatRat(facetDeparture)
 	if delta.Sign() < 0 || delta.Cmp(r) >= 0 {
 		return 0, 0, 0, false
 	}
-	outer := new(big.Rat).Add(r, delta)
-	inner := new(big.Rat).Sub(r, delta)
-	deviation := new(big.Rat).Sub(new(big.Rat).Mul(outer, outer), r2)
-	innerDeviation := new(big.Rat).Sub(r2, new(big.Rat).Mul(inner, inner))
+	outer := proofarith.AddRat(new(big.Rat), r, delta)
+	inner := proofarith.SubRat(new(big.Rat), r, delta)
+	deviation := proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), outer, outer), r2)
+	innerDeviation := proofarith.SubRat(new(big.Rat), r2, proofarith.MulRat(new(big.Rat), inner, inner))
 	if innerDeviation.Cmp(deviation) > 0 {
 		deviation = innerDeviation
 	}
@@ -177,14 +177,14 @@ func ConnectorReach(verts []r3.Vec, tris [][3]int, segments [][]int,
 			// Squared-radius monotonicity bounds their parameter gap, and the
 			// vanishing cap factor cancels against that piece's length.
 			shift, ok := connectorCrossShift(connector, lo, hi, deviation)
-			if !ok || new(big.Rat).Add(delta, shift).Cmp(proofarith.FloatRat(0.08)) > 0 {
+			if !ok || proofarith.AddRat(new(big.Rat), delta, shift).Cmp(proofarith.FloatRat(0.08)) > 0 {
 				return 0, 0, 0, false
 			}
 			maximumShift = max(maximumShift, proofbound.AbsSumUpper(
 				facetDeparture, proofbound.RatFloatUp(shift)))
 		}
 	}
-	quarterRadius := new(big.Rat).Quo(r, big.NewRat(4, 1))
+	quarterRadius := proofarith.QuoRat(new(big.Rat), r, big.NewRat(4, 1))
 	if proofarith.FloatRat(maximumShift).Cmp(quarterRadius) >= 0 ||
 		proofarith.FloatRat(maximumAngular).Cmp(quarterRadius) >= 0 {
 		return 0, 0, 0, false
@@ -229,14 +229,14 @@ func connectorRootAngle(source, held Connector,
 	for _, sign := range []int64{-1, 1} {
 		gate := func(t *big.Rat) *big.Rat {
 			a := sourceLerp(source.a[0], source.a[1], t)
-			cross := new(big.Rat).Sub(new(big.Rat).Mul(a.X, v.Y),
-				new(big.Rat).Mul(a.Y, v.X))
-			cross.Mul(cross, big.NewRat(sign, 1))
-			derivative := new(big.Rat).Mul(big.NewRat(2, 1), SourceDot(a, v))
-			deficit := new(big.Rat).Sub(new(big.Rat).Mul(radius, radius), SourceDot(a, a))
-			left := new(big.Rat).Mul(angleReach, new(big.Rat).Mul(minimum, derivative))
-			right := new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Mul(deficit, cross))
-			return left.Sub(left, right)
+			cross := proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), a.X, v.Y),
+				proofarith.MulRat(new(big.Rat), a.Y, v.X))
+			proofarith.MulRat(cross, cross, big.NewRat(sign, 1))
+			derivative := proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), SourceDot(a, v))
+			deficit := proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), radius, radius), SourceDot(a, a))
+			left := proofarith.MulRat(new(big.Rat), angleReach, proofarith.MulRat(new(big.Rat), minimum, derivative))
+			right := proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), proofarith.MulRat(new(big.Rat), deficit, cross))
+			return proofarith.SubRat(left, left, right)
 		}
 		if !cubicPositive(gate, lo, hi, 6) {
 			return nil, false
@@ -250,23 +250,23 @@ func connectorRootAngle(source, held Connector,
 		rootDifference2 = otherDifference
 	}
 	rootDifference := proofarith.FloatRat(proofbound.RatSqrtUp(rootDifference2))
-	rootRay := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1),
-		new(big.Rat).Mul(radius, rootDifference)), minimum)
-	return rootRay.Add(rootRay, angleReach), true
+	rootRay := proofarith.QuoRat(new(big.Rat), proofarith.MulRat(new(big.Rat), big.NewRat(2, 1),
+		proofarith.MulRat(new(big.Rat), radius, rootDifference)), minimum)
+	return proofarith.AddRat(rootRay, rootRay, angleReach), true
 }
 
 func cubicPositive(f func(*big.Rat) *big.Rat, lo, hi *big.Rat, depth int) bool {
-	third := new(big.Rat).Quo(new(big.Rat).Sub(hi, lo), big.NewRat(3, 1))
-	t1 := new(big.Rat).Add(lo, third)
-	t2 := new(big.Rat).Add(t1, third)
+	third := new(big.Rat).Quo(proofarith.SubRat(new(big.Rat), hi, lo), big.NewRat(3, 1))
+	t1 := proofarith.AddRat(new(big.Rat), lo, third)
+	t2 := proofarith.AddRat(new(big.Rat), t1, third)
 	b0, f1, f2, b3 := f(lo), f(t1), f(t2), f(hi)
-	a := new(big.Rat).Sub(new(big.Rat).Mul(big.NewRat(27, 1), f1),
-		new(big.Rat).Add(new(big.Rat).Mul(big.NewRat(8, 1), b0), b3))
-	b := new(big.Rat).Sub(new(big.Rat).Mul(big.NewRat(27, 1), f2),
-		new(big.Rat).Add(b0, new(big.Rat).Mul(big.NewRat(8, 1), b3)))
-	b1 := new(big.Rat).Quo(new(big.Rat).Sub(new(big.Rat).Mul(big.NewRat(2, 1), a), b),
+	a := proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), big.NewRat(27, 1), f1),
+		proofarith.AddRat(new(big.Rat), proofarith.MulRat(new(big.Rat), big.NewRat(8, 1), b0), b3))
+	b := proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), big.NewRat(27, 1), f2),
+		proofarith.AddRat(new(big.Rat), b0, proofarith.MulRat(new(big.Rat), big.NewRat(8, 1), b3)))
+	b1 := new(big.Rat).Quo(proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), a), b),
 		big.NewRat(18, 1))
-	b2 := new(big.Rat).Quo(new(big.Rat).Sub(new(big.Rat).Mul(big.NewRat(2, 1), b), a),
+	b2 := new(big.Rat).Quo(proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), b), a),
 		big.NewRat(18, 1))
 	if b0.Sign() > 0 && b1.Sign() > 0 && b2.Sign() > 0 && b3.Sign() > 0 {
 		return true
@@ -274,7 +274,7 @@ func cubicPositive(f func(*big.Rat) *big.Rat, lo, hi *big.Rat, depth int) bool {
 	if depth == 0 {
 		return false
 	}
-	mid := new(big.Rat).Quo(new(big.Rat).Add(lo, hi), big.NewRat(2, 1))
+	mid := new(big.Rat).Quo(proofarith.AddRat(new(big.Rat), lo, hi), big.NewRat(2, 1))
 	return cubicPositive(f, lo, mid, depth-1) &&
 		cubicPositive(f, mid, hi, depth-1)
 }
@@ -294,15 +294,15 @@ func connectorCrossShift(c Connector, lo, hi, deviation *big.Rat) (*big.Rat, boo
 	length := proofarith.FloatRat(proofbound.RatSqrtUp(SourceDot(v, v)))
 	aLo := sourceLerp(c.a[0], c.a[1], lo)
 	aHi := sourceLerp(c.a[0], c.a[1], hi)
-	gLo := new(big.Rat).Mul(big.NewRat(2, 1), SourceDot(aLo, v))
-	gHi := new(big.Rat).Mul(big.NewRat(2, 1), SourceDot(aHi, v))
+	gLo := proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), SourceDot(aLo, v))
+	gHi := proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), SourceDot(aHi, v))
 	if gHi.Cmp(gLo) < 0 {
 		gLo = gHi
 	}
 	if gLo.Sign() <= 0 {
 		return nil, false
 	}
-	return new(big.Rat).Quo(new(big.Rat).Mul(deviation, length), gLo), true
+	return new(big.Rat).Quo(proofarith.MulRat(new(big.Rat), deviation, length), gLo), true
 }
 
 func heldConnectorOf(verts []r3.Vec, cell, root int,
@@ -359,10 +359,10 @@ func connectorReachPiece(c Connector, radius2, lo, hi, reach *big.Rat) bool {
 	}
 	gate := func(t *big.Rat) *big.Rat {
 		a := sourceLerp(c.a[0], c.a[1], t)
-		derivative := new(big.Rat).Mul(big.NewRat(2, 1), SourceDot(a, v))
-		deficit := new(big.Rat).Sub(radius2, SourceDot(a, a))
-		return new(big.Rat).Sub(new(big.Rat).Mul(reach, derivative),
-			new(big.Rat).Mul(length, deficit))
+		derivative := proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), SourceDot(a, v))
+		deficit := proofarith.SubRat(new(big.Rat), radius2, SourceDot(a, a))
+		return proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), reach, derivative),
+			proofarith.MulRat(new(big.Rat), length, deficit))
 	}
 	// The radial derivative must remain strictly positive after removing the
 	// cap's vanishing axial factor. This also proves a transverse crossing.
@@ -376,10 +376,10 @@ func connectorReachPiece(c Connector, radius2, lo, hi, reach *big.Rat) bool {
 // A fixed depth bounds work and lets a positive quadratic with a negative
 // whole-interval middle coefficient pass after subdivision.
 func quadraticPositive(f func(*big.Rat) *big.Rat, lo, hi *big.Rat, depth int) bool {
-	mid := new(big.Rat).Quo(new(big.Rat).Add(lo, hi), big.NewRat(2, 1))
+	mid := new(big.Rat).Quo(proofarith.AddRat(new(big.Rat), lo, hi), big.NewRat(2, 1))
 	b0, bm, b2 := f(lo), f(mid), f(hi)
-	b1 := new(big.Rat).Sub(new(big.Rat).Mul(big.NewRat(2, 1), bm),
-		new(big.Rat).Quo(new(big.Rat).Add(b0, b2), big.NewRat(2, 1)))
+	b1 := proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), bm),
+		new(big.Rat).Quo(proofarith.AddRat(new(big.Rat), b0, b2), big.NewRat(2, 1)))
 	if b0.Sign() > 0 && b1.Sign() > 0 && b2.Sign() > 0 {
 		return true
 	}
