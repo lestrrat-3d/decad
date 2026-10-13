@@ -517,9 +517,10 @@ wall-area integral, boundary-displacement and occupied-volume proof. It never
 sums untwisted analytic span formulas.
 
 The body tolerance reference reads a proven lower bound on the true diameter.
-It starts from the complete held audit vertex set and subtracts twice the
-payload's maximum positional displacement, rounded down. A non-positive result
-withholds the reference and prevents a false `Sound` report.
+It reads the single-cell Loft's vertices or the stationed build's authenticated
+sewn mesh vertices, then subtracts twice the payload's maximum positional
+displacement, rounded down. A non-positive result withholds the reference and
+prevents a false `Sound` report.
 
 ## 10. Table D — downstream
 
