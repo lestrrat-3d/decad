@@ -317,6 +317,8 @@
 1	0.00	TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate
 1	0.00	TestSpanExtremeEnclosureRefusesOverBudget
 1	0.00	TestSpiralCapPlaneMustMissTheWholeRootCircle
+1	0.00	TestSpiralBlankRefusesSevenSideRevolveSection
+1	0.00	TestSpiralBlankUsesAuthenticatedRevolveSection
 1	0.00	TestSpiralFiniteConeSideRequiresWholeGeneratorAndFiniteTool
 1	0.00	TestSpiralRootTubePropagatesCancellation
 1	0.00	TestSpiralToolCapMustStayOnCertifiedSideOfBlankMeridian
