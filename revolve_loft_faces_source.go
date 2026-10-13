@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -79,9 +80,8 @@ func certifyRevolveLoftFacesSource(ctx context.Context, blank, tooth *Body) (
 	return selected, selected != nil, nil
 }
 
-// The source gate precedes a separate held-seam construction. It never asks
-// the mesh Boolean to bless a contact that its ordinary chain-depth gate
-// cannot resolve.
+// The source gate precedes a separate held-seam construction. An unfinished
+// source proof cannot veto the ordinary mesh Boolean's independent gates.
 func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 	a, b *Body) (bool, error) {
 	if op != meshbool.OpUnion {
@@ -89,12 +89,12 @@ func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 	}
 	proof, ok, err := certifyRevolveLoftFacesSource(ctx, a, b)
 	if err != nil {
-		return true, err
+		return revolveLoftFacesSourceProofError(ctx, err)
 	}
 	if !ok {
 		proof, ok, err = certifyRevolveLoftFacesSource(ctx, b, a)
 		if err != nil {
-			return true, err
+			return revolveLoftFacesSourceProofError(ctx, err)
 		}
 	}
 	if !ok || proof == nil {
@@ -102,12 +102,20 @@ func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 	}
 	_, certified, manifestErr := revolveLoftFacesCensus(ctx, proof)
 	if manifestErr != nil {
-		return true, manifestErr
+		return revolveLoftFacesSourceProofError(ctx, manifestErr)
 	}
 	if !certified {
-		return true, fmt.Errorf("%w: curved LoftFaces face pairs are undecidable", ErrUnsupported)
+		return false, nil
 	}
 	return true, fmt.Errorf("%w: certified curved LoftFaces contact needs a held-seam builder", ErrUnsupported)
+}
+
+func revolveLoftFacesSourceProofError(ctx context.Context, err error) (bool, error) {
+	if ctx.Err() != nil || errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) {
+		return true, err
+	}
+	return false, nil
 }
 
 func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
