@@ -20,7 +20,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/placedruling/` | Placed cylinder staging, support and relation proofs. See contact-geometry §4.5. |
 | `internal/facetproof/` | Faceted shell audits, placement and similarity proofs. See `docs/evaluator-design.md` §9. |
 | `internal/sectionrecord/` | Curve records and validation. |
-| `internal/selectorquery/` | Selector matching, query rendering, and residual counts. See API §9. |
+| `internal/selectorquery/` | Selector matching, query rendering, residual counts, and face-role indexes. See API §9. |
 | `internal/surfacegeom/` | Private face and edge geometry carriers and placement transforms. Public surface and curve variants live in `topology.go`. See API §6.1, surface §6. |
 | `internal/reportvocab/` | Contact and sweep enums; Verify reports, motion verification records and survey diagnostics. |
 | `internal/extent/` | Unit bounds and stop levels for extents. See API §8.1, evaluator §5/§6. |
@@ -35,11 +35,11 @@ The rules for rows live in `docs/layout.md`.
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
 | `internal/prismshell/` | Prism side-opening sections, slab levels and stack faces. See shell-opening §3–§5. |
 | `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, and extent readings. See evaluator §6. |
-| `internal/revolveshell/` | Effective-meridian survey, removed-run checks, and shell wall sections and displacement. See modify-reach §9.3. |
+| `internal/revolveshell/` | Effective-meridian survey, removed-run and side-segment role checks, and shell wall sections and displacement. See modify-reach §9.3. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines, plane gates and angle bounds. See sweep §3. |
-| `internal/sweepinput/` | Exact path records, tangent gates and recorded section gates for Sweep. See sweep §3, §5, §15.4. |
+| `internal/sweepinput/` | Exact path records, tangent gates, recorded section gates and closed-path class gates for Sweep. See sweep §3, §5, §15.4. |
 | `internal/sweepmitre/` | Mitred profile gates, exact sections, placement, rounding, triangle assembly and measurements. See sweep §16. |
 | `internal/coil/` | Coil stations, axis coordinates, moments and closed forms. See helix §5, §7. |
 | `internal/coilshell/` | Builds the held coil shell and mesh proofs. See helix §5, §8. |

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
+	"github.com/lestrrat-3d/decad/internal/selectorquery"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/wallsurvey"
@@ -103,13 +104,18 @@ type radiusOutcome struct {
 // facesByRole indexes a body's faces by their own-step feature role.
 func facesByRole(b *Body) map[string]*Face {
 	step := b.origin.producer
-	m := make(map[string]*Face)
-	for _, f := range b.Faces() {
+	faces := b.Faces()
+	faceRoles := make([][]string, len(faces))
+	for i, f := range faces {
 		for _, o := range f.origins {
 			if o.producer == step {
-				m[o.Role] = f
+				faceRoles[i] = append(faceRoles[i], o.Role)
 			}
 		}
+	}
+	m := make(map[string]*Face)
+	for role, i := range selectorquery.RoleIndex(faceRoles) {
+		m[role] = faces[i]
 	}
 	return m
 }

@@ -347,7 +347,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
 			return nil, err
 		}
-		if err := requireCapBlendFacetAreas(&mesh, "chamfered brep"); err != nil {
+		if err := tessellation.RequireCapBlendFacetAreas(mesh.vertices, mesh.triangles, "chamfered brep"); err != nil {
 			return nil, err
 		}
 	}

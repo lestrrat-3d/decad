@@ -24,11 +24,20 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 	if len(cells) == 0 {
 		t.Fatal("mapped finite-span consumer returned no cells")
 	}
-	t.Run("exact sign of live mapped span", func(t *testing.T) {
+	t.Run("exact rows of live mapped span", func(t *testing.T) {
 		crossing := proof.crossings[0]
-		rows := spiralRootPolynomial(trim.maps[0], trim.maps[1],
-			crossing.span, proof.rootM, proof.rootB)
-		for _, row := range rows {
+		first, last := trim.maps[0], trim.maps[1]
+		wantQ := spiralRootPolynomialRef(first, last, crossing.span, proof.rootM, proof.rootB)
+		gotQ := loftFacesMeridianQRows(first, last, crossing.span, proof.rootM, proof.rootB)
+		for i := range gotQ {
+			requireSameRows(t, wantQ[i], gotQ[i])
+		}
+		wantJ := spiralRootXOrderRef(first, last, crossing.span, wantQ)
+		gotJ := loftFacesMeridianJRows(first, last, crossing.span, gotQ)
+		for i := range gotJ {
+			requireSameRows(t, wantJ[i], gotJ[i])
+		}
+		for _, row := range gotQ {
 			for _, parameter := range []*big.Rat{
 				big.NewRat(0, 1), big.NewRat(1, 3), big.NewRat(2, 3), big.NewRat(1, 1),
 			} {

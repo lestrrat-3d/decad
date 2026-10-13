@@ -178,7 +178,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 			return nil, fmt.Errorf(`%w: a closed sweep surface result is not implemented`, ErrUnsupported)
 		}
 		var body *Body
-		if _, circle := closedSweepCircle(path); circle {
+		if _, circle := sweepinput.ClosedCircle(path.records); circle {
 			body, err = evalClosedCircleSweep(ctx, d, ref, profile, plane, frame, path, work)
 		} else {
 			body, err = evalClosedCyclicSweep(ctx, d, ref, profile, plane, frame, path, work)

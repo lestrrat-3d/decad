@@ -691,11 +691,11 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 			planar:  f.isPlanar(),
 		})
 	}
-	srcA, err := sourceIDs(ctx, ma, faceID)
+	srcA, err := meshbool.SourceIDs(ctx, ma.source, faceID)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
-	srcB, err := sourceIDs(ctx, mb, faceID)
+	srcB, err := meshbool.SourceIDs(ctx, mb.source, faceID)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -948,25 +948,6 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 		proofbound.AbsSumUpper(slackA, slackB, dropArea)
 }
 
-// sourceIDs maps a tessellation's per-facet source faces to the global
-// group ids.
-func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error) {
-	out := make([]int, len(m.source))
-	for i, f := range m.source {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-		}
-		id, ok := faceID[f]
-		if !ok {
-			return nil, fmt.Errorf(`%w: a facet's source is not an operand face`, ErrBooleanFailed)
-		}
-		out[i] = id
-	}
-	return out, nil
-}
-
 // operandSymDiff reads the volume of the symmetric difference between the
 // operand's held tessellation and the body it stands for from the MESH's own
 // proof record (docs/tessellation-design.md §2's volSymDiff), which the
@@ -1105,13 +1086,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 // operands at VerifyAll and the one-entry cache keys on the level — so this
 // arm holds the invariant for any other path to the same composition.
 func operandSymDiff(m *Mesh) (float64, error) {
-	if !m.boundaryOK {
-		return 0, fmt.Errorf(`%w: this operand's tessellation ran no facet-contact audit, so its facets are not proven to be an embedded boundary and no boolean may compose it; tessellate it at VerifyAll`, ErrUnsupported)
-	}
-	if !m.symDiffOK {
-		return 0, fmt.Errorf(`%w: this operand's tessellation carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
-	}
-	return m.volSymDiff, nil
+	return meshbool.OperandSymDiff(m.boundaryOK, m.symDiffOK, m.volSymDiff)
 }
 
 // refuseUndecidableProximityWithConeCap is the tangency gate (docs/evaluator-design.md §9,

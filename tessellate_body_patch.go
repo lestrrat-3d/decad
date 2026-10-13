@@ -71,7 +71,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
 		}
 	}
-	if err := requireCapBlendFacetAreas(mesh, "Body.Patch sheet"); err != nil {
+	if err := tessellation.RequireCapBlendFacetAreas(mesh.vertices, mesh.triangles, "Body.Patch sheet"); err != nil {
 		return nil, err
 	}
 	if err := requireMeshAudit(ctx, true, b, mesh); err != nil {

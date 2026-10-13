@@ -219,20 +219,18 @@ func revolveShellOffAxisWall(budget *proofbound.WorkBudget, profile profileRecor
 // generated side face sweeps — the j of its own side(0,j) roles — to segs. A
 // face naming no such role is not a side face of this revolve.
 func revolveSideFaceSegments(b *Body, f *Face, segs map[int]struct{}) error {
-	named := false
+	var roles []string
 	for _, o := range f.origins {
-		var li, j int
-		if o.producer != b.origin.producer {
-			continue
+		if o.producer == b.origin.producer {
+			roles = append(roles, o.Role)
 		}
-		if n, _ := fmt.Sscanf(o.Role, "side(%d,%d)", &li, &j); n != 2 || li != 0 {
-			continue
-		}
-		segs[j] = struct{}{}
-		named = true
 	}
-	if !named {
+	named, ok := revolveshell.SideSegments(roles)
+	if !ok {
 		return fmt.Errorf(`%w: a removed face is neither an angular cap nor a generated side face of this revolve`, ErrUnsupported)
+	}
+	for _, j := range named {
+		segs[j] = struct{}{}
 	}
 	return nil
 }
