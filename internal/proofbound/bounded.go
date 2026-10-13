@@ -271,7 +271,7 @@ func ConservativeValueError(held, trueAbsUpper float64) float64 {
 func AbsSumUpper(values ...float64) float64 {
 	total := 0.0
 	for _, value := range values {
-		total = UpRound(total + math.Abs(value))
+		total = UpRound(total + proofarith.Abs(value))
 	}
 	return total
 }

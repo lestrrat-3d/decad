@@ -256,8 +256,15 @@ func DyOf(f float64) (Dyadic, bool) {
 // non-finite inputs before reaching it; the Frexp scale and norm match DyOf,
 // and a float's mantissa always fits inline, so it never allocates.
 func DyOfFinite(f float64) Dyadic {
-	frac, exp := math.Frexp(f)
-	return dyInt64(int64(frac*(1<<53)), exp-53)
+	b := math.Float64bits(f)
+	mag, exp := b&(1<<52-1), int(b>>52&0x7ff)
+	if exp == 0 {
+		exp = -1074
+	} else {
+		mag |= 1 << 52
+		exp -= 1075
+	}
+	return fromMag(mag, 0, b>>63 != 0, exp)
 }
 
 // dyInt64 is the canonical Dyadic for v × 2^exp.
@@ -600,7 +607,13 @@ func (d Dyadic) Float64() (float64, bool) {
 				top |= 1
 			}
 		}
-		f := math.Ldexp(float64(top), shift+d.exp)
+		k := shift + d.exp
+		var f float64
+		if -dyPow2Bias <= k && k <= 900 {
+			f = float64(top) * dyPow2[k+dyPow2Bias]
+		} else {
+			f = math.Ldexp(float64(top), k)
+		}
 		if d.neg() {
 			f = -f
 		}
@@ -697,6 +710,9 @@ func DvEqual(a, b DyV3) bool {
 // binary exponent, so the split the rational version had to compute is a field
 // read here.
 func DySqrtSeed(d Dyadic) float64 {
+	if d.big == nil && d.lo != 0 && !d.neg() {
+		return dySqrtSeedInline(d)
+	}
 	// The mantissa is normalised into [0.5, 1) first and its own exponent
 	// folded into the total, so a value near either end of the float64 range
 	// roots from a fraction rather than from an integer the conversion would
@@ -751,7 +767,11 @@ func DySqrtDown(d Dyadic) float64 {
 		if DySquareAtMost(f, d) {
 			return f
 		}
-		f = math.Nextafter(f, 0)
+		if f > 0 {
+			f = NextDown(f)
+		} else {
+			f = math.Nextafter(f, 0)
+		}
 	}
 	return 0
 }
@@ -771,7 +791,7 @@ func DySqrtUp(d Dyadic) float64 {
 		if !DySquareAtMost(f, d) || DySquareEquals(f, d) {
 			return f
 		}
-		f = math.Nextafter(f, math.Inf(1))
+		f = NextUp(f)
 	}
 	return math.Inf(1)
 }
@@ -839,7 +859,7 @@ func DyadicFloatError(exact Dyadic, held float64) float64 {
 func DyNearestUp(d Dyadic) float64 {
 	f, exact := d.Float64()
 	if !exact {
-		f = math.Nextafter(f, math.Inf(1))
+		f = NextUp(f)
 	}
 	return f
 }
@@ -923,3 +943,50 @@ func isNonFinite(f float64) bool { return !finite(f) }
 
 // SqrtAdjustLimit bounds directed rounding from a correctly rounded square root.
 const SqrtAdjustLimit = 8
+
+// dyPow2 holds 2^k for k in [-dyPow2Bias, dyPow2Bias], each exact.
+const dyPow2Bias = 1000
+
+var dyPow2 = func() (t [2*dyPow2Bias + 1]float64) {
+	for k := range t {
+		t[k] = math.Ldexp(1, k-dyPow2Bias)
+	}
+	return t
+}()
+
+// dySqrtSeedInline is DySqrtSeed's big.Float path for a positive inline
+// mantissa, reproduced on machine words: the magnitude rounds to 64 bits
+// nearest-even (SetPrec(64).SetInt), then to 53 bits nearest-even
+// (Float64; Go's uint64-to-float64 conversion is the same rounding), and
+// scaling by an exact power of two replaces MantExp/SetMantExp/Ldexp
+// wherever the scaled value stays normal.
+func dySqrtSeedInline(d Dyadic) float64 {
+	lo, hi := d.lo, d.hi&^dySign
+	n := bitLen128(lo, hi)
+	top, shift := lo, 0
+	if n > 64 {
+		shift = n - 64
+		top = hi<<(64-uint(shift)) | lo>>uint(shift)
+		rem := lo & (1<<uint(shift) - 1)
+		half := uint64(1) << uint(shift-1)
+		if rem > half || rem == half && top&1 == 1 {
+			top++
+			if top == 0 {
+				top, shift = 1<<63, shift+1
+			}
+		}
+	}
+	tl := bits.Len64(top)
+	exp := d.exp + tl + shift
+	k := -tl
+	if exp%2 != 0 {
+		exp--
+		k++
+	}
+	m := float64(top) * dyPow2[k+dyPow2Bias]
+	half := exp / 2
+	if half < -dyPow2Bias+1 || half > dyPow2Bias-1 {
+		return math.Ldexp(math.Sqrt(m), half)
+	}
+	return math.Sqrt(m) * dyPow2[half+dyPow2Bias]
+}

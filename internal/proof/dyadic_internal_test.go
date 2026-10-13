@@ -284,3 +284,112 @@ func TestDyadicMatchesLegacyForm(t *testing.T) {
 		}
 	}
 }
+
+// legacyDyOfFinite is DyOfFinite as it was written over math.Frexp.
+func legacyDyOfFinite(f float64) Dyadic {
+	frac, exp := math.Frexp(f)
+	return dyInt64(int64(frac*(1<<53)), exp-53)
+}
+
+// TestDyOfFiniteMatchesFrexpForm checks the bit-cast DyOfFinite against the
+// Frexp form field for field.
+func TestDyOfFiniteMatchesFrexpForm(t *testing.T) {
+	check := func(f float64) {
+		require.Equal(t, legacyDyOfFinite(f), DyOfFinite(f), "%x", math.Float64bits(f))
+	}
+	for _, x := range []float64{
+		0, math.Copysign(0, -1), math.MaxFloat64, -math.MaxFloat64, math.SmallestNonzeroFloat64,
+		-math.SmallestNonzeroFloat64, 0x1p-1022, -0x1p-1022, 1, -1,
+	} {
+		check(x)
+		check(math.Nextafter(x, 0))
+	}
+	for e := -1074; e <= 1023; e++ {
+		p := math.Ldexp(1, e)
+		check(p)
+		check(-p)
+		check(math.Nextafter(p, 0))
+		check(math.Nextafter(p, math.Inf(1)))
+	}
+	r := rand.New(rand.NewPCG(5, 6))
+	for range 100_000 {
+		f := math.Float64frombits(r.Uint64())
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			continue
+		}
+		check(f)
+	}
+}
+
+// bigFloatSqrtSeed is DySqrtSeed's big.Float path, kept as the reference for
+// the machine-word path.
+func bigFloatSqrtSeed(d Dyadic) float64 {
+	var t big.Int
+	var buf dyBuf
+	mant := new(big.Float).SetPrec(64).SetInt(d.view(&t, &buf))
+	exp := d.exp + mant.MantExp(mant)
+	if exp%2 != 0 {
+		exp--
+		mant.SetMantExp(mant, 1)
+	}
+	m, _ := mant.Float64()
+	return math.Ldexp(math.Sqrt(m), exp/2)
+}
+
+// randomInlineDyadic builds a positive inline Dyadic of 1-127 mantissa bits;
+// a quarter of the wide ones sit on an exact tie at the 64-bit cut and a
+// quarter carry all ones below it.
+func randomInlineDyadic(r *rand.Rand, exp int) Dyadic {
+	nb := 1 + r.IntN(127)
+	var lo, hi uint64
+	if nb <= 64 {
+		lo = r.Uint64()>>(64-uint(nb)) | 1<<uint(nb-1)
+		return fromMag(lo, 0, false, exp)
+	}
+	lo = r.Uint64()
+	hi = r.Uint64()>>(128-uint(nb)) | 1<<uint(nb-65)
+	switch r.IntN(4) {
+	case 0:
+		lo = lo&^(1<<uint(nb-64)-1) | 1<<uint(nb-65)
+	case 1:
+		lo |= 1<<uint(nb-64) - 1
+	}
+	return fromMag(lo, hi, false, exp)
+}
+
+// TestDySqrtSeedInlineMatchesBigFloat compares the machine-word seed with the
+// big.Float one by exact bits, over exponents that run the power-of-two table
+// and the Ldexp fallback.
+func TestDySqrtSeedInlineMatchesBigFloat(t *testing.T) {
+	r := rand.New(rand.NewPCG(3, 4))
+	for range 50_000 {
+		d := randomInlineDyadic(r, r.IntN(2201)-1100)
+		got, want := DySqrtSeed(d), bigFloatSqrtSeed(d)
+		require.Equal(t, math.Float64bits(want), math.Float64bits(got), "%+v", d)
+	}
+}
+
+// TestDyadicFloat64MatchesLdexp checks the table-scaled inline conversion
+// against Ldexp over inline Dyadics whose value is a normal float.
+func TestDyadicFloat64MatchesLdexp(t *testing.T) {
+	r := rand.New(rand.NewPCG(7, 8))
+	for range 50_000 {
+		d := randomInlineDyadic(r, r.IntN(2300)-1150)
+		n := d.bitLen()
+		if n-1+d.exp < -1022 || n+d.exp > 1024 {
+			continue
+		}
+		top, shift := d.lo, 0
+		if hi := d.hi &^ dySign; hi != 0 {
+			shift = n - 64
+			top = hi<<(64-shift) | d.lo>>shift
+			if d.lo<<(64-shift) != 0 {
+				top |= 1
+			}
+		}
+		want := math.Ldexp(float64(top), shift+d.exp)
+		got, exact := d.Float64()
+		require.Equal(t, math.Float64bits(want), math.Float64bits(got), "%+v", d)
+		require.Equal(t, n <= 53, exact)
+	}
+}
