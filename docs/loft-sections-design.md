@@ -26,6 +26,8 @@ trimmed lines, curved segments, and differing segment counts return
 route for exactly matching curved records. Section 7 admits linearly varying
 four-arc circles. Section 8 admits varying fitted flanks with fixed arcs.
 Section 9 admits four non-affine rounded-rectangle sections.
+Section 10 admits three axis-aligned rectangular sections whose half-width
+and half-height vary independently.
 
 All three planes have world-XY `U` and `V` axes, the same XY origin, and
 strictly increasing Z origins with the middle Z exactly halfway between the
@@ -145,7 +147,8 @@ a conservative unit-normal departure bound. `Face.NormalAt` on a quadratic
 wall remains `ErrUnsupported`, as for every `NURBSSurface`.
 
 The admitted classes are increments, not a claim that general multi-section
-interpolation is determined by profile boundaries. Nonhomothetic profiles,
+interpolation is determined by profile boundaries. Nonhomothetic profiles
+outside §10,
 varying curved profiles outside §§7–9, arbitrary planes, guides, centerlines,
 and hole loops remain `ErrUnsupported`. Nil context or document, or a section count
 other than three or four, returns `ErrDegenerate`. A seam failure returns its own
@@ -440,3 +443,76 @@ areas. The exact held-triangle area uppers join it as conservative
 diameter bound. General four-section free-form profiles, changing corner
 radius or half-height, and non-monotone width controls remain
 `ErrUnsupported`.
+
+## 10. Three independently varying rectangular sections
+
+This route consumes three authenticated, hole-free Sketch profiles. Each has
+four whole `LineSeg` records whose walked vertices form an axis-aligned,
+counterclockwise rectangle centered on the common plane origin. The three
+rectangles may start their recorded walks at different corners. Their planes
+have the world-XY axes, the same XY origin, and equally spaced ascending Z
+levels. This route refuses a profile outside the rectangular class; the
+other `LoftSections` routes keep their own admission. Dispatch chooses
+this route when the dimensions have different exact ratios or the walks
+start at different corners. Homothetic rectangles with matching recorded
+walks keep §1's existing builder.
+
+Let `w_i,h_i > 0` be exact half-width and half-height from the recorded
+corners at normalized heights `0,1/2,1`. For `x = w,h`, define
+`a_x = 2(x_2-2x_1+x_0)`, `b_x = x_2-x_0-a_x`, and
+`x(t)=x_0+b_x t+a_x t²`. Require the middle Bernstein control
+`B_x=2x_1-(x_0+x_2)/2` to be nonnegative. Positive endpoints and this
+control prove `x(t)>0` for every `0<=t<=1`. Each exact section is the
+rectangle `[-w(t),w(t)] × [-h(t),h(t)]` at `z=z_0+Ht`.
+Distinct heights cannot intersect, and positive dimensions keep each section
+embedded. Each source edge sweeps one quadratic wall and names one live
+`NURBSSurface` face; the two end caps are planar.
+
+The held shell uses `N` equal-height bands, with `N=16,32,64,128` chosen as
+the first for which `D=(|a_w|+|a_h|)/(4N²) <= 0.05 mm`. Every exact rational
+ring corner and height must be representable as a finite float64. At a band,
+linear interpolation of the two endpoint widths and heights makes every
+horizontal or vertical wall quad planar; two triangles tile it exactly.
+The first and last rings also tile the end caps. The faceted shell audit
+must pass before commit. The map with normalized rectangle coordinates
+`(u,v)` sends `(u w(t),v h(t),z)` to `(u l_w(t),v l_h(t),z)` and is continuous,
+one-to-one and orientation preserving in both directions. Its distance is
+at most `D`, since `|x(t)-l_x(t)| <= |a_x|/(4N²)`. Adjacent maps use the same
+held ring and the caps use their exact source corners.
+
+Write `W=max(w_0,B_w,w_2)` and `K=max(h_0,B_h,h_2)`. The Bernstein hull
+bounds both true and held dimensions by `W,K`. The true volume is the exact
+rational `4H ∫_0^1 w(t)h(t) dt`; the held mesh integrates the piecewise-linear
+dimensions. At each height, insert an intermediate rectangle with held width
+and true height. The two resulting symmetric-difference strip areas sum to
+at most `4(K|w-l_w|+W|h-l_h|)`. For either quadratic,
+`∫_0^1 |x-l_x| dt = |a_x|/(6N²)`. Therefore the occupied-volume allowance is
+
+```text
+4H (K|a_w| + W|a_h|)/(6N²).
+```
+
+This is non-cancelling even when width and height curve in opposite
+directions. A signed volume difference cannot replace it. The allowance
+feeds `facetedPayload.volSymDiff` and bounds the true volume reading against
+the held tetrahedron sum.
+
+For area, each pair of horizontal walls has density
+`4w sqrt(H²+h'²)` and each pair of vertical walls has density
+`4h sqrt(H²+w'²)` in normalized height. Let
+`P_x=max(|b_x|,|2a_x+b_x|)`. The square-root factor is one-Lipschitz in its
+derivative argument and is at most `H+P_x`. Piecewise-linear interpolation
+also gives `∫|x'-l_x'|=|a_x|/(2N)`. The non-cancelling wall-area allowance is
+
+```text
+4[(H+P_h)|a_w|/(6N²) + W|a_h|/(2N)
+  + (H+P_w)|a_h|/(6N²) + K|a_w|/(2N)].
+```
+
+The held and true end caps coincide; faceted measurement arithmetic adds
+its own rounding charge. Round every rational proof upward. The diameter
+upper bound `2(W+K)+H` covers the source and held shells. The existing
+faceted placement, `Tessellate(VerifyAll)`, mesh-boolean, and export paths
+consume the resulting payload. A nonpositive dimension, failed Bernstein
+gate, unrepresentable station, or unmet 128-band bound returns
+`ErrUnsupported` without committing a body.
