@@ -17,6 +17,9 @@ func TestLoftCylinderEdgesMeetXPAgreesWithRational(t *testing.T) {
 	pt := func(x, y float64) loftCylinderXY {
 		return loftCylinderXY{new(big.Rat).SetFloat64(x), new(big.Rat).SetFloat64(y)}
 	}
+	ratPt := func(x, y *big.Rat) loftCylinderXY { return loftCylinderXY{x, y} }
+	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 100))
+	onePlusTiny := new(big.Rat).Add(big.NewRat(1, 1), tiny)
 	for _, tc := range []struct {
 		name       string
 		a, b, c, d loftCylinderXY
@@ -29,6 +32,9 @@ func TestLoftCylinderEdgesMeetXPAgreesWithRational(t *testing.T) {
 		{"collinear disjoint", pt(0, 0), pt(1, 0), pt(2, 0), pt(5, 0), false},
 		{"overlapping boxes disjoint", pt(0, 0), pt(4, 4), pt(0, 1), pt(2, 3.5), false},
 		{"near miss by one ulp", pt(0, 0), pt(1, 1), pt(1.0000000000000002, 1), pt(3, 0), false},
+		{"rational gap rounded away", pt(0, 0), pt(1, 0), ratPt(onePlusTiny, big.NewRat(0, 1)), pt(2, 0), false},
+		{"rational crossing", pt(0, 0), ratPt(big.NewRat(1, 1), big.NewRat(1, 3)),
+			ratPt(big.NewRat(0, 1), big.NewRat(1, 3)), pt(1, 0), true},
 		{"parallel apart", pt(0, 0), pt(2, 2), pt(0, 1), pt(2, 3), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

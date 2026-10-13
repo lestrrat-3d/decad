@@ -109,8 +109,10 @@ func loftCylinderBoreRingSimple(ctx context.Context, verts []r3.Vec, ring []int)
 		return false
 	}
 	points := make([]loftCylinderXY, n)
+	filtered := make([]meshbool.Xp2, n)
 	for i, index := range ring {
 		points[i] = loftCylinderExactXY(verts[index])
+		filtered[i] = meshbool.NewXP2(points[i].x, points[i].y)
 	}
 	area2 := new(big.Rat)
 	inside := false
@@ -135,7 +137,8 @@ func loftCylinderBoreRingSimple(ctx context.Context, verts []r3.Vec, ring []int)
 			if j == i+1 || i == 0 && j == n-1 {
 				continue
 			}
-			if loftCylinderEdgesMeet(a, b, points[j], points[(j+1)%n]) {
+			if loftCylinderEdgesMeetXP(filtered[i], filtered[(i+1)%n],
+				filtered[j], filtered[(j+1)%n]) {
 				return false
 			}
 		}

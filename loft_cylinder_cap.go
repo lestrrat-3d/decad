@@ -203,18 +203,18 @@ func loftCylinderOrient(a, b, c loftCylinderXY) *big.Rat {
 }
 
 // loftCylinderEdgesMeetXP decides the same closed-segment contact as
-// loftCylinderEdgesMeet. Every outline coordinate is a float lifted exactly,
-// so comparing the float images is the same total order as comparing the
-// rationals, and meshbool.Cross2xSign returns the exact orientation sign,
-// deciding from floats only where its error bound proves the sign. A point
-// without a finite float image takes the rational body.
+// loftCylinderEdgesMeet. Strict separation of rounded float bounds implies
+// strict separation of the rational bounds. Other decisions use exact
+// rational comparisons or meshbool.Cross2xSign's certified sign filter. A
+// point without a finite float image takes the rational body.
 func loftCylinderEdgesMeetXP(a, b, c, d meshbool.Xp2) bool {
 	if !a.FloatFinite || !b.FloatFinite || !c.FloatFinite || !d.FloatFinite {
 		return loftCylinderEdgesMeet(loftCylinderXY{a.U, a.V}, loftCylinderXY{b.U, b.V},
 			loftCylinderXY{c.U, c.V}, loftCylinderXY{d.U, d.V})
 	}
-	between := func(a, b, p float64) bool {
-		return (a <= p && p <= b) || (b <= p && p <= a)
+	between := func(a, b, p *big.Rat) bool {
+		return (a.Cmp(p) <= 0 && p.Cmp(b) <= 0) ||
+			(b.Cmp(p) <= 0 && p.Cmp(a) <= 0)
 	}
 	if a.Fu > c.Fu && a.Fu > d.Fu && b.Fu > c.Fu && b.Fu > d.Fu ||
 		a.Fu < c.Fu && a.Fu < d.Fu && b.Fu < c.Fu && b.Fu < d.Fu ||
@@ -224,10 +224,10 @@ func loftCylinderEdgesMeetXP(a, b, c, d meshbool.Xp2) bool {
 	}
 	abc, abd := meshbool.Cross2xSign(a, b, c), meshbool.Cross2xSign(a, b, d)
 	cda, cdb := meshbool.Cross2xSign(c, d, a), meshbool.Cross2xSign(c, d, b)
-	if abc == 0 && between(a.Fu, b.Fu, c.Fu) && between(a.Fv, b.Fv, c.Fv) ||
-		abd == 0 && between(a.Fu, b.Fu, d.Fu) && between(a.Fv, b.Fv, d.Fv) ||
-		cda == 0 && between(c.Fu, d.Fu, a.Fu) && between(c.Fv, d.Fv, a.Fv) ||
-		cdb == 0 && between(c.Fu, d.Fu, b.Fu) && between(c.Fv, d.Fv, b.Fv) {
+	if abc == 0 && between(a.U, b.U, c.U) && between(a.V, b.V, c.V) ||
+		abd == 0 && between(a.U, b.U, d.U) && between(a.V, b.V, d.V) ||
+		cda == 0 && between(c.U, d.U, a.U) && between(c.V, d.V, a.V) ||
+		cdb == 0 && between(c.U, d.U, b.U) && between(c.V, d.V, b.V) {
 		return true
 	}
 	return abc != abd && cda != cdb
