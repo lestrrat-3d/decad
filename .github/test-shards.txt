@@ -300,6 +300,7 @@
 1	1.05	TestRevolveFreeformPartialCapAreaSlack
 1	0.00	TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift
 1	0.01	TestRevolveSectorCapFanRequiresAdjacentCompleteSourceRing
+1	0.01	TestRevolveSectorNearUnitAxisPlacement
 1	0.01	TestRevolveSectorProjectionRefusesOverlap
 1	0.01	TestRevolveSectorProjectionSeparatesRotatedSources
 1	0.01	TestRevolveSectorStraightBandCrossIsStrictAtBothRadii

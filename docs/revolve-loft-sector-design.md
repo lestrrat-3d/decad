@@ -47,6 +47,13 @@ rotation. The original unplaced source controls each cone map; placement is
 applied once after that map. The placed caps share the exact ring vertex IDs
 at every root station.
 
+A copied sector's axis-X placement has zero translation and no reflection.
+Its X/YZ cross terms are exactly zero, its YZ block has the proper rotation
+relations, and its held X basis length differs from one by at most one float
+step. `MapChargeOf` charges that axial basis defect in source and cap placement
+bounds. The builder also checks each placed cap's measured snap to the shared
+root ring. A larger axial defect or a tilted axis refuses this route.
+
 For repeated sectors, the complete trimmed source solids must be separate by
 one certified projection for every pair. The builder first checks expanded
 world-coordinate ranges. When those ranges overlap, it chooses a YZ direction
