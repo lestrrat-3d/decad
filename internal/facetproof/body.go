@@ -288,7 +288,7 @@ func FirstMomentsFromAudit(budget *proofbound.WorkBudget, audit *MeshAudit, tris
 		}
 		lifted[i] = v
 	}
-	var acc [3]proof.Dyadic
+	var acc [3]proof.DyAcc
 	for fi, t := range tris {
 		if err := budget.Step(); err != nil {
 			return [3]*big.Rat{}, err
@@ -300,7 +300,7 @@ func FirstMomentsFromAudit(budget *proofbound.WorkBudget, audit *MeshAudit, tris
 		a, b, c := lifted[t[0]], lifted[t[1]], lifted[t[2]]
 		for axis := range 3 {
 			s := proof.DyAdd(proof.DyAdd(a[axis], b[axis]), c[axis])
-			acc[axis] = proof.DyAdd(acc[axis], proof.DyMul(d, s))
+			acc[axis].AddProduct(d, s)
 		}
 	}
 	return [3]*big.Rat{acc[0].Rat(), acc[1].Rat(), acc[2].Rat()}, nil

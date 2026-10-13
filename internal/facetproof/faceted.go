@@ -243,7 +243,7 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 		// Every term is a Dyadic (power-of-two denominators), so the
 		// sum accumulates without a GCD and converts once; the value is the
 		// same rational the big.Rat sum produced.
-		total := proof.DyZero()
+		var total proof.DyAcc
 		var v *big.Rat
 		for i, fi := range list {
 			if i%256 == 0 {
@@ -256,7 +256,7 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 			if v == nil {
 				if term, ok := proof.XdotDyadic(audit.XVerts[t[0]], cross); ok {
 					det[fi] = term
-					total = proof.DyAdd(total, term)
+					total.Add(term)
 					continue
 				}
 				v = total.Rat()
