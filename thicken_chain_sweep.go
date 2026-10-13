@@ -12,6 +12,43 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+func thickenChainSweep(ctx context.Context, d *Document, sp chainSweepPayload,
+	side ThickenSide, tmm, tDelta float64) (*Body, error) {
+	if sp.arc && len(sp.spans) == 0 {
+		return thickenArcChainSweep(ctx, d, sp, side, tmm, tDelta)
+	}
+	return thickenCompositeChainSweep(ctx, d, sp, side, tmm, tDelta)
+}
+
+// thickenArcChainSweep closes the source walk through the same exact-axis
+// chain Revolve offset proof, then publishes its new closed section as a
+// solid one-arc Sweep. The original open-chain reduction cannot describe it.
+func thickenArcChainSweep(ctx context.Context, d *Document, sp chainSweepPayload,
+	side ThickenSide, tmm, tDelta float64) (*Body, error) {
+	if sp.path == nil || len(sp.path.records) != 1 {
+		return nil, fmt.Errorf(`%w: this chain Sweep has no one-arc Thicken path`, ErrUnsupported)
+	}
+	reverse := sp.revolve.phi0 < 0 && sp.revolve.phi1 == 0
+	if !reverse && (sp.revolve.phi0 != 0 || sp.revolve.phi1 <= 0) {
+		return nil, fmt.Errorf(`%w: this chain Sweep has no path-order cap proof`, ErrUnsupported)
+	}
+	body, err := thickenChainRevolve(ctx, d, sp.revolve, side, tmm, tDelta)
+	if err != nil {
+		return nil, err
+	}
+	built, ok := body.payload.(revolvePayload)
+	if !ok {
+		return nil, fmt.Errorf(`%w: thickened chain arc has no solid Revolve reduction`, ErrDegenerate)
+	}
+	finishArcSweepBody(body, sweepPayload{
+		prism: prismPayload{
+			profile: built.profile, frame: built.frame, xform: built.xform,
+		},
+		revolve: built, arc: true, reverseArcCaps: reverse, path: sp.path,
+	})
+	return body, nil
+}
+
 // thickenCompositeChainSweep closes the authenticated radial line into a
 // rectangular section and sends that one section through both path spans.
 func thickenCompositeChainSweep(ctx context.Context, d *Document, sp chainSweepPayload,
