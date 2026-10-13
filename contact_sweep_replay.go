@@ -60,7 +60,7 @@ func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 	p.bracketHi = new(big.Rat).Set(right)
 }
 
-// setRotatingBracketGap records what bracketDepthWithin needs from a
+// setRotatingBracketGap records what sweepmemo.BracketDepthWithin needs from a
 // rotating source-box impact: the left sample's certified lower gap and both
 // bodies' travel bound per unit fraction. A left sample without a positive
 // gap leaves the bracket replayable only through its left edge.

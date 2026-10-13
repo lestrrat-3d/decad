@@ -379,7 +379,7 @@ func TestOffsetStagedFamilies(t *testing.T) {
 }
 
 // TestOffsetRefusals is Table R's R40 and R41 plus the sealed option tier: a
-// bad magnitude keeps magnitudeIn's own sentinel, an option this package did
+// bad magnitude keeps sectionrecord.MagnitudeIn's own sentinel, an option this package did
 // not mint is ErrDegenerate, and a retired receiver is ErrRetiredBody. None of
 // them registers or retires anything.
 func TestOffsetRefusals(t *testing.T) {

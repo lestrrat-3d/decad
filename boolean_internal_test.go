@@ -134,7 +134,7 @@ func TestTriTriClassifyNamesTheInPlaneEdge(t *testing.T) {
 }
 
 // singleFacetBoolMesh prepares a one-triangle operand mesh, the smallest input
-// facesNearMiss can be asked about.
+// meshbool.FacesNearMiss can be asked about.
 func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *meshbool.BoolMesh {
 	t.Helper()
 	face := &Face{}
@@ -343,7 +343,7 @@ func TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone(t *testing.T) {
 // reports a value far above the slack for a pair that provably crosses. Asked
 // FIRST, it would drop the crossing from the gate's contact set, and a face
 // pair whose solid penetration is at or below the slack — the case
-// provenDepthExceeds cannot certify — would clear the gate with no proof
+// meshbool.ProvenDepthExceeds cannot certify — would clear the gate with no proof
 // behind it, its topology decided by where the chords fell.
 func TestNearMissKeepsACrossingTheDistanceRoutineMisreads(t *testing.T) {
 	t.Parallel()
@@ -416,7 +416,7 @@ type gateFacePair struct {
 
 // closeGateFacePairs prepares a and b the way evaluateBoolean does and returns
 // every face pair whose facets meet or come within the pair's bound — the
-// pairs refuseUndecidableProximity must decide — with the prepared meshes.
+// pairs refuseUndecidableProximityWithConeCap must decide — with the prepared meshes.
 func closeGateFacePairs(t *testing.T, a, b *Body) (*meshbool.BoolMesh, *meshbool.BoolMesh, []gateFacePair) {
 	t.Helper()
 	tolMM, _, err := pairChordTolerance(t.Context(), a, b)
@@ -461,7 +461,7 @@ func closeGateFacePairs(t *testing.T, a, b *Body) (*meshbool.BoolMesh, *meshbool
 // For every face pair whose facets come within the bound, the gate must find a
 // deep witness, or the union is refused. At least one such pair has no witness
 // among its contacting facets' corners, edge midpoints and centroids on either
-// side (deepWitnessInside): those seven points sit at the far ends of facets
+// side (meshbool.DeepWitnessInside): those seven points sit at the far ends of facets
 // 11 mm long. The walk from the pair's contact segments (meshbool.SpanWitness) proves it.
 func TestProximityGateWalksPastCornerSamples(t *testing.T) {
 	t.Parallel()

@@ -142,7 +142,7 @@ func requireExactRevolveSection(rp revolvePayload, what string) error {
 // meridian is a *view* of rp as a prismPayload carrying the recorded MERIDIAN
 // and the frame and placement it is expressed in — never a body this evaluator
 // builds from. It is what docs/surface-intersection-design.md §3.1 hands
-// buildPrismScene, prismcells.NewReexpression, prismcells.Classify and the rest of
+// prismcells.BuildScene, prismcells.NewReexpression, prismcells.Classify and the rest of
 // §3's resolution, every one of which reads a profile, a frame and a placement
 // and nothing else. The sweep fields are deliberately absent: the revolve's own
 // angular interval is S6's business, never the private 2D scene's, and the
@@ -216,7 +216,7 @@ func walkEnd(seg curveSegment, w survey2d.SegmentWalk) sweptPoint {
 	return sweptPoint{u: w.EndU, v: w.EndV, bound: boundarywalk.DenotedEndBound(seg, w)}
 }
 
-// junctionStart reads the junction where axis walk prev ends and next starts
+// revolveJunctionStart reads the junction where axis walk prev ends and next starts
 // as a plane-local point bounded against the points BOTH neighbours' recorded
 // segments denote there (boundarywalk.JunctionVertex): at a cut junction the
 // two differ (docs/evaluator-design.md §4).
@@ -397,7 +397,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// figure the gates that refuse a departed face read
 		// (docs/evaluator-design.md §6).
 		//
-		// capAdmitAllow is revolveAxisAdmitBandCharge's own term (above): each
+		// capAdmitAllow is revolvemass.AdmitBandCharge's own term (above): each
 		// cap face's LOOP is walked from the axis-snapped profile, while its
 		// area here is ig.Area, the Pappus engine's own integral over the
 		// UNSNAPPED recorded one. The two agree exactly wherever
@@ -1191,7 +1191,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	area := proofbound.BoundedScalar{}
 	for ci := range rp.chains {
 		// Each walk builds from its OWN single-walk view, so
-		// sideOriginsContext's segment indices and walkAxisMoment's own
+		// sideOriginsContext's segment indices and revolvemass.WallAxisMoment's own
 		// rp.profile.Outer read reach exactly that walk's segments, and ci
 		// feeds the face role so two walks never collide on one role string
 		// (docs/surface-intersection-design.md §3.4).

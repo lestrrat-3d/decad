@@ -76,7 +76,7 @@ func WithOffsetSide(side OffsetSide) OffsetOption { return offsetSideOption{side
 //
 // A nil context or an option this package did not mint is ErrDegenerate, as is
 // a zero distance; a wrong-kind, non-finite or negative distance keeps
-// magnitudeIn's own sentinel (R40). A retired receiver is ErrRetiredBody (R41).
+// sectionrecord.MagnitudeIn's own sentinel (R40). A retired receiver is ErrRetiredBody (R41).
 // A refusal registers nothing and retires nothing, so the receiver is live
 // after a refusal exactly as it is after a success.
 func (b *Body) Offset(ctx context.Context, distance units.Value, opts ...OffsetOption) (*Body, error) {

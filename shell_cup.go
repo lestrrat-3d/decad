@@ -53,7 +53,7 @@ const roleShellCap = "shellCap"
 // the shared prism build stamps.
 //
 // thicknessDelta is the shell thickness's OWN conversion displacement — the
-// bound magnitudeInBounded proved when it converted the caller's stated
+// bound extent.MagnitudeInBounded proved when it converted the caller's stated
 // thickness into millimetres (shell.go). It is distinct from zOuterDelta and
 // zCavDelta: those cover the derived FLOOR LEVEL's own float-sum rounding
 // (which already folds thicknessDelta in — cupPayloadFor's step closure), and

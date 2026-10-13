@@ -54,7 +54,7 @@ type BoolMesh struct {
 	Parity *ParityMesh
 }
 
-// twinFacet returns the facet across edge k of facet f — the neighbour a
+// TwinFacet returns the facet across edge k of facet f — the neighbour a
 // watertight mesh's reversed directed edge names.
 func (bm *BoolMesh) TwinFacet(f, k int) (int, bool) {
 	tri := bm.Tris[f]
@@ -62,7 +62,7 @@ func (bm *BoolMesh) TwinFacet(f, k int) (int, bool) {
 	return t, ok && t != f
 }
 
-// prepareFloatNormal computes the correctly rounded float value of one exact
+// PrepareFloatNormal computes the correctly rounded float value of one exact
 // facet normal. RunContactBatch calls it before starting workers, so workers
 // only read the cache; ContactMemo's serial path does the same before use.
 func (bm *BoolMesh) PrepareFloatNormal(i int) {

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// legacyBernsteinRestrict is the two-split form spiralBernRestrict had
+// legacyBernsteinRestrict is the two-split form BernsteinRestrict had
 // before it shared one integer denominator.
 func legacyBernsteinRestrict(a []*big.Rat, lo, hi *big.Rat) []*big.Rat {
 	_, right := polynomial.BernsteinSplit(a, lo)

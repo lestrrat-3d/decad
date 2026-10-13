@@ -170,7 +170,7 @@ func ExtendSetBound(seg CurveSegment, atStart bool, bound float64) CurveSegment 
 
 // TrimProfileFullyWhole reports whether every segment of the supplied loops
 // spans its entity's own natural domain (S7's third clause) — read off the
-// recorded range through wholeSegmentRange, the identical prism-boolean
+// recorded range through WholeSegmentRange, the identical prism-boolean
 // reading (prism_boolean.go), and never off any walk's closed-ness. Stating
 // it this way is a record property, decidable before the arrangement runs,
 // which is what lets every miss here be one refusal at the call
@@ -194,7 +194,7 @@ func TrimProfileFullyWhole(budget *proofbound.WorkBudget, outer LoopRecord, hole
 }
 
 // trimSegmentIsWhole reads one S3-admitted segment's own recorded range
-// through wholeSegmentRange (prism_boolean.go) — exact float equality
+// through WholeSegmentRange — exact float equality
 // against 0 and 1, never a tolerance in either direction.
 func trimSegmentIsWhole(seg CurveSegment) (bool, error) {
 	t0, t1, err := SegmentParamRange(seg)
@@ -261,7 +261,7 @@ func TrimCutChargeUV(seg CurveSegment) (chargeU, chargeV float64, err error) {
 
 // TrimRevolveSegmentCharges is TrimProfileWalks's own per-endpoint rule, read
 // for the revolve family (docs/surface-intersection-design.md §7.1): the
-// per-component charge trimCutChargeUV states lands at exactly the endpoint
+// per-component charge TrimCutChargeUV states lands at exactly the endpoint
 // whose OWN recorded parameter is not a natural bound (0 or 1, per field —
 // never per segment, since a segment cut on only one side keeps its natural
 // end exact), and at NEITHER endpoint of a segment the arrangement did not

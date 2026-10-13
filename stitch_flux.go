@@ -59,7 +59,7 @@ import (
 // single-Circle3 loops. The Sphere arm's own reachable fixture is narrower
 // still — a complete closed spherical shell with NO boundary loop at all
 // (a diameter-revolved semicircle's own two junctions are poles, and a pole
-// junction mints no latitude circle, sphereFaceFluxAndMoment's own doc
+// junction mints no latitude circle, stitchflux.SphereFaceFluxAndMoment's own doc
 // comment) — so it refuses any Sphere face carrying a boundary loop, rather
 // than guess at a spherical zone or cap this file has no fixture for. This
 // is deliberate, not an oversight: an untested closed form is not a proof,
@@ -74,7 +74,7 @@ import (
 // normal over a flat region has no other vector area to compute), a
 // full-circumference Cylinder's is exactly the zero vector (the radial
 // normal's own trig integrates to zero over a full turn — proven in
-// cylinderFaceFluxAndMoment's own doc comment), and a full-circumference
+// stitchflux.CylinderFaceFluxAndMoment's own doc comment), and a full-circumference
 // Cone's reduces to the closed-form cone-shadow identity
 // π(R_lo²−R_hi²)·Axis (coneFaceFluxAndMoment's own doc comment) — the SAME
 // circular term the general contour sum's own per-loop formula would give a
@@ -88,10 +88,10 @@ import (
 // behind it. The Sphere arm's own S_F is zero for a plainer reason still: a
 // zero-loop face has no boundary contour to sum at all, so its vector area
 // is the empty sum rather than a trig integral that happens to collapse
-// (sphereFaceFluxAndMoment's own doc comment). The Torus arm needs no
+// (stitchflux.SphereFaceFluxAndMoment's own doc comment). The Torus arm needs no
 // general contour-sum form either, for a different reason again: its own
 // scope restriction admits only the two-rim shape whose rims share the
-// SAME radius (Major, torusFaceFluxAndMoment's own doc comment), so its S_F
+// SAME radius (Major, stitchflux.TorusFaceFluxAndMoment's own doc comment), so its S_F
 // cancels the identical way a full-circumference Cylinder's does — reused,
 // never re-derived, since it is the same fact under a different name.
 //
@@ -109,19 +109,19 @@ import (
 // When the normal is exactly world-axis aligned, only disk area enters the
 // nonzero moment component. The
 // Cylinder arm's own closed form is derived and verified in
-// cylinderFaceFluxAndMoment's doc comment; the Cone arm's is derived and
+// stitchflux.CylinderFaceFluxAndMoment's doc comment; the Cone arm's is derived and
 // verified in coneFaceFluxAndMoment's own doc comment. The Sphere arm takes
 // a shortcut the other three cannot: because a zero-loop Sphere face IS the
 // whole closed boundary of the ball it bounds, on its own, its first moment
 // is the ball's own moment, and the general shift-of-origin identity
 // (volume times the offset from anchor to centroid) gives it directly —
-// sphereFaceFluxAndMoment's own doc comment derives it and checks it
+// stitchflux.SphereFaceFluxAndMoment's own doc comment derives it and checks it
 // against the same divergence-theorem surface integral by hand. The Torus
 // arm cannot take that shortcut — its own scope restriction always admits a
 // TWO-loop face sharing its boundary with a sibling Cylinder face, never a
 // zero-loop complete torus — so its own moment is the general per-face
 // divergence-theorem integral, derived and verified in
-// torusFaceFluxAndMoment's own doc comment.
+// stitchflux.TorusFaceFluxAndMoment's own doc comment.
 //
 // BOUNDS. Every operation between a bound's origin and its use is charged
 // through proofbound.BoundedAdd/proofbound.BoundedSub/proofbound.BoundedMul/proofbound.BoundedQuotient — never a bare
@@ -179,13 +179,13 @@ import (
 // contract, and composing tan from boundedSin/proofbound.BoundedCos and running it
 // through proofbound.BoundedQuotient — the natural-looking fix — fails
 // proofbound.BoundedQuotient's own clearance check unconditionally, for every angle,
-// not only the degenerate ones (coneApex's own doc comment walks through
+// not only the degenerate ones (stitchflux.ConeApex's own doc comment walks through
 // why). So a nonzero Radius refuses (ErrUnsupported, R8) rather than
 // publish an apex this evaluator cannot bound — pinned directly on a
 // hand-built face (TestStitchConeApexRefusesNonzeroRadius,
 // stitch_internal_test.go), since every reachable construction site sets
 // Cone.Radius literally to 0 (Origin already IS the apex) and so never
-// reaches this gate. coneApex separately refuses a degenerate HalfAngle
+// reaches this gate. stitchflux.ConeApex separately refuses a degenerate HalfAngle
 // (0, or non-finite one layer up through units.Value.In's own
 // ErrNotFinite) regardless of Radius, pinned the same way
 // (TestStitchConeHalfAngleRefusesDegenerateTangent,
@@ -197,7 +197,7 @@ import (
 // because neither of the other two routes exists for them: unlike Cylinder/
 // Cone (a rim's own circumference) or Sphere (the face's own area), a
 // torus's two rims and its own proven area do not determine Major and Minor
-// independently even together (torusFaceFluxAndMoment's own doc comment
+// independently even together (stitchflux.TorusFaceFluxAndMoment's own doc comment
 // proves the ambiguity by a hand-checked counter-example). So this arm
 // reads Torus.Major/Torus.Minor from the tag directly, gated on
 // stitchflux.AxisIsCoordinateAligned rather than derived — the one condition

@@ -357,7 +357,7 @@ func stitchTestCylinderFace(r, height, area, areaBound float64) *Face {
 }
 
 // stitchTestCylinderFaceWithRimBound is stitchTestCylinderFace with the two
-// rims' own lengthBound set explicitly, for boundedCircleRadius's own
+// rims' own lengthBound set explicitly, for stitchflux.CircleRadius's own
 // shown-to-fail leg: the rim's length is set to its own exact 2*pi*r (so
 // rB.value comes out r, matching every other field here) and rimBound is
 // otherwise free to set to whatever the test wants to prove propagates.
@@ -385,7 +385,7 @@ func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound flo
 // face's own already-proven area/areaBound rather than integrating
 // anything fresh (this file's own doc comment), so the flux's own bound
 // must scale with f.areaBound exactly through proofbound.BoundedMul's proofbound.ProductUpper
-// term — driven directly at stitchFaceFluxAndMoment so neither piScalar's
+// term — driven directly at stitchFaceFluxAndMoment so neither stitchflux.PiScalar's
 // own tiny representation error nor any other term can mask the leg,
 // unlike the whole-pipeline reading where every term is the same tiny
 // ulp-scale magnitude and a deleted leg is easy to lose in the noise.
@@ -404,7 +404,7 @@ func TestStitchCylinderFluxReusesAreaBound(t *testing.T) {
 	require.Less(t, fluxZero.Bound, 1e-6, "with areaBound zero, the flux bound has no other source of that magnitude")
 }
 
-// TestStitchCylinderMomentChargesRadiusBound is boundedCircleRadius's own
+// TestStitchCylinderMomentChargesRadiusBound is stitchflux.CircleRadius's own
 // shown-to-fail leg for the Cylinder arm: Circle3/Cylinder carry Radius as a
 // bare units.Value with no bound field, and a revolve about an axis that is
 // not coordinate-aligned through the origin hands back a Radius that is
@@ -440,7 +440,7 @@ func TestStitchCylinderMomentChargesRadiusBound(t *testing.T) {
 
 // stitchTestPlaneDiskFace builds a hand-made Plane face bounded by a single
 // full circle of radius r centered at the frame origin, with the circle's
-// own rim lengthBound set explicitly — boundedCircleRadius's own
+// own rim lengthBound set explicitly — stitchflux.CircleRadius's own
 // shown-to-fail leg for the Plane arm, the disk sibling of
 // TestStitchCylinderMomentChargesRadiusBound.
 func stitchTestPlaneDiskFace(r, rimBound float64) *Face {
@@ -460,7 +460,7 @@ func stitchTestPlaneDiskFace(r, rimBound float64) *Face {
 
 // TestStitchPlaneMomentChargesRadiusBound is
 // TestStitchCylinderMomentChargesRadiusBound's Plane-arm sibling: the same
-// boundedCircleRadius leg, exercised through planeFaceFluxAndMoment's own
+// stitchflux.CircleRadius leg, exercised through stitchflux.PlaneFaceFluxAndMoment's own
 // disk decomposition instead.
 func TestStitchPlaneMomentChargesRadiusBound(t *testing.T) {
 	t.Parallel()
@@ -573,13 +573,13 @@ func stitchTestConeFace(halfAngle, r0, z0, r1, z1, rimBound float64) *Face {
 }
 
 // TestStitchConeApexRefusesNonzeroRadius is docs/surface-design.md's T48:
-// coneApex's own gate on Cone.Radius, exercised at a nonzero value no
-// reachable construction site ever sets (coneApex's own doc comment states
+// stitchflux.ConeApex's own gate on Cone.Radius, exercised at a nonzero value no
+// reachable construction site ever sets (stitchflux.ConeApex's own doc comment states
 // why the general Origin − Axis·(Radius/tan(HalfAngle)) formula is never
 // evaluated — this evaluator has no sound bound for tan(HalfAngle)'s own
 // rounding). Shown to fail: deleting the `radiusValue != 0` gate (falling
 // through to publish apex = Origin regardless of Radius) makes this test's
-// ErrorIs assertion fail, since coneApex would return no error at all for
+// ErrorIs assertion fail, since stitchflux.ConeApex would return no error at all for
 // a nonzero Radius — watched red before landing, then restored.
 func TestStitchConeApexRefusesNonzeroRadius(t *testing.T) {
 	t.Parallel()
@@ -603,14 +603,14 @@ func TestStitchConeApexRefusesNonzeroRadius(t *testing.T) {
 }
 
 // TestStitchConeHalfAngleRefusesDegenerateTangent is docs/surface-design.md's
-// T49: a HalfAngle of 0 gives tan exactly 0, and coneApex refuses rather
+// T49: a HalfAngle of 0 gives tan exactly 0, and stitchflux.ConeApex refuses rather
 // than propagate it into a division — no reachable wallCone ever carries
 // this angle, since a real one is math.Atan2(nonzero, nonzero), always
 // strictly between 0 and pi/2 (revolve_axis.go's own analytic-walk
 // requirement). A HalfAngle of NaN is refused one layer up, by
 // units.Value.In itself (ErrNotFinite, wrapped rather than reaching
-// coneApex's own tangent check at all) — units.Value.In never hands back a
-// non-finite float, so coneApex's own `proofbound.IsNonFinite(tanValue)` guard stands
+// stitchflux.ConeApex's own tangent check at all) — units.Value.In never hands back a
+// non-finite float, so stitchflux.ConeApex's own `proofbound.IsNonFinite(tanValue)` guard stands
 // as a defensive backstop for a pathological finite HalfAngle whose
 // math.Tan happens to round to +/-Inf, which no float64 input this test can
 // construct actually triggers; that guard is therefore not independently
@@ -634,7 +634,7 @@ func TestStitchConeHalfAngleRefusesDegenerateTangent(t *testing.T) {
 
 	// A genuine, non-degenerate half-angle must NOT refuse — confirming the
 	// two refusals above are about the degenerate angles, not a blanket
-	// failure of coneApex itself.
+	// failure of stitchflux.ConeApex itself.
 	ordinary := base
 	ordinary.HalfAngle = units.Radians(0.6)
 	_, _, _, err = stitchflux.ConeApex(ordinary.HalfAngle, ordinary.Radius, ordinary.Origin) //nolint:dogsled // only the error matters here.
@@ -643,13 +643,13 @@ func TestStitchConeHalfAngleRefusesDegenerateTangent(t *testing.T) {
 
 // TestStitchConeFluxAndMomentChargeRimRadiusBound is the Cone arm's own
 // radius-bound leg, the sibling of TestStitchCylinderMomentChargesRadiusBound
-// and TestStitchPlaneMomentChargesRadiusBound: boundedCircleRadius's proven
+// and TestStitchPlaneMomentChargesRadiusBound: stitchflux.CircleRadius's proven
 // bound on each rim must propagate into both flux (through S_F's own
 // R_lo^2-R_hi^2 difference) and the first moment (through the rim-slope
 // tan^2(beta)). anchor is off both the apex's own axis (nonzero X) and its
 // z=0 plane (nonzero Z), so neither term is annihilated by symmetry the way
 // it would be at the apex itself or at any point on the axis. Shown to
-// fail: deleting boundedCircleRadius's own lengthBound propagation (reading
+// fail: deleting stitchflux.CircleRadius's own lengthBound propagation (reading
 // Circle3.Radius bare, bound 0, instead) collapses both bounds below this
 // test's own floor — watched red before landing, then restored.
 func TestStitchConeFluxAndMomentChargeRimRadiusBound(t *testing.T) {
@@ -761,12 +761,12 @@ func stitchTestSphereFace(center r3.Vec, radius, areaBound float64) *Face {
 
 // TestStitchSphereFluxReusesAreaBound is the Sphere arm's own radius-bound
 // leg: since a closed, boundary-less Sphere face has no rim edge to read a
-// circumference from at all (sphereFaceFluxAndMoment's own doc comment),
-// boundedSphereRadius derives the radius from the face's own already-proven
+// circumference from at all (stitchflux.SphereFaceFluxAndMoment's own doc comment),
+// stitchflux.SphereRadius derives the radius from the face's own already-proven
 // area/areaBound instead (Area = 4*pi*R^2, inverted) — so both the flux and
 // the first moment's own bound must scale with f.areaBound, through TWO
 // redundant paths that both have to be zeroed together to lose the signal:
-// boundedSphereRadius's own inversion, AND the K_F formula's own direct
+// stitchflux.SphereRadius's own inversion, AND the K_F formula's own direct
 // reuse of f.areaBound in Radius*Area (the identical reuse
 // TestStitchCylinderFluxReusesAreaBound isolates for the Cylinder arm,
 // which for Sphere has no independent edge-based radius to fall back on).
@@ -798,11 +798,11 @@ func TestStitchSphereFluxReusesAreaBound(t *testing.T) {
 }
 
 // TestStitchSphereFluxDerivesRadiusFromAreaNotBareField is the direct
-// correctness check behind boundedSphereRadius's whole existence: this face
+// correctness check behind stitchflux.SphereRadius's whole existence: this face
 // carries a Sphere.Radius of 999 mm, an absurd value bearing no relation to
 // its own area, which is set to the TRUE area of a radius-5 sphere. If
 // stitchFaceFluxAndMoment ever read Sphere.Radius bare — the exact defect
-// CLAUDE.md's own rule warns against, and the one boundedSphereRadius's own
+// CLAUDE.md's own rule warns against, and the one stitchflux.SphereRadius's own
 // doc comment exists to close — flux would come out around
 // sign*999*area, wildly larger than the radius-5 answer. The published
 // value must match the AREA-derived radius, proving the bare field is
@@ -981,16 +981,16 @@ func stitchTestTorusFace(center, axis r3.Vec, major, minor, e0, e1 float64) *Fac
 	return f
 }
 
-// TestStitchTorusRefusesOffAxisAlignedAxis is torusAxisIsCoordinateAligned's
+// TestStitchTorusRefusesOffAxisAlignedAxis is stitchflux.AxisIsCoordinateAligned's
 // own shown-to-fail leg: this evaluator has no sound bound for Major/Minor
-// off a coordinate-aligned axis through the origin (torusFaceFluxAndMoment's
+// off a coordinate-aligned axis through the origin (stitchflux.TorusFaceFluxAndMoment's
 // own doc comment), so a Torus whose Axis is not exactly a signed unit
 // coordinate vector, or whose Center sits off that axis line, must refuse
 // even though its rims otherwise describe a perfectly admissible half
 // window. No public fixture ever reaches this leg — every one revolves
 // about uAxis, coordinate-aligned through the origin — so it is pinned
 // here on a hand-built face. Shown to fail: replacing
-// torusAxisIsCoordinateAligned's own call with `true` makes both of these
+// stitchflux.AxisIsCoordinateAligned's own call with `true` makes both of these
 // return no error instead of ErrUnsupported — watched red before landing,
 // then restored.
 func TestStitchTorusRefusesOffAxisAlignedAxis(t *testing.T) {
@@ -1014,7 +1014,7 @@ func TestStitchTorusRefusesOffAxisAlignedAxis(t *testing.T) {
 
 // TestStitchTorusRefusesPartialWindow is the window-check's own
 // shown-to-fail leg: this arm can only integrate the tube's own exact
-// +/-pi/2 window (torusFaceFluxAndMoment's own doc comment proves why any
+// +/-pi/2 window (stitchflux.TorusFaceFluxAndMoment's own doc comment proves why any
 // other window would need an unbounded trig call), so a face whose two
 // rims sit at some other pair of axial offsets — even a symmetric one —
 // must refuse rather than integrate a window this evaluator cannot prove.
@@ -1049,7 +1049,7 @@ func TestStitchTorusRefusesPartialWindow(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestStitchTorusFluxAndMomentMatchClosedForm pins torusFaceFluxAndMoment's
+// TestStitchTorusFluxAndMomentMatchClosedForm pins stitchflux.TorusFaceFluxAndMoment's
 // own K_F and M_i closed forms directly, on a hand-built face and an anchor
 // off both Center and the axis, so neither term is annihilated by symmetry
 // the way it would be at Center itself or at a point on the axis

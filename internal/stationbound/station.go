@@ -17,7 +17,7 @@ import (
 //
 // A walk's own two endpoints already state what they are worth
 // (survey2d.SegmentWalk.startBound/endBound, extrude.go). Every sample BETWEEN
-// them is a point the tessellator computed: chordLoop evaluates math.Cos/math.Sin at an angle
+// them is a point the tessellator computed: tessellation.ChordLoop evaluates math.Cos/math.Sin at an angle
 // it formed itself, from a centre, a radius and a sweep the walk had already
 // rounded. None of that arithmetic is a quantity the record states, so the
 // station's held (u, v) is not a recorded coordinate and publishing it as one
@@ -27,7 +27,7 @@ import (
 // per-component gap between a chord station's held (u, v) and the point the
 // RECORD denotes at that station's own parameter.
 //
-// chordLoop divides a circular walk into n chords and emits station k at
+// tessellation.ChordLoop divides a circular walk into n chords and emits station k at
 // angle th0 + k·(th1 − th0)/n. Both circular walk kinds parameterise their
 // angle affinely in the recorded parameter — a CircleSeg's angle is 2π·T, an
 // ArcSeg's is a0 + T·sweep (walkOf) — so that station is the recorded

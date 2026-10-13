@@ -95,8 +95,8 @@ type Patch struct {
 	LevelDelta float64
 
 	// CapThAllow is the proven bound on |held (CapTh1−CapTh0) − true window|,
-	// derived at build time from the same proofbound.Atan2Interval bracket capWallArcBound
-	// builds for this wall's own cap-level arc (capSweepAllow,
+	// derived at build time from the same proofbound.Atan2Interval bracket capcontour.CapWallArcBound
+	// builds for this wall's own cap-level arc (capcontour.CapSweepAllow,
 	// capblend_contour.go), or from proofbound.PiLower/proofbound.PiUpper directly for the one
 	// whole-turn circle, whose cap-level sweep is a structural fact of that
 	// construction (WholeTurn) rather than an offset corner's own computed

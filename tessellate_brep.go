@@ -457,7 +457,7 @@ func brepPlanarDisplacement(f brepFace, walks [][]survey2d.SegmentWalk) float64 
 // DenotedEndBound), which adds an arc's radial residual at its natural t = 1
 // end; addVertex keeps the largest bound any use places at one vertex.
 // imposed, when non-nil, replaces the chording with the samples a route L band
-// states for this wall (brepImposeWall); the wall's own end is still appended.
+// states for this wall (tessellation.ImposeBandWall); the wall's own end is still appended.
 func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e brepEmbed, face *Face, chord float64,
 	work *freeform.FreeformWork, imposed *tessellation.ChordSamples[*Face], addVertex func([3]float64, proofbound.WalkEndBound) int) (brepWallMesh, error) {
 	walk := survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}

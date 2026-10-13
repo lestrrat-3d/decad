@@ -115,7 +115,7 @@ func TestSegFilterKeepsWhatTheExactPredicateAccepts(t *testing.T) {
 }
 
 // TestSegFilterAbstainsOnEverySaturatedIntermediate pins the finiteness guard on
-// each intermediate tooFar forms, one subtest per guard.
+// each intermediate meshbool.SegFilter.TooFar forms, one subtest per guard.
 //
 // The vv gate is what makes the other three guards rather than live soundness
 // routes. Behind it a TRUE hit's ww, c₁ and |P−B|² all sit within a rounding of
@@ -1838,7 +1838,7 @@ func parityProjectedCorners(verts []r3.Vec, tri [3]int, u, v int) [3]meshbool.Xp
 	return out
 }
 
-// parityFloatAreaAbstains recomputes buildFacetBox's float area filter, so a
+// parityFloatAreaAbstains recomputes meshbool.ParityMesh.BuildFacetBox's float area filter, so a
 // case can assert that the float leg could NOT decide and the exact leg is what
 // answered.
 func parityFloatAreaAbstains(verts []r3.Vec, tri [3]int, u, v int) bool {

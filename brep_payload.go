@@ -546,7 +546,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	// recorded segment denotes there (brepgeom.Use's StartBound and EndBound,
 	// which add an arc's radial residual at its natural t = 1 end) — beside
 	// the vertex's own exact frame and placement lift rounding
-	// (prismPayload.liftedVertex), measured once per vertex when it is first
+	// (prismPayload.LiftedVertex), measured once per vertex when it is first
 	// placed. Every use meeting at a vertex holds the same reference
 	// coordinates, so the largest of them reaches every neighbour's denoted
 	// end, as boundarywalk.JunctionVertex's bound does for a prism.

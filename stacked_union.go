@@ -463,7 +463,7 @@ const (
 // stackedNesting is one private scene's clean-nesting answer: which operand's
 // cell carries the other's outer whole as a hole, the scene's cells for a
 // merge, whether any arranged edge is Partial, and the scene's walk charge.
-// charged records that chargeCrossings has run over the scene, so a second
+// charged records that prismcells.SceneDelta.ChargeCrossings has run over the scene, so a second
 // reader of one cached scene takes the charge already in sceneDelta.
 type stackedNesting struct {
 	nest       stackedNest

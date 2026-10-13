@@ -118,7 +118,7 @@ func RevolveMeridianEnclosure(axU, axV, dirU, dirV, u, v float64, bound proofbou
 // §8 measures a stored vertex against is the exact evaluation on the payload's
 // held floats, not on the axis a longer derivation would call true. The
 // difference between those two axes is the frame's own recorded uncertainty
-// (axisFrame.toAxisRhoBound), which revolve's moments engine folds in
+// (revolveaxis.Frame.ToAxisRhoBound), which revolve's moments engine folds in
 // separately and no mesh coordinate re-charges here.
 func AxisCoordInterval(axU, axV, dirU, dirV float64, u, v proofbound.RatInterval) (proofbound.RatInterval, proofbound.RatInterval, bool) {
 	aU, aV := proofarith.FloatRat(axU), proofarith.FloatRat(axV)
@@ -202,7 +202,7 @@ func RevolveBudget(tol, deltaC, deltaR float64) (float64, error) {
 // ExactRigidPointRound measures the displacement docs/tessellation-design.md §8
 // calls deltaR for ONE vertex: the gap between the EXACT rigid image of the
 // stored unplaced point and the binary64 vertex the placement wrote for it. It
-// is exactPrismPointRound's second half, applied to a point this build already
+// is prismrecord.Payload.PointRound's second half, applied to a point this build already
 // holds rather than to a plane-local triple, and it answers exactly zero for an
 // identity placement, whose products are by one and zero and whose sums commit
 // no rounding at all.

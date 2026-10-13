@@ -307,12 +307,12 @@ func TestRevolveSphere(t *testing.T) {
 // the diagnosed symptom directly. semicircleSketch's half-disc, radius 5,
 // centred at u=5, published a centroid bound of exactly 460.625 mm before
 // this fix — wide enough to admit any centroid inside the 10 mm body.
-// moments_circular.go's circularSecondMomentInterval now brackets the arc's
+// internal/circularbounds/moments.go's circularSecondMomentInterval now brackets the arc's
 // own second moments exactly, so the bound shrinks to a tiny fraction of the
 // body's own diameter.
 //
 // Shown-to-fail: forcing circularSecondMomentInterval to answer ok == false
-// (moments_circular.go) reproduces the old envelope and turns the tightness
+// (internal/circularbounds/moments.go) reproduces the old envelope and turns the tightness
 // assertion below red — verified by hand, since the toggle lives in
 // unexported production code no external test can reach.
 func TestRevolveSemicircleFullTurnCentroidBoundTightens(t *testing.T) {
@@ -337,7 +337,7 @@ func TestRevolveSemicircleFullTurnCentroidBoundTightens(t *testing.T) {
 
 // TestRevolveSemicircleVolumeBoundUnaffected is design §15's T113: Volume is
 // Pappus's first theorem over the region's first moments alone
-// (axisMoments's q), which circularSecondMomentInterval never touches, so
+// (revolvemass.AxisMoments's q), which circularSecondMomentInterval never touches, so
 // the ball's own volume bound must be unmoved by the second-moment fix.
 //
 // Verified by hand: forcing circularSecondMomentInterval to answer
@@ -1157,7 +1157,7 @@ func TestRevolveFullTurnHoleIsVoidShell(t *testing.T) {
 	require.InDelta(t, 0.0, n.Value.Z, 1e-9)
 
 	// The hole's circular second moments carry a certified rational bracket
-	// (moments_circular.go's circularSecondMomentInterval), so the centroid's
+	// (internal/circularbounds/moments.go's circularSecondMomentInterval), so the centroid's
 	// own bound stays inside tolerance and the report is Sound even though a
 	// void is present.
 	report, err := doc.Verify(t.Context())
@@ -1678,7 +1678,7 @@ func TestRevolveBoundsComposesBoundaryAndSweepDisplacement(t *testing.T) {
 // in [100, 108] published Exact with a zero bound while missing the true
 // Ymax by one ulp of 108, because the box read the axis frame's own
 // direction and anchor (axisInPlane's dUBound/dVBound/aUBound/aVBound,
-// already folded into the region's moments by axisMoments) as an exact leaf.
+// already folded into the region's moments by revolvemass.AxisMoments) as an exact leaf.
 // The section is entirely straight, so the boundary-extreme scan's own
 // bracket contributes nothing; the whole displacement is the axis frame's.
 func TestRevolveBoundsEnclosesTiltedAxisFullTurn(t *testing.T) {
@@ -1712,7 +1712,7 @@ func TestRevolveBoundsEnclosesTiltedAxisFullTurn(t *testing.T) {
 // recombination proof extrude_bounds_test.go's translated box states: an
 // axis-aligned full turn of u in [0, 10], v in [2, 6] about the sketch u axis,
 // moved by Translation(0.1, 0, 0). The axis frame is untouched and the
-// placement rounds none of base/wg/c0/c1, so frameRoundAllow answers zero —
+// placement rounds none of base/wg/c0/c1, so revolveaxis.FrameRoundAllow answers zero —
 // and the box's own base + hi summation that produces Max.X still rounds,
 // missing the true 0.1 + 10 by 3.6e-16.
 func TestRevolveBoundsEnclosesTranslatedExtreme(t *testing.T) {

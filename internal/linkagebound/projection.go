@@ -45,7 +45,7 @@ func ZeroVec(v motionbound.RatVec) bool {
 	return v[0].Sign() == 0 && v[1].Sign() == 0 && v[2].Sign() == 0
 }
 
-// firstOrder is the side's first-order terms at corner c along axis d: a
+// FirstOrder is the side's first-order terms at corner c along axis d: a
 // proven upper bound on how far the expansion moves x[d] (up) and −x[d]
 // (down) over the interval. The segment term's sum is linear in the
 // fraction t ∈ [0, 1] of the step, so its largest value is at t = 0 or 1:
@@ -104,7 +104,7 @@ func (s Side) Extents() (up, down [3]*big.Rat) {
 	return up, down
 }
 
-// projectionLower is the largest L_n of docs/linkage-check-design.md §5.8
+// Lower is the largest L_n of docs/linkage-check-design.md §5.8
 // over the six coordinate directions n = ±e_axis: the partner's least extent
 // along n less the body's greatest. Along +e_axis that is −b.down − a.up,
 // along −e_axis −b.up − a.down. The distance between two sets is at least
@@ -127,7 +127,7 @@ func Lower(a, b Side) *big.Rat {
 	return best
 }
 
-// faceNormals is docs/linkage-check-design.md §5.8's candidate directions
+// FaceNormals is docs/linkage-check-design.md §5.8's candidate directions
 // read off a point reading: for a prism's hull points, its extrusion
 // direction and each side face's normal, the cross product of the side's
 // bottom edge with that direction; for box corners, the three edge
@@ -161,7 +161,7 @@ func FaceNormals(c Bounds) []motionbound.RatVec {
 	return out
 }
 
-// extentsAlong is Side.extents along any nonzero direction n:
+// ExtentsAlong is Side.extents along any nonzero direction n:
 // proven upper bounds on n·x (up) and on −n·x (down) over the body at every
 // parameter of the interval, before its pad. The remainder bounds a vector,
 // so it is charged Rem·norm, norm an upper bound on |n|.
@@ -229,7 +229,7 @@ func (s Side) ExtentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.R
 	return up, down
 }
 
-// projectionLowerHull is docs/linkage-check-design.md §5.8's hull bound for
+// LowerHull is docs/linkage-check-design.md §5.8's hull bound for
 // a pair whose two sides read hull points: the largest L_n over the six
 // coordinate directions and every face normal of either side, each
 // numerator divided by |n| rounded up when positive and down otherwise, less

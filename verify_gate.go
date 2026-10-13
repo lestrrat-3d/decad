@@ -395,7 +395,7 @@ func fallbackGateDiameter(budget *proofbound.WorkBudget, body *Body) (float64, b
 // draftGateDiameter is bodyGateDiameter's arm for a draft body
 // (docs/draft-design.md Table DD row DD6). The body has no exact carrier
 // model here and no single witness prism: its far section is not the near
-// one. It reads the stations sectionStations places on the near section P at
+// one. It reads the stations diameter.SectionStations places on the near section P at
 // the near level and on the far section Q, read from the payload's own
 // far-section record, at the far level. Both are the boundaries of the
 // body's two caps, so every station is a point of the body. A near station

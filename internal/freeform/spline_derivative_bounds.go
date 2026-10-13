@@ -26,7 +26,7 @@ const HodographGapCost = 10
 
 // RatQuarterCost is RatQuarterOf's own per-call operation count: 1 big.NewRat
 // for the exact one-quarter factor, then a NORMALISING big.Rat.Mul — a GCD plus
-// a division of numerator and of denominator, the same 3 ratPointAt charges its
+// a division of numerator and of denominator, the same 3 DyadicSpan.RatPointAt charges its
 // own normalising SetFrac. 1 + 3 = 4.
 const RatQuarterCost = 4
 

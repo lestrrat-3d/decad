@@ -45,7 +45,7 @@ import (
 // propagates its own refusal instead: ErrLoftSagittaUnderivable is S14's
 // DERIVATION arm, which §5.1 places beside this row precisely because the
 // walk-up that settles m is what asks for that term, and freeform.ErrTooManyChords bare
-// is chordCount's own per-walk ceiling.
+// is tessellation.ChordCount's own per-walk ceiling.
 func StationCapGate(p0, p1 momentinput.Profile, recordArea [2]float64, offsets []int, walks0, walks1 [][]survey2d.SegmentWalk) (float64, error) {
 	loops0 := append([]sectionrecord.LoopRecord{p0.Outer}, p0.Holes...)
 	loops1 := append([]sectionrecord.LoopRecord{p1.Outer}, p1.Holes...)

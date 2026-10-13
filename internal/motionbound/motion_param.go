@@ -46,7 +46,7 @@ func (p MotionParam) Lerp(q MotionParam, f *big.Rat) MotionParam {
 	return MotionParam{Turn: at(p.Turn, q.Turn), Base: at(p.Base, q.Base)}
 }
 
-// spanUpper is a proven upper bound on |θ(q) − θ(p)| in the base unit:
+// SpanUpper is a proven upper bound on |θ(q) − θ(p)| in the base unit:
 // 2π·|Δturn| + |Δbase|, with π taken at its upper enclosure. It is exact for
 // a length, whose turn is always zero.
 func (p MotionParam) SpanUpper(q MotionParam) *big.Rat {

@@ -73,7 +73,7 @@ func TrimGroupFace(src, faceOf []int, faceCount, group int) int {
 }
 
 // CapGroupsPresent reports whether toe and heel are distinct groups below
-// groupCount that each own at least one facet. (From spiralTrimCapGroupsCurrent.)
+// groupCount that each own at least one facet.
 func CapGroupsPresent(src, faceOf []int, groupCount, toe, heel int) bool {
 	if toe < 0 || heel < 0 ||
 		toe == heel ||
@@ -92,7 +92,7 @@ func CapGroupsPresent(src, faceOf []int, groupCount, toe, heel int) bool {
 // CapGroupsPure reports whether the toe and heel cap groups each own one
 // whole face of their own. A retained cone cap owns its entire live result
 // face. A face shared with a different source group cannot be treated as an
-// isolated tool-cap boundary. (From revolveLoftFacesCapGroupsPure.)
+// isolated tool-cap boundary.
 func CapGroupsPure(src, faceOf []int, triCount, faceCount, toe, heel int) bool {
 	if len(src) != triCount || len(faceOf) != triCount {
 		return false

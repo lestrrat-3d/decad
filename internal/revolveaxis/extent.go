@@ -42,11 +42,11 @@ func SectionCoordUpper(coordUpper, sectionDelta float64) float64 {
 // The functional's own coefficients satisfy wg² + c0² + c1² = 1 for a unit g
 // over the orthonormal basis, so |wg| ≤ 1 and |m| ≤ 1 and the extreme moves by
 // at most δz + δρ. The held basis departs from orthonormal only by the rounding
-// frameRoundAllow already charges, at an envelope sectionCoordUpper widens, so
+// FrameRoundAllow already charges, at an envelope SectionCoordUpper widens, so
 // that departure is accounted for there rather than doubled here.
 //
 // It displaces both ends the same way, so it composes OUTWARD with the per-end
-// maximum exactly as frameRoundAllow does, never folded into one end's own sum.
+// maximum exactly as FrameRoundAllow does, never folded into one end's own sum.
 func SectionExtentAllow(ax Frame, sectionDelta float64) float64 {
 	if sectionDelta <= 0 {
 		return 0
@@ -151,7 +151,7 @@ func ExtentBoundarySweepBound(loBound, hiBound, sweepLo, sweepHi float64) float6
 
 // FinishExtent charges the final summation base + lo and base + hi against
 // those terms through proofbound.ExactSumRound
-// (internal/proofbound/bounds.go). frameRoundAllow proves base/wg/c0/c1 each right and says
+// (internal/proofbound/bounds.go). FrameRoundAllow proves base/wg/c0/c1 each right and says
 // nothing about adding them: a pure translation of an axis-aligned revolve
 // leaves all four exactly right and still rounds here. It is charged per END
 // — the two ends are summed from different terms — and composed outward with

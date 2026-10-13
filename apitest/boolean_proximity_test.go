@@ -177,7 +177,7 @@ func intersectionVolume(a, b placedPrism) float64 {
 // hidden-tangency gate must prove each close face pair crosses deeper than that
 // bound. The seven fixed sample points of those long wall facets all lie
 // outside the other prism; the witness comes from the walk along each contact
-// segment (boolean.go, spanWitness).
+// segment (meshbool.SpanWitness).
 func TestUnionOfTiltedPrismsCrossingMidWall(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()

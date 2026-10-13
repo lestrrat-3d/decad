@@ -236,7 +236,7 @@ func CylinderFaceFluxAndMoment(f FaceInput, origin, axis r3.Vec, anchor r3.Vec, 
 	}
 
 	// rB is derived from the FIRST rim's own proven circumference
-	// (boundedCircleRadius's own doc comment), never read off Cylinder.Radius
+	// (CircleRadius's own doc comment), never read off Cylinder.Radius
 	// directly: both rims denote the same cylinder by construction, so
 	// either rim's own proof covers the whole face.
 	rB, err := CircleRadius(rimEdges[0].Length, rimEdges[0].LengthBound, rimEdges[0].LengthUnbounded)
@@ -310,7 +310,7 @@ func CylinderFaceFluxAndMoment(f FaceInput, origin, axis r3.Vec, anchor r3.Vec, 
 //	S_F = π·(R_lo² − R_hi²)·Axis
 //
 // — the standard cone-shadow identity, needing no trig at the call site:
-// R_lo/R_hi come from boundedCircleRadius, never a fresh tan(β) evaluation.
+// R_lo/R_hi come from CircleRadius, never a fresh tan(β) evaluation.
 // Verified independently against numeric double-quadrature over several
 // random half-angles, anchors and apex placements before landing (this
 // PR's own scratch verification; not carried into the tree).
@@ -328,7 +328,7 @@ func CylinderFaceFluxAndMoment(f FaceInput, origin, axis r3.Vec, anchor r3.Vec, 
 //
 // I1 = (zHi²−zLo²)/2, I2 = (zHi³−zLo³)/3, I3 = (zHi⁴−zLo⁴)/4. tan²β is read
 // from the rims' OWN slope ((R_hi−R_lo)/(zHi−zLo))² rather than a second
-// math.Tan evaluation of HalfAngle, so this arm calls coneApex's own
+// math.Tan evaluation of HalfAngle, so this arm calls ConeApex's own
 // math.Tan exactly once per face, for the apex alone. Verified
 // independently against numeric double-quadrature the same way S_F was,
 // across several random half-angles, anchors, axes and apex placements.
@@ -486,7 +486,7 @@ func ConeFaceFluxAndMoment(f FaceInput, cone ConeInput, anchor r3.Vec, sign floa
 // cylinder's axis. So flux_F = K_F + (Center−anchor)·S_F, K_F =
 // σ·Radius·f.Area — reusing the face's own already-proven area/areaBound
 // exactly as the Cylinder arm's own doc comment states the reuse — with
-// Radius itself read through boundedSphereRadius, never bare off
+// Radius itself read through SphereRadius, never bare off
 // Sphere.Radius (that function's own doc comment).
 //
 // S_F = 0, EXACTLY, rather than by a trig integral collapsing to zero: a
@@ -573,7 +573,7 @@ func SphereFaceFluxAndMoment(f FaceInput, center r3.Vec, anchor r3.Vec, sign flo
 // ∫cos²φ dφ = φ/2 + sin2φ/4), not reducible to sinφ/cosφ alone. Recovering
 // φlo/φhi as raw angles from the two rims' own proven radius and axial
 // position needs an inverse trig function of computed floating data — this
-// evaluator has no sound bound for one (this file's own coneApex doc
+// evaluator has no sound bound for one (this file's own ConeApex doc
 // comment states why at length; the same limit applies here). Nor can
 // Major/Minor/φlo/φhi be recovered algebraically without one: two rims of
 // the SAME radius at axial offsets ±e from Center satisfy
@@ -591,13 +591,13 @@ func SphereFaceFluxAndMoment(f FaceInput, center r3.Vec, anchor r3.Vec, sign flo
 // is what the two gates below establish, structurally, never by measuring
 // an angle.
 //
-// GATE 1 — torusAxisIsCoordinateAligned. Trusting Major and Minor bare off
-// the tag at all needs the identical zero-bound condition boundedCircleRadius's
+// GATE 1 — AxisIsCoordinateAligned. Trusting Major and Minor bare off
+// the tag at all needs the identical zero-bound condition CircleRadius's
 // own doc names for the OTHER radius fields' axis-dependent rounding.
 //
 // GATE 2 — the window check. Given Gate 1, Major and Minor carry a proven
 // zero bound, so e_lo = Axis·(rimCenter_lo − Center) and e_hi similarly are
-// EXACT (boundedDot's own zero-bound result for an axis-aligned Axis — every
+// EXACT (Dot's own zero-bound result for an axis-aligned Axis — every
 // product is by 0 or 1). Checking {e_lo, e_hi} == {−Minor, +Minor} EXACTLY
 // (bit-for-bit, never a tolerance) is what proves sinφ_lo = −1, sinφ_hi = +1
 // EXACTLY — a pure algebraic consequence, not a measurement — and therefore

@@ -81,7 +81,7 @@ func (mf MotionFrame) Rotation(sin, cos proofbound.RatInterval) IvMat {
 	return rot
 }
 
-// scaledRotation is rotation's matrix in the common-denominator form, each
+// ScaledRotation is rotation's matrix in the common-denominator form, each
 // entry the same exact interval rotation builds. With a = A/d for integers A
 // over the axis's shared denominator d, k kᵀ = A Aᵀ/|A|² and [k]× =
 // [A]×·(1/(d·|a|)), so every entry is sinUnit·C + (1 − cos)·O (+ cos on the
@@ -233,7 +233,7 @@ func (mf MotionFrame) AtRange(lo, hi MotionParam) IdealPose {
 	return mf.At(lo)
 }
 
-// statedEnd is the ideal pose of a between's stated To, x ↦ B(To)·x + t(To)
+// StatedEnd is the ideal pose of a between's stated To, x ↦ B(To)·x + t(To)
 // read exactly: what η_To of docs/motion-check-design.md §5.1 charges the
 // s = 1 pose against, beside the ideal end T*(1).
 func (mf MotionFrame) StatedEnd() IdealPose {
@@ -241,7 +241,7 @@ func (mf MotionFrame) StatedEnd() IdealPose {
 	return IdealPose{Rot: mf.ToRot, Pivot: IvVec{zero, zero, zero}, Shift: PointVec(mf.ToT)}
 }
 
-// placeFrom maps an exact point through the between's From exactly,
+// PlaceFrom maps an exact point through the between's From exactly,
 // x' = B(From)·x + t(From) — the ideal T*(0). Every other kind starts its path
 // at rest, so the point is returned unchanged.
 func (mf MotionFrame) PlaceFrom(x RatVec) RatVec {

@@ -21,7 +21,7 @@ type filterOracle struct {
 	readings, settled int
 }
 
-// sides compares sideOf against sideOfExact for every axis and offset pair.
+// sides compares sideOf against revolvemesh.RevolveSepAxis.SideOfExact for every axis and offset pair.
 func (o *filterOracle) sides(t *testing.T, axes []revolvemesh.RevolveSepAxis, offs []revolvemesh.RevolveOffset, drift float64) {
 	t.Helper()
 	for ai, ax := range axes {

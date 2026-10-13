@@ -71,7 +71,7 @@ func ElemLineHits(e survey2d.SurveyElem, px, py, dx, dy, tol float64) ([]float64
 // ClrIv is a float interval.
 type ClrIv struct{ Lo, Hi float64 }
 
-// lineIntervals returns the parameter intervals along the unit-direction 2D
+// LineIntervals returns the parameter intervals along the unit-direction 2D
 // line p + t·d that lie inside the region; ok is false when the crossing
 // structure is ambiguous.
 func (r Region2) LineIntervals(px, py, dx, dy float64) ([]ClrIv, bool) {
@@ -176,7 +176,7 @@ func ElemLineSuperset(e survey2d.SurveyElem, px, py, dx, dy, tol float64) ([]flo
 	return hits, spans
 }
 
-// lineIntervalsSuperset returns a conservative superset of the region's
+// LineIntervalsSuperset returns a conservative superset of the region's
 // intersection with the unit 2D line p + t·d: the parity-inside intervals
 // between proper crossings plus every ambiguous contact's span. Sound for
 // exclusion only — an empty result proves the line misses the closed region.
@@ -204,7 +204,7 @@ func (r Region2) LineIntervalsSuperset(px, py, dx, dy float64) []ClrIv {
 	return spans
 }
 
-// segmentHits classifies a 2D segment against the region: +1 provably
+// SegmentHits classifies a 2D segment against the region: +1 provably
 // intersecting, −1 provably disjoint, 0 ambiguous. The +1 witness point is
 // returned for admitted candidates.
 func (r Region2) SegmentHits(ax, ay, bx, by float64) (int, [2]float64) {

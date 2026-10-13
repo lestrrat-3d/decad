@@ -53,7 +53,7 @@ func (c RevArcCell) Speed() *big.Rat {
 	return new(big.Rat).Mul(c.Radius, new(big.Rat).Abs(new(big.Rat).Set(c.Dth)))
 }
 
-// rhoNodes encloses ρ at each node of the fixed subdivision, and states the
+// RhoNodes encloses ρ at each node of the fixed subdivision, and states the
 // per-piece second-order allowance the integral below charges beside them.
 //
 // Nothing here compares against π. Two proofbound.RadSinCosInterval calls enclose the
@@ -149,7 +149,7 @@ func arcFixedMul(a, b arcFixedInterval) arcFixedInterval {
 // contributes is already valid at any depth — depth buys tightness, never
 // soundness. Thirty-two pieces leave the reading within a few percent of the
 // integral it bounds on an ordinary cell, and the second-order allowance
-// rhoNodes charges beside them falls as 1/N², so the budget is spent where it
+// RhoNodes charges beside them falls as 1/N², so the budget is spent where it
 // buys the most.
 const RevolveArcIntegralSteps = 32
 
@@ -177,7 +177,7 @@ const RevolveArcIntegralSteps = 32
 // Each NODE of that subdivision encloses ρ through a certified radian sine
 // enclosure, which never compares against π, and one piece's |Jtrue − Jheld| is
 // at most the larger of its two nodes' magnitudes plus the proven second-order
-// chord allowance (rhoNodes). Multiplying by the exact ∫_a^b w(t) dt of the
+// chord allowance (RevArcCell.RhoNodes). Multiplying by the exact ∫_a^b w(t) dt of the
 // half's own weight and summing gives an upper bound on ∫|Jtrue − Jheld| that
 // never cancels: the absolute value is taken inside every piece, so a cell
 // whose Jacobian error changes sign — the inner wall of a torus does — is
@@ -225,7 +225,7 @@ func RevolveArcFanSlack(cell RevArcCell, poleFirst bool, step, twoArea proofboun
 // direction would otherwise be charged its own magnitude twice over.
 //
 // The allowance composes two independent terms, both scaled by the density's
-// own factor: rhoNodes' second-order chord term, which is about the model's own
+// own factor: RevArcCell.RhoNodes' second-order chord term, which is about the model's own
 // curvature between two nodes, and the model SLACK, which is how far the true
 // meridian may sit from the model at all. The slack is kept out of the
 // curvature argument because a displacement of the true meridian is not
@@ -355,12 +355,12 @@ var ErrRevolveStationEnclosure = fmt.Errorf(`%w: a revolve meridian chord statio
 // ChordSegmentArea is a PROVEN upper bound on the total area of the n circular
 // segments between one circular walk's arc and its chords — the area a partial
 // cap's curved trim omits (docs/tessellation-design.md §10.2), and the circular
-// twin of chordSagitta.
+// twin of tessellation.ChordSagitta.
 //
 // One subarc of angle φ = θ/n cuts off (r²/2)(φ − sin φ), and sin φ ≥ φ − φ³/6
 // on the whole non-negative axis — the elementary alternating-series bound, not
 // a derived one — so that segment is at most r²φ³/12 and the n of them sum to
-// r²θ³/(12 n²). Like chordSagitta it therefore needs no trig call, carries none
+// r²θ³/(12 n²). Like tessellation.ChordSagitta it therefore needs no trig call, carries none
 // of Sin's missing ulp contract, and does not move with FMA contraction between
 // architectures. Every product is outward-rounded and the single division is
 // rounded outward once; the denominator 12 n² is left exact, since every

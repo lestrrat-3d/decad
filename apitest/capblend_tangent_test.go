@@ -102,7 +102,7 @@ func TestTangentJoinedSlotChamferAtOffsetOrigin(t *testing.T) {
 // closed form of a smooth convex prism chamfered on one cap:
 // A·h − P·d²/2 + π·d³/3, with A = 2rL + πr² and P = 2L + 2πr for L = 25.
 //
-// Shown to fail: with capBlendCornerLocusGap reading a G1 join's ruling as a
+// Shown to fail: with tessellation.CapBlendCornerLocusGap reading a G1 join's ruling as a
 // miter locus, Tessellate refuses at both setbacks, since the enclosure of a
 // tangent corner's discriminant reaches zero.
 func TestTangentJoinedRotatedSlotChamfer(t *testing.T) {

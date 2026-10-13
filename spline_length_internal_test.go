@@ -863,7 +863,7 @@ func oddPart(n *big.Int) *big.Int {
 }
 
 // ratSquaredDistance is |b−a|² taken straight over normalising rationals — the
-// plain reading freeform.DyadicSpan.squaredDistance must reproduce exactly, and the exact
+// plain reading freeform.DyadicSpan.SquaredDistance must reproduce exactly, and the exact
 // value the directed square-root bounds are proven against.
 func ratSquaredDistance(a, b freeform.RatPoint) *big.Rat {
 	du := new(big.Rat).Sub(b.U, a.U)

@@ -481,7 +481,7 @@ func TestCutDrillsHole(t *testing.T) {
 
 // TestBooleanUnionRodThroughPlateGeometryUnchanged is the memo's pinning
 // test: the plate cap and rod wall facets are exactly the pair
-// contactMemo (boolean_mesh.go) now serves twice — once to the proximity
+// meshbool.ContactMemo now serves twice — once to the proximity
 // gate, once to the mesh pass — from one stored classification. It asserts
 // on computed geometry rather than on the memo directly: a memo that
 // returned a stale or mis-keyed contact for the second ask would change this

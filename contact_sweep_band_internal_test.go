@@ -37,7 +37,7 @@ func TestPlanarReplayLowerGapChargesTravel(t *testing.T) {
 }
 
 // TestRotatingBracketDepthChargesTravelAndDeviation reads the replay inside a
-// rotating impact bracket directly (bracketDepthWithin): a fraction f past the
+// rotating impact bracket directly (sweepmemo.BracketDepthWithin): a fraction f past the
 // left edge lo replays when (f − lo)·T − g + deviation, the farthest the
 // rounded pair can lie inside a separated one, fits PointResolution. A public
 // fixture's bracket travel and pose rounding sit far below any useful

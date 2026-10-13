@@ -1184,7 +1184,7 @@ func exactRatMeshVolume(verts [][3]*big.Rat, tris [][3]int) *big.Rat {
 	return sum.Quo(sum, big.NewRat(6, 1))
 }
 
-// --- capPolygonAreaRat: docs/loft-design.md §8's cap-polygon shoelace ---
+// --- loftmesh.CapPolygonAreaRat: docs/loft-design.md §8's cap-polygon shoelace ---
 
 // assembleLoftFixture runs evalLoft's own pairing/assembly prefix
 // (loftmesh.ValidateLoftRecords, loftmesh.PairRecords, loftmesh.AssembleTriangulated) and stops there, so a
@@ -1203,7 +1203,7 @@ func assembleLoftFixture(t *testing.T, pl loftPayload) loftmesh.Assembly {
 
 // triangleAreaRat2D is the plain 2D triangle signed-area formula — a
 // square-root-free rational, unlike a 3D triangle's cross-product norm —
-// used by the tests below as an INDEPENDENT check that capPolygonAreaRat's
+// used by the tests below as an INDEPENDENT check that loftmesh.CapPolygonAreaRat's
 // shoelace sum really does equal the sum of the SAME triangulation's own
 // triangle areas.
 func triangleAreaRat2D(pts []Point2, tri [3]int) *big.Rat {
@@ -1355,7 +1355,7 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 // twoHoleSquareProfile the same square carrying two disjoint ones. A hole's
 // clockwise walk is what makes a per-loop shoelace sum SUBTRACT it
 // (docs/sketch-seam-design.md, ProfileRecord.Area's own doc comment), so
-// these are the fixtures that exercise capPolygonAreaRat's multi-loop arm at
+// these are the fixtures that exercise loftmesh.CapPolygonAreaRat's multi-loop arm at
 // all: on a single-loop profile the loop over loopIdx runs exactly once and
 // hole netting is never reached.
 func holeSquareProfile() profileRecord {
@@ -1408,7 +1408,7 @@ func placedHoleLoftPayload(t *testing.T) loftPayload {
 	return pl
 }
 
-// TestCapPolygonAreaRatNetsEveryLoop is capPolygonAreaRat's MULTI-LOOP
+// TestCapPolygonAreaRatNetsEveryLoop is loftmesh.CapPolygonAreaRat's MULTI-LOOP
 // acceptance line: the shoelace must walk every loop loopIdx records, so a
 // hole's clockwise walk nets its own area back out of the cap reading.
 //
@@ -1422,7 +1422,7 @@ func placedHoleLoftPayload(t *testing.T) loftPayload {
 //
 // The two halves:
 //
-//   - capPolygonAreaRat over the polygon loftmesh.AssembleTriangulated ACTUALLY assembled must
+//   - loftmesh.CapPolygonAreaRat over the polygon loftmesh.AssembleTriangulated ACTUALLY assembled must
 //     equal, as an exact rational, moments.go's own region-level integral of
 //     the same record — and that integral nets holes out per loop already
 //     (integrateMomentRecordWithPoll walks Outer then every hole). Dropping a

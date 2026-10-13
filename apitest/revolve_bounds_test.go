@@ -109,7 +109,7 @@ func TestRevolveBoundsEnclosesDenotedExtreme(t *testing.T) {
 		require.NoError(t, err)
 		require.Positive(t, degNormal.Bound.Base(),
 			`a degree-stated sweep's cap normal carries the angular displacement`)
-		// The frame's own cross-product rounding (planeNormalAllow,
+		// The frame's own cross-product rounding (surfacenormal.PlaneAllow,
 		// normal_bound.go) contributes a baseline ulp-level bound even at a
 		// radian-stated angle, so the radian case is not claimed exactly
 		// zero here — only that adopting the denotation rule keeps it at
@@ -121,7 +121,7 @@ func TestRevolveBoundsEnclosesDenotedExtreme(t *testing.T) {
 // The tests below prove rp.sweep()'s own tightening (revolve_denotation.go):
 // it replaces the old |h|+2π magnitude-envelope fallback with the denoted
 // sweep width's own certified bracket wherever the denotation admits one,
-// and the partial-sweep centroid's endpoint sin/cos (endSinCos) takes the
+// and the partial-sweep centroid's endpoint sin/cos (revolveangle.EndSinCos) takes the
 // matching tightening. Every assertion is a RELATION — a ratio ceiling or an
 // independently computed containment — never a bound literal, since the
 // bound differs between amd64 and arm64 through FMA.
@@ -312,7 +312,7 @@ func TestRevolvePartialCentroidBoundTightens(t *testing.T) {
 // TestRevolveSemicirclePartialSweepCentroidBoundTightens is design §15's
 // T114: semicircleSketch's half-disc under a quarter turn (90 degrees)
 // published a centroid bound of exactly 638.75 mm before this fix — the
-// investigation's own worse-than-full-turn case. moments_circular.go's
+// investigation's own worse-than-full-turn case. internal/circularbounds/moments.go's
 // circularSecondMomentInterval now brackets the arc's own second moments
 // exactly, so the bound shrinks to a tiny fraction of the body's own
 // diameter, exactly as TestRevolvePartialCentroidBoundTightens's own
@@ -373,11 +373,11 @@ func widthBracketFor(t *testing.T, name string) (lo, hi *big.Rat) {
 	return nil, nil
 }
 
-// TestRevolveStraightWallAreaTightens is design §11 test 5: walkAxisMoment's
+// TestRevolveStraightWallAreaTightens is design §11 test 5: revolvemass.WallAxisMoment's
 // straight arm, the latitude-circle length and the junction-arc length all
 // replace their old |Δφ|+2π-scaled magnitude envelope with composed bounded
-// arithmetic over the walk's own already-proven inputs (segmentWalk.length
-// with lengthBound, startV/endV with startVBound/endVBound). It proves this
+// arithmetic over the walk's own already-proven inputs (survey2d.SegmentWalk.Length
+// with LengthBound, StartV/EndV with StartVBound/EndVBound). It proves this
 // on annularSketch's full turn, whose corners sweep latitude circles
 // (checked against 2*pi*rho), and its 37-degree sweep, whose corners sweep
 // junction arcs (checked against rho*D) — D the sweep's own reference pi
@@ -472,12 +472,12 @@ func TestRevolveStraightWallAreaTightens(t *testing.T) {
 }
 
 // TestRevolveCircularWallAreaTightens is design §11 test 7:
-// circularAxisMomentInterval (moments_circular.go) replaces walkAxisMoment's
+// circularAxisMomentInterval (internal/circularbounds/moments.go) replaces revolvemass.WallAxisMoment's
 // circular arm's old |Δφ|+2π-scaled magnitude envelope with a
 // rational-interval closed form over the wall's own recorded segment. It
 // proves this on a full-turn torus (a whole CircleSeg wall, checked against
 // 4*pi^2*R*r) and the grooved partial sweep (an ArcSeg wall,
-// revolve_test.go's grooveSketch) — the same envelope walkAxisMoment's
+// revolve_test.go's grooveSketch) — the same envelope revolvemass.WallAxisMoment's
 // straight arm carried before TestRevolveStraightWallAreaTightens.
 func TestRevolveCircularWallAreaTightens(t *testing.T) {
 	t.Parallel()
@@ -572,14 +572,14 @@ func TestRevolveVerifySoundAnnular(t *testing.T) {
 // annularSketch rectangle (u in [0,10], v in [5,15]) lies wholly on its +
 // side. 3-4-5 is a Pythagorean triple, so the axis's own held length is
 // exactly representable and squares back to the exact rational 25 — the
-// condition axisDirectionSqrtBracket's sqrt bracket is checked against below
+// condition revolveaxis.AxisDirectionSqrtBracket's sqrt bracket is checked against below
 // — while the unit direction 3/5, 4/5 it divides out is NOT itself an
 // exact float64, so the direction bound is not the zero-charge case
 // TestRevolveRadianSweepStaysExact's sibling would be.
 var tiltedAxis = decad.SketchLine{Start: decad.Point2{U: 0, V: -20}, End: decad.Point2{U: 3, V: -16}}
 
 // TestRevolveTiltedAxisBoundsTighten is design §11 test 8: the axis
-// direction's own sqrt bracket (axisDirectionSqrtBracket, the transfer of
+// direction's own sqrt bracket (revolveaxis.AxisDirectionSqrtBracket, the transfer of
 // the straight-prism campaign's lineWalkBounds/dySqrtIntervalError) replaces
 // sketchAxisDirectionBounds's old conservativeValueError(dU, 1) envelope —
 // measured ratio ~4.07 before this change on tiltedAxis, for both a full
@@ -844,7 +844,7 @@ func TestRevolveReflexSweepBoundsBoundaryStayTight(t *testing.T) {
 // TestRevolveVerifySoundReflex is the reflex-box design's test 6: with the
 // reflex arm landed, annularSketch verifies Sound at both Along 270 and
 // Symmetric 135, and so does the holed 270 body: circularSecondMomentInterval
-// (moments_circular.go) certifies the hole's own circular second moments, so
+// (internal/circularbounds/moments.go) certifies the hole's own circular second moments, so
 // the centroid reading stays inside tolerance and the report carries no
 // diagnostic at all.
 func TestRevolveVerifySoundReflex(t *testing.T) {

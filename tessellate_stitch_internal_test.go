@@ -334,7 +334,7 @@ func TestTessellateStitchDoesNotPublishSymDiffForAnOpenSheet(t *testing.T) {
 // with a 2x2 hole square centred at (5, 5) — the identical hand-authoring
 // style stitchTestSquareFace (stitch_internal_test.go) uses, extended with a
 // second loop, so triangulateStitchFaces's own hole-bridging path
-// (bridgeHole/earClip, triangulate.go) can be exercised directly without the
+// (triangulation.BridgeHole and triangulation.EarClip) can be exercised directly without the
 // full Extrude/Patch/Stitch pipeline. classOf and the returned positions
 // slice let the caller check the triangulated set's own summed area against
 // the analytic 100 - 4 = 96 mm^2 the two loops denote.

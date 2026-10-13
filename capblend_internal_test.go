@@ -278,7 +278,7 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 
 // TestCapBandMassBoundsChargeTheSideLevelMove checks the band volume and
 // first-moment bounds charge the band's own move when its held side level sits
-// off the denoted one (capBandLevelVolume): a unit square at (100, 100), its
+// off the denoted one (capband.LevelVolume): a unit square at (100, 100), its
 // end cap chamfered 0.1 with a side setback known only to 1e-3. Every
 // patch's flux reads the held level, so the band built is the denoted band
 // of a side setback up to 1e-3 away, and the body differs from the denoted
@@ -289,7 +289,7 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 // grow by no more than the charge: the side disk carries only the cap level's
 // inherited displacement, so the move is charged once.
 //
-// Shown to fail on 2026-10-09: without capBandLevelVolume, the volume bound
+// Shown to fail on 2026-10-09: without capband.LevelVolume, the volume bound
 // does not grow at all; with the
 // side disk still reading the side level's whole bound, the volume bound
 // grows by four thirds of it.

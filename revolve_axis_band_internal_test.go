@@ -18,7 +18,7 @@ import (
 
 // This file is docs/surface-design.md §15's T90-T95: the revolve axis-band
 // repair (revolve_axis.go's resolveAxisSide, revolve_build.go's
-// revolveAxisAdmitBandCharge/revolveAxisAdmitVolumeCharge). Every fixture is
+// revolvemass.AdmitBandCharge/revolvemass.AdmitVolumeCharge). Every fixture is
 // a straight-edged rectangle in plane-local (u, v), U the axial coordinate
 // and V the radial one, with every vertex an exact recorded coordinate —
 // dipShaftBandProfile's own doc comment states which end carries the
@@ -77,7 +77,7 @@ func quarterTurnDenotation() revolveangle.Sweep {
 
 // buildDipShaftBodyCharged builds the revolvePayload from an axis-ALIGNED,
 // otherwise-exact axisFrame (every direction/anchor bound zero, so
-// axisMoments' own use of aU/aV/dU/dV's bounds contributes nothing) carrying
+// revolvemass.AxisMoments' own use of aU/aV/dU/dV's bounds contributes nothing) carrying
 // ONLY the admitted-band charge (radialAdmitAllow, axialExtentUpper) set by
 // hand — the same shape resolveAxisSide itself produces whenever a boundary
 // scan's own candidate (an arc's computed radius, not the axis) is what
@@ -242,16 +242,16 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 // axis (rather than dipped below it) resolves with a genuinely nonzero
 // radialAdmitAllow — confirmed below rather than assumed — because
 // resolveAxisSide's own scan-arithmetic charge (proofbound.PlaneDotDecompositionRoundAllow,
-// the same mechanism axisExtremeContext already uses) provably cannot rule
+// the same mechanism revolveaxis.axisExtreme already uses) provably cannot rule
 // out either sign for a computed value this close to the true radial
 // minimum, whichever way the tilted axis's own rounding lands it on a given
 // architecture.
 //
 // The published volume interval contains the enclosed value here, and the
 // dedicated charge is a real but NEGLIGIBLE contributor to that bound:
-// revolveAxisAdmitVolumeCharge's tol² term is many orders of magnitude
+// revolvemass.AdmitVolumeCharge's tol² term is many orders of magnitude
 // smaller than the OTHER analytic rounding this build already charges (the
-// axis anchor/direction bounds folded through axisMoments, the sweep's own
+// axis anchor/direction bounds folded through revolvemass.AxisMoments, the sweep's own
 // rounding) — asserted below by comparing the published bound WITH the
 // charge against the SAME build with radialAdmitAllow zeroed, and requiring
 // the difference be a tiny fraction of the bound rather than bit-identical

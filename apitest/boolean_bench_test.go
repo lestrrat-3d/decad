@@ -33,7 +33,7 @@ func benchBoxBody(b *testing.B, doc *decad.Document, x0, y0, x1, y1, h float64) 
 // translates it so it spans z ∈ [−6, 14] — tall enough to pierce every plate
 // benchmarked here, and off the z = 0 plane so the pair is never two
 // co-directional coplanar prisms (which the analytic prism boolean, not
-// meshBoolean, would answer).
+// meshbool.MeshBoolean, would answer).
 func benchRodBody(b *testing.B, doc *decad.Document, cx, cy, r float64) *decad.Body {
 	b.Helper()
 	w := sketch.NewWorld()
@@ -56,8 +56,8 @@ func benchRodBody(b *testing.B, doc *decad.Document, cx, cy, r float64) *decad.B
 // BenchmarkBooleanUnionRodThroughPlate measures a mesh-path union where only
 // one operand's wall is chorded: a 20×20×8 mm plate, held exactly, against a
 // radius-6 rod. Every plate-face/rod-wall pair carries positive slack, so it
-// runs the proximity gate (facesNearMiss) before the mesh pass (meshBoolean)
-// — the two call sites contactMemo (boolean_mesh.go) now shares a facet
+// runs the proximity gate (meshbool.FacesNearMiss) before the mesh pass (meshbool.MeshBoolean)
+// — the two call sites meshbool.ContactMemo now shares a facet
 // pair's classification across. This fixture is dominated by other boolean
 // work, so it is a no-regression guard rather than the memo's headline case.
 func BenchmarkBooleanUnionRodThroughPlate(b *testing.B) {

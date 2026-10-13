@@ -74,7 +74,7 @@ import (
 //     arithmetic touches — never at the endpoint that arithmetic produced,
 //     which a cancelling difference can leave arbitrarily small;
 //   - a free-form WALK ENDPOINT's own per-component bound (WalkEndBound,
-//     segmentWalk's startBound/endBound and the identical reading over an
+//     survey2d.SegmentWalk's StartBound/EndBound and the identical reading over an
 //     interior span joint), read as a 3D world-space DISTANCE the point can
 //     sit from the curve it denotes → WalkEndBoundAllow, named for the
 //     endpoint rather than for its one caller today (verify.go's free-form
@@ -159,7 +159,7 @@ import (
 //   - a HELD PLANE-LOCAL DOT PRODUCT of a direction against a frame's own axis
 //     anchor — the anchor shift a revolve's extreme reading subtracts to move a
 //     plane-local extreme into axis coordinates (revolve.go's
-//     axisExtremeContext) — measured against the EXACT rational value of the
+//     revolveaxis.axisExtreme) — measured against the EXACT rational value of the
 //     same two products and their sum → ExactPlaneDotRound. Its two products
 //     round at the ANCHOR's own magnitude, so the term grows with the anchor
 //     while staying the rounding it is.
@@ -500,7 +500,7 @@ func RigidRoundAllow(maxInputAbs, maxTransAbs float64) float64 {
 // (prismPayload's rim and side vertices, capBlendPayload's cap-level vertices,
 // brepPayload's vertices, patchPayload's rim vertices, the clearance kernel's
 // prism carriers). Tessellation reads the same helper for its own cap and wall
-// vertices, through prism_payload.go's exactPrismPointRound.
+// vertices, through prismrecord.Payload.PointRound.
 func ExactFrameLiftRound(frame r3.Frame, xform r3.Transform, u, v, z float64, held r3.Vec) float64 {
 	basis := xform.Basis()
 	origin, fu, fv, fn := frame.Origin(), frame.U(), frame.V(), frame.N()
@@ -911,7 +911,7 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 // parametrization the caller chooses — constant ARC-LENGTH speed for the
 // circular arm, the free-form arm's own SPAN-UNIFORM native fraction (the
 // identical parameter the loft correspondence itself pairs stations on,
-// internal/freeform/spline_sagitta.go's spanMatchedDeltaUpper) — never the side's own native
+// freeform.SpanMatchedDeltaUpper) — never the side's own native
 // curve parameter used unmatched. Nothing below actually depends on which
 // parametrization was chosen: the derivation reads exactly two properties of
 // it, and nothing more. (1) a per-side tangent-magnitude bound, arcLenUpperA/
@@ -919,10 +919,10 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 // parametrization. (2) matchedDeltaUpper, a bound on |curve(s) − chord(s)| at
 // the SAME s, proven under that SAME shared parametrization on BOTH sides.
 // Arc length is one such choice — the circular arm's, whose sagitta discharges
-// it exactly for the IDEAL chord (loftCircularCellStations' own doc comment),
+// it exactly for the IDEAL chord (loftmesh.LoftCircularCellStations' own doc comment),
 // leaving the held stations' own displacement for the caller to compose in.
 // The free-form arm's
-// span-uniform fraction is another, discharged by spanMatchedDeltaUpper. A
+// span-uniform fraction is another, discharged by freeform.SpanMatchedDeltaUpper. A
 // caller adopting a third parametrization may reuse this derivation unchanged
 // provided it proves the same two properties under it. With the shared
 // parametrization fixed, it defines one (t-independent) homotopy
@@ -972,7 +972,7 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 // circular ARC under its own uniform-angle parametrization
 // (TestArcMatchedDeltaEqualsSagitta derives that equality analytically and
 // checks every step of the derivation over exact rationals, covering every
-// cell angle chordCount can produce). For any other curve kind under an
+// cell angle tessellation.ChordCount can produce). For any other curve kind under an
 // ARC-LENGTH parametrization the two provably DIFFER, by an amount that can reach the CHORD LENGTH
 // itself rather than the sagitta: a curve can hug its chord within an
 // arbitrarily small sagitta while packing almost all of its arc length into
@@ -980,7 +980,7 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 // point at the same s (TestCellChordCurveAreaUpperRefusesTheSagittaZigzag
 // pins the exact counterexample). A free-form span under its OWN
 // span-uniform native fraction is the one other case this derivation admits
-// today, discharged not by the sagitta but by spanMatchedDeltaUpper
+// today, discharged not by the sagitta but by freeform.SpanMatchedDeltaUpper
 // (internal/freeform/spline_sagitta.go), which is proven under that exact parametrization
 // rather than assumed equal to it. A caller that cannot prove the
 // parameter-matched bound under whichever shared parametrization it adopted
@@ -990,7 +990,7 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 // has none to pass. The loft evaluator proves it in two composed legs
 // (docs/loft-design.md §5.2's matchedDelta row): the arm's own matched
 // departure for the IDEAL chord — the circular arm's sagitta, or the
-// free-form arm's spanMatchedDeltaUpper — plus the displacement of the two
+// free-form arm's freeform.SpanMatchedDeltaUpper — plus the displacement of the two
 // HELD stations the chord this helper reads actually joins, which is what
 // makes the published bound a claim about the corners passed in rather than
 // about a chord the build never drew.
@@ -1738,7 +1738,7 @@ func CellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // length into a short span and carry an arbitrarily larger energy, so a caller
 // that cannot prove constant speed must pass +Inf and let
 // CellChordCurveAreaAllow fall back to its own premise-free arm. The circular
-// arm's uniform-ANGLE stations (loftCircularCellStations) are constant speed on
+// arm's uniform-ANGLE stations (loftmesh.LoftCircularCellStations) are constant speed on
 // a circle, which is what discharges it today. A free-form cell does not call
 // this helper: its deviation is a polynomial, and
 // internal/freeform's SpanTangentEnergyUpper integrates it exactly.
@@ -2177,7 +2177,7 @@ func TangentDeviationUpper(arcLenUpper, chordLen, energyUpper float64) (float64,
 // # Obligations
 //
 // matchedDeltaUpper must be the cell's own COMPOSED matched delta —
-// loft_build.go's chordCellDeltaUpper, the certified chord-to-curve sagitta
+// loftmesh.ChordCellDeltaUpper, the certified chord-to-curve sagitta
 // PLUS the station displacement delta — never the sagitta alone, because the
 // final step above spends exactly mdCurve + delta <= matchedDeltaUpper.
 // arcLenUpperA/arcLenUpperB are CellChordCurveAreaUpper's own per-side speed
@@ -2315,7 +2315,7 @@ func CutDisplacementAllow(tangentUpper float64) float64 {
 // narrowed t rather than read off the segment's own natural bound
 // (docs/prism-boolean-design.md §7's δ_walk — the analytic boolean's private
 // scene is built from walkOf's own walked geometry, prism_boolean.go's
-// buildPrismScene).
+// prismcells.BuildScene).
 //
 // operandUpper must be a PROVEN upper bound on the magnitude of every operand
 // the walk's OWN arithmetic touches — not on the answer that arithmetic
@@ -2333,7 +2333,7 @@ func CutDisplacementAllow(tangentUpper float64) float64 {
 // trimmed circular one is refused before its scene is built
 // (prismcells.ProfileHasTrimmedCircularSource), since its rebuilt radius and sweep
 // move as well as its endpoints, so prismcells.WalkChargeOf's circular arm — which
-// passes segmentWalk.coordUpper, whose |c|+|c|+r+r L1 form bounds the centre
+// passes survey2d.SegmentWalk.CoordUpper, whose |c|+|c|+r+r L1 form bounds the centre
 // and radius a cos/sin walk works on — is unreachable through that path. It
 // stands so a widening of that refusal meets a charge rather than a silent
 // zero.
@@ -2372,7 +2372,7 @@ func WalkEndpointAllow(operandUpper float64) float64 {
 }
 
 // WalkEndBoundAllow turns a free-form walk endpoint's own PROVEN
-// per-component bound (WalkEndBound — segmentWalk's startBound/endBound, or
+// per-component bound (WalkEndBound — survey2d.SegmentWalk's StartBound/EndBound, or
 // the identical reading a caller takes over one interior span joint) into a
 // 3D world-space displacement bound. The wider of the two plane-local
 // components is read as a per-coordinate bound and carried through the
@@ -2798,7 +2798,7 @@ func ChordLocusLengthAllow(speedUpper, dc, axialSpan, chordUpper float64) float6
 // the band's own material — the band lies BETWEEN the original loop and the
 // offset cap boundary, so both loops' own envelopes
 // (momentinput.CoordinateUpper) are needed, together with max(|z0|, |z1|) — the
-// same envelope prismCentroidGeometryBound already forms for the axial
+// same envelope prismrecord.Payload.CentroidGeometryBound already forms for the axial
 // levels.
 func SweptMomentAllow(delta, areaUpper, coordUpper float64) float64 {
 	vol := SweptVolumeAllow(delta, areaUpper)
@@ -2976,8 +2976,8 @@ func DirectionalPerturbationAllow(dirBound, envelopeUpper float64) float64 {
 // nothing for the other axis's error, which is what keeps a whole circle's
 // reading along u exact even though its own held endpoint misses in v
 // (WalkEndBound's own comment). boundU and boundV must be PROVEN bounds on the
-// point's displacement from the one the record denotes — segmentWalk's
-// startBound/endBound, the only producer of those numbers for a walked
+// point's displacement from the one the record denotes — survey2d.SegmentWalk's
+// StartBound/EndBound, the only producer of those numbers for a walked
 // endpoint.
 //
 // A charged component answers zero exactly where its bound is zero or its
@@ -3024,7 +3024,7 @@ func BoundedFloatError(bs BoundedScalar, held float64) float64 {
 // xform.Apply(pt).Dot(g) (translate true) or xform.ApplyDir(pt).Dot(g)
 // (translate false) — the shape extrude.go's prism box and revolve.go's
 // revolve box each lift a boundary or sweep extreme through, reading the
-// frame and placement as an exact leaf. It is exactPrismPointRound's own
+// frame and placement as an exact leaf. It is prismrecord.Payload.PointRound's own
 // rational chain (extrude.go), reduced to the single coefficient a
 // directional reading needs rather than a whole placed point, and read
 // through a caller-supplied g rather than fixed to a Vec's three components.
@@ -3099,7 +3099,7 @@ func ExactFrameLocalRound(frame r3.Frame, p, axis r3.Vec, held float64) float64 
 // ExactPlaneDotRound proves, over the rationals, the rounding the float64
 // evaluation of a plane-local dot product gu·u + gv·v commits: the anchor shift
 // a revolve's extreme reading subtracts to carry a plane-local extreme into
-// axis coordinates (revolve.go's axisExtremeContext). Both products round at
+// axis coordinates (revolveaxis.axisExtreme). Both products round at
 // the ANCHOR's own magnitude, which the boundary scan's own bound — proven over
 // the SECTION's coordinates — says nothing about.
 //

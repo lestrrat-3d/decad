@@ -15,7 +15,7 @@ import (
 // the expansion itself: the per-endpoint outcome table, the cycle and order
 // rules, and a continuation whose tangent is exact but whose faces differ.
 //
-// Legs shown to fail before these fixtures were accepted: letting chainStep
+// Legs shown to fail before these fixtures were accepted: letting tangentchain.Step
 // take the first proven candidate sends the Branch case red; treating an
 // undecided candidate as a stop sends the Undecided case red; returning the
 // expansion in set order rather than body order sends the body-order test

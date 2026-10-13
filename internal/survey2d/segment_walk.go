@@ -79,7 +79,7 @@ type SegmentWalk struct {
 	// startVBound/endVBound/cVBound are the PROVEN error bounds on the radial
 	// (V) axis-coordinate beside them — startV/endV/cV's own displacement from
 	// the value the axis's TRUE (unrounded) direction and anchor would give,
-	// through axisFrame.toAxisRhoBound, composed for startV/endV with whatever
+	// through revolveaxis.Frame.ToAxisRhoBound, composed for startV/endV with whatever
 	// magnitude that walk's own axis snap discarded to assign an endpoint
 	// exactly zero. They are set ONLY by axisFrame.walk,
 	// which re-expresses a plane-local walk into axis coordinates: a walk that
@@ -116,7 +116,7 @@ type SegmentWalk struct {
 	// The chain is SHARED and MUST NOT be mutated in place. A SegmentWalk
 	// copies only the slice header, so every reader of one ProfileWalks set
 	// holds the same ratPoints: the build (buildLoopSidesAs), the tessellation
-	// (chordLoop), the extent readings, and a rigid re-evaluation that reads
+	// (tessellation.ChordLoop), the extent readings, and a rigid re-evaluation that reads
 	// the published set back. Writing through any of them writes through all
 	// of them.
 	//
@@ -143,7 +143,7 @@ type SegmentWalk struct {
 	// downstream of it, always sees the normalized value form). §6.5's
 	// convexity certificate needs it to apply the FitSplineSeg carve-out: a
 	// joint interior to that conversion's chain is verdict 0 BY CONSTRUCTION,
-	// never by jointConvexitySign's cross product, because that cross carries
+	// never by freeform.JointConvexitySign's cross product, because that cross carries
 	// sketch's own rounded SecondDerivs solve rather than a turn of the
 	// recorded curve (docs/spline-design.md §6.5, §5.1.2). It is false for
 	// every other Tier A kind, whose joints are genuine C⁰ corners the cross
@@ -151,7 +151,7 @@ type SegmentWalk struct {
 	FitInterpolated bool
 }
 
-// isCircular reports whether the walk is a circle or arc — the question the
+// IsCircular reports whether the walk is a circle or arc — the question the
 // closed-form circular branches ask.
 func (w SegmentWalk) IsCircular() bool { return w.Kind == WalkCircular }
 

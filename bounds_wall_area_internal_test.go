@@ -176,7 +176,7 @@ func (a ruledArc) der(s float64) r3.Vec {
 func (a ruledArc) arcLen() float64 { return math.Abs(a.radius * a.dt) }
 
 // sagittaUpper is the arc's own maximum departure from its chord AT THE SAME
-// PARAMETER, read through chordSagitta's own closed form R*sweep^2/8 rather
+// PARAMETER, read through tessellation.ChordSagitta's own closed form R*sweep^2/8 rather
 // than R*(1-cos(sweep/2)) — the identical shape the real build charges, and a
 // strict upper bound on the true departure because 1-cos(x) <= x^2/2. Under the
 // uniform-angle parametrization that departure IS the ordinary sagitta

@@ -21,7 +21,7 @@ import (
 // each exactly representable result as Exact") deciding it, not a preference.
 // A Plane patch's flux is a polynomial in the payload's own float coordinates,
 // so its exact value is a rational the arithmetic can carry and the ONLY
-// rounding is the final one into a float64: exactPlanePatchFlux takes it, and
+// rounding is the final one into a float64: ExactPlaneFlux takes it, and
 // rationalFloatError reports the committed |rational - held| — zero wherever
 // the true flux is a float64, which is what lets an all-Plane cap-loop band
 // publish the Exact volume §8.4 owes it. Evaluating the same identity in

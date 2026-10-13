@@ -316,7 +316,7 @@ func validateFreeformMomentSegment(segment CurveSegment, work *freeform.Freeform
 // sketch-side collapsing on the way, so a general cross-kind join check would
 // only add unearned cost for those three.
 //
-// sketch's own reconstruction (momentRecordMatchesSketch) cannot catch this on
+// sketch's own reconstruction (FieldPreflight.matchesSketch) cannot catch this on
 // its own: it rebuilds the SAME entity from the SAME recorded fit points, so a
 // collapsed terminal point is dropped identically on both sides and the round
 // trip matches regardless.
@@ -422,7 +422,7 @@ func validateMomentRange(start, end float64) error {
 // when the radius is a thousand times smaller. The check is reject-only: a
 // larger difference disproves the record as an arc (ErrDegenerate); a smaller
 // one proves nothing and is CHARGED by every circular bracket through
-// arcEndRadialRatio (moments_circular.go), never trusted.
+// arcEndRadialRatio (internal/circularbounds/curve_intervals.go), never trusted.
 func arcPinnedRadiiJoin(seg ArcSeg, startRadius, endRadius float64) bool {
 	scale := max(
 		math.Abs(seg.Center.U), math.Abs(seg.Center.V),

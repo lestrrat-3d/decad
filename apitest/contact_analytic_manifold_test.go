@@ -321,15 +321,15 @@ func verticalCylinder(t *testing.T, doc *decad.Document, cx, cy, r float64) *dec
 //
 // Legs shown to fail (each deleted or zeroed in turn, fixture red, then
 // restored):
-//   - the gram term of sectionDrift: "long roll" publishes a band that misses
+//   - the gram term of placedruling.Cylinder.SectionDrift: "long roll" publishes a band that misses
 //     the true least height;
-//   - the α² term of sectionDrift: "tilted" publishes a separation bound the
+//   - the α² term of placedruling.Cylinder.SectionDrift: "tilted" publishes a separation bound the
 //     rising end's true least height exceeds;
 //   - the end heights max|H±| in the band: "tilted" publishes a band below its
 //     rising end;
-//   - the gram term of rimDrift: "long roll" publishes rim balls that miss the
+//   - the gram term of placedruling.Cylinder.RimDrift: "long roll" publishes rim balls that miss the
 //     true lowest points;
-//   - the α term of rimDrift: "tilted" publishes rim balls that miss them;
+//   - the α term of placedruling.Cylinder.RimDrift: "tilted" publishes rim balls that miss them;
 //   - the foot check: "off the face" reads Touching;
 //   - the threshold's gram term: "long roll" reads a gap or nothing instead of
 //     its band, and its tilt term |α|·L: "lifted tilt" reads Separated.

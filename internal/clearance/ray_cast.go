@@ -102,8 +102,8 @@ func (f *CFace) RayCrossings(ctx context.Context, p, dir r3.Vec, tol float64) (i
 	}
 }
 
-// quadraticCrossings counts admitted roots of a·t² + 2b·t + c = 0 along the
-// ray; the cone caller relies on admitPoint's z-window (from the apex,
+// QuadraticCrossings counts admitted roots of a·t² + 2b·t + c = 0 along the
+// ray; the cone caller relies on CFace.AdmitPoint's z-window (from the apex,
 // positive) to reject the wrong nappe.
 func (f *CFace) QuadraticCrossings(p, dir r3.Vec, a, b, c, tol float64) (int, bool) {
 	if math.Abs(a) < 1e-14 {
@@ -152,7 +152,7 @@ func (f *CFace) QuadraticCrossings(p, dir r3.Vec, a, b, c, tol float64) (int, bo
 	return n, true
 }
 
-// torusCrossings counts admitted ray roots of the torus quartic with Sturm
+// TorusCrossings counts admitted ray roots of the torus quartic with Sturm
 // certification (§2): a root count is a proof only when the isolation
 // certifies it — a non-square-free quartic (a tangency) is ambiguous and the
 // ladder retries.

@@ -263,7 +263,7 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 // centroid sits (4*Minor)/(3*pi) from the flat diameter, on the bulge side,
 // so Volume = 2*pi*(Major + (4*Minor)/(3*pi))*((pi/2)*Minor^2) — expanding
 // the (4*Minor)/(3*pi) term against the *pi factor it multiplies removes pi
-// from that half entirely, matching torusFaceFluxAndMoment's own K_F
+// from that half entirely, matching stitchflux.TorusFaceFluxAndMoment's own K_F
 // closed form once the sibling Cylinder wall's own INWARD-facing K_F
 // (Cylinder's own K_F identity always faces away from its axis; here that
 // direction points OUT of the solid, so it subtracts rather than adds — the
@@ -279,7 +279,7 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 // Cylinder wall's own first moment along the revolve axis is exactly zero
 // (a cylinder's outward normal never has an axial component), and the
 // Torus wall's own axial moment reduces to exactly u0 times the total
-// volume once its own (1-Axis_i^2) coefficient (torusFaceFluxAndMoment's
+// volume once its own (1-Axis_i^2) coefficient (stitchflux.TorusFaceFluxAndMoment's
 // own doc comment) vanishes for the axis-aligned component.
 func halfTorusAnalytics(major, minor float64) (volume, area float64) {
 	halfDiscArea := (math.Pi / 2) * minor * minor
@@ -594,7 +594,7 @@ func TestStitchConicalSolidMatchesTheRevolveEngine(t *testing.T) {
 // diameter length and starting position along the axis — T50's own fixture
 // with T52's family swept across it. The diameter still runs along the
 // sketch's own U axis, collinear with uAxis, so every fixture this builds
-// stays on-origin and axis-aligned in the sense boundedCircleRadius's own
+// stays on-origin and axis-aligned in the sense stitchflux.CircleRadius's own
 // doc comment names, exactly as T50 itself is.
 func semicircleSketchAt(t *testing.T, u0, diameter float64) (*sketch.Sketch, *sketch.Profile) {
 	t.Helper()
@@ -831,7 +831,7 @@ func TestStitchRefusesRevolveTagOffItsRecord(t *testing.T) {
 // surfaces their records denote, but
 // each Cone tag's apex is the float z − ρ·Δz/Δρ of its walk, which rounds;
 // the Cone arm admits the face and charges how far that apex sits from the
-// record's (coneApexDeparture), so the volume and centroid enclose the
+// record's (stitchflux.ConeApexDeparture), so the volume and centroid enclose the
 // record's own.
 func TestStitchDecimalFrustumEnclosesItsRecord(t *testing.T) {
 	t.Parallel()

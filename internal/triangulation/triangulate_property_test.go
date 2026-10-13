@@ -39,7 +39,7 @@ import (
 //
 // One deliberate choice keeps the family inside the triangulator's exercised
 // domain: the right edge alone carries the collinear samples. Real Tessellate
-// boundaries (chordLoop) chord CURVES and leave a straight edge a single
+// boundaries (tessellation.ChordLoop) chord CURVES and leave a straight edge a single
 // segment, so subdividing every straight edge to long collinear runs would push
 // past that domain (it makes the ear clip stall on a fully-collinear boundary).
 // One densely-sampled edge is the honest degenerate-alignment probe without
@@ -49,7 +49,7 @@ import (
 // DEGENERATE ALIGNMENTS the triangulator handles occur by construction:
 //   - every hole's maximum-u vertex sits at an integer v, so its +u visibility
 //     ray lands EXACTLY on an outer vertex (w, v) — the ray-hits-a-vertex /
-//     bridge-collinear-with-a-boundary-edge case #39's bridgeHole fix targets;
+//     bridge-collinear-with-a-boundary-edge case #39's BridgeHole fix targets;
 //   - two holes sharing a v-band make the left hole's bridge run along the top
 //     or bottom edge of the right hole — the same-band bridge-collinear-with-a-
 //     hole-edge case, whose splice mints genuine collinear corners;
@@ -58,8 +58,8 @@ import (
 //     vice versa) — the hole-vs-hole shared-v-line case, whose splice makes a
 //     genuine boundary corner of one hole coincide with the other hole's bridge
 //     anchor; collapsing it would drop that boundary edge and crack the band, so
-//     earClip must defer it (a distinct-index collinear corner), not collapse it;
-//   - the right edge's collinear run exercises earClip's genuine-collinear-vertex
+//     EarClip must defer it (a distinct-index collinear corner), not collapse it;
+//   - the right edge's collinear run exercises EarClip's genuine-collinear-vertex
 //     deferral directly, holes or none.
 //   - the generator does NOT produce two holes sharing one bridge anchor: its
 //     densely-sampled right edge gives every hole its own outer vertex to bridge
@@ -323,7 +323,7 @@ func TestTriangulate2DProperty(t *testing.T) {
 // TestTriangulate2DBridgeCollinearFamily pins deterministic members of the exact
 // class PR #39 fixed. Each is built through triBuild (collinear right edge), so
 // the degenerate alignment is present by construction; the comment on each states
-// how P4/P2 bite if the bridgeHole / earClip fix were reverted.
+// how P4/P2 bite if the BridgeHole / EarClip fix were reverted.
 func TestTriangulate2DBridgeCollinearFamily(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -333,9 +333,9 @@ func TestTriangulate2DBridgeCollinearFamily(t *testing.T) {
 	}{
 		{
 			// Centred hole: its max-u vertices at v=3 and v=7 send +u rays onto the
-			// outer right-edge vertices (10,3),(10,7). Reverting earClip's genuine-
+			// outer right-edge vertices (10,3),(10,7). Reverting EarClip's genuine-
 			// collinear deferral would collapse an outer collinear vertex and drop a
-			// boundary sub-edge — P4 fails; reverting bridgeHole's max-u-endpoint
+			// boundary sub-edge — P4 fails; reverting BridgeHole's max-u-endpoint
 			// rule would dissolve a bridge sliver into a zero-area facet — P2 fails.
 			name: "centred-hole-ray-hits-outer-vertex", w: 10, h: 10,
 			holes: []triRect{{3, 3, 7, 7}},
@@ -349,7 +349,7 @@ func TestTriangulate2DBridgeCollinearFamily(t *testing.T) {
 			holes: []triRect{{2, 3, 4, 5}, {8, 3, 11, 5}},
 		},
 		{
-			// No holes: the right edge's collinear run alone exercises earClip's
+			// No holes: the right edge's collinear run alone exercises EarClip's
 			// deferral. Dropping any genuine collinear corner drops a boundary
 			// sub-edge (P4).
 			name: "no-holes-collinear-right-edge", w: 8, h: 6,
@@ -379,7 +379,7 @@ func TestTriangulate2DBridgeCollinearFamily(t *testing.T) {
 // second hole's bottom edge, and the bridge lands on the second hole's reflex
 // corner (4,2). That corner is a genuine boundary vertex of the second hole AND
 // the first hole's bridge anchor; collapsing it as a zero-area corner would drop
-// the second hole's boundary edge (7,2)→(4,2) and overlap triangles. earClip
+// the second hole's boundary edge (7,2)→(4,2) and overlap triangles. EarClip
 // must instead DEFER it — a distinct-index collinear corner is not a bridge stub
 // — so every boundary edge survives and the fan is non-overlapping. This is
 // distinct from #39's hole-vs-outer collinear bridge. triAssert judges with the

@@ -6,7 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// pairCands emits the antipodal pair criticals (T2) and the angle-limit
+// PairCands emits the antipodal pair criticals (T2) and the angle-limit
 // disks (T3) for one element pair.
 func (k *WallKernel) PairCands(a, b SurveyElem, add func(x, y, r, rBound float64)) {
 	switch {
@@ -21,7 +21,7 @@ func (k *WallKernel) PairCands(a, b SurveyElem, add func(x, y, r, rBound float64
 	}
 }
 
-// lineLineCands: parallel facing lines carry a constant-diameter family;
+// LineLineCands: parallel facing lines carry a constant-diameter family;
 // the overlap midpoint is its representative (blocked positions surface via
 // the triples). Non-parallel lines have no interior critical: their corners
 // are junctions, their extent limits vertices, their blockers triples.
@@ -64,7 +64,7 @@ func (k *WallKernel) LineLineCands(a, b SurveyElem, add func(x, y, r, rBound flo
 	add(px, py, d/2, rBS.Bound)
 }
 
-// lineArcCands: the critical disks sit on the perpendicular from the arc's
+// LineArcCands: the critical disks sit on the perpendicular from the arc's
 // center to the line; the angle-limit disks sit where the contact pair
 // reaches exactly the allowance boundary.
 //
@@ -122,7 +122,7 @@ func (k *WallKernel) LineArcCands(l, a SurveyElem, add func(x, y, r, rBound floa
 	}
 }
 
-// arcArcCands: centerline criticals (T2, the concentric family included) and
+// ArcArcCands: centerline criticals (T2, the concentric family included) and
 // the law-of-cosines angle-limit disks (T3).
 //
 // The concentric test is the one branch here that is NOT resolved toward
@@ -207,7 +207,7 @@ func (k *WallKernel) ArcArcCands(a, b SurveyElem, add func(x, y, r, rBound float
 	}
 }
 
-// vertexElemCands: the vertex-line foot and vertex-arc centerline criticals
+// VertexElemCands: the vertex-line foot and vertex-arc centerline criticals
 // (T2) plus their angle-limit disks (T3).
 //
 // A vertex sitting ON the element it is read against — the ordinary case, since
@@ -289,7 +289,7 @@ func (k *WallKernel) VertexElemCands(v [2]float64, e SurveyElem, add func(x, y, 
 	}
 }
 
-// vertexVertexCands: the midpoint disk (T2) and the isoceles angle-limit
+// VertexVertexCands: the midpoint disk (T2) and the isoceles angle-limit
 // disks (T3).
 //
 // Two coincident vertices give an exactly zero separation with an exactly zero
@@ -314,13 +314,13 @@ func (k *WallKernel) VertexVertexCands(a, b [2]float64, add func(x, y, r, rBound
 	}
 }
 
-// wedgeCands: the wedge-tangent minima for a partial revolve's cap-cap
+// WedgeCands: the wedge-tangent minima for a partial revolve's cap-cap
 // reading — the disk tangent to one element with the wedge constraint
 // active (r = wedgeS·y), at its own closed-form ρ-critical. wedgeS carries its
 // own bound (a sine its caller proved from a certified trig interval), so BOTH
 // quotient paths below compose that bound through their numerator and
 // denominator rather than reading the sine as an exact leaf, and the arc path
-// reads the element's radius through rrBS for the same reason.
+// reads the element's radius through SurveyElem.RrBS for the same reason.
 //
 // A vertex at or below the axis (v[1] <= 0) is an exact recorded coordinate
 // against an exact zero, so that test needs no interval. Every other reading

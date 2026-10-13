@@ -15,7 +15,7 @@ import (
 // calls each step of §8.5's tolerance ladder directly, so the steps stay
 // observable whichever arm MassProperties dispatches a fixture to.
 //
-// Each widening leg heldMeshMassProperties adds was deleted in turn and the
+// Each widening leg massmoment.HeldMeshMassProperties adds was deleted in turn and the
 // fixture named went red, then restored:
 //
 //   - V by E: TestMeshMassLadderNarrowsSphereTensor, the k = 8 mass misses

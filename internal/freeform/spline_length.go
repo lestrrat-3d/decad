@@ -266,7 +266,7 @@ type DyadicSpan struct {
 	DenSq *big.Int
 }
 
-// valueWidth is one split value's own operand width in bits: the widest of its
+// ValueWidth is one split value's own operand width in bits: the widest of its
 // two integer numerators and of the den·2^exp denominator they are read
 // against. It is the shape every charge over a single dyadic value scales by
 // (spline_sagitta.go's WidthUnits).
@@ -274,7 +274,7 @@ func (s DyadicSpan) ValueWidth(p DyadicPoint) int {
 	return max(s.Den.BitLen()+int(p.Exp), p.U.BitLen(), p.V.BitLen())
 }
 
-// spanWidth is the widest operand width any of the span's own values carries —
+// SpanWidth is the widest operand width any of the span's own values carries —
 // the shape a whole-span charge scales by.
 func (s DyadicSpan) SpanWidth() int {
 	widest := s.Den.BitLen()
@@ -483,7 +483,7 @@ func (s DyadicSpan) ChordLowerScratch(scratch *LengthDistanceScratch) float64 {
 	return SpanSqrtDownScratch(s.DistanceSquaredScratch(s.Points[0], s.Points[len(s.Points)-1], scratch), scratch)
 }
 
-// polygonUpper is a proven upper bound on a control polygon's length.
+// PolygonUpper is a proven upper bound on a control polygon's length.
 func (s DyadicSpan) PolygonUpper() float64 {
 	total := 0.0
 	for i := 0; i+1 < len(s.Points); i++ {
@@ -561,7 +561,7 @@ func (s DyadicSpan) DistanceSquaredScratch(
 	return SpanSquaredDistance{Num: &scratch.Num, DenSq: s.DenSq, Exp: exp}
 }
 
-// squaredDistance is the rational reference for callers that need the exact
+// SquaredDistance is the rational reference for callers that need the exact
 // squared distance rather than a directed float square root.
 func (s DyadicSpan) SquaredDistance(a, b DyadicPoint) *big.Rat {
 	d := s.DistanceSquared(a, b)

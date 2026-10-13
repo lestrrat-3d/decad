@@ -13,7 +13,7 @@ import (
 // ChordWalkMin is docs/tessellation-design.md §3's default walk minimum: a
 // whole closed curve needs at least three chords to bound a polygon, and every
 // other walk needs one. A revolve meridian has a third case of its own
-// (revolvesampling.MeridianMin), which is why the minimum is chordCount's parameter
+// (revolvesampling.MeridianMin), which is why the minimum is ChordCount's parameter
 // rather than a property it reads off the walk.
 func ChordWalkMin(w survey2d.SegmentWalk) int {
 	if w.Closed {
@@ -22,13 +22,13 @@ func ChordWalkMin(w survey2d.SegmentWalk) int {
 	return 1
 }
 
-// ChordCount picks the number of chords for a circular walk so chordSagitta's
+// ChordCount picks the number of chords for a circular walk so ChordSagitta's
 // PROVEN bound on each chord's sagitta stays within tol, and returns that
-// bound. Every accept/reject below reads chordSagitta, never the true
+// bound. Every accept/reject below reads ChordSagitta, never the true
 // sagitta r·(1 − cos(Δθ/2)) it encloses. The per-chord angle never exceeds π,
 // so consecutive samples are always distinct.
 //
-// nMin is the walk's own minimum count (chordWalkMin, or revolvesampling.MeridianMin for
+// nMin is the walk's own minimum count (ChordWalkMin, or revolvesampling.MeridianMin for
 // a revolve meridian). docs/tessellation-design.md §3 asks for it to be tried
 // FIRST: when its own sagitta already fits the budget it is the answer, and the
 // inverse below — which is undefined for a budget at or above 2r — is never
@@ -49,7 +49,7 @@ func ChordCount(w survey2d.SegmentWalk, tol float64, nMin int) (int, float64, er
 		// The TRUE sagitta 2r·sin²(Δθ/4) inverts to Δθ_max = 4·asin(√(tol/2r))
 		// — the stable inverse: acos(1 − tol/r) rounds to zero for tiny tol
 		// and would seed an unbounded walk-up. It seeds the search only; the
-		// walk-up below decides on chordSagitta's larger proven figure, so
+		// walk-up below decides on ChordSagitta's larger proven figure, so
 		// this seed can land one chord short and is corrected there.
 		maxD = 4 * math.Asin(math.Sqrt(tol/(2*w.Radius)))
 	}
@@ -82,7 +82,7 @@ func ChordCount(w survey2d.SegmentWalk, tol float64, nMin int) (int, float64, er
 // ChordSagitta is a PROVEN upper bound on the sagitta 2r·sin²(Δθ/4) a chord
 // subtends when a circular walk of the given sweep is split into n equal
 // chords — docs/tessellation-design.md §3's published sagitta, and the
-// single owner of chordCount's walk-up step, so a later caller measuring the
+// single owner of ChordCount's walk-up step, so a later caller measuring the
 // SAME quantity for a hand-chorded fixture reads the identical closed form
 // rather than a second copy of it.
 //
@@ -111,9 +111,9 @@ func ChordCount(w survey2d.SegmentWalk, tol float64, nMin int) (int, float64, er
 // NOT do is answer ZERO for a positive r·sweep²/(8n²): rounding outward
 // cannot rescue an UNDERFLOW, since proofbound.UpRound leaves 0 alone, and both the
 // sweep·sweep product and the final quotient can reach 0 from operands that
-// are each positive. chordCount hands this figure on as the walk's proven
+// are each positive. ChordCount hands this figure on as the walk's proven
 // sagitta and [Mesh.Bound] publishes it, so a zero there would claim an
-// exact chording for a nonzero deviation and would end chordCount's walk-up
+// exact chording for a nonzero deviation and would end ChordCount's walk-up
 // loop on a false reading. A non-positive answer from the float chain
 // therefore falls through to exactChordSagitta, which states the same bound
 // over the rationals.
@@ -124,7 +124,7 @@ func ChordCount(w survey2d.SegmentWalk, tol float64, nMin int) (int, float64, er
 // TestChordSagittaCoarsestClosedWalkStaysProven pins that ratio). Two
 // consequences reach a caller, and [Body.Tessellate]'s doc comment owns
 // both in the caller's own terms: [Mesh.Bound] reads by that factor above
-// the deviation the chords take, and chordCount's walk-up settles on a
+// the deviation the chords take, and ChordCount's walk-up settles on a
 // slightly larger n than the true sagitta alone would need — up to and
 // including hitting freeform.MaxChordsPerWalk and returning freeform.ErrTooManyChords for a
 // tol within (x/sin x)²−1 of the finest chording the cap admits. Both are
@@ -169,7 +169,7 @@ func ChordSagitta(radius, sweep float64, n int) float64 {
 	return exactChordSagitta(radius, sweep, n)
 }
 
-// exactChordSagitta states chordSagitta's own r·sweep²/(8n²) over the
+// exactChordSagitta states ChordSagitta's own r·sweep²/(8n²) over the
 // RATIONALS, for the one case its float chain cannot: a POSITIVE bound whose
 // float evaluation underflows to zero. Two independent sites in that chain can
 // underflow — sweep·sweep can fall below the smallest denormal on its own, and
@@ -194,14 +194,14 @@ func exactChordSagitta(radius, sweep float64, n int) float64 {
 // (arc − chord) × height, and each of the two caps gains or loses the
 // circular segment between arc and chords — both closed form, both padded a
 // hair so float rounding never understates them. It states the two-cap case
-// only; chordLoop keeps the wall and one cap's own share apart
-// (chordedLoop.wallSlack/capSlack) so a sheet mesh, which triangulates no
+// only; ChordLoop keeps the wall and one cap's own share apart
+// (ChordSamples.WallSlack/CapSlack) so a sheet mesh, which triangulates no
 // cap, can decline the cap half entirely (docs/surface-design.md §10).
 func WalkAreaSlack(w survey2d.SegmentWalk, n int, h float64) float64 {
 	return (WalkWallSlack(w, n, h) + 2*WalkSegmentArea(w, n)) * (1 + 1e-9)
 }
 
-// WalkWallSlack is the WALL half of walkAreaSlack: the area one circular walk's
+// WalkWallSlack is the WALL half of WalkAreaSlack: the area one circular walk's
 // side face loses by standing on n chords instead of its arc, (arc − chord) × h.
 func WalkWallSlack(w survey2d.SegmentWalk, n int, h float64) float64 {
 	sweep := math.Abs(w.Th1 - w.Th0)
@@ -210,7 +210,7 @@ func WalkWallSlack(w survey2d.SegmentWalk, n int, h float64) float64 {
 	return math.Max(arc-chord, 0) * h
 }
 
-// WalkSegmentArea is the PLANAR half of walkAreaSlack, stated on its own
+// WalkSegmentArea is the PLANAR half of WalkAreaSlack, stated on its own
 // because two proofs read it: the caps' own area slack reads it twice (one per
 // cap), and docs/tessellation-reach-design.md §3's occupied-volume term reads it
 // once per walk against the sweep height.

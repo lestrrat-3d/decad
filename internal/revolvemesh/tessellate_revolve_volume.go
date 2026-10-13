@@ -74,7 +74,7 @@ const RevolveAngularIntegralSteps = 64
 // depth.
 //
 // The nodes are read, rather than a whole piece being enclosed at once, for the
-// reason RevArcCell.rhoNodes gives for its own subdivision, and the reason
+// reason RevArcCell.RhoNodes gives for its own subdivision, and the reason
 // binds harder here: P is of order dφ³ while a piece-wide RadSinCosSpan widens
 // by the piece's own width, of order dφ/N. A whole-piece enclosure is therefore
 // not merely loose, it stops converging — the node reading plus a second-order

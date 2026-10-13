@@ -149,7 +149,7 @@ func denotedRimPoints(t *testing.T, rec coilshell.Record, cu, cv float64, r *big
 // TestCoilRimCurveBoundHoldsTheDenotedCircle samples the circle every coil
 // rim denotes — the recorded circle under the screw motion and the record's
 // exact world map — and asserts each sample lies within the rim edge's
-// curveBound of its held circle. It is a falsifier of coilRimCurveBound,
+// curveBound of its held circle. It is a falsifier of coilshell.rimCurveBound,
 // never its proof. At 2.3 turns the end rim's centre and axis round, and
 // under a rotation the map's own defect enters too. Legs shown to fail by
 // deleting them and watching this test go red, then restoring them: the

@@ -74,7 +74,7 @@ func TestVerifyOffsetBoxesReportBoundedInterference(t *testing.T) {
 // TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically confirms
 // docs/prism-boolean-design.md §14 PR4: an admitted coplanar, co-directional
 // prism pair now resolves its interference volume through the same
-// read-only analytic opIntersect dispatch performBoolean uses
+// read-only analytic meshbool.OpIntersect dispatch performBoolean uses
 // (evaluateAnalyticIntersect), rather than always falling to the read-only
 // mesh path. The container (0,0)-(20,20) height 10 and the nested prism
 // (5,5)-(9,10) height 15 share the container's own coplanar base plane, so
@@ -398,7 +398,7 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 
 	// The two revolve balls overlap and both tessellate; at the chord tolerance
 	// this read-only check derives from the pair, the revolve mesh crosses its
-	// facet ceiling, so the pair stages (booleanExpectedStaging). Per
+	// facet ceiling, so the pair stages (meshbool.BooleanExpectedStaging). Per
 	// verification §1.1 that is a DiagUnsupportedPairPayload — a capability
 	// limit — not a contact, in-pipeline, or unresolved-partition diagnostic.
 	requireDiagnosticInvariants(t, report)
@@ -623,7 +623,7 @@ func TestVerifyCrossingPairSeatedAndPlacedResolve(t *testing.T) {
 	})
 
 	// §3.4 reads the operands' ACCUMULATED placement, never the motion one
-	// Transform call received: newPrismReexpression compares pa.frame/pa.xform
+	// Transform call received: prismcells.NewReexpression compares pa.frame/pa.xform
 	// against pb.frame/pb.xform, and Transform composes onto the transform
 	// the receiver already carries. So a body moved by a motion and then by its
 	// inverse is back at the partner's own placement and the pair is measured

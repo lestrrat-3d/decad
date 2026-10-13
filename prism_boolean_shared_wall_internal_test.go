@@ -69,7 +69,7 @@ func TestPrismSharedWallMirroredL(t *testing.T) {
 // takes the mesh path; Cut keeps it as the result's boundary, which the
 // span's charge covers, and builds the box itself.
 //
-// Shown to fail with sharedSpansBounded always reporting true (Union then
+// Shown to fail with prismcells.SceneDelta.SharedSpansBounded always reporting true (Union then
 // built analytically).
 func TestPrismSharedWallDisplacedInteriorSpanFallsBack(t *testing.T) {
 	t.Parallel()
@@ -95,7 +95,7 @@ func TestPrismSharedWallDisplacedInteriorSpanFallsBack(t *testing.T) {
 // wall leans into A by up to the gap at y = 10, so the result's section
 // displacement must cover that distance, computed here exactly.
 //
-// Shown to fail with the gap term deleted from chargeCrossings (the
+// Shown to fail with the gap term deleted from prismcells.SceneDelta.ChargeCrossings (the
 // displacement read 0).
 func TestPrismSharedWallChargesTheGap(t *testing.T) {
 	t.Parallel()

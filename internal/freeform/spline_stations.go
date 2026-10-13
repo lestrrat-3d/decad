@@ -86,7 +86,7 @@ import (
 // cell is measured.
 //
 // TERMINATION rides on that same charge rather than on a separate node or
-// depth ceiling. walkCell recurses only after a split, every split raises
+// depth ceiling. SagittaStationWalk.WalkCell recurses only after a split, every split raises
 // accepted-plus-frontier by one, and that sum starts at the span count and may
 // never pass MaxChordsPerWalk — so the walk runs at most (MaxChordsPerWalk −
 // span count) splits, and visits at most twice that many cells, before it
@@ -204,10 +204,10 @@ func pairWalk(spans0, spans1 []BezierSpan, gen *SagittaStationWalk) ([]RatPoint,
 	// coincident, §5.1), which still has a degree and a (single-point) chord.
 	// DyadicSpan.split preserves point count at every depth (spline_length.go),
 	// so refusing it HERE, before the first DyadicSpanOf conversion, is enough
-	// to keep every cell walkCell ever sees at n >= 1: DyadicSpanSagittaUpper's
+	// to keep every cell SagittaStationWalk.WalkCell ever sees at n >= 1: DyadicSpanSagittaUpper's
 	// own n==0 guard exists for a caller that reaches it directly (SpanSagittaUpper,
 	// whose only error is the counter's), not for this walk, whose accept branch
-	// unconditionally reads ratPointAt(0) — reachable only because that guard's 0
+	// unconditionally reads DyadicSpan.RatPointAt(0) — reachable only because that guard's 0
 	// answer let the cell through, an index-out-of-range panic otherwise, never a
 	// wrong Measurement.
 	for i := range spans0 {
@@ -246,7 +246,7 @@ func pairWalk(spans0, spans1 []BezierSpan, gen *SagittaStationWalk) ([]RatPoint,
 	// recursion would have produced, without walking there.
 	//
 	// COPIED, not aliased: every other station in the two returned lists comes
-	// from ratPointAt, whose own doc comment guarantees the *big.Rat it returns
+	// from DyadicSpan.RatPointAt, whose own doc comment guarantees the *big.Rat it returns
 	// shares no storage with the DyadicSpan it was read from. Appending the
 	// caller's own last0[len(last0)-1]/last1[len(last1)-1] RatPoint directly
 	// would break that guarantee for this ONE station — it would alias the
@@ -304,7 +304,7 @@ type FreeformChain struct {
 // dyadic cell's sagitta, bisect what misses, accept what fits
 // (docs/spline-design.md §6.2.1). It is PairStations' single-chain twin —
 // same walk, same cap, same charge discipline, same termination argument — and
-// the primitive docs/tessellation-reach-design.md §5 gives chordLoop's
+// the primitive docs/tessellation-reach-design.md §5 gives tessellation.ChordLoop's
 // free-form arm. It decides each cell on the sagitta alone: no consumer of a
 // single chain reads a parameter-matched departure, so the walk does not
 // measure one (SagittaStationWalk.Matched).
@@ -525,7 +525,7 @@ func (r *ChainArcChordReader) AcceptCell(spans []BezierSpan, _ float64, works []
 	return nil
 }
 
-// walkCell measures one dyadic cell — one sub-span per side — and either
+// WalkCell measures one dyadic cell — one sub-span per side — and either
 // accepts it, appending its own start station on each side, handing the
 // accepted cell's reconstructed spans to the reader, and folding its measured
 // sagitta into the running maximum, or bisects it on EVERY side together and

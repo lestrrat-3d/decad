@@ -59,7 +59,7 @@ func (r Region2) Contains(px, py float64) (bool, bool) {
 	return false, false
 }
 
-// boundaryDist is the distance from p to the region's boundary.
+// BoundaryDist is the distance from p to the region's boundary.
 func (r Region2) BoundaryDist(px, py float64) float64 {
 	best := math.Inf(1)
 	for _, e := range r.Elems {
@@ -105,7 +105,7 @@ func (r Region2) Samples() [][2]float64 {
 	return out
 }
 
-// interiorPoint returns a point proven strictly inside the region, probing
+// InteriorPoint returns a point proven strictly inside the region, probing
 // element-midpoint inward offsets at a few depths.
 func (r Region2) InteriorPoint() ([2]float64, bool) {
 	probe := func(x, y float64) bool { return r.Classify(x, y, r.Tol()) == 1 }

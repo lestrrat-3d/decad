@@ -14,7 +14,7 @@ import (
 //   - the zero axial slope: with it and the final touching-sample check both
 //     removed, the closing path publishes a track that overlaps at its end. The
 //     final ideal sample alone also refuses it, since gap(1) equals the slope.
-//   - the conversion envelope (sourceTrackPointsWithin): removed, the far-out
+//   - the conversion envelope (box.TrackPointsWithin): removed, the far-out
 //     slide publishes a track whose ManifoldAt fails at fraction 2^-20.
 //
 // The disk corridor is the impact path's existing strict endpoint check.

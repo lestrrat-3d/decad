@@ -220,7 +220,7 @@ func TestSweepPairPlanarWedgeStops(t *testing.T) {
 //
 // The gap and deviation terms only stop narrowing earlier when they grow;
 // zeroing either narrows further, which replay still accepts, so neither can
-// turn this fixture red. Replay's own check (bracketDepthWithin) stays the
+// turn this fixture red. Replay's own check (sweepmemo.BracketDepthWithin) stays the
 // only admission, and TestRotatingBracketDepthChargesTravelAndDeviation
 // covers each of its legs.
 func TestSweepPairPlanarTumblingTetrahedronReplaysImpact(t *testing.T) {

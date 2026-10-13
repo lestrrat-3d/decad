@@ -238,8 +238,8 @@ func extendArcRibbon(t *testing.T, doc *decad.Document) (*decad.Body, sectionrec
 	return nil, sectionrecord.ArcSeg{}
 }
 
-// TestSurfaceExtendArcReceiverToNearestCut covers fullExtendSegment's and
-// extendSetBound's ArcSeg arms through the public API. The arc is recorded in
+// TestSurfaceExtendArcReceiverToNearestCut covers prismcells.FullExtendSegment's and
+// prismcells.ExtendSetBound's ArcSeg arms through the public API. The arc is recorded in
 // the reversed sense, so it also confirms the claim its own derivation rests
 // on: an arc's scene entity is CreateArc(centre, Start, End) either way, so no
 // map runs and the extension lands where the tool actually is.

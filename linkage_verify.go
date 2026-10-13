@@ -293,7 +293,7 @@ type linkageDriver struct {
 type cornerKey struct {
 	pose         *motionPose
 	mover, below int
-	// hull marks the reading of the body's hull points (bodyHullPoints)
+	// hull marks the reading of the body's hull points (linkagebound.PrismHullPoints)
 	// rather than its box corners.
 	hull bool
 }

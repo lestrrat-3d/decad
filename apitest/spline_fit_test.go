@@ -134,7 +134,7 @@ func TestFitSplineCurvedHandComputedArea(t *testing.T) {
 	require.NoError(t, err)
 
 	// Independent hand computation over big.Rat, mirroring the closed form
-	// derived in the doc comment above rather than reusing fitSpanControls.
+	// derived in the doc comment above rather than reusing freeform.FitSpanControls.
 	// h itself is sqrt(2) and irrational, but h^2 is exactly 2 and every use
 	// of h in the closed form is squared, so the whole computation stays
 	// rational.
@@ -352,7 +352,7 @@ func TestFitSplineAreaRoundingRuleBothSides(t *testing.T) {
 // TestFitSplineAllCoincidentFitPointsRefuses is Table R row R14: a fit
 // spline whose control net collapses to a single point contributes no
 // boundary, on the same terms the length bracket refuses on
-// (internal/freeform/spline_length.go's freeformArcLength / freeformDegenerate).
+// (freeform.FreeformArcLength and internal/momentinput's freeformDegenerate).
 func TestFitSplineAllCoincidentFitPointsRefuses(t *testing.T) {
 	t.Parallel()
 	fit := []decad.Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}
@@ -474,7 +474,7 @@ func TestExtrudeFitSplineProfileBuilds(t *testing.T) {
 }
 
 // The R7 ceiling has to be levied BEFORE geom.NewFitInterpolant allocates or
-// solves anything: fitInterpolantCost(n) is 64 units per fit point, so 20,000
+// solves anything: freeform.FitInterpolantCost(n) is 64 units per fit point, so 20,000
 // fit points (1,280,000 units) exceeds the fixed 2^20 ceiling on its own,
 // entirely ahead of the reconstruction charge or the tridiagonal solve.
 func TestOverBudgetFitInterpolantRefusesBeforeSolving(t *testing.T) {

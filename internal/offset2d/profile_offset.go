@@ -115,7 +115,7 @@ func AuditOffsetSectionBudget(budget *proofbound.WorkBudget, orig, offset moment
 // section OffsetProfile records for (profile, s, t) sits from the boundary of
 // the offset the shell DENOTES — P ⊖ t* inward, P ⊕ t* outward — where t* is
 // the caller's thickness in exact millimetres, anywhere within tDelta of the
-// held t (the root magnitudeInBounded's conversion bound). tol is the shell
+// held t (extent.MagnitudeInBounded's conversion bound). tol is the shell
 // tolerance SectionDeltaFromWalks classifies with.
 func OffsetSectionDelta(budget *proofbound.WorkBudget, profile momentinput.Profile, s, t, tDelta, tol float64) (float64, error) {
 	if err := survey2d.WallBudgetErr(budget); err != nil {

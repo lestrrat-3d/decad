@@ -403,7 +403,7 @@ func walkEndFromModel(w survey2d.SegmentWalk) Point2 {
 
 // This file pins the fix for docs/spline-design.md §5.2's own discipline:
 // within ONE evalPrismContext call, buildLoopSidesAs,
-// momentinput.CoordinateEnvelope (via prismCentroidGeometryBound and, four times
+// momentinput.CoordinateEnvelope (via prismrecord.Payload.CentroidGeometryBound and, four times
 // over, prismBoundsContext's per-axis extentBoundedAlong) and
 // prismextent.ProfileBoundaryExtremes (three times, also via extentBoundedAlong)
 // each used to call walkOf on the SAME recorded segment, so one free-form
@@ -456,7 +456,7 @@ func involuteFitPrismPayload(t *testing.T) prismPayload {
 // same call every other free-form-prism test in this package uses). It is
 // LOWER than the 975,600 the bug report measured on the requester's real
 // record by exactly one moments-preflight charge (16,192,
-// evaluatorIntegralsUncheckedContext's own — see evaluatorIntegralsUncheckedContext's
+// momentinput.Profile.EvaluatorIntegralsUncheckedContext's own — see its
 // call in evalPrismContext): the requester's number was measured through the
 // public Extrude path, whose RecordProfile seam runs its own
 // independent-implementation area check (§5.2's "sketch computes its own

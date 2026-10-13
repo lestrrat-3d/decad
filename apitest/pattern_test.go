@@ -148,7 +148,7 @@ func TestPatternCopiesCircular(t *testing.T) {
 // taken to 512 bits, within the instance's and the receiver's bounds.
 //
 // Shown to fail with the reflection's sense correction removed from
-// circularMotion: the mirrored receiver's instances turn the other way.
+// patternrecord.Spec.CircularMotion: the mirrored receiver's instances turn the other way.
 func TestPatternCopiesRotationSense(t *testing.T) {
 	t.Parallel()
 	half2 := new(big.Float).SetPrec(512).Quo(new(big.Float).SetPrec(512).Sqrt(new(big.Float).SetPrec(512).SetInt64(2)), new(big.Float).SetPrec(512).SetInt64(2))
@@ -335,7 +335,7 @@ func exactApplyBig(t r3.Transform, p r3.Vec) [3]*big.Float {
 // (580 mm³); a 0.3 in step would round the two outers apart by its own
 // rounding, so it copies through Copy and lands where the step puts it.
 //
-// Shown to fail with stackedInterfaces re-deriving a changed-outer interface
+// Shown to fail with stackedrecord.Derive re-deriving a changed-outer interface
 // from exclusive holes: the moved stack's floor record is then missing and
 // the stacked audit refuses the integer instance.
 func TestPatternCopiesUnionStack(t *testing.T) {

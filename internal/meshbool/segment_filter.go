@@ -24,8 +24,8 @@ import (
 // that cannot flip (core §2.1), which is what makes the stitched output
 // watertight by construction on the tessellated geometry.
 const (
-	// SegFilterErrCoef covers SegFilter.tooFar's own float evaluation: 64·u,
-	// against the magnitude the branch taken carries. tooFar derives it.
+	// SegFilterErrCoef covers SegFilter.TooFar's own float evaluation: 64·u,
+	// against the magnitude the branch taken carries. SegFilter.TooFar derives it.
 	SegFilterErrCoef = 64 * proofbound.UnitRoundoff
 	// SegFilterFloor is one absolute term covering every gradual-underflow
 	// crumb the same evaluation can commit. Each is at most 2⁻¹⁰⁷⁵ and there
@@ -34,7 +34,7 @@ const (
 	// nothing amplifies afterwards; SegFilterMinNormal is what keeps the
 	// interior branch inside that promise.
 	SegFilterFloor = 0x1p-1000
-	// SegFilterMinNormal is the smallest positive NORMAL float64. tooFar's
+	// SegFilterMinNormal is the smallest positive NORMAL float64. SegFilter.TooFar's
 	// forward-error bound is a RELATIVE one and holds only over normalized
 	// arithmetic; a subnormal intermediate carries absolute error instead, and
 	// a later division by a small quantity amplifies that crumb back up to the
@@ -91,12 +91,12 @@ const (
 // of how far a float approximation may sit from its exact point.
 //
 // τ² underflows to zero only for τ below 2⁻⁵³⁷, and at that scale
-// SegFilterFloor already demands a distance above 2⁻⁵⁰⁰ before tooFar will
+// SegFilterFloor already demands a distance above 2⁻⁵⁰⁰ before SegFilter.TooFar will
 // reject anything — eleven orders above any τ that small — so a threshold that
 // rounds to zero there costs no soundness.
 //
 // The OTHER end of the range, and the two arguments themselves, are answered by
-// returning +Inf, which is the abstain-everywhere threshold: tooFar's left-hand
+// returning +Inf, which is the abstain-everywhere threshold: SegFilter.TooFar's left-hand
 // side is always finite, so a comparison against +Inf is false for every
 // candidate. Two cases earn it, and between them they are every value the
 // signature admits that the derivation above does not speak for.
@@ -153,7 +153,7 @@ func NewSegFilter(a, b r3.Vec, tau2 float64) SegFilter {
 	return SegFilter{A: a, B: b, V: v, Vv: v.Dot(v), Tau2: tau2}
 }
 
-// tooFar reports whether p — the float rounding of a candidate's exact
+// TooFar reports whether p — the float rounding of a candidate's exact
 // coordinates — is PROVABLY farther than τ from the float segment [a, b]. A
 // false answer means "not proven", never "close enough".
 //

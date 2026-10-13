@@ -221,7 +221,7 @@ func (s *ConformScan) CellOf(x, y, z float64) [3]int {
 	}
 }
 
-// edgeInteriorHits returns the mesh vertices lying exactly in the interior of
+// EdgeInteriorHits returns the mesh vertices lying exactly in the interior of
 // facet edge (a, b), searched through the grid cells the edge's slack box
 // covers. An edge spanning the mesh sweeps the whole grid, so the cells and the
 // candidate vertices in them — not the facets — are the candidate operations

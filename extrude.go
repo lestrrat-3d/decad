@@ -778,7 +778,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	height := proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar())
 	// rimVertex places one rim post at (u, v) on level z, whose own axial
 	// displacement is zDelta, beside the post's own exact frame lift and
-	// placement rounding (prismPayload.liftedVertex) — zero wherever that lift
+	// placement rounding (prismPayload.LiftedVertex) — zero wherever that lift
 	// is exact, which is what keeps a plain chain Extrude's rim vertices Exact,
 	// mirroring buildLoopSidesAs's own rimVertex.
 	rimVertex := func(u, v, z, zDelta, extra float64) *Vertex {

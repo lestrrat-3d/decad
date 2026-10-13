@@ -20,7 +20,7 @@ import (
 
 // publishPlanarManifold computes the manifold of a Touching pair, or the
 // shallow-penetration patch of an Overlapping pair, and publishes it on
-// report. An Overlapping pair takes planarOverlapPatch. A Touching pair with
+// report. An Overlapping pair takes planar.OverlapPatch. A Touching pair with
 // no convex body publishes the contact set of a host face that holds every
 // contact (planar.PlanarGuestTouch, §10.5). A withheld manifold leaves
 // report.Manifold nil with its reason: AmbiguousFeature for a contact set

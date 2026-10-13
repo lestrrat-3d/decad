@@ -356,7 +356,7 @@ func TestRevolveWallNormalCoversFarAnchoredTorus(t *testing.T) {
 // Shown to fail: before the denoted-normal comparison the inner Cylinder
 // published a 2.2e-16 bound 5.6e-12 off the denoted normal. Dropping the
 // axis's own anchor and direction bounds from the denoted surface (a zero
-// revolvemesh.AxisBound in wallDenotation) turns it red again, a 2.8e-12
+// revolvemesh.AxisBound in revolveaxis.DenotationInput.WallDenotation) turns it red again, a 2.8e-12
 // bound against the same 5.6e-12.
 func TestRevolveWallNormalCoversFarTiltedAxis(t *testing.T) {
 	t.Parallel()

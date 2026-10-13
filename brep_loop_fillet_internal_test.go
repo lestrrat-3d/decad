@@ -1024,7 +1024,7 @@ func trapezoidStrip() (a [2]*big.Rat, m [2][3]*big.Rat) {
 // placed exact centroid, (Mx, My, Mz)/V + (10⁶, 10⁶, 10⁶), with M the
 // receiver's moments
 // less the strip's, m₁J₁ + m₂J₂ + m₃J₃ in plane and 9·V_strip + a₁/6 + a₂/12
-// along z. Shown to fail with prismPointBoundWith's frame-lift rounding term
+// along z. Shown to fail with prismrecord.Payload.PointBoundWith's frame-lift rounding term
 // deleted: the published bound then held the centroid's own enclosure alone,
 // about 5e-15, below the lift's rounding at 10⁶. The centroid's x, exactly
 // 50 by symmetry, lifts to 10⁶ + 50 with no rounding, so a placement along x

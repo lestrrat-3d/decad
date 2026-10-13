@@ -336,11 +336,11 @@ func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
 // it in the test rather than hard-coding a magic number, and assert against
 // the derivation." The count in question is the SEED the joint walk-up starts
 // from (docs/loft-design.md §5.1). The hand derivation below independently
-// re-implements chordCount's own conservative walk-up — s(n) =
+// re-implements tessellation.ChordCount's own conservative walk-up — s(n) =
 // r*sweep^2/(8*n^2) <= tol, internal/tessellation's ChordSagitta formula, never the
 // exact 2r*sin^2(dtheta/4) PR 1's calibration measured — so it is checking
-// chordCount's own algorithm against an independent transcription of it, not
-// merely echoing chordCount's return value back at itself.
+// tessellation.ChordCount's own algorithm against an independent transcription of it, not
+// merely echoing tessellation.ChordCount's return value back at itself.
 //
 // wedgeArcFeatureSize and wedgeRadius/wedgeSweep are
 // loft_chord_calibration_internal_test.go's own fixtures (same package, same
@@ -371,7 +371,7 @@ func TestLoftCircularCellStationsHandDerivedStationCount(t *testing.T) {
 	// measures every calibration margin at.
 	//
 	// The literal below is deliberate here, where every other site names
-	// loftChordFractionPinM instead: this test exists to check chordCount
+	// loftChordFractionPinM instead: this test exists to check tessellation.ChordCount
 	// against an independent transcription, so naming the pin the generator
 	// itself settles would make the two ends of the cross-check the same
 	// value.
@@ -380,7 +380,7 @@ func TestLoftCircularCellStationsHandDerivedStationCount(t *testing.T) {
 
 // handChordSagittaConservative is TestLoftCircularCellStationsHandDerivedStationCount's
 // own transcription of ChordSagitta's proven bound (internal/tessellation), written
-// independently (ordinary math.Pow rather than chordSagitta's own
+// independently (ordinary math.Pow rather than tessellation.ChordSagitta's own
 // single-operation outward-rounding chain) so the two are a genuine
 // cross-check rather than one call site echoing the other's arithmetic.
 func handChordSagittaConservative(radius, sweep float64, n int) float64 {
@@ -468,7 +468,7 @@ func requireStationDelta(t *testing.T, w0, w1 survey2d.SegmentWalk, seg0, seg1 c
 
 // TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed is the joint walk-up's
 // own reason for existing, shown on a fixture that needs it: an arc whose HELD
-// sagitta already reads under the target at chordCount's own seed count, while
+// sagitta already reads under the target at tessellation.ChordCount's own seed count, while
 // the CERTIFIED sagitta over the record's own enclosures still does not. A
 // max-of-seeds rule would stop at the seed and publish a bound the record does
 // not support; the joint walk-up increments until the certified reading clears.
@@ -477,7 +477,7 @@ func TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed(t *testing.T) {
 	const m = 3
 	seg, w, held, _ := shortfallArc(t, m)
 
-	// The target IS the held reading at m: chordCount is exactly satisfied
+	// The target IS the held reading at m: tessellation.ChordCount is exactly satisfied
 	// there and seeds the walk at m, which is what makes the certified
 	// reading's own verdict at m the only thing that can move the count.
 	seed, ach, err := tessellation.ChordCount(w, held, tessellation.ChordWalkMin(w))
@@ -502,10 +502,10 @@ func TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed(t *testing.T) {
 
 // TestLoftCircularSagittaIsCertifiedNotHeld is finding B's own regression: on
 // a fixture from the audit's own family the arm's published sagitta is
-// STRICTLY ABOVE the held float chordSagitta returns for the same walk and
+// STRICTLY ABOVE the held float tessellation.ChordSagitta returns for the same walk and
 // count, and a certified LOWER bound on the true sagitta is above it too — so
 // the held value bounds nothing there. Publishing the held value, the shape a
-// max-of-chordCount rule ships, fails both assertions.
+// max-of-tessellation.ChordCount rule ships, fails both assertions.
 func TestLoftCircularSagittaIsCertifiedNotHeld(t *testing.T) {
 	t.Parallel()
 	const m = 3
@@ -523,7 +523,7 @@ func TestLoftCircularSagittaIsCertifiedNotHeld(t *testing.T) {
 // TestLoftCircularCellStationsPublishesTheCertifiedReading pins WHICH value the
 // arm publishes, on an ordinary quarter arc rather than a cancellation fixture:
 // the cell's bound is loftmesh.CertifiedSagittaUpper at the settled count composed
-// with the generated stations' own displacement, exactly, never chordSagitta's
+// with the generated stations' own displacement, exactly, never tessellation.ChordSagitta's
 // held float for the same walk and count. The two are distinct values, so
 // substituting the held one fails the equality.
 func TestLoftCircularCellStationsPublishesTheCertifiedReading(t *testing.T) {
@@ -547,11 +547,11 @@ func TestLoftCircularCellStationsPublishesTheCertifiedReading(t *testing.T) {
 // arc trimmed to [0.3, 0.9] of a small sweep, on base angles a few radians
 // round the circle — and returns the first row where a certified LOWER bound
 // on the true per-cell sagitta at count m already exceeds the HELD value
-// chordSagitta returns for the same walk.
+// tessellation.ChordSagitta returns for the same walk.
 //
 // Such a row exists because the trimming cancels: the walk's two angles are
 // both a0 + t*sweep at a magnitude of a few radians, so their float difference
-// keeps only the digits the subtraction leaves, while chordSagitta's own slack
+// keeps only the digits the subtraction leaves, while tessellation.ChordSagitta's own slack
 // over the true 2r*sin^2(x) is (x/sin x)^2 - 1 ~ x^2/3, which vanishes as the
 // sweep shrinks and cannot absorb that loss. The scan is what makes the
 // fixture portable: WHICH rows cancel low depends on the host's rounding of
@@ -618,7 +618,7 @@ func TestLoftCertifiedSagittaRefusesAnUnderivableRecord(t *testing.T) {
 // PROOF of that claim is TestArcMatchedDeltaEqualsSagitta
 // (bounds_chord_internal_test.go): an analytic derivation whose steps are
 // checked over exact rationals, covering every cell angle up to 4 radians
-// and so every cell angle chordCount can produce. What this test adds is
+// and so every cell angle tessellation.ChordCount can produce. What this test adds is
 // numerical corroboration across a wider spread than the derivation covers —
 // sweeps from 0.5 to 359.5 degrees, past the half turn no chord split ever
 // hands one cell — sampled, and so evidence rather than proof.
@@ -711,14 +711,14 @@ func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
 
 // TestLoftCellStationsStationCapFiresBeforeAuditCeiling is S15: a target this
 // fine on a radius-5 quarter arc demands far more than freeform.MaxChordsPerWalk
-// (2^14) chords — chordSagitta ~ r*sweep^2/(8n^2), so meeting it needs n well
-// past the cap — and chordCount refuses outright rather than build past it
+// (2^14) chords — tessellation.ChordSagitta ~ r*sweep^2/(8n^2), so meeting it needs n well
+// past the cap — and tessellation.ChordCount refuses outright rather than build past it
 // (freeform.ErrTooManyChords, reused from tessellate.go per spline design Table R row
 // R8).
 //
 // This necessarily precedes S8's own audit-budget ceiling, each row decided at
 // the phase docs/loft-design.md §4's gate-order paragraph assigns it: evalLoft
-// calls loftmesh.PairRecords (which reaches this refusal through loftCellStations)
+// calls loftmesh.PairRecords (which reaches this refusal through loftmesh.RecordCellStations)
 // before loftmesh.AssembleTriangulated ever builds a triangle and before
 // loftmesh.LoftCrossingAudit ever runs (loft_build.go's own evalLoft body). Had the
 // cap not fired, the station count alone — already past 2^14 per side — would

@@ -282,7 +282,7 @@ func TestRatLerpEndpointsMatchTheGeneralPath(t *testing.T) {
 }
 
 // TestRatLerpEndpointReturnsAFreshRational pins the "never memoize" rule:
-// exactLineMoments mutates its ratLerp results in place, so a cached or
+// momentline.ExactLineMoments mutates its ratLerp results in place, so a cached or
 // shared rational at the endpoint case would corrupt the next call.
 func TestRatLerpEndpointReturnsAFreshRational(t *testing.T) {
 	t.Parallel()
@@ -296,7 +296,7 @@ func TestRatLerpEndpointReturnsAFreshRational(t *testing.T) {
 }
 
 // BenchmarkRatLerpWholeEdge measures the recorded-whole-edge call shape:
-// exactLineMoments and lineWalkBounds each run one ratLerp(start, end, 0)
+// momentline.ExactLineMoments and lineWalkBounds each run one ratLerp(start, end, 0)
 // and one ratLerp(start, end, 1) per whole LineSeg, the fast path's target.
 func BenchmarkRatLerpWholeEdge(b *testing.B) {
 	for b.Loop() {

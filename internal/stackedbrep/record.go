@@ -339,7 +339,7 @@ func (b *Engine) HasEvent(p Point2, level int) bool {
 	return ok
 }
 
-// addFace keeps one horizontal face and marks its vertices at its level.
+// AddFace keeps one horizontal face and marks its vertices at its level.
 func (b *Engine) AddFace(loop Loop, level int, outward bool) error {
 	return b.AddFaceRegion(loop, nil, level, outward)
 }
@@ -359,7 +359,7 @@ func (b *Engine) AddFaceRegion(outer Loop, holes []Loop, level int, outward bool
 	return nil
 }
 
-// recordJunctions reads every slab loop's junctions, then marks the levels
+// RecordJunctions reads every slab loop's junctions, then marks the levels
 // where a junction starts, ends or changes carriers as vertex events.
 func (b *Engine) RecordJunctions(n int) {
 	for k, loops := range b.SlabLoops {
@@ -393,7 +393,7 @@ func (b *Engine) RecordJunctions(n int) {
 	}
 }
 
-// cutsOnLine lists the vertices at level lying strictly inside a plane
+// CutsOnLine lists the vertices at level lying strictly inside a plane
 // unit, in walk order. Position along the line is the free coordinate,
 // compared exactly.
 func (b *Engine) CutsOnLine(u Unit, level int) []Point2 {
@@ -514,7 +514,7 @@ func ubWholeCircle(c Carrier, ccw bool) CurveSegment {
 	return seg
 }
 
-// unitSegments writes a unit's record pieces: a plane line split at the
+// UnitSegments writes a unit's record pieces: a plane line split at the
 // vertices at level, an oblique line whole, a circle split at every vertex
 // on it.
 func (b *Engine) UnitSegments(u Unit, closed bool, level int) ([]CurveSegment, error) {
@@ -549,7 +549,7 @@ func (b *Engine) UnitSegments(u Unit, closed bool, level int) ([]CurveSegment, e
 	return out, nil
 }
 
-// faceRecord writes one horizontal face's region.
+// FaceRecord writes one horizontal face's region.
 func (b *Engine) FaceRecord(f Face) (brepgeom.Profile, error) {
 	write := func(source Loop) (LoopRecord, error) {
 		var loop LoopRecord

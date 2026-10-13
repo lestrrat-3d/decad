@@ -616,7 +616,7 @@ func ratUnitCirclePoints(ts []int64) [][2]*big.Rat {
 // proofbound.CellChordCurveAreaUpper's matchedDeltaUpper obligation and the loft
 // evaluator's sagitta-only sectionDelta field coincide, so every caller
 // leaning on the coincidence (internal/proofbound/bounds.go's own matchedDeltaUpper paragraph,
-// loft_build.go's loftCircularCellStations) rests on what follows.
+// loftmesh.LoftCircularCellStations) rests on what follows.
 //
 // THE DERIVATION. Put the chord's own midpoint on the x axis. An arc of
 // radius r subtending theta = 2b, parametrized uniformly in angle by
@@ -659,13 +659,13 @@ func ratUnitCirclePoints(ts []int64) [][2]*big.Rat {
 //     b = 2 over exact rationals.
 //
 // b <= 2 covers every cell angle a build can produce, with room to spare:
-// chordCount splits a walk into n = ceil(sweep/maxD) chords with
+// tessellation.ChordCount splits a walk into n = ceil(sweep/maxD) chords with
 // maxD = 4*asin(sqrt(tol/(2r))) when tol < r and maxD = pi otherwise, and
 // asin(sqrt(1/2)) = pi/4 caps the first form at pi too, so a cell angle
 // sweep/n never exceeds maxD <= pi — that is 2b <= pi, b <= pi/2 < 2. The
-// third subtest reads that ceiling back off chordCount itself.
+// third subtest reads that ceiling back off tessellation.ChordCount itself.
 //
-// chordSagitta publishes a PROVEN UPPER bound (sin(x) <= x,
+// tessellation.ChordSagitta publishes a PROVEN UPPER bound (sin(x) <= x,
 // docs/tessellation-design.md Sec 3) rather than the tight closed form, so
 // what a circular cell carries is not the arc's exact matched-parameter
 // deviation; it still encloses it,
@@ -751,10 +751,10 @@ func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 	})
 
 	t.Run("every production cell angle lands inside the proven range", func(t *testing.T) {
-		// chordCount is the only thing that sets a circular cell's angle
-		// (loftCircularCellStations calls it once per side and shares the
+		// tessellation.ChordCount is the only thing that sets a circular cell's angle
+		// (loftmesh.LoftCircularCellStations calls it once per side and shares the
 		// larger count), and its own maxD <= pi caps that angle at pi — half
-		// the proven ceiling of 4 radians. Read back off chordCount itself,
+		// the proven ceiling of 4 radians. Read back off tessellation.ChordCount itself,
 		// over targets from coarser-than-the-radius (the maxD = pi arm) to
 		// fine, on radii and sweeps a real section carries.
 		for _, radius := range []float64{0.5, 5, 250} {
@@ -776,7 +776,7 @@ func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 
 	t.Run("chordSagitta's published bound encloses the true sagitta", func(t *testing.T) {
 		// The derivation above is about the TRUE quantity 2r*sin^2(theta/4);
-		// what a cell actually carries is chordSagitta's proven upper bound
+		// what a cell actually carries is tessellation.ChordSagitta's proven upper bound
 		// r*theta^2/(8n^2). This is the sin(x) <= x step, corroborated
 		// numerically across the sweep range the evaluator admits.
 		const radius = 7.0

@@ -221,7 +221,7 @@ func TestTessellateCapBlendRoundedRectMiters(t *testing.T) {
 
 	// The mitered corner patches carry a window-skew term on top of their own
 	// chording, so the mesh reads strictly above the larger of the two rings'
-	// sagitta. chordSagitta is not reachable from here; the internal test
+	// sagitta. tessellation.ChordSagitta is not reachable from here; the internal test
 	// TestCapBlendMeshChargesTheWindowSkew pins the term itself.
 	require.Positive(t, mesh.Bound().Mag())
 	require.Greater(t, mesh.Bound().Mag(), chordSagittaOfRoundedCorner(rho, tol),
@@ -384,7 +384,7 @@ func TestTessellateCapBlendPlacedStaysWatertight(t *testing.T) {
 //	    TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand (internal).
 //	side level bound (L.bound) and cap level bound (capBandLevel(...).bound)
 //	    TestCapBlendMeshMotionCarriesEachLevelBound (internal), one assertion each.
-//	exactPrismPointRound (round in the motion)
+//	prismrecord.Payload.PointRound (round in the motion)
 //	    TestCapBlendMeshMotionCarriesPlacementRounding (internal).
 //	line-line miter displacement (the bandDelta arm of capBlendCapMotion)
 //	    TestCapBlendMeshMotionCarriesTheMiterDisplacement (internal) and

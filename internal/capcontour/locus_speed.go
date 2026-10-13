@@ -191,8 +191,8 @@ func lineWallFrameOf(w survey2d.SideWalk) (lineWallFrame, bool) {
 // line touches the circle with both walls running the same way at that point,
 // so offset2d.CornerJoin classifies the corner as a G1 join: its held
 // tangents' cross product is within the construction's tolerance and their
-// dot product is positive. capSlantEdge, capPatchCornerFlux and
-// capBlendCornerLocusGap step a G1 join's foot along the shared normal and
+// dot product is positive. capSlantEdge, capband.PatchCornerFlux and
+// tessellation.CapBlendCornerLocusGap step a G1 join's foot along the shared normal and
 // never ask for a locus speed. Every corner that reaches this function is not
 // a G1 join, so its Δ1 is nonzero and the general bound below decides. A
 // corner that turns only just past that tolerance can still refuse there,

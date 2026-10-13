@@ -94,7 +94,7 @@ func ValidateFieldsWithPoll(poll func() error, record Profile, work *freeform.Fr
 	}
 	// The reconstruction charge is levied once over the whole scene after
 	// per-segment charges, and before any reconstruction. An analytic record
-	// reaches the same charge through validateMomentRecord after its whole-circle
+	// reaches the same charge through validateRecord after its whole-circle
 	// certificate. See docs/spline-design.md §5.2 for the charge order.
 	arrangement, err := chargeReconstruction(pre.Record, work)
 	if err != nil {
