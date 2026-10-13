@@ -2,6 +2,7 @@ package massmoment
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -16,7 +17,8 @@ func XAxisRotation(t r3.Transform) bool {
 		return false
 	}
 	b := t.Basis()
-	return b.EX == (r3.Vec{X: 1}) && b.EY.X == 0 && b.EZ.X == 0 &&
+	return b.EX.X >= math.Nextafter(1, 0) && b.EX.X <= math.Nextafter(1, math.Inf(1)) &&
+		b.EX.Y == 0 && b.EX.Z == 0 && b.EY.X == 0 && b.EZ.X == 0 &&
 		b.EY.Y == b.EZ.Z && b.EY.Z == -b.EZ.Y
 }
 

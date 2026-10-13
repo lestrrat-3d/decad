@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -214,6 +215,59 @@ func TestUnionShoulderedHubAndThreeRadialLugsVariadic(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, volume.Value.Base()-volume.Bound.Base(),
 		hubVolume.Value.Base()+hubVolume.Bound.Base())
+}
+
+func TestUnionShoulderedHubWithNearAxisCopy(t *testing.T) {
+	for _, serial := range []bool{false, true} {
+		name := "variadic"
+		if serial {
+			name = "serial"
+		}
+		t.Run(name, func(t *testing.T) {
+			_, hub, trimmed := shoulderedHubAndRadialLug(t)
+			hubVolume, err := hub.Volume()
+			require.NoError(t, err)
+			turn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(2*math.Pi*5/16))
+			require.NoError(t, err)
+			copyOfLug, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+			require.NoError(t, err)
+			var joined *decad.Body
+			if serial {
+				joined, err = decad.Union(t.Context(), hub, trimmed)
+				require.NoError(t, err)
+				joined, err = decad.Union(t.Context(), joined, copyOfLug)
+			} else {
+				joined, err = decad.Union(t.Context(), hub, trimmed, copyOfLug)
+			}
+			require.NoError(t, err)
+			mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+				decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			require.True(t, mesh.BoundaryVerified())
+			require.True(t, mesh.VolumeVerified())
+			require.Equal(t, 2, revolveLugEuler(mesh))
+			volume, err := joined.Volume()
+			require.NoError(t, err)
+			require.Greater(t, volume.Value.Base()-volume.Bound.Base(),
+				hubVolume.Value.Base()+hubVolume.Bound.Base())
+		})
+	}
+}
+
+func TestUnionNearAxisCopyOverlapLeavesInputsLive(t *testing.T) {
+	doc, hub, trimmed := shoulderedHubAndRadialLug(t)
+	farTurn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(2*math.Pi*5/16))
+	require.NoError(t, err)
+	farCopy, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(farTurn))
+	require.NoError(t, err)
+	nearTurn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(5))
+	require.NoError(t, err)
+	nearCopy, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(nearTurn))
+	require.NoError(t, err)
+	before := doc.Bodies()
+	_, err = decad.Union(t.Context(), hub, trimmed, farCopy, nearCopy)
+	require.ErrorContains(t, err, "complete sector sources are not separate")
+	require.Equal(t, before, doc.Bodies())
 }
 
 func TestUnionShoulderedHubOverlappingLugsLeaveInputsLive(t *testing.T) {
