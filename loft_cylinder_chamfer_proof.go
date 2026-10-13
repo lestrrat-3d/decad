@@ -143,11 +143,13 @@ func loftCylinderChamferExactRingSimple(ctx context.Context, xverts []proofarith
 		return false
 	}
 	points := make([]loftCylinderXY, n)
+	filtered := make([]meshbool.Xp2, n)
 	for i, index := range ring {
 		if index < 0 || index >= len(xverts) {
 			return false
 		}
 		points[i] = loftCylinderChamferExactXY(xverts[index])
+		filtered[i] = meshbool.NewXP2(points[i].x, points[i].y)
 	}
 	area2 := new(big.Rat)
 	inside := false
@@ -175,7 +177,8 @@ func loftCylinderChamferExactRingSimple(ctx context.Context, xverts []proofarith
 			if j == i+1 || i == 0 && j == n-1 {
 				continue
 			}
-			if loftCylinderEdgesMeet(a, b, points[j], points[(j+1)%n]) {
+			if loftCylinderEdgesMeetXP(filtered[i], filtered[(i+1)%n],
+				filtered[j], filtered[(j+1)%n]) {
 				return false
 			}
 		}
@@ -188,44 +191,40 @@ func loftCylinderChamferExactNested(ctx context.Context, xverts []proofarith.Xpt
 	if len(outer) < 3 || len(inner) < 3 {
 		return false, nil
 	}
-	outerXY := make([]loftCylinderXY, len(outer))
+	outerFiltered := make([]meshbool.Xp2, len(outer))
 	for i, index := range outer {
 		if i%64 == 0 {
 			if err := ctx.Err(); err != nil {
 				return false, err
 			}
 		}
-		outerXY[i] = loftCylinderChamferExactXY(xverts[index])
+		p := loftCylinderChamferExactXY(xverts[index])
+		outerFiltered[i] = meshbool.NewXP2(p.x, p.y)
 	}
-	innerXY := make([]loftCylinderXY, len(inner))
+	innerFiltered := make([]meshbool.Xp2, len(inner))
 	for i, index := range inner {
 		if i%64 == 0 {
 			if err := ctx.Err(); err != nil {
 				return false, err
 			}
 		}
-		innerXY[i] = loftCylinderChamferExactXY(xverts[index])
+		p := loftCylinderChamferExactXY(xverts[index])
+		innerFiltered[i] = meshbool.NewXP2(p.x, p.y)
 	}
-	for i, pa := range outerXY {
-		pb := outerXY[(i+1)%len(outerXY)]
-		for j, pc := range innerXY {
+	for i := range outerFiltered {
+		for j := range innerFiltered {
 			if j%64 == 0 {
 				if err := ctx.Err(); err != nil {
 					return false, err
 				}
 			}
-			pd := innerXY[(j+1)%len(innerXY)]
-			if loftCylinderEdgesMeet(pa, pb, pc, pd) {
+			if loftCylinderEdgesMeetXP(outerFiltered[i], outerFiltered[(i+1)%len(outerFiltered)],
+				innerFiltered[j], innerFiltered[(j+1)%len(innerFiltered)]) {
 				return false, nil
 			}
 		}
 	}
-	poly := make([]meshbool.Xp2, len(outer))
-	for i, p := range outerXY {
-		poly[i] = meshbool.NewXP2(p.x, p.y)
-	}
-	p := innerXY[0]
-	inside, on, err := meshbool.PointInPoly2(proofbound.NewWorkBudget(ctx), poly, meshbool.NewXP2(p.x, p.y))
+	inside, on, err := meshbool.PointInPoly2(proofbound.NewWorkBudget(ctx), outerFiltered, innerFiltered[0])
 	return inside && !on, err
 }
 
