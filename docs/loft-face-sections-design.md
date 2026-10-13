@@ -398,3 +398,8 @@ exception. A certified pair currently returns `ErrUnsupported` at public
 `Union` because the source-aligned held seam and its boundary, area, volume
 and complete-contact audits have not been built. The same producer remains
 unchanged after that refusal.
+
+An adaptive Bernstein cell or depth limit produces no source certificate.
+In that case, `Union` may continue through the ordinary mesh Boolean and its
+existing contact and volume gates. Other source errors still propagate, and
+a completed source certificate still requires the held-seam builder.

@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -79,9 +80,9 @@ func certifyRevolveLoftFacesSource(ctx context.Context, blank, tooth *Body) (
 	return selected, selected != nil, nil
 }
 
-// The source gate precedes a separate held-seam construction. It never asks
-// the mesh Boolean to bless a contact that its ordinary chain-depth gate
-// cannot resolve.
+// The source gate precedes a separate held-seam construction. When its
+// adaptive partition reaches a proof limit, the ordinary mesh Boolean gets
+// a chance to certify the pair through its own contact and volume gates.
 func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 	a, b *Body) (bool, error) {
 	if op != meshbool.OpUnion {
@@ -89,12 +90,12 @@ func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 	}
 	proof, ok, err := certifyRevolveLoftFacesSource(ctx, a, b)
 	if err != nil {
-		return true, err
+		return revolveLoftFacesSourceProofError(ctx, err)
 	}
 	if !ok {
 		proof, ok, err = certifyRevolveLoftFacesSource(ctx, b, a)
 		if err != nil {
-			return true, err
+			return revolveLoftFacesSourceProofError(ctx, err)
 		}
 	}
 	if !ok || proof == nil {
@@ -108,6 +109,16 @@ func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 		return true, fmt.Errorf("%w: curved LoftFaces face pairs are undecidable", ErrUnsupported)
 	}
 	return true, fmt.Errorf("%w: certified curved LoftFaces contact needs a held-seam builder", ErrUnsupported)
+}
+
+func revolveLoftFacesSourceProofError(ctx context.Context, err error) (bool, error) {
+	if errors.Is(err, errRevolveLoftFacesAdaptiveLimit) {
+		if canceled := ctx.Err(); canceled != nil {
+			return true, canceled
+		}
+		return false, nil
+	}
+	return true, err
 }
 
 func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {

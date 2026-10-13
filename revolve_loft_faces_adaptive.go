@@ -2,12 +2,15 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
+
+var errRevolveLoftFacesAdaptiveLimit = errors.New("adaptive Bernstein proof limit")
 
 const (
 	revolveLoftFacesMaxBandDepth = 12
@@ -41,7 +44,8 @@ func revolveLoftFacesTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 	segment, span, band int, tLo, tHi *big.Rat, depth int,
 	remaining *int) ([]revolveLoftFacesMappedCell, bool, error) {
 	if *remaining <= 0 {
-		return nil, false, fmt.Errorf("adaptive Bernstein time-cell budget exhausted at t=[%s,%s]", tLo, tHi)
+		return nil, false, fmt.Errorf("%w: adaptive Bernstein time-cell budget exhausted at t=[%s,%s]",
+			errRevolveLoftFacesAdaptiveLimit, tLo, tHi)
 	}
 	*remaining--
 	if *remaining%32 == 0 {
@@ -67,8 +71,8 @@ func revolveLoftFacesTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 	}
 	if depth >= revolveLoftFacesMaxBandDepth {
 		low, high := polynomial.BernsteinRowsAt(q, tLo), polynomial.BernsteinRowsAt(q, tHi)
-		return nil, false, fmt.Errorf("adaptive Bernstein time depth exhausted at t=[%s,%s], endpoint signs %d/%d to %d/%d",
-			tLo, tHi, low[0].Sign(), low[len(low)-1].Sign(),
+		return nil, false, fmt.Errorf("%w: adaptive Bernstein time depth exhausted at t=[%s,%s], endpoint signs %d/%d to %d/%d",
+			errRevolveLoftFacesAdaptiveLimit, tLo, tHi, low[0].Sign(), low[len(low)-1].Sign(),
 			high[0].Sign(), high[len(high)-1].Sign())
 	}
 	mid := lfMul(lfAdd(tLo, tHi), big.NewRat(1, 2))

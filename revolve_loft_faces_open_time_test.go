@@ -47,8 +47,9 @@ func TestRevolveLoftFacesOpenMovingCrossingRefuses(t *testing.T) {
 	q := spiralRootPolynomial(first, last, span, m, b)
 	j := spiralRootXOrder(first, last, span, q)
 	remaining := revolveLoftFacesMaxBandCells
-	_, ok, _ := revolveLoftFacesOpenTimeSlab(t.Context(), q, j,
+	_, ok, err := revolveLoftFacesOpenTimeSlab(t.Context(), q, j,
 		first, last, span, section, 0, 0, 0,
 		lfZero(), big.NewRat(1, 2), false, true, &remaining)
 	require.False(t, ok)
+	require.ErrorIs(t, err, errRevolveLoftFacesAdaptiveLimit)
 }
