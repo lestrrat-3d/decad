@@ -228,7 +228,7 @@ func revolveLoftFacesContactGraphOf(ctx context.Context,
 	}
 	for i := range g.arcs {
 		arc := &g.arcs[i]
-		ties, tied, tieErr := revolveLoftFacesHeelArcSideTiesOf(ctx, proof, arc.arc)
+		ties, tied, tieErr := revolveLoftFacesHeelArcSideTiesIn(ctx, proof, census, arc.arc)
 		if tieErr != nil || !tied {
 			return nil, false, tieErr
 		}
