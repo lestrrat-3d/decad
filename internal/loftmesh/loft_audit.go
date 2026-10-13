@@ -94,7 +94,11 @@ type LoftAuditData struct {
 	// projections vertexCertificateFloat reads: per triangle the axis pair,
 	// per (axis pair, vertex) the Fu, Fv of its Xp2 (two floats) and its
 	// FloatFinite. They are built in the constructor and never written after.
-	certAxes   []uint8
+	certAxes []uint8
+	// exactLifts marks data built by NewLoftAuditDataWithExact, whose exact
+	// lifts may differ from the float corners; vertexCertificateFloat is off
+	// for it.
+	exactLifts bool
 	projUV     [3][]float64
 	projFinite [3][]bool
 }
@@ -132,7 +136,9 @@ func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 // broad-phase boxes by its certified exact-to-float error before omitting a
 // pair and use LoftAuditShortcuts.ExactInput to disable float-only filters.
 func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int) *LoftAuditData {
-	return newLoftAuditDataSelected(verts, exact, tris, nil, false, loftDataWorkers(verts, len(tris)))
+	d := newLoftAuditDataSelected(verts, exact, tris, nil, false, loftDataWorkers(verts, len(tris)))
+	d.exactLifts = true
+	return d
 }
 
 // newCompactLoftAuditData retains one projection per vertex and axis. The
@@ -720,21 +726,29 @@ func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, short
 // float-certain signs only. It returns true when one fires; false sends
 // the pair down the unchanged exact path.
 //
-// Soundness: every sign it uses is one the exact path also uses, obtained the
-// same way. A plane side is proof.OrientSignFloat's sign, which the exact
-// path's planeSigns returns whenever that filter is certain (its error bound
-// is stated on OrientSignFloat). The one corner whose float sign may be
-// uncertain is the shared vertex itself: it is a corner of the plane's own
-// triangle, so the exact fallback (n . (v - a) for the exact normal n of that
-// triangle and v one of its exact corners) is identically zero, and the sign
-// is taken as 0. A line side is meshbool.Cross2xSign's float filter, run on
-// the same Fu, Fv and FloatFinite values (copied from the same Xp2) with the
-// same det, scale, 1e-12 and range tests, which Cross2xSign returns whenever
-// it decides. Only a decided sign is consumed, and the certificate is the same
-// boolean function of those signs as the exact path's, evaluated in the same
-// order. An undecided sign returns false, so the pair takes the exact path and
-// the answer never depends on a guess.
+// The fast path is OFF (it returns false) for data built by
+// NewLoftAuditDataWithExact: there the exact lifts may differ from the float
+// corners, so a certain float sign need not agree with the exact geometry.
+// For every other table the lifts are proof.XptOf of the float vertices, so
+// the float corners and the exact points are the same values.
+//
+// Soundness on those tables: every sign it uses is one the exact path also
+// uses, obtained the same way. A plane side is proof.OrientSignFloat's sign,
+// which the exact path's planeSigns returns whenever that filter is certain
+// (its error bound is stated on OrientSignFloat). The shared vertex's own
+// corner is a corner of the plane's triangle, so its exact sign against that
+// plane is identically 0 (n . (v - a) with v one of the triangle's exact
+// corners); it is set to 0 without consulting its float sign. A line side is
+// meshbool.Cross2xSign's float filter, run on the same Fu, Fv and FloatFinite
+// values (copied from the same Xp2) with the same det, scale, 1e-12 and range
+// tests, which Cross2xSign returns whenever it decides. Only a decided sign is
+// consumed, and the certificate is the same boolean function of those signs as
+// the exact path's, evaluated in the same order. An undecided sign returns
+// false, so the pair takes the exact path.
 func (d *LoftAuditData) vertexCertificateFloat(tris [][3]int, i, j, shared int) bool {
+	if d.exactLifts {
+		return false
+	}
 	ti, tj := d.corners(i), d.corners(j)
 	signsB, ok := floatPlaneSigns(ti, tj, tris[j], shared)
 	if !ok {
@@ -761,19 +775,19 @@ func (d *LoftAuditData) vertexCertificateFloat(tris [][3]int, i, j, shared int) 
 
 // floatPlaneSigns is the float-certain sign of each corner of other (whose
 // vertex indices are otherTri) against the plane of plane's triangle, which
-// has the corner with index shared in common. The shared corner reads 0 when
-// its float sign is uncertain, as vertexCertificateFloat documents.
+// has the corner with index shared in common. The shared corner reads 0
+// unconditionally, as vertexCertificateFloat documents.
 func floatPlaneSigns(plane, other [3]r3.Vec, otherTri [3]int, shared int) ([3]int, bool) {
 	var signs [3]int
 	for k := range signs {
-		s, ok := proof.OrientSignFloat(plane[0], plane[1], plane[2], other[k])
-		if ok {
-			signs[k] = s
+		if otherTri[k] == shared {
 			continue
 		}
-		if otherTri[k] != shared {
+		s, ok := proof.OrientSignFloat(plane[0], plane[1], plane[2], other[k])
+		if !ok {
 			return signs, false
 		}
+		signs[k] = s
 	}
 	return signs, true
 }

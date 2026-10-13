@@ -206,7 +206,8 @@ func TestVertexCertificateFloatMatchesExactPath(t *testing.T) {
 		t.Logf("%s: %d triangles, %d pairs decided in floats, %d left to the exact path",
 			f.name, len(f.tris), decided, undecided)
 		checkVertexPairs(t, f, compact, "compact")
-		checkVertexPairs(t, f, exact, "exact")
+		exactDecided, _ := checkVertexPairs(t, f, exact, "exact")
+		require.Zero(t, exactDecided, "%s: float decision on data with exact lifts", f.name)
 	}
 	require.Positive(t, total, "the float certificate decided no pair")
 	require.Positive(t, fallbacks, "no pair reached the exact fallback")
