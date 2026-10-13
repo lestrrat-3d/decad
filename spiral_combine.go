@@ -6,7 +6,6 @@ import (
 	"math"
 	"sync"
 
-	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -20,21 +19,6 @@ import (
 type spiralToothPlacement struct {
 	source *loftFacesTrimRecord
 	motion r3.Transform
-}
-
-// r3.Rotation's Rodrigues evaluation can round its X basis length one float
-// step below or above one. Keep that narrow case separate from the exact-axis
-// class, because the sector certificate must charge its axial displacement.
-func spiralNearAxisRotation(t r3.Transform) bool {
-	if !t.IsValid() || t.IsReflection() || t == r3.Identity() ||
-		t.Translation() != (r3.Vec{}) {
-		return false
-	}
-	b := t.Basis()
-	return b.EX.X >= math.Nextafter(1, 0) &&
-		b.EX.X <= math.Nextafter(1, math.Inf(1)) &&
-		b.EX.Y == 0 && b.EX.Z == 0 && b.EY.X == 0 && b.EZ.X == 0 &&
-		b.EY.Y == b.EZ.Z && b.EY.Z == -b.EZ.Y
 }
 
 type spiralCombineSource struct {
@@ -55,45 +39,6 @@ type spiralCombinedAdmission struct {
 	allowed map[[2]int]bool
 	short   [2][4]spiralShortCapFamily
 	groups  []map[int]int
-}
-
-// spiralCombinedDiameter selects six actual held vertices as a lower
-// diameter witness for the transient tool operand. A subset's exact pair
-// distance cannot exceed the full mesh diameter.
-func spiralCombinedDiameter(ctx context.Context, verts []r3.Vec) (float64, bool, error) {
-	if len(verts) == 0 {
-		return 0, false, nil
-	}
-	witness := [6]r3.Vec{verts[0], verts[0], verts[0], verts[0], verts[0], verts[0]}
-	for i, v := range verts {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return 0, false, err
-			}
-		}
-		if !proofbound.FiniteVec(v) {
-			return 0, false, nil
-		}
-		if v.X < witness[0].X {
-			witness[0] = v
-		}
-		if v.X > witness[1].X {
-			witness[1] = v
-		}
-		if v.Y < witness[2].Y {
-			witness[2] = v
-		}
-		if v.Y > witness[3].Y {
-			witness[3] = v
-		}
-		if v.Z < witness[4].Z {
-			witness[4] = v
-		}
-		if v.Z > witness[5].Z {
-			witness[5] = v
-		}
-	}
-	return diameter.PointsContext(ctx, witness[:])
 }
 
 // spiralCombineFaceRoles binds the first tooth's authenticated face families

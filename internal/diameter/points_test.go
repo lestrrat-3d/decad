@@ -146,3 +146,29 @@ func exhaustivePoints(points []r3.Vec) (float64, bool) {
 	}
 	return diameter.Points([]r3.Vec{points[bestI], points[bestJ]})
 }
+
+func TestAxisExtremesContext(t *testing.T) {
+	t.Parallel()
+	d, ok, err := diameter.AxisExtremesContext(t.Context(),
+		[]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 3, Y: 0, Z: 0}, {X: 0, Y: 4, Z: 0}})
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, d, 5-1e-9)
+	require.LessOrEqual(t, d, 5.0)
+
+	d, ok, err = diameter.AxisExtremesContext(t.Context(), nil)
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Zero(t, d)
+
+	_, ok, err = diameter.AxisExtremesContext(t.Context(),
+		[]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: math.NaN(), Y: 0, Z: 0}})
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, ok, err = diameter.AxisExtremesContext(cancelled, []r3.Vec{{X: 1}, {X: 2}})
+	require.ErrorIs(t, err, context.Canceled)
+	require.False(t, ok)
+}
