@@ -10,7 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -42,7 +41,7 @@ type draftPayload struct {
 	// kept names the recorded segments of the walls a subset draft leaves
 	// vertical (docs/draft-design.md §10.2), keyed by loop and segment; empty
 	// for a tapered extrude or a draft of every wall, which moves them all.
-	kept map[draftWall]struct{}
+	kept map[offset2d.DraftWall]struct{}
 
 	// d is the held offset amount h·tan α and dDelta the reach of every amount
 	// the stated sweep and taper denote from it (draftOffset).
@@ -61,28 +60,6 @@ type draftPayload struct {
 	// Both are plane-local and placement-invariant.
 	patches   []capPatch
 	bandDelta map[capBandKey]float64
-}
-
-// draftWall names one recorded segment of a draft's near section: its loop
-// (0 the outer loop, i+1 hole i, the index side(i, j) roles carry) and its
-// index in that loop.
-type draftWall struct{ loop, seg int }
-
-// walkAmounts is the offset amount of each coalesced walk of loop li: t for a
-// walk the draft moves and zero for one it keeps (kept). A walk is kept when
-// its first recorded segment is; draftSectionWalks refuses a walk whose
-// segments disagree before any amount is read.
-func walkAmounts(kept map[draftWall]struct{}, li int, walks []survey2d.SideWalk, t float64) []float64 {
-	out := offset2d.UniformAmounts(len(walks), t)
-	if len(kept) == 0 {
-		return out
-	}
-	for i, w := range walks {
-		if _, ok := kept[draftWall{loop: li, seg: w.Segs[0]}]; ok {
-			out[i] = 0
-		}
-	}
-	return out
 }
 
 // transform is the accumulated rigid placement.

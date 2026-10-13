@@ -101,7 +101,7 @@ type capBlendPayload struct {
 	// draftKept is a draft view's draftPayload.kept: the recorded segments of
 	// the walls a subset draft leaves in place, which every per-walk reading
 	// of the band offsets by zero (walkAmounts). Empty moves every wall.
-	draftKept map[draftWall]struct{}
+	draftKept map[offset2d.DraftWall]struct{}
 	// loftSource marks the cap band built over an axial loft's held outer
 	// station polygon. Its fit-spline allowances remain attached to the
 	// resulting body and mesh; the bore remains an exact circular hole.
@@ -165,7 +165,7 @@ func (cbp capBlendPayload) loopBandDelta(li int) float64 {
 // the band's setback is d: d for every walk of a chamfer or a draft of every
 // wall, and zero for a walk a subset draft keeps (draftKept).
 func (cbp capBlendPayload) walkAmounts(li int, walks []survey2d.SideWalk, d float64) []float64 {
-	return walkAmounts(cbp.draftKept, li, walks, d)
+	return offset2d.DraftWalkAmounts(cbp.draftKept, li, walks, d)
 }
 
 // loopOffset is loop li's own in-plane offset, its loopSetback's dc.
@@ -579,9 +579,9 @@ func buildCapBlendWithLoftSource(ctx context.Context, doc *Document, ref produce
 	// one offset serves both),
 	// every unselected loop left unchanged — and run the existing exact
 	// offset + §5 audit machinery on it. SX6 is the offset's own drop
-	// refusal, re-sentinelled here (wrapCapBlendDropError); the audit's own
+	// refusal, re-sentinelled here (capband.ChamferDropError); the audit's own
 	// refusals keep the sentinel their §4 stage-6 row decided
-	// (wrapCapBlendAuditError) — SX7/SX12 for a crossing or contact, the base
+	// (capband.ChamferAuditError) — SX7/SX12 for a crossing or contact, the base
 	// S8/S9 ErrDegenerate for broken nesting. SX12 audits the exact offset
 	// FAMILY, not the ruled patch the body builds: at axial fraction s, the
 	// denoted miter locus is the parallel section offset by s*dc
@@ -594,7 +594,7 @@ func buildCapBlendWithLoftSource(ctx context.Context, doc *Document, ref produce
 	budget := proofbound.NewWorkBudget(ctx)
 	mixed, err := mixedOffsetProfile(budget, cbp)
 	if err != nil {
-		return nil, wrapCapBlendDropError(err)
+		return nil, capband.ChamferDropError(err)
 	}
 
 	// SX7 (band-meeting): a loop chamfered on both caps needs both bands to
@@ -624,7 +624,7 @@ func buildCapBlendWithLoftSource(ctx context.Context, doc *Document, ref produce
 	}
 
 	if err := auditOffsetSectionBudget(budget, pp.profile, mixed); err != nil {
-		return nil, wrapCapBlendAuditError(err)
+		return nil, capband.ChamferAuditError(err)
 	}
 	if err := auditCapBlendSetbackSpan(budget, pp.profile, cbp); err != nil {
 		return nil, err
@@ -845,49 +845,4 @@ func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (pro
 		out[li] = loopRecord{Segments: segs}
 	}
 	return profileRecord{Outer: out[0], Holes: out[1:]}, nil
-}
-
-// wrapCapBlendDropError re-sentinels the shared offset's own drop refusal as
-// SX6 (docs/modify-reach-design.md Table SX). The offset code is Shell's, and
-// there its drop is S11a — ErrUnsupported, because the shell body exists and
-// only a trimmed-offset kernel is missing. A CAP-LOOP CHAMFER asks a different
-// question of the same machinery: the drop says the selected loop has no
-// regular radius-d envelope — the contour is empty (offsetting a radius-4
-// circle inward by 4 leaves nothing) or merely irregular (a fillet arc whose
-// offset radius reaches zero collapses to a sharp corner) — so the body the
-// caller named does not exist as a cap-loop chamfer. §4's existence test puts
-// that in stage 5 with ErrDegenerate. The translation lives here, at the one
-// call site that asks the existence question, never on offset2d.ErrDrop itself —
-// Shell's own sentinel is correct for Shell. The result does not wrap
-// offset2d.ErrDrop: carrying its ErrUnsupported along would leave the refusal
-// answering to both sentinels, and a caller branching on either would be
-// right, which is the ambiguity §4's one-sentinel rule exists to prevent.
-func wrapCapBlendDropError(err error) error {
-	if !errors.Is(err, offset2d.ErrDrop) {
-		return err
-	}
-	return fmt.Errorf(`%w: the cap-loop offset drops a section feature (a circular wall's offset radius reaches zero, or a walk is consumed), so the selected loop has no regular cap contour at this setback`, ErrDegenerate)
-}
-
-// wrapCapBlendAuditError relabels the shared offset audit's refusal with the
-// wording of the stage-6 row it came from, and preserves the sentinel that row
-// already decided. SX6 (drop) is settled by mixedOffsetProfile's own call to
-// offset2d.BuildLoop before the audit runs, so a refusal reaching here is one of
-// the audit's own: the base S8/S9 nesting rows, which say the offset section is
-// decidably broken and therefore that no such body exists (ErrDegenerate), or
-// SX7/SX12, which say the body exists and this evaluator cannot trim or merge
-// it (ErrUnsupported). Those are opposite existence claims (§4's one-sentinel
-// rule), so an S9 refusal keeps ErrDegenerate through %w and errors.Is keeps
-// branching on it; only the ErrUnsupported family is restated as SX7/SX12.
-func wrapCapBlendAuditError(err error) error {
-	if errors.Is(err, context.Canceled) {
-		return context.Canceled
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return context.DeadlineExceeded
-	}
-	if errors.Is(err, ErrDegenerate) {
-		return fmt.Errorf(`%w; the section that broke is the cap-loop chamfer's own offset of the selected loop(s) by the cap setback`, err)
-	}
-	return fmt.Errorf(`%w: the cap-loop chamfer's ruled patches cannot be certified disjoint from a non-adjacent boundary (%v); a trimming kernel is not available`, ErrUnsupported, err)
 }

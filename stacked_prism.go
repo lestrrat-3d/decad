@@ -141,12 +141,12 @@ func stackedInterfacePatches(sp stackedPrismPayload, columns []stackedColumn, by
 // proven perimeter folded into the bound (§4), and each loop's own column
 // displacement (colDelta) over that loop alone.
 func stackedPatchArea(ctx context.Context, sectionDelta float64, colDelta []float64, columns []stackedColumn, patch stackedrecord.Patch) (proofbound.BoundedScalar, error) {
-	area, err := loopEnclosedAreaContext(ctx, patch.Record.Outer)
+	area, err := momentinput.LoopEnclosedArea(ctx, patch.Record.Outer)
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
 	}
 	for _, hole := range patch.Record.Holes {
-		holeArea, err := loopEnclosedAreaContext(ctx, hole)
+		holeArea, err := momentinput.LoopEnclosedArea(ctx, hole)
 		if err != nil {
 			return proofbound.BoundedScalar{}, err
 		}

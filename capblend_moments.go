@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
@@ -40,7 +41,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	// moments (docs/modify-reach-design.md §8.4's fourth reading): the SAME
 	// per-loop sign this loop already applies to slabVolume/bandVolume, over
 	// the SAME two-part decomposition (a signed slab term via
-	// loopEnclosedMomentsContext, a band term via capband.BandMoment).
+	// momentinput.LoopEnclosedMoments, a band term via capband.BandMoment).
 	var muTotal, mvTotal, mzTotal proofbound.BoundedScalar
 	// Appended in build order — loop index, then the chamfered cap, then each
 	// band's own patch index — which IS Table BX row BX3's deterministic patch
@@ -106,7 +107,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		}
 		_ = loopLen
 
-		loopArea, loopMu, loopMv, err := loopEnclosedMomentsContext(ctx, loop)
+		loopArea, loopMu, loopMv, err := momentinput.LoopEnclosedMoments(ctx, loop)
 		if err != nil {
 			return nil, err
 		}
@@ -211,16 +212,16 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 
 		startBoundary := loop
 		if onStart {
-			startBoundary, err = capLoopBoundary(ctx, loop, cbp.start.dc)
+			startBoundary, err = capband.LoopBoundary(ctx, loop, cbp.start.dc, shellTol)
 			if err != nil {
 				return nil, err
 			}
 		}
-		sArea, err := loopEnclosedAreaContext(ctx, startBoundary)
+		sArea, err := momentinput.LoopEnclosedArea(ctx, startBoundary)
 		if err != nil {
 			return nil, err
 		}
-		// sArea is measured on the BUILT cap contour (loopEnclosedAreaContext's
+		// sArea is measured on the BUILT cap contour (momentinput.LoopEnclosedArea's
 		// own arithmetic bound), which says nothing about how far that contour
 		// sits from the one the offset DENOTES. proofbound.SectionDisplacementArea is the
 		// same 2D set-displacement identity extrude.go's own region area
@@ -235,12 +236,12 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 
 		endBoundary := loop
 		if onEnd {
-			endBoundary, err = capLoopBoundary(ctx, loop, cbp.end.dc)
+			endBoundary, err = capband.LoopBoundary(ctx, loop, cbp.end.dc, shellTol)
 			if err != nil {
 				return nil, err
 			}
 		}
-		eArea, err := loopEnclosedAreaContext(ctx, endBoundary)
+		eArea, err := momentinput.LoopEnclosedArea(ctx, endBoundary)
 		if err != nil {
 			return nil, err
 		}
@@ -341,7 +342,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 // already built for it (band.capCo) rather than re-walked: each edge on that
 // boundary already carries its own held length and proven bound (a wall's
 // straight or circular capEdge, a reflex corner's connector arc), computed
-// from the SAME offset math loopEnclosedAreaContext(capLoopBoundary(...))
+// from the SAME offset math momentinput.LoopEnclosedArea(capband.LoopBoundary(...))
 // measures the area of, so the two readings of one contour never disagree
 // about which boundary they describe. A nil capCo (the loop is not chamfered
 // on this cap) sums to zero, which is what leaves proofbound.SectionDisplacementArea's
@@ -354,32 +355,14 @@ func capContourPerimeterUpper(capCo []coedge) float64 {
 	return proofbound.AbsSumUpper(total.Value, total.Bound)
 }
 
-// capLoopBoundary returns loop_li's OWN offset-by-d boundary (d the cap's dc)
-// as a standalone
-// LoopRecord, used to compute a chamfered cap's per-loop enclosed area and
-// the band's closing disk at the cap level.
-func capLoopBoundary(ctx context.Context, loop loopRecord, d float64) (loopRecord, error) {
-	budget := proofbound.NewWorkBudget(ctx)
-	work := freeform.NewFreeformWork()
-	cl, err := oneLoopCornerLoop(budget, loop, work)
-	if err != nil {
-		return loopRecord{}, err
-	}
-	segs, err := offset2d.BuildLoop(budget, cl.walks, 1, d, shellTol)
-	if err != nil {
-		return loopRecord{}, err
-	}
-	return loopRecord{Segments: segs}, nil
-}
-
-// contourOf is capLoopBoundary read under cbp's corner rule for loop li: a
+// contourOf is capband.LoopBoundary read under cbp's corner rule for loop li: a
 // draft view's far section is the loop's sharp offset
 // (offset2d.BuildSharpLoop), every corner mitered and each walk moved its own
 // amount (walkAmounts), where a chamfer's cap contour closes a reflex corner
 // with an arc.
 func (cbp capBlendPayload) contourOf(ctx context.Context, li int, loop loopRecord, d float64) (loopRecord, error) {
 	if !cbp.draft {
-		return capLoopBoundary(ctx, loop, d)
+		return capband.LoopBoundary(ctx, loop, d, shellTol)
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	cl, err := oneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
@@ -388,7 +371,7 @@ func (cbp capBlendPayload) contourOf(ctx context.Context, li int, loop loopRecor
 	}
 	segs, _, err := offset2d.BuildSharpLoop(budget, cl.walks, cbp.walkAmounts(li, cl.walks, d), shellTol)
 	if err != nil {
-		return loopRecord{}, wrapDraftOffsetError(err)
+		return loopRecord{}, offset2d.DraftOffsetError(err)
 	}
 	return loopRecord{Segments: segs}, nil
 }
@@ -425,7 +408,7 @@ func readBandMassWithSideArea(ctx context.Context, li int, loop loopRecord, cbp 
 		}
 		sideArea = *knownSideArea
 	} else {
-		sideArea, err = loopEnclosedAreaContext(ctx, loop)
+		sideArea, err = momentinput.LoopEnclosedArea(ctx, loop)
 		if err != nil {
 			return capband.BandMassInput{}, err
 		}
@@ -434,7 +417,7 @@ func readBandMassWithSideArea(ctx context.Context, li int, loop loopRecord, cbp 
 	if err != nil {
 		return capband.BandMassInput{}, err
 	}
-	capArea, err := loopEnclosedAreaContext(ctx, capBoundary)
+	capArea, err := momentinput.LoopEnclosedArea(ctx, capBoundary)
 	if err != nil {
 		return capband.BandMassInput{}, err
 	}

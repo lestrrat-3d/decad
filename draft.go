@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -309,7 +310,7 @@ func (f *Face) hasRole(producer producerID, role string) bool {
 // selection leaves out, read from their side(i, j) roles under producer,
 // empty when the selection is b's complete wall set. Whether a
 // subset's corners admit the draft is stage 3's question (SD4).
-func draftKeptWalls(b *Body, producer producerID, selected []*Face) (map[draftWall]struct{}, error) {
+func draftKeptWalls(b *Body, producer producerID, selected []*Face) (map[offset2d.DraftWall]struct{}, error) {
 	for _, f := range selected {
 		if f.hasRole(producer, roleCapStart) || f.hasRole(producer, roleCapEnd) {
 			return nil, fmt.Errorf(`%w: the selection contains a cap of the receiver, which has no trace on the neutral plane to tilt about (draft SD22)`, ErrDegenerate)
@@ -320,7 +321,7 @@ func draftKeptWalls(b *Body, producer producerID, selected []*Face) (map[draftWa
 			return nil, fmt.Errorf(`%w: the selection contains a face that is no wall of the receiver (it carries no side(i, j) role of the receiver's own), so it names no wall to tilt (draft SD21)`, ErrUnsupported)
 		}
 	}
-	kept := map[draftWall]struct{}{}
+	kept := map[offset2d.DraftWall]struct{}{}
 	for _, f := range b.Faces() {
 		if !f.isWallOf(producer) || slices.Contains(selected, f) {
 			continue
@@ -333,7 +334,7 @@ func draftKeptWalls(b *Body, producer producerID, selected []*Face) (map[draftWa
 			if n, err := fmt.Sscanf(o.Role, "side(%d,%d)", &li, &j); err != nil || n != 2 || o.Role != fmt.Sprintf("side(%d,%d)", li, j) {
 				continue
 			}
-			kept[draftWall{loop: li, seg: j}] = struct{}{}
+			kept[offset2d.DraftWall{Loop: li, Seg: j}] = struct{}{}
 		}
 	}
 	return kept, nil
