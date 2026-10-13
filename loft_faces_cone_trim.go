@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -112,7 +113,7 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 	if err != nil {
 		return err
 	}
-	if err := lfPositiveDenominator(base.loftFacesCap.final, box); err != nil {
+	if err := loftface.PositiveDenominator(base.loftFacesCap.final, box); err != nil {
 		return err
 	}
 	if !loftCapOutsideToeCone(base.loftFacesCap.final, box, cone) {
@@ -146,36 +147,17 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 // The source cap lies outside the toe cone on its whole certified rectangle.
 // Linear-fractional coordinate extrema occur at its corners because g > 0.
 func loftCapOutsideToeCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit) bool {
-	corners := lfBoxCorners(box)
-	x := lfScalarRange(m, loftFaceRatVec{lfOne(), lfZero(), lfZero()}, corners)
-	y := lfScalarRange(m, loftFaceRatVec{lfZero(), lfOne(), lfZero()}, corners)
-	z := lfScalarRange(m, loftFaceRatVec{lfZero(), lfZero(), lfOne()}, corners)
-	if x.lo.Cmp(cone.far) <= 0 {
+	corners := loftface.BoxCorners(box)
+	x := loftface.ScalarRange(m, loftFaceRatVec{lfOne(), lfZero(), lfZero()}, corners)
+	y := loftface.ScalarRange(m, loftFaceRatVec{lfZero(), lfOne(), lfZero()}, corners)
+	z := loftface.ScalarRange(m, loftFaceRatVec{lfZero(), lfZero(), lfOne()}, corners)
+	if x.Lo.Cmp(cone.far) <= 0 {
 		return false
 	}
-	d := lfIntervalSub(loftFaceInterval{cone.apex, cone.apex}, x)
-	radial := lfAdd(loftIntervalSquareMin(y), loftIntervalSquareMin(z))
-	margin := lfSub(lfMul(lfMul(cone.slope, cone.slope), radial), loftIntervalSquareMax(d))
+	d := loftface.IntervalSub(loftFaceInterval{Lo: cone.apex, Hi: cone.apex}, x)
+	radial := lfAdd(loftface.IntervalSquareMin(y), loftface.IntervalSquareMin(z))
+	margin := lfSub(lfMul(lfMul(cone.slope, cone.slope), radial), loftface.IntervalSquareMax(d))
 	return margin.Sign() > 0
-}
-
-func loftIntervalSquareMin(i loftFaceInterval) *big.Rat {
-	if i.lo.Sign() <= 0 && i.hi.Sign() >= 0 {
-		return lfZero()
-	}
-	a, b := lfMul(i.lo, i.lo), lfMul(i.hi, i.hi)
-	if a.Cmp(b) < 0 {
-		return a
-	}
-	return b
-}
-
-func loftIntervalSquareMax(i loftFaceInterval) *big.Rat {
-	a, b := lfMul(i.lo, i.lo), lfMul(i.hi, i.hi)
-	if a.Cmp(b) > 0 {
-		return a
-	}
-	return b
 }
 
 // A Cut may keep only part of a cap. Require the exact held triangle multiset
@@ -216,7 +198,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	if err != nil {
 		return nil, true, asBooleanError(op, err)
 	}
-	if err := lfPositiveDenominator(p.loftFacesToe.cap.final, box); err != nil {
+	if err := loftface.PositiveDenominator(p.loftFacesToe.cap.final, box); err != nil {
 		return nil, true, asBooleanError(op, err)
 	}
 	if !loftCapOutsideHeelCone(p.loftFacesToe.cap.final, box, cone) {
@@ -300,12 +282,12 @@ func loftCapOutsideHeelCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit
 	if box[1].Sign() >= 0 && box[0].Sign() <= 0 {
 		return false
 	}
-	g := [3]*big.Rat{m.g0, m.gu, m.gv}
+	g := [3]*big.Rat{m.G0, m.GU, m.GV}
 	coordinate := func(axis int) [3]*big.Rat {
 		return [3]*big.Rat{
-			lfAdd(lfMul(m.constant[axis], g[0]), m.q0[axis]),
-			lfAdd(lfMul(m.constant[axis], g[1]), m.qu[axis]),
-			lfAdd(lfMul(m.constant[axis], g[2]), m.qv[axis]),
+			lfAdd(lfMul(m.Constant[axis], g[0]), m.Q0[axis]),
+			lfAdd(lfMul(m.Constant[axis], g[1]), m.QU[axis]),
+			lfAdd(lfMul(m.Constant[axis], g[2]), m.QV[axis]),
 		}
 	}
 	x, y, z := coordinate(0), coordinate(1), coordinate(2)

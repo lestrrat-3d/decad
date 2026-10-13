@@ -144,7 +144,7 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 	}
 	seam, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(ctx, proof.blank, proof.tooth,
 		sectionIndex, mapped.segment, mapped.band,
-		loftFaceInterval{lo: mapped.tLo, hi: mapped.tHi}, stations)
+		loftFaceInterval{Lo: mapped.tLo, Hi: mapped.tHi}, stations)
 	if err != nil || !ok {
 		return nil, false, err
 	}

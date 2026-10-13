@@ -30,11 +30,11 @@ func TestRevolveLoftFacesOpenTimeExcludesExactPointRoot(t *testing.T) {
 func TestRevolveLoftFacesOpenMovingCrossingRefuses(t *testing.T) {
 	mapAt := func(x, y *big.Rat) loftFaceMap {
 		zero, one := lfZero(), lfOne()
-		return loftFaceMap{constant: loftFaceRatVec{zero, zero, zero},
-			q0: loftFaceRatVec{x, y, zero},
-			qu: loftFaceRatVec{one, one, zero},
-			qv: loftFaceRatVec{zero, zero, zero},
-			g0: one, gu: zero, gv: zero}
+		return loftFaceMap{Constant: loftFaceRatVec{zero, zero, zero},
+			Q0: loftFaceRatVec{x, y, zero},
+			QU: loftFaceRatVec{one, one, zero},
+			QV: loftFaceRatVec{zero, zero, zero},
+			G0: one, GU: zero, GV: zero}
 	}
 	first := mapAt(lfZero(), big.NewRat(1, 2))
 	last := mapAt(lfOne(), big.NewRat(3, 2))

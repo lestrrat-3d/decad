@@ -62,8 +62,8 @@ func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
 		require.NoError(t, arcErr)
 		require.True(t, certified, "sloped heel circle at X=%s", circle.x.RatString())
 		require.NotNil(t, arc)
-		require.Negative(t, arc.negativeZ.box[2].hi.Sign())
-		require.Positive(t, arc.positiveZ.box[2].lo.Sign())
+		require.Negative(t, arc.negativeZ.box[2].Hi.Sign())
+		require.Positive(t, arc.positiveZ.box[2].Lo.Sign())
 		lower := lfZero()
 		if circle.x.Cmp(proof.trim.toe.apex) < 0 {
 			lower = lfDiv(lfSub(proof.trim.toe.apex, circle.x), proof.trim.toe.slope)
@@ -77,7 +77,7 @@ func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
 		changedRoots := 0
 		for i := range changedSection.cells {
 			limit := &changedSection.cells[i].upper
-			if limit.root.lo == nil {
+			if limit.root.Lo == nil {
 				continue
 			}
 			limit.before, limit.after = limit.after, limit.before

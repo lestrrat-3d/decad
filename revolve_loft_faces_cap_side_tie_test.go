@@ -64,8 +64,8 @@ func TestCurvedHeelArcSideTiesRejectChangedSourceRecord(t *testing.T) {
 		require.Nil(t, ties)
 
 		arc = *pair.toolArc
-		arc.negativeZ.parameter.lo = new(big.Rat).Add(
-			arc.negativeZ.parameter.lo, big.NewRat(1, 1<<60))
+		arc.negativeZ.parameter.Lo = new(big.Rat).Add(
+			arc.negativeZ.parameter.Lo, big.NewRat(1, 1<<60))
 		ties, certified, err = revolveLoftFacesHeelArcSideTiesOf(t.Context(), proof, &arc)
 		require.NoError(t, err)
 		require.False(t, certified)

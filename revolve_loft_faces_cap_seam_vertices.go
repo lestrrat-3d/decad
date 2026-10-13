@@ -44,20 +44,20 @@ func revolveLoftFacesCapBoundarySeamVertex(circle revolveLoftFacesToolCapCircle,
 ) (revolveLoftFacesCapSeamVertex, bool) {
 	var out revolveLoftFacesCapSeamVertex
 	if circle.x == nil || circle.radius == nil || circle.radius.Sign() <= 0 ||
-		boundary.parameter.lo == nil || boundary.parameter.hi == nil ||
-		boundary.parameter.lo.Cmp(boundary.parameter.hi) >= 0 {
+		boundary.parameter.Lo == nil || boundary.parameter.Hi == nil ||
+		boundary.parameter.Lo.Cmp(boundary.parameter.Hi) >= 0 {
 		return out, false
 	}
 	var middle [3]*big.Rat
 	for axis, interval := range boundary.box {
-		if interval.lo == nil || interval.hi == nil ||
-			interval.lo.Cmp(interval.hi) > 0 {
+		if interval.Lo == nil || interval.Hi == nil ||
+			interval.Lo.Cmp(interval.Hi) > 0 {
 			return out, false
 		}
-		middle[axis] = lfDiv(lfAdd(interval.lo, interval.hi), big.NewRat(2, 1))
+		middle[axis] = lfDiv(lfAdd(interval.Lo, interval.Hi), big.NewRat(2, 1))
 	}
-	if boundary.box[0].lo.Cmp(circle.x) > 0 ||
-		boundary.box[0].hi.Cmp(circle.x) < 0 ||
+	if boundary.box[0].Lo.Cmp(circle.x) > 0 ||
+		boundary.box[0].Hi.Cmp(circle.x) < 0 ||
 		lfAdd(lfMul(middle[1], middle[1]),
 			lfMul(middle[2], middle[2])).Sign() <= 0 {
 		return out, false
@@ -71,8 +71,8 @@ func revolveLoftFacesCapBoundarySeamVertex(circle revolveLoftFacesToolCapCircle,
 	distance := lfZero()
 	for axis, held := range coordinates {
 		interval := boundary.box[axis]
-		lower := lfAbs(lfSub(lfF(held), interval.lo))
-		upper := lfAbs(lfSub(lfF(held), interval.hi))
+		lower := lfAbs(lfSub(lfF(held), interval.Lo))
+		upper := lfAbs(lfSub(lfF(held), interval.Hi))
 		if lower.Cmp(upper) > 0 {
 			distance = lfAdd(distance, lower)
 		} else {

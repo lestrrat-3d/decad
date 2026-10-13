@@ -1,6 +1,10 @@
 package decad
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/loftface"
+)
 
 // A tool-cap circle is the exact intersection of one authenticated finite
 // Revolve generator and one cone used to trim the source LoftFaces body. It
@@ -149,11 +153,11 @@ func revolveLoftFacesCircleOutsideMaps(maps []loftFaceMap, box [4]*big.Rat,
 	if len(maps) < 2 || x == nil || radius == nil || radius.Sign() <= 0 {
 		return false
 	}
-	corners := lfBoxCorners(box)
+	corners := loftface.BoxCorners(box)
 	axis := [3]loftFaceRatVec{{lfOne(), lfZero(), lfZero()},
 		{lfZero(), lfOne(), lfZero()}, {lfZero(), lfZero(), lfOne()}}
 	for _, mapped := range maps {
-		if lfPositiveDenominator(mapped, box) != nil {
+		if loftface.PositiveDenominator(mapped, box) != nil {
 			return false
 		}
 	}
@@ -161,15 +165,15 @@ func revolveLoftFacesCircleOutsideMaps(maps []loftFaceMap, box [4]*big.Rat,
 	for band := 0; band+1 < len(maps); band++ {
 		var range3 [3]loftFaceInterval
 		for coordinate, direction := range axis {
-			first := lfScalarRange(maps[band], direction, corners)
-			second := lfScalarRange(maps[band+1], direction, corners)
-			range3[coordinate] = lfIntervalHull(first, second)
+			first := loftface.ScalarRange(maps[band], direction, corners)
+			second := loftface.ScalarRange(maps[band+1], direction, corners)
+			range3[coordinate] = loftface.IntervalHull(first, second)
 		}
-		if x.Cmp(range3[0].lo) < 0 || x.Cmp(range3[0].hi) > 0 {
+		if x.Cmp(range3[0].Lo) < 0 || x.Cmp(range3[0].Hi) > 0 {
 			continue
 		}
-		minimum := lfAdd(loftIntervalSquareMin(range3[1]), loftIntervalSquareMin(range3[2]))
-		maximum := lfAdd(loftIntervalSquareMax(range3[1]), loftIntervalSquareMax(range3[2]))
+		minimum := lfAdd(loftface.IntervalSquareMin(range3[1]), loftface.IntervalSquareMin(range3[2]))
+		maximum := lfAdd(loftface.IntervalSquareMax(range3[1]), loftface.IntervalSquareMax(range3[2]))
 		if radius2.Cmp(minimum) >= 0 && radius2.Cmp(maximum) <= 0 {
 			return false
 		}

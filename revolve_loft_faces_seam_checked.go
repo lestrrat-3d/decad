@@ -14,7 +14,7 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 ) ([]revolveLoftFacesSeamVertex, revolveLoftFacesSeamPatch,
 	revolveLoftFacesSeamPatch, bool, error) {
 	var empty revolveLoftFacesSeamPatch
-	if ctx == nil || root.lo == nil || root.hi == nil ||
+	if ctx == nil || root.Lo == nil || root.Hi == nil ||
 		sectionIndex < 0 || segment < 0 || band < 0 {
 		return nil, empty, empty, false, nil
 	}
@@ -42,7 +42,7 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 				mapped.side != revolveLoftFacesJointContact ||
 				mapped.jointKind != revolveLoftFacesWholeArcContact ||
 				mapped.jointArc == nil || mapped.tLo == nil || mapped.tHi == nil ||
-				mapped.tLo.Cmp(root.lo) != 0 || mapped.tHi.Cmp(root.hi) != 0 ||
+				mapped.tLo.Cmp(root.Lo) != 0 || mapped.tHi.Cmp(root.Hi) != 0 ||
 				cell.face != pair.trimmedFace {
 				continue
 			}

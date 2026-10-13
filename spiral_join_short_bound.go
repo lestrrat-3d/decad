@@ -57,7 +57,7 @@ func spiralShortHeldBound(ctx context.Context, proof *spiralFirstJoinSource,
 				if left.Cmp(right) > 0 {
 					left, right = right, left
 				}
-				box[axis] = loftFaceInterval{lo: left, hi: right}
+				box[axis] = loftFaceInterval{Lo: left, Hi: right}
 			}
 			mesh = append(mesh, box)
 		}
@@ -120,11 +120,11 @@ func spiralShortFloatCover(ctx context.Context, source, mesh [][3]loftFaceInterv
 				return nil, false
 			}
 			for axis, interval := range box {
-				if interval.lo == nil || interval.hi == nil || interval.lo.Cmp(interval.hi) > 0 {
+				if interval.Lo == nil || interval.Hi == nil || interval.Lo.Cmp(interval.Hi) > 0 {
 					return nil, false
 				}
 				out[i][axis] = [2]float64{
-					proofbound.RatFloatDown(interval.lo), proofbound.RatFloatUp(interval.hi),
+					proofbound.RatFloatDown(interval.Lo), proofbound.RatFloatUp(interval.Hi),
 				}
 				if proofbound.IsNonFinite(out[i][axis][0]) || proofbound.IsNonFinite(out[i][axis][1]) {
 					return nil, false
@@ -237,7 +237,7 @@ func spiralShortSourceCells(ctx context.Context, proof *spiralFirstJoinSource,
 		if !yes {
 			return nil, false, nil
 		}
-		box, yes := spiralJunctionBox(first, second, part.span, lo, hi, t.lo, t.hi)
+		box, yes := spiralJunctionBox(first, second, part.span, lo, hi, t.Lo, t.Hi)
 		if !yes {
 			return nil, false, nil
 		}
@@ -249,12 +249,12 @@ func spiralShortSourceCells(ctx context.Context, proof *spiralFirstJoinSource,
 func spiralShortBoxesDistanceSquared(a, b [3]loftFaceInterval) (*big.Rat, bool) {
 	distance := new(big.Rat)
 	for axis := range a {
-		if a[axis].lo == nil || a[axis].hi == nil || b[axis].lo == nil || b[axis].hi == nil ||
-			a[axis].lo.Cmp(a[axis].hi) > 0 || b[axis].lo.Cmp(b[axis].hi) > 0 {
+		if a[axis].Lo == nil || a[axis].Hi == nil || b[axis].Lo == nil || b[axis].Hi == nil ||
+			a[axis].Lo.Cmp(a[axis].Hi) > 0 || b[axis].Lo.Cmp(b[axis].Hi) > 0 {
 			return nil, false
 		}
-		lo := lfAbs(lfSub(a[axis].lo, b[axis].hi))
-		hi := lfAbs(lfSub(a[axis].hi, b[axis].lo))
+		lo := lfAbs(lfSub(a[axis].Lo, b[axis].Hi))
+		hi := lfAbs(lfSub(a[axis].Hi, b[axis].Lo))
 		if hi.Cmp(lo) > 0 {
 			lo = hi
 		}

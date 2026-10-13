@@ -11,7 +11,7 @@ func TestCurvedLoftFacesArcSeamPatchesShareCertifiedVertices(t *testing.T) {
 	sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
 	seam, blankPatch, loftPatch, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(),
 		blank, trimmed, sectionIndex, contact.segment, contact.band,
-		loftFaceInterval{lo: contact.tLo, hi: contact.tHi}, stations)
+		loftFaceInterval{Lo: contact.tLo, Hi: contact.tHi}, stations)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Len(t, blankPatch.triangles, 4*(len(stations)-1))
@@ -90,7 +90,7 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 		require.False(t, pointSourceCurrent(trim.source))
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
 			sectionIndex, contact.segment, contact.band,
-			loftFaceInterval{lo: contact.tLo, hi: contact.tHi}, stations)
+			loftFaceInterval{Lo: contact.tLo, Hi: contact.tHi}, stations)
 		require.NoError(t, err)
 		require.False(t, ok)
 	})
@@ -102,7 +102,7 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 		require.False(t, pointSourceCurrent(trim.source))
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
 			sectionIndex, contact.segment, contact.band,
-			loftFaceInterval{lo: contact.tLo, hi: contact.tHi}, stations)
+			loftFaceInterval{Lo: contact.tLo, Hi: contact.tHi}, stations)
 		require.NoError(t, err)
 		require.False(t, ok)
 	})
@@ -112,7 +112,7 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 		require.Greater(t, len(stations), 2)
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
 			sectionIndex, contact.segment, contact.band,
-			loftFaceInterval{lo: contact.tLo, hi: contact.tHi}, stations[:2])
+			loftFaceInterval{Lo: contact.tLo, Hi: contact.tHi}, stations[:2])
 		require.NoError(t, err)
 		require.False(t, ok)
 	})

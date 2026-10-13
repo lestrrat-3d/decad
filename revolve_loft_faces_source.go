@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -158,7 +159,7 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 		return false
 	}
 	for i, mapped := range trim.maps {
-		if lfPositiveDenominator(mapped, box) != nil ||
+		if loftface.PositiveDenominator(mapped, box) != nil ||
 			mapped != trim.base.loftFacesCap.maps[i] {
 			return false
 		}
@@ -261,8 +262,8 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		}
 	}
 	for _, crossing := range proof.crossings {
-		if crossing.x[0].hi.Cmp(toeX) >= 0 ||
-			crossing.x[len(crossing.x)-1].lo.Cmp(heelX) <= 0 {
+		if crossing.x[0].Hi.Cmp(toeX) >= 0 ||
+			crossing.x[len(crossing.x)-1].Lo.Cmp(heelX) <= 0 {
 			return nil, false, nil
 		}
 	}
@@ -309,12 +310,12 @@ func revolveLoftFacesCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
 		return false
 	}
 	first, last := trim.maps[0], trim.maps[len(trim.maps)-1]
-	if lfPositiveDenominator(first, box) != nil || lfPositiveDenominator(last, box) != nil {
+	if loftface.PositiveDenominator(first, box) != nil || loftface.PositiveDenominator(last, box) != nil {
 		return false
 	}
-	corners := lfBoxCorners(box)
+	corners := loftface.BoxCorners(box)
 	xAxis := loftFaceRatVec{lfOne(), lfZero(), lfZero()}
-	return lfScalarRange(first, xAxis, corners).hi.Cmp(toeX) < 0 &&
+	return loftface.ScalarRange(first, xAxis, corners).Hi.Cmp(toeX) < 0 &&
 		spiralCapPlaneAvoidsRootCircle(last, corners, m, b, heelX)
 }
 

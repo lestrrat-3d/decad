@@ -18,9 +18,9 @@ func TestRevolveLoftFacesOwnedTimeRootsRemainDisjoint(t *testing.T) {
 		}
 		return revolveLoftFacesOwnedRoot{
 			root: revolveLoftFacesEndpointRoot{
-				time: loftFaceInterval{lo: lo, hi: hi}, finite: true},
+				time: loftFaceInterval{Lo: lo, Hi: hi}, finite: true},
 			cell: revolveLoftFacesJointCell{
-				time: loftFaceInterval{lo: lo, hi: hi},
+				time: loftFaceInterval{Lo: lo, Hi: hi},
 				sLo:  sLo, sHi: sHi, finite: true},
 			kind: kind, point: point, atEnd: atEnd,
 		}

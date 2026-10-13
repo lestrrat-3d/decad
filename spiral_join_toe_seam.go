@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -19,41 +20,41 @@ type spiralToeRootSeam = spiralHeelRootSeam
 // actual source arc, including the opposite endpoint's radius.
 func spiralToeMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 	radiusBound, capC *big.Rat) (bool, bool) {
-	if lfPositiveDenominator(first, box) != nil || lfPositiveDenominator(second, box) != nil {
+	if loftface.PositiveDenominator(first, box) != nil || loftface.PositiveDenominator(second, box) != nil {
 		return false, false
 	}
-	stretch := math.Max(first.stretch, second.stretch)
+	stretch := math.Max(first.Stretch, second.Stretch)
 	if proofbound.IsNonFinite(stretch) ||
 		lfMul(lfF(stretch), radiusBound).Cmp(big.NewRat(1, 1_000_000_000_000)) >= 0 {
 		return false, false
 	}
-	corners := lfBoxCorners(box)
+	corners := loftface.BoxCorners(box)
 	axis := [3]loftFaceRatVec{{lfOne(), lfZero(), lfZero()},
 		{lfZero(), lfOne(), lfZero()}, {lfZero(), lfZero(), lfOne()}}
 	var firstRange, secondRange, delta [3]loftFaceInterval
 	for i := range axis {
-		firstRange[i] = lfScalarRange(first, axis[i], corners)
-		secondRange[i] = lfScalarRange(second, axis[i], corners)
-		delta[i] = lfIntervalSub(secondRange[i], firstRange[i])
+		firstRange[i] = loftface.ScalarRange(first, axis[i], corners)
+		secondRange[i] = loftface.ScalarRange(second, axis[i], corners)
+		delta[i] = loftface.IntervalSub(secondRange[i], firstRange[i])
 	}
 	for _, cap := range [][3]loftFaceInterval{firstRange, secondRange} {
-		if cap[0].lo.Cmp(big.NewRat(9, 1)) <= 0 || cap[0].hi.Cmp(big.NewRat(12, 1)) >= 0 ||
-			cap[1].lo.Cmp(big.NewRat(8, 1)) <= 0 || cap[1].hi.Cmp(big.NewRat(11, 1)) >= 0 ||
-			cap[2].lo.Cmp(big.NewRat(-4, 1)) <= 0 || cap[2].hi.Cmp(big.NewRat(4, 1)) >= 0 ||
-			lfSub(capC, cap[0].lo).Cmp(big.NewRat(12, 1)) >= 0 {
+		if cap[0].Lo.Cmp(big.NewRat(9, 1)) <= 0 || cap[0].Hi.Cmp(big.NewRat(12, 1)) >= 0 ||
+			cap[1].Lo.Cmp(big.NewRat(8, 1)) <= 0 || cap[1].Hi.Cmp(big.NewRat(11, 1)) >= 0 ||
+			cap[2].Lo.Cmp(big.NewRat(-4, 1)) <= 0 || cap[2].Hi.Cmp(big.NewRat(4, 1)) >= 0 ||
+			lfSub(capC, cap[0].Lo).Cmp(big.NewRat(12, 1)) >= 0 {
 			return false, false
 		}
 	}
 	for _, span := range delta {
-		if span.lo.Cmp(big.NewRat(-4, 1)) <= 0 || span.hi.Cmp(big.NewRat(4, 1)) >= 0 {
+		if span.Lo.Cmp(big.NewRat(-4, 1)) <= 0 || span.Hi.Cmp(big.NewRat(4, 1)) >= 0 {
 			return false, false
 		}
 	}
-	if delta[0].lo.Sign() <= 0 {
+	if delta[0].Lo.Sign() <= 0 {
 		return false, false
 	}
-	negative := firstRange[2].hi.Sign() < 0 && secondRange[2].hi.Sign() < 0
-	positive := firstRange[2].lo.Sign() > 0 && secondRange[2].lo.Sign() > 0
+	negative := firstRange[2].Hi.Sign() < 0 && secondRange[2].Hi.Sign() < 0
+	positive := firstRange[2].Lo.Sign() > 0 && secondRange[2].Lo.Sign() > 0
 	return negative || positive, negative
 }
 
@@ -129,31 +130,31 @@ func spiralToeRootCells(ctx context.Context, trim *loftFacesTrimRecord,
 		}
 		var caps [2][3]loftFaceInterval
 		for index, mapped := range [...]loftFaceMap{trim.maps[1], trim.maps[2]} {
-			first := mapped.at(lfF(a.U), lfF(a.V))
-			second := mapped.at(lfF(z.U), lfF(z.V))
+			first := mapped.At(lfF(a.U), lfF(a.V))
+			second := mapped.At(lfF(z.U), lfF(z.V))
 			for axis := range 3 {
 				minimum, maximum := first[axis], second[axis]
 				if minimum.Cmp(maximum) > 0 {
 					minimum, maximum = maximum, minimum
 				}
 				caps[index][axis] = loftFaceInterval{
-					lfSub(minimum, lfF(departure)), lfAdd(maximum, lfF(departure))}
+					Lo: lfSub(minimum, lfF(departure)), Hi: lfAdd(maximum, lfF(departure))}
 			}
 		}
 		var point, delta [3]loftFaceInterval
 		for axis := range 3 {
-			point[axis] = lfIntervalHull(caps[0][axis], caps[1][axis])
-			delta[axis] = lfIntervalSub(caps[1][axis], caps[0][axis])
+			point[axis] = loftface.IntervalHull(caps[0][axis], caps[1][axis])
+			delta[axis] = loftface.IntervalSub(caps[1][axis], caps[0][axis])
 		}
-		radius := lfIntervalSub(loftFaceInterval{capC, capC}, point[0])
-		if radius.lo.Sign() <= 0 || point[1].lo.Sign() <= 0 {
+		radius := loftface.IntervalSub(loftFaceInterval{Lo: capC, Hi: capC}, point[0])
+		if radius.Lo.Sign() <= 0 || point[1].Lo.Sign() <= 0 {
 			return false, nil
 		}
 		halfDerivative := spiralHeelIntervalAdd(spiralHeelIntervalAdd(
 			spiralHeelIntervalMul(point[1], delta[1]),
 			spiralHeelIntervalMul(point[2], delta[2])),
 			spiralHeelIntervalMul(radius, delta[0]))
-		if halfDerivative.lo.Cmp(big.NewRat(10, 1)) <= 0 {
+		if halfDerivative.Lo.Cmp(big.NewRat(10, 1)) <= 0 {
 			return false, nil
 		}
 		count++
@@ -164,11 +165,11 @@ func spiralToeRootCells(ctx context.Context, trim *loftFacesTrimRecord,
 func spiralToeEndpointBox(ctx context.Context, first, second loftFaceMap,
 	point Point2, capC, charge *big.Rat) ([3]loftFaceInterval, bool, error) {
 	var empty [3]loftFaceInterval
-	a := first.at(lfF(point.U), lfF(point.V))
-	b := second.at(lfF(point.U), lfF(point.V))
-	delta := lfVSub(b, a)
+	a := first.At(lfF(point.U), lfF(point.V))
+	b := second.At(lfF(point.U), lfF(point.V))
+	delta := loftface.VSub(b, a)
 	at := func(t *big.Rat) loftFaceRatVec {
-		return lfVAdd(a, lfVScale(delta, t))
+		return loftface.VAdd(a, loftface.VScale(delta, t))
 	}
 	q := func(t *big.Rat) *big.Rat {
 		p := at(t)
@@ -199,7 +200,7 @@ func spiralToeEndpointBox(ctx context.Context, first, second loftFaceMap,
 		if minValue.Cmp(maxValue) > 0 {
 			minValue, maxValue = maxValue, minValue
 		}
-		out[axis] = loftFaceInterval{lfSub(minValue, charge), lfAdd(maxValue, charge)}
+		out[axis] = loftFaceInterval{Lo: lfSub(minValue, charge), Hi: lfAdd(maxValue, charge)}
 	}
 	return out, true, nil
 }
@@ -271,13 +272,13 @@ func certifySpiralToeRootSeam(ctx context.Context,
 	}
 	coordCharge, slopeCharge := big.NewRat(1, 10_000_000_000), big.NewRat(1, 1_000_000_000)
 	seam := &spiralToeRootSeam{
-		x:        loftFaceInterval{lfSub(idealXLo, coordCharge), lfAdd(idealXHi, coordCharge)},
-		slope:    loftFaceInterval{lfSub(idealSLo, slopeCharge), lfAdd(idealSHi, slopeCharge)},
+		x:        loftFaceInterval{Lo: lfSub(idealXLo, coordCharge), Hi: lfAdd(idealXHi, coordCharge)},
+		slope:    loftFaceInterval{Lo: lfSub(idealSLo, slopeCharge), Hi: lfAdd(idealSHi, slopeCharge)},
 		coneC:    capC,
 		negative: negative,
 	}
-	if seam.x.lo.Cmp(lfF(proof.blank.toeRoot.U)) <= 0 ||
-		seam.x.hi.Cmp(lfF(proof.blank.toeOuter.U)) >= 0 {
+	if seam.x.Lo.Cmp(lfF(proof.blank.toeRoot.U)) <= 0 ||
+		seam.x.Hi.Cmp(lfF(proof.blank.toeOuter.U)) >= 0 {
 		return nil, false, nil
 	}
 	for end, point := range [...]Point2{arc.Start, arc.End} {
@@ -287,9 +288,9 @@ func certifySpiralToeRootSeam(ctx context.Context,
 			return nil, false, err
 		}
 		ratio, yes := spiralHeelRatio(endpoint)
-		if !yes || endpoint[0].lo.Cmp(seam.x.lo) <= 0 ||
-			endpoint[0].hi.Cmp(seam.x.hi) >= 0 ||
-			ratio.lo.Cmp(seam.slope.lo) <= 0 || ratio.hi.Cmp(seam.slope.hi) >= 0 {
+		if !yes || endpoint[0].Lo.Cmp(seam.x.Lo) <= 0 ||
+			endpoint[0].Hi.Cmp(seam.x.Hi) >= 0 ||
+			ratio.Lo.Cmp(seam.slope.Lo) <= 0 || ratio.Hi.Cmp(seam.slope.Hi) >= 0 {
 			return nil, false, nil
 		}
 		seam.ends[end] = endpoint

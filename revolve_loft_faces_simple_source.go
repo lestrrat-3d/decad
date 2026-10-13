@@ -175,14 +175,14 @@ func revolveLoftFacesSimpleBezier(segment, spanIndex int,
 	}
 	for axis := range 2 {
 		value := revolveLoftFacesSimpleCoordinate(span[0], axis)
-		cell.box[axis] = loftFaceInterval{lo: value, hi: value}
+		cell.box[axis] = loftFaceInterval{Lo: value, Hi: value}
 		for _, point := range span[1:] {
 			value = revolveLoftFacesSimpleCoordinate(point, axis)
-			if value.Cmp(cell.box[axis].lo) < 0 {
-				cell.box[axis].lo = value
+			if value.Cmp(cell.box[axis].Lo) < 0 {
+				cell.box[axis].Lo = value
 			}
-			if value.Cmp(cell.box[axis].hi) > 0 {
-				cell.box[axis].hi = value
+			if value.Cmp(cell.box[axis].Hi) > 0 {
+				cell.box[axis].Hi = value
 			}
 		}
 	}
@@ -217,8 +217,8 @@ func revolveLoftFacesSimpleCoordinate(point freeform.RatPoint, axis int) *big.Ra
 
 func revolveLoftFacesSimpleSeparated(a, b revolveLoftFacesSimpleCell) bool {
 	for axis := range 2 {
-		if a.box[axis].hi.Cmp(b.box[axis].lo) < 0 ||
-			b.box[axis].hi.Cmp(a.box[axis].lo) < 0 {
+		if a.box[axis].Hi.Cmp(b.box[axis].Lo) < 0 ||
+			b.box[axis].Hi.Cmp(a.box[axis].Lo) < 0 {
 			return true
 		}
 	}
@@ -247,11 +247,11 @@ func revolveLoftFacesSimpleCellSide(cell revolveLoftFacesSimpleCell,
 		return revolveLoftFacesSimpleArcSide(*cell.arc, axis, contact, side)
 	}
 	if side < 0 {
-		return cell.box[axis].hi.Cmp(contact) == 0 &&
-			cell.box[axis].lo.Cmp(contact) < 0
+		return cell.box[axis].Hi.Cmp(contact) == 0 &&
+			cell.box[axis].Lo.Cmp(contact) < 0
 	}
-	return cell.box[axis].lo.Cmp(contact) == 0 &&
-		cell.box[axis].hi.Cmp(contact) > 0
+	return cell.box[axis].Lo.Cmp(contact) == 0 &&
+		cell.box[axis].Hi.Cmp(contact) > 0
 }
 
 // A short circular arc that alone passes an axis extremum determines which
@@ -274,9 +274,9 @@ func revolveLoftFacesSimplePositiveOrientation(cells []revolveLoftFacesSimpleCel
 						continue
 					}
 					if side < 0 {
-						outermost = outermost && other.box[axis].lo.Cmp(contact) >= 0
+						outermost = outermost && other.box[axis].Lo.Cmp(contact) >= 0
 					} else {
-						outermost = outermost && other.box[axis].hi.Cmp(contact) <= 0
+						outermost = outermost && other.box[axis].Hi.Cmp(contact) <= 0
 					}
 				}
 				if outermost {

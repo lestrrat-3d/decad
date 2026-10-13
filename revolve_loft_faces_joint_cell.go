@@ -26,7 +26,7 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 	atEnd bool, root revolveLoftFacesEndpointRoot) (revolveLoftFacesJointCell, bool) {
 	var empty revolveLoftFacesJointCell
 	if trim == nil || band < 0 || band+1 >= len(trim.maps) ||
-		root.time.lo == nil || root.time.hi == nil {
+		root.time.Lo == nil || root.time.Hi == nil {
 		return empty, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
@@ -40,11 +40,11 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 		polynomial.BernsteinValue(q[1], endpoint),
 		polynomial.BernsteinValue(q[2], endpoint),
 	}
-	loSign, hiSign := polynomial.BernsteinSign(endQ, root.time.lo),
-		polynomial.BernsteinSign(endQ, root.time.hi)
-	if root.time.lo.Cmp(root.time.hi) == 0 {
+	loSign, hiSign := polynomial.BernsteinSign(endQ, root.time.Lo),
+		polynomial.BernsteinSign(endQ, root.time.Hi)
+	if root.time.Lo.Cmp(root.time.Hi) == 0 {
 		if loSign != 0 ||
-			polynomial.BernsteinSign(polynomial.BernsteinDeriv(endQ), root.time.lo) != root.direction {
+			polynomial.BernsteinSign(polynomial.BernsteinDeriv(endQ), root.time.Lo) != root.direction {
 			return empty, false
 		}
 	} else if loSign != -root.direction || hiSign != root.direction {
@@ -61,7 +61,7 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 			sLo, sHi = lfSub(lfOne(), width), lfOne()
 		}
 		box := polynomial.BernsteinRectRestrict(q, sLo, sHi,
-			root.time.lo, root.time.hi)
+			root.time.Lo, root.time.Hi)
 
 		var derivative [3][]*big.Rat
 		for row := range box {
@@ -90,7 +90,7 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 				outerLo, outerHi = sHi, lfOne()
 			}
 			outer := polynomial.BernsteinRectRestrict(q, outerLo, outerHi,
-				root.time.lo, root.time.hi)
+				root.time.Lo, root.time.Hi)
 
 			if fixedSide > 0 && !polynomial.BernsteinRowsPositive(outer) ||
 				fixedSide < 0 && !polynomial.BernsteinRowsPositive(revolveLoftFacesNegateRows(outer)) {
@@ -98,9 +98,9 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 			}
 		}
 		x, ok := revolveLoftFacesSpanXRange(trim.maps[band], trim.maps[band+1],
-			span, sLo, sHi, root.time.lo, root.time.hi)
-		if !ok || root.finite && (x.lo.Cmp(startX) <= 0 || x.hi.Cmp(endX) >= 0) ||
-			!root.finite && x.hi.Cmp(startX) >= 0 && x.lo.Cmp(endX) <= 0 {
+			span, sLo, sHi, root.time.Lo, root.time.Hi)
+		if !ok || root.finite && (x.Lo.Cmp(startX) <= 0 || x.Hi.Cmp(endX) >= 0) ||
+			!root.finite && x.Hi.Cmp(startX) >= 0 && x.Lo.Cmp(endX) <= 0 {
 			continue
 		}
 		return revolveLoftFacesJointCell{sLo: sLo, sHi: sHi,

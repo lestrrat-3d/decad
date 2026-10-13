@@ -48,8 +48,8 @@ func certifyRevolveLoftFacesRadialJoint(ctx context.Context, trim *loftFacesTrim
 	if vertex.fitAtEnd {
 		index = len(q[0]) - 1
 	}
-	g0 := trim.maps[band].denominator(vertex.coordinate[0], vertex.coordinate[1])
-	g1 := trim.maps[band+1].denominator(vertex.coordinate[0], vertex.coordinate[1])
+	g0 := trim.maps[band].Denominator(vertex.coordinate[0], vertex.coordinate[1])
+	g1 := trim.maps[band+1].Denominator(vertex.coordinate[0], vertex.coordinate[1])
 	if g0.Sign() <= 0 || g1.Sign() <= 0 {
 		return empty, false
 	}
@@ -61,7 +61,7 @@ func certifyRevolveLoftFacesRadialJoint(ctx context.Context, trim *loftFacesTrim
 		}
 	}
 	for capIndex, mapped := range [...]loftFaceMap{trim.maps[band], trim.maps[band+1]} {
-		if mapped.at(vertex.coordinate[0], vertex.coordinate[1])[0].Cmp(radial.x[capIndex]) != 0 {
+		if mapped.At(vertex.coordinate[0], vertex.coordinate[1])[0].Cmp(radial.x[capIndex]) != 0 {
 			return empty, false
 		}
 	}
@@ -99,30 +99,30 @@ func revolveLoftFacesPartitionTime(q [3]*big.Rat,
 	pieces := make([]revolveLoftFacesTimePiece, 0, 2*len(roots)+1)
 	previous := lfZero()
 	for index, root := range roots {
-		if root.time.lo == nil || root.time.hi == nil ||
-			root.time.lo.Cmp(previous) <= 0 || root.time.hi.Cmp(root.time.lo) < 0 ||
-			root.time.hi.Cmp(lfOne()) >= 0 || root.direction == 0 {
+		if root.time.Lo == nil || root.time.Hi == nil ||
+			root.time.Lo.Cmp(previous) <= 0 || root.time.Hi.Cmp(root.time.Lo) < 0 ||
+			root.time.Hi.Cmp(lfOne()) >= 0 || root.direction == 0 {
 			return nil, false
 		}
-		atLo, atHi := polynomial.BernsteinSign(coeff, root.time.lo),
-			polynomial.BernsteinSign(coeff, root.time.hi)
-		if root.time.lo.Cmp(root.time.hi) == 0 {
+		atLo, atHi := polynomial.BernsteinSign(coeff, root.time.Lo),
+			polynomial.BernsteinSign(coeff, root.time.Hi)
+		if root.time.Lo.Cmp(root.time.Hi) == 0 {
 			if atLo != 0 {
 				return nil, false
 			}
 		} else if atLo != -root.direction || atHi != root.direction {
 			return nil, false
 		}
-		side := polynomial.BernsteinSign(coeff, lfMul(lfAdd(previous, root.time.lo), big.NewRat(1, 2)))
+		side := polynomial.BernsteinSign(coeff, lfMul(lfAdd(previous, root.time.Lo), big.NewRat(1, 2)))
 		if side == 0 || side != -root.direction {
 			return nil, false
 		}
 		pieces = append(pieces, revolveLoftFacesTimePiece{
-			lo: previous, hi: root.time.lo, loOpen: index != 0,
+			lo: previous, hi: root.time.Lo, loOpen: index != 0,
 			hiOpen: true, side: side, rootIndex: -1})
 		pieces = append(pieces, revolveLoftFacesTimePiece{
-			lo: root.time.lo, hi: root.time.hi, rootIndex: index})
-		previous = root.time.hi
+			lo: root.time.Lo, hi: root.time.Hi, rootIndex: index})
+		previous = root.time.Hi
 	}
 	side := polynomial.BernsteinSign(coeff, lfMul(lfAdd(previous, lfOne()), big.NewRat(1, 2)))
 	if side == 0 || side != roots[len(roots)-1].direction {

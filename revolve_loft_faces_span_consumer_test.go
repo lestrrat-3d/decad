@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
@@ -30,12 +31,12 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		crossing := proof.crossings[0]
 		first, last := trim.maps[0], trim.maps[1]
 		wantQ := spiralRootPolynomialRef(first, last, crossing.span, proof.rootM, proof.rootB)
-		gotQ := loftFacesMeridianQRows(first, last, crossing.span, proof.rootM, proof.rootB)
+		gotQ := loftface.MeridianQRows(first, last, crossing.span, proof.rootM, proof.rootB)
 		for i := range gotQ {
 			requireSameRows(t, wantQ[i], gotQ[i])
 		}
 		wantJ := spiralRootXOrderRef(first, last, crossing.span, wantQ)
-		gotJ := loftFacesMeridianJRows(first, last, crossing.span, gotQ)
+		gotJ := loftface.MeridianJRows(first, last, crossing.span, gotQ)
 		for i := range gotJ {
 			requireSameRows(t, wantJ[i], gotJ[i])
 		}

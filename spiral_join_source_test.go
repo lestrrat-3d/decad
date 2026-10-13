@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/stretchr/testify/require"
 )
@@ -22,24 +23,24 @@ func TestSpiralRootTubePropagatesCancellation(t *testing.T) {
 func TestSpiralCapPlaneMustMissTheWholeRootCircle(t *testing.T) {
 	box := [4]*big.Rat{big.NewRat(-1, 1), big.NewRat(1, 1),
 		big.NewRat(-1, 1), big.NewRat(1, 1)}
-	corners := lfBoxCorners(box)
+	corners := loftface.BoxCorners(box)
 	capMap := loftFaceMap{
-		constant: loftFaceRatVec{lfZero(), lfZero(), lfZero()},
-		q0:       loftFaceRatVec{lfZero(), big.NewRat(1, 1), lfZero()},
-		qu:       loftFaceRatVec{lfOne(), lfZero(), lfZero()},
-		qv:       loftFaceRatVec{lfZero(), lfZero(), lfOne()},
-		g0:       lfOne(), gu: lfZero(), gv: lfZero(),
+		Constant: loftFaceRatVec{lfZero(), lfZero(), lfZero()},
+		Q0:       loftFaceRatVec{lfZero(), big.NewRat(1, 1), lfZero()},
+		QU:       loftFaceRatVec{lfOne(), lfZero(), lfZero()},
+		QV:       loftFaceRatVec{lfZero(), lfZero(), lfOne()},
+		G0:       lfOne(), GU: lfZero(), GV: lfZero(),
 	}
 	m, b, x := lfZero(), lfOne(), lfZero()
 	require.False(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"a tangent cap can meet the circle")
-	capMap.q0[1] = lfAdd(capMap.q0[1], big.NewRat(1, 1<<50))
+	capMap.Q0[1] = lfAdd(capMap.Q0[1], big.NewRat(1, 1<<50))
 	require.True(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"an exact sub-femtometre gap still separates the full cap")
-	capMap.q0[1] = lfZero()
+	capMap.Q0[1] = lfZero()
 	require.False(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"a cap crossing the circle must refuse")
-	capMap.qu = loftFaceRatVec{lfZero(), lfZero(), lfZero()}
+	capMap.QU = loftFaceRatVec{lfZero(), lfZero(), lfZero()}
 	require.False(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"a collapsed cap has no supporting plane")
 }
@@ -203,4 +204,74 @@ func TestSpiralRootRowsMatchReference(t *testing.T) {
 			requireSameRows(t, wantX[i], gotX[i])
 		}
 	}
+}
+
+// spiralRootTube encloses the one true flank/root crossing branch over a
+// caller-specified exact X strip. J>0 orders its two endpoint cuts in band
+// time. Bernstein signs enclose every intermediate source parameter before
+// the rational cap maps enclose the entire resulting ruled strip.
+func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
+	xLo, xHi *big.Rat) ([3]loftFaceInterval, bool, error) {
+	var empty [3]loftFaceInterval
+	if ctx == nil {
+		return empty, false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return empty, false, err
+	}
+	if proof == nil || side < 0 || side >= len(proof.flank) ||
+		xLo == nil || xHi == nil || xLo.Cmp(xHi) >= 0 {
+		return empty, false, nil
+	}
+	span := proof.flank[side]
+	low, ok := spiralIsolateJunction(ctx, proof.tooth.maps, span,
+		proof.rootM, proof.rootB, proof.crossings[side], xLo)
+	if !ok {
+		return empty, false, ctx.Err()
+	}
+	high, ok := spiralIsolateJunction(ctx, proof.tooth.maps, span,
+		proof.rootM, proof.rootB, proof.crossings[side], xHi)
+	if !ok || low.band != high.band || low.tHi.Cmp(high.tLo) >= 0 {
+		return empty, false, ctx.Err()
+	}
+	band := low.band
+	q := spiralRootPolynomial(proof.tooth.maps[band], proof.tooth.maps[band+1],
+		span, proof.rootM, proof.rootB)
+	sLo, sHi := lfZero(), lfOne()
+	if !spiralJunctionRootBracket(q, sLo, sHi, low.tLo, high.tHi) {
+		return empty, false, ctx.Err()
+	}
+	for step := range 64 {
+		if step%8 == 0 && ctx.Err() != nil {
+			return empty, false, ctx.Err()
+		}
+		mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
+		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, high.tHi, -1) {
+			sLo = mid
+			continue
+		}
+		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, high.tHi, 1) {
+			sHi = mid
+			continue
+		}
+		break
+	}
+	box, ok := spiralJunctionBox(proof.tooth.maps[band], proof.tooth.maps[band+1],
+		span, sLo, sHi, low.tLo, high.tHi)
+	if err := ctx.Err(); err != nil {
+		return empty, false, err
+	}
+	if !ok || box[0].Lo.Cmp(xLo) > 0 || box[0].Hi.Cmp(xHi) < 0 {
+		return empty, false, nil
+	}
+	box[0] = loftFaceInterval{Lo: xLo, Hi: xHi}
+	return box, true, nil
+}
+
+// Draws a random loftFaceMap for the gate comparison.
+func randomGateMap(rng *rand.Rand) loftFaceMap {
+	f := func(scale float64) *big.Rat { return lfF((rng.Float64()*2 - 1) * scale) }
+	vec := func(scale float64) loftFaceRatVec { return loftFaceRatVec{f(scale), f(scale), f(scale)} }
+	return loftFaceMap{Constant: vec(10), Q0: vec(5), QU: vec(2), QV: vec(2),
+		G0: lfF(3 + rng.Float64()), GU: f(0.3), GV: f(0.3), Stretch: 1}
 }

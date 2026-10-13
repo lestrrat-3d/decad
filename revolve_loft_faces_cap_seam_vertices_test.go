@@ -47,8 +47,8 @@ func TestCurvedHeelCapEndpointsHaveSourceBounds(t *testing.T) {
 			require.NoError(t, mutationErr)
 			require.False(t, accepted)
 			changedBox := *pair.toolArc
-			changedBox.negativeZ.box[1].lo = lfAdd(
-				changedBox.negativeZ.box[1].lo, big.NewRat(1, 1<<20))
+			changedBox.negativeZ.box[1].Lo = lfAdd(
+				changedBox.negativeZ.box[1].Lo, big.NewRat(1, 1<<20))
 			_, accepted, mutationErr = revolveLoftFacesCapArcSeamVertices(
 				t.Context(), proof, &changedBox)
 			require.NoError(t, mutationErr)

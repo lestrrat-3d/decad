@@ -67,8 +67,8 @@ func revolveLoftFacesEndpointPartitionCells(ctx context.Context,
 				return nil, false, nil
 			}
 			rootCell := jointCells[piece.rootIndex]
-			if rootCell.time.lo == nil || rootCell.time.lo.Cmp(piece.lo) != 0 ||
-				rootCell.time.hi.Cmp(piece.hi) != 0 {
+			if rootCell.time.Lo == nil || rootCell.time.Lo.Cmp(piece.lo) != 0 ||
+				rootCell.time.Hi.Cmp(piece.hi) != 0 {
 				return nil, false, nil
 			}
 			makeCell := func(side int, sLo, sHi *big.Rat) revolveLoftFacesMappedCell {

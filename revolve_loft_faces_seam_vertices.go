@@ -30,9 +30,9 @@ func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFac
 ) ([]revolveLoftFacesSeamVertex, bool, error) {
 	if ctx == nil || trim == nil || trim.source == nil ||
 		band < 0 || band+1 >= len(trim.maps) || len(stations) < 2 ||
-		root.lo == nil || root.hi == nil || section.start.U == section.end.U ||
+		root.Lo == nil || root.Hi == nil || section.start.U == section.end.U ||
 		section.start.V <= 0 || section.end.V <= 0 ||
-		root.lo.Sign() < 0 || root.hi.Cmp(lfOne()) > 0 || root.lo.Cmp(root.hi) > 0 ||
+		root.Lo.Sign() < 0 || root.Hi.Cmp(lfOne()) > 0 || root.Lo.Cmp(root.Hi) > 0 ||
 		proofbound.IsNonFinite(trim.source.sourceStationRound) ||
 		trim.source.sourceStationRound < 0 {
 		return nil, false, nil
@@ -46,7 +46,7 @@ func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFac
 	if xLo.Cmp(xHi) > 0 {
 		xLo, xHi = xHi, xLo
 	}
-	stretch := max(first.stretch, last.stretch)
+	stretch := max(first.Stretch, last.Stretch)
 	if proofbound.IsNonFinite(stretch) || stretch < 0 {
 		return nil, false, nil
 	}
@@ -54,8 +54,8 @@ func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFac
 	if proofbound.IsNonFinite(stationBound) {
 		return nil, false, nil
 	}
-	mid := lfDiv(lfAdd(root.lo, root.hi), big.NewRat(2, 1))
-	halfWidth := lfSub(mid, root.lo)
+	mid := lfDiv(lfAdd(root.Lo, root.Hi), big.NewRat(2, 1))
+	halfWidth := lfSub(mid, root.Lo)
 	seen := make(map[int]struct{}, len(stations))
 	vertices := make([]revolveLoftFacesSeamVertex, 0, len(stations))
 	for _, stationIndex := range stations {
@@ -71,8 +71,8 @@ func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFac
 		seen[stationIndex] = struct{}{}
 		station := trim.source.sourceStation[stationIndex]
 		u, v := lfF(station.U), lfF(station.V)
-		a, z := first.at(u, v), last.at(u, v)
-		for _, time := range []*big.Rat{root.lo, root.hi} {
+		a, z := first.At(u, v), last.At(u, v)
+		for _, time := range []*big.Rat{root.Lo, root.Hi} {
 			x := lfAdd(a[0], lfMul(time, lfSub(z[0], a[0])))
 			if x.Cmp(xLo) <= 0 || x.Cmp(xHi) >= 0 {
 				return nil, false, nil

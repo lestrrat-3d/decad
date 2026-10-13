@@ -43,8 +43,8 @@ func TestMappedRadialJointExactRootBoundary(t *testing.T) {
 	q := [3]*big.Rat{big.NewRat(-1, 1), big.NewRat(0, 1), big.NewRat(1, 1)}
 	rows := [3][]*big.Rat{{q[0]}, {q[1]}, {q[2]}}
 	roots, ok := revolveLoftFacesEndpointTimeRoots(rows, false)
-	if !ok || len(roots) != 1 || roots[0].time.lo.Cmp(big.NewRat(1, 2)) != 0 ||
-		roots[0].time.hi.Cmp(big.NewRat(1, 2)) != 0 {
+	if !ok || len(roots) != 1 || roots[0].time.Lo.Cmp(big.NewRat(1, 2)) != 0 ||
+		roots[0].time.Hi.Cmp(big.NewRat(1, 2)) != 0 {
 		t.Fatalf("expected an exact dyadic root, got %+v, %t", roots, ok)
 	}
 	pieces, ok := revolveLoftFacesPartitionTime(q, roots)

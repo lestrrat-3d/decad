@@ -47,6 +47,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/loopscene/` | Closed-loop sketch scenes. See linkage §15.2. |
 | `internal/linkagebound/loopchain/` | Sketch loop enclosures. See linkage §15. |
 | `internal/polynomial/` | Exact polynomial arithmetic and root brackets, and exact Bernstein rows: values, signs, splits, restrictions, products and integer-row chains. |
+| `internal/loftface/` | LoftFaces exact cap maps, rational vectors and intervals, the band injectivity gate and meridian Bernstein rows. See loft-face-sections design. |
 | `internal/freeform/` | Free-form curve proofs. |
 | `internal/meshbool/` | Pair chord inputs, mesh boolean contact, subdivision, stitching, embedding, exact similarity images and audits. See evaluator §9. |
 | `internal/pointquery/` | Exact point-to-mesh distance and the occupied-volume transfer proof. See point-containment design. |
