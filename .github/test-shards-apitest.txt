@@ -1977,3 +1977,5 @@
 10	0.00	TestTwistedSweepRoundedShellVerifyAll
 10	0.00	TestTwistedSweepRoundedPlacedShellVerifyAll
 10	0.00	TestTwistedSweepRoundedPlacedShellRefusalsAreAtomic
+10	0.00	TestSweepLineFilletSingleTopCapEdgeVerified
+10	0.00	TestSweepLineFilletPlacedBottomCapEdgeVerified
