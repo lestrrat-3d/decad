@@ -844,7 +844,7 @@ Feature tests cover every example model and operation. Repeated construction
 preserves live-body order and provenance roles. Later evaluators may build a
 different topology split but must preserve role/query meaning.
 
-### Positive uniform scale of a line or circular prism
+### Positive uniform scale of a prism or full Revolve
 
 `Body.ScaledAt` admits a solid `prismPayload` whose outer and hole loops contain
 only whole `LineSeg`, `CircleSeg`, and `ArcSeg` records and whose section and
@@ -860,7 +860,7 @@ room for source chording after scale and held-vertex rounding; an unrepresentabl
 target refuses. A later scale of the faceted result does not rechord it, so a
 caller may need a tolerance above the accumulated `Mesh.Bound()`.
 
-The verified prism mesh already has shared-edge, closed and embedded topology.
+The verified source mesh already has shared-edge, closed and embedded topology.
 A positive similarity preserves its exact topology. `facetproof.ScaleMesh`
 maps every held vertex through an exact rational similarity, audits the rounded
 image for embedding, multiplies each source vertex displacement by the scale
@@ -876,6 +876,17 @@ The source-face groups keep their origin roles; each planar frame's origin is
 scaled around the caller's anchor. A circular source wall becomes a `Faceted`
 face with the inherited boundary bound; this path has no scaled curved-normal
 certificate. The result is not a new `prismPayload`.
+
+A complete solid `revolvePayload` with zero section displacement takes the same
+transfer after its own `Tessellate(VerifyAll)` proves boundary and occupied
+volume. Its initial chord is `nextafter(0.05/max(1, factor), 0)` mm. The mesh
+keeps each source face's origin roles. Planar faces keep scaled plane tags;
+curved faces publish `Faceted`, including a sphere's one face with no edge or
+loop. The faceted topology builder admits that zero-boundary case only for a
+closed, edge-connected, single-face mesh. That face has zero rim perimeter;
+the source mesh's proved `areaSlack`, scaled by the factor squared, covers its
+curved area difference without a rim term. Partial or sheet revolves, and any
+source without complete mesh proofs, refuse without retiring the source.
 
 The faceted payload marks this source class so a later `Transform`, `Copy` or
 `ScaledAt` can repeat the proof from its held mesh and bounds.
