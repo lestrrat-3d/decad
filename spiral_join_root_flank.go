@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -47,11 +48,11 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 			}
 		}
 		mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
-		if spiralRootTSign(q, mid, low.tLo, lfOne(), -1) {
+		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, lfOne(), -1) {
 			sLo = mid
 			continue
 		}
-		if spiralRootTSign(q, mid, low.tLo, lfOne(), 1) {
+		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, lfOne(), 1) {
 			sHi = mid
 			continue
 		}
@@ -136,8 +137,8 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 		if !spiralJunctionRootBracket(q, lfZero(), lfOne(), a, z) {
 			return 0, false, nil
 		}
-		rootA := spiralIsolateRootN(spiralRootAtBandT(q, a), 64)
-		rootZ := spiralIsolateRootN(spiralRootAtBandT(q, z), 64)
+		rootA := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, a), 64)
+		rootZ := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, z), 64)
 		xA := spiralBandXRange(first, second, span, rootA, a)
 		xZ := spiralBandXRange(first, second, span, rootZ, z)
 		if xA.hi.Cmp(xZ.lo) >= 0 {
@@ -161,11 +162,11 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 				}
 			}
 			mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
-			if spiralRootTSign(q, mid, a, z, -1) {
+			if polynomial.BernsteinRowsSignAt(q, mid, a, z, -1) {
 				sLo = mid
 				continue
 			}
-			if spiralRootTSign(q, mid, a, z, 1) {
+			if polynomial.BernsteinRowsSignAt(q, mid, a, z, 1) {
 				sHi = mid
 				continue
 			}
@@ -256,8 +257,8 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 		if !spiralJunctionRootBracket(q, lfZero(), lfOne(), a, z) {
 			return nil, false, nil
 		}
-		rootA := spiralIsolateRootN(spiralRootAtBandT(q, a), 64)
-		rootZ := spiralIsolateRootN(spiralRootAtBandT(q, z), 64)
+		rootA := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, a), 64)
+		rootZ := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, z), 64)
 		xA := spiralBandXRange(first, second, span, rootA, a)
 		xZ := spiralBandXRange(first, second, span, rootZ, z)
 		if xA.hi.Cmp(xZ.lo) >= 0 {
@@ -281,11 +282,11 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 				}
 			}
 			mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
-			if spiralRootTSign(q, mid, a, z, -1) {
+			if polynomial.BernsteinRowsSignAt(q, mid, a, z, -1) {
 				sLo = mid
 				continue
 			}
-			if spiralRootTSign(q, mid, a, z, 1) {
+			if polynomial.BernsteinRowsSignAt(q, mid, a, z, 1) {
 				sHi = mid
 				continue
 			}

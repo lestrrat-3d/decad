@@ -3,6 +3,8 @@ package decad
 import (
 	"context"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
 // A radial joint is one authenticated Sketch fit/arc adjacency mapped through
@@ -102,8 +104,8 @@ func revolveLoftFacesPartitionTime(q [3]*big.Rat,
 			root.time.hi.Cmp(lfOne()) >= 0 || root.direction == 0 {
 			return nil, false
 		}
-		atLo, atHi := spiralBernSign(coeff, root.time.lo),
-			spiralBernSign(coeff, root.time.hi)
+		atLo, atHi := polynomial.BernsteinSign(coeff, root.time.lo),
+			polynomial.BernsteinSign(coeff, root.time.hi)
 		if root.time.lo.Cmp(root.time.hi) == 0 {
 			if atLo != 0 {
 				return nil, false
@@ -111,7 +113,7 @@ func revolveLoftFacesPartitionTime(q [3]*big.Rat,
 		} else if atLo != -root.direction || atHi != root.direction {
 			return nil, false
 		}
-		side := spiralBernSign(coeff, lfMul(lfAdd(previous, root.time.lo), big.NewRat(1, 2)))
+		side := polynomial.BernsteinSign(coeff, lfMul(lfAdd(previous, root.time.lo), big.NewRat(1, 2)))
 		if side == 0 || side != -root.direction {
 			return nil, false
 		}
@@ -122,7 +124,7 @@ func revolveLoftFacesPartitionTime(q [3]*big.Rat,
 			lo: root.time.lo, hi: root.time.hi, rootIndex: index})
 		previous = root.time.hi
 	}
-	side := spiralBernSign(coeff, lfMul(lfAdd(previous, lfOne()), big.NewRat(1, 2)))
+	side := polynomial.BernsteinSign(coeff, lfMul(lfAdd(previous, lfOne()), big.NewRat(1, 2)))
 	if side == 0 || side != roots[len(roots)-1].direction {
 		return nil, false
 	}

@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -44,7 +45,7 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 			sign = kind
 			seenBand = true
 			if kind == revolveLoftFacesCrossed &&
-				!spiralAllPositive(spiralRootXOrder(trim.maps[band], trim.maps[band+1], span, signed)) {
+				!polynomial.BernsteinRowsPositive(spiralRootXOrder(trim.maps[band], trim.maps[band+1], span, signed)) {
 				return nil, 0, false
 			}
 		}
@@ -107,17 +108,17 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 }
 
 func revolveLoftFacesClassifyRows(q [3][]*big.Rat) (int, [3][]*big.Rat) {
-	if spiralAllPositive(q) {
+	if polynomial.BernsteinRowsPositive(q) {
 		return revolveLoftFacesOutside, q
 	}
 	negative := revolveLoftFacesNegateRows(q)
-	if spiralAllPositive(negative) {
+	if polynomial.BernsteinRowsPositive(negative) {
 		return revolveLoftFacesInside, negative
 	}
-	if spiralCrossingSigns(q) {
+	if polynomial.BernsteinRowsCross(q) {
 		return revolveLoftFacesCrossed, q
 	}
-	if spiralCrossingSigns(negative) {
+	if polynomial.BernsteinRowsCross(negative) {
 		return revolveLoftFacesCrossed, negative
 	}
 	return 2, [3][]*big.Rat{}
@@ -143,8 +144,9 @@ func revolveLoftFacesNegateRow(row []*big.Rat) []*big.Rat {
 // derivative-numerator coefficient has one strict sign, or all are zero.
 func revolveLoftFacesCapXDirection(mapped loftFaceMap, span freeform.BezierSpan) int {
 	g, h := spiralCapBern(mapped, span)
-	numerator := spiralSub(spiralMul(spiralDeriv(h[0]), g),
-		spiralMul(h[0], spiralDeriv(g)))
+	numerator := polynomial.BernsteinSub(polynomial.BernsteinMul(polynomial.BernsteinDeriv(h[0]), g),
+		polynomial.BernsteinMul(h[0], polynomial.BernsteinDeriv(g)))
+
 	negative, positive, zero := true, true, true
 	for _, coefficient := range numerator {
 		negative = negative && coefficient.Sign() < 0

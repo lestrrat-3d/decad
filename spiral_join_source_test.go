@@ -3,8 +3,11 @@ package decad
 import (
 	"context"
 	"math/big"
+	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/stretchr/testify/require"
 )
 
@@ -79,4 +82,125 @@ func TestSpiralFiniteConeSideRequiresWholeGeneratorAndFiniteTool(t *testing.T) {
 	last.U = 10
 	require.False(t, spiralFiniteConeSide(cone, first, last, 1),
 		"the admitted generator must end before the cone apex")
+}
+
+// The *Ref functions are the big.Rat formulations the integer primitives
+// replaced. The differential tests compare against them value for value.
+
+// Products of Bernstein polynomials retain exact rational coefficients.
+// The largest degree used here is 23, whose binomial weights fit int64.
+// Products of Bernstein polynomials retain exact rational coefficients.
+// The largest degree used here is 23, whose binomial weights fit int64.
+func spiralMulRef(a, b []*big.Rat) []*big.Rat {
+	n, m := len(a)-1, len(b)-1
+	out := make([]*big.Rat, n+m+1)
+	for k := range out {
+		out[k] = lfZero()
+		for i := max(0, k-m); i <= min(n, k); i++ {
+			j := k - i
+			weight := big.NewRat(spiralBinom(n, i)*spiralBinom(m, j), spiralBinom(n+m, k))
+			out[k] = lfAdd(out[k], lfMul(weight, lfMul(a[i], b[j])))
+		}
+	}
+	return out
+}
+
+func spiralBinom(n, k int) int64 {
+	if k < 0 || k > n {
+		return 0
+	}
+	if k > n-k {
+		k = n - k
+	}
+	out := int64(1)
+	for i := 1; i <= k; i++ {
+		out = out * int64(n-k+i) / int64(i)
+	}
+	return out
+}
+
+func spiralBernValueRef(coeff []*big.Rat, parameter *big.Rat) *big.Rat {
+	work := append([]*big.Rat(nil), coeff...)
+	for width := len(work); width > 1; width-- {
+		for i := 0; i+1 < width; i++ {
+			work[i] = lfAdd(lfMul(lfSub(lfOne(), parameter), work[i]),
+				lfMul(parameter, work[i+1]))
+		}
+	}
+	return work[0]
+}
+
+func spiralRootPolynomialRef(first, second loftFaceMap, span freeform.BezierSpan,
+	m, b *big.Rat) [3][]*big.Rat {
+	g0, h0 := spiralCapBern(first, span)
+	g1, h1 := spiralCapBern(second, span)
+	d := spiralMulRef(g0, g1)
+	var a, z [3][]*big.Rat
+	for axis := range a {
+		a[axis] = spiralMulRef(h0[axis], g1)
+		z[axis] = spiralMulRef(h1[axis], g0)
+	}
+	al := polynomial.BernsteinAdd(polynomial.BernsteinScale(a[0], m), polynomial.BernsteinScale(d, b))
+	zl := polynomial.BernsteinAdd(polynomial.BernsteinScale(z[0], m), polynomial.BernsteinScale(d, b))
+	dy, dz, dl := polynomial.BernsteinSub(z[1], a[1]), polynomial.BernsteinSub(z[2], a[2]), polynomial.BernsteinSub(zl, al)
+	q0 := polynomial.BernsteinSub(polynomial.BernsteinAdd(spiralMulRef(a[1], a[1]), spiralMulRef(a[2], a[2])), spiralMulRef(al, al))
+	q1 := polynomial.BernsteinScale(polynomial.BernsteinSub(polynomial.BernsteinAdd(spiralMulRef(a[1], dy), spiralMulRef(a[2], dz)),
+		spiralMulRef(al, dl)), big.NewRat(2, 1))
+	q2 := polynomial.BernsteinSub(polynomial.BernsteinAdd(spiralMulRef(dy, dy), spiralMulRef(dz, dz)), spiralMulRef(dl, dl))
+	return [3][]*big.Rat{q0, polynomial.BernsteinAdd(q0, polynomial.BernsteinScale(q1, big.NewRat(1, 2))),
+		polynomial.BernsteinAdd(polynomial.BernsteinAdd(q0, q1), q2)}
+}
+
+func spiralRootXOrderRef(first, second loftFaceMap, span freeform.BezierSpan,
+	q [3][]*big.Rat) [3][]*big.Rat {
+	g0, h0 := spiralCapBern(first, span)
+	g1, h1 := spiralCapBern(second, span)
+	d := spiralMulRef(g0, g1)
+	a, z := spiralMulRef(h0[0], g1), spiralMulRef(h1[0], g0)
+	b := polynomial.BernsteinSub(z, a)
+	bd := spiralMulRef(b, d)
+	u0 := polynomial.BernsteinSub(spiralMulRef(polynomial.BernsteinDeriv(a), d), spiralMulRef(a, polynomial.BernsteinDeriv(d)))
+	u1 := polynomial.BernsteinSub(spiralMulRef(polynomial.BernsteinDeriv(b), d), spiralMulRef(b, polynomial.BernsteinDeriv(d)))
+	q0 := q[0]
+	q1 := polynomial.BernsteinScale(polynomial.BernsteinSub(q[1], q[0]), big.NewRat(2, 1))
+	q2 := polynomial.BernsteinAdd(polynomial.BernsteinSub(q[2], polynomial.BernsteinScale(q[1], big.NewRat(2, 1))), q[0])
+	j0 := polynomial.BernsteinSub(spiralMulRef(bd, polynomial.BernsteinDeriv(q0)), spiralMulRef(u0, q1))
+	j1 := polynomial.BernsteinSub(spiralMulRef(bd, polynomial.BernsteinDeriv(q1)),
+		polynomial.BernsteinAdd(polynomial.BernsteinScale(spiralMulRef(u0, q2), big.NewRat(2, 1)), spiralMulRef(u1, q1)))
+	j2 := polynomial.BernsteinSub(spiralMulRef(bd, polynomial.BernsteinDeriv(q2)),
+		polynomial.BernsteinScale(spiralMulRef(u1, q2), big.NewRat(2, 1)))
+	return [3][]*big.Rat{j0, polynomial.BernsteinAdd(j0, polynomial.BernsteinScale(j1, big.NewRat(1, 2))),
+		polynomial.BernsteinAdd(polynomial.BernsteinAdd(j0, j1), j2)}
+}
+
+func requireSameRows(t *testing.T, want, got []*big.Rat) {
+	t.Helper()
+	require.Len(t, got, len(want))
+	for i := range want {
+		require.Equal(t, 0, want[i].Cmp(got[i]), "index %d", i)
+		require.Equal(t, want[i].Num().String(), got[i].Num().String())
+		require.Equal(t, want[i].Denom().String(), got[i].Denom().String())
+	}
+}
+
+func TestSpiralRootRowsMatchReference(t *testing.T) {
+	rng := rand.New(rand.NewPCG(13, 17))
+	for range 12 {
+		first, second := randomGateMap(rng), randomGateMap(rng)
+		span := make(freeform.BezierSpan, 4)
+		for i := range span {
+			span[i] = freeform.RatPoint{U: lfF(rng.Float64()*4 - 2), V: lfF(rng.Float64()*4 - 2)}
+		}
+		m, b := lfF(rng.Float64()*2-1), lfF(rng.Float64()*2-1)
+		want := spiralRootPolynomialRef(first, second, span, m, b)
+		got := spiralRootPolynomial(first, second, span, m, b)
+		for i := range want {
+			requireSameRows(t, want[i], got[i])
+		}
+		wantX := spiralRootXOrderRef(first, second, span, want)
+		gotX := spiralRootXOrder(first, second, span, got)
+		for i := range wantX {
+			requireSameRows(t, wantX[i], gotX[i])
+		}
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 )
 
@@ -62,7 +63,7 @@ func spiralShortCapTBracket(q [3][]*big.Rat) (loftFaceInterval, bool) {
 	lo, hi := big.NewRat(15, 16), lfOne()
 	for range 64 {
 		mid := lfMul(lfAdd(lo, hi), big.NewRat(1, 2))
-		coeff := spiralRootAtBandT(q, mid)
+		coeff := polynomial.BernsteinRowsAt(q, mid)
 		negative, positive := true, true
 		for _, value := range coeff {
 			negative = negative && value.Sign() < 0
@@ -150,7 +151,7 @@ func spiralShortCubicBox(ctx context.Context, first, second loftFaceMap,
 		right := lfAdd(left, width)
 		var restricted [3][]*big.Rat
 		for row := range restricted {
-			restricted[row] = spiralBernRestrict(q[row], left, right)
+			restricted[row] = polynomial.BernsteinRestrict(q[row], left, right)
 		}
 		t, ok := spiralShortCapTBracket(restricted)
 		if !ok {
@@ -374,7 +375,7 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 					// that root for every X after their shared start.
 					q := spiralRootPolynomial(proof.tooth.maps[band],
 						proof.tooth.maps[band+1], span, proof.rootM, proof.rootB)
-					if !spiralAllPositive(q) {
+					if !polynomial.BernsteinRowsPositive(q) {
 						return out, false, nil
 					}
 					continue

@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -221,9 +222,9 @@ func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 	}
 	order := loftFacesMeridianJRows(first, last, span, signed)
 	switch {
-	case spiralAllPositive(order):
+	case polynomial.BernsteinRowsPositive(order):
 		cell.xDirection = 1
-	case spiralAllPositive(revolveLoftFacesNegateRows(order)):
+	case polynomial.BernsteinRowsPositive(revolveLoftFacesNegateRows(order)):
 		cell.xDirection = -1
 	default:
 		return cell, false
@@ -337,16 +338,17 @@ func revolveLoftFacesSpanXRange(first, last loftFaceMap, span freeform.BezierSpa
 	}
 	g0, h0 := spiralCapBern(first, span)
 	g1, h1 := spiralCapBern(last, span)
-	denominator := spiralBernRestrict(spiralMul(g0, g1), sLo, sHi)
+	denominator := polynomial.BernsteinRestrict(polynomial.BernsteinMul(g0, g1), sLo, sHi)
 	denRange := revolveLoftFacesCoeffRange(denominator)
 	if denRange.lo.Sign() <= 0 {
 		return loftFaceInterval{}, false
 	}
-	firstX, lastX := spiralMul(h0[0], g1), spiralMul(h1[0], g0)
+	firstX, lastX := polynomial.BernsteinMul(h0[0], g1), polynomial.BernsteinMul(h1[0], g0)
 	at := func(t *big.Rat) loftFaceInterval {
-		numerator := spiralAdd(spiralScale(firstX, lfSub(lfOne(), t)),
-			spiralScale(lastX, t))
-		numRange := revolveLoftFacesCoeffRange(spiralBernRestrict(numerator, sLo, sHi))
+		numerator := polynomial.BernsteinAdd(polynomial.BernsteinScale(firstX, lfSub(lfOne(), t)),
+			polynomial.BernsteinScale(lastX, t))
+
+		numRange := revolveLoftFacesCoeffRange(polynomial.BernsteinRestrict(numerator, sLo, sHi))
 		var out loftFaceInterval
 		for _, valueNum := range [...]*big.Rat{numRange.lo, numRange.hi} {
 			for _, valueDen := range [...]*big.Rat{denRange.lo, denRange.hi} {
@@ -423,7 +425,7 @@ func revolveLoftFacesEndpointTimeRoots(q [3][]*big.Rat,
 		denominator := int64(1 << depth)
 		for numerator := int64(1); numerator < denominator; numerator += 2 {
 			middle := big.NewRat(numerator, denominator)
-			sign := spiralBernSign(coeff, middle)
+			sign := polynomial.BernsteinSign(coeff, middle)
 			if sign == 0 {
 				return nil, false
 			}
@@ -442,14 +444,14 @@ func revolveLoftFacesEndpointTimeRoots(q [3][]*big.Rat,
 
 func revolveLoftFacesIsolateTimeRoot(coeff []*big.Rat,
 	lo, hi *big.Rat) (revolveLoftFacesEndpointRoot, bool) {
-	loSign, hiSign := spiralBernSign(coeff, lo), spiralBernSign(coeff, hi)
+	loSign, hiSign := polynomial.BernsteinSign(coeff, lo), polynomial.BernsteinSign(coeff, hi)
 	if loSign == 0 || hiSign == 0 || loSign == hiSign {
 		return revolveLoftFacesEndpointRoot{}, false
 	}
 	direction := hiSign
 	for range 64 {
 		mid := lfMul(lfAdd(lo, hi), big.NewRat(1, 2))
-		sign := spiralBernSign(coeff, mid)
+		sign := polynomial.BernsteinSign(coeff, mid)
 		if sign == 0 {
 			return revolveLoftFacesEndpointRoot{
 				time: loftFaceInterval{lo: mid, hi: mid}, direction: direction}, true

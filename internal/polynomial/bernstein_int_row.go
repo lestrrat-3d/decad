@@ -1,24 +1,26 @@
-package decad
+package polynomial
 
 import "math/big"
 
-// bernsteinIntRow is a Bernstein coefficient row held as integer numerators over
-// one positive denominator: coefficient i is nums[i]/den. Chaining add, sub,
-// scale, deriv and mul on it defers every GCD to rats, which converts each
+// BernsteinIntRow is a Bernstein coefficient row held as integer numerators over
+// one positive denominator: coefficient i is nums[i]/den. Chaining Add, Sub,
+// Scale, Deriv and Mul on it defers every GCD to Rats, which converts each
 // coefficient once with big.Rat.SetFrac. The rational returned for a
 // coefficient is the canonical big.Rat of the same exact value, so a chain
 // computed here equals the same chain computed with big.Rat operations.
-type bernsteinIntRow struct {
+type BernsteinIntRow struct {
 	nums []*big.Int
 	den  *big.Int
 }
 
-func bernsteinIntRowOf(a []*big.Rat) bernsteinIntRow {
+// BernsteinIntRowOf returns a as an integer-numerator row.
+func BernsteinIntRowOf(a []*big.Rat) BernsteinIntRow {
 	nums, den := bernsteinIntegerRow(a)
-	return bernsteinIntRow{nums: nums, den: den}
+	return BernsteinIntRow{nums: nums, den: den}
 }
 
-func (r bernsteinIntRow) rats() []*big.Rat {
+// Rats returns the canonical big.Rat of every coefficient.
+func (r BernsteinIntRow) Rats() []*big.Rat {
 	out := make([]*big.Rat, len(r.nums))
 	for i, n := range r.nums {
 		out[i] = new(big.Rat).SetFrac(n, r.den)
@@ -28,7 +30,7 @@ func (r bernsteinIntRow) rats() []*big.Rat {
 
 // commonScale returns the factors fa, fb that bring a and b to the common
 // denominator lcm(a.den, b.den) = a.den*fa = b.den*fb.
-func (r bernsteinIntRow) commonScale(o bernsteinIntRow) (fa, fb, den *big.Int) {
+func (r BernsteinIntRow) commonScale(o BernsteinIntRow) (fa, fb, den *big.Int) {
 	var g big.Int
 	g.GCD(nil, nil, r.den, o.den)
 	fa = new(big.Int).Quo(o.den, &g)
@@ -37,10 +39,13 @@ func (r bernsteinIntRow) commonScale(o bernsteinIntRow) (fa, fb, den *big.Int) {
 	return fa, fb, den
 }
 
-func (r bernsteinIntRow) add(o bernsteinIntRow) bernsteinIntRow { return r.combine(o, 1) }
-func (r bernsteinIntRow) sub(o bernsteinIntRow) bernsteinIntRow { return r.combine(o, -1) }
+// Add is the coefficient-wise sum of r and o.
+func (r BernsteinIntRow) Add(o BernsteinIntRow) BernsteinIntRow { return r.combine(o, 1) }
 
-func (r bernsteinIntRow) combine(o bernsteinIntRow, sign int) bernsteinIntRow {
+// Sub is the coefficient-wise difference of r and o.
+func (r BernsteinIntRow) Sub(o BernsteinIntRow) BernsteinIntRow { return r.combine(o, -1) }
+
+func (r BernsteinIntRow) combine(o BernsteinIntRow, sign int) BernsteinIntRow {
 	fa, fb, den := r.commonScale(o)
 	nums := make([]*big.Int, len(r.nums))
 	var t big.Int
@@ -53,33 +58,33 @@ func (r bernsteinIntRow) combine(o bernsteinIntRow, sign int) bernsteinIntRow {
 			nums[i].Sub(nums[i], &t)
 		}
 	}
-	return bernsteinIntRow{nums: nums, den: den}
+	return BernsteinIntRow{nums: nums, den: den}
 }
 
-// scale multiplies every coefficient by k.
-func (r bernsteinIntRow) scale(k *big.Rat) bernsteinIntRow {
+// Scale multiplies every coefficient by k.
+func (r BernsteinIntRow) Scale(k *big.Rat) BernsteinIntRow {
 	nums := make([]*big.Int, len(r.nums))
 	for i, n := range r.nums {
 		nums[i] = new(big.Int).Mul(n, k.Num())
 	}
-	return bernsteinIntRow{nums: nums, den: new(big.Int).Mul(r.den, k.Denom())}
+	return BernsteinIntRow{nums: nums, den: new(big.Int).Mul(r.den, k.Denom())}
 }
 
-// deriv is the Bernstein derivative n*(a[i+1]-a[i]).
-func (r bernsteinIntRow) deriv() bernsteinIntRow {
+// Deriv is the Bernstein derivative n*(a[i+1]-a[i]).
+func (r BernsteinIntRow) Deriv() BernsteinIntRow {
 	n := big.NewInt(int64(len(r.nums) - 1))
 	nums := make([]*big.Int, len(r.nums)-1)
 	for i := range nums {
 		nums[i] = new(big.Int).Sub(r.nums[i+1], r.nums[i])
 		nums[i].Mul(nums[i], n)
 	}
-	return bernsteinIntRow{nums: nums, den: new(big.Int).Set(r.den)}
+	return BernsteinIntRow{nums: nums, den: new(big.Int).Set(r.den)}
 }
 
-// mul multiplies in the scaled basis, where the product is a convolution,
+// Mul multiplies in the scaled basis, where the product is a convolution,
 // and returns the coefficients over den(a)*den(b)*lcm(C(n+m,k)). The result
 // is divided by the common factor of its numerators and denominator.
-func (r bernsteinIntRow) mul(o bernsteinIntRow) bernsteinIntRow {
+func (r BernsteinIntRow) Mul(o BernsteinIntRow) BernsteinIntRow {
 	n, m := len(r.nums)-1, len(o.nums)-1
 	binom := bernsteinBinomials(n + m)
 	lcm := big.NewInt(1)
@@ -110,11 +115,11 @@ func (r bernsteinIntRow) mul(o bernsteinIntRow) bernsteinIntRow {
 	}
 	den := new(big.Int).Mul(r.den, o.den)
 	den.Mul(den, lcm)
-	return bernsteinIntRow{nums: nums, den: den}.reduced()
+	return BernsteinIntRow{nums: nums, den: den}.reduced()
 }
 
 // reduced divides the numerators and denominator by their common factor.
-func (r bernsteinIntRow) reduced() bernsteinIntRow {
+func (r BernsteinIntRow) reduced() BernsteinIntRow {
 	g := new(big.Int).Set(r.den)
 	for _, n := range r.nums {
 		if g.IsInt64() && g.Int64() == 1 {
@@ -129,5 +134,5 @@ func (r bernsteinIntRow) reduced() bernsteinIntRow {
 	for i, n := range r.nums {
 		nums[i] = new(big.Int).Quo(n, g)
 	}
-	return bernsteinIntRow{nums: nums, den: new(big.Int).Quo(r.den, g)}
+	return BernsteinIntRow{nums: nums, den: new(big.Int).Quo(r.den, g)}
 }

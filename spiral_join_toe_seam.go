@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -65,15 +66,19 @@ func spiralToeMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 func spiralToeIdealDerivative(ctx context.Context, p spiralHeelPolys) (bool, error) {
 	delta := [3][]*big.Rat{}
 	for axis := range delta {
-		delta[axis] = spiralSub(p.b[axis], p.a[axis])
+		delta[axis] = polynomial.BernsteinSub(p.b[axis], p.a[axis])
 	}
 	for _, at := range [...][3][]*big.Rat{p.a, p.b} {
-		radius := spiralSub(spiralScale(p.d, p.coneC), at[0])
-		derivative := spiralScale(spiralAdd(spiralAdd(
-			spiralMul(at[1], delta[1]), spiralMul(at[2], delta[2])),
-			spiralMul(radius, delta[0])), big.NewRat(2, 1))
-		lower := spiralSub(derivative, spiralScale(spiralMul(p.d, p.d), big.NewRat(20, 1)))
-		ok, err := spiralHeelSign(ctx, lower, 1, 8)
+		radius := polynomial.BernsteinSub(polynomial.BernsteinScale(p.d, p.coneC), at[0])
+		derivative := polynomial.BernsteinScale(polynomial.BernsteinAdd(polynomial.BernsteinAdd(
+			polynomial.BernsteinMul(at[1], delta[1]), polynomial.BernsteinMul(at[2], delta[2])),
+
+			polynomial.BernsteinMul(radius, delta[0])),
+
+			big.NewRat(2, 1))
+
+		lower := polynomial.BernsteinSub(derivative, polynomial.BernsteinScale(polynomial.BernsteinMul(p.d, p.d), big.NewRat(20, 1)))
+		ok, err := polynomial.BernsteinSignByHalving(ctx, lower, 1, 8)
 		if err != nil || !ok {
 			return false, err
 		}
@@ -82,11 +87,12 @@ func spiralToeIdealDerivative(ctx context.Context, p spiralHeelPolys) (bool, err
 }
 
 func spiralToeFixedSlopeAtX(p spiralHeelPolys, x, slope *big.Rat) []*big.Rat {
-	target := spiralSub(spiralScale(p.d, x), p.a[0])
-	l0 := spiralSub(p.a[2], spiralScale(p.a[1], slope))
-	deltaSlope := spiralSub(spiralSub(p.b[2], p.a[2]),
-		spiralScale(spiralSub(p.b[1], p.a[1]), slope))
-	return spiralAdd(spiralMul(l0, p.deltaX), spiralMul(target, deltaSlope))
+	target := polynomial.BernsteinSub(polynomial.BernsteinScale(p.d, x), p.a[0])
+	l0 := polynomial.BernsteinSub(p.a[2], polynomial.BernsteinScale(p.a[1], slope))
+	deltaSlope := polynomial.BernsteinSub(polynomial.BernsteinSub(p.b[2], p.a[2]),
+		polynomial.BernsteinScale(polynomial.BernsteinSub(p.b[1], p.a[1]), slope))
+
+	return polynomial.BernsteinAdd(polynomial.BernsteinMul(l0, p.deltaX), polynomial.BernsteinMul(target, deltaSlope))
 }
 
 // The retained station cells enclose the actual Sketch arc, rather than
@@ -232,7 +238,7 @@ func certifySpiralToeRootSeam(ctx context.Context,
 		coeff []*big.Rat
 		sign  int
 	}{{p.d, 1}, {p.deltaX, 1}, {p.at(lfZero()), -1}, {p.at(lfOne()), 1}} {
-		if yes, err := spiralHeelSign(ctx, gate.coeff, gate.sign, 8); err != nil || !yes {
+		if yes, err := polynomial.BernsteinSignByHalving(ctx, gate.coeff, gate.sign, 8); err != nil || !yes {
 			return nil, false, err
 		}
 	}
@@ -244,7 +250,7 @@ func certifySpiralToeRootSeam(ctx context.Context,
 		value *big.Rat
 		sign  int
 	}{{idealXLo, -1}, {idealXHi, 1}} {
-		if yes, err := spiralHeelSign(ctx, p.fixedX(gate.value), gate.sign, 12); err != nil || !yes {
+		if yes, err := polynomial.BernsteinSignByHalving(ctx, p.fixedX(gate.value), gate.sign, 12); err != nil || !yes {
 			return nil, false, err
 		}
 	}
@@ -257,7 +263,7 @@ func certifySpiralToeRootSeam(ctx context.Context,
 		sign  int
 	}{{idealSLo, 1}, {idealSHi, -1}} {
 		for _, x := range [...]*big.Rat{idealXLo, idealXHi} {
-			if yes, err := spiralHeelSign(ctx, spiralToeFixedSlopeAtX(p, x, gate.slope),
+			if yes, err := polynomial.BernsteinSignByHalving(ctx, spiralToeFixedSlopeAtX(p, x, gate.slope),
 				gate.sign, 12); err != nil || !yes {
 				return nil, false, err
 			}

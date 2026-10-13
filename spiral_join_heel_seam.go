@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -49,47 +50,6 @@ func spiralHeelCapBern(m loftFaceMap, radius, lo, hi *big.Rat) ([]*big.Rat, [3][
 		h[axis] = toBern(hp[axis])
 	}
 	return g, h
-}
-
-func spiralHeelSplit(coeff []*big.Rat) ([]*big.Rat, []*big.Rat) {
-	left := make([]*big.Rat, len(coeff))
-	right := make([]*big.Rat, len(coeff))
-	work := append([]*big.Rat(nil), coeff...)
-	left[0], right[len(right)-1] = work[0], work[len(work)-1]
-	for row := 1; row < len(coeff); row++ {
-		next := make([]*big.Rat, len(work)-1)
-		for i := range next {
-			next[i] = lfMul(lfAdd(work[i], work[i+1]), big.NewRat(1, 2))
-		}
-		left[row], right[len(right)-1-row] = next[0], next[len(next)-1]
-		work = next
-	}
-	return left, right
-}
-
-func spiralHeelSign(ctx context.Context, coeff []*big.Rat, sign, depth int) (bool, error) {
-	if err := ctx.Err(); err != nil {
-		return false, err
-	}
-	all := true
-	for _, value := range coeff {
-		if value.Sign() != sign {
-			all = false
-			break
-		}
-	}
-	if all {
-		return true, nil
-	}
-	if depth == 0 {
-		return false, nil
-	}
-	left, right := spiralHeelSplit(coeff)
-	ok, err := spiralHeelSign(ctx, left, sign, depth-1)
-	if err != nil || !ok {
-		return ok, err
-	}
-	return spiralHeelSign(ctx, right, sign, depth-1)
 }
 
 // The two cap maps are rational in the source plane. Composing their
@@ -245,49 +205,50 @@ func spiralHeelBuildPolys(first, second loftFaceMap, radius, coneC *big.Rat) spi
 	hi := spiralHeelHalfAngle
 	g0, h0 := spiralHeelCapBern(first, radius, lo, hi)
 	g1, h1 := spiralHeelCapBern(second, radius, lo, hi)
-	p := spiralHeelPolys{d: spiralMul(g0, g1), coneC: coneC}
+	p := spiralHeelPolys{d: polynomial.BernsteinMul(g0, g1), coneC: coneC}
 	for axis := range p.a {
-		p.a[axis] = spiralMul(h0[axis], g1)
-		p.b[axis] = spiralMul(h1[axis], g0)
+		p.a[axis] = polynomial.BernsteinMul(h0[axis], g1)
+		p.b[axis] = polynomial.BernsteinMul(h1[axis], g0)
 	}
-	p.deltaX = spiralSub(p.b[0], p.a[0])
+	p.deltaX = polynomial.BernsteinSub(p.b[0], p.a[0])
 	return p
 }
 
 func (p spiralHeelPolys) fixedX(x *big.Rat) []*big.Rat {
-	target := spiralSub(spiralScale(p.d, x), p.a[0])
-	den := spiralMul(p.d, p.deltaX)
-	y := spiralAdd(spiralMul(p.a[1], p.deltaX), spiralMul(target, spiralSub(p.b[1], p.a[1])))
-	z := spiralAdd(spiralMul(p.a[2], p.deltaX), spiralMul(target, spiralSub(p.b[2], p.a[2])))
+	target := polynomial.BernsteinSub(polynomial.BernsteinScale(p.d, x), p.a[0])
+	den := polynomial.BernsteinMul(p.d, p.deltaX)
+	y := polynomial.BernsteinAdd(polynomial.BernsteinMul(p.a[1], p.deltaX), polynomial.BernsteinMul(target, polynomial.BernsteinSub(p.b[1], p.a[1])))
+	z := polynomial.BernsteinAdd(polynomial.BernsteinMul(p.a[2], p.deltaX), polynomial.BernsteinMul(target, polynomial.BernsteinSub(p.b[2], p.a[2])))
 	radius := lfSub(p.coneC, x)
-	return spiralSub(spiralAdd(spiralMul(y, y), spiralMul(z, z)),
-		spiralScale(spiralMul(den, den), lfMul(radius, radius)))
+	return polynomial.BernsteinSub(polynomial.BernsteinAdd(polynomial.BernsteinMul(y, y), polynomial.BernsteinMul(z, z)),
+		polynomial.BernsteinScale(polynomial.BernsteinMul(den, den), lfMul(radius, radius)))
 }
 
 func (p spiralHeelPolys) fixedSlope(slope *big.Rat) ([]*big.Rat, []*big.Rat) {
-	l0 := spiralSub(p.a[2], spiralScale(p.a[1], slope))
-	l1 := spiralSub(p.b[2], spiralScale(p.b[1], slope))
-	delta := spiralSub(l1, l0)
+	l0 := polynomial.BernsteinSub(p.a[2], polynomial.BernsteinScale(p.a[1], slope))
+	l1 := polynomial.BernsteinSub(p.b[2], polynomial.BernsteinScale(p.b[1], slope))
+	delta := polynomial.BernsteinSub(l1, l0)
 	var n [3][]*big.Rat
 	for axis := range n {
-		n[axis] = spiralSub(spiralMul(p.a[axis], delta),
-			spiralMul(l0, spiralSub(p.b[axis], p.a[axis])))
+		n[axis] = polynomial.BernsteinSub(polynomial.BernsteinMul(p.a[axis], delta),
+			polynomial.BernsteinMul(l0, polynomial.BernsteinSub(p.b[axis], p.a[axis])))
 	}
-	den := spiralMul(p.d, delta)
-	radius := spiralSub(spiralScale(den, p.coneC), n[0])
-	q := spiralSub(spiralAdd(spiralMul(n[1], n[1]), spiralMul(n[2], n[2])),
-		spiralMul(radius, radius))
+	den := polynomial.BernsteinMul(p.d, delta)
+	radius := polynomial.BernsteinSub(polynomial.BernsteinScale(den, p.coneC), n[0])
+	q := polynomial.BernsteinSub(polynomial.BernsteinAdd(polynomial.BernsteinMul(n[1], n[1]), polynomial.BernsteinMul(n[2], n[2])),
+		polynomial.BernsteinMul(radius, radius))
+
 	return delta, q
 }
 
 func (p spiralHeelPolys) at(t *big.Rat) []*big.Rat {
 	var n [3][]*big.Rat
 	for axis := range n {
-		n[axis] = spiralAdd(spiralScale(p.a[axis], lfSub(lfOne(), t)), spiralScale(p.b[axis], t))
+		n[axis] = polynomial.BernsteinAdd(polynomial.BernsteinScale(p.a[axis], lfSub(lfOne(), t)), polynomial.BernsteinScale(p.b[axis], t))
 	}
-	radius := spiralSub(spiralScale(p.d, p.coneC), n[0])
-	return spiralSub(spiralAdd(spiralMul(n[1], n[1]), spiralMul(n[2], n[2])),
-		spiralMul(radius, radius))
+	radius := polynomial.BernsteinSub(polynomial.BernsteinScale(p.d, p.coneC), n[0])
+	return polynomial.BernsteinSub(polynomial.BernsteinAdd(polynomial.BernsteinMul(n[1], n[1]), polynomial.BernsteinMul(n[2], n[2])),
+		polynomial.BernsteinMul(radius, radius))
 }
 
 func spiralHeelRootCells(ctx context.Context, trim *loftFacesTrimRecord, coneC *big.Rat) (bool, error) {
@@ -407,10 +368,10 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 		return nil, false, err
 	}
 	p := spiralHeelBuildPolys(trim.maps[7], trim.maps[8], radius, coneC)
-	if ok, err := spiralHeelSign(ctx, p.deltaX, 1, 0); err != nil || !ok {
+	if ok, err := polynomial.BernsteinSignByHalving(ctx, p.deltaX, 1, 0); err != nil || !ok {
 		return nil, false, err
 	}
-	if ok, err := spiralHeelSign(ctx, p.at(big.NewRat(19, 20)), -1, 6); err != nil || !ok {
+	if ok, err := polynomial.BernsteinSignByHalving(ctx, p.at(big.NewRat(19, 20)), -1, 6); err != nil || !ok {
 		return nil, false, err
 	}
 	idealXLo, idealXHi := big.NewRat(8231, 500), big.NewRat(1646399, 100000)
@@ -422,7 +383,7 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 		value *big.Rat
 		sign  int
 	}{{idealXLo, -1}, {idealXHi, 1}} {
-		if ok, err := spiralHeelSign(ctx, p.fixedX(gate.value), gate.sign, 12); err != nil || !ok {
+		if ok, err := polynomial.BernsteinSignByHalving(ctx, p.fixedX(gate.value), gate.sign, 12); err != nil || !ok {
 			return nil, false, err
 		}
 	}
@@ -445,10 +406,10 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 		if negative {
 			deltaSign = -1
 		}
-		if ok, err := spiralHeelSign(ctx, delta, deltaSign, 0); err != nil || !ok {
+		if ok, err := polynomial.BernsteinSignByHalving(ctx, delta, deltaSign, 0); err != nil || !ok {
 			return nil, false, err
 		}
-		if ok, err := spiralHeelSign(ctx, q, gate.sign, 6); err != nil || !ok {
+		if ok, err := polynomial.BernsteinSignByHalving(ctx, q, gate.sign, 6); err != nil || !ok {
 			return nil, false, err
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
 // loftFacesCapBernsteinRows gives the rational denominator and coordinate
@@ -26,13 +27,13 @@ func loftFacesCapBernsteinRows(m loftFaceMap, span freeform.BezierSpan) ([]*big.
 
 // loftFacesCapIntegerRows holds the same map coefficients over shared integer
 // denominators while products and derivatives are formed.
-func loftFacesCapIntegerRows(m loftFaceMap, span freeform.BezierSpan) (bernsteinIntRow, [3]bernsteinIntRow) {
+func loftFacesCapIntegerRows(m loftFaceMap, span freeform.BezierSpan) (polynomial.BernsteinIntRow, [3]polynomial.BernsteinIntRow) {
 	g, h := loftFacesCapBernsteinRows(m, span)
-	var rows [3]bernsteinIntRow
+	var rows [3]polynomial.BernsteinIntRow
 	for axis := range rows {
-		rows[axis] = bernsteinIntRowOf(h[axis])
+		rows[axis] = polynomial.BernsteinIntRowOf(h[axis])
 	}
-	return bernsteinIntRowOf(g), rows
+	return polynomial.BernsteinIntRowOf(g), rows
 }
 
 // loftFacesMeridianQRows returns Q=D²(y²+z²−(m*x+b)²) after exact cap
@@ -44,20 +45,20 @@ func loftFacesMeridianQRows(first, second loftFaceMap, span freeform.BezierSpan,
 	m, b *big.Rat) [3][]*big.Rat {
 	g0, h0 := loftFacesCapIntegerRows(first, span)
 	g1, h1 := loftFacesCapIntegerRows(second, span)
-	d := g0.mul(g1)
-	var a, z [3]bernsteinIntRow
+	d := g0.Mul(g1)
+	var a, z [3]polynomial.BernsteinIntRow
 	for axis := range a {
-		a[axis] = h0[axis].mul(g1)
-		z[axis] = h1[axis].mul(g0)
+		a[axis] = h0[axis].Mul(g1)
+		z[axis] = h1[axis].Mul(g0)
 	}
-	al := a[0].scale(m).add(d.scale(b))
-	zl := z[0].scale(m).add(d.scale(b))
-	dy, dz, dl := z[1].sub(a[1]), z[2].sub(a[2]), zl.sub(al)
-	q0 := a[1].mul(a[1]).add(a[2].mul(a[2])).sub(al.mul(al))
-	q1 := a[1].mul(dy).add(a[2].mul(dz)).sub(al.mul(dl)).scale(big.NewRat(2, 1))
-	q2 := dy.mul(dy).add(dz.mul(dz)).sub(dl.mul(dl))
-	return [3][]*big.Rat{q0.rats(), q0.add(q1.scale(big.NewRat(1, 2))).rats(),
-		q0.add(q1).add(q2).rats()}
+	al := a[0].Scale(m).Add(d.Scale(b))
+	zl := z[0].Scale(m).Add(d.Scale(b))
+	dy, dz, dl := z[1].Sub(a[1]), z[2].Sub(a[2]), zl.Sub(al)
+	q0 := a[1].Mul(a[1]).Add(a[2].Mul(a[2])).Sub(al.Mul(al))
+	q1 := a[1].Mul(dy).Add(a[2].Mul(dz)).Sub(al.Mul(dl)).Scale(big.NewRat(2, 1))
+	q2 := dy.Mul(dy).Add(dz.Mul(dz)).Sub(dl.Mul(dl))
+	return [3][]*big.Rat{q0.Rats(), q0.Add(q1.Scale(big.NewRat(1, 2))).Rats(),
+		q0.Add(q1).Add(q2).Rats()}
 }
 
 // loftFacesMeridianJRows returns the numerator of X_t*Q_s−X_s*Q_t along
@@ -69,21 +70,21 @@ func loftFacesMeridianJRows(first, second loftFaceMap, span freeform.BezierSpan,
 	q [3][]*big.Rat) [3][]*big.Rat {
 	g0, h0 := loftFacesCapIntegerRows(first, span)
 	g1, h1 := loftFacesCapIntegerRows(second, span)
-	d := g0.mul(g1)
-	a, z := h0[0].mul(g1), h1[0].mul(g0)
-	b := z.sub(a)
-	bd := b.mul(d)
-	u0 := a.deriv().mul(d).sub(a.mul(d.deriv()))
-	u1 := b.deriv().mul(d).sub(b.mul(d.deriv()))
-	rows := [3]bernsteinIntRow{bernsteinIntRowOf(q[0]),
-		bernsteinIntRowOf(q[1]), bernsteinIntRowOf(q[2])}
+	d := g0.Mul(g1)
+	a, z := h0[0].Mul(g1), h1[0].Mul(g0)
+	b := z.Sub(a)
+	bd := b.Mul(d)
+	u0 := a.Deriv().Mul(d).Sub(a.Mul(d.Deriv()))
+	u1 := b.Deriv().Mul(d).Sub(b.Mul(d.Deriv()))
+	rows := [3]polynomial.BernsteinIntRow{polynomial.BernsteinIntRowOf(q[0]),
+		polynomial.BernsteinIntRowOf(q[1]), polynomial.BernsteinIntRowOf(q[2])}
 	two := big.NewRat(2, 1)
 	q0 := rows[0]
-	q1 := rows[1].sub(rows[0]).scale(two)
-	q2 := rows[2].sub(rows[1].scale(two)).add(rows[0])
-	j0 := bd.mul(q0.deriv()).sub(u0.mul(q1))
-	j1 := bd.mul(q1.deriv()).sub(u0.mul(q2).scale(two).add(u1.mul(q1)))
-	j2 := bd.mul(q2.deriv()).sub(u1.mul(q2).scale(two))
-	return [3][]*big.Rat{j0.rats(), j0.add(j1.scale(big.NewRat(1, 2))).rats(),
-		j0.add(j1).add(j2).rats()}
+	q1 := rows[1].Sub(rows[0]).Scale(two)
+	q2 := rows[2].Sub(rows[1].Scale(two)).Add(rows[0])
+	j0 := bd.Mul(q0.Deriv()).Sub(u0.Mul(q1))
+	j1 := bd.Mul(q1.Deriv()).Sub(u0.Mul(q2).Scale(two).Add(u1.Mul(q1)))
+	j2 := bd.Mul(q2.Deriv()).Sub(u1.Mul(q2).Scale(two))
+	return [3][]*big.Rat{j0.Rats(), j0.Add(j1.Scale(big.NewRat(1, 2))).Rats(),
+		j0.Add(j1).Add(j2).Rats()}
 }
