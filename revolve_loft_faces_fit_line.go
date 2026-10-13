@@ -150,12 +150,12 @@ func certifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTri
 		return empty, false
 	}
 	for i, root := range roots {
-		if lineRoots[i].direction != root.direction ||
-			lineRoots[i].time.Lo.Cmp(root.time.Lo) != 0 ||
-			lineRoots[i].time.Hi.Cmp(root.time.Hi) != 0 ||
-			lineRoots[i].finite != root.finite ||
-			lineRoots[i].x.Lo.Cmp(root.x.Lo) != 0 ||
-			lineRoots[i].x.Hi.Cmp(root.x.Hi) != 0 {
+		if lineRoots[i].Direction != root.Direction ||
+			lineRoots[i].Time.Lo.Cmp(root.Time.Lo) != 0 ||
+			lineRoots[i].Time.Hi.Cmp(root.Time.Hi) != 0 ||
+			lineRoots[i].Finite != root.Finite ||
+			lineRoots[i].X.Lo.Cmp(root.X.Lo) != 0 ||
+			lineRoots[i].X.Hi.Cmp(root.X.Hi) != 0 {
 			return empty, false
 		}
 	}

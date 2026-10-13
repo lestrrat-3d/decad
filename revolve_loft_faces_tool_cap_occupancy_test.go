@@ -13,7 +13,7 @@ func TestRevolveLoftFacesToolBoundaryUsesSketchWalkDirection(t *testing.T) {
 	// Sketch always reports increasing natural parameters. Reversed changes
 	// the loop walk without changing those parameters or the radial root.
 	edge := sketch.BoundaryEdge{TStart: 0, TEnd: 1}
-	insideToOutside := revolveLoftFacesVerticalLimit{before: -1, after: 1}
+	insideToOutside := revolveLoftFacesVerticalLimit{Before: -1, After: 1}
 	outward, ok := revolveLoftFacesToolBoundaryOutward(edge, insideToOutside)
 	require.True(t, ok)
 	require.True(t, outward)
@@ -24,7 +24,7 @@ func TestRevolveLoftFacesToolBoundaryUsesSketchWalkDirection(t *testing.T) {
 	require.False(t, outward)
 
 	outward, ok = revolveLoftFacesToolBoundaryOutward(edge,
-		revolveLoftFacesVerticalLimit{before: 1, after: -1})
+		revolveLoftFacesVerticalLimit{Before: 1, After: -1})
 	require.True(t, ok)
 	require.True(t, outward)
 

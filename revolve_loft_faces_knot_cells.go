@@ -62,19 +62,19 @@ func revolveLoftFacesEndpointPartitionCells(ctx context.Context,
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		if piece.rootIndex >= 0 {
-			if piece.rootIndex >= len(jointCells) {
+		if piece.RootIndex >= 0 {
+			if piece.RootIndex >= len(jointCells) {
 				return nil, false, nil
 			}
-			rootCell := jointCells[piece.rootIndex]
-			if rootCell.time.Lo == nil || rootCell.time.Lo.Cmp(piece.lo) != 0 ||
-				rootCell.time.Hi.Cmp(piece.hi) != 0 {
+			rootCell := jointCells[piece.RootIndex]
+			if rootCell.time.Lo == nil || rootCell.time.Lo.Cmp(piece.Lo) != 0 ||
+				rootCell.time.Hi.Cmp(piece.Hi) != 0 {
 				return nil, false, nil
 			}
 			makeCell := func(side int, sLo, sHi *big.Rat) revolveLoftFacesMappedCell {
 				return revolveLoftFacesMappedCell{segment: segment, span: spanIndex,
 					band: band, side: side, sLo: sLo, sHi: sHi,
-					tLo: piece.lo, tHi: piece.hi}
+					tLo: piece.Lo, tHi: piece.Hi}
 			}
 			if atEnd && rootCell.sLo.Sign() > 0 {
 				cells = append(cells, makeCell(rootCell.outsideSide, lfZero(), rootCell.sLo))
@@ -89,14 +89,14 @@ func revolveLoftFacesEndpointPartitionCells(ctx context.Context,
 			cells = append(cells, makeCell(side, rootCell.sLo, rootCell.sHi))
 			continue
 		}
-		if piece.loOpen && piece.lo.Cmp(piece.hi) == 0 ||
-			piece.hiOpen && piece.lo.Cmp(piece.hi) == 0 {
+		if piece.LoOpen && piece.Lo.Cmp(piece.Hi) == 0 ||
+			piece.HiOpen && piece.Lo.Cmp(piece.Hi) == 0 {
 			return nil, false, nil
 		}
 		openCells, ok, err := revolveLoftFacesOpenTimeSlab(ctx, q, j,
 			trim.maps[band], trim.maps[band+1], span, section,
-			segment, spanIndex, band, piece.lo, piece.hi,
-			piece.loOpen, piece.hiOpen, &remaining)
+			segment, spanIndex, band, piece.Lo, piece.Hi,
+			piece.LoOpen, piece.HiOpen, &remaining)
 		if err != nil {
 			return nil, false, fmt.Errorf("mapped fitted span %d/%d band %d: %w",
 				segment, spanIndex, band, err)

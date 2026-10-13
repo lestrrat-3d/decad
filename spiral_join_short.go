@@ -51,8 +51,8 @@ func spiralShortCapEndpointX(first, second loftFaceMap, span freeform.BezierSpan
 		return loftFaceInterval{}, false
 	}
 	return loftFaceInterval{
-		Lo: lfAdd(lfMul(lfSub(lfOne(), root.lo), x0), lfMul(root.lo, x1)),
-		Hi: lfAdd(lfMul(lfSub(lfOne(), root.hi), x0), lfMul(root.hi, x1)),
+		Lo: lfAdd(lfMul(lfSub(lfOne(), root.Lo), x0), lfMul(root.Lo, x1)),
+		Hi: lfAdd(lfMul(lfSub(lfOne(), root.Hi), x0), lfMul(root.Hi, x1)),
 	}, true
 }
 

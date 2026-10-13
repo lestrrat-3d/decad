@@ -24,17 +24,17 @@ type revolveLoftFacesVerticalCell struct {
 }
 
 type revolveLoftFacesVerticalLimit struct {
-	// side is the sign of radius squared minus the limit squared when there
+	// Side is the sign of radius squared minus the limit squared when there
 	// is no root. A root has strict signs on both sides of its bracket.
-	side, before, after int
-	root                loftFaceInterval
-	box                 [3]loftFaceInterval
+	Side, Before, After int
+	Root                loftFaceInterval
+	Box                 [3]loftFaceInterval
 }
 
 type revolveLoftFacesVerticalPiece struct {
-	source         loftFaceInterval
-	loOpen, hiOpen bool // equality with either radial limit excludes the endpoint
-	box            [3]loftFaceInterval
+	Source         loftFaceInterval
+	LoOpen, HiOpen bool // equality with either radial limit excludes the endpoint
+	Box            [3]loftFaceInterval
 }
 
 type revolveLoftFacesVerticalSide struct {
@@ -66,9 +66,9 @@ type revolveLoftFacesConstantXSource struct {
 // of the live Sketch U/V coordinates when both cap denominators are constant.
 // A nil record makes no claim about angular order or similarity.
 type revolveLoftFacesVerticalAffine struct {
-	offset [2]*big.Rat
-	column [2][2]*big.Rat // [source U or V][world Y or Z]
-	det    *big.Rat
+	Offset [2]*big.Rat
+	Column [2][2]*big.Rat // [source U or V][world Y or Z]
+	Det    *big.Rat
 }
 
 // A strict gap between the authenticated radial intervals proves the entire
@@ -338,32 +338,32 @@ func revolveLoftFacesVerticalAffineMap(first, last loftFaceMap,
 			mapped.GV == nil || mapped.GV.Sign() != 0 {
 			return nil, false
 		}
-		for axis := range mappedCaps[i].offset {
+		for axis := range mappedCaps[i].Offset {
 			worldAxis := axis + 1
 			if mapped.Constant[worldAxis] == nil || mapped.Q0[worldAxis] == nil ||
 				mapped.QU[worldAxis] == nil || mapped.QV[worldAxis] == nil {
 				return nil, false
 			}
-			mappedCaps[i].offset[axis] = lfAdd(mapped.Constant[worldAxis],
+			mappedCaps[i].Offset[axis] = lfAdd(mapped.Constant[worldAxis],
 				lfDiv(mapped.Q0[worldAxis], mapped.G0))
-			mappedCaps[i].column[0][axis] = lfDiv(mapped.QU[worldAxis], mapped.G0)
-			mappedCaps[i].column[1][axis] = lfDiv(mapped.QV[worldAxis], mapped.G0)
+			mappedCaps[i].Column[0][axis] = lfDiv(mapped.QU[worldAxis], mapped.G0)
+			mappedCaps[i].Column[1][axis] = lfDiv(mapped.QV[worldAxis], mapped.G0)
 		}
 	}
 	blend := func(a, b *big.Rat) *big.Rat {
 		return lfAdd(lfMul(lfSub(lfOne(), time), a), lfMul(time, b))
 	}
 	result := &revolveLoftFacesVerticalAffine{}
-	for axis := range result.offset {
-		result.offset[axis] = blend(mappedCaps[0].offset[axis], mappedCaps[1].offset[axis])
-		for sourceAxis := range result.column {
-			result.column[sourceAxis][axis] = blend(mappedCaps[0].column[sourceAxis][axis],
-				mappedCaps[1].column[sourceAxis][axis])
+	for axis := range result.Offset {
+		result.Offset[axis] = blend(mappedCaps[0].Offset[axis], mappedCaps[1].Offset[axis])
+		for sourceAxis := range result.Column {
+			result.Column[sourceAxis][axis] = blend(mappedCaps[0].Column[sourceAxis][axis],
+				mappedCaps[1].Column[sourceAxis][axis])
 		}
 	}
-	result.det = lfSub(lfMul(result.column[0][0], result.column[1][1]),
-		lfMul(result.column[0][1], result.column[1][0]))
-	if result.det.Sign() <= 0 {
+	result.Det = lfSub(lfMul(result.Column[0][0], result.Column[1][1]),
+		lfMul(result.Column[0][1], result.Column[1][0]))
+	if result.Det.Sign() <= 0 {
 		return nil, false
 	}
 	return result, true
@@ -423,17 +423,17 @@ func revolveLoftFacesVerticalBezier(trim *loftFacesTrimRecord,
 		return cell, false
 	}
 	for _, limit := range []*revolveLoftFacesVerticalLimit{&cell.lower, &cell.upper} {
-		if limit.root.Lo == nil {
+		if limit.Root.Lo == nil {
 			continue
 		}
-		limit.box, ok = spiralJunctionBox(first, last, span,
-			limit.root.Lo, limit.root.Hi, time, time)
+		limit.Box, ok = spiralJunctionBox(first, last, span,
+			limit.Root.Lo, limit.Root.Hi, time, time)
 		if !ok {
 			return cell, false
 		}
 	}
 	cell.retained, ok = revolveLoftFacesVerticalPieces(first, last, span,
-		time, loQ, hiQ, cell.lower.root, cell.upper.root)
+		time, loQ, hiQ, cell.lower.Root, cell.upper.Root)
 	return cell, ok
 }
 
@@ -450,11 +450,11 @@ func revolveLoftFacesVerticalClassify(q []*big.Rat) (revolveLoftFacesVerticalLim
 		negative = negative && coefficient.Sign() < 0
 	}
 	if positive {
-		result.side = 1
+		result.Side = 1
 		return result, true
 	}
 	if negative {
-		result.side = -1
+		result.Side = -1
 		return result, true
 	}
 	signed := q
@@ -465,11 +465,11 @@ func revolveLoftFacesVerticalClassify(q []*big.Rat) (revolveLoftFacesVerticalLim
 		return result, false
 	}
 	root := spiralIsolateRootN(signed, 80)
-	if root.lo.Sign() <= 0 || root.hi.Cmp(lfOne()) >= 0 {
+	if root.Lo.Sign() <= 0 || root.Hi.Cmp(lfOne()) >= 0 {
 		return result, false
 	}
-	result.root = loftFaceInterval{Lo: root.lo, Hi: root.hi}
-	result.before, result.after = q[0].Sign(), q[len(q)-1].Sign()
+	result.Root = loftFaceInterval{Lo: root.Lo, Hi: root.Hi}
+	result.Before, result.After = q[0].Sign(), q[len(q)-1].Sign()
 	return result, true
 }
 
@@ -512,10 +512,10 @@ func revolveLoftFacesVerticalPieces(first, last loftFaceMap,
 			return nil, false
 		}
 		pieces = append(pieces, revolveLoftFacesVerticalPiece{
-			source: loftFaceInterval{Lo: a, Hi: z},
-			loOpen: loLower == 0 || loUpper == 0,
-			hiOpen: hiLower == 0 || hiUpper == 0,
-			box:    box})
+			Source: loftFaceInterval{Lo: a, Hi: z},
+			LoOpen: loLower == 0 || loUpper == 0,
+			HiOpen: hiLower == 0 || hiUpper == 0,
+			Box:    box})
 	}
 	return pieces, true
 }
@@ -552,14 +552,14 @@ func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 	if loSign == 0 || hiSign == 0 {
 		return cell, false
 	}
-	cell.lower.side, cell.upper.side = loSign, hiSign
+	cell.lower.Side, cell.upper.Side = loSign, hiSign
 	if loSign > 0 && hiSign < 0 {
 		box, valid := revolveLoftFacesVerticalArcBox(radial.arc, trim, band, time)
 		if !valid || box[0].Lo.Cmp(x) != 0 || box[0].Hi.Cmp(x) != 0 {
 			return cell, false
 		}
 		cell.retained = []revolveLoftFacesVerticalPiece{{
-			source: loftFaceInterval{Lo: lfZero(), Hi: lfOne()}, box: box}}
+			Source: loftFaceInterval{Lo: lfZero(), Hi: lfOne()}, Box: box}}
 	}
 	return cell, true
 }

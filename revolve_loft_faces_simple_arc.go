@@ -49,11 +49,11 @@ func revolveLoftFacesSimpleArc(trim *loftFacesTrimRecord, segment int,
 	if !ok || u.Lo == nil || u.Hi == nil || v.Lo == nil || v.Hi == nil {
 		return cell, false
 	}
-	cell = revolveLoftFacesSimpleCell{segment: segment, arc: &arc,
-		start: start, end: end,
-		box: [2]loftFaceInterval{{Lo: u.Lo, Hi: u.Hi}, {Lo: v.Lo, Hi: v.Hi}}}
+	cell = revolveLoftFacesSimpleCell{Segment: segment, Arc: &arc,
+		Start: start, End: end,
+		Box: [2]loftFaceInterval{{Lo: u.Lo, Hi: u.Hi}, {Lo: v.Lo, Hi: v.Hi}}}
 	if reversed {
-		cell.start, cell.end = cell.end, cell.start
+		cell.Start, cell.End = cell.End, cell.Start
 	}
 	return cell, true
 }

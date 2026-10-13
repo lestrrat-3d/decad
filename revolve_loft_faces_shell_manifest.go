@@ -59,8 +59,8 @@ func revolveLoftFacesSameBox(a, b [3]loftFaceInterval) bool {
 }
 
 func revolveLoftFacesSameCrossing(a, b spiralRootCrossing) bool {
-	return a.span == b.span && revolveLoftFacesSameRat(a.lo, b.lo) &&
-		revolveLoftFacesSameRat(a.hi, b.hi)
+	return a.Span == b.Span && revolveLoftFacesSameRat(a.Lo, b.Lo) &&
+		revolveLoftFacesSameRat(a.Hi, b.Hi)
 }
 
 func revolveLoftFacesSameMappedCell(a, b revolveLoftFacesMappedCell) bool {
@@ -93,26 +93,26 @@ func revolveLoftFacesSameBezier(a, b freeform.BezierSpan) bool {
 }
 
 func revolveLoftFacesSameVerticalLimit(a, b revolveLoftFacesVerticalLimit) bool {
-	return a.side == b.side && a.before == b.before && a.after == b.after &&
-		revolveLoftFacesSameInterval(a.root, b.root) &&
-		revolveLoftFacesSameBox(a.box, b.box)
+	return a.Side == b.Side && a.Before == b.Before && a.After == b.After &&
+		revolveLoftFacesSameInterval(a.Root, b.Root) &&
+		revolveLoftFacesSameBox(a.Box, b.Box)
 }
 
 func revolveLoftFacesSameVerticalAffine(a, b *revolveLoftFacesVerticalAffine) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
-	for i := range a.offset {
-		if !revolveLoftFacesSameRat(a.offset[i], b.offset[i]) {
+	for i := range a.Offset {
+		if !revolveLoftFacesSameRat(a.Offset[i], b.Offset[i]) {
 			return false
 		}
-		for j := range a.column[i] {
-			if !revolveLoftFacesSameRat(a.column[i][j], b.column[i][j]) {
+		for j := range a.Column[i] {
+			if !revolveLoftFacesSameRat(a.Column[i][j], b.Column[i][j]) {
 				return false
 			}
 		}
 	}
-	return revolveLoftFacesSameRat(a.det, b.det)
+	return revolveLoftFacesSameRat(a.Det, b.Det)
 }
 
 func revolveLoftFacesSameVerticalSide(a, b *revolveLoftFacesVerticalSide) bool {
@@ -144,9 +144,9 @@ func revolveLoftFacesSameVerticalSide(a, b *revolveLoftFacesVerticalSide) bool {
 		}
 		for j, piece := range cell.retained {
 			match := other.retained[j]
-			if !revolveLoftFacesSameInterval(piece.source, match.source) ||
-				piece.loOpen != match.loOpen || piece.hiOpen != match.hiOpen ||
-				!revolveLoftFacesSameBox(piece.box, match.box) {
+			if !revolveLoftFacesSameInterval(piece.Source, match.Source) ||
+				piece.LoOpen != match.LoOpen || piece.HiOpen != match.HiOpen ||
+				!revolveLoftFacesSameBox(piece.Box, match.Box) {
 				return false
 			}
 		}

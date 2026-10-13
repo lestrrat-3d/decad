@@ -237,7 +237,7 @@ func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 			return cell, false
 		}
 		root := spiralIsolateRoot(capSigned[0])
-		root.span = spanIndex
+		root.Span = spanIndex
 		direction := revolveLoftFacesCapXDirection(mapped, span)
 		if direction == 2 {
 			return cell, false
@@ -262,10 +262,10 @@ func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 // root changes side. The caller must bind the same live source endpoint on
 // both adjacent entities before interpreting either change as a joint seam.
 type revolveLoftFacesEndpointRoot struct {
-	time      loftFaceInterval
-	x         loftFaceInterval
-	direction int
-	finite    bool
+	Time      loftFaceInterval
+	X         loftFaceInterval
+	Direction int
+	Finite    bool
 }
 
 // The mapped endpoint has constant rational source coordinates, so its X
@@ -274,15 +274,15 @@ type revolveLoftFacesEndpointRoot struct {
 // strictly within that section. A boundary overlap is undecidable.
 func revolveLoftFacesEndpointAxialClass(root revolveLoftFacesEndpointRoot,
 	x0, x1 *big.Rat, section revolveSectionSpan) (revolveLoftFacesEndpointRoot, bool) {
-	if x0 == nil || x1 == nil || root.time.Lo == nil || root.time.Hi == nil {
+	if x0 == nil || x1 == nil || root.Time.Lo == nil || root.Time.Hi == nil {
 		return root, false
 	}
 	xAt := func(t *big.Rat) *big.Rat { return lfAdd(x0, lfMul(t, lfSub(x1, x0))) }
-	xLo, xHi := xAt(root.time.Lo), xAt(root.time.Hi)
+	xLo, xHi := xAt(root.Time.Lo), xAt(root.Time.Hi)
 	if xLo.Cmp(xHi) > 0 {
 		xLo, xHi = xHi, xLo
 	}
-	root.x = loftFaceInterval{Lo: xLo, Hi: xHi}
+	root.X = loftFaceInterval{Lo: xLo, Hi: xHi}
 	start, end := lfF(section.start.U), lfF(section.end.U)
 	if start.Cmp(end) > 0 {
 		start, end = end, start
@@ -291,7 +291,7 @@ func revolveLoftFacesEndpointAxialClass(root revolveLoftFacesEndpointRoot,
 		return root, true
 	}
 	if xLo.Cmp(start) > 0 && xHi.Cmp(end) < 0 {
-		root.finite = true
+		root.Finite = true
 		return root, true
 	}
 	return root, false
@@ -433,7 +433,7 @@ func revolveLoftFacesEndpointTimeRoots(q [3][]*big.Rat,
 			if sign != first {
 				left, leftOK := revolveLoftFacesIsolateTimeRoot(coeff, lfZero(), middle)
 				right, rightOK := revolveLoftFacesIsolateTimeRoot(coeff, middle, lfOne())
-				if !leftOK || !rightOK || left.time.Hi.Cmp(right.time.Lo) >= 0 {
+				if !leftOK || !rightOK || left.Time.Hi.Cmp(right.Time.Lo) >= 0 {
 					return nil, false
 				}
 				return []revolveLoftFacesEndpointRoot{left, right}, true
@@ -455,7 +455,7 @@ func revolveLoftFacesIsolateTimeRoot(coeff []*big.Rat,
 		sign := polynomial.BernsteinSign(coeff, mid)
 		if sign == 0 {
 			return revolveLoftFacesEndpointRoot{
-				time: loftFaceInterval{Lo: mid, Hi: mid}, direction: direction}, true
+				Time: loftFaceInterval{Lo: mid, Hi: mid}, Direction: direction}, true
 		}
 		if sign == loSign {
 			lo = mid
@@ -464,5 +464,5 @@ func revolveLoftFacesIsolateTimeRoot(coeff []*big.Rat,
 		}
 	}
 	return revolveLoftFacesEndpointRoot{
-		time: loftFaceInterval{Lo: lo, Hi: hi}, direction: direction}, true
+		Time: loftFaceInterval{Lo: lo, Hi: hi}, Direction: direction}, true
 }

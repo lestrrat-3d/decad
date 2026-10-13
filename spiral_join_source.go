@@ -18,8 +18,8 @@ import (
 // at one LoftFaces cap. Its endpoints are exact rationals with opposite
 // implicit signs; no rounded point is treated as the true crossing.
 type spiralRootCrossing struct {
-	span   int
-	lo, hi *big.Rat
+	Span   int
+	Lo, Hi *big.Rat
 }
 
 // A bounded box around one true flank/root/tool triple junction. The true
@@ -476,7 +476,7 @@ func spiralBezierPoint(span freeform.BezierSpan, s *big.Rat) [2]*big.Rat {
 
 func spiralCapXRange(m loftFaceMap, span freeform.BezierSpan,
 	crossing spiralRootCrossing) loftFaceInterval {
-	left, right := spiralBezierPoint(span, crossing.lo), spiralBezierPoint(span, crossing.hi)
+	left, right := spiralBezierPoint(span, crossing.Lo), spiralBezierPoint(span, crossing.Hi)
 	return loftFaceInterval{
 		Lo: m.At(right[0], right[1])[0],
 		Hi: m.At(left[0], left[1])[0],
@@ -507,7 +507,7 @@ func spiralIsolateRoot(coeff []*big.Rat) spiralRootCrossing {
 // times and returns the dyadic bracket as a span-0 crossing.
 func spiralIsolateRootN(coeff []*big.Rat, steps int) spiralRootCrossing {
 	lo, hi := polynomial.BernsteinIsolateRoot(coeff, steps)
-	return spiralRootCrossing{span: 0, lo: lo, hi: hi}
+	return spiralRootCrossing{Span: 0, Lo: lo, Hi: hi}
 }
 
 func spiralBandXRange(first, second loftFaceMap, span freeform.BezierSpan,
@@ -565,12 +565,12 @@ func spiralIsolateJunction(ctx context.Context, maps []loftFaceMap, span freefor
 	}
 	leftRoot := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, tLo), 64)
 	rightRoot := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, tHi), 64)
-	sLo, sHi := leftRoot.lo, leftRoot.hi
-	if rightRoot.lo.Cmp(sLo) < 0 {
-		sLo = rightRoot.lo
+	sLo, sHi := leftRoot.Lo, leftRoot.Hi
+	if rightRoot.Lo.Cmp(sLo) < 0 {
+		sLo = rightRoot.Lo
 	}
-	if rightRoot.hi.Cmp(sHi) > 0 {
-		sHi = rightRoot.hi
+	if rightRoot.Hi.Cmp(sHi) > 0 {
+		sHi = rightRoot.Hi
 	}
 	margin := big.NewRat(1, 1<<40)
 	sLo, sHi = lfSub(sLo, margin), lfAdd(sHi, margin)

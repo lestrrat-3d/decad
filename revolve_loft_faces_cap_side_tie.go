@@ -114,8 +114,8 @@ func revolveLoftFacesHeelBoundarySideTie(proof *revolveLoftFacesSourceCertificat
 				if cell.segment != boundary.segment || cell.span != boundary.span ||
 					cell.band != arc.band || cell.ref != boundary.ref ||
 					cell.face != boundary.face ||
-					!revolveLoftFacesToolCapIntervalEqual(cell.upper.root, boundary.parameter) ||
-					!revolveLoftFacesCapBoundaryBoxEqual(cell.upper.box, boundary.box) {
+					!revolveLoftFacesToolCapIntervalEqual(cell.upper.Root, boundary.parameter) ||
+					!revolveLoftFacesCapBoundaryBoxEqual(cell.upper.Box, boundary.box) {
 					continue
 				}
 				matches++

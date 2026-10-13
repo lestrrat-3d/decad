@@ -52,12 +52,12 @@ func revolveLoftFacesArcSpanCells(ctx context.Context,
 				}
 				for _, piece := range pieces {
 					cell := revolveLoftFacesMappedCell{segment: segment, span: -1,
-						band: band, side: piece.side, sLo: lfZero(), sHi: lfOne(),
-						tLo: piece.lo, tHi: piece.hi,
-						tLoOpen: piece.loOpen, tHiOpen: piece.hiOpen}
-					if piece.rootIndex >= 0 {
+						band: band, side: piece.Side, sLo: lfZero(), sHi: lfOne(),
+						tLo: piece.Lo, tHi: piece.Hi,
+						tLoOpen: piece.LoOpen, tHiOpen: piece.HiOpen}
+					if piece.RootIndex >= 0 {
 						cell.side = revolveLoftFacesAxialMiss
-						if roots[piece.rootIndex].finite {
+						if roots[piece.RootIndex].Finite {
 							cell.side = revolveLoftFacesJointContact
 							cell.jointKind = revolveLoftFacesWholeArcContact
 							cell.jointArc = arc

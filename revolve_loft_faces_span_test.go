@@ -12,24 +12,24 @@ func TestMappedEndpointTimeRoots(t *testing.T) {
 	two := []*big.Rat{big.NewRat(-1, 1), big.NewRat(2, 1), big.NewRat(-1, 1)}
 	q := [3][]*big.Rat{{two[0]}, {two[1]}, {two[2]}}
 	roots, ok := revolveLoftFacesEndpointTimeRoots(q, true)
-	if !ok || len(roots) != 2 || roots[0].direction != 1 || roots[1].direction != -1 {
+	if !ok || len(roots) != 2 || roots[0].Direction != 1 || roots[1].Direction != -1 {
 		t.Fatalf("expected two ordered transverse roots, got %+v, %t", roots, ok)
 	}
-	if roots[0].time.Lo.Cmp(big.NewRat(1, 8)) <= 0 ||
-		roots[0].time.Hi.Cmp(big.NewRat(1, 4)) >= 0 ||
-		roots[1].time.Lo.Cmp(big.NewRat(3, 4)) <= 0 ||
-		roots[1].time.Hi.Cmp(big.NewRat(7, 8)) >= 0 {
+	if roots[0].Time.Lo.Cmp(big.NewRat(1, 8)) <= 0 ||
+		roots[0].Time.Hi.Cmp(big.NewRat(1, 4)) >= 0 ||
+		roots[1].Time.Lo.Cmp(big.NewRat(3, 4)) <= 0 ||
+		roots[1].Time.Hi.Cmp(big.NewRat(7, 8)) >= 0 {
 		t.Fatalf("roots escaped certified separate intervals: %+v", roots)
 	}
 	for _, root := range roots {
-		if polynomial.BernsteinValue(two, root.time.Lo).Sign()*polynomial.BernsteinValue(two, root.time.Hi).Sign() >= 0 {
+		if polynomial.BernsteinValue(two, root.Time.Lo).Sign()*polynomial.BernsteinValue(two, root.Time.Hi).Sign() >= 0 {
 			t.Fatalf("root bracket does not change side: %+v", root)
 		}
 	}
 
 	q = [3][]*big.Rat{{big.NewRat(-1, 1)}, {big.NewRat(0, 1)}, {big.NewRat(1, 1)}}
 	roots, ok = revolveLoftFacesEndpointTimeRoots(q, false)
-	if !ok || len(roots) != 1 || roots[0].direction != 1 {
+	if !ok || len(roots) != 1 || roots[0].Direction != 1 {
 		t.Fatalf("expected one transverse root, got %+v, %t", roots, ok)
 	}
 	q = [3][]*big.Rat{{big.NewRat(1, 1)}, {big.NewRat(1, 1)}, {big.NewRat(1, 1)}}
@@ -47,20 +47,20 @@ func TestMappedEndpointFiniteSection(t *testing.T) {
 	section := revolveSectionSpan{start: Point2{U: 5.7, V: 2.28},
 		end: Point2{U: 5.8, V: 3.3}}
 	x0, x1 := big.NewRat(5, 1), big.NewRat(6, 1)
-	outside := revolveLoftFacesEndpointRoot{time: loftFaceInterval{
+	outside := revolveLoftFacesEndpointRoot{Time: loftFaceInterval{
 		Lo: big.NewRat(1, 8), Hi: big.NewRat(1, 8)}}
 	outside, ok := revolveLoftFacesEndpointAxialClass(outside, x0, x1, section)
-	if !ok || outside.finite || outside.x.Hi.Cmp(big.NewRat(41, 8)) != 0 {
+	if !ok || outside.Finite || outside.X.Hi.Cmp(big.NewRat(41, 8)) != 0 {
 		t.Fatalf("expected a certified axial miss, got %+v, %t", outside, ok)
 	}
-	inside := revolveLoftFacesEndpointRoot{time: loftFaceInterval{
+	inside := revolveLoftFacesEndpointRoot{Time: loftFaceInterval{
 		Lo: big.NewRat(3, 4), Hi: big.NewRat(3, 4)}}
 	inside, ok = revolveLoftFacesEndpointAxialClass(inside, x0, x1, section)
-	if !ok || !inside.finite || inside.x.Lo.Cmp(big.NewRat(23, 4)) != 0 {
+	if !ok || !inside.Finite || inside.X.Lo.Cmp(big.NewRat(23, 4)) != 0 {
 		t.Fatalf("expected a certified finite crossing, got %+v, %t", inside, ok)
 	}
 	boundaryTime := lfSub(lfF(section.start.U), x0)
-	boundary := revolveLoftFacesEndpointRoot{time: loftFaceInterval{
+	boundary := revolveLoftFacesEndpointRoot{Time: loftFaceInterval{
 		Lo: boundaryTime, Hi: boundaryTime}}
 	if _, ok := revolveLoftFacesEndpointAxialClass(boundary, x0, x1, section); ok {
 		t.Fatal("a contact on the section end must refuse")

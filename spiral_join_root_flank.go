@@ -188,7 +188,7 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 		largest = max(largest, bound)
 	}
 	endpoint, ok := spiralJunctionBox(second, second, span,
-		proof.crossings[side][2].lo, proof.crossings[side][2].hi, lfZero(), lfZero())
+		proof.crossings[side][2].Lo, proof.crossings[side][2].Hi, lfZero(), lfZero())
 	if !ok || endpoint[0].Lo.Cmp(cap2.Lo) > 0 || endpoint[0].Hi.Cmp(cap2.Hi) < 0 {
 		return 0, false, nil
 	}
@@ -300,7 +300,7 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 		plan.slabs[slab] = trueBox
 	}
 	endpoint, ok := spiralJunctionBox(second, second, span,
-		proof.crossings[side][2].lo, proof.crossings[side][2].hi, lfZero(), lfZero())
+		proof.crossings[side][2].Lo, proof.crossings[side][2].Hi, lfZero(), lfZero())
 	if !ok || endpoint[0].Lo.Cmp(cap2.Lo) > 0 || endpoint[0].Hi.Cmp(cap2.Hi) < 0 {
 		return nil, false, nil
 	}

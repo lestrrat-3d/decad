@@ -25,18 +25,18 @@ func revolveLoftFacesToolCapAffineEqual(a, b *revolveLoftFacesVerticalAffine) bo
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
-	if !revolveLoftFacesToolCapRatEqual(a.det, b.det) {
+	if !revolveLoftFacesToolCapRatEqual(a.Det, b.Det) {
 		return false
 	}
-	for axis := range a.offset {
-		if !revolveLoftFacesToolCapRatEqual(a.offset[axis], b.offset[axis]) {
+	for axis := range a.Offset {
+		if !revolveLoftFacesToolCapRatEqual(a.Offset[axis], b.Offset[axis]) {
 			return false
 		}
 	}
-	for sourceAxis := range a.column {
-		for worldAxis := range a.column[sourceAxis] {
-			if !revolveLoftFacesToolCapRatEqual(a.column[sourceAxis][worldAxis],
-				b.column[sourceAxis][worldAxis]) {
+	for sourceAxis := range a.Column {
+		for worldAxis := range a.Column[sourceAxis] {
+			if !revolveLoftFacesToolCapRatEqual(a.Column[sourceAxis][worldAxis],
+				b.Column[sourceAxis][worldAxis]) {
 				return false
 			}
 		}
@@ -69,12 +69,12 @@ func revolveLoftFacesToolCapCellEqual(a, b revolveLoftFacesVerticalCell) bool {
 }
 
 func revolveLoftFacesToolCapLimitEqual(a, b revolveLoftFacesVerticalLimit) bool {
-	if a.side != b.side || a.before != b.before || a.after != b.after ||
-		!revolveLoftFacesToolCapIntervalEqual(a.root, b.root) {
+	if a.Side != b.Side || a.Before != b.Before || a.After != b.After ||
+		!revolveLoftFacesToolCapIntervalEqual(a.Root, b.Root) {
 		return false
 	}
-	for axis := range a.box {
-		if !revolveLoftFacesToolCapIntervalEqual(a.box[axis], b.box[axis]) {
+	for axis := range a.Box {
+		if !revolveLoftFacesToolCapIntervalEqual(a.Box[axis], b.Box[axis]) {
 			return false
 		}
 	}
@@ -82,12 +82,12 @@ func revolveLoftFacesToolCapLimitEqual(a, b revolveLoftFacesVerticalLimit) bool 
 }
 
 func revolveLoftFacesToolCapPieceEqual(a, b revolveLoftFacesVerticalPiece) bool {
-	if a.loOpen != b.loOpen || a.hiOpen != b.hiOpen ||
-		!revolveLoftFacesToolCapIntervalEqual(a.source, b.source) {
+	if a.LoOpen != b.LoOpen || a.HiOpen != b.HiOpen ||
+		!revolveLoftFacesToolCapIntervalEqual(a.Source, b.Source) {
 		return false
 	}
-	for axis := range a.box {
-		if !revolveLoftFacesToolCapIntervalEqual(a.box[axis], b.box[axis]) {
+	for axis := range a.Box {
+		if !revolveLoftFacesToolCapIntervalEqual(a.Box[axis], b.Box[axis]) {
 			return false
 		}
 	}

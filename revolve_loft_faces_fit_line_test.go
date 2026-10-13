@@ -33,7 +33,7 @@ func TestFiniteRevolveFitLineJointKeepsBothLiveSourceSides(t *testing.T) {
 	joint, ok := certifyRevolveLoftFacesFitLineJoint(t.Context(), trim, section, 0, 5, band, false)
 	require.True(t, ok)
 	require.Len(t, joint.roots, 1)
-	require.True(t, joint.roots[0].finite)
+	require.True(t, joint.roots[0].Finite)
 	for _, part := range []struct {
 		segment int
 		span    freeform.BezierSpan

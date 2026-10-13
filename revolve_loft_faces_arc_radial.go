@@ -20,8 +20,8 @@ type mappedArcRadialBand struct {
 }
 
 type mappedArcRadialCap struct {
-	x    *big.Rat
-	u, v [2]*big.Rat
+	X    *big.Rat
+	U, V [2]*big.Rat
 }
 
 func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
@@ -74,9 +74,9 @@ func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 		if atCenter[1].Sign() != 0 || atCenter[2].Sign() != 0 {
 			return empty, false
 		}
-		mappedCaps[index] = mappedArcRadialCap{x: atCenter[0],
-			u: [2]*big.Rat{lfDiv(mapped.QU[1], mapped.G0), lfDiv(mapped.QU[2], mapped.G0)},
-			v: [2]*big.Rat{lfDiv(mapped.QV[1], mapped.G0), lfDiv(mapped.QV[2], mapped.G0)}}
+		mappedCaps[index] = mappedArcRadialCap{X: atCenter[0],
+			U: [2]*big.Rat{lfDiv(mapped.QU[1], mapped.G0), lfDiv(mapped.QU[2], mapped.G0)},
+			V: [2]*big.Rat{lfDiv(mapped.QV[1], mapped.G0), lfDiv(mapped.QV[2], mapped.G0)}}
 	}
 	lambda0, ok0 := mappedArcRadialScale(mappedCaps, lfZero())
 	lambdaMid, okMid := mappedArcRadialScale(mappedCaps, big.NewRat(1, 2))
@@ -87,7 +87,7 @@ func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 		lambda0.Sign() <= 0 || lambda1.Sign() < 0 || lambda2.Sign() <= 0 {
 		return empty, false
 	}
-	x0, x2 := mappedCaps[0].x, mappedCaps[1].x
+	x0, x2 := mappedCaps[0].X, mappedCaps[1].X
 	xMid := lfMul(big.NewRat(1, 2), lfAdd(x0, x2))
 	sectionX0, sectionX1 := lfF(meridian.start.U), lfF(meridian.end.U)
 	sectionR0, sectionR1 := lfF(meridian.start.V), lfF(meridian.end.V)
@@ -115,10 +115,10 @@ func mappedArcRadiusSquare(u, v, centerU, centerV *big.Rat) *big.Rat {
 func mappedArcRadialScale(mappedCaps [2]mappedArcRadialCap, t *big.Rat) (*big.Rat, bool) {
 	var u, v [2]*big.Rat
 	for axis := range u {
-		u[axis] = lfAdd(lfMul(lfSub(lfOne(), t), mappedCaps[0].u[axis]),
-			lfMul(t, mappedCaps[1].u[axis]))
-		v[axis] = lfAdd(lfMul(lfSub(lfOne(), t), mappedCaps[0].v[axis]),
-			lfMul(t, mappedCaps[1].v[axis]))
+		u[axis] = lfAdd(lfMul(lfSub(lfOne(), t), mappedCaps[0].U[axis]),
+			lfMul(t, mappedCaps[1].U[axis]))
+		v[axis] = lfAdd(lfMul(lfSub(lfOne(), t), mappedCaps[0].V[axis]),
+			lfMul(t, mappedCaps[1].V[axis]))
 	}
 	u2 := lfAdd(lfMul(u[0], u[0]), lfMul(u[1], u[1]))
 	v2 := lfAdd(lfMul(v[0], v[0]), lfMul(v[1], v[1]))

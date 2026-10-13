@@ -74,8 +74,8 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 	if vertical.face != circle.blankFace || vertical.x.Cmp(circle.x) != 0 ||
 		vertical.upper.Cmp(circle.radius) != 0 ||
 		vertical.lower.Cmp(circle.radius) >= 0 ||
-		vertical.yzAffine == nil || vertical.yzAffine.det == nil ||
-		vertical.yzAffine.det.Sign() <= 0 {
+		vertical.yzAffine == nil || vertical.yzAffine.Det == nil ||
+		vertical.yzAffine.Det.Sign() <= 0 {
 		return nil, false, nil
 	}
 	return revolveLoftFacesHeelOccupiedFromSource(ctx, proof, circle,
@@ -95,8 +95,8 @@ func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
 		section.band < 0 || section.band >= len(proof.sourceRefs) ||
 		section.x.Cmp(circle.x) != 0 ||
 		section.upper.Cmp(circle.radius) != 0 || !section.hasRetained ||
-		section.yzAffine == nil || section.yzAffine.det == nil ||
-		section.yzAffine.det.Sign() <= 0 {
+		section.yzAffine == nil || section.yzAffine.Det == nil ||
+		section.yzAffine.Det.Sign() <= 0 {
 		return nil, false, nil
 	}
 	current, err := revolveLoftFacesToolCapSourceCurrent(ctx, proof, circle, section)
@@ -113,21 +113,21 @@ func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
 		if cell.segment < 0 || cell.segment >= len(outer) {
 			return nil, false, nil
 		}
-		if cell.upper.root.Lo == nil {
-			if cell.upper.side != -1 && cell.upper.side != 1 {
+		if cell.upper.Root.Lo == nil {
+			if cell.upper.Side != -1 && cell.upper.Side != 1 {
 				return nil, false, nil
 			}
 			continue
 		}
-		root := cell.upper.root
+		root := cell.upper.Root
 		if root.Hi == nil || root.Lo.Sign() <= 0 || root.Lo.Cmp(root.Hi) >= 0 ||
 			root.Hi.Cmp(lfOne()) >= 0 || cell.face == nil ||
-			cell.upper.before*cell.upper.after != -1 ||
-			cell.upper.box[0].Lo == nil || cell.upper.box[0].Hi == nil ||
-			cell.upper.box[0].Lo.Cmp(circle.x) != 0 ||
-			cell.upper.box[0].Hi.Cmp(circle.x) != 0 ||
-			cell.upper.box[1].Lo == nil || cell.upper.box[1].Lo.Sign() <= 0 ||
-			cell.upper.box[2].Lo == nil || cell.upper.box[2].Hi == nil {
+			cell.upper.Before*cell.upper.After != -1 ||
+			cell.upper.Box[0].Lo == nil || cell.upper.Box[0].Hi == nil ||
+			cell.upper.Box[0].Lo.Cmp(circle.x) != 0 ||
+			cell.upper.Box[0].Hi.Cmp(circle.x) != 0 ||
+			cell.upper.Box[1].Lo == nil || cell.upper.Box[1].Lo.Sign() <= 0 ||
+			cell.upper.Box[2].Lo == nil || cell.upper.Box[2].Hi == nil {
 			return nil, false, nil
 		}
 		edge := outer[cell.segment]
@@ -140,7 +140,7 @@ func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
 		}
 		boundary := &revolveLoftFacesToolCapBoundary{
 			segment: cell.segment, span: cell.span, ref: cell.ref,
-			face: cell.face, parameter: root, box: cell.upper.box,
+			face: cell.face, parameter: root, box: cell.upper.Box,
 			outward: outward}
 		switch {
 		case boundary.box[2].Hi.Sign() < 0 && negative == nil:
@@ -225,10 +225,10 @@ func revolveLoftFacesToolCapFaceOriginCurrent(circle revolveLoftFacesToolCapCirc
 
 func revolveLoftFacesToolBoundaryOutward(edge sketch.BoundaryEdge,
 	limit revolveLoftFacesVerticalLimit) (bool, bool) {
-	if edge.Partial || limit.before*limit.after != -1 {
+	if edge.Partial || limit.Before*limit.After != -1 {
 		return false, false
 	}
-	before, after := limit.before, limit.after
+	before, after := limit.Before, limit.After
 	if edge.Reversed {
 		before, after = after, before
 	}

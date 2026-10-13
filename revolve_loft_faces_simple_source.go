@@ -12,11 +12,11 @@ import (
 // one whole short arc in the authenticated Sketch boundary walk. Its box
 // encloses the entire true curve, not a sampled polyline.
 type revolveLoftFacesSimpleCell struct {
-	segment, span int
-	start, end    freeform.RatPoint
-	box           [2]loftFaceInterval
-	bezier        freeform.BezierSpan
-	arc           *arcSeg
+	Segment, Span int
+	Start, End    freeform.RatPoint
+	Box           [2]loftFaceInterval
+	Bezier        freeform.BezierSpan
+	Arc           *arcSeg
 }
 
 type revolveLoftFacesSimpleLoop struct {
@@ -175,14 +175,14 @@ func revolveLoftFacesSimpleBezier(segment, spanIndex int,
 	}
 	for axis := range 2 {
 		value := revolveLoftFacesSimpleCoordinate(span[0], axis)
-		cell.box[axis] = loftFaceInterval{Lo: value, Hi: value}
+		cell.Box[axis] = loftFaceInterval{Lo: value, Hi: value}
 		for _, point := range span[1:] {
 			value = revolveLoftFacesSimpleCoordinate(point, axis)
-			if value.Cmp(cell.box[axis].Lo) < 0 {
-				cell.box[axis].Lo = value
+			if value.Cmp(cell.Box[axis].Lo) < 0 {
+				cell.Box[axis].Lo = value
 			}
-			if value.Cmp(cell.box[axis].Hi) > 0 {
-				cell.box[axis].Hi = value
+			if value.Cmp(cell.Box[axis].Hi) > 0 {
+				cell.Box[axis].Hi = value
 			}
 		}
 	}
@@ -202,9 +202,9 @@ func revolveLoftFacesSimpleBezier(segment, spanIndex int,
 	if !regular {
 		return revolveLoftFacesSimpleCell{}, false
 	}
-	cell.segment, cell.span = segment, spanIndex
-	cell.start, cell.end = span[0], span[len(span)-1]
-	cell.bezier = span
+	cell.Segment, cell.Span = segment, spanIndex
+	cell.Start, cell.End = span[0], span[len(span)-1]
+	cell.Bezier = span
 	return cell, true
 }
 
@@ -217,8 +217,8 @@ func revolveLoftFacesSimpleCoordinate(point freeform.RatPoint, axis int) *big.Ra
 
 func revolveLoftFacesSimpleSeparated(a, b revolveLoftFacesSimpleCell) bool {
 	for axis := range 2 {
-		if a.box[axis].Hi.Cmp(b.box[axis].Lo) < 0 ||
-			b.box[axis].Hi.Cmp(a.box[axis].Lo) < 0 {
+		if a.Box[axis].Hi.Cmp(b.Box[axis].Lo) < 0 ||
+			b.Box[axis].Hi.Cmp(a.Box[axis].Lo) < 0 {
 			return true
 		}
 	}
@@ -226,11 +226,11 @@ func revolveLoftFacesSimpleSeparated(a, b revolveLoftFacesSimpleCell) bool {
 }
 
 func revolveLoftFacesSimpleNeighbors(a, b revolveLoftFacesSimpleCell) bool {
-	if a.end.U.Cmp(b.start.U) != 0 || a.end.V.Cmp(b.start.V) != 0 {
+	if a.End.U.Cmp(b.Start.U) != 0 || a.End.V.Cmp(b.Start.V) != 0 {
 		return false
 	}
 	for axis := range 2 {
-		contact := revolveLoftFacesSimpleCoordinate(a.end, axis)
+		contact := revolveLoftFacesSimpleCoordinate(a.End, axis)
 		for _, side := range [...]int{-1, 1} {
 			if revolveLoftFacesSimpleCellSide(a, axis, contact, side) &&
 				revolveLoftFacesSimpleCellSide(b, axis, contact, -side) {
@@ -243,15 +243,15 @@ func revolveLoftFacesSimpleNeighbors(a, b revolveLoftFacesSimpleCell) bool {
 
 func revolveLoftFacesSimpleCellSide(cell revolveLoftFacesSimpleCell,
 	axis int, contact *big.Rat, side int) bool {
-	if cell.arc != nil {
-		return revolveLoftFacesSimpleArcSide(*cell.arc, axis, contact, side)
+	if cell.Arc != nil {
+		return revolveLoftFacesSimpleArcSide(*cell.Arc, axis, contact, side)
 	}
 	if side < 0 {
-		return cell.box[axis].Hi.Cmp(contact) == 0 &&
-			cell.box[axis].Lo.Cmp(contact) < 0
+		return cell.Box[axis].Hi.Cmp(contact) == 0 &&
+			cell.Box[axis].Lo.Cmp(contact) < 0
 	}
-	return cell.box[axis].Lo.Cmp(contact) == 0 &&
-		cell.box[axis].Hi.Cmp(contact) > 0
+	return cell.Box[axis].Lo.Cmp(contact) == 0 &&
+		cell.Box[axis].Hi.Cmp(contact) > 0
 }
 
 // A short circular arc that alone passes an axis extremum determines which
@@ -259,13 +259,13 @@ func revolveLoftFacesSimpleCellSide(cell revolveLoftFacesSimpleCell,
 // its endpoint chord, so the arc extremum is also the loop's extremum.
 func revolveLoftFacesSimplePositiveOrientation(cells []revolveLoftFacesSimpleCell) bool {
 	for i, cell := range cells {
-		if cell.arc == nil {
+		if cell.Arc == nil {
 			continue
 		}
 		for axis := range 2 {
-			contact := revolveLoftFacesSimpleCoordinate(cell.start, axis)
+			contact := revolveLoftFacesSimpleCoordinate(cell.Start, axis)
 			for _, side := range [...]int{-1, 1} {
-				if !revolveLoftFacesSimpleArcChordSide(*cell.arc, axis, contact, side) {
+				if !revolveLoftFacesSimpleArcChordSide(*cell.Arc, axis, contact, side) {
 					continue
 				}
 				outermost := true
@@ -274,13 +274,13 @@ func revolveLoftFacesSimplePositiveOrientation(cells []revolveLoftFacesSimpleCel
 						continue
 					}
 					if side < 0 {
-						outermost = outermost && other.box[axis].Lo.Cmp(contact) >= 0
+						outermost = outermost && other.Box[axis].Lo.Cmp(contact) >= 0
 					} else {
-						outermost = outermost && other.box[axis].Hi.Cmp(contact) <= 0
+						outermost = outermost && other.Box[axis].Hi.Cmp(contact) <= 0
 					}
 				}
 				if outermost {
-					return cell.arc.TStart < cell.arc.TEnd
+					return cell.Arc.TStart < cell.Arc.TEnd
 				}
 			}
 		}
