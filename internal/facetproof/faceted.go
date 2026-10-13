@@ -160,6 +160,9 @@ type MeshAudit struct {
 	Members  [][]int
 	CompVol  []*big.Rat
 	Contains [][]bool
+	// Det is each facet's exact a·(b×c) over XVerts when every facet's term
+	// was a Dyadic; nil when any facet took the big.Rat fallback.
+	Det []proof.Dyadic
 }
 
 func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*MeshAudit, error) {
@@ -233,6 +236,8 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 	}
 
 	sixth := big.NewRat(1, 6)
+	det := make([]proof.Dyadic, len(tris))
+	allDyadic := true
 	audit.CompVol = make([]*big.Rat, len(audit.Members))
 	for ci, list := range audit.Members {
 		// Every term is a Dyadic (power-of-two denominators), so the
@@ -250,11 +255,13 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 			cross := proof.Xcross(audit.XVerts[t[1]], audit.XVerts[t[2]])
 			if v == nil {
 				if term, ok := proof.XdotDyadic(audit.XVerts[t[0]], cross); ok {
+					det[fi] = term
 					total = proof.DyAdd(total, term)
 					continue
 				}
 				v = total.Rat()
 			}
+			allDyadic = false
 			v.Add(v, proof.XdotRat(audit.XVerts[t[0]], cross))
 		}
 		if v == nil {
@@ -266,6 +273,9 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 		}
 	}
 
+	if allDyadic {
+		audit.Det = det
+	}
 	audit.Contains = make([][]bool, len(audit.Members))
 	for i := range audit.Members {
 		audit.Contains[i] = make([]bool, len(audit.Members))

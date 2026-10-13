@@ -376,7 +376,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	xverts, comp, adj := audit.XVerts, audit.Comp, audit.Adj
+	comp, adj := audit.Comp, audit.Adj
 	members, compVol, contains := audit.Members, audit.CompVol, audit.Contains
 
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
@@ -564,7 +564,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		}
 	}
 	body.volume = volume
-	moments, err := facetproof.FirstMoments(budget, xverts, tris)
+	moments, err := facetproof.FirstMomentsFromAudit(budget, audit, tris)
 	if err != nil {
 		return nil, err
 	}
