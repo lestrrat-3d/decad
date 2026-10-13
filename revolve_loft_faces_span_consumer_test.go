@@ -1,11 +1,13 @@
 package decad
 
 import (
+	"math/big"
 	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
@@ -22,6 +24,19 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 	if len(cells) == 0 {
 		t.Fatal("mapped finite-span consumer returned no cells")
 	}
+	t.Run("exact sign of live mapped span", func(t *testing.T) {
+		crossing := proof.crossings[0]
+		rows := spiralRootPolynomial(trim.maps[0], trim.maps[1],
+			crossing.span, proof.rootM, proof.rootB)
+		for _, row := range rows {
+			for _, parameter := range []*big.Rat{
+				big.NewRat(0, 1), big.NewRat(1, 3), big.NewRat(2, 3), big.NewRat(1, 1),
+			} {
+				reference := spiralBernValueRef(row, parameter)
+				require.Equal(t, reference.Sign(), bernsteinExactSign(row, parameter))
+			}
+		}
+	})
 	t.Logf("root section %d mapped %d source cells", proof.section.rootSpan, len(cells))
 	radial := 0
 	for segment, entity := range trim.source.source.entities {

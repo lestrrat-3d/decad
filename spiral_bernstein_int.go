@@ -2,71 +2,20 @@ package decad
 
 import "math/big"
 
-// Exact Bernstein arithmetic over one shared integer denominator. Every
-// function here returns the same rational as its big.Rat formulation; the
-// common denominator only removes the per-operation GCD of big.Rat.norm.
-
-// spiralIntegerRow returns fresh integer numerators over the positive least
-// common denominator of a. nums[i]/den == a[i] exactly.
 func spiralIntegerRow(a []*big.Rat) ([]*big.Int, *big.Int) {
-	den := big.NewInt(1)
-	var gcd big.Int
-	for _, c := range a {
-		d := c.Denom()
-		gcd.GCD(nil, nil, den, d)
-		den.Quo(den, &gcd)
-		den.Mul(den, d)
-	}
-	nums := make([]*big.Int, len(a))
-	var scale big.Int
-	for i, c := range a {
-		scale.Quo(den, c.Denom())
-		nums[i] = new(big.Int).Mul(c.Num(), &scale)
-	}
-	return nums, den
+	return bernsteinIntegerRow(a)
 }
 
-// spiralBigBinomials returns C(n,0..n) as exact integers.
 func spiralBigBinomials(n int) []*big.Int {
-	out := make([]*big.Int, n+1)
-	out[0] = big.NewInt(1)
-	for i := 1; i <= n; i++ {
-		out[i] = new(big.Int).Mul(out[i-1], big.NewInt(int64(n-i+1)))
-		out[i].Quo(out[i], big.NewInt(int64(i)))
-	}
-	return out
+	return bernsteinBinomials(n)
 }
 
-// spiralScaledBernstein folds the binomial weights into integer numerators:
-// scaled[i] = nums[i]*C(n,i), so that
-// Σ scaled[i] p^i (q-p)^(n-i) / (den q^n) is the Bernstein value at p/q.
 func spiralScaledBernstein(coeff []*big.Rat) ([]*big.Int, *big.Int) {
-	nums, den := spiralIntegerRow(coeff)
-	for i, binom := range spiralBigBinomials(len(coeff) - 1) {
-		nums[i].Mul(nums[i], binom)
-	}
-	return nums, den
+	return bernsteinScaledCoefficients(coeff)
 }
 
-// spiralScaledNumerator evaluates Σ scaled[i] p^i (q-p)^(n-i).
 func spiralScaledNumerator(scaled []*big.Int, p, q *big.Int) *big.Int {
-	n := len(scaled) - 1
-	qp := new(big.Int).Sub(q, p)
-	pPow := make([]*big.Int, n+1)
-	qpPow := make([]*big.Int, n+1)
-	pPow[0], qpPow[0] = big.NewInt(1), big.NewInt(1)
-	for i := 1; i <= n; i++ {
-		pPow[i] = new(big.Int).Mul(pPow[i-1], p)
-		qpPow[i] = new(big.Int).Mul(qpPow[i-1], qp)
-	}
-	sum := new(big.Int)
-	var term big.Int
-	for i, c := range scaled {
-		term.Mul(c, pPow[i])
-		term.Mul(&term, qpPow[n-i])
-		sum.Add(sum, &term)
-	}
-	return sum
+	return bernsteinScaledNumerator(scaled, p, q)
 }
 
 func spiralBernValue(coeff []*big.Rat, parameter *big.Rat) *big.Rat {
@@ -77,12 +26,8 @@ func spiralBernValue(coeff []*big.Rat, parameter *big.Rat) *big.Rat {
 	return new(big.Rat).SetFrac(num, qn.Mul(qn, den))
 }
 
-// spiralBernSign is spiralBernValue(coeff, parameter).Sign() without the
-// final normalisation. den and q^n are positive, so the numerator's sign is
-// the value's sign.
 func spiralBernSign(coeff []*big.Rat, parameter *big.Rat) int {
-	scaled, _ := spiralScaledBernstein(coeff)
-	return spiralScaledNumerator(scaled, parameter.Num(), parameter.Denom()).Sign()
+	return bernsteinExactSign(coeff, parameter)
 }
 
 func spiralIsolateRootN(coeff []*big.Rat, steps int) spiralRootCrossing {
