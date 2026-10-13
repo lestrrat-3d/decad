@@ -47,7 +47,7 @@ func maxRat(x, y *big.Rat) *big.Rat {
 func exactFloat(q *big.Rat) (float64, error) {
 	f, _ := q.Float64()
 	if math.IsNaN(f) || math.IsInf(f, 0) || rf(f).Cmp(q) != 0 {
-		return 0, fmt.Errorf("%w: a three-section loft station cannot be held exactly in float64", decaderr.ErrUnsupported)
+		return 0, fmt.Errorf("%w: a smooth loft station cannot be held exactly in float64", decaderr.ErrUnsupported)
 	}
 	return f, nil
 }

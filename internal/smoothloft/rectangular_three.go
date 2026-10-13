@@ -198,8 +198,12 @@ func buildThreeRectangles(ctx context.Context, sections [3]rectangularSection,
 	return result, nil
 }
 
+type rectangularStationDimension interface {
+	at(*big.Rat) *big.Rat
+}
+
 func rectangularMesh(ctx context.Context, points []sectionrecord.Point2, origin r3.Vec, height *big.Rat,
-	w, h rectangularQuadratic, bands int) ([]r3.Vec, [][3]int, []int, error) {
+	w, h rectangularStationDimension, bands int) ([]r3.Vec, [][3]int, []int, error) {
 	vertices := make([]r3.Vec, (bands+1)*len(points))
 	for i := range bands + 1 {
 		if err := ctx.Err(); err != nil {

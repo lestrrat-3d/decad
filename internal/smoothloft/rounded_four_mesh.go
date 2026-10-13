@@ -106,7 +106,7 @@ func roundedMesh(ctx context.Context, unit []sectionrecord.Point2, b [4]*big.Rat
 			return nil, nil, nil, err
 		}
 		t := big.NewRat(int64(i), int64(bands))
-		width := roundedCubicAt(b, t)
+		width := fourCubicAt(b, t)
 		z, err := roundedExactFloat(add(rf(origin.Z), mul(height, t)))
 		if err != nil {
 			return nil, nil, nil, err
