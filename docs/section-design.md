@@ -3,7 +3,7 @@
 `Body.Section` reads a solid at a requested plane and returns a new Sketch whose
 profiles denote the material in that plane. It does not change the body or its
 document. An exact returned Sketch may enter any admitted profile consumer. A
-bounded oblique section may enter only the straight solid `Extrude` path below.
+bounded section may enter only the straight solid `Extrude` path below.
 
 ## Public result
 
@@ -56,17 +56,34 @@ with U×V exactly equal to the normal. Read the certified center, radius, plane
 origin and axes as exact dyadic values. The signed normal offset `d` gives
 `q = r² − d²`. Require `q > 0`; a tangent or exterior plane has no admitted
 material profile. Use the downward dyadic square root and an exact square
-comparison to require a binary64 radius `h` with `h² = q`. A non-square `q`
-returns `ErrUnsupported` rather than an exact Sketch circle with a rounded
-radius.
+comparison to find whether a binary64 radius `h` satisfies `h² = q`.
 
 Project the center minus the plane origin onto U and V with exact dyadic dot
 products. Require both local coordinates to be exactly representable as
-finite binary64 values. The occupied ball meets the plane in the disk centered
-there with radius `h`; this whole-ball identity does not require a sampled
-meridian crossing. Reconstruct a whole counterclockwise circle through Sketch
-and require its fresh profile record to match before returning it. The exact
-circle may enter ordinary profile consumers, including `Extrude`.
+finite binary64 values. The occupied ball meets the plane in a disk centered
+there with radius `sqrt(q)`; this whole-ball identity does not require a sampled
+meridian crossing. When `h² = q`, reconstruct a whole counterclockwise circle
+through Sketch and require its fresh profile record to match before returning
+it. The exact circle may enter ordinary profile consumers, including `Extrude`.
+
+Otherwise find the downward and upward binary64 square-root brackets by exact
+square comparisons. Refuse a zero lower radius or a nonfinite upper radius.
+Sample the lower circle at the same rational half-angle stations and with the
+same strict-convexity, feature-scale and 0.05 mm gates as the bounded complete
+ellipse below. This polygon lies inside the true disk. Its lower-circle chords
+have the rational `d²/4` unit-circle sagitta bound. Every point of the true
+disk can first move radially to the lower disk within the upper-minus-lower
+radius gap, then move to the lower polygon within the chord gap. Twice the
+radius gap bounds the plane-local L1 displacement; multiplying by the larger
+held basis length upper bound covers world displacement. Add these gaps and
+the rounded polygon-vertex errors without cancellation to `sectionDelta`.
+The same radial map and convex combinations of matching chord endpoints cover
+both occupied regions, not only their boundaries.
+
+Reconstruct the polygon through fresh Sketch reference lines and attach the
+private revision-bound certificate below. The Sketch polygon is an inner
+approximation, not an exact circle. Only straight solid `Extrude` with an
+independent `Distance` may consume it; all other profile consumers refuse it.
 
 ## Cardinal vertical plane of an exact cylinder
 
@@ -326,9 +343,8 @@ reusing its bound.
 - Check a translated, quarter-turned rectangular prism with both radial axes
   and a reversed sweep axis. Refuse tangent, exterior and tapered rectangular
   cases; an interior noncardinal cut uses the bounded class.
-- Refuse a tangent or exterior cardinal plane, a positive `q` whose square
-  root is not exactly binary64, a non-cardinal plane, and a radius or frame
-  whose derived rectangle corner cannot be held exactly.
+- Refuse a tangent or exterior cardinal plane, a non-cardinal plane, and a
+  radius or frame whose derived rectangle corner cannot be held exactly.
 - A cap plane, unadmitted oblique plane, sheet body, invalid input, and
   canceled context must return their stated errors without changing the
   body's document.
@@ -345,8 +361,9 @@ reusing its bound.
   cardinal plane at z = 3 mm returns a circle of radius 4 mm and area 16π mm².
   Extruding it by 2 mm yields 32π mm³ and passes `Tessellate(0.1 mm, VerifyAll)`.
   Check a plane normal to the Revolve axis, signed-cardinal placement and
-  reversed section axes. Refuse a
-  non-square section radius, tangent or exterior plane, and oblique plane.
+  reversed section axes. At z = 2 mm, the bounded polygon encloses the true
+  21π mm² section and its 2 mm Extrude encloses 42π mm³ while passing the same
+  mesh check. Refuse tangent, exterior and oblique planes.
 - Check translated and rigidly placed rectangular prisms, reversed section
   axes, triangle through hexagon section rings, and cuts that refuse at a
   source vertex, tangent, exterior or uncertain topology.

@@ -85,7 +85,7 @@ func obliqueCircleClip(pp prismPayload, plane r3.Frame) ([]Point2, float64, bool
 	}
 	for _, perQuadrant := range [...]int{8, 16, 32} {
 		polygon, delta, ok := obliqueCirclePolygon(localCenter, a, b, orientation,
-			plane, perQuadrant)
+			plane, perQuadrant, 0, 0)
 		if ok {
 			return polygon, delta, true
 		}
@@ -140,7 +140,7 @@ func obliqueCircleUnit(quadrant, numerator, denominator int) sectionRatPoint {
 // circle, where d is the chord length. The affine map and vertex rounding
 // carry that two-sided gap to the exact ellipse and its held line polygon.
 func obliqueCirclePolygon(center, a, b sectionRatPoint, orientation int,
-	plane r3.Frame, perQuadrant int) ([]Point2, float64, bool) {
+	plane r3.Frame, perQuadrant int, extraLocal, extraWorld float64) ([]Point2, float64, bool) {
 	unit := make([]sectionRatPoint, 0, 4*perQuadrant)
 	for quadrant := range 4 {
 		for j := range perQuadrant {
@@ -187,8 +187,8 @@ func obliqueCirclePolygon(center, a, b sectionRatPoint, orientation int,
 		vertexWorld = max(vertexWorld, proofbound.AbsSumUpper(
 			proofbound.ProductUpper(uError, uNorm), proofbound.ProductUpper(vError, vNorm)))
 	}
-	delta := proofbound.UpRound(max(proofbound.AbsSumUpper(curveLocal, vertexLocal),
-		proofbound.AbsSumUpper(curveWorld, vertexWorld)))
+	delta := proofbound.UpRound(max(proofbound.AbsSumUpper(curveLocal, vertexLocal, extraLocal),
+		proofbound.AbsSumUpper(curveWorld, vertexWorld, extraWorld)))
 	if !obliqueCircleFinite(delta) || delta <= 0 || delta > 1.0/20 ||
 		!sectionMatchedConvex(exact, proxy) {
 		return nil, 0, false

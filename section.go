@@ -17,7 +17,8 @@ import (
 // One class is an exact straight prism cut strictly between its caps by a
 // plane whose frame preserves the prism's recorded section coordinates.
 // Other classes are a whole-circle prism cut by a cardinal plane with an exact
-// chord, an authenticated sphere cut by a cardinal plane with an exact circle,
+// chord, an authenticated sphere cut by a cardinal plane with an exact circle
+// or bounded polygon,
 // a rectangular prism cut by an interior cardinal vertical plane, and
 // a bounded oblique cut of an exact rectangular or whole-circle prism,
 // including a certified crossing of one circle-prism cap. The
@@ -36,9 +37,17 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		return nil, nil, fmt.Errorf(`%w: a section needs a sound solid`, ErrNotSolid)
 	}
 	if _, ok := b.payload.(revolvePayload); ok {
-		profile, admitted := cardinalSphereSectionRecord(b, plane)
+		profile, polygon, delta, admitted := cardinalSphereSection(b, plane)
 		if !admitted {
-			return nil, nil, fmt.Errorf(`%w: section needs an authenticated sphere and exact cardinal circle`, ErrUnsupported)
+			return nil, nil, fmt.Errorf(`%w: section needs an authenticated sphere and certifiable cardinal circle`,
+				ErrUnsupported)
+		}
+		if polygon != nil {
+			s, result, err := reconstructBoundedSection(ctx, polygon, plane, delta)
+			if err != nil {
+				return nil, nil, err
+			}
+			return s, []*sketch.Profile{result}, nil
 		}
 		return reconstructExactSection(ctx, profile, plane)
 	}
@@ -62,7 +71,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 				polygon, delta, clipped = obliqueCircleCapClip(ctx, pp, plane)
 			}
 			if clipped {
-				s, result, err := reconstructObliqueSection(ctx, polygon, plane, delta)
+				s, result, err := reconstructBoundedSection(ctx, polygon, plane, delta)
 				if err != nil {
 					return nil, nil, err
 				}

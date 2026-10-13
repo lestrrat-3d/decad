@@ -322,7 +322,7 @@ restates none of it; read it there.
 Input: the recorded profile + plane, a linear `Extent`, options. The sweep
 direction is the plane normal `U × V` for `Along` (core §8.1).
 
-A bounded oblique `Body.Section` profile carries an opaque Sketch attachment.
+A bounded `Body.Section` profile carries an opaque Sketch attachment.
 `Extrude` admits it only while its marked reference boundary, profile, revision
 and plane frame still match the source certificate. It uses the certified frame
 directly and passes the source displacement into `prismPayload.SectionDelta`.
