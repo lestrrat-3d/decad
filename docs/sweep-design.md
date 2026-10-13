@@ -1481,8 +1481,20 @@ bound adds Loft's `FacetDeparture`, which covers each source Arc against
 its chord facets. The horizontal symmetric-difference tube uses the true
 perimeter upper bound. The volume allowance adds every cell's tube, axial
 station move and Loft `VolSymDiff` without cancellation. The curved class
-uses a three-percent-of-radius planning target for its station count; the
-completed boundary proof decides the requested mesh tolerance.
+first finds the least count at a three-percent-of-radius planning target. It
+optionally tries the least count at a 0.08 mm target when that is finer,
+within the same 64-cell and facet-pair ceilings. If the finer count exceeds
+a ceiling or its own Loft, contact or volume proof refuses, the evaluator
+builds the original certified count. Each successful build publishes its
+own computed boundary and occupied-volume bounds. A caller's finer mesh
+tolerance still refuses.
+
+The first refined Loft cell supplies a skip-only estimate of the full
+arc-chorded mesh's facet-pair cost. The complete candidate still receives
+its own audit, since later cells can have different chord counts. A late
+refined refusal can cause at most two builds, each subject to its own
+64-cell and facet-pair ceiling. It does not imply a single shared work
+allowance across both attempts.
 
 The public acceptance builds a 4×2 mm rounded rectangle with 0.5 mm
 corners in Sketch, sweeps it 5 mm with a 30° twist, and asks for
@@ -1490,6 +1502,13 @@ corners in Sketch, sweeps it 5 mm with a 30° twist, and asks for
 `5*(7+π/4) mm³`; the mesh reports both boundary and volume verified.
 The focused tests also cover all eight source wall roles, placement,
 negative twist and an off-axis source refusal without a document commit.
+An 8×6 mm rounded rectangle with 1.5 mm corners and a 30° twist uses the
+optional finer count and passes `Tessellate(0.1 mm, VerifyAll)` with a bound
+below 0.08 mm. The finer build took 0.522 s versus 0.209 s for the original
+build in the measured local probe. A 1.4-radian twist of that profile keeps
+the original certified mesh when the finer construction reaches the
+facet-pair ceiling; the first-cell skip reduced that build from 1.57 s to
+0.61 s in the measured local probe.
 An overlapping Boolean raises its pair tolerance to this Sweep's certified
 held boundary. The rounded-profile example unions with an overlapping
 1.5×0.8×1 mm extruded box and passes `VerifyAll` at 0.2 mm. Its result's

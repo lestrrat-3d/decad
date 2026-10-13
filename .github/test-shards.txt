@@ -1410,3 +1410,4 @@
 10	0.00	TestCrossBoreCellProofsParallelMatchSerial
 10	0.00	TestCurvedVerticalTraceConsumesLiveGraphAndShell
 10	0.00	TestVerticalTraceRefusesChangedSourceAndRayOwners
+10	0.00	TestStationedTwistOptionalRefinementKeepsOriginalWorkCeiling
