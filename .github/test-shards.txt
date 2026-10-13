@@ -7,7 +7,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:    4.67s over 9 tests
-#   shard 1:    5.32s over 285 tests
+#   shard 1:    5.32s over 286 tests
 #   shard 2:   10.22s over 137 tests
 #   shard 3:   58.31s over 135 tests
 #   shard 4:  172.10s over 138 tests
@@ -256,6 +256,7 @@
 1	0.00	TestLoftFacesCapRecordChecksVariableSourceShape
 1	0.68	TestLoftFacesThreeCapConeContinuationKeepsSource
 1	0.96	TestLoftCylinderBoreCentroidDiameter
+1	0.00	TestLoftCylinderSourceTimeSliceMatchesPoint
 1	0.65	TestLoftCylinderUnionCentroidDiameter
 1	0.00	TestLoftExactPlaneSignsMatchDifferencePredicate
 1	0.00	TestLoftMassAccumulatorAreaNeverExact
