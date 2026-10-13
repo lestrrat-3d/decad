@@ -258,7 +258,7 @@ func ChamferMiddlePrism(ctx context.Context, triCount int,
 			}
 			signsA := TrianglePlaneSigns(old.Planes[j], face)
 			signsB := TrianglePlaneSigns(plane, old.Xtris[j])
-			contact, err := meshbool.TriTriClassifyCore(floatFace, old.Corners[j],
+			contact, err := meshbool.TriTriContactSpanCore(floatFace, old.Corners[j],
 				face, old.Xtris[j], normal, old.Norms[j], nil, nil,
 				&signsA, &signsB, false, r3.Vec{}, r3.Vec{}, false)
 			if err != nil {
