@@ -301,12 +301,7 @@ func restoreSweepArcCapRoles(body *Body, reverse bool) {
 	}
 	for _, face := range body.Faces() {
 		for i, origin := range face.origins {
-			switch origin.Role {
-			case roleCapStart:
-				origin.Role = roleCapEnd
-			case roleCapEnd:
-				origin.Role = roleCapStart
-			}
+			origin.Role = compositesweep.SwapCapRole(origin.Role, roleCapStart, roleCapEnd)
 			face.origins[i] = origin
 		}
 	}

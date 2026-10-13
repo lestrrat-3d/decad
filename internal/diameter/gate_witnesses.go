@@ -141,3 +141,23 @@ func CapArcWitness(g capband.Patch, contour float64) (CapArc, bool) {
 	}
 	return CapArc{Center: center, Start: g.CapA, End: g.CapB, Level: g.CapZ, Allow: allow}, true
 }
+
+// VertexWitnesses lists points, each held within its own bound of the point it
+// denotes, with extraAllow added for any displacement those bounds leave out.
+// bounds[i] belongs to points[i]. ok is false, with no error, when a point is
+// not finite or its bound is not a usable magnitude.
+func VertexWitnesses(budget *proofbound.WorkBudget, points []r3.Vec, bounds []float64, extraAllow float64) (GatePoints, bool, error) {
+	g := GatePoints{Points: make([]r3.Vec, 0, len(points))}
+	for i, point := range points {
+		if err := budget.Step(); err != nil {
+			return GatePoints{}, false, err
+		}
+		if !proofbound.FiniteVec(point) || !tolerance.UsableMagnitude(bounds[i]) {
+			return GatePoints{}, false, nil
+		}
+		g.Points = append(g.Points, point)
+		g.Allow = math.Max(g.Allow, bounds[i])
+	}
+	g.Allow = proofbound.AbsSumUpper(g.Allow, extraAllow)
+	return g, true, nil
+}

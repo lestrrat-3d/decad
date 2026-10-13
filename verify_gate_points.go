@@ -120,21 +120,13 @@ func revolveGatePoints(budget *proofbound.WorkBudget, rp revolvePayload) (gatePo
 // usable bound.
 func vertexGatePoints(budget *proofbound.WorkBudget, body *Body, extraAllow float64) (gatePoints, bool, error) {
 	vertices := body.Vertices()
-	g := gatePoints{Points: make([]r3.Vec, 0, len(vertices))}
-	for _, vertex := range vertices {
-		if err := budget.Step(); err != nil {
-			return gatePoints{}, false, err
-		}
+	points := make([]r3.Vec, len(vertices))
+	bounds := make([]float64, len(vertices))
+	for i, vertex := range vertices {
 		position := vertex.Position()
-		bound := position.Bound.Base()
-		if !proofbound.FiniteVec(position.Value) || !tolerance.UsableMagnitude(bound) {
-			return gatePoints{}, false, nil
-		}
-		g.Points = append(g.Points, position.Value)
-		g.Allow = math.Max(g.Allow, bound)
+		points[i], bounds[i] = position.Value, position.Bound.Base()
 	}
-	g.Allow = proofbound.AbsSumUpper(g.Allow, extraAllow)
-	return g, true, nil
+	return diameter.VertexWitnesses(budget, points, bounds, extraAllow)
 }
 
 // chainGatePoints lists a chain Extrude body's vertices beside the stations

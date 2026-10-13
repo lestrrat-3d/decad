@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -273,13 +274,14 @@ func positiveAffine(t r3.Transform) bool { return planarsnapshot.PositiveAffine(
 // prismFaceIndex maps a prism face's provenance role to its index in the
 // body's Faces order, the roles evalPrism gives its caps and side walls.
 func prismFaceIndex(b *Body) map[string]int {
-	index := make(map[string]int)
-	for i, face := range b.Faces() {
+	faces := b.Faces()
+	faceRoles := make([][]string, len(faces))
+	for i, face := range faces {
 		for _, origin := range face.Origins() {
-			index[origin.Role] = i
+			faceRoles[i] = append(faceRoles[i], origin.Role)
 		}
 	}
-	return index
+	return selectorquery.RoleIndex(faceRoles)
 }
 
 // planarPrismSolid lifts an all-LineSeg section through its frame and sweep
