@@ -82,7 +82,6 @@
 1	0.00	TestAxialFacetedChainDirectionRejectsBentAndAmbiguousChains
 1	0.00	TestAxisFrameWalkChargeIsAbsentAtZero
 1	0.00	TestAxisFrameWalkChargeWidensEveryFieldItTouches
-1	0.00	TestBernsteinIntegerRowAlgebraMatchesRationalValues
 1	0.00	TestBezierSliceCountSplitsBrokenFromUnsliceable
 1	0.01	TestBlindStackedLevelCarriesToolConversion
 1	0.00	TestBodyGateDiameterCancellation
@@ -1405,7 +1404,6 @@
 9	0.21	TestWallNormalDecisionEnclosesExactComponent
 9	0.03	TestXHPLerpDenotesTheSameCoordinate
 10	30.00	TestLfBandGateGridMatchesReference
-10	30.00	TestSpiralBernsteinIntegerMatchesReference
 10	2.00	TestSpiralRootRowsMatchReference
 10	0.00	Example_decad_quickstart
 10	0.01	TestLoftCylinderEdgesMeetXPAgreesWithRational

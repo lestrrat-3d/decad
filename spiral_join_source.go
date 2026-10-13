@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/r3"
@@ -142,17 +143,17 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 				}
 				q := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], span, m, b)
 				if spanIndex == 0 {
-					if !spiralCrossingSigns(q) ||
+					if !polynomial.BernsteinRowsCross(q) ||
 						!spiralCapXDecreases(trim.maps[band], span) ||
 						!spiralCapXDecreases(trim.maps[band+1], span) ||
-						!spiralAllPositive(spiralRootXOrder(trim.maps[band], trim.maps[band+1], span, q)) {
+						!polynomial.BernsteinRowsPositive(spiralRootXOrder(trim.maps[band], trim.maps[band+1], span, q)) {
 						return nil, false, nil
 					}
 					if band == 0 {
 						proof.crossings[side][0] = spiralIsolateRoot(q[0])
 					}
 					proof.crossings[side][band+1] = spiralIsolateRoot(q[2])
-				} else if !spiralAllPositive(q) {
+				} else if !polynomial.BernsteinRowsPositive(q) {
 					return nil, false, nil
 				}
 			}
@@ -443,58 +444,13 @@ func spiralToolOuterGap(cone *pointConeLimit, first, last Point2, sign int) (*bi
 	return a, true
 }
 
-func spiralBinom(n, k int) int64 {
-	if k < 0 || k > n {
-		return 0
-	}
-	if k > n-k {
-		k = n - k
-	}
-	out := int64(1)
-	for i := 1; i <= k; i++ {
-		out = out * int64(n-k+i) / int64(i)
-	}
-	return out
-}
-
-func spiralAdd(a, b []*big.Rat) []*big.Rat {
-	out := make([]*big.Rat, len(a))
-	for i := range a {
-		out[i] = lfAdd(a[i], b[i])
-	}
-	return out
-}
-
-func spiralSub(a, b []*big.Rat) []*big.Rat {
-	out := make([]*big.Rat, len(a))
-	for i := range a {
-		out[i] = lfSub(a[i], b[i])
-	}
-	return out
-}
-
-func spiralScale(a []*big.Rat, k *big.Rat) []*big.Rat {
-	out := make([]*big.Rat, len(a))
-	for i := range a {
-		out[i] = lfMul(a[i], k)
-	}
-	return out
-}
-
-func spiralDeriv(a []*big.Rat) []*big.Rat {
-	out := make([]*big.Rat, len(a)-1)
-	for i := range out {
-		out[i] = lfMul(big.NewRat(int64(len(a)-1), 1), lfSub(a[i+1], a[i]))
-	}
-	return out
-}
-
 // These cap-X coefficients are negative on the admitted first spline span.
 // Thus endpoint evaluations enclose X for a rational crossing interval.
 func spiralCapXDecreases(m loftFaceMap, span freeform.BezierSpan) bool {
 	g, h := spiralCapBern(m, span)
-	numerator := spiralSub(spiralMul(spiralDeriv(h[0]), g),
-		spiralMul(h[0], spiralDeriv(g)))
+	numerator := polynomial.BernsteinSub(polynomial.BernsteinMul(polynomial.BernsteinDeriv(h[0]), g),
+		polynomial.BernsteinMul(h[0], polynomial.BernsteinDeriv(g)))
+
 	for _, coefficient := range numerator {
 		if coefficient.Sign() >= 0 {
 			return false
@@ -535,30 +491,6 @@ func spiralRootPolynomial(first, second loftFaceMap, span freeform.BezierSpan,
 	return loftFacesMeridianQRows(first, second, span, m, b)
 }
 
-func spiralAllPositive(rows [3][]*big.Rat) bool {
-	for _, row := range rows {
-		for _, value := range row {
-			if value.Sign() <= 0 {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func spiralCrossingSigns(q [3][]*big.Rat) bool {
-	for _, row := range q {
-		if row[0].Sign() >= 0 || row[len(row)-1].Sign() <= 0 {
-			return false
-		}
-	}
-	var derivative [3][]*big.Rat
-	for i := range q {
-		derivative[i] = spiralDeriv(q[i])
-	}
-	return spiralAllPositive(derivative)
-}
-
 func spiralRootXOrder(first, second loftFaceMap, span freeform.BezierSpan,
 	q [3][]*big.Rat) [3][]*big.Rat {
 	return loftFacesMeridianJRows(first, second, span, q)
@@ -570,22 +502,11 @@ func spiralIsolateRoot(coeff []*big.Rat) spiralRootCrossing {
 	return spiralIsolateRootN(coeff, 64)
 }
 
-func spiralBernRestrict(a []*big.Rat, lo, hi *big.Rat) []*big.Rat {
-	_, right := spiralBernSplit(a, lo)
-	left, _ := spiralBernSplit(right, lfDiv(lfSub(hi, lo), lfSub(lfOne(), lo)))
-	return left
-}
-
-func spiralRootAtBandT(q [3][]*big.Rat, t *big.Rat) []*big.Rat {
-	oneMinus := lfSub(lfOne(), t)
-	a := lfMul(oneMinus, oneMinus)
-	b := lfMul(big.NewRat(2, 1), lfMul(t, oneMinus))
-	c := lfMul(t, t)
-	out := make([]*big.Rat, len(q[0]))
-	for i := range out {
-		out[i] = lfAdd(lfAdd(lfMul(a, q[0][i]), lfMul(b, q[1][i])), lfMul(c, q[2][i]))
-	}
-	return out
+// spiralIsolateRootN bisects the one sign change of a Bernstein row steps
+// times and returns the dyadic bracket as a span-0 crossing.
+func spiralIsolateRootN(coeff []*big.Rat, steps int) spiralRootCrossing {
+	lo, hi := polynomial.BernsteinIsolateRoot(coeff, steps)
+	return spiralRootCrossing{span: 0, lo: lo, hi: hi}
 }
 
 func spiralBandXRange(first, second loftFaceMap, span freeform.BezierSpan,
@@ -621,7 +542,7 @@ func spiralIsolateJunction(ctx context.Context, maps []loftFaceMap, span freefor
 			return spiralJunction{}, false
 		}
 		mid := lfMul(lfAdd(tLo, tHi), big.NewRat(1, 2))
-		fixed := spiralRootAtBandT(q, mid)
+		fixed := polynomial.BernsteinRowsAt(q, mid)
 		root := spiralIsolateRootN(fixed, 64)
 		x := spiralBandXRange(maps[band], maps[band+1], span, root, mid)
 		switch {
@@ -641,8 +562,8 @@ func spiralIsolateJunction(ctx context.Context, maps []loftFaceMap, span freefor
 			}
 		}
 	}
-	leftRoot := spiralIsolateRootN(spiralRootAtBandT(q, tLo), 64)
-	rightRoot := spiralIsolateRootN(spiralRootAtBandT(q, tHi), 64)
+	leftRoot := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, tLo), 64)
+	rightRoot := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, tHi), 64)
 	sLo, sHi := leftRoot.lo, leftRoot.hi
 	if rightRoot.lo.Cmp(sLo) < 0 {
 		sLo = rightRoot.lo
@@ -704,11 +625,11 @@ func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
 			return empty, false, ctx.Err()
 		}
 		mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
-		if spiralRootTSign(q, mid, low.tLo, high.tHi, -1) {
+		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, high.tHi, -1) {
 			sLo = mid
 			continue
 		}
-		if spiralRootTSign(q, mid, low.tLo, high.tHi, 1) {
+		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, high.tHi, 1) {
 			sHi = mid
 			continue
 		}
@@ -726,23 +647,12 @@ func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
 	return box, true, nil
 }
 
-func spiralRootTSign(q [3][]*big.Rat, s, tLo, tHi *big.Rat, sign int) bool {
-	curve := []*big.Rat{spiralBernValue(q[0], s), spiralBernValue(q[1], s),
-		spiralBernValue(q[2], s)}
-	for _, coefficient := range spiralBernRestrict(curve, tLo, tHi) {
-		if coefficient.Sign() != sign {
-			return false
-		}
-	}
-	return true
-}
-
 func spiralJunctionRootBracket(q [3][]*big.Rat, sLo, sHi, tLo, tHi *big.Rat) bool {
 	for _, entry := range []struct {
 		s    *big.Rat
 		sign int
 	}{{sLo, -1}, {sHi, 1}} {
-		if !spiralRootTSign(q, entry.s, tLo, tHi, entry.sign) {
+		if !polynomial.BernsteinRowsSignAt(q, entry.s, tLo, tHi, entry.sign) {
 			return false
 		}
 	}
@@ -759,7 +669,7 @@ func spiralJunctionBox(first, second loftFaceMap, span freeform.BezierSpan,
 	for i, point := range span {
 		u[i], v[i] = point.U, point.V
 	}
-	u, v = spiralBernRestrict(u, sLo, sHi), spiralBernRestrict(v, sLo, sHi)
+	u, v = polynomial.BernsteinRestrict(u, sLo, sHi), polynomial.BernsteinRestrict(v, sLo, sHi)
 	uMin, uMax, vMin, vMax := u[0], u[0], v[0], v[0]
 	for i := range u {
 		if u[i].Cmp(uMin) < 0 {

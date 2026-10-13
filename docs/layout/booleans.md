@@ -15,9 +15,6 @@ The rules for rows live in `docs/layout.md`.
 | `bevel_join_source.go` | Matches the finite six-line blank for the curved LoftFaces join. See loft-face-sections design. |
 | `spiral_join_source.go` | Certifies a cone-trimmed nine-section tooth's continuous flank crossings against a finite bevel blank. See loft-face-sections design. |
 | `loft_faces_meridian_bernstein.go` | Exact LoftFaces cap-map and meridian Bernstein rows shared by curved source proofs. See loft-face-sections design. |
-| `bernstein_exact.go` | Exact integer-denominator Bernstein evaluation shared by curved source proofs. See loft-face-sections design. |
-| `spiral_bernstein_int.go` | Compatibility entry points and exact Bernstein splitting, product and root bisection. See loft-face-sections design. |
-| `bernstein_integer_row.go` | Integer-row Bernstein chain (add, scale, derivative, product) that converts to `big.Rat` once per coefficient. See loft-face-sections design. |
 | `spiral_join_heel_seam.go` | Bounds the source root arc's intersection with the blank heel cap. See loft-face-sections design. |
 | `spiral_join_toe_seam.go` | Bounds the source root arc's intersection with the blank toe cap. See loft-face-sections design. |
 | `spiral_join_short.go` | Bounds fitted-flank and connector intersections with both finite blank end caps. See loft-face-sections design. |

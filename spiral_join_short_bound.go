@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -230,7 +231,7 @@ func spiralShortSourceCells(ctx context.Context, proof *spiralFirstJoinSource,
 		}
 		var restricted [3][]*big.Rat
 		for row := range restricted {
-			restricted[row] = spiralBernRestrict(part.q[row], lo, hi)
+			restricted[row] = polynomial.BernsteinRestrict(part.q[row], lo, hi)
 		}
 		t, yes := spiralShortCapTBracket(restricted)
 		if !yes {

@@ -3,6 +3,8 @@ package decad
 import (
 	"context"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
 // A cap endpoint and a source-side cell name the same true mapped source
@@ -172,10 +174,12 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 		return false
 	}
 	first, last := proof.trim.maps[band], proof.trim.maps[band+1]
-	side := spiralRootAtBandT(spiralRootPolynomial(first, last,
+	side := polynomial.BernsteinRowsAt(spiralRootPolynomial(first, last,
 		spans[boundary.span], m, b), time)
-	capPolynomial := spiralRootAtBandT(spiralRootPolynomial(first, last,
+
+	capPolynomial := polynomial.BernsteinRowsAt(spiralRootPolynomial(first, last,
 		spans[boundary.span], lfZero(), arc.circle.radius), time)
+
 	if len(side) != len(capPolynomial) || len(side) < 2 {
 		return false
 	}

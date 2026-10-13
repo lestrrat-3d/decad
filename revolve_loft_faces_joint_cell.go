@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
 // A joint cell confines one source-side change to a one-sided Bezier sliver
@@ -35,15 +36,15 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 		endpoint = lfOne()
 	}
 	endQ := []*big.Rat{
-		spiralBernValue(q[0], endpoint),
-		spiralBernValue(q[1], endpoint),
-		spiralBernValue(q[2], endpoint),
+		polynomial.BernsteinValue(q[0], endpoint),
+		polynomial.BernsteinValue(q[1], endpoint),
+		polynomial.BernsteinValue(q[2], endpoint),
 	}
-	loSign, hiSign := spiralBernSign(endQ, root.time.lo),
-		spiralBernSign(endQ, root.time.hi)
+	loSign, hiSign := polynomial.BernsteinSign(endQ, root.time.lo),
+		polynomial.BernsteinSign(endQ, root.time.hi)
 	if root.time.lo.Cmp(root.time.hi) == 0 {
 		if loSign != 0 ||
-			spiralBernSign(spiralDeriv(endQ), root.time.lo) != root.direction {
+			polynomial.BernsteinSign(polynomial.BernsteinDeriv(endQ), root.time.lo) != root.direction {
 			return empty, false
 		}
 	} else if loSign != -root.direction || hiSign != root.direction {
@@ -59,16 +60,17 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 		if atEnd {
 			sLo, sHi = lfSub(lfOne(), width), lfOne()
 		}
-		box := revolveLoftFacesRestrictBernstein(q, sLo, sHi,
+		box := polynomial.BernsteinRectRestrict(q, sLo, sHi,
 			root.time.lo, root.time.hi)
+
 		var derivative [3][]*big.Rat
 		for row := range box {
-			derivative[row] = spiralDeriv(box[row])
+			derivative[row] = polynomial.BernsteinDeriv(box[row])
 		}
 		direction := 0
-		if spiralAllPositive(derivative) {
+		if polynomial.BernsteinRowsPositive(derivative) {
 			direction = 1
-		} else if spiralAllPositive(revolveLoftFacesNegateRows(derivative)) {
+		} else if polynomial.BernsteinRowsPositive(revolveLoftFacesNegateRows(derivative)) {
 			direction = -1
 		}
 		if direction == 0 {
@@ -78,7 +80,7 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 		if !atEnd {
 			fixed = lfOne()
 		}
-		fixedSide := revolveLoftFacesTimePointSign(box, fixed)
+		fixedSide := polynomial.BernsteinRowsPointSign(box, fixed)
 		if fixedSide == 0 {
 			continue
 		}
@@ -87,10 +89,11 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 			if !atEnd {
 				outerLo, outerHi = sHi, lfOne()
 			}
-			outer := revolveLoftFacesRestrictBernstein(q, outerLo, outerHi,
+			outer := polynomial.BernsteinRectRestrict(q, outerLo, outerHi,
 				root.time.lo, root.time.hi)
-			if fixedSide > 0 && !spiralAllPositive(outer) ||
-				fixedSide < 0 && !spiralAllPositive(revolveLoftFacesNegateRows(outer)) {
+
+			if fixedSide > 0 && !polynomial.BernsteinRowsPositive(outer) ||
+				fixedSide < 0 && !polynomial.BernsteinRowsPositive(revolveLoftFacesNegateRows(outer)) {
 				continue
 			}
 		}

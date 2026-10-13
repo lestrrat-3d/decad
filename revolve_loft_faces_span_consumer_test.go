@@ -8,6 +8,8 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
+
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
 func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
@@ -42,7 +44,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 				big.NewRat(0, 1), big.NewRat(1, 3), big.NewRat(2, 3), big.NewRat(1, 1),
 			} {
 				reference := spiralBernValueRef(row, parameter)
-				require.Equal(t, reference.Sign(), bernsteinExactSign(row, parameter))
+				require.Equal(t, reference.Sign(), polynomial.BernsteinSign(row, parameter))
 			}
 		}
 	})

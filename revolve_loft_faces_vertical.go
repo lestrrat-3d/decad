@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -409,8 +410,8 @@ func revolveLoftFacesVerticalBezier(trim *loftFacesTrimRecord,
 	cell := revolveLoftFacesVerticalCell{segment: segment, span: spanIndex,
 		band: band, source: span, ref: ref}
 	first, last := trim.maps[band], trim.maps[band+1]
-	loQ := spiralRootAtBandT(spiralRootPolynomial(first, last, span, lfZero(), lower), time)
-	hiQ := spiralRootAtBandT(spiralRootPolynomial(first, last, span, lfZero(), upper), time)
+	loQ := polynomial.BernsteinRowsAt(spiralRootPolynomial(first, last, span, lfZero(), lower), time)
+	hiQ := polynomial.BernsteinRowsAt(spiralRootPolynomial(first, last, span, lfZero(), upper), time)
 	var ok bool
 	cell.lower, ok = revolveLoftFacesVerticalClassify(loQ)
 	if !ok {
@@ -459,7 +460,7 @@ func revolveLoftFacesVerticalClassify(q []*big.Rat) (revolveLoftFacesVerticalLim
 	if q[0].Sign() > 0 {
 		signed = revolveLoftFacesNegateRow(q)
 	}
-	if !spiralCrossingSigns([3][]*big.Rat{signed, signed, signed}) {
+	if !polynomial.BernsteinRowsCross([3][]*big.Rat{signed, signed, signed}) {
 		return result, false
 	}
 	root := spiralIsolateRootN(signed, 80)
@@ -497,15 +498,15 @@ func revolveLoftFacesVerticalPieces(first, last loftFaceMap,
 			continue
 		}
 		mid := lfMul(lfAdd(a, z), big.NewRat(1, 2))
-		if spiralBernSign(loQ, mid) <= 0 || spiralBernSign(hiQ, mid) >= 0 {
+		if polynomial.BernsteinSign(loQ, mid) <= 0 || polynomial.BernsteinSign(hiQ, mid) >= 0 {
 			continue
 		}
 		box, ok := spiralJunctionBox(first, last, span, a, z, time, time)
 		if !ok {
 			return nil, false
 		}
-		loLower, loUpper := spiralBernSign(loQ, a), spiralBernSign(hiQ, a)
-		hiLower, hiUpper := spiralBernSign(loQ, z), spiralBernSign(hiQ, z)
+		loLower, loUpper := polynomial.BernsteinSign(loQ, a), polynomial.BernsteinSign(hiQ, a)
+		hiLower, hiUpper := polynomial.BernsteinSign(loQ, z), polynomial.BernsteinSign(hiQ, z)
 		if loLower < 0 || loUpper > 0 || hiLower < 0 || hiUpper > 0 {
 			return nil, false
 		}
@@ -541,7 +542,7 @@ func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 	if !ok || radial.arc == nil {
 		return cell, false
 	}
-	radius2 := lfAdd(spiralBernValue(radial.q[:], time), lfOne())
+	radius2 := lfAdd(polynomial.BernsteinValue(radial.q[:], time), lfOne())
 	if radius2.Sign() <= 0 {
 		return cell, false
 	}

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,13 +18,13 @@ func TestRevolveLoftFacesOpenTimeExcludesExactPointRoot(t *testing.T) {
 		{big.NewRat(1, 2), big.NewRat(3, 2)},
 	}
 	require.Equal(t, revolveLoftFacesOutside,
-		revolveLoftFacesOpenStrictSide(q, big.NewRat(1, 2), lfOne(), true, false))
+		polynomial.BernsteinRectOpenSide(q, big.NewRat(1, 2), lfOne(), true, false))
 	require.Zero(t,
-		revolveLoftFacesOpenStrictSide(q, big.NewRat(1, 2), lfOne(), false, false))
+		polynomial.BernsteinRectOpenSide(q, big.NewRat(1, 2), lfOne(), false, false))
 	// On the left, Q has a moving source root that reaches s=0 at the
 	// excluded time endpoint. The strict-side shortcut must refuse it.
 	require.Zero(t,
-		revolveLoftFacesOpenStrictSide(q, lfZero(), big.NewRat(1, 2), false, true))
+		polynomial.BernsteinRectOpenSide(q, lfZero(), big.NewRat(1, 2), false, true))
 }
 
 func TestRevolveLoftFacesOpenMovingCrossingRefuses(t *testing.T) {

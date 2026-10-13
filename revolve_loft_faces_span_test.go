@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
 func TestMappedEndpointTimeRoots(t *testing.T) {
@@ -21,7 +22,7 @@ func TestMappedEndpointTimeRoots(t *testing.T) {
 		t.Fatalf("roots escaped certified separate intervals: %+v", roots)
 	}
 	for _, root := range roots {
-		if spiralBernValue(two, root.time.lo).Sign()*spiralBernValue(two, root.time.hi).Sign() >= 0 {
+		if polynomial.BernsteinValue(two, root.time.lo).Sign()*polynomial.BernsteinValue(two, root.time.hi).Sign() >= 0 {
 			t.Fatalf("root bracket does not change side: %+v", root)
 		}
 	}
