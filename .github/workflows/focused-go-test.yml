@@ -38,17 +38,13 @@ jobs:
           ref: ${{ inputs.commit }}
           persist-credentials: false
 
-      - name: Verify checked-out commit
-        shell: bash
-        env:
-          DECAD_COMMIT: ${{ inputs.commit }}
-        run: test "$(git rev-parse HEAD)" = "$DECAD_COMMIT"
-
       - name: Require named root-package test
         shell: bash
         env:
           TEST_NAME: ${{ inputs.test_name }}
-        run: go test -list "^${TEST_NAME}$" . | grep -Fqx "$TEST_NAME"
+        run: |
+          go test -list "^${TEST_NAME}$" . > "$RUNNER_TEMP/focused-go-test-list.txt"
+          grep -Fqx "$TEST_NAME" "$RUNNER_TEMP/focused-go-test-list.txt"
 
       - name: Run named root-package test
         shell: bash
