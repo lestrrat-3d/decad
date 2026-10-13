@@ -5,6 +5,9 @@
 # by measured cost so the shards stay level as the suite grows. Regenerate
 # with the command in _shardgen/main.go's doc comment.
 #
+# A new test that has not been measured goes in shard 10, never in the lightest
+# shard. Rebalance only by regenerating from measured costs.
+#
 # Shard totals at the last measurement:
 #   shard 0:    4.67s over 9 tests
 #   shard 1:    5.32s over 285 tests
