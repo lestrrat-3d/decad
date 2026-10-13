@@ -1410,3 +1410,5 @@
 10	0.00	TestCurvedVerticalTraceConsumesLiveGraphAndShell
 10	0.00	TestVerticalTraceRefusesChangedSourceAndRayOwners
 10	0.00	TestStationedTwistOptionalRefinementKeepsOriginalWorkCeiling
+10	0.00	TestTwistLocalAreaRealArcCell
+10	0.00	TestTwistLocalAreaRealBooleanArcSubset

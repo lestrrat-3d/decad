@@ -56,6 +56,10 @@ func TestTwistLocalAreaRealBooleanArcSubset(t *testing.T) {
 	require.True(t, splitArc, "the real Boolean must cut a rounded source wall")
 	area, err := joined.Area()
 	require.NoError(t, err)
+	// The Boolean carries the source's local allowance through its cut
+	// subset, then adds its own trim-motion and facet charges.
+	require.Less(t, source.mesh.areaSlack, 50.0)
+	require.Less(t, area.Bound.Base(), 80.0)
 	t.Logf("source area allowance=%g result area bound=%g split_arc=%t",
 		source.mesh.areaSlack, area.Bound.Base(), splitArc)
 }
