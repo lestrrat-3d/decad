@@ -109,6 +109,39 @@ Reconstruct one complete counterclockwise circle in Sketch and require its
 fresh profile record to match before returning it. The exact profile can
 enter ordinary profile consumers, including `Extrude`.
 
+## Central oblique plane of an authenticated source sphere
+
+This class uses the same `sourceSphereAtPose` occupied-ball certificate. It
+requires a noncardinal requested frame whose origin equals the certified ball
+center in exact dyadic coordinates. A frame with another origin refuses even
+when its plane also passes through the center. A sphere placed by an unsupported
+rotation still fails the source certificate.
+
+Read the held U and V as exact dyadic vectors and form their Gram entries
+`guu = U·U`, `gvv = V·V`, and `guv = U·V`. Set
+`m = min(guu - |guv|, gvv - |guv|)` and
+`M = max(guu + |guv|, gvv + |guv|)`. Require `m > 0`. For every local vector
+`x`, exact arithmetic then proves
+`m|x|² <= |U*x.u + V*x.v|² <= M|x|²`. The true plane-local section can be an
+ellipse because held frame axes are only approximately orthonormal.
+
+Use exact square comparisons to bound `sqrt(M)` upward and `sqrt(m)` downward.
+Round `r/sqrt(M)` downward to an inner local radius and `r/sqrt(m)` upward to
+an outer local radius. Refuse a zero inner radius or a nonfinite bracket. The
+inner disk lies inside the true section, which lies inside the outer disk.
+Sample the inner circle with the rational half-angle stations and convexity,
+feature-scale and 0.05 mm gates of the bounded circle polygon above. The
+outer-minus-inner radius bounds radial movement from the true section to the
+inner disk. Twice that gap bounds its local L1 move; multiplying by the larger
+held basis length upper bound covers world movement. Add the chord and rounded
+vertex errors without cancellation to `sectionDelta`. The radial mapping and
+convexity cover both occupied planar regions and their boundaries.
+
+Reconstruct the resulting polygon with the private revision-bound Sketch
+certificate. Only straight solid `Extrude` with independent `Distance` may
+consume it. The prism frame-map charge separately covers the held U,V,N map
+when the downstream sweep is not exactly orthonormal.
+
 ## Cardinal vertical plane of an exact cylinder
 
 The second class reads an exact straight prism whose authenticated source is
@@ -387,7 +420,11 @@ reusing its bound.
   Check a plane normal to the Revolve axis, signed-cardinal placement and
   reversed section axes. At z = 2 mm, the bounded polygon encloses the true
   21π mm² section and its 2 mm Extrude encloses 42π mm³ while passing the same
-  mesh check. Refuse tangent, exterior and oblique planes.
+  mesh check. A noncardinal frame whose origin is the sphere center encloses
+  the true 25π mm² section; its 2 mm Extrude encloses 50π mm³ and passes the
+  same mesh check. Refuse a noncardinal frame whose origin differs from the
+  sphere center, including one whose plane still passes through it, as well as
+  tangent and exterior cuts.
 - Check translated and rigidly placed rectangular prisms, reversed section
   axes, triangle through hexagon section rings, and cuts that refuse at a
   source vertex, tangent, exterior or uncertain topology.
