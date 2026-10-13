@@ -445,7 +445,7 @@ func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
 // full height, so every station on them is a point of the body. The
 // receiver's own section is its own denotation, because every modify op
 // refuses a receiver carrying a section displacement (fillet.go's
-// requireExactSection), so an inward cup's witnesses carry only the axial
+// prismrecord.Payload.RequireExactSection), so an inward cup's witnesses carry only the axial
 // displacement. An outward cup's outer region is the OFFSET one, recorded
 // within the cup's offsetDelta of the region it denotes (shell_cup.go), so
 // its witnesses carry that displacement beside the axial one, composed the

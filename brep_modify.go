@@ -197,7 +197,7 @@ func brepModifyRecord(ctx context.Context, payload featurePayload, op string) (b
 
 // requireExactBrepSection is brep-modify SB1 (Table RB's RB3): a brep or
 // stacked receiver whose record carries a section displacement on any face is
-// ErrUnsupported, naming the displacement. It is requireExactSection's rule
+// ErrUnsupported, naming the displacement. It is prismrecord.Payload.RequireExactSection's rule
 // over the whole record: a rewrite of a record that denotes its body only to
 // within a displacement has no proven displacement of its own. Level
 // displacements (z0Delta/z1Delta) are not read; no brep-modify construction

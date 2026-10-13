@@ -33,12 +33,12 @@ func thickenAxisSection(ctx context.Context, profile profileRecord, side Thicken
 	}
 	sec := thickenaxis.NewSectionPair(profile)
 	if side != ThickenNegative {
-		if sec.Outer, err = thickenAxisOffset(budget, profile, loop, dirs, -1, amount); err != nil {
+		if sec.Outer, err = thickenaxis.AxisOffset(budget, profile, loop, dirs, -1, amount, shellTol); err != nil {
 			return thickenaxis.SectionPair{}, err
 		}
 	}
 	if side != ThickenPositive {
-		if sec.Inner, err = thickenAxisOffset(budget, profile, loop, dirs, +1, amount); err != nil {
+		if sec.Inner, err = thickenaxis.AxisOffset(budget, profile, loop, dirs, +1, amount, shellTol); err != nil {
 			return thickenaxis.SectionPair{}, err
 		}
 	}
@@ -56,19 +56,4 @@ func thickenAxisSection(ctx context.Context, profile profileRecord, side Thicken
 		return thickenaxis.SectionPair{}, err
 	}
 	return sec, nil
-}
-
-func thickenAxisOffset(budget *proofbound.WorkBudget, source profileRecord, loop cornerLoop,
-	dirs []thickenaxis.AxisDir, sense int, amount float64) (profileRecord, error) {
-	offset, err := offsetProfile(budget, source, float64(sense), amount)
-	if err != nil {
-		return profileRecord{}, thickenaxis.AuditRefusal(err)
-	}
-	if err := thickenaxis.CertifyAxisOffset(loop.Walks, dirs, offset.Outer, sense, amount, budget); err != nil {
-		return profileRecord{}, err
-	}
-	if err := offset2d.AuditOffsetSectionBudget(budget, source, offset); err != nil {
-		return profileRecord{}, thickenaxis.AuditRefusal(err)
-	}
-	return offset, nil
 }

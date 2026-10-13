@@ -5,10 +5,8 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -52,7 +50,7 @@ import (
 // (prismReexpression).
 //
 // Cut/Intersect's crossing sub-case — genuine boundary contact, not clean
-// nesting — is prism_boolean_crossing.go: §4.2's edge-orientation
+// nesting — is internal/prismcells/payload_resolve.go: §4.2's edge-orientation
 // propagation over hole-free operands, dispatched by
 // prism_boolean_nesting.go's resolveAndBuildPrismCut/Intersect once the
 // clean-nesting search comes back unresolved. It does not yet identify a
@@ -166,7 +164,8 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 
 	switch op {
 	case meshbool.OpUnion:
-		return resolveAndBuildPrismUnion(ctx, budget, pa, pb, reexpress)
+		result, ok, err := prismcells.ResolveAndBuildUnion(ctx, budget, pa.Payload, pb.Payload, reexpress)
+		return prismPayload{Payload: result}, ok, err
 	default: // meshbool.OpCut
 		return resolveAndBuildPrismCut(ctx, budget, pa, pb, reexpress)
 	}
@@ -241,49 +240,6 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 	return budget, pa, pb, reexpress, true, nil
 }
 
-// resolveAndBuildPrismUnion runs Union's hole-free select-all/merge/chain
-// resolution (§4.2) and, once it commits, §6's build-time audit and §7's
-// exactness. Split out of tryPrismBoolean only so each op's own resolve+build
-// sequence reads as one unit.
-func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	merged, sceneDelta, cutDelta, resolved, err := prismcells.ResolveUnion(ctx, budget, pa.Profile, pb.Profile,
-		pa.SectionDelta, pb.SectionDelta, reexpress)
-	if err != nil {
-		return prismPayload{}, false, err
-	}
-	if !resolved {
-		return prismPayload{}, false, nil // §4.4: this topology is unresolved
-	}
-
-	// Point of no return (§3.4): every further problem is a genuine refusal,
-	// unless the cuts carry an amplified displacement (prismcells.AmplifiedFallback).
-	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, auditPrismMergeSection(budget, pa, merged)); fallBack || err != nil {
-		return prismPayload{}, false, err
-	}
-	result := prismPayload{Payload: prismrecord.Payload{
-		Profile: merged,
-		Frame:   pa.Frame,
-		Z0:      pa.Z0,
-		Z1:      pa.Z1,
-		Z0Delta: max(pa.Z0Delta, pb.Z0Delta),
-		Z1Delta: max(pa.Z1Delta, pb.Z1Delta),
-		Xform:   pa.Xform,
-		// §7: operand A's coordinates are unchanged except for its own
-		// consumed segments' walk charge (sceneDelta.A), while B's existing
-		// displacement passes through its rigid re-expression, accumulates
-		// the rounding that re-expression commits, and its own walk charge
-		// (sceneDelta.B) besides. On top of both, every surviving CUT
-		// fragment names its endpoints by a freshly rounded parameter this
-		// union did not have before it ran, so cutDelta stands even where the
-		// two operands carried nothing at all, and every cut the inputs'
-		// displacement can move carries A6's crossing charge
-		// (sceneDelta.Crossing). A chained union must not discard any of
-		// the five.
-		SectionDelta: sceneDelta.Merged(pa.SectionDelta, pb.SectionDelta, reexpress.Delta, cutDelta),
-	}}
-	return result, true, nil
-}
-
 // admitPrismPair checks G1 (both operands a prismPayload), G3 (the composed
 // world normals are bit-identical and the two planes share one sweep axis,
 // exactly) and G4 (every segment of both records is line/circle/arc) — §3.1.
@@ -341,32 +297,6 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKi
 		}
 	}
 	return pa, pb, true, nil
-}
-
-// auditPrismMergeSection runs the modify §5 audit (fillet_audit.go,
-// §6 of this design) on a merged section, reused verbatim with an empty
-// blend map — shell_offset.go's own precedent for "no cutback data, still run
-// the shared audit". orig supplies the S8 sign reference: operand A's own
-// outer loop, whose CCW orientation and non-degenerate area the merged Outer
-// loop must match — the merge is correct only when it keeps that same
-// convention. S9 (nesting) is a no-op here: G6 keeps every operand hole-free
-// for Union, and the crossing sub-case's own scoping
-// (prism_boolean_crossing.go) does the same, so the merged result is always
-// hole-free. This audit runs on every assembled (chained-and-merged) section —
-// Union's own select-all path and the crossing sub-case for Cut/Intersect
-// alike; see this file's header comment for why Cut/Intersect's clean-nesting
-// match needs none.
-func auditPrismMergeSection(budget *proofbound.WorkBudget, pa prismPayload, merged profileRecord) error {
-	loops, err := offset2d.ProfileCornerLoopsBudget(budget, merged)
-	if err != nil {
-		return err
-	}
-	blendAt := make([]map[int]*cornerBlend, len(loops))
-	for i := range blendAt {
-		blendAt[i] = map[int]*cornerBlend{}
-	}
-	orig := profileRecord{Outer: pa.Profile.Outer}
-	return offset2d.AuditRewriteBudget(budget, orig, merged, loops, blendAt)
 }
 
 // prismSceneDelta names the internal scene charge carried through boolean paths.

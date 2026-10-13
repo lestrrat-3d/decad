@@ -47,7 +47,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	d := b.doc
 	// The section-displacement guard, read as a modify refusal: the offset
 	// is of the recorded meridian, and a meridian displaced from the one it
-	// denotes has no proven offset (requireExactSection's prism reading).
+	// denotes has no proven offset (prismrecord.Payload.RequireExactSection's prism reading).
 	if err := requireExactRevolveSection(rp, "this evaluator's revolve shell"); err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 		wall, delta, err = revolveshell.SideWall(budget, rp.profile, rp.ax, walks, axisAt, removedWalks,
 			s, tmm, tDelta, shellTol, offset2d.AuditOffsetSectionBudget)
 	case axisAt < 0:
-		wall, delta, err = revolveShellOffAxisWall(budget, rp.profile, s, tmm, tDelta)
+		wall, delta, err = revolveshell.OffAxisWall(budget, rp.profile, s, tmm, tDelta, shellTol)
 	default:
 		wall, delta, err = revolveshell.AxisWall(budget, rp.profile, rp.ax, walks, axisAt,
 			s, tmm, tDelta, shellTol, offset2d.AuditOffsetSectionBudget)
@@ -186,34 +186,6 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	}
 	d.commit(body, b)
 	return body, nil
-}
-
-// revolveShellOffAxisWall is the wall region of a meridian that is its own
-// effective meridian: the tube section of modify Table B, {P, Q} inward and
-// {Q, P} outward, the inner loop walked as a hole. The offset runs the prism
-// shell's S11a construction and §5 audit (S8, S11b, S9) unchanged, and so does
-// its displacement: the prism cup's offsetSectionDelta over the same loop.
-func revolveShellOffAxisWall(budget *proofbound.WorkBudget, profile profileRecord, s, tmm, tDelta float64) (profileRecord, float64, error) {
-	offset, err := offsetProfile(budget, profile, s, tmm)
-	if err != nil {
-		return profileRecord{}, 0, err
-	}
-	if err := offset2d.AuditOffsetSectionBudget(budget, profile, offset); err != nil {
-		return profileRecord{}, 0, err
-	}
-	delta, err := offsetSectionDelta(budget, profile, s, tmm, tDelta)
-	if err != nil {
-		return profileRecord{}, 0, err
-	}
-	outer, inner := profile.Outer, offset.Outer
-	if s < 0 {
-		outer, inner = offset.Outer, profile.Outer
-	}
-	hole, err := offset2d.ReverseLoopRecordBudget(budget, inner)
-	if err != nil {
-		return profileRecord{}, 0, err
-	}
-	return profileRecord{Outer: outer, Holes: []loopRecord{hole}}, delta, nil
 }
 
 // revolveSideFaceSegments adds the recorded meridian segments a removed

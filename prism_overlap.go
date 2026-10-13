@@ -110,7 +110,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 		}
 
 		// §7's formula with A6's crossing term, byte-identical to
-		// resolveAndBuildPrismIntersectCrossing's, taken over THIS cell's
+		// prismcells.ResolveAndBuildIntersectCrossing's, taken over THIS cell's
 		// own cutDelta.
 		sectionDelta := sceneDelta.Merged(pa.SectionDelta, pb.SectionDelta, reexpress.Delta, cutDelta)
 		pp := prismPayload{Payload: prismrecord.Payload{

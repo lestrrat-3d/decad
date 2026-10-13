@@ -309,7 +309,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator shells a straight prism or its one-line Sweep reduction only`, ErrUnsupported)
 	}
-	if err := requireExactSection(pp, "shells"); err != nil {
+	if err := pp.RequireExactSection("shells"); err != nil {
 		return nil, err
 	}
 	var removedStart, removedEnd bool
@@ -522,7 +522,7 @@ func refuseClosedShell(payload featurePayload) error {
 // displacement.
 func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
 	d := b.doc
-	if err := requireExactSection(pp, "shells"); err != nil {
+	if err := pp.RequireExactSection("shells"); err != nil {
 		return nil, err
 	}
 	budget := proofbound.NewWorkBudget(ctx)

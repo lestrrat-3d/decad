@@ -122,7 +122,7 @@ func ResolveUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb mom
 	// the union once no cell is material of neither operand. Two hole-free
 	// operands can still enclose such a cell between them, so a scene with
 	// one is unresolved (§4.2, §4.4). Merge is the shared
-	// merge/chain tail the crossing sub-case (prism_boolean_crossing.go)
+	// merge/chain tail the crossing sub-case (internal/prismcells/payload_resolve.go)
 	// reuses over its OWN, narrower selected cell set.
 	voidFree, err := CellsHaveNoVoid(budget, tags, profiles)
 	if err != nil {

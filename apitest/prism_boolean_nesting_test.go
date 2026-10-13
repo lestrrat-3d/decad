@@ -507,7 +507,7 @@ func TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost(t *testing.T) {
 // TestPrismCutCrossingToolResolvesAnalytically is docs/prism-boolean-design.md
 // §4.2's crossing sub-case: a tool that pokes outside the target cuts the
 // target's own boundary, so the clean-nesting structural match fails — but
-// prism_boolean_crossing.go's edge-orientation propagation resolves it
+// internal/prismcells/payload_resolve.go's edge-orientation propagation resolves it
 // anyway, with a bound many decades tighter than the mesh path's own chord
 // tolerance would report.
 func TestPrismCutCrossingToolResolvesAnalytically(t *testing.T) {

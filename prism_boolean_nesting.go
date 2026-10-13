@@ -72,7 +72,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 // taken verbatim, so §5's authentication claim 1 (every individual segment is
 // authentic) already covers claim 2 (the assembly is correct) entirely. When
 // this search comes back unresolved, resolveAndBuildPrismCut/Intersect fall
-// through to prism_boolean_crossing.go's edge-orientation classifier before
+// through to internal/prismcells/payload_resolve.go's edge-orientation classifier before
 // giving up — a pair whose operands' boundaries genuinely cross reaches that
 // classifier, not straight to the mesh path; only what NEITHER path resolves
 // falls through unresolved (§4.4).
@@ -94,7 +94,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 // own header; §5 states the clean-nesting claim needs no second proof — the
 // candidate is one s.Profiles() result taken verbatim, so §5's authentication
 // claim 1 already covers claim 2 entirely). When the clean-nesting search
-// comes back unresolved, this tries prism_boolean_crossing.go's
+// comes back unresolved, this tries internal/prismcells/payload_resolve.go's
 // edge-orientation classifier before giving up.
 func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
 	s, match, sceneDelta, resolved, err := prismcells.ResolveCut(ctx, budget, target.Profile, tool.Profile, reexpress)
@@ -102,10 +102,11 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 		return prismPayload{}, false, err
 	}
 	if !resolved {
-		// §4.2's crossing sub-case (prism_boolean_crossing.go): the tool's
+		// §4.2's crossing sub-case (prismcells.ResolveAndBuildCutCrossing): the tool's
 		// boundary genuinely crosses the target's, rather than leaving both
 		// operands' loops untouched.
-		return resolveAndBuildPrismCutCrossing(ctx, budget, target, tool, reexpress)
+		result, ok, err := prismcells.ResolveAndBuildCutCrossing(ctx, budget, target.Payload, tool.Payload, reexpress)
+		return prismPayload{Payload: result}, ok, err
 	}
 
 	// Point of no return (§3.4): every further problem is a genuine refusal
@@ -149,7 +150,7 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 // match (§4.2) in both directions first and, once it finds the unique nested
 // operand, authenticates its own region verbatim and builds §7's exactness.
 // There is no §6 audit on this path, for the same reason as Cut's. When
-// neither direction matches, this tries prism_boolean_crossing.go's
+// neither direction matches, this tries internal/prismcells/payload_resolve.go's
 // edge-orientation classifier before giving up.
 func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
 	s, match, sceneDelta, nestedIsB, resolved, err := prismcells.ResolveIntersect(ctx, budget, pa.Profile, pb.Profile, reexpress)
@@ -157,10 +158,11 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 		return prismPayload{}, false, err
 	}
 	if !resolved {
-		// §4.2's crossing sub-case (prism_boolean_crossing.go): a
+		// §4.2's crossing sub-case (prismcells.ResolveAndBuildIntersectCrossing): a
 		// general-position overlap, rather than one operand's boundary
 		// leaving the other's fully untouched.
-		return resolveAndBuildPrismIntersectCrossing(ctx, budget, pa, pb, reexpress)
+		result, ok, err := prismcells.ResolveAndBuildIntersectCrossing(ctx, budget, pa.Payload, pb.Payload, reexpress)
+		return prismPayload{Payload: result}, ok, err
 	}
 
 	profile, err := prismRecordProfileContext(ctx, s, match)

@@ -2,11 +2,9 @@ package decad
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -203,7 +201,7 @@ func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetS
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	section, err := offsetPrismSection(ctx, pp, sense, dmm, budget)
+	section, err := thickenaxis.OffsetSection(ctx, pp.Profile, sense, dmm, shellTol, budget)
 	if err != nil {
 		return nil, err
 	}
@@ -216,109 +214,4 @@ func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetS
 	// segment list, so carrying them over would name arbitrary result walls.
 	pp.BlendSegs, pp.BlendKind = nil, ""
 	return evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
-}
-
-// offsetPrismSection constructs and certifies the one section the result is
-// built over, in §17.2's fixed order: construct the offset, certify its
-// generated values exactly, run the shared §5 audit, then prove the whole
-// offset interval 0 < τ ≤ d clear. It dispatches on the two admitted section
-// shapes exactly as thickenPrism does, and refuses every other one.
-func offsetPrismSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *proofbound.WorkBudget) (profileRecord, error) {
-	if len(pp.Profile.Outer.Segments) == 1 {
-		if circle, ok := pp.Profile.Outer.Segments[0].(circleSeg); ok {
-			return offsetCircleSection(pp.Profile, circle, sense, amount, budget)
-		}
-	}
-	return offsetAxisSection(ctx, pp, sense, amount, budget)
-}
-
-// offsetCircleSection offsets a whole circle to a concentric one through
-// prismCircleOffset (thicken_prism.go), which constructs the circle, certifies
-// its generated centre and radius against the exact rational sum or difference,
-// and runs the offset audit — the same gate bundle §16.2's own circle arm runs,
-// unchanged.
-//
-// Its positive-radius certificate IS the whole-interval proof for this shape. A
-// concentric offset radius is R(τ) = r − sense·τ, affine and monotone in τ, and
-// a whole circle has no other contact event (§16.2), so a certified positive
-// endpoint radius proves every intermediate radius positive too: growing
-// (sense −1) increases it from r, and eroding (sense +1) reaches its minimum at
-// the endpoint prismCircleOffset already refused a non-positive value for.
-func offsetCircleSection(source profileRecord, circle circleSeg, sense int, amount float64, budget *proofbound.WorkBudget) (profileRecord, error) {
-	if !circle.CCW {
-		return profileRecord{}, fmt.Errorf(`%w: this circle does not have the required outer-loop winding`, ErrUnsupported)
-	}
-	radius, rDelta, err := extent.MagnitudeInBounded(circle.Radius, units.Length, units.Millimeter, "the circle radius")
-	if err != nil || rDelta != 0 {
-		return profileRecord{}, fmt.Errorf(`%w: the circle radius is not exact in millimetres`, ErrUnsupported)
-	}
-	offset, err := prismCircleOffset(budget, source, radius, float64(sense), amount)
-	if err != nil {
-		return profileRecord{}, offsetSectionRefusal(err)
-	}
-	return offset, nil
-}
-
-// offsetAxisSection offsets the axis-parallel line class. It reuses
-// internal/thickenaxis's three gates unchanged — AxisDirections for the
-// class itself, CertifyAxisOffset for the exact-generation gate over
-// every generated endpoint, corner centre and radius, and
-// AxisIntervalClear for the whole-interval Sturm certification — with
-// offsetProfile supplying the section and offset2d.AuditOffsetSectionBudget checking it.
-//
-// The interval proof is NOT optional on this shape and is never inferred from
-// the endpoint: an endpoint that looks simple cannot prove an earlier offset did
-// not pinch and change which boundary the construction denotes (§17.2).
-func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *proofbound.WorkBudget) (profileRecord, error) {
-	for _, seg := range pp.Profile.Outer.Segments {
-		if err := ctx.Err(); err != nil {
-			return profileRecord{}, err
-		}
-		if _, ok := seg.(lineSeg); !ok {
-			return profileRecord{}, fmt.Errorf(`%w: the prism sheet requires line-only axis-parallel walks`, ErrUnsupported)
-		}
-	}
-	loops, err := offset2d.ProfileCornerLoopsBudget(budget, pp.Profile)
-	if err != nil {
-		return profileRecord{}, err
-	}
-	if len(loops) != 1 {
-		return profileRecord{}, fmt.Errorf(`%w: the prism sheet requires one outer loop`, ErrUnsupported)
-	}
-	loop := loops[0]
-	dirs, err := thickenaxis.AxisDirections(loop.Walks, budget)
-	if err != nil {
-		return profileRecord{}, err
-	}
-	offset, err := offsetProfile(budget, pp.Profile, float64(sense), amount)
-	if err != nil {
-		return profileRecord{}, offsetSectionRefusal(err)
-	}
-	if err := thickenaxis.CertifyAxisOffset(loop.Walks, dirs, offset.Outer, sense, amount, budget); err != nil {
-		return profileRecord{}, err
-	}
-	if err := offsetSectionRefusal(offset2d.AuditOffsetSectionBudget(budget, pp.Profile, offset)); err != nil {
-		return profileRecord{}, err
-	}
-	// radial is nil: a prism sheet's walls sweep along a fixed normal and turn
-	// about no axis, so there is no radius for the scan to keep positive
-	// (thicken.go's thickenRadial is the revolve arm's gate alone).
-	if err := thickenaxis.AxisIntervalClear(ctx, loop.Walks, dirs, sense, amount, budget, nil); err != nil {
-		return profileRecord{}, err
-	}
-	return offset, nil
-}
-
-// offsetSectionRefusal lands every section-construction refusal on R38. The
-// shared Shell audit can classify a flipped offset as ErrDegenerate; an offset
-// that changes the section's topology can still denote a sheet after trimming,
-// so R38 is this evaluator's reach (ErrUnsupported) rather than a claim that
-// the caller's positive distance is malformed. A cancelled call still returns
-// its context error unchanged.
-func offsetSectionRefusal(err error) error {
-	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
-		errors.Is(err, ErrUnsupported) {
-		return err
-	}
-	return fmt.Errorf(`%w: the offset section audit refused: %v`, ErrUnsupported, err)
 }
