@@ -162,9 +162,45 @@ func BernsteinMul(a, b []*big.Rat) []*big.Rat {
 }
 
 // BernsteinRestrict is the Bernstein row of a on the sub-interval [lo, hi].
+// It runs both de Casteljau splits over one shared integer denominator: the
+// right half of the split at lo stays unreduced over den·q^n, and only the
+// kept half of the second split is reduced.
 func BernsteinRestrict(a []*big.Rat, lo, hi *big.Rat) []*big.Rat {
-	_, right := BernsteinSplit(a, lo)
-	left, _ := BernsteinSplit(right, ratDiv(ratSub(hi, lo), ratSub(ratOne(), lo)))
+	n := len(a) - 1
+	work, den := bernsteinIntegerRow(a)
+	p, q := lo.Num(), lo.Denom()
+	qp := new(big.Int).Sub(q, p)
+	// right[n-level] = work[n-level] / (den*q^level) after level updates;
+	// scaling by q^(n-level) puts every entry over den*q^n.
+	qPow := make([]*big.Int, n+1)
+	qPow[0] = big.NewInt(1)
+	for i := 1; i <= n; i++ {
+		qPow[i] = new(big.Int).Mul(qPow[i-1], q)
+	}
+	right := make([]*big.Int, n+1)
+	var t1, t2 big.Int
+	for level := 0; level <= n; level++ {
+		right[n-level] = new(big.Int).Mul(work[n-level], qPow[n-level])
+		for i := range n - level {
+			t1.Mul(qp, work[i])
+			t2.Mul(p, work[i+1])
+			work[i].Add(&t1, &t2)
+		}
+	}
+	t := ratDiv(ratSub(hi, lo), ratSub(ratOne(), lo))
+	pp, qq := t.Num(), t.Denom()
+	qpp := new(big.Int).Sub(qq, pp)
+	scale := new(big.Int).Mul(den, qPow[n])
+	left := make([]*big.Rat, n+1)
+	for level := 0; level <= n; level++ {
+		left[level] = new(big.Rat).SetFrac(right[0], scale)
+		for i := range n - level {
+			t1.Mul(qpp, right[i])
+			t2.Mul(pp, right[i+1])
+			right[i].Add(&t1, &t2)
+		}
+		scale.Mul(scale, qq)
+	}
 	return left
 }
 

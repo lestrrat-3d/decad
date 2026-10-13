@@ -69,8 +69,17 @@ func lfGateDerivRange(corners [4]*lfGateNode, row, axis int) loftFaceInterval {
 	}
 	num, den := lfGateCornerRange(nums), lfGateCornerRange(dens)
 	lo2, hi2 := lfMul(den.lo, den.lo), lfMul(den.hi, den.hi)
-	return lfGateCornerRange([4]*big.Rat{lfDiv(num.lo, lo2), lfDiv(num.lo, hi2),
-		lfDiv(num.hi, lo2), lfDiv(num.hi, hi2)})
+	// Every g is positive, so 0 < lo2 <= hi2. A negative numerator is
+	// smallest over the smaller denominator and a non-negative one over the
+	// larger; the maximum is the mirror.
+	loDen, hiDen := hi2, hi2
+	if num.lo.Sign() < 0 {
+		loDen = lo2
+	}
+	if num.hi.Sign() > 0 {
+		hiDen = lo2
+	}
+	return loftFaceInterval{lo: lfDiv(num.lo, loDen), hi: lfDiv(num.hi, hiDen)}
 }
 
 func lfGateScalarRange(corners [4]*lfGateNode, row int) loftFaceInterval {
