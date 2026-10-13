@@ -54,9 +54,9 @@ func obliqueBasisAdmitted(rec *obliqueBossRecord) bool {
 
 func obliqueBossDiameterBound(rec *obliqueBossRecord, boundaryBound float64) float64 {
 	w := proofbound.RatFloatUp(new(big.Rat).Sub(
-		proofarith.FloatRat(rec.rect.u1), proofarith.FloatRat(rec.rect.u0)))
+		proofarith.FloatRat(rec.rect.U1), proofarith.FloatRat(rec.rect.U0)))
 	h := proofbound.RatFloatUp(new(big.Rat).Sub(
-		proofarith.FloatRat(rec.rect.v1), proofarith.FloatRat(rec.rect.v0)))
+		proofarith.FloatRat(rec.rect.V1), proofarith.FloatRat(rec.rect.V0)))
 	plateHeight := proofbound.RatFloatUp(new(big.Rat).Sub(
 		proofarith.FloatRat(rec.top), proofarith.FloatRat(rec.bottom)))
 	w = proofbound.AbsSumUpper(w, proofbound.ProductUpper(2, boundaryBound))
@@ -307,9 +307,9 @@ func proveObliqueBossFillet(ctx context.Context, rec *obliqueBossRecord,
 	// facet arithmetic. Their sum bounds the absolute area discrepancy.
 	heldArea := facetproof.MeshAreaUpper(mesh.verts, mesh.tris)
 	w := proofbound.RatFloatUp(new(big.Rat).Sub(
-		proofarith.FloatRat(rec.rect.u1), proofarith.FloatRat(rec.rect.u0)))
+		proofarith.FloatRat(rec.rect.U1), proofarith.FloatRat(rec.rect.U0)))
 	h := proofbound.RatFloatUp(new(big.Rat).Sub(
-		proofarith.FloatRat(rec.rect.v1), proofarith.FloatRat(rec.rect.v0)))
+		proofarith.FloatRat(rec.rect.V1), proofarith.FloatRat(rec.rect.V0)))
 	plateHeight := proofbound.RatFloatUp(new(big.Rat).Sub(
 		proofarith.FloatRat(rec.top), proofarith.FloatRat(rec.bottom)))
 	plateArea := proofbound.AbsSumUpper(proofbound.ProductUpper(2, proofbound.ProductUpper(w, h)),

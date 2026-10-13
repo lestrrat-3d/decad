@@ -71,5 +71,5 @@ func exactPrismBoxInFrame(source prismPayload, ref r3.Frame) (prismplacement.Box
 		source.BlendKind != "" || len(source.BlendSegs) != 0 || source.Z0 >= source.Z1 {
 		return prismplacement.Box{}, false
 	}
-	return prismplacement.ExactBoxInFrame(r.u0, r.u1, r.v0, r.v1, source.Z0, source.Z1, source.Frame, ref)
+	return prismplacement.ExactBoxInFrame(r.U0, r.U1, r.V0, r.V1, source.Z0, source.Z1, source.Frame, ref)
 }

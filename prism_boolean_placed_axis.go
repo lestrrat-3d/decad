@@ -24,13 +24,13 @@ func placedAxisProfileAdmitted(op meshbool.OperationKind, a, b prismPayload) boo
 	case meshbool.OpUnion, meshbool.OpIntersect:
 		return ra == rb
 	case meshbool.OpCut:
-		return ra.u0 < rb.u0 && rb.u1 < ra.u1 && ra.v0 < rb.v0 && rb.v1 < ra.v1
+		return ra.U0 < rb.U0 && rb.U1 < ra.U1 && ra.V0 < rb.V0 && rb.V1 < ra.V1
 	default:
 		return false
 	}
 }
 
-type axisRect struct{ u0, v0, u1, v1 float64 }
+type axisRect struct{ U0, V0, U1, V1 float64 }
 
 // axisRectangle accepts only four complete line records, one on each side
 // of a nondegenerate axis-aligned rectangle. Profile validation already proves
@@ -52,32 +52,32 @@ func axisRectangle(p profileRecord) (axisRect, bool) {
 		}
 		lines[i] = line
 	}
-	r := axisRect{u0: lines[0].Start.U, u1: lines[0].Start.U,
-		v0: lines[0].Start.V, v1: lines[0].Start.V}
+	r := axisRect{U0: lines[0].Start.U, U1: lines[0].Start.U,
+		V0: lines[0].Start.V, V1: lines[0].Start.V}
 	for _, line := range lines {
 		for _, point := range [...]sectionrecord.Point2{line.Start, line.End} {
-			r.u0, r.u1 = min(r.u0, point.U), max(r.u1, point.U)
-			r.v0, r.v1 = min(r.v0, point.V), max(r.v1, point.V)
+			r.U0, r.U1 = min(r.U0, point.U), max(r.U1, point.U)
+			r.V0, r.V1 = min(r.V0, point.V), max(r.V1, point.V)
 		}
 	}
-	if r.u0 == r.u1 || r.v0 == r.v1 {
+	if r.U0 == r.U1 || r.V0 == r.V1 {
 		return axisRect{}, false
 	}
 	var sides uint8
 	for _, line := range lines {
 		s, e := line.Start, line.End
 		switch {
-		case s.U == r.u0 && e.U == r.u0 &&
-			((s.V == r.v0 && e.V == r.v1) || (s.V == r.v1 && e.V == r.v0)):
+		case s.U == r.U0 && e.U == r.U0 &&
+			((s.V == r.V0 && e.V == r.V1) || (s.V == r.V1 && e.V == r.V0)):
 			sides |= 1
-		case s.U == r.u1 && e.U == r.u1 &&
-			((s.V == r.v0 && e.V == r.v1) || (s.V == r.v1 && e.V == r.v0)):
+		case s.U == r.U1 && e.U == r.U1 &&
+			((s.V == r.V0 && e.V == r.V1) || (s.V == r.V1 && e.V == r.V0)):
 			sides |= 2
-		case s.V == r.v0 && e.V == r.v0 &&
-			((s.U == r.u0 && e.U == r.u1) || (s.U == r.u1 && e.U == r.u0)):
+		case s.V == r.V0 && e.V == r.V0 &&
+			((s.U == r.U0 && e.U == r.U1) || (s.U == r.U1 && e.U == r.U0)):
 			sides |= 4
-		case s.V == r.v1 && e.V == r.v1 &&
-			((s.U == r.u0 && e.U == r.u1) || (s.U == r.u1 && e.U == r.u0)):
+		case s.V == r.V1 && e.V == r.V1 &&
+			((s.U == r.U0 && e.U == r.U1) || (s.U == r.U1 && e.U == r.U0)):
 			sides |= 8
 		default:
 			return axisRect{}, false

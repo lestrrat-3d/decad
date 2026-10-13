@@ -55,9 +55,9 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 	if !proofbound.FiniteVec(cp.Point(0, 0, cp.Z0)) || radius <= 0 ||
 		proofbound.IsNonFinite(radius) || proofbound.IsNonFinite(length) || length < radius ||
 		radius > 100 || length > 100 || math.Abs(pp.Z0) > 10_000 ||
-		math.Abs(pp.Z1) > 10_000 || math.Abs(rect.u0) > 10_000 ||
-		math.Abs(rect.u1) > 10_000 || math.Abs(rect.v0) > 10_000 ||
-		math.Abs(rect.v1) > 10_000 {
+		math.Abs(pp.Z1) > 10_000 || math.Abs(rect.U0) > 10_000 ||
+		math.Abs(rect.U1) > 10_000 || math.Abs(rect.V0) > 10_000 ||
+		math.Abs(rect.V1) > 10_000 {
 		return nil
 	}
 	base := cp.Point(0, 0, cp.Z0)
@@ -117,8 +117,8 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 		return nil
 	}
 	for _, center := range []r3.Vec{base, end} {
-		if !(center.X-margin > rect.u0 && center.X+margin < rect.u1 &&
-			center.Y-margin > rect.v0 && center.Y+margin < rect.v1) {
+		if !(center.X-margin > rect.U0 && center.X+margin < rect.U1 &&
+			center.Y-margin > rect.V0 && center.Y+margin < rect.V1) {
 			return nil
 		}
 	}
