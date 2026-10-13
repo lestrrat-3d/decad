@@ -27,6 +27,11 @@ type revolveSectorPlan struct {
 	capGroups                  [2]int
 }
 
+const (
+	revolveSectorMaxAuditTriangles = 1_200_000
+	revolveSectorStreamTriangles   = 1_000_000
+)
+
 type revolveSectorVolumeRefineError struct{ gain, bound float64 }
 
 type revolveSectorCapRefineError struct{ limit float64 }
@@ -115,7 +120,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		return nil, nil, err
 	}
 	if !math.IsInf(capLimit, 1) {
-		maxCells := 1_000_000 / (2 * len(sources))
+		maxCells := revolveSectorMaxAuditTriangles / (2 * len(sources))
 		for round := range 4 {
 			upper, lower, capErr := sectorConeCapBounds(original, caps, record)
 			if capErr != nil {
@@ -352,7 +357,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	ringLimit := uint64(2) * uint64(len(section.spans)-1) * uint64(len(angles))
 	capTriangleLimit := uint64(len(sources)) * uint64(2*len(caps)+2*len(edges))
 	maxTriangles, sumOK := proofbound.WallCheckedAdd(ringLimit, capTriangleLimit)
-	if !sumOK || count == 0 || uint64(count) > maxTriangles || maxTriangles > 1_000_000 {
+	if !sumOK || count == 0 || uint64(count) > maxTriangles || maxTriangles > revolveSectorMaxAuditTriangles {
 		return nil, nil, fmt.Errorf("%w: joined sectors exceed the audit mesh limit", ErrUnsupported)
 	}
 	pairCount, pairOK := proofbound.WallChoose2(uint64(count))
@@ -375,8 +380,11 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 			patches[patch].Triangles = append(patches[patch].Triangles, i)
 		}
 	}
-	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatches(proofbound.NewWorkBudget(ctx),
-		mesh.verts, mesh.tris, patches, count, scans); err != nil {
+	audit := loftmesh.LoftCrossingAuditBoundedProjectedPatches
+	if count > revolveSectorStreamTriangles {
+		audit = loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming
+	}
+	if err := audit(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris, patches, count, scans); err != nil {
 		if revolveRootCapContact(mesh, ring, section, plans, err) {
 			return nil, nil, &revolveSectorContactRefineError{cause: err}
 		}
