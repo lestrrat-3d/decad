@@ -19,8 +19,23 @@ type revolveLoftFacesBlankSeamShell struct {
 	mesh         joinedMesh
 	vertexBounds []float64
 	seam         []int
+	capRings     []revolveLoftFacesShellCapRing
 	chordBound   float64
 	faceBound    float64
+}
+
+type revolveLoftFacesShellCapRing struct {
+	sectionIndex int
+	arc          *revolveLoftFacesToolCapOccupiedArc
+	vertices     []int
+}
+
+type revolveLoftFacesShellCut struct {
+	sectionIndex int
+	x, radius    *big.Rat
+	arc          *revolveLoftFacesToolCapOccupiedArc
+	seam         bool
+	vertices     []int
 }
 
 type revolveLoftFacesRay struct {
@@ -35,6 +50,15 @@ func revolveLoftFacesBlankShellAtArc(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate,
 	manifest *revolveLoftFacesContactManifest,
 	sectionIndex, cellIndex int,
+) (*revolveLoftFacesBlankSeamShell, bool, error) {
+	return revolveLoftFacesBlankShellAtArcWithCuts(ctx, proof, manifest,
+		sectionIndex, cellIndex, nil)
+}
+
+func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
+	proof *revolveLoftFacesSourceCertificate,
+	manifest *revolveLoftFacesContactManifest,
+	sectionIndex, cellIndex int, capCuts []revolveLoftFacesShellCut,
 ) (*revolveLoftFacesBlankSeamShell, bool, error) {
 	if ctx == nil || proof == nil || proof.trim == nil || proof.tooth == nil || manifest == nil ||
 		sectionIndex < 0 || sectionIndex >= len(proof.section.spans) ||
@@ -217,9 +241,73 @@ func revolveLoftFacesBlankShellAtArc(ctx context.Context,
 			return nil, false, nil
 		}
 	}
-	middle, valid := makeRing(x, radius, true)
-	if !valid {
+	cuts := make([][]revolveLoftFacesShellCut, len(proof.section.spans))
+	cuts[sectionIndex] = append(cuts[sectionIndex], revolveLoftFacesShellCut{
+		sectionIndex: sectionIndex, x: x, radius: radius, seam: true})
+	for _, cut := range capCuts {
+		if cut.arc == nil || cut.sectionIndex < 0 ||
+			cut.sectionIndex >= len(proof.section.spans) ||
+			cut.x == nil || cut.radius == nil || cut.seam ||
+			cut.arc.circle.x == nil || cut.arc.circle.radius == nil ||
+			cut.arc.circle.span != cut.sectionIndex ||
+			cut.arc.circle.x.Cmp(cut.x) != 0 ||
+			cut.arc.circle.radius.Cmp(cut.radius) != 0 {
+			return nil, false, nil
+		}
+		current, err := revolveLoftFacesToolCapOccupiedArcCurrent(ctx, proof, cut.arc)
+		if err != nil || !current {
+			return nil, false, err
+		}
+		cuts[cut.sectionIndex] = append(cuts[cut.sectionIndex], cut)
+	}
+	if (len(proof.section.spans)+len(capCuts)+1)*len(rays) > 1<<16 {
 		return nil, false, nil
+	}
+	for i := range cuts {
+		span := proof.section.spans[i]
+		parameter := func(cut revolveLoftFacesShellCut) (*big.Rat, bool) {
+			startX, endX := lfF(span.start.U), lfF(span.end.U)
+			startR, endR := lfF(span.start.V), lfF(span.end.V)
+			if startX.Cmp(endX) != 0 {
+				fraction := lfDiv(lfSub(cut.x, startX), lfSub(endX, startX))
+				return fraction, lfAdd(startR, lfMul(fraction, lfSub(endR, startR))).Cmp(cut.radius) == 0
+			}
+			if cut.x.Cmp(startX) != 0 || startR.Cmp(endR) == 0 {
+				return nil, false
+			}
+			return lfDiv(lfSub(cut.radius, startR), lfSub(endR, startR)), true
+		}
+		for _, cut := range cuts[i] {
+			fraction, valid := parameter(cut)
+			if !valid || fraction.Sign() <= 0 || fraction.Cmp(lfOne()) >= 0 {
+				return nil, false, nil
+			}
+		}
+		sort.Slice(cuts[i], func(a, b int) bool {
+			first, _ := parameter(cuts[i][a])
+			second, _ := parameter(cuts[i][b])
+			return first.Cmp(second) < 0
+		})
+		for j := range cuts[i] {
+			if j > 0 {
+				previous, _ := parameter(cuts[i][j-1])
+				current, _ := parameter(cuts[i][j])
+				if previous.Cmp(current) >= 0 {
+					return nil, false, nil
+				}
+			}
+			var valid bool
+			cuts[i][j].vertices, valid = makeRing(cuts[i][j].x,
+				cuts[i][j].radius, cuts[i][j].seam)
+			if !valid {
+				return nil, false, nil
+			}
+			if cuts[i][j].arc != nil {
+				out.capRings = append(out.capRings, revolveLoftFacesShellCapRing{
+					sectionIndex: i, arc: cuts[i][j].arc,
+					vertices: cuts[i][j].vertices})
+			}
+		}
 	}
 	addBand := func(start, end []int, source int) bool {
 		if len(start) != len(rays) && len(start) != 1 ||
@@ -246,14 +334,14 @@ func revolveLoftFacesBlankShellAtArc(ctx context.Context,
 		if group[i] < 0 {
 			continue
 		}
-		start, end := rings[i], rings[(i+1)%len(rings)]
-		if i == sectionIndex {
-			if !addBand(start, middle, group[i]) || !addBand(middle, end, group[i]) {
+		start := rings[i]
+		for _, cut := range cuts[i] {
+			if !addBand(start, cut.vertices, group[i]) {
 				return nil, false, nil
 			}
-			continue
+			start = cut.vertices
 		}
-		if !addBand(start, end, group[i]) {
+		if !addBand(start, rings[(i+1)%len(rings)], group[i]) {
 			return nil, false, nil
 		}
 	}
