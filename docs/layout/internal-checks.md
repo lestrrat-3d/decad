@@ -11,12 +11,12 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `internal/stackedrecord/` | Derives and audits slab interfaces, wall columns, and exposed patch rings. See stacked-prism §2.2–§3. |
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
-| `internal/compositesweep/` | Composite Sweep limits, bounded measurements and separation audit. See sweep §7, §9. |
+| `internal/compositesweep/` | Composite Sweep limits, bounded measurements, separation audit and span side-role renumbering. See sweep §7, §9. |
 | `internal/diameter/` | Lower-bound diameter of held witness points. See verification §3. |
 | `internal/tolerance/` | Relative tolerance comparisons, body reference formulas, and reading diagnostics. See verification §2-§3. |
 | `internal/verifyoption/` | Verify options. See verification §2. |
 | `internal/featureoption/` | Profile-fed feature option records and validation. See evaluator §5–§6, sweep §2/§16, loft §2. |
-| `internal/modifyoption/` | Fillet, Chamfer and Shell option codecs. See modify-reach §2. |
+| `internal/modifyoption/` | Fillet, Chamfer and Shell option codecs and side-role segment reading. See modify-reach §2. |
 | `internal/orderedwork/` | Runs independent jobs and returns results in input order. |
 | `internal/prismextent/` | Prism extremes, bounds and extent readings. See evaluator §5. |
 | `internal/prismplacement/` | Exact prism axis shifts, sweep spans and relative placement. See prism-boolean §3. |

@@ -271,21 +271,13 @@ func (a *asymmetricChamfer) capSetbacks(caps prismCaps, edges []*Edge, startLoop
 // faceSideSegments returns the recorded segments of loop li that face f is
 // built from, read from its side(i,j) roles under b's own producer.
 func faceSideSegments(b *Body, f *Face, li int) map[int]struct{} {
-	out := map[int]struct{}{}
+	var roles []string
 	for _, o := range f.origins {
-		if o.producer != b.origin.producer {
-			continue
+		if o.producer == b.origin.producer {
+			roles = append(roles, o.Role)
 		}
-		var i, j int
-		if n, err := fmt.Sscanf(o.Role, "side(%d,%d)", &i, &j); err != nil || n != 2 || i != li {
-			continue
-		}
-		if o.Role != fmt.Sprintf("side(%d,%d)", i, j) {
-			continue
-		}
-		out[j] = struct{}{}
 	}
-	return out
+	return modifyoption.SideSegments(roles, li)
 }
 
 // walkHoldsAny reports whether any recorded segment of a coalesced walk is
