@@ -3,9 +3,9 @@ package decad
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -284,19 +284,7 @@ func compositeSpanFaceRole(face *Face, span int, reverseCaps bool) (string, erro
 	if len(origins) == 0 {
 		return "", fmt.Errorf(`%w: a sweep span face has no origin role`, ErrDegenerate)
 	}
-	role := origins[0].Role
-	if suffix, ok := strings.CutPrefix(role, "side("); ok {
-		return fmt.Sprintf("side(%d,%s", span, suffix), nil
-	}
-	if reverseCaps {
-		switch role {
-		case roleCapStart:
-			return roleCapEnd, nil
-		case roleCapEnd:
-			return roleCapStart, nil
-		}
-	}
-	return role, nil
+	return compositesweep.SpanFaceRole(origins[0].Role, span, reverseCaps, roleCapStart, roleCapEnd), nil
 }
 
 type compositeStationKey struct{ loop, segment int }

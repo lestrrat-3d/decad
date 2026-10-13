@@ -19,3 +19,28 @@ func RewriteSideRole(role string, span int) (string, bool) {
 	}
 	return fmt.Sprintf("side(%d,%s", span, suffix), true
 }
+
+// SpanFaceRole returns the role a composite span face publishes: a "side("
+// role is renumbered as a side wall of span, and, when reverseCaps is set, the
+// start and end cap roles trade places. Any other role is returned unchanged.
+func SpanFaceRole(role string, span int, reverseCaps bool, capStart, capEnd string) string {
+	if suffix, ok := strings.CutPrefix(role, "side("); ok {
+		return fmt.Sprintf("side(%d,%s", span, suffix)
+	}
+	if reverseCaps {
+		return SwapCapRole(role, capStart, capEnd)
+	}
+	return role
+}
+
+// SwapCapRole returns capEnd for capStart, capStart for capEnd, and every
+// other role unchanged.
+func SwapCapRole(role, capStart, capEnd string) string {
+	switch role {
+	case capStart:
+		return capEnd
+	case capEnd:
+		return capStart
+	}
+	return role
+}

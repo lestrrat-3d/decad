@@ -279,12 +279,9 @@ func chainSweepTriangleArea(vertices []r3.Vec, tri [3]int) (float64, float64, bo
 }
 
 func chainSweepFaceAreaSlack(f *Face, held chainSweepAreaInterval) (float64, error) {
-	if held.lo == nil || !proofbound.FiniteVec(r3.Vec{X: f.area, Y: f.areaBound}) || f.areaBound < 0 {
+	slack, ok := proofbound.AreaSlack(f.area, f.areaBound, held.lo, held.hi)
+	if !ok {
 		return 0, fmt.Errorf(`%w: a chain sweep face has no certified area interval`, ErrUnsupported)
 	}
-	lo := new(big.Rat).Sub(proofarith.FloatRat(f.area), proofarith.FloatRat(f.areaBound))
-	hi := new(big.Rat).Add(proofarith.FloatRat(f.area), proofarith.FloatRat(f.areaBound))
-	d1 := new(big.Rat).Abs(new(big.Rat).Sub(lo, held.hi))
-	d2 := new(big.Rat).Abs(new(big.Rat).Sub(hi, held.lo))
-	return proofbound.RatFloatUp(proofbound.RatMax(d1, d2)), nil
+	return slack, nil
 }
