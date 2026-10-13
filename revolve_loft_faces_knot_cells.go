@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 )
 
 // This partitions one authenticated fitted span across the exact time roots
@@ -44,7 +45,7 @@ func revolveLoftFacesKnotPartitionCells(ctx context.Context,
 func revolveLoftFacesEndpointPartitionCells(ctx context.Context,
 	trim *loftFacesTrimRecord, section revolveSectionSpan,
 	segment, spanIndex, band int, span freeform.BezierSpan,
-	roots []revolveLoftFacesEndpointRoot, pieces []revolveLoftFacesTimePiece,
+	roots []loftface.EndpointRoot, pieces []loftface.TimePiece,
 	jointCells []revolveLoftFacesJointCell, atEnd bool) (
 	[]revolveLoftFacesMappedCell, bool, error,
 ) {
@@ -54,8 +55,8 @@ func revolveLoftFacesEndpointPartitionCells(ctx context.Context,
 		return nil, false, nil
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], span, m, b)
-	j := spiralRootXOrder(trim.maps[band], trim.maps[band+1], span, q)
+	q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
+	j := loftface.MeridianJRows(trim.maps[band], trim.maps[band+1], span, q)
 	remaining := revolveLoftFacesMaxBandCells
 	var cells []revolveLoftFacesMappedCell
 	for _, piece := range pieces {

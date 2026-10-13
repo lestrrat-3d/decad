@@ -2,7 +2,8 @@ package decad
 
 import (
 	"context"
-	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/loftface"
 )
 
 // A consumer must rederive a stored occupied arc before using its source
@@ -45,7 +46,7 @@ func revolveLoftFacesToolCapOccupiedArcCurrent(ctx context.Context,
 func revolveLoftFacesToolCapOccupiedArcEqual(a, b *revolveLoftFacesToolCapOccupiedArc) bool {
 	return a != nil && b != nil &&
 		revolveLoftFacesToolCapCircleEqual(a.circle, b.circle) &&
-		a.band == b.band && revolveLoftFacesToolCapRatEqual(a.time, b.time) &&
+		a.band == b.band && loftface.RatEqual(a.time, b.time) &&
 		revolveLoftFacesToolCapBoundaryEqual(a.negativeZ, b.negativeZ) &&
 		revolveLoftFacesToolCapBoundaryEqual(a.positiveZ, b.positiveZ) &&
 		a.throughPositiveY == b.throughPositiveY
@@ -55,32 +56,20 @@ func revolveLoftFacesToolCapCircleEqual(a, b revolveLoftFacesToolCapCircle) bool
 	return a.blankFace == b.blankFace && a.capFace == b.capFace &&
 		a.capOrigin == b.capOrigin && a.span == b.span && a.tool == b.tool &&
 		a.sourceMiss == b.sourceMiss &&
-		revolveLoftFacesToolCapRatEqual(a.x, b.x) &&
-		revolveLoftFacesToolCapRatEqual(a.radius, b.radius)
+		loftface.RatEqual(a.x, b.x) &&
+		loftface.RatEqual(a.radius, b.radius)
 }
 
 func revolveLoftFacesToolCapBoundaryEqual(a, b revolveLoftFacesToolCapBoundary) bool {
 	if a.segment != b.segment || a.span != b.span || a.ref != b.ref ||
 		a.face != b.face || a.outward != b.outward ||
-		!revolveLoftFacesToolCapIntervalEqual(a.parameter, b.parameter) {
+		!loftface.IntervalEqual(a.parameter, b.parameter) {
 		return false
 	}
 	for axis := range a.box {
-		if !revolveLoftFacesToolCapIntervalEqual(a.box[axis], b.box[axis]) {
+		if !loftface.IntervalEqual(a.box[axis], b.box[axis]) {
 			return false
 		}
 	}
 	return true
-}
-
-func revolveLoftFacesToolCapIntervalEqual(a, b loftFaceInterval) bool {
-	return revolveLoftFacesToolCapRatEqual(a.Lo, b.Lo) &&
-		revolveLoftFacesToolCapRatEqual(a.Hi, b.Hi)
-}
-
-func revolveLoftFacesToolCapRatEqual(a, b *big.Rat) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	return a.Cmp(b) == 0
 }

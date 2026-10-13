@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +18,7 @@ func TestRevolveLoftFacesOwnedTimeRootsRemainDisjoint(t *testing.T) {
 			sLo, sHi = big.NewRat(7, 8), big.NewRat(1, 1)
 		}
 		return revolveLoftFacesOwnedRoot{
-			root: revolveLoftFacesEndpointRoot{
+			root: loftface.EndpointRoot{
 				Time: loftFaceInterval{Lo: lo, Hi: hi}, Finite: true},
 			cell: revolveLoftFacesJointCell{
 				time: loftFaceInterval{Lo: lo, Hi: hi},

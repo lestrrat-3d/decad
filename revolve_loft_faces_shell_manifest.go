@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 )
 
 // The source record is rebuilt before shell construction. A copied face
@@ -58,7 +59,7 @@ func revolveLoftFacesSameBox(a, b [3]loftFaceInterval) bool {
 	return true
 }
 
-func revolveLoftFacesSameCrossing(a, b spiralRootCrossing) bool {
+func revolveLoftFacesSameCrossing(a, b loftface.RootCrossing) bool {
 	return a.Span == b.Span && revolveLoftFacesSameRat(a.Lo, b.Lo) &&
 		revolveLoftFacesSameRat(a.Hi, b.Hi)
 }
@@ -92,13 +93,13 @@ func revolveLoftFacesSameBezier(a, b freeform.BezierSpan) bool {
 	return true
 }
 
-func revolveLoftFacesSameVerticalLimit(a, b revolveLoftFacesVerticalLimit) bool {
+func revolveLoftFacesSameVerticalLimit(a, b loftface.VerticalLimit) bool {
 	return a.Side == b.Side && a.Before == b.Before && a.After == b.After &&
 		revolveLoftFacesSameInterval(a.Root, b.Root) &&
 		revolveLoftFacesSameBox(a.Box, b.Box)
 }
 
-func revolveLoftFacesSameVerticalAffine(a, b *revolveLoftFacesVerticalAffine) bool {
+func revolveLoftFacesSameVerticalAffine(a, b *loftface.VerticalAffine) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}

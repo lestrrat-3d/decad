@@ -145,38 +145,5 @@ func revolveLoftFacesToolCircleOutsideSource(trim *loftFacesTrimRecord,
 	if err != nil {
 		return false
 	}
-	return revolveLoftFacesCircleOutsideMaps(trim.maps, box, x, radius)
-}
-
-func revolveLoftFacesCircleOutsideMaps(maps []loftFaceMap, box [4]*big.Rat,
-	x, radius *big.Rat) bool {
-	if len(maps) < 2 || x == nil || radius == nil || radius.Sign() <= 0 {
-		return false
-	}
-	corners := loftface.BoxCorners(box)
-	axis := [3]loftFaceRatVec{{lfOne(), lfZero(), lfZero()},
-		{lfZero(), lfOne(), lfZero()}, {lfZero(), lfZero(), lfOne()}}
-	for _, mapped := range maps {
-		if loftface.PositiveDenominator(mapped, box) != nil {
-			return false
-		}
-	}
-	radius2 := lfMul(radius, radius)
-	for band := 0; band+1 < len(maps); band++ {
-		var range3 [3]loftFaceInterval
-		for coordinate, direction := range axis {
-			first := loftface.ScalarRange(maps[band], direction, corners)
-			second := loftface.ScalarRange(maps[band+1], direction, corners)
-			range3[coordinate] = loftface.IntervalHull(first, second)
-		}
-		if x.Cmp(range3[0].Lo) < 0 || x.Cmp(range3[0].Hi) > 0 {
-			continue
-		}
-		minimum := lfAdd(loftface.IntervalSquareMin(range3[1]), loftface.IntervalSquareMin(range3[2]))
-		maximum := lfAdd(loftface.IntervalSquareMax(range3[1]), loftface.IntervalSquareMax(range3[2]))
-		if radius2.Cmp(minimum) >= 0 && radius2.Cmp(maximum) <= 0 {
-			return false
-		}
-	}
-	return true
+	return loftface.CircleOutsideMaps(trim.maps, box, x, radius)
 }

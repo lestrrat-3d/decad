@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -237,7 +238,7 @@ func spiralShortSourceCells(ctx context.Context, proof *spiralFirstJoinSource,
 		if !yes {
 			return nil, false, nil
 		}
-		box, yes := spiralJunctionBox(first, second, part.span, lo, hi, t.Lo, t.Hi)
+		box, yes := loftface.JunctionBox(first, second, part.span, lo, hi, t.Lo, t.Hi)
 		if !yes {
 			return nil, false, nil
 		}

@@ -4,15 +4,10 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/sketch"
-)
-
-const (
-	revolveLoftFacesInside  = -1
-	revolveLoftFacesCrossed = 0
-	revolveLoftFacesOutside = 1
 )
 
 // A signed side applies to the entire true mapped Bezier span in every band.
@@ -37,25 +32,25 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 		var sign int
 		seenBand := false
 		for band := 0; band+1 < len(trim.maps); band++ {
-			q := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], span, m, b)
-			kind, signed := revolveLoftFacesClassifyRows(q)
+			q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
+			kind, signed := loftface.ClassifyRows(q)
 			if kind == 2 || seenBand && kind != sign {
 				return nil, 0, false
 			}
 			sign = kind
 			seenBand = true
-			if kind == revolveLoftFacesCrossed &&
-				!polynomial.BernsteinRowsPositive(spiralRootXOrder(trim.maps[band], trim.maps[band+1], span, signed)) {
+			if kind == loftface.SideCrossed &&
+				!polynomial.BernsteinRowsPositive(loftface.MeridianJRows(trim.maps[band], trim.maps[band+1], span, signed)) {
 				return nil, 0, false
 			}
 		}
 		sides[index] = sign
-		if sign == revolveLoftFacesCrossed {
+		if sign == loftface.SideCrossed {
 			if crossing != nil {
 				return nil, 0, false
 			}
 			crossing = &revolveLoftFacesCrossing{segment: segmentIndex, span: span,
-				index: index, caps: make([]spiralRootCrossing, len(trim.maps)),
+				index: index, caps: make([]loftface.RootCrossing, len(trim.maps)),
 				x: make([]loftFaceInterval, len(trim.maps))}
 		}
 	}
@@ -67,8 +62,8 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 		}
 		return nil, sides[0], true
 	}
-	q := spiralRootPolynomial(trim.maps[0], trim.maps[1], crossing.span, m, b)
-	before, after := revolveLoftFacesInside, revolveLoftFacesOutside
+	q := loftface.MeridianQRows(trim.maps[0], trim.maps[1], crossing.span, m, b)
+	before, after := loftface.SideInside, loftface.SideOutside
 	if q[0][0].Sign() > 0 {
 		before, after = after, before
 	}
@@ -81,19 +76,19 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 		}
 	}
 	for capIndex, mapped := range trim.maps {
-		capQ := spiralRootPolynomial(mapped, mapped, crossing.span, m, b)
-		kind, signedCap := revolveLoftFacesClassifyRows(capQ)
-		if kind != revolveLoftFacesCrossed {
+		capQ := loftface.MeridianQRows(mapped, mapped, crossing.span, m, b)
+		kind, signedCap := loftface.ClassifyRows(capQ)
+		if kind != loftface.SideCrossed {
 			return nil, 0, false
 		}
-		root := spiralIsolateRoot(signedCap[0])
+		root := loftface.IsolateRoot(signedCap[0])
 		root.Span = crossing.index
-		direction := revolveLoftFacesCapXDirection(mapped, crossing.span)
+		direction := loftface.CapXDirection(mapped, crossing.span)
 		if direction == 2 {
 			return nil, 0, false
 		}
 		crossing.caps[capIndex] = root
-		crossing.x[capIndex] = revolveLoftFacesCapXRange(mapped, crossing.span, root, direction)
+		crossing.x[capIndex] = loftface.DirectedCapXRange(mapped, crossing.span, root, direction)
 	}
 	for i := 0; i+1 < len(crossing.x); i++ {
 		if crossing.x[i].Hi.Cmp(crossing.x[i+1].Lo) >= 0 {
@@ -105,72 +100,4 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 	}
 	crossing.first, crossing.last = before, after
 	return crossing, 0, true
-}
-
-func revolveLoftFacesClassifyRows(q [3][]*big.Rat) (int, [3][]*big.Rat) {
-	if polynomial.BernsteinRowsPositive(q) {
-		return revolveLoftFacesOutside, q
-	}
-	negative := revolveLoftFacesNegateRows(q)
-	if polynomial.BernsteinRowsPositive(negative) {
-		return revolveLoftFacesInside, negative
-	}
-	if polynomial.BernsteinRowsCross(q) {
-		return revolveLoftFacesCrossed, q
-	}
-	if polynomial.BernsteinRowsCross(negative) {
-		return revolveLoftFacesCrossed, negative
-	}
-	return 2, [3][]*big.Rat{}
-}
-
-func revolveLoftFacesNegateRows(q [3][]*big.Rat) [3][]*big.Rat {
-	var out [3][]*big.Rat
-	for i, row := range q {
-		out[i] = revolveLoftFacesNegateRow(row)
-	}
-	return out
-}
-
-func revolveLoftFacesNegateRow(row []*big.Rat) []*big.Rat {
-	out := make([]*big.Rat, len(row))
-	for i, value := range row {
-		out[i] = new(big.Rat).Neg(value)
-	}
-	return out
-}
-
-// A rational cap X map is monotone over this Bezier span if every exact
-// derivative-numerator coefficient has one strict sign, or all are zero.
-func revolveLoftFacesCapXDirection(mapped loftFaceMap, span freeform.BezierSpan) int {
-	g, h := spiralCapBern(mapped, span)
-	numerator := polynomial.BernsteinSub(polynomial.BernsteinMul(polynomial.BernsteinDeriv(h[0]), g),
-		polynomial.BernsteinMul(h[0], polynomial.BernsteinDeriv(g)))
-
-	negative, positive, zero := true, true, true
-	for _, coefficient := range numerator {
-		negative = negative && coefficient.Sign() < 0
-		positive = positive && coefficient.Sign() > 0
-		zero = zero && coefficient.Sign() == 0
-	}
-	switch {
-	case negative:
-		return -1
-	case zero:
-		return 0
-	case positive:
-		return 1
-	default:
-		return 2
-	}
-}
-
-func revolveLoftFacesCapXRange(mapped loftFaceMap, span freeform.BezierSpan,
-	root spiralRootCrossing, direction int) loftFaceInterval {
-	left, right := spiralBezierPoint(span, root.Lo), spiralBezierPoint(span, root.Hi)
-	a, z := mapped.At(left[0], left[1])[0], mapped.At(right[0], right[1])[0]
-	if direction < 0 {
-		return loftFaceInterval{Lo: z, Hi: a}
-	}
-	return loftFaceInterval{Lo: a, Hi: z}
 }

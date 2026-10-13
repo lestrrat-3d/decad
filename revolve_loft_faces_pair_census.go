@@ -3,6 +3,8 @@ package decad
 import (
 	"context"
 	"fmt"
+
+	"github.com/lestrrat-3d/decad/internal/loftface"
 )
 
 // A pair verdict is a source answer for one live blank and trimmed face.
@@ -177,9 +179,9 @@ func revolveLoftFacesCensus(ctx context.Context,
 							}
 							pair.sourceCells = append(pair.sourceCells, cell)
 							switch cell.mapped.side {
-							case revolveLoftFacesCrossed, revolveLoftFacesJointContact:
+							case loftface.SideCrossed, revolveLoftFacesJointContact:
 								pair.verdict = revolveLoftFacesPairSourceCandidate
-							case revolveLoftFacesInside, revolveLoftFacesOutside,
+							case loftface.SideInside, loftface.SideOutside,
 								revolveLoftFacesAxialMiss:
 							default:
 								return nil, false, nil

@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
@@ -23,14 +24,14 @@ type revolveLoftFacesJointCell struct {
 
 func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 	section revolveSectionSpan, span freeform.BezierSpan, band int,
-	atEnd bool, root revolveLoftFacesEndpointRoot) (revolveLoftFacesJointCell, bool) {
+	atEnd bool, root loftface.EndpointRoot) (revolveLoftFacesJointCell, bool) {
 	var empty revolveLoftFacesJointCell
 	if trim == nil || band < 0 || band+1 >= len(trim.maps) ||
 		root.Time.Lo == nil || root.Time.Hi == nil {
 		return empty, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], span, m, b)
+	q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
 	endpoint := lfZero()
 	if atEnd {
 		endpoint = lfOne()
@@ -70,7 +71,7 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 		direction := 0
 		if polynomial.BernsteinRowsPositive(derivative) {
 			direction = 1
-		} else if polynomial.BernsteinRowsPositive(revolveLoftFacesNegateRows(derivative)) {
+		} else if polynomial.BernsteinRowsPositive(loftface.NegateRows(derivative)) {
 			direction = -1
 		}
 		if direction == 0 {
@@ -93,11 +94,11 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 				root.Time.Lo, root.Time.Hi)
 
 			if fixedSide > 0 && !polynomial.BernsteinRowsPositive(outer) ||
-				fixedSide < 0 && !polynomial.BernsteinRowsPositive(revolveLoftFacesNegateRows(outer)) {
+				fixedSide < 0 && !polynomial.BernsteinRowsPositive(loftface.NegateRows(outer)) {
 				continue
 			}
 		}
-		x, ok := revolveLoftFacesSpanXRange(trim.maps[band], trim.maps[band+1],
+		x, ok := loftface.SpanXRange(trim.maps[band], trim.maps[band+1],
 			span, sLo, sHi, root.Time.Lo, root.Time.Hi)
 		if !ok || root.Finite && (x.Lo.Cmp(startX) <= 0 || x.Hi.Cmp(endX) >= 0) ||
 			!root.Finite && x.Hi.Cmp(startX) >= 0 && x.Lo.Cmp(endX) <= 0 {

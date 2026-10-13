@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -75,11 +76,11 @@ func TestRevolveLoftFacesVerticalConstantXAndTrimLimits(t *testing.T) {
 		QV:       loftFaceRatVec{big.NewRat(4, 1), zero, one},
 		G0:       one, GU: big.NewRat(3, 1), GV: big.NewRat(2, 1),
 	}
-	x, ok := revolveLoftFacesConstantX(mapped)
+	x, ok := loftface.ConstantX(mapped)
 	require.True(t, ok)
 	require.Equal(t, "7", x.RatString())
 	mapped.QU[0] = big.NewRat(5, 1)
-	_, ok = revolveLoftFacesConstantX(mapped)
+	_, ok = loftface.ConstantX(mapped)
 	require.False(t, ok)
 
 	trim := &loftFacesTrimRecord{
@@ -129,19 +130,19 @@ func TestRevolveLoftFacesConstantXBand(t *testing.T) {
 		{big.NewRat(11, 2), 0},
 		{big.NewRat(13, 2), 1},
 	} {
-		band, time, ok := revolveLoftFacesConstantXBand(maps, box, tc.x)
+		band, time, ok := loftface.ConstantXBand(maps, box, tc.x)
 		require.True(t, ok)
 		require.Equal(t, tc.band, band)
 		require.Equal(t, "1/2", time.RatString())
 	}
-	_, _, ok := revolveLoftFacesConstantXBand(maps, box, big.NewRat(6, 1))
+	_, _, ok := loftface.ConstantXBand(maps, box, big.NewRat(6, 1))
 	require.False(t, ok, "a cap coincidence has no unique interior band time")
 	maps[2] = makeMap(big.NewRat(11, 2))
-	_, _, ok = revolveLoftFacesConstantXBand(maps, box, big.NewRat(21, 4))
+	_, _, ok = loftface.ConstantXBand(maps, box, big.NewRat(21, 4))
 	require.False(t, ok, "cap X must strictly increase")
 	maps[2] = makeMap(big.NewRat(7, 1))
 	maps[1].QU[0] = one
-	_, _, ok = revolveLoftFacesConstantXBand(maps, box, big.NewRat(11, 2))
+	_, _, ok = loftface.ConstantXBand(maps, box, big.NewRat(11, 2))
 	require.False(t, ok, "cap X must be source independent")
 }
 
@@ -170,7 +171,7 @@ func TestRevolveLoftFacesVerticalClipsLiveSourceSpan(t *testing.T) {
 	require.Less(t, cell.lower.Root.Hi.Cmp(cell.upper.Root.Lo), 0)
 	require.Len(t, cell.retained, 1)
 	require.Equal(t, "1/4", cell.lower.Root.Hi.RatString())
-	rootPoint := spiralBezierPoint(span, cell.retained[0].Source.Lo)
+	rootPoint := loftface.BezierPoint(span, cell.retained[0].Source.Lo)
 	require.Equal(t, "3/2", rootPoint[0].RatString())
 	require.Equal(t, 0, cell.retained[0].Source.Lo.Cmp(cell.lower.Root.Hi))
 	require.Equal(t, 0, cell.retained[0].Source.Hi.Cmp(cell.upper.Root.Lo))
@@ -179,11 +180,11 @@ func TestRevolveLoftFacesVerticalClipsLiveSourceSpan(t *testing.T) {
 	require.False(t, cell.retained[0].HiOpen)
 	require.Equal(t, "11/2", cell.retained[0].Box[0].Lo.RatString())
 	require.Equal(t, "11/2", cell.retained[0].Box[0].Hi.RatString())
-	for _, limit := range [...]revolveLoftFacesVerticalLimit{cell.lower, cell.upper} {
+	for _, limit := range [...]loftface.VerticalLimit{cell.lower, cell.upper} {
 		require.Less(t, limit.Root.Lo.Cmp(limit.Root.Hi), 0)
 		require.Equal(t, "11/2", limit.Box[0].Lo.RatString())
 	}
-	_, ok = revolveLoftFacesVerticalClassify([]*big.Rat{zero, one})
+	_, ok = loftface.VerticalClassify([]*big.Rat{zero, one})
 	require.False(t, ok)
 }
 
@@ -199,16 +200,16 @@ func TestRevolveLoftFacesVerticalAffineOrientation(t *testing.T) {
 		}
 	}
 	first, last := makeMap(big.NewRat(1, 2)), makeMap(one)
-	affine, ok := revolveLoftFacesVerticalAffineMap(first, last, big.NewRat(1, 2))
+	affine, ok := loftface.VerticalAffineMap(first, last, big.NewRat(1, 2))
 	require.True(t, ok)
 	require.Equal(t, "3/4", affine.Column[0][0].RatString())
 	require.Equal(t, "3/4", affine.Column[1][1].RatString())
 	require.Equal(t, "9/16", affine.Det.RatString())
 	last.QV[2] = big.NewRat(-1, 1)
-	_, ok = revolveLoftFacesVerticalAffineMap(first, last, one)
+	_, ok = loftface.VerticalAffineMap(first, last, one)
 	require.False(t, ok)
 	last.QV[2] = one
 	last.GU = one
-	_, ok = revolveLoftFacesVerticalAffineMap(first, last, big.NewRat(1, 2))
+	_, ok = loftface.VerticalAffineMap(first, last, big.NewRat(1, 2))
 	require.False(t, ok)
 }

@@ -5,13 +5,14 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
 )
 
 func revolveLoftFacesSimpleArc(trim *loftFacesTrimRecord, segment int,
-	arc arcSeg, reversed bool) (revolveLoftFacesSimpleCell, bool) {
-	var cell revolveLoftFacesSimpleCell
+	arc arcSeg, reversed bool) (loftface.SimpleCell, bool) {
+	var cell loftface.SimpleCell
 	if segment < 0 || segment >= len(trim.source.source.entities) ||
 		arc.TStart != 0 && arc.TStart != 1 ||
 		arc.TEnd != 0 && arc.TEnd != 1 ||
@@ -49,7 +50,7 @@ func revolveLoftFacesSimpleArc(trim *loftFacesTrimRecord, segment int,
 	if !ok || u.Lo == nil || u.Hi == nil || v.Lo == nil || v.Hi == nil {
 		return cell, false
 	}
-	cell = revolveLoftFacesSimpleCell{Segment: segment, Arc: &arc,
+	cell = loftface.SimpleCell{Segment: segment, Arc: &arc,
 		Start: start, End: end,
 		Box: [2]loftFaceInterval{{Lo: u.Lo, Hi: u.Hi}, {Lo: v.Lo, Hi: v.Hi}}}
 	if reversed {
@@ -74,9 +75,9 @@ func revolveLoftFacesSimpleArcChordSide(arc arcSeg, axis int,
 	if contact == nil || side != -1 && side != 1 {
 		return false
 	}
-	start := revolveLoftFacesSimpleCoordinate(revolveLoftFacesSimplePoint(arc.Start), axis)
-	end := revolveLoftFacesSimpleCoordinate(revolveLoftFacesSimplePoint(arc.End), axis)
-	center := revolveLoftFacesSimpleCoordinate(revolveLoftFacesSimplePoint(arc.Center), axis)
+	start := loftface.SimpleCoordinate(revolveLoftFacesSimplePoint(arc.Start), axis)
+	end := loftface.SimpleCoordinate(revolveLoftFacesSimplePoint(arc.End), axis)
+	center := loftface.SimpleCoordinate(revolveLoftFacesSimplePoint(arc.Center), axis)
 	if start == nil || end == nil || center == nil ||
 		start.Cmp(contact) != 0 || end.Cmp(contact) != 0 {
 		return false
@@ -100,13 +101,13 @@ func revolveLoftFacesSimpleArcMonotoneSide(arc arcSeg, axis int,
 		!revolveLoftFacesSimplePointFinite(center) {
 		return false
 	}
-	startAxis := revolveLoftFacesSimpleCoordinate(start, axis)
-	endAxis := revolveLoftFacesSimpleCoordinate(end, axis)
+	startAxis := loftface.SimpleCoordinate(start, axis)
+	endAxis := loftface.SimpleCoordinate(end, axis)
 	otherAxis := 1 - axis
-	startOrth := lfSub(revolveLoftFacesSimpleCoordinate(start, otherAxis),
-		revolveLoftFacesSimpleCoordinate(center, otherAxis))
-	endOrth := lfSub(revolveLoftFacesSimpleCoordinate(end, otherAxis),
-		revolveLoftFacesSimpleCoordinate(center, otherAxis))
+	startOrth := lfSub(loftface.SimpleCoordinate(start, otherAxis),
+		loftface.SimpleCoordinate(center, otherAxis))
+	endOrth := lfSub(loftface.SimpleCoordinate(end, otherAxis),
+		loftface.SimpleCoordinate(center, otherAxis))
 	if startOrth.Sign() == 0 || startOrth.Sign() != endOrth.Sign() {
 		return false
 	}

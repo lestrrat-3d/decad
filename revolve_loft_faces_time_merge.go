@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -22,7 +23,7 @@ const (
 // Each root owns one live source endpoint. Fit-knot, radial-arc and fit-line
 // records remain distinct even when their time brackets occupy one span.
 type revolveLoftFacesOwnedRoot struct {
-	root  revolveLoftFacesEndpointRoot
+	root  loftface.EndpointRoot
 	cell  revolveLoftFacesJointCell
 	kind  revolveLoftFacesJointKind
 	point *sketch.Point
@@ -82,8 +83,8 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 		return nil, false, nil
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], span, m, b)
-	j := spiralRootXOrder(trim.maps[band], trim.maps[band+1], span, q)
+	q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
+	j := loftface.MeridianJRows(trim.maps[band], trim.maps[band+1], span, q)
 	remaining := revolveLoftFacesMaxBandCells
 	previous := lfZero()
 	var cells []revolveLoftFacesMappedCell

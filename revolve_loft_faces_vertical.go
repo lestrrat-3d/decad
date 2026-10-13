@@ -19,22 +19,8 @@ type revolveLoftFacesVerticalCell struct {
 	source              freeform.BezierSpan // nil for a whole live Sketch arc
 	ref                 FeatureRef
 	face                *Face
-	lower, upper        revolveLoftFacesVerticalLimit
-	retained            []revolveLoftFacesVerticalPiece
-}
-
-type revolveLoftFacesVerticalLimit struct {
-	// Side is the sign of radius squared minus the limit squared when there
-	// is no root. A root has strict signs on both sides of its bracket.
-	Side, Before, After int
-	Root                loftFaceInterval
-	Box                 [3]loftFaceInterval
-}
-
-type revolveLoftFacesVerticalPiece struct {
-	Source         loftFaceInterval
-	LoOpen, HiOpen bool // equality with either radial limit excludes the endpoint
-	Box            [3]loftFaceInterval
+	lower, upper        loftface.VerticalLimit
+	retained            []loftface.VerticalPiece
 }
 
 type revolveLoftFacesVerticalSide struct {
@@ -57,18 +43,9 @@ type revolveLoftFacesConstantXSource struct {
 	band         int
 	time, x      *big.Rat
 	lower, upper *big.Rat
-	yzAffine     *revolveLoftFacesVerticalAffine
+	yzAffine     *loftface.VerticalAffine
 	cells        []revolveLoftFacesVerticalCell
 	hasRetained  bool
-}
-
-// At the certified band time, Y/Z are an orientation-preserving affine map
-// of the live Sketch U/V coordinates when both cap denominators are constant.
-// A nil record makes no claim about angular order or similarity.
-type revolveLoftFacesVerticalAffine struct {
-	Offset [2]*big.Rat
-	Column [2][2]*big.Rat // [source U or V][world Y or Z]
-	Det    *big.Rat
 }
 
 // A strict gap between the authenticated radial intervals proves the entire
@@ -175,13 +152,13 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 	if err != nil {
 		return nil, false, err
 	}
-	band, time, ok := revolveLoftFacesConstantXBand(trim.maps, box, x)
+	band, time, ok := loftface.ConstantXBand(trim.maps, box, x)
 	if !ok || len(proof.sourceRefs[band]) != len(trim.source.profile.Outer.Segments) {
 		return nil, false, nil
 	}
 	result := &revolveLoftFacesConstantXSource{band: band,
 		time: time, x: x, lower: lower, upper: upper}
-	result.yzAffine, _ = revolveLoftFacesVerticalAffineMap(trim.maps[band],
+	result.yzAffine, _ = loftface.VerticalAffineMap(trim.maps[band],
 		trim.maps[band+1], time)
 	for segment, source := range trim.source.profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
@@ -251,36 +228,6 @@ func revolveLoftFacesSourceRefsCurrent(trim *loftFacesTrimRecord, tooth *Body,
 	return true
 }
 
-func revolveLoftFacesConstantXBand(maps []loftFaceMap, box [4]*big.Rat,
-	x *big.Rat) (int, *big.Rat, bool) {
-	if len(maps) < 2 || x == nil {
-		return -1, nil, false
-	}
-	capX := make([]*big.Rat, len(maps))
-	for i, mapped := range maps {
-		if loftface.PositiveDenominator(mapped, box) != nil {
-			return -1, nil, false
-		}
-		mappedX, ok := revolveLoftFacesConstantX(mapped)
-		capX[i] = mappedX
-		if !ok || i > 0 && capX[i].Cmp(capX[i-1]) <= 0 || capX[i].Cmp(x) == 0 {
-			return -1, nil, false
-		}
-	}
-	band := -1
-	for i := 0; i+1 < len(capX); i++ {
-		if capX[i].Cmp(x) < 0 && capX[i+1].Cmp(x) > 0 {
-			band = i
-			break
-		}
-	}
-	if band < 0 {
-		return -1, nil, false
-	}
-	time := lfDiv(lfSub(x, capX[band]), lfSub(capX[band+1], capX[band]))
-	return band, time, true
-}
-
 func revolveLoftFacesVerticalLiveFace(tooth *Body, ref FeatureRef) *Face {
 	if tooth == nil {
 		return nil
@@ -308,65 +255,6 @@ func verticalOriginsMatch(actual, recorded []FeatureRef) bool {
 		}
 	}
 	return true
-}
-
-// A linear-fractional X map is constant on the entire source rectangle
-// exactly when its numerator is that constant times its denominator.
-func revolveLoftFacesConstantX(mapped loftFaceMap) (*big.Rat, bool) {
-	if mapped.G0 == nil || mapped.G0.Sign() <= 0 || mapped.Constant[0] == nil ||
-		mapped.Q0[0] == nil || mapped.QU[0] == nil || mapped.QV[0] == nil ||
-		mapped.GU == nil || mapped.GV == nil {
-		return nil, false
-	}
-	ratio := lfDiv(mapped.Q0[0], mapped.G0)
-	if mapped.QU[0].Cmp(lfMul(ratio, mapped.GU)) != 0 ||
-		mapped.QV[0].Cmp(lfMul(ratio, mapped.GV)) != 0 {
-		return nil, false
-	}
-	return lfAdd(mapped.Constant[0], ratio), true
-}
-
-func revolveLoftFacesVerticalAffineMap(first, last loftFaceMap,
-	time *big.Rat) (*revolveLoftFacesVerticalAffine, bool) {
-	if time == nil || time.Sign() < 0 || time.Cmp(lfOne()) > 0 {
-		return nil, false
-	}
-	var mappedCaps [2]revolveLoftFacesVerticalAffine
-	for i, mapped := range [...]loftFaceMap{first, last} {
-		if mapped.G0 == nil || mapped.G0.Sign() <= 0 ||
-			mapped.GU == nil || mapped.GU.Sign() != 0 ||
-			mapped.GV == nil || mapped.GV.Sign() != 0 {
-			return nil, false
-		}
-		for axis := range mappedCaps[i].Offset {
-			worldAxis := axis + 1
-			if mapped.Constant[worldAxis] == nil || mapped.Q0[worldAxis] == nil ||
-				mapped.QU[worldAxis] == nil || mapped.QV[worldAxis] == nil {
-				return nil, false
-			}
-			mappedCaps[i].Offset[axis] = lfAdd(mapped.Constant[worldAxis],
-				lfDiv(mapped.Q0[worldAxis], mapped.G0))
-			mappedCaps[i].Column[0][axis] = lfDiv(mapped.QU[worldAxis], mapped.G0)
-			mappedCaps[i].Column[1][axis] = lfDiv(mapped.QV[worldAxis], mapped.G0)
-		}
-	}
-	blend := func(a, b *big.Rat) *big.Rat {
-		return lfAdd(lfMul(lfSub(lfOne(), time), a), lfMul(time, b))
-	}
-	result := &revolveLoftFacesVerticalAffine{}
-	for axis := range result.Offset {
-		result.Offset[axis] = blend(mappedCaps[0].Offset[axis], mappedCaps[1].Offset[axis])
-		for sourceAxis := range result.Column {
-			result.Column[sourceAxis][axis] = blend(mappedCaps[0].Column[sourceAxis][axis],
-				mappedCaps[1].Column[sourceAxis][axis])
-		}
-	}
-	result.Det = lfSub(lfMul(result.Column[0][0], result.Column[1][1]),
-		lfMul(result.Column[0][1], result.Column[1][0]))
-	if result.Det.Sign() <= 0 {
-		return nil, false
-	}
-	return result, true
 }
 
 // The Cut keeps the strict outside of its cone. Intersect keeps the strict
@@ -411,125 +299,30 @@ func revolveLoftFacesVerticalBezier(trim *loftFacesTrimRecord,
 	cell := revolveLoftFacesVerticalCell{segment: segment, span: spanIndex,
 		band: band, source: span, ref: ref}
 	first, last := trim.maps[band], trim.maps[band+1]
-	loQ := polynomial.BernsteinRowsAt(spiralRootPolynomial(first, last, span, lfZero(), lower), time)
-	hiQ := polynomial.BernsteinRowsAt(spiralRootPolynomial(first, last, span, lfZero(), upper), time)
+	loQ := polynomial.BernsteinRowsAt(loftface.MeridianQRows(first, last, span, lfZero(), lower), time)
+	hiQ := polynomial.BernsteinRowsAt(loftface.MeridianQRows(first, last, span, lfZero(), upper), time)
 	var ok bool
-	cell.lower, ok = revolveLoftFacesVerticalClassify(loQ)
+	cell.lower, ok = loftface.VerticalClassify(loQ)
 	if !ok {
 		return cell, false
 	}
-	cell.upper, ok = revolveLoftFacesVerticalClassify(hiQ)
+	cell.upper, ok = loftface.VerticalClassify(hiQ)
 	if !ok {
 		return cell, false
 	}
-	for _, limit := range []*revolveLoftFacesVerticalLimit{&cell.lower, &cell.upper} {
+	for _, limit := range []*loftface.VerticalLimit{&cell.lower, &cell.upper} {
 		if limit.Root.Lo == nil {
 			continue
 		}
-		limit.Box, ok = spiralJunctionBox(first, last, span,
+		limit.Box, ok = loftface.JunctionBox(first, last, span,
 			limit.Root.Lo, limit.Root.Hi, time, time)
 		if !ok {
 			return cell, false
 		}
 	}
-	cell.retained, ok = revolveLoftFacesVerticalPieces(first, last, span,
+	cell.retained, ok = loftface.VerticalPieces(first, last, span,
 		time, loQ, hiQ, cell.lower.Root, cell.upper.Root)
 	return cell, ok
-}
-
-// Bernstein control signs prove a strict side. Strict endpoint and
-// derivative signs prove one transverse root and exclude all others.
-func revolveLoftFacesVerticalClassify(q []*big.Rat) (revolveLoftFacesVerticalLimit, bool) {
-	var result revolveLoftFacesVerticalLimit
-	if len(q) < 2 || q[0].Sign() == 0 || q[len(q)-1].Sign() == 0 {
-		return result, false
-	}
-	positive, negative := true, true
-	for _, coefficient := range q {
-		positive = positive && coefficient.Sign() > 0
-		negative = negative && coefficient.Sign() < 0
-	}
-	if positive {
-		result.Side = 1
-		return result, true
-	}
-	if negative {
-		result.Side = -1
-		return result, true
-	}
-	signed := q
-	if q[0].Sign() > 0 {
-		signed = revolveLoftFacesNegateRow(q)
-	}
-	if !polynomial.BernsteinRowsCross([3][]*big.Rat{signed, signed, signed}) {
-		return result, false
-	}
-	root := spiralIsolateRootN(signed, 80)
-	if root.Lo.Sign() <= 0 || root.Hi.Cmp(lfOne()) >= 0 {
-		return result, false
-	}
-	result.Root = loftFaceInterval{Lo: root.Lo, Hi: root.Hi}
-	result.Before, result.After = q[0].Sign(), q[len(q)-1].Sign()
-	return result, true
-}
-
-func revolveLoftFacesVerticalPieces(first, last loftFaceMap,
-	span freeform.BezierSpan, time *big.Rat, loQ, hiQ []*big.Rat,
-	loRoot, hiRoot loftFaceInterval) ([]revolveLoftFacesVerticalPiece, bool) {
-	if loRoot.Lo != nil && hiRoot.Lo != nil &&
-		loRoot.Lo.Cmp(hiRoot.Hi) <= 0 && hiRoot.Lo.Cmp(loRoot.Hi) <= 0 {
-		return nil, false
-	}
-	endpoints := []*big.Rat{lfZero(), lfOne()}
-	for _, root := range [...]loftFaceInterval{loRoot, hiRoot} {
-		if root.Lo != nil {
-			endpoints = append(endpoints, root.Lo, root.Hi)
-		}
-	}
-	sortRats(endpoints)
-	for i := 1; i < len(endpoints); i++ {
-		if endpoints[i].Cmp(endpoints[i-1]) == 0 {
-			return nil, false
-		}
-	}
-	var pieces []revolveLoftFacesVerticalPiece
-	for i := 0; i+1 < len(endpoints); i++ {
-		a, z := endpoints[i], endpoints[i+1]
-		if verticalWithinRoot(a, z, loRoot) || verticalWithinRoot(a, z, hiRoot) {
-			continue
-		}
-		mid := lfMul(lfAdd(a, z), big.NewRat(1, 2))
-		if polynomial.BernsteinSign(loQ, mid) <= 0 || polynomial.BernsteinSign(hiQ, mid) >= 0 {
-			continue
-		}
-		box, ok := spiralJunctionBox(first, last, span, a, z, time, time)
-		if !ok {
-			return nil, false
-		}
-		loLower, loUpper := polynomial.BernsteinSign(loQ, a), polynomial.BernsteinSign(hiQ, a)
-		hiLower, hiUpper := polynomial.BernsteinSign(loQ, z), polynomial.BernsteinSign(hiQ, z)
-		if loLower < 0 || loUpper > 0 || hiLower < 0 || hiUpper > 0 {
-			return nil, false
-		}
-		pieces = append(pieces, revolveLoftFacesVerticalPiece{
-			Source: loftFaceInterval{Lo: a, Hi: z},
-			LoOpen: loLower == 0 || loUpper == 0,
-			HiOpen: hiLower == 0 || hiUpper == 0,
-			Box:    box})
-	}
-	return pieces, true
-}
-
-func verticalWithinRoot(a, z *big.Rat, root loftFaceInterval) bool {
-	return root.Lo != nil && a.Cmp(root.Lo) >= 0 && z.Cmp(root.Hi) <= 0
-}
-
-func sortRats(values []*big.Rat) {
-	for i := 1; i < len(values); i++ {
-		for j := i; j > 0 && values[j].Cmp(values[j-1]) < 0; j-- {
-			values[j], values[j-1] = values[j-1], values[j]
-		}
-	}
 }
 
 // A live whole arc may only be used when its authenticated map gives one
@@ -558,7 +351,7 @@ func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 		if !valid || box[0].Lo.Cmp(x) != 0 || box[0].Hi.Cmp(x) != 0 {
 			return cell, false
 		}
-		cell.retained = []revolveLoftFacesVerticalPiece{{
+		cell.retained = []loftface.VerticalPiece{{
 			Source: loftFaceInterval{Lo: lfZero(), Hi: lfOne()}, Box: box}}
 	}
 	return cell, true
@@ -578,10 +371,10 @@ func revolveLoftFacesVerticalArcBox(arc *sketch.Arc, trim *loftFacesTrimRecord,
 		return box, false
 	}
 	corners := loftface.TileCorners(lfF(u.Lo), lfF(u.Hi), lfF(v.Lo), lfF(v.Hi))
-	first, last := mappedArcCapRanges(trim.maps[band], corners),
-		mappedArcCapRanges(trim.maps[band+1], corners)
+	first, last := loftface.ArcCapRanges(trim.maps[band], corners),
+		loftface.ArcCapRanges(trim.maps[band+1], corners)
 	for axis := range box {
-		box[axis] = mappedArcBlend(first[axis], last[axis], time)
+		box[axis] = loftface.ArcBlend(first[axis], last[axis], time)
 	}
 	return box, true
 }

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -224,7 +225,7 @@ func revolveLoftFacesToolCapFaceOriginCurrent(circle revolveLoftFacesToolCapCirc
 }
 
 func revolveLoftFacesToolBoundaryOutward(edge sketch.BoundaryEdge,
-	limit revolveLoftFacesVerticalLimit) (bool, bool) {
+	limit loftface.VerticalLimit) (bool, bool) {
 	if edge.Partial || limit.Before*limit.After != -1 {
 		return false, false
 	}

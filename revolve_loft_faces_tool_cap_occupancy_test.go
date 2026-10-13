@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -13,7 +14,7 @@ func TestRevolveLoftFacesToolBoundaryUsesSketchWalkDirection(t *testing.T) {
 	// Sketch always reports increasing natural parameters. Reversed changes
 	// the loop walk without changing those parameters or the radial root.
 	edge := sketch.BoundaryEdge{TStart: 0, TEnd: 1}
-	insideToOutside := revolveLoftFacesVerticalLimit{Before: -1, After: 1}
+	insideToOutside := loftface.VerticalLimit{Before: -1, After: 1}
 	outward, ok := revolveLoftFacesToolBoundaryOutward(edge, insideToOutside)
 	require.True(t, ok)
 	require.True(t, outward)
@@ -24,7 +25,7 @@ func TestRevolveLoftFacesToolBoundaryUsesSketchWalkDirection(t *testing.T) {
 	require.False(t, outward)
 
 	outward, ok = revolveLoftFacesToolBoundaryOutward(edge,
-		revolveLoftFacesVerticalLimit{Before: 1, After: -1})
+		loftface.VerticalLimit{Before: 1, After: -1})
 	require.True(t, ok)
 	require.True(t, outward)
 

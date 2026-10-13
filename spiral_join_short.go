@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 )
@@ -44,7 +45,7 @@ func spiralShortCapEndpointX(first, second loftFaceMap, span freeform.BezierSpan
 	if curve[0].Sign() >= 0 || curve[2].Sign() <= 0 {
 		return loftFaceInterval{}, false
 	}
-	root := spiralIsolateRootN(curve, 64)
+	root := loftface.IsolateRootN(curve, 64)
 	x0 := first.At(point.U, point.V)[0]
 	x1 := second.At(point.U, point.V)[0]
 	if x0.Cmp(x1) >= 0 {
@@ -157,7 +158,7 @@ func spiralShortCubicBox(ctx context.Context, first, second loftFaceMap,
 		if !ok {
 			return result, false, nil
 		}
-		box, ok := spiralJunctionBox(first, second, span, left, right, t.Lo, t.Hi)
+		box, ok := loftface.JunctionBox(first, second, span, left, right, t.Lo, t.Hi)
 		if !ok {
 			return result, false, nil
 		}
@@ -202,7 +203,7 @@ func spiralShortCapSpan(source *pointSectionRecord, groups []int,
 
 func spiralShortCapXRange(first, second loftFaceMap, span freeform.BezierSpan,
 	tLo *big.Rat) (loftFaceInterval, bool) {
-	if spiralCapXDecreases(first, span) && spiralCapXDecreases(second, span) {
+	if loftface.CapXDecreases(first, span) && loftface.CapXDecreases(second, span) {
 		var out loftFaceInterval
 		for i, point := range [...]freeform.RatPoint{span[0], span[len(span)-1]} {
 			x0 := first.At(point.U, point.V)[0]
@@ -220,7 +221,7 @@ func spiralShortCapXRange(first, second loftFaceMap, span freeform.BezierSpan,
 		return out, true
 	}
 	capRange := func(m loftFaceMap) (loftFaceInterval, bool) {
-		g, h := spiralCapBern(m, span)
+		g, h := loftface.CapBernsteinRows(m, span)
 		if len(g) == 0 {
 			return loftFaceInterval{}, false
 		}
@@ -263,7 +264,7 @@ func spiralShortCapCrossingProof(first, second loftFaceMap, span freeform.Bezier
 		capStart.Cmp(capEnd) >= 0 {
 		return spiralShortCapCrossing{}, false
 	}
-	q := spiralRootPolynomial(first, second, span, m, b)
+	q := loftface.MeridianQRows(first, second, span, m, b)
 	for k := range q[0] {
 		if q[0][k].Sign() >= 0 || q[2][k].Sign() <= 0 ||
 			lfSub(q[1][k], q[0][k]).Sign() <= 0 ||
@@ -373,7 +374,7 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 					// Beyond the first fitted span the entire source cell lies
 					// outside the root. The finite cap is strictly inward of
 					// that root for every X after their shared start.
-					q := spiralRootPolynomial(proof.tooth.maps[band],
+					q := loftface.MeridianQRows(proof.tooth.maps[band],
 						proof.tooth.maps[band+1], span, proof.rootM, proof.rootB)
 					if !polynomial.BernsteinRowsPositive(q) {
 						return out, false, nil

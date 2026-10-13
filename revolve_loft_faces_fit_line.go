@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -89,8 +90,8 @@ func revolveLoftFacesFitLineVertexAt(trim *loftFacesTrimRecord,
 	if lineAtEnd {
 		lineParameter = lfOne()
 	}
-	fitLocation := spiralBezierPoint(fitSpan, fitParameter)
-	lineLocation := spiralBezierPoint(lineSpans[0], lineParameter)
+	fitLocation := loftface.BezierPoint(fitSpan, fitParameter)
+	lineLocation := loftface.BezierPoint(lineSpans[0], lineParameter)
 	if fitLocation[0].Cmp(lfF(recordedFit.U)) != 0 ||
 		fitLocation[1].Cmp(lfF(recordedFit.V)) != 0 ||
 		fitLocation[0].Cmp(lineLocation[0]) != 0 ||
@@ -107,7 +108,7 @@ func revolveLoftFacesFitLineVertexAt(trim *loftFacesTrimRecord,
 type revolveLoftFacesFitLineJoint struct {
 	vertex    revolveLoftFacesFitLineVertex
 	band      int
-	roots     []revolveLoftFacesEndpointRoot
+	roots     []loftface.EndpointRoot
 	fitCells  []revolveLoftFacesJointCell
 	lineCells []revolveLoftFacesJointCell
 }
@@ -125,8 +126,8 @@ func certifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTri
 		return empty, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	fitQ := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], vertex.fitSpan, m, b)
-	lineQ := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], vertex.lineSpan, m, b)
+	fitQ := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], vertex.fitSpan, m, b)
+	lineQ := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], vertex.lineSpan, m, b)
 	fitEndpoint, lineEndpoint := 0, 0
 	if vertex.fitAtEnd {
 		fitEndpoint = len(fitQ[0]) - 1

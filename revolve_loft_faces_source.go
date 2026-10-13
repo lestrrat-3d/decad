@@ -23,7 +23,7 @@ type revolveLoftFacesCrossing struct {
 	index   int
 	first   int // signed implicit side before the crossing in profile walk order
 	last    int
-	caps    []spiralRootCrossing
+	caps    []loftface.RootCrossing
 	x       []loftFaceInterval
 	faces   []*Face
 }
@@ -247,7 +247,7 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		if _, arc := segment.(arcSeg); arc {
 			finiteSide, certified := mappedArcFiniteSide(ctx, trim, i,
 				section.spans[section.rootSpan])
-			if !certified || finiteSide != mappedArcMiss && finiteSide != side {
+			if !certified || finiteSide != loftface.ArcMiss && finiteSide != side {
 				return nil, false, nil
 			}
 		}
@@ -316,7 +316,7 @@ func revolveLoftFacesCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
 	corners := loftface.BoxCorners(box)
 	xAxis := loftFaceRatVec{lfOne(), lfZero(), lfZero()}
 	return loftface.ScalarRange(first, xAxis, corners).Hi.Cmp(toeX) < 0 &&
-		spiralCapPlaneAvoidsRootCircle(last, corners, m, b, heelX)
+		loftface.CapPlaneAvoidsRootCircle(last, corners, m, b, heelX)
 }
 
 func revolveLoftFacesSegmentKind(trim *loftFacesTrimRecord, index int) bool {

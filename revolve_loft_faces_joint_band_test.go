@@ -3,16 +3,18 @@ package decad
 import (
 	"math/big"
 	"testing"
+
+	"github.com/lestrrat-3d/decad/internal/loftface"
 )
 
 func TestMappedRadialJointTimePartition(t *testing.T) {
 	q := [3]*big.Rat{big.NewRat(-1, 1), big.NewRat(2, 1), big.NewRat(-1, 1)}
 	rows := [3][]*big.Rat{{q[0]}, {q[1]}, {q[2]}}
-	roots, ok := revolveLoftFacesEndpointTimeRoots(rows, true)
+	roots, ok := loftface.EndpointTimeRoots(rows, true)
 	if !ok {
 		t.Fatal("exact quadratic roots were not isolated")
 	}
-	pieces, ok := revolveLoftFacesPartitionTime(q, roots)
+	pieces, ok := loftface.PartitionTime(q, roots)
 	if !ok || len(pieces) != 5 {
 		t.Fatalf("expected five time pieces, got %+v, %t", pieces, ok)
 	}
@@ -34,7 +36,7 @@ func TestMappedRadialJointTimePartition(t *testing.T) {
 		}
 	}
 	roots[0].Direction = -1
-	if _, ok := revolveLoftFacesPartitionTime(q, roots); ok {
+	if _, ok := loftface.PartitionTime(q, roots); ok {
 		t.Fatal("inconsistent root direction must refuse")
 	}
 }
@@ -42,12 +44,12 @@ func TestMappedRadialJointTimePartition(t *testing.T) {
 func TestMappedRadialJointExactRootBoundary(t *testing.T) {
 	q := [3]*big.Rat{big.NewRat(-1, 1), big.NewRat(0, 1), big.NewRat(1, 1)}
 	rows := [3][]*big.Rat{{q[0]}, {q[1]}, {q[2]}}
-	roots, ok := revolveLoftFacesEndpointTimeRoots(rows, false)
+	roots, ok := loftface.EndpointTimeRoots(rows, false)
 	if !ok || len(roots) != 1 || roots[0].Time.Lo.Cmp(big.NewRat(1, 2)) != 0 ||
 		roots[0].Time.Hi.Cmp(big.NewRat(1, 2)) != 0 {
 		t.Fatalf("expected an exact dyadic root, got %+v, %t", roots, ok)
 	}
-	pieces, ok := revolveLoftFacesPartitionTime(q, roots)
+	pieces, ok := loftface.PartitionTime(q, roots)
 	if !ok || len(pieces) != 3 || !pieces[0].HiOpen || !pieces[2].LoOpen ||
 		pieces[1].LoOpen || pieces[1].HiOpen ||
 		pieces[0].Hi.Cmp(pieces[1].Lo) != 0 || pieces[1].Hi.Cmp(pieces[2].Lo) != 0 {
