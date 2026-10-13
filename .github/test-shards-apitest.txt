@@ -1987,3 +1987,6 @@
 10	0.00	TestFacetedPrismUnionFilletReversedSources
 10	0.00	TestFacetedPrismUnionFilletRefusesToolInCornerBand
 10	0.00	TestFacetedPrismUnionFilletRefusesPlacedSourceRelation
+10	0.00	TestFacetedUnionNestedBossShellVerified
+10	0.00	TestFacetedUnionNestedBossShellRefusesInsufficientClearance
+10	0.00	TestFacetedUnionNestedBossShellRefusesPlacedSourceRelation
