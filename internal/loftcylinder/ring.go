@@ -36,8 +36,8 @@ func RingVertex(p r3.Vec) RingVec {
 // RingSub is a - b.
 func RingSub(a, b RingVec) RingVec {
 	return RingVec{
-		new(big.Rat).Sub(a[0], b[0]), new(big.Rat).Sub(a[1], b[1]),
-		new(big.Rat).Sub(a[2], b[2]),
+		proofarith.SubRat(new(big.Rat), a[0], b[0]), proofarith.SubRat(new(big.Rat), a[1], b[1]),
+		proofarith.SubRat(new(big.Rat), a[2], b[2]),
 	}
 }
 
@@ -45,7 +45,7 @@ func RingSub(a, b RingVec) RingVec {
 func RingDot(a, b RingVec) *big.Rat {
 	q := new(big.Rat)
 	for i := range a {
-		q.Add(q, new(big.Rat).Mul(a[i], b[i]))
+		proofarith.AddRat(q, q, proofarith.MulRat(new(big.Rat), a[i], b[i]))
 	}
 	return q
 }
@@ -53,9 +53,9 @@ func RingDot(a, b RingVec) *big.Rat {
 // RingCross is the cross product of a and b.
 func RingCross(a, b RingVec) RingVec {
 	return RingVec{
-		new(big.Rat).Sub(new(big.Rat).Mul(a[1], b[2]), new(big.Rat).Mul(a[2], b[1])),
-		new(big.Rat).Sub(new(big.Rat).Mul(a[2], b[0]), new(big.Rat).Mul(a[0], b[2])),
-		new(big.Rat).Sub(new(big.Rat).Mul(a[0], b[1]), new(big.Rat).Mul(a[1], b[0])),
+		proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), a[1], b[2]), proofarith.MulRat(new(big.Rat), a[2], b[1])),
+		proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), a[2], b[0]), proofarith.MulRat(new(big.Rat), a[0], b[2])),
+		proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), a[0], b[1]), proofarith.MulRat(new(big.Rat), a[1], b[0])),
 	}
 }
 
@@ -75,8 +75,8 @@ func ringPointSegment2(p, a, b RingVec) *big.Rat {
 		v = RingSub(p, b)
 		return RingDot(v, v)
 	}
-	return new(big.Rat).Sub(RingDot(v, v),
-		new(big.Rat).Quo(new(big.Rat).Mul(along, along), length2))
+	return proofarith.SubRat(new(big.Rat), RingDot(v, v),
+		new(big.Rat).Quo(proofarith.MulRat(new(big.Rat), along, along), length2))
 }
 
 func ringPointTriangle2(p RingVec, tri [3]RingVec) *big.Rat {
@@ -97,7 +97,7 @@ func ringPointTriangle2(p RingVec, tri [3]RingVec) *big.Rat {
 	}
 	if inside {
 		q := RingDot(RingSub(p, tri[0]), n)
-		return new(big.Rat).Quo(new(big.Rat).Mul(q, q), n2)
+		return new(big.Rat).Quo(proofarith.MulRat(new(big.Rat), q, q), n2)
 	}
 	var minimum *big.Rat
 	for i := range tri {
@@ -124,22 +124,22 @@ func ringSegments2(a, b, c, d RingVec) *big.Rat {
 	}
 	u, v, w := RingSub(b, a), RingSub(d, c), RingSub(a, c)
 	uu, vv, uv := RingDot(u, u), RingDot(v, v), RingDot(u, v)
-	det := new(big.Rat).Sub(new(big.Rat).Mul(uu, vv), new(big.Rat).Mul(uv, uv))
+	det := proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), uu, vv), proofarith.MulRat(new(big.Rat), uv, uv))
 	if det.Sign() == 0 {
 		return minimum
 	}
 	uw, vw := RingDot(u, w), RingDot(v, w)
-	s := new(big.Rat).Quo(new(big.Rat).Sub(new(big.Rat).Mul(uv, vw),
-		new(big.Rat).Mul(vv, uw)), det)
-	t := new(big.Rat).Quo(new(big.Rat).Sub(new(big.Rat).Mul(uu, vw),
-		new(big.Rat).Mul(uv, uw)), det)
+	s := new(big.Rat).Quo(proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), uv, vw),
+		proofarith.MulRat(new(big.Rat), vv, uw)), det)
+	t := new(big.Rat).Quo(proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), uu, vw),
+		proofarith.MulRat(new(big.Rat), uv, uw)), det)
 	if s.Sign() <= 0 || s.Cmp(big.NewRat(1, 1)) >= 0 ||
 		t.Sign() <= 0 || t.Cmp(big.NewRat(1, 1)) >= 0 {
 		return minimum
 	}
 	for i := range w {
-		w[i] = new(big.Rat).Sub(new(big.Rat).Add(w[i], new(big.Rat).Mul(s, u[i])),
-			new(big.Rat).Mul(t, v[i]))
+		w[i] = proofarith.SubRat(new(big.Rat), proofarith.AddRat(new(big.Rat), w[i], proofarith.MulRat(new(big.Rat), s, u[i])),
+			proofarith.MulRat(new(big.Rat), t, v[i]))
 	}
 	q := RingDot(w, w)
 	if q.Cmp(minimum) < 0 {
@@ -161,14 +161,14 @@ func ringSegmentTriangle2(a, b RingVec,
 	da := RingDot(RingSub(a, tri[0]), n)
 	db := RingDot(RingSub(b, tri[0]), n)
 	if da.Sign() == 0 || db.Sign() == 0 || da.Sign() != db.Sign() {
-		den := new(big.Rat).Sub(da, db)
+		den := proofarith.SubRat(new(big.Rat), da, db)
 		if den.Sign() != 0 {
-			t := new(big.Rat).Quo(da, den)
+			t := proofarith.QuoRat(new(big.Rat), da, den)
 			if t.Sign() >= 0 && t.Cmp(big.NewRat(1, 1)) <= 0 {
 				p := RingVec{}
 				for i := range p {
-					p[i] = new(big.Rat).Add(a[i],
-						new(big.Rat).Mul(t, new(big.Rat).Sub(b[i], a[i])))
+					p[i] = proofarith.AddRat(new(big.Rat), a[i],
+						proofarith.MulRat(new(big.Rat), t, proofarith.SubRat(new(big.Rat), b[i], a[i])))
 				}
 				if q := ringPointTriangle2(p, tri); q != nil && q.Sign() == 0 {
 					return q
@@ -220,8 +220,8 @@ func RingTriangleBox(tri [3]r3.Vec, displacement float64) RingBox {
 			}
 		}
 		box[axis] = [2]float64{
-			proofbound.RatFloatDown(new(big.Rat).Sub(proofarith.FloatRat(lo), proofarith.FloatRat(displacement))),
-			proofbound.RatFloatUp(new(big.Rat).Add(proofarith.FloatRat(hi), proofarith.FloatRat(displacement))),
+			proofbound.RatFloatDown(proofarith.SubRat(new(big.Rat), proofarith.FloatRat(lo), proofarith.FloatRat(displacement))),
+			proofbound.RatFloatUp(proofarith.AddRat(new(big.Rat), proofarith.FloatRat(hi), proofarith.FloatRat(displacement))),
 		}
 	}
 	return box
@@ -338,8 +338,8 @@ func ringPlaneApart(a, b RingVec,
 		wall.Normal2.Sign() == 0 || wall.Plane0 == nil {
 		return false
 	}
-	da := new(big.Rat).Sub(RingDot(a, wall.Normal), wall.Plane0)
-	db := new(big.Rat).Sub(RingDot(b, wall.Normal), wall.Plane0)
+	da := proofarith.SubRat(new(big.Rat), RingDot(a, wall.Normal), wall.Plane0)
+	db := proofarith.SubRat(new(big.Rat), RingDot(b, wall.Normal), wall.Plane0)
 	if da.Sign() == 0 || da.Sign() != db.Sign() {
 		return false
 	}
@@ -350,7 +350,7 @@ func ringPlaneApart(a, b RingVec,
 	if db.Cmp(da) < 0 {
 		da = db
 	}
-	return new(big.Rat).Mul(da, da).Cmp(new(big.Rat).Mul(bound2, wall.Normal2)) > 0
+	return proofarith.MulRat(new(big.Rat), da, da).Cmp(proofarith.MulRat(new(big.Rat), bound2, wall.Normal2)) > 0
 }
 
 // RingWallClear checks the segment from a to b, whose float box is box,

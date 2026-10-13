@@ -44,8 +44,8 @@ func SourcePoint(ex r3.Vec, p sectionrecord.Point2) XY {
 	c, s := proofarith.FloatRat(ex.X), proofarith.FloatRat(ex.Y)
 	u, v := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
 	return XY{
-		X: new(big.Rat).Sub(new(big.Rat).Mul(c, u), new(big.Rat).Mul(s, v)),
-		Y: new(big.Rat).Add(new(big.Rat).Mul(s, u), new(big.Rat).Mul(c, v)),
+		X: proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), c, u), proofarith.MulRat(new(big.Rat), s, v)),
+		Y: proofarith.AddRat(new(big.Rat), proofarith.MulRat(new(big.Rat), s, u), proofarith.MulRat(new(big.Rat), c, v)),
 	}
 }
 
@@ -114,20 +114,20 @@ func SourceConnectorOf(verts []r3.Vec, tris [][3]int, segments [][]int,
 
 // SourceDot returns the exact dot product of a and b.
 func SourceDot(a, b XY) *big.Rat {
-	return new(big.Rat).Add(new(big.Rat).Mul(a.X, b.X), new(big.Rat).Mul(a.Y, b.Y))
+	return proofarith.AddRat(new(big.Rat), proofarith.MulRat(new(big.Rat), a.X, b.X), proofarith.MulRat(new(big.Rat), a.Y, b.Y))
 }
 
 // sourceSub returns a - b.
 func sourceSub(a, b XY) XY {
-	return XY{X: new(big.Rat).Sub(a.X, b.X), Y: new(big.Rat).Sub(a.Y, b.Y)}
+	return XY{X: proofarith.SubRat(new(big.Rat), a.X, b.X), Y: proofarith.SubRat(new(big.Rat), a.Y, b.Y)}
 }
 
 // sourceLerp returns the exact point a + t*(b-a).
 func sourceLerp(a, b XY, t *big.Rat) XY {
 	d := sourceSub(b, a)
 	return XY{
-		X: new(big.Rat).Add(a.X, new(big.Rat).Mul(t, d.X)),
-		Y: new(big.Rat).Add(a.Y, new(big.Rat).Mul(t, d.Y)),
+		X: proofarith.AddRat(new(big.Rat), a.X, proofarith.MulRat(new(big.Rat), t, d.X)),
+		Y: proofarith.AddRat(new(big.Rat), a.Y, proofarith.MulRat(new(big.Rat), t, d.Y)),
 	}
 }
 
@@ -141,7 +141,7 @@ func (c Connector) RadialMonotone() bool {
 		d0 := sourceSub(pair[1][0], u0)
 		d1 := sourceSub(pair[1][1], u1)
 		b0 := SourceDot(u0, d0)
-		b1 := new(big.Rat).Add(SourceDot(u0, d1), SourceDot(u1, d0))
+		b1 := proofarith.AddRat(new(big.Rat), SourceDot(u0, d1), SourceDot(u1, d0))
 		b2 := SourceDot(u1, d1)
 		if b0.Sign() < 0 || b1.Sign() < 0 || b2.Sign() < 0 {
 			return false
@@ -157,7 +157,7 @@ func sourceRadiusMin2(a, b XY) *big.Rat {
 	if den.Sign() == 0 {
 		return SourceDot(a, a)
 	}
-	t := new(big.Rat).Quo(new(big.Rat).Neg(SourceDot(a, d)), den)
+	t := proofarith.QuoRat(new(big.Rat), new(big.Rat).Neg(SourceDot(a, d)), den)
 	if t.Sign() < 0 {
 		t.SetInt64(0)
 	} else if t.Cmp(big.NewRat(1, 1)) > 0 {
@@ -168,7 +168,7 @@ func sourceRadiusMin2(a, b XY) *big.Rat {
 }
 
 func (c Connector) FarOutside(radius *big.Rat) bool {
-	r2 := new(big.Rat).Mul(radius, radius)
+	r2 := proofarith.MulRat(new(big.Rat), radius, radius)
 	return sourceRadiusMin2(c.f[0], c.f[1]).Cmp(r2) > 0
 }
 
@@ -181,20 +181,20 @@ func SourceGapAxis(verts []r3.Vec, root int, facetDeparture float64) (XY, bool) 
 	axis := XY{X: new(big.Rat), Y: new(big.Rat)}
 	for _, index := range []int{0, root, n, n + root} {
 		p := verts[index]
-		axis.X.Add(axis.X, proofarith.FloatRat(p.X))
-		axis.Y.Add(axis.Y, proofarith.FloatRat(p.Y))
+		proofarith.AddRat(axis.X, axis.X, proofarith.FloatRat(p.X))
+		proofarith.AddRat(axis.Y, axis.Y, proofarith.FloatRat(p.Y))
 	}
 	norm2 := SourceDot(axis, axis)
 	if norm2.Sign() == 0 {
 		return XY{}, false
 	}
-	delta2 := new(big.Rat).Mul(proofarith.FloatRat(facetDeparture),
+	delta2 := proofarith.MulRat(new(big.Rat), proofarith.FloatRat(facetDeparture),
 		proofarith.FloatRat(facetDeparture))
-	margin2 := new(big.Rat).Mul(delta2, norm2)
+	margin2 := proofarith.MulRat(new(big.Rat), delta2, norm2)
 	for _, p := range verts {
-		dot := new(big.Rat).Add(new(big.Rat).Mul(axis.X, proofarith.FloatRat(p.X)),
-			new(big.Rat).Mul(axis.Y, proofarith.FloatRat(p.Y)))
-		if dot.Sign() <= 0 || new(big.Rat).Mul(dot, dot).Cmp(margin2) <= 0 {
+		dot := proofarith.AddRat(new(big.Rat), proofarith.MulRat(new(big.Rat), axis.X, proofarith.FloatRat(p.X)),
+			proofarith.MulRat(new(big.Rat), axis.Y, proofarith.FloatRat(p.Y)))
+		if dot.Sign() <= 0 || proofarith.MulRat(new(big.Rat), dot, dot).Cmp(margin2) <= 0 {
 			return XY{}, false
 		}
 	}
@@ -253,11 +253,11 @@ func sourcePointAt(rays [2]sourceRay, s *big.Rat) XY {
 	ray := rays[0]
 	if s.Cmp(big.NewRat(1, 1)) > 0 {
 		ray = rays[1]
-		u = new(big.Rat).Sub(s, big.NewRat(1, 1))
+		u = proofarith.SubRat(new(big.Rat), s, big.NewRat(1, 1))
 	}
 	return XY{
-		X: new(big.Rat).Add(ray.origin.X, new(big.Rat).Mul(u, ray.direction.X)),
-		Y: new(big.Rat).Add(ray.origin.Y, new(big.Rat).Mul(u, ray.direction.Y)),
+		X: proofarith.AddRat(new(big.Rat), ray.origin.X, proofarith.MulRat(new(big.Rat), u, ray.direction.X)),
+		Y: proofarith.AddRat(new(big.Rat), ray.origin.Y, proofarith.MulRat(new(big.Rat), u, ray.direction.Y)),
 	}
 }
 
@@ -384,8 +384,8 @@ func (c Connector) crossingBox(tLo, tHi, radius2 *big.Rat) XYBox {
 
 func sourceProductRange(aLo, aHi, bLo, bHi *big.Rat) (*big.Rat, *big.Rat) {
 	products := [4]*big.Rat{
-		new(big.Rat).Mul(aLo, bLo), new(big.Rat).Mul(aLo, bHi),
-		new(big.Rat).Mul(aHi, bLo), new(big.Rat).Mul(aHi, bHi),
+		proofarith.MulRat(new(big.Rat), aLo, bLo), proofarith.MulRat(new(big.Rat), aLo, bHi),
+		proofarith.MulRat(new(big.Rat), aHi, bLo), proofarith.MulRat(new(big.Rat), aHi, bHi),
 	}
 	lo, hi := products[0], products[0]
 	for _, p := range products[1:] {
@@ -402,13 +402,13 @@ func sourceProductRange(aLo, aHi, bLo, bHi *big.Rat) (*big.Rat, *big.Rat) {
 func sourceCrossLower(a, b XYBox) *big.Rat {
 	xyLo, _ := sourceProductRange(a.lo.X, a.hi.X, b.lo.Y, b.hi.Y)
 	_, yxHi := sourceProductRange(a.lo.Y, a.hi.Y, b.lo.X, b.hi.X)
-	return new(big.Rat).Sub(xyLo, yxHi)
+	return proofarith.SubRat(new(big.Rat), xyLo, yxHi)
 }
 
 func sourceDotLower(axis XY, box XYBox) *big.Rat {
 	xLo, _ := sourceProductRange(axis.X, axis.X, box.lo.X, box.hi.X)
 	yLo, _ := sourceProductRange(axis.Y, axis.Y, box.lo.Y, box.hi.Y)
-	return new(big.Rat).Add(xLo, yLo)
+	return proofarith.AddRat(new(big.Rat), xLo, yLo)
 }
 
 // CrossingBox encloses both true source connector/circle crossings for every
@@ -423,10 +423,10 @@ func (r SourceCircle) CrossingBox(zLo, zHi *big.Rat) ([2]XYBox, error) {
 		zLo.Cmp(zHi) > 0 {
 		return boxes, fmt.Errorf("%w: source circle query leaves its strict root interval", decaderr.ErrUnsupported)
 	}
-	height := new(big.Rat).Sub(r.Z1, r.Z0)
-	tLo := new(big.Rat).Quo(new(big.Rat).Sub(zLo, r.Z0), height)
-	tHi := new(big.Rat).Quo(new(big.Rat).Sub(zHi, r.Z0), height)
-	r2 := new(big.Rat).Mul(r.Radius, r.Radius)
+	height := proofarith.SubRat(new(big.Rat), r.Z1, r.Z0)
+	tLo := new(big.Rat).Quo(proofarith.SubRat(new(big.Rat), zLo, r.Z0), height)
+	tHi := new(big.Rat).Quo(proofarith.SubRat(new(big.Rat), zHi, r.Z0), height)
+	r2 := proofarith.MulRat(new(big.Rat), r.Radius, r.Radius)
 	for i, connector := range r.Connector {
 		boxes[i] = connector.crossingBox(tLo, tHi, r2)
 		if sourceDotLower(r.GapAxis, boxes[i]).Sign() <= 0 {
@@ -446,15 +446,15 @@ func (r SourceCircle) CrossingBox(zLo, zHi *big.Rat) ([2]XYBox, error) {
 // order and the slabs cover the interval without a gap.
 func (r SourceCircle) OrderedOverSafeInterval() bool {
 	const slabs = 256
-	span := new(big.Rat).Sub(r.SafeTop, r.SafeBottom)
+	span := proofarith.SubRat(new(big.Rat), r.SafeTop, r.SafeBottom)
 	if span.Sign() <= 0 {
 		return false
 	}
 	check := func(i int) bool {
-		lo := new(big.Rat).Add(r.SafeBottom,
-			new(big.Rat).Quo(new(big.Rat).Mul(span, big.NewRat(int64(i), 1)), big.NewRat(slabs, 1)))
-		hi := new(big.Rat).Add(r.SafeBottom,
-			new(big.Rat).Quo(new(big.Rat).Mul(span, big.NewRat(int64(i+1), 1)), big.NewRat(slabs, 1)))
+		lo := proofarith.AddRat(new(big.Rat), r.SafeBottom,
+			new(big.Rat).Quo(proofarith.MulRat(new(big.Rat), span, big.NewRat(int64(i), 1)), big.NewRat(slabs, 1)))
+		hi := proofarith.AddRat(new(big.Rat), r.SafeBottom,
+			new(big.Rat).Quo(proofarith.MulRat(new(big.Rat), span, big.NewRat(int64(i+1), 1)), big.NewRat(slabs, 1)))
 		_, err := r.CrossingBox(lo, hi)
 		return err == nil
 	}

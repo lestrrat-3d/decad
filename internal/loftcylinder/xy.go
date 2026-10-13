@@ -35,8 +35,8 @@ func AuditAnnulus(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int,
 			}
 			allowed[a] = struct{}{}
 			pa, pb := ExactXY(verts[a]), ExactXY(verts[b])
-			area.Add(area, new(big.Rat).Sub(
-				new(big.Rat).Mul(pa.X, pb.Y), new(big.Rat).Mul(pa.Y, pb.X)))
+			area.Add(area, proofarith.SubRat(new(big.Rat),
+				proofarith.MulRat(new(big.Rat), pa.X, pb.Y), proofarith.MulRat(new(big.Rat), pa.Y, pb.X)))
 		}
 		return area
 	}
@@ -45,7 +45,7 @@ func AuditAnnulus(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int,
 		innerArea.Sign() <= 0 || outerArea.Cmp(innerArea) <= 0 {
 		return false
 	}
-	expected := new(big.Rat).Sub(outerArea, innerArea)
+	expected := proofarith.SubRat(new(big.Rat), outerArea, innerArea)
 	actual := new(big.Rat)
 	edges := make(map[[2]int]int)
 	count := 0
@@ -70,12 +70,12 @@ func AuditAnnulus(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int,
 			if twice.Sign() >= 0 {
 				return false
 			}
-			actual.Sub(actual, twice)
+			proofarith.SubRat(actual, actual, twice)
 		} else {
 			if twice.Sign() <= 0 {
 				return false
 			}
-			actual.Add(actual, twice)
+			proofarith.AddRat(actual, actual, twice)
 		}
 		for k := range 3 {
 			edges[[2]int{tri[k], tri[(k+1)%3]}]++
@@ -116,11 +116,11 @@ func ExactXY(p r3.Vec) XY {
 
 // Orient returns twice the signed area of triangle abc.
 func Orient(a, b, c XY) *big.Rat {
-	abx := new(big.Rat).Sub(b.X, a.X)
-	aby := new(big.Rat).Sub(b.Y, a.Y)
-	acx := new(big.Rat).Sub(c.X, a.X)
-	acy := new(big.Rat).Sub(c.Y, a.Y)
-	return new(big.Rat).Sub(new(big.Rat).Mul(abx, acy), new(big.Rat).Mul(aby, acx))
+	abx := proofarith.SubRat(new(big.Rat), b.X, a.X)
+	aby := proofarith.SubRat(new(big.Rat), b.Y, a.Y)
+	acx := proofarith.SubRat(new(big.Rat), c.X, a.X)
+	acy := proofarith.SubRat(new(big.Rat), c.Y, a.Y)
+	return proofarith.SubRat(new(big.Rat), proofarith.MulRat(new(big.Rat), abx, acy), proofarith.MulRat(new(big.Rat), aby, acx))
 }
 
 // edgesMeetXP decides the same closed-segment contact as
@@ -211,15 +211,15 @@ func AuditCap(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int,
 		if a.X.Cmp(b.X) == 0 && a.Y.Cmp(b.Y) == 0 {
 			return false
 		}
-		polyTwice.Add(polyTwice, new(big.Rat).Sub(
-			new(big.Rat).Mul(a.X, b.Y), new(big.Rat).Mul(a.Y, b.X)))
+		polyTwice.Add(polyTwice, proofarith.SubRat(new(big.Rat),
+			proofarith.MulRat(new(big.Rat), a.X, b.Y), proofarith.MulRat(new(big.Rat), a.Y, b.X)))
 		if a.Y.Sign() == 0 && a.X.Sign() == 0 {
 			return false
 		}
 		if (a.Y.Sign() > 0) != (b.Y.Sign() > 0) {
-			x := new(big.Rat).Sub(a.X,
-				new(big.Rat).Quo(new(big.Rat).Mul(a.Y,
-					new(big.Rat).Sub(b.X, a.X)), new(big.Rat).Sub(b.Y, a.Y)))
+			x := proofarith.SubRat(new(big.Rat), a.X,
+				new(big.Rat).Quo(proofarith.MulRat(new(big.Rat), a.Y,
+					proofarith.SubRat(new(big.Rat), b.X, a.X)), proofarith.SubRat(new(big.Rat), b.Y, a.Y)))
 			if x.Sign() == 0 {
 				return false
 			}
@@ -261,12 +261,12 @@ func AuditCap(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int,
 			if twice.Sign() >= 0 {
 				return false
 			}
-			areaTwice.Sub(areaTwice, twice)
+			proofarith.SubRat(areaTwice, areaTwice, twice)
 		} else {
 			if twice.Sign() <= 0 {
 				return false
 			}
-			areaTwice.Add(areaTwice, twice)
+			proofarith.AddRat(areaTwice, areaTwice, twice)
 		}
 		for k := range 3 {
 			edges[[2]int{tri[k], tri[(k+1)%3]}]++
@@ -315,11 +315,11 @@ func BoreRingSimple(ctx context.Context, verts []r3.Vec, ring []int) bool {
 			return false
 		}
 		a, b := points[i], points[(i+1)%n]
-		area2.Add(area2, new(big.Rat).Sub(
-			new(big.Rat).Mul(a.X, b.Y), new(big.Rat).Mul(a.Y, b.X)))
+		area2.Add(area2, proofarith.SubRat(new(big.Rat),
+			proofarith.MulRat(new(big.Rat), a.X, b.Y), proofarith.MulRat(new(big.Rat), a.Y, b.X)))
 		if (a.Y.Sign() > 0) != (b.Y.Sign() > 0) {
-			x := new(big.Rat).Sub(a.X, new(big.Rat).Quo(new(big.Rat).Mul(a.Y,
-				new(big.Rat).Sub(b.X, a.X)), new(big.Rat).Sub(b.Y, a.Y)))
+			x := proofarith.SubRat(new(big.Rat), a.X, new(big.Rat).Quo(proofarith.MulRat(new(big.Rat), a.Y,
+				proofarith.SubRat(new(big.Rat), b.X, a.X)), proofarith.SubRat(new(big.Rat), b.Y, a.Y)))
 			if x.Sign() == 0 {
 				return false
 			}

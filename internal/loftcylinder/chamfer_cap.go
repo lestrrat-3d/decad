@@ -19,15 +19,15 @@ import (
 func ChamferCapRadialRun(verts []r3.Vec, ring []int,
 	blankRadius, boreRadius, outerRadius float64) (float64, error) {
 	radius := proofarith.FloatRat(blankRadius)
-	r2 := new(big.Rat).Mul(radius, radius)
+	r2 := proofarith.MulRat(new(big.Rat), radius, radius)
 	outer := proofarith.FloatRat(outerRadius)
-	outer2 := new(big.Rat).Mul(outer, outer)
+	outer2 := proofarith.MulRat(new(big.Rat), outer, outer)
 	if len(ring) < 3 || len(ring) > 4_096 {
 		return 0, fmt.Errorf("%w: cap slit ring exceeds its work limit", decaderr.ErrUnsupported)
 	}
-	gap2 := new(big.Rat).Sub(outer2, r2)
-	width := proofbound.RatFloatUp(new(big.Rat).Quo(gap2,
-		new(big.Rat).Mul(big.NewRat(2, 1), radius)))
+	gap2 := proofarith.SubRat(new(big.Rat), outer2, r2)
+	width := proofbound.RatFloatUp(proofarith.QuoRat(new(big.Rat), gap2,
+		proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), radius)))
 	if boreRadius < 0 || proofbound.IsNonFinite(boreRadius) ||
 		proofbound.AbsSumUpper(boreRadius, width) >= blankRadius {
 		return 0, fmt.Errorf("%w: cap radial path reaches the source bore", decaderr.ErrUnsupported)
@@ -54,8 +54,8 @@ func ChamferCapRadialRun(verts []r3.Vec, ring []int,
 		hit[i] = true
 		d := sourceSub(b, a)
 		len2 := SourceDot(d, d)
-		der0 := new(big.Rat).Mul(big.NewRat(2, 1), SourceDot(a, d))
-		der1 := new(big.Rat).Add(der0, new(big.Rat).Mul(big.NewRat(2, 1), len2))
+		der0 := proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), SourceDot(a, d))
+		der1 := proofarith.AddRat(new(big.Rat), der0, proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), len2))
 		if der0.Sign() == 0 || der0.Sign() != der1.Sign() {
 			return 0, fmt.Errorf("%w: cap radial-band edge has a tangent radius", decaderr.ErrUnsupported)
 		}
@@ -64,7 +64,7 @@ func ChamferCapRadialRun(verts []r3.Vec, ring []int,
 			minDer = abs
 		}
 		lengths[i] = proofbound.ProductUpper(proofbound.RatSqrtUp(len2),
-			proofbound.RatFloatUp(new(big.Rat).Quo(gap2, minDer)))
+			proofbound.RatFloatUp(proofarith.QuoRat(new(big.Rat), gap2, minDer)))
 	}
 	start := -1
 	for i, yes := range hit {
@@ -114,7 +114,7 @@ func chamferPointSegmentGap2(p, a, b XY) *big.Rat {
 	if den.Sign() == 0 {
 		return nil
 	}
-	t := new(big.Rat).Quo(SourceDot(sourceSub(p, a), d), den)
+	t := proofarith.QuoRat(new(big.Rat), SourceDot(sourceSub(p, a), d), den)
 	if t.Sign() < 0 {
 		t.SetInt64(0)
 	} else if t.Cmp(big.NewRat(1, 1)) > 0 {
@@ -147,8 +147,8 @@ func chamferSegmentGapAbove(a, b, c, d XY, bound2 *big.Rat) bool {
 		default:
 			return false
 		}
-		gap := new(big.Rat).Sub(high, low)
-		return new(big.Rat).Mul(gap, gap).Cmp(bound2) > 0
+		gap := proofarith.SubRat(new(big.Rat), high, low)
+		return proofarith.MulRat(new(big.Rat), gap, gap).Cmp(bound2) > 0
 	}
 	// An axis gap lower-bounds every distance between the two segments.
 	if axisGapAbove(a.X, b.X, c.X, d.X) || axisGapAbove(a.Y, b.Y, c.Y, d.Y) {
@@ -197,7 +197,7 @@ func ChamferHeldOutlineGap(ctx context.Context, verts []r3.Vec,
 		newLoop[i] = ExactXY(verts[index])
 	}
 	boundRat := proofarith.FloatRat(bound)
-	bound2 := new(big.Rat).Mul(boundRat, boundRat)
+	bound2 := proofarith.MulRat(new(big.Rat), boundRat, boundRat)
 	for i, a := range outer {
 		b := outer[(i+1)%len(outer)]
 		for j, c := range inner {
@@ -236,7 +236,7 @@ func ChamferCapToothOf(verts []r3.Vec, facetDeparture float64, capIndex int, z f
 	first := capIndex * n
 	result := ChamferCapTooth{
 		points: make([]XY, n), poly: make([]meshbool.Xp2, n),
-		bound2: new(big.Rat).Mul(proofarith.FloatRat(facetDeparture),
+		bound2: proofarith.MulRat(new(big.Rat), proofarith.FloatRat(facetDeparture),
 			proofarith.FloatRat(facetDeparture)),
 	}
 	for i, p := range verts[first : first+n] {
@@ -283,15 +283,15 @@ func chamferExteriorPart(a, b XY, outer2, overlap2 *big.Rat) (
 	}
 	d := sourceSub(b, a)
 	len2 := SourceDot(d, d)
-	der0 := new(big.Rat).Mul(big.NewRat(2, 1), SourceDot(a, d))
-	der1 := new(big.Rat).Add(der0, new(big.Rat).Mul(big.NewRat(2, 1), len2))
+	der0 := proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), SourceDot(a, d))
+	der1 := proofarith.AddRat(new(big.Rat), der0, proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), len2))
 	if der0.Sign() <= 0 || der1.Sign() <= 0 {
 		return XY{}, XY{}, false,
 			fmt.Errorf("%w: cap exterior radial interval is not monotone", decaderr.ErrUnsupported)
 	}
 	low, high := big.NewRat(0, 1), big.NewRat(1, 1)
 	for range 64 {
-		mid := new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1))
+		mid := new(big.Rat).Quo(proofarith.AddRat(new(big.Rat), low, high), big.NewRat(2, 1))
 		p := sourceLerp(a, b, mid)
 		if SourceDot(p, p).Cmp(outer2) < 0 {
 			low = mid
@@ -314,9 +314,9 @@ func chamferExteriorPart(a, b XY, outer2, overlap2 *big.Rat) (
 func ChamferExteriorRimInside(ctx context.Context, teeth []ChamferCapTooth,
 	verts []r3.Vec, ring []int, blankRadius, outerRadius float64) error {
 	outer := proofarith.FloatRat(outerRadius)
-	outer2 := new(big.Rat).Mul(outer, outer)
+	outer2 := proofarith.MulRat(new(big.Rat), outer, outer)
 	overlap := proofarith.FloatRat(proofbound.AbsSumUpper(blankRadius, 0.009))
-	overlap2 := new(big.Rat).Mul(overlap, overlap)
+	overlap2 := proofarith.MulRat(new(big.Rat), overlap, overlap)
 	if overlap.Cmp(outer) >= 0 {
 		return fmt.Errorf("%w: cap exterior has no radial overlap", decaderr.ErrUnsupported)
 	}

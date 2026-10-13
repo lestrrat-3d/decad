@@ -167,11 +167,11 @@ func ChamferExactRingSimple(ctx context.Context, xverts []proofarith.Xpt, ring [
 		if a.X.Cmp(b.X) == 0 && a.Y.Cmp(b.Y) == 0 {
 			return false
 		}
-		area2.Add(area2, new(big.Rat).Sub(
-			new(big.Rat).Mul(a.X, b.Y), new(big.Rat).Mul(a.Y, b.X)))
+		area2.Add(area2, proofarith.SubRat(new(big.Rat),
+			proofarith.MulRat(new(big.Rat), a.X, b.Y), proofarith.MulRat(new(big.Rat), a.Y, b.X)))
 		if (a.Y.Sign() > 0) != (b.Y.Sign() > 0) {
-			x := new(big.Rat).Sub(a.X, new(big.Rat).Quo(new(big.Rat).Mul(a.Y,
-				new(big.Rat).Sub(b.X, a.X)), new(big.Rat).Sub(b.Y, a.Y)))
+			x := proofarith.SubRat(new(big.Rat), a.X, new(big.Rat).Quo(proofarith.MulRat(new(big.Rat), a.Y,
+				proofarith.SubRat(new(big.Rat), b.X, a.X)), proofarith.SubRat(new(big.Rat), b.Y, a.Y)))
 			if x.Sign() == 0 {
 				return false
 			}
@@ -346,7 +346,7 @@ func ChamferIdealOrientation(ctx context.Context, tris [][3]int,
 		if n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0 {
 			return fmt.Errorf("%w: ideal cap shell has a collapsed triangle", decaderr.ErrUnsupported)
 		}
-		volume6.Add(volume6, proofarith.XdotRat(a, proofarith.Xcross(b, c)))
+		proofarith.AddRat(volume6, volume6, proofarith.XdotRat(a, proofarith.Xcross(b, c)))
 	}
 	if volume6.Sign() <= 0 {
 		return fmt.Errorf("%w: ideal cap shell has no outward orientation", decaderr.ErrUnsupported)
@@ -357,12 +357,12 @@ func ChamferIdealOrientation(ctx context.Context, tris [][3]int,
 // ChamferLerp places the exact point of segment ab at an axial level and its
 // rounded held image.
 func ChamferLerp(a, b r3.Vec, level *big.Rat, heldLevel float64) (r3.Vec, proofarith.Xpt, float64, error) {
-	den := new(big.Rat).Sub(proofarith.FloatRat(b.Z), proofarith.FloatRat(a.Z))
+	den := proofarith.SubRat(new(big.Rat), proofarith.FloatRat(b.Z), proofarith.FloatRat(a.Z))
 	if den.Sign() == 0 {
 		return r3.Vec{}, proofarith.Xpt{}, 0,
 			fmt.Errorf("%w: loft/cylinder side has zero axial span", decaderr.ErrUnsupported)
 	}
-	t := new(big.Rat).Quo(new(big.Rat).Sub(level, proofarith.FloatRat(a.Z)), den)
+	t := new(big.Rat).Quo(proofarith.SubRat(new(big.Rat), level, proofarith.FloatRat(a.Z)), den)
 	if t.Sign() <= 0 || t.Cmp(big.NewRat(1, 1)) >= 0 {
 		return r3.Vec{}, proofarith.Xpt{}, 0,
 			fmt.Errorf("%w: chamfer side level lies outside a wall", decaderr.ErrUnsupported)
