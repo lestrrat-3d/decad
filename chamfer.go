@@ -36,9 +36,10 @@ import (
 // (revolve_blend.go, docs/modify-reach-design.md §7), and a brep or stacked
 // boolean result takes routes P and E of docs/brep-modify-design.md and route
 // L of docs/modify-general-design.md (brep_modify.go); any other non-prism
-// receiver is S3 (ErrUnsupported), except the bounded tapered full-circle
-// far-rim case in docs/draft-design.md §10.5 and the source-authenticated
-// perpendicular cylindrical bore mouth in docs/cross-cylinder-bore-chamfer-design.md.
+// receiver is S3 (ErrUnsupported), except a one-span straight solid Sweep's
+// selected lateral edges, the bounded tapered full-circle far-rim case in
+// docs/draft-design.md §10.5, and the source-authenticated perpendicular
+// cylindrical bore mouth in docs/cross-cylinder-bore-chamfer-design.md.
 //
 // Chamfer also takes docs/modify-reach-design.md §8.3's second receiver class,
 // which the fillet does not: a selection covering every geometric edge of one
@@ -75,6 +76,9 @@ type ChamferOption interface{ chamferOption() }
 // A one-sided positive-taper circular extrude also accepts one complete
 // far-cap rim at an equal setback on its disk and cone (draft §10.5).
 //
+// A one-span straight solid Sweep takes selected lateral edges through its
+// stored exact prism reduction. Its cap edges and asymmetric reference roles
+// remain unsupported; other Sweep kinds are S3 (ErrUnsupported).
 // A receiver outside the admitted classes is S3 (ErrUnsupported).
 //
 // WithTangentChain expands the edges sel resolves to as Fillet's does
