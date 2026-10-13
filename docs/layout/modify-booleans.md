@@ -24,11 +24,11 @@ The rules for rows live in `docs/layout.md`.
 | `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
 | `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |
 | `fillet_audit.go` | Adapts corner cutbacks to `internal/sectionaudit/` and renders its detailed refusals. See modify §5. |
-| `shell.go` | Public `ShellOption`, `ShellSense` and `Body.Shell`: prism and straight Sweep cap shells, a tube, cup, band group, or prism side opening. See modify §8 and Table R. |
+| `shell.go` | Public `ShellOption`, `ShellSense` and `Body.Shell`: prism and straight Sweep cap and side shells, a tube, cup, or band group. See modify §8 and Table R. |
 | `shell_offset.go` | Adapts Shell section offsets and proofs; audits the record. See modify §7–§9. |
 | `shell_cup.go` | `cupPayload`, its stacked record and view. See modify-reach §9.1. |
 | `shell_revolve.go` | `Body.Shell` of a revolve. See modify-reach §9.3. |
-| `shell_opening.go` | Prism side opening: classify removed faces and dispatch the audited region build. See shell-opening §3–§5. |
+| `shell_opening.go` | Prism and straight Sweep side openings: classify removed faces and dispatch the audited region build. See shell-opening §3–§5. |
 | `shell_opening_brep.go` | Records a prism side opening from the section or stack engine. See shell-opening §4. |
 | `shell_stacked_boss.go` | Builds and measures the exact two-slab rectangular-boss shell. See modify-general §3.1a. |
 | `shell_round_boss.go` | Builds and measures the exact two-slab circular-boss shell. See modify-general §3.1c. |

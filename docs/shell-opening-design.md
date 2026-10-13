@@ -10,6 +10,10 @@ offset and its §5 audit; to `docs/general-boolean-design.md` ("general-boolean
 `docs/brep-modify-design.md` ("brep-modify §N"), which owns what a later
 modify op does with that result.
 
+A zero-twist one-line solid `Sweep` uses its stored exact prism for this
+construction. Its selected `side(0,0,j)` face must name outer-loop segment
+`j` before the same region and topology audits run.
+
 Four tables are normative:
 
 | Table | Owns | Section |
@@ -433,7 +437,7 @@ Gate order, after modify §4's stage 1 and reach SX10:
 
 | Stage | Gates |
 |---|---|
-| 2. receiver | S3; `requireExactSection`; the removed faces: caps by role, side faces by `side(0,j)`; SO6 |
+| 2. receiver | S3; `requireExactSection`; the removed faces: caps by role, prism sides by `side(0,j)`, one-line Sweep sides by `side(0,0,j)` mapped to the stored prism segment; SO6 |
 | 3. levels | SO3's height half (inward, kept caps) |
 | 4. chain | `offsetOpenChain` over `K`: S11a per walk, SO1/SO2/SO4 per end; each cut on a removed arc placed in the arc's parameterisation (SO5) |
 | 5. regions | §4.7 steps 2–3: S8 (SO3's section half), S11b, S9, the area identity |

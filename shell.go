@@ -87,7 +87,8 @@ func WithShellSense(s ShellSense) ShellOption {
 // lumps: the band inside the outer loop, then one band lining each hole
 // (docs/modify-reach-design.md BX8).
 //
-// A prism also takes a side opening (docs/shell-opening-design.md): one
+// A prism or one-line solid Sweep also takes a side opening
+// (docs/shell-opening-design.md): one
 // connected run of its outer side faces removed, with or without its caps, on
 // a hole-free section whose every walk is a line, along a section axis or
 // oblique, or a circular arc. Each end of the kept walks closes on the removed
@@ -293,32 +294,35 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then the removed faces:
-	// caps by role, and on a prism receiver side faces by side(0,j), which
-	// route the call to the side opening (docs/shell-opening-design.md §5). A
-	// brep receiver's route P takes caps only (SB3).
+	// caps by role, and side faces by the receiver's exact prism segment,
+	// which routes the call to the side opening (shell-opening §5). A brep
+	// receiver's route P takes caps only (SB3).
 	pp, ok := b.payload.(prismPayload)
 	caps := prismCapsOf(b)
-	var sweepCapsOnly bool
+	var sweepStraight bool
 	if route.prism != nil {
 		pp, ok, caps = *route.prism, true, route.caps
 	} else if sweepPrism, admitted := straightSweepPrismReduction(b.payload); admitted {
-		pp, ok, sweepCapsOnly = sweepPrism, true, true
+		pp, ok, sweepStraight = sweepPrism, true, true
 	}
 	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator shells a straight prism only`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: this evaluator shells a straight prism or its one-line Sweep reduction only`, ErrUnsupported)
 	}
 	if err := requireExactSection(pp, "shells"); err != nil {
 		return nil, err
 	}
 	var removedStart, removedEnd bool
-	if route.prism != nil || sweepCapsOnly {
+	var sides map[int]struct{}
+	switch {
+	case route.prism != nil:
 		removedStart, removedEnd, err = classifyRemovedCaps(caps, removed)
-	} else {
-		var sides map[int]struct{}
+	case sweepStraight:
+		removedStart, removedEnd, sides, err = classifyRemovedSweepFaces(b, caps, pp, removed)
+	default:
 		removedStart, removedEnd, sides, err = classifyRemovedFaces(b, caps, removed)
-		if err == nil && len(sides) > 0 {
-			return b.shellSideOpening(ctx, pp, removedStart, removedEnd, sides, s, t, tmm, tDelta)
-		}
+	}
+	if err == nil && len(sides) > 0 {
+		return b.shellSideOpening(ctx, pp, removedStart, removedEnd, sides, s, t, tmm, tDelta)
 	}
 	if err != nil {
 		return nil, err

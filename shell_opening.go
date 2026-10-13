@@ -9,8 +9,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the prism side opening of docs/shell-opening-design.md: Shell
-// on a straight prism that removes one proper connected run R of its outer
+// This file is the prism and one-line Sweep side opening of
+// docs/shell-opening-design.md: Shell on an exact straight prism reduction
+// that removes one proper connected run R of its outer
 // side faces, with or without its caps. The kept walks K are offset as an open
 // chain (shell_chain.go) whose two ends close by Table RO's rim, the removed
 // walk's own carrier cut by the offset. Three regions follow (§3): the wall
@@ -56,6 +57,40 @@ func classifyRemovedFaces(b *Body, caps prismCaps, removed []*Face) (bool, bool,
 		if !named {
 			return false, false, nil, fmt.Errorf(`%w: a removed face is neither a cap nor a side face of this prism (shell-opening SO6)`, ErrUnsupported)
 		}
+	}
+	return start, end, sides, nil
+}
+
+// classifyRemovedSweepFaces maps the published one-line Sweep wall role
+// side(0,0,j) to segment j of its stored exact prism. The first zero names
+// the only path span; the second names the section's outer loop. No role from
+// another span or a hole loop is a side-opening target.
+func classifyRemovedSweepFaces(b *Body, caps prismCaps, pp prismPayload, removed []*Face) (bool, bool, map[int]struct{}, error) {
+	var start, end bool
+	sides := map[int]struct{}{}
+	for _, f := range removed {
+		switch {
+		case caps.start != nil && f == caps.start:
+			start = true
+			continue
+		case caps.end != nil && f == caps.end:
+			end = true
+			continue
+		}
+		if len(f.origins) != 1 || f.origins[0].producer != b.origin.producer {
+			return false, false, nil, fmt.Errorf(`%w: a selected Sweep wall has no single source segment (shell-opening SO6)`, ErrUnsupported)
+		}
+		role := f.origins[0].Role
+		var span, loop, segment int
+		n, err := fmt.Sscanf(role, "side(%d,%d,%d)", &span, &loop, &segment)
+		if err != nil || n != 3 || fmt.Sprintf("side(%d,%d,%d)", span, loop, segment) != role ||
+			span != 0 || segment < 0 || segment >= len(pp.profile.Outer.Segments) {
+			return false, false, nil, fmt.Errorf(`%w: a selected face does not map to this Sweep's stored prism (shell-opening SO6)`, ErrUnsupported)
+		}
+		if loop != 0 {
+			return false, false, nil, fmt.Errorf(`%w: a side opening removes faces of the section's outer loop only (shell-opening SO6)`, ErrUnsupported)
+		}
+		sides[segment] = struct{}{}
 	}
 	return start, end, sides, nil
 }
