@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -86,35 +85,6 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 		return nil, fmt.Errorf("%w: mirrored cap has unmatched pair placements", ErrUnsupported)
 	}
 	return shifts, nil
-}
-
-// Every ideal band edge lies between source cap vertices and its inset.
-// The inset is strictly within that cap. Four times the maximum XY coordinate
-// therefore bounds every band's transverse edge span. This reserves the
-// bridge-cap proof's vertical motion and two lateral motions before choosing
-// the lower half's published 0.1 mm allowance.
-func loftMirrorCylinderChamferBridgeReserve(lower facetedPayload,
-	record *loftMirrorCylinderBoreRecord, setback float64) (float64, error) {
-	shift := record.join.bridgeBound
-	if shift == 0 {
-		return 0, nil
-	}
-	if shift < 0 || proofbound.IsNonFinite(shift) || setback <= shift ||
-		proofbound.IsNonFinite(setback) {
-		return 0, fmt.Errorf("%w: mirrored cap bridge reaches its side station", ErrUnsupported)
-	}
-	maxXY := 0.0
-	for _, v := range lower.verts {
-		maxXY = max(maxXY, math.Abs(v.X), math.Abs(v.Y))
-	}
-	maxXY = proofbound.AbsSumUpper(maxXY, lower.meshBound, setback)
-	span := proofbound.ProductUpper(4, maxXY)
-	lateral := proofbound.ProductUpper(proofbound.DivUpper(shift, setback), span)
-	reserve := proofbound.AbsSumUpper(shift, lateral, lateral)
-	if reserve <= 0 || reserve >= 0.1 || proofbound.IsNonFinite(reserve) {
-		return 0, fmt.Errorf("%w: mirrored cap bridge has no finite allowance", ErrUnsupported)
-	}
-	return reserve, nil
 }
 
 // The upper source is the reflected lower source shifted down by each
