@@ -49,8 +49,9 @@ import (
 // the Union step, including CapStart and CapEnd, and do not retain the operands'
 // origins. A pair of full Revolves about one authenticated axis can instead
 // return an analytic Revolve with the source-face origins of its kept walls.
-// Operands from different
-// documents are ErrForeignBody; retired operands ErrRetiredBody. A boolean
+// Two exact rectangular prisms with perpendicular sweeps can also join across
+// a positive-area planar face patch as one analytic body. Operands from
+// different documents are ErrForeignBody; retired operands ErrRetiredBody. A boolean
 // that fails on the geometry returns a typed [BooleanError] wrapping the §12
 // sentinel: a valid but unclassifiable contact — a curved-surface tangency or
 // near-contact whose chord facets never provably interpenetrate, an exact
@@ -336,6 +337,14 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		return body, nil
 	}
 	if op == meshbool.OpUnion {
+		if payload, ok, err := tryPrismFacePatchUnion(ctx, a, b); err != nil {
+			if errors.Is(err, ErrUnsupported) {
+				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
+			}
+			return nil, err
+		} else if ok {
+			return analyticBooleanBody(ctx, d, ref, payload)
+		}
 		// docs/general-boolean-design.md §3 A1: unequal sweep intervals that
 		// overlap or touch build a stacked prism, or a brep where an
 		// interface is flush or crossing. Same contract as above.
