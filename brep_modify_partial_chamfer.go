@@ -43,11 +43,11 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 	if err != nil {
 		return nil, err
 	}
-	if len(cl.walks) != len(selected) {
+	if len(cl.Walks) != len(selected) {
 		return nil, initial.refuse("SL1", `a partial chamfer's face coalesces recorded walks`)
 	}
 	for i, on := range selected {
-		if on && !cl.walks[i].IsLine() {
+		if on && !cl.Walks[i].IsLine() {
 			return nil, initial.refuse("SL1", `a partial chamfer selects a curved walk`)
 		}
 	}
@@ -145,7 +145,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 		}
 	}
 	segs, joins, capWalk, capArc, err := offset2d.PartialFilletContour(
-		r.budget, cl.walks, selected, make([]bool, len(selected)), amounts, shellTol)
+		r.budget, cl.Walks, selected, make([]bool, len(selected)), amounts, shellTol)
 	if err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
 	}
@@ -172,7 +172,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 			M:  Point2{U: j.M.U, V: j.M.V},
 			PA: Point2{U: j.PA.U, V: j.PA.V}, PB: Point2{U: j.PB.U, V: j.PB.V}}
 	}
-	delta, err := capband.AmountsContourDisplacement(cl.walks, readings, amounts,
+	delta, err := capband.AmountsContourDisplacement(cl.Walks, readings, amounts,
 		r.call.loop.dcDelta, shellTol)
 	if err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
@@ -306,17 +306,17 @@ func (r *brepLoopRead) partialTerminalChamfer(sel brepLoopSel, orig, contour loo
 	if err != nil {
 		return err
 	}
-	if len(ow.walks) != 1 || len(cw.walks) != 1 {
+	if len(ow.Walks) != 1 || len(cw.Walks) != 1 {
 		return r.refuse("SL1", `a terminal is not a single straight walk`)
 	}
 	f := r.bp.faces[sel.face]
 	eF := r.topo.embeds[sel.face]
 	var capRef [3]float64
 	switch {
-	case eF.Canon(ow.walks[0].StartU, ow.walks[0].StartV, f.z0) == v:
-		capRef = eF.Canon(cw.walks[0].StartU, cw.walks[0].StartV, f.z0)
-	case eF.Canon(ow.walks[0].EndU, ow.walks[0].EndV, f.z0) == v:
-		capRef = eF.Canon(cw.walks[0].EndU, cw.walks[0].EndV, f.z0)
+	case eF.Canon(ow.Walks[0].StartU, ow.Walks[0].StartV, f.z0) == v:
+		capRef = eF.Canon(cw.Walks[0].StartU, cw.Walks[0].StartV, f.z0)
+	case eF.Canon(ow.Walks[0].EndU, ow.Walks[0].EndV, f.z0) == v:
+		capRef = eF.Canon(cw.Walks[0].EndU, cw.Walks[0].EndV, f.z0)
 	default:
 		return r.refuse("SL1", `a terminal vertex is not an end of its cap segment`)
 	}

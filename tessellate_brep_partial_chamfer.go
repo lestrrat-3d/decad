@@ -19,7 +19,7 @@ func chordPartialChamferBand(ctx context.Context, b brepLoopBand, f brepFace,
 	if err != nil {
 		return brepBandChord{}, err
 	}
-	partial, err := partialband.PartialFilletLayout(side.walks, b.orig.Segments,
+	partial, err := partialband.PartialFilletLayout(side.Walks, b.orig.Segments,
 		f.regionLoop(b.loop).Segments, b.selected, b.capWalk, b.capArc,
 		b.setback.dc, chord, work)
 	if err != nil {

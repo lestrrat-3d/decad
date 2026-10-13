@@ -468,5 +468,5 @@ func straightPrismCapEdge(caps prismCaps, edges []*Edge) bool {
 
 // computeChamfer builds one section corner blend.
 func computeChamfer(loop cornerLoop, ci int, dA, dB float64) (*cornerBlend, error) {
-	return offset2d.Chamfer(loop.walks, ci, dA, dB, filletTol)
+	return offset2d.Chamfer(loop.Walks, ci, dA, dB, filletTol)
 }

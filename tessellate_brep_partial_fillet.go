@@ -20,7 +20,7 @@ func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
 		return brepBandChord{}, err
 	}
 	contour := f.regionLoop(b.loop)
-	partial, err := partialband.PartialFilletLayout(side.walks, b.orig.Segments,
+	partial, err := partialband.PartialFilletLayout(side.Walks, b.orig.Segments,
 		contour.Segments, b.selected, b.capWalk, b.capArc, b.setback.dc, chord, work)
 	if err != nil {
 		return brepBandChord{}, err

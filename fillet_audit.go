@@ -69,7 +69,7 @@ func auditRewriteBudget(budget *proofbound.WorkBudget, orig, rewritten profileRe
 				cutbacks[ci] = sectionaudit.Cutback{A: blend.CutbackA, B: blend.CutbackB}
 			}
 		}
-		records[li] = sectionaudit.RewriteLoop{Walks: loop.walks, Cutbacks: cutbacks}
+		records[li] = sectionaudit.RewriteLoop{Walks: loop.Walks, Cutbacks: cutbacks}
 	}
 	return sectionaudit.AuditRewrite(budget, orig, rewritten, records)
 }

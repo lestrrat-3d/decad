@@ -383,12 +383,9 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	return body, nil
 }
 
-// cornerLoop is one boundary loop resolved into its coalesced corner walk, the
-// same decomposition buildLoopSides and the surveys use: a lateral edge is a
-// junction between two consecutive walks.
-type cornerLoop struct {
-	walks []survey2d.SideWalk
-}
+// cornerLoop is survey2d.CornerLoop: one boundary loop resolved into its
+// coalesced corner walk.
+type cornerLoop = survey2d.CornerLoop
 
 // matchedCorner retains one selector result beside the section coordinate it
 // resolved to. The selected-edge ordinal follows SelectEdges' stable result
@@ -403,7 +400,7 @@ type matchedCorner struct {
 }
 
 func newMatchedCorner(edgeOrdinal int, edge *Edge, loop, corner int, cl cornerLoop) matchedCorner {
-	w := cl.walks[corner]
+	w := cl.Walks[corner]
 	return matchedCorner{
 		edgeOrdinal: edgeOrdinal,
 		edge:        edge,
@@ -511,7 +508,7 @@ func profileCornerLoopsBudget(budget *proofbound.WorkBudget, profile profileReco
 	}
 	out := make([]cornerLoop, len(walks))
 	for i, loop := range walks {
-		out[i] = cornerLoop{walks: loop}
+		out[i] = cornerLoop{Walks: loop}
 	}
 	return out, nil
 }
@@ -533,11 +530,11 @@ func matchCornerBudget(budget *proofbound.WorkBudget, pp prismPayload, loops []c
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return 0, 0, false, err
 		}
-		n := len(loop.walks)
-		if n == 1 && loop.walks[0].Closed {
+		n := len(loop.Walks)
+		if n == 1 && loop.Walks[0].Closed {
 			continue
 		}
-		for ci, w := range loop.walks {
+		for ci, w := range loop.Walks {
 			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return 0, 0, false, err
 			}
@@ -563,7 +560,7 @@ type cornerBlend = offset2d.Blend
 
 // computeFillet builds one section corner blend.
 func computeFillet(loop cornerLoop, ci int, r float64) (*cornerBlend, error) {
-	return offset2d.Fillet(loop.walks, ci, r, filletTol)
+	return offset2d.Fillet(loop.Walks, ci, r, filletTol)
 }
 
 func rewriteProfileBudget(budget *proofbound.WorkBudget, orig profileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (profileRecord, []map[int]struct{}, error) {
@@ -594,7 +591,7 @@ func rewriteProfileBudget(budget *proofbound.WorkBudget, orig profileRecord, loo
 
 // rewriteLoop applies the section blend to one coalesced loop.
 func rewriteLoop(budget *proofbound.WorkBudget, loop cornerLoop, blends map[int]*cornerBlend) ([]curveSegment, map[int]struct{}, error) {
-	return offset2d.RewriteLoop(budget, loop.walks, blends)
+	return offset2d.RewriteLoop(budget, loop.Walks, blends)
 }
 
 // walkSegment re-emits a coalesced walk trimmed to its two endpoints.

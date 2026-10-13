@@ -463,7 +463,7 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 	if err != nil {
 		return capBlendLoopMesh{}, err
 	}
-	walks := cl.walks
+	walks := cl.Walks
 	n := len(walks)
 	lm := capBlendLoopMesh{
 		li:      li,

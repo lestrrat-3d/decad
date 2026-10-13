@@ -254,7 +254,7 @@ func matchRevolveJunction(rp revolvePayload, junctions [][]revolveJunction, loop
 			if j.center != center || j.axis != axis || j.radius.Mag() != radius.Mag() {
 				continue
 			}
-			for ci, w := range loops[li].walks {
+			for ci, w := range loops[li].Walks {
 				if len(w.Segs) > 0 && w.Segs[0] == j.seg {
 					return li, ci, true, nil
 				}

@@ -353,10 +353,10 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 		if err != nil {
 			return brepOpenSet{}, err
 		}
-		if len(cl.walks) != len(b.orig.Segments) {
+		if len(cl.Walks) != len(b.orig.Segments) {
 			return brepOpenSet{}, fmt.Errorf(`%w: chamfer band %d's loop holds two consecutive segments on one carrier`, ErrUnsupported, bi)
 		}
-		for i, w := range cl.walks {
+		for i, w := range cl.Walks {
 			if b.selected != nil && !b.selected[i] {
 				continue
 			}

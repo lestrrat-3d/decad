@@ -167,3 +167,10 @@ type SideWalk struct {
 	SegmentWalk
 	Segs []int // the recorded segment indices this walk covers
 }
+
+// CornerLoop is one boundary loop resolved into its coalesced corner walk, the
+// same decomposition the root buildLoopSides and the surveys use: a lateral
+// edge is a junction between two consecutive walks.
+type CornerLoop struct {
+	Walks []SideWalk
+}

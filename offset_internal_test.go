@@ -89,10 +89,10 @@ func TestOffsetPrismIntervalCertificationRefusesThePinch(t *testing.T) {
 	loops, err := prismCornerLoopsBudget(budget, pp)
 	require.NoError(t, err)
 	require.Len(t, loops, 1)
-	dirs, err := thickenaxis.AxisDirections(loops[0].walks, budget)
+	dirs, err := thickenaxis.AxisDirections(loops[0].Walks, budget)
 	require.NoError(t, err)
 
-	err = thickenaxis.AxisIntervalClear(t.Context(), loops[0].walks, dirs, +1, 2.5, budget, nil)
+	err = thickenaxis.AxisIntervalClear(t.Context(), loops[0].Walks, dirs, +1, 2.5, budget, nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "offset interval"), err.Error())
 
@@ -105,7 +105,7 @@ func TestOffsetPrismIntervalCertificationRefusesThePinch(t *testing.T) {
 	// A 1.5 mm erosion stops short of the contact: the certification admits it
 	// and the section builds, so the refusal above is the pinch's doing and not
 	// the shape's.
-	require.NoError(t, thickenaxis.AxisIntervalClear(t.Context(), loops[0].walks, dirs, +1, 1.5, budget, nil))
+	require.NoError(t, thickenaxis.AxisIntervalClear(t.Context(), loops[0].Walks, dirs, +1, 1.5, budget, nil))
 	result, err = offsetPrism(t.Context(), doc, pp, OffsetNegative, 1.5, 0)
 	require.NoError(t, err)
 	require.NotNil(t, result)
