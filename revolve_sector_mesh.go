@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -63,12 +64,19 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 	maxRound, maxSnap := 0.0, 0.0
 	// The cone samples depend only on the unplaced cap station and
 	// the cone, never on the plan's motion, so the first plan's samples are
-	// reused by every later plan. They are filled in node order inside the
-	// first plan's loop, so a refusal is raised at the same node and in the
-	// same order as before.
-	if samples.up == nil {
-		samples.up = make([]pointcone.Sample, len(nodes))
-		samples.down = make([]pointcone.Sample, len(nodes))
+	// reused by every later plan. They are formed for every node before the
+	// first plan's loop and their errors are read in node order inside it, so a
+	// refusal is raised at the same node and in the same order as a node-by-node
+	// computation.
+	var upErrs, downErrs []error
+	if !samples.filled {
+		points := make([]r3.Vec, len(original))
+		for i := range original {
+			points[i] = original[i].P
+		}
+		w := orderedwork.EachWorkers(len(points), pointConeFactorParallelMin)
+		samples.up, upErrs = pointConeFactors(points, record.upper, w)
+		samples.down, downErrs = pointConeFactors(points, record.lower, w)
 	}
 	for i := range nodes {
 		far := original[i].P
@@ -76,16 +84,13 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		if samples.filled {
 			up, down = samples.up[i], samples.down[i]
 		} else {
-			var err error
-			up, err = pointConeFactor(far, record.upper)
-			if err != nil {
-				return 0, 0, err
+			if upErrs[i] != nil {
+				return 0, 0, upErrs[i]
 			}
-			down, err = pointConeFactor(far, record.lower)
-			if err != nil {
-				return 0, 0, err
+			if downErrs[i] != nil {
+				return 0, 0, downErrs[i]
 			}
-			samples.up[i], samples.down[i] = up, down
+			up, down = samples.up[i], samples.down[i]
 		}
 		if down.Q-down.QError <= 1 {
 			return 0, 0, fmt.Errorf("%w: sector cap reaches its source plane", ErrUnsupported)

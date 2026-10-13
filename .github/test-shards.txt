@@ -1399,3 +1399,4 @@
 10	0.00	Example_decad_quickstart
 10	0.01	TestLoftCylinderTriangleMinRadiusMatchesRational
 10	0.00	TestChainArcSweepAxisErrorChangesPublicMeshBound
+10	0.00	TestPointConeFactorsMatchSerial

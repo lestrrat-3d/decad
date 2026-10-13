@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -210,12 +211,12 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	capArea, reach := pointcone.CapArea(far, caps), pointcone.ReachUpper(far)
-	upperSamples := make([]pointcone.Sample, len(far))
 	upperNodeRound, upperQError := 0.0, 0.0
-	for i, p := range far {
-		upperSamples[i], err = pointConeFactor(p, upper)
-		if err != nil {
-			return nil, err
+	upperSamples, upperErrs := pointConeFactors(far, upper,
+		orderedwork.EachWorkers(len(far), pointConeFactorParallelMin))
+	for i := range far {
+		if upperErrs[i] != nil {
+			return nil, upperErrs[i]
 		}
 		upperNodeRound = max(upperNodeRound, upperSamples[i].PointError)
 		upperQError = max(upperQError, upperSamples[i].QError)
@@ -247,10 +248,12 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	lowerSamples := make([]pointcone.Sample, len(far))
 	if lower != nil {
 		lowerQError := 0.0
-		for i, p := range far {
-			lowerSamples[i], err = pointConeFactor(p, lower)
-			if err != nil {
-				return nil, err
+		var lowerErrs []error
+		lowerSamples, lowerErrs = pointConeFactors(far, lower,
+			orderedwork.EachWorkers(len(far), pointConeFactorParallelMin))
+		for i := range far {
+			if lowerErrs[i] != nil {
+				return nil, lowerErrs[i]
 			}
 			if lowerSamples[i].Q-lowerSamples[i].QError <= 1 {
 				return nil, fmt.Errorf("%w: the lower cone touches the point-loft far cap", ErrUnsupported)
@@ -383,14 +386,14 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	}
 	fullCapArea := pointcone.CapArea(far, caps)
 	fullReach := pointcone.ReachUpper(far)
-	samples := make([]pointcone.Sample, len(far))
 	maxNodeRound, maxQError := 0.0, 0.0
-	for i, p := range far {
-		sample, err := pointConeFactor(p, cone)
-		if err != nil {
-			return nil, err
+	samples, sampleErrs := pointConeFactors(far, cone,
+		orderedwork.EachWorkers(len(far), pointConeFactorParallelMin))
+	for i := range far {
+		if sampleErrs[i] != nil {
+			return nil, sampleErrs[i]
 		}
-		samples[i] = sample
+		sample := samples[i]
 		maxNodeRound = max(maxNodeRound, sample.PointError)
 		maxQError = max(maxQError, sample.QError)
 	}
@@ -528,4 +531,39 @@ func pointConeFactor(p r3.Vec, cone *pointConeLimit) (pointcone.Sample, error) {
 		return pointcone.FactorRat(p, cone.apex, cone.slope)
 	}
 	return pointcone.FactorDyadic(p, cone.constants())
+}
+
+// pointConeFactorParallelMin is the point count from which pointConeFactors
+// callers ask for more than one worker.
+const pointConeFactorParallelMin = 1024
+
+// pointConeFactors is pointConeFactor over every point: samples[i] and errs[i]
+// are point i's. With workers below 2, or a non-positive apex or slope (the
+// big.Rat form), it runs in point order on the calling goroutine and stops
+// after the first error, leaving later slots zero. Otherwise the cone
+// constants are resolved first and the points are spread over workers; the
+// lowest non-nil errs index is then the serial first error, and slots past it
+// may or may not be filled.
+func pointConeFactors(points []r3.Vec, cone *pointConeLimit, workers int) ([]pointcone.Sample, []error) {
+	samples := make([]pointcone.Sample, len(points))
+	errs := make([]error, len(points))
+	if cone.apex.Sign() <= 0 || cone.slope.Sign() <= 0 {
+		workers = 1
+	}
+	if workers < 2 {
+		for i, p := range points {
+			samples[i], errs[i] = pointConeFactor(p, cone)
+			if errs[i] != nil {
+				break
+			}
+		}
+		return samples, errs
+	}
+	consts := cone.constants()
+	// The per-index error lives in errs, so Each's own result is unused.
+	_, _ = orderedwork.Each(len(points), workers, 256, nil, func(i int) error {
+		samples[i], errs[i] = pointcone.FactorDyadic(points[i], consts)
+		return errs[i]
+	})
+	return samples, errs
 }
