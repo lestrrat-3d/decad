@@ -230,7 +230,7 @@ func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 func revolveLoftFacesTimePointSign(q [3][]*big.Rat, s *big.Rat) int {
 	negative, positive := true, true
 	for _, row := range q {
-		sign := spiralBernSign(row, s)
+		sign := bernsteinExactSign(row, s)
 		negative = negative && sign < 0
 		positive = positive && sign > 0
 	}
