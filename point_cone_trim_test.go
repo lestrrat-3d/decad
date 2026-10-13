@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -15,9 +16,9 @@ func TestPointConeUpperFarPlaneNodeRequiresCapCharge(t *testing.T) {
 	sample, err := pointConeFactor(far, cone)
 	require.NoError(t, err)
 	require.Less(t, sample.Q+sample.QError, 1.0)
-	_, _, err = sectorUpperCapNode(far, sample, false)
+	_, _, err = pointcone.UpperCapNode(far, sample, false)
 	require.ErrorIs(t, err, ErrUnsupported)
-	clipped, round, err := sectorUpperCapNode(far, sample, true)
+	clipped, round, err := pointcone.UpperCapNode(far, sample, true)
 	require.NoError(t, err)
 	require.Equal(t, far, clipped)
 	require.GreaterOrEqual(t, round, far.Scale(sample.Alpha).Sub(far).Len())

@@ -18,8 +18,8 @@ The rules for rows live in `docs/layout.md`.
 | `internal/sweeppath/` | Pair paths, validation, rounded poses, and motion travel bounds. |
 | `internal/planarsnapshot/` | Planar contact snapshots, cached records and pose gates. See multibody §9.1–§9.2. |
 | `internal/placedruling/` | Placed cylinder staging, support and relation proofs. See contact-geometry §4.5. |
-| `internal/facetproof/` | Faceted shell audits, placement, similarity and revolve sector-separation proofs. See `docs/evaluator-design.md` §9. |
-| `internal/pointcone/` | Point-loft cone crossing samples, far-cap subdivision and contact split, and cap and triangle crossing bounds. See loft-point design. |
+| `internal/facetproof/` | Faceted shell audits, placement, similarity and revolve sector-separation proofs, sector seams and angular gaps. See `docs/evaluator-design.md` §9. |
+| `internal/pointcone/` | Point-loft cone crossing samples, far-cap subdivision and contact split, cap and triangle crossing bounds, and sector cap paths, subdivision, merged angles and root-edge order. See loft-point design. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching, query rendering, residual counts, and face-role indexes. See API §9. |
 | `internal/surfacegeom/` | Private face and edge geometry carriers and placement transforms. Public surface and curve variants live in `topology.go`. See API §6.1, surface §6. |
@@ -49,12 +49,12 @@ The rules for rows live in `docs/layout.md`.
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
 | `internal/tessellation/` | Recorded-loop and band chording, mesh topology, bounds and audits. See tessellation-design. |
-| `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines. See loop-fillet §7.1. |
+| `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines, and exact partial-chamfer quad gates and mass. See loop-fillet §7.1, modify-general §4.3a. |
 | `internal/stationbound/` | Bounds circular chord stations, offset cap stations and chain-sweep arc stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums, projected cap proof, body reading finiteness gate, mirrored-cylinder bridge terms and reserve, cap chamfer source bound, split-ring and collar grids, triangle clearance and middle-collar proofs, and grouped contact scans. |
 | `internal/smoothloft/` | Three-section homothety, independent rectangles, varying curves, and four-section rounded-rectangle gates, held meshes and bounds. |
 | `internal/loftfillet/` | Loft fit/circle root-fillet candidate, tangent-root certificate, connector and carrier departures, section contact audits and circle-bore containment. See loft §17–§18. |
-| `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs. |
+| `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs, and quarter-turn cap-rim blend stations and bounds. |
 | `internal/revolveplan/` | Revolve mesh walk resolution, coordinate ceilings and chord counts. See tessellation §8. |
 | `internal/revolvesampling/` | Revolve meridian junctions, stations, samples and section readings. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |

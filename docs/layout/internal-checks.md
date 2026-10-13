@@ -24,7 +24,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/prismcells/` | Prism admission, scene budgets, cells, cuts, charges and trim walks. See prism-boolean §4. |
 | `internal/mirrorjoin/` | Exact line admission, reflection, record splice and joined-section audit. See mirror-pattern §5. |
 | `internal/patternrecord/` | Pattern spec gates, instance motion and record mapping. See mirror-pattern §4.3, §6.2. |
-| `internal/massmoment/` | Rational mass moments and inertia. See dynamic-mass §2–§3. |
+| `internal/massmoment/` | Rational mass moments and inertia, and X-axis placement map charges. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, proofs. See modify §6–§9, shell-opening §3–§5, draft §2. |
 | `internal/capband/` | Cap-band contour, patch, locus, volume, first-moment and centroid bounds. See modify-reach §8.3–§8.4. |

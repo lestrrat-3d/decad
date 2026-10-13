@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
@@ -77,7 +76,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 				e.Canon(cw.EndU, cw.EndV, f.z0), e.Canon(cw.StartU, cw.StartV, f.z0),
 			}, cap: capEdge, side: sideEdge,
 		}
-		if err := partialChamferExactQuad(quads[i], b.setback, e); err != nil {
+		if err := partialband.ChamferQuadExact(quads[i].points, b.setback.dc, b.setback.ds, e); err != nil {
 			return nil, brepBandMass{}, err
 		}
 		sideOrdinal++
@@ -141,7 +140,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
 			{edge: end, forward: end.start == sideE.end}, {edge: capE, forward: false},
 			{edge: start, forward: start.start == capE.start}}, outer: true}
-		areaIv, volume3, moments, err := partialChamferPolygonMass(quads[i].points)
+		areaIv, volume3, moments, err := partialband.ChamferQuadMass(quads[i].points)
 		if err != nil {
 			return nil, brepBandMass{}, err
 		}
@@ -189,133 +188,4 @@ func partialChamferTerminal(terminals map[brepBandTerminal]*Edge, capVertex, sid
 		}
 	}
 	return nil
-}
-
-// partialChamferExactQuad restricts the admission to exactly coplanar
-// recorded floats. A nonzero contour/level displacement is refused above.
-func partialChamferExactQuad(q partialChamferQuad, setback capSetback, e brepEmbed) error {
-	r := partialChamferRats(q.points)
-	a, b, c, d := r[0], r[1], r[2], r[3]
-	ab, ac, ad := partialChamferSub(b, a), partialChamferSub(c, a), partialChamferSub(d, a)
-	n := partialChamferCross(ab, ac)
-	if partialChamferDot(n, ad).Sign() != 0 || partialChamferDot(n, n).Sign() == 0 {
-		return fmt.Errorf(`%w: a partial chamfer patch is not one exact plane`, ErrUnsupported)
-	}
-	// A concave or self-crossing quadrilateral would make the two-triangle
-	// area and divergence fan differ from the patch's actual boundary.
-	second := partialChamferCross(partialChamferSub(c, a), ad)
-	if partialChamferDot(n, second).Sign() <= 0 {
-		return fmt.Errorf(`%w: a partial chamfer patch has inconsistent triangle winding`, ErrUnsupported)
-	}
-	// The cap line must be the exact offset of the side carrier. Its
-	// endpoints may have different travel coordinates after a miter, so
-	// compare the two line equations rather than endpoint differences.
-	local := [4][3]*big.Rat{}
-	for i, p := range q.points {
-		v := e.Local(p)
-		for k := range 3 {
-			local[i][k] = proofarith.FloatRat(v[k])
-		}
-	}
-	travel := partialChamferSub(local[1], local[0])
-	if travel[2].Sign() != 0 || (travel[0].Sign() != 0) == (travel[1].Sign() != 0) {
-		return fmt.Errorf(`%w: a partial chamfer's selected line is not along a face axis`, ErrUnsupported)
-	}
-	length := new(big.Rat).Abs(travel[0])
-	if length.Sign() == 0 {
-		length.Abs(travel[1])
-	}
-	cross2 := func(v [3]*big.Rat) *big.Rat {
-		return new(big.Rat).Sub(new(big.Rat).Mul(travel[0], v[1]),
-			new(big.Rat).Mul(travel[1], v[0]))
-	}
-	dc := proofarith.FloatRat(setback.dc)
-	want := new(big.Rat).Mul(dc, length)
-	for _, capPoint := range [][3]*big.Rat{local[2], local[3]} {
-		if cross2(partialChamferSub(capPoint, local[0])).Cmp(want) != 0 {
-			return fmt.Errorf(`%w: a partial chamfer's cap line is not the exact requested offset`, ErrUnsupported)
-		}
-	}
-	level := new(big.Rat).Abs(new(big.Rat).Sub(local[0][2], local[2][2]))
-	if level.Cmp(proofarith.FloatRat(setback.ds)) != 0 {
-		return fmt.Errorf(`%w: a partial chamfer's side level is not the exact requested setback`, ErrUnsupported)
-	}
-	return nil
-}
-
-func partialChamferRats(points [4][3]float64) [4][3]*big.Rat {
-	var out [4][3]*big.Rat
-	for i := range 4 {
-		for k := range 3 {
-			out[i][k] = proofarith.FloatRat(points[i][k])
-		}
-	}
-	return out
-}
-
-func partialChamferSub(a, b [3]*big.Rat) [3]*big.Rat {
-	var out [3]*big.Rat
-	for k := range 3 {
-		out[k] = new(big.Rat).Sub(a[k], b[k])
-	}
-	return out
-}
-
-func partialChamferCross(a, b [3]*big.Rat) [3]*big.Rat {
-	return [3]*big.Rat{
-		new(big.Rat).Sub(new(big.Rat).Mul(a[1], b[2]), new(big.Rat).Mul(a[2], b[1])),
-		new(big.Rat).Sub(new(big.Rat).Mul(a[2], b[0]), new(big.Rat).Mul(a[0], b[2])),
-		new(big.Rat).Sub(new(big.Rat).Mul(a[0], b[1]), new(big.Rat).Mul(a[1], b[0])),
-	}
-}
-
-func partialChamferDot(a, b [3]*big.Rat) *big.Rat {
-	out := new(big.Rat)
-	for k := range 3 {
-		out.Add(out, new(big.Rat).Mul(a[k], b[k]))
-	}
-	return out
-}
-
-// partialChamferPolygonMass returns one quad's area, three-times-volume
-// flux and first-moment flux in the loop's geometric winding.
-func partialChamferPolygonMass(points [4][3]float64) (proofbound.RatInterval, *big.Rat, [3]*big.Rat, error) {
-	r := partialChamferRats(points)
-	vol3 := new(big.Rat)
-	var moments [3]*big.Rat
-	for k := range 3 {
-		moments[k] = new(big.Rat)
-	}
-	for _, pair := range [][2]int{{1, 2}, {2, 3}} {
-		a, b, c := r[0], r[pair[0]], r[pair[1]]
-		cross := partialChamferCross(partialChamferSub(b, a), partialChamferSub(c, a))
-		centroid3 := [3]*big.Rat{}
-		for k := range 3 {
-			centroid3[k] = new(big.Rat).Add(a[k], b[k])
-			centroid3[k].Add(centroid3[k], c[k])
-		}
-		vol3.Add(vol3, new(big.Rat).Quo(partialChamferDot(centroid3, cross), big.NewRat(6, 1)))
-		for k := range 3 {
-			sum := new(big.Rat)
-			for _, p := range [][2]int{{0, 0}, {1, 1}, {2, 2}, {0, 1}, {1, 2}, {2, 0}} {
-				v := [3]*big.Rat{a[k], b[k], c[k]}
-				sum.Add(sum, new(big.Rat).Mul(v[p[0]], v[p[1]]))
-			}
-			moments[k].Add(moments[k], new(big.Rat).Quo(new(big.Rat).Mul(cross[k], sum), big.NewRat(24, 1)))
-		}
-	}
-	// The two fan triangles lie in the same plane and share orientation.
-	// Their area vectors are parallel, so the total area is half the sum of
-	// their exact cross-vector lengths. For a trapezoid those vectors are
-	// proportional, and each root is enclosed independently.
-	area := proofbound.PointInterval(new(big.Rat))
-	for _, pair := range [][2]int{{1, 2}, {2, 3}} {
-		cross := partialChamferCross(partialChamferSub(r[pair[0]], r[0]), partialChamferSub(r[pair[1]], r[0]))
-		root, ok := proofbound.SqrtFixed(partialChamferDot(cross, cross))
-		if !ok {
-			return proofbound.RatInterval{}, nil, [3]*big.Rat{}, fmt.Errorf(`%w: a chamfer patch has no area`, ErrUnsupported)
-		}
-		area = proofbound.IntervalAdd(area, proofbound.IntervalScale(root, big.NewRat(1, 2)))
-	}
-	return area, vol3, moments, nil
 }
