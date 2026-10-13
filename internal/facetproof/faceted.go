@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -165,7 +166,33 @@ type MeshAudit struct {
 	Det []proof.Dyadic
 }
 
+// auditParallelMin is the facet count from which AuditFacetedMesh lifts its
+// vertices and computes its facet determinants on several goroutines.
+const auditParallelMin = 2048
+
+// AuditFacetedMesh proves the held mesh closed, splits it into shells and
+// computes each shell's exact volume, containment and orientation. Large
+// meshes lift their vertices and facet determinants on up to
+// orderedwork.MaxEachWorkers goroutines; every fold, error and context poll
+// stays on the calling goroutine in facet order, so the result and the first
+// error are those of the single-goroutine loop.
 func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*MeshAudit, error) {
+	return auditFacetedMesh(ctx, verts, tris, orderedwork.EachWorkers(len(tris), auditParallelMin))
+}
+
+// trisIndexVerts reports whether every facet corner names a vertex.
+func trisIndexVerts(tris [][3]int, n int) bool {
+	for _, t := range tris {
+		for _, c := range t {
+			if c < 0 || c >= n {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, workers int) (*MeshAudit, error) {
 	if len(tris) == 0 {
 		return nil, fmt.Errorf(`%w: the boolean result holds no boundary`, decaderr.ErrBooleanFailed)
 	}
@@ -187,14 +214,31 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 		}
 	}
 
+	// A lift or determinant that panics on a bad input must do so where the
+	// single-goroutine loop does, so such meshes take that path.
+	if workers >= 2 && (!proofbound.AllFinite(verts) || !trisIndexVerts(tris, len(verts))) {
+		workers = 1
+	}
 	audit := &MeshAudit{XVerts: make([]proof.Xpt, len(verts))}
-	for i, v := range verts {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
+	if workers < 2 {
+		for i, v := range verts {
+			if i%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
 			}
+			audit.XVerts[i] = proof.XptOf(v)
 		}
-		audit.XVerts[i] = proof.XptOf(v)
+	} else {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if _, err := orderedwork.Each(len(verts), workers, 512, ctx.Err, func(i int) error {
+			audit.XVerts[i] = proof.XptOf(verts[i])
+			return nil
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	audit.Comp = make([]int, len(tris))
@@ -235,6 +279,26 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 		audit.Members = append(audit.Members, list)
 	}
 
+	// preDet[fi], preOK[fi] are facet fi's determinant term, computed ahead
+	// of the component loop that consumes them in its own order.
+	var preDet []proof.Dyadic
+	var preOK []bool
+	if workers >= 2 {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		preDet = make([]proof.Dyadic, len(tris))
+		preOK = make([]bool, len(tris))
+		if _, err := orderedwork.Each(len(tris), workers, 256, ctx.Err, func(fi int) error {
+			t := tris[fi]
+			preDet[fi], preOK[fi] = proof.XdotDyadic(audit.XVerts[t[0]],
+				proof.Xcross(audit.XVerts[t[1]], audit.XVerts[t[2]]))
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+
 	sixth := big.NewRat(1, 6)
 	det := make([]proof.Dyadic, len(tris))
 	allDyadic := true
@@ -250,6 +314,14 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 				if err := ctx.Err(); err != nil {
 					return nil, err
 				}
+			}
+			if v == nil && preOK != nil {
+				if preOK[fi] {
+					det[fi] = preDet[fi]
+					total.Add(preDet[fi])
+					continue
+				}
+				v = total.Rat()
 			}
 			t := tris[fi]
 			cross := proof.Xcross(audit.XVerts[t[1]], audit.XVerts[t[2]])
