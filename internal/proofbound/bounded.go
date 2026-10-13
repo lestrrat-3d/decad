@@ -310,3 +310,18 @@ func TwoPiUpper() float64 {
 func CircularSweepUpper(t0, t1 float64) float64 {
 	return ProductUpper(AbsSumUpper(t0, t1), TwoPiUpper())
 }
+
+// PerimeterUpper includes each edge's length error and rounds each addition
+// outward before the perimeter enters an area bound. lengths[i] pairs with
+// bounds[i]; it charges one budget step per edge and returns the budget's
+// error as soon as one step fails.
+func PerimeterUpper(budget *WorkBudget, lengths, bounds []float64) (float64, error) {
+	perimeter := 0.0
+	for i, length := range lengths {
+		if err := budget.Step(); err != nil {
+			return 0, err
+		}
+		perimeter = AbsSumUpper(perimeter, length, bounds[i])
+	}
+	return perimeter, nil
+}

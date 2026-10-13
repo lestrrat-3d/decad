@@ -8,6 +8,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/r3"
 )
 
 // ConvexVertices reads a whole, closed, strictly convex straight section.
@@ -118,4 +119,11 @@ func ChamferCutter(capSetback, sideSetback float64) momentinput.Profile {
 		segments[i] = sectionrecord.LineSeg{Start: points[i], End: points[(i+1)%len(points)], TStart: 0, TEnd: 1}
 	}
 	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
+}
+
+// P8TopFrontEdge reports whether the endpoints a and b are, in either order,
+// the (3,0,20)-(37,0,20) top front edge of the P8 rounded plate.
+func P8TopFrontEdge(a, b r3.Vec) bool {
+	return (a == r3.NewVec(3, 0, 20) && b == r3.NewVec(37, 0, 20)) ||
+		(a == r3.NewVec(37, 0, 20) && b == r3.NewVec(3, 0, 20))
 }
