@@ -150,3 +150,45 @@ func TestPlacedHeldCopiesRefuseMalformedMesh(t *testing.T) {
 		})
 	}
 }
+
+func TestPlacedHeldCopiesChargeVertexDisplacement(t *testing.T) {
+	move, err := r3.Translation(r3.Vec{X: 1})
+	require.NoError(t, err)
+	source := shellAt(r3.Vec{})
+	image := placedShell(source, move)
+	image.Verts[3].Z += 0.25
+	parts, err := shellseparation.PlacedHeldShells(t.Context(), []shellseparation.HeldCopy{
+		{Verts: source.Verts, Tris: source.Tris, Linked: true},
+		{Verts: image.Verts, Tris: image.Tris, Linked: true},
+	}, []r3.Transform{r3.Identity(), move})
+	require.NoError(t, err)
+	require.Len(t, parts, 2)
+	require.Equal(t, make([]float64, 4), parts[0].VertexBound)
+	require.GreaterOrEqual(t, parts[1].VertexBound[3], 0.25)
+	require.GreaterOrEqual(t, parts[1].MeshBound, 0.25)
+	for _, bound := range parts[1].VertexBound[:3] {
+		require.Less(t, bound, 1e-12)
+	}
+}
+
+func TestPlacedHeldCopiesRefuseBrokenCorrespondence(t *testing.T) {
+	move, err := r3.Translation(r3.Vec{X: 1})
+	require.NoError(t, err)
+	source := shellAt(r3.Vec{})
+	image := placedShell(source, move)
+	first := shellseparation.HeldCopy{Verts: source.Verts, Tris: source.Tris, Linked: true}
+	second := shellseparation.HeldCopy{Verts: image.Verts, Tris: image.Tris, Linked: true}
+	moves := []r3.Transform{r3.Identity(), move}
+
+	for name, copies := range map[string][]shellseparation.HeldCopy{
+		"unlinked source": {{Verts: first.Verts, Tris: first.Tris}, second},
+		"unlinked copy":   {first, {Verts: second.Verts, Tris: second.Tris}},
+		"reordered facets": {first, {Verts: second.Verts,
+			Tris: [][3]int{second.Tris[1], second.Tris[0], second.Tris[2], second.Tris[3]}, Linked: true}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := shellseparation.PlacedHeldShells(t.Context(), copies, moves)
+			require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		})
+	}
+}

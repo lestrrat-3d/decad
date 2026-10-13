@@ -1,12 +1,28 @@
+// Package spiralsector checks the spiral first-join and inverse-copy gates.
 package spiralsector
 
 import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
+
+func ratZero() *big.Rat { return new(big.Rat) }
+
+func ratOne() *big.Rat { return big.NewRat(1, 1) }
+
+func ratF(v float64) *big.Rat { return proof.FloatRat(v) }
+
+func ratAdd(a, b *big.Rat) *big.Rat { return new(big.Rat).Add(a, b) }
+
+func ratSub(a, b *big.Rat) *big.Rat { return new(big.Rat).Sub(a, b) }
+
+func ratMul(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }
+
+func ratAbs(a *big.Rat) *big.Rat { return new(big.Rat).Abs(a) }
 
 func rationalDirection(sumY, sumZ float64) (*big.Rat, *big.Rat, bool) {
 	flip := sumY < -0.5*math.Hypot(sumY, sumZ)
