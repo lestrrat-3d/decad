@@ -5,6 +5,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -26,20 +27,20 @@ func revolveFarRootPoint(frame r3.Frame, cone Cone, slope, angle float64) (r3.Ve
 // revolveSectorCapBoundary closes the certified outside route with stations
 // on the root face. Every root station has an exact matching angular index in
 // the revolved section mesh.
-func revolveSectorCapBoundary(path []sectorPathNode, section revolveSectionCertificate,
-	frame r3.Frame, angles []float64, sector [2]float64) ([]sectorPathNode, error) {
+func revolveSectorCapBoundary(path []pointcone.SectorNode, section revolveSectionCertificate,
+	frame r3.Frame, angles []float64, sector [2]float64) ([]pointcone.SectorNode, error) {
 	if len(path) < 3 || len(angles) < 3 {
 		return nil, fmt.Errorf("%w: sector cap has no closed source route", ErrUnsupported)
 	}
-	nodes := append([]sectorPathNode(nil), path...)
+	nodes := append([]pointcone.SectorNode(nil), path...)
 	for _, i := range []int{0, len(nodes) - 1} {
-		nodes[i].rootBoundary = true
-		nodes[i].angle = math.Atan2(nodes[i].p.Z, nodes[i].p.Y) + 2*math.Pi
-		if nodes[i].angle < sector[0] || nodes[i].angle > sector[1] {
+		nodes[i].RootBoundary = true
+		nodes[i].Angle = math.Atan2(nodes[i].P.Z, nodes[i].P.Y) + 2*math.Pi
+		if nodes[i].Angle < sector[0] || nodes[i].Angle > sector[1] {
 			return nil, fmt.Errorf("%w: root contact is outside the angular sector", ErrUnsupported)
 		}
 	}
-	nodes[len(nodes)-1].groupToNext = -1
+	nodes[len(nodes)-1].GroupToNext = -1
 	root := make([]float64, 0, len(angles))
 	for _, angle := range angles {
 		if sector[0] < angle && angle < sector[1] {
@@ -52,17 +53,17 @@ func revolveSectorCapBoundary(path []sectorPathNode, section revolveSectionCerti
 		if !ok {
 			return fmt.Errorf("%w: root generator misses the source plane", ErrUnsupported)
 		}
-		nodes = append(nodes, sectorPathNode{p: point, groupToNext: -1,
-			crossing: -1, rootBoundary: true, angle: angle})
+		nodes = append(nodes, pointcone.SectorNode{P: point, GroupToNext: -1,
+			Crossing: -1, RootBoundary: true, Angle: angle})
 		return nil
 	}
-	if nodes[len(nodes)-1].angle == sector[1] {
+	if nodes[len(nodes)-1].Angle == sector[1] {
 		for _, angle := range slices.Backward(root) {
 			if err := appendRoot(angle); err != nil {
 				return nil, err
 			}
 		}
-	} else if nodes[len(nodes)-1].angle == sector[0] {
+	} else if nodes[len(nodes)-1].Angle == sector[0] {
 		for _, angle := range root {
 			if err := appendRoot(angle); err != nil {
 				return nil, err

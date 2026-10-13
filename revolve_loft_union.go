@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/r3"
 )
@@ -150,7 +151,7 @@ func tryRevolveLoftNextSectorUnion(ctx context.Context, op meshbool.OperationKin
 		jp.revolveLoftJoin.certificate == nil ||
 		jp.revolveLoftJoin.certificate.trim != p.revolveLoftSector.source ||
 		p.xform != p.revolveLoftSector.motion ||
-		!revolveAxisRotation(p.revolveLoftSector.motion) {
+		!massmoment.XAxisRotation(p.revolveLoftSector.motion) {
 		return nil, false, nil
 	}
 	record := jp.revolveLoftJoin

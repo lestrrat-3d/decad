@@ -20,8 +20,8 @@ type revolveSectorSamples struct {
 // two ordered section rings. The section walk, rather than a profile role,
 // selects the rings shared with the blank mesh.
 func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
-	section revolveSectionCertificate, nodes, original []sectorPathNode, caps [][3]int,
-	edges []sectorCapEdge, rootNode []int, record *pointConeTrimRecord,
+	section revolveSectionCertificate, nodes, original []pointcone.SectorNode, caps [][3]int,
+	edges []pointcone.SectorEdge, rootNode []int, record *pointConeTrimRecord,
 	motion r3.Transform, placedGroups []facetGroup, samples *revolveSectorSamples) (float64, float64, error) {
 	if mesh == nil || record == nil || record.base.pointSection == nil ||
 		len(nodes) != len(rootNode) || len(nodes) != len(original) || len(nodes) < 3 ||
@@ -71,7 +71,7 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		samples.down = make([]pointcone.Sample, len(nodes))
 	}
 	for i := range nodes {
-		far := original[i].p
+		far := original[i].P
 		var up, down pointcone.Sample
 		if samples.filled {
 			up, down = samples.up[i], samples.down[i]
@@ -90,7 +90,7 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		if down.Q-down.QError <= 1 {
 			return 0, 0, fmt.Errorf("%w: sector cap reaches its source plane", ErrUnsupported)
 		}
-		upperPoint, upperRound, err := sectorUpperCapNode(far, up, false)
+		upperPoint, upperRound, err := pointcone.UpperCapNode(far, up, false)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -129,15 +129,15 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		mesh.add([3]int{lower[tri[2]], lower[tri[1]], lower[tri[0]]}, lowerGroup)
 	}
 	for _, edge := range edges {
-		if edge.group < 0 {
+		if edge.Group < 0 {
 			continue
 		}
-		if edge.group >= len(record.base.groups)-1 {
+		if edge.Group >= len(record.base.groups)-1 {
 			return 0, 0, fmt.Errorf("%w: sector face role is missing", ErrUnsupported)
 		}
-		u, v := edge.u, edge.v
-		mesh.add([3]int{upper[u], lower[u], lower[v]}, baseGroup+edge.group)
-		mesh.add([3]int{upper[u], lower[v], upper[v]}, baseGroup+edge.group)
+		u, v := edge.U, edge.V
+		mesh.add([3]int{upper[u], lower[u], lower[v]}, baseGroup+edge.Group)
+		mesh.add([3]int{upper[u], lower[v], upper[v]}, baseGroup+edge.Group)
 	}
 	return maxRound, maxSnap, nil
 }

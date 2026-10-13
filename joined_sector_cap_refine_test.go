@@ -12,18 +12,18 @@ import (
 func TestSectorCapRefinementKeepsSharedEdges(t *testing.T) {
 	cone := &pointConeLimit{apex: big.NewRat(20, 1), slope: big.NewRat(1, 1)}
 	record := &pointConeTrimRecord{lower: cone, upper: cone}
-	nodes := []sectorPathNode{
-		{p: r3.NewVec(10, 5, 0), rootBoundary: true, angle: 0},
-		{p: r3.NewVec(10, 6, 0), rootBoundary: true, angle: 0.1},
-		{p: r3.NewVec(10, 5, 1)},
-		{p: r3.NewVec(10, 10, 10)},
+	nodes := []pointcone.SectorNode{
+		{P: r3.NewVec(10, 5, 0), RootBoundary: true, Angle: 0},
+		{P: r3.NewVec(10, 6, 0), RootBoundary: true, Angle: 0.1},
+		{P: r3.NewVec(10, 5, 1)},
+		{P: r3.NewVec(10, 10, 10)},
 	}
 	triangles := [][3]int{{0, 1, 2}, {1, 3, 2}}
-	edges := []sectorCapEdge{
-		{u: 0, v: 1, group: -1},
-		{u: 1, v: 3, group: 2},
-		{u: 3, v: 2, group: 3},
-		{u: 2, v: 0, group: 3},
+	edges := []pointcone.SectorEdge{
+		{U: 0, V: 1, Group: -1},
+		{U: 1, V: 3, Group: 2},
+		{U: 3, V: 2, Group: 3},
+		{U: 2, V: 0, Group: 3},
 	}
 	before, _, err := sectorConeCapBounds(nodes, triangles, record)
 	require.NoError(t, err)
@@ -36,10 +36,10 @@ func TestSectorCapRefinementKeepsSharedEdges(t *testing.T) {
 	after, _, err := sectorConeCapBounds(refined, cells, record)
 	require.NoError(t, err)
 	require.Less(t, after, before)
-	require.Equal(t, -1, perimeter[0].group)
-	require.Equal(t, -1, perimeter[1].group)
-	require.True(t, refined[perimeter[0].v].rootBoundary)
-	require.Equal(t, 0.05, refined[perimeter[0].v].angle)
+	require.Equal(t, -1, perimeter[0].Group)
+	require.Equal(t, -1, perimeter[1].Group)
+	require.True(t, refined[perimeter[0].V].RootBoundary)
+	require.Equal(t, 0.05, refined[perimeter[0].V].Angle)
 
 	counts := map[pointcone.Edge]int{}
 	for _, tri := range cells {
@@ -48,7 +48,7 @@ func TestSectorCapRefinementKeepsSharedEdges(t *testing.T) {
 		}
 	}
 	for _, edge := range perimeter {
-		require.Equal(t, 1, counts[pointcone.OrderedEdge(edge.u, edge.v)])
+		require.Equal(t, 1, counts[pointcone.OrderedEdge(edge.U, edge.V)])
 	}
 	for _, count := range counts {
 		require.LessOrEqual(t, count, 2)
