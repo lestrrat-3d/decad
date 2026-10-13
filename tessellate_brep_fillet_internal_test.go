@@ -146,13 +146,13 @@ func TestBrepFilletMotionCoversEnds(t *testing.T) {
 	delta := bp.faces[bp.loopBands[0].face].delta
 	require.Positive(t, delta)
 
-	topo, err := brepTopologyContext(t.Context(), bp)
+	btopo, err := brepTopologyContext(t.Context(), bp)
 	require.NoError(t, err)
-	bands, _, err := brepChordBands(t.Context(), bp, topo, 0.05)
+	bands, _, err := brepChordBands(t.Context(), bp, btopo, 0.05)
 	require.NoError(t, err)
 	n := 0
 	add := func([3]float64, proofbound.WalkEndBound) int { n++; return n - 1 }
-	e := topo.embeds[bands[0].band.face]
+	e := btopo.embeds[bands[0].band.face]
 	bands[0].place(e, add)
 	require.NoError(t, bands[0].placeRings(e, add))
 	store, round := make([]float64, n), make([]float64, n)

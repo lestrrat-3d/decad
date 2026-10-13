@@ -39,12 +39,12 @@ func (r *brepLoopRead) partialSelectedLoop() (brepLoopSel, []bool, bool) {
 	if len(r.matched) == 0 || r.matched[0] < 0 {
 		return brepLoopSel{}, nil, false
 	}
-	for _, firstUse := range r.topo.edges[r.matched[0]] {
-		u := r.topo.uses[firstUse]
+	for _, firstUse := range r.btopo.edges[r.matched[0]] {
+		u := r.btopo.uses[firstUse]
 		if u.Part != brepLoopSeg || !r.bp.faces[u.Face].planar() {
 			continue
 		}
-		selected := make([]bool, len(r.topo.planar[u.Face][u.Loop]))
+		selected := make([]bool, len(r.btopo.planar[u.Face][u.Loop]))
 		valid := true
 		for _, ei := range r.matched {
 			if ei < 0 {
@@ -52,8 +52,8 @@ func (r *brepLoopRead) partialSelectedLoop() (brepLoopSel, []bool, bool) {
 				break
 			}
 			found := false
-			for _, ui := range r.topo.edges[ei] {
-				v := r.topo.uses[ui]
+			for _, ui := range r.btopo.edges[ei] {
+				v := r.btopo.uses[ui]
 				if v.Part == brepLoopSeg && v.Face == u.Face && v.Loop == u.Loop {
 					selected[v.Seg] = true
 					found = true
@@ -95,7 +95,7 @@ func brepFilletPartialLoop(ctx context.Context, d *Document, bp brepPayload, cal
 			continue
 		}
 		ui := initial.loopUse[[3]int{sel.face, sel.loop, i}]
-		u := initial.topo.uses[ui]
+		u := initial.btopo.uses[ui]
 		if !u.Walk.IsLine() {
 			continue
 		}
@@ -106,7 +106,7 @@ func brepFilletPartialLoop(ctx context.Context, d *Document, bp brepPayload, cal
 			terminals[u.To] = true
 		}
 		for ordinal, ei := range initial.matched {
-			if ei == initial.topo.edgeOf[ui] {
+			if ei == initial.btopo.edgeOf[ui] {
 				lineCall.edges = append(lineCall.edges, call.edges[ordinal])
 				ordinals = append(ordinals, ordinal)
 				break
@@ -147,7 +147,7 @@ func brepFilletPartialLoop(ctx context.Context, d *Document, bp brepPayload, cal
 	if err := r.matchEdges(); err != nil {
 		return nil, err
 	}
-	planar := r.topo.planar[sel.face]
+	planar := r.btopo.planar[sel.face]
 	if sel.loop >= len(planar) || len(planar[sel.loop]) != len(selected) {
 		return nil, r.refuse("SL1", `restating the straight walls changed the selected planar loop`)
 	}
@@ -157,8 +157,8 @@ func brepFilletPartialLoop(ctx context.Context, d *Document, bp brepPayload, cal
 			return nil, r.refuse("SL1", `restating the straight walls lost a selected edge`)
 		}
 		found := false
-		for _, ui := range r.topo.edges[ei] {
-			u := r.topo.uses[ui]
+		for _, ui := range r.btopo.edges[ei] {
+			u := r.btopo.uses[ui]
 			if u.Face == sel.face && u.Loop == sel.loop && u.Part == brepLoopSeg &&
 				u.Seg >= 0 && u.Seg < len(again) {
 				again[u.Seg] = true
@@ -287,7 +287,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 	band := brepLoopBand{face: sel.face, loop: sel.loop, orig: cloneLoopRecord(orig),
 		setback: *r.call.loop, sigma: sel.sigma, kind: brepBandFillet,
 		selected: slices.Clone(selected), capWalk: capWalk, capArc: capArc, restore: restore}
-	eF := r.topo.embeds[sel.face]
+	eF := r.btopo.embeds[sel.face]
 	n := eF.Axis[2]
 	sideZ, sideDelta := band.sideLevel(f)
 	sideRef := eF.Canon(0, 0, sideZ)[n]
@@ -297,7 +297,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 			continue
 		}
 		b := sel.beside[i]
-		pu := r.topo.uses[b.use]
+		pu := r.btopo.uses[b.use]
 		if _, ok := restore[pu.Face]; !ok {
 			restore[pu.Face] = r.bp.faces[pu.Face]
 		}
@@ -309,7 +309,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 			a.delta = math.Max(a.delta, sideDelta)
 			continue
 		}
-		eA := r.topo.embeds[pu.Face]
+		eA := r.btopo.embeds[pu.Face]
 		local := eA.Sign[2]*sideRef + 0
 		if pu.Part == brepRim0 {
 			a.z0, a.z0Delta = local, proofbound.AbsSumUpper(math.Max(a.z0Delta, f.z0Delta), sideDelta)
@@ -392,8 +392,8 @@ func (r *brepLoopRead) partialTerminalBlend(sel brepLoopSel, orig, contour loopR
 	eb *brepEdgeBlend, k int, sideLevelRef float64) error {
 	v := eb.v[k]
 	seg := -1
-	for _, ui := range r.topo.edges[r.matched[eb.ordinal]] {
-		u := r.topo.uses[ui]
+	for _, ui := range r.btopo.edges[r.matched[eb.ordinal]] {
+		u := r.btopo.uses[ui]
 		if u.Face == sel.face && u.Loop == sel.loop && u.Part == brepLoopSeg {
 			seg = u.Seg
 			break
@@ -413,7 +413,7 @@ func (r *brepLoopRead) partialTerminalBlend(sel brepLoopSel, orig, contour loopR
 		return err
 	}
 	f := r.bp.faces[sel.face]
-	eF := r.topo.embeds[sel.face]
+	eF := r.btopo.embeds[sel.face]
 	var capRef [3]float64
 	switch {
 	case eF.Canon(ow.StartU, ow.StartV, f.z0) == v:
@@ -429,7 +429,7 @@ func (r *brepLoopRead) partialTerminalBlend(sel brepLoopSel, orig, contour loopR
 	centreRef := capRef
 	centreRef[n] = sideRef[n]
 	endFace := r.bp.faces[eb.end[k].face]
-	eEnd := r.topo.embeds[eb.end[k].face]
+	eEnd := r.btopo.embeds[eb.end[k].face]
 	capLocal, sideLocal, centreLocal := eEnd.Local(capRef), eEnd.Local(sideRef), eEnd.Local(centreRef)
 	if capLocal[2] != endFace.z0 || sideLocal[2] != endFace.z0 || centreLocal[2] != endFace.z0 {
 		return r.refuse("SL2", `a terminal cap foot leaves its end face`)

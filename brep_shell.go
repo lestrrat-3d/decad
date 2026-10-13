@@ -97,7 +97,7 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 		zloDelta: record.ZloDelta, zhiDelta: record.ZhiDelta}
 
 	// TC4 and TC5: the tools, read through the record's own pairing.
-	topo, err := brepTopologyContext(ctx, bp)
+	btopo, err := brepTopologyContext(ctx, bp)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return throughCut{}, "", false, ctxErr
@@ -111,7 +111,7 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 		}
 	}
 	reads, reason, err := brepgeom.ReadThroughTools(ctx,
-		&brepgeom.Topology{Uses: topo.uses, Edges: topo.edges, EdgeOf: topo.edgeOf, FaceUses: topo.faceUses},
+		&brepgeom.Topology{Uses: btopo.uses, Edges: btopo.edges, EdgeOf: btopo.edgeOf, FaceUses: btopo.faceUses},
 		faces, embeds, tc.kinds, bp.faces[0].frame)
 	if err != nil || reason != "" {
 		return throughCut{}, reason, false, err

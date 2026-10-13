@@ -68,13 +68,13 @@ type brepBandChord struct {
 // samples its wall must take. A wall two bands reach must take one count from
 // both, or the body refuses. A fillet band adds its interior ring count
 // (docs/loop-fillet-design.md §7.1).
-func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, chord float64) ([]brepBandChord, map[int]tessellation.ChordSamples[*Face], error) {
+func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, chord float64) ([]brepBandChord, map[int]tessellation.ChordSamples[*Face], error) {
 	if len(bp.loopBands) == 0 && bp.bossShell == nil && bp.pocketShell == nil {
 		return nil, nil, nil
 	}
 	openAt := map[brepgeom.EdgeKey]int{}
-	for _, ui := range topo.open {
-		openAt[topo.uses[ui].Key] = ui
+	for _, ui := range btopo.open {
+		openAt[btopo.uses[ui].Key] = ui
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
@@ -106,7 +106,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 		}
 		sideZ, sideDelta := b.sideLevel(f)
 		bc := brepBandChord{band: b, face: f, cbp: cbp, lm: lm, start: b.matSign(f) > 0, sideZ: sideZ, sideDelta: sideDelta}
-		e := topo.embeds[b.face]
+		e := btopo.embeds[b.face]
 		for i, w := range lm.walks {
 			key, _ := brepgeom.CurveKey(e, w.SegmentWalk, sideZ)
 			ui, ok := openAt[key]
@@ -114,14 +114,14 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 				return nil, nil, fmt.Errorf(`%w: chamfer band %d's side contour is not a boundary of the record`, ErrUnsupported, bi)
 			}
 			bc.sideUse = append(bc.sideUse, ui)
-			u := topo.uses[ui]
+			u := btopo.uses[ui]
 			if !brepIsRim(u.Part) {
 				continue
 			}
 			wallFace := bp.faces[u.Face]
 			samples, err := tessellation.ImposeBandWall[*Face](tessellation.BandWallInput{
-				FaceEmbed: e, WallEmbed: topo.embeds[u.Face],
-				WallSegment: wallFace.wall, WallWalk: topo.walls[u.Face],
+				FaceEmbed: e, WallEmbed: btopo.embeds[u.Face],
+				WallSegment: wallFace.wall, WallWalk: btopo.walls[u.Face],
 				WalkIndex: i, SideLevel: sideZ, WallHeight: wallFace.z1 - wallFace.z0,
 				Counts: lm.count, SideStarts: lm.sideStart, SidePoints: point2ToRecordSlice(lm.sidePts),
 				SideBounds: lm.sideBound, SideSag: lm.sideSag,
@@ -184,7 +184,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 			// The upper cavity wall starts on the band's smaller circle.
 			// Impose the band's count and stations on that wall so the
 			// quarter torus and cylinder have one shared rim mesh.
-			e := topo.embeds[shell.ledgeFace]
+			e := btopo.embeds[shell.ledgeFace]
 			seg := region.Outer.Segments[0]
 			w, err := boundarywalk.WalkOf(seg, nil)
 			if err != nil {
@@ -192,13 +192,13 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 			}
 			key, _ := brepgeom.CurveKey(e, w, shell.interfaceZ)
 			ui, ok := openAt[key]
-			if !ok || !brepIsRim(topo.uses[ui].Part) {
+			if !ok || !brepIsRim(btopo.uses[ui].Part) {
 				return nil, nil, fmt.Errorf(`%w: round boss shell cap ring has no cavity wall`, ErrUnsupported)
 			}
-			face := topo.uses[ui].Face
+			face := btopo.uses[ui].Face
 			samples, err := tessellation.ImposeBandWall[*Face](tessellation.BandWallInput{
-				FaceEmbed: e, WallEmbed: topo.embeds[face],
-				WallSegment: bp.faces[face].wall, WallWalk: topo.walls[face],
+				FaceEmbed: e, WallEmbed: btopo.embeds[face],
+				WallSegment: bp.faces[face].wall, WallWalk: btopo.walls[face],
 				WalkIndex: 0, SideLevel: shell.interfaceZ,
 				WallHeight: bp.faces[face].z1 - bp.faces[face].z0,
 				Counts:     lm.count, SideStarts: lm.sideStart,
@@ -235,7 +235,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 		bc := brepBandChord{band: b, face: f, cbp: cbp, lm: lm, start: b.matSign(f) > 0,
 			sideZ: sideZ, sideDelta: sideDelta, pocketShell: true,
 			fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), bandChord)}}
-		e := topo.embeds[b.face]
+		e := btopo.embeds[b.face]
 		for i, w := range lm.walks {
 			key, _ := brepgeom.CurveKey(e, w.SegmentWalk, sideZ)
 			ui, ok := openAt[key]
@@ -243,14 +243,14 @@ func brepChordBands(ctx context.Context, bp brepPayload, topo *brepTopology, cho
 				return nil, nil, fmt.Errorf(`%w: blind-pocket shell side ring is not a boundary of the record`, ErrUnsupported)
 			}
 			bc.sideUse = append(bc.sideUse, ui)
-			u := topo.uses[ui]
+			u := btopo.uses[ui]
 			if !brepIsRim(u.Part) {
 				continue
 			}
 			wallFace := bp.faces[u.Face]
 			samples, err := tessellation.ImposeBandWall[*Face](tessellation.BandWallInput{
-				FaceEmbed: e, WallEmbed: topo.embeds[u.Face],
-				WallSegment: wallFace.wall, WallWalk: topo.walls[u.Face],
+				FaceEmbed: e, WallEmbed: btopo.embeds[u.Face],
+				WallSegment: wallFace.wall, WallWalk: btopo.walls[u.Face],
 				WalkIndex: i, SideLevel: sideZ, WallHeight: wallFace.z1 - wallFace.z0,
 				Counts: lm.count, SideStarts: lm.sideStart, SidePoints: point2ToRecordSlice(lm.sidePts),
 				SideBounds: lm.sideBound, SideSag: lm.sideSag,

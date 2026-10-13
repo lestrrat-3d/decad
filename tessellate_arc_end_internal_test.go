@@ -183,7 +183,7 @@ func TestBrepChordWallReachesArcNaturalEnd(t *testing.T) {
 	got := arcEndTombstone(t)
 	bp, ok := got.payload.(brepPayload)
 	require.True(t, ok, `got %T`, got.payload)
-	topo, err := brepTopologyContext(t.Context(), bp)
+	btopo, err := brepTopologyContext(t.Context(), bp)
 	require.NoError(t, err)
 	checked := 0
 	for fi, f := range bp.faces {
@@ -192,7 +192,7 @@ func TestBrepChordWallReachesArcNaturalEnd(t *testing.T) {
 			continue
 		}
 		require.Equal(t, 1.0, arc.TEnd, `the wall keeps the arc's natural end`)
-		w, e := topo.walls[fi], topo.embeds[fi]
+		w, e := btopo.walls[fi], btopo.embeds[fi]
 		bounds := map[[3]float64]proofbound.WalkEndBound{}
 		var index int
 		capture := func(c [3]float64, b proofbound.WalkEndBound) int {

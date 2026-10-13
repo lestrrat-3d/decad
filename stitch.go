@@ -662,7 +662,7 @@ func reverseFaceOrientation(f *Face) {
 }
 
 func stitchTopology(faces []*Face) stitchweld.Topology[*Face, *Edge] {
-	topo := stitchweld.Topology[*Face, *Edge]{
+	btopo := stitchweld.Topology[*Face, *Edge]{
 		Faces: faces, Uses: map[*Face][]stitchweld.Use[*Edge]{}, Adjacent: map[*Edge][]*Face{},
 	}
 	queue := append([]*Face(nil), faces...)
@@ -678,13 +678,13 @@ func stitchTopology(faces []*Face) stitchweld.Topology[*Face, *Edge] {
 		for _, l := range f.loops {
 			for _, ce := range l.coedges {
 				uses = append(uses, stitchweld.Use[*Edge]{Edge: ce.edge, Forward: ce.forward})
-				topo.Adjacent[ce.edge] = ce.edge.faces
+				btopo.Adjacent[ce.edge] = ce.edge.faces
 				queue = append(queue, ce.edge.faces...)
 			}
 		}
-		topo.Uses[f] = uses
+		btopo.Uses[f] = uses
 	}
-	return topo
+	return btopo
 }
 
 // deriveStitchOrientation derives one consistent orientation across the

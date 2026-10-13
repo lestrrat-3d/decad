@@ -45,7 +45,7 @@ type brepWallMesh struct {
 // RequireClosedMesh proves it. A mesh vertex is keyed by its reference
 // coordinates (brepEmbeds), which a signed permutation states exactly.
 func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64, verify Verification) (*Mesh, error) {
-	topo, err := brepTopologyContext(ctx, bp)
+	btopo, err := brepTopologyContext(ctx, bp)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		return face, nil
 	}
 
-	bands, imposed, err := brepChordBands(ctx, bp, topo, budget)
+	bands, imposed, err := brepChordBands(ctx, bp, btopo, budget)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	}
 	faceTrim := map[*Face]float64{}
 	faceAxial := map[*Face]float64{}
-	edgePoly := make([][]int, len(topo.edges))
+	edgePoly := make([][]int, len(btopo.edges))
 	walls := map[int]brepWallMesh{}
 	work := freeform.NewFreeformWork()
 	for fi, f := range bp.faces {
@@ -126,27 +126,27 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		if s, ok := imposed[fi]; ok {
 			samples = &s
 		}
-		wm, err := brepChordWall(ctx, f, topo.walls[fi], topo.embeds[fi], face, budget, work, samples, addVertex)
+		wm, err := brepChordWall(ctx, f, btopo.walls[fi], btopo.embeds[fi], face, budget, work, samples, addVertex)
 		if err != nil {
 			return nil, err
 		}
 		walls[fi] = wm
-		for _, ui := range topo.faceUses[fi] {
+		for _, ui := range btopo.faceUses[fi] {
 			// A rim on a band's side contour is open: the band, not another
 			// face, meets it, and no edge holds its polyline.
-			switch u := topo.uses[ui]; u.Part {
+			switch u := btopo.uses[ui]; u.Part {
 			case brepRim0:
-				if ei := topo.edgeOf[ui]; ei >= 0 {
+				if ei := btopo.edgeOf[ui]; ei >= 0 {
 					edgePoly[ei] = wm.bottom
 				}
 			case brepRim1:
-				if ei := topo.edgeOf[ui]; ei >= 0 {
+				if ei := btopo.edgeOf[ui]; ei >= 0 {
 					edgePoly[ei] = wm.top
 				}
 			case brepSide0, brepSide1:
 				// The piece's two vertices are the wall's own row ends at
 				// its levels, keyed by the same reference coordinates.
-				edgePoly[topo.edgeOf[ui]] = []int{addVertex(u.DirFrom, proofbound.WalkEndBound{}), addVertex(u.DirTo, proofbound.WalkEndBound{})}
+				edgePoly[btopo.edgeOf[ui]] = []int{addVertex(u.DirFrom, proofbound.WalkEndBound{}), addVertex(u.DirTo, proofbound.WalkEndBound{})}
 			}
 		}
 		for j := 0; j+1 < len(wm.cols); j++ {
@@ -158,7 +158,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		faceAxial[face] = proofbound.AbsSumUpper(math.Max(f.z0Delta, f.z1Delta), f.delta)
 		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, wm.wallSlack)
 	}
-	if err := brepWallClearance(ctx, bp, topo, walls, canon); err != nil {
+	if err := brepWallClearance(ctx, bp, btopo, walls, canon); err != nil {
 		return nil, err
 	}
 
@@ -168,14 +168,14 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	bandsOf := map[int][]int{}
 	terminalPoly := map[int][]int{}
 	for bi := range bands {
-		bands[bi].place(topo.embeds[bands[bi].band.face], addVertex)
+		bands[bi].place(btopo.embeds[bands[bi].band.face], addVertex)
 		if bands[bi].fillet != nil {
-			if err := bands[bi].placeRings(topo.embeds[bands[bi].band.face], addVertex); err != nil {
+			if err := bands[bi].placeRings(btopo.embeds[bands[bi].band.face], addVertex); err != nil {
 				return nil, err
 			}
 		}
 		if bands[bi].partial != nil {
-			polys, err := bands[bi].partialOpenPolys(topo, canon)
+			polys, err := bands[bi].partialOpenPolys(btopo, canon)
 			if err != nil {
 				return nil, err
 			}
@@ -201,8 +201,8 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		if err != nil {
 			return nil, err
 		}
-		e := topo.embeds[fi]
-		loops := make([][]int, len(topo.planar[fi]))
+		e := btopo.embeds[fi]
+		loops := make([][]int, len(btopo.planar[fi]))
 		loopSag := make([]float64, len(loops))
 		var pts []planePoint
 		var meshIdx []int
@@ -211,19 +211,19 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		for _, bi := range bandsOf[fi] {
 			ringLoop[bands[bi].band.loop] = bi
 		}
-		for _, ui := range topo.faceUses[fi] {
-			u := topo.uses[ui]
-			ei := topo.edgeOf[ui]
+		for _, ui := range btopo.faceUses[fi] {
+			u := btopo.uses[ui]
+			ei := btopo.edgeOf[ui]
 			var poly []int
 			switch {
 			case ei >= 0:
-				owner := topo.uses[topo.edges[ei][0]]
+				owner := btopo.uses[btopo.edges[ei][0]]
 				poly = edgePoly[ei]
 				if poly == nil {
 					poly = []int{addVertex(owner.DirFrom, owner.StartBound()), addVertex(owner.DirTo, owner.EndBound())}
 					edgePoly[ei] = poly
 				}
-				if !topo.forward(ui) {
+				if !btopo.forward(ui) {
 					poly = slices.Clone(poly)
 					slices.Reverse(poly)
 				}
@@ -375,13 +375,13 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			return nil, err
 		}
 		if f.planar() {
-			region := brepPlanarDisplacement(f, topo.planar[fi])
+			region := brepPlanarDisplacement(f, btopo.planar[fi])
 			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, region)
 			terms = append(terms, proofbound.ProductUpper(f.z0Delta,
 				proofbound.AbsSumUpper(areaUpper[face], faceCapSlack[face], region)))
 			continue
 		}
-		w := topo.walls[fi]
+		w := btopo.walls[fi]
 		height := proofbound.UpRound(f.z1 - f.z0)
 		moved := proofbound.AbsSumUpper(height, f.z0Delta, f.z1Delta)
 		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
@@ -548,7 +548,7 @@ func brepZipColumns(a, b []int, za, zb []float64, emit func([3]int)) {
 // per-slab loop clearance the stacked tessellator proves, read per wall pair.
 // Each open wall polyline is walked out and back so the loop clearance reader
 // measures exactly its own chords.
-func brepWallClearance(ctx context.Context, bp brepPayload, topo *brepTopology, walls map[int]brepWallMesh, canon [][3]float64) error {
+func brepWallClearance(ctx context.Context, bp brepPayload, btopo *brepTopology, walls map[int]brepWallMesh, canon [][3]float64) error {
 	type wallLine struct {
 		axis   int
 		lo, hi float64
@@ -561,7 +561,7 @@ func brepWallClearance(ctx context.Context, bp brepPayload, topo *brepTopology, 
 		if !ok {
 			continue
 		}
-		e := topo.embeds[fi]
+		e := btopo.embeds[fi]
 		k := e.Axis[2]
 		lo, hi := e.Sign[2]*f.z0, e.Sign[2]*f.z1
 		if lo > hi {
