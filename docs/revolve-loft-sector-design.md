@@ -128,6 +128,14 @@ this route supplies the certified joined ring's largest step and requires a
 0.1 mm result boundary bound. The rewrite limits stations to 2,304, audited
 triangles to 1,321,696 and audit scans to 400 million. It checks connected
 orientation, vertex links and triangle contacts before building a result.
+The result audit proposes each copied face group and each half-annulus as a
+projected YZ patch. It proves each patch from the result triangles; failed
+proposals retain every pair. Only pairs inside a proven patch leave the exact
+contact audit. Cross-patch, patch-to-wall and all unproved pairs remain in it.
+The grouped box tree counts its work under the same 400-million ceiling.
+Above one million candidates, its row queries are separately preflighted
+under that ceiling and classified in bounded batches without a complete pair
+list. The result does not reuse the earlier Union's contact verdict.
 The occupied-volume allowance adds the cylinder's radial shell to the
 joined allowance. A clipped band also adds its side shell and crossing slab.
 The area allowance includes the held areas and new wall. Failed checks leave

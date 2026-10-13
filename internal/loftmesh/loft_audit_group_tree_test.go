@@ -53,6 +53,22 @@ func TestGroupedTreeScanKeepsExactlyUnprovedBoxPairs(t *testing.T) {
 		}
 	}
 	require.Equal(t, want, got)
+	for i := range tris {
+		var row []int
+		rowWork, rowExceeded, rowErr := scan.visitRow(proofbound.NewWorkBudget(t.Context()),
+			i, math.MaxUint64, func(j int) { row = append(row, j) })
+		require.NoError(t, rowErr)
+		require.False(t, rowExceeded)
+		require.GreaterOrEqual(t, rowWork, uint64(len(row)))
+		slices.Sort(row)
+		var expected []int
+		for _, pair := range want {
+			if pair[0] == i {
+				expected = append(expected, pair[1])
+			}
+		}
+		require.Equal(t, expected, row)
+	}
 	limited, exceeded, err := scan.visit(proofbound.NewWorkBudget(t.Context()), 1,
 		func(i, j int) {})
 	require.NoError(t, err)

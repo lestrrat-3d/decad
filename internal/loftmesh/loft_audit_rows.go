@@ -15,11 +15,16 @@ import (
 // candidate list or one result byte per candidate in the complete audit.
 const loftAuditCandidateBatchSize = 1_000_000
 
+type loftRowScan interface {
+	visitRow(budget *proofbound.WorkBudget, i int, limit uint64,
+		fn func(j int)) (uint64, bool, error)
+}
+
 // preflightLoftRows runs before exact preparation or any S7 classification.
 // The count from the selected S8 scanner remains authoritative. This second
 // bounded scan proves the row-ordered producer fits the same ceiling and
 // reports the same candidate count for every triangle.
-func preflightLoftRows(budget *proofbound.WorkBudget, tree treeScan, members, starts []int,
+func preflightLoftRows(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
 	ceiling uint64) error {
 	var scanned uint64
 	for _, i := range members {
@@ -44,7 +49,7 @@ func preflightLoftRows(budget *proofbound.WorkBudget, tree treeScan, members, st
 // classifier in ascending i order, and each row's j partners are sorted.
 // Its replay therefore returns the same first failure and work counts as a
 // complete lexicographic candidate list.
-func streamLoftPairs(budget *proofbound.WorkBudget, tree treeScan, members, starts []int,
+func streamLoftPairs(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
 	count, ceiling uint64, batchSize int, tris [][3]int, boxes [][2]r3.Vec, data *LoftAuditData,
 	shortcuts LoftAuditShortcuts, work *LoftAuditWork, testPair func(i, j int) error) (int, int, error) {
 	batch := loftCandidates{

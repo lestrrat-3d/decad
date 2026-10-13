@@ -22,5 +22,6 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_sector_placement.go` | Checks axis placements, complete-source separation and angular gaps. See revolve-loft-sector design. |
 | `revolve_sector_cylinder_cut.go` | Admits a centered cylinder and rewrites certified Revolve/sector cap fans as annuli. See revolve-loft-sector design. |
 | `revolve_sector_cylinder_band.go` | Rewrites one exact straight meridian-band crossing for a centered cylinder Cut. See revolve-loft-sector design. |
+| `revolve_sector_bore_patches.go` | Proposes source-group and half-annulus projected patches for the centered cylinder Cut audit. See revolve-loft-sector design. |
 | `joined_sector_cap.go` | Triangulates and refines source-labeled sector caps with shared root stations. See revolve-loft-sector design. |
 | `joined_sector_cap_refine.go` | Refines cone-mapped sector cap cells with shared edges. See revolve-loft-sector design. |

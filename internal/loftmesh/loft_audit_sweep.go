@@ -90,6 +90,18 @@ func LoftCrossingAuditBoundedProjectedPatches(budget *proofbound.WorkBudget,
 	return err
 }
 
+// LoftCrossingAuditBoundedProjectedPatchesStreaming uses bounded row batches
+// for a large candidate set. Callers use it only when retaining the complete
+// projected-patch candidate list would exceed their memory allowance; its
+// row preflight must independently fit within maxScans.
+func LoftCrossingAuditBoundedProjectedPatchesStreaming(budget *proofbound.WorkBudget,
+	verts []r3.Vec, tris [][3]int, patches []ProjectedPatch,
+	maxTriangles int, maxScans uint64) error {
+	_, err := loftCrossingAuditLimitedWithStreaming(budget, verts, tris, nil,
+		loftGenericShortcuts, maxScans, maxTriangles, true, true, patches...)
+	return err
+}
+
 // LoftCrossingAuditWork is LoftCrossingAudit's body, with each S7 shortcut
 // under its own explicit per-call switch (LoftAuditShortcuts) and the pair
 // loop's own work counts returned to the caller. CapProof has no effect here:
@@ -199,6 +211,13 @@ func loftCrossingAudit(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]
 func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
 	structure *LoftAuditStructure, shortcuts LoftAuditShortcuts, ceiling uint64,
 	triangleLimit int, parallelPairs bool, patches ...ProjectedPatch) (LoftAuditWork, error) {
+	return loftCrossingAuditLimitedWithStreaming(budget, verts, tris, structure,
+		shortcuts, ceiling, triangleLimit, parallelPairs, false, patches...)
+}
+
+func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
+	structure *LoftAuditStructure, shortcuts LoftAuditShortcuts, ceiling uint64,
+	triangleLimit int, parallelPairs, streamProjected bool, patches ...ProjectedPatch) (LoftAuditWork, error) {
 	var work LoftAuditWork
 	if err := budget.Err(); err != nil {
 		return work, err
@@ -350,21 +369,30 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 		return work, errLoftAuditCeiling()
 	}
 	work.Candidates = int(count)
-	streamed := data == nil && structure == nil && shortcuts.Sweep && provenPatches == 0 &&
+	streamed := data == nil && structure == nil && shortcuts.Sweep &&
+		(provenPatches == 0 || streamProjected) &&
 		parallelPairs && count > loftAuditCandidateBatchSize
-	var rowTree treeScan
+	var rowTree loftRowScan
 	if streamed {
-		var ok bool
-		rowTree, ok = order.(treeScan)
-		if !ok {
-			rowTree = newTreeScan(boxes, members)
+		if provenPatches != 0 {
+			grouped, ok := order.(groupedTreeScan)
+			if !ok {
+				return work, fmt.Errorf("%w: proven loft patches lack a grouped scan", decaderr.ErrUnsupported)
+			}
+			rowTree = grouped
+		} else {
+			var ok bool
+			rowTree, ok = order.(treeScan)
+			if !ok {
+				rowTree = newTreeScan(boxes, members)
+			}
 		}
 		if err := preflightLoftRows(budget, rowTree, members, starts, ceiling); err != nil {
 			return work, err
 		}
 	}
 	var cands loftCandidates
-	sparse := data == nil && structure == nil && shortcuts.Sweep && provenPatches != 0
+	sparse := data == nil && structure == nil && shortcuts.Sweep && provenPatches != 0 && !streamed
 	if sparse {
 		var err error
 		cands, err = sweepCandidates(budget, order, starts, count, keepEveryPair)

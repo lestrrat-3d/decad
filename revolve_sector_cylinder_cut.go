@@ -349,6 +349,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		mesh.verts = append(mesh.verts, high)
 		vertexBound = append(vertexBound, boreBound)
 	}
+	oldCount := len(mesh.tris)
 	for i := range n {
 		j := (i + 1) % n
 		mesh.add([3]int{caps.lowOuter[i], innerLow[i], innerLow[j]}, caps.lowGroup)
@@ -367,8 +368,9 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	if len(mesh.tris) != len(joined.tris)+4*n {
 		return nil, true, fmt.Errorf("%w: cap and wall triangle census changed", ErrUnsupported)
 	}
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
-		mesh.verts, mesh.tris, revolveSectorBoreMaxAuditTriangles,
+	patches := revolveSectorBorePatches(mesh, oldCount, n, false, caps, -1, wallGroup)
+	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
+		mesh.verts, mesh.tris, patches, revolveSectorBoreMaxAuditTriangles,
 		revolveSectorBoreMaxAuditScans); err != nil {
 		return nil, true, err
 	}
