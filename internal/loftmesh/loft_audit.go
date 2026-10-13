@@ -2,7 +2,6 @@ package loftmesh
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -774,7 +773,7 @@ func ProjectionPairIndex(u, v int) int {
 // range test and are left to the exact path.
 func triangleOpenFloat(a, b, c r3.Vec) bool {
 	for _, x := range [...]float64{a.X, a.Y, a.Z, b.X, b.Y, b.Z, c.X, c.Y, c.Z} {
-		m := math.Abs(x)
+		m := proof.Abs(x)
 		if !(m == 0 || m >= 0x1p-300 && m <= 0x1p300) {
 			return false
 		}
@@ -789,6 +788,6 @@ func triangleOpenFloat(a, b, c r3.Vec) bool {
 func orientFloatProven(p, q, r, s float64) bool {
 	left, right := float64(p*s), float64(q*r)
 	det := left - right
-	bound := (math.Abs(left) + math.Abs(right)) * 0x1p-50
-	return math.Abs(det) > bound
+	bound := (proof.Abs(left) + proof.Abs(right)) * 0x1p-50
+	return proof.Abs(det) > bound
 }
