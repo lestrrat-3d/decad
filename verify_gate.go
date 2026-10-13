@@ -143,7 +143,13 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return d, ok, nil
 	}
 	if payload, ok := body.payload.(twistedSweepPayload); ok {
-		d, ok, err := diameter.PointsContext(ctx, payload.held.verts)
+		points := payload.held.verts
+		if payload.mesh != nil {
+			// The stationed build sews several Lofts into this authenticated
+			// mesh. Its held Loft field is empty; delta bounds these vertices.
+			points = payload.mesh.vertices
+		}
+		d, ok, err := diameter.PointsContext(ctx, points)
 		if err != nil || !ok {
 			return d, ok, err
 		}

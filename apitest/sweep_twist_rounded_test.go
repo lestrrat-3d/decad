@@ -13,6 +13,10 @@ import (
 )
 
 func roundedTwistProfile(t *testing.T, offsetX float64) (*sketch.Sketch, *sketch.Profile) {
+	return roundedTwistProfileSized(t, offsetX, 4, 2, 0.5)
+}
+
+func roundedTwistProfileSized(t *testing.T, offsetX, width, height, radius float64) (*sketch.Sketch, *sketch.Profile) {
 	t.Helper()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -22,17 +26,21 @@ func roundedTwistProfile(t *testing.T, offsetX float64) (*sketch.Sketch, *sketch
 		s.Fix(p)
 		return p
 	}
+	left, right := -width/2, width/2
+	bottom, top := -height/2, height/2
 	ends := [8]*sketch.Point{
-		point(-1.5, -1), point(1.5, -1), point(2, -0.5), point(2, 0.5),
-		point(1.5, 1), point(-1.5, 1), point(-2, 0.5), point(-2, -0.5),
+		point(left+radius, bottom), point(right-radius, bottom),
+		point(right, bottom+radius), point(right, top-radius),
+		point(right-radius, top), point(left+radius, top),
+		point(left, top-radius), point(left, bottom+radius),
 	}
 	for i := 0; i < 8; i += 2 {
 		s.CreateLine(ends[i], ends[(i+1)%8])
 	}
-	s.CreateArc(point(1.5, -0.5), ends[1], ends[2])
-	s.CreateArc(point(1.5, 0.5), ends[3], ends[4])
-	s.CreateArc(point(-1.5, 0.5), ends[5], ends[6])
-	s.CreateArc(point(-1.5, -0.5), ends[7], ends[0])
+	s.CreateArc(point(right-radius, bottom+radius), ends[1], ends[2])
+	s.CreateArc(point(right-radius, top-radius), ends[3], ends[4])
+	s.CreateArc(point(left+radius, top-radius), ends[5], ends[6])
+	s.CreateArc(point(left+radius, bottom+radius), ends[7], ends[0])
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	var profile *sketch.Profile
@@ -44,6 +52,32 @@ func roundedTwistProfile(t *testing.T, offsetX float64) (*sketch.Sketch, *sketch
 	}
 	require.NotNil(t, profile)
 	return s, profile
+}
+
+func TestSweepTwistRoundedProfileVerifyUsesHeldDiameter(t *testing.T) {
+	s, profile := roundedTwistProfileSized(t, 0, 8, 6, 1.5)
+	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
+	require.NoError(t, err)
+	doc := decad.New()
+	body, err := decad.Sweep(t.Context(), doc, s, profile, path,
+		decad.WithSweepTwist(units.Degrees(30)))
+	require.NoError(t, err)
+	require.True(t, body.IsSolid())
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+	require.Len(t, report.Bodies, 1)
+	row := report.Bodies[0]
+	require.Equal(t, decad.ValidityValid, row.Validity.Outcome)
+	require.Equal(t, decad.ToleranceExceeded, row.Area.Tolerance.State)
+	require.Equal(t, decad.ToleranceExceeded, row.Bounds.Tolerance.State)
+	require.NotNil(t, row.Region)
+	require.Equal(t, decad.ToleranceSatisfied, row.Region.Volume.Tolerance.State)
+	require.Len(t, row.Diagnostics, 2)
+	require.Equal(t, decad.DiagMeasurementBeyondTolerance, row.Diagnostics[0].Code)
+	require.Equal(t, decad.ReadingArea, row.Diagnostics[0].Reading)
+	require.Equal(t, decad.DiagMeasurementBeyondTolerance, row.Diagnostics[1].Code)
+	require.Equal(t, decad.ReadingBounds, row.Diagnostics[1].Reading)
 }
 
 // A solved Sketch supplies the mixed boundary; the real Sweep and tessellator
