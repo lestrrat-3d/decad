@@ -79,6 +79,7 @@ The rules for rows live in `docs/layout.md`.
 | `seam.go` | Sketch recording adapters and `MeasureProfile`. See sketch-seam §1–§2. |
 | `section.go` | Public planar section query over certified prism records. See section design. |
 | `section_circle_axis.go` | Exact whole-circle prism section on a cardinal plane with an exact chord. See section design. |
+| `section_rectangle_axis.go` | Exact rectangular-prism section on an interior cardinal vertical plane. See section design. |
 | `path.go` | The immutable spatial `Path`, sealed segments and `internal/sweepinput/` record adapter. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |

@@ -120,7 +120,10 @@
 1	0.01	TestSectionCardinalCylinderRefusesUnprovedOffsetChords
 1	0.01	TestSectionCardinalCylinderRefusesUnprovedPlanes
 1	0.01	TestSectionCardinalCylinderSketchFeedsVerifiedExtrude
-1	0.00	TestSectionCardinalPlaneRefusesNoncircularSource
+1	0.01	TestSectionCardinalRectangleFeedsVerifiedExtrude
+1	0.01	TestSectionCardinalRectanglePlacementAndAxisSense
+1	0.01	TestSectionCardinalRectangleRefusesTouchAndOtherSources
+1	0.00	TestSectionCardinalPlaneRefusesNonrectangularPolygon
 1	0.00	TestSectionPlacedPrismKeepsHole
 1	0.00	TestSectionRefusesInvalidOrNonparallelPlane
 1	0.00	TestSectionSketchFeedsExtrude

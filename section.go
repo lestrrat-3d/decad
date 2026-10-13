@@ -18,7 +18,8 @@ import (
 //
 // One class is an exact straight prism cut strictly between its caps by a
 // plane whose frame preserves the prism's recorded section coordinates.
-// Another is a whole-circle prism cut by a cardinal plane with an exact chord.
+// Other classes are a whole-circle prism cut by a cardinal plane with an exact
+// chord and a rectangular prism cut by an interior cardinal vertical plane.
 // Other body or plane classes return [ErrUnsupported]. A nil body or context,
 // or an invalid plane, returns [ErrDegenerate]. A sheet or unsound solid returns
 // [ErrNotSolid]. See docs/section-design.md.
@@ -40,6 +41,9 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 	if !prismSectionPlaneInside(pp, plane) {
 		var admitted bool
 		profile, admitted = cardinalCircleSectionRecord(pp, plane)
+		if !admitted {
+			profile, admitted = cardinalRectangleSectionRecord(pp, plane)
+		}
 		if !admitted {
 			return nil, nil, fmt.Errorf(`%w: section plane does not cross an admitted exact prism section`, ErrUnsupported)
 		}

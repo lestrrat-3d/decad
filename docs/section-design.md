@@ -74,6 +74,27 @@ profile on the requested plane through Sketch and require its fresh recorded
 profile to match that exact rectangle. The parallel class keeps its existing
 circle result and its cap-plane refusal.
 
+## Cardinal vertical plane of an exact rectangular prism
+
+This class admits a hole-free exact straight prism whose source profile has
+four complete lines forming one axis-aligned rectangle in its own section
+coordinates. A blend record, nonzero section or cap displacement, or a
+nonpositive sweep interval returns `ErrUnsupported`.
+
+Prove with exact dyadic arithmetic that the placed source U, V, and sweep axes
+are signed world coordinate axes. The requested V must equal either sense of
+the sweep axis; its U must equal either sense of one source radial axis; its
+normal must equal their cross product. Compute the plane's signed normal
+coordinate at opposite rectangle corners and require strict opposite signs.
+This refuses tangent and exterior planes without a distance tolerance.
+
+The section is the product of the uncut source radial interval and the sweep
+interval. Derive both local interval ends from exact images of the source
+corners and cap levels. Refuse any corner coordinate that is not finite and exactly
+representable as `float64`. Reconstruct the resulting four-line profile in a
+fresh Sketch and require Sketch's certified record to match before returning
+it. The parallel prism and cylinder classes keep their existing gates.
+
 ## Verification
 
 - Extrude a 10×10 mm square by 5 mm. Section at 2.5 mm must give one 100 mm²
@@ -91,6 +112,12 @@ circle result and its cap-plane refusal.
   profile by 2 mm and require `Tessellate(0.1 mm, VerifyAll)` to certify the
   resulting 160 mm³ prism. Check another exact chord, both offset signs, and
   a rigidly placed cylinder.
+- Extrude a 10×10 mm rectangle by 5 mm. Its cardinal vertical section through
+  the interior is 50 mm². Extrude the returned Sketch/profile by 2 mm and
+  require 100 mm³ and `Tessellate(0.1 mm, VerifyAll)`.
+- Check a translated, quarter-turned rectangular prism with both radial axes
+  and a reversed sweep axis. Refuse tangent, exterior, noncardinal and tapered
+  rectangular cases.
 - Refuse a tangent or exterior cardinal plane, a positive `q` whose square
   root is not exactly binary64, a non-cardinal plane, and a radius or frame
   whose derived rectangle corner cannot be held exactly.

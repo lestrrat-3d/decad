@@ -252,13 +252,18 @@ func TestSectionCardinalCylinderRefusesUnprovedPlanes(t *testing.T) {
 	}
 }
 
-func TestSectionCardinalPlaneRefusesNoncircularSource(t *testing.T) {
+func TestSectionCardinalPlaneRefusesNonrectangularPolygon(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
-	rectangle := s.CreateRectangle(0, 0, 2, 2)
-	s.Fix(rectangle.A)
+	a := s.CreatePoint(0, 0)
+	b := s.CreatePoint(2, 0)
+	c := s.CreatePoint(0, 2)
+	s.Fix(a)
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	s.CreateLine(c, a)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
