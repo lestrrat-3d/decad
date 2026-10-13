@@ -1971,3 +1971,5 @@
 10	0.00	TestScaledAtRefusesSheetRevolveWithoutRetiringSource
 10	0.00	TestTwistedSweepRoundedShellUnsupportedCallsAreAtomic
 10	0.00	TestTwistedSweepRoundedShellVerifyAll
+10	0.00	TestTwistedSweepRoundedPlacedShellVerifyAll
+10	0.00	TestTwistedSweepRoundedPlacedShellRefusalsAreAtomic

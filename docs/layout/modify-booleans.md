@@ -27,6 +27,7 @@ The rules for rows live in `docs/layout.md`.
 | `shell.go` | Public `ShellOption`, `ShellSense` and `Body.Shell`: prism, Sweep and Revolve dispatch. See modify §8 and Table R. |
 | `shell_twist.go` | Admits and commits the inward top-cap Shell of a straight twisted rounded Sweep. See shell-twisted-sweep design. |
 | `shell_twist_offset_source.go` | Certifies the denoted twisted-wall inward offset and its area. See shell-twisted-sweep design. |
+| `shell_twist_placed_proof.go` | Bounds the world-normal offset after near-rigid placement. See shell-twisted-sweep design. |
 | `shell_twist_offset_stations.go` | Samples paired source and offset contours with bounded chord and station errors. See shell-twisted-sweep design. |
 | `shell_twist_mesh.go` | Builds and audits the five-face faceted cup and its boundary, volume and area bounds. See shell-twisted-sweep design. |
 | `shell_offset.go` | Binds `internal/offset2d/`'s section offset and its displacement to `shellTol`. See modify §7–§9. |

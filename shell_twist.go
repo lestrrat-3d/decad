@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -18,7 +19,7 @@ func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 		p.path.Start() != (r3.Vec{}) || p.path.End().X != 0 || p.path.End().Y != 0 ||
 		p.path.End().Z <= 0 || p.plane.Origin != (r3.Vec{}) ||
 		p.plane.U != r3.NewVec(1, 0, 0) || p.plane.V != r3.NewVec(0, 1, 0) ||
-		p.xform != r3.Identity() || thicknessDelta != 0 {
+		thicknessDelta != 0 {
 		return nil, fmt.Errorf(`%w: twisted shell needs one straight axial sweep, a top opening, and exact inward thickness`, ErrUnsupported)
 	}
 	height := p.path.End().Z
@@ -45,6 +46,28 @@ func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 		poly.areaInterval, source.area, height, thickness)
 	if err != nil {
 		return nil, err
+	}
+	if p.xform != r3.Identity() {
+		gap, proofErr := twistShellPlacedProof(p.profile, height, thickness,
+			p.angle, source, p.xform)
+		if proofErr != nil {
+			return nil, proofErr
+		}
+		facets, ok := out.payload.(facetedPayload)
+		if !ok {
+			return nil, fmt.Errorf(`%w: twisted shell lost its held cup`, ErrUnsupported)
+		}
+		facets.vertexBound = append([]float64(nil), facets.vertexBound...)
+		for i := range facets.vertexBound {
+			facets.vertexBound[i] = proofbound.AbsSumUpper(facets.vertexBound[i], gap.boundary)
+		}
+		facets.meshBound = proofbound.AbsSumUpper(facets.meshBound, gap.boundary)
+		facets.volSymDiff = proofbound.AbsSumUpper(facets.volSymDiff, gap.volume)
+		facets.areaSlack = proofbound.AbsSumUpper(facets.areaSlack, gap.area)
+		out, err = facets.placed(ctx, b.doc, ref, p.xform)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err := b.doc.requireLive(b); err != nil {
 		return nil, err
