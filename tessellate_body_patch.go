@@ -147,8 +147,8 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 		if source == nil {
 			return fmt.Errorf(`%w: a Body.Patch fill has no source face on its rim`, ErrDegenerate)
 		}
-		patchSense := bodyPatchMeshEdgeSense(m, byFace[f], start, end)
-		sourceSense := bodyPatchMeshEdgeSense(m, byFace[source], start, end)
+		patchSense := tessellation.PatchEdgeSense(m.triangles, byFace[f], start, end)
+		sourceSense := tessellation.PatchEdgeSense(m.triangles, byFace[source], start, end)
 		if patchSense == 0 || sourceSense == 0 {
 			return fmt.Errorf(`%w: a Body.Patch rim has no matching source and fill mesh edges`, ErrUnsupported)
 		}
@@ -160,20 +160,4 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 		}
 	}
 	return nil
-}
-
-func bodyPatchMeshEdgeSense(m *Mesh, tris []int, a, b int) int {
-	for _, ti := range tris {
-		tri := m.triangles[ti]
-		for j := range 3 {
-			start, end := tri[j], tri[(j+1)%3]
-			if start == a && end == b {
-				return 1
-			}
-			if start == b && end == a {
-				return -1
-			}
-		}
-	}
-	return 0
 }

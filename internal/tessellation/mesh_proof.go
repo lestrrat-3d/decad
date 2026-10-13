@@ -84,3 +84,23 @@ func SymDiff(terms []float64) (float64, error) {
 	}
 	return total, nil
 }
+
+// PatchEdgeSense reports the direction in which the facets named by tris
+// traverse the edge a-b: 1 when a facet runs a to b, -1 when it runs b to a,
+// and 0 when none of them uses the edge. The first facet that uses the edge
+// decides.
+func PatchEdgeSense(triangles [][3]int, tris []int, a, b int) int {
+	for _, ti := range tris {
+		tri := triangles[ti]
+		for j := range 3 {
+			start, end := tri[j], tri[(j+1)%3]
+			if start == a && end == b {
+				return 1
+			}
+			if start == b && end == a {
+				return -1
+			}
+		}
+	}
+	return 0
+}

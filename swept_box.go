@@ -110,10 +110,8 @@ func sweptBoxOf(b *Body, p affinePairPath) (SweptBox, bool) {
 // current placement, each coordinate pushed outward by the box's Bound.
 func inflatedBoundsCorners(b *Body) ([8]proofarith.DyV3, bool) {
 	box, err := b.Bounds()
-	if err != nil || box.Bound.Kind() != units.Length ||
-		!finiteMeasurementValues(box.Bound.Base(), box.Min.X, box.Min.Y, box.Min.Z,
-			box.Max.X, box.Max.Y, box.Max.Z) || box.Bound.Base() < 0 {
+	if err != nil {
 		return [8]proofarith.DyV3{}, false
 	}
-	return sweeppath.InflatedBoundsCorners(box.Min, box.Max, box.Bound.Base())
+	return sweeppath.CheckedBoundsCorners(box.Min, box.Max, box.Bound)
 }

@@ -149,3 +149,14 @@ func InflatedBoundsCorners(minimum, maximum r3.Vec, bound float64) ([8]proofarit
 	}
 	return corners, true
 }
+
+// CheckedBoundsCorners is InflatedBoundsCorners for a held box whose bound is
+// a units.Value. It reports false unless the bound is a nonnegative length and
+// the bound and every coordinate are finite.
+func CheckedBoundsCorners(minimum, maximum r3.Vec, bound units.Value) ([8]proofarith.DyV3, bool) {
+	if bound.Kind() != units.Length || !proofbound.FiniteVec(minimum) || !proofbound.FiniteVec(maximum) ||
+		proofbound.IsNonFinite(bound.Base()) || bound.Base() < 0 {
+		return [8]proofarith.DyV3{}, false
+	}
+	return InflatedBoundsCorners(minimum, maximum, bound.Base())
+}

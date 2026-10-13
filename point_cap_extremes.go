@@ -112,24 +112,12 @@ func pointCapGroupFace(b *Body, fp facetedPayload, group int) (*Face, bool) {
 	return faces[index], true
 }
 
-func pointCapAxisDot(point, axis r3.Vec) *big.Rat {
-	return pointPlaneAdd(pointPlaneAdd(
-		pointPlaneMul(ratOfPointPlane(point.X), ratOfPointPlane(axis.X)),
-		pointPlaneMul(ratOfPointPlane(point.Y), ratOfPointPlane(axis.Y))),
-		pointPlaneMul(ratOfPointPlane(point.Z), ratOfPointPlane(axis.Z)))
-}
-
 func pointCapCenterInterval(face *Face, axis r3.Vec, axisLen float64) (float64, float64, bool) {
 	center, err := face.Centroid()
-	if err != nil || !proofbound.FiniteVec(center.Value) ||
-		proofbound.IsNonFinite(center.Bound.Base()) || center.Bound.Base() < 0 {
+	if err != nil {
 		return 0, 0, false
 	}
-	dot := pointCapAxisDot(center.Value, axis)
-	delta := proofbound.ProductUpper(center.Bound.Base(), axisLen)
-	lo := math.Nextafter(proofbound.RatFloatDown(dot)-delta, math.Inf(-1))
-	hi := math.Nextafter(proofbound.RatFloatUp(dot)+delta, math.Inf(1))
-	return lo, hi, !proofbound.IsNonFinite(lo) && !proofbound.IsNonFinite(hi)
+	return proofbound.CenterAxisInterval(center.Value, center.Bound.Base(), axis, axisLen)
 }
 
 func pointCapRingInterval(ctx context.Context, ring []r3.Vec, axis r3.Vec,
@@ -144,7 +132,7 @@ func pointCapRingInterval(ctx context.Context, ring []r3.Vec, axis r3.Vec,
 		if !proofbound.FiniteVec(vertex) {
 			return 0, 0, false, nil
 		}
-		dot := pointCapAxisDot(vertex, axis)
+		dot := proofbound.AxisDot(vertex, axis)
 		lo = min(lo, proofbound.RatFloatDown(dot))
 		hi = max(hi, proofbound.RatFloatUp(dot))
 	}
