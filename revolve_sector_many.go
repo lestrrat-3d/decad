@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -255,17 +256,17 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	for i, node := range original {
 		far[i] = node.p
 	}
-	capGeom := pointConeCapGeometry(far, caps)
-	upperBound, upperLip, err := pointConeCapBoundGeom(capGeom, record.upper)
+	capGeom := pointcone.CapGeometry(far, caps)
+	upperBound, upperLip, err := pointcone.CapBound(capGeom, record.upper.constants())
 	if err != nil {
 		return nil, nil, err
 	}
-	lowerBound, lowerLip, err := pointConeCapBoundGeom(capGeom, record.lower)
+	lowerBound, lowerLip, err := pointcone.CapBound(capGeom, record.lower.constants())
 	if err != nil {
 		return nil, nil, err
 	}
 	lip := proofbound.AbsSumUpper(1, upperLip, lowerLip)
-	capArea := pointConeCapArea(far, caps)
+	capArea := pointcone.CapArea(far, caps)
 	capFactor := max(1, proofbound.ProductUpper(upperLip, upperLip),
 		proofbound.ProductUpper(lowerLip, lowerLip))
 	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.verts,

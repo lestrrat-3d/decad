@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -40,14 +41,14 @@ func TestSectorCapRefinementKeepsSharedEdges(t *testing.T) {
 	require.True(t, refined[perimeter[0].v].rootBoundary)
 	require.Equal(t, 0.05, refined[perimeter[0].v].angle)
 
-	counts := map[pointConeEdge]int{}
+	counts := map[pointcone.Edge]int{}
 	for _, tri := range cells {
 		for i := range 3 {
-			counts[orderedPointConeEdge(tri[i], tri[(i+1)%3])]++
+			counts[pointcone.OrderedEdge(tri[i], tri[(i+1)%3])]++
 		}
 	}
 	for _, edge := range perimeter {
-		require.Equal(t, 1, counts[orderedPointConeEdge(edge.u, edge.v)])
+		require.Equal(t, 1, counts[pointcone.OrderedEdge(edge.u, edge.v)])
 	}
 	for _, count := range counts {
 		require.LessOrEqual(t, count, 2)

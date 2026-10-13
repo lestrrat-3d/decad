@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -15,12 +16,12 @@ func sectorConeCapBounds(nodes []sectorPathNode, caps [][3]int,
 	for i, node := range nodes {
 		far[i] = node.p
 	}
-	capGeom := pointConeCapGeometry(far, caps)
-	upper, _, err := pointConeCapBoundGeom(capGeom, record.upper)
+	capGeom := pointcone.CapGeometry(far, caps)
+	upper, _, err := pointcone.CapBound(capGeom, record.upper.constants())
 	if err != nil {
 		return 0, 0, err
 	}
-	lower, _, err := pointConeCapBoundGeom(capGeom, record.lower)
+	lower, _, err := pointcone.CapBound(capGeom, record.lower.constants())
 	return upper, lower, err
 }
 
@@ -33,39 +34,39 @@ func sectorRefineCap(ctx context.Context, nodes []sectorPathNode,
 		len(triangles) == 0 || len(triangles) > maxCells {
 		return nil, nil, nil, 0, fmt.Errorf("%w: sector cap exceeds its refinement budget", ErrUnsupported)
 	}
-	marked := make(map[pointConeEdge]struct{})
+	marked := make(map[pointcone.Edge]struct{})
 	for _, tri := range triangles {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, 0, err
 		}
 		far := [3]r3.Vec{nodes[tri[0]].p, nodes[tri[1]].p, nodes[tri[2]].p}
-		geom := pointConeCellGeometry(far)
-		upper, _, _, err := pointConeTriangleBoundGeom(geom, record.upper)
+		geom := pointcone.CellGeometry(far)
+		upper, _, _, err := pointcone.TriangleBound(geom, record.upper.constants())
 		if err != nil {
 			return nil, nil, nil, 0, err
 		}
-		lower, _, _, err := pointConeTriangleBoundGeom(geom, record.lower)
+		lower, _, _, err := pointcone.TriangleBound(geom, record.lower.constants())
 		if err != nil {
 			return nil, nil, nil, 0, err
 		}
 		if max(upper, lower) <= limit {
 			continue
 		}
-		marked[orderedPointConeEdge(tri[0], tri[1])] = struct{}{}
-		marked[orderedPointConeEdge(tri[1], tri[2])] = struct{}{}
-		marked[orderedPointConeEdge(tri[2], tri[0])] = struct{}{}
+		marked[pointcone.OrderedEdge(tri[0], tri[1])] = struct{}{}
+		marked[pointcone.OrderedEdge(tri[1], tri[2])] = struct{}{}
+		marked[pointcone.OrderedEdge(tri[2], tri[0])] = struct{}{}
 	}
 	if len(marked) == 0 {
 		return nodes, triangles, edges, 0, nil
 	}
-	boundary := make(map[pointConeEdge]int, len(edges))
+	boundary := make(map[pointcone.Edge]int, len(edges))
 	for _, edge := range edges {
-		boundary[orderedPointConeEdge(edge.u, edge.v)] = edge.group
+		boundary[pointcone.OrderedEdge(edge.u, edge.v)] = edge.group
 	}
-	midpoints := make(map[pointConeEdge]int, len(marked))
+	midpoints := make(map[pointcone.Edge]int, len(marked))
 	levelRound := 0.0
 	midpoint := func(u, v int) int {
-		key := orderedPointConeEdge(u, v)
+		key := pointcone.OrderedEdge(u, v)
 		if _, needed := marked[key]; !needed {
 			return -1
 		}
@@ -131,7 +132,7 @@ func sectorRefineCap(ctx context.Context, nodes []sectorPathNode,
 	}
 	newEdges := make([]sectorCapEdge, 0, 2*len(edges))
 	for _, edge := range edges {
-		mid, split := midpoints[orderedPointConeEdge(edge.u, edge.v)]
+		mid, split := midpoints[pointcone.OrderedEdge(edge.u, edge.v)]
 		if !split {
 			newEdges = append(newEdges, edge)
 			continue

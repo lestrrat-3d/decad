@@ -19,6 +19,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/planarsnapshot/` | Planar contact snapshots, cached records and pose gates. See multibody §9.1–§9.2. |
 | `internal/placedruling/` | Placed cylinder staging, support and relation proofs. See contact-geometry §4.5. |
 | `internal/facetproof/` | Faceted shell audits, placement, similarity and revolve sector-separation proofs. See `docs/evaluator-design.md` §9. |
+| `internal/pointcone/` | Point-loft cone crossing samples, far-cap subdivision and contact split, and cap and triangle crossing bounds. See loft-point design. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching, query rendering, residual counts, and face-role indexes. See API §9. |
 | `internal/surfacegeom/` | Private face and edge geometry carriers and placement transforms. Public surface and curve variants live in `topology.go`. See API §6.1, surface §6. |

@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
@@ -62,14 +63,14 @@ func sectorSubdivideCap(ctx context.Context, nodes []sectorPathNode,
 	}
 	totalRound := 0.0
 	for range rounds {
-		midpoints := map[pointConeEdge]int{}
+		midpoints := map[pointcone.Edge]int{}
 		levelRound := 0.0
-		boundary := map[pointConeEdge]int{}
+		boundary := map[pointcone.Edge]int{}
 		for _, edge := range edges {
-			boundary[orderedPointConeEdge(edge.u, edge.v)] = edge.group
+			boundary[pointcone.OrderedEdge(edge.u, edge.v)] = edge.group
 		}
 		midpoint := func(u, v int) int {
-			key := orderedPointConeEdge(u, v)
+			key := pointcone.OrderedEdge(u, v)
 			if id, ok := midpoints[key]; ok {
 				return id
 			}
@@ -103,7 +104,7 @@ func sectorSubdivideCap(ctx context.Context, nodes []sectorPathNode,
 		}
 		newEdges := make([]sectorCapEdge, 0, len(edges)*2)
 		for _, edge := range edges {
-			m, ok := midpoints[orderedPointConeEdge(edge.u, edge.v)]
+			m, ok := midpoints[pointcone.OrderedEdge(edge.u, edge.v)]
 			if !ok {
 				return nil, nil, nil, 0, fmt.Errorf("%w: cap boundary was not triangulated", ErrUnsupported)
 			}
@@ -154,18 +155,18 @@ func sectorMergedAngles(base []float64, nodes []sectorPathNode) ([]float64, []in
 // sectorUpperCapNode charges any replacement of the exact smooth cone map by
 // the source far plane at one cap station. Cell interiors are charged by the
 // caller's upper far-plane sliver bound when that source class is admitted.
-func sectorUpperCapNode(far r3.Vec, sample pointConeSample,
+func sectorUpperCapNode(far r3.Vec, sample pointcone.Sample,
 	upperFarSliverCharged bool) (r3.Vec, float64, error) {
-	if !upperFarSliverCharged && sample.q+sample.qError < 1 {
+	if !upperFarSliverCharged && sample.Q+sample.QError < 1 {
 		return r3.Vec{}, 0, fmt.Errorf("%w: sector cap reaches its far source plane", ErrUnsupported)
 	}
-	smooth := far.Scale(sample.alpha)
+	smooth := far.Scale(sample.Alpha)
 	if !proofbound.FiniteVec(smooth) {
 		return r3.Vec{}, 0, fmt.Errorf("%w: upper cap has no finite crossing", ErrUnsupported)
 	}
-	if sample.q-sample.qError > 1 {
-		return smooth, sample.pointError, nil
+	if sample.Q-sample.QError > 1 {
+		return smooth, sample.PointError, nil
 	}
 	return far, proofbound.AbsSumUpper(
-		proofbound.DvLenUpper(proofbound.HeldDelta(far, smooth)), sample.pointError), nil
+		proofbound.DvLenUpper(proofbound.HeldDelta(far, smooth)), sample.PointError), nil
 }
