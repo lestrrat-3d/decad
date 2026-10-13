@@ -58,7 +58,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	var vertexStore []float64
 	faceTrim := map[*Face]float64{}
 	faceAxial := map[*Face]float64{}
-	addVertex := func(p Point2, z float64, source proofbound.WalkEndBound) int {
+	addVertex := func(p planePoint, z float64, source proofbound.WalkEndBound) int {
 		v := base.Point(p.U, p.V, z)
 		mesh.vertices = append(mesh.vertices, v)
 		vertexStore = append(vertexStore, proofbound.AbsSumUpper(proofbound.WalkEndBoundAllow(source),

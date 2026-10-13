@@ -29,7 +29,7 @@ func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord
 		return profileRecord{}, false
 	}
 
-	var corners [3]Point2
+	var corners [3]planePoint
 	for i, segment := range rp.profile.Outer.Segments {
 		line, ok := segment.(lineSeg)
 		if !ok || line.TStart != 0 || line.TEnd != 1 ||
@@ -82,7 +82,7 @@ func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord
 	// Compare the placed base and apex with the requested cardinal plane.
 	// Opposite strict signs prove an interior cut; the cone radius varies
 	// linearly along that axis, so the cut is one complete disk.
-	point := func(p Point2) proofarith.DyV3 {
+	point := func(p planePoint) proofarith.DyV3 {
 		local := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()),
 			proofarith.DvAdd(
 				proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.DyOfFinite(p.U)),
@@ -116,7 +116,7 @@ func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord
 		return profileRecord{}, false
 	}
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{circleSeg{
-		Center: Point2{U: centerU, V: centerV}, Radius: units.Millimeters(radiusMM),
+		Center: planePoint{U: centerU, V: centerV}, Radius: units.Millimeters(radiusMM),
 		CCW: true, TStart: 0, TEnd: 1,
 	}}}}, true
 }

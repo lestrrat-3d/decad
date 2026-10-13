@@ -53,14 +53,14 @@ func internalCrossDrilledBrep(t *testing.T) brepPayload {
 	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
 	xy, yz, xz := frame(x, y), frame(y, z), frame(x, z)
 	rect := func(u0, v0, u1, v1 float64) loopRecord {
-		pts := []Point2{{U: u0, V: v0}, {U: u1, V: v0}, {U: u1, V: v1}, {U: u0, V: v1}}
+		pts := []planePoint{{U: u0, V: v0}, {U: u1, V: v0}, {U: u1, V: v1}, {U: u0, V: v1}}
 		var loop loopRecord
 		for i, p := range pts {
 			loop.Segments = append(loop.Segments, lineSeg{Start: p, End: pts[(i+1)%len(pts)], TStart: 0, TEnd: 1})
 		}
 		return loop
 	}
-	hole := circleSeg{Center: Point2{U: 20, V: 10}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0}
+	hole := circleSeg{Center: planePoint{U: 20, V: 10}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0}
 	plate := profileRecord{Outer: rect(0, 0, 40, 20)}
 	side := profileRecord{Outer: rect(0, 0, 20, 20)}
 	drilled := profileRecord{Outer: rect(0, 0, 40, 20), Holes: []loopRecord{{Segments: []curveSegment{hole}}}}
@@ -439,7 +439,7 @@ func TestBrepPayloadAuditRefusesBrokenRecords(t *testing.T) {
 		{"negative displacement", func(bp *brepPayload) { bp.faces[6].delta = -1 }, ErrDegenerate},
 		{"repeated role", func(bp *brepPayload) { bp.faces[1].role = bp.faces[0].role }, ErrDegenerate},
 		{"elliptical wall", func(bp *brepPayload) {
-			bp.faces[6].wall = ellipseSeg{Center: Point2{U: 20, V: 10}, Rx: units.Millimeters(3), Ry: units.Millimeters(2), CCW: true, TStart: 0, TEnd: 1}
+			bp.faces[6].wall = ellipseSeg{Center: planePoint{U: 20, V: 10}, Rx: units.Millimeters(3), Ry: units.Millimeters(2), CCW: true, TStart: 0, TEnd: 1}
 		}, ErrUnsupported},
 		{"missing wall", func(bp *brepPayload) { bp.faces = bp.faces[:6] }, ErrUnsupported},
 		{"missing planar face", func(bp *brepPayload) { bp.faces = append(bp.faces[:3:3], bp.faces[4:]...) }, ErrUnsupported},
@@ -525,14 +525,14 @@ func TestBrepTessellationRefusesWallsCloserThanTheirChords(t *testing.T) {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	var outline loopRecord
-	pts := []Point2{{U: 0, V: 0}, {U: 20, V: 0}, {U: 20, V: 20}, {U: 0, V: 20}}
+	pts := []planePoint{{U: 0, V: 0}, {U: 20, V: 0}, {U: 20, V: 20}, {U: 0, V: 20}}
 	for i, p := range pts {
 		outline.Segments = append(outline.Segments, lineSeg{Start: p, End: pts[(i+1)%4], TStart: 0, TEnd: 1})
 	}
 	// A through hole beside an enclosed void 0.002 mm away: no planar face
 	// carries both loops, so only the two walls can meet each other's chords.
-	hole := circleSeg{Center: Point2{U: 8, V: 10}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0}
-	void := circleSeg{Center: Point2{U: 14.002, V: 10}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0}
+	hole := circleSeg{Center: planePoint{U: 8, V: 10}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0}
+	void := circleSeg{Center: planePoint{U: 14.002, V: 10}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0}
 	voidFace := circleSeg{Center: void.Center, Radius: void.Radius, CCW: true, TStart: 0, TEnd: 1}
 	plate := profileRecord{Outer: outline, Holes: []loopRecord{{Segments: []curveSegment{hole}}}}
 	disc := profileRecord{Outer: loopRecord{Segments: []curveSegment{voidFace}}}

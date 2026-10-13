@@ -20,14 +20,14 @@ const (
 // A straight cone meridian is affine in X. Strict signs at both recorded
 // endpoints prove the same side over the entire finite generator. The far
 // plane and apex checks ensure this sign describes the operative cone wall.
-func spiralFiniteConeSide(cone *pointConeLimit, first, last Point2, sign int) bool {
+func spiralFiniteConeSide(cone *pointConeLimit, first, last planePoint, sign int) bool {
 	if cone == nil || cone.apex == nil || cone.far == nil || cone.slope == nil ||
 		cone.slope.Sign() <= 0 || cone.far.Sign() >= 0 ||
 		first.U <= 0 || last.U <= first.U || first.V <= 0 || last.V <= 0 ||
 		lfF(first.U).Cmp(cone.far) <= 0 || lfF(last.U).Cmp(cone.apex) >= 0 {
 		return false
 	}
-	residual := func(p Point2) *big.Rat {
+	residual := func(p planePoint) *big.Rat {
 		return lfSub(lfAdd(lfF(p.U), lfMul(cone.slope, lfF(p.V))), cone.apex)
 	}
 	return residual(first).Sign() == sign && residual(last).Sign() == sign

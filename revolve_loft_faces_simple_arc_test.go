@@ -7,8 +7,8 @@ import (
 )
 
 func TestRevolveLoftFacesShortArcSupportsOnlyItsChordOutside(t *testing.T) {
-	arc := arcSeg{Center: Point2{},
-		Start: Point2{U: 4, V: -0.5}, End: Point2{U: 4, V: 0.5},
+	arc := arcSeg{Center: planePoint{},
+		Start: planePoint{U: 4, V: -0.5}, End: planePoint{U: 4, V: 0.5},
 		TStart: 0, TEnd: 1}
 	require.True(t, revolveLoftFacesSimpleArcChordSide(arc, 0, lfF(4), 1))
 	require.False(t, revolveLoftFacesSimpleArcChordSide(arc, 0, lfF(4), -1))

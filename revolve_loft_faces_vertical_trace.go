@@ -75,7 +75,7 @@ func revolveLoftFacesVerticalTracePoint(piece revolveLoftFacesVerticalTracePiece
 }
 
 func revolveLoftFacesVerticalTraceMapPoint(affine *loftface.VerticalAffine,
-	point Point2) [2]*big.Rat {
+	point planePoint) [2]*big.Rat {
 	u, v := lfF(point.U), lfF(point.V)
 	return [2]*big.Rat{
 		lfAdd(affine.Offset[0], lfAdd(lfMul(affine.Column[0][0], u), lfMul(affine.Column[1][0], v))),

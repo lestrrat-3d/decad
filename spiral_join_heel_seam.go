@@ -90,7 +90,7 @@ func spiralHeelSourceBox(arc arcSeg) (*big.Rat, *big.Rat, [4]*big.Rat, bool) {
 	if rLo.Sign() <= 0 {
 		return nil, nil, empty, false
 	}
-	for _, end := range [...]Point2{arc.Start, arc.End} {
+	for _, end := range [...]planePoint{arc.Start, arc.End} {
 		// Each endpoint ray is inside the rational half-angle interval.
 		// With U<0, its exact radius is at least -U.
 		if lfAbs(lfF(end.V)).Cmp(lfMul(spiralHeelHalfAngle,
@@ -283,7 +283,7 @@ func spiralHeelRootCells(ctx context.Context, trim *loftFacesTrimRecord, coneC *
 }
 
 func spiralHeelEndpointBox(ctx context.Context, first, second loftFaceMap,
-	point Point2, coneC, charge *big.Rat) ([3]loftFaceInterval, bool, error) {
+	point planePoint, coneC, charge *big.Rat) ([3]loftFaceInterval, bool, error) {
 	var empty [3]loftFaceInterval
 	a := first.At(lfF(point.U), lfF(point.V))
 	b := second.At(lfF(point.U), lfF(point.V))
@@ -427,7 +427,7 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 		seam.x.Hi.Cmp(lfF(proof.blank.heelOuter.U)) >= 0 {
 		return nil, false, nil
 	}
-	for end, point := range [...]Point2{arc.Start, arc.End} {
+	for end, point := range [...]planePoint{arc.Start, arc.End} {
 		endpoint, ok, err := spiralHeelEndpointBox(ctx, trim.maps[7], trim.maps[8], point,
 			coneC, coordCharge)
 		if err != nil || !ok {

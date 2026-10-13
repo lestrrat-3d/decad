@@ -97,7 +97,7 @@ func p8RoundedBrepRecord() (brepPayload, bool) {
 	if err != nil {
 		return brepPayload{}, false
 	}
-	point := func(u, v float64) Point2 { return Point2{U: u, V: v} }
+	point := func(u, v float64) planePoint { return planePoint{U: u, V: v} }
 	line := func(x0, y0, x1, y1 float64) curveSegment {
 		return lineSeg{Start: point(x0, y0), End: point(x1, y1), TEnd: 1}
 	}

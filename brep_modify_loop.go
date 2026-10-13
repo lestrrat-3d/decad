@@ -1098,7 +1098,7 @@ func (r *brepLoopRead) trimPlanar(trims map[int][]map[int]*cornerBlend, pu brepU
 		moved := e.Canon(at[0], at[1], f.z0)
 		moved[n] = sideRef
 		local := e.Local(moved)
-		p := Point2{U: local[0], V: local[1]}
+		p := planePoint{U: local[0], V: local[1]}
 		trim := &cornerBlend{FA: p, FB: p}
 		ci := pu.Seg
 		if c == 0 {

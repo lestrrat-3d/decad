@@ -9,7 +9,7 @@ import (
 )
 
 func TestRevolveLoftFacesSlopedRadialInsideNeedsUniqueOuterCrossing(t *testing.T) {
-	points := []Point2{{U: 3.2}, {U: 6}, {U: 6, V: 3.5},
+	points := []planePoint{{U: 3.2}, {U: 6}, {U: 6, V: 3.5},
 		{U: 5.8, V: 3.3}, {U: 5.7, V: 2.28},
 		{U: 4.7, V: 1.88}, {U: 3.2, V: 3.2}}
 	section := revolveSectionCertificate{axisSpan: 0}
@@ -33,8 +33,8 @@ func TestRevolveLoftFacesSlopedRadialInsideNeedsUniqueOuterCrossing(t *testing.T
 func TestRevolveLoftFacesSlopedRadialInsideRequiresAxisWalkDirection(t *testing.T) {
 	section := revolveSectionCertificate{axisSpan: 0,
 		spans: []revolveSectionSpan{
-			{start: Point2{U: 3}, end: Point2{U: 6}},
-			{start: Point2{U: 6, V: 2}, end: Point2{U: 3, V: 2}},
+			{start: planePoint{U: 3}, end: planePoint{U: 6}},
+			{start: planePoint{U: 6, V: 2}, end: planePoint{U: 3, V: 2}},
 		}}
 	require.True(t, revolveLoftFacesSlopedRadialInside(section, 1, lfF(4), lfF(2)))
 	section.spans[0].start.U, section.spans[0].end.U = 6, 3

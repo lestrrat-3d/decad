@@ -60,9 +60,9 @@ func sectionSketchBody(t *testing.T, build func(*sketch.Sketch), extent AngularE
 func movedProfile(t *testing.T, p profileRecord, k, shift, grow float64) (profileRecord, float64) {
 	t.Helper()
 	most := 0.0
-	pt := func(q Point2) Point2 {
+	pt := func(q planePoint) planePoint {
 		most = math.Max(most, math.Hypot(q.U, q.V))
-		return Point2{U: q.U*k + shift, V: q.V * k}
+		return planePoint{U: q.U*k + shift, V: q.V * k}
 	}
 	loop := func(l loopRecord) loopRecord {
 		out := loopRecord{Segments: make([]curveSegment, len(l.Segments))}

@@ -29,14 +29,14 @@ import (
 // square loop, CCW or CW; planeAt a plane record with the standard XY basis
 // at the given world origin.
 
-func pt(u, v float64) Point2 { return Point2{U: u, V: v} }
+func pt(u, v float64) planePoint { return planePoint{U: u, V: v} }
 
 func squareLoop(cx, cy, half float64, ccw bool) loopRecord {
-	corners := []Point2{
+	corners := []planePoint{
 		pt(cx-half, cy-half), pt(cx+half, cy-half), pt(cx+half, cy+half), pt(cx-half, cy+half),
 	}
 	if !ccw {
-		corners = []Point2{corners[0], corners[3], corners[2], corners[1]}
+		corners = []planePoint{corners[0], corners[3], corners[2], corners[1]}
 	}
 	segs := make([]curveSegment, 4)
 	for i := range corners {
@@ -46,7 +46,7 @@ func squareLoop(cx, cy, half float64, ccw bool) loopRecord {
 }
 
 func triangleLoop() loopRecord {
-	corners := []Point2{pt(0, 0), pt(1, 0), pt(0.5, 1)}
+	corners := []planePoint{pt(0, 0), pt(1, 0), pt(0.5, 1)}
 	segs := make([]curveSegment, 3)
 	for i := range corners {
 		segs[i] = lineSeg{Start: corners[i], End: corners[(i+1)%3], TStart: 0, TEnd: 1}
@@ -404,7 +404,7 @@ func TestLoftPairingsDefaultOffsetIsZero(t *testing.T) {
 	walks := resolveLoftLoopWalks(t, p)
 	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(p, p, offsets, walks, walks, 0, nil, nil)
 	require.NoError(t, err)
-	require.Equal(t, pt(0, 0), Point2(pairs[0].W[0]))
+	require.Equal(t, pt(0, 0), pairs[0].W[0])
 	require.Zero(t, sectionDelta, "a LineSeg-only pairing carries no curve to depart from")
 	require.Zero(t, sectionMatchedDelta, "a LineSeg-only pairing carries no curve to depart from")
 	require.Zero(t, stationRound, "every segment of this square is UNTRIMMED, so every station is PINNED (docs/loft-design.md §5.2)")
@@ -420,8 +420,8 @@ func TestLoftPairingsAlignmentRotatesCorrespondence(t *testing.T) {
 	// loop0 segment 0 (V_0, at local (0,0)) now pairs with loop1 segment 1,
 	// whose own recorded start is local (1,0) — the far endpoint of rung R_0
 	// moves from W[0]=(0,0) to W[1]=(1,0).
-	require.Equal(t, pt(1, 0), Point2(pairs[0].W[0]))
-	require.Equal(t, pt(0, 0), Point2(pairs[0].V[0]))
+	require.Equal(t, pt(1, 0), pairs[0].W[0])
+	require.Equal(t, pt(0, 0), pairs[0].V[0])
 }
 
 // TestLoftPairingsTwoHolesPairByPosition proves P1: two holes recorded in
@@ -463,7 +463,7 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	t.Parallel()
 	fit := fitSplineSeg{
-		Fit:    point2ToRecordSlice([]Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}),
+		Fit:    point2ToRecordSlice([]planePoint{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}),
 		TStart: 0, TEnd: 1,
 	}
 
@@ -553,16 +553,16 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 	require.Len(t, pairs[0].W, n)
 	for j := range n {
 		k := (j + offsets[0]) % n
-		require.Equal(t, pt(walks0[0][j].StartU, walks0[0][j].StartV), Point2(pairs[0].V[j]),
+		require.Equal(t, pt(walks0[0][j].StartU, walks0[0][j].StartV), pairs[0].V[j],
 			"v[%d] is walks0[0][%d]'s own start point", j, j)
-		require.Equal(t, pt(walks1[0][k].StartU, walks1[0][k].StartV), Point2(pairs[0].W[j]),
+		require.Equal(t, pt(walks1[0][k].StartU, walks1[0][k].StartV), pairs[0].W[j],
 			"w[%d] is walks1[0][%d]'s own start point", j, k)
 	}
 	// The same claim as literal coordinates: v runs p0's own corners from
 	// (0,0), and w runs p1's corners rotated by the offset, so w[0] is p1's
 	// SECOND corner (12,18) — a coordinate p0's record does not contain.
-	require.Equal(t, pt(0, 0), Point2(pairs[0].V[0]))
-	require.Equal(t, pt(12, 18), Point2(pairs[0].W[0]))
+	require.Equal(t, pt(0, 0), pairs[0].V[0])
+	require.Equal(t, pt(12, 18), pairs[0].W[0])
 }
 
 // TestValidateLoftRecordsS3PrecedesAWalkOfErrorLaterInTheOtherProfile pins
@@ -1018,7 +1018,7 @@ func TestEvalLoftOverTwistedCorrespondenceCrosses(t *testing.T) {
 // manyGonLoop builds a regular n-gon loop centered at (cx, cy) with the
 // given radius, CCW.
 func manyGonLoop(cx, cy, radius float64, n int) loopRecord {
-	pts := make([]Point2, n)
+	pts := make([]planePoint, n)
 	for i := range n {
 		theta := 2 * math.Pi * float64(i) / float64(n)
 		pts[i] = pt(cx+radius*math.Cos(theta), cy+radius*math.Sin(theta))
@@ -1147,7 +1147,7 @@ func exactLoftVertexLifts(t *testing.T, pl loftPayload) [][3]*big.Rat {
 	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
 	require.Equal(t, pl.verts, a.Verts)
-	lift := func(f r3.Frame, p Point2) [3]*big.Rat {
+	lift := func(f r3.Frame, p planePoint) [3]*big.Rat {
 		o, u, v := f.Origin(), f.U(), f.V()
 		pu, pv := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
 		var out [3]*big.Rat
@@ -1206,7 +1206,7 @@ func assembleLoftFixture(t *testing.T, pl loftPayload) loftmesh.Assembly {
 // used by the tests below as an INDEPENDENT check that loftmesh.CapPolygonAreaRat's
 // shoelace sum really does equal the sum of the SAME triangulation's own
 // triangle areas.
-func triangleAreaRat2D(pts []Point2, tri [3]int) *big.Rat {
+func triangleAreaRat2D(pts []planePoint, tri [3]int) *big.Rat {
 	a, b, c := pts[tri[0]], pts[tri[1]], pts[tri[2]]
 	ua, va := polynomial.MustRatOf(a.U), polynomial.MustRatOf(a.V)
 	ub, vb := polynomial.MustRatOf(b.U), polynomial.MustRatOf(b.V)
@@ -1695,8 +1695,8 @@ func TestComputeLoftChordedAllowReversesSignedCorrections(t *testing.T) {
 		r3.NewVec(-0.5, 2, 6), r3.NewVec(3, 4, 7.5),
 	}
 	pairs := []loftmesh.LoopPair{{
-		V:              point2ToRecordSlice(make([]Point2, 2)),
-		W:              point2ToRecordSlice(make([]Point2, 2)),
+		V:              point2ToRecordSlice(make([]planePoint, 2)),
+		W:              point2ToRecordSlice(make([]planePoint, 2)),
 		ArcUpperV:      []float64{4, 0},
 		ArcUpperW:      []float64{4, 0},
 		MatchedDelta:   []float64{0.01, 0},

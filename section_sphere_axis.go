@@ -11,7 +11,7 @@ import (
 // cardinalSphereSection cuts an authenticated whole-ball Revolve with a
 // cardinal plane. An exactly representable circle stays exact. Otherwise a
 // certified inner polygon carries the radial and chord gaps to Extrude.
-func cardinalSphereSection(b *Body, plane r3.Frame) (profileRecord, []Point2, float64, bool) {
+func cardinalSphereSection(b *Body, plane r3.Frame) (profileRecord, []planePoint, float64, bool) {
 	sphere, ok := sourceSphereAtPose(b, r3.Identity())
 	if !ok || !box.CardinalBasis(plane.U(), plane.V(), plane.N()) {
 		return profileRecord{}, nil, 0, false
@@ -40,7 +40,7 @@ func cardinalSphereSection(b *Body, plane r3.Frame) (profileRecord, []Point2, fl
 	}
 	if proofarith.DySquareEquals(radius, q) {
 		return profileRecord{Outer: loopRecord{Segments: []curveSegment{circleSeg{
-			Center: Point2{U: centerU, V: centerV}, Radius: units.Millimeters(radius),
+			Center: planePoint{U: centerU, V: centerV}, Radius: units.Millimeters(radius),
 			CCW: true, TStart: 0, TEnd: 1,
 		}}}}, nil, 0, true
 	}

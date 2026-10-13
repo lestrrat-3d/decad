@@ -38,7 +38,7 @@ func revolveAxisGap(t *testing.T, b *Body) float64 {
 // (dropping revolveGapMeter.unitDirection) turns torus-below red.
 func TestRevolveCarrierAxisGapExactRevolvesStayZero(t *testing.T) {
 	t.Parallel()
-	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+	uAxis := SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}}
 	draw := func(t *testing.T, f func(s *sketch.Sketch)) (*sketch.Sketch, *sketch.Profile) {
 		t.Helper()
 		w := sketch.NewWorld()

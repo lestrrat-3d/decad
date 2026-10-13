@@ -77,7 +77,7 @@ func twoRadiusOvalProfile() profileRecord {
 // exact on-circle point (5·c, 5·s): (c, s) = (1, 0) gives the axis points, and
 // (3/5, 4/5) the same circle turned by atan(4/3), its points still exact.
 func quarterRingProfile(c, s float64) profileRecord {
-	corners := []Point2{pt(5*c, 5*s), pt(-5*s, 5*c), pt(-5*c, -5*s), pt(5*s, -5*c)}
+	corners := []planePoint{pt(5*c, 5*s), pt(-5*s, 5*c), pt(-5*c, -5*s), pt(5*s, -5*c)}
 	segs := make([]curveSegment, 4)
 	for i := range corners {
 		segs[i] = arcSeg{Center: pt(0, 0), Start: corners[i], End: corners[(i+1)%4], TStart: 0, TEnd: 1}

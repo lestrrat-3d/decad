@@ -23,7 +23,7 @@ func TestChordStationBoundEnclosesACircleSegStation(t *testing.T) {
 	// roundings from it.
 	const r = 5.0
 	seg := circleSeg{
-		Center: Point2{U: 2, V: -3},
+		Center: planePoint{U: 2, V: -3},
 		Radius: units.Millimeters(r),
 		CCW:    true,
 		TStart: 0,
@@ -51,9 +51,9 @@ func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 	// through proofbound.Atan2Interval and proofbound.RadSinCosSpan. The enclosure is wider than a
 	// circle's, but it is finite and it is positive — never a silent zero.
 	seg := arcSeg{
-		Center: Point2{U: 0, V: 0},
-		Start:  Point2{U: 3, V: 0},
-		End:    Point2{U: 0, V: 3},
+		Center: planePoint{U: 0, V: 0},
+		Start:  planePoint{U: 3, V: 0},
+		End:    planePoint{U: 0, V: 3},
 		TStart: 0,
 		TEnd:   1,
 	}
@@ -74,8 +74,8 @@ func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 
 func TestChordStationBoundRefusesWhatItCannotEnclose(t *testing.T) {
 	t.Parallel()
-	circle := circleSeg{Center: Point2{}, Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1}
-	line := lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1}
+	circle := circleSeg{Center: planePoint{}, Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1}
+	line := lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}, TStart: 0, TEnd: 1}
 
 	for _, row := range []struct {
 		name    string

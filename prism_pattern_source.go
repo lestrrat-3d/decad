@@ -36,7 +36,7 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 		return nil, false, nil
 	}
 	circle, ok := blank.Profile.Outer.Segments[0].(circleSeg)
-	if !ok || circle.Center != (Point2{}) || circle.Radius.Base() <= 0 ||
+	if !ok || circle.Center != (planePoint{}) || circle.Radius.Base() <= 0 ||
 		!prismpattern.WholeRange(circle.TStart, circle.TEnd) {
 		return nil, false, nil
 	}

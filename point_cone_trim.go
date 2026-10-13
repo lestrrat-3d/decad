@@ -80,7 +80,7 @@ func exactPointCone(b *Body) (*pointConeLimit, bool) {
 		if !ok {
 			return nil, false
 		}
-		for _, pt := range [...]Point2{line.Start, line.End} {
+		for _, pt := range [...]planePoint{line.Start, line.End} {
 			if pt.V == 0 {
 				axisCount++
 				apex = max(apex, pt.U)
@@ -103,7 +103,7 @@ func exactPointCone(b *Body) (*pointConeLimit, bool) {
 		if !ok {
 			return nil, false
 		}
-		for _, pt := range [...]Point2{line.Start, line.End} {
+		for _, pt := range [...]planePoint{line.Start, line.End} {
 			if pt.V == 0 && pt.U != apex && pt.U != far || pt.V > 0 &&
 				(pt.U != far || pt.V != radius) {
 				return nil, false

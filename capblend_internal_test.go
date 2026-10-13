@@ -81,7 +81,7 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	t.Parallel()
 	const rho, d, half = 0.01, 0.9, 0.5
 	loop := loopRecord{Segments: []curveSegment{
-		circleSeg{Center: Point2{}, Radius: units.Millimeters(rho), CCW: false, TStart: 1, TEnd: 0},
+		circleSeg{Center: planePoint{}, Radius: units.Millimeters(rho), CCW: false, TStart: 1, TEnd: 0},
 	}}
 	work := freeform.NewFreeformWork()
 
@@ -210,7 +210,7 @@ func TestFixPatchOrientation(t *testing.T) {
 func capBandCircle(t *testing.T, r, d, capZ float64) proofbound.BoundedScalar {
 	t.Helper()
 	loop := loopRecord{Segments: []curveSegment{
-		circleSeg{Center: Point2{}, Radius: units.Millimeters(r), CCW: true, TStart: 0, TEnd: 1},
+		circleSeg{Center: planePoint{}, Radius: units.Millimeters(r), CCW: true, TStart: 0, TEnd: 1},
 	}}
 	cbp := capBlendPayload{
 		profile:  profileRecord{Outer: loop},
@@ -250,10 +250,10 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sideZ := capZ + tc.matSign*d
 			geom := []capPatchGeom{
-				{SideA: Point2{U: 0, V: 0}, SideB: Point2{U: 1, V: 0}, CapA: Point2{U: d, V: d}, CapB: Point2{U: 1 - d, V: d}, SideZ: sideZ, CapZ: capZ},
-				{SideA: Point2{U: 1, V: 0}, SideB: Point2{U: 1, V: 1}, CapA: Point2{U: 1 - d, V: d}, CapB: Point2{U: 1 - d, V: 1 - d}, SideZ: sideZ, CapZ: capZ},
-				{SideA: Point2{U: 1, V: 1}, SideB: Point2{U: 0, V: 1}, CapA: Point2{U: 1 - d, V: 1 - d}, CapB: Point2{U: d, V: 1 - d}, SideZ: sideZ, CapZ: capZ},
-				{SideA: Point2{U: 0, V: 1}, SideB: Point2{U: 0, V: 0}, CapA: Point2{U: d, V: 1 - d}, CapB: Point2{U: d, V: d}, SideZ: sideZ, CapZ: capZ},
+				{SideA: planePoint{U: 0, V: 0}, SideB: planePoint{U: 1, V: 0}, CapA: planePoint{U: d, V: d}, CapB: planePoint{U: 1 - d, V: d}, SideZ: sideZ, CapZ: capZ},
+				{SideA: planePoint{U: 1, V: 0}, SideB: planePoint{U: 1, V: 1}, CapA: planePoint{U: 1 - d, V: d}, CapB: planePoint{U: 1 - d, V: 1 - d}, SideZ: sideZ, CapZ: capZ},
+				{SideA: planePoint{U: 1, V: 1}, SideB: planePoint{U: 0, V: 1}, CapA: planePoint{U: 1 - d, V: 1 - d}, CapB: planePoint{U: d, V: 1 - d}, SideZ: sideZ, CapZ: capZ},
+				{SideA: planePoint{U: 0, V: 1}, SideB: planePoint{U: 0, V: 0}, CapA: planePoint{U: d, V: 1 - d}, CapB: planePoint{U: d, V: d}, SideZ: sideZ, CapZ: capZ},
 			}
 			withoutDelta := tc.payload
 			withoutDelta.z0Delta = 0
@@ -299,10 +299,10 @@ func TestCapBandMassBoundsChargeTheSideLevelMove(t *testing.T) {
 	loop := synthRectLoop(u0, u0, u0+1, u0+1)
 	sideZ := capZ - d
 	geom := []capPatchGeom{
-		{SideA: Point2{U: u0, V: u0}, SideB: Point2{U: u0 + 1, V: u0}, CapA: Point2{U: u0 + d, V: u0 + d}, CapB: Point2{U: u0 + 1 - d, V: u0 + d}, SideZ: sideZ, CapZ: capZ},
-		{SideA: Point2{U: u0 + 1, V: u0}, SideB: Point2{U: u0 + 1, V: u0 + 1}, CapA: Point2{U: u0 + 1 - d, V: u0 + d}, CapB: Point2{U: u0 + 1 - d, V: u0 + 1 - d}, SideZ: sideZ, CapZ: capZ},
-		{SideA: Point2{U: u0 + 1, V: u0 + 1}, SideB: Point2{U: u0, V: u0 + 1}, CapA: Point2{U: u0 + 1 - d, V: u0 + 1 - d}, CapB: Point2{U: u0 + d, V: u0 + 1 - d}, SideZ: sideZ, CapZ: capZ},
-		{SideA: Point2{U: u0, V: u0 + 1}, SideB: Point2{U: u0, V: u0}, CapA: Point2{U: u0 + d, V: u0 + 1 - d}, CapB: Point2{U: u0 + d, V: u0 + d}, SideZ: sideZ, CapZ: capZ},
+		{SideA: planePoint{U: u0, V: u0}, SideB: planePoint{U: u0 + 1, V: u0}, CapA: planePoint{U: u0 + d, V: u0 + d}, CapB: planePoint{U: u0 + 1 - d, V: u0 + d}, SideZ: sideZ, CapZ: capZ},
+		{SideA: planePoint{U: u0 + 1, V: u0}, SideB: planePoint{U: u0 + 1, V: u0 + 1}, CapA: planePoint{U: u0 + 1 - d, V: u0 + d}, CapB: planePoint{U: u0 + 1 - d, V: u0 + 1 - d}, SideZ: sideZ, CapZ: capZ},
+		{SideA: planePoint{U: u0 + 1, V: u0 + 1}, SideB: planePoint{U: u0, V: u0 + 1}, CapA: planePoint{U: u0 + 1 - d, V: u0 + 1 - d}, CapB: planePoint{U: u0 + d, V: u0 + 1 - d}, SideZ: sideZ, CapZ: capZ},
+		{SideA: planePoint{U: u0, V: u0 + 1}, SideB: planePoint{U: u0, V: u0}, CapA: planePoint{U: u0 + d, V: u0 + 1 - d}, CapB: planePoint{U: u0 + d, V: u0 + d}, SideZ: sideZ, CapZ: capZ},
 	}
 	exact := capBlendPayload{end: capSetback{dc: d, ds: d}}
 	loose := capBlendPayload{end: capSetback{dc: d, ds: d, dsDelta: dsDelta}}
@@ -460,8 +460,8 @@ func TestPatchAreaOfChargesTheSideLevelRounding(t *testing.T) {
 		// inset by the setback at both ends.
 		const L = 3e6
 		g := capPatchGeom{
-			SideA: Point2{U: 0, V: 0}, SideB: Point2{U: L, V: 0},
-			CapA: Point2{U: d, V: d}, CapB: Point2{U: L - d, V: d},
+			SideA: planePoint{U: 0, V: 0}, SideB: planePoint{U: L, V: 0},
+			CapA: planePoint{U: d, V: d}, CapB: planePoint{U: L - d, V: d},
 			SideZ: sideZ, CapZ: capZ, LevelDelta: levelDelta,
 		}
 		area, bound := capband.AreaOf(g)

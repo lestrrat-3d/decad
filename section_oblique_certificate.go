@@ -117,7 +117,7 @@ func recordExtrudeProfile(s *sketch.Sketch, p *sketch.Profile) (
 	return profile, plane, area, certificate, nil
 }
 
-func reconstructBoundedSection(ctx context.Context, polygon []Point2, frame r3.Frame, delta float64) (
+func reconstructBoundedSection(ctx context.Context, polygon []planePoint, frame r3.Frame, delta float64) (
 	*sketch.Sketch, *sketch.Profile, error,
 ) {
 	if len(polygon) < 3 || delta < 0 {
@@ -177,7 +177,7 @@ func reconstructBoundedSection(ctx context.Context, polygon []Point2, frame r3.F
 	return nil, nil, fmt.Errorf("%w: Sketch did not certify bounded Section polygon", ErrUnsupported)
 }
 
-func sectionSameLineRing(recorded profileRecord, polygon []Point2) bool {
+func sectionSameLineRing(recorded profileRecord, polygon []planePoint) bool {
 	if len(recorded.Holes) != 0 || len(recorded.Outer.Segments) != len(polygon) {
 		return false
 	}

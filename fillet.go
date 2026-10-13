@@ -449,7 +449,7 @@ type matchedCorner struct {
 	edge        *Edge
 	loop        int
 	corner      int
-	point       Point2
+	point       planePoint
 }
 
 func newMatchedCorner(edgeOrdinal int, edge *Edge, loop, corner int, cl cornerLoop) matchedCorner {
@@ -459,7 +459,7 @@ func newMatchedCorner(edgeOrdinal int, edge *Edge, loop, corner int, cl cornerLo
 		edge:        edge,
 		loop:        loop,
 		corner:      corner,
-		point:       Point2{U: w.StartU, V: w.StartV},
+		point:       planePoint{U: w.StartU, V: w.StartV},
 	}
 }
 

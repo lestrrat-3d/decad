@@ -29,7 +29,7 @@ func TestChainGateDiameterRevolveNeverExceedsKnownCone(t *testing.T) {
 	require.NoError(t, err)
 	chains := s.Chains()
 	require.Len(t, chains, 1)
-	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+	axis := SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}}
 	for _, tc := range []struct {
 		name   string
 		extent AngularExtent
@@ -79,15 +79,15 @@ func TestChainWalkEndpointAllowChargesComputedCircularEnds(t *testing.T) {
 		segment curveSegment
 	}{
 		{"circle fragment", circleSeg{
-			Center: Point2{}, Radius: units.Millimeters(1), CCW: true,
+			Center: planePoint{}, Radius: units.Millimeters(1), CCW: true,
 			TStart: 0.0625, TEnd: 0.1875,
 		}},
 		{"trimmed arc", arcSeg{
-			Center: Point2{}, Start: Point2{U: 1}, End: Point2{V: 1},
+			Center: planePoint{}, Start: planePoint{U: 1}, End: planePoint{V: 1},
 			TStart: 0.25, TEnd: 0.75,
 		}},
 		{"natural arc radial residual", arcSeg{
-			Center: Point2{}, Start: Point2{U: 1}, End: Point2{V: 1 + 1e-8},
+			Center: planePoint{}, Start: planePoint{U: 1}, End: planePoint{V: 1 + 1e-8},
 			TStart: 0, TEnd: 1,
 		}},
 	} {
@@ -106,7 +106,7 @@ func TestChainWalkEndpointAllowChargesComputedCircularEnds(t *testing.T) {
 }
 
 func TestChainWalkEndpointAllowKeepsExactArcEndsAtZero(t *testing.T) {
-	arc := arcSeg{Center: Point2{}, Start: Point2{U: 1}, End: Point2{V: 1}, TEnd: 1}
+	arc := arcSeg{Center: planePoint{}, Start: planePoint{U: 1}, End: planePoint{V: 1}, TEnd: 1}
 	require.Zero(t, loftmesh.ArcNaturalEndRadialUpper(arc))
 	allow, ok, err := diameter.ChainWalkEndpointAllow(t.Context(), []chainRecord{{Segments: []curveSegment{arc}}})
 	require.NoError(t, err)

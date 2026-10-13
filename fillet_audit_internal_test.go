@@ -22,10 +22,10 @@ import (
 func TestNestingAuditCancellationReachesSectionBBox(t *testing.T) {
 	t.Parallel()
 	loop := loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TEnd: 1},
-		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TEnd: 1},
-		lineSeg{Start: Point2{U: 10, V: 10}, End: Point2{U: 0, V: 10}, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 10, V: 0}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: 0}, End: planePoint{U: 10, V: 10}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: 10}, End: planePoint{U: 0, V: 10}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 10}, End: planePoint{U: 0, V: 0}, TEnd: 1},
 	}}
 	segs, err := sectionaudit.EntriesOf(nil, []loopRecord{loop})
 	require.NoError(t, err)
@@ -51,21 +51,21 @@ func TestLoopSignedAreaMatchesFullIntegrator(t *testing.T) {
 	t.Parallel()
 	cases := map[string][]curveSegment{
 		"lines with a partial and reverse walk": {
-			lineSeg{Start: Point2{U: 3, V: -4}, End: Point2{U: 9, V: 7}, TStart: 0.125, TEnd: 0.875},
-			lineSeg{Start: Point2{U: -2, V: 5}, End: Point2{U: 7, V: -1}, TStart: 1, TEnd: 0},
+			lineSeg{Start: planePoint{U: 3, V: -4}, End: planePoint{U: 9, V: 7}, TStart: 0.125, TEnd: 0.875},
+			lineSeg{Start: planePoint{U: -2, V: 5}, End: planePoint{U: 7, V: -1}, TStart: 1, TEnd: 0},
 		},
 		"whole circle": {
-			circleSeg{Center: Point2{U: 3, V: -4}, Radius: units.Millimeters(5), CCW: true, TEnd: 1},
+			circleSeg{Center: planePoint{U: 3, V: -4}, Radius: units.Millimeters(5), CCW: true, TEnd: 1},
 		},
 		"clockwise circle fragment": {
-			circleSeg{Center: Point2{U: -3, V: 2}, Radius: units.Millimeters(7),
+			circleSeg{Center: planePoint{U: -3, V: 2}, Radius: units.Millimeters(7),
 				TStart: 0.75, TEnd: 0.125},
 		},
 		"arc and reverse arc": {
-			arcSeg{Center: Point2{U: 1, V: 2}, Start: Point2{U: 6, V: 2},
-				End: Point2{U: 1, V: 7}, TStart: 0.1, TEnd: 0.8},
-			arcSeg{Center: Point2{U: 1, V: 2}, Start: Point2{U: 6, V: 2},
-				End: Point2{U: 1, V: 7}, TStart: 1, TEnd: 0},
+			arcSeg{Center: planePoint{U: 1, V: 2}, Start: planePoint{U: 6, V: 2},
+				End: planePoint{U: 1, V: 7}, TStart: 0.1, TEnd: 0.8},
+			arcSeg{Center: planePoint{U: 1, V: 2}, Start: planePoint{U: 6, V: 2},
+				End: planePoint{U: 1, V: 7}, TStart: 1, TEnd: 0},
 		},
 	}
 	for name, segments := range cases {
@@ -73,7 +73,7 @@ func TestLoopSignedAreaMatchesFullIntegrator(t *testing.T) {
 			t.Parallel()
 			var full regionIntegrals
 			for _, segment := range segments {
-				require.NoError(t, full.AddAnalytic(segment, Point2{}))
+				require.NoError(t, full.AddAnalytic(segment, planePoint{}))
 			}
 			got, err := sectionaudit.LoopSignedArea(nil, loopRecord{Segments: segments})
 			require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestLoopSignedAreaPreservesBudgetAndErrors(t *testing.T) {
 	}
 	for _, segment := range bad {
 		var full regionIntegrals
-		want := full.AddAnalytic(segment, Point2{})
+		want := full.AddAnalytic(segment, planePoint{})
 		require.Error(t, want)
 		_, got := sectionaudit.LoopSignedArea(nil, loopRecord{Segments: []curveSegment{segment}})
 		require.EqualError(t, got, want.Error())
@@ -126,9 +126,9 @@ func TestContactFloorUsesTrueSectionBBox(t *testing.T) {
 		// (0,10). Its endpoint box is 20 wide, 0 tall (diagonal 20); the TRUE box
 		// is 20 wide, 10 tall (diagonal √500).
 		w, err := boundarywalk.WalkOf(arcSeg{
-			Center: Point2{U: 0, V: 0},
-			Start:  Point2{U: 10, V: 0},
-			End:    Point2{U: -10, V: 0},
+			Center: planePoint{U: 0, V: 0},
+			Start:  planePoint{U: 10, V: 0},
+			End:    planePoint{U: -10, V: 0},
 			TEnd:   1,
 		}, freeform.NewFreeformWork())
 		require.NoError(t, err)
@@ -147,7 +147,7 @@ func TestContactFloorUsesTrueSectionBBox(t *testing.T) {
 		// == end, so its endpoint box is a single point (diagonal 0); the TRUE box
 		// is 10×10 (diagonal √200).
 		w, err := boundarywalk.WalkOf(circleSeg{
-			Center: Point2{U: 0, V: 0},
+			Center: planePoint{U: 0, V: 0},
 			Radius: units.Millimeters(5),
 			CCW:    true,
 			TEnd:   1,
@@ -205,10 +205,10 @@ func TestAuditRewriteSingleCornerOverrunIsUnsupported(t *testing.T) {
 	// corner 0 at the origin (arriving down the left wall, leaving along the
 	// bottom wall). Both walls at corner 0 are shorter than the setback below.
 	rect := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 100, V: 0}, TEnd: 1},
-		lineSeg{Start: Point2{U: 100, V: 0}, End: Point2{U: 100, V: 60}, TEnd: 1},
-		lineSeg{Start: Point2{U: 100, V: 60}, End: Point2{U: 0, V: 60}, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: 60}, End: Point2{U: 0, V: 0}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 100, V: 0}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 100, V: 0}, End: planePoint{U: 100, V: 60}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 100, V: 60}, End: planePoint{U: 0, V: 60}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 60}, End: planePoint{U: 0, V: 0}, TEnd: 1},
 	}}}
 
 	// blendOne blends exactly ONE corner of the section (corner 0) at an
@@ -288,10 +288,10 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 
 	t.Run("inter-loop crossing", func(t *testing.T) {
 		horizontal := loopRecord{Segments: []curveSegment{
-			lineSeg{Start: Point2{U: -10, V: 0}, End: Point2{U: 10, V: 0}, TEnd: 1},
+			lineSeg{Start: planePoint{U: -10, V: 0}, End: planePoint{U: 10, V: 0}, TEnd: 1},
 		}}
 		vertical := loopRecord{Segments: []curveSegment{
-			lineSeg{Start: Point2{U: 0, V: -10}, End: Point2{U: 0, V: 10}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: -10}, End: planePoint{U: 0, V: 10}, TEnd: 1},
 		}}
 		budget := proofbound.NewWorkBudget(t.Context())
 		segs, err := sectionaudit.EntriesOf(budget, []loopRecord{horizontal, vertical})
@@ -308,14 +308,14 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 		// exactly on that arc. The interiors never cross — the touch is at the
 		// triangle vertex — yet the loops are not disjoint.
 		quarterDisk := loopRecord{Segments: []curveSegment{
-			lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 20, V: 0}, TEnd: 1},
-			arcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 20, V: 0}, End: Point2{U: 0, V: 20}, TEnd: 1},
-			lineSeg{Start: Point2{U: 0, V: 20}, End: Point2{U: 0, V: 0}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 20, V: 0}, TEnd: 1},
+			arcSeg{Center: planePoint{U: 0, V: 0}, Start: planePoint{U: 20, V: 0}, End: planePoint{U: 0, V: 20}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 20}, End: planePoint{U: 0, V: 0}, TEnd: 1},
 		}}
 		triangleOnArc := loopRecord{Segments: []curveSegment{
-			lineSeg{Start: Point2{U: v, V: v}, End: Point2{U: 30, V: 30}, TEnd: 1},
-			lineSeg{Start: Point2{U: 30, V: 30}, End: Point2{U: 30, V: v}, TEnd: 1},
-			lineSeg{Start: Point2{U: 30, V: v}, End: Point2{U: v, V: v}, TEnd: 1},
+			lineSeg{Start: planePoint{U: v, V: v}, End: planePoint{U: 30, V: 30}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 30, V: 30}, End: planePoint{U: 30, V: v}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 30, V: v}, End: planePoint{U: v, V: v}, TEnd: 1},
 		}}
 		budget := proofbound.NewWorkBudget(t.Context())
 		segs, err := sectionaudit.EntriesOf(budget, []loopRecord{quarterDisk, triangleOnArc})
@@ -332,11 +332,11 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 		// must see the pinch; the touch is at segment 2's endpoint, not an
 		// interior crossing, so the interior-only test misses it.
 		pinched := loopRecord{Segments: []curveSegment{
-			lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 20, V: 0}, TEnd: 1},
-			lineSeg{Start: Point2{U: 20, V: 0}, End: Point2{U: 20, V: 20}, TEnd: 1},
-			lineSeg{Start: Point2{U: 20, V: 20}, End: Point2{U: 10, V: 0}, TEnd: 1},
-			lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: -10}, TEnd: 1},
-			lineSeg{Start: Point2{U: 10, V: -10}, End: Point2{U: 0, V: 0}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 20, V: 0}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 20, V: 0}, End: planePoint{U: 20, V: 20}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 20, V: 20}, End: planePoint{U: 10, V: 0}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 10, V: 0}, End: planePoint{U: 10, V: -10}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 10, V: -10}, End: planePoint{U: 0, V: 0}, TEnd: 1},
 		}}
 		budget := proofbound.NewWorkBudget(t.Context())
 		segs, err := sectionaudit.EntriesOf(budget, []loopRecord{pinched})
@@ -355,15 +355,15 @@ func TestCrossingAuditAcceptsDisjointLoops(t *testing.T) {
 	t.Parallel()
 	t.Run("two well-separated loops", func(t *testing.T) {
 		a := loopRecord{Segments: []curveSegment{
-			lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TEnd: 1},
-			lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TEnd: 1},
-			lineSeg{Start: Point2{U: 10, V: 10}, End: Point2{U: 0, V: 10}, TEnd: 1},
-			lineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 10, V: 0}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 10, V: 0}, End: planePoint{U: 10, V: 10}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 10, V: 10}, End: planePoint{U: 0, V: 10}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 10}, End: planePoint{U: 0, V: 0}, TEnd: 1},
 		}}
 		b := loopRecord{Segments: []curveSegment{
-			lineSeg{Start: Point2{U: 100, V: 100}, End: Point2{U: 110, V: 100}, TEnd: 1},
-			lineSeg{Start: Point2{U: 110, V: 100}, End: Point2{U: 110, V: 110}, TEnd: 1},
-			lineSeg{Start: Point2{U: 110, V: 110}, End: Point2{U: 100, V: 100}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 100, V: 100}, End: planePoint{U: 110, V: 100}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 110, V: 100}, End: planePoint{U: 110, V: 110}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 110, V: 110}, End: planePoint{U: 100, V: 100}, TEnd: 1},
 		}}
 		budget := proofbound.NewWorkBudget(t.Context())
 		segs, err := sectionaudit.EntriesOf(budget, []loopRecord{a, b})
@@ -375,10 +375,10 @@ func TestCrossingAuditAcceptsDisjointLoops(t *testing.T) {
 		// Every consecutive pair of this convex quad shares a vertex; the
 		// adjacency exemption keeps those from reading as contact.
 		quad := loopRecord{Segments: []curveSegment{
-			lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TEnd: 1},
-			lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TEnd: 1},
-			lineSeg{Start: Point2{U: 10, V: 10}, End: Point2{U: 0, V: 10}, TEnd: 1},
-			lineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 10, V: 0}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 10, V: 0}, End: planePoint{U: 10, V: 10}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 10, V: 10}, End: planePoint{U: 0, V: 10}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 10}, End: planePoint{U: 0, V: 0}, TEnd: 1},
 		}}
 		budget := proofbound.NewWorkBudget(t.Context())
 		segs, err := sectionaudit.EntriesOf(budget, []loopRecord{quad})

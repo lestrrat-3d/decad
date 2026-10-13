@@ -17,7 +17,7 @@ import (
 // Several whole source lines may form the same side when they continue
 // exactly forward on one line and Revolve retained one source face for them.
 type revolveSectionSpan struct {
-	start, end  Point2
+	start, end  planePoint
 	sourceEdges []int
 	face        *Face
 	origins     []FeatureRef
@@ -30,7 +30,7 @@ type revolveSectionCertificate struct {
 	spans              []revolveSectionSpan
 	frame              r3.Frame
 	axisSpan, rootSpan int
-	rootStart, rootEnd Point2
+	rootStart, rootEnd planePoint
 	rootCone           Cone
 	coneGap            float64
 }
@@ -57,8 +57,8 @@ func recordedRevolveSection(blank *Body) ([]revolveSectionSpan, int, r3.Frame, b
 	if len(segments) < 4 || len(segments) > 128 {
 		return nil, -1, empty, false
 	}
-	points, ends := make([]Point2, len(segments)), make([]Point2, len(segments))
-	seen := make(map[Point2]struct{}, len(segments))
+	points, ends := make([]planePoint, len(segments)), make([]planePoint, len(segments))
+	seen := make(map[planePoint]struct{}, len(segments))
 	for i, segment := range segments {
 		line, ok := segment.(lineSeg)
 		if !ok || !((line.TStart == 0 && line.TEnd == 1) ||
@@ -128,7 +128,7 @@ func recordedRevolveSection(blank *Body) ([]revolveSectionSpan, int, r3.Frame, b
 	return spans, axisSpan, rp.frame, true
 }
 
-func revolveForwardCollinear(a, b, c Point2) bool {
+func revolveForwardCollinear(a, b, c planePoint) bool {
 	ax := new(big.Rat).Sub(proofarith.FloatRat(b.U), proofarith.FloatRat(a.U))
 	ay := new(big.Rat).Sub(proofarith.FloatRat(b.V), proofarith.FloatRat(a.V))
 	bx := new(big.Rat).Sub(proofarith.FloatRat(c.U), proofarith.FloatRat(b.U))
@@ -236,7 +236,7 @@ func revolveRootCandidates(blank *Body) []revolveSectionCertificate {
 	return candidates
 }
 
-func revolveMeridianResidual(point Point2, slope, originX float64) float64 {
+func revolveMeridianResidual(point planePoint, slope, originX float64) float64 {
 	r := new(big.Rat).Sub(proofarith.FloatRat(point.V),
 		new(big.Rat).Mul(proofarith.FloatRat(slope),
 			new(big.Rat).Sub(proofarith.FloatRat(point.U), proofarith.FloatRat(originX))))

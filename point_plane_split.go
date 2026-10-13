@@ -23,7 +23,7 @@ type pointPlaneSliceRecord struct {
 // and ray intersections below are rational statements about stored floats.
 type pointPlaneLimit struct {
 	nx, ny, d               *big.Rat
-	a, b                    Point2
+	a, b                    planePoint
 	z0, z1                  float64
 	surface                 Plane
 	origins                 []FeatureRef

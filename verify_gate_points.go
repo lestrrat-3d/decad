@@ -177,7 +177,7 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 		}
 		rim := cbp.prismLike(p.geom.CapZ, p.geom.CapZ)
 		rim.Profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{circleSeg{
-			Center: Point2{U: p.geom.CU, V: p.geom.CV}, Radius: units.Millimeters(p.geom.CapRadius),
+			Center: planePoint{U: p.geom.CU, V: p.geom.CV}, Radius: units.Millimeters(p.geom.CapRadius),
 			CCW: true, TStart: 0, TEnd: 1,
 		}}}}
 		rims = append(rims, rim)

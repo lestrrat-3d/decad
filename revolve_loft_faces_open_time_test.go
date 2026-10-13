@@ -42,8 +42,8 @@ func TestRevolveLoftFacesOpenMovingCrossingRefuses(t *testing.T) {
 	span := freeform.BezierSpan{
 		{U: lfZero(), V: lfZero()}, {U: lfOne(), V: lfZero()},
 	}
-	section := revolveSectionSpan{start: Point2{U: 0, V: 1},
-		end: Point2{U: 2, V: 1}}
+	section := revolveSectionSpan{start: planePoint{U: 0, V: 1},
+		end: planePoint{U: 2, V: 1}}
 	m, b := revolveLoftFacesMeridian(section)
 	q := loftface.MeridianQRows(first, last, span, m, b)
 	j := loftface.MeridianJRows(first, last, span, q)

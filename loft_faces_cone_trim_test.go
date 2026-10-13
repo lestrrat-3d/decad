@@ -60,7 +60,7 @@ func TestLoftCapToeConeProofUsesWholeSourceBox(t *testing.T) {
 }
 
 func TestLoftFacesCapRecordChecksVariableSourceShape(t *testing.T) {
-	source := &pointSectionRecord{sourceStation: make([]Point2, 4)}
+	source := &pointSectionRecord{sourceStation: make([]planePoint, 4)}
 	record := &loftFacesCapRecord{source: source, stationGroup: make([]int, 4)}
 	for _, count := range []int{2, 3, 9, maxLoftFacesSections} {
 		record.maps = make([]loftFaceMap, count)

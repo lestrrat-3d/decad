@@ -15,13 +15,13 @@ import (
 // polygon is only a comparison boundary; its vertices carry the exact source
 // and offset positions' outward interval errors.
 type twistOffsetStations struct {
-	outer, inner               []Point2
+	outer, inner               []planePoint
 	outerVertex, innerVertex   []float64
 	outerSpanLen, innerSpanLen []float64
 	outerChord, innerChord     float64
 }
 
-func twistOffsetConvexPolygon(points []Point2) bool {
+func twistOffsetConvexPolygon(points []planePoint) bool {
 	if len(points) < 3 {
 		return false
 	}
@@ -110,32 +110,32 @@ func twistOffsetSourceStation(segment curveSegment, parameter *big.Rat) (
 }
 
 func twistOffsetPointStation(segment curveSegment, parameter *big.Rat,
-	k2, thickness proofbound.RatInterval) (Point2, Point2, float64, float64, error) {
+	k2, thickness proofbound.RatInterval) (planePoint, planePoint, float64, float64, error) {
 	x, y, nx, ny, err := twistOffsetSourceStation(segment, parameter)
 	if err != nil {
-		return Point2{}, Point2{}, 0, 0, err
+		return planePoint{}, planePoint{}, 0, 0, err
 	}
 	// n is the inward unit normal. T=(ny,-nx), hence f=p·T.
 	f := proofbound.IntervalSub(proofbound.IntervalMul(x, ny), proofbound.IntervalMul(y, nx))
 	g, ok := proofbound.SqrtInterval(proofbound.IntervalAdd(twistOffsetUnit(1),
 		proofbound.IntervalMul(k2, proofbound.IntervalSquare(f))))
 	if !ok || g.Lo.Sign() <= 0 {
-		return Point2{}, Point2{}, 0, 0,
+		return planePoint{}, planePoint{}, 0, 0,
 			fmt.Errorf(`%w: twisted shell station has no bounded normal`, ErrUnsupported)
 	}
 	a, ok := proofbound.IntervalQuo(thickness, g)
 	if !ok {
-		return Point2{}, Point2{}, 0, 0,
+		return planePoint{}, planePoint{}, 0, 0,
 			fmt.Errorf(`%w: twisted shell station has no bounded offset`, ErrUnsupported)
 	}
 	beta, ok := proofbound.IntervalQuo(proofbound.IntervalMul(proofbound.IntervalMul(k2, thickness), f), g)
 	if !ok {
-		return Point2{}, Point2{}, 0, 0,
+		return planePoint{}, planePoint{}, 0, 0,
 			fmt.Errorf(`%w: twisted shell station has no bounded offset turn`, ErrUnsupported)
 	}
 	sin, cos, ok := proofbound.RadSinCosSpan(beta)
 	if !ok {
-		return Point2{}, Point2{}, 0, 0,
+		return planePoint{}, planePoint{}, 0, 0,
 			fmt.Errorf(`%w: twisted shell station has no angular enclosure`, ErrUnsupported)
 	}
 	px := proofbound.IntervalAdd(x, proofbound.IntervalMul(a, nx))
@@ -147,7 +147,7 @@ func twistOffsetPointStation(segment curveSegment, parameter *big.Rat,
 		f, _ := middle.Float64()
 		return f
 	}
-	p, q := Point2{U: point(x), V: point(y)}, Point2{U: point(qx), V: point(qy)}
+	p, q := planePoint{U: point(x), V: point(y)}, planePoint{U: point(qx), V: point(qy)}
 	pErr := proofbound.Radius3D(max(proofbound.IntervalFloatError(x, p.U),
 		proofbound.IntervalFloatError(y, p.V)))
 	qErr := proofbound.Radius3D(max(proofbound.IntervalFloatError(qx, q.U),

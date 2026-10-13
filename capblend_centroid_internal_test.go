@@ -298,7 +298,7 @@ func TestChordLocusRegionPointsLieInTheShell(t *testing.T) {
 		Th0: 0.3, Th1: 0.301, CapTh0: 0.3 + 2e-4, CapTh1: 0.301 - 2e-4,
 		SideZ: 19, CapZ: 20,
 	}
-	at := func(r, th float64) Point2 { return Point2{U: r * math.Cos(th), V: r * math.Sin(th)} }
+	at := func(r, th float64) planePoint { return planePoint{U: r * math.Cos(th), V: r * math.Sin(th)} }
 	var ok bool
 	narrow.SkewStart, ok = capband.CornerSkewUpper(0, 0, at(10, narrow.Th0), at(9, narrow.CapTh0), narrow.CapTh0-narrow.Th0)
 	require.True(t, ok)
@@ -590,9 +590,9 @@ func TestSegmentCoordinateUpperCoversTheArc(t *testing.T) {
 		// in its direction.
 		endScale := 0.5 + rng.Float64()
 		seg := arcSeg{
-			Center: Point2{U: cu, V: cv},
-			Start:  Point2{U: cu + r*math.Cos(a0), V: cv + r*math.Sin(a0)},
-			End:    Point2{U: cu + endScale*r*math.Cos(a1), V: cv + endScale*r*math.Sin(a1)},
+			Center: planePoint{U: cu, V: cv},
+			Start:  planePoint{U: cu + r*math.Cos(a0), V: cv + r*math.Sin(a0)},
+			End:    planePoint{U: cu + endScale*r*math.Cos(a1), V: cv + endScale*r*math.Sin(a1)},
 			TStart: 0, TEnd: 1,
 		}
 		got, ok := capband.SegmentCoordinateUpper(seg)
@@ -623,11 +623,11 @@ func TestSegmentCoordinateUpperCoversTheArc(t *testing.T) {
 			`centre (%v, %v) r=%v sweep from %v by %v: the envelope %v must sit at the arc's largest coordinate %v`, cu, cv, r, th0, span, got, want)
 	}
 
-	line := lineSeg{Start: Point2{U: -3, V: 1}, End: Point2{U: 2, V: -5}, TStart: 0, TEnd: 1}
+	line := lineSeg{Start: planePoint{U: -3, V: 1}, End: planePoint{U: 2, V: -5}, TStart: 0, TEnd: 1}
 	got, ok := capband.SegmentCoordinateUpper(line)
 	require.True(t, ok)
 	require.Equal(t, 5.0, got)
-	_, ok = capband.SegmentCoordinateUpper(lineSeg{Start: Point2{}, End: Point2{U: 1}, TStart: -1, TEnd: 1})
+	_, ok = capband.SegmentCoordinateUpper(lineSeg{Start: planePoint{}, End: planePoint{U: 1}, TStart: -1, TEnd: 1})
 	require.False(t, ok, `a range past the entity's own reads the walk's envelope instead`)
 }
 

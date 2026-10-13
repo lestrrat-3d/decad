@@ -129,7 +129,7 @@ func TestPrismPatternFilletSectorRejectsAnotherConnector(t *testing.T) {
 	require.Greater(t, math.Hypot(2.995-2.98, 0.33), 0.3)
 	part := prismPatternPart{prism: prismPayload{Payload: prismrecord.Payload{Xform: r3.Identity()}}}
 	connector, err := prismPatternFilletConnectorSector(part, lineSeg{
-		Start: Point2{U: 2.98, V: 0.33}, End: Point2{U: 3.05, V: 0.01}})
+		Start: planePoint{U: 2.98, V: 0.33}, End: planePoint{U: 3.05, V: 0.01}})
 	require.NoError(t, err)
 	selected := prismPatternFilletSector{lo: big.NewRat(0, 1), hi: big.NewRat(1, 20)}
 	require.False(t, prismPatternFilletSectorsSeparate(selected, connector))

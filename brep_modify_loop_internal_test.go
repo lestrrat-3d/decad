@@ -212,14 +212,14 @@ func TestBrepLoopChamferPocketMouth(t *testing.T) {
 	top := planarFaceAt(t, bp, routeEZ, 10)
 	require.Len(t, top.region.Holes, 1)
 	require.Zero(t, top.delta, "an axis-aligned loop at a millimetre setback has an exact contour")
-	centres := []Point2{{U: 10, V: 15}, {U: 30, V: 15}, {U: 30, V: 25}, {U: 10, V: 25}}
-	var got []Point2
+	centres := []planePoint{{U: 10, V: 15}, {U: 30, V: 15}, {U: 30, V: 25}, {U: 10, V: 25}}
+	var got []planePoint
 	for _, a := range loopArcs(top.region.Holes[0]) {
 		got = append(got, a.center)
 	}
 	require.ElementsMatch(t, centres, got)
-	requireChord(t, top.region.Holes[0], Point2{U: 8.5, V: 15}, Point2{U: 8.5, V: 25})
-	requireChord(t, top.region.Holes[0], Point2{U: 10, V: 13.5}, Point2{U: 30, V: 13.5})
+	requireChord(t, top.region.Holes[0], planePoint{U: 8.5, V: 15}, planePoint{U: 8.5, V: 25})
+	requireChord(t, top.region.Holes[0], planePoint{U: 10, V: 13.5}, planePoint{U: 30, V: 13.5})
 	pocketWalls := 0
 	for _, f := range bp.faces {
 		if !f.planar() && f.z0 == 5 {
@@ -267,7 +267,7 @@ func TestBrepLoopChamferPlateTopLoop(t *testing.T) {
 	require.Equal(t, 14824.5, out.volume.Value.Base())
 	requirePatchKinds(t, out, 4, 0)
 	top := planarFaceAt(t, bp, routeEZ, 10)
-	requireChord(t, top.region.Outer, Point2{U: 1.5, V: 1.5}, Point2{U: 38.5, V: 1.5})
+	requireChord(t, top.region.Outer, planePoint{U: 1.5, V: 1.5}, planePoint{U: 38.5, V: 1.5})
 	walls := 0
 	for _, f := range bp.faces {
 		if !f.planar() && f.z0 == 0 {
@@ -307,16 +307,16 @@ func TestBrepLoopChamferCrossDrilledBothLoops(t *testing.T) {
 	bp := out.payload.(brepPayload)
 	require.Len(t, bp.loopBands, 2)
 	for _, wall := range []curveSegment{
-		lineSeg{Start: Point2{U: 40, V: 0}, End: Point2{U: 40, V: 20}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: 20}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 40, V: 0}, End: planePoint{U: 40, V: 20}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 20}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	} {
 		require.Equal(t, [][2]float64{{1.5, 18.5}}, sweptFaceLevels(bp, wall), "x wall %v", wall)
 	}
 	// The y = 0 wall's frame has u along x and v along z.
 	yWall := planarFaceAt(t, bp, r3.NewVec(0, -1, 0), 0)
-	requireChord(t, yWall.region.Outer, Point2{U: 40, V: 18.5}, Point2{U: 0, V: 18.5})
-	requireChord(t, yWall.region.Outer, Point2{U: 0, V: 1.5}, Point2{U: 40, V: 1.5})
-	requireChord(t, yWall.region.Outer, Point2{U: 0, V: 18.5}, Point2{U: 0, V: 1.5})
+	requireChord(t, yWall.region.Outer, planePoint{U: 40, V: 18.5}, planePoint{U: 0, V: 18.5})
+	requireChord(t, yWall.region.Outer, planePoint{U: 0, V: 1.5}, planePoint{U: 40, V: 1.5})
+	requireChord(t, yWall.region.Outer, planePoint{U: 0, V: 18.5}, planePoint{U: 0, V: 1.5})
 
 	_, again := internalCrossDrilled(t)
 	first, _ := chamferLoopOf(t, again, routeEZ, r3.NewVec(0, 0, 20), 0, 1.5)

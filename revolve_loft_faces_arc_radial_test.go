@@ -17,8 +17,8 @@ func TestMappedArcRadialTimeBandTwoExactTimeCrossings(t *testing.T) {
 	start := s.CreatePoint(2, 0)
 	end := s.CreatePoint(0, 2)
 	arc := s.CreateArc(center, start, end)
-	segment := arcSeg{Center: Point2{}, Start: Point2{U: 2},
-		End: Point2{V: 2}, TStart: 0, TEnd: 1}
+	segment := arcSeg{Center: planePoint{}, Start: planePoint{U: 2},
+		End: planePoint{V: 2}, TStart: 0, TEnd: 1}
 	zero, one := lfZero(), lfOne()
 	first := loftFaceMap{Constant: loftFaceRatVec{zero, zero, zero},
 		Q0: loftFaceRatVec{zero, zero, zero},
@@ -38,7 +38,7 @@ func TestMappedArcRadialTimeBandTwoExactTimeCrossings(t *testing.T) {
 		},
 		maps: []loftFaceMap{first, second},
 	}
-	meridian := revolveSectionSpan{start: Point2{V: 1.5}, end: Point2{U: 1, V: 1.5}}
+	meridian := revolveSectionSpan{start: planePoint{V: 1.5}, end: planePoint{U: 1, V: 1.5}}
 	_, certified := mappedArcFiniteSide(context.Background(), &loftFacesTrimRecord{}, 0, meridian)
 	require.False(t, certified)
 	got, certified := mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)

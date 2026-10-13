@@ -40,7 +40,7 @@ func WithSectionScale(factors ...units.Value) SweepOption {
 }
 
 // mitredSweepLoops adapts SM2's whole-line profile gate to its record.
-func mitredSweepLoops(profile profileRecord) ([]Point2, [][]int, error) {
+func mitredSweepLoops(profile profileRecord) ([]planePoint, [][]int, error) {
 	points, loops, err := sweepmitre.Loops(profile.Outer, profile.Holes)
 	return point2FromRecordSlice(points), loops, err
 }

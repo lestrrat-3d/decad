@@ -23,7 +23,7 @@ func spiralHeldBlankRadialAllowance(ctx context.Context, blank *Body,
 	if group < 0 {
 		return 0, false, nil
 	}
-	cycle := [6]Point2{source.toeAxis, source.heelAxis, source.heelOuter,
+	cycle := [6]planePoint{source.toeAxis, source.heelAxis, source.heelOuter,
 		source.ded, source.toeRoot, source.toeOuter}
 	a, z := cycle[edge], cycle[(edge+1)%len(cycle)]
 	if a.U == z.U {

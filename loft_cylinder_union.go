@@ -111,7 +111,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		return nil, false, nil
 	}
 	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
-	if !ok || circle.Center != (Point2{}) || !circle.CCW {
+	if !ok || circle.Center != (planePoint{}) || !circle.CCW {
 		return nil, false, nil
 	}
 	radius := circle.Radius.Base()
@@ -287,7 +287,7 @@ func loftCylinderSectionKinds(lp loftPayload) bool {
 			return false
 		}
 		arc, ok := segments[5].(arcSeg)
-		if !ok || arc.Center != (Point2{}) || arc.TStart != 1 || arc.TEnd != 0 {
+		if !ok || arc.Center != (planePoint{}) || arc.TStart != 1 || arc.TEnd != 0 {
 			return false
 		}
 		if start.TStart != 0 || start.TEnd != 1 || end.TStart != 0 || end.TEnd != 1 ||
@@ -325,7 +325,7 @@ func loftCylinderRootCollar(lp loftPayload, radius, height float64) (float64, bo
 		x, y := proofarith.FloatRat(arc.Start.U), proofarith.FloatRat(arc.Start.V)
 		q[cap] = new(big.Rat).Mul(scale2,
 			new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y)))
-		for end, p := range []Point2{arc.Start, arc.End} {
+		for end, p := range []planePoint{arc.Start, arc.End} {
 			angles[cap][end] = proofbound.Atan2Interval(
 				proofarith.FloatRat(p.V), proofarith.FloatRat(p.U), false)
 		}

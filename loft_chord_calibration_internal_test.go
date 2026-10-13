@@ -308,9 +308,9 @@ func TestLoftChordCalibrationTrueOutlineIsTheChordedTwin(t *testing.T) {
 				continue
 			}
 			switch {
-			case line.Start == (Point2{}):
+			case line.Start == (planePoint{}):
 				feet = append(feet, [2]float64{line.End.U, line.End.V})
-			case line.End == (Point2{}):
+			case line.End == (planePoint{}):
 				feet = append(feet, [2]float64{line.Start.U, line.Start.V})
 			default:
 				t.Fatalf("a true wedge outline's straight segments are radial, but %v reaches the origin at neither end", line)

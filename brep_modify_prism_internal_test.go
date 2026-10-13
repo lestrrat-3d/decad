@@ -233,14 +233,14 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 		require.Equal(t, r3.NewVec(1, 0, 0), r.pp.Frame.V())
 		require.Equal(t, r3.NewVec(0, 1, 0), r.pp.Frame.N())
 		line := func(u0, v0, u1, v1 float64) curveSegment {
-			return lineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1}
+			return lineSeg{Start: planePoint{U: u0, V: v0}, End: planePoint{U: u1, V: v1}, TStart: 0, TEnd: 1}
 		}
 		want := profileRecord{
 			Outer: loopRecord{Segments: []curveSegment{
 				line(0, 40, 0, 0), line(0, 0, 20, 0), line(20, 0, 20, 40), line(20, 40, 0, 40),
 			}},
 			Holes: []loopRecord{{Segments: []curveSegment{
-				circleSeg{Center: Point2{U: 10, V: 20}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0},
+				circleSeg{Center: planePoint{U: 10, V: 20}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0},
 			}}},
 		}
 		require.Equal(t, want, r.pp.Profile)
@@ -256,7 +256,7 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 	t.Run("wall against its material", func(t *testing.T) {
 		t.Parallel()
 		bp := internalCrossDrilledBrep(t)
-		bp.faces[6].wall = circleSeg{Center: Point2{U: 20, V: 10}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
+		bp.faces[6].wall = circleSeg{Center: planePoint{U: 20, V: 10}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
 		_, ok := read(t, bp, 1)
 		require.False(t, ok)
 	})
@@ -298,7 +298,7 @@ func internalTwoHoleBrep(t *testing.T) brepPayload {
 	bp := internalCrossDrilledBrep(t)
 	hole := func(x float64) loopRecord {
 		return loopRecord{Segments: []curveSegment{
-			circleSeg{Center: Point2{U: x, V: 10}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0},
+			circleSeg{Center: planePoint{U: x, V: 10}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0},
 		}}
 	}
 	outer := bp.faces[4].region.Outer

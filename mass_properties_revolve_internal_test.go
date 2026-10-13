@@ -23,7 +23,7 @@ func TestRevolveMassPropertiesRefusesUnchargedTerms(t *testing.T) {
 	_, err = sk.Solve(t.Context())
 	require.NoError(t, err)
 	body, err := Revolve(t.Context(), New(), sk, sk.Profiles()[0],
-		SketchLine{Start: Point2{}, End: Point2{U: 1}},
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}},
 		AngleExtent{A: units.Degrees(90), Dir: Along})
 	require.NoError(t, err)
 	base, ok := body.payload.(revolvePayload)

@@ -98,7 +98,7 @@ func twistOffsetArcSpan(edge arcSeg, first, last, parts int64) (twistOffsetSpan,
 			big.NewRat(last-first, parts))}, nil
 }
 
-func twistOffsetSegmentEnds(segment curveSegment) (Point2, Point2, twistOffsetTangent, twistOffsetTangent, bool) {
+func twistOffsetSegmentEnds(segment curveSegment) (planePoint, planePoint, twistOffsetTangent, twistOffsetTangent, bool) {
 	switch edge := segment.(type) {
 	case lineSeg:
 		dx := new(big.Rat).Sub(twistRat(edge.End.U), twistRat(edge.Start.U))
@@ -116,7 +116,7 @@ func twistOffsetSegmentEnds(segment curveSegment) (Point2, Point2, twistOffsetTa
 		}
 		return edge.Start, edge.End, start, end, true
 	default:
-		return Point2{}, Point2{}, twistOffsetTangent{}, twistOffsetTangent{}, false
+		return planePoint{}, planePoint{}, twistOffsetTangent{}, twistOffsetTangent{}, false
 	}
 }
 

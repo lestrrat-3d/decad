@@ -68,7 +68,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		return nil
 	}
 	meridianLen, meridianBound := heldOf(filletband.MeridianLength(rIv))
-	meridian := func(foot Point2, vertex Point2, w survey2d.SideWalk, capV, sideV *Vertex) *Edge {
+	meridian := func(foot planePoint, vertex planePoint, w survey2d.SideWalk, capV, sideV *Vertex) *Edge {
 		nu, nv := foot.U-vertex.U, foot.V-vertex.V
 		length := math.Hypot(nu, nv)
 		normal := pl.Dir(nu/length, nv/length, 0)
@@ -121,7 +121,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			}
 			j := fr.joins[k]
 			w := fr.walks[k]
-			vertex := Point2{U: w.StartU, V: w.StartV}
+			vertex := planePoint{U: w.StartU, V: w.StartV}
 			trail[k] = meridian(j.PA, vertex, w, arc.start, side[k].start)
 			lead[k] = meridian(j.PB, vertex, w, arc.end, side[k].start)
 			continue
@@ -129,7 +129,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		if fr.loop.Corners[k] == filletband.Tangent {
 			j := fr.joins[k]
 			w := fr.walks[k]
-			trail[k] = meridian(j.M, Point2{U: w.StartU, V: w.StartV}, w, capV, sideV)
+			trail[k] = meridian(j.M, planePoint{U: w.StartU, V: w.StartV}, w, capV, sideV)
 			lead[k] = trail[k]
 			continue
 		}

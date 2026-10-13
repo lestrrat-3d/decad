@@ -56,7 +56,7 @@ func recognizeCrossCylinderBore(target, tool *Body) *crossCylinderBoreRecord {
 	// The canonical cardinal pose is intentionally narrow. It gives the
 	// source intersection two explicit positive/negative X branches.
 	tp, outer, ok := crossCylinderCircleSource(target, r3.Vec{X: 1}, r3.Vec{Y: 1})
-	if !ok || outer.Center != (Point2{}) || tp.Z0 != 0 ||
+	if !ok || outer.Center != (planePoint{}) || tp.Z0 != 0 ||
 		proofbound.IsNonFinite(tp.Z1) || tp.Z1 <= 0 {
 		return nil
 	}

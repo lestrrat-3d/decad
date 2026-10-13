@@ -204,7 +204,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		e := topo.embeds[fi]
 		loops := make([][]int, len(topo.planar[fi]))
 		loopSag := make([]float64, len(loops))
-		var pts []Point2
+		var pts []planePoint
 		var meshIdx []int
 		trim, capSlack := 0.0, 0.0
 		ringLoop := map[int]int{}
@@ -274,7 +274,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			}
 			for _, vi := range poly[:len(poly)-1] {
 				local := e.Local(canon[vi])
-				pts = append(pts, Point2{U: local[0], V: local[1]})
+				pts = append(pts, planePoint{U: local[0], V: local[1]})
 				meshIdx = append(meshIdx, vi)
 				loops[u.Loop] = append(loops[u.Loop], len(pts)-1)
 			}
@@ -475,7 +475,7 @@ func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e br
 	}
 	samples, bounds := sampled.Samples, sampled.BoundOf
 	if !w.Closed {
-		samples = append(samples, Point2{U: w.EndU, V: w.EndV})
+		samples = append(samples, planePoint{U: w.EndU, V: w.EndV})
 		bounds = append(bounds, boundarywalk.DenotedEndBound(f.wall, w))
 	}
 	wm := brepWallMesh{sag: sampled.MaxSag, wallSlack: sampled.WallSlack, capSlack: sampled.CapSlack,
@@ -552,7 +552,7 @@ func brepWallClearance(ctx context.Context, bp brepPayload, topo *brepTopology, 
 	type wallLine struct {
 		axis   int
 		lo, hi float64
-		pts    []Point2
+		pts    []planePoint
 		sag    float64
 	}
 	var lines []wallLine
@@ -578,7 +578,7 @@ func brepWallClearance(ctx context.Context, bp brepPayload, topo *brepTopology, 
 					n++
 				}
 			}
-			line.pts = append(line.pts, Point2{U: p[0], V: p[1]})
+			line.pts = append(line.pts, planePoint{U: p[0], V: p[1]})
 		}
 		lines = append(lines, line)
 	}
@@ -591,7 +591,7 @@ func brepWallClearance(ctx context.Context, bp brepPayload, topo *brepTopology, 
 			if a.axis != b.axis || math.Max(a.lo, b.lo) >= math.Min(a.hi, b.hi) {
 				continue
 			}
-			ends := []Point2{a.pts[0], a.pts[len(a.pts)-1]}
+			ends := []planePoint{a.pts[0], a.pts[len(a.pts)-1]}
 			if slices.Contains(ends, b.pts[0]) || slices.Contains(ends, b.pts[len(b.pts)-1]) {
 				continue
 			}

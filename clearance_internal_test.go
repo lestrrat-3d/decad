@@ -926,7 +926,7 @@ func TestNewBodyGeomRefusesSurfaceResultRevolve(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := New()
-	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+	axis := SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}}
 	extent := AngleExtent{A: units.Degrees(90), Dir: Along}
 	sheet, err := Revolve(t.Context(), doc, s, s.Profiles()[0], axis, extent, WithSurfaceResult())
 	require.NoError(t, err)

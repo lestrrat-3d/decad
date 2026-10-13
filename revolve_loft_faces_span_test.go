@@ -45,8 +45,8 @@ func TestMappedEndpointTimeRoots(t *testing.T) {
 }
 
 func TestMappedEndpointFiniteSection(t *testing.T) {
-	section := revolveSectionSpan{start: Point2{U: 5.7, V: 2.28},
-		end: Point2{U: 5.8, V: 3.3}}
+	section := revolveSectionSpan{start: planePoint{U: 5.7, V: 2.28},
+		end: planePoint{U: 5.8, V: 3.3}}
 	x0, x1 := big.NewRat(5, 1), big.NewRat(6, 1)
 	outside := loftface.EndpointRoot{Time: loftFaceInterval{
 		Lo: big.NewRat(1, 8), Hi: big.NewRat(1, 8)}}
@@ -91,8 +91,8 @@ func TestMappedSpanAxialHull(t *testing.T) {
 	if !ok || x.Lo.Cmp(big.NewRat(45, 8)) != 0 || x.Hi.Cmp(big.NewRat(25, 4)) != 0 {
 		t.Fatalf("expected exact affine mapped X hull, got %+v, %t", x, ok)
 	}
-	section := revolveSectionSpan{start: Point2{U: 6.5, V: 1},
-		end: Point2{U: 7, V: 2}}
+	section := revolveSectionSpan{start: planePoint{U: 6.5, V: 1},
+		end: planePoint{U: 7, V: 2}}
 	if !revolveLoftFacesSpanAxialMiss(first, last, span, section,
 		big.NewRat(1, 2), big.NewRat(1, 1), big.NewRat(1, 8), big.NewRat(1, 4)) {
 		t.Fatal("mapped span should miss the finite section")

@@ -26,15 +26,15 @@ type pointSectionRecord struct {
 	profile             profileRecord
 	plane               planeRecord
 	source              *pointSectionSource
-	sourceBox           [4]float64 // U min/max, V min/max; contains the true region and station polygon
-	sourceBoxIssued     [4]float64 // original source rectangle at LoftFromPoint publication
-	sourceAreaDelta     float64    // area of the symmetric difference between source region and station polygon
-	sourceStation       []Point2   // original local station coordinates, in source loop order
-	sourceStationIssued []Point2   // station coordinates published with the original point loft
-	sourceStationRound  float64    // local error of every held station against its exact curve point
-	sourceRoundIssued   float64    // station error published with the original point loft
-	sourceArcUpper      []float64  // per-cell source curve speed in world millimetres
-	sourceMatched       []float64  // per-cell parameter-matched source departure in world millimetres
+	sourceBox           [4]float64   // U min/max, V min/max; contains the true region and station polygon
+	sourceBoxIssued     [4]float64   // original source rectangle at LoftFromPoint publication
+	sourceAreaDelta     float64      // area of the symmetric difference between source region and station polygon
+	sourceStation       []planePoint // original local station coordinates, in source loop order
+	sourceStationIssued []planePoint // station coordinates published with the original point loft
+	sourceStationRound  float64      // local error of every held station against its exact curve point
+	sourceRoundIssued   float64      // station error published with the original point loft
+	sourceArcUpper      []float64    // per-cell source curve speed in world millimetres
+	sourceMatched       []float64    // per-cell parameter-matched source departure in world millimetres
 }
 
 // pointSectionSource names the live Sketch entities authenticated when the
@@ -252,9 +252,9 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 	basisUpper := proofbound.AbsSumUpper(basisU, basisV)
 	record.sourceArcUpper = make([]float64, len(pair.ArcUpperW))
 	record.sourceMatched = make([]float64, len(pair.MatchedDelta))
-	record.sourceStation = make([]Point2, len(pair.W))
+	record.sourceStation = make([]planePoint, len(pair.W))
 	for j := range pair.ArcUpperW {
-		record.sourceStation[j] = Point2{U: pair.W[j].U, V: pair.W[j].V}
+		record.sourceStation[j] = planePoint{U: pair.W[j].U, V: pair.W[j].V}
 		record.sourceArcUpper[j] = proofbound.ProductUpper(pair.ArcUpperW[j], basisUpper)
 		record.sourceMatched[j] = proofbound.ProductUpper(
 			proofbound.AbsSumUpper(pair.MatchedDelta[j], stationRound, sectionDelta), basisUpper)

@@ -20,7 +20,7 @@ import (
 func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 	t.Parallel()
 	base := math.Ldexp(1, 53)
-	points := []Point2{{U: base, V: 0}, {U: base + 100, V: 0},
+	points := []planePoint{{U: base, V: 0}, {U: base + 100, V: 0},
 		{U: base + 100, V: 60}, {U: base, V: 60}}
 	segments := make([]curveSegment, len(points))
 	for i := range points {
@@ -87,7 +87,7 @@ func TestThickenRibbonUnrepresentableOffset(t *testing.T) {
 	t.Parallel()
 	base := math.Ldexp(1, 53)
 	chain := chainRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: base, V: 0}, End: Point2{U: base, V: 40}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: base, V: 0}, End: planePoint{U: base, V: 40}, TStart: 0, TEnd: 1},
 	}}
 	budget := proofbound.NewWorkBudget(t.Context())
 	_, err := thickenaxis.RibbonProfile(t.Context(), chain, 1, 0, 1, budget, freeform.NewFreeformWork(), nil)
@@ -99,7 +99,7 @@ func TestThickenRibbonUnrepresentableOffset(t *testing.T) {
 // assembled, each on its own stated reason.
 func TestThickenRibbonWalkClassRefusals(t *testing.T) {
 	t.Parallel()
-	line := func(a, b Point2) curveSegment {
+	line := func(a, b planePoint) curveSegment {
 		return lineSeg{Start: a, End: b, TStart: 0, TEnd: 1}
 	}
 	for _, tc := range []struct {
@@ -108,15 +108,15 @@ func TestThickenRibbonWalkClassRefusals(t *testing.T) {
 		want  string
 	}{
 		{"not axis parallel", chainRecord{Segments: []curveSegment{
-			line(Point2{U: 0, V: 0}, Point2{U: 10, V: 10}),
+			line(planePoint{U: 0, V: 0}, planePoint{U: 10, V: 10}),
 		}}, "not axis-parallel"},
 		{"reverses on itself", chainRecord{Segments: []curveSegment{
-			line(Point2{U: 0, V: 0}, Point2{U: 10, V: 0}),
-			line(Point2{U: 10, V: 0}, Point2{U: 0, V: 0}),
+			line(planePoint{U: 0, V: 0}, planePoint{U: 10, V: 0}),
+			line(planePoint{U: 10, V: 0}, planePoint{U: 0, V: 0}),
 		}}, "not a right angle"},
 		{"arc segment", chainRecord{Segments: []curveSegment{
-			arcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 10, V: 0},
-				End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
+			arcSeg{Center: planePoint{U: 0, V: 0}, Start: planePoint{U: 10, V: 0},
+				End: planePoint{U: 0, V: 10}, TStart: 0, TEnd: 1},
 		}}, "line-only axis-parallel segments"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

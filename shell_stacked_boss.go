@@ -54,7 +54,7 @@ func (r bossRect) inset(t float64) bossRect {
 	return bossRect{r.u0 + t, r.v0 + t, r.u1 - t, r.v1 - t}
 }
 func (r bossRect) profile() profileRecord {
-	pts := [4]Point2{{U: r.u0, V: r.v0}, {U: r.u1, V: r.v0}, {U: r.u1, V: r.v1}, {U: r.u0, V: r.v1}}
+	pts := [4]planePoint{{U: r.u0, V: r.v0}, {U: r.u1, V: r.v0}, {U: r.u1, V: r.v1}, {U: r.u0, V: r.v1}}
 	segs := make([]curveSegment, 4)
 	for i := range segs {
 		segs[i] = lineSeg{Start: pts[i], End: pts[(i+1)%4], TEnd: 1}
@@ -69,7 +69,7 @@ func recordedBossRect(p profileRecord) (bossRect, bool) {
 		return bossRect{}, false
 	}
 	var r bossRect
-	var pts [4]Point2
+	var pts [4]planePoint
 	for i, seg := range p.Outer.Segments {
 		line, ok := seg.(lineSeg)
 		if !ok || line.TStart != 0 || line.TEnd != 1 {
@@ -97,7 +97,7 @@ func recordedBossRect(p profileRecord) (bossRect, bool) {
 	if !(r.width() > 0 && r.height() > 0) {
 		return bossRect{}, false
 	}
-	seen := map[Point2]bool{}
+	seen := map[planePoint]bool{}
 	for _, p := range pts {
 		if seen[p] || !((p.U == r.u0 || p.U == r.u1) && (p.V == r.v0 || p.V == r.v1)) {
 			return bossRect{}, false

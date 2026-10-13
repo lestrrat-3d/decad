@@ -10,31 +10,31 @@ import (
 
 type planeRecord = sectionrecord.PlaneRecord
 
+// planePoint is the evaluator's plane-local coordinate. Point2 is its public
+// spelling; both share one underlying struct, so a value assigns either way.
+type planePoint = sectionrecord.Point2
+
 // Point2 is a plane-local coordinate in millimetres.
 type Point2 struct {
 	U float64 `json:"u"`
 	V float64 `json:"v"`
 }
 
-func point2FromRecordSlice(points []sectionrecord.Point2) []Point2 {
+func point2FromRecordSlice(points []sectionrecord.Point2) []planePoint {
 	if points == nil {
 		return nil
 	}
-	out := make([]Point2, len(points))
-	for i, point := range points {
-		out[i] = point
-	}
+	out := make([]planePoint, len(points))
+	copy(out, points)
 	return out
 }
 
-func point2ToRecordSlice(points []Point2) []sectionrecord.Point2 {
+func point2ToRecordSlice(points []planePoint) []sectionrecord.Point2 {
 	if points == nil {
 		return nil
 	}
 	out := make([]sectionrecord.Point2, len(points))
-	for i, point := range points {
-		out[i] = point
-	}
+	copy(out, points)
 	return out
 }
 

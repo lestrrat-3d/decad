@@ -56,7 +56,7 @@ func denseSpanExtreme(t *testing.T, spans []freeform.BezierSpan, gu, gv float64,
 // splineProfile wraps a single cubic SplineSeg as an (open) one-segment
 // profile — prismextent.ProfileBoundaryExtremes reads segment geometry alone and
 // needs no closed loop.
-func splineProfile(control []Point2) profileRecord {
+func splineProfile(control []planePoint) profileRecord {
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		splineSeg{Control: point2ToRecordSlice(control), TStart: 0, TEnd: 1},
 	}}}
@@ -76,7 +76,7 @@ func identityFrame(t *testing.T) r3.Frame {
 // direction §6.2 names.
 func TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly(t *testing.T) {
 	t.Parallel()
-	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
+	control := []planePoint{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
 	profile := splineProfile(control)
 
 	lo, hi, bound, err := prismextent.ProfileBoundaryExtremes(t.Context(), profile, 0, 1, freeform.NewFreeformWork(), nil)
@@ -102,7 +102,7 @@ func TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly(t *testing.T) {
 // candidate set is the two exact endpoints and nothing else.
 func TestBoundaryExtremesBoundedEndpointExtremeIsExact(t *testing.T) {
 	t.Parallel()
-	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
+	control := []planePoint{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
 	profile := splineProfile(control)
 
 	lo, hi, bound, err := prismextent.ProfileBoundaryExtremes(t.Context(), profile, 1, 0, freeform.NewFreeformWork(), nil)
@@ -186,7 +186,7 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 	t.Parallel()
 	seg := nurbsSeg{
 		Degree: 2,
-		Control: point2ToRecordSlice([]Point2{
+		Control: point2ToRecordSlice([]planePoint{
 			{U: 0, V: 0}, {U: 1, V: 1}, {U: 2, V: 0}, {U: 2, V: 0}, {U: 2, V: 0},
 		}),
 		Knots:   []float64{0, 0, 0, 0.5, 0.5, 1, 1, 1},
@@ -278,7 +278,7 @@ func TestSpanExtremeEnclosureNonFiniteDirectionRefuses(t *testing.T) {
 func TestBoundaryExtremesBoundedNonFiniteDirectionRefuses(t *testing.T) {
 	t.Parallel()
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	for _, tc := range []struct {
 		name   string
@@ -324,7 +324,7 @@ func TestRequireFiniteDirectionAllocatesNothing(t *testing.T) {
 // test 8b is the same two readings on a section whose bracket has none.
 func TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate(t *testing.T) {
 	t.Parallel()
-	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
+	control := []planePoint{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	pp := prismPayload{Payload: prismrecord.Payload{
 		Profile: splineProfile(control),
 		Frame:   identityFrame(t),
@@ -355,7 +355,7 @@ func TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate(t *testing.T) 
 // coordinates themselves.
 func TestPrismBoundsFreeformEndpointHeldExtremesStayExact(t *testing.T) {
 	t.Parallel()
-	control := []Point2{{U: 0, V: 0}, {U: 1, V: 1}, {U: 2, V: 2}, {U: 3, V: 3}}
+	control := []planePoint{{U: 0, V: 0}, {U: 1, V: 1}, {U: 2, V: 2}, {U: 3, V: 3}}
 	pp := prismPayload{Payload: prismrecord.Payload{
 		Profile: splineProfile(control),
 		Frame:   identityFrame(t),
@@ -385,7 +385,7 @@ func TestPrismBoundsFreeformEndpointHeldExtremesStayExact(t *testing.T) {
 // analytic prism's Box still reports Exact with a zero bound.
 func TestBoundaryExtremesContextRegression(t *testing.T) {
 	t.Parallel()
-	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
+	control := []planePoint{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	// V (not U) has an interior extreme on this fixture (see the comment on
 	// TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate).
 	_, _, bound, err := prismextent.ProfileBoundaryExtremes(t.Context(), splineProfile(control), 0, 1, freeform.NewFreeformWork(), nil)
@@ -398,10 +398,10 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	analytic := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 10, V: 10}, End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 10, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: 0}, End: planePoint{U: 10, V: 10}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: 10}, End: planePoint{U: 0, V: 10}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 10}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	pp := prismPayload{Payload: prismrecord.Payload{Profile: analytic, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
 	box, err := prismBoundsContext(t.Context(), pp, freeform.NewFreeformWork(), nil)
@@ -418,7 +418,7 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 // bracket all admit them; only gu*u + gv*v runs off the range.
 func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.T) {
 	t.Parallel()
-	control := []Point2{
+	control := []planePoint{
 		{U: 1e308, V: 1e308},
 		{U: 1.2e308, V: 1e308},
 		{U: 1.4e308, V: 1.2e308},
@@ -499,7 +499,7 @@ func TestFreeformExtremeFloatsRefusesUnrepresentableEnclosures(t *testing.T) {
 func TestBoundaryExtremesBoundedContextCancellation(t *testing.T) {
 	t.Parallel()
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

@@ -202,7 +202,7 @@ func signsOf(coeffs []*big.Rat) []int {
 	return out
 }
 
-func unitWeightCubic(control []Point2) nurbsSeg {
+func unitWeightCubic(control []planePoint) nurbsSeg {
 	return nurbsSeg{
 		Degree:  3,
 		Control: point2ToRecordSlice(control),
@@ -219,7 +219,7 @@ func unitWeightCubic(control []Point2) nurbsSeg {
 // the turns would publish convex for this wall.
 func TestSingleSignPolygonTurnsProveNoCurvatureSign(t *testing.T) {
 	t.Parallel()
-	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
+	seg := unitWeightCubic([]planePoint{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
 	require.NoError(t, validateSegment(seg), "record.go admits the net: no distinctness or convexity gate exists")
 
 	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
@@ -281,7 +281,7 @@ func TestSingleSignPolygonTurnsProveNoCurvatureSign(t *testing.T) {
 // regularity precondition.
 func TestMixedCurvatureAtTheSubdivisionDepthCapRefusesR19(t *testing.T) {
 	t.Parallel()
-	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
+	seg := unitWeightCubic([]planePoint{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
 	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.False(t, reversed)
@@ -306,7 +306,7 @@ func TestMixedCurvatureAtTheSubdivisionDepthCapRefusesR19(t *testing.T) {
 func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
 	t.Parallel()
 	seg := splineSeg{
-		Control: point2ToRecordSlice([]Point2{
+		Control: point2ToRecordSlice([]planePoint{
 			{U: -1.0 / 8, V: 1.0 / 4}, {U: 1.0 / 8, V: -1.0 / 12},
 			{U: -1.0 / 8, V: -1.0 / 12}, {U: 1.0 / 8, V: 1.0 / 4},
 		}),
@@ -371,7 +371,7 @@ func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
 // strict entries and would publish convex outright.
 func TestEndpointCuspEscapesAHalfOpenRootCount(t *testing.T) {
 	t.Parallel()
-	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1.0 / 3, V: 0}, {U: 1, V: 1}})
+	seg := unitWeightCubic([]planePoint{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1.0 / 3, V: 0}, {U: 1, V: 1}})
 	require.NoError(t, validateSegment(seg), "record.go admits coincident adjacent controls")
 
 	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
@@ -405,7 +405,7 @@ func TestCollinearNetProvesTheZeroCurvatureNumerator(t *testing.T) {
 	t.Parallel()
 	seg := nurbsSeg{
 		Degree:  2,
-		Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 2, V: 0}}),
+		Control: point2ToRecordSlice([]planePoint{{U: 0, V: 0}, {U: 1, V: 0}, {U: 2, V: 0}}),
 		Knots:   []float64{0, 0, 0, 1, 1, 1},
 		Weights: []float64{1, 1, 1},
 		TStart:  0,
@@ -438,7 +438,7 @@ func TestCollinearNetProvesTheZeroCurvatureNumerator(t *testing.T) {
 // containment or convexity rule phrased over recorded points misses the curve.
 func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 	t.Parallel()
-	fit := []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 2, V: 1}, {U: 3, V: 0}}
+	fit := []planePoint{{U: 0, V: 0}, {U: 1, V: 0}, {U: 2, V: 1}, {U: 3, V: 0}}
 	seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
 
@@ -507,7 +507,7 @@ func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 func degreeOneNURBS(tStart, tEnd float64) nurbsSeg {
 	return nurbsSeg{
 		Degree:  1,
-		Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}}),
+		Control: point2ToRecordSlice([]planePoint{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}}),
 		Knots:   []float64{0, 0, 1, 2, 2},
 		Weights: []float64{1, 1, 1},
 		TStart:  tStart,
@@ -582,7 +582,7 @@ func TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree(t *testing.T) {
 	t.Parallel()
 	seg := nurbsSeg{
 		Degree:  2,
-		Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}}),
+		Control: point2ToRecordSlice([]planePoint{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}}),
 		Knots:   []float64{0, 0, 0, 1, 1, 1},
 		Weights: []float64{1, 1, 1},
 		TStart:  0,
@@ -627,7 +627,7 @@ func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
 	t.Parallel()
 	seg := nurbsSeg{
 		Degree: 1,
-		Control: point2ToRecordSlice([]Point2{
+		Control: point2ToRecordSlice([]planePoint{
 			{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 0}, {U: 1, V: 0}, {U: 1, V: 1},
 		}),
 		Knots:   []float64{0, 0, 1, 2, 3, 4, 4},
@@ -675,7 +675,7 @@ func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
 // so both routes read the same signs.
 func TestMidpointSplitCreatesAKnownZeroJoint(t *testing.T) {
 	t.Parallel()
-	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
+	seg := unitWeightCubic([]planePoint{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
 	spans, reversed, err := splinebezier.FreeformBezierSpans(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 1)
@@ -802,7 +802,7 @@ func TestClosedChainAddsTheWrapJointAnOpenChainNeverReads(t *testing.T) {
 func degreeTwoConvexityFixture(t *testing.T) ([]freeform.BezierSpan, bool) {
 	seg := nurbsSeg{
 		Degree:  2,
-		Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}}),
+		Control: point2ToRecordSlice([]planePoint{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}}),
 		Knots:   []float64{0, 0, 0, 1, 1, 1},
 		Weights: []float64{1, 1, 1},
 		TStart:  0,
@@ -882,20 +882,20 @@ func spanStrings(span freeform.BezierSpan) [][]string {
 // 13 interior joints' cross products alternate sign (8 positive, 5 negative)
 // — pure artifacts of sketch's rounded natural-cubic solve, since the true
 // curve's tangent is C1 there by the interpolant's own definition.
-func involuteFitPoints() []Point2 {
+func involuteFitPoints() []planePoint {
 	const module, toothNumber, pressureAngle = 1.0, 17.0, 20 * math.Pi / 180
 	pitchR := module * toothNumber / 2
 	baseR := pitchR * math.Cos(pressureAngle)
 	tipR := (module*toothNumber + 2*module) / 2
 	const steps = 15
-	pts := make([]Point2, 0, steps)
+	pts := make([]planePoint, 0, steps)
 	for i := range steps {
 		r := baseR + (tipR-baseR)*float64(i)/float64(steps-1)
 		alpha := math.Acos(baseR / r)
 		t := math.Tan(alpha)
 		x := baseR * (math.Cos(t) + t*math.Sin(t))
 		y := baseR * (math.Sin(t) - t*math.Cos(t))
-		pts = append(pts, Point2{U: x, V: -y}) // mirrored across +X
+		pts = append(pts, planePoint{U: x, V: -y}) // mirrored across +X
 	}
 	return pts
 }
@@ -1052,7 +1052,7 @@ func TestFitInterpolatedFlagNeverMasksASpanConflict(t *testing.T) {
 // all, the full freeform.FreeformLengthDepth levels clear of the cap.
 func TestFitSplineGenuineSpanConflictStillRefuses(t *testing.T) {
 	t.Parallel()
-	fit := []Point2{{U: 0, V: 0}, {U: 0, V: 8}, {U: 8, V: 8}, {U: 9, V: 8}, {U: 9, V: 9}}
+	fit := []planePoint{{U: 0, V: 0}, {U: 0, V: 8}, {U: 8, V: 8}, {U: 9, V: 8}, {U: 9, V: 9}}
 	seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
 
@@ -1109,7 +1109,7 @@ func TestFitSplineGenuineSpanConflictStillRefuses(t *testing.T) {
 // refuses both spans before the carve-out or the fold ever runs.
 func TestFitSplineVanishingSpeedStillRefusesRegularity(t *testing.T) {
 	t.Parallel()
-	fit := []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 0, V: 0}}
+	fit := []planePoint{{U: 0, V: 0}, {U: 1, V: 0}, {U: 0, V: 0}}
 	seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
 
@@ -1164,7 +1164,7 @@ func TestDegreeOneNURBSCornerIsNotFitInterpolatedAndStillFolds(t *testing.T) {
 // even with fitInterpolated set.
 func TestClosedFitSplineChainStillFoldsItsClosingJointByTheCrossProduct(t *testing.T) {
 	t.Parallel()
-	fit := []Point2{{U: 0, V: 0}, {U: -4, V: -4}, {U: -4, V: -3}, {U: 1, V: 1}, {U: 0, V: 0}}
+	fit := []planePoint{{U: 0, V: 0}, {U: -4, V: -4}, {U: -4, V: -3}, {U: 1, V: 1}, {U: 0, V: 0}}
 	seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg), "record.go admits Fit[0] == Fit[last]: no closure gate exists")
 

@@ -129,12 +129,12 @@ func planarFaceAt(t *testing.T, bp brepPayload, n r3.Vec, z float64) brepFace {
 
 // arcEnds is an arc's centre and its two endpoints as an unordered pair.
 type arcEnds struct {
-	center Point2
-	ends   [2]Point2
+	center planePoint
+	ends   [2]planePoint
 }
 
 func arcEndsOf(s arcSeg) arcEnds {
-	ends := [2]Point2{s.Start, s.End}
+	ends := [2]planePoint{s.Start, s.End}
 	if ends[1].U < ends[0].U || (ends[1].U == ends[0].U && ends[1].V < ends[0].V) {
 		ends[0], ends[1] = ends[1], ends[0]
 	}
@@ -154,7 +154,7 @@ func loopArcs(loop loopRecord) []arcEnds {
 
 // requireChord asserts a loop holds one LineSeg between a and b, in either
 // direction.
-func requireChord(t *testing.T, loop loopRecord, a, b Point2) {
+func requireChord(t *testing.T, loop loopRecord, a, b planePoint) {
 	t.Helper()
 	n := 0
 	for _, seg := range loop.Segments {
@@ -200,15 +200,15 @@ func TestBrepModifyEdgeFilletS1VerticalEdge(t *testing.T) {
 
 	yFace := planarFaceAt(t, bp, r3.NewVec(0, -1, 0), 0)
 	require.Contains(t, yFace.region.Outer.Segments,
-		curveSegment(lineSeg{Start: Point2{U: 2, V: 20}, End: Point2{U: 2, V: 0}, TStart: 0, TEnd: 1}),
+		curveSegment(lineSeg{Start: planePoint{U: 2, V: 20}, End: planePoint{U: 2, V: 0}, TStart: 0, TEnd: 1}),
 		"the y = 0 face's x = 0 segment moves to x = 2")
-	want := arcEnds{center: Point2{U: 2, V: 2}, ends: [2]Point2{{U: 0, V: 2}, {U: 2, V: 0}}}
+	want := arcEnds{center: planePoint{U: 2, V: 2}, ends: [2]planePoint{{U: 0, V: 2}, {U: 2, V: 0}}}
 	for _, z := range []float64{0, 20} {
 		require.Equal(t, []arcEnds{want}, loopArcs(planarFaceAt(t, bp, routeEZ, z).region.Outer))
 	}
 	wall := bp.faces[7]
 	require.Equal(t, "fillet", wall.blend)
-	require.Equal(t, curveSegment(arcSeg{Center: Point2{U: 2, V: 2}, Start: Point2{U: 0, V: 2}, End: Point2{U: 2, V: 0}, TStart: 0, TEnd: 1}), wall.wall)
+	require.Equal(t, curveSegment(arcSeg{Center: planePoint{U: 2, V: 2}, Start: planePoint{U: 0, V: 2}, End: planePoint{U: 2, V: 0}, TStart: 0, TEnd: 1}), wall.wall)
 	faces := blendFaces(out, "fillet")
 	require.Len(t, faces, 1)
 	requireRoles(t, out, faces, "wall(7)", "fillet(7)")
@@ -250,9 +250,9 @@ func TestBrepModifyEdgeFilletPocketCorners(t *testing.T) {
 	lo, hi := piEnclosed(big.NewRat(15080, 1), big.NewRat(-20, 1))
 	requireCoversInterval(t, out.volume, lo, hi)
 
-	centres := []Point2{{U: 12, V: 17}, {U: 28, V: 17}, {U: 28, V: 23}, {U: 12, V: 23}}
-	centresOf := func(arcs []arcEnds) []Point2 {
-		var out []Point2
+	centres := []planePoint{{U: 12, V: 17}, {U: 28, V: 17}, {U: 28, V: 23}, {U: 12, V: 23}}
+	centresOf := func(arcs []arcEnds) []planePoint {
+		var out []planePoint
 		for _, a := range arcs {
 			out = append(out, a.center)
 		}
@@ -290,7 +290,7 @@ func TestBrepModifyEdgeChamferCornerBoss(t *testing.T) {
 	require.Equal(t, Exact, out.volume.Exactness)
 	require.Equal(t, 17470.0, out.volume.Value.Base())
 	for _, z := range []float64{10, 25} {
-		requireChord(t, planarFaceAt(t, bp, routeEZ, z).region.Outer, Point2{U: 10, V: -12}, Point2{U: 12, V: -10})
+		requireChord(t, planarFaceAt(t, bp, routeEZ, z).region.Outer, planePoint{U: 10, V: -12}, planePoint{U: 12, V: -10})
 	}
 }
 
@@ -355,23 +355,23 @@ func TestBrepModifyEdgeFilletPocketFloorEdges(t *testing.T) {
 		}
 	}
 	require.Equal(t, 4, swept, "only the plate's four outer walls stay swept")
-	centres := func(f brepFace) []Point2 {
+	centres := func(f brepFace) []planePoint {
 		require.True(t, f.outward)
-		var out []Point2
+		var out []planePoint
 		for _, a := range loopArcs(f.region.Outer) {
 			out = append(out, a.center)
 		}
 		return out
 	}
-	require.ElementsMatch(t, []Point2{{U: 16, V: 6}, {U: 24, V: 6}}, centres(planarFaceAt(t, bp, routeEX, 10)))
-	require.ElementsMatch(t, []Point2{{U: 6, V: 16}, {U: 6, V: 24}}, centres(planarFaceAt(t, bp, routeEX.Scale(-1), -30)))
+	require.ElementsMatch(t, []planePoint{{U: 16, V: 6}, {U: 24, V: 6}}, centres(planarFaceAt(t, bp, routeEX, 10)))
+	require.ElementsMatch(t, []planePoint{{U: 6, V: 16}, {U: 6, V: 24}}, centres(planarFaceAt(t, bp, routeEX.Scale(-1), -30)))
 	// The y = 15 wall's frame has u along z and v along x; the y = 25
 	// wall's, u along x and v along z.
-	requireChord(t, planarFaceAt(t, bp, r3.NewVec(0, 1, 0), 15).region.Outer, Point2{U: 6, V: 10}, Point2{U: 6, V: 30})
-	requireChord(t, planarFaceAt(t, bp, r3.NewVec(0, -1, 0), -25).region.Outer, Point2{U: 10, V: 6}, Point2{U: 30, V: 6})
+	requireChord(t, planarFaceAt(t, bp, r3.NewVec(0, 1, 0), 15).region.Outer, planePoint{U: 6, V: 10}, planePoint{U: 6, V: 30})
+	requireChord(t, planarFaceAt(t, bp, r3.NewVec(0, -1, 0), -25).region.Outer, planePoint{U: 10, V: 6}, planePoint{U: 30, V: 6})
 	floor := planarFaceAt(t, bp, routeEZ, 5).region.Outer
-	requireChord(t, floor, Point2{U: 10, V: 16}, Point2{U: 30, V: 16})
-	requireChord(t, floor, Point2{U: 10, V: 24}, Point2{U: 30, V: 24})
+	requireChord(t, floor, planePoint{U: 10, V: 16}, planePoint{U: 30, V: 16})
+	requireChord(t, floor, planePoint{U: 10, V: 24}, planePoint{U: 30, V: 24})
 
 	// Every vertical line is a junction of two walls sweeping along z, the
 	// pocket's four restated walls included, and reads the receiver's turn:
@@ -420,7 +420,7 @@ func TestBrepModifyEdgeChamferS1AlongX(t *testing.T) {
 	// x = 0: u along z, v along y; x = 40: u along y, v along z.
 	for _, f := range []brepFace{planarFaceAt(t, bp, routeEX.Scale(-1), 0), planarFaceAt(t, bp, routeEX, 40)} {
 		require.True(t, f.outward)
-		requireChord(t, f.region.Outer, Point2{U: 0, V: 2}, Point2{U: 2, V: 0})
+		requireChord(t, f.region.Outer, planePoint{U: 0, V: 2}, planePoint{U: 2, V: 0})
 	}
 }
 
@@ -434,7 +434,7 @@ func internalSplitWallS1(t *testing.T) *Body {
 	bp.faces = slices.Clone(bp.faces)
 	wall, side := -1, -1
 	for fi, f := range bp.faces {
-		if l, ok := f.wall.(lineSeg); ok && l.Start == (Point2{U: 0, V: 20}) && l.End == (Point2{}) {
+		if l, ok := f.wall.(lineSeg); ok && l.Start == (planePoint{U: 0, V: 20}) && l.End == (planePoint{}) {
 			wall = fi
 		}
 		if f.planar() && f.frame.N() == r3.NewVec(0, -1, 0) && f.z0 == 0 {
@@ -448,10 +448,10 @@ func internalSplitWallS1(t *testing.T) *Body {
 	region := *bp.faces[side].region
 	var segs []curveSegment
 	for _, seg := range region.Outer.Segments {
-		if seg == curveSegment(lineSeg{Start: Point2{U: 0, V: 20}, End: Point2{}, TStart: 0, TEnd: 1}) {
+		if seg == curveSegment(lineSeg{Start: planePoint{U: 0, V: 20}, End: planePoint{}, TStart: 0, TEnd: 1}) {
 			segs = append(segs,
-				lineSeg{Start: Point2{U: 0, V: 20}, End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
-				lineSeg{Start: Point2{U: 0, V: 10}, End: Point2{}, TStart: 0, TEnd: 1})
+				lineSeg{Start: planePoint{U: 0, V: 20}, End: planePoint{U: 0, V: 10}, TStart: 0, TEnd: 1},
+				lineSeg{Start: planePoint{U: 0, V: 10}, End: planePoint{}, TStart: 0, TEnd: 1})
 			continue
 		}
 		segs = append(segs, seg)
@@ -623,7 +623,7 @@ func TestAuditTrimmedWall(t *testing.T) {
 // line and an arc keep their ends and swap their range as before.
 func TestReverseSegmentWalksACircleTheOtherWay(t *testing.T) {
 	t.Parallel()
-	circle := circleSeg{Center: Point2{U: 1, V: 2}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
+	circle := circleSeg{Center: planePoint{U: 1, V: 2}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
 	got, ok := reverseSegment(circle).(circleSeg)
 	require.True(t, ok)
 	require.Equal(t, circle.Center, got.Center)
@@ -632,7 +632,7 @@ func TestReverseSegmentWalksACircleTheOtherWay(t *testing.T) {
 	require.Equal(t, [2]float64{1, 0}, [2]float64{got.TStart, got.TEnd})
 	require.Equal(t, circle, reverseSegment(got))
 
-	line := lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 5, V: 0}, TStart: 0, TEnd: 1}
+	line := lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 5, V: 0}, TStart: 0, TEnd: 1}
 	gotLine, ok := reverseSegment(line).(lineSeg)
 	require.True(t, ok)
 	require.Equal(t, [2]float64{1, 0}, [2]float64{gotLine.TStart, gotLine.TEnd})

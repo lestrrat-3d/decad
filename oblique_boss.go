@@ -47,7 +47,7 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 		return nil
 	}
 	circle, ok := cp.Profile.Outer.Segments[0].(circleSeg)
-	if !ok || circle.Center != (Point2{}) || !circle.CCW ||
+	if !ok || circle.Center != (planePoint{}) || !circle.CCW ||
 		!(circle.TStart == 0 && circle.TEnd == 1) {
 		return nil
 	}

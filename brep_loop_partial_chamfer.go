@@ -99,7 +99,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 				return nil, brepBandMass{}, fmt.Errorf(`%w: two partial chamfer strips disagree at their shared corner`, ErrUnsupported)
 			}
 			slant, _, err := capSlantEdge(proofbound.NewWorkBudget(ctx),
-				Point2{U: e.Local(quads[i].points[3])[0], V: e.Local(quads[i].points[3])[1]},
+				planePoint{U: e.Local(quads[i].points[3])[0], V: e.Local(quads[i].points[3])[1]},
 				quads[i].cap.start, quads[i].side.start,
 				e.Local(quads[i].points[0])[0], e.Local(quads[i].points[0])[1],
 				f.z0, sideZ, 0, 0, survey2d.SideWalk{}, survey2d.SideWalk{}, b.setback, true)

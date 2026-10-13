@@ -111,7 +111,7 @@ func evalFloatBezierSpans(spans floatBezierSpans, at float64) (float64, float64)
 
 func TestSplineBezierMatchesGeomEvaluator(t *testing.T) {
 	t.Parallel()
-	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
+	control := []planePoint{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	coords := make([][2]float64, len(control))
 	for i, point := range control {
 		coords[i] = [2]float64{point.U, point.V}
@@ -179,7 +179,7 @@ func splineBasisRat(i, p int, at *big.Rat, knots []*big.Rat) *big.Rat {
 
 // coxDeBoorExact evaluates the clamped cubic B-spline over the given control
 // points and knot vector exactly, as the literal Σ N_{i,3}(t)·P_i.
-func coxDeBoorExact(control []Point2, knots []*big.Rat, at *big.Rat) (*big.Rat, *big.Rat) {
+func coxDeBoorExact(control []planePoint, knots []*big.Rat, at *big.Rat) (*big.Rat, *big.Rat) {
 	u, v := new(big.Rat), new(big.Rat)
 	for i, point := range control {
 		basis := splineBasisRat(i, 3, at, knots)
@@ -215,9 +215,9 @@ func TestSplineBezierSpansUseSketchFloatKnots(t *testing.T) {
 
 	for _, controls := range []int{6, 9} {
 		t.Run(strconv.Itoa(controls), func(t *testing.T) {
-			control := make([]Point2, controls)
+			control := make([]planePoint, controls)
 			for i := range control {
-				control[i] = Point2{U: float64(i), V: float64((i * 7) % 5)}
+				control[i] = planePoint{U: float64(i), V: float64((i * 7) % 5)}
 			}
 			// The reference reads geom DIRECTLY rather than through the converter's
 			// own helper, so the comparison below is a statement about sketch's knot
@@ -253,7 +253,7 @@ func TestSplineBezierSpansUseSketchFloatKnots(t *testing.T) {
 
 func TestClosedSplineBezierMatchesGeomEvaluator(t *testing.T) {
 	t.Parallel()
-	control := []Point2{{U: 0, V: 0}, {U: 4, V: 0}, {U: 5, V: 3}, {U: 2, V: 5}, {U: -1, V: 3}}
+	control := []planePoint{{U: 0, V: 0}, {U: 4, V: 0}, {U: 5, V: 3}, {U: 2, V: 5}, {U: -1, V: 3}}
 	coords := make([][2]float64, len(control))
 	for i, point := range control {
 		coords[i] = [2]float64{point.U, point.V}
@@ -278,7 +278,7 @@ func TestClosedSplineBezierMatchesGeomEvaluator(t *testing.T) {
 
 func TestNURBSBezierMatchesGeomEvaluator(t *testing.T) {
 	t.Parallel()
-	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 4, V: 3}, {U: 5, V: 0}, {U: 8, V: 2}}
+	control := []planePoint{{U: 0, V: 0}, {U: 1, V: 3}, {U: 4, V: 3}, {U: 5, V: 0}, {U: 8, V: 2}}
 	coords := make([]*geom.Point, len(control))
 	for i, point := range control {
 		coords[i] = geom.NewPoint(point.U, point.V)
@@ -319,7 +319,7 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 		{
 			name: "elliptical arc",
 			segment: ellipticalArcSeg{
-				Center: Point2{}, Start: Point2{U: 1}, End: Point2{V: 1},
+				Center: planePoint{}, Start: planePoint{U: 1}, End: planePoint{V: 1},
 				TStart: 0, TEnd: 1,
 			},
 			message: "pinned endpoints",
@@ -332,7 +332,7 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 		{
 			name: "trimmed spline",
 			segment: splineSeg{
-				Control: point2ToRecordSlice([]Point2{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}}),
+				Control: point2ToRecordSlice([]planePoint{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}}),
 				TStart:  0.25, TEnd: 0.75,
 			},
 			message: "full domain",
@@ -348,7 +348,7 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 }
 
 func rationalNURBSFixture() nurbsSeg {
-	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
+	control := []planePoint{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
 	return nurbsSeg{
 		Degree:  3,
 		Control: point2ToRecordSlice(control),
@@ -420,10 +420,10 @@ func degreeOneNURBSWithTrailingNaN(controls int) nurbsSeg {
 // weight equal, so it clears the content scan and the tier test and is refused
 // only by the conversion charge — the path on which every preflight pass runs.
 func wellFormedDegreeOneNURBS(controls int) nurbsSeg {
-	control := make([]Point2, controls)
+	control := make([]planePoint, controls)
 	weights := make([]float64, controls)
 	for i := range control {
-		control[i] = Point2{U: float64(i), V: float64(i % 3)}
+		control[i] = planePoint{U: float64(i), V: float64(i % 3)}
 		weights[i] = 1
 	}
 	interior := controls - 2
@@ -546,9 +546,9 @@ func TestFreeformPreflightBoundaryCost(t *testing.T) {
 // control point.
 func TestReconstructionChordsRestateSketchSampling(t *testing.T) {
 	t.Parallel()
-	point := func(u, v float64) Point2 { return Point2{U: u, V: v} }
-	controls := func(n int) []Point2 {
-		out := make([]Point2, n)
+	point := func(u, v float64) planePoint { return planePoint{U: u, V: v} }
+	controls := func(n int) []planePoint {
+		out := make([]planePoint, n)
 		for i := range out {
 			out[i] = point(float64(i), float64(i%3))
 		}
@@ -618,7 +618,7 @@ func TestReconstructionChordsRestateSketchSampling(t *testing.T) {
 // ordered pairs, where per-source squares see 8192.
 func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 	t.Parallel()
-	control := []Point2{{U: 0, V: 0}, {U: 4, V: 0}, {U: 2, V: 3}}
+	control := []planePoint{{U: 0, V: 0}, {U: 4, V: 0}, {U: 2, V: 3}}
 	one := closedSplineSeg{Control: point2ToRecordSlice(control), CCW: true, TStart: 0, TEnd: 1}
 
 	single := momentinput.ReconstructionOf(profileRecord{Outer: loopRecord{Segments: []curveSegment{one}}})
@@ -656,23 +656,23 @@ func TestReconstructionChargeSixtyToothOutline(t *testing.T) {
 	t.Parallel()
 	segments := make([]curveSegment, 0, 240)
 	for flank := range 120 {
-		fit := make([]Point2, 15)
+		fit := make([]planePoint, 15)
 		for point := range fit {
-			fit[point] = Point2{U: float64(flank), V: float64(point)}
+			fit[point] = planePoint{U: float64(flank), V: float64(point)}
 		}
 		segments = append(segments, fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1})
 	}
 	for tip := range 60 {
-		center := Point2{U: float64(tip * 3), V: 0}
+		center := planePoint{U: float64(tip * 3), V: 0}
 		segments = append(segments, arcSeg{
 			Center: center,
-			Start:  Point2{U: center.U + 1, V: 0},
-			End:    Point2{U: center.U + math.Cos(0.01), V: math.Sin(0.01)},
+			Start:  planePoint{U: center.U + 1, V: 0},
+			End:    planePoint{U: center.U + math.Cos(0.01), V: math.Sin(0.01)},
 		})
 	}
 	for root := range 60 {
 		segments = append(segments, circleSeg{
-			Center: Point2{}, Radius: units.Millimeters(1), CCW: true,
+			Center: planePoint{}, Radius: units.Millimeters(1), CCW: true,
 			TStart: float64(root) / 60, TEnd: float64(root+1) / 60,
 		})
 	}
@@ -696,7 +696,7 @@ func TestReconstructionChargeSixtyToothOutline(t *testing.T) {
 func TestReconstructionChargeInternsSharedAnalyticEntity(t *testing.T) {
 	t.Parallel()
 	first := circleSeg{
-		Center: Point2{U: 4, V: 5}, Radius: units.Millimeters(2), CCW: true,
+		Center: planePoint{U: 4, V: 5}, Radius: units.Millimeters(2), CCW: true,
 		TStart: 0, TEnd: 0.5,
 	}
 	second := first
@@ -707,7 +707,7 @@ func TestReconstructionChargeInternsSharedAnalyticEntity(t *testing.T) {
 	require.Equal(t, single.Chords, shared.Chords, "two fragments naming one circle are charged once")
 
 	distinct := second
-	distinct.Center = Point2{U: 9, V: 5}
+	distinct.Center = planePoint{U: 9, V: 5}
 	twoEntities := momentinput.ReconstructionOf(profileRecord{Outer: loopRecord{Segments: []curveSegment{first, distinct}}})
 	require.Equal(t, 2*single.Chords, twoEntities.Chords, "two distinct circles each contribute their chords")
 }
@@ -786,8 +786,8 @@ func TestKnotInsertionDemandMatchesRationalWalk(t *testing.T) {
 func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 	t.Parallel()
 	third := 1.0 / 3
-	squareControls := func(joint Point2) []Point2 {
-		return []Point2{
+	squareControls := func(joint planePoint) []planePoint {
+		return []planePoint{
 			{U: 0, V: 0}, {U: third, V: 0}, {U: 2 * third, V: 0}, {U: 1, V: 0},
 			joint, {U: 1, V: third}, {U: 1, V: 2 * third}, {U: 1, V: 1},
 			{U: 1, V: 1}, {U: 2 * third, V: 1}, {U: third, V: 1}, {U: 0, V: 1},
@@ -807,7 +807,7 @@ func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 	t.Run("continuous", func(t *testing.T) {
 		// The two one-sided limits at every break are the same recorded point, so
 		// the four cubic pieces meet: one connected curve this slicer cannot cut.
-		ctrl, err := splinebezier.RatPointsOf(point2ToRecordSlice(squareControls(Point2{U: 1, V: 0})))
+		ctrl, err := splinebezier.RatPointsOf(point2ToRecordSlice(squareControls(planePoint{U: 1, V: 0})))
 		require.NoError(t, err)
 		knots := quarterKnots()
 		require.Len(t, knots, len(ctrl)+3+1)
@@ -821,7 +821,7 @@ func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 	t.Run("discontinuous", func(t *testing.T) {
 		// Move the first break's right-hand limit away from its left-hand one and
 		// the curve genuinely jumps there.
-		ctrl, err := splinebezier.RatPointsOf(point2ToRecordSlice(squareControls(Point2{U: 1.5, V: 0})))
+		ctrl, err := splinebezier.RatPointsOf(point2ToRecordSlice(squareControls(planePoint{U: 1.5, V: 0})))
 		require.NoError(t, err)
 
 		_, err = freeform.ClampedBezierSpans(3, ctrl, quarterKnots())
@@ -834,7 +834,7 @@ func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 		// A degree-2 vector clamped one repeat too far at the start: a single
 		// quadratic Bézier with one dead control point, continuous everywhere, but
 		// 3 control points do not stride into whole degree-2 spans.
-		ctrl, err := splinebezier.RatPointsOf(point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}}))
+		ctrl, err := splinebezier.RatPointsOf(point2ToRecordSlice([]planePoint{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}}))
 		require.NoError(t, err)
 		knots := []*big.Rat{
 			new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat),
@@ -857,10 +857,10 @@ func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 func TestUnchargedKnotProbesRefuse(t *testing.T) {
 	t.Parallel()
 	const controls = 3000
-	control := make([]Point2, controls)
+	control := make([]planePoint, controls)
 	weights := make([]float64, controls)
 	for i := range control {
-		control[i] = Point2{U: float64(i), V: float64(i % 3)}
+		control[i] = planePoint{U: float64(i), V: float64(i % 3)}
 		weights[i] = 1
 	}
 	interior := controls - 2
@@ -902,11 +902,11 @@ func TestFreeformSpanCostIsCubic(t *testing.T) {
 func TestWideSpanIntegrationRefusesBeforeExpanding(t *testing.T) {
 	t.Parallel()
 	const degree = 1024
-	control := make([]Point2, degree+1)
+	control := make([]planePoint, degree+1)
 	knots := make([]float64, 0, 2*(degree+1))
 	weights := make([]float64, degree+1)
 	for i := range control {
-		control[i] = Point2{U: float64(i), V: float64(i % 7)}
+		control[i] = planePoint{U: float64(i), V: float64(i % 7)}
 		weights[i] = 1
 	}
 	for range degree + 1 {

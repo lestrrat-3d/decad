@@ -80,7 +80,7 @@ func TestTessellateChargesSectionDisplacementToEveryProof(t *testing.T) {
 
 func TestRequireLoopClearanceOffersValidRetry(t *testing.T) {
 	t.Parallel()
-	pts := []Point2{
+	pts := []planePoint{
 		{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}, {U: 0, V: 1},
 		{U: 1.25, V: 0}, {U: 2.25, V: 0}, {U: 2.25, V: 1}, {U: 1.25, V: 1},
 	}
@@ -100,7 +100,7 @@ func TestRequireLoopClearanceOffersValidRetry(t *testing.T) {
 
 func TestRequireLoopClearanceOmitsInvalidRetry(t *testing.T) {
 	t.Parallel()
-	pts := []Point2{
+	pts := []planePoint{
 		{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}, {U: 0, V: 1},
 		{U: 1, V: 0}, {U: 2, V: 0}, {U: 2, V: 1}, {U: 1, V: 1},
 	}
@@ -413,9 +413,9 @@ func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 	require.NoError(t, err)
 
 	other := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{}, End: Point2{U: 1}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 1}, End: Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 1, V: 1}, End: Point2{}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{}, End: planePoint{U: 1}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 1}, End: planePoint{U: 1, V: 1}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 1, V: 1}, End: planePoint{}, TStart: 0, TEnd: 1},
 	}}}
 	face := &Face{}
 	_, err = tessellation.ChordLoop(t.Context(), other.Outer, 0.2, 5, freeform.NewFreeformWork(), pw, 0,
@@ -494,7 +494,7 @@ func TestMeshDerivedVertexBoundsTakeTheLargestIncidentFace(t *testing.T) {
 	_, err = sk.Solve(t.Context())
 	require.NoError(t, err)
 	body, err := Revolve(t.Context(), New(), sk, sk.Profiles()[0],
-		SketchLine{Start: Point2{}, End: Point2{U: 1}},
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}},
 		AngleExtent{A: units.Degrees(90), Dir: Along})
 	require.NoError(t, err)
 	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)

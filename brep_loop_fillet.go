@@ -265,7 +265,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		// of the foot's normal with up is perpendicular to the walk only to
 		// rounding. A meridian with no straight wall beside it (two circular
 		// walks) keeps that cross product.
-		meridian := func(foot Point2, v survey2d.SideWalk, straight *survey2d.SideWalk, capV, sideV *Vertex) *Edge {
+		meridian := func(foot planePoint, v survey2d.SideWalk, straight *survey2d.SideWalk, capV, sideV *Vertex) *Edge {
 			nu, nv := foot.U-v.StartU, foot.V-v.StartV
 			l := math.Hypot(nu, nv)
 			normal := pl.Dir(nu/l, nv/l, 0)

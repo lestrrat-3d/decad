@@ -34,7 +34,7 @@ import (
 func TestOffsetPrismUnrepresentableOffset(t *testing.T) {
 	t.Parallel()
 	base := math.Ldexp(1, 53)
-	points := []Point2{{U: base, V: 0}, {U: base + 100, V: 0},
+	points := []planePoint{{U: base, V: 0}, {U: base + 100, V: 0},
 		{U: base + 100, V: 60}, {U: base, V: 60}}
 	segments := make([]curveSegment, len(points))
 	for i := range points {
@@ -159,8 +159,8 @@ func offsetNeckPayload(t *testing.T) prismPayload {
 	for i := range pts {
 		next := pts[(i+1)%len(pts)]
 		segments[i] = lineSeg{
-			Start:  Point2{U: pts[i][0], V: pts[i][1]},
-			End:    Point2{U: next[0], V: next[1]},
+			Start:  planePoint{U: pts[i][0], V: pts[i][1]},
+			End:    planePoint{U: next[0], V: next[1]},
 			TStart: 0, TEnd: 1,
 		}
 	}

@@ -15,7 +15,7 @@ import (
 // cap-band proof that contains their whole fan in a cap-height slab.
 func notchedLoft(t *testing.T, withBore bool) *Body {
 	t.Helper()
-	corners := []Point2{
+	corners := []planePoint{
 		pt(-5, -5), pt(5, -5), pt(5, 5), pt(1, 5),
 		pt(1, 3), pt(-1, 3), pt(-1, 5), pt(-5, 5),
 	}
@@ -23,7 +23,7 @@ func notchedLoft(t *testing.T, withBore bool) *Body {
 	for i := range corners {
 		segs[i] = lineSeg{Start: corners[i], End: corners[(i+1)%len(corners)], TStart: 0, TEnd: 1}
 	}
-	segs[0] = fitSplineSeg{Fit: point2ToRecordSlice([]Point2{
+	segs[0] = fitSplineSeg{Fit: point2ToRecordSlice([]planePoint{
 		pt(-5, -5), pt(-2, -5.1), pt(2, -5.1), pt(5, -5),
 	}), TStart: 0, TEnd: 1}
 	profile := profileRecord{Outer: loopRecord{Segments: segs}}
@@ -48,7 +48,7 @@ func notchedLoft(t *testing.T, withBore bool) *Body {
 
 func TestLoftCapBandMotionRequiresReflexVertexIndices(t *testing.T) {
 	outer := capBlendLoopMesh{
-		capPts:      []Point2{pt(1, 1)},
+		capPts:      []planePoint{pt(1, 1)},
 		capLoV:      []int{2},
 		capHiV:      []int{4},
 		arcCount:    []int{1},

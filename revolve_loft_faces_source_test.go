@@ -34,7 +34,7 @@ func neutralArcSeamCone(t *testing.T, doc *Document, apex float64) *Body {
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	tool, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
-		SketchLine{Start: Point2{}, End: Point2{U: 1}}, FullRevolution{})
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
 	require.NoError(t, err)
 	return tool
 }
@@ -113,7 +113,7 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 	blankWorld := sketch.NewWorld()
 	blankSketch, err := blankWorld.CreateSketch(blankWorld.XY())
 	require.NoError(t, err)
-	section := []Point2{{U: 3.2}, {U: 6}, {U: 6, V: 3.5},
+	section := []planePoint{{U: 3.2}, {U: 6}, {U: 6, V: 3.5},
 		{U: 5.8, V: 3.3}, {U: 5.7, V: 2.28}, {U: 4.7, V: 1.88}, {U: 3.2, V: 3.2}}
 	points := make([]*sketch.Point, len(section))
 	for i, point := range section {
@@ -127,7 +127,7 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 	require.NoError(t, err)
 	require.Len(t, blankSketch.Profiles(), 1)
 	blank, err := Revolve(t.Context(), doc, blankSketch, blankSketch.Profiles()[0],
-		SketchLine{Start: Point2{}, End: Point2{U: 1}}, FullRevolution{})
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
 	require.NoError(t, err)
 	return blank, trimmed, trimmedPayload.loftFacesTrim
 }

@@ -222,7 +222,7 @@ func internalPinThroughS1(t *testing.T, doc *Document) *Body {
 	require.NoError(t, err)
 	pinPayload := prismPayload{Payload: prismrecord.Payload{
 		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
-			circleSeg{Center: Point2{U: 20, V: 10}, Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1},
+			circleSeg{Center: planePoint{U: 20, V: 10}, Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1},
 		}}},
 		// The frame's normal is −y: z ∈ [−25, 5] spans y ∈ [−5, 25].
 		Frame: xz, Z0: -25, Z1: 5, Xform: r3.Identity(),

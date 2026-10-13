@@ -115,7 +115,7 @@ func loftCylinderSourceStrictRootCollar(lp loftPayload, radius, height float64) 
 		if q[cap].Cmp(r2) > 0 {
 			return 0, false
 		}
-		for end, p := range []Point2{arc.Start, arc.End} {
+		for end, p := range []planePoint{arc.Start, arc.End} {
 			angles[cap][end] = proofbound.Atan2Interval(
 				proofarith.FloatRat(p.V), proofarith.FloatRat(p.U), false)
 		}

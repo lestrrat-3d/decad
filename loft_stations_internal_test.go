@@ -92,8 +92,8 @@ func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
 	w1 := survey2d.SegmentWalk{Kind: survey2d.WalkLine, StartU: 3, StartV: 4}
 	stations0, stations1, sagitta, matchedDelta, stationRound, err := loftmesh.RecordCellStations(w0, w1, lineSeg{}, lineSeg{}, 123.0, nil, nil)
 	require.NoError(t, err)
-	require.Equal(t, []Point2{{U: 1, V: 2}}, point2FromRecordSlice(stations0))
-	require.Equal(t, []Point2{{U: 3, V: 4}}, point2FromRecordSlice(stations1))
+	require.Equal(t, []planePoint{{U: 1, V: 2}}, point2FromRecordSlice(stations0))
+	require.Equal(t, []planePoint{{U: 3, V: 4}}, point2FromRecordSlice(stations1))
 	require.Zero(t, sagitta)
 	require.Equal(t, []float64{0}, matchedDelta, "a LineSeg cell's own chord IS the curve it denotes")
 	require.Zero(t, stationRound, "these two walks carry an UNTRIMMED start, whose own lineWalkEndBound is zero")
@@ -966,7 +966,7 @@ func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, target, "a build with no chorded pair never reads the chord target")
 
-	fit := fitSplineSeg{Fit: point2ToRecordSlice([]Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}), TStart: 0, TEnd: 1}
+	fit := fitSplineSeg{Fit: point2ToRecordSlice([]planePoint{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}), TStart: 0, TEnd: 1}
 	free := profileRecord{Outer: loopRecord{Segments: []curveSegment{fit, fit, fit}}}
 	freeWalks := resolveLoftLoopWalks(t, free)
 	_, c, ok := loftmesh.PairCounts([]loopRecord{free.Outer}, make([]int, 1), freeWalks, freeWalks)
@@ -1013,7 +1013,7 @@ func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 	require.Len(t, stations1, len(stations0))
 	require.Zero(t, sagitta)
 	for _, p := range stations0 {
-		require.Equal(t, Point2{}, Point2(p), "every station of a zero-radius arc is its own centre")
+		require.Equal(t, planePoint{}, p, "every station of a zero-radius arc is its own centre")
 	}
 }
 
@@ -1026,7 +1026,7 @@ func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 // produces one. A repeated point makes a zero-length LineSeg, which
 // docs/loft-design.md §4 names as a recordable input rather than a
 // hypothetical one (record.go's validateSegment checks finiteness alone).
-func lineStationLoopFixture(t *testing.T, starts []Point2) (profileRecord, [][]survey2d.SegmentWalk) {
+func lineStationLoopFixture(t *testing.T, starts []planePoint) (profileRecord, [][]survey2d.SegmentWalk) {
 	t.Helper()
 	n := len(starts)
 	segs := make([]curveSegment, n)
@@ -1061,8 +1061,8 @@ func requireOneSidedCellRefusal(t *testing.T, err error, cell int) {
 // exactly one of the two sections.
 func TestLoftPairingsRefusesAOneSidedTerminalCell(t *testing.T) {
 	t.Parallel()
-	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(0, 0), pt(1, 1)})
-	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(2, 0), pt(1, 3)})
+	p0, walks0 := lineStationLoopFixture(t, []planePoint{pt(0, 0), pt(0, 0), pt(1, 1)})
+	p1, walks1 := lineStationLoopFixture(t, []planePoint{pt(0, 0), pt(2, 0), pt(1, 3)})
 
 	_, _, _, _, err := loftmesh.PairRecords(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the error matters here.
 	requireOneSidedCellRefusal(t, err, 0)
@@ -1075,8 +1075,8 @@ func TestLoftPairingsRefusesAOneSidedTerminalCell(t *testing.T) {
 // here are sound on both sections; only the wrap collapses, and only on side 0.
 func TestLoftPairingsRefusesAOneSidedWrapCell(t *testing.T) {
 	t.Parallel()
-	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(1, 1), pt(0, 0)})
-	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(2, 0), pt(3, 3)})
+	p0, walks0 := lineStationLoopFixture(t, []planePoint{pt(0, 0), pt(1, 1), pt(0, 0)})
+	p1, walks1 := lineStationLoopFixture(t, []planePoint{pt(0, 0), pt(2, 0), pt(3, 3)})
 
 	_, _, _, _, err := loftmesh.PairRecords(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the error matters here.
 	requireOneSidedCellRefusal(t, err, 2)
@@ -1117,8 +1117,8 @@ func TestLoftPairingsRefusesAOneSidedCellAtOneChordCell(t *testing.T) {
 // would prove only that the gate refuses every collapse.
 func TestLoftPairingsAdmitsABothSidedCollapsedCell(t *testing.T) {
 	t.Parallel()
-	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(0, 0), pt(1, 1)})
-	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(5, 5), pt(5, 5), pt(9, 9)})
+	p0, walks0 := lineStationLoopFixture(t, []planePoint{pt(0, 0), pt(0, 0), pt(1, 1)})
+	p1, walks1 := lineStationLoopFixture(t, []planePoint{pt(5, 5), pt(5, 5), pt(9, 9)})
 
 	pairs, _, _, _, err := loftmesh.PairRecords(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the pairs matter here.
 	require.NoError(t, err)
@@ -1144,7 +1144,7 @@ func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
 	require.Equal(t, proofbound.WalkEndBound{}, w.StartBound, "the pinned end carries a zero displacement reading")
 
 	stations, _ := loftmesh.CircularStationChain(w, seg, 8)
-	require.Equal(t, Point2{U: seg.Start.U, V: seg.Start.V}, Point2(stations[0]),
+	require.Equal(t, planePoint{U: seg.Start.U, V: seg.Start.V}, stations[0],
 		"station 0 IS the recorded coordinate the walk pinned, never a recomputed cos/sin at th0")
 
 	// The recomputed point this chain must NOT use, measured: it differs from
@@ -1153,7 +1153,7 @@ func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
 	// end's zero reading while sitting off the coordinate it names.
 	sin, cos := math.Sincos(w.Th0)
 	recomputedU, recomputedV := w.CU+w.Radius*cos, w.CV+w.Radius*sin
-	require.NotEqual(t, Point2{U: recomputedU, V: recomputedV}, Point2(stations[0]),
+	require.NotEqual(t, planePoint{U: recomputedU, V: recomputedV}, stations[0],
 		"the fixture must be one where the two readings differ, or it proves nothing")
 	recomputedBound := boundarywalk.CircularWalkEndBound(seg, 0, recomputedU, recomputedV)
 	require.Positive(t, recomputedBound.U+recomputedBound.V,
@@ -1176,9 +1176,9 @@ func TestCircularStationChainJunctionsMeetOnOneCoordinate(t *testing.T) {
 
 	firstChain, _ := loftmesh.CircularStationChain(wFirst, first, 6)
 	secondChain, _ := loftmesh.CircularStationChain(wSecond, second, 6)
-	stations := append(append([]Point2{}, point2FromRecordSlice(firstChain)...), point2FromRecordSlice(secondChain)...)
+	stations := append(append([]planePoint{}, point2FromRecordSlice(firstChain)...), point2FromRecordSlice(secondChain)...)
 	require.Len(t, stations, 12, "neither segment contributes its own end point")
-	require.Equal(t, Point2{U: second.Start.U, V: second.Start.V}, stations[6],
+	require.Equal(t, planePoint{U: second.Start.U, V: second.Start.V}, stations[6],
 		"the junction station is the second segment's pinned start, which is the recorded coordinate")
 }
 
@@ -1305,8 +1305,8 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 	require.Len(t, pairs[0].V, 4)
 	require.Len(t, pairs[0].W, 4)
 	for j := range 4 {
-		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, Point2(pairs[0].V[j]))
-		require.Equal(t, Point2{U: walks[0][j].StartU, V: walks[0][j].StartV}, Point2(pairs[0].W[j]))
+		require.Equal(t, planePoint{U: walks[0][j].StartU, V: walks[0][j].StartV}, pairs[0].V[j])
+		require.Equal(t, planePoint{U: walks[0][j].StartU, V: walks[0][j].StartV}, pairs[0].W[j])
 	}
 	require.Zero(t, sectionDelta)
 	require.Zero(t, stationRound, "every station of this UNTRIMMED square is PINNED (docs/loft-design.md §5.2)")
@@ -1494,7 +1494,7 @@ func TestLoftChordTargetReadsFeatureSize(t *testing.T) {
 			lineSeg{Start: pt(0, 0), End: pt(4, 0), TStart: 0, TEnd: 1},
 			nurbsSeg{
 				Degree:  2,
-				Control: point2ToRecordSlice([]Point2{pt(4, 0), pt(2, 4), pt(0, 0)}),
+				Control: point2ToRecordSlice([]planePoint{pt(4, 0), pt(2, 4), pt(0, 0)}),
 				Knots:   []float64{0, 0, 0, 1, 1, 1},
 				Weights: []float64{1, 1, 1},
 				TStart:  0, TEnd: 1,

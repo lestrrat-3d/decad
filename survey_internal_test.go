@@ -326,9 +326,9 @@ func TestWholeArcCandidateCarriesArcRadiusBound(t *testing.T) {
 	// Centre (10, 9) one unit from start (9, 10) in each of u and v: the true
 	// radius is √2, which no float64 holds.
 	seg := arcSeg{
-		Center: Point2{U: 10, V: 9},
-		Start:  Point2{U: 9, V: 10},
-		End:    Point2{U: 11, V: 10},
+		Center: planePoint{U: 10, V: 9},
+		Start:  planePoint{U: 9, V: 10},
+		End:    planePoint{U: 11, V: 10},
 		TStart: 0,
 		TEnd:   1,
 	}
@@ -571,10 +571,10 @@ func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
 	pp := prismPayload{Payload: prismrecord.Payload{
 		Profile: profileRecord{
 			Outer: loopRecord{Segments: []curveSegment{
-				circleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(10), CCW: true, TStart: 0, TEnd: 1},
+				circleSeg{Center: planePoint{U: 0, V: 0}, Radius: units.Millimeters(10), CCW: true, TStart: 0, TEnd: 1},
 			}},
 			Holes: []loopRecord{{Segments: []curveSegment{
-				circleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(10 - 2e-8), CCW: false, TStart: 1, TEnd: 0},
+				circleSeg{Center: planePoint{U: 0, V: 0}, Radius: units.Millimeters(10 - 2e-8), CCW: false, TStart: 1, TEnd: 0},
 			}}},
 		},
 		Z0: 0, Z1: 10,
@@ -588,8 +588,8 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 	t.Parallel()
 	line := func(u0, v0, u1, v1 float64) curveSegment {
 		return lineSeg{
-			Start:  Point2{U: u0, V: v0},
-			End:    Point2{U: u1, V: v1},
+			Start:  planePoint{U: u0, V: v0},
+			End:    planePoint{U: u1, V: v1},
 			TStart: 0,
 			TEnd:   1,
 		}
@@ -658,8 +658,8 @@ func manySegmentProfile(segmentCount int) profileRecord {
 		th0 := 2 * math.Pi * float64(i) / float64(segmentCount)
 		th1 := 2 * math.Pi * float64(i+1) / float64(segmentCount)
 		segs[i] = lineSeg{
-			Start:  Point2{U: 100 * math.Cos(th0), V: 100 * math.Sin(th0)},
-			End:    Point2{U: 100 * math.Cos(th1), V: 100 * math.Sin(th1)},
+			Start:  planePoint{U: 100 * math.Cos(th0), V: 100 * math.Sin(th0)},
+			End:    planePoint{U: 100 * math.Cos(th1), V: 100 * math.Sin(th1)},
 			TStart: 0,
 			TEnd:   1,
 		}
@@ -746,8 +746,8 @@ func TestCupWallCancellationDuringProfileIntegrals(t *testing.T) {
 	t.Parallel()
 	line := func(u0, v0, u1, v1 float64) curveSegment {
 		return lineSeg{
-			Start:  Point2{U: u0, V: v0},
-			End:    Point2{U: u1, V: v1},
+			Start:  planePoint{U: u0, V: v0},
+			End:    planePoint{U: u1, V: v1},
 			TStart: 0,
 			TEnd:   1,
 		}
@@ -1067,9 +1067,9 @@ func TestArcWalkRadiusBoundStaysUnderTheKernelSlack(t *testing.T) {
 				// one an element really carries: the held radius is the walk's
 				// own math.Hypot of recorded differences, not an ideal radius.
 				w, err := boundarywalk.WalkOf(arcSeg{
-					Center: Point2{U: cu, V: cv},
-					Start:  Point2{U: cu + du, V: cv + dv},
-					End:    Point2{U: cu - du, V: cv - dv},
+					Center: planePoint{U: cu, V: cv},
+					Start:  planePoint{U: cu + du, V: cv + dv},
+					End:    planePoint{U: cu - du, V: cv - dv},
 					TStart: 0,
 					TEnd:   1,
 				}, freeform.NewFreeformWork())
@@ -1110,8 +1110,8 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	line, err := axisInPlane(SketchLine{
-		Start: Point2{U: 0, V: -1000},
-		End:   Point2{U: 1, V: -1000},
+		Start: planePoint{U: 0, V: -1000},
+		End:   planePoint{U: 1, V: -1000},
 	}, frame)
 	require.NoError(t, err)
 	ax := axisFrame{
@@ -1126,8 +1126,8 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 	const nearV = 0.49999999999999994
 	require.Equal(t, nearV, math.Nextafter(0.5, 0))
 	w, err := boundarywalk.WalkOf(lineSeg{
-		Start:  Point2{U: 0, V: 0.5},
-		End:    Point2{U: 10, V: nearV},
+		Start:  planePoint{U: 0, V: 0.5},
+		End:    planePoint{U: 10, V: nearV},
 		TStart: 0,
 		TEnd:   1,
 	}, nil)
@@ -1171,10 +1171,10 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 func freeformWallSection() profileRecord {
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		fitSplineSeg{
-			Fit:    point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}}),
+			Fit:    point2ToRecordSlice([]planePoint{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}}),
 			TStart: 0, TEnd: 1,
 		},
-		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: 0}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -1227,7 +1227,7 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 		{
 			name: "a circle whose CCW flag contradicts its range order",
 			seg: circleSeg{
-				Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(10),
+				Center: planePoint{U: 0, V: 0}, Radius: units.Millimeters(10),
 				CCW: true, TStart: 1, TEnd: 0,
 			},
 			is:      ErrDegenerate,
@@ -1242,7 +1242,7 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 		{
 			name: "a circle whose radius is an angle",
 			seg: circleSeg{
-				Center: Point2{U: 0, V: 0}, Radius: units.Degrees(10),
+				Center: planePoint{U: 0, V: 0}, Radius: units.Degrees(10),
 				CCW: true, TStart: 0, TEnd: 1,
 			},
 			message: "radius is not a length",
@@ -1252,7 +1252,7 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 			// so the refusal is ErrUnsupported — the SAME sentinel the free-form
 			// staging limit wraps, on a free-form segment, and still not the
 			// undecided reading.
-			seg: splineSeg{Control: point2ToRecordSlice([]Point2{
+			seg: splineSeg{Control: point2ToRecordSlice([]planePoint{
 				{U: -math.MaxFloat64, V: -math.MaxFloat64},
 				{U: -math.MaxFloat64, V: math.MaxFloat64},
 				{U: math.MaxFloat64, V: -math.MaxFloat64},
@@ -1299,7 +1299,7 @@ func TestPrismWallFreeformRefusalKeepsItsSentinels(t *testing.T) {
 func TestPrismWallAnalyticSectionRegression(t *testing.T) {
 	t.Parallel()
 	line := func(u0, v0, u1, v1 float64) curveSegment {
-		return lineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1}
+		return lineSeg{Start: planePoint{U: u0, V: v0}, End: planePoint{U: u1, V: v1}, TStart: 0, TEnd: 1}
 	}
 	pp := prismPayload{Payload: prismrecord.Payload{
 		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{

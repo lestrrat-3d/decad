@@ -163,7 +163,7 @@ func spiralToeRootCells(ctx context.Context, trim *loftFacesTrimRecord,
 }
 
 func spiralToeEndpointBox(ctx context.Context, first, second loftFaceMap,
-	point Point2, capC, charge *big.Rat) ([3]loftFaceInterval, bool, error) {
+	point planePoint, capC, charge *big.Rat) ([3]loftFaceInterval, bool, error) {
 	var empty [3]loftFaceInterval
 	a := first.At(lfF(point.U), lfF(point.V))
 	b := second.At(lfF(point.U), lfF(point.V))
@@ -281,7 +281,7 @@ func certifySpiralToeRootSeam(ctx context.Context,
 		seam.x.Hi.Cmp(lfF(proof.blank.toeOuter.U)) >= 0 {
 		return nil, false, nil
 	}
-	for end, point := range [...]Point2{arc.Start, arc.End} {
+	for end, point := range [...]planePoint{arc.Start, arc.End} {
 		endpoint, yes, err := spiralToeEndpointBox(ctx, trim.maps[1], trim.maps[2],
 			point, capC, coordCharge)
 		if err != nil || !yes {

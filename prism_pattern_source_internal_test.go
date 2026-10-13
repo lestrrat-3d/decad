@@ -17,22 +17,22 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 	blank := &Body{payload: prismPayload{Payload: prismrecord.Payload{
 		Frame: frame, Xform: r3.Identity(), Z1: 2,
 		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
-			circleSeg{Center: Point2{}, Radius: units.Millimeters(root), TStart: 0, TEnd: 1},
+			circleSeg{Center: planePoint{}, Radius: units.Millimeters(root), TStart: 0, TEnd: 1},
 		}}},
 	}}}
 	section := prismPayload{Payload: prismrecord.Payload{
 		Frame: frame, Xform: r3.Identity(), Z1: 2,
 		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
-			arcSeg{Center: Point2{}, Start: Point2{U: 3, V: -1},
-				End: Point2{U: 3, V: 1}, TStart: 0, TEnd: 1},
-			lineSeg{Start: Point2{U: 3, V: 1}, End: Point2{U: 4, V: 1}, TStart: 0, TEnd: 1},
-			fitSplineSeg{Fit: point2ToRecordSlice([]Point2{{U: 4, V: 1}, {U: 4.5, V: 1.5}, {U: 5, V: 2}}),
+			arcSeg{Center: planePoint{}, Start: planePoint{U: 3, V: -1},
+				End: planePoint{U: 3, V: 1}, TStart: 0, TEnd: 1},
+			lineSeg{Start: planePoint{U: 3, V: 1}, End: planePoint{U: 4, V: 1}, TStart: 0, TEnd: 1},
+			fitSplineSeg{Fit: point2ToRecordSlice([]planePoint{{U: 4, V: 1}, {U: 4.5, V: 1.5}, {U: 5, V: 2}}),
 				TStart: 0, TEnd: 1},
-			arcSeg{Center: Point2{}, Start: Point2{U: 5, V: -2},
-				End: Point2{U: 5, V: 2}, TStart: 1, TEnd: 0},
-			fitSplineSeg{Fit: point2ToRecordSlice([]Point2{{U: 5, V: -2}, {U: 4.5, V: -1.5}, {U: 4, V: -1}}),
+			arcSeg{Center: planePoint{}, Start: planePoint{U: 5, V: -2},
+				End: planePoint{U: 5, V: 2}, TStart: 1, TEnd: 0},
+			fitSplineSeg{Fit: point2ToRecordSlice([]planePoint{{U: 5, V: -2}, {U: 4.5, V: -1.5}, {U: 4, V: -1}}),
 				TStart: 0, TEnd: 1},
-			lineSeg{Start: Point2{U: 4, V: -1}, End: Point2{U: 3, V: -1}, TStart: 0, TEnd: 1},
+			lineSeg{Start: planePoint{U: 4, V: -1}, End: planePoint{U: 3, V: -1}, TStart: 0, TEnd: 1},
 		}}},
 	}}
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/2))

@@ -136,9 +136,9 @@ func TestPatternLinearMotionUsesTheDenotedStep(t *testing.T) {
 	require.NoError(t, err)
 	mv, err := rp.LinearMotion(frame, r3.Identity(), 1)
 	require.NoError(t, err)
-	p, charge, err := mv(Point2{U: 1, V: 2})
+	p, charge, err := mv(planePoint{U: 1, V: 2})
 	require.NoError(t, err)
-	require.Equal(t, Point2{U: 7, V: 10}, Point2(p))
+	require.Equal(t, planePoint{U: 7, V: 10}, p)
 	require.Zero(t, charge)
 	require.Zero(t, proofarith.RationalFloatError(big.NewRat(7, 1), p.U))
 }
