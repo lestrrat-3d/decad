@@ -2134,3 +2134,8 @@ func TestPrismUnionEnclosedVoidIsUnresolved(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok)
 }
+
+func admitPrismPair(a, b *Body) (pa, pb prismPayload, ok bool) {
+	pa, pb, ok, _ = admitPrismPairBudget(proofbound.NewWorkBudget(context.Background()), meshbool.OpUnion, a, b)
+	return pa, pb, ok
+}

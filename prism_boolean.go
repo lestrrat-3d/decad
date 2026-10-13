@@ -341,11 +341,6 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKi
 	return pa, pb, true, nil
 }
 
-func admitPrismPair(a, b *Body) (pa, pb prismPayload, ok bool) {
-	pa, pb, ok, _ = admitPrismPairBudget(proofbound.NewWorkBudget(context.Background()), meshbool.OpUnion, a, b)
-	return pa, pb, ok
-}
-
 func prismPlacementOf(p prismPayload) prismplacement.Operand {
 	return prismplacement.Operand{Frame: p.frame, Xform: p.xform, Z0: p.z0, Z1: p.z1}
 }

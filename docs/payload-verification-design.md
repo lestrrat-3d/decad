@@ -187,7 +187,7 @@ Requirements:
 - Reuse `recordLoops`, `walkElem`, `clearance.Region2`, `clearance.CFace`, `clearance.CEdge`, and `addTopology`.
 - Build no temporary prism caps. They are not cup faces.
 - Keep one rim face per paired loop. Hole/post loop polarity follows
-  `evalCup`'s existing topology.
+  `evalCupContext`'s existing topology.
 - Add `cupPayload` to `payloadExtent` through `cp.extentAlong(g)`'s outer-prism
   reading, taken as an exact interval only where it publishes a zero
   displacement.

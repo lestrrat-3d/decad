@@ -11,6 +11,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -911,4 +912,12 @@ func ringSplineSeg(controls int) splineSeg {
 		control[i] = Point2{U: 10 * math.Cos(a), V: 10 * math.Sin(a)}
 	}
 	return splineSeg{Control: point2ToRecordSlice(control), TStart: 0, TEnd: 1}
+}
+
+func validateFreeformMomentSegment(segment curveSegment, work *freeform.FreeformWork) (curveSegment, Point2, freeformPlan, error) {
+	return momentinput.ValidateFreeformSegment(segment, work)
+}
+
+func validateMomentFields(record profileRecord) (momentinput.FieldPreflight, error) {
+	return momentinput.ValidateFieldsWithPoll(nil, record, nil)
 }

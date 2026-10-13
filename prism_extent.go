@@ -99,10 +99,6 @@ func prismPlacementCoeffAllow(pp prismPayload, g r3.Vec, base, gu, gv, gz, coord
 	return prismextent.PlacementCoeffAllow(pp.xform, pp.frame, g, base, gu, gv, gz, coordUpper, zUpper)
 }
 
-func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) float64 {
-	return prismextent.DecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper)
-}
-
 // prismBoundsContext adapts the internal three-axis reading to Box. A cached
 // walk set is reused across axes; nil resolves each axis as before.
 func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (Box, error) {

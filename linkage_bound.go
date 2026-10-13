@@ -247,21 +247,6 @@ func layerLower(spec *linkageSpec, frames []motionbound.MotionFrame, path []int,
 	})
 }
 
-// readCorners is docs/linkage-check-design.md §5.8's reading of one body of
-// link b at the exact joint values params, under the joints on b's path from
-// position below on — the joints strictly below a pair's lowest common
-// ancestor, whose rigid motion above that ancestor changes no distance. The
-// relative pose composes those joints' ideal motions exactly as
-// idealPosesOf composes a link's, starting from the identity; joint i's axis
-// at the configuration runs through o_i, the image of its Center under the
-// relative pose of the joints above it, along ω_i, its unit Axis turned by
-// that pose's rotation, and a prismatic's direction is turned the same way.
-// lo and hi are the body's Bounds box inflated by its own Bound.
-func readCorners(spec *linkageSpec, frames []motionbound.MotionFrame, params []motionbound.MotionParam, b linkBound, below int, lo, hi motionbound.RatVec) cornerReading {
-	corners := linkagebound.BoxCorners(lo, hi)
-	return readPoints(spec, frames, params, b, below, linkagebound.StaticPoints(corners[:]))
-}
-
 // readPoints maps a static point reading through the link's relative joint path.
 func readPoints(spec *linkageSpec, frames []motionbound.MotionFrame, params []motionbound.MotionParam, b linkBound, below int, out cornerReading) cornerReading {
 	revolute := make([]bool, len(spec.joints))

@@ -749,3 +749,9 @@ func TestChordLocusRegionVolumeCoversTheDip(t *testing.T) {
 	require.GreaterOrEqual(t, got, ref*(1-1e-6), `the region volume %v must cover the dip's measure %v`, got, ref)
 	require.LessOrEqual(t, got, 8*ref, `the region volume %v must sit within 8 times the dip's measure %v`, got, ref)
 }
+
+// intervalMid is one rational strictly inside an enclosure, the point a bound
+// measured from either end is smallest against.
+func intervalMid(a proofbound.RatInterval) *big.Rat {
+	return new(big.Rat).Mul(new(big.Rat).Add(a.Lo, a.Hi), big.NewRat(1, 2))
+}

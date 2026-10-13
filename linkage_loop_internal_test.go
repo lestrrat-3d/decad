@@ -579,3 +579,6 @@ func TestLoopFoldStatement(t *testing.T) {
 		require.False(t, ok, `a slide's range is a length, not turns`)
 	})
 }
+
+// unitAxis is sense·e_axis.
+func unitAxis(axis, sense int) r3.Vec { return linkagebound.UnitAxis(axis, sense) }

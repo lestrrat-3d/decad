@@ -551,7 +551,7 @@ below — the dropped-walk test, S8, S11b, S9 — runs on the section it builds.
 Within the dead zone the three rows name points at most `t·|a − b| + R·|cross|`
 apart (a corner turning by under `1e-9` moves its miter or its connector arc by
 under that), and the G1 row is the one whose point is well-conditioned in the
-held floats. The sibling exact predicate `capJoinIsG1` (exact rational zero
+held floats. The sibling exact predicate `capband.JoinIsG1` (exact rational zero
 cross over the record) is an admission test for the boolean proof and implies
 this rule; this rule never replaces it.
 

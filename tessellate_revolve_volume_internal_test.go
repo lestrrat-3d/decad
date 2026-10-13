@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/revolveproof"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -403,4 +404,10 @@ func TestRevolveSymDiffRefusesAnAbsentAngularTerm(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported)
 	_, err = revolveSymDiff(mesh, plan, big.NewRat(-1, 1), 0, 0)
 	require.ErrorIs(t, err, ErrUnsupported)
+}
+
+// revolveMeridianMoment reads the circular meridian displacement.
+func revolveMeridianMoment(p *revolvePlan) float64 {
+	return proofbound.AbsSumUpper(revolveproof.MeridianMoment(revolveWalkView(p.resolved), p.Meridian, p.Sweep, p.rp.full),
+		revolveFreeformMeridianMoment(p))
 }

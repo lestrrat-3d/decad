@@ -63,9 +63,3 @@ func coneTagTerms(f *Face) (proofbound.RatInterval, proofbound.RatInterval, r3.V
 		return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
 	}
 }
-
-// intervalMid is one rational strictly inside an enclosure, the point a bound
-// measured from either end is smallest against.
-func intervalMid(a proofbound.RatInterval) *big.Rat {
-	return new(big.Rat).Mul(new(big.Rat).Add(a.Lo, a.Hi), big.NewRat(1, 2))
-}

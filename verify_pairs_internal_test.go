@@ -325,3 +325,8 @@ func TestVerifyMeshCacheBuildsOnceUnderContention(t *testing.T) {
 	}
 	require.Equal(t, 1, count.of(bodies[0]))
 }
+
+// withTessellationCount returns ctx carrying count.
+func withTessellationCount(ctx context.Context, count *tessellationCount) context.Context {
+	return context.WithValue(ctx, tessellationCountKey{}, count)
+}

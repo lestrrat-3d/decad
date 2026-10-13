@@ -42,12 +42,6 @@ import (
 //     integral (below) leaves a factor that depends on dφ ALONE. It is
 //     therefore proven once per mesh rather than once per cell.
 
-// revolveMeridianMoment reads the circular meridian displacement.
-func revolveMeridianMoment(p *revolvePlan) float64 {
-	return proofbound.AbsSumUpper(revolveproof.MeridianMoment(revolveWalkView(p.resolved), p.Meridian, p.Sweep, p.rp.full),
-		revolveFreeformMeridianMoment(p))
-}
-
 func revolveFreeformMeridianMoment(p *revolvePlan) float64 {
 	total := 0.0
 	for li, loop := range p.Freeform {

@@ -417,21 +417,6 @@ func (cupPlan) order(faces []*Face) []*Face {
 	return out
 }
 
-// evalCup builds the analytic cup body (Table B, B5/B6) from a view: outer
-// walls over every loop of O, cavity walls over every loop of the reversed C,
-// the kept cap capStart, the pocket floor shellCap, and one rim per loop
-// (1 + k of them) — one manifold, watertight shell (every edge bounds two
-// faces). The cavity region is a VOID: its loops invert, so the void's outer
-// boundary is walked as a hole in the solid and each of the void's own holes
-// as a solid post — the wall slab's band records state exactly that.
-func evalCup(d *Document, ref producerID, cv cupView) (*Body, error) {
-	cp, err := cv.payload(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	return evalCupContext(context.Background(), d, ref, cp)
-}
-
 // evalCupContext builds the cup's stack through the stacked build (§9.1) under
 // cupPlan, and keeps the cup record as the body's payload.
 func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayload) (*Body, error) {
