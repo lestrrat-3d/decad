@@ -72,7 +72,7 @@ func RatFloatDown(q *big.Rat) float64 {
 	if fr, ok := RatOf(f); ok && fr.Cmp(q) <= 0 {
 		return f
 	}
-	return math.Nextafter(f, math.Inf(-1))
+	return proofarith.NextDown(f)
 }
 
 func RatFloatUp(q *big.Rat) float64 {
@@ -83,7 +83,7 @@ func RatFloatUp(q *big.Rat) float64 {
 	if fr, ok := RatOf(f); ok && fr.Cmp(q) >= 0 {
 		return f
 	}
-	return math.Nextafter(f, math.Inf(1))
+	return proofarith.NextUp(f)
 }
 
 // RatSqrtSeed approximates sqrt(q) for a positive rational at EVERY scale a
@@ -149,7 +149,7 @@ func RatSqrtUp(q *big.Rat) float64 {
 		if !RatSquareAtMost(f, q) || RatSquareEquals(f, q) {
 			return f
 		}
-		f = math.Nextafter(f, math.Inf(1))
+		f = proofarith.NextUp(f)
 	}
 	return math.Inf(1)
 }

@@ -1,7 +1,6 @@
 package proof
 
 import (
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/r3"
@@ -68,9 +67,9 @@ func OrientSignFloat(a, b, c, d r3.Vec) (int, bool) {
 		return 0, true
 	}
 	det := bax*(cay*daz-caz*day) + bay*(caz*dax-cax*daz) + baz*(cax*day-cay*dax)
-	perm := math.Abs(bax)*(math.Abs(cay)*math.Abs(daz)+math.Abs(caz)*math.Abs(day)) +
-		math.Abs(bay)*(math.Abs(caz)*math.Abs(dax)+math.Abs(cax)*math.Abs(daz)) +
-		math.Abs(baz)*(math.Abs(cax)*math.Abs(day)+math.Abs(cay)*math.Abs(dax))
+	perm := Abs(bax)*(Abs(cay)*Abs(daz)+Abs(caz)*Abs(day)) +
+		Abs(bay)*(Abs(caz)*Abs(dax)+Abs(cax)*Abs(daz)) +
+		Abs(baz)*(Abs(cax)*Abs(day)+Abs(cay)*Abs(dax))
 	// The true forward error is bounded by a few ulps of the permanent; 1e-12
 	// leaves three decades of margin, so a sign the filter accepts is proven.
 	if err := 1e-12 * perm; det > err || det < -err {

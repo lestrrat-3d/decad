@@ -204,7 +204,7 @@ const (
 // that rule for the multiply and the divide that commit the flush.
 func UpRound(x float64) float64 {
 	if x > 0 {
-		return math.Nextafter(x, math.Inf(1))
+		return proofarith.NextUp(x)
 	}
 	return x
 }
@@ -376,12 +376,12 @@ const underflowTermUlps = 5
 // rather than the norm it cancelled to.
 func CrossProductUpper(a, b r3.Vec) float64 {
 	return AbsSumUpper(
-		ProductUpper(math.Abs(a.Y), math.Abs(b.Z)),
-		ProductUpper(math.Abs(a.Z), math.Abs(b.Y)),
-		ProductUpper(math.Abs(a.Z), math.Abs(b.X)),
-		ProductUpper(math.Abs(a.X), math.Abs(b.Z)),
-		ProductUpper(math.Abs(a.X), math.Abs(b.Y)),
-		ProductUpper(math.Abs(a.Y), math.Abs(b.X)),
+		ProductUpper(proofarith.Abs(a.Y), proofarith.Abs(b.Z)),
+		ProductUpper(proofarith.Abs(a.Z), proofarith.Abs(b.Y)),
+		ProductUpper(proofarith.Abs(a.Z), proofarith.Abs(b.X)),
+		ProductUpper(proofarith.Abs(a.X), proofarith.Abs(b.Z)),
+		ProductUpper(proofarith.Abs(a.X), proofarith.Abs(b.Y)),
+		ProductUpper(proofarith.Abs(a.Y), proofarith.Abs(b.X)),
 	)
 }
 
@@ -620,14 +620,68 @@ func PerturbedTriangleAreaUpper(a, b, c r3.Vec, delta float64) float64 {
 	if !FiniteVec(a) || !FiniteVec(b) || !FiniteVec(c) {
 		return math.Inf(1)
 	}
-	u, v := HeldDelta(b, a), HeldDelta(c, a)
+	area, lu, lv := perturbedTriangleAreaLifted(proofarith.DyVec(a), proofarith.DyVec(b), proofarith.DyVec(c))
+	return AbsSumUpper(area, perturbedAllow(delta, lu, lv))
+}
+
+// perturbedTriangleAreaLifted is PerturbedTriangleAreaUpper's exact part over
+// vertices already lifted to dyadics: the held area (the root of the exact
+// squared cross product, rounded up) and the proven lengths of both edge
+// vectors u = b-a and v = c-a.
+func perturbedTriangleAreaLifted(xa, xb, xc proofarith.DyV3) (area, lu, lv float64) {
+	u, v := proofarith.DvSub(xb, xa), proofarith.DvSub(xc, xa)
 	n := proofarith.DvCross(u, v)
-	area := proofarith.DySqrtUp(proofarith.DyShift(proofarith.DvDot(n, n), -2))
-	allow := AbsSumUpper(
-		ProductUpper(delta, AbsSumUpper(DvLenUpper(u), DvLenUpper(v))),
+	area = proofarith.DySqrtUp(proofarith.DyShift(proofarith.DvDot(n, n), -2))
+	return area, DvLenUpper(u), DvLenUpper(v)
+}
+
+// perturbedAllow is PerturbedTriangleAreaUpper's correction term,
+// delta·(|u| + |v|) + 2·delta², from the proven edge lengths lu and lv.
+func perturbedAllow(delta, lu, lv float64) float64 {
+	return AbsSumUpper(
+		ProductUpper(delta, AbsSumUpper(lu, lv)),
 		ProductUpper(2, ProductUpper(delta, delta)),
 	)
-	return AbsSumUpper(area, allow)
+}
+
+// vertexLifter lifts each mesh vertex to dyadics at most once, on first use by
+// a triangle, and remembers a non-finite vertex so that every triangle using
+// it answers +Inf. A vertex no triangle references is never examined.
+type vertexLifter struct {
+	verts  []r3.Vec
+	lifted []proofarith.DyV3
+	state  []uint8 // 0 unseen, 1 finite and lifted, 2 non-finite
+}
+
+func newVertexLifter(verts []r3.Vec) *vertexLifter {
+	return &vertexLifter{
+		verts:  verts,
+		lifted: make([]proofarith.DyV3, len(verts)),
+		state:  make([]uint8, len(verts)),
+	}
+}
+
+// triangle returns the lifted corners of t, or false when a corner is
+// non-finite.
+func (l *vertexLifter) triangle(t [3]int) (xa, xb, xc proofarith.DyV3, ok bool) {
+	ok = true
+	for _, i := range t {
+		if l.state[i] != 0 {
+			ok = ok && l.state[i] == 1
+			continue
+		}
+		if !FiniteVec(l.verts[i]) {
+			l.state[i] = 2
+			ok = false
+			continue
+		}
+		l.lifted[i] = proofarith.DyVec(l.verts[i])
+		l.state[i] = 1
+	}
+	if !ok {
+		return xa, xb, xc, false
+	}
+	return l.lifted[t[0]], l.lifted[t[1]], l.lifted[t[2]], true
 }
 
 func PerturbedAreaUpperContext(
@@ -645,6 +699,7 @@ func PerturbedAreaUpperWithBudget(
 	tris [][3]int,
 	delta float64,
 ) (float64, error) {
+	lifter := newVertexLifter(verts)
 	total := 0.0
 	for _, t := range tris {
 		if budget != nil {
@@ -652,7 +707,13 @@ func PerturbedAreaUpperWithBudget(
 				return 0, err
 			}
 		}
-		total += PerturbedTriangleAreaUpper(verts[t[0]], verts[t[1]], verts[t[2]], delta)
+		xa, xb, xc, ok := lifter.triangle(t)
+		if !ok {
+			total += math.Inf(1)
+			continue
+		}
+		area, lu, lv := perturbedTriangleAreaLifted(xa, xb, xc)
+		total += AbsSumUpper(area, perturbedAllow(delta, lu, lv))
 	}
 	if budget != nil {
 		if err := budget.Err(); err != nil {
@@ -660,6 +721,71 @@ func PerturbedAreaUpperWithBudget(
 		}
 	}
 	return UpRound(total + SumSlop(len(tris), total)), nil
+}
+
+// PerturbedAreaUpperPairContext returns PerturbedAreaUpperContext's total for
+// two deltas in one pass: each triangle's exact area and edge lengths are
+// formed once and shared by both.
+func PerturbedAreaUpperPairContext(
+	ctx context.Context,
+	verts []r3.Vec,
+	tris [][3]int,
+	d1, d2 float64,
+) (float64, float64, error) {
+	budget := NewWorkBudget(ctx)
+	lifter := newVertexLifter(verts)
+	total1, total2 := 0.0, 0.0
+	for _, t := range tris {
+		if err := budget.Step(); err != nil {
+			return 0, 0, err
+		}
+		xa, xb, xc, ok := lifter.triangle(t)
+		if !ok {
+			total1 += math.Inf(1)
+			total2 += math.Inf(1)
+			continue
+		}
+		area, lu, lv := perturbedTriangleAreaLifted(xa, xb, xc)
+		total1 += AbsSumUpper(area, perturbedAllow(d1, lu, lv))
+		total2 += AbsSumUpper(area, perturbedAllow(d2, lu, lv))
+	}
+	if err := budget.Err(); err != nil {
+		return 0, 0, err
+	}
+	return UpRound(total1 + SumSlop(len(tris), total1)), UpRound(total2 + SumSlop(len(tris), total2)), nil
+}
+
+// PerturbedAreaUpperAllowsContext returns PerturbedAreaUpperContext's total
+// and, per triangle, the correction term of that triangle's own bound (+Inf
+// for a triangle with a non-finite vertex).
+func PerturbedAreaUpperAllowsContext(
+	ctx context.Context,
+	verts []r3.Vec,
+	tris [][3]int,
+	delta float64,
+) (float64, []float64, error) {
+	budget := NewWorkBudget(ctx)
+	lifter := newVertexLifter(verts)
+	allows := make([]float64, len(tris))
+	total := 0.0
+	for i, t := range tris {
+		if err := budget.Step(); err != nil {
+			return 0, nil, err
+		}
+		xa, xb, xc, ok := lifter.triangle(t)
+		if !ok {
+			allows[i] = math.Inf(1)
+			total += math.Inf(1)
+			continue
+		}
+		area, lu, lv := perturbedTriangleAreaLifted(xa, xb, xc)
+		allows[i] = perturbedAllow(delta, lu, lv)
+		total += AbsSumUpper(area, allows[i])
+	}
+	if err := budget.Err(); err != nil {
+		return 0, nil, err
+	}
+	return UpRound(total + SumSlop(len(tris), total)), allows, nil
 }
 
 // SweptVolumeAllow bounds the volume between two closed meshes whose vertices

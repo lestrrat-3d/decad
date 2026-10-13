@@ -58,7 +58,7 @@ func RationalFloatError(exact *big.Rat, held float64) float64 {
 		return math.SmallestNonzeroFloat64
 	}
 	if !exactFloat {
-		out = math.Nextafter(out, math.Inf(1))
+		out = NextUp(out)
 	}
 	return out
 }
@@ -149,7 +149,7 @@ func DivRoundError(a, b, held float64) float64 {
 // flushed to zero must still publish a positive bound.
 func ProvenUpRound(value float64) float64 {
 	if value > 0 {
-		return math.Nextafter(value, math.Inf(1))
+		return NextUp(value)
 	}
 	if value == 0 {
 		return math.SmallestNonzeroFloat64
