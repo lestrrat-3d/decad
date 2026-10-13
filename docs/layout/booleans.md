@@ -77,3 +77,5 @@ The rules for rows live in `docs/layout.md`.
 | `point_cap_extremes.go` | Bounds side-face centroid projections and selects the extreme Split cap faces. See loft-point design. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |
 | `boolean_body.go` | Builds faceted bodies and readings from an audited mesh. See evaluator §9. |
+| `faceted_copy_lineage.go` | Binds live faceted copies to source faces, recorded motion, and separate source and held shells. See faceted-vertex-bounds §3.7. |
+| `faceted_copy_proxy.go` | Places a source-certified proxy under generic copied-tool motions and proves proxy shell separation. See faceted-vertex-bounds §3.7. |

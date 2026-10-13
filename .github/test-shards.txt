@@ -61,6 +61,7 @@
 4	0.00	TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence
 10	7.20	TestCurvedSourcePairCensusCoversLiveFaces
 10	8.00	TestCurvedLoftFacesRealCopySeparation
+10	0.73	TestRealCurvedCopiedToolLineage
 10	13.90	TestCurvedContactGraphHeldAnchors
 10	11.70	TestCurvedContactGraphRejectsStaleSourceEvents
 10	10.10	TestCurvedMultiRunShellConsumesLiveGraph

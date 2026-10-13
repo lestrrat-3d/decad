@@ -50,7 +50,11 @@ func PlacedHeldShells(ctx context.Context, copies []HeldCopy, moves []r3.Transfo
 					return nil, err
 				}
 			}
-			if tri != first.Tris[j] {
+			want := first.Tris[j]
+			if moves[i].IsReflection() {
+				want[1], want[2] = want[2], want[1]
+			}
+			if tri != want {
 				return nil, fmt.Errorf("%w: held copy %d changed source facets", decaderr.ErrUnsupported, i+1)
 			}
 		}

@@ -6,26 +6,18 @@ import (
 	"math"
 	"sync"
 
-	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/shellseparation"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 )
 
-// spiralToothPlacement names the immutable cone trim that produced a rigid
-// copy. It is created only by facetedPayload.placed from an original trim.
-type spiralToothPlacement struct {
-	source *loftFacesTrimRecord
-	motion r3.Transform
-}
-
 type spiralCombineSource struct {
-	first *spiralFirstJoinSource
-	tools []*Body
-	moves []r3.Transform
+	first  *spiralFirstJoinSource
+	tools  []*Body
+	moves  []r3.Transform
+	copies *facetedCopySet
 }
 
 type spiralCombinedTools struct {
@@ -283,75 +275,11 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	next.vertices = make([]r3.Vec, 0, len(original.vertices))
 	next.vertexBound = make([]float64, 0, len(original.vertices))
 	next.volSymDiff, next.areaSlack = 0, 0
-	budget := proofbound.NewWorkBudget(ctx)
-	// Each proxy shell is audited at its source and kept embedded by PlaceMesh.
-	// A separate held-shell clearance proof below replaces the generic whole-
-	// composite crossing audit, whose fixed triangle cap excludes 31 copies.
-	proxyParts := make([]spiralsector.Shell, 0, len(meta.tools))
-	for i, tool := range meta.tools {
-		part, ok := tool.payload.(facetedPayload)
-		if !ok || len(part.verts) != len(proxy.vertices) || len(part.tris) != len(proxy.triangles) ||
-			len(part.src) != len(proxy.triangles) {
-			return nil, nil, fmt.Errorf("%w: spiral copy mesh no longer matches source", ErrUnsupported)
-		}
-		for j, tri := range part.tris {
-			if j%256 == 0 {
-				if err := ctx.Err(); err != nil {
-					return nil, nil, err
-				}
-			}
-			if tri != proxy.triangles[j] {
-				return nil, nil, fmt.Errorf("%w: spiral copy triangle correspondence was lost", ErrUnsupported)
-			}
-		}
-		if i == 0 {
-			proxyParts = append(proxyParts, spiralsector.Shell{
-				Verts: proxy.vertices, Tris: proxy.triangles,
-				VertexBound: make([]float64, len(proxy.vertices)),
-			})
-			next.vertices = append(next.vertices, proxy.vertices...)
-			next.vertexBound = append(next.vertexBound, proxy.vertexBound...)
-			next.volSymDiff = proofbound.AbsSumUpper(next.volSymDiff, proxy.volSymDiff)
-			next.areaSlack = proofbound.AbsSumUpper(next.areaSlack, proxy.areaSlack)
-			continue
-		}
-		linear, err := massmoment.PlacementRotation(meta.moves[i])
-		if err != nil {
-			return nil, nil, err
-		}
-		charge, err := massmoment.MapChargeOf(linear)
-		if err != nil {
-			return nil, nil, err
-		}
-		placed, err := facetproof.PlaceMesh(ctx, budget, proxy.vertices, proxy.triangles,
-			proxy.vertexBound, proxy.volSymDiff, proxy.areaSlack,
-			charge.Stretch, charge.Volume, meta.moves[i])
-		if err != nil {
-			return nil, nil, err
-		}
-		// The clearance audit concerns the held proxy shells themselves. Bound
-		// each placed held vertex against the exact image of the first held
-		// proxy; its original source-shape bound belongs to the Boolean charge,
-		// not to this crossing audit.
-		placementBound := make([]float64, len(placed.Verts))
-		for j, v := range placed.Verts {
-			if j%256 == 0 {
-				if err := ctx.Err(); err != nil {
-					return nil, nil, err
-				}
-			}
-			exact := meshbool.ExactRigidImage(meta.moves[i].Basis(), meta.moves[i].Translation(),
-				proxy.vertices[j])
-			placementBound[j] = proofbound.Radius3D(
-				proofbound.RatFloatUp(meshbool.CoordDistance(exact, v)))
-			if proofbound.IsNonFinite(placementBound[j]) {
-				return nil, nil, fmt.Errorf("%w: placed spiral proxy has no finite held bound", ErrUnsupported)
-			}
-		}
-		proxyParts = append(proxyParts, spiralsector.Shell{
-			Verts: placed.Verts, Tris: placed.Tris, VertexBound: placementBound,
-			MeshBound: facetproof.FacetBoundMax(placed.Tris, placementBound),
-		})
+	placedParts, err := meta.copies.placedProxyShells(ctx, proxy)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, placed := range placedParts {
 		next.vertices = append(next.vertices, placed.Verts...)
 		next.vertexBound = append(next.vertexBound, placed.VertexBound...)
 		next.volSymDiff = proofbound.AbsSumUpper(next.volSymDiff, placed.VolSymDiff)
@@ -365,13 +293,6 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	next.bound = 0
 	next.setVertexBounds(next.vertexBound)
 	next.coordBound = max(next.coordBound, next.bound)
-	if !shellseparation.Separate(ctx, proxyParts, meta.moves,
-		shellseparation.ProxyShell, shellseparation.AxisX, true) {
-		if err := ctx.Err(); err != nil {
-			return nil, nil, err
-		}
-		return nil, nil, fmt.Errorf("%w: spiral proxy shells are not proven disjoint", ErrUnsupported)
-	}
 	if err := massmoment.AuditMesh(ctx, next.vertices, next.triangles, true); err != nil {
 		return nil, nil, err
 	}
@@ -417,8 +338,9 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf("%w: spiral tool has no complete held-mesh proof", ErrUnsupported)
 		}
 		if copyIndex != 0 {
-			if part.spiralTooth == nil || part.spiralTooth.source != source.first.tooth ||
-				part.spiralTooth.motion != source.moves[copyIndex] || part.xform != source.moves[copyIndex] ||
+			if source.copies == nil || source.copies.tools[copyIndex] != tooth ||
+				part.copyLineage == nil || part.copyLineage.source != source.tools[0] ||
+				part.copyLineage.motion != source.moves[copyIndex] ||
 				len(part.verts) != len(firstPart.verts) || len(part.tris) != len(firstPart.tris) {
 				return nil, fmt.Errorf("%w: spiral copy lost its audited source", ErrUnsupported)
 			}

@@ -109,9 +109,9 @@ type facetedPayload struct {
 	loftFacesCap  *loftFacesCapRecord
 	loftFacesToe  *loftFacesToeRecord
 	loftFacesTrim *loftFacesTrimRecord
-	// spiralTooth authenticates a rigid copy of a cone-trimmed LoftFaces tooth.
-	// The source record is immutable; placement never makes a new trim claim.
-	spiralTooth *spiralToothPlacement
+	// copyLineage names the live faceted source and its recorded rigid image.
+	// A Boolean result has no copy lineage; Copy and placement issue it.
+	copyLineage *facetedCopyLineage
 	// spiralTools exists only on a transient disjoint-tool operand built by
 	// A multi-body Union. It maps its source faces back to the live input tools.
 	spiralTools *spiralCombinedTools
@@ -200,7 +200,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	next.loftFacesCap = nil
 	next.loftFacesToe = nil
 	next.loftFacesTrim = nil
-	next.spiralTooth = nil
+	next.copyLineage = nil
 	next.spiralTools = nil
 	// A rigid copy keeps the immutable Split source for certified face
 	// centroid ranking, but cannot become a new structural Split source.
@@ -222,9 +222,6 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	}
 	if fp.pointCone != nil && fp.xform == r3.Identity() {
 		next.revolveLoftSector = &revolveLoftSectorPlacement{source: fp.pointCone, motion: composed}
-	}
-	if fp.loftFacesTrim != nil && fp.xform == r3.Identity() {
-		next.spiralTooth = &spiralToothPlacement{source: fp.loftFacesTrim, motion: composed}
 	}
 	next.groups = append([]facetGroup(nil), fp.groups...)
 	if next.loftMirrorCopy != nil {
