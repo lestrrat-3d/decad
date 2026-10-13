@@ -533,6 +533,11 @@ func (r loftCylinderSourceCircle) ContainsTriangleSector(zLo, zHi *big.Rat,
 	if err != nil {
 		return false
 	}
+	return loftCylinderSourceTriangleInSector(boxes, zLo, zHi, tri)
+}
+
+func loftCylinderSourceTriangleInSector(boxes [2]loftCylinderSourceXYBox, zLo, zHi *big.Rat,
+	tri [3]proofarith.Xpt) bool {
 	for _, p := range tri {
 		if p.X == nil || p.Y == nil || p.Z == nil || p.W == nil || p.W.Sign() <= 0 {
 			return false

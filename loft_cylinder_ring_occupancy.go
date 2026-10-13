@@ -277,7 +277,11 @@ func loftCylinderSourceRingInsideInputs(ctx context.Context, source loftCylinder
 	}
 	type ringTooth struct {
 		loftCylinderRingTooth
-		level *big.Rat
+		level       *big.Rat
+		sectorBoxes [2]loftCylinderSourceXYBox
+		sectorValid bool
+		sectorReady bool
+		connector   [2]loftCylinderSourceTimeSlice
 	}
 	toothRecords := make([]ringTooth, len(source.teeth))
 	for i, body := range source.teeth {
@@ -349,21 +353,28 @@ func loftCylinderSourceRingInsideInputs(ctx context.Context, source loftCylinder
 		}
 		result.seam++
 		sectorCount := 0
-		for toothIndex, tooth := range toothRecords {
+		for toothIndex := range toothRecords {
+			tooth := &toothRecords[toothIndex]
+			if !tooth.sectorReady {
+				boxes, sectorErr := tooth.circle.CrossingBox(tooth.level, tooth.level)
+				tooth.sectorBoxes, tooth.sectorValid = boxes, sectorErr == nil
+				t := new(big.Rat).Quo(new(big.Rat).Sub(tooth.level, tooth.circle.z0),
+					new(big.Rat).Sub(tooth.circle.z1, tooth.circle.z0))
+				for i, connector := range tooth.circle.connector {
+					tooth.connector[i] = connector.timeSlice(t)
+				}
+				tooth.sectorReady = true
+			}
 			mappedEdge := [2]proofarith.Xpt{
 				loftCylinderSourceRingMappedPoint(edge[0], tooth.level),
 				loftCylinderSourceRingMappedPoint(edge[1], tooth.level),
 			}
-			if tooth.circle.ContainsTriangleSector(tooth.level, tooth.level,
+			if tooth.sectorValid && loftCylinderSourceTriangleInSector(tooth.sectorBoxes, tooth.level, tooth.level,
 				[3]proofarith.Xpt{mappedEdge[0], mappedEdge[1], mappedEdge[1]}) {
 				sectorCount++
 			}
-			for _, connector := range tooth.circle.connector {
-				t := new(big.Rat).Quo(new(big.Rat).Sub(tooth.level, tooth.circle.z0),
-					new(big.Rat).Sub(tooth.circle.z1, tooth.circle.z0))
-				inner := loftCylinderSourceLerp(connector.a[0], connector.a[1], t)
-				middle := loftCylinderSourceLerp(connector.d[0], connector.d[1], t)
-				outer := loftCylinderSourceLerp(connector.f[0], connector.f[1], t)
+			for _, slice := range tooth.connector {
+				inner, middle, outer := slice.a, slice.d, slice.f
 				if loftCylinderEdgesMeet(amin, bmin, inner, middle) ||
 					loftCylinderEdgesMeet(amin, bmin, middle, outer) {
 					return refuse("ring may touch a true connector wall")
