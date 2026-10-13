@@ -368,7 +368,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		return nil, true, fmt.Errorf("%w: cap and wall triangle census changed", ErrUnsupported)
 	}
 	patches := revolveSectorBorePatches(mesh, oldCount, n, false, caps, -1, wallGroup)
-	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatches(proofbound.NewWorkBudget(ctx),
+	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
 		mesh.verts, mesh.tris, patches, revolveSectorBoreMaxAuditTriangles,
 		revolveSectorBoreMaxAuditScans); err != nil {
 		return nil, true, err

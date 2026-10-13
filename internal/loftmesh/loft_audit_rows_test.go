@@ -140,12 +140,36 @@ func TestLoftAuditStreamsLargeProjectedCandidateSet(t *testing.T) {
 	patches := []ProjectedPatch{{Triangles: []int{triangles, triangles + 1}, Axes: [2]int{0, 1}}}
 	serial, serialErr := loftCrossingAuditLimited(proofbound.NewWorkBudget(t.Context()), verts,
 		tris, nil, loftGenericShortcuts, 4_000_000, len(tris), false, patches...)
-	streamed, streamedErr := loftCrossingAuditLimited(proofbound.NewWorkBudget(t.Context()), verts,
+	sparse, sparseErr := loftCrossingAuditLimited(proofbound.NewWorkBudget(t.Context()), verts,
 		tris, nil, loftGenericShortcuts, 4_000_000, len(tris), true, patches...)
+	streamed, streamedErr := loftCrossingAuditLimitedWithStreaming(proofbound.NewWorkBudget(t.Context()), verts,
+		tris, nil, loftGenericShortcuts, 4_000_000, len(tris), true, true, patches...)
 	require.Greater(t, streamed.Candidates, loftAuditCandidateBatchSize)
-	require.Equal(t, serial, streamed)
 	require.Error(t, serialErr)
+	require.Equal(t, serial, sparse)
+	require.EqualError(t, sparseErr, serialErr.Error())
+	require.Equal(t, serial, streamed)
 	require.EqualError(t, streamedErr, serialErr.Error())
+	boxes := make([][2]r3.Vec, len(tris))
+	members := make([]int, len(tris))
+	family := make([]int, len(tris))
+	for i, tri := range tris {
+		boxes[i], members[i], family[i] = meshbool.TriBox(verts, tri), i, -1
+	}
+	family[triangles], family[triangles+1] = 0, 0
+	tree := newGroupedTreeScan(boxes, members, family)
+	scan, err := sweepCandidateCounts(proofbound.NewWorkBudget(t.Context()), tree,
+		len(tris), keepEveryPair, math.MaxUint64)
+	require.NoError(t, err)
+	require.Greater(t, scan.count, uint64(loftAuditCandidateBatchSize))
+	require.ErrorContains(t, preflightLoftRows(proofbound.NewWorkBudget(t.Context()),
+		tree, members, scan.starts, scan.scanned), "fixed work ceiling")
+	_, sparseErr = loftCrossingAuditLimited(proofbound.NewWorkBudget(t.Context()), verts,
+		tris, nil, loftGenericShortcuts, scan.scanned, len(tris), true, patches...)
+	require.EqualError(t, sparseErr, serialErr.Error())
+	_, streamedErr = loftCrossingAuditLimitedWithStreaming(proofbound.NewWorkBudget(t.Context()), verts,
+		tris, nil, loftGenericShortcuts, scan.scanned, len(tris), true, true, patches...)
+	require.ErrorContains(t, streamedErr, "fixed work ceiling")
 }
 
 func TestLoftAuditStreamsFirstFailureAfterBatchBoundary(t *testing.T) {

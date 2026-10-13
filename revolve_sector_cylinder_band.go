@@ -278,7 +278,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		return nil, true, fmt.Errorf("%w: band and wall triangle census changed", ErrUnsupported)
 	}
 	patches := revolveSectorBorePatches(mesh, oldCount, n, true, caps, bandGroup, wallGroup)
-	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatches(proofbound.NewWorkBudget(ctx),
+	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
 		mesh.verts, mesh.tris, patches, revolveSectorBoreMaxAuditTriangles,
 		revolveSectorBoreMaxAuditScans); err != nil {
 		return nil, true, err

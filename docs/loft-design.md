@@ -1388,6 +1388,10 @@ When projected-patch proofs omit within-patch pairs, the row query uses one
 tree per proof family and skips only the row's own proven family. It still
 counts each visited node and compared box under the same ceiling, then sorts
 and classifies the remaining pairs in the same row batches.
+The projected-patch producer opts into this row route when a complete
+candidate list would be too large. Other projected-patch audits keep the
+complete-list route after S8: their row queries can exceed the ceiling even
+when the grouped tree's single counting pass fits it.
 
 The unstructured batch path keeps exact vertices, triangle normals and planes,
 and one exact projection for each vertex and used axis. It derives each
