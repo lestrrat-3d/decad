@@ -9,6 +9,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -130,44 +131,16 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 }
 
 func prismPatternMeshRoot(m *Mesh, body *Body, rootIndex int, z0, z1 float64) (int, error) {
-	if len(m.vertices)%2 != 0 || len(m.vertices) < 8 || len(m.triangles) < len(m.vertices) ||
-		len(m.source) != len(m.triangles) {
-		return 0, fmt.Errorf("%w: copied prism has no paired axial section mesh", ErrUnsupported)
-	}
-	n := len(m.vertices) / 2
 	role := fmt.Sprintf("side(0,%d)", rootIndex)
-	var root *Face
+	var roots []*Face
 	for _, face := range body.Faces() {
 		for _, origin := range face.Origins() {
 			if origin.Role == role {
-				if root != nil {
-					return 0, fmt.Errorf("%w: copied prism has duplicate root wall", ErrUnsupported)
-				}
-				root = face
+				roots = append(roots, face)
 			}
 		}
 	}
-	if root == nil {
-		return 0, fmt.Errorf("%w: copied prism lost its root wall", ErrUnsupported)
-	}
-	rootStart := -1
-	for j := range n {
-		if m.vertices[2*j].Z != z0 || m.vertices[2*j+1].Z != z1 ||
-			m.source[2*j] != m.source[2*j+1] {
-			return 0, fmt.Errorf("%w: copied prism lost its shared axial stations", ErrUnsupported)
-		}
-		if m.source[2*j] == root {
-			if rootStart < 0 {
-				rootStart = j
-			}
-		} else if rootStart >= 0 {
-			return 0, fmt.Errorf("%w: copied prism root wall is not one trailing run", ErrUnsupported)
-		}
-	}
-	if rootStart < 2 || rootStart >= n-1 {
-		return 0, fmt.Errorf("%w: copied prism has no exterior path beside its root wall", ErrUnsupported)
-	}
-	return rootStart, nil
+	return tessellation.PrismPatternMeshRoot(m.vertices, len(m.triangles), m.source, roots, z0, z1)
 }
 
 // All held section vertices strictly separate after charging both verified

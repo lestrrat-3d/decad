@@ -397,7 +397,7 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	for i, face := range first.Faces() {
 		faceID[face] = len(blank.Faces()) + i
 	}
-	src, err := sourceIDs(ctx, firstMesh, faceID)
+	src, err := meshbool.SourceIDs(ctx, firstMesh.source, faceID)
 	if err != nil {
 		return nil, nil, err
 	}

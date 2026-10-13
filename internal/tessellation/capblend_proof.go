@@ -251,3 +251,43 @@ func CapBlendTwiceAreaSq(a, b, c r3.Vec) *big.Rat {
 	}
 	return out
 }
+
+// ComposeCapBlendBounds returns docs/tessellation-design.md §2's sourceBound
+// for every face the mesh names: the face's own accumulated trim, band and
+// axial terms in extra plus the largest store displacement its own vertices
+// carry. Every source face is present by construction — the walk is over
+// source itself — and a face whose composed displacement is not finite
+// refuses with ErrUnsupported rather than publishing an infinite bound.
+func ComposeCapBlendBounds[F comparable](
+	source []F, tris [][3]int, extra map[F]float64, store []float64, noun string,
+) (map[F]float64, error) {
+	faceStore := map[F]float64{}
+	for i, f := range source {
+		for _, v := range tris[i] {
+			faceStore[f] = math.Max(faceStore[f], store[v])
+		}
+	}
+	out := make(map[F]float64, len(faceStore))
+	for f, s := range faceStore {
+		bound := proofbound.UpRound(extra[f] + s)
+		if proofbound.IsNonFinite(bound) {
+			return nil, fmt.Errorf(`%w: a %s face's composed displacement is not finite, so this mesh can state no bound for it`, decaderr.ErrUnsupported, noun)
+		}
+		out[f] = bound
+	}
+	return out, nil
+}
+
+// RequireCapBlendFacetAreas refuses a mesh carrying a zero-area triangle
+// (docs/tessellation-design.md §12) with ErrUnsupported. The test is the exact
+// rational squared cross product, so a sliver is judged by what its own
+// coordinates say rather than by a tolerance.
+func RequireCapBlendFacetAreas(verts []r3.Vec, tris [][3]int, noun string) error {
+	for i, tri := range tris {
+		a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+		if CapBlendTwiceAreaSq(a, b, c).Sign() <= 0 {
+			return fmt.Errorf(`%w: facet %d of this %s mesh has zero area`, decaderr.ErrUnsupported, i, noun)
+		}
+	}
+	return nil
+}
