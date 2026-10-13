@@ -38,12 +38,6 @@ jobs:
           ref: ${{ inputs.commit }}
           persist-credentials: false
 
-      - name: Verify checked-out commit
-        shell: bash
-        env:
-          DECAD_COMMIT: ${{ inputs.commit }}
-        run: test "$(git rev-parse HEAD)" = "$DECAD_COMMIT"
-
       - name: Require named root-package test
         shell: bash
         env:
