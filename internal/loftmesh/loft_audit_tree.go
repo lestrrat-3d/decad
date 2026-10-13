@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -195,6 +196,223 @@ func (t treeScan) visit(budget *proofbound.WorkBudget, limit uint64, fn func(i, 
 	}
 	exceeded, err := walk(0, 0)
 	return scanned, exceeded, err
+}
+
+// loftTreeParallelMin is the member count from which the tree scans fan out.
+const loftTreeParallelMin = 4096
+
+// replayRowSteps calls budget.Step work times, as the serial walks do one
+// unit at a time. It returns the number of successful steps and the first
+// error; with no error it returns (work, exceeded, nil).
+func replayRowSteps(budget *proofbound.WorkBudget, work uint64, exceeded bool) (uint64, bool, error) {
+	for s := range work {
+		if err := budget.Step(); err != nil {
+			return s, false, err
+		}
+	}
+	return work, exceeded, nil
+}
+
+// walkRow is visitRow's walk without a budget: the same node and leaf order,
+// the same partners passed to fn, and the work count visitRow would step,
+// stopping at limit+1. It reads only the immutable tree, so concurrent calls
+// are safe as long as each fn is private to its caller.
+func (t treeScan) walkRow(i int, limit uint64, fn func(j int)) (uint64, bool) {
+	if len(t.nodes) == 0 {
+		return 0, false
+	}
+	w := rowWalker{t: &t, i: i, limit: limit, fn: fn}
+	exceeded := w.walk(0)
+	return w.scanned, exceeded
+}
+
+type rowWalker struct {
+	t       *treeScan
+	i       int
+	limit   uint64
+	scanned uint64
+	fn      func(j int)
+}
+
+func (w *rowWalker) walk(node int) bool {
+	w.scanned++
+	if w.scanned > w.limit {
+		return true
+	}
+	n := &w.t.nodes[node]
+	box := &w.t.boxes[w.i]
+	if int(n.maxID) <= w.i || !meshbool.BoxesOverlap(*box, n.box) {
+		return false
+	}
+	if n.left >= 0 {
+		if w.walk(n.left) {
+			return true
+		}
+		return w.walk(n.right)
+	}
+	for _, j := range w.t.order[n.start:n.end] {
+		if int(j) <= w.i {
+			continue
+		}
+		w.scanned++
+		if w.scanned > w.limit {
+			return true
+		}
+		if meshbool.BoxesOverlap(*box, w.t.boxes[j]) {
+			w.fn(int(j))
+		}
+	}
+	return false
+}
+
+// pairWalker is visit's walk(a, b) without a budget.
+type pairWalker struct {
+	t       *treeScan
+	limit   uint64
+	scanned uint64
+	fn      func(i, j int)
+}
+
+func (w *pairWalker) walk(a, b int) bool {
+	w.scanned++
+	if w.scanned > w.limit {
+		return true
+	}
+	t := w.t
+	na, nb := &t.nodes[a], &t.nodes[b]
+	if !meshbool.BoxesOverlap(na.box, nb.box) {
+		return false
+	}
+	if na.left < 0 && nb.left < 0 {
+		for ia := na.start; ia < na.end; ia++ {
+			begin := nb.start
+			if a == b {
+				begin = ia + 1
+			}
+			for ib := begin; ib < nb.end; ib++ {
+				w.scanned++
+				if w.scanned > w.limit {
+					return true
+				}
+				i, j := int(t.order[ia]), int(t.order[ib])
+				if !meshbool.BoxesOverlap(t.boxes[i], t.boxes[j]) {
+					continue
+				}
+				if i > j {
+					i, j = j, i
+				}
+				w.fn(i, j)
+			}
+		}
+		return false
+	}
+	if a == b {
+		return w.walk(na.left, na.left) || w.walk(na.left, na.right) || w.walk(na.right, na.right)
+	}
+	if nb.left < 0 || (na.left >= 0 && na.end-na.start >= nb.end-nb.start) {
+		return w.walk(na.left, b) || w.walk(na.right, b)
+	}
+	return w.walk(a, nb.left) || w.walk(a, nb.right)
+}
+
+// pairTasks expands walk(0, 0) breadth-first, in visit's order, into at least
+// want node pairs whose walks partition the rest of visit's work, and returns
+// them with the work units the expansion consumed (one per expanded non-leaf
+// pair).
+func (t treeScan) pairTasks(want int) ([][2]int, uint64) {
+	tasks := [][2]int{{0, 0}}
+	var used uint64
+	for len(tasks) < want {
+		next := make([][2]int, 0, 3*len(tasks))
+		grew := false
+		for _, task := range tasks {
+			a, b := task[0], task[1]
+			na, nb := &t.nodes[a], &t.nodes[b]
+			if na.left < 0 && nb.left < 0 {
+				next = append(next, task)
+				continue
+			}
+			used++
+			grew = true
+			if !meshbool.BoxesOverlap(na.box, nb.box) {
+				continue
+			}
+			switch {
+			case a == b:
+				next = append(next, [2]int{na.left, na.left}, [2]int{na.left, na.right}, [2]int{na.right, na.right})
+			case nb.left < 0 || (na.left >= 0 && na.end-na.start >= nb.end-nb.start):
+				next = append(next, [2]int{na.left, b}, [2]int{na.right, b})
+			default:
+				next = append(next, [2]int{a, nb.left}, [2]int{a, nb.right})
+			}
+		}
+		tasks = next
+		if !grew {
+			break
+		}
+	}
+	return tasks, used
+}
+
+// countParallel is sweepCandidateCounts' first pass over the tree with the
+// walk split across workers. Workers never touch budget; the steps visit
+// would take are replayed here, in count, and the result equals the serial
+// pass's. A pair count is a sum, so how the walk is split does not matter.
+func (t treeScan) countParallel(budget *proofbound.WorkBudget, f int, keep func(i, j int) bool,
+	limit uint64, workers int) (sweepCount, error) {
+	if len(t.nodes) == 0 {
+		return sweepCount{starts: make([]int, f+1)}, nil
+	}
+	tasks, used := t.pairTasks(256)
+	type part struct {
+		work     uint64
+		exceeded bool
+	}
+	parts := make([]part, len(tasks))
+	blocks := 4 * workers
+	partial := make([][]int32, blocks)
+	if _, err := orderedwork.Each(blocks, workers, 1, budget.Err, func(blk int) error {
+		local := make([]int32, f+1)
+		fn := func(i, j int) {
+			if keep(i, j) {
+				local[i+1]++
+			}
+		}
+		for k := blk; k < len(tasks); k += blocks {
+			w := pairWalker{t: &t, limit: limit, fn: fn}
+			parts[k].exceeded = w.walk(tasks[k][0], tasks[k][1])
+			parts[k].work = w.scanned
+		}
+		partial[blk] = local
+		return nil
+	}); err != nil {
+		return sweepCount{}, err
+	}
+	total := used
+	exceeded := used > limit
+	for _, p := range parts {
+		total += p.work
+		if p.exceeded || total > limit {
+			exceeded = true
+		}
+	}
+	if exceeded {
+		scanned, _, err := replayRowSteps(budget, limit+1, true)
+		return sweepCount{scanned: scanned, exceeded: err == nil}, err
+	}
+	if scanned, _, err := replayRowSteps(budget, total, false); err != nil {
+		return sweepCount{scanned: scanned}, err
+	}
+	starts := make([]int, f+1)
+	for _, local := range partial {
+		for i, c := range local {
+			starts[i] += int(c)
+		}
+	}
+	for i := 1; i <= f; i++ {
+		starts[i] += starts[i-1]
+	}
+	return sweepCount{starts: starts, count: uint64(starts[f]), scanned: total}, nil
 }
 
 func (t treeScan) workBound(limit uint64) (uint64, bool) {
