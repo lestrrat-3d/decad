@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -699,21 +700,18 @@ func PerturbedAreaUpperWithBudget(
 	tris [][3]int,
 	delta float64,
 ) (float64, error) {
-	lifter := newVertexLifter(verts)
+	terms, err := perturbedTriangleTerms(
+		budget, verts, tris, orderedwork.EachWorkers(len(tris), perturbedParallelMin))
+	if err != nil {
+		return 0, err
+	}
 	total := 0.0
-	for _, t := range tris {
-		if budget != nil {
-			if err := budget.Step(); err != nil {
-				return 0, err
-			}
-		}
-		xa, xb, xc, ok := lifter.triangle(t)
-		if !ok {
+	for _, term := range terms {
+		if !term.ok {
 			total += math.Inf(1)
 			continue
 		}
-		area, lu, lv := perturbedTriangleAreaLifted(xa, xb, xc)
-		total += AbsSumUpper(area, perturbedAllow(delta, lu, lv))
+		total += AbsSumUpper(term.area, perturbedAllow(delta, term.lu, term.lv))
 	}
 	if budget != nil {
 		if err := budget.Err(); err != nil {
@@ -733,21 +731,20 @@ func PerturbedAreaUpperPairContext(
 	d1, d2 float64,
 ) (float64, float64, error) {
 	budget := NewWorkBudget(ctx)
-	lifter := newVertexLifter(verts)
+	terms, err := perturbedTriangleTerms(
+		budget, verts, tris, orderedwork.EachWorkers(len(tris), perturbedParallelMin))
+	if err != nil {
+		return 0, 0, err
+	}
 	total1, total2 := 0.0, 0.0
-	for _, t := range tris {
-		if err := budget.Step(); err != nil {
-			return 0, 0, err
-		}
-		xa, xb, xc, ok := lifter.triangle(t)
-		if !ok {
+	for _, term := range terms {
+		if !term.ok {
 			total1 += math.Inf(1)
 			total2 += math.Inf(1)
 			continue
 		}
-		area, lu, lv := perturbedTriangleAreaLifted(xa, xb, xc)
-		total1 += AbsSumUpper(area, perturbedAllow(d1, lu, lv))
-		total2 += AbsSumUpper(area, perturbedAllow(d2, lu, lv))
+		total1 += AbsSumUpper(term.area, perturbedAllow(d1, term.lu, term.lv))
+		total2 += AbsSumUpper(term.area, perturbedAllow(d2, term.lu, term.lv))
 	}
 	if err := budget.Err(); err != nil {
 		return 0, 0, err
@@ -765,27 +762,114 @@ func PerturbedAreaUpperAllowsContext(
 	delta float64,
 ) (float64, []float64, error) {
 	budget := NewWorkBudget(ctx)
-	lifter := newVertexLifter(verts)
+	terms, err := perturbedTriangleTerms(
+		budget, verts, tris, orderedwork.EachWorkers(len(tris), perturbedParallelMin))
+	if err != nil {
+		return 0, nil, err
+	}
 	allows := make([]float64, len(tris))
 	total := 0.0
-	for i, t := range tris {
-		if err := budget.Step(); err != nil {
-			return 0, nil, err
-		}
-		xa, xb, xc, ok := lifter.triangle(t)
-		if !ok {
+	for i, term := range terms {
+		if !term.ok {
 			allows[i] = math.Inf(1)
 			total += math.Inf(1)
 			continue
 		}
-		area, lu, lv := perturbedTriangleAreaLifted(xa, xb, xc)
-		allows[i] = perturbedAllow(delta, lu, lv)
-		total += AbsSumUpper(area, allows[i])
+		allows[i] = perturbedAllow(delta, term.lu, term.lv)
+		total += AbsSumUpper(term.area, allows[i])
 	}
 	if err := budget.Err(); err != nil {
 		return 0, nil, err
 	}
 	return UpRound(total + SumSlop(len(tris), total)), allows, nil
+}
+
+// perturbedTerm is one triangle's perturbedTriangleAreaLifted reading; ok is
+// false when a corner is non-finite.
+type perturbedTerm struct {
+	area, lu, lv float64
+	ok           bool
+}
+
+// perturbedParallelMin is the triangle count from which the mesh functions
+// lift and measure on several goroutines.
+const perturbedParallelMin = 2048
+
+// perturbedTriangleTerms reads every triangle's exact area and edge lengths,
+// stepping budget once per triangle in triangle order (nil budget: none).
+//
+// With workers < 2 one vertexLifter serves the triangles in order. Otherwise
+// the vertices a triangle references are marked on the calling goroutine,
+// lifted one per index, and each triangle is measured from the lifted corners
+// on its own index; the calling goroutine then steps budget once per
+// triangle. No worker touches the budget, so the budget fails at the same
+// step as the serial loop and returns the same error.
+func perturbedTriangleTerms(
+	budget *WorkBudget,
+	verts []r3.Vec,
+	tris [][3]int,
+	workers int,
+) ([]perturbedTerm, error) {
+	terms := make([]perturbedTerm, len(tris))
+	if workers < 2 {
+		lifter := newVertexLifter(verts)
+		for i, t := range tris {
+			if budget != nil {
+				if err := budget.Step(); err != nil {
+					return nil, err
+				}
+			}
+			xa, xb, xc, ok := lifter.triangle(t)
+			if !ok {
+				continue
+			}
+			terms[i].area, terms[i].lu, terms[i].lv = perturbedTriangleAreaLifted(xa, xb, xc)
+			terms[i].ok = true
+		}
+		return terms, nil
+	}
+	var poll func() error
+	if budget != nil {
+		poll = budget.Err
+	}
+	// state: 0 unreferenced, 1 finite and lifted, 2 non-finite.
+	state := make([]uint8, len(verts))
+	for _, t := range tris {
+		state[t[0]], state[t[1]], state[t[2]] = 1, 1, 1
+	}
+	lifted := make([]proofarith.DyV3, len(verts))
+	if _, err := orderedwork.Each(len(verts), workers, 512, poll, func(i int) error {
+		if state[i] == 0 {
+			return nil
+		}
+		if !FiniteVec(verts[i]) {
+			state[i] = 2
+			return nil
+		}
+		lifted[i] = proofarith.DyVec(verts[i])
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if _, err := orderedwork.Each(len(tris), workers, 256, poll, func(i int) error {
+		t := tris[i]
+		if state[t[0]] != 1 || state[t[1]] != 1 || state[t[2]] != 1 {
+			return nil
+		}
+		terms[i].area, terms[i].lu, terms[i].lv = perturbedTriangleAreaLifted(lifted[t[0]], lifted[t[1]], lifted[t[2]])
+		terms[i].ok = true
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if budget != nil {
+		for range tris {
+			if err := budget.Step(); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return terms, nil
 }
 
 // SweptVolumeAllow bounds the volume between two closed meshes whose vertices
