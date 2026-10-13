@@ -233,13 +233,20 @@ implicit. Its roots describe whole-arc contacts; they do not establish one
 angular crossing. A fitted flank may share such a time root only when the
 live Sketch endpoint is the same point handle and all three exact controls
 match. This arc result alone does not admit `Union`.
+When a whole Arc has live Line neighbours on both sides, its pinned End may
+have a different radius from the ideal carrier. The LoftFromPoint producer
+must have charged the exact Arc-end radial residual within its issued station
+bound. The carrier keeps its own whole-Arc time root. An adjacent Line uses
+the same live Sketch endpoint and its own exact time root; the two roots need
+not match. Their source cells remain separate and any undecidable gap refuses.
 
 For each nonvertical finite Revolve side, a source manifest classifies every
 mapped fitted, straight and arc source span. It emits cells only for source
 origins found on a live trimmed face, and binds each emitted cell to its
 Sketch entity, LoftFaces band, source face origin and Revolve face.
-An interior fitted Bezier knot, a fitted-to-radial-arc endpoint and a
-fitted-to-line endpoint have distinct contact kinds. The fitted-to-line gate
+An interior fitted Bezier knot, a fitted-to-radial-arc endpoint, a
+fitted-to-line endpoint and a line-to-arc endpoint have distinct contact kinds.
+The fitted-to-line gate
 requires adjacent whole entities to share one live Sketch point. Both recorded
 endpoints and their exact mapped meridian polynomial controls must agree.
 It isolates that point's time roots, classifies their exact axial intervals
@@ -256,8 +263,8 @@ unsupported until an open-end-aware moving-crossing proof is available.
 Closed root brackets
 use the corresponding one-sided source cell. A source-current check rejects
 stale LoftFaces, Sketch and Revolve records before collecting these cells.
-Every live Arc band must have a strict finite side, an axial miss, or an
-exact whole-arc radial time contact. An undecidable Arc band refuses.
+Every live Arc band must have a strict finite side, an axial miss, or a
+certified whole-arc radial time contact. An undecidable Arc band refuses.
 The manifest does not assert which source cells survive both cone trims.
 
 For a vertical Revolve side, the source gate first binds the complete section

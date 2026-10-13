@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -59,10 +61,34 @@ func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 	centerU, centerV := lfF(arc.Center.X()), lfF(arc.Center.Y())
 	startU, startV := lfF(arc.Start.X()), lfF(arc.Start.Y())
 	endU, endV := lfF(arc.End.X()), lfF(arc.End.Y())
-	radius2 := mappedArcRadiusSquare(startU, startV, centerU, centerV)
-	if radius2.Sign() <= 0 ||
-		mappedArcRadiusSquare(endU, endV, centerU, centerV).Cmp(radius2) != 0 {
+	if endU.Cmp(sourceBox[0]) < 0 || endU.Cmp(sourceBox[1]) > 0 ||
+		endV.Cmp(sourceBox[2]) < 0 || endV.Cmp(sourceBox[3]) > 0 {
 		return empty, false
+	}
+	radius2 := mappedArcRadiusSquare(startU, startV, centerU, centerV)
+	if radius2.Sign() <= 0 {
+		return empty, false
+	}
+	// Sketch pins End to a live point while its circular carrier takes the
+	// radius from Start. LoftFromPoint already charges their radial residual
+	// in sourceStationRound. Keep that bound before classifying the carrier.
+	endRadial := loftmesh.ArcNaturalEndRadialUpper(segment)
+	if proofbound.IsNonFinite(endRadial) || endRadial < 0 ||
+		proofbound.IsNonFinite(trim.source.sourceStationRound) ||
+		endRadial > trim.source.sourceStationRound {
+		return empty, false
+	}
+	if mappedArcRadiusSquare(endU, endV, centerU, centerV).Cmp(radius2) != 0 {
+		// Fitted endpoints require a separate exact fit/arc polynomial match.
+		// Only a line on each side can own the displaced pinned endpoint here.
+		entities := trim.source.source.entities
+		n := len(entities)
+		if _, left := entities[(segmentIndex+n-1)%n].(*sketch.Line); !left {
+			return empty, false
+		}
+		if _, right := entities[(segmentIndex+1)%n].(*sketch.Line); !right {
+			return empty, false
+		}
 	}
 	var mappedCaps [2]mappedArcRadialCap
 	for index, mapped := range [...]loftFaceMap{trim.maps[band], trim.maps[band+1]} {

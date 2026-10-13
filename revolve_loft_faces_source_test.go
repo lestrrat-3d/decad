@@ -48,6 +48,12 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 func neutralArcSeamSourceWithFit(t *testing.T, rightXY, leftXY [][2]float64) (
 	*Body, *Body, *loftFacesTrimRecord,
 ) {
+	return neutralArcSeamSourceWithInnerArcEnd(t, rightXY, leftXY, 0.2)
+}
+
+func neutralArcSeamSourceWithInnerArcEnd(t *testing.T,
+	rightXY, leftXY [][2]float64, innerLeftV float64,
+) (*Body, *Body, *loftFacesTrimRecord) {
 	t.Helper()
 	doc := New()
 	w := sketch.NewWorld()
@@ -64,7 +70,7 @@ func neutralArcSeamSourceWithFit(t *testing.T, rightXY, leftXY [][2]float64) (
 		return point
 	}
 	center := fixed(0, 0)
-	innerRight, innerLeft := fixed(2.2, -0.2), fixed(2.2, 0.2)
+	innerRight, innerLeft := fixed(2.2, -0.2), fixed(2.2, innerLeftV)
 	right := make([]*sketch.Point, len(rightXY))
 	left := make([]*sketch.Point, len(leftXY))
 	for i, xy := range rightXY {

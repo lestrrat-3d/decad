@@ -184,8 +184,10 @@ func revolveLoftFacesPartitionJointCells(ctx context.Context,
 	segment, spanIndex, band int, span freeform.BezierSpan,
 	knots []*revolveLoftFacesFitKnotJoint,
 	radial *revolveLoftFacesRadialJoint,
-	fitLines []*revolveLoftFacesFitLineJoint) ([]revolveLoftFacesMappedCell, bool, error) {
-	if len(fitLines) == 0 && len(knots) < 2 || len(span) == 0 || len(knots) > 2 {
+	fitLines []*revolveLoftFacesFitLineJoint,
+	lineArcs []*revolveLoftFacesLineArcJoint) ([]revolveLoftFacesMappedCell, bool, error) {
+	if len(fitLines) == 0 && len(lineArcs) == 0 && len(knots) < 2 ||
+		len(span) == 0 || len(knots) > 2 {
 		return nil, false, nil
 	}
 	var roots []revolveLoftFacesOwnedRoot
@@ -263,6 +265,18 @@ func revolveLoftFacesPartitionJointCells(ctx context.Context,
 			roots = append(roots, revolveLoftFacesOwnedRoot{root: root,
 				cell: cells[i], kind: revolveLoftFacesFitLineContact,
 				point: joint.vertex.point, atEnd: atEnd})
+		}
+	}
+	for _, joint := range lineArcs {
+		if joint == nil || joint.band != band || joint.vertex.lineSegment != segment ||
+			spanIndex != 0 || !revolveLoftFacesSameBezier(span, joint.vertex.lineSpan) ||
+			len(joint.roots) == 0 || len(joint.roots) != len(joint.cells) {
+			return nil, false, nil
+		}
+		for i, root := range joint.roots {
+			roots = append(roots, revolveLoftFacesOwnedRoot{root: root,
+				cell: joint.cells[i], kind: revolveLoftFacesLineArcContact,
+				point: joint.vertex.point, atEnd: joint.vertex.lineAtEnd})
 		}
 	}
 	return revolveLoftFacesPartitionOwnedEndpointCells(ctx, trim, section,

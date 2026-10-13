@@ -17,6 +17,7 @@ type revolveLoftFacesNonverticalJoints struct {
 	fitKnots []revolveLoftFacesFitKnotJoint
 	radial   []revolveLoftFacesRadialJoint
 	fitLines []revolveLoftFacesFitLineJoint
+	lineArcs []revolveLoftFacesLineArcJoint
 }
 
 func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
@@ -127,6 +128,46 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 						ErrUnsupported, arcIndex, band)
 				}
 				out.radial = append(out.radial, joint)
+			}
+		}
+	}
+	for lineIndex, source := range segments {
+		if _, isLine := source.(lineSeg); !isLine {
+			continue
+		}
+		for _, lineAtWalkEnd := range [...]bool{false, true} {
+			arcIndex := (lineIndex - 1 + len(segments)) % len(segments)
+			if lineAtWalkEnd {
+				arcIndex = (lineIndex + 1) % len(segments)
+			}
+			if _, isArc := entities[arcIndex].(*sketch.Arc); !isArc {
+				continue
+			}
+			vertex, valid := revolveLoftFacesLineArcVertexAt(trim,
+				lineIndex, arcIndex, lineAtWalkEnd)
+			if !valid {
+				return out, false, nil
+			}
+			for band := 0; band+1 < len(trim.maps); band++ {
+				if _, radial := mappedArcRadialTimeBand(ctx, trim, arcIndex, band, section); !radial {
+					continue
+				}
+				roots, valid := revolveLoftFacesEndpointFiniteRoots(trim, section,
+					vertex.lineSpan, band, vertex.lineAtEnd)
+				if !valid {
+					return out, false, fmt.Errorf("%w: line/arc source joint %d/%d band %d has undecidable time roots",
+						ErrUnsupported, lineIndex, arcIndex, band)
+				}
+				if len(roots) == 0 {
+					continue
+				}
+				joint, valid := certifyRevolveLoftFacesLineArcJoint(ctx, trim,
+					section, lineIndex, arcIndex, band, lineAtWalkEnd)
+				if !valid {
+					return out, false, fmt.Errorf("%w: line/arc source joint %d/%d band %d lacks a joint cell proof",
+						ErrUnsupported, lineIndex, arcIndex, band)
+				}
+				out.lineArcs = append(out.lineArcs, joint)
 			}
 		}
 	}

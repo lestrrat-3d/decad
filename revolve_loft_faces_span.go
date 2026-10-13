@@ -69,6 +69,7 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 				var knots []*revolveLoftFacesFitKnotJoint
 				var radial *revolveLoftFacesRadialJoint
 				var fitLines []*revolveLoftFacesFitLineJoint
+				var lineArcs []*revolveLoftFacesLineArcJoint
 				for i := range joints.fitLines {
 					joint := &joints.fitLines[i]
 					if joint.band != band {
@@ -80,6 +81,12 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 							index == len(spans)-1 && joint.vertex.fitAtEnd ||
 						joint.vertex.lineSegment == segment && index == 0 {
 						fitLines = append(fitLines, joint)
+					}
+				}
+				for i := range joints.lineArcs {
+					joint := &joints.lineArcs[i]
+					if joint.band == band && joint.vertex.lineSegment == segment && index == 0 {
+						lineArcs = append(lineArcs, joint)
 					}
 				}
 				for i := range joints.fitKnots {
@@ -107,10 +114,10 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 					}
 					radial = joint
 				}
-				if len(fitLines) != 0 || len(knots) == 2 {
+				if len(fitLines) != 0 || len(lineArcs) != 0 || len(knots) == 2 {
 					refined, certified, err := revolveLoftFacesPartitionJointCells(ctx,
 						trim, section, segment, index, band, span,
-						knots, radial, fitLines)
+						knots, radial, fitLines, lineArcs)
 					if err != nil || !certified {
 						return nil, false, err
 					}

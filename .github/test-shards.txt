@@ -30,6 +30,7 @@
 0	2.54	TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource
 1	0.00	TestAddBlendRolesContextPollsNestedMetadata
 1	0.90	TestFiniteRevolveFitLineJointKeepsBothLiveSourceSides
+1	1.30	TestCurvedMappedSourceWithPinnedArcEnd
 1	0.00	TestMappedArcRadialTimeBandTwoExactTimeCrossings
 1	0.00	TestMappedEndpointFiniteSection
 1	0.00	TestMappedEndpointTimeRoots

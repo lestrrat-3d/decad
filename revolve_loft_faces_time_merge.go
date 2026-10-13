@@ -17,6 +17,7 @@ const (
 	revolveLoftFacesRadialArcContact
 	revolveLoftFacesWholeArcContact
 	revolveLoftFacesFitLineContact
+	revolveLoftFacesLineArcContact
 )
 
 // Each root owns one live source endpoint. Fit-knot, radial-arc and fit-line
@@ -158,7 +159,8 @@ func revolveLoftFacesOrderOwnedRoots(roots []revolveLoftFacesOwnedRoot) bool {
 		root, cell := owned.root, owned.cell
 		if owned.point == nil || owned.kind != revolveLoftFacesFitKnotContact &&
 			owned.kind != revolveLoftFacesRadialArcContact &&
-			owned.kind != revolveLoftFacesFitLineContact ||
+			owned.kind != revolveLoftFacesFitLineContact &&
+			owned.kind != revolveLoftFacesLineArcContact ||
 			root.time.lo == nil || root.time.hi == nil || cell.time.lo == nil ||
 			cell.time.hi == nil || cell.sLo == nil || cell.sHi == nil ||
 			root.time.lo.Cmp(previous) <= 0 ||

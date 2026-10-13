@@ -43,7 +43,7 @@ func TestFiniteRevolveFitLineJointKeepsBothLiveSourceSides(t *testing.T) {
 	} {
 		cells, certified, err := revolveLoftFacesPartitionJointCells(t.Context(),
 			trim, section, part.segment, 0, band, part.span, nil, nil,
-			[]*revolveLoftFacesFitLineJoint{&joint})
+			[]*revolveLoftFacesFitLineJoint{&joint}, nil)
 		require.NoError(t, err)
 		require.True(t, certified)
 		require.NotEmpty(t, cells)

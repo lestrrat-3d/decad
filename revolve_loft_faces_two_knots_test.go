@@ -59,7 +59,7 @@ func TestFiniteRevolveTwoFitKnotsOnOneSourceSpan(t *testing.T) {
 		require.Len(t, knots, 2)
 		require.NotSame(t, knots[0].vertex.point, knots[1].vertex.point)
 		cells, certified, err := revolveLoftFacesPartitionJointCells(t.Context(),
-			trim, section, 0, 1, band, spans[1], knots, nil, nil)
+			trim, section, 0, 1, band, spans[1], knots, nil, nil, nil)
 		require.NoError(t, err)
 		require.True(t, certified)
 		contacts := map[*sketch.Point]int{}
@@ -90,12 +90,12 @@ func TestFiniteRevolveTwoFitKnotsOnOneSourceSpan(t *testing.T) {
 			changed.rightCells[0].time = changed.roots[0].time
 			_, certified, _ := revolveLoftFacesPartitionJointCells(t.Context(),
 				trim, section, 0, 1, band, spans[1],
-				[]*revolveLoftFacesFitKnotJoint{knots[0], &changed}, nil, nil)
+				[]*revolveLoftFacesFitKnotJoint{knots[0], &changed}, nil, nil, nil)
 			require.False(t, certified)
 		})
 		t.Run("wrong source span refuses", func(t *testing.T) {
 			_, certified, _ := revolveLoftFacesPartitionJointCells(t.Context(),
-				trim, section, 0, 1, band, spans[0], knots, nil, nil)
+				trim, section, 0, 1, band, spans[0], knots, nil, nil, nil)
 			require.False(t, certified)
 		})
 		return
