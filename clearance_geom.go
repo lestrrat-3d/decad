@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/stitchweld"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
@@ -130,14 +131,14 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool,
 		// vertex bound) or closed by the CURVE weld certificate at a nonzero
 		// class bound — no longer refuses on that alone: bodyGeom.delta now
 		// exists for it to charge its own worst vertex bound against
-		// (stitchMaxVertexBound, stitch.go), the identical charge a placed
-		// prism's frame/placement rounding takes (bodyGeom's own doc
-		// comment), so this arm needs no standing narrower than addPrismFaces'
+		// (stitchweld.MaxBound over stitchVertexBounds, stitch.go), the
+		// identical charge a placed prism's frame/placement rounding takes
+		// (bodyGeom's own doc comment), so this arm needs no standing narrower than addPrismFaces'
 		// own anymore.
 		if pl.tris == nil {
 			return nil, false, nil
 		}
-		maxVertexBound, mErr := stitchMaxVertexBound(budget, b)
+		maxVertexBound, mErr := stitchweld.MaxBound(budget, stitchVertexBounds(b))
 		if mErr != nil {
 			return nil, false, mErr
 		}
@@ -525,8 +526,8 @@ func revolveCarrierInput(budget *proofbound.WorkBudget, rp revolvePayload) (clea
 // reads comes straight off the body's own topology, so this arm introduces no
 // rounding of its own; the caller (newBodyGeomBudget) charges the body's own
 // worst proven vertex bound into bodyGeom.delta separately
-// (stitchMaxVertexBound, stitch.go) rather than refusing a bounded body a
-// model outright.
+// (stitchweld.MaxBound over stitchVertexBounds, stitch.go) rather than
+// refusing a bounded body a model outright.
 //
 // The plane frame's origin and axes come straight off the face's own Plane
 // tag, negating the normal when the face is reversed — the identical

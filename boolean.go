@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stitchweld"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -1012,7 +1013,7 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 //
 // A stitchPayload operand narrows rather than refuses outright: a CLOSED,
 // all-planar body (sp.tris != nil) whose every vertex carries a proven bound
-// of exactly zero (stitchZeroVertexBound, stitch.go — the identical gate
+// of exactly zero (stitchweld.ZeroBound over stitchVertexBounds, stitch.go — the identical gate
 // tessellate_stitch.go's own occupied-volume publication and
 // clearance_geom.go's carrier-model dispatch both apply) will publish
 // symDiffOK == true once meshed, so refusing it here would contradict what
@@ -1080,7 +1081,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 			}
 		case stitchPayload:
 			if pl.tris != nil {
-				zeroBound, zErr := stitchZeroVertexBound(proofbound.NewWorkBudget(ctx), b)
+				zeroBound, zErr := stitchweld.ZeroBound(proofbound.NewWorkBudget(ctx), stitchVertexBounds(b))
 				if zErr != nil {
 					return zErr
 				}
