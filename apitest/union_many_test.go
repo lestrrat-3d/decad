@@ -32,11 +32,32 @@ func TestUnionManyArrangesThreePrismsOnce(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 }
 
-func TestUnionManyRefusalKeepsEveryOperandLive(t *testing.T) {
+func TestUnionManyChainsMixedHeightPrisms(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 4, 4, 2)
 	b := boxBody(t, doc, 2, 2, 6, 6, 2)
 	c := boxBodyAtZ(t, doc, 5, -1, 9, 3, 1, 2)
+
+	joined, err := decad.Union(t.Context(), a, b, c)
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{joined}, doc.Bodies())
+	volume, err := joined.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volumeMM(t, volume)-87), boundMM3(t, volume))
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
+func TestUnionManyRefusalKeepsEveryOperandLive(t *testing.T) {
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 4, 4, 2)
+	b := boxBody(t, doc, 2, 2, 6, 6, 2)
+	// The first pair joins. The third box touches that result only along an
+	// edge, so the second pair has no solid contact certificate.
+	c := boxBodyAtZ(t, doc, 6, 6, 8, 8, 1, 2)
 	original := doc.Bodies()
 
 	_, err := decad.Union(t.Context(), a, b, c)

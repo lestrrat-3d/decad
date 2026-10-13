@@ -36,8 +36,9 @@ import (
 // Three or more bodies admit a one-scene exact union of equal-interval,
 // same-placement, hole-free whole-line prisms with distinct source line
 // carriers, plus certified straight and spiral bevel tooth patterns. Other
-// multi-body classes return ErrUnsupported. Failure or cancellation leaves
-// every input live. A two-body result from the mesh path is a Faceted body:
+// prism inputs use the two-body evaluator in order, with one final commit.
+// Each pair must pass its own proof. Failure or cancellation leaves every
+// input live. A two-body result from the mesh path is a Faceted body:
 // its faces are grouped by the operands' source faces, so provenance
 // (FaceCreatedBy) survives, and its measurements are Approximate with proven
 // bounds (docs/evaluator-design.md §9) — except that an all-planar pair whose

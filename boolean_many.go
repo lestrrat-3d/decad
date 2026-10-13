@@ -3,6 +3,8 @@ package decad
 import (
 	"context"
 	"fmt"
+
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 )
 
 // performUnionMany validates every input before evaluation and commits the
@@ -51,6 +53,10 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	if !matched && err == nil {
 		body, matched, err = tryPrismPatternUnionMany(ctx, d, ref, operands)
 	}
+	span := producerID(1)
+	if !matched && err == nil {
+		body, span, matched, err = tryPrismUnionChain(ctx, ref, operands)
+	}
 	if !matched && err == nil {
 		body, err = spiralCombineBody(ctx, d, ref, a, tools)
 	}
@@ -60,6 +66,30 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body, operands...)
+	d.commitSpan(body, span, operands...)
 	return body, nil
+}
+
+// tryPrismUnionChain gives prism inputs that miss the specialized many-body
+// paths the same pair evaluator as two-body Union. Every intermediate body is
+// transient. The caller commits only the final certified result and reserves
+// every producer identity used by its intermediate features.
+func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body) (*Body, producerID, bool, error) {
+	for _, operand := range operands {
+		if _, ok := operand.payload.(prismPayload); !ok {
+			return nil, 0, false, nil
+		}
+	}
+	result := operands[0]
+	for i, operand := range operands[1:] {
+		if err := ctx.Err(); err != nil {
+			return nil, 0, true, err
+		}
+		var err error
+		result, err = booleanBody(ctx, meshbool.OpUnion, result, operand, ref+producerID(i))
+		if err != nil {
+			return nil, 0, true, err
+		}
+	}
+	return result, producerID(len(operands) - 1), true, nil
 }
