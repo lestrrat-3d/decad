@@ -175,8 +175,8 @@ func Cross2xSign(a, b, c Xp2) int {
 	au, av, bu, bv, cu, cv := a.Fu, a.Fv, b.Fu, b.Fv, c.Fu, c.Fv
 	if a.FloatFinite && b.FloatFinite && c.FloatFinite {
 		det := (bu-au)*(cv-av) - (bv-av)*(cu-au)
-		scale := (math.Abs(bu)+math.Abs(au))*(math.Abs(cv)+math.Abs(av)) +
-			(math.Abs(bv)+math.Abs(av))*(math.Abs(cu)+math.Abs(au))
+		scale := (proof.Abs(bu)+proof.Abs(au))*(proof.Abs(cv)+proof.Abs(av)) +
+			(proof.Abs(bv)+proof.Abs(av))*(proof.Abs(cu)+proof.Abs(au))
 		err := 1e-12 * scale
 		if !math.IsNaN(det) && !math.IsInf(det, 0) && !math.IsInf(err, 0) && err > 0 {
 			if det > err {
