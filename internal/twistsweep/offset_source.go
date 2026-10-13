@@ -1,4 +1,8 @@
-package decad
+// Package twistsweep holds the twisted-sweep shell proofs: the twist polygon
+// admission, the twisted-wall offset source and stations, the placed-shell
+// proof and the sampled cup mesh. docs/shell-twisted-sweep-design.md owns the
+// design.
+package twistsweep
 
 import (
 	"fmt"
@@ -6,6 +10,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/units"
@@ -15,13 +20,13 @@ import (
 // one-line twisted Sweep. The offset is a denoted curve, not a fitted spline.
 // Central symmetry makes both first moments exactly zero.
 type twistOffsetSourceProof struct {
-	area         proofbound.RatInterval
-	clearanceLo  *big.Rat
-	speedLo      *big.Rat
-	turnRateLo   *big.Rat
-	radialLo     *big.Rat
-	firstMomentX *big.Rat
-	firstMomentY *big.Rat
+	Area         proofbound.RatInterval
+	ClearanceLo  *big.Rat
+	SpeedLo      *big.Rat
+	TurnRateLo   *big.Rat
+	RadialLo     *big.Rat
+	FirstMomentX *big.Rat
+	FirstMomentY *big.Rat
 }
 
 type twistOffsetSpan struct {
@@ -31,7 +36,7 @@ type twistOffsetSpan struct {
 type twistOffsetTangent struct{ x, y *big.Rat }
 
 func twistOffsetPoint(x float64) proofbound.RatInterval {
-	return proofbound.PointInterval(twistRat(x))
+	return proofbound.PointInterval(TwistRat(x))
 }
 
 func twistOffsetUnit(x int64) proofbound.RatInterval {
@@ -44,12 +49,12 @@ func twistOffsetLength(dx, dy *big.Rat) (proofbound.RatInterval, bool) {
 }
 
 func twistOffsetLineSpan(edge lineSeg, first, last, parts int64) (twistOffsetSpan, error) {
-	x, y := twistRat(edge.Start.U), twistRat(edge.Start.V)
-	dx := new(big.Rat).Sub(twistRat(edge.End.U), x)
-	dy := new(big.Rat).Sub(twistRat(edge.End.V), y)
+	x, y := TwistRat(edge.Start.U), TwistRat(edge.Start.V)
+	dx := new(big.Rat).Sub(TwistRat(edge.End.U), x)
+	dy := new(big.Rat).Sub(TwistRat(edge.End.V), y)
 	length, ok := twistOffsetLength(dx, dy)
 	if !ok || length.Lo.Sign() <= 0 {
-		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell line has no positive length`, ErrUnsupported)
+		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell line has no positive length`, decaderr.ErrUnsupported)
 	}
 	dot := new(big.Rat).Add(new(big.Rat).Mul(x, dx), new(big.Rat).Mul(y, dy))
 	len2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
@@ -57,12 +62,12 @@ func twistOffsetLineSpan(edge lineSeg, first, last, parts int64) (twistOffsetSpa
 	f, ok := proofbound.IntervalQuo(proofbound.IntervalAdd(proofbound.PointInterval(dot),
 		proofbound.IntervalScale(parameter, len2)), length)
 	if !ok {
-		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell line tangent is unbounded`, ErrUnsupported)
+		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell line tangent is unbounded`, decaderr.ErrUnsupported)
 	}
 	hNumerator := new(big.Rat).Sub(new(big.Rat).Mul(y, dx), new(big.Rat).Mul(x, dy))
 	h, ok := proofbound.IntervalQuo(proofbound.PointInterval(hNumerator), length)
 	if !ok {
-		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell line normal is unbounded`, ErrUnsupported)
+		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell line normal is unbounded`, decaderr.ErrUnsupported)
 	}
 	return twistOffsetSpan{f: f, h: h, kappa: twistOffsetUnit(0),
 		length: proofbound.IntervalScale(length, big.NewRat(last-first, parts))}, nil
@@ -71,19 +76,19 @@ func twistOffsetLineSpan(edge lineSeg, first, last, parts int64) (twistOffsetSpa
 func twistOffsetArcSpan(edge arcSeg, first, last, parts int64) (twistOffsetSpan, error) {
 	radius, sweep, ok := circularbounds.WalkEnclosures(circularbounds.RecordSegment(edge))
 	if !ok || radius.Lo.Sign() <= 0 || sweep.Lo.Sign() <= 0 || sweep.Hi.Cmp(proofbound.PiUpper) > 0 {
-		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell arc has no bounded radius or turn`, ErrUnsupported)
+		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell arc has no bounded radius or turn`, decaderr.ErrUnsupported)
 	}
-	dx := new(big.Rat).Sub(twistRat(edge.Start.U), twistRat(edge.Center.U))
-	dy := new(big.Rat).Sub(twistRat(edge.Start.V), twistRat(edge.Center.V))
+	dx := new(big.Rat).Sub(TwistRat(edge.Start.U), TwistRat(edge.Center.U))
+	dy := new(big.Rat).Sub(TwistRat(edge.Start.V), TwistRat(edge.Center.V))
 	a0 := proofbound.Atan2Interval(dy, dx,
 		edge.Start.V-edge.Center.V == 0 && math.Signbit(edge.Start.V-edge.Center.V))
 	angle := proofbound.IntervalAdd(a0, proofbound.IntervalMul(sweep,
 		proofbound.Interval(big.NewRat(first, parts), big.NewRat(last, parts))))
 	sin, cos, ok := proofbound.RadSinCosSpan(angle)
 	if !ok {
-		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell arc has no angular enclosure`, ErrUnsupported)
+		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell arc has no angular enclosure`, decaderr.ErrUnsupported)
 	}
-	cx, cy := twistRat(edge.Center.U), twistRat(edge.Center.V)
+	cx, cy := TwistRat(edge.Center.U), TwistRat(edge.Center.V)
 	f := proofbound.IntervalAdd(proofbound.IntervalScale(sin, new(big.Rat).Neg(cx)),
 		proofbound.IntervalScale(cos, cy))
 	h := proofbound.IntervalSub(proofbound.IntervalAdd(
@@ -91,7 +96,7 @@ func twistOffsetArcSpan(edge arcSeg, first, last, parts int64) (twistOffsetSpan,
 		proofbound.IntervalScale(sin, new(big.Rat).Neg(cy))), radius)
 	kappa, ok := proofbound.IntervalQuo(twistOffsetUnit(1), radius)
 	if !ok {
-		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell arc curvature is unbounded`, ErrUnsupported)
+		return twistOffsetSpan{}, fmt.Errorf(`%w: twisted shell arc curvature is unbounded`, decaderr.ErrUnsupported)
 	}
 	return twistOffsetSpan{f: f, h: h, kappa: kappa,
 		length: proofbound.IntervalScale(proofbound.IntervalMul(radius, sweep),
@@ -101,18 +106,18 @@ func twistOffsetArcSpan(edge arcSeg, first, last, parts int64) (twistOffsetSpan,
 func twistOffsetSegmentEnds(segment curveSegment) (planePoint, planePoint, twistOffsetTangent, twistOffsetTangent, bool) {
 	switch edge := segment.(type) {
 	case lineSeg:
-		dx := new(big.Rat).Sub(twistRat(edge.End.U), twistRat(edge.Start.U))
-		dy := new(big.Rat).Sub(twistRat(edge.End.V), twistRat(edge.Start.V))
+		dx := new(big.Rat).Sub(TwistRat(edge.End.U), TwistRat(edge.Start.U))
+		dy := new(big.Rat).Sub(TwistRat(edge.End.V), TwistRat(edge.Start.V))
 		tangent := twistOffsetTangent{dx, dy}
 		return edge.Start, edge.End, tangent, tangent, true
 	case arcSeg:
 		start := twistOffsetTangent{
-			new(big.Rat).Sub(twistRat(edge.Center.V), twistRat(edge.Start.V)),
-			new(big.Rat).Sub(twistRat(edge.Start.U), twistRat(edge.Center.U)),
+			new(big.Rat).Sub(TwistRat(edge.Center.V), TwistRat(edge.Start.V)),
+			new(big.Rat).Sub(TwistRat(edge.Start.U), TwistRat(edge.Center.U)),
 		}
 		end := twistOffsetTangent{
-			new(big.Rat).Sub(twistRat(edge.Center.V), twistRat(edge.End.V)),
-			new(big.Rat).Sub(twistRat(edge.End.U), twistRat(edge.Center.U)),
+			new(big.Rat).Sub(TwistRat(edge.Center.V), TwistRat(edge.End.V)),
+			new(big.Rat).Sub(TwistRat(edge.End.U), TwistRat(edge.Center.U)),
 		}
 		return edge.Start, edge.End, start, end, true
 	default:
@@ -139,31 +144,31 @@ func twistOffsetSmoothClosed(profile profileRecord) bool {
 	return true
 }
 
-// twistOffsetSource proves that the normal-offset contour has a positive
+// TwistOffsetSource proves that the normal-offset contour has a positive
 // tangent speed and increasing tangent angle, and stays strictly inside the
 // authenticated convex source. It integrates its area without a sampled fit.
-func twistOffsetSource(profile profileRecord, height float64, angle units.Value,
+func TwistOffsetSource(profile profileRecord, height float64, angle units.Value,
 	thickness, thicknessDelta float64) (twistOffsetSourceProof, error) {
-	poly, err := twistPolygonOf(profile)
+	poly, err := TwistPolygonOf(profile)
 	if err != nil {
 		return twistOffsetSourceProof{}, err
 	}
-	if !poly.hasArc || !twistOffsetSmoothClosed(profile) || height <= 0 ||
+	if !poly.HasArc || !twistOffsetSmoothClosed(profile) || height <= 0 ||
 		thickness <= 0 || thicknessDelta < 0 || thickness-thicknessDelta <= 0 ||
 		thickness+thicknessDelta >= height {
-		return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell needs a smooth rounded section and a positive floor`, ErrUnsupported)
+		return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell needs a smooth rounded section and a positive floor`, decaderr.ErrUnsupported)
 	}
 	theta, ok := revolveangle.FromValue(angle).Enclosure()
 	if !ok {
-		return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell angle has no enclosure`, ErrUnsupported)
+		return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell angle has no enclosure`, decaderr.ErrUnsupported)
 	}
 	k, ok := proofbound.IntervalQuo(theta, twistOffsetPoint(height))
 	if !ok || proofbound.IntervalSquare(k).Lo.Sign() <= 0 {
-		return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell turn is not bounded away from zero`, ErrUnsupported)
+		return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell turn is not bounded away from zero`, decaderr.ErrUnsupported)
 	}
 	k2 := proofbound.IntervalSquare(k)
-	t := proofbound.Interval(new(big.Rat).Sub(twistRat(thickness), twistRat(thicknessDelta)),
-		new(big.Rat).Add(twistRat(thickness), twistRat(thicknessDelta)))
+	t := proofbound.Interval(new(big.Rat).Sub(TwistRat(thickness), TwistRat(thicknessDelta)),
+		new(big.Rat).Add(TwistRat(thickness), TwistRat(thicknessDelta)))
 	area := twistOffsetUnit(0)
 	var clearanceLo, speedLo, turnRateLo, radialLo *big.Rat
 	const parts = int64(64)
@@ -176,7 +181,7 @@ func twistOffsetSource(profile profileRecord, height float64, angle units.Value,
 			case arcSeg:
 				span, err = twistOffsetArcSpan(edge, index, index+1, parts)
 			default:
-				err = fmt.Errorf(`%w: twisted shell source has an unsupported curve`, ErrUnsupported)
+				err = fmt.Errorf(`%w: twisted shell source has an unsupported curve`, decaderr.ErrUnsupported)
 			}
 			if err != nil {
 				return twistOffsetSourceProof{}, err
@@ -185,11 +190,11 @@ func twistOffsetSource(profile profileRecord, height float64, angle units.Value,
 			g, rootOK := proofbound.SqrtInterval(proofbound.IntervalAdd(twistOffsetUnit(1),
 				proofbound.IntervalMul(k2, f2)))
 			if !rootOK || g.Lo.Sign() <= 0 {
-				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell normal has no positive length`, ErrUnsupported)
+				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell normal has no positive length`, decaderr.ErrUnsupported)
 			}
 			a, quoOK := proofbound.IntervalQuo(t, g)
 			if !quoOK {
-				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell normal distance is unbounded`, ErrUnsupported)
+				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell normal distance is unbounded`, decaderr.ErrUnsupported)
 			}
 			fPrime := proofbound.IntervalAdd(twistOffsetUnit(1),
 				proofbound.IntervalMul(span.kappa, span.h))
@@ -197,7 +202,7 @@ func twistOffsetSource(profile profileRecord, height float64, angle units.Value,
 			betaPrime, quoOK := proofbound.IntervalQuo(proofbound.IntervalMul(
 				proofbound.IntervalMul(k2, t), fPrime), g3)
 			if !quoOK {
-				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell tangent turn is unbounded`, ErrUnsupported)
+				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell tangent turn is unbounded`, decaderr.ErrUnsupported)
 			}
 			lambda := proofbound.IntervalSub(proofbound.IntervalSub(twistOffsetUnit(1),
 				proofbound.IntervalMul(a, span.kappa)),
@@ -206,16 +211,16 @@ func twistOffsetSource(profile profileRecord, height float64, angle units.Value,
 			beta, quoOK := proofbound.IntervalQuo(proofbound.IntervalMul(
 				proofbound.IntervalMul(k2, t), span.f), g)
 			if !quoOK {
-				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell offset angle is unbounded`, ErrUnsupported)
+				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell offset angle is unbounded`, decaderr.ErrUnsupported)
 			}
 			clearance := new(big.Rat).Sub(a.Lo, new(big.Rat).Mul(
-				twistRat(poly.maxRadiusL1), proofbound.IntervalAbsUpper(beta)))
+				TwistRat(poly.MaxRadiusL1), proofbound.IntervalAbsUpper(beta)))
 			if lambda.Lo.Sign() <= 0 || turnRate.Lo.Sign() <= 0 || clearance.Sign() <= 0 {
-				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell offset has no convex clearance proof`, ErrUnsupported)
+				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell offset has no convex clearance proof`, decaderr.ErrUnsupported)
 			}
 			radius := proofbound.IntervalSub(proofbound.IntervalNeg(span.h), a)
 			if radius.Lo.Sign() <= 0 {
-				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell offset has no positive area density`, ErrUnsupported)
+				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell offset has no positive area density`, decaderr.ErrUnsupported)
 			}
 			area = proofbound.IntervalAdd(area, proofbound.IntervalScale(proofbound.IntervalMul(
 				span.length, proofbound.IntervalMul(lambda, radius)), big.NewRat(1, 2)))
@@ -233,10 +238,10 @@ func twistOffsetSource(profile profileRecord, height float64, angle units.Value,
 			}
 		}
 	}
-	if area.Lo.Sign() <= 0 || area.Hi.Cmp(poly.areaInterval.Lo) >= 0 {
-		return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell offset area is not enclosed inside source`, ErrUnsupported)
+	if area.Lo.Sign() <= 0 || area.Hi.Cmp(poly.AreaInterval.Lo) >= 0 {
+		return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell offset area is not enclosed inside source`, decaderr.ErrUnsupported)
 	}
-	return twistOffsetSourceProof{area: area, clearanceLo: clearanceLo,
-		speedLo: speedLo, turnRateLo: turnRateLo, radialLo: radialLo,
-		firstMomentX: new(big.Rat), firstMomentY: new(big.Rat)}, nil
+	return twistOffsetSourceProof{Area: area, ClearanceLo: clearanceLo,
+		SpeedLo: speedLo, TurnRateLo: turnRateLo, RadialLo: radialLo,
+		FirstMomentX: new(big.Rat), FirstMomentY: new(big.Rat)}, nil
 }

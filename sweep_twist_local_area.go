@@ -7,6 +7,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -14,7 +15,7 @@ import (
 // charge is the sum of local absolute density gaps, which remains valid when
 // Boolean keeps any subset of the held walls. Every live source role and held
 // face still has to exist; a smaller number cannot hide a dropped face.
-func twistMixedAreaSlackLocal(profile profileRecord, poly twistPolygon, body *Body,
+func twistMixedAreaSlackLocal(profile profileRecord, poly twistsweep.TwistPolygon, body *Body,
 	held map[*Face]proofbound.RatInterval, wallBound float64) (float64, error) {
 	if proofbound.IsNonFinite(wallBound) || wallBound < 0 {
 		return 0, fmt.Errorf(`%w: mixed twisted wall has no finite area allowance`, ErrUnsupported)
@@ -48,7 +49,7 @@ func twistMixedAreaSlackLocal(profile profileRecord, poly twistPolygon, body *Bo
 		if face == nil || !ok || area.Lo.Sign() < 0 {
 			return 0, fmt.Errorf(`%w: mixed twisted cap %s has no held area`, ErrUnsupported, role)
 		}
-		capCharge.Add(capCharge, poly.areaInterval.Hi)
+		capCharge.Add(capCharge, poly.AreaInterval.Hi)
 		capCharge.Add(capCharge, area.Hi)
 	}
 	return proofbound.AbsSumUpper(wallBound, proofbound.RatFloatUp(capCharge)), nil
@@ -58,7 +59,7 @@ func twistMixedAreaSlackLocal(profile profileRecord, poly twistPolygon, body *Bo
 // Loft triangles are checked against their stored cell and side indices; a
 // face-level area reading alone cannot bind a source parameter to a facet.
 func twistMixedWallAreaL1(cells []loftPayload, stations []straightTwistStation,
-	poly twistPolygon, angle, height float64) (float64, error) {
+	poly twistsweep.TwistPolygon, angle, height float64) (float64, error) {
 	if len(cells) < 2 || len(stations) != len(cells)+1 || height <= 0 ||
 		proofbound.IsNonFinite(height) || proofbound.IsNonFinite(angle) || angle < 0 {
 		return 0, fmt.Errorf(`%w: twisted wall has no source station map`, ErrUnsupported)
@@ -79,7 +80,7 @@ func twistMixedWallAreaL1(cells []loftPayload, stations []straightTwistStation,
 		vertexDelta := proofbound.AbsSumUpper(held.delta,
 			math.Max(stations[i].pointError, stations[i+1].pointError))
 		for j := range n {
-			if held.segment[0][j] < 0 || held.segment[0][j] >= len(poly.points) ||
+			if held.segment[0][j] < 0 || held.segment[0][j] >= len(poly.Points) ||
 				held.cell[2*j] != [2]int{0, j} || held.cell[2*j+1] != [2]int{0, j} ||
 				held.side[2*j] != 0 || held.side[2*j+1] != 1 {
 				return 0, fmt.Errorf(`%w: twisted wall cell has no source/facet correspondence`, ErrUnsupported)
@@ -91,7 +92,7 @@ func twistMixedWallAreaL1(cells []loftPayload, stations []straightTwistStation,
 			}
 			allow := twistWallCellAreaL1(held.verts[j], held.verts[jn],
 				held.verts[n+j], held.verts[n+jn], held.twistAreaCells[0][j],
-				vertexDelta, poly.maxRadiusL1, perAngle, perHeight)
+				vertexDelta, poly.MaxRadiusL1, perAngle, perHeight)
 			if proofbound.IsNonFinite(allow) {
 				return 0, fmt.Errorf(`%w: twisted wall cell has no finite area proof`, ErrUnsupported)
 			}

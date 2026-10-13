@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -47,63 +48,63 @@ func TestTwistShellOffsetSourceFromRoundedSketch(t *testing.T) {
 	require.NoError(t, err)
 	payload, ok := body.payload.(twistedSweepPayload)
 	require.True(t, ok)
-	proof, err := twistOffsetSource(payload.profile, 5, payload.angle, 1, 0)
+	proof, err := twistsweep.TwistOffsetSource(payload.profile, 5, payload.angle, 1, 0)
 	require.NoError(t, err)
-	identityGap, err := twistShellPlacedProof(payload.profile, 5, 1,
+	identityGap, err := twistsweep.TwistShellPlacedProof(payload.profile, 5, 1,
 		payload.angle, proof, r3.Identity())
 	require.NoError(t, err)
-	require.Zero(t, identityGap.boundary)
-	require.Zero(t, identityGap.volume)
-	require.Zero(t, identityGap.area)
+	require.Zero(t, identityGap.Boundary)
+	require.Zero(t, identityGap.Volume)
+	require.Zero(t, identityGap.Area)
 	turn, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(23))
 	require.NoError(t, err)
-	placed, err := twistShellPlacedProof(payload.profile, 5, 1, payload.angle, proof, turn)
+	placed, err := twistsweep.TwistShellPlacedProof(payload.profile, 5, 1, payload.angle, proof, turn)
 	require.NoError(t, err)
-	require.Positive(t, placed.defect)
-	require.Less(t, placed.boundary, 1e-10)
-	require.Less(t, placed.volume, 1e-8)
+	require.Positive(t, placed.Defect)
+	require.Less(t, placed.Boundary, 1e-10)
+	require.Less(t, placed.Volume, 1e-8)
 	t.Logf("placed semantic: defect=%g boundary=%g volume=%g area=%g",
-		placed.defect, placed.boundary, placed.volume, placed.area)
-	want := twistRat(23.615752285840543)
-	require.Negative(t, proof.area.Lo.Cmp(want))
-	require.Positive(t, proof.area.Hi.Cmp(want))
-	require.Positive(t, proof.clearanceLo.Sign())
-	require.Positive(t, proof.speedLo.Sign())
-	require.Positive(t, proof.turnRateLo.Sign())
-	require.Positive(t, proof.radialLo.Sign())
-	require.Zero(t, proof.firstMomentX.Sign())
-	require.Zero(t, proof.firstMomentY.Sign())
-	stations, err := twistOffsetSampleStations(payload.profile, 5, payload.angle, 1, 0, 8, 16)
+		placed.Defect, placed.Boundary, placed.Volume, placed.Area)
+	want := twistsweep.TwistRat(23.615752285840543)
+	require.Negative(t, proof.Area.Lo.Cmp(want))
+	require.Positive(t, proof.Area.Hi.Cmp(want))
+	require.Positive(t, proof.ClearanceLo.Sign())
+	require.Positive(t, proof.SpeedLo.Sign())
+	require.Positive(t, proof.TurnRateLo.Sign())
+	require.Positive(t, proof.RadialLo.Sign())
+	require.Zero(t, proof.FirstMomentX.Sign())
+	require.Zero(t, proof.FirstMomentY.Sign())
+	stations, err := twistsweep.TwistOffsetSampleStations(payload.profile, 5, payload.angle, 1, 0, 8, 16)
 	require.NoError(t, err)
-	require.Len(t, stations.outer, 96)
-	require.Len(t, stations.inner, 96)
-	require.True(t, twistOffsetConvexPolygon(stations.outer))
-	require.True(t, twistOffsetConvexPolygon(stations.inner))
+	require.Len(t, stations.Outer, 96)
+	require.Len(t, stations.Inner, 96)
+	require.True(t, twistsweep.TwistOffsetConvexPolygon(stations.Outer))
+	require.True(t, twistsweep.TwistOffsetConvexPolygon(stations.Inner))
 	var outerVertex, innerVertex float64
-	for i := range stations.outer {
-		outerVertex = max(outerVertex, stations.outerVertex[i])
-		innerVertex = max(innerVertex, stations.innerVertex[i])
+	for i := range stations.Outer {
+		outerVertex = max(outerVertex, stations.OuterVertex[i])
+		innerVertex = max(innerVertex, stations.InnerVertex[i])
 	}
 	t.Logf("stations=%d outerChord=%g innerChord=%g outerVertex=%g innerVertex=%g",
-		len(stations.outer), stations.outerChord, stations.innerChord,
+		len(stations.Outer), stations.OuterChord, stations.InnerChord,
 		outerVertex, innerVertex)
-	poly, err := twistPolygonOf(payload.profile)
+	poly, err := twistsweep.TwistPolygonOf(payload.profile)
 	require.NoError(t, err)
-	held, err := twistShellSampledMesh(t.Context(), stations, 5, 1,
-		payload.angle, poly.areaInterval)
+	held, err := twistsweep.TwistShellSampledMesh(t.Context(), stations, 5, 1,
+		payload.angle, poly.AreaInterval)
 	require.NoError(t, err)
 	t.Logf("held shell: vertices=%d triangles=%d vertexError=%g outerBound=%g innerBound=%g volumeBound=%g areaSlack=%g",
-		len(held.verts), len(held.tris), held.vertexError, held.outerBound,
-		held.innerBound, held.volumeBound, held.areaSlack)
+		len(held.Verts), len(held.Tris), held.VertexError, held.OuterBound,
+		held.InnerBound, held.VolumeBound, held.AreaSlack)
 	inner, err := twistShellFacetedBody(t.Context(), body.Document(), 1, held,
-		poly.areaInterval, proof.area, 5, 1)
+		poly.AreaInterval, proof.Area, 5, 1)
 	require.NoError(t, err)
 	volume, err := inner.Volume()
 	require.NoError(t, err)
 	t.Logf("cup body: faces=%d lumps=%d volume=%g ±%g", len(inner.Faces()),
 		len(inner.Lumps()), volume.Value.Base(), volume.Bound.Base())
 	t.Logf("area=[%.9g,%.9g] clearance>=%.9g speed>=%.9g turn>=%.9g",
-		proofbound.RatFloatDown(proof.area.Lo), proofbound.RatFloatUp(proof.area.Hi),
-		proofbound.RatFloatDown(proof.clearanceLo), proofbound.RatFloatDown(proof.speedLo),
-		proofbound.RatFloatDown(proof.turnRateLo))
+		proofbound.RatFloatDown(proof.Area.Lo), proofbound.RatFloatUp(proof.Area.Hi),
+		proofbound.RatFloatDown(proof.ClearanceLo), proofbound.RatFloatDown(proof.SpeedLo),
+		proofbound.RatFloatDown(proof.TurnRateLo))
 }

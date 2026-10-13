@@ -3,15 +3,16 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/stretchr/testify/require"
 )
 
 func TestStationedTwistOptionalRefinementKeepsOriginalWorkCeiling(t *testing.T) {
-	poly := twistPolygon{
-		points:      make([]planePoint, 8),
-		hasArc:      true,
-		maxRadiusL1: 7,
-		maxEdgeL1:   5,
+	poly := twistsweep.TwistPolygon{
+		Points:      make([]planePoint, 8),
+		HasArc:      true,
+		MaxRadiusL1: 7,
+		MaxEdgeL1:   5,
 	}
 	base, refined, err := stationedTwistCellCounts(poly, 0.5235987755982988)
 	require.NoError(t, err)

@@ -1,10 +1,11 @@
-package decad
+package twistsweep
 
 import (
 	"fmt"
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
@@ -16,13 +17,13 @@ import (
 // denoted world-normal shell on an almost rigidly placed source. Every amount
 // is expressed in local coordinates, before facetedPayload.placed applies L.
 type twistShellPlacedGap struct {
-	boundary float64
-	volume   float64
-	area     float64
-	defect   float64
+	Boundary float64
+	Volume   float64
+	Area     float64
+	Defect   float64
 }
 
-// twistShellPlacedProof uses the exact stored placement matrix to enclose its
+// TwistShellPlacedProof uses the exact stored placement matrix to enclose its
 // metric defect. Let G=LᵀL and e=||G-I||<1/2. The pullback of a world-unit
 // normal is M(N)=G⁻¹N/sqrt(N·G⁻¹N). For a local unit normal N,
 // |M(N)-N|<=4e/(1-e). On a unit tangent to the normal sphere,
@@ -35,7 +36,7 @@ type twistShellPlacedGap struct {
 // Clearance from the outer wall and a positive floor then give one cup with
 // the same cap/rim incidence. The returned charges compare each corresponding
 // boundary patch; neither area nor occupied volume uses signed cancellation.
-func twistShellPlacedProof(profile profileRecord, height, thickness float64,
+func TwistShellPlacedProof(profile profileRecord, height, thickness float64,
 	angle units.Value, source twistOffsetSourceProof, motion r3.Transform) (twistShellPlacedGap, error) {
 	linear, err := massmoment.PlacementRotation(motion)
 	if err != nil {
@@ -48,36 +49,36 @@ func twistShellPlacedProof(profile profileRecord, height, thickness float64,
 	e := charge.Stretch
 	if e < 0 || e >= 0.5 || proofbound.IsNonFinite(e) ||
 		proofbound.IsNonFinite(height) || proofbound.IsNonFinite(thickness) ||
-		height <= thickness || thickness <= 0 || source.clearanceLo == nil ||
-		source.speedLo == nil || source.radialLo == nil {
-		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no metric or source margin`, ErrUnsupported)
+		height <= thickness || thickness <= 0 || source.ClearanceLo == nil ||
+		source.SpeedLo == nil || source.RadialLo == nil {
+		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no metric or source margin`, decaderr.ErrUnsupported)
 	}
 	denom := math.Nextafter(1-e, 0)
 	if denom <= 0 {
-		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no metric margin`, ErrUnsupported)
+		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no metric margin`, decaderr.ErrUnsupported)
 	}
-	poly, err := twistPolygonOf(profile)
+	poly, err := TwistPolygonOf(profile)
 	if err != nil {
 		return twistShellPlacedGap{}, err
 	}
 	theta, ok := revolveangle.FromValue(angle).Enclosure()
 	if !ok {
-		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no turn enclosure`, ErrUnsupported)
+		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no turn enclosure`, decaderr.ErrUnsupported)
 	}
 	k := proofbound.DivUpper(proofbound.RatFloatUp(proofbound.IntervalAbsUpper(theta)), height)
-	radius := proofbound.AbsSumUpper(poly.maxRadiusL1, thickness)
+	radius := proofbound.AbsSumUpper(poly.MaxRadiusL1, thickness)
 	kRadius := proofbound.ProductUpper(k, radius)
 	mu := proofbound.DivUpper(proofbound.ProductUpper(100, e),
 		proofbound.ProductUpper(denom, proofbound.ProductUpper(denom, denom)))
 	delta := proofbound.DivUpper(proofbound.ProductUpper(4, proofbound.ProductUpper(thickness, e)), denom)
 	eta := proofbound.ProductUpper(thickness, proofbound.ProductUpper(mu, k))
 	if eta >= 1 {
-		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell height can fold`, ErrUnsupported)
+		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell height can fold`, decaderr.ErrUnsupported)
 	}
 	heightDenom := math.Nextafter(1-eta, 0)
 	floorGap := proofbound.DivUpper(proofbound.ProductUpper(thickness, e), denom)
 	if !(heightDenom > 0) || proofbound.AbsSumUpper(thickness, floorGap) >= height {
-		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no positive floor clearance`, ErrUnsupported)
+		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no positive floor clearance`, decaderr.ErrUnsupported)
 	}
 
 	// Unit-speed source arclength is the common contour parameter. These
@@ -93,7 +94,7 @@ func twistShellPlacedProof(profile profileRecord, height, thickness float64,
 			case arcSeg:
 				span, err = twistOffsetArcSpan(edge, index, index+1, parts)
 			default:
-				return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell source has an unsupported edge`, ErrUnsupported)
+				return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell source has an unsupported edge`, decaderr.ErrUnsupported)
 			}
 			if err != nil {
 				return twistShellPlacedGap{}, err
@@ -120,7 +121,7 @@ func twistShellPlacedProof(profile profileRecord, height, thickness float64,
 		}
 	}
 	if perimeter <= 0 {
-		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no source perimeter`, ErrUnsupported)
+		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no source perimeter`, decaderr.ErrUnsupported)
 	}
 	// At a fixed height, the local and pulled-back world offsets are at
 	// most delta apart. The implicit height inverse moves source z by at
@@ -145,10 +146,10 @@ func twistShellPlacedProof(profile profileRecord, height, thickness float64,
 		proofbound.ProductUpper(radius, contourGap),
 		proofbound.ProductUpper(oldContourSpeed, positionGap),
 		proofbound.ProductUpper(positionGap, contourGap))
-	crossLo := proofbound.RatFloatDown(new(big.Rat).Mul(source.speedLo, source.radialLo))
+	crossLo := proofbound.RatFloatDown(new(big.Rat).Mul(source.SpeedLo, source.RadialLo))
 	if !(crossGap < crossLo) ||
-		!(positionGap < proofbound.RatFloatDown(source.clearanceLo)) {
-		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell loses radial or outer-wall clearance`, ErrUnsupported)
+		!(positionGap < proofbound.RatFloatDown(source.ClearanceLo)) {
+		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell loses radial or outer-wall clearance`, decaderr.ErrUnsupported)
 	}
 
 	// The straight contour homotopy stays star-shaped by the same cross
@@ -162,7 +163,7 @@ func twistShellPlacedProof(profile profileRecord, height, thickness float64,
 	volume := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(height, sectionSweep),
 		proofbound.ProductUpper(floorGap,
-			proofbound.AbsSumUpper(proofbound.RatFloatUp(source.area.Hi), sectionSweep)))
+			proofbound.AbsSumUpper(proofbound.RatFloatUp(source.Area.Hi), sectionSweep)))
 	wallDensity := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(contourGap, proofbound.AbsSumUpper(1, kRadius)),
 		proofbound.ProductUpper(heightGap, oldContourSpeed),
@@ -175,8 +176,8 @@ func twistShellPlacedProof(profile profileRecord, height, thickness float64,
 		proofbound.ProductUpper(2, sectionSweep))
 	if proofbound.IsNonFinite(boundary) || proofbound.IsNonFinite(volume) ||
 		proofbound.IsNonFinite(area) {
-		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no finite source charges`, ErrUnsupported)
+		return twistShellPlacedGap{}, fmt.Errorf(`%w: placed twisted shell has no finite source charges`, decaderr.ErrUnsupported)
 	}
-	return twistShellPlacedGap{boundary: boundary, volume: volume,
-		area: area, defect: e}, nil
+	return twistShellPlacedGap{Boundary: boundary, Volume: volume,
+		Area: area, Defect: e}, nil
 }
