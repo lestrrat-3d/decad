@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/stretchr/testify/require"
@@ -1206,3 +1207,7 @@ func TestClosedFitSplineChainStillFoldsItsClosingJointByTheCrossProduct(t *testi
 	require.ErrorIs(t, err, freeform.ErrFreeformConvexityConflict,
 		"the closing joint must still fold by the cross product: it conflicts with the spans' unanimous verdict")
 }
+
+func validateNURBSSegment(segment nurbsSeg) error { return sectionrecord.ValidateNURBSSegment(segment) }
+
+func validateSegment(segment curveSegment) error { return sectionrecord.ValidateSegment(segment) }

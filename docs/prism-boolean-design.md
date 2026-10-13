@@ -344,7 +344,7 @@ For an admitted pair, decad builds one private `sketch.Sketch` (the same
   over its own WALKED portion rather than its source curve's whole extent
   (buildPrismScene's own doc comment). A segment whose recorded range is the
   entity's own full domain walks to the record's own coordinates verbatim —
-  `lerp2` and `pinArcWalkEnds` both special-case the natural bounds `t=0`/
+  `momentregion.Lerp2` and `pinArcWalkEnds` both special-case the natural bounds `t=0`/
   `t=1` to return the record's own `Point2`, and a `CircleSeg` recorded over
   those same bounds walks the recorded centre and radius directly — so
   operand A's segments
@@ -829,11 +829,11 @@ when every survivor is a whole edge.
 segment's own WALKED geometry (`walkOf`, §4.1), never from the record's
 `Point2` fields directly. For a segment whose recorded range is the entity's
 own full domain that walk restates the record's own coordinates exactly —
-`lerp2`'s and `pinArcWalkEnds`' own natural-bound special cases, and a
+`momentregion.Lerp2`'s and `pinArcWalkEnds`' own natural-bound special cases, and a
 `CircleSeg` recorded over those bounds walking the recorded centre and radius
 directly — so a WHOLE segment charges nothing, whatever its kind. A `LineSeg`
 recorded over a range NARROWER than that domain instead evaluates the carrier
-at a computed parameter (`lerp2`'s general arm), so it enters the scene at an
+at a computed parameter (`momentregion.Lerp2`'s general arm), so it enters the scene at an
 endpoint this boolean itself computed, whatever the two operands' own prior
 displacement was. It is the only kind that reaches this charge: a trimmed
 circular carrier would enter through two `cos`/`sin`-computed points, moving
@@ -841,7 +841,7 @@ its rebuilt radius and sweep as well as its endpoints, and §4.1 refuses such a
 pair before the scene is built rather than charge it (below). `internal/proofbound/bounds.go`'s
 `walkEndpointAllow` states the allowance, at the magnitude of the operands
 that walk's OWN arithmetic touches and never at the endpoint it produced:
-`lerp2` computes
+`momentregion.Lerp2` computes
 `fl(a + fl(t·fl(b−a)))` from the carrier's own recorded `Start` and `End` — at
 most that, since a target free to fuse the multiply and the add commits one
 rounding fewer — and that difference CANCELS, so a fragment near the plane
@@ -1321,11 +1321,11 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   same fixture with every consumed segment whole publishes a `sectionDelta`
   of exactly `0.0` on all three ops, pinning that the new charge does not
   fire on the case §7 already kept exact.
-- The walk charge survives `lerp2`'s CANCELLATION: over a table of trimmed
+- The walk charge survives `momentregion.Lerp2`'s CANCELLATION: over a table of trimmed
   `LineSeg` carriers whose `End − Start` cancels — the extreme one reaching
   `±1e12`, and a plain 200 mm carrier whose fragment sits on the sketch origin,
   which needs no extreme coordinate at all — `walkChargeOf`'s answer contains
-  the EXACT rational residual of the endpoint `lerp2` walked to, at both
+  the EXACT rational residual of the endpoint `momentregion.Lerp2` walked to, at both
   recorded bounds, compared squared over `math/big.Rat` so no square root or
   float difference can flatter it. Each row also asserts its own premise: that
   charging the walked endpoint's own envelope (`segmentWalk.coordUpper`)

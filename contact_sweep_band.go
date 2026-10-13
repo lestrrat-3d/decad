@@ -534,22 +534,10 @@ func ratOfDyV3(v proofarith.DyV3) motionbound.RatVec {
 	return motionbound.RatVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
 }
 
-func ratAdd3(a, b motionbound.RatVec) motionbound.RatVec {
-	return motionbound.RatVec{new(big.Rat).Add(a[0], b[0]), new(big.Rat).Add(a[1], b[1]), new(big.Rat).Add(a[2], b[2])}
-}
-
 func ratSub3(a, b motionbound.RatVec) motionbound.RatVec {
 	return motionbound.RatVec{new(big.Rat).Sub(a[0], b[0]), new(big.Rat).Sub(a[1], b[1]), new(big.Rat).Sub(a[2], b[2])}
 }
 
 func ratDot3(a, b motionbound.RatVec) *big.Rat {
 	return proofbound.RatAdd(new(big.Rat).Mul(a[0], b[0]), new(big.Rat).Mul(a[1], b[1]), new(big.Rat).Mul(a[2], b[2]))
-}
-
-func ratCross3(a, b motionbound.RatVec) motionbound.RatVec {
-	return motionbound.RatVec{
-		new(big.Rat).Sub(new(big.Rat).Mul(a[1], b[2]), new(big.Rat).Mul(a[2], b[1])),
-		new(big.Rat).Sub(new(big.Rat).Mul(a[2], b[0]), new(big.Rat).Mul(a[0], b[2])),
-		new(big.Rat).Sub(new(big.Rat).Mul(a[0], b[1]), new(big.Rat).Mul(a[1], b[0])),
-	}
 }

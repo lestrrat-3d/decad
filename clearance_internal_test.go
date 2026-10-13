@@ -1080,3 +1080,15 @@ func TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal(t *test
 	require.Equal(t, pairOverlapping, res.verdict)
 	require.Nil(t, res.contained, "a true, non-nesting overlap, never a strict containment")
 }
+
+// newBodyGeom builds the kernel model for shipped single-lump analytic
+// payloads. Faceted and other multi-lump bodies bypass analytic containment
+// and proceed to read-only intersection; ok is false, never a partial model.
+func newBodyGeom(b *Body) (*bodyGeom, bool) {
+	g, ok, err := newBodyGeomBudget(proofbound.NewWorkBudget(context.Background()), b)
+	if err != nil {
+		// A background budget never cancels, so this is unreachable.
+		return nil, false
+	}
+	return g, ok
+}

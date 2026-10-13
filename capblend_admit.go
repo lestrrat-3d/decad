@@ -35,6 +35,3 @@ func capBlendOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp capBlend
 			}, nil
 		})
 }
-
-func capBlendSegmentRefusal(seg curveSegment) string { return capband.SegmentRefusal(seg) }
-func capJoinIsG1(prev, cur curveSegment) bool        { return capband.JoinIsG1(prev, cur) }

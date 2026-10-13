@@ -64,9 +64,7 @@ type closedSplineSeg = sectionrecord.ClosedSplineSeg
 
 type fitSplineSeg = sectionrecord.FitSplineSeg
 
-func cloneLoopRecord(loop loopRecord) loopRecord  { return sectionrecord.CloneLoopRecord(loop) }
-func validateNURBSSegment(segment nurbsSeg) error { return sectionrecord.ValidateNURBSSegment(segment) }
-func validateSegment(segment curveSegment) error  { return sectionrecord.ValidateSegment(segment) }
+func cloneLoopRecord(loop loopRecord) loopRecord { return sectionrecord.CloneLoopRecord(loop) }
 func normalizeSegment(segment curveSegment) (curveSegment, error) {
 	return sectionrecord.NormalizeSegment(segment)
 }

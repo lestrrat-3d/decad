@@ -291,16 +291,6 @@ func (p rotationalSweepPath) pointDeviationSquared(pose r3.Transform, ideal swee
 	return motionbound.SweepPointDeviation(p.sourcePoints, pose, ideal.Rot, ideal.Shift, poll)
 }
 
-// dyDenominatorExp is the exponent k of d's reduced denominator 2^k, the
-// denominator d.Rat() carries: a nonzero Dyadic's mantissa is odd, so k is
-// −exp for a negative exponent and zero otherwise.
-func dyDenominatorExp(d proofarith.Dyadic) int {
-	if d.Sign() == 0 {
-		return 0
-	}
-	return max(0, -d.Exp())
-}
-
 type rotationalPairSweep struct {
 	doc        *Document
 	a, b       rotationalSweepPath
@@ -1167,10 +1157,6 @@ func (p rotationalSweepPath) cornerSpanAfresh(from, to *big.Rat) cornerSpans {
 	spans := motionbound.SweepCornerSpan(p.startPoints, p.path.Delta, p.frame, p.velocity,
 		p.omegaLow, p.omegaHigh, p.path.Duration, from, to, p.path.Drift != nil)
 	return cornerSpans{Den: spans.Den, Lo: spans.Lo, Hi: spans.Hi}
-}
-
-func rotationalSinCosSpan(low, high *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
-	return motionbound.RotationalSinCosSpan(low, high)
 }
 
 func (r *rotationalPairSweep) sortSamples() {

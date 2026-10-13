@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
@@ -337,4 +338,16 @@ func TestPlanarSupportsMatchScan(t *testing.T) {
 	require.Positive(t, accepted, "premise: some planes pass the exact test")
 	require.Positive(t, behind, "premise: the pre-test rules out a vertex behind a plane")
 	require.Positive(t, above, "premise: the pre-test rules out a plane every vertex stands clear of")
+}
+
+func ratAdd3(a, b motionbound.RatVec) motionbound.RatVec {
+	return motionbound.RatVec{new(big.Rat).Add(a[0], b[0]), new(big.Rat).Add(a[1], b[1]), new(big.Rat).Add(a[2], b[2])}
+}
+
+func ratCross3(a, b motionbound.RatVec) motionbound.RatVec {
+	return motionbound.RatVec{
+		new(big.Rat).Sub(new(big.Rat).Mul(a[1], b[2]), new(big.Rat).Mul(a[2], b[1])),
+		new(big.Rat).Sub(new(big.Rat).Mul(a[2], b[0]), new(big.Rat).Mul(a[0], b[2])),
+		new(big.Rat).Sub(new(big.Rat).Mul(a[0], b[1]), new(big.Rat).Mul(a[1], b[0])),
+	}
 }

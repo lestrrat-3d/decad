@@ -426,3 +426,11 @@ func TestNestingAuditCancellationReachesBoundaryScan(t *testing.T) {
 	require.True(t, ctx.entered,
 		`the shared budget must poll inside the nesting boundary scan`)
 }
+
+// rewriteProfile applies every corner's blend to the section, returning the new
+// ProfileRecord and, per loop, the segment indices that are blend connectors
+// (their faces carry the second fillet(i,j) / chamfer(i,j) role, Table B).
+func rewriteProfile(orig profileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (profileRecord, []map[int]struct{}) {
+	profile, blendSegs, _ := rewriteProfileBudget(nil, orig, loops, blendAt)
+	return profile, blendSegs
+}

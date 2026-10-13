@@ -235,3 +235,5 @@ func TestReplayPoseMemoEvictsOldest(t *testing.T) {
 	_, ok = memo.Load(keyAt(3))
 	require.False(t, ok, "the next oldest leaves for the next new key")
 }
+
+func poseBits(pose r3.Transform) [12]uint64 { return sweepmemo.PoseBits(pose) }

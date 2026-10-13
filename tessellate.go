@@ -354,11 +354,6 @@ type tessellationCount struct {
 	built map[*Body]int
 }
 
-// withTessellationCount returns ctx carrying count.
-func withTessellationCount(ctx context.Context, count *tessellationCount) context.Context {
-	return context.WithValue(ctx, tessellationCountKey{}, count)
-}
-
 func (c *tessellationCount) note(b *Body) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

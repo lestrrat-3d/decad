@@ -316,7 +316,7 @@ rational convex combination, so the conversion is exact:
 
 **Repeated knots and repeated control points are admitted, so every construction
 in §5 and §6 runs per NONEMPTY span and must hold on a COLLAPSED one.**
-`validateNURBSSegment` checks the knots finite, non-decreasing, clamped at both
+`sectionrecord.ValidateNURBSSegment` checks the knots finite, non-decreasing, clamped at both
 ends and the whole domain nonempty (`Knots[Degree] < Knots[n]`), the control
 points finite and at least `Degree + 1` of them, every weight positive, and R12's
 one continuity rule — an interior knot past `degree` whose two one-sided limits
@@ -401,14 +401,14 @@ which is what the core falsify-never-bless rule requires.
   curve is bit-for-bit the concatenation of its Bézier pieces, which is the walk
   §2 already admits when the same shape is spelled as a chain of free-form
   curves joined at shared endpoints; a closed one closes with a gap of exactly
-  `0` and encloses positive area. `record.go` admits it today —
-  `validateNURBSSegment` tests distinctness nowhere — so the evaluator owes it a
+  `0` and encloses positive area. `internal/sectionrecord` admits it today —
+  `sectionrecord.ValidateNURBSSegment` tests distinctness nowhere — so the evaluator owes it a
   build or a staged refusal. Where the Bézier extraction cannot slice a stride
   whose spans share no boundary control point, that is R13 `ErrUnsupported`, and
   it is not permanent.
 
 **An END knot above multiplicity `p + 1` is the same record with no piece on the
-far side, and it is a valid body.** `validateNURBSSegment` requires the first
+far side, and it is a valid body.** `sectionrecord.ValidateNURBSSegment` requires the first
 `p + 1` knots equal and the last `p + 1` equal, and rejects no repeat beyond
 them: degree 2 with knots `[0, 0, 0, 0, 1, 1, 1]` and 4 control points is
 admitted, and it is one quadratic Bézier over `P_1, P_2, P_3` with `P_0` DEAD. A

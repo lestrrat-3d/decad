@@ -201,9 +201,6 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 // coordinateAxis reads an exactly coordinate-aligned axis and its sense.
 func coordinateAxis(v r3.Vec) (int, int, bool) { return linkagebound.CoordinateAxis(v) }
 
-// unitAxis is sense·e_axis.
-func unitAxis(axis, sense int) r3.Vec { return linkagebound.UnitAxis(axis, sense) }
-
 // ratVecExact reads a finite held vector exactly.
 func ratVecExact(v r3.Vec) motionbound.RatVec { return linkagebound.ExactVec(v) }
 

@@ -552,14 +552,6 @@ func computeFillet(loop cornerLoop, ci int, r float64) (*cornerBlend, error) {
 	return offset2d.Fillet(loop.walks, ci, r, filletTol)
 }
 
-// rewriteProfile applies every corner's blend to the section, returning the new
-// ProfileRecord and, per loop, the segment indices that are blend connectors
-// (their faces carry the second fillet(i,j) / chamfer(i,j) role, Table B).
-func rewriteProfile(orig profileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (profileRecord, []map[int]struct{}) {
-	profile, blendSegs, _ := rewriteProfileBudget(nil, orig, loops, blendAt)
-	return profile, blendSegs
-}
-
 func rewriteProfileBudget(budget *proofbound.WorkBudget, orig profileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (profileRecord, []map[int]struct{}, error) {
 	origLoops := append([]loopRecord{orig.Outer}, orig.Holes...)
 	newLoops := make([]loopRecord, len(origLoops))

@@ -844,3 +844,23 @@ func TestVerifyPublishUndercutRunsOnAProvenSheet(t *testing.T) {
 	require.Equal(t, AssessmentMet, res.Assessment)
 	require.Empty(t, res.Diagnostics)
 }
+
+// publishUndercutResult is the in-package entry used by the sheet survey test.
+func publishUndercutResult(body *Body, surveys surveyResults, req VerifyRequest,
+	validity ValidityOutcome) UndercutResult {
+	kind := body.Kind()
+	var faces []*Face
+	if req.Undercut != nil && validity == ValidityValid &&
+		(kind == BodySolid || kind == BodySheet) {
+		faces = body.Faces()
+	}
+	published := reportvocab.PublishUndercut[*Body, *Face, JointCell](
+		body, kind == BodySolid, kind == BodySheet, faces,
+		surveyPublication(surveys).Undercut, diagnosticsToInternal(surveys.UndercutDiagnostics), encodedVerifyRequest(req), reportvocab.ValidityOutcome(validity),
+	)
+	return UndercutResult{
+		Request: req.Undercut, Coverage: Coverage(published.Coverage),
+		Faces: published.Faces, Assessment: Assessment(published.Assessment),
+		Diagnostics: diagnosticsFromInternal(published.Diagnostics),
+	}
+}

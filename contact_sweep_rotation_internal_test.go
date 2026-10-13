@@ -455,3 +455,17 @@ func TestPointDeviationMatchesCommonDenomForm(t *testing.T) {
 	require.Positive(t, compared)
 	require.Positive(t, sourceSet, "premise: some source points set the common denominator")
 }
+
+// dyDenominatorExp is the exponent k of d's reduced denominator 2^k, the
+// denominator d.Rat() carries: a nonzero Dyadic's mantissa is odd, so k is
+// −exp for a negative exponent and zero otherwise.
+func dyDenominatorExp(d proofarith.Dyadic) int {
+	if d.Sign() == 0 {
+		return 0
+	}
+	return max(0, -d.Exp())
+}
+
+func rotationalSinCosSpan(low, high *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
+	return motionbound.RotationalSinCosSpan(low, high)
+}

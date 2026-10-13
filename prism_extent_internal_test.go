@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismextent"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -69,4 +70,8 @@ func TestPrismPlacementCoeffAllowKeepsGeneralProof(t *testing.T) {
 		)
 		require.Equal(t, want, prismPlacementCoeffAllow(pp, g, base, gu, gv, gz, 23, 9))
 	}
+}
+
+func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) float64 {
+	return prismextent.DecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper)
 }

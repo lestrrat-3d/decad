@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -167,3 +168,7 @@ func TestCapJoinIsG1IsExact(t *testing.T) {
 		require.NotEmpty(t, capBlendSegmentRefusal(trimmed))
 	})
 }
+
+func capBlendSegmentRefusal(seg curveSegment) string { return capband.SegmentRefusal(seg) }
+
+func capJoinIsG1(prev, cur curveSegment) bool { return capband.JoinIsG1(prev, cur) }
