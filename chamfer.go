@@ -329,7 +329,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	if sweepStraight && asym != nil {
 		return nil, fmt.Errorf(`%w: an asymmetric chamfer of a Sweep wall has no mapped reference-face role`, ErrUnsupported)
 	}
-	if err := requireExactSection(pp, "chamfers"); err != nil {
+	if err := pp.RequireExactSection("chamfers"); err != nil {
 		return nil, err
 	}
 	// A single straight cap edge takes the bounded cutter or route E's corner

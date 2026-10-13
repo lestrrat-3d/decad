@@ -264,7 +264,7 @@ func draftReceiver(b *Body) (prismPayload, error) {
 	if !ok {
 		return prismPayload{}, fmt.Errorf(`%w: this evaluator drafts a straight prism only (an extrude, its filleted or chamfered result, a tube, or any of these placed) (draft SD23)`, ErrUnsupported)
 	}
-	if err := requireExactSection(pp, "drafts"); err != nil {
+	if err := pp.RequireExactSection("drafts"); err != nil {
 		return prismPayload{}, err
 	}
 	return pp, nil

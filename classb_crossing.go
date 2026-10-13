@@ -259,7 +259,7 @@ func (b *cbBuild) run(ctx context.Context) (brepPayload, error) {
 	// Modify §5's audit per planar face record (§5): simplicity, orientation
 	// and nesting. It refuses; it admits nothing.
 	for _, f := range b.faces {
-		if err := auditPrismMergeSection(b.budget, prismPayload{Payload: prismrecord.Payload{Profile: f.region}}, f.region); err != nil {
+		if err := prismcells.AuditMergeSection(b.budget, prismrecord.Payload{Profile: f.region}, f.region); err != nil {
 			return brepPayload{}, err
 		}
 	}

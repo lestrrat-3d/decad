@@ -726,7 +726,7 @@ cover, so `fallbackGateDiameter` reads stations off witness prisms built from
 the receiver's section. The two payloads read different geometry. The
 receiver's own section is its own denotation, because every modify op refuses
 a receiver carrying a section displacement (`fillet.go`'s
-`requireExactSection`), so a cap blend's and an inward cup's witnesses carry
+`prismrecord.Payload.RequireExactSection`), so a cap blend's and an inward cup's witnesses carry
 only an axial displacement. An outward cup's outer region is the offset one,
 recorded within the cup's offset displacement of the region it denotes
 (`docs/modify-design.md` §9), so its witnesses carry that displacement beside

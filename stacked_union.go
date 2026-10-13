@@ -338,7 +338,7 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (profil
 	if fallBack, err := prismcells.AmplifiedFallback(m.sceneDelta.Amplified, err); fallBack || err != nil || !resolved {
 		return profileRecord{}, false, err
 	}
-	if fallBack, err := prismcells.AmplifiedFallback(m.sceneDelta.Amplified, auditPrismMergeSection(st.budget, pa, merged)); fallBack || err != nil {
+	if fallBack, err := prismcells.AmplifiedFallback(m.sceneDelta.Amplified, prismcells.AuditMergeSection(st.budget, pa.Payload, merged)); fallBack || err != nil {
 		return profileRecord{}, false, err
 	}
 	st.cutDelta = max(st.cutDelta, cutDelta)

@@ -62,7 +62,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 	d := b.doc
 	// The section-displacement guard, read as a modify refusal: the rewrite
 	// is of the recorded meridian, and a meridian displaced from the one it
-	// denotes has no proven rewrite (requireExactSection's prism reading).
+	// denotes has no proven rewrite (prismrecord.Payload.RequireExactSection's prism reading).
 	if err := requireExactRevolveSection(rp, "this evaluator's junction "+op.kind); err != nil {
 		return nil, err
 	}

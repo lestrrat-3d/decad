@@ -2040,7 +2040,7 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 
 // TestPrismOverlapVolumeMatchesEvalPrismOnASingleCell is a targeted sanity
 // check that prismOverlapVolume's per-cell measurement agrees with
-// resolveAndBuildPrismIntersectCrossing's own crossing-sub-case answer for a
+// prismcells.ResolveAndBuildIntersectCrossing's own crossing-sub-case answer for a
 // pair whose overlap happens to be ONE region: both routes record the same
 // single arrangement cell through the same recordEdge/edgeJoin/
 // prismcells.CutDelta sequence and the same evalPrism math, so their published

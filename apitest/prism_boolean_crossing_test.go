@@ -11,7 +11,7 @@ import (
 )
 
 // This file is docs/prism-boolean-design.md §4.2's crossing sub-case black-box
-// test suite for Cut and Intersect (prism_boolean_crossing.go): two coplanar
+// test suite for Cut and Intersect (internal/prismcells/payload_resolve.go): two coplanar
 // prisms whose 2D outlines genuinely cross, neither nested inside the other.
 // boxBody/discBody (clearance_test.go, prism_boolean_bounds_test.go) and
 // anyFaceIsFaceted/boundMM3/volumeMM (prism_boolean_test.go, boolean_test.go)

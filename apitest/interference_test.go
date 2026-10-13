@@ -486,7 +486,7 @@ func TestVerifyCancellationInsideReadOnlyIntersection(t *testing.T) {
 
 // This file pins docs/prism-boolean-design.md §3.4's crossing charge as it
 // reaches Verify's interference reading (§4.5, shared with the crossing
-// sub-case's own selection, prism_boolean_crossing.go's
+// sub-case's own selection, internal/prismcells/payload_resolve.go's
 // prismcells.ResolveCrossingCells): a coplanar pair whose 2D outlines genuinely
 // cross is measured whether or not one of the charge's three independent
 // causes fires — a section displacement on either operand, a walk charge on

@@ -492,7 +492,7 @@ G5 overlapping sweep intervals, work cap,
 The crossing classifier does not admit this arm.
 
 **`Cut`/`Intersect`, crossing sub-case (boundary contact, not clean nesting):
-implemented (`prism_boolean_crossing.go`), with the coincident-carrier
+implemented (`internal/prismcells/payload_resolve.go`), with the coincident-carrier
 extension below.** When operand B's
 boundary genuinely crosses operand A's (a bore that pokes outside the hub, or
 a general-position overlap), neither `Union`'s select-all rule (only sound
@@ -696,7 +696,7 @@ Every source region enters `BuildSceneRegions` once, in the same plane. The
 work cap applies to the sum of all input segments. `SplitRuns` resolves
 shared stations, `CellsHaveNoVoid` refuses an enclosed void, and
 `MergeLoops` keeps the exterior boundary. Each resulting loop passes
-`auditPrismMergeSection`; multiple loops also pass
+`prismcells.AuditMergeSection`; multiple loops also pass
 `ProveGroupDisjoint`. One loop builds a `prismPayload`, while proven
 disjoint loops build one one-slab `stackedPrismPayload`. The result carries
 the maximum of the inputs' axial endpoint bounds and one cut-parameter
@@ -1230,7 +1230,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    byte-identical to its pre-cut record; an `Intersect` of a fully-nested pair
    returns the inner operand's own geometry.
 3. **PR3 — crossing sub-case for `Cut`/`Intersect`.** §4.2's edge-orientation
-   propagation over hole-free operands (`prism_boolean_crossing.go`), reusing
+   propagation over hole-free operands (`internal/prismcells/payload_resolve.go`), reusing
    PR1's `prismcells.Merge` chain/merge tail and §6's audit over its own
    per-op cell selection. Tests: two overlapping (not coincident-carrier)
    prisms cut/intersect correctly against the mesh path's own answer on the
@@ -1470,7 +1470,7 @@ it denotes:
 - `interference.go`'s `analyticBodiesEqual` withholds the equal-records
   set-identity certificate: two records being equal says nothing about two
   sets each record is only within its own `δ` of.
-- `fillet.go`'s `requireExactSection` refuses the receiver for
+- `prismrecord.Payload.RequireExactSection` refuses the receiver for
   `Fillet`/`Chamfer`/`Shell` with `ErrUnsupported`, since a rewrite of that
   section has no proven displacement of its own.
 

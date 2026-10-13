@@ -140,7 +140,7 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil || !resolved {
 		return prismPayload{}, false, err
 	}
-	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, auditPrismMergeSection(budget, target, merged)); fallBack || err != nil {
+	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, prismcells.AuditMergeSection(budget, target.Payload, merged)); fallBack || err != nil {
 		return prismPayload{}, false, err
 	}
 	result.Profile = merged
@@ -197,7 +197,7 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, sce
 	for i, loop := range loops {
 		regions[i] = profileRecord{Outer: loop}
 		// Point of no return (§3.4): §6's audit on each assembled loop.
-		if err := auditPrismMergeSection(budget, oa.proxy, regions[i]); err != nil {
+		if err := prismcells.AuditMergeSection(budget, oa.proxy.Payload, regions[i]); err != nil {
 			return nil, false, err
 		}
 	}

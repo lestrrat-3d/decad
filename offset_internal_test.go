@@ -129,7 +129,7 @@ func TestOffsetPrismResultIsBoundedByTheOffsetLoopAlone(t *testing.T) {
 	t.Parallel()
 	pp := offsetNeckPayload(t)
 	budget := proofbound.NewWorkBudget(t.Context())
-	section, err := offsetPrismSection(t.Context(), pp, +1, 1.5, budget)
+	section, err := thickenaxis.OffsetSection(t.Context(), pp.Profile, +1, 1.5, shellTol, budget)
 	require.NoError(t, err)
 
 	doc := New()

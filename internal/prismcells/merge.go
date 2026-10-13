@@ -18,7 +18,7 @@ import (
 
 // Merge is §4.2's/§4.3's shared cell-merge machinery, common to
 // Union's own select-all path (selected is every returned cell) and the
-// crossing sub-case's per-op selection (prism_boolean_crossing.go): count
+// crossing sub-case's per-op selection (internal/prismcells/payload_resolve.go): count
 // every boundary edge (Outer and every Hole loop) of every selected cell by
 // (Entity, TStart, TEnd) — a shared wall between two adjacent selected cells
 // is walked in opposite senses by each but reports the SAME natural-direction

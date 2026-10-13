@@ -191,7 +191,7 @@ any evaluator?) and the sentinel that follows from it.
 | **SD20** | a `NeutralFrame`, or a `NeutralFace` that is not a cap of the operand | yes | `ErrUnsupported` (staged, §14) |
 | **SD21** | a selected face that is no wall of the operand, or a selection that splits the recorded segments of one coalesced walk; an empty selection | yes | `ErrUnsupported`; `ErrNoMatch`/`ErrCardinality` as core §9 |
 | **SD22** | a selected face parallel to the neutral plane — the other cap — or the neutral face itself | no — a face with no trace on the neutral plane has no line to tilt about | `ErrDegenerate` |
-| **SD23** | `Draft` of an operand that is not a `prismPayload`, or whose section carries a displacement (`requireExactSection`), or that is itself a draft body | yes | `ErrUnsupported` (modify S3; a second draft is SX10's composition rule) |
+| **SD23** | `Draft` of an operand that is not a `prismPayload`, or whose section carries a displacement (`prismrecord.Payload.RequireExactSection`), or that is itself a draft body | yes | `ErrUnsupported` (modify S3; a second draft is SX10's composition rule) |
 
 The sharp offset of a convex section past its collapse is the section
 point-reflected through a centre, which keeps its walk sense, so S8 never sees

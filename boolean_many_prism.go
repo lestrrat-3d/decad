@@ -117,7 +117,7 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 	regions := make([]profileRecord, len(loops))
 	for i, loop := range loops {
 		regions[i] = profileRecord{Outer: loop}
-		if err := auditPrismMergeSection(budget, first, regions[i]); err != nil {
+		if err := prismcells.AuditMergeSection(budget, first.Payload, regions[i]); err != nil {
 			return nil, true, err
 		}
 	}

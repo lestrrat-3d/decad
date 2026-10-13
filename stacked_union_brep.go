@@ -386,7 +386,7 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, erro
 			return nil, errUBMiss
 		}
 		out[i] = profileRecord{Outer: loop}
-		if err := auditPrismMergeSection(b.st.budget, prismPayload{Payload: prismrecord.Payload{Profile: out[i]}}, out[i]); err != nil {
+		if err := prismcells.AuditMergeSection(b.st.budget, prismrecord.Payload{Profile: out[i]}, out[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -454,7 +454,7 @@ func (b *ubBuild) cutSlabRegion(sc *ubScene) ([]profileRecord, error) {
 	if len(region.Outer.Segments) == 0 || len(region.Holes) != 1 {
 		return nil, errUBMiss
 	}
-	if err := auditPrismMergeSection(b.st.budget, prismPayload{Payload: prismrecord.Payload{Profile: region}}, region); err != nil {
+	if err := prismcells.AuditMergeSection(b.st.budget, prismrecord.Payload{Profile: region}, region); err != nil {
 		return nil, err
 	}
 	return []profileRecord{region}, nil
@@ -611,7 +611,7 @@ func stackedBrepRecord(ctx context.Context, budget *proofbound.WorkBudget, geom 
 		if f.region == nil {
 			continue
 		}
-		if err := auditPrismMergeSection(budget, prismPayload{Payload: prismrecord.Payload{Profile: *f.region}}, *f.region); err != nil {
+		if err := prismcells.AuditMergeSection(budget, prismrecord.Payload{Profile: *f.region}, *f.region); err != nil {
 			return brepPayload{}, err
 		}
 	}

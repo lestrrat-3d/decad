@@ -36,7 +36,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
 | `internal/prismshell/` | Prism side-opening sections, shell wall bands, slab levels and stack faces. See shell-opening §3–§5, modify-reach §9.2. |
 | `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, extent readings, the simple-revolution radial proof, and wall and cap denotations. See evaluator §6. |
-| `internal/revolveshell/` | Effective-meridian survey, removed-run and side-segment role checks, and shell wall sections and displacement. See modify-reach §9.3. |
+| `internal/revolveshell/` | Effective-meridian survey, removed-run and side-segment role checks, and axis, side and off-axis shell wall sections and displacement. See modify-reach §9.3. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines, plane gates and angle bounds. See sweep §3. |
@@ -45,7 +45,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/coil/` | Coil magnitude, profile side and pitch gates, preflight gates, stations, axis coordinates, moments and closed forms. See helix §4, §5, §7. |
 | `internal/coilshell/` | Builds the held coil shell, mesh proofs and wall-area enclosures. See helix §5, §7, §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames over recorded line and arc spans. See sweep §3.2. |
-| `internal/prismrecord/` | Plain data of the prism record and its plane-local lifts, point bounds, lift factor, centroid envelope, placement operand, cap frames, mass record, exact box and section-plane test; root `prismPayload` embeds it. See evaluator §5, §8. |
+| `internal/prismrecord/` | Plain data of the prism record and its plane-local lifts, point bounds, lift factor, centroid envelope, placement operand, cap frames, mass record, exact box, section-plane test and the modify exact-section gate; root `prismPayload` embeds it. See evaluator §5, §8. |
 | `internal/momentinput/` | Profile records, exact record comparison, rectangle bounds, axis-aligned rectangle footprints, moments, loop enclosed areas and first moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |

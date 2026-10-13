@@ -106,7 +106,7 @@ remains SX16.
 | **RB4** | `facetedPayload` | reach SX9 (permanent) | reach SX9 |
 
 RB1's zero-displacement rule is prism-boolean §13's displaced-receiver rule,
-the one `requireExactSection` enforces for a prism: a rewrite of a record that
+the one `prismrecord.Payload.RequireExactSection` enforces for a prism: a rewrite of a record that
 only denotes its body to within a displacement has no proven displacement of
 its own. Level displacements (`z0Delta`/`z1Delta`) pass through untouched;
 no construction below moves a level.
@@ -379,7 +379,7 @@ Modify §1's test picks every sentinel: a body that does not exist is
 
 | SB | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SB1** | a brep or stacked receiver with `sectionDelta() != 0` | yes; its rewrite has no proven displacement | `ErrUnsupported`, naming the displacement as `requireExactSection` does |
+| **SB1** | a brep or stacked receiver with `sectionDelta() != 0` | yes; its rewrite has no proven displacement | `ErrUnsupported`, naming the displacement as `prismrecord.Payload.RequireExactSection` does |
 | **SB2** | a stacked receiver `brepOfStacked` refuses (a prism group, several regions in one slab; a stack enclosing a cavity, a closed shell) | yes | that call's `ErrUnsupported` |
 | **SB3** | route P reads a prism along some axis, a Shell's removed faces are not its caps, no other axis admits them, and route S reads no through-cut record along any axis (modify-general Table TC) | yes | modify S2, with SG3's reason |
 | **SB4** | route E reading an edge that is not a straight line along a reference axis; only single straight edges reach route E, and every other Fillet or Chamfer selection takes route L (modify-general §4, `docs/loop-fillet-design.md`), which builds a hole rim, a boss root or a cornered loop or refuses with Table SL or SF | — (a falsifier) | `ErrUnsupported` |
@@ -546,7 +546,7 @@ Refusals:
 
 - **Admit a displaced receiver and charge the blend.** An offset solve
   amplifies an input displacement by the corner geometry and nothing here
-  bounds it; SB1 refuses, as `requireExactSection` does for a prism.
+  bounds it; SB1 refuses, as `prismrecord.Payload.RequireExactSection` does for a prism.
 - **Compute the blend in one end face and copy it to the other without
   recomputing.** SB9's recomputation is the one falsifier that proves the two
   faces hold the same carriers; copying would build a closed body on a wrong

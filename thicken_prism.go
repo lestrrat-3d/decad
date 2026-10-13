@@ -6,7 +6,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -101,13 +100,13 @@ func thickenCircleSection(profile profileRecord, circle circleSeg, side ThickenS
 	}
 	sec := thickenaxis.NewSectionPair(profile)
 	if side != ThickenNegative {
-		sec.Outer, err = prismCircleOffset(budget, profile, radius, -1, amount)
+		sec.Outer, err = thickenaxis.CircleOffset(budget, profile, radius, -1, amount, shellTol)
 		if err != nil {
 			return thickenaxis.SectionPair{}, err
 		}
 	}
 	if side != ThickenPositive {
-		sec.Inner, err = prismCircleOffset(budget, profile, radius, +1, amount)
+		sec.Inner, err = thickenaxis.CircleOffset(budget, profile, radius, +1, amount, shellTol)
 		if err != nil {
 			return thickenaxis.SectionPair{}, err
 		}
@@ -132,36 +131,4 @@ func thickenCircleSection(profile profileRecord, circle circleSeg, side ThickenS
 		}
 	}
 	return sec, nil
-}
-
-func prismCircleOffset(budget *proofbound.WorkBudget, source profileRecord, radius, sense, amount float64) (profileRecord, error) {
-	offset, err := offsetProfile(budget, source, sense, amount)
-	if err != nil {
-		return profileRecord{}, err
-	}
-	if len(offset.Outer.Segments) != 1 {
-		return profileRecord{}, fmt.Errorf(`%w: the circle offset changed feature count`, ErrUnsupported)
-	}
-	generated, ok := offset.Outer.Segments[0].(circleSeg)
-	sourceCircle, sourceOK := source.Outer.Segments[0].(circleSeg)
-	if !ok || !sourceOK || generated.Center != sourceCircle.Center || generated.CCW != sourceCircle.CCW {
-		return profileRecord{}, fmt.Errorf(`%w: the circle offset changed feature kind`, ErrUnsupported)
-	}
-	got, delta, err := extent.MagnitudeInBounded(generated.Radius, units.Length, units.Millimeter, "the generated circle radius")
-	if err != nil || delta != 0 {
-		return profileRecord{}, fmt.Errorf(`%w: the generated circle radius is not exact`, ErrUnsupported)
-	}
-	want := new(big.Rat).Set(proofarith.FloatRat(radius))
-	if sense < 0 {
-		want.Add(want, proofarith.FloatRat(amount))
-	} else {
-		want.Sub(want, proofarith.FloatRat(amount))
-	}
-	if want.Sign() <= 0 || proofarith.RationalFloatError(want, got) != 0 {
-		return profileRecord{}, fmt.Errorf(`%w: the circle offset is not exactly representable`, ErrUnsupported)
-	}
-	if err := thickenaxis.AuditRefusal(offset2d.AuditOffsetSectionBudget(budget, source, offset)); err != nil {
-		return profileRecord{}, err
-	}
-	return offset, nil
 }
