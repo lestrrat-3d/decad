@@ -28,7 +28,8 @@ type LoftSection struct {
 // can build as a ruled cone; exactly matching curved records build as a
 // straight prism. Two varying fitted flanks with unchanged circular arcs
 // use the source interpolants' quadratic height wall. Four rounded rectangles
-// with a common radius and height use a cubic-width wall. All routes require
+// with a common radius and height use a cubic-width wall. Three centered
+// rectangles may vary width and height independently. All routes require
 // ascending, equally spaced world-XY planes and interpolate every section exactly
 // (docs/loft-sections-design.md). Other shapes refuse.
 func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*Body, error) {
@@ -77,7 +78,11 @@ func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*
 			built, err = smoothloft.BuildThreeFits(ctx, records, planes, work)
 		}
 	} else {
-		built, err = smoothloft.BuildThree(ctx, records, planes)
+		var rectangular bool
+		built, rectangular, err = smoothloft.TryBuildThreeRectangles(ctx, records, planes)
+		if !rectangular {
+			built, err = smoothloft.BuildThree(ctx, records, planes)
+		}
 	}
 	if err != nil {
 		return nil, err

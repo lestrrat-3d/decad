@@ -204,6 +204,7 @@
 //	    a cap or the material past their walls                ErrUnsupported
 //	Loft          same-type segment pairs, distinct planes    builds
 //	LoftSections  three admitted profiles on equal XY levels  builds
+//	              three independent-width/height rectangles    builds
 //	              four rounded rectangles, cubic width       builds
 //	              three exactly identical curved profiles   builds
 //	              three linearly varying four-arc circles    builds

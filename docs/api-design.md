@@ -938,7 +938,8 @@ Patch, Stitch, Unstitch, Thicken**, plus the sweeps of an OPEN sketch curve —
 `*sketch.Profile` and always build a sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
 rule, and its increment-1 scope. `docs/loft-sections-design.md` owns the
-separate `Document.LoftSections`: three quadratic homothetic line sections,
+separate `Document.LoftSections`: three quadratic homothetic line sections or
+independently varying axis-aligned rectangles,
 exactly identical curved sections, linearly varying four-arc circles, and the
 bounded varying fitted-flank class with fixed arcs; or four rounded-rectangle
 sections with cubic width and fixed height and corner radius.
