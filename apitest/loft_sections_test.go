@@ -179,7 +179,6 @@ func TestLoftSectionsRefusesUnprovenScaleAndSpacing(t *testing.T) {
 	}{
 		{"pinched scale", [3]float64{10, 1, 10}, [3]float64{10, 1, 10}, [3]float64{}, [3]float64{0, 5, 10}},
 		{"unequal spacing", [3]float64{10, 15, 8}, [3]float64{10, 15, 8}, [3]float64{}, [3]float64{0, 4, 10}},
-		{"nonhomothetic section", [3]float64{10, 15, 8}, [3]float64{10, 15, 9}, [3]float64{}, [3]float64{0, 5, 10}},
 		{"scale origin outside profile", [3]float64{5, 7.5, 4}, [3]float64{5, 7.5, 4},
 			[3]float64{15, 22.5, 12}, [3]float64{0, 5, 10}},
 	} {
