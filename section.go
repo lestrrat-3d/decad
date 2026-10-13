@@ -18,7 +18,8 @@ import (
 // plane whose frame preserves the prism's recorded section coordinates.
 // Other classes are a whole-circle prism cut by a cardinal plane with an exact
 // chord, an authenticated sphere cut by a cardinal plane with an exact circle
-// or bounded polygon,
+// or bounded polygon, an authenticated right cone cut by a cardinal plane
+// with an exact circle,
 // a rectangular prism cut by an interior cardinal vertical plane, and
 // a bounded oblique cut of an exact rectangular or whole-circle prism,
 // including a certified crossing of one circle-prism cap. The
@@ -36,10 +37,27 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 	if b.Kind() != BodySolid || !b.IsSolid() {
 		return nil, nil, fmt.Errorf(`%w: a section needs a sound solid`, ErrNotSolid)
 	}
-	if _, ok := b.payload.(revolvePayload); ok {
+	if rp, ok := b.payload.(revolvePayload); ok {
 		profile, polygon, delta, admitted := cardinalSphereSection(b, plane)
 		if !admitted {
-			return nil, nil, fmt.Errorf(`%w: section needs an authenticated sphere and certifiable cardinal circle`,
+			faces := b.Faces()
+			if len(faces) == 2 && len(b.Edges()) == 1 {
+				cone, planar := 0, 0
+				for _, face := range faces {
+					switch face.Surface().Kind() {
+					case KindCone:
+						cone++
+					case KindPlane:
+						planar++
+					}
+				}
+				if cone == 1 && planar == 1 {
+					profile, admitted = cardinalConeSectionRecord(rp, plane)
+				}
+			}
+		}
+		if !admitted {
+			return nil, nil, fmt.Errorf(`%w: section needs an authenticated sphere or cone and certifiable cardinal circle`,
 				ErrUnsupported)
 		}
 		if polygon != nil {

@@ -23,7 +23,7 @@ is `ErrDegenerate`; a sheet or unsound solid is `ErrNotSolid`.
 
 The parallel class admits a `prismPayload` with zero `sectionDelta`,
 `z0Delta`, and `z1Delta`. It refuses a plane that touches either cap. A body
-outside this prism class tries the authenticated sphere class below or returns
+outside this prism class tries the authenticated sphere and cone classes below or returns
 `ErrUnsupported` without changing the document.
 
 The gate reads the stored source frame and rigid placement as exact dyadic
@@ -84,6 +84,30 @@ Reconstruct the polygon through fresh Sketch reference lines and attach the
 private revision-bound certificate below. The Sketch polygon is an inner
 approximation, not an exact circle. Only straight solid `Extrude` with an
 independent `Distance` may consume it; all other profile consumers refuse it.
+
+## Cardinal plane of an authenticated right cone
+
+This class admits a sound solid made by a full `Revolve` of three complete
+meridian lines: one joins the base centre to the rim, one joins the rim to the
+apex, and one joins the apex to the base centre along the axis. It requires
+one cone face, one planar base face, one rim edge, no holes, zero meridian
+displacement, an exact resolved axis, a cardinal source frame and a signed
+cardinal placement. A cone face tag without that source record does not pass.
+
+Require a cardinal requested frame whose normal is parallel to the placed
+base-to-apex axis. Read the source corners, placed centres and requested plane
+as exact dyadic values. The base centre and apex must lie on strictly opposite
+sides of the plane; a cap, apex, tangent or exterior cut returns
+`ErrUnsupported`. The three lines enclose a disk whose radius decreases
+linearly from the base radius to zero at the apex. Divide the exact signed
+base-plane distance by the exact base-to-apex height, and calculate the cut
+radius as a rational value. Require that radius and the projected circle
+centre have finite, exactly representable binary64 coordinates. A radius such
+as 10/3 mm returns `ErrUnsupported` instead of a rounded Sketch circle.
+
+Reconstruct one complete counterclockwise circle in Sketch and require its
+fresh profile record to match before returning it. The exact profile can
+enter ordinary profile consumers, including `Extrude`.
 
 ## Cardinal vertical plane of an exact cylinder
 
