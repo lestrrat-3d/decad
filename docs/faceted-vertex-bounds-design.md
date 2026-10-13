@@ -227,8 +227,12 @@ rounding charge.
 ### 3.7 One Boolean for patterned curved teeth
 
 `Union` with three or more operands admits one certified finite blank and 2–31 rigid copies of the
-same immutable nine-section trim. Each placed body retains the source trim
-pointer, exact recorded motion, and unchanged triangle order. The call builds
+same immutable nine-section trim. `Copy` records its live faceted source,
+producer, source and target placements, and exact recorded motion. A copy of a
+copy retains the original source. The generic copied-tool proof rechecks these
+records, one-to-one live face owners, unchanged triangle order, and source and
+held shell separation. The legacy curved join still requires the nine-section
+trim and axial motions for its first-tooth seam checks. The call builds
 one transient tool operand and commits only after one Union and complete
 boundary, mass, and topology proofs. A refusal leaves all input bodies live.
 
@@ -251,12 +255,14 @@ nonnegative bound per vertex, and a body bound at least as large as each
 vertex bound. A missing local projection can mean an empty clipped slab only
 after those records pass validation. A slab pair with no shared occupied
 interval proves direct separation, but supplies no finite gap for copy
-transfer. The caller checks live source and recorded Copy provenance before
+transfer. `certifyFacetedCopies` checks live source and recorded `Copy` provenance before
 allowing reference-gap transfer. The first source's true departure, a held
 Copy's placement rounding, and a Boolean proxy's own displacement remain
 different shell inputs; the kernel does not upgrade one to another.
 
-The first-tooth cap proxy is placed for every copy. Its per-vertex source
+The generic copied-tool proof places the first-tooth cap proxy for every copy
+and rechecks its live source face owners. The specialized first-tooth source
+proof still certifies the cap proxy's true geometry. Its per-vertex source
 bounds, symmetric-difference volume, and area allowances add across copies.
 The contact gate retains the first tooth's 24 allowed blank/tooth face pairs
 per copy, checks every full-box candidate with the exact contact memo, and
