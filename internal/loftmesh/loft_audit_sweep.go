@@ -25,7 +25,7 @@ import (
 // LoftAuditStructure is the loft's own split of its triangle set:
 // tris[:Walls] are the wall triangles, the next CapStartCount the first cap's
 // triangles, and the rest the second cap's. Loops0 and Loops1 are each cap's
-// polygon loops as vertex-index cycles (loftAssembly's vIdx and wIdx).
+// polygon loops as vertex-index cycles (Assembly's vIdx and wIdx).
 type LoftAuditStructure struct {
 	Walls          int
 	CapStartCount  int
