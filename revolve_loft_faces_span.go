@@ -185,7 +185,7 @@ func revolveLoftFacesStraightOrFitSpans(trim *loftFacesTrimRecord,
 func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 	segment, spanIndex, band int, span freeform.BezierSpan) (revolveLoftFacesMappedCell, bool) {
 	first, last := trim.maps[band], trim.maps[band+1]
-	q := spiralRootPolynomial(first, last, span, m, b)
+	q := loftFacesMeridianQRows(first, last, span, m, b)
 	kind, signed := revolveLoftFacesClassifyRows(q)
 	cell := revolveLoftFacesMappedCell{segment: segment, span: spanIndex,
 		band: band, side: kind, sLo: lfZero(), sHi: lfOne(), tLo: lfZero(), tHi: lfOne()}
@@ -195,7 +195,7 @@ func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 	if kind != revolveLoftFacesCrossed {
 		return cell, true
 	}
-	order := spiralRootXOrder(first, last, span, signed)
+	order := loftFacesMeridianJRows(first, last, span, signed)
 	switch {
 	case spiralAllPositive(order):
 		cell.xDirection = 1
@@ -205,7 +205,7 @@ func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 		return cell, false
 	}
 	for capIndex, mapped := range [...]loftFaceMap{first, last} {
-		capQ := spiralRootPolynomial(mapped, mapped, span, m, b)
+		capQ := loftFacesMeridianQRows(mapped, mapped, span, m, b)
 		capKind, capSigned := revolveLoftFacesClassifyRows(capQ)
 		if capKind != revolveLoftFacesCrossed {
 			return cell, false
