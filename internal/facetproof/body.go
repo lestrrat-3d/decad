@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -271,12 +272,26 @@ func FirstMoments(budget *proofbound.WorkBudget, xverts []proof.Xpt, tris [][3]i
 	return moments, nil
 }
 
+// momentsParallelMin is the facet count from which FirstMomentsFromAudit sums
+// its blocks on several goroutines, and momentsBlock the facets per block.
+const (
+	momentsParallelMin = 2048
+	momentsBlock       = 512
+)
+
 // FirstMomentsFromAudit is FirstMoments over audit.XVerts that reuses the
 // audit's per-facet determinants: each facet adds det·(a+b+c) per axis, summed
 // as Dyadics and converted once. It returns FirstMoments' rational exactly. It
 // falls back to FirstMoments when the audit holds no determinants or a vertex
-// has a non-dyadic denominator.
+// has a non-dyadic denominator. Large meshes sum blocks of facets on several
+// goroutines; the exact sum does not depend on the grouping, and the budget is
+// charged one step per facet on the calling goroutine afterwards.
 func FirstMomentsFromAudit(budget *proofbound.WorkBudget, audit *MeshAudit, tris [][3]int) ([3]*big.Rat, error) {
+	return firstMomentsFromAudit(budget, audit, tris, orderedwork.EachWorkers(len(tris), momentsParallelMin))
+}
+
+func firstMomentsFromAudit(budget *proofbound.WorkBudget, audit *MeshAudit, tris [][3]int,
+	workers int) ([3]*big.Rat, error) {
 	if audit.Det == nil {
 		return FirstMoments(budget, audit.XVerts, tris)
 	}
@@ -288,19 +303,54 @@ func FirstMomentsFromAudit(budget *proofbound.WorkBudget, audit *MeshAudit, tris
 		}
 		lifted[i] = v
 	}
+	if workers >= 2 {
+		return firstMomentsParallel(budget, audit.Det, lifted, tris, workers)
+	}
 	var acc [3]proof.DyAcc
 	for fi, t := range tris {
 		if err := budget.Step(); err != nil {
 			return [3]*big.Rat{}, err
 		}
-		d := audit.Det[fi]
-		if d.IsZero() {
-			continue
+		addFacetMoment(&acc, audit.Det[fi], lifted, t)
+	}
+	return [3]*big.Rat{acc[0].Rat(), acc[1].Rat(), acc[2].Rat()}, nil
+}
+
+// addFacetMoment adds det·(a+b+c) to each axis of acc; a zero det adds nothing.
+func addFacetMoment(acc *[3]proof.DyAcc, d proof.Dyadic, lifted []proof.DyV3, t [3]int) {
+	if d.IsZero() {
+		return
+	}
+	a, b, c := lifted[t[0]], lifted[t[1]], lifted[t[2]]
+	for axis := range 3 {
+		s := proof.DyAdd(proof.DyAdd(a[axis], b[axis]), c[axis])
+		acc[axis].AddProduct(d, s)
+	}
+}
+
+// firstMomentsParallel sums momentsBlock facets per block into one exact
+// accumulator per axis, then adds the block sums in block order.
+func firstMomentsParallel(budget *proofbound.WorkBudget, det []proof.Dyadic, lifted []proof.DyV3,
+	tris [][3]int, workers int) ([3]*big.Rat, error) {
+	blocks := (len(tris) + momentsBlock - 1) / momentsBlock
+	parts := make([][3]proof.DyAcc, blocks)
+	if _, err := orderedwork.Each(blocks, workers, 1, budget.Err, func(b int) error {
+		for fi := b * momentsBlock; fi < min((b+1)*momentsBlock, len(tris)); fi++ {
+			addFacetMoment(&parts[b], det[fi], lifted, tris[fi])
 		}
-		a, b, c := lifted[t[0]], lifted[t[1]], lifted[t[2]]
-		for axis := range 3 {
-			s := proof.DyAdd(proof.DyAdd(a[axis], b[axis]), c[axis])
-			acc[axis].AddProduct(d, s)
+		return nil
+	}); err != nil {
+		return [3]*big.Rat{}, err
+	}
+	for range tris {
+		if err := budget.Step(); err != nil {
+			return [3]*big.Rat{}, err
+		}
+	}
+	var acc [3]proof.DyAcc
+	for b := range parts {
+		for axis := range acc {
+			acc[axis].Add(parts[b][axis].Dyadic())
 		}
 	}
 	return [3]*big.Rat{acc[0].Rat(), acc[1].Rat(), acc[2].Rat()}, nil

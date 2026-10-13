@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -21,12 +22,26 @@ type PlacedMesh struct {
 	AreaSlack   float64
 }
 
+// placeParallelMin is the vertex count from which PlaceMesh computes its exact
+// images on several goroutines.
+const placeParallelMin = 1024
+
 // PlaceMesh rounds each exact affine image to its nearest float, keeps its
 // held facets embedded, and charges the stored basis's exact stretch and
 // determinant before each vertex's own rounding and embedding correction.
+// Large meshes compute the vertex images on several goroutines; the budget
+// steps and the first non-representable vertex are read in vertex order on the
+// calling goroutine.
 func PlaceMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
 	vertexBound []float64, volSymDiff, areaSlack, stretch, volumeCharge float64,
 	delta r3.Transform) (PlacedMesh, error) {
+	return placeMesh(ctx, budget, verts, tris, vertexBound, volSymDiff, areaSlack, stretch, volumeCharge, delta,
+		orderedwork.EachWorkers(len(verts), placeParallelMin))
+}
+
+func placeMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
+	vertexBound []float64, volSymDiff, areaSlack, stretch, volumeCharge float64,
+	delta r3.Transform, workers int) (PlacedMesh, error) {
 	if proofbound.IsNonFinite(volSymDiff) || proofbound.IsNonFinite(areaSlack) ||
 		proofbound.IsNonFinite(stretch) || proofbound.IsNonFinite(volumeCharge) ||
 		volSymDiff < 0 || areaSlack < 0 || stretch < 0 || volumeCharge < 0 ||
@@ -39,13 +54,31 @@ func PlaceMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Ve
 	vertexAllow := make([]float64, len(verts))
 	exact := make([]proof.Xpt, len(verts))
 	basis := delta.Basis()
-	for i, v := range verts {
-		if err := budget.Step(); err != nil {
-			return PlacedMesh{}, err
-		}
+	// An image panics on a non-finite coordinate, so such a placement takes
+	// the vertex-order path.
+	if workers >= 2 && (!proofbound.AllFinite(verts) ||
+		!proofbound.AllFinite([]r3.Vec{basis.EX, basis.EY, basis.EZ, tr})) {
+		workers = 1
+	}
+	place := func(i int) error {
+		v := verts[i]
 		vertexAllow[i] = proofbound.RigidRoundAllow(math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))), maxTrans)
 		exact[i] = proof.ExactAffineImage(basis.EX, basis.EY, basis.EZ, tr, v)
 		next.Verts[i] = exact[i].Vec()
+		return nil
+	}
+	if workers >= 2 {
+		if _, err := orderedwork.Each(len(verts), workers, 512, budget.Err, place); err != nil {
+			return PlacedMesh{}, err
+		}
+	}
+	for i := range verts {
+		if err := budget.Step(); err != nil {
+			return PlacedMesh{}, err
+		}
+		if workers < 2 {
+			_ = place(i)
+		}
 		if !proofbound.FiniteVec(next.Verts[i]) {
 			return PlacedMesh{}, fmt.Errorf("%w: a placed vertex is not representable", decaderr.ErrUnsupported)
 		}
