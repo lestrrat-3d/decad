@@ -151,6 +151,35 @@ func loftCylinderChamferPointSegmentGap2(p, a, b loftCylinderXY) *big.Rat {
 }
 
 func loftCylinderChamferSegmentGapAbove(a, b, c, d loftCylinderXY, bound2 *big.Rat) bool {
+	if a.x.Cmp(b.x) == 0 && a.y.Cmp(b.y) == 0 ||
+		c.x.Cmp(d.x) == 0 && c.y.Cmp(d.y) == 0 {
+		return false
+	}
+	axisGapAbove := func(a, b, c, d *big.Rat) bool {
+		firstMin, firstMax := a, b
+		if a.Cmp(b) > 0 {
+			firstMin, firstMax = b, a
+		}
+		secondMin, secondMax := c, d
+		if c.Cmp(d) > 0 {
+			secondMin, secondMax = d, c
+		}
+		var high, low *big.Rat
+		switch {
+		case firstMax.Cmp(secondMin) < 0:
+			high, low = secondMin, firstMax
+		case secondMax.Cmp(firstMin) < 0:
+			high, low = firstMin, secondMax
+		default:
+			return false
+		}
+		gap := new(big.Rat).Sub(high, low)
+		return new(big.Rat).Mul(gap, gap).Cmp(bound2) > 0
+	}
+	// An axis gap lower-bounds every distance between the two segments.
+	if axisGapAbove(a.x, b.x, c.x, d.x) || axisGapAbove(a.y, b.y, c.y, d.y) {
+		return true
+	}
 	if loftCylinderEdgesMeet(a, b, c, d) {
 		return false
 	}
