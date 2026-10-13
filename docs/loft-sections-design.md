@@ -26,8 +26,8 @@ trimmed lines, curved segments, and differing segment counts return
 route for exactly matching curved records. Section 7 admits linearly varying
 four-arc circles. Section 8 admits varying fitted flanks with fixed arcs.
 Section 9 admits four non-affine rounded-rectangle sections.
-Section 10 admits three axis-aligned rectangular sections whose half-width
-and half-height vary independently.
+Sections 10 and 11 admit three or four axis-aligned rectangular sections
+whose half-width and half-height vary independently.
 
 All three planes have world-XY `U` and `V` axes, the same XY origin, and
 strictly increasing Z origins with the middle Z exactly halfway between the
@@ -148,7 +148,7 @@ wall remains `ErrUnsupported`, as for every `NURBSSurface`.
 
 The admitted classes are increments, not a claim that general multi-section
 interpolation is determined by profile boundaries. Nonhomothetic profiles
-outside §10,
+outside §§10–11,
 varying curved profiles outside §§7–9, arbitrary planes, guides, centerlines,
 and hole loops remain `ErrUnsupported`. Nil context or document, or a section count
 other than three or four, returns `ErrDegenerate`. A seam failure returns its own
@@ -515,4 +515,63 @@ upper bound `2(W+K)+H` covers the source and held shells. The existing
 faceted placement, `Tessellate(VerifyAll)`, mesh-boolean, and export paths
 consume the resulting payload. A nonpositive dimension, failed Bernstein
 gate, unrepresentable station, or unmet 128-band bound returns
+`ErrUnsupported` without committing a body.
+
+## 11. Four independently varying rectangular sections
+
+Four authenticated, hole-free profiles with the four whole-line rectangle
+records of §10 may vary both half-width and half-height. The planes share
+world-XY axes and origin at four ascending, equally spaced Z levels. The
+recorded walk may start at any corner in each section. This route is tried
+before §9's rounded-rectangle route; a profile outside the rectangular class
+continues to §9.
+
+For each dimension `x=w,h`, interpolate the four exact recorded values at
+`t=0,1/3,2/3,1` with one cubic Bernstein curve `x(t)` with controls
+`B_0,B_1,B_2,B_3`. Require `B_0,B_3>0` and `B_1,B_2>=0`. These exact
+coefficient gates prove `x(t)>0` throughout `[0,1]`. No monotonicity gate
+applies. The denoted solid has the section
+`[-w(t),w(t)] × [-h(t),h(t)]` at `z=z_0+Ht`. Its four walls are cubic
+tensor-product surfaces, and its two caps are planar. Strictly increasing
+height and positive dimensions prove that distinct sections do not meet.
+
+Let `M_x=max_[0,1]|x''(t)|`, evaluated from the two exact Bernstein second
+differences. Let `X=max(B_0,B_1,B_2,B_3)` and
+`P_x=3 max_i|B_(i+1)-B_i|`; the Bernstein hull bounds the dimension and
+its derivative. Choose the first `N=16,32,64,128` for which
+`D=(M_w+M_h)/(8N²) <= 0.05 mm`. Every ring coordinate at `t=i/N`
+must be exactly representable by finite float64. The held wall joins
+adjacent exact rings by linear interpolation. Each side quad is planar
+because one coordinate is fixed on that side of a rectangular ring; its
+two triangles tile the quad. The two caps use the first and last rings.
+The closed faceted mesh audit runs before the body commits.
+
+The linear interpolation remainder on each band satisfies
+`|x-l_x| <= M_x/(8N²)`. Mapping each true rectangle to the held rectangle
+at the same normalized `(u,v,t)` moves every point by at most `D` in both
+directions. `MeshBound` and each vertex certificate carry `D`.
+The true volume is `4H ∫_0^1 w(t)h(t) dt`. Both true and held dimensions
+are bounded by their Bernstein maxima `W,K`. Since
+`∫_0^1 |x-l_x| dt <= M_x/(12N²)`, the non-cancelling occupied-volume
+allowance is
+
+```text
+4H (K M_w + W M_h)/(12N²).
+```
+
+For the two horizontal and two vertical walls, use §10's area densities.
+The derivative's deviation from its bandwise average obeys
+`∫_0^1 |x'-l_x'| dt <= M_x/(2N)`. Combining that bound with the
+integrated position bound and the one-Lipschitz square root yields the
+non-cancelling area allowance
+
+```text
+4[(H+P_h) M_w/(12N²) + W M_h/(2N)
+  + (H+P_w) M_h/(12N²) + K M_w/(2N)].
+```
+
+The exact rational terms round upward before entering the faceted payload.
+The diameter bound is `2(W+K)+H`. Placement, `Tessellate(VerifyAll)`,
+booleans, and export consume that payload. A failed positive-control gate,
+plane/spacing gate, exact-station gate, or 128-band bound returns
 `ErrUnsupported` without committing a body.

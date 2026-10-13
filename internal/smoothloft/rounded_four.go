@@ -99,14 +99,7 @@ func roundedPointEqual(actual sectionrecord.Point2, expected roundedPoint) bool 
 }
 
 func roundedWidthControls(w [4]*big.Rat) ([4]*big.Rat, error) {
-	var b [4]*big.Rat
-	b[0], b[3] = w[0], w[3]
-	// At t=1/3 and 2/3, the Bernstein weights are respectively
-	// (8,12,6,1)/27 and (1,6,12,8)/27.
-	a := div(sub(sub(mul(rint(27), w[1]), mul(rint(8), w[0])), w[3]), rint(6))
-	c := div(sub(sub(mul(rint(27), w[2]), w[0]), mul(rint(8), w[3])), rint(6))
-	b[1] = div(sub(mul(rint(2), a), c), rint(3))
-	b[2] = div(sub(mul(rint(2), c), a), rint(3))
+	b := fourCubicControls(w)
 	if mul(rint(3), w[1]).Cmp(add(mul(rint(2), w[0]), w[3])) == 0 &&
 		mul(rint(3), w[2]).Cmp(add(w[0], mul(rint(2), w[3]))) == 0 {
 		return b, fmt.Errorf("%w: four rounded sections need non-affine widths", decaderr.ErrUnsupported)
@@ -121,19 +114,6 @@ func roundedWidthControls(w [4]*big.Rat) ([4]*big.Rat, error) {
 		return b, fmt.Errorf("%w: four rounded sections need monotone width controls", decaderr.ErrUnsupported)
 	}
 	return b, nil
-}
-
-func roundedCubicAt(b [4]*big.Rat, t *big.Rat) *big.Rat {
-	u := sub(rint(1), t)
-	return add(add(mul(b[0], mul(mul(u, u), u)),
-		mul(rint(3), mul(b[1], mul(mul(u, u), t)))),
-		add(mul(rint(3), mul(b[2], mul(u, mul(t, t)))), mul(b[3], mul(mul(t, t), t))))
-}
-
-func roundedWidthCurvature(b [4]*big.Rat) *big.Rat {
-	first := add(sub(b[0], mul(rint(2), b[1])), b[2])
-	second := add(sub(b[1], mul(rint(2), b[2])), b[3])
-	return mul(rint(6), maxRat(abs(first), abs(second)))
 }
 
 // BuildFourRounded certifies a cubic-width rounded rectangle from four
@@ -190,7 +170,7 @@ func BuildFourRounded(ctx context.Context, profiles [4]momentinput.Profile,
 		return Build{}, err
 	}
 	arcGap := div(r, rint(1024))
-	curvature := roundedWidthCurvature(b)
+	curvature := fourCubicCurvature(b)
 	var bands int
 	var widthGap, meshGap *big.Rat
 	for bands = 16; bands <= 128; bands *= 2 {

@@ -288,6 +288,8 @@
 2	0.01	TestLoftPlacedRotationSoundness
 2	0.00	TestLoftPlacedS13OverflowingCoordinate
 2	0.10	TestLoftSectionsConstantCurvesKeepAnalyticFacesAndProof
+2	0.03	TestLoftSectionsFourIndependentRectanglesKeepVolumeAndMeshProof
+2	0.02	TestLoftSectionsFourIndependentRectanglesRefuseUnprovedInputs
 2	0.20	TestLoftSectionsFourRoundedProfilesInterpolateNonAffineWidth
 2	0.02	TestLoftSectionsFourRoundedProfilesRefuseUnprovedShape
 2	0.02	TestLoftSectionsIndependentRectanglesPlaceWithVerifiedMesh
