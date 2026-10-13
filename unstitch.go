@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -138,7 +139,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	maxInputAbs := 0.0
 	for _, l := range srcFace.loops {
 		for _, ce := range l.coedges {
-			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.position), proofbound.VecMaxAbs(ce.edge.end.position))
+			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.n.Position), proofbound.VecMaxAbs(ce.edge.end.n.Position))
 		}
 	}
 	delta := 0.0
@@ -238,11 +239,11 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if nv, ok := newVertByOld[old]; ok {
 			return nv, nil
 		}
-		p := xform.Apply(old.position)
+		p := xform.Apply(old.n.Position)
 		if !proofbound.FiniteVec(p) {
 			return nil, fmt.Errorf(`%w: a placed unstitch vertex is not representable`, ErrUnsupported)
 		}
-		bound := old.bound.Base()
+		bound := old.n.Bound.Base()
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
@@ -250,7 +251,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		// restates under xform, composing rather than overwriting, so a
 		// vertex unstitched and later placed still carries the true
 		// accumulated motion.
-		nv := &Vertex{position: p, bound: units.Millimeters(bound), denot: old.denot.Compose(xform)}
+		nv := &Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(bound), Denot: old.n.Denot.Compose(xform)}}
 		newVertByOld[old] = nv
 		return nv, nil
 	}
@@ -387,17 +388,17 @@ func facePolygonBounds(nf *Face) (Box, error) {
 	var lo, hi r3.Vec
 	maxBound := 0.0
 	fold := func(v *Vertex) error {
-		if !proofbound.FiniteVec(v.position) {
+		if !proofbound.FiniteVec(v.n.Position) {
 			return fmt.Errorf(`%w: a placed unstitch vertex is not representable`, ErrUnsupported)
 		}
 		if !have {
-			lo, hi = v.position, v.position
+			lo, hi = v.n.Position, v.n.Position
 			have = true
 		} else {
-			lo = r3.Vec{X: math.Min(lo.X, v.position.X), Y: math.Min(lo.Y, v.position.Y), Z: math.Min(lo.Z, v.position.Z)}
-			hi = r3.Vec{X: math.Max(hi.X, v.position.X), Y: math.Max(hi.Y, v.position.Y), Z: math.Max(hi.Z, v.position.Z)}
+			lo = r3.Vec{X: math.Min(lo.X, v.n.Position.X), Y: math.Min(lo.Y, v.n.Position.Y), Z: math.Min(lo.Z, v.n.Position.Z)}
+			hi = r3.Vec{X: math.Max(hi.X, v.n.Position.X), Y: math.Max(hi.Y, v.n.Position.Y), Z: math.Max(hi.Z, v.n.Position.Z)}
 		}
-		maxBound = max(maxBound, v.bound.Base())
+		maxBound = max(maxBound, v.n.Bound.Base())
 		return nil
 	}
 	for _, l := range nf.loops {

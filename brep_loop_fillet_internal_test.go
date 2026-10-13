@@ -1084,13 +1084,13 @@ func TestBrepLoopFilletBoundFixture(t *testing.T) {
 		fy, _ := y.Float64()
 		var held *Vertex
 		for vv := range vertices {
-			if vv.position.Sub(r3.NewVec(fx, fy, 10)).Len() < 1e-9 {
+			if vv.n.Position.Sub(r3.NewVec(fx, fy, 10)).Len() < 1e-9 {
 				require.Nil(t, held)
 				held = vv
 			}
 		}
 		require.NotNil(t, held, "a vertex sits at the contour corner (%v, %v)", fx, fy)
-		requireCentroidCovers(t, VecMeasurement{Value: held.position, Bound: held.bound}, [3]*big.Rat{x, y, q(10, 1)})
+		requireCentroidCovers(t, VecMeasurement{Value: held.n.Position, Bound: held.n.Bound}, [3]*big.Rat{x, y, q(10, 1)})
 	}
 
 	// Leg 2. The receiver's moments: the trapezoid prism less the pocket.
@@ -1231,8 +1231,8 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 		require.Greater(t, edge.length, 1.0)
 		require.Greater(t, edge.lengthBound, 0.0)
 		require.LessOrEqual(t, math.Abs(edge.length-wantLength), edge.lengthBound+1e-6)
-		require.InDelta(t, 9, edge.end.position.Z, 1e-8)
-		require.InDelta(t, 10, edge.start.position.Z, 1e-8)
+		require.InDelta(t, 9, edge.end.n.Position.Z, 1e-8)
+		require.InDelta(t, 10, edge.start.n.Position.Z, 1e-8)
 	}
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -1402,7 +1402,7 @@ func TestBrepLoopFilletConsumers(t *testing.T) {
 	for _, f := range filletPatchesOf(turned) {
 		for _, e := range f.Edges() {
 			for _, v := range []*Vertex{e.Start(), e.End()} {
-				p := v.position
+				p := v.n.Position
 				require.GreaterOrEqual(t, p.X, turned.bounds.Min.X-1e-9)
 				require.LessOrEqual(t, p.X, turned.bounds.Max.X+1e-9)
 			}

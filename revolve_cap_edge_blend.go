@@ -97,7 +97,7 @@ func revolveRimSourceOf(rp revolvePayload, edges []*Edge, setback, setbackDelta 
 	if _, ok := e.curve.(Line3); !ok || e.start == nil || e.end == nil {
 		return revolvemesh.RimSource{}, false
 	}
-	a, b := e.start.position, e.end.position
+	a, b := e.start.n.Position, e.end.n.Position
 	lo, hi := r3.NewVec(xhi, 0, 0), r3.NewVec(xhi, outer, 0)
 	if (a != lo || b != hi) && (a != hi || b != lo) {
 		return revolvemesh.RimSource{}, false

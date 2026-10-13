@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -555,7 +556,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	rimVertex := func(u, v, z, zDelta, extra float64, level levelToken) *Vertex {
 		held, lift := pp.LiftedVertex(u, v, z)
 		base := proofbound.AbsSumUpper(delta, zDelta, lift)
-		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(base, extra)), level: level, denot: mintCurve()}
+		return &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, extra)), Level: level, Denot: mintCurve()}}
 	}
 	var bottomV, topV []*Vertex
 	// seamBottom/seamTop are the SINGLE seam vertex a lone closed walk's rim

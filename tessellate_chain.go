@@ -58,8 +58,8 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 			return i
 		}
 		i := len(mesh.vertices)
-		mesh.vertices = append(mesh.vertices, v.position)
-		vertexStore = append(vertexStore, v.bound.Mag())
+		mesh.vertices = append(mesh.vertices, v.n.Position)
+		vertexStore = append(vertexStore, v.n.Bound.Mag())
 		index[v] = i
 		return i
 	}
@@ -85,7 +85,7 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 		for i, ce := range coedges {
 			v := ce.Start()
 			corner[i] = meshIndexOf(v)
-			cornerDelta = math.Max(cornerDelta, v.bound.Mag())
+			cornerDelta = math.Max(cornerDelta, v.n.Bound.Mag())
 		}
 		v0, v1, v2, v3 := corner[0], corner[1], corner[2], corner[3]
 		tri1 := [3]int{v0, v1, v2}

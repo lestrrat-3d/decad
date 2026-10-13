@@ -85,8 +85,8 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 			w := walks[i]
 			bottom := pl.xform.Apply(pl.frame0.ToWorldUV(w.StartU, w.StartV))
 			top := pl.xform.Apply(pl.frame1.ToWorldUV(w.StartU, w.StartV))
-			if (edge.start.position == bottom && edge.end.position == top) ||
-				(edge.start.position == top && edge.end.position == bottom) {
+			if (edge.start.n.Position == bottom && edge.end.n.Position == top) ||
+				(edge.start.n.Position == top && edge.end.n.Position == bottom) {
 				if matched >= 0 {
 					return nil, fmt.Errorf(`%w: a loft edge matches more than one section corner`, ErrUnsupported)
 				}

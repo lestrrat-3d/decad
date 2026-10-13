@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -310,24 +311,7 @@ func internalCurve(c Curve) surfacegeom.Curve {
 
 // Vertex is a topological point.
 type Vertex struct {
-	position r3.Vec
-	bound    units.Value
-	// level is the LEVEL half of the shared-denotation certificate
-	// (denotation.go): non-zero only for a vertex a builder stamped at one
-	// denoted sweep level, and zero ("no certificate") for every vertex no
-	// builder in this package mints one for.
-	level levelToken
-	// denot is the CURVE half of the shared-denotation certificate
-	// (denotation.go): non-zero only for a vertex a builder minted one for —
-	// today a straight prism's rim corner (prism_build.go) and a revolve's
-	// own internal junction vertex (revolve_build.go; a partial revolve's
-	// own SEAM — its boundary copy at phi0/phi1 — mints none) — and
-	// propagated unchanged,
-	// composing xform, by every copier that reproduces the same point
-	// (stitch.go's rebuildStitchTopology, unstitch.go's
-	// copyFaceUnderContext, patch_body.go's copyPatchFacesUnder). Zero ("no
-	// certificate") for every vertex no builder or copier stamps.
-	denot curveToken
+	n topo.Vertex
 }
 
 // Position returns the vertex position in millimetres — a computed
@@ -369,10 +353,10 @@ type Vertex struct {
 // of exactness: what the coordinate was READ FROM is.
 func (v *Vertex) Position() VecMeasurement {
 	exactness := Exact
-	if v.bound.Mag() != 0 {
+	if v.n.Bound.Mag() != 0 {
 		exactness = Approximate
 	}
-	return VecMeasurement{Value: v.position, Exactness: exactness, Bound: v.bound}
+	return VecMeasurement{Value: v.n.Position, Exactness: exactness, Bound: v.n.Bound}
 }
 
 // CoEdge is one directed use of an Edge by a Loop. Its Start and End follow

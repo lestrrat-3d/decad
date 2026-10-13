@@ -413,7 +413,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	}
 	body.bounds = Box{Min: minV, Max: maxV, Bound: units.Millimeters(delta), Exactness: Approximate}
 	for _, vertex := range body.Vertices() {
-		vertex.bound = units.Millimeters(proofbound.AbsSumUpper(vertex.bound.Base(), delta))
+		vertex.n.Bound = units.Millimeters(proofbound.AbsSumUpper(vertex.n.Bound.Base(), delta))
 	}
 	longitudinalExtra := proofbound.ProductUpper(poly.maxRadiusL1,
 		proofbound.AbsSumUpper(proofbound.RatFloatUp(proofbound.HalfPiIv.Hi), upperTheta))
@@ -587,10 +587,10 @@ func sewTwistLoftJoin(ctx context.Context, from, to *Face, previous *Body, sewn 
 		var shared coedge
 		matches := 0
 		for _, candidate := range to.loops[0].coedges {
-			if old.Start().position == candidate.Start().position &&
-				old.End().position == candidate.End().position ||
-				old.Start().position == candidate.End().position &&
-					old.End().position == candidate.Start().position {
+			if old.Start().n.Position == candidate.Start().n.Position &&
+				old.End().n.Position == candidate.End().n.Position ||
+				old.Start().n.Position == candidate.End().n.Position &&
+					old.End().n.Position == candidate.Start().n.Position {
 				shared = candidate
 				matches++
 			}
@@ -599,7 +599,7 @@ func sewTwistLoftJoin(ctx context.Context, from, to *Face, previous *Body, sewn 
 			return fmt.Errorf(`%w: a twisted Loft join has %d matching rim edges`, ErrUnsupported, matches)
 		}
 		var start, end *Vertex
-		if old.Start().position == shared.Start().position {
+		if old.Start().n.Position == shared.Start().n.Position {
 			start, end = shared.Start(), shared.End()
 		} else {
 			start, end = shared.End(), shared.Start()

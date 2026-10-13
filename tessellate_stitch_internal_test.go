@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -353,7 +354,7 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 	classOf = map[*Vertex]int{}
 	positions = make([]r3.Vec, 8)
 	for i, p := range corners {
-		verts[i] = &Vertex{position: p}
+		verts[i] = &Vertex{n: topo.Vertex{Position: p}}
 		classOf[verts[i]] = i
 		positions[i] = p
 	}

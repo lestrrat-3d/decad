@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -92,7 +93,7 @@ func stitchTestSquareFace(corner r3.Vec) *Face {
 	}
 	verts := make([]*Vertex, 4)
 	for i, p := range c {
-		verts[i] = &Vertex{position: p}
+		verts[i] = &Vertex{n: topo.Vertex{Position: p}}
 	}
 	edges := make([]*Edge, 4)
 	for i := range 4 {
@@ -362,8 +363,8 @@ func stitchTestCylinderFace(r, height, area, areaBound float64) *Face {
 // rB.value comes out r, matching every other field here) and rimBound is
 // otherwise free to set to whatever the test wants to prove propagates.
 func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound float64) *Face {
-	v0 := &Vertex{position: r3.NewVec(r, 0, 0)}
-	v1 := &Vertex{position: r3.NewVec(r, 0, height)}
+	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, 0)}}
+	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, height)}}
 	length := 2 * math.Pi * r
 	e0 := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v0, end: v0, length: length, lengthBound: rimBound}
 	e1 := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, height), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v1, end: v1, length: length, lengthBound: rimBound}
@@ -448,7 +449,7 @@ func stitchTestPlaneDiskFace(r, rimBound float64) *Face {
 	if err != nil {
 		panic(err)
 	}
-	v := &Vertex{position: r3.NewVec(r, 0, 0)}
+	v := &Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, 0)}}
 	e := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v, end: v, length: 2 * math.Pi * r, lengthBound: rimBound}
 	f := &Face{
 		surface: Plane{Frame: frame},
@@ -498,7 +499,7 @@ func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
 	require.NoError(t, err)
 	const radius = 2.0
 	center := frame.Origin().Add(frame.U()).Add(frame.V().Scale(0.5))
-	vertex := &Vertex{position: center.Add(frame.U().Scale(radius))}
+	vertex := &Vertex{n: topo.Vertex{Position: center.Add(frame.U().Scale(radius))}}
 	edge := &Edge{
 		curve: Circle3{Center: center, Axis: frame.N(), Radius: units.Millimeters(radius)},
 		start: vertex, end: vertex, length: 2 * math.Pi * radius,
@@ -555,8 +556,8 @@ func stitchTestConeFace(halfAngle, r0, z0, r1, z1, rimBound float64) *Face {
 	axis := r3.NewVec(0, 0, 1)
 	center0 := r3.NewVec(0, 0, z0)
 	center1 := r3.NewVec(0, 0, z1)
-	v0 := &Vertex{position: r3.NewVec(r0, 0, z0)}
-	v1 := &Vertex{position: r3.NewVec(r1, 0, z1)}
+	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(r0, 0, z0)}}
+	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(r1, 0, z1)}}
 	length0 := 2 * math.Pi * r0
 	length1 := 2 * math.Pi * r1
 	e0 := &Edge{curve: Circle3{Center: center0, Axis: axis, Radius: units.Millimeters(r0)}, start: v0, end: v0, length: length0, lengthBound: rimBound}
@@ -838,7 +839,7 @@ func TestStitchSphereFluxDerivesRadiusFromAreaNotBareField(t *testing.T) {
 // unreachable Cone shape.
 func TestStitchSphereFluxRefusesFaceWithABoundaryLoop(t *testing.T) {
 	t.Parallel()
-	v := &Vertex{position: r3.NewVec(5, 5, 0)}
+	v := &Vertex{n: topo.Vertex{Position: r3.NewVec(5, 5, 0)}}
 	e := &Edge{
 		curve:  Circle3{Center: r3.NewVec(5, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(5)},
 		start:  v,
@@ -962,7 +963,7 @@ func frustumShellAnalyticsForInternalTest(uLen, vLo0, vHi0, vLo1, vHi1 float64) 
 func stitchTestTorusFace(center, axis r3.Vec, major, minor, e0, e1 float64) *Face { //nolint:unparam // major is a real parameter of the shape this helper builds; every test so far happens to want the same one, but the formula-verification test below reads it back by name rather than as a bare literal.
 	rim := func(offset float64) *Edge {
 		rimCenter := center.Add(axis.Scale(offset))
-		v := &Vertex{position: rimCenter}
+		v := &Vertex{n: topo.Vertex{Position: rimCenter}}
 		return &Edge{
 			curve: Circle3{Center: rimCenter, Axis: axis, Radius: units.Millimeters(major)},
 			start: v, end: v,
@@ -1250,7 +1251,7 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 
 	vertexObjs := make([]*Vertex, len(verts))
 	for i, p := range verts {
-		vertexObjs[i] = &Vertex{position: p}
+		vertexObjs[i] = &Vertex{n: topo.Vertex{Position: p}}
 	}
 
 	body := &Body{kind: BodySolid, solid: true}

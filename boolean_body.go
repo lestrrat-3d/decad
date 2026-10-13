@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -776,7 +777,7 @@ func buildFacetedTopology(
 		if v, ok := vertexObj[vi]; ok {
 			return v
 		}
-		v := &Vertex{position: verts[vi], bound: units.Millimeters(vertexBound[vi])}
+		v := &Vertex{n: topo.Vertex{Position: verts[vi], Bound: units.Millimeters(vertexBound[vi])}}
 		vertexObj[vi] = v
 		return v
 	}
