@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
@@ -67,7 +68,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 	}
 
 	budget := proofbound.NewWorkBudget(ctx)
-	loops, err := profileCornerLoopsBudget(budget, rp.profile)
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, rp.profile)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +119,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 	}
 
 	// Stage 6: the base §5 audit of the rewritten meridian (S8, S6, S7, S9).
-	if err := auditRewriteBudget(budget, rp.profile, profile, loops, blendAt); err != nil {
+	if err := offset2d.AuditRewriteBudget(budget, rp.profile, profile, loops, blendAt); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, context.Canceled
 		}

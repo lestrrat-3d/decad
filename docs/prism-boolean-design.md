@@ -736,7 +736,7 @@ not the caller's sketch — it is one decad built. Authentication here is
    loop — decad's own combinatorial assembly, not a `sketch` answer. This is
    the modify-design carve-out already in force for auditing a
    *decad-constructed* section (modify §4/§5's Table S, and the offset
-   audit `shell_offset.go` already runs on ITS OWN constructed section with
+   audit `offset2d.AuditOffsetSectionBudget` already runs on ITS OWN constructed section with
    an empty blend map): §6 runs the closed-form crossing/orientation/nesting
    checks the same way, on the merged record, as the second, independent
    proof. Neither of those checks proves the merged loop's own **closure**.
@@ -760,7 +760,7 @@ Reuses the modify §5 machinery verbatim — `sectionaudit.LoopSignedArea`,
 `sectionaudit.EntriesOf`, `sectionaudit.Crossing`, and `sectionaudit.Nesting`
 take generic section records and walks with no fillet-specific coupling,
 so the merged `ProfileRecord` feeds them directly with an empty
-blend map (`shell_offset.go`'s own precedent for "no cutback data, still run
+blend map (`offset2d.AuditOffsetSectionBudget`'s own precedent for "no cutback data, still run
 the shared audit"). Order matches modify §4's:
 
 | Step | Check | Sentinel |

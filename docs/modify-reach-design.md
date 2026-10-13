@@ -393,7 +393,7 @@ junction.
 
 **Corner coordinates.** The payload records the meridian plane-locally, and
 the rewrite is rigid-invariant, so the corner rewrite runs on the plane-local
-coalesced walk (`profileCornerLoopsBudget`), the one a prism's section uses.
+coalesced walk (`offset2d.ProfileCornerLoopsBudget`), the one a prism's section uses.
 The axis-local junction maps to it through the recorded segment its leaving
 walk starts at. Where the two coalescings disagree about that segment, the
 call refuses with `ErrUnsupported` rather than picking a neighbouring corner.

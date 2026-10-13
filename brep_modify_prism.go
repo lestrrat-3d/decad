@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -171,7 +172,7 @@ func brepLevel(f brepFace, e brepEmbed) float64 { return e.Sign[2]*f.z0 + 0 }
 // its section (matchCornerBudget). Any other edge is modify S1's class.
 func requireLateralEdges(ctx context.Context, pp prismPayload, edges []*Edge) error {
 	budget := proofbound.NewWorkBudget(ctx)
-	loops, err := prismCornerLoopsBudget(budget, pp)
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, pp.Profile)
 	if err != nil {
 		return err
 	}

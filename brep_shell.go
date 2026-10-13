@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -201,12 +202,12 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	// Stage 4: the offset audit on S ⊖ t (the side opening ran its own) and on
 	// each Tᵢ ⊕ t, then TC7.
 	if len(rm.Walls) == 0 {
-		if err := auditOffsetSectionBudget(budget, tc.caps.Section, sec.eroded); err != nil {
+		if err := offset2d.AuditOffsetSectionBudget(budget, tc.caps.Section, sec.eroded); err != nil {
 			return nil, shellCancelCause(err)
 		}
 	}
 	for i, tool := range tc.tools {
-		if err := auditOffsetSectionBudget(budget, tool.prism.Profile, dilated[i]); err != nil {
+		if err := offset2d.AuditOffsetSectionBudget(budget, tool.prism.Profile, dilated[i]); err != nil {
 			return nil, shellCancelCause(err)
 		}
 	}
@@ -299,7 +300,7 @@ func (tc throughCut) openingThroughSection(budget *proofbound.WorkBudget, rm thr
 		Profile: tc.caps.Section, Height: tc.caps.Zhi - tc.caps.Zlo, Sides: rm.Sides,
 		KeptCaps: rm.KeptCaps(), Sense: 1, Thickness: call.t, HeldThickness: call.tmm,
 		ThicknessDelta: call.tDelta, Tolerance: shellTol,
-	}, auditOffsetSectionBudget)
+	}, offset2d.AuditOffsetSectionBudget)
 	if err != nil {
 		return throughSection{}, shellCancelCause(err)
 	}

@@ -1,7 +1,6 @@
 package decad
 
 import (
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 )
 
@@ -55,21 +54,4 @@ func renderAuditCoordinates(err error) error {
 		return err
 	}
 	return &renderedAuditDiagnosticError{cause: err, message: diagnostic.Detailed()}
-}
-
-// auditRewriteBudget converts the root corner records into the neutral
-// section audit's ordered rewrite inputs.
-func auditRewriteBudget(budget *proofbound.WorkBudget, orig, rewritten profileRecord,
-	loops []cornerLoop, blendAt []map[int]*cornerBlend) error {
-	records := make([]sectionaudit.RewriteLoop, len(loops))
-	for li, loop := range loops {
-		cutbacks := make(map[int]sectionaudit.Cutback, len(blendAt[li]))
-		for ci, blend := range blendAt[li] {
-			if blend != nil {
-				cutbacks[ci] = sectionaudit.Cutback{A: blend.CutbackA, B: blend.CutbackB}
-			}
-		}
-		records[li] = sectionaudit.RewriteLoop{Walks: loop.Walks, Cutbacks: cutbacks}
-	}
-	return sectionaudit.AuditRewrite(budget, orig, rewritten, records)
 }

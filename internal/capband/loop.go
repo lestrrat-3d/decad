@@ -20,7 +20,7 @@ import (
 // cap-loop chamfer's offset refusals (docs/modify-reach-design.md §8.3).
 
 // LoopWalks decomposes a single recorded loop into its coalesced
-// corner walk, the same decomposition prismCornerLoopsBudget applies to
+// corner walk, the same decomposition offset2d.ProfileCornerLoopsBudget applies to
 // every loop of a section.
 func LoopWalks(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, work *freeform.FreeformWork) ([]survey2d.SideWalk, error) {
 	raw := make([]survey2d.SideWalk, len(loop.Segments))

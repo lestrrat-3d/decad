@@ -259,7 +259,7 @@ reads the record and not the surface.
    (SD6 for the outer loop under a positive taper). The result is `Q` as
    `[]CurveSegment` per loop, assembled into a `ProfileRecord` with the same
    loop order as `P`.
-5. **Audit `Q`** with `auditOffsetSectionBudget` (modify §5): SD6, SD8, SD9.
+5. **Audit `Q`** with `offset2d.AuditOffsetSectionBudget` (modify §5): SD6, SD8, SD9.
    Re-run steps 4–5 at the top of `d`'s span (`auditCapBlendSetbackSpan`'s
    rule): SD10.
 6. **Enclose the far corners.** `capband.ContourDisplacement`

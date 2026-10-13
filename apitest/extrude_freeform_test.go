@@ -1023,7 +1023,7 @@ func TestFreeformPrismMinRadiusUndecided(t *testing.T) {
 }
 
 // TestFreeformPrismFilletChamferRefuse pins Fillet and Chamfer's per-corner
-// rewrite (fillet.go's prismCornerLoopsBudget): it walks every segment of
+// rewrite (offset2d.ProfileCornerLoopsBudget): it walks every segment of
 // every loop regardless of which corner is selected, so a free-form section
 // refuses even when the selected edges are themselves the analytic vertical
 // junctions. Both a curved wall and a straight-walk (degree-1) NURBSSeg wall

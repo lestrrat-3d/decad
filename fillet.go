@@ -9,7 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
@@ -282,7 +281,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	}
 
 	budget := proofbound.NewWorkBudget(ctx)
-	loops, err := prismCornerLoopsBudget(budget, pp)
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, pp.Profile)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +339,7 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	}
 
 	// Stage 4 (§4/§5): the audit of the rewritten profile — S8, S6, S7, S9.
-	if err := auditRewriteBudget(budget, pp.Profile, profile, loops, blendAt); err != nil {
+	if err := offset2d.AuditRewriteBudget(budget, pp.Profile, profile, loops, blendAt); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, context.Canceled
 		}
@@ -492,26 +491,6 @@ func requireExactSection(pp prismPayload, op string) error {
 		`%w: this evaluator %s a receiver whose recorded section is the section it denotes only; this body's section carries a proven displacement of %g mm from the one its construction denotes`,
 		ErrUnsupported, op, pp.SectionDelta,
 	)
-}
-
-func prismCornerLoopsBudget(budget *proofbound.WorkBudget, pp prismPayload) ([]cornerLoop, error) {
-	return profileCornerLoopsBudget(budget, pp.Profile)
-}
-
-// profileCornerLoopsBudget resolves every loop of a recorded section into its
-// coalesced corner walk in the section's own plane-local coordinates. A prism
-// reads its section through it, and a revolve its meridian
-// (revolve_blend.go): the corner rewrite is the same 2D construction for both.
-func profileCornerLoopsBudget(budget *proofbound.WorkBudget, profile profileRecord) ([]cornerLoop, error) {
-	walks, err := boundarywalk.ModifyLoopsBudget(budget, boundarywalk.Profile(profile))
-	if err != nil {
-		return nil, err
-	}
-	out := make([]cornerLoop, len(walks))
-	for i, loop := range walks {
-		out[i] = cornerLoop{Walks: loop}
-	}
-	return out, nil
 }
 
 // matchCornerBudget maps a selected edge to a (loop, corner) of the section: a

@@ -25,7 +25,7 @@ import (
 // rewrite: the corner is cut off by a straight CHORD between the two setback
 // feet (a LineSeg), never a tangent arc, so the bevel wall is a PLANE (§7). It
 // then shares everything downstream with the fillet — the §5 audit
-// (auditRewriteBudget, S8/S6/S7/S9), the profile rewrite (rewriteProfile), evalPrism,
+// (offset2d.AuditRewriteBudget, S8/S6/S7/S9), the profile rewrite (rewriteProfile), evalPrism,
 // and the blend-role machinery (addBlendRoles) — via the common cornerBlend.
 //
 // The setback d is measured along the adjacent boundary curve, d from the
@@ -381,7 +381,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	}
 
 	budget := proofbound.NewWorkBudget(ctx)
-	loops, err := prismCornerLoopsBudget(budget, pp)
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, pp.Profile)
 	if err != nil {
 		return nil, err
 	}
@@ -424,7 +424,7 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 
 	// Stage 4 (§4/§5): the same audit the fillet runs — S8, S6 (an over-large
 	// setback that reaches or passes a walk's far end), S7, S9.
-	if err := auditRewriteBudget(budget, pp.Profile, profile, loops, blendAt); err != nil {
+	if err := offset2d.AuditRewriteBudget(budget, pp.Profile, profile, loops, blendAt); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, context.Canceled
 		}

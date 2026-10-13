@@ -3087,7 +3087,7 @@ radius-`t` arc and a concave inside corner miters, as `docs/modify-design.md`
 never shifted by changing the source prism's axial levels.
 
 `shell_offset.go`'s `offsetProfile` supplies each requested closed section;
-`auditOffsetSectionBudget` checks each one. Its `reverseLoopRecordContext`
+`offset2d.AuditOffsetSectionBudget` checks each one. Its `reverseLoopRecordContext`
 and `shell.go`'s `evalTubeContext` already form and build the one-sided,
 hole-free annulus. A centered call forms the analogous annulus from TWO
 offsets and uses `evalPrismContext`. `shell_cup.go`'s calls to
@@ -3158,7 +3158,7 @@ measurements of a more precise wall than the record denotes.
 Gate order is fixed: check context, liveness, owned options and magnitude;
 select the receiver family; convert and, outside the patch arm, certify
 thickness; construct the requested offsets, or assemble the requested closed
-ring, and certify the generated values; run `auditOffsetSectionBudget` on each
+ring, and certify the generated values; run `offset2d.AuditOffsetSectionBudget` on each
 offset; prove the whole offset interval, the radius where an axis is in play,
 and the outer/inner boundary relation; build the prism or the revolve; recheck
 liveness and context; commit. A construction refusal is returned unchanged
@@ -3249,7 +3249,7 @@ names it as the radial-axis half of this arm's missing proof.
 - the thickness converts to millimetres with zero displacement, and a centered
   call's half-thickness is itself exactly representable;
 - every offset the request needs passes §16.2's exact-generation gate, its own
-  `auditOffsetSectionBudget`, the crossing and nesting audits over the
+  `offset2d.AuditOffsetSectionBudget`, the crossing and nesting audits over the
   assembled annulus, and §16.2's whole-interval scan;
 - the whole swept family's least radius from the axis is proven strictly
   positive.
@@ -3381,7 +3381,7 @@ consume vanishes inside the interval and refuses there.
 exactly is R27, and so is a generated piece of zero length. The gate reads the
 construction's OWN output rather than comparing two constructions, because
 there is no second construction to compare against — which is also why this arm
-runs no `auditOffsetSectionBudget`: that audit compares an offset section to
+runs no `offset2d.AuditOffsetSectionBudget`: that audit compares an offset section to
 its source section, and a ribbon has no source section.
 
 **The endpoint audit.** `crossingAuditBudget` over the assembled loop's segment
@@ -3607,7 +3607,7 @@ source's own sweep: the same `frame`, the same `z0`/`z1` with the same
 `z0Delta`/`z1Delta`, the same accumulated placement, `surfaceResult` true, and
 `Q` as the section. A convex outside corner grows a radius-`d` arc and a
 concave inside corner miters, as `docs/modify-design.md` §8 states.
-`shell_offset.go`'s `offsetProfile` supplies `Q` and `auditOffsetSectionBudget`
+`shell_offset.go`'s `offsetProfile` supplies `Q` and `offset2d.AuditOffsetSectionBudget`
 checks it, exactly as §16.2 has them supply and check each of Thicken's
 requested sections, and the certification of the whole offset interval
 `0 < τ ≤ d` runs unchanged for §16.2's own reason: an endpoint that looks
@@ -3647,7 +3647,7 @@ every source segment is valid, and an erosion at or past the section's inradius
 drops a loop outright. A scale-anchored contact floor may refuse more inputs; a
 gap above that floor is never the proof of separation. Only the closed-form
 segment-pair decisions on decad's OWN synthesized section permit construction.
-`shell_offset.go`'s header owns that distinction, and it is why a closed-form
+`internal/offset2d/profile_offset.go`'s header owns that distinction, and it is why a closed-form
 decision on the offset is admissible where a residual against a handed-in curve
 would not be: `CLAUDE.md`'s reject-only rule governs what `sketch` hands over,
 and this section is decad's own construction proven in closed form.
@@ -3655,7 +3655,7 @@ and this section is decad's own construction proven in closed form.
 Gate order is fixed: check context, liveness, owned options and magnitude;
 select the receiver family; for a prism, convert and certify the distance;
 construct the requested offset and certify its generated values; run
-`auditOffsetSectionBudget`; prove the whole offset interval; build the sheet;
+`offset2d.AuditOffsetSectionBudget`; prove the whole offset interval; build the sheet;
 recheck liveness and context; commit. A construction refusal is returned
 unchanged before any body is registered, and the receiver stays live in a
 refusal exactly as it does on success.

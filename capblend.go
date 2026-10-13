@@ -467,7 +467,7 @@ func (cbp capBlendPayload) loops() []loopRecord {
 // loop.
 func classifyChamferSelection(ctx context.Context, pp prismPayload, caps prismCaps, sel EdgeSelector, edges []*Edge) (startLoops, endLoops map[int]bool, lateral bool, err error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	cornerLoops, err := prismCornerLoopsBudget(budget, pp)
+	cornerLoops, err := offset2d.ProfileCornerLoopsBudget(budget, pp.Profile)
 	if err != nil {
 		return nil, nil, false, err
 	}
@@ -625,7 +625,7 @@ func buildCapBlendWithLoftSource(ctx context.Context, doc *Document, ref produce
 		}
 	}
 
-	if err := auditOffsetSectionBudget(budget, pp.Profile, mixed); err != nil {
+	if err := offset2d.AuditOffsetSectionBudget(budget, pp.Profile, mixed); err != nil {
 		return nil, capband.ChamferAuditError(err)
 	}
 	if err := auditCapBlendSetbackSpan(budget, pp.Profile, cbp); err != nil {
@@ -763,7 +763,7 @@ func auditCapBlendSetbackSpan(budget *proofbound.WorkBudget, profile profileReco
 	}
 	mixed, err := mixedOffsetProfile(budget, top)
 	if err == nil {
-		err = auditOffsetSectionBudget(budget, profile, mixed)
+		err = offset2d.AuditOffsetSectionBudget(budget, profile, mixed)
 	}
 	if err == nil {
 		return nil
@@ -817,7 +817,7 @@ func anyLoopSelected(loops map[int]bool) bool {
 // loop unchanged. It reuses offset2d.BuildLoop's per-feature offset unmodified.
 func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (profileRecord, error) {
 	profile := cbp.profile
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: profile}})
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, profile)
 	if err != nil {
 		return profileRecord{}, err
 	}

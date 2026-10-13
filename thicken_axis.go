@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 )
@@ -19,7 +19,7 @@ func thickenAxisSection(ctx context.Context, profile profileRecord, side Thicken
 			return thickenaxis.SectionPair{}, fmt.Errorf(`%w: the sheet requires line-only axis-parallel walks`, ErrUnsupported)
 		}
 	}
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: profile}})
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, profile)
 	if err != nil {
 		return thickenaxis.SectionPair{}, err
 	}
@@ -67,7 +67,7 @@ func thickenAxisOffset(budget *proofbound.WorkBudget, source profileRecord, loop
 	if err := thickenaxis.CertifyAxisOffset(loop.Walks, dirs, offset.Outer, sense, amount, budget); err != nil {
 		return profileRecord{}, err
 	}
-	if err := auditOffsetSectionBudget(budget, source, offset); err != nil {
+	if err := offset2d.AuditOffsetSectionBudget(budget, source, offset); err != nil {
 		return profileRecord{}, thickenaxis.AuditRefusal(err)
 	}
 	return offset, nil
