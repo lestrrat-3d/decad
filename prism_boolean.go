@@ -8,7 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/sketch"
 )
 
 // This file is docs/prism-boolean-design.md's analytic reduction of
@@ -29,7 +28,7 @@ import (
 // exact, whatever the operands were. A
 // consumed source segment whose own recorded range is narrower than its
 // natural domain enters the private scene at a WALKED endpoint the boolean
-// itself computed (buildPrismScene's own doc comment) rather than at the
+// itself computed (prismcells.BuildScene's own doc comment) rather than at the
 // record's own coordinate, and that computed endpoint is charged too — a
 // trimmed circular carrier (ArcSeg/CircleSeg) moves by more than a
 // coordinate displacement can state, so this file refuses that pair before
@@ -47,7 +46,7 @@ import (
 // sub-case) is prism_boolean_nesting.go — see that file's own header for why
 // it needs no assembly and no §6 audit. This file owns what every path
 // shares: G1-G4 admission, the work-budget cap, the private scene
-// construction (buildPrismScene) and the operand coordinate re-expression
+// construction (prismcells.BuildScene) and the operand coordinate re-expression
 // (prismReexpression).
 //
 // Cut/Intersect's crossing sub-case — genuine boundary contact, not clean
@@ -245,7 +244,8 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 // exactness. Split out of tryPrismBoolean only so each op's own resolve+build
 // sequence reads as one unit.
 func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	merged, sceneDelta, cutDelta, resolved, err := resolvePrismUnion(ctx, budget, pa, pb, reexpress)
+	merged, sceneDelta, cutDelta, resolved, err := prismcells.ResolveUnion(ctx, budget, pa.profile, pb.profile,
+		pa.sectionDelta, pb.sectionDelta, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -287,7 +287,7 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudge
 // exactly) and G4 (every segment of both records is line/circle/arc) — §3.1.
 // A reflected placement is no gate (docs/general-boolean-design.md §3 A4):
 // G3 reads each world normal through ApplyDir, which maps a reflection's
-// sweep direction like any other, and buildPrismScene re-winds operand B's
+// sweep direction like any other, and prismcells.BuildScene re-winds operand B's
 // record when the composed relative map is a reflection
 // (prismcells.Reexpression.Rewind). Two operands reflected by one placement share
 // it in G3's shared-axis arm and need no re-expression.
@@ -345,74 +345,6 @@ func prismPlacementOf(p prismPayload) prismplacement.Operand {
 	return prismplacement.Operand{Frame: p.frame, Xform: p.xform, Z0: p.z0, Z1: p.z1}
 }
 
-// resolvePrismUnion is §4.2's hole-free select-all/merge/chain path. It
-// returns the merged section, buildPrismScene's own per-operand §7 walk
-// charge (sceneDelta), and §7's cut displacement over the merge — the largest
-// allowance any surviving fragment's own cut parameters owe, zero when every
-// survivor is a whole edge.
-//
-// sceneDelta also carries the crossing charge (prismSceneDelta.crossing) for
-// every cut the arrangement made.
-//
-// resolved=false (err always nil in that case) means the pair's topology is
-// unresolved (§4.4), or a cut carries an amplified displacement the crossing
-// charge cannot bound or the merge then fails on: the caller falls back to
-// the mesh path with no error. A non-nil error — including ctx cancellation
-// surfacing through budget — is genuine and must propagate.
-func resolvePrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (profileRecord, prismSceneDelta, float64, bool, error) {
-	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
-	if err != nil {
-		return profileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	if err := budget.Err(); err != nil {
-		return profileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	profiles, err := prismcells.CellProfiles(ctx, budget, s)
-	if err != nil {
-		return profileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	if err := budget.Err(); err != nil {
-		return profileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	if err := budget.Step(); err != nil {
-		return profileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	if len(profiles) == 0 {
-		return profileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
-	}
-	// docs/general-boolean-design.md §3 A6: every crossing the arrangement
-	// cut is charged the input displacement it amplifies; a crossing too
-	// close to tangent for that charge sends the pair to the mesh path.
-	if ok, err := sceneDelta.ChargeCrossings(budget, tags, profiles, pa.sectionDelta, pb.sectionDelta, reexpress.Delta); err != nil || !ok {
-		return profileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-
-	// Union, hole-free operands (G6): select every returned cell, which is
-	// the union once no cell is material of neither operand. Two hole-free
-	// operands can still enclose such a cell between them, so a scene with
-	// one is unresolved (§4.2, §4.4). prismcells.Merge is the shared
-	// merge/chain tail the crossing sub-case (prism_boolean_crossing.go)
-	// reuses over its OWN, narrower selected cell set.
-	voidFree, err := prismcells.CellsHaveNoVoid(budget, tags, profiles)
-	if err != nil {
-		return profileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	if !voidFree {
-		return profileRecord{}, prismSceneDelta{}, 0, false, nil
-	}
-	if ok, err := sceneDelta.SharedSpansBounded(budget, profiles); err != nil || !ok {
-		return profileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	merged, cutDelta, resolved, err := prismcells.Merge(budget, profiles, "union")
-	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil {
-		return profileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	if !resolved {
-		return profileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: not a shape this increment covers
-	}
-	return merged, sceneDelta, cutDelta, true, nil
-}
-
 // auditPrismMergeSection runs the modify §5 audit (fillet_audit.go,
 // §6 of this design) on a merged section, reused verbatim with an empty
 // blend map — shell_offset.go's own precedent for "no cutback data, still run
@@ -441,72 +373,6 @@ func auditPrismMergeSection(budget *proofbound.WorkBudget, pa prismPayload, merg
 
 // prismSceneDelta names the internal scene charge carried through boolean paths.
 type prismSceneDelta = prismcells.SceneDelta
-
-// buildPrismScene is §4.1's scene construction: one private sketch.Sketch
-// holding both operands' recorded entities — Outer AND every Holes[i] loop of
-// each, so a Cut target's own carried-through holes and a nested Intersect
-// operand's own boundary both reach the arrangement (Union's own admitted
-// pairs are hole-free by G6, so this is a no-op widening for that path).
-// Operand A's segments are created verbatim (A's frame is the reference);
-// operand B's are re-expressed into A's frame first (prismcells.Reexpression.MapPoint) —
-// the one new rounding this design introduces. When that map is a
-// reflection, B's record is mapped and re-wound first
-// (prismcells.Reexpression.Rewind) and its entities are built from that record. Entities are deduplicated
-// WITHIN each operand (the same dedup key discipline internal/momentinput/reconstruct.go's
-// momentRecordScene already uses for one record) but NEVER across operands: a
-// coincident carrier is handed to sketch as two separate, numerically
-// matching entities, and sketch's own coincident-carrier resolution decides
-// whether they merge.
-//
-// The second return value is §4.1's tag map: which operand and which loop
-// each created entity traces to (record.go's own "outer loops CCW, holes CW"
-// convention is unaffected — this is provenance, not orientation). Union's
-// resolution ignores it; Cut/Intersect's clean-nesting match
-// (prism_boolean_nesting.go, §4.2) reads it to prove the nesting relation
-// structurally.
-//
-// Every entity is built from the segment's own WALKED geometry (walkOf),
-// never from a Partial segment's recorded Center/Start/End as if it named a
-// whole curve. A Partial segment's Start/End/Center are its SOURCE entity's
-// own defining data, verbatim (record.go), which is exactly what a whole
-// curve's fields hold too — nothing in a CurveSegment's own shape marks a
-// fragment as partial. Recreating that source curve WHOLE is correct for an
-// operand recorded straight from a live sketch profile (a genuine curve that
-// may cross the OTHER operand beyond this operand's own walked range, which
-// is exactly why momentRecordScene does the same for a single record's own
-// self-consistency check). It stops being correct once an operand is itself
-// a prior prism-boolean result: a Partial segment surviving THAT merge
-// traces to one of the ORIGINAL pre-merge operands' own walls, and the
-// portion beyond its walked range is now genuinely INTERIOR material, not a
-// boundary of anything — recreating it whole resurrects a wall this
-// operand's own solid does not have, which can silently misclassify a
-// region in whatever new arrangement it enters. Every segment's OWN walked
-// portion, and nothing more, is what this operand's boundary IS, whole or
-// partial alike — so that is what gets built.
-//
-// A segment whose recorded range narrows its own natural domain enters the
-// scene at that WALKED endpoint — a coordinate this evaluator computed, not
-// one the record states verbatim — and prismcells.WalkChargeOf's allowance for it is
-// accumulated into the returned prismSceneDelta, the largest such charge over
-// each operand's own consumed segments (§7's δ_walk).
-func buildPrismScene(budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {
-	return buildPrismSceneRegions(budget, []profileRecord{pa.profile}, []profileRecord{pb.profile}, reexpress)
-}
-
-// buildPrismSceneRegions adapts root profile records and the composed
-// placement to prismcells' private scene builder.
-func buildPrismSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []profileRecord, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {
-	s, tags, charge, err := prismcells.BuildSceneRegions(budget, sceneProfiles(regionsA), sceneProfiles(regionsB), reexpress)
-	return s, tags, prismSceneDelta{A: charge.A, B: charge.B}, err
-}
-
-func sceneProfiles(regions []profileRecord) []prismcells.SceneProfile {
-	out := make([]prismcells.SceneProfile, len(regions))
-	for i, region := range regions {
-		out[i] = prismcells.SceneProfile{Outer: region.Outer, Holes: region.Holes}
-	}
-	return out
-}
 
 // prismReexpression names the internal scene mapper used by boolean paths.
 type prismReexpression = prismcells.Reexpression

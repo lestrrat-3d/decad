@@ -460,7 +460,7 @@ func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	reexpression, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	require.NoError(t, err)
 	require.False(t, reexpression.Identity)
-	scene, _, _, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
+	scene, _, _, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), pa.profile, pb.profile, reexpression)
 	require.NoError(t, err)
 	profiles, err := prismcells.ProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
@@ -595,7 +595,7 @@ func TestPrismUnionDisplacedSourceSplitChargesTheCrossing(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, reexpression.Identity, "the second union must take the identity re-expression path")
 
-	scene, _, _, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), first, shallow, reexpression)
+	scene, _, _, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), first.profile, shallow.profile, reexpression)
 	require.NoError(t, err)
 	profiles, err := prismcells.ProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
@@ -710,7 +710,7 @@ func TestPrismProfilesContextWaitsForArrangementAfterCancellation(t *testing.T) 
 // requireMergedLoopSegmentsJoin is T1's own invariant, reused by T3: whenever
 // a merge resolves (tryPrismBoolean's ok == true), every consecutive pair of
 // WHOLE LineSeg segments in the merged Outer loop joins bit-exactly — the
-// same property falsifyLoopJoins now proves before resolvePrismUnion returns.
+// same property falsifyLoopJoins now proves before prismcells.ResolveUnion returns.
 // It reads the recorded coordinates directly (segs[i].End == segs[i+1].Start,
 // wrap included), the same comparison loopJoinPointsAgree makes for a
 // same-source pair.
@@ -733,7 +733,7 @@ func requireMergedLoopSegmentsJoin(t *testing.T, segs []curveSegment) {
 // authored directly on the record, never computed by any merge. sketch's own
 // arrangement still accepts the shape as one region on its proximity
 // threshold (docs/sketch-seam-design.md), so the defect survives all the way
-// to resolvePrismUnion's own recorded chain.
+// to prismcells.ResolveUnion's own recorded chain.
 func synthGapRectLoop(u0, v0, u1, v1, gap float64) loopRecord {
 	return loopRecord{Segments: []curveSegment{
 		lineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v0}, TStart: 0, TEnd: 1},
@@ -744,12 +744,12 @@ func synthGapRectLoop(u0, v0, u1, v1, gap float64) loopRecord {
 }
 
 // TestPrismUnionMergedLoopJunctionsClose is RB9's own guard, pinned directly
-// against resolvePrismUnion's wiring rather than against a live cut-fragment
+// against prismcells.ResolveUnion's wiring rather than against a live cut-fragment
 // fixture.
 //
 // The one LIVE-reachable way to produce this defect is an operand recorded as
 // Partial cut fragments (drawn as overshooting lines sketch trims at both
-// ends): buildPrismScene's walkOf interpolates each surviving fragment's
+// ends): prismcells.BuildScene's walkOf interpolates each surviving fragment's
 // walked endpoint independently, from its own entity's Start/End and T, so
 // two fragments naming the same corner can round to bit-different floats
 // before the merge ever sees them. That is fu157's class (#158): welding the
@@ -840,7 +840,7 @@ func TestPrismUnionCleanOperandsMergedLoopClosesExactly(t *testing.T) {
 // computes, not one either wall's record states outright.
 //
 // Every one of those corners must come out the SAME coordinate on every host,
-// or the loop buildPrismScene hands back no longer closes and RecordProfile
+// or the loop prismcells.BuildScene hands back no longer closes and RecordProfile
 // refuses it before the charge under test is ever reached. Each corner is
 // reached twice by separate arithmetic — once along each of the two walls that
 // meet there, through lerp2's start + t·(end − start) — and a host that
@@ -1092,7 +1092,7 @@ func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
 	require.True(t, reexpression.Identity, "both operands share one frame with no placement between them")
 	require.Zero(t, reexpression.Delta, "δ_reexpress must be zero")
 
-	_, _, sceneDelta, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
+	_, _, sceneDelta, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), pa.profile, pb.profile, reexpression)
 	require.NoError(t, err)
 	require.Positive(t, sceneDelta.A, "operand A's own trimmed walls must carry a walk charge")
 	require.Zero(t, sceneDelta.B, "operand B is drawn whole, so δ_walkB is zero")
@@ -1288,7 +1288,7 @@ func TestWalkChargeOf(t *testing.T) {
 // TestPrismCircularWalkChargeImpliesRefusal mechanises the reach §7 states for
 // δ_walk: a positive charge is only ever computed over a trimmed LineSeg,
 // because every circular carrier prismcells.WalkChargeOf could charge is one
-// prismcells.ProfileHasTrimmedCircularSource refuses before buildPrismScene runs
+// prismcells.ProfileHasTrimmedCircularSource refuses before prismcells.BuildScene runs
 // (§4.1). Over the circular ranges either side of that boundary, the charge
 // being positive and the refusal firing must be the SAME condition — so a
 // circular carrier admitted into a scene always charges zero, and the two
@@ -1725,7 +1725,7 @@ func TestPrismBooleanNearWholeCircleSourceFallsBack(t *testing.T) {
 // walk charge alone: the trimmed-source operand A from
 // prismSplitLeftCellBody, unioned with a box that crosses its right wall
 // square, builds analytically, and its sectionDelta covers A's walk
-// charge. Shown to fail with resolvePrismUnion's former
+// charge. Shown to fail with prismcells.ResolveUnion's former
 // split-boundary reroute restored.
 func TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing(t *testing.T) {
 	t.Parallel()
@@ -1741,7 +1741,7 @@ func TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, reexpression.Identity, "both operands share one frame with no placement between them")
 
-	scene, _, sceneDelta, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
+	scene, _, sceneDelta, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), pa.profile, pb.profile, reexpression)
 	require.NoError(t, err)
 	require.Positive(t, sceneDelta.A, "operand A's own trimmed bottom/top walls must carry a walk charge")
 	profiles, err := prismcells.ProfilesContext(t.Context(), scene.Profiles)
@@ -1898,7 +1898,7 @@ func internalPolyPrismBody(t *testing.T, doc *Document, pts [][2]float64, h floa
 // TestPrismOverlapVolumeDeclinesExactlyTangentPair is §4.5's own "what the
 // reading declines" paragraph: two coplanar prisms whose sections meet along
 // a shared wall but enclose no common area must never publish a zero-volume
-// overlap. Whichever internal reason declines it — resolvePrismCrossingCells
+// overlap. Whichever internal reason declines it — prismcells.ResolveCrossingCells
 // reporting unresolved (the coincident-carrier case its own header names) or
 // resolved with an empty selected set — prismOverlapVolume's own contract is
 // the same either way: ok=false, err=nil.

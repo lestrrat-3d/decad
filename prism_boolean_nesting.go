@@ -64,7 +64,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 }
 
 // This file is docs/prism-boolean-design.md §4.2's "clean" sub-case for
-// Cut and Intersect: the structural whole-loop match against buildPrismScene's
+// Cut and Intersect: the structural whole-loop match against prismcells.BuildScene's
 // own tag map (prism_boolean.go), reusing that file's scene construction, G1-G4
 // admission and work-budget/cancellation machinery. There is no assembly and no
 // §6 build-time audit on this path — the candidate is one s.Profiles() result
@@ -79,7 +79,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 // A structurally-matched loop's every edge is Whole (§4.2's own match
 // condition), so the matched profile carries no cut charge (§7's δ_cut) —
 // but a consumed source segment whose OWN recorded range already narrows its
-// natural domain still entered buildPrismScene's private scene at a walked
+// natural domain still entered prismcells.BuildScene's private scene at a walked
 // endpoint the boolean computed, and that charge (§7's δ_walk,
 // prismcells.WalkChargeOf) composes into both ops' own sectionDelta
 // here, exactly as it does on Union's own merge path. A scene with a split
@@ -96,7 +96,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 // comes back unresolved, this tries prism_boolean_crossing.go's
 // edge-orientation classifier before giving up.
 func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	s, match, sceneDelta, resolved, err := resolvePrismCut(ctx, budget, target, tool, reexpress)
+	s, match, sceneDelta, resolved, err := prismcells.ResolveCut(ctx, budget, target.profile, tool.profile, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -151,7 +151,7 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 // neither direction matches, this tries prism_boolean_crossing.go's
 // edge-orientation classifier before giving up.
 func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	s, match, sceneDelta, nestedIsB, resolved, err := resolvePrismIntersect(ctx, budget, pa, pb, reexpress)
+	s, match, sceneDelta, nestedIsB, resolved, err := prismcells.ResolveIntersect(ctx, budget, pa.profile, pb.profile, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -201,113 +201,6 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 		sectionDelta: sectionDelta,
 	}
 	return result, true, nil
-}
-
-// resolvePrismCut is §4.2's clean-nesting match for Cut(target, tool): when
-// the tool's boundary does not touch the target's anywhere, the arrangement
-// leaves both operands' original loops completely unmodified, and decad
-// finds the one s.Profiles() result whose Outer structurally reproduces the
-// target's own Outer and whose Holes structurally reproduce the target's own
-// Holes plus EXACTLY ONE further hole reproducing the tool's own Outer (G6
-// keeps the tool hole-free, so that one hole is the tool's whole solid).
-// That profile IS the result, verbatim — no assembly.
-//
-// This is the discriminator the disjoint-footprint trap needs: a structural
-// match on the tool's own cell alone would not by itself prove nesting, since
-// two disjoint hole-free footprints also arrange into two untouched cells,
-// each reporting its own Outer whole. Requiring the target's OWN cell to
-// carry the tool's Outer as one of ITS holes is what a disjoint pair can
-// never produce — the arrangement of two disjoint footprints yields two
-// separate cells, neither with a hole at all.
-//
-// resolved=false (err always nil in that case) means the pair's topology is
-// unresolved (§4.4) — the caller falls back to the mesh path with no error.
-// A non-nil error is always genuine and must propagate. The returned
-// *sketch.Sketch is the private scene the match was found in, needed to
-// authenticate it through RecordProfile, and sceneDelta is buildPrismScene's
-// own per-operand §7 walk charge.
-func resolvePrismCut(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, prismSceneDelta, bool, error) {
-	s, match, _, delta, resolved, err := resolvePrismCutWithTags(ctx, budget, target, tool, reexpress)
-	return s, match, delta, resolved, err
-}
-
-// resolvePrismCutWithTags also returns the scene's entity-origin map. A
-// stacked result uses it to retain the target's already recorded whole loops
-// while taking only the new tool hole from RecordProfile's authenticated cell.
-func resolvePrismCutWithTags(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, map[sketch.Entity]prismcells.Origin, prismSceneDelta, bool, error) {
-	s, profiles, tags, sceneDelta, err := prismCutCells(ctx, budget, target, tool, reexpress)
-	if err != nil {
-		return nil, nil, nil, prismSceneDelta{}, false, err
-	}
-	match, resolved, err := prismcells.MatchCut(budget, tags, profiles, len(target.profile.Holes))
-	if err != nil || !resolved {
-		return nil, nil, nil, prismSceneDelta{}, false, err
-	}
-	return s, match, tags, sceneDelta, true, nil
-}
-
-// prismCutCells keeps both the scene and sketch's arranged cells available to
-// the clean and enclosing whole-loop matches without arranging a pair twice.
-func prismCutCells(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload,
-	reexpress *prismReexpression) (*sketch.Sketch, []*sketch.Profile,
-	map[sketch.Entity]prismcells.Origin, prismSceneDelta, error) {
-	s, tags, sceneDelta, err := buildPrismScene(budget, target, tool, reexpress)
-	if err != nil {
-		return nil, nil, nil, prismSceneDelta{}, err
-	}
-	if err := budget.Err(); err != nil {
-		return nil, nil, nil, prismSceneDelta{}, err
-	}
-	profiles, err := prismcells.ProfilesContext(ctx, s.Profiles)
-	if err != nil {
-		return nil, nil, nil, prismSceneDelta{}, err
-	}
-	if err := budget.Err(); err != nil {
-		return nil, nil, nil, prismSceneDelta{}, err
-	}
-	return s, profiles, tags, sceneDelta, nil
-}
-
-// resolvePrismIntersect is §4.2's clean-nesting match for Intersect(a, b):
-// run the search in both directions (X=a,Y=b and X=b,Y=a) since Intersect's
-// relation is symmetric (§3.2) — a caller may pass the smaller body first.
-// Each direction asks the same question resolvePrismCut does for its own
-// nesting proof: is X's own cell reported with Y's Outer as one further hole?
-// That is what closes the disjoint-footprint trap here too. Once a direction
-// proves nesting, the RESULT is a separate s.Profiles() candidate: the
-// profile whose Outer reproduces the NESTED operand's own Outer, with its
-// admitted hole if present — that operand's own cell, untouched. If both
-// directions match,
-// or neither does, the topology is unresolved (§4.4).
-//
-// resolved=false (err always nil in that case) means the pair's topology is
-// unresolved. nestedIsB reports which operand the result traces to, for
-// §7's displacement selection. The returned *sketch.Sketch is the private
-// scene the match was found in.
-func resolvePrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (s *sketch.Sketch, match *sketch.Profile, sceneDelta prismSceneDelta, nestedIsB, resolved bool, err error) {
-	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
-	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, false, err
-	}
-	if err := budget.Err(); err != nil {
-		return nil, nil, prismSceneDelta{}, false, false, err
-	}
-	profiles, err := prismcells.ProfilesContext(ctx, s.Profiles)
-	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, false, err
-	}
-	if err := budget.Err(); err != nil {
-		return nil, nil, prismSceneDelta{}, false, false, err
-	}
-	if len(profiles) == 0 {
-		return nil, nil, prismSceneDelta{}, false, false, nil
-	}
-
-	match, nestedIsB, resolved, err = prismcells.MatchIntersect(budget, tags, profiles, len(pb.profile.Holes))
-	if err != nil || !resolved {
-		return nil, nil, prismSceneDelta{}, false, false, err
-	}
-	return s, match, sceneDelta, nestedIsB, true, nil
 }
 
 // prismRecordProfileContext makes RecordProfile's own internal re-arrangement

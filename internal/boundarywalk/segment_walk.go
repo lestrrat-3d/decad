@@ -297,7 +297,7 @@ var errFreeformWalkUncounted = fmt.Errorf(
 //
 // This is the rule lerp2 (moments.go) applies at a line's own bounds, and the
 // rule seam.go's edgeJoin applies when it reads an uncut bound off the record
-// rather than off sketch's node. It matters for the same reason: buildPrismScene
+// rather than off sketch's node. It matters for the same reason: prismcells.BuildScene
 // (prism_boolean.go) creates one sketch point per walked endpoint, so a walk
 // that missed the vertex two segments share would offer sketch two points where
 // the record states one, and RecordProfile would then refuse the region the
