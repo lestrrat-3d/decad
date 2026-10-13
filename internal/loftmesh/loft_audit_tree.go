@@ -1,6 +1,7 @@
 package loftmesh
 
 import (
+	"reflect"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -237,6 +238,19 @@ type flatTree struct {
 	maxID       []int32
 	order       []int32
 	box         []float64 // six per position in order, as nbox
+
+	// The fields below describe the subtree of each node. When inter is
+	// non-empty (interOK), every member box and every descendant node box
+	// contains it, so a query box that overlaps it overlaps all of them.
+	minID   []int32   // smallest member id
+	subN    []int32   // nodes in the subtree, the node included
+	inter   []float64 // six per node: intersection of the member boxes
+	interOK []bool    // inter is non-empty; false when any bound is NaN
+
+	// sorted holds each node's member ids ascending, at sortOff. It is built
+	// by ensureSorted on the calling goroutine before any worker reads it.
+	sorted  []int32
+	sortOff []int32
 }
 
 // flatWalkStack is the walk stack depth: a node is replaced by two children,
@@ -265,7 +279,117 @@ func newFlatTree(t *treeScan) *flatTree {
 		b := t.boxes[j]
 		f.box = append(f.box, b[0].X, b[0].Y, b[0].Z, b[1].X, b[1].Y, b[1].Z)
 	}
+	f.fillSubtrees(t)
 	return f
+}
+
+// fillSubtrees fills minID, subN, inter and interOK. build appends a parent
+// before its children, so a descending loop sees children first.
+func (f *flatTree) fillSubtrees(t *treeScan) {
+	n := len(t.nodes)
+	f.minID = make([]int32, n)
+	f.subN = make([]int32, n)
+	f.inter = make([]float64, 6*n)
+	f.interOK = make([]bool, n)
+	for k := n - 1; k >= 0; k-- {
+		nd := t.nodes[k]
+		in := f.inter[6*k : 6*k+6]
+		if nd.left < 0 {
+			mn := t.order[nd.start]
+			b := t.boxes[mn]
+			in[0], in[1], in[2], in[3], in[4], in[5] = b[0].X, b[0].Y, b[0].Z, b[1].X, b[1].Y, b[1].Z
+			for _, j := range t.order[nd.start:nd.end] {
+				mn = min(mn, j)
+				b := t.boxes[j]
+				in[0], in[1], in[2] = max(in[0], b[0].X), max(in[1], b[0].Y), max(in[2], b[0].Z)
+				in[3], in[4], in[5] = min(in[3], b[1].X), min(in[4], b[1].Y), min(in[5], b[1].Z)
+			}
+			f.minID[k] = mn
+			f.subN[k] = 1
+		} else {
+			l, r := nd.left, nd.right
+			f.minID[k] = min(f.minID[l], f.minID[r])
+			f.subN[k] = 1 + f.subN[l] + f.subN[r]
+			a, b := f.inter[6*l:6*l+6], f.inter[6*r:6*r+6]
+			for c := range 3 {
+				in[c] = max(a[c], b[c])
+				in[c+3] = min(a[c+3], b[c+3])
+			}
+		}
+		// min and max propagate NaN, and a comparison with NaN is false.
+		f.interOK[k] = in[0] <= in[3] && in[1] <= in[4] && in[2] <= in[5]
+	}
+}
+
+// ensureSorted builds the per-node ascending member ids. It writes the
+// flatTree, so it runs on one goroutine before workers read the tree.
+func (f *flatTree) ensureSorted() {
+	if f.sortOff != nil || len(f.left) == 0 {
+		return
+	}
+	n := len(f.left)
+	f.sortOff = make([]int32, n)
+	total := 0
+	for k := range n {
+		f.sortOff[k] = int32(total)
+		total += int(f.end[k] - f.start[k])
+	}
+	f.sorted = make([]int32, total)
+	for k := n - 1; k >= 0; k-- {
+		dst := f.sortedOf(int32(k))
+		if f.left[k] < 0 {
+			copy(dst, f.order[f.start[k]:f.end[k]])
+			slices.Sort(dst)
+			continue
+		}
+		a, b := f.sortedOf(f.left[k]), f.sortedOf(f.right[k])
+		x, y := 0, 0
+		for o := range dst {
+			if y >= len(b) || (x < len(a) && a[x] < b[y]) {
+				dst[o] = a[x]
+				x++
+			} else {
+				dst[o] = b[y]
+				y++
+			}
+		}
+	}
+}
+
+// sortedOf returns node k's member ids ascending; ensureSorted must have run.
+func (f *flatTree) sortedOf(k int32) []int32 {
+	return f.sorted[f.sortOff[k] : int(f.sortOff[k])+int(f.end[k]-f.start[k])]
+}
+
+// pairWork is the unit count of pairWalker.walk over two subtrees of p and q
+// members (one subtree of p members when self) in which every node pair and
+// member pair overlaps. The tree splits at the middle and makes a leaf from
+// treeLeafSize members or fewer, and walk's split rule reads only sizes and
+// leafness, so the count depends on the sizes alone. memo caches by size.
+func pairWork(memo map[[3]int32]uint64, p, q int32, self bool) uint64 {
+	key := [3]int32{p, q, 0}
+	if self {
+		key[2] = 1
+	}
+	if w, ok := memo[key]; ok {
+		return w
+	}
+	var w uint64
+	switch {
+	case self && p <= treeLeafSize:
+		w = 1 + uint64(p)*uint64(p-1)/2
+	case self:
+		l, r := p/2, p-p/2
+		w = 1 + pairWork(memo, l, l, true) + pairWork(memo, l, r, false) + pairWork(memo, r, r, true)
+	case p <= treeLeafSize && q <= treeLeafSize:
+		w = 1 + uint64(p)*uint64(q)
+	case q <= treeLeafSize || (p > treeLeafSize && p >= q):
+		w = 1 + pairWork(memo, p/2, q, false) + pairWork(memo, p-p/2, q, false)
+	default:
+		w = 1 + pairWork(memo, p, q/2, false) + pairWork(memo, p, q-q/2, false)
+	}
+	memo[key] = w
+	return w
 }
 
 func box6(b [2]r3.Vec) [6]float64 {
@@ -298,6 +422,17 @@ func (f *flatTree) walkRowAppend(row [2]r3.Vec, i int, limit uint64, out []int32
 		}
 		if f.maxID[node] <= i32 || !boxes6Overlap(bi[:], f.nbox[6*int(node):6*int(node)+6:6*int(node)+6]) {
 			continue
+		}
+		if f.minID[node] > i32 && f.interOK[node] &&
+			boxes6Overlap(bi[:], f.inter[6*int(node):6*int(node)+6:6*int(node)+6]) {
+			// Every member and descendant box contains a point of the query
+			// box, so the walk below would visit all of them and keep all.
+			extra := uint64(f.subN[node]-1) + uint64(f.end[node]-f.start[node])
+			if scanned+extra <= limit {
+				scanned += extra
+				out = append(out, f.order[f.start[node]:f.end[node]]...)
+				continue
+			}
 		}
 		if l := f.left[node]; l >= 0 {
 			stack[sp] = f.right[node]
@@ -342,6 +477,19 @@ func (f *flatTree) walkRow(row [2]r3.Vec, i int, limit uint64, fn func(j int)) (
 		if f.maxID[node] <= i32 || !boxes6Overlap(bi[:], f.nbox[6*int(node):6*int(node)+6:6*int(node)+6]) {
 			continue
 		}
+		if f.minID[node] > i32 && f.interOK[node] &&
+			boxes6Overlap(bi[:], f.inter[6*int(node):6*int(node)+6:6*int(node)+6]) {
+			// Every member and descendant box contains a point of the query
+			// box, so the walk below would visit all of them and keep all.
+			extra := uint64(f.subN[node]-1) + uint64(f.end[node]-f.start[node])
+			if scanned+extra <= limit {
+				scanned += extra
+				for _, j := range f.order[f.start[node]:f.end[node]] {
+					fn(int(j))
+				}
+				continue
+			}
+		}
 		if l := f.left[node]; l >= 0 {
 			stack[sp] = f.right[node]
 			stack[sp+1] = l
@@ -365,12 +513,74 @@ func (f *flatTree) walkRow(row [2]r3.Vec, i int, limit uint64, fn func(j int)) (
 	return scanned, false
 }
 
+// walkRowCount is walkRow counting the partners instead of passing them to
+// fn. At an exceed it returns the count reached so far, as walkRow's callbacks
+// would have made.
+func (f *flatTree) walkRowCount(row [2]r3.Vec, i int, limit uint64) (int, uint64, bool) {
+	if len(f.left) == 0 {
+		return 0, 0, false
+	}
+	bi := box6(row)
+	var stack [flatWalkStack]int32
+	sp := 1
+	var scanned uint64
+	count := 0
+	i32 := int32(i)
+	for sp > 0 {
+		sp--
+		node := stack[sp]
+		scanned++
+		if scanned > limit {
+			return count, scanned, true
+		}
+		if f.maxID[node] <= i32 || !boxes6Overlap(bi[:], f.nbox[6*int(node):6*int(node)+6:6*int(node)+6]) {
+			continue
+		}
+		if f.minID[node] > i32 && f.interOK[node] &&
+			boxes6Overlap(bi[:], f.inter[6*int(node):6*int(node)+6:6*int(node)+6]) {
+			// Every member and descendant box contains a point of the query
+			// box, so the walk below would visit all of them and keep all.
+			extra := uint64(f.subN[node]-1) + uint64(f.end[node]-f.start[node])
+			if scanned+extra <= limit {
+				scanned += extra
+				count += int(f.end[node] - f.start[node])
+				continue
+			}
+		}
+		if l := f.left[node]; l >= 0 {
+			stack[sp] = f.right[node]
+			stack[sp+1] = l
+			sp += 2
+			continue
+		}
+		for k := int(f.start[node]); k < int(f.end[node]); k++ {
+			j := f.order[k]
+			if j <= i32 {
+				continue
+			}
+			scanned++
+			if scanned > limit {
+				return count, scanned, true
+			}
+			if boxes6Overlap(bi[:], f.box[6*k:6*k+6:6*k+6]) {
+				count++
+			}
+		}
+	}
+	return count, scanned, false
+}
+
 // pairWalker is visit's walk(a, b) without a budget, as an iterative loop.
 type pairWalker struct {
 	t       *treeScan
 	limit   uint64
 	scanned uint64
 	fn      func(i, j int)
+	// counts, when non-nil, replaces fn for subtrees whose member boxes all
+	// overlap: keep accepts every pair, and counts[i+1] takes the pairs whose
+	// lower index is i. memo is private to the walker.
+	counts []int32
+	memo   map[[3]int32]uint64
 }
 
 // walk visits the node pair (a, b) and everything below it in visit's order.
@@ -391,6 +601,16 @@ func (w *pairWalker) walk(a, b int) bool {
 		if !boxes6Overlap(f.nbox[6*a:6*a+6:6*a+6], f.nbox[6*b:6*b+6:6*b+6]) {
 			continue
 		}
+		if w.counts != nil && f.interOK[a] && f.interOK[b] &&
+			boxes6Overlap(f.inter[6*a:6*a+6:6*a+6], f.inter[6*b:6*b+6:6*b+6]) {
+			// Every node pair and member pair below (a, b) overlaps.
+			extra := pairWork(w.memo, f.end[a]-f.start[a], f.end[b]-f.start[b], a == b) - 1
+			if w.scanned+extra <= w.limit {
+				w.scanned += extra
+				w.addAll(int32(a), int32(b))
+				continue
+			}
+		}
 		la, lb := f.left[a], f.left[b]
 		if la < 0 && lb < 0 {
 			if w.leafPairs(a, b) {
@@ -410,6 +630,29 @@ func (w *pairWalker) walk(a, b int) bool {
 		}
 	}
 	return false
+}
+
+// addAll counts every member pair of (a, b) at its lower index, as fn would.
+func (w *pairWalker) addAll(a, b int32) {
+	f := w.t.flat
+	ids := f.sortedOf(a)
+	if a == b {
+		n := int32(len(ids))
+		for k, x := range ids {
+			w.counts[x+1] += n - 1 - int32(k)
+		}
+		return
+	}
+	other := f.sortedOf(b)
+	for _, pair := range [2][2][]int32{{ids, other}, {other, ids}} {
+		p := 0
+		for _, x := range pair[0] {
+			for p < len(pair[1]) && pair[1][p] < x {
+				p++
+			}
+			w.counts[x+1] += int32(len(pair[1]) - p)
+		}
+	}
 }
 
 // leafPairs is walk's leaf-leaf case: every member pair of the two leaves.
@@ -478,6 +721,12 @@ func (t treeScan) pairTasks(want int) ([][2]int, uint64) {
 	return tasks, used
 }
 
+// isKeepEveryPair reports whether keep is keepEveryPair. A false answer only
+// forgoes the count shortcut.
+func isKeepEveryPair(keep func(i, j int) bool) bool {
+	return reflect.ValueOf(keep).Pointer() == reflect.ValueOf(keepEveryPair).Pointer()
+}
+
 // countParallel is sweepCandidateCounts' first pass over the tree with the
 // walk split across workers. Workers never touch budget; the steps visit
 // would take are replayed here, in count, and the result equals the serial
@@ -486,6 +735,10 @@ func (t treeScan) countParallel(budget *proofbound.WorkBudget, f int, keep func(
 	limit uint64, workers int) (sweepCount, error) {
 	if len(t.nodes) == 0 {
 		return sweepCount{starts: make([]int, f+1)}, nil
+	}
+	every := isKeepEveryPair(keep)
+	if every {
+		t.flat.ensureSorted()
 	}
 	tasks, used := t.pairTasks(256)
 	type part struct {
@@ -504,6 +757,9 @@ func (t treeScan) countParallel(budget *proofbound.WorkBudget, f int, keep func(
 		}
 		for k := blk; k < len(tasks); k += blocks {
 			w := pairWalker{t: &t, limit: limit, fn: fn}
+			if every {
+				w.counts, w.memo = local, map[[3]int32]uint64{}
+			}
 			parts[k].exceeded = w.walk(tasks[k][0], tasks[k][1])
 			parts[k].work = w.scanned
 		}
