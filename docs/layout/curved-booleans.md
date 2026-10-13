@@ -38,4 +38,5 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_seam_checked.go` | Rechecks live source face pairs and the complete radial arc station run before building open seam patches. See loft-face-sections design. |
 | `revolve_loft_faces_blank_shell.go` | Builds and audits a closed Revolve shell with a source-aligned radial seam. See loft-face-sections design. |
 | `revolve_loft_faces_blank_shell_caps.go` | Splits the closed Revolve shell at every live occupied heel-cap circle. See loft-face-sections design. |
+| `revolve_loft_faces_cap_seam_vertices.go` | Bounds held heel-cap endpoints against live source boxes. See loft-face-sections design. |
 | `revolve_loft_faces_shell_manifest.go` | Compares every retained Revolve and LoftFaces source-side cell against current producers. See loft-face-sections design. |
