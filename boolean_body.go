@@ -318,19 +318,17 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	return buildFacetedBody(ctx, d, ref, next)
 }
 
-// facetedFacePerimeterUpper includes each edge's length error and rounds each
-// addition outward before the perimeter enters an area bound.
+// facetedFacePerimeterUpper reads every loop's edge lengths and error bounds
+// and returns proofbound.PerimeterUpper over them.
 func facetedFacePerimeterUpper(f *Face, budget *proofbound.WorkBudget) (float64, error) {
-	perimeter := 0.0
+	var lengths, bounds []float64
 	for _, l := range f.loops {
 		for _, ce := range l.coedges {
-			if err := budget.Step(); err != nil {
-				return 0, err
-			}
-			perimeter = proofbound.AbsSumUpper(perimeter, ce.edge.length, ce.edge.lengthBound)
+			lengths = append(lengths, ce.edge.length)
+			bounds = append(bounds, ce.edge.lengthBound)
 		}
 	}
-	return perimeter, nil
+	return proofbound.PerimeterUpper(budget, lengths, bounds)
 }
 
 // buildFacetedBody assembles the Faceted body from the payload: exact

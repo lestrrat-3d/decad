@@ -28,7 +28,7 @@ func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload
 	}
 	edge := edges[0]
 	if _, ok := edge.curve.(Line3); !ok || edge.start == nil || edge.end == nil ||
-		!p8TopFrontEdge(edge) {
+		!capedge.P8TopFrontEdge(edge.start.position, edge.end.position) {
 		return nil, false, nil
 	}
 	// The source integers and admitted quarter-millimeter radii are binary exact.
@@ -76,12 +76,6 @@ func p8QuarterRadius(radius float64) bool {
 	default:
 		return false
 	}
-}
-
-func p8TopFrontEdge(edge *Edge) bool {
-	a, b := edge.start.position, edge.end.position
-	return (a == r3.NewVec(3, 0, 20) && b == r3.NewVec(37, 0, 20)) ||
-		(a == r3.NewVec(37, 0, 20) && b == r3.NewVec(3, 0, 20))
 }
 
 // isP8RoundedBrep compares every stored field, including segment domains,
