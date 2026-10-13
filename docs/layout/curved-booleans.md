@@ -38,7 +38,8 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_seam_vertices.go` | Places one shared held vertex row inside a certified radial arc root bracket and bounds each source side. See loft-face-sections design. |
 | `revolve_loft_faces_seam_patch.go` | Splits open Revolve and LoftFaces source strips through shared seam vertices. See loft-face-sections design. |
 | `revolve_loft_faces_seam_checked.go` | Rechecks live source face pairs and the complete radial arc station run before building open seam patches. See loft-face-sections design. |
-| `revolve_loft_faces_blank_shell.go` | Builds and audits a closed Revolve shell with a source-aligned radial seam. See loft-face-sections design. |
+| `revolve_loft_faces_blank_shell.go` | Builds and audits a closed Revolve shell with source-aligned meridian cuts. See revolve-loft-contact-graph design. |
+| `revolve_loft_faces_blank_shell_multi.go` | Binds all contact graph runs and occupied cap arcs into one audited Revolve shell. See revolve-loft-contact-graph design. |
 | `revolve_loft_faces_blank_shell_caps.go` | Splits the closed Revolve shell at every live occupied heel-cap circle. See loft-face-sections design. |
 | `revolve_loft_faces_cap_seam_vertices.go` | Bounds held heel-cap endpoints against live source boxes. See loft-face-sections design. |
 | `revolve_loft_faces_cap_ray_order.go` | Checks inserted cap rays against source-box angular order. See loft-face-sections design. |

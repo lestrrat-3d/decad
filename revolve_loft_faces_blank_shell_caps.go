@@ -30,25 +30,8 @@ func revolveLoftFacesBlankShellWithCapRings(ctx context.Context,
 	if selected == nil {
 		return nil, false, nil
 	}
-	var cuts []revolveLoftFacesShellCut
-	for _, event := range graph.arcs {
-		pair := graph.pairs[event.pairID]
-		arc := event.arc
-		if arc == nil || arc.circle.tool != 1 || arc.circle.sourceMiss ||
-			arc.circle.blankFace != pair.blankFace ||
-			arc.circle.capFace != pair.trimmedFace ||
-			arc.circle.span != pair.sectionIndex ||
-			event.endpointIDs[0] == event.endpointIDs[1] ||
-			event.endpointCellIDs[0] == event.endpointCellIDs[1] ||
-			arc.circle.x == nil || arc.circle.radius == nil ||
-			arc.circle.radius.Sign() <= 0 {
-			return nil, false, nil
-		}
-		cuts = append(cuts, revolveLoftFacesShellCut{
-			sectionIndex: pair.sectionIndex, x: arc.circle.x,
-			radius: arc.circle.radius, arc: arc})
-	}
-	if len(cuts) == 0 {
+	cuts, valid := revolveLoftFacesGraphCapCuts(graph)
+	if !valid {
 		return nil, false, nil
 	}
 	shell, built, err := revolveLoftFacesBlankShellAtArcWithCuts(ctx, proof, graph.manifest,
@@ -64,6 +47,39 @@ func revolveLoftFacesBlankShellWithCapRings(ctx context.Context,
 		return nil, false, bindErr
 	}
 	return shell, true, nil
+}
+
+func revolveLoftFacesGraphCapCuts(graph *revolveLoftFacesContactGraph) (
+	[]revolveLoftFacesShellCut, bool,
+) {
+	if graph == nil {
+		return nil, false
+	}
+	var cuts []revolveLoftFacesShellCut
+	for _, event := range graph.arcs {
+		if event.pairID < 0 || event.pairID >= len(graph.pairs) {
+			return nil, false
+		}
+		pair := graph.pairs[event.pairID]
+		arc := event.arc
+		if arc == nil || arc.circle.tool != 1 || arc.circle.sourceMiss ||
+			arc.circle.blankFace != pair.blankFace ||
+			arc.circle.capFace != pair.trimmedFace ||
+			arc.circle.span != pair.sectionIndex ||
+			event.endpointIDs[0] == event.endpointIDs[1] ||
+			event.endpointCellIDs[0] == event.endpointCellIDs[1] ||
+			arc.circle.x == nil || arc.circle.radius == nil ||
+			arc.circle.radius.Sign() <= 0 {
+			return nil, false
+		}
+		cuts = append(cuts, revolveLoftFacesShellCut{
+			sectionIndex: pair.sectionIndex, x: arc.circle.x,
+			radius: arc.circle.radius, arc: arc})
+	}
+	if len(cuts) == 0 {
+		return nil, false
+	}
+	return cuts, true
 }
 
 // The certified cap arc selects one of the two walks between its source

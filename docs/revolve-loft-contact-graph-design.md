@@ -35,6 +35,22 @@ must name exactly one ring vertex and retain its unique tied side-cell ID.
 The ring's held point and blank-side bound are checked. Duplicate or missing
 shell, patch, ring, or side-cell anchors refuse.
 
+The multi-run blank-shell consumer inserts every graph whole-arc run and every
+occupied cap arc into one closed Revolve shell. Each cut must lie strictly
+inside its authenticated meridian section. Cuts on one section are sorted by
+their exact meridian fractions; equal fractions refuse. One angular grid is
+shared by every ring. Stations from different runs may use the same exact ray
+and still name different held vertices on their own rings. Two stations from
+one run or a cap endpoint and a station on one ray refuse. Every station and
+cap source box must stay in strict angular order beside its neighboring rays.
+
+The constructor binds every station ID to its shell vertex and both checked
+open-patch vertices, and binds each cap endpoint ID to its ring vertex and
+live side cell. Each shell triangle records its Revolve section, adjacent
+ring band, angular ray interval and triangle half. The shell repeats the
+orientation, crossing, Euler, positive-volume and face-bound audits. These
+records do not classify a triangle as retained or removed.
+
 A stored graph is checked against a newly certified source and census before
 later use. The comparison includes every pair verdict, cell owner and exact
 interval, complete station run, and occupied cap arc. A changed source
