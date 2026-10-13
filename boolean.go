@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 
 	"github.com/lestrrat-3d/r3"
@@ -791,7 +792,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		return booleanEvaluation{}, err
 	}
 	if spiralJoin != nil {
-		ok, err := spiralScopeWidenedContacts(ctx, bmA, bmB, memo,
+		ok, err := spiralsector.ScopeWidenedContacts(ctx, bmA, bmB, memo,
 			spiralJoin.allowed, tolMM)
 		if err != nil {
 			return booleanEvaluation{}, err
@@ -802,7 +803,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		}
 	}
 	if combinedAdmission != nil {
-		ok, err := spiralScopeWidenedContacts(ctx, bmA, bmB, memo,
+		ok, err := spiralsector.ScopeWidenedContacts(ctx, bmA, bmB, memo,
 			combinedAdmission.allowed, tolMM, 24*len(combinedAdmission.source.tools))
 		if err != nil {
 			return booleanEvaluation{}, err
@@ -902,7 +903,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		return booleanEvaluation{}, err
 	}
 	if spiralJoin != nil {
-		ok, err := spiralScopeOutputSwitches(ctx, stitched,
+		ok, err := spiralsector.ScopeOutputSwitches(ctx, stitched,
 			len(a.Faces()), spiralJoin.allowed)
 		if err != nil {
 			return booleanEvaluation{}, err
@@ -921,7 +922,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		}
 	}
 	if combinedAdmission != nil {
-		ok, err := spiralScopeOutputSwitches(ctx, stitched,
+		ok, err := spiralsector.ScopeOutputSwitches(ctx, stitched,
 			len(a.Faces()), combinedAdmission.allowed, 24*len(combinedAdmission.source.tools))
 		if err != nil {
 			return booleanEvaluation{}, err

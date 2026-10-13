@@ -325,3 +325,42 @@ func LowerForDisplacement(d, displacement float64) (float64, bool) {
 func usableMagnitude(v float64) bool {
 	return v >= 0 && v <= math.MaxFloat64
 }
+
+// AxisExtremesContext selects six actual held vertices as a lower
+// diameter witness for the transient tool operand. A subset's exact pair
+// distance cannot exceed the full mesh diameter.
+func AxisExtremesContext(ctx context.Context, verts []r3.Vec) (float64, bool, error) {
+	if len(verts) == 0 {
+		return 0, false, nil
+	}
+	witness := [6]r3.Vec{verts[0], verts[0], verts[0], verts[0], verts[0], verts[0]}
+	for i, v := range verts {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return 0, false, err
+			}
+		}
+		if !proofbound.FiniteVec(v) {
+			return 0, false, nil
+		}
+		if v.X < witness[0].X {
+			witness[0] = v
+		}
+		if v.X > witness[1].X {
+			witness[1] = v
+		}
+		if v.Y < witness[2].Y {
+			witness[2] = v
+		}
+		if v.Y > witness[3].Y {
+			witness[3] = v
+		}
+		if v.Z < witness[4].Z {
+			witness[4] = v
+		}
+		if v.Z > witness[5].Z {
+			witness[5] = v
+		}
+	}
+	return PointsContext(ctx, witness[:])
+}

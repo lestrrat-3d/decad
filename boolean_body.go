@@ -353,7 +353,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		// The transient multi-tool operand needs only a lower witness. Its
 		// coordinate-extreme vertices give one without a quadratic all-pairs
 		// scan over every patterned copy.
-		diameterReading, ok, err = spiralCombinedDiameter(ctx, verts)
+		diameterReading, ok, err = diameter.AxisExtremesContext(ctx, verts)
 	} else {
 		diameterReading, ok, err = diameter.PointsContext(ctx, verts)
 	}

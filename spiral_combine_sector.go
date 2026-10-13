@@ -27,7 +27,7 @@ func spiralCombineInputs(ctx context.Context, blank *Body, tools []*Body) (*spir
 	for i, tool := range tools[1:] {
 		p, ok := tool.payload.(facetedPayload)
 		if !ok || p.spiralTooth == nil || p.spiralTooth.source != first.tooth ||
-			p.spiralTooth.motion != p.xform || !spiralNearAxisRotation(p.xform) {
+			p.spiralTooth.motion != p.xform || !spiralsector.NearAxisRotation(p.xform) {
 			return nil, fmt.Errorf("%w: tool %d is not a rigid copy of the first spiral tooth", ErrUnsupported, i+2)
 		}
 		moves[i+1] = p.xform
