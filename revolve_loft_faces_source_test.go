@@ -40,6 +40,14 @@ func neutralArcSeamCone(t *testing.T, doc *Document, apex float64) *Body {
 }
 
 func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
+	return neutralArcSeamSourceWithFit(t,
+		[][2]float64{{2.8, -0.24}, {3.5, -0.3}, {4.2, -0.35}},
+		[][2]float64{{2.8, 0.24}, {3.5, 0.3}, {4.2, 0.35}})
+}
+
+func neutralArcSeamSourceWithFit(t *testing.T, rightXY, leftXY [][2]float64) (
+	*Body, *Body, *loftFacesTrimRecord,
+) {
 	t.Helper()
 	doc := New()
 	w := sketch.NewWorld()
@@ -57,11 +65,17 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 	}
 	center := fixed(0, 0)
 	innerRight, innerLeft := fixed(2.2, -0.2), fixed(2.2, 0.2)
-	right := []*sketch.Point{fixed(2.8, -0.24), fixed(3.5, -0.3), fixed(4.2, -0.35)}
-	left := []*sketch.Point{fixed(2.8, 0.24), fixed(3.5, 0.3), fixed(4.2, 0.35)}
+	right := make([]*sketch.Point, len(rightXY))
+	left := make([]*sketch.Point, len(leftXY))
+	for i, xy := range rightXY {
+		right[i] = fixed(xy[0], xy[1])
+	}
+	for i, xy := range leftXY {
+		left[i] = fixed(xy[0], xy[1])
+	}
 	_, err = s.CreateFitSpline(right...)
 	require.NoError(t, err)
-	s.CreateArc(center, right[2], left[2])
+	s.CreateArc(center, right[len(right)-1], left[len(left)-1])
 	_, err = s.CreateFitSpline(left...)
 	require.NoError(t, err)
 	s.CreateLine(innerRight, right[0])

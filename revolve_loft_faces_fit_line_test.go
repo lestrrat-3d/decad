@@ -41,8 +41,8 @@ func TestFiniteRevolveFitLineJointKeepsBothLiveSourceSides(t *testing.T) {
 		{segment: 0, span: vertex.fitSpan},
 		{segment: 5, span: vertex.lineSpan},
 	} {
-		cells, certified, err := revolveLoftFacesFitLinePartitionCells(t.Context(),
-			trim, section, part.segment, 0, band, part.span, nil, false, nil,
+		cells, certified, err := revolveLoftFacesPartitionJointCells(t.Context(),
+			trim, section, part.segment, 0, band, part.span, nil, nil,
 			[]*revolveLoftFacesFitLineJoint{&joint})
 		require.NoError(t, err)
 		require.True(t, certified)

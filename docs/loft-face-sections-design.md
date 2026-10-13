@@ -244,9 +244,10 @@ requires adjacent whole entities to share one live Sketch point. Both recorded
 endpoints and their exact mapped meridian polynomial controls must agree.
 It isolates that point's time roots, classifies their exact axial intervals
 against the finite Revolve side, and proves one-sided source cells on both the
-fitted and straight spans. If both endpoints of one span have time roots in
-one band, their rational brackets must be disjoint. The manifest sorts them
-and proves each open time gap with the complete source polynomial.
+fitted and straight spans. Two distinct interior fit knots may own opposite
+ends of one fitted span in one band. The span must match both certified Bezier
+pieces exactly. Their rational time brackets must be disjoint. The manifest
+sorts them and proves each open time gap with the complete source polynomial.
 A nonnegative Bernstein box admits a strict gap with an exact zero on an excluded time endpoint only
 when each source column has a positive control and closed ends are strict.
 When a moving source crossing reaches an excluded exact time endpoint, the

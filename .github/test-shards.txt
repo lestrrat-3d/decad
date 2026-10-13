@@ -6,7 +6,7 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0:    4.67s over 9 tests
+#   shard 0:    6.62s over 10 tests
 #   shard 1:    5.32s over 285 tests
 #   shard 2:   10.22s over 137 tests
 #   shard 3:   58.31s over 135 tests
@@ -21,6 +21,7 @@
 0	0.01	TestLoftMirrorCylinderCapsMustTileWithOppositeWinding
 0	0.01	TestLoftMirrorCylinderLevelsRequireExactMidpoint
 0	0.01	TestLoftMirrorCylinderPairKeepsAuthenticatedSource
+0	1.95	TestFiniteRevolveTwoFitKnotsOnOneSourceSpan
 0	0.70	TestObliqueBossJunctionFilletDiagonalTiltPublicWorkflow
 0	0.71	TestObliqueBossJunctionFilletPublicWorkflow
 0	0.69	TestObliqueBossJunctionFilletXTiltPublicWorkflow

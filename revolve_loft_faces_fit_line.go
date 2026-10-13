@@ -178,21 +178,39 @@ func certifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTri
 }
 
 // Every owned time root is paired with a one-sided source cell. This route
-// also handles a fit knot or radial arc at the opposite end of the same span.
-func revolveLoftFacesFitLinePartitionCells(ctx context.Context,
+// also handles two fit knots or other certified joints on one source span.
+func revolveLoftFacesPartitionJointCells(ctx context.Context,
 	trim *loftFacesTrimRecord, section revolveSectionSpan,
 	segment, spanIndex, band int, span freeform.BezierSpan,
-	knot *revolveLoftFacesFitKnotJoint, knotLeft bool,
+	knots []*revolveLoftFacesFitKnotJoint,
 	radial *revolveLoftFacesRadialJoint,
 	fitLines []*revolveLoftFacesFitLineJoint) ([]revolveLoftFacesMappedCell, bool, error) {
-	if len(fitLines) == 0 || len(span) == 0 {
+	if len(fitLines) == 0 && len(knots) < 2 || len(span) == 0 || len(knots) > 2 {
 		return nil, false, nil
 	}
 	var roots []revolveLoftFacesOwnedRoot
-	if knot != nil {
+	var knotEnds [2]bool
+	for _, knot := range knots {
+		if knot == nil {
+			return nil, false, nil
+		}
+		knotLeft := spanIndex == knot.vertex.leftIndex
+		end := 1
+		if knotLeft {
+			end = 0
+		}
+		if knotEnds[end] {
+			return nil, false, nil
+		}
+		knotEnds[end] = true
+		expectedSpan := knot.vertex.right
+		if knotLeft {
+			expectedSpan = knot.vertex.left
+		}
 		if knot.band != band || knot.vertex.segment != segment ||
 			knotLeft && spanIndex != knot.vertex.leftIndex ||
-			!knotLeft && spanIndex != knot.vertex.leftIndex+1 {
+			!knotLeft && spanIndex != knot.vertex.leftIndex+1 ||
+			!revolveLoftFacesSameBezier(span, expectedSpan) {
 			return nil, false, nil
 		}
 		cells := knot.rightCells
@@ -206,6 +224,10 @@ func revolveLoftFacesFitLinePartitionCells(ctx context.Context,
 			roots = append(roots, revolveLoftFacesOwnedRoot{root: root, cell: cells[i],
 				kind: revolveLoftFacesFitKnotContact, point: knot.vertex.point, atEnd: knotLeft})
 		}
+	}
+	if len(knots) == 2 && (!knotEnds[0] || !knotEnds[1] ||
+		knots[0].vertex.point == knots[1].vertex.point) {
+		return nil, false, nil
 	}
 	if radial != nil {
 		if radial.radial.band != band || radial.vertex.fitSegment != segment ||

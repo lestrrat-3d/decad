@@ -66,8 +66,7 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 				if err := ctx.Err(); err != nil {
 					return nil, false, err
 				}
-				var knot *revolveLoftFacesFitKnotJoint
-				knotLeft := false
+				var knots []*revolveLoftFacesFitKnotJoint
 				var radial *revolveLoftFacesRadialJoint
 				var fitLines []*revolveLoftFacesFitLineJoint
 				for i := range joints.fitLines {
@@ -89,11 +88,11 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 						index != joint.vertex.leftIndex && index != joint.vertex.leftIndex+1 {
 						continue
 					}
-					if knot != nil {
+					if len(knots) == 2 {
 						return nil, false, fmt.Errorf("mapped source segment %d span %d band %d has overlapping joints",
 							segment, index, band)
 					}
-					knot, knotLeft = joint, index == joint.vertex.leftIndex
+					knots = append(knots, joint)
 				}
 				for i := range joints.radial {
 					joint := &joints.radial[i]
@@ -108,26 +107,28 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 					}
 					radial = joint
 				}
-				if len(fitLines) != 0 {
-					refined, certified, err := revolveLoftFacesFitLinePartitionCells(ctx,
+				if len(fitLines) != 0 || len(knots) == 2 {
+					refined, certified, err := revolveLoftFacesPartitionJointCells(ctx,
 						trim, section, segment, index, band, span,
-						knot, knotLeft, radial, fitLines)
+						knots, radial, fitLines)
 					if err != nil || !certified {
 						return nil, false, err
 					}
 					cells = append(cells, refined...)
 					continue
 				}
-				if knot != nil || radial != nil {
+				if len(knots) != 0 || radial != nil {
 					var refined []revolveLoftFacesMappedCell
 					var certified bool
 					var err error
-					if knot != nil && radial != nil {
+					if len(knots) != 0 && radial != nil {
 						refined, certified, err = revolveLoftFacesMergeEndpointCells(ctx,
-							trim, section, segment, index, band, span, knot, radial, knotLeft)
-					} else if knot != nil {
+							trim, section, segment, index, band, span, knots[0], radial,
+							index == knots[0].vertex.leftIndex)
+					} else if len(knots) != 0 {
 						refined, certified, err = revolveLoftFacesKnotPartitionCells(ctx,
-							trim, section, segment, index, band, span, *knot, knotLeft)
+							trim, section, segment, index, band, span, *knots[0],
+							index == knots[0].vertex.leftIndex)
 					} else {
 						refined, certified, err = revolveLoftFacesRadialPartitionCells(ctx,
 							trim, section, segment, index, band, span, *radial)
