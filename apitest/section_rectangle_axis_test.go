@@ -115,7 +115,6 @@ func TestSectionCardinalRectangleRefusesTouchAndOtherSources(t *testing.T) {
 	}{
 		{"tangent", r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 0)},
 		{"outside", r3.NewVec(-1, 0, 0), r3.NewVec(0, 1, 0)},
-		{"noncardinal", r3.NewVec(5, 0, 0), r3.NewVec(1, 1, 0)},
 		{"unrepresentable corner", r3.NewVec(5, 1e17, 0), r3.NewVec(0, 1, 0)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

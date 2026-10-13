@@ -2,8 +2,8 @@
 
 `Body.Section` reads a solid at a requested plane and returns a new Sketch whose
 profiles denote the material in that plane. It does not change the body or its
-document. The returned Sketch may be passed to `MeasureProfile`, `Extrude`, or
-another feature that consumes a Sketch profile.
+document. An exact returned Sketch may enter any admitted profile consumer. A
+bounded oblique section may enter only the straight solid `Extrude` path below.
 
 ## Public result
 
@@ -13,8 +13,9 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 
 The returned Sketch uses `plane` as its construction frame. The profiles are
 fresh, valid Sketch snapshots; changing the Sketch makes them stale under the
-ordinary seam rules. A later body class may return several regions, so the
-result is a slice even though the admitted prism carries one material region.
+ordinary seam rules or the bounded-source certificate below. A later body
+class may return several regions, so the result is a slice even though the
+admitted prism carries one material region.
 The caller may read a retired body. A nil body or context, or an invalid frame,
 is `ErrDegenerate`; a sheet or unsound solid is `ErrNotSolid`.
 
@@ -95,6 +96,99 @@ representable as `float64`. Reconstruct the resulting four-line profile in a
 fresh Sketch and require Sketch's certified record to match before returning
 it. The parallel prism and cylinder classes keep their existing gates.
 
+## Bounded oblique plane of an exact rectangular prism
+
+This class accepts a sound, hole-free `prismPayload` whose authenticated source
+profile is one complete axis-aligned four-line rectangle. Its section and cap
+displacements must be zero, its sweep interval must be positive, and it must
+have no blend record. The requested frame may be oblique and the prism may have
+a rigid placement. The parallel and cardinal classes run first.
+
+Treat each held source coordinate, frame coefficient and rigid-placement
+coefficient as an exact dyadic. The requested plane is the affine span of its
+held `U` and `V` vectors. Use their exact cross product for plane-side tests;
+do not assume the stored `N` is exactly their cross product. Build the eight
+source corners and twelve edges by exact rational arithmetic. A nonzero signed
+plane value at every source corner and at least three strictly crossed edges
+are required. A tangent, exterior, cap-coincident or vertex-contact cut returns
+`ErrUnsupported`. A corner or edge that cannot be bounded with finite
+arithmetic also returns `ErrUnsupported`.
+
+Intersect every crossing edge with the plane using its exact rational crossing
+parameter. Solve for each intersection's rational coordinates in the requested
+`U,V` basis and verify the third world component exactly. Deduplicate and sort
+the three to six vertices by exact plane-local orientation. Require a positive,
+strictly convex polygon. Round each coordinate to a finite `float64`
+representative, then prove that the linearly matched source and rounded vertex
+rings stay strictly convex through the entire straight interpolation. This
+proves that the rounded loop has the source loop's region and edge pairing.
+If the convexity proof, positive-area check, or Sketch reconstruction fails,
+return `ErrUnsupported`.
+
+For every vertex, bound the absolute errors in both plane-local coordinates
+with exact rationals. For each vertex, take the larger of its plane-local
+`|du|+|dv|` and the sum of each error times an outward bound on its held basis
+vector's world length. Round the maximum upward to obtain `sectionDelta`.
+Linear interpolation along matched edges makes this bound cover both plane-local
+and world displacement at every point of each polygon boundary. Both loops are
+convex with the same vertex order, so matching convex combinations of their
+vertices extend the same bound through the occupied planar regions. Refuse a loop
+when four times this bound reaches any exact source edge's plane-local L1
+length; the bounded proxy must preserve a useful local feature scale. The
+world term is needed even when the held frame differs slightly from an exact
+orthonormal frame; the mesh uses `sectionDelta` as a world-distance face bound.
+The existing prism frame-map charge separately covers the held basis's effect
+on mass and coordinate readings. The rounded line loop is reconstructed as a
+fresh Sketch profile on the requested frame and re-recorded through the
+ordinary Sketch seam. Its Sketch area describes only the rounded loop; it does
+not certify equality with the source section.
+
+Attach a private, revision-bound certificate to the returned Sketch. The
+certificate records the reconstructed profile, its frame, the source section
+bound, the exact `*sketch.Sketch` owner pointer, and the Sketch revision. The
+Sketch stores this value under a private pointer-identity key only decad owns.
+Lookup rejects a shallow `copy := *s` because its owner pointer differs, even
+if the copied Sketch shares the attachment map. In-place `Sketch.UnmarshalJSON`
+must clear every attachment when it
+resets the Sketch; an attachment is never serialized. The loop's points and
+entities are locked Sketch references with a section-source marker that does
+survive serialization. A mutation, missing certificate, mismatched frame or
+profile, or deserialized marker returns `ErrUnsupported` at every decad
+profile-consumer entry point. The marker alone never grants a bound. Neither
+Sketch nor its caller can mint decad's private certificate by supplying a
+matching source string.
+
+Admission explicitly checks every certified boundary line and endpoint for
+live membership in that Sketch, reference status, the expected `Source()`, and
+`IsStale() == false`. Sketch revision does not hash reference source or stale
+flags, so matching revisions alone cannot establish this. The central
+`recordProfile` and `recordChain` gates scan all Sketch points and entities for
+the section-source marker or attached certificate before recording any profile
+or chain. They refuse even a second ordinary region in the same Sketch when a
+bounded section marker exists. An in-place load, a reference refresh or a
+staleness mark cannot strip the source bound by selecting a different region.
+
+`Extrude` authenticates the fresh Sketch profile and certificate before extent
+resolution. It requires bitwise equality of the live Sketch plane's held origin,
+U, V and N with the certificate's requested frame. It uses that certified frame
+directly, because rebuilding an oblique frame can move its held basis by one bit.
+Ordinary profiles keep the usual frame reconstruction.
+It passes `sectionDelta` into the new `prismPayload`, so `Volume`,
+`Bounds`, `Tessellate(VerifyAll)` and later supported operations charge the
+section displacement through their existing proof paths. `Extrude` refuses a
+nonzero taper or a section-dependent extent until those paths consume the
+bound. `MeasureProfile`, `Revolve`, `Loft`, `Sweep`, `Coil`, `Patch` and all other
+profile consumers return `ErrUnsupported` for a bounded Section sketch until
+they propagate its source bound. A caller who wants to edit or independently
+use the rounded polygon must draw it in a new ordinary Sketch.
+
+Sketch's attachment stores an opaque package-owned value in the Sketch object;
+it is not a global pointer map and it is not serialized. Its key identifies
+decad's certificate, while the reference-source marker makes loss of the
+attachment a refusal rather than an exact source claim. The certificate's
+revision and profile comparison prevent a stale or caller-edited snapshot from
+reusing its bound.
+
 ## Verification
 
 - Extrude a 10×10 mm square by 5 mm. Section at 2.5 mm must give one 100 mm²
@@ -116,11 +210,21 @@ it. The parallel prism and cylinder classes keep their existing gates.
   the interior is 50 mm². Extrude the returned Sketch/profile by 2 mm and
   require 100 mm³ and `Tessellate(0.1 mm, VerifyAll)`.
 - Check a translated, quarter-turned rectangular prism with both radial axes
-  and a reversed sweep axis. Refuse tangent, exterior, noncardinal and tapered
-  rectangular cases.
+  and a reversed sweep axis. Refuse tangent, exterior and tapered rectangular
+  cases; an interior noncardinal cut uses the bounded class.
 - Refuse a tangent or exterior cardinal plane, a positive `q` whose square
   root is not exactly binary64, a non-cardinal plane, and a radius or frame
   whose derived rectangle corner cannot be held exactly.
-- A cap plane, oblique plane, sheet body, invalid input, and
+- A cap plane, unadmitted oblique plane, sheet body, invalid input, and
   canceled context must return their stated errors without changing the
   body's document.
+- An interior oblique cut of a real Sketch-produced rectangular prism returns
+  one bounded profile. Extruding it by 2 mm yields a volume interval containing
+  the exact clipped area times 2 mm and passes `Tessellate(0.1 mm, VerifyAll)`.
+- Check translated and rigidly placed rectangular prisms, reversed section
+  axes, triangle through hexagon section rings, and cuts that refuse at a
+  source vertex, tangent, exterior or uncertain topology.
+- A changed, stale or serialized bounded Section sketch cannot enter any undecorated
+  profile consumer as an exact source section. A forged reference-source marker
+  has the same refusal, including when a different profile or chain is selected
+  in the same Sketch. Ordinary Sketch profiles keep their current results.

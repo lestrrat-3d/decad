@@ -630,6 +630,9 @@ bound on how far every recorded boundary coordinate sits from the section the
 payload's construction denotes. It displaces the analytic boundary the mesh
 approximates, not a coordinate the tessellation stored, so it is its own term
 and never rides in `deltaStore`. It is zero for every payload a caller draws.
+An `Extrude` of a bounded oblique `Body.Section` also carries this term: its
+certified rounded Sketch loop lies within `deltaSection` of the exact source
+plane cut, in both local and world coordinates (`docs/section-design.md`).
 
 A fourth term, the **per-face axial displacement** `deltaAxial(face)`
 (`docs/evaluator-design.md` §5), is the payload's own per-end `z0Delta`/

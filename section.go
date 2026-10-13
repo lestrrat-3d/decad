@@ -19,7 +19,9 @@ import (
 // One class is an exact straight prism cut strictly between its caps by a
 // plane whose frame preserves the prism's recorded section coordinates.
 // Other classes are a whole-circle prism cut by a cardinal plane with an exact
-// chord and a rectangular prism cut by an interior cardinal vertical plane.
+// chord, a rectangular prism cut by an interior cardinal vertical plane, and
+// a bounded oblique plane cut of an exact rectangular prism. The bounded
+// result enters only straight solid Extrude with an independent Distance.
 // Other body or plane classes return [ErrUnsupported]. A nil body or context,
 // or an invalid plane, returns [ErrDegenerate]. A sheet or unsound solid returns
 // [ErrNotSolid]. See docs/section-design.md.
@@ -45,6 +47,14 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 			profile, admitted = cardinalRectangleSectionRecord(pp, plane)
 		}
 		if !admitted {
+			polygon, delta, clipped := obliqueRectangleClip(pp, plane)
+			if clipped {
+				s, result, err := reconstructObliqueSection(ctx, polygon, plane, delta)
+				if err != nil {
+					return nil, nil, err
+				}
+				return s, []*sketch.Profile{result}, nil
+			}
 			return nil, nil, fmt.Errorf(`%w: section plane does not cross an admitted exact prism section`, ErrUnsupported)
 		}
 	}

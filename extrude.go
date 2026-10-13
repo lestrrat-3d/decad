@@ -67,6 +67,11 @@ func WithTaper(a units.Value) ExtrudeOption {
 // current, unaltered snapshot (ErrStaleProfile or ErrInvalidProfile); an
 // invalid profile is also ErrInvalidProfile, and a boundary decad cannot
 // record exactly is ErrUnrecordableProfile (core §7). This evaluator builds a
+// bounded oblique Body.Section profile only as a solid straight prism with an
+// independent Distance extent, carrying its certified source displacement.
+// Its private Sketch certificate and marked reference loop must still match.
+// Other bounded-section consumers and options return [ErrUnsupported].
+// Otherwise this evaluator builds a
 // straight prism from a profile of line, circle, arc and Tier A free-form
 // segments (a spline, a closed spline, a fit spline, or a unit-weight NURBS
 // curve — docs/spline-design.md Table F); a Tier B or Tier C free-form
@@ -144,7 +149,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	profile, plane, profileArea, err := recordProfile(s, p)
+	profile, plane, profileArea, certificate, err := recordExtrudeProfile(s, p)
 	if err != nil {
 		return nil, err
 	}
@@ -172,9 +177,24 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 			return nil, err
 		}
 	}
-	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
-	if err != nil {
-		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
+	var frame r3.Frame
+	if certificate != nil {
+		// The authenticated Sketch plane has this exact held frame. Rebuilding
+		// it may change an oblique basis by one bit and move the source plane.
+		frame = certificate.frame
+	} else {
+		frame, err = r3.NewFrame(plane.Origin, plane.U, plane.V)
+		if err != nil {
+			return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
+		}
+	}
+	if certificate != nil {
+		if taper.Mag() != 0 || surfaceResult {
+			return nil, fmt.Errorf(`%w: bounded Section needs its original frame and a solid straight Extrude`, ErrUnsupported)
+		}
+		if _, ok := e.(Distance); !ok {
+			return nil, fmt.Errorf(`%w: bounded Section needs an independent Distance extent`, ErrUnsupported)
+		}
 	}
 
 	e, err = normalizeExtent(e)
@@ -195,9 +215,14 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	}
 
 	ref := d.nextProducerID()
+	var sectionDelta float64
+	if certificate != nil {
+		sectionDelta = certificate.delta
+	}
 	body, err := evalPrismContext(ctx, d, ref, prismPayload{
 		profile:       profile,
 		frame:         frame,
+		sectionDelta:  sectionDelta,
 		z0:            sweep.z0,
 		z1:            sweep.z1,
 		z0Delta:       sweep.z0Delta,

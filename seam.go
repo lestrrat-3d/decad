@@ -1,6 +1,8 @@
 package decad
 
 import (
+	"fmt"
+
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/sketch"
@@ -88,6 +90,10 @@ func (p MeasuredProfile) SecondMoments() (SecondMoments, error) {
 // The return value includes authenticated area so feature callers never read
 // a caller-mutable field after admission.
 func recordProfile(s *sketch.Sketch, p *sketch.Profile) (profileRecord, planeRecord, float64, error) {
+	if boundedSectionSketch(s) {
+		return profileRecord{}, planeRecord{}, 0,
+			fmt.Errorf("%w: this bounded Section profile needs a consumer that carries its source bound", ErrUnsupported)
+	}
 	return momentinput.RecordProfileWithArea(s, p)
 }
 
@@ -129,5 +135,9 @@ func recordArrangedProfile(p *sketch.Profile) (profileRecord, error) {
 // *Arc or *Circle fragment and a sampling-convergent underestimate otherwise,
 // with no bound stated for the gap (docs/surface-design.md §13.3).
 func recordChain(s *sketch.Sketch, ch *sketch.Chain) (chainRecord, planeRecord, error) {
+	if boundedSectionSketch(s) {
+		return chainRecord{}, planeRecord{},
+			fmt.Errorf("%w: this bounded Section chain needs a consumer that carries its source bound", ErrUnsupported)
+	}
 	return sketchrecord.RecordChain(s, ch)
 }
