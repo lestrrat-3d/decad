@@ -823,14 +823,7 @@ the parameter allowance once — the quantitative reading decad gives `TExact`'s
 `cutDisplacementAllow` multiplies it by the carrier's own speed over its full
 parameterisation: the chord for a line, `2πR` for a circle or an arc.
 `δ_cut` is the largest such allowance over the surviving fragments, and zero
-when every survivor is a whole edge. One narrower all-line case can also prove
-zero: every cut junction names the same certified Sketch node on both source
-lines, exact rational arithmetic places that node on both finite carriers,
-the carriers cross uniquely, and the nodes preserve each fragment's order.
-`prismcells.MergeLoops` then re-expresses the complete closed loop as whole
-lines between the proved nodes. If any check fails, it keeps the original
-trimmed ranges and their `δ_cut`; a close floating-point intersection never
-counts as this proof.
+when every survivor is a whole edge.
 
 **The walk charge, `δ_walk`.** `prismcells.BuildScene` builds every entity from its
 segment's own WALKED geometry (`walkOf`, §4.1), never from the record's
@@ -912,17 +905,20 @@ merged loop's. Nothing else in the formula changes for it, and the reading's
 charged sum of the cells' volumes adds only that sum's own accumulated
 rounding (`internal/proofbound/bounds.go`'s `exactSumRound`).
 
-It is **exactly zero in a decidable case**: both inputs carry zero
+It is **exactly zero in one decidable case**: both inputs carry zero
 displacement, operand B's section map into A's frame is the identity under
 G3's exact shared-axis or placed-axis arm (equal stored `U`/`V` and linear
 bases, with a composed-origin difference exactly along the common axis),
-**every surviving edge is whole or belongs to a complete certified all-line
-rewrite, AND every consumed source segment is whole**. Two caller-drawn
-profiles on one sketch plane with no placement between them meet the first two
-conditions. The edge condition holds where the merge cut nothing, or where
-the exact source-line intersection nodes and their order pass the §7 proof.
-A partial overlap without that proof keeps `δ_cut`: its recorded walk closes
-only to within that allowance, so a zero bound would be unsound.
+**every surviving edge is whole, AND every consumed
+source segment is whole**. Two caller-drawn profiles on one sketch plane with
+no placement between them meet the first two conditions; they meet the third
+and fourth only where the merge cut nothing — one profile strictly containing
+the other, or two footprints meeting along complete shared walls, drawn (not
+inherited from an earlier trim) so every one of their own segments spans its
+entity's full domain. A partial overlap, which splits at least two walls,
+never reaches the zero case, and neither does a union whose result the caller
+would call "obviously exact": the recorded walk closes only to within
+`δ_cut`, and a zero bound over it would be a claim the evaluator cannot make.
 Narrowing the zero case to require every CONSUMED segment whole, not only
 every SURVIVING edge, is what closes the gap this task found: an OPERAND can
 carry a segment recorded over a range narrower than its own entity's full
@@ -1016,17 +1012,15 @@ terms added:
   `δ == 0` and both axial end bounds are zero — `moments.go`'s region-level
   exact rational accumulator with its single final rounding, over a section and
   sweep interval no coordinate of which was recomputed.
-  `δ == 0` requires every survivor to be a WHOLE edge after the certified
-  line-junction rewrite above, or after a merge that cut nothing: a contained
-  footprint or footprints meeting along complete shared walls. A trimmed edge
-  without that proof retains `δ_cut`, so its rounded parameter cannot silently
-  acquire a zero bound.
+  `δ == 0` requires every survivor to be a WHOLE edge, so this arm is reached
+  by a merge that cut nothing: a contained footprint, or footprints meeting
+  along complete shared walls. It is deliberately narrow — the alternative is a
+  zero bound over a walk that closes only to within `δ_cut`.
 - **`Approximate` otherwise**, carrying the same per-mechanism proven bounds an
   ordinary prism already reports plus the displacement terms: the accumulator
   retires the moment any `CircleSeg`/`ArcSeg` survives (no `π` is ever exact),
   and a nonzero section or axial displacement remains approximate, whatever the
-  segment kinds are. Partially overlapping pairs without the line-junction
-  proof land here.
+  segment kinds are. Every partially overlapping pair lands here.
 
 Volume, Centroid and `Box` all read that same accumulator and that same
 displacement term (evaluator §4, `moments.go`), so no separate derivation is
@@ -1038,7 +1032,7 @@ needed for each.
 |---|---|---|
 | 1. No chaining | Removed. Result is `prismPayload`; no `meshBound` to compose, so no chord tolerance for the next pair to fall below. A chained boolean re-checks §3's gate on the new pair, carries the greater incoming displacement plus its new re-expression and cut displacement, and retains the greater incoming axial displacement at each end (§7). | Unchanged — general-position or non-analytic pairs still degrade per evaluator §9. |
 | 2. Coplanar contact refuses | Removed. Coplanar, co-directional contact is the admitted case's whole premise. | Unchanged — non-coplanar or non-prism coplanar contact (e.g. a prism against a revolve cap) stays on the mesh path. |
-| 3. Analytic identity dies | Removed where `δ == 0`, including a merge that cut nothing or a certified all-line junction rewrite. Result is `prismPayload`: Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already dispatch on payload class. A cut-bearing merge without that proof keeps its displacement and the §12 consumer limits. | Unchanged for mesh-path results — `facetedPayload` still refuses modify ops (modify-reach SX9) and all three surveys. |
+| 3. Analytic identity dies | Removed where `δ == 0` — a merge that cut nothing. Result is `prismPayload`: Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already dispatch on payload class and need zero new code for it. Where `δ > 0` — which every cut-bearing merge is, §7 — the result is a `prismPayload` still, and every consumer's reach there is §12's own rows to state, `Verify`'s tolerance gate included; the reference that gate anchors against is verification design §3's to define. Restoring the reach §12 stages, for a displacement whose CARRIERS are exact, is a separate design change, not a consequence this design removes. | Unchanged for mesh-path results — `facetedPayload` still permanently refuses modify ops (modify-reach SX9) and all three surveys. |
 
 ## 9. Refusals
 
@@ -1347,8 +1341,8 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   trim's own doing.
 - Exactness, one test per §7 arm: a line-only merged section over operands
   that share a frame AND whose merge cut nothing (a contained footprint)
-  reports `Exact` volume with a zero bound; a partially overlapping pair
-  without the §7 source-line proof reports `Approximate`, and the test computes the
+  reports `Exact` volume with a zero bound; a partially overlapping pair of
+  the same two operands reports `Approximate`, and the test computes the
   merged region's TRUE volume over `math/big.Rat` from the operands' own float
   coordinates and asserts the published bound contains the residual — the arm
   that proves `δ_cut` is charged rather than assumed away; the same
