@@ -1935,6 +1935,9 @@
 10	0.00	TestSectionObliqueRectangleOtherRegionCannotBypassBound
 10	0.00	TestSectionObliqueRectangleRefusesUnsupportedExtrudeOptions
 10	0.00	TestSectionObliqueRectangleRefusesContact
+10	0.00	TestSectionCardinalConeFeedsVerifiedExtrude
+10	0.00	TestSectionCardinalConePlacementAndAxisSense
+10	0.00	TestSectionCardinalConeRefusesUnprovedCuts
 10	0.00	TestSectionCardinalSphereFeedsVerifiedExtrude
 10	0.00	TestSectionCardinalSphereNonSquareFeedsVerifiedExtrude
 10	0.00	TestSectionCardinalSphereCutsAcrossRevolveAxis
