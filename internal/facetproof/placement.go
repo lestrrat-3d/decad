@@ -6,7 +6,6 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -45,7 +44,7 @@ func PlaceMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Ve
 			return PlacedMesh{}, err
 		}
 		vertexAllow[i] = proofbound.RigidRoundAllow(math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))), maxTrans)
-		exact[i] = meshbool.ExactRigidImage(basis, tr, v)
+		exact[i] = proof.ExactAffineImage(basis.EX, basis.EY, basis.EZ, tr, v)
 		next.Verts[i] = exact[i].Vec()
 		if !proofbound.FiniteVec(next.Verts[i]) {
 			return PlacedMesh{}, fmt.Errorf("%w: a placed vertex is not representable", decaderr.ErrUnsupported)

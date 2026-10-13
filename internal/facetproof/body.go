@@ -187,6 +187,24 @@ func Volume(ctx context.Context, xverts []proof.Xpt, tris [][3]int,
 	return volF, bound, volRat, nil
 }
 
+// VolumeFromAudit is Volume's result read from the audit's exact
+// component volumes. The facets partition into the components, and an exact
+// rational sum is independent of order and grouping, so the sum of the
+// component volumes is the rational Volume integrates over every facet, bit
+// for bit; the float value and bound follow from that same rational.
+func VolumeFromAudit(audit *MeshAudit, volSymDiff float64) (float64, float64, *big.Rat, error) {
+	volRat := new(big.Rat)
+	for _, v := range audit.CompVol {
+		volRat.Add(volRat, v)
+	}
+	if volRat.Sign() <= 0 {
+		return 0, 0, nil, fmt.Errorf(`%w: the boolean result encloses no volume`, decaderr.ErrBooleanFailed)
+	}
+	volF, _ := volRat.Float64()
+	bound := proofbound.AbsSumUpper(volSymDiff, proofbound.RatAbsDiff(volRat, volF))
+	return volF, bound, volRat, nil
+}
+
 // FirstMoments integrates the held mesh's three exact first moments in facet
 // order. The caller divides by 24 and the exact volume.
 func FirstMoments(budget *proofbound.WorkBudget, xverts []proof.Xpt, tris [][3]int) ([3]*big.Rat, error) {

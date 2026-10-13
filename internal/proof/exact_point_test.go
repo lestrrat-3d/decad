@@ -78,3 +78,25 @@ func TestXhpVecKeepsRationalFloatRounding(t *testing.T) {
 		check(num, den)
 	}
 }
+
+func TestXptDenotesComparesExactPointToFloatVertex(t *testing.T) {
+	t.Parallel()
+	v := r3.Vec{X: 0.1, Y: -2.5, Z: 1e-3}
+	p := proof.XptOf(v)
+	require.True(t, proof.XptDenotes(p, v))
+	for _, other := range []r3.Vec{
+		{X: math.Nextafter(v.X, 1), Y: v.Y, Z: v.Z},
+		{X: v.X, Y: math.Nextafter(v.Y, 0), Z: v.Z},
+		{X: v.X, Y: v.Y, Z: -v.Z},
+	} {
+		require.False(t, proof.XptDenotes(p, other))
+	}
+	// A point spelled over a larger power-of-two denominator still denotes it.
+	scaled := proof.Xpt{X: new(big.Int).Lsh(p.X, 3), Y: new(big.Int).Lsh(p.Y, 3),
+		Z: new(big.Int).Lsh(p.Z, 3), W: new(big.Int).Lsh(p.W, 3)}
+	require.True(t, proof.XptDenotes(scaled, v))
+	// A third of a unit is not any float.
+	third := proof.Xpt{X: big.NewInt(1), Y: big.NewInt(0), Z: big.NewInt(0), W: big.NewInt(3)}
+	require.False(t, proof.XptDenotes(third, r3.Vec{X: 1.0 / 3}))
+	require.True(t, proof.XptDenotes(proof.XptOf(r3.Vec{}), r3.Vec{}))
+}

@@ -40,7 +40,7 @@ func KeepPlacedEmbedded(ctx context.Context, exact []proof.Xpt, held []r3.Vec, t
 				return nil, err
 			}
 		}
-		if meshbool.CoordDistance(exact[i], held[i]).Sign() != 0 {
+		if !proof.XptDenotes(exact[i], held[i]) {
 			h.Moved[i] = true
 			h.Movable[i] = true
 		}
@@ -235,7 +235,11 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 	sixth := big.NewRat(1, 6)
 	audit.CompVol = make([]*big.Rat, len(audit.Members))
 	for ci, list := range audit.Members {
-		v := new(big.Rat)
+		// Every term is a Dyadic (power-of-two denominators), so the
+		// sum accumulates without a GCD and converts once; the value is the
+		// same rational the big.Rat sum produced.
+		total := proof.DyZero()
+		var v *big.Rat
 		for i, fi := range list {
 			if i%256 == 0 {
 				if err := ctx.Err(); err != nil {
@@ -243,7 +247,18 @@ func AuditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*Mesh
 				}
 			}
 			t := tris[fi]
-			v.Add(v, proof.XdotRat(audit.XVerts[t[0]], proof.Xcross(audit.XVerts[t[1]], audit.XVerts[t[2]])))
+			cross := proof.Xcross(audit.XVerts[t[1]], audit.XVerts[t[2]])
+			if v == nil {
+				if term, ok := proof.XdotDyadic(audit.XVerts[t[0]], cross); ok {
+					total = proof.DyAdd(total, term)
+					continue
+				}
+				v = total.Rat()
+			}
+			v.Add(v, proof.XdotRat(audit.XVerts[t[0]], cross))
+		}
+		if v == nil {
+			v = total.Rat()
 		}
 		audit.CompVol[ci] = v.Mul(v, sixth)
 		if audit.CompVol[ci].Sign() == 0 {

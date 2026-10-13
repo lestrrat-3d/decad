@@ -29,6 +29,43 @@ type pointConeLimit struct {
 	origins          []FeatureRef
 	denoted          *surfacenormal.Revolved
 	reversed         bool
+
+	consts *pointConeConsts // built on first use by constants
+}
+
+// pointConeConsts are the cone's apex a = an/ad and slope k = kn/kd as exact
+// integers, with the products every triangle bound multiplies in. Every value
+// is an integer, so a Dyadic with exponent zero.
+type pointConeConsts struct {
+	ad, kd            proofarith.Dyadic
+	cRec, cRad, cProd proofarith.Dyadic // an(kd+kn)²kd, an·kn·kd, an(kd+kn)kd
+	cAlpha            proofarith.Dyadic // an·kd
+	kn                proofarith.Dyadic
+	apexF, slopeF     float64 // cone.apex.Float64(), cone.slope.Float64()
+}
+
+func (cone *pointConeLimit) constants() *pointConeConsts {
+	if cone.consts != nil {
+		return cone.consts
+	}
+	dyInt := func(z *big.Int) proofarith.Dyadic {
+		d, _ := proofarith.DyOfRat(new(big.Rat).SetInt(z))
+		return d
+	}
+	an, ad := dyInt(cone.apex.Num()), dyInt(cone.apex.Denom())
+	kn, kd := dyInt(cone.slope.Num()), dyInt(cone.slope.Denom())
+	sum := proofarith.DyAdd(kd, kn)
+	ankd := proofarith.DyMul(an, kd)
+	apexF, _ := cone.apex.Float64()
+	slopeF, _ := cone.slope.Float64()
+	cone.consts = &pointConeConsts{
+		ad: ad, kd: kd, kn: kn, apexF: apexF, slopeF: slopeF,
+		cRec:   proofarith.DyMul(proofarith.DyMul(ankd, sum), sum),
+		cRad:   proofarith.DyMul(ankd, kn),
+		cProd:  proofarith.DyMul(ankd, sum),
+		cAlpha: ankd,
+	}
+	return cone.consts
 }
 
 type pointConeEdge struct{ a, b int }
@@ -648,7 +685,62 @@ func pointConeSubdivide(ctx context.Context, base facetedPayload, rounds int) (
 	return far, caps, sides, totalRound, nil
 }
 
+// pointConeFactor is pointConeFactorRat's enclosures formed as Dyadic
+// numerators over Dyadic denominators. With a = an/ad > 0, k = kn/kd > 0,
+// rho = [lo, hi] the exact-rounded root bracket of y²+z² and
+// G_lo = x·kd + kn·lo, G_hi = x·kd + kn·hi (so g = [G_lo, G_hi]/kd):
+//
+//	alpha = a/g = [an·kd/(ad·G_hi), an·kd/(ad·G_lo)]
+//	q     = g/a = [ad·G_lo/(an·kd), ad·G_hi/(an·kd)]
+//
+// Each coordinate error reads both alpha endpoints, so the sign of the
+// coordinate (which only orders the scaled interval) never matters. A cone
+// with a non-positive apex or slope takes the big.Rat path unchanged.
 func pointConeFactor(p r3.Vec, cone *pointConeLimit) (pointConeSample, error) {
+	if cone.apex.Sign() <= 0 || cone.slope.Sign() <= 0 {
+		return pointConeFactorRat(p, cone)
+	}
+	if !proofbound.FiniteVec(p) {
+		return pointConeSample{}, fmt.Errorf("%w: a point-cone cap vertex is non-finite", ErrNotFinite)
+	}
+	c := cone.constants()
+	x, y, z := proofarith.MustDyOf(p.X), proofarith.MustDyOf(p.Y), proofarith.MustDyOf(p.Z)
+	rho2 := proofarith.DyAdd(proofarith.DyMul(y, y), proofarith.DyMul(z, z))
+	lo := proofarith.MustDyOf(proofarith.DySqrtDown(rho2))
+	hiF := proofarith.DySqrtUp(rho2)
+	if math.IsInf(hiF, 0) {
+		return pointConeSample{}, fmt.Errorf("%w: the cone radius has no finite enclosure", ErrUnsupported)
+	}
+	hi := proofarith.MustDyOf(hiF)
+	xkd := proofarith.DyMul(x, c.kd)
+	gLo := proofarith.DyAdd(xkd, proofarith.DyMul(c.kn, lo))
+	gHi := proofarith.DyAdd(xkd, proofarith.DyMul(c.kn, hi))
+	if gLo.Sign() <= 0 {
+		return pointConeSample{}, fmt.Errorf("%w: a point-cone ray is not forward", ErrUnsupported)
+	}
+	q := (p.X + c.slopeF*math.Hypot(p.Y, p.Z)) / c.apexF
+	if !proofbound.FiniteVec(r3.Vec{X: q}) || q <= 0 {
+		return pointConeSample{}, fmt.Errorf("%w: the held point-cone ray has no finite crossing", ErrUnsupported)
+	}
+	alpha := 1 / q
+	if !proofbound.FiniteVec(r3.Vec{X: alpha}) {
+		return pointConeSample{}, fmt.Errorf("%w: the held point-cone crossing is non-finite", ErrUnsupported)
+	}
+	held := p.Scale(alpha)
+	adGLo, adGHi := proofarith.DyMul(c.ad, gLo), proofarith.DyMul(c.ad, gHi)
+	coordError := func(coord proofarith.Dyadic, heldCoord float64) float64 {
+		n := proofarith.DyMul(c.cAlpha, coord)
+		return math.Max(proofarith.DyQuoFloatError(n, adGHi, heldCoord),
+			proofarith.DyQuoFloatError(n, adGLo, heldCoord))
+	}
+	bound := proofbound.Radius3D(max(coordError(x, held.X), coordError(y, held.Y), coordError(z, held.Z)))
+	qError := math.Max(
+		proofarith.DyQuoFloatError(proofarith.DyMul(c.ad, gLo), c.cAlpha, q),
+		proofarith.DyQuoFloatError(proofarith.DyMul(c.ad, gHi), c.cAlpha, q))
+	return pointConeSample{q: q, alpha: alpha, qError: qError, pointError: bound}, nil
+}
+
+func pointConeFactorRat(p r3.Vec, cone *pointConeLimit) (pointConeSample, error) {
 	if !proofbound.FiniteVec(p) {
 		return pointConeSample{}, fmt.Errorf("%w: a point-cone cap vertex is non-finite", ErrNotFinite)
 	}
@@ -846,7 +938,62 @@ func pointConeCapBound(far []r3.Vec, caps [][3]int,
 	return capBound, lip, nil
 }
 
+// pointConeTriangleBound forms the same five rationals as
+// pointConeTriangleBoundRat, each formed as one Dyadic numerator over one
+// Dyadic denominator and rounded up once (proofarith.DyQuoFloatUp), so no
+// big.Rat is normalised. With a = an/ad, k = kn/kd and G = xMin·kd + kn·rhoMin
+// (so gMin = G/kd):
+//
+//	reciprocal = an(kd+kn)²kd·h² / (ad·G³)
+//	radial     = an·kn·kd·h² / (ad·2·rhoMin·G²)
+//	product    = an(kd+kn)kd·h² / (ad·G²)
+//	alphaMax   = an·kd / (ad·G)
+//	lip ratio  = an(kd+kn)kd / (ad·G²)
 func pointConeTriangleBound(tri [3]r3.Vec,
+	cone *pointConeLimit) (float64, float64, float64, error) {
+	xMin, yMin, yMax, zMin, zMax := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
+	reach, h := 0.0, 0.0
+	for i, p := range tri {
+		xMin = min(xMin, p.X)
+		yMin, yMax = min(yMin, p.Y), max(yMax, p.Y)
+		zMin, zMax = min(zMin, p.Z), max(zMax, p.Z)
+		reach = max(reach, proofbound.DvLenUpper(proofbound.HeldDelta(p, r3.Vec{})))
+		h = max(h, proofbound.DvLenUpper(proofbound.HeldDelta(p, tri[(i+1)%3])))
+	}
+	minAbs := func(lo, hi float64) float64 {
+		if lo <= 0 && hi >= 0 {
+			return 0
+		}
+		return min(math.Abs(lo), math.Abs(hi))
+	}
+	rhoMin := max(minAbs(yMin, yMax), minAbs(zMin, zMax))
+	if rhoMin <= 0 {
+		return 0, 0, 0, fmt.Errorf("%w: the point-cone cap reaches the axis", ErrUnsupported)
+	}
+	c := cone.constants()
+	x, rho, hd := proofarith.MustDyOf(xMin), proofarith.MustDyOf(rhoMin), proofarith.MustDyOf(h)
+	g := proofarith.DyAdd(proofarith.DyMul(x, c.kd), proofarith.DyMul(c.kn, rho))
+	if g.Sign() <= 0 {
+		return 0, 0, 0, fmt.Errorf("%w: the point-cone cap has no positive ray denominator", ErrUnsupported)
+	}
+	h2 := proofarith.DyMul(hd, hd)
+	g2 := proofarith.DyMul(g, g)
+	g3 := proofarith.DyMul(g2, g)
+	adG2 := proofarith.DyMul(c.ad, g2)
+	alphaBound := proofbound.AbsSumUpper(
+		proofarith.DyQuoFloatUp(proofarith.DyMul(c.cRec, h2), proofarith.DyMul(c.ad, g3)),
+		proofarith.DyQuoFloatUp(proofarith.DyMul(c.cRad, h2),
+			proofarith.DyMul(proofarith.DyShift(rho, 1), adG2)))
+	capBound := proofbound.AbsSumUpper(
+		proofbound.ProductUpper(reach, alphaBound),
+		proofarith.DyQuoFloatUp(proofarith.DyMul(c.cProd, h2), adG2))
+	alphaMax := proofarith.DyQuoFloatUp(c.cAlpha, proofarith.DyMul(c.ad, g))
+	lip := proofbound.AbsSumUpper(alphaMax,
+		proofbound.ProductUpper(reach, proofarith.DyQuoFloatUp(c.cProd, adG2)))
+	return capBound, alphaBound, lip, nil
+}
+
+func pointConeTriangleBoundRat(tri [3]r3.Vec,
 	cone *pointConeLimit) (float64, float64, float64, error) {
 	xMin, yMin, yMax, zMin, zMax := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
 	reach, h := 0.0, 0.0

@@ -8,13 +8,20 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+// revolveSectorSamples caches the per-station cone samples shared by every
+// plan of one construction attempt.
+type revolveSectorSamples struct {
+	up, down []pointConeSample
+	filled   bool
+}
+
 // buildRevolveSectorMesh closes an admitted sector against the root face's
 // two ordered section rings. The section walk, rather than a profile role,
 // selects the rings shared with the blank mesh.
 func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 	section revolveSectionCertificate, nodes, original []sectorPathNode, caps [][3]int,
 	edges []sectorCapEdge, rootNode []int, record *pointConeTrimRecord,
-	motion r3.Transform, placedGroups []facetGroup) (float64, float64, error) {
+	motion r3.Transform, placedGroups []facetGroup, samples *revolveSectorSamples) (float64, float64, error) {
 	if mesh == nil || record == nil || record.base.pointSection == nil ||
 		len(nodes) != len(rootNode) || len(nodes) != len(original) || len(nodes) < 3 ||
 		section.rootSpan < 0 || section.rootSpan >= len(ring.rings) {
@@ -53,15 +60,31 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 	mesh.groups = append(mesh.groups, lowerFace)
 	upper, lower := make([]int, len(nodes)), make([]int, len(nodes))
 	maxRound, maxSnap := 0.0, 0.0
+	// The cone samples depend only on the unplaced cap station and
+	// the cone, never on the plan's motion, so the first plan's samples are
+	// reused by every later plan. They are filled in node order inside the
+	// first plan's loop, so a refusal is raised at the same node and in the
+	// same order as before.
+	if samples.up == nil {
+		samples.up = make([]pointConeSample, len(nodes))
+		samples.down = make([]pointConeSample, len(nodes))
+	}
 	for i := range nodes {
 		far := original[i].p
-		up, err := pointConeFactor(far, record.upper)
-		if err != nil {
-			return 0, 0, err
-		}
-		down, err := pointConeFactor(far, record.lower)
-		if err != nil {
-			return 0, 0, err
+		var up, down pointConeSample
+		if samples.filled {
+			up, down = samples.up[i], samples.down[i]
+		} else {
+			var err error
+			up, err = pointConeFactor(far, record.upper)
+			if err != nil {
+				return 0, 0, err
+			}
+			down, err = pointConeFactor(far, record.lower)
+			if err != nil {
+				return 0, 0, err
+			}
+			samples.up[i], samples.down[i] = up, down
 		}
 		if down.q-down.qError <= 1 {
 			return 0, 0, fmt.Errorf("%w: sector cap reaches its source plane", ErrUnsupported)
@@ -99,6 +122,7 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		lower[i] = len(mesh.verts)
 		mesh.verts = append(mesh.verts, lowerPoint)
 	}
+	samples.filled = true
 	for _, tri := range caps {
 		mesh.add([3]int{upper[tri[0]], upper[tri[1]], upper[tri[2]]}, upperGroup)
 		mesh.add([3]int{lower[tri[2]], lower[tri[1]], lower[tri[0]]}, lowerGroup)

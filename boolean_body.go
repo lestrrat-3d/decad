@@ -555,7 +555,10 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// volume helper is also the read-only interference evaluator's one source
 	// of volume truth.
 	if volRat == nil {
-		volume, volRat, err = meshVolumeMeasurement(ctx, xverts, tris, pp.volSymDiff)
+		var volF, volBound float64
+		volF, volBound, volRat, err = facetproof.VolumeFromAudit(audit, pp.volSymDiff)
+		volume = Measurement{Value: units.CubicMillimeters(volF),
+			Exactness: exactnessOf(volBound), Bound: units.CubicMillimeters(volBound)}
 		if err != nil {
 			return nil, err
 		}
