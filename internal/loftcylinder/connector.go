@@ -198,12 +198,12 @@ func ConnectorReach(verts []r3.Vec, tris [][3]int, segments [][]int,
 // connector's tangential motion before it reaches R.
 func connectorRootAngle(source, held Connector,
 	lo, hi, radius *big.Rat) (*big.Rat, bool) {
-	aLo := SourceLerp(source.a[0], source.a[1], lo)
-	aHi := SourceLerp(source.a[0], source.a[1], hi)
-	hLo := SourceLerp(held.a[0], held.a[1], lo)
-	hHi := SourceLerp(held.a[0], held.a[1], hi)
-	minimum2 := SourceRadiusMin2(aLo, aHi)
-	heldMinimum2 := SourceRadiusMin2(hLo, hHi)
+	aLo := sourceLerp(source.a[0], source.a[1], lo)
+	aHi := sourceLerp(source.a[0], source.a[1], hi)
+	hLo := sourceLerp(held.a[0], held.a[1], lo)
+	hHi := sourceLerp(held.a[0], held.a[1], hi)
+	minimum2 := sourceRadiusMin2(aLo, aHi)
+	heldMinimum2 := sourceRadiusMin2(hLo, hHi)
 	if heldMinimum2.Cmp(minimum2) < 0 {
 		minimum2 = heldMinimum2
 	}
@@ -211,8 +211,8 @@ func connectorRootAngle(source, held Connector,
 	if minimum.Sign() <= 0 {
 		return nil, false
 	}
-	v0 := SourceSub(source.d[0], source.a[0])
-	v1 := SourceSub(source.d[1], source.a[1])
+	v0 := sourceSub(source.d[0], source.a[0])
+	v1 := sourceSub(source.d[1], source.a[1])
 	if (SourceDot(v0, v0).Sign() == 0) ==
 		(SourceDot(v1, v1).Sign() == 0) {
 		return nil, false
@@ -228,7 +228,7 @@ func connectorRootAngle(source, held Connector,
 	angleReach := proofarith.FloatRat(0.02)
 	for _, sign := range []int64{-1, 1} {
 		gate := func(t *big.Rat) *big.Rat {
-			a := SourceLerp(source.a[0], source.a[1], t)
+			a := sourceLerp(source.a[0], source.a[1], t)
 			cross := new(big.Rat).Sub(new(big.Rat).Mul(a.X, v.Y),
 				new(big.Rat).Mul(a.Y, v.X))
 			cross.Mul(cross, big.NewRat(sign, 1))
@@ -242,10 +242,10 @@ func connectorRootAngle(source, held Connector,
 			return nil, false
 		}
 	}
-	rootDifference2 := SourceDot(SourceSub(source.a[0], held.a[0]),
-		SourceSub(source.a[0], held.a[0]))
-	otherDifference := SourceDot(SourceSub(source.a[1], held.a[1]),
-		SourceSub(source.a[1], held.a[1]))
+	rootDifference2 := SourceDot(sourceSub(source.a[0], held.a[0]),
+		sourceSub(source.a[0], held.a[0]))
+	otherDifference := SourceDot(sourceSub(source.a[1], held.a[1]),
+		sourceSub(source.a[1], held.a[1]))
 	if otherDifference.Cmp(rootDifference2) > 0 {
 		rootDifference2 = otherDifference
 	}
@@ -280,8 +280,8 @@ func cubicPositive(f func(*big.Rat) *big.Rat, lo, hi *big.Rat, depth int) bool {
 }
 
 func connectorCrossShift(c Connector, lo, hi, deviation *big.Rat) (*big.Rat, bool) {
-	v0 := SourceSub(c.d[0], c.a[0])
-	v1 := SourceSub(c.d[1], c.a[1])
+	v0 := sourceSub(c.d[0], c.a[0])
+	v1 := sourceSub(c.d[1], c.a[1])
 	zero0 := SourceDot(v0, v0).Sign() == 0
 	zero1 := SourceDot(v1, v1).Sign() == 0
 	if zero0 == zero1 {
@@ -292,8 +292,8 @@ func connectorCrossShift(c Connector, lo, hi, deviation *big.Rat) (*big.Rat, boo
 		v = v1
 	}
 	length := proofarith.FloatRat(proofbound.RatSqrtUp(SourceDot(v, v)))
-	aLo := SourceLerp(c.a[0], c.a[1], lo)
-	aHi := SourceLerp(c.a[0], c.a[1], hi)
+	aLo := sourceLerp(c.a[0], c.a[1], lo)
+	aHi := sourceLerp(c.a[0], c.a[1], hi)
 	gLo := new(big.Rat).Mul(big.NewRat(2, 1), SourceDot(aLo, v))
 	gHi := new(big.Rat).Mul(big.NewRat(2, 1), SourceDot(aHi, v))
 	if gHi.Cmp(gLo) < 0 {
@@ -333,17 +333,17 @@ func sameXY(a, b XY) bool {
 }
 
 func connectorReachPiece(c Connector, radius2, lo, hi, reach *big.Rat) bool {
-	aLo := SourceLerp(c.a[0], c.a[1], lo)
-	aHi := SourceLerp(c.a[0], c.a[1], hi)
-	dLo := SourceLerp(c.d[0], c.d[1], lo)
-	dHi := SourceLerp(c.d[0], c.d[1], hi)
+	aLo := sourceLerp(c.a[0], c.a[1], lo)
+	aHi := sourceLerp(c.a[0], c.a[1], hi)
+	dLo := sourceLerp(c.d[0], c.d[1], lo)
+	dHi := sourceLerp(c.d[0], c.d[1], hi)
 	if SourceDot(aLo, aLo).Cmp(radius2) >= 0 ||
 		SourceDot(aHi, aHi).Cmp(radius2) >= 0 ||
-		SourceRadiusMin2(dLo, dHi).Cmp(radius2) <= 0 {
+		sourceRadiusMin2(dLo, dHi).Cmp(radius2) <= 0 {
 		return false
 	}
-	v0 := SourceSub(c.d[0], c.a[0])
-	v1 := SourceSub(c.d[1], c.a[1])
+	v0 := sourceSub(c.d[0], c.a[0])
+	v1 := sourceSub(c.d[1], c.a[1])
 	zero0 := SourceDot(v0, v0).Sign() == 0
 	zero1 := SourceDot(v1, v1).Sign() == 0
 	if zero0 == zero1 {
@@ -358,7 +358,7 @@ func connectorReachPiece(c Connector, radius2, lo, hi, reach *big.Rat) bool {
 		return false
 	}
 	gate := func(t *big.Rat) *big.Rat {
-		a := SourceLerp(c.a[0], c.a[1], t)
+		a := sourceLerp(c.a[0], c.a[1], t)
 		derivative := new(big.Rat).Mul(big.NewRat(2, 1), SourceDot(a, v))
 		deficit := new(big.Rat).Sub(radius2, SourceDot(a, a))
 		return new(big.Rat).Sub(new(big.Rat).Mul(reach, derivative),

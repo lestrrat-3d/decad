@@ -117,14 +117,14 @@ func SourceDot(a, b XY) *big.Rat {
 	return new(big.Rat).Add(new(big.Rat).Mul(a.X, b.X), new(big.Rat).Mul(a.Y, b.Y))
 }
 
-// SourceSub returns a - b.
-func SourceSub(a, b XY) XY {
+// sourceSub returns a - b.
+func sourceSub(a, b XY) XY {
 	return XY{X: new(big.Rat).Sub(a.X, b.X), Y: new(big.Rat).Sub(a.Y, b.Y)}
 }
 
-// SourceLerp returns the exact point a + t*(b-a).
-func SourceLerp(a, b XY, t *big.Rat) XY {
-	d := SourceSub(b, a)
+// sourceLerp returns the exact point a + t*(b-a).
+func sourceLerp(a, b XY, t *big.Rat) XY {
+	d := sourceSub(b, a)
 	return XY{
 		X: new(big.Rat).Add(a.X, new(big.Rat).Mul(t, d.X)),
 		Y: new(big.Rat).Add(a.Y, new(big.Rat).Mul(t, d.Y)),
@@ -138,8 +138,8 @@ func SourceLerp(a, b XY, t *big.Rat) XY {
 func (c Connector) RadialMonotone() bool {
 	for _, pair := range [][2][2]XY{{c.a, c.d}, {c.d, c.f}} {
 		u0, u1 := pair[0][0], pair[0][1]
-		d0 := SourceSub(pair[1][0], u0)
-		d1 := SourceSub(pair[1][1], u1)
+		d0 := sourceSub(pair[1][0], u0)
+		d1 := sourceSub(pair[1][1], u1)
 		b0 := SourceDot(u0, d0)
 		b1 := new(big.Rat).Add(SourceDot(u0, d1), SourceDot(u1, d0))
 		b2 := SourceDot(u1, d1)
@@ -150,9 +150,9 @@ func (c Connector) RadialMonotone() bool {
 	return true
 }
 
-// SourceRadiusMin2 returns the exact minimum squared radius over segment ab.
-func SourceRadiusMin2(a, b XY) *big.Rat {
-	d := SourceSub(b, a)
+// sourceRadiusMin2 returns the exact minimum squared radius over segment ab.
+func sourceRadiusMin2(a, b XY) *big.Rat {
+	d := sourceSub(b, a)
 	den := SourceDot(d, d)
 	if den.Sign() == 0 {
 		return SourceDot(a, a)
@@ -163,13 +163,13 @@ func SourceRadiusMin2(a, b XY) *big.Rat {
 	} else if t.Cmp(big.NewRat(1, 1)) > 0 {
 		t.SetInt64(1)
 	}
-	p := SourceLerp(a, b, t)
+	p := sourceLerp(a, b, t)
 	return SourceDot(p, p)
 }
 
 func (c Connector) FarOutside(radius *big.Rat) bool {
 	r2 := new(big.Rat).Mul(radius, radius)
-	return SourceRadiusMin2(c.f[0], c.f[1]).Cmp(r2) > 0
+	return sourceRadiusMin2(c.f[0], c.f[1]).Cmp(r2) > 0
 }
 
 // A positive half-plane containing every matched source-boundary point
@@ -237,11 +237,11 @@ func (c Connector) rays(t *big.Rat) [2]sourceRay {
 	var out [2]sourceRay
 	for half, pair := range [2][2][2]XY{{c.a, c.d}, {c.d, c.f}} {
 		lo, hi := pair[0], pair[1]
-		d0 := SourceSub(hi[0], lo[0])
-		d1 := SourceSub(hi[1], lo[1])
+		d0 := sourceSub(hi[0], lo[0])
+		d1 := sourceSub(hi[1], lo[1])
 		out[half] = sourceRay{
-			origin:    SourceLerp(lo[0], lo[1], t),
-			direction: SourceLerp(d0, d1, t),
+			origin:    sourceLerp(lo[0], lo[1], t),
+			direction: sourceLerp(d0, d1, t),
 		}
 	}
 	return out

@@ -75,31 +75,6 @@ func loftCylinderChamferSideGroups(fp facetedPayload, source loftCylinderChamfer
 	return groups, nil
 }
 
-func loftCylinderChamferLerp(a, b r3.Vec, level *big.Rat, heldLevel float64) (r3.Vec, proofarith.Xpt, float64, error) {
-	den := new(big.Rat).Sub(proofarith.FloatRat(b.Z), proofarith.FloatRat(a.Z))
-	if den.Sign() == 0 {
-		return r3.Vec{}, proofarith.Xpt{}, 0,
-			fmt.Errorf("%w: loft/cylinder side has zero axial span", ErrUnsupported)
-	}
-	t := new(big.Rat).Quo(new(big.Rat).Sub(level, proofarith.FloatRat(a.Z)), den)
-	if t.Sign() <= 0 || t.Cmp(big.NewRat(1, 1)) >= 0 {
-		return r3.Vec{}, proofarith.Xpt{}, 0,
-			fmt.Errorf("%w: chamfer side level lies outside a wall", ErrUnsupported)
-	}
-	exact := proofarith.Xlerp(proofarith.XptOf(a), proofarith.XptOf(b), t.Num(), t.Denom())
-	p := exact.Vec()
-	p.Z = heldLevel
-	if !proofbound.FiniteVec(p) {
-		return r3.Vec{}, proofarith.Xpt{}, 0,
-			fmt.Errorf("%w: chamfer side station is nonfinite", ErrUnsupported)
-	}
-	round := max(
-		proofarith.RationalFloatError(meshbool.RatCoordOf(exact, 0), p.X),
-		proofarith.RationalFloatError(meshbool.RatCoordOf(exact, 1), p.Y),
-		proofarith.RationalFloatError(meshbool.RatCoordOf(exact, 2), p.Z))
-	return p, exact, proofbound.Radius3D(round), nil
-}
-
 // Side rings alternate each source ruling with its old triangle diagonal.
 // That is the exact horizontal section of the old two-triangle strip before
 // each intersection point is rounded into the result mesh.
@@ -124,8 +99,9 @@ func loftCylinderChamferClipSide(ctx context.Context, mesh *joinedMesh,
 			t := source.outer[1][i]
 			next := source.outer[1][(i+1)%n]
 			for k, end := range [2]int{t, next} {
-				p, exact, round, err := loftCylinderChamferLerp(fp.verts[b], fp.verts[end],
+				p, exact, round, err := loftcylinder.ChamferLerp(fp.verts[b], fp.verts[end],
 					trueLevels[cap], level)
+
 				if err != nil {
 					return result, err
 				}
@@ -311,7 +287,7 @@ func loftCylinderChamferContactAudit(ctx context.Context, fp facetedPayload,
 					_, atSideVertex := sideVertexKeys[contact.P0.Key()]
 					if meshbool.RatCoordOf(contact.P0, 2).Cmp(trueLevel) != 0 ||
 						!contact.P0OnA ||
-						(!atSideVertex && !loftCylinderChamferContactOnSide(
+						(!atSideVertex && !loftcylinder.ChamferContactOnSide(
 							contact.P0, tri, xverts, sideEdges[cap])) {
 						return fmt.Errorf("%w: ideal cap band touches an old wall away from its side ring: cap=%d band=%d old=%d point=%v tri=%v level=%g",
 							ErrUnsupported, cap, i, j, contact.P0.Vec(), tri, level)
@@ -332,7 +308,7 @@ func loftCylinderChamferContactAudit(ctx context.Context, fp facetedPayload,
 					return fmt.Errorf("%w: ideal cap band crosses an old wall away from its side ring", ErrUnsupported)
 				}
 				a, b := tri[contact.EdgeA], tri[(contact.EdgeA+1)%3]
-				if _, ok := sideEdges[cap][loftCylinderChamferEdge(a, b)]; !ok {
+				if _, ok := sideEdges[cap][loftcylinder.ChamferEdge(a, b)]; !ok {
 					return fmt.Errorf("%w: ideal cap band touches an old wall on a non-rim edge", ErrUnsupported)
 				}
 			}
@@ -344,45 +320,6 @@ func loftCylinderChamferContactAudit(ctx context.Context, fp facetedPayload,
 		}
 	}
 	return nil
-}
-
-// Both rings are simple and counterclockwise on entry. Exact segment tests
-// plus one strict inside witness prove the whole inner ring is nested.
-func loftCylinderChamferRingNested(ctx context.Context, verts []r3.Vec, outer, inner []int) (bool, error) {
-	if len(outer) < 3 || len(inner) < 3 {
-		return false, nil
-	}
-	for i, a := range outer {
-		b := outer[(i+1)%len(outer)]
-		pa, pb := verts[a], verts[b]
-		for j, c := range inner {
-			if j%64 == 0 {
-				if err := ctx.Err(); err != nil {
-					return false, err
-				}
-			}
-			d := inner[(j+1)%len(inner)]
-			pc, pd := verts[c], verts[d]
-			if max(pa.X, pb.X) < min(pc.X, pd.X) || max(pc.X, pd.X) < min(pa.X, pb.X) ||
-				max(pa.Y, pb.Y) < min(pc.Y, pd.Y) || max(pc.Y, pd.Y) < min(pa.Y, pb.Y) {
-				continue
-			}
-			if loftcylinder.EdgesMeet(loftcylinder.ExactXY(pa), loftcylinder.ExactXY(pb),
-				loftcylinder.ExactXY(pc), loftcylinder.ExactXY(pd)) {
-				return false, fmt.Errorf("%w: cap rings meet at outer edge %d (%v,%v) and inner edge %d (%v,%v)",
-					ErrUnsupported, i, pa, pb, j, pc, pd)
-			}
-		}
-	}
-	poly := make([]meshbool.Xp2, len(outer))
-	for i, index := range outer {
-		p := verts[index]
-		poly[i] = meshbool.NewXP2(proofarith.FloatRat(p.X), proofarith.FloatRat(p.Y))
-	}
-	p := verts[inner[0]]
-	inside, on, err := meshbool.PointInPoly2(proofbound.NewWorkBudget(ctx), poly,
-		meshbool.NewXP2(proofarith.FloatRat(p.X), proofarith.FloatRat(p.Y)))
-	return inside && !on, err
 }
 
 func loftCylinderChamferCompact(mesh *joinedMesh, bounds []float64) ([]float64, []int) {
@@ -559,7 +496,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		if !loftcylinder.BoreRingSimple(ctx, mesh.verts, inset[cap]) {
 			return nil, fmt.Errorf("%w: loft/cylinder inset is not one simple outer ring", ErrUnsupported)
 		}
-		inSource, err := loftCylinderChamferRingNested(ctx, mesh.verts, source.outer[cap], inset[cap])
+		inSource, err := loftcylinder.ChamferRingNested(ctx, mesh.verts, source.outer[cap], inset[cap])
 		if err != nil {
 			return nil, err
 		}
@@ -567,7 +504,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			return nil, fmt.Errorf("%w: loft/cylinder inset crosses its source cap", ErrUnsupported)
 		}
 		if active[1] {
-			inSide, err := loftCylinderChamferRingNested(ctx, mesh.verts, clipped.rings[cap], inset[cap])
+			inSide, err := loftcylinder.ChamferRingNested(ctx, mesh.verts, clipped.rings[cap], inset[cap])
 			if err != nil {
 				return nil, err
 			}
@@ -575,7 +512,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 				return nil, fmt.Errorf("%w: loft/cylinder inset crosses its side-level ring", ErrUnsupported)
 			}
 		}
-		if err := loftCylinderChamferHeldOutlineGap(ctx, mesh.verts,
+		if err := loftcylinder.ChamferHeldOutlineGap(ctx, mesh.verts,
 			source.outer[cap], inset[cap], fp.meshBound); err != nil {
 			return nil, err
 		}
@@ -648,11 +585,11 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			capLevel = proofarith.FloatRat(source.z1)
 			sideLevel = new(big.Rat).Sub(capLevel, proofarith.FloatRat(setback))
 		}
-		if !loftCylinderChamferExactRingSimple(ctx, ideal, clipped.rings[cap]) {
+		if !loftcylinder.ChamferExactRingSimple(ctx, ideal, clipped.rings[cap]) {
 			return nil, fmt.Errorf("%w: ideal loft/cylinder side section is not simple", ErrUnsupported)
 		}
 		if active[1] {
-			nested, err := loftCylinderChamferExactNested(ctx, ideal, clipped.rings[cap], inset[cap])
+			nested, err := loftcylinder.ChamferExactNested(ctx, ideal, clipped.rings[cap], inset[cap])
 			if err != nil {
 				return nil, err
 			}
@@ -660,11 +597,11 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 				return nil, fmt.Errorf("%w: ideal loft/cylinder inset crosses its side section", ErrUnsupported)
 			}
 		}
-		bandSideEdges[cap], err = loftCylinderChamferBandBoundary(mesh, bands[cap], clipped.rings[cap], inset[cap])
+		bandSideEdges[cap], err = loftcylinder.ChamferBandBoundary(mesh.tris, bands[cap], clipped.rings[cap], inset[cap])
 		if err != nil {
 			return nil, err
 		}
-		if err := loftCylinderChamferIdealBandLevels(mesh, ideal, bands[cap], inset[cap],
+		if err := loftcylinder.ChamferIdealBandLevels(mesh.tris, ideal, bands[cap], inset[cap],
 			capLevel, sideLevel); err != nil {
 			return nil, err
 		}
@@ -673,7 +610,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		bands, bandSideEdges, ideal, setback); err != nil {
 		return nil, err
 	}
-	if err := loftCylinderChamferIdealBandAudit(ctx, mesh, ideal, bands, clipped.clipBound); err != nil {
+	if err := loftcylinder.ChamferIdealBandAudit(ctx, len(mesh.verts), mesh.tris, ideal, bands, clipped.clipBound); err != nil {
 		return nil, err
 	}
 	bridgeReach := 0.0
@@ -717,7 +654,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	// The exact band-to-source witness consumes the full certified tolerance.
 	// Publish that allowance so VerifyAll does not understate the new boundary.
 	bound := allowance
-	if err := loftCylinderChamferIdealOrientation(ctx, mesh, ideal); err != nil {
+	if err := loftcylinder.ChamferIdealOrientation(ctx, mesh.tris, ideal); err != nil {
 		return nil, err
 	}
 	if err := loftCylinderChamferSolidWitness(ctx, fp, source, setback); err != nil {

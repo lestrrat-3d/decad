@@ -41,12 +41,12 @@ func TestLoftCylinderEdgesMeetXPAgreesWithRational(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, EdgesMeet(tc.a, tc.b, tc.c, tc.d))
 			xp := func(p XY) meshbool.Xp2 { return meshbool.NewXP2(p.X, p.Y) }
-			require.Equal(t, tc.want, EdgesMeetXP(xp(tc.a), xp(tc.b), xp(tc.c), xp(tc.d)))
+			require.Equal(t, tc.want, edgesMeetXP(xp(tc.a), xp(tc.b), xp(tc.c), xp(tc.d)))
 			// A point without a finite float image takes the rational body.
 			huge := new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 2000), big.NewInt(1))
 			far := XY{huge, huge}
 			require.Equal(t, EdgesMeet(tc.a, tc.b, tc.c, far),
-				EdgesMeetXP(xp(tc.a), xp(tc.b), xp(tc.c), xp(far)))
+				edgesMeetXP(xp(tc.a), xp(tc.b), xp(tc.c), xp(far)))
 		})
 	}
 }

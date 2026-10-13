@@ -356,7 +356,7 @@ func loftMirrorCylinderChamferSeam(ctx context.Context, lower, upper facetedPayl
 		!loftcylinder.BoreRingSimple(ctx, lower.verts, half.inner[1]) {
 		return fmt.Errorf("%w: mirrored cap chamfer has no simple middle loops", ErrUnsupported)
 	}
-	nested, err := loftCylinderChamferRingNested(ctx, lower.verts, half.outer[1], half.inner[1])
+	nested, err := loftcylinder.ChamferRingNested(ctx, lower.verts, half.outer[1], half.inner[1])
 	if err != nil {
 		return err
 	}
@@ -368,7 +368,7 @@ func loftMirrorCylinderChamferSeam(ctx context.Context, lower, upper facetedPayl
 	for _, loop := range [][]int{half.outer[1], half.inner[1]} {
 		for i, index := range loop {
 			vertices[index] = struct{}{}
-			edges[loftCylinderChamferEdge(index, loop[(i+1)%len(loop)])] = struct{}{}
+			edges[loftcylinder.ChamferEdge(index, loop[(i+1)%len(loop)])] = struct{}{}
 		}
 	}
 	for side, payload := range []facetedPayload{lower, upper} {
@@ -406,7 +406,7 @@ func loftMirrorCylinderChamferSeam(ctx context.Context, lower, upper facetedPayl
 				return fmt.Errorf("%w: mirrored cap chamfer has a planar seam wall", ErrUnsupported)
 			}
 			if len(on) == 2 {
-				if _, ok := edges[loftCylinderChamferEdge(on[0], on[1])]; !ok {
+				if _, ok := edges[loftcylinder.ChamferEdge(on[0], on[1])]; !ok {
 					return fmt.Errorf("%w: mirrored cap chamfer has an unmatched seam edge", ErrUnsupported)
 				}
 			}
