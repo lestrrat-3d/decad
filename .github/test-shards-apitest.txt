@@ -39,9 +39,14 @@
 1	0.00	TestBodyPatchPlanarHoleFillTessellates
 1	0.00	TestBodyPatchPlanarMeshPlacementAndVerification
 1	0.01	TestBooleanNilContextIsDegenerate
+1	0.01	TestBrepIndependentBossRootEdgesRefuseChamferRouteE
 1	0.01	TestBrepIndependentBossRootEdgesRefuseRouteEWedge
+1	0.01	TestBrepSingleBossPerpendicularRootChamferAddsMaterial
+1	0.01	TestBrepSingleBossRootChamferAddsMaterial
 1	0.01	TestBrepSingleBossRootFilletAddsMaterial
+1	0.01	TestBrepSingleBossTopEdgeChamferKeepsRouteE
 1	0.01	TestBrepSingleBossTopEdgeFilletKeepsRouteE
+1	0.01	TestBrepSingleUnderBossRootChamferAddsMaterial
 1	0.01	TestCapBlendComputedStopMassBounds
 1	0.00	TestCapBlendPartialLoopSelectionRefused
 1	0.01	TestCapBlendSideLevelCarriesSetbackRounding

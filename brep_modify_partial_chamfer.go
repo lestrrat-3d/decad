@@ -14,8 +14,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
-// brepChamferPartialLoop admits one pair of adjacent selected straight walks
-// on a planar face. The other two vertices end on unselected straight walks.
+// brepChamferPartialLoop admits one or two adjacent selected straight walks
+// on a planar face. The chain's two vertices end on unselected straight walks.
 func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 	call brepModifyRequest, sel brepLoopSel, selected []bool) (*Body, error) {
 	initial, err := newBrepLoopRead(ctx, bp, call)
@@ -25,8 +25,8 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 	if err := initial.matchEdges(); err != nil {
 		return nil, err
 	}
-	if len(call.edges) != 2 || len(selected) < 4 {
-		return nil, initial.refuse("SL1", `a partial chamfer requires exactly two adjacent edges with two free ends`)
+	if len(call.edges) < 1 || len(call.edges) > 2 || len(selected) < 4 {
+		return nil, initial.refuse("SL1", `a partial chamfer requires one or two adjacent edges with two free ends`)
 	}
 	var walks []int
 	for i, on := range selected {
@@ -34,9 +34,10 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 			walks = append(walks, i)
 		}
 	}
-	if len(walks) != 2 ||
-		(walks[0]+1)%len(selected) != walks[1] && (walks[1]+1)%len(selected) != walks[0] {
-		return nil, initial.refuse("SL1", `a partial chamfer's two walks are not adjacent`)
+	if len(walks) != len(call.edges) ||
+		len(walks) == 2 &&
+			(walks[0]+1)%len(selected) != walks[1] && (walks[1]+1)%len(selected) != walks[0] {
+		return nil, initial.refuse("SL1", `a partial chamfer's selected walks are not one chain`)
 	}
 	cl, err := oneLoopCornerLoop(initial.budget, bp.faces[sel.face].regionLoop(sel.loop), freeform.NewFreeformWork())
 	if err != nil {
@@ -74,8 +75,29 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 	if err := r.matchEdges(); err != nil {
 		return nil, err
 	}
-	againSel, again, ok := r.partialSelectedLoop()
-	if !ok || againSel.face != sel.face || againSel.loop != sel.loop || !slices.Equal(selected, again) {
+	planar := r.topo.planar[sel.face]
+	if sel.loop >= len(planar) || len(planar[sel.loop]) != len(selected) {
+		return nil, r.refuse("SL1", `restating the straight walls changed the selected partial loop`)
+	}
+	again := make([]bool, len(selected))
+	for _, ei := range r.matched {
+		if ei < 0 {
+			return nil, r.refuse("SL1", `restating the straight walls lost a selected edge`)
+		}
+		found := false
+		for _, ui := range r.topo.edges[ei] {
+			u := r.topo.uses[ui]
+			if u.Face == sel.face && u.Loop == sel.loop && u.Part == brepLoopSeg &&
+				u.Seg >= 0 && u.Seg < len(again) {
+				again[u.Seg] = true
+				found = true
+			}
+		}
+		if !found {
+			return nil, r.refuse("SL1", `restating the straight walls moved a selected edge off its planar loop`)
+		}
+	}
+	if !slices.Equal(selected, again) {
 		return nil, r.refuse("SL1", `restating the straight walls changed the selected partial loop`)
 	}
 	out, err := r.rewritePartialChamfer(sel, selected, blends)

@@ -108,11 +108,9 @@ func brepBlendEdges(ctx context.Context, d *Document, bp brepPayload, call brepM
 	if err != nil {
 		return nil, err
 	}
-	if call.loopKind == brepBandFillet {
-		for _, blend := range blends {
-			if err := r.requireFilletMaterialWedge(blend); err != nil {
-				return nil, err
-			}
+	for _, blend := range blends {
+		if err := r.requireBlendMaterialWedge(blend); err != nil {
+			return nil, err
 		}
 	}
 	out, err := r.rewrite(blends)
@@ -137,11 +135,11 @@ func brepBlendEdges(ctx context.Context, d *Document, bp brepPayload, call brepM
 	return body, nil
 }
 
-// requireFilletMaterialWedge checks route E's section premise at both ends.
+// requireBlendMaterialWedge checks route E's section premise at both ends.
 // A face across an edge may have a convex corner while the material between
 // the end faces has a reflex corner, as at one edge of a stacked boss root.
-// Its corner blend would remove material where the requested fillet fills it.
-func (r *brepEdgeRoute) requireFilletMaterialWedge(eb *brepEdgeBlend) error {
+// Its corner blend would remove material where the requested blend fills it.
+func (r *brepEdgeRoute) requireBlendMaterialWedge(eb *brepEdgeBlend) error {
 	materialConvex, decided := brepgeom.MaterialWedgeConvex(eb.pair, r.topo.uses,
 		r.topo.embeds, r.topo.walls)
 	if !decided {
