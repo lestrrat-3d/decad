@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -18,6 +19,68 @@ const loftAuditCandidateBatchSize = 1_000_000
 type loftRowScan interface {
 	visitRow(budget *proofbound.WorkBudget, i int, limit uint64,
 		fn func(j int)) (uint64, bool, error)
+	walkRow(i int, limit uint64, fn func(j int)) (uint64, bool)
+}
+
+const (
+	// loftRowParallelMin is the member count from which row walks fan out.
+	loftRowParallelMin = 4096
+	// loftRowChunkRows bounds the rows one parallel chunk walks.
+	loftRowChunkRows = 8192
+)
+
+// loftRowResult is one row's budget-free walk.
+type loftRowResult struct {
+	work     uint64
+	exceeded bool
+	count    int
+	row      []int32 // sorted partners (stream only)
+}
+
+// loftRowChunkEnd returns the end of the chunk of consecutive members that
+// starts at lo. A chunk ends after loftRowChunkRows rows or once the S8 counts
+// of its rows reach loftAuditCandidateBatchSize, whichever comes first, and
+// holds at least one row, so a stream never holds much more than one batch of
+// partners in rows.
+func loftRowChunkEnd(members, starts []int, lo int) int {
+	var counts int
+	hi := lo
+	for hi < len(members) && hi-lo < loftRowChunkRows && (hi == lo || counts < loftAuditCandidateBatchSize) {
+		i := members[hi]
+		counts += starts[i+1] - starts[i]
+		hi++
+	}
+	return hi
+}
+
+// walkLoftRows walks members[lo:hi] concurrently without touching budget
+// except to poll it from the calling goroutine. Row k of the chunk walks with
+// limit ceiling, the largest limit any row can get, and is sorted when keep
+// is set; otherwise only its partners are counted.
+func walkLoftRows(budget *proofbound.WorkBudget, tree loftRowScan, members []int, lo, hi int,
+	ceiling uint64, keep bool, workers int, out []loftRowResult) error {
+	_, err := orderedwork.Each(hi-lo, workers, 64, budget.Err, func(k int) error {
+		r := &out[k]
+		*r = loftRowResult{row: r.row[:0]}
+		if !keep {
+			r.work, r.exceeded = tree.walkRow(members[lo+k], ceiling, func(int) { r.count++ })
+			return nil
+		}
+		r.work, r.exceeded = tree.walkRow(members[lo+k], ceiling, func(j int) { r.row = append(r.row, int32(j)) })
+		r.count = len(r.row)
+		slices.Sort(r.row)
+		return nil
+	})
+	return err
+}
+
+// replayLoftRow steps budget exactly as visitRow(budget, i, limit, ...) does
+// for a row whose walk is r.
+func replayLoftRow(budget *proofbound.WorkBudget, r *loftRowResult, limit uint64) (uint64, bool, error) {
+	if r.exceeded || r.work > limit {
+		return replayRowSteps(budget, limit+1, true)
+	}
+	return replayRowSteps(budget, r.work, false)
 }
 
 // preflightLoftRows runs before exact preparation or any S7 classification.
@@ -26,7 +89,40 @@ type loftRowScan interface {
 // reports the same candidate count for every triangle.
 func preflightLoftRows(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
 	ceiling uint64) error {
+	return preflightLoftRowsWorkers(budget, tree, members, starts, ceiling,
+		orderedwork.EachWorkers(len(members), loftRowParallelMin))
+}
+
+// preflightLoftRowsWorkers is preflightLoftRows with an explicit worker count;
+// with workers < 2 the rows walk serially against the budget.
+func preflightLoftRowsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
+	ceiling uint64, workers int) error {
 	var scanned uint64
+	if workers >= 2 {
+		out := make([]loftRowResult, min(loftRowChunkRows, len(members)))
+		for lo := 0; lo < len(members); {
+			hi := loftRowChunkEnd(members, starts, lo)
+			if err := walkLoftRows(budget, tree, members, lo, hi, ceiling, false, workers, out); err != nil {
+				return err
+			}
+			for k := range hi - lo {
+				i := members[lo+k]
+				work, exceeded, err := replayLoftRow(budget, &out[k], ceiling-scanned)
+				if err != nil {
+					return err
+				}
+				if exceeded {
+					return errLoftAuditCeiling()
+				}
+				scanned += work
+				if out[k].count != starts[i+1]-starts[i] {
+					return fmt.Errorf("%w: row-ordered loft candidates differ from S8 count", decaderr.ErrUnsupported)
+				}
+			}
+			lo = hi
+		}
+		return budget.Err()
+	}
 	for _, i := range members {
 		rowCount := 0
 		work, exceeded, err := tree.visitRow(budget, i, ceiling-scanned, func(int) { rowCount++ })
@@ -52,6 +148,18 @@ func preflightLoftRows(budget *proofbound.WorkBudget, tree loftRowScan, members,
 func streamLoftPairs(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
 	count, ceiling uint64, batchSize int, tris [][3]int, boxes [][2]r3.Vec, data *LoftAuditData,
 	shortcuts LoftAuditShortcuts, work *LoftAuditWork, testPair func(i, j int) error) (int, int, error) {
+	return streamLoftPairsWorkers(budget, tree, members, starts, count, ceiling, batchSize, tris, boxes, data,
+		shortcuts, work, testPair, orderedwork.EachWorkers(len(members), loftRowParallelMin))
+}
+
+// streamLoftPairsWorkers is streamLoftPairs with an explicit worker count;
+// with workers < 2 each row walks serially against the budget. Otherwise a
+// chunk of rows walks and sorts concurrently, and the caller replays each
+// row's budget steps and feeds the batch in member order.
+func streamLoftPairsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
+	count, ceiling uint64, batchSize int, tris [][3]int, boxes [][2]r3.Vec, data *LoftAuditData,
+	shortcuts LoftAuditShortcuts, work *LoftAuditWork, testPair func(i, j int) error,
+	workers int) (int, int, error) {
 	batch := loftCandidates{
 		starts: make([]int, 1, min(len(members)+1, batchSize+1)),
 		js:     make([]int32, 0, min(int(count), batchSize)),
@@ -76,21 +184,49 @@ func streamLoftPairs(budget *proofbound.WorkBudget, tree loftRowScan, members, s
 		})
 		return failI, failJ, err
 	}
-	for _, i := range members {
-		row = row[:0]
-		rowWork, exceeded, err := tree.visitRow(budget, i, ceiling-scanned,
-			func(j int) { row = append(row, int32(j)) })
-		if err != nil {
-			return -1, -1, err
+	var out []loftRowResult
+	if workers >= 2 {
+		out = make([]loftRowResult, min(loftRowChunkRows, len(members)))
+	}
+	var chunkLo, chunkHi int
+	for m, i := range members {
+		if workers >= 2 {
+			if m == chunkHi {
+				chunkLo, chunkHi = m, loftRowChunkEnd(members, starts, m)
+				if err := walkLoftRows(budget, tree, members, chunkLo, chunkHi, ceiling, true, workers,
+					out); err != nil {
+					return -1, -1, err
+				}
+			}
+			r := &out[m-chunkLo]
+			rowWork, exceeded, err := replayLoftRow(budget, r, ceiling-scanned)
+			if err != nil {
+				return -1, -1, err
+			}
+			if exceeded {
+				return -1, -1, errLoftAuditCeiling()
+			}
+			scanned += rowWork
+			row = r.row
+			if len(row) != starts[i+1]-starts[i] {
+				return -1, -1, fmt.Errorf("%w: row-ordered loft candidates differ from S8 count", decaderr.ErrUnsupported)
+			}
+		} else {
+			row = row[:0]
+			rowWork, exceeded, err := tree.visitRow(budget, i, ceiling-scanned,
+				func(j int) { row = append(row, int32(j)) })
+			if err != nil {
+				return -1, -1, err
+			}
+			if exceeded {
+				return -1, -1, errLoftAuditCeiling()
+			}
+			scanned += rowWork
+			if len(row) != starts[i+1]-starts[i] {
+				return -1, -1, fmt.Errorf("%w: row-ordered loft candidates differ from S8 count", decaderr.ErrUnsupported)
+			}
+			slices.Sort(row)
 		}
-		if exceeded {
-			return -1, -1, errLoftAuditCeiling()
-		}
-		scanned += rowWork
-		if len(row) != starts[i+1]-starts[i] {
-			return -1, -1, fmt.Errorf("%w: row-ordered loft candidates differ from S8 count", decaderr.ErrUnsupported)
-		}
-		slices.Sort(row)
 		if len(batch.js) != 0 && len(batch.js)+len(row) > batchSize {
 			if failI, failJ, err := flush(); err != nil {
 				return failI, failJ, err

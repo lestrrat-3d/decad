@@ -53,6 +53,22 @@ func (s groupedTreeScan) visitRow(budget *proofbound.WorkBudget, i int,
 	return scanned, false, nil
 }
 
+// walkRow is visitRow's walk without a budget; see treeScan.walkRow.
+func (s groupedTreeScan) walkRow(i int, limit uint64, fn func(j int)) (uint64, bool) {
+	var scanned uint64
+	for k, group := range s.groups {
+		if s.keys[k] >= 0 && s.keys[k] == s.family[i] {
+			continue
+		}
+		used, exceeded := group.walkRow(i, limit-scanned, fn)
+		scanned += used
+		if exceeded {
+			return scanned, true
+		}
+	}
+	return scanned, false
+}
+
 func (s groupedTreeScan) visit(budget *proofbound.WorkBudget, limit uint64,
 	fn func(i, j int)) (uint64, bool, error) {
 	var scanned uint64

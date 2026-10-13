@@ -12,6 +12,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -805,6 +806,21 @@ func (s sweepOrder) visit(budget *proofbound.WorkBudget, limit uint64, fn func(i
 // pass scanned. It reports true instead when the pass scans more than limit
 // pairs (visit).
 func sweepCandidateCounts(budget *proofbound.WorkBudget, s pairScan, f int, keep func(i, j int) bool, limit uint64) (sweepCount, error) {
+	workers := 1
+	if tree, ok := s.(treeScan); ok {
+		workers = orderedwork.EachWorkers(len(tree.order), loftTreeParallelMin)
+	}
+	return sweepCandidateCountsWorkers(budget, s, f, keep, limit, workers)
+}
+
+// sweepCandidateCountsWorkers is sweepCandidateCounts with an explicit worker
+// count. A tree scan with workers >= 2 and at least loftTreeParallelMin
+// members counts in parallel; every other case is the serial walk.
+func sweepCandidateCountsWorkers(budget *proofbound.WorkBudget, s pairScan, f int, keep func(i, j int) bool,
+	limit uint64, workers int) (sweepCount, error) {
+	if tree, ok := s.(treeScan); ok && workers >= 2 && len(tree.order) >= loftTreeParallelMin {
+		return tree.countParallel(budget, f, keep, limit, workers)
+	}
 	starts := make([]int, f+1)
 	scanned, exceeded, err := s.visit(budget, limit, func(i, j int) {
 		if keep(i, j) {
