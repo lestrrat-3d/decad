@@ -399,7 +399,7 @@ exception. A certified pair currently returns `ErrUnsupported` at public
 and complete-contact audits have not been built. The same producer remains
 unchanged after that refusal.
 
-An adaptive Bernstein cell or depth limit produces no source certificate.
-In that case, `Union` may continue through the ordinary mesh Boolean and its
-existing contact and volume gates. Other source errors still propagate, and
-a completed source certificate still requires the held-seam builder.
+An unfinished source proof produces no certificate. Unless the caller's
+context was canceled, `Union` may continue through the ordinary mesh Boolean
+and its independent contact and volume gates. A completed source certificate
+still requires the held-seam builder.

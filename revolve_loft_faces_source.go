@@ -80,9 +80,8 @@ func certifyRevolveLoftFacesSource(ctx context.Context, blank, tooth *Body) (
 	return selected, selected != nil, nil
 }
 
-// The source gate precedes a separate held-seam construction. When its
-// adaptive partition reaches a proof limit, the ordinary mesh Boolean gets
-// a chance to certify the pair through its own contact and volume gates.
+// The source gate precedes a separate held-seam construction. An unfinished
+// source proof cannot veto the ordinary mesh Boolean's independent gates.
 func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 	a, b *Body) (bool, error) {
 	if op != meshbool.OpUnion {
@@ -112,13 +111,11 @@ func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 }
 
 func revolveLoftFacesSourceProofError(ctx context.Context, err error) (bool, error) {
-	if errors.Is(err, errRevolveLoftFacesAdaptiveLimit) {
-		if canceled := ctx.Err(); canceled != nil {
-			return true, canceled
-		}
-		return false, nil
+	if ctx.Err() != nil || errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) {
+		return true, err
 	}
-	return true, err
+	return false, nil
 }
 
 func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
