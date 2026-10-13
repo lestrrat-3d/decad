@@ -541,18 +541,11 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	// The near-band and middle-side proofs read only the finished mesh and
 	// source records, so they run side by side. When both fail, the near-band
 	// error is returned, as when they ran in sequence.
-	reach := func(ctx context.Context, k int) error {
-		if k == 0 {
-			return loftCylinderChamferNearBandReach(ctx, mesh, fp, source, ideal, bands,
-				clipped.clipBound, allowance, !active[1], reflectedShift)
-		}
-		if err := loftCylinderChamferBoreInheritance(fp, mesh, source); err != nil {
-			return err
-		}
-		return loftCylinderChamferMiddleSideReach(ctx, fp, mesh, source, ideal,
-			middle, clipped.clipBound)
-	}
-	if err := orderedwork.Proofs(ctx, 2, orderedwork.EachWorkers(2, 2), reach); err != nil {
+	if err := loftCylinderChamferReach(ctx, &loftCylinderChamferReachInput{
+		fp: fp, mesh: mesh, source: source, ideal: ideal, bands: bands, middle: middle,
+		clipBound: clipped.clipBound, allowance: allowance, multipleRings: !active[1],
+		reflectedShift: reflectedShift,
+	}, orderedwork.EachWorkers(middle[1]-middle[0], 256)); err != nil {
 		return nil, err
 	}
 	// The exact band-to-source witness consumes the full certified tolerance.
