@@ -73,6 +73,16 @@ func walkLoftRows(budget *proofbound.WorkBudget, tree loftRowScan, members []int
 		})
 		return err
 	}
+	if ts, ok := tree.(treeScan); ok && !keep {
+		_, err := orderedwork.Each(hi-lo, workers, 64, budget.Err, func(k int) error {
+			r := &out[k]
+			*r = loftRowResult{row: r.row[:0]}
+			i := members[lo+k]
+			r.count, r.work, r.exceeded = ts.flat.walkRowCount(ts.boxes[i], i, ceiling)
+			return nil
+		})
+		return err
+	}
 	_, err := orderedwork.Each(hi-lo, workers, 64, budget.Err, func(k int) error {
 		r := &out[k]
 		*r = loftRowResult{row: r.row[:0]}
