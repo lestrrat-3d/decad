@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/pointcone"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
@@ -30,51 +31,14 @@ type pointConeLimit struct {
 	denoted          *surfacenormal.Revolved
 	reversed         bool
 
-	consts *pointConeConsts // built on first use by constants
+	consts *pointcone.Consts // built on first use by constants
 }
 
-// pointConeConsts are the cone's apex a = an/ad and slope k = kn/kd as exact
-// integers, with the products every triangle bound multiplies in. Every value
-// is an integer, so a Dyadic with exponent zero.
-type pointConeConsts struct {
-	ad, kd            proofarith.Dyadic
-	cRec, cRad, cProd proofarith.Dyadic // an(kd+kn)²kd, an·kn·kd, an(kd+kn)kd
-	cAlpha            proofarith.Dyadic // an·kd
-	kn                proofarith.Dyadic
-	apexF, slopeF     float64 // cone.apex.Float64(), cone.slope.Float64()
-}
-
-func (cone *pointConeLimit) constants() *pointConeConsts {
-	if cone.consts != nil {
-		return cone.consts
-	}
-	dyInt := func(z *big.Int) proofarith.Dyadic {
-		d, _ := proofarith.DyOfRat(new(big.Rat).SetInt(z))
-		return d
-	}
-	an, ad := dyInt(cone.apex.Num()), dyInt(cone.apex.Denom())
-	kn, kd := dyInt(cone.slope.Num()), dyInt(cone.slope.Denom())
-	sum := proofarith.DyAdd(kd, kn)
-	ankd := proofarith.DyMul(an, kd)
-	apexF, _ := cone.apex.Float64()
-	slopeF, _ := cone.slope.Float64()
-	cone.consts = &pointConeConsts{
-		ad: ad, kd: kd, kn: kn, apexF: apexF, slopeF: slopeF,
-		cRec:   proofarith.DyMul(proofarith.DyMul(ankd, sum), sum),
-		cRad:   proofarith.DyMul(ankd, kn),
-		cProd:  proofarith.DyMul(ankd, sum),
-		cAlpha: ankd,
+func (cone *pointConeLimit) constants() *pointcone.Consts {
+	if cone.consts == nil {
+		cone.consts = pointcone.ConstantsOf(cone.apex, cone.slope)
 	}
 	return cone.consts
-}
-
-type pointConeEdge struct{ a, b int }
-
-type pointConeSide struct{ u, v, group int }
-
-type pointConeSample struct {
-	q, alpha           float64
-	qError, pointError float64
 }
 
 func pointConeFacetGroup(cone *pointConeLimit, flip bool) facetGroup {
@@ -92,13 +56,6 @@ func pointConeFacetGroup(cone *pointConeLimit, flip bool) facetGroup {
 	}
 	return facetGroup{origins: cone.origins, surface: cone.surface,
 		denoted: denoted, reversed: cone.reversed != flip}
-}
-
-func orderedPointConeEdge(a, b int) pointConeEdge {
-	if a > b {
-		a, b = b, a
-	}
-	return pointConeEdge{a, b}
 }
 
 // exactPointCone recognizes the unplaced, full, straight-meridian cone whose
@@ -193,7 +150,7 @@ func tryPointConeBoolean(ctx context.Context, op meshbool.OperationKind, d *Docu
 	} else if fp.pointSection == nil || fp.pointSection.apex != (r3.Vec{}) {
 		return nil, false, nil
 	}
-	if !pointConeSourceAboveFarCap(record.base, cone) {
+	if !pointcone.AboveFarCap(record.base.verts, record.base.meshBound, cone.far) {
 		return nil, false, nil
 	}
 	if op == meshbool.OpCut {
@@ -215,24 +172,6 @@ func tryPointConeBoolean(ctx context.Context, op meshbool.OperationKind, d *Docu
 	return body, true, err
 }
 
-// The cone's far plane is not represented in the radial trim mesh. Admit
-// this arm only when the entire authenticated fan clears that plane.
-func pointConeSourceAboveFarCap(base facetedPayload, cone *pointConeLimit) bool {
-	if !proofbound.FiniteVec(r3.Vec{X: base.meshBound}) || base.meshBound < 0 {
-		return false
-	}
-	for _, p := range base.verts {
-		if !proofbound.FiniteVec(p) {
-			return false
-		}
-		lo := new(big.Rat).Sub(proofarith.FloatRat(p.X), proofarith.FloatRat(base.meshBound))
-		if lo.Cmp(cone.far) <= 0 {
-			return false
-		}
-	}
-	return true
-}
-
 // The larger cone's radial crossing lies farther from the point-loft apex.
 // This comparison uses a deliberately wide exact-rational enclosure of the
 // source fan, so nearly coincident or crossing cones fall back to mesh Boolean.
@@ -245,45 +184,8 @@ func pointConeLimitEarlier(old, next *pointConeLimit, base facetedPayload) bool 
 }
 
 func pointConeLimitOrdered(earlier, later *pointConeLimit, base facetedPayload) bool {
-	xMin, xMax := math.Inf(1), math.Inf(-1)
-	yMin, yMax := math.Inf(1), math.Inf(-1)
-	zMin, zMax := math.Inf(1), math.Inf(-1)
-	rhoMax := new(big.Rat)
-	for _, p := range base.verts[1:] {
-		xMin, xMax = min(xMin, p.X), max(xMax, p.X)
-		yMin, yMax = min(yMin, p.Y), max(yMax, p.Y)
-		zMin, zMax = min(zMin, p.Z), max(zMax, p.Z)
-		y, z := proofarith.FloatRat(p.Y), proofarith.FloatRat(p.Z)
-		r2 := new(big.Rat).Add(new(big.Rat).Mul(y, y), new(big.Rat).Mul(z, z))
-		r := proofarith.FloatRat(proofbound.RatSqrtUp(r2))
-		if r.Cmp(rhoMax) > 0 {
-			rhoMax = r
-		}
-	}
-	minAbs := func(lo, hi float64) float64 {
-		if lo <= 0 && hi >= 0 {
-			return 0
-		}
-		return min(math.Abs(lo), math.Abs(hi))
-	}
-	rhoMin := proofarith.FloatRat(max(minAbs(yMin, yMax), minAbs(zMin, zMax)))
-	// aLater/gLater > aEarlier/gEarlier exactly when this affine
-	// expression in x and rho is positive over the whole far cap.
-	dA := new(big.Rat).Sub(later.apex, earlier.apex)
-	dR := new(big.Rat).Sub(new(big.Rat).Mul(later.apex, earlier.slope),
-		new(big.Rat).Mul(earlier.apex, later.slope))
-	x := proofarith.FloatRat(xMin)
-	if dA.Sign() < 0 {
-		x = proofarith.FloatRat(xMax)
-	}
-	rho := rhoMin
-	if dR.Sign() < 0 {
-		rho = rhoMax
-	}
-	margin := new(big.Rat).Add(new(big.Rat).Mul(dA, x), new(big.Rat).Mul(dR, rho))
-	move := new(big.Rat).Add(new(big.Rat).Abs(dA), new(big.Rat).Abs(dR))
-	move.Mul(move, proofarith.FloatRat(base.meshBound))
-	return margin.Cmp(move) > 0
+	return pointcone.Ordered(earlier.apex, earlier.slope, later.apex, later.slope,
+		base.verts, base.meshBound)
 }
 
 func buildPointConeTrim(ctx context.Context, d *Document, ref producerID,
@@ -307,19 +209,19 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	capArea, reach := pointConeCapArea(far, caps), pointConeReachUpper(far)
-	upperSamples := make([]pointConeSample, len(far))
+	capArea, reach := pointcone.CapArea(far, caps), pointcone.ReachUpper(far)
+	upperSamples := make([]pointcone.Sample, len(far))
 	upperNodeRound, upperQError := 0.0, 0.0
 	for i, p := range far {
 		upperSamples[i], err = pointConeFactor(p, upper)
 		if err != nil {
 			return nil, err
 		}
-		upperNodeRound = max(upperNodeRound, upperSamples[i].pointError)
-		upperQError = max(upperQError, upperSamples[i].qError)
+		upperNodeRound = max(upperNodeRound, upperSamples[i].PointError)
+		upperQError = max(upperQError, upperSamples[i].QError)
 	}
-	capGeom := pointConeCapGeometry(far, caps)
-	upperCapBound, upperLip, err := pointConeCapBoundGeom(capGeom, upper)
+	capGeom := pointcone.CapGeometry(far, caps)
+	upperCapBound, upperLip, err := pointcone.CapBound(capGeom, upper.constants())
 	if err != nil {
 		return nil, err
 	}
@@ -328,13 +230,13 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 			proofbound.ProductUpper(upperLip, upperLip))))
 	lowerCapBound, lowerLip, lowerNodeRound := 0.0, 0.0, 0.0
 	if lower != nil {
-		lowerCapBound, lowerLip, err = pointConeCapBoundGeom(capGeom, lower)
+		lowerCapBound, lowerLip, err = pointcone.CapBound(capGeom, lower.constants())
 		if err != nil {
 			return nil, err
 		}
 	}
 	outside, inside, _, allSides, far, upperSamples, contactRound, err :=
-		pointConeSplitAtContact(far, caps, sides, upperSamples)
+		pointcone.SplitAtContact(far, caps, sides, upperSamples)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +244,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	allCaps := make([][3]int, 0, len(outside)+len(inside))
 	allCaps = append(allCaps, outside...)
 	allCaps = append(allCaps, inside...)
-	lowerSamples := make([]pointConeSample, len(far))
+	lowerSamples := make([]pointcone.Sample, len(far))
 	if lower != nil {
 		lowerQError := 0.0
 		for i, p := range far {
@@ -350,11 +252,11 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 			if err != nil {
 				return nil, err
 			}
-			if lowerSamples[i].q-lowerSamples[i].qError <= 1 {
+			if lowerSamples[i].Q-lowerSamples[i].QError <= 1 {
 				return nil, fmt.Errorf("%w: the lower cone touches the point-loft far cap", ErrUnsupported)
 			}
-			lowerNodeRound = max(lowerNodeRound, lowerSamples[i].pointError)
-			lowerQError = max(lowerQError, lowerSamples[i].qError)
+			lowerNodeRound = max(lowerNodeRound, lowerSamples[i].PointError)
+			lowerQError = max(lowerQError, lowerSamples[i].QError)
 		}
 		lowerCapBound = proofbound.AbsSumUpper(lowerCapBound,
 			proofbound.ProductUpper(reach, proofbound.ProductUpper(lowerQError,
@@ -363,15 +265,15 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	n := len(far)
 	verts := make([]r3.Vec, 0, 2*n+1)
 	for i, p := range far {
-		if upperSamples[i].q <= 1 {
+		if upperSamples[i].Q <= 1 {
 			verts = append(verts, p)
 		} else {
-			verts = append(verts, p.Scale(upperSamples[i].alpha))
+			verts = append(verts, p.Scale(upperSamples[i].Alpha))
 		}
 	}
 	if lower != nil {
 		for i, p := range far {
-			verts = append(verts, p.Scale(lowerSamples[i].alpha))
+			verts = append(verts, p.Scale(lowerSamples[i].Alpha))
 		}
 	} else {
 		verts = append(verts, r3.Vec{})
@@ -405,17 +307,17 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 			add([3]int{t[2] + n, t[1] + n, t[0] + n}, lowerGroup)
 		}
 		for _, side := range allSides {
-			u, v := side.u, side.v
-			add([3]int{u, u + n, v + n}, side.group)
-			add([3]int{u, v + n, v}, side.group)
+			u, v := side.U, side.V
+			add([3]int{u, u + n, v + n}, side.Group)
+			add([3]int{u, v + n, v}, side.Group)
 		}
 	} else {
 		apex := len(verts) - 1
 		for _, side := range allSides {
-			add([3]int{apex, side.v, side.u}, side.group)
+			add([3]int{apex, side.V, side.U}, side.Group)
 		}
 	}
-	verts, tris = pointConeCompact(verts, tris)
+	verts, tris = pointcone.Compact(verts, tris)
 	if tessellation.OrientationSign(verts, tris, r3.Vec{}) < 0 {
 		for i := range tris {
 			tris[i][1], tris[i][2] = tris[i][2], tris[i][1]
@@ -479,9 +381,9 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	if len(far) == 0 || len(caps) == 0 {
 		return nil, fmt.Errorf("%w: the point loft has no far cap", ErrDegenerate)
 	}
-	fullCapArea := pointConeCapArea(far, caps)
-	fullReach := pointConeReachUpper(far)
-	samples := make([]pointConeSample, len(far))
+	fullCapArea := pointcone.CapArea(far, caps)
+	fullReach := pointcone.ReachUpper(far)
+	samples := make([]pointcone.Sample, len(far))
 	maxNodeRound, maxQError := 0.0, 0.0
 	for i, p := range far {
 		sample, err := pointConeFactor(p, cone)
@@ -489,10 +391,10 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 			return nil, err
 		}
 		samples[i] = sample
-		maxNodeRound = max(maxNodeRound, sample.pointError)
-		maxQError = max(maxQError, sample.qError)
+		maxNodeRound = max(maxNodeRound, sample.PointError)
+		maxQError = max(maxQError, sample.QError)
 	}
-	capBound, lip, err := pointConeCapBound(far, caps, cone)
+	capBound, lip, err := pointcone.CapBound(pointcone.CapGeometry(far, caps), cone.constants())
 	if err != nil {
 		return nil, err
 	}
@@ -500,7 +402,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 		proofbound.ProductUpper(fullReach, proofbound.ProductUpper(maxQError,
 			proofbound.ProductUpper(lip, lip))))
 	clippedCaps, _, clippedSides, _, clippedFar, clippedSamples, contactRound, err :=
-		pointConeSplitAtContact(far, caps, sides, samples)
+		pointcone.SplitAtContact(far, caps, sides, samples)
 	if err != nil {
 		return nil, err
 	}
@@ -508,10 +410,10 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	farRound = proofbound.AbsSumUpper(farRound, contactRound)
 	verts := append([]r3.Vec(nil), far...)
 	for i, p := range far {
-		if samples[i].q <= 1 {
+		if samples[i].Q <= 1 {
 			verts = append(verts, p)
 		} else {
-			verts = append(verts, p.Scale(samples[i].alpha))
+			verts = append(verts, p.Scale(samples[i].Alpha))
 		}
 	}
 	groups := append([]facetGroup(nil), base.groups...)
@@ -529,7 +431,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	}
 	n := len(far)
 	near := func(i int) int {
-		if samples[i].q <= 1 {
+		if samples[i].Q <= 1 {
 			return i
 		}
 		return i + n
@@ -539,15 +441,15 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 		add([3]int{near(t[2]), near(t[1]), near(t[0])}, coneGroup)
 	}
 	for _, side := range sides {
-		u, v := side.u, side.v
+		u, v := side.U, side.V
 		if near(u) != u {
-			add([3]int{u, near(u), near(v)}, side.group)
+			add([3]int{u, near(u), near(v)}, side.Group)
 		}
 		if near(v) != v {
-			add([3]int{u, near(v), v}, side.group)
+			add([3]int{u, near(v), v}, side.Group)
 		}
 	}
-	verts, tris = pointConeCompact(verts, tris)
+	verts, tris = pointcone.Compact(verts, tris)
 	if tessellation.OrientationSign(verts, tris, r3.Vec{}) < 0 {
 		for i := range tris {
 			tris[i][1], tris[i][2] = tris[i][2], tris[i][1]
@@ -602,8 +504,8 @@ func pointConeHasOutsideWitness(base facetedPayload, cone *pointConeLimit) bool 
 		if err != nil {
 			continue
 		}
-		margin := new(big.Rat).Sub(proofarith.FloatRat(sample.q), big.NewRat(1, 1))
-		margin.Sub(margin, proofarith.FloatRat(sample.qError))
+		margin := new(big.Rat).Sub(proofarith.FloatRat(sample.Q), big.NewRat(1, 1))
+		margin.Sub(margin, proofarith.FloatRat(sample.QError))
 		if margin.Cmp(move) > 0 {
 			return true
 		}
@@ -612,491 +514,18 @@ func pointConeHasOutsideWitness(base facetedPayload, cone *pointConeLimit) bool 
 }
 
 func pointConeSubdivide(ctx context.Context, base facetedPayload, rounds int) (
-	[]r3.Vec, [][3]int, []pointConeSide, float64, error) {
-	if base.pointSection == nil || len(base.verts) < 4 {
+	[]r3.Vec, [][3]int, []pointcone.Side, float64, error) {
+	if base.pointSection == nil {
 		return nil, nil, nil, 0, fmt.Errorf("%w: the point-cone source has no fan", ErrUnsupported)
 	}
-	far := append([]r3.Vec(nil), base.verts[1:]...)
-	boundaryGroups := map[pointConeEdge]int{}
-	for i, tri := range base.tris {
-		if tri[0] == 0 {
-			boundaryGroups[orderedPointConeEdge(tri[1]-1, tri[2]-1)] = base.src[i]
-		}
-	}
-	var caps [][3]int
-	var sides []pointConeSide
-	for i, tri := range base.tris {
-		if tri[0] == 0 || tri[1] == 0 || tri[2] == 0 {
-			continue
-		}
-		t := [3]int{tri[0] - 1, tri[1] - 1, tri[2] - 1}
-		caps = append(caps, t)
-		for j := range 3 {
-			u, v := t[j], t[(j+1)%3]
-			if group, ok := boundaryGroups[orderedPointConeEdge(u, v)]; ok {
-				sides = append(sides, pointConeSide{u, v, group})
-			}
-		}
-		_ = i
-	}
-	totalRound := 0.0
-	for range rounds {
-		levelRound := 0.0
-		midpoints := map[pointConeEdge]int{}
-		midpoint := func(u, v int) int {
-			key := orderedPointConeEdge(u, v)
-			if index, ok := midpoints[key]; ok {
-				return index
-			}
-			p, q := far[u], far[v]
-			held := p.Scale(0.5).Add(q.Scale(0.5))
-			levelRound = max(levelRound, pointConeMidpointRound(p, q, held))
-			index := len(far)
-			far = append(far, held)
-			midpoints[key] = index
-			return index
-		}
-		next := make([][3]int, 0, len(caps)*4)
-		for _, t := range caps {
-			if err := ctx.Err(); err != nil {
-				return nil, nil, nil, 0, err
-			}
-			a, b, c := t[0], t[1], t[2]
-			ab, bc, ca := midpoint(a, b), midpoint(b, c), midpoint(c, a)
-			next = append(next, [3]int{a, ab, ca}, [3]int{ab, b, bc},
-				[3]int{ca, bc, c}, [3]int{ab, bc, ca})
-		}
-		newSides := make([]pointConeSide, 0, len(sides)*2)
-		for _, side := range sides {
-			m := midpoints[orderedPointConeEdge(side.u, side.v)]
-			newSides = append(newSides, pointConeSide{side.u, m, side.group},
-				pointConeSide{m, side.v, side.group})
-		}
-		caps, sides = next, newSides
-		totalRound = proofbound.AbsSumUpper(totalRound, levelRound)
-	}
-	return far, caps, sides, totalRound, nil
+	return pointcone.Subdivide(ctx, base.verts, base.tris, base.src, rounds)
 }
 
-// pointConeFactor is pointConeFactorRat's enclosures formed as Dyadic
-// numerators over Dyadic denominators. With a = an/ad > 0, k = kn/kd > 0,
-// rho = [lo, hi] the exact-rounded root bracket of y²+z² and
-// G_lo = x·kd + kn·lo, G_hi = x·kd + kn·hi (so g = [G_lo, G_hi]/kd):
-//
-//	alpha = a/g = [an·kd/(ad·G_hi), an·kd/(ad·G_lo)]
-//	q     = g/a = [ad·G_lo/(an·kd), ad·G_hi/(an·kd)]
-//
-// Each coordinate error reads both alpha endpoints, so the sign of the
-// coordinate (which only orders the scaled interval) never matters. A cone
-// with a non-positive apex or slope takes the big.Rat path unchanged.
-func pointConeFactor(p r3.Vec, cone *pointConeLimit) (pointConeSample, error) {
+// pointConeFactor dispatches a held far-cap point to the Dyadic crossing for a
+// positive apex and slope, and to the big.Rat form otherwise.
+func pointConeFactor(p r3.Vec, cone *pointConeLimit) (pointcone.Sample, error) {
 	if cone.apex.Sign() <= 0 || cone.slope.Sign() <= 0 {
-		return pointConeFactorRat(p, cone)
+		return pointcone.FactorRat(p, cone.apex, cone.slope)
 	}
-	if !proofbound.FiniteVec(p) {
-		return pointConeSample{}, fmt.Errorf("%w: a point-cone cap vertex is non-finite", ErrNotFinite)
-	}
-	c := cone.constants()
-	x, y, z := proofarith.MustDyOf(p.X), proofarith.MustDyOf(p.Y), proofarith.MustDyOf(p.Z)
-	rho2 := proofarith.DyAdd(proofarith.DyMul(y, y), proofarith.DyMul(z, z))
-	lo := proofarith.MustDyOf(proofarith.DySqrtDown(rho2))
-	hiF := proofarith.DySqrtUp(rho2)
-	if math.IsInf(hiF, 0) {
-		return pointConeSample{}, fmt.Errorf("%w: the cone radius has no finite enclosure", ErrUnsupported)
-	}
-	hi := proofarith.MustDyOf(hiF)
-	xkd := proofarith.DyMul(x, c.kd)
-	gLo := proofarith.DyAdd(xkd, proofarith.DyMul(c.kn, lo))
-	gHi := proofarith.DyAdd(xkd, proofarith.DyMul(c.kn, hi))
-	if gLo.Sign() <= 0 {
-		return pointConeSample{}, fmt.Errorf("%w: a point-cone ray is not forward", ErrUnsupported)
-	}
-	q := (p.X + c.slopeF*math.Hypot(p.Y, p.Z)) / c.apexF
-	if !proofbound.FiniteVec(r3.Vec{X: q}) || q <= 0 {
-		return pointConeSample{}, fmt.Errorf("%w: the held point-cone ray has no finite crossing", ErrUnsupported)
-	}
-	alpha := 1 / q
-	if !proofbound.FiniteVec(r3.Vec{X: alpha}) {
-		return pointConeSample{}, fmt.Errorf("%w: the held point-cone crossing is non-finite", ErrUnsupported)
-	}
-	held := p.Scale(alpha)
-	adGLo, adGHi := proofarith.DyMul(c.ad, gLo), proofarith.DyMul(c.ad, gHi)
-	coordError := func(coord proofarith.Dyadic, heldCoord float64) float64 {
-		n := proofarith.DyMul(c.cAlpha, coord)
-		return math.Max(proofarith.DyQuoFloatError(n, adGHi, heldCoord),
-			proofarith.DyQuoFloatError(n, adGLo, heldCoord))
-	}
-	bound := proofbound.Radius3D(max(coordError(x, held.X), coordError(y, held.Y), coordError(z, held.Z)))
-	qError := math.Max(
-		proofarith.DyQuoFloatError(proofarith.DyMul(c.ad, gLo), c.cAlpha, q),
-		proofarith.DyQuoFloatError(proofarith.DyMul(c.ad, gHi), c.cAlpha, q))
-	return pointConeSample{q: q, alpha: alpha, qError: qError, pointError: bound}, nil
-}
-
-func pointConeFactorRat(p r3.Vec, cone *pointConeLimit) (pointConeSample, error) {
-	if !proofbound.FiniteVec(p) {
-		return pointConeSample{}, fmt.Errorf("%w: a point-cone cap vertex is non-finite", ErrNotFinite)
-	}
-	x, y, z := proofarith.FloatRat(p.X), proofarith.FloatRat(p.Y), proofarith.FloatRat(p.Z)
-	rho2 := new(big.Rat).Add(new(big.Rat).Mul(y, y), new(big.Rat).Mul(z, z))
-	rho, ok := proofbound.IntervalSqrt(proofbound.PointInterval(rho2))
-	if !ok {
-		return pointConeSample{}, fmt.Errorf("%w: the cone radius has no finite enclosure", ErrUnsupported)
-	}
-	g := proofbound.IntervalAdd(proofbound.PointInterval(x),
-		proofbound.IntervalScale(rho, cone.slope))
-	if g.Lo.Sign() <= 0 {
-		return pointConeSample{}, fmt.Errorf("%w: a point-cone ray is not forward", ErrUnsupported)
-	}
-	alphaIv, ok := proofbound.IntervalQuo(proofbound.PointInterval(cone.apex), g)
-	if !ok {
-		return pointConeSample{}, fmt.Errorf("%w: a point-cone ray has no crossing", ErrUnsupported)
-	}
-	qIv, ok := proofbound.IntervalQuo(g, proofbound.PointInterval(cone.apex))
-	if !ok {
-		return pointConeSample{}, fmt.Errorf("%w: a point-cone ray has no inverse crossing", ErrUnsupported)
-	}
-	a, _ := cone.apex.Float64()
-	k, _ := cone.slope.Float64()
-	q := (p.X + k*math.Hypot(p.Y, p.Z)) / a
-	if !proofbound.FiniteVec(r3.Vec{X: q}) || q <= 0 {
-		return pointConeSample{}, fmt.Errorf("%w: the held point-cone ray has no finite crossing", ErrUnsupported)
-	}
-	alpha := 1 / q
-	if !proofbound.FiniteVec(r3.Vec{X: alpha}) {
-		return pointConeSample{}, fmt.Errorf("%w: the held point-cone crossing is non-finite", ErrUnsupported)
-	}
-	held := p.Scale(alpha)
-	bound := proofbound.Radius3D(max(
-		proofbound.IntervalFloatError(proofbound.IntervalScale(alphaIv, x), held.X),
-		proofbound.IntervalFloatError(proofbound.IntervalScale(alphaIv, y), held.Y),
-		proofbound.IntervalFloatError(proofbound.IntervalScale(alphaIv, z), held.Z)))
-	return pointConeSample{q: q, alpha: alpha,
-		qError: proofbound.IntervalFloatError(qIv, q), pointError: bound}, nil
-}
-
-func pointConeSplitAtContact(far []r3.Vec, caps [][3]int, sides []pointConeSide,
-	samples []pointConeSample) ([][3]int, [][3]int, []pointConeSide, []pointConeSide,
-	[]r3.Vec, []pointConeSample, float64, error) {
-	contact := map[pointConeEdge]int{}
-	maxRound := 0.0
-	crossingFailure := false
-	crossing := func(u, v int) int {
-		if samples[u].q == 1 {
-			return u
-		}
-		if samples[v].q == 1 {
-			return v
-		}
-		key := orderedPointConeEdge(u, v)
-		if index, ok := contact[key]; ok {
-			return index
-		}
-		qu, qv := samples[u].q, samples[v].q
-		t := (1 - qu) / (qv - qu)
-		if !(t > 0 && t < 1) {
-			crossingFailure = true
-			return u
-		}
-		p := far[u].Scale(1 - t).Add(far[v].Scale(t))
-		tr := new(big.Rat).Quo(new(big.Rat).Sub(big.NewRat(1, 1), proofarith.FloatRat(qu)),
-			new(big.Rat).Sub(proofarith.FloatRat(qv), proofarith.FloatRat(qu)))
-		oneminust := new(big.Rat).Sub(big.NewRat(1, 1), tr)
-		exact := [3]*big.Rat{}
-		for axis, pair := range [...][2]float64{{far[u].X, far[v].X}, {far[u].Y, far[v].Y}, {far[u].Z, far[v].Z}} {
-			exact[axis] = new(big.Rat).Add(new(big.Rat).Mul(oneminust, proofarith.FloatRat(pair[0])),
-				new(big.Rat).Mul(tr, proofarith.FloatRat(pair[1])))
-		}
-		maxRound = max(maxRound, proofbound.Radius3D(max(
-			proofbound.RatAbsDiff(exact[0], p.X),
-			proofbound.RatAbsDiff(exact[1], p.Y),
-			proofbound.RatAbsDiff(exact[2], p.Z))))
-		index := len(far)
-		far = append(far, p)
-		samples = append(samples, pointConeSample{q: 1, alpha: 1})
-		contact[key] = index
-		return index
-	}
-	outside := make([][3]int, 0, len(caps))
-	inside := make([][3]int, 0, len(caps))
-	for _, tri := range caps {
-		for _, arm := range []struct {
-			keepOutside bool
-			output      *[][3]int
-		}{{true, &outside}, {false, &inside}} {
-			if arm.keepOutside && samples[tri[0]].q <= 1 && samples[tri[1]].q <= 1 && samples[tri[2]].q <= 1 {
-				continue
-			}
-			if !arm.keepOutside && samples[tri[0]].q >= 1 && samples[tri[1]].q >= 1 && samples[tri[2]].q >= 1 {
-				continue
-			}
-			poly := []int{tri[0], tri[1], tri[2]}
-			out := make([]int, 0, 4)
-			for j := range poly {
-				u, v := poly[j], poly[(j+1)%len(poly)]
-				uIn, vIn := samples[u].q >= 1, samples[v].q >= 1
-				if !arm.keepOutside {
-					uIn, vIn = samples[u].q <= 1, samples[v].q <= 1
-				}
-				if uIn {
-					out = append(out, u)
-				}
-				if uIn != vIn {
-					out = append(out, crossing(u, v))
-				}
-			}
-			poly = poly[:0]
-			for _, index := range out {
-				if len(poly) == 0 || poly[len(poly)-1] != index {
-					poly = append(poly, index)
-				}
-			}
-			if len(poly) > 1 && poly[0] == poly[len(poly)-1] {
-				poly = poly[:len(poly)-1]
-			}
-			for j := 1; j+1 < len(poly); j++ {
-				*arm.output = append(*arm.output, [3]int{poly[0], poly[j], poly[j+1]})
-			}
-		}
-	}
-	outsideSides := make([]pointConeSide, 0, len(sides))
-	allSides := make([]pointConeSide, 0, len(sides)*2)
-	for _, side := range sides {
-		u, v := side.u, side.v
-		qu, qv := samples[u].q, samples[v].q
-		if qu == 1 || qv == 1 || (qu > 1) == (qv > 1) {
-			allSides = append(allSides, side)
-			if qu > 1 || qv > 1 {
-				outsideSides = append(outsideSides, side)
-			}
-			continue
-		}
-		m := crossing(u, v)
-		first, second := pointConeSide{u, m, side.group}, pointConeSide{m, v, side.group}
-		allSides = append(allSides, first, second)
-		if qu > 1 {
-			outsideSides = append(outsideSides, first)
-		} else {
-			outsideSides = append(outsideSides, second)
-		}
-	}
-	if crossingFailure {
-		return nil, nil, nil, nil, nil, nil, 0,
-			fmt.Errorf("%w: a point-cone contact rounds onto a cap vertex", ErrUnsupported)
-	}
-	return outside, inside, outsideSides, allSides, far, samples, maxRound, nil
-}
-
-func pointConeCompact(verts []r3.Vec, tris [][3]int) ([]r3.Vec, [][3]int) {
-	index := make(map[int]int, len(verts))
-	out := make([]r3.Vec, 0, len(verts))
-	for i := range tris {
-		for j, old := range tris[i] {
-			fresh, ok := index[old]
-			if !ok {
-				fresh = len(out)
-				index[old] = fresh
-				out = append(out, verts[old])
-			}
-			tris[i][j] = fresh
-		}
-	}
-	return out, tris
-}
-
-func pointConeReachUpper(far []r3.Vec) float64 {
-	reach := 0.0
-	for _, p := range far {
-		reach = max(reach, proofbound.DvLenUpper(proofbound.HeldDelta(p, r3.Vec{})))
-	}
-	return reach
-}
-
-func pointConeCapArea(far []r3.Vec, caps [][3]int) float64 {
-	return proofbound.PerturbedAreaUpper(far, caps, 0)
-}
-
-func pointConeCapBound(far []r3.Vec, caps [][3]int,
-	cone *pointConeLimit) (float64, float64, error) {
-	return pointConeCapBoundGeom(pointConeCapGeometry(far, caps), cone)
-}
-
-// pointConeMidpointRound is the rounding error of the held midpoint of p and
-// q: the largest per-axis distance from the exact midpoint, as a 3-D radius.
-func pointConeMidpointRound(p, q, held r3.Vec) float64 {
-	dp, dq := proofarith.DyVec(p), proofarith.DyVec(q)
-	heldAxes := [3]float64{held.X, held.Y, held.Z}
-	var e [3]float64
-	for axis := range 3 {
-		exact := proofarith.DyShift(proofarith.DyAdd(dp[axis], dq[axis]), -1)
-		e[axis] = proofarith.DyRoundedFloatError(exact, heldAxes[axis])
-	}
-	return proofbound.Radius3D(max(e[0], e[1], e[2]))
-}
-
-// pointConeCellGeom is the cone-independent half of pointConeTriangleBound.
-type pointConeCellGeom struct{ xMin, rhoMin, reach, h float64 }
-
-// pointConeCapGeometry reads every cap cell's geometry once, so two cones
-// share it. A vertex's reach is the same DvLenUpper of the same exact vector
-// in each cell holding it, and is computed once.
-func pointConeCapGeometry(far []r3.Vec, caps [][3]int) []pointConeCellGeom {
-	reach := make([]float64, len(far))
-	done := make([]bool, len(far))
-	out := make([]pointConeCellGeom, len(caps))
-	for k, tri := range caps {
-		for _, v := range tri {
-			if done[v] {
-				continue
-			}
-			reach[v] = proofbound.DvLenUpper(proofbound.HeldDelta(far[v], r3.Vec{}))
-			done[v] = true
-		}
-		out[k] = pointConeCellGeometryWith([3]r3.Vec{far[tri[0]], far[tri[1]], far[tri[2]]},
-			[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]})
-	}
-	return out
-}
-
-func pointConeCellGeometry(tri [3]r3.Vec) pointConeCellGeom {
-	var reach [3]float64
-	for i, p := range tri {
-		reach[i] = proofbound.DvLenUpper(proofbound.HeldDelta(p, r3.Vec{}))
-	}
-	return pointConeCellGeometryWith(tri, reach)
-}
-
-func pointConeCellGeometryWith(tri [3]r3.Vec, vertexReach [3]float64) pointConeCellGeom {
-	xMin, yMin, yMax, zMin, zMax := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
-	reach, h := 0.0, 0.0
-	for i, p := range tri {
-		xMin = min(xMin, p.X)
-		yMin, yMax = min(yMin, p.Y), max(yMax, p.Y)
-		zMin, zMax = min(zMin, p.Z), max(zMax, p.Z)
-		reach = max(reach, vertexReach[i])
-		h = max(h, proofbound.DvLenUpper(proofbound.HeldDelta(p, tri[(i+1)%3])))
-	}
-	minAbs := func(lo, hi float64) float64 {
-		if lo <= 0 && hi >= 0 {
-			return 0
-		}
-		return min(math.Abs(lo), math.Abs(hi))
-	}
-	rhoMin := max(minAbs(yMin, yMax), minAbs(zMin, zMax))
-	return pointConeCellGeom{xMin: xMin, rhoMin: rhoMin, reach: reach, h: h}
-}
-
-// pointConeCapBoundGeom is pointConeCapBound over precomputed cell geometry.
-func pointConeCapBoundGeom(geom []pointConeCellGeom, cone *pointConeLimit) (float64, float64, error) {
-	capBound, lip := 0.0, 0.0
-	for _, g := range geom {
-		cellBound, _, cellLip, err := pointConeTriangleBoundGeom(g, cone)
-		if err != nil {
-			return 0, 0, err
-		}
-		capBound = max(capBound, cellBound)
-		lip = max(lip, cellLip)
-	}
-	return capBound, lip, nil
-}
-
-// pointConeTriangleBound forms the same five rationals as
-// pointConeTriangleBoundRat, each formed as one Dyadic numerator over one
-// Dyadic denominator and rounded up once (proofarith.DyQuoFloatUp), so no
-// big.Rat is normalised. With a = an/ad, k = kn/kd and G = xMin·kd + kn·rhoMin
-// (so gMin = G/kd):
-//
-//	reciprocal = an(kd+kn)²kd·h² / (ad·G³)
-//	radial     = an·kn·kd·h² / (ad·2·rhoMin·G²)
-//	product    = an(kd+kn)kd·h² / (ad·G²)
-//	alphaMax   = an·kd / (ad·G)
-//	lip ratio  = an(kd+kn)kd / (ad·G²)
-func pointConeTriangleBound(tri [3]r3.Vec,
-	cone *pointConeLimit) (float64, float64, float64, error) {
-	return pointConeTriangleBoundGeom(pointConeCellGeometry(tri), cone)
-}
-
-// pointConeTriangleBoundGeom is pointConeTriangleBound over precomputed geometry.
-func pointConeTriangleBoundGeom(geom pointConeCellGeom,
-	cone *pointConeLimit) (float64, float64, float64, error) {
-	xMin, rhoMin, reach, h := geom.xMin, geom.rhoMin, geom.reach, geom.h
-	if rhoMin <= 0 {
-		return 0, 0, 0, fmt.Errorf("%w: the point-cone cap reaches the axis", ErrUnsupported)
-	}
-	c := cone.constants()
-	x, rho, hd := proofarith.MustDyOf(xMin), proofarith.MustDyOf(rhoMin), proofarith.MustDyOf(h)
-	g := proofarith.DyAdd(proofarith.DyMul(x, c.kd), proofarith.DyMul(c.kn, rho))
-	if g.Sign() <= 0 {
-		return 0, 0, 0, fmt.Errorf("%w: the point-cone cap has no positive ray denominator", ErrUnsupported)
-	}
-	h2 := proofarith.DyMul(hd, hd)
-	g2 := proofarith.DyMul(g, g)
-	g3 := proofarith.DyMul(g2, g)
-	adG2 := proofarith.DyMul(c.ad, g2)
-	alphaBound := proofbound.AbsSumUpper(
-		proofarith.DyQuoFloatUp(proofarith.DyMul(c.cRec, h2), proofarith.DyMul(c.ad, g3)),
-		proofarith.DyQuoFloatUp(proofarith.DyMul(c.cRad, h2),
-			proofarith.DyMul(proofarith.DyShift(rho, 1), adG2)))
-	capBound := proofbound.AbsSumUpper(
-		proofbound.ProductUpper(reach, alphaBound),
-		proofarith.DyQuoFloatUp(proofarith.DyMul(c.cProd, h2), adG2))
-	alphaMax := proofarith.DyQuoFloatUp(c.cAlpha, proofarith.DyMul(c.ad, g))
-	lip := proofbound.AbsSumUpper(alphaMax,
-		proofbound.ProductUpper(reach, proofarith.DyQuoFloatUp(c.cProd, adG2)))
-	return capBound, alphaBound, lip, nil
-}
-
-func pointConeTriangleBoundRat(tri [3]r3.Vec,
-	cone *pointConeLimit) (float64, float64, float64, error) {
-	xMin, yMin, yMax, zMin, zMax := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
-	reach, h := 0.0, 0.0
-	for i, p := range tri {
-		xMin = min(xMin, p.X)
-		yMin, yMax = min(yMin, p.Y), max(yMax, p.Y)
-		zMin, zMax = min(zMin, p.Z), max(zMax, p.Z)
-		reach = max(reach, proofbound.DvLenUpper(proofbound.HeldDelta(p, r3.Vec{})))
-		h = max(h, proofbound.DvLenUpper(proofbound.HeldDelta(p, tri[(i+1)%3])))
-	}
-	minAbs := func(lo, hi float64) float64 {
-		if lo <= 0 && hi >= 0 {
-			return 0
-		}
-		return min(math.Abs(lo), math.Abs(hi))
-	}
-	rhoMin := max(minAbs(yMin, yMax), minAbs(zMin, zMax))
-	if rhoMin <= 0 {
-		return 0, 0, 0, fmt.Errorf("%w: the point-cone cap reaches the axis", ErrUnsupported)
-	}
-	gMin := new(big.Rat).Add(proofarith.FloatRat(xMin),
-		new(big.Rat).Mul(cone.slope, proofarith.FloatRat(rhoMin)))
-	if gMin.Sign() <= 0 {
-		return 0, 0, 0, fmt.Errorf("%w: the point-cone cap has no positive ray denominator", ErrUnsupported)
-	}
-	// The crossing map is F(p)=p*a/g(p), where g=x+k*rho. Its Hessian
-	// includes both the curvature of rho and the reciprocal/product terms.
-	// For triangle diameter h, the interpolation departure is at most
-	// h²/2 times sup ||H_F||. The scalar alpha bound also covers the
-	// piecewise contact decision at g=a.
-	a, k := cone.apex, cone.slope
-	onePlusK := new(big.Rat).Add(big.NewRat(1, 1), k)
-	h2 := new(big.Rat).Mul(proofarith.FloatRat(h), proofarith.FloatRat(h))
-	g2 := new(big.Rat).Mul(gMin, gMin)
-	g3 := new(big.Rat).Mul(g2, gMin)
-	reciprocal := new(big.Rat).Quo(
-		new(big.Rat).Mul(new(big.Rat).Mul(a, onePlusK), new(big.Rat).Mul(onePlusK, h2)), g3)
-	radial := new(big.Rat).Quo(
-		new(big.Rat).Mul(new(big.Rat).Mul(a, k), h2),
-		new(big.Rat).Mul(big.NewRat(2, 1),
-			new(big.Rat).Mul(proofarith.FloatRat(rhoMin), g2)))
-	alphaBound := proofbound.AbsSumUpper(proofbound.RatFloatUp(reciprocal), proofbound.RatFloatUp(radial))
-	product := new(big.Rat).Quo(
-		new(big.Rat).Mul(new(big.Rat).Mul(a, onePlusK), h2), g2)
-	capBound := proofbound.AbsSumUpper(
-		proofbound.ProductUpper(reach, alphaBound), proofbound.RatFloatUp(product))
-	alphaMax := proofbound.RatFloatUp(new(big.Rat).Quo(cone.apex, gMin))
-	lipNumer := new(big.Rat).Mul(cone.apex, new(big.Rat).Add(big.NewRat(1, 1), cone.slope))
-	lipDenom := new(big.Rat).Mul(gMin, gMin)
-	lip := proofbound.AbsSumUpper(alphaMax,
-		proofbound.ProductUpper(reach, proofbound.RatFloatUp(new(big.Rat).Quo(lipNumer, lipDenom))))
-	return capBound, alphaBound, lip, nil
+	return pointcone.FactorDyadic(p, cone.constants())
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -104,7 +105,7 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 		return nil
 	}
 	cone, ok := exactPointCone(tool)
-	if !ok || !pointConeSourceAboveFarCap(base, cone) {
+	if !ok || !pointcone.AboveFarCap(base.verts, base.meshBound, cone.far) {
 		return nil
 	}
 	box, err := lfSourceBox(base.loftFacesCap.source)
@@ -207,7 +208,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	}
 	cone, ok := exactPointCone(tool)
 	if !ok || cone.far.Cmp(p.loftFacesToe.toe.far) != 0 ||
-		!pointConeSourceAboveFarCap(p.loftFacesToe.base, cone) ||
+		!pointcone.AboveFarCap(p.loftFacesToe.base.verts, p.loftFacesToe.base.meshBound, cone.far) ||
 		!orderedLoftFacesConeLimits(p.loftFacesToe.toe, cone, p.loftFacesToe.base) {
 		return nil, false, nil
 	}
@@ -288,26 +289,8 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 }
 
 func orderedLoftFacesConeLimits(toe, heel *pointConeLimit, base facetedPayload) bool {
-	if len(base.verts) == 0 || proofbound.IsNonFinite(base.meshBound) || base.meshBound < 0 ||
-		toe.apex.Cmp(heel.apex) >= 0 || toe.slope.Sign() <= 0 || heel.slope.Sign() <= 0 {
-		return false
-	}
-	minX, maxX := base.verts[0].X, base.verts[0].X
-	for _, v := range base.verts {
-		if !proofbound.FiniteVec(v) {
-			return false
-		}
-		minX, maxX = min(minX, v.X), max(maxX, v.X)
-	}
-	lo := lfSub(lfF(minX), lfF(base.meshBound))
-	hi := lfAdd(lfF(maxX), lfF(base.meshBound))
-	// The heel radius exceeds the toe radius when this expression is
-	// positive. It is affine in X, so both interval endpoints suffice.
-	margin := func(x *big.Rat) *big.Rat {
-		return lfSub(lfMul(toe.slope, lfSub(heel.apex, x)),
-			lfMul(heel.slope, lfSub(toe.apex, x)))
-	}
-	return margin(lo).Sign() > 0 && margin(hi).Sign() > 0
+	return pointcone.ToeHeelOrdered(toe.apex, toe.slope, heel.apex, heel.slope,
+		base.verts, base.meshBound)
 }
 
 // Q is the exact cone pullback after multiplying through the positive map

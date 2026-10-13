@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -11,7 +12,7 @@ import (
 // revolveSectorSamples caches the per-station cone samples shared by every
 // plan of one construction attempt.
 type revolveSectorSamples struct {
-	up, down []pointConeSample
+	up, down []pointcone.Sample
 	filled   bool
 }
 
@@ -66,12 +67,12 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 	// first plan's loop, so a refusal is raised at the same node and in the
 	// same order as before.
 	if samples.up == nil {
-		samples.up = make([]pointConeSample, len(nodes))
-		samples.down = make([]pointConeSample, len(nodes))
+		samples.up = make([]pointcone.Sample, len(nodes))
+		samples.down = make([]pointcone.Sample, len(nodes))
 	}
 	for i := range nodes {
 		far := original[i].p
-		var up, down pointConeSample
+		var up, down pointcone.Sample
 		if samples.filled {
 			up, down = samples.up[i], samples.down[i]
 		} else {
@@ -86,22 +87,22 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 			}
 			samples.up[i], samples.down[i] = up, down
 		}
-		if down.q-down.qError <= 1 {
+		if down.Q-down.QError <= 1 {
 			return 0, 0, fmt.Errorf("%w: sector cap reaches its source plane", ErrUnsupported)
 		}
 		upperPoint, upperRound, err := sectorUpperCapNode(far, up, false)
 		if err != nil {
 			return 0, 0, err
 		}
-		lowerPoint := far.Scale(down.alpha)
+		lowerPoint := far.Scale(down.Alpha)
 		if motion != r3.Identity() {
 			maxInput := max(math.Abs(upperPoint.X), math.Abs(upperPoint.Y), math.Abs(upperPoint.Z),
 				math.Abs(lowerPoint.X), math.Abs(lowerPoint.Y), math.Abs(lowerPoint.Z))
-			maxRound = max(maxRound, proofbound.AbsSumUpper(upperRound, down.pointError,
+			maxRound = max(maxRound, proofbound.AbsSumUpper(upperRound, down.PointError,
 				proofbound.RigidRoundAllow(maxInput, 0)))
 			upperPoint, lowerPoint = motion.Apply(upperPoint), motion.Apply(lowerPoint)
 		} else {
-			maxRound = max(maxRound, upperRound, down.pointError)
+			maxRound = max(maxRound, upperRound, down.PointError)
 		}
 		if !proofbound.FiniteVec(upperPoint) || !proofbound.FiniteVec(lowerPoint) {
 			return 0, 0, fmt.Errorf("%w: sector cap station is non-finite", ErrUnsupported)
