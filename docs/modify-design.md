@@ -152,11 +152,13 @@ a retired body is S17, by core §6's retire rule.
 | **R6** | `brepPayload`, or `stackedPrismPayload` through its face view | `docs/brep-modify-design.md` Table RB | Table RB |
 | **R7** | `loftPayload` with matching, hole-free, axially translated sections | `Fillet` on recorded analytic corners (loft §17); `Chamfer` is S3 | S3 |
 | **R8** | One-sided positive-taper full-circle `draftPayload`, near section at start, no holes or kept walls | Far-rim `Fillet` or symmetric `Chamfer` builds per draft §10.4–§10.5; otherwise S3 | Inward far-cap removal builds draft §10.6's cup; otherwise S3 |
-| **R9** | One straight solid profile `sweepPayload` (§6–§7) | Lateral `Fillet` and equal-setback `Chamfer` use the exact prism reduction. | Shell on either or both caps uses that reduction; closed Shell needs a hole-free section. |
+| **R9** | One straight solid profile `sweepPayload` (§6–§7) | Lateral `Fillet` and equal-setback `Chamfer` use the exact prism reduction. | Cap and side openings use that reduction; closed Shell needs a hole-free section. |
 
 R9 includes rigid placement and only a zero-twist, one-span `LineTo` path.
 Fillet cap edges are S1. Chamfer cap edges, mixed selections and asymmetric
-setbacks refuse. Shell side openings are S2, and other Sweep kinds are S3.
+setbacks refuse. Shell maps each selected `side(0,0,j)` face to segment `j`
+of the stored exact prism before the prism side-opening build. Other Sweep
+kinds are S3.
 
 A full-circle loop is a single closed wall with **no** lateral edge at all
 (evaluator §5 emits no seam), so a cylinder has no edge the corner rewrite can

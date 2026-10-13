@@ -1905,7 +1905,10 @@
 10	0.00	TestSweepTypedNilSectionIsDegenerate
 10	0.00	TestStraightSweepShellCapOpenings
 10	0.00	TestStraightSweepClosedShell
-10	0.00	TestStraightSweepShellStillRefusesSideOpening
+10	0.00	TestStraightSweepShellSideOpening
+10	0.00	TestStraightSweepShellSideOpeningCapsSenseAndPlacement
+10	0.00	TestStraightSweepShellSideOpeningRefusesWholeBoundaryAndHole
+10	0.00	TestSweepShellSideOpeningRefusesOtherPaths
 10	0.00	TestRevolveCanceledContextLeavesDocumentUnchanged
 10	0.00	TestRevolveChainOptionRefusalFollowsTheSeam
 10	0.00	TestRevolveChainRefusesSurfaceResult
