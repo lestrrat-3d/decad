@@ -1,4 +1,4 @@
-package spiralsector
+package shellseparation
 
 import (
 	"math"

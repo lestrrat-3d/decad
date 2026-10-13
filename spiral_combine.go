@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/shellseparation"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 )
@@ -364,7 +365,8 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	next.bound = 0
 	next.setVertexBounds(next.vertexBound)
 	next.coordBound = max(next.coordBound, next.bound)
-	if !spiralsector.Separate(ctx, proxyParts, meta.moves, true) {
+	if !shellseparation.Separate(ctx, proxyParts, meta.moves,
+		shellseparation.ProxyShell, shellseparation.AxisX, true) {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}

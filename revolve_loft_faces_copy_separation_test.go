@@ -1,0 +1,49 @@
+package decad
+
+import (
+	"testing"
+
+	"github.com/lestrrat-3d/decad/internal/shellseparation"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+func TestCurvedLoftFacesRealCopySeparation(t *testing.T) {
+	_, source, trim := neutralArcSeamSource(t)
+	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
+	require.NoError(t, err)
+	image, err := Copy(t.Context(), source, WithCopyPlacement(turn))
+	require.NoError(t, err)
+	original := source.payload.(facetedPayload)
+	placed := image.payload.(facetedPayload)
+	require.Same(t, trim, original.loftFacesTrim)
+	require.NotNil(t, placed.spiralTooth)
+	require.Same(t, trim, placed.spiralTooth.source)
+	require.Equal(t, turn, placed.spiralTooth.motion)
+
+	shell := func(p facetedPayload) shellseparation.Shell {
+		return shellseparation.Shell{Verts: p.verts, Tris: p.tris,
+			VertexBound: p.vertexBound, MeshBound: p.meshBound}
+	}
+	moves := []r3.Transform{r3.Identity(), turn}
+	require.True(t, shellseparation.Separate(t.Context(),
+		[]shellseparation.Shell{shell(original), shell(placed)}, moves,
+		shellseparation.SourceShell,
+		shellseparation.AxisX, true))
+	held, err := shellseparation.PlacedHeldShells(t.Context(), []shellseparation.HeldCopy{
+		{Verts: original.verts, Tris: original.tris, Linked: true},
+		{Verts: placed.verts, Tris: placed.tris, Linked: true},
+	}, moves)
+	require.NoError(t, err)
+	require.True(t, shellseparation.Separate(t.Context(), held, moves,
+		shellseparation.HeldCopyShell,
+		shellseparation.AxisX, true))
+
+	overlap, err := Copy(t.Context(), source)
+	require.NoError(t, err)
+	require.False(t, shellseparation.Separate(t.Context(), []shellseparation.Shell{
+		shell(original), shell(overlap.payload.(facetedPayload)),
+	}, []r3.Transform{r3.Identity(), r3.Identity()}, shellseparation.SourceShell,
+		shellseparation.AxisX, true))
+}

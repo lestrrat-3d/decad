@@ -135,17 +135,17 @@ func TestPlacedHeldShellsRefusals(t *testing.T) {
 		moves  []r3.Transform
 		want   string
 	}{
-		{"one copy", []spiralsector.HeldCopy{first}, moves[:1], "spiral held copies lack their source placement"},
+		{"one copy", []spiralsector.HeldCopy{first}, moves[:1], "held copies lack their source placement"},
 		{
 			"first move not identity", []spiralsector.HeldCopy{first, copyOK}, []r3.Transform{move, move},
-			"spiral held copies lack their source placement",
+			"held copies lack their source placement",
 		},
-		{"first unlinked", []spiralsector.HeldCopy{unlinkedFirst, copyOK}, moves, "spiral held source is incomplete"},
+		{"first unlinked", []spiralsector.HeldCopy{unlinkedFirst, copyOK}, moves, "held source is incomplete"},
 		{
 			"copy unlinked", []spiralsector.HeldCopy{first, unlinkedCopy}, moves,
-			"spiral held copy 2 lost source correspondence",
+			"held copy 2 lost source correspondence",
 		},
-		{"reordered facets", []spiralsector.HeldCopy{first, reordered}, moves, "spiral held copy 2 changed source facets"},
+		{"reordered facets", []spiralsector.HeldCopy{first, reordered}, moves, "held copy 2 changed source facets"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

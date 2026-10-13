@@ -244,6 +244,18 @@ receive the same check. These certificates permit the composite mesh audit to
 skip cross-copy triangle scans while retaining each shell's closure, links,
 orientation, and embedding checks.
 
+`internal/shellseparation` owns the bounded shell proof used by that route.
+It accepts any positive number of pair checks and any Cartesian longitudinal
+axis. Every shell must have finite vertices, indexed facets, one finite
+nonnegative bound per vertex, and a body bound at least as large as each
+vertex bound. A missing local projection can mean an empty clipped slab only
+after those records pass validation. A slab pair with no shared occupied
+interval proves direct separation, but supplies no finite gap for copy
+transfer. The caller checks live source and recorded Copy provenance before
+allowing reference-gap transfer. The first source's true departure, a held
+Copy's placement rounding, and a Boolean proxy's own displacement remain
+different shell inputs; the kernel does not upgrade one to another.
+
 The first-tooth cap proxy is placed for every copy. Its per-vertex source
 bounds, symmetric-difference volume, and area allowances add across copies.
 The contact gate retains the first tooth's 24 allowed blank/tooth face pairs

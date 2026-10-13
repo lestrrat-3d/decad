@@ -1,4 +1,4 @@
-package spiralsector
+package shellseparation
 
 import (
 	"context"
@@ -11,13 +11,121 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// Separate proves source-solid or held-shell separation from
-// certified mesh displacements. A solid lies inside the convex hull of its
-// boundary, so separation along one YZ direction proves disjointness.
-func Separate(ctx context.Context, shells []Shell, moves []r3.Transform, held bool) bool {
-	if len(shells) != len(moves) {
+// Separate proves pairwise source-solid or held-shell separation. Axis selects
+// the longitudinal Cartesian coordinate. Linked must be true only after the
+// caller verifies that every shell is an image of the first under its recorded
+// move; it permits a charged reference-gap transfer for repeated copies.
+func Separate(ctx context.Context, shells []Shell, moves []r3.Transform, kind Kind,
+	axis Axis, linked bool) bool {
+	if ctx == nil || len(shells) < 2 || len(shells) != len(moves) {
 		return false
 	}
+	if kind != SourceShell && kind != HeldCopyShell && kind != ProxyShell {
+		return false
+	}
+	for _, part := range shells {
+		if !validShell(part) {
+			return false
+		}
+	}
+	for _, move := range moves {
+		if !move.IsValid() {
+			return false
+		}
+	}
+	if axis != AxisX {
+		var ok bool
+		shells, moves, ok = canonicalize(shells, moves, axis)
+		if !ok {
+			return false
+		}
+	}
+	return separateCanonical(ctx, shells, moves, kind != SourceShell,
+		linked && transferableMoves(moves))
+}
+
+func validShell(p Shell) bool {
+	if len(p.Verts) == 0 || len(p.Tris) == 0 || len(p.VertexBound) != len(p.Verts) ||
+		proofbound.IsNonFinite(p.MeshBound) || p.MeshBound < 0 {
+		return false
+	}
+	for i, v := range p.Verts {
+		beta := p.VertexBound[i]
+		if !proofbound.FiniteVec(v) || proofbound.IsNonFinite(beta) || beta < 0 || beta > p.MeshBound {
+			return false
+		}
+	}
+	for _, tri := range p.Tris {
+		for _, index := range tri {
+			if index < 0 || index >= len(p.Verts) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func canonicalize(shells []Shell, moves []r3.Transform, axis Axis) ([]Shell, []r3.Transform, bool) {
+	var u, v r3.Vec
+	switch axis {
+	case AxisY:
+		u, v = r3.Vec{Y: 1}, r3.Vec{Z: 1}
+	case AxisZ:
+		u, v = r3.Vec{Z: 1}, r3.Vec{X: 1}
+	default:
+		return nil, nil, false
+	}
+	frame, err := r3.NewFrame(r3.Vec{}, u, v)
+	if err != nil {
+		return nil, nil, false
+	}
+	toWorld, err := r3.FromFrame(frame)
+	if err != nil {
+		return nil, nil, false
+	}
+	toLocal, err := toWorld.Inverse()
+	if err != nil {
+		return nil, nil, false
+	}
+	localShells := make([]Shell, len(shells))
+	localMoves := make([]r3.Transform, len(moves))
+	for i, part := range shells {
+		localShells[i] = part
+		localShells[i].Verts = make([]r3.Vec, len(part.Verts))
+		for j, world := range part.Verts {
+			localShells[i].Verts[j] = frame.ToLocal(world)
+		}
+		placed, err := toWorld.Then(moves[i])
+		if err != nil {
+			return nil, nil, false
+		}
+		localMoves[i], err = placed.Then(toLocal)
+		if err != nil {
+			return nil, nil, false
+		}
+	}
+	return localShells, localMoves, true
+}
+
+func transferableMoves(moves []r3.Transform) bool {
+	if len(moves) < 2 || moves[0] != r3.Identity() {
+		return false
+	}
+	for _, move := range moves[1:] {
+		basis := move.Basis()
+		if move.Translation() != (r3.Vec{}) || move.IsReflection() ||
+			basis.EX.X < math.Nextafter(1, 0) ||
+			basis.EX.X > math.Nextafter(1, math.Inf(1)) ||
+			basis.EX.Y != 0 || basis.EX.Z != 0 || basis.EY.X != 0 || basis.EZ.X != 0 ||
+			basis.EY.Y != basis.EZ.Z || basis.EY.Z != -basis.EZ.Y {
+			return false
+		}
+	}
+	return true
+}
+
+func separateCanonical(ctx context.Context, shells []Shell, moves []r3.Transform,
+	held, transfer bool) bool {
 	maxHeld := 0.0
 	for _, part := range shells {
 		if proofbound.IsNonFinite(part.MeshBound) || part.MeshBound < 0 {
@@ -46,7 +154,7 @@ func Separate(ctx context.Context, shells []Shell, moves []r3.Transform, held bo
 				heldAllowance = proofbound.AbsSumUpper(pi.MeshBound, pj.MeshBound)
 			}
 			angleOffset := j - i
-			if gap := referenceClearance[angleOffset]; gap > 0 &&
+			if gap := referenceClearance[angleOffset]; transfer && gap > 0 &&
 				transferSeparation(shells[0], moves, i, j,
 					angleOffset, gap, heldAllowance) {
 				continue
@@ -55,7 +163,14 @@ func Separate(ctx context.Context, shells []Shell, moves []r3.Transform, held bo
 			cj := moves[j].ApplyDir(r3.Vec{Y: 1})
 			ny, nz := ratSub(ratF(cj.Y), ratF(ci.Y)), ratSub(ratF(cj.Z), ratF(ci.Z))
 			if ny.Sign() == 0 && nz.Sign() == 0 {
-				return false
+				// Identical orientations may still have a measured placement gap.
+				// The direction is a candidate only; exact projection proves it.
+				first, second := shells[i].Verts[0], shells[j].Verts[0]
+				ny, nz = ratSub(ratF(second.Y), ratF(first.Y)),
+					ratSub(ratF(second.Z), ratF(first.Z))
+				if ny.Sign() == 0 && nz.Sign() == 0 {
+					ny = ratOne()
+				}
 			}
 			norm := proofbound.RatSqrtUp(ratAdd(ratMul(ny, ny), ratMul(nz, nz)))
 			if proofbound.IsNonFinite(norm) || norm <= 0 {
@@ -69,26 +184,24 @@ func Separate(ctx context.Context, shells []Shell, moves []r3.Transform, held bo
 			if hiI.Cmp(loJ) < 0 || hiJ.Cmp(loI) < 0 {
 				continue
 			}
-			if len(shells) > 2 {
+			if transfer && len(shells) > 2 {
 				gap := referenceClearance[angleOffset]
 				if gap == 0 {
 					axialExtra, valid := sourceAxialDrift(shells[0], moves, angleOffset)
-					if !valid {
-						return false
+					if valid {
+						// A held target point may be displaced in X from its source.
+						// Include that bound before transferring this offset's slice gap.
+						if held {
+							axialExtra = proofbound.AbsSumUpper(axialExtra, maxHeld)
+						}
+						var referenceOK bool
+						gap, referenceOK = slabsClearance(ctx, shells[0], shells[angleOffset], axialExtra)
+						if referenceOK && gap > 0 && !proofbound.IsNonFinite(gap) {
+							referenceClearance[angleOffset] = gap
+						}
 					}
-					// A held target point may be displaced in X from its source.
-					// Include that bound before transferring this offset's slice gap.
-					if held {
-						axialExtra = proofbound.AbsSumUpper(axialExtra, maxHeld)
-					}
-					var ok bool
-					gap, ok = slabsClearance(ctx, shells[0], shells[angleOffset], axialExtra)
-					if !ok || gap <= 0 {
-						return false
-					}
-					referenceClearance[angleOffset] = gap
 				}
-				if transferSeparation(shells[0], moves, i, j,
+				if gap > 0 && !proofbound.IsNonFinite(gap) && transferSeparation(shells[0], moves, i, j,
 					angleOffset, gap, heldAllowance) {
 					continue
 				}
@@ -204,6 +317,9 @@ func slabsClearance(ctx context.Context, pa, pb Shell, axialExtra float64) (floa
 		if axialExtra > 0 {
 			reach = proofbound.AbsSumUpper(reach, axialExtra)
 		}
+		if proofbound.IsNonFinite(reach) {
+			return 0, false
+		}
 		for _, v := range part.Verts {
 			if !proofbound.FiniteVec(v) {
 				return 0, false
@@ -233,11 +349,11 @@ func slabsClearance(ctx context.Context, pa, pb Shell, axialExtra float64) (floa
 		}
 		fa, ca, okA := slabFacets(pa, levels[i], levels[i+1], axialExtra)
 		fb, cb, okB := slabFacets(pb, levels[i], levels[i+1], axialExtra)
-		if len(fa) == 0 || len(fb) == 0 {
-			continue
-		}
 		if !okA || !okB {
 			return 0, false
+		}
+		if len(fa) == 0 || len(fb) == 0 {
+			continue
 		}
 		direction := cb.Sub(ca)
 		ny, nz := ratF(direction.Y), ratF(direction.Z)
@@ -248,8 +364,11 @@ func slabsClearance(ctx context.Context, pa, pb Shell, axialExtra float64) (floa
 		if proofbound.IsNonFinite(norm) || norm <= 0 {
 			return 0, false
 		}
-		loA, hiA := slabProjection(pa, fa, levels[i], levels[i+1], ny, nz, norm, axialExtra)
-		loB, hiB := slabProjection(pb, fb, levels[i], levels[i+1], ny, nz, norm, axialExtra)
+		loA, hiA, validA := slabProjection(pa, fa, levels[i], levels[i+1], ny, nz, norm, axialExtra)
+		loB, hiB, validB := slabProjection(pb, fb, levels[i], levels[i+1], ny, nz, norm, axialExtra)
+		if !validA || !validB {
+			return 0, false
+		}
 		separate := loA == nil || loB == nil || hiA.Cmp(loB) < 0 || hiB.Cmp(loA) < 0
 		if !separate {
 			for _, axis := range slabHullAxes(pa, fa, pb, fb) {
@@ -261,8 +380,11 @@ func slabsClearance(ctx context.Context, pa, pb Shell, axialExtra float64) (floa
 				if proofbound.IsNonFinite(norm) || norm <= 0 {
 					continue
 				}
-				loA, hiA = slabProjection(pa, fa, levels[i], levels[i+1], ny, nz, norm, axialExtra)
-				loB, hiB = slabProjection(pb, fb, levels[i], levels[i+1], ny, nz, norm, axialExtra)
+				loA, hiA, validA = slabProjection(pa, fa, levels[i], levels[i+1], ny, nz, norm, axialExtra)
+				loB, hiB, validB = slabProjection(pb, fb, levels[i], levels[i+1], ny, nz, norm, axialExtra)
+				if !validA || !validB {
+					return 0, false
+				}
 				if loA == nil || loB == nil || hiA.Cmp(loB) < 0 || hiB.Cmp(loA) < 0 {
 					separate = true
 					break
@@ -284,6 +406,11 @@ func slabsClearance(ctx context.Context, pa, pb Shell, axialExtra float64) (floa
 				clearance = min(clearance, max(0, lower))
 			}
 		}
+	}
+	if math.IsInf(clearance, 1) {
+		// No slab held material from both shells, so there is no finite
+		// transverse gap to transfer to another pair.
+		return 0, true
 	}
 	return clearance, true
 }
@@ -356,6 +483,10 @@ func slabFacets(p Shell, lo, hi, axialExtra float64) ([]int, r3.Vec, bool) {
 	}
 	searchLo := math.Nextafter(lo-reach, math.Inf(-1))
 	searchHi := math.Nextafter(hi+reach, math.Inf(1))
+	if proofbound.IsNonFinite(reach) || proofbound.IsNonFinite(searchLo) ||
+		proofbound.IsNonFinite(searchHi) {
+		return nil, r3.Vec{}, false
+	}
 	selected := make([]int, 0, len(p.Tris)/8)
 	center := r3.Vec{}
 	for i, tri := range p.Tris {
@@ -367,17 +498,17 @@ func slabFacets(p Shell, lo, hi, axialExtra float64) ([]int, r3.Vec, bool) {
 		center = center.Add(a).Add(b).Add(c)
 	}
 	if len(selected) == 0 {
-		return nil, r3.Vec{}, false
+		return nil, r3.Vec{}, true
 	}
 	center = center.Scale(1 / float64(3*len(selected)))
 	return selected, center, proofbound.FiniteVec(center)
 }
 
 func slabProjection(p Shell, facets []int, slabLo, slabHi float64, ny, nz *big.Rat,
-	norm, axialExtra float64) (*big.Rat, *big.Rat) {
+	norm, axialExtra float64) (*big.Rat, *big.Rat, bool) {
 	var lo, hi *big.Rat
 	if len(p.VertexBound) != len(p.Verts) {
-		return nil, nil
+		return nil, nil, false
 	}
 	include := func(value, charge *big.Rat) {
 		lower, upper := ratSub(value, charge), ratAdd(value, charge)
@@ -394,9 +525,17 @@ func slabProjection(p Shell, facets []int, slabLo, slabHi float64, ny, nz *big.R
 		if axialExtra > 0 {
 			beta = proofbound.AbsSumUpper(beta, axialExtra)
 		}
-		charge := ratF(proofbound.ProductUpper(norm, beta))
-		xLo := ratF(math.Nextafter(slabLo-beta, math.Inf(-1)))
-		xHi := ratF(math.Nextafter(slabHi+beta, math.Inf(1)))
+		chargeBound := proofbound.ProductUpper(norm, beta)
+		lower := math.Nextafter(slabLo-beta, math.Inf(-1))
+		upper := math.Nextafter(slabHi+beta, math.Inf(1))
+		if proofbound.IsNonFinite(beta) || beta < 0 ||
+			proofbound.IsNonFinite(chargeBound) ||
+			proofbound.IsNonFinite(lower) || proofbound.IsNonFinite(upper) {
+			return nil, nil, false
+		}
+		charge := ratF(chargeBound)
+		xLo := ratF(lower)
+		xHi := ratF(upper)
 		var x, value [3]*big.Rat
 		for k, vi := range tri {
 			v := p.Verts[vi]
@@ -420,7 +559,7 @@ func slabProjection(p Shell, facets []int, slabLo, slabHi float64, ny, nz *big.R
 			}
 		}
 	}
-	return lo, hi
+	return lo, hi, true
 }
 
 func projection(p Shell, ny, nz *big.Rat, norm float64) (*big.Rat, *big.Rat, bool) {
