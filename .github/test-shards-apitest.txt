@@ -1903,6 +1903,9 @@
 10	0.00	TestSweepChainSingleArcOppositeAxisSideWinding
 10	0.00	TestSweepChainSingleArcMultiSegmentMeshRefuses
 10	0.00	TestSweepTypedNilSectionIsDegenerate
+10	0.00	TestStraightSweepShellCapOpenings
+10	0.00	TestStraightSweepClosedShell
+10	0.00	TestStraightSweepShellStillRefusesSideOpening
 10	0.00	TestRevolveCanceledContextLeavesDocumentUnchanged
 10	0.00	TestRevolveChainOptionRefusalFollowsTheSeam
 10	0.00	TestRevolveChainRefusesSurfaceResult

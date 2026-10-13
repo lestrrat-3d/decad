@@ -23,8 +23,9 @@ import (
 )
 
 // This file is the shell of docs/modify-design.md §8: Body.Shell removes the
-// selected cap faces of a straight prism and lines what remains with a wall of
-// the given thickness. On a prism the whole construction is the recorded
+// selected cap faces of a straight prism or a certified one-line Sweep prism
+// reduction and lines what remains with a wall of the given thickness.
+// On a prism the whole construction is the recorded
 // section's own exact offset (§7): P ⊖ t inward, P ⊕ t outward, per-feature and
 // topology-preserving. A both-caps shell of a hole-free section is a TUBE — a
 // plain prismPayload over the annular section {Outer, Hole} (Table B, B2/B3),
@@ -79,7 +80,7 @@ func WithShellSense(s ShellSense) ShellOption {
 // openings — resolved against the live receiver; a query matching nothing is
 // loud (ErrNoMatch / ErrCardinality, S16). t is a length magnitude, gated like
 // every other (S15); a zero t is S14 (the wall is the empty region). A
-// receiver outside the admitted prism, revolve, brep and draft routes is S3,
+// receiver outside the admitted prism, straight Sweep, revolve, brep and draft routes is S3,
 // ErrUnsupported. A straight prism's offset
 // section faces the §5 audit before anything is built, so no unproven body is
 // ever made. Removing both caps of a section with k holes returns 1 + k
@@ -213,6 +214,9 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		if pp, ok := b.payload.(prismPayload); ok && len(pp.profile.Holes) == 0 {
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
+		if pp, ok := straightSweepShellPrism(b.payload); ok && len(pp.profile.Holes) == 0 {
+			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
+		}
 		if sp, ok := b.payload.(stackedPrismPayload); ok && sense == Inward {
 			view, _, err := brepOfStackedWithRoles(ctx, sp)
 			if ctxErr := ctx.Err(); ctxErr != nil {
@@ -294,8 +298,11 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	// brep receiver's route P takes caps only (SB3).
 	pp, ok := b.payload.(prismPayload)
 	caps := prismCapsOf(b)
+	var sweepCapsOnly bool
 	if route.prism != nil {
 		pp, ok, caps = *route.prism, true, route.caps
+	} else if sweepPrism, admitted := straightSweepShellPrism(b.payload); admitted {
+		pp, ok, sweepCapsOnly = sweepPrism, true, true
 	}
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator shells a straight prism only`, ErrUnsupported)
@@ -304,7 +311,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		return nil, err
 	}
 	var removedStart, removedEnd bool
-	if route.prism != nil {
+	if route.prism != nil || sweepCapsOnly {
 		removedStart, removedEnd, err = classifyRemovedCaps(caps, removed)
 	} else {
 		var sides map[int]struct{}
@@ -425,6 +432,21 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	}
 	d.commit(body, b)
 	return body, nil
+}
+
+// straightSweepShellPrism admits only the certified zero-twist, one-line
+// profile Sweep reduction. Its published caps retain path-start/end roles;
+// composite, arc, twisted, and sheet sweeps have no prism Shell proof.
+func straightSweepShellPrism(payload featurePayload) (prismPayload, bool) {
+	sp, ok := payload.(sweepPayload)
+	if !ok || sp.surfaceResult || sp.arc || sp.closedCircle || sp.closedComposite ||
+		len(sp.spans) != 0 || sp.path == nil || len(sp.path.records) != 1 || len(sp.path.segments) != 1 {
+		return prismPayload{}, false
+	}
+	if _, line := sp.path.segments[0].(LineTo); !line {
+		return prismPayload{}, false
+	}
+	return sp.prism, true
 }
 
 // shellCancelCause maps an error wrapping a context cancellation to the bare
