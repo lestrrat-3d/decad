@@ -71,8 +71,9 @@ type facetedPayload struct {
 	// prismPatternJoin retains immutable source and shell records for a later
 	// certified local corner rewrite. Placement drops this source relation.
 	prismPatternJoin *prismPatternJoinRecord
-	// similaritySource marks a certified similar image of a prism or full
-	// Revolve. Rigid copies retain it; booleans and modify rewrites do not.
+	// similaritySource marks a certified similar image of a prism, full
+	// Revolve, or exact line-only stack/BRep. Rigid copies retain it;
+	// booleans and modify rewrites do not.
 	similaritySource bool
 	// booleanSimilaritySource marks the certified held mesh and source groups
 	// produced by the generic mesh Boolean after its topology and volume audit.

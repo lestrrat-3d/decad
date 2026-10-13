@@ -327,6 +327,7 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | Consumer | Behaviour |
 |---|---|
 | `Transform` / `Copy` | re-evaluates the payload under the composed motion |
+| `ScaledAt` | Exact line-only solid sections with zero section and level displacement become a certified faceted image; source roles and planar tags follow the scale (evaluator §8). |
 | later `Cut` with a prism tool | A spanning tool or a blind tool ending inside a slab or exactly at an interface builds when each reached slab proves a clean cut or no change inside a hole; opposed interface holes require exact, separated sections (§7). |
 | `Union` with a stacked operand | `docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands; a prism-group operand over the partner's interval is A5's |
 | `Cut` by a prism-group tool | `docs/general-boolean-design.md` §3 A5 on a prism target: one arrangement for every lump |

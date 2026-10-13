@@ -844,7 +844,7 @@ Feature tests cover every example model and operation. Repeated construction
 preserves live-body order and provenance roles. Later evaluators may build a
 different topology split but must preserve role/query meaning.
 
-### Positive uniform scale of a prism, full Revolve, or faceted Boolean
+### Positive uniform scale of a prism, stack, full Revolve, or faceted Boolean
 
 `Body.ScaledAt` admits a solid `prismPayload` whose outer and hole loops contain
 only whole `LineSeg`, `CircleSeg`, and `ArcSeg` records and whose section and
@@ -890,9 +890,20 @@ source without complete mesh proofs, refuse without retiring the source.
 
 The faceted payload marks this source class so a later `Transform`, `Copy` or
 `ScaledAt` can repeat the proof from its held mesh and bounds.
-Booleans and modify rewrites do not inherit that prism/Revolve marker. A failed
+Booleans and modify rewrites do not inherit that source marker. A failed
 embedding, non-finite bound or canceled context returns without retiring the
 receiver.
+
+An exact line-only `stackedPrismPayload`, or an A1 `brepPayload` that keeps its
+stack, takes this transfer when it is a solid with zero section and level
+displacements. A BRep also needs line-only planar and swept faces, no blend or
+shell band, and zero side-line split displacement. The source's own
+`Tessellate(VerifyAll)` must supply the complete boundary and occupied-volume
+proof at 0.1 mm. An exact facet-pair audit checks the held mesh for contact
+before `facetproof.ScaleMesh` maps its vertices. The image keeps each source
+face's origin roles and planar tag. It becomes `facetedPayload`, so later
+structural stack and BRep operations do not read its old, unscaled records.
+The source remains live if any authentication, mesh proof or similarity fails.
 
 The generic mesh `Union`, `Cut`, and `Intersect` also mark their faceted result
 after the exact-predicate topology audit and occupied-volume reading succeed.

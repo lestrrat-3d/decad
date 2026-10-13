@@ -71,6 +71,7 @@ The rules for rows live in `docs/layout.md`.
 | `point_plane_split.go` | Splits a point loft by a planar chain sheet. See loft-point design. |
 | `point_plane_scale.go` | Dispatches certified similar bodies, authenticates Boolean mesh sources, and carries Split-slab maps. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |
+| `stack_brep_scale.go` | Admits exact line-only stacks and stack-backed BReps for certified similarity. See evaluator §8. |
 | `point_cap_centroid.go` | Certifies far and planar Split cap centroids and maps them through rigid placement. See loft-point design. |
 | `point_cap_extremes.go` | Bounds side-face centroid projections and selects the extreme Split cap faces. See loft-point design. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |

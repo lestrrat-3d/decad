@@ -28,8 +28,9 @@ type pointPlaneSimilarityStep struct {
 }
 
 // ScaledAt returns the positive uniform image of an authenticated point-loft
-// Split slab, exact line/circular solid prism, complete solid Revolve, or
-// audited faceted Boolean result about anchor, then retires the receiver.
+// Split slab, exact line/circular solid prism, line-only stack or stack-backed
+// BRep, complete solid Revolve, or audited faceted Boolean result about anchor,
+// then retires the receiver.
 // Source roles and certified boundary and occupied-volume bounds follow the
 // image. A refused or canceled call leaves the document unchanged.
 func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) (*Body, error) {
@@ -64,6 +65,10 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 			fp, err = prismScaleSource(ctx, b, source, s)
 		case revolvePayload:
 			fp, err = revolveScaleSource(ctx, b, source, s)
+		case stackedPrismPayload:
+			fp, err = stackedScaleSource(ctx, b, source)
+		case brepPayload:
+			fp, err = brepScaleSource(ctx, b, source)
 		default:
 			return nil, fmt.Errorf("%w: this body has no certified similarity source", ErrUnsupported)
 		}

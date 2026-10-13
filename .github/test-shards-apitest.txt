@@ -1997,3 +1997,6 @@
 10	0.00	TestFacetedPrismUnionChamferRefusesInexactFoot
 10	0.00	TestFacetedBooleanScaledAtCarriesVolumeRolesAndVerification
 10	0.00	TestFacetedBooleanScaledAtAfterPlacementAndRepeat
+10	0.00	TestStackBrepScaledAtVerified
+10	0.00	TestStackBrepScaledAtPlacedAndRepeated
+10	0.00	TestStackBrepScaledAtRefusesCurvedStack
