@@ -171,8 +171,8 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		// The circle has one B-rep edge but many mesh chords. Use the
 		// first shared chord to match the source wall's winding.
 		a, z := ring, 2+ring
-		fillSense := bodyPatchMeshEdgeSense(mesh, byFace[face], a, z)
-		wallSense := bodyPatchMeshEdgeSense(mesh, byFace[faces[0]], a, z)
+		fillSense := tessellation.PatchEdgeSense(mesh.triangles, byFace[face], a, z)
+		wallSense := tessellation.PatchEdgeSense(mesh.triangles, byFace[faces[0]], a, z)
 		if fillSense == 0 || wallSense == 0 {
 			return nil, fmt.Errorf(`%w: a circular Body.Patch rim has no shared facet chord`, ErrUnsupported)
 		}
