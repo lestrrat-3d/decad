@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -207,7 +208,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 	segs := rec.Profile.Segments
 	vertexAt := func(j int64, v int) *Vertex {
 		k := sh.At(j, v)
-		return &Vertex{position: sh.Verts[k], bound: units.Millimeters(sh.VertexBound[k])}
+		return &Vertex{n: &topo.Vertex{Position: sh.Verts[k], Bound: units.Millimeters(sh.VertexBound[k])}}
 	}
 	startV := make([]*Vertex, len(segs))
 	endV := make([]*Vertex, len(segs))

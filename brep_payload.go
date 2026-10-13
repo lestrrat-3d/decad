@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	vnode "github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -564,11 +565,11 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 			held, lift := refView.LiftedVertex(c[0], c[1], c[2])
 			// The bound starts as zero millimetres, so an Exact vertex
 			// publishes a length as every other vertex does.
-			pv = placedVertex{v: &Vertex{position: held, bound: units.Millimeters(0)}, lift: lift}
+			pv = placedVertex{v: &Vertex{n: &vnode.Vertex{Position: held, Bound: units.Millimeters(0)}}, lift: lift}
 			vertices[c] = pv
 		}
-		if b := proofbound.AbsSumUpper(proofbound.AbsSumUpper(faceDelta, levelDelta, pv.lift), endAllow); b > pv.v.bound.Base() {
-			pv.v.bound = units.Millimeters(b)
+		if b := proofbound.AbsSumUpper(proofbound.AbsSumUpper(faceDelta, levelDelta, pv.lift), endAllow); b > pv.v.n.Bound.Base() {
+			pv.v.n.Bound = units.Millimeters(b)
 		}
 		return pv.v
 	}

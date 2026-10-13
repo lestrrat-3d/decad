@@ -18,7 +18,7 @@ func newStitchVertexTable() *stitchVertexTable {
 }
 
 func (t *stitchVertexTable) classOf(v *Vertex) int {
-	return t.ClassOf(v, v.position, v.bound.Base(), v.denot, v.denot.ID != 0)
+	return t.ClassOf(v, v.n.Position, v.n.Bound.Base(), v.n.Denot, v.n.Denot.ID != 0)
 }
 
 // stitchWeldPlan records the admitted free-edge pairs over one Stitch call.

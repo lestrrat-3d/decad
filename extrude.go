@@ -18,6 +18,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -783,7 +784,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	// mirroring buildLoopSidesAs's own rimVertex.
 	rimVertex := func(u, v, z, zDelta, extra float64) *Vertex {
 		held, lift := prismView.LiftedVertex(u, v, z)
-		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(zDelta, lift), extra))}
+		return &Vertex{n: &topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(zDelta, lift), extra))}}
 	}
 
 	// Rim posts 0..n, no wraparound: post i sits at walk i's start for

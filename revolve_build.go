@@ -21,6 +21,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -272,7 +273,7 @@ func (rp revolvePayload) sweptVertex(b revolvemesh.RevolveBasis, z, rho float64,
 	for _, end := range ends {
 		gap = math.Max(gap, rp.sweptGap(held, at, end))
 	}
-	return &Vertex{position: held, bound: units.Millimeters(gap), denot: denot}
+	return &Vertex{n: &topo.Vertex{Position: held, Bound: units.Millimeters(gap), Denot: denot}}
 }
 
 // frameCharge is massmoment.MapCharge over the map the record denotes

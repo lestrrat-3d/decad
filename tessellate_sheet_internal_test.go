@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -182,7 +183,7 @@ func TestRequireSheetMeshCatchesADuplicatedDirectedEdge(t *testing.T) {
 func TestFreeChainCountsByFaceCountsConnectedComponentsNotEdges(t *testing.T) {
 	t.Parallel()
 	face := &Face{}
-	vA, vB, vC := &Vertex{}, &Vertex{}, &Vertex{}
+	vA, vB, vC := &Vertex{n: &topo.Vertex{}}, &Vertex{n: &topo.Vertex{}}, &Vertex{n: &topo.Vertex{}}
 	e1 := &Edge{start: vA, end: vB, faces: []*Face{face}}
 	e2 := &Edge{start: vB, end: vC, faces: []*Face{face}}
 	face.loops = []*Loop{{coedges: []coedge{{edge: e1}, {edge: e2}}}}

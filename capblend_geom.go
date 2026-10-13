@@ -18,6 +18,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -167,7 +168,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// in an edge's length bound.
 	capVertexAt := func(p Point2, base float64) *Vertex {
 		held, lift := pl.LiftedVertex(p.U, p.V, capZ)
-		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(base, lift))}
+		return &Vertex{n: &topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, lift))}}
 	}
 
 	// levelDelta is the side level's conversion and float-sum rounding: sideZ
@@ -629,7 +630,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 
 		var surf Surface
 		if !w.IsCircular() {
-			f, err := planeFromThree(liftSide(Point2{U: w.StartU, V: w.StartV}), liftSide(Point2{U: w.EndU, V: w.EndV}), capB.position)
+			f, err := planeFromThree(liftSide(Point2{U: w.StartU, V: w.StartV}), liftSide(Point2{U: w.EndU, V: w.EndV}), capB.n.Position)
 			if err != nil {
 				return capBandResult{}, err
 			}
@@ -944,10 +945,10 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex
 func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta float64, exactRadius proofbound.RatInterval) *Edge {
 	seamU := cu + r
 	seamPos, lift := pl.LiftedVertex(seamU, cv, z)
-	seam := &Vertex{
-		position: seamPos,
-		bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(delta, lift), proofarith.AddRoundError(cu, r, seamU))),
-	}
+	seam := &Vertex{n: &topo.Vertex{
+		Position: seamPos,
+		Bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(delta, lift), proofarith.AddRoundError(cu, r, seamU))),
+	}}
 	axis := pl.Dir(0, 0, 1)
 	if !ccw {
 		axis = axis.Scale(-1)

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -34,7 +35,7 @@ import (
 // unplaced build still carries a positive delta wherever a station was
 // COMPUTED rather than pinned (loftPayload's own delta doc comment).
 func loftVertex(p r3.Vec, delta float64) *Vertex {
-	return &Vertex{position: p, bound: units.Millimeters(delta)}
+	return &Vertex{n: &topo.Vertex{Position: p, Bound: units.Millimeters(delta)}}
 }
 
 // loftEdge builds one straight loft edge between two vertex-table indices,

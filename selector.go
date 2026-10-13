@@ -484,10 +484,10 @@ func (e selectorEdge) SelectorLineDirection() (r3.Vec, bool) {
 	if _, ok := e.curve.(Line3); !ok {
 		return r3.Vec{}, false
 	}
-	return e.end.position.Sub(e.start.position), true
+	return e.end.n.Position.Sub(e.start.n.Position), true
 }
 func (e selectorEdge) SelectorEndpoints() (r3.Vec, r3.Vec) {
-	return e.start.position, e.end.position
+	return e.start.n.Position, e.end.n.Position
 }
 func (e selectorEdge) SelectorLengthMM() float64 { return e.length }
 func (e selectorEdge) SelectorHasOrigin(ref FeatureRef) bool {

@@ -36,8 +36,8 @@ func prismPatternFilletContactsOf(ctx context.Context, body *Body, edges []*Edge
 			for _, station := range []int{0, part.rootStart} {
 				bottom := fp.verts[part.vertex[0][station]]
 				top := fp.verts[part.vertex[1][station]]
-				if (edge.start.position != bottom || edge.end.position != top) &&
-					(edge.start.position != top || edge.end.position != bottom) {
+				if (edge.start.n.Position != bottom || edge.end.n.Position != top) &&
+					(edge.start.n.Position != top || edge.end.n.Position != bottom) {
 					continue
 				}
 				key := [2]int{i, station}

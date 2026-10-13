@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -290,7 +291,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 	rimVertex := func(u, v, extra float64) *Vertex {
 		held, lift := pp.LiftedVertex(u, v, pp.Z0)
 		base := proofbound.AbsSumUpper(pp.SectionDelta, pp.Z0Delta, lift)
-		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(base, extra))}
+		return &Vertex{n: &topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, extra))}}
 	}
 	var seam *Vertex
 	var verts []*Vertex

@@ -166,7 +166,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		face := &Face{surface: surf, origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
 			body: body, loops: []*Loop{loop}, area: held, areaBound: bound}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
-		nrm, err := face.NormalAt(capV.position)
+		nrm, err := face.NormalAt(capV.n.Position)
 		if err != nil {
 			return fmt.Errorf(`%w: a partial fillet patch's normal cannot be read: %v`, ErrUnsupported, err)
 		}

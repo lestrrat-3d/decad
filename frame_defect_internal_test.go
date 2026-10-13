@@ -261,7 +261,7 @@ func requireCoversMappedReference(t *testing.T, ref, b *Body, m fdMap) {
 		require.NoError(t, err)
 		l1, err := be[i].Length()
 		require.NoError(t, err)
-		d := fdVecOf(re[i].end.position.Sub(re[i].start.position))
+		d := fdVecOf(re[i].end.n.Position.Sub(re[i].start.n.Position))
 		r := fdMissRatio(l1.Value.Base(), l1.Bound.Base(), l0.Value.Base(), l0.Bound.Base(), m.lengthFactor(d))
 		require.LessOrEqual(t, r, slack, "edge length misses by %g× its bound", r)
 		checked++

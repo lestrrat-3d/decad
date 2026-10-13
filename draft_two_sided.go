@@ -113,7 +113,7 @@ func draftRimEnds(face *Face) [][]brepgeom.RimEdgeEnds {
 	for li, loop := range face.loops {
 		ends := make([]brepgeom.RimEdgeEnds, len(loop.coedges))
 		for ci, ce := range loop.coedges {
-			ends[ci] = brepgeom.RimEdgeEnds{Start: ce.Start().position, End: ce.End().position}
+			ends[ci] = brepgeom.RimEdgeEnds{Start: ce.Start().n.Position, End: ce.End().n.Position}
 		}
 		loops[li] = ends
 	}

@@ -14,6 +14,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -308,7 +309,7 @@ func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord,
 	level.Z0, level.Z1 = z, z
 	rimVertex := func(u, v, extra float64) *Vertex {
 		held, lift := pl.LiftedVertex(u, v, z)
-		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(zDelta, lift, extra))}
+		return &Vertex{n: &topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(zDelta, lift, extra))}}
 	}
 	singleClosed := n == 1 && walks[0].Closed
 	verts := make([]*Vertex, n)

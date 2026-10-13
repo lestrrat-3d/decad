@@ -89,7 +89,7 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 		return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
 	}
 	curve, ok := result.curve.(FacetedCurve)
-	if !ok || curve.Bound.Mag() != 0 || result.start.bound.Mag() != 0 || result.end.bound.Mag() != 0 ||
+	if !ok || curve.Bound.Mag() != 0 || result.start.n.Bound.Mag() != 0 || result.end.n.Bound.Mag() != 0 ||
 		len(result.faces) != 2 {
 		return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
 	}
@@ -102,7 +102,7 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 		var sourceEdge *Edge
 		for _, edge := range source.Edges() {
 			if _, ok := edge.curve.(Line3); ok && edge.start != nil && edge.end != nil &&
-				edge.start.bound.Mag() == 0 && edge.end.bound.Mag() == 0 &&
+				edge.start.n.Bound.Mag() == 0 && edge.end.n.Bound.Mag() == 0 &&
 				prismUnionFilletSameEnds(edge, p0, p1) {
 				if sourceEdge != nil {
 					return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
@@ -128,8 +128,8 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 }
 
 func prismUnionFilletSameEnds(edge *Edge, p, q r3.Vec) bool {
-	return (edge.start.position == p && edge.end.position == q) ||
-		(edge.start.position == q && edge.end.position == p)
+	return (edge.start.n.Position == p && edge.end.n.Position == q) ||
+		(edge.start.n.Position == q && edge.end.n.Position == p)
 }
 
 func prismUnionFilletRadiusFits(rect momentinput.AxisRect, radius float64) bool {
