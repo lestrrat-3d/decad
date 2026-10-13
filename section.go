@@ -17,7 +17,8 @@ import (
 // One class is an exact straight prism cut strictly between its caps by a
 // plane whose frame preserves the prism's recorded section coordinates.
 // Other classes are a whole-circle prism cut by a cardinal plane with an exact
-// chord, a rectangular prism cut by an interior cardinal vertical plane, and
+// chord, an authenticated sphere cut by a cardinal plane with an exact circle,
+// a rectangular prism cut by an interior cardinal vertical plane, and
 // a bounded oblique cut of an exact rectangular or whole-circle prism,
 // including a certified crossing of one circle-prism cap. The
 // bounded result enters only straight solid Extrude with an independent Distance.
@@ -33,6 +34,13 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 	}
 	if b.Kind() != BodySolid || !b.IsSolid() {
 		return nil, nil, fmt.Errorf(`%w: a section needs a sound solid`, ErrNotSolid)
+	}
+	if _, ok := b.payload.(revolvePayload); ok {
+		profile, admitted := cardinalSphereSectionRecord(b, plane)
+		if !admitted {
+			return nil, nil, fmt.Errorf(`%w: section needs an authenticated sphere and exact cardinal circle`, ErrUnsupported)
+		}
+		return reconstructExactSection(ctx, profile, plane)
 	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok || pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 {
@@ -63,6 +71,12 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 			return nil, nil, fmt.Errorf(`%w: section plane does not cross an admitted exact prism section`, ErrUnsupported)
 		}
 	}
+	return reconstructExactSection(ctx, profile, plane)
+}
+
+func reconstructExactSection(ctx context.Context, profile profileRecord, plane r3.Frame) (
+	*sketch.Sketch, []*sketch.Profile, error,
+) {
 	work := freeform.NewFreeformWork()
 	if _, err := momentinput.ChargeReconstruction(profile, work); err != nil {
 		return nil, nil, err
