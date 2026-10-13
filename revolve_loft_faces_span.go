@@ -69,6 +69,20 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 				var knot *revolveLoftFacesFitKnotJoint
 				knotLeft := false
 				var radial *revolveLoftFacesRadialJoint
+				var fitLines []*revolveLoftFacesFitLineJoint
+				for i := range joints.fitLines {
+					joint := &joints.fitLines[i]
+					if joint.band != band {
+						continue
+					}
+					if joint.vertex.fitSegment == segment &&
+						index == 0 && !joint.vertex.fitAtEnd ||
+						joint.vertex.fitSegment == segment &&
+							index == len(spans)-1 && joint.vertex.fitAtEnd ||
+						joint.vertex.lineSegment == segment && index == 0 {
+						fitLines = append(fitLines, joint)
+					}
+				}
 				for i := range joints.fitKnots {
 					joint := &joints.fitKnots[i]
 					if joint.vertex.segment != segment || joint.band != band ||
@@ -93,6 +107,16 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 							segment, index, band)
 					}
 					radial = joint
+				}
+				if len(fitLines) != 0 {
+					refined, certified, err := revolveLoftFacesFitLinePartitionCells(ctx,
+						trim, section, segment, index, band, span,
+						knot, knotLeft, radial, fitLines)
+					if err != nil || !certified {
+						return nil, false, err
+					}
+					cells = append(cells, refined...)
+					continue
 				}
 				if knot != nil || radial != nil {
 					var refined []revolveLoftFacesMappedCell
