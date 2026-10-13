@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -219,7 +220,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 				parts[i].topIV = [2]proofbound.RatInterval{startIV, endIV}
 			}
 		}
-		gap, ok := loftCylinderRootRadiusGap(lp, radius)
+		gap, ok := loftcylinder.RootRadiusGap(lp.xform, [2]momentinput.Profile{lp.profile0, lp.profile1}, radius)
 		if !ok {
 			return nil, false, nil
 		}
@@ -302,34 +303,6 @@ func loftCylinderAxialPlacement(xform r3.Transform) bool {
 	return xform.Translation() == (r3.Vec{}) && b.EZ == (r3.Vec{Z: 1}) &&
 		b.EX.Z == 0 && b.EY.Z == 0 && b.EX.X == b.EY.Y &&
 		b.EX.Y == -b.EY.X
-}
-
-func loftCylinderRootRadiusGap(lp loftPayload, radius float64) (float64, bool) {
-	gap := 0.0
-	basis := lp.xform.Basis()
-	c, s := proofarith.FloatRat(basis.EX.X), proofarith.FloatRat(basis.EX.Y)
-	scale2 := new(big.Rat).Add(new(big.Rat).Mul(c, c), new(big.Rat).Mul(s, s))
-	for _, profile := range []profileRecord{lp.profile0, lp.profile1} {
-		arc, ok := profile.Outer.Segments[5].(arcSeg)
-		if !ok || proofbound.IsNonFinite(arc.Start.U) || proofbound.IsNonFinite(arc.Start.V) {
-			return 0, false
-		}
-		x, y := proofarith.FloatRat(arc.Start.U), proofarith.FloatRat(arc.Start.V)
-		q := new(big.Rat).Mul(scale2,
-			new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y)))
-		lo, hi := proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q)
-		if lo <= 0 || proofbound.IsNonFinite(hi) {
-			return 0, false
-		}
-		r := proofarith.FloatRat(radius)
-		d0 := new(big.Rat).Abs(new(big.Rat).Sub(proofarith.FloatRat(lo), r))
-		d1 := new(big.Rat).Abs(new(big.Rat).Sub(proofarith.FloatRat(hi), r))
-		if d0.Cmp(d1) < 0 {
-			d0 = d1
-		}
-		gap = max(gap, proofbound.RatFloatUp(d0))
-	}
-	return gap, gap < 0.01
 }
 
 // A matched pair of centered circular arcs has a constant radius at each

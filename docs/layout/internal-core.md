@@ -48,7 +48,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/momentinput/` | Profile records, exact record comparison, moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
-| `internal/tessellation/` | Recorded-loop and band chording, mesh topology, bounds and audits. See tessellation-design. |
+| `internal/tessellation/` | Recorded-loop and band chording, mesh topology and joined-mesh orientation, bounds and audits. See tessellation-design. |
 | `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines, and exact partial-chamfer quad gates and mass. See loop-fillet §7.1, modify-general §4.3a. |
 | `internal/stationbound/` | Bounds circular chord stations, offset cap stations and chain-sweep arc stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums, projected cap proof, body reading finiteness gate, mirrored-cylinder bridge terms and reserve, cap chamfer source bound, split-ring and collar grids, triangle clearance and middle-collar proofs, and grouped contact scans. |
@@ -59,4 +59,4 @@ The rules for rows live in `docs/layout.md`.
 | `internal/revolvesampling/` | Revolve meridian junctions, stations, samples and section readings. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
-| `internal/loftcylinder/` | Exact cap XY audits, source circle crossings, connector gates and reach, ring-to-wall distances, split-ring cycles and occupancy, cap chamfer clearance and band audits, triangle radii, and radial and wedge gates of the loft/cylinder Union. See loft-cylinder-boolean design. |
+| `internal/loftcylinder/` | Exact cap XY audits, source circle and connector gates, ring distances and occupancy, cap chamfer clearance, triangles, band strips, compaction and audits, triangle radii, root radius gaps, and radial and wedge gates of the loft/cylinder Union. See loft-cylinder-boolean design. |

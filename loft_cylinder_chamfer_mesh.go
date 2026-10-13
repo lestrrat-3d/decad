@@ -13,7 +13,6 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
-	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -126,90 +125,6 @@ func loftCylinderChamferClipSide(ctx context.Context, mesh *joinedMesh,
 	return result, nil
 }
 
-func loftCylinderChamferTriangulate(ctx context.Context, mesh *joinedMesh,
-	outer, inner []int, group int, bottom bool) error {
-	points := make([]triangulation.Point2, 0, len(outer)+len(inner))
-	outerLocal := make([]int, len(outer))
-	for i, index := range outer {
-		if index < 0 || index >= len(mesh.verts) {
-			return fmt.Errorf("%w: cap band has an invalid outer vertex", ErrUnsupported)
-		}
-		p := mesh.verts[index]
-		outerLocal[i] = len(points)
-		points = append(points, triangulation.Point2{U: p.X, V: p.Y})
-	}
-	loops := [][]int{outerLocal}
-	if len(inner) > 0 {
-		hole := make([]int, len(inner))
-		for i := range inner {
-			index := inner[len(inner)-1-i]
-			if index < 0 || index >= len(mesh.verts) {
-				return fmt.Errorf("%w: cap band has an invalid inner vertex", ErrUnsupported)
-			}
-			p := mesh.verts[index]
-			hole[i] = len(points)
-			points = append(points, triangulation.Point2{U: p.X, V: p.Y})
-		}
-		loops = append(loops, hole)
-	}
-	tris, err := triangulation.Triangulate(ctx, points, loops)
-	if err != nil {
-		return triangulation.WrapLoftError(err)
-	}
-	local := append(append([]int(nil), outer...), reverseInts(inner)...)
-	for _, tri := range tris {
-		mapped := [3]int{local[tri[0]], local[tri[1]], local[tri[2]]}
-		if bottom {
-			mapped[1], mapped[2] = mapped[2], mapped[1]
-		}
-		mesh.add(mapped, group)
-	}
-	return nil
-}
-
-// Each old source edge has one offset line. Its side section has a ruling,
-// diagonal, then the next ruling. These local strips preserve that order;
-// a reflex offset arc receives a fan only at its own source corner.
-func loftCylinderChamferBand(mesh *joinedMesh, side, inset []int,
-	samples loftCylinderInsetSamples, group int) error {
-	n := len(samples.lineStart)
-	if len(side) != 2*n || len(samples.arcStart) != n || len(inset) != len(samples.points) {
-		return fmt.Errorf("%w: loft/cylinder band has unmatched source pieces", ErrUnsupported)
-	}
-	for i := range n {
-		j := (i + 1) % n
-		q, diag, next := side[2*i], side[2*i+1], side[2*j]
-		line := inset[samples.lineStart[i]]
-		end := inset[samples.lineStart[j]]
-		if samples.arcStart[j] >= 0 {
-			end = inset[samples.arcStart[j]]
-		}
-		mesh.add([3]int{diag, next, end}, group)
-		mesh.add([3]int{diag, end, line}, group)
-		mesh.add([3]int{q, diag, line}, group)
-		if samples.arcStart[i] < 0 {
-			continue
-		}
-		// Walk the arc backwards from the next offset line's start. The
-		// first triangle above already owns the final arc-to-line segment.
-		current := samples.lineStart[i]
-		for current != samples.arcStart[i] {
-			previous := (current - 1 + len(inset)) % len(inset)
-			mesh.add([3]int{q, inset[current], inset[previous]}, group)
-			current = previous
-		}
-	}
-	return nil
-}
-
-func reverseInts(input []int) []int {
-	out := make([]int, len(input))
-	for i := range input {
-		out[i] = input[len(input)-1-i]
-	}
-	return out
-}
-
 func loftCylinderChamferContactAudit(ctx context.Context, fp facetedPayload,
 	mesh *joinedMesh, source loftCylinderChamferSource, side loftCylinderChamferSide,
 	bands [2][2]int, sideEdges [2]map[[2]int]struct{},
@@ -320,33 +235,6 @@ func loftCylinderChamferContactAudit(ctx context.Context, fp facetedPayload,
 		}
 	}
 	return nil
-}
-
-func loftCylinderChamferCompact(mesh *joinedMesh, bounds []float64) ([]float64, []int) {
-	used := make([]bool, len(mesh.verts))
-	for _, tri := range mesh.tris {
-		for _, index := range tri {
-			used[index] = true
-		}
-	}
-	index := make([]int, len(mesh.verts))
-	verts := make([]r3.Vec, 0, len(mesh.verts))
-	newBounds := make([]float64, 0, len(bounds))
-	for i, yes := range used {
-		if !yes {
-			continue
-		}
-		index[i] = len(verts)
-		verts = append(verts, mesh.verts[i])
-		newBounds = append(newBounds, bounds[i])
-	}
-	for i := range mesh.tris {
-		for k := range 3 {
-			mesh.tris[i][k] = index[mesh.tris[i][k]]
-		}
-	}
-	mesh.verts = verts
-	return newBounds, index
 }
 
 type loftCylinderOneCapData struct {
@@ -546,15 +434,24 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		}
 		mesh.groups[capGroup].origins = append(append([]FeatureRef(nil), mesh.groups[capGroup].origins...),
 			FeatureRef{producer: ref, Role: role})
-		if err := loftCylinderChamferTriangulate(ctx, mesh, inset[cap], source.inner[cap], capGroup, cap == 0); err != nil {
+		capTris, err := loftcylinder.ChamferCapTriangles(ctx, mesh.verts, inset[cap], source.inner[cap], cap == 0)
+		if err != nil {
 			return nil, fmt.Errorf("loft/cylinder cap %d: %w", cap, err)
+		}
+		for _, t := range capTris {
+			mesh.add(t, capGroup)
 		}
 		bandGroup := len(mesh.groups)
 		mesh.groups = append(mesh.groups, facetGroup{origins: []FeatureRef{{producer: ref,
 			Role: fmt.Sprintf("chamferCap(%d,0,0)", cap)}}})
 		bandFirst := len(mesh.tris)
-		if err := loftCylinderChamferBand(mesh, clipped.rings[cap], inset[cap], samples, bandGroup); err != nil {
+		bandTris, err := loftcylinder.ChamferBandTriangles(clipped.rings[cap], inset[cap],
+			samples.lineStart, samples.arcStart, len(samples.points))
+		if err != nil {
 			return nil, fmt.Errorf("loft/cylinder band %d: %w", cap, err)
+		}
+		for _, t := range bandTris {
+			mesh.add(t, bandGroup)
 		}
 		bands[cap] = [2]int{bandFirst, len(mesh.tris)}
 		if len(source.inner[cap]) > 0 {
@@ -694,7 +591,8 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			}
 		}
 	}
-	bounds, remap := loftCylinderChamferCompact(mesh, bounds)
+	var remap []int
+	mesh.verts, bounds, remap = loftcylinder.ChamferCompact(mesh.verts, mesh.tris, bounds)
 	if oneCap != nil {
 		oneCap.ideal = make([]proofarith.Xpt, len(mesh.verts))
 		for i, x := range ideal {
