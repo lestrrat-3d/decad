@@ -3,6 +3,7 @@ package freeform
 import (
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -47,7 +48,7 @@ func SpanChordVector(w *FreeformWork, span BezierSpan) (*big.Rat, *big.Rat, erro
 	if err := w.Step(CostMul(ChordVectorCost, WidthUnits(RatBitWidth(a.U, a.V, b.U, b.V)))); err != nil {
 		return nil, nil, err
 	}
-	return new(big.Rat).Sub(b.U, a.U), new(big.Rat).Sub(b.V, a.V), nil
+	return proofarith.SubRat(new(big.Rat), b.U, a.U), proofarith.SubRat(new(big.Rat), b.V, a.V), nil
 }
 
 // SpanChordSquared is the exact squared length of SpanChordVector's own Δ.
@@ -349,14 +350,14 @@ func SpanTangentDeviationCoefficients(w *FreeformWork, span BezierSpan) ([]RatPo
 	out := make([]RatPoint, q+1)
 	for i := range q + 1 {
 		scale := new(big.Rat).SetInt(binom)
-		gu := new(big.Rat).Sub(span[i+1].U, span[i].U)
-		gu.Mul(gu, p)
-		gu.Sub(gu, dxU)
-		gu.Mul(gu, scale)
-		gv := new(big.Rat).Sub(span[i+1].V, span[i].V)
-		gv.Mul(gv, p)
-		gv.Sub(gv, dxV)
-		gv.Mul(gv, scale)
+		gu := proofarith.SubRat(new(big.Rat), span[i+1].U, span[i].U)
+		proofarith.MulRat(gu, gu, p)
+		proofarith.SubRat(gu, gu, dxU)
+		proofarith.MulRat(gu, gu, scale)
+		gv := proofarith.SubRat(new(big.Rat), span[i+1].V, span[i].V)
+		proofarith.MulRat(gv, gv, p)
+		proofarith.SubRat(gv, gv, dxV)
+		proofarith.MulRat(gv, gv, scale)
 		out[i] = RatPoint{U: gu, V: gv}
 		binom.Mul(binom, big.NewInt(int64(q-i)))
 		binom.Quo(binom, big.NewInt(int64(i+1)))
