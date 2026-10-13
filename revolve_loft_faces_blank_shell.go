@@ -25,9 +25,13 @@ type revolveLoftFacesBlankSeamShell struct {
 }
 
 type revolveLoftFacesShellCapRing struct {
-	sectionIndex int
-	arc          *revolveLoftFacesToolCapOccupiedArc
-	vertices     []int
+	sectionIndex  int
+	arc           *revolveLoftFacesToolCapOccupiedArc
+	vertices      []int
+	endpoints     [2]int
+	occupied      []int
+	endpointProof [2]revolveLoftFacesCapSeamVertex
+	ties          *revolveLoftFacesHeelArcSideTies
 }
 
 type revolveLoftFacesShellCut struct {
@@ -36,11 +40,14 @@ type revolveLoftFacesShellCut struct {
 	arc          *revolveLoftFacesToolCapOccupiedArc
 	seam         bool
 	vertices     []int
+	endpointIDs  [2]int
+	ties         *revolveLoftFacesHeelArcSideTies
 }
 
 type revolveLoftFacesRay struct {
 	y, z      *big.Rat
 	seamIndex int
+	capIDs    []int
 }
 
 // This builds every authenticated Revolve wall and end cap on one angular
@@ -166,9 +173,38 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 	if n > 1024 {
 		return nil, false, nil
 	}
-	rays := revolveLoftFacesShellRays(n, seam)
-	if len(rays) < 4 || len(rays) > 4*n+len(seam) ||
+	capVertices := make([]revolveLoftFacesCapSeamVertex, 0, 2*len(capCuts))
+	for i := range capCuts {
+		vertices, built, err := revolveLoftFacesCapArcSeamVertices(ctx, proof, capCuts[i].arc)
+		if err != nil || !built {
+			return nil, false, err
+		}
+		ties, tied, err := revolveLoftFacesHeelArcSideTiesOf(ctx, proof, capCuts[i].arc)
+		if err != nil || !tied {
+			return nil, false, err
+		}
+		capCuts[i].endpointIDs = [2]int{len(capVertices), len(capVertices) + 1}
+		capCuts[i].ties = ties
+		capVertices = append(capVertices, vertices[:]...)
+	}
+	rays := revolveLoftFacesShellRays(n, seam, capVertices)
+	if len(rays) < 4 || len(rays) > 4*n+len(seam)+len(capVertices) ||
 		len(rays)*len(proof.section.spans) > 1<<16 {
+		return nil, false, nil
+	}
+	if !revolveLoftFacesCapRayOrderBounded(rays, seam, capVertices) {
+		return nil, false, nil
+	}
+	positiveYAxis := -1
+	for index, ray := range rays {
+		if ray.y.Sign() > 0 && ray.z.Sign() == 0 {
+			if positiveYAxis >= 0 {
+				return nil, false, nil
+			}
+			positiveYAxis = index
+		}
+	}
+	if positiveYAxis < 0 {
 		return nil, false, nil
 	}
 	out := &revolveLoftFacesBlankSeamShell{chordBound: maxRadius / (2 * float64(n*n)),
@@ -202,7 +238,7 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 		out.vertexBounds = append(out.vertexBounds, bound)
 		return index
 	}
-	makeRing := func(x, radius *big.Rat, middle bool) ([]int, bool) {
+	makeRing := func(x, radius *big.Rat, cut *revolveLoftFacesShellCut) ([]int, bool) {
 		if radius.Sign() < 0 {
 			return nil, false
 		}
@@ -215,11 +251,24 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 		}
 		ring := make([]int, len(rays))
 		for j, ray := range rays {
-			if middle && ray.seamIndex >= 0 {
+			if cut != nil && cut.seam && ray.seamIndex >= 0 {
 				vertex := seam[ray.seamIndex]
 				ring[j] = appendPoint(vertex.point, vertex.blankBound)
 				out.seam[ray.seamIndex] = ring[j]
 				continue
+			}
+			if cut != nil && cut.arc != nil {
+				found := -1
+				for endpoint, id := range cut.endpointIDs {
+					if slices.Contains(ray.capIDs, id) {
+						found = endpoint
+					}
+				}
+				if found >= 0 {
+					vertex := capVertices[cut.endpointIDs[found]]
+					ring[j] = appendPoint(vertex.point, vertex.blankBound)
+					continue
+				}
 			}
 			point, bound, valid := revolveLoftFacesMeridianRayPoint(
 				[2]*big.Rat{ray.y, ray.z}, x, radius)
@@ -236,7 +285,7 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 			return nil, false, err
 		}
 		var valid bool
-		rings[i], valid = makeRing(lfF(span.start.U), lfF(span.start.V), false)
+		rings[i], valid = makeRing(lfF(span.start.U), lfF(span.start.V), nil)
 		if !valid {
 			return nil, false, nil
 		}
@@ -298,14 +347,39 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 			}
 			var valid bool
 			cuts[i][j].vertices, valid = makeRing(cuts[i][j].x,
-				cuts[i][j].radius, cuts[i][j].seam)
+				cuts[i][j].radius, &cuts[i][j])
 			if !valid {
 				return nil, false, nil
 			}
 			if cuts[i][j].arc != nil {
+				endpoints := [2]int{-1, -1}
+				for rayIndex, ray := range rays {
+					for side, id := range cuts[i][j].endpointIDs {
+						if slices.Contains(ray.capIDs, id) {
+							if endpoints[side] >= 0 {
+								return nil, false, nil
+							}
+							endpoints[side] = cuts[i][j].vertices[rayIndex]
+						}
+					}
+				}
+				if endpoints[0] < 0 || endpoints[1] < 0 || endpoints[0] == endpoints[1] {
+					return nil, false, nil
+				}
+				occupied, pathOK := revolveLoftFacesOccupiedRingPath(
+					cuts[i][j].vertices, endpoints, positiveYAxis,
+					cuts[i][j].arc.throughPositiveY)
+				if !pathOK {
+					return nil, false, nil
+				}
 				out.capRings = append(out.capRings, revolveLoftFacesShellCapRing{
 					sectionIndex: i, arc: cuts[i][j].arc,
-					vertices: cuts[i][j].vertices})
+					vertices: cuts[i][j].vertices, endpoints: endpoints,
+					occupied: occupied,
+					endpointProof: [2]revolveLoftFacesCapSeamVertex{
+						capVertices[cuts[i][j].endpointIDs[0]],
+						capVertices[cuts[i][j].endpointIDs[1]]},
+					ties: cuts[i][j].ties})
 			}
 		}
 	}
@@ -466,8 +540,9 @@ func revolveLoftFacesShellSideCurrent(ctx context.Context,
 	return false, nil
 }
 
-func revolveLoftFacesShellRays(n int, seam []revolveLoftFacesSeamVertex) []revolveLoftFacesRay {
-	rays := make([]revolveLoftFacesRay, 0, 4*n+len(seam))
+func revolveLoftFacesShellRays(n int, seam []revolveLoftFacesSeamVertex,
+	capVertices []revolveLoftFacesCapSeamVertex) []revolveLoftFacesRay {
+	rays := make([]revolveLoftFacesRay, 0, 4*n+len(seam)+len(capVertices))
 	for quadrant := range 4 {
 		for i := range n {
 			q := big.NewRat(int64(i), int64(n))
@@ -492,6 +567,14 @@ func revolveLoftFacesShellRays(n int, seam []revolveLoftFacesSeamVertex) []revol
 	for i, point := range seam {
 		rays = append(rays, revolveLoftFacesRay{y: point.exact[1], z: point.exact[2], seamIndex: i})
 	}
+	for i, point := range capVertices {
+		if point.point.Y == 0 && point.point.Z == 0 {
+			return nil
+		}
+		rays = append(rays, revolveLoftFacesRay{
+			y: lfF(point.point.Y), z: lfF(point.point.Z), seamIndex: -1,
+			capIDs: []int{i}})
+	}
 	sort.Slice(rays, func(i, j int) bool { return revolveLoftFacesRayBefore(rays[i], rays[j]) })
 	unique := rays[:0]
 	for _, ray := range rays {
@@ -499,11 +582,16 @@ func revolveLoftFacesShellRays(n int, seam []revolveLoftFacesSeamVertex) []revol
 			unique = append(unique, ray)
 			continue
 		}
+		// A cap endpoint needs its own ray. A collision with a grid, seam,
+		// or second cap ray would erase its certified angular interval.
+		if len(ray.capIDs) != 0 || len(unique[len(unique)-1].capIDs) != 0 {
+			return nil
+		}
 		if ray.seamIndex >= 0 {
 			if unique[len(unique)-1].seamIndex >= 0 {
 				return nil
 			}
-			unique[len(unique)-1] = ray
+			unique[len(unique)-1].seamIndex = ray.seamIndex
 		}
 	}
 	return unique

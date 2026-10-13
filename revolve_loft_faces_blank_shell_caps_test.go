@@ -50,6 +50,29 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 	for _, ring := range shell.capRings {
 		require.Len(t, ring.vertices, len(shell.capRings[0].vertices))
 		require.Equal(t, ring.sectionIndex, ring.arc.circle.span)
+		require.NotNil(t, ring.ties)
+		require.NotEqual(t, ring.endpoints[0], ring.endpoints[1])
+		require.GreaterOrEqual(t, len(ring.occupied), 2)
+		require.Equal(t, ring.endpoints[0], ring.occupied[0])
+		require.Equal(t, ring.endpoints[1], ring.occupied[len(ring.occupied)-1])
+		throughAxis := false
+		for _, vertex := range ring.occupied {
+			point := shell.mesh.verts[vertex]
+			throughAxis = throughAxis || point.Y > 0 && point.Z == 0
+		}
+		require.Equal(t, ring.arc.throughPositiveY, throughAxis)
+		for side, endpoint := range ring.endpoints {
+			require.True(t, slices.Contains(ring.vertices, endpoint))
+			require.Less(t, shell.vertexBounds[endpoint], 0.1)
+			require.Equal(t, ring.endpointProof[side].point, shell.mesh.verts[endpoint])
+			require.Equal(t, ring.endpointProof[side].blankBound,
+				shell.vertexBounds[endpoint])
+			require.Less(t, ring.endpointProof[side].loftBound, 0.1)
+		}
+		require.True(t, ring.ties.negativeZ.sourceCell != nil ||
+			ring.ties.negativeZ.verticalCell != nil)
+		require.True(t, ring.ties.positiveZ.sourceCell != nil ||
+			ring.ties.positiveZ.verticalCell != nil)
 		x, radius := ring.arc.circle.x, ring.arc.circle.radius
 		xf, _ := x.Float64()
 		rf, _ := radius.Float64()
