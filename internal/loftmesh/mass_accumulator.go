@@ -147,7 +147,7 @@ func (m *MassAccumulator) Add(a, b, c r3.Vec, wall bool) {
 	sc := proofarith.Xsub(proofarith.XptOf(c), m.anchor)
 
 	triVol6 := proofarith.XdotRat(sa, proofarith.Xcross(sb, sc))
-	m.Vol6.Add(m.Vol6, triVol6)
+	proofarith.AddRat(m.Vol6, m.Vol6, triVol6)
 
 	saX, saY, saZ := proofarith.XhpRat(proofarith.Xhp(sa))
 	sbX, sbY, sbZ := proofarith.XhpRat(proofarith.Xhp(sb))
@@ -155,9 +155,9 @@ func (m *MassAccumulator) Add(a, b, c r3.Vec, wall bool) {
 	sumX := proofbound.RatAdd(saX, sbX, scX)
 	sumY := proofbound.RatAdd(saY, sbY, scY)
 	sumZ := proofbound.RatAdd(saZ, sbZ, scZ)
-	m.MomX.Add(m.MomX, new(big.Rat).Mul(triVol6, sumX))
-	m.MomY.Add(m.MomY, new(big.Rat).Mul(triVol6, sumY))
-	m.MomZ.Add(m.MomZ, new(big.Rat).Mul(triVol6, sumZ))
+	proofarith.AddRat(m.MomX, m.MomX, proofarith.MulRat(new(big.Rat), triVol6, sumX))
+	proofarith.AddRat(m.MomY, m.MomY, proofarith.MulRat(new(big.Rat), triVol6, sumY))
+	proofarith.AddRat(m.MomZ, m.MomZ, proofarith.MulRat(new(big.Rat), triVol6, sumZ))
 
 	m.foldBounds(a)
 	m.foldBounds(b)

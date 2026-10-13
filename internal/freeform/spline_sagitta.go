@@ -3,6 +3,7 @@ package freeform
 import (
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -217,22 +218,27 @@ func ChordSegmentSquaredDistance(w *FreeformWork, p, a RatPoint, bax, bay, d *bi
 	if err := w.Step(CostMul(ChordProjectionCost, WidthUnits(RatBitWidth(p.U, p.V, a.U, a.V, bax, bay, d)))); err != nil {
 		return nil, err
 	}
-	pax := new(big.Rat).Sub(p.U, a.U)
-	pay := new(big.Rat).Sub(p.V, a.V)
+	pax := proofarith.SubRat(new(big.Rat), p.U, a.U)
+	pay := proofarith.SubRat(new(big.Rat), p.V, a.V)
 	if d.Sign() == 0 {
-		return new(big.Rat).Add(new(big.Rat).Mul(pax, pax), new(big.Rat).Mul(pay, pay)), nil
+		return proofarith.AddRat(new(big.Rat),
+			proofarith.MulRat(new(big.Rat), pax, pax), proofarith.MulRat(new(big.Rat), pay, pay)), nil
 	}
-	n := new(big.Rat).Add(new(big.Rat).Mul(pax, bax), new(big.Rat).Mul(pay, bay))
+	n := proofarith.AddRat(new(big.Rat),
+		proofarith.MulRat(new(big.Rat), pax, bax), proofarith.MulRat(new(big.Rat), pay, bay))
 	if n.Sign() < 0 {
-		return new(big.Rat).Add(new(big.Rat).Mul(pax, pax), new(big.Rat).Mul(pay, pay)), nil
+		return proofarith.AddRat(new(big.Rat),
+			proofarith.MulRat(new(big.Rat), pax, pax), proofarith.MulRat(new(big.Rat), pay, pay)), nil
 	}
 	if n.Cmp(d) >= 0 {
-		pbx := new(big.Rat).Sub(pax, bax)
-		pby := new(big.Rat).Sub(pay, bay)
-		return new(big.Rat).Add(new(big.Rat).Mul(pbx, pbx), new(big.Rat).Mul(pby, pby)), nil
+		pbx := proofarith.SubRat(new(big.Rat), pax, bax)
+		pby := proofarith.SubRat(new(big.Rat), pay, bay)
+		return proofarith.AddRat(new(big.Rat),
+			proofarith.MulRat(new(big.Rat), pbx, pbx), proofarith.MulRat(new(big.Rat), pby, pby)), nil
 	}
-	cross := new(big.Rat).Sub(new(big.Rat).Mul(pax, bay), new(big.Rat).Mul(pay, bax))
-	return new(big.Rat).Quo(new(big.Rat).Mul(cross, cross), d), nil
+	cross := proofarith.SubRat(new(big.Rat),
+		proofarith.MulRat(new(big.Rat), pax, bay), proofarith.MulRat(new(big.Rat), pay, bax))
+	return proofarith.QuoRat(new(big.Rat), proofarith.MulRat(new(big.Rat), cross, cross), d), nil
 }
 
 // ChordEndpointSquaredDistance pays the same projection charge at the same
@@ -256,9 +262,10 @@ func RatChordFrame(w *FreeformWork, a, b RatPoint) (*big.Rat, *big.Rat, *big.Rat
 	if err := w.Step(CostMul(ChordFrameCost, WidthUnits(RatBitWidth(a.U, a.V, b.U, b.V)))); err != nil {
 		return nil, nil, nil, err
 	}
-	bax := new(big.Rat).Sub(b.U, a.U)
-	bay := new(big.Rat).Sub(b.V, a.V)
-	d := new(big.Rat).Add(new(big.Rat).Mul(bax, bax), new(big.Rat).Mul(bay, bay))
+	bax := proofarith.SubRat(new(big.Rat), b.U, a.U)
+	bay := proofarith.SubRat(new(big.Rat), b.V, a.V)
+	d := proofarith.AddRat(new(big.Rat),
+		proofarith.MulRat(new(big.Rat), bax, bax), proofarith.MulRat(new(big.Rat), bay, bay))
 	return bax, bay, d, nil
 }
 
@@ -346,8 +353,8 @@ func (s DyadicSpan) RatPointAt(w *FreeformWork, i int) (RatPoint, error) {
 	}
 	scale := new(big.Int).Lsh(s.Den, p.Exp)
 	return RatPoint{
-		U: new(big.Rat).SetFrac(p.U, scale),
-		V: new(big.Rat).SetFrac(p.V, scale),
+		U: proofarith.RatFrac(new(big.Rat), p.U, scale),
+		V: proofarith.RatFrac(new(big.Rat), p.V, scale),
 	}, nil
 }
 

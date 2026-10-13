@@ -46,11 +46,11 @@ func CoordOf(v r3.Vec, axis int) float64 {
 func RatCoordOf(p proof.Xpt, axis int) *big.Rat {
 	switch axis {
 	case 0:
-		return new(big.Rat).SetFrac(p.X, p.W)
+		return proof.RatFrac(new(big.Rat), p.X, p.W)
 	case 1:
-		return new(big.Rat).SetFrac(p.Y, p.W)
+		return proof.RatFrac(new(big.Rat), p.Y, p.W)
 	default:
-		return new(big.Rat).SetFrac(p.Z, p.W)
+		return proof.RatFrac(new(big.Rat), p.Z, p.W)
 	}
 }
 
