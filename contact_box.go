@@ -32,18 +32,18 @@ func (b sourceBoxContactProof) axisBox() box.AxisBox {
 // accumulated placement, and query pose with exact dyadic operations.
 func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	pp, ok := b.payload.(prismPayload)
-	if !ok || !b.solid || b.kind != BodySolid || pp.surfaceResult ||
-		pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
-		!box.RectangularProfile(pp.profile) ||
-		!box.CardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
-		!signedAxisTransform(pp.xform) || !signedAxisTransform(pose) {
+	if !ok || !b.solid || b.kind != BodySolid || pp.SurfaceResult ||
+		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
+		!box.RectangularProfile(pp.Profile) ||
+		!box.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) ||
+		!signedAxisTransform(pp.Xform) || !signedAxisTransform(pose) {
 		return sourceBoxContactProof{}, false
 	}
-	if !proofbound.FiniteVec(pp.frame.Origin()) || !finiteMeasurementValues(pp.z0, pp.z1) {
+	if !proofbound.FiniteVec(pp.Frame.Origin()) || !finiteMeasurementValues(pp.Z0, pp.Z1) {
 		return sourceBoxContactProof{}, false
 	}
 	var umin, umax, vmin, vmax float64
-	for i, seg := range pp.profile.Outer.Segments {
+	for i, seg := range pp.Profile.Outer.Segments {
 		line, ok := seg.(lineSeg)
 		if !ok {
 			return sourceBoxContactProof{}, false
@@ -55,11 +55,11 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 		umin, umax = math.Min(umin, p.U), math.Max(umax, p.U)
 		vmin, vmax = math.Min(vmin, p.V), math.Max(vmax, p.V)
 	}
-	if !finiteMeasurementValues(umin, umax, vmin, vmax) || pp.z0 >= pp.z1 {
+	if !finiteMeasurementValues(umin, umax, vmin, vmax) || pp.Z0 >= pp.Z1 {
 		return sourceBoxContactProof{}, false
 	}
-	numeric, ok := box.SourceAxisBox(pp.frame, pp.xform, pose,
-		[2]float64{umin, umax}, [2]float64{vmin, vmax}, [2]float64{pp.z0, pp.z1})
+	numeric, ok := box.SourceAxisBox(pp.Frame, pp.Xform, pose,
+		[2]float64{umin, umax}, [2]float64{vmin, vmax}, [2]float64{pp.Z0, pp.Z1})
 	if !ok {
 		return sourceBoxContactProof{}, false
 	}

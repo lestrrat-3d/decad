@@ -42,7 +42,7 @@ import (
 // the interface forms open the record's own — one per extent reading, never one
 // per segment.
 func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
-	if pp.sectionDelta != 0 {
+	if pp.SectionDelta != 0 {
 		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a prism with a proven section displacement`, ErrUnsupported)
 	}
 	return pp.extentBoundedAlong(context.Background(), g, freeform.NewFreeformWork(), nil)
@@ -81,26 +81,26 @@ func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *free
 // and placement rounding, and the final endpoint sums. A non-nil walks
 // reuses the profile's resolved segments across all three box axes.
 func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, float64, float64, error) {
-	base := pp.xform.Apply(pp.frame.Origin()).Dot(g)
-	gu := pp.dir(1, 0, 0).Dot(g)
-	gv := pp.dir(0, 1, 0).Dot(g)
-	gz := pp.dir(0, 0, 1).Dot(g)
+	base := pp.Xform.Apply(pp.Frame.Origin()).Dot(g)
+	gu := pp.Dir(1, 0, 0).Dot(g)
+	gv := pp.Dir(0, 1, 0).Dot(g)
+	gz := pp.Dir(0, 0, 1).Dot(g)
 	return prismextent.ExtentAlong(ctx, prismextent.ExtentInput{
-		Profile: pp.profile, Frame: pp.frame, Transform: pp.xform,
-		Z0: pp.z0, Z1: pp.z1, Base: base, GU: gu, GV: gv, GZ: gz,
+		Profile: pp.Profile, Frame: pp.Frame, Transform: pp.Xform,
+		Z0: pp.Z0, Z1: pp.Z1, Base: base, GU: gu, GV: gv, GZ: gz,
 		Direction: g,
 	}, work, walks, prismextent.ProfileBoundaryExtremes)
 }
 
 // prismPlacementCoeffAllow adapts the held prism frame for prismextent.
 func prismPlacementCoeffAllow(pp prismPayload, g r3.Vec, base, gu, gv, gz, coordUpper, zUpper float64) float64 {
-	return prismextent.PlacementCoeffAllow(pp.xform, pp.frame, g, base, gu, gv, gz, coordUpper, zUpper)
+	return prismextent.PlacementCoeffAllow(pp.Xform, pp.Frame, g, base, gu, gv, gz, coordUpper, zUpper)
 }
 
 // prismBoundsContext adapts the internal three-axis reading to Box. A cached
 // walk set is reused across axes; nil resolves each axis as before.
 func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (Box, error) {
-	low, high, bound, err := prismextent.Bounds(ctx, work, walks, pp.sectionDelta, pp.axialDelta(), pp.extentBoundedAlong)
+	low, high, bound, err := prismextent.Bounds(ctx, work, walks, pp.SectionDelta, pp.axialDelta(), pp.extentBoundedAlong)
 	if err != nil {
 		return Box{}, err
 	}

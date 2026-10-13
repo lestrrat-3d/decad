@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -119,8 +120,8 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 			j: read.Axis, w0: read.LowerFace, w1: read.UpperFace,
 			loop0: read.LowerLoop, loop1: read.UpperLoop,
 			lo: read.Lo, hi: read.Hi, walls: read.Walls, frameEmb: read.FrameEmbed,
-			prism: prismPayload{profile: profileRecord{Outer: read.Outer},
-				frame: read.Frame, z0: read.Lo, z1: read.Hi, xform: bp.xform},
+			prism: prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: read.Outer},
+				Frame: read.Frame, Z0: read.Lo, Z1: read.Hi, Xform: bp.xform}},
 		})
 	}
 	return tc, "", true, nil
@@ -191,7 +192,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	}
 	dilated := make([]profileRecord, len(tc.tools))
 	for i, tool := range tc.tools {
-		dilated[i], err = offsetProfile(budget, tool.prism.profile, -1, call.tmm)
+		dilated[i], err = offsetProfile(budget, tool.prism.Profile, -1, call.tmm)
 		if err != nil {
 			return nil, err
 		}
@@ -205,7 +206,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 		}
 	}
 	for i, tool := range tc.tools {
-		if err := auditOffsetSectionBudget(budget, tool.prism.profile, dilated[i]); err != nil {
+		if err := auditOffsetSectionBudget(budget, tool.prism.Profile, dilated[i]); err != nil {
 			return nil, shellCancelCause(err)
 		}
 	}
@@ -224,7 +225,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 		}
 	}
 	for _, tool := range tc.tools {
-		d, err := offsetSectionDelta(budget, tool.prism.profile, -1, call.tmm, call.tDelta)
+		d, err := offsetSectionDelta(budget, tool.prism.Profile, -1, call.tmm, call.tDelta)
 		if err != nil {
 			return nil, shellCancelCause(err)
 		}
@@ -374,7 +375,7 @@ func throughCapsCount(bp brepPayload, embeds []brepEmbed, k int) int {
 func (tc throughCut) requireStripsClear(bp brepPayload, i int, dilated profileRecord, tmm, tDelta float64) error {
 	tool := tc.tools[i]
 	separated, err := throughshell.StripsClear(throughshell.StripInput{
-		Tool: tool.prism.profile, Dilated: dilated, Receiver: tc.caps.Section,
+		Tool: tool.prism.Profile, Dilated: dilated, Receiver: tc.caps.Section,
 		ToolFrame: tool.frameEmb, ReceiverFrame: tc.caps.Embed,
 		SweepAxis: tc.k, PiercedAxis: tool.j, Lo: tool.lo, Hi: tool.hi,
 		Thickness: tmm, ThicknessDelta: tDelta,
@@ -415,12 +416,12 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded profileR
 		z1, z1Delta = step(z1, z1Delta, -call.tmm)
 	}
 	charge := max(delta, z0Delta, z1Delta)
-	var cut featurePayload = prismPayload{profile: eroded, frame: tc.caps.Frame, z0: z0, z1: z1, xform: bp.xform}
+	var cut featurePayload = prismPayload{Payload: prismrecord.Payload{Profile: eroded, Frame: tc.caps.Frame, Z0: z0, Z1: z1, Xform: bp.xform}}
 	for i, tool := range tc.tools {
 		lo, loDelta := step(tool.lo, 0, -call.tmm)
 		hi, hiDelta := step(tool.hi, 0, call.tmm)
-		tp := prismPayload{profile: dilated[i], frame: tool.prism.frame, xform: bp.xform,
-			z0: lo, z1: hi, z0Delta: loDelta, z1Delta: hiDelta}
+		tp := prismPayload{Payload: prismrecord.Payload{Profile: dilated[i], Frame: tool.prism.Frame, Xform: bp.xform,
+			Z0: lo, Z1: hi, Z0Delta: loDelta, Z1Delta: hiDelta}}
 		out, ok, err := classBOfPayloads(ctx, meshbool.OpCut, cut, tp, bp.xform, charge)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {

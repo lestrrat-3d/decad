@@ -269,7 +269,7 @@ func shellWitness(sh *Shell) (r3.Vec, bool) {
 // check that a wall's own segment kind is one this kernel can model at all —
 // only the cap-only region built from its result is skipped.
 func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload) (bool, error) {
-	if pp.sectionDelta != 0 {
+	if pp.SectionDelta != 0 {
 		// The kernel's certificates are exact statements about the carriers it
 		// reads, so a section the payload only holds within a displacement of
 		// (docs/prism-boolean-design.md §7) is a payload it cannot model: no
@@ -277,7 +277,7 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 		// against the wrong boundary.
 		return false, nil
 	}
-	loops, err := boundarywalk.SurveyLoops(budget, boundarywalk.Profile(pp.profile))
+	loops, err := boundarywalk.SurveyLoops(budget, boundarywalk.Profile(pp.Profile))
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return false, err
@@ -287,7 +287,7 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 		// one. The error return is reserved for cancellation.
 		return false, nil
 	}
-	built, ok, err := clearance.BuildPrismCarriers(budget, prismCarrierFrame(pp), loops, pp.surfaceResult)
+	built, ok, err := clearance.BuildPrismCarriers(budget, prismCarrierFrame(pp), loops, pp.SurfaceResult)
 	if err != nil || !ok {
 		return false, err
 	}
@@ -304,7 +304,7 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 	// exactly zero for an unplaced, feature-built prism whose lifts are exact
 	// for its own coordinates, which keeps its Clearance rows Exact.
 	pointTerm := carrierLiftRound(built.Faces)
-	g.delta = proofbound.AbsSumUpper(pointTerm, pp.axialDelta(), clearance.BodyFaceTiltDelta(g.faces, pp.frame, pp.xform))
+	g.delta = proofbound.AbsSumUpper(pointTerm, pp.axialDelta(), clearance.BodyFaceTiltDelta(g.faces, pp.Frame, pp.Xform))
 	g.carrierDelta = g.delta
 	return true, nil
 }
@@ -320,7 +320,7 @@ func carrierLiftRound(faces []*clearance.CFace) float64 {
 }
 
 func prismCarrierFrame(pp prismPayload) clearance.PrismCarrierFrame {
-	return clearance.PrismCarrierFrame{Frame: pp.frame, Transform: pp.xform, Z0: pp.z0, Z1: pp.z1}
+	return clearance.PrismCarrierFrame{Frame: pp.Frame, Transform: pp.Xform, Z0: pp.Z0, Z1: pp.Z1}
 }
 
 // addBrepFaces builds a brep body's carrier faces from its own record

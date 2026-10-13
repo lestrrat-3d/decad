@@ -50,7 +50,7 @@ func prismPatternFilletRingCutOf(rec *prismPatternJoinRecord,
 		bottom := rec.mesh.verts[rec.outlines[0][position]]
 		top := rec.mesh.verts[rec.outlines[1][position]]
 		if bottom.X != top.X || bottom.Y != top.Y ||
-			bottom.Z != rec.source.blank.z0 || top.Z != rec.source.blank.z1 {
+			bottom.Z != rec.source.blank.Z0 || top.Z != rec.source.blank.Z1 {
 			return prismpattern.IVPoint{}, false
 		}
 		return prismpattern.IVPointOf(proofarith.FloatRat(bottom.X), proofarith.FloatRat(bottom.Y)), true

@@ -153,8 +153,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 
 	capName := capNameOf(matSign)
 
-	liftCap := func(p Point2) r3.Vec { return pl.point(p.U, p.V, capZ) }
-	liftSide := func(p Point2) r3.Vec { return pl.point(p.U, p.V, sideZ) }
+	liftCap := func(p Point2) r3.Vec { return pl.Point(p.U, p.V, capZ) }
+	liftSide := func(p Point2) r3.Vec { return pl.Point(p.U, p.V, sideZ) }
 
 	// capVertexAt places one cap-level vertex at p, bounded by base beside the
 	// vertex's own exact frame lift and placement rounding
@@ -166,7 +166,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// per-coordinate rounding, not a chord or locus term, so it has no business
 	// in an edge's length bound.
 	capVertexAt := func(p Point2, base float64) *Vertex {
-		held, lift := pl.liftedVertex(p.U, p.V, capZ)
+		held, lift := pl.LiftedVertex(p.U, p.V, capZ)
 		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(base, lift))}
 	}
 
@@ -246,7 +246,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		if w.Th1 < w.Th0 {
 			sign = -1
 		}
-		samplePoint := pl.point(w.CU+w.Radius, w.CV, sideZ)
+		samplePoint := pl.Point(w.CU+w.Radius, w.CV, sideZ)
 		if err := fixPatchOrientation(patch, pl, samplePoint, sign, 0, axialRef); err != nil {
 			return capBandResult{}, err
 		}
@@ -424,7 +424,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			continue
 		}
 		arcByCorner[i] = &Edge{
-			curve: Arc3{Center: liftCap(Point2{U: j.VertU, V: j.VertV}), Axis: pl.dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
+			curve: Arc3{Center: liftCap(Point2{U: j.VertU, V: j.VertV}), Axis: pl.Dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
 			start: pAV, end: pBV,
 			convex: false,
 			length: arcLength, lengthBound: capcontour.CapApexArcBound(
@@ -437,7 +437,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		if span, ok := capcontour.OffsetSpan(dc, dcDelta); ok {
 			center, axis, _, _ := surfacegeom.CircleOf(internalCurve(arcByCorner[i].curve))
 			cornerDelta := math.Min(capband.CornerGap(j.VertU, j.VertV, prev.EndU, prev.EndV, prev.EndBound), capband.CornerGap(j.VertU, j.VertV, cur.StartU, cur.StartV, cur.StartBound))
-			arcByCorner[i].curveBound, arcByCorner[i].curveBounded = pl.circleCurveBound(j.VertU, j.VertV, capZ, capDelta, cornerDelta, dc, proofbound.IntervalFloatError(span, dc), center, axis)
+			arcByCorner[i].curveBound, arcByCorner[i].curveBounded = pl.CircleCurveBound(j.VertU, j.VertV, capZ, capDelta, cornerDelta, dc, proofbound.IntervalFloatError(span, dc), center, axis)
 		}
 	}
 
@@ -491,7 +491,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// normal and decides nothing at all. Verified empirically (never hand-trusted):
 		// fixPatchOrientation checks the actual built surface's own NormalAt
 		// against this reference and reverses only if they disagree.
-		if err := fixPatchOrientation(face, pl, pl.point(j.VertU+dc*math.Cos(arcTh0[i]), j.VertV+dc*math.Sin(arcTh0[i]), capZ), -math.Cos(arcTh0[i]), -math.Sin(arcTh0[i]), -matSign); err != nil {
+		if err := fixPatchOrientation(face, pl, pl.Point(j.VertU+dc*math.Cos(arcTh0[i]), j.VertV+dc*math.Sin(arcTh0[i]), capZ), -math.Cos(arcTh0[i]), -math.Sin(arcTh0[i]), -matSign); err != nil {
 			return capBandResult{}, err
 		}
 		slantIn[i].faces = append(slantIn[i].faces, face)
@@ -624,7 +624,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// recorded centre, every radius of which sits within radialShift
 			// of the held capRadius.
 			center, axis, _, _ := surfacegeom.CircleOf(internalCurve(capEdge.curve))
-			capEdge.curveBound, capEdge.curveBounded = pl.circleCurveBound(w.CU, w.CV, capZ, capDelta, 0, capRadius, radialShift, center, axis)
+			capEdge.curveBound, capEdge.curveBounded = pl.CircleCurveBound(w.CU, w.CV, capZ, capDelta, 0, capRadius, radialShift, center, axis)
 		}
 
 		var surf Surface
@@ -681,7 +681,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				sign = -1
 			}
 			refU, refV = sign*math.Cos(w.Th0), sign*math.Sin(w.Th0)
-			samplePoint = pl.point(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), sideZ)
+			samplePoint = pl.Point(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), sideZ)
 		}
 		if err := fixPatchOrientation(face, pl, samplePoint, refU, refV, axialRef); err != nil {
 			return capBandResult{}, err
@@ -943,17 +943,17 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex
 // circumference is bounded against π's own rational bracket.
 func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta float64, exactRadius proofbound.RatInterval) *Edge {
 	seamU := cu + r
-	seamPos, lift := pl.liftedVertex(seamU, cv, z)
+	seamPos, lift := pl.LiftedVertex(seamU, cv, z)
 	seam := &Vertex{
 		position: seamPos,
 		bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(delta, lift), proofarith.AddRoundError(cu, r, seamU))),
 	}
-	axis := pl.dir(0, 0, 1)
+	axis := pl.Dir(0, 0, 1)
 	if !ccw {
 		axis = axis.Scale(-1)
 	}
 	held := 2 * math.Pi * r
-	center := pl.point(cu, cv, z)
+	center := pl.Point(cu, cv, z)
 	e := &Edge{
 		curve: Circle3{Center: center, Axis: axis, Radius: units.Millimeters(r)},
 		start: seam, end: seam,
@@ -968,7 +968,7 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 			proofbound.RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(exactRadius.Hi, heldRat))))
 		radiusBound = proofbound.AbsSumUpper(gap, delta)
 	}
-	e.curveBound, e.curveBounded = pl.circleCurveBound(cu, cv, z, pl.axialDelta(), 0, r, radiusBound, center, axis)
+	e.curveBound, e.curveBounded = pl.CircleCurveBound(cu, cv, z, pl.axialDelta(), 0, r, radiusBound, center, axis)
 	return e
 }
 
@@ -981,12 +981,12 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 // caller forms the two together so the bound is never computed against a
 // value spelled a second time.
 func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1, length, lengthBound float64) *Edge {
-	axis := pl.dir(0, 0, 1)
+	axis := pl.Dir(0, 0, 1)
 	if th1 < th0 {
 		axis = axis.Scale(-1)
 	}
 	return &Edge{
-		curve: Arc3{Center: pl.point(cu, cv, z), Axis: axis, Radius: units.Millimeters(r)},
+		curve: Arc3{Center: pl.Point(cu, cv, z), Axis: axis, Radius: units.Millimeters(r)},
 		start: start, end: end,
 		convex: th1 > th0,
 		length: length, lengthBound: lengthBound,
@@ -1028,7 +1028,7 @@ func planeFromThree(p0, p1, p2 r3.Vec) (Plane, error) {
 func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) Surface {
 	dz, dr := z1-z0, r1-r0
 	if dr == 0 {
-		return Cylinder{Origin: pl.point(cu, cv, z0), Axis: pl.dir(0, 0, 1), Radius: units.Millimeters(r0)}
+		return Cylinder{Origin: pl.Point(cu, cv, z0), Axis: pl.Dir(0, 0, 1), Radius: units.Millimeters(r0)}
 	}
 	apexZ := z0 - r0*dz/dr
 	growth := 1.0
@@ -1036,8 +1036,8 @@ func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) Surface {
 		growth = -1
 	}
 	return Cone{
-		Origin:    pl.point(cu, cv, apexZ),
-		Axis:      pl.dir(0, 0, growth),
+		Origin:    pl.Point(cu, cv, apexZ),
+		Axis:      pl.Dir(0, 0, growth),
 		Radius:    units.Millimeters(0),
 		HalfAngle: units.Radians(math.Atan2(math.Abs(dr), math.Abs(dz))),
 	}
@@ -1123,7 +1123,7 @@ func fixPatchOrientation(f *Face, pl prismPayload, samplePoint r3.Vec, refU, ref
 	if err != nil {
 		return fmt.Errorf(`%w: a cap-loop chamfer band patch's outward orientation cannot be certified; its own normal reading refuses at the build's orientation sample point (%v)`, ErrUnsupported, err)
 	}
-	ref := pl.dir(refU, refV, refZ)
+	ref := pl.Dir(refU, refV, refZ)
 	if n.Value.Dot(ref) < 0 {
 		f.reversed = !f.reversed
 	}

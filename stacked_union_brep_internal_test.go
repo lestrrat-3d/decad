@@ -280,7 +280,7 @@ func TestStackedUnionBrepMisses(t *testing.T) {
 		plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10)
 		boss := internalBoxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15)
 		pp := plate.payload.(prismPayload)
-		pp.sectionDelta = 1e-12
+		pp.SectionDelta = 1e-12
 		_, ok, err := tryStackedUnion(t.Context(), &Body{payload: pp}, boss)
 		require.NoError(t, err)
 		require.False(t, ok)
@@ -304,7 +304,7 @@ func TestStackedUnionBrepMisses(t *testing.T) {
 		require.NoError(t, err)
 		boss, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(25), Dir: Along})
 		require.NoError(t, err)
-		require.Zero(t, boss.payload.(prismPayload).sectionDelta)
+		require.Zero(t, boss.payload.(prismPayload).SectionDelta)
 		_, ok, err := tryStackedUnion(t.Context(), plate, boss)
 		require.NoError(t, err)
 		require.False(t, ok)

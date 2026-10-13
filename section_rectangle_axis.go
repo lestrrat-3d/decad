@@ -9,17 +9,17 @@ import (
 // cardinalRectangleSectionRecord derives the exact section of an axis-aligned
 // rectangular prism on a cardinal plane parallel to its sweep axis.
 func cardinalRectangleSectionRecord(pp prismPayload, plane r3.Frame) (profileRecord, bool) {
-	u0, u1, v0, v1, ok := momentinput.RectangleBounds(pp.profile)
-	if !ok || pp.blendKind != "" || len(pp.blendSegs) != 0 || pp.z0 >= pp.z1 {
+	u0, u1, v0, v1, ok := momentinput.RectangleBounds(pp.Profile)
+	if !ok || pp.BlendKind != "" || len(pp.BlendSegs) != 0 || pp.Z0 >= pp.Z1 {
 		return profileRecord{}, false
 	}
-	sourceOrigin := proofarith.DyVec(pp.frame.Origin())
-	placedOrigin := proofarith.DvTransform(pp.xform, sourceOrigin)
+	sourceOrigin := proofarith.DyVec(pp.Frame.Origin())
+	placedOrigin := proofarith.DvTransform(pp.Xform, sourceOrigin)
 	image := func(direction r3.Vec) proofarith.DyV3 {
 		point := proofarith.DvAdd(sourceOrigin, proofarith.DyVec(direction))
-		return proofarith.DvSub(proofarith.DvTransform(pp.xform, point), placedOrigin)
+		return proofarith.DvSub(proofarith.DvTransform(pp.Xform, point), placedOrigin)
 	}
-	radialU, radialV, axis := image(pp.frame.U()), image(pp.frame.V()), image(pp.frame.N())
+	radialU, radialV, axis := image(pp.Frame.U()), image(pp.Frame.V()), image(pp.Frame.N())
 	if !sectionCardinalDirection(radialU) || !sectionCardinalDirection(radialV) ||
 		!sectionCardinalDirection(axis) || !sectionSignedDirection(proofarith.DvCross(radialU, radialV), axis) {
 		return profileRecord{}, false
@@ -33,16 +33,16 @@ func cardinalRectangleSectionRecord(pp prismPayload, plane r3.Frame) (profileRec
 
 	point := func(u, v, z float64) proofarith.DyV3 {
 		local := proofarith.DvAdd(sourceOrigin, proofarith.DvAdd(
-			proofarith.DvScale(proofarith.DyVec(pp.frame.U()), proofarith.DyOfFinite(u)),
+			proofarith.DvScale(proofarith.DyVec(pp.Frame.U()), proofarith.DyOfFinite(u)),
 			proofarith.DvAdd(
-				proofarith.DvScale(proofarith.DyVec(pp.frame.V()), proofarith.DyOfFinite(v)),
-				proofarith.DvScale(proofarith.DyVec(pp.frame.N()), proofarith.DyOfFinite(z)),
+				proofarith.DvScale(proofarith.DyVec(pp.Frame.V()), proofarith.DyOfFinite(v)),
+				proofarith.DvScale(proofarith.DyVec(pp.Frame.N()), proofarith.DyOfFinite(z)),
 			),
 		))
-		return proofarith.DvTransform(pp.xform, local)
+		return proofarith.DvTransform(pp.Xform, local)
 	}
-	low := proofarith.DvSub(point(u0, v0, pp.z0), proofarith.DyVec(plane.Origin()))
-	high := proofarith.DvSub(point(u1, v1, pp.z0), proofarith.DyVec(plane.Origin()))
+	low := proofarith.DvSub(point(u0, v0, pp.Z0), proofarith.DyVec(plane.Origin()))
+	high := proofarith.DvSub(point(u1, v1, pp.Z0), proofarith.DyVec(plane.Origin()))
 	cutLow, cutHigh := proofarith.DvDot(low, requestN), proofarith.DvDot(high, requestN)
 	if cutLow.Sign() == 0 || cutHigh.Sign() == 0 || cutLow.Sign() == cutHigh.Sign() {
 		return profileRecord{}, false
@@ -51,7 +51,7 @@ func cardinalRectangleSectionRecord(pp prismPayload, plane r3.Frame) (profileRec
 	if proofarith.DyCmp(loU, hiU) > 0 {
 		loU, hiU = hiU, loU
 	}
-	highCap := proofarith.DvSub(point(u0, v0, pp.z1), proofarith.DyVec(plane.Origin()))
+	highCap := proofarith.DvSub(point(u0, v0, pp.Z1), proofarith.DyVec(plane.Origin()))
 	loV, hiV := proofarith.DvDot(low, requestV), proofarith.DvDot(highCap, requestV)
 	if proofarith.DyCmp(loV, hiV) > 0 {
 		loV, hiV = hiV, loV

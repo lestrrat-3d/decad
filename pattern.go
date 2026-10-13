@@ -184,7 +184,7 @@ func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref p
 func patternFrameOf(payload featurePayload) (r3.Frame, r3.Transform, []profileRecord, bool) {
 	switch p := payload.(type) {
 	case prismPayload:
-		return p.frame, p.xform, []profileRecord{p.profile}, true
+		return p.Frame, p.Xform, []profileRecord{p.Profile}, true
 	case stackedPrismPayload:
 		regions := make([]profileRecord, 0, len(p.slabs))
 		for _, slab := range p.slabs {
@@ -256,13 +256,13 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 	}
 	switch p := payload.(type) {
 	case prismPayload:
-		moved, delta, err := moveRegion(budget, p.profile, mv)
+		moved, delta, err := moveRegion(budget, p.Profile, mv)
 		if err != nil {
 			return nil, err
 		}
-		p.profile = moved
-		p.sectionDelta = patternrecord.WithDelta(p.sectionDelta, delta)
-		p.walks = nil
+		p.Profile = moved
+		p.SectionDelta = patternrecord.WithDelta(p.SectionDelta, delta)
+		p.Walks = nil
 		return evalPrismContext(ctx, d, ref, p, freeform.NewFreeformWork())
 	case stackedPrismPayload:
 		slabs := make([]stackedrecord.Slab, len(p.slabs))
@@ -387,9 +387,9 @@ func (rp resolvedPattern) patternGroup(ctx context.Context, payload featurePaylo
 	multiSlab := false
 	switch p := payload.(type) {
 	case prismPayload:
-		regions = []profileRecord{p.profile}
-		slab = stackedrecord.Slab{Z0: p.z0, Z1: p.z1, Z0Delta: p.z0Delta, Z1Delta: p.z1Delta}
-		sectionDelta = p.sectionDelta
+		regions = []profileRecord{p.Profile}
+		slab = stackedrecord.Slab{Z0: p.Z0, Z1: p.Z1, Z0Delta: p.Z0Delta, Z1Delta: p.Z1Delta}
+		sectionDelta = p.SectionDelta
 	case stackedPrismPayload:
 		if p.isGroup() {
 			regions = p.slabs[0].Regions

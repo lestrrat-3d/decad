@@ -142,12 +142,12 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 	if _, ok := pull.Normalize(); !ok {
 		return undercutOutcome{}
 	}
-	m, okM := survey2d.NewPlacedFrameMap(pp.frame, pp.xform)
+	m, okM := survey2d.NewPlacedFrameMap(pp.Frame, pp.Xform)
 	if !okM {
 		return undercutOutcome{}
 	}
 	roles := facesByRole(b)
-	loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(pp.profile))
+	loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(pp.Profile))
 	if err != nil {
 		return undercutOutcome{}
 	}
@@ -165,7 +165,7 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 			}
 		}
 	}
-	if !pp.surfaceResult {
+	if !pp.SurfaceResult {
 		for _, cap := range []struct {
 			role string
 			sign float64
@@ -271,7 +271,7 @@ func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 		return undercutOutcome{}
 	}
 	base := cp.basePrism()
-	m, okM := survey2d.NewPlacedFrameMap(base.frame, base.xform)
+	m, okM := survey2d.NewPlacedFrameMap(base.Frame, base.Xform)
 	if !okM {
 		return undercutOutcome{}
 	}
@@ -406,9 +406,9 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		var err error
 		switch pl := b.payload.(type) {
 		case prismPayload:
-			reading, readErr := wallsurvey.PrismWall(budget, pl.profile,
-				survey2d.PrismHeight{Z0: pl.z0, Z1: pl.z1, Z0Delta: pl.z0Delta, Z1Delta: pl.z1Delta},
-				pl.sectionDelta, cfg.AllowRad)
+			reading, readErr := wallsurvey.PrismWall(budget, pl.Profile,
+				survey2d.PrismHeight{Z0: pl.Z0, Z1: pl.Z1, Z0Delta: pl.Z0Delta, Z1Delta: pl.Z1Delta},
+				pl.SectionDelta, cfg.AllowRad)
 			out, err = wallOutcome{reading: reading.Reading, bound: reading.Bound,
 				ok: reading.OK, reason: reading.Reason}, readErr
 		case revolvePayload:
@@ -487,7 +487,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		ok := false
 		switch pl := b.payload.(type) {
 		case prismPayload:
-			reading := radiussurvey.Prism(pl.profile, pl.sectionDelta)
+			reading := radiussurvey.Prism(pl.Profile, pl.SectionDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case revolvePayload:
 			reading := radiussurvey.Revolve(pl.profile, pl.ax, pl.sectionDelta)

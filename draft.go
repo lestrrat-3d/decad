@@ -188,16 +188,16 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 	// Stages 3 to 7 are the tapered extrude's, over b's section.
 	ref := d.nextProducerID()
 	body, err := evalDraftContext(ctx, d, ref, draftPayload{
-		profile:    pp.profile,
-		frame:      pp.frame,
-		z0:         pp.z0,
-		z1:         pp.z1,
-		z0Delta:    pp.z0Delta,
-		z1Delta:    pp.z1Delta,
+		profile:    pp.Profile,
+		frame:      pp.Frame,
+		z0:         pp.Z0,
+		z1:         pp.Z1,
+		z0Delta:    pp.Z0Delta,
+		z1Delta:    pp.Z1Delta,
 		nearStart:  nearStart,
 		taper:      alpha,
 		taperDelta: alphaDelta,
-		xform:      pp.xform,
+		xform:      pp.Xform,
 		kept:       kept,
 	})
 	if err != nil {

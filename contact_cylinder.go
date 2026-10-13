@@ -24,23 +24,23 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 		return cylinder, true
 	}
 	pp, ok := b.payload.(prismPayload)
-	if !ok || !b.solid || b.kind != BodySolid || pp.surfaceResult ||
-		pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
-		len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) != 1 ||
-		!pairbox.CardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
-		!signedAxisTransform(pp.xform) || !signedAxisTransform(pose) ||
-		!proofbound.FiniteVec(pp.frame.Origin()) || !finiteMeasurementValues(pp.z0, pp.z1) ||
-		pp.z0 >= pp.z1 {
+	if !ok || !b.solid || b.kind != BodySolid || pp.SurfaceResult ||
+		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
+		len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
+		!pairbox.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) ||
+		!signedAxisTransform(pp.Xform) || !signedAxisTransform(pose) ||
+		!proofbound.FiniteVec(pp.Frame.Origin()) || !finiteMeasurementValues(pp.Z0, pp.Z1) ||
+		pp.Z0 >= pp.Z1 {
 		return sourceCylinderContactProof{}, false
 	}
-	circle, ok := pp.profile.Outer.Segments[0].(circleSeg)
+	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
 	if !ok || !circle.CCW || circle.TStart != 0 || circle.TEnd != 1 ||
 		circle.Radius.Kind() != units.Length ||
 		!finiteMeasurementValues(circle.Center.U, circle.Center.V, circle.Radius.Base()) ||
 		circle.Radius.Base() <= 0 {
 		return sourceCylinderContactProof{}, false
 	}
-	axis, _, ok := clearance.SignedAxis(pose.ApplyDir(pp.xform.ApplyDir(pp.frame.N())))
+	axis, _, ok := clearance.SignedAxis(pose.ApplyDir(pp.Xform.ApplyDir(pp.Frame.N())))
 	if !ok {
 		return sourceCylinderContactProof{}, false
 	}
@@ -77,8 +77,8 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 	if planes != 2 || walls != 1 || endFaces[0] == nil || endFaces[1] == nil {
 		return sourceCylinderContactProof{}, false
 	}
-	numeric := pairbox.SourcePrismCylinderBox(pp.frame, pp.xform, pose, circle.Center,
-		pp.z0, pp.z1, circle.Radius.Base(), axis)
+	numeric := pairbox.SourcePrismCylinderBox(pp.Frame, pp.Xform, pose, circle.Center,
+		pp.Z0, pp.Z1, circle.Radius.Base(), axis)
 	box := sourceBoxContactProof{lo: numeric.Lo, hi: numeric.Hi}
 	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces, wall: wallFace}, true
 }

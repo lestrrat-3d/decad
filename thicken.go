@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -132,8 +133,8 @@ func thickenSweep(ctx context.Context, d *Document, sp sweepPayload, side Thicke
 			return nil, fmt.Errorf(`%w: a thickened arc sweep has no revolve reduction`, ErrDegenerate)
 		}
 		sp.revolve = built
-		sp.prism.profile = built.profile
-		sp.prism.xform = built.xform
+		sp.prism.Profile = built.profile
+		sp.prism.Xform = built.xform
 		sp.surfaceResult = false
 		finishArcSweepBody(body, sp)
 		return body, nil
@@ -163,8 +164,8 @@ func thickenPatch(ctx context.Context, d *Document, pp patchPayload, side Thicke
 		return nil, fmt.Errorf(`%w: the thicken interval has no proven positive height`, ErrUnsupported)
 	}
 	prism := pp.prism()
-	prism.z0, prism.z0Delta = z0.Value, z0.Bound
-	prism.z1, prism.z1Delta = z1.Value, z1.Bound
+	prism.Z0, prism.Z0Delta = z0.Value, z0.Bound
+	prism.Z1, prism.Z1Delta = z1.Value, z1.Bound
 	ref := d.nextProducerID()
 	return evalPrismContext(ctx, d, ref, prism, freeform.NewFreeformWork())
 }
@@ -290,13 +291,13 @@ func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side
 	if err != nil {
 		return nil, err
 	}
-	return evalPrismContext(ctx, d, d.nextProducerID(), prismPayload{
-		profile: section,
-		frame:   cp.frame,
-		z0:      cp.z0, z1: cp.z1,
-		z0Delta: cp.z0Delta, z1Delta: cp.z1Delta,
-		xform: cp.xform,
-	}, work)
+	return evalPrismContext(ctx, d, d.nextProducerID(), prismPayload{Payload: prismrecord.Payload{
+		Profile: section,
+		Frame:   cp.frame,
+		Z0:      cp.z0, Z1: cp.z1,
+		Z0Delta: cp.z0Delta, Z1Delta: cp.z1Delta,
+		Xform: cp.xform,
+	}}, work)
 }
 
 // thickenChainRevolve builds a solid of revolution from an uncapped chain

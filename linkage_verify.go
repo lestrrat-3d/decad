@@ -619,9 +619,9 @@ func bodyPoints(b *Body, hull bool) (cornerReading, bool) {
 	if hull {
 		if pp, isPrism := b.payload.(prismPayload); isPrism {
 			points, pad, k, ok := linkagebound.PrismHullPoints(linkagebound.PrismHull{
-				Outer: pp.profile.Outer, Frame: pp.frame, Transform: pp.xform,
-				Z0: pp.z0, Z1: pp.z1, SectionDelta: pp.sectionDelta,
-				Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
+				Outer: pp.Profile.Outer, Frame: pp.Frame, Transform: pp.Xform,
+				Z0: pp.Z0, Z1: pp.Z1, SectionDelta: pp.SectionDelta,
+				Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta,
 			})
 			if ok {
 				reading := linkagebound.StaticPoints(points)

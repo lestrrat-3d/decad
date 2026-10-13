@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -102,25 +103,25 @@ func tryClassBCrossingCut(ctx context.Context, x prismPayload, cp classBPair) (b
 // silent miss: both operands hole-free, every level displacement zero, and a
 // frame for faces normal to e that carries X's axes bit for bit.
 func newCBBuild(ctx context.Context, x prismPayload, cp classBPair) (*cbBuild, bool, error) {
-	if x.frame != cp.ref || cp.d() == 2 {
+	if x.Frame != cp.ref || cp.d() == 2 {
 		return nil, false, nil
 	}
-	if len(x.profile.Holes) != 0 || len(cp.y.profile.Holes) != 0 {
+	if len(x.Profile.Holes) != 0 || len(cp.y.Profile.Holes) != 0 {
 		return nil, false, nil
 	}
-	if x.z0Delta != 0 || x.z1Delta != 0 || cp.y.z0Delta != 0 || cp.y.z1Delta != 0 {
+	if x.Z0Delta != 0 || x.Z1Delta != 0 || cp.y.Z0Delta != 0 || cp.y.Z1Delta != 0 {
 		return nil, false, nil
 	}
-	axes := [3]r3.Vec{x.frame.U(), x.frame.V(), x.frame.N()}
+	axes := [3]r3.Vec{x.Frame.U(), x.Frame.V(), x.Frame.N()}
 	d := cp.d()
-	fe, err := r3.NewFrame(x.frame.Origin(), axes[d], axes[2])
+	fe, err := r3.NewFrame(x.Frame.Origin(), axes[d], axes[2])
 	if err != nil {
 		return nil, false, fmt.Errorf(`%w: X's axes make no frame: %s`, ErrDegenerate, err)
 	}
 	b := &cbBuild{
 		cp:     cp,
 		x:      x,
-		fX:     cbFrame{frame: x.frame, axis: [3]int{0, 1, 2}, sign: [3]float64{1, 1, 1}},
+		fX:     cbFrame{frame: x.Frame, axis: [3]int{0, 1, 2}, sign: [3]float64{1, 1, 1}},
 		fG:     cbFrame{frame: cp.g, axis: cp.axis, sign: cp.sign},
 		budget: proofbound.NewWorkBudget(ctx),
 	}
@@ -155,13 +156,13 @@ func (b *cbBuild) geom(c cbCarrier) cbGeom {
 		op, frame = b.cp.y, b.fG
 	}
 	if c.idx < 0 {
-		z := op.z0
+		z := op.Z0
 		if c.idx == -2 {
-			z = op.z1
+			z = op.Z1
 		}
 		return cbGeom{axis: frame.axis[2], level: frame.sign[2]*z + 0}
 	}
-	seg := op.profile.Outer.Segments[c.idx]
+	seg := op.Profile.Outer.Segments[c.idx]
 	switch s := seg.(type) {
 	case lineSeg:
 		if s.Start.U == s.End.U {
@@ -183,8 +184,8 @@ func (b *cbBuild) run(ctx context.Context) (brepPayload, error) {
 		{Frame: b.fG.frame, Axis: b.fG.axis, Sign: b.fG.sign},
 		{Frame: b.fE.frame, Axis: b.fE.axis, Sign: b.fE.sign},
 	}
-	x := classbgeom.CrossingPrism{Segments: b.x.profile.Outer.Segments, Z0: b.x.z0, Z1: b.x.z1}
-	y := classbgeom.CrossingPrism{Segments: b.cp.y.profile.Outer.Segments, Z0: b.cp.y.z0, Z1: b.cp.y.z1}
+	x := classbgeom.CrossingPrism{Segments: b.x.Profile.Outer.Segments, Z0: b.x.Z0, Z1: b.x.Z1}
+	y := classbgeom.CrossingPrism{Segments: b.cp.y.Profile.Outer.Segments, Z0: b.cp.y.Z0, Z1: b.cp.y.Z1}
 	if err := b.vertices.SeedRecordedCorners([2]classbgeom.CrossingPrism{x, y},
 		[2]classbgeom.CrossingFrame{frames[0], frames[1]}, cbCarrierOf); err != nil {
 		return brepPayload{}, err
@@ -201,7 +202,7 @@ func (b *cbBuild) run(ctx context.Context) (brepPayload, error) {
 			if op == cbY {
 				p, frame = b.cp.y, b.fG
 			}
-			return classbgeom.TraceCrossingChords(ctx, op, f, p.profile.Outer.Segments,
+			return classbgeom.TraceCrossingChords(ctx, op, f, p.Profile.Outer.Segments,
 				classbgeom.CrossingFrame{Frame: frame.frame, Axis: frame.axis, Sign: frame.sign},
 				cbCarrierOf, geometry,
 				func(f, c1, c2 cbCarrier, at [3]float64, delta float64) ([3]float64, error) {
@@ -258,11 +259,11 @@ func (b *cbBuild) run(ctx context.Context) (brepPayload, error) {
 	// Modify §5's audit per planar face record (§5): simplicity, orientation
 	// and nesting. It refuses; it admits nothing.
 	for _, f := range b.faces {
-		if err := auditPrismMergeSection(b.budget, prismPayload{profile: f.region}, f.region); err != nil {
+		if err := auditPrismMergeSection(b.budget, prismPayload{Payload: prismrecord.Payload{Profile: f.region}}, f.region); err != nil {
 			return brepPayload{}, err
 		}
 	}
-	out := brepPayload{xform: b.x.xform}
+	out := brepPayload{xform: b.x.Xform}
 	// The reference frame is X's: the first face's frame must be it.
 	for _, f := range b.faces {
 		if f.frame.axis == b.fX.axis && f.frame.sign == b.fX.sign {
@@ -286,7 +287,7 @@ func (b *cbBuild) run(ctx context.Context) (brepPayload, error) {
 		}
 	}
 	pieces, err := classbgeom.CylinderPieces(pieceFaces, [2]classbgeom.CrossingFrame{frames[0], frames[1]},
-		[2][]curveSegment{b.x.profile.Outer.Segments, b.cp.y.profile.Outer.Segments},
+		[2][]curveSegment{b.x.Profile.Outer.Segments, b.cp.y.Profile.Outer.Segments},
 		func(c cbCarrier) (int, int, bool, int) {
 			g := b.geom(c)
 			return c.op, c.idx, g.cyl, g.axis
@@ -310,7 +311,7 @@ func (b *cbBuild) brepFace(f cbFace) brepFace {
 	region := f.region
 	out := brepFace{frame: f.frame.frame, region: &region, outward: f.outward, z0: f.level, z1: f.level, delta: f.delta}
 	if f.carrier.idx >= 0 {
-		axes := [3]r3.Vec{b.x.frame.U(), b.x.frame.V(), b.x.frame.N()}
+		axes := [3]r3.Vec{b.x.Frame.U(), b.x.Frame.V(), b.x.Frame.N()}
 		sweep := b.fX.axis[2]
 		if f.carrier.op == cbY {
 			sweep = b.fG.axis[2]
@@ -362,9 +363,9 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 		return nil
 	}
 	tool := profileRecord{Outer: toLoop(other[0])}
-	target := prismPayload{profile: a}
-	toolP := prismPayload{profile: tool}
-	if _, within, err := prismcells.RegionsWithinWorkCap(b.budget, target.profile, toolP.profile); err != nil || !within {
+	target := prismPayload{Payload: prismrecord.Payload{Profile: a}}
+	toolP := prismPayload{Payload: prismrecord.Payload{Profile: tool}}
+	if _, within, err := prismcells.RegionsWithinWorkCap(b.budget, target.Profile, toolP.Profile); err != nil || !within {
 		if err != nil {
 			return err
 		}
@@ -373,7 +374,7 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 	}
 	reexpress := &prismReexpression{Identity: true}
 	if cut {
-		s, match, _, resolved, err := prismcells.ResolveCut(ctx, b.budget, target.profile, toolP.profile, reexpress)
+		s, match, _, resolved, err := prismcells.ResolveCut(ctx, b.budget, target.Profile, toolP.Profile, reexpress)
 		if err != nil {
 			return err
 		}
@@ -385,7 +386,7 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 			return add(region)
 		}
 	} else {
-		s, match, _, _, resolved, err := prismcells.ResolveIntersect(ctx, b.budget, target.profile, toolP.profile, reexpress)
+		s, match, _, _, resolved, err := prismcells.ResolveIntersect(ctx, b.budget, target.Profile, toolP.Profile, reexpress)
 		if err != nil {
 			return err
 		}
@@ -401,8 +402,8 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 	if !cut {
 		keep = func(inA, inB bool) bool { return inA && inB }
 	}
-	selected, _, resolved, err := prismcells.ResolveCrossingCells(ctx, b.budget, target.profile, toolP.profile,
-		target.sectionDelta, toolP.sectionDelta, reexpress, keep)
+	selected, _, resolved, err := prismcells.ResolveCrossingCells(ctx, b.budget, target.Profile, toolP.Profile,
+		target.SectionDelta, toolP.SectionDelta, reexpress, keep)
 	if err != nil {
 		return err
 	}

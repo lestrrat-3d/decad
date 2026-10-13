@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -157,8 +158,8 @@ func TestStitchAuditRefusesOverlappingAssembly(t *testing.T) {
 // into a closed set at all.
 func TestStitchRuleSRefusesMultipleSourceBodies(t *testing.T) {
 	t.Parallel()
-	bodyA := &Body{payload: prismPayload{surfaceResult: true}}
-	bodyB := &Body{payload: prismPayload{surfaceResult: true}}
+	bodyA := &Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}}
+	bodyB := &Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}}
 	faceA := &Face{body: bodyA}
 	faceB := &Face{body: bodyB}
 

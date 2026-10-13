@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -44,12 +45,12 @@ func (sp stackedPrismPayload) axialDelta() float64 {
 
 func (sp stackedPrismPayload) outerPrism() prismPayload {
 	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
-	return prismPayload{
-		profile: profileRecord{Outer: first.Regions[0].Outer},
-		frame:   sp.frame, xform: sp.xform, sectionDelta: sp.sectionDelta,
-		z0: first.Z0, z0Delta: first.Z0Delta,
-		z1: last.Z1, z1Delta: last.Z1Delta,
-	}
+	return prismPayload{Payload: prismrecord.Payload{
+		Profile: profileRecord{Outer: first.Regions[0].Outer},
+		Frame:   sp.frame, Xform: sp.xform, SectionDelta: sp.sectionDelta,
+		Z0: first.Z0, Z0Delta: first.Z0Delta,
+		Z1: last.Z1, Z1Delta: last.Z1Delta,
+	}}
 }
 
 // outerRuns is one outer-only prism per maximal run of consecutive slabs that
@@ -66,9 +67,9 @@ func (sp stackedPrismPayload) outerRuns() []prismPayload {
 	runs := make([]prismPayload, len(planned))
 	for i, slab := range planned {
 		run := base
-		run.profile = slab.Regions[0]
-		run.z0, run.z0Delta = slab.Z0, slab.Z0Delta
-		run.z1, run.z1Delta = slab.Z1, slab.Z1Delta
+		run.Profile = slab.Regions[0]
+		run.Z0, run.Z0Delta = slab.Z0, slab.Z0Delta
+		run.Z1, run.Z1Delta = slab.Z1, slab.Z1Delta
 		runs[i] = run
 	}
 	return runs
@@ -102,7 +103,7 @@ func stackedBoundsContext(ctx context.Context, sp stackedPrismPayload, outerDelt
 	bound := 0.0
 	for i, run := range runs {
 		if outerDelta > 0 {
-			run.sectionDelta = proofbound.AbsSumUpper(run.sectionDelta, outerDelta)
+			run.SectionDelta = proofbound.AbsSumUpper(run.SectionDelta, outerDelta)
 		}
 		box, err := prismBoundsContext(ctx, run, work, nil)
 		if err != nil {
@@ -355,7 +356,7 @@ func stackedRegionPart(ctx context.Context, sp stackedPrismPayload, base prismPa
 	v.Bound = proofbound.AbsSumUpper(v.Bound, sp.sectionDelta)
 	mid := proofbound.BoundedDiv(proofbound.BoundedAdd(proofbound.MeasuredScalar(slab.Z0, slab.Z0Delta),
 		proofbound.MeasuredScalar(slab.Z1, slab.Z1Delta)), proofbound.ExactScalar(2))
-	part.centroid = base.point(u.Value, v.Value, mid.Value)
+	part.centroid = base.Point(u.Value, v.Value, mid.Value)
 	part.centroidBound = prismPointBound(base, u, v, mid)
 	return part, nil
 }
@@ -388,10 +389,10 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		maxColDelta = max(maxColDelta, colDelta[ci])
 		first, last := sp.slabs[col.Start], sp.slabs[col.End]
 		pp := base
-		pp.z0, pp.z0Delta = first.Z0, first.Z0Delta
-		pp.z1, pp.z1Delta = last.Z1, last.Z1Delta
+		pp.Z0, pp.Z0Delta = first.Z0, first.Z0Delta
+		pp.Z1, pp.Z1Delta = last.Z1, last.Z1Delta
 		if colDelta[ci] > 0 {
-			pp.sectionDelta = proofbound.AbsSumUpper(sp.sectionDelta, colDelta[ci])
+			pp.SectionDelta = proofbound.AbsSumUpper(sp.sectionDelta, colDelta[ci])
 		}
 		wallFaces, bottom, top, perimeter, err := buildLoopSidesAs(ctx, body, ref, pp,
 			plan.wallRoleLoop(*col), col.LoopIndex != 0, col.Loop, work, nil, levelToken{}, levelToken{}, false)
@@ -545,7 +546,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		// envelope caps the centroid's distance from the held point.
 		geometryBound := 0.0
 		for _, run := range runs {
-			runBound, err := prismCentroidGeometryBound(run, run.profile, centroid, work, nil)
+			runBound, err := prismCentroidGeometryBound(run, run.Profile, centroid, work, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -562,8 +563,8 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 			// axial one along the normal, carried through the rigid map's 3·L1
 			// factor, as the cup's own envelope is.
 			geometryBound = proofbound.AbsSumUpper(geometryBound, proofbound.ProductUpper(3, proofbound.AbsSumUpper(
-				proofbound.ProductUpper(proofbound.AbsSumUpper(vecL1(base.frame.U()), vecL1(base.frame.V())), maxColDelta),
-				proofbound.ProductUpper(vecL1(base.frame.N()), sp.axialDelta()),
+				proofbound.ProductUpper(proofbound.AbsSumUpper(vecL1(base.Frame.U()), vecL1(base.Frame.V())), maxColDelta),
+				proofbound.ProductUpper(vecL1(base.Frame.N()), sp.axialDelta()),
 			)))
 			centroidBound = math.Min(centroidBound, geometryBound)
 		}

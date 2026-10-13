@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -121,7 +122,7 @@ func classBOfPayloads(ctx context.Context, op meshbool.OperationKind, a, b featu
 func classBFaceView(ctx context.Context, payload featurePayload) (brepPayload, bool, error) {
 	switch p := payload.(type) {
 	case prismPayload:
-		if p.surfaceResult {
+		if p.SurfaceResult {
 			return brepPayload{}, false, nil
 		}
 		bp, err := brepOfPrism(p)
@@ -162,7 +163,7 @@ func classBFaceView(ctx context.Context, payload featurePayload) (brepPayload, b
 func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, placement r3.Transform, delta float64) (classBPair, bool, error) {
 	// B1: X exposes a face view; Y is a prism.
 	y, okY := yPayload.(prismPayload)
-	if !okY || y.surfaceResult {
+	if !okY || y.SurfaceResult {
 		return classBPair{}, false, nil
 	}
 	x, ok, err := classBFaceView(ctx, xPayload)
@@ -173,10 +174,10 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, pla
 		return classBPair{}, false, err
 	}
 	// B5: no section displacement to amplify.
-	if x.sectionDelta() != 0 || y.sectionDelta != 0 {
+	if x.sectionDelta() != 0 || y.SectionDelta != 0 {
 		return classBPair{}, false, nil
 	}
-	if x.xform != placement || y.xform != placement {
+	if x.xform != placement || y.Xform != placement {
 		return classBPair{}, false, nil
 	}
 	embeds, err := brepEmbeds(x.faces)
@@ -187,7 +188,7 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, pla
 	// B3 and B4: every axis dot is exactly 0 or ±1, and Y's axes are the
 	// reference axes, signed, bit for bit.
 	refAxes := [3]r3.Vec{ref.U(), ref.V(), ref.N()}
-	yAxes := [3]r3.Vec{y.frame.U(), y.frame.V(), y.frame.N()}
+	yAxes := [3]r3.Vec{y.Frame.U(), y.Frame.V(), y.Frame.N()}
 	for _, a := range refAxes {
 		for _, b := range yAxes {
 			if dot := a.Dot(b); dot != 0 && dot != 1 && dot != -1 {
@@ -239,11 +240,11 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, pla
 	cp.g = g
 	// B2: lines, circles and arcs only, each over its natural range, so every
 	// recorded point is the point the record states.
-	if !classbgeom.NaturalPair(cp.faces, y.profile) {
+	if !classbgeom.NaturalPair(cp.faces, y.Profile) {
 		return classBPair{}, false, nil
 	}
 	// G6: the tool is hole-free.
-	if len(y.profile.Holes) != 0 {
+	if len(y.Profile.Holes) != 0 {
 		return classBPair{}, false, nil
 	}
 	shifted, ok := classBShiftedTool(ref, y, g)
@@ -252,8 +253,8 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, pla
 	}
 	cp.y = shifted
 	cp.tool = classbgeom.ToolRecord{
-		Profile: shifted.profile, Z0: shifted.z0, Z1: shifted.z1,
-		Z0Delta: shifted.z0Delta, Z1Delta: shifted.z1Delta, Axis: cp.axis, Sign: cp.sign,
+		Profile: shifted.Profile, Z0: shifted.Z0, Z1: shifted.Z1,
+		Z0Delta: shifted.Z0Delta, Z1Delta: shifted.Z1Delta, Axis: cp.axis, Sign: cp.sign,
 	}
 	// B6: every line runs along a reference axis. Under B4 that is parallel
 	// or perpendicular to the other operand's normal.
@@ -278,13 +279,13 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, pla
 // nothing: a datum plane and its CreateOffsetPlane at a float distance meet
 // that, and a pair whose sums would round misses.
 func classBShiftedTool(ref r3.Frame, y prismPayload, g r3.Frame) (prismPayload, bool) {
-	loops := append([]loopRecord{y.profile.Outer}, y.profile.Holes...)
-	moved, z0, z1, ok := classbgeom.ShiftedRecord(ref, y.frame, g, loops, y.z0, y.z1)
+	loops := append([]loopRecord{y.Profile.Outer}, y.Profile.Holes...)
+	moved, z0, z1, ok := classbgeom.ShiftedRecord(ref, y.Frame, g, loops, y.Z0, y.Z1)
 	out := y
-	out.frame = g
-	out.profile = profileRecord{Outer: moved[0], Holes: moved[1:]}
-	out.z0, out.z1 = z0, z1
-	out.walks = nil
+	out.Frame = g
+	out.Profile = profileRecord{Outer: moved[0], Holes: moved[1:]}
+	out.Z0, out.Z1 = z0, z1
+	out.Walks = nil
 	return out, ok
 }
 
@@ -330,7 +331,7 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 	}
 	// The interval of [a, b] inside X, each end with its displacement.
 	type end struct{ level, delta float64 }
-	a, b := end{cp.y.z0, cp.y.z0Delta}, end{cp.y.z1, cp.y.z1Delta}
+	a, b := end{cp.y.Z0, cp.y.Z0Delta}, end{cp.y.Z1, cp.y.Z1Delta}
 	var inside [2]end
 	var outside [][2]end
 	switch {
@@ -346,8 +347,8 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 		outside = [][2]end{{a, inside[0]}}
 	}
 	if op == meshbool.OpIntersect {
-		return prismPayload{profile: cp.y.profile, frame: cp.g, xform: cp.x.xform,
-			z0: inside[0].level, z1: inside[1].level, z0Delta: inside[0].delta, z1Delta: inside[1].delta}, true, nil
+		return prismPayload{Payload: prismrecord.Payload{Profile: cp.y.Profile, Frame: cp.g, Xform: cp.x.xform,
+			Z0: inside[0].level, Z1: inside[1].level, Z0Delta: inside[0].delta, Z1Delta: inside[1].delta}}, true, nil
 	}
 	// Point of no return (prism-boolean §3.4).
 	drop := map[int]struct{}{}
@@ -372,7 +373,7 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 				z0: lo.level, z1: hi.level, z0Delta: lo.delta, z1Delta: hi.delta})
 		}
 	}
-	section := cp.y.profile
+	section := cp.y.Profile
 	addCap := func(at end, outward bool) {
 		region := section
 		out.faces = append(out.faces, brepFace{frame: cp.g, region: &region, outward: outward,
@@ -416,9 +417,9 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 // is false when the scene returned no such match.
 func classBPerpendicularRegion(ctx context.Context, cp classBPair, region profileRecord) (profileRecord, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	target := prismPayload{profile: region, frame: cp.g, xform: cp.x.xform, z0: 0, z1: 1}
-	tool := prismPayload{profile: cp.y.profile, frame: cp.g, xform: cp.x.xform, z0: 0, z1: 1}
-	segments, within, err := prismcells.RegionsWithinWorkCap(budget, target.profile, tool.profile)
+	target := prismPayload{Payload: prismrecord.Payload{Profile: region, Frame: cp.g, Xform: cp.x.xform, Z0: 0, Z1: 1}}
+	tool := prismPayload{Payload: prismrecord.Payload{Profile: cp.y.Profile, Frame: cp.g, Xform: cp.x.xform, Z0: 0, Z1: 1}}
+	segments, within, err := prismcells.RegionsWithinWorkCap(budget, target.Profile, tool.Profile)
 	if err != nil {
 		return profileRecord{}, false, err
 	}
@@ -430,7 +431,7 @@ func classBPerpendicularRegion(ctx context.Context, cp classBPair, region profil
 	if err != nil {
 		return profileRecord{}, false, err
 	}
-	s, match, sceneDelta, resolved, err := prismcells.ResolveCut(ctx, budget, target.profile, tool.profile, reexpress)
+	s, match, sceneDelta, resolved, err := prismcells.ResolveCut(ctx, budget, target.Profile, tool.Profile, reexpress)
 	if err != nil || !resolved || sceneDelta.A != 0 || sceneDelta.B != 0 {
 		return profileRecord{}, false, err
 	}

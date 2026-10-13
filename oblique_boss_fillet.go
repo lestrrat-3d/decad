@@ -70,11 +70,11 @@ func obliqueBossHasOrigin(face *Face, group facetGroup) bool {
 
 func obliqueBossPlateWallRoles(rec *obliqueBossRecord) ([4]string, bool) {
 	pp, ok := rec.plate.payload.(prismPayload)
-	if !ok || len(pp.profile.Outer.Segments) != 4 {
+	if !ok || len(pp.Profile.Outer.Segments) != 4 {
 		return [4]string{}, false
 	}
 	var roles [4]string // x-low, x-high, y-low, y-high
-	for i, segment := range pp.profile.Outer.Segments {
+	for i, segment := range pp.Profile.Outer.Segments {
 		line, ok := segment.(lineSeg)
 		if !ok {
 			return [4]string{}, false

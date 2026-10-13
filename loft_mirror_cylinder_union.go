@@ -88,7 +88,7 @@ func tryLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID
 	if upper.xform != reflection {
 		return nil, false, nil
 	}
-	z0, middle, z2 := pp.z0, lower.frame1.Origin().Z, pp.z1
+	z0, middle, z2 := pp.Z0, lower.frame1.Origin().Z, pp.Z1
 	if lower.frame0.Origin().Z != z0 || !(z0 < middle && middle < z2) ||
 		!loftMirrorCylinderLevels(z0, middle, z2) {
 		return nil, false, nil
@@ -96,7 +96,7 @@ func tryLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID
 	// The first-stage source relation proves upper=reflection(lower). The
 	// blank has the same circle and exact caps over both half intervals.
 	half := pp
-	half.z1 = middle
+	half.Z1 = middle
 	halfBlank, err := evalPrismContext(ctx, d, ref, half, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, true, err
@@ -183,14 +183,14 @@ func loftMirrorCylinderUpperBridge(pair *Body, motion r3.Transform,
 }
 
 func loftMirrorCylinderBlank(pp prismPayload) bool {
-	if pp.surfaceResult || pp.xform != r3.Identity() || pp.z0Delta != 0 ||
-		pp.z1Delta != 0 || pp.sectionDelta != 0 || pp.z1 <= pp.z0 ||
-		len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) != 1 ||
-		pp.frame.Origin() != (r3.Vec{}) || pp.frame.U() != (r3.Vec{X: 1}) ||
-		pp.frame.V() != (r3.Vec{Y: 1}) {
+	if pp.SurfaceResult || pp.Xform != r3.Identity() || pp.Z0Delta != 0 ||
+		pp.Z1Delta != 0 || pp.SectionDelta != 0 || pp.Z1 <= pp.Z0 ||
+		len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
+		pp.Frame.Origin() != (r3.Vec{}) || pp.Frame.U() != (r3.Vec{X: 1}) ||
+		pp.Frame.V() != (r3.Vec{Y: 1}) {
 		return false
 	}
-	circle, ok := pp.profile.Outer.Segments[0].(circleSeg)
+	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
 	return ok && circle.CCW && circle.Center == (Point2{}) &&
 		circle.Radius.Base() > 0 && !proofbound.IsNonFinite(circle.Radius.Base())
 }
@@ -343,9 +343,9 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 	}
 	shell := &joinedMesh{verts: verts, tris: tris, src: src, groups: groups}
 	for cap, outline := range capOutlines {
-		z := fullBlank.z0
+		z := fullBlank.Z0
 		if cap == 1 {
-			z = fullBlank.z1
+			z = fullBlank.Z1
 		}
 		if !loftCylinderAuditCap(ctx, shell, outline, capGroups[cap], z, cap == 0) {
 			return nil, fmt.Errorf("%w: mirrored cylinder cap does not tile its recorded outline", ErrUnsupported)
@@ -364,7 +364,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 		return nil, err
 	}
 	if err := loftCylinderTagCaps(&fp, blank, capGroups,
-		[2]float64{fullBlank.z0, fullBlank.z1}, ref); err != nil {
+		[2]float64{fullBlank.Z0, fullBlank.Z1}, ref); err != nil {
 		return nil, err
 	}
 	loftCylinderTagBridgedTop(&fp, capGroups[1], []float64{bridgeBound})

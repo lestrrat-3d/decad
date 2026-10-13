@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/smoothloft"
 	"github.com/lestrrat-3d/r3"
@@ -239,7 +240,7 @@ func (d *Document) buildConstantCurvedSections(ctx context.Context, profiles [3]
 		return nil, fmt.Errorf("%w: curved three-section loft has no first frame: %s", ErrDegenerate, err)
 	}
 	ref := d.nextProducerID()
-	return evalPrismContext(ctx, d, ref, prismPayload{
-		profile: profiles[0], frame: frame, z0: 0, z1: height, xform: r3.Identity(),
-	}, work)
+	return evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+		Profile: profiles[0], Frame: frame, Z0: 0, Z1: height, Xform: r3.Identity(),
+	}}, work)
 }

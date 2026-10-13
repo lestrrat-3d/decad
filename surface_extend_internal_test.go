@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -105,12 +106,12 @@ func extendSceneCarrier(t *testing.T, seg curveSegment) sketch.Entity {
 	t.Helper()
 	full, err := prismcells.FullExtendSegment(seg)
 	require.NoError(t, err)
-	view := prismPayload{profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{full}}}}
-	tool := prismPayload{profile: extendTestSquare()}
+	view := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{full}}}}}
+	tool := prismPayload{Payload: prismrecord.Payload{Profile: extendTestSquare()}}
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(view), prismPlacementOf(tool))
 	require.NoError(t, err)
 	require.True(t, reexpress.Identity)
-	_, tags, _, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), view.profile, tool.profile, reexpress)
+	_, tags, _, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), view.Profile, tool.Profile, reexpress)
 	require.NoError(t, err)
 	var carrier sketch.Entity
 	found := 0

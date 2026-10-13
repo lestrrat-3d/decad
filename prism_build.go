@@ -48,14 +48,14 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ig, err := pp.profile.EvaluatorIntegralsUncheckedContext(ctx, freeform.MomentFirstOrder, work)
+	ig, err := pp.Profile.EvaluatorIntegralsUncheckedContext(ctx, freeform.MomentFirstOrder, work)
 	if err != nil {
 		return nil, err
 	}
 	if ig.Area <= 0 {
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
-	height := proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar())
+	height := proofbound.BoundedSub(pp.Z1Scalar(), pp.Z0Scalar())
 	h := height.Value
 	if h <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
@@ -66,10 +66,10 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// guards, and kind BodySheet is what Kind() reports
 	// (docs/surface-design.md §4.3).
 	kind := BodySolid
-	if pp.surfaceResult {
+	if pp.SurfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: !pp.surfaceResult, kind: kind}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: !pp.SurfaceResult, kind: kind}
 
 	// The LEVEL half of the shared-denotation certificate (denotation.go):
 	// minted only when this payload's own section is drawn straight from its
@@ -83,21 +83,21 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// coordinates — the two ends share one normal (a prism does not tilt
 	// between them), so it is computed once.
 	var levelZ0, levelZ1 levelToken
-	if pp.sectionDelta == 0 {
-		levelNormal := pp.dir(0, 0, 1)
-		levelZ0 = d.mintLevel(pp.point(0, 0, pp.z0), levelNormal)
-		levelZ1 = d.mintLevel(pp.point(0, 0, pp.z1), levelNormal)
+	if pp.SectionDelta == 0 {
+		levelNormal := pp.Dir(0, 0, 1)
+		levelZ0 = d.mintLevel(pp.Point(0, 0, pp.Z0), levelNormal)
+		levelZ1 = d.mintLevel(pp.Point(0, 0, pp.Z1), levelNormal)
 	}
 
 	// Topology: one shell over every loop's side faces plus the two caps.
 	var faces []*Face
 	// The start cap faces −N (its outward normal leaves the material at the
 	// bottom), so its frame swaps the in-plane axes; the end cap keeps them.
-	startFrame, err := capFrame(pp, pp.z0, true)
+	startFrame, err := capFrame(pp, pp.Z0, true)
 	if err != nil {
 		return nil, err
 	}
-	endFrame, err := capFrame(pp, pp.z1, false)
+	endFrame, err := capFrame(pp, pp.Z1, false)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		body:          body,
 		area:          ig.Area,
 		areaBound:     ig.AreaBound,
-		axialDelta:    pp.z0Delta,
+		axialDelta:    pp.Z0Delta,
 		hasAxialDelta: true,
 	}
 	capEnd := &Face{
@@ -116,13 +116,13 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		body:          body,
 		area:          ig.Area,
 		areaBound:     ig.AreaBound,
-		axialDelta:    pp.z1Delta,
+		axialDelta:    pp.Z1Delta,
 		hasAxialDelta: true,
 	}
 
 	perimeter := proofbound.BoundedScalar{}
 	walks := 0
-	loops := append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...)
+	loops := append([]loopRecord{pp.Profile.Outer}, pp.Profile.Holes...)
 	for _, loop := range loops {
 		walks += len(loop.Segments)
 	}
@@ -139,13 +139,13 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// that resolution cost rather than being handed it free. reusable is what
 	// decides, and it accepts only a set resolved from a bit-identical record
 	// that measured its own charge; anything else resolves here as before.
-	pw := pp.walks
-	if pw.Reusable(pp.profile) {
+	pw := pp.Walks
+	if pw.Reusable(pp.Profile) {
 		if err := pw.Charge(work); err != nil {
 			return nil, err
 		}
 	} else {
-		resolved, err := momentinput.ResolveProfileWalks(pp.profile, work)
+		resolved, err := momentinput.ResolveProfileWalks(pp.Profile, work)
 		if err != nil {
 			return nil, err
 		}
@@ -170,7 +170,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// neither joins faces nor gets its loops attached, which is what leaves
 	// each rim edge with only its wall face — both rims of every loop become
 	// free edges with no rim-specific code.
-	if !pp.surfaceResult {
+	if !pp.SurfaceResult {
 		faces = append(faces, capStart, capEnd)
 		if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
 			return nil, err
@@ -195,7 +195,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// the volume takes it through the height and each cap takes it once; the
 	// walls take it through the perimeter, which every walk already charged its
 	// own length displacement into (buildLoopSidesAs).
-	delta := pp.sectionDelta
+	delta := pp.SectionDelta
 	regionArea := proofbound.MeasuredScalar(ig.Area, proofbound.AbsSumUpper(
 		ig.AreaBound,
 		proofbound.SectionDisplacementArea(delta, walks, proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound)),
@@ -206,7 +206,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	caps := proofbound.BoundedMul(proofbound.ExactScalar(2), regionArea)
 	sides := proofbound.BoundedMul(perimeter, height)
 	area := proofbound.BoundedAdd(caps, sides)
-	if pp.surfaceResult {
+	if pp.SurfaceResult {
 		// §4.3: a surface result's area is the solid's area minus the two
 		// omitted caps'. Each cap's area and bound are read back from the Face
 		// fields rather than assumed to equal regionArea's, and the
@@ -233,8 +233,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	}
 	cu := proofbound.BoundedQuotient(ig.Mu, ig.MuBound, ig.Area, ig.AreaBound)
 	cv := proofbound.BoundedQuotient(ig.Mv, ig.MvBound, ig.Area, ig.AreaBound)
-	zc := proofbound.BoundedDiv(proofbound.BoundedAdd(pp.z0Scalar(), pp.z1Scalar()), proofbound.ExactScalar(2))
-	centroidValue := pp.point(cu.Value, cv.Value, zc.Value)
+	zc := proofbound.BoundedDiv(proofbound.BoundedAdd(pp.Z0Scalar(), pp.Z1Scalar()), proofbound.ExactScalar(2))
+	centroidValue := pp.Point(cu.Value, cv.Value, zc.Value)
 	// A displaced section moves its own centroid, so the displacement enters the
 	// plane-local source term prismPointBound already carries through the frame
 	// and placement (docs/prism-boolean-design.md §7). The geometry envelope is a
@@ -244,7 +244,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	cu.Bound = proofbound.AbsSumUpper(cu.Bound, delta)
 	cv.Bound = proofbound.AbsSumUpper(cv.Bound, delta)
 	centroidBound := prismPointBound(pp, cu, cv, zc)
-	geometryBound, err := prismCentroidGeometryBound(pp, pp.profile, centroidValue, work, pw)
+	geometryBound, err := prismCentroidGeometryBound(pp, pp.Profile, centroidValue, work, pw)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +262,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		return nil, err
 	}
 	body.bounds = bounds
-	if err := chargePrismMap(body, pp.frame, pp.xform); err != nil {
+	if err := chargePrismMap(body, pp.Frame, pp.Xform); err != nil {
 		return nil, err
 	}
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
@@ -271,7 +271,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// A prism-derived modify body re-mints its blend roles from its own record
 	// under this build's ref, so a copy or placement reproduces them (modify §9).
 	// A plain extrude carries no descriptors and this is a no-op.
-	if err := addBlendRoles(ctx, body, ref, pp.blendSegs, pp.blendKind); err != nil {
+	if err := addBlendRoles(ctx, body, ref, pp.BlendSegs, pp.BlendKind); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -281,7 +281,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// and every walk in it held. Publishing it onto the payload is what lets a
 	// later rigid re-evaluation read it back; the record itself is unchanged, so
 	// the payload the body carries denotes exactly what it did before.
-	pp.walks = pw
+	pp.Walks = pw
 	body.payload = pp
 	return body, nil
 }
@@ -316,14 +316,14 @@ func attachFaceLoopsContext(ctx context.Context, faces []*Face) error {
 // placement rigid, so the transformed axes cannot be degenerate; NewFrame
 // re-validates anyway and the error propagates rather than being discarded.
 func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
-	if pp.reflected() {
+	if pp.Reflected() {
 		flip = !flip
 	}
-	u, v := pp.dir(1, 0, 0), pp.dir(0, 1, 0)
+	u, v := pp.Dir(1, 0, 0), pp.Dir(0, 1, 0)
 	if flip {
 		u, v = v, u
 	}
-	f, err := r3.NewFrame(pp.point(0, 0, z), u, v)
+	f, err := r3.NewFrame(pp.Point(0, 0, z), u, v)
 	if err != nil {
 		return r3.Frame{}, fmt.Errorf(`%w: the placed cap frame is degenerate: %s`, ErrDegenerate, err)
 	}
@@ -343,7 +343,7 @@ func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
 func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool, bStart, bEnd, tStart, tEnd *Vertex) (*Edge, *Edge, Surface, bool, error) {
 	switch w.Kind {
 	case survey2d.WalkCircular:
-		axis := pp.dir(0, 0, 1)
+		axis := pp.Dir(0, 0, 1)
 		// The material's side of a circular wall is decided by the WALK, not
 		// by the loop's role: the outward normal is the walk tangent turned a
 		// quarter turn against the walk's sense, which is the radial
@@ -362,12 +362,12 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		if clockwise {
 			edgeSign = -1
 		}
-		if pp.reflected() {
+		if pp.Reflected() {
 			edgeSign = -edgeSign
 		}
 		edgeAxis := axis.Scale(edgeSign)
-		center0 := pp.point(w.CU, w.CV, pp.z0)
-		center1 := pp.point(w.CU, w.CV, pp.z1)
+		center0 := pp.Point(w.CU, w.CV, pp.Z0)
+		center1 := pp.Point(w.CU, w.CV, pp.Z1)
 		radius := units.Millimeters(w.Radius)
 		var curve0, curve1 Curve
 		if closed {
@@ -387,8 +387,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// this walk, computed by the caller.
 		bottomEdge := &Edge{curve: curve0, start: bStart, end: bEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
 		topEdge := &Edge{curve: curve1, start: tStart, end: tEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
-		bottomEdge.curveBound, bottomEdge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z0, pp.z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
-		topEdge.curveBound, topEdge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z1, pp.z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
+		bottomEdge.curveBound, bottomEdge.curveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
+		topEdge.curveBound, topEdge.curveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
 		surf := Cylinder{Origin: center0, Axis: axis, Radius: radius}
 		// A clockwise-walked wall has its material OUTSIDE the cylinder,
 		// so its outward normal is the radial direction negated.
@@ -418,15 +418,15 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// the outer loop counter-clockwise, holes clockwise (moments.go).
 		bottomEdge := &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
 		topEdge := &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
-		mid := pp.point((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, pp.z0)
+		mid := pp.Point((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, pp.Z0)
 		// tangent × N is the outward normal for a CCW outer walk (and a
 		// CW hole walk); a reflection flips the cross product, so the
 		// tangent is negated to keep the frame's normal outward.
 		tu, tv := w.TanInU, w.TanInV
-		if pp.reflected() {
+		if pp.Reflected() {
 			tu, tv = -tu, -tv
 		}
-		f, err := r3.NewFrame(mid, pp.dir(tu, tv, 0), pp.dir(0, 0, 1))
+		f, err := r3.NewFrame(mid, pp.Dir(tu, tv, 0), pp.Dir(0, 0, 1))
 		if err != nil {
 			return nil, nil, nil, false, fmt.Errorf(`%w: a boundary segment has no direction`, ErrDegenerate)
 		}
@@ -514,7 +514,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// junction vertex and each side face carries that displacement too
 	// (docs/prism-boolean-design.md §7). It is zero for every payload a caller
 	// draws, and the arithmetic below is then the unchanged one.
-	delta := pp.sectionDelta
+	delta := pp.SectionDelta
 	walkLenAllow := proofbound.SectionDisplacementLength(delta, 1)
 	raw := make([]survey2d.SideWalk, len(loop.Segments))
 	total := proofbound.BoundedScalar{}
@@ -559,7 +559,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// lengths and the side face areas built from it below — a ToFace or
 	// ThroughAll stop's float arithmetic (stops.go), a non-base unit's rescale,
 	// and a chamfered end's setback alike.
-	height := proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar())
+	height := proofbound.BoundedSub(pp.Z1Scalar(), pp.Z0Scalar())
 	// A side vertex sits at one recorded boundary coordinate and one sweep level,
 	// so it carries both displacements: the section's, which moves it in the
 	// plane, and its own end's, which moves it along the normal. Each is zero for
@@ -574,7 +574,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// displacement is zDelta, charging the section's displacement, that level's,
 	// the vertex's own exact lift rounding and the walk-end term extra.
 	rimVertex := func(u, v, z, zDelta, extra float64, level levelToken) *Vertex {
-		held, lift := pp.liftedVertex(u, v, z)
+		held, lift := pp.LiftedVertex(u, v, z)
 		base := proofbound.AbsSumUpper(delta, zDelta, lift)
 		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(base, extra)), level: level, denot: mintCurve()}
 	}
@@ -589,8 +589,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	if singleClosed {
 		w := walks[0]
 		u, v, extra := boundarywalk.JunctionVertexAt(loop.Segments, w, w)
-		seamBottom = rimVertex(u, v, pp.z0, pp.z0Delta, extra, levelZ0)
-		seamTop = rimVertex(u, v, pp.z1, pp.z1Delta, extra, levelZ1)
+		seamBottom = rimVertex(u, v, pp.Z0, pp.Z0Delta, extra, levelZ0)
+		seamTop = rimVertex(u, v, pp.Z1, pp.Z1Delta, extra, levelZ1)
 	} else {
 		bottomV = make([]*Vertex, n)
 		topV = make([]*Vertex, n)
@@ -600,8 +600,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			}
 			prev := walks[(i+n-1)%n]
 			u, v, extra := boundarywalk.JunctionVertexAt(loop.Segments, prev, w)
-			bottomV[i] = rimVertex(u, v, pp.z0, pp.z0Delta, extra, levelZ0)
-			topV[i] = rimVertex(u, v, pp.z1, pp.z1Delta, extra, levelZ1)
+			bottomV[i] = rimVertex(u, v, pp.Z0, pp.Z0Delta, extra, levelZ0)
+			topV[i] = rimVertex(u, v, pp.Z1, pp.Z1Delta, extra, levelZ1)
 		}
 	}
 
@@ -629,7 +629,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 				start:       bottomV[i],
 				end:         topV[i],
 				convex:      cross > 0,
-				length:      pp.z1 - pp.z0,
+				length:      pp.Z1 - pp.Z0,
 				lengthBound: height.Bound,
 			}
 		}

@@ -642,9 +642,9 @@ func TestBrepFaceViewJoinsACrossingBuiltPrism(t *testing.T) {
 	require.True(t, ok)
 	// The premise: the cut's two fragments walk to their shared corner at
 	// two different floats.
-	joined, _, err := brepJoinProfile(pp.profile)
+	joined, _, err := brepJoinProfile(pp.Profile)
 	require.NoError(t, err)
-	require.NotEqual(t, pp.profile, joined)
+	require.NotEqual(t, pp.Profile, joined)
 	brep := internalBrepBody(t, prism)
 	requireClosedTopology(t, brep)
 	require.Len(t, brep.Faces(), len(prism.Faces()))
@@ -653,7 +653,7 @@ func TestBrepFaceViewJoinsACrossingBuiltPrism(t *testing.T) {
 	requireCoversInterval(t, brep.volume, lo, hi)
 	requireCoversInterval(t, prism.volume, lo, hi)
 	for _, f := range brep.payload.(brepPayload).faces {
-		require.GreaterOrEqual(t, f.delta, pp.sectionDelta, `every face keeps the record's own displacement`)
+		require.GreaterOrEqual(t, f.delta, pp.SectionDelta, `every face keeps the record's own displacement`)
 	}
 }
 

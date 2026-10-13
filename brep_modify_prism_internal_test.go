@@ -228,10 +228,10 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 		require.True(t, ok)
 		frame, _, err := brepgeom.AxisFrame(bp.faces[0].frame, 1)
 		require.NoError(t, err)
-		require.Equal(t, frame, r.pp.frame)
-		require.Equal(t, r3.NewVec(0, 0, 1), r.pp.frame.U())
-		require.Equal(t, r3.NewVec(1, 0, 0), r.pp.frame.V())
-		require.Equal(t, r3.NewVec(0, 1, 0), r.pp.frame.N())
+		require.Equal(t, frame, r.pp.Frame)
+		require.Equal(t, r3.NewVec(0, 0, 1), r.pp.Frame.U())
+		require.Equal(t, r3.NewVec(1, 0, 0), r.pp.Frame.V())
+		require.Equal(t, r3.NewVec(0, 1, 0), r.pp.Frame.N())
 		line := func(u0, v0, u1, v1 float64) curveSegment {
 			return lineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1}
 		}
@@ -243,10 +243,10 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 				circleSeg{Center: Point2{U: 10, V: 20}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0},
 			}}},
 		}
-		require.Equal(t, want, r.pp.profile)
-		require.Equal(t, [2]float64{0, 20}, [2]float64{r.pp.z0, r.pp.z1})
-		require.Zero(t, r.pp.sectionDelta)
-		require.Equal(t, bp.xform, r.pp.xform)
+		require.Equal(t, want, r.pp.Profile)
+		require.Equal(t, [2]float64{0, 20}, [2]float64{r.pp.Z0, r.pp.Z1})
+		require.Zero(t, r.pp.SectionDelta)
+		require.Equal(t, bp.xform, r.pp.Xform)
 	})
 	t.Run("hand-built", func(t *testing.T) {
 		t.Parallel()

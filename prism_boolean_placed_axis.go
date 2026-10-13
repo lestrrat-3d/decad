@@ -11,12 +11,12 @@ import (
 // for prisms whose stored transforms differ only by an axial translation.
 // The pre-existing same-transform shared-axis arm does not use this gate.
 func placedAxisProfileAdmitted(op meshbool.OperationKind, a, b prismPayload) bool {
-	if a.sectionDelta != 0 || b.sectionDelta != 0 ||
-		a.z0Delta != 0 || a.z1Delta != 0 || b.z0Delta != 0 || b.z1Delta != 0 {
+	if a.SectionDelta != 0 || b.SectionDelta != 0 ||
+		a.Z0Delta != 0 || a.Z1Delta != 0 || b.Z0Delta != 0 || b.Z1Delta != 0 {
 		return false
 	}
-	ra, aok := axisRectangle(a.profile)
-	rb, bok := axisRectangle(b.profile)
+	ra, aok := axisRectangle(a.Profile)
+	rb, bok := axisRectangle(b.Profile)
 	if !aok || !bok {
 		return false
 	}

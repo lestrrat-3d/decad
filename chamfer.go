@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -416,14 +417,14 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	}
 
 	// The rewritten section, and the bevel chords' (loop, segment) indices.
-	profile, chamferSegs, err := rewriteProfileBudget(budget, pp.profile, loops, blendAt)
+	profile, chamferSegs, err := rewriteProfileBudget(budget, pp.Profile, loops, blendAt)
 	if err != nil {
 		return nil, err
 	}
 
 	// Stage 4 (§4/§5): the same audit the fillet runs — S8, S6 (an over-large
 	// setback that reaches or passes a walk's far end), S7, S9.
-	if err := auditRewriteBudget(budget, pp.profile, profile, loops, blendAt); err != nil {
+	if err := auditRewriteBudget(budget, pp.Profile, profile, loops, blendAt); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, context.Canceled
 		}
@@ -442,17 +443,17 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 	// opens its one counter here (docs/spline-design.md §5.2).
 	// A section rewrite is a change of the SECTION: both sweep levels come
 	// through unchanged, and so does each one's own axial displacement.
-	body, err := evalPrismContext(ctx, doc, ref, prismPayload{
-		profile:   profile,
-		frame:     pp.frame,
-		z0:        pp.z0,
-		z1:        pp.z1,
-		z0Delta:   pp.z0Delta,
-		z1Delta:   pp.z1Delta,
-		xform:     pp.xform,
-		blendSegs: chamferSegs,
-		blendKind: "chamfer",
-	}, freeform.NewFreeformWork())
+	body, err := evalPrismContext(ctx, doc, ref, prismPayload{Payload: prismrecord.Payload{
+		Profile:   profile,
+		Frame:     pp.Frame,
+		Z0:        pp.Z0,
+		Z1:        pp.Z1,
+		Z0Delta:   pp.Z0Delta,
+		Z1Delta:   pp.Z1Delta,
+		Xform:     pp.Xform,
+		BlendSegs: chamferSegs,
+		BlendKind: "chamfer",
+	}}, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}

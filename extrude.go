@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -220,17 +221,17 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if certificate != nil {
 		sectionDelta = certificate.delta
 	}
-	body, err := evalPrismContext(ctx, d, ref, prismPayload{
-		profile:       profile,
-		frame:         frame,
-		sectionDelta:  sectionDelta,
-		z0:            sweep.z0,
-		z1:            sweep.z1,
-		z0Delta:       sweep.z0Delta,
-		z1Delta:       sweep.z1Delta,
-		xform:         r3.Identity(),
-		surfaceResult: surfaceResult,
-	}, work)
+	body, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+		Profile:       profile,
+		Frame:         frame,
+		SectionDelta:  sectionDelta,
+		Z0:            sweep.z0,
+		Z1:            sweep.z1,
+		Z0Delta:       sweep.z0Delta,
+		Z1Delta:       sweep.z1Delta,
+		Xform:         r3.Identity(),
+		SurfaceResult: surfaceResult,
+	}}, work)
 	if err != nil {
 		return nil, err
 	}
@@ -491,13 +492,13 @@ func (pp chainPayload) prism() prismPayload {
 	for _, c := range pp.chains[1:] {
 		profile.Holes = append(profile.Holes, loopRecord(c))
 	}
-	return prismPayload{
-		profile: profile,
-		frame:   pp.frame,
-		z0:      pp.z0, z1: pp.z1,
-		z0Delta: pp.z0Delta, z1Delta: pp.z1Delta,
-		xform: pp.xform,
-	}
+	return prismPayload{Payload: prismrecord.Payload{
+		Profile: profile,
+		Frame:   pp.frame,
+		Z0:      pp.z0, Z1: pp.z1,
+		Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
+		Xform: pp.xform,
+	}}
 }
 
 // transform is the accumulated rigid placement.
@@ -675,7 +676,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	var boundsWalks *momentinput.ProfileWalks
 	if pp.sectionDelta != 0 {
 		var err error
-		boundsWalks, err = prismcells.TrimProfileWalks(view.profile, work)
+		boundsWalks, err = prismcells.TrimProfileWalks(view.Profile, work)
 		if err != nil {
 			return nil, err
 		}
@@ -683,7 +684,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 			return nil, err
 		}
 	} else {
-		boundsWalks = chainBoundsWalks(view.profile, captures)
+		boundsWalks = chainBoundsWalks(view.Profile, captures)
 	}
 	bounds, err := prismBoundsContext(ctx, view, work, boundsWalks)
 	if err != nil {
@@ -781,7 +782,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	// is exact, which is what keeps a plain chain Extrude's rim vertices Exact,
 	// mirroring buildLoopSidesAs's own rimVertex.
 	rimVertex := func(u, v, z, zDelta, extra float64) *Vertex {
-		held, lift := prismView.liftedVertex(u, v, z)
+		held, lift := prismView.LiftedVertex(u, v, z)
 		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(zDelta, lift), extra))}
 	}
 

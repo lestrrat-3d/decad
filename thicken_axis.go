@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 )
@@ -18,7 +19,7 @@ func thickenAxisSection(ctx context.Context, profile profileRecord, side Thicken
 			return thickenaxis.SectionPair{}, fmt.Errorf(`%w: the sheet requires line-only axis-parallel walks`, ErrUnsupported)
 		}
 	}
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
+	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: profile}})
 	if err != nil {
 		return thickenaxis.SectionPair{}, err
 	}

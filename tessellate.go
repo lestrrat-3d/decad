@@ -606,7 +606,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 	// arm below that would otherwise touch a cap face, a cap triangulation or
 	// a cap's own area/volume term reads it to skip that half of the work
 	// rather than fault a role the build never minted.
-	sheet := pp.surfaceResult
+	sheet := pp.SurfaceResult
 
 	// Every mesh vertex lands on the RECORDED section, which a payload carrying a
 	// section displacement holds only within that displacement of the section its
@@ -625,11 +625,11 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 	// carries a zero displacement and chords against the requested tolerance
 	// unchanged.
 	budget := chord
-	if pp.sectionDelta > 0 {
-		budget = freeform.DownRound(freeform.DownRound(chord - pp.sectionDelta))
+	if pp.SectionDelta > 0 {
+		budget = freeform.DownRound(freeform.DownRound(chord - pp.SectionDelta))
 		if budget <= 0 {
 			requested := units.Millimeters(chord)
-			displacement := units.Millimeters(pp.sectionDelta)
+			displacement := units.Millimeters(pp.SectionDelta)
 			return nil, fmt.Errorf(`%w: requested tolerance %s leaves no chord budget above the body's own section displacement %s; retry with a tolerance greater than %s`, ErrUnsupported, requested, displacement, displacement)
 		}
 	}
@@ -689,15 +689,15 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 	// resolution of THIS record — a boolean result, a modify op's rewritten
 	// section, a body an older evaluator built — leaves pw nil and every loop
 	// resolves through walkOf as before.
-	pw := pp.walks
-	if pw.Reusable(pp.profile) {
+	pw := pp.Walks
+	if pw.Reusable(pp.Profile) {
 		if err := pw.Charge(work); err != nil {
 			return nil, err
 		}
 	} else {
 		pw = nil
 	}
-	loops := append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...)
+	loops := append([]loopRecord{pp.Profile.Outer}, pp.Profile.Holes...)
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -706,7 +706,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 		if countFloor != nil {
 			floor = func(w survey2d.SideWalk) int { return countFloor(li, w.Segs[0]) }
 		}
-		cl, err := tessellation.ChordLoopWithCountFloor(ctx, loop, budget, pp.z1-pp.z0, work, pw, li, func(w survey2d.SideWalk) (*Face, error) {
+		cl, err := tessellation.ChordLoopWithCountFloor(ctx, loop, budget, pp.Z1-pp.Z0, work, pw, li, func(w survey2d.SideWalk) (*Face, error) {
 			return faceOfRole(wallRole(li, w.Segs[0]))
 		}, stationbound.ChordStationBound, floor, freeformTarget)
 		if err != nil {
@@ -738,13 +738,13 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 		if err := vertexBudget.Step(); err != nil {
 			return nil, err
 		}
-		lo := pp.point(p.U, p.V, pp.z0)
-		hi := pp.point(p.U, p.V, pp.z1)
+		lo := pp.Point(p.U, p.V, pp.Z0)
+		hi := pp.Point(p.U, p.V, pp.Z1)
 		mesh.vertices = append(mesh.vertices, lo, hi)
 		plane := proofbound.WalkEndBoundAllow(sampleBound[j])
 		vertexStore = append(vertexStore,
-			proofbound.AbsSumUpper(plane, exactPrismPointRound(pp, p.U, p.V, pp.z0, lo)),
-			proofbound.AbsSumUpper(plane, exactPrismPointRound(pp, p.U, p.V, pp.z1, hi)),
+			proofbound.AbsSumUpper(plane, exactPrismPointRound(pp, p.U, p.V, pp.Z0, lo)),
+			proofbound.AbsSumUpper(plane, exactPrismPointRound(pp, p.U, p.V, pp.Z1, hi)),
 		)
 	}
 	storeMax, err := tessellation.StoreMax(vertexStore)
@@ -755,14 +755,14 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 
 	// Prove loop clearance before both caps reuse the wall rings' vertices.
 	if err := tessellation.PrismCaps(ctx, &topology, sheet, capStart, capEnd,
-		pp.z0Delta, pp.z1Delta, tessellation.RequireLoopClearance, triangulation.Triangulate); err != nil {
+		pp.Z0Delta, pp.Z1Delta, tessellation.RequireLoopClearance, triangulation.Triangulate); err != nil {
 		return nil, err
 	}
 	mesh.triangles, mesh.source = topology.Triangles, topology.Sources
 
 	// A reflected placement flips handedness, turning every counter-clockwise
 	// winding clockwise; reversing the windings restores outward orientation.
-	if pp.reflected() {
+	if pp.Reflected() {
 		for i := range mesh.triangles {
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
 		}
@@ -790,7 +790,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 	if err := requireMeshAudit(ctx, sheet, b, &mesh); err != nil {
 		return nil, err
 	}
-	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, vertexStore, pp.sectionDelta); err != nil {
+	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, vertexStore, pp.SectionDelta); err != nil {
 		return nil, err
 	}
 	if verify < VerifyAll {
@@ -802,14 +802,14 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 		// face bound this mesh states is complete and stands.
 		return &mesh, nil
 	}
-	if pp.sectionDelta > 0 {
-		wallMove := proofbound.ProductUpper(proofbound.SectionDisplacementLength(pp.sectionDelta, walks), math.Abs(pp.z1-pp.z0))
+	if pp.SectionDelta > 0 {
+		wallMove := proofbound.ProductUpper(proofbound.SectionDisplacementLength(pp.SectionDelta, walks), math.Abs(pp.Z1-pp.Z0))
 		if sheet {
 			// A sheet carries no cap, so its section-displacement area charge
 			// drops both cap terms and keeps the wall's own alone.
 			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, wallMove)
 		} else {
-			capMove := proofbound.SectionDisplacementArea(pp.sectionDelta, walks, perimeterUpper)
+			capMove := proofbound.SectionDisplacementArea(pp.SectionDelta, walks, perimeterUpper)
 			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, capMove, capMove, wallMove)
 		}
 	}
@@ -836,13 +836,13 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 	// differs by its own axial displacement over the cap it caps; and every
 	// computed coordinate sweeps volume at the rate of the surface it moved.
 	// Absolute sums throughout — an occupied-volume bound admits no cancellation.
-	height := math.Abs(pp.z1 - pp.z0)
+	height := math.Abs(pp.Z1 - pp.Z0)
 	areaUpper := tessellation.FaceAreaUpper(mesh.vertices, mesh.triangles, mesh.source, vertexStore)
 	terms := []float64{
 		proofbound.ProductUpper(height, segmentArea),
-		proofbound.ProductUpper(proofbound.SectionDisplacementArea(pp.sectionDelta, walks, perimeterUpper), height),
-		proofbound.ProductUpper(pp.z0Delta, areaUpper[capStart]),
-		proofbound.ProductUpper(pp.z1Delta, areaUpper[capEnd]),
+		proofbound.ProductUpper(proofbound.SectionDisplacementArea(pp.SectionDelta, walks, perimeterUpper), height),
+		proofbound.ProductUpper(pp.Z0Delta, areaUpper[capStart]),
+		proofbound.ProductUpper(pp.Z1Delta, areaUpper[capEnd]),
 		proofbound.SweptVolumeAllow(storeMax, proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax)),
 	}
 	if err := publishSymDiff(&mesh, terms); err != nil {
@@ -1051,8 +1051,8 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 		wallAxial := math.Max(loDelta, hiDelta)
 		for i, p := range samples {
 			plane := proofbound.WalkEndBoundAllow(cl.BoundOf[i])
-			loV := base.point(p.U, p.V, lo)
-			hiV := base.point(p.U, p.V, hi)
+			loV := base.Point(p.U, p.V, lo)
+			hiV := base.Point(p.U, p.V, hi)
 			r.loV[i] = add(loV, proofbound.AbsSumUpper(plane, exactPrismPointRound(base, p.U, p.V, lo, loV)))
 			r.hiV[i] = add(hiV, proofbound.AbsSumUpper(plane, exactPrismPointRound(base, p.U, p.V, hi, hiV)))
 			f := cl.FaceOf[i]
@@ -1130,7 +1130,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 
 	// A reflected placement flips handedness, turning every counter-clockwise
 	// winding clockwise; reversing the windings restores outward orientation.
-	if base.reflected() {
+	if base.Reflected() {
 		for i := range mesh.triangles {
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
 		}

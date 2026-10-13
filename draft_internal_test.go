@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,7 +17,7 @@ func TestDraftReceiverClasses(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, prismPayload{}, pp)
 
-	_, err = draftReceiver(&Body{payload: prismPayload{sectionDelta: 1e-6}})
+	_, err = draftReceiver(&Body{payload: prismPayload{Payload: prismrecord.Payload{SectionDelta: 1e-6}}})
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "proven displacement")
 

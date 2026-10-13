@@ -42,7 +42,7 @@ func TestPrismSharedWallMirroredL(t *testing.T) {
 		got, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, l, image)
 		require.NoError(t, err)
 		require.True(t, ok)
-		require.Positive(t, got.sectionDelta, "the reflected image brings a displacement")
+		require.Positive(t, got.SectionDelta, "the reflected image brings a displacement")
 		body, err := Union(t.Context(), l, image)
 		require.NoError(t, err)
 		requireSharedWallVolume(t, body, 300*prismFixtureHeight)
@@ -85,7 +85,7 @@ func TestPrismSharedWallDisplacedInteriorSpanFallsBack(t *testing.T) {
 	cut, ok, err := tryPrismBoolean(t.Context(), meshbool.OpCut, box, image)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Positive(t, cut.sectionDelta)
+	require.Positive(t, cut.SectionDelta)
 }
 
 // TestPrismSharedWallChargesTheGap pins CoincidentReading.Gap: B's wall runs
@@ -108,7 +108,7 @@ func TestPrismSharedWallChargesTheGap(t *testing.T) {
 	require.True(t, ok)
 	gap, _ := new(big.Rat).Sub(new(big.Rat).SetInt64(10), new(big.Rat).SetFloat64(lean)).Float64()
 	require.Positive(t, gap)
-	require.GreaterOrEqual(t, got.sectionDelta, gap)
+	require.GreaterOrEqual(t, got.SectionDelta, gap)
 }
 
 // requireSharedWallVolume asserts b's volume bound contains want.

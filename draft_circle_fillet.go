@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -72,8 +73,8 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 	// sweep of at most a quarter turn, and adding centre and radius motion,
 	// moves every arc point by less than 16*epsilon. The 64-fold charge also
 	// covers every constructed line and the frame-origin lift.
-	point := prismPayload{profile: dp.profile, frame: dp.frame, z0: dp.z0,
-		z0Delta: dp.z0Delta, xform: r3.Identity()}
+	point := prismPayload{Payload: prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
+		Z0Delta: dp.z0Delta, Xform: r3.Identity()}}
 	originDelta := prismPointBound(point, proofbound.ExactScalar(circle.Center.U),
 		proofbound.ExactScalar(circle.Center.V), proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
 	epsilon := math.Max(originDelta, dp.farDelta)

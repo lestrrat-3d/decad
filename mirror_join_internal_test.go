@@ -55,7 +55,7 @@ func TestMirrorJoinChargesTheReflectionRounding(t *testing.T) {
 		held, _ := image.Float64()
 		want := proofarith.RationalFloatError(image, held)
 		require.Positive(t, want, "the premise: 2·0.1 − 5 is not a float")
-		require.Equal(t, want, pp.sectionDelta)
+		require.Equal(t, want, pp.SectionDelta)
 
 		v, err := joined.Volume()
 		require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestMirrorJoinChargesTheReflectionRounding(t *testing.T) {
 		joined := joinRectangle(t, 8, 13)
 		pp, ok := joined.payload.(prismPayload)
 		require.True(t, ok)
-		require.Zero(t, pp.sectionDelta)
+		require.Zero(t, pp.SectionDelta)
 		v, err := joined.Volume()
 		require.NoError(t, err)
 		require.Equal(t, Exact, v.Exactness)

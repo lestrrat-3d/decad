@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 
@@ -25,18 +26,18 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 		thickness      = 0.1
 		thicknessDelta = 0.03125
 	)
-	pp := prismPayload{
-		z0:      0,
-		z1:      1e12,
-		z1Delta: 0.25,
-	}
+	pp := prismPayload{Payload: prismrecord.Payload{
+		Z0:      0,
+		Z1:      1e12,
+		Z1Delta: 0.25,
+	}}
 	floorDelta := func(from, sourceDelta, by float64) float64 {
 		to := from + by
 		return proofbound.AbsSumUpper(sourceDelta, thicknessDelta, proofarith.AddRoundError(from, by, to))
 	}
-	topFloorDelta := floorDelta(pp.z0, pp.z0Delta, thickness)
-	bottomInFloorDelta := floorDelta(pp.z1, pp.z1Delta, -thickness)
-	bottomOutFloorDelta := floorDelta(pp.z1, pp.z1Delta, thickness)
+	topFloorDelta := floorDelta(pp.Z0, pp.Z0Delta, thickness)
+	bottomInFloorDelta := floorDelta(pp.Z1, pp.Z1Delta, -thickness)
+	bottomOutFloorDelta := floorDelta(pp.Z1, pp.Z1Delta, thickness)
 
 	tests := []struct {
 		name                            string
@@ -46,19 +47,19 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 	}{
 		{
 			name: "top inward", sense: 1, removedEnd: true,
-			openDelta: pp.z1Delta, outerDelta: pp.z0Delta, cavDelta: topFloorDelta,
+			openDelta: pp.Z1Delta, outerDelta: pp.Z0Delta, cavDelta: topFloorDelta,
 		},
 		{
 			name: "top outward", sense: -1, removedEnd: true,
-			openDelta: pp.z1Delta, outerDelta: topFloorDelta, cavDelta: pp.z0Delta,
+			openDelta: pp.Z1Delta, outerDelta: topFloorDelta, cavDelta: pp.Z0Delta,
 		},
 		{
 			name: "bottom inward", sense: 1,
-			openDelta: pp.z0Delta, outerDelta: pp.z1Delta, cavDelta: bottomInFloorDelta,
+			openDelta: pp.Z0Delta, outerDelta: pp.Z1Delta, cavDelta: bottomInFloorDelta,
 		},
 		{
 			name: "bottom outward", sense: -1,
-			openDelta: pp.z0Delta, outerDelta: bottomOutFloorDelta, cavDelta: pp.z1Delta,
+			openDelta: pp.Z0Delta, outerDelta: bottomOutFloorDelta, cavDelta: pp.Z1Delta,
 		},
 	}
 	for _, tt := range tests {
@@ -77,12 +78,12 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 func requireCupPrismLevelBounds(t *testing.T, prism prismPayload, a, b proofbound.BoundedScalar) {
 	t.Helper()
 	if a.Value <= b.Value {
-		require.Equal(t, a.Bound, prism.z0Delta)
-		require.Equal(t, b.Bound, prism.z1Delta)
+		require.Equal(t, a.Bound, prism.Z0Delta)
+		require.Equal(t, b.Bound, prism.Z1Delta)
 		return
 	}
-	require.Equal(t, b.Bound, prism.z0Delta)
-	require.Equal(t, a.Bound, prism.z1Delta)
+	require.Equal(t, b.Bound, prism.Z0Delta)
+	require.Equal(t, a.Bound, prism.Z1Delta)
 }
 
 // The displaced-cup fixtures give a recorded cup an offset displacement of

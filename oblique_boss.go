@@ -26,42 +26,42 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 	plate, boss := a, b
 	pp, plateOK := plate.payload.(prismPayload)
 	cp, circleOK := boss.payload.(prismPayload)
-	if !plateOK || !circleOK || len(cp.profile.Outer.Segments) != 1 {
+	if !plateOK || !circleOK || len(cp.Profile.Outer.Segments) != 1 {
 		plate, boss = b, a
 		pp, plateOK = plate.payload.(prismPayload)
 		cp, circleOK = boss.payload.(prismPayload)
 	}
-	if !plateOK || !circleOK || pp.surfaceResult || cp.surfaceResult ||
-		pp.sectionDelta != 0 || cp.sectionDelta != 0 ||
-		pp.z0Delta != 0 || pp.z1Delta != 0 || cp.z0Delta != 0 || cp.z1Delta != 0 ||
-		pp.xform != r3.Identity() || pp.frame.Origin() != (r3.Vec{}) ||
-		pp.frame.U() != (r3.Vec{X: 1}) || pp.frame.V() != (r3.Vec{Y: 1}) ||
-		cp.frame.Origin() != (r3.Vec{}) || cp.frame.U() != (r3.Vec{X: 1}) ||
-		cp.frame.V() != (r3.Vec{Y: 1}) || len(cp.profile.Holes) != 0 ||
-		len(cp.profile.Outer.Segments) != 1 || pp.z1 <= pp.z0 || cp.z0 != 0 || cp.z1 <= 0 {
+	if !plateOK || !circleOK || pp.SurfaceResult || cp.SurfaceResult ||
+		pp.SectionDelta != 0 || cp.SectionDelta != 0 ||
+		pp.Z0Delta != 0 || pp.Z1Delta != 0 || cp.Z0Delta != 0 || cp.Z1Delta != 0 ||
+		pp.Xform != r3.Identity() || pp.Frame.Origin() != (r3.Vec{}) ||
+		pp.Frame.U() != (r3.Vec{X: 1}) || pp.Frame.V() != (r3.Vec{Y: 1}) ||
+		cp.Frame.Origin() != (r3.Vec{}) || cp.Frame.U() != (r3.Vec{X: 1}) ||
+		cp.Frame.V() != (r3.Vec{Y: 1}) || len(cp.Profile.Holes) != 0 ||
+		len(cp.Profile.Outer.Segments) != 1 || pp.Z1 <= pp.Z0 || cp.Z0 != 0 || cp.Z1 <= 0 {
 		return nil
 	}
-	rect, ok := axisRectangle(pp.profile)
+	rect, ok := axisRectangle(pp.Profile)
 	if !ok {
 		return nil
 	}
-	circle, ok := cp.profile.Outer.Segments[0].(circleSeg)
+	circle, ok := cp.Profile.Outer.Segments[0].(circleSeg)
 	if !ok || circle.Center != (Point2{}) || !circle.CCW ||
 		!(circle.TStart == 0 && circle.TEnd == 1) {
 		return nil
 	}
 	radius := circle.Radius.Base()
-	length := cp.z1
-	if !proofbound.FiniteVec(cp.point(0, 0, cp.z0)) || radius <= 0 ||
+	length := cp.Z1
+	if !proofbound.FiniteVec(cp.Point(0, 0, cp.Z0)) || radius <= 0 ||
 		proofbound.IsNonFinite(radius) || proofbound.IsNonFinite(length) || length < radius ||
-		radius > 100 || length > 100 || math.Abs(pp.z0) > 10_000 ||
-		math.Abs(pp.z1) > 10_000 || math.Abs(rect.u0) > 10_000 ||
+		radius > 100 || length > 100 || math.Abs(pp.Z0) > 10_000 ||
+		math.Abs(pp.Z1) > 10_000 || math.Abs(rect.u0) > 10_000 ||
 		math.Abs(rect.u1) > 10_000 || math.Abs(rect.v0) > 10_000 ||
 		math.Abs(rect.v1) > 10_000 {
 		return nil
 	}
-	base := cp.point(0, 0, cp.z0)
-	axisHeld := cp.dir(0, 0, 1)
+	base := cp.Point(0, 0, cp.Z0)
+	axisHeld := cp.Dir(0, 0, 1)
 	axisLength := axisHeld.Len()
 	if !(axisLength > 0) || proofbound.IsNonFinite(axisLength) {
 		return nil
@@ -92,15 +92,15 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 	if capCount != 2 || !(sourceBound < radius/1000) {
 		return nil
 	}
-	farHeld := cp.point(0, 0, cp.z1)
+	farHeld := cp.Point(0, 0, cp.Z1)
 	farIdeal := base.Add(axis.Scale(length))
 	poseStretch := prismLiftFactor(cp) - 1
 	if poseStretch < 0 || proofbound.IsNonFinite(poseStretch) {
 		return nil
 	}
 	sourceBound = proofbound.AbsSumUpper(sourceBound,
-		prismPointBound(cp, proofbound.ExactScalar(0), proofbound.ExactScalar(0), proofbound.ExactScalar(cp.z0)),
-		prismPointBound(cp, proofbound.ExactScalar(0), proofbound.ExactScalar(0), proofbound.ExactScalar(cp.z1)),
+		prismPointBound(cp, proofbound.ExactScalar(0), proofbound.ExactScalar(0), proofbound.ExactScalar(cp.Z0)),
+		prismPointBound(cp, proofbound.ExactScalar(0), proofbound.ExactScalar(0), proofbound.ExactScalar(cp.Z1)),
 		proofbound.DvLenUpper(proofbound.HeldDelta(farHeld, farIdeal)),
 		proofbound.ProductUpper(poseStretch, proofbound.AbsSumUpper(radius, length)))
 	if !(sourceBound < radius/1000) {
@@ -111,9 +111,9 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 	// radius against the remaining margin before rebuilding.
 	margin := proofbound.AbsSumUpper(proofbound.DivUpper(radius, 0.93), sourceBound, 0.01)
 	end := base.Add(axis.Scale(length))
-	if !(base.Z-radius*sinTilt-sourceBound > pp.z0 &&
-		base.Z+radius*sinTilt+sourceBound < pp.z1 &&
-		end.Z-radius*sinTilt-sourceBound > pp.z1+0.01) {
+	if !(base.Z-radius*sinTilt-sourceBound > pp.Z0 &&
+		base.Z+radius*sinTilt+sourceBound < pp.Z1 &&
+		end.Z-radius*sinTilt-sourceBound > pp.Z1+0.01) {
 		return nil
 	}
 	for _, center := range []r3.Vec{base, end} {
@@ -123,7 +123,7 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 		}
 	}
 	return &obliqueBossRecord{
-		plate: plate, boss: boss, rect: rect, bottom: pp.z0, top: pp.z1,
+		plate: plate, boss: boss, rect: rect, bottom: pp.Z0, top: pp.Z1,
 		base: base, axis: axis, ex: ex, ey: ey, radius: radius,
 		length: length, sourceBound: sourceBound,
 	}

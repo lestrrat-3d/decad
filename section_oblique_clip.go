@@ -16,15 +16,15 @@ import (
 // a rounded plane-local polygon and a displacement covering every matched
 // point of its exact source boundary in both local and world coordinates.
 func obliqueRectangleClip(pp prismPayload, plane r3.Frame) ([]Point2, float64, bool) {
-	u0, u1, v0, v1, ok := momentinput.RectangleBounds(pp.profile)
-	if !ok || pp.blendKind != "" || len(pp.blendSegs) != 0 || pp.z0 >= pp.z1 {
+	u0, u1, v0, v1, ok := momentinput.RectangleBounds(pp.Profile)
+	if !ok || pp.BlendKind != "" || len(pp.BlendSegs) != 0 || pp.Z0 >= pp.Z1 {
 		return nil, 0, false
 	}
-	base := proofarith.DyVec(pp.frame.Origin())
+	base := proofarith.DyVec(pp.Frame.Origin())
 	axis := [3]proofarith.DyV3{
-		proofarith.DyVec(pp.frame.U()), proofarith.DyVec(pp.frame.V()), proofarith.DyVec(pp.frame.N()),
+		proofarith.DyVec(pp.Frame.U()), proofarith.DyVec(pp.Frame.V()), proofarith.DyVec(pp.Frame.N()),
 	}
-	limits := [3][2]float64{{u0, u1}, {v0, v1}, {pp.z0, pp.z1}}
+	limits := [3][2]float64{{u0, u1}, {v0, v1}, {pp.Z0, pp.Z1}}
 	requestedOrigin := proofarith.DyVec(plane.Origin())
 	normal := proofarith.DvCross(proofarith.DyVec(plane.U()), proofarith.DyVec(plane.V()))
 	if proofarith.DvIsZero(normal) {
@@ -39,7 +39,7 @@ func obliqueRectangleClip(pp prismPayload, plane r3.Frame) ([]Point2, float64, b
 			point = proofarith.DvAdd(point, proofarith.DvScale(axis[coordinate],
 				proofarith.DyOfFinite(limits[coordinate][choice])))
 		}
-		corners[corner] = proofarith.DvTransform(pp.xform, point)
+		corners[corner] = proofarith.DvTransform(pp.Xform, point)
 		side[corner] = proofarith.DvDot(proofarith.DvSub(corners[corner], requestedOrigin), normal)
 		// Contact at a box vertex needs a separate topology proof.
 		if side[corner].IsZero() {

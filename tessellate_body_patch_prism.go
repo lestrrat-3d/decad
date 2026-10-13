@@ -24,8 +24,8 @@ func bodyPatchCircularPrismSource(pp bodyPatchPayload) (prismPayload, bool) {
 		return prismPayload{}, false
 	}
 	prism, ok := pp.faces[0].body.payload.(prismPayload)
-	if !ok || !prism.surfaceResult || prism.sectionDelta != 0 || len(prism.profile.Holes) != 0 ||
-		len(prism.profile.Outer.Segments) != 1 {
+	if !ok || !prism.SurfaceResult || prism.SectionDelta != 0 || len(prism.Profile.Holes) != 0 ||
+		len(prism.Profile.Outer.Segments) != 1 {
 		return prismPayload{}, false
 	}
 	if _, ok := pp.faces[0].surface.(Cylinder); !ok {
@@ -60,15 +60,15 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		return nil, fmt.Errorf(`%w: a circular Body.Patch source has an incomplete face map`, ErrUnsupported)
 	}
 	work := freeform.NewFreeformWork()
-	walks := prism.walks
-	if walks.Reusable(prism.profile) {
+	walks := prism.Walks
+	if walks.Reusable(prism.Profile) {
 		if err := walks.Charge(work); err != nil {
 			return nil, err
 		}
 	} else {
 		walks = nil
 	}
-	cl, err := tessellation.ChordLoop(ctx, prism.profile.Outer, chord, prism.z1-prism.z0,
+	cl, err := tessellation.ChordLoop(ctx, prism.Profile.Outer, chord, prism.Z1-prism.Z0,
 		work, walks, 0, func(_ survey2d.SideWalk) (*Face, error) { return pp.faces[0], nil },
 		stationbound.ChordStationBound)
 	if err != nil {
@@ -83,8 +83,8 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		return nil, fmt.Errorf(`%w: a circular Body.Patch source has no finite rim chording bound`, ErrUnsupported)
 	}
 	for j, p := range cl.Samples {
-		if source.vertices[2*j] != prism.point(p.U, p.V, prism.z0) ||
-			source.vertices[2*j+1] != prism.point(p.U, p.V, prism.z1) {
+		if source.vertices[2*j] != prism.Point(p.U, p.V, prism.Z0) ||
+			source.vertices[2*j+1] != prism.Point(p.U, p.V, prism.Z1) {
 			return nil, fmt.Errorf(`%w: a circular Body.Patch source changed its wall stations`, ErrUnsupported)
 		}
 	}

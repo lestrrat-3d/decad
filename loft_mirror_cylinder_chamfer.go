@@ -148,9 +148,9 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 		return fmt.Errorf("%w: mirrored bore lost its two exterior annuli", ErrUnsupported)
 	}
 	for cap, face := range caps {
-		z := blank.z0
+		z := blank.Z0
 		if cap == 1 {
-			z = blank.z1
+			z = blank.Z1
 		}
 		if record.capGroups[cap] < 0 || record.wallGroups[cap] < 0 ||
 			!loftCylinderAuditAnnulus(ctx, mesh, record.outer[cap], record.inner[cap],
@@ -309,9 +309,9 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	}
 	mesh := &joinedMesh{verts: verts, tris: tris, src: src, groups: groups}
 	for cap, group := range capGroups {
-		z := blank.z0
+		z := blank.Z0
 		if cap == 1 {
-			z = blank.z1
+			z = blank.Z1
 		}
 		if !loftCylinderAuditAnnulus(ctx, mesh, outer[cap], inner[cap], group, z, cap == 0) {
 			return nil, fmt.Errorf("%w: mirrored cap chamfer does not tile exterior annulus %d", ErrUnsupported, cap)
@@ -339,7 +339,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		result.groups[group].origins = append([]FeatureRef(nil), old.groups[record.capGroups[cap]].origins...)
 	}
 	if err := loftCylinderTagCaps(&result, record.join.blank, capGroups,
-		[2]float64{blank.z0, blank.z1}, ref); err != nil {
+		[2]float64{blank.Z0, blank.Z1}, ref); err != nil {
 		return nil, err
 	}
 	return buildFacetedBody(ctx, d, ref, result)

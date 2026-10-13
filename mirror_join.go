@@ -219,7 +219,7 @@ func newJoinRegion(p profileRecord) joinRegion {
 // payload: the same frame, placement, interval and axial displacements over
 // the assembled record, with δ_mirror as its section displacement.
 func joinPrismPayload(budget *proofbound.WorkBudget, pp prismPayload, walls []joinWall) (prismPayload, error) {
-	region := newJoinRegion(pp.profile)
+	region := newJoinRegion(pp.Profile)
 	segs := make([]lineSeg, 0, len(walls))
 	for _, w := range walls {
 		seg, err := joinWallSegment(region.loops, w)
@@ -236,7 +236,7 @@ func joinPrismPayload(budget *proofbound.WorkBudget, pp prismPayload, walls []jo
 	if err := line.admitRegions(budget, []joinRegion{region}); err != nil {
 		return prismPayload{}, err
 	}
-	if pp.sectionDelta != 0 {
+	if pp.SectionDelta != 0 {
 		return prismPayload{}, errJoinDisplaced
 	}
 	joined, delta, err := line.assemble(budget, region)
@@ -244,11 +244,11 @@ func joinPrismPayload(budget *proofbound.WorkBudget, pp prismPayload, walls []jo
 		return prismPayload{}, err
 	}
 	out := pp
-	out.profile = joined
-	out.sectionDelta = delta
-	out.walks = nil
-	out.blendSegs = nil
-	out.blendKind = ""
+	out.Profile = joined
+	out.SectionDelta = delta
+	out.Walks = nil
+	out.BlendSegs = nil
+	out.BlendKind = ""
 	return out, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -333,13 +334,13 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	}
 
 	// The rewritten section, and the fillet arcs' (loop, segment) indices.
-	profile, filletArcs, err := rewriteProfileBudget(budget, pp.profile, loops, blendAt)
+	profile, filletArcs, err := rewriteProfileBudget(budget, pp.Profile, loops, blendAt)
 	if err != nil {
 		return nil, err
 	}
 
 	// Stage 4 (§4/§5): the audit of the rewritten profile — S8, S6, S7, S9.
-	if err := auditRewriteBudget(budget, pp.profile, profile, loops, blendAt); err != nil {
+	if err := auditRewriteBudget(budget, pp.Profile, profile, loops, blendAt); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, context.Canceled
 		}
@@ -358,17 +359,17 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	// opens its one counter here (docs/spline-design.md §5.2).
 	// A section rewrite is a change of the SECTION: both sweep levels come
 	// through unchanged, and so does each one's own axial displacement.
-	body, err := evalPrismContext(ctx, d, ref, prismPayload{
-		profile:   profile,
-		frame:     pp.frame,
-		z0:        pp.z0,
-		z1:        pp.z1,
-		z0Delta:   pp.z0Delta,
-		z1Delta:   pp.z1Delta,
-		xform:     pp.xform,
-		blendSegs: filletArcs,
-		blendKind: "fillet",
-	}, freeform.NewFreeformWork())
+	body, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+		Profile:   profile,
+		Frame:     pp.Frame,
+		Z0:        pp.Z0,
+		Z1:        pp.Z1,
+		Z0Delta:   pp.Z0Delta,
+		Z1Delta:   pp.Z1Delta,
+		Xform:     pp.Xform,
+		BlendSegs: filletArcs,
+		BlendKind: "fillet",
+	}}, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -484,17 +485,17 @@ func wrapModifyAuditError(sel EdgeSelector, matched []matchedCorner, err error) 
 // existence test). Zero for every payload a caller draws, so this changes
 // nothing for a drawn, placed or already-modified prism.
 func requireExactSection(pp prismPayload, op string) error {
-	if pp.sectionDelta == 0 {
+	if pp.SectionDelta == 0 {
 		return nil
 	}
 	return fmt.Errorf(
 		`%w: this evaluator %s a receiver whose recorded section is the section it denotes only; this body's section carries a proven displacement of %g mm from the one its construction denotes`,
-		ErrUnsupported, op, pp.sectionDelta,
+		ErrUnsupported, op, pp.SectionDelta,
 	)
 }
 
 func prismCornerLoopsBudget(budget *proofbound.WorkBudget, pp prismPayload) ([]cornerLoop, error) {
-	return profileCornerLoopsBudget(budget, pp.profile)
+	return profileCornerLoopsBudget(budget, pp.Profile)
 }
 
 // profileCornerLoopsBudget resolves every loop of a recorded section into its
@@ -538,8 +539,8 @@ func matchCornerBudget(budget *proofbound.WorkBudget, pp prismPayload, loops []c
 			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return 0, 0, false, err
 			}
-			j0 := pp.point(w.StartU, w.StartV, pp.z0)
-			j1 := pp.point(w.StartU, w.StartV, pp.z1)
+			j0 := pp.Point(w.StartU, w.StartV, pp.Z0)
+			j1 := pp.Point(w.StartU, w.StartV, pp.Z1)
 			if matchEndpoints(e.start.position, e.end.position, j0, j1, tol) {
 				return li, ci, true, nil
 			}

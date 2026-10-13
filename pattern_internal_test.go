@@ -65,8 +65,8 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 		require.NoError(t, err)
 		for _, c := range copies {
 			pp := patternInstance(t, c)
-			require.Zero(t, pp.sectionDelta)
-			require.Equal(t, r3.Identity(), pp.xform, "a frame-keeping instance keeps the receiver's placement")
+			require.Zero(t, pp.SectionDelta)
+			require.Equal(t, r3.Identity(), pp.Xform, "a frame-keeping instance keeps the receiver's placement")
 		}
 	})
 	t.Run("along the sweep", func(t *testing.T) {
@@ -74,7 +74,7 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 		peg := patternPrism(t, 0, 0, 5, 5, 0)
 		copies, err := peg.PatternCopies(t.Context(), LinearPattern{Dir: r3.NewVec(0, 0, 1), Step: units.Millimeters(10), Count: 2})
 		require.NoError(t, err)
-		require.NotEqual(t, r3.Identity(), patternInstance(t, copies[0]).xform, "a placed Copy instance carries the motion in its placement")
+		require.NotEqual(t, r3.Identity(), patternInstance(t, copies[0]).Xform, "a placed Copy instance carries the motion in its placement")
 	})
 	t.Run("quarter turns", func(t *testing.T) {
 		t.Parallel()
@@ -82,7 +82,7 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 		copies, err := block.PatternCopies(t.Context(), CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 4})
 		require.NoError(t, err)
 		for _, c := range copies {
-			require.Zero(t, patternInstance(t, c).sectionDelta)
+			require.Zero(t, patternInstance(t, c).SectionDelta)
 		}
 	})
 	t.Run("inch step", func(t *testing.T) {
@@ -95,7 +95,7 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 		require.NoError(t, err)
 		conversion := extent.ConversionRound(step, units.Millimeter, held)
 		require.Positive(t, conversion, "the premise: 0.3 in does not convert to a float")
-		require.GreaterOrEqual(t, patternInstance(t, copies[0]).sectionDelta, conversion)
+		require.GreaterOrEqual(t, patternInstance(t, copies[0]).SectionDelta, conversion)
 	})
 	t.Run("six pins", func(t *testing.T) {
 		t.Parallel()
@@ -110,16 +110,16 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 		for i, c := range copies {
 			pp := patternInstance(t, c)
 			if i+1 == 3 {
-				require.Zero(t, pp.sectionDelta, "the half turn is exact")
+				require.Zero(t, pp.SectionDelta, "the half turn is exact")
 			} else {
-				require.Positive(t, pp.sectionDelta, "60° turns read certified trig")
+				require.Positive(t, pp.SectionDelta, "60° turns read certified trig")
 			}
-			circle, ok := pp.profile.Outer.Segments[0].(circleSeg)
+			circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
 			require.True(t, ok)
 			du := new(big.Float).SetPrec(512).Sub(f(circle.Center.U), wants[i][0])
 			dv := new(big.Float).SetPrec(512).Sub(f(circle.Center.V), wants[i][1])
 			sq := new(big.Float).SetPrec(512).Add(new(big.Float).Mul(du, du), new(big.Float).Mul(dv, dv))
-			allow := f(pp.sectionDelta)
+			allow := f(pp.SectionDelta)
 			require.LessOrEqual(t, sq.Cmp(allow.Mul(allow, allow)), 0, "instance %d centre %v", i+1, circle.Center)
 		}
 	})

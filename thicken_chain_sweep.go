@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
@@ -41,9 +42,9 @@ func thickenArcChainSweep(ctx context.Context, d *Document, sp chainSweepPayload
 		return nil, fmt.Errorf(`%w: thickened chain arc has no solid Revolve reduction`, ErrDegenerate)
 	}
 	finishArcSweepBody(body, sweepPayload{
-		prism: prismPayload{
-			profile: built.profile, frame: built.frame, xform: built.xform,
-		},
+		prism: prismPayload{Payload: prismrecord.Payload{
+			Profile: built.profile, Frame: built.frame, Xform: built.xform,
+		}},
 		revolve: built, arc: true, reverseArcCaps: reverse, path: sp.path,
 	})
 	return body, nil

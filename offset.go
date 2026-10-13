@@ -164,7 +164,7 @@ func offsetPatch(ctx context.Context, d *Document, pp patchPayload, side OffsetS
 	if side == OffsetNegative {
 		signed = -dmm
 	}
-	motion, err := r3.Translation(pp.prism().dir(0, 0, 1).Scale(signed))
+	motion, err := r3.Translation(pp.prism().Dir(0, 0, 1).Scale(signed))
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the offset translation is not a placement: %s`, ErrUnsupported, err)
 	}
@@ -182,10 +182,10 @@ func offsetPatch(ctx context.Context, d *Document, pp patchPayload, side OffsetS
 // sectionDelta == 0 truthful, so evalPrismContext's existing moment and extent
 // proofs apply to the offset section as they do to a recorded one.
 func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetSide, dmm, dDelta float64) (*Body, error) {
-	if !pp.surfaceResult || pp.sectionDelta != 0 || len(pp.profile.Holes) != 0 {
+	if !pp.SurfaceResult || pp.SectionDelta != 0 || len(pp.Profile.Holes) != 0 {
 		return nil, fmt.Errorf(`%w: this prism sheet has no admitted Offset section`, ErrUnsupported)
 	}
-	if proofbound.AdmitAbove(proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar()), 0) != proofbound.SurvAdmit {
+	if proofbound.AdmitAbove(proofbound.BoundedSub(pp.Z1Scalar(), pp.Z0Scalar()), 0) != proofbound.SurvAdmit {
 		return nil, fmt.Errorf(`%w: the prism sheet has no proven positive sweep height`, ErrUnsupported)
 	}
 	if dDelta != 0 {
@@ -206,14 +206,14 @@ func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetS
 	if err != nil {
 		return nil, err
 	}
-	pp.profile = section
+	pp.Profile = section
 	// The walk cache resolves THIS payload's old profile; the new section
 	// resolves afresh (prism_payload.go's walks doc comment).
-	pp.walks = nil
+	pp.Walks = nil
 	// No source face role is inherited (§17.3): a blend descriptor names (loop,
 	// segment) indices of the SOURCE record, and the offset mints its own
 	// segment list, so carrying them over would name arbitrary result walls.
-	pp.blendSegs, pp.blendKind = nil, ""
+	pp.BlendSegs, pp.BlendKind = nil, ""
 	return evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
 }
 
@@ -223,9 +223,9 @@ func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetS
 // offset interval 0 < τ ≤ d clear. It dispatches on the two admitted section
 // shapes exactly as thickenPrism does, and refuses every other one.
 func offsetPrismSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *proofbound.WorkBudget) (profileRecord, error) {
-	if len(pp.profile.Outer.Segments) == 1 {
-		if circle, ok := pp.profile.Outer.Segments[0].(circleSeg); ok {
-			return offsetCircleSection(pp.profile, circle, sense, amount, budget)
+	if len(pp.Profile.Outer.Segments) == 1 {
+		if circle, ok := pp.Profile.Outer.Segments[0].(circleSeg); ok {
+			return offsetCircleSection(pp.Profile, circle, sense, amount, budget)
 		}
 	}
 	return offsetAxisSection(ctx, pp, sense, amount, budget)
@@ -269,7 +269,7 @@ func offsetCircleSection(source profileRecord, circle circleSeg, sense int, amou
 // the endpoint: an endpoint that looks simple cannot prove an earlier offset did
 // not pinch and change which boundary the construction denotes (§17.2).
 func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount float64, budget *proofbound.WorkBudget) (profileRecord, error) {
-	for _, seg := range pp.profile.Outer.Segments {
+	for _, seg := range pp.Profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
 			return profileRecord{}, err
 		}
@@ -289,14 +289,14 @@ func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount f
 	if err != nil {
 		return profileRecord{}, err
 	}
-	offset, err := offsetProfile(budget, pp.profile, float64(sense), amount)
+	offset, err := offsetProfile(budget, pp.Profile, float64(sense), amount)
 	if err != nil {
 		return profileRecord{}, offsetSectionRefusal(err)
 	}
 	if err := thickenaxis.CertifyAxisOffset(loop.Walks, dirs, offset.Outer, sense, amount, budget); err != nil {
 		return profileRecord{}, err
 	}
-	if err := offsetSectionRefusal(auditOffsetSectionBudget(budget, pp.profile, offset)); err != nil {
+	if err := offsetSectionRefusal(auditOffsetSectionBudget(budget, pp.Profile, offset)); err != nil {
 		return profileRecord{}, err
 	}
 	// radial is nil: a prism sheet's walls sweep along a fixed normal and turn

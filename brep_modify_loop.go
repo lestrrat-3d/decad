@@ -526,7 +526,7 @@ func brepEdgeMatches(refView prismPayload, owner brepUse, e *Edge, tol float64) 
 	if e.start == nil || e.end == nil {
 		return false
 	}
-	lift := func(c [3]float64) r3.Vec { return refView.point(c[0], c[1], c[2]) }
+	lift := func(c [3]float64) r3.Vec { return refView.Point(c[0], c[1], c[2]) }
 	key := owner.Key
 	switch c := e.curve.(type) {
 	case Line3:
@@ -543,7 +543,7 @@ func brepEdgeMatches(refView prismPayload, owner brepUse, e *Edge, tol float64) 
 		}
 		var unit [3]float64
 		unit[key.Axis] = 1
-		axis := refView.dir(unit[0], unit[1], unit[2])
+		axis := refView.Dir(unit[0], unit[1], unit[2])
 		return axis.Cross(c.Axis).Len() <= tol
 	default:
 		return false

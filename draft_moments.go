@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/units"
 )
@@ -107,11 +108,11 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 	if err != nil {
 		return err
 	}
-	pl := prismPayload{frame: dp.frame, xform: dp.xform}
+	pl := prismPayload{Payload: prismrecord.Payload{Frame: dp.frame, Xform: dp.xform}}
 	cu := proofbound.BoundedQuotient(mu.Value, mu.Bound, volume.Value, volume.Bound)
 	cv := proofbound.BoundedQuotient(mv.Value, mv.Bound, volume.Value, volume.Bound)
 	cz := proofbound.BoundedQuotient(mz.Value, mz.Bound, volume.Value, volume.Bound)
-	centroid := pl.point(cu.Value, cv.Value, cz.Value)
+	centroid := pl.Point(cu.Value, cv.Value, cz.Value)
 	centroidBound := math.Min(prismPointBound(pl, cu, cv, cz), capband.CentroidGeometryBound(centroid, boxToInternal(bounds)))
 	body.centroid = VecMeasurement{
 		Value:     centroid,

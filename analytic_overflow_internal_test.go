@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -42,12 +43,12 @@ func overflowFrame(t *testing.T) r3.Frame {
 func TestEvalPrismRejectsOverflowedMeasurements(t *testing.T) {
 	t.Parallel()
 	profile := overflowSquare(1e154)
-	body, err := evalPrism(New(), producerID(0), prismPayload{
-		profile: profile,
-		frame:   overflowFrame(t),
-		z1:      100,
-		xform:   r3.Identity(),
-	}, freeform.NewFreeformWork())
+	body, err := evalPrism(New(), producerID(0), prismPayload{Payload: prismrecord.Payload{
+		Profile: profile,
+		Frame:   overflowFrame(t),
+		Z1:      100,
+		Xform:   r3.Identity(),
+	}}, freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrNotFinite)
 	require.Nil(t, body)
 }
@@ -123,12 +124,12 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 			CCW:    true,
 		},
 	}}}
-	prism, err := evalPrism(New(), producerID(0), prismPayload{
-		profile: circle,
-		frame:   overflowFrame(t),
-		z1:      2,
-		xform:   r3.Identity(),
-	}, freeform.NewFreeformWork())
+	prism, err := evalPrism(New(), producerID(0), prismPayload{Payload: prismrecord.Payload{
+		Profile: circle,
+		Frame:   overflowFrame(t),
+		Z1:      2,
+		Xform:   r3.Identity(),
+	}}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	circular := 0
 	for _, edge := range prism.Edges() {
@@ -191,12 +192,12 @@ func TestCoalescedAnalyticEdgesCarryLengthBounds(t *testing.T) {
 		lineSeg{Start: Point2{U: 1, V: 3}, End: Point2{U: 0, V: 2}, TStart: 0, TEnd: 1},
 		lineSeg{Start: Point2{U: 0, V: 2}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
-	body, err := evalPrism(New(), producerID(0), prismPayload{
-		profile: profile,
-		frame:   overflowFrame(t),
-		z1:      1,
-		xform:   r3.Identity(),
-	}, freeform.NewFreeformWork())
+	body, err := evalPrism(New(), producerID(0), prismPayload{Payload: prismrecord.Payload{
+		Profile: profile,
+		Frame:   overflowFrame(t),
+		Z1:      1,
+		Xform:   r3.Identity(),
+	}}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	coalesced := 0
 	for _, edge := range body.Edges() {

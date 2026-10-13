@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -13,15 +14,15 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 	root := math.Sqrt(10)
-	blank := &Body{payload: prismPayload{
-		frame: frame, xform: r3.Identity(), z1: 2,
-		profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+	blank := &Body{payload: prismPayload{Payload: prismrecord.Payload{
+		Frame: frame, Xform: r3.Identity(), Z1: 2,
+		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			circleSeg{Center: Point2{}, Radius: units.Millimeters(root), TStart: 0, TEnd: 1},
 		}}},
-	}}
-	section := prismPayload{
-		frame: frame, xform: r3.Identity(), z1: 2,
-		profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+	}}}
+	section := prismPayload{Payload: prismrecord.Payload{
+		Frame: frame, Xform: r3.Identity(), Z1: 2,
+		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			arcSeg{Center: Point2{}, Start: Point2{U: 3, V: -1},
 				End: Point2{U: 3, V: 1}, TStart: 0, TEnd: 1},
 			lineSeg{Start: Point2{U: 3, V: 1}, End: Point2{U: 4, V: 1}, TStart: 0, TEnd: 1},
@@ -33,11 +34,11 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 				TStart: 0, TEnd: 1},
 			lineSeg{Start: Point2{U: 4, V: -1}, End: Point2{U: 3, V: -1}, TStart: 0, TEnd: 1},
 		}}},
-	}
+	}}
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/2))
 	require.NoError(t, err)
 	copySection := section
-	copySection.xform = turn
+	copySection.Xform = turn
 	first := &Body{payload: section}
 	copyBody := &Body{payload: copySection}
 	operands := []*Body{blank, first, copyBody}
@@ -50,7 +51,7 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 
 	// Rebuilding a similar section is not a Copy certificate.
 	separate := copySection
-	separate.profile.Outer.Segments = append([]curveSegment(nil), copySection.profile.Outer.Segments...)
+	separate.Profile.Outer.Segments = append([]curveSegment(nil), copySection.Profile.Outer.Segments...)
 	operands[2] = &Body{payload: separate}
 	_, matched, err = prismPatternSourceOf(t.Context(), operands)
 	require.True(t, matched)

@@ -1227,7 +1227,7 @@ func sectionDisplacementOf(b *Body) float64 {
 	}
 	switch p := b.payload.(type) {
 	case prismPayload:
-		return p.sectionDelta
+		return p.SectionDelta
 	case stackedPrismPayload:
 		return p.sectionDelta
 	case brepPayload:

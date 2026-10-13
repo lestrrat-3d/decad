@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -50,7 +51,7 @@ func exactPrismLift(pp prismPayload, u, v, z float64) [3]*big.Rat {
 func exactLiftRat(pp prismPayload, u, v, z *big.Rat) [3]*big.Rat {
 	rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
 	coords := func(w r3.Vec) [3]float64 { return [3]float64{w.X, w.Y, w.Z} }
-	o, fu, fv, fn := coords(pp.frame.Origin()), coords(pp.frame.U()), coords(pp.frame.V()), coords(pp.frame.N())
+	o, fu, fv, fn := coords(pp.Frame.Origin()), coords(pp.Frame.U()), coords(pp.Frame.V()), coords(pp.Frame.N())
 	var local [3]*big.Rat
 	for i := range local {
 		s := rat(o[i])
@@ -58,8 +59,8 @@ func exactLiftRat(pp prismPayload, u, v, z *big.Rat) [3]*big.Rat {
 		s.Add(s, new(big.Rat).Mul(rat(fv[i]), v))
 		local[i] = s.Add(s, new(big.Rat).Mul(rat(fn[i]), z))
 	}
-	basis := pp.xform.Basis()
-	ex, ey, ez, tr := coords(basis.EX), coords(basis.EY), coords(basis.EZ), coords(pp.xform.Translation())
+	basis := pp.Xform.Basis()
+	ex, ey, ez, tr := coords(basis.EX), coords(basis.EY), coords(basis.EZ), coords(pp.Xform.Translation())
 	var out [3]*big.Rat
 	for i := range out {
 		s := rat(tr[i])
@@ -77,7 +78,7 @@ func exactLiftRat(pp prismPayload, u, v, z *big.Rat) [3]*big.Rat {
 func exactPrismDiameterSquare(pp prismPayload, section [][2]float64) *big.Rat {
 	var corners [][3]*big.Rat
 	for _, uv := range section {
-		corners = append(corners, exactPrismLift(pp, uv[0], uv[1], pp.z0), exactPrismLift(pp, uv[0], uv[1], pp.z1))
+		corners = append(corners, exactPrismLift(pp, uv[0], uv[1], pp.Z0), exactPrismLift(pp, uv[0], uv[1], pp.Z1))
 	}
 	best := new(big.Rat)
 	for i := range corners {
@@ -342,7 +343,7 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 		t.Parallel()
 		for i := range placements {
 			pp := placedBox(t, i).payload.(prismPayload)
-			pp.sectionDelta = math.Ldexp(1, -40)
+			pp.SectionDelta = math.Ldexp(1, -40)
 			// The held section is the denoted one moved by at most
 			// sectionDelta, so the reading is shrunk below the held
 			// section's own diameter, which bounds it from above.
@@ -364,7 +365,7 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 		t.Parallel()
 		for i := range placements {
 			pp := freeformTrianglePayload(t, 1, 11)
-			pp.xform = gateFarPlacement(t, i)
+			pp.Xform = gateFarPlacement(t, i)
 			upper := exactPrismDiameterSquare(pp, [][2]float64{{0, 0}, {5, 4}, {10, 0}})
 			requireGateDiameterWithin(t, read(t, &Body{payload: pp}), floatSqrtOf(upper)-gateFarSlack(), upper)
 		}
@@ -384,7 +385,7 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			require.NoError(t, err)
 			pdp := placed.payload.(draftPayload)
 			nearZ, _, farZ, _ := pdp.levels()
-			view := prismPayload{frame: pdp.frame, xform: pdp.xform, z0: nearZ, z1: farZ}
+			view := prismPayload{Payload: prismrecord.Payload{Frame: pdp.frame, Xform: pdp.xform, Z0: nearZ, Z1: farZ}}
 			least := new(big.Rat).Sub(new(big.Rat).SetFloat64(dp.d), new(big.Rat).SetFloat64(dp.dDelta))
 			upper := exactDraftSquareDiameterSquare(view, 5, least)
 			requireGateDiameterWithin(t, read(t, placed), floatSqrtOf(upper)-gateFarSlack(), upper)
@@ -499,14 +500,14 @@ func exactDraftSquareDiameterSquare(view prismPayload, half float64, offset *big
 	var corners [][3]*big.Rat
 	for _, su := range []float64{-1, 1} {
 		for _, sv := range []float64{-1, 1} {
-			corners = append(corners, exactPrismLift(view, su*half, sv*half, view.z0))
+			corners = append(corners, exactPrismLift(view, su*half, sv*half, view.Z0))
 		}
 	}
 	far := new(big.Rat).Sub(new(big.Rat).SetFloat64(half), offset)
 	for _, su := range []int64{-1, 1} {
 		for _, sv := range []int64{-1, 1} {
 			corners = append(corners, exactLiftRat(view, new(big.Rat).Mul(far, big.NewRat(su, 1)),
-				new(big.Rat).Mul(far, big.NewRat(sv, 1)), new(big.Rat).SetFloat64(view.z1)))
+				new(big.Rat).Mul(far, big.NewRat(sv, 1)), new(big.Rat).SetFloat64(view.Z1)))
 		}
 	}
 	best := new(big.Rat)

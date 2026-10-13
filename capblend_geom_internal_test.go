@@ -258,7 +258,7 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 	loop := cbp.loops()[0]
 	setback := cbp.setbackAt(-1)
 	pp := cbp.prismLike(cbp.z0, cbp.z1-setback.ds)
-	pp.z1Delta = proofbound.AbsSumUpper(cbp.z1Delta, setback.dsDelta)
+	pp.Z1Delta = proofbound.AbsSumUpper(cbp.z1Delta, setback.dsDelta)
 	ref := body.origin.producer
 	work := freeform.NewFreeformWork()
 	// The supplied boundary hangs off the vertices the slant edges start

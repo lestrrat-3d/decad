@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -28,7 +29,7 @@ import (
 func TestPrismLiftFactorBoundsTheHeldMap(t *testing.T) {
 	t.Parallel()
 	xy := canonicalPrismFrame(t)
-	require.Equal(t, 1.0, prismLiftFactor(prismPayload{frame: xy, xform: r3.Identity()}),
+	require.Equal(t, 1.0, prismLiftFactor(prismPayload{Payload: prismrecord.Payload{Frame: xy, Xform: r3.Identity()}}),
 		`an axis-aligned unplaced map is exactly orthonormal`)
 
 	rng := rand.New(rand.NewPCG(53, 59))
@@ -39,7 +40,7 @@ func TestPrismLiftFactorBoundsTheHeldMap(t *testing.T) {
 		require.NoError(t, err)
 		xform, err := r3.Rotation(axis(), units.Degrees(rng.Float64()*360))
 		require.NoError(t, err)
-		pp := prismPayload{frame: frame, xform: xform}
+		pp := prismPayload{Payload: prismrecord.Payload{Frame: frame, Xform: xform}}
 		factor := prismLiftFactor(pp)
 		require.LessOrEqual(t, factor, 1+1e-12)
 
@@ -66,7 +67,7 @@ func TestPrismLiftFactorBoundsTheHeldMap(t *testing.T) {
 	require.Positive(t, exceeded, `some held maps stretch past 1, which the factor must cover`)
 
 	// The bound carries the source ball at that factor, not four times it.
-	pp := prismPayload{frame: xy, xform: r3.Identity()}
+	pp := prismPayload{Payload: prismrecord.Payload{Frame: xy, Xform: r3.Identity()}}
 	b := 1e-3
 	got := prismPointBound(pp, proofbound.MeasuredScalar(1, b), proofbound.MeasuredScalar(2, b), proofbound.MeasuredScalar(3, b))
 	require.LessOrEqual(t, got, proofbound.Radius3D(b)*(1+1e-12),

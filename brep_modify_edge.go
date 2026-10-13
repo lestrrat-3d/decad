@@ -236,9 +236,9 @@ func prepareBrepEdgeBlends(ctx context.Context, bp brepPayload, call brepModifyR
 			if err != nil {
 				return nil, nil, err
 			}
-			oldFirst := oldView.point(eb.v[0][0], eb.v[0][1], eb.v[0][2])
-			newFirst := newView.point(again.v[0][0], again.v[0][1], again.v[0][2])
-			newLast := newView.point(again.v[1][0], again.v[1][1], again.v[1][2])
+			oldFirst := oldView.Point(eb.v[0][0], eb.v[0][1], eb.v[0][2])
+			newFirst := newView.Point(again.v[0][0], again.v[0][1], again.v[0][2])
+			newLast := newView.Point(again.v[1][0], again.v[1][1], again.v[1][2])
 			switch {
 			case oldFirst.Sub(newFirst).Len() <= 1e-6:
 				again.end = eb.end
@@ -284,7 +284,7 @@ func (r *brepEdgeRoute) refuse(eb *brepEdgeBlend, row, reason string) error {
 
 // render names a reference-coordinate point by its placed position.
 func (r *brepEdgeRoute) render(c [3]float64) string {
-	return renderVec(r.bp.refView().point(c[0], c[1], c[2]))
+	return renderVec(r.bp.refView().Point(c[0], c[1], c[2]))
 }
 
 // partner is the other use of use ui's edge, -1 when ui is a route L band's
@@ -342,8 +342,8 @@ func (r *brepEdgeRoute) admitEdge(ordinal int, e *Edge) (*brepEdgeBlend, error) 
 		if owner.Key.Circular {
 			continue
 		}
-		p := refView.point(owner.DirFrom[0], owner.DirFrom[1], owner.DirFrom[2])
-		q := refView.point(owner.DirTo[0], owner.DirTo[1], owner.DirTo[2])
+		p := refView.Point(owner.DirFrom[0], owner.DirFrom[1], owner.DirFrom[2])
+		q := refView.Point(owner.DirTo[0], owner.DirTo[1], owner.DirTo[2])
 		if !matchEndpoints(e.start.position, e.end.position, p, q, tol) {
 			continue
 		}
@@ -485,10 +485,10 @@ func (r *brepEdgeRoute) withRestated(ctx context.Context, restated map[int]brepR
 			if !on {
 				continue
 			}
-			point := oldView.point(old[0], old[1], old[2])
+			point := oldView.Point(old[0], old[1], old[2])
 			for _, use := range topo.uses {
 				for _, candidate := range [2][3]float64{use.DirFrom, use.DirTo} {
-					if point.Sub(newView.point(candidate[0], candidate[1], candidate[2])).Len() <= 1e-6 {
+					if point.Sub(newView.Point(candidate[0], candidate[1], candidate[2])).Len() <= 1e-6 {
 						next.terminals[candidate] = true
 					}
 				}

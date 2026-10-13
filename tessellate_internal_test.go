@@ -51,21 +51,21 @@ func TestTessellateChargesSectionDisplacementToEveryProof(t *testing.T) {
 	got := displacedUnionBody(t, 1e14)
 	pp, ok := got.payload.(prismPayload)
 	require.True(t, ok, `the analytic reduction must own this pair`)
-	require.Positive(t, pp.sectionDelta)
+	require.Positive(t, pp.SectionDelta)
 
 	mesh, err := tessellateContext(t.Context(), got, units.Millimeters(20), VerifyAll)
 	require.NoError(t, err)
 
 	// The bound is the displacement, up-rounded once.
-	require.GreaterOrEqual(t, mesh.bound, pp.sectionDelta)
-	require.Equal(t, proofbound.UpRound(pp.sectionDelta), mesh.bound)
+	require.GreaterOrEqual(t, mesh.bound, pp.SectionDelta)
+	require.Equal(t, proofbound.UpRound(pp.SectionDelta), mesh.bound)
 
 	// The slack is the same displacement read as an area, composed exactly as
 	// evalPrism composes it: the section's own tube once per cap — 2·δ·p over
 	// the 40 mm outline plus a δ-disk at each of the four corners — and the
 	// outline's length displacement over the 10 mm sweep.
 	const perimeter, height, walks = 40.0, 10.0, 4.0
-	d := pp.sectionDelta
+	d := pp.SectionDelta
 	capMove := 2*d*perimeter + walks*math.Pi*d*d
 	wallMove := walks * 12 * math.Pi * d * height
 	require.InEpsilon(t, 2*capMove+wallMove, mesh.areaSlack, 1e-12)
@@ -436,7 +436,7 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 	body, err := evalPrism(New(), 0, involuteFitPrismPayload(t), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	published := prismPayloadOf(t, body)
-	require.True(t, published.walks.Reusable(published.profile),
+	require.True(t, published.Walks.Reusable(published.Profile),
 		"premise: the build published a resolution of this very record")
 
 	tol := units.Millimeters(0.2)

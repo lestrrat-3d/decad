@@ -717,7 +717,7 @@ square roots, and each recorded join is charged its enclosure's greatest reach
 from the held point. A recorded line stays within the larger of its two end
 reaches of the denoted line, and a recorded arc within three times the larger,
 so the recorded figure is three times the largest reach. A corner the evaluator cannot enclose is `ErrUnsupported`. The
-displacement plays `prismPayload.sectionDelta`'s role for that one region
+displacement plays `prismPayload.SectionDelta`'s role for that one region
 (`docs/prism-boolean-design.md` §7): the offset region's prism carries it as its
 section displacement, so its walls, `Bounds`, the mass path, the through-all
 extent and the verification gate's witness all charge it; the cup charges it

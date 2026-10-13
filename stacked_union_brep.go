@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedbrep"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -99,7 +100,7 @@ var errUBMiss = brepgeom.ErrStackedWallMiss
 // is a silent miss. A non-nil error is cancellation or a refusal past the
 // gate that the stacked path itself raises.
 func (st *stackedUnionState) brep(ctx context.Context, levels []stackedrecord.UnionLevel, reach [][2]int) (featurePayload, bool, error) {
-	if !st.reexpress.Identity || st.va.proxy.sectionDelta != 0 || st.vb.proxy.sectionDelta != 0 {
+	if !st.reexpress.Identity || st.va.proxy.SectionDelta != 0 || st.vb.proxy.SectionDelta != 0 {
 		// B's records enter every scene verbatim only under the identity
 		// re-expression; a re-expressed B would be recorded once per scene.
 		// Every straight wall becomes a planar face at its recorded level,
@@ -186,7 +187,7 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	for i, level := range b.levels {
 		faceLevels[i] = stackedbrep.Level{Held: level.Held, Delta: level.Delta}
 	}
-	out, err := stackedBrepRecord(ctx, b.st.budget, b.geom, faceLevels, b.st.va.proxy.frame, b.st.va.proxy.xform, delta)
+	out, err := stackedBrepRecord(ctx, b.st.budget, b.geom, faceLevels, b.st.va.proxy.Frame, b.st.va.proxy.Xform, delta)
 	if err != nil {
 		return brepPayload{}, err
 	}
@@ -306,7 +307,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 // the shared spans' width into the build's crossing term.
 func (b *ubBuild) charge(sc *ubScene) error {
 	if !sc.charged {
-		ok, err := sc.delta.ChargeCrossings(b.st.budget, sc.tags, sc.profiles, b.st.va.proxy.sectionDelta, b.st.vb.proxy.sectionDelta, 0)
+		ok, err := sc.delta.ChargeCrossings(b.st.budget, sc.tags, sc.profiles, b.st.va.proxy.SectionDelta, b.st.vb.proxy.SectionDelta, 0)
 		if err != nil {
 			return err
 		}
@@ -385,7 +386,7 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, erro
 			return nil, errUBMiss
 		}
 		out[i] = profileRecord{Outer: loop}
-		if err := auditPrismMergeSection(b.st.budget, prismPayload{profile: out[i]}, out[i]); err != nil {
+		if err := auditPrismMergeSection(b.st.budget, prismPayload{Payload: prismrecord.Payload{Profile: out[i]}}, out[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -453,7 +454,7 @@ func (b *ubBuild) cutSlabRegion(sc *ubScene) ([]profileRecord, error) {
 	if len(region.Outer.Segments) == 0 || len(region.Holes) != 1 {
 		return nil, errUBMiss
 	}
-	if err := auditPrismMergeSection(b.st.budget, prismPayload{profile: region}, region); err != nil {
+	if err := auditPrismMergeSection(b.st.budget, prismPayload{Payload: prismrecord.Payload{Profile: region}}, region); err != nil {
 		return nil, err
 	}
 	return []profileRecord{region}, nil
@@ -610,7 +611,7 @@ func stackedBrepRecord(ctx context.Context, budget *proofbound.WorkBudget, geom 
 		if f.region == nil {
 			continue
 		}
-		if err := auditPrismMergeSection(budget, prismPayload{profile: *f.region}, *f.region); err != nil {
+		if err := auditPrismMergeSection(budget, prismPayload{Payload: prismrecord.Payload{Profile: *f.region}}, *f.region); err != nil {
 			return brepPayload{}, err
 		}
 	}

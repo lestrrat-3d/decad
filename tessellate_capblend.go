@@ -242,7 +242,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 
 	// A reflected placement flips handedness, turning every counter-clockwise
 	// winding clockwise; reversing them restores outward orientation.
-	if pl.reflected() {
+	if pl.Reflected() {
 		for i := range mesh.triangles {
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
 		}
@@ -257,7 +257,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	if err := tessellation.RequireCapBlendFacetAreas(mesh.vertices, mesh.triangles, cbp.noun()); err != nil {
 		return nil, err
 	}
-	if tessellation.OrientationSign(mesh.vertices, mesh.triangles, pl.point(0, 0, cbp.z0)) <= 0 {
+	if tessellation.OrientationSign(mesh.vertices, mesh.triangles, pl.Point(0, 0, cbp.z0)) <= 0 {
 		return nil, fmt.Errorf(`%w: this %s's assembled cells do not enclose a positive volume`, ErrUnsupported, cbp.noun())
 	}
 
@@ -334,7 +334,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl prismPayload, lms []capBlendLoopMesh, mesh *Mesh, proveVolume bool) ([]float64, []float64, error) {
 	var store, motion []float64
 	addVertex := func(p Point2, z, plane float64) (int, float64) {
-		held := pl.point(p.U, p.V, z)
+		held := pl.Point(p.U, p.V, z)
 		mesh.vertices = append(mesh.vertices, held)
 		round := exactPrismPointRound(pl, p.U, p.V, z, held)
 		store = append(store, proofbound.AbsSumUpper(plane, round))

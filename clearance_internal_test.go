@@ -896,8 +896,8 @@ func TestAddPrismFacesOmitsCapsForSurfaceResult(t *testing.T) {
 
 	pp, ok := sheet.payload.(prismPayload)
 	require.True(t, ok)
-	require.True(t, pp.surfaceResult)
-	sweepDir := pp.dir(0, 0, 1)
+	require.True(t, pp.SurfaceResult)
+	sweepDir := pp.Dir(0, 0, 1)
 
 	g, ok := newBodyGeom(sheet)
 	require.True(t, ok, `a surface-result prism must still admit a kernel model`)

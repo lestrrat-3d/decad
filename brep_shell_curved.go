@@ -56,7 +56,7 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 	if !ok {
 		return refuse("needs a rectangular pierced wall")
 	}
-	circle, ok := recordedBossCircle(tool.prism.profile)
+	circle, ok := recordedBossCircle(tool.prism.Profile)
 	if !ok {
 		return refuse("needs one exact whole-circle through tool")
 	}
@@ -97,7 +97,7 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 	if err != nil {
 		return nil, true, err
 	}
-	sp := stackedPrismPayload{frame: tool.prism.frame, xform: bp.xform,
+	sp := stackedPrismPayload{frame: tool.prism.Frame, xform: bp.xform,
 		slabs: []stackedrecord.Slab{
 			{Regions: []profileRecord{end}, Z0: tool.lo, Z1: loInner},
 			{Regions: []profileRecord{middle}, Z0: loInner, Z1: hiInner},

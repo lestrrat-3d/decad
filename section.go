@@ -36,10 +36,10 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		return nil, nil, fmt.Errorf(`%w: a section needs a sound solid`, ErrNotSolid)
 	}
 	pp, ok := b.payload.(prismPayload)
-	if !ok || pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 {
+	if !ok || pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 {
 		return nil, nil, fmt.Errorf(`%w: section needs an exact straight prism`, ErrUnsupported)
 	}
-	profile := pp.profile
+	profile := pp.Profile
 	if !prismSectionPlaneInside(pp, plane) {
 		var admitted bool
 		profile, admitted = cardinalCircleSectionRecord(pp, plane)
@@ -73,14 +73,14 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 // plane's u/v coordinates and that the requested level lies between both caps.
 // The equalities use exact arithmetic over the held frame and transform bits.
 func prismSectionPlaneInside(pp prismPayload, plane r3.Frame) bool {
-	source := proofarith.DyVec(pp.frame.Origin())
-	placed := proofarith.DvTransform(pp.xform, source)
+	source := proofarith.DyVec(pp.Frame.Origin())
+	placed := proofarith.DvTransform(pp.Xform, source)
 	for _, pair := range [][2]r3.Vec{
-		{pp.frame.U(), plane.U()},
-		{pp.frame.V(), plane.V()},
-		{pp.frame.N(), plane.N()},
+		{pp.Frame.U(), plane.U()},
+		{pp.Frame.V(), plane.V()},
+		{pp.Frame.N(), plane.N()},
 	} {
-		end := proofarith.DvTransform(pp.xform, proofarith.DvAdd(source, proofarith.DyVec(pair[0])))
+		end := proofarith.DvTransform(pp.Xform, proofarith.DvAdd(source, proofarith.DyVec(pair[0])))
 		if !proofarith.DvEqual(proofarith.DvSub(end, placed), proofarith.DyVec(pair[1])) {
 			return false
 		}
@@ -95,7 +95,7 @@ func prismSectionPlaneInside(pp prismPayload, plane r3.Frame) bool {
 			continue
 		}
 		level := new(big.Rat).Neg(new(big.Rat).Quo(delta[axis].Rat(), normal[axis].Rat()))
-		return level.Cmp(proofarith.FloatRat(pp.z0)) > 0 && level.Cmp(proofarith.FloatRat(pp.z1)) < 0
+		return level.Cmp(proofarith.FloatRat(pp.Z0)) > 0 && level.Cmp(proofarith.FloatRat(pp.Z1)) < 0
 	}
 	return false
 }

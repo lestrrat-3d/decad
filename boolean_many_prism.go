@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 )
@@ -37,14 +38,14 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 		}
 		if i == 0 {
 			first = p
-		} else if p.frame != first.frame || p.xform != first.xform ||
-			p.z0 != first.z0 || p.z1 != first.z1 {
+		} else if p.Frame != first.Frame || p.Xform != first.Xform ||
+			p.Z0 != first.Z0 || p.Z1 != first.Z1 {
 			return nil, false, nil
 		}
-		if p.sectionDelta != 0 || len(p.profile.Holes) != 0 || len(p.profile.Outer.Segments) == 0 {
+		if p.SectionDelta != 0 || len(p.Profile.Holes) != 0 || len(p.Profile.Outer.Segments) == 0 {
 			return nil, false, nil
 		}
-		for _, segment := range p.profile.Outer.Segments {
+		for _, segment := range p.Profile.Outer.Segments {
 			if err := budget.Step(); err != nil {
 				return nil, true, err
 			}
@@ -54,9 +55,9 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 			}
 			lines = append(lines, sourceLine{owner: i, line: line})
 		}
-		profiles[i] = p.profile
-		z0Delta = max(z0Delta, p.z0Delta)
-		z1Delta = max(z1Delta, p.z1Delta)
+		profiles[i] = p.Profile
+		z0Delta = max(z0Delta, p.Z0Delta)
+		z1Delta = max(z1Delta, p.Z1Delta)
 	}
 	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, profiles...)
 	if err != nil {
@@ -121,9 +122,9 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 		}
 	}
 	if len(regions) == 1 {
-		p := prismPayload{profile: regions[0], frame: first.frame, xform: first.xform,
-			z0: first.z0, z1: first.z1, z0Delta: z0Delta, z1Delta: z1Delta,
-			sectionDelta: cutDelta}
+		p := prismPayload{Payload: prismrecord.Payload{Profile: regions[0], Frame: first.Frame, Xform: first.Xform,
+			Z0: first.Z0, Z1: first.Z1, Z0Delta: z0Delta, Z1Delta: z1Delta,
+			SectionDelta: cutDelta}}
 		body, err := analyticBooleanBody(ctx, d, ref, p)
 		return body, true, err
 	}
@@ -135,9 +136,9 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 		return nil, true, fmt.Errorf("%w: Union's prism regions are not proven disjoint", ErrUnsupported)
 	}
 	sp := stackedPrismPayload{
-		slabs: []stackedrecord.Slab{{Regions: regions, Z0: first.z0, Z1: first.z1,
+		slabs: []stackedrecord.Slab{{Regions: regions, Z0: first.Z0, Z1: first.Z1,
 			Z0Delta: z0Delta, Z1Delta: z1Delta}},
-		frame: first.frame, xform: first.xform,
+		frame: first.Frame, xform: first.Xform,
 		sectionDelta: proofbound.AbsSumUpper(disjointWalk, cutDelta),
 	}
 	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {

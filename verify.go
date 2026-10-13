@@ -826,7 +826,7 @@ func auditSheetBoundary(ctx context.Context, b *Body) sheetAuditOutcome {
 func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 	switch pp := p.(type) {
 	case prismPayload:
-		return pp.surfaceResult && pp.sectionDelta == 0
+		return pp.SurfaceResult && pp.SectionDelta == 0
 	case loftPayload:
 		return pp.surfaceResult && pp.sectionDelta == 0 && !pp.chorded
 	case chainLoftPayload:
@@ -843,7 +843,7 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 	case bodyPatchPayload:
 		return bodyPatchPayloadProvesSimple(ctx, pp)
 	case sweepPayload:
-		return len(pp.spans) == 0 && !pp.arc && pp.prism.surfaceResult && pp.prism.sectionDelta == 0
+		return len(pp.spans) == 0 && !pp.arc && pp.prism.SurfaceResult && pp.prism.SectionDelta == 0
 	case revolvePayload:
 		return revolvePayloadProvesSimple(ctx, pp)
 	case chainPayload:

@@ -26,7 +26,7 @@ func internalBoxGroup(t *testing.T, doc *Document) (*Body, stackedPrismPayload) 
 func TestPrismGroupRegionsDisjointProof(t *testing.T) {
 	doc := New()
 	box := func(x0, y0, x1, y1 float64) profileRecord {
-		return internalBoxBody(t, doc, x0, y0, x1, y1, 1).payload.(prismPayload).profile
+		return internalBoxBody(t, doc, x0, y0, x1, y1, 1).payload.(prismPayload).Profile
 	}
 	cases := []struct {
 		name    string
@@ -93,8 +93,8 @@ func TestPrismGroupSixHoleCutIsUndisplaced(t *testing.T) {
 	pp, ok, err := tryPrismGroupCut(t.Context(), plate, group)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Len(t, pp.profile.Holes, 6)
-	require.Zero(t, pp.sectionDelta)
+	require.Len(t, pp.Profile.Holes, 6)
+	require.Zero(t, pp.SectionDelta)
 }
 
 // A ring of four lumps around an empty cell: the void guard refuses the
@@ -176,7 +176,7 @@ func TestPrismGroupDisplacedToolChargesTheCrossing(t *testing.T) {
 		re, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(toolOp.proxy))
 		require.NoError(t, err)
 		require.False(t, re.Identity)
-		s, _, _, err := prismcells.BuildProfileScene(proofbound.NewWorkBudget(t.Context()), []profileRecord{target.profile}, toolOp.regions, re)
+		s, _, _, err := prismcells.BuildProfileScene(proofbound.NewWorkBudget(t.Context()), []profileRecord{target.Profile}, toolOp.regions, re)
 		require.NoError(t, err)
 		split, err := prismcells.HasSplitBoundary(proofbound.NewWorkBudget(t.Context()), s.Profiles())
 		require.NoError(t, err)
@@ -190,7 +190,7 @@ func TestPrismGroupDisplacedToolChargesTheCrossing(t *testing.T) {
 		got, ok, err := tryPrismGroupCut(t.Context(), plate, tool)
 		require.NoError(t, err)
 		require.True(t, ok, "A6 charges the displaced group's crossings instead of rerouting them")
-		require.GreaterOrEqual(t, got.sectionDelta, deltaB/theta)
+		require.GreaterOrEqual(t, got.SectionDelta, deltaB/theta)
 	})
 	t.Run("an amplified merge failure falls back", func(t *testing.T) {
 		doc := New()
@@ -210,6 +210,6 @@ func TestPrismGroupDisplacedToolChargesTheCrossing(t *testing.T) {
 		require.True(t, ok, "A6 charges the displaced group's crossings instead of rerouting them")
 		pp, isPrism := got.(prismPayload)
 		require.True(t, isPrism, "the two lumps merge into the plate as one region")
-		require.GreaterOrEqual(t, pp.sectionDelta, deltaB/theta)
+		require.GreaterOrEqual(t, pp.SectionDelta, deltaB/theta)
 	})
 }

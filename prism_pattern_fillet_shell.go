@@ -206,9 +206,9 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		return nil, outlines, 0, err
 	}
 	for capIndex, outline := range outlines {
-		z := rec.source.blank.z0
+		z := rec.source.blank.Z0
 		if capIndex == 1 {
-			z = rec.source.blank.z1
+			z = rec.source.blank.Z1
 		}
 		if !loftCylinderAuditCap(ctx, mesh, outline, rec.groups[capIndex+1], z, capIndex == 0) ||
 			!prismPatternRootChordsInsideCap(ctx, mesh, outline, rec.parts, capIndex) {

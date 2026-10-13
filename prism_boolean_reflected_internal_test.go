@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
@@ -62,12 +63,12 @@ func prismReflectDiscBody(t *testing.T, doc *Document, cx, cy, r float64) *Body 
 func TestPrismBooleanGateG2AdmitsAReflectedOperand(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
-	pp := prismPayload{
-		profile: profileRecord{Outer: synthLineLoop()},
-		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
-	}
+	pp := prismPayload{Payload: prismrecord.Payload{
+		Profile: profileRecord{Outer: synthLineLoop()},
+		Frame:   frame, Z0: 0, Z1: 10, Xform: r3.Identity(),
+	}}
 	reflected := pp
-	reflected.xform = prismMirrorAcrossX(t, 0)
+	reflected.Xform = prismMirrorAcrossX(t, 0)
 
 	pa, pb, ok := admitPrismPair(&Body{payload: pp}, &Body{payload: reflected})
 	require.True(t, ok, "A4: a reflected operand clears G1-G4")
@@ -112,8 +113,8 @@ func TestPrismReexpressionRewound(t *testing.T) {
 		}}},
 	}
 	frame := canonicalPrismFrame(t)
-	pa := prismPayload{profile: profileRecord{Outer: synthRectLoop(-20, -20, 20, 20)}, frame: frame, z0: 0, z1: 10, xform: r3.Identity()}
-	pb := prismPayload{profile: profile, frame: frame, z0: 0, z1: 10, xform: prismMirrorAcrossX(t, 0)}
+	pa := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-20, -20, 20, 20)}, Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}}
+	pb := prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: frame, Z0: 0, Z1: 10, Xform: prismMirrorAcrossX(t, 0)}}
 	re, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	require.NoError(t, err)
 	require.True(t, re.Reflected)
@@ -180,14 +181,14 @@ func TestPrismReexpressionRewound(t *testing.T) {
 func TestPrismReflectedSceneClassifiesTheRewoundWinding(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
-	pa := prismPayload{profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)}, frame: frame, z0: 0, z1: 10, xform: r3.Identity()}
-	pb := prismPayload{profile: profileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}, frame: frame, z0: 0, z1: 10, xform: prismMirrorAcrossX(t, 0)}
+	pa := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)}, Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}}
+	pb := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}, Frame: frame, Z0: 0, Z1: 10, Xform: prismMirrorAcrossX(t, 0)}}
 	re, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	require.NoError(t, err)
 	require.True(t, re.Reflected)
 
 	budget := proofbound.NewWorkBudget(t.Context())
-	s, tags, _, err := prismcells.BuildScene(budget, pa.profile, pb.profile, re)
+	s, tags, _, err := prismcells.BuildScene(budget, pa.Profile, pb.Profile, re)
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	matterA, matterB, resolved, err := prismcells.Classify(budget, tags, profiles)
@@ -231,7 +232,7 @@ func TestPrismReflectedOperandChargesItsWalk(t *testing.T) {
 	pa, pb, ok := admitPrismPair(box, image)
 	require.True(t, ok)
 	want := 0.0
-	for _, seg := range pb.profile.Outer.Segments {
+	for _, seg := range pb.Profile.Outer.Segments {
 		w, err := boundarywalk.WalkOf(seg, nil)
 		require.NoError(t, err)
 		c, err := prismcells.WalkChargeOf(seg, w)
@@ -243,7 +244,7 @@ func TestPrismReflectedOperandChargesItsWalk(t *testing.T) {
 	re, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
 	require.NoError(t, err)
 	require.True(t, re.Reflected)
-	_, _, sceneDelta, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), pa.profile, pb.profile, re)
+	_, _, sceneDelta, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), pa.Profile, pb.Profile, re)
 	require.NoError(t, err)
 	require.Zero(t, sceneDelta.A, "the box is drawn whole")
 	require.Equal(t, want, sceneDelta.B)
@@ -251,7 +252,7 @@ func TestPrismReflectedOperandChargesItsWalk(t *testing.T) {
 	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, box, image)
 	require.NoError(t, err)
 	require.True(t, ok, "B nests inside A, so the union splits nothing")
-	require.GreaterOrEqual(t, result.sectionDelta, want)
+	require.GreaterOrEqual(t, result.SectionDelta, want)
 }
 
 // TestPrismBooleanReflectedSharedAxisIsIdentity is T1 of
@@ -283,9 +284,9 @@ func TestPrismBooleanReflectedSharedAxisIsIdentity(t *testing.T) {
 	both, ok, err := tryPrismBoolean(t.Context(), meshbool.OpCut, ml, md)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.True(t, both.reflected())
-	require.Zero(t, both.sectionDelta, "the shared-axis arm computes no coordinate")
-	require.Len(t, both.profile.Holes, 1)
+	require.True(t, both.Reflected())
+	require.Zero(t, both.SectionDelta, "the shared-axis arm computes no coordinate")
+	require.Len(t, both.Profile.Holes, 1)
 
 	doc2 := New()
 	l2 := internalPolyPrismBody(t, doc2, lPts, prismFixtureHeight)
@@ -295,8 +296,8 @@ func TestPrismBooleanReflectedSharedAxisIsIdentity(t *testing.T) {
 	one, ok, err := tryPrismBoolean(t.Context(), meshbool.OpCut, ml2, disc2)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Positive(t, one.sectionDelta, "the reflected re-expression rounds the tool's coordinates")
-	require.Len(t, one.profile.Holes, 1)
+	require.Positive(t, one.SectionDelta, "the reflected re-expression rounds the tool's coordinates")
+	require.Len(t, one.Profile.Holes, 1)
 }
 
 // prismToothBody extrudes a gear tooth over [z0, z0+h]: an arc of radius 20

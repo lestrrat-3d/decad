@@ -50,15 +50,15 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 	}
 	record := joined.loftCylinderJoin
 	prism, ok := tool.payload.(prismPayload)
-	if !ok || prism.surfaceResult || prism.xform != r3.Identity() ||
-		prism.sectionDelta != 0 || prism.z0Delta != 0 || prism.z1Delta != 0 ||
-		prism.frame.U() != (r3.Vec{X: 1}) || prism.frame.V() != (r3.Vec{Y: 1}) ||
-		prism.frame.N() != (r3.Vec{Z: 1}) ||
-		prism.frame.Origin().X != 0 || prism.frame.Origin().Y != 0 ||
-		len(prism.profile.Holes) != 0 || len(prism.profile.Outer.Segments) != 1 {
+	if !ok || prism.SurfaceResult || prism.Xform != r3.Identity() ||
+		prism.SectionDelta != 0 || prism.Z0Delta != 0 || prism.Z1Delta != 0 ||
+		prism.Frame.U() != (r3.Vec{X: 1}) || prism.Frame.V() != (r3.Vec{Y: 1}) ||
+		prism.Frame.N() != (r3.Vec{Z: 1}) ||
+		prism.Frame.Origin().X != 0 || prism.Frame.Origin().Y != 0 ||
+		len(prism.Profile.Holes) != 0 || len(prism.Profile.Outer.Segments) != 1 {
 		return nil, false, nil
 	}
-	circle, ok := prism.profile.Outer.Segments[0].(circleSeg)
+	circle, ok := prism.Profile.Outer.Segments[0].(circleSeg)
 	if !ok || circle.Center != (Point2{}) ||
 		!((circle.TStart == 0 && circle.TEnd == 1) ||
 			(circle.TStart == 1 && circle.TEnd == 0)) {
@@ -68,14 +68,14 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 	if err != nil {
 		return nil, false, err
 	}
-	origin := prism.frame.Origin()
+	origin := prism.Frame.Origin()
 	if !proofbound.FiniteVec(origin) ||
-		!proofbound.FiniteVec(r3.Vec{X: prism.z0, Y: prism.z1, Z: radius}) ||
+		!proofbound.FiniteVec(r3.Vec{X: prism.Z0, Y: prism.Z1, Z: radius}) ||
 		radius <= 0 || radius >= record.radius {
 		return nil, false, nil
 	}
-	start := new(big.Rat).Add(proofarith.FloatRat(origin.Z), proofarith.FloatRat(prism.z0))
-	end := new(big.Rat).Add(proofarith.FloatRat(origin.Z), proofarith.FloatRat(prism.z1))
+	start := new(big.Rat).Add(proofarith.FloatRat(origin.Z), proofarith.FloatRat(prism.Z0))
+	end := new(big.Rat).Add(proofarith.FloatRat(origin.Z), proofarith.FloatRat(prism.Z1))
 	if start.Cmp(proofarith.FloatRat(record.z0)) >= 0 ||
 		end.Cmp(proofarith.FloatRat(record.z1)) <= 0 {
 		return nil, false, nil

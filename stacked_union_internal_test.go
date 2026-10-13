@@ -69,11 +69,11 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 		require.Empty(t, sp.interfaces[0].UpperExposed)
 		require.Len(t, sp.interfaces[0].LowerExposed, 1)
 		floor := sp.interfaces[0].LowerExposed[0]
-		plateOuter := plate.payload.(prismPayload).profile.Outer
+		plateOuter := plate.payload.(prismPayload).Profile.Outer
 		same, err := momentinput.ExactLoopEqual(nil, floor.Outer, plateOuter)
 		require.NoError(t, err)
 		require.True(t, same, "the floor's outer is the plate's own outer record")
-		bossHole, err := offset2d.ReverseLoopRecordContext(t.Context(), boss.payload.(prismPayload).profile.Outer)
+		bossHole, err := offset2d.ReverseLoopRecordContext(t.Context(), boss.payload.(prismPayload).Profile.Outer)
 		require.NoError(t, err)
 		require.Equal(t, []loopRecord{bossHole}, floor.Holes, "the floor's one hole is the boss outline, reversed")
 	})
@@ -81,7 +81,7 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 		plate, boss := internalBossOnPlate(t, 0, 5, 20)
 		sp := internalStackedUnion(t, plate, boss)
 		require.Len(t, sp.slabs, 3)
-		plateProfile := plate.payload.(prismPayload).profile
+		plateProfile := plate.payload.(prismPayload).Profile
 		require.Equal(t, plateProfile, sp.slabs[1].Regions[0],
 			"the slab both operands reach takes the containing plate's record verbatim")
 		require.Empty(t, sp.interfaces[0].LowerExposed)
@@ -94,8 +94,8 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 func TestStackedUnionInterfaceReportsSplitBoundary(t *testing.T) {
 	plate, crossing := internalBossOnPlate(t, 18, 10, 15)
 	base := plate.payload.(prismPayload)
-	m, err := stackedUnionInterfaceMatch(t.Context(), proofbound.NewWorkBudget(t.Context()), base, base.profile,
-		crossing.payload.(prismPayload).profile)
+	m, err := stackedUnionInterfaceMatch(t.Context(), proofbound.NewWorkBudget(t.Context()), base, base.Profile,
+		crossing.payload.(prismPayload).Profile)
 	require.NoError(t, err)
 	require.Equal(t, stackedNestNone, m.nest)
 	require.True(t, m.split, "the interface scene reports a Partial edge where the boss crosses the outline")
@@ -125,7 +125,7 @@ func TestStackedUnionFlushBossBuildsBrep(t *testing.T) {
 	boss := internalBoxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15)
 	base := plate.payload.(prismPayload)
 	budget := proofbound.NewWorkBudget(t.Context())
-	m, err := stackedUnionInterfaceMatch(t.Context(), budget, base, base.profile, boss.payload.(prismPayload).profile)
+	m, err := stackedUnionInterfaceMatch(t.Context(), budget, base, base.Profile, boss.payload.(prismPayload).Profile)
 	require.NoError(t, err)
 	require.Equal(t, stackedNestNone, m.nest)
 	require.True(t, m.split, "the shared walls split the plate's outline at the boss's corners")
@@ -152,7 +152,7 @@ func TestStackedUnionFlushBossBuildsBrep(t *testing.T) {
 	require.True(t, isBrep, "got %T", payload)
 	floors := 0
 	for _, f := range bp.faces {
-		if f.planar() && f.outward && f.z0 == 10 && f.frame == base.frame {
+		if f.planar() && f.outward && f.z0 == 10 && f.frame == base.Frame {
 			floors++
 			area, err := loopSignedAreaCB(f.region.Outer)
 			require.NoError(t, err)
@@ -211,7 +211,7 @@ func TestStackedUnionPayloadAuditRejectsBrokenInterfaces(t *testing.T) {
 	plate, boss := internalBossOnPlate(t, 0, 10, 15)
 	base := internalStackedUnion(t, plate, boss)
 	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: base.slabs, Interfaces: base.interfaces}))
-	bossOuter := boss.payload.(prismPayload).profile.Outer
+	bossOuter := boss.payload.(prismPayload).Profile.Outer
 	cases := []struct {
 		name   string
 		change func(*stackedPrismPayload)

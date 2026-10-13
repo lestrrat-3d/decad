@@ -149,7 +149,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		return nil, brepBandMass{}, err
 	}
 	convex := b.sigma < 0
-	up := pl.dir(0, 0, -m)
+	up := pl.Dir(0, 0, -m)
 	sideCo, capCo := open.side[bi], open.cap[bi]
 	n := len(fr.walks)
 	if len(sideCo) != n {
@@ -202,12 +202,12 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		return nil
 	}
 	torus := func(cu, cv, major float64) Torus {
-		return Torus{Center: pl.point(cu, cv, sideZ), Axis: pl.dir(0, 0, 1), Major: units.Millimeters(major), Minor: units.Millimeters(r)}
+		return Torus{Center: pl.Point(cu, cv, sideZ), Axis: pl.Dir(0, 0, 1), Major: units.Millimeters(major), Minor: units.Millimeters(r)}
 	}
 	walkSurface := func(w survey2d.SideWalk) Surface {
 		if w.IsCircular() {
 			if filletband.SphereWalk(w, r) {
-				return Sphere{Center: pl.point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
+				return Sphere{Center: pl.Point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
 			}
 			major := w.Radius - r
 			if w.Th1 < w.Th0 {
@@ -216,7 +216,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			return torus(w.CU, w.CV, major)
 		}
 		tu, tv := walkTangent(w)
-		return Cylinder{Origin: pl.point(w.StartU-r*tv, w.StartV+r*tu, sideZ), Axis: pl.dir(tu, tv, 0), Radius: units.Millimeters(r)}
+		return Cylinder{Origin: pl.Point(w.StartU-r*tv, w.StartV+r*tu, sideZ), Axis: pl.Dir(tu, tv, 0), Radius: units.Millimeters(r)}
 	}
 
 	// straightWalk is the first of a, b (when given) that is a straight walk,
@@ -268,17 +268,17 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		meridian := func(foot Point2, v survey2d.SideWalk, straight *survey2d.SideWalk, capV, sideV *Vertex) *Edge {
 			nu, nv := foot.U-v.StartU, foot.V-v.StartV
 			l := math.Hypot(nu, nv)
-			normal := pl.dir(nu/l, nv/l, 0)
+			normal := pl.Dir(nu/l, nv/l, 0)
 			axis, _ := normal.Cross(up).Normalize()
 			if straight != nil {
 				tu, tv := walkTangent(*straight)
-				tangent := pl.dir(tu, tv, 0)
+				tangent := pl.Dir(tu, tv, 0)
 				if axis.Dot(tangent) < 0 {
 					tangent = tangent.Scale(-1)
 				}
 				axis = tangent
 			}
-			return &Edge{curve: Arc3{Center: pl.point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)},
+			return &Edge{curve: Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)},
 				start: capV, end: sideV, convex: convex, length: meridianLen, lengthBound: meridianBound}
 		}
 		lead, trail := make([]*Edge, n), make([]*Edge, n)
@@ -322,10 +322,10 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				held, bound := heldOf(lenIv)
 				bu, bv := j.M.U-w.StartU, j.M.V-w.StartV
 				semi := math.Hypot(bu, bv)
-				major := pl.dir(bu/semi, bv/semi, 0)
+				major := pl.Dir(bu/semi, bv/semi, 0)
 				axis, _ := major.Cross(up).Normalize()
 				lead[k] = &Edge{
-					curve: Ellipse3{Center: pl.point(j.M.U, j.M.V, sideZ), Axis: axis, Major: major,
+					curve: Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis, Major: major,
 						SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
 					start: capAt(k), end: sideV, convex: convex, length: held, lengthBound: bound,
 				}
@@ -499,8 +499,8 @@ func filletBandExtent(ctx context.Context, b brepLoopBand, f brepFace, xform r3.
 		return 0, 0, 0, fmt.Errorf(`%w: a fillet band's face level is not finite`, ErrNotFinite)
 	}
 	sideIv := proofbound.IntervalAdd(proofbound.PointInterval(level), proofbound.IntervalScale(rIv, big.NewRat(int64(m), 1)))
-	base := pl.xform.Apply(pl.frame.Origin()).Dot(g)
-	coeff := [3]float64{pl.dir(1, 0, 0).Dot(g), pl.dir(0, 1, 0).Dot(g), pl.dir(0, 0, 1).Dot(g)}
+	base := pl.Xform.Apply(pl.Frame.Origin()).Dot(g)
+	coeff := [3]float64{pl.Dir(1, 0, 0).Dot(g), pl.Dir(0, 1, 0).Dot(g), pl.Dir(0, 0, 1).Dot(g)}
 	loIv, hiIv, err := filletband.ExtentsOf(fr.pieces, fr.walks, fr.loop.Corners,
 		m, b.setback.dc, rIv, sideIv, coeff)
 	if err != nil {
@@ -541,7 +541,7 @@ func brepFilletUndercuts(budget *proofbound.WorkBudget, roles map[string]*Face, 
 	faces *[]*Face, undecided *bool, work *freeform.FreeformWork) bool {
 	f := bp.faces[band.face]
 	view := f.view(bp.xform)
-	m, ok := survey2d.NewPlacedFrameMap(view.frame, view.xform)
+	m, ok := survey2d.NewPlacedFrameMap(view.Frame, view.Xform)
 	if !ok {
 		return false
 	}

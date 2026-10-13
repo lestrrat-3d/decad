@@ -49,7 +49,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	piUpper := proofbound.RatFloatUp(proofbound.PiUpper)
 	trueDisk := proofbound.ProductUpper(3, radius)
 	heldDisk := proofbound.AbsSumUpper(trueDisk, old.meshBound, arcBound)
-	height := rec.source.blank.z1 - rec.source.blank.z0
+	height := rec.source.blank.Z1 - rec.source.blank.Z0
 	if height <= 0 || proofbound.IsNonFinite(heldDisk) {
 		return nil, fmt.Errorf("%w: joined-prism fillet has no finite local disk", ErrUnsupported)
 	}
@@ -82,7 +82,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	}
 	if err := loftCylinderTagCaps(&result, rec.blank,
 		[2]int{rec.groups[1], rec.groups[2]},
-		[2]float64{rec.source.blank.z0, rec.source.blank.z1}, ref); err != nil {
+		[2]float64{rec.source.blank.Z0, rec.source.blank.Z1}, ref); err != nil {
 		return nil, err
 	}
 	out, err := buildFacetedBody(ctx, body.doc, ref, result)

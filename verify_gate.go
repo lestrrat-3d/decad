@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/r3"
@@ -410,10 +411,10 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 	lift := func(u, v, z float64, bound proofbound.WalkEndBound) (r3.Vec, float64) {
 		gap := prismPointBoundWith(pp, factor, proofbound.MeasuredScalar(u, bound.U), proofbound.MeasuredScalar(v, bound.V),
 			proofbound.MeasuredScalar(z, 0))
-		return pp.point(u, v, z), gap
+		return pp.Point(u, v, z), gap
 	}
-	return diameter.FreeformSection(ctx, pp.profile.Outer, pp.profile.Holes,
-		pp.z0, pp.z1, pp.sectionDelta, lift, pp.axialDelta)
+	return diameter.FreeformSection(ctx, pp.Profile.Outer, pp.Profile.Holes,
+		pp.Z0, pp.Z1, pp.SectionDelta, lift, pp.axialDelta)
 }
 
 // fallbackGateDiameter is bodyGateDiameter's fallback for a payload whose true
@@ -507,7 +508,7 @@ func draftGateDiameter(ctx context.Context, body *Body, dp draftPayload) (float6
 func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
 	nearZ, _, farZ, _ := dp.levels()
 	level := func(profile profileRecord, z float64) prismPayload {
-		return prismPayload{profile: profile, frame: dp.frame, z0: z, z1: z, xform: dp.xform}
+		return prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: dp.frame, Z0: z, Z1: z, Xform: dp.xform}}
 	}
 	return []prismPayload{level(dp.profile, nearZ), level(dp.far, farZ)}, proofbound.AbsSumUpper(dp.axialDelta(), dp.farDelta)
 }
@@ -567,22 +568,22 @@ func gateWitnessPrism(payload featurePayload) (prismPayload, float64, bool) {
 	case cupPayload:
 		cup := pl.view()
 		witness := cup.outerPrism()
-		witness.profile = cup.outer
-		displacement := proofbound.AbsSumUpper(witness.sectionDelta, witness.axialDelta())
-		witness.sectionDelta = 0
+		witness.Profile = cup.outer
+		displacement := proofbound.AbsSumUpper(witness.SectionDelta, witness.axialDelta())
+		witness.SectionDelta = 0
 		return witness, displacement, true
 	case prismPayload:
-		if pl.sectionDelta == 0 {
+		if pl.SectionDelta == 0 {
 			return prismPayload{}, 0, false
 		}
-		displacement := proofbound.AbsSumUpper(pl.sectionDelta, pl.axialDelta())
+		displacement := proofbound.AbsSumUpper(pl.SectionDelta, pl.axialDelta())
 		witness := pl
-		witness.sectionDelta = 0
+		witness.SectionDelta = 0
 		return witness, displacement, true
 	case sweepPayload:
 		witness := pl.prism
-		displacement := proofbound.AbsSumUpper(witness.sectionDelta, witness.axialDelta())
-		witness.sectionDelta = 0
+		displacement := proofbound.AbsSumUpper(witness.SectionDelta, witness.axialDelta())
+		witness.SectionDelta = 0
 		return witness, displacement, true
 	default:
 		return prismPayload{}, 0, false
@@ -603,7 +604,7 @@ func gateWitnessPrisms(payload featurePayload) ([]prismPayload, float64, bool) {
 	if pl, ok := payload.(stackedPrismPayload); ok {
 		runs := pl.outerRuns()
 		for i := range runs {
-			runs[i].sectionDelta = 0
+			runs[i].SectionDelta = 0
 		}
 		return runs, proofbound.AbsSumUpper(pl.sectionDelta, pl.axialDelta()), true
 	}
@@ -633,12 +634,12 @@ func capBlendWitnessPrisms(pl capBlendPayload) []prismPayload {
 	out := make([]prismPayload, 0, len(loops))
 	for li, loop := range loops {
 		witness := pl.prismLike(pl.z0, pl.z1)
-		witness.profile = profileRecord{Outer: loop}
+		witness.Profile = profileRecord{Outer: loop}
 		if pl.startLoops[li] {
-			witness.z0 = pl.z0 + pl.start.ds
+			witness.Z0 = pl.z0 + pl.start.ds
 		}
 		if pl.endLoops[li] {
-			witness.z1 = pl.z1 - pl.end.ds
+			witness.Z1 = pl.z1 - pl.end.ds
 		}
 		out = append(out, witness)
 	}

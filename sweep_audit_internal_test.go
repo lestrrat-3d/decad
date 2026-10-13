@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 
 	"github.com/lestrrat-3d/r3"
@@ -21,13 +22,13 @@ func TestSweepAuditAcceptsSeparatedStraightSpans(t *testing.T) {
 	doc := &Document{}
 	spans := make([]sweepAuditSpan, 3)
 	for i := range spans {
-		body, buildErr := evalPrismContext(t.Context(), doc, producerID(i+1), prismPayload{
-			profile: profile,
-			frame:   frame,
-			z0:      float64(i),
-			z1:      float64(i + 1),
-			xform:   r3.Identity(),
-		}, freeform.NewFreeformWork())
+		body, buildErr := evalPrismContext(t.Context(), doc, producerID(i+1), prismPayload{Payload: prismrecord.Payload{
+			Profile: profile,
+			Frame:   frame,
+			Z0:      float64(i),
+			Z1:      float64(i + 1),
+			Xform:   r3.Identity(),
+		}}, freeform.NewFreeformWork())
 		require.NoError(t, buildErr)
 		spans[i] = sweepAuditSpan{
 			body:     body,
@@ -45,13 +46,13 @@ func TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs(t *testing.T) {
 	profile := unitSquareProfile()
 	doc := &Document{}
 	build := func(z0, z1 float64) sweepAuditSpan {
-		body, buildErr := evalPrismContext(t.Context(), doc, 1, prismPayload{
-			profile: profile,
-			frame:   frame,
-			z0:      z0,
-			z1:      z1,
-			xform:   r3.Identity(),
-		}, freeform.NewFreeformWork())
+		body, buildErr := evalPrismContext(t.Context(), doc, 1, prismPayload{Payload: prismrecord.Payload{
+			Profile: profile,
+			Frame:   frame,
+			Z0:      z0,
+			Z1:      z1,
+			Xform:   r3.Identity(),
+		}}, freeform.NewFreeformWork())
 		require.NoError(t, buildErr)
 		return sweepAuditSpan{
 			body:     body,

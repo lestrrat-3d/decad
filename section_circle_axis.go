@@ -12,11 +12,11 @@ import (
 // and a cardinal plane with an exact chord. Every image and corner is compared
 // in exact dyadic arithmetic before Sketch receives held coordinates.
 func cardinalCircleSectionRecord(pp prismPayload, plane r3.Frame) (profileRecord, bool) {
-	if len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) != 1 ||
-		pp.blendKind != "" || len(pp.blendSegs) != 0 || pp.z0 >= pp.z1 {
+	if len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
+		pp.BlendKind != "" || len(pp.BlendSegs) != 0 || pp.Z0 >= pp.Z1 {
 		return profileRecord{}, false
 	}
-	circle, ok := pp.profile.Outer.Segments[0].(circleSeg)
+	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
 	if !ok || !circle.CCW || circle.TStart != 0 || circle.TEnd != 1 {
 		return profileRecord{}, false
 	}
@@ -25,13 +25,13 @@ func cardinalCircleSectionRecord(pp prismPayload, plane r3.Frame) (profileRecord
 		return profileRecord{}, false
 	}
 
-	sourceOrigin := proofarith.DyVec(pp.frame.Origin())
-	placedOrigin := proofarith.DvTransform(pp.xform, sourceOrigin)
+	sourceOrigin := proofarith.DyVec(pp.Frame.Origin())
+	placedOrigin := proofarith.DvTransform(pp.Xform, sourceOrigin)
 	image := func(direction r3.Vec) proofarith.DyV3 {
 		point := proofarith.DvAdd(sourceOrigin, proofarith.DyVec(direction))
-		return proofarith.DvSub(proofarith.DvTransform(pp.xform, point), placedOrigin)
+		return proofarith.DvSub(proofarith.DvTransform(pp.Xform, point), placedOrigin)
 	}
-	radialU, radialV, axis := image(pp.frame.U()), image(pp.frame.V()), image(pp.frame.N())
+	radialU, radialV, axis := image(pp.Frame.U()), image(pp.Frame.V()), image(pp.Frame.N())
 	if !sectionCardinalDirection(radialU) || !sectionCardinalDirection(radialV) ||
 		!sectionCardinalDirection(axis) || !sectionSignedDirection(proofarith.DvCross(radialU, radialV), axis) {
 		return profileRecord{}, false
@@ -44,10 +44,10 @@ func cardinalCircleSectionRecord(pp prismPayload, plane r3.Frame) (profileRecord
 	}
 
 	centerLocal := proofarith.DvAdd(sourceOrigin, proofarith.DvAdd(
-		proofarith.DvScale(proofarith.DyVec(pp.frame.U()), proofarith.DyOfFinite(circle.Center.U)),
-		proofarith.DvScale(proofarith.DyVec(pp.frame.V()), proofarith.DyOfFinite(circle.Center.V)),
+		proofarith.DvScale(proofarith.DyVec(pp.Frame.U()), proofarith.DyOfFinite(circle.Center.U)),
+		proofarith.DvScale(proofarith.DyVec(pp.Frame.V()), proofarith.DyOfFinite(circle.Center.V)),
 	))
-	centerWorld := proofarith.DvTransform(pp.xform, centerLocal)
+	centerWorld := proofarith.DvTransform(pp.Xform, centerLocal)
 	delta := proofarith.DvSub(centerWorld, proofarith.DyVec(plane.Origin()))
 	uCenter := proofarith.DvDot(delta, requestU)
 	vCenter := proofarith.DvDot(delta, requestV)
@@ -66,8 +66,8 @@ func cardinalCircleSectionRecord(pp prismPayload, plane r3.Frame) (profileRecord
 	}
 	uLo, uHi := proofarith.DySubScalar(uCenter, halfChord), proofarith.DyAdd(uCenter, halfChord)
 	axisSense := proofarith.DvDot(axis, requestV)
-	vLo := proofarith.DyAdd(vCenter, proofarith.DyMul(axisSense, proofarith.DyOfFinite(pp.z0)))
-	vHi := proofarith.DyAdd(vCenter, proofarith.DyMul(axisSense, proofarith.DyOfFinite(pp.z1)))
+	vLo := proofarith.DyAdd(vCenter, proofarith.DyMul(axisSense, proofarith.DyOfFinite(pp.Z0)))
+	vHi := proofarith.DyAdd(vCenter, proofarith.DyMul(axisSense, proofarith.DyOfFinite(pp.Z1)))
 	if proofarith.DyCmp(vLo, vHi) > 0 {
 		vLo, vHi = vHi, vLo
 	}

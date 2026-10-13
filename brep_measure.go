@@ -116,7 +116,7 @@ func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology,
 	refView := bp.refView()
 	c := readings.Centroid
 	centroidBound := prismPointBound(refView, c[0], c[1], c[2])
-	body.centroid = VecMeasurement{Value: refView.point(c[0].Value, c[1].Value, c[2].Value),
+	body.centroid = VecMeasurement{Value: refView.Point(c[0].Value, c[1].Value, c[2].Value),
 		Exactness: exactnessOf(centroidBound), Bound: units.Millimeters(centroidBound)}
 
 	box, err := brepBoundsContext(ctx, bp)

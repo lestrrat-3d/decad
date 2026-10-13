@@ -31,22 +31,22 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 		return nil, false, nil
 	}
 	blank, ok := operands[0].payload.(prismPayload)
-	if !ok || len(blank.profile.Holes) != 0 || len(blank.profile.Outer.Segments) != 1 ||
-		blank.xform != r3.Identity() {
+	if !ok || len(blank.Profile.Holes) != 0 || len(blank.Profile.Outer.Segments) != 1 ||
+		blank.Xform != r3.Identity() {
 		return nil, false, nil
 	}
-	circle, ok := blank.profile.Outer.Segments[0].(circleSeg)
+	circle, ok := blank.Profile.Outer.Segments[0].(circleSeg)
 	if !ok || circle.Center != (Point2{}) || circle.Radius.Base() <= 0 ||
 		!prismpattern.WholeRange(circle.TStart, circle.TEnd) {
 		return nil, false, nil
 	}
 	first, ok := operands[1].payload.(prismPayload)
-	if !ok || first.frame != blank.frame || first.z0 != blank.z0 || first.z1 != blank.z1 ||
-		first.xform != r3.Identity() || len(first.profile.Holes) != 0 ||
-		len(first.profile.Outer.Segments) < 4 {
+	if !ok || first.Frame != blank.Frame || first.Z0 != blank.Z0 || first.Z1 != blank.Z1 ||
+		first.Xform != r3.Identity() || len(first.Profile.Holes) != 0 ||
+		len(first.Profile.Outer.Segments) < 4 {
 		return nil, false, nil
 	}
-	segments := first.profile.Outer.Segments
+	segments := first.Profile.Outer.Segments
 	var root arcSeg
 	rootIndex := -1
 	for i, segment := range segments {
@@ -74,18 +74,18 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 			return nil, true, err
 		}
 		section, isPrism := body.payload.(prismPayload)
-		if !isPrism || section.frame != first.frame || section.z0 != first.z0 ||
-			section.z1 != first.z1 || !prismpattern.AxialRotation(section.xform) ||
-			len(section.profile.Outer.Segments) != len(segments) ||
-			&section.profile.Outer.Segments[0] != &segments[0] {
+		if !isPrism || section.Frame != first.Frame || section.Z0 != first.Z0 ||
+			section.Z1 != first.Z1 || !prismpattern.AxialRotation(section.Xform) ||
+			len(section.Profile.Outer.Segments) != len(segments) ||
+			&section.Profile.Outer.Segments[0] != &segments[0] {
 			return nil, true, fmt.Errorf("%w: section %d is not a radial copy of the first prism", ErrUnsupported, i+1)
 		}
-		localGap, good := prismpattern.ArcGap(root, circle.Radius.Base(), section.xform)
+		localGap, good := prismpattern.ArcGap(root, circle.Radius.Base(), section.Xform)
 		if !good {
 			return nil, true, fmt.Errorf("%w: section %d has no finite circular-root bound", ErrUnsupported, i+1)
 		}
 		gap = max(gap, localGap)
-		scale2 := prismpattern.Scale2(section.xform)
+		scale2 := prismpattern.Scale2(section.Xform)
 		if scale2.Sign() <= 0 {
 			return nil, true, fmt.Errorf("%w: section %d has no positive radial placement scale", ErrUnsupported, i+1)
 		}

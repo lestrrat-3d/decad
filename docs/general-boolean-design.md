@@ -858,7 +858,7 @@ ordinary mesh-path operand and export input.
 | Consumer | Behaviour |
 |---|---|
 | `Union`/`Cut`/`Intersect` with a prism, stacked or brep partner | class B again over the face view (§5), so a cross-drilled plate takes a second cross hole and a coplanar blind cut alike; a co-directional `Union` on an A1 result reads its `stack` and is A1 again (§3); a pair outside both takes the mesh path over §4.4's mesh |
-| `Transform` / `Copy` / `Mirrored` | re-lifts every face frame under the composed motion; a reflection flips `outward` and every wall's winding, exactly as `prismPayload.reflected()` does |
+| `Transform` / `Copy` / `Mirrored` | re-lifts every face frame under the composed motion; a reflection flips `outward` and every wall's winding, exactly as `prismPayload.Reflected()` does |
 | `Fillet` / `Chamfer` / `Shell` | `docs/brep-modify-design.md`: a brep that reads as a prism along a reference axis takes the prism's own ops (route P); an axis-parallel straight edge takes the brep rewrite (route E) and the result is a `brepPayload`; every other call refuses by that document's Table SB |
 | `ThroughAll` / `ToFace` stops | a planar face's level is its frame and `z0`; a directional extent reads the per-face extremes (§4.3), and refuses a record carrying a `delta` as a prism's does |
 | `Verify` validity | by construction (§4.2); the structural audit runs |

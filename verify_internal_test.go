@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -203,13 +204,13 @@ func TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum(t *testing.T) {
 	require.True(t, isPrism)
 
 	const delta = 0.125
-	pp.sectionDelta = delta
-	pp.z1Delta = delta
+	pp.SectionDelta = delta
+	pp.Z1Delta = delta
 	require.InDelta(t, delta, pp.axialDelta(), 0)
 
 	witness, displacement, ok := gateWitnessPrism(pp)
 	require.True(t, ok, `a displaced prism earns a witness prism instead of losing its gate reference`)
-	require.Zero(t, witness.sectionDelta, `the witness prism's own section is read as held, never as displaced`)
+	require.Zero(t, witness.SectionDelta, `the witness prism's own section is read as held, never as displaced`)
 	require.Equal(t, proofbound.AbsSumUpper(delta, pp.axialDelta()), displacement,
 		`the charged displacement is the SUM of the section and axial terms, since they are perpendicular`)
 
@@ -262,12 +263,12 @@ func freeformTriangleProfile() profileRecord {
 
 func freeformTrianglePayload(t *testing.T, z0, z1 float64) prismPayload {
 	t.Helper()
-	return prismPayload{
-		profile: freeformTriangleProfile(),
-		frame:   identityFrame(t),
-		z0:      z0, z1: z1,
-		xform: r3.Identity(),
-	}
+	return prismPayload{Payload: prismrecord.Payload{
+		Profile: freeformTriangleProfile(),
+		Frame:   identityFrame(t),
+		Z0:      z0, Z1: z1,
+		Xform: r3.Identity(),
+	}}
 }
 
 // sCurveFreeformProfile is a single cubic SplineSeg (one raw Bézier span, its
@@ -293,14 +294,14 @@ func denseFreeformCapPoints(t *testing.T, pp prismPayload, samples int) []r3.Vec
 	t.Helper()
 	var pts []r3.Vec
 	work := freeform.NewFreeformWork()
-	for _, loop := range append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...) {
+	for _, loop := range append([]loopRecord{pp.Profile.Outer}, pp.Profile.Holes...) {
 		for _, seg := range loop.Segments {
 			w, err := boundarywalk.WalkOf(seg, work)
 			require.NoError(t, err)
 			if w.Kind != survey2d.WalkFreeform {
 				pts = append(pts,
-					pp.point(w.StartU, w.StartV, pp.z0), pp.point(w.StartU, w.StartV, pp.z1),
-					pp.point(w.EndU, w.EndV, pp.z0), pp.point(w.EndU, w.EndV, pp.z1),
+					pp.Point(w.StartU, w.StartV, pp.Z0), pp.Point(w.StartU, w.StartV, pp.Z1),
+					pp.Point(w.EndU, w.EndV, pp.Z0), pp.Point(w.EndU, w.EndV, pp.Z1),
 				)
 				continue
 			}
@@ -308,7 +309,7 @@ func denseFreeformCapPoints(t *testing.T, pp prismPayload, samples int) []r3.Vec
 			for i := 0; i <= samples; i++ {
 				at := float64(i) / float64(samples)
 				u, v := evalFloatBezierSpans(floatSpans, at)
-				pts = append(pts, pp.point(u, v, pp.z0), pp.point(u, v, pp.z1))
+				pts = append(pts, pp.Point(u, v, pp.Z0), pp.Point(u, v, pp.Z1))
 			}
 		}
 	}
@@ -344,7 +345,7 @@ func TestBodyGateDiameterFreeformArmAnswersHandComputedMaximum(t *testing.T) {
 // pair farther apart than the arm's own witness-only reading.
 func TestBodyGateDiameterFreeformArmUnderstatesNeverOverstates(t *testing.T) {
 	t.Parallel()
-	pp := prismPayload{profile: sCurveFreeformProfile(), frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
+	pp := prismPayload{Payload: prismrecord.Payload{Profile: sCurveFreeformProfile(), Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
 	body := &Body{payload: pp}
 
 	d, ok, err := bodyGateDiameter(t.Context(), body)
@@ -363,7 +364,7 @@ func TestBodyGateDiameterFreeformArmUnderstatesNeverOverstates(t *testing.T) {
 // diagonal (prismBoundsContext, P4a's already-landed free-form Box).
 func TestBodyGateDiameterFreeformArmBelowBoxDiagonal(t *testing.T) {
 	t.Parallel()
-	pp := prismPayload{profile: sCurveFreeformProfile(), frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
+	pp := prismPayload{Payload: prismrecord.Payload{Profile: sCurveFreeformProfile(), Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
 	body := &Body{payload: pp}
 
 	d, ok, err := bodyGateDiameter(t.Context(), body)
@@ -383,12 +384,12 @@ func TestBodyGateDiameterFreeformArmBelowBoxDiagonal(t *testing.T) {
 func TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain(t *testing.T) {
 	t.Parallel()
 	build := func(fit []Point2) prismPayload {
-		return prismPayload{
-			profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		return prismPayload{Payload: prismrecord.Payload{
+			Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 				fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1},
 			}}},
-			frame: identityFrame(t), z0: 0, z1: 10, xform: r3.Identity(),
-		}
+			Frame: identityFrame(t), Z0: 0, Z1: 10, Xform: r3.Identity(),
+		}}
 	}
 	deduped := build([]Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}, {U: 10 + 5e-13, V: 0}})
 	clean := build([]Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}})
@@ -415,14 +416,14 @@ func TestBodyGateDiameterFreeformArmDisplacementShrinksDiameter(t *testing.T) {
 	require.True(t, ok)
 
 	shrunk := base
-	shrunk.z0Delta = 0.5
+	shrunk.Z0Delta = 0.5
 	shrunkD, ok, err := bodyGateDiameter(t.Context(), &Body{payload: shrunk})
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Less(t, shrunkD, baseD)
 
 	collapsed := base
-	collapsed.z0Delta = baseD
+	collapsed.Z0Delta = baseD
 	_, ok, err = bodyGateDiameter(t.Context(), &Body{payload: collapsed})
 	require.NoError(t, err)
 	require.False(t, ok, "a shrink that collapses to non-positive must report no diameter")
@@ -456,7 +457,7 @@ func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
 			TStart:  0, TEnd: 1,
 		},
 	}}}
-	pp := prismPayload{profile: collapsed, frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
+	pp := prismPayload{Payload: prismrecord.Payload{Profile: collapsed, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
 	_, ok, err := bodyGateDiameter(t.Context(), &Body{payload: pp})
 	require.NoError(t, err)
 	require.False(t, ok, "a curve this arm cannot certify must never publish a diameter")
@@ -469,21 +470,21 @@ func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
 // is zero, so the body ends with no gate diameter at all.
 func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T) {
 	t.Parallel()
-	collapsedSpan := prismPayload{
-		profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+	collapsedSpan := prismPayload{Payload: prismrecord.Payload{
+		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			splineSeg{
 				Control: point2ToRecordSlice([]Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}),
 				TStart:  0, TEnd: 1,
 			},
 		}}},
-		frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity(),
-	}
+		Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity(),
+	}}
 
 	collapsedShrink := freeformTrianglePayload(t, 0, 10)
 	baseD, ok, err := bodyGateDiameter(t.Context(), &Body{payload: collapsedShrink})
 	require.NoError(t, err)
 	require.True(t, ok)
-	collapsedShrink.z0Delta = baseD
+	collapsedShrink.Z0Delta = baseD
 
 	for name, pp := range map[string]prismPayload{
 		"uncertifiable curve": collapsedSpan,
@@ -547,10 +548,10 @@ func TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism(t *testing.T) {
 		lineSeg{Start: Point2{U: 10, V: 10}, End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
 		lineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
-	pp := prismPayload{
-		profile: analytic, frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity(),
-		sectionDelta: 0.1,
-	}
+	pp := prismPayload{Payload: prismrecord.Payload{
+		Profile: analytic, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity(),
+		SectionDelta: 0.1,
+	}}
 
 	armD, armOK, err := freeformSectionGateDiameter(t.Context(), pp)
 	require.NoError(t, err)
@@ -624,13 +625,13 @@ func (c *cancelAfterPolls) Err() error {
 // into the arm's structural "no arm" answer.
 func TestBodyGateDiameterFreeformArmCancelsDuringWitnessMaximum(t *testing.T) {
 	t.Parallel()
-	pp := prismPayload{
-		profile: freeformLargeProfile(800),
-		frame:   identityFrame(t),
-		z0:      0, z1: 10,
-		xform: r3.Identity(),
-	}
-	segments := len(pp.profile.Outer.Segments)
+	pp := prismPayload{Payload: prismrecord.Payload{
+		Profile: freeformLargeProfile(800),
+		Frame:   identityFrame(t),
+		Z0:      0, Z1: 10,
+		Xform: r3.Identity(),
+	}}
+	segments := len(pp.Profile.Outer.Segments)
 
 	// The fixture really does answer, so the cancelled run below cannot pass
 	// by declining: its witnesses span (0,0,0) to (10,0,10), sqrt(200) apart.
@@ -792,7 +793,7 @@ func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
 		b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
 		pp, ok := b.payload.(prismPayload)
 		require.True(t, ok)
-		pp.sectionDelta = 1e-6
+		pp.SectionDelta = 1e-6
 		b.payload = pp
 		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(t.Context(), b))
 	})
@@ -958,7 +959,7 @@ func internalArcChordPrism(t *testing.T, doc *Document, sweepDeg, h float64) *Bo
 func arcChordDiameterSquare(t *testing.T, pp prismPayload) *big.Rat {
 	t.Helper()
 	var center *Point2
-	for _, seg := range pp.profile.Outer.Segments {
+	for _, seg := range pp.Profile.Outer.Segments {
 		if arc, ok := seg.(arcSeg); ok {
 			center = &Point2{U: arc.Center.U, V: arc.Center.V}
 		}
@@ -969,7 +970,7 @@ func arcChordDiameterSquare(t *testing.T, pp prismPayload) *big.Rat {
 		return r.Mul(r, r)
 	}
 	radiusSquare := new(big.Rat)
-	for _, seg := range pp.profile.Outer.Segments {
+	for _, seg := range pp.Profile.Outer.Segments {
 		var ends []Point2
 		switch seg := seg.(type) {
 		case arcSeg:
@@ -987,7 +988,7 @@ func arcChordDiameterSquare(t *testing.T, pp prismPayload) *big.Rat {
 		}
 	}
 	upper := new(big.Rat).Mul(radiusSquare, big.NewRat(4, 1))
-	return upper.Add(upper, sq(pp.z1-pp.z0))
+	return upper.Add(upper, sq(pp.Z1-pp.Z0))
 }
 
 // requireStationDiameter asserts that d sits at or below the exact upper
@@ -1059,7 +1060,7 @@ func TestFallbackGateDiameterReadsCurvedWallStations(t *testing.T) {
 	require.True(t, ok)
 	pp, isPrism := body.payload.(prismPayload)
 	require.True(t, isPrism)
-	pp.sectionDelta = math.Ldexp(1, -40)
+	pp.SectionDelta = math.Ldexp(1, -40)
 
 	d, ok, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), &Body{payload: pp})
 	require.NoError(t, err)

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -113,12 +114,12 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 	// publish an under-charged bound for it, the pair is refused before the
 	// scene is even built, the same silent-fallback shape the entry gate
 	// above already uses (§3.4).
-	trimmedCircular, err := prismcells.ProfileHasTrimmedCircularSource(budget, pa.profile.Outer, pa.profile.Holes)
+	trimmedCircular, err := prismcells.ProfileHasTrimmedCircularSource(budget, pa.Profile.Outer, pa.Profile.Holes)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
 	if !trimmedCircular {
-		if trimmedCircular, err = prismcells.ProfileHasTrimmedCircularSource(budget, pb.profile.Outer, pb.profile.Holes); err != nil {
+		if trimmedCircular, err = prismcells.ProfileHasTrimmedCircularSource(budget, pb.Profile.Outer, pb.Profile.Holes); err != nil {
 			return prismPayload{}, false, err
 		}
 	}
@@ -128,14 +129,14 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 
 	switch op {
 	case meshbool.OpUnion:
-		if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 { // G6: both hole-free
+		if len(pa.Profile.Holes) != 0 || len(pb.Profile.Holes) != 0 { // G6: both hole-free
 			return prismPayload{}, false, nil
 		}
 		if !prismplacement.UnionZIntervalMatches(prismPlacementOf(pa), prismPlacementOf(pb)) { // G5
 			return prismPayload{}, false, nil
 		}
 	case meshbool.OpCut:
-		if len(pb.profile.Holes) != 0 { // G6: the TOOL must be hole-free; the target's own holes carry through
+		if len(pb.Profile.Holes) != 0 { // G6: the TOOL must be hole-free; the target's own holes carry through
 			return prismPayload{}, false, nil
 		}
 		if !prismplacement.CutZIntervalSpans(prismPlacementOf(pa), prismPlacementOf(pb)) { // G5, §3.2's Cut row
@@ -147,7 +148,7 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 		return prismPayload{}, false, nil
 	}
 
-	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.profile, pb.profile)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.Profile, pb.Profile)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -202,12 +203,12 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 		return nil, prismPayload{}, prismPayload{}, nil, false, nil
 	}
 
-	trimmedCircular, err := prismcells.ProfileHasTrimmedCircularSource(budget, pa.profile.Outer, pa.profile.Holes)
+	trimmedCircular, err := prismcells.ProfileHasTrimmedCircularSource(budget, pa.Profile.Outer, pa.Profile.Holes)
 	if err != nil {
 		return nil, prismPayload{}, prismPayload{}, nil, false, err
 	}
 	if !trimmedCircular {
-		if trimmedCircular, err = prismcells.ProfileHasTrimmedCircularSource(budget, pb.profile.Outer, pb.profile.Holes); err != nil {
+		if trimmedCircular, err = prismcells.ProfileHasTrimmedCircularSource(budget, pb.Profile.Outer, pb.Profile.Holes); err != nil {
 			return nil, prismPayload{}, prismPayload{}, nil, false, err
 		}
 	}
@@ -215,14 +216,14 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 		return nil, prismPayload{}, prismPayload{}, nil, false, nil
 	}
 
-	if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 { // G6: both hole-free (§4.4's multi-lump row is why)
+	if len(pa.Profile.Holes) != 0 || len(pb.Profile.Holes) != 0 { // G6: both hole-free (§4.4's multi-lump row is why)
 		return nil, prismPayload{}, prismPayload{}, nil, false, nil
 	}
 	if !prismplacement.IntersectZIntervalOverlaps(prismPlacementOf(pa), prismPlacementOf(pb)) { // G5
 		return nil, prismPayload{}, prismPayload{}, nil, false, nil
 	}
 
-	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.profile, pb.profile)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.Profile, pb.Profile)
 	if err != nil {
 		return nil, prismPayload{}, prismPayload{}, nil, false, err
 	}
@@ -244,8 +245,8 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 // exactness. Split out of tryPrismBoolean only so each op's own resolve+build
 // sequence reads as one unit.
 func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	merged, sceneDelta, cutDelta, resolved, err := prismcells.ResolveUnion(ctx, budget, pa.profile, pb.profile,
-		pa.sectionDelta, pb.sectionDelta, reexpress)
+	merged, sceneDelta, cutDelta, resolved, err := prismcells.ResolveUnion(ctx, budget, pa.Profile, pb.Profile,
+		pa.SectionDelta, pb.SectionDelta, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -258,14 +259,14 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudge
 	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, auditPrismMergeSection(budget, pa, merged)); fallBack || err != nil {
 		return prismPayload{}, false, err
 	}
-	result := prismPayload{
-		profile: merged,
-		frame:   pa.frame,
-		z0:      pa.z0,
-		z1:      pa.z1,
-		z0Delta: max(pa.z0Delta, pb.z0Delta),
-		z1Delta: max(pa.z1Delta, pb.z1Delta),
-		xform:   pa.xform,
+	result := prismPayload{Payload: prismrecord.Payload{
+		Profile: merged,
+		Frame:   pa.Frame,
+		Z0:      pa.Z0,
+		Z1:      pa.Z1,
+		Z0Delta: max(pa.Z0Delta, pb.Z0Delta),
+		Z1Delta: max(pa.Z1Delta, pb.Z1Delta),
+		Xform:   pa.Xform,
 		// §7: operand A's coordinates are unchanged except for its own
 		// consumed segments' walk charge (sceneDelta.A), while B's existing
 		// displacement passes through its rigid re-expression, accumulates
@@ -277,8 +278,8 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *proofbound.WorkBudge
 		// displacement can move carries A6's crossing charge
 		// (sceneDelta.Crossing). A chained union must not discard any of
 		// the five.
-		sectionDelta: sceneDelta.Merged(pa.sectionDelta, pb.sectionDelta, reexpress.Delta, cutDelta),
-	}
+		SectionDelta: sceneDelta.Merged(pa.SectionDelta, pb.SectionDelta, reexpress.Delta, cutDelta),
+	}}
 	return result, true, nil
 }
 
@@ -311,29 +312,29 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKi
 	if !aok || !bok {
 		return prismPayload{}, prismPayload{}, false, nil
 	}
-	aAnalytic, err := prismcells.ProfileAnalytic(budget, pa.profile)
+	aAnalytic, err := prismcells.ProfileAnalytic(budget, pa.Profile)
 	if err != nil {
 		return prismPayload{}, prismPayload{}, false, err
 	}
-	bAnalytic, err := prismcells.ProfileAnalytic(budget, pb.profile)
+	bAnalytic, err := prismcells.ProfileAnalytic(budget, pb.Profile)
 	if err != nil {
 		return prismPayload{}, prismPayload{}, false, err
 	}
 	if !aAnalytic || !bAnalytic { // G4
 		return prismPayload{}, prismPayload{}, false, nil
 	}
-	worldNormalA := pa.xform.ApplyDir(pa.frame.N())
-	worldNormalB := pb.xform.ApplyDir(pb.frame.N())
+	worldNormalA := pa.Xform.ApplyDir(pa.Frame.N())
+	worldNormalB := pb.Xform.ApplyDir(pb.Frame.N())
 	if worldNormalA != worldNormalB { // G3: co-directional, bit-identical
 		return prismPayload{}, prismPayload{}, false, nil
 	}
 	shared := prismplacement.SharedAxisOf(prismPlacementOf(pa), prismPlacementOf(pb))
-	if shared.OK && pa.xform != pb.xform && !placedAxisProfileAdmitted(op, pa, pb) {
+	if shared.OK && pa.Xform != pb.Xform && !placedAxisProfileAdmitted(op, pa, pb) {
 		return prismPayload{}, prismPayload{}, false, nil
 	}
 	if !shared.OK { // G3
-		worldOriginA := pa.xform.Apply(pa.frame.Origin())
-		worldOriginB := pb.xform.Apply(pb.frame.Origin())
+		worldOriginA := pa.Xform.Apply(pa.Frame.Origin())
+		worldOriginB := pb.Xform.Apply(pb.Frame.Origin())
 		if worldOriginB.Sub(worldOriginA).Dot(worldNormalA) != 0.0 { // G3's coplanar arm, unchanged
 			return prismPayload{}, prismPayload{}, false, nil
 		}
@@ -342,7 +343,7 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKi
 }
 
 func prismPlacementOf(p prismPayload) prismplacement.Operand {
-	return prismplacement.Operand{Frame: p.frame, Xform: p.xform, Z0: p.z0, Z1: p.z1}
+	return prismplacement.Operand{Frame: p.Frame, Xform: p.Xform, Z0: p.Z0, Z1: p.Z1}
 }
 
 // auditPrismMergeSection runs the modify §5 audit (fillet_audit.go,
@@ -359,7 +360,7 @@ func prismPlacementOf(p prismPayload) prismplacement.Operand {
 // alike; see this file's header comment for why Cut/Intersect's clean-nesting
 // match needs none.
 func auditPrismMergeSection(budget *proofbound.WorkBudget, pa prismPayload, merged profileRecord) error {
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: merged})
+	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: merged}})
 	if err != nil {
 		return err
 	}
@@ -367,7 +368,7 @@ func auditPrismMergeSection(budget *proofbound.WorkBudget, pa prismPayload, merg
 	for i := range blendAt {
 		blendAt[i] = map[int]*cornerBlend{}
 	}
-	orig := profileRecord{Outer: pa.profile.Outer}
+	orig := profileRecord{Outer: pa.Profile.Outer}
 	return auditRewriteBudget(budget, orig, merged, loops, blendAt)
 }
 

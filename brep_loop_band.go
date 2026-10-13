@@ -380,9 +380,9 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 				start, end = placeVertex(from, 0, 0, 0), placeVertex(to, 0, 0, 0)
 			}
 			sideView := f.view(bp.xform)
-			sideView.z0, sideView.z1 = sideZ, sideZ
-			sideView.z0Delta, sideView.z1Delta = u.LevelDelta, u.LevelDelta
-			sideView.sectionDelta = beside.delta
+			sideView.Z0, sideView.Z1 = sideZ, sideZ
+			sideView.Z0Delta, sideView.Z1Delta = u.LevelDelta, u.LevelDelta
+			sideView.SectionDelta = beside.delta
 			edge, err := brepBandEdge(sideView, w.SegmentWalk, hole, start, end)
 			if err != nil {
 				return brepOpenSet{}, err
@@ -446,7 +446,7 @@ func brepBandEdge(view prismPayload, w survey2d.SegmentWalk, hole bool, start, e
 	if err != nil {
 		return nil, err
 	}
-	edge.lengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(view.sectionDelta, 1))
+	edge.lengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(view.SectionDelta, 1))
 	return edge, nil
 }
 

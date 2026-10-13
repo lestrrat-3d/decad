@@ -171,10 +171,10 @@ func TestFixPatchOrientation(t *testing.T) {
 			// (docs/api-design.md's r3.Frame contract), so decomposing the
 			// TRUE outward normal against it is a dot product, never a
 			// matrix solve.
-			valid := band.pl.point(band.geom.CU+band.geom.SideRadius, band.geom.CV, band.geom.SideZ)
+			valid := band.pl.Point(band.geom.CU+band.geom.SideRadius, band.geom.CV, band.geom.SideZ)
 			truth, err := band.face.NormalAt(valid)
 			require.NoError(t, err, "the band built successfully, so its own sample point must read")
-			eu, ev, en := band.pl.dir(1, 0, 0), band.pl.dir(0, 1, 0), band.pl.dir(0, 0, 1)
+			eu, ev, en := band.pl.Dir(1, 0, 0), band.pl.Dir(0, 1, 0), band.pl.Dir(0, 0, 1)
 			refU, refV, refZ := truth.Value.Dot(eu), truth.Value.Dot(ev), truth.Value.Dot(en)
 
 			before := band.face.reversed
@@ -195,7 +195,7 @@ func TestFixPatchOrientation(t *testing.T) {
 			require.Equal(t, before, band.face.reversed, "the function restores the correct sign")
 			n, err := band.face.NormalAt(valid)
 			require.NoError(t, err)
-			ref := band.pl.dir(refU, refV, refZ)
+			ref := band.pl.Dir(refU, refV, refZ)
 			require.Positive(t, n.Value.Dot(ref))
 		})
 	}
@@ -817,10 +817,10 @@ func TestCapPatchNormalRangeCoversWhatAFlatPatchTakes(t *testing.T) {
 			// leading slant.
 			g := band.geom
 			corners := []r3.Vec{
-				band.pl.point(g.SideA.U, g.SideA.V, g.SideZ),
-				band.pl.point(g.SideB.U, g.SideB.V, g.SideZ),
-				band.pl.point(g.CapB.U, g.CapB.V, g.CapZ),
-				band.pl.point(g.CapA.U, g.CapA.V, g.CapZ),
+				band.pl.Point(g.SideA.U, g.SideA.V, g.SideZ),
+				band.pl.Point(g.SideB.U, g.SideB.V, g.SideZ),
+				band.pl.Point(g.CapB.U, g.CapB.V, g.CapZ),
+				band.pl.Point(g.CapA.U, g.CapA.V, g.CapZ),
 			}
 			points := append([]r3.Vec(nil), corners...)
 			for i, c := range corners {
@@ -854,7 +854,7 @@ func (b bandUnderTest) componentAt(t *testing.T, theta float64, pull r3.Vec) (fl
 	t.Helper()
 	sin, cos := math.Sincos(theta)
 	g := b.geom
-	n, err := b.face.NormalAt(b.pl.point(g.CU+g.CapRadius*cos, g.CV+g.CapRadius*sin, g.CapZ))
+	n, err := b.face.NormalAt(b.pl.Point(g.CU+g.CapRadius*cos, g.CV+g.CapRadius*sin, g.CapZ))
 	require.NoError(t, err)
 	bound, err := n.Bound.In(units.One)
 	require.NoError(t, err)
@@ -939,7 +939,7 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 
 			g := band.geom
 			if tc.centreFar > 0 {
-				require.Greater(t, band.pl.point(g.CU, g.CV, g.CapZ).Len(), tc.centreFar,
+				require.Greater(t, band.pl.Point(g.CU, g.CV, g.CapZ).Len(), tc.centreFar,
 					"this case charges the frame origin's rounding, so its patch must sit that far out")
 			}
 			arms := 0.0

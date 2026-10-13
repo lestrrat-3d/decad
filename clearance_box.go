@@ -13,18 +13,18 @@ func axisBoxPrism(b *Body) bool {
 		return false
 	}
 	pp, ok := b.payload.(prismPayload)
-	if !ok || pp.surfaceResult || pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 {
+	if !ok || pp.SurfaceResult || pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 {
 		return false
 	}
-	if !box.CardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) {
+	if !box.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) {
 		return false
 	}
-	basis := pp.xform.Basis()
+	basis := pp.Xform.Basis()
 	if basis.EX != (r3.Vec{X: 1}) || basis.EY != (r3.Vec{Y: 1}) ||
-		basis.EZ != (r3.Vec{Z: 1}) || pp.xform.Translation() != (r3.Vec{}) {
+		basis.EZ != (r3.Vec{Z: 1}) || pp.Xform.Translation() != (r3.Vec{}) {
 		return false
 	}
-	return box.RectangularProfile(pp.profile)
+	return box.RectangularProfile(pp.Profile)
 }
 
 // clearanceAxisBoxes gives the closed-form gap of two certified rectangular

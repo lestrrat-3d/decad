@@ -21,10 +21,10 @@ import (
 // exact offset of the source section; evalPrismContext can then keep its
 // zero-displacement section certificate.
 func thickenPrism(ctx context.Context, d *Document, pp prismPayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
-	if !pp.surfaceResult || pp.sectionDelta != 0 || len(pp.profile.Holes) != 0 {
+	if !pp.SurfaceResult || pp.SectionDelta != 0 || len(pp.Profile.Holes) != 0 {
 		return nil, fmt.Errorf(`%w: this prism sheet has no admitted Thicken section`, ErrUnsupported)
 	}
-	if proofbound.AdmitAbove(proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar()), 0) != proofbound.SurvAdmit {
+	if proofbound.AdmitAbove(proofbound.BoundedSub(pp.Z1Scalar(), pp.Z0Scalar()), 0) != proofbound.SurvAdmit {
 		return nil, fmt.Errorf(`%w: the prism sheet has no proven positive sweep height`, ErrUnsupported)
 	}
 	amount, err := thickenAmount(tmm, tDelta, side)
@@ -35,7 +35,7 @@ func thickenPrism(ctx context.Context, d *Document, pp prismPayload, side Thicke
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	sec, err := thickenSectionOf(ctx, pp.profile, side, amount, budget, nil)
+	sec, err := thickenSectionOf(ctx, pp.Profile, side, amount, budget, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -47,9 +47,9 @@ func thickenPrism(ctx context.Context, d *Document, pp prismPayload, side Thicke
 	if err != nil {
 		return nil, err
 	}
-	pp.profile = annulus
-	pp.surfaceResult = false
-	pp.walks = nil
+	pp.Profile = annulus
+	pp.SurfaceResult = false
+	pp.Walks = nil
 	return evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
 }
 

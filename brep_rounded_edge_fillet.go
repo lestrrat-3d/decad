@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capedge"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -41,9 +42,9 @@ func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload
 	}
 	d := body.doc
 	ref := d.nextProducerID()
-	tool, err := evalPrismContext(ctx, d, ref, prismPayload{
-		profile: capedge.QuarterCutter(radius), frame: frame, z0: -42, z1: 42, xform: r3.Identity(),
-	}, freeform.NewFreeformWork())
+	tool, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+		Profile: capedge.QuarterCutter(radius), Frame: frame, Z0: -42, Z1: 42, Xform: r3.Identity(),
+	}}, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, true, err
 	}

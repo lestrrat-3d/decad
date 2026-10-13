@@ -97,7 +97,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			store[i] = math.Max(store[i], proofbound.AbsSumUpper(allow, round[i]))
 			return i
 		}
-		v := refView.point(c[0], c[1], c[2])
+		v := refView.Point(c[0], c[1], c[2])
 		r := exactPrismPointRound(refView, c[0], c[1], c[2], v)
 		mesh.vertices = append(mesh.vertices, v)
 		round = append(round, r)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
@@ -24,16 +25,16 @@ func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 	for i := range points {
 		segments[i] = lineSeg{Start: points[i], End: points[(i+1)%len(points)], TStart: 0, TEnd: 1}
 	}
-	pp := prismPayload{
-		profile: profileRecord{Outer: loopRecord{Segments: segments}},
-		z0:      0, z1: 10, surfaceResult: true,
-	}
+	pp := prismPayload{Payload: prismrecord.Payload{
+		Profile: profileRecord{Outer: loopRecord{Segments: segments}},
+		Z0:      0, Z1: 10, SurfaceResult: true,
+	}}
 	budget := proofbound.NewWorkBudget(t.Context())
 	loops, err := prismCornerLoopsBudget(budget, pp)
 	require.NoError(t, err)
 	dirs, err := thickenaxis.AxisDirections(loops[0].Walks, budget)
 	require.NoError(t, err)
-	generated, err := offsetProfile(budget, pp.profile, +1, 1)
+	generated, err := offsetProfile(budget, pp.Profile, +1, 1)
 	require.NoError(t, err)
 	first, ok := generated.Outer.Segments[0].(lineSeg)
 	require.True(t, ok)

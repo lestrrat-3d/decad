@@ -54,7 +54,7 @@ The rules for rows live in `docs/layout.md`.
 | `coil.go` | `Coil`, `CoilOption`, Table CS gates, payload and placement. See helix §2, §4, §5.6. |
 | `coil_body.go` | The coil's Table CB topology and Table CM readings. See helix §6–§7. |
 | `sweep_transport.go` | Validates the path and adapts spans to `internal/sweeptransport/`. See sweep §3.2. |
-| `prism_payload.go` | `prismPayload` and coordinate adapters. See evaluator §5. |
+| `prism_payload.go` | `prismPayload`, the root wrapper of `prismrecord.Payload`, and coordinate adapters. See evaluator §5, §8. |
 | `prism_build.go` | `evalPrismContext`, caps, and side faces. See evaluator §5. |
 | `prism_extent.go` | Adapts prism extents and box readings. See evaluator §5. |
 | `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents. See evaluator §6 and surface §13.2. |

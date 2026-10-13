@@ -108,7 +108,7 @@ Per tess §5/§6, with the terms the current code already computes plus the two 
 | Term | Source |
 |---|---|
 | `deltaTrim(face)` | wall: its walk's `chordCount` sagitta; cap/floor/rim: max sagitta over the loops bounding that patch (`chordedLoop.maxSag`) |
-| `deltaSection` | `pp.sectionDelta` (0 for a cup) |
+| `deltaSection` | `pp.SectionDelta` (0 for a cup) |
 | `deltaAxial(face)` | `z0Delta` for `capStart`, `z1Delta` for `capEnd`, `max` for a wall; cup floors/rims read `cp.zDelta` per level |
 | `deltaStore(face)` | NEW. Two mechanisms, max over the face's vertices: (a) a computed circular sample's own gap from the certified enclosure of the point it denotes — `circularWalkEndBound`'s mechanism (`extrude.go`) applied at interior fraction `k/n` through `turnSinCosInterval` for a `CircleSeg` and `radSinCosSpan` over `atan2Interval` for an `ArcSeg` (`moments.go`, `internal/proofbound/turn_trig.go`), carried by `walkEndBoundAllow`; (b) `exactPrismPointRound(pp, u, v, z, held)` (`extrude.go`) for the frame/placement write. Both are zero for a recorded line vertex under an axis-aligned identity payload |
 
