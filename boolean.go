@@ -439,6 +439,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	}
 	if op == meshbool.OpUnion {
 		eval.payload.obliqueBoss = recognizeObliqueBoss(a, b)
+		eval.payload.prismUnionFillet = recognizePrismUnionFillet(a, b)
 	}
 	if op == meshbool.OpCut {
 		eval.payload.crossCylinderBore = recognizeCrossCylinderBore(a, b)

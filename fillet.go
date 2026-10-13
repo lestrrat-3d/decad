@@ -132,6 +132,9 @@ const filletTol = sectionaudit.Tolerance
 // receiver outside those routes, loft §17 and draft §10.4 is S3
 // (ErrUnsupported).
 //
+// A faceted Union of two rectangular prisms also admits one untouched outer
+// vertical edge when the other prism is certified clear of the full removed
+// radius band (docs/modify-reach-design.md §10.1).
 // A loop-filleted body publishes its volume, centroid, area, box and
 // through-all extent, and passes Verify; it meshes with an occupied-volume
 // proof, exports to STEP, takes part in a mesh boolean, is surveyed for
@@ -249,6 +252,13 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	}
 	if fp, ok := b.payload.(facetedPayload); ok && fp.obliqueBoss != nil {
 		return b.filletObliqueBoss(ctx, edges, fp.obliqueBoss, rmm, rDelta)
+	}
+	if fp, ok := b.payload.(facetedPayload); ok && fp.prismUnionFillet != nil {
+		// A retained source pair alone does not authenticate this selection.
+		// Keep the ordinary S3 refusal and its complete edge context on a miss.
+		if out, matched, err := b.filletPrismUnion(ctx, edges, fp.prismUnionFillet, rmm, rDelta); matched || err != nil {
+			return out, err
+		}
 	}
 	if fp, ok := b.payload.(facetedPayload); ok && fp.prismPatternJoin != nil {
 		out, err := prismPatternFilletBody(ctx, b, edges, rmm, rDelta)

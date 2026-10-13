@@ -35,8 +35,9 @@ The extension does **not** add a general B-rep kernel:
 - no mixed lateral-edge + cap-edge blend in one call;
 - no variable-radius fillet;
 - no topology-changing offset;
-- no faceted receiver (a brep or stacked receiver is
-  `docs/brep-modify-design.md`'s);
+- no general faceted receiver (the isolated rectangular-prism Union fillet
+  below and certified cap routes are bounded exceptions; a brep or stacked
+  receiver is `docs/brep-modify-design.md`'s);
 - no partial-revolve shell that keeps an angular cap.
 
 Each excluded body exists. Table SX stages it with `ErrUnsupported` at the
@@ -105,7 +106,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 | **RX3** | `stackedPrismPayload` | through its face view, `docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same, plus `WithNoOpenings` for a nested two-slab rectangular boss (modify-general §3.1a) |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
 | **RX5** | `cupPayload`: a two-slab `stackedPrismPayload` record beside the shell morphology (§9.1) | base S3 | base S3 |
-| **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | certified loft/cylinder outer cap `Chamfer`, including mirrored bore results, or one cross-cylinder bore-mouth `Chamfer`; otherwise SX9 | SX9 |
+| **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | certified loft/cylinder outer cap `Chamfer`, including mirrored bore results, one cross-cylinder bore-mouth `Chamfer`, or §10.1's isolated rectangular-prism Union edge `Fillet`; otherwise SX9 | SX9 |
 | **RX7** | `brepPayload` (`docs/general-boolean-design.md` §4) | `docs/brep-modify-design.md` Table RB; outside it, SX16 | the same |
 | **RX8** | `loftPayload` | `Fillet` on analytic corners of matching axial sections (loft §17); equal-distance `Chamfer` on both complete held outer cap loops of a matching axial loft with zero holes or one certified circular bore (loft §18); other chamfers are base S3 | base S3 |
 | **RX9** | `draftPayload` with one positive-taper whole circular wall and its near section at the start level | draft §10.4–§10.5 | Removing its far cap inward builds draft §10.6's cup; other calls are base S3 |
@@ -143,7 +144,7 @@ more specific SX row replaces that base refusal.
 | **SX6** | cap-loop offset loses a carrier, reaches an empty circular offset, or has no regular radius-`r` envelope; LF9's exact-radius inward arc with straight G1 neighbours is the fillet exception (`docs/vertex-blend-design.md`) | no regular requested blend | `ErrDegenerate` |
 | **SX7** | cap-loop center paths cross/touch non-adjacent paths, a patch self-intersects, two cap bands meet, or trims need merging | body exists under trimming/merge kernel | `ErrUnsupported` |
 | **SX8** | shell side/no-opening extension is used on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap; revolve meridian is holed or meets the axis along more than one walk; a revolve wall's offset reaches the axis | body exists outside extension | `ErrUnsupported` |
-| **SX9** | any modify op on `facetedPayload` outside RX6's certified chamfer classes | body exists; no admitted source and topology certificate for the selected modification | `ErrUnsupported` |
+| **SX9** | any modify op on `facetedPayload` outside RX6's certified classes | body exists; no admitted source and topology certificate for the selected modification | `ErrUnsupported` |
 | **SX10** | another modify op on `capBlendPayload`, or on a `stackedPrismPayload` whose face view refuses (`docs/brep-modify-design.md` SB2) | body exists; compound feature composition not built | `ErrUnsupported` |
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
 | **SX12** | cap chamfer ruled patches intersect away from shared boundaries or cannot be certified disjoint | body exists under trim kernel | `ErrUnsupported` |
@@ -1591,7 +1592,43 @@ that slab. The outer-wall region precedes hole-wall regions, which retain
 Do not copy ancestor `FeatureRef`s onto result faces. A consuming modify step
 owns the result. Multi-role faces carry only roles minted by that step. This
 keeps base §11's record-index rule and resolves ancestor provenance in favor of
-the shipped behavior.
+the shipped behavior. Section 10.1's rebuilt Boolean is a separate faceted
+route: its source face groups retain their authenticated origins, as the
+ordinary Boolean evaluator does.
+
+### 10.1 Isolated outer edge of a faceted prism Union
+
+A mesh Union of two real prism sources retains those immutable sources until
+the Union is placed or otherwise rebuilt. `Fillet` accepts one selected
+faceted edge only when its zero-bound endpoints equal one complete lateral
+edge of a source's exact, unplaced, axis-aligned rectangular prism. The two
+faces next to the selected edge must carry exactly the two planar source-wall
+roles next to that source edge. The source's section and both sweep levels
+must have zero displacement. The other source is a prism with certified
+bounds; it may be placed or rotated.
+
+The radius has zero conversion displacement and is smaller than half each
+rectangle side. The existing section rewrite and audit create the fillet,
+but this route also checks that its connector is the exact inward quarter
+circle: its centre is one radius inside each side, its feet lie one radius
+along the source walls, and its directed arc traverses that quadrant. If any
+centre or foot coordinate cannot be represented exactly, this route refuses.
+These checks prove the rewritten source lies inside the original prism and
+differs only in the corner square swept through the prism's full height.
+
+The corner-square box is rounded outward from exact rational coordinate
+sums. It must be strictly separate from the other source's true body box
+after that box's stated bound. Thus the removed material does not intersect
+the other source, and the modified Union equals the Union of the filleted
+source with the unchanged second prism. The removed volume is
+`height × radius² × (1 − π/4)` and cannot be replenished by the other
+source. The evaluator builds the source
+fillet without committing it, then reruns its ordinary Boolean evaluator.
+That evaluator supplies the final one-lump boundary, occupied-volume bound,
+measurements, and `VerifyAll` mesh proof. One document commit retires only
+the original Union. A failed selection, non-isolated radius band, displaced
+section, or placed Union falls through to the ordinary receiver-class S3
+refusal, preserving its selected-edge context.
 
 ## 11. Exactness + proof discipline
 
@@ -1628,6 +1665,7 @@ the upper cap proof checks split rings against the translated original teeth
 and adds the inherited bridge reach and swept-volume charge.
 The perpendicular cylinder Cut retains two full source circles for a
 separate one-mouth chamfer (`docs/cross-cylinder-bore-chamfer-design.md`).
+Section 10.1 admits one isolated rectangular-prism Union outer-edge fillet.
 Other faceted modifications remain SX9.
 
 **What SX9 leaves a caller proving.** Outside RX6, a caller whose

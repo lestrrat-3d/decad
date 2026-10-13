@@ -1983,3 +1983,7 @@
 10	0.00	TestTwistedSweepRoundedPlacedShellRefusalsAreAtomic
 10	0.00	TestSweepLineFilletSingleTopCapEdgeVerified
 10	0.00	TestSweepLineFilletPlacedBottomCapEdgeVerified
+10	0.00	TestFacetedPrismUnionUntouchedOuterEdgeFillet
+10	0.00	TestFacetedPrismUnionFilletReversedSources
+10	0.00	TestFacetedPrismUnionFilletRefusesToolInCornerBand
+10	0.00	TestFacetedPrismUnionFilletRefusesPlacedSourceRelation

@@ -10,6 +10,7 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `fillet.go` | Fillet entry and section rewrite adapter. See modify §6. |
+| `prism_union_fillet.go` | Authenticates one untouched outer edge of a faceted prism Union and rebuilds its isolated source fillet. See modify-reach §10.1. |
 | `draft_circle_fillet.go` | Rebuilds a positive-taper circular draft's far cap-rim fillet as a bounded full meridian revolution. See draft §10.4. |
 | `draft_circle_chamfer.go` | Rebuilds a positive-taper circular draft's far cap-rim chamfer as a bounded full meridian revolution. See draft §10.5. |
 | `draft_circle_shell.go` | Builds the inward cup of a positive-taper circular draft through a bounded meridian revolution. See draft §10.6. |
