@@ -1,0 +1,111 @@
+package proof
+
+import "math/big"
+
+// ratSplitAdd sets z = a+b (a-b with sub) in lowest terms with Knuth's
+// split GCD (TAOCP 4.5.1): d1 = gcd(q1, q2) and d2 = gcd(t, d1) replace the
+// one GCD of the full cross-multiplied numerator and denominator.
+func ratSplitAdd(z, a, b *big.Rat, sub bool) *big.Rat {
+	p1, q1 := a.Num(), a.Denom()
+	p2, q2 := b.Num(), b.Denom()
+	d1 := new(big.Int).GCD(nil, nil, q1, q2)
+	if isOne(d1) {
+		n := new(big.Int).Mul(p1, q2)
+		m := new(big.Int).Mul(p2, q1)
+		if sub {
+			n.Sub(n, m)
+		} else {
+			n.Add(n, m)
+		}
+		if n.Sign() == 0 {
+			return z.SetInt64(0)
+		}
+		d := m.Mul(q1, q2)
+		z.SetInt(n)
+		z.Denom().Set(d)
+		return z
+	}
+	q1d := new(big.Int).Quo(q1, d1)
+	q2d := new(big.Int).Quo(q2, d1)
+	t := new(big.Int).Mul(p1, q2d)
+	u := new(big.Int).Mul(p2, q1d)
+	if sub {
+		t.Sub(t, u)
+	} else {
+		t.Add(t, u)
+	}
+	if t.Sign() == 0 {
+		return z.SetInt64(0)
+	}
+	d2 := u.GCD(nil, nil, t, d1)
+	if !isOne(d2) {
+		t.Quo(t, d2)
+		q2d.Quo(q2, d2)
+	} else {
+		q2d.Set(q2)
+	}
+	d := q1d.Mul(q1d, q2d)
+	z.SetInt(t)
+	z.Denom().Set(d)
+	return z
+}
+
+// ratSplitMul sets z = a·b in lowest terms: g1 = gcd(p1, q2) and
+// g2 = gcd(p2, q1) cancel before the products are formed.
+func ratSplitMul(z, a, b *big.Rat) *big.Rat {
+	p1, q1 := a.Num(), a.Denom()
+	p2, q2 := b.Num(), b.Denom()
+	if p1.Sign() == 0 || p2.Sign() == 0 {
+		return z.SetInt64(0)
+	}
+	n1, d2 := p1, q2
+	if g := new(big.Int).GCD(nil, nil, p1, q2); !isOne(g) {
+		n1 = new(big.Int).Quo(p1, g)
+		d2 = new(big.Int).Quo(q2, g)
+	}
+	n2, d1 := p2, q1
+	if g := new(big.Int).GCD(nil, nil, p2, q1); !isOne(g) {
+		n2 = new(big.Int).Quo(p2, g)
+		d1 = new(big.Int).Quo(q1, g)
+	}
+	n := new(big.Int).Mul(n1, n2)
+	d := new(big.Int).Mul(d1, d2)
+	z.SetInt(n)
+	z.Denom().Set(d)
+	return z
+}
+
+// QuoRat sets z = a/b in lowest terms: g1 = gcd(p1, p2) and
+// g2 = gcd(q1, q2) cancel first. b must be nonzero.
+func QuoRat(z, a, b *big.Rat) *big.Rat {
+	p1, q1 := a.Num(), a.Denom()
+	p2, q2 := b.Num(), b.Denom()
+	if p2.Sign() == 0 {
+		return z.Quo(a, b)
+	}
+	if p1.Sign() == 0 {
+		return z.SetInt64(0)
+	}
+	n1, n2 := p1, p2
+	if g := new(big.Int).GCD(nil, nil, p1, p2); !isOne(g) {
+		n1 = new(big.Int).Quo(p1, g)
+		n2 = new(big.Int).Quo(p2, g)
+	}
+	m1, m2 := q2, q1
+	if g := new(big.Int).GCD(nil, nil, q1, q2); !isOne(g) {
+		m1 = new(big.Int).Quo(q2, g)
+		m2 = new(big.Int).Quo(q1, g)
+	}
+	n := new(big.Int).Mul(n1, m1)
+	d := new(big.Int).Mul(m2, n2)
+	if d.Sign() < 0 {
+		n.Neg(n)
+		d.Neg(d)
+	}
+	z.SetInt(n)
+	z.Denom().Set(d)
+	return z
+}
+
+// isOne reports whether x is 1.
+func isOne(x *big.Int) bool { return x.IsInt64() && x.Int64() == 1 }

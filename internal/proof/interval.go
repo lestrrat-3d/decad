@@ -184,7 +184,8 @@ func ScaledNum(r *big.Rat, den *big.Int) *big.Int {
 // so stripping the numerator's trailing zero bits, at most m of them, reaches
 // them (setPowerOfTwoFrac). Each returns the rational big.Rat's own operation
 // returns, in the same lowest terms. An operand with any other denominator
-// takes big.Rat's operation itself. Each sets z, which may alias either
+// takes the split-GCD form (rat_split.go), which returns the same lowest
+// terms as big.Rat's operation. Each sets z, which may alias either
 // operand or both, and returns it; the result is written into z's own
 // numerator and denominator.
 func AddRat(z, a, b *big.Rat) *big.Rat {
@@ -194,7 +195,7 @@ func AddRat(z, a, b *big.Rat) *big.Rat {
 		return addMixedDyadic(z, a, b, i, j, okA, false)
 	}
 	if !okA {
-		return z.Add(a, b)
+		return ratSplitAdd(z, a, b, false)
 	}
 	return setPowerOfTwoFrac(z, alignedNum(z, a, b, i, j, false))
 }
@@ -206,7 +207,7 @@ func SubRat(z, a, b *big.Rat) *big.Rat {
 		return addMixedDyadic(z, a, b, i, j, okA, true)
 	}
 	if !okA {
-		return z.Sub(a, b)
+		return ratSplitAdd(z, a, b, true)
 	}
 	return setPowerOfTwoFrac(z, alignedNum(z, a, b, i, j, true))
 }
@@ -215,7 +216,11 @@ func MulRat(z, a, b *big.Rat) *big.Rat {
 	i, okA := denomExp(a)
 	j, okB := denomExp(b)
 	if !okA || !okB {
-		return z.Mul(a, b)
+		if a == b {
+			// big.Rat squares without a GCD; keep that path.
+			return z.Mul(a, b)
+		}
+		return ratSplitMul(z, a, b)
 	}
 	z.Num().Mul(a.Num(), b.Num())
 	return setPowerOfTwoFrac(z, i+j)
