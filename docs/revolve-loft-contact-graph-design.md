@@ -57,3 +57,24 @@ interval, complete station run, and occupied cap arc. A changed source
 station, face, reference, interval, root, or event ID refuses. Graph records
 and the open patches remain construction pieces; the retained LoftFaces faces,
 joined shell, boundary displacement, and occupied-volume proofs are separate.
+
+## Clear blank-shell triangles
+
+A clear-patch consumer constructs the graph and all-run shell from the current
+Revolve and trimmed `LoftFaces` producers, then tessellates the actual trimmed
+tool at `VerifyAll` with the caller's chord tolerance. A candidate triangle
+must retain its source section, face origins, ring band, angular interval,
+held vertices and sufficient face bound. The tool mesh must publish an embedded
+boundary and an occupied-volume proof. A missing or changed producer,
+provenance record, bound or proof leaves the candidate unclassified.
+
+For every tool facet, exact triangle-distance predicates must prove a gap
+strictly greater than the sum of the shell's complete face bound and the
+tool's mesh bound. A candidate beside a contact run or trim-cap arc generally
+cannot pass this test and stays unclassified. The exact interior centroid is
+rounded with its displacement charged against the gap. A verified point query
+must classify that point as inside or outside the trimmed tool. The gap then
+keeps the tool boundary away from every point of the connected shell triangle,
+so that one point's occupancy labels the whole triangle. An undecided or
+boundary point query leaves it unclassified. These labels do not select a
+retained mask, build the LoftFaces side, close a joined shell or admit `Union`.
