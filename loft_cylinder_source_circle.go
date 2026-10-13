@@ -361,30 +361,157 @@ func loftCylinderSourceUnionBox(a, b loftCylinderSourceXYBox) loftCylinderSource
 	return loftCylinderSourceBoxOf(a.lo, a.hi, b.lo, b.hi)
 }
 
+// loftCylinderSourceRay is one connector half at a fixed height parameter t:
+// the point at wall parameter u is origin + u*direction, the same rational
+// point(u, t) forms from its three nested lerps.
+type loftCylinderSourceRay struct{ origin, direction loftCylinderXY }
+
+// rays fixes t for both halves (a->d, then d->f) of the connector.
+func (c loftCylinderSourceConnector) rays(t *big.Rat) [2]loftCylinderSourceRay {
+	var out [2]loftCylinderSourceRay
+	for half, pair := range [2][2][2]loftCylinderXY{{c.a, c.d}, {c.d, c.f}} {
+		lo, hi := pair[0], pair[1]
+		d0 := loftCylinderSourceSub(hi[0], lo[0])
+		d1 := loftCylinderSourceSub(hi[1], lo[1])
+		out[half] = loftCylinderSourceRay{
+			origin:    loftCylinderSourceLerp(lo[0], lo[1], t),
+			direction: loftCylinderSourceLerp(d0, d1, t),
+		}
+	}
+	return out
+}
+
+// loftCylinderSourcePointAt is point(s, t) read off rays(t).
+func loftCylinderSourcePointAt(rays [2]loftCylinderSourceRay, s *big.Rat) loftCylinderXY {
+	u := s
+	ray := rays[0]
+	if s.Cmp(big.NewRat(1, 1)) > 0 {
+		ray = rays[1]
+		u = new(big.Rat).Sub(s, big.NewRat(1, 1))
+	}
+	return loftCylinderXY{
+		x: new(big.Rat).Add(ray.origin.x, new(big.Rat).Mul(u, ray.direction.x)),
+		y: new(big.Rat).Add(ray.origin.y, new(big.Rat).Mul(u, ray.direction.y)),
+	}
+}
+
+// loftCylinderSourceIntRay is a connector half at fixed height parameter t
+// with integer coordinates over the shared positive denominator den:
+// point(u) = (origin + u*direction) / den.
+type loftCylinderSourceIntRay struct {
+	ox, oy, dx, dy *big.Int
+	den            *big.Int
+}
+
+func loftCylinderLCM(a, b *big.Int) *big.Int {
+	g := new(big.Int).GCD(nil, nil, a, b)
+	return new(big.Int).Mul(a, new(big.Int).Quo(b, g))
+}
+
+func loftCylinderSourceIntRayOf(ray loftCylinderSourceRay) loftCylinderSourceIntRay {
+	den := loftCylinderLCM(loftCylinderLCM(ray.origin.x.Denom(), ray.origin.y.Denom()),
+		loftCylinderLCM(ray.direction.x.Denom(), ray.direction.y.Denom()))
+	scale := func(q *big.Rat) *big.Int {
+		return new(big.Int).Mul(q.Num(), new(big.Int).Quo(den, q.Denom()))
+	}
+	return loftCylinderSourceIntRay{ox: scale(ray.origin.x), oy: scale(ray.origin.y),
+		dx: scale(ray.direction.x), dy: scale(ray.direction.y), den: den}
+}
+
+// pointInt is the point at s = m / 2^k over denominator den*2^k.
+func (r loftCylinderSourceIntRay) pointInt(m, pow *big.Int) (*big.Int, *big.Int) {
+	x := new(big.Int).Mul(r.ox, pow)
+	x.Add(x, new(big.Int).Mul(m, r.dx))
+	y := new(big.Int).Mul(r.oy, pow)
+	y.Add(y, new(big.Int).Mul(m, r.dy))
+	return x, y
+}
+
+// crossingBox bisects the wall parameter in integers: low and high are
+// L/2^k and H/2^k, every comparison is an exact comparison of rationals
+// cross-multiplied over positive denominators, and the box is formed from the
+// final dyadic bounds with the exact rational lerps.
 func (c loftCylinderSourceConnector) crossingBox(tLo, tHi, radius2 *big.Rat) loftCylinderSourceXYBox {
-	low, high := big.NewRat(0, 1), big.NewRat(2, 1)
+	raysLo, raysHi := c.rays(tLo), c.rays(tHi)
+	var intLo, intHi [2]loftCylinderSourceIntRay
+	for half := range 2 {
+		intLo[half] = loftCylinderSourceIntRayOf(raysLo[half])
+		intHi[half] = loftCylinderSourceIntRayOf(raysHi[half])
+	}
+	rn, rd := radius2.Num(), radius2.Denom()
+	sameT := tLo.Cmp(tHi) == 0
+	// low = L/2^k, high = H/2^k.
+	low, high := big.NewInt(0), big.NewInt(2)
+	pow := big.NewInt(1)
+	point := func(rays *[2]loftCylinderSourceIntRay, m, pow *big.Int) (*big.Int, *big.Int, *big.Int) {
+		ray := &rays[0]
+		u := m
+		if m.Cmp(pow) > 0 {
+			ray = &rays[1]
+			u = new(big.Int).Sub(m, pow)
+		}
+		x, y := ray.pointInt(u, pow)
+		return x, y, new(big.Int).Mul(ray.den, pow)
+	}
+	norm2 := func(x, y *big.Int) *big.Int {
+		return new(big.Int).Add(new(big.Int).Mul(x, x), new(big.Int).Mul(y, y))
+	}
+	// cmpFrac compares n/d (d > 0) against radius2: sign of n*rd - rn*d.
+	cmpFrac := func(n, d *big.Int) int {
+		return new(big.Int).Mul(n, rd).Cmp(new(big.Int).Mul(rn, d))
+	}
 	for range 52 {
-		mid := new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1))
-		p0, p1 := c.point(mid, tLo), c.point(mid, tHi)
-		q0, q1 := loftCylinderSourceDot(p0, p0), loftCylinderSourceDot(p1, p1)
-		if q0.Cmp(radius2) < 0 && q1.Cmp(radius2) < 0 {
+		// mid = (low+high)/2 = (L+H)/2^(k+1).
+		low.Lsh(low, 1)
+		high.Lsh(high, 1)
+		pow.Lsh(pow, 1)
+		mid := new(big.Int).Add(low, high)
+		mid.Rsh(mid, 1)
+		x0, y0, e0 := point(&intLo, mid, pow)
+		x1, y1, e1 := point(&intHi, mid, pow)
+		q0, q1 := norm2(x0, y0), norm2(x1, y1)
+		e0sq, e1sq := new(big.Int).Mul(e0, e0), new(big.Int).Mul(e1, e1)
+		if cmpFrac(q0, e0sq) < 0 && cmpFrac(q1, e1sq) < 0 {
 			low = mid
 			continue
 		}
-		if loftCylinderSourceRadiusMin2(p0, p1).Cmp(radius2) > 0 {
+		// Common denominator E = e0*e1 for the segment p0 -> p1.
+		px0, py0 := new(big.Int).Mul(x0, e1), new(big.Int).Mul(y0, e1)
+		px1, py1 := new(big.Int).Mul(x1, e0), new(big.Int).Mul(y1, e0)
+		esq := new(big.Int).Mul(e0, e1)
+		esq.Mul(esq, esq)
+		dx, dy := new(big.Int).Sub(px1, px0), new(big.Int).Sub(py1, py0)
+		den := norm2(dx, dy)
+		num := new(big.Int).Add(new(big.Int).Mul(px0, dx), new(big.Int).Mul(py0, dy))
+		num.Neg(num)
+		var minNum, minDen *big.Int
+		switch {
+		case den.Sign() == 0 || num.Sign() <= 0:
+			minNum, minDen = norm2(px0, py0), esq
+		case num.Cmp(den) >= 0:
+			minNum, minDen = norm2(px1, py1), esq
+		default:
+			minNum = new(big.Int).Sub(new(big.Int).Mul(norm2(px0, py0), den), new(big.Int).Mul(num, num))
+			minDen = new(big.Int).Mul(den, esq)
+		}
+		if cmpFrac(minNum, minDen) > 0 {
 			high = mid
 			continue
 		}
-		if tLo.Cmp(tHi) == 0 && q0.Cmp(radius2) == 0 {
-			low, high = mid, mid
+		if sameT && cmpFrac(q0, e0sq) == 0 {
+			low, high = mid, new(big.Int).Set(mid)
 		}
 		break
 	}
+	lowRat := new(big.Rat).SetFrac(low, pow)
+	highRat := new(big.Rat).SetFrac(high, pow)
 	box := loftCylinderSourceBoxOf(
-		c.point(low, tLo), c.point(low, tHi), c.point(high, tLo), c.point(high, tHi))
-	if low.Cmp(big.NewRat(1, 1)) < 0 && high.Cmp(big.NewRat(1, 1)) > 0 {
+		loftCylinderSourcePointAt(raysLo, lowRat), loftCylinderSourcePointAt(raysHi, lowRat),
+		loftCylinderSourcePointAt(raysLo, highRat), loftCylinderSourcePointAt(raysHi, highRat))
+	if lowRat.Cmp(big.NewRat(1, 1)) < 0 && highRat.Cmp(big.NewRat(1, 1)) > 0 {
 		middle := big.NewRat(1, 1)
-		box = loftCylinderSourceUnionBox(box, loftCylinderSourceBoxOf(c.point(middle, tLo), c.point(middle, tHi)))
+		box = loftCylinderSourceUnionBox(box, loftCylinderSourceBoxOf(
+			loftCylinderSourcePointAt(raysLo, middle), loftCylinderSourcePointAt(raysHi, middle)))
 	}
 	return box
 }

@@ -1039,9 +1039,12 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		tri  [3]r3.Vec
+		// A triangle sharing a coordinate plane with a is decided by the
+		// float filter's zero-axis shortcut and never reaches the exact path.
+		decidedByFilter bool
 	}{
 		{name: `shared edge`, tri: b},
-		{name: `copied facet`, tri: a},
+		{name: `copied facet`, tri: a, decidedByFilter: true},
 		{name: `near coplanar`, tri: [3]r3.Vec{
 			{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: near}, {X: 5, Y: 10, Z: -near},
 		}},
@@ -1063,6 +1066,10 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 					proofarith.OrientSignPrepared(a[0], a[1], a[2], tc.tri[i], xta[0], xtri[i], na))
 				require.Equal(t, proofarith.OrientSign(tc.tri[0], tc.tri[1], tc.tri[2], a[i]),
 					proofarith.OrientSignPrepared(tc.tri[0], tc.tri[1], tc.tri[2], a[i], xtri[0], xta[i], ntri))
+			}
+			if tc.decidedByFilter {
+				require.Zero(t, uncertain, `the filter must decide every coplanar sign`)
+				return
 			}
 			require.Positive(t, uncertain, `this case must exercise the exact fallback`)
 		})

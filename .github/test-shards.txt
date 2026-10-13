@@ -1402,3 +1402,6 @@
 10	30.00	TestSpiralBernsteinIntegerMatchesReference
 10	2.00	TestSpiralRootRowsMatchReference
 10	0.00	Example_decad_quickstart
+10	0.01	TestLoftCylinderEdgesMeetXPAgreesWithRational
+10	0.01	TestLoftCylinderSourceCrossingBoxMatchesRationalBisection
+10	0.01	TestLoftCylinderTriangleMinRadiusMatchesRational
