@@ -5,7 +5,9 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -113,11 +115,8 @@ func (plane LoftExactPlane) Sign(p proof.Xpt, sum, term *big.Int) int {
 }
 
 func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
-	xverts := make([]proof.Xpt, len(verts))
-	for i, v := range verts {
-		xverts[i] = proof.XptOf(v)
-	}
-	return NewLoftAuditDataWithExact(verts, xverts, tris)
+	workers := loftDataWorkers(verts, len(tris))
+	return newLoftAuditDataSelected(verts, liftLoftVertices(verts, nil, workers), tris, nil, false, workers)
 }
 
 // NewLoftAuditDataWithExact audits a rational construction whose float
@@ -125,23 +124,25 @@ func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 // broad-phase boxes by its certified exact-to-float error before omitting a
 // pair and use LoftAuditShortcuts.ExactInput to disable float-only filters.
 func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int) *LoftAuditData {
-	return newLoftAuditDataSelected(verts, exact, tris, nil, false)
+	return newLoftAuditDataSelected(verts, exact, tris, nil, false, loftDataWorkers(verts, len(tris)))
 }
 
 // newCompactLoftAuditData retains one projection per vertex and axis. The
 // streamed S7 path reconstructs triangle triples from these immutable tables.
 func newCompactLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
-	exact := make([]proof.Xpt, len(verts))
-	for i, v := range verts {
-		exact[i] = proof.XptOf(v)
-	}
-	return newLoftAuditDataSelected(verts, exact, tris, nil, true)
+	workers := loftDataWorkers(verts, len(tris))
+	return newLoftAuditDataSelected(verts, liftLoftVertices(verts, nil, workers), tris, nil, true, workers)
 }
 
 // newLoftAuditDataForCandidates keeps full-length index tables while lifting
 // only triangles that S8 retained for pairwise classification. S6 and the
 // projected patch proof have already checked every triangle before this call.
 func newLoftAuditDataForCandidates(verts []r3.Vec, tris [][3]int, cands loftCandidates) *LoftAuditData {
+	return newLoftAuditDataForCandidatesWorkers(verts, tris, cands, loftDataWorkers(verts, len(tris)))
+}
+
+func newLoftAuditDataForCandidatesWorkers(verts []r3.Vec, tris [][3]int, cands loftCandidates,
+	workers int) *LoftAuditData {
 	selected := make([]bool, len(tris))
 	for i := range len(cands.starts) - 1 {
 		if cands.starts[i] != cands.starts[i+1] {
@@ -152,22 +153,50 @@ func newLoftAuditDataForCandidates(verts []r3.Vec, tris [][3]int, cands loftCand
 		selected[j] = true
 	}
 
-	exact := make([]proof.Xpt, len(verts))
+	need := make([]bool, len(verts))
 	for i, tri := range tris {
-		if !selected[i] {
-			continue
-		}
-		for _, vertex := range tri {
-			if exact[vertex].W == nil {
-				exact[vertex] = proof.XptOf(verts[vertex])
-			}
+		if selected[i] {
+			need[tri[0]], need[tri[1]], need[tri[2]] = true, true, true
 		}
 	}
-	return newLoftAuditDataSelected(verts, exact, tris, selected, false)
+	return newLoftAuditDataSelected(verts, liftLoftVertices(verts, need, workers), tris, selected, false, workers)
 }
 
+// loftDataParallelMin is the triangle count from which the audit tables are
+// built on several goroutines.
+const loftDataParallelMin = 2048
+
+// loftDataWorkers is the worker count for the tables of a mesh with the given
+// triangle count: one when any vertex is non-finite, so a lift that panics
+// does so where the serial loop would.
+func loftDataWorkers(verts []r3.Vec, triangles int) int {
+	workers := orderedwork.EachWorkers(triangles, loftDataParallelMin)
+	if workers >= 2 && !proofbound.AllFinite(verts) {
+		return 1
+	}
+	return workers
+}
+
+// liftLoftVertices returns proof.XptOf of every vertex need marks (every
+// vertex when need is nil); the others stay zero. Each worker writes only the
+// slot of the vertex it owns.
+func liftLoftVertices(verts []r3.Vec, need []bool, workers int) []proof.Xpt {
+	exact := make([]proof.Xpt, len(verts))
+	_, _ = orderedwork.Each(len(verts), workers, 512, nil, func(i int) error {
+		if need == nil || need[i] {
+			exact[i] = proof.XptOf(verts[i])
+		}
+		return nil
+	})
+	return exact
+}
+
+// newLoftAuditDataSelected builds the tables of the selected triangles (all
+// when selected is nil). With workers of two or more, the per-triangle and
+// per-vertex passes run on several goroutines; each pass writes only the slot
+// of the item it owns, and the tables equal the serial ones.
 func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
-	selected []bool, compact bool) *LoftAuditData {
+	selected []bool, compact bool, workers int) *LoftAuditData {
 	d := &LoftAuditData{
 		Xverts:     exact,
 		Norms:      make([]proof.Xpt, len(tris)),
@@ -177,19 +206,18 @@ func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
 	}
 	if compact {
 		d.verts, d.tris = verts, tris
-		d.projAxes = make([]uint8, len(tris))
 	} else {
 		d.Corners = make([][3]r3.Vec, len(tris))
 		d.Xtris = make([][3]proof.Xpt, len(tris))
 		d.Projections = make([][3]meshbool.Xp2, len(tris))
 	}
-	// Neighboring triangles reuse a vertex's exact projection on the same plane.
-	var projected [3][]meshbool.Xp2
-	axes := [3][2]int{{0, 1}, {2, 0}, {1, 2}}
-	for i, tri := range tris {
+	// Each triangle's tables depend on that triangle alone.
+	projAxes := make([]uint8, len(tris))
+	_, _ = orderedwork.Each(len(tris), workers, 256, nil, func(i int) error {
 		if selected != nil && !selected[i] {
-			continue
+			return nil
 		}
+		tri := tris[i]
 		xt := [3]proof.Xpt{d.Xverts[tri[0]], d.Xverts[tri[1]], d.Xverts[tri[2]]}
 		if !compact {
 			d.Corners[i] = LoftTriCorners(verts, tri)
@@ -198,25 +226,52 @@ func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
 		d.Norms[i] = proof.Xcross(proof.Xsub(xt[1], xt[0]), proof.Xsub(xt[2], xt[0]))
 		d.floatNorms[i] = d.Norms[i].Vec()
 		d.Planes[i] = NewLoftExactPlane(xt[0], d.Norms[i])
-		projection := ProjectionPairIndex(meshbool.ProjAxes(d.Norms[i]))
-		if compact {
-			d.projAxes[i] = uint8(projection)
+		projAxes[i] = uint8(ProjectionPairIndex(meshbool.ProjAxes(d.Norms[i])))
+		return nil
+	})
+	if compact {
+		d.projAxes = projAxes
+	}
+	// Neighboring triangles share a vertex's exact projection on the same
+	// plane: one value per (plane, vertex) that some selected triangle uses.
+	var need [3][]bool
+	for i, tri := range tris {
+		if selected != nil && !selected[i] {
+			continue
 		}
-		if projected[projection] == nil {
-			projected[projection] = make([]meshbool.Xp2, len(exact))
+		p := projAxes[i]
+		if need[p] == nil {
+			need[p] = make([]bool, len(exact))
 		}
-		for j, vi := range tri {
-			if projected[projection][vi].U == nil {
-				uv := axes[projection]
-				projected[projection][vi] = meshbool.NewXP2FromXpt(exact[vi], uv[0], uv[1])
-			}
-			if !compact {
-				d.Projections[i][j] = projected[projection][vi]
-			}
+		need[p][tri[0]], need[p][tri[1]], need[p][tri[2]] = true, true, true
+	}
+	var projected [3][]meshbool.Xp2
+	for p := range need {
+		if need[p] != nil {
+			projected[p] = make([]meshbool.Xp2, len(exact))
 		}
 	}
+	axes := [3][2]int{{0, 1}, {2, 0}, {1, 2}}
+	_, _ = orderedwork.Each(len(exact), workers, 512, nil, func(vi int) error {
+		for p := range need {
+			if need[p] != nil && need[p][vi] {
+				projected[p][vi] = meshbool.NewXP2FromXpt(exact[vi], axes[p][0], axes[p][1])
+			}
+		}
+		return nil
+	})
 	if compact {
 		d.projected = projected
+		return d
+	}
+	for i, tri := range tris {
+		if selected != nil && !selected[i] {
+			continue
+		}
+		p := projAxes[i]
+		for j, vi := range tri {
+			d.Projections[i][j] = projected[p][vi]
+		}
 	}
 	return d
 }
