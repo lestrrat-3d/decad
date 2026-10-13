@@ -34,7 +34,7 @@ func IntervalQuo(a, b RatInterval) (RatInterval, bool) {
 			loNum, loDen, hiNum, hiDen = a.Hi, b.Hi, a.Lo, b.Hi
 		}
 	}
-	return IntervalOwned(new(big.Rat).Quo(loNum, loDen), new(big.Rat).Quo(hiNum, hiDen)), true
+	return IntervalOwned(proofarith.QuoRat(new(big.Rat), loNum, loDen), proofarith.QuoRat(new(big.Rat), hiNum, hiDen)), true
 }
 
 // IntervalSquare is x² over an interval. It is not IntervalMul(a, a): the
