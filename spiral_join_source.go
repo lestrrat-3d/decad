@@ -563,7 +563,7 @@ func spiralRootPolynomial(first, second loftFaceMap, span freeform.BezierSpan,
 	g0, h0 := spiralCapIntRows(first, span)
 	g1, h1 := spiralCapIntRows(second, span)
 	d := g0.mul(g1)
-	var a, z [3]spiralIntRow
+	var a, z [3]bernsteinIntRow
 	for axis := range a {
 		a[axis] = h0[axis].mul(g1)
 		z[axis] = h1[axis].mul(g0)
@@ -579,13 +579,13 @@ func spiralRootPolynomial(first, second loftFaceMap, span freeform.BezierSpan,
 }
 
 // spiralCapIntRows is spiralCapBern with integer rows.
-func spiralCapIntRows(m loftFaceMap, span freeform.BezierSpan) (spiralIntRow, [3]spiralIntRow) {
+func spiralCapIntRows(m loftFaceMap, span freeform.BezierSpan) (bernsteinIntRow, [3]bernsteinIntRow) {
 	g, h := spiralCapBern(m, span)
-	var rows [3]spiralIntRow
+	var rows [3]bernsteinIntRow
 	for axis := range rows {
-		rows[axis] = spiralIntRowOf(h[axis])
+		rows[axis] = bernsteinIntRowOf(h[axis])
 	}
-	return spiralIntRowOf(g), rows
+	return bernsteinIntRowOf(g), rows
 }
 
 func spiralAllPositive(rows [3][]*big.Rat) bool {
@@ -625,7 +625,8 @@ func spiralRootXOrder(first, second loftFaceMap, span freeform.BezierSpan,
 	bd := b.mul(d)
 	u0 := a.deriv().mul(d).sub(a.mul(d.deriv()))
 	u1 := b.deriv().mul(d).sub(b.mul(d.deriv()))
-	rows := [3]spiralIntRow{spiralIntRowOf(q[0]), spiralIntRowOf(q[1]), spiralIntRowOf(q[2])}
+	rows := [3]bernsteinIntRow{bernsteinIntRowOf(q[0]),
+		bernsteinIntRowOf(q[1]), bernsteinIntRowOf(q[2])}
 	two := big.NewRat(2, 1)
 	q0 := rows[0]
 	q1 := rows[1].sub(rows[0]).scale(two)

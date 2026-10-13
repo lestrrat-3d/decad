@@ -82,6 +82,7 @@
 1	0.00	TestAxialFacetedChainDirectionRejectsBentAndAmbiguousChains
 1	0.00	TestAxisFrameWalkChargeIsAbsentAtZero
 1	0.00	TestAxisFrameWalkChargeWidensEveryFieldItTouches
+1	0.00	TestBernsteinIntegerRowAlgebraMatchesRationalValues
 1	0.00	TestBezierSliceCountSplitsBrokenFromUnsliceable
 1	0.01	TestBlindStackedLevelCarriesToolConversion
 1	0.00	TestBodyGateDiameterCancellation
