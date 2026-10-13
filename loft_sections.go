@@ -22,25 +22,28 @@ type LoftSection struct {
 	Profile *sketch.Profile
 }
 
-// LoftSections builds one solid through three or four Sketch profiles.
+// LoftSections builds one solid through three or more Sketch profiles.
 // The three-section quadratic route admits positive homothetic whole-line loops
 // star-shaped about their common origin. A varying four-arc circular section
 // can build as a ruled cone; exactly matching curved records build as a
 // straight prism. Two varying fitted flanks with unchanged circular arcs
 // use the source interpolants' quadratic height wall. Four rounded rectangles
-// with a common radius and height use a cubic-width wall. Three or four centered
-// rectangles may vary width and height independently. All routes require
+// with a common radius and height use a cubic-width wall. Three to thirty-two
+// centered rectangles may vary width and height independently. All routes require
 // ascending, equally spaced world-XY planes and interpolate every section exactly
 // (docs/loft-sections-design.md). Other shapes refuse.
 func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*Body, error) {
-	if ctx == nil || d == nil || (len(sections) != 3 && len(sections) != 4) {
-		return nil, fmt.Errorf("%w: LoftSections needs a context, document and three or four sections", ErrDegenerate)
+	if ctx == nil || d == nil || len(sections) < 3 {
+		return nil, fmt.Errorf("%w: LoftSections needs a context, document and at least three sections", ErrDegenerate)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if len(sections) == 4 {
 		return d.buildFourRoundedSections(ctx, sections)
+	}
+	if len(sections) >= 5 {
+		return d.buildManyRectangularSections(ctx, sections)
 	}
 	var records [3]profileRecord
 	var planes [3]planeRecord
@@ -88,6 +91,32 @@ func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*
 		return nil, err
 	}
 	return d.buildSmoothSectionBody(ctx, built, planes[0], planes[2])
+}
+
+func (d *Document) buildManyRectangularSections(ctx context.Context, sections []LoftSection) (*Body, error) {
+	if len(sections) > 32 {
+		return nil, fmt.Errorf("%w: rectangular LoftSections accepts at most 32 sections", ErrUnsupported)
+	}
+	records := make([]profileRecord, len(sections))
+	planes := make([]planeRecord, len(sections))
+	for i, section := range sections {
+		if section.Sketch == nil || section.Profile == nil {
+			return nil, fmt.Errorf("%w: LoftSections section %d needs a sketch and profile", ErrDegenerate, i)
+		}
+		profile, plane, sketchArea, err := recordProfile(section.Sketch, section.Profile)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := falsifyRecordedArea(profile, sketchArea, freeform.NewFreeformWork()); err != nil {
+			return nil, err
+		}
+		records[i], planes[i] = profile, plane
+	}
+	built, err := smoothloft.BuildManyRectangles(ctx, records, planes)
+	if err != nil {
+		return nil, err
+	}
+	return d.buildSmoothSectionBody(ctx, built, planes[0], planes[len(planes)-1])
 }
 
 func (d *Document) buildFourRoundedSections(ctx context.Context, sections []LoftSection) (*Body, error) {

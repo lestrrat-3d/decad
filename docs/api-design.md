@@ -941,7 +941,7 @@ Patch, Stitch, Unstitch, Thicken**, plus the sweeps of an OPEN sketch curve —
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
 rule, and its increment-1 scope. `docs/loft-sections-design.md` owns the
 separate `Document.LoftSections`: three quadratic homothetic line sections or
-three or four independently varying axis-aligned rectangles,
+three to thirty-two independently varying axis-aligned rectangles,
 exactly identical curved sections, linearly varying four-arc circles, and the
 bounded varying fitted-flank class with fixed arcs; or four rounded-rectangle
 sections with cubic width and fixed height and corner radius.
@@ -992,7 +992,7 @@ chain's seam gates and before the axis gates and any commit
 (`docs/surface-design.md` §13.2).
 
 `LoftSections(ctx, sections ...LoftSection)` carries each `Sketch` and
-`Profile` together. It admits the three- and four-section classes in
+`Profile` together. It admits the bounded classes in
 `docs/loft-sections-design.md`.
 
 `LoftFaces(ctx, sections ...*Face)` consumes two to thirty-two ordered planar caps from
