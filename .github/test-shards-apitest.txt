@@ -464,6 +464,11 @@
 3	0.03	TestClearanceFrameOriginGapEnclosesExactGap
 3	1.60	TestClearanceOracleOverlapNeverSound
 3	0.01	TestClearanceSubTolAxialOverlapMeasured
+3	0.02	TestClosedShellOfNestedRectangularSlabs
+3	0.01	TestClosedShellOfNestedRectangularSlabsRefusesCollapsedCavity
+3	0.01	TestClosedShellOfNestedRectangularSlabsRefusesInexactReverseFrame
+3	0.02	TestClosedShellOfNestedRectangularSlabsReversedLevels
+3	0.02	TestClosedShellOfNestedRectangularSlabsSwappedAxes
 3	0.04	TestContactPairPlanarManifoldPlateHole
 3	0.01	TestContactPairPlanarManifoldSlopedNormal
 3	0.02	TestContactPairRepeatReturnsEqualPrivateReport

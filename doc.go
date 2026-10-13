@@ -190,7 +190,7 @@
 //	    rim past the removed walk's far end                   ErrUnsupported
 //	  holed meridian, or one meeting the axis twice           ErrUnsupported
 //	  offset reaching across the axis                         ErrUnsupported
-//	  WithNoOpenings on any other receiver                    ErrUnsupported
+//	  WithNoOpenings on other receivers                       ErrUnsupported
 //	Fillet/Chamfer/Shell  brep or stacked boolean result that
 //	                      reads as a prism along an axis      builds
 //	Shell         brep read as a prism cut by through tools,
@@ -198,6 +198,9 @@
 //	              along section axes removed                  builds
 //	Shell         exact nested rectangular or circular boss
 //	              on a rectangular plate, top removed         builds
+//	              nested rectangular slabs, no openings,
+//	              inward; reversed order needs an exact
+//	              frame flip                                    builds
 //	  a brep or stacked result that reads as neither          ErrUnsupported
 //	  outward; a curved removed wall, or a wall run ending
 //	    at a reflex corner; dilated tools that meet, reach
@@ -245,8 +248,8 @@
 // WithTangentChain expands a Fillet's or Chamfer's edges
 // across proven tangent continuations, WithAsymmetricChamfer gives a Chamfer
 // two setbacks, WithShellSense picks a shell's wall sense, WithNoOpenings asks
-// for a closed shell (built for a full revolve and a hole-free prism,
-// [ErrUnsupported] elsewhere),
+// for a closed shell (built for a full revolve, a hole-free prism and an
+// inward nested rectangular-slab Union; [ErrUnsupported] elsewhere),
 // and WithTaper drafts an extrude's walls by a signed angle, a positive one
 // narrowing the body away from the sketch plane (docs/draft-design.md); a
 // taper the support map does not list is [ErrUnsupported], returned before

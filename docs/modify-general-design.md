@@ -158,21 +158,43 @@ face across the first axis holding more than two, else axis 0's reason.
 Before route S's through-cut reading, `shellStackedBoss` admits one nested,
 hole-free pair of axis-aligned rectangular slabs in the same frame. Both
 sections and all levels must have zero displacement. The lower slab is the
-plate, the upper slab is the boss, and the one removed face must be the boss
-top. Inward thickness `t` must leave a positive floor, a positive lower
-cavity wall, an upper cavity at least `2t` narrower in both directions, and
+plate, the upper slab is the boss for the top-open call. `WithNoOpenings`
+accepts that order and the reverse order, where the lower slab is narrower.
+The reverse order negates both slab intervals and each section's V coordinate,
+flips the frame's V axis exactly, and rebuilds the exposed interface. It then
+takes the same closed construction in a right-handed frame. If `r3.NewFrame`
+changes any held U, V or N component while flipping V, the reverse route
+refuses because the source-to-result map would need a displacement bound.
+Inward thickness `t` must leave a positive floor, a positive lower cavity
+wall, an upper cavity at least `2t` narrower in both directions, and, for a
+closed shell, a positive cavity below the boss roof. It must also leave
 positive clearance between the boss and the plate's eroded outline. All new
 offset coordinates must be exactly representable. Other stacks continue to
 route S and keep SG3.
 
-The result keeps the source's exterior faces except the boss top. Its cavity
-has a plate inset over `[z0+t, z1-t]`, a horizontal ledge at `z1-t`, and a
+With no opening, the source's complete outer boundary remains. The cavity
+ends at `z2 − t`, where its ceiling faces into the void. Its lower inset,
+ledge and four quarter-cylinder root patches match the top-open construction.
+The completed cavity forms one void shell inside the one outer shell; the
+plate floor, boss roof and root clearances prove they do not meet.
+
+The top-open result keeps the source's exterior faces except the boss top.
+Its cavity has a plate inset over `[z0+t, z1-t]`, a horizontal ledge at `z1-t`, and a
 boss inset over `[z1, z2]`. Four quarter-cylinder patches join the ledge's
 boss-sized inner ring to the upper cavity walls. Adjacent patches meet on
 four `Ellipse3` seams. The lower and upper rings each bound one ordinary
 record face and one patch. The body build mints fresh `face(k)` and `wall(k)`
 roles; each patch has a `filletLoop` role. No planar cap is inserted at the
 transition.
+
+The closed result keeps the boss's complete top, ends the boss inset at
+`z2 − t`, and caps that inset with one cavity ceiling. The source's exterior
+faces form one connected shell. The derived cavity floor, inset walls,
+ledge, four cylinder patches and ceiling form one other closed face group.
+`evalBrepContext` marks that group void after confirming that all source
+faces occupy the exterior group. For the same dimensions and thickness,
+the closed volume adds the boss inset's area times `t` to the top-open
+volume; its first axial moment adds that volume at height `z2 − t/2`.
 
 For boss width `w`, depth `d` and thickness `t`, the transition's void volume
 is `wdt - 2(w+d)t² + (w+d)πt²/2 + (20/3 - 2π)t³`. The shell volume subtracts
@@ -328,10 +350,11 @@ The removed faces are read against the recognised record:
 Only `Inward` builds. The dilation `(A \ T) ⊕ t` does not distribute over the
 difference and rounds every convex edge of the receiver — a hole mouth's rim
 into a torus, a box corner into a sphere — so `Outward` is SG1.
-`WithNoOpenings` is SG2: a brep record's lumps are its connected face sets
-(general-boolean §4.2), and a closed cavity's faces would read as a second
-solid; the void shell `shellClosedPrism` builds lives on the stacked record
-alone.
+`WithNoOpenings` takes §3.1a's closed rectangular-boss case. It is SG2 on
+other brep or stacked receivers: a brep record's lumps are its connected face
+sets (general-boolean §4.2), and a closed cavity's faces would read as a
+second solid without a nesting proof. The void shell `shellClosedPrism`
+builds lives on the stacked record alone.
 
 ### 3.3 Construction
 
@@ -467,7 +490,7 @@ Modify §1's test picks every sentinel.
 | SG | Call | Exists? | Sentinel |
 |---|---|---|---|
 | **SG1** | `WithShellSense(Outward)` on a brep or stacked receiver | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
-| **SG2** | `WithNoOpenings` on a brep or stacked receiver | yes; a brep record holds no void shell | `ErrUnsupported` (replaces SX16's text for this call) |
+| **SG2** | `WithNoOpenings` on a brep or stacked receiver outside §3.1a's nested rectangular boss | yes; no other brep record carries a certified void shell | `ErrUnsupported` (replaces SX16's text for this call) |
 | **SG3** | the record is no through-cut record (Table TC) and is outside §3.1a–§3.1e: a blind port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion may hold surfaces beyond the admitted cases | `ErrUnsupported`, naming the first face Table TC does not take |
 | **SG4** | a removed face that is a tool wall outside §3.1d, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
 | **SG5** | a removed face that names no face of the record; a removed wall that is no straight wall along a section axis (a fillet cylinder: its rim is no planar face); a wall run whose end cuts backward along the removed carrier (a reflex corner: the rim lies inside the material). A set of walls that is no proper connected run is shell-opening SO6 | yes | `ErrUnsupported` |
@@ -481,7 +504,7 @@ reach SX10:
 |---|---|
 | 2a. record | RB dispatch; SB2; SB1 |
 | 2b. route P | brep-modify §4.2 unchanged: an axis whose prism takes the removed faces as caps builds the prism's own cup or tube |
-| 2c. route S entry | SG1; SG2; Table TC (SG3); §3.1d's exact circular-wall case; the remaining removed faces against the record (SG4, SG5's face and straight-wall tests) |
+| 2c. route S entry | SG1; §3.1a's closed-boss case or SG2; Table TC (SG3); §3.1d's exact circular-wall case; the remaining removed faces against the record (SG4, SG5's face and straight-wall tests) |
 | 3. existence | caps alone: S18; S10 (section and height limits); S11a on `S`. A wall run: `sideOpeningRegions` in shell-opening §5's stages 2–5 (SO6, SO3's height half, S11a and SO1, SO2, SO4 per end, S8, S11b and S9 on `W` and `C`, the area identity), then SG5's reflex-end test. Then S11a on each tool |
 | 4. offset audit | S8, S11b, S9 on `S ⊖ t` (caps alone) and on each `Tᵢ ⊕ t`; TC7 (SG6) |
 | 5. cavity | the private cuts (SG6) |
@@ -737,7 +760,7 @@ as a plane, takes the partial fillet route
 |---|---|---|---|---|
 | **BG1** | route S shell | `brepPayload`, `stack` nil | the receiver's kept faces, the cavity's faces reversed, one rim per removed face; every edge on exactly two faces | `face(k)` / `wall(k)` by result index; no `capStart`/`capEnd` |
 | **BG2** | route L chamfer | `brepPayload` with `loopBands`, `stack` nil | the rewritten record's faces plus the band patches | `face(k)` / `wall(k)`; each patch `chamferLoop(f,l,p)` for face `f`, loop `l`, patch `p` in its band's own order |
-| **BG3** | rectangular-boss shell (§3.1a) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus four cylinder patches and four ellipse seams | `face(k)` / `wall(k)`; the patches carry `filletLoop` roles |
+| **BG3** | rectangular-boss shell (§3.1a) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus four cylinder patches and four ellipse seams; the closed arm groups the cavity as one void shell | `face(k)` / `wall(k)`; the patches carry `filletLoop` roles |
 | **BG4** | circular-boss shell (§3.1c) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus one whole-turn torus patch | `face(k)` / `wall(k)`; the patch carries a `filletLoop` role |
 | **BG5** | box all-edge chamfer (§4.3b) | `allEdgeChamferPayload` | six inset box planes, twelve bevel planes, one bore cylinder | `face(k)` / `chamfer(axis,side,side)` / `wall(6)` |
 | **BG6** | coaxial counterbore shell (§3.1e) | `brepPayload` with `pocketShell`, `stack` nil | retained source faces, two cavity linings and floors, two opening rims, one whole-turn torus patch | `face(k)` / `wall(k)`; the patch carries a `filletLoop` role |
@@ -773,7 +796,7 @@ Other record-based consumers keep their existing payload gates.
 | chamfers of edges sharing a vertex outside one loop, or fillets whose selected edges share no planar loop after straight-wall restatement | SB5 / SL1 | the mixed chamfer's corner plane has no reference-axis normal; route V and the partial fillet admit the cases in `docs/vertex-blend-design.md` |
 | an edge ending on a blend or a curved face outside P8's exact front top edge (§4.3c) | SB7 | the complete-loop fillet builds P8's top loop (`docs/loop-fillet-design.md`); other partial edges need a source and cutter-contact proof |
 | shell of a blind pocket outside §3.1b, a counterbore outside §3.1e, a blind port, a stacked union outside §3.1a or §3.1c, or a keyway (P2, P3, P6c) | SG3 | the remaining cases need a shape-specific exact transition and occupied-volume proof |
-| an outward or closed shell of a brep | SG1 / SG2 | §3.2 |
+| an outward shell, or a closed shell outside §3.1a | SG1 / SG2 | §3.2 |
 | shell removing a curved outer wall (a fillet cylinder, P8), or a wall run ending at a reflex corner (P7's `y = 8` wall) | SG5 | the rim at a curved outer wall is a swept face less the cavity's trace, and a reflex end's rim lies inside the material along the removed carrier; the rim assembly states only planar regions on a removed face |
 | the surveyed modify requests on faceted P6b and P9 | reach SX9 | these receivers have no retained source route; a complete tilted plate-to-cylinder junction has the separate bounded `Fillet` in `docs/oblique-boss-fillet-design.md` |
 

@@ -102,7 +102,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 |---|---|---|---|
 | **RX1** | `prismPayload` | base lateral junctions; one straight cap edge through route E or the bounded cutter; OR every geometric edge of one or more complete cap loops. Route V admits both classes in one `Fillet` call where its partition holds (`docs/vertex-blend-design.md`) | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR, for a hole-free section, `WithNoOpenings` |
 | **RX2** | `revolvePayload` | off-axis swept meridian junctions: a full-turn latitude `Circle3` or partial-turn junction `Arc3`; one bounded quarter-turn rectangular cap rim (§7.2) | full turn: one proper connected run of generated side faces, or `WithNoOpenings`; partial turn: both angular caps MUST be removed, with an optional proper connected side-face run |
-| **RX3** | `stackedPrismPayload` | through its face view, `docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same |
+| **RX3** | `stackedPrismPayload` | through its face view, `docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same, plus `WithNoOpenings` for a nested two-slab rectangular boss (modify-general §3.1a) |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
 | **RX5** | `cupPayload`: a two-slab `stackedPrismPayload` record beside the shell morphology (§9.1) | base S3 | base S3 |
 | **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | certified loft/cylinder outer cap `Chamfer`, including mirrored bore results, or one cross-cylinder bore-mouth `Chamfer`; otherwise SX9 | SX9 |
