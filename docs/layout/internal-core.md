@@ -30,7 +30,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks, coalescing, and analytic survey and modify loops over recorded segments. |
 | `internal/classbgeom/` | Class-B boolean geometry. See general-boolean §3 B, §5. |
-| `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, measurements, extents, face surveys and topology. See general-boolean §4–§5. |
+| `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, measurements, extents, face surveys, middle-rim audit and topology. See general-boolean §4–§5. |
 | `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
 | `internal/prismshell/` | Prism side-opening sections, slab levels and stack faces. See shell-opening §3–§5. |
@@ -50,7 +50,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/tessellation/` | Recorded-loop and band chording, mesh topology, bounds and audits. See tessellation-design. |
 | `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines. See loop-fillet §7.1. |
 | `internal/stationbound/` | Bounds circular chord stations and offset cap stations against their exact recorded parameters. |
-| `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums, projected cap proof, and grouped contact scans. |
+| `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums, projected cap proof, body reading finiteness gate, mirrored-cylinder bridge terms, and grouped contact scans. |
 | `internal/smoothloft/` | Three-section homothety, independent rectangles, varying curves, and four-section rounded-rectangle gates, held meshes and bounds. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs. |
 | `internal/revolveplan/` | Revolve mesh walk resolution, coordinate ceilings and chord counts. See tessellation §8. |
