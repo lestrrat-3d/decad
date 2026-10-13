@@ -29,7 +29,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/sectionaudit/` | Rewrite audit order, signed area, cutback, crossing, contact and nesting checks. See modify §5. |
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
-| `internal/boundarywalk/` | Bounded walks, coalescing, and analytic survey and modify loops over recorded segments. |
+| `internal/boundarywalk/` | Bounded walks, coalescing, junction vertices, rim convexity, and analytic survey and modify loops over recorded segments. |
 | `internal/classbgeom/` | Class-B boolean geometry. See general-boolean §3 B, §5. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, measurements, extents, face surveys, middle-rim audit and topology. See general-boolean §4–§5. |
 | `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
@@ -42,15 +42,15 @@ The rules for rows live in `docs/layout.md`.
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines, plane gates and angle bounds. See sweep §3. |
 | `internal/sweepinput/` | Exact path records, tangent gates, recorded section gates and closed-path class gates for Sweep. See sweep §3, §5, §15.4. |
 | `internal/sweepmitre/` | Mitred profile gates, exact sections, placement, rounding, triangle assembly and measurements. See sweep §16. |
-| `internal/coil/` | Coil stations, axis coordinates, moments and closed forms. See helix §5, §7. |
-| `internal/coilshell/` | Builds the held coil shell and mesh proofs. See helix §5, §8. |
-| `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames. See sweep §3.2. |
+| `internal/coil/` | Coil magnitude and preflight gates, stations, axis coordinates, moments and closed forms. See helix §4, §5, §7. |
+| `internal/coilshell/` | Builds the held coil shell, mesh proofs and wall-area enclosures. See helix §5, §7, §8. |
+| `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames over recorded line and arc spans. See sweep §3.2. |
 | `internal/momentinput/` | Profile records, exact record comparison, moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
 | `internal/tessellation/` | Recorded-loop and band chording, mesh topology, bounds and audits. See tessellation-design. |
 | `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines. See loop-fillet §7.1. |
-| `internal/stationbound/` | Bounds circular chord stations and offset cap stations against their exact recorded parameters. |
+| `internal/stationbound/` | Bounds circular chord stations, offset cap stations and chain-sweep arc stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums, projected cap proof, body reading finiteness gate, mirrored-cylinder bridge terms and reserve, cap chamfer source bound, split-ring and collar grids, triangle clearance and middle-collar proofs, and grouped contact scans. |
 | `internal/smoothloft/` | Three-section homothety, independent rectangles, varying curves, and four-section rounded-rectangle gates, held meshes and bounds. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs. |

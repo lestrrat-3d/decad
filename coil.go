@@ -3,12 +3,10 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/coil"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/r3"
@@ -187,11 +185,11 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 	}
 
 	// CS4: pitch and turns.
-	pitchMM, err := coilMagnitude(pitch, units.Length, units.Millimeter, "the coil pitch")
+	pitchMM, err := coil.Magnitude(pitch, units.Length, units.Millimeter, "the coil pitch")
 	if err != nil {
 		return nil, err
 	}
-	turnCount, err := coilMagnitude(turns, units.Dimensionless, units.One, "the coil turn count")
+	turnCount, err := coil.Magnitude(turns, units.Dimensionless, units.One, "the coil turn count")
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +223,7 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 	if err != nil {
 		return nil, err
 	}
-	if err := coilPreflight(turnCount, len(prof.Pts), len(prof.LoopIdx)-1); err != nil {
+	if err := coil.Preflight(turnCount, len(prof.Pts), len(prof.LoopIdx)-1, coilStationsPerTurn, maxCoilStations, maxCoilFacets); err != nil {
 		return nil, err
 	}
 
@@ -247,26 +245,6 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 	}
 	d.commit(body)
 	return body, nil
-}
-
-// coilMagnitude is Table CS row CS4 over one value: its kind, its
-// finiteness, then its sign. Zero is ErrDegenerate rather than a reduction:
-// a zero pitch names a Revolve, and a zero turn count names no solid.
-func coilMagnitude(v units.Value, kind units.Kind, unit units.Unit, what string) (float64, error) {
-	if v.Kind() != kind {
-		return 0, fmt.Errorf(`%w: %s must be a %s, got %s`, ErrUnitKind, what, kind, v.Kind())
-	}
-	m, err := v.In(unit)
-	if err != nil || math.IsNaN(m) || math.IsInf(m, 0) {
-		return 0, fmt.Errorf(`%w: %s is not finite`, ErrNotFinite, what)
-	}
-	if m <= 0 {
-		if what == "the coil pitch" {
-			return 0, fmt.Errorf(`%w: %s must be positive, got %s; a zero pitch is a Revolve`, ErrDegenerate, what, v)
-		}
-		return 0, fmt.Errorf(`%w: %s must be positive, got %s`, ErrDegenerate, what, v)
-	}
-	return m, nil
 }
 
 // coilSide is Table CS rows CS5 and CS6 (§5.1): it reads the profile's
@@ -308,20 +286,4 @@ func coilSide(ctx context.Context, profile profileRecord, line revolveaxis.Line2
 			ErrUnsupported, resolved.AxialExtentUpper, pitch, turns)
 	}
 	return int(resolved.Side), nil
-}
-
-// coilPreflight is Table CS row CS8, decided from counts alone before any
-// allocation.
-func coilPreflight(turns float64, vertices, holes int) error {
-	n, ok := coil.StationCount(proofarith.FloatRat(turns), coilStationsPerTurn)
-	if !ok || n > maxCoilStations {
-		return fmt.Errorf(`%w: a coil of %v turns needs more than the %d-station ceiling at %d stations per turn`,
-			ErrUnsupported, turns, maxCoilStations, coilStationsPerTurn)
-	}
-	walls := 2 * n * int64(vertices)
-	caps := 2 * int64(vertices+2*holes-2)
-	if walls+caps > maxCoilFacets {
-		return fmt.Errorf(`%w: the coil's %d triangles exceed the %d-triangle ceiling`, ErrUnsupported, walls+caps, maxCoilFacets)
-	}
-	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
@@ -222,7 +223,7 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 	if err != nil {
 		return nil, proofbound.RatInterval{}, err
 	}
-	if err := compositeCrossSpanContactAudit(budget, auditTris, mesh.triangles, spanOf, mesh.coordBound); err != nil {
+	if err := compositesweep.CrossSpanContactAudit(budget, auditTris, mesh.triangles, spanOf, mesh.coordBound); err != nil {
 		return nil, proofbound.RatInterval{}, err
 	}
 	if tessellation.OrientationSign(mesh.vertices, mesh.triangles, r3.Vec{}) <= 0 {

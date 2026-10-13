@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/mirrorjoin"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 )
 
 // This file adapts internal/mirrorjoin's record rewrite to prism and stacked
@@ -367,10 +365,6 @@ func (l mirrorLine) mirrorReversedRun(budget *proofbound.WorkBudget, run []curve
 	return l.line.ReverseRun(budget, run)
 }
 
-func segmentJoinEnds(seg curveSegment, work *freeform.FreeformWork) (mirrorjoin.Ends, error) {
-	return mirrorjoin.SegmentEnds(seg, work)
-}
-
 // assemble adapts §5.2's record splice and runs §5.3's section audit.
 func (l mirrorLine) assemble(budget *proofbound.WorkBudget, region joinRegion) (profileRecord, float64, error) {
 	work := freeform.NewFreeformWork()
@@ -379,53 +373,8 @@ func (l mirrorLine) assemble(budget *proofbound.WorkBudget, region joinRegion) (
 		return profileRecord{}, 0, err
 	}
 	out := profileRecord{Outer: spliced.Outer, Holes: spliced.Holes}
-	if err := auditJoinedSection(budget, out, work); err != nil {
+	if err := mirrorjoin.AuditJoinedSection(budget, out, work); err != nil {
 		return profileRecord{}, 0, err
 	}
 	return out, spliced.Delta, nil
-}
-
-// auditJoinedSection is §5.3: the modify §5 audit with an empty blend map,
-// in prism-boolean §6's order. The junction falsifier runs on every junction
-// of every loop (RB9, ErrUnrecordableProfile); S8 reads each loop's signed
-// area — the outer positive, every hole negative (RB3, ErrDegenerate); S7
-// refuses a crossing or contact of non-adjacent segments within the
-// diameter-anchored floor (RB4); S9 proves every hole inside the outer and
-// outside every other hole (RB5/RB6). Every check only refuses.
-func auditJoinedSection(budget *proofbound.WorkBudget, p profileRecord, work *freeform.FreeformWork) error {
-	loops := append([]loopRecord{p.Outer}, p.Holes...)
-	for li, loop := range loops {
-		joins := make([]sketchrecord.LoopJoin, len(loop.Segments))
-		for si, seg := range loop.Segments {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			ends, err := segmentJoinEnds(seg, work)
-			if err != nil {
-				return err
-			}
-			joins[si] = sketchrecord.RecordedJoin(
-				ends.Start, ends.End, ends.ComputedStart, ends.ComputedEnd, ends.Closed)
-		}
-		if err := sketchrecord.FalsifyLoopJoins(fmt.Sprintf("mirror join loop %d", li), joins); err != nil {
-			return err
-		}
-	}
-	for li, loop := range loops {
-		area, err := sectionaudit.LoopSignedArea(budget, loop)
-		if err != nil {
-			return err
-		}
-		if (li == 0) != (area > 0) || area == 0 {
-			return fmt.Errorf(`%w: the join's spliced loop %d winds the wrong way or encloses nothing`, ErrDegenerate, li)
-		}
-	}
-	segs, err := sectionaudit.EntriesOf(budget, loops)
-	if err != nil {
-		return err
-	}
-	if err := sectionaudit.Crossing(budget, segs); err != nil {
-		return err
-	}
-	return sectionaudit.Nesting(budget, segs, len(loops))
 }

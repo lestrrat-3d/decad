@@ -330,84 +330,8 @@ func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
 	return f, nil
 }
 
-// junctionVertexAt places the rim vertex where walk prev ends and walk next
-// starts, and returns its plane position with the 3D bound it owes against the
-// points BOTH walks denote there (boundarywalk.JunctionVertex): next's
-// recorded start and prev's recorded end, which differ at a cut junction
-// (docs/evaluator-design.md §3, §4). segs are the recorded segments the walks'
-// Segs index; a single whole closed walk passes itself as both neighbours.
-// Every kind charges its own walk-end bound: a trimmed line's lerp rounding, a
-// circle's or trimmed arc's trig enclosure, a free-form chain's control-point
-// rounding, and an arc's natural t = 1 radial residual. A vertex is therefore
-// Exact only where every end meeting there is a recorded coordinate it holds
-// verbatim (topology.go's Vertex.Position contract). proofbound.WalkEndBoundAllow
-// carries the per-component bound into world space.
-func junctionVertexAt(segs []curveSegment, prev, next survey2d.SideWalk) (float64, float64, float64) {
-	u, v, bound := boundarywalk.JunctionVertex(
-		segs[prev.Segs[len(prev.Segs)-1]], prev.SegmentWalk, segs[next.Segs[0]], next.SegmentWalk)
-	return u, v, proofbound.WalkEndBoundAllow(bound)
-}
-
-// rimConvexity decides one walk's rim-edge convexity — evaluator §3's
-// walked-boundary rule (topology.go's Edge.IsConvex doc comment) —
-// independently of the curve, surface and faceReversed construction
-// buildLoopSidesAs still runs for its own kind right after it. holeLoop is
-// the loop's material side; a walk with no turn of its own (a straight wall,
-// or a free-form chain §6.5 proves straight) reads it, and a walk that DOES
-// turn — circular or genuinely curved free-form — decides convexity from its
-// own turn instead, exactly as buildLoopSidesAs's per-kind switch did before
-// this was pulled out of it.
-func rimConvexity(ctx context.Context, w survey2d.SideWalk, holeLoop bool, work *freeform.FreeformWork) (bool, error) {
-	switch w.Kind {
-	case survey2d.WalkCircular:
-		// A clockwise walk's material lies outside its circle, so the
-		// boundary turns into the metal there and the rim is concave — a
-		// hole's rim (clockwise) and a concave outer bite's (also
-		// clockwise) alike, while a counter-clockwise round keeps its
-		// convex rim. The loop's role decides nothing here.
-		return w.Th1 >= w.Th0, nil
-	case survey2d.WalkFreeform:
-		// §6.5's wall-edge convexity certificate (docs/spline-design.md
-		// §6.5, Table R R19). It applies the one reversal negation
-		// internally and states its verdict in the LOOP'S OWN WALK
-		// direction, so the mapping below reads it verbatim — a
-		// counter-clockwise turn convex, clockwise concave, the identical
-		// convention the circular case above fixes. NEVER negate again for
-		// a hole loop: a hole rim's concavity falls out of the clockwise
-		// walk itself, exactly as it does for a circular hole wall.
-		verdict, err := freeform.FreeformWallConvexityContext(ctx, w.Spans, w.Closed, w.Reversed, w.FitInterpolated, work)
-		if err != nil {
-			return false, err
-		}
-		switch verdict {
-		case freeform.FreeformConvexityPositive:
-			return true, nil
-		case freeform.FreeformConvexityNegative:
-			return false, nil
-		case freeform.FreeformConvexityStraight:
-			// Every live span lies on one line and no joint turns off it
-			// (§6.5's Table K): the chain has no turn of its own, so
-			// evaluator §3's straight-wall rule decides it by its loop's
-			// role — the same expression the default arm below uses.
-			return !holeLoop, nil
-		}
-		// The three verdicts above are exhaustive today, so this is
-		// unreachable — but a future fourth verdict silently falling through
-		// to !holeLoop would be a straight-wall answer for a wall this
-		// evaluator never proved straight, exactly the quiet wrong answer
-		// this project exists to prevent. Refuse explicitly rather than guess.
-		return false, fmt.Errorf(`%w: free-form wall convexity verdict %d is not handled by this evaluator`, ErrUnsupported, verdict)
-	default:
-		// A straight wall has no turn of its own to disagree with the
-		// loop's: which side its material lies on is decided by the sense
-		// the whole loop is walked, and that sense IS the loop's role —
-		// the outer loop counter-clockwise, holes clockwise (moments.go).
-		return !holeLoop, nil
-	}
-}
-
 // buildWallGeometry builds one wall's two rim curves and the surface it
-// sweeps, from its walk alone: convex is rimConvexity's own answer for this
+// sweeps, from its walk alone: convex is boundarywalk.RimConvexity's own answer for this
 // walk, and closed marks a single whole closed walk sharing one seam vertex
 // at each cap (bStart==bEnd, tStart==tEnd) — never true for a chain, since
 // RecordChain admits no whole closed segment
@@ -459,7 +383,7 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// there and the rim is concave — a hole's rim (clockwise) and a
 		// concave outer bite's (also clockwise) alike, while a
 		// counter-clockwise round keeps its convex rim. The loop's role
-		// decides nothing here. convex is rimConvexity's own answer for
+		// decides nothing here. convex is boundarywalk.RimConvexity's own answer for
 		// this walk, computed by the caller.
 		bottomEdge := &Edge{curve: curve0, start: bStart, end: bEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
 		topEdge := &Edge{curve: curve1, start: tStart, end: tEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
@@ -479,7 +403,7 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// fixes above. NEVER negate again for a hole loop: a hole rim's
 		// concavity falls out of the clockwise walk itself, exactly as it
 		// does for a circular hole wall. An R19 refusal already returned
-		// from rimConvexity, before this switch ever ran.
+		// from boundarywalk.RimConvexity, before this switch ever ran.
 		bottomEdge := &Edge{curve: NURBSCurve{}, start: bStart, end: bEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
 		topEdge := &Edge{curve: NURBSCurve{}, start: tStart, end: tEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
 		// faceReversed stays false: an opaque NURBSSurface publishes no
@@ -664,7 +588,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	var seamBottom, seamTop *Vertex
 	if singleClosed {
 		w := walks[0]
-		u, v, extra := junctionVertexAt(loop.Segments, w, w)
+		u, v, extra := boundarywalk.JunctionVertexAt(loop.Segments, w, w)
 		seamBottom = rimVertex(u, v, pp.z0, pp.z0Delta, extra, levelZ0)
 		seamTop = rimVertex(u, v, pp.z1, pp.z1Delta, extra, levelZ1)
 	} else {
@@ -675,7 +599,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 				return nil, nil, nil, proofbound.BoundedScalar{}, err
 			}
 			prev := walks[(i+n-1)%n]
-			u, v, extra := junctionVertexAt(loop.Segments, prev, w)
+			u, v, extra := boundarywalk.JunctionVertexAt(loop.Segments, prev, w)
 			bottomV[i] = rimVertex(u, v, pp.z0, pp.z0Delta, extra, levelZ0)
 			topV[i] = rimVertex(u, v, pp.z1, pp.z1Delta, extra, levelZ1)
 		}
@@ -727,7 +651,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			bStart, tStart = bottomV[i], topV[i]
 			bEnd, tEnd = bottomV[(i+1)%n], topV[(i+1)%n]
 		}
-		convex, err := rimConvexity(ctx, w, holeLoop, work)
+		convex, err := boundarywalk.RimConvexity(ctx, w, holeLoop, work)
 		if err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}

@@ -838,7 +838,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			plane := segPlaneWalks(resolved, w.Segs)
 			freeformConvex := false
 			if w.Kind == survey2d.WalkFreeform {
-				freeformConvex, err = rimConvexity(ctx, w, holeLoop, work)
+				freeformConvex, err = boundarywalk.RimConvexity(ctx, w, holeLoop, work)
 				if err != nil {
 					return revLoopParts{}, err
 				}

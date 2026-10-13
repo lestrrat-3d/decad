@@ -206,7 +206,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 		maxLocal = max(maxLocal, math.Abs(pt.U), math.Abs(pt.V))
 		verts[j+1] = frame.ToWorldUV(pt.U, pt.V)
 		if !proofbound.FiniteVec(verts[j+1]) {
-			return nil, errLoftPointUnrepresentable("far section vertex")
+			return nil, loftmesh.ErrPointUnrepresentable("far section vertex")
 		}
 	}
 	tris := make([][3]int, 0, len(pair.W)+len(capTriangles))

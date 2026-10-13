@@ -126,7 +126,7 @@ func loftGearSketches(t *testing.T, g loftGear, count int) (*sketch.Sketch, *ske
 	return s0, p0, s1, p1
 }
 
-// loftGearAssembly runs evalLoft's prefix up to assembleLoft over count teeth
+// loftGearAssembly runs evalLoft's prefix up to loftmesh.AssembleTriangulated over count teeth
 // of g and returns the assembled triangle set with its structure.
 func loftGearAssembly(t *testing.T, g loftGear, count int) loftmesh.Assembly {
 	t.Helper()
@@ -144,7 +144,7 @@ func loftGearAssembly(t *testing.T, g loftGear, count int) loftmesh.Assembly {
 	require.NoError(t, err)
 	frame1, err := r3.NewFrame(plane1.Origin, plane1.U, plane1.V)
 	require.NoError(t, err)
-	a, err := assembleLoft(t.Context(), pairs, frame0, frame1, plane0, r3.Identity(), stationRound)
+	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, frame0, frame1, plane0, r3.Identity(), stationRound)
 	require.NoError(t, err)
 	return a
 }
@@ -226,7 +226,7 @@ func loftGearDenseLoop(t *testing.T, loop loopRecord, perSeg int) ([]Point2, []b
 // point with the same local point on the other section, so lifting one dense
 // sample through both frames gives matched rulings. The closed surface is the
 // ruled patch over every curved sample interval, the loft's own triangle pair
-// (diagonal from bottom sample i to top sample i+1, as assembleLoft splits a
+// (diagonal from bottom sample i to top sample i+1, as loftmesh.AssembleTriangulated splits a
 // cell) over every LineSeg, and the two planar caps. Volume and first moment
 // come from the divergence theorem over that surface: ∮ (p·n)/3 and
 // ∮ p(p·n)/4, which 4-point Gauss–Legendre integrates exactly on a ruled

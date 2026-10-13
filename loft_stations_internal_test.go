@@ -719,7 +719,7 @@ func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
 // This necessarily precedes S8's own audit-budget ceiling, each row decided at
 // the phase docs/loft-design.md §4's gate-order paragraph assigns it: evalLoft
 // calls loftmesh.PairRecords (which reaches this refusal through loftCellStations)
-// before assembleLoft ever builds a triangle and before
+// before loftmesh.AssembleTriangulated ever builds a triangle and before
 // loftmesh.LoftCrossingAudit ever runs (loft_build.go's own evalLoft body). Had the
 // cap not fired, the station count alone — already past 2^14 per side — would
 // publish orders of magnitude more wall faces than S8's own
@@ -766,7 +766,7 @@ func quarterArcRingProfile(t *testing.T, n int) (profileRecord, [][]survey2d.Seg
 //
 // The F formula the derivation rests on is measured here on a real assembled
 // triangle set rather than assumed: a square-with-square-hole loft has
-// Σstations = 8 over H = 1 hole, and assembleLoft emits exactly
+// Σstations = 8 over H = 1 hole, and loftmesh.AssembleTriangulated emits exactly
 // 4*8 + 4*1 - 4 = 32 triangles. A hole-free square gives 4*4 - 4 = 12.
 func TestLoftStationCapFitsTheAuditTriangleCeiling(t *testing.T) {
 	t.Parallel()
@@ -777,7 +777,7 @@ func TestLoftStationCapFitsTheAuditTriangleCeiling(t *testing.T) {
 		require.NoError(t, err)
 		pairs, _, _, stationRound, err := loftmesh.PairRecords(p, p, offsets, walks0, walks1, 0, nil, nil)
 		require.NoError(t, err)
-		a, err := assembleLoft(t.Context(), pairs, mustFrame(t, pl0), mustFrame(t, pl1), pl0, r3.Identity(), stationRound)
+		a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, mustFrame(t, pl0), mustFrame(t, pl1), pl0, r3.Identity(), stationRound)
 		require.NoError(t, err)
 		return len(a.Tris)
 	}
@@ -984,7 +984,7 @@ func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 // TestLoftCircularCellStationsRefusesOneSidedCollapse is S16, a defensive
 // gate: a chord cell whose two stations coincide on exactly ONE of the two
 // sections has no case in the uniform two-faces-per-cell wall topology
-// assembleLoft builds. It is reachable only from a degenerate record (a
+// loftmesh.AssembleTriangulated builds. It is reachable only from a degenerate record (a
 // zero-radius arc, whose Start, End and Center are one coordinate) — a real
 // sketch authentication does not produce one (this PR's own risk register,
 // mirroring spline_fit.go's dedup carve-out for the free-form arm's analogous
