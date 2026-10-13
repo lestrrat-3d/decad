@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -111,9 +112,9 @@ func spiralHeelSourceBox(arc arcSeg) (*big.Rat, *big.Rat, [4]*big.Rat, bool) {
 }
 
 func spiralHeelCapEightOutside(capMap loftFaceMap, coneC *big.Rat) bool {
-	n0 := lfVAdd(lfVScale(capMap.Constant, capMap.G0), capMap.Q0)
-	nu := lfVAdd(lfVScale(capMap.Constant, capMap.GU), capMap.QU)
-	nv := lfVAdd(lfVScale(capMap.Constant, capMap.GV), capMap.QV)
+	n0 := loftface.VAdd(loftface.VScale(capMap.Constant, capMap.G0), capMap.Q0)
+	nu := loftface.VAdd(loftface.VScale(capMap.Constant, capMap.GU), capMap.QU)
+	nv := loftface.VAdd(loftface.VScale(capMap.Constant, capMap.GV), capMap.QV)
 	coneVec := func(n loftFaceRatVec, g *big.Rat) loftFaceRatVec {
 		return loftFaceRatVec{lfSub(lfMul(coneC, g), n[0]), n[1], n[2]}
 	}
@@ -128,7 +129,7 @@ func spiralHeelCapEightOutside(capMap loftFaceMap, coneC *big.Rat) bool {
 }
 
 func spiralHeelIntervalAdd(a, b loftFaceInterval) loftFaceInterval {
-	return loftFaceInterval{lfAdd(a.Lo, b.Lo), lfAdd(a.Hi, b.Hi)}
+	return loftFaceInterval{Lo: lfAdd(a.Lo, b.Lo), Hi: lfAdd(a.Hi, b.Hi)}
 }
 
 func spiralHeelIntervalMul(a, b loftFaceInterval) loftFaceInterval {
@@ -143,7 +144,7 @@ func spiralHeelIntervalMul(a, b loftFaceInterval) loftFaceInterval {
 			hi = value
 		}
 	}
-	return loftFaceInterval{lo, hi}
+	return loftFaceInterval{Lo: lo, Hi: hi}
 }
 
 // A mapped radius error below 10^-12 mm changes |Q| by less than
@@ -154,7 +155,7 @@ func spiralHeelIntervalMul(a, b loftFaceInterval) loftFaceInterval {
 // per coordinate and 10^-9 in slope. Every premise is gated below.
 func spiralHeelMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 	radiusBound, coneC *big.Rat) (bool, bool) {
-	if lfPositiveDenominator(first, box) != nil || lfPositiveDenominator(second, box) != nil {
+	if loftface.PositiveDenominator(first, box) != nil || loftface.PositiveDenominator(second, box) != nil {
 		return false, false
 	}
 	stretch := math.Max(first.Stretch, second.Stretch)
@@ -162,13 +163,13 @@ func spiralHeelMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 		lfMul(lfF(stretch), radiusBound).Cmp(big.NewRat(1, 1_000_000_000_000)) >= 0 {
 		return false, false
 	}
-	corners := lfBoxCorners(box)
+	corners := loftface.BoxCorners(box)
 	axis := [3]loftFaceRatVec{{lfOne(), lfZero(), lfZero()},
 		{lfZero(), lfOne(), lfZero()}, {lfZero(), lfZero(), lfOne()}}
 	var a, b, delta [3]loftFaceInterval
 	for i := range a {
-		a[i], b[i] = lfScalarRange(first, axis[i], corners), lfScalarRange(second, axis[i], corners)
-		delta[i] = lfIntervalSub(b[i], a[i])
+		a[i], b[i] = loftface.ScalarRange(first, axis[i], corners), loftface.ScalarRange(second, axis[i], corners)
+		delta[i] = loftface.IntervalSub(b[i], a[i])
 	}
 	for _, cap := range [][3]loftFaceInterval{a, b} {
 		if cap[0].Lo.Sign() <= 0 || cap[0].Hi.Cmp(big.NewRat(17, 1)) >= 0 ||
@@ -187,7 +188,7 @@ func spiralHeelMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 		return false, false
 	}
 	for _, cap := range [][3]loftFaceInterval{a, b} {
-		radial := loftFaceInterval{lfSub(coneC, cap[0].Hi), lfSub(coneC, cap[0].Lo)}
+		radial := loftFaceInterval{Lo: lfSub(coneC, cap[0].Hi), Hi: lfSub(coneC, cap[0].Lo)}
 		derivative := spiralHeelIntervalAdd(spiralHeelIntervalAdd(
 			spiralHeelIntervalMul(cap[1], delta[1]), spiralHeelIntervalMul(cap[2], delta[2])),
 			spiralHeelIntervalMul(radial, delta[0]))
@@ -286,8 +287,8 @@ func spiralHeelEndpointBox(ctx context.Context, first, second loftFaceMap,
 	var empty [3]loftFaceInterval
 	a := first.At(lfF(point.U), lfF(point.V))
 	b := second.At(lfF(point.U), lfF(point.V))
-	delta := lfVSub(b, a)
-	at := func(t *big.Rat) loftFaceRatVec { return lfVAdd(a, lfVScale(delta, t)) }
+	delta := loftface.VSub(b, a)
+	at := func(t *big.Rat) loftFaceRatVec { return loftface.VAdd(a, loftface.VScale(delta, t)) }
 	q := func(t *big.Rat) *big.Rat {
 		p := at(t)
 		r := lfSub(coneC, p[0])
@@ -317,7 +318,7 @@ func spiralHeelEndpointBox(ctx context.Context, first, second loftFaceMap,
 		if minValue.Cmp(maxValue) > 0 {
 			minValue, maxValue = maxValue, minValue
 		}
-		out[axis] = loftFaceInterval{lfSub(minValue, charge), lfAdd(maxValue, charge)}
+		out[axis] = loftFaceInterval{Lo: lfSub(minValue, charge), Hi: lfAdd(maxValue, charge)}
 	}
 	return out, true, nil
 }
@@ -339,7 +340,7 @@ func spiralHeelRatio(box [3]loftFaceInterval) (loftFaceInterval, bool) {
 			hi = value
 		}
 	}
-	return loftFaceInterval{lo, hi}, true
+	return loftFaceInterval{Lo: lo, Hi: hi}, true
 }
 
 func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource) (*spiralHeelRootSeam, bool, error) {
@@ -417,8 +418,8 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 	// actual Sketch arc and both its endpoint crossings.
 	coordCharge, slopeCharge := big.NewRat(1, 10_000_000_000), big.NewRat(1, 1_000_000_000)
 	seam := &spiralHeelRootSeam{
-		x:        loftFaceInterval{lfSub(idealXLo, coordCharge), lfAdd(idealXHi, coordCharge)},
-		slope:    loftFaceInterval{lfSub(idealSLo, slopeCharge), lfAdd(idealSHi, slopeCharge)},
+		x:        loftFaceInterval{Lo: lfSub(idealXLo, coordCharge), Hi: lfAdd(idealXHi, coordCharge)},
+		slope:    loftFaceInterval{Lo: lfSub(idealSLo, slopeCharge), Hi: lfAdd(idealSHi, slopeCharge)},
 		coneC:    coneC,
 		negative: negative,
 	}
@@ -481,9 +482,9 @@ func spiralHeelTailBox(seam *spiralHeelRootSeam, minAbsSlope *big.Rat) ([3]loftF
 	yHi := new(big.Rat).Quo(rHi, sqrtMinLo)
 	zLo := new(big.Rat).Quo(lfMul(rLo, minAbsSlope), sqrtMinHi)
 	zHi := new(big.Rat).Quo(lfMul(rHi, maxAbsSlope), sqrtMaxLo)
-	z := loftFaceInterval{zLo, zHi}
+	z := loftFaceInterval{Lo: zLo, Hi: zHi}
 	if seam.negative {
-		z = loftFaceInterval{lfSub(lfZero(), zHi), lfSub(lfZero(), zLo)}
+		z = loftFaceInterval{Lo: lfSub(lfZero(), zHi), Hi: lfSub(lfZero(), zLo)}
 	}
-	return [3]loftFaceInterval{seam.x, {yLo, yHi}, z}, true
+	return [3]loftFaceInterval{seam.x, {Lo: yLo, Hi: yHi}, z}, true
 }

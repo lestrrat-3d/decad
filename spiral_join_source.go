@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
@@ -205,13 +206,13 @@ func spiralOriginalCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
 		return false
 	}
 	for _, end := range [...]int{0, 8} {
-		if lfPositiveDenominator(trim.maps[end], box) != nil {
+		if loftface.PositiveDenominator(trim.maps[end], box) != nil {
 			return false
 		}
 	}
-	corners := lfBoxCorners(box)
+	corners := loftface.BoxCorners(box)
 	xAxis := loftFaceRatVec{lfOne(), lfZero(), lfZero()}
-	if lfScalarRange(trim.maps[0], xAxis, corners).Hi.Cmp(toeX) >= 0 {
+	if loftface.ScalarRange(trim.maps[0], xAxis, corners).Hi.Cmp(toeX) >= 0 {
 		return false
 	}
 	return spiralCapPlaneAvoidsRootCircle(trim.maps[8], corners, m, b, heelX)
@@ -222,12 +223,12 @@ func spiralCapPlaneAvoidsRootCircle(capMap loftFaceMap, corners [4][2]*big.Rat,
 	p0 := capMap.At(corners[0][0], corners[0][1])
 	p1 := capMap.At(corners[1][0], corners[1][1])
 	p2 := capMap.At(corners[2][0], corners[2][1])
-	normal := lfVCross(lfVSub(p1, p0), lfVSub(p2, p0))
+	normal := loftface.VCross(loftface.VSub(p1, p0), loftface.VSub(p2, p0))
 	if normal[0].Sign() == 0 && normal[1].Sign() == 0 && normal[2].Sign() == 0 {
 		return false
 	}
-	d := lfVDot(normal, p0)
-	if lfVDot(normal, capMap.At(corners[3][0], corners[3][1])).Cmp(d) != 0 {
+	d := loftface.VDot(normal, p0)
+	if loftface.VDot(normal, capMap.At(corners[3][0], corners[3][1])).Cmp(d) != 0 {
 		return false
 	}
 	radius := lfAdd(lfMul(m, circleX), b)
@@ -289,7 +290,7 @@ func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
 		return false
 	}
 	for _, mapped := range trim.maps {
-		if lfPositiveDenominator(mapped, box) != nil {
+		if loftface.PositiveDenominator(mapped, box) != nil {
 			return false
 		}
 	}
@@ -305,14 +306,14 @@ func spiralSourcePhysicalSector(trim *loftFacesTrimRecord, m, b *big.Rat) bool {
 	if err != nil {
 		return false
 	}
-	corners := lfBoxCorners(box)
+	corners := loftface.BoxCorners(box)
 	y := loftFaceRatVec{lfZero(), lfOne(), lfZero()}
 	x := loftFaceRatVec{lfOne(), lfZero(), lfZero()}
 	for _, mapped := range trim.maps {
-		if lfScalarRange(mapped, y, corners).Lo.Sign() <= 0 {
+		if loftface.ScalarRange(mapped, y, corners).Lo.Sign() <= 0 {
 			return false
 		}
-		xRange := lfScalarRange(mapped, x, corners)
+		xRange := loftface.ScalarRange(mapped, x, corners)
 		r0, r1 := lfAdd(lfMul(m, xRange.Lo), b), lfAdd(lfMul(m, xRange.Hi), b)
 		if r0.Sign() <= 0 || r1.Sign() <= 0 {
 			return false
@@ -374,7 +375,7 @@ func spiralCellSide(first, second loftFaceMap, a, z Point2, departure, m, b *big
 	secondA := second.At(lfF(a.U), lfF(a.V))
 	secondZ := second.At(lfF(z.U), lfF(z.V))
 	blend := func(x, y loftFaceRatVec, t *big.Rat) loftFaceRatVec {
-		return lfVAdd(lfVScale(x, lfSub(lfOne(), t)), lfVScale(y, t))
+		return loftface.VAdd(loftface.VScale(x, lfSub(lfOne(), t)), loftface.VScale(y, t))
 	}
 	corners := [4]loftFaceRatVec{
 		blend(firstA, secondA, tLo), blend(firstZ, secondZ, tLo),
@@ -398,10 +399,10 @@ func spiralCellSide(first, second loftFaceMap, a, z Point2, departure, m, b *big
 		r0, r1 = r1, r0
 	}
 	radius := loftFaceInterval{Lo: r0, Hi: r1}
-	minimumF := lfSub(lfAdd(loftIntervalSquareMin(box[1]), loftIntervalSquareMin(box[2])),
-		loftIntervalSquareMax(radius))
-	maximumF := lfSub(lfAdd(loftIntervalSquareMax(box[1]), loftIntervalSquareMax(box[2])),
-		loftIntervalSquareMin(radius))
+	minimumF := lfSub(lfAdd(loftface.IntervalSquareMin(box[1]), loftface.IntervalSquareMin(box[2])),
+		loftface.IntervalSquareMax(radius))
+	maximumF := lfSub(lfAdd(loftface.IntervalSquareMax(box[1]), loftface.IntervalSquareMax(box[2])),
+		loftface.IntervalSquareMin(radius))
 	if outside && minimumF.Sign() > 0 || !outside && maximumF.Sign() < 0 {
 		return true
 	}
@@ -483,17 +484,17 @@ func spiralCapXRange(m loftFaceMap, span freeform.BezierSpan,
 }
 
 func spiralCapBern(m loftFaceMap, span freeform.BezierSpan) ([]*big.Rat, [3][]*big.Rat) {
-	return loftFacesCapBernsteinRows(m, span)
+	return loftface.CapBernsteinRows(m, span)
 }
 
 func spiralRootPolynomial(first, second loftFaceMap, span freeform.BezierSpan,
 	m, b *big.Rat) [3][]*big.Rat {
-	return loftFacesMeridianQRows(first, second, span, m, b)
+	return loftface.MeridianQRows(first, second, span, m, b)
 }
 
 func spiralRootXOrder(first, second loftFaceMap, span freeform.BezierSpan,
 	q [3][]*big.Rat) [3][]*big.Rat {
-	return loftFacesMeridianJRows(first, second, span, q)
+	return loftface.MeridianJRows(first, second, span, q)
 }
 
 // The 64 dyadic bisections give a rational enclosure narrower than 2^-64
@@ -583,68 +584,6 @@ func spiralIsolateJunction(ctx context.Context, maps []loftFaceMap, span freefor
 	}
 	box[0] = loftFaceInterval{Lo: targetX, Hi: targetX}
 	return spiralJunction{band: band, sLo: sLo, sHi: sHi, tLo: tLo, tHi: tHi, box: box}, true
-}
-
-// spiralRootTube encloses the one true flank/root crossing branch over a
-// caller-specified exact X strip. J>0 orders its two endpoint cuts in band
-// time. Bernstein signs enclose every intermediate source parameter before
-// the rational cap maps enclose the entire resulting ruled strip.
-func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
-	xLo, xHi *big.Rat) ([3]loftFaceInterval, bool, error) {
-	var empty [3]loftFaceInterval
-	if ctx == nil {
-		return empty, false, nil
-	}
-	if err := ctx.Err(); err != nil {
-		return empty, false, err
-	}
-	if proof == nil || side < 0 || side >= len(proof.flank) ||
-		xLo == nil || xHi == nil || xLo.Cmp(xHi) >= 0 {
-		return empty, false, nil
-	}
-	span := proof.flank[side]
-	low, ok := spiralIsolateJunction(ctx, proof.tooth.maps, span,
-		proof.rootM, proof.rootB, proof.crossings[side], xLo)
-	if !ok {
-		return empty, false, ctx.Err()
-	}
-	high, ok := spiralIsolateJunction(ctx, proof.tooth.maps, span,
-		proof.rootM, proof.rootB, proof.crossings[side], xHi)
-	if !ok || low.band != high.band || low.tHi.Cmp(high.tLo) >= 0 {
-		return empty, false, ctx.Err()
-	}
-	band := low.band
-	q := spiralRootPolynomial(proof.tooth.maps[band], proof.tooth.maps[band+1],
-		span, proof.rootM, proof.rootB)
-	sLo, sHi := lfZero(), lfOne()
-	if !spiralJunctionRootBracket(q, sLo, sHi, low.tLo, high.tHi) {
-		return empty, false, ctx.Err()
-	}
-	for step := range 64 {
-		if step%8 == 0 && ctx.Err() != nil {
-			return empty, false, ctx.Err()
-		}
-		mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
-		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, high.tHi, -1) {
-			sLo = mid
-			continue
-		}
-		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, high.tHi, 1) {
-			sHi = mid
-			continue
-		}
-		break
-	}
-	box, ok := spiralJunctionBox(proof.tooth.maps[band], proof.tooth.maps[band+1],
-		span, sLo, sHi, low.tLo, high.tHi)
-	if err := ctx.Err(); err != nil {
-		return empty, false, err
-	}
-	if !ok || box[0].Lo.Cmp(xLo) > 0 || box[0].Hi.Cmp(xHi) < 0 {
-		return empty, false, nil
-	}
-	box[0] = loftFaceInterval{Lo: xLo, Hi: xHi}
-	return box, true, nil
 }
 
 func spiralJunctionRootBracket(q [3][]*big.Rat, sLo, sHi, tLo, tHi *big.Rat) bool {

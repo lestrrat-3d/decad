@@ -3,6 +3,7 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -84,7 +85,7 @@ func revolveLoftFacesRayBoxValid(box revolveLoftFacesRayBox) bool {
 }
 
 func revolveLoftFacesRayCrossRange(a, b revolveLoftFacesRayBox) loftFaceInterval {
-	return lfIntervalSub(revolveLoftFacesRayProductRange(a.y, b.z),
+	return loftface.IntervalSub(revolveLoftFacesRayProductRange(a.y, b.z),
 		revolveLoftFacesRayProductRange(a.z, b.y))
 }
 

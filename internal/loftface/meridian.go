@@ -1,4 +1,4 @@
-package decad
+package loftface
 
 import (
 	"math/big"
@@ -7,28 +7,28 @@ import (
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
-// loftFacesCapBernsteinRows gives the rational denominator and coordinate
+// CapBernsteinRows gives the rational denominator and coordinate
 // numerators of one exact LoftFaces cap map over a source Bezier span.
-func loftFacesCapBernsteinRows(m loftFaceMap, span freeform.BezierSpan) ([]*big.Rat, [3][]*big.Rat) {
+func CapBernsteinRows(m Map, span freeform.BezierSpan) ([]*big.Rat, [3][]*big.Rat) {
 	g := make([]*big.Rat, len(span))
 	var h [3][]*big.Rat
 	for axis := range h {
 		h[axis] = make([]*big.Rat, len(span))
 	}
 	for i, p := range span {
-		g[i] = lfAdd(lfAdd(m.G0, lfMul(m.GU, p.U)), lfMul(m.GV, p.V))
+		g[i] = ratAdd(ratAdd(m.G0, ratMul(m.GU, p.U)), ratMul(m.GV, p.V))
 		for axis := range h {
-			h[axis][i] = lfAdd(lfMul(m.Constant[axis], g[i]),
-				lfAdd(lfAdd(m.Q0[axis], lfMul(m.QU[axis], p.U)), lfMul(m.QV[axis], p.V)))
+			h[axis][i] = ratAdd(ratMul(m.Constant[axis], g[i]),
+				ratAdd(ratAdd(m.Q0[axis], ratMul(m.QU[axis], p.U)), ratMul(m.QV[axis], p.V)))
 		}
 	}
 	return g, h
 }
 
-// loftFacesCapIntegerRows holds the same map coefficients over shared integer
+// capIntegerRows holds the same map coefficients over shared integer
 // denominators while products and derivatives are formed.
-func loftFacesCapIntegerRows(m loftFaceMap, span freeform.BezierSpan) (polynomial.BernsteinIntRow, [3]polynomial.BernsteinIntRow) {
-	g, h := loftFacesCapBernsteinRows(m, span)
+func capIntegerRows(m Map, span freeform.BezierSpan) (polynomial.BernsteinIntRow, [3]polynomial.BernsteinIntRow) {
+	g, h := CapBernsteinRows(m, span)
 	var rows [3]polynomial.BernsteinIntRow
 	for axis := range rows {
 		rows[axis] = polynomial.BernsteinIntRowOf(h[axis])
@@ -36,15 +36,15 @@ func loftFacesCapIntegerRows(m loftFaceMap, span freeform.BezierSpan) (polynomia
 	return polynomial.BernsteinIntRowOf(g), rows
 }
 
-// loftFacesMeridianQRows returns Q=D²(y²+z²−(m*x+b)²) after exact cap
+// MeridianQRows returns Q=D²(y²+z²−(m*x+b)²) after exact cap
 // interpolation, where D=g0*g1. For a source span of degree n, each row has
 // Bernstein degree at most 4n in source parameter s. The three rows are the
 // quadratic Bernstein coefficients in band time t. A caller proves D>0
 // before using Q's sign as the geometric side of the meridian.
-func loftFacesMeridianQRows(first, second loftFaceMap, span freeform.BezierSpan,
+func MeridianQRows(first, second Map, span freeform.BezierSpan,
 	m, b *big.Rat) [3][]*big.Rat {
-	g0, h0 := loftFacesCapIntegerRows(first, span)
-	g1, h1 := loftFacesCapIntegerRows(second, span)
+	g0, h0 := capIntegerRows(first, span)
+	g1, h1 := capIntegerRows(second, span)
 	d := g0.Mul(g1)
 	var a, z [3]polynomial.BernsteinIntRow
 	for axis := range a {
@@ -61,15 +61,15 @@ func loftFacesMeridianQRows(first, second loftFaceMap, span freeform.BezierSpan,
 		q0.Add(q1).Add(q2).Rats()}
 }
 
-// loftFacesMeridianJRows returns the numerator of X_t*Q_s−X_s*Q_t along
+// MeridianJRows returns the numerator of X_t*Q_s−X_s*Q_t along
 // Q=0, after multiplying by D². With X=(A+t*B)/D, it is
 // J=B*D*Q_s−(H_s*D−H*D_s)*Q_t. For a source span of degree n, each row has
 // Bernstein degree at most 8n−1 in s and quadratic degree in t. A caller
 // separately proves the sign of Q_s before using J to order a moving crossing.
-func loftFacesMeridianJRows(first, second loftFaceMap, span freeform.BezierSpan,
+func MeridianJRows(first, second Map, span freeform.BezierSpan,
 	q [3][]*big.Rat) [3][]*big.Rat {
-	g0, h0 := loftFacesCapIntegerRows(first, span)
-	g1, h1 := loftFacesCapIntegerRows(second, span)
+	g0, h0 := capIntegerRows(first, span)
+	g1, h1 := capIntegerRows(second, span)
 	d := g0.Mul(g1)
 	a, z := h0[0].Mul(g1), h1[0].Mul(g0)
 	b := z.Sub(a)

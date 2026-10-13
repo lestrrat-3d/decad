@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/sketch"
@@ -210,7 +211,7 @@ func revolveLoftFacesStraightOrFitSpans(trim *loftFacesTrimRecord,
 func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 	segment, spanIndex, band int, span freeform.BezierSpan) (revolveLoftFacesMappedCell, bool) {
 	first, last := trim.maps[band], trim.maps[band+1]
-	q := loftFacesMeridianQRows(first, last, span, m, b)
+	q := loftface.MeridianQRows(first, last, span, m, b)
 	kind, signed := revolveLoftFacesClassifyRows(q)
 	cell := revolveLoftFacesMappedCell{segment: segment, span: spanIndex,
 		band: band, side: kind, sLo: lfZero(), sHi: lfOne(), tLo: lfZero(), tHi: lfOne()}
@@ -220,7 +221,7 @@ func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 	if kind != revolveLoftFacesCrossed {
 		return cell, true
 	}
-	order := loftFacesMeridianJRows(first, last, span, signed)
+	order := loftface.MeridianJRows(first, last, span, signed)
 	switch {
 	case polynomial.BernsteinRowsPositive(order):
 		cell.xDirection = 1
@@ -230,7 +231,7 @@ func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 		return cell, false
 	}
 	for capIndex, mapped := range [...]loftFaceMap{first, last} {
-		capQ := loftFacesMeridianQRows(mapped, mapped, span, m, b)
+		capQ := loftface.MeridianQRows(mapped, mapped, span, m, b)
 		capKind, capSigned := revolveLoftFacesClassifyRows(capQ)
 		if capKind != revolveLoftFacesCrossed {
 			return cell, false
@@ -363,7 +364,7 @@ func revolveLoftFacesSpanXRange(first, last loftFaceMap, span freeform.BezierSpa
 		}
 		return out
 	}
-	return lfIntervalHull(at(tLo), at(tHi)), true
+	return loftface.IntervalHull(at(tLo), at(tHi)), true
 }
 
 func revolveLoftFacesCoeffRange(coeff []*big.Rat) loftFaceInterval {

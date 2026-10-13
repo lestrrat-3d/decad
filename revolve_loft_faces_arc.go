@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -107,7 +108,7 @@ func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 			box[2].Cmp(sourceBox[2]) < 0 || box[3].Cmp(sourceBox[3]) > 0 {
 			return 0, false
 		}
-		corners := lfBoxCorners(box)
+		corners := loftface.BoxCorners(box)
 		var side int
 		undecided := false
 		first, second := mappedArcCapRanges(trim.maps[band], corners),
@@ -171,7 +172,7 @@ func mappedArcCapRanges(mapped loftFaceMap, corners [4][2]*big.Rat) [3]loftFaceI
 		var row loftFaceRatVec
 		row[0], row[1], row[2] = lfZero(), lfZero(), lfZero()
 		row[axis] = lfOne()
-		out[axis] = lfScalarRange(mapped, row, corners)
+		out[axis] = loftface.ScalarRange(mapped, row, corners)
 	}
 	return out
 }
@@ -188,7 +189,7 @@ func mappedArcBandSide(first, second [3]loftFaceInterval, x0, x1, m, b *big.Rat,
 	tLo, tHi *big.Rat, depth int) (int, bool) {
 	var box [3]loftFaceInterval
 	for axis := range box {
-		box[axis] = lfIntervalHull(mappedArcBlend(first[axis], second[axis], tLo),
+		box[axis] = loftface.IntervalHull(mappedArcBlend(first[axis], second[axis], tLo),
 			mappedArcBlend(first[axis], second[axis], tHi))
 	}
 	if box[0].Hi.Cmp(x0) < 0 || box[0].Lo.Cmp(x1) > 0 {
@@ -199,10 +200,10 @@ func mappedArcBandSide(first, second [3]loftFaceInterval, x0, x1, m, b *big.Rat,
 	if radius.Lo.Cmp(radius.Hi) > 0 {
 		radius.Lo, radius.Hi = radius.Hi, radius.Lo
 	}
-	low := lfSub(lfAdd(loftIntervalSquareMin(box[1]), loftIntervalSquareMin(box[2])),
-		loftIntervalSquareMax(radius))
-	high := lfSub(lfAdd(loftIntervalSquareMax(box[1]), loftIntervalSquareMax(box[2])),
-		loftIntervalSquareMin(radius))
+	low := lfSub(lfAdd(loftface.IntervalSquareMin(box[1]), loftface.IntervalSquareMin(box[2])),
+		loftface.IntervalSquareMax(radius))
+	high := lfSub(lfAdd(loftface.IntervalSquareMax(box[1]), loftface.IntervalSquareMax(box[2])),
+		loftface.IntervalSquareMin(radius))
 	if low.Sign() > 0 {
 		return mappedArcOutside, true
 	}

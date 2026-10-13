@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -257,7 +258,7 @@ func revolveLoftFacesConstantXBand(maps []loftFaceMap, box [4]*big.Rat,
 	}
 	capX := make([]*big.Rat, len(maps))
 	for i, mapped := range maps {
-		if lfPositiveDenominator(mapped, box) != nil {
+		if loftface.PositiveDenominator(mapped, box) != nil {
 			return -1, nil, false
 		}
 		mappedX, ok := revolveLoftFacesConstantX(mapped)
@@ -576,7 +577,7 @@ func revolveLoftFacesVerticalArcBox(arc *sketch.Arc, trim *loftFacesTrimRecord,
 		lfF(v.Lo).Cmp(sourceBox[2]) < 0 || lfF(v.Hi).Cmp(sourceBox[3]) > 0 {
 		return box, false
 	}
-	corners := lfTileCorners(lfF(u.Lo), lfF(u.Hi), lfF(v.Lo), lfF(v.Hi))
+	corners := loftface.TileCorners(lfF(u.Lo), lfF(u.Hi), lfF(v.Lo), lfF(v.Hi))
 	first, last := mappedArcCapRanges(trim.maps[band], corners),
 		mappedArcCapRanges(trim.maps[band+1], corners)
 	for axis := range box {
