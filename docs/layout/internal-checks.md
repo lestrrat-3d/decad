@@ -35,7 +35,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/survey2d/` | 2D disks, prism readers, walks, Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Holds certified section pairs and checks offsets, ribbons and interval clearance. See surface §16. |
 | `internal/revolvesurvey/` | Revolve wall, undercut and concave-radius readers. See verification §6. |
-| `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings. See verification §6. |
+| `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings, and the revolve clearance carrier input. See verification §6, clearance §2. |
 | `internal/radiussurvey/` | Prism, revolve, cup and BRep concave-radius readings. See verification §6. |
 | `internal/motionbound/` | Motion variants, exact parameters, poses, box bounds, pair certificates, record radii, overlap transfer and sweeps. |
 | `internal/motionoption/` | Motion options. See motion-check §3. |

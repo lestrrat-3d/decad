@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -86,7 +87,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	if !ok || cross.x >= caps.highX {
 		return nil, true, fmt.Errorf("%w: bore does not cross one straight section band", ErrUnsupported)
 	}
-	maxStep, ok := revolveSectorRingMaxStep(ring.angles)
+	maxStep, ok := revolvemesh.SectorRingMaxStep(ring.angles)
 	if !ok {
 		return nil, true, fmt.Errorf("%w: section ring has no bounded angular plan", ErrUnsupported)
 	}
@@ -188,7 +189,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
 		}
-		cell, fan, err := revolveSectorCapFan(tri, joined.src[i], caps.lowAxis,
+		cell, fan, err := revolvemesh.SectorCapFan(tri, joined.src[i], caps.lowAxis,
 			caps.lowGroup, lowPos, n)
 		if err != nil {
 			return nil, true, err
@@ -200,7 +201,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 			lowSeen[cell] = true
 			continue
 		}
-		cell, fan, err = revolveSectorCapFan(tri, joined.src[i], caps.highAxis,
+		cell, fan, err = revolvemesh.SectorCapFan(tri, joined.src[i], caps.highAxis,
 			caps.highGroup, highPos, n)
 		if err != nil {
 			return nil, true, err
@@ -278,7 +279,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	if len(mesh.tris) != len(joined.tris)+2*n {
 		return nil, true, fmt.Errorf("%w: band and wall triangle census changed", ErrUnsupported)
 	}
-	patches := revolveSectorBorePatches(mesh, oldCount, n, true, caps, bandGroup, wallGroup)
+	patches := revolvemesh.SectorBorePatches(mesh.src, oldCount, n, true, caps.lowGroup, caps.highGroup, bandGroup, wallGroup)
 	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
 		mesh.verts, mesh.tris, patches, revolveSectorBoreMaxAuditTriangles,
 		revolveSectorBoreMaxAuditScans); err != nil {
