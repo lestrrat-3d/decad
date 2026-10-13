@@ -94,6 +94,58 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		defer func() { trimmed.payload = original }()
 		refusesEntry(t)
 	})
+	t.Run("changed body facet after context", func(t *testing.T) {
+		original := trimmed.payload
+		changed := original.(facetedPayload)
+		changed.verts = slices.Clone(changed.verts)
+		changed.verts[0].X += 1
+		trimmed.payload = changed
+		defer func() { trimmed.payload = original }()
+		refuses(t, classifier)
+	})
+	t.Run("changed body bound after context", func(t *testing.T) {
+		original := trimmed.payload
+		changed := original.(facetedPayload)
+		changed.meshBound = math.Nextafter(changed.meshBound, 0)
+		trimmed.payload = changed
+		defer func() { trimmed.payload = original }()
+		refuses(t, classifier)
+	})
+	t.Run("changed body volume proof after context", func(t *testing.T) {
+		original := trimmed.payload
+		changed := original.(facetedPayload)
+		changed.volSymDiff = math.Nextafter(changed.volSymDiff, math.Inf(1))
+		trimmed.payload = changed
+		defer func() { trimmed.payload = original }()
+		refuses(t, classifier)
+	})
+	t.Run("changed owned tool facet after context", func(t *testing.T) {
+		original := classifier.tool.vertices[0]
+		classifier.tool.vertices[0].X += 1
+		defer func() { classifier.tool.vertices[0] = original }()
+		refuses(t, classifier)
+	})
+	t.Run("understated owned tool bound after context", func(t *testing.T) {
+		original := classifier.tool.bound
+		require.Positive(t, original)
+		classifier.tool.bound = math.Nextafter(original, 0)
+		defer func() { classifier.tool.bound = original }()
+		refuses(t, classifier)
+	})
+	t.Run("changed owned shell vertex after context", func(t *testing.T) {
+		vertex := shell.mesh.tris[index][0]
+		original := shell.mesh.verts[vertex]
+		shell.mesh.verts[vertex].X += 1
+		defer func() { shell.mesh.verts[vertex] = original }()
+		refuses(t, classifier)
+	})
+	t.Run("understated owned shell bound after context", func(t *testing.T) {
+		original := shell.faceBound
+		require.Positive(t, original)
+		shell.faceBound = math.Nextafter(original, 0)
+		defer func() { shell.faceBound = original }()
+		refuses(t, classifier)
+	})
 	t.Run("changed cached facet", func(t *testing.T) {
 		original := trimmed.tessellationCache.Load()
 		changed := *tool

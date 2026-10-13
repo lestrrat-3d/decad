@@ -63,7 +63,7 @@ func sameRevolveLoftFacesProofMesh(a, b *Mesh) bool {
 		slices.Equal(a.vertexBound, b.vertexBound) && maps.Equal(a.faceBound, b.faceBound) &&
 		a.bound == b.bound && a.coordBound == b.coordBound &&
 		a.areaSlack == b.areaSlack && a.volSymDiff == b.volSymDiff &&
-		a.symDiffOK == b.symDiffOK
+		a.symDiffOK == b.symDiffOK && a.boundaryOK == b.boundaryOK
 }
 
 func cloneRevolveLoftFacesClearShell(shell *revolveLoftFacesBlankSeamShell) *revolveLoftFacesBlankSeamShell {
@@ -94,12 +94,41 @@ func cloneRevolveLoftFacesClearShell(shell *revolveLoftFacesBlankSeamShell) *rev
 	return &cloned
 }
 
+func sameRevolveLoftFacesClearShell(a, b *revolveLoftFacesBlankSeamShell) bool {
+	if a == nil || b == nil ||
+		!slices.Equal(a.mesh.verts, b.mesh.verts) ||
+		!slices.Equal(a.mesh.tris, b.mesh.tris) ||
+		!slices.Equal(a.mesh.src, b.mesh.src) ||
+		!slices.EqualFunc(a.mesh.groups, b.mesh.groups, func(x, y facetGroup) bool {
+			return slices.Equal(x.origins, y.origins)
+		}) ||
+		!slices.Equal(a.vertexBounds, b.vertexBounds) ||
+		!slices.Equal(a.triangleCells, b.triangleCells) ||
+		a.rayCount != b.rayCount || a.chordBound != b.chordBound || a.faceBound != b.faceBound ||
+		len(a.sectionRings) != len(b.sectionRings) {
+		return false
+	}
+	for i := range a.sectionRings {
+		if len(a.sectionRings[i]) != len(b.sectionRings[i]) {
+			return false
+		}
+		for j := range a.sectionRings[i] {
+			if !slices.Equal(a.sectionRings[i][j], b.sectionRings[i][j]) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // This private context owns the real producers consumed by every candidate
 // triangle. Construction checks the complete contact graph and shell once.
 type revolveLoftFacesClearPatchContext struct {
-	source *revolveLoftFacesSourceCertificate
-	shell  *revolveLoftFacesBlankSeamShell
-	tool   *Mesh
+	source     *revolveLoftFacesSourceCertificate
+	shell      *revolveLoftFacesBlankSeamShell
+	tool       *Mesh
+	shellProof *revolveLoftFacesBlankSeamShell
+	toolProof  *Mesh
 }
 
 func newRevolveLoftFacesClearPatchContext(ctx context.Context,
@@ -119,6 +148,10 @@ func newRevolveLoftFacesClearPatchContext(ctx context.Context,
 		return nil, false, err
 	}
 	fresh, err := tessellateFaceted(ctx, source.tooth, payload, payload.meshBound)
+	if fresh != nil {
+		// tessellateContext sets this flag after the payload restatement.
+		fresh.boundaryOK = true
+	}
 	if err != nil || !sameRevolveLoftFacesProofMesh(tool, fresh) ||
 		!source.toolProof.current(source.tooth, payload) {
 		return nil, false, err
@@ -127,9 +160,12 @@ func newRevolveLoftFacesClearPatchContext(ctx context.Context,
 	if err != nil || !ok || !source.toolProof.current(source.tooth, payload) {
 		return nil, false, err
 	}
+	ownedShell := cloneRevolveLoftFacesClearShell(shell)
+	ownedTool := cloneRevolveLoftFacesProofMesh(tool)
 	return &revolveLoftFacesClearPatchContext{
-		source: source, shell: cloneRevolveLoftFacesClearShell(shell),
-		tool: cloneRevolveLoftFacesProofMesh(tool),
+		source: source, shell: ownedShell, tool: ownedTool,
+		shellProof: cloneRevolveLoftFacesClearShell(ownedShell),
+		toolProof:  cloneRevolveLoftFacesProofMesh(ownedTool),
 	}, true, nil
 }
 
@@ -149,6 +185,9 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 	source, shell, tool := c.source, c.shell, c.tool
 	if ctx == nil || source == nil || shell == nil || tool == nil ||
 		source.tooth == nil || source.trim == nil ||
+		!revolveLoftFacesClearPatchToolCurrent(source) ||
+		!sameRevolveLoftFacesClearShell(shell, c.shellProof) ||
+		!sameRevolveLoftFacesProofMesh(tool, c.toolProof) ||
 		!revolveLoftFacesSectionCurrent(source) ||
 		!revolveLoftFacesTrimCurrent(source.tooth, source.trim) ||
 		!revolveLoftFacesSourceRefsCurrent(source.trim, source.tooth, source.sourceRefs) ||
@@ -233,6 +272,14 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 		return pointquery.Undecided, false, err
 	}
 	return location, true, nil
+}
+
+func revolveLoftFacesClearPatchToolCurrent(source *revolveLoftFacesSourceCertificate) bool {
+	if source == nil || source.tooth == nil {
+		return false
+	}
+	payload, ok := source.tooth.payload.(facetedPayload)
+	return ok && source.toolProof.current(source.tooth, payload)
 }
 
 func sameRevolveLoftFacesShellGroup(source *revolveLoftFacesSourceCertificate,
