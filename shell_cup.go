@@ -7,8 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
@@ -321,7 +320,7 @@ func (cp cupPayload) view() cupView {
 // The two regions must have one loop count; a dropped loop is S11a, caught
 // before here.
 func (cp cupView) payload(ctx context.Context) (cupPayload, error) {
-	bands, err := shellWallBands(ctx, cp.outer, cp.cavity)
+	bands, err := prismshell.ShellWallBands(ctx, cp.outer, cp.cavity)
 	if err != nil {
 		return cupPayload{}, err
 	}
@@ -459,65 +458,4 @@ func renameCavityRoles(ctx context.Context, faces []*Face, ref producerID) error
 		}
 	}
 	return nil
-}
-
-// loopEnclosedAreaContext is the absolute area a single loop encloses — the magnitude
-// of its Green's-theorem signed area, so a hole (clockwise) and an outer loop
-// (counter-clockwise) both report a positive area. A rim band's area is the
-// difference of the two loops it spans, and both are strictly nested (the audit
-// proved the cavity simple and inside the outer region), so the absolute
-// difference is the band's analytic area, with both source bounds carried.
-func loopEnclosedAreaContext(ctx context.Context, l loopRecord) (proofbound.BoundedScalar, error) {
-	ig, err := loopRegionIntegralsContext(ctx, l, freeform.MomentAreaOrder)
-	if err != nil {
-		return proofbound.BoundedScalar{}, err
-	}
-	return proofbound.MeasuredScalar(math.Abs(ig.Area), ig.AreaBound), nil
-}
-
-// loopRegionIntegralsContext runs the regionIntegrals accumulator over one
-// loop's own segments about the plane origin, through the order its caller reads.
-func loopRegionIntegralsContext(ctx context.Context, l loopRecord, order freeform.MomentIntegralOrder) (regionIntegrals, error) {
-	var ig regionIntegrals
-	for _, seg := range l.Segments {
-		if err := ctx.Err(); err != nil {
-			return regionIntegrals{}, err
-		}
-		// Integrated about the plane origin itself; the band's area is a
-		// difference of two loop areas, so no walk anchor is involved.
-		if err := ig.AddFor(seg, momentinput.Plan{}, Point2{}, order); err != nil {
-			return regionIntegrals{}, err
-		}
-	}
-	return ig, nil
-}
-
-// loopEnclosedMomentsContext is a signed first-moment sibling of
-// loopEnclosedAreaContext (docs/modify-reach-design.md §8.4's slab term): the
-// SAME regionIntegrals accumulator over the loop's own segments about the
-// plane origin, returning the loop's own area together with its first
-// moments (∫u dA, ∫v dA) — each canonicalized the SAME way
-// loopEnclosedAreaContext's |area| already is, via orient = sign(the loop's
-// own raw signed area). Reversing a walk's direction negates every one of
-// Green's theorem's contour integrals identically — area and first moments
-// alike, since they are all contour integrals of the same shape — so the
-// SAME orient factor that turns a clockwise hole's negative raw area into
-// loopEnclosedAreaContext's positive reading turns its first moments
-// consistently too, and orient*ig.Area equals math.Abs(ig.Area) exactly, so
-// this function's own area field always matches loopEnclosedAreaContext's.
-// The caller (evalCapBlendContext) applies its own per-loop sign
-// (outer/hole, by loop index) on top of this canonicalized triple, exactly as
-// it already does to loopEnclosedAreaContext's |area| for the slab volume.
-func loopEnclosedMomentsContext(ctx context.Context, l loopRecord) (area, mu, mv proofbound.BoundedScalar, err error) {
-	ig, err := loopRegionIntegralsContext(ctx, l, freeform.MomentFirstOrder)
-	if err != nil {
-		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
-	}
-	orient := 1.0
-	if ig.Area < 0 {
-		orient = -1
-	}
-	return proofbound.MeasuredScalar(orient*ig.Area, ig.AreaBound),
-		proofbound.MeasuredScalar(orient*ig.Mu, ig.MuBound),
-		proofbound.MeasuredScalar(orient*ig.Mv, ig.MvBound), nil
 }

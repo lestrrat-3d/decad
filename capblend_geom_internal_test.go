@@ -66,7 +66,7 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 			budget := proofbound.NewWorkBudget(t.Context())
 			cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
 			require.NoError(t, err)
-			joins, err := capOffsetJoins(budget, cl, cbp.loopOffset(0))
+			joins, err := capband.OffsetJoins(budget, cl.walks, cbp.loopOffset(0), shellTol)
 			require.NoError(t, err)
 
 			var skew float64
@@ -125,9 +125,9 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 	budget := proofbound.NewWorkBudget(t.Context())
 	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
-	joins, err := capOffsetJoins(budget, cl, dc)
+	joins, err := capband.OffsetJoins(budget, cl.walks, dc, shellTol)
 	require.NoError(t, err)
-	delta, err := capband.ContourDisplacement(cl.walks, capContourJoins(joins), dc, 0, shellTol)
+	delta, err := capband.ContourDisplacement(cl.walks, capband.ContourJoins(joins), dc, 0, shellTol)
 	require.NoError(t, err)
 
 	n := len(cl.walks)
@@ -207,7 +207,7 @@ func TestCapMiterLocusUpperReadsTheStatedAxialRise(t *testing.T) {
 	budget := proofbound.NewWorkBudget(t.Context())
 	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
-	joins, err := capOffsetJoins(budget, cl, dc)
+	joins, err := capband.OffsetJoins(budget, cl.walks, dc, shellTol)
 	require.NoError(t, err)
 	n := len(cl.walks)
 	checked := 0

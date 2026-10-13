@@ -63,21 +63,6 @@ func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, rol
 	return filletLoopRead{loop: read, walks: cl.walks, joins: joins, pieces: pieces}, nil
 }
 
-// filletContourDelta bounds the contour that remains after a sphere pole
-// consumes an inward arc. The surviving offset carriers meet at the recorded
-// centre, so the ordinary contour proof reads that centre as their miter.
-func filletContourDelta(ctx context.Context, loop loopRecord, r, rDelta float64) (float64, error) {
-	budget := proofbound.NewWorkBudget(ctx)
-	cl, err := oneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
-	if err != nil {
-		return 0, err
-	}
-	if len(cl.walks) == 1 && cl.walks[0].Closed {
-		return loopContourDelta(ctx, loop, r, rDelta)
-	}
-	return filletband.ContourDelta(budget, cl.walks, r, rDelta, shellTol)
-}
-
 // suppliedFilletCapWalls pairs the contour's edges with the original walks.
 // A collapsed inward arc has no cap edge; its two neighbouring edges share
 // the pole vertex at the arc's recorded centre.

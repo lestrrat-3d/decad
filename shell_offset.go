@@ -55,15 +55,6 @@ func offsetProfile(budget *proofbound.WorkBudget, profile profileRecord, s, t fl
 	return profileRecord{Outer: out[0], Holes: out[1:]}, nil
 }
 
-// offsetJoinsBudget resolves every corner join of one coalesced loop of two or
-// more walks, in walk order: corner i sits at walk i's start (== walk i−1's
-// end). It is the one place the corner rule of docs/modify-design.md §7 is
-// decided by offset2d.SectionJoinsBudget. The build (offset2d.BuildLoop) and
-// its displacement proof (offsetSectionDelta) read those same joins.
-func offsetJoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, s, t float64) ([]cornerJoin, error) {
-	return offset2d.SectionJoinsBudget(budget, walks, s, t, shellTol)
-}
-
 // cornerJoin is the shared section offset join read by the root builders.
 type cornerJoin = offset2d.Join
 

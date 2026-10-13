@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -84,7 +85,7 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	}}
 	work := freeform.NewFreeformWork()
 
-	capBoundary, err := capLoopBoundary(t.Context(), loop, d)
+	capBoundary, err := capband.LoopBoundary(t.Context(), loop, d, shellTol)
 	require.NoError(t, err)
 	require.Len(t, capBoundary.Segments, 1)
 	widened, ok := capBoundary.Segments[0].(circleSeg)
@@ -115,7 +116,7 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	// gathered independently here only to state the required minimum —
 	// nothing about the coordUpper mechanism under test is re-derived.
 	patchArea, patchAreaBound := capband.AreaOf(g)
-	capArea, err := loopEnclosedAreaContext(t.Context(), capBoundary)
+	capArea, err := momentinput.LoopEnclosedArea(t.Context(), capBoundary)
 	require.NoError(t, err)
 	areaUpper := proofbound.AbsSumUpper(patchArea, patchAreaBound, capArea.Value, capArea.Bound)
 

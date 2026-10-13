@@ -42,7 +42,7 @@ radius `t` about the corner, and a convex corner's two offsets cross at the
 miter foot. The chamfer uses the linear map `h = t·ds/dc`; the fillet uses
 the circular one. So the fillet arm reuses, unchanged:
 
-- the cap contour at `t = r` (`capLoopBoundary`, modify-general §4.2 step 1),
+- the cap contour at `t = r` (`capband.LoopBoundary`, modify-general §4.2 step 1),
   its displacement (`capband.ContourDisplacement`) charged into `F.delta`;
 - the side contour, `ℓ` moved `r` along `F`'s normal (step 2), with
   `levelDelta`;
@@ -60,7 +60,7 @@ convex corner's miter, the measurements, and the mesh.
 ## 2. Table LF — surfaces and edges per corner class
 
 The loop's walks are resolved as route L resolves them
-(`oneLoopCornerLoop`, `capOffsetJoins`). Each walk and each corner of `ℓ`
+(`oneLoopCornerLoop`, `capband.OffsetJoins`). Each walk and each corner of `ℓ`
 yields one patch or one edge:
 
 | LF | Piece of `ℓ` | Patch (face) | Trimmed by |

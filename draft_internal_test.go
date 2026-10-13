@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,7 +51,7 @@ func TestDraftKeptWallsReadsRoles(t *testing.T) {
 
 	kept, err = draftKeptWalls(b, 7, []*Face{own})
 	require.NoError(t, err)
-	require.Equal(t, map[draftWall]struct{}{{loop: 1, seg: 2}: {}, {loop: 1, seg: 3}: {}}, kept)
+	require.Equal(t, map[offset2d.DraftWall]struct{}{{Loop: 1, Seg: 2}: {}, {Loop: 1, Seg: 3}: {}}, kept)
 
 	_, err = draftKeptWalls(b, 7, []*Face{own, capStart})
 	require.ErrorIs(t, err, ErrDegenerate)

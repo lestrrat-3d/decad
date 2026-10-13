@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
+	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -119,7 +120,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 		if err != nil {
 			return nil, err
 		}
-		if err := requireSectionCavity(t, tmm, inradius, enough); err != nil {
+		if err := shellsurvey.RequireSectionCavity(t, tmm, inradius, enough, shellTol); err != nil {
 			return nil, err
 		}
 	}

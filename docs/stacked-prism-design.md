@@ -250,7 +250,7 @@ needed.
 | Quantity | Composition |
 |---|---|
 | `Volume` | `Σ_k A_k · h_k` — each slab's region area (with `sectionDisplacementArea(sectionDelta, walks_k, perimeter_k)` folded into its bound, as `evalPrism` does) times its bounded height |
-| `Area` | the first region's area (bottom cap) + the last region's area (top cap) + each exposed record's area (`loopEnclosedAreaContext` of its outer loop) + `Σ_columns perimeter · height` |
+| `Area` | the first region's area (bottom cap) + the last region's area (top cap) + each exposed record's area (`momentinput.LoopEnclosedArea` of its outer loop) + `Σ_columns perimeter · height` |
 | `Centroid` | `Σ_k m_k · c_k / Σ_k m_k`, with `m_k = A_k · h_k` and `c_k` the region's centroid lifted to the slab's bounded midpoint through `prismPayload.point`; taken component by component in bounded arithmetic, each `c_k` component carrying `prismPointBound`'s radius as its bound, and the three component bounds folded into one radius through `radius3D`. `prismCentroidGeometryBound`, the largest over the outer runs, plus `sectionDelta`, caps the result as `evalPrism`'s does |
 | `Bounds` | the union of `prismBoundsContext` over each outer run: one outer-only prism per run of slabs sharing an outer record, over that run's interval with its end levels' displacements and the payload's `sectionDelta`, the largest run bound covering the union. A cut-built stack is one run, the outer-only prism on the full interval |
 | `extentAlong` | the extreme over every outer run's reading |

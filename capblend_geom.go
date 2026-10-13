@@ -6,11 +6,11 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -29,31 +29,10 @@ import (
 // wall, and a Cone whose apex is the original corner for a reflex corner's
 // extra offset arc.
 
-// capOffsetJoins returns the shared Shell offset joins after checking the
-// cap band's circular walls. The caller pairs each join with its source wall.
-func capOffsetJoins(budget *proofbound.WorkBudget, cl cornerLoop, d float64) ([]cornerJoin, error) {
-	walks := cl.walks
-	n := len(walks)
-	if n == 0 {
-		return nil, fmt.Errorf(`%w: a cap loop holds no walks`, ErrDegenerate)
-	}
-	for _, w := range walks {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		if w.IsCircular() {
-			if _, err := capband.BandRadius(w, d, shellTol); err != nil {
-				return nil, err
-			}
-		}
-	}
-	return offsetJoinsBudget(budget, walks, 1, d)
-}
-
-// offsetJoins is capOffsetJoins read under cbp's corner rule for loop li. A
+// offsetJoins is capband.OffsetJoins read under cbp's corner rule for loop li. A
 // draft view (docs/draft-design.md §2) checks the band radius of each circular
-// wall it moves exactly as capOffsetJoins does and then resolves every corner
-// by the sharp rule, each walk at its own amount (walkAmounts, §10.2): a
+// wall it moves exactly as capband.OffsetJoins does and then resolves every corner
+// by the sharp rule, each walk at its own amount (offset2d.DraftWalkAmounts, §10.2): a
 // reflex corner is mitered, a corner at a circular walk must be a G1 join
 // between two walks moved alike (SD4), and two moved lines that do not meet
 // are a cusp (SD15).
@@ -62,7 +41,7 @@ func (cbp capBlendPayload) offsetJoins(budget *proofbound.WorkBudget, li int, cl
 		return filletband.OffsetJoins(budget, cl.walks, d, cbp.loopSetback(li).dcDelta, shellTol)
 	}
 	if !cbp.draft {
-		return capOffsetJoins(budget, cl, d)
+		return capband.OffsetJoins(budget, cl.walks, d, shellTol)
 	}
 	if len(cl.walks) == 0 {
 		return nil, fmt.Errorf(`%w: a draft loop holds no walks`, ErrDegenerate)
@@ -74,11 +53,11 @@ func (cbp capBlendPayload) offsetJoins(budget *proofbound.WorkBudget, li int, cl
 		}
 		if w.IsCircular() {
 			if _, err := capband.WallRadius(w, amounts[i], shellTol); err != nil {
-				return nil, wrapDraftOffsetError(err)
+				return nil, offset2d.DraftOffsetError(err)
 			}
 		}
 	}
-	return sharpOffsetJoinsBudget(budget, cl.walks, amounts)
+	return offset2d.DraftSharpJoins(budget, cl.walks, amounts, shellTol)
 }
 
 // capWallFoot returns the offset segment's own (start, end) feet for wall i,
@@ -98,24 +77,10 @@ func capWallFoot(joins []cornerJoin, i, n int) (Point2, Point2) {
 }
 
 // oneLoopCornerLoop decomposes a single recorded loop into its coalesced
-// corner walk, the same decomposition prismCornerLoopsBudget applies to
-// every loop of a section.
+// corner walk (capband.LoopWalks), the same decomposition
+// prismCornerLoopsBudget applies to every loop of a section.
 func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop loopRecord, work *freeform.FreeformWork) (cornerLoop, error) {
-	raw := make([]survey2d.SideWalk, len(loop.Segments))
-	for i, seg := range loop.Segments {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return cornerLoop{}, err
-		}
-		w, err := boundarywalk.WalkOf(seg, work)
-		if err != nil {
-			return cornerLoop{}, err
-		}
-		if err := boundarywalk.RequireAnalyticWalk(w, "a cap-loop chamfer"); err != nil {
-			return cornerLoop{}, err
-		}
-		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
-	}
-	walks, err := boundarywalk.CoalesceWalksBudget(raw, budget)
+	walks, err := capband.LoopWalks(budget, loop, work)
 	if err != nil {
 		return cornerLoop{}, err
 	}
@@ -351,9 +316,9 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// published for a coordinate this solve computed.
 	var delta float64
 	if cbp.draft {
-		delta, err = capband.AmountsContourDisplacement(walks, capContourJoins(joins), amounts, dcDelta, shellTol)
+		delta, err = capband.AmountsContourDisplacement(walks, capband.ContourJoins(joins), amounts, dcDelta, shellTol)
 	} else {
-		delta, err = capband.ContourDisplacement(walks, capContourJoins(joins), dc, dcDelta, shellTol)
+		delta, err = capband.ContourDisplacement(walks, capband.ContourJoins(joins), dc, dcDelta, shellTol)
 	}
 	if err != nil {
 		return capBandResult{}, err
@@ -1151,7 +1116,7 @@ func capNameOf(matSign float64) string {
 // ErrUnsupported rather than leaving face.reversed at whatever the caller
 // constructed it with. NormalAt's own refusal there is ErrDegenerate, but
 // that sentinel and ErrUnsupported are opposite existence claims a caller
-// branches on (capblend.go's wrapCapBlendAuditError), so the underlying error
+// branches on (capblend.go's capband.ChamferAuditError), so the underlying error
 // is folded in with %v, never %w.
 func fixPatchOrientation(f *Face, pl prismPayload, samplePoint r3.Vec, refU, refV, refZ float64) error {
 	n, err := f.NormalAt(samplePoint)

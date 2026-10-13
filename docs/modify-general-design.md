@@ -566,7 +566,7 @@ face and material side must agree on their pair, because they share one
 cap-blend view. Then:
 
 1. **The cap contour.** `ℓ` offset `dc` into `F`'s material by reach §8.3's
-   construction (`capLoopBoundary`): SX6 for a dropped carrier, SX13's radial
+   construction (`capband.LoopBoundary`): SX6 for a dropped carrier, SX13's radial
    half per circular wall, SX14 per corner. `F`'s region is rewritten with the
    contour in `ℓ`'s place, and the second offset at the top of `dc`'s
    conversion span runs as `auditCapBlendSetbackSpan` does.
