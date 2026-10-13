@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -82,7 +83,7 @@ func revolveLoftFacesFitArcVertex(trim *loftFacesTrimRecord,
 	if sourceAtEnd {
 		parameter = lfOne()
 	}
-	location := spiralBezierPoint(span, parameter)
+	location := loftface.BezierPoint(span, parameter)
 	if location[0].Cmp(lfF(recordedFit.U)) != 0 ||
 		location[1].Cmp(lfF(recordedFit.V)) != 0 {
 		return revolveLoftFacesJointVertex{}, false

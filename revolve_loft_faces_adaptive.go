@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
@@ -29,8 +30,8 @@ func revolveLoftFacesAdaptiveBezierCells(ctx context.Context, trim *loftFacesTri
 		return nil, false, nil
 	}
 	first, last := trim.maps[band], trim.maps[band+1]
-	q := spiralRootPolynomial(first, last, span, m, b)
-	j := spiralRootXOrder(first, last, span, q)
+	q := loftface.MeridianQRows(first, last, span, m, b)
+	j := loftface.MeridianJRows(first, last, span, q)
 	remaining := revolveLoftFacesMaxBandCells
 	return revolveLoftFacesTimeSlab(ctx, q, j, first, last, span, section, segment, spanIndex, band,
 		lfZero(), lfOne(), 0, &remaining)
@@ -50,10 +51,10 @@ func revolveLoftFacesTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 		}
 	}
 	box := polynomial.BernsteinRectRestrict(q, lfZero(), lfOne(), tLo, tHi)
-	kind, _ := revolveLoftFacesClassifyRows(box)
+	kind, _ := loftface.ClassifyRows(box)
 	whole := revolveLoftFacesMappedCell{segment: segment, span: span,
 		band: band, side: kind, sLo: lfZero(), sHi: lfOne(), tLo: tLo, tHi: tHi}
-	if kind == revolveLoftFacesInside || kind == revolveLoftFacesOutside {
+	if kind == loftface.SideInside || kind == loftface.SideOutside {
 		return []revolveLoftFacesMappedCell{whole}, true, nil
 	}
 	if revolveLoftFacesSpanAxialMiss(first, last, sourceSpan, section,
@@ -112,7 +113,7 @@ func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 	for _, orientation := range []int{1, -1} {
 		oriented := box
 		if orientation < 0 {
-			oriented = revolveLoftFacesNegateRows(box)
+			oriented = loftface.NegateRows(box)
 		}
 		if polynomial.BernsteinRowsPointSign(oriented, lfZero()) != -1 ||
 			polynomial.BernsteinRowsPointSign(oriented, lfOne()) != 1 {
@@ -135,7 +136,7 @@ func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 	check:
 		middle := polynomial.BernsteinRectRestrict(q, sLo, sHi, tLo, tHi)
 		if orientation < 0 {
-			middle = revolveLoftFacesNegateRows(middle)
+			middle = loftface.NegateRows(middle)
 		}
 		if !polynomial.BernsteinRowsCross(middle) {
 			continue
@@ -143,7 +144,7 @@ func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 		if sLo.Sign() > 0 {
 			left := polynomial.BernsteinRectRestrict(q, lfZero(), sLo, tLo, tHi)
 			if orientation > 0 {
-				left = revolveLoftFacesNegateRows(left)
+				left = loftface.NegateRows(left)
 			}
 			if !polynomial.BernsteinRowsPositive(left) {
 				continue
@@ -152,7 +153,7 @@ func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 		if sHi.Cmp(lfOne()) < 0 {
 			right := polynomial.BernsteinRectRestrict(q, sHi, lfOne(), tLo, tHi)
 			if orientation < 0 {
-				right = revolveLoftFacesNegateRows(right)
+				right = loftface.NegateRows(right)
 			}
 			if !polynomial.BernsteinRowsPositive(right) {
 				continue
@@ -160,12 +161,12 @@ func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 		}
 		order := polynomial.BernsteinRectRestrict(j, sLo, sHi, tLo, tHi)
 		if orientation < 0 {
-			order = revolveLoftFacesNegateRows(order)
+			order = loftface.NegateRows(order)
 		}
 		xDirection := 0
 		if polynomial.BernsteinRowsPositive(order) {
 			xDirection = 1
-		} else if polynomial.BernsteinRowsPositive(revolveLoftFacesNegateRows(order)) {
+		} else if polynomial.BernsteinRowsPositive(loftface.NegateRows(order)) {
 			xDirection = -1
 		}
 		if xDirection == 0 {
@@ -179,7 +180,7 @@ func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 		if sLo.Sign() > 0 {
 			cells = append(cells, makeCell(-orientation, lfZero(), sLo))
 		}
-		crossing := makeCell(revolveLoftFacesCrossed, sLo, sHi)
+		crossing := makeCell(loftface.SideCrossed, sLo, sHi)
 		crossing.xDirection = xDirection
 		cells = append(cells, crossing)
 		if sHi.Cmp(lfOne()) < 0 {

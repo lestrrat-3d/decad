@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/stretchr/testify/require"
 )
 
@@ -152,19 +153,19 @@ func TestRevolveLoftFacesCircleMissUsesWholeMappedSourceBox(t *testing.T) {
 			G0: lfOne(), GU: lfZero(), GV: lfZero()}
 	}
 	maps := []loftFaceMap{sectionMap(big.NewRat(5, 1)), sectionMap(big.NewRat(7, 1))}
-	require.True(t, revolveLoftFacesCircleOutsideMaps(maps, box,
+	require.True(t, loftface.CircleOutsideMaps(maps, box,
 		big.NewRat(6, 1), big.NewRat(1, 2)))
-	require.False(t, revolveLoftFacesCircleOutsideMaps(maps, box,
+	require.False(t, loftface.CircleOutsideMaps(maps, box,
 		big.NewRat(6, 1), big.NewRat(2, 1)), "the source box can meet this circle")
-	require.True(t, revolveLoftFacesCircleOutsideMaps(maps, box,
+	require.True(t, loftface.CircleOutsideMaps(maps, box,
 		big.NewRat(8, 1), big.NewRat(2, 1)), "the circle is beyond every band")
-	require.False(t, revolveLoftFacesCircleOutsideMaps(maps, box,
+	require.False(t, loftface.CircleOutsideMaps(maps, box,
 		big.NewRat(6, 1), big.NewRat(1, 1)), "boundary equality cannot prove a miss")
 	invalid := slices.Clone(maps)
 	invalid[0].G0 = lfZero()
-	require.False(t, revolveLoftFacesCircleOutsideMaps(invalid, box,
+	require.False(t, loftface.CircleOutsideMaps(invalid, box,
 		big.NewRat(6, 1), big.NewRat(1, 2)), "a zero map denominator cannot prove a miss")
-	require.False(t, revolveLoftFacesCircleOutsideMaps(maps[:1], box,
+	require.False(t, loftface.CircleOutsideMaps(maps[:1], box,
 		big.NewRat(6, 1), big.NewRat(1, 2)), "one cap does not define a band")
 }
 

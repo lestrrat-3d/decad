@@ -8,12 +8,6 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-const (
-	mappedArcMiss    = 0
-	mappedArcInside  = -1
-	mappedArcOutside = 1
-)
-
 // mappedArcFiniteSide proves that the whole mapped Sketch arc misses a finite
 // straight Revolve generator, or stays on one strict side wherever its axial
 // range overlaps that generator. An undecidable box, including a possible
@@ -90,19 +84,19 @@ func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 		box := [4]*big.Rat{lfF(u.Lo), lfF(u.Hi), lfF(v.Lo), lfF(v.Hi)}
 		if lo == 0 {
 			point := segment.Start
-			box[0] = ratMin(box[0], lfF(point.U))
-			box[1] = ratMax(box[1], lfF(point.U))
-			box[2] = ratMin(box[2], lfF(point.V))
-			box[3] = ratMax(box[3], lfF(point.V))
+			box[0] = loftface.RatMin(box[0], lfF(point.U))
+			box[1] = loftface.RatMax(box[1], lfF(point.U))
+			box[2] = loftface.RatMin(box[2], lfF(point.V))
+			box[3] = loftface.RatMax(box[3], lfF(point.V))
 		}
 		// A pinned end can miss the ideal circular carrier by the Sketch solve
 		// residual. Include it whenever this slice reaches that endpoint.
 		if hi == 1 {
 			point := segment.End
-			box[0] = ratMin(box[0], lfF(point.U))
-			box[1] = ratMax(box[1], lfF(point.U))
-			box[2] = ratMin(box[2], lfF(point.V))
-			box[3] = ratMax(box[3], lfF(point.V))
+			box[0] = loftface.RatMin(box[0], lfF(point.U))
+			box[1] = loftface.RatMax(box[1], lfF(point.U))
+			box[2] = loftface.RatMin(box[2], lfF(point.V))
+			box[3] = loftface.RatMax(box[3], lfF(point.V))
 		}
 		if box[0].Cmp(sourceBox[0]) < 0 || box[1].Cmp(sourceBox[1]) > 0 ||
 			box[2].Cmp(sourceBox[2]) < 0 || box[3].Cmp(sourceBox[3]) > 0 {
@@ -111,9 +105,9 @@ func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 		corners := loftface.BoxCorners(box)
 		var side int
 		undecided := false
-		first, second := mappedArcCapRanges(trim.maps[band], corners),
-			mappedArcCapRanges(trim.maps[band+1], corners)
-		bandSide, ok := mappedArcBandSide(first, second, x0, x1, m, b, tLo, tHi, 6)
+		first, second := loftface.ArcCapRanges(trim.maps[band], corners),
+			loftface.ArcCapRanges(trim.maps[band+1], corners)
+		bandSide, ok := loftface.ArcBandSide(first, second, x0, x1, m, b, tLo, tHi, 6)
 		if !ok {
 			undecided = true
 		} else {
@@ -145,85 +139,9 @@ func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 	return visit(sLo, sHi, 10)
 }
 
-func ratMin(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) < 0 {
-		return a
-	}
-	return b
-}
-
 func mappedArcRecordMatches(segment arcSeg, arc *sketch.Arc) bool {
 	return arc != nil && arc.Center != nil && arc.Start != nil && arc.End != nil &&
 		segment.Center.U == arc.Center.X() && segment.Center.V == arc.Center.Y() &&
 		segment.Start.U == arc.Start.X() && segment.Start.V == arc.Start.Y() &&
 		segment.End.U == arc.End.X() && segment.End.V == arc.End.Y()
-}
-
-func ratMax(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) > 0 {
-		return a
-	}
-	return b
-}
-
-func mappedArcCapRanges(mapped loftFaceMap, corners [4][2]*big.Rat) [3]loftFaceInterval {
-	var out [3]loftFaceInterval
-	for axis := range out {
-		var row loftFaceRatVec
-		row[0], row[1], row[2] = lfZero(), lfZero(), lfZero()
-		row[axis] = lfOne()
-		out[axis] = loftface.ScalarRange(mapped, row, corners)
-	}
-	return out
-}
-
-func mappedArcBlend(first, second loftFaceInterval, t *big.Rat) loftFaceInterval {
-	a, z := lfSub(lfOne(), t), t
-	return loftFaceInterval{
-		Lo: lfAdd(lfMul(a, first.Lo), lfMul(z, second.Lo)),
-		Hi: lfAdd(lfMul(a, first.Hi), lfMul(z, second.Hi)),
-	}
-}
-
-func mappedArcBandSide(first, second [3]loftFaceInterval, x0, x1, m, b *big.Rat,
-	tLo, tHi *big.Rat, depth int) (int, bool) {
-	var box [3]loftFaceInterval
-	for axis := range box {
-		box[axis] = loftface.IntervalHull(mappedArcBlend(first[axis], second[axis], tLo),
-			mappedArcBlend(first[axis], second[axis], tHi))
-	}
-	if box[0].Hi.Cmp(x0) < 0 || box[0].Lo.Cmp(x1) > 0 {
-		return mappedArcMiss, true
-	}
-	x := loftFaceInterval{Lo: ratMax(box[0].Lo, x0), Hi: ratMin(box[0].Hi, x1)}
-	radius := loftFaceInterval{Lo: lfAdd(lfMul(m, x.Lo), b), Hi: lfAdd(lfMul(m, x.Hi), b)}
-	if radius.Lo.Cmp(radius.Hi) > 0 {
-		radius.Lo, radius.Hi = radius.Hi, radius.Lo
-	}
-	low := lfSub(lfAdd(loftface.IntervalSquareMin(box[1]), loftface.IntervalSquareMin(box[2])),
-		loftface.IntervalSquareMax(radius))
-	high := lfSub(lfAdd(loftface.IntervalSquareMax(box[1]), loftface.IntervalSquareMax(box[2])),
-		loftface.IntervalSquareMin(radius))
-	if low.Sign() > 0 {
-		return mappedArcOutside, true
-	}
-	if high.Sign() < 0 {
-		return mappedArcInside, true
-	}
-	if depth == 0 {
-		return 0, false
-	}
-	mid := lfMul(lfAdd(tLo, tHi), big.NewRat(1, 2))
-	left, ok := mappedArcBandSide(first, second, x0, x1, m, b, tLo, mid, depth-1)
-	if !ok {
-		return 0, false
-	}
-	right, ok := mappedArcBandSide(first, second, x0, x1, m, b, mid, tHi, depth-1)
-	if !ok || left != 0 && right != 0 && left != right {
-		return 0, false
-	}
-	if left != 0 {
-		return left, true
-	}
-	return right, true
 }

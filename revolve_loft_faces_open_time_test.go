@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +18,7 @@ func TestRevolveLoftFacesOpenTimeExcludesExactPointRoot(t *testing.T) {
 		{big.NewRat(0, 1), big.NewRat(1, 1)},
 		{big.NewRat(1, 2), big.NewRat(3, 2)},
 	}
-	require.Equal(t, revolveLoftFacesOutside,
+	require.Equal(t, loftface.SideOutside,
 		polynomial.BernsteinRectOpenSide(q, big.NewRat(1, 2), lfOne(), true, false))
 	require.Zero(t,
 		polynomial.BernsteinRectOpenSide(q, big.NewRat(1, 2), lfOne(), false, false))
@@ -44,8 +45,8 @@ func TestRevolveLoftFacesOpenMovingCrossingRefuses(t *testing.T) {
 	section := revolveSectionSpan{start: Point2{U: 0, V: 1},
 		end: Point2{U: 2, V: 1}}
 	m, b := revolveLoftFacesMeridian(section)
-	q := spiralRootPolynomial(first, last, span, m, b)
-	j := spiralRootXOrder(first, last, span, q)
+	q := loftface.MeridianQRows(first, last, span, m, b)
+	j := loftface.MeridianJRows(first, last, span, q)
 	remaining := revolveLoftFacesMaxBandCells
 	_, ok, _ := revolveLoftFacesOpenTimeSlab(t.Context(), q, j,
 		first, last, span, section, 0, 0, 0,

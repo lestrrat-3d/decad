@@ -21,7 +21,7 @@ type revolveLoftFacesMappedCell struct {
 	jointKind           revolveLoftFacesJointKind
 	jointPoint          *sketch.Point
 	jointArc            *sketch.Arc
-	first, last         spiralRootCrossing
+	first, last         loftface.RootCrossing
 	xFirst, xLast       loftFaceInterval
 	xDirection          int
 	sLo, sHi            *big.Rat
@@ -212,37 +212,37 @@ func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 	segment, spanIndex, band int, span freeform.BezierSpan) (revolveLoftFacesMappedCell, bool) {
 	first, last := trim.maps[band], trim.maps[band+1]
 	q := loftface.MeridianQRows(first, last, span, m, b)
-	kind, signed := revolveLoftFacesClassifyRows(q)
+	kind, signed := loftface.ClassifyRows(q)
 	cell := revolveLoftFacesMappedCell{segment: segment, span: spanIndex,
 		band: band, side: kind, sLo: lfZero(), sHi: lfOne(), tLo: lfZero(), tHi: lfOne()}
 	if kind == 2 {
 		return cell, false
 	}
-	if kind != revolveLoftFacesCrossed {
+	if kind != loftface.SideCrossed {
 		return cell, true
 	}
 	order := loftface.MeridianJRows(first, last, span, signed)
 	switch {
 	case polynomial.BernsteinRowsPositive(order):
 		cell.xDirection = 1
-	case polynomial.BernsteinRowsPositive(revolveLoftFacesNegateRows(order)):
+	case polynomial.BernsteinRowsPositive(loftface.NegateRows(order)):
 		cell.xDirection = -1
 	default:
 		return cell, false
 	}
 	for capIndex, mapped := range [...]loftFaceMap{first, last} {
 		capQ := loftface.MeridianQRows(mapped, mapped, span, m, b)
-		capKind, capSigned := revolveLoftFacesClassifyRows(capQ)
-		if capKind != revolveLoftFacesCrossed {
+		capKind, capSigned := loftface.ClassifyRows(capQ)
+		if capKind != loftface.SideCrossed {
 			return cell, false
 		}
-		root := spiralIsolateRoot(capSigned[0])
-		root.span = spanIndex
-		direction := revolveLoftFacesCapXDirection(mapped, span)
+		root := loftface.IsolateRoot(capSigned[0])
+		root.Span = spanIndex
+		direction := loftface.CapXDirection(mapped, span)
 		if direction == 2 {
 			return cell, false
 		}
-		x := revolveLoftFacesCapXRange(mapped, span, root, direction)
+		x := loftface.DirectedCapXRange(mapped, span, root, direction)
 		if capIndex == 0 {
 			cell.first, cell.xFirst = root, x
 		} else {
@@ -256,33 +256,21 @@ func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 	return cell, true
 }
 
-// A crossing can enter another whole Sketch entity through their shared
-// endpoint twice in one LoftFaces band. These exact rational brackets cover
-// every zero of the quadratic endpoint polynomial in band time. Each simple
-// root changes side. The caller must bind the same live source endpoint on
-// both adjacent entities before interpreting either change as a joint seam.
-type revolveLoftFacesEndpointRoot struct {
-	time      loftFaceInterval
-	x         loftFaceInterval
-	direction int
-	finite    bool
-}
-
 // The mapped endpoint has constant rational source coordinates, so its X
 // coordinate interpolates linearly between the two authenticated cap maps.
 // A finite section admits a root only when the complete exact X bracket lies
 // strictly within that section. A boundary overlap is undecidable.
-func revolveLoftFacesEndpointAxialClass(root revolveLoftFacesEndpointRoot,
-	x0, x1 *big.Rat, section revolveSectionSpan) (revolveLoftFacesEndpointRoot, bool) {
-	if x0 == nil || x1 == nil || root.time.Lo == nil || root.time.Hi == nil {
+func revolveLoftFacesEndpointAxialClass(root loftface.EndpointRoot,
+	x0, x1 *big.Rat, section revolveSectionSpan) (loftface.EndpointRoot, bool) {
+	if x0 == nil || x1 == nil || root.Time.Lo == nil || root.Time.Hi == nil {
 		return root, false
 	}
 	xAt := func(t *big.Rat) *big.Rat { return lfAdd(x0, lfMul(t, lfSub(x1, x0))) }
-	xLo, xHi := xAt(root.time.Lo), xAt(root.time.Hi)
+	xLo, xHi := xAt(root.Time.Lo), xAt(root.Time.Hi)
 	if xLo.Cmp(xHi) > 0 {
 		xLo, xHi = xHi, xLo
 	}
-	root.x = loftFaceInterval{Lo: xLo, Hi: xHi}
+	root.X = loftFaceInterval{Lo: xLo, Hi: xHi}
 	start, end := lfF(section.start.U), lfF(section.end.U)
 	if start.Cmp(end) > 0 {
 		start, end = end, start
@@ -291,7 +279,7 @@ func revolveLoftFacesEndpointAxialClass(root revolveLoftFacesEndpointRoot,
 		return root, true
 	}
 	if xLo.Cmp(start) > 0 && xHi.Cmp(end) < 0 {
-		root.finite = true
+		root.Finite = true
 		return root, true
 	}
 	return root, false
@@ -299,15 +287,15 @@ func revolveLoftFacesEndpointAxialClass(root revolveLoftFacesEndpointRoot,
 
 func revolveLoftFacesEndpointFiniteRoots(trim *loftFacesTrimRecord,
 	section revolveSectionSpan, span freeform.BezierSpan, band int, atEnd bool) (
-	[]revolveLoftFacesEndpointRoot, bool,
+	[]loftface.EndpointRoot, bool,
 ) {
 	if trim == nil || band < 0 || band+1 >= len(trim.maps) || len(span) == 0 ||
 		section.start.U == section.end.U {
 		return nil, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], span, m, b)
-	roots, ok := revolveLoftFacesEndpointTimeRoots(q, atEnd)
+	q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
+	roots, ok := loftface.EndpointTimeRoots(q, atEnd)
 	if !ok {
 		return nil, false
 	}
@@ -315,7 +303,7 @@ func revolveLoftFacesEndpointFiniteRoots(trim *loftFacesTrimRecord,
 	if atEnd {
 		s = lfOne()
 	}
-	point := spiralBezierPoint(span, s)
+	point := loftface.BezierPoint(span, s)
 	x0 := trim.maps[band].At(point[0], point[1])[0]
 	x1 := trim.maps[band+1].At(point[0], point[1])[0]
 	for i, root := range roots {
@@ -327,62 +315,9 @@ func revolveLoftFacesEndpointFiniteRoots(trim *loftFacesTrimRecord,
 	return roots, true
 }
 
-// Bezier hulls enclose both cap numerators and their positive projective
-// denominator over a source subspan. X is affine in band time at each source
-// point, so the hull of its two time-end ranges encloses the full time slab.
-func revolveLoftFacesSpanXRange(first, last loftFaceMap, span freeform.BezierSpan,
-	sLo, sHi, tLo, tHi *big.Rat) (loftFaceInterval, bool) {
-	if len(span) == 0 || sLo == nil || sHi == nil || tLo == nil || tHi == nil ||
-		sLo.Sign() < 0 || sLo.Cmp(sHi) > 0 || sHi.Cmp(lfOne()) > 0 ||
-		tLo.Sign() < 0 || tLo.Cmp(tHi) > 0 || tHi.Cmp(lfOne()) > 0 {
-		return loftFaceInterval{}, false
-	}
-	g0, h0 := spiralCapBern(first, span)
-	g1, h1 := spiralCapBern(last, span)
-	denominator := polynomial.BernsteinRestrict(polynomial.BernsteinMul(g0, g1), sLo, sHi)
-	denRange := revolveLoftFacesCoeffRange(denominator)
-	if denRange.Lo.Sign() <= 0 {
-		return loftFaceInterval{}, false
-	}
-	firstX, lastX := polynomial.BernsteinMul(h0[0], g1), polynomial.BernsteinMul(h1[0], g0)
-	at := func(t *big.Rat) loftFaceInterval {
-		numerator := polynomial.BernsteinAdd(polynomial.BernsteinScale(firstX, lfSub(lfOne(), t)),
-			polynomial.BernsteinScale(lastX, t))
-
-		numRange := revolveLoftFacesCoeffRange(polynomial.BernsteinRestrict(numerator, sLo, sHi))
-		var out loftFaceInterval
-		for _, valueNum := range [...]*big.Rat{numRange.Lo, numRange.Hi} {
-			for _, valueDen := range [...]*big.Rat{denRange.Lo, denRange.Hi} {
-				value := lfDiv(valueNum, valueDen)
-				if out.Lo == nil || value.Cmp(out.Lo) < 0 {
-					out.Lo = value
-				}
-				if out.Hi == nil || value.Cmp(out.Hi) > 0 {
-					out.Hi = value
-				}
-			}
-		}
-		return out
-	}
-	return loftface.IntervalHull(at(tLo), at(tHi)), true
-}
-
-func revolveLoftFacesCoeffRange(coeff []*big.Rat) loftFaceInterval {
-	var out loftFaceInterval
-	for _, value := range coeff {
-		if out.Lo == nil || value.Cmp(out.Lo) < 0 {
-			out.Lo = value
-		}
-		if out.Hi == nil || value.Cmp(out.Hi) > 0 {
-			out.Hi = value
-		}
-	}
-	return out
-}
-
 func revolveLoftFacesSpanAxialMiss(first, last loftFaceMap, span freeform.BezierSpan,
 	section revolveSectionSpan, sLo, sHi, tLo, tHi *big.Rat) bool {
-	x, ok := revolveLoftFacesSpanXRange(first, last, span, sLo, sHi, tLo, tHi)
+	x, ok := loftface.SpanXRange(first, last, span, sLo, sHi, tLo, tHi)
 	if !ok {
 		return false
 	}
@@ -391,78 +326,4 @@ func revolveLoftFacesSpanAxialMiss(first, last loftFaceMap, span freeform.Bezier
 		start, end = end, start
 	}
 	return x.Hi.Cmp(start) < 0 || x.Lo.Cmp(end) > 0
-}
-
-func revolveLoftFacesEndpointTimeRoots(q [3][]*big.Rat,
-	atEnd bool) ([]revolveLoftFacesEndpointRoot, bool) {
-	if len(q[0]) == 0 || len(q[0]) != len(q[1]) || len(q[0]) != len(q[2]) {
-		return nil, false
-	}
-	index := 0
-	if atEnd {
-		index = len(q[0]) - 1
-	}
-	coeff := []*big.Rat{q[0][index], q[1][index], q[2][index]}
-	first, last := coeff[0].Sign(), coeff[2].Sign()
-	if first == 0 || last == 0 {
-		return nil, false
-	}
-	if first != last {
-		root, ok := revolveLoftFacesIsolateTimeRoot(coeff, lfZero(), lfOne())
-		if !ok {
-			return nil, false
-		}
-		return []revolveLoftFacesEndpointRoot{root}, true
-	}
-	if coeff[1].Sign() == first {
-		return nil, true
-	}
-	// A quadratic with equal endpoint signs has either zero or two simple
-	// interior roots. A bounded dyadic search finds an opposite-sign point;
-	// two disjoint sign-changing intervals then prove both roots and exclude
-	// further roots by the polynomial degree. If the search misses a narrow
-	// opposite-side pocket, refuse instead of guessing from samples.
-	for depth := 1; depth <= 12; depth++ {
-		denominator := int64(1 << depth)
-		for numerator := int64(1); numerator < denominator; numerator += 2 {
-			middle := big.NewRat(numerator, denominator)
-			sign := polynomial.BernsteinSign(coeff, middle)
-			if sign == 0 {
-				return nil, false
-			}
-			if sign != first {
-				left, leftOK := revolveLoftFacesIsolateTimeRoot(coeff, lfZero(), middle)
-				right, rightOK := revolveLoftFacesIsolateTimeRoot(coeff, middle, lfOne())
-				if !leftOK || !rightOK || left.time.Hi.Cmp(right.time.Lo) >= 0 {
-					return nil, false
-				}
-				return []revolveLoftFacesEndpointRoot{left, right}, true
-			}
-		}
-	}
-	return nil, false
-}
-
-func revolveLoftFacesIsolateTimeRoot(coeff []*big.Rat,
-	lo, hi *big.Rat) (revolveLoftFacesEndpointRoot, bool) {
-	loSign, hiSign := polynomial.BernsteinSign(coeff, lo), polynomial.BernsteinSign(coeff, hi)
-	if loSign == 0 || hiSign == 0 || loSign == hiSign {
-		return revolveLoftFacesEndpointRoot{}, false
-	}
-	direction := hiSign
-	for range 64 {
-		mid := lfMul(lfAdd(lo, hi), big.NewRat(1, 2))
-		sign := polynomial.BernsteinSign(coeff, mid)
-		if sign == 0 {
-			return revolveLoftFacesEndpointRoot{
-				time: loftFaceInterval{Lo: mid, Hi: mid}, direction: direction}, true
-		}
-		if sign == loSign {
-			lo = mid
-		} else {
-			hi = mid
-		}
-	}
-	return revolveLoftFacesEndpointRoot{
-		time: loftFaceInterval{Lo: lo, Hi: hi}, direction: direction}, true
 }

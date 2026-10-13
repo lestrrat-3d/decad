@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -62,8 +63,8 @@ func revolveLoftFacesFitKnotVertex(trim *loftFacesTrimRecord,
 type revolveLoftFacesFitKnotJoint struct {
 	vertex     revolveLoftFacesFitKnot
 	band       int
-	roots      []revolveLoftFacesEndpointRoot
-	pieces     []revolveLoftFacesTimePiece
+	roots      []loftface.EndpointRoot
+	pieces     []loftface.TimePiece
 	leftCells  []revolveLoftFacesJointCell
 	rightCells []revolveLoftFacesJointCell
 }
@@ -82,8 +83,8 @@ func certifyRevolveLoftFacesFitKnotJoint(ctx context.Context, trim *loftFacesTri
 		return empty, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	leftQ := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], vertex.left, m, b)
-	rightQ := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], vertex.right, m, b)
+	leftQ := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], vertex.left, m, b)
+	rightQ := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], vertex.right, m, b)
 	leftEnd := len(leftQ[0]) - 1
 	for row := range leftQ {
 		if leftQ[row][leftEnd].Cmp(rightQ[row][0]) != 0 {
@@ -95,7 +96,7 @@ func certifyRevolveLoftFacesFitKnotJoint(ctx context.Context, trim *loftFacesTri
 		return empty, false
 	}
 	q := [3]*big.Rat{leftQ[0][leftEnd], leftQ[1][leftEnd], leftQ[2][leftEnd]}
-	pieces, ok := revolveLoftFacesPartitionTime(q, roots)
+	pieces, ok := loftface.PartitionTime(q, roots)
 	if !ok {
 		return empty, false
 	}
