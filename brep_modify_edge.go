@@ -150,7 +150,7 @@ func (r *brepEdgeRoute) requireBlendMaterialWedge(eb *brepEdgeBlend) error {
 		if err != nil {
 			return err
 		}
-		walks := loops[end.loop].walks
+		walks := loops[end.loop].Walks
 		previous := walks[(end.corner+len(walks)-1)%len(walks)]
 		current := walks[end.corner]
 		cornerConvex := previous.TanOutU*current.TanInV-previous.TanOutV*current.TanInU > 0
@@ -640,7 +640,7 @@ func (r *brepEdgeRoute) requireNaturalFaces(eb *brepEdgeBlend) error {
 					return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s holds a segment over a narrowed range`, f.role))
 				}
 			}
-			walks := loops[li].walks
+			walks := loops[li].Walks
 			if len(walks) != len(loop.Segments) {
 				return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s holds two consecutive segments on one line`, f.role))
 			}
@@ -664,7 +664,7 @@ func (r *brepEdgeRoute) requireNaturalFaces(eb *brepEdgeBlend) error {
 func brepCornerAt(loops []cornerLoop, e brepEmbed, level float64, v [3]float64) (int, int, bool) {
 	li, ci, n := 0, 0, 0
 	for l, loop := range loops {
-		for c, w := range loop.walks {
+		for c, w := range loop.Walks {
 			if w.Closed || e.Canon(w.StartU, w.StartV, level) != v {
 				continue
 			}
@@ -696,7 +696,7 @@ func (r *brepEdgeRoute) locateCorners(eb *brepEdgeBlend) error {
 			return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s has no single corner at the edge's vertex (%s)`, g.role, r.render(v)))
 		}
 		end.loop, end.corner = li, ci
-		walks := loops[li].walks
+		walks := loops[li].Walks
 		n := len(walks)
 		var faceOf [2]int
 		for w, wi := range [2]int{(ci + n - 1) % n, ci} {
@@ -924,7 +924,7 @@ func (r *brepEdgeRoute) rewrite(blends []*brepEdgeBlend) (brepPayload, error) {
 			if err != nil {
 				return brepPayload{}, err
 			}
-			walks := loops[u.Loop].walks
+			walks := loops[u.Loop].Walks
 			n := len(walks)
 			seg := walks[u.Seg]
 			startRef := embed.Canon(seg.StartU, seg.StartV, r.bp.faces[fi].z0)

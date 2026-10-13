@@ -66,7 +66,7 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 			budget := proofbound.NewWorkBudget(t.Context())
 			cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
 			require.NoError(t, err)
-			joins, err := capband.OffsetJoins(budget, cl.walks, cbp.loopOffset(0), shellTol)
+			joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.loopOffset(0), shellTol)
 			require.NoError(t, err)
 
 			var skew float64
@@ -80,8 +80,8 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 			require.Equal(t, 1, found, `a sector has one circular wall`)
 
 			heldMax, lowerMax := 0.0, 0.0
-			n := len(cl.walks)
-			for i, w := range cl.walks {
+			n := len(cl.Walks)
+			for i, w := range cl.Walks {
 				if !w.IsCircular() {
 					continue
 				}
@@ -125,14 +125,14 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 	budget := proofbound.NewWorkBudget(t.Context())
 	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
-	joins, err := capband.OffsetJoins(budget, cl.walks, dc, shellTol)
+	joins, err := capband.OffsetJoins(budget, cl.Walks, dc, shellTol)
 	require.NoError(t, err)
-	delta, err := capband.ContourDisplacement(cl.walks, capband.ContourJoins(joins), dc, 0, shellTol)
+	delta, err := capband.ContourDisplacement(cl.Walks, capband.ContourJoins(joins), dc, 0, shellTol)
 	require.NoError(t, err)
 
-	n := len(cl.walks)
+	n := len(cl.Walks)
 	checked := 0
-	for i, w := range cl.walks {
+	for i, w := range cl.Walks {
 		if !w.IsCircular() {
 			continue
 		}
@@ -207,12 +207,12 @@ func TestCapMiterLocusUpperReadsTheStatedAxialRise(t *testing.T) {
 	budget := proofbound.NewWorkBudget(t.Context())
 	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
-	joins, err := capband.OffsetJoins(budget, cl.walks, dc, shellTol)
+	joins, err := capband.OffsetJoins(budget, cl.Walks, dc, shellTol)
 	require.NoError(t, err)
-	n := len(cl.walks)
+	n := len(cl.Walks)
 	checked := 0
 	for i, j := range joins {
-		prev, cur := cl.walks[(i+n-1)%n], cl.walks[i]
+		prev, cur := cl.Walks[(i+n-1)%n], cl.Walks[i]
 		if j.Arc || j.G1 || (!prev.IsCircular() && !cur.IsCircular()) {
 			continue
 		}

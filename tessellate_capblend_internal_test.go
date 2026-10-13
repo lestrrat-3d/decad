@@ -73,9 +73,9 @@ func TestCapBlendPayloadStoresEachBandsContourDisplacement(t *testing.T) {
 	work := freeform.NewFreeformWork()
 	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], work)
 	require.NoError(t, err)
-	joins, err := capband.OffsetJoins(budget, cl.walks, cbp.loopOffset(0), shellTol)
+	joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.loopOffset(0), shellTol)
 	require.NoError(t, err)
-	want, err := capband.ContourDisplacement(cl.walks, capband.ContourJoins(joins),
+	want, err := capband.ContourDisplacement(cl.Walks, capband.ContourJoins(joins),
 		cbp.loopOffset(0), cbp.loopSetback(0).dcDelta, shellTol)
 	require.NoError(t, err)
 	require.Equal(t, want, stored)
@@ -312,9 +312,9 @@ func capBlendCornerSetup(t *testing.T, cbp capBlendPayload) ([]survey2d.SideWalk
 	budget := proofbound.NewWorkBudget(t.Context())
 	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
-	joins, err := capband.OffsetJoins(budget, cl.walks, cbp.loopOffset(0), shellTol)
+	joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.loopOffset(0), shellTol)
 	require.NoError(t, err)
-	return cl.walks, joins
+	return cl.Walks, joins
 }
 
 func capBlendLocusInput(cbp capBlendPayload, walks []survey2d.SideWalk, i int,

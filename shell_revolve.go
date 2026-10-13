@@ -88,7 +88,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	if err != nil {
 		return nil, err
 	}
-	walks := loops[0].walks
+	walks := loops[0].Walks
 	axisAt := -1
 	for i, w := range walks {
 		if !rp.ax.IsAxis(rp.ax.Walk(w.SegmentWalk)) {

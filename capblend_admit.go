@@ -22,7 +22,7 @@ func capBlendOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp capBlend
 			if err != nil {
 				return nil, nil, err
 			}
-			return cl.walks, func() ([]bool, error) {
+			return cl.Walks, func() ([]bool, error) {
 				joins, err := cbp.offsetJoins(budget, li, cl, cbp.loopOffset(li))
 				if err != nil {
 					return nil, err

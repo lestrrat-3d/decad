@@ -46,7 +46,7 @@ func offsetProfile(budget *proofbound.WorkBudget, profile profileRecord, s, t fl
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return profileRecord{}, err
 		}
-		segs, err := offset2d.BuildLoop(budget, loop.walks, s, t, shellTol)
+		segs, err := offset2d.BuildLoop(budget, loop.Walks, s, t, shellTol)
 		if err != nil {
 			return profileRecord{}, offset2d.InLoop(err, i)
 		}
@@ -96,7 +96,7 @@ func offsetSectionDelta(budget *proofbound.WorkBudget, profile profileRecord, s,
 	}
 	walks := make([][]survey2d.SideWalk, len(loops))
 	for i, loop := range loops {
-		walks[i] = loop.walks
+		walks[i] = loop.Walks
 	}
 	return offset2d.SectionDeltaFromWalks(budget, walks, s, t, amount, shellTol)
 }

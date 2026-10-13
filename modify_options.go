@@ -204,9 +204,9 @@ func (a *asymmetricChamfer) setbacks(loop cornerLoop, li, ci int, e *Edge) (floa
 		return 0, 0, fmt.Errorf(`%w: the asymmetric chamfer has no reference face for this edge`, ErrUnsupported)
 	}
 	segs := faceSideSegments(a.body, ref, li)
-	n := len(loop.walks)
-	arriving := walkHoldsAny(loop.walks[(ci+n-1)%n].Segs, segs)
-	leaving := walkHoldsAny(loop.walks[ci].Segs, segs)
+	n := len(loop.Walks)
+	arriving := walkHoldsAny(loop.Walks[(ci+n-1)%n].Segs, segs)
+	leaving := walkHoldsAny(loop.Walks[ci].Segs, segs)
 	switch {
 	case arriving && !leaving:
 		return a.d, a.other, nil

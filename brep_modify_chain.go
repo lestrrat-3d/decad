@@ -221,7 +221,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 	if err != nil {
 		return brepPayload{}, err
 	}
-	if len(cl.walks) != len(selected) {
+	if len(cl.Walks) != len(selected) {
 		return brepPayload{}, r.refuse("SL2", `the partial loop coalesces two recorded walks`)
 	}
 	amounts := make([]float64, len(selected))
@@ -239,10 +239,10 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 		if !on {
 			continue
 		}
-		if cl.walks[i].IsCircular() && !filletband.SphereWalk(cl.walks[i], amounts[i]) {
+		if cl.Walks[i].IsCircular() && !filletband.SphereWalk(cl.Walks[i], amounts[i]) {
 			return brepPayload{}, r.refuse("SL2", `a selected circular walk has no supported partial-loop patch`)
 		}
-		if !filletband.SphereWalk(cl.walks[i], amounts[i]) {
+		if !filletband.SphereWalk(cl.Walks[i], amounts[i]) {
 			continue
 		}
 		next := (i + 1) % len(selected)
@@ -252,7 +252,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 		sphere[i] = true
 	}
 	segs, joins, capWalk, capArc, err := offset2d.PartialFilletContour(
-		r.budget, cl.walks, selected, sphere, amounts, shellTol)
+		r.budget, cl.Walks, selected, sphere, amounts, shellTol)
 	if err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
 	}
@@ -275,7 +275,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 			PA: Point2{U: j.PA.U, V: j.PA.V}, PB: Point2{U: j.PB.U, V: j.PB.V}}
 	}
 	delta, err := capband.PartialFilletContourDelta(
-		cl.walks, readings, amounts, sphere, r.call.loop.dcDelta, shellTol)
+		cl.Walks, readings, amounts, sphere, r.call.loop.dcDelta, shellTol)
 	if err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
 	}

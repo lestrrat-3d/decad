@@ -679,7 +679,7 @@ func requireCapBlendCornerLoci(budget *proofbound.WorkBudget, cbp capBlendPayloa
 		if err != nil {
 			return err
 		}
-		walks := cl.walks
+		walks := cl.Walks
 		n := len(walks)
 		for i, j := range joins {
 			prev, cur := walks[(i+n-1)%n], walks[i]
@@ -831,14 +831,14 @@ func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (pro
 			continue
 		}
 		var segs []curveSegment
-		if cbp.fillet && (len(loops[li].walks) != 1 || !loops[li].walks[0].Closed) {
-			joins, joinErr := filletband.OffsetJoins(budget, loops[li].walks, cbp.loopOffset(li), cbp.loopSetback(li).dcDelta, shellTol)
+		if cbp.fillet && (len(loops[li].Walks) != 1 || !loops[li].Walks[0].Closed) {
+			joins, joinErr := filletband.OffsetJoins(budget, loops[li].Walks, cbp.loopOffset(li), cbp.loopSetback(li).dcDelta, shellTol)
 			if joinErr != nil {
 				return profileRecord{}, offset2d.InLoop(joinErr, li)
 			}
-			segs, err = filletband.OffsetLoop(budget, loops[li].walks, joins, cbp.loopOffset(li), shellTol)
+			segs, err = filletband.OffsetLoop(budget, loops[li].Walks, joins, cbp.loopOffset(li), shellTol)
 		} else {
-			segs, err = offset2d.BuildLoop(budget, loops[li].walks, 1, cbp.loopOffset(li), shellTol)
+			segs, err = offset2d.BuildLoop(budget, loops[li].Walks, 1, cbp.loopOffset(li), shellTol)
 		}
 		if err != nil {
 			return profileRecord{}, offset2d.InLoop(err, li)

@@ -31,19 +31,19 @@ func (cbp capBlendPayload) loopContourDelta(ctx context.Context, li int, loop lo
 	if err != nil {
 		return 0, err
 	}
-	amounts := cbp.walkAmounts(li, cl.walks, d)
-	if len(cl.walks) == 1 && cl.walks[0].Closed {
+	amounts := cbp.walkAmounts(li, cl.Walks, d)
+	if len(cl.Walks) == 1 && cl.Walks[0].Closed {
 		a, aDelta := amounts[0], dDelta
 		if a == 0 {
 			aDelta = 0
 		}
-		return capband.WallCircleDisplacement(cl.walks[0], a, aDelta, shellTol)
+		return capband.WallCircleDisplacement(cl.Walks[0], a, aDelta, shellTol)
 	}
 	joins, err := cbp.offsetJoins(budget, li, cl, d)
 	if err != nil {
 		return 0, err
 	}
-	return capband.AmountsContourDisplacement(cl.walks, capband.ContourJoins(joins), amounts, dDelta, shellTol)
+	return capband.AmountsContourDisplacement(cl.Walks, capband.ContourJoins(joins), amounts, dDelta, shellTol)
 }
 
 // capBandClosure is the neutral proof of the slivers between integrated

@@ -185,7 +185,7 @@ func TestRewriteLoopChargesEachWalkToBudget(t *testing.T) {
 	}
 	ctx := &cancelOnFirstPollContext{Context: t.Context()}
 
-	_, _, err := rewriteLoop(proofbound.NewWorkBudget(ctx), cornerLoop{walks: walks}, nil)
+	_, _, err := rewriteLoop(proofbound.NewWorkBudget(ctx), cornerLoop{Walks: walks}, nil)
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 1, ctx.polls)
@@ -270,7 +270,7 @@ func sectionCornerLoops(t *testing.T, prof profileRecord) []cornerLoop {
 			require.NoError(t, err)
 			raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
 		}
-		out = append(out, cornerLoop{walks: boundarywalk.CoalesceWalks(raw)})
+		out = append(out, cornerLoop{Walks: boundarywalk.CoalesceWalks(raw)})
 	}
 	return out
 }

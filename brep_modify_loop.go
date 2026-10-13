@@ -664,7 +664,7 @@ func (r *brepLoopRead) naturalFaceLoops(fi int) (string, error) {
 				return fmt.Sprintf(`brep face %s holds a segment over a narrowed range`, f.role), nil
 			}
 		}
-		walks := loops[li].walks
+		walks := loops[li].Walks
 		if len(walks) != len(loop.Segments) {
 			return fmt.Sprintf(`brep face %s holds two consecutive segments on one line`, f.role), nil
 		}
@@ -973,8 +973,8 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		if err != nil {
 			return brepPayload{}, err
 		}
-		if len(cl.walks) == 1 && cl.walks[0].Closed {
-			_, err = capband.BandRadius(cl.walks[0], setback.dc, shellTol)
+		if len(cl.Walks) == 1 && cl.Walks[0].Closed {
+			_, err = capband.BandRadius(cl.Walks[0], setback.dc, shellTol)
 		} else {
 			_, err = views[sel.face].offsetJoins(r.budget, sel.loop, cl, setback.dc)
 		}
@@ -1090,7 +1090,7 @@ func (r *brepLoopRead) trimPlanar(trims map[int][]map[int]*cornerBlend, pu brepU
 		}
 	}
 	e := r.topo.embeds[pu.Face]
-	walks := loops[pu.Loop].walks
+	walks := loops[pu.Loop].Walks
 	count := len(walks)
 	seg := walks[pu.Seg]
 	for c, at := range [2][2]float64{{seg.StartU, seg.StartV}, {seg.EndU, seg.EndV}} {

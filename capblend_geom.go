@@ -38,16 +38,16 @@ import (
 // are a cusp (SD15).
 func (cbp capBlendPayload) offsetJoins(budget *proofbound.WorkBudget, li int, cl cornerLoop, d float64) ([]cornerJoin, error) {
 	if cbp.fillet {
-		return filletband.OffsetJoins(budget, cl.walks, d, cbp.loopSetback(li).dcDelta, shellTol)
+		return filletband.OffsetJoins(budget, cl.Walks, d, cbp.loopSetback(li).dcDelta, shellTol)
 	}
 	if !cbp.draft {
-		return capband.OffsetJoins(budget, cl.walks, d, shellTol)
+		return capband.OffsetJoins(budget, cl.Walks, d, shellTol)
 	}
-	if len(cl.walks) == 0 {
+	if len(cl.Walks) == 0 {
 		return nil, fmt.Errorf(`%w: a draft loop holds no walks`, ErrDegenerate)
 	}
-	amounts := cbp.walkAmounts(li, cl.walks, d)
-	for i, w := range cl.walks {
+	amounts := cbp.walkAmounts(li, cl.Walks, d)
+	for i, w := range cl.Walks {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
@@ -57,7 +57,7 @@ func (cbp capBlendPayload) offsetJoins(budget *proofbound.WorkBudget, li int, cl
 			}
 		}
 	}
-	return offset2d.DraftSharpJoins(budget, cl.walks, amounts, shellTol)
+	return offset2d.DraftSharpJoins(budget, cl.Walks, amounts, shellTol)
 }
 
 // capWallFoot returns the offset segment's own (start, end) feet for wall i,
@@ -84,7 +84,7 @@ func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop loopRecord, work *fre
 	if err != nil {
 		return cornerLoop{}, err
 	}
-	return cornerLoop{walks: walks}, nil
+	return cornerLoop{Walks: walks}, nil
 }
 
 // capBandResult is what buildCapBand contributes to the enclosing build: the
@@ -131,7 +131,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	if err != nil {
 		return capBandResult{}, err
 	}
-	walks := cl.walks
+	walks := cl.Walks
 	n := len(walks)
 	// dc offsets the cap contour in the plane and ds carries the original loop
 	// along the sweep to the side level (docs/modify-reach-design.md §8.3.1).

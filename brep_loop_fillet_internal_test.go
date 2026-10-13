@@ -899,14 +899,14 @@ func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
 	for i, on := range selected {
 		if on {
 			amounts[i] = 2
-			sphere[i] = filletband.SphereWalk(cl.walks[i], 2)
+			sphere[i] = filletband.SphereWalk(cl.Walks[i], 2)
 		}
 	}
 	segs, joins, capWalk, _, err := offset2d.PartialFilletContour(
-		r.budget, cl.walks, selected, sphere, amounts, shellTol)
+		r.budget, cl.Walks, selected, sphere, amounts, shellTol)
 	require.NoError(t, err)
 	require.Len(t, segs, 4)
-	for i, w := range cl.walks {
+	for i, w := range cl.Walks {
 		if !w.IsCircular() {
 			continue
 		}

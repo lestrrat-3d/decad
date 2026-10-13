@@ -369,7 +369,7 @@ func (cbp capBlendPayload) contourOf(ctx context.Context, li int, loop loopRecor
 	if err != nil {
 		return loopRecord{}, err
 	}
-	segs, _, err := offset2d.BuildSharpLoop(budget, cl.walks, cbp.walkAmounts(li, cl.walks, d), shellTol)
+	segs, _, err := offset2d.BuildSharpLoop(budget, cl.Walks, cbp.walkAmounts(li, cl.Walks, d), shellTol)
 	if err != nil {
 		return loopRecord{}, offset2d.DraftOffsetError(err)
 	}

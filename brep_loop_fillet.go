@@ -50,17 +50,17 @@ func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, rol
 	if err != nil {
 		return filletLoopRead{}, err
 	}
-	read, joins, pieces, bad, err := filletband.ReadLoop(budget, loop, cl.walks, r, shellTol)
+	read, joins, pieces, bad, err := filletband.ReadLoop(budget, loop, cl.Walks, r, shellTol)
 	if err != nil {
 		return filletLoopRead{}, err
 	}
 	if bad >= 0 {
-		n := len(cl.walks)
+		n := len(cl.Walks)
 		return filletLoopRead{}, fmt.Errorf(`%w: a fillet of a complete loop of brep face %s has no supported join at corner (%s, %s) between recorded segments %d and %d (loop-fillet SF1)`,
-			ErrUnsupported, role, renderCoord(cl.walks[bad].StartU), renderCoord(cl.walks[bad].StartV),
-			cl.walks[(bad+n-1)%n].Segs[len(cl.walks[(bad+n-1)%n].Segs)-1], cl.walks[bad].Segs[0])
+			ErrUnsupported, role, renderCoord(cl.Walks[bad].StartU), renderCoord(cl.Walks[bad].StartV),
+			cl.Walks[(bad+n-1)%n].Segs[len(cl.Walks[(bad+n-1)%n].Segs)-1], cl.Walks[bad].Segs[0])
 	}
-	return filletLoopRead{loop: read, walks: cl.walks, joins: joins, pieces: pieces}, nil
+	return filletLoopRead{loop: read, walks: cl.Walks, joins: joins, pieces: pieces}, nil
 }
 
 // suppliedFilletCapWalls pairs the contour's edges with the original walks.

@@ -26,7 +26,7 @@ func thickenAxisSection(ctx context.Context, profile profileRecord, side Thicken
 		return thickenaxis.SectionPair{}, fmt.Errorf(`%w: the sheet requires one outer loop`, ErrUnsupported)
 	}
 	loop := loops[0]
-	dirs, err := thickenaxis.AxisDirections(loop.walks, budget)
+	dirs, err := thickenaxis.AxisDirections(loop.Walks, budget)
 	if err != nil {
 		return thickenaxis.SectionPair{}, err
 	}
@@ -42,12 +42,12 @@ func thickenAxisSection(ctx context.Context, profile profileRecord, side Thicken
 		}
 	}
 	if side != ThickenNegative {
-		if err := thickenaxis.AxisIntervalClear(ctx, loop.walks, dirs, -1, amount, budget, radial); err != nil {
+		if err := thickenaxis.AxisIntervalClear(ctx, loop.Walks, dirs, -1, amount, budget, radial); err != nil {
 			return thickenaxis.SectionPair{}, err
 		}
 	}
 	if side != ThickenPositive {
-		if err := thickenaxis.AxisIntervalClear(ctx, loop.walks, dirs, +1, amount, budget, radial); err != nil {
+		if err := thickenaxis.AxisIntervalClear(ctx, loop.Walks, dirs, +1, amount, budget, radial); err != nil {
 			return thickenaxis.SectionPair{}, err
 		}
 	}
@@ -63,7 +63,7 @@ func thickenAxisOffset(budget *proofbound.WorkBudget, source profileRecord, loop
 	if err != nil {
 		return profileRecord{}, thickenaxis.AuditRefusal(err)
 	}
-	if err := thickenaxis.CertifyAxisOffset(loop.walks, dirs, offset.Outer, sense, amount, budget); err != nil {
+	if err := thickenaxis.CertifyAxisOffset(loop.Walks, dirs, offset.Outer, sense, amount, budget); err != nil {
 		return profileRecord{}, err
 	}
 	if err := auditOffsetSectionBudget(budget, source, offset); err != nil {
