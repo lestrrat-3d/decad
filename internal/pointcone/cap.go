@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -245,24 +246,57 @@ func MidpointRound(p, q, held r3.Vec) float64 {
 // CellGeom is the cone-independent half of TriangleBound.
 type CellGeom struct{ xMin, rhoMin, reach, h float64 }
 
+// capParallelMin is the cell count from which CapGeometry and CapBound work
+// on several goroutines.
+const capParallelMin = 1024
+
 // CapGeometry reads every cap cell's geometry once, so two cones
 // share it. A vertex's reach is the same DvLenUpper of the same exact vector
 // in each cell holding it, and is computed once.
 func CapGeometry(far []r3.Vec, caps [][3]int) []CellGeom {
+	workers := orderedwork.EachWorkers(len(caps), capParallelMin)
+	return capGeometry(far, caps, workers)
+}
+
+// capGeometry is CapGeometry on up to workers goroutines. It runs the serial
+// loop when workers < 2 or a far vertex is not finite.
+func capGeometry(far []r3.Vec, caps [][3]int, workers int) []CellGeom {
 	reach := make([]float64, len(far))
-	done := make([]bool, len(far))
 	out := make([]CellGeom, len(caps))
-	for k, tri := range caps {
-		for _, v := range tri {
-			if done[v] {
-				continue
+	if workers >= 2 && !proofbound.AllFinite(far) {
+		workers = 1
+	}
+	if workers < 2 {
+		done := make([]bool, len(far))
+		for k, tri := range caps {
+			for _, v := range tri {
+				if done[v] {
+					continue
+				}
+				reach[v] = proofbound.DvLenUpper(proofbound.HeldDelta(far[v], r3.Vec{}))
+				done[v] = true
 			}
-			reach[v] = proofbound.DvLenUpper(proofbound.HeldDelta(far[v], r3.Vec{}))
-			done[v] = true
+			out[k] = cellGeometryWith([3]r3.Vec{far[tri[0]], far[tri[1]], far[tri[2]]},
+				[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]})
 		}
+		return out
+	}
+	used := make([]bool, len(far))
+	for _, tri := range caps {
+		used[tri[0]], used[tri[1]], used[tri[2]] = true, true, true
+	}
+	_, _ = orderedwork.Each(len(far), workers, 512, nil, func(v int) error {
+		if used[v] {
+			reach[v] = proofbound.DvLenUpper(proofbound.HeldDelta(far[v], r3.Vec{}))
+		}
+		return nil
+	})
+	_, _ = orderedwork.Each(len(caps), workers, 256, nil, func(k int) error {
+		tri := caps[k]
 		out[k] = cellGeometryWith([3]r3.Vec{far[tri[0]], far[tri[1]], far[tri[2]]},
 			[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]})
-	}
+		return nil
+	})
 	return out
 }
 
@@ -298,6 +332,30 @@ func cellGeometryWith(tri [3]r3.Vec, vertexReach [3]float64) CellGeom {
 // CapBound is the largest cell bound and Lipschitz value of TriangleBound over
 // precomputed cell geometry.
 func CapBound(geom []CellGeom, c *Consts) (float64, float64, error) {
+	return capBound(geom, c, orderedwork.EachWorkers(len(geom), capParallelMin))
+}
+
+// capBound is CapBound with the cells' TriangleBound formed on up to workers
+// goroutines. It returns the error of the lowest failing cell and otherwise
+// folds the cells in order. It runs the serial loop when workers < 2 or a
+// cell field is not finite, so no cell the serial loop never reaches can panic.
+func capBound(geom []CellGeom, c *Consts, workers int) (float64, float64, error) {
+	if workers >= 2 && geomFinite(geom) {
+		bounds, lips := make([]float64, len(geom)), make([]float64, len(geom))
+		if _, err := orderedwork.Each(len(geom), workers, 256, nil, func(k int) error {
+			var err error
+			bounds[k], _, lips[k], err = TriangleBound(geom[k], c)
+			return err
+		}); err != nil {
+			return 0, 0, err
+		}
+		capBound, lip := 0.0, 0.0
+		for k := range geom {
+			capBound = max(capBound, bounds[k])
+			lip = max(lip, lips[k])
+		}
+		return capBound, lip, nil
+	}
 	capBound, lip := 0.0, 0.0
 	for _, g := range geom {
 		cellBound, _, cellLip, err := TriangleBound(g, c)
@@ -308,6 +366,16 @@ func CapBound(geom []CellGeom, c *Consts) (float64, float64, error) {
 		lip = max(lip, cellLip)
 	}
 	return capBound, lip, nil
+}
+
+// geomFinite reports whether every field of every cell is finite.
+func geomFinite(geom []CellGeom) bool {
+	for _, g := range geom {
+		if !proofbound.FiniteVec(r3.Vec{X: g.xMin, Y: g.rhoMin, Z: g.h}) || !proofbound.FiniteVec(r3.Vec{X: g.reach}) {
+			return false
+		}
+	}
+	return true
 }
 
 // TriangleBound forms five rationals, each formed as one Dyadic numerator over one
