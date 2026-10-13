@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -45,35 +46,35 @@ func prismPatternFilletRingCutOf(rec *prismPatternJoinRecord,
 	if position < 0 || limitPosition < 0 || position == limitPosition {
 		return empty, fmt.Errorf("%w: joined-prism fillet has no bounded source ring gap", ErrUnsupported)
 	}
-	point := func(position int) (prismPatternIVPoint, bool) {
+	point := func(position int) (prismpattern.IVPoint, bool) {
 		bottom := rec.mesh.verts[rec.outlines[0][position]]
 		top := rec.mesh.verts[rec.outlines[1][position]]
 		if bottom.X != top.X || bottom.Y != top.Y ||
 			bottom.Z != rec.source.blank.z0 || top.Z != rec.source.blank.z1 {
-			return prismPatternIVPoint{}, false
+			return prismpattern.IVPoint{}, false
 		}
-		return prismPatternIVPointOf(proofarith.FloatRat(bottom.X), proofarith.FloatRat(bottom.Y)), true
+		return prismpattern.IVPointOf(proofarith.FloatRat(bottom.X), proofarith.FloatRat(bottom.Y)), true
 	}
 	// A held station can sit on the other side of a contact from its true
 	// circle station. Check both orders before shortening the source chord.
-	trueRoots := make(map[int]prismPatternIVPoint, 2*len(rec.parts))
+	trueRoots := make(map[int]prismpattern.IVPoint, 2*len(rec.parts))
 	for _, sourcePart := range rec.parts {
 		trueRoots[sourcePart.vertex[0][0]] = prismPatternExactPlacedPoint(sourcePart,
 			rec.source.rootArc.Start)
 		trueRoots[sourcePart.vertex[0][sourcePart.rootStart]] = prismPatternExactPlacedPoint(sourcePart,
 			rec.source.rootArc.End)
 	}
-	sourcePoint := func(position int, held prismPatternIVPoint) prismPatternIVPoint {
+	sourcePoint := func(position int, held prismpattern.IVPoint) prismpattern.IVPoint {
 		if root, ok := trueRoots[outline[position]]; ok {
 			return root
 		}
 		widen := proofarith.FloatRat(rec.ringRound)
-		return prismPatternIVPoint{
+		return prismpattern.IVPoint{
 			X: proofbound.IntervalWiden(held.X, widen),
 			Y: proofbound.IntervalWiden(held.Y, widen),
 		}
 	}
-	cross := func(a, b prismPatternIVPoint) proofbound.RatInterval {
+	cross := func(a, b prismpattern.IVPoint) proofbound.RatInterval {
 		return proofbound.IntervalSub(proofbound.IntervalMul(a.X, b.Y),
 			proofbound.IntervalMul(a.Y, b.X))
 	}
@@ -91,7 +92,7 @@ func prismPatternFilletRingCutOf(rec *prismPatternJoinRecord,
 		q := contact.circleIV
 		// Status 1 brackets Q in this cell; status 2 places Q farther
 		// along the same ordered gap. Zero has no strict exact proof.
-		classify := func(current, next prismPatternIVPoint) int {
+		classify := func(current, next prismpattern.IVPoint) int {
 			if direction < 0 {
 				if cross(next, current).Lo.Sign() <= 0 || cross(q, current).Lo.Sign() <= 0 {
 					return 0

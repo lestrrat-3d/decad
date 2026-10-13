@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -36,7 +37,7 @@ func prismPatternFilletSectorOf(rec *prismPatternJoinRecord,
 		contact.station == part.rootStart && cross.Hi.Sign() >= 0 {
 		return empty, fmt.Errorf("%w: joined-prism fillet arc has no sided polar sweep", ErrUnsupported)
 	}
-	centerNorm, err := prismPatternIVSqrt(center.Dot(center))
+	centerNorm, err := prismpattern.IVSqrt(center.Dot(center))
 	r := proofarith.FloatRat(radius)
 	if err != nil || centerNorm.Lo.Cmp(r) <= 0 {
 		return empty, fmt.Errorf("%w: joined-prism fillet circle reaches the axis", ErrUnsupported)
@@ -48,7 +49,7 @@ func prismPatternFilletSectorOf(rec *prismPatternJoinRecord,
 		return empty, fmt.Errorf("%w: joined-prism fillet has no polar tangent bound", ErrUnsupported)
 	}
 	delta := proofbound.Atan2Interval(r, proofarith.FloatRat(tangentLo), false).Hi
-	cAngle, err := prismPatternFilletHeldAngle(contact.center, contact.pointError)
+	cAngle, err := prismpattern.HeldAngle(contact.center, contact.pointError)
 	if err != nil {
 		return empty, err
 	}
@@ -60,19 +61,19 @@ func prismPatternFilletSectorOf(rec *prismPatternJoinRecord,
 	}
 	for _, angleOf := range []struct {
 		point r3.Vec
-		iv    prismPatternIVPoint
+		iv    prismpattern.IVPoint
 		held  bool
 	}{{iv: root}, {point: contact.line, held: true}, {point: contact.circle, held: true}} {
 		var angle proofbound.RatInterval
 		if angleOf.held {
-			angle, err = prismPatternFilletHeldAngle(angleOf.point, contact.pointError)
+			angle, err = prismpattern.HeldAngle(angleOf.point, contact.pointError)
 		} else {
-			angle, err = prismPatternFilletExactAngle(angleOf.iv)
+			angle, err = prismpattern.ExactAngle(angleOf.iv)
 		}
 		if err != nil {
 			return empty, err
 		}
-		angle, ok := prismPatternFilletAngleNear(angle, cAngle)
+		angle, ok := prismpattern.AngleNear(angle, cAngle)
 		if !ok {
 			return empty, fmt.Errorf("%w: joined-prism fillet contact leaves its polar sector", ErrUnsupported)
 		}
@@ -93,15 +94,15 @@ func prismPatternFilletSectorOf(rec *prismPatternJoinRecord,
 func prismPatternFilletConnectorSector(part prismPatternPart,
 	line lineSeg) (prismPatternFilletSector, error) {
 	var empty prismPatternFilletSector
-	a, err := prismPatternFilletExactAngle(prismPatternExactPlacedPoint(part, line.Start))
+	a, err := prismpattern.ExactAngle(prismPatternExactPlacedPoint(part, line.Start))
 	if err != nil {
 		return empty, err
 	}
-	b, err := prismPatternFilletExactAngle(prismPatternExactPlacedPoint(part, line.End))
+	b, err := prismpattern.ExactAngle(prismPatternExactPlacedPoint(part, line.End))
 	if err != nil {
 		return empty, err
 	}
-	b, ok := prismPatternFilletAngleNear(b, a)
+	b, ok := prismpattern.AngleNear(b, a)
 	if !ok {
 		return empty, fmt.Errorf("%w: joined-prism connector has no narrow polar sector", ErrUnsupported)
 	}
@@ -113,45 +114,6 @@ func prismPatternFilletConnectorSector(part prismPatternPart,
 		hi = b.Hi
 	}
 	return prismPatternFilletSector{lo: lo, hi: hi}, nil
-}
-
-func prismPatternFilletExactAngle(p prismPatternIVPoint) (proofbound.RatInterval, error) {
-	if p.X.Lo.Cmp(p.X.Hi) != 0 || p.Y.Lo.Cmp(p.Y.Hi) != 0 ||
-		p.X.Lo.Sign() == 0 && p.Y.Lo.Sign() == 0 {
-		return proofbound.RatInterval{}, fmt.Errorf("%w: joined-prism fillet has no exact polar point", ErrUnsupported)
-	}
-	return proofbound.Atan2Interval(p.Y.Lo, p.X.Lo, false), nil
-}
-
-func prismPatternFilletHeldAngle(p r3.Vec, errorBound float64) (proofbound.RatInterval, error) {
-	if !proofbound.FiniteVec(p) || proofbound.IsNonFinite(errorBound) || errorBound < 0 {
-		return proofbound.RatInterval{}, fmt.Errorf("%w: joined-prism fillet has no finite polar point", ErrUnsupported)
-	}
-	radialSq := new(big.Rat).Add(new(big.Rat).Mul(proofarith.FloatRat(p.X), proofarith.FloatRat(p.X)),
-		new(big.Rat).Mul(proofarith.FloatRat(p.Y), proofarith.FloatRat(p.Y)))
-	radialLo := new(big.Rat).Sub(proofarith.FloatRat(proofbound.RatSqrtDown(radialSq)),
-		proofarith.FloatRat(errorBound))
-	if radialLo.Sign() <= 0 {
-		return proofbound.RatInterval{}, fmt.Errorf("%w: joined-prism fillet polar error reaches the axis", ErrUnsupported)
-	}
-	angle := proofbound.Atan2Interval(proofarith.FloatRat(p.Y), proofarith.FloatRat(p.X), false)
-	widen := proofbound.Atan2Interval(proofarith.FloatRat(errorBound), radialLo, false).Hi
-	return proofbound.IntervalWiden(angle, widen), nil
-}
-
-// Pick the only 2π copy within 90 degrees of the reference. All accepted
-// contacts and source connectors are local; distant or ambiguous arcs refuse.
-func prismPatternFilletAngleNear(angle, reference proofbound.RatInterval) (proofbound.RatInterval, bool) {
-	for k := int64(-1); k <= 1; k++ {
-		shifted := proofbound.IntervalAdd(angle,
-			proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(k, 1)))
-		diff := proofbound.IntervalSub(shifted, reference)
-		if diff.Lo.Cmp(new(big.Rat).Neg(proofbound.HalfPiInterval().Lo)) > 0 &&
-			diff.Hi.Cmp(proofbound.HalfPiInterval().Lo) < 0 {
-			return shifted, true
-		}
-	}
-	return proofbound.RatInterval{}, false
 }
 
 func prismPatternFilletSectorsSeparate(a, b prismPatternFilletSector) bool {

@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -44,7 +45,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 				continue
 			}
 			v := part.mesh.vertices[2*j]
-			r2 := prismPatternRadialSq(Point2{U: v.X, V: v.Y})
+			r2 := prismpattern.RadialSq(Point2{U: v.X, V: v.Y})
 			excess := new(big.Rat).Sub(proofarith.FloatRat(proofbound.RatSqrtUp(r2)),
 				proofarith.FloatRat(radius))
 			if excess.Sign() > 0 {
@@ -131,8 +132,8 @@ func prismPatternConnectorReach(p prismPayload, root arcSeg, radius float64,
 	if rootIndex != len(segments)-1 || rootIndex < 2 {
 		return 0, fmt.Errorf("%w: copied-prism connectors have no trailing root arc", ErrUnsupported)
 	}
-	scale2 := prismPatternScale2(p.xform)
-	radiusSq := prismPatternRadiusSq(radius)
+	scale2 := prismpattern.Scale2(p.xform)
+	radiusSq := prismpattern.RadiusSq(radius)
 	reach := 0.0
 	for _, index := range []int{0, rootIndex - 1} {
 		line, ok := segments[index].(lineSeg)
@@ -154,7 +155,7 @@ func prismPatternConnectorReach(p prismPayload, root arcSeg, radius float64,
 		if derivative.Sign() <= 0 {
 			return 0, fmt.Errorf("%w: copied-prism connector has no outward crossing", ErrUnsupported)
 		}
-		nearSq := new(big.Rat).Mul(prismPatternRadialSq(near), scale2)
+		nearSq := new(big.Rat).Mul(prismpattern.RadialSq(near), scale2)
 		gap := new(big.Rat).Sub(radiusSq, nearSq)
 		if gap.Sign() <= 0 {
 			return 0, fmt.Errorf("%w: copied-prism connector starts outside the blank", ErrUnsupported)

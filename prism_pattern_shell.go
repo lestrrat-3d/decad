@@ -8,10 +8,9 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
-	"github.com/lestrrat-3d/r3"
 )
 
 // prismPatternShell replaces only the inward root walls with exposed pieces
@@ -120,7 +119,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 				if cap == 1 {
 					z = source.blank.z1
 				}
-				point, round, err := prismPatternRingPoint(radius, z, angle, angleIV)
+				point, round, err := prismpattern.RingPoint(radius, z, angle, angleIV)
 				if err != nil {
 					return nil, [2][]int{}, blankGroup, 0, 0, err
 				}
@@ -184,23 +183,4 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 		}
 	}
 	return mesh, outlines, blankGroup, maxStep, ringRound, nil
-}
-
-func prismPatternRingPoint(radius, z, angle float64,
-	angleIV proofbound.RatInterval) (r3.Vec, float64, error) {
-	point := r3.Vec{X: radius * math.Cos(angle), Y: radius * math.Sin(angle), Z: z}
-	if !proofbound.FiniteVec(point) {
-		return r3.Vec{}, 0, fmt.Errorf("%w: circular prism ring is non-finite", ErrUnsupported)
-	}
-	sine, cosine, ok := proofbound.RadSinCosInterval(proofarith.FloatRat(angle))
-	if !ok {
-		return r3.Vec{}, 0, fmt.Errorf("%w: circular prism ring has no trigonometric enclosure", ErrUnsupported)
-	}
-	r := proofarith.FloatRat(radius)
-	pointRound := proofbound.Radius3D(max(
-		proofbound.IntervalFloatError(proofbound.IntervalScale(cosine, r), point.X),
-		proofbound.IntervalFloatError(proofbound.IntervalScale(sine, r), point.Y)))
-	angleError := proofbound.IntervalFloatError(angleIV, angle)
-	round := proofbound.AbsSumUpper(pointRound, proofbound.ProductUpper(radius, angleError))
-	return point, round, nil
 }

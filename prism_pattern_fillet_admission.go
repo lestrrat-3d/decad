@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -79,25 +80,25 @@ func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecor
 		proofbound.ProductUpper(2, radius))
 	minScale2 := big.NewRat(1, 1)
 	for _, part := range rec.parts {
-		scale2 := prismPatternScale2(part.prism.xform)
+		scale2 := prismpattern.Scale2(part.prism.xform)
 		if scale2.Cmp(minScale2) < 0 {
 			minScale2 = scale2
 		}
 	}
-	reachSq := new(big.Rat).Quo(prismPatternRadiusSq(reach), minScale2)
-	if err := prismPatternOutsideRoot(ctx, rec.source.section.profile.Outer.Segments,
+	reachSq := new(big.Rat).Quo(prismpattern.RadiusSq(reach), minScale2)
+	if err := prismpattern.OutsideRoot(ctx, rec.source.section.profile.Outer.Segments,
 		rec.source.rootIndex, rec.source.rootArc, reachSq); err != nil {
 		return fmt.Errorf("%w: joined-prism fillet radial envelope reaches another source wall: %w",
 			ErrUnsupported, err)
 	}
 	for _, part := range rec.parts {
-		scale2 := prismPatternScale2(part.prism.xform)
+		scale2 := prismpattern.Scale2(part.prism.xform)
 		for i, segment := range part.prism.profile.Outer.Segments {
 			arc, ok := segment.(arcSeg)
 			if !ok || i == rec.source.rootIndex {
 				continue
 			}
-			nominalSq := new(big.Rat).Mul(scale2, prismPatternRadialSq(arc.Start))
+			nominalSq := new(big.Rat).Mul(scale2, prismpattern.RadialSq(arc.Start))
 			lower := proofarith.FloatRat(proofbound.RatSqrtDown(nominalSq))
 			residual := proofbound.ProductUpper(proofbound.RatSqrtUp(scale2),
 				circularbounds.ArcRadialResidualUpper(arc))

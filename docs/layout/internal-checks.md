@@ -19,9 +19,10 @@ The rules for rows live in `docs/layout.md`.
 | `internal/modifyoption/` | Fillet, Chamfer and Shell option codecs and side-role segment reading. See modify-reach §2. |
 | `internal/orderedwork/` | Runs independent jobs and returns results in input order. |
 | `internal/prismextent/` | Prism extremes, bounds and extent readings. See evaluator §5. |
-| `internal/prismplacement/` | Exact prism axis shifts, sweep spans and relative placement. See prism-boolean §3. |
+| `internal/prismplacement/` | Exact prism axis shifts, sweep spans, relative placement and exact rectangular boxes in a reference frame. See prism-boolean §3. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, moment and arc-box bounds over neutral records. |
 | `internal/prismcells/` | Prism admission, scene budgets, cells, cuts, charges and trim walks. See prism-boolean §4. |
+| `internal/prismpattern/` | Prism-pattern Union radial source gaps, outward wall certificates, interval fillet contact points, polar angles and ring points. See prism-pattern-union design. |
 | `internal/mirrorjoin/` | Exact line admission, reflection, record splice and joined-section audit. See mirror-pattern §5. |
 | `internal/patternrecord/` | Pattern spec gates, instance motion and record mapping. See mirror-pattern §4.3, §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia, and X-axis placement map charges. See dynamic-mass §2–§3. |
