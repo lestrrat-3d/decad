@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file tests SweepChain's one-span straight path. The standalone arc
-// and composite paths outside §15.8's cardinal class still refuse.
+// This file tests SweepChain's one-span straight path and the composite paths
+// outside §15.8's cardinal class. Standalone arc tests live in sweep_chain_arc_test.go.
 
 // straightSweepPath is the one-span path every axis-aligned fixture below
 // sweeps along: from the XY plane's origin, h mm along that plane's own
@@ -285,10 +285,9 @@ func TestSweepChainRefusesAnOffNormalPath(t *testing.T) {
 	require.Empty(t, doc.Bodies())
 }
 
-// TestSweepChainRefusesCompositeAndArcPaths is docs/surface-design.md's T194:
-// a source extending beyond the half-circle radius and a standalone arc
-// each refuse at their own gate.
-func TestSweepChainRefusesCompositeAndArcPaths(t *testing.T) {
+// TestSweepChainRefusesCompositeOutsideCardinalClass is docs/surface-design.md's
+// T194: a source extending beyond the half-circle radius refuses at SC7.
+func TestSweepChainRefusesCompositeOutsideCardinalClass(t *testing.T) {
 	t.Parallel()
 	s, ch := lineChainSketch(t)
 	doc := decad.New()
@@ -302,17 +301,6 @@ func TestSweepChainRefusesCompositeAndArcPaths(t *testing.T) {
 	_, err = decad.Sweep(t.Context(), doc, s, ch, composite)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "radial source inside its radius")
-
-	// A half turn in the XZ plane about (10, 0, 0), so its initial tangent is
-	// exactly +Z and the path clears SC3 before reaching the staged arm.
-	arc, err := decad.NewPath(
-		r3.NewVec(0, 0, 0),
-		decad.ArcThrough{Through: r3.NewVec(10, 0, 10), End: r3.NewVec(20, 0, 0)},
-	)
-	require.NoError(t, err)
-	_, err = decad.Sweep(t.Context(), doc, s, ch, arc)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "straight path span only")
 
 	require.Empty(t, doc.Bodies())
 }

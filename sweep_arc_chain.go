@@ -1,0 +1,38 @@
+package decad
+
+import (
+	"context"
+
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/r3"
+)
+
+// sweepArcChain reduces one spatial arc and one open Sketch walk to the same
+// analytic chain Revolve wall used by a standalone chain Revolve. The path
+// owns the axis and angle; the open source walk still determines sheet kind
+// and free rims.
+func (d *Document) sweepArcChain(ctx context.Context, chain chainRecord,
+	plane planeRecord, frame r3.Frame, path *Path) (*Body, error) {
+	work := freeform.NewFreeformWork()
+	view := profileRecord{Outer: loopRecord(chain)}
+	span, err := compositeArcSweepSpan(ctx, view, plane, frame, path.records[0], work)
+	if err != nil {
+		return nil, err
+	}
+	arc := span.revolve
+	reduction := chainRevolvePayload{
+		chains: []chainRecord{chain}, frame: arc.frame, ax: arc.ax,
+		phi0: arc.phi0, phi1: arc.phi1, den: arc.den, xform: r3.Identity(),
+	}
+	ref := d.nextProducerID()
+	body, err := evalChainRevolveContext(ctx, d, ref, reduction, work)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	finishChainSweepBody(body, chainSweepPayload{revolve: reduction, arc: true, path: path})
+	d.commit(body)
+	return body, nil
+}

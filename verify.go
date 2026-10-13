@@ -857,18 +857,17 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 		// the argument, on the identical prismPayload reading above.
 		return pp.sectionDelta == 0
 	case chainSweepPayload:
-		if len(pp.spans) != 0 {
+		if len(pp.spans) != 0 || pp.arc {
 			return false
 		}
-		// A chain-fed sweep's only reduction reachable today is the one-span
-		// straight case (docs/sweep-design.md §15): chain Sweep builds the body
+		// The remaining one-span reduction is the straight case
+		// (docs/sweep-design.md §15): chain Sweep builds the body
 		// through the identical evalChainExtrudeContext a plain chain Extrude
 		// does, over a chainPayload it then wraps unchanged (sweep.go's
 		// finishChainSweepBody). So this is the SAME construction argument
 		// chainPayload's own arm makes, re-read off the wrapped payload —
-		// never a weaker version of it, since chainSweepPayload carries no
-		// arc or composite shape of its own yet for the argument to fail to
-		// cover.
+		// never a weaker version of it. The arc and composite cases returned
+		// false above because their partial turns have no simplicity proof.
 		return pp.chain.sectionDelta == 0
 	case chainRevolvePayload:
 		// A chain-fed revolve earns leg 4 on the identical full-turn argument,

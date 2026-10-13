@@ -159,7 +159,7 @@
 1	0.02	TestSurfaceRevolveStaysASheetThroughPlacement
 1	0.01	TestSurfaceSweepArcIsASheet
 1	0.00	TestSurfaceTrimKeepInsideKeepsTheCutStrips
-1	0.00	TestSweepChainRefusesCompositeAndArcPaths
+1	0.00	TestSweepChainRefusesCompositeOutsideCardinalClass
 1	0.01	TestSweepChainCardinalLineArcRefusesNonradialSource
 1	0.01	TestSweepChainCardinalLineArcSheet
 1	0.01	TestSweepChainCardinalThickenSolid
@@ -1893,6 +1893,11 @@
 10	0.01	TestArcSegExactQuarterDisk
 10	0.00	TestSweepChainOptionRefusalFollowsTheSeam
 10	0.00	TestSweepChainRefusesProfileOnlyOptions
+10	0.00	TestSweepChainSingleArcHalfAnnulusVerifies
+10	0.00	TestSweepChainSingleArcNoncardinalAndReflectedMesh
+10	0.00	TestSweepChainSingleArcAxisEndMeshRefuses
+10	0.00	TestSweepChainSingleArcOppositeAxisSideWinding
+10	0.00	TestSweepChainSingleArcMultiSegmentMeshRefuses
 10	0.00	TestSweepTypedNilSectionIsDegenerate
 10	0.00	TestRevolveCanceledContextLeavesDocumentUnchanged
 10	0.00	TestRevolveChainOptionRefusalFollowsTheSeam

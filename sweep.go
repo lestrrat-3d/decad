@@ -66,8 +66,8 @@ func WithSweepTwist(angle units.Value) SweepOption {
 // (docs/surface-design.md §13.3); the seam's own sentinel wins before any path
 // geometry is read. The path must start in the sketch plane with its initial
 // tangent codirectional with that plane's positive normal (ErrDegenerate). The
-// evaluator sweeps one straight span or §15.8's cardinal line/arc pair; other
-// composite paths and a single arc are ErrUnsupported (Table SC). The result
+// evaluator sweeps one straight span, one arc, or §15.8's cardinal line/arc pair;
+// other composite paths are ErrUnsupported (Table SC). The result
 // is always a sheet, one wall per recorded segment per span with no cap or
 // closing face. A chain section therefore returns ErrUnsupported for
 // [WithSurfaceResult] (there is no solid to toggle), [WithSweepTwist],
@@ -348,21 +348,23 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 // survives an open walk — it pairs by recorded-segment index and reads no
 // winding — and §15.2 states why a ONE-SPAN path needs no such rule at all: it
 // has no join, so its whole build is the recorded walk transported over that
-// one span. This increment builds the one-span STRAIGHT case, which reduces to
-// the chain prism that chain Extrude already builds, over the path's own height
-// rather than a resolved Extent. The arc reduction and every composite path
-// stay ErrUnsupported (Table SC rows SC7 and SC9, docs/surface-design.md R34).
+// one span. A one-span straight path reduces to the chain prism that chain
+// Extrude already builds, over the path's own height rather than a resolved
+// Extent. A one-span arc reduces to a chain Revolve. Composite paths outside
+// §15.8's cardinal class stay ErrUnsupported (Table SC row SC7).
 
 // chainSweepPayload is the chain Sweep's own record of a ribbon body: one chain
-// prism reduction or two built chain spans, beside their source Path.
+// prism or Revolve reduction, or two built chain spans, beside its source Path.
 // It stays DISTINCT from chainPayload for the reason sweepPayload stays
 // distinct from prismPayload — a downstream consumer whose Sweep proof has not
 // landed dispatches on this type and refuses, rather than reading the analytic
 // reduction as proof for the original operation (docs/sweep-design.md §10).
 type chainSweepPayload struct {
-	chain chainPayload
-	path  *Path
-	spans []chainSweepSpanPayload
+	chain   chainPayload
+	revolve chainRevolvePayload
+	arc     bool
+	path    *Path
+	spans   []chainSweepSpanPayload
 }
 
 // transform is the accumulated rigid placement.
@@ -370,15 +372,27 @@ func (sp chainSweepPayload) transform() r3.Transform {
 	if len(sp.spans) != 0 {
 		return sp.spans[0].transform()
 	}
+	if sp.arc {
+		return sp.revolve.transform()
+	}
 	return sp.chain.transform()
 }
 
-// placed re-evaluates a one-span reduction under the composed motion (core
-// §8). The cardinal composite refuses until its transformed join plane and
-// mesh stations have their own bound.
+// placed re-evaluates either one-span reduction under the composed motion
+// (core §8). The cardinal composite refuses until its transformed join plane
+// and mesh stations have their own bound.
 func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	if len(sp.spans) != 0 {
 		return nil, fmt.Errorf(`%w: composite chain Sweep placement has no transformed separation proof`, ErrUnsupported)
+	}
+	if sp.arc {
+		sp.revolve.xform = composed
+		body, err := evalChainRevolveContext(ctx, d, ref, sp.revolve, freeform.NewFreeformWork())
+		if err != nil {
+			return nil, err
+		}
+		finishChainSweepBody(body, sp)
+		return body, nil
 	}
 	sp.chain.xform = composed
 	body, err := evalChainExtrudeContext(ctx, d, ref, sp.chain, freeform.NewFreeformWork())
@@ -443,10 +457,11 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 	if len(segments) > 1 {
 		return d.sweepCompositeChain(ctx, chain, plane, path)
 	}
+	if _, ok := segments[0].(ArcThrough); ok {
+		return d.sweepArcChain(ctx, chain, plane, frame, path)
+	}
 	if _, ok := segments[0].(LineTo); !ok {
-		return nil, fmt.Errorf(
-			`%w: a chain Sweep sweeps a straight path span only; the arc reduction is staged (docs/sweep-design.md §15.6)`,
-			ErrUnsupported)
+		return nil, fmt.Errorf(`%w: this chain Sweep path span is not admitted`, ErrUnsupported)
 	}
 	height, heightBound, err := validateStraightSweepPath(path, frame)
 	if err != nil {
@@ -516,6 +531,9 @@ func finishStraightSweepBody(body *Body, payload sweepPayload) {
 func finishChainSweepBody(body *Body, payload chainSweepPayload) {
 	if built, ok := body.payload.(chainPayload); ok {
 		payload.chain = built
+	}
+	if built, ok := body.payload.(chainRevolvePayload); ok {
+		payload.revolve = built
 	}
 	prefixSweepSpanZeroRole(body)
 	body.payload = payload
