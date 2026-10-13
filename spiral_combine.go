@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/big"
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
@@ -12,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -295,83 +295,11 @@ func spiralInverseHeldResult(ctx context.Context, blankHeld *meshbool.BoolMesh,
 	first *Body, held *meshbool.StitchedMesh, move r3.Transform) (
 	[]r3.Vec, []float64, float64, float64, bool,
 ) {
-	inv, err := move.Inverse()
-	if err != nil {
-		return nil, nil, 0, 0, false
-	}
-	forward, err := massmoment.PlacementRotation(move)
-	if err != nil {
-		return nil, nil, 0, 0, false
-	}
-	back, err := massmoment.PlacementRotation(inv)
-	if err != nil {
-		return nil, nil, 0, 0, false
-	}
-	// The admitted near-axis motion has no X/YZ cross terms. Keep the local
-	// blank ring's held X coordinate exact, and charge the omitted one-ULP
-	// axial inverse through the canonical back*forward residual below.
-	back[0][0] = lfOne()
-	back[0][1], back[0][2] = lfZero(), lfZero()
-	charge, err := massmoment.MapChargeOf(back)
-	if err != nil {
-		return nil, nil, 0, 0, false
-	}
 	firstPart, ok := first.payload.(facetedPayload)
-	if !ok || len(held.VertexBound) != len(held.Verts) || len(firstPart.verts) == 0 {
+	if !ok {
 		return nil, nil, 0, 0, false
 	}
-	maxTooth, maxBlank := 0.0, 0.0
-	for _, v := range firstPart.verts {
-		maxTooth = max(maxTooth, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
-	}
-	for _, v := range blankHeld.Verts {
-		maxBlank = max(maxBlank, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
-	}
-	toothRadius := proofbound.AbsSumUpper(proofbound.Radius3D(maxTooth), firstPart.meshBound)
-	blankRadius := proofbound.AbsSumUpper(proofbound.Radius3D(maxBlank),
-		facetproof.FacetBoundMax(blankHeld.Tris, blankHeld.VertexBound))
-	deviation := new(big.Rat)
-	for row := range 3 {
-		for column := range 3 {
-			entry := new(big.Rat)
-			for k := range 3 {
-				entry.Add(entry, lfMul(back[row][k], forward[k][column]))
-			}
-			if row == column {
-				entry.Sub(entry, lfOne())
-			}
-			deviation.Add(deviation, lfAbs(entry))
-		}
-	}
-	toothExtra := proofbound.ProductUpper(proofbound.RatFloatUp(deviation), toothRadius)
-	blankExtra := proofbound.ProductUpper(charge.Stretch, blankRadius)
-	radialExtra := blankExtra
-	commonExtra := proofbound.AbsSumUpper(toothExtra, blankExtra)
-	verts := make([]r3.Vec, len(held.Verts))
-	beta := make([]float64, len(held.VertexBound))
-	maxExtra := 0.0
-	for i, v := range held.Verts {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, nil, 0, 0, false
-			}
-		}
-		if !proofbound.FiniteVec(v) || proofbound.IsNonFinite(held.VertexBound[i]) {
-			return nil, nil, 0, 0, false
-		}
-		verts[i] = inv.Apply(v)
-		verts[i].X = v.X
-		if !proofbound.FiniteVec(verts[i]) {
-			return nil, nil, 0, 0, false
-		}
-		round := proofbound.RigidRoundAllow(max(math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z)), 0)
-		extra := proofbound.AbsSumUpper(round, commonExtra)
-		beta[i] = proofbound.AbsSumUpper(
-			proofbound.ProductUpper(proofbound.AbsSumUpper(1, charge.Stretch), held.VertexBound[i]), extra)
-		maxExtra = max(maxExtra, extra)
-	}
-	return verts, beta, proofbound.AbsSumUpper(
-		proofbound.ProductUpper(proofbound.AbsSumUpper(1, charge.Stretch), held.Round), maxExtra), radialExtra, true
+	return spiralsector.InverseHeldResult(ctx, blankHeld, firstPart.verts, firstPart.meshBound, held, move)
 }
 
 // spiralPrepareCombinedUnion transports the first join's certified temporary
@@ -413,7 +341,7 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	// Each proxy shell is audited at its source and kept embedded by PlaceMesh.
 	// A separate held-shell clearance proof below replaces the generic whole-
 	// composite crossing audit, whose fixed triangle cap excludes 31 copies.
-	proxyParts := make([]*Body, 0, len(meta.tools))
+	proxyParts := make([]spiralsector.Shell, 0, len(meta.tools))
 	for i, tool := range meta.tools {
 		part, ok := tool.payload.(facetedPayload)
 		if !ok || len(part.verts) != len(proxy.vertices) || len(part.tris) != len(proxy.triangles) ||
@@ -431,10 +359,10 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 			}
 		}
 		if i == 0 {
-			proxyParts = append(proxyParts, &Body{payload: facetedPayload{
-				verts: proxy.vertices, tris: proxy.triangles,
-				vertexBound: make([]float64, len(proxy.vertices)),
-			}})
+			proxyParts = append(proxyParts, spiralsector.Shell{
+				Verts: proxy.vertices, Tris: proxy.triangles,
+				VertexBound: make([]float64, len(proxy.vertices)),
+			})
 			next.vertices = append(next.vertices, proxy.vertices...)
 			next.vertexBound = append(next.vertexBound, proxy.vertexBound...)
 			next.volSymDiff = proofbound.AbsSumUpper(next.volSymDiff, proxy.volSymDiff)
@@ -474,10 +402,10 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 				return nil, nil, fmt.Errorf("%w: placed spiral proxy has no finite held bound", ErrUnsupported)
 			}
 		}
-		proxyParts = append(proxyParts, &Body{payload: facetedPayload{
-			verts: placed.Verts, tris: placed.Tris, vertexBound: placementBound,
-			meshBound: facetproof.FacetBoundMax(placed.Tris, placementBound),
-		}})
+		proxyParts = append(proxyParts, spiralsector.Shell{
+			Verts: placed.Verts, Tris: placed.Tris, VertexBound: placementBound,
+			MeshBound: facetproof.FacetBoundMax(placed.Tris, placementBound),
+		})
 		next.vertices = append(next.vertices, placed.Verts...)
 		next.vertexBound = append(next.vertexBound, placed.VertexBound...)
 		next.volSymDiff = proofbound.AbsSumUpper(next.volSymDiff, placed.VolSymDiff)
@@ -491,7 +419,7 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	next.bound = 0
 	next.setVertexBounds(next.vertexBound)
 	next.coordBound = max(next.coordBound, next.bound)
-	if !spiralToolSectorsSeparate(ctx, proxyParts, meta.moves, true) {
+	if !spiralsector.Separate(ctx, proxyParts, meta.moves, true) {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
