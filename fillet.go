@@ -43,7 +43,9 @@ import (
 // receiver takes the same corner rewrite on its meridian (revolve_blend.go,
 // docs/modify-reach-design.md §7), and a brep or stacked boolean result takes
 // routes P and E of docs/brep-modify-design.md (brep_modify.go); any other
-// receiver is S3 (ErrUnsupported).
+// receiver is S3 (ErrUnsupported). A zero-twist, one-line solid Sweep reads
+// its stored exact prism reduction for lateral-edge fillets. Other Sweep
+// paths are S3, and its cap-edge selections are S1.
 // A one-sided positive circular draft also admits its one complete far cap
 // rim through the bounded meridian reduction in draft_circle_fillet.go.
 
@@ -58,9 +60,9 @@ type FilletOption interface{ filletOption() }
 // residual.
 const filletTol = sectionaudit.Tolerance
 
-// Fillet rounds selected section corners of a straight prism or a matching-
-// section axial loft with a tangent arc of radius r, returning the new body and
-// retiring the receiver
+// Fillet rounds selected section corners of a straight prism, its admitted
+// one-line Sweep reduction, or a matching-section axial loft with a tangent
+// arc of radius r, returning the new body and retiring the receiver
 // (docs/modify-design.md §6, core §8). sel is resolved against the live
 // receiver; a query matching nothing is loud (ErrNoMatch / ErrCardinality,
 // S16). r is a length magnitude, gated like every other (S15); a zero r is
@@ -259,11 +261,19 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
 	// edge is a lateral edge mapped to a section corner (S1).
 	pp, ok := b.payload.(prismPayload)
+	// A one-span straight solid Sweep builds through evalPrismContext and keeps
+	// that exact reduction beside its path. Its original edges can be matched
+	// against the reduction's corners without replacing the public selector.
+	sweepReduction := false
+	if reduction, admitted := straightSweepPrismReduction(b.payload); admitted {
+		pp, ok = reduction, true
+		sweepReduction = true
+	}
 	if route.prism != nil {
 		pp, ok = *route.prism, true
 	}
 	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism, a revolve, or a matching-section axial loft only; selector %s matched [%s]`,
+		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only; selector %s matched [%s]`,
 			ErrUnsupported, sel, selectedEdgesContext(edges))
 	}
 	if err := requireExactSection(pp, "fillets"); err != nil {
@@ -287,6 +297,10 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 			return nil, err
 		}
 		if !found {
+			if sweepReduction {
+				return nil, fmt.Errorf(`%w: %s is not a lateral edge of the straight Sweep`,
+					ErrUnsupported, selectedEdgeContext(ei, e))
+			}
 			// RF3 (docs/loop-fillet-design.md §3): a cap edge sends the
 			// prism through its brep face view. Route E, L or V then reads the
 			// whole selection (docs/vertex-blend-design.md §2).

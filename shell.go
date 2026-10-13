@@ -214,7 +214,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		if pp, ok := b.payload.(prismPayload); ok && len(pp.profile.Holes) == 0 {
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
-		if pp, ok := straightSweepShellPrism(b.payload); ok && len(pp.profile.Holes) == 0 {
+		if pp, ok := straightSweepPrismReduction(b.payload); ok && len(pp.profile.Holes) == 0 {
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
 		if sp, ok := b.payload.(stackedPrismPayload); ok && sense == Inward {
@@ -301,7 +301,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	var sweepCapsOnly bool
 	if route.prism != nil {
 		pp, ok, caps = *route.prism, true, route.caps
-	} else if sweepPrism, admitted := straightSweepShellPrism(b.payload); admitted {
+	} else if sweepPrism, admitted := straightSweepPrismReduction(b.payload); admitted {
 		pp, ok, sweepCapsOnly = sweepPrism, true, true
 	}
 	if !ok {
@@ -432,21 +432,6 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	}
 	d.commit(body, b)
 	return body, nil
-}
-
-// straightSweepShellPrism admits only the certified zero-twist, one-line
-// profile Sweep reduction. Its published caps retain path-start/end roles;
-// composite, arc, twisted, and sheet sweeps have no prism Shell proof.
-func straightSweepShellPrism(payload featurePayload) (prismPayload, bool) {
-	sp, ok := payload.(sweepPayload)
-	if !ok || sp.surfaceResult || sp.arc || sp.closedCircle || sp.closedComposite ||
-		len(sp.spans) != 0 || sp.path == nil || len(sp.path.records) != 1 || len(sp.path.segments) != 1 {
-		return prismPayload{}, false
-	}
-	if _, line := sp.path.segments[0].(LineTo); !line {
-		return prismPayload{}, false
-	}
-	return sp.prism, true
 }
 
 // shellCancelCause maps an error wrapping a context cancellation to the bare

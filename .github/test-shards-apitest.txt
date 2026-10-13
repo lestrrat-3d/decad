@@ -1923,3 +1923,7 @@
 10	0.00	TestSectionObliqueRectangleOtherRegionCannotBypassBound
 10	0.00	TestSectionObliqueRectangleRefusesUnsupportedExtrudeOptions
 10	0.00	TestSectionObliqueRectangleRefusesContact
+10	0.00	TestSweepLineFilletVerticalEdgesVerified
+10	0.00	TestSweepLineFilletCapEdgeRefuses
+10	0.00	TestSweepLineFilletPlacedReceiver
+10	0.00	TestSweepFilletRefusesArcCompositeAndMitredPaths
