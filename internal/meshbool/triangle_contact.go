@@ -243,7 +243,7 @@ func Orient2Float(a, b, c [2]float64) int {
 	bx, by := b[0]-a[0], b[1]-a[1]
 	cx, cy := c[0]-a[0], c[1]-a[1]
 	det := bx*cy - by*cx
-	perm := math.Abs(bx)*math.Abs(cy) + math.Abs(by)*math.Abs(cx)
+	perm := proof.Abs(bx)*proof.Abs(cy) + proof.Abs(by)*proof.Abs(cx)
 	err := 1e-12 * perm
 	if det > err {
 		return 1

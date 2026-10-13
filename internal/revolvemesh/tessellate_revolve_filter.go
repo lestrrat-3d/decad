@@ -3,6 +3,7 @@ package revolvemesh
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -25,8 +26,8 @@ type RevIv struct{ Lo, Hi float64 }
 // RevIvVec is a vector of intervals, one per coordinate.
 type RevIvVec [3]RevIv
 
-func RevDown(x float64) float64 { return math.Nextafter(x, math.Inf(-1)) }
-func RevUp(x float64) float64   { return math.Nextafter(x, math.Inf(1)) }
+func RevDown(x float64) float64 { return proof.NextDown(x) }
+func RevUp(x float64) float64   { return proof.NextUp(x) }
 
 // RevIvDiff encloses a − b for two exact floats.
 func RevIvDiff(a, b float64) RevIv {

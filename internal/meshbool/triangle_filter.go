@@ -3,6 +3,7 @@ package meshbool
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
@@ -48,31 +49,9 @@ var FivAbstain = FloatInterval{Lo: math.Inf(-1), Hi: math.Inf(1)}
 
 // FivNextDown and FivNextUp implement Nextafter for finite inputs. Every
 // caller rejects non-finite values before widening them.
-func FivNextDown(x float64) float64 {
-	if x == 0 {
-		return -math.SmallestNonzeroFloat64
-	}
-	bits := math.Float64bits(x)
-	if x > 0 {
-		bits--
-	} else {
-		bits++
-	}
-	return math.Float64frombits(bits)
-}
+func FivNextDown(x float64) float64 { return proof.NextDown(x) }
 
-func FivNextUp(x float64) float64 {
-	if x == 0 {
-		return math.SmallestNonzeroFloat64
-	}
-	bits := math.Float64bits(x)
-	if x > 0 {
-		bits++
-	} else {
-		bits--
-	}
-	return math.Float64frombits(bits)
-}
+func FivNextUp(x float64) float64 { return proof.NextUp(x) }
 
 // abstains reports whether iv is the abstain sentinel.
 func (a FloatInterval) Abstains() bool { return a == FivAbstain }
@@ -227,33 +206,34 @@ func triSpanOnLineWithNormal(t [3]FivVec, origin FivVec, signs [3]int, dir, plan
 	found := false
 	values := [3]FloatInterval{}
 	valueSet := [3]bool{}
-	value := func(i int) FloatInterval {
-		if !valueSet[i] {
-			values[i] = FivDot(planeNormal, FivSub(t[i], origin))
-			valueSet[i] = true
-		}
-		return values[i]
-	}
-	widen := func(p FivVec) bool {
-		proj := FivDot(p, dir)
-		if proj.Abstains() {
-			return false
-		}
-		lo = math.Min(lo, proj.Lo)
-		hi = math.Max(hi, proj.Hi)
-		found = true
-		return true
-	}
+	// The per-vertex plane value and the span widening are written inline,
+	// not as closures: under -race every captured-variable access is
+	// instrumented. The FloatInterval operations and their order are the
+	// same as the closure form.
 	for i := range 3 {
 		j := (i + 1) % 3
-		if signs[i] == 0 && !widen(t[i]) {
-			return FloatInterval{}, false
+		if signs[i] == 0 {
+			proj := FivDot(t[i], dir)
+			if proj.Abstains() {
+				return FloatInterval{}, false
+			}
+			lo = math.Min(lo, proj.Lo)
+			hi = math.Max(hi, proj.Hi)
+			found = true
 		}
 		if signs[i]*signs[j] >= 0 {
 			continue
 		}
-		vi := value(i)
-		vj := value(j)
+		if !valueSet[i] {
+			values[i] = FivDot(planeNormal, FivSub(t[i], origin))
+			valueSet[i] = true
+		}
+		vi := values[i]
+		if !valueSet[j] {
+			values[j] = FivDot(planeNormal, FivSub(t[j], origin))
+			valueSet[j] = true
+		}
+		vj := values[j]
 		frac := vi.Div(vi.Sub(vj))
 		if frac.Abstains() {
 			return FloatInterval{}, false
@@ -263,9 +243,13 @@ func triSpanOnLineWithNormal(t [3]FivVec, origin FivVec, signs [3]int, dir, plan
 			Y: t[i].Y.Add(frac.Mul(t[j].Y.Sub(t[i].Y))),
 			Z: t[i].Z.Add(frac.Mul(t[j].Z.Sub(t[i].Z))),
 		}
-		if !widen(p) {
+		proj := FivDot(p, dir)
+		if proj.Abstains() {
 			return FloatInterval{}, false
 		}
+		lo = math.Min(lo, proj.Lo)
+		hi = math.Max(hi, proj.Hi)
+		found = true
 	}
 	if !found {
 		return FloatInterval{}, false
