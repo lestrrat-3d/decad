@@ -246,8 +246,9 @@ oblique line with a vertex strictly inside it misses.
 
 **Displacements.** Every level carries its own `z0Delta`/`z1Delta`. Every
 face carries one section displacement: §7's stacked formula over the
-slab merges (their cut charge, since every incoming and walk term is zero
-by admission) plus the largest allowance of any canonical vertex. Every
+slab merges (their cut charge, unless certified line junctions remove it,
+since every incoming and walk term is zero by admission) plus the largest
+allowance of any canonical vertex. Every
 vertex lies on exact carriers — an axis-aligned plane at its recorded
 level, a circle about its recorded centre — within that distance of the
 crossing it denotes, so each planar region and each pinned arc is within
@@ -402,7 +403,8 @@ Each consumer reads the span as a boundary of both operands:
   that is not exactly one selected cell's boundary takes the mesh path.
 
 A union of two boxes sharing a wall whole, drawn on one carrier, cuts nothing
-and is `Exact`; a partial shared wall is `Approximate` with the cut charge.
+and is `Exact`. A partial shared wall keeps the cut charge unless the entire
+all-line loop passes prism-boolean §7's certified-node rewrite.
 
 #### A5 — multi-region operands and results
 
@@ -491,7 +493,8 @@ distance instead of prism-boolean §3.4 rerouting the pair
 With A6 a rotated tooth whose root sits inside the hub builds analytically
 with a bound of a few ulps times `1/sin θ`, `Approximate`; `Fillet` on that
 result refuses (prism-boolean §13's displaced-receiver rule), as it does for
-every cut-bearing merge. P1's own tooth does not build. Its root arc lies on
+every cut-bearing merge without §7's exact line-junction proof. P1's own tooth
+does not build. Its root arc lies on
 the hub's circle (a coincident carrier, which `sketch` merges), the rotation
 displaces the tooth, and the shared arc lies inside the union, where A3 has
 no charge for the two true walls parting: the pair falls back to the mesh
