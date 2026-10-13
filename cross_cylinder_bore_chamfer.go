@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -50,7 +51,10 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 		rec.centerZ+rec.bore+setback >= rec.height {
 		return nil, true, fmt.Errorf("%w: the cross-bore setback exceeds its proven clearance", ErrUnsupported)
 	}
+	measurePhase("cross start", time.Now())
+	t0 := time.Now()
 	mesh, err := buildCrossBoreChamferMesh(ctx, rec, setback)
+	t0 = measurePhase("cross mesh", t0)
 	if err != nil {
 		return nil, true, err
 	}
@@ -58,11 +62,14 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	if err != nil {
 		return nil, true, err
 	}
+	t0 = measurePhase("cross prove", t0)
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
 		mesh.verts, mesh.tris, loftmesh.MaxLoftAuditTriangles, crossBoreAuditScans); err != nil {
 		return nil, true, err
 	}
+	t0 = measurePhase("cross crossaudit", t0)
 	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.verts, mesh.tris)
+	t0 = measurePhase("cross facetaudit", t0)
 	if err != nil {
 		return nil, true, err
 	}
@@ -70,6 +77,7 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	if err != nil {
 		return nil, true, err
 	}
+	t0 = measurePhase("cross volume", t0)
 	if heldVolume.Cmp(proofarith.FloatRat(volumeGap)) <= 0 {
 		return nil, true, fmt.Errorf("%w: the cross-bore chamfer has no proven positive volume", ErrUnsupported)
 	}
@@ -88,5 +96,6 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
 		areaSlack: areaSlack, dPair: dPair, contactAudited: true, xform: r3.Identity(),
 	}, audit, volume, heldVolume)
+	measurePhase("cross build", t0)
 	return result, true, err
 }

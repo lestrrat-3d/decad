@@ -255,6 +255,7 @@ func proveCrossBoreChamfer(ctx context.Context, rec *crossCylinderBoreRecord,
 	setback float64, mesh *crossBoreMesh) (float64, float64, float64, error) {
 	const n = 2 * crossBoreHalfStations
 	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
+	measureCrossBoreProbe(ctx, rec, setback, gap)
 	maximum, err := crossBoreCellMaxima(ctx, n, orderedwork.EachWorkers(n, crossBoreCellParallelMin),
 		func(i int) (crossBoreCellResult, error) { return crossBoreCellProof(rec, setback, i, gap) })
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"time"
 
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -291,6 +292,17 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	fp facetedPayload, source loftCylinderChamferSource, setback float64,
 	active [2]bool, allowance float64, reflectedShift []*big.Rat,
 	oneCap *loftCylinderOneCapData) (*Body, error) {
+	t0 := measurePhase("loft start", time.Now())
+	body, err := buildLoftCylinderCapChamferCapsInner(ctx, d, ref, fp, source, setback,
+		active, allowance, reflectedShift, oneCap)
+	measurePhase("loft whole buildLoftCylinderCapChamferCaps", t0)
+	return body, err
+}
+
+func buildLoftCylinderCapChamferCapsInner(ctx context.Context, d *Document, ref producerID,
+	fp facetedPayload, source loftCylinderChamferSource, setback float64,
+	active [2]bool, allowance float64, reflectedShift []*big.Rat,
+	oneCap *loftCylinderOneCapData) (*Body, error) {
 	// This rewrite has its own fixed work envelope. The source ring and its
 	// chorded inset bound the constructed mesh; the crossing audit still
 	// performs every exact contact check it would under the default ceiling.
@@ -552,9 +564,11 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		return loftCylinderChamferMiddleSideReach(ctx, fp, mesh, source, ideal,
 			middle, clipped.clipBound)
 	}
+	tReach := measurePhase("loft reach-start", time.Now())
 	if err := orderedwork.Proofs(ctx, 2, orderedwork.EachWorkers(2, 2), reach); err != nil {
 		return nil, err
 	}
+	measurePhase("loft orderedwork.Proofs", tReach)
 	// The exact band-to-source witness consumes the full certified tolerance.
 	// Publish that allowance so VerifyAll does not understate the new boundary.
 	bound := allowance
