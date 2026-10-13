@@ -94,6 +94,78 @@ func TestSectionCardinalSphereNonSquareFeedsVerifiedExtrude(t *testing.T) {
 	require.Less(t, mesh.Bound().Base(), 0.1)
 }
 
+func TestSectionObliqueCenterSphereFeedsVerifiedExtrude(t *testing.T) {
+	sphere := sectionSphereSource(t)
+	frame, err := r3.NewFrame(r3.Vec{X: 5}, r3.Vec{X: 1}, r3.Vec{Y: 1, Z: 1})
+	require.NoError(t, err)
+	section, profiles, err := sphere.Section(t.Context(), frame)
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	require.True(t, profiles[0].Valid)
+	_, err = decad.MeasureProfile(section, profiles[0])
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+		D: units.Millimeters(2), Dir: decad.Along,
+	})
+	require.NoError(t, err)
+	volume, err := child.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-50*math.Pi), volume.Bound.Base())
+	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Less(t, mesh.Bound().Base(), 0.1)
+}
+
+func TestSectionObliqueCenterSpherePlacementAndPlaneSense(t *testing.T) {
+	sphere := sectionSphereSource(t)
+	motion, err := r3.FromBasis(r3.Basis{
+		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
+	}, r3.Vec{X: 7, Y: 11, Z: 13})
+	require.NoError(t, err)
+	placed, err := decad.Transform(t.Context(), sphere, motion)
+	require.NoError(t, err)
+	frame, err := r3.NewFrame(r3.Vec{X: 7, Y: 16, Z: 13},
+		r3.Vec{X: -1}, r3.Vec{Y: -1, Z: -1})
+	require.NoError(t, err)
+	section, profiles, err := placed.Section(t.Context(), frame)
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	sectionFrame, err := section.Plane().Frame()
+	require.NoError(t, err)
+	require.Equal(t, frame, sectionFrame)
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+		D: units.Millimeters(2), Dir: decad.Along,
+	})
+	require.NoError(t, err)
+	volume, err := child.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-50*math.Pi), volume.Bound.Base())
+}
+
+func TestSectionObliqueCenterSphereRefusesOtherOrigins(t *testing.T) {
+	sphere := sectionSphereSource(t)
+	for _, tc := range []struct {
+		name   string
+		origin r3.Vec
+	}{
+		{name: "same plane", origin: r3.Vec{}},
+		{name: "offset plane", origin: r3.Vec{X: 5, Y: 1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			frame, err := r3.NewFrame(tc.origin, r3.Vec{X: 1}, r3.Vec{Y: 1, Z: 1})
+			require.NoError(t, err)
+			section, profiles, err := sphere.Section(t.Context(), frame)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.Nil(t, section)
+			require.Nil(t, profiles)
+		})
+	}
+}
+
 func TestSectionCardinalSphereCutsAcrossRevolveAxis(t *testing.T) {
 	sphere := sectionSphereSource(t)
 	frame, err := r3.NewFrame(r3.Vec{X: 1}, r3.Vec{Y: 1}, r3.Vec{Z: 1})

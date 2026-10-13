@@ -1944,6 +1944,9 @@
 10	0.00	TestSectionCardinalSpherePlacementAndPlaneSense
 10	0.00	TestSectionCardinalSphereNonSquarePlacementAndPlaneSense
 10	0.00	TestSectionCardinalSphereRefusesUnprovedCuts
+10	0.00	TestSectionObliqueCenterSphereFeedsVerifiedExtrude
+10	0.00	TestSectionObliqueCenterSpherePlacementAndPlaneSense
+10	0.00	TestSectionObliqueCenterSphereRefusesOtherOrigins
 10	0.00	TestSweepLineFilletVerticalEdgesVerified
 10	0.00	TestSweepLineFilletCapEdgeRefuses
 10	0.00	TestSweepLineFilletPlacedReceiver

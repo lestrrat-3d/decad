@@ -18,8 +18,8 @@ import (
 // plane whose frame preserves the prism's recorded section coordinates.
 // Other classes are a whole-circle prism cut by a cardinal plane with an exact
 // chord, an authenticated sphere cut by a cardinal plane with an exact circle
-// or bounded polygon, an authenticated right cone cut by a cardinal plane
-// with an exact circle,
+// or bounded polygon or by a central oblique plane, an authenticated right cone
+// cut by a cardinal plane with an exact circle,
 // a rectangular prism cut by an interior cardinal vertical plane, and
 // a bounded oblique cut of an exact rectangular or whole-circle prism,
 // including a certified crossing of one circle-prism cap. The
@@ -57,7 +57,12 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 			}
 		}
 		if !admitted {
-			return nil, nil, fmt.Errorf(`%w: section needs an authenticated sphere or cone and certifiable cardinal circle`,
+			if sphere, authenticated := sourceSphereAtPose(b, r3.Identity()); authenticated {
+				polygon, delta, admitted = centralSphereObliquePolygon(sphere.center, sphere.radius, plane)
+			}
+		}
+		if !admitted {
+			return nil, nil, fmt.Errorf(`%w: section needs an authenticated sphere or cone and certified plane cut`,
 				ErrUnsupported)
 		}
 		if polygon != nil {
