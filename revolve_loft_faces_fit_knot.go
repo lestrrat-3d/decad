@@ -83,15 +83,16 @@ func certifyRevolveLoftFacesFitKnotJoint(ctx context.Context, trim *loftFacesTri
 		return empty, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	leftQ := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], vertex.left, m, b)
-	rightQ := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], vertex.right, m, b)
+	memo := revolveLoftFacesMeridianMemoOf(ctx)
+	leftQ := memo.QRows(trim.maps[band], trim.maps[band+1], vertex.left, m, b)
+	rightQ := memo.QRows(trim.maps[band], trim.maps[band+1], vertex.right, m, b)
 	leftEnd := len(leftQ[0]) - 1
 	for row := range leftQ {
 		if leftQ[row][leftEnd].Cmp(rightQ[row][0]) != 0 {
 			return empty, false
 		}
 	}
-	roots, ok := revolveLoftFacesEndpointFiniteRoots(trim, section, vertex.left, band, true)
+	roots, ok := revolveLoftFacesEndpointFiniteRootsWith(memo, trim, section, vertex.left, band, true)
 	if !ok {
 		return empty, false
 	}
@@ -103,12 +104,12 @@ func certifyRevolveLoftFacesFitKnotJoint(ctx context.Context, trim *loftFacesTri
 	leftCells := make([]revolveLoftFacesJointCell, len(roots))
 	rightCells := make([]revolveLoftFacesJointCell, len(roots))
 	for i, root := range roots {
-		leftCells[i], ok = revolveLoftFacesKnotRootCell(trim, section,
+		leftCells[i], ok = revolveLoftFacesKnotRootCellWith(memo, trim, section,
 			vertex.left, band, true, root)
 		if !ok {
 			return empty, false
 		}
-		rightCells[i], ok = revolveLoftFacesKnotRootCell(trim, section,
+		rightCells[i], ok = revolveLoftFacesKnotRootCellWith(memo, trim, section,
 			vertex.right, band, false, root)
 		if !ok {
 			return empty, false

@@ -147,7 +147,7 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 						sLo: lfZero(), sHi: lfOne(), tLo: lfZero(), tHi: lfOne()})
 					continue
 				}
-				cell, ok := revolveLoftFacesMappedBezierCell(trim, m, b,
+				cell, ok := revolveLoftFacesMappedBezierCell(revolveLoftFacesMeridianMemoOf(ctx), trim, m, b,
 					segment, index, band, span)
 				if ok {
 					cells = append(cells, cell)
@@ -208,10 +208,10 @@ func revolveLoftFacesStraightOrFitSpans(trim *loftFacesTrimRecord,
 	}
 }
 
-func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
+func revolveLoftFacesMappedBezierCell(memo *loftface.MeridianMemo, trim *loftFacesTrimRecord, m, b *big.Rat,
 	segment, spanIndex, band int, span freeform.BezierSpan) (revolveLoftFacesMappedCell, bool) {
 	first, last := trim.maps[band], trim.maps[band+1]
-	q := loftface.MeridianQRows(first, last, span, m, b)
+	q := memo.QRows(first, last, span, m, b)
 	kind, signed := loftface.ClassifyRows(q)
 	cell := revolveLoftFacesMappedCell{segment: segment, span: spanIndex,
 		band: band, side: kind, sLo: lfZero(), sHi: lfOne(), tLo: lfZero(), tHi: lfOne()}
@@ -231,7 +231,7 @@ func revolveLoftFacesMappedBezierCell(trim *loftFacesTrimRecord, m, b *big.Rat,
 		return cell, false
 	}
 	for capIndex, mapped := range [...]loftFaceMap{first, last} {
-		capQ := loftface.MeridianQRows(mapped, mapped, span, m, b)
+		capQ := memo.QRows(mapped, mapped, span, m, b)
 		capKind, capSigned := loftface.ClassifyRows(capQ)
 		if capKind != loftface.SideCrossed {
 			return cell, false
@@ -289,12 +289,19 @@ func revolveLoftFacesEndpointFiniteRoots(trim *loftFacesTrimRecord,
 	section revolveSectionSpan, span freeform.BezierSpan, band int, atEnd bool) (
 	[]loftface.EndpointRoot, bool,
 ) {
+	return revolveLoftFacesEndpointFiniteRootsWith(nil, trim, section, span, band, atEnd)
+}
+
+func revolveLoftFacesEndpointFiniteRootsWith(memo *loftface.MeridianMemo, trim *loftFacesTrimRecord,
+	section revolveSectionSpan, span freeform.BezierSpan, band int, atEnd bool) (
+	[]loftface.EndpointRoot, bool,
+) {
 	if trim == nil || band < 0 || band+1 >= len(trim.maps) || len(span) == 0 ||
 		section.start.U == section.end.U {
 		return nil, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
+	q := memo.QRows(trim.maps[band], trim.maps[band+1], span, m, b)
 	roots, ok := loftface.EndpointTimeRoots(q, atEnd)
 	if !ok {
 		return nil, false

@@ -55,7 +55,7 @@ func revolveLoftFacesEndpointPartitionCells(ctx context.Context,
 		return nil, false, nil
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
+	q := revolveLoftFacesMeridianMemoOf(ctx).QRows(trim.maps[band], trim.maps[band+1], span, m, b)
 	j := loftface.MeridianJRows(trim.maps[band], trim.maps[band+1], span, q)
 	remaining := revolveLoftFacesMaxBandCells
 	var cells []revolveLoftFacesMappedCell

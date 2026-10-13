@@ -51,7 +51,7 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 				return out, false, nil
 			}
 			for band := 0; band+1 < len(trim.maps); band++ {
-				roots, ok := revolveLoftFacesEndpointFiniteRoots(trim, section,
+				roots, ok := revolveLoftFacesEndpointFiniteRootsWith(revolveLoftFacesMeridianMemoOf(ctx), trim, section,
 					vertex.left, band, true)
 				if !ok {
 					return out, false, fmt.Errorf("%w: fitted source knot %d/%d band %d has undecidable time roots",
@@ -81,7 +81,7 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 					return out, false, nil
 				}
 				for band := 0; band+1 < len(trim.maps); band++ {
-					roots, valid := revolveLoftFacesEndpointFiniteRoots(trim, section,
+					roots, valid := revolveLoftFacesEndpointFiniteRootsWith(revolveLoftFacesMeridianMemoOf(ctx), trim, section,
 						vertex.fitSpan, band, vertex.fitAtEnd)
 					if !valid {
 						return out, false, fmt.Errorf("%w: fit/line source joint %d/%d band %d has undecidable time roots",
