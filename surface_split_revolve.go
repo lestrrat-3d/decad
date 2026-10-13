@@ -27,7 +27,7 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 	if err != nil {
 		return nil, err
 	}
-	cells, err := resolveSplit(ctx, budget, rcvView, tlView)
+	cells, err := prismcells.SplitPieces(ctx, budget, rcvView.Payload, tlView.Payload)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 			den:         rcv.den,
 			xform:       rcv.xform,
 			radialProof: ax.RadialProof,
-			// resolveSplit's own δ_cut for this cell is the whole of it: S4
+			// prismcells.SplitPieces's own δ_cut for this cell is the whole of it: S4
 			// and S7 zero every other term prism §7 derives, and a cell's
 			// uncut edges record their entity's own data verbatim.
 			sectionDelta: cell.SectionDelta,
@@ -71,7 +71,7 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 // admitSplitRevolvePair runs S2-S4, S6 and S7 for a Split over the revolve
 // family; S1 has already routed the pair here and S5 belongs to Trim alone.
 // It returns the target's own revolve record beside the two MERIDIAN views
-// resolveSplit consumes.
+// prismcells.SplitPieces consumes.
 //
 // S4's axis-clearance clause does not reach Split. It guards Trim and Extend,
 // whose results are open-meridian sheets with no pole for a cut end on the

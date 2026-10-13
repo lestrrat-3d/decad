@@ -329,7 +329,7 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKi
 		return prismPayload{}, prismPayload{}, false, nil
 	}
 	shared := prismplacement.SharedAxisOf(pa.PlacementOperand(), pb.PlacementOperand())
-	if shared.OK && pa.Xform != pb.Xform && !placedAxisProfileAdmitted(op, pa, pb) {
+	if shared.OK && pa.Xform != pb.Xform && !prismcells.PlacedAxisProfileAdmitted(op, pa.Payload, pb.Payload) {
 		return prismPayload{}, prismPayload{}, false, nil
 	}
 	if !shared.OK { // G3

@@ -247,11 +247,11 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, pla
 	if len(y.Profile.Holes) != 0 {
 		return classBPair{}, false, nil
 	}
-	shifted, ok := classBShiftedTool(ref, y, g)
+	shifted, ok := classbgeom.ShiftedTool(ref, y.Payload, g)
 	if !ok {
 		return classBPair{}, false, nil
 	}
-	cp.y = shifted
+	cp.y = prismPayload{Payload: shifted}
 	cp.tool = classbgeom.ToolRecord{
 		Profile: shifted.Profile, Z0: shifted.Z0, Z1: shifted.Z1,
 		Z0Delta: shifted.Z0Delta, Z1Delta: shifted.Z1Delta, Axis: cp.axis, Sign: cp.sign,
@@ -270,23 +270,6 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, pla
 		return classBPair{}, false, err
 	}
 	return cp, true, nil
-}
-
-// classBShiftedTool re-expresses Y's record into g, Y's axes at the reference
-// origin: every coordinate moves by the exact rational dot of the origin
-// difference with its axis. The shift is admitted only where every shifted
-// coordinate and level is itself a float, so the re-expression rounds
-// nothing: a datum plane and its CreateOffsetPlane at a float distance meet
-// that, and a pair whose sums would round misses.
-func classBShiftedTool(ref r3.Frame, y prismPayload, g r3.Frame) (prismPayload, bool) {
-	loops := append([]loopRecord{y.Profile.Outer}, y.Profile.Holes...)
-	moved, z0, z1, ok := classbgeom.ShiftedRecord(ref, y.Frame, g, loops, y.Z0, y.Z1)
-	out := y
-	out.Frame = g
-	out.Profile = profileRecord{Outer: moved[0], Holes: moved[1:]}
-	out.Z0, out.Z1 = z0, z1
-	out.Walks = nil
-	return out, ok
 }
 
 // buildClassB assembles op's result (§4) over the reach, in g. Each slab face

@@ -33,8 +33,9 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 			return nil, err
 		}
 		toothArea = proofbound.AbsSumUpper(toothArea, area.Value.Base(), area.Bound.Base())
-		reach, err := prismPatternConnectorReach(part.prism, source.rootArc, radius,
+		reach, err := prismpattern.ConnectorReach(part.prism.Payload, source.rootArc, radius,
 			source.rootIndex)
+
 		if err != nil {
 			return nil, err
 		}
@@ -121,53 +122,4 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	return buildFacetedBody(ctx, d, ref, fp)
-}
-
-// A connector begins strictly inside the circle, ends strictly outside, and
-// increases squared radius at its inner endpoint. Convexity of squared
-// radius bounds its unique crossing parameter by (R²-r0²)/(2 near·step).
-func prismPatternConnectorReach(p prismPayload, root arcSeg, radius float64,
-	rootIndex int) (float64, error) {
-	segments := p.Profile.Outer.Segments
-	if rootIndex != len(segments)-1 || rootIndex < 2 {
-		return 0, fmt.Errorf("%w: copied-prism connectors have no trailing root arc", ErrUnsupported)
-	}
-	scale2 := prismpattern.Scale2(p.Xform)
-	radiusSq := prismpattern.RadiusSq(radius)
-	reach := 0.0
-	for _, index := range []int{0, rootIndex - 1} {
-		line, ok := segments[index].(lineSeg)
-		if !ok {
-			return 0, fmt.Errorf("%w: copied-prism root connector is not a line", ErrUnsupported)
-		}
-		near, far := line.Start, line.End
-		if near != root.Start && near != root.End {
-			near, far = far, near
-		}
-		if near != root.Start && near != root.End {
-			return 0, fmt.Errorf("%w: copied-prism connector misses its root arc", ErrUnsupported)
-		}
-		nu, nv := proofarith.FloatRat(near.U), proofarith.FloatRat(near.V)
-		du := new(big.Rat).Sub(proofarith.FloatRat(far.U), nu)
-		dv := new(big.Rat).Sub(proofarith.FloatRat(far.V), nv)
-		derivative := new(big.Rat).Mul(big.NewRat(2, 1), scale2)
-		derivative.Mul(derivative, new(big.Rat).Add(new(big.Rat).Mul(nu, du), new(big.Rat).Mul(nv, dv)))
-		if derivative.Sign() <= 0 {
-			return 0, fmt.Errorf("%w: copied-prism connector has no outward crossing", ErrUnsupported)
-		}
-		nearSq := new(big.Rat).Mul(prismpattern.RadialSq(near), scale2)
-		gap := new(big.Rat).Sub(radiusSq, nearSq)
-		if gap.Sign() <= 0 {
-			return 0, fmt.Errorf("%w: copied-prism connector starts outside the blank", ErrUnsupported)
-		}
-		tUpper := new(big.Rat).Quo(gap, derivative)
-		if tUpper.Cmp(big.NewRat(1, 1)) > 0 {
-			tUpper.SetInt64(1)
-		}
-		stepSq := new(big.Rat).Mul(scale2,
-			new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv)))
-		length := proofbound.ProductUpper(proofbound.RatSqrtUp(stepSq), proofbound.RatFloatUp(tUpper))
-		reach = max(reach, length)
-	}
-	return reach, nil
 }

@@ -732,7 +732,7 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
 5. **PR5 — `Document.Split` over the revolve family** (landed).
    `revolvePayload.sectionDelta` reaches the Pappus volume, the centroid and
    every other solid reading (§7.2). `surface_split_revolve.go` runs PR2's
-   `resolveSplit` over the two meridian views, reruns the axis gates per piece
+   `prismcells.SplitPieces` over the two meridian views, reruns the axis gates per piece
    (§2.2) and builds one `revolvePayload` per cell; the deterministic order is
    PR2's. Tests: T184–T186.
 

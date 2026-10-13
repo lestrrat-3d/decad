@@ -3,6 +3,7 @@ package decad
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -11,7 +12,7 @@ import (
 // junction. The generic Union still proves its own mesh and contact.
 type obliqueBossRecord struct {
 	plate, boss  *Body
-	rect         axisRect
+	rect         momentinput.AxisRect
 	bottom, top  float64
 	base         r3.Vec
 	axis, ex, ey r3.Vec
@@ -41,7 +42,7 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 		len(cp.Profile.Outer.Segments) != 1 || pp.Z1 <= pp.Z0 || cp.Z0 != 0 || cp.Z1 <= 0 {
 		return nil
 	}
-	rect, ok := axisRectangle(pp.Profile)
+	rect, ok := momentinput.AxisRectangle(pp.Profile)
 	if !ok {
 		return nil
 	}
