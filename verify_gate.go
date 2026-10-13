@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -289,69 +288,37 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 // rounding that the topology does not charge. The exact-down point-set reader
 // and two-sided shrink keep the result below the denoted body's diameter.
 func chainVertexGateDiameter(ctx context.Context, body *Body, extraAllow float64) (float64, bool, error) {
-	if err := ctx.Err(); err != nil {
-		return 0, false, err
-	}
-	vertices := body.Vertices()
-	points := make([]r3.Vec, 0, len(vertices))
-	maxBound := 0.0
-	for _, vertex := range vertices {
-		if err := ctx.Err(); err != nil {
-			return 0, false, err
+	return diameter.HeldPoints(ctx, func(yield func(diameter.HeldPoint) bool) {
+		for _, vertex := range body.Vertices() {
+			position := vertex.Position()
+			if !yield(diameter.HeldPoint{Value: position.Value, Bound: position.Bound.Base()}) {
+				return
+			}
 		}
-		position := vertex.Position()
-		bound := position.Bound.Base()
-		if !proofbound.FiniteVec(position.Value) || !tolerance.UsableMagnitude(bound) {
-			return 0, false, nil
-		}
-		points = append(points, position.Value)
-		maxBound = math.Max(maxBound, bound)
-	}
-	d, ok, err := diameter.PointsContext(ctx, points)
-	if err != nil || !ok {
-		return d, ok, err
-	}
-	d, ok = diameter.LowerForDisplacement(d, proofbound.AbsSumUpper(maxBound, extraAllow))
-	return d, ok && d > 0, nil
+	}, extraAllow)
 }
 
-// A full-turn chain can expose only one seam vertex even though its circular
-// rim has positive diameter. Every swept circle or connected circular arc of
-// at most one turn has diameter at least its arc length divided by π: up to a
-// half turn the endpoint chord proves it, and past a half turn the arc
-// contains antipodal points. The edge's published length bound already
-// includes its radius and angular uncertainty. Rational arithmetic rounds
-// the resulting reference down exactly once.
+// chainRevolveEdgeGateDiameter reads the lengths of the body's circle and arc
+// edges. A full-turn chain can expose only one seam vertex even though its
+// circular rim has positive diameter (diameter.CircularArcs).
 func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta float64) (float64, bool, error) {
-	if err := ctx.Err(); err != nil {
-		return 0, false, err
-	}
-	for _, edge := range body.Edges() {
-		if err := ctx.Err(); err != nil {
-			return 0, false, err
+	return diameter.CircularArcs(ctx, func(yield func(diameter.ArcLength) bool) {
+		for _, edge := range body.Edges() {
+			switch edge.Curve().(type) {
+			case Circle3, Arc3:
+			default:
+				continue
+			}
+			length, err := edge.Length()
+			arc := diameter.ArcLength{Unbounded: err != nil}
+			if err == nil {
+				arc.Value, arc.Bound = length.Value.Base(), length.Bound.Base()
+			}
+			if !yield(arc) {
+				return
+			}
 		}
-		switch edge.Curve().(type) {
-		case Circle3, Arc3:
-		default:
-			continue
-		}
-		length, err := edge.Length()
-		if err != nil {
-			return 0, false, nil //nolint:nilerr // unbounded edge length withholds the reference
-		}
-		value, bound := length.Value.Base(), length.Bound.Base()
-		if !tolerance.UsableMagnitude(value) || !tolerance.UsableMagnitude(bound) || value <= bound {
-			continue
-		}
-		lengthLow := new(big.Rat).Sub(new(big.Rat).SetFloat64(value), new(big.Rat).SetFloat64(bound))
-		denominator := new(big.Rat).SetFloat64(proofbound.TwoPiUpper())
-		diameterLow := new(big.Rat).Quo(lengthLow.Mul(lengthLow, big.NewRat(2, 1)), denominator)
-		d, ok := diameter.LowerForDisplacement(proofbound.RatFloatDown(diameterLow), sectionDelta)
-		if ok && d > 0 {
-			return d, true, nil
-		}
-	}
-	return 0, false, nil
+	}, sectionDelta)
 }
 
 // freeformSectionGateDiameter is bodyGateDiameter's arm for a free-form-walled
