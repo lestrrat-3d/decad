@@ -1941,3 +1941,5 @@
 10	0.00	TestLoftSectionsSixIndependentRectanglesHoldEverySection
 10	0.00	TestLoftSectionsManyRectanglesRefuseUnprovedInputs
 10	0.00	TestLoftSectionsManyRectanglesRefuseExcessSections
+10	0.00	TestSweepTwistRoundedProfileAxisRefusalIsAtomic
+10	0.00	TestSweepTwistRoundedProfileVerifyAll

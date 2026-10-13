@@ -43,7 +43,7 @@ The current `Sweep` implementation admits:
 - §3.4's closed planar racetrack with one authenticated circular section;
 - §3.5's closed planar tangent line/arc loop with one authenticated circular section;
 - line, circle, arc, and fitted-spline profile boundaries;
-- zero total twist, or §17's one-span polygon twist;
+- zero total twist, or §17's bounded straight-path twist;
 - tangent internal joins;
 - a build whose local curvature gates and global contact audit prove a simple,
   closed solid.
@@ -364,7 +364,7 @@ The existing existence rule applies: a requested solid that does not exist is
 | **S8** | an arc span's rotation axis crosses the transported profile interior, or boundary contact fails Revolve's exact axis-incidence rule | `ErrDegenerate` | yes; the mapped boundary folds or pinches |
 | **S9** | remote patches contact, or neighbours contact beyond their shared boundary | proved contact: `ErrDegenerate`; undecided budget: `ErrUnsupported` | contact is permanent; budget is not |
 | **S10** | profile kind is unsupported by one of the path-span builders | `ErrUnsupported` | follows spline reach |
-| **S11** | nonzero `WithSweepTwist` outside §17's bounded polygon cases | `ErrUnsupported` | no |
+| **S11** | nonzero `WithSweepTwist` outside §17's bounded profile and path cases | `ErrUnsupported` | no |
 | **S12** | option repeated, or a foreign type embeds the sealed marker | `ErrDegenerate` | yes; `WithSurfaceResult()` is exempt — a repeat is idempotent (docs/surface-design.md §4.1) |
 | **S13** | a computed frame, vertex, measurement, or proof bound is non-finite | `ErrUnsupported` | no; numeric ceiling |
 | **S14** | fixed facet, station, exact-predicate, or work budget is exhausted | `ErrUnsupported` | no; resource ceiling |
@@ -609,6 +609,7 @@ separation audit closes. Other composite paths remain staged as
 | **6** | `FitSplineSeg` profile build and shared dyadic tessellation through composite arc-line-arc paths. **This reach is landed.** | Other Tier A profile kinds and Tier B/C kinds follow spline staging |
 | **7a** | §17's one-span centred convex polygon twist and verified faceted mesh. **This reach is landed.** | curved/composite paths, holes, non-convex or free-form profiles, sheets, mitres and scale |
 | **7b** | nonzero distributed twist over tangent composite paths | closed-path twist, a corner mode or scale other than §16's |
+| **7c** | §17.4's centred symmetric Line/Arc profile on one straight path, with bounded Loft wall facets and verified mesh | other curved profiles, holes, sheets, mitres and scale |
 | **8** | sweep boundary adapter for clearance/interference | non-constant-section surveys |
 | **M1**, **M2** | §16's mitred polyline sweep; §16.9 owns the two rows | what §16.9 lists |
 | **F1** | §3.3's exact two-arc full circle as a zero-twist solid, including D1–D3 and D7 through full `Revolve` | general closed paths and nonzero closed-path twist |
@@ -1271,7 +1272,7 @@ deleted once and watched fail before it is trusted.
 - `docs/api-design.md` needs no edit: `Sweep`'s signature is unchanged and §8
   already names this document as the owner of its options and reach.
 
-## 17. Bounded polygon twist
+## 17. Bounded twist
 
 ### 17.1 One straight span
 
@@ -1447,3 +1448,48 @@ and a 6.306450007046607 mm³ occupied-volume allowance, below the exact
 20 mm³ volume. The held mesh encloses 18.98294353769568 mm³. It passes
 `Tessellate(0.1 mm, VerifyAll)` before and after placement. Negative twist,
 a full turn and the over-turn and work-ceiling refusals are focused cases.
+
+### 17.4 Centred rounded profiles on one straight path
+
+A straight positive-Z path also admits a solved, hole-free Sketch profile
+with whole Line and Arc segments when its chord outline passes §17.1's
+strict-convexity check and every segment has an exactly opposite partner
+under a half-turn around the path axis. Each Arc has equal exact squared
+endpoint radii, positive radius, and a certified turn no greater than π.
+Other curve kinds, partial edges and mixed profiles without this symmetry
+return `ErrUnsupported` before a body is committed. The paired source walks
+make the true section's two first moments zero. Increasing Z keeps distinct
+rotated sections disjoint.
+
+The profile area reading supplies an interval for true volume `area*h` and
+both cap areas. Circular-walk intervals supply each Arc length and radius.
+For source perimeter `P` and maximum source radius `R`, the true wall area
+lies between `h*P_low` and
+`h*P_high*sqrt(1+(|theta|*R/h)^2)`. This follows from the rotating wall's
+arc-length Jacobian `sqrt(h²+theta²*(p·p')²)` with `|p'|=1`.
+The body area interval adds the two cap-area intervals. The mesh area
+allowance sums the positive upper bound for each source face and its held
+facets. This coarse charge also covers a Boolean that keeps only part of
+one face; subtraction of whole-face areas could hide opposite local errors.
+
+The existing stationed build evaluates each cell with the authenticated
+curved profile through Loft. It groups the Loft's curved wall triangles by
+source segment and sews cells at the full station table. For a cell angle
+`a`, maximum straight-edge L1 length `E` and station error `e`, the true
+twist-to-ruled-Loft allowance is `R*a*a/8 + E*a/4 + e`. The public boundary
+bound adds Loft's `FacetDeparture`, which covers each source Arc against
+its chord facets. The horizontal symmetric-difference tube uses the true
+perimeter upper bound. The volume allowance adds every cell's tube, axial
+station move and Loft `VolSymDiff` without cancellation. The curved class
+uses a three-percent-of-radius planning target for its station count; the
+completed boundary proof decides the requested mesh tolerance.
+
+The public acceptance builds a 4×2 mm rounded rectangle with 0.5 mm
+corners in Sketch, sweeps it 5 mm with a 30° twist, and asks for
+`Tessellate(0.1 mm, VerifyAll)`. Its true volume is
+`5*(7+π/4) mm³`; the mesh reports both boundary and volume verified.
+The focused tests also cover all eight source wall roles, placement,
+negative twist and an off-axis source refusal without a document commit.
+An overlapping Boolean still refuses when its own pair tolerance is finer
+than this Sweep's certified held boundary. Section 17.4 does not raise the
+Boolean's pair tolerance.

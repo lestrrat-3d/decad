@@ -24,14 +24,17 @@ type straightTwistStation struct {
 }
 
 func stationedTwistCellCount(poly twistPolygon, angleUpper float64) (int, error) {
-	if angleUpper <= 1 || proofbound.IsNonFinite(angleUpper) ||
+	if angleUpper <= 0 || proofbound.IsNonFinite(angleUpper) ||
 		poly.maxRadiusL1 <= 0 || proofbound.IsNonFinite(poly.maxRadiusL1) {
 		return 0, fmt.Errorf(`%w: stationed twist has no finite angle or profile radius`, ErrUnsupported)
 	}
-	// Four percent of the source radius sets a scale-relative boundary target.
-	// The actual cell proof, rather than this planning target, decides whether
-	// Tessellate can certify a caller's requested tolerance.
-	target := proofbound.ProductUpper(poly.maxRadiusL1, 0.04)
+	// The curved source needs a finer station than the straight polygon.
+	// The final proof still decides the caller's requested mesh tolerance.
+	targetScale := 0.04
+	if poly.hasArc {
+		targetScale = 0.03
+	}
+	target := proofbound.ProductUpper(poly.maxRadiusL1, targetScale)
 	for cells := 2; cells <= maxStationedTwistCells; cells++ {
 		perCell := proofbound.DivUpper(angleUpper, float64(cells))
 		if perCell > 1 || twistDeparture(poly, perCell, 0, 0) > target {
@@ -156,7 +159,7 @@ func evalStationedTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		if !heldOK {
 			return nil, fmt.Errorf(`%w: twisted sweep cell lost its Loft payload`, ErrUnsupported)
 		}
-		if _, err := mergeTwistWalls(ctx, part, ref, len(poly.points)); err != nil {
+		if _, err := mergeTwistWalls(ctx, part, ref, held[i], len(poly.points)); err != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
 		}
 		parts[i], err = compositeSpanPartOf(part)
@@ -188,7 +191,9 @@ func evalStationedTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		stationError := max(stations[i].pointError, stations[i+1].pointError)
 		axialError := max(stations[i].axialError, stations[i+1].axialError)
 		ideal := straightTwistCellDeparture(poly, cellAngle, stationError)
-		delta = max(delta, proofbound.AbsSumUpper(ideal, loft.delta))
+		// Loft's source-to-facet proof includes the arc chord and ruled-wall
+		// departure; its vertex-only delta does not.
+		delta = max(delta, proofbound.AbsSumUpper(ideal, loft.proof.FacetDeparture))
 		// The horizontal tube compares cells at their exact source heights.
 		// Move that comparison Loft to the rounded station heights separately:
 		// each triangle vertex moves axially by at most axialError, and the
@@ -203,26 +208,39 @@ func evalStationedTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(volSymDiff) {
 		return nil, fmt.Errorf(`%w: stationed twist has no finite boundary proof`, ErrUnsupported)
 	}
-	volumeRat := new(big.Rat).Mul(poly.area, twistRat(path.End().Z))
-	if twistRat(volSymDiff).Cmp(volumeRat) >= 0 {
+	volumeIv := proofbound.IntervalScale(poly.areaInterval, twistRat(path.End().Z))
+	if twistRat(volSymDiff).Cmp(volumeIv.Lo) >= 0 {
 		return nil, fmt.Errorf(`%w: stationed twist boundary tube exceeds the true occupied volume`, ErrUnsupported)
 	}
 	pathSpanOfCell := make([]int, cells)
-	mesh, heldAreaIv, err := compositeTwistMesh(ctx, body, held, len(poly.points),
+	mesh, heldAreaIv, heldByFace, err := compositeTwistMesh(ctx, body, held, len(poly.points),
 		pathSpanOfCell, delta, volSymDiff)
 	if err != nil {
 		return nil, err
 	}
-	trueAreaIv, err := twistAreaInterval(poly, twistRat(path.End().Z), thetaIv)
+	var trueAreaIv proofbound.RatInterval
+	if poly.hasArc {
+		trueAreaIv, err = twistMixedAreaInterval(poly, twistRat(path.End().Z), thetaIv)
+	} else {
+		trueAreaIv, err = twistAreaInterval(poly, twistRat(path.End().Z), thetaIv)
+	}
 	if err != nil {
 		return nil, err
 	}
-	mesh.areaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(
-		proofbound.IntervalSub(trueAreaIv, heldAreaIv)))
+	if poly.hasArc {
+		mesh.areaSlack, err = twistMixedAreaSlack(profile, poly, twistRat(path.End().Z),
+			thetaIv, body, heldByFace)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		mesh.areaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(
+			proofbound.IntervalSub(trueAreaIv, heldAreaIv)))
+	}
 	if proofbound.IsNonFinite(mesh.areaSlack) {
 		return nil, fmt.Errorf(`%w: stationed twist has no finite area proof`, ErrUnsupported)
 	}
-	volume, volumeBound := mitredEnclosure(volumeRat, volumeRat)
+	volume, volumeBound := mitredEnclosure(volumeIv.Lo, volumeIv.Hi)
 	area, areaBound := mitredEnclosure(trueAreaIv.Lo, trueAreaIv.Hi)
 	body.volume = Measurement{Value: units.CubicMillimeters(volume), Bound: units.CubicMillimeters(volumeBound),
 		Exactness: exactnessOf(volumeBound)}
