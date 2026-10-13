@@ -222,11 +222,66 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	return true, nil
 }
 
+// facetOpenFloat reports whether facet i's held corners are proven not
+// collinear by floats alone, so its exact normal is non-zero.
+func (e *heldEmbedding) facetOpenFloat(i int) bool {
+	t := e.h.Tris[i]
+	return proof.TriangleOpenFloat(e.h.Verts[t[0]], e.h.Verts[t[1]], e.h.Verts[t[2]])
+}
+
+// pairApartFloat proves, from certain float orientation signs alone, the
+// answers pairSeparated would give as (true, true) for one shared edge or one
+// shared vertex. False decides nothing.
+func (e *heldEmbedding) pairApartFloat(i, j int, sharedI, sharedJ []int) bool {
+	ti, tj, vs := e.h.Tris[i], e.h.Tris[j], e.h.Verts
+	switch len(sharedI) {
+	case 2:
+		c := ti[3-sharedI[0]-sharedI[1]]
+		d := tj[3-sharedJ[0]-sharedJ[1]]
+		s, ok := proof.OrientSignFloat(vs[ti[sharedI[0]]], vs[ti[sharedI[1]]], vs[c], vs[d])
+		return ok && s != 0
+	case 1:
+		// sideI reads j's unshared corners against i's plane, sideJ the
+		// reverse. A certain non-zero reading also proves the plane's own
+		// facet is not collinear.
+		sideI, openI := e.strictSideFloat(ti, tj, sharedJ[0])
+		sideJ, openJ := e.strictSideFloat(tj, ti, sharedI[0])
+		openI = openI || e.facetOpenFloat(i)
+		openJ = openJ || e.facetOpenFloat(j)
+		return openI && openJ && (sideI || sideJ)
+	}
+	return false
+}
+
+// strictSideFloat reports whether the two corners of u other than slot skip
+// lie strictly on one side of t's plane by certain float signs, and whether
+// any certain non-zero sign was read (so t's corners are not collinear).
+func (e *heldEmbedding) strictSideFloat(t, u [3]int, skip int) (bool, bool) {
+	vs := e.h.Verts
+	side, open, strict := 0, false, true
+	for k, q := range u {
+		if k == skip {
+			continue
+		}
+		s, ok := proof.OrientSignFloat(vs[t[0]], vs[t[1]], vs[t[2]], vs[q])
+		if ok && s != 0 {
+			open = true
+		}
+		if !ok || s == 0 || side != 0 && s != side {
+			strict = false
+		}
+		side = s
+	}
+	return strict, open
+}
+
 func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBoxTree) (bool, error) {
 	stack := make([]int, 0, 64)
 	for _, i := range query {
-		if _, _, n := e.facet(i); zeroXpt(n) {
-			return false, nil
+		if !e.facetOpenFloat(i) {
+			if _, _, n := e.facet(i); zeroXpt(n) {
+				return false, nil
+			}
 		}
 		box := e.triBox(i)
 		if len(tree.nodes) == 0 {
@@ -531,7 +586,8 @@ func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 	if !BoxesOverlap(e.triBox(i), e.triBox(j)) {
 		return true
 	}
-	var sharedI, sharedJ []int
+	var bufI, bufJ [3]int
+	sharedI, sharedJ := bufI[:0], bufJ[:0]
 	for a, va := range ti {
 		for b, vb := range tj {
 			if va == vb {
@@ -549,6 +605,15 @@ func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 	if len(sharedI) == 1 && !BoxesOverlap(e.coneBox(i, sharedI[0]), e.coneBox(j, sharedJ[0])) {
 		return true
 	}
+	if e.pairApartFloat(i, j, sharedI, sharedJ) {
+		return true
+	}
+	return e.pairEmbeddedExact(i, j, sharedI, sharedJ)
+}
+
+// pairEmbeddedExact is pairEmbedded's exact path, for a pair that passed the
+// box, projection and cone tests and that no float certificate decided.
+func (e *heldEmbedding) pairEmbeddedExact(i, j int, sharedI, sharedJ []int) bool {
 	ok, decided, signs := e.pairSeparated(i, j, sharedI, sharedJ)
 	if decided {
 		return ok
@@ -615,7 +680,7 @@ func (e *heldEmbedding) projection(i int) *heldProjectedFacet {
 			point := e.h.Verts[v]
 			p.points[axis][k] = [2]float64{AxisCoord(point, axes[0]), AxisCoord(point, axes[1])}
 			for _, coord := range p.points[axis][k] {
-				magnitude := math.Abs(coord)
+				magnitude := proof.Abs(coord)
 				if !(magnitude == 0 || magnitude >= 1e-100 && magnitude <= 1e100) {
 					p.stable[axis] = false
 				}
@@ -687,8 +752,16 @@ func (e *heldEmbedding) coneBox(i, k int) [2]r3.Vec {
 	whole := [2]r3.Vec{r3.NewVec(-2, -2, -2), r3.NewVec(2, 2, 2)}
 	t := e.h.Tris[i]
 	v, a, b := e.h.Verts[t[k]], e.h.Verts[t[(k+1)%3]], e.h.Verts[t[(k+2)%3]]
-	scale := math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z)))
-	floor := math.Ldexp(math.Max(scale, math.SmallestNonzeroFloat64), -20)
+	scale := math.Max(proof.Abs(v.X), math.Max(proof.Abs(v.Y), proof.Abs(v.Z)))
+	s := math.Max(scale, math.SmallestNonzeroFloat64)
+	var floor float64
+	if s >= 0x1p-1000 {
+		// A normal power of two times a value this large is exact, so the
+		// product equals Ldexp(s, -20).
+		floor = s * 0x1p-20
+	} else {
+		floor = math.Ldexp(s, -20)
+	}
 	da, db := a.Sub(v), b.Sub(v)
 	la, lb := da.Len(), db.Len()
 	box := whole
