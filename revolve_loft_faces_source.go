@@ -102,10 +102,10 @@ func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
 	}
 	_, certified, manifestErr := revolveLoftFacesCensus(ctx, proof)
 	if manifestErr != nil {
-		return true, manifestErr
+		return revolveLoftFacesSourceProofError(ctx, manifestErr)
 	}
 	if !certified {
-		return true, fmt.Errorf("%w: curved LoftFaces face pairs are undecidable", ErrUnsupported)
+		return false, nil
 	}
 	return true, fmt.Errorf("%w: certified curved LoftFaces contact needs a held-seam builder", ErrUnsupported)
 }

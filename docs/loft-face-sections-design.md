@@ -399,7 +399,7 @@ exception. A certified pair currently returns `ErrUnsupported` at public
 and complete-contact audits have not been built. The same producer remains
 unchanged after that refusal.
 
-An unfinished source proof produces no certificate. Unless the caller's
-context was canceled, `Union` may continue through the ordinary mesh Boolean
-and its independent contact and volume gates. A completed source certificate
-still requires the held-seam builder.
+An unfinished source proof or face-pair census does not select this path.
+Unless the caller's context was canceled, `Union` may continue through the
+ordinary mesh Boolean and its independent contact and volume gates. A
+completed source certificate and census still require the held-seam builder.
