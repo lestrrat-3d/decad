@@ -277,6 +277,9 @@ func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opt
 		}
 	}
 	if fp, ok := b.payload.(facetedPayload); ok {
+		if fp.prismUnionFillet != nil && asym == nil {
+			return b.chamferPrismUnion(ctx, edges, fp.prismUnionFillet, dmm, dDelta)
+		}
 		body, recognized, err := tryCrossCylinderBoreMouthChamfer(ctx, b, fp, edges, dmm, dDelta, asym)
 		if recognized || err != nil {
 			if err != nil {

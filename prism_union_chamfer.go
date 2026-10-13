@@ -1,0 +1,123 @@
+package decad
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+)
+
+// chamferPrismUnion removes one triangular corner prism from an authenticated
+// source of a faceted Union. The other source stays strictly outside the
+// corner box, so the ordinary Boolean rebuild certifies the modified Union.
+func (b *Body) chamferPrismUnion(ctx context.Context, edges []*Edge,
+	rec *prismUnionFilletRecord, setback, setbackDelta float64) (*Body, error) {
+	if len(edges) != 1 || setbackDelta != 0 || !(setback > 0) || proofbound.IsNonFinite(setback) {
+		return nil, fmt.Errorf("%w: a faceted prism Union chamfer needs one exact outer edge and setback", ErrUnsupported)
+	}
+	for _, pair := range [][2]*Body{{rec.first, rec.second}, {rec.second, rec.first}} {
+		pp, ok := pair[0].payload.(prismPayload)
+		if !ok {
+			continue
+		}
+		corner, band, sourceEdge, ok := prismUnionFilletCorner(pair[0], pp, edges[0], setback)
+		if !ok || !prismUnionFilletSourceFaces(edges[0], sourceEdge) ||
+			!prismUnionFilletBandSeparate(pair[1], band) {
+			continue
+		}
+		out, err := chamferPrismUnionSource(ctx, b.doc, pp, sourceEdge, corner, setback)
+		if err != nil {
+			return nil, err
+		}
+		// The removed triangular prism lies inside the certified corner box,
+		// which is strictly separate from the unchanged source's true body.
+		joined, err := booleanBody(ctx, meshbool.OpUnion, out, pair[1], b.doc.nextProducerID())
+		if err != nil {
+			return nil, err
+		}
+		return commitModifyResult(ctx, b, joined)
+	}
+	return nil, fmt.Errorf("%w: the selected faceted edge has no isolated exact rectangular prism corner", ErrUnsupported)
+}
+
+func chamferPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
+	selected *Edge, corner sectionrecord.Point2, setback float64) (*Body, error) {
+	budget := proofbound.NewWorkBudget(ctx)
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, pp.Profile)
+	if err != nil {
+		return nil, err
+	}
+	if len(loops) != 1 || len(loops[0].Walks) != 4 {
+		return nil, fmt.Errorf("%w: the source rectangle has no four-corner walk", ErrUnsupported)
+	}
+	li, ci, found, err := matchCornerBudget(budget, pp, loops, selected)
+	if err != nil {
+		return nil, err
+	}
+	if !found || li != 0 || loops[0].Walks[ci].StartU != corner.U ||
+		loops[0].Walks[ci].StartV != corner.V {
+		return nil, fmt.Errorf("%w: the source edge does not match the authenticated corner", ErrUnsupported)
+	}
+	blend, err := computeChamfer(loops[0], ci, setback, setback)
+	if err != nil {
+		return nil, err
+	}
+	if !prismUnionChamferChord(pp, corner, setback, blend) {
+		return nil, fmt.Errorf("%w: the rectangular corner has no exact inward chamfer chord", ErrUnsupported)
+	}
+	blends := []map[int]*cornerBlend{{ci: blend}}
+	profile, connectors, err := rewriteProfileBudget(budget, pp.Profile, loops, blends)
+	if err != nil {
+		return nil, err
+	}
+	if err := offset2d.AuditRewriteBudget(budget, pp.Profile, profile, loops, blends); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("%w: the rectangular source chamfer failed its section audit: %v", ErrUnsupported, err)
+	}
+	return evalPrismContext(ctx, d, d.nextProducerID(), prismPayload{Payload: prismrecord.Payload{
+		Profile: profile, Frame: pp.Frame, Z0: pp.Z0, Z1: pp.Z1,
+		Xform: pp.Xform, BlendSegs: connectors, BlendKind: string(brepBandChamfer),
+	}}, freeform.NewFreeformWork())
+}
+
+// Exact directed feet and a whole line connector prove that the rewrite
+// removes precisely the right triangle in the source rectangle's corner.
+func prismUnionChamferChord(pp prismPayload, corner sectionrecord.Point2,
+	setback float64, blend *cornerBlend) bool {
+	line, ok := blend.Connector.(lineSeg)
+	if !ok || line.TStart != 0 || line.TEnd != 1 || line.Start != blend.FA || line.End != blend.FB ||
+		blend.CutbackA != setback || blend.CutbackB != setback {
+		return false
+	}
+	rect, ok := momentinput.AxisRectangle(pp.Profile)
+	if !ok {
+		return false
+	}
+	xDir, yDir := 1, 1
+	if corner.U == rect.U1 {
+		xDir = -1
+	}
+	if corner.V == rect.V1 {
+		yDir = -1
+	}
+	xInner, xOK := prismUnionFilletExactShift(corner.U, setback, xDir)
+	yInner, yOK := prismUnionFilletExactShift(corner.V, setback, yDir)
+	if !xOK || !yOK {
+		return false
+	}
+	xFoot := sectionrecord.Point2{U: xInner, V: corner.V}
+	yFoot := sectionrecord.Point2{U: corner.U, V: yInner}
+	if xDir == yDir {
+		return blend.FA == yFoot && blend.FB == xFoot
+	}
+	return blend.FA == xFoot && blend.FB == yFoot
+}
