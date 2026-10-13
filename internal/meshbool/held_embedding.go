@@ -2,6 +2,7 @@ package meshbool
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/big"
@@ -290,6 +291,7 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *held
 	}
 	local.planes = map[string]int{}
 	local.fnorm = make([]r3.Vec, len(e.fnorm))
+	local.fnormOK = make([]bool, len(e.fnormOK))
 	local.cone = make([][3][2]r3.Vec, len(e.cone))
 	local.coneOK = make([][3]bool, len(e.coneOK))
 	local.projected = make([]heldProjectedFacet, len(e.projected))
@@ -328,6 +330,8 @@ type heldEmbedding struct {
 	planeSense []int8
 	planes     map[string]int
 	fnorm      []r3.Vec
+	// fnormOK marks fnorm[i] as the float rounding of norm[i], computed on demand.
+	fnormOK []bool
 	// cone caches, per facet and corner, a box around the unit directions
 	// the facet leaves that corner in (coneBox).
 	cone   [][3][2]r3.Vec
@@ -389,6 +393,7 @@ func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget, memo bool) 
 		plane:       make([]int, len(h.Tris)),
 		planeSense:  make([]int8, len(h.Tris)),
 		fnorm:       make([]r3.Vec, len(h.Tris)),
+		fnormOK:     make([]bool, len(h.Tris)),
 		cone:        make([][3][2]r3.Vec, len(h.Tris)),
 		coneOK:      make([][3]bool, len(h.Tris)),
 		projected:   make([]heldProjectedFacet, len(h.Tris)),
@@ -478,10 +483,20 @@ func (e *heldEmbedding) facet(i int) ([3]r3.Vec, [3]proof.Xpt, proof.Xpt) {
 	x := [3]proof.Xpt{e.lift(t[0]), e.lift(t[1]), e.lift(t[2])}
 	if !e.normOK[i] {
 		e.norm[i] = proof.Xcross(proof.Xsub(x[1], x[0]), proof.Xsub(x[2], x[0]))
-		e.fnorm[i] = e.norm[i].Vec()
 		e.normOK[i] = true
 	}
 	return f, x, e.norm[i]
+}
+
+// floatNorm is facet i's exact normal rounded to float64, computed on first
+// use: only the triangle-pair classifier reads it.
+func (e *heldEmbedding) floatNorm(i int) r3.Vec {
+	if !e.fnormOK[i] {
+		_, _, n := e.facet(i)
+		e.fnorm[i] = n.Vec()
+		e.fnormOK[i] = true
+	}
+	return e.fnorm[i]
 }
 
 func (e *heldEmbedding) setVert(v int, p r3.Vec) {
@@ -491,6 +506,7 @@ func (e *heldEmbedding) setVert(v int, p r3.Vec) {
 	e.xvOK[v] = false
 	for _, f := range e.inc[v] {
 		e.normOK[f] = false
+		e.fnormOK[f] = false
 		e.plane[f] = -1
 		e.coneOK[f] = [3]bool{}
 		e.projectedOK[f] = false
@@ -543,7 +559,7 @@ func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 		return false
 	}
 	c, err := TriTriClassifyCore(fa, fb, xa, xb, na, nb, nil, nil,
-		&signs.a, &signs.b, true, e.fnorm[i], e.fnorm[j], true)
+		&signs.a, &signs.b, true, e.floatNorm(i), e.floatNorm(j), true)
 	if err != nil {
 		return false
 	}
@@ -843,14 +859,40 @@ func (e *heldEmbedding) planeOf(i int) int {
 	off := new(big.Int).Mul(d[0], x[0].X)
 	off.Add(off, new(big.Int).Mul(d[1], x[0].Y))
 	off.Add(off, new(big.Int).Mul(d[2], x[0].Z))
-	key := d[0].String() + "," + d[1].String() + "," + d[2].String() + "|" + new(big.Rat).SetFrac(off, x[0].W).RatString()
-	id, ok := e.planes[key]
+	key := planeKey(d, off, x[0].W)
+	id, ok := e.planes[string(key)]
 	if !ok {
 		id = len(e.planes)
-		e.planes[key] = id
+		e.planes[string(key)] = id
 	}
 	e.plane[i] = id
 	return id
+}
+
+// planeKey encodes a plane's primitive direction d and its offset off/w in
+// lowest terms as bytes. Each of the five integers is a sign byte, a uvarint
+// length and the magnitude, so equal keys mean equal reduced pairs.
+func planeKey(d [3]*big.Int, off, w *big.Int) []byte {
+	var num, den *big.Int
+	switch {
+	case off.Sign() == 0:
+		num, den = new(big.Int), big.NewInt(1)
+	case w.Sign() > 0 && w.BitLen() == int(w.TrailingZeroBits())+1:
+		tz := min(off.TrailingZeroBits(), w.TrailingZeroBits())
+		num, den = new(big.Int).Rsh(off, tz), new(big.Int).Rsh(w, tz)
+	default:
+		r := new(big.Rat).SetFrac(off, w)
+		num, den = r.Num(), r.Denom()
+	}
+	buf := make([]byte, 0, 96)
+	for _, v := range [5]*big.Int{d[0], d[1], d[2], num, den} {
+		buf = append(buf, byte(v.Sign()+1))
+		n := (v.BitLen() + 7) / 8
+		buf = binary.AppendUvarint(buf, uint64(n))
+		buf = slices.Grow(buf, n)[:len(buf)+n]
+		v.FillBytes(buf[len(buf)-n:])
+	}
+	return buf
 }
 
 // planeAxes is the projection that keeps facet i's plane non-degenerate, or
