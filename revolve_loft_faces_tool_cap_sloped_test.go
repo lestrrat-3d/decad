@@ -77,10 +77,10 @@ func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
 		changedRoots := 0
 		for i := range changedSection.cells {
 			limit := &changedSection.cells[i].upper
-			if limit.root.Lo == nil {
+			if limit.Root.Lo == nil {
 				continue
 			}
-			limit.before, limit.after = limit.after, limit.before
+			limit.Before, limit.After = limit.After, limit.Before
 			changedRoots++
 		}
 		require.Equal(t, 2, changedRoots)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -33,7 +34,7 @@ func revolveLoftFacesArcSpanCells(ctx context.Context,
 		radial, radialOK := mappedArcRadialTimeBand(ctx, trim, segment, band, section)
 		if radialOK {
 			q := [3][]*big.Rat{{radial.q[0]}, {radial.q[1]}, {radial.q[2]}}
-			roots, rootsOK := revolveLoftFacesEndpointTimeRoots(q, false)
+			roots, rootsOK := loftface.EndpointTimeRoots(q, false)
 			if !rootsOK {
 				return nil, false, fmt.Errorf("%w: radial source arc %d band %d has undecidable time roots",
 					ErrUnsupported, segment, band)
@@ -46,18 +47,18 @@ func revolveLoftFacesArcSpanCells(ctx context.Context,
 						return nil, false, nil
 					}
 				}
-				pieces, partitionOK := revolveLoftFacesPartitionTime(radial.q, roots)
+				pieces, partitionOK := loftface.PartitionTime(radial.q, roots)
 				if !partitionOK {
 					return nil, false, nil
 				}
 				for _, piece := range pieces {
 					cell := revolveLoftFacesMappedCell{segment: segment, span: -1,
-						band: band, side: piece.side, sLo: lfZero(), sHi: lfOne(),
-						tLo: piece.lo, tHi: piece.hi,
-						tLoOpen: piece.loOpen, tHiOpen: piece.hiOpen}
-					if piece.rootIndex >= 0 {
+						band: band, side: piece.Side, sLo: lfZero(), sHi: lfOne(),
+						tLo: piece.Lo, tHi: piece.Hi,
+						tLoOpen: piece.LoOpen, tHiOpen: piece.HiOpen}
+					if piece.RootIndex >= 0 {
 						cell.side = revolveLoftFacesAxialMiss
-						if roots[piece.rootIndex].finite {
+						if roots[piece.RootIndex].Finite {
 							cell.side = revolveLoftFacesJointContact
 							cell.jointKind = revolveLoftFacesWholeArcContact
 							cell.jointArc = arc
@@ -74,7 +75,7 @@ func revolveLoftFacesArcSpanCells(ctx context.Context,
 			return nil, false, fmt.Errorf("%w: mapped source arc %d band %d has undecidable finite side",
 				ErrUnsupported, segment, band)
 		}
-		if side == mappedArcMiss {
+		if side == loftface.ArcMiss {
 			side = revolveLoftFacesAxialMiss
 		}
 		cells = append(cells, revolveLoftFacesMappedCell{segment: segment,

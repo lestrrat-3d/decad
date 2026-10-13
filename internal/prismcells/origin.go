@@ -5,7 +5,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// Origin is buildPrismScene's own tag map value (§4.1's "tagged, in
+// Origin is BuildScene's own tag map value (§4.1's "tagged, in
 // a side map, with its origin"): which operand a created scene entity traces
 // to, and which of that operand's loops it came from — -1 for Outer, else the
 // index into ProfileRecord.Holes. Union's resolution never reads it — every
@@ -15,10 +15,10 @@ import (
 // map, never a geometric test. AuthoredReversed is the crossing sub-case's own
 // addition (membership.go): whether this operand's own recorded
 // walk of the entity runs backwards relative to the entity's own natural
-// parameterization — the fixed fact buildPrismScene computes once at creation
+// parameterization — the fixed fact BuildScene computes once at creation
 // time that Classify later compares against a returned edge's own
 // Reversed flag, never a geometric test. For an operand B whose relative map
-// is a reflection, it is read off the re-wound record buildPrismScene builds
+// is a reflection, it is read off the re-wound record BuildScene builds
 // B from (docs/general-boolean-design.md §3 A4), whose loops keep the
 // "outer CCW, holes CW" convention the comparison assumes.
 //
@@ -34,7 +34,7 @@ type Origin struct {
 }
 
 // LoopEntitySet is the tag map's per-loop view: the set of entities
-// buildPrismScene created for one operand's one loop (Outer at hole = -1,
+// BuildScene created for one operand's one loop (Outer at hole = -1,
 // else Holes[hole]), read for the structural match (§4.2) alone.
 func LoopEntitySet(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, isB bool, hole int) (map[sketch.Entity]struct{}, error) {
 	out := map[sketch.Entity]struct{}{}
@@ -70,7 +70,7 @@ func RegionLoopEntitySet(budget *proofbound.WorkBudget, tags map[sketch.Entity]O
 // every edge is Whole (Partial == false — the arrangement cut nothing), the
 // edge count equals the wanted set's size, and the edges' Entity values equal
 // the wanted set. Comparing Entity by interface identity is the same
-// discipline buildPrismScene's own dedup key already uses. Deliberately NOT a
+// discipline BuildScene's own dedup key already uses. Deliberately NOT a
 // check on edge order or starting index: a simple loop's own walk is
 // determined only up to rotation, and requiring an index would make the match
 // fragile without proving anything more.

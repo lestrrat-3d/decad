@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -112,7 +113,7 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 					continue // a nonradial arc is classified by its own source cells
 				}
 				q := [3][]*big.Rat{{radial.q[0]}, {radial.q[1]}, {radial.q[2]}}
-				roots, ok := revolveLoftFacesEndpointTimeRoots(q, false)
+				roots, ok := loftface.EndpointTimeRoots(q, false)
 				if !ok {
 					return out, false, fmt.Errorf("%w: radial source arc %d band %d has undecidable time roots",
 						ErrUnsupported, arcIndex, band)

@@ -79,7 +79,7 @@ func TestEvalPrismCollapsedSpanRunStillBuilds(t *testing.T) {
 // covered, on the running platform, and requires that family to hold a miss;
 // that is what keeps its walk assertions non-vacuous wherever the test runs.
 //
-// What depends on it: buildPrismScene (prism_boolean.go) creates one sketch
+// What depends on it: prismcells.BuildScene (prism_boolean.go) creates one sketch
 // point per walked endpoint, so a walk landing an ulp off the vertex two
 // segments share would offer sketch two points where the record states one, and
 // RecordProfile would then refuse the region the arrangement admits on its own

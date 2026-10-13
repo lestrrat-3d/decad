@@ -2,7 +2,6 @@ package decad
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -365,7 +364,7 @@ func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (profileRecord
 	if err := st.withinCap(empty, pb); err != nil {
 		return profileRecord{}, false, err
 	}
-	s, tags, sceneDelta, err := buildPrismScene(st.budget, empty, pb, st.reexpress)
+	s, tags, sceneDelta, err := prismcells.BuildScene(st.budget, empty.profile, pb.profile, st.reexpress)
 	if err != nil {
 		return profileRecord{}, false, err
 	}
@@ -442,27 +441,14 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper profi
 func stackedUnionInterfaceMatch(ctx context.Context, budget *proofbound.WorkBudget, base prismPayload, lower, upper profileRecord) (stackedNesting, error) {
 	pl, pu := base, base
 	pl.profile, pu.profile = lower, upper
-	if err := stackedSceneWithinCap(budget, pl, pu); err != nil {
+	if err := prismcells.RequireRegionsWithinCap(budget, pl.profile, pu.profile); err != nil {
 		return stackedNesting{}, err
 	}
 	return stackedNestingOf(ctx, budget, pl, pu, &prismReexpression{Identity: true})
 }
 
 func (st *stackedUnionState) withinCap(pa, pb prismPayload) error {
-	return stackedSceneWithinCap(st.budget, pa, pb)
-}
-
-func stackedSceneWithinCap(budget *proofbound.WorkBudget, pa, pb prismPayload) error {
-	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.profile, pb.profile)
-	if err != nil {
-		return err
-	}
-	if !withinCap {
-		return fmt.Errorf(
-			`%w: the analytic union scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
-			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
-	}
-	return nil
+	return prismcells.RequireRegionsWithinCap(st.budget, pa.profile, pb.profile)
 }
 
 type stackedNest int
@@ -506,7 +492,7 @@ func (m *stackedNesting) charge(budget *proofbound.WorkBudget, pa, pb prismPaylo
 // both directions over one private scene of two hole-free regions. A matched
 // proof cell that sketch reports invalid is RB1.
 func stackedNestingOf(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (stackedNesting, error) {
-	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
+	s, tags, sceneDelta, err := prismcells.BuildScene(budget, pa.profile, pb.profile, reexpress)
 	if err != nil {
 		return stackedNesting{}, err
 	}

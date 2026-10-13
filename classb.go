@@ -430,7 +430,7 @@ func classBPerpendicularRegion(ctx context.Context, cp classBPair, region profil
 	if err != nil {
 		return profileRecord{}, false, err
 	}
-	s, match, sceneDelta, resolved, err := resolvePrismCut(ctx, budget, target, tool, reexpress)
+	s, match, sceneDelta, resolved, err := prismcells.ResolveCut(ctx, budget, target.profile, tool.profile, reexpress)
 	if err != nil || !resolved || sceneDelta.A != 0 || sceneDelta.B != 0 {
 		return profileRecord{}, false, err
 	}

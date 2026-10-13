@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,7 +34,7 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 		}
 		require.NoError(t, err)
 		require.True(t, certified)
-		band, time, unique := revolveLoftFacesConstantXBand(proof.trim.maps, box, circle.x)
+		band, time, unique := loftface.ConstantXBand(proof.trim.maps, box, circle.x)
 		require.True(t, unique)
 		require.Equal(t, band, arc.band)
 		require.Zero(t, time.Cmp(arc.time))
@@ -107,6 +108,6 @@ func TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence(t *testing.T) {
 	require.False(t, revolveLoftFacesToolCapSourceCellsEqual(original, &changed))
 
 	changed.cells[0] = original.cells[0]
-	changed.cells[0].retained = []revolveLoftFacesVerticalPiece{}
+	changed.cells[0].retained = []loftface.VerticalPiece{}
 	require.False(t, revolveLoftFacesToolCapSourceCellsEqual(original, &changed))
 }

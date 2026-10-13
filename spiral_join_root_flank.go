@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -25,7 +26,7 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 		return empty, false, err
 	}
 	toeRoot := lfF(proof.blank.toeRoot.U)
-	cap2 := spiralCapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
+	cap2 := loftface.CapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
 	if cap2.Lo == nil || cap2.Hi == nil || toeRoot.Cmp(cap2.Lo) >= 0 ||
 		cap2.Hi.Cmp(lfF(proof.blank.ded.U)) >= 0 {
 		return empty, false, nil
@@ -35,7 +36,7 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 	if !ok || low.band != 1 || low.tHi.Cmp(lfOne()) >= 0 {
 		return empty, false, ctx.Err()
 	}
-	q := spiralRootPolynomial(proof.tooth.maps[1], proof.tooth.maps[2],
+	q := loftface.MeridianQRows(proof.tooth.maps[1], proof.tooth.maps[2],
 		proof.flank[side], proof.rootM, proof.rootB)
 	sLo, sHi := lfZero(), lfOne()
 	if !spiralJunctionRootBracket(q, sLo, sHi, low.tLo, lfOne()) {
@@ -58,7 +59,7 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 		}
 		break
 	}
-	box, ok := spiralJunctionBox(proof.tooth.maps[1], proof.tooth.maps[2],
+	box, ok := loftface.JunctionBox(proof.tooth.maps[1], proof.tooth.maps[2],
 		proof.flank[side], sLo, sHi, low.tLo, lfOne())
 	if err := ctx.Err(); err != nil {
 		return empty, false, err
@@ -114,7 +115,7 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 		}
 	}
 	toeRoot := lfF(proof.blank.toeRoot.U)
-	cap2 := spiralCapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
+	cap2 := loftface.CapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
 	if lfF(held[0].X).Cmp(toeRoot) != 0 || lfF(held[len(held)-1].X).Cmp(cap2.Hi) < 0 {
 		return 0, false, nil
 	}
@@ -124,7 +125,7 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 	}
 	first, second := proof.tooth.maps[1], proof.tooth.maps[2]
 	span := proof.flank[side]
-	q := spiralRootPolynomial(first, second, span, proof.rootM, proof.rootB)
+	q := loftface.MeridianQRows(first, second, span, proof.rootM, proof.rootB)
 	width := lfSub(lfOne(), start.tLo)
 	const slabs = 16
 	var largest float64
@@ -137,10 +138,10 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 		if !spiralJunctionRootBracket(q, lfZero(), lfOne(), a, z) {
 			return 0, false, nil
 		}
-		rootA := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, a), 64)
-		rootZ := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, z), 64)
-		xA := spiralBandXRange(first, second, span, rootA, a)
-		xZ := spiralBandXRange(first, second, span, rootZ, z)
+		rootA := loftface.IsolateRootN(polynomial.BernsteinRowsAt(q, a), 64)
+		rootZ := loftface.IsolateRootN(polynomial.BernsteinRowsAt(q, z), 64)
+		xA := loftface.BandXRange(first, second, span, rootA, a)
+		xZ := loftface.BandXRange(first, second, span, rootZ, z)
 		if xA.Hi.Cmp(xZ.Lo) >= 0 {
 			return 0, false, nil
 		}
@@ -172,7 +173,7 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 			}
 			break
 		}
-		trueBox, yes := spiralJunctionBox(first, second, span, sLo, sHi, a, z)
+		trueBox, yes := loftface.JunctionBox(first, second, span, sLo, sHi, a, z)
 		if !yes || trueBox[0].Lo.Cmp(xLo) > 0 || trueBox[0].Hi.Cmp(xHi) < 0 {
 			return 0, false, nil
 		}
@@ -187,8 +188,8 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 		}
 		largest = max(largest, bound)
 	}
-	endpoint, ok := spiralJunctionBox(second, second, span,
-		proof.crossings[side][2].lo, proof.crossings[side][2].hi, lfZero(), lfZero())
+	endpoint, ok := loftface.JunctionBox(second, second, span,
+		proof.crossings[side][2].Lo, proof.crossings[side][2].Hi, lfZero(), lfZero())
 	if !ok || endpoint[0].Lo.Cmp(cap2.Lo) > 0 || endpoint[0].Hi.Cmp(cap2.Hi) < 0 {
 		return 0, false, nil
 	}
@@ -232,7 +233,7 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 		return nil, false, err
 	}
 	toeRoot := lfF(proof.blank.toeRoot.U)
-	cap2 := spiralCapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
+	cap2 := loftface.CapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
 	if rootBox[0].Lo.Cmp(toeRoot) != 0 || rootBox[0].Hi.Cmp(cap2.Hi) != 0 {
 		return nil, false, nil
 	}
@@ -243,7 +244,7 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 	}
 	first, second := proof.tooth.maps[1], proof.tooth.maps[2]
 	span := proof.flank[side]
-	q := spiralRootPolynomial(first, second, span, proof.rootM, proof.rootB)
+	q := loftface.MeridianQRows(first, second, span, proof.rootM, proof.rootB)
 	width := lfSub(lfOne(), start.tLo)
 	plan := &spiralRootFlankSourceBoxes{
 		proof: proof, side: side, toeRoot: toeRoot, cap2: cap2,
@@ -257,10 +258,10 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 		if !spiralJunctionRootBracket(q, lfZero(), lfOne(), a, z) {
 			return nil, false, nil
 		}
-		rootA := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, a), 64)
-		rootZ := spiralIsolateRootN(polynomial.BernsteinRowsAt(q, z), 64)
-		xA := spiralBandXRange(first, second, span, rootA, a)
-		xZ := spiralBandXRange(first, second, span, rootZ, z)
+		rootA := loftface.IsolateRootN(polynomial.BernsteinRowsAt(q, a), 64)
+		rootZ := loftface.IsolateRootN(polynomial.BernsteinRowsAt(q, z), 64)
+		xA := loftface.BandXRange(first, second, span, rootA, a)
+		xZ := loftface.BandXRange(first, second, span, rootZ, z)
 		if xA.Hi.Cmp(xZ.Lo) >= 0 {
 			return nil, false, nil
 		}
@@ -292,15 +293,15 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 			}
 			break
 		}
-		trueBox, yes := spiralJunctionBox(first, second, span, sLo, sHi, a, z)
+		trueBox, yes := loftface.JunctionBox(first, second, span, sLo, sHi, a, z)
 		if !yes || trueBox[0].Lo.Cmp(xLo) > 0 || trueBox[0].Hi.Cmp(xHi) < 0 {
 			return nil, false, nil
 		}
 		trueBox[0] = loftFaceInterval{Lo: xLo, Hi: xHi}
 		plan.slabs[slab] = trueBox
 	}
-	endpoint, ok := spiralJunctionBox(second, second, span,
-		proof.crossings[side][2].lo, proof.crossings[side][2].hi, lfZero(), lfZero())
+	endpoint, ok := loftface.JunctionBox(second, second, span,
+		proof.crossings[side][2].Lo, proof.crossings[side][2].Hi, lfZero(), lfZero())
 	if !ok || endpoint[0].Lo.Cmp(cap2.Lo) > 0 || endpoint[0].Hi.Cmp(cap2.Hi) < 0 {
 		return nil, false, nil
 	}

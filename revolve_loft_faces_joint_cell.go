@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
@@ -23,14 +24,14 @@ type revolveLoftFacesJointCell struct {
 
 func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 	section revolveSectionSpan, span freeform.BezierSpan, band int,
-	atEnd bool, root revolveLoftFacesEndpointRoot) (revolveLoftFacesJointCell, bool) {
+	atEnd bool, root loftface.EndpointRoot) (revolveLoftFacesJointCell, bool) {
 	var empty revolveLoftFacesJointCell
 	if trim == nil || band < 0 || band+1 >= len(trim.maps) ||
-		root.time.Lo == nil || root.time.Hi == nil {
+		root.Time.Lo == nil || root.Time.Hi == nil {
 		return empty, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], span, m, b)
+	q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
 	endpoint := lfZero()
 	if atEnd {
 		endpoint = lfOne()
@@ -40,14 +41,14 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 		polynomial.BernsteinValue(q[1], endpoint),
 		polynomial.BernsteinValue(q[2], endpoint),
 	}
-	loSign, hiSign := polynomial.BernsteinSign(endQ, root.time.Lo),
-		polynomial.BernsteinSign(endQ, root.time.Hi)
-	if root.time.Lo.Cmp(root.time.Hi) == 0 {
+	loSign, hiSign := polynomial.BernsteinSign(endQ, root.Time.Lo),
+		polynomial.BernsteinSign(endQ, root.Time.Hi)
+	if root.Time.Lo.Cmp(root.Time.Hi) == 0 {
 		if loSign != 0 ||
-			polynomial.BernsteinSign(polynomial.BernsteinDeriv(endQ), root.time.Lo) != root.direction {
+			polynomial.BernsteinSign(polynomial.BernsteinDeriv(endQ), root.Time.Lo) != root.Direction {
 			return empty, false
 		}
-	} else if loSign != -root.direction || hiSign != root.direction {
+	} else if loSign != -root.Direction || hiSign != root.Direction {
 		return empty, false
 	}
 	startX, endX := lfF(section.start.U), lfF(section.end.U)
@@ -61,7 +62,7 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 			sLo, sHi = lfSub(lfOne(), width), lfOne()
 		}
 		box := polynomial.BernsteinRectRestrict(q, sLo, sHi,
-			root.time.Lo, root.time.Hi)
+			root.Time.Lo, root.Time.Hi)
 
 		var derivative [3][]*big.Rat
 		for row := range box {
@@ -70,7 +71,7 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 		direction := 0
 		if polynomial.BernsteinRowsPositive(derivative) {
 			direction = 1
-		} else if polynomial.BernsteinRowsPositive(revolveLoftFacesNegateRows(derivative)) {
+		} else if polynomial.BernsteinRowsPositive(loftface.NegateRows(derivative)) {
 			direction = -1
 		}
 		if direction == 0 {
@@ -90,22 +91,22 @@ func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 				outerLo, outerHi = sHi, lfOne()
 			}
 			outer := polynomial.BernsteinRectRestrict(q, outerLo, outerHi,
-				root.time.Lo, root.time.Hi)
+				root.Time.Lo, root.Time.Hi)
 
 			if fixedSide > 0 && !polynomial.BernsteinRowsPositive(outer) ||
-				fixedSide < 0 && !polynomial.BernsteinRowsPositive(revolveLoftFacesNegateRows(outer)) {
+				fixedSide < 0 && !polynomial.BernsteinRowsPositive(loftface.NegateRows(outer)) {
 				continue
 			}
 		}
-		x, ok := revolveLoftFacesSpanXRange(trim.maps[band], trim.maps[band+1],
-			span, sLo, sHi, root.time.Lo, root.time.Hi)
-		if !ok || root.finite && (x.Lo.Cmp(startX) <= 0 || x.Hi.Cmp(endX) >= 0) ||
-			!root.finite && x.Hi.Cmp(startX) >= 0 && x.Lo.Cmp(endX) <= 0 {
+		x, ok := loftface.SpanXRange(trim.maps[band], trim.maps[band+1],
+			span, sLo, sHi, root.Time.Lo, root.Time.Hi)
+		if !ok || root.Finite && (x.Lo.Cmp(startX) <= 0 || x.Hi.Cmp(endX) >= 0) ||
+			!root.Finite && x.Hi.Cmp(startX) >= 0 && x.Lo.Cmp(endX) <= 0 {
 			continue
 		}
 		return revolveLoftFacesJointCell{sLo: sLo, sHi: sHi,
-			time: root.time, outsideSide: fixedSide,
-			sDerivative: direction, x: x, finite: root.finite}, true
+			time: root.Time, outsideSide: fixedSide,
+			sDerivative: direction, x: x, finite: root.Finite}, true
 	}
 	return empty, false
 }

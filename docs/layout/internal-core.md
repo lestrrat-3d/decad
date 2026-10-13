@@ -34,7 +34,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, measurements, extents, face surveys, middle-rim audit and topology. See general-boolean §4–§5. |
 | `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
-| `internal/prismshell/` | Prism side-opening sections, slab levels and stack faces. See shell-opening §3–§5. |
+| `internal/prismshell/` | Prism side-opening sections, shell wall bands, slab levels and stack faces. See shell-opening §3–§5, modify-reach §9.2. |
 | `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, and extent readings. See evaluator §6. |
 | `internal/revolveshell/` | Effective-meridian survey, removed-run and side-segment role checks, and shell wall sections and displacement. See modify-reach §9.3. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
@@ -45,7 +45,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/coil/` | Coil magnitude and preflight gates, stations, axis coordinates, moments and closed forms. See helix §4, §5, §7. |
 | `internal/coilshell/` | Builds the held coil shell, mesh proofs and wall-area enclosures. See helix §5, §7, §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames over recorded line and arc spans. See sweep §3.2. |
-| `internal/momentinput/` | Profile records, exact record comparison, rectangle bounds, moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
+| `internal/momentinput/` | Profile records, exact record comparison, rectangle bounds, moments, loop enclosed areas and first moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
 | `internal/tessellation/` | Recorded-loop and band chording, mesh topology, bounds and audits. See tessellation-design. |

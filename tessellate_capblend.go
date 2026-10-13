@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -61,7 +62,7 @@ type capBlendLoopMesh struct {
 	li    int
 	loop  loopRecord
 	walks []survey2d.SideWalk
-	// joins is the per-corner offset join capOffsetJoins resolves, nil for an
+	// joins is the per-corner offset join capband.OffsetJoins resolves, nil for an
 	// unchamfered loop and for the one cornerless closed circle (whole).
 	joins          []cornerJoin
 	whole          bool
@@ -504,9 +505,9 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 		if cbp.fillet && filletband.SphereWalk(w, d) {
 			return 0, nil
 		}
-		// A subset draft's kept wall keeps its own radius (walkAmounts).
+		// A subset draft's kept wall keeps its own radius (offset2d.DraftWalkAmounts).
 		if cbp.draft {
-			return capband.WallRadius(w, walkAmounts(cbp.draftKept, li, []survey2d.SideWalk{w}, d)[0], shellTol)
+			return capband.WallRadius(w, offset2d.DraftWalkAmounts(cbp.draftKept, li, []survey2d.SideWalk{w}, d)[0], shellTol)
 		}
 		return capband.BandRadius(w, d, shellTol)
 	}, capband.WallSweep)

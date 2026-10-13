@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
@@ -335,7 +336,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		if err != nil {
 			return nil, err
 		}
-		if err := requireSectionCavity(t, tmm, inradius, enough); err != nil {
+		if err := shellsurvey.RequireSectionCavity(t, tmm, inradius, enough, shellTol); err != nil {
 			return nil, err
 		}
 		// The height limit: where a cap is kept (a cup), the wall behind it is a
@@ -438,32 +439,6 @@ func shellCancelCause(err error) error {
 	return err
 }
 
-// shellWallBands lists the bands a shell's wall section holds between the
-// outer region O and the cavity region C: the band between O's outer loop and
-// C's (C's outer reversed as its one hole), then, for each hole i of O, the
-// band between C's hole i (reversed, an outer) and O's hole i. Inward O is the
-// receiver's section P and C its erosion; outward O is the dilation and C is
-// P. The §5 audit has proven C's loops simple and nested in O's, so the bands
-// are regular and pairwise disjoint (docs/modify-reach-design.md §9.2).
-func shellWallBands(ctx context.Context, outer, cavity profileRecord) ([]profileRecord, error) {
-	if len(outer.Holes) != len(cavity.Holes) {
-		return nil, fmt.Errorf(`%w: the shell's outer and cavity regions have different loop counts`, ErrDegenerate)
-	}
-	cavityOuter, err := offset2d.ReverseLoopRecordContext(ctx, cavity.Outer)
-	if err != nil {
-		return nil, err
-	}
-	bands := []profileRecord{{Outer: outer.Outer, Holes: []loopRecord{cavityOuter}}}
-	for i, hole := range cavity.Holes {
-		post, err := offset2d.ReverseLoopRecordContext(ctx, hole)
-		if err != nil {
-			return nil, err
-		}
-		bands = append(bands, profileRecord{Outer: post, Holes: []loopRecord{outer.Holes[i]}})
-	}
-	return bands, nil
-}
-
 // evalShellBandsContext builds reach BX8: the both-caps shell of a section
 // with k >= 1 holes is 1 + k disjoint bands over the receiver's sweep, one
 // stacked slab holding one region per band (a prism group,
@@ -477,7 +452,7 @@ func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp 
 	if s < 0 {
 		outer, cavity = offset, pp.profile
 	}
-	bands, err := shellWallBands(ctx, outer, cavity)
+	bands, err := prismshell.ShellWallBands(ctx, outer, cavity)
 	if err != nil {
 		return nil, err
 	}
@@ -547,7 +522,7 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 		if err != nil {
 			return nil, err
 		}
-		if err := requireSectionCavity(t, tmm, inradius, enough); err != nil {
+		if err := shellsurvey.RequireSectionCavity(t, tmm, inradius, enough, shellTol); err != nil {
 			return nil, err
 		}
 		// SX11: the two kept caps each eat t of the sweep, so the cavity's
@@ -574,7 +549,7 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 	if s < 0 {
 		outer, cavity = offset, pp.profile
 	}
-	bands, err := shellWallBands(ctx, outer, cavity)
+	bands, err := prismshell.ShellWallBands(ctx, outer, cavity)
 	if err != nil {
 		return nil, err
 	}
@@ -623,28 +598,6 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 // a limit reached within it is treated as reached. The section is decad's own
 // exact geometry, so this only absorbs float noise, never an admission.
 const shellTol = 1e-9
-
-// requireSectionCavity is S10's section limit (docs/modify-design.md §8): P ⊖ t
-// is non-empty exactly when t is strictly less than the section's inradius.
-// enough reports that a contained disk already proved the thickness fits.
-// The accept boundary sits shellTol*max(1, inradius) below the limit — a
-// SCALE-RELATIVE rounding tolerance that grows with the part's scale, not a
-// fixed sub-nanometre margin — so the refusal reports the computed accepted
-// maximum thickness rather than the bare inradius (at a large scale the two
-// differ by far more than a noise floor).
-func requireSectionCavity(t units.Value, tmm, inradius float64, enough bool) error {
-	maxT := inradius - shellTol*math.Max(1, inradius)
-	if enough || tmm < maxT {
-		return nil
-	}
-	if maxT <= 0 {
-		// The inradius itself is at or below the rounding tolerance, so the
-		// accepted maximum is non-positive — no positive thickness leaves a
-		// cavity. A smaller thickness cannot help; the section must be enlarged.
-		return fmt.Errorf(`%w: the section's inradius %s is at or below the evaluator's rounding tolerance, so this evaluator accepts no positive shell thickness here (the tolerance-adjusted maximum is non-positive); enlarge the section`, ErrDegenerate, units.Millimeters(inradius))
-	}
-	return fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the section's inradius %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(maxT), units.Millimeters(inradius))
-}
 
 // classifyRemovedCaps decides which caps a removed-face set names on a brep
 // receiver's route P (docs/brep-modify-design.md §4.2): every face must be one

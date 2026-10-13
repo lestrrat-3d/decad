@@ -28,8 +28,8 @@ func TestMappedFitKnotRootCellRequiresFiniteSourceSliver(t *testing.T) {
 	finite := revolveSectionSpan{start: Point2{U: 0.45, V: 1.5},
 		end: Point2{U: 0.55, V: 1.5}}
 	roots, ok := revolveLoftFacesEndpointFiniteRoots(trim, finite, span, 0, true)
-	if !ok || len(roots) != 1 || !roots[0].finite ||
-		roots[0].time.Lo.Cmp(big.NewRat(1, 2)) != 0 {
+	if !ok || len(roots) != 1 || !roots[0].Finite ||
+		roots[0].Time.Lo.Cmp(big.NewRat(1, 2)) != 0 {
 		t.Fatalf("expected one exact finite knot time, got %+v, %t", roots, ok)
 	}
 	cell, ok := revolveLoftFacesKnotRootCell(trim, finite, span, 0, true, roots[0])
@@ -40,14 +40,14 @@ func TestMappedFitKnotRootCellRequiresFiniteSourceSliver(t *testing.T) {
 	outside := revolveSectionSpan{start: Point2{U: 0.7, V: 1.5},
 		end: Point2{U: 0.8, V: 1.5}}
 	roots, ok = revolveLoftFacesEndpointFiniteRoots(trim, outside, span, 0, true)
-	if !ok || len(roots) != 1 || roots[0].finite {
+	if !ok || len(roots) != 1 || roots[0].Finite {
 		t.Fatalf("expected one exact axial miss, got %+v, %t", roots, ok)
 	}
 	cell, ok = revolveLoftFacesKnotRootCell(trim, outside, span, 0, true, roots[0])
 	if !ok || cell.finite || cell.x.Hi.Cmp(lfF(outside.start.U)) >= 0 {
 		t.Fatalf("nonfinite contact must be clipped by exact X: %+v, %t", cell, ok)
 	}
-	roots[0].direction = -roots[0].direction
+	roots[0].Direction = -roots[0].Direction
 	if _, ok := revolveLoftFacesKnotRootCell(trim, outside, span, 0, true, roots[0]); ok {
 		t.Fatal("a root with the wrong source-side direction must refuse")
 	}

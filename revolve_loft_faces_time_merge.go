@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -22,7 +23,7 @@ const (
 // Each root owns one live source endpoint. Fit-knot, radial-arc and fit-line
 // records remain distinct even when their time brackets occupy one span.
 type revolveLoftFacesOwnedRoot struct {
-	root  revolveLoftFacesEndpointRoot
+	root  loftface.EndpointRoot
 	cell  revolveLoftFacesJointCell
 	kind  revolveLoftFacesJointKind
 	point *sketch.Point
@@ -82,8 +83,8 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 		return nil, false, nil
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], span, m, b)
-	j := spiralRootXOrder(trim.maps[band], trim.maps[band+1], span, q)
+	q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
+	j := loftface.MeridianJRows(trim.maps[band], trim.maps[band+1], span, q)
 	remaining := revolveLoftFacesMaxBandCells
 	previous := lfZero()
 	var cells []revolveLoftFacesMappedCell
@@ -109,7 +110,7 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		ok, err := appendGap(owned.root.time.Lo, i != 0, true)
+		ok, err := appendGap(owned.root.Time.Lo, i != 0, true)
 		if err != nil || !ok {
 			return nil, false, err
 		}
@@ -117,7 +118,7 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 		makeCell := func(side int, sLo, sHi *big.Rat) revolveLoftFacesMappedCell {
 			return revolveLoftFacesMappedCell{segment: segment, span: spanIndex,
 				band: band, side: side, sLo: sLo, sHi: sHi,
-				tLo: owned.root.time.Lo, tHi: owned.root.time.Hi}
+				tLo: owned.root.Time.Lo, tHi: owned.root.Time.Hi}
 		}
 		if owned.atEnd && cell.sLo.Sign() > 0 {
 			cells = append(cells, makeCell(cell.outsideSide, lfZero(), cell.sLo))
@@ -132,7 +133,7 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 		contact := makeCell(side, cell.sLo, cell.sHi)
 		contact.jointKind, contact.jointPoint = owned.kind, owned.point
 		cells = append(cells, contact)
-		previous = owned.root.time.Hi
+		previous = owned.root.Time.Hi
 	}
 	ok, err := appendGap(lfOne(), true, false)
 	if err != nil || !ok {
@@ -146,12 +147,12 @@ func revolveLoftFacesOrderOwnedRoots(roots []revolveLoftFacesOwnedRoot) bool {
 		return false
 	}
 	for _, owned := range roots {
-		if owned.root.time.Lo == nil {
+		if owned.root.Time.Lo == nil {
 			return false
 		}
 	}
 	sort.Slice(roots, func(i, j int) bool {
-		return roots[i].root.time.Lo.Cmp(roots[j].root.time.Lo) < 0
+		return roots[i].root.Time.Lo.Cmp(roots[j].root.Time.Lo) < 0
 	})
 	previous := lfZero()
 	for _, owned := range roots {
@@ -159,21 +160,21 @@ func revolveLoftFacesOrderOwnedRoots(roots []revolveLoftFacesOwnedRoot) bool {
 		if owned.point == nil || owned.kind != revolveLoftFacesFitKnotContact &&
 			owned.kind != revolveLoftFacesRadialArcContact &&
 			owned.kind != revolveLoftFacesFitLineContact ||
-			root.time.Lo == nil || root.time.Hi == nil || cell.time.Lo == nil ||
+			root.Time.Lo == nil || root.Time.Hi == nil || cell.time.Lo == nil ||
 			cell.time.Hi == nil || cell.sLo == nil || cell.sHi == nil ||
-			root.time.Lo.Cmp(previous) <= 0 ||
-			root.time.Hi.Cmp(root.time.Lo) < 0 ||
-			root.time.Hi.Cmp(lfOne()) >= 0 ||
-			cell.time.Lo.Cmp(root.time.Lo) != 0 ||
-			cell.time.Hi.Cmp(root.time.Hi) != 0 ||
+			root.Time.Lo.Cmp(previous) <= 0 ||
+			root.Time.Hi.Cmp(root.Time.Lo) < 0 ||
+			root.Time.Hi.Cmp(lfOne()) >= 0 ||
+			cell.time.Lo.Cmp(root.Time.Lo) != 0 ||
+			cell.time.Hi.Cmp(root.Time.Hi) != 0 ||
 			cell.sLo.Sign() < 0 || cell.sHi.Cmp(lfOne()) > 0 ||
 			cell.sLo.Cmp(cell.sHi) >= 0 ||
-			cell.finite != root.finite ||
+			cell.finite != root.Finite ||
 			owned.atEnd && cell.sHi.Cmp(lfOne()) != 0 ||
 			!owned.atEnd && cell.sLo.Sign() != 0 {
 			return false
 		}
-		previous = root.time.Hi
+		previous = root.Time.Hi
 	}
 	return true
 }

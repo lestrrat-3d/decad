@@ -2,9 +2,8 @@ package decad
 
 import (
 	"context"
-	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 )
 
 // A radial joint is one authenticated Sketch fit/arc adjacency mapped through
@@ -15,16 +14,9 @@ import (
 type revolveLoftFacesRadialJoint struct {
 	vertex   revolveLoftFacesJointVertex
 	radial   mappedArcRadialBand
-	roots    []revolveLoftFacesEndpointRoot
-	pieces   []revolveLoftFacesTimePiece
+	roots    []loftface.EndpointRoot
+	pieces   []loftface.TimePiece
 	fitCells []revolveLoftFacesJointCell
-}
-
-type revolveLoftFacesTimePiece struct {
-	lo, hi         *big.Rat
-	loOpen, hiOpen bool
-	side           int
-	rootIndex      int // -1 for a strict-side piece
 }
 
 func certifyRevolveLoftFacesRadialJoint(ctx context.Context, trim *loftFacesTrimRecord,
@@ -43,7 +35,7 @@ func certifyRevolveLoftFacesRadialJoint(ctx context.Context, trim *loftFacesTrim
 		return empty, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := spiralRootPolynomial(trim.maps[band], trim.maps[band+1], vertex.fitSpan, m, b)
+	q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], vertex.fitSpan, m, b)
 	index := 0
 	if vertex.fitAtEnd {
 		index = len(q[0]) - 1
@@ -70,7 +62,7 @@ func certifyRevolveLoftFacesRadialJoint(ctx context.Context, trim *loftFacesTrim
 	if !ok {
 		return empty, false
 	}
-	pieces, ok := revolveLoftFacesPartitionTime(radial.q, roots)
+	pieces, ok := loftface.PartitionTime(radial.q, roots)
 	if !ok {
 		return empty, false
 	}
@@ -84,51 +76,4 @@ func certifyRevolveLoftFacesRadialJoint(ctx context.Context, trim *loftFacesTrim
 	}
 	return revolveLoftFacesRadialJoint{vertex: vertex, radial: radial,
 		roots: roots, pieces: pieces, fitCells: fitCells}, true
-}
-
-// Quadratic degree plus isolated sign-changing root brackets proves there is
-// no unlisted side change in any strict piece. The bracket pieces remain
-// undecidable as point cells; the radial-joint source certificate binds each
-// entire arc contact there instead.
-func revolveLoftFacesPartitionTime(q [3]*big.Rat,
-	roots []revolveLoftFacesEndpointRoot) ([]revolveLoftFacesTimePiece, bool) {
-	if len(roots) == 0 || len(roots) > 2 || q[0] == nil || q[1] == nil || q[2] == nil {
-		return nil, false
-	}
-	coeff := []*big.Rat{q[0], q[1], q[2]}
-	pieces := make([]revolveLoftFacesTimePiece, 0, 2*len(roots)+1)
-	previous := lfZero()
-	for index, root := range roots {
-		if root.time.Lo == nil || root.time.Hi == nil ||
-			root.time.Lo.Cmp(previous) <= 0 || root.time.Hi.Cmp(root.time.Lo) < 0 ||
-			root.time.Hi.Cmp(lfOne()) >= 0 || root.direction == 0 {
-			return nil, false
-		}
-		atLo, atHi := polynomial.BernsteinSign(coeff, root.time.Lo),
-			polynomial.BernsteinSign(coeff, root.time.Hi)
-		if root.time.Lo.Cmp(root.time.Hi) == 0 {
-			if atLo != 0 {
-				return nil, false
-			}
-		} else if atLo != -root.direction || atHi != root.direction {
-			return nil, false
-		}
-		side := polynomial.BernsteinSign(coeff, lfMul(lfAdd(previous, root.time.Lo), big.NewRat(1, 2)))
-		if side == 0 || side != -root.direction {
-			return nil, false
-		}
-		pieces = append(pieces, revolveLoftFacesTimePiece{
-			lo: previous, hi: root.time.Lo, loOpen: index != 0,
-			hiOpen: true, side: side, rootIndex: -1})
-		pieces = append(pieces, revolveLoftFacesTimePiece{
-			lo: root.time.Lo, hi: root.time.Hi, rootIndex: index})
-		previous = root.time.Hi
-	}
-	side := polynomial.BernsteinSign(coeff, lfMul(lfAdd(previous, lfOne()), big.NewRat(1, 2)))
-	if side == 0 || side != roots[len(roots)-1].direction {
-		return nil, false
-	}
-	pieces = append(pieces, revolveLoftFacesTimePiece{
-		lo: previous, hi: lfOne(), loOpen: true, side: side, rootIndex: -1})
-	return pieces, true
 }

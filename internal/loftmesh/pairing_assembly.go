@@ -244,7 +244,7 @@ func (p *LoopPair) appendFreeform(cell FreeformCell) {
 // inside the per-segment generator.
 //
 // A cell whose two stations coincide on exactly ONE of the two sections has no
-// case in the uniform two-faces-per-cell wall topology assembleLoft builds, so
+// case in the uniform two-faces-per-cell wall topology AssembleTriangulated builds, so
 // the row refuses with ErrUnsupported. A cell collapsing on BOTH sections, and
 // a collapsed cap triangle, are S6's two arms rather than this row, which is
 // why the test below compares the two sides' equality rather than refusing on

@@ -135,9 +135,9 @@ chain-revolve build, not a bound and not a gate.
 ### 3.1 Scene construction
 
 decad builds one private `sketch.Sketch`, the same
-`sketch.NewWorld().CreateSketch(...)` pattern `buildPrismScene`
+`sketch.NewWorld().CreateSketch(...)` pattern `prismcells.BuildScene`
 (`internal/prismcells/scene.go`) and `momentRecordScene` (`internal/momentinput/reconstruct.go`) already
-use. **`buildPrismScene` is reused**, over three extensions and no new scene
+use. **`prismcells.BuildScene` is reused**, over three extensions and no new scene
 code:
 
 - **It takes a `ChainRecord` on the same terms as a `LoopRecord`.** Nothing in
@@ -162,7 +162,7 @@ code:
   the receiver's own recorded range runs. This is what makes the scene entity's
   parameterisation the receiver's OWN, so §3.2's nearest-cut reading and the
   bound it stores live in one space and no map runs between them. The
-  derivation is per kind, off `buildPrismScene`'s entity creation, which reads
+  derivation is per kind, off `prismcells.BuildScene`'s entity creation, which reads
   `walkOf`'s walked geometry of exactly the segment it is handed:
 
   | Kind | Entity created | Why the scene parameter IS the record's |
@@ -714,7 +714,7 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
 ## 11. Increments
 
 1. **PR1 — the gate and `Trim` over the prism family.** S1–S7,
-   `buildPrismScene`'s `ChainRecord` arm, §3.2's side reading over
+   `prismcells.BuildScene`'s `ChainRecord` arm, §3.2's side reading over
    `prismcells.Classify` unchanged, §3.3's open-walk chaining, `chainPayload`'s
    walk set and section displacement, §7's exactness, and `Body.Trim`. Tests:
    surface §15's T170–T174 and T181.
@@ -757,7 +757,7 @@ one-space reading §3.2 rests on. Each asserts on computed geometry:
 |---|---|---|
 | TI1 | a receiver whose recorded `LineSeg` runs against its line's authored direction — `sketch` publishes the fragment `Reversed`, so the record holds `TStart` > `TEnd` — extended in both directions in turn | a tool lying entirely INSIDE the ribbon is RS4, naming the carrier and its domain; a tool genuinely past the named end lengthens the ribbon to the nearer of its two crossings, with `Bounds` and `Area` enclosing that answer and the untouched end's `Point2` fields byte-identical to the pre-extend record's |
 | TI2 | an `ArcSeg` receiver, likewise recorded in the reversed sense, extended against a tool crossing its carrier twice beyond the receiver's own end | the nearer crossing wins; `Bounds` reaches it and `Area` encloses the analytic arc-length product. The arc arm needs no map, so this fixture holds both before and after the recreation's order is fixed — which is what proves the `LineSeg` arm was the only broken one |
-| TI3 | each admitted kind in BOTH recorded senses, taken through `fullExtendSegment` and `buildPrismScene`, sampled against the record's own parameterisation | the scene entity passes through the same point at every sampled parameter. This is the table in §3.1 checked as geometry rather than argued. It is the only fixture the `CircleSeg` arm has: a circle fragment separates the disk's interior from the exterior, so it is never a bridge in `sketch`'s arrangement and never reaches `Chains()`, and a chain `Extrude` is the one producer of an undisplaced `chainPayload` — S7 refuses `Trim`'s, which always carries a displacement. The arm stays for a receiver's non-extended circle segments and for a future producer, proven rather than unexercised |
+| TI3 | each admitted kind in BOTH recorded senses, taken through `fullExtendSegment` and `prismcells.BuildScene`, sampled against the record's own parameterisation | the scene entity passes through the same point at every sampled parameter. This is the table in §3.1 checked as geometry rather than argued. It is the only fixture the `CircleSeg` arm has: a circle fragment separates the disk's interior from the exterior, so it is never a bridge in `sketch`'s arrangement and never reaches `Chains()`, and a chain `Extrude` is the one producer of an undisplaced `chainPayload` — S7 refuses `Trim`'s, which always carries a displacement. The arm stays for a receiver's non-extended circle segments and for a future producer, proven rather than unexercised |
 
 The untouched-end obligation of T178 and TI1 is read by ELIMINATION against the
 end that moved, never by a selector clause keyed on the untouched coordinate:
