@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -276,17 +275,4 @@ func loftCylinderInset(ctx context.Context, fp facetedPayload, ring []int, d flo
 		return loftCylinderInsetSamples{}, fmt.Errorf("%w: inset has unmatched offset pieces", ErrUnsupported)
 	}
 	return out, nil
-}
-
-func loftCylinderChamferBound(fp facetedPayload, inset, clip, bridge float64) (float64, error) {
-	// Exact containment C⊂H makes the original two-way source/held bound
-	// sufficient in the reverse direction. The complete source-occupied
-	// split rings and cap/side gates prove the forward direction separately.
-	bound := proofbound.AbsSumUpper(max(fp.meshBound, bridge), inset, clip)
-	if math.IsNaN(bound) || math.IsInf(bound, 0) || bound > 0.1 {
-		return 0, fmt.Errorf("%w: loft/cylinder cap chamfer source bound %g mm exceeds 0.1 mm "+
-			"(joined %g, bridge %g, inset %g, clip %g)", ErrUnsupported, bound,
-			fp.meshBound, bridge, inset, clip)
-	}
-	return bound, nil
 }

@@ -683,7 +683,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			return nil, err
 		}
 	}
-	needed, err := loftCylinderChamferBound(fp, maxInset, clipped.clipBound, bridgeReach)
+	needed, err := loftmesh.CylinderChamferBound(fp.meshBound, maxInset, clipped.clipBound, bridgeReach)
 	if err != nil {
 		return nil, err
 	}

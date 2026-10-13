@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -57,7 +58,8 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 	if err != nil {
 		return nil, true, err
 	}
-	bridgeReserve, err := loftMirrorCylinderChamferBridgeReserve(lower, record, setback)
+	bridgeReserve, err := loftmesh.MirrorBridgeReserve(lower.verts, lower.meshBound,
+		record.join.bridgeBound, setback)
 	if err != nil {
 		return nil, true, err
 	}

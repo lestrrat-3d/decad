@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -51,4 +52,32 @@ func TestMirrorUpperBridgeSwept(t *testing.T) {
 	require.False(t, ok)
 	_, ok = loftmesh.MirrorUpperBridgeSwept(0.5, 1, math.NaN())
 	require.False(t, ok)
+}
+
+func TestMirrorBridgeReserve(t *testing.T) {
+	verts := []r3.Vec{{X: 1, Y: -2, Z: 5}}
+	t.Run("zero shift needs no reserve", func(t *testing.T) {
+		got, err := loftmesh.MirrorBridgeReserve(verts, 0.01, 0, 0.5)
+		require.NoError(t, err)
+		require.Zero(t, got)
+	})
+	t.Run("reserve covers vertical and lateral motion", func(t *testing.T) {
+		got, err := loftmesh.MirrorBridgeReserve(verts, 0.01, 0.001, 0.5)
+		require.NoError(t, err)
+		require.InDelta(t, 0.04116, got, 1e-12)
+		// Z is left out of the span: a large Z must not change the reserve.
+		far, err := loftmesh.MirrorBridgeReserve([]r3.Vec{{X: 1, Y: -2, Z: 500}}, 0.01, 0.001, 0.5)
+		require.NoError(t, err)
+		require.Equal(t, got, far)
+	})
+	t.Run("setback must exceed the shift", func(t *testing.T) {
+		_, err := loftmesh.MirrorBridgeReserve(verts, 0.01, 0.001, 0.001)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "mirrored cap bridge reaches its side station")
+	})
+	t.Run("reserve of 0.1 mm or more is refused", func(t *testing.T) {
+		_, err := loftmesh.MirrorBridgeReserve([]r3.Vec{{X: 2}}, 0.01, 0.01, 0.5)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "mirrored cap bridge has no finite allowance")
+	})
 }
