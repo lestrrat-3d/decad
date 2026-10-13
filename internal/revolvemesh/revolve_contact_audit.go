@@ -1,7 +1,10 @@
 package revolvemesh
 
 import (
+	"cmp"
 	"fmt"
+	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -269,6 +272,36 @@ func RevolveContactAudit(budget *proofbound.WorkBudget, data []RevolveAuditTri, 
 		return fmt.Errorf(`%w: this revolve mesh's facet-pair audit needs %d exact tests, past the fixed ceiling of %d; retry with a coarser chord tolerance`, decaderr.ErrUnsupported, pairs, proofbound.MaxFacetPairTestsPerCall)
 	}
 	margin := proofbound.ProductUpper(2, delta)
+	if !(margin >= 0) {
+		return revolveContactAuditAllPairs(budget, data, tris, delta, margin)
+	}
+	rows, err := revolveContactCandidates(budget, data, tris, margin)
+	if err != nil {
+		return err
+	}
+	axes := newRevolveAxisCache(len(data))
+	for i, row := range rows {
+		for _, jj := range row {
+			j := int(jj)
+			if err := budget.Step(); err != nil {
+				return err
+			}
+			shared, count := tessellation.SharedVertexIndices(tris[i], tris[j])
+			if count == 0 && BoxGapExceeds(data[i].Box, data[j].Box, margin) {
+				continue
+			}
+			if err := auditRevolvePairCached(data, tris, shared, count, i, j, delta, axes); err != nil {
+				return err
+			}
+		}
+	}
+	return budget.Err()
+}
+
+// revolveContactAuditAllPairs is the plain all-pairs walk, kept for a margin
+// the sweep cannot order by (negative or NaN).
+func revolveContactAuditAllPairs(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, delta, margin float64) error {
+	f := len(tris)
 	for i := range f {
 		for j := i + 1; j < f; j++ {
 			if err := budget.Step(); err != nil {
@@ -284,6 +317,96 @@ func RevolveContactAudit(budget *proofbound.WorkBudget, data []RevolveAuditTri, 
 		}
 	}
 	return budget.Err()
+}
+
+// revolveContactCandidates lists, per facet i, every j > i in ascending order
+// that the audit may have to test: every pair the box gap test does not
+// separate, and every pair that shares a vertex. Facets are swept in order of
+// their box's low coordinate on the sweep axis; for a facet i, the facets after
+// it in that order are read until the first whose low coordinate clears i's
+// high coordinate by more than margin. The gap test is monotone in that low
+// coordinate, so every later facet is cleared too, and a pair the sweep never
+// lists is one BoxGapExceeds separates on that axis alone. The caller applies
+// the same skip test the all-pairs walk applies, so it audits the same pairs
+// in the same order.
+func revolveContactCandidates(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, margin float64) ([][]int32, error) {
+	axis := revolveSweepAxis(data)
+	order := make([]int32, len(data))
+	for i := range order {
+		order[i] = int32(i)
+	}
+	slices.SortStableFunc(order, func(a, b int32) int {
+		return cmp.Compare(boxCoord(data[a].Box[0], axis), boxCoord(data[b].Box[0], axis))
+	})
+	rows := make([][]int32, len(data))
+	for p, i := range order {
+		hi := boxCoord(data[i].Box[1], axis)
+		for _, j := range order[p+1:] {
+			if err := budget.Step(); err != nil {
+				return nil, err
+			}
+			if freeform.DownRound(boxCoord(data[j].Box[0], axis)-hi) > margin {
+				break
+			}
+			if BoxGapExceeds(data[i].Box, data[j].Box, margin) {
+				continue
+			}
+			lo, up := min(i, j), max(i, j)
+			rows[lo] = append(rows[lo], up)
+		}
+	}
+	// Every pair that shares a vertex is listed regardless of its boxes.
+	incident := make(map[int][]int32)
+	for i, t := range tris {
+		for _, v := range t {
+			incident[v] = append(incident[v], int32(i))
+		}
+	}
+	for i, t := range tris {
+		for _, v := range t {
+			for _, j := range incident[v] {
+				if int(j) > i {
+					rows[i] = append(rows[i], j)
+				}
+			}
+		}
+	}
+	for i, row := range rows {
+		slices.Sort(row)
+		rows[i] = slices.Compact(row)
+	}
+	return rows, nil
+}
+
+func boxCoord(v r3.Vec, axis int) float64 {
+	switch axis {
+	case 0:
+		return v.X
+	case 1:
+		return v.Y
+	default:
+		return v.Z
+	}
+}
+
+// revolveSweepAxis picks the coordinate whose boxes overlap least: the one
+// with the smallest summed box width per unit of total extent. Any axis lists
+// every pair the gap test keeps; the choice only changes how many it lists.
+func revolveSweepAxis(data []RevolveAuditTri) int {
+	best, bestScore := 0, math.Inf(1)
+	for axis := range 3 {
+		lo, hi, width := math.Inf(1), math.Inf(-1), 0.0
+		for _, t := range data {
+			a, b := boxCoord(t.Box[0], axis), boxCoord(t.Box[1], axis)
+			lo, hi, width = min(lo, a), max(hi, b), width+(b-a)
+		}
+		if extent := hi - lo; extent > 0 {
+			if score := width / extent; score < bestScore {
+				best, bestScore = axis, score
+			}
+		}
+	}
+	return best
 }
 
 // RequireRevolveFacetArea proves one facet keeps a positive area everywhere on
@@ -476,6 +599,14 @@ func RevolveRejectionAxis(d, u RevolveOffset, delta float64) RevolveSepAxis {
 //
 // The mirror, with the roles swapped, is the caller's second call.
 func RevolveVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, triB [3]int, shared int, delta float64) bool {
+	return revolveVertexIsolated(a, triA, b, triB, shared, delta, nil, 0)
+}
+
+// revolveVertexIsolated is RevolveVertexIsolated reading a's candidate axes
+// from cache entry ia when cache is non-nil. Every cached axis is the value
+// the uncached path builds from a, the shared corner and delta alone.
+func revolveVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, triB [3]int, shared int, delta float64,
+	cache *revolveAxisCache, ia int) bool {
 	e := proofbound.ProductUpper(2, delta)
 	ai := TriangleVertexSlot(triA, shared)
 	bi := TriangleVertexSlot(triB, shared)
@@ -513,16 +644,38 @@ func RevolveVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, tr
 		}
 		return side == 0 || side != want
 	}
-	if try(RevolveNormalAxis(a, delta), nil) {
+	var corner *revolveCornerAxes
+	if cache != nil {
+		corner = cache.corner(ia, a, ai, delta)
+	}
+	normal := func() RevolveSepAxis {
+		if cache != nil {
+			return cache.normalAxis(ia, a, delta)
+		}
+		return RevolveNormalAxis(a, delta)
+	}
+	if try(normal(), nil) {
 		return true
 	}
 	for k := range 2 {
-		if try(RevolveEdgeFanAxis(a, aOff[k], delta), []RevolveOffset{aOff[1-k]}) {
+		var ax RevolveSepAxis
+		if corner != nil {
+			ax = corner.fan[k]
+		} else {
+			ax = RevolveEdgeFanAxis(a, aOff[k], delta)
+		}
+		if try(ax, []RevolveOffset{aOff[1-k]}) {
 			return true
 		}
 	}
-	chord := RevolveOffsetOf(proofarith.DvSub(aOff[0].V, aOff[1].V), RevIvSubVec(aOff[0].F, aOff[1].F))
-	if try(RevolveEdgeFanAxis(a, chord, delta), aOff[:]) {
+	var chordAxis RevolveSepAxis
+	if corner != nil {
+		chordAxis = corner.chord
+	} else {
+		chord := RevolveOffsetOf(proofarith.DvSub(aOff[0].V, aOff[1].V), RevIvSubVec(aOff[0].F, aOff[1].F))
+		chordAxis = RevolveEdgeFanAxis(a, chord, delta)
+	}
+	if try(chordAxis, aOff[:]) {
 		return true
 	}
 	// The edge-pair family. g = eA × eB zeroes both eA and eB identically, so
