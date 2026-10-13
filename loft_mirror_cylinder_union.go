@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -372,37 +373,8 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 
 func loftMirrorCylinderCapsOppose(lower, upper facetedPayload, upperMap []int,
 	lowerGroup, upperGroup int) bool {
-	indices := make(map[[3]int]int)
-	for i, triangle := range lower.tris {
-		if lower.src[i] != lowerGroup {
-			continue
-		}
-		key, sign := loftMirrorSortedTriangle(triangle)
-		if indices[key] != 0 {
-			return false
-		}
-		indices[key] = sign
-	}
-	if len(indices) == 0 {
-		return false
-	}
-	for i, triangle := range upper.tris {
-		if upper.src[i] != upperGroup {
-			continue
-		}
-		for corner, index := range triangle {
-			if index < 0 || index >= len(upperMap) {
-				return false
-			}
-			triangle[corner] = upperMap[index]
-		}
-		key, sign := loftMirrorSortedTriangle(triangle)
-		if indices[key] != -sign {
-			return false
-		}
-		delete(indices, key)
-	}
-	return len(indices) == 0
+	return facetedtopology.CapsOppose(lower.tris, lower.src, upper.tris, upper.src,
+		upperMap, lowerGroup, upperGroup)
 }
 
 func loftMirrorCylinderCapOrigins(fp *facetedPayload, blank *Body, pairs []*Body,

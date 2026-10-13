@@ -50,7 +50,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/freeform/` | Free-form curve proofs. |
 | `internal/meshbool/` | Pair chord inputs, mesh boolean contact, subdivision, stitching, embedding, exact similarity images and audits. See evaluator §9. |
 | `internal/pointquery/` | Exact point-to-mesh distance and the occupied-volume transfer proof. See point-containment design. |
-| `internal/facetedtopology/` | Chains audited mesh face boundaries and selects loops. See evaluator §9. |
+| `internal/facetedtopology/` | Chains audited mesh face boundaries, selects loops, resolves source-group faces and matches cap patches. See evaluator §9. |
 | `internal/clearance/` | Clearance geometry and cell sums. See clearance design. |
 | `internal/clearance/facepair/` | Face-pair cells. See clearance §4. |
 | `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4. |

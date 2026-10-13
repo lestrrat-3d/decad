@@ -1,5 +1,7 @@
 package decad
 
+import "github.com/lestrrat-3d/decad/internal/facetedtopology"
+
 type spiralStarGroups struct {
 	blankRoot, blankToe, blankHeel int
 	toothToe, toothHeel            int
@@ -8,23 +10,10 @@ type spiralStarGroups struct {
 
 func spiralTrimFaceGroup(tooth *Body, sourceGroup int) int {
 	p, ok := tooth.payload.(facetedPayload)
-	if !ok || len(p.faceOf) != len(p.src) {
+	if !ok {
 		return -1
 	}
-	face := -1
-	for i, group := range p.src {
-		if group != sourceGroup {
-			continue
-		}
-		if face >= 0 && face != p.faceOf[i] {
-			return -1
-		}
-		face = p.faceOf[i]
-	}
-	if face >= len(tooth.Faces()) {
-		return -1
-	}
-	return face
+	return facetedtopology.TrimGroupFace(p.src, p.faceOf, len(tooth.Faces()), sourceGroup)
 }
 
 func spiralJoinGroups(blank, tooth *Body, proof *spiralFirstJoinSource) (spiralStarGroups, bool) {

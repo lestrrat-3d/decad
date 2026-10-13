@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -94,19 +95,9 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 }
 
 func pointCapGroupFace(b *Body, fp facetedPayload, group int) (*Face, bool) {
-	index := -1
-	for i, source := range fp.src {
-		if source != group {
-			continue
-		}
-		if index == -1 {
-			index = fp.faceOf[i]
-		} else if index != fp.faceOf[i] {
-			return nil, false
-		}
-	}
 	faces := b.Faces()
-	if index < 0 || index >= len(faces) {
+	index, ok := facetedtopology.GroupFace(fp.src, fp.faceOf, len(faces), group)
+	if !ok {
 		return nil, false
 	}
 	return faces[index], true
