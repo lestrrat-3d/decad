@@ -312,7 +312,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	cv := proofbound.BoundedQuotient(mvTotal.Value, mvTotal.Bound, volume.Value, volume.Bound)
 	cz := proofbound.BoundedQuotient(mzTotal.Value, mzTotal.Bound, volume.Value, volume.Bound)
 	centroidValue := pl.Point(cu.Value, cv.Value, cz.Value)
-	formulaBound := prismPointBound(pl, cu, cv, cz)
+	formulaBound := pl.PointBound(cu, cv, cz)
 	geometryBound := capband.CentroidGeometryBound(centroidValue, boxToInternal(bounds))
 	centroidBound := math.Min(formulaBound, geometryBound)
 	body.centroid = VecMeasurement{

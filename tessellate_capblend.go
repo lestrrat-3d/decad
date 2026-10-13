@@ -336,7 +336,7 @@ func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl pri
 	addVertex := func(p Point2, z, plane float64) (int, float64) {
 		held := pl.Point(p.U, p.V, z)
 		mesh.vertices = append(mesh.vertices, held)
-		round := exactPrismPointRound(pl, p.U, p.V, z, held)
+		round := pl.PointRound(p.U, p.V, z, held)
 		store = append(store, proofbound.AbsSumUpper(plane, round))
 		return len(mesh.vertices) - 1, round
 	}

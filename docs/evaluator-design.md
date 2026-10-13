@@ -752,8 +752,10 @@ what needs the root package: `transform`, `placed`, methods that satisfy
 root interfaces, and fields that hold root types. `prismPayload` is
 `struct{ prismrecord.Payload }`; the owner's exported fields (`Profile`,
 `Frame`, `Z0`/`Z1`, `Z0Delta`/`Z1Delta`, `Xform`, `BlendSegs`,
-`BlendKind`, `SectionDelta`, `Walks`, `SurfaceResult`) are promoted. A
-value copy of the wrapper copies the record exactly as a copy of the flat
+`BlendKind`, `SectionDelta`, `Walks`, `SurfaceResult`) are promoted.
+Readings that read nothing but the record (`Point`, `Dir`, `LiftedVertex`,
+the point bounds and the lift factor) are methods of the owner and are
+promoted as well. A value copy of the wrapper copies the record exactly as a copy of the flat
 struct did, so `placed`'s copy-then-set-`Xform` is unchanged.
 
 `Transform` and `Copy` pass the caller's context through payload re-evaluation.

@@ -62,7 +62,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		v := base.Point(p.U, p.V, z)
 		mesh.vertices = append(mesh.vertices, v)
 		vertexStore = append(vertexStore, proofbound.AbsSumUpper(proofbound.WalkEndBoundAllow(source),
-			exactPrismPointRound(base, p.U, p.V, z, v)))
+			base.PointRound(p.U, p.V, z, v)))
 		return len(mesh.vertices) - 1
 	}
 	rings := make([]tessellation.StackedRing[*Face], len(columns))

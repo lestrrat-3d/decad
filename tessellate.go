@@ -743,8 +743,8 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 		mesh.vertices = append(mesh.vertices, lo, hi)
 		plane := proofbound.WalkEndBoundAllow(sampleBound[j])
 		vertexStore = append(vertexStore,
-			proofbound.AbsSumUpper(plane, exactPrismPointRound(pp, p.U, p.V, pp.Z0, lo)),
-			proofbound.AbsSumUpper(plane, exactPrismPointRound(pp, p.U, p.V, pp.Z1, hi)),
+			proofbound.AbsSumUpper(plane, pp.PointRound(p.U, p.V, pp.Z0, lo)),
+			proofbound.AbsSumUpper(plane, pp.PointRound(p.U, p.V, pp.Z1, hi)),
 		)
 	}
 	storeMax, err := tessellation.StoreMax(vertexStore)
@@ -1053,8 +1053,8 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 			plane := proofbound.WalkEndBoundAllow(cl.BoundOf[i])
 			loV := base.Point(p.U, p.V, lo)
 			hiV := base.Point(p.U, p.V, hi)
-			r.loV[i] = add(loV, proofbound.AbsSumUpper(plane, exactPrismPointRound(base, p.U, p.V, lo, loV)))
-			r.hiV[i] = add(hiV, proofbound.AbsSumUpper(plane, exactPrismPointRound(base, p.U, p.V, hi, hiV)))
+			r.loV[i] = add(loV, proofbound.AbsSumUpper(plane, base.PointRound(p.U, p.V, lo, loV)))
+			r.hiV[i] = add(hiV, proofbound.AbsSumUpper(plane, base.PointRound(p.U, p.V, hi, hiV)))
 			f := cl.FaceOf[i]
 			faceTrim[f] = math.Max(faceTrim[f], cl.SagOf[i])
 			faceAxial[f] = wallAxial

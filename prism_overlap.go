@@ -85,7 +85,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 
 	// §3.2's Intersect z-interval and per-end axial displacement, shared by
 	// every measured cell — the pair's own relation, not a per-cell one.
-	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
+	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(pa.PlacementOperand(), pb.PlacementOperand())
 	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.Z0, pa.Z0Delta, pbZ0, pb.Z0Delta)
 	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.Z1, pa.Z1Delta, pbZ1, pb.Z1Delta)
 

@@ -110,7 +110,7 @@ Per tess §5/§6, with the terms the current code already computes plus the two 
 | `deltaTrim(face)` | wall: its walk's `chordCount` sagitta; cap/floor/rim: max sagitta over the loops bounding that patch (`chordedLoop.maxSag`) |
 | `deltaSection` | `pp.SectionDelta` (0 for a cup) |
 | `deltaAxial(face)` | `z0Delta` for `capStart`, `z1Delta` for `capEnd`, `max` for a wall; cup floors/rims read `cp.zDelta` per level |
-| `deltaStore(face)` | NEW. Two mechanisms, max over the face's vertices: (a) a computed circular sample's own gap from the certified enclosure of the point it denotes — `circularWalkEndBound`'s mechanism (`extrude.go`) applied at interior fraction `k/n` through `turnSinCosInterval` for a `CircleSeg` and `radSinCosSpan` over `atan2Interval` for an `ArcSeg` (`moments.go`, `internal/proofbound/turn_trig.go`), carried by `walkEndBoundAllow`; (b) `exactPrismPointRound(pp, u, v, z, held)` (`extrude.go`) for the frame/placement write. Both are zero for a recorded line vertex under an axis-aligned identity payload |
+| `deltaStore(face)` | NEW. Two mechanisms, max over the face's vertices: (a) a computed circular sample's own gap from the certified enclosure of the point it denotes — `circularWalkEndBound`'s mechanism (`extrude.go`) applied at interior fraction `k/n` through `turnSinCosInterval` for a `CircleSeg` and `radSinCosSpan` over `atan2Interval` for an `ArcSeg` (`moments.go`, `internal/proofbound/turn_trig.go`), carried by `walkEndBoundAllow`; (b) `prismrecord.Payload.PointRound(pp, u, v, z, held)` (`extrude.go`) for the frame/placement write. Both are zero for a recorded line vertex under an axis-aligned identity payload |
 
 `faceBound(f) = upRound(deltaTrim + deltaStore + deltaSection + deltaAxial)`. `bound` stays the conservative
 composition tess §5 already permits (largest sagitta + payload-wide axial max + `deltaStore` max).
@@ -367,7 +367,7 @@ composes both in one expression.
 |---|---|---|
 | §8 profile → `(z, ρ)`, `rhoMax`, `zAbsMax`, `coordMax` | `revolveproof.Extents(walks)` | endpoints plus cardinal points inside a circular walk's interval; non-positive `rhoMax` is an invariant failure |
 | §8 `deltaC` | `revolvemesh.IdealBasis`, `revolveMeridianEnclosure`, `revolveIdealPoint` | Certified intervals enclose each unplaced vertex; `deltaC` bounds its stored float coordinate. |
-| §8 `deltaR` | `min(rigidRoundAllow(coordMax + deltaC, translationMax), exactRigidPointRound per vertex)` | the second term measures the same displacement exactly, so it is 0 under an exact identity and tighter elsewhere; `exactPrismPointRound`'s own mechanism |
+| §8 `deltaR` | `min(rigidRoundAllow(coordMax + deltaC, translationMax), exactRigidPointRound per vertex)` | the second term measures the same displacement exactly, so it is 0 under an exact identity and tighter elsewhere; `prismrecord.Payload.PointRound`'s own mechanism |
 | §8 budget order | `revolveConstructionPrior` + `rigidRoundAllow` before the count, the measured pair after | §8 splits the tolerance BEFORE the counts, and the count decides how many angles there are, so the split spends count-INDEPENDENT ceilings: the meridian gap (per sample, not per angle), the stored trig's own ceiling, and the evaluation's ulps at `coordMax`. The measured `deltaC`/`deltaR` are checked against them and refuse on a violation, so the a-priori figure is held to account rather than trusted |
 | §8 tolerance split | `revolveBudget(tol, deltaC, deltaR)` | `available = downRound(downRound(tol − deltaC − deltaR))`; `<= 0` refuses; meridian gets `available/2`; angular gets `available − deltaM` |
 | §3/§8 counts | `chordCount` for each circular meridian walk (R4) and for the global angular sequence with `radius = rhoMax`, `sweep = |φ1−φ0|` or `2π`, `closed = full` | the downward-then-upward correction and the cap are `chordCount`'s own; R3 sections have no circular meridian walk, so `deltaM == 0` |
@@ -635,8 +635,8 @@ the largest per-vertex displacement:
 
 | Vertex | Per-vertex motion (each term already proven; summed through `absSumUpper`) |
 |---|---|
-| side ring, level `L` ∈ {`zLo`, `zHi`} | `walkEndBoundAllow(sideBound)` — `stationbound.ChordStationBound` at `k/n` for an interior station, the walk's own `startBound` at a junction — plus `exactPrismPointRound` plus `L.bound` |
-| cap ring, station `k` of a circular walk (`k = 0` is the foot verbatim) | `walkEndBoundAllow(stationbound.CapOffsetStationBound(seg, k, n, ∓d))` — `circularEndpointInterval`'s enclosure with the exact offset `∓d` (`capcontour.CapWallRadiusOffset`) added to the record's radius `R`, read at the exact fraction `k/n` of the SIDE window — plus `exactPrismPointRound` plus `capBandLevel(capZ).bound` |
+| side ring, level `L` ∈ {`zLo`, `zHi`} | `walkEndBoundAllow(sideBound)` — `stationbound.ChordStationBound` at `k/n` for an interior station, the walk's own `startBound` at a junction — plus `prismrecord.Payload.PointRound` plus `L.bound` |
+| cap ring, station `k` of a circular walk (`k = 0` is the foot verbatim) | `walkEndBoundAllow(stationbound.CapOffsetStationBound(seg, k, n, ∓d))` — `circularEndpointInterval`'s enclosure with the exact offset `∓d` (`capcontour.CapWallRadiusOffset`) added to the record's radius `R`, read at the exact fraction `k/n` of the SIDE window — plus `prismrecord.Payload.PointRound` plus `capBandLevel(capZ).bound` |
 | cap ring, a straight walk's foot preceded by a circular walk | the same enclosure on the PRECEDING walk at `k = n`, plus the same two terms |
 | cap ring, a line-line miter foot | `band.delta` (`capContourDelta`'s enclosure of the exact miter point) plus the same two terms |
 
@@ -713,7 +713,7 @@ refuses reflex corners in other receivers.
   `DiagUnsupportedPairPayload`.
 - `Verify` on an overlapping pair of admitted cap-blend bodies publishes an `Interference` row.
 - Each leg of `volSymDiff` is shown to fail: deleting `Mchord`'s band term, its trimmed term, the cap
-  `motion` enclosure, the side `L.bound` term or `exactPrismPointRound` makes a named fixture's result
+  `motion` enclosure, the side `L.bound` term or `prismrecord.Payload.PointRound` makes a named fixture's result
   volume fall outside its published bound, recorded in the test file.
 
 ## 8. Recorded decisions this design changes
@@ -758,7 +758,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    a quarter-turn `CircleSeg` sample at `k/n = 1/2` publishes a bound within 4 ulps of `r`; an `ArcSeg` sample
    publishes a finite positive bound; a non-derivable enclosure answers `+Inf`.
 4. **Files:** `tessellate.go`. **What:** `deltaStore` for prism and cup — max over emitted vertices of
-   `walkEndBoundAllow(stationbound.ChordStationBound)` and `exactPrismPointRound` (`prism_payload.go`); per-face `faceBound`
+   `walkEndBoundAllow(stationbound.ChordStationBound)` and `prismrecord.Payload.PointRound` (`prism_payload.go`); per-face `faceBound`
    per §3's table; `perturbedTriangleAreaAllow` per triangle into `areaSlack`. **Depends on:** 1, 3.
    **Tests:** `apitest/tessellate_test.go`: §3's plate/rotated-plate assertions; `Bound()` under identity axis-aligned
    placement is unchanged from today's value for `holedPlateBody`.

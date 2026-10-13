@@ -45,7 +45,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 			return prismPayload{}, false, nil
 		}
 	}
-	if !prismplacement.IntersectZIntervalOverlaps(prismPlacementOf(pa), prismPlacementOf(pb)) {
+	if !prismplacement.IntersectZIntervalOverlaps(pa.PlacementOperand(), pb.PlacementOperand()) {
 		return prismPayload{}, false, nil
 	}
 	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.Profile, pb.Profile)
@@ -57,7 +57,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d`,
 			ErrUnsupported, meshbool.OpIntersect, segments, prismcells.MaxArrangementSegments)
 	}
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	reexpress, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -173,7 +173,7 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 	// float, or B's shifted endpoint rounded once with that rounding charged
 	// (prismplacement.IntersectLowerEnd and IntersectUpperEnd); a tie takes
 	// the larger displacement, since both operands' coordinates denote it.
-	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
+	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(pa.PlacementOperand(), pb.PlacementOperand())
 	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.Z0, pa.Z0Delta, pbZ0, pb.Z0Delta)
 	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.Z1, pa.Z1Delta, pbZ1, pb.Z1Delta)
 

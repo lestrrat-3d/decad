@@ -482,7 +482,7 @@ func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
 		c[i] = proofbound.MeasuredScalar(value, bound)
 	}
 	ref := bp.refView()
-	cb := prismPointBound(ref, c[0], c[1], c[2])
+	cb := ref.PointBound(c[0], c[1], c[2])
 	body.centroid = VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value), Bound: units.Millimeters(cb), Exactness: exactnessOf(cb)}
 	var a proofbound.BoundedScalar
 	for _, f := range body.Faces() {

@@ -94,13 +94,13 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 	}
 	farHeld := cp.Point(0, 0, cp.Z1)
 	farIdeal := base.Add(axis.Scale(length))
-	poseStretch := prismLiftFactor(cp) - 1
+	poseStretch := cp.LiftFactor() - 1
 	if poseStretch < 0 || proofbound.IsNonFinite(poseStretch) {
 		return nil
 	}
 	sourceBound = proofbound.AbsSumUpper(sourceBound,
-		prismPointBound(cp, proofbound.ExactScalar(0), proofbound.ExactScalar(0), proofbound.ExactScalar(cp.Z0)),
-		prismPointBound(cp, proofbound.ExactScalar(0), proofbound.ExactScalar(0), proofbound.ExactScalar(cp.Z1)),
+		cp.PointBound(proofbound.ExactScalar(0), proofbound.ExactScalar(0), proofbound.ExactScalar(cp.Z0)),
+		cp.PointBound(proofbound.ExactScalar(0), proofbound.ExactScalar(0), proofbound.ExactScalar(cp.Z1)),
 		proofbound.DvLenUpper(proofbound.HeldDelta(farHeld, farIdeal)),
 		proofbound.ProductUpper(poseStretch, proofbound.AbsSumUpper(radius, length)))
 	if !(sourceBound < radius/1000) {

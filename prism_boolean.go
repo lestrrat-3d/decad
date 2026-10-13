@@ -132,14 +132,14 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 		if len(pa.Profile.Holes) != 0 || len(pb.Profile.Holes) != 0 { // G6: both hole-free
 			return prismPayload{}, false, nil
 		}
-		if !prismplacement.UnionZIntervalMatches(prismPlacementOf(pa), prismPlacementOf(pb)) { // G5
+		if !prismplacement.UnionZIntervalMatches(pa.PlacementOperand(), pb.PlacementOperand()) { // G5
 			return prismPayload{}, false, nil
 		}
 	case meshbool.OpCut:
 		if len(pb.Profile.Holes) != 0 { // G6: the TOOL must be hole-free; the target's own holes carry through
 			return prismPayload{}, false, nil
 		}
-		if !prismplacement.CutZIntervalSpans(prismPlacementOf(pa), prismPlacementOf(pb)) { // G5, §3.2's Cut row
+		if !prismplacement.CutZIntervalSpans(pa.PlacementOperand(), pb.PlacementOperand()) { // G5, §3.2's Cut row
 			return prismPayload{}, false, nil
 		}
 	default:
@@ -158,7 +158,7 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 			ErrUnsupported, op, segments, prismcells.MaxArrangementSegments)
 	}
 
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	reexpress, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -219,7 +219,7 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 	if len(pa.Profile.Holes) != 0 || len(pb.Profile.Holes) != 0 { // G6: both hole-free (§4.4's multi-lump row is why)
 		return nil, prismPayload{}, prismPayload{}, nil, false, nil
 	}
-	if !prismplacement.IntersectZIntervalOverlaps(prismPlacementOf(pa), prismPlacementOf(pb)) { // G5
+	if !prismplacement.IntersectZIntervalOverlaps(pa.PlacementOperand(), pb.PlacementOperand()) { // G5
 		return nil, prismPayload{}, prismPayload{}, nil, false, nil
 	}
 
@@ -233,7 +233,7 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 			ErrUnsupported, meshbool.OpIntersect, segments, prismcells.MaxArrangementSegments)
 	}
 
-	reexpress, err = prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	reexpress, err = prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	if err != nil {
 		return nil, prismPayload{}, prismPayload{}, nil, false, err
 	}
@@ -328,7 +328,7 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKi
 	if worldNormalA != worldNormalB { // G3: co-directional, bit-identical
 		return prismPayload{}, prismPayload{}, false, nil
 	}
-	shared := prismplacement.SharedAxisOf(prismPlacementOf(pa), prismPlacementOf(pb))
+	shared := prismplacement.SharedAxisOf(pa.PlacementOperand(), pb.PlacementOperand())
 	if shared.OK && pa.Xform != pb.Xform && !placedAxisProfileAdmitted(op, pa, pb) {
 		return prismPayload{}, prismPayload{}, false, nil
 	}
@@ -340,10 +340,6 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKi
 		}
 	}
 	return pa, pb, true, nil
-}
-
-func prismPlacementOf(p prismPayload) prismplacement.Operand {
-	return prismplacement.Operand{Frame: p.Frame, Xform: p.Xform, Z0: p.Z0, Z1: p.Z1}
 }
 
 // auditPrismMergeSection runs the modify §5 audit (fillet_audit.go,

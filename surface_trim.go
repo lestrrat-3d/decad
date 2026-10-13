@@ -170,7 +170,7 @@ func admitExtendPair(budget *proofbound.WorkBudget, receiver, tool *Body) (chain
 
 // Adapt a root payload to the neutral surface gate's input.
 func surfacePrismOperand(p prismPayload) prismcells.SurfaceOperand {
-	return prismcells.SurfaceOperand{Profile: p.Profile, Placement: prismPlacementOf(p)}
+	return prismcells.SurfaceOperand{Profile: p.Profile, Placement: p.PlacementOperand()}
 }
 
 // TrimSide names which pieces of the receiver a Trim keeps
@@ -652,7 +652,7 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	}
 
 	// S7's remaining two clauses.
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(rcvView), prismPlacementOf(tlView))
+	reexpress, err := prismcells.NewReexpression(rcvView.PlacementOperand(), tlView.PlacementOperand())
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
@@ -881,7 +881,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	// and leaves every other receiver segment outside it, so a receiver
 	// carrying narrowed segments elsewhere clears S7 for an Extend and refuses
 	// it for a Trim.
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(rcvView), prismPlacementOf(tlView))
+	reexpress, err := prismcells.NewReexpression(rcvView.PlacementOperand(), tlView.PlacementOperand())
 	if err != nil {
 		return pass(err)
 	}

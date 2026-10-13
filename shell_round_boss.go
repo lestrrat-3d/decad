@@ -192,7 +192,7 @@ func measureRoundBossShell(ctx context.Context, bp brepPayload, body *Body) erro
 		c[i] = proofbound.MeasuredScalar(value, bound)
 	}
 	ref := bp.refView()
-	cb := prismPointBound(ref, c[0], c[1], c[2])
+	cb := ref.PointBound(c[0], c[1], c[2])
 	body.centroid = VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value),
 		Bound: units.Millimeters(cb), Exactness: exactnessOf(cb)}
 	var surfaceArea proofbound.BoundedScalar

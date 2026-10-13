@@ -739,7 +739,7 @@ and a polygon's hull is its vertices' — and an affine map keeps hull containme
 exactly through the payload's own frame and placement, read as the exact rationals of their floats, are
 another such set. The payload's own displacement bounds — the section's and each level's (§5.3,
 `prismPayload`) — move the denoted body off that exact image by at most `4·√3` times the largest, the
-charge `prismPointBound` already makes through the two near-orthonormal maps, and that **pad** is a ball
+charge `prismrecord.Payload.PointBound` already makes through the two near-orthonormal maps, and that **pad** is a ball
 around every hull point, worth `pad` along any unit `n`. The hull points themselves lie inside the body's
 rest box inflated by its `Bound`: the box's extremes bracket the same exact image of the recorded section,
 and its `Bound` adds the displacements on top. So `ρ`, read from that box's corners, bounds every hull
