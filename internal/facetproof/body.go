@@ -270,3 +270,38 @@ func FirstMoments(budget *proofbound.WorkBudget, xverts []proof.Xpt, tris [][3]i
 	}
 	return moments, nil
 }
+
+// FirstMomentsFromAudit is FirstMoments over audit.XVerts that reuses the
+// audit's per-facet determinants: each facet adds det·(a+b+c) per axis, summed
+// as Dyadics and converted once. It returns FirstMoments' rational exactly. It
+// falls back to FirstMoments when the audit holds no determinants or a vertex
+// has a non-dyadic denominator.
+func FirstMomentsFromAudit(budget *proofbound.WorkBudget, audit *MeshAudit, tris [][3]int) ([3]*big.Rat, error) {
+	if audit.Det == nil {
+		return FirstMoments(budget, audit.XVerts, tris)
+	}
+	lifted := make([]proof.DyV3, len(audit.XVerts))
+	for i, p := range audit.XVerts {
+		v, ok := proof.XptDyV3(p)
+		if !ok {
+			return FirstMoments(budget, audit.XVerts, tris)
+		}
+		lifted[i] = v
+	}
+	var acc [3]proof.Dyadic
+	for fi, t := range tris {
+		if err := budget.Step(); err != nil {
+			return [3]*big.Rat{}, err
+		}
+		d := audit.Det[fi]
+		if d.IsZero() {
+			continue
+		}
+		a, b, c := lifted[t[0]], lifted[t[1]], lifted[t[2]]
+		for axis := range 3 {
+			s := proof.DyAdd(proof.DyAdd(a[axis], b[axis]), c[axis])
+			acc[axis] = proof.DyAdd(acc[axis], proof.DyMul(d, s))
+		}
+	}
+	return [3]*big.Rat{acc[0].Rat(), acc[1].Rat(), acc[2].Rat()}, nil
+}

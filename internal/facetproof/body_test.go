@@ -142,3 +142,67 @@ func TestVolumeFromAuditMatchesVolume(t *testing.T) {
 		})
 	}
 }
+
+func TestFirstMomentsFromAuditMatchesFirstMoments(t *testing.T) {
+	t.Parallel()
+	octa := func() ([]r3.Vec, [][3]int) {
+		o := r3.Vec{X: 0.1, Y: -0.3, Z: 0.7}
+		verts := []r3.Vec{
+			{X: o.X + 1.1, Y: o.Y, Z: o.Z}, {X: o.X - 0.9, Y: o.Y, Z: o.Z},
+			{X: o.X, Y: o.Y + 1.3, Z: o.Z}, {X: o.X, Y: o.Y - 0.7, Z: o.Z},
+			{X: o.X, Y: o.Y, Z: o.Z + 1.7}, {X: o.X, Y: o.Y, Z: o.Z - 0.3},
+		}
+		tris := [][3]int{
+			{0, 2, 4}, {2, 1, 4}, {1, 3, 4}, {3, 0, 4},
+			{2, 0, 5}, {1, 2, 5}, {3, 1, 5}, {0, 3, 5},
+		}
+		return verts, tris
+	}
+	cases := map[string]func() ([]r3.Vec, [][3]int){
+		// Faces of the origin-cornered box lie in planes through the origin,
+		// so their determinants are zero.
+		"box at origin": func() ([]r3.Vec, [][3]int) {
+			return testBox(nil, nil, r3.Vec{}, r3.Vec{X: 2, Y: 3, Z: 5}, false)
+		},
+		"non-dyadic box": func() ([]r3.Vec, [][3]int) {
+			return testBox(nil, nil, r3.Vec{X: 0.1, Y: -0.3, Z: 0.7}, r3.Vec{X: 1.3, Y: 0.9, Z: 2.1}, false)
+		},
+		"box with void": func() ([]r3.Vec, [][3]int) {
+			verts, tris := testBox(nil, nil, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10}, false)
+			return testBox(verts, tris, r3.Vec{X: 2.5, Y: 3.1, Z: 4}, r3.Vec{X: 5, Y: 6.7, Z: 8}, true)
+		},
+		"offset octahedron": octa,
+	}
+	for name, build := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			verts, tris := build()
+			audit, err := facetproof.AuditFacetedMesh(t.Context(), verts, tris)
+			require.NoError(t, err)
+			require.NotNil(t, audit.Det)
+			want, err := facetproof.FirstMoments(proofbound.NewWorkBudget(t.Context()), audit.XVerts, tris)
+			require.NoError(t, err)
+			got, err := facetproof.FirstMomentsFromAudit(proofbound.NewWorkBudget(t.Context()), audit, tris)
+			require.NoError(t, err)
+			fallback := *audit
+			fallback.Det = nil
+			viaFallback, err := facetproof.FirstMomentsFromAudit(proofbound.NewWorkBudget(t.Context()), &fallback, tris)
+			require.NoError(t, err)
+			for axis := range 3 {
+				require.Zero(t, got[axis].Cmp(want[axis]), "axis %d", axis)
+				require.Zero(t, viaFallback[axis].Cmp(want[axis]), "fallback axis %d", axis)
+			}
+		})
+	}
+	t.Run("zero determinant present", func(t *testing.T) {
+		t.Parallel()
+		verts, tris := testBox(nil, nil, r3.Vec{}, r3.Vec{X: 2, Y: 3, Z: 5}, false)
+		audit, err := facetproof.AuditFacetedMesh(t.Context(), verts, tris)
+		require.NoError(t, err)
+		zero := false
+		for _, d := range audit.Det {
+			zero = zero || d.IsZero()
+		}
+		require.True(t, zero)
+	})
+}
