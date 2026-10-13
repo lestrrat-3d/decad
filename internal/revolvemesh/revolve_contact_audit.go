@@ -4,7 +4,11 @@ import (
 	"cmp"
 	"fmt"
 	"math"
+	"runtime"
 	"slices"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -279,6 +283,30 @@ func RevolveContactAudit(budget *proofbound.WorkBudget, data []RevolveAuditTri, 
 	if err != nil {
 		return err
 	}
+	return revolveAuditRows(budget, data, tris, rows, delta, margin,
+		runtime.GOMAXPROCS(0) > 1 && revolveRowsLen(rows) >= revolveParallelMinPairs)
+}
+
+// revolveParallelMinPairs is the candidate count from which the audit runs its
+// pairs on several goroutines.
+const revolveParallelMinPairs = 20000
+
+func revolveRowsLen(rows [][]int32) int {
+	n := 0
+	for _, row := range rows {
+		n += len(row)
+	}
+	return n
+}
+
+// revolveAuditRows audits every listed pair in (i, j) order and returns the
+// first error that order meets. With parallel set, the pairs run on several
+// goroutines and the result is still the serial one.
+func revolveAuditRows(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, rows [][]int32,
+	delta, margin float64, parallel bool) error {
+	if parallel {
+		return revolveAuditRowsParallel(budget, data, tris, rows, delta, margin)
+	}
 	axes := newRevolveAxisCache(len(data))
 	for i, row := range rows {
 		for _, jj := range row {
@@ -294,6 +322,99 @@ func RevolveContactAudit(budget *proofbound.WorkBudget, data []RevolveAuditTri, 
 				return err
 			}
 		}
+	}
+	return budget.Err()
+}
+
+// revolveAuditRowsParallel splits the flat candidate list into contiguous
+// chunks, one per worker, each with its own axis cache. A worker records the
+// smallest failing flat index it meets and stops once it is past the smallest
+// failure any worker has recorded, so the lowest failing index is always
+// found. The caller then replays the budget steps in list order up to that
+// index, so the returned error is the one the serial loop returns first. Only
+// the caller touches the budget; workers never do.
+func revolveAuditRowsParallel(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, rows [][]int32,
+	delta, margin float64) error {
+	total := revolveRowsLen(rows)
+	is := make([]int32, 0, total)
+	js := make([]int32, 0, total)
+	for i, row := range rows {
+		for _, j := range row {
+			is = append(is, int32(i))
+			js = append(js, j)
+		}
+	}
+	workers := min(runtime.GOMAXPROCS(0), 4)
+	errs := make([]error, workers)
+	errAt := make([]int, workers)
+	var best atomic.Int64
+	best.Store(int64(total))
+	var stopped atomic.Bool
+	var group sync.WaitGroup
+	group.Add(workers)
+	for w := range workers {
+		start := total * w / workers
+		end := total * (w + 1) / workers
+		go func() {
+			defer group.Done()
+			axes := newRevolveAxisCache(len(data))
+			for k := start; k < end; k++ {
+				if k%proofbound.WorkPollInterval == 0 && stopped.Load() {
+					return
+				}
+				if int64(k) > best.Load() {
+					return
+				}
+				i, j := int(is[k]), int(js[k])
+				shared, count := tessellation.SharedVertexIndices(tris[i], tris[j])
+				if count == 0 && BoxGapExceeds(data[i].Box, data[j].Box, margin) {
+					continue
+				}
+				if err := auditRevolvePairCached(data, tris, shared, count, i, j, delta, axes); err != nil {
+					errs[w], errAt[w] = err, k
+					for {
+						cur := best.Load()
+						if int64(k) >= cur || best.CompareAndSwap(cur, int64(k)) {
+							break
+						}
+					}
+					return
+				}
+			}
+		}()
+	}
+	done := make(chan struct{})
+	go func() {
+		group.Wait()
+		close(done)
+	}()
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for running := true; running; {
+		select {
+		case <-done:
+			running = false
+		case <-ticker.C:
+			if err := budget.Err(); err != nil {
+				stopped.Store(true)
+				<-done
+				return err
+			}
+		}
+	}
+	first, firstErr := total, error(nil)
+	for w, err := range errs {
+		if err != nil && errAt[w] < first {
+			first, firstErr = errAt[w], err
+		}
+	}
+	for k := 0; k < total && k <= first; k++ {
+		if err := budget.Step(); err != nil {
+			return err
+		}
+	}
+	if firstErr != nil {
+		return firstErr
 	}
 	return budget.Err()
 }

@@ -1,6 +1,7 @@
 package revolvemesh
 
 import (
+	"context"
 	"math"
 	"math/rand/v2"
 	"testing"
@@ -209,4 +210,52 @@ func TestRevolveContactAuditMatchesAllPairs(t *testing.T) {
 			require.Equal(t, want.Error(), got.Error(), "%s delta %v", name, delta)
 		}
 	}
+}
+
+// TestRevolveAuditRowsParallelMatchesSerial runs the parallel audit on the
+// sweep meshes, including the ones whose audit fails, and compares the
+// outcome and the number of budget steps with the serial walk.
+func TestRevolveAuditRowsParallelMatchesSerial(t *testing.T) {
+	failed := 0
+	for name, m := range sweepMeshes(t) {
+		for _, delta := range sweepDeltas {
+			margin := proofbound.ProductUpper(2, delta)
+			rows, err := revolveContactCandidates(proofbound.NewWorkBudget(t.Context()), m.data, m.tris, margin)
+			require.NoError(t, err, name)
+			run := func(parallel bool) (int, error) {
+				budget := proofbound.NewWorkBudget(t.Context())
+				steps := 0
+				inner := budget.StepFn
+				budget.StepFn = func() error { steps++; return inner() }
+				err := revolveAuditRows(budget, m.data, m.tris, rows, delta, margin, parallel)
+				return steps, err
+			}
+			wantSteps, want := run(false)
+			gotSteps, got := run(true)
+			if want == nil {
+				require.NoError(t, got, "%s delta %v", name, delta)
+			} else {
+				failed++
+				require.Error(t, got, "%s delta %v", name, delta)
+				require.Equal(t, want.Error(), got.Error(), "%s delta %v", name, delta)
+			}
+			require.Equal(t, wantSteps, gotSteps, "%s delta %v", name, delta)
+		}
+	}
+	require.NotZero(t, failed, "no sweep mesh exercises the error path")
+}
+
+// TestRevolveAuditRowsParallelCancelled checks that a cancelled context gives
+// the parallel audit the outcome the serial walk has.
+func TestRevolveAuditRowsParallelCancelled(t *testing.T) {
+	m := soupMesh(t)
+	margin := proofbound.ProductUpper(2, 0.25)
+	rows, err := revolveContactCandidates(proofbound.NewWorkBudget(t.Context()), m.data, m.tris, margin)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	want := revolveAuditRows(proofbound.NewWorkBudget(ctx), m.data, m.tris, rows, 0.25, margin, false)
+	got := revolveAuditRows(proofbound.NewWorkBudget(ctx), m.data, m.tris, rows, 0.25, margin, true)
+	require.Error(t, want)
+	require.Equal(t, want.Error(), got.Error())
 }
