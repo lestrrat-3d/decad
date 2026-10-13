@@ -80,7 +80,14 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		return nil, err
 	}
 	if r.singleStraightEdges() {
-		return brepBlendEdges(ctx, d, bp, call)
+		body, err := brepBlendEdges(ctx, d, bp, call)
+		var mismatch *brepMaterialWedgeMismatchError
+		if len(call.edges) == 1 && call.loopKind == brepBandFillet && errors.As(err, &mismatch) {
+			if sel, selected, ok := r.partialSelectedLoop(); ok {
+				return brepFilletPartialLoop(ctx, d, bp, call, sel, selected)
+			}
+		}
+		return body, err
 	}
 	if call.asym != nil {
 		loops, err := r.admitLoops()
