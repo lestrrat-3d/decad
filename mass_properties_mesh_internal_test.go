@@ -45,7 +45,7 @@ func meshLadderRevolve(t *testing.T, extent AngularExtent, build func(s *sketch.
 	build(s)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], SketchLine{End: Point2{U: 1}}, extent)
+	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], SketchLine{End: planePoint{U: 1}}, extent)
 	require.NoError(t, err)
 	return body
 }

@@ -57,7 +57,7 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 		return err
 	}
 	n := bc.fillet.n
-	side := make([]Point2, len(match))
+	side := make([]planePoint, len(match))
 	for c, index := range match {
 		side[c] = lm.sidePts[index]
 	}

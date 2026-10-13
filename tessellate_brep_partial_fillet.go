@@ -46,7 +46,7 @@ func (bc *brepBandChord) placePartialRings(e brepEmbed,
 	fr.ringV = make([][]int, n+1)
 	fr.dev = make([][]float64, n+1)
 	fr.ringV[0], fr.ringV[n] = bc.sideV, bc.capV
-	side, capPoints := make([]Point2, N), make([]Point2, N)
+	side, capPoints := make([]planePoint, N), make([]planePoint, N)
 	for c, col := range bc.partial.Columns {
 		side[c], capPoints[c] = col.Side, col.Cap
 	}

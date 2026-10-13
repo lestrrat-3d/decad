@@ -153,7 +153,7 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 func samePrismCarrier(a, b lineSeg) bool {
 	dx := lfSub(lfF(a.End.U), lfF(a.Start.U))
 	dy := lfSub(lfF(a.End.V), lfF(a.Start.V))
-	for _, endpoint := range []Point2{b.Start, b.End} {
+	for _, endpoint := range []planePoint{b.Start, b.End} {
 		ex := lfSub(lfF(endpoint.U), lfF(a.Start.U))
 		ey := lfSub(lfF(endpoint.V), lfF(a.Start.V))
 		if lfSub(lfMul(dx, ey), lfMul(dy, ex)).Sign() != 0 {

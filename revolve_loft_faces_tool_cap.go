@@ -127,7 +127,7 @@ func revolveLoftFacesToolCircleOnSpan(tool *pointConeLimit, span revolveSectionS
 	return x, radius, true, true
 }
 
-func revolveLoftFacesToolResidual(tool *pointConeLimit, point Point2) *big.Rat {
+func revolveLoftFacesToolResidual(tool *pointConeLimit, point planePoint) *big.Rat {
 	return lfSub(lfAdd(lfF(point.U), lfMul(tool.slope, lfF(point.V))), tool.apex)
 }
 

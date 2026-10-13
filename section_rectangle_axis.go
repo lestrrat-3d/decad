@@ -63,8 +63,8 @@ func cardinalRectangleSectionRecord(pp prismPayload, plane r3.Frame) (profileRec
 	if !x0Exact || !x1Exact || !y0Exact || !y1Exact || x0 >= x1 || y0 >= y1 {
 		return profileRecord{}, false
 	}
-	a, b := Point2{U: x0, V: y0}, Point2{U: x1, V: y0}
-	c, d := Point2{U: x1, V: y1}, Point2{U: x0, V: y1}
+	a, b := planePoint{U: x0, V: y0}, planePoint{U: x1, V: y0}
+	c, d := planePoint{U: x1, V: y1}, planePoint{U: x0, V: y1}
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		lineSeg{Start: a, End: b, TStart: 0, TEnd: 1},
 		lineSeg{Start: b, End: c, TStart: 0, TEnd: 1},

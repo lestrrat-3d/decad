@@ -55,7 +55,7 @@ func liftOriginBodies(t *testing.T, o r3.Vec, shift float64) map[string]*Body {
 		s.CreateCircle(c, 2)
 	})
 	s, p := liftOriginSketch(t, o, rect(0, 1, 3, 2))
-	rev, err := Revolve(t.Context(), New(), s, p, SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}, FullRevolution{})
+	rev, err := Revolve(t.Context(), New(), s, p, SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}}, FullRevolution{})
 	require.NoError(t, err)
 	out["revolve"] = rev
 	return out

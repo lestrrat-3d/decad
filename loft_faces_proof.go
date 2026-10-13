@@ -117,7 +117,7 @@ type loftFaceCapBounds struct {
 	sourceDeparture     []float64
 }
 
-func lfStationUV(point Point2) (*big.Rat, *big.Rat) { return lfF(point.U), lfF(point.V) }
+func lfStationUV(point planePoint) (*big.Rat, *big.Rat) { return lfF(point.U), lfF(point.V) }
 
 func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSection,
 	source *pointSectionRecord) (loftFaceCapBounds, error) {

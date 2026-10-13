@@ -29,8 +29,8 @@ func chargeProbeAxis() axisFrame {
 func chargeProbeWalk(t *testing.T) survey2d.SegmentWalk {
 	t.Helper()
 	w, err := boundarywalk.WalkOf(lineSeg{
-		Start:  Point2{U: 3, V: 0},
-		End:    Point2{U: 3, V: 20},
+		Start:  planePoint{U: 3, V: 0},
+		End:    planePoint{U: 3, V: 20},
 		TStart: 0,
 		TEnd:   1,
 	}, nil)

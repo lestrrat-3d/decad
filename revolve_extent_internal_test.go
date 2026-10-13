@@ -35,7 +35,7 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 		{
 			name: "circular quarter turn",
 			profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
-				circleSeg{Center: Point2{U: 2, V: 5}, Radius: units.Millimeters(2), CCW: true, TStart: 0, TEnd: 1},
+				circleSeg{Center: planePoint{U: 2, V: 5}, Radius: units.Millimeters(2), CCW: true, TStart: 0, TEnd: 1},
 			}}},
 			phi1: math.Pi / 2,
 			den:  quarterTurnDenotation(),

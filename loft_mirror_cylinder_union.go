@@ -191,7 +191,7 @@ func loftMirrorCylinderBlank(pp prismPayload) bool {
 		return false
 	}
 	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
-	return ok && circle.CCW && circle.Center == (Point2{}) &&
+	return ok && circle.CCW && circle.Center == (planePoint{}) &&
 		circle.Radius.Base() > 0 && !proofbound.IsNonFinite(circle.Radius.Base())
 }
 

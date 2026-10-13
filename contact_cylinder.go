@@ -108,7 +108,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 		return sourceCylinderContactProof{}, false
 	}
 	numeric, ok := pairbox.SourceRevolvedCylinderBox(rp.frame, rp.xform, pose,
-		Point2{U: rp.ax.AU, V: rp.ax.AV}, Point2{U: rp.ax.DU, V: rp.ax.DV},
+		planePoint{U: rp.ax.AU, V: rp.ax.AV}, planePoint{U: rp.ax.DU, V: rp.ax.DV},
 		rp.profile.Outer.Segments, axis)
 	if !ok {
 		return sourceCylinderContactProof{}, false

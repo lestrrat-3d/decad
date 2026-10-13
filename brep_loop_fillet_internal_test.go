@@ -267,13 +267,13 @@ func TestBrepLoopFilletCrossDrilled(t *testing.T) {
 		}
 		require.ElementsMatch(t, []r3.Vec{{X: 2, Y: 2, Z: 18}, {X: 38, Y: 2, Z: 18}, {X: 38, Y: 18, Z: 18}, {X: 2, Y: 18, Z: 18}}, centres)
 		for _, wall := range []curveSegment{
-			lineSeg{Start: Point2{U: 40, V: 0}, End: Point2{U: 40, V: 20}, TStart: 0, TEnd: 1},
-			lineSeg{Start: Point2{U: 0, V: 20}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+			lineSeg{Start: planePoint{U: 40, V: 0}, End: planePoint{U: 40, V: 20}, TStart: 0, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 20}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
 		} {
 			require.Equal(t, [][2]float64{{0, 18}}, sweptFaceLevels(bp, wall), "x wall %v", wall)
 		}
 		yWall := planarFaceAt(t, bp, r3.NewVec(0, -1, 0), 0)
-		requireChord(t, yWall.region.Outer, Point2{U: 40, V: 18}, Point2{U: 0, V: 18})
+		requireChord(t, yWall.region.Outer, planePoint{U: 40, V: 18}, planePoint{U: 0, V: 18})
 		requireRolesOf(t, out, bp.loopBands[0], 4)
 		requireBandEdgesConvex(t, out, true)
 		requireNormalFaces(t, patches, r3.NewVec(38+math.Sqrt2, 10, 18+math.Sqrt2), r3.NewVec(1, 0, 1))
@@ -912,9 +912,9 @@ func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
 		}
 		require.True(t, selected[i])
 		require.Equal(t, -1, capWalk[i])
-		pole := Point2{U: w.CU, V: w.CV}
-		require.Equal(t, pole, Point2{U: joins[i].M.U, V: joins[i].M.V})
-		require.Equal(t, pole, Point2{U: joins[(i+1)%len(joins)].M.U, V: joins[(i+1)%len(joins)].M.V})
+		pole := planePoint{U: w.CU, V: w.CV}
+		require.Equal(t, pole, planePoint{U: joins[i].M.U, V: joins[i].M.V})
+		require.Equal(t, pole, planePoint{U: joins[(i+1)%len(joins)].M.U, V: joins[(i+1)%len(joins)].M.V})
 	}
 }
 

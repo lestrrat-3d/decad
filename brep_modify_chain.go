@@ -271,8 +271,8 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 	readings := make([]capcontour.Join, len(joins))
 	for i, j := range joins {
 		readings[i] = capcontour.Join{Arc: j.Arc, G1: j.G1, VU: j.VertU, VV: j.VertV,
-			M:  Point2{U: j.M.U, V: j.M.V},
-			PA: Point2{U: j.PA.U, V: j.PA.V}, PB: Point2{U: j.PB.U, V: j.PB.V}}
+			M:  planePoint{U: j.M.U, V: j.M.V},
+			PA: planePoint{U: j.PA.U, V: j.PA.V}, PB: planePoint{U: j.PB.U, V: j.PB.V}}
 	}
 	delta, err := capband.PartialFilletContourDelta(
 		cl.Walks, readings, amounts, sphere, r.call.loop.dcDelta, shellTol)
@@ -434,9 +434,9 @@ func (r *brepLoopRead) partialTerminalBlend(sel brepLoopSel, orig, contour loopR
 	if capLocal[2] != endFace.z0 || sideLocal[2] != endFace.z0 || centreLocal[2] != endFace.z0 {
 		return r.refuse("SL2", `a terminal cap foot leaves its end face`)
 	}
-	capPoint := Point2{U: capLocal[0], V: capLocal[1]}
-	sidePoint := Point2{U: sideLocal[0], V: sideLocal[1]}
-	centre := Point2{U: centreLocal[0], V: centreLocal[1]}
+	capPoint := planePoint{U: capLocal[0], V: capLocal[1]}
+	sidePoint := planePoint{U: sideLocal[0], V: sideLocal[1]}
+	centre := planePoint{U: centreLocal[0], V: centreLocal[1]}
 	if math.Abs(math.Hypot(sidePoint.U-centre.U, sidePoint.V-centre.V)-r.call.loop.dc) > filletTol {
 		return r.refuse("SL2", `a terminal wall meets the selected pipe along a noncircular curve`)
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestRevolveSectorStraightBandCrossIsStrictAtBothRadii(t *testing.T) {
-	outer, capPoint := Point2{U: 5, V: 2.5}, Point2{U: 6, V: 1.5}
+	outer, capPoint := planePoint{U: 5, V: 2.5}, planePoint{U: 6, V: 1.5}
 	cross, ok := revolveSectorStraightBandCross(outer, capPoint, 2)
 	require.True(t, ok)
 	require.Equal(t, 5.5, cross.x)

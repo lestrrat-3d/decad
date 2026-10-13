@@ -78,10 +78,10 @@ type capBlendLoopMesh struct {
 	arcSag         []float64
 	arcTh0, arcTh1 []float64
 	locusGap       []float64 // corner i's ruling-versus-locus gap, both caps alike
-	sidePts        []Point2
+	sidePts        []planePoint
 	sideBound      []proofbound.WalkEndBound
 	sideStart      []int // walk i's first side sample
-	capPts         []Point2
+	capPts         []planePoint
 	capBound       []proofbound.WalkEndBound
 	capWallStart   []int // walk i's first cap sample
 	// capMotion is each cap sample's plane-local displacement from the point
@@ -333,7 +333,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 // read by both arrays.
 func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl prismPayload, lms []capBlendLoopMesh, mesh *Mesh, proveVolume bool) ([]float64, []float64, error) {
 	var store, motion []float64
-	addVertex := func(p Point2, z, plane float64) (int, float64) {
+	addVertex := func(p planePoint, z, plane float64) (int, float64) {
 		held := pl.Point(p.U, p.V, z)
 		mesh.vertices = append(mesh.vertices, held)
 		round := pl.PointRound(p.U, p.V, z, held)
@@ -382,7 +382,7 @@ func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl pri
 // capBlendVertexWriter places one plane-local point at level z beside its
 // plane-local bound and returns the new vertex with the lift's rounding
 // (capBlendVertices' addVertex).
-type capBlendVertexWriter func(p Point2, z, plane float64) (int, float64)
+type capBlendVertexWriter func(p planePoint, z, plane float64) (int, float64)
 
 // capBlendSideRing writes one loop's side ring twice, at zLo and at zHi, the
 // two rims of its trimmed side wall, and appends each vertex's motion when the
@@ -637,7 +637,7 @@ func (w capBlendBandWriter) AddAreaSlack(patch, facets float64) {
 // their own sagitta tubes, or a cap at this tolerance cannot prove it represents
 // the region's topology and refuses rather than return a pinched mesh.
 func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []capBlendLoopMesh, start bool, face *Face, bump func(*Face, float64)) error {
-	var pts []Point2
+	var pts []planePoint
 	var vtx []int
 	var loopIdx [][]int
 	var sag []float64
@@ -715,8 +715,8 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 // compactCapBlendRing omits zero-length contour edges where a fillet's
 // inward circular offset has collapsed to its centre. The band's samples
 // retain their full count so its strips still match the side wall.
-func compactCapBlendRing(pts []Point2, vertices []int) ([]Point2, []int) {
-	compactPts := make([]Point2, 0, len(pts))
+func compactCapBlendRing(pts []planePoint, vertices []int) ([]planePoint, []int) {
+	compactPts := make([]planePoint, 0, len(pts))
 	compactVertices := make([]int, 0, len(vertices))
 	for i, p := range pts {
 		if len(compactPts) != 0 && compactPts[len(compactPts)-1] == p {

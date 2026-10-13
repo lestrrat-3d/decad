@@ -119,16 +119,16 @@ func matchingLoftHeldCapOuters(frame r3.Frame, start, end *Face) bool {
 		len(start.loops[0].coedges) != len(end.loops[0].coedges) {
 		return false
 	}
-	keyOf := func(ce coedge) [2]Point2 {
+	keyOf := func(ce coedge) [2]planePoint {
 		a, b := frame.ToLocal(ce.Start().position), frame.ToLocal(ce.End().position)
-		p := Point2{U: a.X, V: a.Y}
-		q := Point2{U: b.X, V: b.Y}
+		p := planePoint{U: a.X, V: a.Y}
+		q := planePoint{U: b.X, V: b.Y}
 		if p.U > q.U || (p.U == q.U && p.V > q.V) {
 			p, q = q, p
 		}
-		return [2]Point2{p, q}
+		return [2]planePoint{p, q}
 	}
-	counts := make(map[[2]Point2]int, len(start.loops[0].coedges))
+	counts := make(map[[2]planePoint]int, len(start.loops[0].coedges))
 	for _, ce := range start.loops[0].coedges {
 		counts[keyOf(ce)]++
 	}

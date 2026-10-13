@@ -41,7 +41,7 @@ func (p twistedSweepPayload) placed(ctx context.Context, d *Document, ref produc
 }
 
 type twistPolygon struct {
-	points         []Point2
+	points         []planePoint
 	area           *big.Rat
 	perimeterLower float64
 	perimeterUpper float64
@@ -55,7 +55,7 @@ type twistPolygon struct {
 // This proves the exact curved section's first moments vanish, rather than
 // inferring its centroid from the chord polygon.
 func twistOppositeSegments(a, b curveSegment) bool {
-	negative := func(p, q Point2) bool { return p.U == -q.U && p.V == -q.V }
+	negative := func(p, q planePoint) bool { return p.U == -q.U && p.V == -q.V }
 	switch a := a.(type) {
 	case lineSeg:
 		b, ok := b.(lineSeg)
@@ -83,7 +83,7 @@ func twistPolygonOf(profile profileRecord) (twistPolygon, error) {
 	if len(segments) < 3 || len(segments) > 256 {
 		return twistPolygon{}, fmt.Errorf(`%w: a twisted sweep needs 3 to 256 profile edges`, ErrUnsupported)
 	}
-	points := make([]Point2, len(segments))
+	points := make([]planePoint, len(segments))
 	hasArc := false
 	for i, segment := range segments {
 		switch edge := segment.(type) {

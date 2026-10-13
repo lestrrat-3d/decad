@@ -812,7 +812,7 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 			return nil, nil, fmt.Errorf(`%w: Stitch cannot triangulate a non-planar face`, ErrUnsupported)
 		}
 		frame := pl.Frame
-		var pts []Point2
+		var pts []planePoint
 		var verts []*Vertex
 		loopIdx := make([][]int, len(f.loops))
 		for li, l := range f.loops {
@@ -821,7 +821,7 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 				v := ce.Start()
 				local := frame.ToLocal(v.Position().Value)
 				idxs[i] = len(pts)
-				pts = append(pts, Point2{U: local.X, V: local.Y})
+				pts = append(pts, planePoint{U: local.X, V: local.Y})
 				verts = append(verts, v)
 			}
 			loopIdx[li] = idxs
@@ -852,7 +852,7 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 // shoelace returns twice the signed area of the polygon idx walks over pts —
 // its sign alone is what triangulateStitchFaces reads, to decide whether a
 // loop's stored walk is counter-clockwise in the face's own local frame.
-func shoelace(pts []Point2, idx []int) float64 {
+func shoelace(pts []planePoint, idx []int) float64 {
 	n := len(idx)
 	sum := 0.0
 	for i := range n {

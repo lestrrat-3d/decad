@@ -26,7 +26,7 @@ type prismPatternFilletContact struct {
 	ringCut       prismPatternFilletRingCut
 }
 
-func prismPatternExactPlacedPoint(part prismPatternPart, point Point2) prismpattern.IVPoint {
+func prismPatternExactPlacedPoint(part prismPatternPart, point planePoint) prismpattern.IVPoint {
 	b := part.prism.Xform.Basis()
 	c, s := proofarith.FloatRat(b.EX.X), proofarith.FloatRat(b.EX.Y)
 	u, v := proofarith.FloatRat(point.U), proofarith.FloatRat(point.V)

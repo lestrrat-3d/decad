@@ -46,8 +46,8 @@ func TestSpiralCapPlaneMustMissTheWholeRootCircle(t *testing.T) {
 }
 
 func TestSpiralToolCapMustStayOnCertifiedSideOfBlankMeridian(t *testing.T) {
-	toe := Point2{U: 2, V: 8}
-	outer := Point2{U: 3, V: 7}
+	toe := planePoint{U: 2, V: 8}
+	outer := planePoint{U: 3, V: 7}
 	cone := &pointConeLimit{apex: big.NewRat(9999999999999999, 1000000000000000),
 		slope: big.NewRat(1, 1)}
 	gap, ok := spiralToolOuterGap(cone, toe, outer, 1)
@@ -70,7 +70,7 @@ func TestSpiralToolCapMustStayOnCertifiedSideOfBlankMeridian(t *testing.T) {
 func TestSpiralFiniteConeSideRequiresWholeGeneratorAndFiniteTool(t *testing.T) {
 	cone := &pointConeLimit{apex: big.NewRat(10, 1), far: big.NewRat(-1, 1),
 		slope: big.NewRat(1, 1)}
-	first, last := Point2{U: 2, V: 9}, Point2{U: 3, V: 8}
+	first, last := planePoint{U: 2, V: 9}, planePoint{U: 3, V: 8}
 	require.True(t, spiralFiniteConeSide(cone, first, last, 1))
 	last.V = 6
 	require.False(t, spiralFiniteConeSide(cone, first, last, 1),

@@ -15,8 +15,8 @@ import (
 func overflowSquare(side float64) profileRecord {
 	line := func(u0, v0, u1, v1 float64) curveSegment {
 		return lineSeg{
-			Start:  Point2{U: u0, V: v0},
-			End:    Point2{U: u1, V: v1},
+			Start:  planePoint{U: u0, V: v0},
+			End:    planePoint{U: u1, V: v1},
 			TStart: 0,
 			TEnd:   1,
 		}
@@ -56,10 +56,10 @@ func TestEvalPrismRejectsOverflowedMeasurements(t *testing.T) {
 func TestEvalRevolveRejectsOverflowedMeasurements(t *testing.T) {
 	t.Parallel()
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 1e154}, End: Point2{U: 2e154}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 2e154}, End: Point2{U: 2e154, V: 1}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 2e154, V: 1}, End: Point2{U: 1e154, V: 1}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 1e154, V: 1}, End: Point2{U: 1e154}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 1e154}, End: planePoint{U: 2e154}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 2e154}, End: planePoint{U: 2e154, V: 1}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 2e154, V: 1}, End: planePoint{U: 1e154, V: 1}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 1e154, V: 1}, End: planePoint{U: 1e154}, TStart: 0, TEnd: 1},
 	}}}
 	body, err := evalRevolve(New(), producerID(0), revolvePayload{
 		profile: profile,
@@ -117,7 +117,7 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 	t.Parallel()
 	circle := profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		circleSeg{
-			Center: Point2{},
+			Center: planePoint{},
 			Radius: units.Millimeters(10),
 			TStart: 0,
 			TEnd:   1,
@@ -144,10 +144,10 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 	require.Equal(t, 2, circular)
 
 	revolveProfile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: 5}, End: Point2{U: 10, V: 5}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 10, V: 5}, End: Point2{U: 10, V: 15}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 10, V: 15}, End: Point2{U: 0, V: 15}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: 15}, End: Point2{U: 0, V: 5}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 5}, End: planePoint{U: 10, V: 5}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: 5}, End: planePoint{U: 10, V: 15}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: 15}, End: planePoint{U: 0, V: 15}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 15}, End: planePoint{U: 0, V: 5}, TStart: 0, TEnd: 1},
 	}}}
 	rp := revolvePayload{
 		profile: revolveProfile,
@@ -186,11 +186,11 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 func TestCoalescedAnalyticEdgesCarryLengthBounds(t *testing.T) {
 	t.Parallel()
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 1, V: 1}, End: Point2{U: 2, V: 2}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 2, V: 2}, End: Point2{U: 1, V: 3}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 1, V: 3}, End: Point2{U: 0, V: 2}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: 2}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 1}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 1, V: 1}, End: planePoint{U: 2, V: 2}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 2, V: 2}, End: planePoint{U: 1, V: 3}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 1, V: 3}, End: planePoint{U: 0, V: 2}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 2}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	body, err := evalPrism(New(), producerID(0), prismPayload{Payload: prismrecord.Payload{
 		Profile: profile,

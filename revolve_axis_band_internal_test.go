@@ -44,10 +44,10 @@ const dipShaftRadius = 5.0
 func dipShaftBandProfile(length, dip float64) profileRecord {
 	const radius = dipShaftRadius
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: -dip}, End: Point2{U: length, V: -dip}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: length, V: -dip}, End: Point2{U: length, V: radius}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: length, V: radius}, End: Point2{U: 0, V: radius}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: radius}, End: Point2{U: 0, V: -dip}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: -dip}, End: planePoint{U: length, V: -dip}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: length, V: -dip}, End: planePoint{U: length, V: radius}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: length, V: radius}, End: planePoint{U: 0, V: radius}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: radius}, End: planePoint{U: 0, V: -dip}, TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -222,7 +222,7 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 	const eps = 1e-7
 	line := revolveaxis.Line2{DU: 0.8, DV: 0.6, AV: aV}
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: aV - eps}, End: Point2{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: aV - eps}, End: planePoint{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
 	}}}
 	_, _, err := resolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
 	require.Error(t, err)
@@ -262,7 +262,7 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 // not need it to be.
 func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
 	t.Parallel()
-	tiltedAxis := SketchLine{Start: Point2{U: 0, V: -20}, End: Point2{U: 3, V: -16}}
+	tiltedAxis := SketchLine{Start: planePoint{U: 0, V: -20}, End: planePoint{U: 3, V: -16}}
 	const dU, dV = 0.6, 0.8 // the axis's own (3,4)/5 direction, restated for the profile's placement
 	uv := func(z, rho float64) (float64, float64) {
 		return z*dU - rho*dV, -20 + z*dV + rho*dU

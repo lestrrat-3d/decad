@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func spiralTestRevolveBlank(t *testing.T, section []Point2) *Body {
+func spiralTestRevolveBlank(t *testing.T, section []planePoint) *Body {
 	t.Helper()
 	doc := New()
 	world := sketch.NewWorld()
@@ -25,13 +25,13 @@ func spiralTestRevolveBlank(t *testing.T, section []Point2) *Body {
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	blank, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
-		SketchLine{Start: Point2{}, End: Point2{U: 1}}, FullRevolution{})
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
 	require.NoError(t, err)
 	return blank
 }
 
 func TestSpiralBlankUsesAuthenticatedRevolveSection(t *testing.T) {
-	section := []Point2{{U: 4.9}, {U: 6}, {U: 6, V: 3.5},
+	section := []planePoint{{U: 4.9}, {U: 6}, {U: 6, V: 3.5},
 		{U: 5.7, V: 2.28}, {U: 4.7, V: 1.88}, {U: 4.9, V: 1.5}}
 	blank := spiralTestRevolveBlank(t, section)
 	candidates := revolveRootCandidates(blank)
@@ -65,7 +65,7 @@ func TestSpiralBlankUsesAuthenticatedRevolveSection(t *testing.T) {
 }
 
 func TestSpiralBlankRefusesSevenSideRevolveSection(t *testing.T) {
-	section := []Point2{{U: 4.9}, {U: 6}, {U: 6, V: 3.5},
+	section := []planePoint{{U: 4.9}, {U: 6}, {U: 6, V: 3.5},
 		{U: 5.9, V: 3.4}, {U: 5.7, V: 2.28},
 		{U: 4.7, V: 1.88}, {U: 4.9, V: 1.5}}
 	blank := spiralTestRevolveBlank(t, section)

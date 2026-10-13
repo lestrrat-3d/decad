@@ -92,10 +92,10 @@ func TestPatternedGroupDisplacement(t *testing.T) {
 func TestPatternedOverlapIsNotProvenDisjoint(t *testing.T) {
 	t.Parallel()
 	a := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 15, V: 0}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 15, V: 0}, End: Point2{U: 15, V: 5}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 15, V: 5}, End: Point2{U: 0, V: 5}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: 5}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 15, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 15, V: 0}, End: planePoint{U: 15, V: 5}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 15, V: 5}, End: planePoint{U: 0, V: 5}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 5}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	rp, err := patternrecord.ResolveLinear(r3.NewVec(1, 0, 0), units.Millimeters(10), 2)
 	require.NoError(t, err)

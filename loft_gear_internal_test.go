@@ -194,9 +194,9 @@ func (c loftGearCase) skipHeavy(t *testing.T) {
 // walls a LineSeg pair by the triangle pair through its four corners
 // (docs/loft-design.md §5), not by a ruled patch. Every sample lies on the
 // recorded curve.
-func loftGearDenseLoop(t *testing.T, loop loopRecord, perSeg int) ([]Point2, []bool) {
+func loftGearDenseLoop(t *testing.T, loop loopRecord, perSeg int) ([]planePoint, []bool) {
 	t.Helper()
-	var out []Point2
+	var out []planePoint
 	var faceted []bool
 	for _, seg := range loop.Segments {
 		switch s := seg.(type) {

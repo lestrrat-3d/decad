@@ -14,13 +14,13 @@ import (
 func TestShellRectCircleWitnessKeepsToleranceAndFallsBack(t *testing.T) {
 	t.Parallel()
 	outer := loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 100, V: 0}, TEnd: 1},
-		lineSeg{Start: Point2{U: 100, V: 0}, End: Point2{U: 100, V: 60}, TEnd: 1},
-		lineSeg{Start: Point2{U: 100, V: 60}, End: Point2{U: 0, V: 60}, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: 60}, End: Point2{U: 0, V: 0}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 100, V: 0}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 100, V: 0}, End: planePoint{U: 100, V: 60}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 100, V: 60}, End: planePoint{U: 0, V: 60}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 60}, End: planePoint{U: 0, V: 0}, TEnd: 1},
 	}}
 	hole := loopRecord{Segments: []curveSegment{
-		circleSeg{Center: Point2{U: 50, V: 30}, Radius: units.Millimeters(8), TStart: 1},
+		circleSeg{Center: planePoint{U: 50, V: 30}, Radius: units.Millimeters(8), TStart: 1},
 	}}
 	for _, tc := range []struct {
 		name      string
@@ -34,9 +34,9 @@ func TestShellRectCircleWitnessKeepsToleranceAndFallsBack(t *testing.T) {
 		{"margin passes", profileRecord{Outer: outer}, 30 - 4e-8, true},
 		{"margin refuses", profileRecord{Outer: outer}, 30 - 2e-8, false},
 		{"nonrectangle falls back", profileRecord{Outer: loopRecord{Segments: []curveSegment{
-			lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 100, V: 0}, TEnd: 1},
-			lineSeg{Start: Point2{U: 100, V: 0}, End: Point2{U: 50, V: 60}, TEnd: 1},
-			lineSeg{Start: Point2{U: 50, V: 60}, End: Point2{U: 0, V: 0}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 100, V: 0}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 100, V: 0}, End: planePoint{U: 50, V: 60}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 50, V: 60}, End: planePoint{U: 0, V: 0}, TEnd: 1},
 		}}}, 5, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

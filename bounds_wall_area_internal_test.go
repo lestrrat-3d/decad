@@ -563,7 +563,7 @@ func TestLoftCertifiedChordLowerIsALowerBound(t *testing.T) {
 	for _, turn := range []float64{0.01, 0.25, 0.5, 1} {
 		for _, m := range []int{1, 3, 64, 1024} {
 			seg := circleSeg{
-				Center: Point2{U: 1.5, V: -0.5},
+				Center: planePoint{U: 1.5, V: -0.5},
 				Radius: units.Millimeters(radius),
 				CCW:    true,
 				TStart: 0,
@@ -587,7 +587,7 @@ func TestLoftCertifiedChordLowerIsALowerBound(t *testing.T) {
 			}
 		}
 	}
-	zero := circleSeg{Center: Point2{}, Radius: units.Millimeters(1), CCW: true, TStart: 0.25, TEnd: 0.25}
+	zero := circleSeg{Center: planePoint{}, Radius: units.Millimeters(1), CCW: true, TStart: 0.25, TEnd: 0.25}
 	require.Equal(t, 0.0, loftmesh.CertifiedChordLower(zero, 4), "a zero sweep has no chord to bound")
 	require.Equal(t, 0.0, loftmesh.CertifiedChordLower(lineSeg{}, 4), "a record with no circular enclosure publishes the empty bound")
 	require.Equal(t, 0.0, loftmesh.CertifiedChordLower(zero, 0), "a non-positive station count has no cell to bound")
@@ -614,9 +614,9 @@ func TestLoftCertifiedChordLowerIsALowerBound(t *testing.T) {
 func TestLoftCertifiedChordLowerRefusesTheHeldWalkFloats(t *testing.T) {
 	t.Parallel()
 	seg := arcSeg{
-		Center: Point2{U: 0, V: 0},
-		Start:  Point2{U: 20724598.671875, V: 50331168.203125},
-		End:    Point2{U: 20719427.640625, V: 50333297.140625},
+		Center: planePoint{U: 0, V: 0},
+		Start:  planePoint{U: 20724598.671875, V: 50331168.203125},
+		End:    planePoint{U: 20719427.640625, V: 50333297.140625},
 		TStart: 0,
 		TEnd:   1,
 	}

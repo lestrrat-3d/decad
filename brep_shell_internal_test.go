@@ -322,13 +322,13 @@ func TestBrepShellThroughCutP1(t *testing.T) {
 	require.True(t, rim.planar())
 	require.Equal(t, 20.0, rim.z0)
 	require.Len(t, rim.region.Holes, 1)
-	var corners []Point2
+	var corners []planePoint
 	for _, seg := range rim.region.Holes[0].Segments {
 		from, _, ok := brepgeom.NaturalLine(seg)
 		require.True(t, ok)
 		corners = append(corners, from)
 	}
-	require.ElementsMatch(t, []Point2{{U: 2, V: 2}, {U: 38, V: 2}, {U: 38, V: 18}, {U: 2, V: 18}}, corners)
+	require.ElementsMatch(t, []planePoint{{U: 2, V: 2}, {U: 38, V: 2}, {U: 38, V: 18}, {U: 2, V: 18}}, corners)
 
 	require.Len(t, shellCylinders(result, 5, shellY), 1)
 	require.Equal(t, [][2]float64{{2, 18}}, shellWallLevels(bp, 5))
@@ -770,7 +770,7 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 	require.ErrorContains(t, err, "has no cavity hole to partner")
 	require.ErrorContains(t, err, "modify-general SG7")
 	_, err = throughCutRims(t.Context(), budget, bp, tc, doctor(func(r *profileRecord) {
-		r.Holes = append(r.Holes, loopRecord{Segments: []curveSegment{circleSeg{Center: Point2{U: 30, V: 10}, Radius: units.Millimeters(1), TEnd: 1}}})
+		r.Holes = append(r.Holes, loopRecord{Segments: []curveSegment{circleSeg{Center: planePoint{U: 30, V: 10}, Radius: units.Millimeters(1), TEnd: 1}}})
 	}), eroded, dilated, topOnly)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "neither its outer loop nor a hole of the eroded section")

@@ -15,7 +15,7 @@ import (
 // exact affine plane spanned by the requested held U and V vectors. It returns
 // a rounded plane-local polygon and a displacement covering every matched
 // point of its exact source boundary in both local and world coordinates.
-func obliqueRectangleClip(pp prismPayload, plane r3.Frame) ([]Point2, float64, bool) {
+func obliqueRectangleClip(pp prismPayload, plane r3.Frame) ([]planePoint, float64, bool) {
 	u0, u1, v0, v1, ok := momentinput.RectangleBounds(pp.Profile)
 	if !ok || pp.BlendKind != "" || len(pp.BlendSegs) != 0 || pp.Z0 >= pp.Z1 {
 		return nil, 0, false
@@ -79,7 +79,7 @@ func obliqueRectangleClip(pp prismPayload, plane r3.Frame) ([]Point2, float64, b
 		return nil, 0, false
 	}
 	sectionSortRatPolygon(exact)
-	proxy := make([]Point2, len(exact))
+	proxy := make([]planePoint, len(exact))
 	delta := float64(0)
 	uNorm := proofbound.DvLenUpper(proofarith.DyVec(plane.U()))
 	vNorm := proofbound.DvLenUpper(proofarith.DyVec(plane.V()))
@@ -89,7 +89,7 @@ func obliqueRectangleClip(pp prismPayload, plane r3.Frame) ([]Point2, float64, b
 		if math.IsNaN(u) || math.IsInf(u, 0) || math.IsNaN(v) || math.IsInf(v, 0) {
 			return nil, 0, false
 		}
-		proxy[i] = Point2{U: u, V: v}
+		proxy[i] = planePoint{U: u, V: v}
 		uError := proofarith.RationalFloatError(point.u, u)
 		vError := proofarith.RationalFloatError(point.v, v)
 		local := proofbound.AbsSumUpper(uError, vError)
@@ -186,7 +186,7 @@ func sectionSortRatPolygon(points []sectionRatPoint) {
 	})
 }
 
-func sectionMatchedConvex(source []sectionRatPoint, rounded []Point2) bool {
+func sectionMatchedConvex(source []sectionRatPoint, rounded []planePoint) bool {
 	if len(source) != len(rounded) {
 		return false
 	}

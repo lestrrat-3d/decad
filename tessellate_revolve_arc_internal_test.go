@@ -295,7 +295,7 @@ func TestRevolveArcStationEnclosesTheRecordedPoint(t *testing.T) {
 	// the station's stored pair can be checked against the recorded circle by
 	// hand.
 	lift := revolvemesh.RevolveLift{DU: 1}
-	seg := circleSeg{Center: Point2{U: 0, V: 10}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
+	seg := circleSeg{Center: planePoint{U: 0, V: 10}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
 
 	station, gap, err := revolvesampling.ArcStation(lift, seg, 1, 4)
 	require.NoError(t, err)
@@ -315,7 +315,7 @@ func TestRevolveArcStationEnclosesTheRecordedPoint(t *testing.T) {
 
 	// A circle centred ON the axis has a station at ρ = 0 only where the
 	// generator crosses it, which sweeps no manifold solid.
-	onAxis := circleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
+	onAxis := circleSeg{Center: planePoint{U: 0, V: 0}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
 	_, _, err = revolvesampling.ArcStation(lift, onAxis, 2, 4)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
@@ -373,7 +373,7 @@ func TestRequireWalkClearanceGatesTheSagittaTubes(t *testing.T) {
 	t.Parallel()
 	// A flattened rectangle whose two long sides are 0.3 apart: with a 0.1
 	// tube on each the pair clears, and with a 0.2 tube on each it does not.
-	pts := []Point2{{U: 0, V: 0}, {U: 10, V: 0}, {U: 10, V: 0.3}, {U: 0, V: 0.3}}
+	pts := []planePoint{{U: 0, V: 0}, {U: 10, V: 0}, {U: 10, V: 0.3}, {U: 0, V: 0.3}}
 	loops := [][]int{{0, 1, 2, 3}}
 
 	require.NoError(t, requireWalkClearance(t.Context(), pts, loops, [][]float64{{0.1, 0, 0.1, 0}}))
@@ -428,7 +428,7 @@ func TestRevolveCircularMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, p := tc.build(t)
-			axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+			axis := SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}}
 			body, err := Revolve(t.Context(), New(), s, p, axis, FullRevolution{})
 			require.NoError(t, err)
 			mesh, err := body.Tessellate(t.Context(), units.Millimeters(tc.tol))

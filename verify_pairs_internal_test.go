@@ -137,7 +137,7 @@ func internalFrustumBody(t *testing.T, doc *Document, a, b r3.Vec, ra, rb float6
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := Revolve(t.Context(), doc, s, s.Profiles()[0], SketchLine{End: Point2{U: 1}}, FullRevolution{})
+	body, err := Revolve(t.Context(), doc, s, s.Profiles()[0], SketchLine{End: planePoint{U: 1}}, FullRevolution{})
 	require.NoError(t, err)
 	d, ok := b.Sub(a).Normalize()
 	require.True(t, ok)

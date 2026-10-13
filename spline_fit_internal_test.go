@@ -54,7 +54,7 @@ func monomialFromBezierCubic(b0, b1, b2, b3 *big.Rat) [4]float64 {
 
 func TestFitSplineBezierMatchesSpansToAFewULPs(t *testing.T) {
 	t.Parallel()
-	fit := []Point2{{U: 0, V: 0}, {U: 4, V: 3}, {U: 9, V: -1}, {U: 12, V: 2}, {U: 15, V: 0}}
+	fit := []planePoint{{U: 0, V: 0}, {U: 4, V: 3}, {U: 9, V: -1}, {U: 12, V: 2}, {U: 15, V: 0}}
 	seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1}
 
 	spans, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
@@ -94,7 +94,7 @@ func TestFitSplineBezierMatchesSpansToAFewULPs(t *testing.T) {
 // coincide within geom's absolute 1e-12 threshold.
 func TestFitSplineEndpointsAreFitZeroAndActiveLast(t *testing.T) {
 	t.Parallel()
-	fit := []Point2{
+	fit := []planePoint{
 		{U: 0, V: 0}, {U: 10, V: 0}, {U: 10, V: 10},
 		{U: 10 + 3e-13, V: 10}, // collapses into the point before it
 	}
@@ -105,16 +105,16 @@ func TestFitSplineEndpointsAreFitZeroAndActiveLast(t *testing.T) {
 
 	start, end, err := splinebezier.FreeformEndpoints(spans, false)
 	require.NoError(t, err)
-	require.Equal(t, fit[0], Point2(start), "the chain's first control point is Fit[0] exactly")
-	require.NotEqual(t, fit[len(fit)-1], Point2(end),
+	require.Equal(t, fit[0], start, "the chain's first control point is Fit[0] exactly")
+	require.NotEqual(t, fit[len(fit)-1], end,
 		"the last two fit points coincide within 1e-12, so the active end is not the raw Fit[len-1]")
-	require.Equal(t, fit[2], Point2(end), "the active end is the FIRST of the collapsed run, Points[k-1]")
+	require.Equal(t, fit[2], end, "the active end is the FIRST of the collapsed run, Points[k-1]")
 
 	// Cross-checked against geom's own interpolant directly.
 	interp, err := geom.NewFitInterpolant(splinebezier.FitCoords(point2ToRecordSlice(fit)))
 	require.NoError(t, err)
 	last := interp.Points[len(interp.Points)-1]
-	require.Equal(t, Point2{U: last[0], V: last[1]}, Point2(end))
+	require.Equal(t, planePoint{U: last[0], V: last[1]}, end)
 }
 
 // allocatedByFit reports how many bytes a call allocates in total — the only
@@ -140,9 +140,9 @@ func allocatedByFit(call func()) uint64 {
 // reading meaningless rather than making it fail loudly.
 func TestFitInterpolantChargeRefusesBeforeSolving(t *testing.T) {
 	const points = 20000 // 64*20000 = 1,280,000 > 2^20
-	fit := make([]Point2, points)
+	fit := make([]planePoint, points)
 	for i := range fit {
-		fit[i] = Point2{U: float64(i), V: float64(i % 7)}
+		fit[i] = planePoint{U: float64(i), V: float64(i % 7)}
 	}
 	seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1}
 
@@ -181,7 +181,7 @@ func TestFitInterpolantCostIsLinear(t *testing.T) {
 func TestFitInterpolantNonFiniteMapsToR16(t *testing.T) {
 	t.Parallel()
 	seg := fitSplineSeg{
-		Fit:    point2ToRecordSlice([]Point2{{U: -1e308, V: 0}, {U: 1e308, V: 1}}),
+		Fit:    point2ToRecordSlice([]planePoint{{U: -1e308, V: 0}, {U: 1e308, V: 1}}),
 		TStart: 0, TEnd: 1,
 	}
 	_, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
@@ -196,7 +196,7 @@ func TestFitInterpolantNonFiniteMapsToR16(t *testing.T) {
 // record.go's own >= 2 floor.
 func TestFitSplineTooFewPointsRefuses(t *testing.T) {
 	t.Parallel()
-	seg := fitSplineSeg{Fit: point2ToRecordSlice([]Point2{{U: 1}}), TStart: 0, TEnd: 1}
+	seg := fitSplineSeg{Fit: point2ToRecordSlice([]planePoint{{U: 1}}), TStart: 0, TEnd: 1}
 	_, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrDegenerate)
@@ -210,7 +210,7 @@ func TestFitSplineTooFewPointsRefuses(t *testing.T) {
 func TestFitSplineAllCoincidentReturnsNoSpans(t *testing.T) {
 	t.Parallel()
 	seg := fitSplineSeg{
-		Fit:    point2ToRecordSlice([]Point2{{U: 3, V: 4}, {U: 3, V: 4}, {U: 3, V: 4}}),
+		Fit:    point2ToRecordSlice([]planePoint{{U: 3, V: 4}, {U: 3, V: 4}, {U: 3, V: 4}}),
 		TStart: 0, TEnd: 1,
 	}
 	spans, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})
@@ -222,7 +222,7 @@ func TestFitSplineAllCoincidentReturnsNoSpans(t *testing.T) {
 // reconstructed endpoints and interior points stay on sketch's interpolant.
 func TestFitSplineTrimmedRangePreservesSource(t *testing.T) {
 	t.Parallel()
-	fit := []Point2{{U: 0}, {U: 1, V: 1}, {U: 2}}
+	fit := []planePoint{{U: 0}, {U: 1, V: 1}, {U: 2}}
 	for _, bounds := range [][2]float64{{0.25, 0.75}, {0.75, 0.25}} {
 		seg := fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: bounds[0], TEnd: bounds[1]}
 		spans, err := splinebezier.FitSplineBezierSpans(seg, &freeform.FreeformWork{})

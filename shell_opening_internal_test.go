@@ -45,9 +45,9 @@ func internalSideSegments(t *testing.T, pp prismPayload, alongU bool, at float64
 }
 
 // internalLoopPoints lists a line loop's start points in walk order.
-func internalLoopPoints(t *testing.T, loop loopRecord) []Point2 {
+func internalLoopPoints(t *testing.T, loop loopRecord) []planePoint {
 	t.Helper()
-	out := make([]Point2, len(loop.Segments))
+	out := make([]planePoint, len(loop.Segments))
 	for i, seg := range loop.Segments {
 		l, ok := seg.(lineSeg)
 		require.True(t, ok, "segment %d is %T", i, seg)
@@ -66,7 +66,7 @@ func internalLoopPoints(t *testing.T, loop loopRecord) []Point2 {
 // displacement is zero.
 func TestSideOpeningRegionsUChannel(t *testing.T) {
 	t.Parallel()
-	pt := func(u, v float64) Point2 { return Point2{U: u, V: v} }
+	pt := func(u, v float64) planePoint { return planePoint{U: u, V: v} }
 	t.Run("inward", func(t *testing.T) {
 		t.Parallel()
 		box := internalBoxBody(t, New(), 0, 0, 40, 20, 10)
@@ -74,11 +74,11 @@ func TestSideOpeningRegionsUChannel(t *testing.T) {
 		budget := proofbound.NewWorkBudget(t.Context())
 		sec, err := testSideOpeningRegions(budget, pp, internalSideSegments(t, pp, false, 0), 2, 1, units.Millimeters(2), 2)
 		require.NoError(t, err)
-		require.Equal(t, []Point2{
+		require.Equal(t, []planePoint{
 			pt(0, 0), pt(40, 0), pt(40, 20), pt(0, 20), pt(0, 18),
 			pt(38, 18), pt(38, 2), pt(0, 2),
 		}, internalLoopPoints(t, sec.Wall.Outer))
-		require.Equal(t, []Point2{pt(0, 2), pt(38, 2), pt(38, 18), pt(0, 18)}, internalLoopPoints(t, sec.Cavity.Outer))
+		require.Equal(t, []planePoint{pt(0, 2), pt(38, 2), pt(38, 18), pt(0, 18)}, internalLoopPoints(t, sec.Cavity.Outer))
 		require.Equal(t, pp.Profile, sec.Caps)
 		require.Empty(t, sec.Corners, "both cuts run forward along the removed face")
 		require.Zero(t, sec.Delta)
@@ -97,10 +97,10 @@ func TestSideOpeningRegionsUChannel(t *testing.T) {
 		budget := proofbound.NewWorkBudget(t.Context())
 		sec, err := testSideOpeningRegions(budget, pp, sides, 2, -1, units.Millimeters(2), 2)
 		require.NoError(t, err)
-		require.Equal(t, []Point2{pt(0, -2), pt(40, -2), pt(40, 0), pt(0, 0)}, internalLoopPoints(t, sec.Wall.Outer))
-		require.Equal(t, []Point2{pt(0, -2), pt(40, -2), pt(40, 20), pt(0, 20)}, internalLoopPoints(t, sec.Caps.Outer))
+		require.Equal(t, []planePoint{pt(0, -2), pt(40, -2), pt(40, 0), pt(0, 0)}, internalLoopPoints(t, sec.Wall.Outer))
+		require.Equal(t, []planePoint{pt(0, -2), pt(40, -2), pt(40, 20), pt(0, 20)}, internalLoopPoints(t, sec.Caps.Outer))
 		require.Equal(t, pp.Profile, sec.Cavity)
-		require.ElementsMatch(t, []Point2{pt(0, 0), pt(40, 0)}, point2FromRecordSlice(sec.Corners))
+		require.ElementsMatch(t, []planePoint{pt(0, 0), pt(40, 0)}, point2FromRecordSlice(sec.Corners))
 		require.Zero(t, sec.Delta)
 	})
 }
@@ -111,17 +111,17 @@ func TestSideOpeningRegionsUChannel(t *testing.T) {
 // (28,2) (28,8) (10,8) with area 316. Only the reflex end is marked.
 func TestSideOpeningRegionsLPrism(t *testing.T) {
 	t.Parallel()
-	pt := func(u, v float64) Point2 { return Point2{U: u, V: v} }
+	pt := func(u, v float64) planePoint { return planePoint{U: u, V: v} }
 	l := internalPolyPrismBodyAtZ(t, New(), [][2]float64{{0, 0}, {30, 0}, {30, 10}, {10, 10}, {10, 30}, {0, 30}}, 0, 10)
 	pp := l.payload.(prismPayload)
 	budget := proofbound.NewWorkBudget(t.Context())
 	sec, err := testSideOpeningRegions(budget, pp, internalSideSegments(t, pp, false, 10), 2, 1, units.Millimeters(2), 2)
 	require.NoError(t, err)
-	require.Equal(t, []Point2{pt(10, 28), pt(2, 28), pt(2, 2), pt(28, 2), pt(28, 8), pt(10, 8)}, internalLoopPoints(t, sec.Cavity.Outer))
+	require.Equal(t, []planePoint{pt(10, 28), pt(2, 28), pt(2, 2), pt(28, 2), pt(28, 8), pt(10, 8)}, internalLoopPoints(t, sec.Cavity.Outer))
 	area, err := loopSignedAreaCB(sec.Cavity.Outer)
 	require.NoError(t, err)
 	require.Equal(t, 316.0, area)
-	require.Equal(t, []Point2{pt(10, 10)}, point2FromRecordSlice(sec.Corners))
+	require.Equal(t, []planePoint{pt(10, 10)}, point2FromRecordSlice(sec.Corners))
 	require.Zero(t, sec.Delta)
 }
 
@@ -175,7 +175,7 @@ func TestSideOpeningBrepChargesInexactThickness(t *testing.T) {
 func TestRequireAreaIdentityRefuses(t *testing.T) {
 	t.Parallel()
 	rect := func(u0, v0, u1, v1 float64) profileRecord {
-		p := []Point2{{U: u0, V: v0}, {U: u1, V: v0}, {U: u1, V: v1}, {U: u0, V: v1}}
+		p := []planePoint{{U: u0, V: v0}, {U: u1, V: v0}, {U: u1, V: v1}, {U: u0, V: v1}}
 		var loop loopRecord
 		for i := range p {
 			loop.Segments = append(loop.Segments, lineSeg{Start: p[i], End: p[(i+1)%4], TStart: 0, TEnd: 1})
@@ -190,7 +190,7 @@ func TestRequireAreaIdentityRefuses(t *testing.T) {
 
 // internalSideSegmentsOn names the outer-loop segments of pp whose recorded
 // line runs from a to b.
-func internalSideSegmentsOn(t *testing.T, pp prismPayload, a, b Point2) map[int]struct{} {
+func internalSideSegmentsOn(t *testing.T, pp prismPayload, a, b planePoint) map[int]struct{} {
 	t.Helper()
 	out := map[int]struct{}{}
 	for i, seg := range pp.Profile.Outer.Segments {
@@ -206,7 +206,7 @@ func internalSideSegmentsOn(t *testing.T, pp prismPayload, a, b Point2) map[int]
 
 // internalNear asserts the held point p lies within bound of the exact point
 // (u, v), compared exactly.
-func internalNear(t *testing.T, p Point2, u, v *big.Rat, bound float64) {
+func internalNear(t *testing.T, p planePoint, u, v *big.Rat, bound float64) {
 	t.Helper()
 	du := new(big.Rat).Sub(proofarith.FloatRat(p.U), u)
 	dv := new(big.Rat).Sub(proofarith.FloatRat(p.V), v)
@@ -226,7 +226,7 @@ func internalNear(t *testing.T, p Point2, u, v *big.Rat, bound float64) {
 // (10.4, 28), which splits the cap region's walk there.
 func TestSideOpeningRegionsOblique(t *testing.T) {
 	t.Parallel()
-	pt := func(u, v float64) Point2 { return Point2{U: u, V: v} }
+	pt := func(u, v float64) planePoint { return planePoint{U: u, V: v} }
 	rat := func(n, d int64) *big.Rat { return big.NewRat(n, d) }
 	t.Run("oblique removed face", func(t *testing.T) {
 		t.Parallel()
@@ -237,12 +237,12 @@ func TestSideOpeningRegionsOblique(t *testing.T) {
 		require.NoError(t, err)
 		caps := internalLoopPoints(t, sec.Caps.Outer)
 		require.Len(t, caps, 5)
-		require.Equal(t, []Point2{pt(0, 9), pt(0, 0), pt(12, 0)}, caps[:3])
+		require.Equal(t, []planePoint{pt(0, 9), pt(0, 0), pt(12, 0)}, caps[:3])
 		internalNear(t, caps[3], rat(8, 1), rat(3, 1), sec.Delta)
 		internalNear(t, caps[4], rat(3, 1), rat(27, 4), sec.Delta)
 		cavity := internalLoopPoints(t, sec.Cavity.Outer)
-		require.Equal(t, []Point2{caps[4], pt(3, 3), caps[3]}, cavity)
-		require.ElementsMatch(t, []Point2{pt(12, 0), pt(0, 9)}, point2FromRecordSlice(sec.Corners))
+		require.Equal(t, []planePoint{caps[4], pt(3, 3), caps[3]}, cavity)
+		require.ElementsMatch(t, []planePoint{pt(12, 0), pt(0, 9)}, point2FromRecordSlice(sec.Corners))
 	})
 	t.Run("slanted reflex end", func(t *testing.T) {
 		t.Parallel()
@@ -254,12 +254,12 @@ func TestSideOpeningRegionsOblique(t *testing.T) {
 		cavity := internalLoopPoints(t, sec.Cavity.Outer)
 		require.Len(t, cavity, 7)
 		internalNear(t, cavity[0], rat(52, 5), rat(28, 1), sec.Delta)
-		require.Equal(t, []Point2{pt(2, 28), pt(2, 2), pt(28, 2), pt(28, 8)}, cavity[1:5])
+		require.Equal(t, []planePoint{pt(2, 28), pt(2, 2), pt(28, 2), pt(28, 8)}, cavity[1:5])
 		internalNear(t, cavity[5], rat(72, 5), rat(8, 1), sec.Delta)
 		require.Equal(t, pt(14, 10), cavity[6], "R' turns at the corner it runs back through")
 		caps := internalLoopPoints(t, sec.Caps.Outer)
-		require.Equal(t, []Point2{pt(10, 30), pt(0, 30), pt(0, 0), pt(30, 0), pt(30, 10), pt(14, 10), cavity[0]}, caps)
-		require.ElementsMatch(t, []Point2{pt(14, 10), pt(10, 30)}, point2FromRecordSlice(sec.Corners))
+		require.Equal(t, []planePoint{pt(10, 30), pt(0, 30), pt(0, 0), pt(30, 0), pt(30, 10), pt(14, 10), cavity[0]}, caps)
+		require.ElementsMatch(t, []planePoint{pt(14, 10), pt(10, 30)}, point2FromRecordSlice(sec.Corners))
 	})
 }
 
@@ -273,11 +273,11 @@ func TestSideOpeningRegionsOblique(t *testing.T) {
 // zero.
 func TestSideOpeningCutReachCoversExactCut(t *testing.T) {
 	t.Parallel()
-	pt := func(u, v float64) Point2 { return Point2{U: u, V: v} }
+	pt := func(u, v float64) planePoint { return planePoint{U: u, V: v} }
 	type family struct {
 		name   string
 		pts    [][2]float64
-		a, b   Point2
+		a, b   planePoint
 		cavity func(t *big.Rat) [][2]*big.Rat
 	}
 	// lin is a + b·t over the rationals.
@@ -356,9 +356,9 @@ func internalDSectionPrism(t *testing.T) (prismPayload, int, int) {
 }
 
 // internalWalkedPoints lists a loop's walked start points in walk order.
-func internalWalkedPoints(t *testing.T, loop loopRecord) []Point2 {
+func internalWalkedPoints(t *testing.T, loop loopRecord) []planePoint {
 	t.Helper()
-	out := make([]Point2, len(loop.Segments))
+	out := make([]planePoint, len(loop.Segments))
 	for i, seg := range loop.Segments {
 		from, _, ok := offset2d.WalkedEnds(seg)
 		require.True(t, ok, "segment %d is %T", i, seg)
@@ -423,7 +423,7 @@ func internalCutWithin(t *testing.T, seg curveSegment, tCut float64, u *big.Rat,
 // outside a zero bound).
 func TestSideOpeningRegionsDSection(t *testing.T) {
 	t.Parallel()
-	pt := func(u, v float64) Point2 { return Point2{U: u, V: v} }
+	pt := func(u, v float64) planePoint { return planePoint{U: u, V: v} }
 	pp, arc, chord := internalDSectionPrism(t)
 	own := pp.Profile.Outer.Segments[arc].(arcSeg)
 	regions := func(t *testing.T, removed, keptCaps int, tmm float64) (prismshell.Section, error) {
@@ -444,8 +444,8 @@ func TestSideOpeningRegionsDSection(t *testing.T) {
 		t.Parallel()
 		sec, err := regions(t, chord, 2, 1)
 		require.NoError(t, err)
-		require.Equal(t, []Point2{pt(0, -4), pt(0, 4)}, internalWalkedPoints(t, sec.Cavity.Outer))
-		require.Equal(t, []Point2{pt(0, -5), pt(0, 5), pt(0, 4), pt(0, -4)}, internalWalkedPoints(t, sec.Wall.Outer))
+		require.Equal(t, []planePoint{pt(0, -4), pt(0, 4)}, internalWalkedPoints(t, sec.Cavity.Outer))
+		require.Equal(t, []planePoint{pt(0, -5), pt(0, 5), pt(0, 4), pt(0, -4)}, internalWalkedPoints(t, sec.Wall.Outer))
 		require.Empty(t, sec.Corners)
 		require.Zero(t, sec.Delta)
 		require.Zero(t, sec.CutGap, "the rims are lines")
@@ -455,12 +455,12 @@ func TestSideOpeningRegionsDSection(t *testing.T) {
 		sec, err := regions(t, arc, 2, 3)
 		require.NoError(t, err)
 		require.Equal(t, lineSeg{Start: pt(3, 4), End: pt(3, -4), TStart: 0, TEnd: 1}, sec.Cavity.Outer.Segments[0], "C opens with x = 3")
-		require.Equal(t, []Point2{pt(0, 5), pt(0, -5)}, internalWalkedPoints(t, sec.Wall.Outer)[:2])
+		require.Equal(t, []planePoint{pt(0, 5), pt(0, -5)}, internalWalkedPoints(t, sec.Wall.Outer)[:2])
 		internalArcPieces(t, own, sec)
 		b, a := rims(t, sec)
 		require.Equal(t, 0.0, b.TStart, "the rim at (0, −5) starts at the arc's own start")
 		require.Equal(t, 1.0, a.TEnd, "the rim at (0, 5) ends at the arc's own end")
-		require.ElementsMatch(t, []Point2{pt(0, -5), pt(0, 5)}, point2FromRecordSlice(sec.Corners), "both end vertices on the removed arc are marked")
+		require.ElementsMatch(t, []planePoint{pt(0, -5), pt(0, 5)}, point2FromRecordSlice(sec.Corners), "both end vertices on the removed arc are marked")
 		require.Zero(t, sec.Delta, "the exact cuts enclose to their held floats")
 		require.Positive(t, sec.CutGap, "the cut parameter is a float")
 		internalCutWithin(t, b, b.TEnd, big.NewRat(3, 1), -1, 16, sec.CutGap)
@@ -521,7 +521,7 @@ func TestSideOpeningRegionsArcArcCut(t *testing.T) {
 	pp := body.payload.(prismPayload)
 	removed := map[int]struct{}{}
 	for i, seg := range pp.Profile.Outer.Segments {
-		if a, ok := seg.(arcSeg); ok && a.Center == (Point2{}) {
+		if a, ok := seg.(arcSeg); ok && a.Center == (planePoint{}) {
 			continue
 		}
 		removed[i] = struct{}{}
@@ -535,7 +535,7 @@ func TestSideOpeningRegionsArcArcCut(t *testing.T) {
 	}
 
 	exact := regions(t, 2, 4)
-	require.Equal(t, []Point2{{U: 0, V: 17}, {U: 15, V: 8}, {U: 13, V: 16}, {U: 13, V: 20}, {U: 0, V: 20}},
+	require.Equal(t, []planePoint{{U: 0, V: 17}, {U: 15, V: 8}, {U: 13, V: 16}, {U: 13, V: 20}, {U: 0, V: 20}},
 		internalWalkedPoints(t, exact.Cavity.Outer))
 
 	sec := regions(t, 0, 2)
@@ -570,7 +570,7 @@ func internalArcSectionPrism(t *testing.T, build func(s *sketch.Sketch)) (prismP
 	pp := body.payload.(prismPayload)
 	removed := map[int]struct{}{}
 	for i, seg := range pp.Profile.Outer.Segments {
-		if a, ok := seg.(arcSeg); ok && a.Center == (Point2{}) {
+		if a, ok := seg.(arcSeg); ok && a.Center == (planePoint{}) {
 			continue
 		}
 		removed[i] = struct{}{}
@@ -626,11 +626,11 @@ func TestSideOpeningRegionsArcExtension(t *testing.T) {
 	}
 	// offsetArc is where O's first segment, K', an arc about the origin,
 	// starts and ends.
-	offsetArc := func(t *testing.T, sec prismshell.Section) (Point2, Point2) {
+	offsetArc := func(t *testing.T, sec prismshell.Section) (planePoint, planePoint) {
 		t.Helper()
 		arc, ok := sec.Caps.Outer.Segments[0].(arcSeg)
 		require.True(t, ok, "O opens with the offset arc")
-		require.Equal(t, Point2{}, Point2(arc.Center))
+		require.Equal(t, planePoint{}, arc.Center)
 		from, to, ok := offset2d.WalkedEnds(arc)
 		require.True(t, ok)
 		return from, to
@@ -643,10 +643,10 @@ func TestSideOpeningRegionsArcExtension(t *testing.T) {
 		require.Len(t, removed, 3)
 		sec := regions(t, pp, removed, 2, 2.375)
 		from, to := offsetArc(t, sec)
-		require.Equal(t, Point2{U: 0, V: 10.625}, from)
-		require.Equal(t, Point2{U: 5, V: 9.375}, to)
+		require.Equal(t, planePoint{U: 0, V: 10.625}, from)
+		require.Equal(t, planePoint{U: 5, V: 9.375}, to)
 		// 9.375/5 < 12/5: the cut lies past the arc's own end angle.
-		require.Equal(t, Point2{U: 5, V: 9.375}, internalWalkedPoints(t, sec.Caps.Outer)[1], "R' starts at the cut")
+		require.Equal(t, planePoint{U: 5, V: 9.375}, internalWalkedPoints(t, sec.Caps.Outer)[1], "R' starts at the cut")
 		require.Zero(t, sec.Delta)
 		require.Zero(t, sec.CutGap, "the rims are lines")
 	})
@@ -667,7 +667,7 @@ func TestSideOpeningRegionsArcExtension(t *testing.T) {
 		require.Len(t, removed, 4)
 		sec := regions(t, pp, removed, 0, 4)
 		from, q := offsetArc(t, sec)
-		require.Equal(t, Point2{U: 0, V: 9}, from)
+		require.Equal(t, planePoint{U: 0, V: 9}, from)
 		require.Negative(t, q.V, "the offset arc runs past (13, 0)")
 		require.Positive(t, sec.Delta)
 		require.Positive(t, sec.CutGap, "the rim is a range of the removed arc's complement")

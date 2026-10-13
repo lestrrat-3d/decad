@@ -83,7 +83,7 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 			loft.vertexBounds[position+j] = proofbound.AbsSumUpper(round,
 				proofbound.ProductUpper(trim.source.sourceStationRound, mapped.Stretch))
 		}
-		for row, end := range [...]Point2{section.start, section.end} {
+		for row, end := range [...]planePoint{section.start, section.end} {
 			position := row * 2 * len(seam)
 			if row == 1 {
 				position = 2 * len(seam)
@@ -120,7 +120,7 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 // The endpoints remain on the same exact radial ray as the mapped station.
 // This is a split of a source meridian cell, with radial and float movement
 // separately charged; angular chording is not included in this vertex bound.
-func revolveLoftFacesMeridianPoint(seam loftFaceRatVec, end Point2) (r3.Vec, float64, bool) {
+func revolveLoftFacesMeridianPoint(seam loftFaceRatVec, end planePoint) (r3.Vec, float64, bool) {
 	if seam[0] == nil || seam[1] == nil || seam[2] == nil || end.V <= 0 {
 		return r3.Vec{}, 0, false
 	}

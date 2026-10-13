@@ -91,13 +91,13 @@ func TestMirrorJoinChargesTheReflectionRounding(t *testing.T) {
 // record walkOf refuses.
 func TestMirrorJoinCircleImageKeepsItsSense(t *testing.T) {
 	t.Parallel()
-	line, err := admitMirrorLine([]lineSeg{{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1}})
+	line, err := admitMirrorLine([]lineSeg{{Start: planePoint{U: 0, V: 10}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1}})
 	require.NoError(t, err)
-	hole := circleSeg{Center: Point2{U: 5, V: 5}, Radius: units.Millimeters(2), CCW: false, TStart: 1, TEnd: 0}
+	hole := circleSeg{Center: planePoint{U: 5, V: 5}, Radius: units.Millimeters(2), CCW: false, TStart: 1, TEnd: 0}
 	img, charge, err := line.mirrorReversedRun(proofbound.NewWorkBudget(t.Context()), []curveSegment{hole})
 	require.NoError(t, err)
 	require.Zero(t, charge)
-	want := circleSeg{Center: Point2{U: -5, V: 5}, Radius: units.Millimeters(2), CCW: false, TStart: 1, TEnd: 0}
+	want := circleSeg{Center: planePoint{U: -5, V: 5}, Radius: units.Millimeters(2), CCW: false, TStart: 1, TEnd: 0}
 	require.Equal(t, []curveSegment{want}, img)
 	_, err = boundarywalk.WalkOf(img[0], nil)
 	require.NoError(t, err)

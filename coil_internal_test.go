@@ -29,7 +29,7 @@ import (
 //     stations.
 
 // coilAxisV is the sketch's own V axis.
-var coilAxisV = SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}
+var coilAxisV = SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 0, V: 1}}
 
 // coilLoopsSketch fixes every loop's points on the XY plane, closes each
 // loop with lines, and returns the profile with the most holes.
@@ -380,7 +380,7 @@ func TestCoilTiltedAxisAgrees(t *testing.T) {
 	// a rounding bound. The profile is the square ρ ∈ [10, 15], ζ ∈ [0, 5]
 	// about it, whose corners ζ·d + ρ·e_r land on integers.
 	ts, tp := coilLoopsSketch(t, [][2]float64{{-8, 6}, {-12, 9}, {-9, 13}, {-5, 10}})
-	tilted, err := Coil(t.Context(), New(), ts, tp, SketchLine{Start: Point2{}, End: Point2{U: 3, V: 4}},
+	tilted, err := Coil(t.Context(), New(), ts, tp, SketchLine{Start: planePoint{}, End: planePoint{U: 3, V: 4}},
 		units.Millimeters(6), units.Scalar(2))
 	require.NoError(t, err)
 	as, ap := coilLoopsSketch(t, [][2]float64{{10, 0}, {15, 0}, {15, 5}, {10, 5}})
@@ -541,7 +541,7 @@ func TestCoilRefusals(t *testing.T) {
 		// (3, 4) lies on the axis through (0, 0) along (3, 4); the axis
 		// direction's own rounding leaves that vertex's side undecided.
 		s, p := coilLoopsSketch(t, [][2]float64{{3, 4}, {-1, 7}, {-4, 3}})
-		refuse(t, ErrUnsupported, "does not prove it off the axis", s, p, SketchLine{Start: Point2{}, End: Point2{U: 3, V: 4}}, units.Millimeters(9), units.Scalar(0.5))
+		refuse(t, ErrUnsupported, "does not prove it off the axis", s, p, SketchLine{Start: planePoint{}, End: planePoint{U: 3, V: 4}}, units.Millimeters(9), units.Scalar(0.5))
 	})
 	t.Run("CS6 at one pitch", func(t *testing.T) {
 		s, p := coilLoopsSketch(t, [][2]float64{{2, 0}, {3, 0}, {3, 1.5}, {2, 1.5}})

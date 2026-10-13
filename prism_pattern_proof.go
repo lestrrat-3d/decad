@@ -46,7 +46,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 				continue
 			}
 			v := part.mesh.vertices[2*j]
-			r2 := prismpattern.RadialSq(Point2{U: v.X, V: v.Y})
+			r2 := prismpattern.RadialSq(planePoint{U: v.X, V: v.Y})
 			excess := new(big.Rat).Sub(proofarith.FloatRat(proofbound.RatSqrtUp(r2)),
 				proofarith.FloatRat(radius))
 			if excess.Sign() > 0 {

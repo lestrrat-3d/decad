@@ -331,7 +331,7 @@ func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 	x *big.Rat, segment, band int, time, lower, upper *big.Rat,
 	ref FeatureRef) (revolveLoftFacesVerticalCell, bool) {
 	cell := revolveLoftFacesVerticalCell{segment: segment, band: band, ref: ref}
-	unit := revolveSectionSpan{start: Point2{V: 1}, end: Point2{U: 1, V: 1}}
+	unit := revolveSectionSpan{start: planePoint{V: 1}, end: planePoint{U: 1, V: 1}}
 	radial, ok := mappedArcRadialTimeBand(ctx, trim, segment, band, unit)
 	if !ok || radial.arc == nil {
 		return cell, false

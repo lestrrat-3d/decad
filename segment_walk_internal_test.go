@@ -105,15 +105,15 @@ func TestLineWalkBoundsDyadicMatchRational(t *testing.T) {
 	t.Parallel()
 	segments := []lineSeg{
 		// An exact Pythagorean length takes the early return.
-		{Start: Point2{}, End: Point2{U: 3, V: 4}, TStart: 0, TEnd: 1},
+		{Start: planePoint{}, End: planePoint{U: 3, V: 4}, TStart: 0, TEnd: 1},
 		// The nearest float rounds upward, so the L1 upper steps again.
-		{Start: Point2{U: 742738.6080317994, V: -412993.430223764},
-			End: Point2{U: 93525.59566117924, V: -1.214321966296021e-06}, TStart: 0.5, TEnd: 0},
+		{Start: planePoint{U: 742738.6080317994, V: -412993.430223764},
+			End: planePoint{U: 93525.59566117924, V: -1.214321966296021e-06}, TStart: 0.5, TEnd: 0},
 		// The tangent error also needs that extra upward step.
-		{Start: Point2{U: -14, V: 564957.3992155936},
-			End: Point2{U: -45, V: -41.555421284777154}, TStart: 0.146174813846073, TEnd: 1},
+		{Start: planePoint{U: -14, V: 564957.3992155936},
+			End: planePoint{U: -45, V: -41.555421284777154}, TStart: 0.146174813846073, TEnd: 1},
 		// A non-finite endpoint remains unbounded.
-		{Start: Point2{U: math.Inf(1)}, End: Point2{U: 1, V: 2}, TStart: 0, TEnd: 1},
+		{Start: planePoint{U: math.Inf(1)}, End: planePoint{U: 1, V: 2}, TStart: 0, TEnd: 1},
 	}
 	rng := rand.New(rand.NewPCG(7, 9))
 	coord := func() float64 {
@@ -144,7 +144,7 @@ func TestLineWalkBoundsDyadicMatchRational(t *testing.T) {
 	}
 	for i := range 2048 {
 		seg := lineSeg{
-			Start: Point2{U: coord(), V: coord()}, End: Point2{U: coord(), V: coord()},
+			Start: planePoint{U: coord(), V: coord()}, End: planePoint{U: coord(), V: coord()},
 			TStart: param(), TEnd: param(),
 		}
 		if i%97 == 0 {
@@ -230,18 +230,18 @@ func TestArcWalkRadiusBoundMatchesEnclosureBracket(t *testing.T) {
 	// and at 10000 the test alone cost about 25s of a race shard.
 	for range 2000 {
 		scale := []float64{1, 1e-3, 1e3, 1e6}[rng.IntN(4)]
-		c := Point2{U: rng.NormFloat64() * scale, V: rng.NormFloat64() * scale}
-		var start, end Point2
+		c := planePoint{U: rng.NormFloat64() * scale, V: rng.NormFloat64() * scale}
+		var start, end planePoint
 		if rng.IntN(3) == 0 {
 			k := float64(1 + rng.IntN(50))
-			c = Point2{U: float64(rng.IntN(200) - 100), V: float64(rng.IntN(200) - 100)}
-			start = Point2{U: c.U + 3*k, V: c.V + 4*k}
-			end = Point2{U: c.U - 4*k, V: c.V + 3*k}
+			c = planePoint{U: float64(rng.IntN(200) - 100), V: float64(rng.IntN(200) - 100)}
+			start = planePoint{U: c.U + 3*k, V: c.V + 4*k}
+			end = planePoint{U: c.U - 4*k, V: c.V + 3*k}
 		} else {
 			r := math.Abs(rng.NormFloat64())*scale + scale/100
 			a, b := rng.Float64()*2*math.Pi, rng.Float64()*2*math.Pi
-			start = Point2{U: c.U + r*math.Cos(a), V: c.V + r*math.Sin(a)}
-			end = Point2{U: c.U + r*math.Cos(b), V: c.V + r*math.Sin(b)}
+			start = planePoint{U: c.U + r*math.Cos(a), V: c.V + r*math.Sin(a)}
+			end = planePoint{U: c.U + r*math.Cos(b), V: c.V + r*math.Sin(b)}
 		}
 		t0, t1 := 0.0, 1.0
 		if rng.IntN(2) == 0 {
@@ -251,9 +251,9 @@ func TestArcWalkRadiusBoundMatchesEnclosureBracket(t *testing.T) {
 	}
 
 	overflow := arcSeg{
-		Center: Point2{U: -1e308, V: 0},
-		Start:  Point2{U: 1e308, V: 0},
-		End:    Point2{U: -1e308, V: 1e308},
+		Center: planePoint{U: -1e308, V: 0},
+		Start:  planePoint{U: 1e308, V: 0},
+		End:    planePoint{U: -1e308, V: 1e308},
 		TStart: 0, TEnd: 1,
 	}
 	_, _, ok := circularbounds.WalkEnclosures(circularbounds.RecordSegment(overflow))

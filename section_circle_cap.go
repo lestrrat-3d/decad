@@ -16,7 +16,7 @@ import (
 // obliqueCircleCapClip admits one strictly crossed cap only after Sketch has
 // certified the source circle-line trim. Inner and outer rational polygons
 // enclose the clipped disk before its affine map into the requested plane.
-func obliqueCircleCapClip(ctx context.Context, pp prismPayload, plane r3.Frame) ([]Point2, float64, bool) {
+func obliqueCircleCapClip(ctx context.Context, pp prismPayload, plane r3.Frame) ([]planePoint, float64, bool) {
 	if len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
 		pp.BlendKind != "" || len(pp.BlendSegs) != 0 || pp.Z0 >= pp.Z1 {
 		return nil, 0, false
@@ -217,7 +217,7 @@ func sectionCircleCapSketch(ctx context.Context, circle circleSeg, r, a, b, capL
 }
 
 func sectionCircleCapPolygon(center, a, b sectionRatPoint, zCos, zSin, capLevel *big.Rat,
-	keepBelow bool, orientation int, plane r3.Frame, perQuadrant int) ([]Point2, float64, bool) {
+	keepBelow bool, orientation int, plane r3.Frame, perQuadrant int) ([]planePoint, float64, bool) {
 	unit := make([]sectionRatPoint, 0, 4*perQuadrant)
 	for quadrant := range 4 {
 		for j := range perQuadrant {
@@ -271,14 +271,14 @@ func sectionCircleCapPolygon(center, a, b sectionRatPoint, zCos, zSin, capLevel 
 		return nil, 0, false
 	}
 	gap := delta
-	proxy := make([]Point2, len(inner))
+	proxy := make([]planePoint, len(inner))
 	for i, point := range inner {
 		u, _ := point.u.Float64()
 		v, _ := point.v.Float64()
 		if !obliqueCircleFinite(u, v) {
 			return nil, 0, false
 		}
-		proxy[i] = Point2{U: u, V: v}
+		proxy[i] = planePoint{U: u, V: v}
 	}
 	// The outer-to-inner gap and the inner-to-held rounding are additive.
 	rounding := float64(0)

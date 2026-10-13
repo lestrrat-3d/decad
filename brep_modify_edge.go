@@ -739,7 +739,7 @@ func (r *brepEdgeRoute) traces(eb *brepEdgeBlend, j int, mate brepUse) bool {
 // footOf is the blend's foot on adjacent face j's carrier in one end face:
 // fA where the arriving walk pairs with that face, fB otherwise, with the
 // cutback the foot claims from the corner.
-func footOf(end brepEdgeEnd, cb *cornerBlend, j int) (Point2, float64) {
+func footOf(end brepEdgeEnd, cb *cornerBlend, j int) (planePoint, float64) {
 	if end.arriving == j {
 		return cb.FA, cb.CutbackA
 	}
@@ -850,7 +850,7 @@ func (r *brepEdgeRoute) computeBlends(eb *brepEdgeBlend) error {
 // wall ends and their claims.
 type brepFaceEdit struct {
 	blendAt              []map[int]*cornerBlend
-	start, end           *Point2
+	start, end           *planePoint
 	claimStart, claimEnd float64
 }
 
@@ -901,7 +901,7 @@ func (r *brepEdgeRoute) rewrite(blends []*brepEdgeBlend) (brepPayload, error) {
 			u := r.topo.uses[eb.pair[j]]
 			if eb.side[j] == brepSideSwept {
 				local := embed.Local(ref)
-				p := Point2{U: local[0], V: local[1]}
+				p := planePoint{U: local[0], V: local[1]}
 				_, claim := footOf(eb.end[0], eb.blend[0], j)
 				e := editOf(fi)
 				if u.Part == brepSide1 {
@@ -937,7 +937,7 @@ func (r *brepEdgeRoute) rewrite(blends []*brepEdgeBlend) (brepPayload, error) {
 				moved := ref
 				moved[eb.axis] = eb.v[k][eb.axis]
 				local := embed.Local(moved)
-				p := Point2{U: local[0], V: local[1]}
+				p := planePoint{U: local[0], V: local[1]}
 				_, claim := footOf(eb.end[k], eb.blend[k], j)
 				trim := &cornerBlend{FA: p, FB: p}
 				ci := u.Seg

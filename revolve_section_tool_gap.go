@@ -18,7 +18,7 @@ func revolveSectionToolGap(section revolveSectionCertificate,
 		return 0, false
 	}
 	root := section.spans[section.rootSpan]
-	var neighbors [2]Point2
+	var neighbors [2]planePoint
 	if root.start.U < root.end.U {
 		neighbors[0] = section.spans[(section.rootSpan+len(section.spans)-1)%len(section.spans)].start
 		neighbors[1] = section.spans[(section.rootSpan+1)%len(section.spans)].end
@@ -37,13 +37,13 @@ func revolveSectionToolGap(section revolveSectionCertificate,
 	maxGap := 0.0
 	for i, item := range []struct {
 		limit *pointConeLimit
-		root  Point2
+		root  planePoint
 	}{{record.lower, section.rootStart}, {record.upper, section.rootEnd}} {
 		outer := neighbors[i]
 		if outer.V <= 0 || outer == item.root {
 			return 0, false
 		}
-		residual := func(p Point2) *big.Rat {
+		residual := func(p planePoint) *big.Rat {
 			value := new(big.Rat).Sub(new(big.Rat).Add(
 				proofarith.FloatRat(p.U),
 				new(big.Rat).Mul(item.limit.slope, proofarith.FloatRat(p.V))),

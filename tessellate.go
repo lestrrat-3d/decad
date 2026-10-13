@@ -1017,7 +1017,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	// construction. A ring holds its samples, the lo/hi mesh vertices of each,
 	// its wall faces and the sagitta bound the chording proved.
 	type ring struct {
-		samples []Point2
+		samples []planePoint
 		loV     []int
 		hiV     []int
 		faces   []*Face
@@ -1285,10 +1285,10 @@ func (m *Mesh) addTriangle(tri [3]int, src *Face) {
 	m.source = append(m.source, src)
 }
 
-func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, loopSag []float64) error {
+func requireLoopClearance(ctx context.Context, pts []planePoint, loopIdx [][]int, loopSag []float64) error {
 	return tessellation.RequireLoopClearance(ctx, point2ToRecordSlice(pts), loopIdx, loopSag)
 }
 
-func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sag [][]float64) error {
+func requireWalkClearance(ctx context.Context, pts []planePoint, loopIdx [][]int, sag [][]float64) error {
 	return tessellation.RequireWalkClearance(ctx, point2ToRecordSlice(pts), loopIdx, sag)
 }

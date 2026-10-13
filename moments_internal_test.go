@@ -55,18 +55,18 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 		name    string
 		segment curveSegment
 	}{
-		{"line", lineSeg{Start: Point2{U: 2, V: 1}, End: Point2{U: 5, V: 4}, TEnd: 1}},
-		{"whole circle", circleSeg{Center: Point2{U: 4, V: 3}, Radius: units.Millimeters(2), CCW: true, TEnd: 1}},
-		{"circle fragment", circleSeg{Center: Point2{U: 4, V: 3}, Radius: units.Millimeters(2), CCW: true, TStart: 0.125, TEnd: 0.625}},
-		{"arc", arcSeg{Center: Point2{U: 4, V: 3}, Start: Point2{U: 5, V: 3}, End: Point2{U: 4, V: 4}, TEnd: 1}},
+		{"line", lineSeg{Start: planePoint{U: 2, V: 1}, End: planePoint{U: 5, V: 4}, TEnd: 1}},
+		{"whole circle", circleSeg{Center: planePoint{U: 4, V: 3}, Radius: units.Millimeters(2), CCW: true, TEnd: 1}},
+		{"circle fragment", circleSeg{Center: planePoint{U: 4, V: 3}, Radius: units.Millimeters(2), CCW: true, TStart: 0.125, TEnd: 0.625}},
+		{"arc", arcSeg{Center: planePoint{U: 4, V: 3}, Start: planePoint{U: 5, V: 3}, End: planePoint{U: 4, V: 4}, TEnd: 1}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var first, full regionIntegrals
-			require.NoError(t, first.AddFor(tc.segment, freeformPlan{}, Point2{}, freeform.MomentFirstOrder))
-			require.NoError(t, full.AddFor(tc.segment, freeformPlan{}, Point2{}, freeform.MomentSecondOrder))
+			require.NoError(t, first.AddFor(tc.segment, freeformPlan{}, planePoint{}, freeform.MomentFirstOrder))
+			require.NoError(t, full.AddFor(tc.segment, freeformPlan{}, planePoint{}, freeform.MomentSecondOrder))
 			check(t, first, full)
 			var area regionIntegrals
-			require.NoError(t, area.AddFor(tc.segment, freeformPlan{}, Point2{}, freeform.MomentAreaOrder))
+			require.NoError(t, area.AddFor(tc.segment, freeformPlan{}, planePoint{}, freeform.MomentAreaOrder))
 			area.PublishExact()
 			require.Equal(t, full.Area, area.Area)
 			require.Equal(t, full.AreaBound, area.AreaBound)
@@ -98,10 +98,10 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 
 	t.Run("offset rectangle through evaluator", func(t *testing.T) {
 		record := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-			lineSeg{Start: Point2{U: 100.25, V: -50.5}, End: Point2{U: 120.25, V: -50.5}, TEnd: 1},
-			lineSeg{Start: Point2{U: 120.25, V: -50.5}, End: Point2{U: 120.25, V: -45.5}, TEnd: 1},
-			lineSeg{Start: Point2{U: 120.25, V: -45.5}, End: Point2{U: 100.25, V: -45.5}, TEnd: 1},
-			lineSeg{Start: Point2{U: 100.25, V: -45.5}, End: Point2{U: 100.25, V: -50.5}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 100.25, V: -50.5}, End: planePoint{U: 120.25, V: -50.5}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 120.25, V: -50.5}, End: planePoint{U: 120.25, V: -45.5}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 120.25, V: -45.5}, End: planePoint{U: 100.25, V: -45.5}, TEnd: 1},
+			lineSeg{Start: planePoint{U: 100.25, V: -45.5}, End: planePoint{U: 100.25, V: -50.5}, TEnd: 1},
 		}}}
 		first, err := record.EvaluatorIntegralsUncheckedContext(t.Context(), freeform.MomentFirstOrder, freeform.NewFreeformWork())
 		require.NoError(t, err)
@@ -123,9 +123,9 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 	})
 
 	t.Run("area with overflowing higher moments", func(t *testing.T) {
-		seg := lineSeg{Start: Point2{}, End: Point2{U: 1e120, V: 1e120}, TEnd: 1}
+		seg := lineSeg{Start: planePoint{}, End: planePoint{U: 1e120, V: 1e120}, TEnd: 1}
 		var area regionIntegrals
-		require.NoError(t, area.AddFor(seg, freeformPlan{}, Point2{}, freeform.MomentAreaOrder))
+		require.NoError(t, area.AddFor(seg, freeformPlan{}, planePoint{}, freeform.MomentAreaOrder))
 		require.True(t, area.IsFinite(freeform.MomentAreaOrder))
 		require.False(t, area.IsFinite(freeform.MomentFirstOrder))
 		require.Zero(t, area.Muu)
@@ -208,8 +208,8 @@ func TestMomentValidationCancellationIsBounded(t *testing.T) {
 	t.Parallel()
 	segments := make([]curveSegment, proofbound.WorkPollInterval+64)
 	for i := range segments {
-		start := Point2{U: float64(i), V: 0}
-		segments[i] = lineSeg{Start: start, End: Point2{U: start.U + 1, V: math.Sin(float64(i))}, TEnd: 1}
+		start := planePoint{U: float64(i), V: 0}
+		segments[i] = lineSeg{Start: start, End: planePoint{U: start.U + 1, V: math.Sin(float64(i))}, TEnd: 1}
 	}
 	record := profileRecord{Outer: loopRecord{Segments: segments}}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "ValidateFieldsWithPoll"}
@@ -642,9 +642,9 @@ func BenchmarkTurnSinCosInterval(b *testing.B) {
 func TestThirdOrderMomentsOfASector(t *testing.T) {
 	t.Parallel()
 	record := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{}, End: Point2{U: 4, V: 3}, TEnd: 1},
-		arcSeg{Center: Point2{}, Start: Point2{U: 4, V: 3}, End: Point2{U: 0, V: 5}, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: 5}, End: Point2{}, TEnd: 1},
+		lineSeg{Start: planePoint{}, End: planePoint{U: 4, V: 3}, TEnd: 1},
+		arcSeg{Center: planePoint{}, Start: planePoint{U: 4, V: 3}, End: planePoint{U: 0, V: 5}, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 5}, End: planePoint{}, TEnd: 1},
 	}}}
 	ig, err := record.EvaluatorIntegralsContext(t.Context(), freeform.MomentThirdOrder, freeform.NewFreeformWork())
 	require.NoError(t, err)
@@ -703,7 +703,7 @@ func ratLerp(start, end, t float64) *big.Rat {
 // distinct points where the record states one, and the region sketch then
 // admits on its proximity threshold would fail the seam's loop-closure
 // falsifier at RecordProfile.
-func lerp2(start, end Point2, t float64) (float64, float64) {
+func lerp2(start, end planePoint, t float64) (float64, float64) {
 	return momentregion.Lerp2(start, end, t)
 }
 

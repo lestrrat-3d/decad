@@ -409,14 +409,14 @@ func TestMultiLumpFacetedBodyBypassesAnalyticContainment(t *testing.T) {
 
 func TestHoleOrderingCancellationIsBounded(t *testing.T) {
 	t.Parallel()
-	pts := []Point2{{U: 0, V: 0}, {U: 100, V: 0}, {U: 100, V: 100}, {U: 0, V: 100}}
+	pts := []planePoint{{U: 0, V: 0}, {U: 100, V: 0}, {U: 100, V: 100}, {U: 0, V: 100}}
 	loops := [][]int{{0, 1, 2, 3}}
 	for h := range 8 {
 		var hole []int
 		cx := 10 + 10*float64(h)
 		for k := range 40 {
 			th := -2 * math.Pi * float64(k) / 40 // holes run clockwise
-			pts = append(pts, Point2{U: cx + 2*math.Cos(th), V: 50 + 2*math.Sin(th)})
+			pts = append(pts, planePoint{U: cx + 2*math.Cos(th), V: 50 + 2*math.Sin(th)})
 			hole = append(hole, len(pts)-1)
 		}
 		loops = append(loops, hole)
@@ -435,7 +435,7 @@ func TestHoleOrderingKeepsRightToLeftBridging(t *testing.T) {
 	// reduce it to triangles whose total area is the outer square less every
 	// hole. The holes are supplied left-to-right, so a triangulation this exact
 	// only comes out if they were re-ordered right-to-left before bridging.
-	pts := []Point2{{U: 0, V: 0}, {U: 100, V: 0}, {U: 100, V: 100}, {U: 0, V: 100}}
+	pts := []planePoint{{U: 0, V: 0}, {U: 100, V: 0}, {U: 100, V: 100}, {U: 0, V: 100}}
 	loops := [][]int{{0, 1, 2, 3}}
 	holeArea := 0.0
 	for h := range 8 {
@@ -443,7 +443,7 @@ func TestHoleOrderingKeepsRightToLeftBridging(t *testing.T) {
 		cx := 10 + 10*float64(h)
 		for k := range 40 {
 			th := -2 * math.Pi * float64(k) / 40
-			pts = append(pts, Point2{U: cx + 2*math.Cos(th), V: 50 + 2*math.Sin(th)})
+			pts = append(pts, planePoint{U: cx + 2*math.Cos(th), V: 50 + 2*math.Sin(th)})
 			hole = append(hole, len(pts)-1)
 		}
 		loops = append(loops, hole)
@@ -536,7 +536,7 @@ func TestAnalyticBodiesEqualCancellationIsBounded(t *testing.T) {
 	t.Parallel()
 	segs := make([]curveSegment, 300)
 	for i := range segs {
-		segs[i] = lineSeg{Start: Point2{U: float64(i)}, End: Point2{U: float64(i + 1)}, TEnd: 1}
+		segs[i] = lineSeg{Start: planePoint{U: float64(i)}, End: planePoint{U: float64(i + 1)}, TEnd: 1}
 	}
 	profile := profileRecord{Outer: loopRecord{Segments: segs}}
 	a := &Body{payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}}
@@ -583,9 +583,9 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 	pp, ok := body.payload.(prismPayload)
 	require.True(t, ok)
 	const sides = 300
-	corner := func(i int) Point2 {
+	corner := func(i int) planePoint {
 		th := 2 * math.Pi * float64(i%sides) / sides
-		return Point2{U: 100 * math.Cos(th), V: 100 * math.Sin(th)}
+		return planePoint{U: 100 * math.Cos(th), V: 100 * math.Sin(th)}
 	}
 	segs := make([]curveSegment, sides)
 	for i := range segs {
@@ -665,7 +665,7 @@ func TestChordingRefusalsSplitFromOperandDegeneracy(t *testing.T) {
 	t.Parallel()
 	t.Run("stalled ear clip is expected", func(t *testing.T) {
 		// A self-crossing chorded boundary: no corner is ever clippable.
-		pts := []Point2{{U: 0, V: 0}, {U: 10, V: 10}, {U: 10, V: 0}, {U: 0, V: 10}}
+		pts := []planePoint{{U: 0, V: 0}, {U: 10, V: 10}, {U: 10, V: 0}, {U: 0, V: 10}}
 
 		_, err := triangulation.EarClip(t.Context(), point2ToRecordSlice(pts), []int{0, 1, 2, 3})
 		require.ErrorIs(t, err, ErrDegenerate,
@@ -676,7 +676,7 @@ func TestChordingRefusalsSplitFromOperandDegeneracy(t *testing.T) {
 	})
 
 	t.Run("hole outside its outline is the operand's own", func(t *testing.T) {
-		pts := []Point2{
+		pts := []planePoint{
 			{U: 0, V: 0}, {U: 10, V: 0}, {U: 10, V: 10}, {U: 0, V: 10},
 			{U: 50, V: 50}, {U: 52, V: 50}, {U: 51, V: 52},
 		}

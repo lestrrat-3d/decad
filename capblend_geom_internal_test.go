@@ -19,7 +19,7 @@ import (
 // between the directions to side and capEnd, read from the low end of the
 // Atan2Interval enclosure of their cross and dot products. It is zero where the
 // enclosure reaches zero.
-func cornerAngleLower(cU, cV float64, side, capEnd Point2) float64 {
+func cornerAngleLower(cU, cV float64, side, capEnd planePoint) float64 {
 	diff := func(a, b float64) *big.Rat { return new(big.Rat).Sub(proofarith.FloatRat(a), proofarith.FloatRat(b)) }
 	au, av := diff(side.U, cU), diff(side.V, cV)
 	bu, bv := diff(capEnd.U, cU), diff(capEnd.V, cV)
@@ -90,10 +90,10 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 				c0, c1 := capband.WindowOnBranch(capTh0, capTh1, w.Th0)
 				for _, corner := range []struct {
 					held      float64
-					side, cap Point2
+					side, cap planePoint
 				}{
-					{math.Abs(c0 - w.Th0), Point2{U: w.StartU, V: w.StartV}, start},
-					{math.Abs(w.Th1 - c1), Point2{U: w.EndU, V: w.EndV}, end},
+					{math.Abs(c0 - w.Th0), planePoint{U: w.StartU, V: w.StartV}, start},
+					{math.Abs(w.Th1 - c1), planePoint{U: w.EndU, V: w.EndV}, end},
 				} {
 					lower := cornerAngleLower(w.CU, w.CV, corner.side, corner.cap)
 					require.Positive(t, lower, `the corner is a genuine miter`)

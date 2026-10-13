@@ -27,7 +27,7 @@ func blendAxisReceiver(t *testing.T) revolvePayload {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+	axis := SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}}
 	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], axis, FullRevolution{})
 	require.NoError(t, err)
 	rp, ok := body.payload.(revolvePayload)
@@ -35,7 +35,7 @@ func blendAxisReceiver(t *testing.T) revolvePayload {
 	return rp
 }
 
-func polygonLoop(pts ...Point2) loopRecord {
+func polygonLoop(pts ...planePoint) loopRecord {
 	segs := make([]curveSegment, len(pts))
 	for i, p := range pts {
 		segs[i] = lineSeg{Start: p, End: pts[(i+1)%len(pts)], TStart: 0, TEnd: 1}
@@ -56,7 +56,7 @@ func TestRevolveBlendAxisGate(t *testing.T) {
 
 	t.Run(`a meridian across the axis`, func(t *testing.T) {
 		crossing := profileRecord{Outer: polygonLoop(
-			Point2{U: 0, V: -1}, Point2{U: 10, V: -1}, Point2{U: 10, V: 4}, Point2{U: 0, V: 4},
+			planePoint{U: 0, V: -1}, planePoint{U: 10, V: -1}, planePoint{U: 10, V: 4}, planePoint{U: 0, V: 4},
 		)}
 		_, err := revolveBlendAxis(t.Context(), rp, crossing, freeform.NewFreeformWork())
 		require.ErrorIs(t, err, ErrDegenerate)
@@ -67,12 +67,12 @@ func TestRevolveBlendAxisGate(t *testing.T) {
 		// The arc about (5, 2) of radius 2 runs counter-clockwise from (3, 2)
 		// under the centre to (7, 2), touching the axis at (5, 0).
 		touching := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-			arcSeg{Center: Point2{U: 5, V: 2}, Start: Point2{U: 3, V: 2}, End: Point2{U: 7, V: 2}, TStart: 0, TEnd: 1},
-			lineSeg{Start: Point2{U: 7, V: 2}, End: Point2{U: 10, V: 2}, TStart: 0, TEnd: 1},
-			lineSeg{Start: Point2{U: 10, V: 2}, End: Point2{U: 10, V: 4}, TStart: 0, TEnd: 1},
-			lineSeg{Start: Point2{U: 10, V: 4}, End: Point2{U: 0, V: 4}, TStart: 0, TEnd: 1},
-			lineSeg{Start: Point2{U: 0, V: 4}, End: Point2{U: 0, V: 2}, TStart: 0, TEnd: 1},
-			lineSeg{Start: Point2{U: 0, V: 2}, End: Point2{U: 3, V: 2}, TStart: 0, TEnd: 1},
+			arcSeg{Center: planePoint{U: 5, V: 2}, Start: planePoint{U: 3, V: 2}, End: planePoint{U: 7, V: 2}, TStart: 0, TEnd: 1},
+			lineSeg{Start: planePoint{U: 7, V: 2}, End: planePoint{U: 10, V: 2}, TStart: 0, TEnd: 1},
+			lineSeg{Start: planePoint{U: 10, V: 2}, End: planePoint{U: 10, V: 4}, TStart: 0, TEnd: 1},
+			lineSeg{Start: planePoint{U: 10, V: 4}, End: planePoint{U: 0, V: 4}, TStart: 0, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 4}, End: planePoint{U: 0, V: 2}, TStart: 0, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 2}, End: planePoint{U: 3, V: 2}, TStart: 0, TEnd: 1},
 		}}}
 		_, err := revolveBlendAxis(t.Context(), rp, touching, freeform.NewFreeformWork())
 		require.ErrorIs(t, err, ErrDegenerate)

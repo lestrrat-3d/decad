@@ -64,7 +64,7 @@ func arcEndPie(t *testing.T, doc *Document) *Body {
 func arcDenotedEnd(arc arcSeg) (*big.Float, *big.Float) {
 	const prec = 256
 	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
-	hypot := func(p Point2) *big.Float {
+	hypot := func(p planePoint) *big.Float {
 		du := new(big.Float).SetPrec(prec).Sub(f(p.U), f(arc.Center.U))
 		dv := new(big.Float).SetPrec(prec).Sub(f(p.V), f(arc.Center.V))
 		du.Mul(du, du)
@@ -129,7 +129,7 @@ func TestChordLoopSampleReachesArcNaturalEnd(t *testing.T) {
 			found = true
 			gap := requireReachesArcEnd(t, arc, p.U, p.V, cl.BoundOf[j])
 			require.Greater(t, gap, 1e-12, `End sits well off the denoted point`)
-		case arc.Start, Point2{}:
+		case arc.Start, planePoint{}:
 			require.Equalf(t, proofbound.WalkEndBound{}, cl.BoundOf[j], `the recorded corner %v stays exact`, p)
 		}
 	}
@@ -256,7 +256,7 @@ func TestRevolveJunctionReachesArcNaturalEnd(t *testing.T) {
 	s.CreateLine(o, start)
 	s.CreateArc(o, start, end)
 	s.CreateLine(end, o)
-	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}
+	axis := SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 0, V: 1}}
 	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], axis, FullRevolution{})
 	require.NoError(t, err)
 	rp, ok := body.payload.(revolvePayload)

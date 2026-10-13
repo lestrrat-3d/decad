@@ -19,7 +19,7 @@ import (
 
 // revolveAxisU is the sketch plane's own u axis, the axis every body below
 // revolves about.
-var revolveAxisU = SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+var revolveAxisU = SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}}
 
 // internalCylinderBody is the 10 x 8 rectangle clear of the axis: a full turn
 // sweeps the cylinder of radius 8 and height 10, whose generator is STRAIGHT,

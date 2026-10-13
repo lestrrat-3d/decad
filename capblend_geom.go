@@ -62,7 +62,7 @@ func (cbp capBlendPayload) offsetJoins(budget *proofbound.WorkBudget, li int, cl
 
 // capWallFoot returns the offset segment's own (start, end) feet for wall i,
 // exactly as offset2d.BuildLoop's per-wall trim does.
-func capWallFoot(joins []cornerJoin, i, n int) (Point2, Point2) {
+func capWallFoot(joins []cornerJoin, i, n int) (planePoint, planePoint) {
 	j0 := joins[i]
 	start := j0.M
 	if j0.Arc {
@@ -153,8 +153,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 
 	capName := capNameOf(matSign)
 
-	liftCap := func(p Point2) r3.Vec { return pl.Point(p.U, p.V, capZ) }
-	liftSide := func(p Point2) r3.Vec { return pl.Point(p.U, p.V, sideZ) }
+	liftCap := func(p planePoint) r3.Vec { return pl.Point(p.U, p.V, capZ) }
+	liftSide := func(p planePoint) r3.Vec { return pl.Point(p.U, p.V, sideZ) }
 
 	// capVertexAt places one cap-level vertex at p, bounded by base beside the
 	// vertex's own exact frame lift and placement rounding
@@ -165,7 +165,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// still read unwidened for their own, separate bound: the frame lift is a
 	// per-coordinate rounding, not a chord or locus term, so it has no business
 	// in an edge's length bound.
-	capVertexAt := func(p Point2, base float64) *Vertex {
+	capVertexAt := func(p planePoint, base float64) *Vertex {
 		held, lift := pl.LiftedVertex(p.U, p.V, capZ)
 		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(base, lift))}
 	}
@@ -281,8 +281,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// The two circles pair at their seams, the side wall's own walk start
 		// and the cap circle's (cU + capRadius, cV), and keep that pairing all
 		// the way round, so both corner skews are the seams' one angle.
-		sideSeam := Point2{U: w.StartU, V: w.StartV}
-		capSeam := Point2{U: w.CU + capRadius, V: w.CV}
+		sideSeam := planePoint{U: w.StartU, V: w.StartV}
+		capSeam := planePoint{U: w.CU + capRadius, V: w.CV}
 		if err := capband.SetPatchSkews(&geom, sideSeam, sideSeam, capSeam, capSeam); err != nil {
 			return capBandResult{}, err
 		}
@@ -424,7 +424,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			continue
 		}
 		arcByCorner[i] = &Edge{
-			curve: Arc3{Center: liftCap(Point2{U: j.VertU, V: j.VertV}), Axis: pl.Dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
+			curve: Arc3{Center: liftCap(planePoint{U: j.VertU, V: j.VertV}), Axis: pl.Dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
 			start: pAV, end: pBV,
 			convex: false,
 			length: arcLength, lengthBound: capcontour.CapApexArcBound(
@@ -629,7 +629,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 
 		var surf Surface
 		if !w.IsCircular() {
-			f, err := planeFromThree(liftSide(Point2{U: w.StartU, V: w.StartV}), liftSide(Point2{U: w.EndU, V: w.EndV}), capB.position)
+			f, err := planeFromThree(liftSide(planePoint{U: w.StartU, V: w.StartV}), liftSide(planePoint{U: w.EndU, V: w.EndV}), capB.position)
 			if err != nil {
 				return capBandResult{}, err
 			}
@@ -674,7 +674,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		var samplePoint r3.Vec
 		if !w.IsCircular() {
 			refU, refV = w.TanInV, -w.TanInU
-			samplePoint = liftSide(Point2{U: w.StartU, V: w.StartV})
+			samplePoint = liftSide(planePoint{U: w.StartU, V: w.StartV})
 		} else {
 			sign := 1.0
 			if w.Th1 < w.Th0 {
@@ -705,7 +705,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			g.Th0, g.Th1 = w.Th0, w.Th1
 			g.CapTh0, g.CapTh1 = capTh0, capTh1
 			g.CapThAllow = capThAllow
-			side0, side1 := Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV}
+			side0, side1 := planePoint{U: w.StartU, V: w.StartV}, planePoint{U: w.EndU, V: w.EndV}
 			cap0, cap1 := start, end
 			held, err := capband.WallHeldAllow(w, capRadius, start, end, capTh0, capTh1)
 			if err != nil {
@@ -738,8 +738,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				return capBandResult{}, err
 			}
 		} else {
-			g.SideA = Point2{U: w.StartU, V: w.StartV}
-			g.SideB = Point2{U: w.EndU, V: w.EndV}
+			g.SideA = planePoint{U: w.StartU, V: w.StartV}
+			g.SideB = planePoint{U: w.EndU, V: w.EndV}
 			g.CapA, g.CapB = start, end
 		}
 		// chordUpper/slant are this wall patch's own held chord (its cap-level
@@ -904,7 +904,7 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt, delta, capDe
 // band's build; each sub-range's own enclosure charges one step, so a band
 // with many mitered circular corners cannot spend unbounded work here any
 // more than it can building the contour displacement itself.
-func capSlantEdge(budget *proofbound.WorkBudget, capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur survey2d.SideWalk, setback capSetback, affine bool) (*Edge, float64, error) {
+func capSlantEdge(budget *proofbound.WorkBudget, capP planePoint, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur survey2d.SideWalk, setback capSetback, affine bool) (*Edge, float64, error) {
 	dc, dcDelta := setback.dc, setback.dcDelta
 	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
 	squared, squaredOK := proofarith.DySquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)

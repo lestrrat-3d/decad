@@ -37,7 +37,7 @@ func twistShellDistanceUpper(a, b r3.Vec) float64 {
 	return proofbound.RatSqrtUp(squared)
 }
 
-func twistShellContourBounds(points []Point2) (float64, float64) {
+func twistShellContourBounds(points []planePoint) (float64, float64) {
 	var radius, edge float64
 	for i, p := range points {
 		q := points[(i+1)%len(points)]
@@ -52,7 +52,7 @@ func twistShellContourBounds(points []Point2) (float64, float64) {
 	return radius, edge
 }
 
-func twistShellRingVertex(p Point2, sourceError, z float64, exactZ *big.Rat,
+func twistShellRingVertex(p planePoint, sourceError, z float64, exactZ *big.Rat,
 	angle proofbound.RatInterval, heldAngle float64) (r3.Vec, float64, error) {
 	sinIv, cosIv, ok := proofbound.RadSinCosSpan(angle)
 	if !ok {

@@ -31,7 +31,7 @@ import (
 //     charges every moment order and a denoted region need not be centered.
 
 func rectangleRecord(u0, v0, u1, v1 float64) profileRecord {
-	corners := []Point2{{U: u0, V: v0}, {U: u1, V: v0}, {U: u1, V: v1}, {U: u0, V: v1}}
+	corners := []planePoint{{U: u0, V: v0}, {U: u1, V: v0}, {U: u1, V: v1}, {U: u0, V: v1}}
 	segments := make([]curveSegment, len(corners))
 	for i, corner := range corners {
 		segments[i] = lineSeg{Start: corner, End: corners[(i+1)%len(corners)], TEnd: 1}
@@ -102,7 +102,7 @@ func TestRotatedPrismMassChargesDisplacement(t *testing.T) {
 func TestRotatedPrismMassMatchesCardinalPath(t *testing.T) {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	triangle := []Point2{{U: 0, V: 0}, {U: 6, V: 0}, {U: 0, V: 8}}
+	triangle := []planePoint{{U: 0, V: 0}, {U: 6, V: 0}, {U: 0, V: 8}}
 	segments := make([]curveSegment, len(triangle))
 	for i, corner := range triangle {
 		segments[i] = lineSeg{Start: corner, End: triangle[(i+1)%len(triangle)], TEnd: 1}

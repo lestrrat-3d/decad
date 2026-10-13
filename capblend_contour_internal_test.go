@@ -119,7 +119,7 @@ func TestStraightEdgeBoundDyadicMatchesRational(t *testing.T) {
 				"displaced bound of %v to %v at %v", a, b, h)
 		}
 
-		end, start := Point2{U: a.X, V: a.Y}, Point2{U: b.X, V: b.Y}
+		end, start := planePoint{U: a.X, V: a.Y}, planePoint{U: b.X, V: b.Y}
 		planeHeld := math.Hypot(end.U-start.U, end.V-start.V)
 		requireSameFloatBits(t,
 			ratStraightEdgeBound(planeHeld, ratSquaredDistance3Oracle(end.U, end.V, 0, start.U, start.V, 0), delta, delta),

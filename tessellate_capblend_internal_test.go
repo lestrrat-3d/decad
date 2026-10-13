@@ -336,7 +336,7 @@ func TestCapStationBoundEnclosesTheStationItDenotes(t *testing.T) {
 	t.Parallel()
 	const cU, cV, r = 3.0, -7.0, 8.0
 	theta := 0.9
-	held := Point2{U: cU + r*math.Cos(theta), V: cV + r*math.Sin(theta)}
+	held := planePoint{U: cU + r*math.Cos(theta), V: cV + r*math.Sin(theta)}
 	bound := tessellation.CapStationBound(cU, cV, r, theta, held.U, held.V)
 	require.True(t, bound.Derivable())
 	require.LessOrEqual(t, proofbound.WalkEndBoundAllow(bound), 1e-12,
@@ -582,7 +582,7 @@ func TestCapOffsetStationBoundReadsTheExactOffsetCircle(t *testing.T) {
 		// grows by d. Its seam station is (19, 0) exactly, while the held sample
 		// is evaluated at the float full turn, which is not 2π: the gap is real
 		// and small.
-		bore := circleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(18), CCW: false, TStart: 1, TEnd: 0}
+		bore := circleSeg{Center: planePoint{U: 0, V: 0}, Radius: units.Millimeters(18), CCW: false, TStart: 1, TEnd: 0}
 		off := big.NewRat(1, 1)
 		const n = 64
 		heldU, heldV := 19*math.Cos(2*math.Pi), 19*math.Sin(2*math.Pi)
@@ -595,7 +595,7 @@ func TestCapOffsetStationBoundReadsTheExactOffsetCircle(t *testing.T) {
 	})
 
 	t.Run("a fillet arc's foot", func(t *testing.T) {
-		fillet := arcSeg{Center: Point2{U: 36, V: -22}, Start: Point2{U: 36, V: -34}, End: Point2{U: 48, V: -22}, TStart: 0, TEnd: 1}
+		fillet := arcSeg{Center: planePoint{U: 36, V: -22}, Start: planePoint{U: 36, V: -34}, End: planePoint{U: 48, V: -22}, TStart: 0, TEnd: 1}
 		off := big.NewRat(-1, 1)
 		at := stationbound.CapOffsetStationBound(fillet, 0, 8, off, 36, -33)
 		require.True(t, at.Derivable())
@@ -607,7 +607,7 @@ func TestCapOffsetStationBoundReadsTheExactOffsetCircle(t *testing.T) {
 	})
 
 	t.Run("an index or coordinate it cannot read", func(t *testing.T) {
-		fillet := arcSeg{Center: Point2{U: 36, V: -22}, Start: Point2{U: 36, V: -34}, End: Point2{U: 48, V: -22}, TStart: 0, TEnd: 1}
+		fillet := arcSeg{Center: planePoint{U: 36, V: -22}, Start: planePoint{U: 36, V: -34}, End: planePoint{U: 48, V: -22}, TStart: 0, TEnd: 1}
 		off := big.NewRat(-1, 1)
 		require.False(t, stationbound.CapOffsetStationBound(fillet, -1, 8, off, 36, -33).Derivable())
 		require.False(t, stationbound.CapOffsetStationBound(fillet, 9, 8, off, 36, -33).Derivable())

@@ -79,10 +79,10 @@ func cardinalCircleSectionRecord(pp prismPayload, plane r3.Frame) (profileRecord
 		return profileRecord{}, false
 	}
 
-	bottomLeft := Point2{U: u0, V: v0}
-	bottomRight := Point2{U: u1, V: v0}
-	topRight := Point2{U: u1, V: v1}
-	topLeft := Point2{U: u0, V: v1}
+	bottomLeft := planePoint{U: u0, V: v0}
+	bottomRight := planePoint{U: u1, V: v0}
+	topRight := planePoint{U: u1, V: v1}
+	topLeft := planePoint{U: u0, V: v1}
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		lineSeg{Start: bottomLeft, End: bottomRight, TStart: 0, TEnd: 1},
 		lineSeg{Start: bottomRight, End: topRight, TStart: 0, TEnd: 1},

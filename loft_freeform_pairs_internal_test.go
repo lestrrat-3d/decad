@@ -243,9 +243,9 @@ func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measur
 // wedgeLoopSamples samples the recorded outer loop in walk order: a LineSeg
 // contributes its walk start, a free-form segment its own perSpan samples per
 // span at uniform native parameter (denseWalkSamples).
-func wedgeLoopSamples(t *testing.T, p profileRecord, perSpan int) []Point2 {
+func wedgeLoopSamples(t *testing.T, p profileRecord, perSpan int) []planePoint {
 	t.Helper()
-	var loop []Point2
+	var loop []planePoint
 	for _, seg := range p.Outer.Segments {
 		switch seg := seg.(type) {
 		case lineSeg:
@@ -266,9 +266,9 @@ func wedgeLoopSamples(t *testing.T, p profileRecord, perSpan int) []Point2 {
 // fall on the sample grid, and the samples between them sit at uniform cell
 // parameter, so N·(x_{i+1} − x_i) is C' at each midpoint to O(1/N²) and the
 // midpoint sum integrates the square.
-func sampledTangentEnergy(t *testing.T, loop []Point2, lo, hi Point2) float64 {
+func sampledTangentEnergy(t *testing.T, loop []planePoint, lo, hi planePoint) float64 {
 	t.Helper()
-	nearest := func(p Point2) int {
+	nearest := func(p planePoint) int {
 		best, bestD := 0, math.Inf(1)
 		for i, q := range loop {
 			if d := math.Hypot(q.U-p.U, q.V-p.V); d < bestD {
@@ -320,7 +320,7 @@ func wedgeDenseArea(t *testing.T, p profileRecord, height float64) float64 {
 // reversed walk, the opposite-sense build no longer succeeds.
 func TestLoftFreeformReversedRangeBuildsTheSameStations(t *testing.T) {
 	t.Parallel()
-	control := point2ToRecordSlice([]Point2{pt(4, 0), pt(4.5, 2), pt(2, 3.5), pt(-0.5, 2), pt(0, 0)})
+	control := point2ToRecordSlice([]planePoint{pt(4, 0), pt(4.5, 2), pt(2, 3.5), pt(-0.5, 2), pt(0, 0)})
 	forward := splineSeg{Control: control, TStart: 0, TEnd: 1}
 	reversed := splineSeg{Control: slices.Clone(control), TStart: 1, TEnd: 0}
 	slices.Reverse(reversed.Control)
@@ -499,8 +499,8 @@ func TestLoftFreeformUnequalSpanCounts(t *testing.T) {
 // different free-form types.
 func TestLoftFreeformMixedPairsRefuseS3(t *testing.T) {
 	t.Parallel()
-	fit := fitSplineSeg{Fit: point2ToRecordSlice([]Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}), TStart: 0, TEnd: 1}
-	spline := splineSeg{Control: point2ToRecordSlice([]Point2{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}), TStart: 0, TEnd: 1}
+	fit := fitSplineSeg{Fit: point2ToRecordSlice([]planePoint{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}), TStart: 0, TEnd: 1}
+	spline := splineSeg{Control: point2ToRecordSlice([]planePoint{pt(0, 0), pt(0.3, 0.2), pt(0.6, -0.1), pt(1, 0)}), TStart: 0, TEnd: 1}
 	arc := arcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
 	line := lineSeg{Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
 	for _, row := range []struct {
@@ -535,7 +535,7 @@ func TestLoftFreeformMixedPairsRefuseS3(t *testing.T) {
 // instead of the share, the pair chords and no refusal comes back.
 func TestLoftFreeformPairPastItsShareRefusesS15(t *testing.T) {
 	t.Parallel()
-	fit := fitSplineSeg{Fit: point2ToRecordSlice([]Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}), TStart: 0, TEnd: 1}
+	fit := fitSplineSeg{Fit: point2ToRecordSlice([]planePoint{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}), TStart: 0, TEnd: 1}
 	segs := []curveSegment{lineSeg{Start: pt(0, 0), End: pt(0, -1), TStart: 0, TEnd: 1}, fit}
 	for len(segs) < loftmesh.StationCapCeiling {
 		segs = append(segs, lineSeg{Start: pt(4, 0), End: pt(0, 0), TStart: 0, TEnd: 1})
@@ -714,7 +714,7 @@ func fitSplineWedgeSketch(t *testing.T, w *sketch.World, plane *sketch.Plane, n 
 // perSpan evenly spaced local parameters per converted Bézier span, the span's
 // own end excluded. Sample i of one side and sample i of another side with the
 // same span count sit at the same span-native parameter.
-func denseWalkSamples(t *testing.T, seg curveSegment, perSpan int) []Point2 {
+func denseWalkSamples(t *testing.T, seg curveSegment, perSpan int) []planePoint {
 	t.Helper()
 	w, err := boundarywalk.WalkOf(seg, freeform.NewFreeformWork())
 	require.NoError(t, err)
@@ -728,9 +728,9 @@ func denseWalkSamples(t *testing.T, seg curveSegment, perSpan int) []Point2 {
 			spans[len(w.Spans)-1-i] = rev
 		}
 	}
-	var out []Point2
+	var out []planePoint
 	for _, span := range spans {
-		ctrl := make([]Point2, len(span))
+		ctrl := make([]planePoint, len(span))
 		for i, p := range span {
 			u, _ := p.U.Float64()
 			v, _ := p.V.Float64()
@@ -743,7 +743,7 @@ func denseWalkSamples(t *testing.T, seg curveSegment, perSpan int) []Point2 {
 	return out
 }
 
-func deCasteljau(ctrl []Point2, s float64) Point2 {
+func deCasteljau(ctrl []planePoint, s float64) planePoint {
 	work := slices.Clone(ctrl)
 	for n := len(work) - 1; n > 0; n-- {
 		for i := range n {
@@ -753,7 +753,7 @@ func deCasteljau(ctrl []Point2, s float64) Point2 {
 	return work[0]
 }
 
-func liftSamples(pts []Point2, f r3.Frame) []r3.Vec {
+func liftSamples(pts []planePoint, f r3.Frame) []r3.Vec {
 	out := make([]r3.Vec, len(pts))
 	for i, p := range pts {
 		out[i] = f.ToWorldUV(p.U, p.V)

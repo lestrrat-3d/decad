@@ -59,7 +59,7 @@ func revolveLoftFacesSimpleArc(trim *loftFacesTrimRecord, segment int,
 	return cell, true
 }
 
-func revolveLoftFacesSimplePoint(point Point2) freeform.RatPoint {
+func revolveLoftFacesSimplePoint(point planePoint) freeform.RatPoint {
 	return freeform.RatPoint{U: lfF(point.U), V: lfF(point.V)}
 }
 

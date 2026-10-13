@@ -311,7 +311,7 @@ func fdSlotSheet(t *testing.T, f r3.Frame, length, r float64) *Body {
 }
 
 // fdAxisU is the sketch's own U axis.
-var fdAxisU = SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+var fdAxisU = SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}}
 
 // fdRadialChainSheet revolves the line from (0, 0) to (0, 3), perpendicular
 // to the sketch's U axis, by ext into a disk or a sector of one.

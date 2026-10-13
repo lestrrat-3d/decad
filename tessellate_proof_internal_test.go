@@ -154,9 +154,9 @@ func TestWalkSegmentAreaIsTheCircularSegmentClosedForm(t *testing.T) {
 	// occupied-volume term multiplies by the sweep height.
 	const r = 3.0
 	seg := arcSeg{
-		Start:  Point2{U: r, V: 0},
-		End:    Point2{U: 0, V: r},
-		Center: Point2{U: 0, V: 0},
+		Start:  planePoint{U: r, V: 0},
+		End:    planePoint{U: 0, V: r},
+		Center: planePoint{U: 0, V: 0},
 		TStart: 0,
 		TEnd:   1,
 	}

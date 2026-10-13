@@ -440,7 +440,7 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 func loopSignedAreaCB(loop loopRecord) (float64, error) {
 	var ig regionIntegrals
 	for _, seg := range loop.Segments {
-		if err := ig.AddFor(seg, freeformPlan{}, Point2{}, freeform.MomentAreaOrder); err != nil {
+		if err := ig.AddFor(seg, freeformPlan{}, planePoint{}, freeform.MomentAreaOrder); err != nil {
 			return 0, err
 		}
 	}

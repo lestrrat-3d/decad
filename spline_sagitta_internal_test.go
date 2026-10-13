@@ -245,10 +245,10 @@ import (
 func quarterCircleFitSpans(t *testing.T) []freeform.BezierSpan {
 	t.Helper()
 	const radius = 5.0
-	fit := make([]Point2, 5)
+	fit := make([]planePoint, 5)
 	for k := range fit {
 		theta := float64(k) * math.Pi / 8
-		fit[k] = Point2{U: radius * math.Cos(theta), V: radius * math.Sin(theta)}
+		fit[k] = planePoint{U: radius * math.Cos(theta), V: radius * math.Sin(theta)}
 	}
 	spans, err := splinebezier.FitSplineBezierSpans(fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1}, freeform.NewFreeformWork())
 	require.NoError(t, err)

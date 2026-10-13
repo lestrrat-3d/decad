@@ -16,7 +16,7 @@ import (
 // The plate remains rectangular; the single transition is a quarter torus.
 type roundBossCircle struct {
 	outer, inner profileRecord
-	center       Point2
+	center       planePoint
 	radius       float64
 }
 

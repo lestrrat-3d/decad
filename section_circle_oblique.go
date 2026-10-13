@@ -14,7 +14,7 @@ import (
 // obliqueCircleClip bounds a complete ellipse cut from an exact whole-circle
 // prism. The requested plane is read as the exact span of its held U and V.
 // Cuts meeting either cap, and planes parallel to the sweep axis, refuse.
-func obliqueCircleClip(pp prismPayload, plane r3.Frame) ([]Point2, float64, bool) {
+func obliqueCircleClip(pp prismPayload, plane r3.Frame) ([]planePoint, float64, bool) {
 	if len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
 		pp.BlendKind != "" || len(pp.BlendSegs) != 0 || pp.Z0 >= pp.Z1 {
 		return nil, 0, false
@@ -140,7 +140,7 @@ func obliqueCircleUnit(quadrant, numerator, denominator int) sectionRatPoint {
 // circle, where d is the chord length. The affine map and vertex rounding
 // carry that two-sided gap to the exact ellipse and its held line polygon.
 func obliqueCirclePolygon(center, a, b sectionRatPoint, orientation int,
-	plane r3.Frame, perQuadrant int, extraLocal, extraWorld float64) ([]Point2, float64, bool) {
+	plane r3.Frame, perQuadrant int, extraLocal, extraWorld float64) ([]planePoint, float64, bool) {
 	unit := make([]sectionRatPoint, 0, 4*perQuadrant)
 	for quadrant := range 4 {
 		for j := range perQuadrant {
@@ -172,7 +172,7 @@ func obliqueCirclePolygon(center, a, b sectionRatPoint, orientation int,
 	curveLocal := proofbound.RatFloatUp(sectionRatAdd(uGap, vGap))
 	curveWorld := proofbound.AbsSumUpper(proofbound.ProductUpper(proofbound.RatFloatUp(uGap), uNorm),
 		proofbound.ProductUpper(proofbound.RatFloatUp(vGap), vNorm))
-	proxy := make([]Point2, len(exact))
+	proxy := make([]planePoint, len(exact))
 	vertexLocal, vertexWorld := float64(0), float64(0)
 	for i, point := range exact {
 		u, _ := point.u.Float64()
@@ -180,7 +180,7 @@ func obliqueCirclePolygon(center, a, b sectionRatPoint, orientation int,
 		if !obliqueCircleFinite(u, v) {
 			return nil, 0, false
 		}
-		proxy[i] = Point2{U: u, V: v}
+		proxy[i] = planePoint{U: u, V: v}
 		uError := proofarith.RationalFloatError(point.u, u)
 		vError := proofarith.RationalFloatError(point.v, v)
 		vertexLocal = max(vertexLocal, proofbound.AbsSumUpper(uError, vError))

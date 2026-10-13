@@ -13,7 +13,7 @@ import (
 // ball. The held U,V basis need not be exactly orthonormal, so its local cut
 // can be an ellipse. The Gram solve and its squared radius are exact.
 func obliqueSpherePolygon(center proofarith.DyV3, radius proofarith.Dyadic,
-	plane r3.Frame) ([]Point2, float64, bool) {
+	plane r3.Frame) ([]planePoint, float64, bool) {
 	if radius.Sign() <= 0 || box.CardinalBasis(plane.U(), plane.V(), plane.N()) {
 		return nil, 0, false
 	}

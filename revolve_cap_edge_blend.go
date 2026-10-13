@@ -76,10 +76,10 @@ func revolveRimSourceOf(rp revolvePayload, edges []*Edge, setback, setbackDelta 
 	}
 	xlo, xhi, outer := lines[0].Start.U, lines[0].End.U, lines[1].End.V
 	want := [4]lineSeg{
-		{Start: Point2{U: xlo}, End: Point2{U: xhi}, TEnd: 1},
-		{Start: Point2{U: xhi}, End: Point2{U: xhi, V: outer}, TEnd: 1},
-		{Start: Point2{U: xhi, V: outer}, End: Point2{U: xlo, V: outer}, TEnd: 1},
-		{Start: Point2{U: xlo, V: outer}, End: Point2{U: xlo}, TEnd: 1},
+		{Start: planePoint{U: xlo}, End: planePoint{U: xhi}, TEnd: 1},
+		{Start: planePoint{U: xhi}, End: planePoint{U: xhi, V: outer}, TEnd: 1},
+		{Start: planePoint{U: xhi, V: outer}, End: planePoint{U: xlo, V: outer}, TEnd: 1},
+		{Start: planePoint{U: xlo, V: outer}, End: planePoint{U: xlo}, TEnd: 1},
 	}
 	for i := range lines {
 		if lines[i] != want[i] {

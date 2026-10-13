@@ -136,12 +136,12 @@ func TestOffsetSectionDeltaEnclosesDenotedOffset(t *testing.T) {
 			var radii []*big.Rat
 			for _, loop := range append([]loopRecord{offset.Outer}, offset.Holes...) {
 				for _, seg := range loop.Segments {
-					var ends []Point2
+					var ends []planePoint
 					switch g := seg.(type) {
 					case lineSeg:
-						ends = []Point2{g.Start, g.End}
+						ends = []planePoint{g.Start, g.End}
 					case arcSeg:
-						ends = []Point2{g.Start, g.End}
+						ends = []planePoint{g.Start, g.End}
 					case circleSeg:
 						rr, err := g.Radius.In(units.Millimeter)
 						require.NoError(t, err)
@@ -170,7 +170,7 @@ func TestOffsetSectionDeltaEnclosesDenotedOffset(t *testing.T) {
 
 // requireNearDenoted checks that p lies within sqrt(reach2) of one of the
 // denoted points, compared in exact rationals.
-func requireNearDenoted(t *testing.T, p Point2, denoted [][2]*big.Rat, reach2 *big.Rat) {
+func requireNearDenoted(t *testing.T, p planePoint, denoted [][2]*big.Rat, reach2 *big.Rat) {
 	t.Helper()
 	pu, pv := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
 	var best *big.Rat

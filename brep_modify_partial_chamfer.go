@@ -169,8 +169,8 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 	readings := make([]capcontour.Join, len(joins))
 	for i, j := range joins {
 		readings[i] = capcontour.Join{Arc: j.Arc, G1: j.G1, VU: j.VertU, VV: j.VertV,
-			M:  Point2{U: j.M.U, V: j.M.V},
-			PA: Point2{U: j.PA.U, V: j.PA.V}, PB: Point2{U: j.PB.U, V: j.PB.V}}
+			M:  planePoint{U: j.M.U, V: j.M.V},
+			PA: planePoint{U: j.PA.U, V: j.PA.V}, PB: planePoint{U: j.PB.U, V: j.PB.V}}
 	}
 	delta, err := capband.AmountsContourDisplacement(cl.Walks, readings, amounts,
 		r.call.loop.dcDelta, shellTol)
@@ -335,9 +335,9 @@ func (r *brepLoopRead) partialTerminalChamfer(sel brepLoopSel, orig, contour loo
 	level := v[n]
 	switch {
 	case oldA[n] == level && oldB[n] == sideRef:
-		blend.FA, blend.FB = Point2{U: capLocal[0], V: capLocal[1]}, Point2{U: sideLocal[0], V: sideLocal[1]}
+		blend.FA, blend.FB = planePoint{U: capLocal[0], V: capLocal[1]}, planePoint{U: sideLocal[0], V: sideLocal[1]}
 	case oldB[n] == level && oldA[n] == sideRef:
-		blend.FA, blend.FB = Point2{U: sideLocal[0], V: sideLocal[1]}, Point2{U: capLocal[0], V: capLocal[1]}
+		blend.FA, blend.FB = planePoint{U: sideLocal[0], V: sideLocal[1]}, planePoint{U: capLocal[0], V: capLocal[1]}
 	default:
 		return r.refuse("SL1", `a terminal blend has no cap and side feet`)
 	}

@@ -252,12 +252,12 @@ func freeformTriangleProfile() profileRecord {
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		nurbsSeg{
 			Degree:  1,
-			Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}}),
+			Control: point2ToRecordSlice([]planePoint{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}}),
 			Weights: []float64{1, 1, 1},
 			Knots:   []float64{0, 0, 0.5, 1, 1},
 			TStart:  0, TEnd: 1,
 		},
-		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: 0}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -278,10 +278,10 @@ func freeformTrianglePayload(t *testing.T, z0, z1 float64) prismPayload {
 // chord between them, so a witness set built from span endpoints alone
 // understates the section's true extent.
 func sCurveFreeformProfile() profileRecord {
-	control := []Point2{{U: 0, V: 0}, {U: 0, V: 20}, {U: 10, V: -20}, {U: 10, V: 0}}
+	control := []planePoint{{U: 0, V: 0}, {U: 0, V: 20}, {U: 10, V: -20}, {U: 10, V: 0}}
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		splineSeg{Control: point2ToRecordSlice(control), TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: 0}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -383,7 +383,7 @@ func TestBodyGateDiameterFreeformArmBelowBoxDiagonal(t *testing.T) {
 // identical diameter to the same section recorded without the duplicate.
 func TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain(t *testing.T) {
 	t.Parallel()
-	build := func(fit []Point2) prismPayload {
+	build := func(fit []planePoint) prismPayload {
 		return prismPayload{Payload: prismrecord.Payload{
 			Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 				fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1},
@@ -391,8 +391,8 @@ func TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain(t *testing.T) {
 			Frame: identityFrame(t), Z0: 0, Z1: 10, Xform: r3.Identity(),
 		}}
 	}
-	deduped := build([]Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}, {U: 10 + 5e-13, V: 0}})
-	clean := build([]Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}})
+	deduped := build([]planePoint{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}, {U: 10 + 5e-13, V: 0}})
+	clean := build([]planePoint{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}})
 
 	dD, dOK, err := bodyGateDiameter(t.Context(), &Body{payload: deduped})
 	require.NoError(t, err)
@@ -453,7 +453,7 @@ func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
 	t.Parallel()
 	collapsed := profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		splineSeg{
-			Control: point2ToRecordSlice([]Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}),
+			Control: point2ToRecordSlice([]planePoint{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}),
 			TStart:  0, TEnd: 1,
 		},
 	}}}
@@ -473,7 +473,7 @@ func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T
 	collapsedSpan := prismPayload{Payload: prismrecord.Payload{
 		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			splineSeg{
-				Control: point2ToRecordSlice([]Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}),
+				Control: point2ToRecordSlice([]planePoint{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}),
 				TStart:  0, TEnd: 1,
 			},
 		}}},
@@ -543,10 +543,10 @@ func TestBodyGateDiameterFreeformArmSkipsAnalyticPrism(t *testing.T) {
 func TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism(t *testing.T) {
 	t.Parallel()
 	analytic := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 10, V: 10}, End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 10, V: 0}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: 0}, End: planePoint{U: 10, V: 10}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: 10}, End: planePoint{U: 0, V: 10}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: 10}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	pp := prismPayload{Payload: prismrecord.Payload{
 		Profile: analytic, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity(),
@@ -579,18 +579,18 @@ func freeformLargeProfile(lines int) profileRecord {
 	segs := []curveSegment{
 		nurbsSeg{
 			Degree:  1,
-			Control: point2ToRecordSlice([]Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}}),
+			Control: point2ToRecordSlice([]planePoint{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}}),
 			Weights: []float64{1, 1, 1},
 			Knots:   []float64{0, 0, 0.5, 1, 1},
 			TStart:  0, TEnd: 1,
 		},
 	}
-	at := func(i int) Point2 {
+	at := func(i int) planePoint {
 		if i == lines {
-			return Point2{U: 0, V: 0}
+			return planePoint{U: 0, V: 0}
 		}
 		th := math.Pi * float64(i) / float64(lines)
-		return Point2{U: 5 + 5*math.Cos(th), V: -5 * math.Sin(th)}
+		return planePoint{U: 5 + 5*math.Cos(th), V: -5 * math.Sin(th)}
 	}
 	for i := range lines {
 		segs = append(segs, lineSeg{Start: at(i), End: at(i + 1), TStart: 0, TEnd: 1})
@@ -805,10 +805,10 @@ func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
 // radial extreme taken against it carries a zero bound.
 func rectangleProfile(vlo, vhi float64) profileRecord {
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: vlo}, End: Point2{U: 10, V: vlo}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 10, V: vlo}, End: Point2{U: 10, V: vhi}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 10, V: vhi}, End: Point2{U: 0, V: vhi}, TStart: 0, TEnd: 1},
-		lineSeg{Start: Point2{U: 0, V: vhi}, End: Point2{U: 0, V: vlo}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: vlo}, End: planePoint{U: 10, V: vlo}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: vlo}, End: planePoint{U: 10, V: vhi}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 10, V: vhi}, End: planePoint{U: 0, V: vhi}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: vhi}, End: planePoint{U: 0, V: vlo}, TStart: 0, TEnd: 1},
 	}}}
 }
 
@@ -919,7 +919,7 @@ func TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift(t *testing.T) {
 	const eps = 1e-7
 	ax := axisFrame{DU: 0.8, DV: 0.6, AU: 0, AV: aV}
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: Point2{U: 0, V: aV - eps}, End: Point2{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
+		lineSeg{Start: planePoint{U: 0, V: aV - eps}, End: planePoint{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
 	}}}
 	rp := revolvePayload{profile: profile, ax: ax, full: true}
 	require.False(t, revolvePayloadProvesSimple(t.Context(), rp),
@@ -958,10 +958,10 @@ func internalArcChordPrism(t *testing.T, doc *Document, sweepDeg, h float64) *Bo
 // prism's at most sqrt((2R)^2 + (z1 - z0)^2).
 func arcChordDiameterSquare(t *testing.T, pp prismPayload) *big.Rat {
 	t.Helper()
-	var center *Point2
+	var center *planePoint
 	for _, seg := range pp.Profile.Outer.Segments {
 		if arc, ok := seg.(arcSeg); ok {
-			center = &Point2{U: arc.Center.U, V: arc.Center.V}
+			center = &planePoint{U: arc.Center.U, V: arc.Center.V}
 		}
 	}
 	require.NotNil(t, center, `the fixture's section holds one arc`)
@@ -971,12 +971,12 @@ func arcChordDiameterSquare(t *testing.T, pp prismPayload) *big.Rat {
 	}
 	radiusSquare := new(big.Rat)
 	for _, seg := range pp.Profile.Outer.Segments {
-		var ends []Point2
+		var ends []planePoint
 		switch seg := seg.(type) {
 		case arcSeg:
-			ends = []Point2{seg.Start, seg.End}
+			ends = []planePoint{seg.Start, seg.End}
 		case lineSeg:
-			ends = []Point2{seg.Start, seg.End}
+			ends = []planePoint{seg.Start, seg.End}
 		default:
 			t.Fatalf("unexpected segment %T", seg)
 		}

@@ -8,7 +8,7 @@ import (
 
 func TestStationedTwistOptionalRefinementKeepsOriginalWorkCeiling(t *testing.T) {
 	poly := twistPolygon{
-		points:      make([]Point2, 8),
+		points:      make([]planePoint, 8),
 		hasArc:      true,
 		maxRadiusL1: 7,
 		maxEdgeL1:   5,

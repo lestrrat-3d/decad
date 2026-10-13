@@ -23,7 +23,7 @@ type counterboreShellRound struct {
 	plate, inset       bossRect
 	farZ, stepZ, nearZ float64
 	sign, t            float64
-	center             Point2
+	center             planePoint
 	frame              r3.Frame
 }
 

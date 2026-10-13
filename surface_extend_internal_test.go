@@ -38,7 +38,7 @@ import (
 // operand. Nothing here reads it; it exists so prismcells.BuildScene builds a scene
 // at all.
 func extendTestSquare() profileRecord {
-	pts := []Point2{{U: 1000, V: 1000}, {U: 1010, V: 1000}, {U: 1010, V: 1010}, {U: 1000, V: 1010}}
+	pts := []planePoint{{U: 1000, V: 1000}, {U: 1010, V: 1000}, {U: 1010, V: 1010}, {U: 1000, V: 1010}}
 	segs := make([]curveSegment, len(pts))
 	for i := range pts {
 		segs[i] = lineSeg{Start: pts[i], End: pts[(i+1)%len(pts)], TStart: 0, TEnd: 1}
@@ -135,12 +135,12 @@ func TestExtendFullDomainSceneSharesTheRecordParameterisation(t *testing.T) {
 		name string
 		seg  curveSegment
 	}{
-		{"line forward", lineSeg{Start: Point2{U: 100, V: 0.1}, End: Point2{U: 0, V: 0.1}, TStart: 0, TEnd: 0.6}},
-		{"line reversed", lineSeg{Start: Point2{U: 100, V: 0.1}, End: Point2{U: 0, V: 0.1}, TStart: 0.6, TEnd: 0}},
-		{"circle ccw", circleSeg{Center: Point2{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: true, TStart: 0.25, TEnd: 0.75}},
-		{"circle cw", circleSeg{Center: Point2{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: false, TStart: 0.75, TEnd: 0.25}},
-		{"arc forward", arcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 100, V: 0}, End: Point2{U: -100, V: 0}, TStart: 0, TEnd: 0.5}},
-		{"arc reversed", arcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 100, V: 0}, End: Point2{U: -100, V: 0}, TStart: 0.5, TEnd: 0}},
+		{"line forward", lineSeg{Start: planePoint{U: 100, V: 0.1}, End: planePoint{U: 0, V: 0.1}, TStart: 0, TEnd: 0.6}},
+		{"line reversed", lineSeg{Start: planePoint{U: 100, V: 0.1}, End: planePoint{U: 0, V: 0.1}, TStart: 0.6, TEnd: 0}},
+		{"circle ccw", circleSeg{Center: planePoint{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: true, TStart: 0.25, TEnd: 0.75}},
+		{"circle cw", circleSeg{Center: planePoint{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: false, TStart: 0.75, TEnd: 0.25}},
+		{"arc forward", arcSeg{Center: planePoint{U: 0, V: 0}, Start: planePoint{U: 100, V: 0}, End: planePoint{U: -100, V: 0}, TStart: 0, TEnd: 0.5}},
+		{"arc reversed", arcSeg{Center: planePoint{U: 0, V: 0}, Start: planePoint{U: 100, V: 0}, End: planePoint{U: -100, V: 0}, TStart: 0.5, TEnd: 0}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -169,10 +169,10 @@ func TestExtendSetBoundWidensOnlyTheNamedEnd(t *testing.T) {
 		atStart bool
 		bound   float64
 	}{
-		{"line reversed at start", lineSeg{Start: Point2{U: 100, V: 0.1}, End: Point2{U: 0, V: 0.1}, TStart: 0.6, TEnd: 0}, true, 0.7},
-		{"line forward at end", lineSeg{Start: Point2{U: 0, V: 0.1}, End: Point2{U: 100, V: 0.1}, TStart: 0, TEnd: 0.4}, false, 0.7},
-		{"circle at end", circleSeg{Center: Point2{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: true, TStart: 0.25, TEnd: 0.75}, false, 0.875},
-		{"arc reversed at start", arcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 100, V: 0}, End: Point2{U: -100, V: 0}, TStart: 0.5, TEnd: 0}, true, 0.75},
+		{"line reversed at start", lineSeg{Start: planePoint{U: 100, V: 0.1}, End: planePoint{U: 0, V: 0.1}, TStart: 0.6, TEnd: 0}, true, 0.7},
+		{"line forward at end", lineSeg{Start: planePoint{U: 0, V: 0.1}, End: planePoint{U: 100, V: 0.1}, TStart: 0, TEnd: 0.4}, false, 0.7},
+		{"circle at end", circleSeg{Center: planePoint{U: 3, V: -7}, Radius: units.Millimeters(50), CCW: true, TStart: 0.25, TEnd: 0.75}, false, 0.875},
+		{"arc reversed at start", arcSeg{Center: planePoint{U: 0, V: 0}, Start: planePoint{U: 100, V: 0}, End: planePoint{U: -100, V: 0}, TStart: 0.5, TEnd: 0}, true, 0.75},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

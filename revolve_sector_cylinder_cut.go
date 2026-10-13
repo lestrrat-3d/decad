@@ -122,7 +122,7 @@ func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, nil
 	}
 	circle, ok := prism.Profile.Outer.Segments[0].(circleSeg)
-	if !ok || circle.Center != (Point2{}) ||
+	if !ok || circle.Center != (planePoint{}) ||
 		!((circle.TStart == 0 && circle.TEnd == 1) ||
 			(circle.TStart == 1 && circle.TEnd == 0)) {
 		return nil, false, nil

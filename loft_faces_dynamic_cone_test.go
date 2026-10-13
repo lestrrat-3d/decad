@@ -71,7 +71,7 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 		_, e = cs.Solve(t.Context())
 		require.NoError(t, e)
 		body, e := Revolve(t.Context(), doc, cs, cs.Profiles()[0], SketchLine{
-			Start: Point2{}, End: Point2{U: 1}}, FullRevolution{})
+			Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
 		require.NoError(t, e)
 		return body
 	}

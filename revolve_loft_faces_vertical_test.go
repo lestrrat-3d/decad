@@ -13,7 +13,7 @@ import (
 
 func TestRevolveLoftFacesVerticalRefusesChangedBlankSection(t *testing.T) {
 	blank := sectionSketchBody(t, func(s *sketch.Sketch) {
-		section := []Point2{{U: 2}, {U: 5}, {U: 5, V: 3}, {U: 2, V: 1}}
+		section := []planePoint{{U: 2}, {U: 5}, {U: 5, V: 3}, {U: 2, V: 1}}
 		points := make([]*sketch.Point, len(section))
 		for i, point := range section {
 			points[i] = s.CreatePoint(point.U, point.V)
@@ -87,7 +87,7 @@ func TestRevolveLoftFacesVerticalConstantXAndTrimLimits(t *testing.T) {
 		toe:  &pointConeLimit{apex: big.NewRat(13, 2), far: big.NewRat(-2, 1), slope: one},
 		heel: &pointConeLimit{apex: big.NewRat(8, 1), far: big.NewRat(-2, 1), slope: one},
 	}
-	section := revolveSectionSpan{start: Point2{U: 6}, end: Point2{U: 6, V: 3.5}}
+	section := revolveSectionSpan{start: planePoint{U: 6}, end: planePoint{U: 6, V: 3.5}}
 	lower, upper, outcome := revolveLoftFacesVerticalLimits(trim, section, big.NewRat(6, 1))
 	require.Equal(t, revolveLoftFacesVerticalContact, outcome)
 	require.Equal(t, "1/2", lower.RatString())

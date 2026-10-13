@@ -100,16 +100,16 @@ func TestPrismBooleanGateG2AdmitsAReflectedOperand(t *testing.T) {
 // dropping the narrowed line's charge returned zero.
 func TestPrismReexpressionRewound(t *testing.T) {
 	t.Parallel()
-	narrowed := lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 20, V: 0}, TStart: 0, TEnd: 0.5}
+	narrowed := lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 20, V: 0}, TStart: 0, TEnd: 0.5}
 	profile := profileRecord{
 		Outer: loopRecord{Segments: []curveSegment{
 			narrowed, // walks (0,0) → (10,0)
-			lineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 5}, TStart: 0, TEnd: 1},
-			arcSeg{Center: Point2{U: 5, V: 5}, Start: Point2{U: 10, V: 5}, End: Point2{U: 0, V: 5}, TStart: 0, TEnd: 1},
-			lineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 5}, TStart: 1, TEnd: 0}, // walks (0,5) → (0,0)
+			lineSeg{Start: planePoint{U: 10, V: 0}, End: planePoint{U: 10, V: 5}, TStart: 0, TEnd: 1},
+			arcSeg{Center: planePoint{U: 5, V: 5}, Start: planePoint{U: 10, V: 5}, End: planePoint{U: 0, V: 5}, TStart: 0, TEnd: 1},
+			lineSeg{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 0, V: 5}, TStart: 1, TEnd: 0}, // walks (0,5) → (0,0)
 		}},
 		Holes: []loopRecord{{Segments: []curveSegment{
-			circleSeg{Center: Point2{U: 5, V: 4}, Radius: units.Millimeters(1), CCW: false, TStart: 1, TEnd: 0},
+			circleSeg{Center: planePoint{U: 5, V: 4}, Radius: units.Millimeters(1), CCW: false, TStart: 1, TEnd: 0},
 		}}},
 	}
 	frame := canonicalPrismFrame(t)
@@ -127,11 +127,11 @@ func TestPrismReexpressionRewound(t *testing.T) {
 	// exactly. A lone circle closes by its own kind; its walk ends are cos/sin
 	// readings and are not compared.
 	for _, loop := range append([]loopRecord{got.Outer}, got.Holes...) {
-		walks := make([]Point2, 0, 2*len(loop.Segments))
+		walks := make([]planePoint, 0, 2*len(loop.Segments))
 		for _, seg := range loop.Segments {
 			w, err := boundarywalk.WalkOf(seg, nil)
 			require.NoError(t, err)
-			walks = append(walks, Point2{U: w.StartU, V: w.StartV}, Point2{U: w.EndU, V: w.EndV})
+			walks = append(walks, planePoint{U: w.StartU, V: w.StartV}, planePoint{U: w.EndU, V: w.EndV})
 		}
 		if len(loop.Segments) == 1 {
 			continue
@@ -156,7 +156,7 @@ func TestPrismReexpressionRewound(t *testing.T) {
 	require.Positive(t, wantCharge)
 	require.Equal(t, wantCharge, charge, "the narrowed line's own walk charge")
 
-	m := func(u, v float64) Point2 { return Point2{U: -u, V: v} }
+	m := func(u, v float64) planePoint { return planePoint{U: -u, V: v} }
 	want := prismcells.SceneProfile{
 		Outer: loopRecord{Segments: []curveSegment{
 			lineSeg{Start: m(0, 5), End: m(0, 0), TStart: 1, TEnd: 0},

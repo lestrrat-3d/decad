@@ -19,9 +19,9 @@ import (
 // these named corners only map the older spiral join's fixed cap roles.
 type spiralBlankSource struct {
 	section           revolveSectionCertificate
-	toeAxis, heelAxis Point2
-	toeOuter, toeRoot Point2
-	ded, heelOuter    Point2
+	toeAxis, heelAxis planePoint
+	toeOuter, toeRoot planePoint
+	ded, heelOuter    planePoint
 	edgeIndex         [6]int
 	rootFace          *Face
 }
@@ -52,7 +52,7 @@ func spiralSixSideBlank(section revolveSectionCertificate) (*spiralBlankSource, 
 	if result.toeAxis.U > result.heelAxis.U {
 		result.toeAxis, result.heelAxis = result.heelAxis, result.toeAxis
 	}
-	var interior []Point2
+	var interior []planePoint
 	for _, span := range section.spans {
 		if len(span.sourceEdges) != 1 {
 			return nil, false
@@ -63,12 +63,12 @@ func spiralSixSideBlank(section revolveSectionCertificate) (*spiralBlankSource, 
 		}
 		switch point.U {
 		case result.toeAxis.U:
-			if result.toeOuter != (Point2{}) {
+			if result.toeOuter != (planePoint{}) {
 				return nil, false
 			}
 			result.toeOuter = point
 		case result.heelAxis.U:
-			if result.heelOuter != (Point2{}) {
+			if result.heelOuter != (planePoint{}) {
 				return nil, false
 			}
 			result.heelOuter = point
@@ -76,8 +76,8 @@ func spiralSixSideBlank(section revolveSectionCertificate) (*spiralBlankSource, 
 			interior = append(interior, point)
 		}
 	}
-	if len(interior) != 2 || result.toeOuter == (Point2{}) ||
-		result.heelOuter == (Point2{}) {
+	if len(interior) != 2 || result.toeOuter == (planePoint{}) ||
+		result.heelOuter == (planePoint{}) {
 		return nil, false
 	}
 	if interior[0].U > interior[1].U {
@@ -88,7 +88,7 @@ func spiralSixSideBlank(section revolveSectionCertificate) (*spiralBlankSource, 
 		result.toeAxis.U < result.ded.U && result.ded.U < result.heelAxis.U) {
 		return nil, false
 	}
-	cycle := [6]Point2{result.toeAxis, result.heelAxis, result.heelOuter,
+	cycle := [6]planePoint{result.toeAxis, result.heelAxis, result.heelOuter,
 		result.ded, result.toeRoot, result.toeOuter}
 	var seen [6]bool
 	for _, span := range section.spans {
@@ -438,7 +438,7 @@ func spiralOtherSides(ctx context.Context, trim *loftFacesTrimRecord, m, b *big.
 	return seen[1] > 0 && seen[3] > 0 && seen[4] > 0 && seen[5] > 0
 }
 
-func spiralCellSide(first, second loftFaceMap, a, z Point2, departure, m, b *big.Rat,
+func spiralCellSide(first, second loftFaceMap, a, z planePoint, departure, m, b *big.Rat,
 	outside bool, tLo, tHi *big.Rat, depth int) bool {
 	firstA := first.At(lfF(a.U), lfF(a.V))
 	firstZ := first.At(lfF(z.U), lfF(z.V))
@@ -500,8 +500,8 @@ func spiralRootToolX(m, b *big.Rat, cone *pointConeLimit) (*big.Rat, bool) {
 // The exact straight blank cap meridian and tool cone differ affinely.
 // Endpoint signs and the largest absolute endpoint residual bound their
 // separation over the entire finite blank cap generator.
-func spiralToolOuterGap(cone *pointConeLimit, first, last Point2, sign int) (*big.Rat, bool) {
-	residual := func(point Point2) *big.Rat {
+func spiralToolOuterGap(cone *pointConeLimit, first, last planePoint, sign int) (*big.Rat, bool) {
+	residual := func(point planePoint) *big.Rat {
 		return lfSub(lfAdd(lfF(point.U), lfMul(cone.slope, lfF(point.V))), cone.apex)
 	}
 	a, z := residual(first), residual(last)
