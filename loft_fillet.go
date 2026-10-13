@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftfillet"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -63,7 +64,7 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 		blend                 *cornerBlend
 		fitParam, circleParam float64
 		fitCircle             bool
-		certificate           loftFitRootCertificate
+		certificate           loftfillet.RootCertificate
 		constructionDelta     float64
 		idealArcLength        float64
 		fitCarrierDeparture   float64
@@ -78,7 +79,7 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 		matched := -1
 		for i := range segments {
 			prev := (i + n - 1) % n
-			if (!analytic[prev] || !analytic[i]) && !loftFitCirclePair(segments[prev], segments[i]) {
+			if (!analytic[prev] || !analytic[i]) && !loftfillet.FitCirclePair(segments[prev], segments[i]) {
 				continue
 			}
 			w := walks[i]
@@ -99,8 +100,8 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 			return nil, fmt.Errorf(`%w: a loft corner was selected twice`, ErrDegenerate)
 		}
 		prev := (matched + n - 1) % n
-		if loftFitCirclePair(segments[prev], segments[matched]) {
-			cb, fitParam, circleParam, err := loftFitCircleBlend(segments, walks, matched, radius)
+		if loftfillet.FitCirclePair(segments[prev], segments[matched]) {
+			cb, fitParam, circleParam, err := loftfillet.CircleBlend(segments, walks, matched, radius)
 			if err != nil {
 				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, sel, matched)
 			}
@@ -125,16 +126,16 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 			if !ok {
 				return nil, fmt.Errorf(`%w: the loft fit-circle connector is not an arc`, ErrUnsupported)
 			}
-			cert, err := certifyLoftFitCircleRoot(ctx, fit, circle, connector, fitParam, radius,
+			cert, err := loftfillet.CertifyRoot(ctx, fit, circle, connector, fitParam, radius,
 				fitArrives, math.Copysign(1, cross))
 			if err != nil {
 				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, sel, matched)
 			}
-			departure, idealLength, err := loftFitArcDeparture(cert, connector, fitArrives, radius)
+			departure, idealLength, err := loftfillet.ArcDeparture(cert, connector, fitArrives, radius)
 			if err != nil {
 				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, sel, matched)
 			}
-			fitCarrier, rootCarrier, circleIdealParam, err := loftFitCarrierDeparture(cert, circle,
+			fitCarrier, rootCarrier, circleIdealParam, err := loftfillet.CarrierDeparture(cert, circle,
 				fitParam, circleParam, fitArrives)
 			if err != nil {
 				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, sel, matched)
@@ -290,7 +291,7 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 	limit := pl.rewriteWorkLimit(uint64(len(rewritten)))
 	work0.RaiseLimit(limit)
 	work1.RaiseLimit(limit)
-	if err := auditLoftFilletProfile(ctx, budget, profile, changed, constructionDelta, work0); err != nil {
+	if err := loftfillet.AuditProfile(ctx, budget, profile, changed, constructionDelta, work0); err != nil {
 		return nil, err
 	}
 	area0, err := profile.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work0)
@@ -320,12 +321,4 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 		return nil, err
 	}
 	return commitModifyResult(ctx, b, body)
-}
-
-func loftFitCirclePair(a, b curveSegment) bool {
-	_, aFit := a.(fitSplineSeg)
-	_, bFit := b.(fitSplineSeg)
-	_, aCircle := a.(circleSeg)
-	_, bCircle := b.(circleSeg)
-	return (aFit && bCircle) || (aCircle && bFit)
 }

@@ -1,58 +1,60 @@
-package decad
+package loftfillet
 
 import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/sketch/geom"
 )
 
-// loftFitCircleBlend proposes a numerical fillet at one CircleSeg/FitSplineSeg
+// CircleBlend proposes a numerical fillet at one CircleSeg/FitSplineSeg
 // corner. It retains the fit points: the caller changes only the returned
 // segment ranges. The residual checks below can reject a bad proposal; they
 // do not certify either tangent contact or the rewritten section's closure.
-func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corner int, radius float64) (*cornerBlend, float64, float64, error) {
+func CircleBlend(segments []sectionrecord.CurveSegment, walks []survey2d.SideWalk, corner int, radius float64) (*offset2d.Blend, float64, float64, error) {
 	if len(segments) != len(walks) || len(segments) < 2 || corner < 0 || corner >= len(segments) ||
-		!finiteLoftFitValue(radius) || radius <= 0 {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle fillet has invalid corner inputs`, ErrUnsupported)
+		!finiteValue(radius) || radius <= 0 {
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle fillet has invalid corner inputs`, decaderr.ErrUnsupported)
 	}
 	prev := (corner + len(segments) - 1) % len(segments)
 	fitArrives := false
-	var fit fitSplineSeg
-	var circle circleSeg
+	var fit sectionrecord.FitSplineSeg
+	var circle sectionrecord.CircleSeg
 	var fitWalk, circleWalk survey2d.SideWalk
 	switch a := segments[prev].(type) {
-	case fitSplineSeg:
-		c, ok := segments[corner].(circleSeg)
+	case sectionrecord.FitSplineSeg:
+		c, ok := segments[corner].(sectionrecord.CircleSeg)
 		if !ok {
-			return nil, 0, 0, fmt.Errorf(`%w: the loft corner is not a fit-spline/circle pair`, ErrUnsupported)
+			return nil, 0, 0, fmt.Errorf(`%w: the loft corner is not a fit-spline/circle pair`, decaderr.ErrUnsupported)
 		}
 		fit, circle, fitWalk, circleWalk, fitArrives = a, c, walks[prev], walks[corner], true
-	case circleSeg:
-		f, ok := segments[corner].(fitSplineSeg)
+	case sectionrecord.CircleSeg:
+		f, ok := segments[corner].(sectionrecord.FitSplineSeg)
 		if !ok {
-			return nil, 0, 0, fmt.Errorf(`%w: the loft corner is not a circle/fit-spline pair`, ErrUnsupported)
+			return nil, 0, 0, fmt.Errorf(`%w: the loft corner is not a circle/fit-spline pair`, decaderr.ErrUnsupported)
 		}
 		fit, circle, fitWalk, circleWalk = f, a, walks[corner], walks[prev]
 	default:
-		return nil, 0, 0, fmt.Errorf(`%w: the loft corner is not a fit-spline/circle pair`, ErrUnsupported)
+		return nil, 0, 0, fmt.Errorf(`%w: the loft corner is not a fit-spline/circle pair`, decaderr.ErrUnsupported)
 	}
 	if fitWalk.Kind != survey2d.WalkFreeform || circleWalk.Kind != survey2d.WalkCircular ||
-		len(fit.Fit) < 2 || !finiteLoftFitValue(circleWalk.Radius) || circleWalk.Radius <= 0 {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft corner has no usable fit-spline and circular walks`, ErrUnsupported)
+		len(fit.Fit) < 2 || !finiteValue(circleWalk.Radius) || circleWalk.Radius <= 0 {
+		return nil, 0, 0, fmt.Errorf(`%w: the loft corner has no usable fit-spline and circular walks`, decaderr.ErrUnsupported)
 	}
 	for _, point := range fit.Fit {
-		if !finiteLoftFitValue(point.U, point.V) {
-			return nil, 0, 0, fmt.Errorf(`%w: the loft fit spline has a non-finite fit point`, ErrUnsupported)
+		if !finiteValue(point.U, point.V) {
+			return nil, 0, 0, fmt.Errorf(`%w: the loft fit spline has a non-finite fit point`, decaderr.ErrUnsupported)
 		}
 	}
 	interp, err := geom.NewFitInterpolant(splinebezier.FitCoords(fit.Fit))
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit spline cannot be evaluated: %v`, ErrUnsupported, err)
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit spline cannot be evaluated: %v`, decaderr.ErrUnsupported, err)
 	}
 
 	// Use the existing analytic construction only to choose the nearby branch.
@@ -65,14 +67,14 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 	}
 	px, py := interp.Eval(fitCorner)
 	dx, dy := interp.EvalDeriv(fitCorner)
-	if !finiteLoftFitValue(px, py, dx, dy) {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit spline has no finite corner tangent`, ErrUnsupported)
+	if !finiteValue(px, py, dx, dy) {
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit spline has no finite corner tangent`, decaderr.ErrUnsupported)
 	}
 	travel := math.Copysign(1, fit.TEnd-fit.TStart)
 	dx, dy = travel*dx, travel*dy
 	length := math.Hypot(dx, dy)
-	if !finiteLoftFitValue(length) || length == 0 {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit spline has no corner direction`, ErrUnsupported)
+	if !finiteValue(length) || length == 0 {
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit spline has no corner direction`, decaderr.ErrUnsupported)
 	}
 	dx, dy = dx/length, dy/length
 	startU, startV, endU, endV := px, py, px+dx, py+dy
@@ -88,25 +90,25 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 	if fitArrives {
 		arrive, leave = surrogate, circleWalk
 	}
-	seed, err := offset2d.Fillet([]survey2d.SideWalk{arrive, leave}, 1, radius, filletTol)
+	seed, err := offset2d.Fillet([]survey2d.SideWalk{arrive, leave}, 1, radius, sectionaudit.Tolerance)
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	seedArc, ok := seed.Connector.(arcSeg)
+	seedArc, ok := seed.Connector.(sectionrecord.ArcSeg)
 	if !ok {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle fillet has no seed arc`, ErrUnsupported)
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle fillet has no seed arc`, decaderr.ErrUnsupported)
 	}
 	ax, ay := arrive.TanOutU, arrive.TanOutV
 	bx, by := leave.TanInU, leave.TanInV
 	cross := ax*by - ay*bx
-	if !finiteLoftFitValue(cross) || math.Abs(cross) <= filletTol {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle corner has no distinct tangent directions`, ErrUnsupported)
+	if !finiteValue(cross) || math.Abs(cross) <= sectionaudit.Tolerance {
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle corner has no distinct tangent directions`, decaderr.ErrUnsupported)
 	}
 	offsetSign := math.Copysign(1, cross)
 	insideSign := math.Copysign(1, circle.TEnd-circle.TStart)
 	offsetRadius := circleWalk.Radius - offsetSign*insideSign*radius
-	if !finiteLoftFitValue(offsetRadius) || offsetRadius <= filletTol {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft root circle cannot carry that fillet radius`, ErrUnsupported)
+	if !finiteValue(offsetRadius) || offsetRadius <= sectionaudit.Tolerance {
+		return nil, 0, 0, fmt.Errorf(`%w: the loft root circle cannot carry that fillet radius`, decaderr.ErrUnsupported)
 	}
 
 	otherFit := fit.TEnd
@@ -127,13 +129,13 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 		du, dv := interp.EvalDeriv(t)
 		du, dv = travel*du, travel*dv
 		d := math.Hypot(du, dv)
-		if !finiteLoftFitValue(t, x, y, du, dv, d) || d == 0 {
+		if !finiteValue(t, x, y, du, dv, d) || d == 0 {
 			return trialResult{}
 		}
 		ox := x - offsetSign*radius*dv/d
 		oy := y + offsetSign*radius*du/d
 		q := math.Hypot(ox-circleWalk.CU, oy-circleWalk.CV)
-		if !finiteLoftFitValue(ox, oy, q) || q == 0 {
+		if !finiteValue(ox, oy, q) || q == 0 {
 			return trialResult{}
 		}
 		return trialResult{
@@ -150,10 +152,10 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 	initial := trial(0)
 	previousF = initial.residual
 	if !initial.valid {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle offset cannot be evaluated at its corner`, ErrUnsupported)
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle offset cannot be evaluated at its corner`, decaderr.ErrUnsupported)
 	}
 	if previousF == 0 {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle contact is at the original corner`, ErrUnsupported)
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle contact is at the original corner`, decaderr.ErrUnsupported)
 	}
 	rootLo, rootHi, roots := 0.0, 0.0, 0
 	inspect := func(u float64) bool {
@@ -172,16 +174,16 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 	}
 	for exponent := 24; exponent >= 9; exponent-- {
 		if !inspect(math.Ldexp(1, -exponent)) {
-			return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle offset has a non-finite search interval`, ErrUnsupported)
+			return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle offset has a non-finite search interval`, decaderr.ErrUnsupported)
 		}
 	}
 	for i := 1; i <= 256; i++ {
 		if !inspect(float64(i) / 256) {
-			return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle offset has a non-finite search interval`, ErrUnsupported)
+			return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle offset has a non-finite search interval`, decaderr.ErrUnsupported)
 		}
 	}
 	if roots != 1 || rootLo > rootHi {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle offset has %d observed contact roots`, ErrUnsupported, roots)
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle offset has %d observed contact roots`, decaderr.ErrUnsupported, roots)
 	}
 	loF := trial(rootLo).residual
 	for range 54 {
@@ -191,7 +193,7 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 		}
 		result := trial(mid)
 		if !result.valid {
-			return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle contact cannot be refined`, ErrUnsupported)
+			return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle contact cannot be refined`, decaderr.ErrUnsupported)
 		}
 		f := result.residual
 		if f == 0 {
@@ -208,19 +210,19 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 	fitT := fitCorner + u*(otherFit-fitCorner)
 	result := trial(u)
 	fitFoot, center := result.foot, result.center
-	if !result.valid || !betweenLoftFitRange(fitT, fit.TStart, fit.TEnd) ||
+	if !result.valid || !betweenRange(fitT, fit.TStart, fit.TEnd) ||
 		math.Abs(result.residual) > 1e-8*math.Max(1, radius) ||
 		math.Hypot(center.U-seedArc.Center.U, center.V-seedArc.Center.V) > 8*radius {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle contact is outside its interior or seed branch`, ErrUnsupported)
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle contact is outside its interior or seed branch`, decaderr.ErrUnsupported)
 	}
 	centerDistance := math.Hypot(center.U-circleWalk.CU, center.V-circleWalk.CV)
 	circleFoot := sectionrecord.Point2{
 		U: circleWalk.CU + circleWalk.Radius*(center.U-circleWalk.CU)/centerDistance,
 		V: circleWalk.CV + circleWalk.Radius*(center.V-circleWalk.CV)/centerDistance,
 	}
-	circleT, ok := loftCircleContactParameter(circleFoot, circle, circleCorner)
+	circleT, ok := circleContactParameter(circleFoot, circle, circleCorner)
 	if !ok {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft circle contact is outside its recorded fragment`, ErrUnsupported)
+		return nil, 0, 0, fmt.Errorf(`%w: the loft circle contact is outside its recorded fragment`, decaderr.ErrUnsupported)
 	}
 	fa, fb := circleFoot, fitFoot
 	if fitArrives {
@@ -238,19 +240,19 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 	}
 	atFitU, atFitV := arcTangent(fitFoot)
 	if atFitU*result.tangentU+atFitV*result.tangentV < 1-1e-6 {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle arc misses the fit tangent`, ErrUnsupported)
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle arc misses the fit tangent`, decaderr.ErrUnsupported)
 	}
 	circleSign := math.Copysign(1, circle.TEnd-circle.TStart)
 	circleU := circleSign * -(circleFoot.V - circleWalk.CV) / circleWalk.Radius
 	circleV := circleSign * (circleFoot.U - circleWalk.CU) / circleWalk.Radius
 	atCircleU, atCircleV := arcTangent(circleFoot)
 	if atCircleU*circleU+atCircleV*circleV < 1-1e-6 ||
-		!finiteLoftFitValue(fa.U, fa.V, fb.U, fb.V, center.U, center.V) {
-		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle arc misses the circle tangent`, ErrUnsupported)
+		!finiteValue(fa.U, fa.V, fb.U, fb.V, center.U, center.V) {
+		return nil, 0, 0, fmt.Errorf(`%w: the loft fit-circle arc misses the circle tangent`, decaderr.ErrUnsupported)
 	}
 	fitCut := math.Hypot(fitFoot.U-px, fitFoot.V-py)
 	circleCut := circleWalk.Radius * 2 * math.Pi * math.Abs(circleT-circleCorner)
-	blend := &cornerBlend{FA: fa, FB: fb,
+	blend := &offset2d.Blend{FA: fa, FB: fb,
 		Connector: offset2d.ArcSegment(center, fa, fb, arcCCW)}
 	if fitArrives {
 		blend.CutbackA, blend.CutbackB = fitCut, circleCut
@@ -260,7 +262,7 @@ func loftFitCircleBlend(segments []curveSegment, walks []survey2d.SideWalk, corn
 	return blend, fitT, circleT, nil
 }
 
-func finiteLoftFitValue(values ...float64) bool {
+func finiteValue(values ...float64) bool {
 	for _, value := range values {
 		if math.IsNaN(value) || math.IsInf(value, 0) {
 			return false
@@ -269,16 +271,16 @@ func finiteLoftFitValue(values ...float64) bool {
 	return true
 }
 
-func betweenLoftFitRange(value, a, b float64) bool {
+func betweenRange(value, a, b float64) bool {
 	return value > math.Min(a, b) && value < math.Max(a, b)
 }
 
-func loftCircleContactParameter(point sectionrecord.Point2, circle circleSeg, corner float64) (float64, bool) {
+func circleContactParameter(point sectionrecord.Point2, circle sectionrecord.CircleSeg, corner float64) (float64, bool) {
 	angle := math.Atan2(point.V-circle.Center.V, point.U-circle.Center.U) / (2 * math.Pi)
 	value, count := 0.0, 0
 	for shift := -1; shift <= 2; shift++ {
 		candidate := angle + float64(shift)
-		if !betweenLoftFitRange(candidate, circle.TStart, circle.TEnd) {
+		if !betweenRange(candidate, circle.TStart, circle.TEnd) {
 			continue
 		}
 		if count == 0 || math.Abs(candidate-corner) < math.Abs(value-corner) {
@@ -287,4 +289,14 @@ func loftCircleContactParameter(point sectionrecord.Point2, circle circleSeg, co
 		count++
 	}
 	return value, count == 1
+}
+
+// FitCirclePair reports whether two adjacent segments are one FitSplineSeg
+// and one CircleSeg, in either order.
+func FitCirclePair(a, b sectionrecord.CurveSegment) bool {
+	_, aFit := a.(sectionrecord.FitSplineSeg)
+	_, bFit := b.(sectionrecord.FitSplineSeg)
+	_, aCircle := a.(sectionrecord.CircleSeg)
+	_, bCircle := b.(sectionrecord.CircleSeg)
+	return (aFit && bCircle) || (aCircle && bFit)
 }

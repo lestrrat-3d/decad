@@ -138,7 +138,6 @@
 1	0.00	TestCellSinkPrunesOnlyStrictlyBeyondTheMargin
 1	0.00	TestCellTwistAreaLinearArmEnclosesTheExactProduct
 1	0.00	TestCertifiedRootRefinementCancellation
-1	0.00	TestCertifyLoftCircleHoleRequiresStrictContainment
 1	0.00	TestChainGateDiameterCancelledBuildReturnsContextError
 1	0.00	TestChainStep
 1	0.00	TestChainWalkEndpointAllowChargesComputedCircularEnds
@@ -400,7 +399,6 @@
 2	0.07	TestLoftCircularCellStationsPublishesTheCertifiedReading
 2	0.00	TestLoftCrossingAuditBroadPhaseStillCatchesACrossing
 2	0.00	TestLoftCrossingAuditRejectsCollapsedTriangle
-2	0.00	TestLoftFitCircleBlendKeepsSourceFitCurve
 2	0.89	TestLoftFreeformReversedRangeBuildsTheSameStations
 2	0.00	TestLoftMassAccumulatorBoundsEmpty
 2	0.00	TestLoftPairingsChargeDistinctJunctionEnds
@@ -531,7 +529,6 @@
 3	0.00	TestLoftCrossingAuditCancellation
 3	0.00	TestLoftCrossingAuditRejectsGenuineCrossing
 3	3.72	TestLoftEmbeddedFlankRecordsSurviveFilletAndBore
-3	0.00	TestLoftFitCircleRootCertificateEnclosesIdealContact
 3	3.74	TestLoftGearToothVerifiesSound
 3	0.00	TestLoftMassAccumulatorBoxAnchoredElsewhereStillExact
 3	0.00	TestLoftPairingsConsumesTheGateResolvedWalks
@@ -1059,7 +1056,6 @@
 7	0.00	TestLoftCrossingAuditEdgeCertificateAgreesOnAOneULPFold
 7	0.47	TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest
 7	0.00	TestLoftCrossingAuditVertexCertificateIsSymmetric
-7	0.08	TestLoftFilletAuditRefusesPossibleSplineContact
 7	2.13	TestLoftFitSplineWedgeVerifiesSound
 7	0.01	TestLoftFreeformWalkBisectsOnMatched
 7	1.62	TestLoftFreeformWedgePlacedAndTessellated

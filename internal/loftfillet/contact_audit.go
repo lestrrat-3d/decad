@@ -1,4 +1,4 @@
-package decad
+package loftfillet
 
 import (
 	"context"
@@ -6,36 +6,39 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 )
 
-// certifyRecordedFitArcSeparation proves that no interior intersection of the
+// recordedFitArcSeparation proves that no interior intersection of the
 // retained fit spline and its adjacent recorded connector arc is possible.
 // Bernstein signs cheaply exclude most spans. Exact Sturm counts isolate any
 // support-circle roots that remain; a root outside the short connector's
 // angular wedge cannot be an arc intersection.
-func certifyRecordedFitArcSeparation(ctx context.Context, budget *proofbound.WorkBudget,
-	fit fitSplineSeg, arc arcSeg, fitArrives bool, work *freeform.FreeformWork) error {
+func recordedFitArcSeparation(ctx context.Context, budget *proofbound.WorkBudget,
+	fit sectionrecord.FitSplineSeg, arc sectionrecord.ArcSeg, fitArrives bool, work *freeform.FreeformWork) error {
 	spans, err := splinebezier.FitSplineBezierSpans(fit, work)
 	if err != nil || len(spans) == 0 {
-		return fmt.Errorf(`%w: the loft fillet cannot certify the adjacent fit spline`, ErrUnsupported)
+		return fmt.Errorf(`%w: the loft fillet cannot certify the adjacent fit spline`, decaderr.ErrUnsupported)
 	}
 	if !(arc.TStart == 0 && arc.TEnd == 1 || arc.TStart == 1 && arc.TEnd == 0) {
-		return fmt.Errorf(`%w: the loft fillet connector is not a complete short arc`, ErrUnsupported)
+		return fmt.Errorf(`%w: the loft fillet connector is not a complete short arc`, decaderr.ErrUnsupported)
 	}
 	_, sweep, ok := circularbounds.WalkEnclosures(circularbounds.RecordSegment(arc))
 	if !ok || sweep.Lo.Sign() <= 0 || sweep.Hi.Cmp(proofbound.PiLower) >= 0 {
-		return fmt.Errorf(`%w: the loft fillet cannot certify a short connector arc`, ErrUnsupported)
+		return fmt.Errorf(`%w: the loft fillet cannot certify a short connector arc`, decaderr.ErrUnsupported)
 	}
 	ox, oy := new(big.Rat).SetFloat64(arc.Center.U), new(big.Rat).SetFloat64(arc.Center.V)
 	sx := new(big.Rat).Sub(new(big.Rat).SetFloat64(arc.Start.U), ox)
 	sy := new(big.Rat).Sub(new(big.Rat).SetFloat64(arc.Start.V), oy)
 	r2 := new(big.Rat).Add(new(big.Rat).Mul(sx, sx), new(big.Rat).Mul(sy, sy))
 	if r2.Sign() <= 0 {
-		return fmt.Errorf(`%w: the loft fillet connector has no radius`, ErrUnsupported)
+		return fmt.Errorf(`%w: the loft fillet connector has no radius`, decaderr.ErrUnsupported)
 	}
 	contactAtLow := fit.TStart < fit.TEnd
 	if fitArrives {
@@ -52,13 +55,13 @@ func certifyRecordedFitArcSeparation(ctx context.Context, budget *proofbound.Wor
 	arcU, arcV, ok := circularbounds.EndpointInterval(circularbounds.RecordSegment(arc),
 		new(big.Rat).SetFloat64(arcParam))
 	if !ok {
-		return fmt.Errorf(`%w: the loft fillet connector endpoint is underivable`, ErrUnsupported)
+		return fmt.Errorf(`%w: the loft fillet connector endpoint is underivable`, decaderr.ErrUnsupported)
 	}
 	du := proofbound.IntervalAbsUpper(proofbound.IntervalSub(proofbound.PointInterval(fitPoint.U), arcU))
 	dv := proofbound.IntervalAbsUpper(proofbound.IntervalSub(proofbound.PointInterval(fitPoint.V), arcV))
 	gap := proofbound.RatSqrtUp(new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv)))
-	if gap > filletTol {
-		return fmt.Errorf(`%w: the loft fillet fit/connector endpoint gap is too large`, ErrUnsupported)
+	if gap > sectionaudit.Tolerance {
+		return fmt.Errorf(`%w: the loft fillet fit/connector endpoint gap is too large`, decaderr.ErrUnsupported)
 	}
 	for i, span := range spans {
 		u, v := freeform.SpanCoordinatePolys(span)
@@ -67,12 +70,12 @@ func certifyRecordedFitArcSeparation(ctx context.Context, budget *proofbound.Wor
 		h := polynomial.RpSub(polynomial.RpAdd(polynomial.RpMul(u, u), polynomial.RpMul(v, v)),
 			polynomial.RatPoly{r2})
 		if polynomial.RpDeg(h) < 0 {
-			return fmt.Errorf(`%w: the loft fillet fit spline coincides with its connector circle`, ErrUnsupported)
+			return fmt.Errorf(`%w: the loft fillet fit spline coincides with its connector circle`, decaderr.ErrUnsupported)
 		}
 		controls := freeform.RpToBernstein(h, polynomial.RpDeg(h))
 		allowStart := contactAtLow && i == 0
 		allowEnd := !contactAtLow && i == len(spans)-1
-		if loftBernsteinNoInteriorZero(controls, allowStart, allowEnd, 0) {
+		if bernsteinNoInteriorZero(controls, allowStart, allowEnd, 0) {
 			continue
 		}
 		q := polynomial.RpSquareFree(h)
@@ -81,8 +84,8 @@ func certifyRecordedFitArcSeparation(ctx context.Context, budget *proofbound.Wor
 			return err
 		}
 		if polynomial.RpEval(h, big.NewRat(0, 1)).Sign() == 0 &&
-			!loftFitArcOutside(span, arc, big.NewRat(0, 1), big.NewRat(0, 1)) && !allowStart {
-			return fmt.Errorf(`%w: the loft fillet connector touches its adjacent fit spline`, ErrUnsupported)
+			!fitArcOutside(span, arc, big.NewRat(0, 1), big.NewRat(0, 1)) && !allowStart {
+			return fmt.Errorf(`%w: the loft fillet connector touches its adjacent fit spline`, decaderr.ErrUnsupported)
 		}
 		count := polynomial.SturmCount(chain, big.NewRat(0, 1), big.NewRat(1, 1))
 		type job struct {
@@ -98,11 +101,11 @@ func certifyRecordedFitArcSeparation(ctx context.Context, budget *proofbound.Wor
 			}
 			nodes++
 			if nodes > 512 {
-				return fmt.Errorf(`%w: the loft fillet fit/arc contact proof exceeds its work limit`, ErrUnsupported)
+				return fmt.Errorf(`%w: the loft fillet fit/arc contact proof exceeds its work limit`, decaderr.ErrUnsupported)
 			}
 			j := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
-			if j.count == 0 || loftFitArcOutside(span, arc, j.lo, j.hi) {
+			if j.count == 0 || fitArcOutside(span, arc, j.lo, j.hi) {
 				continue
 			}
 			if j.count == 1 && j.hi.Cmp(big.NewRat(1, 1)) == 0 && allowEnd &&
@@ -110,7 +113,7 @@ func certifyRecordedFitArcSeparation(ctx context.Context, budget *proofbound.Wor
 				continue // the shared trim endpoint is the only root here
 			}
 			if j.depth >= 128 {
-				return fmt.Errorf(`%w: the loft fillet connector may cross its adjacent fit spline`, ErrUnsupported)
+				return fmt.Errorf(`%w: the loft fillet connector may cross its adjacent fit spline`, decaderr.ErrUnsupported)
 			}
 			mid := new(big.Rat).Quo(new(big.Rat).Add(j.lo, j.hi), big.NewRat(2, 1))
 			left := polynomial.SturmCount(chain, j.lo, mid)
@@ -121,7 +124,7 @@ func certifyRecordedFitArcSeparation(ctx context.Context, budget *proofbound.Wor
 	return nil
 }
 
-func loftFitArcOutside(span freeform.BezierSpan, arc arcSeg, lo, hi *big.Rat) bool {
+func fitArcOutside(span freeform.BezierSpan, arc sectionrecord.ArcSeg, lo, hi *big.Rat) bool {
 	u, v := make([]*big.Rat, len(span)), make([]*big.Rat, len(span))
 	for i, point := range span {
 		u[i], v[i] = point.U, point.V
@@ -133,12 +136,12 @@ func loftFitArcOutside(span freeform.BezierSpan, arc arcSeg, lo, hi *big.Rat) bo
 	startV := proofbound.PointInterval(new(big.Rat).SetFloat64(arc.Start.V))
 	endU := proofbound.PointInterval(new(big.Rat).SetFloat64(arc.End.U))
 	endV := proofbound.PointInterval(new(big.Rat).SetFloat64(arc.End.V))
-	return loftOutsideShortArc(pointU, pointV,
+	return outsideShortArc(pointU, pointV,
 		new(big.Rat).SetFloat64(arc.Center.U), new(big.Rat).SetFloat64(arc.Center.V),
 		startU, startV, endU, endV)
 }
 
-func loftBernsteinNoInteriorZero(controls []*big.Rat, allowStart, allowEnd bool, depth int) bool {
+func bernsteinNoInteriorZero(controls []*big.Rat, allowStart, allowEnd bool, depth int) bool {
 	if controls[0].Sign() == 0 && !allowStart ||
 		controls[len(controls)-1].Sign() == 0 && !allowEnd {
 		return false
@@ -151,6 +154,6 @@ func loftBernsteinNoInteriorZero(controls []*big.Rat, allowStart, allowEnd bool,
 		return false
 	}
 	left, right := freeform.BernsteinSplit(controls, big.NewRat(1, 2))
-	return loftBernsteinNoInteriorZero(left, allowStart, false, depth+1) &&
-		loftBernsteinNoInteriorZero(right, false, allowEnd, depth+1)
+	return bernsteinNoInteriorZero(left, allowStart, false, depth+1) &&
+		bernsteinNoInteriorZero(right, false, allowEnd, depth+1)
 }

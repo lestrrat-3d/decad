@@ -1,4 +1,8 @@
-package decad
+// Package loftfillet certifies a loft section rewrite at a fitted-spline/circle
+// root corner: the numerical candidate, the exact tangent-root certificate,
+// connector and carrier departures, section contact audits, and the
+// circle-bore containment check. See docs/loft-design.md §17 and §18.
+package loftfillet
 
 import (
 	"context"
@@ -6,18 +10,20 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/lestrrat-3d/units"
 )
 
-// loftFitRootCertificate encloses one ideal radius-r arc tangent to the source
+// RootCertificate encloses one ideal radius-r arc tangent to the source
 // fit spline and its root circle. Every interval is over rational lifts of the
 // recorded floats. The numerical fillet is only a seed for finding this root.
-type loftFitRootCertificate struct {
+type RootCertificate struct {
 	Param                    proofbound.RatInterval
 	FitFootU, FitFootV       proofbound.RatInterval
 	CenterU, CenterV         proofbound.RatInterval
@@ -26,7 +32,7 @@ type loftFitRootCertificate struct {
 	SpeedUpper float64
 }
 
-type loftFitRootSpan struct {
+type rootSpan struct {
 	start, end *big.Rat
 	curve      freeform.BezierSpan
 	pInt       polynomial.IntPoly
@@ -38,27 +44,27 @@ type loftFitRootSpan struct {
 
 // signAt reads the exact polynomial sign after one positive-denominator
 // rescaling, avoiding repeated rational normalization during root search.
-func (s loftFitRootSpan) signAt(x *big.Rat) int {
+func (s rootSpan) signAt(x *big.Rat) int {
 	var acc, dpow, tmp big.Int
 	return polynomial.IpSign(s.pInt, x.Num(), x.Denom(), &acc, &dpow, &tmp)
 }
 
-// certifyLoftFitCircleRoot proves that one ideal contact root is bracketed
+// CertifyRoot proves that one ideal contact root is bracketed
 // near numericFitT and that no squared-equation root lies between it and the
 // original fit corner. The caller must still bound the departure of its held
 // ArcSeg from these ideal contacts and audit the complete rewritten section.
-func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circleSeg, arc arcSeg,
-	numericFitT, radius float64, fitArrives bool, offsetSign float64) (loftFitRootCertificate, error) {
-	refuse := func(reason string) (loftFitRootCertificate, error) {
-		return loftFitRootCertificate{}, fmt.Errorf(`%w: %s`, ErrUnsupported, reason)
+func CertifyRoot(ctx context.Context, fit sectionrecord.FitSplineSeg, circle sectionrecord.CircleSeg, arc sectionrecord.ArcSeg,
+	numericFitT, radius float64, fitArrives bool, offsetSign float64) (RootCertificate, error) {
+	refuse := func(reason string) (RootCertificate, error) {
+		return RootCertificate{}, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, reason)
 	}
-	if ctx == nil || !finiteLoftFitValue(numericFitT, radius, offsetSign) || radius <= 0 ||
+	if ctx == nil || !finiteValue(numericFitT, radius, offsetSign) || radius <= 0 ||
 		(offsetSign != -1 && offsetSign != 1) || len(fit.Fit) < 2 ||
-		!betweenLoftFitRange(numericFitT, fit.TStart, fit.TEnd) {
+		!betweenRange(numericFitT, fit.TStart, fit.TEnd) {
 		return refuse("the ideal fit-circle contact has invalid input")
 	}
 	for _, point := range fit.Fit {
-		if !finiteLoftFitValue(point.U, point.V) {
+		if !finiteValue(point.U, point.V) {
 			return refuse("the source fit spline has a non-finite point")
 		}
 	}
@@ -124,9 +130,9 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 	if rho.Sign() <= 0 {
 		return refuse("the root circle has no positive offset radius")
 	}
-	makeSpan := func(i int) (loftFitRootSpan, error) {
+	makeSpan := func(i int) (rootSpan, error) {
 		if err := ctx.Err(); err != nil {
-			return loftFitRootSpan{}, err
+			return rootSpan{}, err
 		}
 		u, v := freeform.SpanCoordinatePolys(spans[i])
 		du, dv := polynomial.RpDeriv(u), polynomial.RpDeriv(v)
@@ -142,19 +148,19 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 		p := polynomial.RpSub(polynomial.RpMul(polynomial.RpMul(a, a), l), polynomial.RpMul(br, br))
 		degree := polynomial.RpDeg(p)
 		if degree < 1 || degree > 16 {
-			return loftFitRootSpan{}, fmt.Errorf(`%w: the ideal tangent equation has no supported degree`, ErrUnsupported)
+			return rootSpan{}, fmt.Errorf(`%w: the ideal tangent equation has no supported degree`, decaderr.ErrUnsupported)
 		}
 		dp := polynomial.RpDeriv(p)
-		return loftFitRootSpan{start: params[i], end: params[i+1], curve: spans[i],
+		return rootSpan{start: params[i], end: params[i+1], curve: spans[i],
 			pInt: polynomial.ClearDenoms(p), dp: dp, a: a, b: b, l: l,
 			pBern:  freeform.RpToBernstein(p, degree),
 			dpBern: freeform.RpToBernstein(dp, degree-1)}, nil
 	}
 	span, err := makeSpan(active)
 	if err != nil {
-		return loftFitRootCertificate{}, err
+		return RootCertificate{}, err
 	}
-	local := func(global *big.Rat, s loftFitRootSpan) *big.Rat {
+	local := func(global *big.Rat, s rootSpan) *big.Rat {
 		return new(big.Rat).Quo(new(big.Rat).Sub(global, s.start), new(big.Rat).Sub(s.end, s.start))
 	}
 	seed := local(seedGlobal, span)
@@ -172,7 +178,7 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 	var lo, hi *big.Rat
 	for range 42 {
 		if err := ctx.Err(); err != nil {
-			return loftFitRootCertificate{}, err
+			return RootCertificate{}, err
 		}
 		lo = new(big.Rat).Sub(seed, step)
 		hi = new(big.Rat).Add(seed, step)
@@ -196,7 +202,7 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 	// hull of one strict sign then proves there is exactly one P-root inside.
 	for range 64 {
 		if err := ctx.Err(); err != nil {
-			return loftFitRootCertificate{}, err
+			return RootCertificate{}, err
 		}
 		mid := new(big.Rat).Quo(new(big.Rat).Add(lo, hi), big.NewRat(2, 1))
 		mv := span.signAt(mid)
@@ -211,17 +217,17 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 			hi = mid
 		}
 	}
-	derivative := loftFitPolynomialHull(span.dpBern, lo, hi)
+	derivative := polynomialHull(span.dpBern, lo, hi)
 	if derivative.Lo.Sign() <= 0 && derivative.Hi.Sign() >= 0 {
 		return refuse("the ideal tangent root has no one-sign derivative proof")
 	}
-	if err := loftFitExcludeNearerRoots(ctx, spans, params, cornerGlobal, span, lo, hi,
+	if err := excludeNearerRoots(ctx, spans, params, cornerGlobal, span, lo, hi,
 		makeSpan, local); err != nil {
-		return loftFitRootCertificate{}, err
+		return RootCertificate{}, err
 	}
-	aIv := loftFitPolyInterval(span.a, lo, hi)
-	bIv := loftFitPolyInterval(span.b, lo, hi)
-	lIv := loftFitPolyInterval(span.l, lo, hi)
+	aIv := polyInterval(span.a, lo, hi)
+	bIv := polyInterval(span.b, lo, hi)
+	lIv := polyInterval(span.l, lo, hi)
 	if lIv.Lo.Sign() <= 0 || aIv.Lo.Sign() <= 0 && aIv.Hi.Sign() >= 0 ||
 		bIv.Lo.Sign() <= 0 && bIv.Hi.Sign() >= 0 {
 		return refuse("the ideal tangent root has no resolved speed or unsquared branch")
@@ -230,41 +236,41 @@ func certifyLoftFitCircleRoot(ctx context.Context, fit fitSplineSeg, circle circ
 	if aIv.Lo.Sign() != int(offsetSign*travelSign)*bIv.Lo.Sign() {
 		return refuse("the squared tangent equation selected the opposite offset branch")
 	}
-	speedUpper, ok := loftFitFragmentSpeedUpper(spans, params, total, fit)
+	speedUpper, ok := fragmentSpeedUpper(spans, params, total, fit)
 	if !ok {
 		return refuse("the original fit fragment has no finite speed bound")
 	}
-	cert, err := loftFitEncloseRoot(span, lo, hi, total, cx, cy, rootRadius, rho, r,
+	cert, err := encloseRoot(span, lo, hi, total, cx, cy, rootRadius, rho, r,
 		new(big.Rat).SetFloat64(offsetSign), new(big.Rat).SetFloat64(travelSign))
 	if err != nil {
-		return loftFitRootCertificate{}, err
+		return RootCertificate{}, err
 	}
 	cert.SpeedUpper = speedUpper
-	if _, _, err := loftFitArcDeparture(cert, arc, fitArrives, radius); err != nil {
-		return loftFitRootCertificate{}, err
+	if _, _, err := ArcDeparture(cert, arc, fitArrives, radius); err != nil {
+		return RootCertificate{}, err
 	}
-	if err := certifyIdealFitArcSeparation(ctx, spans, params, total, fit, fitArrives,
+	if err := idealFitArcSeparation(ctx, spans, params, total, fit, fitArrives,
 		arc, cert, r, active, lo, hi); err != nil {
-		return loftFitRootCertificate{}, err
+		return RootCertificate{}, err
 	}
 	return cert, nil
 }
 
-func loftFitPolynomialHull(coeffs []*big.Rat, lo, hi *big.Rat) proofbound.RatInterval {
+func polynomialHull(coeffs []*big.Rat, lo, hi *big.Rat) proofbound.RatInterval {
 	a, b := freeform.BernsteinHull(freeform.BernsteinRestrict(coeffs, lo, hi))
 	return proofbound.Interval(a, b)
 }
 
-func loftFitPolyInterval(p polynomial.RatPoly, lo, hi *big.Rat) proofbound.RatInterval {
+func polyInterval(p polynomial.RatPoly, lo, hi *big.Rat) proofbound.RatInterval {
 	if polynomial.RpDeg(p) < 0 {
 		return proofbound.PointInterval(new(big.Rat))
 	}
-	return loftFitPolynomialHull(freeform.RpToBernstein(p, polynomial.RpDeg(p)), lo, hi)
+	return polynomialHull(freeform.RpToBernstein(p, polynomial.RpDeg(p)), lo, hi)
 }
 
-func loftFitExcludeNearerRoots(ctx context.Context, spans []freeform.BezierSpan, params []*big.Rat,
-	cornerGlobal *big.Rat, active loftFitRootSpan, lo, hi *big.Rat,
-	makeSpan func(int) (loftFitRootSpan, error), local func(*big.Rat, loftFitRootSpan) *big.Rat) error {
+func excludeNearerRoots(ctx context.Context, spans []freeform.BezierSpan, params []*big.Rat,
+	cornerGlobal *big.Rat, active rootSpan, lo, hi *big.Rat,
+	makeSpan func(int) (rootSpan, error), local func(*big.Rat, rootSpan) *big.Rat) error {
 	nearLocal := lo
 	activeIndex := -1
 	for i := range spans {
@@ -274,7 +280,7 @@ func loftFitExcludeNearerRoots(ctx context.Context, spans []freeform.BezierSpan,
 		}
 	}
 	if activeIndex < 0 {
-		return fmt.Errorf(`%w: the ideal fit contact has no active span`, ErrUnsupported)
+		return fmt.Errorf(`%w: the ideal fit contact has no active span`, decaderr.ErrUnsupported)
 	}
 	if cornerGlobal.Cmp(new(big.Rat).Add(active.start,
 		new(big.Rat).Mul(lo, new(big.Rat).Sub(active.end, active.start)))) > 0 {
@@ -300,21 +306,21 @@ func loftFitExcludeNearerRoots(ctx context.Context, spans []freeform.BezierSpan,
 				return err
 			}
 		}
-		if !loftFitExcludePolynomialRoots(ctx, segment,
+		if !excludePolynomialRoots(ctx, segment,
 			local(start, segment), local(end, segment), 0, new(int)) {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			return fmt.Errorf(`%w: a closer fit-circle tangent root cannot be excluded`, ErrUnsupported)
+			return fmt.Errorf(`%w: a closer fit-circle tangent root cannot be excluded`, decaderr.ErrUnsupported)
 		}
 	}
 	return nil
 }
 
-// loftFitFragmentSpeedUpper bounds |dFit/dt| over the entire original
+// fragmentSpeedUpper bounds |dFit/dt| over the entire original
 // fragment, including portions outside the one span holding the fillet root.
-func loftFitFragmentSpeedUpper(spans []freeform.BezierSpan, params []*big.Rat,
-	total *big.Rat, fit fitSplineSeg) (float64, bool) {
+func fragmentSpeedUpper(spans []freeform.BezierSpan, params []*big.Rat,
+	total *big.Rat, fit sectionrecord.FitSplineSeg) (float64, bool) {
 	start := new(big.Rat).Mul(new(big.Rat).SetFloat64(math.Min(fit.TStart, fit.TEnd)), total)
 	end := new(big.Rat).Mul(new(big.Rat).SetFloat64(math.Max(fit.TStart, fit.TEnd)), total)
 	upper := 0.0
@@ -331,8 +337,8 @@ func loftFitFragmentSpeedUpper(spans []freeform.BezierSpan, params []*big.Rat,
 		localStart := new(big.Rat).Quo(new(big.Rat).Sub(pieceStart, params[i]), width)
 		localEnd := new(big.Rat).Quo(new(big.Rat).Sub(pieceEnd, params[i]), width)
 		u, v := freeform.SpanCoordinatePolys(span)
-		du := loftFitPolyInterval(polynomial.RpDeriv(u), localStart, localEnd)
-		dv := loftFitPolyInterval(polynomial.RpDeriv(v), localStart, localEnd)
+		du := polyInterval(polynomial.RpDeriv(u), localStart, localEnd)
+		dv := polyInterval(polynomial.RpDeriv(v), localStart, localEnd)
 		speedSq := new(big.Rat).Add(
 			new(big.Rat).Mul(proofbound.IntervalAbsUpper(du), proofbound.IntervalAbsUpper(du)),
 			new(big.Rat).Mul(proofbound.IntervalAbsUpper(dv), proofbound.IntervalAbsUpper(dv)),
@@ -340,7 +346,7 @@ func loftFitFragmentSpeedUpper(spans []freeform.BezierSpan, params []*big.Rat,
 		scaled := new(big.Rat).Mul(speedSq, new(big.Rat).Mul(
 			new(big.Rat).Quo(total, width), new(big.Rat).Quo(total, width)))
 		value := proofbound.RatSqrtUp(scaled)
-		if !finiteLoftFitValue(value) {
+		if !finiteValue(value) {
 			return 0, false
 		}
 		upper = math.Max(upper, value)
@@ -348,17 +354,17 @@ func loftFitFragmentSpeedUpper(spans []freeform.BezierSpan, params []*big.Rat,
 	return upper, upper > 0
 }
 
-func loftFitExcludePolynomialRoots(ctx context.Context, span loftFitRootSpan,
+func excludePolynomialRoots(ctx context.Context, span rootSpan,
 	lo, hi *big.Rat, depth int, nodes *int) bool {
 	if ctx.Err() != nil || depth > 22 || *nodes >= 512 {
 		return false
 	}
 	*nodes++
-	hull := loftFitPolynomialHull(span.pBern, lo, hi)
+	hull := polynomialHull(span.pBern, lo, hi)
 	if hull.Lo.Sign() > 0 || hull.Hi.Sign() < 0 {
 		return true
 	}
-	derivative := loftFitPolynomialHull(span.dpBern, lo, hi)
+	derivative := polynomialHull(span.dpBern, lo, hi)
 	if derivative.Lo.Sign() > 0 || derivative.Hi.Sign() < 0 {
 		loSign, hiSign := span.signAt(lo), span.signAt(hi)
 		if loSign == hiSign && loSign != 0 {
@@ -366,12 +372,12 @@ func loftFitExcludePolynomialRoots(ctx context.Context, span loftFitRootSpan,
 		}
 	}
 	mid := new(big.Rat).Quo(new(big.Rat).Add(lo, hi), big.NewRat(2, 1))
-	return loftFitExcludePolynomialRoots(ctx, span, lo, mid, depth+1, nodes) &&
-		loftFitExcludePolynomialRoots(ctx, span, mid, hi, depth+1, nodes)
+	return excludePolynomialRoots(ctx, span, lo, mid, depth+1, nodes) &&
+		excludePolynomialRoots(ctx, span, mid, hi, depth+1, nodes)
 }
 
-func loftFitEncloseRoot(span loftFitRootSpan, lo, hi, total, cx, cy, rootRadius, rho, radius,
-	offsetSign, travelSign *big.Rat) (loftFitRootCertificate, error) {
+func encloseRoot(span rootSpan, lo, hi, total, cx, cy, rootRadius, rho, radius,
+	offsetSign, travelSign *big.Rat) (RootCertificate, error) {
 	paramOf := func(local *big.Rat) *big.Rat {
 		global := new(big.Rat).Add(span.start,
 			new(big.Rat).Mul(local, new(big.Rat).Sub(span.end, span.start)))
@@ -379,25 +385,25 @@ func loftFitEncloseRoot(span loftFitRootSpan, lo, hi, total, cx, cy, rootRadius,
 	}
 	param := proofbound.Interval(paramOf(lo), paramOf(hi))
 	u, v := freeform.SpanCoordinatePolys(span.curve)
-	fitU, fitV := loftFitPolyInterval(u, lo, hi), loftFitPolyInterval(v, lo, hi)
-	du := loftFitPolyInterval(polynomial.RpDeriv(u), lo, hi)
-	dv := loftFitPolyInterval(polynomial.RpDeriv(v), lo, hi)
+	fitU, fitV := polyInterval(u, lo, hi), polyInterval(v, lo, hi)
+	du := polyInterval(polynomial.RpDeriv(u), lo, hi)
+	dv := polyInterval(polynomial.RpDeriv(v), lo, hi)
 	du = proofbound.IntervalScale(du, travelSign)
 	dv = proofbound.IntervalScale(dv, travelSign)
 	speedSq := proofbound.IntervalAdd(proofbound.IntervalSquare(du), proofbound.IntervalSquare(dv))
 	if speedSq.Lo.Sign() <= 0 {
-		return loftFitRootCertificate{}, fmt.Errorf(`%w: the ideal fit tangent speed may vanish`, ErrUnsupported)
+		return RootCertificate{}, fmt.Errorf(`%w: the ideal fit tangent speed may vanish`, decaderr.ErrUnsupported)
 	}
 	speed, ok := proofbound.IntervalSqrt(speedSq)
 	if !ok {
-		return loftFitRootCertificate{}, fmt.Errorf(`%w: the ideal fit tangent speed has no finite enclosure`, ErrUnsupported)
+		return RootCertificate{}, fmt.Errorf(`%w: the ideal fit tangent speed has no finite enclosure`, decaderr.ErrUnsupported)
 	}
 	factor := new(big.Rat).Mul(offsetSign, radius)
 	normalU, okU := proofbound.IntervalQuo(proofbound.IntervalScale(dv,
 		new(big.Rat).Neg(factor)), speed)
 	normalV, okV := proofbound.IntervalQuo(proofbound.IntervalScale(du, factor), speed)
 	if !okU || !okV {
-		return loftFitRootCertificate{}, fmt.Errorf(`%w: the ideal fit tangent normal has no finite enclosure`, ErrUnsupported)
+		return RootCertificate{}, fmt.Errorf(`%w: the ideal fit tangent normal has no finite enclosure`, decaderr.ErrUnsupported)
 	}
 	centerU := proofbound.IntervalAdd(fitU, normalU)
 	centerV := proofbound.IntervalAdd(fitV, normalV)
@@ -408,7 +414,7 @@ func loftFitEncloseRoot(span loftFitRootSpan, lo, hi, total, cx, cy, rootRadius,
 		proofbound.IntervalScale(centerOffsetU, circleFactor))
 	circleV := proofbound.IntervalAdd(proofbound.PointInterval(cy),
 		proofbound.IntervalScale(centerOffsetV, circleFactor))
-	return loftFitRootCertificate{
+	return RootCertificate{
 		Param: param, FitFootU: fitU, FitFootV: fitV,
 		CenterU: centerU, CenterV: centerV,
 		CircleFootU: circleU, CircleFootV: circleV,
