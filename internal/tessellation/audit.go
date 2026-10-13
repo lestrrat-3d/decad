@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -364,15 +365,49 @@ func requireCycleOrPathLink(center int, link map[int][]int) error {
 // docs/tessellation-design.md §4's signed-volume audit runs on it too, for
 // every payload class that assembles its own triangle set.
 func OrientationSign(vertices []r3.Vec, triangles [][3]int, anchor r3.Vec) int {
+	return orientationSum(vertices, triangles, anchor,
+		orderedwork.EachWorkers(len(triangles), orientationParallelMin)).Sign()
+}
+
+const (
+	// orientationParallelMin is the triangle count from which OrientationSign
+	// sums its blocks on several goroutines.
+	orientationParallelMin = 2048
+	// orientationBlock is the triangle count of one exact partial sum.
+	orientationBlock = 512
+)
+
+// orientationSum is the exact signed tetrahedron sum behind OrientationSign.
+// Each block of orientationBlock triangles is summed exactly into its own
+// accumulator, and the block sums are added in block order. An exact sum does
+// not depend on how its terms are grouped, so the result is the same for every
+// workers value. Workers run no context or budget call. A non-finite vertex
+// makes the sum run on the calling goroutine alone, so the panic of a lift of
+// that vertex happens where the first triangle reading it is reached.
+func orientationSum(vertices []r3.Vec, triangles [][3]int, anchor r3.Vec, workers int) proof.Dyadic {
 	xa := proof.DyVec(anchor)
-	sum := proof.DyZero()
-	for _, t := range triangles {
-		a := proof.DvSub(proof.DyVec(vertices[t[0]]), xa)
-		b := proof.DvSub(proof.DyVec(vertices[t[1]]), xa)
-		c := proof.DvSub(proof.DyVec(vertices[t[2]]), xa)
-		sum = proof.DyAdd(sum, proof.DvDot(a, proof.DvCross(b, c)))
+	if !proofbound.AllFinite(vertices) {
+		workers = 1
 	}
-	return sum.Sign()
+	blocks := (len(triangles) + orientationBlock - 1) / orientationBlock
+	parts := make([]proof.DyAcc, blocks)
+	// The block function never fails, so Each returns len(parts) and nil.
+	_, _ = orderedwork.Each(blocks, workers, 1, nil, func(k int) error {
+		lo := k * orientationBlock
+		hi := min(lo+orientationBlock, len(triangles))
+		for _, t := range triangles[lo:hi] {
+			a := proof.DvSub(proof.DyVec(vertices[t[0]]), xa)
+			b := proof.DvSub(proof.DyVec(vertices[t[1]]), xa)
+			c := proof.DvSub(proof.DyVec(vertices[t[2]]), xa)
+			parts[k].Add(proof.DvDot(a, proof.DvCross(b, c)))
+		}
+		return nil
+	})
+	var sum proof.DyAcc
+	for k := range parts {
+		sum.Add(parts[k].Dyadic())
+	}
+	return sum.Dyadic()
 }
 
 // RequireVertexLinks is docs/tessellation-design.md §9's construction safety
