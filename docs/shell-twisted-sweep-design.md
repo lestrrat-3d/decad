@@ -65,9 +65,36 @@ The builder audits held facet crossings, edge use, vertex links, and
 orientation before it commits. `Tessellate(VerifyAll)` checks the stored
 boundary and occupied-volume certificates at the requested tolerance.
 
+`Copy` and `Transform` can place the source Sweep under a rigid motion. Shell
+first certifies the offset cup in the Sweep's local profile and path frame.
+The stored floating-point rotation has a small exact metric defect, so an
+affine image of a local unit-normal offset is not exactly the world-normal
+offset. The exact stored matrix supplies `e = ||LᵀL-I|| < 1/2`. Its normal
+map differs from the local unit normal by at most `4e/(1-e)` and its tangent
+map by at most `100e/(1-e)³`. The certificate compares the two cavity walls
+at each height. It requires the height map to remain increasing, the new
+contours to keep their positive radial winding, the outer-wall clearance to
+remain positive, and the world-offset floor to stay between the two caps.
+The floor's local height differs from `t` by at most `te/(1-e)`.
+
+The maximum contour movement plus the moved floor bounds boundary distance.
+The contour homotopy's swept area bounds each section's symmetric difference;
+its height integral and the floor strip bound occupied-volume difference.
+Separate absolute wall-density, floor, and rim terms bound area difference
+without cancellation. These three charges augment the local cup proof before
+the ordinary faceted placement path moves the held vertices, audits contact
+and orientation, and adds its own rounding, area, and volume charges. A proof
+refusal leaves the source Sweep and document unchanged. `capEnd` remains
+selectable on the placed Sweep.
+
 The public gate uses a solved 8×6 mm rounded rectangle with 1.5 mm corners,
 a 5 mm path, 30° twist, and 1 mm inward Shell thickness. Its 3,456-triangle
 cup reports a 0.015314 mm boundary bound and a 16.076 mm³ volume allowance;
 `Tessellate(0.1 mm, VerifyAll)` reports boundary and volume verified.
 A 0.01 mm request refuses at the same fixed mesh. Starting-cap, outward,
 and over-thick calls also refuse without changing the document.
+The placed public gate applies a 23° rotation about `(1,2,3)` followed by a
+`(9,-4,7)` mm translation. Both `Copy` and `Transform` Sweep sources select
+one `capEnd` and shell successfully. Their cups pass `VerifyAll` at 0.1 mm
+with a boundary bound below 0.015314 mm and a volume allowance below
+16.076 mm³.

@@ -160,7 +160,8 @@ Fillet cap edges are S1. Chamfer cap edges, mixed selections and asymmetric
 setbacks refuse. Shell maps each selected `side(0,0,j)` face to segment `j`
 of the stored exact prism before the prism side-opening build. R10 requires
 the origin XY plane, an origin-to-positive-Z path, an exact thickness, and
-the top-cap opening. Other Sweep kinds are S3.
+the top-cap opening. R10 evaluates these source conditions in the local
+frame before its audited rigid placement. Other Sweep kinds are S3.
 
 A full-circle loop is a single closed wall with **no** lateral edge at all
 (evaluator §5 emits no seam), so a cylinder has no edge the corner rewrite can

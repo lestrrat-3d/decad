@@ -19,6 +19,7 @@ type twistOffsetSourceProof struct {
 	clearanceLo  *big.Rat
 	speedLo      *big.Rat
 	turnRateLo   *big.Rat
+	radialLo     *big.Rat
 	firstMomentX *big.Rat
 	firstMomentY *big.Rat
 }
@@ -164,7 +165,7 @@ func twistOffsetSource(profile profileRecord, height float64, angle units.Value,
 	t := proofbound.Interval(new(big.Rat).Sub(twistRat(thickness), twistRat(thicknessDelta)),
 		new(big.Rat).Add(twistRat(thickness), twistRat(thicknessDelta)))
 	area := twistOffsetUnit(0)
-	var clearanceLo, speedLo, turnRateLo *big.Rat
+	var clearanceLo, speedLo, turnRateLo, radialLo *big.Rat
 	const parts = int64(64)
 	for _, segment := range profile.Outer.Segments {
 		for index := range parts {
@@ -227,12 +228,15 @@ func twistOffsetSource(profile profileRecord, height float64, angle units.Value,
 			if turnRateLo == nil || turnRate.Lo.Cmp(turnRateLo) < 0 {
 				turnRateLo = turnRate.Lo
 			}
+			if radialLo == nil || radius.Lo.Cmp(radialLo) < 0 {
+				radialLo = radius.Lo
+			}
 		}
 	}
 	if area.Lo.Sign() <= 0 || area.Hi.Cmp(poly.areaInterval.Lo) >= 0 {
 		return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell offset area is not enclosed inside source`, ErrUnsupported)
 	}
 	return twistOffsetSourceProof{area: area, clearanceLo: clearanceLo,
-		speedLo: speedLo, turnRateLo: turnRateLo,
+		speedLo: speedLo, turnRateLo: turnRateLo, radialLo: radialLo,
 		firstMomentX: new(big.Rat), firstMomentY: new(big.Rat)}, nil
 }
