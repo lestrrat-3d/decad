@@ -19,7 +19,7 @@ type partialChamferQuad struct {
 	side   *Edge
 }
 
-// attachPartialChamferBand builds the two selected straight-walk strips.
+// attachPartialChamferBand builds one concave root or two convex outer strips.
 // Every patch vertex is already an open edge of the rewritten face record.
 func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 	bp brepPayload, bi int, open brepOpenSet, e brepEmbed) ([]*Face, brepBandMass, error) {
@@ -28,10 +28,18 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 	}
 	b := bp.loopBands[bi]
 	f := bp.faces[b.face]
-	if b.loop != 0 || b.sigma != -1 || f.delta != 0 || b.setback.dc != b.setback.ds ||
+	selectedCount := 0
+	for _, on := range b.selected {
+		if on {
+			selectedCount++
+		}
+	}
+	outerPair := b.loop == 0 && b.sigma == -1 && selectedCount == 2
+	rootSingle := b.loop > 0 && b.sigma == 1 && selectedCount == 1
+	if (!outerPair && !rootSingle) || f.delta != 0 || b.setback.dc != b.setback.ds ||
 		b.setback.dcDelta != 0 ||
 		b.setback.dsDelta != 0 {
-		return nil, brepBandMass{}, fmt.Errorf(`%w: a partial chamfer requires an exact convex outer contour`, ErrUnsupported)
+		return nil, brepBandMass{}, fmt.Errorf(`%w: a partial chamfer requires an exact outer pair or inner root`, ErrUnsupported)
 	}
 	sideZ, sideDelta := b.sideLevel(f)
 	if sideDelta != 0 {
@@ -74,8 +82,9 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		}
 		sideOrdinal++
 	}
-	if sideOrdinal != 2 || sideOrdinal != len(open.side[bi]) || len(open.terminal[bi]) != 2 {
-		return nil, brepBandMass{}, fmt.Errorf(`%w: a partial chamfer does not have two strips and two terminal lines`, ErrUnsupported)
+	if sideOrdinal != selectedCount || sideOrdinal != len(open.side[bi]) ||
+		len(open.terminal[bi]) != 2 {
+		return nil, brepBandMass{}, fmt.Errorf(`%w: a partial chamfer does not have one or two strips and two terminal lines`, ErrUnsupported)
 	}
 	lead, trail := make([]*Edge, len(quads)), make([]*Edge, len(quads))
 	for i, on := range b.selected {
@@ -109,7 +118,11 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 	}
 	var patches []*Face
 	mass := zeroBrepBandMass()
-	outwardCap := f.view(bp.xform).dir(0, 0, -b.matSign(f))
+	capSign := -1.0
+	if f.outward {
+		capSign = 1
+	}
+	outwardCap := f.view(bp.xform).dir(0, 0, capSign)
 	for i, on := range b.selected {
 		if !on {
 			continue

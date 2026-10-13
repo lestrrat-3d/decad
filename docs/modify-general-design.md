@@ -522,9 +522,9 @@ axis before it refuses.
 
 Route L runs for `Chamfer` and `Fillet` on a brep or stacked receiver when
 route P takes no axis and the selection is not route E's admitted independent
-straight edges. A single straight Fillet edge whose end-face corner differs
-from the interior material wedge (brep-modify EB8) takes route L when it is
-part of a planar-face loop. A `Fillet` builds its loops with the fillet arm of
+straight edges. A single straight Fillet or Chamfer edge whose end-face corner
+differs from the interior material wedge (brep-modify EB8) takes route L when
+it is part of a planar-face loop. A `Fillet` builds its loops with the fillet arm of
 `docs/loop-fillet-design.md`, whose band is a pipe where this section's is
 ruled; Table LB, the record rewrite and SL1, SL2 hold for both. A record carrying
 route L bands reads as no prism, so route P takes no axis of it. Each selected edge is matched to one
@@ -636,28 +636,30 @@ extremized on those two directrices, which the record's faces hold within
 their own displacements. The centroid divides the summed moments by the
 volume and lifts through the reference frame.
 
-### 4.3a Two adjacent straight-edge chamfers
+### 4.3a Selected straight-edge chamfers
 
-A symmetric `Chamfer` of exactly two adjacent straight edges on one planar
-face's outer loop of at least four walks takes a selected-walk band. Both
-selected walks must be lines, the common corner must be convex, and their
-other ends must meet unselected
-straight walks. Route E's three-edge, end-face and restatement gates run on
-both edges. Route L's neighbouring-face, reach, contour and section audits
-run on the selected walks. Each selected wall ends at the band's side level;
-the planar face keeps the contour with only those two walks offset.
+A symmetric `Chamfer` takes a selected-walk band for either one straight edge
+on a rising inner loop (a boss root) or exactly two adjacent straight edges
+on a descending outer loop. The loop has at least four walks, and each end
+of the selected run meets an unselected straight walk. The two-edge run has
+a convex common corner. Route E's three-edge, end-face and restatement gates
+run on every selected edge. Route L's neighbouring-face, reach, contour and
+section audits run on the selected walks. Each selected wall ends at the
+band's side level; the planar face keeps the contour with only the selected
+walks offset. A material-wedge mismatch bars route E before the single-edge
+band is tried.
 
-The two band patches are planar quadrilaterals between the side and cap
-walks. Their common edge joins the original corner at the side level to
-the offset corner on the face. At each free end, the end face gets a straight
+The one or two band patches are planar quadrilaterals between the side and
+cap walks. Two patches share an edge that joins their original corner at the
+side level to the offset corner on the face. At each free end, the end face gets a straight
 terminal segment between its side and cap feet. The builder refuses if a
-terminal foot, shared corner, patch plane, or both triangles' common
+terminal foot, any shared corner, patch plane, or both triangles' common
 orientation cannot be proved from the recorded lines and setbacks. Exact
 rational polygon integrals contribute the patches' volume and first moments.
-The patch normal and those signed integrals follow the face's outward side
-on either cap. The mesh uses those same four vertices per patch; `VerifyAll`
-checks its closed boundary and occupied volume. Curved, reflex, longer and
-disjoint chains continue to SL1.
+The patch normal and those signed integrals follow the planar face's outward
+direction for both the removed wedge and the filled boss root. The mesh uses
+those same four vertices per patch; `VerifyAll` checks its closed boundary
+and occupied volume. Curved, longer and disjoint chains continue to SL1.
 
 ### 4.3b Simultaneous outer-edge chamfer of a cross-drilled box
 
@@ -727,7 +729,7 @@ tessellates at 0.1 mm with `VerifyAll` and reports Sound under default
 
 | SL | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SL1** | a partial loop outside one admissible straight-edge fillet chain, §4.3a's two-edge chamfer, or §4.3b's box all-edge chamfer; two loops sharing an edge after route V's partition; or loops mixed with single edges for a `Chamfer` | yes | `ErrUnsupported` |
+| **SL1** | a partial loop outside one admissible straight-edge fillet chain, §4.3a's one inner-root or two outer-edge chamfer, or §4.3b's box all-edge chamfer; two loops sharing an edge after route V's partition; or loops mixed with single edges for a `Chamfer` | yes | `ErrUnsupported` |
 | **SL2** | an adjacent face outside LB3/LB4/LB6: a curved or oblique neighbour, a split side line, a neighbour whose own loop continues past the vertex on a curve, walls on both sides of `F` | yes | `ErrUnsupported` |
 | **SL3** | retired: a `Fillet` of complete loops builds through `docs/loop-fillet-design.md`'s fillet arm or refuses with that document's Table SF | — | — |
 | **SL4** | an asymmetric route L reference with no unambiguous record-face identity | yes | reach SX16 |

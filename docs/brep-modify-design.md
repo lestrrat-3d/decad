@@ -202,7 +202,7 @@ edge `e` must satisfy EB1–EB6 and the set must satisfy EB7.
 | **EB5** | Every segment of `G0`, `G1` and the adjacent faces is over its natural range (`LineSeg` 0→1 or 1→0, `ArcSeg` likewise, `CircleSeg` whole), and no loop of those faces holds two consecutive segments on one carrier (collinear lines; co-circular arcs of one centre, radius and sense). | SB8 |
 | **EB6** | `G0`'s two loop segments at `V0` are the traces of the two adjacent faces — each pairs, in the receiver's topology, with that face's rim (sw) or with its segment next to `e` (pl) — and they make a corner there (modify S4 otherwise). `G1` likewise at `V1`. | SB8 / S4 |
 | **EB7** | No two edges of `E` share a vertex. | SB5 |
-| **EB8** | For a Fillet, the corner in each end face, or its complement when the other end face lies on its outer side, has the same convex or reflex turn as the solid between the two faces beside `e`. | SB8 |
+| **EB8** | For a Fillet or Chamfer, the corner in each end face, or its complement when the other end face lies on its outer side, has the same convex or reflex turn as the solid between the two faces beside `e`. | SB8 |
 
 EB5's second half exists because the corner rewrite re-emits a coalesced walk as
 one segment (`rewriteLoop`), and a vertex another face placed inside that walk
@@ -296,7 +296,7 @@ faces `G0`, `G1`:
    recomputed blend, so its connector is already walked in `G1`'s loop sense;
    nothing is transported from `G0` into `G1`'s record. Steps 4 and 5 read
    `G0`'s feet and centre.
-   Before a route E Fillet rewrites a face, EB8 compares each corner's turn
+   Before a route E Fillet or Chamfer rewrites a face, EB8 compares each corner's turn
    with the interior material wedge. The adjacent faces' outward normals
    `n0` and `n1` and the first face's oriented solid-boundary tangent `t` make the material
    turn `sign((n0 × n1) · t)`: positive is convex, negative is reflex. An inward
@@ -386,7 +386,7 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | **SB5** | selected single straight edges share a vertex outside route V's complete-loop or selected-chain fillet (`docs/vertex-blend-design.md` §2); a mixed `Chamfer` still takes SL1 | yes | `ErrUnsupported` (SL1's text) |
 | **SB6** | an edge vertex with other than three incident edges, or an edge that is one piece of a split side line | yes | `ErrUnsupported` |
 | **SB7** | the third face at an edge vertex cannot be restated as a plane across its axis | yes outside P8's exact front top edge (§4.3c); complete-loop fillets have their own route | `ErrUnsupported` |
-| **SB8** | an adjacent face outside EB4/EB5, or a Fillet whose end-face corners disagree with the interior material wedge (EB8) or whose wedge turn is undecided | yes | `ErrUnsupported` |
+| **SB8** | an adjacent face outside EB4/EB5, or a Fillet or Chamfer whose end-face corners disagree with the interior material wedge (EB8) or whose wedge turn is undecided | yes | `ErrUnsupported` |
 | **SB9** | the two end faces' blends disagree in reference coordinates | — (a falsifier) | `ErrUnsupported` |
 | **SB10** | Shell of a brep that reads as a prism along no axis and as no through-cut record (modify-general Table TC) | yes; the three-dimensional offset puts a sphere at a reflex vertex, a torus around a reflex circle and an elliptical edge where two reflex edges meet, none of which this record holds | `ErrUnsupported`, with SG3's reason |
 
