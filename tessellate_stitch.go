@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stitchweld"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -36,7 +37,7 @@ import (
 // exactly when every one of them is; its areaSlack is the matching
 // proofbound.PerturbedTriangleAreaAllow sum. A CLOSED body (b.Kind() == BodySolid)
 // whose every vertex carries a proven bound of exactly zero
-// (stitchZeroVertexBound, stitch.go) publishes a zero occupied-volume proof
+// (stitchweld.ZeroBound over stitchVertexBounds, stitch.go) publishes a zero occupied-volume proof
 // (symDiffOK == true) — see the comment at that publication below for the
 // three-step argument. Every other stitched body — open, curved/mixed,
 // placed, or certificate-welded — keeps symDiffOK false, so Union, Cut and
@@ -373,7 +374,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	// triangle this mesh restates, or the claim does not:
 	//
 	//  1. Every held vertex IS the true boundary vertex, not merely near it.
-	//     stitchZeroVertexBound (stitch.go) proves every one of b.Vertices()'s
+	//     stitchweld.ZeroBound (stitch.go) proves every one of b.Vertices()'s
 	//     own proven bounds is exactly zero — the same gate
 	//     clearance_geom.go's addStitchFaces dispatch already applies, reused
 	//     verbatim rather than re-derived. That rules out both a nonzero
@@ -408,7 +409,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	mesh.volSymDiff = 0
 	mesh.symDiffOK = false
 	if b.Kind() == BodySolid {
-		zeroBound, err := stitchZeroVertexBound(budget, b)
+		zeroBound, err := stitchweld.ZeroBound(budget, stitchVertexBounds(b))
 		if err != nil {
 			return nil, err
 		}

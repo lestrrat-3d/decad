@@ -1223,7 +1223,7 @@ func stitchTestLumpFace(vs []*Vertex) *Face {
 // itself refuses this exact shape before a body this overlapped could ever
 // reach tessellation (TestStitchRefusesNestedBoxes, apitest/stitch_test.go). This
 // fixture is what proves tessellateStitch's own symDiffOK reading does not
-// merely inherit that earlier refusal: stitchZeroVertexBound alone holds
+// merely inherit that earlier refusal: stitchweld.ZeroBound alone holds
 // here (every one of the 16 vertices is zero-bound), so without this file's
 // OWN lump-separation reading, symDiffOK would wrongly read true.
 func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {

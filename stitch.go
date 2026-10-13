@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"iter"
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -764,46 +765,24 @@ func stitchLumpsProvenSeparate(components [][]*Face) bool {
 		})
 }
 
-// stitchZeroVertexBound reports whether every one of b's own vertices
-// carries a proven bound of exactly zero — clearance_geom.go's own
-// addStitchFaces dispatch gate (docs/clearance-design.md §2) and
-// tessellate_stitch.go's own occupied-volume admission
-// (docs/tessellation-design.md §2's stitchPayload row) both ask this
-// identical question, so it lives here once rather than as two checks that
-// could drift apart. budget charges one step per vertex visited, the same
-// cancellable walk clearance_geom.go's own version charged before this
-// extraction.
-func stitchZeroVertexBound(budget *proofbound.WorkBudget, b *Body) (bool, error) {
-	for _, v := range b.Vertices() {
-		if err := budget.Step(); err != nil {
-			return false, err
-		}
-		if v.Position().Bound.Mag() != 0 {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
-// stitchMaxVertexBound is stitchZeroVertexBound's own magnitude twin: the
-// largest proven bound over every one of b's own vertices, zero when every
-// vertex is exact. clearance_geom.go's addStitchFaces dispatch reads it as
-// the body's own bodyGeom.delta (docs/clearance-design.md §2) once a bounded
-// stitched body earns a model rather than a refusal: every vertex this
-// carrier model reads comes straight off the body's own topology, so the
-// worst vertex bound is a sound charge against the whole model, exactly as a
-// placed prism's frame/placement rounding is (bodyGeom's own doc comment).
-func stitchMaxVertexBound(budget *proofbound.WorkBudget, b *Body) (float64, error) {
-	best := 0.0
-	for _, v := range b.Vertices() {
-		if err := budget.Step(); err != nil {
-			return 0, err
-		}
-		if m := v.Position().Bound.Mag(); m > best {
-			best = m
+// stitchVertexBounds yields the proven bound magnitude of each of b's own
+// vertices, in b.Vertices() order. clearance_geom.go's addStitchFaces dispatch
+// gate (docs/clearance-design.md §2) and tessellate_stitch.go's occupied-volume
+// admission (docs/tessellation-design.md §2's stitchPayload row) both reduce
+// it through stitchweld.ZeroBound, and clearance_geom.go reads the largest
+// through stitchweld.MaxBound as the body's own bodyGeom.delta once a bounded
+// stitched body earns a model rather than a refusal: every vertex this carrier
+// model reads comes straight off the body's own topology, so the worst vertex
+// bound is a sound charge against the whole model, exactly as a placed prism's
+// frame/placement rounding is (bodyGeom's own doc comment).
+func stitchVertexBounds(b *Body) iter.Seq[float64] {
+	return func(yield func(float64) bool) {
+		for _, v := range b.Vertices() {
+			if !yield(v.Position().Bound.Mag()) {
+				return
+			}
 		}
 	}
-	return best, nil
 }
 
 // triangulateStitchFaces triangulates each planar face in its own plane

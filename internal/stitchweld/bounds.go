@@ -1,8 +1,10 @@
 package stitchweld
 
 import (
+	"iter"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -87,4 +89,35 @@ func BoxCorners(boxMin, boxMax r3.Vec, inflate float64) [8]r3.Vec {
 		{X: hi.X, Y: hi.Y, Z: lo.Z}, {X: hi.X, Y: lo.Y, Z: hi.Z},
 		{X: lo.X, Y: hi.Y, Z: hi.Z}, {X: hi.X, Y: hi.Y, Z: hi.Z},
 	}
+}
+
+// ZeroBound reports whether every magnitude in mags is exactly zero. budget
+// charges one step per magnitude visited, before the magnitude is read, and
+// its error is returned as is. An empty sequence is vacuously zero.
+func ZeroBound(budget *proofbound.WorkBudget, mags iter.Seq[float64]) (bool, error) {
+	for m := range mags {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		if m != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// MaxBound returns the largest magnitude in mags, zero for an empty sequence
+// or when every magnitude is zero. budget charges one step per magnitude
+// visited and its error is returned as is.
+func MaxBound(budget *proofbound.WorkBudget, mags iter.Seq[float64]) (float64, error) {
+	best := 0.0
+	for m := range mags {
+		if err := budget.Step(); err != nil {
+			return 0, err
+		}
+		if m > best {
+			best = m
+		}
+	}
+	return best, nil
 }

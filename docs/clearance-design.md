@@ -195,7 +195,7 @@ It is admitted whenever the recorded triangle set exists (an all-planar body,
 open or closed); a placement's own widened vertex bound (`stitch.go`'s
 `rigidRoundAllow`) or a certificate weld's own nonzero class bound no longer
 refuses it. Instead, `newBodyGeomBudget` charges the body's own largest
-proven vertex bound into `bodyGeom.delta` (`stitchMaxVertexBound`,
+proven vertex bound into `bodyGeom.delta` (`stitchweld.MaxBound`,
 `stitch.go`), the same per-body displacement `addPrismFaces` and
 `addRevolveFaces` charge their own frame/placement rounding, axial or angular
 displacement, per-face tilt and, for a revolve, the carriers' axis gap into, and `clearancePair` widens the
@@ -913,7 +913,7 @@ undecided pair — `Verify` would report a clearance the geometry does not have.
 
 A closed, all-planar `stitchPayload` (docs/surface-design.md §6.4) gains a
 carrier model, §2's `addStitchFaces`, once every vertex of the body carries a
-proven bound of exactly zero — the identical gate (`stitchZeroVertexBound`)
+proven bound of exactly zero — the identical gate (`stitchweld.ZeroBound`)
 that lets its mesh publish a zero occupied-volume proof
 (`docs/tessellation-design.md` §2's `stitchPayload` row), so a pair the
 kernel proves `pairOverlapping` for such a body now reaches a real
