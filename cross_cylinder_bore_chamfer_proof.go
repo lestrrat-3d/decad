@@ -61,12 +61,6 @@ func crossDSinCos(a crossDual) (crossDual, crossDual, bool) {
 	return crossDual{v: s, d: crossMul(c, a.d)},
 		crossDual{v: c, d: crossSub(crossPoint(0), crossMul(s, a.d))}, true
 }
-func crossPolar(aY, aZ, bY, bZ crossDual) crossIV {
-	return crossSub(crossMul(aY.v, bZ.d), crossMul(aZ.v, bY.d))
-}
-func crossJacobian(aY, aZ, dY, dZ crossDual) crossIV {
-	return crossSub(crossMul(aY.d, dZ.v), crossMul(aZ.d, dY.v))
-}
 
 type crossBoreCellResult struct {
 	width, sampleError, speed, bandLength float64
@@ -76,8 +70,10 @@ type crossBoreCellResult struct {
 // ruled band between the two source-cylinder setbacks. The cross products of
 // the endpoint curves and their mixed pair are Bernstein coefficients for
 // polar progress at every transverse band position. Both Jacobian endpoints
-// have one sign, so no transverse band strip folds. The source/held sample
-// comparison charges libm and coordinate rounding instead of assuming ulps.
+// have one sign, so no transverse band strip folds. Each clearance and fold
+// test computes only the interval endpoint it reads and decides its sign by
+// comparison. The source/held sample comparison charges libm and coordinate
+// rounding instead of assuming ulps.
 //
 // The cell's intervals keep unreduced rationals (proofarith.LazyRat); a value
 // is read in lowest terms where it leaves the proof: a square-root input, the
@@ -134,20 +130,34 @@ func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
 	inX := crossDMul(xd, crossDSub(crossConst(crossPoint(1)), dOverQ))
 	inY := crossDMul(rd, crossDSub(crossDMul(cd, codb), crossDMul(sd, sodb)))
 	inZ := crossDMul(rd, crossDAdd(crossDMul(sd, codb), crossDMul(cd, sodb)))
-	outerBore := crossSub(crossAdd(crossSq(outY.v), crossSq(outZ.v)), crossSq(r))
-	innerTarget := crossSub(crossSq(R), crossAdd(crossSq(inX.v), crossSq(inY.v)))
-	diffY, diffZ := crossDSub(outY, inY), crossDSub(outZ, inZ)
-	support := crossAdd(crossMul(diffY.v, inY.v), crossMul(diffZ.v, inZ.v))
-	polarMid, ok := crossQuo(crossAdd(crossPolar(inY, inZ, outY, outZ),
-		crossPolar(outY, outZ, inY, inZ)), crossPoint(2))
-	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the band polar proof is undefined", ErrUnsupported)
+	diffY, diffZ := crossSub(outY.v, inY.v), crossSub(outZ.v, inZ.v)
+	mulLo, mulHi := proofarith.LazyIntervalMulLo, proofarith.LazyIntervalMulHi
+	// crossPolar(aY, aZ, bY, bZ).Lo
+	polarLo := func(aY, aZ, bY, bZ crossDual) proofarith.LazyRat {
+		return proofarith.LazySub(mulLo(aY.v, bZ.d), mulHi(aZ.v, bY.d))
 	}
-	if outerBore.Lo.Sign() <= 0 || innerTarget.Lo.Sign() <= 0 || support.Lo.Sign() <= 0 ||
-		crossPolar(inY, inZ, inY, inZ).Lo.Sign() <= 0 ||
-		crossPolar(outY, outZ, outY, outZ).Lo.Sign() <= 0 || polarMid.Lo.Sign() <= 0 ||
-		crossJacobian(inY, inZ, diffY, diffZ).Hi.Sign() >= 0 ||
-		crossJacobian(outY, outZ, diffY, diffZ).Hi.Sign() >= 0 {
+	// crossPolar(aY, aZ, bY, bZ).Lo.Sign() > 0
+	polarPositive := func(aY, aZ, bY, bZ crossDual) bool {
+		return proofarith.LazyCmp(mulLo(aY.v, bZ.d), mulHi(aZ.v, bY.d)) > 0
+	}
+	// crossJacobian(aY, aZ, dY, dZ).Hi.Sign() < 0
+	jacobianNegative := func(aY, aZ crossDual, dY, dZ crossIV) bool {
+		return proofarith.LazyCmp(mulHi(aY.d, dZ), mulLo(aZ.d, dY)) < 0
+	}
+	outerBorePositive := proofarith.LazyCmp(proofarith.LazyAdd(proofarith.LazyIntervalSquareLo(outY.v),
+		proofarith.LazyIntervalSquareLo(outZ.v)), proofarith.LazyIntervalSquareHi(r)) > 0
+	innerTargetPositive := proofarith.LazyCmp(proofarith.LazyIntervalSquareLo(R),
+		proofarith.LazyAdd(proofarith.LazyIntervalSquareHi(inX.v), proofarith.LazyIntervalSquareHi(inY.v))) > 0
+	supportPositive := proofarith.LazyCmp(mulLo(diffY, inY.v), proofarith.LazyNeg(mulLo(diffZ, inZ.v))) > 0
+	// polarMid = (P1 + P2)/2 with P1 = crossPolar(inY, inZ, outY, outZ) and
+	// P2 = crossPolar(outY, outZ, inY, inZ). Dividing by the positive point 2
+	// keeps the sign of P1.Lo + P2.Lo, and never fails: the divisor excludes 0.
+	polarMidPositive := proofarith.LazyCmp(polarLo(inY, inZ, outY, outZ),
+		proofarith.LazyNeg(polarLo(outY, outZ, inY, inZ))) > 0
+	if !outerBorePositive || !innerTargetPositive || !supportPositive ||
+		!polarPositive(inY, inZ, inY, inZ) || !polarPositive(outY, outZ, outY, outZ) ||
+		!polarMidPositive || !jacobianNegative(inY, inZ, diffY, diffZ) ||
+		!jacobianNegative(outY, outZ, diffY, diffZ) {
 		return crossBoreCellResult{}, fmt.Errorf("%w: a cross-bore chamfer cell loses clearance or folds", ErrUnsupported)
 	}
 	negativeX := crossSub(crossPoint(0), xd.v)
@@ -182,8 +192,8 @@ func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
 	diffX := crossSub(outX.v, inX.v)
 	bandCoord := max(
 		proofbound.LazyIntervalAbsUpperUp(diffX),
-		proofbound.LazyIntervalAbsUpperUp(diffY.v),
-		proofbound.LazyIntervalAbsUpperUp(diffZ.v))
+		proofbound.LazyIntervalAbsUpperUp(diffY),
+		proofbound.LazyIntervalAbsUpperUp(diffZ))
 	return crossBoreCellResult{
 		width: width, sampleError: proofbound.Radius3D(sampleError),
 		speed: proofbound.Radius3D(speed), bandLength: proofbound.Radius3D(bandCoord),
