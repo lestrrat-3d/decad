@@ -45,11 +45,11 @@ gap are charged. Both radius readings multiply the recorded squared radius
 by the placed body's exact squared XY rotation-basis norm, including its
 float-basis residual.
 
-`loftCylinderRadialGate` computes the exact minimum projected radius of
+`loftcylinder.RadialGate` computes the exact minimum projected radius of
 every held wall triangle. Fitted flank and tip cells must stay outside the
 circle after the Loft source bound. Root stations must lie entirely in their
 charged radial band. The two connector cells and root cells give the maximum
-inward reach of the seam. `loftCylinderWedgeGate` evaluates the quadratic
+inward reach of the seam. `loftcylinder.WedgeGate` evaluates the quadratic
 cross product of every held triangle against both moving root endpoint rays.
 Its Bernstein coefficients bound the whole facet, including the first tooth's
 cap facets. The Loft source bound is added to any lateral wedge departure.

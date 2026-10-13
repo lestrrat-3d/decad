@@ -57,3 +57,4 @@ The rules for rows live in `docs/layout.md`.
 | `internal/revolvesampling/` | Revolve meridian junctions, stations, samples and section readings. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds. See tessellation §8–§11. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
+| `internal/loftcylinder/` | Exact ring-to-wall distances, split-ring cycles, projected triangle radii and the radial and wedge gates of the loft/cylinder Union. See loft-cylinder-boolean design. |

@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -132,7 +133,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 		for step := range steps {
 			b0, b1 := rings[0][step], rings[0][step+1]
 			t0, t1 := rings[1][step], rings[1][step+1]
-			if !loftCylinderRingOrder(mesh.verts[b0], mesh.verts[b1],
+			if !loftcylinder.RingOrder(mesh.verts[b0], mesh.verts[b1],
 				mesh.verts[t0], mesh.verts[t1]) {
 				return nil, [2][]int{}, blankGroup, 0, 0,
 					fmt.Errorf("%w: circular prism ring loses angular order", ErrUnsupported)

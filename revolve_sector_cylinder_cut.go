@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -212,7 +213,7 @@ func revolveSectorTriangleClear(t [3]int, verts []r3.Vec, clearance float64) boo
 		return true
 	}
 	projected := [3]r3.Vec{{X: a.Y, Y: a.Z}, {X: b.Y, Y: b.Z}, {X: c.Y, Y: c.Z}}
-	return loftCylinderTriangleMinRadius(projected[:], [3]int{0, 1, 2}) > clearance
+	return loftcylinder.TriangleMinRadius(projected[:], [3]int{0, 1, 2}) > clearance
 }
 
 // revolveSectorRingMaxStep rechecks the retained Union station order and

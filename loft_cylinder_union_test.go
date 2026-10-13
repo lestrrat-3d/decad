@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -210,11 +211,11 @@ func TestLoftCylinderTriangleMinRadiusMatchesRational(t *testing.T) {
 			verts := tc.tri[:]
 			tri := [3]int{0, 1, 2}
 			require.Equal(t, loftCylinderTriangleMinRadiusReference(verts, tri),
-				loftCylinderTriangleMinRadius(verts, tri))
+				loftcylinder.TriangleMinRadius(verts, tri))
 			// An edge-only call (the repeated index form used by seams).
 			edge := [3]int{0, 1, 1}
 			require.Equal(t, loftCylinderTriangleMinRadiusReference(verts, edge),
-				loftCylinderTriangleMinRadius(verts, edge))
+				loftcylinder.TriangleMinRadius(verts, edge))
 		})
 	}
 }

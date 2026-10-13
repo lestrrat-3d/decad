@@ -310,7 +310,6 @@
 1	0.01	TestRevolveSectorStraightBandCrossIsStrictAtBothRadii
 1	0.01	TestRevolveSectorTriangleClearChecksInteriorRadialDistance
 1	0.01	TestSectorCapRefinementKeepsSharedEdges
-1	0.00	TestRingPlaneRejectPreservesExactDistance
 1	0.00	TestRoundBossShellMeshVolumeProof
 1	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
 1	0.01	TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding
