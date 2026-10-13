@@ -1666,7 +1666,9 @@ and adds the inherited bridge reach and swept-volume charge.
 The perpendicular cylinder Cut retains two full source circles for a
 separate one-mouth chamfer (`docs/cross-cylinder-bore-chamfer-design.md`).
 Section 10.1 admits one isolated rectangular-prism Union outer-edge fillet.
-Other faceted modifications remain SX9.
+The nested rectangular-boss Shell route accepts a complete boss top cap from
+one authenticated prism Union and rebuilds a bounded faceted cup
+(`docs/shell-faceted-boss-design.md`). Other unrecognized faceted cases remain SX9.
 
 **What SX9 leaves a caller proving.** Outside RX6, a caller whose
 part fillets or chamfers a faceted boolean result cannot reach the modified

@@ -282,6 +282,11 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if tp, ok := b.payload.(twistedSweepPayload); ok {
 		return b.shellTwistedSweep(ctx, tp, removed, sense, tmm, tDelta)
 	}
+	if fp, ok := b.payload.(facetedPayload); ok && fp.prismUnionFillet != nil {
+		if out, matched, err := b.shellPrismUnionBoss(ctx, fp, removed, sense, tmm, tDelta); matched || err != nil {
+			return out, err
+		}
+	}
 	// A brep or stacked receiver takes the brep route
 	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
 	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{op: "shells", shell: true,

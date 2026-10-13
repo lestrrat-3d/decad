@@ -147,7 +147,7 @@ a retired body is S17, by core §6's retire rule.
 | **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these after `Transform` | **builds** for lateral edges here; reach RX1 adds complete cap loops; route E or the bounded cutter adds one straight cap edge for either blend; route V adds mixed complete-loop fillets (`docs/vertex-blend-design.md`) | **builds** for cap removal here, the B4 multi-lump result through reach BX8; reach RX1 adds side/no-opening cases |
 | **R2** | `cupPayload` — a one-cap shell (B5/B6), recorded as a two-slab `stackedPrismPayload` (reach §9.1) | S3 | S3 |
 | **R3** | `revolvePayload` | reach RX2 for swept meridian junctions and one bounded quarter-turn radial cap rim for either fillet or chamfer; otherwise S3/SX5 | reach RX2; otherwise S2/SX8 |
-| **R4** | `facetedPayload` — a boolean output | reach SX9 | reach SX9 |
+| **R4** | `facetedPayload` — a boolean output | reach SX9 | One authenticated nested rectangular-boss Union top cap builds a bounded cup (`docs/shell-faceted-boss-design.md`); otherwise reach SX9. |
 | **R5** | `capBlendPayload` | reach SX10 | reach SX10 |
 | **R6** | `brepPayload`, or `stackedPrismPayload` through its face view | `docs/brep-modify-design.md` Table RB | Table RB |
 | **R7** | `loftPayload` with matching, hole-free, axially translated sections | `Fillet` on recorded analytic corners (loft §17); `Chamfer` is S3 | S3 |
@@ -900,7 +900,7 @@ do with; PR 1 builds on them and carries none of them.
 - `WithTangentChain` expands only through proven analytic G1 continuations;
 - revolve meridian junctions reuse the exact section rewrite;
 - variable-radius fillets, unsupported partial cap chains, mixed edge classes, and all
-  faceted receivers stay explicitly unsupported.
+  faceted receivers outside explicit source-backed routes stay unsupported.
 
 The extension's PR order and required tests are reach §§13–14. No reach choice
 in this document remains open.
