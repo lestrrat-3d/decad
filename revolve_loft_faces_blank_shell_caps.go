@@ -8,20 +8,38 @@ import "context"
 func revolveLoftFacesBlankShellWithCapRings(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate, sectionIndex, cellIndex int,
 ) (*revolveLoftFacesBlankSeamShell, bool, error) {
-	census, ok, err := revolveLoftFacesCensus(ctx, proof)
-	if err != nil || !ok || census == nil || census.manifest == nil {
+	graph, ok, err := revolveLoftFacesContactGraphOf(ctx, proof)
+	if err != nil || !ok || graph == nil || graph.manifest == nil {
 		return nil, false, err
 	}
-	var cuts []revolveLoftFacesShellCut
-	for _, pair := range census.pairs {
-		if pair.verdict != revolveLoftFacesPairToolArc {
-			continue
+	if sectionIndex < 0 || sectionIndex >= len(proof.section.spans) {
+		return nil, false, nil
+	}
+	var selected *revolveLoftFacesGraphRun
+	for i := range graph.runs {
+		run := &graph.runs[i]
+		cell := graph.cells[run.cellID]
+		if cell.sectionIndex == sectionIndex && cell.cellIndex == cellIndex &&
+			cell.source != nil && cell.blankFace == proof.section.spans[sectionIndex].face {
+			if selected != nil {
+				return nil, false, nil
+			}
+			selected = run
 		}
-		arc := pair.toolArc
+	}
+	if selected == nil {
+		return nil, false, nil
+	}
+	var cuts []revolveLoftFacesShellCut
+	for _, event := range graph.arcs {
+		pair := graph.pairs[event.pairID]
+		arc := event.arc
 		if arc == nil || arc.circle.tool != 1 || arc.circle.sourceMiss ||
 			arc.circle.blankFace != pair.blankFace ||
 			arc.circle.capFace != pair.trimmedFace ||
 			arc.circle.span != pair.sectionIndex ||
+			event.endpointIDs[0] == event.endpointIDs[1] ||
+			event.endpointCellIDs[0] == event.endpointCellIDs[1] ||
 			arc.circle.x == nil || arc.circle.radius == nil ||
 			arc.circle.radius.Sign() <= 0 {
 			return nil, false, nil
@@ -33,13 +51,17 @@ func revolveLoftFacesBlankShellWithCapRings(ctx context.Context,
 	if len(cuts) == 0 {
 		return nil, false, nil
 	}
-	shell, built, err := revolveLoftFacesBlankShellAtArcWithCuts(ctx, proof, census.manifest,
+	shell, built, err := revolveLoftFacesBlankShellAtArcWithCuts(ctx, proof, graph.manifest,
 		sectionIndex, cellIndex, cuts)
 	if err != nil || !built {
 		return nil, false, err
 	}
 	if shell == nil || shell.faceBound >= 0.1 {
 		return nil, false, nil
+	}
+	bound, bindErr := graph.bindBlankShell(ctx, proof, selected, shell)
+	if bindErr != nil || !bound {
+		return nil, false, bindErr
 	}
 	return shell, true, nil
 }
