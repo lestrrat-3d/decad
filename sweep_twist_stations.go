@@ -192,6 +192,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 			plane0: stations[i].plane, plane1: stations[i+1].plane,
 			frame0: stations[i].frame, frame1: stations[i+1].frame,
 			xform: xform, recordArea: [2]float64{recordArea, recordArea},
+			retainTwistAreaCells: poly.hasArc,
 		}, budget, work0, work1)
 		if buildErr != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, buildErr)
@@ -276,8 +277,12 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 		return nil, err
 	}
 	if poly.hasArc {
-		mesh.areaSlack, err = twistMixedAreaSlack(profile, poly, twistRat(path.End().Z),
-			thetaIv, body, heldByFace)
+		wallBound, wallErr := twistMixedWallAreaL1(held, stations, poly,
+			proofbound.RatFloatUp(absTheta), path.End().Z)
+		if wallErr != nil {
+			return nil, wallErr
+		}
+		mesh.areaSlack, err = twistMixedAreaSlackLocal(profile, poly, body, heldByFace, wallBound)
 		if err != nil {
 			return nil, err
 		}

@@ -1468,9 +1468,15 @@ lies between `h*P_low` and
 `h*P_high*sqrt(1+(|theta|*R/h)^2)`. This follows from the rotating wall's
 arc-length Jacobian `sqrt(h²+theta²*(p·p')²)` with `|p'|=1`.
 The body area interval adds the two cap-area intervals. The mesh area
-allowance sums the positive upper bound for each source face and its held
-facets. This coarse charge also covers a Boolean that keeps only part of
-one face; subtraction of whole-face areas could hide opposite local errors.
+allowance keeps a positive source-plus-held charge for both caps. For each
+wall cell, the authenticated Loft pairing records source arc length,
+tangent-deviation energy and parameter-matched chord departure. The two
+emitted held facets keep their cell and side IDs. These readings bound the
+integral of the absolute true-versus-held area-density difference over the
+cell's shared source parameters, with outward rounding for station and
+vertex error. Summing the nonnegative cell bounds also covers any matched
+parameter subset kept by a Boolean. The Boolean separately charges cut
+boundary movement through its faceted-area geometry allowance.
 
 The existing stationed build evaluates each cell with the authenticated
 curved profile through Loft. It groups the Loft's curved wall triangles by
@@ -1512,6 +1518,11 @@ facet-pair ceiling; the first-cell skip reduced that build from 1.57 s to
 An overlapping Boolean raises its pair tolerance to this Sweep's certified
 held boundary. The rounded-profile example unions with an overlapping
 1.5×0.8×1 mm extruded box and passes `VerifyAll` at 0.2 mm. Its result's
-fixed mesh bound is 0.144733 mm, so a 0.1 mm request refuses. The default
-`Document.Verify` reads `Suspect` because the source Sweep's area and volume
-bounds remain too broad for that separate oracle's tolerance.
+refined mesh bound is about 0.111778 mm, so a 0.1 mm request refuses. The default
+`Document.Verify` still reads `Suspect`. The caps retain coarse area charges,
+and the source occupied-volume, centroid and bounds proofs do not yet meet
+that separate oracle's thresholds. The rounded example's local wall charge
+is about 6.78 mm²; its complete mixed-face allowance is about 37.92 mm²,
+compared with about 145.71 mm² under the former positive wall charges.
+The real overlapping Union carries that allowance through a cut Arc wall
+and passes `VerifyAll(0.2 mm)` with a result area bound about 58.76 mm².
