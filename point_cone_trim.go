@@ -318,7 +318,8 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 		upperNodeRound = max(upperNodeRound, upperSamples[i].pointError)
 		upperQError = max(upperQError, upperSamples[i].qError)
 	}
-	upperCapBound, upperLip, err := pointConeCapBound(far, caps, upper)
+	capGeom := pointConeCapGeometry(far, caps)
+	upperCapBound, upperLip, err := pointConeCapBoundGeom(capGeom, upper)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +328,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 			proofbound.ProductUpper(upperLip, upperLip))))
 	lowerCapBound, lowerLip, lowerNodeRound := 0.0, 0.0, 0.0
 	if lower != nil {
-		lowerCapBound, lowerLip, err = pointConeCapBound(far, caps, lower)
+		lowerCapBound, lowerLip, err = pointConeCapBoundGeom(capGeom, lower)
 		if err != nil {
 			return nil, err
 		}
@@ -649,15 +650,7 @@ func pointConeSubdivide(ctx context.Context, base facetedPayload, rounds int) (
 			}
 			p, q := far[u], far[v]
 			held := p.Scale(0.5).Add(q.Scale(0.5))
-			exact := [3]*big.Rat{
-				new(big.Rat).Mul(new(big.Rat).Add(proofarith.FloatRat(p.X), proofarith.FloatRat(q.X)), big.NewRat(1, 2)),
-				new(big.Rat).Mul(new(big.Rat).Add(proofarith.FloatRat(p.Y), proofarith.FloatRat(q.Y)), big.NewRat(1, 2)),
-				new(big.Rat).Mul(new(big.Rat).Add(proofarith.FloatRat(p.Z), proofarith.FloatRat(q.Z)), big.NewRat(1, 2)),
-			}
-			levelRound = max(levelRound, proofbound.Radius3D(max(
-				proofbound.RatAbsDiff(exact[0], held.X),
-				proofbound.RatAbsDiff(exact[1], held.Y),
-				proofbound.RatAbsDiff(exact[2], held.Z))))
+			levelRound = max(levelRound, pointConeMidpointRound(p, q, held))
 			index := len(far)
 			far = append(far, held)
 			midpoints[key] = index
@@ -925,10 +918,79 @@ func pointConeCapArea(far []r3.Vec, caps [][3]int) float64 {
 
 func pointConeCapBound(far []r3.Vec, caps [][3]int,
 	cone *pointConeLimit) (float64, float64, error) {
+	return pointConeCapBoundGeom(pointConeCapGeometry(far, caps), cone)
+}
+
+// pointConeMidpointRound is the rounding error of the held midpoint of p and
+// q: the largest per-axis distance from the exact midpoint, as a 3-D radius.
+func pointConeMidpointRound(p, q, held r3.Vec) float64 {
+	dp, dq := proofarith.DyVec(p), proofarith.DyVec(q)
+	heldAxes := [3]float64{held.X, held.Y, held.Z}
+	var e [3]float64
+	for axis := range 3 {
+		exact := proofarith.DyShift(proofarith.DyAdd(dp[axis], dq[axis]), -1)
+		e[axis] = proofarith.DyRoundedFloatError(exact, heldAxes[axis])
+	}
+	return proofbound.Radius3D(max(e[0], e[1], e[2]))
+}
+
+// pointConeCellGeom is the cone-independent half of pointConeTriangleBound.
+type pointConeCellGeom struct{ xMin, rhoMin, reach, h float64 }
+
+// pointConeCapGeometry reads every cap cell's geometry once, so two cones
+// share it. A vertex's reach is the same DvLenUpper of the same exact vector
+// in each cell holding it, and is computed once.
+func pointConeCapGeometry(far []r3.Vec, caps [][3]int) []pointConeCellGeom {
+	reach := make([]float64, len(far))
+	done := make([]bool, len(far))
+	out := make([]pointConeCellGeom, len(caps))
+	for k, tri := range caps {
+		for _, v := range tri {
+			if done[v] {
+				continue
+			}
+			reach[v] = proofbound.DvLenUpper(proofbound.HeldDelta(far[v], r3.Vec{}))
+			done[v] = true
+		}
+		out[k] = pointConeCellGeometryWith([3]r3.Vec{far[tri[0]], far[tri[1]], far[tri[2]]},
+			[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]})
+	}
+	return out
+}
+
+func pointConeCellGeometry(tri [3]r3.Vec) pointConeCellGeom {
+	var reach [3]float64
+	for i, p := range tri {
+		reach[i] = proofbound.DvLenUpper(proofbound.HeldDelta(p, r3.Vec{}))
+	}
+	return pointConeCellGeometryWith(tri, reach)
+}
+
+func pointConeCellGeometryWith(tri [3]r3.Vec, vertexReach [3]float64) pointConeCellGeom {
+	xMin, yMin, yMax, zMin, zMax := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
+	reach, h := 0.0, 0.0
+	for i, p := range tri {
+		xMin = min(xMin, p.X)
+		yMin, yMax = min(yMin, p.Y), max(yMax, p.Y)
+		zMin, zMax = min(zMin, p.Z), max(zMax, p.Z)
+		reach = max(reach, vertexReach[i])
+		h = max(h, proofbound.DvLenUpper(proofbound.HeldDelta(p, tri[(i+1)%3])))
+	}
+	minAbs := func(lo, hi float64) float64 {
+		if lo <= 0 && hi >= 0 {
+			return 0
+		}
+		return min(math.Abs(lo), math.Abs(hi))
+	}
+	rhoMin := max(minAbs(yMin, yMax), minAbs(zMin, zMax))
+	return pointConeCellGeom{xMin: xMin, rhoMin: rhoMin, reach: reach, h: h}
+}
+
+// pointConeCapBoundGeom is pointConeCapBound over precomputed cell geometry.
+func pointConeCapBoundGeom(geom []pointConeCellGeom, cone *pointConeLimit) (float64, float64, error) {
 	capBound, lip := 0.0, 0.0
-	for _, tri := range caps {
-		cellBound, _, cellLip, err := pointConeTriangleBound(
-			[3]r3.Vec{far[tri[0]], far[tri[1]], far[tri[2]]}, cone)
+	for _, g := range geom {
+		cellBound, _, cellLip, err := pointConeTriangleBoundGeom(g, cone)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -951,22 +1013,13 @@ func pointConeCapBound(far []r3.Vec, caps [][3]int,
 //	lip ratio  = an(kd+kn)kd / (ad·G²)
 func pointConeTriangleBound(tri [3]r3.Vec,
 	cone *pointConeLimit) (float64, float64, float64, error) {
-	xMin, yMin, yMax, zMin, zMax := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
-	reach, h := 0.0, 0.0
-	for i, p := range tri {
-		xMin = min(xMin, p.X)
-		yMin, yMax = min(yMin, p.Y), max(yMax, p.Y)
-		zMin, zMax = min(zMin, p.Z), max(zMax, p.Z)
-		reach = max(reach, proofbound.DvLenUpper(proofbound.HeldDelta(p, r3.Vec{})))
-		h = max(h, proofbound.DvLenUpper(proofbound.HeldDelta(p, tri[(i+1)%3])))
-	}
-	minAbs := func(lo, hi float64) float64 {
-		if lo <= 0 && hi >= 0 {
-			return 0
-		}
-		return min(math.Abs(lo), math.Abs(hi))
-	}
-	rhoMin := max(minAbs(yMin, yMax), minAbs(zMin, zMax))
+	return pointConeTriangleBoundGeom(pointConeCellGeometry(tri), cone)
+}
+
+// pointConeTriangleBoundGeom is pointConeTriangleBound over precomputed geometry.
+func pointConeTriangleBoundGeom(geom pointConeCellGeom,
+	cone *pointConeLimit) (float64, float64, float64, error) {
+	xMin, rhoMin, reach, h := geom.xMin, geom.rhoMin, geom.reach, geom.h
 	if rhoMin <= 0 {
 		return 0, 0, 0, fmt.Errorf("%w: the point-cone cap reaches the axis", ErrUnsupported)
 	}

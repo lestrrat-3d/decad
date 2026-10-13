@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -145,5 +146,119 @@ func TestPointConeFactorMatchesRationalForm(t *testing.T) {
 		require.Equal(t, math.Float64bits(want.alpha), math.Float64bits(got.alpha), "alpha %v", p)
 		require.Equal(t, math.Float64bits(want.qError), math.Float64bits(got.qError), "qError %v", p)
 		require.Equal(t, math.Float64bits(want.pointError), math.Float64bits(got.pointError), "pointError %v", p)
+	}
+}
+
+// legacyPointConeTriangleBound is the per-cone geometry pass that
+// pointConeTriangleBound ran before the geometry was shared between cones.
+func legacyPointConeTriangleBound(tri [3]r3.Vec, cone *pointConeLimit) (float64, float64, error) {
+	xMin, yMin, yMax, zMin, zMax := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
+	reach, h := 0.0, 0.0
+	for i, p := range tri {
+		xMin = min(xMin, p.X)
+		yMin, yMax = min(yMin, p.Y), max(yMax, p.Y)
+		zMin, zMax = min(zMin, p.Z), max(zMax, p.Z)
+		reach = max(reach, proofbound.DvLenUpper(proofbound.HeldDelta(p, r3.Vec{})))
+		h = max(h, proofbound.DvLenUpper(proofbound.HeldDelta(p, tri[(i+1)%3])))
+	}
+	minAbs := func(lo, hi float64) float64 {
+		if lo <= 0 && hi >= 0 {
+			return 0
+		}
+		return min(math.Abs(lo), math.Abs(hi))
+	}
+	geom := pointConeCellGeom{xMin: xMin, rhoMin: max(minAbs(yMin, yMax), minAbs(zMin, zMax)),
+		reach: reach, h: h}
+	bound, _, lip, err := pointConeTriangleBoundGeom(geom, cone)
+	return bound, lip, err
+}
+
+func legacyPointConeCapBound(far []r3.Vec, caps [][3]int, cone *pointConeLimit) (float64, float64, error) {
+	capBound, lip := 0.0, 0.0
+	for _, tri := range caps {
+		cellBound, cellLip, err := legacyPointConeTriangleBound(
+			[3]r3.Vec{far[tri[0]], far[tri[1]], far[tri[2]]}, cone)
+		if err != nil {
+			return 0, 0, err
+		}
+		capBound = max(capBound, cellBound)
+		lip = max(lip, cellLip)
+	}
+	return capBound, lip, nil
+}
+
+// Sharing one geometry pass between the upper and lower cones gives the same
+// bounds, Lipschitz values and refusals as computing it per cone.
+func TestPointConeCapGeometryMatchesPerConeBound(t *testing.T) {
+	t.Parallel()
+	r := rand.New(rand.NewPCG(11, 13))
+	upper := &pointConeLimit{apex: big.NewRat(1, 5), slope: big.NewRat(3, 7)}
+	lower := &pointConeLimit{apex: big.NewRat(10, 1), slope: big.NewRat(1, 1)}
+	for i := range 30 {
+		scale := math.Ldexp(1, r.IntN(6)-2)
+		far := make([]r3.Vec, 40)
+		for j := range far {
+			// Mostly off the axis with a positive ray denominator; every
+			// third cap strays across it, every fourth behind the apex.
+			far[j] = r3.Vec{X: (r.Float64()*2 + 0.1) * 4 * scale,
+				Y: (r.Float64() + 0.5) * 4 * scale, Z: (r.Float64() + 0.5) * 4 * scale}
+			switch {
+			case i%3 == 0 && j%7 == 0:
+				far[j].Y = -far[j].Y
+			case i%4 == 0 && j%9 == 0:
+				far[j].X = -8 * scale * (r.Float64() + 1)
+			}
+		}
+		if i%5 == 0 {
+			far[r.IntN(len(far))] = r3.Vec{X: scale}
+		}
+		caps := make([][3]int, 60)
+		for j := range caps {
+			caps[j] = [3]int{r.IntN(len(far)), r.IntN(len(far)), r.IntN(len(far))}
+		}
+		geom := pointConeCapGeometry(far, caps)
+		for _, cone := range []*pointConeLimit{upper, lower} {
+			wantBound, wantLip, wantErr := legacyPointConeCapBound(far, caps, cone)
+			gotBound, gotLip, gotErr := pointConeCapBoundGeom(geom, cone)
+			if wantErr != nil {
+				require.EqualError(t, gotErr, wantErr.Error())
+				continue
+			}
+			require.NoError(t, gotErr)
+			require.Equal(t, math.Float64bits(wantBound), math.Float64bits(gotBound))
+			require.Equal(t, math.Float64bits(wantLip), math.Float64bits(gotLip))
+		}
+	}
+}
+
+// The Dyadic midpoint rounding error equals the big.Rat form bit for bit.
+func TestPointConeMidpointRoundMatchesRational(t *testing.T) {
+	t.Parallel()
+	r := rand.New(rand.NewPCG(21, 22))
+	coord := func() float64 {
+		return (r.Float64()*2 - 1) * math.Ldexp(1, r.IntN(21)-10)
+	}
+	for i := range 20000 {
+		p := r3.Vec{X: coord(), Y: coord(), Z: coord()}
+		q := r3.Vec{X: coord(), Y: coord(), Z: coord()}
+		switch i % 4 {
+		case 1:
+			q = p
+		case 2:
+			q = p.Scale(-1)
+		case 3:
+			q.Y = p.Y
+		}
+		held := p.Scale(0.5).Add(q.Scale(0.5))
+		half := big.NewRat(1, 2)
+		mid := func(a, b float64) *big.Rat {
+			return new(big.Rat).Mul(new(big.Rat).Add(proofarith.FloatRat(a), proofarith.FloatRat(b)), half)
+		}
+		want := proofbound.Radius3D(max(
+			proofbound.RatAbsDiff(mid(p.X, q.X), held.X),
+			proofbound.RatAbsDiff(mid(p.Y, q.Y), held.Y),
+			proofbound.RatAbsDiff(mid(p.Z, q.Z), held.Z)))
+		got := pointConeMidpointRound(p, q, held)
+		require.Equal(t, math.Float64bits(want), math.Float64bits(got), "%v %v", p, q)
 	}
 }

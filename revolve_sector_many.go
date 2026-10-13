@@ -255,11 +255,12 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	for i, node := range original {
 		far[i] = node.p
 	}
-	upperBound, upperLip, err := pointConeCapBound(far, caps, record.upper)
+	capGeom := pointConeCapGeometry(far, caps)
+	upperBound, upperLip, err := pointConeCapBoundGeom(capGeom, record.upper)
 	if err != nil {
 		return nil, nil, err
 	}
-	lowerBound, lowerLip, err := pointConeCapBound(far, caps, record.lower)
+	lowerBound, lowerLip, err := pointConeCapBoundGeom(capGeom, record.lower)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -380,18 +381,13 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		return nil, nil, err
 	}
 	roundEnvelope := proofbound.AbsSumUpper(sectionSag, localRound)
-	area, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts,
-		mesh.tris, roundEnvelope)
+	area, areaForArea, err := proofbound.PerturbedAreaUpperPairContext(ctx, mesh.verts,
+		mesh.tris, roundEnvelope, bound)
 	if err != nil {
 		return nil, nil, err
 	}
 	volumeGap := proofbound.AbsSumUpper(sourceVolume,
 		proofbound.SweptVolumeAllow(roundEnvelope, area))
-	areaForArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts,
-		mesh.tris, bound)
-	if err != nil {
-		return nil, nil, err
-	}
 	blankArea, err := cert.blank.Area()
 	if err != nil {
 		return nil, nil, err
