@@ -128,11 +128,10 @@ func reachTestRun(t *testing.T, in loftCylinderChamferReachInput, workers int) e
 
 func TestLoftCylinderChamferReachFanOutMatchesSerial(t *testing.T) {
 	in := reachTestInput(t)
-	require.NoError(t, reachTestRun(t, in, 1))
 	require.NoError(t, reachTestRun(t, in, 4))
 
 	// The near band is the slow item and the facets are the subject of the
-	// next two cases, so they run with empty bands, which skip the near band.
+	// next case, so it runs with empty bands, which skip the near band.
 	noBands := in
 	noBands.bands = [2][2]int{}
 
@@ -156,16 +155,6 @@ func TestLoftCylinderChamferReachFanOutMatchesSerial(t *testing.T) {
 		require.Positive(t, failed)
 	})
 
-	t.Run("grid limit falls back mid-way", func(t *testing.T) {
-		t.Cleanup(func() { middleSidePrepHook = nil })
-		// This limit lets the shared grid serve about 1 800 facets, so the
-		// fan-out replays them and then re-runs the rest serially.
-		middleSidePrepHook = func(prep *middleSidePrep) { prep.grid.LimitWork(1 << 18) }
-		serial := reachTestRun(t, noBands, 1)
-		require.ErrorContains(t, serial, "retained middle facet 1873")
-		require.EqualError(t, reachTestRun(t, noBands, 4), serial.Error())
-	})
-
 	t.Run("near band fails first", func(t *testing.T) {
 		starved := in
 		starved.allowance = in.clipBound / 2
@@ -177,5 +166,30 @@ func TestLoftCylinderChamferReachFanOutMatchesSerial(t *testing.T) {
 		serial = reachTestRun(t, starved, 1)
 		require.ErrorIs(t, serial, ErrUnsupported)
 		require.EqualError(t, reachTestRun(t, starved, 4), serial.Error())
+	})
+}
+
+// TestLoftCylinderChamferReachSerialPasses is the serial full run of the
+// reach fan-out check, split out so each test fits one CI job.
+func TestLoftCylinderChamferReachSerialPasses(t *testing.T) {
+	in := reachTestInput(t)
+	require.NoError(t, reachTestRun(t, in, 1))
+}
+
+// TestLoftCylinderChamferReachGridLimitFallsBack runs the fan-out with a
+// grid work limit that stops it mid-way, split out of the reach fan-out check.
+func TestLoftCylinderChamferReachGridLimitFallsBack(t *testing.T) {
+	in := reachTestInput(t)
+	noBands := in
+	noBands.bands = [2][2]int{}
+
+	t.Run("grid limit falls back mid-way", func(t *testing.T) {
+		t.Cleanup(func() { middleSidePrepHook = nil })
+		// This limit lets the shared grid serve about 1 800 facets, so the
+		// fan-out replays them and then re-runs the rest serially.
+		middleSidePrepHook = func(prep *middleSidePrep) { prep.grid.LimitWork(1 << 18) }
+		serial := reachTestRun(t, noBands, 1)
+		require.ErrorContains(t, serial, "retained middle facet 1873")
+		require.EqualError(t, reachTestRun(t, noBands, 4), serial.Error())
 	})
 }
