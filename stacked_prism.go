@@ -357,7 +357,7 @@ func stackedRegionPart(ctx context.Context, sp stackedPrismPayload, base prismPa
 	mid := proofbound.BoundedDiv(proofbound.BoundedAdd(proofbound.MeasuredScalar(slab.Z0, slab.Z0Delta),
 		proofbound.MeasuredScalar(slab.Z1, slab.Z1Delta)), proofbound.ExactScalar(2))
 	part.centroid = base.Point(u.Value, v.Value, mid.Value)
-	part.centroidBound = prismPointBound(base, u, v, mid)
+	part.centroidBound = base.PointBound(u, v, mid)
 	return part, nil
 }
 
@@ -546,7 +546,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		// envelope caps the centroid's distance from the held point.
 		geometryBound := 0.0
 		for _, run := range runs {
-			runBound, err := prismCentroidGeometryBound(run, run.Profile, centroid, work, nil)
+			runBound, err := run.CentroidGeometryBound(run.Profile, centroid, work, nil)
 			if err != nil {
 				return nil, err
 			}

@@ -78,7 +78,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 	if n < 3 || len(source.vertices) != 2*n {
 		return nil, fmt.Errorf(`%w: a circular Body.Patch source has no matching wall stations`, ErrUnsupported)
 	}
-	capSag := proofbound.ProductUpper(cl.MaxSag, prismLiftFactor(prism))
+	capSag := proofbound.ProductUpper(cl.MaxSag, prism.LiftFactor())
 	if proofbound.IsNonFinite(capSag) {
 		return nil, fmt.Errorf(`%w: a circular Body.Patch source has no finite rim chording bound`, ErrUnsupported)
 	}

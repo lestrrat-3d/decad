@@ -130,7 +130,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 			}
 		}
 	}
-	shift := prismplacement.ZShift(prismPlacementOf(va.proxy), prismPlacementOf(vb.proxy))
+	shift := prismplacement.ZShift(va.proxy.PlacementOperand(), vb.proxy.PlacementOperand())
 	levels, ok := stackedrecord.UnionLevels(va.slabs, vb.slabs, shift)
 	if !ok || len(levels) < 3 {
 		// Equal intervals are prism-boolean §3.2's Union row, not a stack.
@@ -145,7 +145,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 	if b0.Cmp(a1) > 0 || a0.Cmp(b1) > 0 { // G5 for a stacked union: the intervals overlap or touch
 		return nil, false, nil
 	}
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(va.proxy), prismPlacementOf(vb.proxy))
+	reexpress, err := prismcells.NewReexpression(va.proxy.PlacementOperand(), vb.proxy.PlacementOperand())
 	if err != nil {
 		return nil, false, err
 	}

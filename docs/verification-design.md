@@ -551,7 +551,7 @@ each circular wall the points at evenly spaced fractions of its recorded
 parameter range, at most 15° apart, plus the points opposite its start and
 its end when it sweeps past 180°. Each station is a point the record denotes,
 held within the gap `boundarywalk.CircularPointBound` proves (or a line end's
-own walk-end bound), and `prismPointBound` carries that gap through the frame
+own walk-end bound), and `prismrecord.Payload.PointBound` carries that gap through the frame
 and placement and adds the lift's own rounding. `stationGateDiameter` reads
 the stations alone and shrinks their maximum by the widest such gap plus
 `axialDelta`, since each held level sits within `axialDelta` of the level it
@@ -664,7 +664,7 @@ each span endpoint is a point of the recorded curve itself
 (`docs/spline-design.md` §6.2), and every point in the set is a real point of
 the body's own boundary. Each held witness sits within its own proven gap of
 that point: its recorded coordinate's or conversion's bound, carried through
-the frame and placement by `prismPointBound` together with the lift's own
+the frame and placement by `prismrecord.Payload.PointBound` together with the lift's own
 rounding. The maximum is shrunk by twice the widest gap, and the shared
 reader publishes it rounded toward zero, so the reading can only UNDERSTATE
 the body's true diameter and never overstate it — the same construction

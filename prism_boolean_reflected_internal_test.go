@@ -72,14 +72,14 @@ func TestPrismBooleanGateG2AdmitsAReflectedOperand(t *testing.T) {
 
 	pa, pb, ok := admitPrismPair(&Body{payload: pp}, &Body{payload: reflected})
 	require.True(t, ok, "A4: a reflected operand clears G1-G4")
-	re, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	re, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.False(t, re.Identity)
 	require.True(t, re.Reflected, "one reflected placement makes the relative map improper")
 
 	pa, pb, ok = admitPrismPair(&Body{payload: reflected}, &Body{payload: reflected})
 	require.True(t, ok)
-	re, err = prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	re, err = prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.True(t, re.Identity, "one shared reflected placement is the shared-axis arm's identity")
 	require.False(t, re.Reflected)
@@ -115,7 +115,7 @@ func TestPrismReexpressionRewound(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-20, -20, 20, 20)}, Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}}
 	pb := prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: frame, Z0: 0, Z1: 10, Xform: prismMirrorAcrossX(t, 0)}}
-	re, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	re, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.True(t, re.Reflected)
 
@@ -183,7 +183,7 @@ func TestPrismReflectedSceneClassifiesTheRewoundWinding(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)}, Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}}
 	pb := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}, Frame: frame, Z0: 0, Z1: 10, Xform: prismMirrorAcrossX(t, 0)}}
-	re, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	re, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.True(t, re.Reflected)
 
@@ -241,7 +241,7 @@ func TestPrismReflectedOperandChargesItsWalk(t *testing.T) {
 	}
 	require.Positive(t, want, "the fixture must carry a narrowed segment, or it proves nothing")
 
-	re, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	re, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.True(t, re.Reflected)
 	_, _, sceneDelta, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), pa.Profile, pb.Profile, re)
@@ -277,7 +277,7 @@ func TestPrismBooleanReflectedSharedAxisIsIdentity(t *testing.T) {
 	require.NoError(t, err)
 	pa, pb, ok := admitPrismPair(ml, md)
 	require.True(t, ok)
-	re, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	re, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.True(t, re.Identity)
 

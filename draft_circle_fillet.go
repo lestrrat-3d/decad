@@ -75,8 +75,9 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 	// covers every constructed line and the frame-origin lift.
 	point := prismPayload{Payload: prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
 		Z0Delta: dp.z0Delta, Xform: r3.Identity()}}
-	originDelta := prismPointBound(point, proofbound.ExactScalar(circle.Center.U),
+	originDelta := point.PointBound(proofbound.ExactScalar(circle.Center.U),
 		proofbound.ExactScalar(circle.Center.V), proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
+
 	epsilon := math.Max(originDelta, dp.farDelta)
 	for _, q := range []proofbound.BoundedScalar{near, far, height, fillet,
 		centerR, centerZ, sideR, sideZ} {

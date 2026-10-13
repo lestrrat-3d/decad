@@ -143,7 +143,7 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 	}
 
 	// S7's remaining two clauses.
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(rcvView), prismPlacementOf(tlView))
+	reexpress, err := prismcells.NewReexpression(rcvView.PlacementOperand(), tlView.PlacementOperand())
 	if err != nil {
 		return pass(err)
 	}

@@ -243,8 +243,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// figure proven only for the recorded section.
 	cu.Bound = proofbound.AbsSumUpper(cu.Bound, delta)
 	cv.Bound = proofbound.AbsSumUpper(cv.Bound, delta)
-	centroidBound := prismPointBound(pp, cu, cv, zc)
-	geometryBound, err := prismCentroidGeometryBound(pp, pp.Profile, centroidValue, work, pw)
+	centroidBound := pp.PointBound(cu, cv, zc)
+	geometryBound, err := pp.CentroidGeometryBound(pp.Profile, centroidValue, work, pw)
 	if err != nil {
 		return nil, err
 	}

@@ -84,7 +84,7 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 		mesh.vertices[i] = held
 		store[i] = proofbound.AbsSumUpper(
 			proofbound.WalkEndBoundAllow(sampleBounds[i]),
-			exactPrismPointRound(view, point.U, point.V, 0, held),
+			view.PointRound(point.U, point.V, 0, held),
 		)
 	}
 	mesh.coordBound, err = tessellation.StoreMax(store)

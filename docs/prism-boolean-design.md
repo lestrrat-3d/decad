@@ -957,7 +957,7 @@ the placement and its blend descriptors, and no coordinate-error term;
 `evalPrism` derives area and volume from the profile integrals and the z
 endpoints alone; and those integrals bound only the rounding of their own
 arithmetic over the recorded floats, so a line-only record yields a zero area
-bound and `exactnessOf` publishes `Exact`. `prismPointBound` carries a
+bound and `exactnessOf` publishes `Exact`. `prismrecord.Payload.PointBound` carries a
 coordinate bound for the centroid POINT only and speaks for no other reading.
 Feeding an assembled record through that path unchanged would publish a
 displacement-free measurement of a section that carries a displacement. The
@@ -997,7 +997,7 @@ extension is two pieces, each in the existing machinery's own shape:
   `evalPrism` composes those two terms into area (the area displacement once per
   cap, plus the sweep height × the walls' own length displacement), volume (the
   height upper bound × the area displacement), centroid (`δ` in plane, entering
-  `prismPointBound`'s existing source term) and `Box` (`δ` outward on every
+  `prismrecord.Payload.PointBound`'s existing source term) and `Box` (`δ` outward on every
   face); the same length displacement stands beside every walk's own edge length
   and side-face area, and `δ` beside every junction vertex. The sweep
   interval adds no term of its own for `Union` or `Cut`, whose result interval

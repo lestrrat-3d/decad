@@ -85,8 +85,9 @@ func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense Sh
 	// Include the existing draft's far-contour displacement and frame lift.
 	point := prismPayload{Payload: prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
 		Z0Delta: dp.z0Delta, Xform: r3.Identity()}}
-	originDelta := prismPointBound(point, proofbound.ExactScalar(nearCircle.Center.U),
+	originDelta := point.PointBound(proofbound.ExactScalar(nearCircle.Center.U),
 		proofbound.ExactScalar(nearCircle.Center.V), proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
+
 	epsilon := math.Max(originDelta, dp.farDelta)
 	epsilon = math.Max(epsilon, math.Abs(farHeld-far.Value)+farHeldDelta)
 	epsilon = math.Max(epsilon, math.Hypot(farCircle.Center.U-nearCircle.Center.U,

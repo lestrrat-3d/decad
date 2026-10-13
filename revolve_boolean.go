@@ -44,7 +44,7 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 	} else if !within {
 		return nil, false, nil
 	}
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(ra.meridian()), prismPlacementOf(rb.meridian()))
+	reexpress, err := prismcells.NewReexpression(ra.meridian().PlacementOperand(), rb.meridian().PlacementOperand())
 	if err != nil {
 		return nil, false, err
 	}

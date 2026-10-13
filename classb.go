@@ -427,7 +427,7 @@ func classBPerpendicularRegion(ctx context.Context, cp classBPair, region profil
 		return profileRecord{}, false, fmt.Errorf(`%w: the class-B face scene charges at least %d arranger segments against this evaluator's cap of %d`,
 			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
 	}
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(tool))
+	reexpress, err := prismcells.NewReexpression(target.PlacementOperand(), tool.PlacementOperand())
 	if err != nil {
 		return profileRecord{}, false, err
 	}

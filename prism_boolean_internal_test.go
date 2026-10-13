@@ -139,7 +139,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		b := &Body{payload: shiftedPP}
 		pa, pb, ok := admitPrismPair(a, b)
 		require.True(t, ok)
-		require.Zero(t, prismplacement.ZShift(prismPlacementOf(pa), prismPlacementOf(pb)).Cmp(big.NewRat(3, 1)))
+		require.Zero(t, prismplacement.ZShift(pa.PlacementOperand(), pb.PlacementOperand()).Cmp(big.NewRat(3, 1)))
 	})
 
 	t.Run("frame and placement offsets combine exactly", func(t *testing.T) {
@@ -152,7 +152,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		shiftedPP.Xform = shifted
 		pa, pb, ok := admitPrismPair(a, &Body{payload: shiftedPP})
 		require.True(t, ok)
-		require.Zero(t, prismplacement.ZShift(prismPlacementOf(pa), prismPlacementOf(pb)).Cmp(big.NewRat(5, 1)))
+		require.Zero(t, prismplacement.ZShift(pa.PlacementOperand(), pb.PlacementOperand()).Cmp(big.NewRat(5, 1)))
 	})
 
 	t.Run("rotated basis refuses", func(t *testing.T) {
@@ -176,7 +176,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		b := &Body{payload: offsetPP}
 		pa, pb, ok := admitPrismPair(a, b)
 		require.True(t, ok)
-		require.Zero(t, prismplacement.ZShift(prismPlacementOf(pa), prismPlacementOf(pb)).Cmp(big.NewRat(-16, 1)),
+		require.Zero(t, prismplacement.ZShift(pa.PlacementOperand(), pb.PlacementOperand()).Cmp(big.NewRat(-16, 1)),
 			"G5's shift is the exact origin offset along N")
 	})
 
@@ -272,7 +272,7 @@ func TestPrismBooleanGateG5RequiresMatchingZInterval(t *testing.T) {
 	t.Run("unequal heights from the same plane", func(t *testing.T) {
 		pb := pa
 		pb.Z1 = 15
-		require.False(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(pa), prismPlacementOf(pb)))
+		require.False(t, prismplacement.UnionZIntervalMatches(pa.PlacementOperand(), pb.PlacementOperand()))
 	})
 
 	t.Run("matching interval, re-expressed through an offset frame", func(t *testing.T) {
@@ -283,12 +283,12 @@ func TestPrismBooleanGateG5RequiresMatchingZInterval(t *testing.T) {
 		require.NoError(t, err)
 		pb := pa
 		pb.Frame = offset
-		require.False(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(pa), prismPlacementOf(pb)),
+		require.False(t, prismplacement.UnionZIntervalMatches(pa.PlacementOperand(), pb.PlacementOperand()),
 			"A's [0,10] must not match B's shifted [3,13]")
 
 		paShiftedToMatch := pa
 		paShiftedToMatch.Z0, paShiftedToMatch.Z1 = 3, 13
-		require.True(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(paShiftedToMatch), prismPlacementOf(pb)))
+		require.True(t, prismplacement.UnionZIntervalMatches(paShiftedToMatch.PlacementOperand(), pb.PlacementOperand()))
 	})
 }
 
@@ -317,7 +317,7 @@ func TestPrismBooleanGateG5ShiftIsExactRational(t *testing.T) {
 	t.Run("meeting caps admitted", func(t *testing.T) {
 		target := payload(frame, 0, 16)
 		tool := payload(offsetBy(t, -16), 0, 32)
-		require.True(t, prismplacement.CutZIntervalSpans(prismPlacementOf(target), prismPlacementOf(tool)))
+		require.True(t, prismplacement.CutZIntervalSpans(target.PlacementOperand(), tool.PlacementOperand()))
 	})
 
 	t.Run("a hair short refused", func(t *testing.T) {
@@ -327,23 +327,23 @@ func TestPrismBooleanGateG5ShiftIsExactRational(t *testing.T) {
 		require.Equal(t, 16.0, z1+shift, "premise: the float sum rounds onto the target's cap")
 		require.Negative(t, new(big.Rat).Add(proofarith.FloatRat(z1), proofarith.FloatRat(shift)).Cmp(big.NewRat(16, 1)),
 			"premise: the exact sum falls short of the target's cap")
-		require.False(t, prismplacement.CutZIntervalSpans(prismPlacementOf(target), prismPlacementOf(tool)))
+		require.False(t, prismplacement.CutZIntervalSpans(target.PlacementOperand(), tool.PlacementOperand()))
 	})
 
 	t.Run("union matches the shifted interval exactly", func(t *testing.T) {
 		pa := payload(frame, 0, 10)
-		require.True(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(pa),
-			prismPlacementOf(payload(offsetBy(t, -16), 16, 26))))
-		require.False(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(pa),
-			prismPlacementOf(payload(offsetBy(t, -16), 16, 26.000000000000004))))
+		require.True(t, prismplacement.UnionZIntervalMatches(pa.PlacementOperand(),
+			payload(offsetBy(t, -16), 16, 26).PlacementOperand()))
+		require.False(t, prismplacement.UnionZIntervalMatches(pa.PlacementOperand(),
+			payload(offsetBy(t, -16), 16, 26.000000000000004).PlacementOperand()))
 	})
 
 	t.Run("intersect overlap over the shifted interval", func(t *testing.T) {
 		pa := payload(frame, 0, 10)
-		require.True(t, prismplacement.IntersectZIntervalOverlaps(prismPlacementOf(pa),
-			prismPlacementOf(payload(offsetBy(t, -16), 20, 30))))
-		require.False(t, prismplacement.IntersectZIntervalOverlaps(prismPlacementOf(pa),
-			prismPlacementOf(payload(offsetBy(t, -16), 26, 30))))
+		require.True(t, prismplacement.IntersectZIntervalOverlaps(pa.PlacementOperand(),
+			payload(offsetBy(t, -16), 20, 30).PlacementOperand()))
+		require.False(t, prismplacement.IntersectZIntervalOverlaps(pa.PlacementOperand(),
+			payload(offsetBy(t, -16), 26, 30).PlacementOperand()))
 	})
 }
 
@@ -455,10 +455,10 @@ func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	pb.Xform = rotation
 	_, _, admitted := admitPrismPair(&Body{payload: pa}, &Body{payload: pb})
 	require.True(t, admitted, "the fixture must clear G1-G4 before the split guard runs")
-	require.True(t, prismplacement.UnionZIntervalMatches(prismPlacementOf(pa), prismPlacementOf(pb)),
+	require.True(t, prismplacement.UnionZIntervalMatches(pa.PlacementOperand(), pb.PlacementOperand()),
 		"the fixture must clear G5")
 
-	reexpression, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	reexpression, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.False(t, reexpression.Identity)
 	scene, _, _, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), pa.Profile, pb.Profile, reexpression)
@@ -592,7 +592,7 @@ func TestPrismUnionDisplacedSourceSplitChargesTheCrossing(t *testing.T) {
 		}}},
 		Frame: first.Frame, Z0: first.Z0, Z1: first.Z1, Xform: first.Xform,
 	}}
-	reexpression, err := prismcells.NewReexpression(prismPlacementOf(first), prismPlacementOf(shallow))
+	reexpression, err := prismcells.NewReexpression(first.PlacementOperand(), shallow.PlacementOperand())
 	require.NoError(t, err)
 	require.True(t, reexpression.Identity, "the second union must take the identity re-expression path")
 
@@ -1088,7 +1088,7 @@ func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
 	pb := b.payload.(prismPayload)
 	require.Zero(t, pb.SectionDelta, "δ_B must be zero")
 
-	reexpression, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	reexpression, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.True(t, reexpression.Identity, "both operands share one frame with no placement between them")
 	require.Zero(t, reexpression.Delta, "δ_reexpress must be zero")
@@ -1738,7 +1738,7 @@ func TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing(t *testing.T) {
 	b := prismRectBody(t, doc, 4, 3, 6, 7) // straddles A's right wall at u=5
 	pb := b.payload.(prismPayload)
 
-	reexpression, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	reexpression, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.True(t, reexpression.Identity, "both operands share one frame with no placement between them")
 

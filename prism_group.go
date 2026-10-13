@@ -98,11 +98,11 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	if ok, err := admitPrismGroupPair(budget, meshbool.OpCut, targetOp, tool, false, true); err != nil || !ok {
 		return prismPayload{}, false, err
 	}
-	if !prismplacement.CutZIntervalSpans(prismPlacementOf(target), prismPlacementOf(tool.proxy)) { // G5
+	if !prismplacement.CutZIntervalSpans(target.PlacementOperand(), tool.proxy.PlacementOperand()) { // G5
 		return prismPayload{}, false, nil
 	}
 	scene, ok, err := prismcells.BuildGroupScene(ctx, budget, targetOp.regions, tool.regions,
-		prismPlacementOf(target), prismPlacementOf(tool.proxy), target.SectionDelta, tool.proxy.SectionDelta, "cut")
+		target.PlacementOperand(), tool.proxy.PlacementOperand(), target.SectionDelta, tool.proxy.SectionDelta, "cut")
 	if err != nil || !ok {
 		return prismPayload{}, false, err
 	}
@@ -166,11 +166,11 @@ func tryPrismGroupUnion(ctx context.Context, a, b *Body) (featurePayload, bool, 
 	if ok, err := admitPrismGroupPair(budget, meshbool.OpUnion, oa, ob, true, true); err != nil || !ok {
 		return nil, false, err
 	}
-	if !prismplacement.UnionZIntervalMatches(prismPlacementOf(oa.proxy), prismPlacementOf(ob.proxy)) { // G5
+	if !prismplacement.UnionZIntervalMatches(oa.proxy.PlacementOperand(), ob.proxy.PlacementOperand()) { // G5
 		return nil, false, nil
 	}
 	scene, ok, err := prismcells.BuildGroupScene(ctx, budget, oa.regions, ob.regions,
-		prismPlacementOf(oa.proxy), prismPlacementOf(ob.proxy), oa.proxy.SectionDelta, ob.proxy.SectionDelta, "union")
+		oa.proxy.PlacementOperand(), ob.proxy.PlacementOperand(), oa.proxy.SectionDelta, ob.proxy.SectionDelta, "union")
 	if err != nil || !ok {
 		return nil, false, err
 	}

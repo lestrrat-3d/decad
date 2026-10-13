@@ -35,18 +35,18 @@ func tryCrossingBlindCut(ctx context.Context, a, b *Body) (brepPayload, bool, er
 		!crossingBlindAxisLines(pa.Profile) || !crossingBlindAxisLines(pb.Profile) {
 		return brepPayload{}, false, nil
 	}
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
+	reexpress, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	if err != nil || !reexpress.Identity {
 		return brepPayload{}, false, err
 	}
-	z0, z1, ok := prismplacement.ShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
+	z0, z1, ok := prismplacement.ShiftedInterval(pa.PlacementOperand(), pb.PlacementOperand())
 	if !ok || z0.Cmp(proofarith.FloatRat(pa.Z0)) <= 0 ||
 		z0.Cmp(proofarith.FloatRat(pa.Z1)) >= 0 || z1.Cmp(proofarith.FloatRat(pa.Z1)) != 0 {
 		return brepPayload{}, false, nil
 	}
 	va, _ := stackedUnionOperandOf(a)
 	vb, _ := stackedUnionOperandOf(b)
-	shift := prismplacement.ZShift(prismPlacementOf(pa), prismPlacementOf(pb))
+	shift := prismplacement.ZShift(pa.PlacementOperand(), pb.PlacementOperand())
 	levels, ok := stackedrecord.UnionLevels(va.slabs, vb.slabs, shift)
 	if !ok || len(levels) != 3 || levels[0].Delta != 0 || levels[1].Delta != 0 || levels[2].Delta != 0 {
 		return brepPayload{}, false, nil

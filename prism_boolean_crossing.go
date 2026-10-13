@@ -122,7 +122,7 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbou
 	// to B's own recorded interval, exactly as the clean-nesting path's own
 	// Intersect builder does; prismplacement.IntersectLowerEnd/IntersectUpperEnd charge a shifted endpoint's
 	// single rounding.
-	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
+	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(pa.PlacementOperand(), pb.PlacementOperand())
 	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.Z0, pa.Z0Delta, pbZ0, pb.Z0Delta)
 	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.Z1, pa.Z1Delta, pbZ1, pb.Z1Delta)
 

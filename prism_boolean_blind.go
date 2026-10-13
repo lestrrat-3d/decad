@@ -36,7 +36,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 			return stackedPrismPayload{}, false, nil
 		}
 	}
-	z0, z1, ok := prismplacement.ShiftedInterval(prismPlacementOf(target), prismPlacementOf(tool))
+	z0, z1, ok := prismplacement.ShiftedInterval(target.PlacementOperand(), tool.PlacementOperand())
 	if !ok {
 		return stackedPrismPayload{}, false, nil
 	}
@@ -58,7 +58,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 			`%w: the analytic cut scene charges %d arranger segments against the cap of %d`,
 			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
 	}
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(target), prismPlacementOf(tool))
+	reexpress, err := prismcells.NewReexpression(target.PlacementOperand(), tool.PlacementOperand())
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
@@ -183,7 +183,7 @@ func tryStackedBlindCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	if err != nil || trimmed {
 		return stackedPrismPayload{}, false, err
 	}
-	z0, z1, ok := prismplacement.ShiftedInterval(prismPlacementOf(outer), prismPlacementOf(tool))
+	z0, z1, ok := prismplacement.ShiftedInterval(outer.PlacementOperand(), tool.PlacementOperand())
 	if !ok {
 		return stackedPrismPayload{}, false, nil
 	}
@@ -216,7 +216,7 @@ func tryStackedBlindCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	if split < 0 && interfaceAt < 0 {
 		return stackedPrismPayload{}, false, nil
 	}
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(outer), prismPlacementOf(tool))
+	reexpress, err := prismcells.NewReexpression(outer.PlacementOperand(), tool.PlacementOperand())
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
@@ -284,14 +284,14 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 		return stackedPrismPayload{}, false, err
 	}
 	if len(tool.Profile.Holes) != 0 ||
-		!prismplacement.CutZIntervalSpans(prismPlacementOf(outer), prismPlacementOf(tool)) {
+		!prismplacement.CutZIntervalSpans(outer.PlacementOperand(), tool.PlacementOperand()) {
 		return stackedPrismPayload{}, false, nil
 	}
 	trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, tool.Profile.Outer, tool.Profile.Holes)
 	if err != nil || trimmed {
 		return stackedPrismPayload{}, false, err
 	}
-	reexpress, err := prismcells.NewReexpression(prismPlacementOf(outer), prismPlacementOf(tool))
+	reexpress, err := prismcells.NewReexpression(outer.PlacementOperand(), tool.PlacementOperand())
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}

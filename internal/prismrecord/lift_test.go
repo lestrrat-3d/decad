@@ -1,4 +1,4 @@
-package decad
+package prismrecord
 
 import (
 	"math"
@@ -7,14 +7,13 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
-// TestPrismLiftFactorBoundsTheHeldMap checks the stretch prismPointBound
+// TestLiftFactorBoundsTheHeldMap checks the stretch PointBound
 // carries a plane-local error ball through: exactly 1 for an axis-aligned
 // frame without placement, whose held map is exactly orthonormal, and for
 // randomly rotated frames and placements a factor whose square covers every
@@ -23,13 +22,14 @@ import (
 // stretch. The factor must also stay within 1e-12 of 1, and the bound must
 // carry the error ball at that factor.
 //
-// Shown to fail on 2026-10-09: with prismLiftFactor answering 1 whatever the
+// Shown to fail on 2026-10-09: with LiftFactor answering 1 whatever the
 // defect, rotated maps whose rows exceed 1 fail the cover check; with the
 // fixed 4 back, the axis-aligned row and the tightness check fail.
-func TestPrismLiftFactorBoundsTheHeldMap(t *testing.T) {
+func TestLiftFactorBoundsTheHeldMap(t *testing.T) {
 	t.Parallel()
-	xy := canonicalPrismFrame(t)
-	require.Equal(t, 1.0, prismLiftFactor(prismPayload{Payload: prismrecord.Payload{Frame: xy, Xform: r3.Identity()}}),
+	xy, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	require.Equal(t, 1.0, Payload{Frame: xy, Xform: r3.Identity()}.LiftFactor(),
 		`an axis-aligned unplaced map is exactly orthonormal`)
 
 	rng := rand.New(rand.NewPCG(53, 59))
@@ -40,8 +40,8 @@ func TestPrismLiftFactorBoundsTheHeldMap(t *testing.T) {
 		require.NoError(t, err)
 		xform, err := r3.Rotation(axis(), units.Degrees(rng.Float64()*360))
 		require.NoError(t, err)
-		pp := prismPayload{Payload: prismrecord.Payload{Frame: frame, Xform: xform}}
-		factor := prismLiftFactor(pp)
+		pp := Payload{Frame: frame, Xform: xform}
+		factor := pp.LiftFactor()
 		require.LessOrEqual(t, factor, 1+1e-12)
 
 		l, err := massmoment.PrismRotation(frame, xform)
@@ -67,9 +67,9 @@ func TestPrismLiftFactorBoundsTheHeldMap(t *testing.T) {
 	require.Positive(t, exceeded, `some held maps stretch past 1, which the factor must cover`)
 
 	// The bound carries the source ball at that factor, not four times it.
-	pp := prismPayload{Payload: prismrecord.Payload{Frame: xy, Xform: r3.Identity()}}
+	pp := Payload{Frame: xy, Xform: r3.Identity()}
 	b := 1e-3
-	got := prismPointBound(pp, proofbound.MeasuredScalar(1, b), proofbound.MeasuredScalar(2, b), proofbound.MeasuredScalar(3, b))
+	got := pp.PointBound(proofbound.MeasuredScalar(1, b), proofbound.MeasuredScalar(2, b), proofbound.MeasuredScalar(3, b))
 	require.LessOrEqual(t, got, proofbound.Radius3D(b)*(1+1e-12),
 		`an exact lift charges the ball once, %v, not %v`, proofbound.Radius3D(b), got)
 	require.GreaterOrEqual(t, got, math.Sqrt(3)*b)

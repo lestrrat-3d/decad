@@ -1221,7 +1221,6 @@
 10	0.00	TestPrepRefusesACollapsedOperandFacet
 10	0.01	TestPrismBooleanNearWholeCircleSourceFallsBack
 10	0.00	TestPrismBooleanTrimmedCircularSourceFallsBack
-10	0.25	TestPrismLiftFactorBoundsTheHeldMap
 10	0.00	TestPrismPlacementCoeffAllowIdentityWorldAxes
 10	0.01	TestPrismProofRecordChargesEveryFaceItsOwnDisplacement
 10	0.00	TestPrismUnionDisplacedSourceSplitChargesTheCrossing
