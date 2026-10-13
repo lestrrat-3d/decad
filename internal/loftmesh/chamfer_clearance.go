@@ -1,4 +1,4 @@
-package decad
+package loftmesh
 
 import (
 	"math"
@@ -9,10 +9,11 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// The first box encloses an exact triangle by outward rounding; the second
+// ChamferBoxGapAbove reports a separation of two triangle boxes. The first
+// box encloses an exact triangle by outward rounding; the second
 // holds binary64 vertices exactly. A one-ulp-down coordinate gap strictly
 // above the source displacement separates the full triangle pair.
-func loftCylinderChamferBoxGapAbove(a, b [2]r3.Vec, sourceBound float64) bool {
+func ChamferBoxGapAbove(a, b [2]r3.Vec, sourceBound float64) bool {
 	if sourceBound < 0 || proofbound.IsNonFinite(sourceBound) {
 		return false
 	}
@@ -27,7 +28,7 @@ func loftCylinderChamferBoxGapAbove(a, b [2]r3.Vec, sourceBound float64) bool {
 // An axis whose projected intervals have a gap larger than sourceBound
 // separates the whole ideal band triangle from the source wall envelope.
 // Cross-multiplication keeps the exact comparison in integers.
-func loftCylinderChamferAxisGapAbove(a, b [3]proofarith.Xpt,
+func chamferAxisGapAbove(a, b [3]proofarith.Xpt,
 	axis proofarith.Xpt, sourceBound *big.Rat) bool {
 	normNum := proofarith.XdotNum(axis, axis)
 	if normNum.Sign() == 0 {
@@ -90,7 +91,7 @@ func loftCylinderChamferAxisGapAbove(a, b [3]proofarith.Xpt,
 // This is a reject-only triangle clearance certificate. Face normals,
 // cross-edge axes, and in-plane edge normals include the coplanar case.
 // Failure to find a separating axis does not assert contact.
-func loftCylinderChamferTriangleGapAbove(a, b [3]proofarith.Xpt, sourceBound float64) bool {
+func chamferTriangleGapAbove(a, b [3]proofarith.Xpt, sourceBound float64) bool {
 	if sourceBound < 0 || proofbound.IsNonFinite(sourceBound) {
 		return false
 	}
@@ -103,29 +104,30 @@ func loftCylinderChamferTriangleGapAbove(a, b [3]proofarith.Xpt, sourceBound flo
 	na := proofarith.Xcross(ae[0], ae[1])
 	nb := proofarith.Xcross(be[0], be[1])
 	for _, axis := range [2]proofarith.Xpt{na, nb} {
-		if loftCylinderChamferAxisGapAbove(a, b, axis, bound) {
+		if chamferAxisGapAbove(a, b, axis, bound) {
 			return true
 		}
 	}
 	for i := range 3 {
 		for j := range 3 {
-			if loftCylinderChamferAxisGapAbove(a, b, proofarith.Xcross(ae[i], be[j]), bound) {
+			if chamferAxisGapAbove(a, b, proofarith.Xcross(ae[i], be[j]), bound) {
 				return true
 			}
 		}
-		if loftCylinderChamferAxisGapAbove(a, b, proofarith.Xcross(ae[i], na), bound) ||
-			loftCylinderChamferAxisGapAbove(a, b, proofarith.Xcross(be[i], nb), bound) {
+		if chamferAxisGapAbove(a, b, proofarith.Xcross(ae[i], na), bound) ||
+			chamferAxisGapAbove(a, b, proofarith.Xcross(be[i], nb), bound) {
 			return true
 		}
 	}
 	return false
 }
 
-// Splitting a triangle makes the separating-axis certificate complete for
+// ChamferTriangleGapSplit reports a triangle clearance certificate. Splitting
+// a triangle makes the separating-axis certificate complete for
 // many close but disjoint pairs while preserving an exact partition.
-func loftCylinderChamferTriangleGapSplit(a, b [3]proofarith.Xpt,
+func ChamferTriangleGapSplit(a, b [3]proofarith.Xpt,
 	sourceBound float64, depth int) bool {
-	if loftCylinderChamferTriangleGapAbove(a, b, sourceBound) {
+	if chamferTriangleGapAbove(a, b, sourceBound) {
 		return true
 	}
 	if depth == 0 {
@@ -142,8 +144,8 @@ func loftCylinderChamferTriangleGapSplit(a, b [3]proofarith.Xpt,
 	}
 	i, j, k := longest, (longest+1)%3, (longest+2)%3
 	mid := proofarith.Xlerp(a[i], a[j], big.NewInt(1), big.NewInt(2))
-	return loftCylinderChamferTriangleGapSplit([3]proofarith.Xpt{a[i], mid, a[k]}, b,
+	return ChamferTriangleGapSplit([3]proofarith.Xpt{a[i], mid, a[k]}, b,
 		sourceBound, depth-1) &&
-		loftCylinderChamferTriangleGapSplit([3]proofarith.Xpt{mid, a[j], a[k]}, b,
+		ChamferTriangleGapSplit([3]proofarith.Xpt{mid, a[j], a[k]}, b,
 			sourceBound, depth-1)
 }

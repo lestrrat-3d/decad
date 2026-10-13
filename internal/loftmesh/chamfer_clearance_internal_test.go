@@ -1,4 +1,4 @@
-package decad
+package loftmesh
 
 import (
 	"math/big"
@@ -65,11 +65,11 @@ func TestChamferAxisGapIntegerMatchesRational(t *testing.T) {
 		{name: "above gap", bound: big.NewRat(9, 8), want: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.want, loftCylinderChamferAxisGapAbove(a, b, axis, tc.bound))
-			require.Equal(t, tc.want, loftCylinderChamferAxisGapAbove(b, a, axis, tc.bound))
+			require.Equal(t, tc.want, chamferAxisGapAbove(a, b, axis, tc.bound))
+			require.Equal(t, tc.want, chamferAxisGapAbove(b, a, axis, tc.bound))
 		})
 	}
-	require.False(t, loftCylinderChamferAxisGapAbove(a, b, point(0, 0, 0), big.NewRat(0, 1)))
+	require.False(t, chamferAxisGapAbove(a, b, point(0, 0, 0), big.NewRat(0, 1)))
 
 	rng := rand.New(rand.NewSource(72))
 	randomPoint := func() proofarith.Xpt {
@@ -88,7 +88,7 @@ func TestChamferAxisGapIntegerMatchesRational(t *testing.T) {
 			proofarith.Xsub(randomPoint(), randomPoint()))
 		bound := big.NewRat(int64(rng.Intn(17)), 8)
 		want := chamferAxisGapAboveRatReference(first, second, direction, bound)
-		require.Equal(t, want, loftCylinderChamferAxisGapAbove(first, second, direction, bound),
+		require.Equal(t, want, chamferAxisGapAbove(first, second, direction, bound),
 			"random triangle pair %d", i)
 	}
 }

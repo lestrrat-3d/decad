@@ -50,7 +50,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/tessellation/` | Recorded-loop and band chording, mesh topology, bounds and audits. See tessellation-design. |
 | `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines. See loop-fillet §7.1. |
 | `internal/stationbound/` | Bounds circular chord stations and offset cap stations against their exact recorded parameters. |
-| `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums, projected cap proof, body reading finiteness gate, mirrored-cylinder bridge terms and reserve, cap chamfer source bound, and grouped contact scans. |
+| `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums, projected cap proof, body reading finiteness gate, mirrored-cylinder bridge terms and reserve, cap chamfer source bound, split-ring and collar grids, triangle clearance and middle-collar proofs, and grouped contact scans. |
 | `internal/smoothloft/` | Three-section homothety, independent rectangles, varying curves, and four-section rounded-rectangle gates, held meshes and bounds. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs. |
 | `internal/revolveplan/` | Revolve mesh walk resolution, coordinate ceilings and chord counts. See tessellation §8. |

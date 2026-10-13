@@ -144,9 +144,6 @@
 1	0.00	TestChainStep
 1	0.00	TestChainWalkEndpointAllowChargesComputedCircularEnds
 1	0.00	TestChainWalkEndpointAllowKeepsExactArcEndsAtZero
-1	0.00	TestChamferAxisGapIntegerMatchesRational
-1	0.00	TestChamferMiddleGridKeepsEveryOverlappingBox
-1	0.00	TestChamferSplitRingGridContainsEveryExactReachCandidate
 1	0.00	TestChargesScaleWithOperandWidth
 1	0.00	TestCheckedIntegerArithmeticRefusesOverflow
 1	0.00	TestChordCountHonoursTheWalkMinimum
