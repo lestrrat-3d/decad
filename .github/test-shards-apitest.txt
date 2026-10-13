@@ -1919,6 +1919,9 @@
 10	0.00	TestExtrudeCanceledContextLeavesDocumentUnchanged
 10	0.00	TestExtrudeChainRefusesProfileOnlyOptions
 10	0.00	TestExtrudeChainOptionRefusalFollowsTheSeam
+10	0.00	TestSectionObliqueCylinderFeedsVerifiedExtrude
+10	0.00	TestSectionObliqueCylinderPlacementAndReverseAxis
+10	0.00	TestSectionObliqueCylinderRefusesCapCrossing
 10	0.00	TestSectionObliqueRectangleFeedsVerifiedExtrude
 10	0.00	TestSectionObliqueVerticalRectangleFeedsVerifiedExtrude
 10	0.00	TestSectionObliqueRectangleTriangleThroughHexagon

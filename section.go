@@ -20,8 +20,8 @@ import (
 // plane whose frame preserves the prism's recorded section coordinates.
 // Other classes are a whole-circle prism cut by a cardinal plane with an exact
 // chord, a rectangular prism cut by an interior cardinal vertical plane, and
-// a bounded oblique plane cut of an exact rectangular prism. The bounded
-// result enters only straight solid Extrude with an independent Distance.
+// a bounded oblique cut of an exact rectangular or whole-circle prism. The
+// bounded result enters only straight solid Extrude with an independent Distance.
 // Other body or plane classes return [ErrUnsupported]. A nil body or context,
 // or an invalid plane, returns [ErrDegenerate]. A sheet or unsound solid returns
 // [ErrNotSolid]. See docs/section-design.md.
@@ -48,6 +48,9 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		}
 		if !admitted {
 			polygon, delta, clipped := obliqueRectangleClip(pp, plane)
+			if !clipped {
+				polygon, delta, clipped = obliqueCircleClip(pp, plane)
+			}
 			if clipped {
 				s, result, err := reconstructObliqueSection(ctx, polygon, plane, delta)
 				if err != nil {

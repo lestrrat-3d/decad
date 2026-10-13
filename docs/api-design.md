@@ -378,9 +378,9 @@ query design owns its proof and refusal rules.
 
 `Section` returns Sketch profiles on the requested plane for admitted exact
 prisms, exact cardinal cylinder chords, and bounded oblique rectangular-prism
-cuts. `docs/section-design.md` owns the gates and reconstruction proof. An exact
-profile uses the ordinary Sketch seam. A bounded oblique profile carries a
-private source certificate and currently enters only straight solid `Extrude`
+or full-cylinder cuts. `docs/section-design.md` owns the gates and reconstruction
+proof. An exact profile uses the ordinary Sketch seam. A bounded oblique profile
+carries a private source certificate and currently enters only straight solid `Extrude`
 with an independent `Distance` extent. Other Decad profile consumers refuse it.
 
 A bounding box is a measurement, so it carries the same trust metadata every other

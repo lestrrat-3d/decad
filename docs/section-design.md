@@ -96,6 +96,57 @@ representable as `float64`. Reconstruct the resulting four-line profile in a
 fresh Sketch and require Sketch's certified record to match before returning
 it. The parallel prism and cylinder classes keep their existing gates.
 
+## Bounded complete ellipse of an exact whole-circle prism
+
+This class accepts the authenticated, hole-free, whole counterclockwise circle
+of an exact straight `prismPayload`. It refuses a blend record, nonzero section
+or cap displacement, and a nonpositive sweep interval. The requested plane may
+be oblique and the source prism may have a rigid placement. The parallel and
+cardinal classes run first.
+
+Read stored source, placement, circle and requested-frame coefficients as exact
+dyadics. The requested plane is the affine span of its held U and V; use their
+exact cross product for plane tests. If that plane is parallel to the placed
+sweep axis, return `ErrUnsupported`. Otherwise solve its sweep coordinate as
+`z = zCenter + zCos*cos(theta) + zSin*sin(theta)` in exact rationals. Require
+`zCenter - |zCos| - |zSin| > z0` and
+`zCenter + |zCos| + |zSin| < z1`. These strict inequalities prove that the
+entire cut lies between both caps; a cap-crossing or cap-touching curve
+returns `ErrUnsupported`.
+
+Solve the placed centre and two radial vectors in the requested held U,V basis,
+checking the third world coordinate exactly. Their plane-local images give an
+affine map of the unit disk. A zero determinant returns `ErrUnsupported`; the
+nonzero map sends its boundary to one complete ellipse and its interior to the
+filled section. Reverse the sample order if the determinant reverses winding.
+Sample four quadrants with the exact rational half-angle parameter
+`((1-t²)/(1+t²), 2t/(1+t²))`, at equally spaced rational `t` values. Try 8,
+16, then 32 samples per quadrant. Every sample lies exactly on the source
+circle, so its plane-local image is an exact rational ellipse point. Round each
+point to finite binary64 coordinates for Sketch reference lines.
+
+For a unit-circle arc with endpoint chord length `d` and angle below 180°, its
+maximum radial gap to that chord is at most `d²/4`. Take the largest exact
+sample chord squared, divide by four, and multiply it by the sums of absolute
+plane-local affine coefficients. This encloses both local coordinate errors
+from every ellipse arc to its chord. The held U,V length upper bounds convert
+those errors to a world-distance bound. Add the outward-rounded rational-to-
+binary64 error of each polygon vertex in both local and world coordinates.
+The larger total is `sectionDelta`. The affine image of the sampled circle is
+strictly convex, and the existing exact source-to-held polygon test requires
+its rounded line ring and every intermediate ring to remain strictly convex.
+An ellipse boundary point maps radially to its chord within the gap above;
+scaling that mapping from the centre covers both occupied regions. Refuse a
+sample count if the delta exceeds 0.05 mm, if four times the delta reaches any
+exact polygon edge's local L1 length, or if the rounded convexity proof fails.
+Exhausting 32 samples per quadrant returns `ErrUnsupported`.
+
+Reconstruct the rounded polygon through Sketch reference lines and attach the
+same private, revision-bound certificate described below. The Sketch area is
+the polygon's area, not an exact ellipse-area reading. `Extrude` carries
+`sectionDelta` to its prism proof; `MeasureProfile` and other undecorated
+consumers refuse the bounded source.
+
 ## Bounded oblique plane of an exact rectangular prism
 
 This class accepts a sound, hole-free `prismPayload` whose authenticated source
@@ -221,6 +272,12 @@ reusing its bound.
 - An interior oblique cut of a real Sketch-produced rectangular prism returns
   one bounded profile. Extruding it by 2 mm yields a volume interval containing
   the exact clipped area times 2 mm and passes `Tessellate(0.1 mm, VerifyAll)`.
+- A real whole-circle cylinder of radius 2 mm and height 10 mm cut by the
+  central plane spanned by `(1,0,0)` and `(0,1,1)` returns one bounded ellipse
+  polygon. Its largest section coordinates enclose 2 mm and 2√2 mm.
+  A 2 mm Extrude yields a volume interval containing 8π√2 mm³ and passes
+  `Tessellate(0.1 mm, VerifyAll)`. Check a placed cylinder, reversed section
+  axis and a cut crossing a cap.
 - Check translated and rigidly placed rectangular prisms, reversed section
   axes, triangle through hexagon section rings, and cuts that refuse at a
   source vertex, tangent, exterior or uncertain topology.
