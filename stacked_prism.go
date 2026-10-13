@@ -424,7 +424,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	}
 
 	newPlane := func(z, axial float64, flip bool, role string, area proofbound.BoundedScalar) (*Face, error) {
-		frame, err := capFrame(base, z, flip)
+		frame, err := base.CapFrame(z, flip)
 		if err != nil {
 			return nil, err
 		}

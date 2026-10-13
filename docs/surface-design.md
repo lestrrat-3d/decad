@@ -613,7 +613,7 @@ Four gates, in this order, and each is reject-only:
    prism cap's own `axialDelta` does. So a chain the level arm admits instead
    takes its plane's origin and normal from the token directly (`origin`,
    `normal`, transformed by this evaluation's own placement) — the same
-   frame-derived construction `prism_build.go`'s own `capFrame` already uses
+   frame-derived construction `prismrecord.Payload.CapFrame` already uses
    for a solid prism's caps, needing no fitting argument at all.
    `patchChainOrientedNormal`'s fit still runs for such a chain, but only to
    settle which of the token's two normal directions matches the chain's own

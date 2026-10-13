@@ -253,7 +253,7 @@ func TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame(t *
 	// sign patchChainLevelNormal settles on) is this fixture's own artifact.
 	// planeFrameFromNormal's own Gram-Schmidt reprocesses whatever normal it
 	// is handed, introducing the SAME ordinary float64 rounding
-	// prism_build.go's own capFrame already carries for any analytic Plane
+	// prismrecord.Payload.CapFrame already carries for any analytic Plane
 	// (a few ULPs, ~1e-16) — the claim under test is that the published
 	// normal tracks the TOKEN's axis to THAT floor, not the far larger 1e-6
 	// perturbation on v3's own held position: a fit to the held vertices

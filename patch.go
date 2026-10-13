@@ -32,7 +32,7 @@ import (
 // existing refusal there instead of being silently handed a zero-height
 // prism. prism() below is the one bridge — a *view*, never routed through
 // evalPrismContext, which rejects h <= 0 with ErrDegenerate — that lets a
-// patch reuse capFrame, prismPayload.point and prismBoundsContext, each of
+// patch reuse Payload.CapFrame, prismPayload.point and prismBoundsContext, each of
 // which is correct at zero height.
 type patchPayload struct {
 	profile profileRecord
@@ -51,7 +51,7 @@ func (pp patchPayload) placed(ctx context.Context, d *Document, ref producerID, 
 }
 
 // prism is a *view* of pp as a zero-height prismPayload — never a body this
-// evaluator builds — used only to feed capFrame, prismPayload.point and
+// evaluator builds — used only to feed Payload.CapFrame, prismPayload.point and
 // prismBoundsContext, each of which reads a section and a placement and is
 // correct at z0 == z1 == 0. Every prismPayload field this view leaves at its
 // zero value (z0Delta, z1Delta, sectionDelta, blend roles, surfaceResult)
@@ -169,9 +169,9 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 
 	// The positive side is the sketch plane's own normal — the sense
 	// Direction.Along names for that plane (docs/surface-design.md §5.1) —
-	// so the face's frame is capFrame at zero height with no flip, unlike a
+	// so the face's frame is Payload.CapFrame at zero height with no flip, unlike a
 	// prism's start cap.
-	frame, err := capFrame(prismView, 0, false)
+	frame, err := prismView.CapFrame(0, false)
 	if err != nil {
 		return nil, err
 	}
