@@ -1952,3 +1952,5 @@
 10	0.00	TestSweepTwistRoundedProfileVerifyAll
 10	0.00	TestSweepTwistRoundedProfileUnionKeepsHeldProof
 10	0.00	TestSweepTwistRoundedProfileUnionRefusesNearContact
+10	0.00	TestSweepTwistRoundedLargeProfileVerifyAll
+10	0.00	TestSweepTwistRoundedLargeProfileKeepsCoarseCertifiedBuild

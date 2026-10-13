@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -23,10 +24,10 @@ type straightTwistStation struct {
 	axialError float64
 }
 
-func stationedTwistCellCount(poly twistPolygon, angleUpper float64) (int, error) {
+func stationedTwistCellCounts(poly twistPolygon, angleUpper float64) (int, int, error) {
 	if angleUpper <= 0 || proofbound.IsNonFinite(angleUpper) ||
 		poly.maxRadiusL1 <= 0 || proofbound.IsNonFinite(poly.maxRadiusL1) {
-		return 0, fmt.Errorf(`%w: stationed twist has no finite angle or profile radius`, ErrUnsupported)
+		return 0, 0, fmt.Errorf(`%w: stationed twist has no finite angle or profile radius`, ErrUnsupported)
 	}
 	// The curved source needs a finer station than the straight polygon.
 	// The final proof still decides the caller's requested mesh tolerance.
@@ -34,7 +35,24 @@ func stationedTwistCellCount(poly twistPolygon, angleUpper float64) (int, error)
 	if poly.hasArc {
 		targetScale = 0.03
 	}
-	target := proofbound.ProductUpper(poly.maxRadiusL1, targetScale)
+	baseTarget := proofbound.ProductUpper(poly.maxRadiusL1, targetScale)
+	base, err := stationedTwistCountAtTarget(poly, angleUpper, baseTarget)
+	if err != nil {
+		return 0, 0, err
+	}
+	if !poly.hasArc || baseTarget <= 0.08 {
+		return base, base, nil
+	}
+	// The finer target is optional. When it exceeds the fixed station or
+	// facet-pair ceiling, the original certified build stays available.
+	refined, err := stationedTwistCountAtTarget(poly, angleUpper, 0.08)
+	if err == nil {
+		return base, refined, nil
+	}
+	return base, base, nil
+}
+
+func stationedTwistCountAtTarget(poly twistPolygon, angleUpper, target float64) (int, error) {
 	for cells := 2; cells <= maxStationedTwistCells; cells++ {
 		perCell := proofbound.DivUpper(angleUpper, float64(cells))
 		if perCell > 1 || twistDeparture(poly, perCell, 0, 0) > target {
@@ -132,10 +150,34 @@ func evalStationedTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if absTheta.Cmp(proofbound.TwoPiIv.Hi) > 0 {
 		return nil, fmt.Errorf(`%w: stationed twist admits at most one full turn`, ErrUnsupported)
 	}
-	cells, err := stationedTwistCellCount(poly, proofbound.RatFloatUp(absTheta))
+	baseCells, cells, err := stationedTwistCellCounts(poly, proofbound.RatFloatUp(absTheta))
 	if err != nil {
 		return nil, err
 	}
+	if cells > baseCells {
+		body, refinedErr := evalStationedTwistedSweepCells(ctx, d, ref, profile, plane, path,
+			angle, recordArea, xform, poly, theta, thetaIv, absTheta, cells, true)
+		if refinedErr == nil {
+			return body, nil
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if !errors.Is(refinedErr, ErrUnsupported) && !errors.Is(refinedErr, ErrDegenerate) {
+			return nil, refinedErr
+		}
+	}
+	return evalStationedTwistedSweepCells(ctx, d, ref, profile, plane, path,
+		angle, recordArea, xform, poly, theta, thetaIv, absTheta, baseCells, false)
+}
+
+// An optional finer build can refuse without changing the original
+// independently certified station count or committing a partial body. There
+// are at most two attempts, each with its own fixed cell and audit ceiling.
+func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref producerID,
+	profile profileRecord, plane planeRecord, path *Path, angle units.Value,
+	recordArea float64, xform r3.Transform, poly twistPolygon, theta float64,
+	thetaIv proofbound.RatInterval, absTheta *big.Rat, cells int, optional bool) (*Body, error) {
 	stations, err := straightTwistStations(path.End().Z, theta, thetaIv, poly, cells)
 	if err != nil {
 		return nil, err
@@ -158,6 +200,12 @@ func evalStationedTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		held[i], heldOK = part.payload.(loftPayload)
 		if !heldOK {
 			return nil, fmt.Errorf(`%w: twisted sweep cell lost its Loft payload`, ErrUnsupported)
+		}
+		// Arc subdivision can make the actual Loft much larger than the
+		// source-edge estimate. A first-cell projection only skips an optional
+		// attempt; the complete mesh still receives its own exact work audit.
+		if optional && i == 0 && !stationedTwistFirstCellFits(held[i], cells) {
+			return nil, fmt.Errorf(`%w: refined twist exceeds the fixed facet-pair work ceiling`, ErrUnsupported)
 		}
 		if _, err := mergeTwistWalls(ctx, part, ref, held[i], len(poly.points)); err != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
@@ -287,4 +335,21 @@ func evalStationedTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		delta: delta, areaSlack: mesh.areaSlack, volSymDiff: volSymDiff,
 	}
 	return body, nil
+}
+
+func stationedTwistFirstCellFits(first loftPayload, cells int) bool {
+	if cells <= 0 || first.walls <= 0 || first.walls >= len(first.tris) {
+		return false
+	}
+	walls := uint64(first.walls)
+	if walls > ^uint64(0)/uint64(cells) {
+		return false
+	}
+	facets := walls * uint64(cells)
+	caps := uint64(len(first.tris) - first.walls)
+	if caps > ^uint64(0)-facets {
+		return false
+	}
+	pairs, ok := proofbound.WallChoose2(facets + caps)
+	return ok && pairs <= proofbound.MaxFacetPairTestsPerCall
 }
