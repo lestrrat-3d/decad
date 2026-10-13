@@ -66,9 +66,9 @@ const filletTol = sectionaudit.Tolerance
 // (docs/modify-design.md §6, core §8). sel is resolved against the live
 // receiver; a query matching nothing is loud (ErrNoMatch / ErrCardinality,
 // S16). r is a length magnitude, gated like every other (S15); a zero r is
-// S13. A selected edge that is not a lateral edge — a cap edge — is S1
-// (ErrUnsupported). The rewritten section faces the §5 audit before anything
-// is built, so no unproven body is ever made.
+// S13. One straight cap edge of a prism or one-line solid Sweep takes route E;
+// other unsupported cap selections are S1 (ErrUnsupported). A rewritten
+// section faces the §5 audit before anything is built.
 //
 // WithTangentChain expands the edges sel resolves to across every edge that
 // continues them with proven G1 continuity before any receiver gate runs
@@ -298,8 +298,29 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 		}
 		if !found {
 			if sweepReduction {
-				return nil, fmt.Errorf(`%w: %s is not a lateral edge of the straight Sweep`,
-					ErrUnsupported, selectedEdgeContext(ei, e))
+				if len(edges) != 1 {
+					return nil, fmt.Errorf(`%w: a straight Sweep fillets one cap edge at a time; selector %s matched [%s]`,
+						ErrUnsupported, sel, selectedEdgesContext(edges))
+				}
+				if !straightSweepCapEdge(e) {
+					return nil, fmt.Errorf(`%w: %s is not a cap edge of the straight Sweep`,
+						ErrUnsupported, selectedEdgeContext(ei, e))
+				}
+				// The one-line Sweep was built from pp. Route E matches this
+				// published edge to that exact prism's face view, then checks the
+				// material wedge before rewriting either end face.
+				bp, err := brepOfPrism(pp)
+				if err != nil {
+					return nil, err
+				}
+				if err := requireExactBrepSection(bp, loopCall.op); err != nil {
+					return nil, err
+				}
+				body, err := brepBlendEdges(ctx, d, bp, loopCall)
+				if err != nil {
+					return nil, err
+				}
+				return commitModifyResult(ctx, b, body)
 			}
 			// RF3 (docs/loop-fillet-design.md §3): a cap edge sends the
 			// prism through its brep face view. Route E, L or V then reads the
@@ -381,6 +402,28 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 	}
 	d.commit(body, b)
 	return body, nil
+}
+
+// straightSweepCapEdge checks the public role pair before the stored prism's
+// face view matches the selected geometry. A one-line Sweep renames only its
+// swept walls to side(0,loop,segment); its two cap roles are unchanged.
+func straightSweepCapEdge(edge *Edge) bool {
+	facing := edge.Faces()
+	if len(facing) != 2 {
+		return false
+	}
+	capRole, wallRole := false, false
+	for _, face := range facing {
+		for _, origin := range face.origins {
+			switch {
+			case origin.Role == roleCapStart || origin.Role == roleCapEnd:
+				capRole = true
+			case strings.HasPrefix(origin.Role, "side(0,"):
+				wallRole = true
+			}
+		}
+	}
+	return capRole && wallRole
 }
 
 // cornerLoop is survey2d.CornerLoop: one boundary loop resolved into its

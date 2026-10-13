@@ -152,14 +152,15 @@ a retired body is S17, by core §6's retire rule.
 | **R6** | `brepPayload`, or `stackedPrismPayload` through its face view | `docs/brep-modify-design.md` Table RB | Table RB |
 | **R7** | `loftPayload` with matching, hole-free, axially translated sections | `Fillet` on recorded analytic corners (loft §17); `Chamfer` is S3 | S3 |
 | **R8** | One-sided positive-taper full-circle `draftPayload`, near section at start, no holes or kept walls | Far-rim `Fillet` or symmetric `Chamfer` builds per draft §10.4–§10.5; otherwise S3 | Inward far-cap removal builds draft §10.6's cup; otherwise S3 |
-| **R9** | One straight solid profile `sweepPayload` (§6–§7) | Lateral `Fillet` and `Chamfer`; one straight cap-edge `Chamfer` via exact prism Route E | Cap or side openings; closed Shell if hole-free |
+| **R9** | One straight solid profile `sweepPayload` (§6–§7) | Lateral `Fillet` and equal-setback `Chamfer` use the exact prism reduction; one straight cap edge of either op takes route E. | Cap or side openings; closed Shell if hole-free. |
 | **R10** | One straight `twistedSweepPayload` with a smooth symmetric convex Line/Arc section | S3 | Inward top-cap Shell builds a bounded faceted cup. See `docs/shell-twisted-sweep-design.md`. |
 
 R9 includes rigid placement and only a zero-twist, one-span `LineTo` path.
-Fillet cap edges are S1. A one-edge cap Chamfer uses route E's edge matching,
-material-side check, face rewrite and closure proof on the stored exact prism.
-Other cap selections, mixed selections and asymmetric setbacks refuse.
-Shell maps each selected `side(0,0,j)` face to segment `j`
+One straight cap-edge Fillet or Chamfer uses the stored prism's face view and
+route E's edge matching, material-side check, face rewrite and closure proof.
+Fillet also checks the public cap and wall roles before that match. Other cap
+selections, mixed selections and asymmetric setbacks refuse. Shell maps each
+selected `side(0,0,j)` face to segment `j`
 of the stored exact prism before the prism side-opening build. R10 requires
 the origin XY plane, an origin-to-positive-Z path, an exact thickness, and
 the top-cap opening. R10 evaluates these source conditions in the local
@@ -361,10 +362,14 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 S13.
 
 For R9's straight Sweep, `Fillet` resolves the selector on the published Sweep
-edges, then matches each lateral edge to the stored prism section corner. A cap
-edge is S1. The usual section rewrite and audit build B1's `prismPayload` over
-the same frame and interval, including the Sweep's endpoint displacement
-bound. Arc, composite, mitred and twisted Sweep payloads do not take this route.
+edges, then matches each lateral edge to the stored prism section corner. One
+straight cap edge takes the stored prism's brep face view through route E. The
+public edge must border one cap and one `side(0,loop,segment)` wall; route E
+matches it to one record edge and checks both end-face corners against the
+interior material wedge before rewriting them. Other cap selections are S1.
+The lateral section rewrite and audit build B1's `prismPayload` over the same
+frame and interval, including the Sweep's endpoint displacement bound. Arc,
+composite, mitred and twisted Sweep payloads do not take either route.
 
 The rolling-ball blend of a lateral edge is a **cylinder**: the ball of radius
 `r` rolling in the corner sweeps its center along a straight line parallel to

@@ -75,7 +75,59 @@ func TestSweepLineFilletCapEdgeRefuses(t *testing.T) {
 	_, err := body.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))),
 		units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "one cap edge at a time")
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
+}
+
+func TestSweepLineFilletSingleTopCapEdgeVerified(t *testing.T) {
+	t.Parallel()
+	doc, body := straightSweepFilletSquare(t)
+	sel := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
+		decad.EndpointAt(r3.NewVec(0, 0, 10))).Exactly(1)
+	selected, err := sel.SelectEdges(body)
+	require.NoError(t, err)
+	require.Len(t, selected, 1)
+
+	rounded, err := body.Fillet(t.Context(), sel, units.Millimeters(1))
+	require.NoError(t, err)
+	volume, err := rounded.Volume()
+	require.NoError(t, err)
+	got, err := volume.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 4000-20*(1-math.Pi/4), got, 1e-9)
+	require.Len(t, rounded.Faces(), 7)
+	require.Len(t, rounded.Edges(), 15)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.True(t, report.Passed())
+	mesh, err := rounded.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
+func TestSweepLineFilletPlacedBottomCapEdgeVerified(t *testing.T) {
+	t.Parallel()
+	_, body := straightSweepFilletSquare(t)
+	motion, err := r3.Translation(r3.NewVec(3, -2, 5))
+	require.NoError(t, err)
+	placed, err := decad.Transform(t.Context(), body, motion)
+	require.NoError(t, err)
+	sel := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
+		decad.EndpointAt(r3.NewVec(3, -2, 5))).Exactly(1)
+	rounded, err := placed.Fillet(t.Context(), sel, units.Millimeters(1))
+	require.NoError(t, err)
+	volume, err := rounded.Volume()
+	require.NoError(t, err)
+	got, err := volume.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 4000-20*(1-math.Pi/4), got, 1e-9)
+	mesh, err := rounded.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
 }
 
 func TestSweepLineFilletPlacedReceiver(t *testing.T) {
