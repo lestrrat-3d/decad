@@ -2,6 +2,7 @@ package loftmesh
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -48,6 +49,9 @@ import (
 // triangle has no interior, so the shell it would contribute to does not
 // exist.
 func TriangleCollapsed(verts []r3.Vec, tri [3]int) bool {
+	if triangleOpenFloat(verts[tri[0]], verts[tri[1]], verts[tri[2]]) {
+		return false
+	}
 	a, b, c := proof.XptOf(verts[tri[0]]), proof.XptOf(verts[tri[1]]), proof.XptOf(verts[tri[2]])
 	n := proof.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
 	return n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0
@@ -758,4 +762,33 @@ func ProjectionPairIndex(u, v int) int {
 	default:
 		return 2
 	}
+}
+
+// triangleOpenFloat proves (b-a)x(c-a) non-zero from float arithmetic alone,
+// or answers false (undecided). Every coordinate must be zero or of magnitude
+// in [2^-300, 2^300], so no difference or product below underflows or
+// overflows; each normal component is then a 2D orientation determinant whose
+// float evaluation errs by at most (3+16e)e of its float permanent (e = 2^-53,
+// Shewchuk's ccwerrboundA). 2^-50 covers that, and a component whose float
+// magnitude exceeds it is non-zero exactly. NaN and infinite inputs fail the
+// range test and are left to the exact path.
+func triangleOpenFloat(a, b, c r3.Vec) bool {
+	for _, x := range [...]float64{a.X, a.Y, a.Z, b.X, b.Y, b.Z, c.X, c.Y, c.Z} {
+		m := math.Abs(x)
+		if !(m == 0 || m >= 0x1p-300 && m <= 0x1p300) {
+			return false
+		}
+	}
+	ux, uy, uz := b.X-a.X, b.Y-a.Y, b.Z-a.Z
+	vx, vy, vz := c.X-a.X, c.Y-a.Y, c.Z-a.Z
+	return orientFloatProven(uy, uz, vy, vz) || orientFloatProven(uz, ux, vz, vx) ||
+		orientFloatProven(ux, uy, vx, vy)
+}
+
+// orientFloatProven reports whether p*s - q*r is proven non-zero.
+func orientFloatProven(p, q, r, s float64) bool {
+	left, right := float64(p*s), float64(q*r)
+	det := left - right
+	bound := (math.Abs(left) + math.Abs(right)) * 0x1p-50
+	return math.Abs(det) > bound
 }
