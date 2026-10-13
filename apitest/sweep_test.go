@@ -121,8 +121,8 @@ func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 	require.Equal(t, decad.ValidityValid, placedBodyReport.Validity.Outcome)
 }
 
-// TestSweepLineStagesModify is docs/sweep-design.md Table D row D8: a modify
-// operation has no sweepPayload receiver, so it refuses and leaves the
+// TestSweepLineStagesModify selects cap and lateral edges together. The
+// bounded lateral Fillet route refuses that mixed selection and leaves the
 // document unchanged.
 func TestSweepLineStagesModify(t *testing.T) {
 	t.Parallel()

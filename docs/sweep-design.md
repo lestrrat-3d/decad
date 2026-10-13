@@ -532,7 +532,7 @@ withholds the reference and prevents a false `Sound` report.
 | **D5** | clearance | box separation may settle the partition, but `WithClearances` stays `Suspect` until a sweep boundary adapter lands |
 | **D6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload` until non-constant-section proofs land |
 | **D7** | `Transform`, `Copy` | re-evaluates the payload under the composed rigid motion and reruns the applicable construction proof; every displacement and measurement is recomputed |
-| **D8** | Fillet, Chamfer and Shell | A zero-twist, one-line profile Sweep takes Shell on its capStart, capEnd, or both, and takes `WithNoOpenings` for a hole-free section. Its exact prism reduction supplies the existing Shell offset and build proofs (`docs/modify-design.md` R9). Side openings and other Sweep kinds refuse; Fillet and Chamfer refuse. A one-span sweep sheet takes `Thicken` through its reduction (`docs/surface-design.md` §16.8) |
+| **D8** | Fillet, Chamfer and Shell | A zero-twist, one-line profile Sweep takes `Fillet` on lateral edges and `Shell` on capStart, capEnd, or both; a hole-free section also takes `WithNoOpenings`. Its exact prism reduction supplies the existing Fillet and Shell section proofs (`docs/modify-design.md` R9). Sweep cap-edge Fillet, side-opening Shell, Chamfer, and other Sweep kinds refuse. A one-span sweep sheet takes `Thicken` through its reduction (`docs/surface-design.md` §16.8) |
 
 The composite tessellator chooses the largest required profile chord count
 from its prism and Revolve span plans for each recorded segment. Each span

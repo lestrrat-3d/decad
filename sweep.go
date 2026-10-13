@@ -304,6 +304,21 @@ type sweepPayload struct {
 	surfaceResult   bool
 }
 
+// straightSweepPrismReduction returns the exact prism built for one solid,
+// zero-twist, one-line profile Sweep. Modifiers still apply their own edge or
+// face selection gates before using the reduction.
+func straightSweepPrismReduction(payload featurePayload) (prismPayload, bool) {
+	sp, ok := payload.(sweepPayload)
+	if !ok || sp.surfaceResult || sp.arc || sp.closedCircle || sp.closedComposite ||
+		len(sp.spans) != 0 || sp.path == nil || len(sp.path.records) != 1 || len(sp.path.segments) != 1 {
+		return prismPayload{}, false
+	}
+	if _, line := sp.path.segments[0].(LineTo); !line {
+		return prismPayload{}, false
+	}
+	return sp.prism, true
+}
+
 func (sp sweepPayload) transform() r3.Transform {
 	if len(sp.spans) != 0 {
 		return sp.spans[0].transform()
