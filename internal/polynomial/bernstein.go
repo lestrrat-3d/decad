@@ -3,6 +3,8 @@ package polynomial
 import (
 	"context"
 	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // Exact Bernstein arithmetic uses one shared integer denominator. The
@@ -10,10 +12,10 @@ import (
 
 func ratZero() *big.Rat             { return new(big.Rat) }
 func ratOne() *big.Rat              { return big.NewRat(1, 1) }
-func ratAdd(a, b *big.Rat) *big.Rat { return new(big.Rat).Add(a, b) }
-func ratSub(a, b *big.Rat) *big.Rat { return new(big.Rat).Sub(a, b) }
-func ratMul(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }
-func ratDiv(a, b *big.Rat) *big.Rat { return new(big.Rat).Quo(a, b) }
+func ratAdd(a, b *big.Rat) *big.Rat { return proofarith.AddRat(new(big.Rat), a, b) }
+func ratSub(a, b *big.Rat) *big.Rat { return proofarith.SubRat(new(big.Rat), a, b) }
+func ratMul(a, b *big.Rat) *big.Rat { return proofarith.MulRat(new(big.Rat), a, b) }
+func ratDiv(a, b *big.Rat) *big.Rat { return proofarith.QuoRat(new(big.Rat), a, b) }
 
 // bernsteinIntegerRow returns fresh numerators over their positive least
 // common denominator. nums[i]/den equals coeff[i] exactly.
@@ -90,7 +92,7 @@ func BernsteinValue(coeff []*big.Rat, parameter *big.Rat) *big.Rat {
 	p, q := parameter.Num(), parameter.Denom()
 	num := bernsteinScaledNumerator(scaled, p, q)
 	qn := new(big.Int).Exp(q, big.NewInt(int64(len(coeff)-1)), nil)
-	return new(big.Rat).SetFrac(num, qn.Mul(qn, den))
+	return proofarith.RatFrac(new(big.Rat), num, qn.Mul(qn, den))
 }
 
 // BernsteinIsolateRoot bisects the one sign change of a Bernstein row steps
@@ -110,8 +112,8 @@ func BernsteinIsolateRoot(coeff []*big.Rat, steps int) (lo, hi *big.Rat) {
 			a.Set(mid)
 		}
 	}
-	lo = new(big.Rat).SetFrac(a, q)
-	hi = new(big.Rat).SetFrac(new(big.Int).Add(a, big.NewInt(1)), q)
+	lo = proofarith.RatFrac(new(big.Rat), a, q)
+	hi = proofarith.RatFrac(new(big.Rat), new(big.Int).Add(a, big.NewInt(1)), q)
 	return lo, hi
 }
 
@@ -126,8 +128,8 @@ func BernsteinSplit(a []*big.Rat, at *big.Rat) ([]*big.Rat, []*big.Rat) {
 	scale := new(big.Int).Set(den)
 	var t1, t2 big.Int
 	for level := 0; level <= n; level++ {
-		left[level] = new(big.Rat).SetFrac(work[0], scale)
-		right[n-level] = new(big.Rat).SetFrac(work[n-level], scale)
+		left[level] = proofarith.RatFrac(new(big.Rat), work[0], scale)
+		right[n-level] = proofarith.RatFrac(new(big.Rat), work[n-level], scale)
 		for i := range n - level {
 			t1.Mul(qp, work[i])
 			t2.Mul(p, work[i+1])
@@ -156,7 +158,7 @@ func BernsteinMul(a, b []*big.Rat) []*big.Rat {
 			sum.Add(sum, &term)
 		}
 		outDen.Mul(den, binom[k])
-		out[k] = new(big.Rat).SetFrac(sum, &outDen)
+		out[k] = proofarith.RatFrac(new(big.Rat), sum, &outDen)
 	}
 	return out
 }
@@ -193,7 +195,7 @@ func BernsteinRestrict(a []*big.Rat, lo, hi *big.Rat) []*big.Rat {
 	scale := new(big.Int).Mul(den, qPow[n])
 	left := make([]*big.Rat, n+1)
 	for level := 0; level <= n; level++ {
-		left[level] = new(big.Rat).SetFrac(right[0], scale)
+		left[level] = proofarith.RatFrac(new(big.Rat), right[0], scale)
 		for i := range n - level {
 			t1.Mul(qpp, right[i])
 			t2.Mul(pp, right[i+1])
