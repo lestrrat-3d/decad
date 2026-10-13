@@ -12,9 +12,9 @@ import (
 
 // ComputeLoftChordedAllow derives LoftChordedAllow's corrections and bounds by walking
 // every wall cell of every loop pairs holds, over the SAME cell corner
-// convention assembleLoft's own Table B split uses (vLo, vHi = section-0's
+// convention AssembleTriangulated's own Table B split uses (vLo, vHi = section-0's
 // two corners; wLo, wHi = section-1's) — verts/vIdx/wIdx are evalLoft's own
-// assembled loftAssembly fields. anchor is the accumulator's own anchor (p0's
+// assembled Assembly fields. anchor is the accumulator's own anchor (p0's
 // placed plane origin), read by the exact first-moment correction.
 //
 // matchedDelta is docs/loft-design.md §5.2's own matchedDelta term, already

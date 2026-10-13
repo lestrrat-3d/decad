@@ -22,7 +22,7 @@ import (
 // proofbound.ChordedBoundaryMomentAllow, proofbound.CellTwistOffsetUpper,
 // proofbound.CellTwistAreaAllow and the shared per-cell reader
 // proofbound.CellAllowsOf: the enclosure those legs prove between the HELD
-// FLAT-TRIANGLE polyhedron assembleLoft actually builds and the true curved
+// FLAT-TRIANGLE polyhedron loftmesh.AssembleTriangulated actually builds and the true curved
 // solid it approximates, over a table of radii, sweeps, heights, chord counts
 // AND a TWIST angle between the two paired sections. That is the tessellation's
 // volSymDiff composition at delta == 0, where §2's vertex sweep and skirt are
@@ -129,7 +129,7 @@ func twistedPieSliceTrueVolume(radius, sweepRad, twistRad, h float64) float64 {
 
 // heldVolumeExact sums signed tetrahedra, anchored at the origin, over
 // EXACTLY the triangle set a test mesh builds — the same two-triangle-per-
-// wall-cell topology assembleLoft emits (loft_build.go) and
+// wall-cell topology loftmesh.AssembleTriangulated emits (internal/loftmesh/triangulated.go) and
 // loftMassAccumulator measures (loft_moments.go) — as an exact rational, so
 // the "measured" gap this file's enclosure tests compare against is never
 // itself subject to float summation slop.

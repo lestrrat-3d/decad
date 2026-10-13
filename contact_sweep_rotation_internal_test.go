@@ -399,6 +399,13 @@ func pointDeviationSquaredCommonDenom(p rotationalSweepPath, pose r3.Transform,
 // box pose differs.
 func TestPointDeviationMatchesCommonDenomForm(t *testing.T) {
 	t.Parallel()
+	// dyDenominatorExp reads the exponent of the reduced denominator 2^k.
+	for _, c := range []struct {
+		v    float64
+		want int
+	}{{0, 0}, {3, 0}, {4, 0}, {0.5, 1}, {-0.375, 3}} {
+		require.Equal(t, c.want, dyDenominatorExp(proofarith.MustDyOf(c.v)), "%v", c.v)
+	}
 	rng := rand.New(rand.NewPCG(103, 107))
 	compared, sourceSet := 0, 0
 	// Half-integer source points under a half-unit shift stage to integers,
