@@ -329,6 +329,8 @@ an occupied heel circle carries its ordered source-bound arc. Missing face
 roles, duplicate pairs and undecidable side values refuse the whole census.
 Later mesh consumers must rederive the census before using its mutable cells.
 These source verdicts do not prove a shared seam, retained patch or volume.
+One census computes each distinct set of meridian rows once; equal inputs, compared exactly,
+reuse the rows within that census only.
 
 Each occupied heel cap arc endpoint also binds to one live source-side cell.
 For a sloped Revolve side, the cap radial and side meridian polynomials

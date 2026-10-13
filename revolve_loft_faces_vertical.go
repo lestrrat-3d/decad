@@ -186,7 +186,7 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 			continue
 		}
 		for spanIndex, span := range spans {
-			cell, certified := revolveLoftFacesVerticalBezier(trim, segment, spanIndex,
+			cell, certified := revolveLoftFacesVerticalBezierWith(revolveLoftFacesMeridianMemoOf(ctx), trim, segment, spanIndex,
 				band, time, lower, upper, ref, span)
 			if !certified {
 				return nil, false, nil
@@ -296,11 +296,18 @@ func revolveLoftFacesVerticalLimits(trim *loftFacesTrimRecord,
 func revolveLoftFacesVerticalBezier(trim *loftFacesTrimRecord,
 	segment, spanIndex, band int, time, lower, upper *big.Rat,
 	ref FeatureRef, span freeform.BezierSpan) (revolveLoftFacesVerticalCell, bool) {
+	return revolveLoftFacesVerticalBezierWith(nil, trim, segment, spanIndex, band,
+		time, lower, upper, ref, span)
+}
+
+func revolveLoftFacesVerticalBezierWith(memo *loftface.MeridianMemo, trim *loftFacesTrimRecord,
+	segment, spanIndex, band int, time, lower, upper *big.Rat,
+	ref FeatureRef, span freeform.BezierSpan) (revolveLoftFacesVerticalCell, bool) {
 	cell := revolveLoftFacesVerticalCell{segment: segment, span: spanIndex,
 		band: band, source: span, ref: ref}
 	first, last := trim.maps[band], trim.maps[band+1]
-	loQ := polynomial.BernsteinRowsAt(loftface.MeridianQRows(first, last, span, lfZero(), lower), time)
-	hiQ := polynomial.BernsteinRowsAt(loftface.MeridianQRows(first, last, span, lfZero(), upper), time)
+	loQ := polynomial.BernsteinRowsAt(memo.QRows(first, last, span, lfZero(), lower), time)
+	hiQ := polynomial.BernsteinRowsAt(memo.QRows(first, last, span, lfZero(), upper), time)
 	var ok bool
 	cell.lower, ok = loftface.VerticalClassify(loQ)
 	if !ok {

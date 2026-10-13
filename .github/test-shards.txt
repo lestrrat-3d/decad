@@ -1417,3 +1417,4 @@
 10	0.00	TestTwistShellOffsetSourceFromRoundedSketch
 10	0.00	TestLoftCylinderChamferReachFanOutMatchesSerial
 8	0.00	TestCrossBoreSignTestsMatchReference
+8	0.00	TestCurvedCensusMeridianMemoMatchesDirect

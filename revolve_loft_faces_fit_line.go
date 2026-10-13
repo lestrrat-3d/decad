@@ -126,8 +126,9 @@ func certifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTri
 		return empty, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	fitQ := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], vertex.fitSpan, m, b)
-	lineQ := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], vertex.lineSpan, m, b)
+	memo := revolveLoftFacesMeridianMemoOf(ctx)
+	fitQ := memo.QRows(trim.maps[band], trim.maps[band+1], vertex.fitSpan, m, b)
+	lineQ := memo.QRows(trim.maps[band], trim.maps[band+1], vertex.lineSpan, m, b)
 	fitEndpoint, lineEndpoint := 0, 0
 	if vertex.fitAtEnd {
 		fitEndpoint = len(fitQ[0]) - 1
@@ -140,12 +141,12 @@ func certifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTri
 			return empty, false
 		}
 	}
-	roots, ok := revolveLoftFacesEndpointFiniteRoots(trim, section,
+	roots, ok := revolveLoftFacesEndpointFiniteRootsWith(memo, trim, section,
 		vertex.fitSpan, band, vertex.fitAtEnd)
 	if !ok || len(roots) == 0 {
 		return empty, false
 	}
-	lineRoots, lineOK := revolveLoftFacesEndpointFiniteRoots(trim, section,
+	lineRoots, lineOK := revolveLoftFacesEndpointFiniteRootsWith(memo, trim, section,
 		vertex.lineSpan, band, vertex.lineAtEnd)
 	if !lineOK || len(lineRoots) != len(roots) {
 		return empty, false
@@ -163,12 +164,12 @@ func certifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTri
 	fitCells := make([]revolveLoftFacesJointCell, len(roots))
 	lineCells := make([]revolveLoftFacesJointCell, len(roots))
 	for i, root := range roots {
-		fitCells[i], ok = revolveLoftFacesKnotRootCell(trim, section,
+		fitCells[i], ok = revolveLoftFacesKnotRootCellWith(memo, trim, section,
 			vertex.fitSpan, band, vertex.fitAtEnd, root)
 		if !ok {
 			return empty, false
 		}
-		lineCells[i], ok = revolveLoftFacesKnotRootCell(trim, section,
+		lineCells[i], ok = revolveLoftFacesKnotRootCellWith(memo, trim, section,
 			vertex.lineSpan, band, vertex.lineAtEnd, root)
 		if !ok {
 			return empty, false

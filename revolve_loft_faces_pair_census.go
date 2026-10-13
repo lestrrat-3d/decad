@@ -40,6 +40,7 @@ func revolveLoftFacesCensus(ctx context.Context,
 	if ctx == nil || proof == nil || proof.blank == nil || proof.tooth == nil {
 		return nil, false, nil
 	}
+	ctx = revolveLoftFacesWithMeridianMemo(ctx)
 	manifest, ok, err := revolveLoftFacesAllSideManifest(ctx, proof)
 	if err != nil || !ok {
 		return nil, false, err
@@ -213,4 +214,18 @@ func revolveLoftFacesCensus(ctx context.Context,
 		}
 	}
 	return result, len(result.pairs) == len(blankFaces)*len(trimmedFaces), nil
+}
+
+type revolveLoftFacesMeridianMemoKey struct{}
+
+func revolveLoftFacesWithMeridianMemo(ctx context.Context) context.Context {
+	return context.WithValue(ctx, revolveLoftFacesMeridianMemoKey{}, loftface.NewMeridianMemo())
+}
+
+func revolveLoftFacesMeridianMemoOf(ctx context.Context) *loftface.MeridianMemo {
+	if ctx == nil {
+		return nil
+	}
+	memo, _ := ctx.Value(revolveLoftFacesMeridianMemoKey{}).(*loftface.MeridianMemo)
+	return memo
 }

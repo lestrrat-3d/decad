@@ -25,13 +25,19 @@ type revolveLoftFacesJointCell struct {
 func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 	section revolveSectionSpan, span freeform.BezierSpan, band int,
 	atEnd bool, root loftface.EndpointRoot) (revolveLoftFacesJointCell, bool) {
+	return revolveLoftFacesKnotRootCellWith(nil, trim, section, span, band, atEnd, root)
+}
+
+func revolveLoftFacesKnotRootCellWith(memo *loftface.MeridianMemo, trim *loftFacesTrimRecord,
+	section revolveSectionSpan, span freeform.BezierSpan, band int,
+	atEnd bool, root loftface.EndpointRoot) (revolveLoftFacesJointCell, bool) {
 	var empty revolveLoftFacesJointCell
 	if trim == nil || band < 0 || band+1 >= len(trim.maps) ||
 		root.Time.Lo == nil || root.Time.Hi == nil {
 		return empty, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
+	q := memo.QRows(trim.maps[band], trim.maps[band+1], span, m, b)
 	endpoint := lfZero()
 	if atEnd {
 		endpoint = lfOne()
