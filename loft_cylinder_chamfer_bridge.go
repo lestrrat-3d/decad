@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -208,10 +209,10 @@ func loftCylinderChamferBridgeCap(ctx context.Context, fp facetedPayload,
 			sectionRing[i], sectionRing[j] = sectionRing[j], sectionRing[i]
 		}
 	}
-	if !loftCylinderChamferExactRingSimple(ctx, xverts, sectionRing) {
+	if !loftcylinder.ChamferExactRingSimple(ctx, xverts, sectionRing) {
 		return 0, fmt.Errorf("%w: source-cap section self-intersects", ErrUnsupported)
 	}
-	nested, err := loftCylinderChamferExactNested(ctx, xverts, sectionRing, inset)
+	nested, err := loftcylinder.ChamferExactNested(ctx, xverts, sectionRing, inset)
 	if err != nil {
 		return 0, err
 	}
@@ -223,7 +224,7 @@ func loftCylinderChamferBridgeCap(ctx context.Context, fp facetedPayload,
 	lateral := proofbound.ProductUpper(proofbound.RatFloatUp(new(big.Rat).Quo(
 		new(big.Rat).Sub(capLevel, level), proofarith.FloatRat(setback))), span)
 	gap := proofbound.AbsSumUpper(fp.meshBound, lateral)
-	if err := loftCylinderChamferHeldOutlineGap(ctx, mesh.verts, source.outer[1], inset, gap); err != nil {
+	if err := loftcylinder.ChamferHeldOutlineGap(ctx, mesh.verts, source.outer[1], inset, gap); err != nil {
 		return 0, err
 	}
 	reach := proofbound.AbsSumUpper(epsilon, lateral, lateral)

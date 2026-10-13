@@ -19,7 +19,7 @@ func loftCylinderCrossingBoxReference(c Connector, tLo, tHi, radius2 *big.Rat) X
 			low = mid
 			continue
 		}
-		if SourceRadiusMin2(p0, p1).Cmp(radius2) > 0 {
+		if sourceRadiusMin2(p0, p1).Cmp(radius2) > 0 {
 			high = mid
 			continue
 		}
@@ -105,7 +105,7 @@ func (c Connector) point(s, t *big.Rat) XY {
 		lo, hi = c.d, c.f
 		u.Sub(u, big.NewRat(1, 1))
 	}
-	p0 := SourceLerp(lo[0], hi[0], u)
-	p1 := SourceLerp(lo[1], hi[1], u)
-	return SourceLerp(p0, p1, t)
+	p0 := sourceLerp(lo[0], hi[0], u)
+	p1 := sourceLerp(lo[1], hi[1], u)
+	return sourceLerp(p0, p1, t)
 }

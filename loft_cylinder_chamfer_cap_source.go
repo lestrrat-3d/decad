@@ -3,20 +3,11 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
-	"github.com/lestrrat-3d/decad/internal/meshbool"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
-
-type loftCylinderChamferCapTooth struct {
-	points []loftcylinder.XY
-	poly   []meshbool.Xp2
-	bound2 *big.Rat
-}
 
 // Every true tooth cap contour outside the centered root arc is matched to a
 // retained held chord. Union copied these chords, in order, into its audited
@@ -74,91 +65,16 @@ func loftCylinderChamferExteriorLineage(fp facetedPayload,
 	return nil
 }
 
-func loftCylinderChamferCapToothOf(body *Body, capIndex int, z float64) (loftCylinderChamferCapTooth, error) {
+func loftCylinderChamferCapToothOf(body *Body, capIndex int, z float64) (loftcylinder.ChamferCapTooth, error) {
 	if body == nil {
-		return loftCylinderChamferCapTooth{}, fmt.Errorf("%w: cap lacks a source tooth", ErrUnsupported)
+		return loftcylinder.ChamferCapTooth{}, fmt.Errorf("%w: cap lacks a source tooth", ErrUnsupported)
 	}
 	lp, ok := body.payload.(loftPayload)
 	if !ok || !lp.authenticatedReconstruction || len(lp.verts)%2 != 0 ||
 		lp.proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.proof.FacetDeparture) {
-		return loftCylinderChamferCapTooth{}, fmt.Errorf("%w: cap tooth has no matched Loft contour", ErrUnsupported)
+		return loftcylinder.ChamferCapTooth{}, fmt.Errorf("%w: cap tooth has no matched Loft contour", ErrUnsupported)
 	}
-	n := len(lp.verts) / 2
-	if n < 6 || n > 4096 {
-		return loftCylinderChamferCapTooth{}, fmt.Errorf("%w: cap tooth contour exceeds its work limit", ErrUnsupported)
-	}
-	first := capIndex * n
-	result := loftCylinderChamferCapTooth{
-		points: make([]loftcylinder.XY, n), poly: make([]meshbool.Xp2, n),
-		bound2: new(big.Rat).Mul(proofarith.FloatRat(lp.proof.FacetDeparture),
-			proofarith.FloatRat(lp.proof.FacetDeparture)),
-	}
-	for i, p := range lp.verts[first : first+n] {
-		if p.Z != z {
-			return loftCylinderChamferCapTooth{}, fmt.Errorf("%w: source tooth cap leaves the blank plane", ErrUnsupported)
-		}
-		result.points[i] = loftcylinder.ExactXY(p)
-		result.poly[i] = meshbool.NewXP2(result.points[i].X, result.points[i].Y)
-	}
-	return result, nil
-}
-
-// A rational point just below the outer band circle leaves the certified
-// exterior part whole. The small overlap makes root-circle bisection error a
-// reason to refuse, rather than an uncharged gap in source coverage.
-func loftCylinderChamferExteriorPart(a, b loftcylinder.XY, outer2, overlap2 *big.Rat) (
-	loftcylinder.XY, loftcylinder.XY, bool, error) {
-	qa, qb := loftcylinder.SourceDot(a, a), loftcylinder.SourceDot(b, b)
-	if qa.Cmp(outer2) == 0 || qb.Cmp(outer2) == 0 {
-		return loftcylinder.XY{}, loftcylinder.XY{}, false,
-			fmt.Errorf("%w: cap inset touches the radial split vertex", ErrUnsupported)
-	}
-	max2 := qa
-	if qb.Cmp(max2) > 0 {
-		max2 = qb
-	}
-	if max2.Cmp(outer2) < 0 {
-		return loftcylinder.XY{}, loftcylinder.XY{}, false, nil
-	}
-	if loftcylinder.SourceRadiusMin2(a, b).Cmp(outer2) > 0 {
-		return a, b, true, nil
-	}
-	if qa.Cmp(outer2) > 0 && qb.Cmp(outer2) > 0 {
-		return loftcylinder.XY{}, loftcylinder.XY{}, false,
-			fmt.Errorf("%w: cap inset returns through its radial split", ErrUnsupported)
-	}
-	if qa.Cmp(outer2) > 0 {
-		a, b = b, a
-	}
-	if loftcylinder.SourceDot(a, a).Cmp(outer2) >= 0 ||
-		loftcylinder.SourceDot(b, b).Cmp(outer2) <= 0 {
-		return loftcylinder.XY{}, loftcylinder.XY{}, false,
-			fmt.Errorf("%w: cap inset has no exterior radial interval", ErrUnsupported)
-	}
-	d := loftcylinder.SourceSub(b, a)
-	len2 := loftcylinder.SourceDot(d, d)
-	der0 := new(big.Rat).Mul(big.NewRat(2, 1), loftcylinder.SourceDot(a, d))
-	der1 := new(big.Rat).Add(der0, new(big.Rat).Mul(big.NewRat(2, 1), len2))
-	if der0.Sign() <= 0 || der1.Sign() <= 0 {
-		return loftcylinder.XY{}, loftcylinder.XY{}, false,
-			fmt.Errorf("%w: cap exterior radial interval is not monotone", ErrUnsupported)
-	}
-	low, high := big.NewRat(0, 1), big.NewRat(1, 1)
-	for range 64 {
-		mid := new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1))
-		p := loftcylinder.SourceLerp(a, b, mid)
-		if loftcylinder.SourceDot(p, p).Cmp(outer2) < 0 {
-			low = mid
-		} else {
-			high = mid
-		}
-	}
-	p := loftcylinder.SourceLerp(a, b, low)
-	if loftcylinder.SourceDot(p, p).Cmp(overlap2) <= 0 {
-		return loftcylinder.XY{}, loftcylinder.XY{}, false,
-			fmt.Errorf("%w: cap radial split has no certified overlap", ErrUnsupported)
-	}
-	return p, b, true, nil
+	return loftcylinder.ChamferCapToothOf(lp.verts, lp.proof.FacetDeparture, capIndex, z)
 }
 
 // Each source tooth's held cap chords and exact cap curve have the same
@@ -178,7 +94,7 @@ func loftCylinderChamferExteriorRimInside(ctx context.Context, source loftCylind
 	if capIndex == 1 {
 		z = source.z1
 	}
-	teeth := make([]loftCylinderChamferCapTooth, len(source.teeth))
+	teeth := make([]loftcylinder.ChamferCapTooth, len(source.teeth))
 	for i, body := range source.teeth {
 		tooth, err := loftCylinderChamferCapToothOf(body, capIndex, z)
 		if err != nil {
@@ -186,60 +102,5 @@ func loftCylinderChamferExteriorRimInside(ctx context.Context, source loftCylind
 		}
 		teeth[i] = tooth
 	}
-	outer := proofarith.FloatRat(outerRadius)
-	outer2 := new(big.Rat).Mul(outer, outer)
-	overlap := proofarith.FloatRat(proofbound.AbsSumUpper(source.blankRadius, 0.009))
-	overlap2 := new(big.Rat).Mul(overlap, overlap)
-	if overlap.Cmp(outer) >= 0 {
-		return fmt.Errorf("%w: cap exterior has no radial overlap", ErrUnsupported)
-	}
-	pairs := 0
-	for i, index := range ring {
-		if i%32 == 0 {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-		}
-		a := loftcylinder.ExactXY(verts[index])
-		b := loftcylinder.ExactXY(verts[ring[(i+1)%len(ring)]])
-		a, b, yes, err := loftCylinderChamferExteriorPart(a, b, outer2, overlap2)
-		if err != nil {
-			return err
-		}
-		if !yes {
-			continue
-		}
-		middle := loftcylinder.SourceLerp(a, b, big.NewRat(1, 2))
-		occupied := false
-		for _, tooth := range teeth {
-			inside, on, err := meshbool.PointInPoly2(proofbound.NewWorkBudget(ctx), tooth.poly,
-				meshbool.NewXP2(middle.X, middle.Y))
-			if err != nil {
-				return err
-			}
-			if !inside || on {
-				continue
-			}
-			separated := true
-			for j, c := range tooth.points {
-				pairs++
-				if pairs > 4_194_304 {
-					return fmt.Errorf("%w: cap exterior clearance exceeds its work limit", ErrUnsupported)
-				}
-				d := tooth.points[(j+1)%len(tooth.points)]
-				if !loftCylinderChamferSegmentGapAbove(a, b, c, d, tooth.bound2) {
-					separated = false
-					break
-				}
-			}
-			if separated {
-				occupied = true
-				break
-			}
-		}
-		if !occupied {
-			return fmt.Errorf("%w: cap exterior edge %d has no certified source tooth", ErrUnsupported, i)
-		}
-	}
-	return nil
+	return loftcylinder.ChamferExteriorRimInside(ctx, teeth, verts, ring, source.blankRadius, outerRadius)
 }

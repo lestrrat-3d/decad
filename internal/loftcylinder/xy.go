@@ -123,12 +123,12 @@ func Orient(a, b, c XY) *big.Rat {
 	return new(big.Rat).Sub(new(big.Rat).Mul(abx, acy), new(big.Rat).Mul(aby, acx))
 }
 
-// EdgesMeetXP decides the same closed-segment contact as
+// edgesMeetXP decides the same closed-segment contact as
 // EdgesMeet. Strict separation of rounded float bounds implies
 // strict separation of the rational bounds. Other decisions use exact
 // rational comparisons or meshbool.Cross2xSign's certified sign filter. A
 // point without a finite float image takes the rational body.
-func EdgesMeetXP(a, b, c, d meshbool.Xp2) bool {
+func edgesMeetXP(a, b, c, d meshbool.Xp2) bool {
 	if !a.FloatFinite || !b.FloatFinite || !c.FloatFinite || !d.FloatFinite {
 		return EdgesMeet(XY{a.U, a.V}, XY{b.U, b.V},
 			XY{c.U, c.V}, XY{d.U, d.V})
@@ -234,7 +234,7 @@ func AuditCap(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int,
 			if j%256 == 0 && ctx.Err() != nil {
 				return false
 			}
-			if EdgesMeetXP(xpoints[i], xpoints[(i+1)%n], xpoints[j], xpoints[(j+1)%n]) {
+			if edgesMeetXP(xpoints[i], xpoints[(i+1)%n], xpoints[j], xpoints[(j+1)%n]) {
 				return false
 			}
 		}
@@ -331,7 +331,7 @@ func BoreRingSimple(ctx context.Context, verts []r3.Vec, ring []int) bool {
 			if j == i+1 || i == 0 && j == n-1 {
 				continue
 			}
-			if EdgesMeetXP(filtered[i], filtered[(i+1)%n],
+			if edgesMeetXP(filtered[i], filtered[(i+1)%n],
 				filtered[j], filtered[(j+1)%n]) {
 				return false
 			}

@@ -50,7 +50,7 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 		}
 		a, b := RingPoint(edge[0]), RingPoint(edge[1])
 		amin, bmin := ringXY(a), ringXY(b)
-		min2 := SourceRadiusMin2(amin, bmin)
+		min2 := sourceRadiusMin2(amin, bmin)
 		if min2.Cmp(bore2) <= 0 {
 			return refuse("ring may reach the centered bore")
 		}
@@ -94,9 +94,9 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 			for _, connector := range tooth.Circle.Connector {
 				t := new(big.Rat).Quo(new(big.Rat).Sub(tooth.Level, tooth.Circle.Z0),
 					new(big.Rat).Sub(tooth.Circle.Z1, tooth.Circle.Z0))
-				inner := SourceLerp(connector.a[0], connector.a[1], t)
-				middle := SourceLerp(connector.d[0], connector.d[1], t)
-				outer := SourceLerp(connector.f[0], connector.f[1], t)
+				inner := sourceLerp(connector.a[0], connector.a[1], t)
+				middle := sourceLerp(connector.d[0], connector.d[1], t)
+				outer := sourceLerp(connector.f[0], connector.f[1], t)
 				if EdgesMeet(amin, bmin, inner, middle) ||
 					EdgesMeet(amin, bmin, middle, outer) {
 					return refuse("ring may touch a true connector wall")

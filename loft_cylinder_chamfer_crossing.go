@@ -34,7 +34,7 @@ func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *joinedMesh,
 			if !loftcylinder.BoreRingSimple(ctx, mesh.verts, source.inner[cap]) {
 				return fmt.Errorf("%w: cap %d has no simple bore loop", ErrUnsupported, cap)
 			}
-			nested, err := loftCylinderChamferRingNested(ctx, mesh.verts, outer[cap], source.inner[cap])
+			nested, err := loftcylinder.ChamferRingNested(ctx, mesh.verts, outer[cap], source.inner[cap])
 			if err != nil {
 				return err
 			}
@@ -51,7 +51,7 @@ func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *joinedMesh,
 			for i, a := range ring {
 				b := ring[(i+1)%len(ring)]
 				vertices[cap][a] = struct{}{}
-				edges[cap][loftCylinderChamferEdge(a, b)] = struct{}{}
+				edges[cap][loftcylinder.ChamferEdge(a, b)] = struct{}{}
 			}
 		}
 	}
@@ -86,7 +86,7 @@ func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *joinedMesh,
 				return fmt.Errorf("%w: cap chamfer wall lies in a cap plane", ErrUnsupported)
 			}
 			if len(on) == 2 {
-				if _, ok := edges[cap][loftCylinderChamferEdge(on[0], on[1])]; !ok {
+				if _, ok := edges[cap][loftcylinder.ChamferEdge(on[0], on[1])]; !ok {
 					return fmt.Errorf("%w: cap chamfer wall has no shared cap edge", ErrUnsupported)
 				}
 			}

@@ -48,10 +48,10 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_chamfer.go` | Admits both outer cap loops and samples their held-polygon insets. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_bridge.go` | Checks paired original and axial proof teeth for cap Chamfer. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_mesh.go` | Builds and audits the rational outer-cap cutter and rounded mesh. See loft-cylinder-boolean design. |
-| `loft_cylinder_chamfer_proof.go` | Checks cutter containment, source contacts and volume witnesses. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer_proof.go` | Builds ideal side vertices, the blank solid witness and the tooth face map. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_near.go` | Bounds band points through a source-occupied split ring. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_crossing.go` | Checks cap tiling and localized non-cap crossings for one-cap Chamfer. See loft-cylinder-boolean design. |
-| `loft_cylinder_chamfer_cap.go` | Bounds cap root slits and the retained inset region. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer_cap.go` | Checks that cap root slits reach the source root arcs. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_cap_source.go` | Matches inset cap edges to the original tooth contours. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_bore.go` | Preserves the centered bore wall and inner loops. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_side.go` | Certifies retained middle-side reach into the source union. See loft-cylinder-boolean design. |
