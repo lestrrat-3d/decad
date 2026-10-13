@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/r3"
 )
 
 // PrismLoop is one recorded boundary loop's already chorded samples and
@@ -108,4 +109,41 @@ func PrismCaps[F comparable](ctx context.Context, t *PrismTopology[F], sheet boo
 		t.Sources = append(t.Sources, capEnd, capStart)
 	}
 	return nil
+}
+
+// PrismPatternMeshRoot returns the first section index of the root wall's
+// trailing run in a copied prism's paired axial section mesh. The mesh holds
+// n bottom/top vertex pairs (verts[2j] at z0, verts[2j+1] at z1), its facets
+// number ntri, and source names each facet's wall. roots lists the wall once
+// per origin carrying the root role, so a repeated entry is a duplicate root.
+// Every refusal is an ErrUnsupported.
+func PrismPatternMeshRoot[F comparable](verts []r3.Vec, ntri int, source []F, roots []F, z0, z1 float64) (int, error) {
+	if len(verts)%2 != 0 || len(verts) < 8 || ntri < len(verts) || len(source) != ntri {
+		return 0, fmt.Errorf("%w: copied prism has no paired axial section mesh", decaderr.ErrUnsupported)
+	}
+	n := len(verts) / 2
+	if len(roots) > 1 {
+		return 0, fmt.Errorf("%w: copied prism has duplicate root wall", decaderr.ErrUnsupported)
+	}
+	if len(roots) == 0 {
+		return 0, fmt.Errorf("%w: copied prism lost its root wall", decaderr.ErrUnsupported)
+	}
+	root := roots[0]
+	rootStart := -1
+	for j := range n {
+		if verts[2*j].Z != z0 || verts[2*j+1].Z != z1 || source[2*j] != source[2*j+1] {
+			return 0, fmt.Errorf("%w: copied prism lost its shared axial stations", decaderr.ErrUnsupported)
+		}
+		if source[2*j] == root {
+			if rootStart < 0 {
+				rootStart = j
+			}
+		} else if rootStart >= 0 {
+			return 0, fmt.Errorf("%w: copied prism root wall is not one trailing run", decaderr.ErrUnsupported)
+		}
+	}
+	if rootStart < 2 || rootStart >= n-1 {
+		return 0, fmt.Errorf("%w: copied prism has no exterior path beside its root wall", decaderr.ErrUnsupported)
+	}
+	return rootStart, nil
 }

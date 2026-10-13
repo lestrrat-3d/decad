@@ -185,7 +185,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 			proofbound.ProductUpper(proofbound.AbsSumUpper(capSag, source.coordBound,
 				prism.axialDelta()), lengthScale), placementRound, face.axialDelta))
 	}
-	if err := requireCapBlendFacetAreas(mesh, "Body.Patch circular sheet"); err != nil {
+	if err := tessellation.RequireCapBlendFacetAreas(mesh.vertices, mesh.triangles, "Body.Patch circular sheet"); err != nil {
 		return nil, err
 	}
 	if err := requireMeshAudit(ctx, true, b, mesh); err != nil {

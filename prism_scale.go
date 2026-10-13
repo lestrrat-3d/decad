@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -61,7 +62,7 @@ func prismScaleSource(ctx context.Context, b *Body, prism prismPayload, factor f
 		}
 		faceID[face] = i
 	}
-	source, err := sourceIDs(ctx, mesh, faceID)
+	source, err := meshbool.SourceIDs(ctx, mesh.source, faceID)
 	if err != nil {
 		return facetedPayload{}, err
 	}

@@ -253,15 +253,19 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
 		return nil, err
 	}
-	if err := requireCapBlendFacetAreas(&mesh, cbp.noun()); err != nil {
+	if err := tessellation.RequireCapBlendFacetAreas(mesh.vertices, mesh.triangles, cbp.noun()); err != nil {
 		return nil, err
 	}
 	if tessellation.OrientationSign(mesh.vertices, mesh.triangles, pl.point(0, 0, cbp.z0)) <= 0 {
 		return nil, fmt.Errorf(`%w: this %s's assembled cells do not enclose a positive volume`, ErrUnsupported, cbp.noun())
 	}
 
-	if err := composeCapBlendBounds(&mesh, faceExtra, store, cbp.noun()); err != nil {
+	faceBounds, err := tessellation.ComposeCapBlendBounds(mesh.source, mesh.triangles, faceExtra, store, cbp.noun())
+	if err != nil {
 		return nil, err
+	}
+	for f, bound := range faceBounds {
+		mesh.setFaceBound(f, bound)
 	}
 	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
 		tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, store))
@@ -735,41 +739,4 @@ func capBlendRingSagitta(lm *capBlendLoopMesh, contour bool) float64 {
 // capBlendRingSegmentArea reads the matching circular-segment area proof.
 func capBlendRingSegmentArea(lm *capBlendLoopMesh, contour bool, d float64) float64 {
 	return tessellation.CapBlendRingSegmentArea(lm.proof(), contour, d)
-}
-
-// composeCapBlendBounds publishes docs/tessellation-design.md §2's sourceBound
-// for every face the mesh names: the face's own accumulated trim, band and axial
-// terms plus the largest store displacement its own vertices carry. Every source
-// face is present by construction — the walk is over mesh.source itself — and a
-// face whose composed displacement is not finite refuses rather than publishing
-// an infinite bound.
-func composeCapBlendBounds(m *Mesh, extra map[*Face]float64, store []float64, noun string) error {
-	faceStore := map[*Face]float64{}
-	for i, f := range m.source {
-		for _, v := range m.triangles[i] {
-			faceStore[f] = math.Max(faceStore[f], store[v])
-		}
-	}
-	for f, s := range faceStore {
-		bound := proofbound.UpRound(extra[f] + s)
-		if proofbound.IsNonFinite(bound) {
-			return fmt.Errorf(`%w: a %s face's composed displacement is not finite, so this mesh can state no bound for it`, ErrUnsupported, noun)
-		}
-		m.setFaceBound(f, bound)
-	}
-	return nil
-}
-
-// requireCapBlendFacetAreas refuses a mesh carrying a zero-area triangle
-// (docs/tessellation-design.md §12). The test is the exact rational squared
-// cross product, so a sliver is judged by what its own coordinates say rather
-// than by a tolerance.
-func requireCapBlendFacetAreas(m *Mesh, noun string) error {
-	for i, tri := range m.triangles {
-		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
-		if tessellation.CapBlendTwiceAreaSq(a, b, c).Sign() <= 0 {
-			return fmt.Errorf(`%w: facet %d of this %s mesh has zero area`, ErrUnsupported, i, noun)
-		}
-	}
-	return nil
 }
