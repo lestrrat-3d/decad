@@ -113,21 +113,21 @@ func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
 		if cell.segment < 0 || cell.segment >= len(outer) {
 			return nil, false, nil
 		}
-		if cell.upper.root.lo == nil {
+		if cell.upper.root.Lo == nil {
 			if cell.upper.side != -1 && cell.upper.side != 1 {
 				return nil, false, nil
 			}
 			continue
 		}
 		root := cell.upper.root
-		if root.hi == nil || root.lo.Sign() <= 0 || root.lo.Cmp(root.hi) >= 0 ||
-			root.hi.Cmp(lfOne()) >= 0 || cell.face == nil ||
+		if root.Hi == nil || root.Lo.Sign() <= 0 || root.Lo.Cmp(root.Hi) >= 0 ||
+			root.Hi.Cmp(lfOne()) >= 0 || cell.face == nil ||
 			cell.upper.before*cell.upper.after != -1 ||
-			cell.upper.box[0].lo == nil || cell.upper.box[0].hi == nil ||
-			cell.upper.box[0].lo.Cmp(circle.x) != 0 ||
-			cell.upper.box[0].hi.Cmp(circle.x) != 0 ||
-			cell.upper.box[1].lo == nil || cell.upper.box[1].lo.Sign() <= 0 ||
-			cell.upper.box[2].lo == nil || cell.upper.box[2].hi == nil {
+			cell.upper.box[0].Lo == nil || cell.upper.box[0].Hi == nil ||
+			cell.upper.box[0].Lo.Cmp(circle.x) != 0 ||
+			cell.upper.box[0].Hi.Cmp(circle.x) != 0 ||
+			cell.upper.box[1].Lo == nil || cell.upper.box[1].Lo.Sign() <= 0 ||
+			cell.upper.box[2].Lo == nil || cell.upper.box[2].Hi == nil {
 			return nil, false, nil
 		}
 		edge := outer[cell.segment]
@@ -143,9 +143,9 @@ func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
 			face: cell.face, parameter: root, box: cell.upper.box,
 			outward: outward}
 		switch {
-		case boundary.box[2].hi.Sign() < 0 && negative == nil:
+		case boundary.box[2].Hi.Sign() < 0 && negative == nil:
 			negative = boundary
-		case boundary.box[2].lo.Sign() > 0 && positive == nil:
+		case boundary.box[2].Lo.Sign() > 0 && positive == nil:
 			positive = boundary
 		default:
 			return nil, false, nil

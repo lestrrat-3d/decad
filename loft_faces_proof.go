@@ -16,18 +16,18 @@ type loftFaceRatVec [3]*big.Rat
 type loftFaceRatMat [3][3]*big.Rat
 
 type loftFaceAffine struct {
-	a loftFaceRatMat
-	b loftFaceRatVec
+	A loftFaceRatMat
+	B loftFaceRatVec
 }
 
 type loftFaceMap struct {
-	constant   loftFaceRatVec
-	q0, qu, qv loftFaceRatVec
-	g0, gu, gv *big.Rat
-	stretch    float64
+	Constant   loftFaceRatVec
+	Q0, QU, QV loftFaceRatVec
+	G0, GU, GV *big.Rat
+	Stretch    float64
 }
 
-type loftFaceInterval struct{ lo, hi *big.Rat }
+type loftFaceInterval struct{ Lo, Hi *big.Rat }
 
 func lfZero() *big.Rat             { return new(big.Rat) }
 func lfOne() *big.Rat              { return big.NewRat(1, 1) }
@@ -90,12 +90,12 @@ func lfMatMul(a, b loftFaceRatMat) loftFaceRatMat {
 
 func lfIdentity() loftFaceAffine {
 	var out loftFaceAffine
-	for i := range out.a {
-		out.b[i] = lfZero()
-		for j := range out.a[i] {
-			out.a[i][j] = lfZero()
+	for i := range out.A {
+		out.B[i] = lfZero()
+		for j := range out.A[i] {
+			out.A[i][j] = lfZero()
 		}
-		out.a[i][i] = lfOne()
+		out.A[i][i] = lfOne()
 	}
 	return out
 }
@@ -103,11 +103,11 @@ func lfIdentity() loftFaceAffine {
 func lfMotion(t r3.Transform) loftFaceAffine {
 	basis := t.Basis()
 	cols := [3]r3.Vec{basis.EX, basis.EY, basis.EZ}
-	out := loftFaceAffine{b: lfVec(t.Translation())}
+	out := loftFaceAffine{B: lfVec(t.Translation())}
 	for j, col := range cols {
 		v := lfVec(col)
 		for i := range v {
-			out.a[i][j] = v[i]
+			out.A[i][j] = v[i]
 		}
 	}
 	return out
@@ -116,15 +116,15 @@ func lfMotion(t r3.Transform) loftFaceAffine {
 func lfScale(anchor r3.Vec, factor float64) loftFaceAffine {
 	out := lfIdentity()
 	for i, v := range lfVec(anchor) {
-		out.a[i][i] = lfF(factor)
-		out.b[i] = lfMul(lfSub(lfOne(), lfF(factor)), v)
+		out.A[i][i] = lfF(factor)
+		out.B[i] = lfMul(lfSub(lfOne(), lfF(factor)), v)
 	}
 	return out
 }
 
 func lfCompose(prior, next loftFaceAffine) loftFaceAffine {
-	return loftFaceAffine{a: lfMatMul(next.a, prior.a),
-		b: lfVAdd(lfMatVec(next.a, prior.b), next.b)}
+	return loftFaceAffine{A: lfMatMul(next.A, prior.A),
+		B: lfVAdd(lfMatVec(next.A, prior.B), next.B)}
 }
 
 func lfSimilarity(section loftFaceSection) (loftFaceAffine, error) {
@@ -186,39 +186,39 @@ func lfCapMap(section loftFaceSection, source *pointSectionRecord) (loftFaceMap,
 	if section.limit == nil {
 		g0 = lfOne()
 	}
-	q0 := lfVScale(lfMatVec(affine.a, lfVSub(origin, apex)), d)
-	qu := lfVScale(lfMatVec(affine.a, uAxis), d)
-	qv := lfVScale(lfMatVec(affine.a, vAxis), d)
-	stretch := lfAffineStretch(affine.a)
+	q0 := lfVScale(lfMatVec(affine.A, lfVSub(origin, apex)), d)
+	qu := lfVScale(lfMatVec(affine.A, uAxis), d)
+	qv := lfVScale(lfMatVec(affine.A, vAxis), d)
+	stretch := lfAffineStretch(affine.A)
 	if section.limit != nil {
 		stretch = proofbound.ProductUpper(stretch, section.limit.mapStretch)
 	}
 	if proofbound.IsNonFinite(stretch) {
 		return loftFaceMap{}, fmt.Errorf("%w: loft cap source stretch is not finite", ErrUnsupported)
 	}
-	return loftFaceMap{constant: lfVAdd(lfMatVec(affine.a, apex), affine.b),
-		q0: q0, qu: qu, qv: qv, g0: g0, gu: gu, gv: gv, stretch: stretch}, nil
+	return loftFaceMap{Constant: lfVAdd(lfMatVec(affine.A, apex), affine.B),
+		Q0: q0, QU: qu, QV: qv, G0: g0, GU: gu, GV: gv, Stretch: stretch}, nil
 }
 
-func (m loftFaceMap) denominator(u, v *big.Rat) *big.Rat {
-	return lfAdd(lfAdd(m.g0, lfMul(m.gu, u)), lfMul(m.gv, v))
+func (m loftFaceMap) Denominator(u, v *big.Rat) *big.Rat {
+	return lfAdd(lfAdd(m.G0, lfMul(m.GU, u)), lfMul(m.GV, v))
 }
 
-func (m loftFaceMap) numerator(u, v *big.Rat) loftFaceRatVec {
-	return lfVAdd(lfVAdd(m.q0, lfVScale(m.qu, u)), lfVScale(m.qv, v))
+func (m loftFaceMap) Numerator(u, v *big.Rat) loftFaceRatVec {
+	return lfVAdd(lfVAdd(m.Q0, lfVScale(m.QU, u)), lfVScale(m.QV, v))
 }
 
-func (m loftFaceMap) at(u, v *big.Rat) loftFaceRatVec {
-	g := m.denominator(u, v)
-	return lfVAdd(m.constant, lfVScale(m.numerator(u, v), lfDiv(lfOne(), g)))
+func (m loftFaceMap) At(u, v *big.Rat) loftFaceRatVec {
+	g := m.Denominator(u, v)
+	return lfVAdd(m.Constant, lfVScale(m.Numerator(u, v), lfDiv(lfOne(), g)))
 }
 
-func (m loftFaceMap) deriv(u, v *big.Rat, axis int) loftFaceRatVec {
-	g := m.denominator(u, v)
-	q := m.numerator(u, v)
-	qAxis, gAxis := m.qu, m.gu
+func (m loftFaceMap) Deriv(u, v *big.Rat, axis int) loftFaceRatVec {
+	g := m.Denominator(u, v)
+	q := m.Numerator(u, v)
+	qAxis, gAxis := m.QU, m.GU
 	if axis == 1 {
-		qAxis, gAxis = m.qv, m.gv
+		qAxis, gAxis = m.QV, m.GV
 	}
 	return lfVScale(lfVSub(lfVScale(qAxis, g), lfVScale(q, gAxis)),
 		lfDiv(lfOne(), lfMul(g, g)))
@@ -234,21 +234,21 @@ func lfRatUp(q *big.Rat) float64 {
 
 func lfIntervalHull(a, b loftFaceInterval) loftFaceInterval {
 	out := a
-	if b.lo.Cmp(out.lo) < 0 {
-		out.lo = b.lo
+	if b.Lo.Cmp(out.Lo) < 0 {
+		out.Lo = b.Lo
 	}
-	if b.hi.Cmp(out.hi) > 0 {
-		out.hi = b.hi
+	if b.Hi.Cmp(out.Hi) > 0 {
+		out.Hi = b.Hi
 	}
 	return out
 }
 
 func lfIntervalSub(a, b loftFaceInterval) loftFaceInterval {
-	return loftFaceInterval{lfSub(a.lo, b.hi), lfSub(a.hi, b.lo)}
+	return loftFaceInterval{lfSub(a.Lo, b.Hi), lfSub(a.Hi, b.Lo)}
 }
 
 func lfIntervalAbs(a loftFaceInterval, center *big.Rat) *big.Rat {
-	lo, hi := lfAbs(lfSub(a.lo, center)), lfAbs(lfSub(a.hi, center))
+	lo, hi := lfAbs(lfSub(a.Lo, center)), lfAbs(lfSub(a.Hi, center))
 	if lo.Cmp(hi) > 0 {
 		return lo
 	}
@@ -262,16 +262,16 @@ func lfTileCorners(u0, u1, v0, v1 *big.Rat) [4][2]*big.Rat {
 func lfScalarRange(m loftFaceMap, row loftFaceRatVec, corners [4][2]*big.Rat) loftFaceInterval {
 	var out loftFaceInterval
 	for i, corner := range corners {
-		value := lfVDot(row, m.at(corner[0], corner[1]))
+		value := lfVDot(row, m.At(corner[0], corner[1]))
 		if i == 0 {
 			out = loftFaceInterval{value, value}
 			continue
 		}
-		if value.Cmp(out.lo) < 0 {
-			out.lo = value
+		if value.Cmp(out.Lo) < 0 {
+			out.Lo = value
 		}
-		if value.Cmp(out.hi) > 0 {
-			out.hi = value
+		if value.Cmp(out.Hi) > 0 {
+			out.Hi = value
 		}
 	}
 	return out
@@ -281,14 +281,14 @@ func lfDerivRange(m loftFaceMap, row loftFaceRatVec, axis int,
 	corners [4][2]*big.Rat) (loftFaceInterval, error) {
 	var num, den loftFaceInterval
 	for i, corner := range corners {
-		g := m.denominator(corner[0], corner[1])
+		g := m.Denominator(corner[0], corner[1])
 		if g.Sign() <= 0 {
 			return loftFaceInterval{}, fmt.Errorf("%w: loft cap ray denominator is not positive", ErrUnsupported)
 		}
-		q := m.numerator(corner[0], corner[1])
-		qAxis, gAxis := m.qu, m.gu
+		q := m.Numerator(corner[0], corner[1])
+		qAxis, gAxis := m.QU, m.GU
 		if axis == 1 {
-			qAxis, gAxis = m.qv, m.gv
+			qAxis, gAxis = m.QV, m.GV
 		}
 		n := lfVDot(row, lfVSub(lfVScale(qAxis, g), lfVScale(q, gAxis)))
 		if i == 0 {
@@ -296,29 +296,29 @@ func lfDerivRange(m loftFaceMap, row loftFaceRatVec, axis int,
 			den = loftFaceInterval{g, g}
 			continue
 		}
-		if n.Cmp(num.lo) < 0 {
-			num.lo = n
+		if n.Cmp(num.Lo) < 0 {
+			num.Lo = n
 		}
-		if n.Cmp(num.hi) > 0 {
-			num.hi = n
+		if n.Cmp(num.Hi) > 0 {
+			num.Hi = n
 		}
-		if g.Cmp(den.lo) < 0 {
-			den.lo = g
+		if g.Cmp(den.Lo) < 0 {
+			den.Lo = g
 		}
-		if g.Cmp(den.hi) > 0 {
-			den.hi = g
+		if g.Cmp(den.Hi) > 0 {
+			den.Hi = g
 		}
 	}
-	lo2, hi2 := lfMul(den.lo, den.lo), lfMul(den.hi, den.hi)
-	values := [4]*big.Rat{lfDiv(num.lo, lo2), lfDiv(num.lo, hi2),
-		lfDiv(num.hi, lo2), lfDiv(num.hi, hi2)}
+	lo2, hi2 := lfMul(den.Lo, den.Lo), lfMul(den.Hi, den.Hi)
+	values := [4]*big.Rat{lfDiv(num.Lo, lo2), lfDiv(num.Lo, hi2),
+		lfDiv(num.Hi, lo2), lfDiv(num.Hi, hi2)}
 	out := loftFaceInterval{values[0], values[0]}
 	for _, v := range values[1:] {
-		if v.Cmp(out.lo) < 0 {
-			out.lo = v
+		if v.Cmp(out.Lo) < 0 {
+			out.Lo = v
 		}
-		if v.Cmp(out.hi) > 0 {
-			out.hi = v
+		if v.Cmp(out.Hi) > 0 {
+			out.Hi = v
 		}
 	}
 	return out, nil
@@ -358,7 +358,7 @@ func lfBoxCorners(box [4]*big.Rat) [4][2]*big.Rat {
 
 func lfPositiveDenominator(m loftFaceMap, box [4]*big.Rat) error {
 	for _, corner := range lfBoxCorners(box) {
-		if m.denominator(corner[0], corner[1]).Sign() <= 0 {
+		if m.Denominator(corner[0], corner[1]).Sign() <= 0 {
 			return fmt.Errorf("%w: loft cap ray denominator crosses its source region", ErrUnsupported)
 		}
 	}
@@ -378,9 +378,9 @@ func boolInt(ok bool) int {
 func lfPlaneOrder(maps []loftFaceMap, box [4]*big.Rat) error {
 	corners := lfBoxCorners(box)
 	for middle := 1; middle+1 < len(maps); middle++ {
-		p0 := maps[middle].at(corners[0][0], corners[0][1])
-		p1 := maps[middle].at(corners[2][0], corners[2][1])
-		p2 := maps[middle].at(corners[1][0], corners[1][1])
+		p0 := maps[middle].At(corners[0][0], corners[0][1])
+		p1 := maps[middle].At(corners[2][0], corners[2][1])
+		p2 := maps[middle].At(corners[1][0], corners[1][1])
 		normal := lfVCross(lfVSub(p1, p0), lfVSub(p2, p0))
 		if normal[0].Sign() == 0 && normal[1].Sign() == 0 && normal[2].Sign() == 0 {
 			return fmt.Errorf("%w: loft cap %d has no exact supporting plane", ErrUnsupported, middle)
@@ -391,7 +391,7 @@ func lfPlaneOrder(maps []loftFaceMap, box [4]*big.Rat) error {
 				continue
 			}
 			for _, corner := range corners {
-				sign := lfVDot(normal, lfVSub(capMap.at(corner[0], corner[1]), p0)).Sign()
+				sign := lfVDot(normal, lfVSub(capMap.At(corner[0], corner[1]), p0)).Sign()
 				if sign == 0 {
 					return fmt.Errorf("%w: loft cap %d meets section %d", ErrUnsupported, middle, section)
 				}
@@ -448,12 +448,12 @@ func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSectio
 			}
 		}
 		u, v := lfStationUV(station)
-		den[j] = capMap.denominator(u, v)
+		den[j] = capMap.Denominator(u, v)
 		if den[j].Sign() <= 0 {
 			return out,
 				fmt.Errorf("%w: loft station ray denominator is not positive", ErrUnsupported)
 		}
-		exact[j] = capMap.at(u, v)
+		exact[j] = capMap.At(u, v)
 		held := [3]float64{section.ring[j].X, section.ring[j].Y, section.ring[j].Z}
 		perCoord := 0.0
 		for axis := range held {
@@ -474,9 +474,9 @@ func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSectio
 		speed := lfDiv(lfMul(maxDen, lengthL1), minDen)
 		out.projectiveDeparture[j] = lfRatUp(shift)
 		out.polygonSpeed[j] = lfRatUp(speed)
-		out.sourceSpeed[j] = proofbound.ProductUpper(source.sourceArcUpper[j], capMap.stretch)
+		out.sourceSpeed[j] = proofbound.ProductUpper(source.sourceArcUpper[j], capMap.Stretch)
 		out.sourceDeparture[j] = proofbound.ProductUpper(
-			max(source.sourceMatched[j], section.slice.base.meshBound), capMap.stretch)
+			max(source.sourceMatched[j], section.slice.base.meshBound), capMap.Stretch)
 		if proofbound.IsNonFinite(out.projectiveDeparture[j]) ||
 			proofbound.IsNonFinite(out.polygonSpeed[j]) ||
 			proofbound.IsNonFinite(out.sourceSpeed[j]) ||
@@ -561,7 +561,7 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 	baseArea = proofbound.AbsSumUpper(baseArea, base.areaSlack)
 	endCapArea := 0.0
 	for _, i := range []int{0, len(sections) - 1} {
-		stretch2 := proofbound.ProductUpper(embedding.maps[i].stretch, embedding.maps[i].stretch)
+		stretch2 := proofbound.ProductUpper(embedding.maps[i].Stretch, embedding.maps[i].Stretch)
 		endCapArea = proofbound.AbsSumUpper(endCapArea, proofbound.ProductUpper(baseArea, stretch2))
 	}
 	heldArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, 0)

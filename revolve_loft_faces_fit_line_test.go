@@ -18,8 +18,8 @@ func TestFiniteRevolveFitLineJointKeepsBothLiveSourceSides(t *testing.T) {
 	require.True(t, ok)
 	require.False(t, other.lineAtEnd)
 	band := 3
-	first := trim.maps[band].at(vertex.coordinate[0], vertex.coordinate[1])
-	last := trim.maps[band+1].at(vertex.coordinate[0], vertex.coordinate[1])
+	first := trim.maps[band].At(vertex.coordinate[0], vertex.coordinate[1])
+	last := trim.maps[band+1].At(vertex.coordinate[0], vertex.coordinate[1])
 	x0, _ := first[0].Float64()
 	x1, _ := last[0].Float64()
 	y0, _ := first[1].Float64()

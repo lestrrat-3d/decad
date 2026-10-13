@@ -45,14 +45,14 @@ func spiralShortCapEndpointX(first, second loftFaceMap, span freeform.BezierSpan
 		return loftFaceInterval{}, false
 	}
 	root := spiralIsolateRootN(curve, 64)
-	x0 := first.at(point.U, point.V)[0]
-	x1 := second.at(point.U, point.V)[0]
+	x0 := first.At(point.U, point.V)[0]
+	x1 := second.At(point.U, point.V)[0]
 	if x0.Cmp(x1) >= 0 {
 		return loftFaceInterval{}, false
 	}
 	return loftFaceInterval{
-		lo: lfAdd(lfMul(lfSub(lfOne(), root.lo), x0), lfMul(root.lo, x1)),
-		hi: lfAdd(lfMul(lfSub(lfOne(), root.hi), x0), lfMul(root.hi, x1)),
+		Lo: lfAdd(lfMul(lfSub(lfOne(), root.lo), x0), lfMul(root.lo, x1)),
+		Hi: lfAdd(lfMul(lfSub(lfOne(), root.hi), x0), lfMul(root.hi, x1)),
 	}, true
 }
 
@@ -75,10 +75,10 @@ func spiralShortCapTBracket(q [3][]*big.Rat) (loftFaceInterval, bool) {
 		case positive:
 			hi = mid
 		default:
-			return loftFaceInterval{lo: lo, hi: hi}, true
+			return loftFaceInterval{Lo: lo, Hi: hi}, true
 		}
 	}
-	return loftFaceInterval{lo: lo, hi: hi}, true
+	return loftFaceInterval{Lo: lo, Hi: hi}, true
 }
 
 // A projective cap map restricted to one line has coordinate extrema at
@@ -87,38 +87,38 @@ func spiralShortCapTBracket(q [3][]*big.Rat) (loftFaceInterval, bool) {
 func spiralShortLineBox(first, second loftFaceMap, span freeform.BezierSpan,
 	t loftFaceInterval) ([3]loftFaceInterval, bool) {
 	var box [3]loftFaceInterval
-	if len(span) != 2 || t.lo == nil || t.hi == nil ||
-		t.lo.Sign() < 0 || t.lo.Cmp(t.hi) > 0 || t.hi.Cmp(lfOne()) > 0 {
+	if len(span) != 2 || t.Lo == nil || t.Hi == nil ||
+		t.Lo.Sign() < 0 || t.Lo.Cmp(t.Hi) > 0 || t.Hi.Cmp(lfOne()) > 0 {
 		return box, false
 	}
 	var caps [2][3]loftFaceInterval
 	for index, mapped := range [...]loftFaceMap{first, second} {
 		for _, source := range span {
-			if mapped.denominator(source.U, source.V).Sign() <= 0 {
+			if mapped.Denominator(source.U, source.V).Sign() <= 0 {
 				return box, false
 			}
-			point := mapped.at(source.U, source.V)
+			point := mapped.At(source.U, source.V)
 			for axis, value := range point {
 				interval := &caps[index][axis]
-				if interval.lo == nil || value.Cmp(interval.lo) < 0 {
-					interval.lo = value
+				if interval.Lo == nil || value.Cmp(interval.Lo) < 0 {
+					interval.Lo = value
 				}
-				if interval.hi == nil || value.Cmp(interval.hi) > 0 {
-					interval.hi = value
+				if interval.Hi == nil || value.Cmp(interval.Hi) > 0 {
+					interval.Hi = value
 				}
 			}
 		}
 	}
 	for axis := range box {
-		for _, time := range []*big.Rat{t.lo, t.hi} {
-			for _, a := range []*big.Rat{caps[0][axis].lo, caps[0][axis].hi} {
-				for _, z := range []*big.Rat{caps[1][axis].lo, caps[1][axis].hi} {
+		for _, time := range []*big.Rat{t.Lo, t.Hi} {
+			for _, a := range []*big.Rat{caps[0][axis].Lo, caps[0][axis].Hi} {
+				for _, z := range []*big.Rat{caps[1][axis].Lo, caps[1][axis].Hi} {
 					value := lfAdd(lfMul(lfSub(lfOne(), time), a), lfMul(time, z))
-					if box[axis].lo == nil || value.Cmp(box[axis].lo) < 0 {
-						box[axis].lo = value
+					if box[axis].Lo == nil || value.Cmp(box[axis].Lo) < 0 {
+						box[axis].Lo = value
 					}
-					if box[axis].hi == nil || value.Cmp(box[axis].hi) > 0 {
-						box[axis].hi = value
+					if box[axis].Hi == nil || value.Cmp(box[axis].Hi) > 0 {
+						box[axis].Hi = value
 					}
 				}
 			}
@@ -157,16 +157,16 @@ func spiralShortCubicBox(ctx context.Context, first, second loftFaceMap,
 		if !ok {
 			return result, false, nil
 		}
-		box, ok := spiralJunctionBox(first, second, span, left, right, t.lo, t.hi)
+		box, ok := spiralJunctionBox(first, second, span, left, right, t.Lo, t.Hi)
 		if !ok {
 			return result, false, nil
 		}
 		for axis := range result {
-			if result[axis].lo == nil || box[axis].lo.Cmp(result[axis].lo) < 0 {
-				result[axis].lo = box[axis].lo
+			if result[axis].Lo == nil || box[axis].Lo.Cmp(result[axis].Lo) < 0 {
+				result[axis].Lo = box[axis].Lo
 			}
-			if result[axis].hi == nil || box[axis].hi.Cmp(result[axis].hi) > 0 {
-				result[axis].hi = box[axis].hi
+			if result[axis].Hi == nil || box[axis].Hi.Cmp(result[axis].Hi) > 0 {
+				result[axis].Hi = box[axis].Hi
 			}
 		}
 	}
@@ -205,15 +205,15 @@ func spiralShortCapXRange(first, second loftFaceMap, span freeform.BezierSpan,
 	if spiralCapXDecreases(first, span) && spiralCapXDecreases(second, span) {
 		var out loftFaceInterval
 		for i, point := range [...]freeform.RatPoint{span[0], span[len(span)-1]} {
-			x0 := first.at(point.U, point.V)[0]
-			x1 := second.at(point.U, point.V)[0]
+			x0 := first.At(point.U, point.V)[0]
+			x1 := second.At(point.U, point.V)[0]
 			xLo := lfAdd(lfMul(lfSub(lfOne(), tLo), x0), lfMul(tLo, x1))
 			for _, x := range []*big.Rat{xLo, x1} {
-				if i == 0 && out.lo == nil || x.Cmp(out.lo) < 0 {
-					out.lo = x
+				if i == 0 && out.Lo == nil || x.Cmp(out.Lo) < 0 {
+					out.Lo = x
 				}
-				if i == 0 && out.hi == nil || x.Cmp(out.hi) > 0 {
-					out.hi = x
+				if i == 0 && out.Hi == nil || x.Cmp(out.Hi) > 0 {
+					out.Hi = x
 				}
 			}
 		}
@@ -230,11 +230,11 @@ func spiralShortCapXRange(first, second loftFaceMap, span freeform.BezierSpan,
 				return loftFaceInterval{}, false
 			}
 			x := lfDiv(h[0][i], g[i])
-			if i == 0 || x.Cmp(out.lo) < 0 {
-				out.lo = x
+			if i == 0 || x.Cmp(out.Lo) < 0 {
+				out.Lo = x
 			}
-			if i == 0 || x.Cmp(out.hi) > 0 {
-				out.hi = x
+			if i == 0 || x.Cmp(out.Hi) > 0 {
+				out.Hi = x
 			}
 		}
 		return out, true
@@ -247,14 +247,14 @@ func spiralShortCapXRange(first, second loftFaceMap, span freeform.BezierSpan,
 	blend := func(x, y, t *big.Rat) *big.Rat {
 		return lfAdd(lfMul(lfSub(lfOne(), t), x), lfMul(t, y))
 	}
-	lo, hi := blend(a.lo, z.lo, tLo), blend(a.hi, z.hi, tLo)
-	if z.lo.Cmp(lo) < 0 {
-		lo = z.lo
+	lo, hi := blend(a.Lo, z.Lo, tLo), blend(a.Hi, z.Hi, tLo)
+	if z.Lo.Cmp(lo) < 0 {
+		lo = z.Lo
 	}
-	if z.hi.Cmp(hi) > 0 {
-		hi = z.hi
+	if z.Hi.Cmp(hi) > 0 {
+		hi = z.Hi
 	}
-	return loftFaceInterval{lo: lo, hi: hi}, true
+	return loftFaceInterval{Lo: lo, Hi: hi}, true
 }
 
 func spiralShortCapCrossingProof(first, second loftFaceMap, span freeform.BezierSpan,
@@ -282,9 +282,9 @@ func spiralShortCapCrossingProof(first, second loftFaceMap, span freeform.Bezier
 		}
 	}
 	x, ok := spiralShortCapXRange(first, second, span, tLo)
-	if !ok || requireFullFinite && (x.lo.Cmp(capStart) <= 0 || x.hi.Cmp(capEnd) >= 0) ||
-		lfAdd(lfMul(m, x.lo), b).Sign() <= 0 ||
-		lfAdd(lfMul(m, x.hi), b).Sign() <= 0 {
+	if !ok || requireFullFinite && (x.Lo.Cmp(capStart) <= 0 || x.Hi.Cmp(capEnd) >= 0) ||
+		lfAdd(lfMul(m, x.Lo), b).Sign() <= 0 ||
+		lfAdd(lfMul(m, x.Hi), b).Sign() <= 0 {
 		return spiralShortCapCrossing{}, false
 	}
 	certificate := spiralShortCapCrossing{span: span, q: q, tLo: tLo, x: x}
@@ -385,11 +385,11 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 				if !ok {
 					return out, false, nil
 				}
-				if piece == 0 || certificate.x.lo.Cmp(family.x.lo) < 0 {
-					family.x.lo = certificate.x.lo
+				if piece == 0 || certificate.x.Lo.Cmp(family.x.Lo) < 0 {
+					family.x.Lo = certificate.x.Lo
 				}
-				if piece == 0 || certificate.x.hi.Cmp(family.x.hi) > 0 {
-					family.x.hi = certificate.x.hi
+				if piece == 0 || certificate.x.Hi.Cmp(family.x.Hi) > 0 {
+					family.x.Hi = certificate.x.Hi
 				}
 				family.pieces = append(family.pieces, certificate)
 			}
@@ -402,14 +402,14 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 					return out, false, nil
 				}
 				switch {
-				case left.hi.Cmp(capStart) < 0 && right.lo.Cmp(capStart) > 0 &&
-					family.pieces[0].x.hi.Cmp(capEnd) < 0:
+				case left.Hi.Cmp(capStart) < 0 && right.Lo.Cmp(capStart) > 0 &&
+					family.pieces[0].x.Hi.Cmp(capEnd) < 0:
 					family.finiteEnd = 1
-					family.x = loftFaceInterval{lo: capStart, hi: family.pieces[0].x.hi}
-				case right.hi.Cmp(capStart) < 0 && left.lo.Cmp(capStart) > 0 &&
-					family.pieces[0].x.hi.Cmp(capEnd) < 0:
+					family.x = loftFaceInterval{Lo: capStart, Hi: family.pieces[0].x.Hi}
+				case right.Hi.Cmp(capStart) < 0 && left.Lo.Cmp(capStart) > 0 &&
+					family.pieces[0].x.Hi.Cmp(capEnd) < 0:
 					family.finiteEnd = 0
-					family.x = loftFaceInterval{lo: capStart, hi: family.pieces[0].x.hi}
+					family.x = loftFaceInterval{Lo: capStart, Hi: family.pieces[0].x.Hi}
 				default:
 					return out, false, nil
 				}

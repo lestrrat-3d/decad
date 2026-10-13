@@ -96,7 +96,7 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 		crossing.x[capIndex] = revolveLoftFacesCapXRange(mapped, crossing.span, root, direction)
 	}
 	for i := 0; i+1 < len(crossing.x); i++ {
-		if crossing.x[i].hi.Cmp(crossing.x[i+1].lo) >= 0 {
+		if crossing.x[i].Hi.Cmp(crossing.x[i+1].Lo) >= 0 {
 			return nil, 0, false
 		}
 	}
@@ -168,9 +168,9 @@ func revolveLoftFacesCapXDirection(mapped loftFaceMap, span freeform.BezierSpan)
 func revolveLoftFacesCapXRange(mapped loftFaceMap, span freeform.BezierSpan,
 	root spiralRootCrossing, direction int) loftFaceInterval {
 	left, right := spiralBezierPoint(span, root.lo), spiralBezierPoint(span, root.hi)
-	a, z := mapped.at(left[0], left[1])[0], mapped.at(right[0], right[1])[0]
+	a, z := mapped.At(left[0], left[1])[0], mapped.At(right[0], right[1])[0]
 	if direction < 0 {
-		return loftFaceInterval{lo: z, hi: a}
+		return loftFaceInterval{Lo: z, Hi: a}
 	}
-	return loftFaceInterval{lo: a, hi: z}
+	return loftFaceInterval{Lo: a, Hi: z}
 }

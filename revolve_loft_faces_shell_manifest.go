@@ -46,7 +46,7 @@ func revolveLoftFacesSameRat(a, b *big.Rat) bool {
 }
 
 func revolveLoftFacesSameInterval(a, b loftFaceInterval) bool {
-	return revolveLoftFacesSameRat(a.lo, b.lo) && revolveLoftFacesSameRat(a.hi, b.hi)
+	return revolveLoftFacesSameRat(a.Lo, b.Lo) && revolveLoftFacesSameRat(a.Hi, b.Hi)
 }
 
 func revolveLoftFacesSameBox(a, b [3]loftFaceInterval) bool {

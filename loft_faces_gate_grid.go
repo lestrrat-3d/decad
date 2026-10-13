@@ -23,23 +23,23 @@ type lfGateNode struct {
 func lfGateGrid(m loftFaceMap, rows [3]loftFaceRatVec, us, vs []*big.Rat) ([][]lfGateNode, error) {
 	var rowQu, rowQv, rowConstant [3]*big.Rat
 	for r, row := range rows {
-		rowQu[r], rowQv[r], rowConstant[r] = lfVDot(row, m.qu), lfVDot(row, m.qv), lfVDot(row, m.constant)
+		rowQu[r], rowQv[r], rowConstant[r] = lfVDot(row, m.QU), lfVDot(row, m.QV), lfVDot(row, m.Constant)
 	}
 	grid := make([][]lfGateNode, len(us))
 	for i, u := range us {
 		grid[i] = make([]lfGateNode, len(vs))
 		for j, v := range vs {
-			g := m.denominator(u, v)
+			g := m.Denominator(u, v)
 			if g.Sign() <= 0 {
 				return nil, fmt.Errorf("%w: loft cap ray denominator is not positive", ErrUnsupported)
 			}
-			q := m.numerator(u, v)
+			q := m.Numerator(u, v)
 			inverseG := lfDiv(lfOne(), g)
 			node := lfGateNode{g: g}
 			for r, row := range rows {
 				rowQ := lfVDot(row, q)
-				node.deriv[r][0] = lfSub(lfMul(g, rowQu[r]), lfMul(m.gu, rowQ))
-				node.deriv[r][1] = lfSub(lfMul(g, rowQv[r]), lfMul(m.gv, rowQ))
+				node.deriv[r][0] = lfSub(lfMul(g, rowQu[r]), lfMul(m.GU, rowQ))
+				node.deriv[r][1] = lfSub(lfMul(g, rowQv[r]), lfMul(m.GV, rowQ))
 				node.scalar[r] = lfAdd(rowConstant[r], lfMul(rowQ, inverseG))
 			}
 			grid[i][j] = node
@@ -51,11 +51,11 @@ func lfGateGrid(m loftFaceMap, rows [3]loftFaceRatVec, us, vs []*big.Rat) ([][]l
 func lfGateCornerRange(values [4]*big.Rat) loftFaceInterval {
 	out := loftFaceInterval{values[0], values[0]}
 	for _, v := range values[1:] {
-		if v.Cmp(out.lo) < 0 {
-			out.lo = v
+		if v.Cmp(out.Lo) < 0 {
+			out.Lo = v
 		}
-		if v.Cmp(out.hi) > 0 {
-			out.hi = v
+		if v.Cmp(out.Hi) > 0 {
+			out.Hi = v
 		}
 	}
 	return out
@@ -68,18 +68,18 @@ func lfGateDerivRange(corners [4]*lfGateNode, row, axis int) loftFaceInterval {
 		nums[i], dens[i] = c.deriv[row][axis], c.g
 	}
 	num, den := lfGateCornerRange(nums), lfGateCornerRange(dens)
-	lo2, hi2 := lfMul(den.lo, den.lo), lfMul(den.hi, den.hi)
+	lo2, hi2 := lfMul(den.Lo, den.Lo), lfMul(den.Hi, den.Hi)
 	// Every g is positive, so 0 < lo2 <= hi2. A negative numerator is
 	// smallest over the smaller denominator and a non-negative one over the
 	// larger; the maximum is the mirror.
 	loDen, hiDen := hi2, hi2
-	if num.lo.Sign() < 0 {
+	if num.Lo.Sign() < 0 {
 		loDen = lo2
 	}
-	if num.hi.Sign() > 0 {
+	if num.Hi.Sign() > 0 {
 		hiDen = lo2
 	}
-	return loftFaceInterval{lo: lfDiv(num.lo, loDen), hi: lfDiv(num.hi, hiDen)}
+	return loftFaceInterval{Lo: lfDiv(num.Lo, loDen), Hi: lfDiv(num.Hi, hiDen)}
 }
 
 func lfGateScalarRange(corners [4]*lfGateNode, row int) loftFaceInterval {
@@ -97,11 +97,11 @@ func lfBandGate(ctx context.Context, first, second loftFaceMap,
 	box [4]*big.Rat) (float64, float64, int, error) {
 	centerU := lfDiv(lfAdd(box[0], box[1]), big.NewRat(2, 1))
 	centerV := lfDiv(lfAdd(box[2], box[3]), big.NewRat(2, 1))
-	c0 := lfVScale(lfVAdd(first.deriv(centerU, centerV, 0), second.deriv(centerU, centerV, 0)),
+	c0 := lfVScale(lfVAdd(first.Deriv(centerU, centerV, 0), second.Deriv(centerU, centerV, 0)),
 		big.NewRat(1, 2))
-	c1 := lfVScale(lfVAdd(first.deriv(centerU, centerV, 1), second.deriv(centerU, centerV, 1)),
+	c1 := lfVScale(lfVAdd(first.Deriv(centerU, centerV, 1), second.Deriv(centerU, centerV, 1)),
 		big.NewRat(1, 2))
-	c2 := lfVSub(second.at(centerU, centerV), first.at(centerU, centerV))
+	c2 := lfVSub(second.At(centerU, centerV), first.At(centerU, centerV))
 	rows, det, err := lfInverseRows(c0, c1, c2)
 	if err != nil {
 		return 0, 0, 0, err

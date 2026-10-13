@@ -150,7 +150,7 @@ func loftCapOutsideToeCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit)
 	x := lfScalarRange(m, loftFaceRatVec{lfOne(), lfZero(), lfZero()}, corners)
 	y := lfScalarRange(m, loftFaceRatVec{lfZero(), lfOne(), lfZero()}, corners)
 	z := lfScalarRange(m, loftFaceRatVec{lfZero(), lfZero(), lfOne()}, corners)
-	if x.lo.Cmp(cone.far) <= 0 {
+	if x.Lo.Cmp(cone.far) <= 0 {
 		return false
 	}
 	d := lfIntervalSub(loftFaceInterval{cone.apex, cone.apex}, x)
@@ -160,10 +160,10 @@ func loftCapOutsideToeCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit)
 }
 
 func loftIntervalSquareMin(i loftFaceInterval) *big.Rat {
-	if i.lo.Sign() <= 0 && i.hi.Sign() >= 0 {
+	if i.Lo.Sign() <= 0 && i.Hi.Sign() >= 0 {
 		return lfZero()
 	}
-	a, b := lfMul(i.lo, i.lo), lfMul(i.hi, i.hi)
+	a, b := lfMul(i.Lo, i.Lo), lfMul(i.Hi, i.Hi)
 	if a.Cmp(b) < 0 {
 		return a
 	}
@@ -171,7 +171,7 @@ func loftIntervalSquareMin(i loftFaceInterval) *big.Rat {
 }
 
 func loftIntervalSquareMax(i loftFaceInterval) *big.Rat {
-	a, b := lfMul(i.lo, i.lo), lfMul(i.hi, i.hi)
+	a, b := lfMul(i.Lo, i.Lo), lfMul(i.Hi, i.Hi)
 	if a.Cmp(b) > 0 {
 		return a
 	}
@@ -300,12 +300,12 @@ func loftCapOutsideHeelCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit
 	if box[1].Sign() >= 0 && box[0].Sign() <= 0 {
 		return false
 	}
-	g := [3]*big.Rat{m.g0, m.gu, m.gv}
+	g := [3]*big.Rat{m.G0, m.GU, m.GV}
 	coordinate := func(axis int) [3]*big.Rat {
 		return [3]*big.Rat{
-			lfAdd(lfMul(m.constant[axis], g[0]), m.q0[axis]),
-			lfAdd(lfMul(m.constant[axis], g[1]), m.qu[axis]),
-			lfAdd(lfMul(m.constant[axis], g[2]), m.qv[axis]),
+			lfAdd(lfMul(m.Constant[axis], g[0]), m.Q0[axis]),
+			lfAdd(lfMul(m.Constant[axis], g[1]), m.QU[axis]),
+			lfAdd(lfMul(m.Constant[axis], g[2]), m.QV[axis]),
 		}
 	}
 	x, y, z := coordinate(0), coordinate(1), coordinate(2)

@@ -20,16 +20,16 @@ func TestMappedArcRadialTimeBandTwoExactTimeCrossings(t *testing.T) {
 	segment := arcSeg{Center: Point2{}, Start: Point2{U: 2},
 		End: Point2{V: 2}, TStart: 0, TEnd: 1}
 	zero, one := lfZero(), lfOne()
-	first := loftFaceMap{constant: loftFaceRatVec{zero, zero, zero},
-		q0: loftFaceRatVec{zero, zero, zero},
-		qu: loftFaceRatVec{zero, one, zero},
-		qv: loftFaceRatVec{zero, zero, one},
-		g0: one, gu: zero, gv: zero}
-	second := loftFaceMap{constant: loftFaceRatVec{one, zero, zero},
-		q0: loftFaceRatVec{zero, zero, zero},
-		qu: loftFaceRatVec{zero, zero, one},
-		qv: loftFaceRatVec{zero, big.NewRat(-1, 1), zero},
-		g0: one, gu: zero, gv: zero}
+	first := loftFaceMap{Constant: loftFaceRatVec{zero, zero, zero},
+		Q0: loftFaceRatVec{zero, zero, zero},
+		QU: loftFaceRatVec{zero, one, zero},
+		QV: loftFaceRatVec{zero, zero, one},
+		G0: one, GU: zero, GV: zero}
+	second := loftFaceMap{Constant: loftFaceRatVec{one, zero, zero},
+		Q0: loftFaceRatVec{zero, zero, zero},
+		QU: loftFaceRatVec{zero, zero, one},
+		QV: loftFaceRatVec{zero, big.NewRat(-1, 1), zero},
+		G0: one, GU: zero, GV: zero}
 	trim := &loftFacesTrimRecord{
 		source: &pointSectionRecord{
 			profile:   profileRecord{Outer: loopRecord{Segments: []curveSegment{segment}}},
@@ -64,10 +64,10 @@ func TestMappedArcRadialTimeBandTwoExactTimeCrossings(t *testing.T) {
 
 	// A shear breaks the all-time radial identity even though the cap still
 	// maps every sampled endpoint to a finite point.
-	trim.maps[1].qv[2] = big.NewRat(1, 100)
+	trim.maps[1].QV[2] = big.NewRat(1, 100)
 	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.False(t, certified)
-	trim.maps[1].qv[2] = zero
+	trim.maps[1].QV[2] = zero
 	require.True(t, s.RemoveEntity(arc))
 	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.False(t, certified)

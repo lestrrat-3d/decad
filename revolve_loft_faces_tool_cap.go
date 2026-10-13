@@ -165,7 +165,7 @@ func revolveLoftFacesCircleOutsideMaps(maps []loftFaceMap, box [4]*big.Rat,
 			second := lfScalarRange(maps[band+1], direction, corners)
 			range3[coordinate] = lfIntervalHull(first, second)
 		}
-		if x.Cmp(range3[0].lo) < 0 || x.Cmp(range3[0].hi) > 0 {
+		if x.Cmp(range3[0].Lo) < 0 || x.Cmp(range3[0].Hi) > 0 {
 			continue
 		}
 		minimum := lfAdd(loftIntervalSquareMin(range3[1]), loftIntervalSquareMin(range3[2]))

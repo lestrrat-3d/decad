@@ -12,11 +12,11 @@ func TestLoftCapConeProofRequiresStrictWholeCapSeparation(t *testing.T) {
 	zero, one := lfZero(), lfOne()
 	near := big.NewRat(10000000000000001, 10000000000000000)
 	m := loftFaceMap{
-		constant: loftFaceRatVec{zero, zero, zero},
-		q0:       loftFaceRatVec{big.NewRat(10, 1), zero, zero},
-		qu:       loftFaceRatVec{one, near, zero},
-		qv:       loftFaceRatVec{zero, zero, big.NewRat(3, 1)},
-		g0:       one, gu: zero, gv: zero,
+		Constant: loftFaceRatVec{zero, zero, zero},
+		Q0:       loftFaceRatVec{big.NewRat(10, 1), zero, zero},
+		QU:       loftFaceRatVec{one, near, zero},
+		QV:       loftFaceRatVec{zero, zero, big.NewRat(3, 1)},
+		G0:       one, GU: zero, GV: zero,
 	}
 	box := [4]*big.Rat{big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(-1, 1), one}
 	cone := &pointConeLimit{apex: big.NewRat(10, 1), far: zero, slope: one}
@@ -24,12 +24,12 @@ func TestLoftCapConeProofRequiresStrictWholeCapSeparation(t *testing.T) {
 		t.Fatal("the exact positive quadratic with a small radial margin was refused")
 	}
 	changed := m
-	changed.qu[1] = one
+	changed.QU[1] = one
 	if loftCapOutsideHeelCone(changed, box, cone) {
 		t.Fatal("a cap that touches the cone at v=0 was admitted")
 	}
 	changed = m
-	changed.qv[1] = one
+	changed.QV[1] = one
 	if loftCapOutsideHeelCone(changed, box, cone) {
 		t.Fatal("an uncertified cross term was admitted")
 	}
@@ -42,18 +42,18 @@ func TestLoftCapConeProofRequiresStrictWholeCapSeparation(t *testing.T) {
 func TestLoftCapToeConeProofUsesWholeSourceBox(t *testing.T) {
 	zero, one := lfZero(), lfOne()
 	m := loftFaceMap{
-		constant: loftFaceRatVec{zero, zero, zero},
-		q0:       loftFaceRatVec{big.NewRat(5, 1), big.NewRat(10, 1), zero},
-		qu:       loftFaceRatVec{zero, zero, zero},
-		qv:       loftFaceRatVec{zero, zero, zero},
-		g0:       one, gu: zero, gv: zero,
+		Constant: loftFaceRatVec{zero, zero, zero},
+		Q0:       loftFaceRatVec{big.NewRat(5, 1), big.NewRat(10, 1), zero},
+		QU:       loftFaceRatVec{zero, zero, zero},
+		QV:       loftFaceRatVec{zero, zero, zero},
+		G0:       one, GU: zero, GV: zero,
 	}
 	box := [4]*big.Rat{big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(-1, 1), one}
 	cone := &pointConeLimit{apex: big.NewRat(8, 1), far: zero, slope: one}
 	if !loftCapOutsideToeCone(m, box, cone) {
 		t.Fatal("the cap strictly outside the toe cone was refused")
 	}
-	m.q0[1] = big.NewRat(2, 1)
+	m.Q0[1] = big.NewRat(2, 1)
 	if loftCapOutsideToeCone(m, box, cone) {
 		t.Fatal("the cap inside the toe cone was admitted")
 	}

@@ -18,11 +18,11 @@ func lfBandGateRef(ctx context.Context, first, second loftFaceMap,
 	box [4]*big.Rat) (float64, float64, int, error) {
 	centerU := lfDiv(lfAdd(box[0], box[1]), big.NewRat(2, 1))
 	centerV := lfDiv(lfAdd(box[2], box[3]), big.NewRat(2, 1))
-	c0 := lfVScale(lfVAdd(first.deriv(centerU, centerV, 0), second.deriv(centerU, centerV, 0)),
+	c0 := lfVScale(lfVAdd(first.Deriv(centerU, centerV, 0), second.Deriv(centerU, centerV, 0)),
 		big.NewRat(1, 2))
-	c1 := lfVScale(lfVAdd(first.deriv(centerU, centerV, 1), second.deriv(centerU, centerV, 1)),
+	c1 := lfVScale(lfVAdd(first.Deriv(centerU, centerV, 1), second.Deriv(centerU, centerV, 1)),
 		big.NewRat(1, 2))
-	c2 := lfVSub(second.at(centerU, centerV), first.at(centerU, centerV))
+	c2 := lfVSub(second.At(centerU, centerV), first.At(centerU, centerV))
 	rows, det, err := lfInverseRows(c0, c1, c2)
 	if err != nil {
 		return 0, 0, 0, err
@@ -81,8 +81,8 @@ func lfBandGateRef(ctx context.Context, first, second loftFaceMap,
 func randomGateMap(rng *rand.Rand) loftFaceMap {
 	f := func(scale float64) *big.Rat { return lfF((rng.Float64()*2 - 1) * scale) }
 	vec := func(scale float64) loftFaceRatVec { return loftFaceRatVec{f(scale), f(scale), f(scale)} }
-	return loftFaceMap{constant: vec(10), q0: vec(5), qu: vec(2), qv: vec(2),
-		g0: lfF(3 + rng.Float64()), gu: f(0.3), gv: f(0.3), stretch: 1}
+	return loftFaceMap{Constant: vec(10), Q0: vec(5), QU: vec(2), QV: vec(2),
+		G0: lfF(3 + rng.Float64()), GU: f(0.3), GV: f(0.3), Stretch: 1}
 }
 
 func TestLfBandGateGridMatchesReference(t *testing.T) {

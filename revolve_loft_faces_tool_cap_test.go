@@ -145,11 +145,11 @@ func TestRevolveLoftFacesCircleMissUsesWholeMappedSourceBox(t *testing.T) {
 	box := [4]*big.Rat{big.NewRat(-1, 1), big.NewRat(1, 1),
 		big.NewRat(-1, 1), big.NewRat(1, 1)}
 	sectionMap := func(x *big.Rat) loftFaceMap {
-		return loftFaceMap{constant: loftFaceRatVec{lfZero(), lfZero(), lfZero()},
-			q0: loftFaceRatVec{x, big.NewRat(2, 1), lfZero()},
-			qu: loftFaceRatVec{lfZero(), lfOne(), lfZero()},
-			qv: loftFaceRatVec{lfZero(), lfZero(), lfOne()},
-			g0: lfOne(), gu: lfZero(), gv: lfZero()}
+		return loftFaceMap{Constant: loftFaceRatVec{lfZero(), lfZero(), lfZero()},
+			Q0: loftFaceRatVec{x, big.NewRat(2, 1), lfZero()},
+			QU: loftFaceRatVec{lfZero(), lfOne(), lfZero()},
+			QV: loftFaceRatVec{lfZero(), lfZero(), lfOne()},
+			G0: lfOne(), GU: lfZero(), GV: lfZero()}
 	}
 	maps := []loftFaceMap{sectionMap(big.NewRat(5, 1)), sectionMap(big.NewRat(7, 1))}
 	require.True(t, revolveLoftFacesCircleOutsideMaps(maps, box,
@@ -161,7 +161,7 @@ func TestRevolveLoftFacesCircleMissUsesWholeMappedSourceBox(t *testing.T) {
 	require.False(t, revolveLoftFacesCircleOutsideMaps(maps, box,
 		big.NewRat(6, 1), big.NewRat(1, 1)), "boundary equality cannot prove a miss")
 	invalid := slices.Clone(maps)
-	invalid[0].g0 = lfZero()
+	invalid[0].G0 = lfZero()
 	require.False(t, revolveLoftFacesCircleOutsideMaps(invalid, box,
 		big.NewRat(6, 1), big.NewRat(1, 2)), "a zero map denominator cannot prove a miss")
 	require.False(t, revolveLoftFacesCircleOutsideMaps(maps[:1], box,

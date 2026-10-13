@@ -69,16 +69,16 @@ func TestRevolveLoftFacesConstantXRejectsSubstitutedSourceRef(t *testing.T) {
 func TestRevolveLoftFacesVerticalConstantXAndTrimLimits(t *testing.T) {
 	zero, one := lfZero(), lfOne()
 	mapped := loftFaceMap{
-		constant: loftFaceRatVec{big.NewRat(5, 1), zero, zero},
-		q0:       loftFaceRatVec{big.NewRat(2, 1), zero, zero},
-		qu:       loftFaceRatVec{big.NewRat(6, 1), one, zero},
-		qv:       loftFaceRatVec{big.NewRat(4, 1), zero, one},
-		g0:       one, gu: big.NewRat(3, 1), gv: big.NewRat(2, 1),
+		Constant: loftFaceRatVec{big.NewRat(5, 1), zero, zero},
+		Q0:       loftFaceRatVec{big.NewRat(2, 1), zero, zero},
+		QU:       loftFaceRatVec{big.NewRat(6, 1), one, zero},
+		QV:       loftFaceRatVec{big.NewRat(4, 1), zero, one},
+		G0:       one, GU: big.NewRat(3, 1), GV: big.NewRat(2, 1),
 	}
 	x, ok := revolveLoftFacesConstantX(mapped)
 	require.True(t, ok)
 	require.Equal(t, "7", x.RatString())
-	mapped.qu[0] = big.NewRat(5, 1)
+	mapped.QU[0] = big.NewRat(5, 1)
 	_, ok = revolveLoftFacesConstantX(mapped)
 	require.False(t, ok)
 
@@ -113,11 +113,11 @@ func TestRevolveLoftFacesConstantXBand(t *testing.T) {
 	zero, one := lfZero(), lfOne()
 	makeMap := func(x *big.Rat) loftFaceMap {
 		return loftFaceMap{
-			constant: loftFaceRatVec{x, zero, zero},
-			q0:       loftFaceRatVec{zero, zero, zero},
-			qu:       loftFaceRatVec{zero, one, zero},
-			qv:       loftFaceRatVec{zero, zero, one},
-			g0:       one, gu: zero, gv: zero,
+			Constant: loftFaceRatVec{x, zero, zero},
+			Q0:       loftFaceRatVec{zero, zero, zero},
+			QU:       loftFaceRatVec{zero, one, zero},
+			QV:       loftFaceRatVec{zero, zero, one},
+			G0:       one, GU: zero, GV: zero,
 		}
 	}
 	box := [4]*big.Rat{zero, one, zero, one}
@@ -140,7 +140,7 @@ func TestRevolveLoftFacesConstantXBand(t *testing.T) {
 	_, _, ok = revolveLoftFacesConstantXBand(maps, box, big.NewRat(21, 4))
 	require.False(t, ok, "cap X must strictly increase")
 	maps[2] = makeMap(big.NewRat(7, 1))
-	maps[1].qu[0] = one
+	maps[1].QU[0] = one
 	_, _, ok = revolveLoftFacesConstantXBand(maps, box, big.NewRat(11, 2))
 	require.False(t, ok, "cap X must be source independent")
 }
@@ -149,11 +149,11 @@ func TestRevolveLoftFacesVerticalClipsLiveSourceSpan(t *testing.T) {
 	zero, one := lfZero(), lfOne()
 	makeMap := func(x *big.Rat) loftFaceMap {
 		return loftFaceMap{
-			constant: loftFaceRatVec{x, zero, zero},
-			q0:       loftFaceRatVec{zero, zero, zero},
-			qu:       loftFaceRatVec{zero, one, zero},
-			qv:       loftFaceRatVec{zero, zero, one},
-			g0:       one, gu: zero, gv: zero,
+			Constant: loftFaceRatVec{x, zero, zero},
+			Q0:       loftFaceRatVec{zero, zero, zero},
+			QU:       loftFaceRatVec{zero, one, zero},
+			QV:       loftFaceRatVec{zero, zero, one},
+			G0:       one, GU: zero, GV: zero,
 		}
 	}
 	span := freeform.BezierSpan{{U: one, V: zero}, {U: big.NewRat(3, 1), V: zero}}
@@ -167,21 +167,21 @@ func TestRevolveLoftFacesVerticalClipsLiveSourceSpan(t *testing.T) {
 	require.Zero(t, cell.upper.side)
 	require.Equal(t, -1, cell.upper.before)
 	require.Equal(t, 1, cell.upper.after)
-	require.Less(t, cell.lower.root.hi.Cmp(cell.upper.root.lo), 0)
+	require.Less(t, cell.lower.root.Hi.Cmp(cell.upper.root.Lo), 0)
 	require.Len(t, cell.retained, 1)
-	require.Equal(t, "1/4", cell.lower.root.hi.RatString())
-	rootPoint := spiralBezierPoint(span, cell.retained[0].source.lo)
+	require.Equal(t, "1/4", cell.lower.root.Hi.RatString())
+	rootPoint := spiralBezierPoint(span, cell.retained[0].source.Lo)
 	require.Equal(t, "3/2", rootPoint[0].RatString())
-	require.Equal(t, 0, cell.retained[0].source.lo.Cmp(cell.lower.root.hi))
-	require.Equal(t, 0, cell.retained[0].source.hi.Cmp(cell.upper.root.lo))
+	require.Equal(t, 0, cell.retained[0].source.Lo.Cmp(cell.lower.root.Hi))
+	require.Equal(t, 0, cell.retained[0].source.Hi.Cmp(cell.upper.root.Lo))
 	require.True(t, cell.retained[0].loOpen,
 		"an exact radial clip root is not inside the strict retained interval")
 	require.False(t, cell.retained[0].hiOpen)
-	require.Equal(t, "11/2", cell.retained[0].box[0].lo.RatString())
-	require.Equal(t, "11/2", cell.retained[0].box[0].hi.RatString())
+	require.Equal(t, "11/2", cell.retained[0].box[0].Lo.RatString())
+	require.Equal(t, "11/2", cell.retained[0].box[0].Hi.RatString())
 	for _, limit := range [...]revolveLoftFacesVerticalLimit{cell.lower, cell.upper} {
-		require.Less(t, limit.root.lo.Cmp(limit.root.hi), 0)
-		require.Equal(t, "11/2", limit.box[0].lo.RatString())
+		require.Less(t, limit.root.Lo.Cmp(limit.root.Hi), 0)
+		require.Equal(t, "11/2", limit.box[0].Lo.RatString())
 	}
 	_, ok = revolveLoftFacesVerticalClassify([]*big.Rat{zero, one})
 	require.False(t, ok)
@@ -191,11 +191,11 @@ func TestRevolveLoftFacesVerticalAffineOrientation(t *testing.T) {
 	zero, one := lfZero(), lfOne()
 	makeMap := func(scale *big.Rat) loftFaceMap {
 		return loftFaceMap{
-			constant: loftFaceRatVec{zero, zero, zero},
-			q0:       loftFaceRatVec{zero, zero, zero},
-			qu:       loftFaceRatVec{zero, scale, zero},
-			qv:       loftFaceRatVec{zero, zero, scale},
-			g0:       one, gu: zero, gv: zero,
+			Constant: loftFaceRatVec{zero, zero, zero},
+			Q0:       loftFaceRatVec{zero, zero, zero},
+			QU:       loftFaceRatVec{zero, scale, zero},
+			QV:       loftFaceRatVec{zero, zero, scale},
+			G0:       one, GU: zero, GV: zero,
 		}
 	}
 	first, last := makeMap(big.NewRat(1, 2)), makeMap(one)
@@ -204,11 +204,11 @@ func TestRevolveLoftFacesVerticalAffineOrientation(t *testing.T) {
 	require.Equal(t, "3/4", affine.column[0][0].RatString())
 	require.Equal(t, "3/4", affine.column[1][1].RatString())
 	require.Equal(t, "9/16", affine.det.RatString())
-	last.qv[2] = big.NewRat(-1, 1)
+	last.QV[2] = big.NewRat(-1, 1)
 	_, ok = revolveLoftFacesVerticalAffineMap(first, last, one)
 	require.False(t, ok)
-	last.qv[2] = one
-	last.gu = one
+	last.QV[2] = one
+	last.GU = one
 	_, ok = revolveLoftFacesVerticalAffineMap(first, last, big.NewRat(1, 2))
 	require.False(t, ok)
 }

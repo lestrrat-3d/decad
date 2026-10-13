@@ -38,10 +38,10 @@ func spiralHeelCapBern(m loftFaceMap, radius, lo, hi *big.Rat) ([]*big.Rat, [3][
 	var gp [3]*big.Rat
 	var hp [3][3]*big.Rat
 	for j := range gp {
-		gp[j] = lfAdd(lfAdd(lfMul(m.g0, k[j]), lfMul(m.gu, u[j])), lfMul(m.gv, v[j]))
+		gp[j] = lfAdd(lfAdd(lfMul(m.G0, k[j]), lfMul(m.GU, u[j])), lfMul(m.GV, v[j]))
 		for axis := range hp {
-			hp[axis][j] = lfAdd(lfAdd(lfMul(m.constant[axis], gp[j]), lfMul(m.q0[axis], k[j])),
-				lfAdd(lfMul(m.qu[axis], u[j]), lfMul(m.qv[axis], v[j])))
+			hp[axis][j] = lfAdd(lfAdd(lfMul(m.Constant[axis], gp[j]), lfMul(m.Q0[axis], k[j])),
+				lfAdd(lfMul(m.QU[axis], u[j]), lfMul(m.QV[axis], v[j])))
 		}
 	}
 	g := toBern(gp)
@@ -111,13 +111,13 @@ func spiralHeelSourceBox(arc arcSeg) (*big.Rat, *big.Rat, [4]*big.Rat, bool) {
 }
 
 func spiralHeelCapEightOutside(capMap loftFaceMap, coneC *big.Rat) bool {
-	n0 := lfVAdd(lfVScale(capMap.constant, capMap.g0), capMap.q0)
-	nu := lfVAdd(lfVScale(capMap.constant, capMap.gu), capMap.qu)
-	nv := lfVAdd(lfVScale(capMap.constant, capMap.gv), capMap.qv)
+	n0 := lfVAdd(lfVScale(capMap.Constant, capMap.G0), capMap.Q0)
+	nu := lfVAdd(lfVScale(capMap.Constant, capMap.GU), capMap.QU)
+	nv := lfVAdd(lfVScale(capMap.Constant, capMap.GV), capMap.QV)
 	coneVec := func(n loftFaceRatVec, g *big.Rat) loftFaceRatVec {
 		return loftFaceRatVec{lfSub(lfMul(coneC, g), n[0]), n[1], n[2]}
 	}
-	a, u, v := coneVec(n0, capMap.g0), coneVec(nu, capMap.gu), coneVec(nv, capMap.gv)
+	a, u, v := coneVec(n0, capMap.G0), coneVec(nu, capMap.GU), coneVec(nv, capMap.GV)
 	dot := func(x, y loftFaceRatVec) *big.Rat {
 		return lfSub(lfAdd(lfMul(x[1], y[1]), lfMul(x[2], y[2])), lfMul(x[0], y[0]))
 	}
@@ -128,12 +128,12 @@ func spiralHeelCapEightOutside(capMap loftFaceMap, coneC *big.Rat) bool {
 }
 
 func spiralHeelIntervalAdd(a, b loftFaceInterval) loftFaceInterval {
-	return loftFaceInterval{lfAdd(a.lo, b.lo), lfAdd(a.hi, b.hi)}
+	return loftFaceInterval{lfAdd(a.Lo, b.Lo), lfAdd(a.Hi, b.Hi)}
 }
 
 func spiralHeelIntervalMul(a, b loftFaceInterval) loftFaceInterval {
-	values := [4]*big.Rat{lfMul(a.lo, b.lo), lfMul(a.lo, b.hi),
-		lfMul(a.hi, b.lo), lfMul(a.hi, b.hi)}
+	values := [4]*big.Rat{lfMul(a.Lo, b.Lo), lfMul(a.Lo, b.Hi),
+		lfMul(a.Hi, b.Lo), lfMul(a.Hi, b.Hi)}
 	lo, hi := values[0], values[0]
 	for _, value := range values[1:] {
 		if value.Cmp(lo) < 0 {
@@ -157,7 +157,7 @@ func spiralHeelMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 	if lfPositiveDenominator(first, box) != nil || lfPositiveDenominator(second, box) != nil {
 		return false, false
 	}
-	stretch := math.Max(first.stretch, second.stretch)
+	stretch := math.Max(first.Stretch, second.Stretch)
 	if math.IsNaN(stretch) || math.IsInf(stretch, 0) ||
 		lfMul(lfF(stretch), radiusBound).Cmp(big.NewRat(1, 1_000_000_000_000)) >= 0 {
 		return false, false
@@ -171,32 +171,32 @@ func spiralHeelMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 		delta[i] = lfIntervalSub(b[i], a[i])
 	}
 	for _, cap := range [][3]loftFaceInterval{a, b} {
-		if cap[0].lo.Sign() <= 0 || cap[0].hi.Cmp(big.NewRat(17, 1)) >= 0 ||
-			cap[1].lo.Cmp(big.NewRat(13, 1)) <= 0 || cap[1].hi.Cmp(big.NewRat(15, 1)) >= 0 ||
-			cap[2].lo.Cmp(big.NewRat(-5, 1)) <= 0 || cap[2].hi.Cmp(big.NewRat(5, 1)) >= 0 ||
-			lfSub(coneC, cap[0].lo).Cmp(big.NewRat(16, 1)) >= 0 {
+		if cap[0].Lo.Sign() <= 0 || cap[0].Hi.Cmp(big.NewRat(17, 1)) >= 0 ||
+			cap[1].Lo.Cmp(big.NewRat(13, 1)) <= 0 || cap[1].Hi.Cmp(big.NewRat(15, 1)) >= 0 ||
+			cap[2].Lo.Cmp(big.NewRat(-5, 1)) <= 0 || cap[2].Hi.Cmp(big.NewRat(5, 1)) >= 0 ||
+			lfSub(coneC, cap[0].Lo).Cmp(big.NewRat(16, 1)) >= 0 {
 			return false, false
 		}
 	}
 	for _, span := range delta {
-		if span.lo.Cmp(big.NewRat(-4, 1)) <= 0 || span.hi.Cmp(big.NewRat(4, 1)) >= 0 {
+		if span.Lo.Cmp(big.NewRat(-4, 1)) <= 0 || span.Hi.Cmp(big.NewRat(4, 1)) >= 0 {
 			return false, false
 		}
 	}
-	if delta[0].lo.Sign() <= 0 {
+	if delta[0].Lo.Sign() <= 0 {
 		return false, false
 	}
 	for _, cap := range [][3]loftFaceInterval{a, b} {
-		radial := loftFaceInterval{lfSub(coneC, cap[0].hi), lfSub(coneC, cap[0].lo)}
+		radial := loftFaceInterval{lfSub(coneC, cap[0].Hi), lfSub(coneC, cap[0].Lo)}
 		derivative := spiralHeelIntervalAdd(spiralHeelIntervalAdd(
 			spiralHeelIntervalMul(cap[1], delta[1]), spiralHeelIntervalMul(cap[2], delta[2])),
 			spiralHeelIntervalMul(radial, delta[0]))
-		if lfMul(big.NewRat(2, 1), derivative.lo).Cmp(big.NewRat(25, 1)) <= 0 {
+		if lfMul(big.NewRat(2, 1), derivative.Lo).Cmp(big.NewRat(25, 1)) <= 0 {
 			return false, false
 		}
 	}
-	negative := a[2].hi.Sign() < 0 && b[2].hi.Sign() < 0
-	positive := a[2].lo.Sign() > 0 && b[2].lo.Sign() > 0
+	negative := a[2].Hi.Sign() < 0 && b[2].Hi.Sign() < 0
+	positive := a[2].Lo.Sign() > 0 && b[2].Lo.Sign() > 0
 	return negative || positive, negative
 }
 
@@ -284,8 +284,8 @@ func spiralHeelRootCells(ctx context.Context, trim *loftFacesTrimRecord, coneC *
 func spiralHeelEndpointBox(ctx context.Context, first, second loftFaceMap,
 	point Point2, coneC, charge *big.Rat) ([3]loftFaceInterval, bool, error) {
 	var empty [3]loftFaceInterval
-	a := first.at(lfF(point.U), lfF(point.V))
-	b := second.at(lfF(point.U), lfF(point.V))
+	a := first.At(lfF(point.U), lfF(point.V))
+	b := second.At(lfF(point.U), lfF(point.V))
 	delta := lfVSub(b, a)
 	at := func(t *big.Rat) loftFaceRatVec { return lfVAdd(a, lfVScale(delta, t)) }
 	q := func(t *big.Rat) *big.Rat {
@@ -323,12 +323,12 @@ func spiralHeelEndpointBox(ctx context.Context, first, second loftFaceMap,
 }
 
 func spiralHeelRatio(box [3]loftFaceInterval) (loftFaceInterval, bool) {
-	if box[1].lo.Sign() <= 0 {
+	if box[1].Lo.Sign() <= 0 {
 		return loftFaceInterval{}, false
 	}
 	values := [4]*big.Rat{
-		new(big.Rat).Quo(box[2].lo, box[1].lo), new(big.Rat).Quo(box[2].lo, box[1].hi),
-		new(big.Rat).Quo(box[2].hi, box[1].lo), new(big.Rat).Quo(box[2].hi, box[1].hi),
+		new(big.Rat).Quo(box[2].Lo, box[1].Lo), new(big.Rat).Quo(box[2].Lo, box[1].Hi),
+		new(big.Rat).Quo(box[2].Hi, box[1].Lo), new(big.Rat).Quo(box[2].Hi, box[1].Hi),
 	}
 	lo, hi := values[0], values[0]
 	for _, value := range values[1:] {
@@ -422,8 +422,8 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 		coneC:    coneC,
 		negative: negative,
 	}
-	if seam.x.lo.Cmp(lfF(proof.blank.ded.U)) <= 0 ||
-		seam.x.hi.Cmp(lfF(proof.blank.heelOuter.U)) >= 0 {
+	if seam.x.Lo.Cmp(lfF(proof.blank.ded.U)) <= 0 ||
+		seam.x.Hi.Cmp(lfF(proof.blank.heelOuter.U)) >= 0 {
 		return nil, false, nil
 	}
 	for end, point := range [...]Point2{arc.Start, arc.End} {
@@ -433,8 +433,8 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 			return nil, false, err
 		}
 		ratio, ok := spiralHeelRatio(endpoint)
-		if !ok || endpoint[0].lo.Cmp(seam.x.lo) <= 0 || endpoint[0].hi.Cmp(seam.x.hi) >= 0 ||
-			ratio.lo.Cmp(seam.slope.lo) <= 0 || ratio.hi.Cmp(seam.slope.hi) >= 0 {
+		if !ok || endpoint[0].Lo.Cmp(seam.x.Lo) <= 0 || endpoint[0].Hi.Cmp(seam.x.Hi) >= 0 ||
+			ratio.Lo.Cmp(seam.slope.Lo) <= 0 || ratio.Hi.Cmp(seam.slope.Hi) >= 0 {
 			return nil, false, nil
 		}
 		seam.ends[end] = endpoint
@@ -450,14 +450,14 @@ func spiralHeelTailBox(seam *spiralHeelRootSeam, minAbsSlope *big.Rat) ([3]loftF
 	if seam == nil || minAbsSlope == nil || minAbsSlope.Sign() <= 0 {
 		return empty, false
 	}
-	maxAbsSlope := seam.slope.hi
+	maxAbsSlope := seam.slope.Hi
 	if seam.negative {
-		maxAbsSlope = lfSub(lfZero(), seam.slope.lo)
+		maxAbsSlope = lfSub(lfZero(), seam.slope.Lo)
 	}
 	if minAbsSlope.Cmp(maxAbsSlope) >= 0 {
 		return empty, false
 	}
-	rLo, rHi := lfSub(seam.coneC, seam.x.hi), lfSub(seam.coneC, seam.x.lo)
+	rLo, rHi := lfSub(seam.coneC, seam.x.Hi), lfSub(seam.coneC, seam.x.Lo)
 	if rLo.Sign() <= 0 {
 		return empty, false
 	}

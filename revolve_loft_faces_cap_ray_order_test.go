@@ -14,8 +14,8 @@ func TestCurvedCapRayOrderRequiresSeparatedSourceBoxes(t *testing.T) {
 	}
 	box := func(y0, y1, z0, z1 int64) revolveLoftFacesCapSeamVertex {
 		var vertex revolveLoftFacesCapSeamVertex
-		vertex.boundary.box[1] = loftFaceInterval{lo: lfF(float64(y0)), hi: lfF(float64(y1))}
-		vertex.boundary.box[2] = loftFaceInterval{lo: lfF(float64(z0)), hi: lfF(float64(z1))}
+		vertex.boundary.box[1] = loftFaceInterval{Lo: lfF(float64(y0)), Hi: lfF(float64(y1))}
+		vertex.boundary.box[2] = loftFaceInterval{Lo: lfF(float64(z0)), Hi: lfF(float64(z1))}
 		return vertex
 	}
 	rays := []revolveLoftFacesRay{

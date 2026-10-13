@@ -312,17 +312,17 @@ func verticalOriginsMatch(actual, recorded []FeatureRef) bool {
 // A linear-fractional X map is constant on the entire source rectangle
 // exactly when its numerator is that constant times its denominator.
 func revolveLoftFacesConstantX(mapped loftFaceMap) (*big.Rat, bool) {
-	if mapped.g0 == nil || mapped.g0.Sign() <= 0 || mapped.constant[0] == nil ||
-		mapped.q0[0] == nil || mapped.qu[0] == nil || mapped.qv[0] == nil ||
-		mapped.gu == nil || mapped.gv == nil {
+	if mapped.G0 == nil || mapped.G0.Sign() <= 0 || mapped.Constant[0] == nil ||
+		mapped.Q0[0] == nil || mapped.QU[0] == nil || mapped.QV[0] == nil ||
+		mapped.GU == nil || mapped.GV == nil {
 		return nil, false
 	}
-	ratio := lfDiv(mapped.q0[0], mapped.g0)
-	if mapped.qu[0].Cmp(lfMul(ratio, mapped.gu)) != 0 ||
-		mapped.qv[0].Cmp(lfMul(ratio, mapped.gv)) != 0 {
+	ratio := lfDiv(mapped.Q0[0], mapped.G0)
+	if mapped.QU[0].Cmp(lfMul(ratio, mapped.GU)) != 0 ||
+		mapped.QV[0].Cmp(lfMul(ratio, mapped.GV)) != 0 {
 		return nil, false
 	}
-	return lfAdd(mapped.constant[0], ratio), true
+	return lfAdd(mapped.Constant[0], ratio), true
 }
 
 func revolveLoftFacesVerticalAffineMap(first, last loftFaceMap,
@@ -332,21 +332,21 @@ func revolveLoftFacesVerticalAffineMap(first, last loftFaceMap,
 	}
 	var mappedCaps [2]revolveLoftFacesVerticalAffine
 	for i, mapped := range [...]loftFaceMap{first, last} {
-		if mapped.g0 == nil || mapped.g0.Sign() <= 0 ||
-			mapped.gu == nil || mapped.gu.Sign() != 0 ||
-			mapped.gv == nil || mapped.gv.Sign() != 0 {
+		if mapped.G0 == nil || mapped.G0.Sign() <= 0 ||
+			mapped.GU == nil || mapped.GU.Sign() != 0 ||
+			mapped.GV == nil || mapped.GV.Sign() != 0 {
 			return nil, false
 		}
 		for axis := range mappedCaps[i].offset {
 			worldAxis := axis + 1
-			if mapped.constant[worldAxis] == nil || mapped.q0[worldAxis] == nil ||
-				mapped.qu[worldAxis] == nil || mapped.qv[worldAxis] == nil {
+			if mapped.Constant[worldAxis] == nil || mapped.Q0[worldAxis] == nil ||
+				mapped.QU[worldAxis] == nil || mapped.QV[worldAxis] == nil {
 				return nil, false
 			}
-			mappedCaps[i].offset[axis] = lfAdd(mapped.constant[worldAxis],
-				lfDiv(mapped.q0[worldAxis], mapped.g0))
-			mappedCaps[i].column[0][axis] = lfDiv(mapped.qu[worldAxis], mapped.g0)
-			mappedCaps[i].column[1][axis] = lfDiv(mapped.qv[worldAxis], mapped.g0)
+			mappedCaps[i].offset[axis] = lfAdd(mapped.Constant[worldAxis],
+				lfDiv(mapped.Q0[worldAxis], mapped.G0))
+			mappedCaps[i].column[0][axis] = lfDiv(mapped.QU[worldAxis], mapped.G0)
+			mappedCaps[i].column[1][axis] = lfDiv(mapped.QV[worldAxis], mapped.G0)
 		}
 	}
 	blend := func(a, b *big.Rat) *big.Rat {
@@ -422,11 +422,11 @@ func revolveLoftFacesVerticalBezier(trim *loftFacesTrimRecord,
 		return cell, false
 	}
 	for _, limit := range []*revolveLoftFacesVerticalLimit{&cell.lower, &cell.upper} {
-		if limit.root.lo == nil {
+		if limit.root.Lo == nil {
 			continue
 		}
 		limit.box, ok = spiralJunctionBox(first, last, span,
-			limit.root.lo, limit.root.hi, time, time)
+			limit.root.Lo, limit.root.Hi, time, time)
 		if !ok {
 			return cell, false
 		}
@@ -467,7 +467,7 @@ func revolveLoftFacesVerticalClassify(q []*big.Rat) (revolveLoftFacesVerticalLim
 	if root.lo.Sign() <= 0 || root.hi.Cmp(lfOne()) >= 0 {
 		return result, false
 	}
-	result.root = loftFaceInterval{lo: root.lo, hi: root.hi}
+	result.root = loftFaceInterval{Lo: root.lo, Hi: root.hi}
 	result.before, result.after = q[0].Sign(), q[len(q)-1].Sign()
 	return result, true
 }
@@ -475,14 +475,14 @@ func revolveLoftFacesVerticalClassify(q []*big.Rat) (revolveLoftFacesVerticalLim
 func revolveLoftFacesVerticalPieces(first, last loftFaceMap,
 	span freeform.BezierSpan, time *big.Rat, loQ, hiQ []*big.Rat,
 	loRoot, hiRoot loftFaceInterval) ([]revolveLoftFacesVerticalPiece, bool) {
-	if loRoot.lo != nil && hiRoot.lo != nil &&
-		loRoot.lo.Cmp(hiRoot.hi) <= 0 && hiRoot.lo.Cmp(loRoot.hi) <= 0 {
+	if loRoot.Lo != nil && hiRoot.Lo != nil &&
+		loRoot.Lo.Cmp(hiRoot.Hi) <= 0 && hiRoot.Lo.Cmp(loRoot.Hi) <= 0 {
 		return nil, false
 	}
 	endpoints := []*big.Rat{lfZero(), lfOne()}
 	for _, root := range [...]loftFaceInterval{loRoot, hiRoot} {
-		if root.lo != nil {
-			endpoints = append(endpoints, root.lo, root.hi)
+		if root.Lo != nil {
+			endpoints = append(endpoints, root.Lo, root.Hi)
 		}
 	}
 	sortRats(endpoints)
@@ -511,7 +511,7 @@ func revolveLoftFacesVerticalPieces(first, last loftFaceMap,
 			return nil, false
 		}
 		pieces = append(pieces, revolveLoftFacesVerticalPiece{
-			source: loftFaceInterval{lo: a, hi: z},
+			source: loftFaceInterval{Lo: a, Hi: z},
 			loOpen: loLower == 0 || loUpper == 0,
 			hiOpen: hiLower == 0 || hiUpper == 0,
 			box:    box})
@@ -520,7 +520,7 @@ func revolveLoftFacesVerticalPieces(first, last loftFaceMap,
 }
 
 func verticalWithinRoot(a, z *big.Rat, root loftFaceInterval) bool {
-	return root.lo != nil && a.Cmp(root.lo) >= 0 && z.Cmp(root.hi) <= 0
+	return root.Lo != nil && a.Cmp(root.Lo) >= 0 && z.Cmp(root.Hi) <= 0
 }
 
 func sortRats(values []*big.Rat) {
@@ -554,11 +554,11 @@ func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 	cell.lower.side, cell.upper.side = loSign, hiSign
 	if loSign > 0 && hiSign < 0 {
 		box, valid := revolveLoftFacesVerticalArcBox(radial.arc, trim, band, time)
-		if !valid || box[0].lo.Cmp(x) != 0 || box[0].hi.Cmp(x) != 0 {
+		if !valid || box[0].Lo.Cmp(x) != 0 || box[0].Hi.Cmp(x) != 0 {
 			return cell, false
 		}
 		cell.retained = []revolveLoftFacesVerticalPiece{{
-			source: loftFaceInterval{lo: lfZero(), hi: lfOne()}, box: box}}
+			source: loftFaceInterval{Lo: lfZero(), Hi: lfOne()}, box: box}}
 	}
 	return cell, true
 }

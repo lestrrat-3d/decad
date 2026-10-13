@@ -16,10 +16,10 @@ func loftFacesCapBernsteinRows(m loftFaceMap, span freeform.BezierSpan) ([]*big.
 		h[axis] = make([]*big.Rat, len(span))
 	}
 	for i, p := range span {
-		g[i] = lfAdd(lfAdd(m.g0, lfMul(m.gu, p.U)), lfMul(m.gv, p.V))
+		g[i] = lfAdd(lfAdd(m.G0, lfMul(m.GU, p.U)), lfMul(m.GV, p.V))
 		for axis := range h {
-			h[axis][i] = lfAdd(lfMul(m.constant[axis], g[i]),
-				lfAdd(lfAdd(m.q0[axis], lfMul(m.qu[axis], p.U)), lfMul(m.qv[axis], p.V)))
+			h[axis][i] = lfAdd(lfMul(m.Constant[axis], g[i]),
+				lfAdd(lfAdd(m.Q0[axis], lfMul(m.QU[axis], p.U)), lfMul(m.QV[axis], p.V)))
 		}
 	}
 	return g, h

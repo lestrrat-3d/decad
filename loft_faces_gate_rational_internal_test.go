@@ -15,9 +15,9 @@ func legacyLfGateDerivRange(corners [4]*lfGateNode, row, axis int) loftFaceInter
 		nums[i], dens[i] = c.deriv[row][axis], c.g
 	}
 	num, den := lfGateCornerRange(nums), lfGateCornerRange(dens)
-	lo2, hi2 := lfMul(den.lo, den.lo), lfMul(den.hi, den.hi)
-	return lfGateCornerRange([4]*big.Rat{lfDiv(num.lo, lo2), lfDiv(num.lo, hi2),
-		lfDiv(num.hi, lo2), lfDiv(num.hi, hi2)})
+	lo2, hi2 := lfMul(den.Lo, den.Lo), lfMul(den.Hi, den.Hi)
+	return lfGateCornerRange([4]*big.Rat{lfDiv(num.Lo, lo2), lfDiv(num.Lo, hi2),
+		lfDiv(num.Hi, lo2), lfDiv(num.Hi, hi2)})
 }
 
 func TestLfGateDerivRangeTwoQuotients(t *testing.T) {
@@ -47,8 +47,8 @@ func TestLfGateDerivRangeTwoQuotients(t *testing.T) {
 			for ax := range 2 {
 				want := legacyLfGateDerivRange(corners, r, ax)
 				got := lfGateDerivRange(corners, r, ax)
-				require.Zero(t, want.lo.Cmp(got.lo), "iter %d lo", iter)
-				require.Zero(t, want.hi.Cmp(got.hi), "iter %d hi", iter)
+				require.Zero(t, want.Lo.Cmp(got.Lo), "iter %d lo", iter)
+				require.Zero(t, want.Hi.Cmp(got.Hi), "iter %d hi", iter)
 			}
 		}
 	}

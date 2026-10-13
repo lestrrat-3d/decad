@@ -261,8 +261,8 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		}
 	}
 	for _, crossing := range proof.crossings {
-		if crossing.x[0].hi.Cmp(toeX) >= 0 ||
-			crossing.x[len(crossing.x)-1].lo.Cmp(heelX) <= 0 {
+		if crossing.x[0].Hi.Cmp(toeX) >= 0 ||
+			crossing.x[len(crossing.x)-1].Lo.Cmp(heelX) <= 0 {
 			return nil, false, nil
 		}
 	}
@@ -314,7 +314,7 @@ func revolveLoftFacesCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
 	}
 	corners := lfBoxCorners(box)
 	xAxis := loftFaceRatVec{lfOne(), lfZero(), lfZero()}
-	return lfScalarRange(first, xAxis, corners).hi.Cmp(toeX) < 0 &&
+	return lfScalarRange(first, xAxis, corners).Hi.Cmp(toeX) < 0 &&
 		spiralCapPlaneAvoidsRootCircle(last, corners, m, b, heelX)
 }
 

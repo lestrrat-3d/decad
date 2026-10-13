@@ -74,13 +74,13 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 			if row == 1 {
 				position = 2 * len(seam)
 			}
-			point, round, ok := revolveLoftFacesHeldPoint(mapped.at(u, v))
+			point, round, ok := revolveLoftFacesHeldPoint(mapped.At(u, v))
 			if !ok {
 				return blank, loft, false, nil
 			}
 			loft.vertices[position+j] = point
 			loft.vertexBounds[position+j] = proofbound.AbsSumUpper(round,
-				proofbound.ProductUpper(trim.source.sourceStationRound, mapped.stretch))
+				proofbound.ProductUpper(trim.source.sourceStationRound, mapped.Stretch))
 		}
 		for row, end := range [...]Point2{section.start, section.end} {
 			position := row * 2 * len(seam)

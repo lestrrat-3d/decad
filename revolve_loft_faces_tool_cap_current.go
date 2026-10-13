@@ -74,8 +74,8 @@ func revolveLoftFacesToolCapBoundaryEqual(a, b revolveLoftFacesToolCapBoundary) 
 }
 
 func revolveLoftFacesToolCapIntervalEqual(a, b loftFaceInterval) bool {
-	return revolveLoftFacesToolCapRatEqual(a.lo, b.lo) &&
-		revolveLoftFacesToolCapRatEqual(a.hi, b.hi)
+	return revolveLoftFacesToolCapRatEqual(a.Lo, b.Lo) &&
+		revolveLoftFacesToolCapRatEqual(a.Hi, b.Hi)
 }
 
 func revolveLoftFacesToolCapRatEqual(a, b *big.Rat) bool {

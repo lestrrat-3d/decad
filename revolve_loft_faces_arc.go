@@ -179,8 +179,8 @@ func mappedArcCapRanges(mapped loftFaceMap, corners [4][2]*big.Rat) [3]loftFaceI
 func mappedArcBlend(first, second loftFaceInterval, t *big.Rat) loftFaceInterval {
 	a, z := lfSub(lfOne(), t), t
 	return loftFaceInterval{
-		lo: lfAdd(lfMul(a, first.lo), lfMul(z, second.lo)),
-		hi: lfAdd(lfMul(a, first.hi), lfMul(z, second.hi)),
+		Lo: lfAdd(lfMul(a, first.Lo), lfMul(z, second.Lo)),
+		Hi: lfAdd(lfMul(a, first.Hi), lfMul(z, second.Hi)),
 	}
 }
 
@@ -191,13 +191,13 @@ func mappedArcBandSide(first, second [3]loftFaceInterval, x0, x1, m, b *big.Rat,
 		box[axis] = lfIntervalHull(mappedArcBlend(first[axis], second[axis], tLo),
 			mappedArcBlend(first[axis], second[axis], tHi))
 	}
-	if box[0].hi.Cmp(x0) < 0 || box[0].lo.Cmp(x1) > 0 {
+	if box[0].Hi.Cmp(x0) < 0 || box[0].Lo.Cmp(x1) > 0 {
 		return mappedArcMiss, true
 	}
-	x := loftFaceInterval{lo: ratMax(box[0].lo, x0), hi: ratMin(box[0].hi, x1)}
-	radius := loftFaceInterval{lo: lfAdd(lfMul(m, x.lo), b), hi: lfAdd(lfMul(m, x.hi), b)}
-	if radius.lo.Cmp(radius.hi) > 0 {
-		radius.lo, radius.hi = radius.hi, radius.lo
+	x := loftFaceInterval{Lo: ratMax(box[0].Lo, x0), Hi: ratMin(box[0].Hi, x1)}
+	radius := loftFaceInterval{Lo: lfAdd(lfMul(m, x.Lo), b), Hi: lfAdd(lfMul(m, x.Hi), b)}
+	if radius.Lo.Cmp(radius.Hi) > 0 {
+		radius.Lo, radius.Hi = radius.Hi, radius.Lo
 	}
 	low := lfSub(lfAdd(loftIntervalSquareMin(box[1]), loftIntervalSquareMin(box[2])),
 		loftIntervalSquareMax(radius))

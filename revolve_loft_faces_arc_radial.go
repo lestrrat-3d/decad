@@ -66,17 +66,17 @@ func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 	}
 	var mappedCaps [2]mappedArcRadialCap
 	for index, mapped := range [...]loftFaceMap{trim.maps[band], trim.maps[band+1]} {
-		if mapped.g0.Sign() <= 0 || mapped.gu.Sign() != 0 || mapped.gv.Sign() != 0 ||
-			mapped.qu[0].Sign() != 0 || mapped.qv[0].Sign() != 0 {
+		if mapped.G0.Sign() <= 0 || mapped.GU.Sign() != 0 || mapped.GV.Sign() != 0 ||
+			mapped.QU[0].Sign() != 0 || mapped.QV[0].Sign() != 0 {
 			return empty, false
 		}
-		atCenter := mapped.at(centerU, centerV)
+		atCenter := mapped.At(centerU, centerV)
 		if atCenter[1].Sign() != 0 || atCenter[2].Sign() != 0 {
 			return empty, false
 		}
 		mappedCaps[index] = mappedArcRadialCap{x: atCenter[0],
-			u: [2]*big.Rat{lfDiv(mapped.qu[1], mapped.g0), lfDiv(mapped.qu[2], mapped.g0)},
-			v: [2]*big.Rat{lfDiv(mapped.qv[1], mapped.g0), lfDiv(mapped.qv[2], mapped.g0)}}
+			u: [2]*big.Rat{lfDiv(mapped.QU[1], mapped.G0), lfDiv(mapped.QU[2], mapped.G0)},
+			v: [2]*big.Rat{lfDiv(mapped.QV[1], mapped.G0), lfDiv(mapped.QV[2], mapped.G0)}}
 	}
 	lambda0, ok0 := mappedArcRadialScale(mappedCaps, lfZero())
 	lambdaMid, okMid := mappedArcRadialScale(mappedCaps, big.NewRat(1, 2))

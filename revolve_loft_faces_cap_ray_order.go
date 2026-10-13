@@ -32,8 +32,8 @@ func revolveLoftFacesCapRayOrderBounded(rays []revolveLoftFacesRay,
 			return false
 		}
 		box := revolveLoftFacesRayBox{
-			y: loftFaceInterval{lo: ray.y, hi: ray.y},
-			z: loftFaceInterval{lo: ray.z, hi: ray.z},
+			y: loftFaceInterval{Lo: ray.y, Hi: ray.y},
+			z: loftFaceInterval{Lo: ray.z, Hi: ray.z},
 		}
 		if ray.seamIndex >= 0 {
 			if ray.seamIndex >= len(seam) || len(ray.capIDs) != 0 {
@@ -45,8 +45,8 @@ func revolveLoftFacesCapRayOrderBounded(rays []revolveLoftFacesRay,
 			}
 			bound := lfF(point.loftBound)
 			y, z := lfF(point.point.Y), lfF(point.point.Z)
-			box.y = loftFaceInterval{lo: lfSub(y, bound), hi: lfAdd(y, bound)}
-			box.z = loftFaceInterval{lo: lfSub(z, bound), hi: lfAdd(z, bound)}
+			box.y = loftFaceInterval{Lo: lfSub(y, bound), Hi: lfAdd(y, bound)}
+			box.z = loftFaceInterval{Lo: lfSub(z, bound), Hi: lfAdd(z, bound)}
 		}
 		if len(ray.capIDs) == 1 {
 			id := ray.capIDs[0]
@@ -70,8 +70,8 @@ func revolveLoftFacesCapRayOrderBounded(rays []revolveLoftFacesRay,
 		next := (index + 1) % len(rays)
 		if prev < index && !revolveLoftFacesRayBefore(rays[prev], rays[index]) ||
 			next > index && !revolveLoftFacesRayBefore(rays[index], rays[next]) ||
-			revolveLoftFacesRayCrossRange(boxes[prev], boxes[index]).lo.Sign() <= 0 ||
-			revolveLoftFacesRayCrossRange(boxes[index], boxes[next]).lo.Sign() <= 0 {
+			revolveLoftFacesRayCrossRange(boxes[prev], boxes[index]).Lo.Sign() <= 0 ||
+			revolveLoftFacesRayCrossRange(boxes[index], boxes[next]).Lo.Sign() <= 0 {
 			return false
 		}
 	}
@@ -79,8 +79,8 @@ func revolveLoftFacesCapRayOrderBounded(rays []revolveLoftFacesRay,
 }
 
 func revolveLoftFacesRayBoxValid(box revolveLoftFacesRayBox) bool {
-	return box.y.lo != nil && box.y.hi != nil && box.z.lo != nil && box.z.hi != nil &&
-		box.y.lo.Cmp(box.y.hi) <= 0 && box.z.lo.Cmp(box.z.hi) <= 0
+	return box.y.Lo != nil && box.y.Hi != nil && box.z.Lo != nil && box.z.Hi != nil &&
+		box.y.Lo.Cmp(box.y.Hi) <= 0 && box.z.Lo.Cmp(box.z.Hi) <= 0
 }
 
 func revolveLoftFacesRayCrossRange(a, b revolveLoftFacesRayBox) loftFaceInterval {
@@ -90,16 +90,16 @@ func revolveLoftFacesRayCrossRange(a, b revolveLoftFacesRayBox) loftFaceInterval
 
 func revolveLoftFacesRayProductRange(a, b loftFaceInterval) loftFaceInterval {
 	products := [4]*big.Rat{
-		lfMul(a.lo, b.lo), lfMul(a.lo, b.hi),
-		lfMul(a.hi, b.lo), lfMul(a.hi, b.hi),
+		lfMul(a.Lo, b.Lo), lfMul(a.Lo, b.Hi),
+		lfMul(a.Hi, b.Lo), lfMul(a.Hi, b.Hi),
 	}
-	out := loftFaceInterval{lo: products[0], hi: products[0]}
+	out := loftFaceInterval{Lo: products[0], Hi: products[0]}
 	for _, product := range products[1:] {
-		if product.Cmp(out.lo) < 0 {
-			out.lo = product
+		if product.Cmp(out.Lo) < 0 {
+			out.Lo = product
 		}
-		if product.Cmp(out.hi) > 0 {
-			out.hi = product
+		if product.Cmp(out.Hi) > 0 {
+			out.Hi = product
 		}
 	}
 	return out

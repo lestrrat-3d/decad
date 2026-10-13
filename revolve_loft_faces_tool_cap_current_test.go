@@ -78,9 +78,9 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 		require.NoError(t, currentErr)
 		require.False(t, current, "another time cannot own the same source cells")
 		changed = *arc
-		changed.negativeZ.parameter.lo = new(big.Rat).Add(
-			arc.negativeZ.parameter.lo, arc.negativeZ.parameter.hi)
-		changed.negativeZ.parameter.lo.Quo(changed.negativeZ.parameter.lo, big.NewRat(2, 1))
+		changed.negativeZ.parameter.Lo = new(big.Rat).Add(
+			arc.negativeZ.parameter.Lo, arc.negativeZ.parameter.Hi)
+		changed.negativeZ.parameter.Lo.Quo(changed.negativeZ.parameter.Lo, big.NewRat(2, 1))
 		current, currentErr = revolveLoftFacesToolCapOccupiedArcCurrent(t.Context(), proof, &changed)
 		require.NoError(t, currentErr)
 		require.False(t, current, "a narrowed root bracket is not the certified source bracket")

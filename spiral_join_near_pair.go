@@ -218,8 +218,8 @@ func certifySpiralNearFaceRoles(ctx context.Context, blank, tooth *Body,
 		for index, group := range [...]int{0, 2, 3, 5} {
 			family := short[end][index]
 			if family.band != band || family.group != group || len(family.pieces) != 1 ||
-				family.x.lo == nil || family.x.hi == nil ||
-				family.x.lo.Cmp(family.x.hi) >= 0 {
+				family.x.Lo == nil || family.x.Hi == nil ||
+				family.x.Lo.Cmp(family.x.Hi) >= 0 {
 				return nil, empty, false, nil
 			}
 		}
