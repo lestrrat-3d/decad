@@ -34,7 +34,7 @@ import "github.com/lestrrat-3d/r3"
 // as it does today.
 //
 // origin and normal carry what admission itself never reads: the SAME
-// world-space point and direction prism_build.go's own capFrame already
+// world-space point and direction prismrecord.Payload.CapFrame already
 // derives for a solid prism's caps (pp.point(0, 0, z) and pp.dir(0, 0, 1)),
 // never a value fitted to held vertex coordinates. This is what lets
 // Body.Patch's level arm publish an EXACT plane for a chain it admits by

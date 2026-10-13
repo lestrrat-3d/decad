@@ -132,25 +132,16 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	if pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		!pairbox.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) ||
 		!pairbox.CardinalBasis(basis.EX, basis.EY, basis.EZ) {
-		return massPropertiesFromReadings(massmoment.GeneralPrismProperties(ctx, massPrismRecord(pp), vecMeasurementToInternal(b.centroid), density))
+		return massPropertiesFromReadings(massmoment.GeneralPrismProperties(ctx, pp.MassRecord(), vecMeasurementToInternal(b.centroid), density))
 	}
 	if !pairbox.RectangularProfile(pp.Profile) {
-		return massPropertiesFromReadings(massmoment.CardinalPrismProperties(ctx, massPrismRecord(pp), vecMeasurementToInternal(b.centroid), density))
+		return massPropertiesFromReadings(massmoment.CardinalPrismProperties(ctx, pp.MassRecord(), vecMeasurementToInternal(b.centroid), density))
 	}
 
 	// The recorded rectangle and levels are the source solid. Translation does
 	// not change its centroidal inertia, and a signed-permutation basis only
 	// reorders its three dimensions. Work in exact dyadics until division by 12.
-	return massPropertiesFromReadings(massmoment.CardinalBoxProperties(ctx, massPrismRecord(pp), vecMeasurementToInternal(b.centroid), density))
-}
-
-// massPrismRecord presents a root prism payload to the mass integrator.
-func massPrismRecord(pp prismPayload) massmoment.PrismRecord {
-	return massmoment.PrismRecord{
-		Profile: pp.Profile, Frame: pp.Frame, Transform: pp.Xform,
-		Z0: pp.Z0, Z1: pp.Z1, SectionDelta: pp.SectionDelta,
-		Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta,
-	}
+	return massPropertiesFromReadings(massmoment.CardinalBoxProperties(ctx, pp.MassRecord(), vecMeasurementToInternal(b.centroid), density))
 }
 
 // massCupRecords reads the two prism records whose difference forms a cup.
@@ -159,7 +150,7 @@ func massCupRecords(cp cupView) (massmoment.PrismRecord, massmoment.PrismRecord)
 	outer.Profile = cp.outer
 	cavity := cp.cavityPrism()
 	cavity.Profile = cp.cavity
-	return massPrismRecord(outer), massPrismRecord(cavity)
+	return outer.MassRecord(), cavity.MassRecord()
 }
 
 // massRevolveRecord presents a root revolve payload to the mass integrator.
@@ -182,7 +173,7 @@ func massSweepRecord(sp sweepPayload) massmoment.SweepRecord {
 		if sp.arc {
 			record.Revolve = massRevolveRecord(sp.revolve)
 		} else {
-			record.Prism = massPrismRecord(sp.prism)
+			record.Prism = sp.prism.MassRecord()
 		}
 		return record
 	}
@@ -192,7 +183,7 @@ func massSweepRecord(sp sweepPayload) massmoment.SweepRecord {
 		if span.arc {
 			record.Spans[i].Revolve = massRevolveRecord(span.revolve)
 		} else {
-			record.Spans[i].Prism = massPrismRecord(span.prism)
+			record.Spans[i].Prism = span.prism.MassRecord()
 		}
 	}
 	return record

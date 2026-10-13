@@ -236,7 +236,7 @@ func TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum(t *testing.T) {
 }
 
 // This file pins docs/verification-design.md's free-form tolerance-gate
-// diameter arm: freeformSectionGateDiameter, tried by
+// diameter arm: diameter.PrismFreeformSection, tried by
 // bodyGateDiameter ahead of fallbackGateDiameter whenever the exact carrier
 // model refuses a prismPayload. Every fixture is a synthetic prismPayload
 // built directly — the pattern prism_boolean_internal_test.go already uses —
@@ -287,7 +287,7 @@ func sCurveFreeformProfile() profileRecord {
 
 // denseFreeformCapPoints is an independent oracle: it samples every free-form
 // walk densely through evalSpans (spline_bezier_internal_test.go's own
-// de Casteljau, never freeformSectionGateDiameter's machinery) at both cap
+// de Casteljau, never diameter.PrismFreeformSection's machinery) at both cap
 // heights, so a diameter read off its output is a dense-sample approximation
 // of the section's TRUE diameter, never the arm's own witness-only reading.
 func denseFreeformCapPoints(t *testing.T, pp prismPayload, samples int) []r3.Vec {
@@ -491,7 +491,7 @@ func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T
 		"collapsed shrink":    collapsedShrink,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, armOK, err := freeformSectionGateDiameter(t.Context(), pp)
+			_, armOK, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.axialDelta)
 			require.NoError(t, err)
 			require.False(t, armOK, "the arm must withhold on this path")
 
@@ -553,7 +553,7 @@ func TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism(t *testing.T) {
 		SectionDelta: 0.1,
 	}}
 
-	armD, armOK, err := freeformSectionGateDiameter(t.Context(), pp)
+	armD, armOK, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.axialDelta)
 	require.NoError(t, err)
 	require.False(t, armOK, "no free-form segment is present, so the new arm must decline outright")
 	require.Zero(t, armD)
@@ -635,14 +635,14 @@ func TestBodyGateDiameterFreeformArmCancelsDuringWitnessMaximum(t *testing.T) {
 
 	// The fixture really does answer, so the cancelled run below cannot pass
 	// by declining: its witnesses span (0,0,0) to (10,0,10), sqrt(200) apart.
-	d, ok, err := freeformSectionGateDiameter(t.Context(), pp)
+	d, ok, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.axialDelta)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.InDelta(t, math.Sqrt(200), d, 1e-9)
 
 	// One poll per segment, then the maximum's own first budget poll.
 	ctx := &cancelAfterPolls{Context: t.Context(), pass: segments}
-	d, ok, err = freeformSectionGateDiameter(ctx, pp)
+	d, ok, err = diameter.PrismFreeformSection(ctx, pp.Payload, pp.axialDelta)
 	require.ErrorIs(t, err, context.Canceled, "cancellation must propagate as an error, not as (0, false, nil)")
 	require.False(t, ok)
 	require.Zero(t, d)
@@ -1008,7 +1008,7 @@ func requireStationDiameter(t *testing.T, d, h float64, upperSquare *big.Rat) {
 // A circular wall that sweeps past 180 degrees holds antipodal points the
 // carrier witnesses never reach: at 240 degrees they sample th0, the
 // mid-angle and th1 only, which read 2*sin(120 degrees) = sqrt(3) against the
-// unit wall's true 2. The stations prismStationWitnesses places read the
+// unit wall's true 2. The stations diameter.PrismStationWitnesses places read the
 // true diameter while the reading stays at or below it.
 //
 // Shown to fail first: with the gate reading the carrier witnesses alone,
