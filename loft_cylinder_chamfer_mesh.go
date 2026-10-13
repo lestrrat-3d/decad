@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -596,7 +597,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 				clipped.clipBound)
 			for i, index := range inset[cap] {
 				next := inset[cap][(i+1)%len(inset[cap])]
-				if loftCylinderTriangleMinRadius(mesh.verts, [3]int{index, next, next}) <= boreReach {
+				if loftcylinder.TriangleMinRadius(mesh.verts, [3]int{index, next, next}) <= boreReach {
 					return nil, fmt.Errorf("%w: loft/cylinder inset edge reaches the exact bore", ErrUnsupported)
 				}
 			}
@@ -623,7 +624,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			boreReach := proofbound.AbsSumUpper(source.boreRadius, fp.meshBound, samples.bound,
 				clipped.clipBound)
 			for _, tri := range mesh.tris[bandFirst:] {
-				if loftCylinderTriangleMinRadius(mesh.verts, tri) <= boreReach {
+				if loftcylinder.TriangleMinRadius(mesh.verts, tri) <= boreReach {
 					return nil, fmt.Errorf("%w: loft/cylinder cap band reaches the exact bore", ErrUnsupported)
 				}
 			}

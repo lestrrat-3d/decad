@@ -3,6 +3,7 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -24,7 +25,7 @@ func loftCylinderConnectorGate(lp loftPayload, root int, radius, height, sourceB
 		j := min(near, far)
 		a := [2]r3.Vec{lp.verts[near], lp.verts[n+near]}
 		f := [2]r3.Vec{lp.verts[far], lp.verts[n+far]}
-		minimum := loftCylinderTriangleMinRadius(f[:], [3]int{0, 1, 1})
+		minimum := loftcylinder.TriangleMinRadius(f[:], [3]int{0, 1, 1})
 		threshold := new(big.Rat).Add(proofarith.FloatRat(radius), proofarith.FloatRat(sourceBound))
 		if proofarith.FloatRat(minimum).Cmp(threshold) <= 0 {
 			return 0, false

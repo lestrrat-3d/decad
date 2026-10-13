@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -56,7 +57,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		for j := 1; j < part.rootStart-1; j++ {
 			for side := range 2 {
 				tri := part.mesh.triangles[2*j+side]
-				minimum := loftCylinderTriangleMinRadius(part.mesh.vertices, tri)
+				minimum := loftcylinder.TriangleMinRadius(part.mesh.vertices, tri)
 				if minimum <= proofbound.AbsSumUpper(radius, part.mesh.Bound().Base()) {
 					return nil, fmt.Errorf("%w: copied-prism exterior wall %d lacks circular clearance",
 						ErrUnsupported, j)

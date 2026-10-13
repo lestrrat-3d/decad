@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -78,7 +79,7 @@ func loftCylinderSourceCircleOf(lp loftPayload, radius float64) (loftCylinderSou
 	if !ok {
 		return refuse("source root has no radial gap bound")
 	}
-	if _, ok := loftCylinderRadialGate(lp, root, radius, lp.proof.FacetDeparture, gap); !ok {
+	if _, ok := loftcylinder.RadialGate(lp.verts, lp.tris, lp.segment, root, radius, lp.proof.FacetDeparture, gap); !ok {
 		return refuse("source fitted walls may meet the circle")
 	}
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(z1), proofarith.FloatRat(z0)))
