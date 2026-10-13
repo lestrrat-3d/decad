@@ -13,18 +13,16 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-type crossIV = proofbound.RatInterval
+type crossIV = proofarith.LazyInterval
 
-func crossPoint(x float64) crossIV          { return proofbound.PointInterval(proofarith.FloatRat(x)) }
-func crossAdd(a, b crossIV) crossIV         { return proofbound.IntervalAdd(a, b) }
-func crossSub(a, b crossIV) crossIV         { return proofbound.IntervalSub(a, b) }
-func crossMul(a, b crossIV) crossIV         { return proofbound.IntervalMul(a, b) }
-func crossSq(a crossIV) crossIV             { return proofbound.IntervalSquare(a) }
-func crossQuo(a, b crossIV) (crossIV, bool) { return proofbound.IntervalQuo(a, b) }
-func crossSqrt(a crossIV) (crossIV, bool)   { return proofbound.IntervalSqrt(a) }
-func crossWidth(a crossIV) float64 {
-	return proofbound.RatFloatUp(new(big.Rat).Sub(a.Hi, a.Lo))
-}
+func crossPoint(x float64) crossIV          { return proofarith.LazyPoint(proofarith.FloatRat(x)) }
+func crossAdd(a, b crossIV) crossIV         { return proofarith.LazyIntervalAdd(a, b) }
+func crossSub(a, b crossIV) crossIV         { return proofarith.LazyIntervalSub(a, b) }
+func crossMul(a, b crossIV) crossIV         { return proofarith.LazyIntervalMul(a, b) }
+func crossSq(a crossIV) crossIV             { return proofarith.LazyIntervalSquare(a) }
+func crossQuo(a, b crossIV) (crossIV, bool) { return proofarith.LazyIntervalQuo(a, b) }
+func crossSqrt(a crossIV) (crossIV, bool)   { return proofbound.LazyIntervalSqrt(a) }
+func crossWidth(a crossIV) float64          { return proofbound.LazyIntervalWidthUp(a) }
 
 type crossDual struct{ v, d crossIV }
 
@@ -56,7 +54,7 @@ func crossDSqrt(a crossDual) (crossDual, bool) {
 	return crossDual{v: v, d: d}, ok
 }
 func crossDSinCos(a crossDual) (crossDual, crossDual, bool) {
-	s, c, ok := proofbound.RadSinCosSpan(a.v)
+	s, c, ok := proofbound.LazyRadSinCosSpan(a.v)
 	if !ok {
 		return crossDual{}, crossDual{}, false
 	}
@@ -80,12 +78,18 @@ type crossBoreCellResult struct {
 // polar progress at every transverse band position. Both Jacobian endpoints
 // have one sign, so no transverse band strip folds. The source/held sample
 // comparison charges libm and coordinate rounding instead of assuming ulps.
+//
+// The cell's intervals keep unreduced rationals (proofarith.LazyRat); a value
+// is read in lowest terms where it leaves the proof: a square-root input, the
+// sine/cosine span input and width, and the float readers.
 func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
 	i int, angularGap *big.Rat) (crossBoreCellResult, error) {
 	const n = 2 * crossBoreHalfStations
 	turn := big.NewRat(int64(i), n)
-	s, c := proofbound.TurnSinCosInterval(turn)
-	s, c = proofbound.IntervalWiden(s, angularGap), proofbound.IntervalWiden(c, angularGap)
+	s0, c0 := proofbound.TurnSinCosInterval(turn)
+	gapLazy := proofarith.LazyOf(angularGap)
+	s := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(s0)), gapLazy)
+	c := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(c0)), gapLazy)
 	R, r, d := crossPoint(rec.radius), crossPoint(rec.bore), crossPoint(setback)
 	cd, sd := crossDual{v: c, d: crossSub(crossPoint(0), s)}, crossDual{v: s, d: c}
 	Rd, rd, dd := crossConst(R), crossConst(r), crossConst(d)
@@ -169,17 +173,17 @@ func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
 		{inX.v, inner.X}, {inY.v, inner.Y}, {inZ.v, inner.Z - rec.centerZ},
 		{negativeX, negative.X}, {negativeY, negative.Y}, {negativeZ, negative.Z},
 	} {
-		sampleError = max(sampleError, proofbound.IntervalFloatError(pair.exact, pair.held))
+		sampleError = max(sampleError, proofbound.LazyIntervalFloatError(pair.exact, pair.held))
 	}
 	speed := 0.0
 	for _, dcoord := range []crossIV{outX.d, outY.d, outZ.d, inX.d, inY.d, inZ.d} {
-		speed = max(speed, proofbound.RatFloatUp(proofbound.IntervalAbsUpper(dcoord)))
+		speed = max(speed, proofbound.LazyIntervalAbsUpperUp(dcoord))
 	}
 	diffX := crossSub(outX.v, inX.v)
 	bandCoord := max(
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(diffX)),
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(diffY.v)),
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(diffZ.v)))
+		proofbound.LazyIntervalAbsUpperUp(diffX),
+		proofbound.LazyIntervalAbsUpperUp(diffY.v),
+		proofbound.LazyIntervalAbsUpperUp(diffZ.v))
 	return crossBoreCellResult{
 		width: width, sampleError: proofbound.Radius3D(sampleError),
 		speed: proofbound.Radius3D(speed), bandLength: proofbound.Radius3D(bandCoord),

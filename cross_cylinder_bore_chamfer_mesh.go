@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -38,6 +39,40 @@ func crossBoreStationError(p r3.Vec, radius *big.Rat, phi float64) (float64, boo
 	y := proofbound.IntervalMul(s, proofbound.PointInterval(radius))
 	err := max(proofbound.IntervalFloatError(x, p.X), proofbound.IntervalFloatError(y, p.Y))
 	return proofbound.Radius3D(err), true
+}
+
+// crossBoreStationErrors computes crossBoreStationError for the four vertices
+// of every station (idx[i] holds their indices in the order bottom, lower,
+// upper, top), evaluating each station's sine and cosine enclosure once.
+// Stations run on up to workers goroutines, each writing only its own slot.
+// The result is errs[i][k], the error of vertex idx[i][k]. The first failing
+// station in index order gives the error: a station without a circular bound
+// or with a non-finite error.
+func crossBoreStationErrors(ctx context.Context, verts []r3.Vec, stations []crossBoreStation,
+	idx [][4]int, radius *big.Rat, workers int) ([][4]float64, error) {
+	errs := make([][4]float64, len(stations))
+	_, err := orderedwork.Each(len(stations), workers, 16, ctx.Err, func(i int) error {
+		fail := fmt.Errorf("%w: an outer-ring station has no circular bound", ErrUnsupported)
+		s, c, ok := proofbound.RadSinCosSpan(proofbound.PointInterval(proofarith.FloatRat(stations[i].phi)))
+		if !ok {
+			return fail
+		}
+		x := proofbound.IntervalMul(c, proofbound.PointInterval(radius))
+		y := proofbound.IntervalMul(s, proofbound.PointInterval(radius))
+		for k, vertex := range idx[i] {
+			p := verts[vertex]
+			e := proofbound.Radius3D(max(proofbound.IntervalFloatError(x, p.X), proofbound.IntervalFloatError(y, p.Y)))
+			if proofbound.IsNonFinite(e) {
+				return fail
+			}
+			errs[i][k] = e
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return errs, nil
 }
 
 func (m *crossBoreMesh) point(p r3.Vec) int {
@@ -215,6 +250,19 @@ func crossBoreStationGap(stations []crossBoreStation) (float64, error) {
 
 func buildCrossBoreChamferMesh(ctx context.Context,
 	rec *crossCylinderBoreRecord, setback float64) (*crossBoreMesh, error) {
+	return buildCrossBoreChamferMeshWorkers(ctx, rec, setback, -1)
+}
+
+// crossBoreStationParallelMin is the station count from which the station
+// errors are computed on several goroutines.
+const crossBoreStationParallelMin = 256
+
+// buildCrossBoreChamferMeshWorkers is buildCrossBoreChamferMesh with the
+// station-error fan-out width given; a negative workers picks
+// orderedwork.EachWorkers for the station count. The mesh does not depend on
+// workers.
+func buildCrossBoreChamferMeshWorkers(ctx context.Context,
+	rec *crossCylinderBoreRecord, setback float64, workers int) (*crossBoreMesh, error) {
 	groups, err := crossBoreMeshGroups(rec)
 	if err != nil {
 		return nil, err
@@ -234,6 +282,7 @@ func buildCrossBoreChamferMesh(ctx context.Context,
 	lower := make([]int, len(stations))
 	upper := make([]int, len(stations))
 	top := make([]int, len(stations))
+	vertexIndex := make([][4]int, len(stations))
 	n := 2 * crossBoreHalfStations
 	positiveOuter, negativeOuter := make([]int, n), make([]int, n)
 	for i, station := range stations {
@@ -250,13 +299,7 @@ func buildCrossBoreChamferMesh(ctx context.Context,
 			upper[i] = m.point(station.upper)
 		}
 		top[i] = m.point(r3.Vec{X: x, Y: y, Z: rec.height})
-		for _, vertex := range []int{bottom[i], lower[i], upper[i], top[i]} {
-			err, ok := crossBoreStationError(m.verts[vertex], radiusRat, station.phi)
-			if !ok || proofbound.IsNonFinite(err) {
-				return nil, fmt.Errorf("%w: an outer-ring station has no circular bound", ErrUnsupported)
-			}
-			m.outerStationError = max(m.outerStationError, err)
-		}
+		vertexIndex[i] = [4]int{bottom[i], lower[i], upper[i], top[i]}
 		if station.kind == crossBorePositive {
 			positiveOuter[station.j] = upper[i]
 			positiveOuter[(n-station.j)%n] = lower[i]
@@ -264,6 +307,18 @@ func buildCrossBoreChamferMesh(ctx context.Context,
 		if station.kind == crossBoreNegative {
 			negativeOuter[station.j] = upper[i]
 			negativeOuter[(n-station.j)%n] = lower[i]
+		}
+	}
+	if workers < 0 {
+		workers = orderedwork.EachWorkers(len(stations), crossBoreStationParallelMin)
+	}
+	errs, err := crossBoreStationErrors(ctx, m.verts, stations, vertexIndex, radiusRat, workers)
+	if err != nil {
+		return nil, err
+	}
+	for _, station := range errs {
+		for _, e := range station {
+			m.outerStationError = max(m.outerStationError, e)
 		}
 	}
 	bottomCenter, topCenter := m.point(r3.Vec{}), m.point(r3.Vec{Z: rec.height})

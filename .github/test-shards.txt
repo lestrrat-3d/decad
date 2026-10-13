@@ -1407,6 +1407,8 @@
 10	0.00	TestCrossBoreCellMaximaMatchesSerial
 10	0.00	TestCrossBoreCellMaximaHonoursCancelledContext
 10	0.00	TestCrossBoreCellProofsParallelMatchSerial
+10	0.00	TestCrossBoreLazyCellsMatchReference
+10	0.00	TestCrossBoreStationErrorsMatchSerial
 10	0.00	TestCurvedVerticalTraceConsumesLiveGraphAndShell
 10	0.00	TestVerticalTraceRefusesChangedSourceAndRayOwners
 10	0.00	TestStationedTwistOptionalRefinementKeepsOriginalWorkCeiling
