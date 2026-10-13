@@ -58,7 +58,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		}
 		if !admitted {
 			if sphere, authenticated := sourceSphereAtPose(b, r3.Identity()); authenticated {
-				polygon, delta, admitted = centralSphereObliquePolygon(sphere.center, sphere.radius, plane)
+				polygon, delta, admitted = obliqueSpherePolygon(sphere.center, sphere.radius, plane)
 			}
 		}
 		if !admitted {

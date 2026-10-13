@@ -109,13 +109,11 @@ Reconstruct one complete counterclockwise circle in Sketch and require its
 fresh profile record to match before returning it. The exact profile can
 enter ordinary profile consumers, including `Extrude`.
 
-## Central oblique plane of an authenticated source sphere
+## Oblique plane of an authenticated source sphere
 
 This class uses the same `sourceSphereAtPose` occupied-ball certificate. It
-requires a noncardinal requested frame whose origin equals the certified ball
-center in exact dyadic coordinates. A frame with another origin refuses even
-when its plane also passes through the center. A sphere placed by an unsupported
-rotation still fails the source certificate.
+requires a noncardinal requested frame and a strictly interior plane cut.
+A sphere placed by an unsupported rotation still fails the source certificate.
 
 Read the held U and V as exact dyadic vectors and form their Gram entries
 `guu = U·U`, `gvv = V·V`, and `guv = U·V`. Set
@@ -125,10 +123,15 @@ Read the held U and V as exact dyadic vectors and form their Gram entries
 `m|x|² <= |U*x.u + V*x.v|² <= M|x|²`. The true plane-local section can be an
 ellipse because held frame axes are only approximately orthonormal.
 
-Use exact square comparisons to bound `sqrt(M)` upward and `sqrt(m)` downward.
-Round `r/sqrt(M)` downward to an inner local radius and `r/sqrt(m)` upward to
-an outer local radius. Refuse a zero inner radius or a nonfinite bracket. The
-inner disk lies inside the true section, which lies inside the outer disk.
+Let `w` be the held plane origin minus the ball center and `b=(U·w,V·w)`.
+Solve `G*c=-b` over exact rationals for the local ellipse center `c`, where
+`G` is the Gram matrix. Require its exact determinant to be positive. The
+completed-square radius is `q = r² - |w|² - b·c`; refuse `q <= 0` for tangent
+and exterior planes. Exact square comparisons round `sqrt(q/M)` downward
+to an inner local radius and `sqrt(q/m)` upward to an outer local radius.
+Refuse a zero inner radius or a nonfinite bracket. Both disks use the exact
+rational center `c`. The inner disk lies inside the true section, which lies
+inside the outer disk.
 Sample the inner circle with the rational half-angle stations and convexity,
 feature-scale and 0.05 mm gates of the bounded circle polygon above. The
 outer-minus-inner radius bounds radial movement from the true section to the
@@ -422,8 +425,9 @@ reusing its bound.
   21π mm² section and its 2 mm Extrude encloses 42π mm³ while passing the same
   mesh check. A noncardinal frame whose origin is the sphere center encloses
   the true 25π mm² section; its 2 mm Extrude encloses 50π mm³ and passes the
-  same mesh check. Refuse a noncardinal frame whose origin differs from the
-  sphere center, including one whose plane still passes through it, as well as
+  same mesh check. A noncardinal frame 3 mm from the center encloses the true
+  16π mm² section; its 2 mm Extrude encloses 32π mm³ and passes the same mesh
+  check. A frame shifted along its own plane retains the same section. Refuse
   tangent and exterior cuts.
 - Check translated and rigidly placed rectangular prisms, reversed section
   axes, triangle through hexagon section rings, and cuts that refuse at a

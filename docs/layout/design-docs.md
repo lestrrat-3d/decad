@@ -83,7 +83,7 @@ The rules for rows live in `docs/layout.md`.
 | `section_circle_axis.go` | Exact whole-circle prism section on a cardinal plane with an exact chord. See section design. |
 | `section_cone_axis.go` | Exact full right-cone section on a cardinal plane with an exact circle. See section design. |
 | `section_sphere_axis.go` | Authenticated source-sphere section on a cardinal plane with an exact circle or bounded polygon. See section design. |
-| `section_sphere_oblique.go` | Bounded central oblique section of an authenticated source sphere. See section design. |
+| `section_sphere_oblique.go` | Bounded oblique section of an authenticated source sphere. See section design. |
 | `section_circle_oblique.go` | Rational full-ellipse cut of an exact whole-circle prism and bounded line polygon. See section design. |
 | `section_circle_cap.go` | Certified source circle-line trim and bounded one-cap oblique section polygon. See section design. |
 | `section_rectangle_axis.go` | Exact rectangular-prism section on an interior cardinal vertical plane. See section design. |
