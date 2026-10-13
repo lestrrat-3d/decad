@@ -1963,3 +1963,5 @@
 10	0.00	TestScaledAtRefusesPartialRevolveWithoutRetiringSource
 10	0.00	TestFullRevolveScaledAtRepeatsAfterRigidPlacement
 10	0.00	TestScaledAtRefusesSheetRevolveWithoutRetiringSource
+10	0.00	TestTwistedSweepRoundedShellUnsupportedCallsAreAtomic
+10	0.00	TestTwistedSweepRoundedShellVerifyAll

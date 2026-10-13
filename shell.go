@@ -279,6 +279,9 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	if rp, ok := b.payload.(revolvePayload); ok {
 		return b.shellRevolve(ctx, rp, removed, s, t, tmm, tDelta)
 	}
+	if tp, ok := b.payload.(twistedSweepPayload); ok {
+		return b.shellTwistedSweep(ctx, tp, removed, sense, tmm, tDelta)
+	}
 	// A brep or stacked receiver takes the brep route
 	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
 	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{op: "shells", shell: true,
