@@ -1395,4 +1395,7 @@
 9	0.00	TestWallKernelSetupCancellationIsBounded
 9	0.21	TestWallNormalDecisionEnclosesExactComponent
 9	0.03	TestXHPLerpDenotesTheSameCoordinate
+10	30.00	TestLfBandGateGridMatchesReference
+10	30.00	TestSpiralBernsteinIntegerMatchesReference
+10	2.00	TestSpiralRootRowsMatchReference
 10	0.00	Example_decad_quickstart

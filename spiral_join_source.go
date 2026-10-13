@@ -494,22 +494,6 @@ func spiralScale(a []*big.Rat, k *big.Rat) []*big.Rat {
 	return out
 }
 
-// Products of Bernstein polynomials retain exact rational coefficients.
-// The largest degree used here is 23, whose binomial weights fit int64.
-func spiralMul(a, b []*big.Rat) []*big.Rat {
-	n, m := len(a)-1, len(b)-1
-	out := make([]*big.Rat, n+m+1)
-	for k := range out {
-		out[k] = lfZero()
-		for i := max(0, k-m); i <= min(n, k); i++ {
-			j := k - i
-			weight := big.NewRat(spiralBinom(n, i)*spiralBinom(m, j), spiralBinom(n+m, k))
-			out[k] = lfAdd(out[k], lfMul(weight, lfMul(a[i], b[j])))
-		}
-	}
-	return out
-}
-
 func spiralDeriv(a []*big.Rat) []*big.Rat {
 	out := make([]*big.Rat, len(a)-1)
 	for i := range out {
@@ -576,23 +560,32 @@ func spiralCapBern(m loftFaceMap, span freeform.BezierSpan) ([]*big.Rat, [3][]*b
 // 0,1,2 are the quadratic Bernstein coefficients in band t.
 func spiralRootPolynomial(first, second loftFaceMap, span freeform.BezierSpan,
 	m, b *big.Rat) [3][]*big.Rat {
-	g0, h0 := spiralCapBern(first, span)
-	g1, h1 := spiralCapBern(second, span)
-	d := spiralMul(g0, g1)
-	var a, z [3][]*big.Rat
+	g0, h0 := spiralCapIntRows(first, span)
+	g1, h1 := spiralCapIntRows(second, span)
+	d := g0.mul(g1)
+	var a, z [3]spiralIntRow
 	for axis := range a {
-		a[axis] = spiralMul(h0[axis], g1)
-		z[axis] = spiralMul(h1[axis], g0)
+		a[axis] = h0[axis].mul(g1)
+		z[axis] = h1[axis].mul(g0)
 	}
-	al := spiralAdd(spiralScale(a[0], m), spiralScale(d, b))
-	zl := spiralAdd(spiralScale(z[0], m), spiralScale(d, b))
-	dy, dz, dl := spiralSub(z[1], a[1]), spiralSub(z[2], a[2]), spiralSub(zl, al)
-	q0 := spiralSub(spiralAdd(spiralMul(a[1], a[1]), spiralMul(a[2], a[2])), spiralMul(al, al))
-	q1 := spiralScale(spiralSub(spiralAdd(spiralMul(a[1], dy), spiralMul(a[2], dz)),
-		spiralMul(al, dl)), big.NewRat(2, 1))
-	q2 := spiralSub(spiralAdd(spiralMul(dy, dy), spiralMul(dz, dz)), spiralMul(dl, dl))
-	return [3][]*big.Rat{q0, spiralAdd(q0, spiralScale(q1, big.NewRat(1, 2))),
-		spiralAdd(spiralAdd(q0, q1), q2)}
+	al := a[0].scale(m).add(d.scale(b))
+	zl := z[0].scale(m).add(d.scale(b))
+	dy, dz, dl := z[1].sub(a[1]), z[2].sub(a[2]), zl.sub(al)
+	q0 := a[1].mul(a[1]).add(a[2].mul(a[2])).sub(al.mul(al))
+	q1 := a[1].mul(dy).add(a[2].mul(dz)).sub(al.mul(dl)).scale(big.NewRat(2, 1))
+	q2 := dy.mul(dy).add(dz.mul(dz)).sub(dl.mul(dl))
+	return [3][]*big.Rat{q0.rats(), q0.add(q1.scale(big.NewRat(1, 2))).rats(),
+		q0.add(q1).add(q2).rats()}
+}
+
+// spiralCapIntRows is spiralCapBern with integer rows.
+func spiralCapIntRows(m loftFaceMap, span freeform.BezierSpan) (spiralIntRow, [3]spiralIntRow) {
+	g, h := spiralCapBern(m, span)
+	var rows [3]spiralIntRow
+	for axis := range rows {
+		rows[axis] = spiralIntRowOf(h[axis])
+	}
+	return spiralIntRowOf(g), rows
 }
 
 func spiralAllPositive(rows [3][]*big.Rat) bool {
@@ -624,67 +617,30 @@ func spiralCrossingSigns(q [3][]*big.Rat) bool {
 // by D² is J=B*D*Q_s−(H_s*D−H*D_s)*Q_t, degree (23,2).
 func spiralRootXOrder(first, second loftFaceMap, span freeform.BezierSpan,
 	q [3][]*big.Rat) [3][]*big.Rat {
-	g0, h0 := spiralCapBern(first, span)
-	g1, h1 := spiralCapBern(second, span)
-	d := spiralMul(g0, g1)
-	a, z := spiralMul(h0[0], g1), spiralMul(h1[0], g0)
-	b := spiralSub(z, a)
-	bd := spiralMul(b, d)
-	u0 := spiralSub(spiralMul(spiralDeriv(a), d), spiralMul(a, spiralDeriv(d)))
-	u1 := spiralSub(spiralMul(spiralDeriv(b), d), spiralMul(b, spiralDeriv(d)))
-	q0 := q[0]
-	q1 := spiralScale(spiralSub(q[1], q[0]), big.NewRat(2, 1))
-	q2 := spiralAdd(spiralSub(q[2], spiralScale(q[1], big.NewRat(2, 1))), q[0])
-	j0 := spiralSub(spiralMul(bd, spiralDeriv(q0)), spiralMul(u0, q1))
-	j1 := spiralSub(spiralMul(bd, spiralDeriv(q1)),
-		spiralAdd(spiralScale(spiralMul(u0, q2), big.NewRat(2, 1)), spiralMul(u1, q1)))
-	j2 := spiralSub(spiralMul(bd, spiralDeriv(q2)),
-		spiralScale(spiralMul(u1, q2), big.NewRat(2, 1)))
-	return [3][]*big.Rat{j0, spiralAdd(j0, spiralScale(j1, big.NewRat(1, 2))),
-		spiralAdd(spiralAdd(j0, j1), j2)}
-}
-
-func spiralBernValue(coeff []*big.Rat, parameter *big.Rat) *big.Rat {
-	work := append([]*big.Rat(nil), coeff...)
-	for width := len(work); width > 1; width-- {
-		for i := 0; i+1 < width; i++ {
-			work[i] = lfAdd(lfMul(lfSub(lfOne(), parameter), work[i]),
-				lfMul(parameter, work[i+1]))
-		}
-	}
-	return work[0]
+	g0, h0 := spiralCapIntRows(first, span)
+	g1, h1 := spiralCapIntRows(second, span)
+	d := g0.mul(g1)
+	a, z := h0[0].mul(g1), h1[0].mul(g0)
+	b := z.sub(a)
+	bd := b.mul(d)
+	u0 := a.deriv().mul(d).sub(a.mul(d.deriv()))
+	u1 := b.deriv().mul(d).sub(b.mul(d.deriv()))
+	rows := [3]spiralIntRow{spiralIntRowOf(q[0]), spiralIntRowOf(q[1]), spiralIntRowOf(q[2])}
+	two := big.NewRat(2, 1)
+	q0 := rows[0]
+	q1 := rows[1].sub(rows[0]).scale(two)
+	q2 := rows[2].sub(rows[1].scale(two)).add(rows[0])
+	j0 := bd.mul(q0.deriv()).sub(u0.mul(q1))
+	j1 := bd.mul(q1.deriv()).sub(u0.mul(q2).scale(two).add(u1.mul(q1)))
+	j2 := bd.mul(q2.deriv()).sub(u1.mul(q2).scale(two))
+	return [3][]*big.Rat{j0.rats(), j0.add(j1.scale(big.NewRat(1, 2))).rats(),
+		j0.add(j1).add(j2).rats()}
 }
 
 // The 64 dyadic bisections give a rational enclosure narrower than 2^-64
 // of one source cubic. The cap builder still has to charge its mapped width.
 func spiralIsolateRoot(coeff []*big.Rat) spiralRootCrossing {
 	return spiralIsolateRootN(coeff, 64)
-}
-
-func spiralIsolateRootN(coeff []*big.Rat, steps int) spiralRootCrossing {
-	lo, hi := lfZero(), lfOne()
-	for range steps {
-		mid := lfMul(lfAdd(lo, hi), big.NewRat(1, 2))
-		if spiralBernValue(coeff, mid).Sign() < 0 {
-			lo = mid
-		} else {
-			hi = mid
-		}
-	}
-	return spiralRootCrossing{span: 0, lo: lo, hi: hi}
-}
-
-func spiralBernSplit(a []*big.Rat, at *big.Rat) ([]*big.Rat, []*big.Rat) {
-	n := len(a) - 1
-	left, right := make([]*big.Rat, n+1), make([]*big.Rat, n+1)
-	work := append([]*big.Rat(nil), a...)
-	for level := 0; level <= n; level++ {
-		left[level], right[n-level] = work[0], work[n-level]
-		for i := range n - level {
-			work[i] = lfAdd(lfMul(lfSub(lfOne(), at), work[i]), lfMul(at, work[i+1]))
-		}
-	}
-	return left, right
 }
 
 func spiralBernRestrict(a []*big.Rat, lo, hi *big.Rat) []*big.Rat {

@@ -399,7 +399,7 @@ func revolveLoftFacesEndpointTimeRoots(q [3][]*big.Rat,
 		denominator := int64(1 << depth)
 		for numerator := int64(1); numerator < denominator; numerator += 2 {
 			middle := big.NewRat(numerator, denominator)
-			sign := spiralBernValue(coeff, middle).Sign()
+			sign := spiralBernSign(coeff, middle)
 			if sign == 0 {
 				return nil, false
 			}
@@ -418,14 +418,14 @@ func revolveLoftFacesEndpointTimeRoots(q [3][]*big.Rat,
 
 func revolveLoftFacesIsolateTimeRoot(coeff []*big.Rat,
 	lo, hi *big.Rat) (revolveLoftFacesEndpointRoot, bool) {
-	loSign, hiSign := spiralBernValue(coeff, lo).Sign(), spiralBernValue(coeff, hi).Sign()
+	loSign, hiSign := spiralBernSign(coeff, lo), spiralBernSign(coeff, hi)
 	if loSign == 0 || hiSign == 0 || loSign == hiSign {
 		return revolveLoftFacesEndpointRoot{}, false
 	}
 	direction := hiSign
 	for range 64 {
 		mid := lfMul(lfAdd(lo, hi), big.NewRat(1, 2))
-		sign := spiralBernValue(coeff, mid).Sign()
+		sign := spiralBernSign(coeff, mid)
 		if sign == 0 {
 			return revolveLoftFacesEndpointRoot{
 				time: loftFaceInterval{lo: mid, hi: mid}, direction: direction}, true

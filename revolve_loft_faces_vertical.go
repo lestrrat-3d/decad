@@ -497,15 +497,15 @@ func revolveLoftFacesVerticalPieces(first, last loftFaceMap,
 			continue
 		}
 		mid := lfMul(lfAdd(a, z), big.NewRat(1, 2))
-		if spiralBernValue(loQ, mid).Sign() <= 0 || spiralBernValue(hiQ, mid).Sign() >= 0 {
+		if spiralBernSign(loQ, mid) <= 0 || spiralBernSign(hiQ, mid) >= 0 {
 			continue
 		}
 		box, ok := spiralJunctionBox(first, last, span, a, z, time, time)
 		if !ok {
 			return nil, false
 		}
-		loLower, loUpper := spiralBernValue(loQ, a).Sign(), spiralBernValue(hiQ, a).Sign()
-		hiLower, hiUpper := spiralBernValue(loQ, z).Sign(), spiralBernValue(hiQ, z).Sign()
+		loLower, loUpper := spiralBernSign(loQ, a), spiralBernSign(hiQ, a)
+		hiLower, hiUpper := spiralBernSign(loQ, z), spiralBernSign(hiQ, z)
 		if loLower < 0 || loUpper > 0 || hiLower < 0 || hiUpper > 0 {
 			return nil, false
 		}
