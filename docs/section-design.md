@@ -23,8 +23,8 @@ is `ErrDegenerate`; a sheet or unsound solid is `ErrNotSolid`.
 
 The parallel class admits a `prismPayload` with zero `sectionDelta`,
 `z0Delta`, and `z1Delta`. It refuses a plane that touches either cap. A body
-whose payload is not this prism class returns `ErrUnsupported` without
-changing the document.
+outside this prism class tries the authenticated sphere class below or returns
+`ErrUnsupported` without changing the document.
 
 The gate reads the stored source frame and rigid placement as exact dyadic
 values. It proves that the placed images of source `U`, `V`, and `N` equal the
@@ -42,6 +42,31 @@ boundary through the seam's `TExact` checks, then require its segments to match
 the prism record. A source segment that cannot be recreated or whose
 trim Sketch does not certify returns `ErrUnsupported`. A reconstructed profile
 that does not match the source never becomes a section result.
+
+## Cardinal plane of an authenticated source sphere
+
+This class reads the occupied-ball certificate from `sourceSphereAtPose` for a
+solid, full `Revolve` of one complete semicircle and its on-axis diameter. The
+certificate rejects a displaced meridian, altered face topology, and a placed
+body whose motion does not map signed world axes to signed world axes. A sphere
+face tag alone does not establish the occupied ball.
+
+Require the requested U, V and normal to be three distinct signed world axes,
+with U×V exactly equal to the normal. Read the certified center, radius, plane
+origin and axes as exact dyadic values. The signed normal offset `d` gives
+`q = r² − d²`. Require `q > 0`; a tangent or exterior plane has no admitted
+material profile. Use the downward dyadic square root and an exact square
+comparison to require a binary64 radius `h` with `h² = q`. A non-square `q`
+returns `ErrUnsupported` rather than an exact Sketch circle with a rounded
+radius.
+
+Project the center minus the plane origin onto U and V with exact dyadic dot
+products. Require both local coordinates to be exactly representable as
+finite binary64 values. The occupied ball meets the plane in the disk centered
+there with radius `h`; this whole-ball identity does not require a sampled
+meridian crossing. Reconstruct a whole counterclockwise circle through Sketch
+and require its fresh profile record to match before returning it. The exact
+circle may enter ordinary profile consumers, including `Extrude`.
 
 ## Cardinal vertical plane of an exact cylinder
 
@@ -316,6 +341,12 @@ reusing its bound.
   A 2 mm Extrude yields a volume interval containing 8π√2 mm³ and passes
   `Tessellate(0.1 mm, VerifyAll)`. Check a placed cylinder, reversed section
   axis and a cut crossing a cap.
+- A radius 5 mm Sketch semicircle revolved to a full sphere and cut by the
+  cardinal plane at z = 3 mm returns a circle of radius 4 mm and area 16π mm².
+  Extruding it by 2 mm yields 32π mm³ and passes `Tessellate(0.1 mm, VerifyAll)`.
+  Check a plane normal to the Revolve axis, signed-cardinal placement and
+  reversed section axes. Refuse a
+  non-square section radius, tangent or exterior plane, and oblique plane.
 - Check translated and rigidly placed rectangular prisms, reversed section
   axes, triangle through hexagon section rings, and cuts that refuse at a
   source vertex, tangent, exterior or uncertain topology.

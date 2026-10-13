@@ -1935,6 +1935,10 @@
 10	0.00	TestSectionObliqueRectangleOtherRegionCannotBypassBound
 10	0.00	TestSectionObliqueRectangleRefusesUnsupportedExtrudeOptions
 10	0.00	TestSectionObliqueRectangleRefusesContact
+10	0.00	TestSectionCardinalSphereFeedsVerifiedExtrude
+10	0.00	TestSectionCardinalSphereCutsAcrossRevolveAxis
+10	0.00	TestSectionCardinalSpherePlacementAndPlaneSense
+10	0.00	TestSectionCardinalSphereRefusesUnprovedCuts
 10	0.00	TestSweepLineFilletVerticalEdgesVerified
 10	0.00	TestSweepLineFilletCapEdgeRefuses
 10	0.00	TestSweepLineFilletPlacedReceiver
