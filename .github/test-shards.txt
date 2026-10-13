@@ -1397,3 +1397,6 @@
 10	0.01	TestLoftCylinderTriangleMinRadiusMatchesRational
 10	0.00	TestChainArcSweepAxisErrorChangesPublicMeshBound
 10	0.00	TestPointConeFactorsMatchSerial
+10	0.00	TestCrossBoreCellMaximaMatchesSerial
+10	0.00	TestCrossBoreCellMaximaHonoursCancelledContext
+10	0.00	TestCrossBoreCellProofsParallelMatchSerial

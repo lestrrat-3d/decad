@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -185,6 +186,62 @@ func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
 	}, nil
 }
 
+const (
+	// crossBoreCellParallelMin is the cell count from which the cells are
+	// proved on several goroutines.
+	crossBoreCellParallelMin = 256
+	// crossBoreCellGrain is the number of consecutive cells one worker takes
+	// at a time.
+	crossBoreCellGrain = 16
+)
+
+// crossBoreCellMaxima folds cell(i) for i in [0, n) into the componentwise
+// maximum in index order and returns the error of the lowest failing cell,
+// whatever the worker count. With workers below 2 it polls ctx every 32
+// cells; otherwise it polls ctx before the fan-out and the calling goroutine
+// polls it while the workers run. cell runs on worker goroutines and must
+// not touch ctx or any shared budget.
+func crossBoreCellMaxima(ctx context.Context, n, workers int,
+	cell func(i int) (crossBoreCellResult, error)) (crossBoreCellResult, error) {
+	maximum := crossBoreCellResult{}
+	fold := func(c crossBoreCellResult) {
+		maximum.width = max(maximum.width, c.width)
+		maximum.sampleError = max(maximum.sampleError, c.sampleError)
+		maximum.speed = max(maximum.speed, c.speed)
+		maximum.bandLength = max(maximum.bandLength, c.bandLength)
+	}
+	if workers < 2 {
+		for i := range n {
+			if i%32 == 0 {
+				if err := ctx.Err(); err != nil {
+					return crossBoreCellResult{}, err
+				}
+			}
+			c, err := cell(i)
+			if err != nil {
+				return crossBoreCellResult{}, err
+			}
+			fold(c)
+		}
+		return maximum, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return crossBoreCellResult{}, err
+	}
+	cells := make([]crossBoreCellResult, n)
+	if _, err := orderedwork.Each(n, workers, crossBoreCellGrain, ctx.Err, func(i int) error {
+		c, err := cell(i)
+		cells[i] = c
+		return err
+	}); err != nil {
+		return crossBoreCellResult{}, err
+	}
+	for i := range n {
+		fold(cells[i])
+	}
+	return maximum, nil
+}
+
 // proveCrossBoreChamfer encloses all source-to-held boundary motion. Its
 // volume proof charges the entire positive-mouth collar, where the ideal
 // chamfer and mesh can differ arbitrarily, then two radial chord annuli for
@@ -192,26 +249,16 @@ func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
 // region is deliberate; it keeps the occupied-volume argument independent
 // of the exact band integral. Each source foot is at developed-cylinder
 // distance d from its seam point, so its Euclidean distance is at most d;
-// the ruled band lies in the resulting positive-mouth collar.
+// the ruled band lies in the resulting positive-mouth collar. The cells are
+// proved concurrently and folded in cell order.
 func proveCrossBoreChamfer(ctx context.Context, rec *crossCylinderBoreRecord,
 	setback float64, mesh *crossBoreMesh) (float64, float64, float64, error) {
 	const n = 2 * crossBoreHalfStations
 	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
-	maximum := crossBoreCellResult{}
-	for i := range n {
-		if i%32 == 0 {
-			if err := ctx.Err(); err != nil {
-				return 0, 0, 0, err
-			}
-		}
-		cell, err := crossBoreCellProof(rec, setback, i, gap)
-		if err != nil {
-			return 0, 0, 0, err
-		}
-		maximum.width = max(maximum.width, cell.width)
-		maximum.sampleError = max(maximum.sampleError, cell.sampleError)
-		maximum.speed = max(maximum.speed, cell.speed)
-		maximum.bandLength = max(maximum.bandLength, cell.bandLength)
+	maximum, err := crossBoreCellMaxima(ctx, n, orderedwork.EachWorkers(n, crossBoreCellParallelMin),
+		func(i int) (crossBoreCellResult, error) { return crossBoreCellProof(rec, setback, i, gap) })
+	if err != nil {
+		return 0, 0, 0, err
 	}
 	// Every vertical wall patch pairs source and held points at the same
 	// height fraction. The band pairs them at the same angle and transverse
