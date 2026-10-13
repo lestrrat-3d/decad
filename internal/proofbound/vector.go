@@ -17,6 +17,18 @@ func FiniteVec(v r3.Vec) bool {
 	return finiteFloat(v.X) && finiteFloat(v.Y) && finiteFloat(v.Z)
 }
 
+// AllFinite reports whether every vector in vs is FiniteVec. A parallel
+// loop over exact lifts takes its serial path when this is false, so a lift
+// that panics on a non-finite coordinate does so where the serial loop would.
+func AllFinite(vs []r3.Vec) bool {
+	for _, v := range vs {
+		if !FiniteVec(v) {
+			return false
+		}
+	}
+	return true
+}
+
 // finiteFloat is !math.IsNaN(x) && !math.IsInf(x, 0) by comparison.
 func finiteFloat(x float64) bool {
 	return x == x && x <= math.MaxFloat64 && x >= -math.MaxFloat64
