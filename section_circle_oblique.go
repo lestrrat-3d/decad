@@ -15,31 +15,31 @@ import (
 // prism. The requested plane is read as the exact span of its held U and V.
 // Cuts meeting either cap, and planes parallel to the sweep axis, refuse.
 func obliqueCircleClip(pp prismPayload, plane r3.Frame) ([]Point2, float64, bool) {
-	if len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) != 1 ||
-		pp.blendKind != "" || len(pp.blendSegs) != 0 || pp.z0 >= pp.z1 {
+	if len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
+		pp.BlendKind != "" || len(pp.BlendSegs) != 0 || pp.Z0 >= pp.Z1 {
 		return nil, 0, false
 	}
-	circle, ok := pp.profile.Outer.Segments[0].(circleSeg)
+	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
 	if !ok || !circle.CCW || circle.TStart != 0 || circle.TEnd != 1 {
 		return nil, 0, false
 	}
 	radius, err := circle.Radius.In(units.Millimeter)
 	if err != nil || radius <= 0 || !obliqueCircleFinite(radius, circle.Center.U, circle.Center.V,
-		pp.z0, pp.z1) {
+		pp.Z0, pp.Z1) {
 		return nil, 0, false
 	}
 
-	sourceOrigin := proofarith.DyVec(pp.frame.Origin())
-	placedOrigin := proofarith.DvTransform(pp.xform, sourceOrigin)
+	sourceOrigin := proofarith.DyVec(pp.Frame.Origin())
+	placedOrigin := proofarith.DvTransform(pp.Xform, sourceOrigin)
 	image := func(direction r3.Vec) proofarith.DyV3 {
 		point := proofarith.DvAdd(sourceOrigin, proofarith.DyVec(direction))
-		return proofarith.DvSub(proofarith.DvTransform(pp.xform, point), placedOrigin)
+		return proofarith.DvSub(proofarith.DvTransform(pp.Xform, point), placedOrigin)
 	}
-	radialU, radialV, axis := image(pp.frame.U()), image(pp.frame.V()), image(pp.frame.N())
+	radialU, radialV, axis := image(pp.Frame.U()), image(pp.Frame.V()), image(pp.Frame.N())
 	centerLocal := proofarith.DvAdd(sourceOrigin, proofarith.DvAdd(
-		proofarith.DvScale(proofarith.DyVec(pp.frame.U()), proofarith.DyOfFinite(circle.Center.U)),
-		proofarith.DvScale(proofarith.DyVec(pp.frame.V()), proofarith.DyOfFinite(circle.Center.V))))
-	centerWorld := proofarith.DvTransform(pp.xform, centerLocal)
+		proofarith.DvScale(proofarith.DyVec(pp.Frame.U()), proofarith.DyOfFinite(circle.Center.U)),
+		proofarith.DvScale(proofarith.DyVec(pp.Frame.V()), proofarith.DyOfFinite(circle.Center.V))))
+	centerWorld := proofarith.DvTransform(pp.Xform, centerLocal)
 	requestedOrigin := proofarith.DyVec(plane.Origin())
 	normal := proofarith.DvCross(proofarith.DyVec(plane.U()), proofarith.DyVec(plane.V()))
 	denominator := proofarith.DvDot(normal, axis).Rat()
@@ -56,8 +56,8 @@ func obliqueCircleClip(pp prismPayload, plane r3.Frame) ([]Point2, float64, bool
 	// |a cos(theta)+b sin(theta)| <= |a|+|b|. Strict containment
 	// keeps the complete ellipse away from both cap faces.
 	zReach := sectionRatAdd(new(big.Rat).Abs(zCos), new(big.Rat).Abs(zSin))
-	if sectionRatSub(zCenter, zReach).Cmp(proofarith.FloatRat(pp.z0)) <= 0 ||
-		sectionRatAdd(zCenter, zReach).Cmp(proofarith.FloatRat(pp.z1)) >= 0 {
+	if sectionRatSub(zCenter, zReach).Cmp(proofarith.FloatRat(pp.Z0)) <= 0 ||
+		sectionRatAdd(zCenter, zReach).Cmp(proofarith.FloatRat(pp.Z1)) >= 0 {
 		return nil, 0, false
 	}
 	center := obliqueCircleWorldAdd(obliqueCircleWorld(centerWorld),
