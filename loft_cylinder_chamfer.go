@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -211,7 +212,7 @@ func loftCylinderInset(ctx context.Context, fp facetedPayload, ring []int, d flo
 	if err != nil {
 		return loftCylinderInsetSamples{}, err
 	}
-	if err := auditOffsetSectionBudget(budget, profile, inset); err != nil {
+	if err := offset2d.AuditOffsetSectionBudget(budget, profile, inset); err != nil {
 		return loftCylinderInsetSamples{}, err
 	}
 	delta, err := offsetSectionDelta(budget, profile, 1, d, 0)

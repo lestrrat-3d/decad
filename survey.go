@@ -244,7 +244,7 @@ func cupWalksBudget(budget *proofbound.WorkBudget, loop loopRecord) ([]survey2d.
 var cupWallOperations = cupwall.Operations{
 	Offset:  offsetProfile,
 	Equal:   momentinput.ExactProfileEqual,
-	Audit:   auditOffsetSectionBudget,
+	Audit:   offset2d.AuditOffsetSectionBudget,
 	Reverse: offset2d.ReverseLoopRecordBudget,
 }
 

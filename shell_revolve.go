@@ -84,7 +84,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	loops, err := profileCornerLoopsBudget(budget, rp.profile)
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, rp.profile)
 	if err != nil {
 		return nil, err
 	}
@@ -130,12 +130,12 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	switch {
 	case sides > 0:
 		wall, delta, err = revolveshell.SideWall(budget, rp.profile, rp.ax, walks, axisAt, removedWalks,
-			s, tmm, tDelta, shellTol, auditOffsetSectionBudget)
+			s, tmm, tDelta, shellTol, offset2d.AuditOffsetSectionBudget)
 	case axisAt < 0:
 		wall, delta, err = revolveShellOffAxisWall(budget, rp.profile, s, tmm, tDelta)
 	default:
 		wall, delta, err = revolveshell.AxisWall(budget, rp.profile, rp.ax, walks, axisAt,
-			s, tmm, tDelta, shellTol, auditOffsetSectionBudget)
+			s, tmm, tDelta, shellTol, offset2d.AuditOffsetSectionBudget)
 	}
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -198,7 +198,7 @@ func revolveShellOffAxisWall(budget *proofbound.WorkBudget, profile profileRecor
 	if err != nil {
 		return profileRecord{}, 0, err
 	}
-	if err := auditOffsetSectionBudget(budget, profile, offset); err != nil {
+	if err := offset2d.AuditOffsetSectionBudget(budget, profile, offset); err != nil {
 		return profileRecord{}, 0, err
 	}
 	delta, err := offsetSectionDelta(budget, profile, s, tmm, tDelta)

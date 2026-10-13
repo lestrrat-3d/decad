@@ -136,7 +136,7 @@ func TestShellContextCancellationDuringOffsetLeavesReceiverLive(t *testing.T) {
 func TestShellContextCancellationDuringOffsetSetupLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	ctx := &operationCancelContext{Context: t.Context(), target: "prismCornerLoopsBudget"}
+	ctx := &operationCancelContext{Context: t.Context(), target: "ProfileCornerLoopsBudget"}
 
 	body, err := box.Shell(ctx, topCap(box), units.Millimeters(5))
 
@@ -187,7 +187,7 @@ func TestShellContextCancellationDuringAuditPreservesError(t *testing.T) {
 			doc, box := manySidedPrism(t, 4)
 			ctx := &operationCancelContext{
 				Context:   t.Context(),
-				target:    "auditOffsetSectionBudget",
+				target:    "AuditOffsetSectionBudget",
 				cancelErr: cancelErr,
 			}
 

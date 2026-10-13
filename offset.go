@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -36,7 +37,7 @@ import (
 // publishes no such relation and denotes nothing whatever about the source, so
 // that audit has no subject here and offset2d.ReverseLoopRecordContext and
 // evalTubeContext are not on this path (§17.2). Everything else §16.2 states —
-// offsetProfile, auditOffsetSectionBudget, the exact-generation gate and the
+// offsetProfile, offset2d.AuditOffsetSectionBudget, the exact-generation gate and the
 // whole-interval certification of thicken_axis.go — runs unchanged.
 
 // OffsetOption configures which side of a sheet the offset is taken on.
@@ -263,7 +264,7 @@ func offsetCircleSection(source profileRecord, circle circleSeg, sense int, amou
 // class itself, CertifyAxisOffset for the exact-generation gate over
 // every generated endpoint, corner centre and radius, and
 // AxisIntervalClear for the whole-interval Sturm certification — with
-// offsetProfile supplying the section and auditOffsetSectionBudget checking it.
+// offsetProfile supplying the section and offset2d.AuditOffsetSectionBudget checking it.
 //
 // The interval proof is NOT optional on this shape and is never inferred from
 // the endpoint: an endpoint that looks simple cannot prove an earlier offset did
@@ -277,7 +278,7 @@ func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount f
 			return profileRecord{}, fmt.Errorf(`%w: the prism sheet requires line-only axis-parallel walks`, ErrUnsupported)
 		}
 	}
-	loops, err := prismCornerLoopsBudget(budget, pp)
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, pp.Profile)
 	if err != nil {
 		return profileRecord{}, err
 	}
@@ -296,7 +297,7 @@ func offsetAxisSection(ctx context.Context, pp prismPayload, sense int, amount f
 	if err := thickenaxis.CertifyAxisOffset(loop.Walks, dirs, offset.Outer, sense, amount, budget); err != nil {
 		return profileRecord{}, err
 	}
-	if err := offsetSectionRefusal(auditOffsetSectionBudget(budget, pp.Profile, offset)); err != nil {
+	if err := offsetSectionRefusal(offset2d.AuditOffsetSectionBudget(budget, pp.Profile, offset)); err != nil {
 		return profileRecord{}, err
 	}
 	// radial is nil: a prism sheet's walls sweep along a fixed normal and turn

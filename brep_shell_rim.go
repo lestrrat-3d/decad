@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
@@ -196,7 +197,7 @@ func auditThroughRim(budget *proofbound.WorkBudget, region profileRecord) error 
 			return fmt.Errorf(`%w: the shell's rim loop %d is walked against its material`, ErrDegenerate, li)
 		}
 	}
-	if err := auditOffsetSectionBudget(budget, region, region); err != nil {
+	if err := offset2d.AuditOffsetSectionBudget(budget, region, region); err != nil {
 		return shellCancelCause(err)
 	}
 	return nil

@@ -139,7 +139,7 @@ func evalDraftContext(ctx context.Context, doc *Document, ref producerID, dp dra
 	if err != nil {
 		return nil, err
 	}
-	if err := auditOffsetSectionBudget(budget, dp.profile, far); err != nil {
+	if err := offset2d.AuditOffsetSectionBudget(budget, dp.profile, far); err != nil {
 		return nil, offset2d.DraftAuditError(err)
 	}
 	if err := auditDraftSpan(budget, dp.profile, walks, dp.kept, dp.d, dp.dDelta); err != nil {
@@ -170,7 +170,7 @@ func auditDraftSpan(budget *proofbound.WorkBudget, profile profileRecord, walks 
 	}
 	far, err := offset2d.DraftFarSection(budget, walks, kept, top, shellTol)
 	if err == nil {
-		err = auditOffsetSectionBudget(budget, profile, far)
+		err = offset2d.AuditOffsetSectionBudget(budget, profile, far)
 	}
 	switch {
 	case err == nil:

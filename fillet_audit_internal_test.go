@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -248,7 +249,7 @@ func TestAuditRewriteSingleCornerOverrunIsUnsupported(t *testing.T) {
 			require.Equal(t, tc.flips, math.Signbit(origArea) != math.Signbit(newArea),
 				`the rewritten loop's signed-area flip must match the case's expectation`)
 
-			err = auditRewriteBudget(proofbound.NewWorkBudget(t.Context()), rect, rewritten, loops, blendAt)
+			err = offset2d.AuditRewriteBudget(proofbound.NewWorkBudget(t.Context()), rect, rewritten, loops, blendAt)
 			require.ErrorIs(t, err, ErrUnsupported,
 				`a single corner's overrun is Table S's S6, not the S8 inside-out verdict`)
 			require.NotErrorIs(t, err, ErrDegenerate,
@@ -258,7 +259,7 @@ func TestAuditRewriteSingleCornerOverrunIsUnsupported(t *testing.T) {
 }
 
 // sectionCornerLoops resolves a section's loops into coalesced corner walks, the
-// same decomposition prismCornerLoopsBudget runs, so an internal audit test can drive
+// same decomposition offset2d.ProfileCornerLoopsBudget runs, so an internal audit test can drive
 // the real computeChamfer/computeFillet path on a hand-built section.
 func sectionCornerLoops(t *testing.T, prof profileRecord) []cornerLoop {
 	t.Helper()

@@ -163,7 +163,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 	} else {
 		profile.Holes[sel.loop-1] = loopRecord{Segments: segs}
 	}
-	if err := auditOffsetSectionBudget(r.budget, *f.region, profile); err != nil {
+	if err := offset2d.AuditOffsetSectionBudget(r.budget, *f.region, profile); err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
 	}
 	readings := make([]capcontour.Join, len(joins))
@@ -231,7 +231,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 				restore[end.face] = r.bp.faces[end.face]
 			}
 			if trims[end.face] == nil {
-				loops, err := profileCornerLoopsBudget(r.budget, *r.bp.faces[end.face].region)
+				loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *r.bp.faces[end.face].region)
 				if err != nil {
 					return brepPayload{}, err
 				}
@@ -253,7 +253,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 	slices.Sort(order)
 	for _, fi := range order {
 		old := r.bp.faces[fi]
-		loops, err := profileCornerLoopsBudget(r.budget, *old.region)
+		loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *old.region)
 		if err != nil {
 			return brepPayload{}, err
 		}
@@ -261,7 +261,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 		if err != nil {
 			return brepPayload{}, err
 		}
-		if err := auditRewriteBudget(r.budget, *old.region, region, loops, trims[fi]); err != nil {
+		if err := offset2d.AuditRewriteBudget(r.budget, *old.region, region, loops, trims[fi]); err != nil {
 			return brepPayload{}, r.wrapFace(fi, err)
 		}
 		faces[fi].region = &region

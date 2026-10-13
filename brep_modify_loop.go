@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
@@ -654,7 +655,7 @@ func (r *brepLoopRead) naturalFaceLoops(fi int) (string, error) {
 		}
 		return "", nil
 	}
-	loops, err := profileCornerLoopsBudget(r.budget, *f.region)
+	loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *f.region)
 	if err != nil {
 		return "", err
 	}
@@ -998,7 +999,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 			return brepPayload{}, r.wrapFace(fi, err)
 		}
 		region := *r.bp.faces[fi].region
-		if err := auditOffsetSectionBudget(r.budget, region, mixed[fi]); err != nil {
+		if err := offset2d.AuditOffsetSectionBudget(r.budget, region, mixed[fi]); err != nil {
 			return brepPayload{}, r.wrapFace(fi, capband.ChamferAuditError(err))
 		}
 		if err := auditCapBlendSetbackSpan(r.budget, region, views[fi]); err != nil {
@@ -1055,7 +1056,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 	slices.Sort(planarOrder)
 	for _, fi := range planarOrder {
 		f := r.bp.faces[fi]
-		loops, err := profileCornerLoopsBudget(r.budget, *f.region)
+		loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *f.region)
 		if err != nil {
 			return brepPayload{}, err
 		}
@@ -1063,7 +1064,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		if err != nil {
 			return brepPayload{}, err
 		}
-		if err := auditRewriteBudget(r.budget, *f.region, profile, loops, trims[fi]); err != nil {
+		if err := offset2d.AuditRewriteBudget(r.budget, *f.region, profile, loops, trims[fi]); err != nil {
 			return brepPayload{}, r.wrapFace(fi, renderAuditCoordinates(err))
 		}
 		faces[fi].region = &profile
@@ -1079,7 +1080,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 // neighbouring line is d. A corner two bands claim is SL2.
 func (r *brepLoopRead) trimPlanar(trims map[int][]map[int]*cornerBlend, pu brepUse, n int, sideRef, d float64) error {
 	f := r.bp.faces[pu.Face]
-	loops, err := profileCornerLoopsBudget(r.budget, *f.region)
+	loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *f.region)
 	if err != nil {
 		return err
 	}

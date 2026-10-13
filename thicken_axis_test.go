@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -30,7 +31,7 @@ func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 		Z0:      0, Z1: 10, SurfaceResult: true,
 	}}
 	budget := proofbound.NewWorkBudget(t.Context())
-	loops, err := prismCornerLoopsBudget(budget, pp)
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, pp.Profile)
 	require.NoError(t, err)
 	dirs, err := thickenaxis.AxisDirections(loops[0].Walks, budget)
 	require.NoError(t, err)

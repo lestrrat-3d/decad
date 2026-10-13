@@ -23,9 +23,9 @@ The rules for rows live in `docs/layout.md`.
 | `chamfer.go` | `Body.Chamfer`; cap loops route to `capblend.go`. See modify §7. |
 | `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
 | `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |
-| `fillet_audit.go` | Adapts corner cutbacks to `internal/sectionaudit/` and renders its detailed refusals. See modify §5. |
+| `fillet_audit.go` | Renders `internal/sectionaudit/`'s detailed refusals. See modify §5. |
 | `shell.go` | Public `ShellOption`, `ShellSense` and `Body.Shell`: prism and straight Sweep cap and side shells, a tube, cup, or band group. See modify §8 and Table R. |
-| `shell_offset.go` | Adapts Shell section offsets and proofs; audits the record. See modify §7–§9. |
+| `shell_offset.go` | Binds `internal/offset2d/`'s section offset and its displacement to `shellTol`. See modify §7–§9. |
 | `shell_cup.go` | `cupPayload`, its stacked record and view. See modify-reach §9.1. |
 | `shell_revolve.go` | `Body.Shell` of a revolve. See modify-reach §9.3. |
 | `shell_opening.go` | Prism and straight Sweep side openings: classify removed faces and dispatch the audited region build. See shell-opening §3–§5. |

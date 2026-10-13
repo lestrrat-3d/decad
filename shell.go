@@ -383,7 +383,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	// the crossing test (a crossing or boundary contact of offset loops is S11b,
 	// §8), then S9 (nesting). The shared §5 audit, run on decad's own synthesized
 	// geometry. A shell mints no cutback, so S6 cannot fire.
-	if err := auditOffsetSectionBudget(offsetBudget, pp.Profile, offset); err != nil {
+	if err := offset2d.AuditOffsetSectionBudget(offsetBudget, pp.Profile, offset); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, context.Canceled
 		}
@@ -550,7 +550,7 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 	if err != nil {
 		return nil, err
 	}
-	if err := auditOffsetSectionBudget(budget, pp.Profile, offset); err != nil {
+	if err := offset2d.AuditOffsetSectionBudget(budget, pp.Profile, offset); err != nil {
 		return nil, shellCancelCause(err)
 	}
 	offsetDelta, err := offsetSectionDelta(budget, pp.Profile, s, tmm, tDelta)

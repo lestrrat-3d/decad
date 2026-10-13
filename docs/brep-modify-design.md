@@ -276,7 +276,7 @@ For each admitted edge `e` with axis `a`, adjacent faces `F1`, `F2` and end
 faces `G0`, `G1`:
 
 1. **Corner blend in `G0`.** `G0`'s region is walked into `cornerLoop`s as
-   `prismCornerLoopsBudget` does for a section; the corner at `V0` is the walk
+   `offset2d.ProfileCornerLoopsBudget` does for a section; the corner at `V0` is the walk
    junction whose point maps to `V0`'s reference coordinates (`brepCornerAt`,
    an exact comparison, replacing `matchCornerBudget`'s lifted-point match).
    `computeFillet(loop, corner, r)` or `computeChamfer(loop, corner, dA, dB)` runs

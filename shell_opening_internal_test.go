@@ -24,7 +24,7 @@ func testSideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, side
 		Profile: pp.Profile, Height: pp.Z1 - pp.Z0, Sides: sides,
 		KeptCaps: keptCaps, Sense: sense, Thickness: thickness, HeldThickness: held,
 		ThicknessDelta: 0, Tolerance: shellTol,
-	}, auditOffsetSectionBudget)
+	}, offset2d.AuditOffsetSectionBudget)
 }
 
 // internalSideSegments names the outer-loop segments of pp whose recorded

@@ -241,7 +241,7 @@ func TestOffsetPrismCircle(t *testing.T) {
 // TestOffsetPrismNeckRefusal is T204: §17.2's 4 mm-wide neck eroded 3 mm makes
 // its two offset walls cross, which the shared crossing audit names (R38).
 //
-// Shown to fail: drop auditOffsetSectionBudget from the prism arm and the
+// Shown to fail: drop offset2d.AuditOffsetSectionBudget from the prism arm and the
 // whole-interval certification refuses the same neck instead, with the less
 // specific "the offset interval contains a possible nonadjacent contact" —
 // which turns the message assertion below red. That is the gate order §16.2

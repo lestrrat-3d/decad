@@ -78,7 +78,7 @@ func capWallFoot(joins []cornerJoin, i, n int) (Point2, Point2) {
 
 // oneLoopCornerLoop decomposes a single recorded loop into its coalesced
 // corner walk (capband.LoopWalks), the same decomposition
-// prismCornerLoopsBudget applies to every loop of a section.
+// offset2d.ProfileCornerLoopsBudget applies to every loop of a section.
 func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop loopRecord, work *freeform.FreeformWork) (cornerLoop, error) {
 	walks, err := capband.LoopWalks(budget, loop, work)
 	if err != nil {

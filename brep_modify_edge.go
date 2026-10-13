@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
@@ -305,7 +306,7 @@ func (r *brepEdgeRoute) cornerLoops(fi int) ([]cornerLoop, error) {
 	if loops, ok := r.loops[fi]; ok {
 		return loops, nil
 	}
-	loops, err := profileCornerLoopsBudget(r.budget, *r.bp.faces[fi].region)
+	loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *r.bp.faces[fi].region)
 	if err != nil {
 		return nil, err
 	}
@@ -980,7 +981,7 @@ func (r *brepEdgeRoute) rewrite(blends []*brepEdgeBlend) (brepPayload, error) {
 				return brepPayload{}, err
 			}
 			// Modify §5's audit of the face's final record: S8, S6, S7, S9.
-			if err := auditRewriteBudget(r.budget, *f.region, profile, loops, edit.blendAt); err != nil {
+			if err := offset2d.AuditRewriteBudget(r.budget, *f.region, profile, loops, edit.blendAt); err != nil {
 				return brepPayload{}, r.auditFailure(f, err)
 			}
 			faces[fi].region = &profile

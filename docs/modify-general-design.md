@@ -365,7 +365,7 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    order: S18, S10's section limit (`shellsurvey.SectionInradius`), S10's
    height limit per kept cap (`t < h` with one cap kept, `t < h/2` with both:
    reach SX11's reading), S11a as `offsetProfile(S, +1, t)` is built, then
-   `auditOffsetSectionBudget` (S8, S11b, S9).
+   `offset2d.AuditOffsetSectionBudget` (S8, S11b, S9).
 2. **Each tool dilated.** `Dᵢ = offsetProfile(Tᵢ.profile, −1, t)`: S11a for a
    dropped feature, then the same audit on `Dᵢ` against `Tᵢ`'s section. The
    dilation rounds the tool's convex corners into arcs of radius `t` and

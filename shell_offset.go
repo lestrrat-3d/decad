@@ -2,102 +2,22 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// This file adapts the exact section offset of docs/modify-design.md §7 and
-// audits its record for a shell. The offset is per-feature and topology-preserving:
-// a line offsets to a parallel line, a circle to a concentric circle, a corner
-// closes with a miter or an arc of radius t about the corner point or, at a G1
-// join, with the corner moved t along the shared normal (§7). Every piece
-// is a line or an arc, so P ⊖ t / P ⊕ t is again a ProfileRecord in the
-// line-and-arc vocabulary (§2). The offset is decad's OWN synthesized geometry,
-// proven by exact closed-form tests, never a residual (§5, CLAUDE.md's
-// falsify-only rule governs only what sketch hands over).
-//
-// A feature the offset DROPS or a miter that does not close is a feature-set
-// change the evaluator cannot build without a trimmed-offset kernel — S11a /
-// S11, ErrUnsupported, caught here as the offset is constructed and so
-// antecedent to the audit (§4). A drop takes two shapes, both caught here: a
-// circular segment whose offset radius reaches zero (offset2d.OffsetRadius),
-// and a whole loop whose erosion is empty: a polygonal hole narrower than 2t
-// offset outward, whose corner joins overshoot every walk so each runs backward
-// (offset2d.WalkConsumed). The eroded loop keeps its walk sense, so its signed
-// area does not change sign and the §5 audit's S8 cannot see it — which is why
-// the drop is decided per walk, here, before there is any section to audit. A
-// merge the audit catches later is S11b.
-
-// offsetProfile computes the topology-preserving offset of a section: P ⊖ t
-// (inward, s = +1) or P ⊕ t (outward, s = −1), each loop offset in its own
-// sense (docs/modify-design.md §7). A dropped feature is S11a (offset2d.ErrDrop);
-// a non-closing miter is S11 (offset2d.ErrTopology), naming the loop and the
-// corner (offset2d.CornerTopologyError). Both are ErrUnsupported.
-func offsetProfile(budget *proofbound.WorkBudget, profile profileRecord, s, t float64) (profileRecord, error) {
-	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return profileRecord{}, err
-	}
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: profile}})
-	if err != nil {
-		return profileRecord{}, err
-	}
-	out := make([]loopRecord, len(loops))
-	for i, loop := range loops {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return profileRecord{}, err
-		}
-		segs, err := offset2d.BuildLoop(budget, loop.Walks, s, t, shellTol)
-		if err != nil {
-			return profileRecord{}, offset2d.InLoop(err, i)
-		}
-		out[i] = loopRecord{Segments: segs}
-	}
-	return profileRecord{Outer: out[0], Holes: out[1:]}, nil
-}
+// This file binds the exact section offset of docs/modify-design.md §7 to
+// shellTol; the construction, its S11a/S11 refusals and the §5 audit live in
+// internal/offset2d/profile_offset.go.
 
 // cornerJoin is the shared section offset join read by the root builders.
 type cornerJoin = offset2d.Join
 
-// auditOffsetSectionBudget runs the shared §5 audit (fillet_audit.go) on a shell's
-// offset section, in §4's order: S8 (orientation — an offset loop turned inside
-// out is ErrDegenerate), the crossing test (a crossing or boundary contact of
-// offset loops — S11b, ErrUnsupported), then S9 (nesting). A shell mints no
-// cutback, so the empty fillet map makes the S6 trim test a no-op — the one test
-// that cannot fire on an offset (§8).
-func auditOffsetSectionBudget(budget *proofbound.WorkBudget, orig, offset profileRecord) error {
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: offset}})
-	if err != nil {
-		return err
-	}
-	empty := make([]map[int]*cornerBlend, len(loops))
-	for i := range empty {
-		empty[i] = map[int]*cornerBlend{}
-	}
-	return auditRewriteBudget(budget, orig, offset, loops, empty)
+// offsetProfile binds offset2d.OffsetProfile to shellTol.
+func offsetProfile(budget *proofbound.WorkBudget, profile profileRecord, s, t float64) (profileRecord, error) {
+	return offset2d.OffsetProfile(budget, profile, s, t, shellTol)
 }
 
-// offsetSectionDelta is the cup's offset displacement (docs/modify-design.md
-// §9): a proven upper bound on how far any boundary point of the offset
-// section offsetProfile records for (profile, s, t) sits from the boundary of
-// the offset the shell DENOTES — P ⊖ t* inward, P ⊕ t* outward — where t* is
-// the caller's thickness in exact millimetres, anywhere within tDelta of the
-// held t (magnitudeInBounded's conversion bound).
+// offsetSectionDelta binds offset2d.OffsetSectionDelta to shellTol.
 func offsetSectionDelta(budget *proofbound.WorkBudget, profile profileRecord, s, t, tDelta float64) (float64, error) {
-	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return 0, err
-	}
-	amount, err := offset2d.OffsetAmount(s, t, tDelta)
-	if err != nil {
-		return 0, err
-	}
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: profile}})
-	if err != nil {
-		return 0, err
-	}
-	walks := make([][]survey2d.SideWalk, len(loops))
-	for i, loop := range loops {
-		walks[i] = loop.Walks
-	}
-	return offset2d.SectionDeltaFromWalks(budget, walks, s, t, amount, shellTol)
+	return offset2d.OffsetSectionDelta(budget, profile, s, t, tDelta, shellTol)
 }

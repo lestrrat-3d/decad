@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -159,7 +160,7 @@ func prismCircleOffset(budget *proofbound.WorkBudget, source profileRecord, radi
 	if want.Sign() <= 0 || proofarith.RationalFloatError(want, got) != 0 {
 		return profileRecord{}, fmt.Errorf(`%w: the circle offset is not exactly representable`, ErrUnsupported)
 	}
-	if err := thickenaxis.AuditRefusal(auditOffsetSectionBudget(budget, source, offset)); err != nil {
+	if err := thickenaxis.AuditRefusal(offset2d.AuditOffsetSectionBudget(budget, source, offset)); err != nil {
 		return profileRecord{}, err
 	}
 	return offset, nil

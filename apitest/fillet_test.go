@@ -79,7 +79,7 @@ func (c *preAuditScanCancelContext) Err() error {
 	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
 	for {
 		frame, more := frames.Next()
-		if strings.HasSuffix(frame.Function, ".prismCornerLoopsBudget") {
+		if strings.HasSuffix(frame.Function, ".ProfileCornerLoopsBudget") {
 			c.entered = true
 			return context.Canceled
 		}
@@ -94,7 +94,7 @@ func (c *auditScanCancelContext) Err() error {
 	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
 	for {
 		frame, more := frames.Next()
-		if strings.HasSuffix(frame.Function, ".auditRewriteBudget") {
+		if strings.HasSuffix(frame.Function, ".AuditRewriteBudget") {
 			c.entered = true
 			return c.cancelErr
 		}

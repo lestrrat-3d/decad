@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -356,7 +357,7 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKi
 // alike; see this file's header comment for why Cut/Intersect's clean-nesting
 // match needs none.
 func auditPrismMergeSection(budget *proofbound.WorkBudget, pa prismPayload, merged profileRecord) error {
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: merged}})
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, merged)
 	if err != nil {
 		return err
 	}
@@ -365,7 +366,7 @@ func auditPrismMergeSection(budget *proofbound.WorkBudget, pa prismPayload, merg
 		blendAt[i] = map[int]*cornerBlend{}
 	}
 	orig := profileRecord{Outer: pa.Profile.Outer}
-	return auditRewriteBudget(budget, orig, merged, loops, blendAt)
+	return offset2d.AuditRewriteBudget(budget, orig, merged, loops, blendAt)
 }
 
 // prismSceneDelta names the internal scene charge carried through boolean paths.

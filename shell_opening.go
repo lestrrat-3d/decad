@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/units"
@@ -117,7 +118,7 @@ func (b *Body) shellSideOpening(ctx context.Context, pp prismPayload, removedSta
 		Profile: pp.Profile, Height: pp.Z1 - pp.Z0, Sides: sides,
 		KeptCaps: keptCaps, Sense: s, Thickness: t, HeldThickness: tmm,
 		ThicknessDelta: tDelta, Tolerance: shellTol,
-	}, auditOffsetSectionBudget)
+	}, offset2d.AuditOffsetSectionBudget)
 	if err != nil {
 		return nil, shellCancelCause(err)
 	}
