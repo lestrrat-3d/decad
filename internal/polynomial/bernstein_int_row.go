@@ -1,11 +1,16 @@
 package polynomial
 
-import "math/big"
+import (
+	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+)
 
 // BernsteinIntRow is a Bernstein coefficient row held as integer numerators over
 // one positive denominator: coefficient i is nums[i]/den. Chaining Add, Sub,
 // Scale, Deriv and Mul on it defers every GCD to Rats, which converts each
-// coefficient once with big.Rat.SetFrac. The rational returned for a
+// coefficient once with proof.RatFrac (a shift for a power-of-two denominator,
+// big.Rat.SetFrac otherwise). The rational returned for a
 // coefficient is the canonical big.Rat of the same exact value, so a chain
 // computed here equals the same chain computed with big.Rat operations.
 type BernsteinIntRow struct {
@@ -23,7 +28,7 @@ func BernsteinIntRowOf(a []*big.Rat) BernsteinIntRow {
 func (r BernsteinIntRow) Rats() []*big.Rat {
 	out := make([]*big.Rat, len(r.nums))
 	for i, n := range r.nums {
-		out[i] = new(big.Rat).SetFrac(n, r.den)
+		out[i] = proofarith.RatFrac(new(big.Rat), n, r.den)
 	}
 	return out
 }
