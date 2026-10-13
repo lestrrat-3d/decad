@@ -260,31 +260,16 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref producerID, c
 	return evalLoft(ctx, d, ref, next, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 }
 
-// validateLoftBodyMeasurements is evalLoft's own finiteness gate (design O2).
-// Volume, Centroid and Bounds must be fully finite, exactly as every other
-// analytic payload's validateAnalyticBodyMeasurements requires — but Area's
-// Bound is deliberately NOT checked: §8 requires a saturated Area bound to
-// publish +Inf as a proof term (a wall set whose areas approach float64's own
-// ceiling), and checking it here would refuse the very body that fixture
-// constructs. Only Area's Value is checked for finiteness.
+// validateLoftBodyMeasurements is evalLoft's own finiteness gate (design O2);
+// loftmesh.ValidateBodyReadings owns the rule.
 func validateLoftBodyMeasurements(body *Body) error {
-	if !finiteMeasurementValues(body.volume.Value.Base(), body.volume.Bound.Base()) {
-		return fmt.Errorf(`%w: the loft's volume measurement is not finite`, ErrNotFinite)
-	}
-	if !finiteMeasurementValues(body.area.Value.Base()) {
-		return fmt.Errorf(`%w: the loft's area value is not finite`, ErrNotFinite)
-	}
-	if !finiteMeasurementValues(body.centroid.Value.X, body.centroid.Value.Y, body.centroid.Value.Z, body.centroid.Bound.Base()) {
-		return fmt.Errorf(`%w: the loft's centroid measurement is not finite`, ErrNotFinite)
-	}
-	if !finiteMeasurementValues(
-		body.bounds.Min.X, body.bounds.Min.Y, body.bounds.Min.Z,
-		body.bounds.Max.X, body.bounds.Max.Y, body.bounds.Max.Z,
-		body.bounds.Bound.Base(),
-	) {
-		return fmt.Errorf(`%w: the loft's bounds measurement is not finite`, ErrNotFinite)
-	}
-	return nil
+	return loftmesh.ValidateBodyReadings(loftmesh.BodyReadings{
+		Volume: body.volume.Value.Base(), VolumeBound: body.volume.Bound.Base(),
+		Area:     body.area.Value.Base(),
+		Centroid: body.centroid.Value, CentroidBound: body.centroid.Bound.Base(),
+		BoundsMin: body.bounds.Min, BoundsMax: body.bounds.Max,
+		BoundsBound: body.bounds.Bound.Base(),
+	})
 }
 
 // evalLoft builds the lofted body from the payload's own records

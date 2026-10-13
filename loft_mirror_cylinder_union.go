@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -154,48 +153,29 @@ func loftMirrorCylinderPairMotion(fp facetedPayload, source *loftMirrorJoinRecor
 	if fp.loftMirrorCopy == nil || fp.loftMirrorCopy.source != source ||
 		fp.xform != fp.loftMirrorCopy.motion ||
 		!loftCylinderAxialPlacement(fp.loftMirrorCopy.motion) &&
-			!loftMirrorCylinderNearAxialPlacement(fp.loftMirrorCopy.motion) {
+			!loftmesh.NearAxialPlacement(fp.loftMirrorCopy.motion) {
 		return r3.Transform{}, false
 	}
 	return fp.loftMirrorCopy.motion, true
 }
 
-func loftMirrorCylinderNearAxialPlacement(motion r3.Transform) bool {
-	if !motion.IsValid() || motion.IsReflection() ||
-		motion.Translation() != (r3.Vec{}) {
-		return false
-	}
-	b := motion.Basis()
-	return b.EZ == (r3.Vec{Z: math.Nextafter(1, 0)}) &&
-		b.EX.Z == 0 && b.EY.Z == 0 && b.EX.X == b.EY.Y &&
-		b.EX.Y == -b.EY.X
-}
-
 // For a lower source L reflected about z=middle, the actual upper copy is
-// T(F(L)). The reflected lower-half Join represents F(T(L)). Their exact
-// affine source maps differ only by the constant translation
-// 2*middle*(1-T.EZ.Z) in Z. The pair's certified area bounds the upper
-// source area along this translation, so its swept volume covers the
-// symmetric difference. Held placement roundoff remains in the lower Join.
+// T(F(L)). The reflected lower-half Join represents F(T(L)); the pair's
+// certified area bounds the upper source area along the constant translation
+// between them (loftmesh.MirrorUpperBridgeShift). Held placement roundoff
+// remains in the lower Join.
 func loftMirrorCylinderUpperBridge(pair *Body, motion r3.Transform,
 	middle float64) (float64, float64, bool, error) {
-	if !loftMirrorCylinderNearAxialPlacement(motion) ||
-		middle <= 0 || proofbound.IsNonFinite(middle) {
-		return 0, 0, false, nil
-	}
-	gap := new(big.Rat).Sub(big.NewRat(1, 1), proofarith.FloatRat(motion.Basis().EZ.Z))
-	shift := proofbound.RatFloatUp(new(big.Rat).Mul(
-		new(big.Rat).Mul(big.NewRat(2, 1), proofarith.FloatRat(middle)), gap))
-	if shift <= 0 || proofbound.IsNonFinite(shift) {
+	shift, ok := loftmesh.MirrorUpperBridgeShift(motion, middle)
+	if !ok {
 		return 0, 0, false, nil
 	}
 	area, err := pair.Area()
 	if err != nil {
 		return 0, 0, true, err
 	}
-	areaUpper := proofbound.AbsSumUpper(area.Value.Base(), area.Bound.Base())
-	swept := proofbound.SweptVolumeAllow(shift, areaUpper)
-	if proofbound.IsNonFinite(areaUpper) || proofbound.IsNonFinite(swept) {
+	swept, ok := loftmesh.MirrorUpperBridgeSwept(shift, area.Value.Base(), area.Bound.Base())
+	if !ok {
 		return 0, 0, false, nil
 	}
 	return shift, swept, true, nil

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -105,27 +105,17 @@ func reverseDraftFaceLoops(face *Face) {
 // The two builders read the same sketch section in the same frame at zero.
 // Check their held rims before replacing either set of vertices or edges.
 func auditDraftMiddleRim(ctx context.Context, from, to *Face) error {
-	if len(from.loops) != len(to.loops) {
-		return fmt.Errorf(`%w: two-sided taper halves have different middle loop counts`, ErrUnsupported)
+	return brepgeom.AuditMiddleRim(ctx, draftRimEnds(from), draftRimEnds(to))
+}
+
+func draftRimEnds(face *Face) [][]brepgeom.RimEdgeEnds {
+	loops := make([][]brepgeom.RimEdgeEnds, len(face.loops))
+	for li, loop := range face.loops {
+		ends := make([]brepgeom.RimEdgeEnds, len(loop.coedges))
+		for ci, ce := range loop.coedges {
+			ends[ci] = brepgeom.RimEdgeEnds{Start: ce.Start().position, End: ce.End().position}
+		}
+		loops[li] = ends
 	}
-	budget := proofbound.NewWorkBudget(ctx)
-	for li := range from.loops {
-		if err := budget.Step(); err != nil {
-			return err
-		}
-		left, right := from.loops[li].coedges, to.loops[li].coedges
-		if len(left) != len(right) {
-			return fmt.Errorf(`%w: two-sided taper halves have different middle rim edge counts`, ErrUnsupported)
-		}
-		for ci := range left {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			if left[ci].Start().position != right[ci].Start().position ||
-				left[ci].End().position != right[ci].End().position {
-				return fmt.Errorf(`%w: two-sided taper halves do not share the held middle rim`, ErrUnsupported)
-			}
-		}
-	}
-	return budget.Err()
+	return loops
 }

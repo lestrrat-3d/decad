@@ -8,7 +8,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
@@ -218,19 +217,16 @@ func chainSpanRims(part *Body, arc, reverse bool) (chainRimPair, error) {
 }
 
 func certifyChainRimPair(from, to *Edge) error {
-	for _, pair := range [][2]*Vertex{{from.start, to.start}, {from.end, to.end}} {
-		if pair[0] == nil || pair[1] == nil {
-			return fmt.Errorf(`%w: a composite chain join has a missing source post`, ErrUnsupported)
-		}
-		a, b := pair[0], pair[1]
-		d2, ok := proofarith.DySquaredDistance3(
-			a.position.X, a.position.Y, a.position.Z,
-			b.position.X, b.position.Y, b.position.Z)
-		if !ok || proofarith.DySqrtUp(d2) > proofbound.AbsSumUpper(a.bound.Base(), b.bound.Base()) {
-			return fmt.Errorf(`%w: composite chain source rims disagree beyond their coordinate bounds`, ErrUnsupported)
-		}
+	return compositesweep.CertifyRimPair(
+		[2]*compositesweep.RimPost{chainRimPost(from.start), chainRimPost(from.end)},
+		[2]*compositesweep.RimPost{chainRimPost(to.start), chainRimPost(to.end)})
+}
+
+func chainRimPost(v *Vertex) *compositesweep.RimPost {
+	if v == nil {
+		return nil
 	}
-	return nil
+	return &compositesweep.RimPost{Position: v.position, Bound: v.bound.Base()}
 }
 
 type chainSweepExtent struct{ span chainSweepSpanPayload }
