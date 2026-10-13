@@ -24,6 +24,7 @@ type revolveLoftFacesBlankSeamShell struct {
 	seamRunIDs    [][]int
 	triangleCells []revolveLoftFacesShellTriangleCell
 	sectionRings  [][][]int
+	rays          []revolveLoftFacesRay
 	rayCount      int
 	capRings      []revolveLoftFacesShellCapRing
 	chordBound    float64
@@ -192,7 +193,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		return nil, false, nil
 	}
 	out := &revolveLoftFacesBlankSeamShell{chordBound: maxRadius / (2 * float64(n*n)),
-		seams: make([][]int, len(seams)), rayCount: len(rays)}
+		seams: make([][]int, len(seams)), rayCount: len(rays), rays: rays}
 	for run := range seams {
 		out.seams[run] = make([]int, len(seams[run]))
 		for i := range out.seams[run] {

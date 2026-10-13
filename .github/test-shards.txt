@@ -1408,3 +1408,5 @@
 10	0.00	TestCrossBoreCellMaximaMatchesSerial
 10	0.00	TestCrossBoreCellMaximaHonoursCancelledContext
 10	0.00	TestCrossBoreCellProofsParallelMatchSerial
+10	0.00	TestCurvedVerticalTraceConsumesLiveGraphAndShell
+10	0.00	TestVerticalTraceRefusesChangedSourceAndRayOwners

@@ -51,6 +51,37 @@ ring band, angular ray interval and triangle half. The shell repeats the
 orientation, crossing, Euler, positive-volume and face-bound audits. These
 records do not classify a triangle as retained or removed.
 
+## Vertical source contact on the blank shell
+
+The vertical-trace consumer rebuilds the current graph and all-run shell. It
+selects one constant-X source cell by its graph ID and finds the cap arc with
+that cell's section and blank face. The graph's two endpoint-cell IDs choose
+the path ends. Exact mapped source endpoints link every retained piece on
+that planar side; a missing piece, extra component, changed root bracket, or
+duplicate owner refuses.
+
+The supported path uses exact mapped two-control lines and live Sketch arcs
+whose positive similarity maps their center to the Revolve axis. Every line
+and arc has a strict angular derivative in the positive radial half-plane.
+Lines adjacent to an arc must leave its circle radially; nonadjacent lines
+must have disjoint exact control hulls. Each piece lies inside the cap circle
+except at its graph-owned root bracket. Other curve and path classes refuse.
+
+The consumer finds each piece's crossing with every shell ray. A ray may meet
+different path pieces more than once, including a cap endpoint and the inner
+arc. Exact source parameters bound line crossings; centered-arc radius and
+ray direction bound arc crossings. Each adjacent pair of held path vertices
+must fit one ray wedge. The line segment's endpoint boxes and the arc chord's
+angle bound charge source-to-held displacement; a bound at or above 0.1 mm
+refuses.
+
+Every affected planar fan wedge is split by its ordered radial contacts and
+source edges. Exact edge-crossing checks and ear clipping triangulate each
+bounded region. Each emitted triangle records one original section, ring
+band, and ray wedge. The rebuilt shell repeats orientation, Euler, exact
+facet-crossing, positive-volume and face-bound audits. The trace does not
+classify retained LoftFaces faces or produce a joined Union boundary.
+
 A stored graph is checked against a newly certified source and census before
 later use. The comparison includes every pair verdict, cell owner and exact
 interval, complete station run, and occupied cap arc. A changed source
