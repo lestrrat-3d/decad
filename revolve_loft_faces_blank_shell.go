@@ -16,13 +16,26 @@ import (
 // A source-aligned blank shell is a closed construction piece. Its face bound
 // charges angular chording and vertex movement; it is not a Union result.
 type revolveLoftFacesBlankSeamShell struct {
-	mesh         joinedMesh
-	vertexBounds []float64
-	seam         []int
-	seamIDs      []int
-	capRings     []revolveLoftFacesShellCapRing
-	chordBound   float64
-	faceBound    float64
+	mesh          joinedMesh
+	vertexBounds  []float64
+	seam          []int
+	seamIDs       []int
+	seams         [][]int
+	seamRunIDs    [][]int
+	triangleCells []revolveLoftFacesShellTriangleCell
+	sectionRings  [][][]int
+	rayCount      int
+	capRings      []revolveLoftFacesShellCapRing
+	chordBound    float64
+	faceBound     float64
+}
+
+type revolveLoftFacesShellTriangleCell struct {
+	section, band, ray, half int
+}
+
+type revolveLoftFacesShellSeamSelector struct {
+	sectionIndex, cellIndex int
 }
 
 type revolveLoftFacesShellCapRing struct {
@@ -42,6 +55,7 @@ type revolveLoftFacesShellCut struct {
 	x, radius    *big.Rat
 	arc          *revolveLoftFacesToolCapOccupiedArc
 	seam         bool
+	seamRun      int
 	vertices     []int
 	endpointIDs  [2]int
 	ties         *revolveLoftFacesHeelArcSideTies
@@ -50,7 +64,12 @@ type revolveLoftFacesShellCut struct {
 type revolveLoftFacesRay struct {
 	y, z      *big.Rat
 	seamIndex int
+	seamRefs  []revolveLoftFacesRaySeamRef
 	capIDs    []int
+}
+
+type revolveLoftFacesRaySeamRef struct {
+	run, station int
 }
 
 // This builds every authenticated Revolve wall and end cap on one angular
@@ -70,10 +89,17 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 	manifest *revolveLoftFacesContactManifest,
 	sectionIndex, cellIndex int, capCuts []revolveLoftFacesShellCut,
 ) (*revolveLoftFacesBlankSeamShell, bool, error) {
+	return revolveLoftFacesBlankShellAtRunsWithCuts(ctx, proof, manifest,
+		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, capCuts)
+}
+
+func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
+	proof *revolveLoftFacesSourceCertificate,
+	manifest *revolveLoftFacesContactManifest,
+	selectors []revolveLoftFacesShellSeamSelector, capCuts []revolveLoftFacesShellCut,
+) (*revolveLoftFacesBlankSeamShell, bool, error) {
 	if ctx == nil || proof == nil || proof.trim == nil || proof.tooth == nil || manifest == nil ||
-		sectionIndex < 0 || sectionIndex >= len(proof.section.spans) ||
-		sectionIndex >= len(manifest.sideOutcome) ||
-		manifest.sideOutcome[sectionIndex] != revolveLoftFacesSideSourceCandidate ||
+		len(selectors) == 0 ||
 		!revolveLoftFacesSectionCurrent(proof) {
 		return nil, false, nil
 	}
@@ -91,76 +117,22 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 		return nil, false, nil
 	}
 	manifest = current
-	section := proof.section.spans[sectionIndex]
-	if section.face == nil || section.start.U == section.end.U ||
-		section.start.V <= 0 || section.end.V <= 0 {
-		return nil, false, nil
-	}
-	var side *revolveLoftFacesNonverticalSide
-	for i := range manifest.nonvertical {
-		if manifest.nonvertical[i].sectionIndex == sectionIndex {
-			if side != nil {
-				return nil, false, nil
-			}
-			side = &manifest.nonvertical[i]
-		}
-	}
-	if side == nil || side.face != section.face ||
-		!slices.Equal(side.origins, section.origins) ||
-		cellIndex < 0 || cellIndex >= len(side.cells) {
-		return nil, false, nil
-	}
-	cell := side.cells[cellIndex]
-	mapped := cell.mapped
-	if mapped.side != revolveLoftFacesJointContact ||
-		mapped.jointKind != revolveLoftFacesWholeArcContact || mapped.jointArc == nil ||
-		mapped.tLo == nil || mapped.tHi == nil || mapped.tLoOpen || mapped.tHiOpen ||
-		mapped.segment < 0 || mapped.segment >= len(proof.trim.source.source.entities) ||
-		proof.trim.source.source.entities[mapped.segment] != mapped.jointArc ||
-		mapped.band < 0 || mapped.band+1 >= len(proof.trim.maps) {
-		return nil, false, nil
-	}
-	if mapped.band >= len(proof.sourceRefs) ||
-		mapped.segment >= len(proof.sourceRefs[mapped.band]) ||
-		cell.ref != proof.sourceRefs[mapped.band][mapped.segment] {
-		return nil, false, nil
-	}
-	liveFace, unique := revolveLoftFacesUniqueOriginFace(proof.tooth, cell.ref)
-	if !unique || liveFace == nil || liveFace != cell.face {
-		return nil, false, nil
-	}
-	arcCells, certified, err := revolveLoftFacesArcSpanCells(ctx, proof.trim,
-		section, mapped.segment)
-	if err != nil || !certified {
-		return nil, false, err
-	}
-	matched := false
-	for _, source := range arcCells {
-		matched = matched || revolveLoftFacesSameArcContact(source, mapped)
-	}
-	if !matched {
-		return nil, false, nil
-	}
-	stations, ok := revolveLoftFacesCompleteArcRun(proof.trim, mapped.segment)
-	if !ok {
-		return nil, false, nil
-	}
-	seam, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(ctx, proof.blank, proof.tooth,
-		sectionIndex, mapped.segment, mapped.band,
-		loftFaceInterval{Lo: mapped.tLo, Hi: mapped.tHi}, stations)
-	if err != nil || !ok {
-		return nil, false, err
-	}
-	x := seam[0].exact[0]
-	for _, vertex := range seam[1:] {
-		if vertex.exact[0].Cmp(x) != 0 {
+	seams := make([][]revolveLoftFacesSeamVertex, len(selectors))
+	seamCuts := make([]revolveLoftFacesShellCut, len(selectors))
+	seenSelectors := make(map[revolveLoftFacesShellSeamSelector]struct{}, len(selectors))
+	stationCount := 0
+	for run, selector := range selectors {
+		if _, duplicate := seenSelectors[selector]; duplicate {
 			return nil, false, nil
 		}
-	}
-	m, b := revolveLoftFacesMeridian(section)
-	radius := lfAdd(lfMul(m, x), b)
-	if radius.Sign() <= 0 {
-		return nil, false, nil
+		seenSelectors[selector] = struct{}{}
+		cut, vertices, valid, cutErr := revolveLoftFacesShellSeamCutOf(ctx, proof, manifest, selector)
+		if cutErr != nil || !valid {
+			return nil, false, cutErr
+		}
+		cut.seamRun = run
+		seamCuts[run], seams[run] = cut, vertices
+		stationCount += len(vertices)
 	}
 	maxRadius := 0.0
 	for _, span := range proof.section.spans {
@@ -190,12 +162,21 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 		capCuts[i].ties = ties
 		capVertices = append(capVertices, vertices[:]...)
 	}
-	rays := revolveLoftFacesShellRays(n, seam, capVertices)
-	if len(rays) < 4 || len(rays) > 4*n+len(seam)+len(capVertices) ||
+	rays := revolveLoftFacesShellRaysForRuns(n, seams, capVertices)
+	if len(rays) < 4 || len(rays) > 4*n+stationCount+len(capVertices) ||
 		len(rays)*len(proof.section.spans) > 1<<16 {
 		return nil, false, nil
 	}
-	if !revolveLoftFacesCapRayOrderBounded(rays, seam, capVertices) {
+	if len(seams) == 1 {
+		for i := range rays {
+			if len(rays[i].seamRefs) == 1 {
+				rays[i].seamIndex = rays[i].seamRefs[0].station
+			}
+		}
+		if !revolveLoftFacesCapRayOrderBounded(rays, seams[0], capVertices) {
+			return nil, false, nil
+		}
+	} else if !revolveLoftFacesAllRayOrderBounded(rays, seams, capVertices) {
 		return nil, false, nil
 	}
 	positiveYAxis := -1
@@ -211,10 +192,14 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 		return nil, false, nil
 	}
 	out := &revolveLoftFacesBlankSeamShell{chordBound: maxRadius / (2 * float64(n*n)),
-		seam: make([]int, len(seam))}
-	for i := range out.seam {
-		out.seam[i] = -1
+		seams: make([][]int, len(seams)), rayCount: len(rays)}
+	for run := range seams {
+		out.seams[run] = make([]int, len(seams[run]))
+		for i := range out.seams[run] {
+			out.seams[run][i] = -1
+		}
 	}
+	out.seam = out.seams[0]
 	group := make([]int, len(proof.section.spans))
 	for i, span := range proof.section.spans {
 		group[i] = -1
@@ -254,11 +239,21 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 		}
 		ring := make([]int, len(rays))
 		for j, ray := range rays {
-			if cut != nil && cut.seam && ray.seamIndex >= 0 {
-				vertex := seam[ray.seamIndex]
-				ring[j] = appendPoint(vertex.point, vertex.blankBound)
-				out.seam[ray.seamIndex] = ring[j]
-				continue
+			if cut != nil && cut.seam {
+				matched := false
+				for _, ref := range ray.seamRefs {
+					if ref.run != cut.seamRun {
+						continue
+					}
+					vertex := seams[ref.run][ref.station]
+					ring[j] = appendPoint(vertex.point, vertex.blankBound)
+					out.seams[ref.run][ref.station] = ring[j]
+					matched = true
+					break
+				}
+				if matched {
+					continue
+				}
 			}
 			if cut != nil && cut.arc != nil {
 				found := -1
@@ -294,8 +289,9 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 		}
 	}
 	cuts := make([][]revolveLoftFacesShellCut, len(proof.section.spans))
-	cuts[sectionIndex] = append(cuts[sectionIndex], revolveLoftFacesShellCut{
-		sectionIndex: sectionIndex, x: x, radius: radius, seam: true})
+	for _, cut := range seamCuts {
+		cuts[cut.sectionIndex] = append(cuts[cut.sectionIndex], cut)
+	}
 	for _, cut := range capCuts {
 		if cut.arc == nil || cut.sectionIndex < 0 ||
 			cut.sectionIndex >= len(proof.section.spans) ||
@@ -312,7 +308,7 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 		}
 		cuts[cut.sectionIndex] = append(cuts[cut.sectionIndex], cut)
 	}
-	if (len(proof.section.spans)+len(capCuts)+1)*len(rays) > 1<<16 {
+	if (len(proof.section.spans)+len(capCuts)+len(seamCuts))*len(rays) > 1<<16 {
 		return nil, false, nil
 	}
 	for i := range cuts {
@@ -386,7 +382,15 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 			}
 		}
 	}
-	addBand := func(start, end []int, source int) bool {
+	out.sectionRings = make([][][]int, len(cuts))
+	for i := range cuts {
+		out.sectionRings[i] = append(out.sectionRings[i], rings[i])
+		for _, cut := range cuts[i] {
+			out.sectionRings[i] = append(out.sectionRings[i], cut.vertices)
+		}
+		out.sectionRings[i] = append(out.sectionRings[i], rings[(i+1)%len(rings)])
+	}
+	addBand := func(start, end []int, source, section, band int) bool {
 		if len(start) != len(rays) && len(start) != 1 ||
 			len(end) != len(rays) && len(end) != 1 || source < 0 {
 			return false
@@ -398,11 +402,18 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 				return false
 			case len(start) == 1:
 				out.mesh.add([3]int{start[0], end[j], end[next]}, source)
+				out.triangleCells = append(out.triangleCells,
+					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j})
 			case len(end) == 1:
 				out.mesh.add([3]int{start[j], end[0], start[next]}, source)
+				out.triangleCells = append(out.triangleCells,
+					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j})
 			default:
 				out.mesh.add([3]int{start[j], end[j], end[next]}, source)
 				out.mesh.add([3]int{start[j], end[next], start[next]}, source)
+				out.triangleCells = append(out.triangleCells,
+					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j},
+					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j, half: 1})
 			}
 		}
 		return true
@@ -412,19 +423,21 @@ func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
 			continue
 		}
 		start := rings[i]
-		for _, cut := range cuts[i] {
-			if !addBand(start, cut.vertices, group[i]) {
+		for band, cut := range cuts[i] {
+			if !addBand(start, cut.vertices, group[i], i, band) {
 				return nil, false, nil
 			}
 			start = cut.vertices
 		}
-		if !addBand(start, rings[(i+1)%len(rings)], group[i]) {
+		if !addBand(start, rings[(i+1)%len(rings)], group[i], i, len(cuts[i])) {
 			return nil, false, nil
 		}
 	}
-	for _, index := range out.seam {
-		if index < 0 {
-			return nil, false, nil
+	for _, run := range out.seams {
+		for _, index := range run {
+			if index < 0 {
+				return nil, false, nil
+			}
 		}
 	}
 	maxVertexBound := 0.0
