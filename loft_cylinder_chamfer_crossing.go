@@ -93,7 +93,7 @@ func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *joinedMesh,
 		}
 	}
 	maxScans := uint64(min(64_000_000, 2_048*len(wall)))
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.verts, wall,
+	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewPollWorkBudget(ctx), mesh.verts, wall,
 		maxTriangles, maxScans); err != nil {
 		return fmt.Errorf("cap chamfer wall crossing audit (%d facets, %d pair scans): %w",
 			len(wall), maxScans, err)

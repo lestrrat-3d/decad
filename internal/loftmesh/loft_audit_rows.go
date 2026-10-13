@@ -2,8 +2,10 @@ package loftmesh
 
 import (
 	"fmt"
+	"math/bits"
 	"runtime"
 	"slices"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
@@ -59,6 +61,18 @@ func loftRowChunkEnd(members, starts []int, lo int) int {
 // is set; otherwise only its partners are counted.
 func walkLoftRows(budget *proofbound.WorkBudget, tree loftRowScan, members []int, lo, hi int,
 	ceiling uint64, keep bool, workers int, out []loftRowResult) error {
+	if ts, ok := tree.(treeScan); ok && keep {
+		words := (len(ts.boxes) + 63) / 64
+		_, err := orderedwork.Each(hi-lo, workers, 64, budget.Err, func(k int) error {
+			r := &out[k]
+			*r = loftRowResult{row: r.row[:0]}
+			r.row, r.work, r.exceeded = ts.walkRowAppend(members[lo+k], ceiling, r.row)
+			r.count = len(r.row)
+			r.row = sortRowByBitmap(r.row, words)
+			return nil
+		})
+		return err
+	}
 	_, err := orderedwork.Each(hi-lo, workers, 64, budget.Err, func(k int) error {
 		r := &out[k]
 		*r = loftRowResult{row: r.row[:0]}
@@ -72,6 +86,60 @@ func walkLoftRows(budget *proofbound.WorkBudget, tree loftRowScan, members []int
 		return nil
 	})
 	return err
+}
+
+// rowBitmaps holds zeroed bitmaps for sortRowByBitmap.
+var rowBitmaps sync.Pool
+
+// sortRowByBitmap returns row sorted ascending. A row's partners are distinct
+// member indices below words*64, so it sets one bit per partner in a pooled
+// bitmap and reads the set bits back in order, clearing them. A repeated
+// partner, or a row whose index range is far wider than the row is long, is
+// sorted with slices.Sort instead, which gives the same order.
+func sortRowByBitmap(row []int32, words int) []int32 {
+	if len(row) < 2 {
+		return row
+	}
+	lo, hi := row[0], row[0]
+	for _, j := range row {
+		lo, hi = min(lo, j), max(hi, j)
+	}
+	if int(hi>>6-lo>>6)+1 > 16*len(row) {
+		slices.Sort(row)
+		return row
+	}
+	var set *[]uint64
+	if v, ok := rowBitmaps.Get().(*[]uint64); ok && len(*v) >= words {
+		set = v
+	} else {
+		w := make([]uint64, words)
+		set = &w
+	}
+	bitmap := *set
+	for k, j := range row {
+		bit := uint64(1) << (uint(j) & 63)
+		if bitmap[j>>6]&bit != 0 {
+			for _, c := range row[:k] {
+				bitmap[c>>6] = 0
+			}
+			rowBitmaps.Put(set)
+			slices.Sort(row)
+			return row
+		}
+		bitmap[j>>6] |= bit
+	}
+	n := 0
+	for w := lo >> 6; w <= hi>>6; w++ {
+		x := bitmap[w]
+		bitmap[w] = 0
+		for x != 0 {
+			row[n] = w<<6 | int32(bits.TrailingZeros64(x))
+			n++
+			x &= x - 1
+		}
+	}
+	rowBitmaps.Put(set)
+	return row
 }
 
 // replayLoftRow steps budget exactly as visitRow(budget, i, limit, ...) does

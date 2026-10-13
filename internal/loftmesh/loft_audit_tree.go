@@ -17,6 +17,7 @@ type treeScan struct {
 	boxes [][2]r3.Vec
 	order []int32
 	nodes []treeNode
+	flat  *flatTree
 }
 
 type treeNode struct {
@@ -36,6 +37,7 @@ func newTreeScan(boxes [][2]r3.Vec, members []int) treeScan {
 	if len(members) != 0 {
 		t.build(0, len(members))
 	}
+	t.flat = newFlatTree(&t)
 	return t
 }
 
@@ -202,13 +204,11 @@ func (t treeScan) visit(budget *proofbound.WorkBudget, limit uint64, fn func(i, 
 const loftTreeParallelMin = 4096
 
 // replayRowSteps calls budget.Step work times, as the serial walks do one
-// unit at a time. It returns the number of successful steps and the first
-// error; with no error it returns (work, exceeded, nil).
+// unit at a time, through budget.StepN. It returns the number of successful
+// steps and the first error; with no error it returns (work, exceeded, nil).
 func replayRowSteps(budget *proofbound.WorkBudget, work uint64, exceeded bool) (uint64, bool, error) {
-	for s := range work {
-		if err := budget.Step(); err != nil {
-			return s, false, err
-		}
+	if s, err := budget.StepN(work); err != nil {
+		return s, false, err
 	}
 	return work, exceeded, nil
 }
@@ -218,54 +218,154 @@ func replayRowSteps(budget *proofbound.WorkBudget, work uint64, exceeded bool) (
 // stopping at limit+1. It reads only the immutable tree, so concurrent calls
 // are safe as long as each fn is private to its caller.
 func (t treeScan) walkRow(i int, limit uint64, fn func(j int)) (uint64, bool) {
-	if len(t.nodes) == 0 {
-		return 0, false
-	}
-	w := rowWalker{t: &t, i: i, limit: limit, fn: fn}
-	exceeded := w.walk(0)
-	return w.scanned, exceeded
+	return t.flat.walkRow(t.boxes[i], i, limit, fn)
 }
 
-type rowWalker struct {
-	t       *treeScan
-	i       int
-	limit   uint64
-	scanned uint64
-	fn      func(j int)
+// walkRowAppend is walkRow with the partners appended to out in the order
+// walkRow passes them to fn.
+func (t treeScan) walkRowAppend(i int, limit uint64, out []int32) ([]int32, uint64, bool) {
+	return t.flat.walkRowAppend(t.boxes[i], i, limit, out)
 }
 
-func (w *rowWalker) walk(node int) bool {
-	w.scanned++
-	if w.scanned > w.limit {
-		return true
+// flatTree is treeScan's nodes and member boxes as parallel arrays, so a walk
+// reads contiguous numbers instead of 100-byte node structs. It is built once
+// by newTreeScan and never written afterwards.
+type flatTree struct {
+	nbox        []float64 // six per node: min x, y, z then max x, y, z
+	left, right []int32   // child nodes; left < 0 for a leaf
+	start, end  []int32   // the node's range of order
+	maxID       []int32
+	order       []int32
+	box         []float64 // six per position in order, as nbox
+}
+
+// flatWalkStack is the walk stack depth: a node is replaced by two children,
+// so the stack holds at most the tree depth plus one entry, and a tree over
+// fewer than 2^31 members is shallower than 32 levels.
+const flatWalkStack = 64
+
+func newFlatTree(t *treeScan) *flatTree {
+	f := &flatTree{
+		nbox:  make([]float64, 0, 6*len(t.nodes)),
+		left:  make([]int32, len(t.nodes)),
+		right: make([]int32, len(t.nodes)),
+		start: make([]int32, len(t.nodes)),
+		end:   make([]int32, len(t.nodes)),
+		maxID: make([]int32, len(t.nodes)),
+		order: t.order,
+		box:   make([]float64, 0, 6*len(t.order)),
 	}
-	n := &w.t.nodes[node]
-	box := &w.t.boxes[w.i]
-	if int(n.maxID) <= w.i || !meshbool.BoxesOverlap(*box, n.box) {
-		return false
+	for k, n := range t.nodes {
+		f.nbox = append(f.nbox, n.box[0].X, n.box[0].Y, n.box[0].Z, n.box[1].X, n.box[1].Y, n.box[1].Z)
+		f.left[k], f.right[k] = int32(n.left), int32(n.right)
+		f.start[k], f.end[k] = int32(n.start), int32(n.end)
+		f.maxID[k] = n.maxID
 	}
-	if n.left >= 0 {
-		if w.walk(n.left) {
-			return true
+	for _, j := range t.order {
+		b := t.boxes[j]
+		f.box = append(f.box, b[0].X, b[0].Y, b[0].Z, b[1].X, b[1].Y, b[1].Z)
+	}
+	return f
+}
+
+func box6(b [2]r3.Vec) [6]float64 {
+	return [6]float64{b[0].X, b[0].Y, b[0].Z, b[1].X, b[1].Y, b[1].Z}
+}
+
+// boxes6Overlap is meshbool.BoxesOverlap over two six-number boxes.
+func boxes6Overlap(a, b []float64) bool {
+	return a[0] <= b[3] && b[0] <= a[3] && a[1] <= b[4] && b[1] <= a[4] && a[2] <= b[5] && b[2] <= a[5]
+}
+
+// walkRowAppend is visitRow's walk as an iterative loop with no budget. The
+// stack pushes right before left, so nodes come in the order a recursion
+// visits them.
+func (f *flatTree) walkRowAppend(row [2]r3.Vec, i int, limit uint64, out []int32) ([]int32, uint64, bool) {
+	if len(f.left) == 0 {
+		return out, 0, false
+	}
+	bi := box6(row)
+	var stack [flatWalkStack]int32
+	sp := 1
+	var scanned uint64
+	i32 := int32(i)
+	for sp > 0 {
+		sp--
+		node := stack[sp]
+		scanned++
+		if scanned > limit {
+			return out, scanned, true
 		}
-		return w.walk(n.right)
-	}
-	for _, j := range w.t.order[n.start:n.end] {
-		if int(j) <= w.i {
+		if f.maxID[node] <= i32 || !boxes6Overlap(bi[:], f.nbox[6*int(node):6*int(node)+6:6*int(node)+6]) {
 			continue
 		}
-		w.scanned++
-		if w.scanned > w.limit {
-			return true
+		if l := f.left[node]; l >= 0 {
+			stack[sp] = f.right[node]
+			stack[sp+1] = l
+			sp += 2
+			continue
 		}
-		if meshbool.BoxesOverlap(*box, w.t.boxes[j]) {
-			w.fn(int(j))
+		for k := int(f.start[node]); k < int(f.end[node]); k++ {
+			j := f.order[k]
+			if j <= i32 {
+				continue
+			}
+			scanned++
+			if scanned > limit {
+				return out, scanned, true
+			}
+			if boxes6Overlap(bi[:], f.box[6*k:6*k+6:6*k+6]) {
+				out = append(out, j)
+			}
 		}
 	}
-	return false
+	return out, scanned, false
 }
 
-// pairWalker is visit's walk(a, b) without a budget.
+// walkRow is walkRowAppend with each partner passed to fn.
+func (f *flatTree) walkRow(row [2]r3.Vec, i int, limit uint64, fn func(j int)) (uint64, bool) {
+	if len(f.left) == 0 {
+		return 0, false
+	}
+	bi := box6(row)
+	var stack [flatWalkStack]int32
+	sp := 1
+	var scanned uint64
+	i32 := int32(i)
+	for sp > 0 {
+		sp--
+		node := stack[sp]
+		scanned++
+		if scanned > limit {
+			return scanned, true
+		}
+		if f.maxID[node] <= i32 || !boxes6Overlap(bi[:], f.nbox[6*int(node):6*int(node)+6:6*int(node)+6]) {
+			continue
+		}
+		if l := f.left[node]; l >= 0 {
+			stack[sp] = f.right[node]
+			stack[sp+1] = l
+			sp += 2
+			continue
+		}
+		for k := int(f.start[node]); k < int(f.end[node]); k++ {
+			j := f.order[k]
+			if j <= i32 {
+				continue
+			}
+			scanned++
+			if scanned > limit {
+				return scanned, true
+			}
+			if boxes6Overlap(bi[:], f.box[6*k:6*k+6:6*k+6]) {
+				fn(int(j))
+			}
+		}
+	}
+	return scanned, false
+}
+
+// pairWalker is visit's walk(a, b) without a budget, as an iterative loop.
 type pairWalker struct {
 	t       *treeScan
 	limit   uint64
@@ -273,46 +373,70 @@ type pairWalker struct {
 	fn      func(i, j int)
 }
 
+// walk visits the node pair (a, b) and everything below it in visit's order.
+// It reports whether the work limit was exceeded.
 func (w *pairWalker) walk(a, b int) bool {
-	w.scanned++
-	if w.scanned > w.limit {
-		return true
+	t := w.t
+	f := t.flat
+	stack := make([][2]int32, 1, 3*flatWalkStack)
+	stack[0] = [2]int32{int32(a), int32(b)}
+	for len(stack) > 0 {
+		top := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		a, b := int(top[0]), int(top[1])
+		w.scanned++
+		if w.scanned > w.limit {
+			return true
+		}
+		if !boxes6Overlap(f.nbox[6*a:6*a+6:6*a+6], f.nbox[6*b:6*b+6:6*b+6]) {
+			continue
+		}
+		la, lb := f.left[a], f.left[b]
+		if la < 0 && lb < 0 {
+			if w.leafPairs(a, b) {
+				return true
+			}
+			continue
+		}
+		ra, rb := f.right[a], f.right[b]
+		// Pushed in reverse so the first pair pops first.
+		switch {
+		case a == b:
+			stack = append(stack, [2]int32{ra, ra}, [2]int32{la, ra}, [2]int32{la, la})
+		case lb < 0 || (la >= 0 && f.end[a]-f.start[a] >= f.end[b]-f.start[b]):
+			stack = append(stack, [2]int32{ra, int32(b)}, [2]int32{la, int32(b)})
+		default:
+			stack = append(stack, [2]int32{int32(a), rb}, [2]int32{int32(a), lb})
+		}
 	}
+	return false
+}
+
+// leafPairs is walk's leaf-leaf case: every member pair of the two leaves.
+func (w *pairWalker) leafPairs(a, b int) bool {
 	t := w.t
 	na, nb := &t.nodes[a], &t.nodes[b]
-	if !meshbool.BoxesOverlap(na.box, nb.box) {
-		return false
-	}
-	if na.left < 0 && nb.left < 0 {
-		for ia := na.start; ia < na.end; ia++ {
-			begin := nb.start
-			if a == b {
-				begin = ia + 1
-			}
-			for ib := begin; ib < nb.end; ib++ {
-				w.scanned++
-				if w.scanned > w.limit {
-					return true
-				}
-				i, j := int(t.order[ia]), int(t.order[ib])
-				if !meshbool.BoxesOverlap(t.boxes[i], t.boxes[j]) {
-					continue
-				}
-				if i > j {
-					i, j = j, i
-				}
-				w.fn(i, j)
-			}
+	for ia := na.start; ia < na.end; ia++ {
+		begin := nb.start
+		if a == b {
+			begin = ia + 1
 		}
-		return false
+		for ib := begin; ib < nb.end; ib++ {
+			w.scanned++
+			if w.scanned > w.limit {
+				return true
+			}
+			i, j := int(t.order[ia]), int(t.order[ib])
+			if !meshbool.BoxesOverlap(t.boxes[i], t.boxes[j]) {
+				continue
+			}
+			if i > j {
+				i, j = j, i
+			}
+			w.fn(i, j)
+		}
 	}
-	if a == b {
-		return w.walk(na.left, na.left) || w.walk(na.left, na.right) || w.walk(na.right, na.right)
-	}
-	if nb.left < 0 || (na.left >= 0 && na.end-na.start >= nb.end-nb.start) {
-		return w.walk(na.left, b) || w.walk(na.right, b)
-	}
-	return w.walk(a, nb.left) || w.walk(a, nb.right)
+	return false
 }
 
 // pairTasks expands walk(0, 0) breadth-first, in visit's order, into at least
