@@ -190,7 +190,10 @@ func ScaledNum(r *big.Rat, den *big.Int) *big.Int {
 func AddRat(z, a, b *big.Rat) *big.Rat {
 	i, okA := denomExp(a)
 	j, okB := denomExp(b)
-	if !okA || !okB {
+	if okA != okB {
+		return addMixedDyadic(z, a, b, i, j, okA, false)
+	}
+	if !okA {
 		return z.Add(a, b)
 	}
 	return setPowerOfTwoFrac(z, alignedNum(z, a, b, i, j, false))
@@ -199,7 +202,10 @@ func AddRat(z, a, b *big.Rat) *big.Rat {
 func SubRat(z, a, b *big.Rat) *big.Rat {
 	i, okA := denomExp(a)
 	j, okB := denomExp(b)
-	if !okA || !okB {
+	if okA != okB {
+		return addMixedDyadic(z, a, b, i, j, okA, true)
+	}
+	if !okA {
 		return z.Sub(a, b)
 	}
 	return setPowerOfTwoFrac(z, alignedNum(z, a, b, i, j, true))
@@ -213,6 +219,42 @@ func MulRat(z, a, b *big.Rat) *big.Rat {
 	}
 	z.Num().Mul(a.Num(), b.Num())
 	return setPowerOfTwoFrac(z, i+j)
+}
+
+// addMixedDyadic sets z to a+b (or a-b with sub) when exactly one operand has
+// a power-of-two denominator, without a GCD. aDyadic says which one. With
+// r = p/q the other operand and w = m/2^k the dyadic one, the sum is
+// N/D = (p·2^k ± m·q)/(q·2^k). gcd(N, u) = gcd(p, u) = 1 for the odd part u
+// of q, so the only common factor is a power of two, 2^min(tz(N), tz(D)).
+// N and D are built before z is written, so z may alias either operand.
+func addMixedDyadic(z, a, b *big.Rat, i, j uint, aDyadic, sub bool) *big.Rat {
+	r, w, k := b, a, i
+	if !aDyadic {
+		r, w, k = a, b, j
+	}
+	// The result is r+w, r-w or w-r; negate flips which term carries the sign.
+	rTerm := new(big.Int).Lsh(r.Num(), k)
+	wTerm := new(big.Int).Mul(w.Num(), r.Denom())
+	n := rTerm
+	switch {
+	case sub && aDyadic:
+		n.Sub(wTerm, rTerm)
+	case sub:
+		n.Sub(rTerm, wTerm)
+	default:
+		n.Add(rTerm, wTerm)
+	}
+	d := new(big.Int).Lsh(r.Denom(), k)
+	if n.Sign() == 0 {
+		return z.SetInt64(0)
+	}
+	if s := min(n.TrailingZeroBits(), d.TrailingZeroBits()); s > 0 {
+		n.Rsh(n, s)
+		d.Rsh(d, s)
+	}
+	z.SetInt(n)
+	z.Denom().Set(d)
+	return z
 }
 
 // denomExp is the exponent k of a denominator 2^k, and false for a

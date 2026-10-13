@@ -79,7 +79,7 @@ func IntervalSqrt(a RatInterval) (RatInterval, bool) {
 
 // IntervalWiden grows an enclosure by a non-negative rational on both ends.
 func IntervalWiden(a RatInterval, w *big.Rat) RatInterval {
-	return Interval(new(big.Rat).Sub(a.Lo, w), new(big.Rat).Add(a.Hi, w))
+	return IntervalOwned(proofarith.SubRat(new(big.Rat), a.Lo, w), proofarith.AddRat(new(big.Rat), a.Hi, w))
 }
 
 // RatFloorGrid rounds a rational DOWN onto the 2⁻ˢʰⁱᶠᵗ grid, so the result is

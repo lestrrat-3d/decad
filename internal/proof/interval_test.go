@@ -270,6 +270,87 @@ func TestCommonDenominatorRatOpsMatchBigRat(t *testing.T) {
 	}
 }
 
+// TestRatDyadicMixedAddSubMatchBigRat feeds AddRat and SubRat exactly one
+// dyadic operand and one general rational, in both argument orders and with
+// z aliasing each operand, and requires big.Rat's numerator and denominator.
+func TestRatDyadicMixedAddSubMatchBigRat(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(0x243F6A8885A308D3, 0x13198A2E03707344))
+	dyadic := func() *big.Rat {
+		switch rng.IntN(6) {
+		case 0:
+			return new(big.Rat)
+		case 1:
+			return new(big.Rat).SetInt64(rng.Int64N(1<<30) - 1<<29)
+		case 2:
+			return new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(rng.Int64N(999)+1), uint(rng.IntN(1100))))
+		case 3:
+			// subnormal or tiny
+			return new(big.Rat).SetFloat64(math.Float64frombits(rng.Uint64N(1 << 52)))
+		}
+		for {
+			f := math.Float64frombits(rng.Uint64())
+			if !math.IsNaN(f) && !math.IsInf(f, 0) {
+				return new(big.Rat).SetFloat64(f)
+			}
+		}
+	}
+	general := func() *big.Rat {
+		u := rng.Int64N(1_000_000_000)/2*2 + 3
+		den := new(big.Int).Lsh(big.NewInt(u), uint(rng.IntN(71)))
+		num := big.NewInt(rng.Int64N(1<<40) - 1<<39)
+		if rng.IntN(4) == 0 {
+			num.Lsh(num, uint(rng.IntN(90)))
+		}
+		r := new(big.Rat).SetFrac(num, den)
+		if r.IsInt() || r.Denom().BitLen() == int(r.Denom().TrailingZeroBits())+1 {
+			return big.NewRat(rng.Int64N(2001)-1000, 3)
+		}
+		return r
+	}
+	same := func(want, got *big.Rat, msg string) {
+		t.Helper()
+		require.Zero(t, want.Num().Cmp(got.Num()), msg)
+		require.Zero(t, want.Denom().Cmp(got.Denom()), msg)
+	}
+	ops := []struct {
+		name string
+		got  func(z, a, b *big.Rat) *big.Rat
+		want func(z, a, b *big.Rat) *big.Rat
+	}{
+		{"add", proof.AddRat, (*big.Rat).Add},
+		{"sub", proof.SubRat, (*big.Rat).Sub},
+	}
+	for range 20000 {
+		d, g := dyadic(), general()
+		if rng.IntN(2) == 0 {
+			d, g = g, d
+		}
+		if rng.IntN(50) == 0 {
+			// the general operand cancels the dyadic one's neighbour exactly
+			g = new(big.Rat).Add(g, d)
+			if g.IsInt() || g.Denom().BitLen() == int(g.Denom().TrailingZeroBits())+1 {
+				g = general()
+			}
+		}
+		for _, pair := range [][2]*big.Rat{{d, g}, {g, d}} {
+			a, b := pair[0], pair[1]
+			ha, hb := new(big.Rat).Set(a), new(big.Rat).Set(b)
+			for _, op := range ops {
+				want := op.want(new(big.Rat), ha, hb)
+				same(want, op.got(new(big.Rat), a, b), op.name)
+				same(ha, a, op.name+" a unchanged")
+				same(hb, b, op.name+" b unchanged")
+				same(want, op.got(new(big.Rat).Set(a), new(big.Rat).Set(a), b), op.name+" z=a")
+				z := new(big.Rat).Set(b)
+				same(want, op.got(z, a, z), op.name+" z=b")
+			}
+		}
+		z := new(big.Rat).Set(g)
+		same(new(big.Rat).Add(g, g), proof.AddRat(z, z, z), "z=a=b")
+	}
+}
+
 var ratIntervalBenchmarkSink proof.RatInterval
 
 func BenchmarkRatIntervalArithmetic(b *testing.B) {
