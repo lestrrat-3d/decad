@@ -938,6 +938,11 @@ faces and free rims. A partial arc reports `ValidityUndecided`, as a partial
 chain `Revolve` does. `Transform` and `Copy` replay the same reduction under
 their composed placement.
 
+`Body.Thicken` sends this sheet through its chain `Revolve` reduction when
+§16.7's exact-axis and generated-section gates admit it. The result carries
+a closed profile in a solid one-arc `sweepPayload`; its wall and cap roles
+follow the original path order. See `docs/surface-design.md` §16.8.
+
 The mesh admits one `LineSeg` whose complete re-expressed walk has both ends
 strictly clear of the resolved axis. The recorded line and bounded path axis
 give two certified endpoint intervals in axial coordinate `z` and radius `ρ`.

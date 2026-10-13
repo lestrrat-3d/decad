@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
@@ -114,8 +115,8 @@ func revolveLoftFacesHeelBoundarySideTie(proof *revolveLoftFacesSourceCertificat
 				if cell.segment != boundary.segment || cell.span != boundary.span ||
 					cell.band != arc.band || cell.ref != boundary.ref ||
 					cell.face != boundary.face ||
-					!revolveLoftFacesToolCapIntervalEqual(cell.upper.root, boundary.parameter) ||
-					!revolveLoftFacesCapBoundaryBoxEqual(cell.upper.box, boundary.box) {
+					!loftface.IntervalEqual(cell.upper.Root, boundary.parameter) ||
+					!revolveLoftFacesCapBoundaryBoxEqual(cell.upper.Box, boundary.box) {
 					continue
 				}
 				matches++
@@ -128,7 +129,7 @@ func revolveLoftFacesHeelBoundarySideTie(proof *revolveLoftFacesSourceCertificat
 			mapped := cell.mapped
 			if mapped.segment != boundary.segment || mapped.span != boundary.span ||
 				mapped.band != arc.band || cell.ref != boundary.ref ||
-				cell.face != boundary.face || mapped.side != revolveLoftFacesCrossed ||
+				cell.face != boundary.face || mapped.side != loftface.SideCrossed ||
 				!revolveLoftFacesTimeInCell(arc.time, mapped) {
 				continue
 			}
@@ -160,7 +161,7 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 	if err != nil {
 		return false
 	}
-	band, time, ok := revolveLoftFacesConstantXBand(proof.trim.maps, box, arc.circle.x)
+	band, time, ok := loftface.ConstantXBand(proof.trim.maps, box, arc.circle.x)
 	if !ok || band != arc.band || time.Cmp(arc.time) != 0 {
 		return false
 	}
@@ -174,10 +175,10 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 		return false
 	}
 	first, last := proof.trim.maps[band], proof.trim.maps[band+1]
-	side := polynomial.BernsteinRowsAt(spiralRootPolynomial(first, last,
+	side := polynomial.BernsteinRowsAt(loftface.MeridianQRows(first, last,
 		spans[boundary.span], m, b), time)
 
-	capPolynomial := polynomial.BernsteinRowsAt(spiralRootPolynomial(first, last,
+	capPolynomial := polynomial.BernsteinRowsAt(loftface.MeridianQRows(first, last,
 		spans[boundary.span], lfZero(), arc.circle.radius), time)
 
 	if len(side) != len(capPolynomial) || len(side) < 2 {
@@ -202,7 +203,7 @@ func revolveLoftFacesTimeInCell(time *big.Rat, cell revolveLoftFacesMappedCell) 
 
 func revolveLoftFacesCapBoundaryBoxEqual(a, b [3]loftFaceInterval) bool {
 	for axis := range a {
-		if !revolveLoftFacesToolCapIntervalEqual(a[axis], b[axis]) {
+		if !loftface.IntervalEqual(a[axis], b[axis]) {
 			return false
 		}
 	}

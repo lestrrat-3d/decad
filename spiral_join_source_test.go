@@ -32,16 +32,16 @@ func TestSpiralCapPlaneMustMissTheWholeRootCircle(t *testing.T) {
 		G0:       lfOne(), GU: lfZero(), GV: lfZero(),
 	}
 	m, b, x := lfZero(), lfOne(), lfZero()
-	require.False(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
+	require.False(t, loftface.CapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"a tangent cap can meet the circle")
 	capMap.Q0[1] = lfAdd(capMap.Q0[1], big.NewRat(1, 1<<50))
-	require.True(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
+	require.True(t, loftface.CapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"an exact sub-femtometre gap still separates the full cap")
 	capMap.Q0[1] = lfZero()
-	require.False(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
+	require.False(t, loftface.CapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"a cap crossing the circle must refuse")
 	capMap.QU = loftFaceRatVec{lfZero(), lfZero(), lfZero()}
-	require.False(t, spiralCapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
+	require.False(t, loftface.CapPlaneAvoidsRootCircle(capMap, corners, m, b, x),
 		"a collapsed cap has no supporting plane")
 }
 
@@ -133,8 +133,8 @@ func spiralBernValueRef(coeff []*big.Rat, parameter *big.Rat) *big.Rat {
 
 func spiralRootPolynomialRef(first, second loftFaceMap, span freeform.BezierSpan,
 	m, b *big.Rat) [3][]*big.Rat {
-	g0, h0 := spiralCapBern(first, span)
-	g1, h1 := spiralCapBern(second, span)
+	g0, h0 := loftface.CapBernsteinRows(first, span)
+	g1, h1 := loftface.CapBernsteinRows(second, span)
 	d := spiralMulRef(g0, g1)
 	var a, z [3][]*big.Rat
 	for axis := range a {
@@ -154,8 +154,8 @@ func spiralRootPolynomialRef(first, second loftFaceMap, span freeform.BezierSpan
 
 func spiralRootXOrderRef(first, second loftFaceMap, span freeform.BezierSpan,
 	q [3][]*big.Rat) [3][]*big.Rat {
-	g0, h0 := spiralCapBern(first, span)
-	g1, h1 := spiralCapBern(second, span)
+	g0, h0 := loftface.CapBernsteinRows(first, span)
+	g1, h1 := loftface.CapBernsteinRows(second, span)
 	d := spiralMulRef(g0, g1)
 	a, z := spiralMulRef(h0[0], g1), spiralMulRef(h1[0], g0)
 	b := polynomial.BernsteinSub(z, a)
@@ -194,12 +194,12 @@ func TestSpiralRootRowsMatchReference(t *testing.T) {
 		}
 		m, b := lfF(rng.Float64()*2-1), lfF(rng.Float64()*2-1)
 		want := spiralRootPolynomialRef(first, second, span, m, b)
-		got := spiralRootPolynomial(first, second, span, m, b)
+		got := loftface.MeridianQRows(first, second, span, m, b)
 		for i := range want {
 			requireSameRows(t, want[i], got[i])
 		}
 		wantX := spiralRootXOrderRef(first, second, span, want)
-		gotX := spiralRootXOrder(first, second, span, got)
+		gotX := loftface.MeridianJRows(first, second, span, got)
 		for i := range wantX {
 			requireSameRows(t, wantX[i], gotX[i])
 		}
@@ -235,7 +235,7 @@ func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
 		return empty, false, ctx.Err()
 	}
 	band := low.band
-	q := spiralRootPolynomial(proof.tooth.maps[band], proof.tooth.maps[band+1],
+	q := loftface.MeridianQRows(proof.tooth.maps[band], proof.tooth.maps[band+1],
 		span, proof.rootM, proof.rootB)
 	sLo, sHi := lfZero(), lfOne()
 	if !spiralJunctionRootBracket(q, sLo, sHi, low.tLo, high.tHi) {
@@ -256,7 +256,7 @@ func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
 		}
 		break
 	}
-	box, ok := spiralJunctionBox(proof.tooth.maps[band], proof.tooth.maps[band+1],
+	box, ok := loftface.JunctionBox(proof.tooth.maps[band], proof.tooth.maps[band+1],
 		span, sLo, sHi, low.tLo, high.tHi)
 	if err := ctx.Err(); err != nil {
 		return empty, false, err

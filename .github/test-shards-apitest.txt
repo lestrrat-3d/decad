@@ -164,6 +164,10 @@
 1	0.01	TestSweepChainCardinalLineArcSheet
 1	0.01	TestSweepChainCardinalThickenSolid
 1	0.01	TestSweepChainThickenConservativeRefusals
+1	0.01	TestSweepChainArcThickenSolidAndReplay
+1	0.01	TestSweepChainArcThickenSides
+1	0.01	TestSweepChainArcThickenNoncardinalRefusesWithoutRetiringSheet
+1	0.01	TestSweepChainArcThickenPositiveAxisSideKeepsCapOrder
 1	0.01	TestSweepCompositeSpanBudgetRejectsBeforeCommit
 1	0.00	TestSweepMitredOneSpanFrustum
 1	0.01	TestSweepPairPlanarWedgeStops

@@ -267,7 +267,7 @@ func (tc throughCut) erodeThroughSection(budget *proofbound.WorkBudget, rm throu
 	if err != nil {
 		return throughSection{}, err
 	}
-	if err := requireSectionCavity(call.t, call.tmm, inradius, enough); err != nil {
+	if err := shellsurvey.RequireSectionCavity(call.t, call.tmm, inradius, enough, shellTol); err != nil {
 		return throughSection{}, err
 	}
 	h := tc.caps.Zhi - tc.caps.Zlo

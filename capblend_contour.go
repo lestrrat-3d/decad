@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
-	"github.com/lestrrat-3d/decad/internal/capcontour"
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -13,37 +13,6 @@ import (
 // This file adapts a built cap band's corner and edge records to the neutral
 // contour and closure proofs in internal/capband.
 
-func capContourJoins(joins []cornerJoin) []capcontour.Join {
-	readings := make([]capcontour.Join, len(joins))
-	for i, j := range joins {
-		readings[i] = capcontour.Join{
-			Arc: j.Arc, G1: j.G1, VU: j.VertU, VV: j.VertV,
-			M: j.M, PA: j.PA, PB: j.PB,
-		}
-	}
-	return readings
-}
-
-// loopContourDelta re-derives one loop's contour displacement from its record
-// for readings that hold no built band. It uses the same walks and joins as
-// buildCapBand.
-func loopContourDelta(ctx context.Context, loop loopRecord, d, dDelta float64) (float64, error) {
-	budget := proofbound.NewWorkBudget(ctx)
-	work := freeform.NewFreeformWork()
-	cl, err := oneLoopCornerLoop(budget, loop, work)
-	if err != nil {
-		return 0, err
-	}
-	if len(cl.walks) == 1 && cl.walks[0].Closed {
-		return capband.WholeCircleDisplacement(cl.walks[0], d, dDelta, shellTol)
-	}
-	joins, err := capOffsetJoins(budget, cl, d)
-	if err != nil {
-		return 0, err
-	}
-	return capband.ContourDisplacement(cl.walks, capContourJoins(joins), d, dDelta, shellTol)
-}
-
 // loopContourDelta is the package function of the same name read under
 // cbp's corner rule for loop li: a draft view's contour is the sharp offset
 // (cbp.offsetJoins), each walk at its own amount (walkAmounts), so its
@@ -51,10 +20,10 @@ func loopContourDelta(ctx context.Context, loop loopRecord, d, dDelta float64) (
 // arcs a chamfer's contour holds.
 func (cbp capBlendPayload) loopContourDelta(ctx context.Context, li int, loop loopRecord, d, dDelta float64) (float64, error) {
 	if cbp.fillet {
-		return filletContourDelta(ctx, loop, d, dDelta)
+		return filletband.LoopContourDelta(ctx, loop, d, dDelta, shellTol)
 	}
 	if !cbp.draft {
-		return loopContourDelta(ctx, loop, d, dDelta)
+		return capband.LoopContourDelta(ctx, loop, d, dDelta, shellTol)
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
@@ -74,7 +43,7 @@ func (cbp capBlendPayload) loopContourDelta(ctx context.Context, li int, loop lo
 	if err != nil {
 		return 0, err
 	}
-	return capband.AmountsContourDisplacement(cl.walks, capContourJoins(joins), amounts, dDelta, shellTol)
+	return capband.AmountsContourDisplacement(cl.walks, capband.ContourJoins(joins), amounts, dDelta, shellTol)
 }
 
 // capBandClosure is the neutral proof of the slivers between integrated
@@ -91,7 +60,7 @@ func capBandClosureOf(walks []survey2d.SideWalk, joins []cornerJoin, slantIn, sl
 	for i, edge := range slantOut {
 		out[i] = edge.length
 	}
-	closure, ok := capband.ClosureOf(walks, capContourJoins(joins), in, out, slantInHeld, slantOutHeld)
+	closure, ok := capband.ClosureOf(walks, capband.ContourJoins(joins), in, out, slantInHeld, slantOutHeld)
 	if !ok {
 		return capBandClosure{}, capband.ErrHeldUnbounded
 	}

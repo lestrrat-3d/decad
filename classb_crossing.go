@@ -362,8 +362,8 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 		return nil
 	}
 	tool := profileRecord{Outer: toLoop(other[0])}
-	target := prismPayload{profile: a, frame: frame.frame, xform: b.x.xform, z0: 0, z1: 1}
-	toolP := prismPayload{profile: tool, frame: frame.frame, xform: b.x.xform, z0: 0, z1: 1}
+	target := prismPayload{profile: a}
+	toolP := prismPayload{profile: tool}
 	if _, within, err := prismcells.RegionsWithinWorkCap(b.budget, target.profile, toolP.profile); err != nil || !within {
 		if err != nil {
 			return err
@@ -373,7 +373,7 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 	}
 	reexpress := &prismReexpression{Identity: true}
 	if cut {
-		s, match, _, resolved, err := resolvePrismCut(ctx, b.budget, target, toolP, reexpress)
+		s, match, _, resolved, err := prismcells.ResolveCut(ctx, b.budget, target.profile, toolP.profile, reexpress)
 		if err != nil {
 			return err
 		}
@@ -385,7 +385,7 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 			return add(region)
 		}
 	} else {
-		s, match, _, _, resolved, err := resolvePrismIntersect(ctx, b.budget, target, toolP, reexpress)
+		s, match, _, _, resolved, err := prismcells.ResolveIntersect(ctx, b.budget, target.profile, toolP.profile, reexpress)
 		if err != nil {
 			return err
 		}
@@ -401,7 +401,8 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 	if !cut {
 		keep = func(inA, inB bool) bool { return inA && inB }
 	}
-	selected, _, resolved, err := resolvePrismCrossingCells(ctx, b.budget, target, toolP, reexpress, keep)
+	selected, _, resolved, err := prismcells.ResolveCrossingCells(ctx, b.budget, target.profile, toolP.profile,
+		target.sectionDelta, toolP.sectionDelta, reexpress, keep)
 	if err != nil {
 		return err
 	}

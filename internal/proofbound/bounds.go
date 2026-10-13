@@ -1866,7 +1866,7 @@ func CellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 //	|A_true - T_held| <= ruled leg + twist leg + station-shift leg,
 //
 // A_true the area of the ruled patch between the two curves the cell's DENOTED
-// stations carry and T_held the two flat triangles assembleLoft actually holds:
+// stations carry and T_held the two flat triangles loftmesh.AssembleTriangulated actually holds:
 //
 //   - the RULED leg is this helper, |Area(bilinear chord patch) - Area(ruled
 //     patch)|, both patches pinned at the corners it is handed;

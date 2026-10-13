@@ -156,7 +156,7 @@ func TestPrismCutCleanNestingBoreThroughHub(t *testing.T) {
 // TestPrismCutCleanNestingKeepsAToolVertexTheFormulaMisses cuts with a tool
 // whose section has a vertex the line parameterization's own float formula does
 // not reproduce: for the pair 4/7 → 10/3, start + 1·(end − start) lands one ulp
-// short of 10/3. buildPrismScene creates one sketch point per walked endpoint,
+// short of 10/3. prismcells.BuildScene creates one sketch point per walked endpoint,
 // so a walk that answered the formula rather than the record would hand sketch
 // two points where the tool's record states one shared vertex; sketch would
 // admit that region on its own proximity threshold and RecordProfile would then

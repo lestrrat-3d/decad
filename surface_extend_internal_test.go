@@ -16,7 +16,7 @@ import (
 )
 
 // This file checks, as geometry, the claim FullExtendSegment's comment
-// derives: the scene entity buildPrismScene creates from the full-domain
+// derives: the scene entity prismcells.BuildScene creates from the full-domain
 // recreation carries the RECEIVER'S OWN parameterisation, so a cut parameter
 // sketch reports on that entity indexes the receiver's record directly and
 // ResolveSurfaceExtend stores it without a map.
@@ -34,7 +34,7 @@ import (
 // three in one place.
 
 // extendTestSquare is the far-away tool operand the scene needs as its second
-// operand. Nothing here reads it; it exists so buildPrismScene builds a scene
+// operand. Nothing here reads it; it exists so prismcells.BuildScene builds a scene
 // at all.
 func extendTestSquare() profileRecord {
 	pts := []Point2{{U: 1000, V: 1000}, {U: 1010, V: 1000}, {U: 1010, V: 1010}, {U: 1000, V: 1010}}
@@ -99,7 +99,7 @@ func scenePointAt(t *testing.T, e sketch.Entity, param float64) (float64, float6
 	}
 }
 
-// extendSceneCarrier runs FullExtendSegment and buildPrismScene as
+// extendSceneCarrier runs FullExtendSegment and prismcells.BuildScene as
 // ResolveSurfaceExtend does, and returns the one receiver-side entity the scene holds.
 func extendSceneCarrier(t *testing.T, seg curveSegment) sketch.Entity {
 	t.Helper()
@@ -110,7 +110,7 @@ func extendSceneCarrier(t *testing.T, seg curveSegment) sketch.Entity {
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(view), prismPlacementOf(tool))
 	require.NoError(t, err)
 	require.True(t, reexpress.Identity)
-	_, tags, _, err := buildPrismScene(proofbound.NewWorkBudget(t.Context()), view, tool, reexpress)
+	_, tags, _, err := prismcells.BuildScene(proofbound.NewWorkBudget(t.Context()), view.profile, tool.profile, reexpress)
 	require.NoError(t, err)
 	var carrier sketch.Entity
 	found := 0

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -91,8 +92,8 @@ func TestRevolveLoftFacesSimpleSourceRefusesChangedRecordedArc(t *testing.T) {
 }
 
 func TestRevolveLoftFacesSimpleNeighborsRequireOppositeInteriorSides(t *testing.T) {
-	span := func(a, b float64) revolveLoftFacesSimpleCell {
-		cell, ok := revolveLoftFacesSimpleBezier(0, 0, freeform.BezierSpan{
+	span := func(a, b float64) loftface.SimpleCell {
+		cell, ok := loftface.SimpleBezier(0, 0, freeform.BezierSpan{
 			{U: lfF(a), V: lfZero()}, {U: lfF(b), V: lfZero()}})
 		require.True(t, ok)
 		return cell
@@ -104,17 +105,17 @@ func TestRevolveLoftFacesSimpleNeighborsRequireOppositeInteriorSides(t *testing.
 }
 
 func TestRevolveLoftFacesSimpleSeparatedRequiresStrictAxisGap(t *testing.T) {
-	span := func(startU, startV, endU, endV float64) revolveLoftFacesSimpleCell {
-		cell, ok := revolveLoftFacesSimpleBezier(0, 0, freeform.BezierSpan{
+	span := func(startU, startV, endU, endV float64) loftface.SimpleCell {
+		cell, ok := loftface.SimpleBezier(0, 0, freeform.BezierSpan{
 			{U: lfF(startU), V: lfF(startV)},
 			{U: lfF(endU), V: lfF(endV)}})
 		require.True(t, ok)
 		return cell
 	}
 	first := span(0, 0, 1, 1)
-	require.True(t, revolveLoftFacesSimpleSeparated(first, span(2, 0, 3, 1)))
-	require.False(t, revolveLoftFacesSimpleSeparated(first, span(1, 0, 2, 1)),
+	require.True(t, loftface.SimpleSeparated(first, span(2, 0, 3, 1)))
+	require.False(t, loftface.SimpleSeparated(first, span(1, 0, 2, 1)),
 		"a shared box boundary cannot certify separation")
-	require.False(t, revolveLoftFacesSimpleSeparated(first, span(0.5, 0.5, 1.5, 1.5)),
+	require.False(t, loftface.SimpleSeparated(first, span(0.5, 0.5, 1.5, 1.5)),
 		"overlap in both coordinate boxes needs a stronger proof")
 }

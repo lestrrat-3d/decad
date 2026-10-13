@@ -2,23 +2,12 @@ package decad
 
 import (
 	"math"
-	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
-
-func TestPrismPatternRootNeedsExactInwardOverlap(t *testing.T) {
-	root := arcSeg{Center: Point2{}, Start: Point2{U: 3, V: -4}, End: Point2{U: 3, V: 4}}
-	radiusSq := prismPatternRadiusSq(5)
-	require.False(t, prismPatternRootInside(root, radiusSq, big.NewRat(1, 1)))
-	require.False(t, prismPatternRootInside(root, radiusSq, big.NewRat(2, 1)))
-	require.True(t, prismPatternRootInside(root, radiusSq, big.NewRat(99, 100)))
-	root.End = Point2{U: 4, V: 3}
-	require.False(t, prismPatternRootInside(root, radiusSq, big.NewRat(1, 1)))
-}
 
 func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.T) {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})

@@ -5,11 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/circularbounds"
-	"github.com/lestrrat-3d/decad/internal/freeform"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/splinebezier"
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -41,7 +37,7 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 	}
 	circle, ok := blank.profile.Outer.Segments[0].(circleSeg)
 	if !ok || circle.Center != (Point2{}) || circle.Radius.Base() <= 0 ||
-		!prismPatternWholeRange(circle.TStart, circle.TEnd) {
+		!prismpattern.WholeRange(circle.TStart, circle.TEnd) {
 		return nil, false, nil
 	}
 	first, ok := operands[1].payload.(prismPayload)
@@ -55,10 +51,10 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 	rootIndex := -1
 	for i, segment := range segments {
 		arc, isArc := segment.(arcSeg)
-		if !isArc || arc.Center != circle.Center || !prismPatternWholeRange(arc.TStart, arc.TEnd) {
+		if !isArc || arc.Center != circle.Center || !prismpattern.WholeRange(arc.TStart, arc.TEnd) {
 			continue
 		}
-		gap, good := prismPatternArcGap(arc, circle.Radius.Base(), r3.Identity())
+		gap, good := prismpattern.ArcGap(arc, circle.Radius.Base(), r3.Identity())
 		if !good || gap >= 0.01 {
 			continue
 		}
@@ -72,28 +68,28 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 	}
 	gap := 0.0
 	leastScale2 := big.NewRat(1, 1)
-	blankRadiusSq := prismPatternRadiusSq(circle.Radius.Base())
+	blankRadiusSq := prismpattern.RadiusSq(circle.Radius.Base())
 	for i, body := range operands[1:] {
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
 		}
 		section, isPrism := body.payload.(prismPayload)
 		if !isPrism || section.frame != first.frame || section.z0 != first.z0 ||
-			section.z1 != first.z1 || !prismPatternAxialRotation(section.xform) ||
+			section.z1 != first.z1 || !prismpattern.AxialRotation(section.xform) ||
 			len(section.profile.Outer.Segments) != len(segments) ||
 			&section.profile.Outer.Segments[0] != &segments[0] {
 			return nil, true, fmt.Errorf("%w: section %d is not a radial copy of the first prism", ErrUnsupported, i+1)
 		}
-		localGap, good := prismPatternArcGap(root, circle.Radius.Base(), section.xform)
+		localGap, good := prismpattern.ArcGap(root, circle.Radius.Base(), section.xform)
 		if !good {
 			return nil, true, fmt.Errorf("%w: section %d has no finite circular-root bound", ErrUnsupported, i+1)
 		}
 		gap = max(gap, localGap)
-		scale2 := prismPatternScale2(section.xform)
+		scale2 := prismpattern.Scale2(section.xform)
 		if scale2.Sign() <= 0 {
 			return nil, true, fmt.Errorf("%w: section %d has no positive radial placement scale", ErrUnsupported, i+1)
 		}
-		if !prismPatternRootInside(root, blankRadiusSq, scale2) {
+		if !prismpattern.RootInside(root, blankRadiusSq, scale2) {
 			return nil, true, fmt.Errorf("%w: section %d circular root is not strictly inside the blank",
 				ErrUnsupported, i+1)
 		}
@@ -108,171 +104,10 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 	// more ulps. Prove every non-root source outside the blank after the
 	// smallest radial scale among all copies, not only in source coordinates.
 	outsideRadiusSq := new(big.Rat).Quo(blankRadiusSq, leastScale2)
-	if err := prismPatternOutsideRoot(ctx, segments, rootIndex, root, outsideRadiusSq); err != nil {
+	if err := prismpattern.OutsideRoot(ctx, segments, rootIndex, root, outsideRadiusSq); err != nil {
 		return nil, true, err
 	}
 	return &prismPatternSource{blank: blank, blankRadius: circle.Radius.Base(), section: first,
 		rootArc: root, rootIndex: rootIndex,
 		rootGap: gap, sections: operands[1:]}, true, nil
-}
-
-// The source arc's denoted radius comes from Start. Its pinned End can
-// disagree slightly, so both recorded endpoints must lie inside the blank.
-// This exact overlap is needed before the join can remove the root wall.
-func prismPatternRootInside(root arcSeg, blankRadiusSq, scale2 *big.Rat) bool {
-	for _, endpoint := range []Point2{root.Start, root.End} {
-		endpointSq := new(big.Rat).Mul(prismPatternRadialSq(endpoint), scale2)
-		if endpointSq.Cmp(blankRadiusSq) >= 0 {
-			return false
-		}
-	}
-	return true
-}
-
-func prismPatternWholeRange(start, end float64) bool {
-	return start == 0 && end == 1 || start == 1 && end == 0
-}
-
-func prismPatternAxialRotation(t r3.Transform) bool {
-	if !t.IsValid() || t.IsReflection() || t.Translation() != (r3.Vec{}) {
-		return false
-	}
-	b := t.Basis()
-	return b.EZ == (r3.Vec{Z: 1}) && b.EX.Z == 0 && b.EY.Z == 0 &&
-		b.EX.X == b.EY.Y && b.EX.Y == -b.EY.X
-}
-
-// prismPatternArcGap bounds the difference between a placed arc's exact
-// radius and the blank's radius. The arc's denoted radius comes from Start;
-// its pinned End can differ, so the caller must charge that endpoint too.
-func prismPatternArcGap(arc arcSeg, radius float64, motion r3.Transform) (float64, bool) {
-	scale2 := prismPatternScale2(motion)
-	x := new(big.Rat).Sub(proofarith.FloatRat(arc.Start.U), proofarith.FloatRat(arc.Center.U))
-	y := new(big.Rat).Sub(proofarith.FloatRat(arc.Start.V), proofarith.FloatRat(arc.Center.V))
-	r2 := new(big.Rat).Mul(scale2,
-		new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y)))
-	lo, hi := proofbound.RatSqrtDown(r2), proofbound.RatSqrtUp(r2)
-	if lo <= 0 || proofbound.IsNonFinite(hi) {
-		return 0, false
-	}
-	r := proofarith.FloatRat(radius)
-	d0 := new(big.Rat).Abs(new(big.Rat).Sub(proofarith.FloatRat(lo), r))
-	d1 := new(big.Rat).Abs(new(big.Rat).Sub(proofarith.FloatRat(hi), r))
-	if d1.Cmp(d0) > 0 {
-		d0 = d1
-	}
-	endGap := proofbound.ProductUpper(proofbound.RatSqrtUp(scale2), circularbounds.ArcRadialResidualUpper(arc))
-	gap := proofbound.AbsSumUpper(proofbound.RatFloatUp(d0), endGap)
-	return gap, !proofbound.IsNonFinite(gap)
-}
-
-func prismPatternScale2(motion r3.Transform) *big.Rat {
-	b := motion.Basis()
-	c, s := proofarith.FloatRat(b.EX.X), proofarith.FloatRat(b.EX.Y)
-	return new(big.Rat).Add(new(big.Rat).Mul(c, c), new(big.Rat).Mul(s, s))
-}
-
-func prismPatternOutsideRoot(ctx context.Context, segments []curveSegment, rootIndex int,
-	root arcSeg, outsideRadiusSq *big.Rat) error {
-	for i, segment := range segments {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if i == rootIndex {
-			continue
-		}
-		switch seg := segment.(type) {
-		case lineSeg:
-			if i == (rootIndex+1)%len(segments) || (i+1)%len(segments) == rootIndex {
-				if !prismPatternRootConnector(seg, root, outsideRadiusSq) {
-					return fmt.Errorf("%w: prism section connector %d has no outward radial proof", ErrUnsupported, i)
-				}
-				continue
-			}
-			if !prismPatternLineOutside(seg, outsideRadiusSq) {
-				return fmt.Errorf("%w: prism section line %d is not proven outside the circular wall", ErrUnsupported, i)
-			}
-		case fitSplineSeg:
-			spans, err := splinebezier.FitSplineBezierSpans(seg, freeform.NewFreeformWork())
-			if err != nil {
-				return err
-			}
-			for _, span := range spans {
-				if !prismPatternSpanOutside(span, outsideRadiusSq) {
-					return fmt.Errorf("%w: prism section spline %d is not proven outside the circular wall", ErrUnsupported, i)
-				}
-			}
-		case arcSeg:
-			if seg.Center != (Point2{}) || prismPatternRadialSq(seg.Start).Cmp(outsideRadiusSq) <= 0 {
-				return fmt.Errorf("%w: prism section arc %d is not proven outside the circular wall", ErrUnsupported, i)
-			}
-		default:
-			return fmt.Errorf("%w: prism section curve %d has no circular-wall proof", ErrUnsupported, i)
-		}
-	}
-	return nil
-}
-
-func prismPatternRootConnector(line lineSeg, root arcSeg, outsideRadiusSq *big.Rat) bool {
-	near, far := line.Start, line.End
-	if near != root.Start && near != root.End {
-		near, far = far, near
-	}
-	if near != root.Start && near != root.End {
-		return false
-	}
-	nu, nv := proofarith.FloatRat(near.U), proofarith.FloatRat(near.V)
-	du := new(big.Rat).Sub(proofarith.FloatRat(far.U), nu)
-	dv := new(big.Rat).Sub(proofarith.FloatRat(far.V), nv)
-	radial := new(big.Rat).Add(new(big.Rat).Mul(nu, du), new(big.Rat).Mul(nv, dv))
-	return radial.Sign() > 0 && prismPatternRadialSq(far).Cmp(outsideRadiusSq) > 0
-}
-
-func prismPatternRadiusSq(radius float64) *big.Rat {
-	r := proofarith.FloatRat(radius)
-	return new(big.Rat).Mul(r, r)
-}
-
-func prismPatternRadialSq(p Point2) *big.Rat {
-	u, v := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
-	return new(big.Rat).Add(new(big.Rat).Mul(u, u), new(big.Rat).Mul(v, v))
-}
-
-func prismPatternLineOutside(line lineSeg, outsideRadiusSq *big.Rat) bool {
-	a, b := prismPatternRadialSq(line.Start), prismPatternRadialSq(line.End)
-	if a.Cmp(outsideRadiusSq) <= 0 || b.Cmp(outsideRadiusSq) <= 0 {
-		return false
-	}
-	// The dot with one endpoint direction is a conservative linear support
-	// certificate for every point on this line.
-	return prismPatternControlOutside([]freeform.RatPoint{
-		{U: proofarith.FloatRat(line.Start.U), V: proofarith.FloatRat(line.Start.V)},
-		{U: proofarith.FloatRat(line.End.U), V: proofarith.FloatRat(line.End.V)},
-	}, outsideRadiusSq)
-}
-
-func prismPatternSpanOutside(span freeform.BezierSpan, outsideRadiusSq *big.Rat) bool {
-	return prismPatternControlOutside(span, outsideRadiusSq)
-}
-
-// A Bezier span lies in its controls' convex hull. One separating line that
-// leaves all controls beyond a circle proves the entire span outside it.
-func prismPatternControlOutside(points []freeform.RatPoint, outsideRadiusSq *big.Rat) bool {
-	if len(points) == 0 {
-		return false
-	}
-	du := new(big.Rat).Add(points[0].U, points[len(points)-1].U)
-	dv := new(big.Rat).Add(points[0].V, points[len(points)-1].V)
-	norm2 := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
-	if norm2.Sign() == 0 {
-		return false
-	}
-	threshold := new(big.Rat).Mul(outsideRadiusSq, norm2)
-	for _, point := range points {
-		dot := new(big.Rat).Add(new(big.Rat).Mul(du, point.U), new(big.Rat).Mul(dv, point.V))
-		if dot.Sign() <= 0 || new(big.Rat).Mul(dot, dot).Cmp(threshold) <= 0 {
-			return false
-		}
-	}
-	return true
 }

@@ -77,7 +77,7 @@ one is queued.
 
 | Command | What builds | What is still staged |
 |---|---|---|
-| `Thicken` | §16.1's seven sheet families build | Other composite sweeps, one-span chain sweeps, loft, stitched, `Body.Patch` and `Unstitch` sheets refuse under R24; §16.8 names their missing proofs |
+| `Thicken` | §16.1's admitted sheet families build | Other composite sweeps, chain sweeps outside §16.8's classes, loft, stitched, `Body.Patch` and `Unstitch` sheets refuse under R24; §16.8 names their missing proofs |
 | `Trim`, `Extend` | `Trim` over a receiver whose section is one closed loop and `Extend` over a chain ribbon, in the prism family and the revolve family alike (`docs/surface-intersection-design.md` §2.2) | `Extend` over a PARTIALLY revolved ribbon, RS14. A partial revolution gathers the wall's swept free edge into one loop with its two cap edges, and no recorded fact separates them; lifting it is a recorded free-end map from the chain-revolve build, not a bound and not a gate (that document's §2.2). That document's §4 states every other shape outside the admitted class, and `docs/api-design.md` §2.1's reasoning is what keeps a pair sharing no generator refused |
 | `Document.Split` | the prism family and the revolve family alike: one solid target, a sheet tool, and one solid body per arranged piece out (`docs/surface-intersection-design.md` §8). A revolve piece charges its cut ends through that document's §7.2 | nothing is staged. That document's §4 states every shape outside the admitted class |
 | `Sweep` over a chain | one straight span, one arc through the chain Revolve gates, or §15.8's exact cardinal line/arc path over one radial source line | Other composite paths refuse R34. A single-arc sheet from more than one straight off-axis source segment has no mesh. `docs/sweep-design.md` §15 states the reductions. Table D row 13 |
@@ -2604,7 +2604,7 @@ ANSWER is accepted and reads `Suspect`.
 | 5 | An all-planar stitched body's own mesh, CLOSED or OPEN: `stitchPayload` records the final wound triangle set `Stitch`'s own build assembled and audited (§6.4), attributed by the live rebuilt face per triangle rather than by role (two welded operands can carry the same role string), and `tessellate_stitch.go` restates it with no chording. A CLOSED body runs the closed-mesh audit plus its own vertex-link safety net over that restated set; an OPEN body — a sheet — runs `docs/tessellation-design.md` §1.2's manifold-with-boundary audit instead, its free-boundary attribution agreeing with the body's own recorded free `Edge`s by the identical live face pointer on both sides, never a role lookup. A curved or mixed stitched body's mesh stays `ErrUnsupported`, staged to a later increment, whether open or closed. The mesh publishes a zero occupied-volume proof (`symDiffOK == true`) for a CLOSED body whose every vertex carries a proven bound of exactly zero, admitting it to a boolean like any other zero-bound operand; every other stitched body keeps `symDiffOK` false, so no boolean admits it — an open one refusing on Table X's own sheet-boolean rule, a bounded or placed closed one on `boolean.go`'s `requireVolumeProvingPayload` arm. `newBodyGeomBudget` (`docs/clearance-design.md` §2) carries the identical zero-bound `stitchPayload` arm already, which is what lets a stitched solid reach a proven pair relation at all; a bounded or placed stitched solid still reads undecided exactly as it does for any other payload this evaluator has not wired a carrier for |
 | 6 | The open sketch chain (§13): `ChainRecord` and `RecordChain` beside `ProfileRecord` and `RecordProfile`, under the same gates and the same four sentinels; `Extrude` and `Revolve` over a chain, building Table G's wall set with no cap and no closing face; the fourth validity leg for a chain-fed prism and for a full-turn chain revolve clear of the axis; prism ribbon tessellation and export on the identical manifold-with-boundary audit; Table A's four new amendment rows; §15's T130–T141. `Document.LoftChain` and a chain `Sweep` land as signatures refusing with `ErrUnsupported`, and rows 12 and 14 build their first admitted cases; a chain free end ON the revolve axis stays R22 until row 10; the chain-fed revolve mesh remains separate |
 | 7 | Patch and profile prism `Thicken`, all sides, interval and crossing audits (T150–T157). Revolve and chain land in rows 16–18, one-span sweep in row 20, cardinal chain composite in row 21; other families stay R24 |
-| 8 | `Trim`, `Extend` and `Split` over a pair whose two sweeps share one generator, in the five PRs `docs/surface-intersection-design.md` §11 states: its §2 entry gate, `buildPrismScene`'s `ChainRecord` arm, `prismcells.Classify`'s side reading consumed unchanged, the open-walk chaining of its §3.3, `chainPayload`'s and `chainRevolvePayload`'s walk set and section displacement, the one displacement term its §7 derives from `internal/proofbound/bounds.go`'s existing `cutParamUlps`/`cutDisplacementAllow`, and §7.1's fold of that term into the revolve's own axis-coordinate walk. Table A's five new rows; Table R's R29–R31; §15's T170–T186. A pair sharing no generator, a chain ribbon as `Trim`'s receiver, and a second trim of an already-trimmed body each refuse with `ErrUnsupported`, and that document's §4 and §5 own why |
+| 8 | `Trim`, `Extend` and `Split` over a pair whose two sweeps share one generator, in the five PRs `docs/surface-intersection-design.md` §11 states: its §2 entry gate, `prismcells.BuildScene`'s `ChainRecord` arm, `prismcells.Classify`'s side reading consumed unchanged, the open-walk chaining of its §3.3, `chainPayload`'s and `chainRevolvePayload`'s walk set and section displacement, the one displacement term its §7 derives from `internal/proofbound/bounds.go`'s existing `cutParamUlps`/`cutDisplacementAllow`, and §7.1's fold of that term into the revolve's own axis-coordinate walk. Table A's five new rows; Table R's R29–R31; §15's T170–T186. A pair sharing no generator, a chain ribbon as `Trim`'s receiver, and a second trim of an already-trimmed body each refuse with `ErrUnsupported`, and that document's §4 and §5 own why |
 | 9 | §10.1's curved or mixed stitched mesh from one complete revolve sheet, closed or open. Other source constructions and new curved welds remain R32 until they can prove identical seam samples. |
 | 10 | One free pole on a chain `Revolve` (§13.3): Table G's pole topology, the wall `Area` and `Bounds` charges, one free rim after a full revolution, and T139 plus T142–T146. Both free ends on the axis stay R22; interior axis pinches are R33. The chain-fed revolve mesh remains a separate increment because its open-walk pole fan and boundary audit need their own proof |
 | 11 | §10.2's open stitched mesh from all single-face sheets unstitched from one revolve sheet. Pointer-proven re-welds reuse the source mesh's identical curved seam samples; other curved welds remain R32. |
@@ -2617,7 +2617,8 @@ ANSWER is accepted and reads `Suspect`.
 | 18 | `Body.Thicken` on a chain revolve shell (§16.7): §16.6's assembled section under §16.5's sweep and radial gate, and §15's T165–T169. A free end on the axis stays R43 |
 | 19 | The chain-fed prism ribbon's `Tessellate`/`STL`/`OBJ` mesh over a `LineSeg`-only chain (`tessellate_chain.go`): every wall's exact planar quad read straight off its topology with no chording. A curved or free-form wall, and the chain-fed revolve ribbon's mesh, stay R45 and row 10's own staging respectively |
 | 20 | `Body.Thicken` on one-span straight and arc sweep sheets (§16.8): reuse the prism or revolve offset proof, then publish the new solid as `sweepPayload` with its path and roles. Composite sweep sheets stay R24. T213 checks both reductions and replay |
-| 21 | Cardinal composite chain `Sweep` `Thicken` (§16.8): exact ribbon section and radial interval; two-span solid sweep sews caps and proves measurements and mesh. Other chain sweeps stay R24 (T195c) |
+| 21 | Cardinal composite chain `Sweep` `Thicken` (§16.8): exact ribbon section and radial interval; two-span solid sweep sews caps and proves measurements and mesh. Other chain sweeps stay R24 except row 22's one-arc class (T195c) |
+| 22 | One-arc chain `Sweep` `Thicken` (§16.8): §16.7 closes the source walk under its exact-axis gate, and the result uses the solid one-arc Sweep proof and path roles (T214) |
 
 **Increment 7 depends on increment 1's patch and prism sheets and analytic
 prism builder, plus `docs/modify-design.md` §5/§8's section offset and audit.**
@@ -2989,6 +2990,7 @@ The copy and revolve-tag obligations are:
 | T211 | full-turn revolve sheets of a quadrilateral whose side climbs 5e-10 over a unit run (tagged `Cylinder`), and of one whose side leans 5e-10 off perpendicular (tagged `Plane`) | `Stitch` is `ErrUnsupported` (R8); were it admitted, its volume and centroid would have to enclose the record's exact Pappus readings. Shown-to-fail: without `stitchFluxTagsDenoted` the volumes sat 2.1e-9 and 1.6e-9 mm³ off under 7.0e-15 and 5.7e-15 bounds |
 | T212 | a decimal trapezoid's full-turn sheet (two `Cylinder`, two `Cone` walls), stitched; and, internally, T46-style cone wall whose tag apex is moved 1e-6 mm along the axis with its record unchanged | the stitched volume and centroid enclose the record's exact Pappus readings; the moved apex's flux and moment bounds enclose the exact-apex readings. Shown-to-fail: dropping `ConeInput.ApexBound`'s widening left the moved flux 9.4e-6 off under a 3.6e-14 bound |
 | T213 | one-span straight and quarter-arc sweep sheets thickened on their admitted sides | the solid keeps `side(0,i,j)` roles and path-order caps, measures the reduced annulus's volume, verifies Sound, tessellates with a volume proof, and replays under placement; a composite sheet keeps R24 |
+| T214 | one real Sketch line swept through a half-circle, then thickened 1 mm | the solid measures 12π mm³ and 30π+8 mm², keeps start/end cap roles in path order, passes 0.1 mm `VerifyAll`, and replays under placement; negative and centered sides retain the same volume and move the Y interval |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `.github/test-shards-apitest.txt` one for every `apitest/` test, and
@@ -3045,6 +3047,7 @@ its construction and its readings:
 | one-span straight or arc sweep sheet, `sweepPayload` | admitted (§16.8) | offset the reduced prism or revolve section, then publish the solid with sweep roles and payload |
 | composite sweep sheet, `sweepPayload` | R24 (§16.8) | each adjacent pair needs a proof that its offset sections join without folding |
 | §15.8's cardinal composite chain-sweep sheet, `chainSweepPayload` | admitted (§16.8) | the one source line generates an exact rectangular section, with positive radius through the whole offset interval and a certified two-span join |
+| one-arc chain-sweep sheet, `chainSweepPayload` | admitted (§16.8) | its one chain `Revolve` reduction passes §16.7's offset and exact-axis gates |
 | other chain-sweep sheet, `chainSweepPayload` | R24 (§16.8) | its source walk's offset has no certified path-span join |
 | loft sheet, `loftPayload` | R24 (§16.8) | paired wall stations have no single constant section, and a curved pairing's own `sectionDelta` is nonzero |
 | stitched sheet, `stitchPayload` | R24 (§16.8) | welded faces have no one recorded generator |
@@ -3484,9 +3487,24 @@ moments, and its composite mesh supplies the occupied-volume proof at
 For thickness `t`, the solid's volume is
 `t[wL+π(Rw−w²/2)]`, and its area is
 `2wt+2L(w+t)+π[(2R−w)t+2Rw−w²]`. It has two end caps and four walls per
-span. A one-span chain sweep or a chain sweep outside §15.8 remains R24;
+span. A chain sweep outside §15.8 and the one-arc class below remains R24;
 nonrepresentable generated coordinates remain R27. The source sheet retires
 only after the whole build succeeds.
+
+**A one-arc chain-sweep sheet thickens through its chain `Revolve` reduction.**
+The receiver has one `ArcThrough` span and one authenticated open chain, with
+no composite spans. Pass its reduced `chainRevolvePayload` through §16.7's
+`RibbonProfile`, exact radial-axis gate and solid Revolve build. A path-derived
+axis with a nonzero coordinate or direction bound keeps §16.7's refusal; a
+mesh of the source sheet does not certify an offset axis.
+
+The built solid publishes the closed generated section as a one-arc
+`sweepPayload`, because its old open-chain payload cannot denote the new
+material region. Its zero-height prism witness uses the built section and
+placement. Prefix each wall role with span zero, and restore path-order cap
+roles when the reduced sweep occupies a negative-to-zero angle interval.
+The solid then uses the existing one-arc Sweep volume, area, placement and
+occupied-volume mesh proofs. A refusal leaves the source sheet live.
 
 **A loft sheet is staged behind a variable-section offset.** A loft holds two
 recorded sections on two frames and rules a chorded wall between them, so there

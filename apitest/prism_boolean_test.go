@@ -131,7 +131,7 @@ func overshootQuadBody(t *testing.T, doc *decad.Document, corners [][2]float64, 
 // strictly inside it. The merge cuts nothing, so every surviving segment is
 // WHOLE and the section displacement is zero, yet the private scene's own
 // reconstruction restates one corner as two whole segments' own defining
-// coordinates that do not bit-match (buildPrismScene's walkOf interpolates
+// coordinates that do not bit-match (prismcells.BuildScene's walkOf interpolates
 // each fragment's walked endpoint independently). The seam's junction
 // falsifier now catches it: Union refuses instead of publishing a body whose
 // own segments do not bound it, and both operands are left untouched.

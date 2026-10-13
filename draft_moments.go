@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/units"
 )
@@ -65,7 +66,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 			patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 		}
 
-		near, err := loopEnclosedAreaContext(ctx, loop)
+		near, err := momentinput.LoopEnclosedArea(ctx, loop)
 		if err != nil {
 			return err
 		}
@@ -74,7 +75,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 		if err != nil {
 			return err
 		}
-		far, err := loopEnclosedAreaContext(ctx, boundary)
+		far, err := momentinput.LoopEnclosedArea(ctx, boundary)
 		if err != nil {
 			return err
 		}

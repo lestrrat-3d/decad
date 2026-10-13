@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -19,74 +20,19 @@ type prismPatternFilletContact struct {
 	center        r3.Vec
 	pointError    float64
 	tubeRadius    float64
-	lineIV        prismPatternIVPoint
-	centerIV      prismPatternIVPoint
-	circleIV      prismPatternIVPoint
+	lineIV        prismpattern.IVPoint
+	centerIV      prismpattern.IVPoint
+	circleIV      prismpattern.IVPoint
 	ringCut       prismPatternFilletRingCut
 }
 
-type prismPatternIVPoint struct{ x, y proofbound.RatInterval }
-
-func prismPatternIVPointOf(x, y *big.Rat) prismPatternIVPoint {
-	return prismPatternIVPoint{proofbound.PointInterval(x), proofbound.PointInterval(y)}
-}
-
-func (p prismPatternIVPoint) add(q prismPatternIVPoint) prismPatternIVPoint {
-	return prismPatternIVPoint{proofbound.IntervalAdd(p.x, q.x), proofbound.IntervalAdd(p.y, q.y)}
-}
-
-func (p prismPatternIVPoint) sub(q prismPatternIVPoint) prismPatternIVPoint {
-	return prismPatternIVPoint{proofbound.IntervalSub(p.x, q.x), proofbound.IntervalSub(p.y, q.y)}
-}
-
-func (p prismPatternIVPoint) scale(s proofbound.RatInterval) prismPatternIVPoint {
-	return prismPatternIVPoint{proofbound.IntervalMul(p.x, s), proofbound.IntervalMul(p.y, s)}
-}
-
-func (p prismPatternIVPoint) dot(q prismPatternIVPoint) proofbound.RatInterval {
-	return proofbound.IntervalAdd(proofbound.IntervalMul(p.x, q.x), proofbound.IntervalMul(p.y, q.y))
-}
-
-func prismPatternIVSqrt(a proofbound.RatInterval) (proofbound.RatInterval, error) {
-	value, ok := proofbound.IntervalSqrt(a)
-	if !ok || proofbound.IsNonFinite(proofbound.RatFloatUp(value.Hi)) {
-		return proofbound.RatInterval{}, fmt.Errorf("%w: joined-prism fillet has no finite square-root bracket", ErrUnsupported)
-	}
-	return value, nil
-}
-
-func prismPatternIVQuo(a, b proofbound.RatInterval) (proofbound.RatInterval, error) {
-	value, ok := proofbound.IntervalQuo(a, b)
-	if !ok {
-		return proofbound.RatInterval{}, fmt.Errorf("%w: joined-prism fillet has no separated denominator", ErrUnsupported)
-	}
-	return value, nil
-}
-
-func prismPatternIVHeld(p prismPatternIVPoint, z float64) (r3.Vec, float64, error) {
-	read := func(iv proofbound.RatInterval) float64 {
-		mid := new(big.Rat).Add(iv.Lo, iv.Hi)
-		mid.Quo(mid, big.NewRat(2, 1))
-		value, _ := mid.Float64()
-		return value
-	}
-	x, y := read(p.x), read(p.y)
-	point := r3.Vec{X: x, Y: y, Z: z}
-	if !proofbound.FiniteVec(point) {
-		return r3.Vec{}, 0, fmt.Errorf("%w: joined-prism fillet contact is non-finite", ErrUnsupported)
-	}
-	errorBound := proofbound.AbsSumUpper(proofbound.IntervalFloatError(p.x, x),
-		proofbound.IntervalFloatError(p.y, y))
-	return point, errorBound, nil
-}
-
-func prismPatternExactPlacedPoint(part prismPatternPart, point Point2) prismPatternIVPoint {
+func prismPatternExactPlacedPoint(part prismPatternPart, point Point2) prismpattern.IVPoint {
 	b := part.prism.xform.Basis()
 	c, s := proofarith.FloatRat(b.EX.X), proofarith.FloatRat(b.EX.Y)
 	u, v := proofarith.FloatRat(point.U), proofarith.FloatRat(point.V)
 	x := new(big.Rat).Sub(new(big.Rat).Mul(c, u), new(big.Rat).Mul(s, v))
 	y := new(big.Rat).Add(new(big.Rat).Mul(s, u), new(big.Rat).Mul(c, v))
-	return prismPatternIVPointOf(x, y)
+	return prismpattern.IVPointOf(x, y)
 }
 
 func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
@@ -117,39 +63,39 @@ func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
 	q := prismPatternExactPlacedPoint(part, near)
 	f := prismPatternExactPlacedPoint(part, far)
 	heldRoot := part.mesh.vertices[2*station]
-	rootError := proofbound.AbsSumUpper(proofbound.IntervalFloatError(q.x, heldRoot.X),
-		proofbound.IntervalFloatError(q.y, heldRoot.Y))
+	rootError := proofbound.AbsSumUpper(proofbound.IntervalFloatError(q.X, heldRoot.X),
+		proofbound.IntervalFloatError(q.Y, heldRoot.Y))
 	if rootError > part.mesh.Bound().Base() {
 		return result, fmt.Errorf("%w: joined-prism fillet root is not tied to its source", ErrUnsupported)
 	}
-	d := f.sub(q)
-	length, err := prismPatternIVSqrt(d.dot(d))
+	d := f.Sub(q)
+	length, err := prismpattern.IVSqrt(d.Dot(d))
 	if err != nil || length.Lo.Sign() <= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet connector has no positive length", ErrUnsupported)
 	}
-	ux, err := prismPatternIVQuo(d.x, length)
+	ux, err := prismpattern.IVQuo(d.X, length)
 	if err != nil {
 		return result, err
 	}
-	uy, err := prismPatternIVQuo(d.y, length)
+	uy, err := prismpattern.IVQuo(d.Y, length)
 	if err != nil {
 		return result, err
 	}
-	u := prismPatternIVPoint{ux, uy}
-	n := prismPatternIVPoint{proofbound.IntervalScale(uy, proofarith.FloatRat(-side)),
-		proofbound.IntervalScale(ux, proofarith.FloatRat(side))}
+	u := prismpattern.IVPoint{X: ux, Y: uy}
+	n := prismpattern.IVPoint{X: proofbound.IntervalScale(uy, proofarith.FloatRat(-side)),
+		Y: proofbound.IntervalScale(ux, proofarith.FloatRat(side))}
 	r, R := proofarith.FloatRat(radius), proofarith.FloatRat(blankRadius)
 	rIV := proofbound.PointInterval(r)
 	RIV := proofbound.PointInterval(R)
-	L := q.add(n.scale(rIV))
-	a := L.dot(u)
+	L := q.Add(n.Scale(rIV))
+	a := L.Dot(u)
 	Rplus := proofbound.IntervalAdd(RIV, rIV)
 	disc := proofbound.IntervalSub(proofbound.IntervalSquare(a),
-		proofbound.IntervalSub(L.dot(L), proofbound.IntervalSquare(Rplus)))
+		proofbound.IntervalSub(L.Dot(L), proofbound.IntervalSquare(Rplus)))
 	if disc.Lo.Sign() <= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet offset has no distinct outer contact", ErrUnsupported)
 	}
-	squareRoot, err := prismPatternIVSqrt(disc)
+	squareRoot, err := prismpattern.IVSqrt(disc)
 	if err != nil {
 		return result, err
 	}
@@ -157,45 +103,45 @@ func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
 	if t.Lo.Sign() <= 0 || proofbound.IntervalSub(length, t).Lo.Sign() <= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet contact escapes its connector", ErrUnsupported)
 	}
-	center := L.add(u.scale(t))
-	lineFoot := q.add(u.scale(t))
-	if lineFoot.dot(lineFoot).Lo.Cmp(prismPatternRadiusSq(blankRadius)) <= 0 {
+	center := L.Add(u.Scale(t))
+	lineFoot := q.Add(u.Scale(t))
+	if lineFoot.Dot(lineFoot).Lo.Cmp(prismpattern.RadiusSq(blankRadius)) <= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet line foot stays inside the blank", ErrUnsupported)
 	}
-	step, err := prismPatternIVQuo(RIV, Rplus)
+	step, err := prismpattern.IVQuo(RIV, Rplus)
 	if err != nil {
 		return result, err
 	}
-	circleFoot := center.scale(step)
-	cross := proofbound.IntervalSub(proofbound.IntervalMul(q.x, circleFoot.y),
-		proofbound.IntervalMul(q.y, circleFoot.x))
+	circleFoot := center.Scale(step)
+	cross := proofbound.IntervalSub(proofbound.IntervalMul(q.X, circleFoot.Y),
+		proofbound.IntervalMul(q.Y, circleFoot.X))
 	if side < 0 && cross.Hi.Sign() >= 0 || side > 0 && cross.Lo.Sign() <= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet contact leaves its circular gap", ErrUnsupported)
 	}
 	// A source corner, both tangent feet, and the complete radius-r arc fit in
 	// one 3r disk. Later clearance and volume proofs charge only these disks.
-	centerDistance, err := prismPatternIVSqrt(center.sub(q).dot(center.sub(q)))
+	centerDistance, err := prismpattern.IVSqrt(center.Sub(q).Dot(center.Sub(q)))
 	if err != nil || new(big.Rat).Add(centerDistance.Hi, r).Cmp(new(big.Rat).Mul(r, big.NewRat(3, 1))) >= 0 {
 		return result, fmt.Errorf("%w: joined-prism fillet escapes its local disk", ErrUnsupported)
 	}
 	result = prismPatternFilletContact{part: partIndex, station: station,
 		tubeRadius: proofbound.RatFloatUp(new(big.Rat).Add(centerDistance.Hi, r)),
 		lineIV:     lineFoot, centerIV: center, circleIV: circleFoot}
-	result.line, _, err = prismPatternIVHeld(lineFoot, heldRoot.Z)
+	result.line, _, err = prismpattern.IVHeld(lineFoot, heldRoot.Z)
 	if err != nil {
 		return prismPatternFilletContact{}, err
 	}
-	result.circle, _, err = prismPatternIVHeld(circleFoot, heldRoot.Z)
+	result.circle, _, err = prismpattern.IVHeld(circleFoot, heldRoot.Z)
 	if err != nil {
 		return prismPatternFilletContact{}, err
 	}
-	result.center, _, err = prismPatternIVHeld(center, heldRoot.Z)
+	result.center, _, err = prismpattern.IVHeld(center, heldRoot.Z)
 	if err != nil {
 		return prismPatternFilletContact{}, err
 	}
-	_, eLine, _ := prismPatternIVHeld(lineFoot, heldRoot.Z)
-	_, eCircle, _ := prismPatternIVHeld(circleFoot, heldRoot.Z)
-	_, eCenter, _ := prismPatternIVHeld(center, heldRoot.Z)
+	_, eLine, _ := prismpattern.IVHeld(lineFoot, heldRoot.Z)
+	_, eCircle, _ := prismpattern.IVHeld(circleFoot, heldRoot.Z)
+	_, eCenter, _ := prismpattern.IVHeld(center, heldRoot.Z)
 	result.pointError = math.Max(eLine, math.Max(eCircle, eCenter))
 	return result, nil
 }

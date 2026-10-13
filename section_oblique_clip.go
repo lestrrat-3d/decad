@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -15,7 +16,7 @@ import (
 // a rounded plane-local polygon and a displacement covering every matched
 // point of its exact source boundary in both local and world coordinates.
 func obliqueRectangleClip(pp prismPayload, plane r3.Frame) ([]Point2, float64, bool) {
-	u0, u1, v0, v1, ok := sectionRectangleBounds(pp.profile)
+	u0, u1, v0, v1, ok := momentinput.RectangleBounds(pp.profile)
 	if !ok || pp.blendKind != "" || len(pp.blendSegs) != 0 || pp.z0 >= pp.z1 {
 		return nil, 0, false
 	}

@@ -63,7 +63,7 @@ The rules for rows live in `docs/layout.md`.
 | `prism_group.go` | Prism-group `Cut` tools and disjoint `Union` results. See general-boolean A5. |
 | `stacked_union.go` / `stacked_union_brep.go` | A1 `Union`: slabs or a brep. See general-boolean A1. |
 | `prism_face_patch_union.go` | Re-expresses exact rectangular face-patch Union operands for prism or A1 scenes. See general-boolean A1. |
-| `prism_boolean_crossing.go` | Cut/Intersect's crossing resolution. See prism-boolean §4.2. |
+| `prism_boolean_crossing.go` | Cut/Intersect's crossing builders over prismcells' resolution. See prism-boolean §4.2. |
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`. See its doc comment. |
 | `brep_payload.go` / `brep_measure.go` | BRep face views, topology and readings. See general-boolean §4. |
 | `classb.go` | Class-B admission and result adapters. See general-boolean §3 B. |

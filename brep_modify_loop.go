@@ -959,7 +959,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		views[fi] = cbp
 		profile, err := mixedOffsetProfile(r.budget, cbp)
 		if err != nil {
-			return brepPayload{}, r.wrapFace(fi, wrapCapBlendDropError(err))
+			return brepPayload{}, r.wrapFace(fi, capband.ChamferDropError(err))
 		}
 		mixed[fi] = profile
 		if err := requireCapBlendLevelsSeparate(cbp); err != nil {
@@ -999,7 +999,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		}
 		region := *r.bp.faces[fi].region
 		if err := auditOffsetSectionBudget(r.budget, region, mixed[fi]); err != nil {
-			return brepPayload{}, r.wrapFace(fi, wrapCapBlendAuditError(err))
+			return brepPayload{}, r.wrapFace(fi, capband.ChamferAuditError(err))
 		}
 		if err := auditCapBlendSetbackSpan(r.budget, region, views[fi]); err != nil {
 			return brepPayload{}, r.wrapFace(fi, err)
