@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -537,15 +538,21 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 				ErrUnsupported, cap)
 		}
 	}
-	if err := loftCylinderChamferNearBandReach(ctx, mesh, fp, source, ideal, bands,
-		clipped.clipBound, allowance, !active[1], reflectedShift); err != nil {
-		return nil, err
+	// The near-band and middle-side proofs read only the finished mesh and
+	// source records, so they run side by side. When both fail, the near-band
+	// error is returned, as when they ran in sequence.
+	reach := func(ctx context.Context, k int) error {
+		if k == 0 {
+			return loftCylinderChamferNearBandReach(ctx, mesh, fp, source, ideal, bands,
+				clipped.clipBound, allowance, !active[1], reflectedShift)
+		}
+		if err := loftCylinderChamferBoreInheritance(fp, mesh, source); err != nil {
+			return err
+		}
+		return loftCylinderChamferMiddleSideReach(ctx, fp, mesh, source, ideal,
+			middle, clipped.clipBound)
 	}
-	if err := loftCylinderChamferBoreInheritance(fp, mesh, source); err != nil {
-		return nil, err
-	}
-	if err := loftCylinderChamferMiddleSideReach(ctx, fp, mesh, source, ideal,
-		middle, clipped.clipBound); err != nil {
+	if err := orderedwork.Proofs(ctx, 2, orderedwork.EachWorkers(2, 2), reach); err != nil {
 		return nil, err
 	}
 	// The exact band-to-source witness consumes the full certified tolerance.
