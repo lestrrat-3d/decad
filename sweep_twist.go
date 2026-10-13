@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
@@ -46,28 +47,79 @@ type twistPolygon struct {
 	perimeterUpper float64
 	maxRadiusL1    float64
 	maxEdgeL1      float64
+	hasArc         bool
+	areaInterval   proofbound.RatInterval
+}
+
+// Opposite source edges have the same parameter walk after a half-turn.
+// This proves the exact curved section's first moments vanish, rather than
+// inferring its centroid from the chord polygon.
+func twistOppositeSegments(a, b curveSegment) bool {
+	negative := func(p, q Point2) bool { return p.U == -q.U && p.V == -q.V }
+	switch a := a.(type) {
+	case lineSeg:
+		b, ok := b.(lineSeg)
+		return ok && a.TStart == b.TStart && a.TEnd == b.TEnd &&
+			negative(a.Start, b.Start) && negative(a.End, b.End)
+	case arcSeg:
+		b, ok := b.(arcSeg)
+		return ok && a.TStart == b.TStart && a.TEnd == b.TEnd &&
+			negative(a.Center, b.Center) && negative(a.Start, b.Start) && negative(a.End, b.End)
+	default:
+		return false
+	}
 }
 
 func twistRat(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
 
-// twistPolygonOf admits only a strictly convex polygon whose exact dyadic
-// centroid is on the path axis. The z coordinate is monotone, so every true
-// section is a simple rotated copy of this polygon and sections cannot meet.
+// twistPolygonOf admits a strictly convex chord outline. A curved outline
+// must also have exact opposite source edges, which proves its true centroid
+// lies on the axis. Monotone Z keeps different true sections disjoint.
 func twistPolygonOf(profile profileRecord) (twistPolygon, error) {
 	if len(profile.Holes) != 0 {
 		return twistPolygon{}, fmt.Errorf(`%w: a twisted sweep with holes is not implemented`, ErrUnsupported)
 	}
 	segments := profile.Outer.Segments
 	if len(segments) < 3 || len(segments) > 256 {
-		return twistPolygon{}, fmt.Errorf(`%w: a twisted sweep needs 3 to 256 straight profile edges`, ErrUnsupported)
+		return twistPolygon{}, fmt.Errorf(`%w: a twisted sweep needs 3 to 256 profile edges`, ErrUnsupported)
 	}
 	points := make([]Point2, len(segments))
+	hasArc := false
 	for i, segment := range segments {
-		line, ok := segment.(lineSeg)
-		if !ok || line.TStart != 0 || line.TEnd != 1 {
-			return twistPolygon{}, fmt.Errorf(`%w: a twisted sweep needs whole straight profile edges`, ErrUnsupported)
+		switch edge := segment.(type) {
+		case lineSeg:
+			if edge.TStart != 0 || edge.TEnd != 1 {
+				return twistPolygon{}, fmt.Errorf(`%w: a twisted sweep needs whole profile edges`, ErrUnsupported)
+			}
+			points[i] = edge.Start
+		case arcSeg:
+			hasArc = true
+			if edge.TStart != 0 || edge.TEnd != 1 {
+				return twistPolygon{}, fmt.Errorf(`%w: a twisted sweep needs whole profile edges`, ErrUnsupported)
+			}
+			startU := new(big.Rat).Sub(twistRat(edge.Start.U), twistRat(edge.Center.U))
+			startV := new(big.Rat).Sub(twistRat(edge.Start.V), twistRat(edge.Center.V))
+			endU := new(big.Rat).Sub(twistRat(edge.End.U), twistRat(edge.Center.U))
+			endV := new(big.Rat).Sub(twistRat(edge.End.V), twistRat(edge.Center.V))
+			startR2 := new(big.Rat).Add(new(big.Rat).Mul(startU, startU), new(big.Rat).Mul(startV, startV))
+			endR2 := new(big.Rat).Add(new(big.Rat).Mul(endU, endU), new(big.Rat).Mul(endV, endV))
+			if startR2.Sign() <= 0 || startR2.Cmp(endR2) != 0 {
+				return twistPolygon{}, fmt.Errorf(`%w: a twisted arc needs equal pinned endpoint radii`, ErrUnsupported)
+			}
+			points[i] = edge.Start
+		default:
+			return twistPolygon{}, fmt.Errorf(`%w: a twisted sweep needs line or arc profile edges`, ErrUnsupported)
 		}
-		points[i] = line.Start
+	}
+	if hasArc {
+		if len(segments)%2 != 0 {
+			return twistPolygon{}, fmt.Errorf(`%w: a mixed twisted section needs paired opposite edges`, ErrUnsupported)
+		}
+		for i := range len(segments) / 2 {
+			if !twistOppositeSegments(segments[i], segments[i+len(segments)/2]) {
+				return twistPolygon{}, fmt.Errorf(`%w: a mixed twisted section needs exact central symmetry`, ErrUnsupported)
+			}
+		}
 	}
 	area2, momentX6, momentY6 := new(big.Rat), new(big.Rat), new(big.Rat)
 	perimeter, perimeterLow := new(big.Rat), new(big.Rat)
@@ -87,31 +139,67 @@ func twistPolygonOf(profile profileRecord) (twistPolygon, error) {
 			return twistPolygon{}, fmt.Errorf(`%w: a twisted sweep needs a strictly convex profile`, ErrUnsupported)
 		}
 		sign = turn.Sign()
-		length2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
-		length, ok := proofbound.SqrtFixed(length2)
-		if !ok {
-			return twistPolygon{}, fmt.Errorf(`%w: the twisted profile perimeter has no bound`, ErrUnsupported)
+		if arc, curved := segments[i].(arcSeg); curved {
+			converted := circularbounds.RecordSegment(arc)
+			radiusIv, sweepIv, ok := circularbounds.WalkEnclosures(converted)
+			if !ok || radiusIv.Lo.Sign() <= 0 || sweepIv.Lo.Sign() <= 0 ||
+				sweepIv.Hi.Cmp(proofbound.PiUpper) > 0 {
+				return twistPolygon{}, fmt.Errorf(`%w: a twisted arc needs a bounded positive turn up to a half-circle`, ErrUnsupported)
+			}
+			length, ok := circularbounds.LengthInterval(converted)
+			if !ok || length.Lo.Sign() <= 0 {
+				return twistPolygon{}, fmt.Errorf(`%w: the twisted arc perimeter has no bound`, ErrUnsupported)
+			}
+			perimeter.Add(perimeter, length.Hi)
+			perimeterLow.Add(perimeterLow, length.Lo)
+			arcRadius := new(big.Rat).Add(
+				new(big.Rat).Add(new(big.Rat).Abs(twistRat(arc.Center.U)),
+					new(big.Rat).Abs(twistRat(arc.Center.V))),
+				new(big.Rat).Mul(big.NewRat(2, 1), radiusIv.Hi))
+			if arcRadius.Cmp(maxRadius) > 0 {
+				maxRadius = arcRadius
+			}
+		} else {
+			length2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
+			length, ok := proofbound.SqrtFixed(length2)
+			if !ok {
+				return twistPolygon{}, fmt.Errorf(`%w: the twisted profile perimeter has no bound`, ErrUnsupported)
+			}
+			perimeter.Add(perimeter, length.Hi)
+			perimeterLow.Add(perimeterLow, length.Lo)
+			edgeL1 := new(big.Rat).Add(new(big.Rat).Abs(dx), new(big.Rat).Abs(dy))
+			if edgeL1.Cmp(maxEdge) > 0 {
+				maxEdge = edgeL1
+			}
 		}
-		perimeter.Add(perimeter, length.Hi)
-		perimeterLow.Add(perimeterLow, length.Lo)
 		radiusL1 := new(big.Rat).Add(new(big.Rat).Abs(px), new(big.Rat).Abs(py))
 		if radiusL1.Cmp(maxRadius) > 0 {
 			maxRadius = radiusL1
-		}
-		edgeL1 := new(big.Rat).Add(new(big.Rat).Abs(dx), new(big.Rat).Abs(dy))
-		if edgeL1.Cmp(maxEdge) > 0 {
-			maxEdge = edgeL1
 		}
 	}
 	if area2.Sign() == 0 || momentX6.Sign() != 0 || momentY6.Sign() != 0 {
 		return twistPolygon{}, fmt.Errorf(`%w: the twisted profile must have its centroid on the path axis`, ErrUnsupported)
 	}
+	area := new(big.Rat).Quo(new(big.Rat).Abs(area2), big.NewRat(2, 1))
+	areaInterval := proofbound.PointInterval(area)
+	if hasArc {
+		measured, err := profile.Area()
+		if err != nil {
+			return twistPolygon{}, err
+		}
+		value, bound := twistRat(measured.Value.Base()), twistRat(measured.Bound.Base())
+		areaInterval = proofbound.Interval(new(big.Rat).Sub(value, bound), new(big.Rat).Add(value, bound))
+		if areaInterval.Lo.Sign() <= 0 {
+			return twistPolygon{}, fmt.Errorf(`%w: a mixed twisted section has no positive area proof`, ErrUnsupported)
+		}
+	}
 	return twistPolygon{
-		points: points, area: new(big.Rat).Quo(new(big.Rat).Abs(area2), big.NewRat(2, 1)),
+		points: points, area: area, areaInterval: areaInterval,
 		perimeterLower: proofbound.RatFloatDown(perimeterLow),
 		perimeterUpper: proofbound.RatFloatUp(perimeter),
 		maxRadiusL1:    proofbound.RatFloatUp(maxRadius),
 		maxEdgeL1:      proofbound.RatFloatUp(maxEdge),
+		hasArc:         hasArc,
 	}, nil
 }
 
@@ -173,6 +261,95 @@ func twistAreaInterval(poly twistPolygon, height *big.Rat, angle proofbound.RatI
 	return result, nil
 }
 
+// For an arc-length parameter s, a rotating vertical wall has Jacobian
+// sqrt(h² + theta²*(p dot dp/ds)²). The two-sided perimeter and source-radius
+// enclosures bound this non-cancelling integral for both lines and arcs.
+func twistMixedAreaInterval(poly twistPolygon, height *big.Rat,
+	angle proofbound.RatInterval) (proofbound.RatInterval, error) {
+	if height.Sign() <= 0 || poly.perimeterLower <= 0 || poly.perimeterUpper <= 0 ||
+		poly.maxRadiusL1 <= 0 || proofbound.IsNonFinite(poly.perimeterUpper) ||
+		proofbound.IsNonFinite(poly.maxRadiusL1) {
+		return proofbound.RatInterval{}, fmt.Errorf(`%w: a mixed twisted section has no wall-area bound`, ErrUnsupported)
+	}
+	thetaR := new(big.Rat).Mul(proofbound.IntervalAbsUpper(angle), twistRat(poly.maxRadiusL1))
+	ratio := new(big.Rat).Quo(thetaR, height)
+	factor, ok := proofbound.SqrtInterval(proofbound.PointInterval(
+		new(big.Rat).Add(big.NewRat(1, 1), new(big.Rat).Mul(ratio, ratio))))
+	if !ok {
+		return proofbound.RatInterval{}, fmt.Errorf(`%w: a mixed twisted section has no wall-area root`, ErrUnsupported)
+	}
+	wallLo := new(big.Rat).Mul(height, twistRat(poly.perimeterLower))
+	wallHi := new(big.Rat).Mul(new(big.Rat).Mul(height, twistRat(poly.perimeterUpper)), factor.Hi)
+	return proofbound.IntervalAdd(proofbound.IntervalScale(poly.areaInterval, big.NewRat(2, 1)),
+		proofbound.Interval(wallLo, wallHi)), nil
+}
+
+// Each live source face receives a positive source-plus-held area charge.
+// It also covers an arbitrary Boolean subset within one face.
+func twistMixedAreaSlack(profile profileRecord, poly twistPolygon, height *big.Rat,
+	angle proofbound.RatInterval, body *Body,
+	held map[*Face]proofbound.RatInterval) (float64, error) {
+	byRole := make(map[string]*Face, len(body.Faces()))
+	for _, face := range body.Faces() {
+		if len(face.origins) != 1 {
+			return 0, fmt.Errorf(`%w: a mixed twisted face lost its source role`, ErrUnsupported)
+		}
+		byRole[face.origins[0].Role] = face
+	}
+	if len(byRole) != len(profile.Outer.Segments)+2 {
+		return 0, fmt.Errorf(`%w: a mixed twisted section has incomplete face roles`, ErrUnsupported)
+	}
+	thetaR := new(big.Rat).Mul(proofbound.IntervalAbsUpper(angle), twistRat(poly.maxRadiusL1))
+	ratio := new(big.Rat).Quo(thetaR, height)
+	factor, ok := proofbound.SqrtInterval(proofbound.PointInterval(
+		new(big.Rat).Add(big.NewRat(1, 1), new(big.Rat).Mul(ratio, ratio))))
+	if !ok {
+		return 0, fmt.Errorf(`%w: a mixed twisted wall has no area factor`, ErrUnsupported)
+	}
+	slack := new(big.Rat)
+	charge := func(role string, trueArea proofbound.RatInterval) error {
+		face := byRole[role]
+		heldArea, exists := held[face]
+		if face == nil || !exists || heldArea.Lo.Sign() < 0 {
+			return fmt.Errorf(`%w: mixed twisted face %s has no held area`, ErrUnsupported, role)
+		}
+		// A later Boolean may keep only part of this face. The difference
+		// between whole-face totals could hide opposite local errors, so
+		// charge both positive areas without subtracting them.
+		slack.Add(slack, trueArea.Hi)
+		slack.Add(slack, heldArea.Hi)
+		return nil
+	}
+	for _, role := range []string{roleCapStart, roleCapEnd} {
+		if err := charge(role, poly.areaInterval); err != nil {
+			return 0, err
+		}
+	}
+	for index, segment := range profile.Outer.Segments {
+		var length proofbound.RatInterval
+		switch edge := segment.(type) {
+		case lineSeg:
+			dx := new(big.Rat).Sub(twistRat(edge.End.U), twistRat(edge.Start.U))
+			dy := new(big.Rat).Sub(twistRat(edge.End.V), twistRat(edge.Start.V))
+			length, ok = proofbound.SqrtInterval(proofbound.PointInterval(
+				new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))))
+		case arcSeg:
+			length, ok = circularbounds.LengthInterval(circularbounds.RecordSegment(edge))
+		default:
+			ok = false
+		}
+		if !ok || length.Lo.Sign() <= 0 {
+			return 0, fmt.Errorf(`%w: mixed twisted wall %d has no source length`, ErrUnsupported, index)
+		}
+		trueArea := proofbound.Interval(new(big.Rat).Mul(height, length.Lo),
+			new(big.Rat).Mul(new(big.Rat).Mul(height, length.Hi), factor.Hi))
+		if err := charge(fmt.Sprintf("side(0,0,%d)", index), trueArea); err != nil {
+			return 0, err
+		}
+	}
+	return proofbound.RatFloatUp(slack), nil
+}
+
 // twistDeparture encloses the true wall against Loft's flat two-triangle
 // wall. Linear interpolation of the rotation has error ≤ R|angle|²/8; the
 // bilinear ruled quad against its diagonal has error ≤ |edge|(|angle|+e)/4.
@@ -185,8 +362,8 @@ func twistDeparture(poly twistPolygon, angleUpper, endpointCoordError, loftDelta
 }
 
 // twistSymDiff bounds each horizontal symmetric difference by the two-sided
-// delta tube of the convex true polygon. The section has perimeter P, so the
-// tube area is at most 2Pδ+2πδ²; integrate over the exact path height.
+// delta tube of the true closed source walk. A rectifiable walk of perimeter
+// P has a delta-neighbourhood of area at most 2Pδ+2πδ². Integrate over height.
 func twistSymDiff(height float64, perimeter, delta float64) float64 {
 	h, p, d := twistRat(height), twistRat(perimeter), twistRat(delta)
 	linear := new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Mul(p, d))
@@ -194,12 +371,13 @@ func twistSymDiff(height float64, perimeter, delta float64) float64 {
 	return proofbound.RatFloatUp(new(big.Rat).Mul(h, new(big.Rat).Add(linear, quadratic)))
 }
 
-// mergeTwistWalls removes the diagonal Loft exposes between each pair of
-// wall triangles. The two triangles remain in the held mesh, but their one
-// true twisted patch is one live Faceted face with role side(0,0,j).
-func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, count int) (map[string]*Face, error) {
+// mergeTwistWalls removes internal Loft edges from each source wall's live
+// face. Its triangles remain in the held mesh; its outline becomes one live
+// Faceted face with role side(0,0,j).
+func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftPayload, count int) (map[string]*Face, error) {
 	oldFaces := body.Faces()
-	if len(oldFaces) != 2+2*count {
+	if len(oldFaces) != 2+held.walls || len(held.cell) != held.walls ||
+		len(held.segment) != 1 {
 		return nil, fmt.Errorf(`%w: the twist's held wall count changed`, ErrUnsupported)
 	}
 	sources := map[string]*Face{
@@ -211,35 +389,90 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, count int)
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		lower, upper := oldFaces[2+2*j], oldFaces[3+2*j]
-		if len(lower.loops) != 1 || len(upper.loops) != 1 ||
-			len(lower.loops[0].coedges) != 3 || len(upper.loops[0].coedges) != 3 {
-			return nil, fmt.Errorf(`%w: a twisted wall has no paired Loft triangles`, ErrUnsupported)
+		uses := map[*Edge][]coedge{}
+		area, areaBound, firstFacet := 0.0, 0.0, -1
+		for k := range held.walls {
+			cell := held.cell[k]
+			if cell[0] != 0 || cell[1] < 0 || cell[1] >= len(held.segment[0]) {
+				return nil, fmt.Errorf(`%w: a twisted wall lost its source segment`, ErrUnsupported)
+			}
+			if held.segment[0][cell[1]] != j {
+				continue
+			}
+			face := oldFaces[2+k]
+			if len(face.loops) != 1 || len(face.loops[0].coedges) != 3 ||
+				len(face.origins) == 0 {
+				return nil, fmt.Errorf(`%w: a twisted wall has no Loft triangle`, ErrUnsupported)
+			}
+			if firstFacet < 0 {
+				firstFacet = k
+			}
+			for _, use := range face.loops[0].coedges {
+				uses[use.edge] = append(uses[use.edge], use)
+			}
+			area = proofbound.AbsSumUpper(area, face.area)
+			areaBound = proofbound.AbsSumUpper(areaBound, face.areaBound)
 		}
-		lo, up := lower.loops[0].coedges, upper.loops[0].coedges
-		li, ui := -1, -1
-		for a, x := range lo {
-			for b, y := range up {
-				if x.edge == y.edge {
-					li, ui = a, b
+		if firstFacet < 0 {
+			return nil, fmt.Errorf(`%w: a twisted source wall has no facets`, ErrUnsupported)
+		}
+		boundary := map[*Vertex]coedge{}
+		for _, edgeUses := range uses {
+			switch len(edgeUses) {
+			case 1:
+				use := edgeUses[0]
+				if _, exists := boundary[use.Start()]; exists {
+					return nil, fmt.Errorf(`%w: a twisted wall boundary branches`, ErrUnsupported)
 				}
+				boundary[use.Start()] = use
+			case 2:
+				if edgeUses[0].forward == edgeUses[1].forward {
+					return nil, fmt.Errorf(`%w: twisted wall facets use a seam in the same direction`, ErrUnsupported)
+				}
+			default:
+				return nil, fmt.Errorf(`%w: a twisted wall edge has an unsupported use count`, ErrUnsupported)
 			}
 		}
-		if li < 0 {
-			return nil, fmt.Errorf(`%w: paired twisted facets have no shared diagonal`, ErrUnsupported)
+		if len(boundary) < 4 {
+			return nil, fmt.Errorf(`%w: a twisted wall has no closed boundary`, ErrUnsupported)
 		}
-		outline := []coedge{
-			lo[(li+1)%3], lo[(li+2)%3], up[(ui+1)%3], up[(ui+2)%3],
+		var first *Vertex
+		for _, use := range oldFaces[2+firstFacet].loops[0].coedges {
+			if kept, ok := boundary[use.Start()]; ok && kept.edge == use.edge {
+				first = use.Start()
+				break
+			}
+		}
+		if first == nil {
+			return nil, fmt.Errorf(`%w: a twisted wall has no deterministic outline start`, ErrUnsupported)
+		}
+		outline := make([]coedge, 0, len(boundary))
+		current := first
+		for range len(boundary) {
+			use, ok := boundary[current]
+			if !ok {
+				return nil, fmt.Errorf(`%w: a twisted wall outline is disconnected`, ErrUnsupported)
+			}
+			outline = append(outline, use)
+			current = use.End()
+			delete(boundary, use.Start())
+		}
+		if current != first || len(boundary) != 0 {
+			return nil, fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
 		}
 		face := &Face{
 			surface: Faceted{}, loops: []*Loop{{outer: true, coedges: outline}},
 			origins:   []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(0,0,%d)", j)}},
 			body:      body,
-			area:      proofbound.AbsSumUpper(lower.area, upper.area),
-			areaBound: proofbound.AbsSumUpper(lower.areaBound, upper.areaBound),
+			area:      area,
+			areaBound: areaBound,
 		}
-		sources[lower.origins[0].Role] = face
-		sources[upper.origins[0].Role] = face
+		for k := range held.walls {
+			cell := held.cell[k]
+			if held.segment[0][cell[1]] == j {
+				sources[oldFaces[2+k].origins[0].Role] = face
+			}
+		}
 		merged = append(merged, face)
 	}
 	// Detach the old triangle uses before attaching the merged faces. The
@@ -287,7 +520,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	if upper == 0 {
 		return nil, fmt.Errorf(`%w: the twisted sweep admits an angle up to one radian`, ErrUnsupported)
 	}
-	if upper > 1 {
+	if upper > 1 || poly.hasArc {
 		return evalStationedTwistedSweep(ctx, d, ref, profile, plane, path, angle, recordArea, xform)
 	}
 	sinIv, cosIv, ok := denoted.SinCosFor(theta)
@@ -325,7 +558,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	if !ok {
 		return nil, fmt.Errorf(`%w: the twisted sweep lost its held Loft proof`, ErrUnsupported)
 	}
-	sourceRoles, err := mergeTwistWalls(ctx, heldBody, ref, len(poly.points))
+	sourceRoles, err := mergeTwistWalls(ctx, heldBody, ref, held, len(poly.points))
 	if err != nil {
 		return nil, err
 	}

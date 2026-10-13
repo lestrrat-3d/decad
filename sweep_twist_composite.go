@@ -147,12 +147,13 @@ func compositeTwistCellProof(poly twistPolygon, geometry twistCardinalPath,
 }
 
 func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
-	profileEdges int, pathSpanOfCell []int, delta, volSymDiff float64) (*Mesh, proofbound.RatInterval, error) {
+	profileEdges int, pathSpanOfCell []int, delta, volSymDiff float64) (*Mesh, proofbound.RatInterval,
+	map[*Face]proofbound.RatInterval, error) {
 	if len(cells) < 2 {
-		return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: composite twist has too few held cells`, ErrDegenerate)
+		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: composite twist has too few held cells`, ErrDegenerate)
 	}
 	if len(pathSpanOfCell) != len(cells) {
-		return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twisted Loft cells have no path-span map`, ErrDegenerate)
+		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft cells have no path-span map`, ErrDegenerate)
 	}
 	byRole := map[string]*Face{}
 	for _, face := range body.Faces() {
@@ -161,30 +162,35 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 		}
 	}
 	mesh := &Mesh{bound: delta, volSymDiff: volSymDiff, symDiffOK: true}
-	spanOf := make([]int, 0, len(cells)*(2*profileEdges+4))
+	stationPoints := len(cells[0].verts) / 2
+	if stationPoints < profileEdges || len(cells[0].verts) != 2*stationPoints {
+		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft has no complete station table`, ErrUnsupported)
+	}
+	spanOf := make([]int, 0, len(cells)*(2*stationPoints+4))
 	for cell, held := range cells {
 		if err := ctx.Err(); err != nil {
-			return nil, proofbound.RatInterval{}, err
+			return nil, proofbound.RatInterval{}, nil, err
 		}
-		if len(held.verts) != 2*profileEdges || held.walls != 2*profileEdges ||
+		if len(held.verts) != 2*stationPoints || held.walls != 2*stationPoints ||
+			len(held.segment) != 1 || len(held.segment[0]) != stationPoints ||
 			len(held.tris) <= held.walls+held.capStartCount {
-			return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twisted Loft has an unexpected station table`, ErrUnsupported)
+			return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft has an unexpected station table`, ErrUnsupported)
 		}
 		if cell == 0 {
-			mesh.vertices = append(mesh.vertices, held.verts[:profileEdges]...)
+			mesh.vertices = append(mesh.vertices, held.verts[:stationPoints]...)
 		} else {
-			for j := range profileEdges {
-				if mesh.vertices[cell*profileEdges+j] != held.verts[j] {
-					return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twisted Loft cells disagree at a shared station`, ErrUnsupported)
+			for j := range stationPoints {
+				if mesh.vertices[cell*stationPoints+j] != held.verts[j] {
+					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft cells disagree at a shared station`, ErrUnsupported)
 				}
 			}
 		}
-		mesh.vertices = append(mesh.vertices, held.verts[profileEdges:]...)
+		mesh.vertices = append(mesh.vertices, held.verts[stationPoints:]...)
 		mesh.coordBound = max(mesh.coordBound, held.delta)
 		for t, triangle := range held.tris {
 			if t < held.walls && (t >= len(held.cell) ||
 				held.cell[t][0] != 0 || held.cell[t][1] != t/2) {
-				return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twisted Loft wall order lost its profile provenance`, ErrUnsupported)
+				return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft wall order lost its profile provenance`, ErrUnsupported)
 			}
 			if t >= held.walls && t < held.walls+held.capStartCount && cell != 0 ||
 				t >= held.walls+held.capStartCount && cell != len(cells)-1 {
@@ -192,20 +198,24 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 			}
 			role := roleCapStart
 			if t < held.walls {
-				role = fmt.Sprintf("side(%d,0,%d)", pathSpanOfCell[cell], t/2)
+				segment := held.segment[0][t/2]
+				if segment < 0 || segment >= profileEdges {
+					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft lost its source segment`, ErrUnsupported)
+				}
+				role = fmt.Sprintf("side(%d,0,%d)", pathSpanOfCell[cell], segment)
 			} else if t >= held.walls+held.capStartCount {
 				role = roleCapEnd
 			}
 			face := byRole[role]
 			if face == nil {
-				return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twisted Loft mesh has no live face for %s`, ErrDegenerate, role)
+				return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft mesh has no live face for %s`, ErrDegenerate, role)
 			}
 			mapped := [3]int{}
 			for i, local := range triangle {
-				if local < 0 || local >= 2*profileEdges {
-					return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twisted Loft triangle has an invalid station`, ErrDegenerate)
+				if local < 0 || local >= 2*stationPoints {
+					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft triangle has an invalid station`, ErrDegenerate)
 				}
-				mapped[i] = cell*profileEdges + local
+				mapped[i] = cell*stationPoints + local
 			}
 			mesh.addTriangle(mapped, face)
 			mesh.setFaceBound(face, delta)
@@ -213,24 +223,25 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 		}
 	}
 	if err := requireMeshAudit(ctx, false, body, mesh); err != nil {
-		return nil, proofbound.RatInterval{}, err
+		return nil, proofbound.RatInterval{}, nil, err
 	}
 	if err := liftTessellationError(tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles)); err != nil {
-		return nil, proofbound.RatInterval{}, err
+		return nil, proofbound.RatInterval{}, nil, err
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	auditTris, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.vertices, mesh.triangles, mesh.coordBound)
 	if err != nil {
-		return nil, proofbound.RatInterval{}, err
+		return nil, proofbound.RatInterval{}, nil, err
 	}
 	if err := compositesweep.CrossSpanContactAudit(budget, auditTris, mesh.triangles, spanOf, mesh.coordBound); err != nil {
-		return nil, proofbound.RatInterval{}, err
+		return nil, proofbound.RatInterval{}, nil, err
 	}
 	if tessellation.OrientationSign(mesh.vertices, mesh.triangles, r3.Vec{}) <= 0 {
-		return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twisted Loft mesh has nonpositive orientation`, ErrUnsupported)
+		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft mesh has nonpositive orientation`, ErrUnsupported)
 	}
 	area := proofbound.PointInterval(new(big.Rat))
-	for _, triangle := range mesh.triangles {
+	byFace := make(map[*Face]proofbound.RatInterval, len(body.Faces()))
+	for index, triangle := range mesh.triangles {
 		var points [3]proofbound.IvVec3
 		for i, index := range triangle {
 			v := mesh.vertices[index]
@@ -242,11 +253,18 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 		}
 		twice, ok := revolvemesh.IvTwoTriangleArea(points[0], points[1], points[2])
 		if !ok {
-			return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twisted Loft facet has no area enclosure`, ErrUnsupported)
+			return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft facet has no area enclosure`, ErrUnsupported)
 		}
-		area = proofbound.IntervalAdd(area, proofbound.IntervalScale(twice, big.NewRat(1, 2)))
+		facet := proofbound.IntervalScale(twice, big.NewRat(1, 2))
+		area = proofbound.IntervalAdd(area, facet)
+		face := mesh.source[index]
+		if previous, exists := byFace[face]; exists {
+			byFace[face] = proofbound.IntervalAdd(previous, facet)
+		} else {
+			byFace[face] = facet
+		}
 	}
-	return mesh, area, nil
+	return mesh, area, byFace, nil
 }
 
 func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
@@ -258,6 +276,9 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	poly, err := twistPolygonOf(profile)
 	if err != nil {
 		return nil, err
+	}
+	if poly.hasArc {
+		return nil, fmt.Errorf(`%w: a composite twisted sweep needs straight profile edges`, ErrUnsupported)
 	}
 	geometry, err := twistCardinalPathOf(path, plane, poly)
 	if err != nil {
@@ -295,7 +316,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		if !heldOK {
 			return nil, fmt.Errorf(`%w: a twisted sweep cell lost its Loft payload`, ErrUnsupported)
 		}
-		if _, err := mergeTwistWalls(ctx, part, ref, len(poly.points)); err != nil {
+		if _, err := mergeTwistWalls(ctx, part, ref, held[i], len(poly.points)); err != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
 		}
 		parts[i], err = compositeSpanPartOf(part)
@@ -362,7 +383,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	for i := 1; i < len(pathSpanOfCell); i++ {
 		pathSpanOfCell[i] = 1
 	}
-	mesh, heldAreaIv, err := compositeTwistMesh(ctx, body, held, len(poly.points),
+	mesh, heldAreaIv, _, err := compositeTwistMesh(ctx, body, held, len(poly.points),
 		pathSpanOfCell, delta, volSymDiff)
 	if err != nil {
 		return nil, err

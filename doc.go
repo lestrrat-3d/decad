@@ -104,7 +104,7 @@
 //	  composite path without exact transported frames or
 //	    certified span separation                             ErrUnsupported
 //	  closed path                                             ErrUnsupported
-//	  WithSweepTwist: centred convex whole-line profile,
+//	  WithSweepTwist: centred convex whole-line or symmetric Line/Arc profile,
 //	    origin XY plane, one positive-Z line, <= 1 turn     builds
 //	    or line then cardinal XZ quarter arc, <= 1 rad      builds
 //	  other nonzero twist                                     ErrUnsupported
@@ -256,7 +256,8 @@
 // the document changes. Draft leans an existing prism's walls, all of
 // them or a selected subset, the same way about one of its caps.
 // WithSweepTwist names a sweep's distributed twist. Its admitted straight
-// and cardinal curved polygon cases are described in docs/sweep-design.md §17.
+// polygon, symmetric Line/Arc, and cardinal curved polygon cases are
+// described in docs/sweep-design.md §17.
 // WithLoftAlignment
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate], as is a repeated
