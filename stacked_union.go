@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -51,8 +52,8 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 	switch p := b.payload.(type) {
 	case prismPayload:
 		return stackedUnionOperand{proxy: p, slabs: []stackedrecord.Slab{{
-			Regions: []profileRecord{p.profile},
-			Z0:      p.z0, Z1: p.z1, Z0Delta: p.z0Delta, Z1Delta: p.z1Delta,
+			Regions: []profileRecord{p.Profile},
+			Z0:      p.Z0, Z1: p.Z1, Z0Delta: p.Z0Delta, Z1Delta: p.Z1Delta,
 		}}}, true
 	case stackedPrismPayload:
 		return stackedUnionOperand{proxy: p.outerPrism(), slabs: p.slabs}, true
@@ -63,11 +64,11 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 			return stackedUnionOperand{}, false
 		}
 		first, last := p.stack.slabs[0], p.stack.slabs[len(p.stack.slabs)-1]
-		return stackedUnionOperand{proxy: prismPayload{
-			profile: profileRecord{Outer: first.Regions[0].Outer},
-			frame:   p.faces[0].frame, xform: p.xform, sectionDelta: p.stack.delta,
-			z0: first.Z0, z0Delta: first.Z0Delta, z1: last.Z1, z1Delta: last.Z1Delta,
-		}, slabs: p.stack.slabs, brep: true}, true
+		return stackedUnionOperand{proxy: prismPayload{Payload: prismrecord.Payload{
+			Profile: profileRecord{Outer: first.Regions[0].Outer},
+			Frame:   p.faces[0].frame, Xform: p.xform, SectionDelta: p.stack.delta,
+			Z0: first.Z0, Z0Delta: first.Z0Delta, Z1: last.Z1, Z1Delta: last.Z1Delta,
+		}}, slabs: p.stack.slabs, brep: true}, true
 	default:
 		return stackedUnionOperand{}, false
 	}
@@ -78,7 +79,7 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 // displacement for prism-boolean §3.4's crossing charge.
 func (o stackedUnionOperand) view(region profileRecord) prismPayload {
 	v := o.proxy
-	v.profile = region
+	v.Profile = region
 	return v
 }
 
@@ -151,7 +152,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 
 	st := &stackedUnionState{budget: budget, va: va, vb: vb, reexpress: reexpress,
 		bRecorded: map[int]profileRecord{}, scenes: map[[2]stackedUnionRegionRef]*stackedNesting{}}
-	sp := stackedPrismPayload{frame: va.proxy.frame, xform: va.proxy.xform}
+	sp := stackedPrismPayload{frame: va.proxy.Frame, xform: va.proxy.Xform}
 	zero := new(big.Rat)
 	var reach [][2]int
 	for k := 0; k+1 < len(levels); k++ {
@@ -203,8 +204,8 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 func (st *stackedUnionState) sectionDelta() float64 {
 	return proofbound.AbsSumUpper(
 		max(
-			proofbound.AbsSumUpper(st.va.proxy.sectionDelta, st.walkA),
-			proofbound.AbsSumUpper(st.vb.proxy.sectionDelta, st.walkB, st.reexpress.Delta),
+			proofbound.AbsSumUpper(st.va.proxy.SectionDelta, st.walkA),
+			proofbound.AbsSumUpper(st.vb.proxy.SectionDelta, st.walkB, st.reexpress.Delta),
 			st.walkInterface,
 			st.crossing,
 		),
@@ -364,7 +365,7 @@ func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (profileRecord
 	if err := st.withinCap(empty, pb); err != nil {
 		return profileRecord{}, false, err
 	}
-	s, tags, sceneDelta, err := prismcells.BuildScene(st.budget, empty.profile, pb.profile, st.reexpress)
+	s, tags, sceneDelta, err := prismcells.BuildScene(st.budget, empty.Profile, pb.Profile, st.reexpress)
 	if err != nil {
 		return profileRecord{}, false, err
 	}
@@ -440,15 +441,15 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper profi
 // already in the result's frame, with the identity re-expression.
 func stackedUnionInterfaceMatch(ctx context.Context, budget *proofbound.WorkBudget, base prismPayload, lower, upper profileRecord) (stackedNesting, error) {
 	pl, pu := base, base
-	pl.profile, pu.profile = lower, upper
-	if err := prismcells.RequireRegionsWithinCap(budget, pl.profile, pu.profile); err != nil {
+	pl.Profile, pu.Profile = lower, upper
+	if err := prismcells.RequireRegionsWithinCap(budget, pl.Profile, pu.Profile); err != nil {
 		return stackedNesting{}, err
 	}
 	return stackedNestingOf(ctx, budget, pl, pu, &prismReexpression{Identity: true})
 }
 
 func (st *stackedUnionState) withinCap(pa, pb prismPayload) error {
-	return prismcells.RequireRegionsWithinCap(st.budget, pa.profile, pb.profile)
+	return prismcells.RequireRegionsWithinCap(st.budget, pa.Profile, pb.Profile)
 }
 
 type stackedNest int
@@ -480,7 +481,7 @@ func (m *stackedNesting) charge(budget *proofbound.WorkBudget, pa, pb prismPaylo
 	if m.charged {
 		return m.chargeOK, nil
 	}
-	ok, err := m.sceneDelta.ChargeCrossings(budget, m.tags, m.profiles, pa.sectionDelta, pb.sectionDelta, reexpress.Delta)
+	ok, err := m.sceneDelta.ChargeCrossings(budget, m.tags, m.profiles, pa.SectionDelta, pb.SectionDelta, reexpress.Delta)
 	if err != nil {
 		return false, err
 	}
@@ -492,7 +493,7 @@ func (m *stackedNesting) charge(budget *proofbound.WorkBudget, pa, pb prismPaylo
 // both directions over one private scene of two hole-free regions. A matched
 // proof cell that sketch reports invalid is RB1.
 func stackedNestingOf(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (stackedNesting, error) {
-	s, tags, sceneDelta, err := prismcells.BuildScene(budget, pa.profile, pb.profile, reexpress)
+	s, tags, sceneDelta, err := prismcells.BuildScene(budget, pa.Profile, pb.Profile, reexpress)
 	if err != nil {
 		return stackedNesting{}, err
 	}

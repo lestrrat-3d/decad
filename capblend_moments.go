@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
@@ -89,14 +90,14 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		// end's displacement goes in with it: the wall vertices, the vertical
 		// edge lengths and the side face areas all read a level the setback
 		// computed, never one they can claim was recorded.
-		ppFor := prismPayload{
-			frame:   cbp.frame,
-			z0:      zLo.Value,
-			z1:      zHi.Value,
-			z0Delta: zLo.Bound,
-			z1Delta: zHi.Bound,
-			xform:   cbp.xform,
-		}
+		ppFor := prismPayload{Payload: prismrecord.Payload{
+			Frame:   cbp.frame,
+			Z0:      zLo.Value,
+			Z1:      zHi.Value,
+			Z0Delta: zLo.Bound,
+			Z1Delta: zHi.Bound,
+			Xform:   cbp.xform,
+		}}
 		sideFaces, bottomCo, topCo, loopLen, err := buildLoopSidesAs(ctx, body, ref, ppFor, li, li != 0, loop, work, nil, levelToken{}, levelToken{}, false)
 		if err != nil {
 			return nil, err
@@ -250,7 +251,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		endArea = proofbound.BoundedAdd(endArea, proofbound.MeasuredScalar(sign*eArea.Value, eBound))
 	}
 
-	pl := prismPayload{frame: cbp.frame, xform: cbp.xform}
+	pl := prismPayload{Payload: prismrecord.Payload{Frame: cbp.frame, Xform: cbp.xform}}
 	startFrame, err := capFrame(pl, cbp.z0, true)
 	if err != nil {
 		return nil, err
@@ -310,7 +311,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	cu := proofbound.BoundedQuotient(muTotal.Value, muTotal.Bound, volume.Value, volume.Bound)
 	cv := proofbound.BoundedQuotient(mvTotal.Value, mvTotal.Bound, volume.Value, volume.Bound)
 	cz := proofbound.BoundedQuotient(mzTotal.Value, mzTotal.Bound, volume.Value, volume.Bound)
-	centroidValue := pl.point(cu.Value, cv.Value, cz.Value)
+	centroidValue := pl.Point(cu.Value, cv.Value, cz.Value)
 	formulaBound := prismPointBound(pl, cu, cv, cz)
 	geometryBound := capband.CentroidGeometryBound(centroidValue, boxToInternal(bounds))
 	centroidBound := math.Min(formulaBound, geometryBound)

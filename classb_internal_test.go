@@ -245,7 +245,7 @@ func TestClassBCutExactOffsetPlane(t *testing.T) {
 			}
 			bp, ok := result.payload.(brepPayload)
 			require.True(t, ok)
-			require.Equal(t, x.frame.Origin(), bp.faces[len(bp.faces)-1].frame.Origin(), `the tool's walls share the box's origin`)
+			require.Equal(t, x.Frame.Origin(), bp.faces[len(bp.faces)-1].frame.Origin(), `the tool's walls share the box's origin`)
 			lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(-180, 1))
 			requireCoversInterval(t, result.volume, lo, hi)
 		})
@@ -282,7 +282,7 @@ func TestClassBCutGateMissesTakeMeshPath(t *testing.T) {
 		{name: "a hair from perpendicular", tool: func(t *testing.T, doc *Document) *Body {
 			tilt := 1e-12
 			body := toolOn(t, doc, frameOf(t, r3.NewVec(20, 10, 10), r3.NewVec(1, 0, 0), r3.NewVec(0, tilt, 1)), 3)
-			n := body.payload.(prismPayload).frame.N()
+			n := body.payload.(prismPayload).Frame.N()
 			require.NotZero(t, n.Dot(r3.NewVec(0, 0, 1)), `the fixture's normals are not exactly perpendicular`)
 			return body
 		}},

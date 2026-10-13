@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -111,24 +112,24 @@ func (cp cupView) cavityScalar() proofbound.BoundedScalar {
 // basePrism shares the cup's frame and placement with the prism helpers that
 // need no axial level.
 func (cp cupView) basePrism() prismPayload {
-	return prismPayload{frame: cp.frame, xform: cp.xform}
+	return prismPayload{Payload: prismrecord.Payload{Frame: cp.frame, Xform: cp.xform}}
 }
 
 // prismBetween builds an ordered prism from two cup levels, preserving each
 // level's own axial displacement at the matching prism end.
 func (cp cupView) prismBetween(a, b proofbound.BoundedScalar) prismPayload {
 	if a.Value <= b.Value {
-		return prismPayload{
-			frame: cp.frame, z0: a.Value, z1: b.Value,
-			z0Delta: a.Bound, z1Delta: b.Bound,
-			xform: cp.xform,
-		}
+		return prismPayload{Payload: prismrecord.Payload{
+			Frame: cp.frame, Z0: a.Value, Z1: b.Value,
+			Z0Delta: a.Bound, Z1Delta: b.Bound,
+			Xform: cp.xform,
+		}}
 	}
-	return prismPayload{
-		frame: cp.frame, z0: b.Value, z1: a.Value,
-		z0Delta: b.Bound, z1Delta: a.Bound,
-		xform: cp.xform,
-	}
+	return prismPayload{Payload: prismrecord.Payload{
+		Frame: cp.frame, Z0: b.Value, Z1: a.Value,
+		Z0Delta: b.Bound, Z1Delta: a.Bound,
+		Xform: cp.xform,
+	}}
 }
 
 // outerPrism and cavityPrism are the cup's two prisms, without their
@@ -137,7 +138,7 @@ func (cp cupView) prismBetween(a, b proofbound.BoundedScalar) prismPayload {
 func (cp cupView) outerPrism() prismPayload {
 	pp := cp.prismBetween(cp.outerScalar(), cp.openScalar())
 	if cp.sense == Outward {
-		pp.sectionDelta = cp.offsetDelta
+		pp.SectionDelta = cp.offsetDelta
 	}
 	return pp
 }
@@ -145,7 +146,7 @@ func (cp cupView) outerPrism() prismPayload {
 func (cp cupView) cavityPrism() prismPayload {
 	pp := cp.prismBetween(cp.cavityScalar(), cp.openScalar())
 	if cp.sense != Outward {
-		pp.sectionDelta = cp.offsetDelta
+		pp.SectionDelta = cp.offsetDelta
 	}
 	return pp
 }
@@ -162,9 +163,9 @@ func (cp cupView) cavityPrism() prismPayload {
 // extreme along g by at most offsetDelta·|g|, and |g| ≤ its L1 norm.
 func (cp cupView) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 	outer := cp.outerPrism()
-	outer.profile = cp.outer
-	displaced := outer.sectionDelta
-	outer.sectionDelta = 0
+	outer.Profile = cp.outer
+	displaced := outer.SectionDelta
+	outer.SectionDelta = 0
 	lo, hi, delta, err := outer.extentAlong(g)
 	if err != nil || displaced == 0 {
 		return lo, hi, delta, err
@@ -179,10 +180,10 @@ func (cp cupView) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 // its mirror. Inward, O is the original section P and C the erosion Q; outward,
 // O is the dilation Q and C the original P.
 func cupPayloadFor(pp prismPayload, offset profileRecord, s, t, tDelta, offsetDelta float64, removedEnd bool) cupView {
-	z0, z1 := pp.z0, pp.z1
-	o, c := pp.profile, offset
+	z0, z1 := pp.Z0, pp.Z1
+	o, c := pp.Profile, offset
 	if s < 0 {
-		o, c = offset, pp.profile
+		o, c = offset, pp.Profile
 	}
 	sense := Inward
 	if s < 0 {
@@ -191,12 +192,12 @@ func cupPayloadFor(pp prismPayload, offset profileRecord, s, t, tDelta, offsetDe
 	cp := cupView{
 		outer:          o,
 		cavity:         c,
-		frame:          pp.frame,
+		frame:          pp.Frame,
 		thickness:      t,
 		thicknessDelta: tDelta,
 		offsetDelta:    offsetDelta,
 		sense:          sense,
-		xform:          pp.xform,
+		xform:          pp.Xform,
 	}
 	// step is the one derived floor level. It carries the source end's own
 	// displacement, the thickness conversion, and this float sum's rounding.
@@ -206,23 +207,23 @@ func cupPayloadFor(pp prismPayload, offset profileRecord, s, t, tDelta, offsetDe
 	}
 	if removedEnd { // open at the top
 		cp.zOpen = z1
-		cp.zOpenDelta = pp.z1Delta
+		cp.zOpenDelta = pp.Z1Delta
 		if s > 0 {
-			cp.zOuter, cp.zOuterDelta = z0, pp.z0Delta
-			cp.zCav, cp.zCavDelta = step(z0, pp.z0Delta, t)
+			cp.zOuter, cp.zOuterDelta = z0, pp.Z0Delta
+			cp.zCav, cp.zCavDelta = step(z0, pp.Z0Delta, t)
 		} else {
-			cp.zOuter, cp.zOuterDelta = step(z0, pp.z0Delta, -t)
-			cp.zCav, cp.zCavDelta = z0, pp.z0Delta
+			cp.zOuter, cp.zOuterDelta = step(z0, pp.Z0Delta, -t)
+			cp.zCav, cp.zCavDelta = z0, pp.Z0Delta
 		}
 	} else { // open at the bottom — the mirror
 		cp.zOpen = z0
-		cp.zOpenDelta = pp.z0Delta
+		cp.zOpenDelta = pp.Z0Delta
 		if s > 0 {
-			cp.zOuter, cp.zOuterDelta = z1, pp.z1Delta
-			cp.zCav, cp.zCavDelta = step(z1, pp.z1Delta, -t)
+			cp.zOuter, cp.zOuterDelta = z1, pp.Z1Delta
+			cp.zCav, cp.zCavDelta = step(z1, pp.Z1Delta, -t)
 		} else {
-			cp.zOuter, cp.zOuterDelta = step(z1, pp.z1Delta, t)
-			cp.zCav, cp.zCavDelta = z1, pp.z1Delta
+			cp.zOuter, cp.zOuterDelta = step(z1, pp.Z1Delta, t)
+			cp.zCav, cp.zCavDelta = z1, pp.Z1Delta
 		}
 	}
 	return cp

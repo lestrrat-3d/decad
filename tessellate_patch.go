@@ -80,7 +80,7 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		held := view.point(point.U, point.V, 0)
+		held := view.Point(point.U, point.V, 0)
 		mesh.vertices[i] = held
 		store[i] = proofbound.AbsSumUpper(
 			proofbound.WalkEndBoundAllow(sampleBounds[i]),
@@ -94,7 +94,7 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 	for i := range mesh.source {
 		mesh.source[i] = face
 	}
-	if view.reflected() {
+	if view.Reflected() {
 		for i := range mesh.triangles {
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
 		}

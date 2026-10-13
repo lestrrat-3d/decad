@@ -84,7 +84,7 @@ func classifyRemovedSweepFaces(b *Body, caps prismCaps, pp prismPayload, removed
 		var span, loop, segment int
 		n, err := fmt.Sscanf(role, "side(%d,%d,%d)", &span, &loop, &segment)
 		if err != nil || n != 3 || fmt.Sprintf("side(%d,%d,%d)", span, loop, segment) != role ||
-			span != 0 || segment < 0 || segment >= len(pp.profile.Outer.Segments) {
+			span != 0 || segment < 0 || segment >= len(pp.Profile.Outer.Segments) {
 			return false, false, nil, fmt.Errorf(`%w: a selected face does not map to this Sweep's stored prism (shell-opening SO6)`, ErrUnsupported)
 		}
 		if loop != 0 {
@@ -114,7 +114,7 @@ func (b *Body) shellSideOpening(ctx context.Context, pp prismPayload, removedSta
 		}
 	}
 	sec, err := prismshell.SideOpeningRegions(budget, prismshell.SideOpeningInput{
-		Profile: pp.profile, Height: pp.z1 - pp.z0, Sides: sides,
+		Profile: pp.Profile, Height: pp.Z1 - pp.Z0, Sides: sides,
 		KeptCaps: keptCaps, Sense: s, Thickness: t, HeldThickness: tmm,
 		ThicknessDelta: tDelta, Tolerance: shellTol,
 	}, auditOffsetSectionBudget)

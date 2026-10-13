@@ -64,8 +64,8 @@ func TestPatternedGroupDisplacement(t *testing.T) {
 		require.NoError(t, err)
 		pp, ok := got.payload.(prismPayload)
 		require.True(t, ok)
-		require.Len(t, pp.profile.Holes, 6)
-		require.Zero(t, pp.sectionDelta)
+		require.Len(t, pp.Profile.Holes, 6)
+		require.Zero(t, pp.SectionDelta)
 	})
 	t.Run("six placed Copy cuts", func(t *testing.T) {
 		t.Parallel()
@@ -82,7 +82,7 @@ func TestPatternedGroupDisplacement(t *testing.T) {
 		}
 		pp, ok := part.payload.(prismPayload)
 		require.True(t, ok)
-		require.Positive(t, pp.sectionDelta, "the contrast: placed tools charge their re-expression")
+		require.Positive(t, pp.SectionDelta, "the contrast: placed tools charge their re-expression")
 	})
 }
 
@@ -131,8 +131,8 @@ func TestPatternedSixPinsGroup(t *testing.T) {
 	for i, c := range copies {
 		pp, ok := c.payload.(prismPayload)
 		require.True(t, ok)
-		require.Equal(t, pp.profile, sp.slabs[0].Regions[i+1], "a copy and a group instance are the same record")
-		require.LessOrEqual(t, pp.sectionDelta, sp.sectionDelta)
+		require.Equal(t, pp.Profile, sp.slabs[0].Regions[i+1], "a copy and a group instance are the same record")
+		require.LessOrEqual(t, pp.SectionDelta, sp.sectionDelta)
 	}
 }
 

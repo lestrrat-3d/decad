@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -15,7 +16,7 @@ import (
 func tryPrismFacePatchUnion(ctx context.Context, a, b *Body) (featurePayload, bool, error) {
 	pa, okA := a.payload.(prismPayload)
 	pb, okB := b.payload.(prismPayload)
-	if !okA || !okB || pa.xform != pb.xform || pa.surfaceResult || pb.surfaceResult {
+	if !okA || !okB || pa.Xform != pb.Xform || pa.SurfaceResult || pb.SurfaceResult {
 		return nil, false, nil
 	}
 	// A1's unequal-level BRep keeps planar box volumes exact. Try that
@@ -24,14 +25,14 @@ func tryPrismFacePatchUnion(ctx context.Context, a, b *Body) (featurePayload, bo
 	for pass := range 2 {
 		for _, pair := range [][2]prismPayload{{pa, pb}, {pb, pa}} {
 			x, y := pair[0], pair[1]
-			if x.frame.N() == y.frame.N() || x.frame.N() == y.frame.N().Scale(-1) {
+			if x.Frame.N() == y.Frame.N() || x.Frame.N() == y.Frame.N().Scale(-1) {
 				continue // class A already reads co-directional boxes.
 			}
-			xBox, ok := exactPrismBoxInFrame(x, x.frame)
+			xBox, ok := exactPrismBoxInFrame(x, x.Frame)
 			if !ok {
 				continue
 			}
-			yBox, ok := exactPrismBoxInFrame(y, x.frame)
+			yBox, ok := exactPrismBoxInFrame(y, x.Frame)
 			if !ok || !prismplacement.BoxesShareFacePatch(xBox, yBox, 2) {
 				continue
 			}
@@ -39,10 +40,10 @@ func tryPrismFacePatchUnion(ctx context.Context, a, b *Body) (featurePayload, bo
 			if equalLevels != (pass == 1) {
 				continue
 			}
-			yReframed := prismPayload{
-				profile: prismplacement.BoxProfile(yBox), frame: x.frame, xform: x.xform,
-				z0: yBox.Lo[2], z1: yBox.Hi[2],
-			}
+			yReframed := prismPayload{Payload: prismrecord.Payload{
+				Profile: prismplacement.BoxProfile(yBox), Frame: x.Frame, Xform: x.Xform,
+				Z0: yBox.Lo[2], Z1: yBox.Hi[2],
+			}}
 			var payload featurePayload
 			var built bool
 			var err error
@@ -65,10 +66,10 @@ func tryPrismFacePatchUnion(ctx context.Context, a, b *Body) (featurePayload, bo
 // exactPrismBoxInFrame admits only an authenticated, undisplaced rectangular
 // source prism and asks prismplacement.ExactBoxInFrame for its exact box in ref.
 func exactPrismBoxInFrame(source prismPayload, ref r3.Frame) (prismplacement.Box, bool) {
-	r, ok := axisRectangle(source.profile)
-	if !ok || source.sectionDelta != 0 || source.z0Delta != 0 || source.z1Delta != 0 ||
-		source.blendKind != "" || len(source.blendSegs) != 0 || source.z0 >= source.z1 {
+	r, ok := axisRectangle(source.Profile)
+	if !ok || source.SectionDelta != 0 || source.Z0Delta != 0 || source.Z1Delta != 0 ||
+		source.BlendKind != "" || len(source.BlendSegs) != 0 || source.Z0 >= source.Z1 {
 		return prismplacement.Box{}, false
 	}
-	return prismplacement.ExactBoxInFrame(r.u0, r.u1, r.v0, r.v1, source.z0, source.z1, source.frame, ref)
+	return prismplacement.ExactBoxInFrame(r.u0, r.u1, r.v0, r.v1, source.Z0, source.Z1, source.Frame, ref)
 }

@@ -21,7 +21,7 @@ import (
 func testSideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, sides map[int]struct{},
 	keptCaps int, sense float64, thickness units.Value, held float64) (prismshell.Section, error) {
 	return prismshell.SideOpeningRegions(budget, prismshell.SideOpeningInput{
-		Profile: pp.profile, Height: pp.z1 - pp.z0, Sides: sides,
+		Profile: pp.Profile, Height: pp.Z1 - pp.Z0, Sides: sides,
 		KeptCaps: keptCaps, Sense: sense, Thickness: thickness, HeldThickness: held,
 		ThicknessDelta: 0, Tolerance: shellTol,
 	}, auditOffsetSectionBudget)
@@ -33,7 +33,7 @@ func testSideOpeningRegions(budget *proofbound.WorkBudget, pp prismPayload, side
 func internalSideSegments(t *testing.T, pp prismPayload, alongU bool, at float64) map[int]struct{} {
 	t.Helper()
 	out := map[int]struct{}{}
-	for i, seg := range pp.profile.Outer.Segments {
+	for i, seg := range pp.Profile.Outer.Segments {
 		l, ok := seg.(lineSeg)
 		require.True(t, ok)
 		if alongU && l.Start.V == at && l.End.V == at || !alongU && l.Start.U == at && l.End.U == at {
@@ -79,7 +79,7 @@ func TestSideOpeningRegionsUChannel(t *testing.T) {
 			pt(38, 18), pt(38, 2), pt(0, 2),
 		}, internalLoopPoints(t, sec.Wall.Outer))
 		require.Equal(t, []Point2{pt(0, 2), pt(38, 2), pt(38, 18), pt(0, 18)}, internalLoopPoints(t, sec.Cavity.Outer))
-		require.Equal(t, pp.profile, sec.Caps)
+		require.Equal(t, pp.Profile, sec.Caps)
 		require.Empty(t, sec.Corners, "both cuts run forward along the removed face")
 		require.Zero(t, sec.Delta)
 	})
@@ -99,7 +99,7 @@ func TestSideOpeningRegionsUChannel(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []Point2{pt(0, -2), pt(40, -2), pt(40, 0), pt(0, 0)}, internalLoopPoints(t, sec.Wall.Outer))
 		require.Equal(t, []Point2{pt(0, -2), pt(40, -2), pt(40, 20), pt(0, 20)}, internalLoopPoints(t, sec.Caps.Outer))
-		require.Equal(t, pp.profile, sec.Cavity)
+		require.Equal(t, pp.Profile, sec.Cavity)
 		require.ElementsMatch(t, []Point2{pt(0, 0), pt(40, 0)}, point2FromRecordSlice(sec.Corners))
 		require.Zero(t, sec.Delta)
 	})
@@ -193,7 +193,7 @@ func TestRequireAreaIdentityRefuses(t *testing.T) {
 func internalSideSegmentsOn(t *testing.T, pp prismPayload, a, b Point2) map[int]struct{} {
 	t.Helper()
 	out := map[int]struct{}{}
-	for i, seg := range pp.profile.Outer.Segments {
+	for i, seg := range pp.Profile.Outer.Segments {
 		l, ok := seg.(lineSeg)
 		require.True(t, ok)
 		if l.Start == a && l.End == b {
@@ -343,7 +343,7 @@ func internalDSectionPrism(t *testing.T) (prismPayload, int, int) {
 	require.NoError(t, err)
 	pp := body.payload.(prismPayload)
 	arc, chord := -1, -1
-	for i, seg := range pp.profile.Outer.Segments {
+	for i, seg := range pp.Profile.Outer.Segments {
 		switch seg.(type) {
 		case arcSeg:
 			arc = i
@@ -351,7 +351,7 @@ func internalDSectionPrism(t *testing.T) (prismPayload, int, int) {
 			chord = i
 		}
 	}
-	require.Len(t, pp.profile.Outer.Segments, 2)
+	require.Len(t, pp.Profile.Outer.Segments, 2)
 	return pp, arc, chord
 }
 
@@ -425,7 +425,7 @@ func TestSideOpeningRegionsDSection(t *testing.T) {
 	t.Parallel()
 	pt := func(u, v float64) Point2 { return Point2{U: u, V: v} }
 	pp, arc, chord := internalDSectionPrism(t)
-	own := pp.profile.Outer.Segments[arc].(arcSeg)
+	own := pp.Profile.Outer.Segments[arc].(arcSeg)
 	regions := func(t *testing.T, removed, keptCaps int, tmm float64) (prismshell.Section, error) {
 		t.Helper()
 		budget := proofbound.NewWorkBudget(t.Context())
@@ -520,7 +520,7 @@ func TestSideOpeningRegionsArcArcCut(t *testing.T) {
 	require.NoError(t, err)
 	pp := body.payload.(prismPayload)
 	removed := map[int]struct{}{}
-	for i, seg := range pp.profile.Outer.Segments {
+	for i, seg := range pp.Profile.Outer.Segments {
 		if a, ok := seg.(arcSeg); ok && a.Center == (Point2{}) {
 			continue
 		}
@@ -569,7 +569,7 @@ func internalArcSectionPrism(t *testing.T, build func(s *sketch.Sketch)) (prismP
 	require.NoError(t, err)
 	pp := body.payload.(prismPayload)
 	removed := map[int]struct{}{}
-	for i, seg := range pp.profile.Outer.Segments {
+	for i, seg := range pp.Profile.Outer.Segments {
 		if a, ok := seg.(arcSeg); ok && a.Center == (Point2{}) {
 			continue
 		}

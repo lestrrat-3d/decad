@@ -24,7 +24,7 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	if !ok {
 		return capPatchModel{}, false
 	}
-	world, ok := survey2d.NewPlacedFrameMap(pl.frame, pl.xform)
+	world, ok := survey2d.NewPlacedFrameMap(pl.Frame, pl.Xform)
 	if !ok {
 		return capPatchModel{}, false
 	}

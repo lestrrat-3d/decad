@@ -27,10 +27,10 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 	switch pa := a.payload.(type) {
 	case prismPayload:
 		pb, ok := b.payload.(prismPayload)
-		if !ok || pa.frame != pb.frame || pa.z0 != pb.z0 || pa.z1 != pb.z1 || pa.xform != pb.xform {
+		if !ok || pa.Frame != pb.Frame || pa.Z0 != pb.Z0 || pa.Z1 != pb.Z1 || pa.Xform != pb.Xform {
 			return false, nil
 		}
-		if pa.sectionDelta != 0 || pb.sectionDelta != 0 {
+		if pa.SectionDelta != 0 || pb.SectionDelta != 0 {
 			// Equal records are a certificate of equal SETS only while each
 			// record IS the set it denotes. A payload carrying a section
 			// displacement (docs/prism-boolean-design.md §7) denotes a set its
@@ -38,7 +38,7 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 			// being equal says nothing about the two sets. Undecided.
 			return false, nil
 		}
-		return momentinput.ExactProfileEqual(budget, pa.profile, pb.profile)
+		return momentinput.ExactProfileEqual(budget, pa.Profile, pb.Profile)
 	case cupPayload:
 		other, ok := b.payload.(cupPayload)
 		if !ok {

@@ -19,12 +19,12 @@ type orientedSourceBox struct {
 
 func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, bool) {
 	pp, ok := body.payload.(prismPayload)
-	if !ok || !body.solid || body.kind != BodySolid || pp.surfaceResult ||
-		pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
-		!signedAxisTransform(pp.xform) {
+	if !ok || !body.solid || body.kind != BodySolid || pp.SurfaceResult ||
+		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
+		!signedAxisTransform(pp.Xform) {
 		return orientedSourceBox{}, false
 	}
-	geometry, placedEdge, ok := pairbox.SourceOrientedBox(pp.profile, pp.frame, pp.z0, pp.z1, pp.xform, pose)
+	geometry, placedEdge, ok := pairbox.SourceOrientedBox(pp.Profile, pp.Frame, pp.Z0, pp.Z1, pp.Xform, pose)
 	if !ok {
 		return orientedSourceBox{}, false
 	}

@@ -68,7 +68,7 @@ func (span sweepAuditSpan) AuditExtent(
 ) (float64, float64, float64, error) {
 	switch payload := span.body.payload.(type) {
 	case prismPayload:
-		return payload.extentBoundedAlong(ctx, direction, work, payload.walks)
+		return payload.extentBoundedAlong(ctx, direction, work, payload.Walks)
 	case revolvePayload:
 		return payload.extentBoundedAlong(ctx, direction, work)
 	case draftPayload:

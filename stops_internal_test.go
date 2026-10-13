@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -77,13 +78,13 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 	stopBody := func(ref producerID, z1, z1Delta float64) *Body {
 		return &Body{
 			origin: FeatureRef{producer: ref},
-			payload: prismPayload{
-				profile: profile,
-				frame:   frame,
-				z1:      z1,
-				z1Delta: z1Delta,
-				xform:   r3.Identity(),
-			},
+			payload: prismPayload{Payload: prismrecord.Payload{
+				Profile: profile,
+				Frame:   frame,
+				Z1:      z1,
+				Z1Delta: z1Delta,
+				Xform:   r3.Identity(),
+			}},
 		}
 	}
 
@@ -230,14 +231,14 @@ func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	doc := &Document{}
-	host, err := evalPrism(doc, 1, prismPayload{
-		profile: profileRecord{Outer: synthRectLoop(0, 0, 1, 1)},
-		frame:   frame,
-		z0:      10,
-		z1:      20,
-		z1Delta: 0.25,
-		xform:   r3.Identity(),
-	}, freeform.NewFreeformWork())
+	host, err := evalPrism(doc, 1, prismPayload{Payload: prismrecord.Payload{
+		Profile: profileRecord{Outer: synthRectLoop(0, 0, 1, 1)},
+		Frame:   frame,
+		Z0:      10,
+		Z1:      20,
+		Z1Delta: 0.25,
+		Xform:   r3.Identity(),
+	}}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	doc.bodies = []*Body{host}
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
@@ -77,11 +78,11 @@ func evalArcSweepContext(
 	// Every one of its points lies on the real start cap, so its point-set
 	// diameter is a sound lower bound on the swept body's diameter. It is not
 	// itself built, so its own surfaceResult stays at its zero value.
-	witness := prismPayload{
-		profile: profile,
-		frame:   frame,
-		xform:   r3.Identity(),
-	}
+	witness := prismPayload{Payload: prismrecord.Payload{
+		Profile: profile,
+		Frame:   frame,
+		Xform:   r3.Identity(),
+	}}
 	payload := sweepPayload{
 		prism:          witness,
 		revolve:        revolve,

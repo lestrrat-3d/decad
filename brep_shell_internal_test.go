@@ -287,8 +287,8 @@ func TestBrepShellThroughCutReadsP1(t *testing.T) {
 	require.Equal(t, [2]float64{0, 20}, [2]float64{tool.lo, tool.hi})
 	require.Len(t, tool.walls, 1)
 	require.Equal(t, throughTool, tc.kinds[tool.walls[0]])
-	require.Len(t, tool.prism.profile.Outer.Segments, 1)
-	circle, ok := tool.prism.profile.Outer.Segments[0].(circleSeg)
+	require.Len(t, tool.prism.Profile.Outer.Segments, 1)
+	circle, ok := tool.prism.Profile.Outer.Segments[0].(circleSeg)
 	require.True(t, ok)
 	require.True(t, circle.CCW, "the tool's section is an outer loop")
 	require.Equal(t, 3.0, circle.Radius.Base())
@@ -743,7 +743,7 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 	require.NoError(t, err)
 	dilated := make([]profileRecord, len(tc.tools))
 	for i, tool := range tc.tools {
-		dilated[i], err = offsetProfile(budget, tool.prism.profile, -1, 2)
+		dilated[i], err = offsetProfile(budget, tool.prism.Profile, -1, 2)
 		require.NoError(t, err)
 	}
 	topOnly := throughRemoval{Top: true}
@@ -1016,7 +1016,7 @@ func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
 	require.NoError(t, err)
 	dilated := make([]profileRecord, len(tc.tools))
 	for i, tool := range tc.tools {
-		dilated[i], err = offsetProfile(budget, tool.prism.profile, -1, 2)
+		dilated[i], err = offsetProfile(budget, tool.prism.Profile, -1, 2)
 		require.NoError(t, err)
 	}
 	cavity, err := tc.cavity(t.Context(), bp, sec.eroded, dilated, rm, call, 0)

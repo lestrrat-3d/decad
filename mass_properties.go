@@ -122,19 +122,19 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	if !ok {
 		return verifiedMeshMassProperties(ctx, b, density)
 	}
-	if pp.surfaceResult {
+	if pp.SurfaceResult {
 		return MassProperties{}, fmt.Errorf("%w: certified volume moments are unavailable for this solid", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
 		return MassProperties{}, err
 	}
-	basis := pp.xform.Basis()
-	if pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
-		!pairbox.CardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
+	basis := pp.Xform.Basis()
+	if pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
+		!pairbox.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) ||
 		!pairbox.CardinalBasis(basis.EX, basis.EY, basis.EZ) {
 		return massPropertiesFromReadings(massmoment.GeneralPrismProperties(ctx, massPrismRecord(pp), vecMeasurementToInternal(b.centroid), density))
 	}
-	if !pairbox.RectangularProfile(pp.profile) {
+	if !pairbox.RectangularProfile(pp.Profile) {
 		return massPropertiesFromReadings(massmoment.CardinalPrismProperties(ctx, massPrismRecord(pp), vecMeasurementToInternal(b.centroid), density))
 	}
 
@@ -147,18 +147,18 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 // massPrismRecord presents a root prism payload to the mass integrator.
 func massPrismRecord(pp prismPayload) massmoment.PrismRecord {
 	return massmoment.PrismRecord{
-		Profile: pp.profile, Frame: pp.frame, Transform: pp.xform,
-		Z0: pp.z0, Z1: pp.z1, SectionDelta: pp.sectionDelta,
-		Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
+		Profile: pp.Profile, Frame: pp.Frame, Transform: pp.Xform,
+		Z0: pp.Z0, Z1: pp.Z1, SectionDelta: pp.SectionDelta,
+		Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta,
 	}
 }
 
 // massCupRecords reads the two prism records whose difference forms a cup.
 func massCupRecords(cp cupView) (massmoment.PrismRecord, massmoment.PrismRecord) {
 	outer := cp.outerPrism()
-	outer.profile = cp.outer
+	outer.Profile = cp.outer
 	cavity := cp.cavityPrism()
-	cavity.profile = cp.cavity
+	cavity.Profile = cp.cavity
 	return massPrismRecord(outer), massPrismRecord(cavity)
 }
 

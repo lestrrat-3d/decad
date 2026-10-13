@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -152,12 +153,12 @@ func recognisePrism(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 		return brepPrismRead{}, false, err
 	}
 	return brepPrismRead{
-		pp: prismPayload{
-			profile: caps.Section, frame: caps.Frame, xform: bp.xform,
-			z0: caps.Zlo, z1: caps.Zhi,
-			z0Delta: max(bp.faces[caps.Bottom].z0Delta, walls.ZloDelta),
-			z1Delta: max(bp.faces[caps.Top].z0Delta, walls.ZhiDelta),
-		},
+		pp: prismPayload{Payload: prismrecord.Payload{
+			Profile: caps.Section, Frame: caps.Frame, Xform: bp.xform,
+			Z0: caps.Zlo, Z1: caps.Zhi,
+			Z0Delta: max(bp.faces[caps.Bottom].z0Delta, walls.ZloDelta),
+			Z1Delta: max(bp.faces[caps.Top].z0Delta, walls.ZhiDelta),
+		}},
 		bottom: caps.Bottom, top: caps.Top, bottomLoop: caps.BottomLoop,
 	}, true, nil
 }

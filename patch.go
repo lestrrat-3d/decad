@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -57,7 +58,7 @@ func (pp patchPayload) placed(ctx context.Context, d *Document, ref producerID, 
 // is meaningless for a patch, which denotes its own recorded section exactly
 // as a plain extrude does.
 func (pp patchPayload) prism() prismPayload {
-	return prismPayload{profile: pp.profile, frame: pp.frame, xform: pp.xform, walks: pp.walks}
+	return prismPayload{Payload: prismrecord.Payload{Profile: pp.profile, Frame: pp.frame, Xform: pp.xform, Walks: pp.walks}}
 }
 
 // Patch records p through the seam exactly as Extrude does — the same
@@ -287,8 +288,8 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 	// own exact frame lift and placement rounding (prismPayload.liftedVertex),
 	// zero wherever that lift is exact for the coordinates at hand.
 	rimVertex := func(u, v, extra float64) *Vertex {
-		held, lift := pp.liftedVertex(u, v, pp.z0)
-		base := proofbound.AbsSumUpper(pp.sectionDelta, pp.z0Delta, lift)
+		held, lift := pp.LiftedVertex(u, v, pp.Z0)
+		base := proofbound.AbsSumUpper(pp.SectionDelta, pp.Z0Delta, lift)
 		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(base, extra))}
 	}
 	var seam *Vertex
@@ -334,11 +335,11 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 			if clockwise {
 				edgeSign = -1
 			}
-			if pp.reflected() {
+			if pp.Reflected() {
 				edgeSign = -edgeSign
 			}
-			edgeAxis := pp.dir(0, 0, 1).Scale(edgeSign)
-			center := pp.point(w.CU, w.CV, pp.z0)
+			edgeAxis := pp.Dir(0, 0, 1).Scale(edgeSign)
+			center := pp.Point(w.CU, w.CV, pp.Z0)
 			radius := units.Millimeters(w.Radius)
 			if singleClosed {
 				curve = Circle3{Center: center, Axis: edgeAxis, Radius: radius}
@@ -353,9 +354,9 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 		edge := &Edge{curve: curve, start: start, end: end, convex: convex, length: w.Length, lengthBound: w.LengthBound}
 		switch c := curve.(type) {
 		case Circle3:
-			edge.curveBound, edge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z0, pp.z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
+			edge.curveBound, edge.curveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
 		case Arc3:
-			edge.curveBound, edge.curveBounded = pp.circleCurveBound(w.CU, w.CV, pp.z0, pp.z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
+			edge.curveBound, edge.curveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
 		}
 		coedges = append(coedges, coedge{edge: edge, forward: true})
 	}

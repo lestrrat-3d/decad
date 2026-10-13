@@ -34,7 +34,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		}
 	}
 	mesh := &Mesh{}
-	spanWork := newCompositeSweepWork(sp.prism.profile)
+	spanWork := newCompositeSweepWork(sp.prism.Profile)
 	budget := proofbound.NewWorkBudget(ctx)
 	coordinateBound := 0.0
 	triangleSpan := []int{}
@@ -268,9 +268,9 @@ func compositeWorkLimit(freeformTarget float64) uint64 {
 // is a lower bound. Fitted splines instead share the smallest certified
 // chording target across their prism and Revolve spans.
 func compositeProfileCountPlan(ctx context.Context, sp sweepPayload, chord float64) (map[compositeStationKey]int, int, float64, error) {
-	loops := append([]loopRecord{sp.prism.profile.Outer}, sp.prism.profile.Holes...)
+	loops := append([]loopRecord{sp.prism.Profile.Outer}, sp.prism.Profile.Holes...)
 	counts := map[compositeStationKey]int{}
-	work := newCompositeSweepWork(sp.prism.profile)
+	work := newCompositeSweepWork(sp.prism.Profile)
 	freeformTarget := chord
 	hasFreeform := false
 	for li, loop := range loops {

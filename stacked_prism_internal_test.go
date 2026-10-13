@@ -54,7 +54,7 @@ func TestStackedPayloadAuditRejectsBrokenRecords(t *testing.T) {
 	base := pocket.payload.(stackedPrismPayload)
 	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: base.slabs, Interfaces: base.interfaces}))
 	other := internalBoxBody(t, doc, 1, 1, 2, 2, 10)
-	otherHole, err := offset2d.ReverseLoopRecordContext(t.Context(), other.payload.(prismPayload).profile.Outer)
+	otherHole, err := offset2d.ReverseLoopRecordContext(t.Context(), other.payload.(prismPayload).Profile.Outer)
 	require.NoError(t, err)
 	cases := []struct {
 		name   string
@@ -107,7 +107,7 @@ func TestBlindStackedLevelCarriesToolConversion(t *testing.T) {
 	plate := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	tool := internalOffsetBox(t, doc, 3, 3, 7, 7, 10,
 		Distance{D: units.Inches(0.2), Dir: Against})
-	toolDelta := tool.payload.(prismPayload).z0Delta
+	toolDelta := tool.payload.(prismPayload).Z0Delta
 	require.Positive(t, toolDelta)
 	pocket, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)

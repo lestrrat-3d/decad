@@ -85,7 +85,7 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	// chamfered loop's unchanged (non-band) portion has the same wall role
 	// and the same normal as an untouched one.
 	pl := cbp.prismLike(0, 0)
-	m, okM := survey2d.NewPlacedFrameMap(pl.frame, pl.xform)
+	m, okM := survey2d.NewPlacedFrameMap(pl.Frame, pl.Xform)
 	if !okM {
 		return undercutOutcome{}
 	}
@@ -208,7 +208,7 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 		return capband.PullComponent(vecMeasurementToInternal(n), p, pLen)
 	}
 	if !g.Circular {
-		v, allow, ok := sampleAt(pl.point(g.SideA.U, g.SideA.V, g.SideZ))
+		v, allow, ok := sampleAt(pl.Point(g.SideA.U, g.SideA.V, g.SideZ))
 		if !ok {
 			return 0, 0, 0, false
 		}
@@ -221,7 +221,7 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 	r := g.CapRadius
 	sample := func(theta float64) (float64, bool) {
 		sin, cos := math.Sincos(theta)
-		v, _, ok := sampleAt(pl.point(g.CU+r*cos, g.CV+r*sin, g.CapZ))
+		v, _, ok := sampleAt(pl.Point(g.CU+r*cos, g.CV+r*sin, g.CapZ))
 		return v, ok
 	}
 	return capband.CircularNormalRange(g.Th0, g.Th1, g.WholeTurn, f.normalBound, model, sample)

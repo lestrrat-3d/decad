@@ -121,7 +121,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 	if f.outward {
 		capSign = 1
 	}
-	outwardCap := f.view(bp.xform).dir(0, 0, capSign)
+	outwardCap := f.view(bp.xform).Dir(0, 0, capSign)
 	for i, on := range b.selected {
 		if !on {
 			continue

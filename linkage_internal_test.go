@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -769,9 +770,9 @@ func TestLinkageProjectionSegmentTerm(t *testing.T) {
 func prismHullPointsForTest(b *Body) ([]motionbound.RatVec, *big.Rat, int, bool) {
 	pp := b.payload.(prismPayload)
 	return linkagebound.PrismHullPoints(linkagebound.PrismHull{
-		Outer: pp.profile.Outer, Frame: pp.frame, Transform: pp.xform,
-		Z0: pp.z0, Z1: pp.z1, SectionDelta: pp.sectionDelta,
-		Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
+		Outer: pp.Profile.Outer, Frame: pp.Frame, Transform: pp.Xform,
+		Z0: pp.Z0, Z1: pp.Z1, SectionDelta: pp.SectionDelta,
+		Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta,
 	})
 }
 
@@ -792,7 +793,7 @@ func TestLinkageHullPoints(t *testing.T) {
 	}
 
 	pp := block.payload.(prismPayload)
-	pp.z1Delta = 0.25
+	pp.Z1Delta = 0.25
 	_, pad, _, ok = prismHullPointsForTest(&Body{payload: pp})
 	require.True(t, ok)
 	require.InDelta(t, 4*math.Sqrt(3)*0.25, linkRatFloat(t, pad), 1e-12)
@@ -848,15 +849,15 @@ func TestLinkageHullPointsInsideRestBox(t *testing.T) {
 	tilted, err := Copy(t.Context(), internalBoxBody(t, doc, 0, 0, 10, 10, 5), WithCopyPlacement(tilt))
 	require.NoError(t, err)
 	frame := canonicalPrismFrame(t)
-	inner := prismPayload{profile: profileRecord{Outer: synthRectLoop(2, 2, 8, 8)}, frame: frame, z0: 0, z1: 10, xform: r3.Identity()}
+	inner := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(2, 2, 8, 8)}, Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}}
 	const shift = 1e8
 	far, err := r3.Translation(r3.NewVec(shift, 0, 0))
 	require.NoError(t, err)
-	containing := prismPayload{profile: profileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)}, frame: frame, z0: 0, z1: 10, xform: far}
+	containing := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)}, Frame: frame, Z0: 0, Z1: 10, Xform: far}}
 	union, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: inner}, &Body{payload: containing})
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Positive(t, union.sectionDelta)
+	require.Positive(t, union.SectionDelta)
 	unionBox, err := prismBoundsContext(t.Context(), union, nil, nil)
 	require.NoError(t, err)
 	for name, body := range map[string]*Body{

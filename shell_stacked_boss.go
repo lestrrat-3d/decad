@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -362,7 +363,7 @@ func bossShellOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology,
 		profile profileRecord
 		z       float64
 	}{{band.sideProfile(), band.lowerZ}, {band.capProfile(), band.interfaceZ}} {
-		view := prismPayload{frame: band.frame, xform: bp.xform, z0: spec.z, z1: spec.z}
+		view := prismPayload{Payload: prismrecord.Payload{Frame: band.frame, Xform: bp.xform, Z0: spec.z, Z1: spec.z}}
 		for _, seg := range spec.profile.Outer.Segments {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -482,7 +483,7 @@ func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
 	}
 	ref := bp.refView()
 	cb := prismPointBound(ref, c[0], c[1], c[2])
-	body.centroid = VecMeasurement{Value: ref.point(c[0].Value, c[1].Value, c[2].Value), Bound: units.Millimeters(cb), Exactness: exactnessOf(cb)}
+	body.centroid = VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value), Bound: units.Millimeters(cb), Exactness: exactnessOf(cb)}
 	var a proofbound.BoundedScalar
 	for _, f := range body.Faces() {
 		a = proofbound.BoundedAdd(a, proofbound.MeasuredScalar(f.area, f.areaBound))

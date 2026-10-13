@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 )
@@ -169,7 +170,7 @@ func admitExtendPair(budget *proofbound.WorkBudget, receiver, tool *Body) (chain
 
 // Adapt a root payload to the neutral surface gate's input.
 func surfacePrismOperand(p prismPayload) prismcells.SurfaceOperand {
-	return prismcells.SurfaceOperand{Profile: p.profile, Placement: prismPlacementOf(p)}
+	return prismcells.SurfaceOperand{Profile: p.Profile, Placement: prismPlacementOf(p)}
 }
 
 // TrimSide names which pieces of the receiver a Trim keeps
@@ -253,12 +254,12 @@ func (b *Body) Trim(ctx context.Context, tool *Body, side TrimSide) (*Body, erro
 
 	pp := chainPayload{
 		chains:       chains,
-		frame:        rcv.frame,
-		z0:           rcv.z0,
-		z1:           rcv.z1,
-		z0Delta:      rcv.z0Delta,
-		z1Delta:      rcv.z1Delta,
-		xform:        rcv.xform,
+		frame:        rcv.Frame,
+		z0:           rcv.Z0,
+		z1:           rcv.Z1,
+		z0Delta:      rcv.Z0Delta,
+		z1Delta:      rcv.Z1Delta,
+		xform:        rcv.Xform,
 		sectionDelta: sectionDelta,
 	}
 	ref := d.nextProducerID()
@@ -322,7 +323,7 @@ func bodyTrimFamily(b *Body) trimSweepFamily {
 func trimOperandSectionDelta(b *Body) float64 {
 	switch p := b.payload.(type) {
 	case prismPayload:
-		return p.sectionDelta
+		return p.SectionDelta
 	case chainPayload:
 		return p.sectionDelta
 	case revolvePayload:
@@ -506,12 +507,12 @@ func resolveSplit(ctx context.Context, budget *proofbound.WorkBudget, target, to
 	}
 	result := make([]prismPayload, len(selected))
 	for i, cell := range selected {
-		result[i] = prismPayload{
-			profile: cell.Profile, frame: target.frame, xform: target.xform,
-			z0: target.z0, z1: target.z1,
-			z0Delta: target.z0Delta, z1Delta: target.z1Delta,
-			sectionDelta: cell.CutDelta,
-		}
+		result[i] = prismPayload{Payload: prismrecord.Payload{
+			Profile: cell.Profile, Frame: target.Frame, Xform: target.Xform,
+			Z0: target.Z0, Z1: target.Z1,
+			Z0Delta: target.Z0Delta, Z1Delta: target.Z1Delta,
+			SectionDelta: cell.CutDelta,
+		}}
 	}
 	return result, nil
 }
@@ -597,7 +598,7 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	rcvView, tlView := rcv.meridian(), tl.meridian()
 
 	// S2: neither operand's accumulated placement is a reflection.
-	if rcvView.reflected() || tlView.reflected() {
+	if rcvView.Reflected() || tlView.Reflected() {
 		return fail(`%w: Trim does not admit a reflected operand`, ErrUnsupported)
 	}
 
@@ -831,7 +832,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	rcvView, tlView := rcvRev.meridian(), tl.meridian()
 
 	// S2: neither operand's accumulated placement is a reflection.
-	if rcvView.reflected() || tlView.reflected() {
+	if rcvView.Reflected() || tlView.Reflected() {
 		return fail(`%w: Extend does not admit a reflected operand`, ErrUnsupported)
 	}
 

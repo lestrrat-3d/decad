@@ -71,7 +71,7 @@ func prismGatePoints(budget *proofbound.WorkBudget, prisms []prismPayload, displ
 // whose gap the proof cannot state. Cancellation through budget returns the
 // error.
 func prismStationWitnesses(budget *proofbound.WorkBudget, pp prismPayload, work *freeform.FreeformWork) ([]r3.Vec, float64, bool, error) {
-	stations, ok, err := diameter.SectionStations(budget, append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...), work)
+	stations, ok, err := diameter.SectionStations(budget, append([]loopRecord{pp.Profile.Outer}, pp.Profile.Holes...), work)
 	if err != nil || !ok {
 		return nil, 0, false, err
 	}
@@ -79,14 +79,14 @@ func prismStationWitnesses(budget *proofbound.WorkBudget, pp prismPayload, work 
 	allow := 0.0
 	factor := prismLiftFactor(pp)
 	for _, s := range stations {
-		for _, z := range [2]float64{pp.z0, pp.z1} {
+		for _, z := range [2]float64{pp.Z0, pp.Z1} {
 			a := prismPointBoundWith(pp, factor, proofbound.MeasuredScalar(s.U, s.Bound.U), proofbound.MeasuredScalar(s.V, s.Bound.V),
 				proofbound.MeasuredScalar(z, 0))
 			if !tolerance.UsableMagnitude(a) {
 				return nil, 0, false, nil
 			}
 			allow = math.Max(allow, a)
-			pts = append(pts, pp.point(s.U, s.V, z))
+			pts = append(pts, pp.Point(s.U, s.V, z))
 		}
 	}
 	return pts, allow, true, nil
@@ -208,7 +208,7 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 			continue
 		}
 		rim := cbp.prismLike(p.geom.CapZ, p.geom.CapZ)
-		rim.profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{circleSeg{
+		rim.Profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{circleSeg{
 			Center: Point2{U: p.geom.CU, V: p.geom.CV}, Radius: units.Millimeters(p.geom.CapRadius),
 			CCW: true, TStart: 0, TEnd: 1,
 		}}}}
@@ -252,7 +252,7 @@ func capArcRim(cbp capBlendPayload, g capPatchGeom, contour float64) (prismPaylo
 		return prismPayload{}, 0, false
 	}
 	rim := cbp.prismLike(arc.Level, arc.Level)
-	rim.profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{arcSeg{
+	rim.Profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{arcSeg{
 		Center: arc.Center, Start: arc.Start, End: arc.End, TStart: 0, TEnd: 1,
 	}}}}
 	return rim, arc.Allow, true
@@ -357,7 +357,7 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 	case capBlendPayload:
 		return capBlendGatePoints(ctx, budget, body, pl)
 	case prismPayload:
-		if pl.sectionDelta == 0 {
+		if pl.SectionDelta == 0 {
 			if g, ok, err := prismGatePoints(budget, []prismPayload{pl}, pl.axialDelta()); err != nil || ok {
 				return g, ok, err
 			}

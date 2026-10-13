@@ -18,9 +18,9 @@ import (
 // its shared-edge topology, source-face map and occupied-volume proof. A
 // curved face becomes Faceted because this path has no scaled normal proof.
 func prismScaleSource(ctx context.Context, b *Body, prism prismPayload, factor float64) (facetedPayload, error) {
-	curved, eligible := prismcells.ScaleSourceProfile(prism.profile)
-	if prism.surfaceResult || prism.sectionDelta != 0 || prism.z0Delta != 0 || prism.z1Delta != 0 ||
-		!prism.xform.IsValid() || !eligible {
+	curved, eligible := prismcells.ScaleSourceProfile(prism.Profile)
+	if prism.SurfaceResult || prism.SectionDelta != 0 || prism.Z0Delta != 0 || prism.Z1Delta != 0 ||
+		!prism.Xform.IsValid() || !eligible {
 		return facetedPayload{}, fmt.Errorf("%w: scale needs an exact line/circular solid prism", ErrUnsupported)
 	}
 	chord := 0.1

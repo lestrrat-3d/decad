@@ -27,7 +27,7 @@ type prismPatternFilletContact struct {
 }
 
 func prismPatternExactPlacedPoint(part prismPatternPart, point Point2) prismpattern.IVPoint {
-	b := part.prism.xform.Basis()
+	b := part.prism.Xform.Basis()
 	c, s := proofarith.FloatRat(b.EX.X), proofarith.FloatRat(b.EX.Y)
 	u, v := proofarith.FloatRat(point.U), proofarith.FloatRat(point.V)
 	x := new(big.Rat).Sub(new(big.Rat).Mul(c, u), new(big.Rat).Mul(s, v))
@@ -46,10 +46,10 @@ func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
 	if station == part.rootStart {
 		lineIndex, side = rootIndex-1, 1
 	}
-	if lineIndex < 0 || lineIndex >= len(part.prism.profile.Outer.Segments) {
+	if lineIndex < 0 || lineIndex >= len(part.prism.Profile.Outer.Segments) {
 		return result, fmt.Errorf("%w: joined-prism fillet lost its connector", ErrUnsupported)
 	}
-	connector, ok := part.prism.profile.Outer.Segments[lineIndex].(lineSeg)
+	connector, ok := part.prism.Profile.Outer.Segments[lineIndex].(lineSeg)
 	if !ok {
 		return result, fmt.Errorf("%w: joined-prism fillet connector is not straight", ErrUnsupported)
 	}

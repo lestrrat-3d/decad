@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/r3"
@@ -54,7 +55,7 @@ func evalClosedCircleSweep(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	witness := prismPayload{profile: profile, frame: frame, xform: r3.Identity()}
+	witness := prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: frame, Xform: r3.Identity()}}
 	finishArcSweepBody(body, sweepPayload{
 		prism:        witness,
 		revolve:      revolve,

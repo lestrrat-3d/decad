@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -33,16 +34,16 @@ func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp p
 			return nil, offset2d.ErrUnbounded
 		}
 	}
-	return evalPrismContext(ctx, d, ref, prismPayload{
-		profile:      sec.Wall,
-		frame:        pp.frame,
-		z0:           pp.z0,
-		z1:           pp.z1,
-		z0Delta:      pp.z0Delta,
-		z1Delta:      pp.z1Delta,
-		xform:        pp.xform,
-		sectionDelta: delta,
-	}, freeform.NewFreeformWork())
+	return evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+		Profile:      sec.Wall,
+		Frame:        pp.Frame,
+		Z0:           pp.Z0,
+		Z1:           pp.Z1,
+		Z0Delta:      pp.Z0Delta,
+		Z1Delta:      pp.Z1Delta,
+		Xform:        pp.Xform,
+		SectionDelta: delta,
+	}}, freeform.NewFreeformWork())
 }
 
 // sideOpeningBrep records the stack's built faces under the receiver frame and
@@ -50,13 +51,13 @@ func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp p
 func sideOpeningBrep(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload,
 	sec prismshell.Section, removedStart, removedEnd bool, s, tmm, tDelta float64) (brepPayload, error) {
 	geom, levels, delta, err := prismshell.Stack(budget, prismshell.StackInput{
-		Section: sec, Z0: pp.z0, Z1: pp.z1, Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
+		Section: sec, Z0: pp.Z0, Z1: pp.Z1, Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta,
 		RemovedStart: removedStart, RemovedEnd: removedEnd, Sense: s,
 		Thickness: tmm, ThicknessDelta: tDelta,
 	})
 	var bp brepPayload
 	if err == nil {
-		bp, err = stackedBrepRecord(ctx, budget, geom, levels, pp.frame, pp.xform, delta)
+		bp, err = stackedBrepRecord(ctx, budget, geom, levels, pp.Frame, pp.Xform, delta)
 	}
 	if errors.Is(err, brepgeom.ErrStackedWallMiss) {
 		return brepPayload{}, fmt.Errorf(`%w: the stacked record build does not state this side opening's faces (shell-opening SO5)`, ErrUnsupported)

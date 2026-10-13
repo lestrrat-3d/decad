@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
@@ -47,7 +48,7 @@ func replayCompositeSweep(
 	ref producerID,
 	payload sweepPayload,
 ) (*Body, error) {
-	return replayCompositeSweepWork(ctx, d, ref, payload, newCompositeSweepWork(payload.prism.profile))
+	return replayCompositeSweepWork(ctx, d, ref, payload, newCompositeSweepWork(payload.prism.Profile))
 }
 
 func replayCompositeSweepWork(
@@ -57,7 +58,7 @@ func replayCompositeSweepWork(
 	payload sweepPayload,
 	work *freeform.FreeformWork,
 ) (*Body, error) {
-	if err := compositesweep.Preflight(payload.prism.profile, len(payload.spans)); err != nil {
+	if err := compositesweep.Preflight(payload.prism.Profile, len(payload.spans)); err != nil {
 		return nil, err
 	}
 	parts := make([]compositeSpanPart, len(payload.spans))
@@ -143,11 +144,11 @@ func evalCompositeSweepContextWithClosure(
 	// from the published face set after every span has built solid
 	// (docs/surface-design.md §4).
 	payload := sweepPayload{
-		prism: prismPayload{
-			profile: profile,
-			frame:   frame,
-			xform:   r3.Identity(),
-		},
+		prism: prismPayload{Payload: prismrecord.Payload{
+			Profile: profile,
+			Frame:   frame,
+			Xform:   r3.Identity(),
+		}},
 		spans:           make([]sweepSpanPayload, len(path.records)),
 		path:            path,
 		surfaceResult:   surfaceResult,
@@ -206,13 +207,13 @@ func compositeLineSweepSpan(
 	if math.IsInf(heightBound, 0) || math.IsNaN(heightBound) {
 		return sweepSpanPayload{}, fmt.Errorf(`%w: the sweep line's length has no finite error bound`, ErrUnsupported)
 	}
-	return sweepSpanPayload{prism: prismPayload{
-		profile: profile,
-		frame:   frame,
-		z1:      height,
-		z1Delta: heightBound,
-		xform:   r3.Identity(),
-	}}, nil
+	return sweepSpanPayload{prism: prismPayload{Payload: prismrecord.Payload{
+		Profile: profile,
+		Frame:   frame,
+		Z1:      height,
+		Z1Delta: heightBound,
+		Xform:   r3.Identity(),
+	}}}, nil
 }
 
 func compositeArcSweepSpan(
@@ -259,7 +260,7 @@ func (span sweepSpanPayload) transform() r3.Transform {
 	if span.arc {
 		return span.revolve.xform
 	}
-	return span.prism.xform
+	return span.prism.Xform
 }
 
 // build evaluates one temporary closed span. assembleCompositeSweepBody

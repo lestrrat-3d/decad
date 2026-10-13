@@ -115,9 +115,9 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 						new(big.Rat).Sub(big.NewRat(1, 1), fraction)),
 					proofbound.IntervalScale(endIV, fraction))
 				angle := start + float64(step)*width/float64(steps)
-				z := source.blank.z0
+				z := source.blank.Z0
 				if cap == 1 {
-					z = source.blank.z1
+					z = source.blank.Z1
 				}
 				point, round, err := prismpattern.RingPoint(radius, z, angle, angleIV)
 				if err != nil {
@@ -169,9 +169,9 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 		return nil, [2][]int{}, blankGroup, 0, 0, err
 	}
 	for cap, outline := range outlines {
-		z := source.blank.z0
+		z := source.blank.Z0
 		if cap == 1 {
-			z = source.blank.z1
+			z = source.blank.Z1
 		}
 		if !loftCylinderAuditCap(ctx, mesh, outline, blankGroup[cap+1], z, cap == 0) ||
 			!prismPatternRootChordsInsideCap(ctx, mesh, outline, parts, cap) {

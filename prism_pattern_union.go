@@ -53,10 +53,10 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 		return nil, matched, err
 	}
 	blank := source.blank
-	if blank.surfaceResult || blank.sectionDelta != 0 || blank.z0Delta != 0 || blank.z1Delta != 0 ||
-		blank.frame.Origin() != (r3.Vec{}) || blank.frame.U() != (r3.Vec{X: 1}) ||
-		blank.frame.V() != (r3.Vec{Y: 1}) || blank.z0 != 0 || blank.z1 <= 0 ||
-		source.rootIndex != len(source.section.profile.Outer.Segments)-1 ||
+	if blank.SurfaceResult || blank.SectionDelta != 0 || blank.Z0Delta != 0 || blank.Z1Delta != 0 ||
+		blank.Frame.Origin() != (r3.Vec{}) || blank.Frame.U() != (r3.Vec{X: 1}) ||
+		blank.Frame.V() != (r3.Vec{Y: 1}) || blank.Z0 != 0 || blank.Z1 <= 0 ||
+		source.rootIndex != len(source.section.Profile.Outer.Segments)-1 ||
 		source.rootArc.TStart != 1 || source.rootArc.TEnd != 0 {
 		return nil, true, fmt.Errorf("%w: copied-prism circular join needs a positive axial blank and trailing inward root arc",
 			ErrUnsupported)
@@ -70,7 +70,7 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 		if !ok {
 			return nil, true, fmt.Errorf("%w: copied-prism section %d lost its prism payload", ErrUnsupported, i+1)
 		}
-		if p.surfaceResult || p.sectionDelta != 0 || p.z0Delta != 0 || p.z1Delta != 0 {
+		if p.SurfaceResult || p.SectionDelta != 0 || p.Z0Delta != 0 || p.Z1Delta != 0 {
 			return nil, true, fmt.Errorf("%w: copied-prism section %d has a displaced or open source", ErrUnsupported, i+1)
 		}
 		m, err := body.Tessellate(ctx, units.Millimeters(0.02), WithVerification(VerifyAll))
@@ -80,7 +80,7 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 		if !m.BoundaryVerified() || !m.VolumeVerified() {
 			return nil, true, fmt.Errorf("%w: copied-prism section %d lacks a complete mesh proof", ErrUnsupported, i+1)
 		}
-		rootStart, err := prismPatternMeshRoot(m, body, source.rootIndex, blank.z0, blank.z1)
+		rootStart, err := prismPatternMeshRoot(m, body, source.rootIndex, blank.Z0, blank.Z1)
 		if err != nil {
 			return nil, true, err
 		}

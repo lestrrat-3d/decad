@@ -103,14 +103,14 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		return nil, false, nil
 	}
 	pp, ok := blank.payload.(prismPayload)
-	if !ok || pp.surfaceResult || pp.xform != r3.Identity() ||
-		pp.z0Delta != 0 || pp.z1Delta != 0 || pp.sectionDelta != 0 ||
-		len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) != 1 ||
-		pp.frame.Origin() != (r3.Vec{}) || pp.frame.U() != (r3.Vec{X: 1}) ||
-		pp.frame.V() != (r3.Vec{Y: 1}) || pp.z1 <= pp.z0 {
+	if !ok || pp.SurfaceResult || pp.Xform != r3.Identity() ||
+		pp.Z0Delta != 0 || pp.Z1Delta != 0 || pp.SectionDelta != 0 ||
+		len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
+		pp.Frame.Origin() != (r3.Vec{}) || pp.Frame.U() != (r3.Vec{X: 1}) ||
+		pp.Frame.V() != (r3.Vec{Y: 1}) || pp.Z1 <= pp.Z0 {
 		return nil, false, nil
 	}
-	circle, ok := pp.profile.Outer.Segments[0].(circleSeg)
+	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
 	if !ok || circle.Center != (Point2{}) || !circle.CCW {
 		return nil, false, nil
 	}
@@ -137,11 +137,11 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		if !loftCylinderSectionKinds(lp) || lp.frame0.U() != (r3.Vec{X: 1}) ||
 			lp.frame0.V() != (r3.Vec{Y: 1}) || lp.frame1.U() != (r3.Vec{X: 1}) ||
 			lp.frame1.V() != (r3.Vec{Y: 1}) ||
-			lp.frame0.Origin() != (r3.Vec{Z: pp.z0}) ||
-			lp.frame1.Origin() != (r3.Vec{Z: pp.z1}) {
+			lp.frame0.Origin() != (r3.Vec{Z: pp.Z0}) ||
+			lp.frame1.Origin() != (r3.Vec{Z: pp.Z1}) {
 			return nil, false, nil
 		}
-		proofTooth, bridge, admitted, err := loftCylinderProofTooth(ctx, d, tooth, pp.z0, pp.z1)
+		proofTooth, bridge, admitted, err := loftCylinderProofTooth(ctx, d, tooth, pp.Z0, pp.Z1)
 		if err != nil {
 			return nil, true, err
 		}
@@ -225,7 +225,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 			return nil, false, nil
 		}
 		height := proofbound.RatFloatUp(new(big.Rat).Sub(
-			proofarith.FloatRat(pp.z1), proofarith.FloatRat(pp.z0)))
+			proofarith.FloatRat(pp.Z1), proofarith.FloatRat(pp.Z0)))
 		collar, ok := loftCylinderRootCollar(lp, radius, height)
 		if !ok {
 			return nil, false, nil
@@ -246,7 +246,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		if !ok {
 			return nil, false, nil
 		}
-		wedge, ok := loftcylinder.WedgeGate(lp.verts, lp.tris, root, pp.z0, pp.z1)
+		wedge, ok := loftcylinder.WedgeGate(lp.verts, lp.tris, root, pp.Z0, pp.Z1)
 		if !ok {
 			return nil, false, nil
 		}
@@ -573,9 +573,9 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 					proofbound.IntervalScale(gapIV[cap][0], new(big.Rat).Sub(big.NewRat(1, 1), fraction)),
 					proofbound.IntervalScale(gapIV[cap][1], fraction))
 				angleError := proofbound.IntervalFloatError(trueAngle, angle)
-				z := pp.z0
+				z := pp.Z0
 				if cap == 1 {
-					z = pp.z1
+					z = pp.Z1
 				}
 				p := r3.Vec{X: radius * math.Cos(angle), Y: radius * math.Sin(angle), Z: z}
 				if !proofbound.FiniteVec(p) {
@@ -700,7 +700,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		seamReach = max(proofbound.AbsSumUpper(innerInset, rootAngular),
 			connectorReach, crossingShift)
 	}
-	collarSweep, ok := loftCylinderCollarSweep(parts, pp.z0, pp.z1, rootCollar)
+	collarSweep, ok := loftCylinderCollarSweep(parts, pp.Z0, pp.Z1, rootCollar)
 	if !ok {
 		return nil, fmt.Errorf("%w: circular join lacks a cap-collar sweep bound", ErrUnsupported)
 	}
@@ -716,9 +716,9 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	for cap, outline := range outlines {
-		z := pp.z0
+		z := pp.Z0
 		if cap == 1 {
-			z = pp.z1
+			z = pp.Z1
 		}
 		if !loftCylinderAuditCap(ctx, mesh, outline, blankGroups[cap+1], z, cap == 0) {
 			if err := ctx.Err(); err != nil {
@@ -770,7 +770,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		proofbound.ProductUpper(outerExcess, outerExcess))
 	annulusArea := proofbound.ProductUpper(proofbound.RatFloatUp(proofbound.PiUpper), bandArea)
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(
-		proofarith.FloatRat(pp.z1), proofarith.FloatRat(pp.z0)))
+		proofarith.FloatRat(pp.Z1), proofarith.FloatRat(pp.Z0)))
 	annulusVolume := proofbound.ProductUpper(annulusArea, height)
 	volumeGap := proofbound.AbsSumUpper(blankMesh.volSymDiff, toothVolume, annulusVolume)
 	areaSlack := proofbound.AbsSumUpper(area, blankArea.Value.Base(), blankArea.Bound.Base(), toothArea)
@@ -797,14 +797,14 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 			blank: blank, teeth: toothBodies, proofTeeth: proofBodies,
 			axialBridge: axialBridge, capOutlines: outlines,
 			capGroups:     [2]int{blankGroups[1], blankGroups[2]},
-			minSideRadius: minSideRadius, radius: radius, z0: pp.z0, z1: pp.z1,
+			minSideRadius: minSideRadius, radius: radius, z0: pp.Z0, z1: pp.Z1,
 			innerInset: innerInset, outerExcess: outerExcess, rootCollar: rootCollar,
 		}}
 	if proofbound.IsNonFinite(fp.dPair) {
 		return nil, fmt.Errorf("%w: circular join has no finite diameter proof", ErrUnsupported)
 	}
 	if err := loftCylinderTagCaps(&fp, blank, fp.loftCylinderJoin.capGroups,
-		[2]float64{pp.z0, pp.z1}, ref); err != nil {
+		[2]float64{pp.Z0, pp.Z1}, ref); err != nil {
 		return nil, err
 	}
 	loftCylinderTagBridgedTop(&fp, fp.loftCylinderJoin.capGroups[1], axialBridge)

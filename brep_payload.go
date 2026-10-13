@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
@@ -126,15 +127,15 @@ func (f brepFace) reversed() brepFace {
 // face's carries its one wall segment as an open single-segment loop, which
 // only the per-segment readings (extents, witnesses) consume.
 func (f brepFace) view(xform r3.Transform) prismPayload {
-	pp := prismPayload{
-		frame: f.frame, xform: xform,
-		z0: f.z0, z1: f.z1, z0Delta: f.z0Delta, z1Delta: f.z1Delta,
-		sectionDelta: f.delta,
-	}
+	pp := prismPayload{Payload: prismrecord.Payload{
+		Frame: f.frame, Xform: xform,
+		Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta,
+		SectionDelta: f.delta,
+	}}
 	if f.planar() {
-		pp.profile = *f.region
+		pp.Profile = *f.region
 	} else {
-		pp.profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{f.wall}}}
+		pp.Profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{f.wall}}}
 	}
 	return pp
 }
@@ -190,34 +191,34 @@ func brepOfPrism(pp prismPayload) (brepPayload, error) {
 // brepOfPrismWithRoles also maps record faces to the source prism's public
 // roles, so an asymmetric chamfer can resolve its reference face.
 func brepOfPrismWithRoles(pp prismPayload) (brepPayload, []string, error) {
-	if pp.surfaceResult {
+	if pp.SurfaceResult {
 		return brepPayload{}, nil, fmt.Errorf(`%w: a surface-result prism has no closed face view`, ErrUnsupported)
 	}
-	profile, allow, err := brepJoinProfile(pp.profile)
+	profile, allow, err := brepJoinProfile(pp.Profile)
 	if err != nil {
 		return brepPayload{}, nil, err
 	}
-	pp.profile = profile
+	pp.Profile = profile
 	if allow > 0 {
-		pp.sectionDelta = proofbound.AbsSumUpper(pp.sectionDelta, allow)
+		pp.SectionDelta = proofbound.AbsSumUpper(pp.SectionDelta, allow)
 	}
-	bp := brepPayload{xform: pp.xform}
+	bp := brepPayload{xform: pp.Xform}
 	var sourceRoles []string
-	for li, loop := range append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...) {
+	for li, loop := range append([]loopRecord{pp.Profile.Outer}, pp.Profile.Holes...) {
 		for si, seg := range loop.Segments {
 			bp.faces = append(bp.faces, brepFace{
-				frame: pp.frame, wall: seg, z0: pp.z0, z1: pp.z1,
-				z0Delta: pp.z0Delta, z1Delta: pp.z1Delta, delta: pp.sectionDelta,
+				frame: pp.Frame, wall: seg, z0: pp.Z0, z1: pp.Z1,
+				z0Delta: pp.Z0Delta, z1Delta: pp.Z1Delta, delta: pp.SectionDelta,
 			})
 			sourceRoles = append(sourceRoles, fmt.Sprintf("side(%d,%d)", li, si))
 		}
 	}
-	region := pp.profile
+	region := pp.Profile
 	bp.faces = append(bp.faces,
-		brepFace{frame: pp.frame, region: &region, z0: pp.z0, z1: pp.z0,
-			z0Delta: pp.z0Delta, z1Delta: pp.z0Delta, delta: pp.sectionDelta},
-		brepFace{frame: pp.frame, region: &region, outward: true, z0: pp.z1, z1: pp.z1,
-			z0Delta: pp.z1Delta, z1Delta: pp.z1Delta, delta: pp.sectionDelta},
+		brepFace{frame: pp.Frame, region: &region, z0: pp.Z0, z1: pp.Z0,
+			z0Delta: pp.Z0Delta, z1Delta: pp.Z0Delta, delta: pp.SectionDelta},
+		brepFace{frame: pp.Frame, region: &region, outward: true, z0: pp.Z1, z1: pp.Z1,
+			z0Delta: pp.Z1Delta, z1Delta: pp.Z1Delta, delta: pp.SectionDelta},
 	)
 	sourceRoles = append(sourceRoles, roleCapStart, roleCapEnd)
 	bp.assignRoles()
@@ -560,7 +561,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	placeVertex := func(c [3]float64, faceDelta, levelDelta, endAllow float64) *Vertex {
 		pv, ok := vertices[c]
 		if !ok {
-			held, lift := refView.liftedVertex(c[0], c[1], c[2])
+			held, lift := refView.LiftedVertex(c[0], c[1], c[2])
 			// The bound starts as zero millimetres, so an Exact vertex
 			// publishes a length as every other vertex does.
 			pv = placedVertex{v: &Vertex{position: held, bound: units.Millimeters(0)}, lift: lift}
@@ -695,7 +696,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 // the placement: the one map every vertex, centroid and mesh point is lifted
 // through.
 func (bp brepPayload) refView() prismPayload {
-	return prismPayload{frame: bp.faces[0].frame, xform: bp.xform}
+	return prismPayload{Payload: prismrecord.Payload{Frame: bp.faces[0].frame, Xform: bp.xform}}
 }
 
 // brepEdge builds one edge from its owner use: a rim takes its wall's curve and

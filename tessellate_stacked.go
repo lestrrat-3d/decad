@@ -59,7 +59,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	faceTrim := map[*Face]float64{}
 	faceAxial := map[*Face]float64{}
 	addVertex := func(p Point2, z float64, source proofbound.WalkEndBound) int {
-		v := base.point(p.U, p.V, z)
+		v := base.Point(p.U, p.V, z)
 		mesh.vertices = append(mesh.vertices, v)
 		vertexStore = append(vertexStore, proofbound.AbsSumUpper(proofbound.WalkEndBoundAllow(source),
 			exactPrismPointRound(base, p.U, p.V, z, v)))
@@ -177,7 +177,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			}
 		}
 	}
-	if base.reflected() {
+	if base.Reflected() {
 		for i := range mesh.triangles {
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
 		}

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capedge"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -48,14 +49,14 @@ func tryObliqueCapEdgeChamfer(ctx context.Context, body *Body, pp prismPayload, 
 // charge of straight end walls and its own refusals.
 func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edges []*Edge,
 	reach, reachDelta float64, profile profileRecord) (*Body, bool, error) {
-	if len(edges) != 1 || reachDelta != 0 || pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 {
+	if len(edges) != 1 || reachDelta != 0 || pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 {
 		return nil, false, nil
 	}
 	if _, ok := edges[0].curve.(Line3); !ok || edges[0].start == nil || edges[0].end == nil {
 		return nil, false, nil
 	}
-	if len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) < 3 ||
-		pp.z1-pp.z0 <= 4*reach || !obliqueCapEdgeProfile(pp, edges[0], reach) {
+	if len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) < 3 ||
+		pp.Z1-pp.Z0 <= 4*reach || !obliqueCapEdgeProfile(pp, edges[0], reach) {
 		return nil, false, nil
 	}
 	facing := edges[0].Faces()
@@ -64,7 +65,7 @@ func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edge
 	}
 	var sideNormal, capNormal r3.Vec
 	mid := edges[0].start.position.Add(edges[0].end.position).Scale(0.5)
-	axis := pp.dir(0, 0, 1)
+	axis := pp.Dir(0, 0, 1)
 	for _, face := range facing {
 		if _, ok := face.Surface().(Plane); !ok {
 			return nil, false, nil
@@ -92,9 +93,9 @@ func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edge
 	}
 	d := body.doc
 	ref := d.nextProducerID()
-	tool, err := evalPrismContext(ctx, d, ref, prismPayload{
-		profile: profile, frame: frame, z0: -span, z1: span, xform: r3.Identity(),
-	}, freeform.NewFreeformWork())
+	tool, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+		Profile: profile, Frame: frame, Z0: -span, Z1: span, Xform: r3.Identity(),
+	}}, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, true, err
 	}
@@ -112,16 +113,16 @@ func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edge
 // obliqueCapEdgeProfile adapts the selected topology edge to its recorded
 // section edge, then applies the cutter's convexity and clearance gates.
 func obliqueCapEdgeProfile(pp prismPayload, edge *Edge, radius float64) bool {
-	vertices, ok := capedge.ConvexVertices(pp.profile)
+	vertices, ok := capedge.ConvexVertices(pp.Profile)
 	if !ok {
 		return false
 	}
 	match := -1
 	for i, a := range vertices {
 		b := vertices[(i+1)%len(vertices)]
-		for _, level := range []float64{pp.z0, pp.z1} {
+		for _, level := range []float64{pp.Z0, pp.Z1} {
 			if !matchEndpoints(edge.start.position, edge.end.position,
-				pp.point(a.U, a.V, level), pp.point(b.U, b.V, level), 1e-6) {
+				pp.Point(a.U, a.V, level), pp.Point(b.U, b.V, level), 1e-6) {
 				continue
 			}
 			if match >= 0 {

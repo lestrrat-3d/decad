@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -209,14 +210,14 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 			// pp.surfaceResult to decide Kind()/solid, cap omission, sheetLumps and
 			// the area subtraction, which is what gives the line reduction the
 			// whole sheet behaviour for free (docs/surface-design.md §4).
-			prism := prismPayload{
-				profile:       profile,
-				frame:         frame,
-				z1:            height,
-				z1Delta:       heightBound,
-				xform:         r3.Identity(),
-				surfaceResult: surfaceResult,
-			}
+			prism := prismPayload{Payload: prismrecord.Payload{
+				Profile:       profile,
+				Frame:         frame,
+				Z1:            height,
+				Z1Delta:       heightBound,
+				Xform:         r3.Identity(),
+				SurfaceResult: surfaceResult,
+			}}
 			body, err = evalPrismContext(ctx, d, ref, prism, work)
 			if err == nil {
 				finishStraightSweepBody(body, sweepPayload{prism: prism, path: path, surfaceResult: surfaceResult})
@@ -326,22 +327,22 @@ func (sp sweepPayload) transform() r3.Transform {
 	if sp.arc {
 		return sp.revolve.xform
 	}
-	return sp.prism.xform
+	return sp.prism.Xform
 }
 
 func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	if len(sp.spans) != 0 {
 		sp.spans = append([]sweepSpanPayload(nil), sp.spans...)
-		sp.prism.xform = composed
+		sp.prism.Xform = composed
 		for i := range sp.spans {
-			sp.spans[i].prism.xform = composed
+			sp.spans[i].prism.Xform = composed
 			sp.spans[i].revolve.xform = composed
 		}
 		return replayCompositeSweep(ctx, d, ref, sp)
 	}
 	if sp.arc {
 		sp.revolve.xform = composed
-		sp.prism.xform = composed
+		sp.prism.Xform = composed
 		body, err := evalRevolveContext(ctx, d, ref, sp.revolve)
 		if err != nil {
 			return nil, err
@@ -349,7 +350,7 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 		finishArcSweepBody(body, sp)
 		return body, nil
 	}
-	sp.prism.xform = composed
+	sp.prism.Xform = composed
 	body, err := evalPrismContext(ctx, d, ref, sp.prism, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err

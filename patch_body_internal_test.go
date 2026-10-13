@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -363,7 +364,7 @@ func patchTestReceiverWithOneChain(payload featurePayload, edges []*Edge) *Body 
 func TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver(t *testing.T) {
 	t.Parallel()
 	edges, _ := boundedSquareChain(1, units.Millimeters(0))
-	receiver := patchTestReceiverWithOneChain(prismPayload{surfaceResult: true, sectionDelta: 5}, edges)
+	receiver := patchTestReceiverWithOneChain(prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 5}}, edges)
 
 	pp := bodyPatchPayload{faces: receiver.Faces(), chains: []bodyPatchChain{{edges: edges}}}
 	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))
@@ -399,7 +400,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	innerFace := &Face{loops: []*Loop{{outer: true, coedges: []coedge{{edge: inner, forward: true}}}}}
 	inner.faces = []*Face{innerFace}
 
-	receiver := &Body{payload: prismPayload{surfaceResult: true, sectionDelta: 0}}
+	receiver := &Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}}
 	receiver.lumps = sheetLumps([]*Face{outerFace, innerFace})
 	outerFace.body = receiver
 	innerFace.body = receiver
@@ -434,7 +435,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch(t *testing.T) {
 		{curve: Line3{}, start: v2, end: v3, level: levelA},
 		{curve: Line3{}, start: v3, end: v0, level: levelA},
 	}
-	receiver := patchTestReceiverWithOneChain(prismPayload{surfaceResult: true, sectionDelta: 0}, edges)
+	receiver := patchTestReceiverWithOneChain(prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}, edges)
 
 	pp := bodyPatchPayload{faces: receiver.Faces(), chains: []bodyPatchChain{{edges: edges}}}
 	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))

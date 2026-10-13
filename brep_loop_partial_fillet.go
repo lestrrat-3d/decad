@@ -55,7 +55,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet band has extra contour edges`, ErrUnsupported)
 	}
 	convex := b.sigma < 0
-	up := pl.dir(0, 0, -b.matSign(f))
+	up := pl.Dir(0, 0, -b.matSign(f))
 	sideZ, _ := b.sideLevel(f)
 	lead, trail := make([]*Edge, n), make([]*Edge, n)
 	capAt := func(k int) *Vertex {
@@ -71,14 +71,14 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 	meridian := func(foot Point2, vertex Point2, w survey2d.SideWalk, capV, sideV *Vertex) *Edge {
 		nu, nv := foot.U-vertex.U, foot.V-vertex.V
 		length := math.Hypot(nu, nv)
-		normal := pl.dir(nu/length, nv/length, 0)
+		normal := pl.Dir(nu/length, nv/length, 0)
 		axis, _ := normal.Cross(up).Normalize()
 		tu, tv := walkTangent(w)
-		tangent := pl.dir(tu, tv, 0)
+		tangent := pl.Dir(tu, tv, 0)
 		if axis.Dot(tangent) < 0 {
 			tangent = tangent.Scale(-1)
 		}
-		return &Edge{curve: Arc3{Center: pl.point(foot.U, foot.V, sideZ), Axis: tangent,
+		return &Edge{curve: Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: tangent,
 			Radius: units.Millimeters(r)}, start: capV, end: sideV, convex: convex,
 			length: meridianLen, lengthBound: meridianBound}
 	}
@@ -152,9 +152,9 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		held, bound := heldOf(lengthIv)
 		bu, bv := j.M.U-w.StartU, j.M.V-w.StartV
 		semi := math.Hypot(bu, bv)
-		major := pl.dir(bu/semi, bv/semi, 0)
+		major := pl.Dir(bu/semi, bv/semi, 0)
 		axis, _ := major.Cross(up).Normalize()
-		lead[k] = &Edge{curve: Ellipse3{Center: pl.point(j.M.U, j.M.V, sideZ), Axis: axis,
+		lead[k] = &Edge{curve: Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis,
 			Major: major, SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
 			start: capV, end: sideV, convex: convex, length: held, lengthBound: bound}
 		trail[k] = lead[k]
@@ -204,7 +204,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 				start.start != pole || end.start != pole || start.end != sideE.start || end.end != sideE.end {
 				return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet's sphere patch does not close`, ErrUnsupported)
 			}
-			surf := Sphere{Center: pl.point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
+			surf := Sphere{Center: pl.Point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
 			loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
 				{edge: end, forward: false}, {edge: start, forward: true}}, outer: true}
 			if err := newPatch(surf, loop, pole, piece); err != nil {
@@ -221,8 +221,8 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet patch does not close on its contours`, ErrUnsupported)
 		}
 		tu, tv := walkTangent(w)
-		surf := Cylinder{Origin: pl.point(w.StartU-r*tv, w.StartV+r*tu, sideZ),
-			Axis: pl.dir(tu, tv, 0), Radius: units.Millimeters(r)}
+		surf := Cylinder{Origin: pl.Point(w.StartU-r*tv, w.StartV+r*tu, sideZ),
+			Axis: pl.Dir(tu, tv, 0), Radius: units.Millimeters(r)}
 		startForward := start.start == capE.start
 		endForward := end.start == sideE.end
 		loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
@@ -241,7 +241,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		}
 		arc := open.capBySeg[bi][b.capArc[next]]
 		v := fr.walks[next]
-		torus := Torus{Center: pl.point(v.StartU, v.StartV, sideZ), Axis: pl.dir(0, 0, 1),
+		torus := Torus{Center: pl.Point(v.StartU, v.StartV, sideZ), Axis: pl.Dir(0, 0, 1),
 			Major: units.Millimeters(r), Minor: units.Millimeters(r)}
 		horn := &Loop{coedges: []coedge{{edge: arc, forward: true},
 			{edge: lead[next], forward: true}, {edge: trail[next], forward: false}}, outer: true}

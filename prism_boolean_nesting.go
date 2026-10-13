@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -21,9 +22,9 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 	if !aok || !bok {
 		return prismPayload{}, false, nil
 	}
-	if len(ah.profile.Holes) == 1 && len(bh.profile.Holes) == 0 {
+	if len(ah.Profile.Holes) == 1 && len(bh.Profile.Holes) == 0 {
 		a, b = b, a
-	} else if len(ah.profile.Holes) != 0 || len(bh.profile.Holes) != 1 {
+	} else if len(ah.Profile.Holes) != 0 || len(bh.Profile.Holes) != 1 {
 		return prismPayload{}, false, nil
 	}
 
@@ -35,7 +36,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 	if err != nil || !ok {
 		return prismPayload{}, false, err
 	}
-	for _, profile := range []profileRecord{pa.profile, pb.profile} {
+	for _, profile := range []profileRecord{pa.Profile, pb.Profile} {
 		trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, profile.Outer, profile.Holes)
 		if err != nil {
 			return prismPayload{}, false, err
@@ -47,7 +48,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 	if !prismplacement.IntersectZIntervalOverlaps(prismPlacementOf(pa), prismPlacementOf(pb)) {
 		return prismPayload{}, false, nil
 	}
-	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.profile, pb.profile)
+	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, pa.Profile, pb.Profile)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -96,7 +97,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 // comes back unresolved, this tries prism_boolean_crossing.go's
 // edge-orientation classifier before giving up.
 func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	s, match, sceneDelta, resolved, err := prismcells.ResolveCut(ctx, budget, target.profile, tool.profile, reexpress)
+	s, match, sceneDelta, resolved, err := prismcells.ResolveCut(ctx, budget, target.Profile, tool.Profile, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -114,33 +115,33 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil {
 		return prismPayload{}, false, err
 	}
-	result := prismPayload{
-		profile: profile,
+	result := prismPayload{Payload: prismrecord.Payload{
+		Profile: profile,
 		// The record carries the TARGET's own frame/xform (operand A's — the
 		// private scene's own reference plane, §4.1). The scene's returned
 		// PlaneRecord describes that private scene's own world-XY plane, not
 		// the body's; using it here would silently swap the result onto the
 		// wrong plane, so it is discarded.
-		frame: target.frame,
-		xform: target.xform,
+		Frame: target.Frame,
+		Xform: target.Xform,
 		// §3.2's Cut row: the result's z-interval is the target's own,
 		// unchanged — the tool removes material across the target's full
 		// height, never narrows it.
-		z0:      target.z0,
-		z1:      target.z1,
-		z0Delta: target.z0Delta,
-		z1Delta: target.z1Delta,
+		Z0:      target.Z0,
+		Z1:      target.Z1,
+		Z0Delta: target.Z0Delta,
+		Z1Delta: target.Z1Delta,
 		// §7/Task 4.4: every matched edge is whole, so the cut charge is
 		// zero — there is no fresh cut parameter to charge at all. What
 		// remains is the same formula PR1's Union path uses for its own
 		// re-expression and prior-displacement terms (now including each
 		// operand's own walk charge), with the (already zero) cut term
 		// omitted rather than added back in.
-		sectionDelta: max(
-			proofbound.AbsSumUpper(target.sectionDelta, sceneDelta.A),
-			proofbound.AbsSumUpper(tool.sectionDelta, sceneDelta.B, reexpress.Delta),
+		SectionDelta: max(
+			proofbound.AbsSumUpper(target.SectionDelta, sceneDelta.A),
+			proofbound.AbsSumUpper(tool.SectionDelta, sceneDelta.B, reexpress.Delta),
 		),
-	}
+	}}
 	return result, true, nil
 }
 
@@ -151,7 +152,7 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 // neither direction matches, this tries prism_boolean_crossing.go's
 // edge-orientation classifier before giving up.
 func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	s, match, sceneDelta, nestedIsB, resolved, err := prismcells.ResolveIntersect(ctx, budget, pa.profile, pb.profile, reexpress)
+	s, match, sceneDelta, nestedIsB, resolved, err := prismcells.ResolveIntersect(ctx, budget, pa.Profile, pb.Profile, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -173,33 +174,33 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 	// (prismplacement.IntersectLowerEnd and IntersectUpperEnd); a tie takes
 	// the larger displacement, since both operands' coordinates denote it.
 	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
-	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta)
-	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta)
+	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.Z0, pa.Z0Delta, pbZ0, pb.Z0Delta)
+	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.Z1, pa.Z1Delta, pbZ1, pb.Z1Delta)
 
 	// §7/Task 4.4: the record traces to the NESTED operand alone, so only
 	// that operand's own displacement term (now including its own walk
 	// charge) reaches the result — never the max of both, which would be
 	// conservative where the code already knows which operand's coordinates
 	// it took.
-	sectionDelta := proofbound.AbsSumUpper(pa.sectionDelta, sceneDelta.A)
+	sectionDelta := proofbound.AbsSumUpper(pa.SectionDelta, sceneDelta.A)
 	if nestedIsB {
-		sectionDelta = proofbound.AbsSumUpper(pb.sectionDelta, sceneDelta.B, reexpress.Delta)
+		sectionDelta = proofbound.AbsSumUpper(pb.SectionDelta, sceneDelta.B, reexpress.Delta)
 	}
 
-	result := prismPayload{
-		profile: profile,
+	result := prismPayload{Payload: prismrecord.Payload{
+		Profile: profile,
 		// The private scene's reference plane is always operand A's (§4.1),
 		// regardless of which operand turned out to be nested — B's own
 		// coordinates, when they are the ones that survive, already live in
 		// A's frame through the scene's re-expression.
-		frame:        pa.frame,
-		xform:        pa.xform,
-		z0:           z0,
-		z1:           z1,
-		z0Delta:      z0Delta,
-		z1Delta:      z1Delta,
-		sectionDelta: sectionDelta,
-	}
+		Frame:        pa.Frame,
+		Xform:        pa.Xform,
+		Z0:           z0,
+		Z1:           z1,
+		Z0Delta:      z0Delta,
+		Z1Delta:      z1Delta,
+		SectionDelta: sectionDelta,
+	}}
 	return result, true, nil
 }
 

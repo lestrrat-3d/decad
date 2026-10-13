@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -52,15 +53,15 @@ import (
 // silent fallback per this file's own header; a non-nil error is a genuine
 // refusal past §3.4's point of no return.
 func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	if len(target.profile.Holes) != 0 || len(tool.profile.Holes) != 0 {
+	if len(target.Profile.Holes) != 0 || len(tool.Profile.Holes) != 0 {
 		// This classifier is scoped to hole-free operands (this file's own
 		// header); a holed target/tool falls back to the mesh path exactly
 		// as it did before this increment.
 		return prismPayload{}, false, nil
 	}
 
-	merged, sceneDelta, cutDelta, resolved, err := prismcells.ResolveCrossing(ctx, budget, target.profile, tool.profile,
-		target.sectionDelta, tool.sectionDelta, reexpress,
+	merged, sceneDelta, cutDelta, resolved, err := prismcells.ResolveCrossing(ctx, budget, target.Profile, tool.Profile,
+		target.SectionDelta, tool.SectionDelta, reexpress,
 		func(a, b bool) bool { return a && !b }, "cut")
 	if err != nil {
 		return prismPayload{}, false, err
@@ -75,22 +76,22 @@ func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *proofbound.Wor
 		return prismPayload{}, false, err
 	}
 
-	result := prismPayload{
-		profile: merged,
-		frame:   target.frame,
-		xform:   target.xform,
+	result := prismPayload{Payload: prismrecord.Payload{
+		Profile: merged,
+		Frame:   target.Frame,
+		Xform:   target.Xform,
 		// §3.2's Cut row: the result's z-interval is the target's own,
 		// unchanged — the tool removes material across the target's full
 		// height, never narrows it.
-		z0:      target.z0,
-		z1:      target.z1,
-		z0Delta: target.z0Delta,
-		z1Delta: target.z1Delta,
+		Z0:      target.Z0,
+		Z1:      target.Z1,
+		Z0Delta: target.Z0Delta,
+		Z1Delta: target.Z1Delta,
 		// §7's formula with A6's crossing term, Union's own: this path
 		// assembles a merged loop exactly like Union's, so it carries the
 		// same displacement terms, cutDelta and the crossing charge included.
-		sectionDelta: sceneDelta.Merged(target.sectionDelta, tool.sectionDelta, reexpress.Delta, cutDelta),
-	}
+		SectionDelta: sceneDelta.Merged(target.SectionDelta, tool.SectionDelta, reexpress.Delta, cutDelta),
+	}}
 	return result, true, nil
 }
 
@@ -99,12 +100,12 @@ func resolveAndBuildPrismCutCrossing(ctx context.Context, budget *proofbound.Wor
 // axial displacement selection reuse prismplacement.ZShift/IntersectLowerEnd/IntersectUpperEnd
 // (prism_boolean_nesting.go) unchanged.
 func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 {
+	if len(pa.Profile.Holes) != 0 || len(pb.Profile.Holes) != 0 {
 		return prismPayload{}, false, nil
 	}
 
-	merged, sceneDelta, cutDelta, resolved, err := prismcells.ResolveCrossing(ctx, budget, pa.profile, pb.profile,
-		pa.sectionDelta, pb.sectionDelta, reexpress,
+	merged, sceneDelta, cutDelta, resolved, err := prismcells.ResolveCrossing(ctx, budget, pa.Profile, pb.Profile,
+		pa.SectionDelta, pb.SectionDelta, reexpress,
 		func(a, b bool) bool { return a && b }, "intersect")
 	if err != nil {
 		return prismPayload{}, false, err
@@ -122,18 +123,18 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *proofbou
 	// Intersect builder does; prismplacement.IntersectLowerEnd/IntersectUpperEnd charge a shifted endpoint's
 	// single rounding.
 	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
-	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta)
-	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta)
+	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.Z0, pa.Z0Delta, pbZ0, pb.Z0Delta)
+	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.Z1, pa.Z1Delta, pbZ1, pb.Z1Delta)
 
-	result := prismPayload{
-		profile:      merged,
-		frame:        pa.frame,
-		xform:        pa.xform,
-		z0:           z0,
-		z1:           z1,
-		z0Delta:      z0Delta,
-		z1Delta:      z1Delta,
-		sectionDelta: sceneDelta.Merged(pa.sectionDelta, pb.sectionDelta, reexpress.Delta, cutDelta),
-	}
+	result := prismPayload{Payload: prismrecord.Payload{
+		Profile:      merged,
+		Frame:        pa.Frame,
+		Xform:        pa.Xform,
+		Z0:           z0,
+		Z1:           z1,
+		Z0Delta:      z0Delta,
+		Z1Delta:      z1Delta,
+		SectionDelta: sceneDelta.Merged(pa.SectionDelta, pb.SectionDelta, reexpress.Delta, cutDelta),
+	}}
 	return result, true, nil
 }

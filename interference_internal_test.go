@@ -12,6 +12,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -538,8 +539,8 @@ func TestAnalyticBodiesEqualCancellationIsBounded(t *testing.T) {
 		segs[i] = lineSeg{Start: Point2{U: float64(i)}, End: Point2{U: float64(i + 1)}, TEnd: 1}
 	}
 	profile := profileRecord{Outer: loopRecord{Segments: segs}}
-	a := &Body{payload: prismPayload{profile: profile, z1: 1}}
-	b := &Body{payload: prismPayload{profile: profile, z1: 1}}
+	a := &Body{payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}}
+	b := &Body{payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "ExactLoopEqual"}
 
 	_, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)
@@ -590,7 +591,7 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 	for i := range segs {
 		segs[i] = lineSeg{Start: corner(i), End: corner(i + 1), TEnd: 1}
 	}
-	pp.profile = profileRecord{Outer: loopRecord{Segments: segs}}
+	pp.Profile = profileRecord{Outer: loopRecord{Segments: segs}}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "SurveyLoops"}
 
 	_, _, err := newBodyGeomBudget(proofbound.NewWorkBudget(ctx), &Body{

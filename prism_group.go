@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/prismcells"
@@ -43,15 +44,15 @@ type prismGroupOperand struct {
 func prismGroupOperandOf(b *Body) (prismGroupOperand, bool) {
 	switch p := b.payload.(type) {
 	case prismPayload:
-		return prismGroupOperand{proxy: p, regions: []profileRecord{p.profile}}, true
+		return prismGroupOperand{proxy: p, regions: []profileRecord{p.Profile}}, true
 	case stackedPrismPayload:
 		if !p.isGroup() {
 			return prismGroupOperand{}, false
 		}
 		slab := p.slabs[0]
-		proxy := prismPayload{profile: slab.Regions[0], frame: p.frame, xform: p.xform,
-			z0: slab.Z0, z1: slab.Z1, z0Delta: slab.Z0Delta, z1Delta: slab.Z1Delta,
-			sectionDelta: p.sectionDelta}
+		proxy := prismPayload{Payload: prismrecord.Payload{Profile: slab.Regions[0], Frame: p.frame, Xform: p.xform,
+			Z0: slab.Z0, Z1: slab.Z1, Z0Delta: slab.Z0Delta, Z1Delta: slab.Z1Delta,
+			SectionDelta: p.sectionDelta}}
 		return prismGroupOperand{proxy: proxy, regions: slab.Regions, group: true}, true
 	default:
 		return prismGroupOperand{}, false
@@ -93,7 +94,7 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	if err := budget.Err(); err != nil {
 		return prismPayload{}, false, err
 	}
-	targetOp := prismGroupOperand{proxy: target, regions: []profileRecord{target.profile}}
+	targetOp := prismGroupOperand{proxy: target, regions: []profileRecord{target.Profile}}
 	if ok, err := admitPrismGroupPair(budget, meshbool.OpCut, targetOp, tool, false, true); err != nil || !ok {
 		return prismPayload{}, false, err
 	}
@@ -101,18 +102,18 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 		return prismPayload{}, false, nil
 	}
 	scene, ok, err := prismcells.BuildGroupScene(ctx, budget, targetOp.regions, tool.regions,
-		prismPlacementOf(target), prismPlacementOf(tool.proxy), target.sectionDelta, tool.proxy.sectionDelta, "cut")
+		prismPlacementOf(target), prismPlacementOf(tool.proxy), target.SectionDelta, tool.proxy.SectionDelta, "cut")
 	if err != nil || !ok {
 		return prismPayload{}, false, err
 	}
 	sceneDelta := scene.Delta
-	result := prismPayload{frame: target.frame, xform: target.xform,
-		z0: target.z0, z1: target.z1, z0Delta: target.z0Delta, z1Delta: target.z1Delta}
-	inA, inB := sceneDelta.Incoming(target.sectionDelta, tool.proxy.sectionDelta, scene.ReexpressionDelta)
+	result := prismPayload{Payload: prismrecord.Payload{Frame: target.Frame, Xform: target.Xform,
+		Z0: target.Z0, Z1: target.Z1, Z0Delta: target.Z0Delta, Z1Delta: target.Z1Delta}}
+	inA, inB := sceneDelta.Incoming(target.SectionDelta, tool.proxy.SectionDelta, scene.ReexpressionDelta)
 	inputDelta := max(inA, inB)
 
 	match, nested, err := prismcells.GroupCutMatch(budget, scene.Profiles, scene.Tags,
-		len(target.profile.Holes), len(tool.regions))
+		len(target.Profile.Holes), len(tool.regions))
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -122,13 +123,13 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 			return prismPayload{}, false, err
 		}
 		// Every edge of the matched cell is whole: no cut charge.
-		result.profile = profile
-		result.sectionDelta = inputDelta
+		result.Profile = profile
+		result.SectionDelta = inputDelta
 		return result, true, nil
 	}
 
 	// The crossing sub-case, scoped to a hole-free target as prism-boolean's.
-	if len(target.profile.Holes) != 0 {
+	if len(target.Profile.Holes) != 0 {
 		return prismPayload{}, false, nil
 	}
 	selected, resolved, err := prismcells.GroupCutCells(budget, scene)
@@ -142,8 +143,8 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, auditPrismMergeSection(budget, target, merged)); fallBack || err != nil {
 		return prismPayload{}, false, err
 	}
-	result.profile = merged
-	result.sectionDelta = sceneDelta.Merged(target.sectionDelta, tool.proxy.sectionDelta, scene.ReexpressionDelta, cutDelta)
+	result.Profile = merged
+	result.SectionDelta = sceneDelta.Merged(target.SectionDelta, tool.proxy.SectionDelta, scene.ReexpressionDelta, cutDelta)
 	return result, true, nil
 }
 
@@ -169,7 +170,7 @@ func tryPrismGroupUnion(ctx context.Context, a, b *Body) (featurePayload, bool, 
 		return nil, false, nil
 	}
 	scene, ok, err := prismcells.BuildGroupScene(ctx, budget, oa.regions, ob.regions,
-		prismPlacementOf(oa.proxy), prismPlacementOf(ob.proxy), oa.proxy.sectionDelta, ob.proxy.sectionDelta, "union")
+		prismPlacementOf(oa.proxy), prismPlacementOf(ob.proxy), oa.proxy.SectionDelta, ob.proxy.SectionDelta, "union")
 	if err != nil || !ok {
 		return nil, false, err
 	}
@@ -190,7 +191,7 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, sce
 		return nil, false, err
 	}
 	// §7's incoming terms with A6's crossing charge.
-	inA, inB := scene.Delta.Incoming(oa.proxy.sectionDelta, ob.proxy.sectionDelta, scene.ReexpressionDelta)
+	inA, inB := scene.Delta.Incoming(oa.proxy.SectionDelta, ob.proxy.SectionDelta, scene.ReexpressionDelta)
 	inputDelta := max(inA, inB, scene.Delta.Crossing)
 	regions := make([]profileRecord, len(loops))
 	for i, loop := range loops {
@@ -200,20 +201,20 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, sce
 			return nil, false, err
 		}
 	}
-	z0Delta, z1Delta := max(oa.proxy.z0Delta, ob.proxy.z0Delta), max(oa.proxy.z1Delta, ob.proxy.z1Delta)
+	z0Delta, z1Delta := max(oa.proxy.Z0Delta, ob.proxy.Z0Delta), max(oa.proxy.Z1Delta, ob.proxy.Z1Delta)
 	if len(regions) == 1 {
-		return prismPayload{profile: regions[0], frame: oa.proxy.frame, xform: oa.proxy.xform,
-			z0: oa.proxy.z0, z1: oa.proxy.z1, z0Delta: z0Delta, z1Delta: z1Delta,
-			sectionDelta: proofbound.AbsSumUpper(inputDelta, cutDelta)}, true, nil
+		return prismPayload{Payload: prismrecord.Payload{Profile: regions[0], Frame: oa.proxy.Frame, Xform: oa.proxy.Xform,
+			Z0: oa.proxy.Z0, Z1: oa.proxy.Z1, Z0Delta: z0Delta, Z1Delta: z1Delta,
+			SectionDelta: proofbound.AbsSumUpper(inputDelta, cutDelta)}}, true, nil
 	}
 	disjoint, disjointWalk, err := prismcells.ProveGroupDisjoint(ctx, budget, regions)
 	if err != nil || !disjoint {
 		return nil, false, err
 	}
 	sp := stackedPrismPayload{
-		slabs: []stackedrecord.Slab{{Regions: regions, Z0: oa.proxy.z0, Z1: oa.proxy.z1,
+		slabs: []stackedrecord.Slab{{Regions: regions, Z0: oa.proxy.Z0, Z1: oa.proxy.Z1,
 			Z0Delta: z0Delta, Z1Delta: z1Delta}},
-		frame: oa.proxy.frame, xform: oa.proxy.xform,
+		frame: oa.proxy.Frame, xform: oa.proxy.Xform,
 		sectionDelta: proofbound.AbsSumUpper(max(inputDelta, disjointWalk), cutDelta),
 	}
 	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {

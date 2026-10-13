@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -66,8 +67,8 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 	// Selected cells: Task 1's first half of the crossing resolution, under
 	// Intersect's own keep — the arrangement's own cells that
 	// prismcells.Classify puts on BOTH operands' material sides.
-	selected, sceneDelta, resolved, err := prismcells.ResolveCrossingCells(ctx, budget, pa.profile, pb.profile,
-		pa.sectionDelta, pb.sectionDelta, reexpress,
+	selected, sceneDelta, resolved, err := prismcells.ResolveCrossingCells(ctx, budget, pa.Profile, pb.Profile,
+		pa.SectionDelta, pb.SectionDelta, reexpress,
 		func(a, b bool) bool { return a && b })
 	if err != nil {
 		return Measurement{}, false, err
@@ -85,8 +86,8 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 	// §3.2's Intersect z-interval and per-end axial displacement, shared by
 	// every measured cell — the pair's own relation, not a per-cell one.
 	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
-	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta)
-	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta)
+	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.Z0, pa.Z0Delta, pbZ0, pb.Z0Delta)
+	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.Z1, pa.Z1Delta, pbZ1, pb.Z1Delta)
 
 	d := a.doc
 	values := make([]float64, 0, len(selected))
@@ -111,17 +112,17 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 		// §7's formula with A6's crossing term, byte-identical to
 		// resolveAndBuildPrismIntersectCrossing's, taken over THIS cell's
 		// own cutDelta.
-		sectionDelta := sceneDelta.Merged(pa.sectionDelta, pb.sectionDelta, reexpress.Delta, cutDelta)
-		pp := prismPayload{
-			profile:      cellProfile,
-			frame:        pa.frame,
-			xform:        pa.xform,
-			z0:           z0,
-			z1:           z1,
-			z0Delta:      z0Delta,
-			z1Delta:      z1Delta,
-			sectionDelta: sectionDelta,
-		}
+		sectionDelta := sceneDelta.Merged(pa.SectionDelta, pb.SectionDelta, reexpress.Delta, cutDelta)
+		pp := prismPayload{Payload: prismrecord.Payload{
+			Profile:      cellProfile,
+			Frame:        pa.Frame,
+			Xform:        pa.Xform,
+			Z0:           z0,
+			Z1:           z1,
+			Z0Delta:      z0Delta,
+			Z1Delta:      z1Delta,
+			SectionDelta: sectionDelta,
+		}}
 
 		body, err := evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
 		if err != nil {

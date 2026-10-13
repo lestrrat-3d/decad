@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 
@@ -40,14 +41,14 @@ func TestOffsetPrismUnrepresentableOffset(t *testing.T) {
 	}
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	pp := prismPayload{
-		profile: profileRecord{Outer: loopRecord{Segments: segments}},
-		frame:   frame, xform: r3.Identity(),
-		z0: 0, z1: 10, surfaceResult: true,
-	}
+	pp := prismPayload{Payload: prismrecord.Payload{
+		Profile: profileRecord{Outer: loopRecord{Segments: segments}},
+		Frame:   frame, Xform: r3.Identity(),
+		Z0: 0, Z1: 10, SurfaceResult: true,
+	}}
 
 	budget := proofbound.NewWorkBudget(t.Context())
-	generated, offErr := offsetProfile(budget, pp.profile, +1, 1)
+	generated, offErr := offsetProfile(budget, pp.Profile, +1, 1)
 	require.NoError(t, offErr)
 	first, ok := generated.Outer.Segments[0].(lineSeg)
 	require.True(t, ok)
@@ -135,9 +136,9 @@ func TestOffsetPrismResultIsBoundedByTheOffsetLoopAlone(t *testing.T) {
 	require.NoError(t, err)
 	built, ok := result.payload.(prismPayload)
 	require.True(t, ok)
-	require.Empty(t, built.profile.Holes,
+	require.Empty(t, built.Profile.Holes,
 		`one region: no hole walk, so the payload publishes no nesting relation to audit`)
-	require.Equal(t, section.Outer, built.profile.Outer,
+	require.Equal(t, section.Outer, built.Profile.Outer,
 		`the result's boundary IS the generated offset loop, and the source loop appears nowhere in it`)
 }
 
@@ -162,9 +163,9 @@ func offsetNeckPayload(t *testing.T) prismPayload {
 			TStart: 0, TEnd: 1,
 		}
 	}
-	return prismPayload{
-		profile: profileRecord{Outer: loopRecord{Segments: segments}},
-		frame:   frame, xform: r3.Identity(),
-		z0: 0, z1: 10, surfaceResult: true,
-	}
+	return prismPayload{Payload: prismrecord.Payload{
+		Profile: profileRecord{Outer: loopRecord{Segments: segments}},
+		Frame:   frame, Xform: r3.Identity(),
+		Z0: 0, Z1: 10, SurfaceResult: true,
+	}}
 }

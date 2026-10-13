@@ -1097,7 +1097,7 @@ substituted for each other anywhere upstream of that composition.
 **`sectionDelta` is a maximum rather than a sum because a boundary point
 lies in exactly one cell** — the identical reasoning
 `docs/prism-boolean-design.md` §7 and its Implementation notes already state
-for `prismPayload.sectionDelta`, which this
+for `prismPayload.SectionDelta`, which this
 field mirrors by name and by contract.
 
 **`delta` composes two terms beside the placement one, `stationRound` and

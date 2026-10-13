@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
@@ -97,7 +98,7 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 		Outer: loopRecord{Segments: outer},
 		Holes: pl.profile0.Holes,
 	}
-	pp := prismPayload{profile: profile, frame: pl.frame0, z0: 0, z1: end.Z, xform: r3.Identity()}
+	pp := prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: pl.frame0, Z0: 0, Z1: end.Z, Xform: r3.Identity()}}
 	setback := capSetback{dc: d, dcDelta: dDelta, ds: d, dsDelta: dDelta}
 	source := &loftCapBandSource{profile: pl.profile0, proof: pl.proof}
 	result, err := buildCapBlendWithLoftSource(ctx, b.doc, b.doc.nextProducerID(), pp, setback, setback,

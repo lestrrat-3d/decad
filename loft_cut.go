@@ -28,23 +28,23 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 		}
 	}
 	tool, ok := b.payload.(prismPayload)
-	if !ok || tool.surfaceResult || tool.xform != r3.Identity() ||
-		tool.frame.U() != pl.frame0.U() || tool.frame.V() != pl.frame0.V() ||
-		len(tool.profile.Holes) != 0 || len(tool.profile.Outer.Segments) != 1 {
+	if !ok || tool.SurfaceResult || tool.Xform != r3.Identity() ||
+		tool.Frame.U() != pl.frame0.U() || tool.Frame.V() != pl.frame0.V() ||
+		len(tool.Profile.Holes) != 0 || len(tool.Profile.Outer.Segments) != 1 {
 		return nil, false, nil
 	}
-	circle, ok := tool.profile.Outer.Segments[0].(circleSeg)
+	circle, ok := tool.Profile.Outer.Segments[0].(circleSeg)
 	if !ok || !((circle.TStart == 0 && circle.TEnd == 1) ||
 		(circle.TStart == 1 && circle.TEnd == 0)) {
 		return nil, false, nil
 	}
-	centerWorld := tool.point(circle.Center.U, circle.Center.V, 0)
+	centerWorld := tool.Point(circle.Center.U, circle.Center.V, 0)
 	center := pl.frame0.ToLocal(centerWorld)
 	if pl.frame0.ToWorld(center) != centerWorld {
 		return nil, false, nil
 	}
-	from := pl.frame0.ToLocal(tool.point(0, 0, tool.z0))
-	to := pl.frame0.ToLocal(tool.point(0, 0, tool.z1))
+	from := pl.frame0.ToLocal(tool.Point(0, 0, tool.Z0))
+	to := pl.frame0.ToLocal(tool.Point(0, 0, tool.Z1))
 	end := pl.frame0.ToLocal(pl.frame1.Origin())
 	if from.Z > 0 || to.Z < end.Z || end.Z <= 0 || end.X != 0 || end.Y != 0 {
 		return nil, false, nil

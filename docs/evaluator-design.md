@@ -325,7 +325,7 @@ direction is the plane normal `U × V` for `Along` (core §8.1).
 A bounded oblique `Body.Section` profile carries an opaque Sketch attachment.
 `Extrude` admits it only while its marked reference boundary, profile, revision
 and plane frame still match the source certificate. It uses the certified frame
-directly and passes the source displacement into `prismPayload.sectionDelta`.
+directly and passes the source displacement into `prismPayload.SectionDelta`.
 Only a straight solid sweep with an independent `Distance` extent consumes this
 bound; other options and profile consumers refuse it. See section design.
 
@@ -356,7 +356,7 @@ arithmetic, so a frame that is not axis-aligned or a placement that is not the
 identity rounds, and `Bounds` (a `capBlendPayload` result's included) charges
 that rounding rather than reading the placed extreme as an exact leaf. Every
 rim and side vertex `buildLoopSidesAs` places charges its OWN frame/placement
-lift rounding, measured exactly for that vertex (`prismPayload.liftedVertex`,
+lift rounding, measured exactly for that vertex (`prismPayload.LiftedVertex`,
 `internal/proofbound/bounds.go`'s `ExactFrameLiftRound`: the held point
 against the same origin + u·U + v·V + z·N chain and placement over dyadic
 rationals) and folded into the vertex's own section/axial displacement rather
@@ -394,7 +394,7 @@ chamfered end's setback). It is the axial twin of the section displacement:
 the two are tracked apart and neither stands in for the other — one moves a
 coordinate IN the plane, the other moves a level ALONG the normal — while a
 reading both displace, a side vertex or `Bounds`, sums them. The per-end pair
-is spelled `prismPayload.z0Delta`/`z1Delta`; `cupPayload.zDelta` is the cup's
+is spelled `prismPayload.Z0Delta`/`Z1Delta`; `cupPayload.zDelta` is the cup's
 own spelling of it, and `capBlendPayload` preserves the pair and composes a
 selected end's setback rounding into it. Every
 level-derived reading takes it: `h` and the
@@ -745,6 +745,17 @@ its own snapshot. That is what lets a `Remove` run beside a `Verify`. The lock g
 feature's check-then-commit are still unguarded, which is why the document as a whole stays unsafe
 for concurrent mutation (core §12).
 
+Every payload is a root type, because its `placed` reads `*Document` and
+builds a `*Body` (`featurePayload`). Where a payload's plain data has an
+internal owner, the root type embeds that owner by value and keeps only
+what needs the root package: `transform`, `placed`, methods that satisfy
+root interfaces, and fields that hold root types. `prismPayload` is
+`struct{ prismrecord.Payload }`; the owner's exported fields (`Profile`,
+`Frame`, `Z0`/`Z1`, `Z0Delta`/`Z1Delta`, `Xform`, `BlendSegs`,
+`BlendKind`, `SectionDelta`, `Walks`, `SurfaceResult`) are promoted. A
+value copy of the wrapper copies the record exactly as a copy of the flat
+struct did, so `placed`'s copy-then-set-`Xform` is unchanged.
+
 `Transform` and `Copy` pass the caller's context through payload re-evaluation.
 Faceted placement polls that context while transforming vertices, auditing and
 rebuilding topology, and recomputing measurements.
@@ -800,9 +811,9 @@ charge, zero exactly for an axis-aligned frame under the identity placement.
 A placement changes the MOTION and nothing else, so a prism's re-evaluation
 reuses the plane-local walk resolution the original build published rather than
 resolving the same section again. `prismPayload` carries a private
-`*momentinput.ProfileWalks` for its own record; `evalPrismContext` publishes the set it
+`*momentinput.ProfileWalks` (`Walks`) for its own record; `evalPrismContext` publishes the set it
 resolved onto the body it just built, and `placed` — the one path that carries a
-payload forward unchanged but for `xform` — hands it back to the next build.
+payload forward unchanged but for `Xform` — hands it back to the next build.
 What makes it sound is that a walk holds nothing placement-dependent: `walkOf`
 answers in the section's own (u, v), and the frame, the placement and the
 reflection's orientation and winding corrections are all applied by consumers

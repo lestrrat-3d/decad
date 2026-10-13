@@ -2,6 +2,7 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
@@ -37,7 +38,7 @@ func offsetProfile(budget *proofbound.WorkBudget, profile profileRecord, s, t fl
 	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return profileRecord{}, err
 	}
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
+	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: profile}})
 	if err != nil {
 		return profileRecord{}, err
 	}
@@ -65,7 +66,7 @@ type cornerJoin = offset2d.Join
 // cutback, so the empty fillet map makes the S6 trim test a no-op — the one test
 // that cannot fire on an offset (§8).
 func auditOffsetSectionBudget(budget *proofbound.WorkBudget, orig, offset profileRecord) error {
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: offset})
+	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: offset}})
 	if err != nil {
 		return err
 	}
@@ -90,7 +91,7 @@ func offsetSectionDelta(budget *proofbound.WorkBudget, profile profileRecord, s,
 	if err != nil {
 		return 0, err
 	}
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
+	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: profile}})
 	if err != nil {
 		return 0, err
 	}

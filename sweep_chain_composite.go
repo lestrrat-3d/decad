@@ -109,9 +109,9 @@ func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, p
 	}
 	payload := chainSweepPayload{path: path, spans: []chainSweepSpanPayload{
 		{chain: chainPayload{
-			chains: []chainRecord{chain}, frame: straight.prism.frame,
-			z0: straight.prism.z0, z1: straight.prism.z1,
-			z0Delta: straight.prism.z0Delta, z1Delta: straight.prism.z1Delta,
+			chains: []chainRecord{chain}, frame: straight.prism.Frame,
+			z0: straight.prism.Z0, z1: straight.prism.Z1,
+			z0Delta: straight.prism.Z0Delta, z1Delta: straight.prism.Z1Delta,
 			xform: r3.Identity(),
 		}},
 		{revolve: chainRevolvePayload{

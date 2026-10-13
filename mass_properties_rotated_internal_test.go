@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -42,13 +43,13 @@ func TestRotatedPrismMassChargesDisplacement(t *testing.T) {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	const delta = 1.0 / 1024
-	pp := prismPayload{
-		profile: rectangleRecord(-8, -4, 8, 4),
-		frame:   frame,
-		z0:      0, z1: 16,
-		z0Delta: delta, z1Delta: delta, sectionDelta: delta,
-		xform: r3.Identity(),
-	}
+	pp := prismPayload{Payload: prismrecord.Payload{
+		Profile: rectangleRecord(-8, -4, 8, 4),
+		Frame:   frame,
+		Z0:      0, Z1: 16,
+		Z0Delta: delta, Z1Delta: delta, SectionDelta: delta,
+		Xform: r3.Identity(),
+	}}
 	rho := 1.0 / 1024
 	got, err := massPropertiesFromReadings(massmoment.GeneralPrismProperties(t.Context(),
 		massPrismRecord(pp), vecMeasurementToInternal(VecMeasurement{}), units.KilogramsPerCubicMillimeter(rho)))
@@ -110,10 +111,10 @@ func TestRotatedPrismMassMatchesCardinalPath(t *testing.T) {
 		EX: r3.NewVec(0, 1, 0), EY: r3.NewVec(-1, 0, 0), EZ: r3.NewVec(0, 0, 1),
 	}, r3.NewVec(30, 0, 0))
 	require.NoError(t, err)
-	pp := prismPayload{
-		profile: profileRecord{Outer: loopRecord{Segments: segments}},
-		frame:   frame, z0: 0, z1: 10, xform: turn,
-	}
+	pp := prismPayload{Payload: prismrecord.Payload{
+		Profile: profileRecord{Outer: loopRecord{Segments: segments}},
+		Frame:   frame, Z0: 0, Z1: 10, Xform: turn,
+	}}
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
 	general, err := massPropertiesFromReadings(
 		massmoment.GeneralPrismProperties(t.Context(), massPrismRecord(pp), vecMeasurementToInternal(VecMeasurement{}), density))

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -219,13 +220,13 @@ func internalPinThroughS1(t *testing.T, doc *Document) *Body {
 	t.Helper()
 	xz, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1))
 	require.NoError(t, err)
-	pinPayload := prismPayload{
-		profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
+	pinPayload := prismPayload{Payload: prismrecord.Payload{
+		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			circleSeg{Center: Point2{U: 20, V: 10}, Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1},
 		}}},
 		// The frame's normal is −y: z ∈ [−25, 5] spans y ∈ [−5, 25].
-		frame: xz, z0: -25, z1: 5, xform: r3.Identity(),
-	}
+		Frame: xz, Z0: -25, Z1: 5, Xform: r3.Identity(),
+	}}
 	pin, err := evalPrismContext(t.Context(), doc, doc.nextProducerID(), pinPayload, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	doc.commit(pin)

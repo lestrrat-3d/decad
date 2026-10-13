@@ -20,15 +20,15 @@ type crossCylinderBoreRecord struct {
 
 func crossCylinderCircleSource(body *Body, u, v r3.Vec) (prismPayload, circleSeg, bool) {
 	pp, ok := body.payload.(prismPayload)
-	if !ok || !body.solid || body.kind != BodySolid || pp.surfaceResult ||
-		pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
-		pp.xform != r3.Identity() || pp.frame.Origin() != (r3.Vec{}) ||
-		pp.frame.U() != u || pp.frame.V() != v ||
-		len(pp.profile.Holes) != 0 || len(pp.profile.Outer.Segments) != 1 ||
-		!(pp.z1 > pp.z0) {
+	if !ok || !body.solid || body.kind != BodySolid || pp.SurfaceResult ||
+		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
+		pp.Xform != r3.Identity() || pp.Frame.Origin() != (r3.Vec{}) ||
+		pp.Frame.U() != u || pp.Frame.V() != v ||
+		len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
+		!(pp.Z1 > pp.Z0) {
 		return prismPayload{}, circleSeg{}, false
 	}
-	circle, ok := pp.profile.Outer.Segments[0].(circleSeg)
+	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
 	if !ok || !circle.CCW || circle.TStart != 0 || circle.TEnd != 1 ||
 		!proofbound.FiniteVec(r3.Vec{X: circle.Center.U, Y: circle.Center.V, Z: circle.Radius.Base()}) ||
 		!(circle.Radius.Base() > 0) {
@@ -56,21 +56,21 @@ func recognizeCrossCylinderBore(target, tool *Body) *crossCylinderBoreRecord {
 	// The canonical cardinal pose is intentionally narrow. It gives the
 	// source intersection two explicit positive/negative X branches.
 	tp, outer, ok := crossCylinderCircleSource(target, r3.Vec{X: 1}, r3.Vec{Y: 1})
-	if !ok || outer.Center != (Point2{}) || tp.z0 != 0 ||
-		proofbound.IsNonFinite(tp.z1) || tp.z1 <= 0 {
+	if !ok || outer.Center != (Point2{}) || tp.Z0 != 0 ||
+		proofbound.IsNonFinite(tp.Z1) || tp.Z1 <= 0 {
 		return nil
 	}
 	bp, inner, ok := crossCylinderCircleSource(tool, r3.Vec{Y: 1}, r3.Vec{Z: 1})
 	if !ok || inner.Center.U != 0 {
 		return nil
 	}
-	R, r, H, c := outer.Radius.Base(), inner.Radius.Base(), tp.z1, inner.Center.V
+	R, r, H, c := outer.Radius.Base(), inner.Radius.Base(), tp.Z1, inner.Center.V
 	if !proofbound.FiniteVec(r3.Vec{X: R, Y: r, Z: H}) ||
 		proofbound.IsNonFinite(c) ||
 		R < 2 || R > 20 || r < 0.25 || r > R/4 ||
 		H < 2 || H > 40 || c-r <= 0 || c+r >= H ||
-		bp.z0 >= -R-1 || bp.z1 <= R+1 ||
-		math.Abs(bp.z0) > 100 || math.Abs(bp.z1) > 100 {
+		bp.Z0 >= -R-1 || bp.Z1 <= R+1 ||
+		math.Abs(bp.Z0) > 100 || math.Abs(bp.Z1) > 100 {
 		return nil
 	}
 	targetBound, ok := crossCylinderCircleBound(target, R)

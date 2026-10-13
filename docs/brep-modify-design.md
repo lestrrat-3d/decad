@@ -174,7 +174,7 @@ route S, which refuses with SB10 where the record reads as no through-cut
 record.
 
 `matchCornerBudget` compares the selected edge's vertex positions with
-`pp.point(...)` within `1e-6`; the recognised prism lifts through `F` and
+`pp.Point(...)` within `1e-6`; the recognised prism lifts through `F` and
 `bp.xform`, the same placement the brep's vertices were lifted through, so the
 match holds.
 

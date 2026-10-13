@@ -22,7 +22,7 @@ import (
 func tryCrossingBlindCut(ctx context.Context, a, b *Body) (brepPayload, bool, error) {
 	target, targetOK := a.payload.(prismPayload)
 	tool, toolOK := b.payload.(prismPayload)
-	if !targetOK || !toolOK || len(target.profile.Holes) != 1 || len(tool.profile.Holes) != 0 {
+	if !targetOK || !toolOK || len(target.Profile.Holes) != 1 || len(tool.Profile.Holes) != 0 {
 		return brepPayload{}, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
@@ -30,9 +30,9 @@ func tryCrossingBlindCut(ctx context.Context, a, b *Body) (brepPayload, bool, er
 	if err != nil || !admitted {
 		return brepPayload{}, false, err
 	}
-	if pa.sectionDelta != 0 || pb.sectionDelta != 0 ||
-		pa.z0Delta != 0 || pa.z1Delta != 0 || pb.z0Delta != 0 || pb.z1Delta != 0 ||
-		!crossingBlindAxisLines(pa.profile) || !crossingBlindAxisLines(pb.profile) {
+	if pa.SectionDelta != 0 || pb.SectionDelta != 0 ||
+		pa.Z0Delta != 0 || pa.Z1Delta != 0 || pb.Z0Delta != 0 || pb.Z1Delta != 0 ||
+		!crossingBlindAxisLines(pa.Profile) || !crossingBlindAxisLines(pb.Profile) {
 		return brepPayload{}, false, nil
 	}
 	reexpress, err := prismcells.NewReexpression(prismPlacementOf(pa), prismPlacementOf(pb))
@@ -40,8 +40,8 @@ func tryCrossingBlindCut(ctx context.Context, a, b *Body) (brepPayload, bool, er
 		return brepPayload{}, false, err
 	}
 	z0, z1, ok := prismplacement.ShiftedInterval(prismPlacementOf(pa), prismPlacementOf(pb))
-	if !ok || z0.Cmp(proofarith.FloatRat(pa.z0)) <= 0 ||
-		z0.Cmp(proofarith.FloatRat(pa.z1)) >= 0 || z1.Cmp(proofarith.FloatRat(pa.z1)) != 0 {
+	if !ok || z0.Cmp(proofarith.FloatRat(pa.Z0)) <= 0 ||
+		z0.Cmp(proofarith.FloatRat(pa.Z1)) >= 0 || z1.Cmp(proofarith.FloatRat(pa.Z1)) != 0 {
 		return brepPayload{}, false, nil
 	}
 	va, _ := stackedUnionOperandOf(a)

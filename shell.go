@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -212,10 +213,10 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		}
 		// Reach BX5: a hole-free straight prism keeps both caps and lines
 		// them with a wall, closing a cavity.
-		if pp, ok := b.payload.(prismPayload); ok && len(pp.profile.Holes) == 0 {
+		if pp, ok := b.payload.(prismPayload); ok && len(pp.Profile.Holes) == 0 {
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
-		if pp, ok := straightSweepPrismReduction(b.payload); ok && len(pp.profile.Holes) == 0 {
+		if pp, ok := straightSweepPrismReduction(b.payload); ok && len(pp.Profile.Holes) == 0 {
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
 		if sp, ok := b.payload.(stackedPrismPayload); ok && sense == Inward {
@@ -329,8 +330,8 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	}
 	bothCaps := removedStart && removedEnd
 
-	holed := len(pp.profile.Holes) > 0
-	h := pp.z1 - pp.z0
+	holed := len(pp.Profile.Holes) > 0
+	h := pp.Z1 - pp.Z0
 	offsetBudget := proofbound.NewWorkBudget(ctx)
 	if err := offsetBudget.Err(); err != nil {
 		return nil, err
@@ -343,7 +344,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		// The section limit: P ⊖ t is non-empty exactly when t is strictly less
 		// than the section's inradius. A contained disk can certify success;
 		// otherwise internal/survey2d/wall_kernel.go computes the same reading Wall.Minimum answers.
-		inradius, enough, err := shellsurvey.SectionInradius(offsetBudget, boundarywalk.Profile(pp.profile), tmm, tDelta, shellTol)
+		inradius, enough, err := shellsurvey.SectionInradius(offsetBudget, boundarywalk.Profile(pp.Profile), tmm, tDelta, shellTol)
 		if err != nil {
 			return nil, err
 		}
@@ -373,7 +374,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	// The exact per-feature offset (§7). A dropped feature or a miter that does
 	// not close is caught here — antecedent to the audit (S11a / S11) — before
 	// there is any constructed section to audit.
-	offset, err := offsetProfile(offsetBudget, pp.profile, s, tmm)
+	offset, err := offsetProfile(offsetBudget, pp.Profile, s, tmm)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +383,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 	// the crossing test (a crossing or boundary contact of offset loops is S11b,
 	// §8), then S9 (nesting). The shared §5 audit, run on decad's own synthesized
 	// geometry. A shell mints no cutback, so S6 cannot fire.
-	if err := auditOffsetSectionBudget(offsetBudget, pp.profile, offset); err != nil {
+	if err := auditOffsetSectionBudget(offsetBudget, pp.Profile, offset); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, context.Canceled
 		}
@@ -402,7 +403,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		// B4 / reach BX8: the wall is one band around the outer loop plus one
 		// band lining each hole — 1 + k disjoint lumps, one stacked slab with
 		// one region per band.
-		offsetDelta, derr := offsetSectionDelta(offsetBudget, pp.profile, s, tmm, tDelta)
+		offsetDelta, derr := offsetSectionDelta(offsetBudget, pp.Profile, s, tmm, tDelta)
 		if derr != nil {
 			return nil, shellCancelCause(derr)
 		}
@@ -414,7 +415,7 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		// floor slab (one lump).
 		// The offset section is a float evaluation of P ⊖ t*; the cup records
 		// how far it may sit from that denoted offset beside it (§9).
-		offsetDelta, derr := offsetSectionDelta(offsetBudget, pp.profile, s, tmm, tDelta)
+		offsetDelta, derr := offsetSectionDelta(offsetBudget, pp.Profile, s, tmm, tDelta)
 		if derr != nil {
 			return nil, shellCancelCause(derr)
 		}
@@ -459,17 +460,17 @@ func shellCancelCause(err error) error {
 // offset loops sit within offsetDelta of the offset the thickness denotes, so
 // the payload carries it as its section displacement.
 func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, offset profileRecord, s, offsetDelta float64) (*Body, error) {
-	outer, cavity := pp.profile, offset
+	outer, cavity := pp.Profile, offset
 	if s < 0 {
-		outer, cavity = offset, pp.profile
+		outer, cavity = offset, pp.Profile
 	}
 	bands, err := prismshell.ShellWallBands(ctx, outer, cavity)
 	if err != nil {
 		return nil, err
 	}
 	return evalStackedContext(ctx, d, ref, stackedPrismPayload{
-		slabs: []stackedrecord.Slab{{Regions: bands, Z0: pp.z0, Z1: pp.z1, Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta}},
-		frame: pp.frame, xform: pp.xform, sectionDelta: offsetDelta,
+		slabs: []stackedrecord.Slab{{Regions: bands, Z0: pp.Z0, Z1: pp.Z1, Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta}},
+		frame: pp.Frame, xform: pp.Xform, sectionDelta: offsetDelta,
 	})
 }
 
@@ -529,7 +530,7 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 		return nil, err
 	}
 	if s > 0 {
-		inradius, enough, err := shellsurvey.SectionInradius(budget, boundarywalk.Profile(pp.profile), tmm, tDelta, shellTol)
+		inradius, enough, err := shellsurvey.SectionInradius(budget, boundarywalk.Profile(pp.Profile), tmm, tDelta, shellTol)
 		if err != nil {
 			return nil, err
 		}
@@ -539,26 +540,26 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 		// SX11: the two kept caps each eat t of the sweep, so the cavity's
 		// axial height h − 2t is positive exactly when t < h/2, read with the
 		// section limit's scale-relative rounding tolerance.
-		h := pp.z1 - pp.z0
+		h := pp.Z1 - pp.Z0
 		if maxT := h/2 - shellTol*math.Max(1, h); tmm >= maxT {
 			return nil, fmt.Errorf(`%w: the shell thickness %s leaves no cavity between the two kept caps of a %s sweep (the accepted maximum is %s, half the sweep less the evaluator's rounding tolerance; modify-reach SX11)`,
 				ErrDegenerate, t, units.Millimeters(h), units.Millimeters(math.Max(maxT, 0)))
 		}
 	}
-	offset, err := offsetProfile(budget, pp.profile, s, tmm)
+	offset, err := offsetProfile(budget, pp.Profile, s, tmm)
 	if err != nil {
 		return nil, err
 	}
-	if err := auditOffsetSectionBudget(budget, pp.profile, offset); err != nil {
+	if err := auditOffsetSectionBudget(budget, pp.Profile, offset); err != nil {
 		return nil, shellCancelCause(err)
 	}
-	offsetDelta, err := offsetSectionDelta(budget, pp.profile, s, tmm, tDelta)
+	offsetDelta, err := offsetSectionDelta(budget, pp.Profile, s, tmm, tDelta)
 	if err != nil {
 		return nil, shellCancelCause(err)
 	}
-	outer, cavity := pp.profile, offset
+	outer, cavity := pp.Profile, offset
 	if s < 0 {
-		outer, cavity = offset, pp.profile
+		outer, cavity = offset, pp.Profile
 	}
 	bands, err := prismshell.ShellWallBands(ctx, outer, cavity)
 	if err != nil {
@@ -570,26 +571,26 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 		to := from + by
 		return to, proofbound.AbsSumUpper(delta, tDelta, proofarith.AddRoundError(from, by, to))
 	}
-	lo, loDelta := step(pp.z0, pp.z0Delta, s*tmm)
-	hi, hiDelta := step(pp.z1, pp.z1Delta, -s*tmm)
+	lo, loDelta := step(pp.Z0, pp.Z0Delta, s*tmm)
+	hi, hiDelta := step(pp.Z1, pp.Z1Delta, -s*tmm)
 	caps := stackedrecord.Slab{Regions: []profileRecord{outer}}
 	first, middle, last := caps, stackedrecord.Slab{Regions: bands}, caps
 	if s > 0 {
-		first.Z0, first.Z0Delta, first.Z1, first.Z1Delta = pp.z0, pp.z0Delta, lo, loDelta
+		first.Z0, first.Z0Delta, first.Z1, first.Z1Delta = pp.Z0, pp.Z0Delta, lo, loDelta
 		middle.Z0, middle.Z0Delta, middle.Z1, middle.Z1Delta = lo, loDelta, hi, hiDelta
-		last.Z0, last.Z0Delta, last.Z1, last.Z1Delta = hi, hiDelta, pp.z1, pp.z1Delta
+		last.Z0, last.Z0Delta, last.Z1, last.Z1Delta = hi, hiDelta, pp.Z1, pp.Z1Delta
 	} else {
-		first.Z0, first.Z0Delta, first.Z1, first.Z1Delta = lo, loDelta, pp.z0, pp.z0Delta
-		middle.Z0, middle.Z0Delta, middle.Z1, middle.Z1Delta = pp.z0, pp.z0Delta, pp.z1, pp.z1Delta
-		last.Z0, last.Z0Delta, last.Z1, last.Z1Delta = pp.z1, pp.z1Delta, hi, hiDelta
+		first.Z0, first.Z0Delta, first.Z1, first.Z1Delta = lo, loDelta, pp.Z0, pp.Z0Delta
+		middle.Z0, middle.Z0Delta, middle.Z1, middle.Z1Delta = pp.Z0, pp.Z0Delta, pp.Z1, pp.Z1Delta
+		last.Z0, last.Z0Delta, last.Z1, last.Z1Delta = pp.Z1, pp.Z1Delta, hi, hiDelta
 	}
 	exposed := []profileRecord{cavity}
 	ref := d.nextProducerID()
 	body, err := evalStackedContext(ctx, d, ref, stackedPrismPayload{
 		slabs:        []stackedrecord.Slab{first, middle, last},
 		interfaces:   []stackedrecord.Interface{{LowerExposed: exposed}, {UpperExposed: exposed}},
-		frame:        pp.frame,
-		xform:        pp.xform,
+		frame:        pp.Frame,
+		xform:        pp.Xform,
 		sectionDelta: offsetDelta,
 	})
 	if err != nil {
@@ -644,11 +645,11 @@ func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismP
 	}
 	var outer, inner loopRecord
 	if s > 0 { // inward: P is the outside, Q the cavity
-		outer = pp.profile.Outer
+		outer = pp.Profile.Outer
 		inner = offset.Outer
 	} else { // outward: Q is the outside, P the cavity
 		outer = offset.Outer
-		inner = pp.profile.Outer
+		inner = pp.Profile.Outer
 	}
 	holeLoop, err := offset2d.ReverseLoopRecordContext(ctx, inner)
 	if err != nil {
@@ -659,13 +660,13 @@ func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismP
 	// opens its one counter here (docs/spline-design.md §5.2).
 	// A tube keeps the receiver's sweep, so each end keeps its own axial
 	// displacement too.
-	return evalPrismContext(ctx, d, ref, prismPayload{
-		profile: section,
-		frame:   pp.frame,
-		z0:      pp.z0,
-		z1:      pp.z1,
-		z0Delta: pp.z0Delta,
-		z1Delta: pp.z1Delta,
-		xform:   pp.xform,
-	}, freeform.NewFreeformWork())
+	return evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+		Profile: section,
+		Frame:   pp.Frame,
+		Z0:      pp.Z0,
+		Z1:      pp.Z1,
+		Z0Delta: pp.Z0Delta,
+		Z1Delta: pp.Z1Delta,
+		Xform:   pp.Xform,
+	}}, freeform.NewFreeformWork())
 }

@@ -104,7 +104,7 @@ func loftCapBandFiniteMotion(outer capBlendLoopMesh, vertices []r3.Vec, motion [
 // axial error and the mesh's full displacement, so the slab includes all
 // floating-point level motion as well as every reflex apex fan.
 func loftCapBandSlabVolume(ctx context.Context, body *Body, mesh *Mesh, cbp capBlendPayload) (float64, error) {
-	center := cbp.prismLike(0, 0).point(0, 0, cbp.z0)
+	center := cbp.prismLike(0, 0).Point(0, 0, cbp.z0)
 	boxError := body.bounds.Bound.Base()
 	axisMax := 0.0
 	include := func(p [3]float64, errorBound float64) {

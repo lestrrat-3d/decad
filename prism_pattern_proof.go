@@ -86,7 +86,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		proofbound.RatFloatUp(proofbound.PiUpper),
 		proofbound.ProductUpper(proofbound.ProductUpper(4, radius), seamBand))
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(
-		proofarith.FloatRat(source.blank.z1), proofarith.FloatRat(source.blank.z0)))
+		proofarith.FloatRat(source.blank.Z1), proofarith.FloatRat(source.blank.Z0)))
 	volumeGap := proofbound.AbsSumUpper(toothVolume, proofbound.ProductUpper(annulusArea, height))
 	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, bound)
 	if err != nil {
@@ -117,7 +117,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		return nil, fmt.Errorf("%w: copied-prism join has no finite diameter proof", ErrUnsupported)
 	}
 	if err := loftCylinderTagCaps(&fp, blank, [2]int{groups[1], groups[2]},
-		[2]float64{source.blank.z0, source.blank.z1}, ref); err != nil {
+		[2]float64{source.blank.Z0, source.blank.Z1}, ref); err != nil {
 		return nil, err
 	}
 	return buildFacetedBody(ctx, d, ref, fp)
@@ -128,11 +128,11 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 // radius bounds its unique crossing parameter by (R²-r0²)/(2 near·step).
 func prismPatternConnectorReach(p prismPayload, root arcSeg, radius float64,
 	rootIndex int) (float64, error) {
-	segments := p.profile.Outer.Segments
+	segments := p.Profile.Outer.Segments
 	if rootIndex != len(segments)-1 || rootIndex < 2 {
 		return 0, fmt.Errorf("%w: copied-prism connectors have no trailing root arc", ErrUnsupported)
 	}
-	scale2 := prismpattern.Scale2(p.xform)
+	scale2 := prismpattern.Scale2(p.Xform)
 	radiusSq := prismpattern.RadiusSq(radius)
 	reach := 0.0
 	for _, index := range []int{0, rootIndex - 1} {

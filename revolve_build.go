@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
@@ -147,7 +148,7 @@ func requireExactRevolveSection(rp revolvePayload, what string) error {
 // angular interval is S6's business, never the private 2D scene's, and the
 // levels a prismPayload would carry have no meaning for a meridian.
 func (rp revolvePayload) meridian() prismPayload {
-	return prismPayload{profile: rp.profile, frame: rp.frame, xform: rp.xform}
+	return prismPayload{Payload: prismrecord.Payload{Profile: rp.profile, Frame: rp.frame, Xform: rp.xform}}
 }
 
 // transform is the accumulated rigid placement.

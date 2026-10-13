@@ -80,20 +80,20 @@ func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecor
 		proofbound.ProductUpper(2, radius))
 	minScale2 := big.NewRat(1, 1)
 	for _, part := range rec.parts {
-		scale2 := prismpattern.Scale2(part.prism.xform)
+		scale2 := prismpattern.Scale2(part.prism.Xform)
 		if scale2.Cmp(minScale2) < 0 {
 			minScale2 = scale2
 		}
 	}
 	reachSq := new(big.Rat).Quo(prismpattern.RadiusSq(reach), minScale2)
-	if err := prismpattern.OutsideRoot(ctx, rec.source.section.profile.Outer.Segments,
+	if err := prismpattern.OutsideRoot(ctx, rec.source.section.Profile.Outer.Segments,
 		rec.source.rootIndex, rec.source.rootArc, reachSq); err != nil {
 		return fmt.Errorf("%w: joined-prism fillet radial envelope reaches another source wall: %w",
 			ErrUnsupported, err)
 	}
 	for _, part := range rec.parts {
-		scale2 := prismpattern.Scale2(part.prism.xform)
-		for i, segment := range part.prism.profile.Outer.Segments {
+		scale2 := prismpattern.Scale2(part.prism.Xform)
+		for i, segment := range part.prism.Profile.Outer.Segments {
 			arc, ok := segment.(arcSeg)
 			if !ok || i == rec.source.rootIndex {
 				continue
@@ -147,7 +147,7 @@ func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecor
 				if contact.part == j && station == connector.station {
 					continue
 				}
-				line, ok := other.prism.profile.Outer.Segments[connector.index].(lineSeg)
+				line, ok := other.prism.Profile.Outer.Segments[connector.index].(lineSeg)
 				if !ok {
 					return fmt.Errorf("%w: joined-prism fillet lost a source connector", ErrUnsupported)
 				}

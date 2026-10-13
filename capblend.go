@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismextent"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -210,11 +211,11 @@ func (cbp capBlendPayload) placed(ctx context.Context, d *Document, ref producer
 // placement over [z0, z1], so the point/dir machinery already built for
 // prisms serves the cap-blend build too.
 func (cbp capBlendPayload) prismLike(z0, z1 float64) prismPayload {
-	return prismPayload{
-		frame: cbp.frame, z0: z0, z1: z1,
-		z0Delta: cbp.z0Delta, z1Delta: cbp.z1Delta,
-		xform: cbp.xform,
-	}
+	return prismPayload{Payload: prismrecord.Payload{
+		Frame: cbp.frame, Z0: z0, Z1: z1,
+		Z0Delta: cbp.z0Delta, Z1Delta: cbp.z1Delta,
+		Xform: cbp.xform,
+	}}
 }
 
 // capBandLevel preserves the selected end's axial displacement while a
@@ -302,9 +303,9 @@ func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, float64, err
 func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, float64, error) {
 	pl := cbp.prismLike(0, 0)
 	base := cbp.xform.Apply(cbp.frame.Origin()).Dot(g)
-	gu := pl.dir(1, 0, 0).Dot(g)
-	gv := pl.dir(0, 1, 0).Dot(g)
-	gz := pl.dir(0, 0, 1).Dot(g)
+	gu := pl.Dir(1, 0, 0).Dot(g)
+	gv := pl.Dir(0, 1, 0).Dot(g)
+	gz := pl.Dir(0, 0, 1).Dot(g)
 	inPlane := proofbound.UpRound(math.Hypot(gu, gv))
 	axial := math.Abs(gz)
 	lo, hi := math.Inf(1), math.Inf(-1)
@@ -556,16 +557,16 @@ func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismP
 
 func buildCapBlendWithLoftSource(ctx context.Context, doc *Document, ref producerID, pp prismPayload,
 	start, end capSetback, startLoops, endLoops map[int]bool, source *loftCapBandSource) (*Body, error) {
-	height := pp.z1 - pp.z0
-	loops := append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...)
+	height := pp.Z1 - pp.Z0
+	loops := append([]loopRecord{pp.Profile.Outer}, pp.Profile.Holes...)
 	cbp := capBlendPayload{
-		profile:    pp.profile,
-		frame:      pp.frame,
-		z0:         pp.z0,
-		z1:         pp.z1,
-		z0Delta:    pp.z0Delta,
-		z1Delta:    pp.z1Delta,
-		xform:      pp.xform,
+		profile:    pp.Profile,
+		frame:      pp.Frame,
+		z0:         pp.Z0,
+		z1:         pp.Z1,
+		z0Delta:    pp.Z0Delta,
+		z1Delta:    pp.Z1Delta,
+		xform:      pp.Xform,
 		start:      start,
 		end:        end,
 		startLoops: startLoops,
@@ -624,10 +625,10 @@ func buildCapBlendWithLoftSource(ctx context.Context, doc *Document, ref produce
 		}
 	}
 
-	if err := auditOffsetSectionBudget(budget, pp.profile, mixed); err != nil {
+	if err := auditOffsetSectionBudget(budget, pp.Profile, mixed); err != nil {
 		return nil, capband.ChamferAuditError(err)
 	}
-	if err := auditCapBlendSetbackSpan(budget, pp.profile, cbp); err != nil {
+	if err := auditCapBlendSetbackSpan(budget, pp.Profile, cbp); err != nil {
 		return nil, err
 	}
 	if err := requireCapBlendLevelsSeparate(cbp); err != nil {
@@ -816,7 +817,7 @@ func anyLoopSelected(loops map[int]bool) bool {
 // loop unchanged. It reuses offset2d.BuildLoop's per-feature offset unmodified.
 func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (profileRecord, error) {
 	profile := cbp.profile
-	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
+	loops, err := prismCornerLoopsBudget(budget, prismPayload{Payload: prismrecord.Payload{Profile: profile}})
 	if err != nil {
 		return profileRecord{}, err
 	}

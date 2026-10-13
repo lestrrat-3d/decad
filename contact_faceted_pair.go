@@ -294,10 +294,10 @@ func prismFaceIndex(b *Body) map[string]int {
 func planarPrismSolid(ctx context.Context, budget *proofbound.WorkBudget,
 	pp prismPayload, faceIndex map[string]int) (planar.PlanarSolid, bool, error) {
 	return planarsnapshot.PrismSolid(ctx, budget, planarsnapshot.PrismInput{
-		Outer: pp.profile.Outer, Holes: pp.profile.Holes,
-		Frame: pp.frame, Transform: pp.xform, Z0: pp.z0, Z1: pp.z1,
-		SectionDelta: pp.sectionDelta, Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
-		SurfaceResult: pp.surfaceResult, CapStartRole: roleCapStart, CapEndRole: roleCapEnd,
+		Outer: pp.Profile.Outer, Holes: pp.Profile.Holes,
+		Frame: pp.Frame, Transform: pp.Xform, Z0: pp.Z0, Z1: pp.Z1,
+		SectionDelta: pp.SectionDelta, Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta,
+		SurfaceResult: pp.SurfaceResult, CapStartRole: roleCapStart, CapEndRole: roleCapEnd,
 	}, faceIndex, triangulation.Triangulate)
 }
 

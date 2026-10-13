@@ -431,7 +431,7 @@ func freeformWallChordDeviation(t *testing.T, body *Body, mesh *Mesh) float64 {
 	require.True(t, ok)
 
 	var spans []freeform.BezierSpan
-	for _, seg := range pp.profile.Outer.Segments {
+	for _, seg := range pp.Profile.Outer.Segments {
 		if _, isFree := seg.(fitSplineSeg); !isFree {
 			continue
 		}

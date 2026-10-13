@@ -52,15 +52,15 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 	}
 	blank, ok := record.blank.payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(blank) ||
-		lower.loftCylinderJoin.z0 != blank.z0 ||
-		!loftMirrorCylinderLevels(blank.z0, lower.loftCylinderJoin.z1, blank.z1) {
+		lower.loftCylinderJoin.z0 != blank.Z0 ||
+		!loftMirrorCylinderLevels(blank.Z0, lower.loftCylinderJoin.z1, blank.Z1) {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its exact axial levels", ErrUnsupported)
 	}
 	source := &joinedMesh{verts: joined.verts, tris: joined.tris, src: joined.src}
 	for cap, group := range record.capGroups {
-		level := blank.z0
+		level := blank.Z0
 		if cap == 1 {
-			level = blank.z1
+			level = blank.Z1
 		}
 		if group < 0 || group >= len(joined.groups) ||
 			!loftCylinderAuditCap(ctx, source, record.capOutlines[cap], group, level, cap == 0) {
@@ -75,8 +75,8 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 	if !ok {
 		return nil, true, fmt.Errorf("%w: mirrored circular bore lost its cutter source", ErrUnsupported)
 	}
-	toolEnd := new(big.Rat).Add(proofarith.FloatRat(prism.frame.Origin().Z), proofarith.FloatRat(prism.z1))
-	if toolEnd.Cmp(proofarith.FloatRat(blank.z1)) <= 0 {
+	toolEnd := new(big.Rat).Add(proofarith.FloatRat(prism.Frame.Origin().Z), proofarith.FloatRat(prism.Z1))
+	if toolEnd.Cmp(proofarith.FloatRat(blank.Z1)) <= 0 {
 		return nil, true, fmt.Errorf("%w: mirrored circular bore tool ends inside the upper half", ErrUnsupported)
 	}
 	body, err := buildLoftMirrorCylinderBore(ctx, d, ref, record, lowerBore)
@@ -238,9 +238,9 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 	}
 	mesh := &joinedMesh{verts: verts, tris: tris, src: src}
 	for cap, group := range capGroups {
-		z := fullBlank.z0
+		z := fullBlank.Z0
 		if cap == 1 {
-			z = fullBlank.z1
+			z = fullBlank.Z1
 		}
 		if !loftCylinderAuditAnnulus(ctx, mesh, outer[cap], inner[cap], group, z, cap == 0) {
 			return nil, fmt.Errorf("%w: reflected circular bore cap does not tile its annulus", ErrUnsupported)
@@ -257,7 +257,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		return nil, err
 	}
 	if err := loftCylinderTagCaps(&fp, record.blank, capGroups,
-		[2]float64{fullBlank.z0, fullBlank.z1}, ref); err != nil {
+		[2]float64{fullBlank.Z0, fullBlank.Z1}, ref); err != nil {
 		return nil, err
 	}
 	loftCylinderTagBridgedTop(&fp, capGroups[1], []float64{record.bridgeBound})

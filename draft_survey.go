@@ -31,7 +31,7 @@ func draftUndercuts(b *Body, dp draftPayload, pull r3.Vec) undercutOutcome {
 		return undercutOutcome{}
 	}
 	pl := dp.band().prismLike(0, 0)
-	m, okM := survey2d.NewPlacedFrameMap(pl.frame, pl.xform)
+	m, okM := survey2d.NewPlacedFrameMap(pl.Frame, pl.Xform)
 	if !okM {
 		return undercutOutcome{}
 	}
