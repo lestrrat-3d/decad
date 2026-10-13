@@ -1937,3 +1937,7 @@
 10	0.00	TestStraightSweepChamferRefusesOtherEdges
 10	0.00	TestStraightSweepChamferRefusesAsymmetricReference
 10	0.00	TestStraightSweepChamferRefusesOtherSweeps
+10	0.00	TestLoftSectionsFiveIndependentRectanglesKeepVolumeAndMeshProof
+10	0.00	TestLoftSectionsSixIndependentRectanglesHoldEverySection
+10	0.00	TestLoftSectionsManyRectanglesRefuseUnprovedInputs
+10	0.00	TestLoftSectionsManyRectanglesRefuseExcessSections

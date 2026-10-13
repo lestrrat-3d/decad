@@ -1,7 +1,7 @@
 # Smooth Section Loft Design
 
-`Document.LoftSections` builds one smooth solid through three or four recorded
-Sketch profiles. `docs/loft-design.md` continues to own the two-profile ruled
+`Document.LoftSections` builds one smooth solid through three to thirty-two
+recorded Sketch profiles. `docs/loft-design.md` continues to own the two-profile ruled
 `Document.Loft`. This document owns the separate smooth constructions, their
 admission gates, and the proofs attached to their held meshes.
 
@@ -16,9 +16,9 @@ type LoftSection struct {
 func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*Body, error)
 ```
 
-The call requires three or four sections. Each passes the ordinary profile
-seam and area falsifier in argument order. The three-section quadratic-scale route admits
-one outer loop with the same number and order of whole `LineSeg` records on
+The call requires at least three sections. Each passes the ordinary profile
+seam and area falsifier in argument order. The three-section quadratic-scale
+route admits one outer loop with the same number and order of whole `LineSeg` records on
 all three profiles. Every line may walk forward or backward according to its
 recorded full-domain range; the walked vertices must meet exactly. Holes,
 trimmed lines, curved segments, and differing segment counts return
@@ -26,12 +26,13 @@ trimmed lines, curved segments, and differing segment counts return
 route for exactly matching curved records. Section 7 admits linearly varying
 four-arc circles. Section 8 admits varying fitted flanks with fixed arcs.
 Section 9 admits four non-affine rounded-rectangle sections.
-Sections 10 and 11 admit three or four axis-aligned rectangular sections
-whose half-width and half-height vary independently.
+Sections 10–12 admit three to thirty-two axis-aligned rectangular sections
+whose half-width and half-height vary independently. Five or more sections
+must be rectangles and stop at thirty-two sections.
 
-All three planes have world-XY `U` and `V` axes, the same XY origin, and
-strictly increasing Z origins with the middle Z exactly halfway between the
-ends. A different pose or spacing returns `ErrUnsupported`. The returned body
+For the three-section homothetic route, all three planes have world-XY `U` and
+`V` axes, the same XY origin, and strictly increasing Z origins with the middle
+Z exactly halfway between the ends. A different pose or spacing returns `ErrUnsupported`. The returned body
 is a solid; this increment has no surface-result or alignment option.
 
 Let `P_j` be walked vertex `j` of the first section. Every corresponding
@@ -148,11 +149,12 @@ wall remains `ErrUnsupported`, as for every `NURBSSurface`.
 
 The admitted classes are increments, not a claim that general multi-section
 interpolation is determined by profile boundaries. Nonhomothetic profiles
-outside §§10–11,
+outside §§10–12,
 varying curved profiles outside §§7–9, arbitrary planes, guides, centerlines,
-and hole loops remain `ErrUnsupported`. Nil context or document, or a section count
-other than three or four, returns `ErrDegenerate`. A seam failure returns its own
-sentinel and leaves the document unchanged.
+and hole loops remain `ErrUnsupported`. Nil context or document, or fewer than
+three sections, returns `ErrDegenerate`; more than thirty-two sections returns
+`ErrUnsupported`. A seam failure returns its own sentinel and leaves the
+document unchanged.
 
 ## 6. Exact constant curved sections
 
@@ -575,3 +577,41 @@ The diameter bound is `2(W+K)+H`. Placement, `Tessellate(VerifyAll)`,
 booleans, and export consume that payload. A failed positive-control gate,
 plane/spacing gate, exact-station gate, or 128-band bound returns
 `ErrUnsupported` without committing a body.
+
+## 12. Five to thirty-two independently varying rectangular sections
+
+Five to thirty-two authenticated, hole-free profiles use §10's exact centered
+four-line rectangle record gate. Their world-XY planes have one XY origin and
+ascending, equally spaced Z levels. A different first corner in each recorded
+walk does not change its rectangle. A non-rectangle, unequal spacing, or a
+thirty-third section returns `ErrUnsupported` before body commit.
+
+Let `x_i` be the exact recorded half-widths or half-heights. For each
+dimension, set `m_0=x_1-x_0`, `m_(n-1)=x_(n-1)-x_(n-2)`, and
+`m_i=(x_(i+1)-x_(i-1))/2` at interior sections. Span `i`, parameterized by
+`u∈[0,1]`, has cubic Bernstein controls
+
+```text
+[x_i, x_i + m_i/3, x_(i+1) - m_(i+1)/3, x_(i+1)].
+```
+
+The same tangent at a shared section makes adjacent cubics C1 in height.
+Require positive endpoint controls and nonnegative interior controls on
+every span for both dimensions. Their Bernstein hulls then prove strictly
+positive width and height throughout every span. Strictly ascending Z levels
+and positive dimensions make distinct sections disjoint.
+
+For each span, use §11's exact maximum second derivative `M_x`, Bernstein
+maximum `X`, and derivative maximum `P_x`. Choose that span's first
+`N_i=16,32,64,128` with `(M_w+M_h)/(8N_i²) <= 0.05 mm`. Reject if no
+count qualifies or any ring coordinate cannot be held exactly by finite
+float64. One ring at each shared section is used by both neighboring spans.
+Each wall quad is planar and split into two triangles. The first and last
+rings form planar caps; the closed faceted shell audit precedes body commit.
+
+The source-to-held displacement bound is the maximum span bound. For each
+span of height `H_i`, use §11's non-cancelling occupied-volume and area
+allowances with that span's own `W_i,K_i,P_w,i,P_h,i,M_w,i,M_h,i,N_i`.
+Sum those allowances across spans before upward rounding. The global
+diameter bound is `2(max_i W_i + max_i K_i) + Σ_i H_i`. The resulting
+faceted payload supplies `Volume`, `Area`, and `Tessellate(VerifyAll)`.
