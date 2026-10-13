@@ -80,8 +80,8 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 		require.NoError(t, stationErr)
 		part, buildErr := evalLoft(t.Context(), doc, body.origin.producer, loftPayload{
 			profile0: source.profile, profile1: source.profile,
-			plane0: candidateStations[0].plane, plane1: candidateStations[1].plane,
-			frame0: candidateStations[0].frame, frame1: candidateStations[1].frame,
+			plane0: candidateStations[0].Plane, plane1: candidateStations[1].Plane,
+			frame0: candidateStations[0].Frame, frame1: candidateStations[1].Frame,
 			xform: source.xform, recordArea: [2]float64{source.recordArea, source.recordArea},
 			retainTwistAreaCells: true,
 		}, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -110,13 +110,13 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	vLo, vHi := held.verts[j], held.verts[(j+1)%n]
 	wLo, wHi := held.verts[n+j], held.verts[n+(j+1)%n]
 	e := proofbound.AbsSumUpper(held.delta,
-		math.Max(stations[0].pointError, stations[1].pointError))
-	bound := twistWallCellAreaL1(vLo, vHi, wLo, wHi, claim, e,
+		math.Max(stations[0].PointError, stations[1].PointError))
+	bound := twistsweep.TwistWallCellAreaL1(vLo, vHi, wLo, wHi, claim, e,
 		poly.MaxRadiusL1, proofbound.DivUpper(proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), float64(cells)),
 		proofbound.DivUpper(source.path.End().Z, float64(cells)))
 	require.True(t, !proofbound.IsNonFinite(bound))
 	t.Logf("cells=%d source_segment=%d cell=%d bound=%g arc=%g energy=%g matched=%g endpoint=%g",
-		cells, held.segment[0][j], j, bound, claim.arcLength, claim.energy, claim.matched, e)
+		cells, held.segment[0][j], j, bound, claim.ArcLength, claim.Energy, claim.Matched, e)
 	require.Less(t, bound, 2.0)
 	// Independently integrate the area-density difference on this actual
 	// quarter-circle cell. Midpoint sampling is a regression witness, not the
@@ -165,8 +165,8 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	for i := 1; i < cells; i++ {
 		part, err := evalLoft(t.Context(), doc, body.origin.producer, loftPayload{
 			profile0: source.profile, profile1: source.profile,
-			plane0: stations[i].plane, plane1: stations[i+1].plane,
-			frame0: stations[i].frame, frame1: stations[i+1].frame,
+			plane0: stations[i].Plane, plane1: stations[i+1].Plane,
+			frame0: stations[i].Frame, frame1: stations[i+1].Frame,
 			xform: source.xform, recordArea: [2]float64{source.recordArea, source.recordArea},
 			retainTwistAreaCells: true,
 		}, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -226,10 +226,10 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End().Z)
 	require.ErrorIs(t, err, ErrUnsupported)
 	corrupt[0] = heldCells[0]
-	corrupt[0].twistAreaCells = [][]twistAreaCellClaims{
-		append([]twistAreaCellClaims(nil), heldCells[0].twistAreaCells[0]...),
+	corrupt[0].twistAreaCells = [][]twistsweep.TwistAreaCellClaims{
+		append([]twistsweep.TwistAreaCellClaims(nil), heldCells[0].twistAreaCells[0]...),
 	}
-	corrupt[0].twistAreaCells[0][j].matched = -1
+	corrupt[0].twistAreaCells[0][j].Matched = -1
 	_, err = twistMixedWallAreaL1(corrupt, stations, poly,
 		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End().Z)
 	require.ErrorIs(t, err, ErrUnsupported)

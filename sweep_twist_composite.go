@@ -17,8 +17,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-const twistArcCells = 8
-
 type compositeTwistedSweepPayload struct {
 	profile    profileRecord
 	plane      planeRecord
@@ -37,18 +35,16 @@ func (p compositeTwistedSweepPayload) placed(ctx context.Context, d *Document,
 	return evalCompositeTwistedSweep(ctx, d, ref, p.profile, p.plane, p.path, p.angle, p.recordArea, xform)
 }
 
-type twistCardinalPath struct{ height, radius float64 }
-
-func twistCardinalPathOf(path *Path, plane planeRecord, poly twistsweep.TwistPolygon) (twistCardinalPath, error) {
+func twistCardinalPathOf(path *Path, plane planeRecord, poly twistsweep.TwistPolygon) (twistsweep.TwistCardinalPath, error) {
 	if path == nil || len(path.records) != 2 ||
 		plane.Origin != (r3.Vec{}) || plane.U != r3.NewVec(1, 0, 0) ||
 		plane.V != r3.NewVec(0, 1, 0) || path.Start() != (r3.Vec{}) {
-		return twistCardinalPath{}, fmt.Errorf(`%w: composite twist needs an origin XY sketch and two path spans`, ErrUnsupported)
+		return twistsweep.TwistCardinalPath{}, fmt.Errorf(`%w: composite twist needs an origin XY sketch and two path spans`, ErrUnsupported)
 	}
 	line, arc := path.records[0], path.records[1]
 	if line.Arc != nil || arc.Arc == nil || line.End.X != 0 || line.End.Y != 0 || line.End.Z <= 0 ||
 		arc.Start != line.End {
-		return twistCardinalPath{}, fmt.Errorf(`%w: composite twist needs a positive Z line followed by an arc`, ErrUnsupported)
+		return twistsweep.TwistCardinalPath{}, fmt.Errorf(`%w: composite twist needs a positive Z line followed by an arc`, ErrUnsupported)
 	}
 	r := arc.End.X
 	h := line.End.Z
@@ -62,42 +58,15 @@ func twistCardinalPathOf(path *Path, plane planeRecord, poly twistsweep.TwistPol
 		carrier.RadiusEnd[2].Cmp(twistsweep.TwistRat(r)) != 0 ||
 		carrier.Axis[0].Sign() != 0 || carrier.Axis[1].Sign() <= 0 || carrier.Axis[2].Sign() != 0 ||
 		arc.ArcAngle.Turn == nil || arc.ArcAngle.Turn.Cmp(big.NewRat(1, 4)) != 0 {
-		return twistCardinalPath{}, fmt.Errorf(`%w: composite twist needs a positive cardinal quarter arc in XZ`, ErrUnsupported)
+		return twistsweep.TwistCardinalPath{}, fmt.Errorf(`%w: composite twist needs a positive cardinal quarter arc in XZ`, ErrUnsupported)
 	}
 	// The profile stays on the inside of the arc's polar radius. This also
 	// separates the true arc from the preceding line except at their join.
 	if !proofbound.FiniteVec(arc.End) ||
 		twistsweep.TwistRat(r).Cmp(new(big.Rat).Mul(big.NewRat(8, 1), twistsweep.TwistRat(poly.MaxRadiusL1))) <= 0 {
-		return twistCardinalPath{}, fmt.Errorf(`%w: the twisted profile approaches the arc axis`, ErrUnsupported)
+		return twistsweep.TwistCardinalPath{}, fmt.Errorf(`%w: the twisted profile approaches the arc axis`, ErrUnsupported)
 	}
-	return twistCardinalPath{height: h, radius: r}, nil
-}
-
-type twistStation struct {
-	plane      planeRecord
-	frame      r3.Frame
-	pointError float64
-}
-
-func compositeTwistArea(poly twistsweep.TwistPolygon, geometry twistCardinalPath,
-	joinAngle, fullAngle proofbound.RatInterval) (proofbound.RatInterval, error) {
-	straight, err := twistAreaInterval(poly, twistsweep.TwistRat(geometry.height), joinAngle)
-	if err != nil {
-		return proofbound.RatInterval{}, err
-	}
-	h, radius, r := twistsweep.TwistRat(geometry.height), twistsweep.TwistRat(geometry.radius), twistsweep.TwistRat(poly.MaxRadiusL1)
-	pathLength := proofbound.IntervalAdd(proofbound.PointInterval(h), proofbound.IntervalScale(proofbound.HalfPiIv, radius))
-	arcRate, ok := proofbound.IntervalQuo(proofbound.IntervalScale(fullAngle, radius), pathLength)
-	if !ok {
-		return proofbound.RatInterval{}, fmt.Errorf(`%w: arc twist rate is unbounded`, ErrUnsupported)
-	}
-	rate := proofbound.IntervalAbsUpper(arcRate)
-	lower := new(big.Rat).Mul(twistsweep.TwistRat(poly.PerimeterLower),
-		new(big.Rat).Mul(new(big.Rat).Sub(radius, r), proofbound.HalfPiIv.Lo))
-	upperSpeed := new(big.Rat).Add(new(big.Rat).Add(radius, r), new(big.Rat).Mul(r, rate))
-	upper := new(big.Rat).Mul(twistsweep.TwistRat(poly.PerimeterUpper),
-		new(big.Rat).Mul(upperSpeed, proofbound.HalfPiIv.Hi))
-	return proofbound.IntervalAdd(straight, proofbound.Interval(lower, upper)), nil
+	return twistsweep.TwistCardinalPath{Height: h, Radius: r}, nil
 }
 
 // The true boundary and the ideal Loft boundary share a triangle-domain
@@ -105,27 +74,27 @@ func compositeTwistArea(poly twistsweep.TwistPolygon, geometry twistCardinalPath
 // sweeps at most displacement times the product of upper bounds on its two
 // surface derivatives. Both end-cap homotopies are charged as well. Loft's
 // own proof later covers the ideal-to-stored vertex displacement separately.
-func compositeTwistCellProof(poly twistsweep.TwistPolygon, geometry twistCardinalPath,
-	fullAngle proofbound.RatInterval, start, end twistStation, held loftPayload) (float64, float64, error) {
-	dPhi := proofbound.RatFloatUp(new(big.Rat).Quo(proofbound.HalfPiIv.Hi, big.NewRat(twistArcCells, 1)))
-	pathLengthLo := new(big.Rat).Add(twistsweep.TwistRat(geometry.height),
-		new(big.Rat).Mul(twistsweep.TwistRat(geometry.radius), proofbound.HalfPiIv.Lo))
+func compositeTwistCellProof(poly twistsweep.TwistPolygon, geometry twistsweep.TwistCardinalPath,
+	fullAngle proofbound.RatInterval, start, end twistsweep.TwistStation, held loftPayload) (float64, float64, error) {
+	dPhi := proofbound.RatFloatUp(new(big.Rat).Quo(proofbound.HalfPiIv.Hi, big.NewRat(twistsweep.TwistArcCells, 1)))
+	pathLengthLo := new(big.Rat).Add(twistsweep.TwistRat(geometry.Height),
+		new(big.Rat).Mul(twistsweep.TwistRat(geometry.Radius), proofbound.HalfPiIv.Lo))
 	dBetaRat := new(big.Rat).Quo(new(big.Rat).Mul(
 		proofbound.IntervalAbsUpper(fullAngle),
-		new(big.Rat).Mul(twistsweep.TwistRat(geometry.radius),
-			new(big.Rat).Quo(proofbound.HalfPiIv.Hi, big.NewRat(twistArcCells, 1)))), pathLengthLo)
+		new(big.Rat).Mul(twistsweep.TwistRat(geometry.Radius),
+			new(big.Rat).Quo(proofbound.HalfPiIv.Hi, big.NewRat(twistsweep.TwistArcCells, 1)))), pathLengthLo)
 	dBeta := proofbound.RatFloatUp(dBetaRat)
-	eps := max(start.pointError, end.pointError)
+	eps := max(start.PointError, end.PointError)
 	turn := proofbound.AbsSumUpper(dPhi, dBeta)
 	interp := proofbound.AbsSumUpper(
-		proofbound.ProductUpper(proofbound.ProductUpper(geometry.radius, proofbound.ProductUpper(dPhi, dPhi)), 0.125),
+		proofbound.ProductUpper(proofbound.ProductUpper(geometry.Radius, proofbound.ProductUpper(dPhi, dPhi)), 0.125),
 		proofbound.ProductUpper(proofbound.ProductUpper(poly.MaxRadiusL1, proofbound.ProductUpper(turn, turn)), 0.125))
 	warp := proofbound.ProductUpper(proofbound.ProductUpper(poly.MaxEdgeL1, turn), 0.25)
 	idealDelta := proofbound.AbsSumUpper(interp, warp, eps)
 	wallEdgeUpper := proofbound.AbsSumUpper(poly.PerimeterUpper,
 		proofbound.ProductUpper(float64(2*len(poly.Points)), eps))
 	speedUpper := proofbound.AbsSumUpper(
-		proofbound.ProductUpper(proofbound.AbsSumUpper(geometry.radius, poly.MaxRadiusL1), dPhi),
+		proofbound.ProductUpper(proofbound.AbsSumUpper(geometry.Radius, poly.MaxRadiusL1), dPhi),
 		proofbound.ProductUpper(poly.MaxRadiusL1, dBeta), proofbound.ProductUpper(2, eps))
 	wallAreaUpper := proofbound.ProductUpper(wallEdgeUpper, speedUpper)
 	if held.walls != 2*len(poly.Points) || len(held.tris) < held.walls+held.capStartCount {
@@ -133,10 +102,10 @@ func compositeTwistCellProof(poly twistsweep.TwistPolygon, geometry twistCardina
 	}
 	capStart := proofbound.PerturbedAreaUpper(held.verts,
 		held.tris[held.walls:held.walls+held.capStartCount],
-		proofbound.AbsSumUpper(start.pointError, held.delta))
+		proofbound.AbsSumUpper(start.PointError, held.delta))
 	capEnd := proofbound.PerturbedAreaUpper(held.verts,
 		held.tris[held.walls+held.capStartCount:],
-		proofbound.AbsSumUpper(end.pointError, held.delta))
+		proofbound.AbsSumUpper(end.PointError, held.delta))
 	// The cap homotopy moves only by its station error; the larger wall
 	// departure is used for one simple upper bound on the whole cell.
 	swept := proofbound.ProductUpper(idealDelta,
@@ -294,7 +263,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(thetaIv)) > 1 {
 		return nil, fmt.Errorf(`%w: composite twist needs a nonzero certified angle up to one radian`, ErrUnsupported)
 	}
-	stations, joinAngle, err := compositeTwistStations(thetaIv, theta, geometry, poly)
+	stations, joinAngle, err := twistsweep.CompositeTwistStations(thetaIv, theta, geometry, poly)
 	if err != nil {
 		return nil, err
 	}
@@ -305,8 +274,8 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	for i := range parts {
 		part, buildErr := evalLoft(ctx, d, ref, loftPayload{
 			profile0: profile, profile1: profile,
-			plane0: stations[i].plane, plane1: stations[i+1].plane,
-			frame0: stations[i].frame, frame1: stations[i+1].frame,
+			plane0: stations[i].Plane, plane1: stations[i+1].Plane,
+			frame0: stations[i].Frame, frame1: stations[i+1].Frame,
 			xform: xform, recordArea: [2]float64{recordArea, recordArea},
 		}, budget, work0, work1)
 		if buildErr != nil {
@@ -351,7 +320,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	}
 	upperTheta := proofbound.RatFloatUp(proofbound.IntervalAbsUpper(thetaIv))
 	upperJoin := proofbound.RatFloatUp(proofbound.IntervalAbsUpper(joinAngle))
-	lineEps := max(stations[0].pointError, stations[1].pointError)
+	lineEps := max(stations[0].PointError, stations[1].PointError)
 	lineIdeal := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(proofbound.ProductUpper(poly.MaxRadiusL1,
 			proofbound.ProductUpper(upperJoin, upperJoin)), 0.125),
@@ -359,7 +328,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		lineEps)
 	delta := proofbound.AbsSumUpper(lineIdeal, held[0].delta)
 	volSymDiff := proofbound.AbsSumUpper(
-		twistSymDiff(geometry.height, poly.PerimeterUpper, lineIdeal), held[0].proof.VolSymDiff)
+		twistSymDiff(geometry.Height, poly.PerimeterUpper, lineIdeal), held[0].proof.VolSymDiff)
 	for i := 1; i < len(held); i++ {
 		ideal, swept, proofErr := compositeTwistCellProof(poly, geometry, thetaIv,
 			stations[i], stations[i+1], held[i])
@@ -372,8 +341,8 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(volSymDiff) {
 		return nil, fmt.Errorf(`%w: twisted sweep has no finite boundary proof`, ErrUnsupported)
 	}
-	length := proofbound.IntervalAdd(proofbound.PointInterval(twistsweep.TwistRat(geometry.height)),
-		proofbound.IntervalScale(proofbound.HalfPiIv, twistsweep.TwistRat(geometry.radius)))
+	length := proofbound.IntervalAdd(proofbound.PointInterval(twistsweep.TwistRat(geometry.Height)),
+		proofbound.IntervalScale(proofbound.HalfPiIv, twistsweep.TwistRat(geometry.Radius)))
 	volumeIv := proofbound.IntervalScale(length, poly.Area)
 	// This gate rejects a certificate that merely permits the whole true
 	// body to be missing. The admitted mesh must have a local, useful bound.
@@ -389,7 +358,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	trueAreaIv, err := compositeTwistArea(poly, geometry, joinAngle, thetaIv)
+	trueAreaIv, err := twistsweep.CompositeTwistArea(poly, geometry, joinAngle, thetaIv)
 	if err != nil {
 		return nil, err
 	}
@@ -441,8 +410,8 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 }
 
 func publishCompositeTwistCentroid(body *Body, xform r3.Transform,
-	geometry twistCardinalPath, poly twistsweep.TwistPolygon, length proofbound.RatInterval) error {
-	h, radius := twistsweep.TwistRat(geometry.height), twistsweep.TwistRat(geometry.radius)
+	geometry twistsweep.TwistCardinalPath, poly twistsweep.TwistPolygon, length proofbound.RatInterval) error {
+	h, radius := twistsweep.TwistRat(geometry.Height), twistsweep.TwistRat(geometry.Radius)
 	xNum := proofbound.IntervalScale(proofbound.IntervalSub(proofbound.HalfPiIv,
 		proofbound.PointInterval(big.NewRat(1, 1))), new(big.Rat).Mul(radius, radius))
 	zNum := proofbound.IntervalAdd(proofbound.PointInterval(new(big.Rat).Add(
@@ -460,7 +429,7 @@ func publishCompositeTwistCentroid(body *Body, xform r3.Transform,
 	// is at the path axis, so only its bounded second moment can shift this.
 	correction := proofbound.RatFloatUp(new(big.Rat).Quo(
 		new(big.Rat).Mul(twistsweep.TwistRat(poly.MaxRadiusL1), twistsweep.TwistRat(poly.MaxRadiusL1)),
-		twistsweep.TwistRat(geometry.radius)))
+		twistsweep.TwistRat(geometry.Radius)))
 	local := r3.NewVec(x, 0, z)
 	world := xform.Apply(local)
 	translation := xform.Translation()
@@ -472,106 +441,6 @@ func publishCompositeTwistCentroid(body *Body, xform r3.Transform,
 	}
 	body.centroid = VecMeasurement{Value: world, Bound: units.Millimeters(bound), Exactness: exactnessOf(bound)}
 	return nil
-}
-
-func compositeTwistStations(theta proofbound.RatInterval, heldTheta float64,
-	geometry twistCardinalPath, poly twistsweep.TwistPolygon) ([]twistStation, proofbound.RatInterval, error) {
-	h, radius := twistsweep.TwistRat(geometry.height), twistsweep.TwistRat(geometry.radius)
-	length := proofbound.IntervalAdd(proofbound.PointInterval(h), proofbound.IntervalScale(proofbound.HalfPiIv, radius))
-	if length.Lo.Sign() <= 0 {
-		return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twisted path length has no positive lower bound`, ErrUnsupported)
-	}
-	joinFraction, ok := proofbound.IntervalQuo(proofbound.PointInterval(h), length)
-	if !ok {
-		return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twisted path join has no parameter bound`, ErrUnsupported)
-	}
-	joinAngle := proofbound.IntervalMul(theta, joinFraction)
-	stations := make([]twistStation, twistArcCells+2)
-	arcLength := geometry.radius * math.Pi / 2
-	for index := range stations {
-		var phiIv proofbound.RatInterval
-		var phiHeld float64
-		if index <= 1 {
-			phiIv = proofbound.PointInterval(new(big.Rat))
-		} else {
-			fraction := big.NewRat(int64(index-1), twistArcCells)
-			phiIv = proofbound.IntervalScale(proofbound.HalfPiIv, fraction)
-			phiHeld = math.Pi / 2 * float64(index-1) / twistArcCells
-		}
-		pathFraction, ok := proofbound.IntervalQuo(proofbound.IntervalAdd(
-			proofbound.PointInterval(h), proofbound.IntervalScale(phiIv, radius)), length)
-		if !ok {
-			return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twist station has no path fraction`, ErrUnsupported)
-		}
-		betaIv := proofbound.IntervalMul(theta, pathFraction)
-		betaHeld := heldTheta * (geometry.height + geometry.radius*phiHeld) / (geometry.height + arcLength)
-		if index == 0 {
-			betaIv = proofbound.PointInterval(new(big.Rat))
-			betaHeld = 0
-		}
-		sPhi, cPhi, okPhi := proofbound.RadSinCosSpan(phiIv)
-		sBeta, cBeta, okBeta := proofbound.RadSinCosSpan(betaIv)
-		if !okPhi || !okBeta {
-			return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twist station has no trigonometric enclosure`, ErrUnsupported)
-		}
-		sph, cph := math.Sincos(phiHeld)
-		sbe, cbe := math.Sincos(betaHeld)
-		origin := r3.NewVec(geometry.radius*(1-cph), 0, geometry.height+geometry.radius*sph)
-		if index == 0 {
-			origin = r3.Vec{}
-		}
-		u := r3.NewVec(cph*cbe, sbe, -sph*cbe)
-		v := r3.NewVec(-cph*sbe, cbe, sph*sbe)
-		frame, err := r3.NewFrame(origin, u, v)
-		if err != nil {
-			return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twist station has no held frame: %s`, ErrUnsupported, err)
-		}
-		if index == 0 {
-			frame, err = r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
-			if err != nil {
-				return nil, proofbound.RatInterval{}, err
-			}
-		}
-		trueOriginX := proofbound.IntervalScale(proofbound.IntervalSub(
-			proofbound.PointInterval(big.NewRat(1, 1)), cPhi), radius)
-		trueOriginZ := proofbound.IntervalAdd(proofbound.PointInterval(h), proofbound.IntervalScale(sPhi, radius))
-		if index == 0 {
-			trueOriginZ = proofbound.PointInterval(new(big.Rat))
-		}
-		originError := proofbound.AbsSumUpper(
-			proofbound.IntervalFloatError(trueOriginX, frame.Origin().X),
-			proofbound.IntervalFloatError(trueOriginZ, frame.Origin().Z))
-		idealU := [3]proofbound.RatInterval{
-			proofbound.IntervalMul(cPhi, cBeta), sBeta,
-			proofbound.IntervalNeg(proofbound.IntervalMul(sPhi, cBeta)),
-		}
-		idealV := [3]proofbound.RatInterval{
-			proofbound.IntervalNeg(proofbound.IntervalMul(cPhi, sBeta)), cBeta,
-			proofbound.IntervalMul(sPhi, sBeta),
-		}
-		actualU, actualV := frame.U(), frame.V()
-		frameError := 0.0
-		for coordinate, actual := range [2][3]float64{{actualU.X, actualU.Y, actualU.Z},
-			{actualV.X, actualV.Y, actualV.Z}} {
-			ideal := idealU
-			if coordinate == 1 {
-				ideal = idealV
-			}
-			for axis, value := range actual {
-				frameError = max(frameError, proofbound.IntervalFloatError(ideal[axis], value))
-			}
-		}
-		pointError := proofbound.AbsSumUpper(originError,
-			proofbound.ProductUpper(3*poly.MaxRadiusL1, frameError))
-		if !proofbound.FiniteVec(frame.Origin()) || proofbound.IsNonFinite(pointError) {
-			return nil, proofbound.RatInterval{}, fmt.Errorf(`%w: twist station has no finite displacement`, ErrUnsupported)
-		}
-		stations[index] = twistStation{
-			plane: planeRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()},
-			frame: frame, pointError: pointError,
-		}
-	}
-	return stations, joinAngle, nil
 }
 
 // A Loft's start and end cap loops walk in opposite directions. Match the
