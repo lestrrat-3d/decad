@@ -253,6 +253,53 @@ type ChamferBoxGrid struct {
 	epoch   uint32
 	work    int
 	maxWork int
+	// log records every query that reaches the work accounting; only a fork
+	// sets logging.
+	log     []ChamferGridQuery
+	logging bool
+}
+
+// ChamferGridQuery is one candidates call: its cell-range count (saturated
+// at maxWork+1) and the visits it added, or Tripped when the call refused.
+type ChamferGridQuery struct {
+	Count, Visits int
+	Tripped       bool
+}
+
+// Fork returns a grid sharing g's cells and step with its own seen/epoch
+// scratch and a zero visit count that records each query.
+func (grid *ChamferBoxGrid) Fork() *ChamferBoxGrid {
+	return &ChamferBoxGrid{
+		step: grid.step, cells: grid.cells, seen: make([]uint32, len(grid.seen)),
+		maxWork: grid.maxWork, logging: true,
+	}
+}
+
+// TakeLog returns and clears a fork's query log.
+func (grid *ChamferBoxGrid) TakeLog() []ChamferGridQuery {
+	log := grid.log
+	grid.log = nil
+	return log
+}
+
+// LimitWork lowers the visit ceiling to maxWork. It never raises it.
+func (grid *ChamferBoxGrid) LimitWork(maxWork int) {
+	grid.maxWork = min(grid.maxWork, maxWork)
+}
+
+// Replay applies one facet's log to g's own count. It reports false, and
+// leaves the count unchanged, at the first query that g itself would refuse
+// (Tripped, Count > maxWork-work, or work+Visits > maxWork).
+func (grid *ChamferBoxGrid) Replay(log []ChamferGridQuery) bool {
+	work := grid.work
+	for _, q := range log {
+		if q.Tripped || q.Count > grid.maxWork-work || work+q.Visits > grid.maxWork {
+			return false
+		}
+		work += q.Visits
+	}
+	grid.work = work
+	return true
 }
 
 func chamferBoxGridRange(box [2]r3.Vec,
@@ -337,8 +384,12 @@ func (grid *ChamferBoxGrid) candidates(box [2]r3.Vec) ([]int, error) {
 		return nil, err
 	}
 	if count.Cmp(big.NewInt(int64(grid.maxWork-grid.work))) > 0 {
+		if grid.logging {
+			grid.log = append(grid.log, ChamferGridQuery{Count: grid.maxWork + 1, Tripped: true})
+		}
 		return nil, fmt.Errorf("%w: cap collar grid visits exceed %d", decaderr.ErrUnsupported, grid.maxWork)
 	}
+	start := grid.work
 	grid.epoch++
 	if grid.epoch == 0 {
 		clear(grid.seen)
@@ -350,6 +401,10 @@ func (grid *ChamferBoxGrid) candidates(box [2]r3.Vec) ([]int, error) {
 			members := grid.cells[chamferGridCell{x: x, y: y}]
 			grid.work += 1 + len(members)
 			if grid.work > grid.maxWork {
+				if grid.logging {
+					grid.log = append(grid.log, ChamferGridQuery{
+						Count: int(count.Int64()), Visits: grid.work - start, Tripped: true})
+				}
 				return nil, fmt.Errorf("%w: cap collar grid visits exceed %d", decaderr.ErrUnsupported, grid.maxWork)
 			}
 			for _, member := range members {
@@ -365,6 +420,9 @@ func (grid *ChamferBoxGrid) candidates(box [2]r3.Vec) ([]int, error) {
 		if x == limits[0][1] {
 			break
 		}
+	}
+	if grid.logging {
+		grid.log = append(grid.log, ChamferGridQuery{Count: int(count.Int64()), Visits: grid.work - start})
 	}
 	return candidates, nil
 }

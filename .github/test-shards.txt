@@ -1415,3 +1415,4 @@
 10	0.00	TestTwistLocalAreaRealArcCell
 10	0.00	TestTwistLocalAreaRealBooleanArcSubset
 10	0.00	TestTwistShellOffsetSourceFromRoundedSketch
+10	0.00	TestLoftCylinderChamferReachFanOutMatchesSerial
