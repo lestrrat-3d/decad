@@ -15,7 +15,7 @@ import (
 )
 
 // pointLoftSliceSheet cuts a radial tab fan parallel to its far profile.
-// A world-XY Sketch line and two-sided ExtrudeChain make the finite sheet.
+// A world-XY Sketch line and two-sided chain Extrude make the finite sheet.
 func pointLoftSliceSheet(t *testing.T, doc *decad.Document, offset, halfWidth float64) *decad.Body {
 	return pointLoftSliceSheetDirected(t, doc, offset, halfWidth, false)
 }
@@ -42,7 +42,7 @@ func pointLoftSliceSheetDirected(t *testing.T, doc *decad.Document,
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	sheet, err := doc.ExtrudeChain(s, s.Chains()[0], decad.TwoSided{
+	sheet, err := decad.Extrude(t.Context(), doc, s, s.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(30)},
 		Two: decad.DistanceSide{D: units.Millimeters(30)},
 	})
@@ -146,7 +146,7 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			_, err = sheetSketch.Solve(t.Context())
 			require.NoError(t, err)
 			require.Len(t, sheetSketch.Chains(), 1)
-			sheet, err := doc.ExtrudeChain(sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
+			sheet, err := decad.Extrude(t.Context(), doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
 				One: decad.DistanceSide{D: units.Millimeters(30)},
 				Two: decad.DistanceSide{D: units.Millimeters(30)},
 			})
@@ -228,7 +228,7 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			innerSheetSketch.CreateLine(innerA, innerB)
 			_, err = innerSheetSketch.Solve(t.Context())
 			require.NoError(t, err)
-			innerSheet, err := doc.ExtrudeChain(innerSheetSketch, innerSheetSketch.Chains()[0], decad.TwoSided{
+			innerSheet, err := decad.Extrude(t.Context(), doc, innerSheetSketch, innerSheetSketch.Chains()[0], decad.TwoSided{
 				One: decad.DistanceSide{D: units.Millimeters(30)},
 				Two: decad.DistanceSide{D: units.Millimeters(30)},
 			})
@@ -244,7 +244,7 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 				require.True(t, mesh.BoundaryVerified())
 				require.True(t, mesh.VolumeVerified())
 			}
-			canceledSheet, err := doc.ExtrudeChain(sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
+			canceledSheet, err := decad.Extrude(t.Context(), doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
 				One: decad.DistanceSide{D: units.Millimeters(30)},
 				Two: decad.DistanceSide{D: units.Millimeters(30)},
 			})

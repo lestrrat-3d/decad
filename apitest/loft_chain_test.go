@@ -58,7 +58,7 @@ func openWalkSketch(tb testing.TB, plane *sketch.Plane, w *sketch.World, pts [][
 // docs/surface-design.md's T196: two 40 mm line walks on parallel planes 10 mm
 // apart rule into a two-triangle ribbon. Beside the structural readings, the
 // row's own assertion is that every wall normal equals the normal
-// ExtrudeChain's wall over the SAME recorded segment publishes — which is what
+// chain Extrude's wall over the SAME recorded segment publishes — which is what
 // pins docs/loft-design.md §16.2's stated positive side, T x N0, to the landed
 // Table G rule rather than to this build's own winding convention.
 func TestLoftChainOneCellRibbonPinsTheSideToExtrudeChain(t *testing.T) {
@@ -100,7 +100,7 @@ func TestLoftChainOneCellRibbonPinsTheSideToExtrudeChain(t *testing.T) {
 	// normal builds one wall whose normal Table G states as T x N. Both of the
 	// ribbon's triangles are coplanar with it, so all three normals agree.
 	sibling := decad.New()
-	ribbon, err := sibling.ExtrudeChain(s0, ch0, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	ribbon, err := decad.Extrude(t.Context(), sibling, s0, ch0, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	require.Len(t, ribbon.Faces(), 1)
 	want, err := ribbon.Faces()[0].NormalAt(r3.NewVec(20, 0, 5))
@@ -171,7 +171,7 @@ func TestLoftChainMultiCellRibbonFreeEdgesAndArea(t *testing.T) {
 // Shown-to-fail: removing loftmesh.ChainLoftPlaneSideGate's negative-side arm turns the
 // below-case refusal below red, and the ribbon it then builds publishes every
 // wall normal as the NEGATION of the chain prism's over the same recorded
-// segment — measured at (20, 0, -5): (0, 1, 0) against ExtrudeChain's
+// segment — measured at (20, 0, -5): (0, 1, 0) against chain Extrude's
 // (0, -1, 0). That negation is the whole reason the arm exists, since the side
 // a chain loft states is pinned to Table G's T x N and to nothing else. See
 // this PR's report for the exact failure text.

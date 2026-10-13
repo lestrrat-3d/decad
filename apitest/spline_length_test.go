@@ -34,7 +34,7 @@ func TestFreeformArcLengthMatchesIndependentSplineSampling(t *testing.T) {
 	require.Len(t, profiles, 1)
 
 	d := decad.New()
-	body, err := d.Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), d, s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
 	require.NoError(t, err)
 	var splineEdges []*decad.Edge
 	for _, edge := range body.Edges() {

@@ -18,7 +18,7 @@ func polygonPrism(t *testing.T, pts [][2]float64) (*decad.Document, *decad.Body)
 	t.Helper()
 	s, p := polygonSketch(t, pts)
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return doc, body
 }
@@ -640,7 +640,7 @@ func arcPrism(t *testing.T, build func(s *sketch.Sketch)) (*decad.Document, *dec
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return doc, body
 }

@@ -56,7 +56,7 @@ func slotBody(t *testing.T, rightCenter [2]float64) (*decad.Document, *decad.Bod
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(slotHeight), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(slotHeight), Dir: decad.Along})
 	require.NoError(t, err)
 	return doc, body
 }
@@ -93,7 +93,7 @@ func ovalBody(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(slotHeight), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(slotHeight), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -225,7 +225,7 @@ func TestShellNoOpenings(t *testing.T) {
 		var holed *decad.Body
 		for _, p := range s.Profiles() {
 			if len(p.Holes) == 1 {
-				holed, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+				holed, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 				require.NoError(t, err)
 			}
 		}
@@ -633,7 +633,7 @@ func TestAsymmetricChamferOnBrepStraightEdge(t *testing.T) {
 				s.Fix(rect.A)
 				_, err = s.Solve(t.Context())
 				require.NoError(t, err)
-				b, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+				b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 				require.NoError(t, err)
 				return b
 			}

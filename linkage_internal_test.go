@@ -36,7 +36,7 @@ func internalBoxBodyAtZ(t *testing.T, doc *Document, x0, y0, x1, y1, z0, h float
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
 	return body
 }

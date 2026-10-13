@@ -40,7 +40,7 @@ func Example_decad_shell_bands() {
 	}
 
 	doc := decad.New()
-	box, err := doc.Extrude(s, plate, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(context.Background(), doc, s, plate, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

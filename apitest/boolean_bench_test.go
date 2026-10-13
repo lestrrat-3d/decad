@@ -24,7 +24,7 @@ func benchBoxBody(b *testing.B, doc *decad.Document, x0, y0, x1, y1, h float64) 
 	s.Fix(rect.A)
 	_, err = s.Solve(b.Context())
 	require.NoError(b, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(b.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(b, err)
 	return body
 }
@@ -44,7 +44,7 @@ func benchRodBody(b *testing.B, doc *decad.Document, cx, cy, r float64) *decad.B
 	s.CreateCircle(center, r)
 	_, err = s.Solve(b.Context())
 	require.NoError(b, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(b.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(b, err)
 	tr, err := r3.Translation(r3.Vec{X: 0, Y: 0, Z: -6})
 	require.NoError(b, err)

@@ -26,7 +26,7 @@ func draftSlot(t *testing.T) *Body {
 	s.Fix(slot.C2)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along}, WithTaper(units.Degrees(3)))
+	b, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along}, WithTaper(units.Degrees(3)))
 	require.NoError(t, err)
 	return b
 }

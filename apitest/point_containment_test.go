@@ -128,7 +128,7 @@ func TestPointLocationRejectsInvalidRequests(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 
 	s, p := plateSketch(t)
-	sheet, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
+	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 		decad.WithSurfaceResult())
 	require.NoError(t, err)
 	_, err = sheet.LocatePoint(t.Context(), point, units.Millimeters(0.1))

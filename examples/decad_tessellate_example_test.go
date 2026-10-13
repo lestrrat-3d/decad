@@ -39,7 +39,7 @@ func Example_decad_tessellate() {
 	}
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(context.Background(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

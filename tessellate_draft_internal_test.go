@@ -82,7 +82,7 @@ func draftMeshBody(t *testing.T, holes int, draw func(*sketch.Sketch), h, deg fl
 		if len(p.Holes) != holes {
 			continue
 		}
-		b, err := New().Extrude(s, p, Distance{D: units.Millimeters(h), Dir: dir}, WithTaper(units.Degrees(deg)))
+		b, err := Extrude(t.Context(), New(), s, p, Distance{D: units.Millimeters(h), Dir: dir}, WithTaper(units.Degrees(deg)))
 		require.NoError(t, err)
 		return b
 	}
@@ -304,7 +304,7 @@ func draftMeshSubset(t *testing.T, holes int, draw func(*sketch.Sketch), h, deg 
 		if len(p.Holes) != holes {
 			continue
 		}
-		b, err := New().Extrude(s, p, Distance{D: units.Millimeters(h)})
+		b, err := Extrude(t.Context(), New(), s, p, Distance{D: units.Millimeters(h)})
 		require.NoError(t, err)
 		var q *FaceQuery
 		for _, f := range b.Faces() {

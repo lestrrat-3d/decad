@@ -15,7 +15,7 @@ import (
 // This file is docs/surface-design.md §13.4's tessellation increment,
 // gap 2 of this PR's report: a chain-fed prism ribbon's mesh, restated
 // straight off the body's own wall topology with no chording (Table G's
-// Plane row). ExtrudeChain and SweepChain's one-span straight reduction
+// Plane row). Chain Extrude and SweepChain's one-span straight reduction
 // share the identical restatement (tessellate_chain.go).
 
 // TestExtrudeChainTessellatesOneWallRibbon is T130's ribbon, tessellated: one
@@ -36,7 +36,7 @@ func TestExtrudeChainTessellatesOneWallRibbon(t *testing.T) {
 	ch := s.Chains()[0]
 
 	doc := decad.New()
-	body, err := doc.ExtrudeChain(s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -80,7 +80,7 @@ func TestExtrudeChainTessellatesThreeWallRibbon(t *testing.T) {
 	ch := s.Chains()[0]
 
 	doc := decad.New()
-	body, err := doc.ExtrudeChain(s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -120,7 +120,7 @@ func TestExtrudeChainTessellateRefusesCurvedWall(t *testing.T) {
 	ch := s.Chains()[0]
 
 	doc := decad.New()
-	body, err := doc.ExtrudeChain(s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -134,7 +134,7 @@ func TestExtrudeChainTessellateRefusesCurvedWall(t *testing.T) {
 // TestSweepChainTessellatesRibbon confirms the chainSweepPayload arm reuses
 // the identical restatement: a one-span straight SweepChain ribbon
 // tessellates to the same mesh shape (face and triangle count) its
-// ExtrudeChain sibling over the same walk does.
+// chain Extrude sibling over the same walk does.
 func TestSweepChainTessellatesRibbon(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()

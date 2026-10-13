@@ -31,7 +31,7 @@ func chamferedFlange(t *testing.T) (*Body, capBlendPayload) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	plate, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: Along})
+	plate, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: Along})
 	require.NoError(t, err)
 
 	bs, err := w.CreateSketch(w.XY())
@@ -42,7 +42,7 @@ func chamferedFlange(t *testing.T) (*Body, capBlendPayload) {
 	_, err = bs.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, bs.Profiles(), 1)
-	bore, err := doc.Extrude(bs, bs.Profiles()[0], Symmetric{D: units.Millimeters(32)})
+	bore, err := Extrude(t.Context(), doc, bs, bs.Profiles()[0], Symmetric{D: units.Millimeters(32)})
 	require.NoError(t, err)
 
 	drilled, err := Cut(t.Context(), plate, bore)

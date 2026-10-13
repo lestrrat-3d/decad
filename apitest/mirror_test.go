@@ -30,7 +30,7 @@ func newMirrorScene() *mirrorScene {
 func (sc *mirrorScene) poly(t *testing.T, plane *sketch.Plane, pts [][2]float64, e decad.Extent) *decad.Body {
 	t.Helper()
 	s, profile := meshPolygonSketch(t, sc.w, plane, pts)
-	body, err := sc.doc.Extrude(s, profile, e)
+	body, err := decad.Extrude(t.Context(), sc.doc, s, profile, e)
 	require.NoError(t, err)
 	return body
 }
@@ -52,7 +52,7 @@ func (sc *mirrorScene) cylinder(t *testing.T, plane *sketch.Plane, cx, cy, r flo
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := sc.doc.Extrude(s, s.Profiles()[0], e)
+	body, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], e)
 	require.NoError(t, err)
 	return body
 }

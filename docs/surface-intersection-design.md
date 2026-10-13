@@ -291,7 +291,7 @@ single-walk ribbon becomes the one-element case:
 - `sectionDelta float64`, on `prismPayload`'s own terms (prism §7): the proven
   upper bound on how far any recorded boundary coordinate of the section sits
   from the section its construction denotes. It is zero for every ribbon a
-  caller builds through `ExtrudeChain` or a chain `Revolve`, and this design's
+  caller builds through a chain `Extrude` or a chain `Revolve`, and this design's
   trim is the first construction that sets it nonzero.
 
 The alternative — a new payload type per arm — was rejected: it would put a
@@ -757,7 +757,7 @@ one-space reading §3.2 rests on. Each asserts on computed geometry:
 |---|---|---|
 | TI1 | a receiver whose recorded `LineSeg` runs against its line's authored direction — `sketch` publishes the fragment `Reversed`, so the record holds `TStart` > `TEnd` — extended in both directions in turn | a tool lying entirely INSIDE the ribbon is RS4, naming the carrier and its domain; a tool genuinely past the named end lengthens the ribbon to the nearer of its two crossings, with `Bounds` and `Area` enclosing that answer and the untouched end's `Point2` fields byte-identical to the pre-extend record's |
 | TI2 | an `ArcSeg` receiver, likewise recorded in the reversed sense, extended against a tool crossing its carrier twice beyond the receiver's own end | the nearer crossing wins; `Bounds` reaches it and `Area` encloses the analytic arc-length product. The arc arm needs no map, so this fixture holds both before and after the recreation's order is fixed — which is what proves the `LineSeg` arm was the only broken one |
-| TI3 | each admitted kind in BOTH recorded senses, taken through `fullExtendSegment` and `buildPrismScene`, sampled against the record's own parameterisation | the scene entity passes through the same point at every sampled parameter. This is the table in §3.1 checked as geometry rather than argued. It is the only fixture the `CircleSeg` arm has: a circle fragment separates the disk's interior from the exterior, so it is never a bridge in `sketch`'s arrangement and never reaches `Chains()`, and `ExtrudeChain` is the one producer of an undisplaced `chainPayload` — S7 refuses `Trim`'s, which always carries a displacement. The arm stays for a receiver's non-extended circle segments and for a future producer, proven rather than unexercised |
+| TI3 | each admitted kind in BOTH recorded senses, taken through `fullExtendSegment` and `buildPrismScene`, sampled against the record's own parameterisation | the scene entity passes through the same point at every sampled parameter. This is the table in §3.1 checked as geometry rather than argued. It is the only fixture the `CircleSeg` arm has: a circle fragment separates the disk's interior from the exterior, so it is never a bridge in `sketch`'s arrangement and never reaches `Chains()`, and a chain `Extrude` is the one producer of an undisplaced `chainPayload` — S7 refuses `Trim`'s, which always carries a displacement. The arm stays for a receiver's non-extended circle segments and for a future producer, proven rather than unexercised |
 
 The untouched-end obligation of T178 and TI1 is read by ELIMINATION against the
 end that moved, never by a selector clause keyed on the untouched coordinate:

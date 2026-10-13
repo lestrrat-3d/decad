@@ -109,7 +109,7 @@ func revolveSectorCylinderTool(t *testing.T, doc *decad.Document,
 	s.CreateCircle(center, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
 	return tool
 }

@@ -59,7 +59,7 @@ func TestLoftArcWedgeBuildsAndMatchesClosedForm(t *testing.T) {
 }
 
 // TestLoftArcWedgeMatchesExtrudeOracle is the ask's own independent-oracle
-// line: Document.Extrude on the SAME untwisted congruent section (the base
+// line: Extrude on the SAME untwisted congruent section (the base
 // plane's own arc-wedge profile, swept the identical wedgeHeight) is an
 // INDEPENDENT evaluation path, and the two measurement intervals must
 // overlap.
@@ -73,7 +73,7 @@ func TestLoftArcWedgeMatchesExtrudeOracle(t *testing.T) {
 	require.NoError(t, err)
 
 	extrudeDoc := New()
-	extrudeBody, err := extrudeDoc.Extrude(s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
+	extrudeBody, err := Extrude(t.Context(), extrudeDoc, s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
 	require.NoError(t, err)
 
 	loftVol, err := loftBody.Volume()
@@ -159,7 +159,7 @@ func TestLoftArcWedgeAreaOracleAtGrowingRadius(t *testing.T) {
 			require.NoError(t, err)
 
 			extrudeDoc := New()
-			extrudeBody, err := extrudeDoc.Extrude(s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
+			extrudeBody, err := Extrude(t.Context(), extrudeDoc, s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
 			require.NoError(t, err)
 
 			loftArea, err := loftBody.Area()

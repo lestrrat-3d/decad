@@ -41,7 +41,7 @@ func circleProfile(t *testing.T, r, h float64) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -218,7 +218,7 @@ func reflexLBody(t *testing.T) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(reflexLHeight), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(reflexLHeight), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

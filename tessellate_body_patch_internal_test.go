@@ -19,7 +19,7 @@ func TestBodyPatchMeshChargesTheFilledCapsAxialBound(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := New()
-	walls, err := doc.Extrude(s, s.Profiles()[0], Symmetric{D: units.Inches(2.5)}, WithSurfaceResult())
+	walls, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Symmetric{D: units.Inches(2.5)}, WithSurfaceResult())
 	require.NoError(t, err)
 	filled, err := walls.Patch(t.Context(), Edges(Free()).Exactly(8))
 	require.NoError(t, err)

@@ -502,7 +502,7 @@ func internalFourHolePlate(t *testing.T) *Body {
 		}
 	}
 	require.NotNil(t, prof)
-	body, err := New().Extrude(s, prof, Distance{D: units.Millimeters(8), Dir: Along})
+	body, err := Extrude(t.Context(), New(), s, prof, Distance{D: units.Millimeters(8), Dir: Along})
 	require.NoError(t, err)
 	_, ok := body.payload.(prismPayload)
 	require.True(t, ok)
@@ -1149,7 +1149,7 @@ func internalSemicircularBite(t *testing.T) *Body {
 	s.CreateLine(pts[5], pts[0])
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 	return body
 }

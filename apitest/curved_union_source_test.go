@@ -62,7 +62,7 @@ func axialSliceSheet(t *testing.T, doc *decad.Document, x float64) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	sheet, err := doc.ExtrudeChain(s, s.Chains()[0], decad.TwoSided{
+	sheet, err := decad.Extrude(t.Context(), doc, s, s.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(20)},
 		Two: decad.DistanceSide{D: units.Millimeters(20)},
 	})

@@ -890,7 +890,7 @@ func TestAddPrismFacesOmitsCapsForSurfaceResult(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := New()
-	sheet, err := doc.Extrude(s, s.Profiles()[0],
+	sheet, err := Extrude(t.Context(), doc, s, s.Profiles()[0],
 		Distance{D: units.Millimeters(10), Dir: Along}, WithSurfaceResult())
 	require.NoError(t, err)
 
@@ -955,7 +955,7 @@ func stitchedBoxForClearanceTest(t *testing.T) (doc *Document, box *Body) {
 	ws.Fix(wrect.A)
 	_, err = ws.Solve(t.Context())
 	require.NoError(t, err)
-	walls, err := doc.Extrude(ws, ws.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}, WithSurfaceResult())
+	walls, err := Extrude(t.Context(), doc, ws, ws.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}, WithSurfaceResult())
 	require.NoError(t, err)
 
 	bs, err := w.CreateSketch(w.XY())
@@ -1072,7 +1072,7 @@ func TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal(t *test
 	// coplanar cap pair is its own ambiguous configuration the kernel
 	// correctly reads as unsure, which would only obscure the point this
 	// test makes.
-	block, err := doc.Extrude(bs, bs.Profiles()[0], Distance{D: units.Millimeters(6), Dir: Along})
+	block, err := Extrude(t.Context(), doc, bs, bs.Profiles()[0], Distance{D: units.Millimeters(6), Dir: Along})
 	require.NoError(t, err)
 
 	res, err := clearancePair(t.Context(), box, block, false)

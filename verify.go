@@ -862,7 +862,7 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 		}
 		// A chain-fed sweep's only reduction reachable today is the one-span
 		// straight case (docs/sweep-design.md §15): chain Sweep builds the body
-		// through the identical evalChainExtrudeContext a plain ExtrudeChain
+		// through the identical evalChainExtrudeContext a plain chain Extrude
 		// does, over a chainPayload it then wraps unchanged (sweep.go's
 		// finishChainSweepBody). So this is the SAME construction argument
 		// chainPayload's own arm makes, re-read off the wrapped payload —

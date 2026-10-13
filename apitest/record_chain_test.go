@@ -13,7 +13,7 @@ import (
 // (docs/sketch-seam-design.md §2.2, docs/surface-design.md §13.3): the same
 // four gates RecordProfile earns, run over a chain instead of a profile.
 // extrude_chain_test.go covers the stale, invalid, and uncertified-fragment
-// gates end to end through ExtrudeChain; this file targets RecordChain
+// gates end to end through chain Extrude; this file targets RecordChain
 // directly, mirroring record_test.go's TestRecordProfileGates and its
 // foreign/changed-snapshot siblings.
 

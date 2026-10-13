@@ -132,7 +132,7 @@ func TestProfileRecordChargesCutJunction(t *testing.T) {
 		requireJunctionEncloses(t, `record area`, value, bound, truth)
 		require.Less(t, bound, 1e-9*value, `the junction charge stays near the rounding level`)
 
-		body, err := doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
 		require.NoError(t, err)
 		volume, err := body.Volume()
 		require.NoError(t, err)

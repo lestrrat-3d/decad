@@ -43,11 +43,11 @@ func (dp twoSidedDraftPayload) placed(ctx context.Context, d *Document, ref prod
 func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, dp twoSidedDraftPayload) (*Body, error) {
 	negative, err := evalDraftContext(ctx, d, ref, dp.negative)
 	if err != nil {
-		return nil, fmt.Errorf("against-side taper: %w", err)
+		return nil, wrapStageError("against-side taper", err)
 	}
 	positive, err := evalDraftContext(ctx, d, ref, dp.positive)
 	if err != nil {
-		return nil, fmt.Errorf("along-side taper: %w", err)
+		return nil, wrapStageError("along-side taper", err)
 	}
 	negativePayload, ok := negative.payload.(draftPayload)
 	if !ok {

@@ -139,7 +139,7 @@ func TestTessellateContextReachesCapTriangulationCancellation(t *testing.T) {
 	}
 	require.NotNil(t, prof)
 	doc := New()
-	body, err := doc.Extrude(s, prof, Distance{D: units.Millimeters(8), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, prof, Distance{D: units.Millimeters(8), Dir: Along})
 	require.NoError(t, err)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "maxU"}
 

@@ -418,7 +418,7 @@ func TestNormalAtExactnessIsProven(t *testing.T) {
 	t.Run(`a rotated placement's cap normal is Approximate`, func(t *testing.T) {
 		s, p := plateSketch(t)
 		doc := decad.New()
-		body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 		require.NoError(t, err)
 		rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 		require.NoError(t, err)
@@ -471,7 +471,7 @@ func TestNormalAtExactnessIsProven(t *testing.T) {
 	t.Run(`a normal exact under the lift stays Exact`, func(t *testing.T) {
 		s, p := plateSketch(t)
 		doc := decad.New()
-		body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.NewVec(1000, -250, 80))
 		require.NoError(t, err)
@@ -514,7 +514,7 @@ func TestNormalAtExactnessIsProven(t *testing.T) {
 func TestNormalAtPlaneArmCoversItsFrameCross(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
-	body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), body, planeArmSpin(t))
 	require.NoError(t, err)
@@ -563,7 +563,7 @@ func planeArmSpin(t *testing.T) r3.Transform {
 func plateCapFace(t *testing.T, role string, motion *r3.Transform) *decad.Face {
 	t.Helper()
 	s, p := plateSketch(t)
-	body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 	if motion != nil {
 		body, err = decad.Transform(t.Context(), body, *motion)
@@ -644,7 +644,7 @@ func holeWallBody(t *testing.T) *decad.Body {
 		}
 	}
 	require.NotNil(t, prof)
-	body, err := decad.New().Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

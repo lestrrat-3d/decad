@@ -39,7 +39,7 @@ func Example_decad_selectors() {
 	}
 
 	doc := decad.New()
-	plate, err := doc.Extrude(ps, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	plate, err := decad.Extrude(context.Background(), doc, ps, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -75,7 +75,7 @@ func Example_decad_selectors() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	gusset, err := doc.Extrude(gs, gs.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	gusset, err := decad.Extrude(context.Background(), doc, gs, gs.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

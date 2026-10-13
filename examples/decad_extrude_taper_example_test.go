@@ -32,7 +32,7 @@ func Example_decad_extrude_taper() {
 	}
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0],
+	body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 		decad.WithTaper(units.Degrees(5)))
 	if err != nil {
@@ -104,7 +104,7 @@ func Example_decad_extrude_taper_to_face() {
 		return
 	}
 	doc := decad.New()
-	stop, err := doc.Extrude(stopSketch, stopSketch.Profiles()[0],
+	stop, err := decad.Extrude(context.Background(), doc, stopSketch, stopSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to build stop: %s\n", err)
@@ -122,7 +122,7 @@ func Example_decad_extrude_taper_to_face() {
 		return
 	}
 	end := decad.ToFace{Body: stop, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(stop)))}
-	part, err := doc.Extrude(s, s.Profiles()[0], end, decad.WithTaper(units.Degrees(5)))
+	part, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], end, decad.WithTaper(units.Degrees(5)))
 	if err != nil {
 		fmt.Printf("failed to build tapered part: %s\n", err)
 		return

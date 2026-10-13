@@ -26,7 +26,7 @@ func circleSectionSourceSized(t *testing.T, u, v, radius, height float64) (*deca
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
 	return doc, body
 }
@@ -53,7 +53,7 @@ func verifyOffsetCylinderSection(t *testing.T, source *decad.Body, frame r3.Fram
 	require.Equal(t, units.SquareMillimeters(2*halfChord*height), area.Value)
 	require.Equal(t, decad.Exact, area.Exactness)
 
-	child, err := decad.New().Extrude(section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
 	})
 	require.NoError(t, err)
@@ -169,7 +169,7 @@ func TestSectionCardinalCylinderSketchFeedsVerifiedExtrude(t *testing.T) {
 	require.Equal(t, units.SquareMillimeters(10), area.Value)
 	require.Equal(t, decad.Exact, area.Exactness)
 
-	child, err := decad.New().Extrude(section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
 	})
 	require.NoError(t, err)
@@ -219,7 +219,7 @@ func TestSectionCardinalCylinderOffsetCentreAndReverseAxis(t *testing.T) {
 	section, profiles, err := source.Section(t.Context(), frame)
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
-	child, err := decad.New().Extrude(section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(1), Dir: decad.Along,
 	})
 	require.NoError(t, err)
@@ -262,7 +262,7 @@ func TestSectionCardinalPlaneRefusesNoncircularSource(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 	frame := cardinalAxisSectionPlane(t, r3.NewVec(1, 1, 2.5), r3.NewVec(1, 0, 0))
 	section, profiles, err := body.Section(t.Context(), frame)

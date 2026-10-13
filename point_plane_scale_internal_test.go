@@ -39,7 +39,7 @@ func TestPointPlaneScaleCarriesSourceThroughLaterPlacement(t *testing.T) {
 	sheetSketch.CreateLine(a, b)
 	_, err = sheetSketch.Solve(t.Context())
 	require.NoError(t, err)
-	sheet, err := doc.ExtrudeChain(sheetSketch, sheetSketch.Chains()[0], TwoSided{
+	sheet, err := Extrude(t.Context(), doc, sheetSketch, sheetSketch.Chains()[0], TwoSided{
 		One: DistanceSide{D: units.Millimeters(30)},
 		Two: DistanceSide{D: units.Millimeters(30)},
 	})

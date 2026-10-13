@@ -125,7 +125,7 @@ func TestCoilInternalThread(t *testing.T) {
 		}
 	}
 	require.NotNil(t, annulus)
-	block, err := doc.Extrude(s, annulus, Distance{D: units.Millimeters(20), Dir: Along})
+	block, err := Extrude(t.Context(), doc, s, annulus, Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
 	tool := threadTool(t, doc, 5.9, 4.7, -17, 1)
 	res, err := Cut(t.Context(), block, tool)

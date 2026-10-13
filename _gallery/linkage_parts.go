@@ -119,5 +119,5 @@ func extrudeRegion(ctx context.Context, doc *decad.Document, s *sketch.Sketch, h
 		return nil, fmt.Errorf("sketch bounds no valid region with %d holes", holes)
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	return doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(height), Dir: decad.Along}) //nolint:contextcheck
+	return decad.Extrude(ctx, doc, s, profile, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 }

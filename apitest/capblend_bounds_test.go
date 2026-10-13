@@ -79,7 +79,7 @@ func quarterDiskBody(t *testing.T, r, h float64) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -139,7 +139,7 @@ func plateWithRectHole(t *testing.T, side float64) *decad.Body {
 	require.NotNil(t, prof, `the rectangle-with-square-hole region should exist`)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -199,7 +199,7 @@ func TestCapBlendThroughAllStopsAtBuiltExtent(t *testing.T) {
 	const height, d = 20.0, 5.0
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
 	chamfered, err := plate.Chamfer(t.Context(), capLoopEdges(plate), units.Millimeters(d))
 	require.NoError(t, err)
@@ -213,7 +213,7 @@ func TestCapBlendThroughAllStopsAtBuiltExtent(t *testing.T) {
 	}
 	require.InDelta(t, height, zHi, 1e-9)
 
-	pin, err := doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(20*20*height))
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, height), decadtest.Exactly())
@@ -230,7 +230,7 @@ func TestCapBlendThroughAllBehindPlaneRefused(t *testing.T) {
 	const height, d, drop = 20.0, 5.0, 24.0
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
 	chamfered, err := plate.Chamfer(t.Context(), capLoopEdges(plate), units.Millimeters(d))
 	require.NoError(t, err)
@@ -245,7 +245,7 @@ func TestCapBlendThroughAllBehindPlaneRefused(t *testing.T) {
 	}
 	require.InDelta(t, height-drop, zHi, 1e-9, "the whole body sits behind the sketch plane")
 
-	_, err = doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
@@ -335,7 +335,7 @@ func TestCapBlendNestingRefusalKeepsDegenerate(t *testing.T) {
 	require.NotNil(t, prof, `the plate-with-disk region should exist`)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
 	require.NoError(t, err)
 
 	_, err = body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(12))
@@ -515,7 +515,7 @@ func heldAngleSection(t *testing.T, draw func(s *sketch.Sketch), d float64) *dec
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	chamfered, err := body.Chamfer(t.Context(), decad.Edges(decad.CreatedBy(decad.CapStart(body))), units.Millimeters(d))
 	require.NoError(t, err)
@@ -672,7 +672,7 @@ func TestCapBlendUnrepresentableAxialChangeRefused(t *testing.T) {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	tower, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(H), Dir: decad.Along})
+	tower, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(H), Dir: decad.Along})
 	require.NoError(t, err)
 
 	_, err = tower.Chamfer(t.Context(), capLoopEdges(tower), units.Millimeters(d))
@@ -818,7 +818,7 @@ func smallSkewSection(t *testing.T, h float64) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -984,7 +984,7 @@ func rightTriangleBody(t *testing.T, h float64) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	// The closed form below is a fact about THESE coordinates, so the test
 	// states them rather than trusting the solver to have left them alone.
@@ -1074,7 +1074,7 @@ func TestCapBlendCapContourVertexBoundCoversWallDirection(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
 	held := map[[2]float64]bool{}
 	for _, v := range body.Vertices() {
@@ -1153,7 +1153,7 @@ func TestCapBlendCapContourVertexBoundCoversArcWallNormal(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
 	held := map[[2]float64]bool{}
 	for _, v := range body.Vertices() {
@@ -1291,7 +1291,7 @@ func TestCapBlendContourHeldExtentCarriesItsDisplacement(t *testing.T) {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(5))
 	require.NoError(t, err)
@@ -1345,7 +1345,7 @@ func rightTriangleBodyLegs(t *testing.T, a, b, h float64) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -1436,7 +1436,7 @@ func TestCapBlendSideLevelCarriesSetbackRounding(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
 	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(d))
 	require.NoError(t, err)
@@ -1474,9 +1474,9 @@ func TestCapBlendInheritsComputedCapLevelBound(t *testing.T) {
 	)
 	s, plateProfile, pinProfile := plateAndPin(t)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
 	require.NoError(t, err)
-	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProfile, decad.ToFace{
 		Body:   plate,
 		Face:   capEndFace(plate),
 		Offset: units.Millimeters(-shortBy),
@@ -1540,9 +1540,9 @@ func TestCapBlendComputedStopMassBounds(t *testing.T) {
 	require.NotNil(t, plateProfile)
 	require.NotNil(t, pinProfile)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
 	require.NoError(t, err)
-	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProfile, decad.ToFace{
 		Body:   plate,
 		Face:   capEndFace(plate),
 		Offset: units.Millimeters(-shortBy),
@@ -1631,9 +1631,9 @@ func TestCapBlendWholeCircleInheritsComputedCapLevelBound(t *testing.T) {
 	require.NotNil(t, diskProfile)
 
 	doc := decad.New()
-	plateBody, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	plateBody, err := decad.Extrude(t.Context(), doc, s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
 	require.NoError(t, err)
-	disk, err := doc.Extrude(s, diskProfile, decad.ToFace{
+	disk, err := decad.Extrude(t.Context(), doc, s, diskProfile, decad.ToFace{
 		Body:   plateBody,
 		Face:   capEndFace(plateBody),
 		Offset: units.Millimeters(-shortBy),
@@ -1687,7 +1687,7 @@ func concentricDiskWithHole(t *testing.T, R, r, h float64) *decad.Body {
 	require.NotNil(t, prof, `the annulus region should exist`)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -1938,7 +1938,7 @@ func TestCapBlendBoundsEnclosesPlacedVertices(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(H), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(H), Dir: decad.Along})
 	require.NoError(t, err)
 
 	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(d))

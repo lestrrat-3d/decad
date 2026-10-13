@@ -511,7 +511,7 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 // chainRevolvePayload is chain Revolve's own record of a shell body: the
 // recorded open walk SET, the plane frame, the oriented plane-local axis, the
 // sweep interval, and the accumulated rigid placement — chainRevolvePayload
-// is to chain Revolve what chainPayload is to ExtrudeChain, and what
+// is to chain Revolve what chainPayload is to chain Extrude, and what
 // revolvePayload is to Revolve (docs/surface-design.md §13.4). A plain
 // chain Revolve builds the one-walk case; docs/surface-intersection-design.md
 // §3.4 is what first builds more than one, one lump per surviving walk, and

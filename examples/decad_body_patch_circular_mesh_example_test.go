@@ -26,7 +26,7 @@ func Example_bodyPatchCircularMesh() {
 		return
 	}
 	doc := decad.New()
-	tube, err := doc.Extrude(s, s.Profiles()[0],
+	tube, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}, decad.WithSurfaceResult())
 	if err != nil {
 		fmt.Println(err)

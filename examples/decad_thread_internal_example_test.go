@@ -47,7 +47,7 @@ func Example_decad_thread_internal() {
 	}
 
 	doc := decad.New()
-	block, err := doc.Extrude(s, annulus, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	block, err := decad.Extrude(context.Background(), doc, s, annulus, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

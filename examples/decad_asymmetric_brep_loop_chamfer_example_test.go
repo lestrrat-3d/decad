@@ -26,7 +26,7 @@ func Example_decad_asymmetric_brep_loop_chamfer() {
 		return
 	}
 	doc := decad.New()
-	plate, err := doc.Extrude(s, s.Profiles()[0],
+	plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude plate: %s\n", err)
@@ -56,7 +56,7 @@ func Example_decad_asymmetric_brep_loop_chamfer() {
 		fmt.Printf("failed to solve drill sketch: %s\n", err)
 		return
 	}
-	drill, err := doc.Extrude(drillSketch, drillSketch.Profiles()[0],
+	drill, err := decad.Extrude(context.Background(), doc, drillSketch, drillSketch.Profiles()[0],
 		decad.Symmetric{D: units.Millimeters(11)})
 	if err != nil {
 		fmt.Printf("failed to extrude drill: %s\n", err)

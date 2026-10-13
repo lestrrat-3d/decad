@@ -131,7 +131,7 @@ Rules:
   and its refusal; this bullet names them and restates none.** The
   verification gate reads these (verification §4).
   A rim vertex where two recorded walks meet — a prism's, patch's or
-  `ExtrudeChain`'s junction, and the point a revolve's junction vertex is
+  chain `Extrude`'s junction, and the point a revolve's junction vertex is
   measured against — is bounded against the points BOTH neighbours denote
   there (`boundarywalk.JunctionVertex`). It sits at the next walk's held
   start. That walk's own end bound reaches its denoted start, and the
@@ -362,7 +362,7 @@ coordinates under the identity placement, for one — charges zero. A cap-loop
 chamfer's own cap-level vertices take the same per-vertex charge in
 `capblend_geom.go`'s `buildCapBand` (`capVertexAt`), beside their own contour
 displacement, never inside the value an edge's own length bound still reads
-unwidened; `ExtrudeChain`'s rim posts, a brep record's vertices and a patch's
+unwidened; chain `Extrude`'s rim posts, a brep record's vertices and a patch's
 rim vertices take it too. The cost is one exact dyadic evaluation per vertex,
 about 0.3 µs, under 1% of a 1000-gon extrude's build.
 `apitest/vertex_frame_origin_test.go` checks every payload kind at a

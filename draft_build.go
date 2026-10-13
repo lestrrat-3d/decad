@@ -47,8 +47,10 @@ func draftAngle(taper units.Value) (float64, float64, error) {
 // alphaDelta of the stated angle, past SD1 and SD2): the SD12 surface-result
 // gate, extent resolution, then one or two draft slabs. A one-sided stop
 // resolves its far level and axial bound before the single-slab build.
-// Every gate runs before the document changes.
-func (d *Document) extrudeDraft(profile profileRecord, frame r3.Frame, e Extent, alpha, alphaDelta float64, surfaceResult bool) (*Body, error) {
+// ctx is checked between those steps and polled inside the slab builds; a
+// canceled ctx returns ctx.Err() before the commit. Every gate runs before the
+// document changes.
+func (d *Document) extrudeDraft(ctx context.Context, profile profileRecord, frame r3.Frame, e Extent, alpha, alphaDelta float64, surfaceResult bool) (*Body, error) {
 	switch e.(type) {
 	case Distance, ThroughAll, ToFace, Symmetric, TwoSided:
 	default:
@@ -59,6 +61,9 @@ func (d *Document) extrudeDraft(profile profileRecord, frame r3.Frame, e Extent,
 	}
 	sweep, err := d.resolveLinearExtent(e, frame)
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	ref := d.nextProducerID()
@@ -79,17 +84,29 @@ func (d *Document) extrudeDraft(profile profileRecord, frame r3.Frame, e Extent,
 		negative, positive := base, base
 		negative.z1, negative.z1Delta, negative.nearStart = 0, 0, false
 		positive.z0, positive.z0Delta, positive.nearStart = 0, 0, true
-		body, err = evalTwoSidedDraftContext(context.Background(), d, ref, twoSidedDraftPayload{
+		body, err = evalTwoSidedDraftContext(ctx, d, ref, twoSidedDraftPayload{
 			negative: negative, positive: positive,
 		})
 	} else {
-		body, err = evalDraftContext(context.Background(), d, ref, base)
+		body, err = evalDraftContext(ctx, d, ref, base)
 	}
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	d.commit(body)
 	return body, nil
+}
+
+// wrapStageError names the stage of a build that failed. A canceled or
+// expired context passes through unwrapped, so a caller reads ctx.Err() itself.
+func wrapStageError(stage string, err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	return fmt.Errorf(`%s: %w`, stage, err)
 }
 
 // evalDraftContext runs the record gates of Table SD in stage order and, once
@@ -356,7 +373,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		}
 		band, err := buildCapBand(ctx, body, ref, cbp, li, loop, farZ, matSign, nearCo, nil, work)
 		if err != nil {
-			return nil, fmt.Errorf(`the tapered extrude's walls: %w`, err)
+			return nil, wrapStageError(`the tapered extrude's walls`, err)
 		}
 		faces = append(faces, band.patches...)
 		nearLoops[li] = &Loop{coedges: nearCo, outer: li == 0}

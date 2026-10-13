@@ -324,7 +324,7 @@ func holePlateBody(t *testing.T) *decad.Body {
 	}
 	require.NotNil(t, prof)
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -615,7 +615,7 @@ func TestSelectorProvenanceSurvivesFaceMerge(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	var merged *decad.Face

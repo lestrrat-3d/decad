@@ -740,7 +740,7 @@ components are not proven separate, rather than publish an unrecorded cavity.
 
 An operation is a package-level function. A query is a method. This section
 owns the rule; a companion design that writes an operation as a method
-(`func (b *Body) Fillet(...)`, `func (d *Document) Extrude(...)`) means the
+(`func (b *Body) Fillet(...)`, `func (d *Document) Loft(...)`) means the
 free function the table below names for it.
 
 **An operation is any call that builds a body, retires a body, or registers a
@@ -790,14 +790,13 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 | `Body.ScaledAt` | `ScaledAt(ctx, b, anchor, factor)` |
 | `Body.Mirrored`, `Body.MirroredCopy` | `Mirrored(ctx, b, plane, opts...)`, `MirroredCopy(ctx, b, plane)` |
 | `Body.Patterned`, `Body.PatternCopies` | `Patterned(ctx, b, spec)`, `PatternCopies(ctx, b, spec)` |
-| `Document.Extrude` | `Extrude(ctx, doc, s, p, e, opts...)` |
 | `Document.Loft`, `LoftFaces`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
 | `Document.Sweep` over a profile or a chain | `Sweep(ctx, doc, s, sec, path, opts...)`, one generic function over `Section` (§8) |
-| `Document.ExtrudeChain`, `LoftChain` | the same names with `ctx, doc` leading |
+| `Document.LoftChain` | the same name with `ctx, doc` leading |
 | `Document.Remove` | `Remove(b)` |
 
 **Every operation that builds a body from a sketch takes a `ctx`, `Extrude`,
-`Revolve` and `ExtrudeChain` included.** Each checks `ctx` at
+`Revolve` over a chain included.** Each checks `ctx` at
 entry, between recording the section, resolving the extent and building the
 body, and inside the build evaluators. A canceled `ctx` returns `ctx.Err()`
 unchanged before commit and leaves `Document.Bodies()` and every other body as
@@ -934,7 +933,7 @@ before extruding. decad never re-derives it.
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
 Fillet, Chamfer, Shell, Transform, ScaledAt, Copy, Loft, LoftSections, LoftFromPoint, Sweep, Coil,
 Patch, Stitch, Unstitch, Thicken**, plus the sweeps of an OPEN sketch curve —
-**ExtrudeChain, LoftChain**, and **Sweep** and **Revolve** given a
+**LoftChain**, and **Extrude**, **Sweep** and **Revolve** given a
 `*sketch.Chain` — which take a `*sketch.Chain` where their siblings take a
 `*sketch.Profile` and always build a sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
@@ -958,7 +957,7 @@ build and `Draft`, the face draft of an existing prism, with its
 `NeutralFace`/`NeutralFrame` planes and the `Walls(b)` selector.
 
 ```go
-func Extrude(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
+func Extrude[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, e Extent, opts ...ExtrudeOption) (*Body, error)
 func Revolve[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
 func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, path *Path, opts ...SweepOption) (*Body, error)
 func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
@@ -968,6 +967,14 @@ func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec, s *sketch.Ske
 // *sketch.Profile or an open *sketch.Chain.
 type Section interface{ *sketch.Profile | *sketch.Chain }
 ```
+
+`Extrude` infers `S` from `sec`, so no call site names the type argument. A
+profile section builds a solid, or a sheet under `WithSurfaceResult()`, and a
+nonzero `WithTaper` builds a draft body. A chain section builds a sheet with no
+draft build, so `Extrude` returns `ErrUnsupported` for `WithSurfaceResult()` and
+for `WithTaper` of any angle, zero included, on a chain. That refusal follows
+the chain's seam gates and nil-option check and precedes extent resolution and
+any commit (`docs/surface-design.md` §13.2).
 
 `Sweep` infers `S` from `sec`, so no call site names the type argument. A
 profile section builds a solid, or a sheet under `WithSurfaceResult()`. A
@@ -1267,11 +1274,9 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 func WithThickenSide(side ThickenSide) ThickenOption
 
 // The chain-fed forms. Each sweeps an OPEN sketch curve and always returns a
-// BodySheet, so WithSurfaceResult() is not among their options: ChainExtrudeOption
-// and ChainLoftOption are their own sealed tiers, which SurfaceResultOption
-// implements neither of. Sweep and Revolve take a chain through Section
-// instead (above).
-func ExtrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
+// BodySheet, so WithSurfaceResult() is not among their options: ChainLoftOption
+// is LoftChain's own sealed tier, which SurfaceResultOption does not implement.
+// Extrude, Sweep and Revolve take a chain through Section instead (above).
 func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error)
 ```
 
@@ -1291,7 +1296,7 @@ An edge it cannot join stays free, which is a result rather than an error, so
 the caller reads `Edges(Free())` to see what did not close.
 
 **A chain-fed form takes the sketch beside the chain, on §7's terms, and
-consumes nothing.** All four (`Sweep` over a chain included) build the part of
+consumes nothing.** All four (`Extrude`, `Sweep` and `Revolve` over a chain included) build the part of
 their reach `docs/surface-design.md` §1.2 states: a chain `Sweep` sweeps one
 straight path span and `LoftChain` rules a `LineSeg`-only correspondence between
 two exactly-parallel walks, and each refuses the rest at the call with

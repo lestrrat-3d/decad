@@ -150,7 +150,7 @@ func TestDraftNotchWall(t *testing.T) {
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawPolygon(
 		[2]float64{0, 0}, [2]float64{20, 0}, [2]float64{20, 10},
 		[2]float64{10, 10}, [2]float64{10, 20}, [2]float64{0, 20}))
-	l, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(h)})
+	l, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h)})
 	require.NoError(t, err)
 	notch := pickWalls(t, l, func(f *decad.Face) bool { return hasVertexAt(f, 10, 10) && hasVertexAt(f, 10, 20) })
 	got, err := decad.Draft(t.Context(), l, notch, capNeutral(l, decad.CapStart), units.Degrees(deg))
@@ -177,7 +177,7 @@ func TestDraftHoleAlone(t *testing.T) {
 	const ro, ri, h, deg = 10.0, 4.0, 10.0, 5.0
 	doc := decad.New()
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 1, drawRing(ro, ri))
-	ring, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(h)})
+	ring, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h)})
 	require.NoError(t, err)
 	hole := pickWalls(t, ring, func(f *decad.Face) bool { return hasRole(f, "side(1,0)") })
 	got, err := decad.Draft(t.Context(), ring, hole, capNeutral(ring, decad.CapStart), units.Degrees(deg))
@@ -233,7 +233,7 @@ func TestDraftSubsetChargesTheTangentSpan(t *testing.T) {
 	const a, h, deg = 2.0, 10.0, 5.0
 	doc := decad.New()
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, a))
-	box, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(h)})
+	box, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h)})
 	require.NoError(t, err)
 	got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
 		capNeutral(box, decad.CapStart), units.Degrees(deg))
@@ -254,7 +254,7 @@ func TestDraftSubsetVerify(t *testing.T) {
 		capNeutral(box, decad.CapStart), units.Degrees(5))
 	require.NoError(t, err)
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 1, drawRing(12, 5))
-	ring, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Against})
+	ring, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Against})
 	require.NoError(t, err)
 	hole, err := decad.Draft(t.Context(), ring, pickWalls(t, ring, func(f *decad.Face) bool { return hasRole(f, "side(1,0)") }),
 		capNeutral(ring, decad.CapEnd), units.Degrees(5))
@@ -282,7 +282,7 @@ func TestDraftSubsetRefusals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSlot(0, 0))
-	slot, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(8)})
+	slot, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(8)})
 	require.NoError(t, err)
 	box := plainBox(t, doc, decad.Along)
 
@@ -341,7 +341,7 @@ func TestDraftSubsetMesh(t *testing.T) {
 		capNeutral(box, decad.CapStart), units.Degrees(deg))
 	require.NoError(t, err)
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 1, drawRing(ro, ri))
-	ring, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(h)})
+	ring, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h)})
 	require.NoError(t, err)
 	hole, err := decad.Draft(t.Context(), ring, pickWalls(t, ring, func(f *decad.Face) bool { return hasRole(f, "side(1,0)") }),
 		capNeutral(ring, decad.CapStart), units.Degrees(deg))

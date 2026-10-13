@@ -34,6 +34,14 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 			_, err := decad.Sweep(ctx, doc, nil, (*sketch.Chain)(nil), nil)
 			return err
 		}},
+		{"Extrude profile", func(ctx context.Context) error {
+			_, err := decad.Extrude(ctx, doc, nil, (*sketch.Profile)(nil), nil)
+			return err
+		}},
+		{"Extrude chain", func(ctx context.Context) error {
+			_, err := decad.Extrude(ctx, doc, nil, (*sketch.Chain)(nil), nil)
+			return err
+		}},
 		{"Revolve profile", func(ctx context.Context) error {
 			_, err := decad.Revolve(ctx, doc, nil, (*sketch.Profile)(nil), nil, nil)
 			return err
@@ -143,6 +151,77 @@ func TestRevolveCanceledContextLeavesDocumentUnchanged(t *testing.T) {
 		}},
 		{"chain", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
 			return decad.Revolve(ctx, doc, chainSketch, chain, chainAxis, decad.FullRevolution{})
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			canceled, cancel := context.WithCancel(t.Context())
+			cancel()
+			_, err := tc.call(canceled, doc)
+			require.Equal(t, context.Canceled, err)
+			require.Empty(t, doc.Bodies())
+
+			const maxChecks = 1000
+			for n := 1; n <= maxChecks; n++ {
+				ctx := &cancelAtCheckContext{Context: t.Context(), n: n}
+				body, err := tc.call(ctx, doc)
+				if err == nil {
+					require.NotNil(t, body)
+					require.Greater(t, n, 3, "the call checks its context at several steps before it commits")
+					require.Len(t, doc.Bodies(), 1)
+					return
+				}
+				require.Equal(t, context.Canceled, err, "check %d", n)
+				require.Empty(t, doc.Bodies(), "check %d", n)
+			}
+			require.Fail(t, "the call never completed")
+		})
+	}
+}
+
+// TestExtrudeTypedNilSectionIsDegenerate pins that a typed-nil section of
+// either kind returns ErrDegenerate and leaves the document unchanged.
+func TestExtrudeTypedNilSectionIsDegenerate(t *testing.T) {
+	t.Parallel()
+	s, _ := solidSketch(t)
+	doc := decad.New()
+	e := decad.Distance{D: units.Millimeters(5), Dir: decad.Along}
+
+	_, err := decad.Extrude(t.Context(), doc, s, (*sketch.Profile)(nil), e)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = decad.Extrude(t.Context(), doc, s, (*sketch.Chain)(nil), e)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Empty(t, doc.Bodies())
+}
+
+// TestExtrudeCanceledContextLeavesDocumentUnchanged cancels a profile, a
+// tapered profile and a chain Extrude before the call and at each of its
+// cancellation checks. Every cancellation returns context.Canceled unchanged
+// and leaves Bodies() empty; the first uncanceled run commits one body, after
+// several checks ran.
+func TestExtrudeCanceledContextLeavesDocumentUnchanged(t *testing.T) {
+	t.Parallel()
+	profileSketch, profile := solidSketch(t)
+	chainSketch, chain := lineChainSketch(t)
+	e := decad.Distance{D: units.Millimeters(5), Dir: decad.Along}
+	tests := []struct {
+		name string
+		call func(context.Context, *decad.Document) (*decad.Body, error)
+	}{
+		{"profile", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+			return decad.Extrude(ctx, doc, profileSketch, profile, e)
+		}},
+		{"tapered profile", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+			return decad.Extrude(ctx, doc, profileSketch, profile, e, decad.WithTaper(units.Degrees(5)))
+		}},
+		{"two-sided tapered profile", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+			return decad.Extrude(ctx, doc, profileSketch, profile, decad.Symmetric{D: units.Millimeters(5)},
+				decad.WithTaper(units.Degrees(5)))
+		}},
+		{"chain", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+			return decad.Extrude(ctx, doc, chainSketch, chain, e)
 		}},
 	}
 	for _, tc := range tests {

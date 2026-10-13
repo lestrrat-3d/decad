@@ -31,7 +31,7 @@ func boxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, h float64) *deca
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -52,7 +52,7 @@ func boxBodyAtZ(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, h float64
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -260,7 +260,7 @@ func tiltedPlanePair(t *testing.T, doc *decad.Document, origin r3.Vec) {
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 2)
 	for _, p := range s.Profiles() {
-		_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+		_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
 		require.NoError(t, err)
 	}
 }
@@ -311,7 +311,7 @@ func TestClearanceInchExtrudeAxialGapContainsTruth(t *testing.T) {
 	s.Fix(base.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Inches(1.7), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Inches(1.7), Dir: decad.Along})
 	require.NoError(t, err)
 
 	boxBodyAtZ(t, doc, 20, 10, 80, 50, 50, 10)
@@ -510,7 +510,7 @@ func TestClearanceBeyondBoxesInHole(t *testing.T) {
 		}
 	}
 	require.NotNil(t, prof)
-	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 	boxBody(t, doc, -2.5, -2.5, 2.5, 2.5, 5)
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -555,7 +555,7 @@ func TestClearanceCoaxialPegInTube(t *testing.T) {
 	s2.CreateCircle(c, 5)
 	_, err = s2.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = doc.Extrude(s2, s2.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s2, s2.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -612,7 +612,7 @@ func TestClearanceNonFinitePolynomialIsUndecided(t *testing.T) {
 	cylinderSketch.CreateCircle(cylinderCenter, cylinderRadius)
 	_, err = cylinderSketch.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = doc.Extrude(
+	_, err = decad.Extrude(t.Context(), doc,
 		cylinderSketch,
 		cylinderSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(height), Dir: decad.Along},
@@ -808,7 +808,7 @@ func TestClearanceBallCenteredInHole(t *testing.T) {
 		}
 	}
 	require.NotNil(t, prof)
-	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	// The ball: revolved about the u axis at the origin, then placed so its
@@ -867,7 +867,7 @@ func rodBody(t *testing.T, doc *decad.Document, cx, cy, r, half float64) *decad.
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
 	require.NoError(t, err)
 	return body
 }
@@ -1023,7 +1023,7 @@ func TestVerifyClearanceCancellationInsideVertexTier(t *testing.T) {
 	doc := decad.New()
 	for _, cx := range []float64{0, 50} {
 		s, p := polygonSketch(t, polygon(cx))
-		_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 		require.NoError(t, err)
 	}
 	before := snapshotDocument(t, doc)

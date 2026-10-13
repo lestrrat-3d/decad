@@ -46,7 +46,7 @@ func planarPartAndBranch(t *testing.T, doc *Document, shift r3.Vec, top float64)
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	part, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
+	part, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
 	turn, err := r3.FromBasis(r3.Basis{EX: r3.NewVec(1, 0, 0), EY: r3.NewVec(0, 0, 1), EZ: r3.NewVec(0, -1, 0)},
 		r3.NewVec(0, 20, 0).Add(shift))
@@ -206,7 +206,7 @@ func planarBox(t *testing.T, doc *Document, x0, y0, z0, x1, y1, z1 float64) *Bod
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(z1 - z0), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(z1 - z0), Dir: Along})
 	require.NoError(t, err)
 	if z0 == 0 {
 		return body

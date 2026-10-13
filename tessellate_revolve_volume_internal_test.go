@@ -289,7 +289,7 @@ func TestPairChordToleranceClearsARevolveCoordinateReservation(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	near, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+	near, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
 	box, err := Transform(t.Context(), near, far)
 	require.NoError(t, err)

@@ -228,7 +228,7 @@ func TestCapBlendPatchNormalBoundCoversDenotedWall(t *testing.T) {
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
 			require.Len(t, s.Profiles(), 1)
-			body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+			body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 			require.NoError(t, err)
 			chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
 			require.NoError(t, err)

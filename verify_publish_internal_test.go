@@ -45,7 +45,7 @@ func rectangularPrism(t *testing.T, w, d, h float64) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := New()
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -135,7 +135,7 @@ func TestVerifyPublishExactZeroWall(t *testing.T) {
 	require.Len(t, profiles, 1)
 
 	doc := New()
-	body, err := doc.Extrude(s, profiles[0], Distance{D: units.Millimeters(5), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, profiles[0], Distance{D: units.Millimeters(5), Dir: Along})
 	require.NoError(t, err)
 
 	for _, minimum := range []float64{1, 0.001} {
@@ -169,7 +169,7 @@ func wedgePrismBody(t *testing.T) *Body {
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 	doc := New()
-	body, err := doc.Extrude(s, profiles[0], Distance{D: units.Millimeters(80), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, profiles[0], Distance{D: units.Millimeters(80), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -219,7 +219,7 @@ func holePlateBody(t *testing.T) *Body {
 	}
 	require.NotNil(t, prof)
 	doc := New()
-	body, err := doc.Extrude(s, prof, Distance{D: units.Millimeters(8), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, prof, Distance{D: units.Millimeters(8), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -263,7 +263,7 @@ func curvedWebPlateBody(t *testing.T) *Body {
 	}
 	require.NotNil(t, prof)
 	doc := New()
-	body, err := doc.Extrude(s, prof, Distance{D: units.Millimeters(20), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, prof, Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -298,7 +298,7 @@ func axisBoxBody(t *testing.T, doc *Document, x0, y0, x1, y1, h float64) *Body {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -450,7 +450,7 @@ func chamferedQuarterDiskBody(t *testing.T, r, h, d float64) *Body {
 	require.Len(t, profiles, 1)
 
 	doc := New()
-	body, err := doc.Extrude(s, profiles[0], Distance{D: units.Millimeters(h), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, profiles[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
 	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
@@ -519,7 +519,7 @@ func freeformArchProfileBody(t *testing.T) *Body {
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 	doc := New()
-	body, err := doc.Extrude(s, profiles[0], Distance{D: units.Millimeters(5), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, profiles[0], Distance{D: units.Millimeters(5), Dir: Along})
 	require.NoError(t, err)
 	return body
 }

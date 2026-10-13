@@ -205,7 +205,7 @@ func TestVertexTiltedPlaneUnplacedBoundEnclosesDisplacement(t *testing.T) {
 	t.Parallel()
 	s, p, frame := tiltedPlaneSketch(t)
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
 	require.NoError(t, err)
 
 	identity := r3.Identity()

@@ -44,7 +44,7 @@ func TestSweepStraightTessellatesAsItsPrism(t *testing.T) {
 
 	ew := sketch.NewWorld()
 	es, eprofile := meshPolygonSketch(t, ew, ew.XY(), sweepHexagonCorners)
-	extruded, err := decad.New().Extrude(es, eprofile, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
+	extruded, err := decad.Extrude(t.Context(), decad.New(), es, eprofile, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
 	require.NoError(t, err)
 	want, err := extruded.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestSweepStraightIsABooleanOperand(t *testing.T) {
 		require.NoError(t, err)
 		bw := sketch.NewWorld()
 		bs, bp := meshPolygonSketch(t, bw, bw.XY(), [][2]float64{{0, 0}, {20, 0}, {20, 20}, {0, 20}})
-		box, err := doc.Extrude(bs, bp, decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+		box, err := decad.Extrude(t.Context(), doc, bs, bp, decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 		require.NoError(t, err)
 		box, err = decad.Transform(t.Context(), box, move)
 		require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestSweepStraightIsABooleanOperand(t *testing.T) {
 		return decad.Sweep(t.Context(), doc, s, p, path)
 	})
 	want := union(t, func(doc *decad.Document, s *sketch.Sketch, p *sketch.Profile) (*decad.Body, error) {
-		return doc.Extrude(s, p, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
+		return decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
 	})
 	require.Equal(t, want, got)
 	// The hexagon holds 345 mm² × 14 mm and the box 20 × 20 × 4 mm; the
@@ -209,7 +209,7 @@ func TestSweepArcIsABooleanOperand(t *testing.T) {
 	bs, bp := meshPolygonSketch(t, bw, bw.XY(), [][2]float64{
 		{20, 45}, {40, 45}, {40, 65}, {20, 65},
 	})
-	box, err := doc.Extrude(bs, bp, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, bs, bp, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(0, 0, 20))
 	require.NoError(t, err)
@@ -351,7 +351,7 @@ func TestSweepCompositeMeshBoolean(t *testing.T) {
 	require.NoError(t, err)
 	w := sketch.NewWorld()
 	bs, bp := meshPolygonSketch(t, w, w.XY(), [][2]float64{{0, 0}, {2, 0}, {2, 2}, {0, 2}})
-	box, err := doc.Extrude(bs, bp, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, bs, bp, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(10.25, 0.25, 4.5))
 	require.NoError(t, err)

@@ -19,7 +19,7 @@ type pointPlaneSliceRecord struct {
 }
 
 // pointPlaneLimit is the exact plane through the source line of an unplaced
-// world-XY ExtrudeChain. Its normal is deliberately unnormalised: all tests
+// world-XY chain Extrude. Its normal is deliberately unnormalised: all tests
 // and ray intersections below are rational statements about stored floats.
 type pointPlaneLimit struct {
 	nx, ny, d               *big.Rat

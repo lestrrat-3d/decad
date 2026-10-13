@@ -45,7 +45,7 @@ func circleSheet(t *testing.T, doc *decad.Document, r float64) *decad.Body {
 func surfaceTube(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
-	tube, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	tube, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	return tube
 }
@@ -301,7 +301,7 @@ func TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := plateSketch(t)
-	tube, err := doc.Extrude(s, p, decad.Distance{D: units.Inches(5), Dir: decad.Along}, decad.WithSurfaceResult())
+	tube, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Inches(5), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	// No predicate tells the two congruent rims apart (docs/surface-design.md
@@ -342,7 +342,7 @@ func TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall(t *testing.
 	t.Parallel()
 	doc := decad.New()
 	s, p := plateSketch(t)
-	wall, err := doc.Extrude(s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	rim, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(wall)
@@ -400,7 +400,7 @@ func TestBodyPatchCapsBothBoundedRimsOnARotatedSketchPlane(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	wall, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	rim, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(wall)
@@ -455,7 +455,7 @@ func TestBodyPatchTableR(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		s, p := plateSketch(t)
-		solid, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		solid, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(t, err)
 
 		before := doc.Bodies()
@@ -484,7 +484,7 @@ func TestBodyPatchTableR(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		s, p := plateSketch(t)
-		solid, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		solid, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(t, err)
 
 		before := doc.Bodies()
@@ -589,7 +589,7 @@ func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Inches(3), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Inches(3), Dir: decad.Along})
 	require.NoError(t, err)
 	capSelector := capEndFace(plate)
 	startSelector := capStartFace(plate)
@@ -608,7 +608,7 @@ func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {
 	}
 	require.NotNil(t, capSheet)
 	require.Len(t, box, 5)
-	want, err := doc.Extrude(s, pinProf, decad.ToFace{Body: capSheet, Face: decad.Faces()})
+	want, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: capSheet, Face: decad.Faces()})
 	require.NoError(t, err)
 	wantBox, err := want.Bounds()
 	require.NoError(t, err)
@@ -617,7 +617,7 @@ func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {
 	require.NoError(t, err)
 	patched, err := open.Patch(t.Context(), decad.Edges(decad.Free()))
 	require.NoError(t, err)
-	pin, err := doc.Extrude(s, pinProf, decad.ToFace{Body: patched, Face: capSelector})
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: patched, Face: capSelector})
 	require.NoError(t, err)
 	got, err := pin.Bounds()
 	require.NoError(t, err)

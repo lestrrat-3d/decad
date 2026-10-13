@@ -205,7 +205,7 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 	p := s.Profiles()[0]
 
 	doc := decad.New()
-	sheet, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	free, err := decad.Edges(decad.Free()).SelectEdges(sheet)
 	require.NoError(t, err)

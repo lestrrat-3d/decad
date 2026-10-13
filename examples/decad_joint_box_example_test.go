@@ -34,7 +34,7 @@ func Example_decad_jointBox() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
-		return doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	}
 
 	doc := decad.New()

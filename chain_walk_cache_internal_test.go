@@ -28,7 +28,7 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 	chains := s.Chains()
 	require.Len(t, chains, 1)
 	doc := New()
-	body, err := doc.ExtrudeChain(s, chains[0], Distance{D: units.Millimeters(10), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, chains[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 
 	check := func(t *testing.T, body *Body) {
@@ -114,7 +114,7 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 	_, err = s2.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s2.Chains(), 1)
-	analytic, err := New().ExtrudeChain(s2, s2.Chains()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	analytic, err := Extrude(t.Context(), New(), s2, s2.Chains()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
 	check(t, analytic)
 }

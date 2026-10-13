@@ -32,7 +32,7 @@ func Example_decad_body_patch() {
 	}
 
 	doc := decad.New()
-	tube, err := doc.Extrude(s, s.Profiles()[0],
+	tube, err := decad.Extrude(ctx, doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 		decad.WithSurfaceResult())
 	if err != nil {

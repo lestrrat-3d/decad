@@ -47,7 +47,7 @@ func chamferedSectionBody(t *testing.T, section func(*sketch.Sketch), d float64)
 			prof = p
 		}
 	}
-	body, err := doc.Extrude(s, prof, Distance{D: units.Millimeters(capBlendMeshHeight), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, prof, Distance{D: units.Millimeters(capBlendMeshHeight), Dir: Along})
 	require.NoError(t, err)
 	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
@@ -468,9 +468,9 @@ func TestCapBlendMeshMotionCarriesEachLevelBound(t *testing.T) {
 	require.NotNil(t, plateProfile)
 	require.NotNil(t, pinProfile)
 	doc := New()
-	plate, err := doc.Extrude(s, plateProfile, Distance{D: units.Millimeters(1e12), Dir: Along})
+	plate, err := Extrude(t.Context(), doc, s, plateProfile, Distance{D: units.Millimeters(1e12), Dir: Along})
 	require.NoError(t, err)
-	pin, err := doc.Extrude(s, pinProfile, ToFace{
+	pin, err := Extrude(t.Context(), doc, s, pinProfile, ToFace{
 		Body:   plate,
 		Face:   Faces(FaceCreatedBy(CapEnd(plate))),
 		Offset: units.Millimeters(-1e-3),
@@ -631,7 +631,7 @@ func asymChamferedSectionBody(t *testing.T, section func(*sketch.Sketch), dc, ds
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := New()
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(capBlendMeshHeight), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(capBlendMeshHeight), Dir: Along})
 	require.NoError(t, err)
 	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(dc),
 		WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(ds)))
@@ -735,7 +735,7 @@ func TestCapBlendMeshCapMotionCarriesSetbackRounding(t *testing.T) {
 	diskSection(0, 0, r)(s)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
 	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), inch)
 	require.NoError(t, err)

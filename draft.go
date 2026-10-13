@@ -77,7 +77,7 @@ var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 // negative one widens it; the angle is a signed [units.Angle] outside
 // [ErrNegativeMagnitude] (core §12). sel names the walls to lean, about one
 // of b's caps. Faces(Walls(b)) names every wall, and the result is
-// the body a tapered [Document.Extrude] of the same section and sweep builds.
+// the body a tapered [Extrude] of the same section and sweep builds.
 // A subset leans only the walls it names: each moved wall's far trace is its
 // own moved line or circle, a kept wall stays vertical, and a corner between a
 // moved and a kept line is the intersection of the two

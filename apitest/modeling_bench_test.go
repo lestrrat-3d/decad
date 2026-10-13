@@ -26,7 +26,7 @@ func modelingBenchRectOnWorld(tb testing.TB, doc *decad.Document, w *sketch.Worl
 	s.Fix(rect.A)
 	_, err = s.Solve(tb.Context())
 	require.NoError(tb, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(tb.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(tb, err)
 	return body
 }
@@ -70,7 +70,7 @@ func BenchmarkModelingExtrudeFreeformCold(b *testing.B) {
 		b.StopTimer()
 		doc = decad.New()
 		b.StartTimer()
-		body, err = doc.Extrude(s, profile, depth)
+		body, err = decad.Extrude(b.Context(), doc, s, profile, depth)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -109,7 +109,7 @@ func BenchmarkModelingExtrudeChainCold(b *testing.B) {
 		b.StopTimer()
 		doc := decad.New()
 		b.StartTimer()
-		body, buildErr := doc.ExtrudeChain(s, chain, depth)
+		body, buildErr := decad.Extrude(b.Context(), doc, s, chain, depth)
 		if buildErr != nil {
 			b.Fatal(buildErr)
 		}
@@ -337,7 +337,7 @@ func BenchmarkModelingPlacedFreeform(b *testing.B) {
 	for b.Loop() {
 		b.StopTimer()
 		doc := decad.New()
-		body, buildErr := doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		body, buildErr := decad.Extrude(b.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(b, buildErr)
 		b.StartTimer()
 		placed, err = decad.Transform(b.Context(), body, transform)
@@ -502,7 +502,7 @@ func BenchmarkModelingPatchFreeEdges(b *testing.B) {
 		_, err = s.Solve(b.Context())
 		require.NoError(b, err)
 		doc := decad.New()
-		sheet, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{
+		sheet, err := decad.Extrude(b.Context(), doc, s, s.Profiles()[0], decad.Distance{
 			D: units.Millimeters(10), Dir: decad.Along,
 		}, decad.WithSurfaceResult())
 		require.NoError(b, err)
@@ -535,7 +535,7 @@ func BenchmarkModelingTrimRectangleSheet(b *testing.B) {
 		sheetSketch.Fix(rect.A)
 		_, err = sheetSketch.Solve(b.Context())
 		require.NoError(b, err)
-		sheet, err := doc.Extrude(sheetSketch, sheetSketch.Profiles()[0],
+		sheet, err := decad.Extrude(b.Context(), doc, sheetSketch, sheetSketch.Profiles()[0],
 			decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
 		require.NoError(b, err)
 		toolSketch, err := w.CreateSketch(w.XY())
@@ -544,7 +544,7 @@ func BenchmarkModelingTrimRectangleSheet(b *testing.B) {
 		toolSketch.Fix(toolRect.A)
 		_, err = toolSketch.Solve(b.Context())
 		require.NoError(b, err)
-		tool, err := doc.Extrude(toolSketch, toolSketch.Profiles()[0], decad.TwoSided{
+		tool, err := decad.Extrude(b.Context(), doc, toolSketch, toolSketch.Profiles()[0], decad.TwoSided{
 			One: decad.DistanceSide{D: units.Millimeters(15)},
 			Two: decad.DistanceSide{D: units.Millimeters(5)},
 		})
@@ -589,7 +589,7 @@ func BenchmarkModelingExtendChain(b *testing.B) {
 			if len(chain.Edges) != 1 || chain.Edges[0].Entity != line || chain.Edges[0].TStart != 0 {
 				continue
 			}
-			ribbon, err = doc.ExtrudeChain(s, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			ribbon, err = decad.Extrude(b.Context(), doc, s, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 			require.NoError(b, err)
 			break
 		}
@@ -600,7 +600,7 @@ func BenchmarkModelingExtendChain(b *testing.B) {
 		toolSketch.Fix(toolRect.A)
 		_, err = toolSketch.Solve(b.Context())
 		require.NoError(b, err)
-		tool, err := doc.Extrude(toolSketch, toolSketch.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)})
+		tool, err := decad.Extrude(b.Context(), doc, toolSketch, toolSketch.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)})
 		require.NoError(b, err)
 		b.StartTimer()
 		extended, err := ribbon.Extend(b.Context(), query, tool)

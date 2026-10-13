@@ -85,7 +85,7 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 		_, sheetErr = sheetSketch.Solve(t.Context())
 		require.NoError(t, sheetErr)
 		require.Len(t, sheetSketch.Chains(), 1)
-		sheet, sheetErr := doc.ExtrudeChain(sheetSketch, sheetSketch.Chains()[0], TwoSided{
+		sheet, sheetErr := Extrude(t.Context(), doc, sheetSketch, sheetSketch.Chains()[0], TwoSided{
 			One: DistanceSide{D: units.Millimeters(20)},
 			Two: DistanceSide{D: units.Millimeters(20)},
 		})

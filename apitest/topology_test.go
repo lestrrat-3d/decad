@@ -13,7 +13,7 @@ import (
 func coedgeBox(t *testing.T) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
-	body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

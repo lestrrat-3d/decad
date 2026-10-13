@@ -32,7 +32,7 @@ func rectPrism(t *testing.T, w, d, h float64) *decad.Document {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	_, err = doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return doc
 }
@@ -109,7 +109,7 @@ func TestWallWedgePrismNoWall(t *testing.T) {
 	// determination that no wall exists — nothing for the tool to violate.
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {30, 0}, {15, 15 * math.Sqrt(3)}})
 	doc := decad.New()
-	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(80), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(80), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -162,7 +162,7 @@ func TestWallAnnularPrism(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -190,7 +190,7 @@ func TestWallDraftAllowanceBoundary(t *testing.T) {
 	top := 0.5 + 20*math.Tan(beta)
 	s, p := polygonSketch(t, [][2]float64{{-0.5, 0}, {0.5, 0}, {top, 20}, {-top, 20}})
 	doc := decad.New()
-	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1.2)))
@@ -230,7 +230,7 @@ func TestWallKnifeEdgeExactZero(t *testing.T) {
 	require.Len(t, profiles, 1)
 
 	doc := decad.New()
-	_, err = doc.Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(0.001)))
@@ -266,7 +266,7 @@ func TestVerifyWallCancellationStopsCandidateWork(t *testing.T) {
 	}
 	s, p := polygonSketch(t, pts)
 	doc := decad.New()
-	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	before := snapshotDocument(t, doc)
 	ctx := newCancelAfterContext(t.Context(), 5)
@@ -305,7 +305,7 @@ func TestUndercutExactlyPerpendicularWallIsNotOpposed(t *testing.T) {
 	t.Parallel()
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {3, 9}, {-6, 12}, {-9, 3}})
 	doc := decad.New()
-	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(3, 9, 0)))
 	require.NoError(t, err)
@@ -353,7 +353,7 @@ func TestUndercutWallTiltedOffItsHeldTangent(t *testing.T) {
 	corners := [][2]float64{{-1e-15, 0}, {24, 0}, {24, 32}}
 	s, p := polygonSketch(t, corners)
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 	// cornersOf is the set of plane-local corners a face's outer loop visits.
 	cornersOf := func(f *decad.Face) map[[2]float64]bool {
@@ -424,7 +424,7 @@ func TestUndercutArcWindowFollowsTheRecord(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, s.Profiles(), 1)
 		doc := decad.New()
-		body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 		require.NoError(t, err)
 		held := map[[2]float64]bool{}
 		for _, v := range body.Vertices() {
@@ -494,7 +494,7 @@ func TestUndercutNearTangentPullDecidedAtRecordedStart(t *testing.T) {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	sawStart := false
 	for _, v := range body.Vertices() {
@@ -709,7 +709,7 @@ func holePlate(t *testing.T) *decad.Document {
 	}
 	require.NotNil(t, prof)
 	doc := decad.New()
-	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 	return doc
 }
@@ -935,7 +935,7 @@ func TestWallReadingBoundEnclosesCurvedWeb(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -991,7 +991,7 @@ func TestWallReadingBoundIsOnTheSpanningDiameter(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(100), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(100), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -1065,7 +1065,7 @@ func TestWallHeightCarriesAxialDelta(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	_, err = doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Inches(0.1), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Inches(0.1), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -1088,7 +1088,7 @@ func TestMinRadiusArcRadiusBound(t *testing.T) {
 	// hole on the same fixture family (holePlate) stays Exact with Bound zero.
 	s, prof := dSectionProfile(t)
 	doc := decad.New()
-	_, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
@@ -1221,7 +1221,7 @@ func TestSurveySweepEnclosesHalfDiscTruths(t *testing.T) {
 				doc := decad.New()
 				// A tall prism keeps the sweep height out of the wall
 				// comparison, so the reading is the section's own.
-				_, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(200), Dir: decad.Along})
+				_, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(200), Dir: decad.Along})
 				require.NoError(t, err)
 				report, err := doc.Verify(t.Context(),
 					decad.WithMinWallThickness(units.Millimeters(0.001)),
@@ -1276,7 +1276,7 @@ func TestWallConcentricRingCarriesRadiusDifferenceBound(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(500), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(500), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -1618,7 +1618,7 @@ func TestMinRadiusAggregatesLosingCandidate(t *testing.T) {
 	t.Parallel()
 	s, prof := rivalRadiusPlate(t)
 	doc := decad.New()
-	_, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
@@ -1663,7 +1663,7 @@ func TestMinRadiusExactCandidatesStayExact(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
@@ -1781,7 +1781,7 @@ func TestWallHeightArmAggregatesAgainstTheSectionSpan(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	_, err = doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Inches(0.1), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Inches(0.1), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))

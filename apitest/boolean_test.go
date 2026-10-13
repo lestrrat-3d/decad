@@ -33,7 +33,7 @@ func diskBody(t *testing.T, doc *decad.Document, cx, cy, r float64) *decad.Body 
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -72,7 +72,7 @@ func wedgePrism(t *testing.T, doc *decad.Document, w *sketch.World, plane *sketc
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
 	require.NoError(t, err)
 	return body
 }
@@ -100,7 +100,7 @@ func discBodySymmetric(t testing.TB, doc *decad.Document, cx, r, half float64) *
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
 	require.NoError(t, err)
 	return body
 }
@@ -128,7 +128,7 @@ func washerBodySymmetric(t testing.TB, doc *decad.Document, outer, inner, half f
 		}
 	}
 	require.NotNil(t, prof, `the washer's holed region should exist`)
-	body, err := doc.Extrude(s, prof, decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Symmetric{D: units.Millimeters(half)})
 	require.NoError(t, err)
 	return body
 }
@@ -1124,7 +1124,7 @@ func polyPrism(t *testing.T, doc *decad.Document, w *sketch.World, plane *sketch
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
 	require.NoError(t, err)
 	return body
 }

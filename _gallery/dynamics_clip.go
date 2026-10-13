@@ -433,7 +433,7 @@ func extrudedBox(ctx context.Context, doc *decad.Document, x0, y0, x1, y1, z0, h
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	return decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 }
 
 // revolvedSphere is the source sphere of the given radius centered on the
@@ -471,7 +471,7 @@ func extrudedCylinder(ctx context.Context, doc *decad.Document, radius, height f
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	return decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 }
 
 // tumbleRelease is one tumble body's release: a proper rotation by degrees
@@ -665,7 +665,7 @@ func extrudedPolygon(ctx context.Context, doc *decad.Document, corners [][2]floa
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	return decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 }
 
 // stitchedTetrahedron stitches the tetrahedron with corners a·(1, 0, 0),

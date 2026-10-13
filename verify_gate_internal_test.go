@@ -255,7 +255,7 @@ func TestCapBlendGateDiameterReadsTrimmedCapArcs(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := New()
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
 	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapStart(body))).Or(CreatedBy(CapEnd(body))), units.Millimeters(2))
 	require.NoError(t, err)
@@ -424,7 +424,7 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			s.CreateCircle(c, 5)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along}, WithTaper(units.Degrees(3)))
+			body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along}, WithTaper(units.Degrees(3)))
 			require.NoError(t, err)
 			dp := body.payload.(draftPayload)
 			placement := gateFarPlacement(t, i)
@@ -486,7 +486,7 @@ func draftSquare(t *testing.T) *Body {
 	s.Fix(s.CreateRectangle(-5, -5, 5, 5).A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along}, WithTaper(units.Degrees(3)))
+	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along}, WithTaper(units.Degrees(3)))
 	require.NoError(t, err)
 	return body
 }
@@ -545,12 +545,12 @@ func internalArcChain(t *testing.T, sweepDeg, h float64) *Body {
 	require.NoError(t, err)
 	chains := s.Chains()
 	require.Len(t, chains, 1)
-	body, err := New().ExtrudeChain(s, chains[0], Distance{D: units.Millimeters(h), Dir: Along})
+	body, err := Extrude(t.Context(), New(), s, chains[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
 
-// A wall that sweeps 240 degrees holds antipodal points. An ExtrudeChain
+// A wall that sweeps 240 degrees holds antipodal points. A chain Extrude
 // sheet of that arc has vertices only at the arc's ends, and a brep's face
 // carries the same wall; each reads its stations along the wall at both
 // levels, so the reading reaches the wall's own diameter and stays at or
@@ -615,7 +615,7 @@ func TestPairGateDiameterReadsStations(t *testing.T) {
 		s.CreateCircle(c, 1)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		b, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(1), Dir: Along})
+		b, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(1), Dir: Along})
 		require.NoError(t, err)
 		return a, b
 	}
@@ -727,7 +727,7 @@ func TestPairGateDiameterReadsCoilStations(t *testing.T) {
 	cs.Fix(rect.A)
 	_, err = cs.Solve(t.Context())
 	require.NoError(t, err)
-	cube, err := doc.Extrude(cs, cs.Profiles()[0], Distance{D: units.Millimeters(0.2), Dir: Along})
+	cube, err := Extrude(t.Context(), doc, cs, cs.Profiles()[0], Distance{D: units.Millimeters(0.2), Dir: Along})
 	require.NoError(t, err)
 
 	d, err := interferencePairDiameter(t.Context(), spring, cube)

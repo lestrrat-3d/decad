@@ -39,7 +39,7 @@ func TestExtrudePlate(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	require.True(t, body.IsSolid())
@@ -87,7 +87,7 @@ func TestExtrudePlateWithHole(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 
 	wantVol := (6000 - math.Pi*100) * 8
@@ -129,7 +129,7 @@ func TestExtrudeExtents(t *testing.T) {
 	// Symmetric full-length 8: the sweep is [−4, 4]. The full box is checked,
 	// not just Z, since the plate's own X/Y footprint is unchanged.
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Symmetric{D: units.Millimeters(8), FullLength: true})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Millimeters(8), FullLength: true})
 	require.NoError(t, err)
 	decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, -4), r3.NewVec(100, 60, 4))
 	decadtest.MeasuresCentroid(t, body, r3.NewVec(50, 30, 0))
@@ -138,7 +138,7 @@ func TestExtrudeExtents(t *testing.T) {
 	// volume.
 	doc2 := decad.New()
 	p2 := s.Profiles()[0]
-	body2, err := doc2.Extrude(s, p2, decad.Distance{D: units.Millimeters(10), Dir: decad.Against})
+	body2, err := decad.Extrude(t.Context(), doc2, s, p2, decad.Distance{D: units.Millimeters(10), Dir: decad.Against})
 	require.NoError(t, err)
 	decadtest.MeasuresBounds(t, body2, r3.NewVec(0, 0, -10), r3.NewVec(100, 60, 0))
 	decadtest.MeasuresVolume(t, body2, units.CubicMillimeters(60000))
@@ -146,7 +146,7 @@ func TestExtrudeExtents(t *testing.T) {
 	// TwoSided distance sides: One along 7, Two against 3 → [−3, 7].
 	doc3 := decad.New()
 	p3 := s.Profiles()[0]
-	body3, err := doc3.Extrude(s, p3, decad.TwoSided{
+	body3, err := decad.Extrude(t.Context(), doc3, s, p3, decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(7)},
 		Two: decad.DistanceSide{D: units.Millimeters(3)},
 	})
@@ -172,7 +172,7 @@ func TestExtrudeQuarterDiskPrism(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(math.Pi*400/4*5))
@@ -194,7 +194,7 @@ func TestTransformRetiresSourceAndPreservesGeometry(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	rot, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(90))
@@ -231,20 +231,20 @@ func TestExtrudeRejections(t *testing.T) {
 	s, p := plateSketch(t)
 	doc := decad.New()
 
-	_, err := doc.Extrude(s, p, decad.Symmetric{D: units.Millimeters(10)},
+	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Millimeters(10)},
 		decad.WithTaper(units.Degrees(3)), decad.WithSurfaceResult())
 	require.ErrorIs(t, err, decad.ErrUnsupported, `a tapered surface result is unsupported`)
-	_, err = doc.Extrude(s, p, decad.ThroughAll{Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.ThroughAll{Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrDegenerate, `a through-all sweep with no live body in its path has no stop`)
-	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(0), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(0), Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(-1), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(-1), Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
-	_, err = doc.Extrude(s, p, decad.Distance{D: units.Degrees(10), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Degrees(10), Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrUnitKind)
-	_, err = doc.Extrude(s, p, nil)
+	_, err = decad.Extrude(t.Context(), doc, s, p, nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithTaper(units.Millimeters(3)))
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithTaper(units.Millimeters(3)))
 	require.ErrorIs(t, err, decad.ErrUnitKind, `a taper must be an angle`)
 
 	// Every rejection left the document untouched.
@@ -255,7 +255,7 @@ func TestExtrudeRejections(t *testing.T) {
 	s.AddConstraint(sketch.NewDistance(s.Points()[0], s.Points()[1], 55))
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 }
 
@@ -278,7 +278,7 @@ func TestFaceNormals(t *testing.T) {
 		}
 	}
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 
 	requireNormal := func(f *decad.Face, at, want r3.Vec) {
@@ -336,7 +336,7 @@ func TestWholeCircleEdgeSeamVertices(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
 	require.NoError(t, err)
 	for _, e := range body.Edges() {
 		if _, ok := e.Curve().(decad.Circle3); !ok {
@@ -352,7 +352,7 @@ func TestExtrudeRejectsUnknownDirection(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Direction(99)})
+	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Direction(99)})
 	require.ErrorIs(t, err, decad.ErrDegenerate, `an unknown direction is malformed, never silently Along`)
 	require.Empty(t, doc.Bodies())
 }
@@ -380,7 +380,7 @@ func TestExtrudeCoalescesCollinearSides(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 6, `the split edge merges: four sides + two caps`)
 	requireManifold(t, body)
@@ -405,7 +405,7 @@ func TestWholeCircleCylinderHasTwoLoops(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
 	require.NoError(t, err)
 	for _, f := range body.Faces() {
 		if _, ok := f.Surface().(decad.Cylinder); !ok {
@@ -434,7 +434,7 @@ func TestArcEdgeAxisFollowsWalkSense(t *testing.T) {
 		}
 	}
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 	circles := 0
 	for _, e := range body.Edges() {
@@ -454,7 +454,7 @@ func TestReflectedPlacementKeepsOutwardNormals(t *testing.T) {
 	// and its centroid must map exactly.
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	mirror, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1))
@@ -493,9 +493,9 @@ func TestExtrudeRejectsNonFiniteTaper(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, decad.WithTaper(units.Degrees(math.Inf(1))))
+	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, decad.WithTaper(units.Degrees(math.Inf(1))))
 	require.ErrorIs(t, err, decad.ErrNotFinite)
-	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, decad.WithTaper(units.Degrees(math.NaN())))
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, decad.WithTaper(units.Degrees(math.NaN())))
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 	require.Empty(t, doc.Bodies())
 }
@@ -504,7 +504,7 @@ func TestExtrudeRejectsNilOption(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, nil)
+	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }
@@ -515,9 +515,9 @@ func TestNilExtentPointersAreBranchable(t *testing.T) {
 	// contract as an untyped nil: errors.Is(err, ErrDegenerate).
 	s, p := plateSketch(t)
 	doc := decad.New()
-	_, err := doc.Extrude(s, p, (*decad.Distance)(nil))
+	_, err := decad.Extrude(t.Context(), doc, s, p, (*decad.Distance)(nil))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = doc.Extrude(s, p, decad.TwoSided{One: (*decad.DistanceSide)(nil), Two: decad.DistanceSide{D: units.Millimeters(1)}})
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.TwoSided{One: (*decad.DistanceSide)(nil), Two: decad.DistanceSide{D: units.Millimeters(1)}})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }
@@ -556,7 +556,7 @@ func roundedPlateBody(t *testing.T, bite bool) *decad.Body {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -698,7 +698,7 @@ func TestExtrudeRescaledDistanceCarriesConversionRounding(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
-			body, err := doc.Extrude(s, p, decad.Distance{D: tc.d, Dir: decad.Along})
+			body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: tc.d, Dir: decad.Along})
 			require.NoError(t, err)
 			box, err := body.Bounds()
 			require.NoError(t, err)
@@ -731,7 +731,7 @@ func BenchmarkExtrudePlate(b *testing.B) {
 	d := decad.Distance{D: units.Millimeters(10), Dir: decad.Along}
 	for b.Loop() {
 		doc := decad.New()
-		if _, err := doc.Extrude(s, p, d); err != nil {
+		if _, err := decad.Extrude(b.Context(), doc, s, p, d); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -817,7 +817,7 @@ func TestExtrudeInvoluteFlankBuildsAndVerifies(t *testing.T) {
 	s, p := involuteFlankSketch(t)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err, "a fit-spline involute flank must build: the R19 and R7 refusals this branch fixes")
 	require.NotNil(t, body)
 
@@ -884,7 +884,7 @@ func TestPlacedUsesEvaluatorCache(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	motion, err := r3.Translation(r3.NewVec(0, 0, 25))
 	require.NoError(t, err)
@@ -954,7 +954,7 @@ func TestExtrudeSketchArcRadiiRoundApart(t *testing.T) {
 			require.Equal(t, 1, arcs, `the profile records the one corner arc`)
 
 			doc := decad.New()
-			body, err := doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+			body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 			require.NoError(t, err)
 
 			// One corner is rounded: the 96×20 section less one (1 − π/4)r² wedge.

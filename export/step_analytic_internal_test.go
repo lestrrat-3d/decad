@@ -25,7 +25,7 @@ func arcPrisms(t *testing.T) map[string]*decad.Body {
 		require.NoError(t, err)
 		profiles := s.Profiles()
 		require.Len(t, profiles, 1)
-		body, err := doc.Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), doc, s, profiles[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 		require.NoError(t, err)
 		return body
 	}

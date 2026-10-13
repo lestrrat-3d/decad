@@ -43,6 +43,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Loft with differing loop or segment counts | `ErrUnsupported` (S1/S2) | `docs/loft-design.md` Table S |
 | Loft of mixed-kind or reversed pairs | Refused permanently | `docs/loft-design.md` §1 "Permanently out of scope" |
 | `LoftChain` with curved segments or non-parallel planes | `ErrUnsupported` (R36, R35) | `docs/surface-design.md` §1.2 |
+| `Extrude` over a chain with `WithTaper` (any angle) or `WithSurfaceResult()` | `ErrUnsupported` after the seam gates and before the extent; a chain extrude always returns a sheet and has no draft build | `docs/surface-design.md` §13.2 |
 | Hole, rib, web, emboss features | No entry point exists | none |
 
 ## Modify operations
@@ -100,7 +101,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Tessellation of `Body.Patch` with a curved face or edge outside a single-circle prism sheet filled in one call, or with a nonzero face-normal bound | `ErrUnsupported`: no shared chording for that face or edge | `docs/surface-design.md` §10; `docs/tessellation-design.md` §2 |
 | `Stitch` closing a revolve sheet whose wall tags are not exactly their records: a tilted or round-anchored axis, a near-parallel or near-perpendicular side, a snapped centre | `ErrUnsupported` (R8, `stitchFluxTagsDenoted`) | `docs/surface-design.md` §6.4 |
 | `Extend` of a partially revolved ribbon | `ErrUnsupported` (RS14) | `docs/surface-intersection-design.md` §2.2 |
-| `Trim`/`Extend`/`Split` over a pair sharing no generator, except a point loft split by a finite world-XY line `ExtrudeChain` sheet | Refused outside the bounded point-loft split class | `docs/surface-intersection-design.md` §4, `docs/loft-point-design.md` "Planar split of a point loft" |
+| `Trim`/`Extend`/`Split` over a pair sharing no generator, except a point loft split by a finite world-XY line chain `Extrude` sheet | Refused outside the bounded point-loft split class | `docs/surface-intersection-design.md` §4, `docs/loft-point-design.md` "Planar split of a point loft" |
 | `Face.Centroid` outside an authenticated point-loft far cap or planar Split cap | `ErrUnsupported`; only complete caps carry a bounded area-centroid certificate | `docs/loft-point-design.md` "Planar split of a point loft" |
 | `Body.ExtremeFacesByCentroid` outside a complete point-loft planar Split slab, its rigid copy, or its positive uniform image | `ErrUnsupported`; this source class has a cone bound for every side-face centroid | `docs/loft-point-design.md` "Planar split of a point loft" |
 | `Body.ScaledAt` of other bodies | `ErrUnsupported`; no similarity certificate | `docs/loft-point-design.md` "Anchored uniform scale of a Split slab"; `docs/evaluator-design.md` "Positive uniform scale of a line or circular prism" |

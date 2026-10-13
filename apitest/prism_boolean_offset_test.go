@@ -27,7 +27,7 @@ func offsetPlateBody(t *testing.T, doc *decad.Document, w *sketch.World, plane *
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -43,7 +43,7 @@ func offsetDiscBody(t *testing.T, doc *decad.Document, w *sketch.World, plane *s
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -225,7 +225,7 @@ func TestPrismCutAgainstToolOnOffsetPlaneIsAnalytic(t *testing.T) {
 	s.CreateCircle(center, 18)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(48), Dir: decad.Against})
+	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(48), Dir: decad.Against})
 	require.NoError(t, err)
 
 	got, err := decad.Cut(t.Context(), plate, tool)

@@ -294,7 +294,7 @@ func witnessSliceBody(t *testing.T, doc *decad.Document, cx, cy, r float64) *dec
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

@@ -28,7 +28,7 @@ func Example_decad_verify_diagnostics() {
 		return
 	}
 	doc := decad.New()
-	if _, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(0.5), Dir: decad.Along}); err != nil {
+	if _, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(0.5), Dir: decad.Along}); err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}

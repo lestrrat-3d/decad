@@ -92,7 +92,7 @@ func boolErrCube(doc *decad.Document, offset r3.Vec) (*decad.Body, error) {
 	if _, err := s.Solve(context.Background()); err != nil {
 		return nil, err
 	}
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		return nil, err
 	}

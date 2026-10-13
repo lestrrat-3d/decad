@@ -29,7 +29,7 @@ func patternedPrism(t *testing.T, doc *Document, u0, v0, u1, v1, r float64) *Bod
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along})
 	require.NoError(t, err)
 	return body
 }

@@ -18,7 +18,7 @@ import (
 // multi-segment composite path below and a standalone arc still refuse.
 //
 // The height comes from the path's own two points rather than from an Extent,
-// which is the whole difference from ExtrudeChain over the same walk.
+// which is the whole difference from chain Extrude over the same walk.
 func Example_decad_sweep_chain() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

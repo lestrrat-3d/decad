@@ -44,7 +44,7 @@ func knobBody(t *testing.T, doc *decad.Document) (*decad.Body, float64) {
 	s.CreateCircle(center, 2)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	disc, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	disc, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 	require.NoError(t, err)
 	disc, err = decad.Transform(t.Context(), disc, translation(t, r3.Vec{Z: 8}))
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ func octagonBody(t *testing.T, doc *decad.Document) *decad.Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

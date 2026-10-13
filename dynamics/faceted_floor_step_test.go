@@ -23,7 +23,7 @@ func positiveBoundFacetedFloorFixture(t *testing.T) (*decad.Document, *decad.Bod
 	s.CreateCircle(center, 2)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	upper, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{
+	upper, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(4), Dir: decad.Along,
 	})
 	require.NoError(t, err)

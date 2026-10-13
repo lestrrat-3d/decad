@@ -24,7 +24,7 @@ func Example_decad_locate_point() {
 		return
 	}
 	doc := decad.New()
-	box, err := doc.Extrude(s, s.Profiles()[0],
+	box, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		fmt.Println(err)

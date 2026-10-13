@@ -24,7 +24,7 @@ func thinPlateBody(doc *decad.Document, x float64) (*decad.Body, error) {
 	if _, err := s.Solve(context.Background()); err != nil {
 		return nil, err
 	}
-	return doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(0.5), Dir: decad.Along})
+	return decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(0.5), Dir: decad.Along})
 }
 
 // acceptExceptDesignatedThinWall is proposal §12's positive-match exception

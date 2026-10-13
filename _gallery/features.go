@@ -172,7 +172,7 @@ func ductSpans(ctx context.Context) ([]*decad.Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	middle, err := decad.New().Extrude(middleSketch, middleProfile, //nolint:contextcheck // Sweep and sketch solve above are cancellable.
+	middle, err := decad.Extrude(ctx, decad.New(), middleSketch, middleProfile,
 		decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
 	if err != nil {
 		return nil, fmt.Errorf("build the straight render span: %w", err)
@@ -426,7 +426,7 @@ func bladeBodyAtShape(ctx context.Context, height, profileScale float64) (*decad
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	blade, err := decad.New().Extrude(s, profile, //nolint:contextcheck
+	blade, err := decad.Extrude(ctx, decad.New(), s, profile,
 		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	if err != nil {
 		return nil, fmt.Errorf("extrude the blade: %w", err)
@@ -599,7 +599,7 @@ func cylinder(
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	return doc.Extrude(s, profile, extent) //nolint:contextcheck
+	return decad.Extrude(ctx, doc, s, profile, extent)
 }
 
 // prism sweeps the given plane-local loops straight along the plane normal.
@@ -609,7 +609,7 @@ func prism(ctx context.Context, doc *decad.Document, w *sketch.World, plane *ske
 		return nil, err
 	}
 	// Extrude has no context-aware variant; the sketch solve is the cancellable phase.
-	return doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(height), Dir: decad.Along}) //nolint:contextcheck
+	return decad.Extrude(ctx, doc, s, profile, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 }
 
 func sketchLoops(ctx context.Context, w *sketch.World, plane *sketch.Plane, loops ...[]point) (*sketch.Sketch, *sketch.Profile, error) {

@@ -20,7 +20,7 @@ func TestDocumentRemoveMintsNoProducer(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := d.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along})
+	body, err := Extrude(t.Context(), d, s, s.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along})
 	require.NoError(t, err)
 
 	before := d.nextProducerID()

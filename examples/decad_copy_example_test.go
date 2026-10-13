@@ -34,7 +34,7 @@ func Example_decad_copy() {
 
 	doc := decad.New()
 	// Step 0: the master peg, 4 mm tall — modelled once.
-	master, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	master, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude peg: %s\n", err)
 		return

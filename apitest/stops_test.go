@@ -54,10 +54,10 @@ func TestExtrudeThroughAll(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	pin, err := doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(4000))
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 10), decadtest.Exactly())
@@ -108,7 +108,7 @@ func TestExtrudeThroughAllRefusesDisplacedPrismExtentOnYZPlane(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := doc.Extrude(s, s.Profiles()[0], tc.extent)
+			_, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], tc.extent)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, "proven section displacement")
 			requireDocumentUnchanged(t, doc, before)
@@ -120,9 +120,9 @@ func TestExtrudeThroughAllStacked(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	_, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
-	second, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	second, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(0, 0, 25))
 	require.NoError(t, err)
@@ -132,14 +132,14 @@ func TestExtrudeThroughAllStacked(t *testing.T) {
 	// The sweep runs through the far side of EVERY live body it meets:
 	// lower spans [0, 10], upper [25, 35], so the stop is 35 — and both stop
 	// bodies are recorded, in stop order along the sweep.
-	pin, err := doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(400*35))
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 35), decadtest.Exactly())
 
 	// Nothing lies below the sketch plane, so an Against through-all has no
 	// stop at all.
-	_, err = doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Against})
+	_, err = decad.Extrude(t.Context(), doc, s, pinProf, decad.ThroughAll{Dir: decad.Against})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.NotErrorIs(t, err, decad.ErrUnsupported)
 }
@@ -148,15 +148,15 @@ func TestExtrudeThroughAllSides(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	_, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
-	_, err = doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
+	_, err = decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
 	require.NoError(t, err)
 
 	// One through-all side, one distance side: [−3, 10]. The plate below
 	// has no material above the sketch plane, so only the plate above is a
 	// stop body of the along side.
-	pin, err := doc.Extrude(s, pinProf, decad.TwoSided{
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.TwoSided{
 		One: decad.ThroughAllSide{},
 		Two: decad.DistanceSide{D: units.Millimeters(3)},
 	})
@@ -167,11 +167,11 @@ func TestExtrudeThroughAllSides(t *testing.T) {
 	// Both sides through-all: [−6, 10], one stop body per side, along side
 	// first. A fresh document, so the earlier pin is not itself a stop body.
 	doc2 := decad.New()
-	_, err = doc2.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc2, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
-	_, err = doc2.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
+	_, err = decad.Extrude(t.Context(), doc2, s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
 	require.NoError(t, err)
-	pin2, err := doc2.Extrude(s, pinProf, decad.TwoSided{
+	pin2, err := decad.Extrude(t.Context(), doc2, s, pinProf, decad.TwoSided{
 		One: decad.ThroughAllSide{},
 		Two: decad.ThroughAllSide{},
 	})
@@ -183,13 +183,13 @@ func TestExtrudeToFace(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	// Stop at the plate's far cap: the sense comes from the target face, so
 	// the extent carries no Direction — the sweep is exactly [0, 10].
 	q := capEndFace(plate)
-	pin, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: q})
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: q})
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(4000))
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 10), decadtest.Exactly())
@@ -198,10 +198,10 @@ func TestExtrudeToFace(t *testing.T) {
 
 	// A positive offset overshoots the face, a negative one stops short of
 	// it (core §8.1).
-	over, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(2)})
+	over, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(2)})
 	require.NoError(t, err)
 	decadtest.MeasuresBounds(t, over, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 12), decadtest.Exactly())
-	short, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(-3)})
+	short, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(-3)})
 	require.NoError(t, err)
 	decadtest.MeasuresBounds(t, short, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 7), decadtest.Exactly())
 }
@@ -212,10 +212,10 @@ func TestExtrudeToFaceAgainst(t *testing.T) {
 	// sense comes from the face, not from a Direction.
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	below, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
+	below, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
 	require.NoError(t, err)
 
-	pin, err := doc.Extrude(s, pinProf, decad.ToFace{Body: below, Face: capStartFace(below)})
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: below, Face: capStartFace(below)})
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(400*6))
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, -6), r3.NewVec(140, 20, 0), decadtest.Exactly())
@@ -225,14 +225,14 @@ func TestExtrudeToFaceSides(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	above, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	above, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
-	below, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
+	below, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
 	require.NoError(t, err)
 
 	// Each side stops at its own face: [−6, 10], named-extent refs recorded
 	// in extent order (core §6.2).
-	pin, err := doc.Extrude(s, pinProf, decad.TwoSided{
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.TwoSided{
 		One: decad.ToFace{Body: above, Face: capEndFace(above)},
 		Two: decad.ToFace{Body: below, Face: capStartFace(below)},
 	})
@@ -242,7 +242,7 @@ func TestExtrudeToFaceSides(t *testing.T) {
 
 	// A side's face must lie on the side's own sense: the against side
 	// cannot stop at a face above the sketch plane.
-	_, err = doc.Extrude(s, pinProf, decad.TwoSided{
+	_, err = decad.Extrude(t.Context(), doc, s, pinProf, decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(1)},
 		Two: decad.ToFace{Body: above, Face: capEndFace(above)},
 	})
@@ -253,62 +253,62 @@ func TestExtrudeToFaceGates(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	liveBodies := len(doc.Bodies())
 
 	t.Run("NilBody", func(t *testing.T) {
-		_, err := doc.Extrude(s, pinProf, decad.ToFace{Face: capEndFace(plate)})
+		_, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Face: capEndFace(plate)})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("ForeignBody", func(t *testing.T) {
 		other := decad.New()
-		_, err := other.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate)})
+		_, err := decad.Extrude(t.Context(), other, s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate)})
 		require.ErrorIs(t, err, decad.ErrForeignBody)
 	})
 	t.Run("RetiredBody", func(t *testing.T) {
 		s2, plateProf2, pinProf2 := plateAndPin(t)
 		doc2 := decad.New()
-		old, err := doc2.Extrude(s2, plateProf2, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		old, err := decad.Extrude(t.Context(), doc2, s2, plateProf2, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(0, 0, 1))
 		require.NoError(t, err)
 		_, err = decad.Transform(t.Context(), old, move)
 		require.NoError(t, err)
-		_, err = doc2.Extrude(s2, pinProf2, decad.ToFace{Body: old, Face: capEndFace(old)})
+		_, err = decad.Extrude(t.Context(), doc2, s2, pinProf2, decad.ToFace{Body: old, Face: capEndFace(old)})
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 	})
 	t.Run("NilFace", func(t *testing.T) {
-		_, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate})
+		_, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("TypedNilFace", func(t *testing.T) {
 		var q *decad.FaceQuery
-		_, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: q})
+		_, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: q})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.NotErrorIs(t, err, decad.ErrUnsupported, `malformed input must not read as staged resolution`)
 	})
 	t.Run("ZeroMatchesIsErrCardinality", func(t *testing.T) {
 		// The implicit exactly-one takes precedence over ErrNoMatch even for
 		// a selector asserting no cardinality of its own (core §12).
-		_, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Cylindrical())})
+		_, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Cylindrical())})
 		require.ErrorIs(t, err, decad.ErrCardinality)
 		require.NotErrorIs(t, err, decad.ErrNoMatch)
 	})
 	t.Run("ManyMatchesIsErrCardinality", func(t *testing.T) {
-		_, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Planar())})
+		_, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Planar())})
 		require.ErrorIs(t, err, decad.ErrCardinality)
 	})
 	t.Run("OwnAssertionMiss", func(t *testing.T) {
 		// The query's own cardinality assertion fails first: a plate has six
 		// planar faces, not three.
-		_, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Planar()).Exactly(3)})
+		_, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Planar()).Exactly(3)})
 		require.ErrorIs(t, err, decad.ErrCardinality)
 	})
 	t.Run("NonPlanarStopFace", func(t *testing.T) {
 		holed := holePlateBody(t)
 		hq := decad.Faces(decad.Cylindrical())
-		_, err := holed.Document().Extrude(s, pinProf, decad.ToFace{Body: holed, Face: hq})
+		_, err := decad.Extrude(t.Context(), holed.Document(), s, pinProf, decad.ToFace{Body: holed, Face: hq})
 		require.ErrorIs(t, err, decad.ErrUnsupported, `a curved stop face is staged, loudly`)
 	})
 	t.Run("NotPerpendicularStopFace", func(t *testing.T) {
@@ -318,27 +318,27 @@ func TestExtrudeToFaceGates(t *testing.T) {
 		doc2 := decad.New()
 		prism := trianglePrismHost(t, doc2)
 		q := decad.Faces(decad.Planar(), decad.NormalTo(r3.NewVec(1, 0, 0)))
-		_, err := doc2.Extrude(s, pinProf, decad.ToFace{Body: prism, Face: q})
+		_, err := decad.Extrude(t.Context(), doc2, s, pinProf, decad.ToFace{Body: prism, Face: q})
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 	t.Run("CoplanarStopFace", func(t *testing.T) {
-		_, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capStartFace(plate)})
+		_, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: capStartFace(plate)})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("OffsetWrongKind", func(t *testing.T) {
-		_, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Degrees(5)})
+		_, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Degrees(5)})
 		require.ErrorIs(t, err, decad.ErrUnitKind)
 	})
 	t.Run("OffsetNotFinite", func(t *testing.T) {
-		_, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(math.Inf(1))})
+		_, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(math.Inf(1))})
 		require.ErrorIs(t, err, decad.ErrNotFinite)
 	})
 	t.Run("OffsetPullsStopBehindPlane", func(t *testing.T) {
-		_, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(-15)})
+		_, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(-15)})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("NilExtentPointer", func(t *testing.T) {
-		_, err := doc.Extrude(s, pinProf, (*decad.ToFace)(nil))
+		_, err := decad.Extrude(t.Context(), doc, s, pinProf, (*decad.ToFace)(nil))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 
@@ -383,7 +383,7 @@ func arcSegmentPlate(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := doc.Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }
@@ -403,7 +403,7 @@ func TestExtrudeThroughAllArcSectionCarriesRadiusBound(t *testing.T) {
 	require.Positive(t, hostBox.Bound.Base())
 
 	ps, pp := pinFootprint(t)
-	pin, err := doc.Extrude(ps, pp, decad.ThroughAll{Dir: decad.Along})
+	pin, err := decad.Extrude(t.Context(), doc, ps, pp, decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
 
 	// The sweep runs from the sketch plane to the apex the host HOLDS, so the
@@ -446,7 +446,7 @@ func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
 		require.Positive(t, box.Bound.Base())
 
 		ps, pp := pinFootprint(t)
-		pin, err := doc.Extrude(ps, pp, decad.ThroughAll{Dir: decad.Along})
+		pin, err := decad.Extrude(t.Context(), doc, ps, pp, decad.ThroughAll{Dir: decad.Along})
 		require.NoError(t, err)
 
 		// The sweep stops at the host's own held far side, and the 4×4
@@ -471,7 +471,7 @@ func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
 		require.NoError(t, err)
 
 		ps, pp := pinFootprint(t)
-		pin, err := doc.Extrude(ps, pp, decad.ThroughAll{Dir: decad.Along})
+		pin, err := decad.Extrude(t.Context(), doc, ps, pp, decad.ThroughAll{Dir: decad.Along})
 		require.NoError(t, err)
 
 		// The revolved solid spans z ∈ [−8, 8] exactly, so the stop is 8 and
@@ -566,7 +566,7 @@ func TestRevolveToFaceAngularGates(t *testing.T) {
 	host, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	es, ep := plateSketch(t)
-	plate, err := doc.Extrude(es, ep, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, es, ep, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	prism := trianglePrismHost(t, doc)
 	liveBodies := len(doc.Bodies())
@@ -602,7 +602,7 @@ func TestRevolveToFaceAngularGates(t *testing.T) {
 		ws.Fix(rect.A)
 		_, err = ws.Solve(t.Context())
 		require.NoError(t, err)
-		straddle, err := doc.Extrude(ws, ws.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		straddle, err := decad.Extrude(t.Context(), doc, ws, ws.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(t, err)
 		_, err = decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Body: straddle, Face: capStartFace(straddle)})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -642,7 +642,7 @@ func TestExtrudeThroughAllCupStop(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	box, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 
 	// Hollow the plate into a cup (one cap removed): the box is retired, so the
@@ -652,7 +652,7 @@ func TestExtrudeThroughAllCupStop(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, doc.Bodies(), box)
 
-	pin, err := doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
 	require.NotErrorIs(t, err, decad.ErrUnsupported)
 
@@ -672,12 +672,12 @@ func TestExtrudeThroughAllSideCupStop(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	box, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 	cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
 
-	pin, err := doc.Extrude(s, pinProf, decad.TwoSided{
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.TwoSided{
 		One: decad.ThroughAllSide{},
 		Two: decad.DistanceSide{D: units.Millimeters(3)},
 	})
@@ -722,10 +722,10 @@ func TestExtrudeToFaceComputedLevelIsBounded(t *testing.T) {
 	)
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
 	require.NoError(t, err)
 
-	pin, err := doc.Extrude(s, pinProf, decad.ToFace{
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{
 		Body:   plate,
 		Face:   capEndFace(plate),
 		Offset: units.Millimeters(-shortBy),
@@ -785,10 +785,10 @@ func TestExtrudeStatedLevelStaysExact(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	toFace, err := doc.Extrude(s, pinProf, decad.ToFace{
+	toFace, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{
 		Body:   plate,
 		Face:   capEndFace(plate),
 		Offset: units.Millimeters(2),
@@ -832,9 +832,9 @@ func TestExtrudeToFaceInheritsCapBlendComputedLevelBound(t *testing.T) {
 	)
 	s, plateProfile, pinProfile := plateAndPin(t)
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
 	require.NoError(t, err)
-	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProfile, decad.ToFace{
 		Body:   plate,
 		Face:   capEndFace(plate),
 		Offset: units.Millimeters(-shortBy),
@@ -846,7 +846,7 @@ func TestExtrudeToFaceInheritsCapBlendComputedLevelBound(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	third, err := doc.Extrude(s, pinProfile, decad.ToFace{
+	third, err := decad.Extrude(t.Context(), doc, s, pinProfile, decad.ToFace{
 		Body: chamfered,
 		Face: capEndFace(chamfered),
 	})
@@ -896,7 +896,7 @@ func TestExtrudeToFaceInheritsPlacedLoftBound(t *testing.T) {
 	require.Positive(t, loftBound)
 
 	s, _, pinProfile := plateAndPin(t)
-	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProfile, decad.ToFace{
 		Body: placed,
 		Face: capEndFace(placed),
 	})

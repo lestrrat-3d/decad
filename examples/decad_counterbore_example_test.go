@@ -24,7 +24,7 @@ func Example_decad_counterbore() {
 		return
 	}
 	doc := decad.New()
-	plate, err := doc.Extrude(plateSketch, plateSketch.Profiles()[0],
+	plate, err := decad.Extrude(context.Background(), doc, plateSketch, plateSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude plate: %s\n", err)
@@ -43,7 +43,7 @@ func Example_decad_counterbore() {
 		fmt.Printf("failed to solve through hole: %s\n", err)
 		return
 	}
-	throughTool, err := doc.Extrude(throughSketch, throughSketch.Profiles()[0],
+	throughTool, err := decad.Extrude(context.Background(), doc, throughSketch, throughSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude through hole: %s\n", err)
@@ -72,7 +72,7 @@ func Example_decad_counterbore() {
 		fmt.Printf("failed to solve counterbore: %s\n", err)
 		return
 	}
-	shoulderTool, err := doc.Extrude(shoulderSketch, shoulderSketch.Profiles()[0],
+	shoulderTool, err := decad.Extrude(context.Background(), doc, shoulderSketch, shoulderSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude counterbore: %s\n", err)

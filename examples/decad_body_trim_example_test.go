@@ -31,7 +31,7 @@ func Example_decad_body_trim() {
 	}
 
 	doc := decad.New()
-	sheet, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
 	if err != nil {
 		fmt.Printf("failed to extrude the sheet: %s\n", err)
 		return
@@ -49,7 +49,7 @@ func Example_decad_body_trim() {
 		fmt.Printf("failed to solve the tool sketch: %s\n", err)
 		return
 	}
-	tool, err := doc.Extrude(ts, ts.Profiles()[0], decad.TwoSided{
+	tool, err := decad.Extrude(context.Background(), doc, ts, ts.Profiles()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
 	})

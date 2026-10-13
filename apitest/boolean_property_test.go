@@ -542,7 +542,7 @@ func plateWithHoleBody(t *testing.T, doc *decad.Document, half, rHole, h float64
 		}
 	}
 	require.NotNil(t, prof, `the plate-with-hole region should exist`)
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

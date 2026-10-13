@@ -760,7 +760,7 @@ A path of one span has no internal join, so §15.1's rule has nothing to
 decide there. The whole build is the recorded walk transported over that one
 span:
 
-- a **`LineTo`** span is the chain prism `Document.ExtrudeChain` already
+- a **`LineTo`** span is the chain prism a chain `Extrude` already
   builds, over the path's own signed height instead of a resolved `Extent`;
 - an **`ArcThrough`** span is the chain shell `Revolve` over a chain already
   builds, over the arc's exact centre, axis and directed angle instead of a
@@ -771,14 +771,14 @@ one-span chain `Sweep` was never waiting on a pairing rule. It was waiting on
 this section to say so, and on Table SC to state which path shapes it admits.
 
 **The two reductions are not the same call as their chain siblings, and the
-difference is the height.** `ExtrudeChain` takes its interval from an `Extent`
+difference is the height.** A chain `Extrude` takes its interval from an `Extent`
 the document resolves; a straight chain sweep takes it from the path's two
 recorded points, so the interval carries `validateStraightSweepPath`'s own
 composed bound — the square root's committed error against the exact rational
 squared length, plus the per-component departure of the held sweep vector from
 the exact tangent. On an axis-aligned frame every one of those terms is zero
 and the two calls publish bit-identical measurements; on any other frame the
-chain sweep's `Area` is `Approximate` where the same walk's `ExtrudeChain`
+chain sweep's `Area` is `Approximate` where the same walk's chain `Extrude`
 reading may not be.
 
 ### 15.3 The entry point
@@ -822,7 +822,7 @@ The call takes the sketch beside the chain because a chain's geometry is
 plane-local and the plane is the sketch's (`docs/api-design.md` §7).
 
 **A chain-fed result is always a sheet**, which is `docs/surface-design.md`
-§13.2's answer for `ExtrudeChain` and a chain `Revolve` restated with no change:
+§13.2's answer for a chain `Extrude` and a chain `Revolve` restated with no change:
 `Kind()` is `BodySheet` by construction, `IsSolid()` is `false`, and
 `Volume()`/`Centroid()` answer `ErrNotSolid` by KIND rather than by soundness.
 
@@ -861,7 +861,7 @@ option refusals of §15.3 included, from masking a seam refusal.
 | `Edges(Free())` | both rims of the walk over every span, plus the one sweep edge at each of the walk's two free ends; a one-span straight sweep of an `n`-segment walk resolves `2n + 2` |
 | `Area` | the sum of each wall's own area through `boundedAdd`. A straight span's wall is `boundedMul(segment length, span height)`, the height carrying §15.2's composed path bound; an arc span's is `boundedMul(walkAxisMoment, sweep)` on `docs/surface-design.md` §13.4's own terms. A circular wall carries its proven integral enclosure and a free-form wall `internal/freeform/spline_length.go`'s proven bracket |
 | `Bounds` | the recorded walk's per-segment analytic extremes swept over the span's signed interval, from `prism_extent.go` and `revolve_extent.go` verbatim, charging the frame and placement rounding those readings already charge |
-| `Verify`'s validity | exactly what an `ExtrudeChain` ribbon or a chain `Revolve` shell over the same recorded walk and interval reads (`docs/surface-design.md` §13.4, §9.1). A composite chain sweep reads `ValidityUndecided`, for D1's own reason: the assembled topology audit proves how the spans sew together, never that the swept walls do not fold back through one another |
+| `Verify`'s validity | exactly what a chain `Extrude` ribbon or a chain `Revolve` shell over the same recorded walk and interval reads (`docs/surface-design.md` §13.4, §9.1). A composite chain sweep reads `ValidityUndecided`, for D1's own reason: the assembled topology audit proves how the spans sew together, never that the swept walls do not fold back through one another |
 
 No bound in that table is new, because no geometry is: every wall is built by
 the per-segment construction its chain sibling already proves, and the one term

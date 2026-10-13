@@ -32,7 +32,7 @@ func internalCircleBody(t *testing.T, doc *Document, x, radius, z float64, exten
 	s.CreateCircle(center, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], extent)
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], extent)
 	require.NoError(t, err)
 	return body
 }

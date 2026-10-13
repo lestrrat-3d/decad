@@ -22,7 +22,7 @@ func makeCylinder(t *testing.T, doc *decad.Document) *decad.Body {
 	s.Fix(center)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	cylinder, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{
+	cylinder, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(10), Dir: decad.Along,
 	})
 	require.NoError(t, err)

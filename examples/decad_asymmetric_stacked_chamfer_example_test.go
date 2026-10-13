@@ -28,7 +28,7 @@ func Example_decad_asymmetric_stacked_chamfer() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
-		return doc.Extrude(s, s.Profiles()[0],
+		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
 			decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	}
 	plate, err := extrudeRectangle(0, 0, 40, 40, 0, 10)

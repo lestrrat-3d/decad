@@ -34,7 +34,7 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 		ss.CreateLine(a, b)
 		_, e = ss.Solve(t.Context())
 		require.NoError(t, e)
-		body, e := doc.ExtrudeChain(ss, ss.Chains()[0], TwoSided{
+		body, e := Extrude(t.Context(), doc, ss, ss.Chains()[0], TwoSided{
 			One: DistanceSide{D: units.Millimeters(20)}, Two: DistanceSide{D: units.Millimeters(20)}})
 		require.NoError(t, e)
 		return body

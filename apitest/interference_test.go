@@ -441,7 +441,7 @@ func TestVerifyCoarseBooleanTessellationStaysSuspect(t *testing.T) {
 		}
 	}
 	require.NotNil(t, profile)
-	_, err = doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 	boxBody(t, doc, -1, 1, 1, 2, 4)
 	before := snapshotDocument(t, doc)
@@ -568,7 +568,7 @@ func splitCellBody(t *testing.T, doc *decad.Document, h float64) *decad.Body {
 	}
 	require.NotNil(t, left, "the split rectangle's left cell must exist")
 
-	body, err := doc.Extrude(s, left, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, left, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
 }

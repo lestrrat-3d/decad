@@ -37,7 +37,7 @@ func TestClassBCrossingVertexFarFromOrigin(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
 
 	tw := sketch.NewWorld()
@@ -50,7 +50,7 @@ func TestClassBCrossingVertexFarFromOrigin(t *testing.T) {
 	ts.CreateCircle(c, 3)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	drill, err := doc.Extrude(ts, ts.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
+	drill, err := decad.Extrude(t.Context(), doc, ts, ts.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
 	require.NoError(t, err)
 
 	got, err := decad.Cut(t.Context(), box, drill)

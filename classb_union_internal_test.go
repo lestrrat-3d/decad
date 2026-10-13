@@ -28,7 +28,7 @@ func internalPinAlongX(t *testing.T, doc *Document, x0, l float64) *Body {
 	s.CreateCircle(c, 3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(l), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(l), Dir: Along})
 	require.NoError(t, err)
 	return body
 }

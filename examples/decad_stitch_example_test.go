@@ -50,7 +50,7 @@ func Example_decad_stitch() {
 	}
 
 	doc := decad.New()
-	walls, err := doc.Extrude(s, prof,
+	walls, err := decad.Extrude(ctx, doc, s, prof,
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 		decad.WithSurfaceResult())
 	if err != nil {

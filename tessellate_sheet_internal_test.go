@@ -21,7 +21,7 @@ func internalSheetBoxBody(t *testing.T, doc *Document, x0, y0, x1, y1, h float64
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along}, WithSurfaceResult())
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along}, WithSurfaceResult())
 	require.NoError(t, err)
 	return body
 }
@@ -47,7 +47,7 @@ func internalHoledSheetBody(t *testing.T, doc *Document) *Body {
 		}
 	}
 	require.NotNil(t, prof)
-	body, err := doc.Extrude(s, prof, Distance{D: units.Millimeters(8), Dir: Along}, WithSurfaceResult())
+	body, err := Extrude(t.Context(), doc, s, prof, Distance{D: units.Millimeters(8), Dir: Along}, WithSurfaceResult())
 	require.NoError(t, err)
 	return body
 }

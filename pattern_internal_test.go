@@ -32,7 +32,7 @@ func patternPrism(t *testing.T, u0, v0, u1, v1, r float64) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := New()
-	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along})
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along})
 	require.NoError(t, err)
 	return body
 }
@@ -168,7 +168,7 @@ func TestPatternCopiesUnionStackArm(t *testing.T) {
 				s.Fix(rect.A)
 				_, err = s.Solve(t.Context())
 				require.NoError(t, err)
-				b, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along})
+				b, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along})
 				require.NoError(t, err)
 				return b
 			}

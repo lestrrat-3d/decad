@@ -18,7 +18,7 @@ func extrudePlate(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return doc, body
 }
@@ -256,7 +256,7 @@ func TestVerifyDisjointPairIsSound(t *testing.T) {
 	require.NoError(t, err)
 
 	s, p := plateSketch(t)
-	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	// Two proven solids whose boxes are far apart: proven disjoint, and the
@@ -279,7 +279,7 @@ func TestVerifyTouchingBoxesAreDisjoint(t *testing.T) {
 	require.NoError(t, err)
 
 	s, p := plateSketch(t)
-	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -291,7 +291,7 @@ func TestVerifyCoincidentPairIsInterfering(t *testing.T) {
 	t.Parallel()
 	doc, _ := extrudePlate(t)
 	s, p := plateSketch(t)
-	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	// Two coincident analytic plates have an exact set-identity certificate,
@@ -370,7 +370,7 @@ func TestVerifyClearancesMeasureBoxProvenPair(t *testing.T) {
 	_, err = decad.Transform(t.Context(), body, shift)
 	require.NoError(t, err)
 	s, p := plateSketch(t)
-	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	// A box-proven pair is already partition-decided, but its row still
@@ -609,7 +609,7 @@ func TestVerifyPlateWithHole(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -849,7 +849,7 @@ func TestVerifyDiagnosticsInterference(t *testing.T) {
 	// Two coincident analytic plates overlap by an exact set-identity volume.
 	doc, _ := extrudePlate(t)
 	s, p := plateSketch(t)
-	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -885,9 +885,9 @@ func coplanarContactPairDocument(t *testing.T) *decad.Document {
 	p := s.Profiles()[0]
 
 	doc := decad.New()
-	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
-	box2, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	box2, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
 	shift, err := r3.Translation(r3.NewVec(0, 5, 5))
@@ -1067,7 +1067,7 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	_, err = decad.Transform(t.Context(), cup1, far)
 	require.NoError(t, err)
 	s2, p2 := plateSketch(t)
-	box2, err := doc.Extrude(s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	box2, err := decad.Extrude(t.Context(), doc, s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
 	require.NoError(t, err)
 	_, err = box2.Shell(t.Context(), topCap(box2), units.Millimeters(5))
 	require.NoError(t, err)
@@ -1288,9 +1288,9 @@ func computedToFacePin(t *testing.T) (*decad.Document, *decad.Body, float64) {
 	require.NotNil(t, pinProfile)
 
 	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(1e6), Dir: decad.Along})
+	plate, err := decad.Extrude(t.Context(), doc, s, plateProfile, decad.Distance{D: units.Millimeters(1e6), Dir: decad.Along})
 	require.NoError(t, err)
-	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+	pin, err := decad.Extrude(t.Context(), doc, s, pinProfile, decad.ToFace{
 		Body:   plate,
 		Face:   capEndFace(plate),
 		Offset: units.Millimeters(-0.001),

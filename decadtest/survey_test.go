@@ -52,7 +52,7 @@ func holePlateReport(t *testing.T) (*decad.Report, *decad.Body) {
 	require.NotNil(t, prof, "the sketch must solve one profile with one hole")
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report := decadtest.Verify(t, doc, decad.WithConcaveRadius())

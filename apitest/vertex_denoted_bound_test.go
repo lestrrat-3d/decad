@@ -255,7 +255,7 @@ func TestExtrudeVertexReachesDenotedCutEnds(t *testing.T) {
 			doc := decad.New()
 			for _, profile := range profiles {
 				ends := denotedEnds(t, recordOf(t, s, profile))
-				body, err := doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+				body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
 				require.NoError(t, err)
 				bounded, shared := requireVerticesReachDenoted(t, body, ends, inPlane)
 				junctions := len(ends) / 2
@@ -296,7 +296,7 @@ func TestExtrudeVertexReachesDenotedCircleSeam(t *testing.T) {
 			profiles := s.Profiles()
 			require.Len(t, profiles, 1)
 			ends := denotedEnds(t, recordOf(t, s, profiles[0]))
-			body, err := decad.New().Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+			body, err := decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
 			require.NoError(t, err)
 			bounded, _ := requireVerticesReachDenoted(t, body, ends, inPlane)
 			require.Equal(t, tc.bounded, bounded)
@@ -328,7 +328,7 @@ func TestExtrudeVertexReachesDenotedTrimmedSide(t *testing.T) {
 		profiles := s.Profiles()
 		require.Len(t, profiles, 1)
 		ends := denotedEnds(t, recordOf(t, s, profiles[0]))
-		body, err := decad.New().Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
 		require.NoError(t, err)
 		bounded, _ := requireVerticesReachDenoted(t, body, ends, inPlane)
 		require.Equal(t, 2, bounded, `only the trimmed corner's two vertices carry a bound`)
@@ -347,7 +347,7 @@ func TestExtrudeVertexReachesDenotedTrimmedSide(t *testing.T) {
 		profiles := s.Profiles()
 		require.Len(t, profiles, 1)
 		ends := denotedEnds(t, recordOf(t, s, profiles[0]))
-		body, err := decad.New().Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 		require.NoError(t, err)
 		bounded, shared := requireVerticesReachDenoted(t, body, ends, inPlane)
 		require.Zero(t, bounded, `every vertex of an integer rectangle is Exact`)
@@ -363,7 +363,7 @@ func TestExtrudeVertexReachesDenotedTrimmedSide(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, [2]float64{1, 0}, [2]float64{hole.TStart, hole.TEnd})
 		ends := denotedEnds(t, record)
-		body, err := decad.New().Extrude(s, profile, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), decad.New(), s, profile, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 		require.NoError(t, err)
 		bounded, _ := requireVerticesReachDenoted(t, body, ends, inPlane)
 		require.Zero(t, bounded, `the hole's seam sits on its exact t = 0 point`)
@@ -429,7 +429,7 @@ func TestExtrudeVertexReachesDenotedMergedRun(t *testing.T) {
 	record := recordOf(t, s, profiles[0])
 	ends := denotedEnds(t, record)
 	require.Len(t, record.Outer.Segments, 5, `the base stays two recorded segments`)
-	body, err := decad.New().Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	body, err := decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
 	require.NoError(t, err)
 	bounded, shared := requireVerticesReachDenoted(t, body, ends, inPlane)
 	require.Equal(t, 2, bounded, `only the trimmed corner's two vertices carry a bound`)
@@ -439,14 +439,14 @@ func TestExtrudeVertexReachesDenotedMergedRun(t *testing.T) {
 // TestChainVertexReachesDenotedCutEnd records the two open fragments the
 // radius-7.3 circle leaves of the 1370 mm line along v = 0.3. Each is one line
 // segment trimmed at a crossing, so its free end there is a lerp at the
-// recorded t. Every vertex ExtrudeChain and a quarter-turn chain Revolve about
+// recorded t. Every vertex chain Extrude and a quarter-turn chain Revolve about
 // v = 20 place there must reach the denoted point, and the extruded line's
 // natural end stays Exact. The quarter-turn image of every vertex also
 // carries the rotation's own rounding, so the revolve's natural end is
 // bounded there too.
 //
 // Shown-to-fail on amd64: with no walk-end term at a chain's free ends,
-// ExtrudeChain publishes the trimmed end Exact, 1.8e-15 mm from its denoted
+// chain Extrude publishes the trimmed end Exact, 1.8e-15 mm from its denoted
 // point. The revolve leg is coverage only: chain Revolve charged its free
 // ends' own walk bound already.
 func TestChainVertexReachesDenotedCutEnd(t *testing.T) {
@@ -471,7 +471,7 @@ func TestChainVertexReachesDenotedCutEnd(t *testing.T) {
 		require.Len(t, record.Segments, 1)
 		ends := denotedSegmentEnds(t, record.Segments)
 
-		body, err := doc.ExtrudeChain(s, ch, decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		body, err := decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
 		require.NoError(t, err)
 		// Whether the trimmed end's held lerp rounds is arch-specific: an FMA
 		// evaluation lands on this lerp exactly, a two-step one does not. Only
