@@ -36,9 +36,9 @@ func recognizePrismUnionFillet(a, b *Body) *prismUnionFilletRecord {
 }
 
 func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
-	rec *prismUnionFilletRecord, radius, radiusDelta float64) (*Body, error) {
+	rec *prismUnionFilletRecord, radius, radiusDelta float64) (*Body, bool, error) {
 	if len(edges) != 1 || radiusDelta != 0 || !(radius > 0) || proofbound.IsNonFinite(radius) {
-		return nil, fmt.Errorf("%w: a faceted prism Union fillet needs one exact outer edge and radius", ErrUnsupported)
+		return nil, false, nil
 	}
 	for _, pair := range [][2]*Body{{rec.first, rec.second}, {rec.second, rec.first}} {
 		pp, ok := pair[0].payload.(prismPayload)
@@ -55,7 +55,7 @@ func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
 		}
 		out, err := filletPrismUnionSource(ctx, b.doc, pp, sourceEdge, corner, radius)
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
 		// The bounded band R removed from the exact rectangular source is
 		// strictly outside the other source's true box. Thus R∩B is empty,
@@ -63,11 +63,12 @@ func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
 		// its own occupied-volume and boundary certificates.
 		joined, err := booleanBody(ctx, meshbool.OpUnion, out, pair[1], b.doc.nextProducerID())
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
-		return commitModifyResult(ctx, b, joined)
+		body, err := commitModifyResult(ctx, b, joined)
+		return body, true, err
 	}
-	return nil, fmt.Errorf("%w: the selected faceted edge has no isolated exact rectangular prism corner", ErrUnsupported)
+	return nil, false, nil
 }
 
 // The source must be an exact, unplaced +XY rectangle. Its selected edge and

@@ -1627,7 +1627,8 @@ fillet without committing it, then reruns its ordinary Boolean evaluator.
 That evaluator supplies the final one-lump boundary, occupied-volume bound,
 measurements, and `VerifyAll` mesh proof. One document commit retires only
 the original Union. A failed selection, non-isolated radius band, displaced
-section, or placed Union remains SX9.
+section, or placed Union falls through to the ordinary receiver-class S3
+refusal, preserving its selected-edge context.
 
 ## 11. Exactness + proof discipline
 

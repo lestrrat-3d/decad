@@ -254,7 +254,11 @@ func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts
 		return b.filletObliqueBoss(ctx, edges, fp.obliqueBoss, rmm, rDelta)
 	}
 	if fp, ok := b.payload.(facetedPayload); ok && fp.prismUnionFillet != nil {
-		return b.filletPrismUnion(ctx, edges, fp.prismUnionFillet, rmm, rDelta)
+		// A retained source pair alone does not authenticate this selection.
+		// Keep the ordinary S3 refusal and its complete edge context on a miss.
+		if out, matched, err := b.filletPrismUnion(ctx, edges, fp.prismUnionFillet, rmm, rDelta); matched || err != nil {
+			return out, err
+		}
 	}
 	if fp, ok := b.payload.(facetedPayload); ok && fp.prismPatternJoin != nil {
 		out, err := prismPatternFilletBody(ctx, b, edges, rmm, rDelta)
