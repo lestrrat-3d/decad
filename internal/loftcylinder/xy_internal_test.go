@@ -1,4 +1,4 @@
-package decad
+package loftcylinder
 
 import (
 	"math/big"
@@ -14,15 +14,15 @@ import (
 // overlapping bounding boxes.
 func TestLoftCylinderEdgesMeetXPAgreesWithRational(t *testing.T) {
 	t.Parallel()
-	pt := func(x, y float64) loftCylinderXY {
-		return loftCylinderXY{new(big.Rat).SetFloat64(x), new(big.Rat).SetFloat64(y)}
+	pt := func(x, y float64) XY {
+		return XY{new(big.Rat).SetFloat64(x), new(big.Rat).SetFloat64(y)}
 	}
-	ratPt := func(x, y *big.Rat) loftCylinderXY { return loftCylinderXY{x, y} }
+	ratPt := func(x, y *big.Rat) XY { return XY{x, y} }
 	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 100))
 	onePlusTiny := new(big.Rat).Add(big.NewRat(1, 1), tiny)
 	for _, tc := range []struct {
 		name       string
-		a, b, c, d loftCylinderXY
+		a, b, c, d XY
 		want       bool
 	}{
 		{"touch at endpoint", pt(0, 0), pt(2, 0), pt(2, 0), pt(3, 3), true},
@@ -36,16 +36,17 @@ func TestLoftCylinderEdgesMeetXPAgreesWithRational(t *testing.T) {
 		{"rational crossing", pt(0, 0), ratPt(big.NewRat(1, 1), big.NewRat(1, 3)),
 			ratPt(big.NewRat(0, 1), big.NewRat(1, 3)), pt(1, 0), true},
 		{"parallel apart", pt(0, 0), pt(2, 2), pt(0, 1), pt(2, 3), false},
+		{"line crossing beyond the segment", pt(0, 0), pt(0.5, 0.5), pt(0, 2), pt(2, 0), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.want, loftCylinderEdgesMeet(tc.a, tc.b, tc.c, tc.d))
-			xp := func(p loftCylinderXY) meshbool.Xp2 { return meshbool.NewXP2(p.x, p.y) }
-			require.Equal(t, tc.want, loftCylinderEdgesMeetXP(xp(tc.a), xp(tc.b), xp(tc.c), xp(tc.d)))
+			require.Equal(t, tc.want, EdgesMeet(tc.a, tc.b, tc.c, tc.d))
+			xp := func(p XY) meshbool.Xp2 { return meshbool.NewXP2(p.X, p.Y) }
+			require.Equal(t, tc.want, EdgesMeetXP(xp(tc.a), xp(tc.b), xp(tc.c), xp(tc.d)))
 			// A point without a finite float image takes the rational body.
 			huge := new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 2000), big.NewInt(1))
-			far := loftCylinderXY{huge, huge}
-			require.Equal(t, loftCylinderEdgesMeet(tc.a, tc.b, tc.c, far),
-				loftCylinderEdgesMeetXP(xp(tc.a), xp(tc.b), xp(tc.c), xp(far)))
+			far := XY{huge, huge}
+			require.Equal(t, EdgesMeet(tc.a, tc.b, tc.c, far),
+				EdgesMeetXP(xp(tc.a), xp(tc.b), xp(tc.c), xp(far)))
 		})
 	}
 }

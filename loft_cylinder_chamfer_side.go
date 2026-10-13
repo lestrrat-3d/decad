@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -49,7 +50,7 @@ func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
 	}
 	toothParity := make(map[*Body]*meshbool.ParityMesh)
 	toothIndices := make(map[*Body][]int)
-	toothCircles := make(map[*Body]loftCylinderSourceCircle)
+	toothCircles := make(map[*Body]loftcylinder.SourceCircle)
 	for i := middle[0]; i < middle[1]; i++ {
 		if i%32 == 0 && ctx.Err() != nil {
 			return ctx.Err()
@@ -136,7 +137,7 @@ func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
 // hidden root walls meet it, use the exact blank disk for that part instead.
 func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.Xpt,
 	face loftCylinderChamferToothFace, parity *meshbool.ParityMesh, indices []int,
-	blankRadius float64, circles map[*Body]loftCylinderSourceCircle) error {
+	blankRadius float64, circles map[*Body]loftcylinder.SourceCircle) error {
 	lp := face.loft
 	if lp.walls <= 0 || lp.walls > len(lp.tris) || face.root < 3 ||
 		face.scale == nil || face.scale.Sign() <= 0 ||
@@ -201,7 +202,7 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 	}
 	mappedLo := new(big.Rat).Quo(zLo, face.scale)
 	mappedHi := new(big.Rat).Quo(zHi, face.scale)
-	if mappedLo.Cmp(circle.safeBottom) <= 0 || mappedHi.Cmp(circle.safeTop) >= 0 ||
+	if mappedLo.Cmp(circle.SafeBottom) <= 0 || mappedHi.Cmp(circle.SafeTop) >= 0 ||
 		!loftmesh.ChamferMiddleHeldRootInside(lp.verts, lp.tris, lp.walls, face.root, mappedLo, mappedHi, blankRadius) {
 		return fmt.Errorf("%w: inward patch has no hidden root-wall interval", ErrUnsupported)
 	}

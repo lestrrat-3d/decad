@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -43,8 +44,8 @@ func loftCylinderChamferCapRadialReach(source loftCylinderChamferSource,
 		if !ok {
 			return 0, fmt.Errorf("%w: cap slit lacks the source root arc", ErrUnsupported)
 		}
-		p := loftCylinderSourcePoint(lp, arc.Start)
-		if q := loftCylinderSourceDot(p, p); q.Cmp(outer2) > 0 {
+		p := loftcylinder.SourcePoint(lp.xform.Basis().EX, arc.Start)
+		if q := loftcylinder.SourceDot(p, p); q.Cmp(outer2) > 0 {
 			return 0, fmt.Errorf("%w: cap radial band misses a source root", ErrUnsupported)
 		}
 	}
@@ -63,9 +64,9 @@ func loftCylinderChamferCapRadialReach(source loftCylinderChamferSource,
 	radii := make([]*big.Rat, len(ring))
 	for i, index := range ring {
 		next := ring[(i+1)%len(ring)]
-		a := loftCylinderExactXY(verts[index])
-		b := loftCylinderExactXY(verts[next])
-		qa, qb := loftCylinderSourceDot(a, a), loftCylinderSourceDot(b, b)
+		a := loftcylinder.ExactXY(verts[index])
+		b := loftcylinder.ExactXY(verts[next])
+		qa, qb := loftcylinder.SourceDot(a, a), loftcylinder.SourceDot(b, b)
 		radii[i] = qa
 		if qa.Cmp(r2) == 0 || qa.Cmp(outer2) == 0 {
 			return 0, fmt.Errorf("%w: cap radial band meets an inset vertex", ErrUnsupported)
@@ -74,13 +75,13 @@ func loftCylinderChamferCapRadialReach(source loftCylinderChamferSource,
 		if qb.Cmp(max2) > 0 {
 			max2 = qb
 		}
-		if loftCylinderSourceRadiusMin2(a, b).Cmp(outer2) >= 0 || max2.Cmp(r2) <= 0 {
+		if loftcylinder.SourceRadiusMin2(a, b).Cmp(outer2) >= 0 || max2.Cmp(r2) <= 0 {
 			continue
 		}
 		hit[i] = true
-		d := loftCylinderSourceSub(b, a)
-		len2 := loftCylinderSourceDot(d, d)
-		der0 := new(big.Rat).Mul(big.NewRat(2, 1), loftCylinderSourceDot(a, d))
+		d := loftcylinder.SourceSub(b, a)
+		len2 := loftcylinder.SourceDot(d, d)
+		der0 := new(big.Rat).Mul(big.NewRat(2, 1), loftcylinder.SourceDot(a, d))
 		der1 := new(big.Rat).Add(der0, new(big.Rat).Mul(big.NewRat(2, 1), len2))
 		if der0.Sign() == 0 || der0.Sign() != der1.Sign() {
 			return 0, fmt.Errorf("%w: cap radial-band edge has a tangent radius", ErrUnsupported)
@@ -134,25 +135,25 @@ func loftCylinderChamferCapRadialReach(source loftCylinderChamferSource,
 	return reach, nil
 }
 
-func loftCylinderChamferPointSegmentGap2(p, a, b loftCylinderXY) *big.Rat {
-	d := loftCylinderSourceSub(b, a)
-	den := loftCylinderSourceDot(d, d)
+func loftCylinderChamferPointSegmentGap2(p, a, b loftcylinder.XY) *big.Rat {
+	d := loftcylinder.SourceSub(b, a)
+	den := loftcylinder.SourceDot(d, d)
 	if den.Sign() == 0 {
 		return nil
 	}
-	t := new(big.Rat).Quo(loftCylinderSourceDot(loftCylinderSourceSub(p, a), d), den)
+	t := new(big.Rat).Quo(loftcylinder.SourceDot(loftcylinder.SourceSub(p, a), d), den)
 	if t.Sign() < 0 {
 		t.SetInt64(0)
 	} else if t.Cmp(big.NewRat(1, 1)) > 0 {
 		t.SetInt64(1)
 	}
-	gap := loftCylinderSourceSub(p, loftCylinderSourceLerp(a, b, t))
-	return loftCylinderSourceDot(gap, gap)
+	gap := loftcylinder.SourceSub(p, loftcylinder.SourceLerp(a, b, t))
+	return loftcylinder.SourceDot(gap, gap)
 }
 
-func loftCylinderChamferSegmentGapAbove(a, b, c, d loftCylinderXY, bound2 *big.Rat) bool {
-	if a.x.Cmp(b.x) == 0 && a.y.Cmp(b.y) == 0 ||
-		c.x.Cmp(d.x) == 0 && c.y.Cmp(d.y) == 0 {
+func loftCylinderChamferSegmentGapAbove(a, b, c, d loftcylinder.XY, bound2 *big.Rat) bool {
+	if a.X.Cmp(b.X) == 0 && a.Y.Cmp(b.Y) == 0 ||
+		c.X.Cmp(d.X) == 0 && c.Y.Cmp(d.Y) == 0 {
 		return false
 	}
 	axisGapAbove := func(a, b, c, d *big.Rat) bool {
@@ -177,10 +178,10 @@ func loftCylinderChamferSegmentGapAbove(a, b, c, d loftCylinderXY, bound2 *big.R
 		return new(big.Rat).Mul(gap, gap).Cmp(bound2) > 0
 	}
 	// An axis gap lower-bounds every distance between the two segments.
-	if axisGapAbove(a.x, b.x, c.x, d.x) || axisGapAbove(a.y, b.y, c.y, d.y) {
+	if axisGapAbove(a.X, b.X, c.X, d.X) || axisGapAbove(a.Y, b.Y, c.Y, d.Y) {
 		return true
 	}
-	if loftCylinderEdgesMeet(a, b, c, d) {
+	if loftcylinder.EdgesMeet(a, b, c, d) {
 		return false
 	}
 	for _, v := range [4]*big.Rat{
@@ -213,13 +214,13 @@ func loftCylinderChamferHeldOutlineGap(ctx context.Context, verts []r3.Vec,
 		len(outer)*len(inner) > 8_000_000 {
 		return fmt.Errorf("%w: cap outline clearance exceeds its work limit", ErrUnsupported)
 	}
-	old := make([]loftCylinderXY, len(outer))
-	newLoop := make([]loftCylinderXY, len(inner))
+	old := make([]loftcylinder.XY, len(outer))
+	newLoop := make([]loftcylinder.XY, len(inner))
 	for i, index := range outer {
-		old[i] = loftCylinderExactXY(verts[index])
+		old[i] = loftcylinder.ExactXY(verts[index])
 	}
 	for i, index := range inner {
-		newLoop[i] = loftCylinderExactXY(verts[index])
+		newLoop[i] = loftcylinder.ExactXY(verts[index])
 	}
 	boundRat := proofarith.FloatRat(bound)
 	bound2 := new(big.Rat).Mul(boundRat, boundRat)

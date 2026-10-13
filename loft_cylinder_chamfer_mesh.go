@@ -367,8 +367,8 @@ func loftCylinderChamferRingNested(ctx context.Context, verts []r3.Vec, outer, i
 				max(pa.Y, pb.Y) < min(pc.Y, pd.Y) || max(pc.Y, pd.Y) < min(pa.Y, pb.Y) {
 				continue
 			}
-			if loftCylinderEdgesMeet(loftCylinderExactXY(pa), loftCylinderExactXY(pb),
-				loftCylinderExactXY(pc), loftCylinderExactXY(pd)) {
+			if loftcylinder.EdgesMeet(loftcylinder.ExactXY(pa), loftcylinder.ExactXY(pb),
+				loftcylinder.ExactXY(pc), loftcylinder.ExactXY(pd)) {
 				return false, fmt.Errorf("%w: cap rings meet at outer edge %d (%v,%v) and inner edge %d (%v,%v)",
 					ErrUnsupported, i, pa, pb, j, pc, pd)
 			}
@@ -523,7 +523,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		if !active[cap] {
 			continue
 		}
-		if !loftCylinderBoreRingSimple(ctx, mesh.verts, clipped.rings[cap]) {
+		if !loftcylinder.BoreRingSimple(ctx, mesh.verts, clipped.rings[cap]) {
 			return nil, fmt.Errorf("%w: loft/cylinder side level is not one simple outer ring", ErrUnsupported)
 		}
 	}
@@ -556,7 +556,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			mesh.verts = append(mesh.verts, p)
 			bounds = append(bounds, proofbound.AbsSumUpper(fp.meshBound, samples.bound))
 		}
-		if !loftCylinderBoreRingSimple(ctx, mesh.verts, inset[cap]) {
+		if !loftcylinder.BoreRingSimple(ctx, mesh.verts, inset[cap]) {
 			return nil, fmt.Errorf("%w: loft/cylinder inset is not one simple outer ring", ErrUnsupported)
 		}
 		inSource, err := loftCylinderChamferRingNested(ctx, mesh.verts, source.outer[cap], inset[cap])

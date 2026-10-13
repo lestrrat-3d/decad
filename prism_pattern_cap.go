@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -17,48 +18,48 @@ func prismPatternRootChordsInsideCap(ctx context.Context, mesh *joinedMesh,
 	if capIndex < 0 || capIndex > 1 || len(outline) < 3 {
 		return false
 	}
-	points := make([]loftCylinderXY, len(outline))
+	points := make([]loftcylinder.XY, len(outline))
 	poly := make([]meshbool.Xp2, len(outline))
 	for i, index := range outline {
 		if index < 0 || index >= len(mesh.verts) {
 			return false
 		}
-		points[i] = loftCylinderExactXY(mesh.verts[index])
-		poly[i] = meshbool.NewXP2(points[i].x, points[i].y)
+		points[i] = loftcylinder.ExactXY(mesh.verts[index])
+		poly[i] = meshbool.NewXP2(points[i].X, points[i].Y)
 	}
-	same := func(a, b loftCylinderXY) bool {
-		return a.x.Cmp(b.x) == 0 && a.y.Cmp(b.y) == 0
+	same := func(a, b loftcylinder.XY) bool {
+		return a.X.Cmp(b.X) == 0 && a.Y.Cmp(b.Y) == 0
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	for _, part := range parts {
 		n := len(part.mesh.vertices) / 2
-		rootA := loftCylinderExactXY(part.mesh.vertices[2*part.rootStart+capIndex])
-		rootB := loftCylinderExactXY(part.mesh.vertices[capIndex])
+		rootA := loftcylinder.ExactXY(part.mesh.vertices[2*part.rootStart+capIndex])
+		rootB := loftcylinder.ExactXY(part.mesh.vertices[capIndex])
 		for j := part.rootStart; j < n; j++ {
 			if ctx.Err() != nil {
 				return false
 			}
-			a := loftCylinderExactXY(part.mesh.vertices[2*j+capIndex])
-			b := loftCylinderExactXY(part.mesh.vertices[2*((j+1)%n)+capIndex])
+			a := loftcylinder.ExactXY(part.mesh.vertices[2*j+capIndex])
+			b := loftcylinder.ExactXY(part.mesh.vertices[2*((j+1)%n)+capIndex])
 			if same(a, b) {
 				return false
 			}
 			mid := meshbool.NewXP2(
-				new(big.Rat).Quo(new(big.Rat).Add(a.x, b.x), big.NewRat(2, 1)),
-				new(big.Rat).Quo(new(big.Rat).Add(a.y, b.y), big.NewRat(2, 1)))
+				new(big.Rat).Quo(new(big.Rat).Add(a.X, b.X), big.NewRat(2, 1)),
+				new(big.Rat).Quo(new(big.Rat).Add(a.Y, b.Y), big.NewRat(2, 1)))
 			inside, on, err := meshbool.PointInPoly2(budget, poly, mid)
 			if err != nil || on || !inside {
 				return false
 			}
 			for k, c := range points {
 				d := points[(k+1)%len(points)]
-				if !loftCylinderEdgesMeet(a, b, c, d) {
+				if !loftcylinder.EdgesMeet(a, b, c, d) {
 					continue
 				}
 				shared := (same(a, rootA) || same(a, rootB)) && (same(a, c) || same(a, d)) ||
 					(same(b, rootA) || same(b, rootB)) && (same(b, c) || same(b, d))
-				if !shared || loftCylinderOrient(a, b, c).Sign() == 0 &&
-					loftCylinderOrient(a, b, d).Sign() == 0 {
+				if !shared || loftcylinder.Orient(a, b, c).Sign() == 0 &&
+					loftcylinder.Orient(a, b, d).Sign() == 0 {
 					return false
 				}
 			}

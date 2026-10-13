@@ -41,11 +41,9 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_union.go` | Joins a source Loft tooth pattern to a coaxial cylinder with certified seam and volume bounds. See loft-cylinder-boolean design. |
 | `loft_cylinder_axial_bridge.go` | Bounds a one-ulp axial placement difference between original Loft sources and private Union proof copies. See loft-cylinder-boolean design. |
 | `loft_cylinder_separation.go` | Proves twisted Loft teeth remain separated at every height. See loft-cylinder-boolean design. |
-| `loft_cylinder_cap.go` | Audits joined disks and bored annuli, then tags certified cap faces. See loft-cylinder-boolean design. |
-| `loft_cylinder_seam.go` | Certifies the faceted connector's radial crossing at every height. See loft-cylinder-boolean design. |
-| `loft_cylinder_reach.go` | Certifies source and held connector reach and crossing angles. See loft-cylinder-boolean design. |
-| `loft_cylinder_source_circle.go` | Bounds a source Loft tooth's exact circle crossings over a rational height interval. See loft-cylinder-boolean design. |
-| `loft_cylinder_ring_occupancy.go` | Certifies one strict interior split ring inside an authenticated loft/cylinder union. See loft-cylinder-boolean design. |
+| `loft_cylinder_cap.go` | Reads joined meshes into the exact cap disk and annulus audits and tags certified cap faces. See loft-cylinder-boolean design. |
+| `loft_cylinder_source_circle.go` | Builds a source Loft tooth's exact circle record and strict root collar. See loft-cylinder-boolean design. |
+| `loft_cylinder_ring_occupancy.go` | Gathers tooth circles and walls for the strict interior split-ring check. See loft-cylinder-boolean design. |
 | `loft_cylinder_bore.go` | Cuts a centered through-bore from an audited loft/cylinder join. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer.go` | Admits both outer cap loops and samples their held-polygon insets. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_bridge.go` | Checks paired original and axial proof teeth for cap Chamfer. See loft-cylinder-boolean design. |
