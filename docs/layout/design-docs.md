@@ -20,6 +20,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/section-design.md` | Read-only planar section gate and Sketch reconstruction proof. |
 | `docs/interference-design.md` | Read-only pair overlap and bounded volume proofs. |
 | `docs/modify-design.md` | `Fillet`/`Chamfer`/`Shell` tables, section rewrite, exact offset, and build audit. |
+| `docs/shell-twisted-sweep-design.md` | Inward top-cap Shell of a one-line twisted rounded Sweep: offset, held cup and bounds. |
 | `docs/spline-design.md` | Free-form kinds, exactness tiers, refusals, Tier A moments, work budget, proven brackets, and reach. |
 | `docs/modify-reach-design.md` | Modify reach: tangent chains, asymmetric chamfers, cap-loop blends, shell reach and staging. |
 | `docs/brep-modify-design.md` | Modify ops on brep and stacked receivers; Tables RB/EB/SB/BB/DB. |
