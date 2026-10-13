@@ -1935,6 +1935,10 @@
 10	0.00	TestSectionObliqueRectangleOtherRegionCannotBypassBound
 10	0.00	TestSectionObliqueRectangleRefusesUnsupportedExtrudeOptions
 10	0.00	TestSectionObliqueRectangleRefusesContact
+10	0.00	TestSectionCardinalSphereFeedsVerifiedExtrude
+10	0.00	TestSectionCardinalSphereCutsAcrossRevolveAxis
+10	0.00	TestSectionCardinalSpherePlacementAndPlaneSense
+10	0.00	TestSectionCardinalSphereRefusesUnprovedCuts
 10	0.00	TestSweepLineFilletVerticalEdgesVerified
 10	0.00	TestSweepLineFilletCapEdgeRefuses
 10	0.00	TestSweepLineFilletPlacedReceiver
@@ -1954,3 +1958,8 @@
 10	0.00	TestSweepTwistRoundedProfileUnionRefusesNearContact
 10	0.00	TestSweepTwistRoundedLargeProfileVerifyAll
 10	0.00	TestSweepTwistRoundedLargeProfileKeepsCoarseCertifiedBuild
+10	0.00	TestFullRevolveScaledAtPreservesSphereVolumeAndSourceFace
+10	0.00	TestFullRevolveScaledAtPreservesPlanarFaceRoles
+10	0.00	TestScaledAtRefusesPartialRevolveWithoutRetiringSource
+10	0.00	TestFullRevolveScaledAtRepeatsAfterRigidPlacement
+10	0.00	TestScaledAtRefusesSheetRevolveWithoutRetiringSource

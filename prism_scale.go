@@ -33,12 +33,33 @@ func prismScaleSource(ctx context.Context, b *Body, prism prismPayload, factor f
 			return facetedPayload{}, fmt.Errorf("%w: the scale leaves no representable curved-source chord", ErrUnsupported)
 		}
 	}
+	return certifiedScaleSource(ctx, b, chord)
+}
+
+// revolveScaleSource admits a complete solid Revolve only after its own
+// tessellation proves both the boundary and occupied volume. The similarity
+// then carries those proofs through the same faceted path as a prism.
+func revolveScaleSource(ctx context.Context, b *Body, source revolvePayload, factor float64) (facetedPayload, error) {
+	if !source.full || source.surfaceResult || !source.xform.IsValid() || source.sectionDelta != 0 {
+		return facetedPayload{}, fmt.Errorf("%w: scale needs a complete exact solid Revolve", ErrUnsupported)
+	}
+	chord := math.Nextafter(0.05/math.Max(1, factor), 0)
+	if chord <= 0 {
+		return facetedPayload{}, fmt.Errorf("%w: the scale leaves no representable Revolve chord", ErrUnsupported)
+	}
+	return certifiedScaleSource(ctx, b, chord)
+}
+
+// certifiedScaleSource transfers an authenticated source mesh to the
+// similarity evaluator. Curved faces become Faceted; planar source tags and
+// all face origins remain attached to their source facet groups.
+func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedPayload, error) {
 	mesh, err := tessellateContext(ctx, b, units.Millimeters(chord), VerifyAll)
 	if err != nil {
 		return facetedPayload{}, err
 	}
 	if !mesh.boundaryOK || !mesh.symDiffOK || len(mesh.vertices) == 0 || len(mesh.triangles) == 0 {
-		return facetedPayload{}, fmt.Errorf("%w: the prism mesh has no complete similarity proof", ErrUnsupported)
+		return facetedPayload{}, fmt.Errorf("%w: the source mesh has no complete similarity proof", ErrUnsupported)
 	}
 	vertexBound, err := mesh.vertexBounds()
 	if err != nil {
@@ -54,12 +75,10 @@ func prismScaleSource(ctx context.Context, b *Body, prism prismPayload, factor f
 		switch surface := face.Surface().(type) {
 		case Plane:
 			groups[i] = facetGroup{origins: face.Origins(), surface: surface, planar: true}
-		case Cylinder:
-			// The source mesh supplies the curved-face displacement. Its group
-			// keeps origins but publishes Faceted after the similarity.
-			groups[i] = facetGroup{origins: face.Origins()}
 		default:
-			return facetedPayload{}, fmt.Errorf("%w: the prism has an unproved scaled surface", ErrUnsupported)
+			// The source mesh supplies every curved-face displacement. The
+			// image keeps origins and publishes Faceted without a normal tag.
+			groups[i] = facetGroup{origins: face.Origins()}
 		}
 		faceID[face] = i
 	}
@@ -78,20 +97,20 @@ func prismScaleSource(ctx context.Context, b *Body, prism prismPayload, factor f
 	diameter := proofbound.AbsSumUpper(proofbound.DvLenUpper(proofbound.HeldDelta(hi, lo)),
 		proofbound.ProductUpper(2, mesh.bound))
 	if proofbound.IsNonFinite(diameter) {
-		return facetedPayload{}, fmt.Errorf("%w: the prism has no finite diameter bound", ErrUnsupported)
+		return facetedPayload{}, fmt.Errorf("%w: the source has no finite diameter bound", ErrUnsupported)
 	}
 	return facetedPayload{
-		prismScale:     true,
-		contactAudited: true,
-		verts:          mesh.vertices,
-		vertexBound:    vertexBound,
-		tris:           mesh.triangles,
-		src:            source,
-		groups:         groups,
-		meshBound:      facetproof.FacetBoundMax(mesh.triangles, vertexBound),
-		volSymDiff:     mesh.volSymDiff,
-		areaSlack:      mesh.areaSlack,
-		dPair:          diameter,
-		xform:          r3.Identity(),
+		similaritySource: true,
+		contactAudited:   true,
+		verts:            mesh.vertices,
+		vertexBound:      vertexBound,
+		tris:             mesh.triangles,
+		src:              source,
+		groups:           groups,
+		meshBound:        facetproof.FacetBoundMax(mesh.triangles, vertexBound),
+		volSymDiff:       mesh.volSymDiff,
+		areaSlack:        mesh.areaSlack,
+		dPair:            diameter,
+		xform:            r3.Identity(),
 	}, nil
 }

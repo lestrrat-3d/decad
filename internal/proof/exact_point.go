@@ -35,7 +35,7 @@ func XdotNum(a, b Xpt) *big.Int { return XhpDotNum(Xhp(a), Xhp(b)) }
 // rather than a sign.
 func XdotRat(a, b Xpt) *big.Rat {
 	den := new(big.Int).Mul(a.W, b.W)
-	return new(big.Rat).SetFrac(XdotNum(a, b), den)
+	return RatFrac(new(big.Rat), XdotNum(a, b), den)
 }
 
 // Xcross is a × b, exact, stripped the same way as Xsub.

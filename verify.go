@@ -623,11 +623,17 @@ func auditBoundary(b *Body) bool {
 		loops := f.Loops()
 		if len(loops) == 0 {
 			// A closed surface of revolution bounds a solid with no edges
-			// at all — a full sphere or a full torus needs no boundary
-			// loop. Any other loop-less face is a defect.
+			// at all. A faceted one-face image may have the same topology
+			// only after its embedded closed mesh passed the build audit.
 			switch f.Surface().Kind() {
 			case KindSphere, KindTorus:
 				continue
+			case KindFaceted:
+				fp, ok := b.payload.(facetedPayload)
+				if ok && fp.contactAudited && len(faces) == 1 && len(fp.tris) > 0 && len(b.Edges()) == 0 {
+					continue
+				}
+				return false
 			default:
 				return false
 			}

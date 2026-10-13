@@ -28,9 +28,10 @@ type pointPlaneSimilarityStep struct {
 }
 
 // ScaledAt returns the positive uniform image of an authenticated point-loft
-// Split slab or exact line/circular solid prism about anchor and retires the
-// receiver. Source roles and certified boundary and occupied-volume bounds
-// follow the image. A refused or canceled call leaves the document unchanged.
+// Split slab, exact line/circular solid prism or complete solid Revolve about
+// anchor, then retires the receiver. Source roles and certified boundary and
+// occupied-volume bounds follow the image. A refused or canceled call leaves
+// the document unchanged.
 func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("%w: a nil context cannot control a scale", ErrDegenerate)
@@ -57,18 +58,21 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 	}
 	fp, ok := b.payload.(facetedPayload)
 	if !ok {
-		prism, isPrism := b.payload.(prismPayload)
-		if !isPrism {
+		var err error
+		switch source := b.payload.(type) {
+		case prismPayload:
+			fp, err = prismScaleSource(ctx, b, source, s)
+		case revolvePayload:
+			fp, err = revolveScaleSource(ctx, b, source, s)
+		default:
 			return nil, fmt.Errorf("%w: this body has no certified similarity source", ErrUnsupported)
 		}
-		var err error
-		fp, err = prismScaleSource(ctx, b, prism, s)
 		if err != nil {
 			return nil, err
 		}
 	}
 	pointSlab := fp.pointPlane != nil && fp.pointPlane.base.pointSection != nil
-	if (!pointSlab && !fp.prismScale) || !fp.xform.IsValid() ||
+	if (!pointSlab && !fp.similaritySource) || !fp.xform.IsValid() ||
 		len(fp.verts) == 0 || len(fp.vertexBound) != len(fp.verts) {
 		return nil, fmt.Errorf("%w: this body has no certified similarity source", ErrUnsupported)
 	}
