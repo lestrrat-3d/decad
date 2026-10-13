@@ -148,7 +148,7 @@ func payloadAuditsFacetContact(p featurePayload) bool {
 		return len(sp.spans) != 0 || sp.arc
 	}
 	if sp, ok := p.(chainSweepPayload); ok {
-		return len(sp.spans) != 0
+		return len(sp.spans) != 0 || sp.arc
 	}
 	if _, ok := p.(bodyPatchPayload); ok {
 		return true

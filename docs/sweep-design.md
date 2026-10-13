@@ -842,7 +842,6 @@ chain through `RecordChain` instead of a profile through `RecordProfile`.
 | **SC6** | a recorded chain segment outside the line, circle and arc set the span builders admit | `ErrUnsupported`, S10 |
 | **SC7** | a composite path outside §15.8's exact cardinal line/half-circle and one-line source class | `ErrUnsupported` |
 | **SC8** | an arc span the chain shell refuses — a walk that does not lie in one closed half-plane of the arc axis, both free ends on that axis, or an interior on-axis junction | exactly what a chain `Revolve` answers: `ErrDegenerate`, or `ErrUnsupported` under `docs/surface-design.md` R22 and R33 |
-| **SC9** | a one-span arc path, before the standalone arc reduction | `ErrUnsupported`, `docs/surface-design.md` R34 |
 
 **SC2 is decided before SC3, and that order is load-bearing.** A foreign,
 stale, invalid or unrecordable chain names a repair the caller makes in the
@@ -872,14 +871,15 @@ a chain sweep adds that neither sibling has is §15.2's path height bound.
 | PR | Lands | Still staged |
 |---|---|---|
 | **C1** | `Sweep` over a chain along a one-span `LineTo` path: Table SC rows SC1 through SC4 and SC6, the chain prism reduction, and the four readings §15.5 states for it | a standalone arc and composite paths outside §15.8 |
-| **C2** | a one-span `ArcThrough` reduction with the chain shell's own axis gates (SC8) | still staged |
+| **C2** | a one-span `ArcThrough` reduction with the chain shell's own axis gates (SC8), plus §15.9's one-line sheet mesh | other chain-arc meshes |
 | **C3a** | §15.8's exact cardinal line/half-circle composite, one source `LineSeg`, indexed wall-rim sew, span-separation proof, area/bounds and sheet mesh | other composite paths and a placed composite sheet |
 | **C3** | §15.1's composite join over other tangent line/arc paths: general wall-face rim lists, sew, separation and boundary audit | staged |
 
 The one-span straight chain sweep reuses the chain prism's exact-quad mesh.
-§15.8's composite uses its own bounded sheet mesh. Other chain-sweep meshes
-remain `ErrUnsupported`, and the modify operations have no receiver row for
-it (D8).
+§15.9 meshes one straight source line swept through a single arc. §15.8's
+composite uses its own bounded sheet mesh. Other chain-sweep meshes return
+`ErrUnsupported` at tessellation, and the modify operations have no receiver
+row for the new one-span arc sheet (D8).
 
 ### 15.7 Required tests
 
@@ -896,7 +896,7 @@ The path starts at the origin, rises on +Z by `L > 0`, then follows the XZ
 half-circle through `(R,0,L+R)` to `(2R,0,L)`. The comparisons
 `L+R`, `2R`, `R−w` and `2R−w` must hold as exact binary-rational equalities;
 the transported frames must carry zero displacement. A source or path outside
-this class refuses SC7. A single arc still refuses SC9.
+this class refuses SC7. A single arc takes §15.9's separate reduction.
 
 The two spans build from that ONE `ChainRecord`, using the chain prism and
 chain revolve builders. Each has one wall with a start and end source-line
@@ -928,6 +928,42 @@ its transformed join-plane and station bounds have their own proof.
 `Body.Thicken` admits this exact cardinal sheet on its three thickness sides
 through `docs/surface-design.md` §16.8's generated rectangular section. Other
 chain sweeps still refuse at that consumer.
+
+### 15.9 One-arc chain sheet and mesh
+
+A one-span `ArcThrough` path passes the same `sweeparc.Derive` and chain
+`Revolve` axis gates as an arc span of §15.8. The authenticated Sketch chain
+enters that reduction unchanged, and the result has its chain Revolve wall
+faces and free rims. A partial arc reports `ValidityUndecided`, as a partial
+chain `Revolve` does. `Transform` and `Copy` replay the same reduction under
+their composed placement.
+
+The mesh admits one `LineSeg` whose complete re-expressed walk has both ends
+strictly clear of the resolved axis. The recorded line and bounded path axis
+give two certified endpoint intervals in axial coordinate `z` and radius `ρ`.
+Both vary affinely along the line, so positive endpoint radius intervals keep the whole source
+line on one side of the axis. Each angular cell's four exact corner points
+are coplanar; the chosen diagonal adds no meridian chording error. The
+denoted angle enclosure gives an outward sweep-angle upper bound, and the
+larger true endpoint-radius upper bound sets `ChordSagitta` for every point
+of the wall. `SweptPointGap` charges path-axis, source-endpoint, angle and
+placement errors at every stored vertex. Its maximum plus the sagitta must
+fit the requested tolerance.
+
+The one source wall owns two triangles per angular cell and four free edges.
+The sheet and positive-facet audits run at every verification level;
+`RevolveContactAudit` runs at `VerifyBoundary` and `VerifyAll`. `VerifyNone`
+keeps the same triangles but reports `BoundaryVerified() == false`.
+`VerifyAll` sums the non-cancelling `CellSlack` over the angular cells and
+adds a per-cell Jacobian difference for path-axis, source and denoted-angle
+intervals. For one cell, true density is `Ltrue * stepTrue * ρtrue(t)`.
+The added bound is `(LtrueUpper*δstep + stepHeldUpper*δL)*ρtrueUpper +
+LheldUpper*stepHeldUpper*δρ`, where each `δ` is an outward interval difference
+and `δρ` is the larger endpoint difference. The line makes that endpoint
+maximum valid for every `t`. `CoordinateAreaAllow` charges held vertices.
+The sheet publishes no occupied-volume proof. A source with a curved segment, several segments or
+an endpoint on the axis may build analytically, but its mesh refuses until
+it has a separate station and boundary proof.
 
 ## 16. Mitred polyline sweep with a per-span section scale
 

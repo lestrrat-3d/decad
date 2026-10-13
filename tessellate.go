@@ -523,6 +523,9 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		if len(sp.spans) != 0 {
 			return tessellateChainSweep(ctx, b, sp, chord, verify)
 		}
+		if sp.arc {
+			return tessellateChainArcSweep(ctx, b, sp, chord, verify)
+		}
 		// the chain Sweep's one-span straight reduction builds through the
 		// identical evalChainExtrudeContext a plain chain Extrude does, over
 		// the chainPayload it wraps unchanged (sweep.go's
