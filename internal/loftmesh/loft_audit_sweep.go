@@ -350,21 +350,29 @@ func loftCrossingAuditLimited(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 		return work, errLoftAuditCeiling()
 	}
 	work.Candidates = int(count)
-	streamed := data == nil && structure == nil && shortcuts.Sweep && provenPatches == 0 &&
+	streamed := data == nil && structure == nil && shortcuts.Sweep &&
 		parallelPairs && count > loftAuditCandidateBatchSize
-	var rowTree treeScan
+	var rowTree loftRowScan
 	if streamed {
-		var ok bool
-		rowTree, ok = order.(treeScan)
-		if !ok {
-			rowTree = newTreeScan(boxes, members)
+		if provenPatches != 0 {
+			grouped, ok := order.(groupedTreeScan)
+			if !ok {
+				return work, fmt.Errorf("%w: proven loft patches lack a grouped scan", decaderr.ErrUnsupported)
+			}
+			rowTree = grouped
+		} else {
+			var ok bool
+			rowTree, ok = order.(treeScan)
+			if !ok {
+				rowTree = newTreeScan(boxes, members)
+			}
 		}
 		if err := preflightLoftRows(budget, rowTree, members, starts, ceiling); err != nil {
 			return work, err
 		}
 	}
 	var cands loftCandidates
-	sparse := data == nil && structure == nil && shortcuts.Sweep && provenPatches != 0
+	sparse := data == nil && structure == nil && shortcuts.Sweep && provenPatches != 0 && !streamed
 	if sparse {
 		var err error
 		cands, err = sweepCandidates(budget, order, starts, count, keepEveryPair)

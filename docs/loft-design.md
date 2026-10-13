@@ -1384,6 +1384,10 @@ step the shared budget for each node visit and leaf comparison; the classifier
 steps it once per replayed pair. If the row query exceeds the ceiling after
 the selected S8 scan passes, the audit returns S8's resource refusal before
 any pair classification.
+When projected-patch proofs omit within-patch pairs, the row query uses one
+tree per proof family and skips only the row's own proven family. It still
+counts each visited node and compared box under the same ceiling, then sorts
+and classifies the remaining pairs in the same row batches.
 
 The unstructured batch path keeps exact vertices, triangle normals and planes,
 and one exact projection for each vertex and used axis. It derives each

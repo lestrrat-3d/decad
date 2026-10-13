@@ -14,6 +14,7 @@ import (
 type groupedTreeScan struct {
 	groups []treeScan
 	keys   []int
+	family []int
 }
 
 func newGroupedTreeScan(boxes [][2]r3.Vec, members, family []int) groupedTreeScan {
@@ -26,11 +27,30 @@ func newGroupedTreeScan(boxes [][2]r3.Vec, members, family []int) groupedTreeSca
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	out := groupedTreeScan{keys: keys, groups: make([]treeScan, len(keys))}
+	out := groupedTreeScan{keys: keys, groups: make([]treeScan, len(keys)), family: family}
 	for i, key := range keys {
 		out.groups[i] = newTreeScan(boxes, buckets[key])
 	}
 	return out
+}
+
+// visitRow emits the same pairs as visit that have i as their lower index.
+// Only a proven patch's own tree is omitted; cross-patch and unproved pairs
+// retain the ordinary box query and exact contact verdict.
+func (s groupedTreeScan) visitRow(budget *proofbound.WorkBudget, i int,
+	limit uint64, fn func(j int)) (uint64, bool, error) {
+	var scanned uint64
+	for k, group := range s.groups {
+		if s.keys[k] >= 0 && s.keys[k] == s.family[i] {
+			continue
+		}
+		used, exceeded, err := group.visitRow(budget, i, limit-scanned, fn)
+		scanned += used
+		if exceeded || err != nil {
+			return scanned, exceeded, err
+		}
+	}
+	return scanned, false, nil
 }
 
 func (s groupedTreeScan) visit(budget *proofbound.WorkBudget, limit uint64,

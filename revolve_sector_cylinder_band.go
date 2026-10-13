@@ -258,6 +258,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		mesh.verts[innerHigh[i]] = high
 		vertexBound[innerHigh[i]] = boreBound
 	}
+	oldCount := len(mesh.tris)
 	for i := range n {
 		j := (i + 1) % n
 		mesh.add([3]int{rootRing[i], caps.lowOuter[i], caps.lowOuter[j]}, bandGroup)
@@ -276,8 +277,9 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	if len(mesh.tris) != len(joined.tris)+2*n {
 		return nil, true, fmt.Errorf("%w: band and wall triangle census changed", ErrUnsupported)
 	}
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
-		mesh.verts, mesh.tris, revolveSectorBoreMaxAuditTriangles,
+	patches := revolveSectorBorePatches(mesh, oldCount, n, true, caps, bandGroup, wallGroup)
+	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatches(proofbound.NewWorkBudget(ctx),
+		mesh.verts, mesh.tris, patches, revolveSectorBoreMaxAuditTriangles,
 		revolveSectorBoreMaxAuditScans); err != nil {
 		return nil, true, err
 	}

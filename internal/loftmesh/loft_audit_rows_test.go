@@ -123,6 +123,31 @@ func TestLoftAuditStreamsLargeUnstructuredCandidateSet(t *testing.T) {
 	require.EqualError(t, streamedErr, serialErr.Error())
 }
 
+func TestLoftAuditStreamsLargeProjectedCandidateSet(t *testing.T) {
+	const triangles = 1_500
+	verts := make([]r3.Vec, 0, 3*triangles+4)
+	tris := make([][3]int, 0, triangles+2)
+	for range triangles {
+		start := len(verts)
+		verts = append(verts, r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+		tris = append(tris, [3]int{start, start + 1, start + 2})
+	}
+	start := len(verts)
+	verts = append(verts, r3.NewVec(10, 0, 0), r3.NewVec(11, 0, 0),
+		r3.NewVec(11, 1, 0), r3.NewVec(10, 1, 0))
+	tris = append(tris, [3]int{start, start + 1, start + 2},
+		[3]int{start, start + 2, start + 3})
+	patches := []ProjectedPatch{{Triangles: []int{triangles, triangles + 1}, Axes: [2]int{0, 1}}}
+	serial, serialErr := loftCrossingAuditLimited(proofbound.NewWorkBudget(t.Context()), verts,
+		tris, nil, loftGenericShortcuts, 4_000_000, len(tris), false, patches...)
+	streamed, streamedErr := loftCrossingAuditLimited(proofbound.NewWorkBudget(t.Context()), verts,
+		tris, nil, loftGenericShortcuts, 4_000_000, len(tris), true, patches...)
+	require.Greater(t, streamed.Candidates, loftAuditCandidateBatchSize)
+	require.Equal(t, serial, streamed)
+	require.Error(t, serialErr)
+	require.EqualError(t, streamedErr, serialErr.Error())
+}
+
 func TestLoftAuditStreamsFirstFailureAfterBatchBoundary(t *testing.T) {
 	const triangles = 1_500
 	verts := []r3.Vec{r3.NewVec(0, 0, 0)}
