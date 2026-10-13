@@ -17,10 +17,10 @@ import (
 // chamferPrismUnion removes one triangular corner prism from an authenticated
 // source of a faceted Union. The other source stays strictly outside the
 // corner box, so the ordinary Boolean rebuild certifies the modified Union.
-func (b *Body) chamferPrismUnion(ctx context.Context, edges []*Edge,
-	rec *prismUnionFilletRecord, setback, setbackDelta float64) (*Body, error) {
+func (b *Body) tryChamferPrismUnion(ctx context.Context, edges []*Edge,
+	rec *prismUnionFilletRecord, setback, setbackDelta float64) (*Body, bool, error) {
 	if len(edges) != 1 || setbackDelta != 0 || !(setback > 0) || proofbound.IsNonFinite(setback) {
-		return nil, fmt.Errorf("%w: a faceted prism Union chamfer needs one exact outer edge and setback", ErrUnsupported)
+		return nil, false, nil
 	}
 	for _, pair := range [][2]*Body{{rec.first, rec.second}, {rec.second, rec.first}} {
 		pp, ok := pair[0].payload.(prismPayload)
@@ -28,23 +28,26 @@ func (b *Body) chamferPrismUnion(ctx context.Context, edges []*Edge,
 			continue
 		}
 		corner, band, sourceEdge, ok := prismUnionFilletCorner(pair[0], pp, edges[0], setback)
-		if !ok || !prismUnionFilletSourceFaces(edges[0], sourceEdge) ||
-			!prismUnionFilletBandSeparate(pair[1], band) {
+		if !ok || !prismUnionFilletSourceFaces(edges[0], sourceEdge) {
 			continue
+		}
+		if !prismUnionFilletBandSeparate(pair[1], band) {
+			return nil, true, fmt.Errorf("%w: another Union source occupies the selected chamfer corner", ErrUnsupported)
 		}
 		out, err := chamferPrismUnionSource(ctx, b.doc, pp, sourceEdge, corner, setback)
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
 		// The removed triangular prism lies inside the certified corner box,
 		// which is strictly separate from the unchanged source's true body.
 		joined, err := booleanBody(ctx, meshbool.OpUnion, out, pair[1], b.doc.nextProducerID())
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
-		return commitModifyResult(ctx, b, joined)
+		result, err := commitModifyResult(ctx, b, joined)
+		return result, true, err
 	}
-	return nil, fmt.Errorf("%w: the selected faceted edge has no isolated exact rectangular prism corner", ErrUnsupported)
+	return nil, false, nil
 }
 
 func chamferPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
