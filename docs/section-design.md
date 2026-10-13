@@ -147,6 +147,44 @@ the polygon's area, not an exact ellipse-area reading. `Extrude` carries
 `sectionDelta` to its prism proof; `MeasureProfile` and other undecorated
 consumers refuse the bounded source.
 
+## Bounded one-cap crossing of an exact whole-circle prism
+
+An oblique plane may cross exactly one cap of the same authenticated whole-circle
+prism. Read the plane, circle, placement and cap coefficients as exact dyadics.
+Solve the sweep level over the source unit disk in rationals as
+`zCenter + zCos*x + zSin*y`. Prove one cap line is a strict secant using the
+exact squared distance test. Require the other cap to lie strictly outside the
+disk and the outer enclosure below. Tangency, two-cap crossings and a plane
+parallel to the sweep axis refuse.
+
+Build a source-plane Sketch from the original circle and the exact cap line.
+The line's two finite endpoints must be exactly representable as binary64 and
+must extend beyond the circle. Require Sketch to publish a valid, hole-free
+circle-and-line region whose partial bounds all have `TExact`. Choose the
+region by the directed line's interior side, never by sampled area or crossing
+coordinates. This Sketch check owns the trim topology; no approximate
+intersection may substitute for it.
+
+In parallel, sample the unit circle at rational half-angle stations. Their
+convex hull is an inner disk polygon; intersections of adjacent exact tangent
+lines make an outer disk polygon. Clip both by the exact cap half-plane, then
+map them into the requested plane with the exact rational affine map. The
+inner polygon lies inside the true section, which lies inside the outer one.
+Sketch supplies trim topology but no displacement bound for the mapped ellipse,
+so the rational enclosures supply only that missing bound.
+For every outer vertex, find a point on an inner edge using exact rational
+projection. The largest outward-rounded local and world distances cover the
+outer polygon because a convex neighborhood of the inner polygon contains
+every outer vertex. This bounds the two-sided occupied-region displacement.
+Add the exact rational-to-binary64 rounding error of every inner vertex.
+Require the same strict convexity and edge-scale gates as the complete-ellipse
+case, plus the 0.05 mm displacement cap. Exhausting the station budget refuses.
+
+Reconstruct the inner polygon through the existing private bounded-Section
+Sketch certificate. Only straight solid `Extrude` can consume it; the
+certificate carries the source displacement through the prism volume proof
+and `VerifyAll`.
+
 ## Bounded oblique plane of an exact rectangular prism
 
 This class accepts a sound, hole-free `prismPayload` whose authenticated source

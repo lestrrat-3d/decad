@@ -81,6 +81,7 @@ The rules for rows live in `docs/layout.md`.
 | `section.go` | Public planar section query over certified prism records. See section design. |
 | `section_circle_axis.go` | Exact whole-circle prism section on a cardinal plane with an exact chord. See section design. |
 | `section_circle_oblique.go` | Rational full-ellipse cut of an exact whole-circle prism and bounded line polygon. See section design. |
+| `section_circle_cap.go` | Certified source circle-line trim and bounded one-cap oblique section polygon. See section design. |
 | `section_rectangle_axis.go` | Exact rectangular-prism section on an interior cardinal vertical plane. See section design. |
 | `section_oblique_clip.go` | Exact rational clipping of a rectangular prism by an oblique plane and a bounded rounded loop. See section design. |
 | `section_oblique_certificate.go` | Private bounded-section Sketch provenance and guarded Extrude recording. See section design. |
