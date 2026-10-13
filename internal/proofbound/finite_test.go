@@ -44,3 +44,32 @@ func TestIsNonFiniteAndFiniteVecMatchMath(t *testing.T) {
 		}
 	}
 }
+
+func TestAllFiniteMatchesFiniteVecLoop(t *testing.T) {
+	t.Parallel()
+	require.True(t, proofbound.AllFinite(nil))
+	require.True(t, proofbound.AllFinite([]r3.Vec{}))
+	base := []r3.Vec{{X: 1, Y: 2, Z: 3}, {X: -4, Y: 0, Z: 5}, {X: 6, Y: 7, Z: 8}, {X: 9, Y: 1, Z: 2}}
+	require.True(t, proofbound.AllFinite(base))
+	for _, bad := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		for pos := range base {
+			for slot := range 3 {
+				vs := append([]r3.Vec(nil), base...)
+				switch slot {
+				case 0:
+					vs[pos].X = bad
+				case 1:
+					vs[pos].Y = bad
+				default:
+					vs[pos].Z = bad
+				}
+				want := true
+				for _, v := range vs {
+					want = want && proofbound.FiniteVec(v)
+				}
+				require.False(t, want)
+				require.Equal(t, want, proofbound.AllFinite(vs), "bad %v pos %d slot %d", bad, pos, slot)
+			}
+		}
+	}
+}
