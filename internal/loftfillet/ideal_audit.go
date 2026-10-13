@@ -1,26 +1,28 @@
-package decad
+package loftfillet
 
 import (
 	"context"
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
-// certifyIdealFitArcSeparation excludes a second contact between the retained
+// idealFitArcSeparation excludes a second contact between the retained
 // exact fit spline and the ideal tangent connector. The tangent root itself is
 // allowed inside a neighborhood where H” has one strict sign. Everywhere
 // else, a piece must lie outside the connector's short angular wedge or have
 // one strict sign for H=|fit-center|²-radius².
-func certifyIdealFitArcSeparation(ctx context.Context, spans []freeform.BezierSpan,
-	params []*big.Rat, total *big.Rat, fit fitSplineSeg, fitArrives bool,
-	arc arcSeg, cert loftFitRootCertificate, radius *big.Rat,
+func idealFitArcSeparation(ctx context.Context, spans []freeform.BezierSpan,
+	params []*big.Rat, total *big.Rat, fit sectionrecord.FitSplineSeg, fitArrives bool,
+	arc sectionrecord.ArcSeg, cert RootCertificate, radius *big.Rat,
 	active int, rootLo, rootHi *big.Rat) error {
 	refuse := func() error {
-		return fmt.Errorf(`%w: the ideal loft fit/connector has an unresolved second contact`, ErrUnsupported)
+		return fmt.Errorf(`%w: the ideal loft fit/connector has an unresolved second contact`, decaderr.ErrUnsupported)
 	}
 	zoneWidth := new(big.Rat).SetFrac64(1, 4096)
 	zoneLo := new(big.Rat).Sub(rootLo, zoneWidth)
@@ -28,7 +30,7 @@ func certifyIdealFitArcSeparation(ctx context.Context, spans []freeform.BezierSp
 	if zoneLo.Sign() <= 0 || zoneHi.Cmp(big.NewRat(1, 1)) >= 0 || active < 0 || active >= len(spans) {
 		return refuse()
 	}
-	if !loftIdealHSecondDerivativeStrict(spans[active], cert, zoneLo, zoneHi) {
+	if !idealHSecondDerivativeStrict(spans[active], cert, zoneLo, zoneHi) {
 		return refuse()
 	}
 	farT := fit.TEnd
@@ -64,8 +66,8 @@ func certifyIdealFitArcSeparation(ctx context.Context, spans []freeform.BezierSp
 		lo := new(big.Rat).Quo(new(big.Rat).Sub(pieceLo, params[i]), width)
 		hi := new(big.Rat).Quo(new(big.Rat).Sub(pieceHi, params[i]), width)
 		u, v := freeform.SpanCoordinatePolys(span)
-		cu := loftIntervalMidpoint(cert.CenterU)
-		cv := loftIntervalMidpoint(cert.CenterV)
+		cu := intervalMidpoint(cert.CenterU)
+		cv := intervalMidpoint(cert.CenterV)
 		du := proofbound.IntervalAbsUpper(proofbound.IntervalSub(cert.CenterU, proofbound.PointInterval(cu)))
 		dv := proofbound.IntervalAbsUpper(proofbound.IntervalSub(cert.CenterV, proofbound.PointInterval(cv)))
 		x := polynomial.RpSub(u, polynomial.RatPoly{cu})
@@ -79,17 +81,17 @@ func certifyIdealFitArcSeparation(ctx context.Context, spans []freeform.BezierSp
 				return false
 			}
 			nodes++
-			if loftIdealFitOutsideArc(span, cert.CenterU, cert.CenterV,
+			if idealFitOutsideArc(span, cert.CenterU, cert.CenterV,
 				startU, startV, endU, endV, a, b) {
 				return true
 			}
-			xIv, yIv := loftFitPolyInterval(x, a, b), loftFitPolyInterval(y, a, b)
+			xIv, yIv := polyInterval(x, a, b), polyInterval(y, a, b)
 			xMax, yMax := proofbound.IntervalAbsUpper(xIv), proofbound.IntervalAbsUpper(yIv)
 			errorUpper := new(big.Rat).Add(
 				new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Add(
 					new(big.Rat).Mul(xMax, du), new(big.Rat).Mul(yMax, dv))),
 				new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv)))
-			hIv := loftFitPolyInterval(h, a, b)
+			hIv := polyInterval(h, a, b)
 			if new(big.Rat).Sub(hIv.Lo, errorUpper).Sign() > 0 ||
 				new(big.Rat).Add(hIv.Hi, errorUpper).Sign() < 0 {
 				return true
@@ -104,26 +106,26 @@ func certifyIdealFitArcSeparation(ctx context.Context, spans []freeform.BezierSp
 	return nil
 }
 
-func loftIntervalMidpoint(iv proofbound.RatInterval) *big.Rat {
+func intervalMidpoint(iv proofbound.RatInterval) *big.Rat {
 	return new(big.Rat).Quo(new(big.Rat).Add(iv.Lo, iv.Hi), big.NewRat(2, 1))
 }
 
-func loftIdealHSecondDerivativeStrict(span freeform.BezierSpan, cert loftFitRootCertificate,
+func idealHSecondDerivativeStrict(span freeform.BezierSpan, cert RootCertificate,
 	lo, hi *big.Rat) bool {
 	u, v := freeform.SpanCoordinatePolys(span)
 	du, dv := polynomial.RpDeriv(u), polynomial.RpDeriv(v)
 	ddu, ddv := polynomial.RpDeriv(du), polynomial.RpDeriv(dv)
-	uIv := proofbound.IntervalSub(loftFitPolyInterval(u, lo, hi), cert.CenterU)
-	vIv := proofbound.IntervalSub(loftFitPolyInterval(v, lo, hi), cert.CenterV)
-	duIv, dvIv := loftFitPolyInterval(du, lo, hi), loftFitPolyInterval(dv, lo, hi)
-	dduIv, ddvIv := loftFitPolyInterval(ddu, lo, hi), loftFitPolyInterval(ddv, lo, hi)
+	uIv := proofbound.IntervalSub(polyInterval(u, lo, hi), cert.CenterU)
+	vIv := proofbound.IntervalSub(polyInterval(v, lo, hi), cert.CenterV)
+	duIv, dvIv := polyInterval(du, lo, hi), polyInterval(dv, lo, hi)
+	dduIv, ddvIv := polyInterval(ddu, lo, hi), polyInterval(ddv, lo, hi)
 	second := proofbound.IntervalAdd(
 		proofbound.IntervalAdd(proofbound.IntervalMul(duIv, duIv), proofbound.IntervalMul(dvIv, dvIv)),
 		proofbound.IntervalAdd(proofbound.IntervalMul(uIv, dduIv), proofbound.IntervalMul(vIv, ddvIv)))
 	return second.Lo.Sign() > 0 || second.Hi.Sign() < 0
 }
 
-func loftIdealFitOutsideArc(span freeform.BezierSpan, centerU, centerV,
+func idealFitOutsideArc(span freeform.BezierSpan, centerU, centerV,
 	startU, startV, endU, endV proofbound.RatInterval, lo, hi *big.Rat) bool {
 	u, v := make([]*big.Rat, len(span)), make([]*big.Rat, len(span))
 	for i, point := range span {

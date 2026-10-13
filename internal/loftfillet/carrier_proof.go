@@ -1,34 +1,37 @@
-package decad
+package loftfillet
 
 import (
 	"fmt"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/units"
 )
 
-// loftFitCarrierDeparture bounds the parameter shift of both retained
+// CarrierDeparture bounds the parameter shift of both retained
 // carriers when their ideal tangent feet replace the recorded float trims.
 // Each carrier uses the same monotone normalized traversal before and after
 // the trim. A cell endpoint's parameter shift is no larger than its changed
 // end's shift, so twice the path departure is a per-cell length allowance.
-func loftFitCarrierDeparture(cert loftFitRootCertificate, circle circleSeg,
+func CarrierDeparture(cert RootCertificate, circle sectionrecord.CircleSeg,
 	numericFitT, numericCircleT float64, fitArrives bool) (
 	fitDeparture, circleDeparture float64, circleParam proofbound.RatInterval, err error) {
 	refuse := func() (float64, float64, proofbound.RatInterval, error) {
 		return 0, 0, proofbound.RatInterval{},
-			fmt.Errorf(`%w: the loft fit-circle carrier departure cannot be certified`, ErrUnsupported)
+			fmt.Errorf(`%w: the loft fit-circle carrier departure cannot be certified`, decaderr.ErrUnsupported)
 	}
-	if !finiteLoftFitValue(numericFitT, numericCircleT, cert.SpeedUpper) || cert.SpeedUpper <= 0 {
+	if !finiteValue(numericFitT, numericCircleT, cert.SpeedUpper) || cert.SpeedUpper <= 0 {
 		return refuse()
 	}
 	fitShift := proofbound.IntervalAbsUpper(proofbound.IntervalSub(cert.Param,
 		proofbound.PointInterval(new(big.Rat).SetFloat64(numericFitT))))
 	fitDeparture = proofbound.ProductUpper(cert.SpeedUpper, proofbound.RatFloatUp(fitShift))
 	radius, unitErr := circle.Radius.In(units.Millimeter)
-	if unitErr != nil || !finiteLoftFitValue(radius) || radius <= 0 {
+	if unitErr != nil || !finiteValue(radius) || radius <= 0 {
 		return refuse()
 	}
 	u, v, ok := circularbounds.EndpointInterval(circularbounds.RecordSegment(circle),
@@ -40,7 +43,7 @@ func loftFitCarrierDeparture(cert loftFitRootCertificate, circle circleSeg,
 	dv := proofbound.IntervalAbsUpper(proofbound.IntervalSub(cert.CircleFootV, v))
 	chord := proofbound.RatSqrtUp(new(big.Rat).Add(
 		new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv)))
-	if !finiteLoftFitValue(chord) {
+	if !finiteValue(chord) {
 		return refuse()
 	}
 	// The shorter angular difference between two points on one circle is at
@@ -71,8 +74,8 @@ func loftFitCarrierDeparture(cert loftFitRootCertificate, circle circleSeg,
 		new(big.Rat).Mul(proofbound.TwoPiInterval().Lo, new(big.Rat).SetFloat64(radius)),
 		new(big.Rat).Abs(new(big.Rat).Sub(
 			new(big.Rat).SetFloat64(other), new(big.Rat).SetFloat64(numericCircleT)))))
-	if !finiteLoftFitValue(circleDeparture, remaining) ||
-		fitDeparture > filletTol || circleDeparture > filletTol ||
+	if !finiteValue(circleDeparture, remaining) ||
+		fitDeparture > sectionaudit.Tolerance || circleDeparture > sectionaudit.Tolerance ||
 		circleDeparture >= remaining/4 {
 		return refuse()
 	}

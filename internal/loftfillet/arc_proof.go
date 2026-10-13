@@ -1,4 +1,4 @@
-package decad
+package loftfillet
 
 import (
 	"fmt"
@@ -6,18 +6,21 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
-// loftFitArcDeparture bounds the entire recorded connector against the
+// ArcDeparture bounds the entire recorded connector against the
 // radius-r tangent connector defined by an isolated fit/circle root. Both
 // arcs are compared at the same fraction of their certified short sweeps.
 // The endpoint angle differences interpolate linearly, so the largest one
 // bounds every intermediate angle difference.
-func loftFitArcDeparture(cert loftFitRootCertificate, arc arcSeg, fitArrives bool,
+func ArcDeparture(cert RootCertificate, arc sectionrecord.ArcSeg, fitArrives bool,
 	radius float64) (departure, idealLength float64, err error) {
 	refuse := func() (float64, float64, error) {
-		return 0, 0, fmt.Errorf(`%w: the loft fit-circle arc departure cannot be certified`, ErrUnsupported)
+		return 0, 0, fmt.Errorf(`%w: the loft fit-circle arc departure cannot be certified`, decaderr.ErrUnsupported)
 	}
 	r, ok := proofbound.RatOf(radius)
 	if !ok || r.Sign() <= 0 {
@@ -110,7 +113,7 @@ func loftFitArcDeparture(cert loftFitRootCertificate, arc arcSeg, fitArrives boo
 		proofbound.RatFloatUp(new(big.Rat).Mul(rMax, angleError)))
 	if math.IsNaN(departure) || math.IsInf(departure, 0) ||
 		math.IsNaN(idealLength) || math.IsInf(idealLength, 0) ||
-		departure > filletTol {
+		departure > sectionaudit.Tolerance {
 		return refuse()
 	}
 	return departure, idealLength, nil

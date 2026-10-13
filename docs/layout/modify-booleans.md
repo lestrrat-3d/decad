@@ -17,14 +17,6 @@ The rules for rows live in `docs/layout.md`.
 | `oblique_boss_fillet.go` / `oblique_boss_proof.go` | Builds and proves the complete tilted cylinder boss-root fillet. See oblique-boss-fillet design. |
 | `cross_cylinder_bore_chamfer.go` / `cross_cylinder_bore_chamfer_mesh.go` | Builds one perpendicular cylinder bore-mouth chamfer. See cross-cylinder-bore-chamfer design. |
 | `cross_cylinder_bore_chamfer_proof.go` | Proves that chamfer's boundary and volume. See cross-cylinder-bore-chamfer design. |
-| `loft_fillet_audit.go` | Audits rewritten loft sections and nonadjacent clearance. See loft §17. |
-| `loft_fit_fillet.go` | Finds a numerical fit/circle root-fillet candidate. See loft §17. |
-| `loft_fit_root_cert.go` | Certifies the ideal fit/circle tangent contact. See loft §17. |
-| `loft_fit_arc_proof.go` | Bounds held connectors against the ideal fillet. See loft §17. |
-| `loft_fit_carrier_proof.go` | Bounds trimmed carriers against ideal trims. See loft §17. |
-| `loft_fit_contact_audit.go` | Excludes recorded fit/connector contacts. See loft §17. |
-| `loft_fit_circle_audit.go` | Excludes recorded circle/connector contacts. See loft §17. |
-| `loft_fit_ideal_audit.go` | Excludes ideal fit/connector contacts. See loft §17. |
 | `loft_chamfer.go` | Builds both outer cap bands on a matching axial loft's held polygon. See loft §18. |
 | `cap_edge_cutter.go` | Applies `internal/capedge/` admission and cutters to one oblique prism cap-edge fillet or chamfer. |
 | `brep_rounded_edge_fillet.go` | Rounds P8's one front top edge after matching its exact rounded, cross-drilled BRep record. See modify-general §4.3c. |

@@ -1,4 +1,4 @@
-package decad
+package loftfillet
 
 import (
 	"context"
@@ -8,61 +8,64 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-type loftSectionBox struct{ u, v proofbound.RatInterval }
+type sectionBox struct{ u, v proofbound.RatInterval }
 
-func loftLineCoordinate(a, b, t float64) *big.Rat {
+func lineCoordinate(a, b, t float64) *big.Rat {
 	ra, _ := proofbound.RatOf(a)
 	rb, _ := proofbound.RatOf(b)
 	rt, _ := proofbound.RatOf(t)
 	return new(big.Rat).Add(ra, new(big.Rat).Mul(rt, new(big.Rat).Sub(rb, ra)))
 }
 
-func loftPointInterval(a, b *big.Rat) proofbound.RatInterval {
+func pointInterval(a, b *big.Rat) proofbound.RatInterval {
 	return proofbound.Interval(proofbound.RatMin(a, b), proofbound.RatMax(a, b))
 }
 
-func loftSectionSegmentBox(seg curveSegment, w survey2d.SegmentWalk) (loftSectionBox, error) {
+func sectionSegmentBox(seg sectionrecord.CurveSegment, w survey2d.SegmentWalk) (sectionBox, error) {
 	switch seg := seg.(type) {
-	case lineSeg:
-		return loftSectionBox{
-			loftPointInterval(loftLineCoordinate(seg.Start.U, seg.End.U, seg.TStart),
-				loftLineCoordinate(seg.Start.U, seg.End.U, seg.TEnd)),
-			loftPointInterval(loftLineCoordinate(seg.Start.V, seg.End.V, seg.TStart),
-				loftLineCoordinate(seg.Start.V, seg.End.V, seg.TEnd)),
+	case sectionrecord.LineSeg:
+		return sectionBox{
+			pointInterval(lineCoordinate(seg.Start.U, seg.End.U, seg.TStart),
+				lineCoordinate(seg.Start.U, seg.End.U, seg.TEnd)),
+			pointInterval(lineCoordinate(seg.Start.V, seg.End.V, seg.TStart),
+				lineCoordinate(seg.Start.V, seg.End.V, seg.TEnd)),
 		}, nil
-	case arcSeg:
+	case sectionrecord.ArcSeg:
 		record := circularbounds.RecordSegment(seg)
 		arc, ok := record.(circularbounds.ArcSeg)
 		if !ok {
-			return loftSectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound an arc`, ErrUnsupported)
+			return sectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound an arc`, decaderr.ErrUnsupported)
 		}
 		u, v, ok := circularbounds.ArcBox(arc)
 		if !ok {
-			return loftSectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound an arc`, ErrUnsupported)
+			return sectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound an arc`, decaderr.ErrUnsupported)
 		}
-		return loftSectionBox{u, v}, nil
-	case circleSeg:
+		return sectionBox{u, v}, nil
+	case sectionrecord.CircleSeg:
 		record := circularbounds.RecordSegment(seg)
 		circle, ok := record.(circularbounds.CircleSeg)
 		if !ok {
-			return loftSectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound a circle`, ErrUnsupported)
+			return sectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound a circle`, decaderr.ErrUnsupported)
 		}
 		u, v, ok := circularbounds.CircleBox(circle)
 		if !ok {
-			return loftSectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound a circle`, ErrUnsupported)
+			return sectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound a circle`, decaderr.ErrUnsupported)
 		}
-		return loftSectionBox{u, v}, nil
+		return sectionBox{u, v}, nil
 	default:
 		if w.Kind != survey2d.WalkFreeform || len(w.Spans) == 0 {
-			return loftSectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound a section segment`, ErrUnsupported)
+			return sectionBox{}, fmt.Errorf(`%w: the loft fillet cannot bound a section segment`, decaderr.ErrUnsupported)
 		}
-		var out loftSectionBox
+		var out sectionBox
 		first := true
 		for _, span := range w.Spans {
 			for _, pt := range span {
@@ -82,7 +85,7 @@ func loftSectionSegmentBox(seg curveSegment, w survey2d.SegmentWalk) (loftSectio
 	}
 }
 
-func loftBoxSeparated(a, b loftSectionBox, gap *big.Rat) bool {
+func boxSeparated(a, b sectionBox, gap *big.Rat) bool {
 	separated := func(a, b proofbound.RatInterval) bool {
 		return new(big.Rat).Add(a.Hi, gap).Cmp(b.Lo) < 0 ||
 			new(big.Rat).Add(b.Hi, gap).Cmp(a.Lo) < 0
@@ -90,18 +93,18 @@ func loftBoxSeparated(a, b loftSectionBox, gap *big.Rat) bool {
 	return separated(a.u, b.u) || separated(a.v, b.v)
 }
 
-// auditLoftFilletProfile keeps the existing authenticated free-form pieces
+// AuditProfile keeps the existing authenticated free-form pieces
 // verbatim. Only new analytic pieces can introduce a new contact with them.
 // Their complete circular range is enclosed by ArcBox; a Bézier lies in its
 // exact control hull. A pair whose enclosing boxes do not separate is refused.
-func auditLoftFilletProfile(ctx context.Context, budget *proofbound.WorkBudget,
-	profile profileRecord, changed map[int]bool, constructionDelta float64,
+func AuditProfile(ctx context.Context, budget *proofbound.WorkBudget,
+	profile momentinput.Profile, changed map[int]bool, constructionDelta float64,
 	work *freeform.FreeformWork) error {
 	if constructionDelta < 0 || proofbound.IsNonFinite(constructionDelta) {
-		return fmt.Errorf(`%w: the loft fillet construction departure is underivable`, ErrUnsupported)
+		return fmt.Errorf(`%w: the loft fillet construction departure is underivable`, decaderr.ErrUnsupported)
 	}
 	segments := profile.Outer.Segments
-	boxes := make([]loftSectionBox, len(segments))
+	boxes := make([]sectionBox, len(segments))
 	free := make([]bool, len(segments))
 	var analytic []sectionaudit.Entry
 	for i, seg := range segments {
@@ -116,7 +119,7 @@ func auditLoftFilletProfile(ctx context.Context, budget *proofbound.WorkBudget,
 		if !free[i] {
 			analytic = append(analytic, sectionaudit.NewEntry(0, i, len(segments), w))
 		}
-		boxes[i], err = loftSectionSegmentBox(seg, w)
+		boxes[i], err = sectionSegmentBox(seg, w)
 		if err != nil {
 			return err
 		}
@@ -133,7 +136,7 @@ func auditLoftFilletProfile(ctx context.Context, budget *proofbound.WorkBudget,
 	d2 := proofbound.RatAdd(proofbound.RatMul(du, du), proofbound.RatMul(dv, dv))
 	diameter := proofbound.RatSqrtUp(d2)
 	if math.IsInf(diameter, 0) || math.IsNaN(diameter) {
-		return fmt.Errorf(`%w: the loft fillet's section diameter cannot be bounded`, ErrUnsupported)
+		return fmt.Errorf(`%w: the loft fillet's section diameter cannot be bounded`, decaderr.ErrUnsupported)
 	}
 	contactEps, _ := proofbound.RatOf(math.Nextafter(sectionaudit.ContactEps, math.Inf(1)))
 	delta := new(big.Rat).SetFloat64(constructionDelta)
@@ -159,9 +162,9 @@ func auditLoftFilletProfile(ctx context.Context, budget *proofbound.WorkBudget,
 				if !free[j] {
 					continue
 				}
-				if arc, isArc := segments[i].(arcSeg); isArc {
-					if fit, isFit := segments[j].(fitSplineSeg); isFit {
-						if err := certifyRecordedFitArcSeparation(ctx, budget, fit, arc,
+				if arc, isArc := segments[i].(sectionrecord.ArcSeg); isArc {
+					if fit, isFit := segments[j].(sectionrecord.FitSplineSeg); isFit {
+						if err := recordedFitArcSeparation(ctx, budget, fit, arc,
 							j == (i+len(segments)-1)%len(segments), work); err != nil {
 							return fmt.Errorf("%w; connector %d, fit %d", err, i, j)
 						}
@@ -172,8 +175,8 @@ func auditLoftFilletProfile(ctx context.Context, budget *proofbound.WorkBudget,
 			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return err
 			}
-			if !loftBoxSeparated(boxes[i], boxes[j], gap) {
-				return fmt.Errorf(`%w: loft fillet segment %d may contact segment %d`, ErrUnsupported, i, j)
+			if !boxSeparated(boxes[i], boxes[j], gap) {
+				return fmt.Errorf(`%w: loft fillet segment %d may contact segment %d`, decaderr.ErrUnsupported, i, j)
 			}
 		}
 	}
@@ -181,20 +184,20 @@ func auditLoftFilletProfile(ctx context.Context, budget *proofbound.WorkBudget,
 		if !changed[i] {
 			continue
 		}
-		arc, ok := segment.(arcSeg)
+		arc, ok := segment.(sectionrecord.ArcSeg)
 		if !ok {
 			continue
 		}
 		neighbors := []int{(i + len(segments) - 1) % len(segments), (i + 1) % len(segments)}
-		_, fitBefore := segments[neighbors[0]].(fitSplineSeg)
-		_, fitAfter := segments[neighbors[1]].(fitSplineSeg)
+		_, fitBefore := segments[neighbors[0]].(sectionrecord.FitSplineSeg)
+		_, fitAfter := segments[neighbors[1]].(sectionrecord.FitSplineSeg)
 		if !fitBefore && !fitAfter {
 			continue
 		}
 		for _, j := range neighbors {
-			circle, isCircle := segments[j].(circleSeg)
+			circle, isCircle := segments[j].(sectionrecord.CircleSeg)
 			if isCircle {
-				if err := certifyRecordedCircleArcSeparation(circle, arc); err != nil {
+				if err := recordedCircleArcSeparation(circle, arc); err != nil {
 					return err
 				}
 			}

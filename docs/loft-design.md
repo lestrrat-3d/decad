@@ -2680,12 +2680,13 @@ The rewrite inserts each connector after its incoming segment and trims its
 two carriers. A fitted-spline root fillet keeps the original fitted control
 points and changes only its recorded trim parameter. Both loft profiles
 receive the same rewritten section. The numerical blend supplies a candidate;
-`loft_fit_root_cert.go` isolates one root of the exact rational tangent
-equation and proves its direction, positive speed and nearest-corner choice.
-The root brackets the ideal fit foot, connector center and circle foot.
-`loft_fit_arc_proof.go` bounds every held connector point against the ideal
-radius-r arc. `loft_fit_carrier_proof.go` bounds the retained fit and circle
-pieces against their ideal trims and checks the original circle fragment.
+`internal/loftfillet/root_cert.go` isolates one root of the exact rational
+tangent equation and proves its direction, positive speed and nearest-corner
+choice. The root brackets the ideal fit foot, connector center and circle
+foot. `internal/loftfillet/arc_proof.go` bounds every held connector point
+against the ideal radius-r arc. `internal/loftfillet/carrier_proof.go` bounds
+the retained fit and circle pieces against their ideal trims and checks the
+original circle fragment.
 Two cuts on one carrier must have ordered ideal contact intervals. A second
 native fillet call on an already certified fitted-spline loft refuses until
 the proof maps can be composed across rewrites.
@@ -2694,9 +2695,9 @@ The section audit checks the recorded fit/connector pair with an exact
 support-circle polynomial and Sturm root counts. A root outside the certified
 short connector sweep cannot cross that arc. It checks the adjacent root
 circle and connector with outward circle-intersection boxes. For the ideal
-fit/connector pair, `loft_fit_ideal_audit.go` proves one strict second-
-derivative sign near the tangent root and excludes every other retained piece
-by a strict radial sign or angular separation. Nonadjacent changed pieces
+fit/connector pair, `internal/loftfillet/ideal_audit.go` proves one strict
+second-derivative sign near the tangent root and excludes every other retained
+piece by a strict radial sign or angular separation. Nonadjacent changed pieces
 must have exact enclosing boxes separated by more than the section contact
 floor plus twice the construction departure. The analytic crossing audit and
 rewritten section area gate still run. Unresolved contacts return
@@ -2733,12 +2734,13 @@ fillets, optional bore and both outer-cap chamfers.
 prism tool cuts one full circular through-bore. Both recorded sections must be
 identical and hole-free before the cut, share their in-plane axes, have zero
 alignment, and have no placement. The tool must share those axes and span both
-cap levels. `loft_cut.go` proves that the circle's containing square misses
-every outer carrier enclosure and junction, then uses exact winding of the
-carrier chords to prove the circle lies inside the authenticated outer loop.
-It inserts the same clockwise `CircleSeg` hole into both sections and runs the
-normal loft evaluator. A pair outside these gates uses the general boolean
-path; the global sketch reconstruction ceiling is unchanged.
+cap levels. `internal/loftfillet/circle_hole.go` proves that the circle's
+containing square misses every outer carrier enclosure and junction, then uses
+exact winding of the carrier chords to prove the circle lies inside the
+authenticated outer loop. It inserts the same clockwise `CircleSeg` hole into
+both sections and runs the normal loft evaluator. A pair outside these gates
+uses the general boolean path; the global sketch reconstruction ceiling is
+unchanged.
 
 `OuterLoopOf(CapStart(body))` and `OuterLoopOf(CapEnd(body))` select only the
 held outer cap edges, excluding the circular bore rims. An equal-distance

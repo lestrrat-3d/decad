@@ -53,6 +53,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/stationbound/` | Bounds circular chord stations and offset cap stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums, projected cap proof, body reading finiteness gate, mirrored-cylinder bridge terms and reserve, cap chamfer source bound, split-ring and collar grids, triangle clearance and middle-collar proofs, and grouped contact scans. |
 | `internal/smoothloft/` | Three-section homothety, independent rectangles, varying curves, and four-section rounded-rectangle gates, held meshes and bounds. |
+| `internal/loftfillet/` | Loft fit/circle root-fillet candidate, tangent-root certificate, connector and carrier departures, section contact audits and circle-bore containment. See loft §17–§18. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, construction and area proofs. |
 | `internal/revolveplan/` | Revolve mesh walk resolution, coordinate ceilings and chord counts. See tessellation §8. |
 | `internal/revolvesampling/` | Revolve meridian junctions, stations, samples and section readings. |
