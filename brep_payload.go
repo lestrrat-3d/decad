@@ -662,7 +662,15 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		}
 		bands.patches = append(bands.patches, patches...)
 	}
-	body.lumps = sheetLumps(append(faces, bands.patches...))
+	allFaces := append(faces, bands.patches...)
+	if bp.bossShell != nil && bp.bossShell.closed {
+		body.lumps, err = closedBossShellLumps(allFaces, bp.bossShell.outerFaceCount)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		body.lumps = sheetLumps(allFaces)
+	}
 	if bp.bossShell != nil {
 		err = measureBossShell(ctx, bp, body)
 	} else if bp.pocketShell != nil {

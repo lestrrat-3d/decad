@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -20,12 +21,14 @@ import (
 // on a two-slab rectangular boss. The two open rings belong to the inner
 // ledge at lowerZ and the upper cavity walls at interfaceZ.
 type bossShellBand struct {
-	plate, boss, lower, upper    bossRect
-	round                        *roundBossCircle
-	z0, interfaceZ, topZ, lowerZ float64
-	t                            float64
-	ledgeFace                    int
-	frame                        r3.Frame
+	plate, boss, lower, upper                bossRect
+	round                                    *roundBossCircle
+	z0, interfaceZ, topZ, cavityTopZ, lowerZ float64
+	t                                        float64
+	ledgeFace                                int
+	outerFaceCount                           int
+	closed                                   bool
+	frame                                    r3.Frame
 }
 
 func (b *bossShellBand) sideProfile() profileRecord {
@@ -106,6 +109,52 @@ func recordedBossRect(p profileRecord) (bossRect, bool) {
 	return r, cross > 0 && !proofbound.IsNonFinite(r.width()) && !proofbound.IsNonFinite(r.height())
 }
 
+// reverseClosedBossStack makes a narrow lower slab the upper boss of the
+// existing certified construction. Flipping the frame's V axis, each section's
+// V coordinates, and the recorded levels preserves the same world geometry
+// and a right-handed face frame.
+func reverseClosedBossStack(ctx context.Context, sp stackedPrismPayload) (stackedPrismPayload, bool, error) {
+	if len(sp.slabs) != 2 || len(sp.interfaces) != 1 ||
+		len(sp.slabs[0].Regions) != 1 || len(sp.slabs[1].Regions) != 1 {
+		return stackedPrismPayload{}, false, nil
+	}
+	inner, innerOK := recordedBossRect(sp.slabs[0].Regions[0])
+	outer, outerOK := recordedBossRect(sp.slabs[1].Regions[0])
+	if !innerOK || !outerOK || !(inner.u0 > outer.u0 && inner.v0 > outer.v0 &&
+		inner.u1 < outer.u1 && inner.v1 < outer.v1) {
+		return stackedPrismPayload{}, false, nil
+	}
+	frame, err := r3.NewFrame(sp.frame.Origin(), sp.frame.U(), sp.frame.V().Scale(-1))
+	if err != nil {
+		return stackedPrismPayload{}, true, fmt.Errorf("%w: the closed boss shell cannot reverse its section frame: %v",
+			ErrUnsupported, err)
+	}
+	if frame.Origin() != sp.frame.Origin() || frame.U() != sp.frame.U() ||
+		frame.V() != sp.frame.V().Scale(-1) || frame.N() != sp.frame.N().Scale(-1) {
+		return stackedPrismPayload{}, true, fmt.Errorf("%w: the closed boss shell needs an exact reversed section frame",
+			ErrUnsupported)
+	}
+	reflectRect := func(r bossRect) profileRecord {
+		return (bossRect{u0: r.u0, v0: -r.v1, u1: r.u1, v1: -r.v0}).profile()
+	}
+	exposed, err := stackedrecord.UnionExposed(ctx, reflectRect(outer), reflectRect(inner))
+	if err != nil {
+		return stackedPrismPayload{}, true, fmt.Errorf("%w: the closed boss shell cannot reverse its interface: %v",
+			ErrUnsupported, err)
+	}
+	a, b := sp.slabs[0], sp.slabs[1]
+	return stackedPrismPayload{
+		slabs: []stackedrecord.Slab{
+			{Regions: []profileRecord{reflectRect(outer)}, Z0: -b.Z1, Z1: -b.Z0, Z0Delta: b.Z1Delta, Z1Delta: b.Z0Delta},
+			{Regions: []profileRecord{reflectRect(inner)}, Z0: -a.Z1, Z1: -a.Z0, Z0Delta: a.Z1Delta, Z1Delta: a.Z0Delta},
+		},
+		interfaces: []stackedrecord.Interface{{
+			LowerExposed: exposed,
+		}},
+		frame: frame, xform: sp.xform, sectionDelta: sp.sectionDelta,
+	}, true, nil
+}
+
 // shellStackedBoss handles only the exact two-slab, nested rectangular case.
 // An unrelated stack falls through to the ordinary Shell route.
 func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload, view brepPayload,
@@ -118,7 +167,9 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	if !pOK || !bOK || !(boss.u0 > plate.u0 && boss.v0 > plate.v0 && boss.u1 < plate.u1 && boss.v1 < plate.v1) {
 		return nil, false, nil
 	}
-	if call.sense != Inward || len(call.removed) != 1 || call.removed[0] != facesByRole(source)[roleCapEnd] {
+	closed := len(call.removed) == 0
+	if call.sense != Inward || (!closed &&
+		(len(call.removed) != 1 || call.removed[0] != facesByRole(source)[roleCapEnd])) {
 		return nil, false, nil
 	}
 	refuse := func(why string) (*Body, bool, error) {
@@ -134,8 +185,18 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 		boss.u0 > plate.u0+t && boss.v0 > plate.v0+t && boss.u1 < plate.u1-t && boss.v1 < plate.v1-t) {
 		return refuse("has insufficient floor, wall, or root clearance")
 	}
+	if closed && b.Z1-b.Z0 <= t {
+		return refuse("has no cavity below the kept boss roof")
+	}
 	lower, upper := plate.inset(t), boss.inset(t)
 	lowerZ := a.Z1 - t
+	cavityTopZ := b.Z1
+	if closed {
+		cavityTopZ = b.Z1 - t
+		if proofbound.ExactSumRound(cavityTopZ, b.Z1, -t) != 0 {
+			return refuse("needs an exactly represented cavity ceiling")
+		}
+	}
 	if proofbound.ExactSumRound(lowerZ, a.Z1, -t) != 0 ||
 		proofbound.ExactSumRound(a.Z0+t, a.Z0, t) != 0 ||
 		proofbound.ExactSumRound(a.Z1-a.Z0, a.Z1, -a.Z0) != 0 ||
@@ -158,9 +219,14 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	if topCapIdx < 0 {
 		return refuse("has no top cap")
 	}
-	result := brepPayload{xform: view.xform, faces: make([]brepFace, 0, len(view.faces)+15)}
-	result.faces = append(result.faces, view.faces[:topCapIdx]...)
-	result.faces = append(result.faces, view.faces[topCapIdx+1:]...)
+	result := brepPayload{xform: view.xform, faces: make([]brepFace, 0, len(view.faces)+16)}
+	if closed {
+		result.faces = append(result.faces, view.faces...)
+	} else {
+		result.faces = append(result.faces, view.faces[:topCapIdx]...)
+		result.faces = append(result.faces, view.faces[topCapIdx+1:]...)
+	}
+	outerFaceCount := len(result.faces)
 	addPlane := func(p profileRecord, z float64, outward bool) int {
 		result.faces = append(result.faces, brepFace{frame: sp.frame, region: &p, z0: z, z1: z, outward: outward})
 		return len(result.faces) - 1
@@ -179,16 +245,22 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	}
 	ledge.Holes = []loopRecord{hole}
 	ledgeFace := addPlane(ledge, lowerZ, false)
-	addWalls(upper, b.Z0, b.Z1)
-	rim := profileRecord{Outer: boss.profile().Outer}
-	hole, err = offset2d.ReverseLoopRecordContext(ctx, upper.profile().Outer)
-	if err != nil {
-		return nil, true, err
+	addWalls(upper, b.Z0, cavityTopZ)
+	if closed {
+		addPlane(upper.profile(), cavityTopZ, false)
+	} else {
+		rim := profileRecord{Outer: boss.profile().Outer}
+		hole, err = offset2d.ReverseLoopRecordContext(ctx, upper.profile().Outer)
+		if err != nil {
+			return nil, true, err
+		}
+		rim.Holes = []loopRecord{hole}
+		addPlane(rim, b.Z1, true)
 	}
-	rim.Holes = []loopRecord{hole}
-	addPlane(rim, b.Z1, true)
 	result.bossShell = &bossShellBand{plate: plate, boss: boss, lower: lower, upper: upper,
-		z0: a.Z0, interfaceZ: a.Z1, topZ: b.Z1, lowerZ: lowerZ, t: t, ledgeFace: ledgeFace, frame: sp.frame}
+		z0: a.Z0, interfaceZ: a.Z1, topZ: b.Z1, cavityTopZ: cavityTopZ,
+		lowerZ: lowerZ, t: t, ledgeFace: ledgeFace, frame: sp.frame,
+		outerFaceCount: outerFaceCount, closed: closed}
 	result.assignRoles()
 	body, err := evalBrepContext(ctx, source.doc, source.doc.nextProducerID(), result)
 	return body, true, err
@@ -208,6 +280,72 @@ func bossRectArithmeticExact(r bossRect, t float64) bool {
 	if proofbound.ExactSumRound(in.width(), in.u1, -in.u0) != 0 ||
 		proofbound.ExactSumRound(in.height(), in.v1, -in.v0) != 0 {
 		return false
+	}
+	return true
+}
+
+// closedBossShellLumps assigns the inner face component to the one void shell.
+// shellStackedBoss has already proved that the nested cavity stays clear of
+// every exterior wall, the floor and the kept roof. Every source face must
+// therefore lie in the one outer component, and all derived cavity faces in
+// exactly one other closed component.
+func closedBossShellLumps(faces []*Face, outerFaceCount int) ([]*Lump, error) {
+	if outerFaceCount <= 0 || outerFaceCount >= len(faces) {
+		return nil, fmt.Errorf("%w: a closed boss shell has no distinct exterior and cavity", ErrUnsupported)
+	}
+	outerFaces := make(map[*Face]struct{}, outerFaceCount)
+	for _, face := range faces[:outerFaceCount] {
+		outerFaces[face] = struct{}{}
+	}
+	groups := splitConnectedFaces(faces)
+	if len(groups) != 2 {
+		return nil, fmt.Errorf("%w: a closed boss shell has %d face components, expected an exterior and one cavity",
+			ErrUnsupported, len(groups))
+	}
+	var outer, cavity []*Face
+	for _, group := range groups {
+		anchors := 0
+		for _, face := range group {
+			if _, ok := outerFaces[face]; ok {
+				anchors++
+			}
+		}
+		switch {
+		case anchors == outerFaceCount && len(group) == outerFaceCount:
+			outer = group
+		case anchors == 0:
+			cavity = group
+		default:
+			return nil, fmt.Errorf("%w: a closed boss shell mixes exterior and cavity faces", ErrUnsupported)
+		}
+	}
+	if len(outer) != outerFaceCount || len(cavity) != len(faces)-outerFaceCount ||
+		shellIsOpen(outer) || shellIsOpen(cavity) ||
+		!closedBossShellEdgePairs(outer) || !closedBossShellEdgePairs(cavity) {
+		return nil, fmt.Errorf("%w: a closed boss shell needs two closed face components", ErrUnsupported)
+	}
+	return []*Lump{{shells: []*Shell{{faces: outer}, {faces: cavity, void: true}}}}, nil
+}
+
+// Each component must use every edge exactly twice. A free edge or a repeated
+// edge cannot pass merely because the face graph has two components. The
+// coedge's forward bit records curve direction, not outward face winding.
+func closedBossShellEdgePairs(faces []*Face) bool {
+	edges := map[*Edge]int{}
+	for _, face := range faces {
+		for _, loop := range face.loops {
+			for _, use := range loop.coedges {
+				edges[use.edge]++
+			}
+		}
+	}
+	if len(edges) == 0 {
+		return false
+	}
+	for edge, uses := range edges {
+		if uses != 2 || len(edge.faces) != 2 || edge.faces[0] == edge.faces[1] {
+			return false
+		}
 	}
 	return true
 }
@@ -305,7 +443,8 @@ func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
 	bw, bh := point(b.boss.width()), point(b.boss.height())
 	plateV, bossV := mul(area(b.plate), h), mul(area(b.boss), hb)
 	lowerV := mul(area(b.lower), sub(h, scale(t, 2, 1)))
-	upperV := mul(area(b.upper), hb)
+	upperHeight := sub(point(b.cavityTopZ), point(b.interfaceZ))
+	upperV := mul(area(b.upper), upperHeight)
 	t2, t3, t4 := mul(t, t), mul(mul(t, t), t), mul(mul(t, t), mul(t, t))
 	widths := add(bw, bh)
 	bandV := add(
@@ -322,6 +461,7 @@ func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
 	// z is measured from the recorded frame origin, not from the plate base.
 	plateCZ := scale(add(point(b.z0), point(b.interfaceZ)), 1, 2)
 	bossCZ := scale(add(point(b.interfaceZ), point(b.topZ)), 1, 2)
+	upperCZ := scale(add(point(b.interfaceZ), point(b.cavityTopZ)), 1, 2)
 	bandZ := add(mul(point(b.lowerZ), bandV),
 		add(sub(scale(mul(area(b.boss), t2), 1, 2), scale(mul(widths, t3), 1, 3)), scale(t4, 1, 3)))
 	mu := sub(sub(add(mul(plateV, centerU(b.plate)), mul(bossV, centerU(b.boss))),
@@ -329,7 +469,7 @@ func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
 	mv := sub(sub(add(mul(plateV, centerV(b.plate)), mul(bossV, centerV(b.boss))),
 		add(mul(lowerV, centerV(b.lower)), mul(upperV, centerV(b.upper)))), mul(bandV, centerV(b.boss)))
 	mz := sub(sub(add(mul(plateV, plateCZ), mul(bossV, bossCZ)),
-		add(mul(lowerV, plateCZ), mul(upperV, bossCZ))), bandZ)
+		add(mul(lowerV, plateCZ), mul(upperV, upperCZ))), bandZ)
 	ivs := []proofbound.RatInterval{mu, mv, mz}
 	var c [3]proofbound.BoundedScalar
 	for i, iv := range ivs {

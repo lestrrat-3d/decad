@@ -739,7 +739,10 @@ union, a class-B cut, a route-E rewrite, a shell side opening. A vertex where
 natural line ends and an arc's `t = 0` Start meet at one recorded coordinate
 stays `Exact`.
 
-`Lumps` and `Shells` are derived from face adjacency (`sheetLumps`). Roles are fresh under the boolean's producer identity:
+`Lumps` and `Shells` are derived from face adjacency (`sheetLumps`). A closed
+rectangular-boss shell uses its proven cavity clearance to group the source
+outer faces as one shell and the disconnected cavity faces as one void shell
+(modify-general §3.1a). Roles are fresh under the boolean's producer identity:
 `face(k)` for planar faces, `wall(k)` for swept, both indexed by the result
 record, and `capStart`/`capEnd` are not minted (core §9: the helper returns a
 reference matching nothing). `Face.Origins` carry no operand provenance

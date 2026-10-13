@@ -120,10 +120,11 @@ func WithShellSense(s ShellSense) ShellOption {
 // builds it: the meridian's wall region swept a whole turn, an outer shell
 // around one void shell (Shell.IsVoid) that is the cavity. So does a
 // hole-free straight prism: both caps keep a floor t thick, so an inward wall
-// needs t below half the sweep (SX11, ErrDegenerate). Every other receiver
-// returns ErrUnsupported after the stage-1 gates pass — a holed prism section,
-// a partial revolve, since it keeps both angular caps, and a brep or stacked
-// receiver, whose record holds no void shell (SG2). Two WithShellSense
+// needs t below half the sweep (SX11, ErrDegenerate). A two-slab rectangular
+// boss Union builds the bounded inward cavity of modify-general §3.1a. Other
+// receivers return ErrUnsupported after the stage-1 gates pass — a holed
+// prism section, a partial revolve, and brep or stacked results outside that
+// boss class (SG2). Two WithShellSense
 // options naming different senses are ErrDegenerate (SX1).
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism
@@ -210,6 +211,36 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		// them with a wall, closing a cavity.
 		if pp, ok := b.payload.(prismPayload); ok && len(pp.profile.Holes) == 0 {
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
+		}
+		if sp, ok := b.payload.(stackedPrismPayload); ok && sense == Inward {
+			view, _, err := brepOfStackedWithRoles(ctx, sp)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, ctxErr
+			}
+			if err == nil {
+				body, matched, err := shellStackedBoss(ctx, b, sp, view,
+					brepShellCall{sense: sense, t: t, tmm: tmm, tDelta: tDelta})
+				if !matched && err == nil {
+					reversed, eligible, reverseErr := reverseClosedBossStack(ctx, sp)
+					if reverseErr != nil {
+						return nil, reverseErr
+					}
+					if eligible {
+						reversedView, _, viewErr := brepOfStackedWithRoles(ctx, reversed)
+						if viewErr != nil {
+							return nil, viewErr
+						}
+						body, matched, err = shellStackedBoss(ctx, b, reversed, reversedView,
+							brepShellCall{sense: sense, t: t, tmm: tmm, tDelta: tDelta})
+					}
+				}
+				if matched || err != nil {
+					if err != nil {
+						return nil, err
+					}
+					return commitModifyResult(ctx, b, body)
+				}
+			}
 		}
 		return nil, refuseClosedShell(b.payload)
 	}
@@ -457,8 +488,8 @@ func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp 
 }
 
 // refuseClosedShell is Shell's answer to WithNoOpenings on every receiver but
-// a full-turn revolve over a hole-free meridian, which shellRevolve builds,
-// and a hole-free straight prism, which shellClosedPrism builds
+// a full-turn revolve over a hole-free meridian, a hole-free straight prism,
+// and an admitted two-slab rectangular boss. Their own builders run first
 // (docs/modify-reach-design.md Tables RX/SX, §14). Each receiver gets the row
 // that stages it: a faceted boolean result SX9, a brep or stacked receiver
 // docs/modify-general-design.md's SG2, a holed prism section or revolve
@@ -470,7 +501,7 @@ func refuseClosedShell(payload featurePayload) error {
 	case facetedPayload:
 		return fmt.Errorf(`%w: this evaluator modifies no faceted boolean result (modify-reach SX9)`, ErrUnsupported)
 	case brepPayload, stackedPrismPayload:
-		return fmt.Errorf(`%w: this evaluator does not build a closed shell of a brep or stacked receiver; a brep record's lumps are its connected face sets, so it holds no void shell (modify-general SG2)`, ErrUnsupported)
+		return fmt.Errorf(`%w: this evaluator does not build a closed shell of this brep or stacked receiver; it has no certified void-shell construction (modify-general SG2)`, ErrUnsupported)
 	case prismPayload:
 		// Shell routes a hole-free section to shellClosedPrism, so the prism
 		// that arrives here is holed.
