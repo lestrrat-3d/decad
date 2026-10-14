@@ -398,15 +398,15 @@ func BoxesWithin(a, b [2]r3.Vec, slack float64) bool {
 // does not contain, so the value returned for such a pair is neither the
 // distance nor a lower bound on it and must never gate an admission.
 func TriTriDistance(ta, tb [3]r3.Vec) float64 {
-	best := math.Inf(1)
+	best := posInf
 	for i := range 3 {
 		for j := range 3 {
-			best = math.Min(best, SegSegDist3(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3]))
+			best = minFloat64(best, SegSegDist3(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3]))
 		}
 	}
 	for i := range 3 {
-		best = math.Min(best, PointTriDistance(ta[i], tb))
-		best = math.Min(best, PointTriDistance(tb[i], ta))
+		best = minFloat64(best, PointTriDistance(ta[i], tb))
+		best = minFloat64(best, PointTriDistance(tb[i], ta))
 	}
 	if best <= 0 || proofbound.IsNonFinite(best) {
 		return 0
@@ -440,11 +440,53 @@ func SegSegDist3(p0, p1, q0, q1 r3.Vec) float64 {
 	return p0.Add(u.Scale(s)).Sub(q0.Add(v.Scale(t))).Len()
 }
 
+// Clamp01 is num/den clamped into [0, 1], or 0 when den <= 0. It returns the
+// same bits as math.Max(0, math.Min(1, num/den)) for every input, written as
+// comparisons because the race build instruments math.Max and math.Min.
 func Clamp01(num, den float64) float64 {
 	if den <= 0 {
 		return 0
 	}
-	return math.Max(0, math.Min(1, num/den))
+	q := num / den
+	switch {
+	case q != q:
+		// math.Min and math.Max return the canonical NaN, not q's payload.
+		return math.NaN()
+	case q <= 0:
+		// math.Max(0, q) is +0 for q == -0 as well.
+		return 0
+	case q >= 1:
+		return 1
+	}
+	return q
+}
+
+// posInf is math.Inf(1), read once so the hot minimum folds do not rebuild it.
+var posInf = math.Inf(1)
+
+// minFloat64 returns the same bits as math.Min(x, y) for every input: the
+// canonical NaN when either side is NaN and neither is -Inf, -Inf when either
+// is -Inf, and -0 for the pair (-0, +0). The ordered cases use plain
+// comparisons because the race build instruments math.Min.
+func minFloat64(x, y float64) float64 {
+	if x < y {
+		return x
+	}
+	if y < x {
+		return y
+	}
+	if x == y {
+		// Equal and nonzero means identical bits. Only the zeros differ.
+		if x == 0 && math.Signbit(x) {
+			return x
+		}
+		return y
+	}
+	// Unordered: at least one NaN.
+	if math.IsInf(x, -1) || math.IsInf(y, -1) {
+		return math.Inf(-1)
+	}
+	return math.NaN()
 }
 
 // PointBoxDist is the Euclidean distance from a point to an axis-aligned box
@@ -478,9 +520,9 @@ func PointTriDistance(p r3.Vec, t [3]r3.Vec) float64 {
 			return p.Sub(foot).Len()
 		}
 	}
-	best := math.Inf(1)
+	best := posInf
 	for i := range 3 {
-		best = math.Min(best, SegSegDist3(p, p, t[i], t[(i+1)%3]))
+		best = minFloat64(best, SegSegDist3(p, p, t[i], t[(i+1)%3]))
 	}
 	return best
 }
