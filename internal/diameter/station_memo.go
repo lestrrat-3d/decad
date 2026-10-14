@@ -19,8 +19,10 @@ const stationMemoEntries = 64
 // so a hit is a call with identical input and SectionStations, a pure
 // function of its loops for these kinds, gives the identical answer. Other
 // kinds are read fresh. A nil memo reads fresh. It is safe for concurrent
-// use. A cancelled reading is never stored, and it keeps at most
-// stationMemoEntries entries.
+// use, and it keeps at most stationMemoEntries entries. The budget's context
+// is checked before a hit is returned and, after the lock is taken, before a
+// reading is stored or a concurrent winner returned, so a cancelled call
+// neither stores nor returns a reading.
 //
 // A memo belongs to one top-level call (the call's bodyGeomCache owns it) and
 // is dropped with it. The returned stations are shared between hits, so a
@@ -47,6 +49,9 @@ func (m *StationMemo) SectionStations(budget *proofbound.WorkBudget, loops []sec
 	for _, e := range m.entries {
 		if loopsEqual(e.loops, loops) {
 			m.mu.Unlock()
+			if err := budget.Err(); err != nil {
+				return nil, false, err
+			}
 			return e.stations, e.ok, nil
 		}
 	}
@@ -57,6 +62,11 @@ func (m *StationMemo) SectionStations(budget *proofbound.WorkBudget, loops []sec
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// A reading is stored and returned only while the budget is live: a
+	// short read polls the context too rarely to have noticed a cancel.
+	if err := budget.Err(); err != nil {
+		return nil, false, err
+	}
 	for _, e := range m.entries {
 		if loopsEqual(e.loops, loops) {
 			return e.stations, e.ok, nil

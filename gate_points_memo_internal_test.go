@@ -109,3 +109,71 @@ func TestGatePointsStoreOnlyInAnEntry(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, first, viaNil)
 }
+
+// TestGatePointsNeverStoreOrReturnUnderCancel checks the gate cache with real
+// cancelled contexts. A normal budget polls the context once per 256 steps, so
+// a short reading runs to the end under a cancelled context; the cache must
+// still refuse to store it (cold), refuse to return a stored one (warm), and
+// refuse one that finished after a cancel during the computation. The body is
+// a brep, which reads no station memo, so these checks are the cache's own.
+//
+// Shown to fail: dropping the budget check before a stored reading is
+// returned makes the warm case succeed; dropping the check under the lock
+// makes the cold and during-computation cases store a reading.
+func TestGatePointsNeverStoreOrReturnUnderCancel(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	brep := internalBrepBody(t, internalBoxBody(t, doc, 0, 0, 4, 2, 1))
+	cancelled := func() context.Context {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		return ctx
+	}
+	t.Run("cold", func(t *testing.T) {
+		t.Parallel()
+		cache := &bodyGeomCache{}
+		_, _, err := cache.get(proofbound.NewWorkBudget(t.Context()), brep)
+		require.NoError(t, err)
+		ctx := cancelled()
+		_, _, err = cache.gatePoints(ctx, proofbound.NewWorkBudget(ctx), brep)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Nil(t, cache.entries[brep].gate)
+	})
+	t.Run("warm", func(t *testing.T) {
+		t.Parallel()
+		cache := &bodyGeomCache{}
+		_, _, err := cache.get(proofbound.NewWorkBudget(t.Context()), brep)
+		require.NoError(t, err)
+		_, _, err = cache.gatePoints(t.Context(), proofbound.NewWorkBudget(t.Context()), brep)
+		require.NoError(t, err)
+		require.NotNil(t, cache.entries[brep].gate)
+		ctx := cancelled()
+		_, _, err = cache.gatePoints(ctx, proofbound.NewWorkBudget(ctx), brep)
+		require.ErrorIs(t, err, context.Canceled)
+	})
+	t.Run("during computation", func(t *testing.T) {
+		t.Parallel()
+		cache := &bodyGeomCache{}
+		_, _, err := cache.get(proofbound.NewWorkBudget(t.Context()), brep)
+		require.NoError(t, err)
+		ctx, cancel := context.WithCancel(t.Context())
+		steps := 0
+		b := &proofbound.WorkBudget{
+			StepFn: func() error {
+				steps++
+				return nil
+			},
+			ErrFn: func() error {
+				// The reading's own steps have all run when the publish
+				// check asks; cancel just before it answers.
+				if steps > 0 {
+					cancel()
+				}
+				return ctx.Err()
+			},
+		}
+		_, _, err = cache.gatePoints(ctx, b, brep)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Nil(t, cache.entries[brep].gate)
+	})
+}

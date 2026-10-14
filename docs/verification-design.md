@@ -615,8 +615,14 @@ body's points are read once. The clearance kernel reads them through the call's
 body's own cache entry, so the reading is dropped with the entry. The cache
 also owns a `diameter.StationMemo`, which keeps a prism's section stations by
 the float bits of its line, circle and arc loops, so the placed copies of one
-profile share them. Both live for one call and store nothing on a cancelled
-reading; every reading equals a fresh one bit for bit.
+profile share them. Both live for one call. Each checks the call's context
+(`budget.Err()`) at two points: before it returns a stored reading, and after
+it takes its lock, before it stores a new reading or returns the reading a
+concurrent call stored first. The budget polls the context only every 256
+steps, so a short reading can finish under a cancelled context; these checks
+make a cancelled call neither store nor return a reading. A cancel that
+arrives after the last check can still race with the call, as it can for any
+reading. Every reading returned equals a fresh one bit for bit.
 
 **Every arm publishes through one witness-maximum reader, and that reader
 rounds toward zero.** `pointSetDiameterWithBudget` (`verify_gate.go`, backed by

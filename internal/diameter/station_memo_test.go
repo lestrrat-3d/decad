@@ -1,6 +1,7 @@
 package diameter_test
 
 import (
+	"context"
 	"math"
 	"math/rand/v2"
 	"sync"
@@ -211,4 +212,59 @@ func TestStationMemoConcurrent(t *testing.T) {
 	}
 	wg.Wait()
 	require.Equal(t, len(profiles), m.Len())
+}
+
+// TestStationMemoNeverStoresOrReturnsUnderCancel checks the memo with real
+// cancelled contexts. NewWorkBudget polls the context once per 256 steps, so a
+// four-line rectangle reads to the end under a cancelled context; the memo
+// itself must still refuse to store the reading (cold), refuse to return a
+// stored one (warm), and refuse a reading that finished after a cancel that
+// came during the computation.
+//
+// Shown to fail: dropping the budget check before a hit makes the warm case
+// return stations; dropping the check under the lock makes the cold case
+// store the rectangle and the during-computation case store it too.
+func TestStationMemoNeverStoresOrReturnsUnderCancel(t *testing.T) {
+	t.Parallel()
+	l := loops{rect(0, 0, 4, 2)}
+	read := func(m *diameter.StationMemo, b *proofbound.WorkBudget) error {
+		_, _, err := m.SectionStations(b, l, freeform.NewFreeformWork())
+		return err
+	}
+	t.Run("cold", func(t *testing.T) {
+		t.Parallel()
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		m := &diameter.StationMemo{}
+		require.ErrorIs(t, read(m, proofbound.NewWorkBudget(ctx)), context.Canceled)
+		require.Zero(t, m.Len())
+	})
+	t.Run("warm", func(t *testing.T) {
+		t.Parallel()
+		m := &diameter.StationMemo{}
+		require.NoError(t, read(m, proofbound.NewWorkBudget(t.Context())))
+		require.Equal(t, 1, m.Len())
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		require.ErrorIs(t, read(m, proofbound.NewWorkBudget(ctx)), context.Canceled)
+		require.NoError(t, read(m, proofbound.NewWorkBudget(t.Context())), "a live call still hits")
+	})
+	t.Run("during computation", func(t *testing.T) {
+		t.Parallel()
+		ctx, cancel := context.WithCancel(t.Context())
+		steps := 0
+		b := &proofbound.WorkBudget{
+			StepFn: func() error {
+				if steps++; steps == 4 { // the last of the rectangle's steps
+					cancel()
+				}
+				return nil
+			},
+			ErrFn: ctx.Err,
+		}
+		m := &diameter.StationMemo{}
+		require.ErrorIs(t, read(m, b), context.Canceled)
+		require.Equal(t, 4, steps, "the reading ran to the end before the cancel was seen")
+		require.Zero(t, m.Len())
+	})
 }

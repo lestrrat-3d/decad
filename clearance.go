@@ -116,7 +116,10 @@ type gateReading struct {
 // gate points depend on its payload alone, which a call never changes.
 // A reading is stored only in the body's existing entry, so it lives
 // and is evicted with the body's carrier model; a body with no entry
-// is read without storing. A cancelled reading is never stored. The
+// is read without storing. The budget's context is checked before a stored
+// reading is returned and, under the lock, before a reading is stored or a
+// concurrent winner returned, so a cancelled call neither stores nor returns a
+// reading. The
 // returned points are shared between hits and must not be modified.
 func (cache *bodyGeomCache) gatePoints(ctx context.Context, budget *proofbound.WorkBudget,
 	body *Body) (gatePoints, bool, error) {
@@ -127,6 +130,9 @@ func (cache *bodyGeomCache) gatePoints(ctx context.Context, budget *proofbound.W
 	entry, found := cache.entries[body]
 	cache.mu.Unlock()
 	if found && entry.gate != nil {
+		if err := budget.Err(); err != nil {
+			return gatePoints{}, false, err
+		}
 		return entry.gate.points, entry.gate.ok, nil
 	}
 	points, ok, err := bodyGatePoints(ctx, budget, body, &cache.stations)
@@ -135,6 +141,11 @@ func (cache *bodyGeomCache) gatePoints(ctx context.Context, budget *proofbound.W
 	}
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
+	// A reading is stored and returned only while the budget is live: a
+	// short read polls the context too rarely to have noticed a cancel.
+	if err := budget.Err(); err != nil {
+		return gatePoints{}, false, err
+	}
 	entry, found = cache.entries[body]
 	if !found {
 		return points, ok, nil
