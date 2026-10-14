@@ -62,7 +62,25 @@ func preparePlanarRebuilt(s *PlanarSolid) *planarPrep {
 	return p
 }
 
+// dyadicsEqual reports whether every check of requireDyadicsEqual passes.
+func dyadicsEqual(want, got []proof.Dyadic) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range want {
+		if proof.DyCmp(want[i], got[i]) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// requireDyadicsEqual compares with plain Go first and runs the checks below only on a
+// mismatch, so a passing call skips t.Helper and require.
 func requireDyadicsEqual(t *testing.T, want, got []proof.Dyadic, label string) {
+	if dyadicsEqual(want, got) {
+		return
+	}
 	t.Helper()
 	require.Len(t, got, len(want), label)
 	for i := range want {

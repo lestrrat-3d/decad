@@ -60,7 +60,18 @@ func lazyUnreduced(rng *rand.Rand, r *big.Rat) proofarith.LazyRat {
 	return proofarith.LazyMul(x, proofarith.LazyQuo(kr, kr))
 }
 
+// lazyEqual reports whether every check of requireLazyEqual passes.
+func lazyEqual(want *big.Rat, got proofarith.LazyRat) bool {
+	r := got.Rat()
+	return want.Cmp(r) == 0 && want.Num().Cmp(r.Num()) == 0 && want.Denom().Cmp(r.Denom()) == 0
+}
+
+// requireLazyEqual compares with plain Go first and runs the checks below only on a
+// mismatch, so a passing call skips t.Helper and require.
 func requireLazyEqual(t *testing.T, want *big.Rat, got proofarith.LazyRat) {
+	if lazyEqual(want, got) {
+		return
+	}
 	t.Helper()
 	r := got.Rat()
 	require.Zero(t, want.Cmp(r))
@@ -100,7 +111,11 @@ func lazyRandInterval(rng *rand.Rand) (proofarith.RatInterval, proofarith.LazyIn
 	return proofarith.Interval(a, b), proofarith.LazyInterval{Lo: lazyUnreduced(rng, a), Hi: lazyUnreduced(rng, b)}
 }
 
+// requireLazyIntervalEqual takes the same fast path as requireLazyEqual.
 func requireLazyIntervalEqual(t *testing.T, want proofarith.RatInterval, got proofarith.LazyInterval) {
+	if lazyEqual(want.Lo, got.Lo) && lazyEqual(want.Hi, got.Hi) {
+		return
+	}
 	t.Helper()
 	requireLazyEqual(t, want.Lo, got.Lo)
 	requireLazyEqual(t, want.Hi, got.Hi)
