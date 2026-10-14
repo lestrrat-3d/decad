@@ -1228,7 +1228,8 @@ arithmetic, or a float filter whose error bound proves the sign. No sign comes
 from a tolerance:
 
 - **The noncoplanar shared edge.** For a pair Table C gives a common edge, one
-  exact sign proving the two triangles' planes DISTINCT is enough: both planes
+  exact sign proving the two triangles' planes DISTINCT is enough (decided by the guarded float orientation filter when
+  it is certain, by exact arithmetic otherwise): both planes
   contain that edge's supporting line, so distinct planes meet in exactly that
   line, and a closed nondegenerate triangle meets the line supporting one of
   its own edges in exactly that edge. The intersection is therefore the

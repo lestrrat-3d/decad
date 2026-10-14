@@ -670,7 +670,7 @@ func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, short
 	if sharedCount == 2 {
 		edgeA, edgeB := data.Xverts[shared[0]], data.Xverts[shared[1]]
 		apex := data.Xverts[tessellation.TriangleApexIndex(tris[j], shared[0], shared[1])]
-		if proof.XdotSign(na, proof.Xsub(apex, edgeA)) == 0 {
+		if data.apexPlaneSign(ta, tb, xta, xtb, na, apex, edgeA) == 0 {
 			if TriTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
 				return LoftPairClassified, nil
 			}
@@ -1004,6 +1004,44 @@ func (d *LoftAuditData) planeSigns(i int, xother [3]proof.Xpt, other [3]r3.Vec) 
 		signs[k] = proof.OrientSignPrepared(t[0], t[1], t[2], other[k], xt[0], xother[k], d.Norms[i])
 	}
 	return signs
+}
+
+// apexPlaneSign is the sign of na . (apex - edgeA): which side of triangle i's
+// plane the apex of triangle j lies on, for a pair sharing the edge that ends at
+// edgeA (a corner of triangle i). Only whether it is zero is read.
+//
+// ti, tj and xti, xtj are the TABLE's corners of the two triangles, in the
+// table's order (the order na was built in). The caller's vertex triples may
+// list the same vertices in another order, so no position of the caller's triple
+// is used: the apex and edgeA are bound to table corners by the identity of
+// their exact points, which the table copies from Xverts (same big.Int
+// pointers), and so by vertex index.
+//
+// na is (t1 - t0) x (t2 - t0) over the exact lifts of triangle i's corners in
+// table order and edgeA is one of those corners, so na . (edgeA - t0) is exactly
+// 0 and the value is na . (apex - t0) = det[t1 - t0, t2 - t0, apex - t0], the
+// value proof.OrientSignFloat signs for (t0, t1, t2, apex). A sign that filter
+// certifies is therefore the exact sign, and a certified zero is its
+// exact-zero-column case. An undecided sign, an apex that is not a corner of the
+// table's triangle j, or an edgeA that is not a corner of the table's triangle i
+// falls through to the exact dot product. The float answer is off for data built
+// by NewLoftAuditDataWithExact, whose exact lifts may differ from the float
+// corners. For every other table the lifts are proof.XptOf of the float
+// vertices, so a table corner and its exact point are the same value.
+func (d *LoftAuditData) apexPlaneSign(ti, tj [3]r3.Vec, xti, xtj [3]proof.Xpt, na, apex, edgeA proof.Xpt) int {
+	if !d.exactLifts && apex.X != nil && edgeA.X != nil &&
+		(xti[0].X == edgeA.X || xti[1].X == edgeA.X || xti[2].X == edgeA.X) {
+		for k := range xtj {
+			if xtj[k].X != apex.X {
+				continue
+			}
+			if s, ok := proof.OrientSignFloat(ti[0], ti[1], ti[2], tj[k]); ok {
+				return s
+			}
+			break
+		}
+	}
+	return proof.XdotSign(na, proof.Xsub(apex, edgeA))
 }
 
 func ProjectionPairIndex(u, v int) int {
