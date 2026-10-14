@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -105,4 +106,61 @@ func TestLoftCapConeRecordDoesNotSurviveRoundTripPlacement(t *testing.T) {
 	require.Nil(t, final.loftFacesCap)
 	require.Nil(t, final.loftFacesToe)
 	require.Nil(t, final.loftFacesTrim)
+}
+
+func TestLoftCapTangentToHeelCone(t *testing.T) {
+	apex, slope := big.NewRat(8, 1), big.NewRat(3, 4)
+	end, err := loftface.NewTangentEnd(apex, slope, 0, 1)
+	require.NoError(t, err)
+	final := end.Map()
+	normal := loftface.VCross(final.QU, final.QV)
+	previous := final
+	previous.Constant = loftface.VAdd(final.Constant, loftface.VScale(normal, big.NewRat(1, 8)))
+	box := [4]*big.Rat{big.NewRat(-4, 1), big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(1, 1)}
+	cone := &pointConeLimit{apex: apex, far: big.NewRat(-4, 1), slope: slope}
+	record := func() *loftFacesCapRecord {
+		return &loftFacesCapRecord{tangent: &end, final: final, maps: []loftFaceMap{previous, previous, final}}
+	}
+
+	plane, err := loftCapTangentToHeelCone(record(), box, cone)
+	require.NoError(t, err)
+	require.NotNil(t, plane)
+	require.Equal(t, 1, plane.Side)
+	require.False(t, loftCapOutsideHeelCone(final, box, cone), "the tangent cap is not on the strict path")
+
+	plain := record()
+	plain.tangent = nil
+	plane, err = loftCapTangentToHeelCone(plain, box, cone)
+	require.NoError(t, err)
+	require.Nil(t, plane, "a plain LoftFaces cap has no tangent scope")
+
+	other := &pointConeLimit{apex: apex, far: cone.far, slope: big.NewRat(1, 1)}
+	plane, err = loftCapTangentToHeelCone(record(), box, other)
+	require.NoError(t, err)
+	require.Nil(t, plane, "the end was built for another cone")
+
+	changed := record()
+	changed.final.Q0 = loftface.RatVec{big.NewRat(0, 1), big.NewRat(1, 1<<40), big.NewRat(0, 1)}
+	plane, err = loftCapTangentToHeelCone(changed, box, cone)
+	require.NoError(t, err)
+	require.Nil(t, plane, "the recorded final map is not the constructed one")
+
+	straddling := [4]*big.Rat{big.NewRat(-1, 1), big.NewRat(1, 1), big.NewRat(-1, 1), big.NewRat(1, 1)}
+	plane, err = loftCapTangentToHeelCone(record(), straddling, cone)
+	require.NoError(t, err)
+	require.Nil(t, plane, "the box contains the apex line u = 0")
+
+	wrongSide := record()
+	wrongSide.maps = []loftFaceMap{final, previous, final}
+	wrongSide.maps[1].Constant = loftface.VSub(final.Constant, loftface.VScale(normal, big.NewRat(1, 8)))
+	plane, err = loftCapTangentToHeelCone(wrongSide, box, cone)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Nil(t, plane)
+
+	earlier := record()
+	earlier.maps = []loftFaceMap{previous, previous, final}
+	earlier.maps[0].Constant = loftface.VSub(final.Constant, loftface.VScale(normal, big.NewRat(1, 8)))
+	plane, err = loftCapTangentToHeelCone(earlier, box, cone)
+	require.ErrorIs(t, err, ErrUnsupported, "G2 refuses an earlier cap across the plane")
+	require.Nil(t, plane)
 }

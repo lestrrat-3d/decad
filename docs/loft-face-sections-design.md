@@ -111,6 +111,113 @@ disjoint from the heel cone wall's held facets. Only that exact face pair
 skips the proximity refusal. The held Intersect result must contain no facets
 from the cap; a retained held cap would disagree with the true separation.
 
+A cone-tangent end (see "Cone-tangent end section") has `A = 0` and
+`C > 0`: the denominator-cleared pullback is exactly `C*v²`, so the cap plane
+touches the heel cone along one ruling and nowhere else. The Intersect takes
+this branch only when the cap record carries a tangent end built for the heel
+cone's exact apex and slope, that end reproduces the recorded final map, and
+the rectangle lies strictly on one side of `u = 0`. The Intersect tries the
+strict `A, C > 0` branch first and falls through to the tangent branch only
+when the strict branch does not apply. The tangent branch exempts no face
+pair from the proximity gate. Two exact side gates guard it, and a failure of
+either refuses the Intersect with `ErrUnsupported`. Let `Pi` be the cap plane,
+`phi` its exact functional, and `s` the strict common sign of `phi` over the
+corners of the preceding cap map (the loft side).
+
+- G1, cone on the loft side. The cone's axis midpoint `m = ((A+far)/2, 0, 0)`
+  is in the open interior of the finite cone. Because the pullback is
+  `C*v² >= 0`, the plane meets no interior point, so the whole interior lies on
+  `m`'s side. The gate requires `s*phi(m) > 0`. A loft that approaches the plane
+  from the far side of the cone is refused.
+- G2, every earlier cap on the loft side. Each earlier cap map has a positive
+  denominator over the source rectangle, and `s*phi` is positive at its four
+  corners. The numerator of `phi` is affine in `(u, v)`, so every earlier cap
+  lies strictly in `{s*phi > 0}`. On a band, `phi` is affine in the band
+  parameter, so the loft lies in `{s*phi >= 0}` and meets `Pi` only in the end
+  cap.
+
+With G1 and G2 the Intersect runs on the tooth extended by an exact prism `E`
+glued to the end cap on the side away from the loft. The prism is the end cap
+translated by `-h*s*N/U`, where `N` is the cap normal, `h = 1` mm and
+`U = RatSqrtUp(N.N)` is a rational upper bound of `|N|`. The displacement has
+length `h*|N|/U <= h`, strictly positive, and points along `-s*N`. It lies in
+`{s*phi <= 0}`, so it meets the tooth only in the end cap. The cone lies in
+`{s*phi >= 0}` by G1. On the open half-space `{s*phi > 0}` the extended tooth
+and the tooth coincide, so the regularized intersection of the extended tooth
+with the cone is the intersection of the tooth with the cone. The argument uses
+no ruling, ruling interval or profile corner. It holds wherever the prism
+reaches, including the toe tool's removed material and the cone's far plane,
+because the exact cap stays in the tooth and the cone stays on the loft side.
+Correctness needs only the direction and the positive length of the
+displacement, not its exact value.
+
+The held proxy replaces only the end-cap facets of the held tooth. Each ring
+vertex must equal, as floats, a station vertex of the last LoftFaces ring, and
+each ring edge must be a distinct station chord, or the extension refuses. Each
+ring vertex gets the extension vertex nearest to its exact translate, with a
+vertex bound of the ring vertex bound plus the 3D radius of the exact rounding
+gap. The ring edges become extension walls carrying the face id of the wall
+they continue, and the cap facets move to the extension vertices with their
+face id and orientation. An extension wall over chord `j` stands for the
+translate of the true cap-boundary piece of chord `j`. The certified distance
+between that piece and the held chord is
+`chord_j = AbsSumUpper(sourceDeparture[j], projectiveDeparture[j], stationRound)`
+of the final cap's bounds, and it includes the curved profile's departure. The
+bounds of the wall's two extension vertices are raised to at least
+`AbsSumUpper(max(beta(a), beta(b), chord_j), max(gap(a_e), gap(b_e)))`. A face
+bound is recomputed as the maximum facet bound over the face's final facets.
+The mesh bound is the maximum of the face bounds. The ring must be one closed
+cycle with exactly one wall neighbour per edge. The proxy must pass the exact
+closed, oriented, embedded mesh audit and have positive exact volume, and the
+prism alone (old cap reversed, extension walls, extension cap) must pass the
+same audit.
+
+Gate E5 proves the proxy changes nothing the Boolean decides. Let `psi =
+s*phi`, and let `S` be the vertices of the old held cap and of the held prism.
+Let `eps_S` be the largest `psi` over `S` and `B_S` its exact axis box. Let
+`eps_K` be the largest `-psi` over the held cone vertices. After both meshes
+exist, E5 requires:
+
+1. every extension-cap vertex has `psi < -eps_K`;
+2. every held cone facet whose box meets `B_S`, clipped exactly to `B_S`, has
+   `psi > eps_S` at every clipped vertex. Equality refuses.
+
+So no held cone facet touches the old cap or the prism, and the prism lies
+outside the held cone. The held proxy is then the held tooth plus a held prism
+that overlaps it only along the removed cap, so the Boolean cuts the same
+non-extension facets at the same contacts and keeps the same pieces. No
+extension facet is cut, carries a rim or survives. After the Boolean, any
+result vertex with `psi < -max(eps_K, eps_S)` refuses. Both checks run before
+the result is published. E5 proves the statement for the exact stitched
+geometry. The post-Boolean check reads the result vertices after the final
+float stitch (`ResultBeyondSlab`), which can move a rim vertex off its exact
+cone facet and out of its half-space. It can therefore refuse a result
+conservatively because of rounding. Such a refusal is not a failure of E5, and
+the check never admits anything.
+
+The proxy keeps the unextended tooth's occupied-volume bound and area slack,
+and it adds no volume or area charge. It does add the largest extension-vertex
+rounding gap (`CoordCharge`, a length) to the operand's coordinate bound.
+The composition reads the operand's volume bound only through
+`(T' ∩ K) Δ (heldT' ∩ heldK) ⊂ (T Δ heldT) ∪ (K Δ heldK)`, and the left side
+equals `(T ∩ K) Δ (heldT ∩ heldK)` by the exact equality above and E5. Every
+result facet is a piece of a non-extension facet, so the unextended area
+allowance is the one the result composes. These two figures are valid only for
+this Boolean under E5. The proxy is never published.
+
+Extension walls carry the face id of the band wall they continue. Their own
+ids would make every `(extension wall, cone)` a separate face pair whose held
+facets come within the gate's slack of the cone at the ruling's endpoints, so
+the ordinary gate would refuse every real tangent tooth. With the shared id the
+gate examines the band wall's own crossing of the cone. E5 makes the id
+irrelevant to the result, because no extension facet has a contact.
+
+The held Intersect result must contain no facet from the end-cap group, which
+now includes the extension cap. The result must keep one face for the heel
+cone, and it keeps the trim record with the tangent end copied from the cap
+record. A result without a single toe-cap face and a single heel-cone face
+refuses before the body is built.
+
 This continuation tries four, eight, sixteen and at most thirty-two times
 the ordinary pair chord. It retries only a first-operand staging refusal.
 The local chain-depth gate still checks the held bound at every other contact.

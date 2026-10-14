@@ -28,10 +28,17 @@ type tangentLoftFixture struct {
 }
 
 func newTangentLoftFixture(t *testing.T) tangentLoftFixture {
+	return newTangentLoftFixtureTurned(t, 0, 1)
+}
+
+// newTangentLoftFixtureTurned is the fixture turned about world X by the
+// angle with the given sine and cosine, so its tangent ruling points along
+// (0, cos, sin).
+func newTangentLoftFixtureTurned(t *testing.T, sin, cos float64) tangentLoftFixture {
 	t.Helper()
 	doc := New()
 	world := sketch.NewWorld()
-	frame, err := r3.NewFrame(r3.NewVec(8, 0, 0), r3.NewVec(0.6, -0.8, 0), r3.NewVec(0, 0, 1))
+	frame, err := r3.NewFrame(r3.NewVec(8, 0, 0), r3.NewVec(0.6, -0.8*cos, -0.8*sin), r3.NewVec(0, -sin, cos))
 	require.NoError(t, err)
 	plane, err := world.CreatePlaneFromFrame(frame)
 	require.NoError(t, err)
@@ -260,22 +267,33 @@ func (c *countdownContext) Err() error {
 }
 
 func TestLoftFacesToConeTangentCancelledDuringEvaluation(t *testing.T) {
-	f := newTangentLoftFixture(t)
-	cone := f.cone(t, f.doc)
-	end := ConeTangentEnd{Cone: cone, Radial: r3.NewVec(0, 1, 0)}
+	radial := r3.NewVec(0, 1, 0)
 	// Count how many Err checks a successful evaluation makes, on a twin document.
 	g := newTangentLoftFixture(t)
 	counter := &countdownContext{Context: t.Context(), left: 1 << 30}
-	_, err := LoftFacesToConeTangent(counter, ConeTangentEnd{Cone: g.cone(t, g.doc), Radial: end.Radial}, g.toe, g.heel)
+	_, err := LoftFacesToConeTangent(counter, ConeTangentEnd{Cone: g.cone(t, g.doc), Radial: radial}, g.toe, g.heel)
 	require.NoError(t, err)
 	checks := (1 << 30) - counter.left
 	require.Greater(t, checks, 2, "evaluation polls the context after entry")
 
-	before, next := len(f.doc.Bodies()), f.doc.nextProducerID()
-	_, err = LoftFacesToConeTangent(&countdownContext{Context: t.Context(), left: checks - 1}, end, f.toe, f.heel)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Len(t, f.doc.Bodies(), before)
-	require.Equal(t, next, f.doc.nextProducerID())
+	// A cancel at each of these polls lands inside assembly or proof; the last
+	// is the final pre-commit check.
+	for name, left := range map[string]int{
+		"first poll after entry": 1,
+		"middle poll":            checks / 2,
+		"second to last poll":    checks - 2,
+		"final poll":             checks - 1,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newTangentLoftFixture(t)
+			end := ConeTangentEnd{Cone: f.cone(t, f.doc), Radial: radial}
+			before, next := len(f.doc.Bodies()), f.doc.nextProducerID()
+			_, err := LoftFacesToConeTangent(&countdownContext{Context: t.Context(), left: left}, end, f.toe, f.heel)
+			require.ErrorIs(t, err, context.Canceled)
+			require.Len(t, f.doc.Bodies(), before)
+			require.Equal(t, next, f.doc.nextProducerID())
+		})
+	}
 }
 
 func TestLoftFacesToConeTangentCancelled(t *testing.T) {
