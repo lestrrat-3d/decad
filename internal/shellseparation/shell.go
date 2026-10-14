@@ -46,10 +46,10 @@ func ratZero() *big.Rat { return new(big.Rat) }
 
 func ratF(v float64) *big.Rat { return proof.FloatRat(v) }
 
-func ratAdd(a, b *big.Rat) *big.Rat { return new(big.Rat).Add(a, b) }
+func ratAdd(a, b *big.Rat) *big.Rat { return proof.AddRat(new(big.Rat), a, b) }
 
-func ratSub(a, b *big.Rat) *big.Rat { return new(big.Rat).Sub(a, b) }
+func ratSub(a, b *big.Rat) *big.Rat { return proof.SubRat(new(big.Rat), a, b) }
 
-func ratMul(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }
+func ratMul(a, b *big.Rat) *big.Rat { return proof.MulRat(new(big.Rat), a, b) }
 
 func ratAbs(a *big.Rat) *big.Rat { return new(big.Rat).Abs(a) }

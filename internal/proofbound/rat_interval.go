@@ -65,7 +65,7 @@ func IntervalMul(a, b RatInterval) RatInterval {
 // IntervalAbsUpper is the largest magnitude an interval permits.
 func IntervalAbsUpper(a RatInterval) *big.Rat {
 	lo, hi := new(big.Rat).Abs(a.Lo), new(big.Rat).Abs(a.Hi)
-	if lo.Cmp(hi) >= 0 {
+	if proofarith.CmpRat(lo, hi) >= 0 {
 		return lo
 	}
 	return hi
@@ -196,14 +196,14 @@ func AtanSmallInterval(x *big.Rat) RatInterval {
 }
 
 func AtanPositiveInterval(x *big.Rat) RatInterval {
-	if x.Cmp(big.NewRat(1, 2)) <= 0 {
+	if proofarith.CmpRat(x, big.NewRat(1, 2)) <= 0 {
 		return AtanSmallInterval(x)
 	}
 	// atan(x) = π/4 + atan((x-1)/(x+1)); for x in (1/2,1], the transformed
 	// argument lies in [-1/3,0), inside the fast alternating-series range.
-	q := new(big.Rat).Quo(
-		new(big.Rat).Sub(x, big.NewRat(1, 1)),
-		new(big.Rat).Add(x, big.NewRat(1, 1)),
+	q := proofarith.QuoRat(new(big.Rat),
+		proofarith.SubRat(new(big.Rat), x, big.NewRat(1, 1)),
+		proofarith.AddRat(new(big.Rat), x, big.NewRat(1, 1)),
 	)
 	return IntervalAdd(QuarterPiInterval(), AtanSmallInterval(q))
 }
@@ -228,10 +228,10 @@ func Atan2Interval(y, x *big.Rat, negativeZeroY bool) RatInterval {
 	}
 	ax, ay := new(big.Rat).Abs(x), new(big.Rat).Abs(y)
 	var base RatInterval
-	if ay.Cmp(ax) <= 0 {
-		base = AtanPositiveInterval(new(big.Rat).Quo(ay, ax))
+	if proofarith.CmpRat(ay, ax) <= 0 {
+		base = AtanPositiveInterval(proofarith.QuoRat(new(big.Rat), ay, ax))
 	} else {
-		base = IntervalSub(HalfPiInterval(), AtanPositiveInterval(new(big.Rat).Quo(ax, ay)))
+		base = IntervalSub(HalfPiInterval(), AtanPositiveInterval(proofarith.QuoRat(new(big.Rat), ax, ay)))
 	}
 	switch {
 	case x.Sign() > 0 && y.Sign() > 0:

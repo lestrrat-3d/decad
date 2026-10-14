@@ -1,6 +1,7 @@
 package proof_test
 
 import (
+	"math"
 	"math/big"
 	"math/rand/v2"
 	"testing"
@@ -112,4 +113,139 @@ func randBits(rng *rand.Rand, bits int) *big.Int {
 		n.Or(n, new(big.Int).SetUint64(rng.Uint64()))
 	}
 	return n.Rsh(n, uint((bits+63)/64*64-bits))
+}
+
+// TestCmpRatMatchesRatCmp compares CmpRat with big.Rat.Cmp over 50,000 random
+// pairs that exercise each branch: two dyadics with exponents 0 to 1100, a
+// dyadic against a fraction, two fractions over one denominator, integers,
+// zero, opposite signs, equal values in different spellings, and Rats built
+// by FloatRat or by Num alone whose integer denominator is unstored. CmpRat
+// must leave every input untouched: the same numerator pointer, value and
+// sign, the same denominator value, and an unstored denominator still unstored.
+func TestCmpRatMatchesRatCmp(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(13, 17))
+	signed := func(bits int) *big.Int {
+		n := randBits(rng, bits)
+		if rng.IntN(2) == 0 {
+			n.Neg(n)
+		}
+		return n
+	}
+	pow2 := func(e int) *big.Int { return new(big.Int).Lsh(big.NewInt(1), uint(e)) }
+	// odd denominator times an optional power of two, never 1.
+	oddDenom := func() *big.Int {
+		d := randBits(rng, 2+rng.IntN(120))
+		d.SetBit(d, 0, 1)
+		if d.IsInt64() && d.Int64() == 1 {
+			d.SetInt64(3)
+		}
+		if rng.IntN(3) == 0 {
+			d.Lsh(d, uint(rng.IntN(70)))
+		}
+		return d
+	}
+	dyadic := func() *big.Rat {
+		e := rng.IntN(1101)
+		if rng.IntN(4) == 0 {
+			e = rng.IntN(6)
+		}
+		return new(big.Rat).SetFrac(signed(1+rng.IntN(200)), pow2(e))
+	}
+	fraction := func() *big.Rat { return new(big.Rat).SetFrac(signed(1+rng.IntN(200)), oddDenom()) }
+	unstoredInt := func(n *big.Int) *big.Rat {
+		r := new(big.Rat)
+		r.Num().Set(n)
+		return r
+	}
+	integer := func() *big.Rat {
+		n := signed(rng.IntN(130))
+		if rng.IntN(2) == 0 {
+			return unstoredInt(n)
+		}
+		return new(big.Rat).SetInt(n)
+	}
+	floatRat := func() *big.Rat {
+		switch rng.IntN(4) {
+		case 0:
+			return proof.FloatRat(float64(rng.Int64N(1<<20) - 1<<19))
+		case 1:
+			return proof.FloatRat(rng.NormFloat64() * 1e-3)
+		case 2:
+			return proof.FloatRat(math.Ldexp(rng.NormFloat64(), rng.IntN(2001)-1000))
+		}
+		return proof.FloatRat(0)
+	}
+	anyRat := func() *big.Rat {
+		switch rng.IntN(5) {
+		case 0:
+			return dyadic()
+		case 1:
+			return fraction()
+		case 2:
+			return integer()
+		case 3:
+			return floatRat()
+		}
+		return new(big.Rat)
+	}
+	pair := func() (*big.Rat, *big.Rat) {
+		switch rng.IntN(9) {
+		case 0: // dyadic against dyadic
+			return dyadic(), dyadic()
+		case 1: // dyadic against fraction
+			return dyadic(), fraction()
+		case 2: // equal denominators
+			d := oddDenom()
+			if rng.IntN(2) == 0 {
+				d = pow2(1 + rng.IntN(300))
+			}
+			return new(big.Rat).SetFrac(signed(1+rng.IntN(150)), d), new(big.Rat).SetFrac(signed(1+rng.IntN(150)), d)
+		case 3: // integers and zero
+			return integer(), integer()
+		case 4: // opposite signs, equal magnitude
+			a := anyRat()
+			return a, new(big.Rat).Neg(a)
+		case 5: // equal values in different spellings
+			f := rng.NormFloat64() * math.Ldexp(1, rng.IntN(200)-100)
+			a := new(big.Rat).SetFloat64(f)
+			return a, proof.FloatRat(f)
+		case 6: // a value against itself, shared or copied
+			a := anyRat()
+			if rng.IntN(2) == 0 {
+				return a, a
+			}
+			return a, new(big.Rat).Set(a)
+		case 7: // one integer against a fraction or dyadic
+			if rng.IntN(2) == 0 {
+				return integer(), fraction()
+			}
+			return dyadic(), integer()
+		}
+		return anyRat(), anyRat()
+	}
+	type snapshot struct {
+		numPtr *big.Int
+		num    string
+		denom  string
+		sign   int
+		stored bool
+	}
+	snap := func(r *big.Rat) snapshot {
+		// An unstored denominator makes Denom return a fresh Int on each call.
+		d1, d2 := r.Denom(), r.Denom()
+		return snapshot{r.Num(), r.Num().String(), d1.String(), r.Sign(), d1 == d2}
+	}
+	for range 50000 {
+		a, b := pair()
+		sa, sb := snap(a), snap(b)
+		want := a.Cmp(b)
+		require.Equal(t, want, proof.CmpRat(a, b), "CmpRat(%v, %v)", a, b)
+		require.Equal(t, -want, proof.CmpRat(b, a), "CmpRat(%v, %v)", b, a)
+		require.Equal(t, 0, proof.CmpRat(a, a), "CmpRat(%v, %v)", a, a)
+		require.Same(t, sa.numPtr, a.Num())
+		require.Same(t, sb.numPtr, b.Num())
+		require.Equal(t, sa, snap(a), "CmpRat changed %v", a)
+		require.Equal(t, sb, snap(b), "CmpRat changed %v", b)
+	}
 }

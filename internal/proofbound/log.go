@@ -3,6 +3,8 @@ package proofbound
 import (
 	"math/big"
 	"sync"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file encloses the square root, the natural logarithm and the inverse
@@ -102,16 +104,16 @@ func lnPoint(y *big.Rat) RatInterval {
 	e := y.Num().BitLen() - y.Denom().BitLen()
 	m := new(big.Rat).Set(y)
 	if e > 0 {
-		m.Quo(m, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(e))))
+		proofarith.QuoRat(m, m, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(e))))
 	} else if e < 0 {
-		m.Mul(m, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(-e))))
+		proofarith.MulRat(m, m, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(-e))))
 	}
 	one := big.NewRat(1, 1)
-	if m.Cmp(one) < 0 {
-		m.Mul(m, big.NewRat(2, 1))
+	if proofarith.CmpRat(m, one) < 0 {
+		proofarith.MulRat(m, m, big.NewRat(2, 1))
 		e--
 	}
-	w := new(big.Rat).Quo(new(big.Rat).Sub(m, one), new(big.Rat).Add(m, one))
+	w := proofarith.QuoRat(new(big.Rat), proofarith.SubRat(new(big.Rat), m, one), proofarith.AddRat(new(big.Rat), m, one))
 	lo, hi := artanhFixed(w)
 	series := Interval(FixedToRat(lo), FixedToRat(hi))
 	if e == 0 {
@@ -140,11 +142,11 @@ func asinhPoint(x *big.Rat) RatInterval {
 	case -1:
 		return IntervalNeg(asinhPoint(new(big.Rat).Neg(x)))
 	}
-	sq := new(big.Rat).Mul(x, x)
-	sq.Add(sq, big.NewRat(1, 1))
+	sq := proofarith.MulRat(new(big.Rat), x, x)
+	proofarith.AddRat(sq, sq, big.NewRat(1, 1))
 	root, _ := SqrtFixed(sq)
-	lo := lnPoint(new(big.Rat).Add(x, root.Lo))
-	hi := lnPoint(new(big.Rat).Add(x, root.Hi))
+	lo := lnPoint(proofarith.AddRat(new(big.Rat), x, root.Lo))
+	hi := lnPoint(proofarith.AddRat(new(big.Rat), x, root.Hi))
 	return Interval(lo.Lo, hi.Hi)
 }
 

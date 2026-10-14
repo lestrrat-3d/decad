@@ -3,6 +3,7 @@ package massmoment
 import (
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -15,7 +16,7 @@ func RotateTensor(m [3][3]*big.Rat, local [3][3]proofbound.RatInterval) [3][3]pr
 			sum := proofbound.PointInterval(new(big.Rat))
 			for k := range local {
 				for l := range local[k] {
-					coefficient := new(big.Rat).Mul(m[i][k], m[j][l])
+					coefficient := proofarith.MulRat(new(big.Rat), m[i][k], m[j][l])
 					sum = proofbound.IntervalAdd(sum, proofbound.IntervalScale(local[k][l], coefficient))
 				}
 			}
@@ -29,16 +30,17 @@ func RotateTensor(m [3][3]*big.Rat, local [3][3]proofbound.RatInterval) [3][3]pr
 // bound on its Frobenius norm that needs no square root.
 func OrthonormalityDefect(m [3][3]*big.Rat) *big.Rat {
 	defect := new(big.Rat)
+	one := big.NewRat(1, 1)
 	for i := range m {
 		for j := range m {
 			dot := new(big.Rat)
 			for k := range m {
-				dot.Add(dot, new(big.Rat).Mul(m[k][i], m[k][j]))
+				proofarith.AddRat(dot, dot, proofarith.MulRat(new(big.Rat), m[k][i], m[k][j]))
 			}
 			if i == j {
-				dot.Sub(dot, big.NewRat(1, 1))
+				proofarith.SubRat(dot, dot, one)
 			}
-			defect.Add(defect, dot.Abs(dot))
+			proofarith.AddRat(defect, defect, dot.Abs(dot))
 		}
 	}
 	return defect
@@ -64,10 +66,10 @@ func GershgorinLower(t [3][3]proofbound.RatInterval) *big.Rat {
 		row := new(big.Rat).Set(t[i][i].Lo)
 		for j := range t[i] {
 			if i != j {
-				row.Sub(row, proofbound.IntervalAbsUpper(t[i][j]))
+				proofarith.SubRat(row, row, proofbound.IntervalAbsUpper(t[i][j]))
 			}
 		}
-		if lower == nil || row.Cmp(lower) < 0 {
+		if lower == nil || proofarith.CmpRat(row, lower) < 0 {
 			lower = row
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -153,7 +154,7 @@ func (m *homotopyMemo) put(key string, val *big.Rat, err error) {
 // reading without the memo; its doc comment states the argument.
 func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat, error) {
 	d := IntervalAbsSpan(step)
-	if d.Lo.Sign() < 0 || d.Hi.Cmp(d.Lo) < 0 {
+	if d.Lo.Sign() < 0 || proofarith.CmpRat(d.Hi, d.Lo) < 0 {
 		return nil, ErrRevolveAngularHomotopy
 	}
 	one := proofbound.PointInterval(big.NewRat(1, 1))
@@ -178,7 +179,7 @@ func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat
 	}
 	for i := int64(0); i <= n; i++ {
 		u := big.NewRat(i, n)
-		co := new(big.Rat).Sub(big.NewRat(1, 1), u)
+		co := proofarith.SubRat(new(big.Rat), big.NewRat(1, 1), u)
 		sinA, cosA, cosB := sinAt[i], cosAt[i], cosAt[n-i]
 		versA := proofbound.IntervalSub(one, cosA)
 		p := proofbound.IntervalMul(d, proofbound.IntervalAdd(
@@ -193,11 +194,11 @@ func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat
 	total := new(big.Rat)
 	width := big.NewRat(1, n)
 	for i := range n {
-		piece := new(big.Rat).Add(proofbound.RatMax(pAt[i], pAt[i+1]), bulgeP)
-		piece.Add(piece, new(big.Rat).Add(proofbound.RatMax(qAt[i], qAt[i+1]), bulgeQ))
-		total.Add(total, new(big.Rat).Mul(piece, width))
+		piece := proofarith.AddRat(new(big.Rat), proofbound.RatMax(pAt[i], pAt[i+1]), bulgeP)
+		proofarith.AddRat(piece, piece, proofarith.AddRat(new(big.Rat), proofbound.RatMax(qAt[i], qAt[i+1]), bulgeQ))
+		proofarith.AddRat(total, total, proofarith.MulRat(new(big.Rat), piece, width))
 	}
-	return total.Mul(total, big.NewRat(1, 2)), nil
+	return proofarith.MulRat(total, total, big.NewRat(1, 2)), nil
 }
 
 // AngularHomotopyBulges states the per-piece second-order allowance
@@ -224,17 +225,18 @@ func revolveAngularHomotopyFactorUncached(step proofbound.RatInterval) (*big.Rat
 // falling with the step while everything it sits beside kept falling.
 func AngularHomotopyBulges(d proofbound.RatInterval, n int64) (*big.Rat, *big.Rat) {
 	dh := new(big.Rat).Set(d.Hi)
-	sq := new(big.Rat).Mul(dh, dh)
+	mul := func(a, b *big.Rat) *big.Rat { return proofarith.MulRat(new(big.Rat), a, b) }
+	sq := mul(dh, dh)
 	sinB := proofbound.RatMin(big.NewRat(1, 1), dh)
-	versB := proofbound.RatMin(big.NewRat(2, 1), new(big.Rat).Mul(sq, big.NewRat(1, 2)))
+	versB := proofbound.RatMin(big.NewRat(2, 1), mul(sq, big.NewRat(1, 2)))
 
-	p := new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(2, 1), dh), new(big.Rat).Add(
-		new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(2, 1), dh), sinB),
+	p := mul(mul(big.NewRat(2, 1), dh), proofarith.AddRat(new(big.Rat),
+		mul(mul(big.NewRat(2, 1), dh), sinB),
 		sq,
 	))
-	q := new(big.Rat).Mul(new(big.Rat).Mul(sq, sinB), new(big.Rat).Add(versB, big.NewRat(1, 1)))
+	q := mul(mul(sq, sinB), proofarith.AddRat(new(big.Rat), versB, big.NewRat(1, 1)))
 	denom := new(big.Rat).SetInt64(8 * n * n)
-	return new(big.Rat).Quo(p, denom), new(big.Rat).Quo(q, denom)
+	return proofarith.QuoRat(new(big.Rat), p, denom), proofarith.QuoRat(new(big.Rat), q, denom)
 }
 
 var ErrRevolveAngularHomotopy = fmt.Errorf(`%w: a revolve cell's angular homotopy states no enclosure of the volume it sweeps, so this mesh can prove no occupied-volume bound`, decaderr.ErrUnsupported)
@@ -267,5 +269,5 @@ func RevolveCellSweptVolume(lo, hi RevMeridian, angular *big.Rat) *big.Rat {
 		proofbound.IntervalMul(lo.RhoIv, hi.RhoIv),
 	), third)
 	axial := proofbound.IntervalAbsUpper(proofbound.IntervalSub(hi.ZIv, lo.ZIv))
-	return new(big.Rat).Mul(new(big.Rat).Mul(axial, proofbound.IntervalAbsUpper(quad)), angular)
+	return proofarith.MulRat(new(big.Rat), proofarith.MulRat(new(big.Rat), axial, proofbound.IntervalAbsUpper(quad)), angular)
 }

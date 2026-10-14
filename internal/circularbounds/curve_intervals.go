@@ -38,7 +38,7 @@ func shiftPoint(point, anchor Point2) Point2 {
 }
 
 func exactCoordinateDelta(a, b float64) *big.Rat {
-	return new(big.Rat).Sub(proofarith.FloatRat(a), proofarith.FloatRat(b))
+	return proofarith.SubRat(new(big.Rat), proofarith.FloatRat(a), proofarith.FloatRat(b))
 }
 
 // arcEndRadialRatio brackets ρ = |Start − Center| / |End − Center| for a recorded

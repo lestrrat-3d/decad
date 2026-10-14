@@ -1,6 +1,9 @@
 package proof
 
-import "math/big"
+import (
+	"cmp"
+	"math/big"
+)
 
 // ratSplitAdd sets z = a+b (a-b with sub) in lowest terms with Knuth's
 // split GCD (TAOCP 4.5.1): d1 = gcd(q1, q2) and d2 = gcd(t, d1) replace the
@@ -105,6 +108,56 @@ func QuoRat(z, a, b *big.Rat) *big.Rat {
 	z.SetInt(n)
 	z.Denom().Set(d)
 	return z
+}
+
+// CmpRat compares a and b and returns -1, 0 or +1 as a is less than, equal to
+// or greater than b, the result big.Rat.Cmp returns. It reads a and b and
+// writes neither: it never stores into a Rat's numerator or denominator, and
+// it asks Denom for a fraction only, so a Rat whose integer denominator is
+// unstored (Denom would return a fresh detached 1) allocates nothing.
+//
+// Signs decide first. Two integers, and two fractions with equal denominators,
+// compare their numerators. Two power-of-two denominators 2^i and 2^j put the
+// numerators over the larger one, which shifts the numerator with the smaller
+// exponent left by |i-j|, and compare those. Any other pair compares the two
+// cross products a.Num·b.Denom and b.Num·a.Denom, whose sign equals the sign
+// of the difference because both denominators are positive. The integers the
+// shifts and products need are stack-declared big.Int values, and no branch
+// reaches math/big's pooled scratch stack below the Karatsuba size.
+func CmpRat(a, b *big.Rat) int {
+	if sa, sb := a.Sign(), b.Sign(); sa != sb {
+		return cmp.Compare(sa, sb)
+	} else if sa == 0 {
+		return 0
+	}
+	an, bn := a.Num(), b.Num()
+	aInt, bInt := a.IsInt(), b.IsInt()
+	if aInt && bInt {
+		return an.Cmp(bn)
+	}
+	i, okA := denomExp(a)
+	j, okB := denomExp(b)
+	if okA && okB {
+		var shifted big.Int
+		if i < j {
+			return shifted.Lsh(an, j-i).Cmp(bn)
+		}
+		return an.Cmp(shifted.Lsh(bn, i-j))
+	}
+	if !aInt && !bInt && a.Denom().Cmp(b.Denom()) == 0 {
+		return an.Cmp(bn)
+	}
+	var x, y big.Int
+	return mulDenom(&x, an, b).Cmp(mulDenom(&y, bn, a))
+}
+
+// mulDenom sets z to n times r's denominator and returns it. An integer r has
+// denominator 1, so z is n without a call to Denom.
+func mulDenom(z, n *big.Int, r *big.Rat) *big.Int {
+	if r.IsInt() {
+		return z.Set(n)
+	}
+	return z.Mul(n, r.Denom())
 }
 
 // isOne reports whether x is 1.

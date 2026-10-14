@@ -41,10 +41,10 @@ func BoxMidStation(box [3]RatInterval) (r3.Vec, float64, bool) {
 	var held [3]float64
 	maxError := 0.0
 	for i, interval := range box {
-		if interval.Lo == nil || interval.Hi == nil || interval.Lo.Cmp(interval.Hi) > 0 {
+		if interval.Lo == nil || interval.Hi == nil || proofarith.CmpRat(interval.Lo, interval.Hi) > 0 {
 			return r3.Vec{}, 0, false
 		}
-		mid := new(big.Rat).Quo(new(big.Rat).Add(interval.Lo, interval.Hi), big.NewRat(2, 1))
+		mid := proofarith.QuoRat(new(big.Rat), proofarith.AddRat(new(big.Rat), interval.Lo, interval.Hi), big.NewRat(2, 1))
 		held[i], _ = mid.Float64()
 		if math.IsNaN(held[i]) || math.IsInf(held[i], 0) {
 			return r3.Vec{}, 0, false

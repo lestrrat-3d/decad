@@ -16,9 +16,9 @@ func AreaSlack(area, bound float64, heldLo, heldHi *big.Rat) (float64, bool) {
 	if heldLo == nil || !FiniteVec(r3.Vec{X: area, Y: bound}) || bound < 0 {
 		return 0, false
 	}
-	lo := new(big.Rat).Sub(proofarith.FloatRat(area), proofarith.FloatRat(bound))
-	hi := new(big.Rat).Add(proofarith.FloatRat(area), proofarith.FloatRat(bound))
-	d1 := new(big.Rat).Abs(new(big.Rat).Sub(lo, heldHi))
-	d2 := new(big.Rat).Abs(new(big.Rat).Sub(hi, heldLo))
+	lo := proofarith.SubRat(new(big.Rat), proofarith.FloatRat(area), proofarith.FloatRat(bound))
+	hi := proofarith.AddRat(new(big.Rat), proofarith.FloatRat(area), proofarith.FloatRat(bound))
+	d1 := new(big.Rat).Abs(proofarith.SubRat(new(big.Rat), lo, heldHi))
+	d2 := new(big.Rat).Abs(proofarith.SubRat(new(big.Rat), hi, heldLo))
 	return RatFloatUp(RatMax(d1, d2)), true
 }

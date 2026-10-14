@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"math/big"
 	"sync"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // TurnGridShift is the dyadic grid the radian-to-turn conversion lands on
@@ -49,7 +51,7 @@ func RadSinCosInterval(x *big.Rat) (RatInterval, RatInterval, bool) {
 // Both functions are 1-Lipschitz, so the interval width widens the reading
 // at its lower endpoint without assuming monotonicity over the span.
 func RadSinCosSpan(x RatInterval) (RatInterval, RatInterval, bool) {
-	width := new(big.Rat).Sub(x.Hi, x.Lo)
+	width := proofarith.SubRat(new(big.Rat), x.Hi, x.Lo)
 	if width.Sign() < 0 {
 		return RatInterval{}, RatInterval{}, false
 	}
@@ -142,12 +144,12 @@ func radSinCosIntervalUncached(x *big.Rat) (RatInterval, RatInterval, bool) {
 		return RatInterval{}, RatInterval{}, false
 	}
 	base := RatFloorGrid(turn.Lo, TurnGridShift)
-	gap := new(big.Rat).Sub(turn.Hi, base)
+	gap := proofarith.SubRat(new(big.Rat), turn.Hi, base)
 	if gap.Sign() < 0 {
 		return RatInterval{}, RatInterval{}, false
 	}
 	sin, cos := TurnSinCosInterval(base)
-	slop := new(big.Rat).Mul(twoPi.Hi, gap)
+	slop := proofarith.MulRat(new(big.Rat), twoPi.Hi, gap)
 	return IntervalWiden(sin, slop), IntervalWiden(cos, slop), true
 }
 

@@ -99,7 +99,7 @@ func (s ScaledIvMat) MulPoints(o IvMat) (ScaledIvMat, bool) {
 	values := make([]*big.Rat, 0, 9)
 	for k := range 3 {
 		for j := range 3 {
-			if o[k][j].Lo.Cmp(o[k][j].Hi) != 0 {
+			if proofarith.CmpRat(o[k][j].Lo, o[k][j].Hi) != 0 {
 				return ScaledIvMat{}, false
 			}
 			values = append(values, o[k][j].Lo)
@@ -146,10 +146,10 @@ func MagnitudeSquaredUpper(entries ...proofbound.RatInterval) *big.Rat {
 	sum := new(big.Rat)
 	for _, e := range entries {
 		m := new(big.Rat).Abs(e.Lo)
-		if hi := new(big.Rat).Abs(e.Hi); hi.Cmp(m) > 0 {
+		if hi := new(big.Rat).Abs(e.Hi); proofarith.CmpRat(hi, m) > 0 {
 			m = hi
 		}
-		sum.Add(sum, m.Mul(m, m))
+		proofarith.AddRat(sum, sum, proofarith.MulRat(m, m, m))
 	}
 	return sum
 }
