@@ -133,7 +133,7 @@ func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecor
 			rootPoint = rec.source.rootArc.End
 		}
 		root := prismPatternExactPlacedPoint(part, rootPoint)
-		held := part.mesh.vertices[2*station]
+		held := part.mesh.n.Vertices[2*station]
 		rootError := proofbound.AbsSumUpper(
 			proofbound.IntervalFloatError(root.X, held.X),
 			proofbound.IntervalFloatError(root.Y, held.Y))

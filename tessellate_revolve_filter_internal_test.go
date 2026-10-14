@@ -92,11 +92,11 @@ func TestRevolveAuditPreTestMatchesExact(t *testing.T) {
 	require.NoError(t, err)
 	var o filterOracle
 	for _, delta := range []float64{0, 1e-15, 1e-9, 1e-4, 0.05, 0.5} {
-		data, err := revolvemesh.RequireRevolveFacetAreas(proofbound.NewWorkBudget(t.Context()), m.vertices, m.triangles, 0)
+		data, err := revolvemesh.RequireRevolveFacetAreas(proofbound.NewWorkBudget(t.Context()), m.n.Vertices, m.n.Triangles, 0)
 		require.NoError(t, err)
 		for i := range data {
 			for j := i + 1; j < len(data); j++ {
-				o.pair(t, data, m.triangles, i, j, delta)
+				o.pair(t, data, m.n.Triangles, i, j, delta)
 			}
 		}
 	}

@@ -132,7 +132,7 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 			byRole[origin.Role] = face
 		}
 	}
-	mesh := &Mesh{bound: delta, volSymDiff: volSymDiff, symDiffOK: true}
+	mesh := &Mesh{n: topo.Mesh{Bound: delta, VolSymDiff: volSymDiff, SymDiffOK: true}}
 	stationPoints := len(cells[0].verts) / 2
 	if stationPoints < profileEdges || len(cells[0].verts) != 2*stationPoints {
 		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft has no complete station table`, ErrUnsupported)
@@ -148,16 +148,16 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 			return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft has an unexpected station table`, ErrUnsupported)
 		}
 		if cell == 0 {
-			mesh.vertices = append(mesh.vertices, held.verts[:stationPoints]...)
+			mesh.n.Vertices = append(mesh.n.Vertices, held.verts[:stationPoints]...)
 		} else {
 			for j := range stationPoints {
-				if mesh.vertices[cell*stationPoints+j] != held.verts[j] {
+				if mesh.n.Vertices[cell*stationPoints+j] != held.verts[j] {
 					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft cells disagree at a shared station`, ErrUnsupported)
 				}
 			}
 		}
-		mesh.vertices = append(mesh.vertices, held.verts[stationPoints:]...)
-		mesh.coordBound = max(mesh.coordBound, held.delta)
+		mesh.n.Vertices = append(mesh.n.Vertices, held.verts[stationPoints:]...)
+		mesh.n.CoordBound = max(mesh.n.CoordBound, held.delta)
 		for t, triangle := range held.tris {
 			if t < held.walls && (t >= len(held.cell) ||
 				held.cell[t][0] != 0 || held.cell[t][1] != t/2) {
@@ -196,26 +196,26 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 	if err := requireMeshAudit(ctx, false, body, mesh); err != nil {
 		return nil, proofbound.RatInterval{}, nil, err
 	}
-	if err := liftTessellationError(tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles)); err != nil {
+	if err := liftTessellationError(tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles)); err != nil {
 		return nil, proofbound.RatInterval{}, nil, err
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	auditTris, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.vertices, mesh.triangles, mesh.coordBound)
+	auditTris, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.n.Vertices, mesh.n.Triangles, mesh.n.CoordBound)
 	if err != nil {
 		return nil, proofbound.RatInterval{}, nil, err
 	}
-	if err := compositesweep.CrossSpanContactAudit(budget, auditTris, mesh.triangles, spanOf, mesh.coordBound); err != nil {
+	if err := compositesweep.CrossSpanContactAudit(budget, auditTris, mesh.n.Triangles, spanOf, mesh.n.CoordBound); err != nil {
 		return nil, proofbound.RatInterval{}, nil, err
 	}
-	if tessellation.OrientationSign(mesh.vertices, mesh.triangles, r3.Vec{}) <= 0 {
+	if tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, r3.Vec{}) <= 0 {
 		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft mesh has nonpositive orientation`, ErrUnsupported)
 	}
 	area := proofbound.PointInterval(new(big.Rat))
 	byFace := make(map[*Face]proofbound.RatInterval, len(body.Faces()))
-	for index, triangle := range mesh.triangles {
+	for index, triangle := range mesh.n.Triangles {
 		var points [3]proofbound.IvVec3
 		for i, index := range triangle {
-			v := mesh.vertices[index]
+			v := mesh.n.Vertices[index]
 			points[i] = proofbound.IvVec3{
 				proofbound.PointInterval(twistsweep.TwistRat(v.X)),
 				proofbound.PointInterval(twistsweep.TwistRat(v.Y)),
@@ -363,9 +363,9 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	mesh.areaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(
+	mesh.n.AreaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(
 		proofbound.IntervalSub(trueAreaIv, heldAreaIv)))
-	if proofbound.IsNonFinite(mesh.areaSlack) {
+	if proofbound.IsNonFinite(mesh.n.AreaSlack) {
 		return nil, fmt.Errorf(`%w: twisted sweep area proof is not finite`, ErrUnsupported)
 	}
 	volume, volumeBound := mitredEnclosure(volumeIv.Lo, volumeIv.Hi)
@@ -377,8 +377,8 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if err := publishCompositeTwistCentroid(body, xform, geometry, poly, length); err != nil {
 		return nil, err
 	}
-	minV, maxV := mesh.vertices[0], mesh.vertices[0]
-	for _, vertex := range mesh.vertices[1:] {
+	minV, maxV := mesh.n.Vertices[0], mesh.n.Vertices[0]
+	for _, vertex := range mesh.n.Vertices[1:] {
 		minV.X, minV.Y, minV.Z = min(minV.X, vertex.X), min(minV.Y, vertex.Y), min(minV.Z, vertex.Z)
 		maxV.X, maxV.Y, maxV.Z = max(maxV.X, vertex.X), max(maxV.Y, vertex.Y), max(maxV.Z, vertex.Z)
 	}

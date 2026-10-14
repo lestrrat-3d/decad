@@ -38,8 +38,8 @@ func TestTwistLocalAreaRealBooleanArcSubset(t *testing.T) {
 	// A result arc facet uses a new rim vertex. That confirms the source
 	// cell was actually split by the Boolean rather than merely carried
 	// through unchanged beside the box.
-	sourceVertex := make(map[r3.Vec]struct{}, len(source.mesh.vertices))
-	for _, vertex := range source.mesh.vertices {
+	sourceVertex := make(map[r3.Vec]struct{}, len(source.mesh.n.Vertices))
+	for _, vertex := range source.mesh.n.Vertices {
 		sourceVertex[vertex] = struct{}{}
 	}
 	splitArc := false
@@ -47,8 +47,8 @@ func TestTwistLocalAreaRealBooleanArcSubset(t *testing.T) {
 		if len(face.origins) == 0 || face.origins[0].Role != "side(0,0,1)" {
 			continue
 		}
-		for _, index := range mesh.triangles[i] {
-			if _, exists := sourceVertex[mesh.vertices[index]]; !exists {
+		for _, index := range mesh.n.Triangles[i] {
+			if _, exists := sourceVertex[mesh.n.Vertices[index]]; !exists {
 				splitArc = true
 			}
 		}
@@ -58,8 +58,8 @@ func TestTwistLocalAreaRealBooleanArcSubset(t *testing.T) {
 	require.NoError(t, err)
 	// The Boolean carries the source's local allowance through its cut
 	// subset, then adds its own trim-motion and facet charges.
-	require.Less(t, source.mesh.areaSlack, 50.0)
+	require.Less(t, source.mesh.n.AreaSlack, 50.0)
 	require.Less(t, area.Bound.Base(), 80.0)
 	t.Logf("source area allowance=%g result area bound=%g split_arc=%t",
-		source.mesh.areaSlack, area.Bound.Base(), splitArc)
+		source.mesh.n.AreaSlack, area.Bound.Base(), splitArc)
 }

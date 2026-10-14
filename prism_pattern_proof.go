@@ -27,7 +27,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	for i := range parts {
 		part := &parts[i]
 		toothBound = max(toothBound, part.mesh.Bound().Base())
-		toothVolume = proofbound.AbsSumUpper(toothVolume, part.mesh.volSymDiff)
+		toothVolume = proofbound.AbsSumUpper(toothVolume, part.mesh.n.VolSymDiff)
 		area, err := part.body.Area()
 		if err != nil {
 			return nil, err
@@ -40,12 +40,12 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 			return nil, err
 		}
 		connectorReach = max(connectorReach, reach)
-		n := len(part.mesh.vertices) / 2
+		n := len(part.mesh.n.Vertices) / 2
 		for j := range n {
 			if j < part.rootStart {
 				continue
 			}
-			v := part.mesh.vertices[2*j]
+			v := part.mesh.n.Vertices[2*j]
 			r2 := prismpattern.RadialSq(planePoint{U: v.X, V: v.Y})
 			excess := new(big.Rat).Sub(proofarith.FloatRat(proofbound.RatSqrtUp(r2)),
 				proofarith.FloatRat(radius))
@@ -58,8 +58,8 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		// connector walls are the only retained pieces that enter the band.
 		for j := 1; j < part.rootStart-1; j++ {
 			for side := range 2 {
-				tri := part.mesh.triangles[2*j+side]
-				minimum := loftcylinder.TriangleMinRadius(part.mesh.vertices, tri)
+				tri := part.mesh.n.Triangles[2*j+side]
+				minimum := loftcylinder.TriangleMinRadius(part.mesh.n.Vertices, tri)
 				if minimum <= proofbound.AbsSumUpper(radius, part.mesh.Bound().Base()) {
 					return nil, fmt.Errorf("%w: copied-prism exterior wall %d lacks circular clearance",
 						ErrUnsupported, j)

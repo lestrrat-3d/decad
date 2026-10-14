@@ -47,12 +47,12 @@ func TestShellStackedBossMeshVolumeProof(t *testing.T) {
 			require.NoError(t, err)
 			mesh, err := tessellateContext(t.Context(), shell, units.Millimeters(0.1), VerifyAll)
 			require.NoError(t, err)
-			require.True(t, mesh.boundaryOK)
-			require.True(t, mesh.symDiffOK)
+			require.True(t, mesh.n.BoundaryOK)
+			require.True(t, mesh.n.SymDiffOK)
 			delta := new(big.Rat).Sub(internalMeshVolumeRat(mesh), new(big.Rat).SetFloat64(v.Value.Base()))
 			delta.Abs(delta)
 			deltaHeld, _ := delta.Float64()
-			require.LessOrEqual(t, deltaHeld, proofbound.AbsSumUpper(mesh.volSymDiff, v.Bound.Base()))
+			require.LessOrEqual(t, deltaHeld, proofbound.AbsSumUpper(mesh.n.VolSymDiff, v.Bound.Base()))
 		})
 	}
 }

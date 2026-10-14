@@ -52,7 +52,7 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	store := make([]float64, 0, 2*n+4)
 	for i, nominal := range []r3.Vec{{}, {X: w}, {X: w, Z: height}, {Z: height}} {
 		v := lineCo[i].Start()
-		mesh.vertices = append(mesh.vertices, v.n.Position)
+		mesh.n.Vertices = append(mesh.n.Vertices, v.n.Position)
 		store = append(store, chainSweepVertexGap(v, nominal))
 	}
 	mesh.addTriangle([3]int{0, 1, 2}, straight)
@@ -63,7 +63,7 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		nextOuter, nextInner := len(mesh.vertices), len(mesh.vertices)+1
+		nextOuter, nextInner := len(mesh.n.Vertices), len(mesh.n.Vertices)+1
 		for k, radial := range []float64{radius, radius - w} {
 			var p r3.Vec
 			var gap float64
@@ -81,7 +81,7 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 					return nil, err
 				}
 			}
-			mesh.vertices = append(mesh.vertices, p)
+			mesh.n.Vertices = append(mesh.n.Vertices, p)
 			store = append(store, gap)
 		}
 		mesh.addTriangle([3]int{outer, inner, nextInner}, curved)
@@ -95,7 +95,7 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	if err != nil {
 		return nil, err
 	}
-	mesh.coordBound = coord
+	mesh.n.CoordBound = coord
 	straightBound := max(store[0], store[1], store[2], store[3])
 	mesh.setFaceBound(straight, proofbound.UpRound(straightBound))
 	arcBound := proofbound.AbsSumUpper(tessellation.ChordSagitta(radius, upperPi, n), coord)
@@ -109,11 +109,11 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	// At VerifyAll, the two live faces' certified area intervals bound the
 	// difference from their attributed held triangle sums.
 	areas := map[*Face]chainSweepAreaInterval{}
-	for i, tri := range mesh.triangles {
+	for i, tri := range mesh.n.Triangles {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		lo, hi, ok := chainSweepTriangleArea(mesh.vertices, tri)
+		lo, hi, ok := chainSweepTriangleArea(mesh.n.Vertices, tri)
 		if !ok {
 			return nil, fmt.Errorf(`%w: chain sweep facet %d has no positive area`, ErrUnsupported, i)
 		}
@@ -126,11 +126,11 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 		areas[mesh.source[i]] = pair
 	}
 	if verify >= VerifyBoundary {
-		data, auditErr := revolvemesh.RequireRevolveFacetAreas(budget, mesh.vertices, mesh.triangles, coord)
+		data, auditErr := revolvemesh.RequireRevolveFacetAreas(budget, mesh.n.Vertices, mesh.n.Triangles, coord)
 		if auditErr != nil {
 			return nil, liftTessellationError(auditErr)
 		}
-		if auditErr = revolvemesh.RevolveContactAudit(budget, data, mesh.triangles, coord); auditErr != nil {
+		if auditErr = revolvemesh.RevolveContactAudit(budget, data, mesh.n.Triangles, coord); auditErr != nil {
 			return nil, liftTessellationError(auditErr)
 		}
 	}
@@ -140,9 +140,9 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 			if proofErr != nil {
 				return nil, proofErr
 			}
-			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, slack)
+			mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, slack)
 		}
-		if proofbound.IsNonFinite(mesh.areaSlack) {
+		if proofbound.IsNonFinite(mesh.n.AreaSlack) {
 			return nil, fmt.Errorf(`%w: the chain sweep mesh has no finite area bound`, ErrUnsupported)
 		}
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -640,15 +641,15 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload, privateRoles .
 	for k, i := range out.SourceFaces {
 		src[k] = faces[i]
 	}
-	mesh := &Mesh{vertices: out.Vertices, triangles: out.Triangles, source: src}
+	mesh := &Mesh{n: topo.Mesh{Vertices: out.Vertices, Triangles: out.Triangles}, source: src}
 	for _, f := range src {
 		mesh.setFaceBound(f, out.BoundMM)
 	}
-	mesh.bound = out.BoundMM
-	mesh.areaSlack = out.AreaSlackMM2
+	mesh.n.Bound = out.BoundMM
+	mesh.n.AreaSlack = out.AreaSlackMM2
 	if out.VolumeProof {
-		mesh.volSymDiff = out.VolumeSymDiffMM3
-		mesh.symDiffOK = true
+		mesh.n.VolSymDiff = out.VolumeSymDiffMM3
+		mesh.n.SymDiffOK = true
 	}
 	return mesh, nil
 }

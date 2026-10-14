@@ -361,16 +361,16 @@ func TestCapBlendMeshPublishesNoVolumeProofForAMiteredBand(t *testing.T) {
 	chamfered, cbp := chamferedSectionBody(t, quarterDiskSection(10), 2)
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, 0.1, VerifyAll)
 	require.NoError(t, err)
-	require.False(t, mesh.symDiffOK, `a mitered circular wall is not covered by the slice-wise proof`)
-	require.Equal(t, 0.0, mesh.volSymDiff)
+	require.False(t, mesh.n.SymDiffOK, `a mitered circular wall is not covered by the slice-wise proof`)
+	require.Equal(t, 0.0, mesh.n.VolSymDiff)
 	_, err = operandSymDiff(mesh)
 	require.ErrorIs(t, err, ErrUnsupported)
 	refusal, err := capBlendOccupiedVolumeAdmission(proofbound.NewWorkBudget(t.Context()), cbp)
 	require.NoError(t, err)
 	require.ErrorContains(t, refusal, `loop 0`)
 	require.ErrorContains(t, refusal, `no proof of the volume`)
-	require.False(t, proofbound.IsNonFinite(mesh.areaSlack))
-	require.Positive(t, mesh.areaSlack)
+	require.False(t, proofbound.IsNonFinite(mesh.n.AreaSlack))
+	require.Positive(t, mesh.n.AreaSlack)
 	for _, f := range mesh.source {
 		_, ok := mesh.sourceBound(f)
 		require.True(t, ok, `every source face is present in the proof record`)
@@ -412,13 +412,13 @@ func TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand(t *testing.T) {
 	chamfered, cbp := chamferedFlange(t)
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
-	require.False(t, proofbound.IsNonFinite(mesh.volSymDiff))
+	require.True(t, mesh.n.SymDiffOK)
+	require.False(t, proofbound.IsNonFinite(mesh.n.VolSymDiff))
 
 	lms, motion := capBlendMotionUnderTest(t, cbp, tol)
 	chordVolume := capBlendChordVolume(cbp, lms)
 	require.Positive(t, chordVolume, `the fillet arcs and the bore are chorded`)
-	require.GreaterOrEqual(t, mesh.volSymDiff, chordVolume)
+	require.GreaterOrEqual(t, mesh.n.VolSymDiff, chordVolume)
 	// tessellateContext is the one writer of boundaryOK, which operandSymDiff
 	// reads first; the cap-blend path runs no facet-contact audit, so it is
 	// true at VerifyAll and the published figure reaches the boolean.
@@ -426,7 +426,7 @@ func TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand(t *testing.T) {
 	require.NoError(t, err)
 	got, err := operandSymDiff(viaContext)
 	require.NoError(t, err)
-	require.Equal(t, mesh.volSymDiff, got)
+	require.Equal(t, mesh.n.VolSymDiff, got)
 
 	// Shown to fail: dropping lm.capMotion[j] from the cap vertex's motion in
 	// capBlendVertices turns this assertion red.
@@ -486,7 +486,7 @@ func TestCapBlendMeshMotionCarriesEachLevelBound(t *testing.T) {
 	const tol = 1.0
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK, `an all-Plane band of line-line miters is admitted`)
+	require.True(t, mesh.n.SymDiffOK, `an all-Plane band of line-line miters is admitted`)
 
 	lms, motion := capBlendMotionUnderTest(t, cbp, tol)
 	require.Len(t, lms, 1)
@@ -505,7 +505,7 @@ func TestCapBlendMeshMotionCarriesEachLevelBound(t *testing.T) {
 	// The end cap is a 20×20 square shrunk by the 1 mm setback, so its area is
 	// at least 18², and a level displaced by its bound sweeps at least that
 	// much volume times the bound.
-	require.GreaterOrEqual(t, mesh.volSymDiff, proofbound.ProductUpper(capLevel.Bound, 18*18))
+	require.GreaterOrEqual(t, mesh.n.VolSymDiff, proofbound.ProductUpper(capLevel.Bound, 18*18))
 }
 
 // TestCapBlendMeshMotionCarriesPlacementRounding guards the rounding leg: a
@@ -526,12 +526,12 @@ func TestCapBlendMeshMotionCarriesPlacementRounding(t *testing.T) {
 	require.True(t, ok)
 	mesh, err := tessellateCapBlend(t.Context(), moved, cbp, 1, VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
+	require.True(t, mesh.n.SymDiffOK)
 	_, motion := capBlendMotionUnderTest(t, cbp, 1)
 	require.Equal(t, 0.0, capBlendChordVolume(cbp, nil))
 	// Shown to fail: dropping round from capBlendVertices' motion leaves every
 	// entry zero and this assertion red.
-	require.Positive(t, mesh.volSymDiff, `a placed plate rounds every coordinate it writes`)
+	require.Positive(t, mesh.n.VolSymDiff, `a placed plate rounds every coordinate it writes`)
 	worst := 0.0
 	for _, m := range motion {
 		worst = math.Max(worst, m)
@@ -560,12 +560,12 @@ func TestCapBlendMeshMotionCarriesTheMiterDisplacement(t *testing.T) {
 	require.Positive(t, delta, `an irrational miter point is held only within the band's contour displacement`)
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, 1, VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
+	require.True(t, mesh.n.SymDiffOK)
 	lms, motion := capBlendMotionUnderTest(t, cbp, 1)
 	require.Equal(t, 0.0, capBlendChordVolume(cbp, lms), `a hexagon chords nothing`)
 	// Shown to fail: dropping the bandDelta arm of capBlendCapMotion turns
 	// these assertions red.
-	require.Positive(t, mesh.volSymDiff)
+	require.Positive(t, mesh.n.VolSymDiff)
 	for j := range lms[0].capPts {
 		require.GreaterOrEqual(t, motion[lms[0].capHiV[j]], delta, `miter foot %d`, j)
 	}
@@ -656,11 +656,11 @@ func TestCapBlendChordVolumeChargesEachCapsBandHeight(t *testing.T) {
 	chamfered, cbp := asymChamferedSectionBody(t, diskSection(0, 0, 10), 1, 8)
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
+	require.True(t, mesh.n.SymDiffOK)
 
 	meshVol := 0.0
-	for _, tri := range mesh.triangles {
-		a, b, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
+	for _, tri := range mesh.n.Triangles {
+		a, b, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 		meshVol += a.Dot(b.Cross(c)) / 6
 	}
 	bodyVol := chamfered.volume.Value.Mag()
@@ -670,7 +670,7 @@ func TestCapBlendChordVolumeChargesEachCapsBandHeight(t *testing.T) {
 	lms, _ := capBlendMotionUnderTest(t, cbp, tol)
 	chordVolume := capBlendChordVolume(cbp, lms)
 	require.GreaterOrEqual(t, chordVolume, deficit, `the chord term covers the measured segment volume`)
-	require.GreaterOrEqual(t, mesh.volSymDiff, deficit)
+	require.GreaterOrEqual(t, mesh.n.VolSymDiff, deficit)
 }
 
 // TestCapBlendCornerLocusGapEnclosesTheTwoDistanceLocus checks the mesh's

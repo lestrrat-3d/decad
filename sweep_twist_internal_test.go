@@ -32,7 +32,7 @@ func TestStationedTwistOccupiedVolumeProof(t *testing.T) {
 	area, err := body.Area()
 	require.NoError(t, err)
 	t.Logf("cells=%d boundary=%g occupied_volume=%g volume=%g volume_bound=%g volume_exactness=%v area=%g area_bound=%g",
-		len(payload.mesh.vertices)/4-1, payload.delta, payload.volSymDiff, volume.Value.Base(),
+		len(payload.mesh.n.Vertices)/4-1, payload.delta, payload.volSymDiff, volume.Value.Base(),
 		volume.Bound.Base(), volume.Exactness, area.Value.Base(), area.Bound.Base())
 	require.LessOrEqual(t, payload.delta, 0.1)
 	require.Less(t, payload.volSymDiff, 20.0)
@@ -78,5 +78,5 @@ func TestTwistPlacedAxialRoundVolumeProof(t *testing.T) {
 	require.NoError(t, err)
 	gap := math.Abs(heldVolume - trueVolume.Value.Base())
 	require.Greater(t, gap, 5e-9)
-	require.LessOrEqual(t, gap, mesh.volSymDiff+trueVolume.Bound.Base())
+	require.LessOrEqual(t, gap, mesh.n.VolSymDiff+trueVolume.Bound.Base())
 }

@@ -1275,7 +1275,7 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 
 	mesh, err := tessellateStitch(context.Background(), body, sp)
 	require.NoError(t, err)
-	require.False(t, mesh.symDiffOK, "two fully-overlapping lumps must not earn the zero occupied-volume proof")
+	require.False(t, mesh.n.SymDiffOK, "two fully-overlapping lumps must not earn the zero occupied-volume proof")
 }
 
 // TestStitchConeArmChargesApexDeparture pins the cone apex bound on a

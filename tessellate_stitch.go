@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -276,10 +277,12 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 		return nil, err
 	}
 	mesh := &Mesh{
-		vertices:  append([]r3.Vec(nil), sourceMesh.vertices...),
-		triangles: append([][3]int(nil), sourceMesh.triangles...),
-		source:    make([]*Face, len(sourceMesh.source)),
-		areaSlack: sourceMesh.areaSlack,
+		n: topo.Mesh{
+			Vertices:  append([]r3.Vec(nil), sourceMesh.n.Vertices...),
+			Triangles: append([][3]int(nil), sourceMesh.n.Triangles...),
+			AreaSlack: sourceMesh.n.AreaSlack,
+		},
+		source: make([]*Face, len(sourceMesh.source)),
 	}
 	for i, sourceFace := range sourceMesh.source {
 		liveFace, ok := paired[sourceFace]
@@ -290,7 +293,7 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 		// Today's identity-copy routes preserve this bit. Keep the winding
 		// aligned if an admitted stitch ever reverses a live face.
 		if sourceFace.n.Reversed != liveFace.n.Reversed {
-			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
+			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
 	}
 	for sourceFace, liveFace := range paired {
@@ -306,13 +309,13 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 		}
 		return mesh, nil
 	}
-	if err := tessellation.RequireClosedMesh(mesh.triangles); err != nil {
+	if err := tessellation.RequireClosedMesh(mesh.n.Triangles); err != nil {
 		return nil, fmt.Errorf(`%w: the chorded stitched boundary is not a closed mesh`, ErrUnsupported)
 	}
-	if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles); err != nil {
 		return nil, err
 	}
-	if len(mesh.vertices) == 0 || tessellation.OrientationSign(mesh.vertices, mesh.triangles, mesh.vertices[0]) <= 0 {
+	if len(mesh.n.Vertices) == 0 || tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, mesh.n.Vertices[0]) <= 0 {
 		return nil, fmt.Errorf(`%w: the chorded stitched boundary does not enclose a positive volume`, ErrUnsupported)
 	}
 	return mesh, nil
@@ -335,14 +338,16 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	// must not alias the payload's own arrays, or a future consumer writing
 	// through one would rewrite the body's boundary.
 	mesh := &Mesh{
-		vertices:  append([]r3.Vec(nil), sp.verts...),
-		triangles: append([][3]int(nil), sp.tris...),
-		source:    append([]*Face(nil), sp.triFaces...),
+		n: topo.Mesh{
+			Vertices:  append([]r3.Vec(nil), sp.verts...),
+			Triangles: append([][3]int(nil), sp.tris...),
+		},
+		source: append([]*Face(nil), sp.triFaces...),
 	}
 
 	budget := proofbound.NewWorkBudget(ctx)
 	slack := 0.0
-	for i, tri := range mesh.triangles {
+	for i, tri := range mesh.n.Triangles {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
@@ -352,14 +357,14 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 		}
 		mesh.setFaceBound(mesh.source[i], delta)
 		if delta > 0 {
-			a, bb, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
+			a, bb, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 			slack = proofbound.AbsSumUpper(slack, proofbound.PerturbedTriangleAreaAllow(a, bb, c, delta))
 		}
 	}
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	mesh.areaSlack = slack
+	mesh.n.AreaSlack = slack
 
 	// A stitched body's mesh publishes an occupied-volume proof of EXACTLY
 	// zero — the strongest claim this codebase makes — only for a CLOSED body
@@ -406,8 +411,8 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	// Together the three steps mean the held triangle set occupies EXACTLY
 	// the same volume the denoted body does: a zero symmetric difference, not
 	// merely a small one.
-	mesh.volSymDiff = 0
-	mesh.symDiffOK = false
+	mesh.n.VolSymDiff = 0
+	mesh.n.SymDiffOK = false
 	if b.Kind() == BodySolid {
 		zeroBound, err := stitchweld.ZeroBound(budget, stitchVertexBounds(b))
 		if err != nil {
@@ -422,7 +427,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 		// identical axis-aligned box question directly against b's own
 		// Lumps, so the zero claim stays sound on its own terms even if
 		// evalStitchContext's gate were ever loosened or bypassed.
-		mesh.symDiffOK = zeroBound && stitchLumpsProvenSeparate(stitchLumpFaceGroups(b))
+		mesh.n.SymDiffOK = zeroBound && stitchLumpsProvenSeparate(stitchLumpFaceGroups(b))
 	}
 
 	// Every audit below restates the payload's own invariants over the
@@ -455,10 +460,10 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	// body's geometry is bad (docs/tessellation-design.md §12; §1.2's own
 	// note that a stitched solid mesh also runs tessellation.RequireVertexLinks beside
 	// it).
-	if err := tessellation.RequireClosedMesh(mesh.triangles); err != nil {
+	if err := tessellation.RequireClosedMesh(mesh.n.Triangles); err != nil {
 		return nil, fmt.Errorf(`%w: the stitched body's held triangle set is not a closed mesh, so it restates no boundary`, ErrUnsupported)
 	}
-	if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles); err != nil {
 		return nil, err
 	}
 	return mesh, nil

@@ -19,7 +19,7 @@ func TestCurvedClearPatchCertifiesRealTrimmedTool(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, built)
 	require.NotEmpty(t, classifier.shell.mesh.tris)
-	require.NotEmpty(t, classifier.tool.triangles)
+	require.NotEmpty(t, classifier.tool.n.Triangles)
 	index := -1
 	for i := range classifier.shell.mesh.tris {
 		location, certified, checkErr := classifier.classify(t.Context(), i)
@@ -120,16 +120,16 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		refuses(t, classifier)
 	})
 	t.Run("changed owned tool facet after context", func(t *testing.T) {
-		original := classifier.tool.vertices[0]
-		classifier.tool.vertices[0].X += 1
-		defer func() { classifier.tool.vertices[0] = original }()
+		original := classifier.tool.n.Vertices[0]
+		classifier.tool.n.Vertices[0].X += 1
+		defer func() { classifier.tool.n.Vertices[0] = original }()
 		refuses(t, classifier)
 	})
 	t.Run("understated owned tool bound after context", func(t *testing.T) {
-		original := classifier.tool.bound
+		original := classifier.tool.n.Bound
 		require.Positive(t, original)
-		classifier.tool.bound = math.Nextafter(original, 0)
-		defer func() { classifier.tool.bound = original }()
+		classifier.tool.n.Bound = math.Nextafter(original, 0)
+		defer func() { classifier.tool.n.Bound = original }()
 		refuses(t, classifier)
 	})
 	t.Run("changed owned shell vertex after context", func(t *testing.T) {
@@ -149,19 +149,19 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	t.Run("changed cached facet", func(t *testing.T) {
 		original := trimmed.tessellationCache.Load()
 		changed := *tool
-		changed.vertices = slices.Clone(tool.vertices)
-		changed.vertices[0].X += 1
+		changed.n.Vertices = slices.Clone(tool.n.Vertices)
+		changed.n.Vertices[0].X += 1
 		trimmed.tessellationCache.Store(&tessellationCacheEntry{
 			chordBits: math.Float64bits(0.1), verify: VerifyAll, mesh: &changed})
 		defer trimmed.tessellationCache.Store(original)
 		refusesEntry(t)
 	})
 	t.Run("understated positive cached bound", func(t *testing.T) {
-		require.Positive(t, tool.bound)
+		require.Positive(t, tool.n.Bound)
 		original := trimmed.tessellationCache.Load()
 		changed := *tool
-		changed.bound = math.Nextafter(tool.bound, 0)
-		require.Positive(t, changed.bound)
+		changed.n.Bound = math.Nextafter(tool.n.Bound, 0)
+		require.Positive(t, changed.n.Bound)
 		trimmed.tessellationCache.Store(&tessellationCacheEntry{
 			chordBits: math.Float64bits(0.1), verify: VerifyAll, mesh: &changed})
 		defer trimmed.tessellationCache.Store(original)
@@ -201,21 +201,21 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	})
 	t.Run("insufficient separation", func(t *testing.T) {
 		changed := *tool
-		changed.bound = 1000
+		changed.n.Bound = 1000
 		modified := *classifier
 		modified.tool = &changed
 		refuses(t, &modified)
 	})
 	t.Run("undecided point location", func(t *testing.T) {
 		changed := *tool
-		changed.volSymDiff = math.MaxFloat64
+		changed.n.VolSymDiff = math.MaxFloat64
 		modified := *classifier
 		modified.tool = &changed
 		refuses(t, &modified)
 	})
 	t.Run("unverified tool", func(t *testing.T) {
 		changed := *tool
-		changed.symDiffOK = false
+		changed.n.SymDiffOK = false
 		modified := *classifier
 		modified.tool = &changed
 		refuses(t, &modified)

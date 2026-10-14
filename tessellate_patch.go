@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -70,9 +71,11 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 	}
 	view := pp.prism()
 	mesh := &Mesh{
-		vertices:  make([]r3.Vec, len(points)),
-		triangles: triangles,
-		source:    make([]*Face, len(triangles)),
+		n: topo.Mesh{
+			Vertices:  make([]r3.Vec, len(points)),
+			Triangles: triangles,
+		},
+		source: make([]*Face, len(triangles)),
 	}
 	store := make([]float64, len(points))
 	budget := proofbound.NewWorkBudget(ctx)
@@ -81,13 +84,13 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 			return nil, err
 		}
 		held := view.Point(point.U, point.V, 0)
-		mesh.vertices[i] = held
+		mesh.n.Vertices[i] = held
 		store[i] = proofbound.AbsSumUpper(
 			proofbound.WalkEndBoundAllow(sampleBounds[i]),
 			view.PointRound(point.U, point.V, 0, held),
 		)
 	}
-	mesh.coordBound, err = tessellation.StoreMax(store)
+	mesh.n.CoordBound, err = tessellation.StoreMax(store)
 	if err != nil {
 		return nil, err
 	}
@@ -95,19 +98,19 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 		mesh.source[i] = face
 	}
 	if view.Reflected() {
-		for i := range mesh.triangles {
-			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
+		for i := range mesh.n.Triangles {
+			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
 	}
 	auditBudget := proofbound.NewWorkBudget(ctx)
 	auditTriangles, err := revolvemesh.RequireRevolveFacetAreas(
-		auditBudget, mesh.vertices, mesh.triangles, mesh.coordBound)
+		auditBudget, mesh.n.Vertices, mesh.n.Triangles, mesh.n.CoordBound)
 	if err != nil {
 		return nil, err
 	}
 	if verify >= VerifyBoundary {
 		if err := revolvemesh.RevolveContactAudit(
-			auditBudget, auditTriangles, mesh.triangles, mesh.coordBound); err != nil {
+			auditBudget, auditTriangles, mesh.n.Triangles, mesh.n.CoordBound); err != nil {
 			return nil, err
 		}
 	}
@@ -118,9 +121,9 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 		return nil, err
 	}
 	if verify >= VerifyAll {
-		mesh.areaSlack = proofbound.AbsSumUpper(capSlack,
-			tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, store))
-		if proofbound.IsNonFinite(mesh.areaSlack) {
+		mesh.n.AreaSlack = proofbound.AbsSumUpper(capSlack,
+			tessellation.StoreAreaAllow(mesh.n.Vertices, mesh.n.Triangles, store))
+		if proofbound.IsNonFinite(mesh.n.AreaSlack) {
 			return nil, fmt.Errorf(`%w: a patch mesh states no finite area allowance`, ErrUnsupported)
 		}
 	}

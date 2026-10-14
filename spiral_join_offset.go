@@ -25,11 +25,11 @@ const spiralFirstJoinCapOffset = 0.032 // millimetres; every actual move is char
 func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Mesh,
 	src []int, proof *spiralFirstJoinSource) (*Mesh, bool, error) {
 	if ctx == nil || blank == nil || tooth == nil || original == nil || proof == nil ||
-		proof.tooth == nil || !original.boundaryOK || !original.symDiffOK ||
-		len(src) != len(original.triangles) || len(original.vertices) == 0 ||
-		len(original.vertices) > 1<<16 || len(original.triangles) > 1<<17 ||
-		len(original.vertexBound) != len(original.vertices) ||
-		len(original.source) != len(original.triangles) {
+		proof.tooth == nil || !original.n.BoundaryOK || !original.n.SymDiffOK ||
+		len(src) != len(original.n.Triangles) || len(original.n.Vertices) == 0 ||
+		len(original.n.Vertices) > 1<<16 || len(original.n.Triangles) > 1<<17 ||
+		len(original.n.VertexBound) != len(original.n.Vertices) ||
+		len(original.source) != len(original.n.Triangles) {
 		return nil, false, nil
 	}
 	p, ok := tooth.payload.(facetedPayload)
@@ -42,9 +42,9 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		return nil, false, nil
 	}
 	toeGroup, heelGroup := len(blank.Faces())+toeFace, len(blank.Faces())+heelFace
-	move := make([]int8, len(original.vertices))
+	move := make([]int8, len(original.n.Vertices))
 	var capFacets [2]int
-	for i, tri := range original.triangles {
+	for i, tri := range original.n.Triangles {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return nil, false, err
@@ -76,8 +76,8 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		return nil, false, nil
 	}
 	next := *original
-	next.vertices = append([]r3.Vec(nil), original.vertices...)
-	next.vertexBound = append([]float64(nil), original.vertexBound...)
+	next.n.Vertices = append([]r3.Vec(nil), original.n.Vertices...)
+	next.n.VertexBound = append([]float64(nil), original.n.VertexBound...)
 	next.faceBound = make(map[*Face]float64, len(original.faceBound))
 	for face, bound := range original.faceBound {
 		if proofbound.IsNonFinite(bound) || bound < 0 {
@@ -91,24 +91,24 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		if side == 0 {
 			continue
 		}
-		old := original.vertices[i]
+		old := original.n.Vertices[i]
 		if !proofbound.FiniteVec(old) || old.Y <= 0 {
 			return nil, false, nil
 		}
-		next.vertices[i].Y += float64(side) * spiralFirstJoinCapOffset
-		if !proofbound.FiniteVec(next.vertices[i]) || next.vertices[i].Y <= 0 {
+		next.n.Vertices[i].Y += float64(side) * spiralFirstJoinCapOffset
+		if !proofbound.FiniteVec(next.n.Vertices[i]) || next.n.Vertices[i].Y <= 0 {
 			return nil, false, nil
 		}
-		actual := lfAbs(lfSub(lfF(next.vertices[i].Y), lfF(old.Y)))
+		actual := lfAbs(lfSub(lfF(next.n.Vertices[i].Y), lfF(old.Y)))
 		if actual.Cmp(maxShift) > 0 {
 			maxShift = actual
 		}
 		shiftUp := proofbound.RatFloatUp(actual)
-		if proofbound.IsNonFinite(shiftUp) || proofbound.IsNonFinite(next.vertexBound[i]) ||
-			next.vertexBound[i] < 0 {
+		if proofbound.IsNonFinite(shiftUp) || proofbound.IsNonFinite(next.n.VertexBound[i]) ||
+			next.n.VertexBound[i] < 0 {
 			return nil, false, nil
 		}
-		next.vertexBound[i] = proofbound.AbsSumUpper(next.vertexBound[i], shiftUp)
+		next.n.VertexBound[i] = proofbound.AbsSumUpper(next.n.VertexBound[i], shiftUp)
 		moved++
 	}
 	if moved == 0 || maxShift.Sign() == 0 {
@@ -121,7 +121,7 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 	areaXZ := new(big.Rat)
 	changed := make([][3]int, 0)
 	seenFace := make(map[*Face]bool)
-	for i, tri := range original.triangles {
+	for i, tri := range original.n.Triangles {
 		if move[tri[0]] == 0 && move[tri[1]] == 0 && move[tri[2]] == 0 {
 			continue
 		}
@@ -136,19 +136,19 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		// new facet departure read from the maximum of its vertex bounds.
 		largest := tri[0]
 		for _, vertex := range tri {
-			bound := original.vertexBound[vertex]
+			bound := original.n.VertexBound[vertex]
 			if proofbound.IsNonFinite(bound) || bound < 0 {
 				return nil, false, nil
 			}
-			if bound > original.vertexBound[largest] {
+			if bound > original.n.VertexBound[largest] {
 				largest = vertex
 			}
 		}
-		required := proofbound.AbsSumUpper(original.vertexBound[largest], maxShiftUp)
+		required := proofbound.AbsSumUpper(original.n.VertexBound[largest], maxShiftUp)
 		if proofbound.IsNonFinite(required) {
 			return nil, false, nil
 		}
-		next.vertexBound[largest] = max(next.vertexBound[largest], required)
+		next.n.VertexBound[largest] = max(next.n.VertexBound[largest], required)
 		face := original.source[i]
 		bound, present := original.faceBound[face]
 		if !present {
@@ -158,7 +158,7 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 			next.faceBound[face] = proofbound.AbsSumUpper(bound, maxShiftUp)
 			seenFace[face] = true
 		}
-		a, b, c := original.vertices[tri[0]], original.vertices[tri[1]], original.vertices[tri[2]]
+		a, b, c := original.n.Vertices[tri[0]], original.n.Vertices[tri[1]], original.n.Vertices[tri[2]]
 		cross := lfSub(lfMul(lfSub(lfF(b.X), lfF(a.X)), lfSub(lfF(c.Z), lfF(a.Z))),
 			lfMul(lfSub(lfF(b.Z), lfF(a.Z)), lfSub(lfF(c.X), lfF(a.X))))
 		areaXZ.Add(areaXZ, lfAbs(cross))
@@ -168,19 +168,19 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 	if proofbound.IsNonFinite(volumeCharge) {
 		return nil, false, nil
 	}
-	next.volSymDiff = proofbound.AbsSumUpper(original.volSymDiff, volumeCharge)
-	next.areaSlack = proofbound.AbsSumUpper(original.areaSlack,
-		facetproof.MeshAreaUpper(original.vertices, changed),
-		facetproof.MeshAreaUpper(next.vertices, changed))
-	next.coordBound = proofbound.AbsSumUpper(original.coordBound, maxShiftUp)
+	next.n.VolSymDiff = proofbound.AbsSumUpper(original.n.VolSymDiff, volumeCharge)
+	next.n.AreaSlack = proofbound.AbsSumUpper(original.n.AreaSlack,
+		facetproof.MeshAreaUpper(original.n.Vertices, changed),
+		facetproof.MeshAreaUpper(next.n.Vertices, changed))
+	next.n.CoordBound = proofbound.AbsSumUpper(original.n.CoordBound, maxShiftUp)
 	for _, bound := range next.faceBound {
-		next.bound = max(next.bound, bound)
+		next.n.Bound = max(next.n.Bound, bound)
 	}
-	if proofbound.IsNonFinite(next.volSymDiff) || proofbound.IsNonFinite(next.areaSlack) ||
-		proofbound.IsNonFinite(next.bound) || proofbound.IsNonFinite(next.coordBound) {
+	if proofbound.IsNonFinite(next.n.VolSymDiff) || proofbound.IsNonFinite(next.n.AreaSlack) ||
+		proofbound.IsNonFinite(next.n.Bound) || proofbound.IsNonFinite(next.n.CoordBound) {
 		return nil, false, nil
 	}
-	if err := massmoment.AuditMesh(ctx, next.vertices, next.triangles, false); err != nil {
+	if err := massmoment.AuditMesh(ctx, next.n.Vertices, next.n.Triangles, false); err != nil {
 		if ctx.Err() != nil {
 			return nil, false, ctx.Err()
 		}

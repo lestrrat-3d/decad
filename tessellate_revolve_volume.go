@@ -66,6 +66,6 @@ func revolveSweepUpper(p *revolvePlan) float64 {
 
 // revolveSymDiff reads the occupied-volume difference bound.
 func revolveSymDiff(m *Mesh, p *revolvePlan, angular *big.Rat, deltaC, deltaR float64) (float64, error) {
-	return revolveproof.SymDiff(m.vertices, m.triangles, revolveWalkView(p.resolved),
+	return revolveproof.SymDiff(m.n.Vertices, m.n.Triangles, revolveWalkView(p.resolved),
 		p.Meridian, p.Sweep, p.rp.full, revolveFreeformMeridianMoment(p), angular, deltaC, deltaR)
 }

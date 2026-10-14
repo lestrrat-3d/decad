@@ -287,7 +287,7 @@ func (bc *brepBandChord) place(e brepEmbed, addVertex func([3]float64, proofboun
 func (bc *brepBandChord) emit(budget *proofbound.WorkBudget, m *Mesh, geom map[string]capPatchGeom,
 	faceOfRole func(string) (*Face, error), bump func(*Face, float64)) error {
 	if bc.partial != nil {
-		first := len(m.triangles)
+		first := len(m.n.Triangles)
 		var err error
 		if bc.band.kind == brepBandFillet {
 			err = bc.emitPartialFillet(m, faceOfRole, bump)
@@ -298,14 +298,14 @@ func (bc *brepBandChord) emit(budget *proofbound.WorkBudget, m *Mesh, geom map[s
 			return err
 		}
 		if bc.band.sigma > 0 {
-			for i := first; i < len(m.triangles); i++ {
-				m.triangles[i][1], m.triangles[i][2] = m.triangles[i][2], m.triangles[i][1]
+			for i := first; i < len(m.n.Triangles); i++ {
+				m.n.Triangles[i][1], m.n.Triangles[i][2] = m.n.Triangles[i][2], m.n.Triangles[i][1]
 			}
 		}
 		return nil
 	}
 	if bc.fillet != nil {
-		first := len(m.triangles)
+		first := len(m.n.Triangles)
 		if err := bc.emitFillet(m, faceOfRole, bump); err != nil {
 			return err
 		}
@@ -313,8 +313,8 @@ func (bc *brepBandChord) emit(budget *proofbound.WorkBudget, m *Mesh, geom map[s
 		// its recorded square underside faces down. Its generated winding
 		// already opposes both neighbouring faces.
 		if bc.band.sigma > 0 && !bc.pocketShell {
-			for i := first; i < len(m.triangles); i++ {
-				m.triangles[i][1], m.triangles[i][2] = m.triangles[i][2], m.triangles[i][1]
+			for i := first; i < len(m.n.Triangles); i++ {
+				m.n.Triangles[i][1], m.n.Triangles[i][2] = m.n.Triangles[i][2], m.n.Triangles[i][1]
 			}
 		}
 		return nil
@@ -325,13 +325,13 @@ func (bc *brepBandChord) emit(budget *proofbound.WorkBudget, m *Mesh, geom map[s
 	} else {
 		lm.sideHi, lm.capHiV = bc.sideV, bc.capV
 	}
-	first := len(m.triangles)
+	first := len(m.n.Triangles)
 	if err := emitCapBand(budget, m, bc.cbp, lm, bc.start, faceOfRole, geom, bump, bc.band.patchRole); err != nil {
 		return err
 	}
 	if bc.band.sigma > 0 {
-		for i := first; i < len(m.triangles); i++ {
-			m.triangles[i][1], m.triangles[i][2] = m.triangles[i][2], m.triangles[i][1]
+		for i := first; i < len(m.n.Triangles); i++ {
+			m.n.Triangles[i][1], m.n.Triangles[i][2] = m.n.Triangles[i][2], m.n.Triangles[i][1]
 		}
 	}
 	return nil

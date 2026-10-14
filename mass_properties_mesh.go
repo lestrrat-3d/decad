@@ -77,10 +77,10 @@ func meshMassPropertiesAt(ctx context.Context, b *Body, tol float64, density uni
 	if !mesh.BoundaryVerified() || !mesh.VolumeVerified() {
 		return MassProperties{}, fmt.Errorf("%w: the body's mesh carries no occupied-volume proof", ErrUnsupported)
 	}
-	if err := massmoment.AuditMesh(ctx, mesh.vertices, mesh.triangles, payloadAuditsFacetContact(b.payload)); err != nil {
+	if err := massmoment.AuditMesh(ctx, mesh.n.Vertices, mesh.n.Triangles, payloadAuditsFacetContact(b.payload)); err != nil {
 		return MassProperties{}, err
 	}
 	anchor := b.bounds.Min.Add(b.bounds.Max).Scale(.5)
 	return massPropertiesFromReadings(
-		massmoment.HeldMeshMassProperties(ctx, boxToInternal(b.bounds), anchor, mesh.vertices, mesh.triangles, mesh.volSymDiff, density))
+		massmoment.HeldMeshMassProperties(ctx, boxToInternal(b.bounds), anchor, mesh.n.Vertices, mesh.n.Triangles, mesh.n.VolSymDiff, density))
 }

@@ -90,7 +90,7 @@ func WithVerification(v Verification) TessellateOption {
 // closure or the manifold-with-boundary audit, vertex links, per-facet
 // positive area, signed-volume orientation — runs at every level, so no other
 // payload's reading moves with the level.
-func (m *Mesh) BoundaryVerified() bool { return m.boundaryOK }
+func (m *Mesh) BoundaryVerified() bool { return m.n.BoundaryOK }
 
 // VolumeVerified reports whether this mesh carries the proof of the volume it
 // and the body it stands for differ by (docs/tessellation-design.md §2's
@@ -103,7 +103,7 @@ func (m *Mesh) BoundaryVerified() bool { return m.boundaryOK }
 // exact. A false reading is the proof's ABSENCE, never
 // a bound of zero: a zero would be the claim that the mesh occupies exactly
 // the denoted volume.
-func (m *Mesh) VolumeVerified() bool { return m.symDiffOK }
+func (m *Mesh) VolumeVerified() bool { return m.n.SymDiffOK }
 
 // withholdProofs drops the two proofs a level below [VerifyAll] never ran
 // (docs/tessellation-design.md §2). Dropping them is mandatory rather than
@@ -113,9 +113,9 @@ func (m *Mesh) VolumeVerified() bool { return m.symDiffOK }
 // no facet-pair audit and no volume term (§10.1), and a zero Bound would be a
 // positive claim of exactness rather than an absent proof.
 func (m *Mesh) withholdProofs() {
-	m.areaSlack = 0
-	m.volSymDiff = 0
-	m.symDiffOK = false
+	m.n.AreaSlack = 0
+	m.n.VolSymDiff = 0
+	m.n.SymDiffOK = false
 }
 
 // payloadAuditsFacetContact reports whether this payload's own tessellation

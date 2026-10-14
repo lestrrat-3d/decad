@@ -32,15 +32,15 @@ func prismPatternRootChordsInsideCap(ctx context.Context, mesh *joinedMesh,
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	for _, part := range parts {
-		n := len(part.mesh.vertices) / 2
-		rootA := loftcylinder.ExactXY(part.mesh.vertices[2*part.rootStart+capIndex])
-		rootB := loftcylinder.ExactXY(part.mesh.vertices[capIndex])
+		n := len(part.mesh.n.Vertices) / 2
+		rootA := loftcylinder.ExactXY(part.mesh.n.Vertices[2*part.rootStart+capIndex])
+		rootB := loftcylinder.ExactXY(part.mesh.n.Vertices[capIndex])
 		for j := part.rootStart; j < n; j++ {
 			if ctx.Err() != nil {
 				return false
 			}
-			a := loftcylinder.ExactXY(part.mesh.vertices[2*j+capIndex])
-			b := loftcylinder.ExactXY(part.mesh.vertices[2*((j+1)%n)+capIndex])
+			a := loftcylinder.ExactXY(part.mesh.n.Vertices[2*j+capIndex])
+			b := loftcylinder.ExactXY(part.mesh.n.Vertices[2*((j+1)%n)+capIndex])
 			if same(a, b) {
 				return false
 			}

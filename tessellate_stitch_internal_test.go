@@ -223,7 +223,7 @@ func TestStitchTessellateClassBoundIsIndependentOfPlacement(t *testing.T) {
 	mesh, err := solid.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Equal(t, wantBound, mesh.Bound().Base())
-	require.Positive(t, mesh.areaSlack)
+	require.Positive(t, mesh.n.AreaSlack)
 }
 
 // internalStitchedBox builds T3's own worked box example (stitchBoxSheets,
@@ -279,8 +279,8 @@ func TestTessellateStitchPublishesZeroSymDiffForClosedZeroBoundBody(t *testing.T
 	box := internalStitchedBox(t, New())
 	mesh, err := box.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
-	require.Zero(t, mesh.volSymDiff)
+	require.True(t, mesh.n.SymDiffOK)
+	require.Zero(t, mesh.n.VolSymDiff)
 }
 
 // TestTessellateStitchDoesNotPublishSymDiffForAPlacedBody is the ZERO-BOUND
@@ -298,7 +298,7 @@ func TestTessellateStitchDoesNotPublishSymDiffForAPlacedBody(t *testing.T) {
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
-	require.False(t, mesh.symDiffOK)
+	require.False(t, mesh.n.SymDiffOK)
 }
 
 // TestTessellateStitchDoesNotPublishSymDiffForAnOpenSheet is the
@@ -327,7 +327,7 @@ func TestTessellateStitchDoesNotPublishSymDiffForAnOpenSheet(t *testing.T) {
 
 	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
-	require.False(t, mesh.symDiffOK)
+	require.False(t, mesh.n.SymDiffOK)
 }
 
 // stitchTestSquareFaceWithHole builds a hand-built planar face at z =

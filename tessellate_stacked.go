@@ -60,10 +60,10 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	faceAxial := map[*Face]float64{}
 	addVertex := func(p planePoint, z float64, source proofbound.WalkEndBound) int {
 		v := base.Point(p.U, p.V, z)
-		mesh.vertices = append(mesh.vertices, v)
+		mesh.n.Vertices = append(mesh.n.Vertices, v)
 		vertexStore = append(vertexStore, proofbound.AbsSumUpper(proofbound.WalkEndBoundAllow(source),
 			base.PointRound(p.U, p.V, z, v)))
-		return len(mesh.vertices) - 1
+		return len(mesh.n.Vertices) - 1
 	}
 	rings := make([]tessellation.StackedRing[*Face], len(columns))
 	for ci, col := range columns {
@@ -84,7 +84,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		r.SegmentArea, r.Walks, r.PerimeterUpper = cl.SegmentArea, cl.Walks, cl.PerimeterUpper
 		r.Bottom = make([]int, len(cl.Samples))
 		r.Top = make([]int, len(cl.Samples))
-		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cl.WallSlack, cl.CapSlack, cl.CapSlack)
+		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, cl.WallSlack, cl.CapSlack, cl.CapSlack)
 		for j, p := range cl.Samples {
 			r.Bottom[j] = addVertex(p, first.Z0, cl.BoundOf[j])
 			r.Top[j] = addVertex(p, last.Z1, cl.BoundOf[j])
@@ -178,11 +178,11 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		}
 	}
 	if base.Reflected() {
-		for i := range mesh.triangles {
-			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
+		for i := range mesh.n.Triangles {
+			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
 	}
-	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.triangles)); err != nil {
+	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
 		return nil, err
 	}
 	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, vertexStore, sp.sectionDelta); err != nil {
@@ -209,10 +209,10 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		SlabColumns: slabColumns, SectionDelta: sp.sectionDelta,
 		Faces: b.Faces(), Source: mesh.source, FaceAxial: faceAxial,
 		IsPlanar: func(face *Face) bool { _, ok := face.surface.(Plane); return ok },
-		Vertices: mesh.vertices, Triangles: mesh.triangles,
-		Store: vertexStore, StoreMax: storeMax, AreaSlack: mesh.areaSlack,
+		Vertices: mesh.n.Vertices, Triangles: mesh.n.Triangles,
+		Store: vertexStore, StoreMax: storeMax, AreaSlack: mesh.n.AreaSlack,
 	})
-	mesh.areaSlack = proof.AreaSlack
+	mesh.n.AreaSlack = proof.AreaSlack
 	if err := publishSymDiff(&mesh, proof.Terms); err != nil {
 		return nil, err
 	}

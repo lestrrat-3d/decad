@@ -97,7 +97,7 @@ Rules:
 - `facesOfMesh` reads `m.faceBound[f]` and `faceChordDelta` is deleted. For prism/cup the published value
   is never below what `faceChordDelta` returns today (a planar face with straight edges publishes
   `deltaStore + sectionDelta + deltaAxial(face)`, which is at least `sectionDisplacementOf`).
-- `operandSymDiff` returns `m.volSymDiff` when `m.symDiffOK`, else `ErrUnsupported` (a staging refusal,
+- `operandSymDiff` returns `m.n.VolSymDiff` when `m.n.SymDiffOK`, else `ErrUnsupported` (a staging refusal,
   routed through `expectedBooleanForOperand(booleanExpectedStaging, …)` like a tessellation refusal).
   `tessellateFaceted` sets `volSymDiff = fp.volSymDiff, symDiffOK = true`.
 
@@ -766,7 +766,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    **Depends on:** 2, 4. **Tests:** the cylinder circular-segment example (§3).
 6. **Files:** `boolean.go`. **What:** `facesOfMesh` reads `m.faceBound`; delete `faceChordDelta` and
    `sectionDisplacementOf` if unreferenced; `operandSymDiff` returns `(float64, error)` reading
-   `m.volSymDiff` under `m.symDiffOK`, else a staging `ErrUnsupported`. **Depends on:** 1, 4, 5.
+   `m.n.VolSymDiff` under `m.n.SymDiffOK`, else a staging `ErrUnsupported`. **Depends on:** 1, 4, 5.
    **Tests:** `boolean_internal_test.go` reconstructs a prism×prism result bound from the two `volSymDiff`s;
    `apitest/prism_boolean_displacement_test.go`'s existing refusal fixtures still refuse.
 

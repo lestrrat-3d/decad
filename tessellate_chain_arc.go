@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // tessellateChainArcSweep restates one straight, off-axis source chain swept
@@ -136,27 +137,27 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 		if proofbound.IsNonFinite(bound) || bound > chord {
 			continue
 		}
-		mesh := &Mesh{vertices: verts, coordBound: math.Max(coord, vertexGap)}
+		mesh := &Mesh{n: topo.Mesh{Vertices: verts, CoordBound: math.Max(coord, vertexGap)}}
 		revolvemesh.EmitCellTriangles(samples[0][0], samples[0][1], n, func(tri [3]int) {
 			mesh.addTriangle(tri, face)
 		})
 		if rp.reflected() {
-			for i := range mesh.triangles {
-				mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
+			for i := range mesh.n.Triangles {
+				mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 			}
 		}
 		mesh.setFaceBound(face, bound)
 		if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
 			return nil, err
 		}
-		audit, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.vertices, mesh.triangles,
-			mesh.coordBound)
+		audit, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.n.Vertices, mesh.n.Triangles,
+			mesh.n.CoordBound)
 		if err != nil {
 			return nil, liftTessellationError(err)
 		}
 		if verify >= VerifyBoundary {
-			if err := revolvemesh.RevolveContactAudit(budget, audit, mesh.triangles,
-				mesh.coordBound); err != nil {
+			if err := revolvemesh.RevolveContactAudit(budget, audit, mesh.n.Triangles,
+				mesh.n.CoordBound); err != nil {
 				return nil, liftTessellationError(err)
 			}
 		}
@@ -170,10 +171,10 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 			if err != nil {
 				return nil, err
 			}
-			mesh.areaSlack = proofbound.AbsSumUpper(
+			mesh.n.AreaSlack = proofbound.AbsSumUpper(
 				proofbound.ProductUpper(float64(n), proofbound.AbsSumUpper(cell, axisAllow)),
-				revolvemesh.CoordinateAreaAllow(mesh.vertices, mesh.triangles, coord))
-			if proofbound.IsNonFinite(mesh.areaSlack) {
+				revolvemesh.CoordinateAreaAllow(mesh.n.Vertices, mesh.n.Triangles, coord))
+			if proofbound.IsNonFinite(mesh.n.AreaSlack) {
 				return refuse("the chain arc Sweep has no finite area slack")
 			}
 		}

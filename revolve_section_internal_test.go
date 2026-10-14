@@ -328,23 +328,23 @@ func TestRevolveSectionDisplacementTessellates(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported)
 	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.13))
 	require.NoError(t, err)
-	for _, v := range mesh.vertices {
+	for _, v := range mesh.n.Vertices {
 		// The revolve axis is world x, so z = v.X and ρ = hypot(v.Y, v.Z).
 		off := math.Abs(math.Hypot(v.X-5, math.Hypot(v.Y, v.Z)-10) - 3)
-		require.LessOrEqual(t, off, mesh.bound, "vertex %v sits %v off the denoted torus", v, off)
+		require.LessOrEqual(t, off, mesh.n.Bound, "vertex %v sits %v off the denoted torus", v, off)
 	}
 	// Its area slack encloses the DENOTED solid's area.
 	area, err := ref.Area()
 	require.NoError(t, err)
 	meshArea := 0.0
-	for _, tri := range mesh.triangles {
-		a, b, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
+	for _, tri := range mesh.n.Triangles {
+		a, b, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 		meshArea += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
-	require.LessOrEqual(t, math.Abs(meshArea-area.Value.Base()), mesh.areaSlack+area.Bound.Base())
+	require.LessOrEqual(t, math.Abs(meshArea-area.Value.Base()), mesh.n.AreaSlack+area.Bound.Base())
 	// The mesh's occupied-volume bound encloses the DENOTED solid's volume.
 	vol, err := ref.Volume()
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
-	require.LessOrEqual(t, math.Abs(internalMeshVolume(mesh)-vol.Value.Base()), mesh.volSymDiff+vol.Bound.Base())
+	require.True(t, mesh.n.SymDiffOK)
+	require.LessOrEqual(t, math.Abs(internalMeshVolume(mesh)-vol.Value.Base()), mesh.n.VolSymDiff+vol.Bound.Base())
 }

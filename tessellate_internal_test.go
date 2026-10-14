@@ -57,8 +57,8 @@ func TestTessellateChargesSectionDisplacementToEveryProof(t *testing.T) {
 	require.NoError(t, err)
 
 	// The bound is the displacement, up-rounded once.
-	require.GreaterOrEqual(t, mesh.bound, pp.SectionDelta)
-	require.Equal(t, proofbound.UpRound(pp.SectionDelta), mesh.bound)
+	require.GreaterOrEqual(t, mesh.n.Bound, pp.SectionDelta)
+	require.Equal(t, proofbound.UpRound(pp.SectionDelta), mesh.n.Bound)
 
 	// The slack is the same displacement read as an area, composed exactly as
 	// evalPrism composes it: the section's own tube once per cap — 2·δ·p over
@@ -68,14 +68,14 @@ func TestTessellateChargesSectionDisplacementToEveryProof(t *testing.T) {
 	d := pp.SectionDelta
 	capMove := 2*d*perimeter + walks*math.Pi*d*d
 	wallMove := walks * 12 * math.Pi * d * height
-	require.InEpsilon(t, 2*capMove+wallMove, mesh.areaSlack, 1e-12)
+	require.InEpsilon(t, 2*capMove+wallMove, mesh.n.AreaSlack, 1e-12)
 
 	// An undisplaced straight prism charges neither term.
 	plain := internalBoxBody(t, New(), 0, 0, 10, 10, 10)
 	flat, err := tessellateContext(t.Context(), plain, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
-	require.Zero(t, flat.bound)
-	require.Zero(t, flat.areaSlack)
+	require.Zero(t, flat.n.Bound)
+	require.Zero(t, flat.n.AreaSlack)
 }
 
 func TestRequireLoopClearanceOffersValidRetry(t *testing.T) {
@@ -442,7 +442,7 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 	tol := units.Millimeters(0.2)
 	reused, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
-	require.NotEmpty(t, reused.triangles)
+	require.NotEmpty(t, reused.n.Triangles)
 
 	withoutResolution := &Body{
 		doc:      body.doc,
@@ -499,13 +499,13 @@ func TestMeshDerivedVertexBoundsTakeTheLargestIncidentFace(t *testing.T) {
 	require.NoError(t, err)
 	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
-	require.Nil(t, mesh.vertexBound, `a revolve publishes no per-vertex record`)
+	require.Nil(t, mesh.n.VertexBound, `a revolve publishes no per-vertex record`)
 
 	beta, err := mesh.vertexBounds()
 	require.NoError(t, err)
-	require.Len(t, beta, len(mesh.vertices))
-	incident := make([]map[*Face]struct{}, len(mesh.vertices))
-	for k, tri := range mesh.triangles {
+	require.Len(t, beta, len(mesh.n.Vertices))
+	incident := make([]map[*Face]struct{}, len(mesh.n.Vertices))
+	for k, tri := range mesh.n.Triangles {
 		for _, v := range tri {
 			if incident[v] == nil {
 				incident[v] = map[*Face]struct{}{}

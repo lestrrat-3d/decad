@@ -1237,8 +1237,8 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.NotEmpty(t, mesh.Triangles())
-	incidence := make([]uint8, len(mesh.vertices))
-	for ti, tri := range mesh.triangles {
+	incidence := make([]uint8, len(mesh.n.Vertices))
+	for ti, tri := range mesh.n.Triangles {
 		var bit uint8
 		switch mesh.source[ti].Surface().(type) {
 		case Cylinder:
@@ -1255,7 +1255,7 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 	}
 	checked := 0
 	for vi, mask := range incidence {
-		p := mesh.vertices[vi]
+		p := mesh.n.Vertices[vi]
 		if mask != 3 || p.Z <= 9+1e-8 || p.Z >= 10-1e-8 || p.Y >= 20-1e-8 {
 			continue
 		}
@@ -1413,5 +1413,5 @@ func TestBrepLoopFilletConsumers(t *testing.T) {
 	// their own tests in tessellate_brep_fillet_internal_test.go.
 	m, err := tessellateContext(t.Context(), out, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
-	require.True(t, m.symDiffOK)
+	require.True(t, m.n.SymDiffOK)
 }

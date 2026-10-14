@@ -183,14 +183,14 @@ func TestDraftMeshVolumeProofCoversTheClosedForm(t *testing.T) {
 			for _, tol := range []float64{0.25, 0.05, 0.01} {
 				mesh, err := b.Tessellate(t.Context(), units.Millimeters(tol))
 				require.NoError(t, err, "tol %g", tol)
-				require.NoError(t, tessellation.RequireClosedMesh(mesh.triangles))
-				requireDraftMeshEmbedded(t, mesh.vertices, mesh.triangles)
-				require.True(t, mesh.symDiffOK, "tol %g: a draft band of miters and exact G1 joins is admitted", tol)
+				require.NoError(t, tessellation.RequireClosedMesh(mesh.n.Triangles))
+				requireDraftMeshEmbedded(t, mesh.n.Vertices, mesh.n.Triangles)
+				require.True(t, mesh.n.SymDiffOK, "tol %g: a draft band of miters and exact G1 joins is admitted", tol)
 				got := new(big.Float).SetPrec(draftMeshPrec).SetRat(internalMeshVolumeRat(mesh))
 				gap, _ := new(big.Float).Abs(dmAdd(got, dmNeg(fx.volume))).Float64()
 				want, _ := fx.volume.Float64()
-				require.LessOrEqualf(t, gap, mesh.volSymDiff, "tol %g: the mesh volume sits %g from the closed form %v, outside volSymDiff %g", tol, gap, want, mesh.volSymDiff)
-				require.LessOrEqualf(t, mesh.volSymDiff, 0.1*want, "tol %g: volSymDiff %g is no proof of a %v mm³ body", tol, mesh.volSymDiff, want)
+				require.LessOrEqualf(t, gap, mesh.n.VolSymDiff, "tol %g: the mesh volume sits %g from the closed form %v, outside volSymDiff %g", tol, gap, want, mesh.n.VolSymDiff)
+				require.LessOrEqualf(t, mesh.n.VolSymDiff, 0.1*want, "tol %g: volSymDiff %g is no proof of a %v mm³ body", tol, mesh.n.VolSymDiff, want)
 			}
 		})
 	}
@@ -226,8 +226,8 @@ func TestDraftMeshEmbeddedCheckRefusesACrossing(t *testing.T) {
 	b := draftMeshFixtures()[0].build(t)
 	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
-	require.NoError(t, draftMeshContactAudit(t, mesh.vertices, mesh.triangles))
-	verts := append([]r3.Vec(nil), mesh.vertices...)
+	require.NoError(t, draftMeshContactAudit(t, mesh.n.Vertices, mesh.n.Triangles))
+	verts := append([]r3.Vec(nil), mesh.n.Vertices...)
 	moved := false
 	for i, v := range verts {
 		if v.Z == 10 {
@@ -237,7 +237,7 @@ func TestDraftMeshEmbeddedCheckRefusesACrossing(t *testing.T) {
 		}
 	}
 	require.True(t, moved)
-	require.ErrorIs(t, draftMeshContactAudit(t, verts, mesh.triangles), ErrUnsupported)
+	require.ErrorIs(t, draftMeshContactAudit(t, verts, mesh.n.Triangles), ErrUnsupported)
 }
 
 // TestDraftMeshSharesTheNearRing pins the structure that makes a draft mesh
@@ -250,8 +250,8 @@ func TestDraftMeshSharesTheNearRing(t *testing.T) {
 	b := draftMeshFixtures()[0].build(t)
 	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
-	require.Len(t, mesh.vertices, 8)
-	require.Len(t, mesh.triangles, 12)
+	require.Len(t, mesh.n.Vertices, 8)
+	require.Len(t, mesh.n.Triangles, 12)
 	faces := map[*Face]int{}
 	for _, f := range mesh.source {
 		faces[f]++
@@ -279,7 +279,7 @@ func TestDraftMoverRecordRadiusEnclosesTheBody(t *testing.T) {
 			mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
 			require.NoError(t, err)
 			worst := 0.0
-			for _, v := range mesh.vertices {
+			for _, v := range mesh.n.Vertices {
 				worst = max(worst, vecL1(v))
 			}
 			require.False(t, math.IsInf(radius, 1), "a draft body states a finite record radius")
@@ -373,13 +373,13 @@ func TestDraftSubsetMeshVolumeProofCoversTheClosedForm(t *testing.T) {
 			for _, tol := range []float64{0.25, 0.05, 0.01} {
 				mesh, err := b.Tessellate(t.Context(), units.Millimeters(tol))
 				require.NoError(t, err, "tol %g", tol)
-				require.NoError(t, tessellation.RequireClosedMesh(mesh.triangles))
-				require.True(t, mesh.symDiffOK, "tol %g", tol)
+				require.NoError(t, tessellation.RequireClosedMesh(mesh.n.Triangles))
+				require.True(t, mesh.n.SymDiffOK, "tol %g", tol)
 				got := new(big.Float).SetPrec(draftMeshPrec).SetRat(internalMeshVolumeRat(mesh))
 				gap, _ := new(big.Float).Abs(dmAdd(got, dmNeg(fx.volume))).Float64()
 				want, _ := fx.volume.Float64()
-				require.LessOrEqualf(t, gap, mesh.volSymDiff, "tol %g: the mesh volume sits %g from the closed form %v, outside volSymDiff %g", tol, gap, want, mesh.volSymDiff)
-				require.LessOrEqualf(t, mesh.volSymDiff, 0.1*want, "tol %g: volSymDiff %g is no proof of a %v mm³ body", tol, mesh.volSymDiff, want)
+				require.LessOrEqualf(t, gap, mesh.n.VolSymDiff, "tol %g: the mesh volume sits %g from the closed form %v, outside volSymDiff %g", tol, gap, want, mesh.n.VolSymDiff)
+				require.LessOrEqualf(t, mesh.n.VolSymDiff, 0.1*want, "tol %g: volSymDiff %g is no proof of a %v mm³ body", tol, mesh.n.VolSymDiff, want)
 			}
 		})
 	}

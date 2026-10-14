@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -85,9 +86,9 @@ func unionVertexBoundFixture(t *testing.T, a, b *Body) vertexBoundFixture {
 	require.NoError(t, err)
 	mb, err := tessellateContext(t.Context(), b, units.Millimeters(tol), VerifyAll)
 	require.NoError(t, err)
-	bmA, err := prepBoolMeshContext(t.Context(), ma, make([]int, len(ma.triangles)))
+	bmA, err := prepBoolMeshContext(t.Context(), ma, make([]int, len(ma.n.Triangles)))
 	require.NoError(t, err)
-	bmB, err := prepBoolMeshContext(t.Context(), mb, make([]int, len(mb.triangles)))
+	bmB, err := prepBoolMeshContext(t.Context(), mb, make([]int, len(mb.n.Triangles)))
 	require.NoError(t, err)
 	betaA, err := ma.vertexBounds()
 	require.NoError(t, err)
@@ -119,7 +120,7 @@ func unionVertexBoundFixture(t *testing.T, a, b *Body) vertexBoundFixture {
 			segs = append(segs, segment{
 				p0:   c.P0,
 				p1:   c.P1,
-				sum:  proofbound.AbsSumUpper(facet(betaA, ma.triangles[i]), facet(betaB, mb.triangles[j])),
+				sum:  proofbound.AbsSumUpper(facet(betaA, ma.n.Triangles[i]), facet(betaB, mb.n.Triangles[j])),
 				sin2: c.Sin2,
 			})
 		}
@@ -142,10 +143,10 @@ func unionVertexBoundFixture(t *testing.T, a, b *Body) vertexBoundFixture {
 	}
 
 	operand := map[r3.Vec]float64{}
-	for i, v := range ma.vertices {
+	for i, v := range ma.n.Vertices {
 		operand[v] = betaA[i]
 	}
-	for i, v := range mb.vertices {
+	for i, v := range mb.n.Vertices {
 		operand[v] = max(operand[v], betaB[i])
 	}
 	u, err := Union(t.Context(), a, b)
@@ -217,8 +218,8 @@ func TestBooleanVertexBoundsComposePerPair(t *testing.T) {
 	b, err = Transform(t.Context(), b, turn)
 	require.NoError(t, err)
 	f := unionVertexBoundFixture(t, a, b)
-	require.Positive(t, f.ma.bound)
-	require.Positive(t, f.mb.bound)
+	require.Positive(t, f.ma.n.Bound)
+	require.Positive(t, f.mb.n.Bound)
 
 	// Two rim points closer than an ulp weld into one held vertex, which then
 	// takes the larger of their two sums.
@@ -260,10 +261,10 @@ func TestBooleanVertexBoundsComposePerPair(t *testing.T) {
 	}
 	require.Positive(t, kept)
 
-	today := proofbound.AbsSumUpper(proofbound.UpRound((f.ma.bound+f.mb.bound)/f.sinMin), maxWeld)
+	today := proofbound.AbsSumUpper(proofbound.UpRound((f.ma.n.Bound+f.mb.n.Bound)/f.sinMin), maxWeld)
 	require.LessOrEqual(t, f.result.meshBound, today)
 	require.Equal(t, facetproof.FacetBoundMax(f.result.tris, f.result.vertexBound), f.result.meshBound)
-	t.Logf("meshBound %.3g, global composition %.3g, operand deltas %.3g / %.3g", f.result.meshBound, today, f.ma.bound, f.mb.bound)
+	t.Logf("meshBound %.3g, global composition %.3g, operand deltas %.3g / %.3g", f.result.meshBound, today, f.ma.n.Bound, f.mb.n.Bound)
 }
 
 // TestBooleanVertexBoundsChargeEachRimItsWeld is docs/tessellation-design.md
@@ -289,8 +290,8 @@ func TestBooleanVertexBoundsChargeEachRimItsWeld(t *testing.T) {
 	b, err = Transform(t.Context(), b, down)
 	require.NoError(t, err)
 	f := unionVertexBoundFixture(t, a, b)
-	require.Zero(t, f.ma.bound)
-	require.Zero(t, f.mb.bound)
+	require.Zero(t, f.ma.n.Bound)
+	require.Zero(t, f.mb.n.Bound)
 
 	inexact := 0
 	for _, r := range f.rims {
@@ -340,7 +341,7 @@ func TestHeldGateReadsFacetsWithinThePrePassSlack(t *testing.T) {
 				tris[i] = [3]int{tr[0], tr[2], tr[1]}
 			}
 		}
-		m := &Mesh{vertices: verts, triangles: tris, source: make([]*Face, len(tris))}
+		m := &Mesh{n: topo.Mesh{Vertices: verts, Triangles: tris}, source: make([]*Face, len(tris))}
 		m.setVertexBounds([]float64{bound, bound, bound, bound})
 		bm, err := prepBoolMeshContext(t.Context(), m, make([]int, len(tris)))
 		require.NoError(t, err)
@@ -393,9 +394,9 @@ func TestHeldGateCertifiesEachUnionsRimCeiling(t *testing.T) {
 		mb, restatingB, err := tessellateBooleanOperand(ctx, branch, tol)
 		require.NoError(t, err)
 		require.True(t, restatingA && restatingB, `the tree and its mitred branch both restate held meshes`)
-		bmA, err := prepBoolMeshContext(ctx, ma, make([]int, len(ma.triangles)))
+		bmA, err := prepBoolMeshContext(ctx, ma, make([]int, len(ma.n.Triangles)))
 		require.NoError(t, err)
-		bmB, err := prepBoolMeshContext(ctx, mb, make([]int, len(mb.triangles)))
+		bmB, err := prepBoolMeshContext(ctx, mb, make([]int, len(mb.n.Triangles)))
 		require.NoError(t, err)
 		segments := 0
 		contacts := meshbool.NewContactBatchExecutor(ctx, bmA, bmB, meshbool.NewContactMemo(bmA, bmB), meshbool.ContactWorkers(ctx),

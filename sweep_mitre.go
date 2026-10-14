@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -184,12 +185,14 @@ func tessellateMitredSweep(ctx context.Context, b *Body, mp mitredSweepPayload, 
 		return nil, fmt.Errorf(`%w: the mitred sweep's held triangle set is not a closed mesh`, ErrUnsupported)
 	}
 	mesh := &Mesh{
-		vertices:  append([]r3.Vec(nil), mp.verts...),
-		triangles: append([][3]int(nil), mp.tris...),
-		source:    src,
+		n: topo.Mesh{
+			Vertices:  append([]r3.Vec(nil), mp.verts...),
+			Triangles: append([][3]int(nil), mp.tris...),
+		},
+		source: src,
 	}
 	mesh.setVertexBounds(mp.vertexBound)
-	mesh.bound = mp.delta
+	mesh.n.Bound = mp.delta
 	slack := 0.0
 	for _, t := range mp.tris {
 		slack = proofbound.AbsSumUpper(slack, proofbound.PerturbedTriangleAreaAllow(mp.verts[t[0]], mp.verts[t[1]], mp.verts[t[2]], mp.delta))
@@ -202,8 +205,8 @@ func tessellateMitredSweep(ctx context.Context, b *Body, mp mitredSweepPayload, 
 	if !finiteMeasurementValues(slack, volSymDiff) {
 		return nil, fmt.Errorf(`%w: the mitred sweep states no finite proof for a required mesh bound`, ErrUnsupported)
 	}
-	mesh.areaSlack = slack
-	mesh.volSymDiff = volSymDiff
-	mesh.symDiffOK = true
+	mesh.n.AreaSlack = slack
+	mesh.n.VolSymDiff = volSymDiff
+	mesh.n.SymDiffOK = true
 	return mesh, nil
 }

@@ -89,8 +89,8 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 		candidateHeld, ok := part.payload.(loftPayload)
 		require.True(t, ok)
 		n := len(candidateHeld.segment[0])
-		if len(source.mesh.vertices) == (candidate+1)*n &&
-			slices.Equal(source.mesh.vertices[:2*n], candidateHeld.verts) {
+		if len(source.mesh.n.Vertices) == (candidate+1)*n &&
+			slices.Equal(source.mesh.n.Vertices[:2*n], candidateHeld.verts) {
 			cells, stations, held = candidate, candidateStations, candidateHeld
 			break
 		}
@@ -176,7 +176,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	}
 	for i, cell := range heldCells {
 		for k := range cell.verts {
-			require.Equal(t, source.mesh.vertices[i*n+k], cell.verts[k])
+			require.Equal(t, source.mesh.n.Vertices[i*n+k], cell.verts[k])
 		}
 	}
 	global := 0
@@ -186,13 +186,13 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 				k >= cell.walls+cell.capStartCount && i != cells-1 {
 				continue
 			}
-			require.Less(t, global, len(source.mesh.triangles))
+			require.Less(t, global, len(source.mesh.n.Triangles))
 			require.Equal(t, [3]int{i*n + tri[0], i*n + tri[1], i*n + tri[2]},
-				source.mesh.triangles[global])
+				source.mesh.n.Triangles[global])
 			global++
 		}
 	}
-	require.Equal(t, len(source.mesh.triangles), global)
+	require.Equal(t, len(source.mesh.n.Triangles), global)
 	wallBound, err := twistMixedWallAreaL1(heldCells, stations, poly,
 		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End().Z)
 	require.NoError(t, err)
@@ -201,12 +201,12 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	comparison, _, heldByFace, err := compositeTwistMesh(t.Context(), body, heldCells,
 		len(poly.Points), make([]int, cells), source.delta, source.volSymDiff)
 	require.NoError(t, err)
-	require.Equal(t, source.mesh.vertices, comparison.vertices)
-	require.Equal(t, source.mesh.triangles, comparison.triangles)
+	require.Equal(t, source.mesh.n.Vertices, comparison.n.Vertices)
+	require.Equal(t, source.mesh.n.Triangles, comparison.n.Triangles)
 	localSlack, err := twistMixedAreaSlackLocal(source.profile, poly, body, heldByFace, wallBound)
 	require.NoError(t, err)
 	t.Logf("local mixed area allowance=%g", localSlack)
-	require.Equal(t, localSlack, source.mesh.areaSlack)
+	require.Equal(t, localSlack, source.mesh.n.AreaSlack)
 	require.Less(t, localSlack, 50.0)
 	corrupt := append([]loftPayload(nil), heldCells...)
 	corrupt[0].side = append([]uint8(nil), corrupt[0].side...)

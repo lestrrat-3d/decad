@@ -105,7 +105,7 @@ func (bc *brepBandChord) emitPartialFillet(m *Mesh, faceOfRole func(string) (*Fa
 		if err != nil {
 			return err
 		}
-		first := len(m.triangles)
+		first := len(m.n.Triangles)
 		twist := 0.0
 		tri := func(a, b, c int) {
 			if a != b && b != c && a != c {
@@ -128,12 +128,12 @@ func (bc *brepBandChord) emitPartialFillet(m *Mesh, faceOfRole func(string) (*Fa
 				}
 				if a != b {
 					twist = math.Max(twist, proofbound.CellTwistOffsetUpper(
-						m.vertices[a], m.vertices[b], m.vertices[A], m.vertices[B]))
+						m.n.Vertices[a], m.n.Vertices[b], m.n.Vertices[A], m.n.Vertices[B]))
 				}
 			}
 		}
 		eps := proofbound.AbsSumUpper(sPhi, bc.partial.PatchSag[p], twist)
-		bc.finishPatch(m, face, eps, delta, levelDelta, axial, first, len(m.triangles), bump)
+		bc.finishPatch(m, face, eps, delta, levelDelta, axial, first, len(m.n.Triangles), bump)
 	}
 	return nil
 }
