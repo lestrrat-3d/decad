@@ -300,6 +300,50 @@ func TestSectionDirectLoftVaryingCircleRefusesPlacement(t *testing.T) {
 	requireDirectLoftSectionUnsupported(t, placed, r3.NewVec(0, 0, 1))
 }
 
+func TestSectionDirectLoftVaryingCircleRefusesShiftedSourceOrigin(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		shift r3.Vec
+	}{
+		{name: "X", shift: r3.NewVec(1, 0, 2)},
+		{name: "Y", shift: r3.NewVec(0, 1, 2)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			world := sketch.NewWorld()
+			topFrame, err := r3.NewFrame(tc.shift, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+			require.NoError(t, err)
+			topPlane, err := world.CreatePlaneFromFrame(topFrame)
+			require.NoError(t, err)
+			bottom, bottomProfile := loftCircleProfile(t, world, world.XY(), 1)
+			top, topProfile := loftCircleProfile(t, world, topPlane, 3)
+			source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+			require.NoError(t, err)
+			requireDirectLoftSectionUnsupported(t, source, r3.NewVec(0, 0, 1))
+		})
+	}
+}
+
+func TestSectionDirectLoftMovingCircleRefusesNonexactY(t *testing.T) {
+	world := sketch.NewWorld()
+	topPlane, err := world.CreateOffsetPlane(world.XY(), 3)
+	require.NoError(t, err)
+	build := func(plane *sketch.Plane, centerY float64) (*sketch.Sketch, *sketch.Profile) {
+		s, err := world.CreateSketch(plane)
+		require.NoError(t, err)
+		center := s.CreatePoint(0, centerY)
+		s.Fix(center)
+		s.CreateCircle(center, 4)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		return s, s.Profiles()[0]
+	}
+	bottom, bottomProfile := build(world.XY(), 0)
+	top, topProfile := build(topPlane, 1)
+	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	require.NoError(t, err)
+	requireDirectLoftSectionUnsupported(t, source, r3.NewVec(0, 0, 0.2))
+}
+
 func TestSectionDirectLoftAnnulusRefusesCapAndTilt(t *testing.T) {
 	source := directLoftCircles(t, true, 1, 2, 1, 0)
 	for _, tc := range []struct {

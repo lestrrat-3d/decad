@@ -496,7 +496,8 @@ reusing its bound.
   A midlevel Section returns radius 2 mm; its 2 mm Extrude encloses 8π mm³
   and passes `Tessellate(0.1 mm, VerifyAll)`. Check a translated source frame,
   a moving outer circle, one moving hole and two paired holes. Refuse cap,
-  tilted, shifted, placed and inexact-interpolation requests.
+  tilted, shifted source or request, placed and inexact X/Y or radius
+  interpolation requests.
 - Extrude a 1 mm whole circle by 5 mm. Section it by a cardinal plane through
   its axis and check the exact 2×5 mm rectangle. Re-extrude the returned
   profile by 2 mm and require `Tessellate(0.1 mm, VerifyAll)` to certify the

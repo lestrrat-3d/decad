@@ -66,8 +66,8 @@ func loftCircleSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, boo
 // from two authenticated source profiles. At a fixed height their ruled
 // boundary is a circle with linearly interpolated center and radius.
 func loftVaryingCircularOuterSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
-	// Cut/Fillet markers, invalid alignment shapes and plane/frame disagreement
-	// are reject-only for current direct Loft producers.
+	// Cut/Fillet markers, hole-count disagreement, invalid alignment shapes
+	// and plane/frame disagreement are reject-only for current direct Lofts.
 	if !pl.authenticatedReconstruction || pl.surfaceResult ||
 		pl.constructionDelta != 0 || len(pl.blendSegs) != 0 ||
 		pl.throughBoreCut || pl.analyticBore || pl.xform != r3.Identity() ||
