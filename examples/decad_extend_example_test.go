@@ -66,7 +66,7 @@ func Example_decad_extend() {
 	}
 	query := decad.Edges(decad.Free(), decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(40, 0, 0))).Exactly(1)
-	extended, err := ribbon.Extend(ctx, query, tool)
+	extended, err := decad.Extend(ctx, ribbon, query, tool)
 	if err != nil {
 		fmt.Printf("failed to extend ribbon: %s\n", err)
 		return

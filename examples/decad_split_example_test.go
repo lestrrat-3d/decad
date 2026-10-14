@@ -51,7 +51,7 @@ func Example_decad_split() {
 		fmt.Printf("failed to extrude tool: %s\n", err)
 		return
 	}
-	pieces, err := doc.Split(context.Background(), block, tool)
+	pieces, err := decad.Split(context.Background(), block, tool)
 	if err != nil {
 		fmt.Printf("failed to split block: %s\n", err)
 		return

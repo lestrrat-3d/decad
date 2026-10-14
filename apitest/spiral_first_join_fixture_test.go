@@ -252,7 +252,7 @@ func spiralSlabs(t *testing.T, doc *decad.Document, d spiralDims, f spiralFrame,
 	for k := 1; k <= 8; k++ {
 		location := parent.Add(normal.Scale(sign * float64(k) * f.span / 6))
 		sheet := spiralSliceSheet(t, doc, location, u, 2*d.coneDist)
-		cut, err := doc.Split(t.Context(), pieces[0], sheet)
+		cut, err := decad.Split(t.Context(), pieces[0], sheet)
 		require.NoError(t, err)
 		require.Len(t, cut, 2)
 		pieces[0] = cut[0]

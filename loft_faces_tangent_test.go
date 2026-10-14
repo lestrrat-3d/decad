@@ -56,9 +56,9 @@ func newTangentLoftFixture(t *testing.T) tangentLoftFixture {
 		require.NoError(t, e)
 		return body
 	}
-	first, err := doc.Split(t.Context(), point, sheet(5))
+	first, err := Split(t.Context(), point, sheet(5))
 	require.NoError(t, err)
-	second, err := doc.Split(t.Context(), first[0], sheet(4.5))
+	second, err := Split(t.Context(), first[0], sheet(4.5))
 	require.NoError(t, err)
 	f := tangentLoftFixture{doc: doc, world: world, s: s, near: second[1], far: first[1]}
 	pick := func(body *Body, role FeatureRef) *Face {

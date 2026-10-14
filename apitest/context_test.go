@@ -50,7 +50,7 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 			_, err := decad.Revolve(ctx, doc, nil, (*sketch.Chain)(nil), nil, nil)
 			return err
 		}},
-		{"Document.Split", func(ctx context.Context) error { _, err := doc.Split(ctx, nil, nil); return err }},
+		{"Split", func(ctx context.Context) error { _, err := decad.Split(ctx, nil, nil); return err }},
 		{"Transform", func(ctx context.Context) error { _, err := decad.Transform(ctx, body, r3.Transform{}); return err }},
 		{"Copy identity", func(ctx context.Context) error { _, err := decad.Copy(ctx, body); return err }},
 		{"Copy placement", func(ctx context.Context) error {
@@ -65,8 +65,8 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		{"Offset", func(ctx context.Context) error { _, err := decad.Offset(ctx, body, units.Value{}); return err }},
 		{"Unstitch", func(ctx context.Context) error { _, err := decad.Unstitch(ctx, body); return err }},
 		{"Body.Tessellate", func(ctx context.Context) error { _, err := body.Tessellate(ctx, units.Value{}); return err }},
-		{"Body.Trim", func(ctx context.Context) error { _, err := body.Trim(ctx, nil, 0); return err }},
-		{"Body.Extend", func(ctx context.Context) error { _, err := body.Extend(ctx, nil, nil); return err }},
+		{"Trim", func(ctx context.Context) error { _, err := decad.Trim(ctx, body, nil, 0); return err }},
+		{"Extend", func(ctx context.Context) error { _, err := decad.Extend(ctx, body, nil, nil); return err }},
 		{"Stitch", func(ctx context.Context) error { _, err := decad.Stitch(ctx); return err }},
 		{"Union", func(ctx context.Context) error { _, err := decad.Union(ctx, nil, nil); return err }},
 		{"Cut", func(ctx context.Context) error { _, err := decad.Cut(ctx, nil, nil); return err }},

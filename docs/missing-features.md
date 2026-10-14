@@ -87,7 +87,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Touching, coplanar or face-on-face contact on the mesh path | `BooleanError` code `BooleanUnsupportedContact` | `docs/general-boolean-design.md` §2, `docs/interference-design.md` |
 | Curved surfaces tangent with facets that never meet | `ErrUnsupported` | `doc.go` support map |
 | Held mesh operand coarser than the pair tolerance after a Boolean chain | `ErrUnsupported` except for fixed held primitives including twisted Sweeps and certified `LoftFaces` results, certified Revolve/sector joins with a centered spanning cylinder Cut, and authenticated mirrored-Loft pairs joined to a centered cylinder | `docs/faceted-vertex-bounds-design.md` §5, `docs/loft-face-sections-design.md`, `docs/revolve-loft-sector-design.md`, `docs/loft-mirror-boolean-design.md`, `docs/sweep-design.md` §17.4 |
-| Sheet body as a boolean operand | Refused permanently; use `Document.Split` | `docs/surface-design.md` Table X |
+| Sheet body as a boolean operand | Refused permanently; use `Split` | `docs/surface-design.md` Table X |
 
 ## Free-form curves
 

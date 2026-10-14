@@ -23,7 +23,7 @@ import (
 // ResolveSurfaceExtend stores it without a map.
 //
 // It is an internal fixture because two of the three admitted kinds cannot be
-// driven through Body.Extend at all today. Only a CircleSeg is affected in
+// driven through Extend at all today. Only a CircleSeg is affected in
 // practice: a circle fragment always separates the disk's interior from the
 // exterior, so it is never a bridge in sketch's arrangement and never reaches
 // Chains() — and chain Extrude is the one producer of an undisplaced

@@ -550,7 +550,7 @@ func BenchmarkModelingTrimRectangleSheet(b *testing.B) {
 		})
 		require.NoError(b, err)
 		b.StartTimer()
-		trimmed, err := sheet.Trim(b.Context(), tool, decad.KeepOutside)
+		trimmed, err := decad.Trim(b.Context(), sheet, tool, decad.KeepOutside)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -603,7 +603,7 @@ func BenchmarkModelingExtendChain(b *testing.B) {
 		tool, err := decad.Extrude(b.Context(), doc, toolSketch, toolSketch.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)})
 		require.NoError(b, err)
 		b.StartTimer()
-		extended, err := ribbon.Extend(b.Context(), query, tool)
+		extended, err := decad.Extend(b.Context(), ribbon, query, tool)
 		if err != nil {
 			b.Fatal(err)
 		}

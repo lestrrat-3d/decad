@@ -102,7 +102,7 @@ func TestCurvedLoftFacesSourceNeedsHeldSeam(t *testing.T) {
 	inner := fittedSectorPointLoft(t, doc)
 	slabs := make([]*decad.Body, 0, 8)
 	for k := 1; k <= 8; k++ {
-		parts, err := doc.Split(t.Context(), inner, axialSliceSheet(t, doc, 8-0.7*float64(k)))
+		parts, err := decad.Split(t.Context(), inner, axialSliceSheet(t, doc, 8-0.7*float64(k)))
 		require.NoError(t, err)
 		require.Len(t, parts, 2)
 		inner = parts[0]

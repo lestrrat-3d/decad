@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// This file is Document.Split over the revolve family
+// This file is Split over the revolve family
 // (docs/surface-intersection-design.md §11's PR5). The cell selection and the
 // per-cell recording run through prismcells over the two operands' MERIDIAN
 // views, as they do for Trim's revolve arm. Each

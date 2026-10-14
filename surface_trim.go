@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 )
 
-// This file implements Body.Trim, Body.Extend and Document.Split. Their §2.1
+// This file implements Trim, Extend and Split. Their §2.1
 // gates share prism-boolean's exact generator comparison, identity
 // re-expression check and sweep-span relation. All three build a private scene
 // through prismcells;
@@ -24,16 +24,17 @@ import (
 // views: §11's PR4, this file's own last section. Split's revolve arm is §11's
 // PR5, in surface_split_revolve.go.
 
-// Extend lengthens the receiver along the named edges' own carriers until
-// they meet tool, and returns the lengthened sheet. It admits a receiver and
+// Extend lengthens b along the named edges' own carriers until
+// they meet tool, and returns the lengthened sheet. It admits a b and
 // tool sharing ONE generator, exactly as Trim does — both a straight sweep, or
 // both a revolve about one axis — under surface-intersection §2.1's own gate.
-func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body, error) {
+// A nil context or a nil b is ErrDegenerate.
+func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an extension`, ErrDegenerate)
 	}
 	if b == nil || b.doc == nil {
-		return nil, fmt.Errorf(`%w: the receiver belongs to no document`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
 	d := b.doc
 	if err := d.requireLive(b); err != nil {
@@ -134,7 +135,7 @@ func extendEndSegment(b *Body, pp chainPayload, edge *Edge) (int, int, bool, err
 // admitExtendPair applies S1-S4, S6 and S7. The selected segment enters the
 // scene at full domain; every other receiver segment stays outside it.
 func admitExtendPair(budget *proofbound.WorkBudget, receiver, tool *Body) (chainPayload, prismPayload, error) {
-	// A revolve pair never reaches here: Body.Extend routes it to its own arm
+	// A revolve pair never reaches here: Extend routes it to its own arm
 	// before this gate runs, exactly as Trim routes one.
 	rf, tf := bodyTrimFamily(receiver), bodyTrimFamily(tool)
 	if rf != tf || rf != trimFamilyPrism {
@@ -190,8 +191,8 @@ func (s TrimSide) String() string {
 	}
 }
 
-// Trim cuts the receiver where it meets tool and returns the kept pieces as
-// one sheet body (docs/surface-intersection-design.md §8). The receiver and
+// Trim cuts b where it meets tool and returns the kept pieces as
+// one sheet body (docs/surface-intersection-design.md §8). b and
 // tool are consumed on the document's uniform terms (core §6); a refusal
 // consumes neither. It admits a pair whose two sweeps share ONE generator —
 // both the prism family (a straight Extrude/chain Extrude sweep) or both the
@@ -200,14 +201,14 @@ func (s TrimSide) String() string {
 // S1-S7 states, is [ErrUnsupported] at the call, never a fallback: a sheet's
 // mesh proves no occupied volume (boolean.go's requireVolumeProvingPayload),
 // so there is no mesh path for a miss to reroute to. A tool that separates no
-// fragment of the receiver, or every fragment, is [ErrDegenerate] (R30): no
-// trimmed body exists either way.
-func (b *Body) Trim(ctx context.Context, tool *Body, side TrimSide) (*Body, error) {
+// fragment of b, or every fragment, is [ErrDegenerate] (R30): no
+// trimmed body exists either way. A nil context or a nil b is ErrDegenerate.
+func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a trim`, ErrDegenerate)
 	}
 	if b == nil || b.doc == nil {
-		return nil, fmt.Errorf(`%w: the receiver belongs to no document`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
 	d := b.doc
 	if err := d.requireLive(b); err != nil {
@@ -395,14 +396,16 @@ func trimProfileFullyWhole(budget *proofbound.WorkBudget, p profileRecord) (bool
 // (docs/surface-intersection-design.md §2.1). Any other pair, or a miss on
 // that section's gate, is ErrUnsupported. Both operands are consumed only
 // after every piece has been built. A tool that separates no target cell is
-// ErrDegenerate.
-func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, error) {
+// ErrDegenerate, as is a nil context or a nil target. The document is the
+// target's own.
+func Split(ctx context.Context, target, tool *Body) ([]*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a split`, ErrDegenerate)
 	}
-	if d == nil {
-		return nil, fmt.Errorf(`%w: a split needs a document`, ErrDegenerate)
+	if target == nil || target.doc == nil {
+		return nil, fmt.Errorf(`%w: the split target belongs to no document`, ErrDegenerate)
 	}
+	d := target.doc
 	if err := d.requireLive(target); err != nil {
 		return nil, err
 	}
