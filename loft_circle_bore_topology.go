@@ -29,19 +29,19 @@ const (
 	loftCircleWallCylinder
 	loftCircleWallCone
 	loftCircleWallRuled
+	loftCircleWallQuarterTurn
 )
 
 // directLoftCircularHole reads only authenticated section records. Matching
-// frame axes and zero alignment make the two circle walks use the same angle
-// parameter, so their linear interpolation has center C(z) and radius r(z).
-// A fixed center gives a right cylinder or cone; a moving center gives a
-// rational degree-(2,1) ruled surface, never a right cylinder or cone.
+// frame axes and zero alignment make a circle pair interpolate with center
+// C(z) and radius r(z). A fixed center gives a right cylinder or cone; a
+// moving center gives a rational ruled surface. Exact cardinal quarter-turn
+// frames also give a rational ruled surface under the common angle parameter.
 func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 	if !pl.authenticatedReconstruction || pl.surfaceResult ||
 		len(pl.profile0.Holes) != 1 || len(pl.profile1.Holes) != 1 ||
 		len(pl.profile0.Holes[0].Segments) != 1 || len(pl.profile1.Holes[0].Segments) != 1 ||
-		!sectionrecord.IdenticalRecord(pl.profile0.Outer, pl.profile1.Outer) ||
-		pl.frame0.U() != pl.frame1.U() || pl.frame0.V() != pl.frame1.V() {
+		!sectionrecord.IdenticalRecord(pl.profile0.Outer, pl.profile1.Outer) {
 		return loftCircleWallNone
 	}
 	for _, offset := range pl.alignment {
@@ -60,25 +60,30 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 		!loftBoreHasExactAxis(pl.frame0, pl.frame1, 0, 0, level.Z) {
 		return loftCircleWallNone
 	}
+	sameAxes := pl.frame0.U() == pl.frame1.U() && pl.frame0.V() == pl.frame1.V()
+	if !sameAxes {
+		// A cardinal quarter-turn gives an exact ruled circle pair and an
+		// angularly constant area integrand. Both local centers must be on
+		// the common axis; other frame rotations need their own area bound.
+		quarterTurn := pl.frame1.U() == (r3.Vec{Y: 1}) && pl.frame1.V() == (r3.Vec{X: -1})
+		quarterTurn = quarterTurn ||
+			pl.frame1.U() == (r3.Vec{Y: -1}) && pl.frame1.V() == (r3.Vec{X: 1})
+		if !quarterTurn || bottom.Center.U != 0 || bottom.Center.V != 0 ||
+			top.Center.U != 0 || top.Center.V != 0 {
+			return loftCircleWallNone
+		}
+	}
 	// The cylindrical builder uses the first section's entire circle record
 	// for both rims, so equal world radii alone do not authorize that reuse.
-	if sectionrecord.IdenticalRecord(bottom, top) {
+	if sameAxes && sectionrecord.IdenticalRecord(bottom, top) {
 		if loftBoreHasExactAxis(pl.frame0, pl.frame1,
 			bottom.Center.U, bottom.Center.V, level.Z) {
 			return loftCircleWallCylinder
 		}
 		return loftCircleWallNone
 	}
-	if bottom.Center == top.Center && bottom.Radius.Base() == top.Radius.Base() {
+	if sameAxes && bottom.Center == top.Center && bottom.Radius.Base() == top.Radius.Base() {
 		return loftCircleWallNone
-	}
-	// The retained outer wall faces must each bound their true area before
-	// the complete Loft area can be used to isolate this one curved wall.
-	// Equal straight segments give planar outer wall cells.
-	for _, segment := range pl.profile0.Outer.Segments {
-		if _, ok := segment.(lineSeg); !ok {
-			return loftCircleWallNone
-		}
 	}
 	// The varying case uses exact world-XY coordinates. This makes its
 	// section-to-world control net exact and lets Cone's half-angle bound
@@ -94,10 +99,99 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 	if height.Cmp(proofarith.FloatRat(level.Z)) != 0 {
 		return loftCircleWallNone
 	}
-	if bottom.Center != top.Center {
-		return loftCircleWallRuled
+	if !sameAxes {
+		return loftCircleWallQuarterTurn
 	}
-	return loftCircleWallCone
+	if bottom.Center == top.Center {
+		return loftCircleWallCone
+	}
+	// Isolating a moving-center wall from the complete Loft area requires
+	// independently bounded outer wall areas. Equal line segments supply
+	// planar outer wall cells; curved outer walls need another area proof.
+	for _, segment := range pl.profile0.Outer.Segments {
+		if _, ok := segment.(lineSeg); !ok {
+			return loftCircleWallNone
+		}
+	}
+	return loftCircleWallRuled
+}
+
+// loftConeWallArea bounds the lateral area of the exact circular frustum
+// denoted by two coaxial circle records. The surface is independent of the
+// outer Loft wall, so a curved outer loop does not enter this proof.
+func loftConeWallArea(pl loftPayload, bottom, top circleSeg) (proofbound.BoundedScalar, bool) {
+	r0, r1 := bottom.Radius.Base(), top.Radius.Base()
+	h := new(big.Rat).Sub(proofarith.FloatRat(pl.plane1.Origin.Z),
+		proofarith.FloatRat(pl.plane0.Origin.Z))
+	dr := new(big.Rat).Sub(proofarith.FloatRat(r1), proofarith.FloatRat(r0))
+	slantSquared := new(big.Rat).Add(new(big.Rat).Mul(h, h), new(big.Rat).Mul(dr, dr))
+	slant, ok := proofbound.IntervalSqrt(proofbound.PointInterval(slantSquared))
+	if !ok {
+		return proofbound.BoundedScalar{}, false
+	}
+	radiusSum := new(big.Rat).Add(proofarith.FloatRat(r0), proofarith.FloatRat(r1))
+	areaInterval := proofbound.IntervalMul(
+		proofbound.IntervalScale(proofbound.TwoPiInterval(),
+			new(big.Rat).Quo(radiusSum, big.NewRat(2, 1))), slant)
+	held := math.Pi * (r0 + r1) * math.Hypot(pl.frame0.ToLocal(pl.frame1.Origin()).Z, r1-r0)
+	bound := proofbound.IntervalFloatError(areaInterval, held)
+	if proofbound.IsNonFinite(held) || proofbound.IsNonFinite(bound) {
+		return proofbound.BoundedScalar{}, false
+	}
+	return proofbound.MeasuredScalar(held, bound), true
+}
+
+// loftQuarterTurnWallArea encloses the lateral area of a pair of concentric
+// circles whose section frames differ by exactly a quarter-turn. Writing the
+// planar ruled point as q(t) exp(iθ), q(t)=(1-t)r0+i t r1, removes θ from the
+// area integrand. Its square is a positive quadratic in t. Each interval's
+// endpoint maximum and endpoint-or-vertex minimum bound the integrand there;
+// outward square roots and π then bound the full integral.
+func loftQuarterTurnWallArea(pl loftPayload, bottom, top circleSeg) (proofbound.BoundedScalar, bool) {
+	r0, r1 := proofarith.FloatRat(bottom.Radius.Base()), proofarith.FloatRat(top.Radius.Base())
+	h := new(big.Rat).Sub(proofarith.FloatRat(pl.plane1.Origin.Z),
+		proofarith.FloatRat(pl.plane0.Origin.Z))
+	r0sq, r1sq := new(big.Rat).Mul(r0, r0), new(big.Rat).Mul(r1, r1)
+	sum := new(big.Rat).Add(r0sq, r1sq)
+	minimumAt := new(big.Rat).Quo(r0sq, sum)
+	squaredSpeed := func(t *big.Rat) *big.Rat {
+		oneMinus := new(big.Rat).Sub(big.NewRat(1, 1), t)
+		q0 := new(big.Rat).Mul(oneMinus, r0)
+		q1 := new(big.Rat).Mul(t, r1)
+		planar := new(big.Rat).Add(new(big.Rat).Mul(q0, q0), new(big.Rat).Mul(q1, q1))
+		radial := new(big.Rat).Sub(new(big.Rat).Mul(oneMinus, r0sq), new(big.Rat).Mul(t, r1sq))
+		return new(big.Rat).Add(new(big.Rat).Mul(new(big.Rat).Mul(h, h), planar),
+			new(big.Rat).Mul(radial, radial))
+	}
+	const cells int64 = 512
+	loSum, hiSum := new(big.Rat), new(big.Rat)
+	for i := range cells {
+		a, b := big.NewRat(i, cells), big.NewRat(i+1, cells)
+		qa, qb := squaredSpeed(a), squaredSpeed(b)
+		lo, hi := qa, qb
+		if qa.Cmp(qb) > 0 {
+			lo, hi = qb, qa
+		}
+		if a.Cmp(minimumAt) <= 0 && minimumAt.Cmp(b) <= 0 {
+			lo = squaredSpeed(minimumAt)
+		}
+		rootLo, rootHi := proofbound.RatSqrtDown(lo), proofbound.RatSqrtUp(hi)
+		if proofbound.IsNonFinite(rootLo) || proofbound.IsNonFinite(rootHi) {
+			return proofbound.BoundedScalar{}, false
+		}
+		loSum.Add(loSum, proofarith.FloatRat(rootLo))
+		hiSum.Add(hiSum, proofarith.FloatRat(rootHi))
+	}
+	areaInterval := proofbound.IntervalMul(proofbound.TwoPiInterval(),
+		proofbound.IntervalOwned(new(big.Rat).Quo(loSum, big.NewRat(cells, 1)),
+			new(big.Rat).Quo(hiSum, big.NewRat(cells, 1))))
+	midpoint := new(big.Rat).Quo(new(big.Rat).Add(areaInterval.Lo, areaInterval.Hi), big.NewRat(2, 1))
+	held, _ := midpoint.Float64()
+	bound := proofbound.IntervalFloatError(areaInterval, held)
+	if proofbound.IsNonFinite(held) || proofbound.IsNonFinite(bound) {
+		return proofbound.BoundedScalar{}, false
+	}
+	return proofbound.MeasuredScalar(held, bound), true
 }
 
 // loftCircularRim uses a section's own whole-circle record and the Loft
@@ -150,13 +244,14 @@ func loftCircularRim(pl loftPayload, a loftmesh.Assembly, side int) (*Edge, bool
 // ((1-t²)/(1+t²), 2t/(1+t²)). In Bernstein form its homogeneous weights
 // are [1,1,2], with controls [(1,0),(1,1),(0,1)]; rotations give the other
 // three quarters. Both authenticated circles use this same rational basis.
-// Linear interpolation of their weighted controls gives the exact ruled
-// circle-to-circle surface, including a moving center. The source records
+// Linear interpolation of their world-space weighted controls gives the
+// exact ruled circle-to-circle surface, including a moving center or an
+// exact cardinal quarter-turn of the second section. The source records
 // therefore determine an exact private degree-(2,1) control net; its tag is
 // NURBSSurface when that wall is neither a right cylinder nor a right cone.
 func loftCircularWallSurface(pl loftPayload, bottom, top circleSeg,
 	kind loftCircleWallKind) (surfacegeom.Surface, float64) {
-	if kind == loftCircleWallRuled {
+	if kind == loftCircleWallRuled || kind == loftCircleWallQuarterTurn {
 		return surfacegeom.NURBSSurface{}, 0
 	}
 	r0, r1 := bottom.Radius.Base(), top.Radius.Base()
@@ -190,7 +285,7 @@ func loftCircularWallSurface(pl loftPayload, bottom, top circleSeg,
 // buildLoftVaryingCircularHoleTopology uses the source circle pair to replace
 // only the hole wall and its two rims. A circle whose placement cannot bound
 // its analytic curve keeps the original faceted topology instead.
-func buildLoftVaryingCircularHoleTopology(ctx context.Context, pl loftPayload,
+func buildLoftVaryingCircularHoleTopology(ctx context.Context, body *Body, pl loftPayload,
 	kind loftCircleWallKind, a loftmesh.Assembly, start, end *Face,
 	walls []*Face) ([]*Face, *Face, error) {
 	if len(a.VIdx) != 2 || len(start.loops) != 2 || len(end.loops) != 2 || len(walls) != a.Walls {
@@ -226,8 +321,8 @@ func buildLoftVaryingCircularHoleTopology(ctx context.Context, pl loftPayload,
 	}
 	surface, normalBound := loftCircularWallSurface(pl, bottomSeg, topSeg, kind)
 	wall := &Face{n: topo.Face{
-		Surface: surface, Reversed: kind != loftCircleWallRuled,
-		NormalBound: normalBound, Origins: origins,
+		Surface: surface, Reversed: kind != loftCircleWallRuled && kind != loftCircleWallQuarterTurn,
+		NormalBound: normalBound, Origins: origins, Body: bodyNode(body),
 	}}
 	wall.loops = []*Loop{
 		{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{{edge: bottom, forward: true}}, a.Reversed)},

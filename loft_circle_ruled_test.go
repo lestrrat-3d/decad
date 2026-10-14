@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -27,6 +28,42 @@ func TestDirectLoftCircleGateRejectsEqualBaseDifferentRecord(t *testing.T) {
 	require.Equal(t, loftCircleWallCylinder, directLoftCircularHole(pl))
 	pl.profile1.Holes[0].Segments[0] = other
 	require.Equal(t, loftCircleWallNone, directLoftCircularHole(pl))
+}
+
+func TestDirectLoftRuledCircleWallHasBodyNode(t *testing.T) {
+	world := sketch.NewWorld()
+	upper, err := world.CreateOffsetPlane(world.XY(), 2)
+	require.NoError(t, err)
+	var sections [2]*sketch.Sketch
+	var profiles [2]*sketch.Profile
+	for i, plane := range []*sketch.Plane{world.XY(), upper} {
+		s, err := world.CreateSketch(plane)
+		require.NoError(t, err)
+		rect := s.CreateRectangle(-5, -5, 5, 5)
+		s.Fix(rect.A)
+		x := 0.0
+		if i == 1 {
+			x = 1
+		}
+		center := s.CreatePoint(x, 0)
+		s.Fix(center)
+		s.CreateCircle(center, 1)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		sections[i], profiles[i] = s, s.Profiles()[0]
+	}
+	body, err := New().Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
+	require.NoError(t, err)
+	var ruled *Face
+	for _, face := range body.Faces() {
+		if _, ok := face.Surface().(NURBSSurface); ok {
+			require.Nil(t, ruled)
+			ruled = face
+		}
+	}
+	require.NotNil(t, ruled)
+	require.Same(t, bodyNode(body), ruled.n.Body)
+	require.Same(t, body, bodyHandle(ruled.n.Body))
 }
 
 // The three homogeneous Bernstein controls in loftCircularWallSurface's

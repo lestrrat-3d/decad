@@ -1405,6 +1405,7 @@
 10	10.81	TestCurvedSourceCapCirclesSplitClosedBlankShell
 10	5.93	TestCurvedSourcePairCensusCoversLiveFaces
 10	0.00	TestDirectLoftCircleGateRejectsEqualBaseDifferentRecord
+10	0.00	TestDirectLoftRuledCircleWallHasBodyNode
 10	0.01	TestDisplacedStationCellNeedsTheStationShiftLeg
 10	0.03	TestEvalPrismContinuesCallerFreeformWork
 10	2.10	TestExactSumRoundDyadicMatchesRational
