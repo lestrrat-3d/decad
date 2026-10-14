@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -9,6 +10,73 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBrepAdjacentBossRootChamferAddsCornerMaterial(t *testing.T) {
+	t.Parallel()
+	joined := squareBossOnPlate(t)
+	beforeMesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+
+	corner := r3.NewVec(5, -5, 5)
+	roots := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
+		Or(decad.ParallelTo(r3.NewVec(0, 1, 0)), decad.EndpointAt(corner)).Exactly(2)
+	got, err := decad.Chamfer(t.Context(), joined, roots, units.Millimeters(1))
+	require.NoError(t, err)
+	requireEveryEdgeOnTwoFaces(t, got)
+	require.Equal(t, 2, countRolePrefix(got, "chamferLoop("))
+
+	// At height t in [0,1], the two 10 mm strips each have width 1-t;
+	// their outside corner adds a square of area (1-t)^2.
+	wantVolume := 2500 + 10 + 1.0/3
+	volume, err := got.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-wantVolume), volume.Bound.Base()+1e-12)
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.InDelta(t, 10+1.0/3, meshVolume(mesh)-meshVolume(beforeMesh), 1e-8)
+
+	cornerFill := r3.NewVec(5.25, -5.25, 5.25)
+	before, err := joined.LocatePoint(t.Context(), cornerFill, units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.Equal(t, decad.PointOutside, before)
+	after, err := got.LocatePoint(t.Context(), cornerFill, units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.Equal(t, decad.PointInside, after)
+}
+
+func TestBrepAdjacentUnderBossRootChamferAddsCornerMaterial(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := boxBody(t, doc, -10, -10, 10, 10, 5)
+	boss := boxBodyAtZ(t, doc, -5, -5, 5, 5, -5, 5)
+	joined, err := decad.Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	corner := r3.NewVec(5, -5, 0)
+	roots := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
+		Or(decad.ParallelTo(r3.NewVec(0, 1, 0)), decad.EndpointAt(corner)).Exactly(2)
+	got, err := decad.Chamfer(t.Context(), joined, roots, units.Millimeters(1))
+	require.NoError(t, err)
+	wantVolume := 2500 + 10 + 1.0/3
+	volume, err := got.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-wantVolume), volume.Bound.Base()+1e-12)
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	cornerFill := r3.NewVec(5.25, -5.25, -0.25)
+	before, err := joined.LocatePoint(t.Context(), cornerFill, units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.Equal(t, decad.PointOutside, before)
+	after, err := got.LocatePoint(t.Context(), cornerFill, units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.Equal(t, decad.PointInside, after)
+}
 
 func TestBrepSingleBossRootChamferAddsMaterial(t *testing.T) {
 	t.Parallel()

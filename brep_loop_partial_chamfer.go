@@ -20,7 +20,7 @@ type partialChamferQuad struct {
 	side   *Edge
 }
 
-// attachPartialChamferBand builds one concave root or two convex outer strips.
+// attachPartialChamferBand builds one or two concave root strips or two convex outer strips.
 // Every patch vertex is already an open edge of the rewritten face record.
 func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 	bp brepPayload, bi int, open brepOpenSet, e brepEmbed) ([]*Face, brepBandMass, error) {
@@ -36,11 +36,11 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		}
 	}
 	outerPair := b.loop == 0 && b.sigma == -1 && selectedCount == 2
-	rootSingle := b.loop > 0 && b.sigma == 1 && selectedCount == 1
-	if (!outerPair && !rootSingle) || f.delta != 0 || b.setback.dc != b.setback.ds ||
+	rootRun := b.loop > 0 && b.sigma == 1 && (selectedCount == 1 || selectedCount == 2)
+	if (!outerPair && !rootRun) || f.delta != 0 || b.setback.dc != b.setback.ds ||
 		b.setback.dcDelta != 0 ||
 		b.setback.dsDelta != 0 {
-		return nil, brepBandMass{}, fmt.Errorf(`%w: a partial chamfer requires an exact outer pair or inner root`, ErrUnsupported)
+		return nil, brepBandMass{}, fmt.Errorf(`%w: a partial chamfer requires an exact outer pair or one or two inner roots`, ErrUnsupported)
 	}
 	sideZ, sideDelta := b.sideLevel(f)
 	if sideDelta != 0 {
