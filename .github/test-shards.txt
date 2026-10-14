@@ -1438,3 +1438,4 @@
 1	0.00	TestCurvedCallScopeStillRefusesChangedGraph
 5	0.00	TestCurvedTimeStageCellsMatchLegacy
 4	0.00	TestCurvedCensusOwnedArcsMatchLiveCheck
+9	1.40	TestCrossBoreCapPatchesHold

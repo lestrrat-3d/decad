@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -89,6 +90,21 @@ func (m *crossBoreMesh) triangle(a, b, c, source int) {
 func (m *crossBoreMesh) quad(a, b, c, d, source int) {
 	m.triangle(a, b, c, source)
 	m.triangle(a, c, d, source)
+}
+
+// crossBoreCapPatches returns the bottom cap fan (source 0) and the top
+// cap fan (source 1) as projected patches over the XY axes, each in
+// triangle order. Each cap is a fan at one exact height; a proof shows it
+// is one non-self-touching graph over XY, so its own pairs can meet only
+// at indexed edges and vertices.
+func crossBoreCapPatches(src []int) []loftmesh.ProjectedPatch {
+	patches := []loftmesh.ProjectedPatch{{Axes: [2]int{0, 1}}, {Axes: [2]int{0, 1}}}
+	for i, s := range src {
+		if s == 0 || s == 1 {
+			patches[s].Triangles = append(patches[s].Triangles, i)
+		}
+	}
+	return patches
 }
 
 type crossBoreStation struct {
