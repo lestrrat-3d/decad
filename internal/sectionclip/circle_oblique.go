@@ -41,8 +41,10 @@ func obliqueCircleUnit(quadrant, numerator, denominator int) SectionRatPoint {
 }
 
 // Each sampled circular arc and its chord are within d²/4 for a unit
-// circle, where d is the chord length. The affine map and vertex rounding
-// carry that two-sided gap to the exact ellipse and its held line polygon.
+// circle, where d is the chord length. The exact station polygon may be inside
+// its source circle, but coordinate rounding can move the held polygon outside.
+// The affine map and vertex rounding carry that two-sided gap to the exact
+// ellipse and its held line polygon.
 func ObliqueCirclePolygon(center, a, b SectionRatPoint, orientation int,
 	plane r3.Frame, perQuadrant int, extraLocal, extraWorld float64) ([]planePoint, float64, bool) {
 	unit := make([]SectionRatPoint, 0, 4*perQuadrant)

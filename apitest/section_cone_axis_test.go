@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -91,6 +92,78 @@ func TestSectionCardinalConeInexactRadiusFeedsVerifiedExtrude(t *testing.T) {
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 	require.Equal(t, []*decad.Body{cone}, doc.Bodies())
+}
+
+func TestSectionCardinalConeRoundedProxyCarriesDisplacement(t *testing.T) {
+	_, cone := sectionConeSource(t, 3)
+	move, err := r3.Translation(r3.NewVec(1<<20, 0, 0))
+	require.NoError(t, err)
+	placed, err := decad.Transform(t.Context(), cone, move)
+	require.NoError(t, err)
+	section, profiles, err := placed.Section(t.Context(), sectionConePlane(t, 1))
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+
+	// Compare held Sketch vertices with the exact 10/3 mm circle. Some
+	// rounded vertices lie outside; the certificate must cover both sides.
+	center := big.NewRat(1<<20, 1)
+	radiusSquared := big.NewRat(100, 9)
+	outside := 0
+	for _, point := range section.Points() {
+		if !point.IsReference() {
+			continue
+		}
+		dx := new(big.Rat).Sub(new(big.Rat).SetFloat64(point.X()), center)
+		dy := new(big.Rat).SetFloat64(point.Y())
+		distanceSquared := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
+		if distanceSquared.Cmp(radiusSquared) > 0 {
+			outside++
+		}
+	}
+	require.Positive(t, outside)
+	_, err = decad.MeasureProfile(section, profiles[0])
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+		D: units.Millimeters(2), Dir: decad.Along,
+	})
+	require.NoError(t, err)
+	volume, err := child.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-200*math.Pi/9), volume.Bound.Base())
+	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
+func TestSectionCardinalConeRefusesInexactProjectedCenter(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		center r3.Vec
+		origin r3.Vec
+	}{
+		{name: "u", center: r3.NewVec(0.1, 0, 0), origin: r3.NewVec(1<<20, 0, 5)},
+		{name: "v", center: r3.NewVec(0, 0.1, 0), origin: r3.NewVec(0, 1<<20, 5)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, cone := sectionConeSource(t, 10)
+			move, err := r3.Translation(tc.center)
+			require.NoError(t, err)
+			placed, err := decad.Transform(t.Context(), cone, move)
+			require.NoError(t, err)
+			// The same source and exact radius succeed with a nearby plane origin.
+			_, nearby, err := placed.Section(t.Context(), sectionConePlane(t, 5))
+			require.NoError(t, err)
+			require.Len(t, nearby, 1)
+			frame, err := r3.NewFrame(tc.origin, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+			require.NoError(t, err)
+			section, profiles, err := placed.Section(t.Context(), frame)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.Nil(t, section)
+			require.Nil(t, profiles)
+		})
+	}
 }
 
 func TestSectionCardinalConePlacementAndAxisSense(t *testing.T) {

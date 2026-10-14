@@ -16,7 +16,7 @@ import (
 // cardinalConeSection cuts one authenticated full right cone. The three
 // complete meridian lines must join a base-axis point, base-rim point and apex.
 // All comparisons use their exact recorded binary values. An inexact radius
-// is represented by an inner polygon with a certified section displacement.
+// is represented by a bounded polygon with a certified two-sided displacement.
 func cardinalConeSection(rp revolvePayload, plane r3.Frame) (profileRecord, []planePoint, float64, bool) {
 	if !rp.full || rp.surfaceResult || rp.sectionDelta != 0 ||
 		len(rp.profile.Holes) != 0 || len(rp.profile.Outer.Segments) != 3 ||
