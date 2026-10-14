@@ -27,8 +27,8 @@ type Xp2 struct {
 }
 
 func NewXP2(u, v *big.Rat) Xp2 {
-	fu, _ := u.Float64()
-	fv, _ := v.Float64()
+	fu, _ := proof.RatFloat64(u)
+	fv, _ := proof.RatFloat64(v)
 	return Xp2{
 		U:              u,
 		V:              v,
@@ -86,8 +86,8 @@ func cacheFloat(f float64) float64 {
 // homogeneous form to avoid normalising four intermediate differences.
 func NewXP2FromXpt(p proof.Xpt, u, v int) Xp2 {
 	ur, vr := RatCoordOf(p, u), RatCoordOf(p, v)
-	fu, _ := ur.Float64()
-	fv, _ := vr.Float64()
+	fu, _ := proof.RatFloat64(ur)
+	fv, _ := proof.RatFloat64(vr)
 	return Xp2{
 		U:              ur,
 		V:              vr,
