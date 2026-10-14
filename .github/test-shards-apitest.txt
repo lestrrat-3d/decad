@@ -2003,3 +2003,4 @@
 10	0.00	TestBrepUnionSectionFeedsExtrude
 10	0.00	TestBrepUnionSectionPlacementAndRefusals
 10	0.00	TestBrepSectionRefusesBodyWithoutCertifiedSlabs
+10	0.00	TestSpiralFirstToothUnionIsCertified
