@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 
@@ -365,7 +366,7 @@ func TestLinkagePairGapCarriesBothDeviations(t *testing.T) {
 	require.Greater(t, etaB, 0.0)
 	res, err := clearancePair(t.Context(), ta, tb, boxesDisjoint(ta.bounds, tb.bounds))
 	require.NoError(t, err)
-	require.Equal(t, pairDisjoint, res.verdict)
+	require.Equal(t, reportvocab.PairDisjoint, res.verdict)
 	require.LessOrEqual(t, got.lo, res.lo-etaA-etaB)
 	require.Less(t, got.lo, res.lo-etaA, `the forearm's own deviation is charged too`)
 	require.GreaterOrEqual(t, got.hi, res.hi+etaA+etaB)

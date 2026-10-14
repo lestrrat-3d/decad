@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -15,11 +16,11 @@ import (
 // Each leg has been deleted once and watched fail:
 //
 //   - the delta subtraction in planarDisjointResult: with it gone, the
-//     shallow-gap case reads pairDisjoint;
+//     shallow-gap case reads reportvocab.PairDisjoint;
 //   - the PlanarDeepVertex gate on a held overlap: with it gone, the
-//     shallow-overlap case reads pairOverlapping;
+//     shallow-overlap case reads reportvocab.PairOverlapping;
 //   - the zero-delta gate on a held touch: with it gone, the displaced
-//     touching case reads pairTouching.
+//     touching case reads reportvocab.PairTouching.
 //
 // The branch stands a million millimetres from the origin, so its held
 // vertices round by about 1e-10 mm (mitredSweepPayload.delta) while the
@@ -105,12 +106,12 @@ func TestPlanarPairVerdictDisplacementBand(t *testing.T) {
 	cases := []struct {
 		name    string
 		top     float64
-		verdict pairVerdict
+		verdict reportvocab.PairVerdict
 	}{
-		{"clear gap, ten times the band", 40 - 10*delta, pairDisjoint},
-		{"shallow gap, inside the band", 40 - delta/4, pairUndecided},
-		{"shallow overlap, inside the band", 40 + delta/4, pairUndecided},
-		{"deep overlap", 41, pairOverlapping},
+		{"clear gap, ten times the band", 40 - 10*delta, reportvocab.PairDisjoint},
+		{"shallow gap, inside the band", 40 - delta/4, reportvocab.PairUndecided},
+		{"shallow overlap, inside the band", 40 + delta/4, reportvocab.PairUndecided},
+		{"deep overlap", 41, reportvocab.PairOverlapping},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -122,7 +123,7 @@ func TestPlanarPairVerdictDisplacementBand(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, tc.verdict, res.verdict)
-			if tc.verdict != pairDisjoint {
+			if tc.verdict != reportvocab.PairDisjoint {
 				require.Zero(t, res.lo)
 				require.Zero(t, res.hi)
 				return
@@ -156,7 +157,7 @@ func TestPlanarPairVerdictTouchNeedsZeroDisplacement(t *testing.T) {
 		res, ok, err := planarPairVerdict(t.Context(), part, branch)
 		require.NoError(t, err)
 		require.True(t, ok)
-		require.Equal(t, pairUndecided, res.verdict)
+		require.Equal(t, reportvocab.PairUndecided, res.verdict)
 	})
 
 	t.Run("exact mitred column under an exact prism lid", func(t *testing.T) {
@@ -185,7 +186,7 @@ func TestPlanarPairVerdictTouchNeedsZeroDisplacement(t *testing.T) {
 		res, ok, err := planarPairVerdict(t.Context(), column, lid)
 		require.NoError(t, err)
 		require.True(t, ok)
-		require.Equal(t, pairTouching, res.verdict)
+		require.Equal(t, reportvocab.PairTouching, res.verdict)
 		require.True(t, res.exact)
 		require.Zero(t, res.lo)
 		require.Zero(t, res.hi)

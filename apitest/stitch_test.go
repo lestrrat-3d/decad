@@ -745,7 +745,7 @@ func TestStitchBoxReachesAProvenClearanceGap(t *testing.T) {
 // TestStitchOverlappingSolidStaysUndecided (T66), whose whole subject — a
 // stitched solid's overlap ever reaching a real Interference row — this row
 // retires: the clearance kernel already proved this shape of pair
-// pairOverlapping before this increment
+// reportvocab.PairOverlapping before this increment
 // (TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal,
 // clearance_internal_test.go), but requireVolumeProvingPayload
 // (boolean.go) refused the stitched operand before measuredInterference

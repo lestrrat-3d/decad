@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance/curvecells"
 	"github.com/lestrrat-3d/decad/internal/clearance/spine"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -1043,7 +1044,7 @@ func TestAddStitchFacesBuildsExactPlanarCarriers(t *testing.T) {
 }
 
 // TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal pins
-// that the clearance kernel proves pairOverlapping for this exact
+// that the clearance kernel proves reportvocab.PairOverlapping for this exact
 // fixture — the carrier model this file's addStitchFaces builds admits the
 // transversal crossing — directly against clearancePair, independent of
 // whatever the mesh boolean itself later decides. This fixture's block
@@ -1078,7 +1079,7 @@ func TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal(t *test
 
 	res, err := clearancePair(t.Context(), box, block, false)
 	require.NoError(t, err)
-	require.Equal(t, pairOverlapping, res.verdict)
+	require.Equal(t, reportvocab.PairOverlapping, res.verdict)
 	require.Nil(t, res.contained, "a true, non-nesting overlap, never a strict containment")
 }
 

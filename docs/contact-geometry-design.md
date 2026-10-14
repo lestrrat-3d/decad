@@ -189,7 +189,7 @@ manifold carry in each case.
 separated pair; box separation alone does not supply a minimum. If the
 analytic kernel proves separation but cannot measure the gap, return
 `Undecided` with a gap-specific reason. Keep the private four-way
-`pairVerdict` separate from the public `ContactRelation`; map it only after
+`reportvocab.PairVerdict` separate from the public `ContactRelation`; map it only after
 the transient pose's own displacement has been charged. A later overlap
 volume proof may upgrade an undecided analytic relation, but may not weaken a
 stronger earlier certificate.

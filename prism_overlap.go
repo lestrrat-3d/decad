@@ -54,7 +54,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 		if errors.Is(err, ErrUnsupported) {
 			// RB7 (§9): the arrangement cap. Wrapped exactly as
 			// evaluateAnalyticIntersect wraps its own RB7, so
-			// measuredInterference reads it as interferenceUnsupportedPipeline
+			// measuredInterference reads it as reportvocab.InterferenceUnsupportedPipeline
 			// and the report says Suspect.
 			return Measurement{}, false, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
 		}

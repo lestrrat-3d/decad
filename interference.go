@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 )
 
@@ -82,37 +83,6 @@ func cupViewsEqual(budget *proofbound.WorkBudget, pa, pb cupView) (bool, error) 
 	return momentinput.ExactProfileEqual(budget, pa.cavity, pb.cavity)
 }
 
-// interferenceOutcome distinguishes why the overlap volume could not be
-// measured, so Verify can pick the matching diagnostic (verification §1.1).
-// Payload staging retains the first operand that failed; contact policy and
-// in-pipeline reach remain separate from it and from an undecided proof.
-type interferenceOutcome int
-
-const (
-	// interferenceMeasured — a positive bounded overlap volume was proven.
-	interferenceMeasured interferenceOutcome = iota
-	// interferenceUndecided — the read-only proof resolved neither way.
-	interferenceUndecided
-	// interferenceUnsupportedPayloadFirst — the first operand cannot enter the
-	// read-only intersection pipeline.
-	interferenceUnsupportedPayloadFirst
-	// interferenceUnsupportedPayloadSecond — the second operand cannot enter
-	// the read-only intersection pipeline.
-	interferenceUnsupportedPayloadSecond
-	// interferenceUnsupportedContact — the exact boolean contact policy refused
-	// the pair.
-	interferenceUnsupportedContact
-	// interferenceUnsupportedPipeline — both operands entered the pipeline, but
-	// later geometry exceeded its supported reach.
-	interferenceUnsupportedPipeline
-	// interferenceUnsupportedVolumeProofFirst — the first operand meshes, but its
-	// mesh carries no occupied-volume proof, so the read-only intersection cannot
-	// compose it.
-	interferenceUnsupportedVolumeProofFirst
-	// interferenceUnsupportedVolumeProofSecond — the same for the second operand.
-	interferenceUnsupportedVolumeProofSecond
-)
-
 // measuredInterference returns the pair's bounded overlap volume. Strict
 // containment and exact analytic equality prove the set identity directly.
 // An admitted coplanar, co-directional prism pair next resolves through the
@@ -137,58 +107,58 @@ const (
 //
 // meshes supplies the mesh path's operand meshes: Verify's per-call cache,
 // or pairMeshes{} where a caller measures one pair on its own.
-func measuredInterference(ctx context.Context, a, b *Body, res pairResult, meshes operandMeshes) (Measurement, interferenceOutcome, error) {
+func measuredInterference(ctx context.Context, a, b *Body, res pairResult, meshes operandMeshes) (Measurement, reportvocab.InterferenceOutcome, error) {
 	if res.contained != nil {
-		return res.contained.volume, interferenceMeasured, nil
+		return res.contained.volume, reportvocab.InterferenceMeasured, nil
 	}
 	equal, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)
 	if err != nil {
-		return Measurement{}, interferenceUndecided, err
+		return Measurement{}, reportvocab.InterferenceUndecided, err
 	}
 	if equal {
 		// Stable pair order chooses A when the represented sets are equal.
-		return a.volume, interferenceMeasured, nil
+		return a.volume, reportvocab.InterferenceMeasured, nil
 	}
 
 	analytic, ok, err := evaluateAnalyticIntersect(ctx, a, b)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
-			return Measurement{}, interferenceOutcomeForExpected(expected), nil
+			return Measurement{}, reportvocab.InterferenceOutcomeForExpected(expected), nil
 		}
-		return Measurement{}, interferenceUndecided, err
+		return Measurement{}, reportvocab.InterferenceUndecided, err
 	}
 	if ok {
 		if !positiveVolume(analytic.volume) {
-			return Measurement{}, interferenceUndecided, nil
+			return Measurement{}, reportvocab.InterferenceUndecided, nil
 		}
-		return analytic.volume, interferenceMeasured, nil
+		return analytic.volume, reportvocab.InterferenceMeasured, nil
 	}
 
 	overlap, ok, err := prismOverlapVolume(ctx, a, b)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
-			return Measurement{}, interferenceOutcomeForExpected(expected), nil
+			return Measurement{}, reportvocab.InterferenceOutcomeForExpected(expected), nil
 		}
-		return Measurement{}, interferenceUndecided, err
+		return Measurement{}, reportvocab.InterferenceUndecided, err
 	}
 	if ok {
 		if !positiveVolume(overlap) {
-			return Measurement{}, interferenceUndecided, nil
+			return Measurement{}, reportvocab.InterferenceUndecided, nil
 		}
-		return overlap, interferenceMeasured, nil
+		return overlap, reportvocab.InterferenceMeasured, nil
 	}
 
 	eval, err := evaluateBooleanMeshes(ctx, meshbool.OpIntersect, a, b, meshes)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
-			return Measurement{}, interferenceOutcomeForExpected(expected), nil
+			return Measurement{}, reportvocab.InterferenceOutcomeForExpected(expected), nil
 		}
-		return Measurement{}, interferenceUndecided, err
+		return Measurement{}, reportvocab.InterferenceUndecided, err
 	}
 	if !positiveVolume(eval.volume) {
-		return Measurement{}, interferenceUndecided, nil
+		return Measurement{}, reportvocab.InterferenceUndecided, nil
 	}
-	return eval.volume, interferenceMeasured, nil
+	return eval.volume, reportvocab.InterferenceMeasured, nil
 }
 
 // positiveVolume is interference design §6's positive-volume gate: the true
@@ -199,29 +169,6 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult, meshe
 func positiveVolume(v Measurement) bool {
 	value := math.Abs(v.Value.Base())
 	return value-v.Bound.Base() > 0
-}
-
-// interferenceOutcomeForExpected preserves the read-only boolean's private
-// reason taxonomy for Verify's cause-specific diagnostics.
-func interferenceOutcomeForExpected(expected *meshbool.BooleanExpectedError) interferenceOutcome {
-	switch expected.Kind {
-	case meshbool.BooleanExpectedContact:
-		return interferenceUnsupportedContact
-	case meshbool.BooleanExpectedUnsupported:
-		return interferenceUnsupportedPipeline
-	case meshbool.BooleanExpectedStaging:
-		if expected.Operand == 1 {
-			return interferenceUnsupportedPayloadSecond
-		}
-		return interferenceUnsupportedPayloadFirst
-	case meshbool.BooleanExpectedVolumeProof:
-		if expected.Operand == 1 {
-			return interferenceUnsupportedVolumeProofSecond
-		}
-		return interferenceUnsupportedVolumeProofFirst
-	default:
-		return interferenceUndecided
-	}
 }
 
 // interferencePairDiameter reads the pair's diameter D through

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -717,7 +718,7 @@ func requireSheetAuditViolated(t *testing.T, corrupt func(t *testing.T, doc *Doc
 	b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
 	corrupt(t, doc, b)
 
-	require.Equal(t, sheetAuditViolated, auditSheetBoundary(t.Context(), b))
+	require.Equal(t, reportvocab.SheetAuditViolated, auditSheetBoundary(t.Context(), b))
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -784,7 +785,7 @@ func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
 		doc := New()
 		b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
 		b.payload = nil
-		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(t.Context(), b))
+		require.Equal(t, reportvocab.SheetAuditUndecided, auditSheetBoundary(t.Context(), b))
 	})
 
 	t.Run("nonzero sectionDelta", func(t *testing.T) {
@@ -795,7 +796,7 @@ func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
 		require.True(t, ok)
 		pp.SectionDelta = 1e-6
 		b.payload = pp
-		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(t.Context(), b))
+		require.Equal(t, reportvocab.SheetAuditUndecided, auditSheetBoundary(t.Context(), b))
 	})
 }
 

@@ -1926,7 +1926,7 @@ func TestPrismOverlapVolumeDeclinesExactlyTangentPair(t *testing.T) {
 // exceeding prismcells.MaxArrangementSegments refuses with ErrUnsupported before
 // s.Profiles runs, wrapped as meshbool.BooleanExpectedUnsupported exactly as
 // evaluateAnalyticIntersect's own RB7 is, so measuredInterference reads it as
-// interferenceUnsupportedPipeline and Verify reports Suspect rather than
+// reportvocab.InterferenceUnsupportedPipeline and Verify reports Suspect rather than
 // erroring.
 func TestPrismOverlapVolumeArrangementCapRefuses(t *testing.T) {
 	t.Parallel()

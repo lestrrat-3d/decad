@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/diameter"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -18,39 +19,20 @@ import (
 // This file is the pair kernel of docs/clearance-design.md §1/§2/§5/§6/§7,
 // and, since PR increment 2, docs/surface-design.md §9.3's sheet-against-solid
 // decision procedure (sheetSolidPair, below). One non-mutating pass proves one
-// of four outcomes: pairDisjoint, pairTouching, pairOverlapping, or
-// pairUndecided. Admitted non-coplanar transversal crossings and strict
-// containment produce pairOverlapping; unsupported contact stays
-// pairUndecided. When asked, the kernel measures the gap as a proven interval
+// of four outcomes: reportvocab.PairDisjoint, reportvocab.PairTouching, reportvocab.PairOverlapping, or
+// reportvocab.PairUndecided. Admitted non-coplanar transversal crossings and strict
+// containment produce reportvocab.PairOverlapping; unsupported contact stays
+// reportvocab.PairUndecided. When asked, the kernel measures the gap as a proven interval
 // [lo, hi]. Exactness belongs to the interval, not the winning candidate:
 // Exact requires a closed-form winner and every bracketed rival proven to sit
 // at or above it. Cone-involved pairs may read a coarse enclosure interval
 // rather than a fabricated verdict.
 
-// pairVerdict is the kernel's partition answer for one pair.
-type pairVerdict int
-
-const (
-	// pairUndecided: the kernel can prove neither shared interior nor
-	// disjoint interiors. It joins neither report list and reads Suspect.
-	pairUndecided pairVerdict = iota
-	// pairDisjoint: boundary clearance proven positive and nesting excluded.
-	pairDisjoint
-	// pairTouching: every zero-distance contact certified (the coplanar
-	// plane-pair certificate or a ruling certificate) — the gap is a
-	// measured Exact zero (§6).
-	pairTouching
-	// pairOverlapping: shared interior is proven by nesting or another
-	// admitted certificate. A row still requires a complete bounded overlap
-	// volume from containment or the read-only boolean evaluator.
-	pairOverlapping
-)
-
 // pairResult is one pair's kernel answer: the verdict, the proven gap
 // interval (when disjoint or touching), and the pair-diameter reading the
 // §7 gate needs.
 type pairResult struct {
-	verdict pairVerdict
+	verdict reportvocab.PairVerdict
 	lo, hi  float64
 	exact   bool
 	diam    float64
@@ -59,7 +41,7 @@ type pairResult struct {
 	// per shell of the other — voids included — proven outside this one prove
 	// this whole body lies in the other.
 	contained *Body
-	// ruling is non-nil only on a pairTouching verdict proved by a §6
+	// ruling is non-nil only on a reportvocab.PairTouching verdict proved by a §6
 	// ruling certificate; it keeps the certified faces and feet.
 	ruling *clearance.RulingContact
 }
@@ -283,7 +265,7 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 		}
 	}
 	if certified {
-		return pairResult{verdict: pairTouching, exact: true, diam: diam}, nil
+		return pairResult{verdict: reportvocab.PairTouching, exact: true, diam: diam}, nil
 	}
 	// The ruling certificates (§6) make the same exact separating-plane
 	// claim along a tangent ruling. They read only carriers and exact
@@ -294,7 +276,7 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 			return pairResult{}, err
 		}
 		if ruling != nil {
-			return pairResult{verdict: pairTouching, exact: true, diam: diam, ruling: ruling}, nil
+			return pairResult{verdict: reportvocab.PairTouching, exact: true, diam: diam, ruling: ruling}, nil
 		}
 	}
 
@@ -303,7 +285,7 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 		return pairResult{}, err
 	}
 	if sink.Overlap {
-		return pairResult{verdict: pairOverlapping, diam: diam}, nil
+		return pairResult{verdict: reportvocab.PairOverlapping, diam: diam}, nil
 	}
 	if sink.Unsure {
 		return pairResult{diam: diam}, nil
@@ -321,11 +303,11 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 		if err != nil {
 			return pairResult{}, err
 		}
-		if verdict != pairDisjoint {
+		if verdict != reportvocab.PairDisjoint {
 			return pairResult{verdict: verdict, diam: diam, contained: contained}, nil
 		}
 	}
-	return pairResult{verdict: pairDisjoint, lo: lo, hi: hi, exact: exact, diam: diam}, nil
+	return pairResult{verdict: reportvocab.PairDisjoint, lo: lo, hi: hi, exact: exact, diam: diam}, nil
 }
 
 // coplanarContactCertified scans the plane-face pairs for the §6 coplanar
@@ -417,7 +399,7 @@ func payloadExtent(ctx context.Context, b *Body, g r3.Vec) (float64, float64, bo
 // body's boundary miss the inner body entirely, leaving the inner body in one
 // component its witnesses speak for. Multi-lump/faceted bodies never reach this
 // method; they use read-only intersection instead.
-func (k *pairKernel) nestingRelation() (pairVerdict, *Body, error) {
+func (k *pairKernel) nestingRelation() (reportvocab.PairVerdict, *Body, error) {
 	type membership struct {
 		inside, outside, unknown int
 	}
@@ -445,29 +427,29 @@ func (k *pairKernel) nestingRelation() (pairVerdict, *Body, error) {
 	}
 	ab, err := classify(k.a, k.b)
 	if err != nil {
-		return pairUndecided, nil, err
+		return reportvocab.PairUndecided, nil, err
 	}
 	ba, err := classify(k.b, k.a)
 	if err != nil {
-		return pairUndecided, nil, err
+		return reportvocab.PairUndecided, nil, err
 	}
 	contains := func(inner, outer membership, innerWit, outerWit []r3.Vec) bool {
 		return len(innerWit) > 0 && len(outerWit) > 0 &&
 			inner.inside == len(innerWit) && outer.outside == len(outerWit)
 	}
 	if contains(ab, ba, k.a.shellWit, k.b.shellWit) {
-		return pairOverlapping, k.a.body, nil
+		return reportvocab.PairOverlapping, k.a.body, nil
 	}
 	if contains(ba, ab, k.b.shellWit, k.a.shellWit) {
-		return pairOverlapping, k.b.body, nil
+		return reportvocab.PairOverlapping, k.b.body, nil
 	}
 	if ab.inside > 0 || ba.inside > 0 {
-		return pairOverlapping, nil, nil
+		return reportvocab.PairOverlapping, nil, nil
 	}
 	if ab.unknown > 0 || ba.unknown > 0 {
-		return pairUndecided, nil, nil
+		return reportvocab.PairUndecided, nil, nil
 	}
-	return pairDisjoint, nil, nil
+	return reportvocab.PairDisjoint, nil, nil
 }
 
 // pairDiameter reads the pair's diameter D — the greatest distance between
@@ -481,47 +463,12 @@ func (k *pairKernel) pairDiameter() (float64, error) {
 	return pairGateDiameterCached(k.ctx, k.a.body, k.b.body, k.cache)
 }
 
-// sheetSolidVerdict is docs/surface-design.md §9.3's pair decision procedure's
-// answer for a pair holding exactly one sheet operand against a proven solid.
-// A sheet encloses no region, so §1's four interior relations do not apply to
-// this pair shape at all; these four answers replace them.
-type sheetSolidVerdict int
-
-const (
-	// sheetSolidUndecided — a body model was missing, the candidate
-	// enumeration could not decide the boundary distance, or the witness
-	// cast failed. Neither Interfering, Sound, nor a Clearance row follows.
-	sheetSolidUndecided sheetSolidVerdict = iota
-	// sheetSolidCrossing — an admitted transversal crossing between a sheet
-	// face and a solid face proves the sheet crosses the solid's boundary.
-	sheetSolidCrossing
-	// sheetSolidContained — the boundary distance is proven positive, and the
-	// witness vertex is proven inside the solid.
-	sheetSolidContained
-	// sheetSolidOutside — the same proof, with the witness proven outside.
-	sheetSolidOutside
-)
-
-// sheetSolidResult is one sheet-against-solid pair's decision. lo, hi, exact
-// and diam are populated only for sheetSolidContained and sheetSolidOutside,
-// and they carry the SAME boundary-distance interval regardless of which side
-// the witness landed on (docs/api-design.md §6.2): the interval is proven
-// before the witness cast ever runs, so containment and separation share one
-// Clearance row that states the distance to the solid's boundary without
-// asserting which side the sheet is on.
-type sheetSolidResult struct {
-	verdict sheetSolidVerdict
-	lo, hi  float64
-	exact   bool
-	diam    float64
-}
-
 // sheetSolidPair decides docs/surface-design.md §9.3's pair procedure for a
 // sheet operand against a proven solid: run when their bounds-inflated boxes
 // meet, and also when they are separated but a gap was requested — the same
 // two occasions clearancePair itself runs for a solid pair. boxDisjoint is
 // true in that second case: the caller already proved the boxes separated,
-// so the answer here can only be sheetSolidOutside or sheetSolidUndecided,
+// so the answer here can only be reportvocab.SheetSolidOutside or reportvocab.SheetSolidUndecided,
 // never crossing or contained, and the witness cast below is skipped as
 // redundant, exactly as clearancePair's own nestingExcluded parameter skips
 // its two-directional cast for the same reason. It reuses clearancePair's own
@@ -553,51 +500,51 @@ type sheetSolidResult struct {
 // has nothing left to prove. Box separation proves the same conclusion an
 // easier way: a box that does not even meet the solid's own box cannot admit
 // a crossing or a containment either.
-func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, cache *bodyGeomCache) (sheetSolidResult, error) {
+func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, cache *bodyGeomCache) (reportvocab.SheetSolidResult, error) {
 	if err := ctx.Err(); err != nil {
-		return sheetSolidResult{}, err
+		return reportvocab.SheetSolidResult{}, err
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	gs, oks, err := cache.get(budget, sheet)
 	if err != nil {
-		return sheetSolidResult{}, err
+		return reportvocab.SheetSolidResult{}, err
 	}
 	gb, okb, err := cache.get(budget, solid)
 	if err != nil {
-		return sheetSolidResult{}, err
+		return reportvocab.SheetSolidResult{}, err
 	}
 	if !oks || !okb {
 		// Either operand's carrier model is missing — a revolve sheet is
 		// refused a model outright, and a multi-lump or faceted operand
 		// bypasses this analytic kernel entirely (docs/clearance-design.md
 		// §2). The pair stays undecided rather than guessing a side.
-		return sheetSolidResult{verdict: sheetSolidUndecided}, nil
+		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidUndecided}, nil
 	}
 	k := newPairKernel(ctx, gs, gb)
 	k.cache = cache
 	diam, err := k.pairDiameter()
 	if err != nil {
-		return sheetSolidResult{}, err
+		return reportvocab.SheetSolidResult{}, err
 	}
 
 	// No coplanarContactCertified call here — see the doc comment above.
 	sink, err := k.enumerate()
 	if err != nil {
-		return sheetSolidResult{}, err
+		return reportvocab.SheetSolidResult{}, err
 	}
 	if sink.Overlap {
-		return sheetSolidResult{verdict: sheetSolidCrossing, diam: diam}, nil
+		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidCrossing, Diam: diam}, nil
 	}
 	if sink.Unsure {
-		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
+		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidUndecided, Diam: diam}, nil
 	}
 	lo, hi, exact, ok := sink.Interval()
 	if !ok {
-		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
+		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidUndecided, Diam: diam}, nil
 	}
 	lo, hi, exact = clearanceDeltaWiden(lo, hi, exact, gs.widenDelta(), gb.widenDelta())
 	if lo <= k.tol {
-		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
+		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidUndecided, Diam: diam}, nil
 	}
 
 	if boxDisjoint {
@@ -605,7 +552,7 @@ func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, c
 		// solid (docs/surface-design.md §9.3): the witness cast below would
 		// only confirm what a non-overlapping bounding box already decided,
 		// the same shortcut clearancePair takes via nestingExcluded.
-		return sheetSolidResult{verdict: sheetSolidOutside, lo: lo, hi: hi, exact: exact, diam: diam}, nil
+		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidOutside, Lo: lo, Hi: hi, Exact: exact, Diam: diam}, nil
 	}
 
 	// The one-shell premise the doc comment above states, asserted rather
@@ -615,17 +562,17 @@ func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, c
 	// witness here. A future sheet construction that broke that premise
 	// would land here undecided rather than pick a witness arbitrarily.
 	if len(gs.shellWit) != 1 {
-		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
+		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidUndecided, Diam: diam}, nil
 	}
 	inside, ok, err := gb.pointInBody(ctx, gs.shellWit[0], k.tol)
 	if err != nil {
-		return sheetSolidResult{}, err
+		return reportvocab.SheetSolidResult{}, err
 	}
 	if !ok {
-		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
+		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidUndecided, Diam: diam}, nil
 	}
 	if inside {
-		return sheetSolidResult{verdict: sheetSolidContained, lo: lo, hi: hi, exact: exact, diam: diam}, nil
+		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidContained, Lo: lo, Hi: hi, Exact: exact, Diam: diam}, nil
 	}
-	return sheetSolidResult{verdict: sheetSolidOutside, lo: lo, hi: hi, exact: exact, diam: diam}, nil
+	return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidOutside, Lo: lo, Hi: hi, Exact: exact, Diam: diam}, nil
 }

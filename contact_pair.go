@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -430,7 +431,7 @@ func classifyAnalyticContact(ctx context.Context, report *ContactReport) error {
 		return err
 	}
 	switch res.verdict {
-	case pairDisjoint:
+	case reportvocab.PairDisjoint:
 		gap := pairGapMeasurement(res)
 		if !finiteMeasurementValues(gap.Value.Base(), gap.Bound.Base()) ||
 			gap.Value.Base()-gap.Bound.Base() <= 0 {
@@ -439,7 +440,7 @@ func classifyAnalyticContact(ctx context.Context, report *ContactReport) error {
 		}
 		report.Relation = ContactSeparated
 		report.Gap = &gap
-	case pairTouching:
+	case reportvocab.PairTouching:
 		report.Relation = ContactTouching
 		gap := Measurement{Value: units.Millimeters(0), Exactness: Exact, Bound: units.Millimeters(0)}
 		report.Gap = &gap
@@ -447,7 +448,7 @@ func classifyAnalyticContact(ctx context.Context, report *ContactReport) error {
 		if res.ruling != nil {
 			publishRulingManifold(report, res.ruling)
 		}
-	case pairOverlapping:
+	case reportvocab.PairOverlapping:
 		report.Relation = ContactOverlapping
 		report.Reason = ContactNoNormalProof
 	default:

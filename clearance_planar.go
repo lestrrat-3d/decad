@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -79,17 +80,17 @@ func planarPairAdmits(a, b *Body) bool {
 //     only where gLo − δ > 0, and the true gap then lies in
 //     [gLo − δ, gHi + δ], rounded outward; a held gap within δ proves
 //     nothing and stays undecided;
-//   - a held touch is pairTouching only at δ = 0, where the held boundary IS
+//   - a held touch is reportvocab.PairTouching only at δ = 0, where the held boundary IS
 //     the true one and the kernel's local-separation certificate is an
 //     exact material-side claim; a touch within a band stays undecided;
-//   - a held overlap is pairOverlapping at δ = 0, and otherwise only through
+//   - a held overlap is reportvocab.PairOverlapping at δ = 0, and otherwise only through
 //     a vertex proven deeper than δ inside the other solid
 //     (planar.PlanarDeepVertex), which survives any displacement within δ.
 //
 // The pair diameter the §7 gate reads is interferencePairDiameter's, the
 // same reading the interference path forms for this pair. The verdict never
 // loosens the analytic kernel's: the caller consults this arm only for a
-// pairUndecided result.
+// reportvocab.PairUndecided result.
 func planarPairVerdict(ctx context.Context, a, b *Body) (pairResult, bool, error) {
 	if !planarPairAdmits(a, b) {
 		return pairResult{}, false, nil
@@ -130,10 +131,10 @@ func planarPairVerdict(ctx context.Context, a, b *Body) (pairResult, bool, error
 		if delta.Sign() != 0 {
 			return undecided, true, nil
 		}
-		return pairResult{verdict: pairTouching, exact: true, diam: diam}, true, nil
+		return pairResult{verdict: reportvocab.PairTouching, exact: true, diam: diam}, true, nil
 	case pair.Overlapping:
 		if delta.Sign() == 0 {
-			return pairResult{verdict: pairOverlapping, diam: diam}, true, nil
+			return pairResult{verdict: reportvocab.PairOverlapping, diam: diam}, true, nil
 		}
 		deep, err := planar.PlanarDeepVertex(&sa, &sb, delta, budget.Step)
 		if err != nil {
@@ -142,7 +143,7 @@ func planarPairVerdict(ctx context.Context, a, b *Body) (pairResult, bool, error
 		if !deep {
 			return undecided, true, nil
 		}
-		return pairResult{verdict: pairOverlapping, diam: diam}, true, nil
+		return pairResult{verdict: reportvocab.PairOverlapping, diam: diam}, true, nil
 	default:
 		return undecided, true, nil
 	}
@@ -165,5 +166,5 @@ func planarDisjointResult(gap *pair.ScalarReading, delta *big.Rat, diam float64)
 	if !(lo > 0) || !finiteMeasurementValues(lo, hi) {
 		return pairResult{}, false
 	}
-	return pairResult{verdict: pairDisjoint, lo: lo, hi: hi, exact: lo == hi, diam: diam}, true
+	return pairResult{verdict: reportvocab.PairDisjoint, lo: lo, hi: hi, exact: lo == hi, diam: diam}, true
 }

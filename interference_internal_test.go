@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
@@ -241,58 +242,58 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		expected    *meshbool.BooleanExpectedError
-		wantOutcome interferenceOutcome
+		wantOutcome reportvocab.InterferenceOutcome
 		wantCode    DiagnosticCode
 		wantMessage []string
 	}{
 		{
 			name:        "first payload",
 			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedStaging, Operand: 0},
-			wantOutcome: interferenceUnsupportedPayloadFirst,
+			wantOutcome: reportvocab.InterferenceUnsupportedPayloadFirst,
 			wantCode:    DiagUnsupportedPairPayload,
 			wantMessage: []string{"first operand", "its tessellation refused that tolerance", "held facets where the pair meets are coarser"},
 		},
 		{
 			name:        "second payload",
 			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedStaging, Operand: 1},
-			wantOutcome: interferenceUnsupportedPayloadSecond,
+			wantOutcome: reportvocab.InterferenceUnsupportedPayloadSecond,
 			wantCode:    DiagUnsupportedPairPayload,
 			wantMessage: []string{"second operand", "its tessellation refused that tolerance", "held facets where the pair meets are coarser"},
 		},
 		{
 			name:        "first operand volume proof",
 			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedVolumeProof, Operand: 0},
-			wantOutcome: interferenceUnsupportedVolumeProofFirst,
+			wantOutcome: reportvocab.InterferenceUnsupportedVolumeProofFirst,
 			wantCode:    DiagUnsupportedPairPayload,
 			wantMessage: []string{"first operand", "no proof of the volume"},
 		},
 		{
 			name:        "second operand volume proof",
 			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedVolumeProof, Operand: 1},
-			wantOutcome: interferenceUnsupportedVolumeProofSecond,
+			wantOutcome: reportvocab.InterferenceUnsupportedVolumeProofSecond,
 			wantCode:    DiagUnsupportedPairPayload,
 			wantMessage: []string{"second operand", "no proof of the volume"},
 		},
 		{
 			name:        "contact policy",
 			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedContact, Operand: -1},
-			wantOutcome: interferenceUnsupportedContact,
+			wantOutcome: reportvocab.InterferenceUnsupportedContact,
 			wantCode:    DiagUnsupportedPairContact,
 			wantMessage: []string{"contact", "clear separation"},
 		},
 		{
 			name:        "in-pipeline reach",
 			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedUnsupported, Operand: -1},
-			wantOutcome: interferenceUnsupportedPipeline,
+			wantOutcome: reportvocab.InterferenceUnsupportedPipeline,
 			wantCode:    DiagUnsupportedPairPipeline,
 			wantMessage: []string{"both operands tessellate", "simplify the boolean geometry"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			outcome := interferenceOutcomeForExpected(tc.expected)
+			outcome := reportvocab.InterferenceOutcomeForExpected(tc.expected)
 			require.Equal(t, tc.wantOutcome, outcome)
 
-			diag := undecidedPairDiag(a, b, pairOverlapping, outcome)
+			diag := undecidedPairDiag(a, b, reportvocab.PairOverlapping, outcome)
 			require.Equal(t, tc.wantCode, diag.Code)
 			require.Equal(t, Suspect, diag.Status)
 			require.Equal(t, ReadingNone, diag.Reading)
@@ -304,10 +305,10 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 		})
 	}
 
-	undecided := undecidedPairDiag(a, b, pairOverlapping, interferenceUndecided)
+	undecided := undecidedPairDiag(a, b, reportvocab.PairOverlapping, reportvocab.InterferenceUndecided)
 	require.Equal(t, DiagUndecidedInterference, undecided.Code)
 
-	partition := undecidedPairDiag(a, b, pairUndecided, interferenceUndecided)
+	partition := undecidedPairDiag(a, b, reportvocab.PairUndecided, reportvocab.InterferenceUndecided)
 	require.Equal(t, DiagUndecidedPair, partition.Code)
 }
 
@@ -340,7 +341,7 @@ func TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted(t *testing.T
 
 	volume, outcome, err := measuredInterference(t.Context(), a, b, pairResult{}, pairMeshes{})
 	require.NoError(t, err)
-	require.Equal(t, interferenceMeasured, outcome, `the mesh fallback must still measure a genuine overlap`)
+	require.Equal(t, reportvocab.InterferenceMeasured, outcome, `the mesh fallback must still measure a genuine overlap`)
 	require.Equal(t, want.volume, volume, `measuredInterference must report the same read-only mesh result evaluateBoolean itself would`)
 	require.InDelta(t, 125.0, volume.Value.Base(), 1e-6)
 }
@@ -390,7 +391,7 @@ func TestMultiLumpFacetedBodyBypassesAnalyticContainment(t *testing.T) {
 	require.False(t, ok, `a faceted multi-lump body must not enter analytic containment with a partial model`)
 	res, err := clearancePair(t.Context(), outer, multi, false)
 	require.NoError(t, err)
-	require.Equal(t, pairUndecided, res.verdict)
+	require.Equal(t, reportvocab.PairUndecided, res.verdict)
 	require.Nil(t, res.contained)
 
 	report, err := doc.Verify(t.Context())

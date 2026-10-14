@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -46,7 +47,7 @@ func TestPlanarPairVerdictCoilAgainstPrism(t *testing.T) {
 		res, ok, err := planarPairVerdict(t.Context(), pair[0], pair[1])
 		require.NoError(t, err, name)
 		require.True(t, ok, name)
-		require.Equal(t, pairDisjoint, res.verdict, name)
+		require.Equal(t, reportvocab.PairDisjoint, res.verdict, name)
 		require.LessOrEqual(t, res.lo, want, name)
 		require.GreaterOrEqual(t, res.hi, want, name)
 		// The held gap is within δ of the true one and the interval adds δ
