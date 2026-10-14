@@ -52,6 +52,18 @@ func Evaluate(seg Line, anchor Point, order freeform.MomentIntegralOrder) ([6]fl
 	return values, bounds, exact
 }
 
+// EvaluateArea computes the same area value and bound as Evaluate without
+// forming first moments. The profile-area falsifier reads only this field.
+func EvaluateArea(seg Line, anchor Point) (float64, float64, *big.Rat) {
+	exact := ExactLineArea(seg, anchor)
+	start := Point{U: seg.Start.U - anchor.U, V: seg.Start.V - anchor.V}
+	end := Point{U: seg.End.U - anchor.U, V: seg.End.V - anchor.V}
+	u0, v0 := lerp(start, end, seg.TStart)
+	u1, v1 := lerp(start, end, seg.TEnd)
+	area := 0.5 * (u0*v1 - u1*v0)
+	return area, proofarith.RationalFloatError(exact, area), exact
+}
+
 func lerp(start, end Point, t float64) (float64, float64) {
 	switch t {
 	case 0:
@@ -154,6 +166,24 @@ func ExactLineMoments(seg Line, anchor Point, order freeform.MomentIntegralOrder
 	v0.Sub(v0, anchorV)
 	v1.Sub(v1, anchorV)
 	return ExactChordMoments(u0, v0, u1, v1, order)
+}
+
+// ExactLineArea uses ExactLineMoments' endpoint and anchor operations, then
+// forms only its area expression.
+func ExactLineArea(seg Line, anchor Point) *big.Rat {
+	u0 := RatLerp(seg.Start.U, seg.End.U, seg.TStart)
+	v0 := RatLerp(seg.Start.V, seg.End.V, seg.TStart)
+	u1 := RatLerp(seg.Start.U, seg.End.U, seg.TEnd)
+	v1 := RatLerp(seg.Start.V, seg.End.V, seg.TEnd)
+	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
+	if u0 == nil || v0 == nil || u1 == nil || v1 == nil || anchorU == nil || anchorV == nil {
+		return nil
+	}
+	u0.Sub(u0, anchorU)
+	u1.Sub(u1, anchorU)
+	v0.Sub(v0, anchorV)
+	v1.Sub(v1, anchorV)
+	return RatScale(new(big.Rat).Sub(proofbound.RatMul(u0, v1), proofbound.RatMul(u1, v0)), 1, 2)
 }
 
 // ExactChordMoments evaluates the polynomial line formulas over exact

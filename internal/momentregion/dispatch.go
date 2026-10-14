@@ -15,6 +15,20 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// AddSegmentArea uses the line-only area path for the profile-area falsifier.
+// Other segment kinds retain AddSegment's validated integration.
+func (s State) AddSegmentArea(segment sectionrecord.CurveSegment, plan Plan, anchor sectionrecord.Point2) error {
+	normalized, err := sectionrecord.NormalizeSegment(segment)
+	if err != nil {
+		return err
+	}
+	if line, ok := normalized.(sectionrecord.LineSeg); ok {
+		s.AddLineArea(line, anchor)
+		return nil
+	}
+	return s.AddSegment(normalized, plan, anchor, freeform.MomentAreaOrder)
+}
+
 // AddSegment integrates a normalized record in its recorded walk direction.
 func (s State) AddSegment(segment sectionrecord.CurveSegment, plan Plan, anchor sectionrecord.Point2,
 	order freeform.MomentIntegralOrder) error {
