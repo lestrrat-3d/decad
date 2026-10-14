@@ -1349,13 +1349,15 @@ before the candidate pass and keeps the smallest, the sweep on a tie:
 - the sweep sorts the boxes along the axis of largest extent and compares
   every pair that overlaps on that axis; a shape whose boxes all overlap
   there (a tall tube, a coil of many turns) compares nearly every pair;
-- the grid registers every box in each cell of a uniform grid its extent
-  meets — each axis's cell the larger of the boxes' median extent and the
-  span over `⌈∛F⌉` — compares every pair sharing a cell, and reports an
-  overlapping pair only from the cell holding the maximum of its two lower
-  corners, a point of both boxes; its work is the registrations plus those
-  comparisons, and it is built only when its registrations fit under the
-  ceiling and under the current smallest count;
+- the grid sizes a uniform grid — each axis's cell the boxes' median extent
+  when that exceeds the span over `F`, else the span over `⌈∛F⌉` — and
+  records every box once per (x, y) column of the cells its extent meets,
+  with its z cell range; it compares every pair of boxes sharing a cell,
+  once per shared cell, and reports an overlapping pair only from the cell
+  holding the maximum of its two lower corners, a point of both boxes; its
+  work is the (box, cell) incidences plus those comparisons, and it is built
+  only when its incidences fit under the ceiling and under the current
+  smallest count;
 - the balanced box tree splits member indices into disjoint halves until
   each leaf holds at most eight. Each node's box is the coordinatewise
   min/max of all descendant triangle boxes. A pair of disjoint node boxes
