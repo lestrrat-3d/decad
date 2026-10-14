@@ -309,10 +309,51 @@ func PointInPoly2(budget *proofbound.WorkBudget, poly []Xp2, p Xp2) (bool, bool,
 	return inside, false, nil
 }
 
+// polyArea2FloatSign accepts only a sign separated from zero by a proven
+// rounding allowance. All admitted coordinates are exact zero or normal
+// floats in [2^-300, 2^250], so products and nonzero sums cannot underflow.
+// For at most 1024 edges, coordinate conversion, products, differences and
+// summation contribute less than (n+6)*2^-52 times the product magnitude.
+// The magnitude's own rounding changes it by less than 2^-40; the larger
+// 1e-12*(n+1) allowance covers both, including its final rounding.
+func polyArea2FloatSign(poly []Xp2) int {
+	n := len(poly)
+	if n == 0 || n > 1024 {
+		return 0
+	}
+	var sum, scale float64
+	for i, a := range poly {
+		b := poly[(i+1)%n]
+		if !a.floatFromExact || !b.floatFromExact || !a.FloatFinite || !b.FloatFinite {
+			return 0
+		}
+		left, right := a.Fu*b.Fv, b.Fu*a.Fv
+		sum += left - right
+		scale += math.Abs(left) + math.Abs(right)
+	}
+	err := 1e-12 * (float64(n) + 1) * scale
+	if math.IsNaN(sum) || math.IsInf(sum, 0) || math.IsNaN(err) || math.IsInf(err, 0) || err <= 0 {
+		return 0
+	}
+	if sum > err {
+		return 1
+	}
+	if sum < -err {
+		return -1
+	}
+	return 0
+}
+
 // PolyArea2Sign is the exact sign of twice the polygon's signed area.
 // Reduce after every edge so the integer accumulator cannot grow with the
 // number of edges beyond the exact area's denominator.
 func PolyArea2Sign(budget *proofbound.WorkBudget, poly []Xp2) (int, error) {
+	if sign := polyArea2FloatSign(poly); sign != 0 {
+		if _, err := budget.StepN(uint64(len(poly))); err != nil {
+			return 0, err
+		}
+		return sign, nil
+	}
 	var num, den big.Int
 	den.SetInt64(1)
 	var leftDen, rightDen, termDen, left, right, next, part, gcd big.Int
