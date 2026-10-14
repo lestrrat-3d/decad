@@ -146,7 +146,9 @@ func RatSqrtUp(q *big.Rat) float64 {
 		f = math.MaxFloat64
 	}
 	for range SqrtAdjustLimit {
-		if !RatSquareAtMost(f, q) || RatSquareEquals(f, q) {
+		// Stop at the first float that is not finite or whose square is not
+		// below q. One exact comparison decides it.
+		if c, ok := ratSquareCmp(f, q); !ok || c >= 0 {
 			return f
 		}
 		f = proofarith.NextUp(f)
@@ -157,20 +159,49 @@ func RatSqrtUp(q *big.Rat) float64 {
 // The exact arithmetic package owns the shared directed-rounding walk limit.
 const SqrtAdjustLimit = proofarith.SqrtAdjustLimit
 
+// RatSquareAtMost reports whether f*f <= q, exactly, and is false for a
+// non-finite f.
 func RatSquareAtMost(f float64, q *big.Rat) bool {
-	square := proofarith.FloatRat(f)
-	if square == nil {
-		return false
-	}
-	square.Mul(square, square)
-	return square.Cmp(q) <= 0
+	c, ok := ratSquareCmp(f, q)
+	return ok && c <= 0
 }
 
+// RatSquareEquals reports whether f*f == q, exactly, and is false for a
+// non-finite f.
 func RatSquareEquals(f float64, q *big.Rat) bool {
-	square := proofarith.FloatRat(f)
-	if square == nil {
-		return false
+	c, ok := ratSquareCmp(f, q)
+	return ok && c == 0
+}
+
+// ratSquareCmp returns the sign of f*f - q, exactly, and false for a
+// non-finite f.
+//
+// A finite f is m·2^e with m an integer below 2^53. math.Frexp gives
+// |f| = frac·2^x with frac in [0.5, 1) (subnormals included), and
+// m = frac·2^53 is an integer because frac has a 53-bit significand. So
+// e = x-53 and f*f = m²·2^(2e); the sign of f does not matter. Write q = n/d
+// with d > 0, which big.Rat guarantees. Multiplying f*f - q by d > 0 keeps its
+// sign, so sign(f*f - q) = sign(m²·d·2^(2e) - n). When 2e >= 0 the power of
+// two shifts the left side. When 2e < 0, multiplying through by 2^(-2e) > 0
+// moves it to n instead. Either way both sides are integers, and one big.Int
+// comparison gives the sign that comparing the big.Rat square of f with q
+// gave, with no big.Rat product and no GCD. A zero f gives m = 0, so the
+// comparison is 0 against n·2^106, the sign of -q, as the square of the zero
+// Rat gave.
+func ratSquareCmp(f float64, q *big.Rat) (int, bool) {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, false
 	}
-	square.Mul(square, square)
-	return square.Cmp(q) == 0
+	frac, exp := math.Frexp(math.Abs(f))
+	m := new(big.Int).SetInt64(int64(frac * (1 << 53)))
+	e2 := 2 * (exp - 53)
+	lhs := m.Mul(m, m)
+	lhs.Mul(lhs, q.Denom())
+	rhs := q.Num()
+	if e2 >= 0 {
+		lhs.Lsh(lhs, uint(e2))
+	} else {
+		rhs = new(big.Int).Lsh(rhs, uint(-e2))
+	}
+	return lhs.Cmp(rhs), true
 }
