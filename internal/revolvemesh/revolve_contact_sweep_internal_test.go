@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"testing"
+	"time"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -254,8 +255,32 @@ func TestRevolveAuditRowsParallelCancelled(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	want := revolveAuditRows(proofbound.NewWorkBudget(ctx), m.data, m.tris, rows, 0.25, margin, false)
+	serialBudget := proofbound.NewWorkBudget(ctx)
+	wantSteps := 0
+	serialStep := serialBudget.StepFn
+	serialBudget.StepFn = func() error { wantSteps++; return serialStep() }
+	want := revolveAuditRows(serialBudget, m.data, m.tris, rows, 0.25, margin, false)
 	got := revolveAuditRows(proofbound.NewWorkBudget(ctx), m.data, m.tris, rows, 0.25, margin, true)
 	require.Error(t, want)
+	require.ErrorContains(t, want, "revolve facets 0 and 60")
 	require.Equal(t, want.Error(), got.Error())
+
+	// Hold the workers until the caller observes cancellation. The serial
+	// walk must still reach its earlier facet error before its first poll.
+	release := make(chan struct{})
+	poll := make(chan time.Time, 1)
+	poll <- time.Time{}
+	budget := proofbound.NewWorkBudget(ctx)
+	gotSteps := 0
+	parallelStep := budget.StepFn
+	budget.StepFn = func() error { gotSteps++; return parallelStep() }
+	budget.ErrFn = func() error {
+		close(release)
+		return ctx.Err()
+	}
+	got = revolveAuditRowsParallelWithPoll(budget, m.data, m.tris, rows, 0.25, margin, poll,
+		func() { <-release })
+	require.Error(t, got)
+	require.Equal(t, want.Error(), got.Error())
+	require.Equal(t, wantSteps, gotSteps)
 }
