@@ -168,8 +168,8 @@ func divEnclosure(a, b, c, d float64) (float64, float64) {
 // result also passes. A down result is at or below the exact result and an up
 // result at or above it. The explicit float64 conversion of a product stops
 // the compiler from fusing it into a later add, which would round differently.
-func down(x float64) float64        { return math.Nextafter(x, math.Inf(-1)) }
-func up(x float64) float64          { return math.Nextafter(x, math.Inf(1)) }
+func down(x float64) float64        { return proof.NextDown(x) }
+func up(x float64) float64          { return proof.NextUp(x) }
 func addDown(a, b float64) float64  { return down(a + b) }
 func addUp(a, b float64) float64    { return up(a + b) }
 func subDown(a, b float64) float64  { return down(a - b) }

@@ -3,6 +3,8 @@ package shellseparation
 import (
 	"math"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // slabProjection and projection return the exact least and greatest of many
@@ -16,10 +18,10 @@ import (
 //
 // Enclosure argument. Every float operation below is one IEEE binary64
 // operation (+, -, *, /) on float operands, rounded to nearest, followed by a
-// step of one ulp outward (math.Nextafter). The exact result of a finite
-// operation lies within half an ulp of the rounded one, so the step lands on
-// the far side of it, for normal and subnormal results and for an underflow to
-// either signed zero. A positive overflow gives [MaxFloat64, +Inf] and a
+// step of one ulp outward (proof.NextUp, proof.NextDown, equal to math.Nextafter
+// toward an infinity). The exact result of a finite operation lies within half
+// an ulp of the rounded one, so the step lands on the far side of it, for
+// normal and subnormal results and for an underflow to either signed zero. A positive overflow gives [MaxFloat64, +Inf] and a
 // negative one [-Inf, -MaxFloat64]. A NaN end (for example 0 times Inf) is not
 // a bound: it compares false in every filter test, so it keeps the candidate
 // for exact evaluation and, in a cut, keeps every candidate.
@@ -48,8 +50,8 @@ import (
 // enclosure except intersection with another enclosure that is itself proven
 // to hold the exact value (the hull of a crossing's two end values).
 
-func fDown(x float64) float64 { return math.Nextafter(x, math.Inf(-1)) }
-func fUp(x float64) float64   { return math.Nextafter(x, math.Inf(1)) }
+func fDown(x float64) float64 { return proof.NextDown(x) }
+func fUp(x float64) float64   { return proof.NextUp(x) }
 
 func fAddDown(a, b float64) float64 { return fDown(a + b) }
 func fAddUp(a, b float64) float64   { return fUp(a + b) }
