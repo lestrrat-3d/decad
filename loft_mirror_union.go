@@ -163,7 +163,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 			g := facetGroup{origins: face.Origins()}
 			if capRole != "" {
 				g.origins = append(g.origins, FeatureRef{producer: ref, Role: capRole})
-				g.surface = face.Surface()
+				g.surface = face.n.Surface
 				g.planar = true
 				g.normalBound = face.n.NormalBound
 				g.reversed = face.n.Reversed

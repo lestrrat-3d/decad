@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -242,23 +243,23 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		return nil, err
 	}
 	capStart := &Face{
-		surface: Plane{Frame: startFrame},
 		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
 		body:    body,
 		loops:   startLoops,
 		n: topo.Face{
 			AxialDelta:    dp.z0Delta,
 			HasAxialDelta: true,
+			Surface:       surfacegeom.Plane{Frame: startFrame},
 		},
 	}
 	capEnd := &Face{
-		surface: Plane{Frame: endFrame},
 		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
 		body:    body,
 		loops:   endLoops,
 		n: topo.Face{
 			AxialDelta:    dp.z1Delta,
 			HasAxialDelta: true,
+			Surface:       surfacegeom.Plane{Frame: endFrame},
 		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {

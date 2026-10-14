@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -94,7 +95,7 @@ func TestPrismProofRecordChargesEveryFaceItsOwnDisplacement(t *testing.T) {
 		d, _ := mesh.sourceBound(f)
 		role := roleOf(t, f)
 		switch {
-		case f.Surface().Kind() == KindCylinder:
+		case f.n.Surface.Kind() == surfacegeom.KindCylinder:
 			// The hole wall stands on chords that lie inside its own arc, so
 			// its bound covers the sagitta it took.
 			require.GreaterOrEqual(t, d, sagitta, `the hole wall %q must charge its own chord sagitta`, role)
@@ -398,11 +399,11 @@ func TestFreeformPrismProofRecordCoversItsOwnChording(t *testing.T) {
 	for _, f := range body.Faces() {
 		d, ok := mesh.sourceBound(f)
 		require.True(t, ok)
-		if _, isNURBS := f.Surface().(NURBSSurface); isNURBS {
+		if _, isNURBS := f.n.Surface.(surfacegeom.NURBSSurface); isNURBS {
 			curved = d
 			continue
 		}
-		if _, isPlane := f.Surface().(Plane); isPlane && roleOf(t, f) != roleCapStart && roleOf(t, f) != roleCapEnd {
+		if _, isPlane := f.n.Surface.(surfacegeom.Plane); isPlane && roleOf(t, f) != roleCapStart && roleOf(t, f) != roleCapEnd {
 			straight = d
 		}
 	}
@@ -445,7 +446,7 @@ func freeformWallChordDeviation(t *testing.T, body *Body, mesh *Mesh) float64 {
 	// of them in the sketch plane.
 	var chords [][2][2]float64
 	for i, f := range mesh.source {
-		if _, isNURBS := f.Surface().(NURBSSurface); !isNURBS {
+		if _, isNURBS := f.n.Surface.(surfacegeom.NURBSSurface); !isNURBS {
 			continue
 		}
 		tri := mesh.n.Triangles[i]

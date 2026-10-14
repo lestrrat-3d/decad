@@ -68,7 +68,7 @@ func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edge
 	mid := edges[0].start.n.Position.Add(edges[0].end.n.Position).Scale(0.5)
 	axis := pp.Dir(0, 0, 1)
 	for _, face := range facing {
-		if _, ok := face.Surface().(Plane); !ok {
+		if _, ok := face.n.Surface.(surfacegeom.Plane); !ok {
 			return nil, false, nil
 		}
 		n, err := face.NormalAt(mid)

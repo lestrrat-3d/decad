@@ -131,24 +131,24 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 	startArea, startBound := faceArea(sweepmitre.SlotCapStart)
 	endArea, endBound := faceArea(sweepmitre.SlotCapEnd)
 	faces = append(faces,
-		&Face{
-			surface: capStartSurf, loops: capStartLoops,
+		&Face{loops: capStartLoops,
 			origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
 			body:    body, n: topo.Face{
 				Area:          startArea,
 				AreaBound:     startBound,
 				AxialDelta:    delta,
 				HasAxialDelta: true,
+				Surface:       capStartSurf,
 			},
 		},
-		&Face{
-			surface: capEndSurf, loops: capEndLoops,
+		&Face{loops: capEndLoops,
 			origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
 			body:    body, n: topo.Face{
 				Area:          endArea,
 				AreaBound:     endBound,
 				AxialDelta:    delta,
 				HasAxialDelta: true,
+				Surface:       capEndSurf,
 			},
 		},
 	)
@@ -167,12 +167,12 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 				slot := sweepmitre.SlotWall0 + w
 				area, bound := faceArea(slot)
 				face := &Face{
-					surface: surf,
 					origins: []FeatureRef{{producer: ref, Role: a.Roles[slot]}},
 					body:    body,
 					n: topo.Face{
 						Area:      area,
 						AreaBound: bound,
+						Surface:   surf,
 					},
 				}
 				face.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{

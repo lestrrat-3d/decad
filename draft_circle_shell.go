@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -153,12 +154,12 @@ func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense Sh
 func addDraftCircleShellRoles(ctx context.Context, body *Body, ref producerID) error {
 	roles := map[string]struct {
 		name string
-		kind SurfaceKind
+		kind surfacegeom.SurfaceKind
 	}{
-		"side(0,1)": {roleShellCap, KindPlane},
-		"side(0,2)": {"shellSide(0,0)", KindCone},
-		"side(0,3)": {"rim(0)", KindPlane},
-		"side(0,5)": {roleCapStart, KindPlane},
+		"side(0,1)": {roleShellCap, surfacegeom.KindPlane},
+		"side(0,2)": {"shellSide(0,0)", surfacegeom.KindCone},
+		"side(0,3)": {"rim(0)", surfacegeom.KindPlane},
+		"side(0,5)": {roleCapStart, surfacegeom.KindPlane},
 	}
 	seen := map[string]struct{}{}
 	for _, face := range body.Faces() {
@@ -170,7 +171,7 @@ func addDraftCircleShellRoles(ctx context.Context, body *Body, ref producerID) e
 			if !ok || source.producer != ref {
 				continue
 			}
-			if face.Surface().Kind() != role.kind {
+			if face.n.Surface.Kind() != role.kind {
 				return fmt.Errorf(`%w: the tapered circular shell's %s has the wrong surface`,
 					ErrUnsupported, role.name)
 			}

@@ -67,7 +67,7 @@ func planarBodyFace(t *testing.T, body *Body, n, p r3.Vec) *Face {
 	t.Helper()
 	var found []*Face
 	for _, f := range body.Faces() {
-		pl, ok := f.Surface().(Plane)
+		pl, ok := f.n.Surface.(surfacegeom.Plane)
 		if !ok {
 			continue
 		}
@@ -143,10 +143,10 @@ func requirePatchKinds(t *testing.T, body *Body, planes, cones int) []*Face {
 	patches := loopPatches(body)
 	gotPlanes, gotCones := 0, 0
 	for _, f := range patches {
-		switch f.Surface().(type) {
-		case Plane:
+		switch f.n.Surface.(type) {
+		case surfacegeom.Plane:
 			gotPlanes++
-		case Cone:
+		case surfacegeom.Cone:
 			gotCones++
 		default:
 			t.Fatalf("a band patch is a %T", f.Surface())
@@ -411,10 +411,10 @@ func TestBrepLoopChamferLBracketTopLoop(t *testing.T) {
 	lo, hi := piEnclosed(big.NewRat(51605, 3), big.NewRat(-865, 12))
 	requireCoversInterval(t, out.volume, lo, hi)
 	cones := requirePatchKinds(t, out, 6, 1)
-	cone, ok := cones[len(cones)-1].Surface().(Cone)
+	cone, ok := cones[len(cones)-1].n.Surface.(surfacegeom.Cone)
 	if !ok {
 		for _, f := range cones {
-			if c, isCone := f.Surface().(Cone); isCone {
+			if c, isCone := f.n.Surface.(surfacegeom.Cone); isCone {
 				cone, ok = c, true
 			}
 		}

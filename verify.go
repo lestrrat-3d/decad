@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismextent"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/decad/internal/verifyoption"
 
@@ -350,7 +351,7 @@ type facePlaneKey struct {
 // it), so a pair of opposite-facing coplanar faces produces the same key, and
 // every component is passed through zeroSign so -0.0 and 0.0 never key
 // differently.
-func canonicalFacePlaneKey(p Plane) facePlaneKey {
+func canonicalFacePlaneKey(p surfacegeom.Plane) facePlaneKey {
 	n := p.Frame.N()
 	off := n.Dot(p.Frame.Origin())
 	flip := n.X < 0 || (n.X == 0 && (n.Y < 0 || (n.Y == 0 && n.Z < 0)))
@@ -379,12 +380,12 @@ func zeroSign(f float64) float64 {
 func sharesFacePlane(a, b *Body) bool {
 	keys := make(map[facePlaneKey]struct{})
 	for _, f := range a.Faces() {
-		if p, ok := f.Surface().(Plane); ok {
+		if p, ok := f.n.Surface.(surfacegeom.Plane); ok {
 			keys[canonicalFacePlaneKey(p)] = struct{}{}
 		}
 	}
 	for _, f := range b.Faces() {
-		p, ok := f.Surface().(Plane)
+		p, ok := f.n.Surface.(surfacegeom.Plane)
 		if !ok {
 			continue
 		}
@@ -624,10 +625,10 @@ func auditBoundary(b *Body) bool {
 			// A closed surface of revolution bounds a solid with no edges
 			// at all. A faceted one-face image may have the same topology
 			// only after its embedded closed mesh passed the build audit.
-			switch f.Surface().Kind() {
-			case KindSphere, KindTorus:
+			switch f.n.Surface.Kind() {
+			case surfacegeom.KindSphere, surfacegeom.KindTorus:
 				continue
-			case KindFaceted:
+			case surfacegeom.KindFaceted:
 				fp, ok := b.payload.(facetedPayload)
 				if ok && fp.contactAudited && len(faces) == 1 && len(fp.tris) > 0 && len(b.Edges()) == 0 {
 					continue

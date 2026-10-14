@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -274,7 +275,7 @@ func draftReceiver(b *Body) (prismPayload, error) {
 // neutral face is ErrDegenerate and a flat one without an analytic Plane
 // surface is ErrUnsupported.
 func requireFlatAnalyticNeutral(f *Face) error {
-	if _, ok := f.Surface().(Plane); ok {
+	if _, ok := f.n.Surface.(surfacegeom.Plane); ok {
 		return nil
 	}
 	if f.isPlanar() {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -69,7 +70,7 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 		return sourceBoxContactProof{}, false
 	}
 	for _, face := range faces {
-		plane, ok := face.surface.(Plane)
+		plane, ok := face.n.Surface.(surfacegeom.Plane)
 		if !ok || face.n.NormalBound != 0 {
 			return sourceBoxContactProof{}, false
 		}

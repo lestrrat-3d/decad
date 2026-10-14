@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -588,7 +589,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, err
 		}
-		transformed, err := surfaceplace.TransformSurface(internalSurface(f.surface), xform)
+		transformed, err := surfaceplace.TransformSurface(f.n.Surface, xform)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -597,7 +598,6 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 		nf := &Face{
-			surface: publicSurface(transformed),
 			origins: append([]FeatureRef(nil), f.origins...),
 			n: topo.Face{
 				Area:          f.n.Area,
@@ -608,6 +608,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				HasAxialDelta: f.n.HasAxialDelta,
 				NormalBound:   f.n.NormalBound,
 				Denoted:       f.denotedUnder(xform),
+				Surface:       transformed,
 			},
 		}
 		for _, l := range f.loops {
@@ -812,7 +813,7 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
-		pl, ok := f.surface.(Plane)
+		pl, ok := f.n.Surface.(surfacegeom.Plane)
 		if !ok {
 			return nil, nil, fmt.Errorf(`%w: Stitch cannot triangulate a non-planar face`, ErrUnsupported)
 		}
@@ -904,8 +905,8 @@ func fixWeldedEdgeConvexity(welded map[*Edge]struct{}) {
 		if fwd == nil || bwd == nil {
 			continue
 		}
-		pa, okA := fwd.surface.(Plane)
-		pb, okB := bwd.surface.(Plane)
+		pa, okA := fwd.n.Surface.(surfacegeom.Plane)
+		pb, okB := bwd.n.Surface.(surfacegeom.Plane)
 		if !okA || !okB {
 			continue
 		}

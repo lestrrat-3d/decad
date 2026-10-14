@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -257,7 +258,7 @@ func TestEvalCupChargesOffsetDisplacement(t *testing.T) {
 				}
 				a, err := f.Area()
 				require.NoError(t, err)
-				n := f.surface.(Plane).Frame.N()
+				n := f.n.Surface.(surfacegeom.Plane).Frame.N()
 				offsetWalls = append(offsetWalls, offsetWall{area: a, alongU: math.Abs(n.Y) > 0.5})
 			}
 			require.Len(t, offsetWalls, 4)

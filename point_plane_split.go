@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -25,7 +26,7 @@ type pointPlaneLimit struct {
 	nx, ny, d               *big.Rat
 	a, b                    planePoint
 	z0, z1                  float64
-	surface                 Plane
+	surface                 surfacegeom.Plane
 	origins                 []FeatureRef
 	normalBound, mapStretch float64
 	centroid                VecMeasurement
@@ -76,7 +77,7 @@ func exactPointPlaneSheet(tool *Body, apex r3.Vec) (*pointPlaneLimit, bool) {
 		}
 	}
 	face := tool.Faces()[0]
-	surface, ok := face.surface.(Plane)
+	surface, ok := face.n.Surface.(surfacegeom.Plane)
 	if !ok || !proofbound.FiniteVec(apex) || !proofbound.FiniteVec(r3.Vec{
 		X: line.Start.U, Y: line.Start.V, Z: line.End.U}) ||
 		!proofbound.FiniteVec(r3.Vec{X: line.End.V, Y: cp.z0, Z: cp.z1}) {
@@ -335,7 +336,7 @@ func pointPlaneCapGroup(ref producerID, role string, plane *pointPlaneLimit,
 		origins := append([]FeatureRef(nil), base.groups[len(base.groups)-1].origins...)
 		origins = append(origins, FeatureRef{producer: ref, Role: role})
 		sourceCap := base.groups[len(base.groups)-1]
-		return facetGroup{origins: origins, surface: Plane{Frame: frame}, planar: true,
+		return facetGroup{origins: origins, surface: surfacegeom.Plane{Frame: frame}, planar: true,
 			reversed: apexSide.Sign() > 0,
 			centroid: sourceCap.centroid, hasCentroid: sourceCap.hasCentroid}
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -477,7 +478,7 @@ func TestVerifyPublishUndercutPartialCoverage(t *testing.T) {
 		}
 	}
 	require.NotNil(t, plane, "the origin-corner flat chamfer patch")
-	require.Equal(t, KindPlane, plane.Surface().Kind())
+	require.Equal(t, surfacegeom.KindPlane, plane.n.Surface.Kind())
 
 	res := publishBody(t, body, WithPullDirection(r3.NewVec(1, 0, 0)))
 	require.Equal(t, CoveragePartial, res.Undercut.Coverage)

@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -21,7 +22,7 @@ func curvedLoftRadiusFace(t *testing.T, body *Body) *Face {
 	t.Helper()
 	var found *Face
 	for _, f := range body.Faces() {
-		c, ok := f.Surface().(Cylinder)
+		c, ok := f.n.Surface.(surfacegeom.Cylinder)
 		if !ok {
 			continue
 		}
@@ -40,7 +41,7 @@ func curvedLoftRadiusFace(t *testing.T, body *Body) *Face {
 func TestFacetedPlacementMovesCurvedTags(t *testing.T) {
 	body := curvedLoftBody(t)
 	src := curvedLoftRadiusFace(t, body)
-	srcCyl := src.Surface().(Cylinder)
+	srcCyl := src.n.Surface.(surfacegeom.Cylinder)
 	p0 := r3.NewVec(8, 0, 5)
 	n0, err := src.NormalAt(p0)
 	require.NoError(t, err)
@@ -67,7 +68,7 @@ func TestFacetedPlacementMovesCurvedTags(t *testing.T) {
 				require.NoError(t, err)
 				mv := curvedLoftRadiusFace(t, placed)
 				require.IsType(t, Cylinder{}, mv.Surface())
-				cyl := mv.Surface().(Cylinder)
+				cyl := mv.n.Surface.(surfacegeom.Cylinder)
 				require.Equal(t, tc.move.Apply(srcCyl.Origin), cyl.Origin)
 				require.Equal(t, tc.move.ApplyDir(srcCyl.Axis), cyl.Axis)
 
@@ -111,7 +112,7 @@ func TestFacetedPlacementReflectsPlaneTag(t *testing.T) {
 	body := curvedLoftBody(t)
 	var top *Face
 	for _, f := range body.Faces() {
-		if pl, ok := f.Surface().(Plane); ok && math.Abs(pl.Frame.Origin().Z-10) < 1e-9 {
+		if pl, ok := f.n.Surface.(surfacegeom.Plane); ok && math.Abs(pl.Frame.Origin().Z-10) < 1e-9 {
 			top = f
 		}
 	}
@@ -139,7 +140,7 @@ func TestFacetedPlacementReflectsPlaneTag(t *testing.T) {
 			var mv *Face
 			for _, f := range placed.Faces() {
 				// The mirror plane z = 20 sends the cap at z = 10 to z = 30.
-				if pl, ok := f.Surface().(Plane); ok && math.Abs(pl.Frame.Origin().Z-30) < 1e-9 {
+				if pl, ok := f.n.Surface.(surfacegeom.Plane); ok && math.Abs(pl.Frame.Origin().Z-30) < 1e-9 {
 					mv = f
 				}
 			}
@@ -206,7 +207,7 @@ func placementConeCut(t *testing.T) *Body {
 
 func placementConeFace(body *Body) *Face {
 	for _, f := range body.Faces() {
-		if _, ok := f.Surface().(Cone); ok {
+		if _, ok := f.n.Surface.(surfacegeom.Cone); ok {
 			return f
 		}
 	}

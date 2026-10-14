@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -42,8 +43,8 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 // tag refuses: a patch whose surface this file cannot state exactly gets no
 // model at all, and DX7 answers undecided.
 func coneTagTerms(f *Face) (proofbound.RatInterval, proofbound.RatInterval, r3.Vec, r3.Vec, bool) {
-	switch s := f.surface.(type) {
-	case Cone:
+	switch s := f.n.Surface.(type) {
+	case surfacegeom.Cone:
 		half, err := s.HalfAngle.In(units.Radian)
 		if err != nil {
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
@@ -57,7 +58,7 @@ func coneTagTerms(f *Face) (proofbound.RatInterval, proofbound.RatInterval, r3.V
 			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
 		}
 		return sin, cos, s.Origin, s.Axis, true
-	case Cylinder:
+	case surfacegeom.Cylinder:
 		return proofbound.PointInterval(new(big.Rat)), proofbound.PointInterval(big.NewRat(1, 1)), s.Origin, s.Axis, true
 	default:
 		return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false

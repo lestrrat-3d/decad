@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -229,7 +230,7 @@ func requireThroughShellLumps(t *testing.T, body *Body, sel FaceSelector, th uni
 func shellCylinders(body *Body, r float64, dir r3.Vec) []*Face {
 	var out []*Face
 	for _, f := range body.Faces() {
-		c, ok := f.Surface().(Cylinder)
+		c, ok := f.n.Surface.(surfacegeom.Cylinder)
 		if ok && c.Radius.Base() == r && (c.Axis == dir || c.Axis == dir.Scale(-1)) {
 			out = append(out, f)
 		}
@@ -683,7 +684,7 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 		refuses(t, p8, Faces(Facing(shellY.Scale(-1))).Exactly(1), mm2, nil, "shell-opening SO1")
 		var fillet *Face
 		for _, f := range p8.Faces() {
-			if c, ok := f.Surface().(Cylinder); ok && c.Axis.Cross(shellUp) == (r3.Vec{}) {
+			if c, ok := f.n.Surface.(surfacegeom.Cylinder); ok && c.Axis.Cross(shellUp) == (r3.Vec{}) {
 				fillet = f
 				break
 			}

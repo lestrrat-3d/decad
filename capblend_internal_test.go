@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -150,20 +151,20 @@ func TestFixPatchOrientation(t *testing.T) {
 		// "decides the sign" case reuses the build's own valid sample point;
 		// "refuses an unreadable sample" uses the cone's own apex, where
 		// NormalAt's radial direction is zero.
-		sample func(band bandUnderTest, valid r3.Vec, cone Cone) r3.Vec
+		sample func(band bandUnderTest, valid r3.Vec, cone surfacegeom.Cone) r3.Vec
 	}{
 		{
 			name:   "decides the sign",
-			sample: func(_ bandUnderTest, valid r3.Vec, _ Cone) r3.Vec { return valid },
+			sample: func(_ bandUnderTest, valid r3.Vec, _ surfacegeom.Cone) r3.Vec { return valid },
 		},
 		{
 			name:   "refuses an unreadable sample",
-			sample: func(_ bandUnderTest, _ r3.Vec, cone Cone) r3.Vec { return cone.Origin },
+			sample: func(_ bandUnderTest, _ r3.Vec, cone surfacegeom.Cone) r3.Vec { return cone.Origin },
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			band := chamferedCircularBand(t, diskSection(0, 0, 30), 20, 5, nil)
-			cone, ok := band.face.Surface().(Cone)
+			cone, ok := band.face.n.Surface.(surfacegeom.Cone)
 			require.True(t, ok, "a whole-turn band patch is a Cone")
 
 			// The build's own sample point and reference direction, read back
@@ -670,7 +671,7 @@ func chamferedCircularBand(t *testing.T, section func(*sketch.Sketch), h, d floa
 		found++
 		face := roles[patch.role]
 		require.NotNil(t, face)
-		require.Equal(t, KindCone, face.Surface().Kind())
+		require.Equal(t, surfacegeom.KindCone, face.n.Surface.Kind())
 		// The sweep levels the payload itself carries: the reading under test
 		// takes its own levels from the patch geometry, so these only pin that
 		// the survey's plane-local map is the payload's own.
@@ -747,7 +748,7 @@ func chamferedRectFlatPatches(t *testing.T, motion r3.Transform) []bandUnderTest
 		}
 		face := roles[patch.role]
 		require.NotNil(t, face)
-		require.Equal(t, KindPlane, face.Surface().Kind())
+		require.Equal(t, surfacegeom.KindPlane, face.n.Surface.Kind())
 		out = append(out, bandUnderTest{face: face, pl: pl, geom: patch.geom})
 	}
 	require.Len(t, out, 4, "a rectangle's four corners each chamfer to one flat patch")

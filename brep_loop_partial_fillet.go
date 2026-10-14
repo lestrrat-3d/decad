@@ -168,10 +168,10 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 	}
 	var patches []*Face
 	area := proofbound.BoundedScalar{}
-	newPatch := func(surf Surface, loop *Loop, capV *Vertex, piece filletband.Piece) error {
+	newPatch := func(surf surfacegeom.Surface, loop *Loop, capV *Vertex, piece filletband.Piece) error {
 		held, bound := heldOf(filletband.PatchArea(piece, rIv))
-		face := &Face{surface: surf, origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
-			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound}}
+		face := &Face{origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
+			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: surf}}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		nrm, err := face.NormalAt(capV.n.Position)
 		if err != nil {
@@ -211,7 +211,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 				start.start != pole || end.start != pole || start.end != sideE.start || end.end != sideE.end {
 				return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet's sphere patch does not close`, ErrUnsupported)
 			}
-			surf := Sphere{Center: pl.Point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
+			surf := surfacegeom.Sphere{Center: pl.Point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
 			loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
 				{edge: end, forward: false}, {edge: start, forward: true}}, n: topo.Loop{Outer: true}}
 			if err := newPatch(surf, loop, pole, piece); err != nil {
@@ -228,7 +228,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet patch does not close on its contours`, ErrUnsupported)
 		}
 		tu, tv := walkTangent(w)
-		surf := Cylinder{Origin: pl.Point(w.StartU-r*tv, w.StartV+r*tu, sideZ),
+		surf := surfacegeom.Cylinder{Origin: pl.Point(w.StartU-r*tv, w.StartV+r*tu, sideZ),
 			Axis: pl.Dir(tu, tv, 0), Radius: units.Millimeters(r)}
 		startForward := start.start == capE.start
 		endForward := end.start == sideE.end
@@ -248,7 +248,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		}
 		arc := open.capBySeg[bi][b.capArc[next]]
 		v := fr.walks[next]
-		torus := Torus{Center: pl.Point(v.StartU, v.StartV, sideZ), Axis: pl.Dir(0, 0, 1),
+		torus := surfacegeom.Torus{Center: pl.Point(v.StartU, v.StartV, sideZ), Axis: pl.Dir(0, 0, 1),
 			Major: units.Millimeters(r), Minor: units.Millimeters(r)}
 		horn := &Loop{coedges: []coedge{{edge: arc, forward: true},
 			{edge: lead[next], forward: true}, {edge: trail[next], forward: false}}, n: topo.Loop{Outer: true}}

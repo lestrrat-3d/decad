@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
@@ -89,7 +90,7 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 			if wall != nil {
 				return nil, false, nil
 			}
-			if _, ok := face.Surface().(Cylinder); !ok {
+			if _, ok := face.n.Surface.(surfacegeom.Cylinder); !ok {
 				return nil, false, nil
 			}
 			wall = face
@@ -155,7 +156,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	}
 	wallGroup := len(mesh.groups)
 	mesh.groups = append(mesh.groups, facetGroup{origins: wall.Origins(),
-		surface: wall.Surface(), normalBound: wall.n.NormalBound,
+		surface: wall.n.Surface, normalBound: wall.n.NormalBound,
 		reversed: !wall.n.Reversed})
 	vertexBound := append([]float64(nil), joined.vertexBound...)
 	var inner [2][]int

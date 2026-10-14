@@ -363,7 +363,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	}
 	for _, face := range body.Faces() {
 		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {
-			face.surface = Faceted{Bound: units.Millimeters(delta)}
+			face.n.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 		}
 		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, area, areaBound)
 		face.n.AxialDelta, face.n.HasAxialDelta = delta, true
@@ -535,10 +535,9 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 			if current != first || len(boundary) != 0 {
 				return fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
 			}
-			face := &Face{
-				surface: Faceted{}, loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}},
+			face := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}},
 				origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}},
-				body:    body, n: topo.Face{Area: area, AreaBound: areaBound},
+				body:    body, n: topo.Face{Area: area, AreaBound: areaBound, Surface: surfacegeom.Faceted{}},
 			}
 			merged = append(merged, face)
 		}

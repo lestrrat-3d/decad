@@ -1,6 +1,7 @@
 package topo
 
 import (
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 )
 
@@ -65,4 +66,7 @@ type Face struct {
 	// where its tag is exactly this surface (root stitch_flux.go's
 	// stitchFluxTagsDenoted).
 	Denoted *surfacenormal.Revolved
+	// Surface is the face's tagged geometry in its internal variant. Root
+	// Face.Surface converts it to the public variant with publicSurface.
+	Surface surfacegeom.Surface
 }

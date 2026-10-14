@@ -116,10 +116,10 @@ func requireFilletPatches(t *testing.T, body *Body, cylinders, tori int) []*Face
 	patches := filletPatchesOf(body)
 	got := [2]int{}
 	for _, f := range patches {
-		switch f.Surface().(type) {
-		case Cylinder:
+		switch f.n.Surface.(type) {
+		case surfacegeom.Cylinder:
 			got[0]++
-		case Torus:
+		case surfacegeom.Torus:
 			got[1]++
 		default:
 			t.Fatalf("a fillet patch is a %T", f.Surface())
@@ -188,11 +188,11 @@ func requireNormalFaces(t *testing.T, patches []*Face, p, dir r3.Vec) {
 	t.Helper()
 	for _, f := range patches {
 		var d float64
-		switch s := f.Surface().(type) {
-		case Cylinder:
+		switch s := f.n.Surface.(type) {
+		case surfacegeom.Cylinder:
 			rel := p.Sub(s.Origin)
 			d = rel.Sub(s.Axis.Scale(rel.Dot(s.Axis))).Len() - s.Radius.Base()
-		case Torus:
+		case surfacegeom.Torus:
 			rel := p.Sub(s.Center)
 			radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
 			ring, ok := radial.Normalize()
@@ -279,7 +279,7 @@ func TestBrepLoopFilletCrossDrilled(t *testing.T) {
 		requireBandEdgesConvex(t, out, true)
 		requireNormalFaces(t, patches, r3.NewVec(38+math.Sqrt2, 10, 18+math.Sqrt2), r3.NewVec(1, 0, 1))
 		for _, f := range patches {
-			c := f.Surface().(Cylinder)
+			c := f.n.Surface.(surfacegeom.Cylinder)
 			require.Equal(t, 2.0, c.Radius.Base())
 		}
 	})
@@ -306,7 +306,7 @@ func TestBrepLoopFilletCrossDrilled(t *testing.T) {
 		out, bp := filletLoopOfFace(t, s1, r3.NewVec(0, -1, 0), r3.Vec{}, 1, 1)
 		requireVolumePi(t, out, pp(q(16000, 1), q(-563, 3), q(2, 1)))
 		patches := requireFilletPatches(t, out, 0, 1)
-		tor := patches[0].Surface().(Torus)
+		tor := patches[0].n.Surface.(surfacegeom.Torus)
 		require.Equal(t, r3.NewVec(20, 1, 10), tor.Center)
 		require.InDelta(t, 1, math.Abs(tor.Axis.Dot(r3.NewVec(0, 1, 0))), 1e-15)
 		require.Equal(t, 4.0, tor.Major.Base())
@@ -361,7 +361,7 @@ func TestBrepLoopFilletPocket(t *testing.T) {
 		}
 		var corners []r3.Vec
 		for _, f := range patches {
-			tor, ok := f.Surface().(Torus)
+			tor, ok := f.n.Surface.(surfacegeom.Torus)
 			if !ok {
 				continue
 			}
@@ -449,7 +449,7 @@ func TestBrepLoopFilletRoundBoss(t *testing.T) {
 			pp(q(80000, 1), q(80269, 12), q(-33, 1)),
 		}, v, noOffset())
 		patches := requireFilletPatches(t, out, 0, 1)
-		tor := patches[0].Surface().(Torus)
+		tor := patches[0].n.Surface.(surfacegeom.Torus)
 		require.Equal(t, r3.NewVec(20, 20, 11), tor.Center)
 		require.Equal(t, 6.0, tor.Major.Base())
 		plateTop := planarFaceAt(t, bp, routeEZ, 10)
@@ -466,7 +466,7 @@ func TestBrepLoopFilletRoundBoss(t *testing.T) {
 		out, _ := filletLoopOfFace(t, internalRoundBoss(t), routeEZ, r3.NewVec(0, 0, 25), 0, 1)
 		requireVolumePi(t, out, pp(q(16000, 1), q(1100, 3), q(2, 1)))
 		patches := requireFilletPatches(t, out, 0, 1)
-		require.Equal(t, 4.0, patches[0].Surface().(Torus).Major.Base())
+		require.Equal(t, 4.0, patches[0].n.Surface.(surfacegeom.Torus).Major.Base())
 		requireNormalFaces(t, patches, r3.NewVec(24+1/math.Sqrt2, 20, 24+1/math.Sqrt2), r3.NewVec(1, 0, 1))
 	})
 	t.Run("both", func(t *testing.T) {
@@ -529,7 +529,7 @@ func TestBrepLoopFilletFourHolePrism(t *testing.T) {
 		requireVolumePi(t, out, pp(q(19200, 1), q(-680, 3), q(7, 1)))
 		patches := requireFilletPatches(t, out, 0, 4)
 		for _, f := range patches {
-			require.Equal(t, 3.5, f.Surface().(Torus).Major.Base())
+			require.Equal(t, 3.5, f.n.Surface.(surfacegeom.Torus).Major.Base())
 		}
 	})
 	t.Run("top loop", func(t *testing.T) {
@@ -572,7 +572,7 @@ func TestBrepLoopFilletLBracket(t *testing.T) {
 		out, _ := filletLoopOfFace(t, internalLBracket(t), r3.NewVec(-1, 0, 0), r3.Vec{}, 1, 1)
 		requireVolumePi(t, out, pp(q(17280, 1), q(-239, 3), q(2, 1)))
 		patches := requireFilletPatches(t, out, 0, 1)
-		tor := patches[0].Surface().(Torus)
+		tor := patches[0].n.Surface.(surfacegeom.Torus)
 		require.Equal(t, r3.NewVec(1, 24, 15), tor.Center)
 		require.InDelta(t, 1, math.Abs(tor.Axis.Dot(r3.NewVec(1, 0, 0))), 1e-15)
 		require.Equal(t, 4.0, tor.Major.Base())
@@ -589,7 +589,7 @@ func TestBrepLoopFilletRoundedPlate(t *testing.T) {
 	requireVolumePi(t, out, pp(q(14896, 1), q(256, 3), q(2, 1)))
 	patches := requireFilletPatches(t, out, 4, 4)
 	for _, f := range patches {
-		if tor, ok := f.Surface().(Torus); ok {
+		if tor, ok := f.n.Surface.(surfacegeom.Torus); ok {
 			require.Equal(t, 1.0, tor.Major.Base())
 			require.Equal(t, 2.0, tor.Minor.Base())
 		}
@@ -614,7 +614,7 @@ func TestBrepLoopFilletSphereAtEqualRadius(t *testing.T) {
 	require.Len(t, patches, 8)
 	var spheres int
 	for _, f := range patches {
-		if sphere, ok := f.Surface().(Sphere); ok {
+		if sphere, ok := f.n.Surface.(surfacegeom.Sphere); ok {
 			spheres++
 			require.Equal(t, 3.0, sphere.Radius.Base())
 		}
@@ -635,7 +635,7 @@ func TestVertexBlendBoxAllEdges(t *testing.T) {
 	requireVolumePi(t, out, pp(q(14848, 1), q(848, 3), q(0, 1)))
 	var spheres int
 	for _, f := range filletPatchesOf(out) {
-		if _, ok := f.Surface().(Sphere); ok {
+		if _, ok := f.n.Surface.(surfacegeom.Sphere); ok {
 			spheres++
 		}
 	}
@@ -654,7 +654,7 @@ func TestVertexBlendBoxTopAndVerticalEdges(t *testing.T) {
 	requireVolumePi(t, out, pp(q(15264, 1), q(544, 3), q(0, 1)))
 	var spheres int
 	for _, f := range filletPatchesOf(out) {
-		if _, ok := f.Surface().(Sphere); ok {
+		if _, ok := f.n.Surface.(surfacegeom.Sphere); ok {
 			spheres++
 		}
 	}
@@ -679,7 +679,7 @@ func TestVertexBlendPocketFloor(t *testing.T) {
 	requireVolumePi(t, out, pp(q(15153, 1), q(-297, 8), q(0, 1)))
 	var spheres int
 	for _, f := range filletPatchesOf(out) {
-		if _, ok := f.Surface().(Sphere); ok {
+		if _, ok := f.n.Surface.(surfacegeom.Sphere); ok {
 			spheres++
 		}
 	}
@@ -699,7 +699,7 @@ func TestVertexBlendBoxPartialCornerSet(t *testing.T) {
 	out, _ := filletSelection(t, box, sel, 2, 1)
 	var spheres, ellipses int
 	for _, f := range filletPatchesOf(out) {
-		if _, ok := f.Surface().(Sphere); ok {
+		if _, ok := f.n.Surface.(surfacegeom.Sphere); ok {
 			spheres++
 		}
 	}
@@ -871,7 +871,7 @@ func requireCornerSphere(t *testing.T, body *Body) {
 	t.Helper()
 	spheres := 0
 	for _, face := range filletPatchesOf(body) {
-		if _, ok := face.Surface().(Sphere); ok {
+		if _, ok := face.n.Surface.(surfacegeom.Sphere); ok {
 			spheres++
 		}
 	}
@@ -940,7 +940,7 @@ func TestVertexBlendCrossDrilledBar(t *testing.T) {
 	requireVolumePi(t, out, pp(q(14848, 1), q(308, 3), q(0, 1)))
 	var spheres int
 	for _, f := range filletPatchesOf(out) {
-		if _, ok := f.Surface().(Sphere); ok {
+		if _, ok := f.n.Surface.(surfacegeom.Sphere); ok {
 			spheres++
 		}
 	}
@@ -1201,14 +1201,14 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 	}
 	straightCount, curvedCount := 0, 0
 	for _, patch := range patches {
-		switch surf := patch.Surface().(type) {
-		case Cylinder:
+		switch surf := patch.n.Surface.(type) {
+		case surfacegeom.Cylinder:
 			if math.Abs(surf.Axis.X) < 0.9 || math.Abs(surf.Origin.Y-20) > 2 {
 				continue
 			}
 			require.LessOrEqual(t, math.Abs(patch.n.Area-straightArea), patch.n.AreaBound+1e-5)
 			straightCount++
-		case Torus:
+		case surfacegeom.Torus:
 			require.LessOrEqual(t, math.Abs(patch.n.Area-curvedArea), patch.n.AreaBound+1e-5)
 			curvedCount++
 		}
@@ -1241,10 +1241,10 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 	incidence := make([]uint8, len(mesh.n.Vertices))
 	for ti, tri := range mesh.n.Triangles {
 		var bit uint8
-		switch mesh.source[ti].Surface().(type) {
-		case Cylinder:
+		switch mesh.source[ti].n.Surface.(type) {
+		case surfacegeom.Cylinder:
 			bit = 1
-		case Torus:
+		case surfacegeom.Torus:
 			bit = 2
 		}
 		if bit == 0 {
@@ -1338,10 +1338,10 @@ func TestVertexBlendPocketMouthOpenChain(t *testing.T) {
 	requireClosedTopology(t, out)
 	var cylinders, tori int
 	for _, f := range filletPatchesOf(out) {
-		switch f.Surface().(type) {
-		case Cylinder:
+		switch f.n.Surface.(type) {
+		case surfacegeom.Cylinder:
 			cylinders++
-		case Torus:
+		case surfacegeom.Torus:
 			tori++
 		}
 	}

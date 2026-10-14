@@ -72,11 +72,11 @@ func TestClassBCutCrossDrilledBox(t *testing.T) {
 	require.Len(t, result.Faces(), 7)
 	cylinders, holed := 0, 0
 	for _, f := range result.Faces() {
-		if _, ok := f.Surface().(Cylinder); ok {
+		if _, ok := f.n.Surface.(surfacegeom.Cylinder); ok {
 			cylinders++
 			require.True(t, f.n.Reversed, `the hole's wall faces into the hole`)
 		}
-		if _, planar := f.Surface().(Plane); planar && len(f.Loops()) == 2 {
+		if _, planar := f.n.Surface.(surfacegeom.Plane); planar && len(f.Loops()) == 2 {
 			holed++
 			_, isCircle := f.Loops()[1].Edges()[0].n.Curve.(surfacegeom.Circle3)
 			require.True(t, isCircle, `a y wall's inner loop is the hole's rim`)
@@ -137,7 +137,7 @@ func TestClassBCutCrossSlot(t *testing.T) {
 	// B1: 16000 − 10·10·20, Exact, and every face planar.
 	require.Len(t, result.Faces(), 10)
 	for _, f := range result.Faces() {
-		_, planar := f.Surface().(Plane)
+		_, planar := f.n.Surface.(surfacegeom.Plane)
 		require.True(t, planar)
 	}
 	require.Len(t, result.Edges(), 24)

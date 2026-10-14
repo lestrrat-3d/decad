@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -156,17 +157,17 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 			if index == proof.section.rootSpan || span.face == nil {
 				continue
 			}
-			if _, ok := span.face.surface.(Cone); ok {
+			if _, ok := span.face.n.Surface.(surfacegeom.Cone); ok {
 				face = span.face
 				break
 			}
 		}
 		require.NotNil(t, face)
-		original := face.surface
-		defer func() { face.surface = original }()
-		changed := original.(Cone)
+		original := face.n.Surface
+		defer func() { face.n.Surface = original }()
+		changed := original.(surfacegeom.Cone)
 		changed.Origin.X += 0.125
-		face.surface = changed
+		face.n.Surface = changed
 		require.False(t, revolveLoftFacesSectionCurrent(proof))
 		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
 		require.NoError(t, err)

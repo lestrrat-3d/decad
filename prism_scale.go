@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -72,8 +73,8 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 		if err := ctx.Err(); err != nil {
 			return facetedPayload{}, err
 		}
-		switch surface := face.Surface().(type) {
-		case Plane:
+		switch surface := face.n.Surface.(type) {
+		case surfacegeom.Plane:
 			groups[i] = facetGroup{origins: face.Origins(), surface: surface, planar: true}
 		default:
 			// The source mesh supplies every curved-face displacement. The

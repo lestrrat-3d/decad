@@ -91,7 +91,6 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		return nil, err
 	}
 	capStart := &Face{
-		surface: Plane{Frame: startFrame},
 		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
 		body:    body,
 		n: topo.Face{
@@ -99,10 +98,10 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			AreaBound:     ig.AreaBound,
 			AxialDelta:    pp.Z0Delta,
 			HasAxialDelta: true,
+			Surface:       surfacegeom.Plane{Frame: startFrame},
 		},
 	}
 	capEnd := &Face{
-		surface: Plane{Frame: endFrame},
 		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
 		body:    body,
 		n: topo.Face{
@@ -110,6 +109,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			AreaBound:     ig.AreaBound,
 			AxialDelta:    pp.Z1Delta,
 			HasAxialDelta: true,
+			Surface:       surfacegeom.Plane{Frame: endFrame},
 		},
 	}
 
@@ -312,7 +312,7 @@ func attachFaceLoopsContext(ctx context.Context, faces []*Face) error {
 // (buildChainSides, extrude.go) share; the two differ only in the TOPOLOGY
 // around it — wraparound junctions and cap coedges for a loop, neither for a
 // chain (docs/surface-design.md §13.4).
-func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool, bStart, bEnd, tStart, tEnd *Vertex) (*Edge, *Edge, Surface, bool, error) {
+func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool, bStart, bEnd, tStart, tEnd *Vertex) (*Edge, *Edge, surfacegeom.Surface, bool, error) {
 	switch w.Kind {
 	case survey2d.WalkCircular:
 		axis := pp.Dir(0, 0, 1)
@@ -361,7 +361,7 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		topEdge := &Edge{start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve1}}
 		bottomEdge.n.CurveBound, bottomEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
 		topEdge.n.CurveBound, topEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
-		surf := Cylinder{Origin: center0, Axis: axis, Radius: radius}
+		surf := surfacegeom.Cylinder{Origin: center0, Axis: axis, Radius: radius}
 		// A clockwise-walked wall has its material OUTSIDE the cylinder,
 		// so its outward normal is the radial direction negated.
 		return bottomEdge, topEdge, surf, clockwise, nil
@@ -382,7 +382,7 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// normal at all (§7's NormalAt refusal, topology.go), so
 		// topo.Face.Reversed — "the outward normal is the surface's geometric
 		// normal negated" — names nothing for this variant.
-		return bottomEdge, topEdge, NURBSSurface{}, false, nil
+		return bottomEdge, topEdge, surfacegeom.NURBSSurface{}, false, nil
 	default:
 		// A straight wall has no turn of its own to disagree with the
 		// loop's: which side its material lies on is decided by the sense
@@ -402,7 +402,7 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		if err != nil {
 			return nil, nil, nil, false, fmt.Errorf(`%w: a boundary segment has no direction`, ErrDegenerate)
 		}
-		return bottomEdge, topEdge, Plane{Frame: f}, false, nil
+		return bottomEdge, topEdge, surfacegeom.Plane{Frame: f}, false, nil
 	}
 }
 
@@ -650,13 +650,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		}
 		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
 		face := &Face{
-			surface: surf,
 			origins: origins,
 			body:    body,
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
 				Reversed:  faceReversed,
+				Surface:   surf,
 			},
 		}
 		if singleClosed {

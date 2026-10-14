@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
 
@@ -69,7 +70,7 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		if _, ok := f.Surface().(Plane); !ok {
+		if _, ok := f.n.Surface.(surfacegeom.Plane); !ok {
 			return nil, fmt.Errorf(`%w: this evaluator has no chording arm for a chain-fed %T wall`, ErrUnsupported, f.Surface())
 		}
 		loops := f.Loops()

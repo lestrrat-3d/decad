@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -149,7 +150,7 @@ func addDraftCircleCapRoles(ctx context.Context, body *Body, ref producerID) err
 			if !ok || origin.producer != ref {
 				continue
 			}
-			if seen[capRole] || face.Surface().Kind() != KindPlane {
+			if seen[capRole] || face.n.Surface.Kind() != surfacegeom.KindPlane {
 				return fmt.Errorf(`%w: the tapered circular rim has no unique planar %s`, ErrUnsupported, capRole)
 			}
 			face.origins = append(face.origins, FeatureRef{producer: ref, Role: capRole})

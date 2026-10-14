@@ -146,8 +146,8 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 			return nil, brepBandMass{}, err
 		}
 		held, bound := heldOf(areaIv)
-		face := &Face{surface: plane, origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
-			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound}}
+		face := &Face{origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
+			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: plane}}
 		normal, err := face.NormalAt(sideE.start.n.Position)
 		if err != nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d has no normal: %v`,

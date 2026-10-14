@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -292,7 +293,7 @@ func TestRevolveSectionDisplacementNormal(t *testing.T) {
 	got, _ := displacedRevolve(t, ref, 0, 0)
 	var wall *Face
 	for _, f := range got.Faces() {
-		if _, ok := f.Surface().(Sphere); ok {
+		if _, ok := f.n.Surface.(surfacegeom.Sphere); ok {
 			wall = f
 		}
 	}

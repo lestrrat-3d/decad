@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -50,18 +51,18 @@ func TestRevolveShellOpeningSectionDelta(t *testing.T) {
 	cone := [][2]float64{{0, 0}, {20, 0}, {0, 10}}
 	cylinderAt := func(r float64) func(*Face) bool {
 		return func(f *Face) bool {
-			c, ok := f.Surface().(Cylinder)
+			c, ok := f.n.Surface.(surfacegeom.Cylinder)
 			return ok && c.Radius.Mag() == r
 		}
 	}
 	planeAt := func(u float64) func(*Face) bool {
 		return func(f *Face) bool {
-			p, ok := f.Surface().(Plane)
+			p, ok := f.n.Surface.(surfacegeom.Plane)
 			return ok && math.Abs(p.Frame.N().X) > 0.5 && p.Frame.Origin().X == u
 		}
 	}
-	isCone := func(f *Face) bool { _, ok := f.Surface().(Cone); return ok }
-	isTorus := func(f *Face) bool { _, ok := f.Surface().(Torus); return ok }
+	isCone := func(f *Face) bool { _, ok := f.n.Surface.(surfacegeom.Cone); return ok }
+	isTorus := func(f *Face) bool { _, ok := f.n.Surface.(surfacegeom.Torus); return ok }
 	for _, tc := range []struct {
 		name      string
 		pts       [][2]float64

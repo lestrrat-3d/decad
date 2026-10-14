@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -208,7 +209,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		Rings: rings, ColumnHeights: columnHeights, SlabHeights: slabHeights,
 		SlabColumns: slabColumns, SectionDelta: sp.sectionDelta,
 		Faces: b.Faces(), Source: mesh.source, FaceAxial: faceAxial,
-		IsPlanar: func(face *Face) bool { _, ok := face.surface.(Plane); return ok },
+		IsPlanar: func(face *Face) bool { _, ok := face.n.Surface.(surfacegeom.Plane); return ok },
 		Vertices: mesh.n.Vertices, Triangles: mesh.n.Triangles,
 		Store: vertexStore, StoreMax: storeMax, AreaSlack: mesh.n.AreaSlack,
 	})

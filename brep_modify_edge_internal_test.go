@@ -213,7 +213,7 @@ func TestBrepModifyEdgeFilletS1VerticalEdge(t *testing.T) {
 	faces := blendFaces(out, "fillet")
 	require.Len(t, faces, 1)
 	requireRoles(t, out, faces, "wall(7)", "fillet(7)")
-	cyl, ok := faces[0].Surface().(Cylinder)
+	cyl, ok := faces[0].n.Surface.(surfacegeom.Cylinder)
 	require.True(t, ok)
 	require.Equal(t, 2.0, cyl.Radius.Base())
 }
@@ -565,7 +565,7 @@ func TestBrepModifyEdgeConsumersOnS1Fillet(t *testing.T) {
 
 	fillet := blendFaces(out, "fillet")
 	require.Len(t, fillet, 1)
-	cyl, ok := fillet[0].Surface().(Cylinder)
+	cyl, ok := fillet[0].n.Surface.(surfacegeom.Cylinder)
 	require.True(t, ok)
 	require.Len(t, fillet[0].Loops(), 1)
 	coedges := fillet[0].Loops()[0].CoEdges()

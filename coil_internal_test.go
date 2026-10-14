@@ -186,7 +186,7 @@ func TestCoilSquareSpring(t *testing.T) {
 			a, err := coilFace(t, b, role).Area()
 			require.NoError(t, err)
 			requireEnclosesBig(t, a.Value.Base(), a.Bound.Base()+want.err, want.exact, role)
-			require.Equal(t, KindFaceted, coilFace(t, b, role).Surface().Kind())
+			require.Equal(t, surfacegeom.KindFaceted, coilFace(t, b, role).n.Surface.Kind())
 		}
 		area, err := b.Area()
 		require.NoError(t, err)

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionclip"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -48,10 +49,10 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 			if len(faces) == 2 && len(b.Edges()) == 1 {
 				cone, planar := 0, 0
 				for _, face := range faces {
-					switch face.Surface().Kind() {
-					case KindCone:
+					switch face.n.Surface.Kind() {
+					case surfacegeom.KindCone:
 						cone++
-					case KindPlane:
+					case surfacegeom.KindPlane:
 						planar++
 					}
 				}

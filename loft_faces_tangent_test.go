@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -135,7 +136,7 @@ func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, endFaces, 1)
 	require.Len(t, endFaces[0].Origins(), 1)
-	plane, ok := endFaces[0].Surface().(Plane)
+	plane, ok := endFaces[0].n.Surface.(surfacegeom.Plane)
 	require.True(t, ok)
 	normal := plane.Frame.U().Cross(plane.Frame.V())
 	require.InDelta(t, 1, math.Abs(normal.Dot(r3.NewVec(0.8, 0.6, 0))), 1e-12)

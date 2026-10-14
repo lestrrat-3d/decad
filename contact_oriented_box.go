@@ -4,6 +4,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -36,7 +37,7 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 		return orientedSourceBox{}, false
 	}
 	for _, face := range faces {
-		plane, ok := face.surface.(Plane)
+		plane, ok := face.n.Surface.(surfacegeom.Plane)
 		if !ok || face.n.NormalBound != 0 {
 			return orientedSourceBox{}, false
 		}
@@ -258,7 +259,7 @@ func publishOrientedAxisPatch(report *ContactReport, a, b *orientedSourceBox) {
 
 func orientedSourceFace(body *Body, pose r3.Transform, axis, side int) *Face {
 	for _, face := range body.Faces() {
-		plane, ok := face.surface.(Plane)
+		plane, ok := face.n.Surface.(surfacegeom.Plane)
 		if !ok || face.n.NormalBound != 0 {
 			continue
 		}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -158,7 +159,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	faces := b.Faces()
 	valid := make([]bool, len(faces))
 	for i, face := range faces {
-		valid[i] = face.n.HeldPlanar && face.surface.Kind() == KindFaceted
+		valid[i] = face.n.HeldPlanar && face.n.Surface.Kind() == surfacegeom.KindFaceted
 	}
 	result, proven, err := facetproof.ProveAxisSupport(ctx, facetproof.AxisSupportInput{
 		Verts: pp.verts, ExactSourceVerts: pp.exactSourceVerts,

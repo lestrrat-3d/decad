@@ -484,7 +484,7 @@ func (e selectorEdge) SelectorCircular() bool {
 type selectorFace struct{ *Face }
 
 func (f selectorFace) SelectorPlanarNormal() (r3.Vec, bool) {
-	plane, ok := f.surface.(Plane)
+	plane, ok := f.n.Surface.(surfacegeom.Plane)
 	if !ok {
 		return r3.Vec{}, false
 	}
@@ -498,7 +498,7 @@ func (f selectorFace) SelectorOutwardPlanarNormal() (r3.Vec, bool) {
 	return normal, ok
 }
 func (f selectorFace) SelectorCylindrical() bool {
-	_, ok := f.surface.(Cylinder)
+	_, ok := f.n.Surface.(surfacegeom.Cylinder)
 	return ok
 }
 func (f selectorFace) SelectorHasOrigin(ref FeatureRef) bool {

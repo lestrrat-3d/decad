@@ -187,7 +187,7 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	pl, ok := face.Surface().(Plane)
+	pl, ok := face.n.Surface.(surfacegeom.Plane)
 	if !ok {
 		// The gate is an ANALYTIC planar surface (a Plane — an extrude/revolve
 		// cap), not merely a flat face: a boolean-built face can be flat
@@ -344,7 +344,7 @@ func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, w
 	if err != nil {
 		return 0, 0, err
 	}
-	pl, ok := face.Surface().(Plane)
+	pl, ok := face.n.Surface.(surfacegeom.Plane)
 	if !ok {
 		// The gate is an ANALYTIC planar surface (a Plane — a revolve radial
 		// cap), not merely a flat face: a boolean-built face can be flat

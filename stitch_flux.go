@@ -270,7 +270,7 @@ func stitchAllTetrahedronEligible(faces []*Face) bool {
 // mismatch a second caller, so the tighter check closes it here rather than
 // leave two admission rules that can disagree.
 func faceIsTetrahedronEligible(f *Face) bool {
-	if _, ok := f.surface.(Plane); !ok {
+	if _, ok := f.n.Surface.(surfacegeom.Plane); !ok {
 		return false
 	}
 	if f.n.NormalBound != 0 {
@@ -355,22 +355,22 @@ func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz proofboun
 	if f.n.Reversed {
 		sign = -1.0
 	}
-	switch s := f.surface.(type) {
-	case Plane:
+	switch s := f.n.Surface.(type) {
+	case surfacegeom.Plane:
 		return stitchflux.PlaneFaceFluxAndMoment(stitchFluxFaceInput(f), s.Frame, anchor, sign)
-	case Cylinder:
+	case surfacegeom.Cylinder:
 		return stitchflux.CylinderFaceFluxAndMoment(stitchFluxFaceInput(f), s.Origin, s.Axis, anchor, sign)
-	case Cone:
+	case surfacegeom.Cone:
 		return coneFaceFluxAndMoment(f, s, anchor, sign)
-	case Sphere:
+	case surfacegeom.Sphere:
 		return stitchflux.SphereFaceFluxAndMoment(stitchFluxFaceInput(f), s.Center, anchor, sign)
-	case Torus:
+	case surfacegeom.Torus:
 		input := stitchflux.TorusInput{Center: s.Center, Axis: s.Axis, Major: s.Major, Minor: s.Minor}
 		return stitchflux.TorusFaceFluxAndMoment(stitchFluxFaceInput(f), input, anchor, sign)
 	default:
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch closes a boundary holding a %T face this evaluator has no closed-form flux integral for (docs/surface-design.md Table R row R8)`,
-			ErrUnsupported, s,
+			ErrUnsupported, publicSurface(s),
 		)
 	}
 }
@@ -407,8 +407,8 @@ func (s stitchLoopSource) Circle() (stitchflux.CircleRim, bool, string) {
 	}, true, ""
 }
 
-func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
-	apexBound, ok := stitchflux.ConeApexDeparture(f.n.Denoted, surfacegeom.Cone(cone))
+func coneFaceFluxAndMoment(f *Face, cone surfacegeom.Cone, anchor r3.Vec, sign float64) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
+	apexBound, ok := stitchflux.ConeApexDeparture(f.n.Denoted, cone)
 	if !ok {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path cannot state how far this cone's apex sits from the apex its record denotes (docs/surface-design.md Table R row R8)`,
@@ -447,7 +447,7 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 
 	envelopes := make([]stitchflux.MassEnvelopeFace, 0, len(faces))
 	for _, f := range faces {
-		envelope := stitchflux.MassEnvelopeFace{Surface: internalSurface(f.surface), Area: f.n.Area, AreaBound: f.n.AreaBound}
+		envelope := stitchflux.MassEnvelopeFace{Surface: f.n.Surface, Area: f.n.Area, AreaBound: f.n.AreaBound}
 		for i, loop := range f.loops {
 			for _, ce := range loop.coedges {
 				envelope.Vertices = append(envelope.Vertices, ce.Start().Position().Value)
@@ -534,7 +534,7 @@ func stitchFluxTagsDenoted(faces []*Face) bool {
 // stitchTaggedFace passes a face's surface and edge curves to the exact
 // denotation gate without giving the internal package topology ownership.
 func stitchTaggedFace(f *Face) stitchflux.TaggedFace {
-	tagged := stitchflux.TaggedFace{Denoted: f.n.Denoted, Surface: internalSurface(f.surface)}
+	tagged := stitchflux.TaggedFace{Denoted: f.n.Denoted, Surface: f.n.Surface}
 	for _, loop := range f.loops {
 		for _, ce := range loop.coedges {
 			tagged.Curves = append(tagged.Curves, ce.edge.n.Curve)
