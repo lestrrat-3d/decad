@@ -50,7 +50,7 @@ func offsetCircleSheet(t testing.TB, doc *decad.Document, radius float64) *decad
 	return sheet
 }
 
-// TestOffsetPatchPositive is T200: a 100x60 mm Document.Patch offset positive
+// TestOffsetPatchPositive is T200: a 100x60 mm PatchProfile offset positive
 // 2 mm. The result is the source's own face translated along the sketch
 // plane's normal, so its Area is the source's reading — value AND bound — and
 // the source itself stays live.
@@ -58,7 +58,7 @@ func TestOffsetPatchPositive(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	patch, err := doc.Patch(t.Context(), s, p)
+	patch, err := decad.PatchProfile(t.Context(), doc, s, p)
 	require.NoError(t, err)
 	sourceArea, err := patch.Area()
 	require.NoError(t, err)
@@ -103,7 +103,7 @@ func TestOffsetPatchNegative(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	patch, err := doc.Patch(t.Context(), s, p)
+	patch, err := decad.PatchProfile(t.Context(), doc, s, p)
 	require.NoError(t, err)
 
 	up, err := decad.Offset(t.Context(), patch, units.Millimeters(2), decad.WithOffsetSide(decad.OffsetPositive))
@@ -334,9 +334,9 @@ func TestOffsetStagedFamilies(t *testing.T) {
 	require.NoError(t, err)
 
 	ps, pp := plateSketch(t)
-	flat, err := doc.Patch(t.Context(), ps, pp)
+	flat, err := decad.PatchProfile(t.Context(), doc, ps, pp)
 	require.NoError(t, err)
-	doubled, err := flat.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(4))
+	doubled, err := decad.PatchEdges(t.Context(), flat, decad.Edges(decad.Free()).Exactly(4))
 	require.NoError(t, err)
 
 	walls, bottom, _ := stitchBoxSheets(t, doc, 10)
@@ -359,7 +359,7 @@ func TestOffsetStagedFamilies(t *testing.T) {
 	}{
 		{"chain ribbon", ribbon, "no admitted Offset generator"},
 		{"chain revolve shell", shell, "no admitted Offset generator"},
-		{"Body.Patch result", doubled, "no admitted Offset generator"},
+		{"PatchEdges result", doubled, "no admitted Offset generator"},
 		{"stitched sheet", stitched, "no admitted Offset generator"},
 		{"solid", solid, "requires a sheet body"},
 	} {
@@ -386,7 +386,7 @@ func TestOffsetRefusals(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	patch, err := doc.Patch(t.Context(), s, p)
+	patch, err := decad.PatchProfile(t.Context(), doc, s, p)
 	require.NoError(t, err)
 	// Three of the five share ErrDegenerate, so each case also reads the text
 	// that says WHICH gate refused it.
@@ -431,7 +431,7 @@ func TestOffsetPatchConversionIsRefused(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	patch, err := doc.Patch(t.Context(), s, p)
+	patch, err := decad.PatchProfile(t.Context(), doc, s, p)
 	require.NoError(t, err)
 	_, err = decad.Offset(t.Context(), patch, units.Inches(0.1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

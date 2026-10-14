@@ -163,7 +163,7 @@ Rules:
   `boundarywalk.DenotedStartBound` and `DenotedEndBound`). Every such use
   holds the same reference coordinates, so the largest of them reaches both
   neighbours' denoted ends, an arc's natural `t = 1` end included.
-  `Body.Patch` admits a rim with such a vertex only through its level-token
+  `PatchEdges` admits a rim with such a vertex only through its level-token
   arm, which a straight prism build stamps (`docs/surface-design.md` §5.2,
   Table R row R6).
 - **Every loop exposes its stored direction.** `Loop.CoEdges()` returns copied
@@ -433,12 +433,31 @@ case explicitly — the feature call resolves which live bodies actually bound
 the stops from live bodies without consuming them. (`ToFaceAngular` is the
 revolve analog and lands there, §6/§11.) A `ToFace` stop face must be an
 analytic Plane whose held normal is exactly parallel to the sweep normal, by a
-rational cross product of zero and not a tolerance, and whose face states no
-normal departure (`NormalBound` 0, no `Denoted` surface). Any other face is
-`ErrUnsupported`, however small its tilt, because the cap this evaluator builds
-is perpendicular to the sweep and nothing would charge a tilt. That includes a
-stop body whose placement rounds its normal, every revolve cap and a cap-loop
-chamfer band patch; a `Distance` extent reaches them. A nonzero
+rational cross product of zero and not a tolerance, whose face states no
+normal departure (`NormalBound` 0, no `Denoted` surface), and which carries its
+producer's `topo.CapRecord` and an axial displacement. The record is the plane
+the cap denotes: the plane-local level `z` carried through the payload frame
+`(O, U, V, N)` and the placement `(B, t)`, every held value read as an exact
+rational. The plane it denotes is `m·(x − P) = 0` with `m = (B·U) × (B·V)` and
+`P = B(O + z·N) + t`, not the held tag, whose origin is a rounded lift and whose
+normal is a rounded cross product. It must be an exact level set of the sweep
+frame `(O', U', V', N')`: `m·U' = m·V' = 0` in rationals. The stop is then the
+single exact level `c = m·(P − O') / (m·N')` (`extent.PlaneStop`), and the cap
+this evaluator builds, perpendicular to the sweep at one level, charges no
+footprint-dependent departure. The published displacement is the sum of three
+terms: the exact distance from the held stop to `c + travel·offset`
+(`extent.StopLevelError`, so a rounded tag origin or a non-unit held normal is
+charged and never trusted), the offset's conversion bound, and `k` times the
+face's `axialDelta`, with `k = max(|m·(B·N)|, |m|) / |m·N'|` rounded up, which is
+exactly 1 when the frames and the placement are exactly orthonormal. Any other
+face is `ErrUnsupported`, however small its tilt, because nothing would charge
+it. That includes a stop body whose placement rounds its normal, every revolve
+cap, a cap-loop chamfer band patch, a stop plane that is not an exact level set
+of the sweep, a face of a faceted boolean (a mirrored-loft union, a loft or
+cylinder union), a copy placed by a non-identity transform (`CapRecord.Under`
+keeps the record only under the identity placement), and a sweep, mitred-sweep,
+twist or coil end cap and a `Body.Patch` chain patch, none of which states a
+record; a `Distance` extent reaches them. A nonzero
 `WithTaper` builds a draft body over `Distance`, `ToFace`, `ThroughAll`,
 `Symmetric`, or `TwoSided`. `docs/draft-design.md` owns the tapered extrude:
 its sharp offset family, its one- and two-slab payloads, its refusals and its
@@ -465,8 +484,8 @@ body's and every face's `Area` and every edge's `Length` by e·(|x| + bound)
 the draft, the cap blend, the stacked prism (and the cup built on it) and the
 class-B brep take it as their last step; a brep's face frames are signed
 permutations of its first, so the first face's map stands for all. A face copy
-(`Unstitch`, `Body.Patch`) carries its source's readings through its
-placement alone and takes the placement's own charge; a `Body.Patch` face
+(`Unstitch`, `PatchEdges`) carries its source's readings through its
+placement alone and takes the placement's own charge; a `PatchEdges` face
 fitted to a rim takes its fitted frame's, and one fitted to a straight-edged
 rim instead bounds its area directly against the polygon its own vertices
 denote (`patchchain.PolygonAreaBound`), and one with a circular edge edge by edge
@@ -1407,8 +1426,8 @@ question reads `Suspect`.
 
 Sheet bodies and the surface operations follow `docs/surface-design.md` §14's
 count-free three-increment plan: the body kind with `WithSurfaceResult()` on
-Extrude and Revolve and `Document.Patch`; then `Stitch`/`Unstitch` over exact
-all-planar boundaries with `Body.Patch` and the sheet-against-solid pair
+Extrude and Revolve and `PatchProfile`; then `Stitch`/`Unstitch` over exact
+all-planar boundaries with `PatchEdges` and the sheet-against-solid pair
 proofs; then the remaining surface-result features, the shared-denotation join
 certificate and curved closure. An unlanded surface build returns
 `ErrUnsupported`; an unlanded pair question reads `Suspect`. These stages do

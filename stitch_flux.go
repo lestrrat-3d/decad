@@ -220,7 +220,7 @@ import (
 // feature already carries — a full-turn revolve's own axis argument, a
 // surface-result prism or loft's own — and Rule S is what makes sure this
 // file never publishes Volume/Centroid without it. A stitch of curved sheets
-// from two different features, or a stitch downstream of Body.Patch (whose
+// from two different features, or a stitch downstream of PatchEdges (whose
 // own payload carries no such proof — docs/surface-design.md §5.2), stays
 // refused on this gate alone.
 

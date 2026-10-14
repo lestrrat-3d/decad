@@ -189,7 +189,7 @@ func stitchInternalOffAxisPlateSketch(t *testing.T) (*sketch.Sketch, *sketch.Pro
 
 // TestStitchTessellateClassBoundIsIndependentOfPlacement is docs/surface-design.md's
 // T60: T42's bounded-rim stitched solid (a Symmetric surface-extruded wall
-// on an off-axis, non-origin sketch plane, Body.Patch-capped on both rims,
+// on an off-axis, non-origin sketch plane, PatchEdges-capped on both rims,
 // then stitched at IDENTITY — the same fixture apitest/stitch_test.go's
 // TestStitchClosesABoundedPatchedWallWithChargedVolumeBound builds). No
 // placement is in play at all, so a positive mesh Bound here can only be
@@ -204,7 +204,7 @@ func TestStitchTessellateClassBoundIsIndependentOfPlacement(t *testing.T) {
 	wall, err := Extrude(t.Context(), doc, s, p, Symmetric{D: units.Inches(2.5)}, WithSurfaceResult())
 	require.NoError(t, err)
 
-	capped, err := wall.Patch(t.Context(), Edges(Free()).Exactly(8))
+	capped, err := PatchEdges(t.Context(), wall, Edges(Free()).Exactly(8))
 	require.NoError(t, err)
 
 	solid, err := Stitch(t.Context(), capped)
@@ -249,7 +249,7 @@ func internalStitchedBox(t *testing.T, doc *Document) *Body {
 	bs.Fix(brect.A)
 	_, err = bs.Solve(t.Context())
 	require.NoError(t, err)
-	bottom, err := doc.Patch(t.Context(), bs, bs.Profiles()[0])
+	bottom, err := PatchProfile(t.Context(), doc, bs, bs.Profiles()[0])
 	require.NoError(t, err)
 
 	topPlane, err := w.CreateOffsetPlane(w.XY(), 10)
@@ -260,7 +260,7 @@ func internalStitchedBox(t *testing.T, doc *Document) *Body {
 	ts.Fix(trect.A)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	top, err := doc.Patch(t.Context(), ts, ts.Profiles()[0])
+	top, err := PatchProfile(t.Context(), doc, ts, ts.Profiles()[0])
 	require.NoError(t, err)
 
 	box, err := Stitch(t.Context(), walls, bottom, top)

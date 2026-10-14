@@ -64,7 +64,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// minted only when this payload's own section is drawn straight from its
 	// record — a section the analytic prism boolean re-expresses sets
 	// sectionDelta nonzero and mints neither — so every vertex and rim edge
-	// this build places at z0/z1 can later prove Body.Patch's bounded-chain
+	// this build places at z0/z1 can later prove PatchEdges's bounded-chain
 	// gate coplanar by shared identity alone, never by comparing a
 	// coordinate (docs/surface-design.md §5.2). The token's own origin/normal
 	// are read off the SAME frame-derived construction Payload.CapFrame uses below
@@ -99,6 +99,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			AxialDelta:    pp.Z0Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: startFrame},
+			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z0},
 		},
 	}
 	capEnd := &Face{
@@ -110,6 +111,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			AxialDelta:    pp.Z1Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: endFrame},
+			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z1},
 		},
 	}
 

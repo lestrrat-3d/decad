@@ -40,7 +40,7 @@ func stitchTrianglePatch(t *testing.T, doc *decad.Document, w *sketch.World, pla
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	patch, err := doc.Patch(t.Context(), s, s.Profiles()[0])
+	patch, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[0])
 	require.NoError(t, err)
 	return patch
 }

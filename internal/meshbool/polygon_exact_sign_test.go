@@ -74,3 +74,38 @@ func TestCross2xSignNonFiniteFloatsFallBackToExact(t *testing.T) {
 		require.Equal(t, want, meshbool.Cross2xSign(a, b, c), "case %d", i)
 	}
 }
+
+func TestCross2xSignUnderflowedRationalCoordinate(t *testing.T) {
+	m := new(big.Rat).SetFloat64(math.SmallestNonzeroFloat64)
+	h := new(big.Rat).SetFloat64(0x1p1000)
+	makePoints := func(h *big.Rat) [3]meshbool.Xp2 {
+		return [3]meshbool.Xp2{
+			meshbool.NewXP2(big.NewRat(0, 1), big.NewRat(0, 1)),
+			meshbool.NewXP2(h, new(big.Rat).Quo(m, big.NewRat(4, 1))),
+			meshbool.NewXP2(new(big.Rat).Mul(h, big.NewRat(8, 1)), m),
+		}
+	}
+	for _, points := range [][3]meshbool.Xp2{makePoints(h), makePoints(new(big.Rat).SetFloat64(0x1p200))} {
+		require.Zero(t, points[1].Fv)
+		require.Equal(t, -1, meshbool.Cross2x(points[0], points[1], points[2]).Sign())
+		require.Equal(t, -1, meshbool.Cross2xSign(points[0], points[1], points[2]))
+		require.False(t, points[1].FloatFinite)
+	}
+}
+
+func TestCross2xSignFromXptUnderflowedCoordinate(t *testing.T) {
+	w := new(big.Int).Lsh(big.NewInt(1), 1076)
+	h := new(big.Int).Lsh(big.NewInt(1), 200)
+	xpt := func(x, y *big.Int) proof.Xpt {
+		return proof.Xpt{X: x, Y: y, Z: big.NewInt(0), W: w}
+	}
+	points := [3]meshbool.Xp2{
+		meshbool.NewXP2FromXpt(xpt(big.NewInt(0), big.NewInt(0)), 0, 1),
+		meshbool.NewXP2FromXpt(xpt(new(big.Int).Mul(h, w), big.NewInt(1)), 0, 1),
+		meshbool.NewXP2FromXpt(xpt(new(big.Int).Mul(new(big.Int).Mul(h, big.NewInt(8)), w), big.NewInt(4)), 0, 1),
+	}
+	require.Zero(t, points[1].Fv)
+	require.Equal(t, -1, meshbool.Cross2x(points[0], points[1], points[2]).Sign())
+	require.Equal(t, -1, meshbool.Cross2xSign(points[0], points[1], points[2]))
+	require.False(t, points[1].FloatFinite)
+}

@@ -445,7 +445,7 @@ func BenchmarkModelingPatchCircle(b *testing.B) {
 		b.StopTimer()
 		doc := decad.New()
 		b.StartTimer()
-		patch, err := doc.Patch(b.Context(), s, profile)
+		patch, err := decad.PatchProfile(b.Context(), doc, s, profile)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -473,7 +473,7 @@ func BenchmarkModelingThickenPatch(b *testing.B) {
 	for b.Loop() {
 		b.StopTimer()
 		doc := decad.New()
-		patch, err := doc.Patch(b.Context(), s, profile)
+		patch, err := decad.PatchProfile(b.Context(), doc, s, profile)
 		require.NoError(b, err)
 		b.StartTimer()
 		body, err := decad.Thicken(b.Context(), patch, units.Millimeters(2))
@@ -491,7 +491,7 @@ func BenchmarkModelingThickenPatch(b *testing.B) {
 }
 
 // BenchmarkModelingPatchFreeEdges measures filling both free rims on an
-// extruded cylindrical sheet through Body.Patch.
+// extruded cylindrical sheet through PatchEdges.
 func BenchmarkModelingPatchFreeEdges(b *testing.B) {
 	for b.Loop() {
 		b.StopTimer()
@@ -507,7 +507,7 @@ func BenchmarkModelingPatchFreeEdges(b *testing.B) {
 		}, decad.WithSurfaceResult())
 		require.NoError(b, err)
 		b.StartTimer()
-		patched, err := sheet.Patch(b.Context(), decad.Edges(decad.Free()).Exactly(2))
+		patched, err := decad.PatchEdges(b.Context(), sheet, decad.Edges(decad.Free()).Exactly(2))
 		if err != nil {
 			b.Fatal(err)
 		}

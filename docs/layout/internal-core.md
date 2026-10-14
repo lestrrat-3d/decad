@@ -19,14 +19,14 @@ The rules for rows live in `docs/layout.md`.
 | `internal/planarsnapshot/` | Planar contact snapshots, cached records and pose gates. See multibody §9.1–§9.2. |
 | `internal/placedruling/` | Placed cylinder staging, support and relation proofs. See contact-geometry §4.5. |
 | `internal/facetproof/` | Faceted shell audits, placement, similarity and revolve sector-separation proofs, sector seams and angular gaps. See `docs/evaluator-design.md` §9. |
-| `internal/pointcone/` | Point-loft cone crossing samples, far-cap subdivision and contact split, cap and triangle crossing bounds, and sector cap paths, subdivision, merged angles and root-edge order. See loft-point design. |
+| `internal/pointcone/` | Point-loft cone crossing samples, far-cap subdivision and contact split, cap and triangle crossing bounds, and sector cap paths, subdivision, merged angles and root-edge order, and the strict-side offset of a cone meridian (`offset.go`). See loft-point and loft-face-sections designs. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching, query rendering, residual counts, and face-role indexes. See API §9. |
 | `internal/surfacegeom/` | Private face and edge geometry carriers. Public surface and curve variants live in `topology.go`; `Edge.Curve` and `Face.Surface` convert the node's curve and surface to the public variant. See API §6.1, surface §6. |
 | `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |
 | `internal/reportvocab/` | Contact and sweep enums; Verify reports, motion verification records, survey diagnostics, and pair, interference and sheet outcomes. |
 | `internal/extent/` | Unit bounds and stop levels for extents. See API §8.1, evaluator §5/§6. |
-| `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation, segment record and area bounds. See surface §5.2. |
+| `internal/patchchain/` | `PatchEdges` chain partition, plane proof, orientation, segment record and area bounds. See surface §5.2. |
 | `internal/sectionaudit/` | Rewrite audit order, signed area, cutback, crossing, contact and nesting checks. See modify §5. |
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |

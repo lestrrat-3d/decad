@@ -250,6 +250,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			AxialDelta:    dp.z0Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: startFrame},
+			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.z0},
 		},
 	}
 	capEnd := &Face{
@@ -260,6 +261,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			AxialDelta:    dp.z1Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: endFrame},
+			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.z1},
 		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {

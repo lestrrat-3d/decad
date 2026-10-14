@@ -23,7 +23,7 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 	}{
 		{"Document.Verify", func(ctx context.Context) error { _, err := doc.Verify(ctx); return err }},
 		{"Document.VerifyMotion", func(ctx context.Context) error { _, err := doc.VerifyMotion(ctx, nil, nil); return err }},
-		{"Document.Patch", func(ctx context.Context) error { _, err := doc.Patch(ctx, nil, nil); return err }},
+		{"PatchProfile", func(ctx context.Context) error { _, err := decad.PatchProfile(ctx, doc, nil, nil); return err }},
 		{"Document.Loft", func(ctx context.Context) error { _, err := doc.Loft(ctx, nil, nil, nil, nil); return err }},
 		{"Document.LoftChain", func(ctx context.Context) error { _, err := doc.LoftChain(ctx, nil, nil, nil, nil); return err }},
 		{"Sweep profile", func(ctx context.Context) error {
@@ -57,7 +57,7 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 			_, err := decad.Copy(ctx, body, decad.WithCopyPlacement(r3.Transform{}))
 			return err
 		}},
-		{"Body.Patch", func(ctx context.Context) error { _, err := body.Patch(ctx, nil); return err }},
+		{"PatchEdges", func(ctx context.Context) error { _, err := decad.PatchEdges(ctx, body, nil); return err }},
 		{"Body.Fillet", func(ctx context.Context) error { _, err := decad.Fillet(ctx, body, nil, units.Value{}); return err }},
 		{"Body.Chamfer", func(ctx context.Context) error { _, err := decad.Chamfer(ctx, body, nil, units.Value{}); return err }},
 		{"Body.Shell", func(ctx context.Context) error { _, err := decad.Shell(ctx, body, nil, units.Value{}); return err }},

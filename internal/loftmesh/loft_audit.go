@@ -435,7 +435,7 @@ type LoftAuditShortcuts struct {
 //   - skips: a zero-shared-vertex pair a broad-phase tier proved apart.
 //   - edgeCerts: a pair the noncoplanar shared-edge certificate admitted
 //     (AuditLoftPairData's own doc comment carries its proof).
-//   - vertexCerts: a pair the isolated shared-vertex certificate admitted.
+//   - vertexCerts: a pair a shared-vertex certificate (B, C or D) admitted.
 //   - classifications: every other pair, which reached AuditLoftPairData
 //     without a certificate deciding it.
 //
@@ -531,8 +531,8 @@ func LoftPlaneSeparated(ta, tb [3]r3.Vec) bool {
 	return meshbool.AllOneSide(sa)
 }
 
-// loftPlaneSeparatedPrepared reuses the audit's exact lifts and normals if
-// the same adaptive float sign as LoftPlaneSeparated needs an exact fallback.
+// loftPlaneSeparatedPrepared reads the audit's exact lifts and normals, using
+// the adaptive float sign only when the lifts are the float corners' values.
 func loftPlaneSeparatedPrepared(data *LoftAuditData, i, j int) bool {
 	separated, _, _ := loftPlaneSeparatedSigns(data, i, j)
 	return separated
@@ -546,17 +546,11 @@ func loftPlaneSeparatedSigns(data *LoftAuditData, i, j int) (bool, [3]int, [3]in
 	ta, tb := data.corners(i), data.corners(j)
 	xta, xtb := data.xtri(i), data.xtri(j)
 	var sa, sb [3]int
-	for k := range sb {
-		sb[k] = proof.OrientSignPrepared(ta[0], ta[1], ta[2], tb[k],
-			xta[0], xtb[k], data.Norms[i])
-	}
+	sb = data.planeSigns(i, xtb, tb)
 	if meshbool.AllOneSide(sb) {
 		return true, sa, sb
 	}
-	for k := range sa {
-		sa[k] = proof.OrientSignPrepared(tb[0], tb[1], tb[2], ta[k],
-			xtb[0], xta[k], data.Norms[j])
-	}
+	sa = data.planeSigns(j, xta, ta)
 	return meshbool.AllOneSide(sa), sa, sb
 }
 
@@ -633,6 +627,16 @@ func AuditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
 // second triangle. The second triangle meets the line only at the shared
 // vertex; the first stays entirely on its own side. Convexity confines their
 // intersection to that vertex. A zero sign falls through to classification.
+//
+// # Certificate D — a separating plane through the shared vertex
+//
+// A pair sharing exactly one vertex index is admitted once a plane through that
+// vertex has one triangle's two remaining corners strictly on one side and the
+// other triangle's two remaining corners strictly on the other. Convexity
+// confines the intersection to the vertex. separatingPlaneCertificate owns the
+// proof; it reads four float orientation signs, each certified by
+// proof.OrientSignFloat, and any undecided or zero sign falls through to the
+// path below.
 func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts) (LoftPairOutcome, error) {
 	return auditLoftPairDataSigned(data, tris, i, j, shortcuts, nil, nil)
 }
@@ -652,6 +656,9 @@ func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, short
 		}
 	}
 	if shortcuts.Certificates && sharedCount == 1 && data.vertexCertificateFloat(tris, i, j, shared[0]) {
+		return LoftPairVertexCertificate, nil
+	}
+	if shortcuts.Certificates && sharedCount == 1 && data.separatingPlaneCertificate(tris[i], tris[j], i, j, shared[0]) {
 		return LoftPairVertexCertificate, nil
 	}
 	ta := data.corners(i)
@@ -708,7 +715,7 @@ func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, short
 	// the span alone: the same classification without the boundary, edge and
 	// angle records of a full TriContact, which nothing below reads.
 	span, err := meshbool.TriTriContactSpanCore(ta, tb, xta, xtb, na, nb,
-		projA, projB, &signsA, &signsB, !shortcuts.ExactInput,
+		projA, projB, &signsA, &signsB, !data.exactLifts && !shortcuts.ExactInput,
 		data.floatNorms[i], data.floatNorms[j], true)
 	if err != nil {
 		return LoftPairClassified, err
@@ -984,12 +991,12 @@ func TrianglePlaneSigns(plane LoftExactPlane, other [3]proof.Xpt) [3]int {
 	return signs
 }
 
-// planeSigns is TrianglePlaneSigns(data.Planes[i], xother) with the float
-// corners other of the same triangle: each sign is the exact sign of
-// Norms[i] . (point - anchor), which is what the cached plane evaluates, so
-// the adaptive float filter decides the generic corner and the exact lift
-// decides the rest.
+// planeSigns evaluates the cached exact plane. The adaptive float filter may
+// decide a sign only when the exact points are lifts of the float corners.
 func (d *LoftAuditData) planeSigns(i int, xother [3]proof.Xpt, other [3]r3.Vec) [3]int {
+	if d.exactLifts {
+		return TrianglePlaneSigns(d.Planes[i], xother)
+	}
 	t := d.corners(i)
 	xt := d.xtri(i)
 	var signs [3]int

@@ -63,17 +63,6 @@ func payloadAxialDelta(b *Body) float64 {
 	return ad.axialDelta()
 }
 
-// selectedFaceAxialDelta returns the selected planar stop face's own
-// displacement. Payload-wide axialDelta remains for callers that need a bound
-// over every face, such as ThroughAll; a ToFace stop names one face and must
-// not charge an unrelated cap's bound to it.
-func selectedFaceAxialDelta(b *Body, face *Face) float64 {
-	if face != nil && face.n.HasAxialDelta {
-		return face.n.AxialDelta
-	}
-	return payloadAxialDelta(b)
-}
-
 // resolveStopBody runs the body gates every body-relative stop shares with
 // EdgeAxis (core §8.1): the named body must be live in this document.
 func (d *Document) resolveStopBody(b *Body, what string) (*Body, error) {
@@ -154,19 +143,25 @@ func builtinFaceQuery(sel FaceSelector, what string) (*FaceQuery, error) {
 // coordinate along the sketch plane normal, beside that coordinate's own proven
 // axial displacement. The level is COMPUTED — from another body's face, in
 // float — so the displacement is what keeps it from publishing itself as the
-// level it denotes: it composes this resolution's own rounding, the offset's
-// conversion, and whatever the stop body proved about the level its face sits
-// at. The resolved face must be usable
-// as a prism cap — the §5 build table's stop is the closed-form intersection
-// of the sweep direction with the target surface, and the cap it emits is
-// planar and perpendicular to the sweep — so the face must be an analytic
-// Plane whose held normal is EXACTLY parallel to the sweep normal (a zero
-// rational cross product, never a tolerance) and which states no departure
-// of its surface from that tag (no normal bound, no denoted surface). A
-// non-planar stop face, a planar one not exactly perpendicular to the sweep,
-// or one stating a departure is a solid this evaluator cannot build, because
-// the perpendicular cap would charge none of the tilt (ErrUnsupported,
-// staged). A face coplanar with the sketch
+// level it denotes: it composes the exact distance from the held stop to the
+// level the face's record denotes, the offset's conversion, and the face's own
+// axial displacement carried to the stop level.
+//
+// The resolved face must be usable as a prism cap — the §5 build table's stop
+// is the closed-form intersection of the sweep direction with the target
+// surface, and the cap it emits is planar and perpendicular to the sweep — so
+// the face must be an analytic Plane whose held normal is EXACTLY parallel to
+// the sweep normal (a zero rational cross product, never a tolerance), which
+// states no departure of its surface from that tag (no normal bound, no
+// denoted surface), and which carries its producer's CapRecord and an axial
+// displacement. The plane that record denotes must be an exact level set of
+// the sweep (extent.PlaneStop), so the stop is the single exact level c and
+// the cap charges no footprint-dependent departure. Any other face — a
+// non-planar one, a planar one not exactly perpendicular to the sweep, one
+// stating a departure, one without a record (a faceted boolean face, a placed
+// copy, a sweep, twist, coil or mitred cap, a chain patch), or one whose
+// denoted plane is not a level set of the sweep — is a solid this evaluator
+// cannot build (ErrUnsupported, staged). A face coplanar with the sketch
 // plane stops the sweep before it starts (ErrDegenerate).
 //
 // travel is 0 for a standalone ToFace — the target face supplies the sense
@@ -202,6 +197,14 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 	if face.n.NormalBound != 0 || face.n.Denoted != nil {
 		return 0, 0, 0, fmt.Errorf(`%w: ToFace cannot use this face: its surface departs from its planar tag by a stated tilt, which a perpendicular cap does not charge; use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
 	}
+	rec := face.n.CapRecord
+	if rec == nil || !face.n.HasAxialDelta {
+		return 0, 0, 0, fmt.Errorf(`%w: ToFace cannot use this face: it states no record of the exact plane it denotes (a faceted boolean face, a placed copy, a sweep or patch cap); use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
+	}
+	c, k, ok := extent.PlaneStop(rec.Frame, rec.Xform, rec.Z, frame)
+	if !ok {
+		return 0, 0, 0, fmt.Errorf(`%w: ToFace requires the plane the stop face denotes to be exactly perpendicular to the sweep; on this sketch plane its level would vary across the footprint, which the perpendicular cap does not charge; use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
+	}
 	zFace := pl.Frame.Origin().Sub(frame.Origin()).Dot(n)
 	tol := extent.RelativeStopTolerance(math.Max(pl.Frame.Origin().Len(), frame.Origin().Len()))
 	if math.Abs(zFace) <= tol {
@@ -220,14 +223,15 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 		return 0, 0, 0, fmt.Errorf(`%w: the to-face offset pulls the stop behind the sketch plane`, ErrDegenerate)
 	}
 	// The three terms displace the level along the same normal, so they sum:
-	// the whole expression's own rounding (which covers the difference, the dot
-	// product and the offset step alike), the offset's conversion into
-	// millimetres, and the displacement the stop body proved for its own levels.
-	delta := proofbound.AbsSumUpper(
-		extent.StopLevelRound(pl.Frame.Origin(), frame.Origin(), n, travel, offset, stop),
-		offsetDelta,
-		selectedFaceAxialDelta(body, face),
-	)
+	// the exact distance from the held stop to the level the record denotes
+	// (it covers the rounded tag origin, the difference, the dot product and
+	// the offset step alike), the offset's conversion into millimetres, and
+	// the face's proven axial displacement carried to a level displacement.
+	axial := face.n.AxialDelta
+	if k != 1 {
+		axial = proofbound.ProductUpper(k, axial)
+	}
+	delta := proofbound.AbsSumUpper(extent.StopLevelError(c, travel, offset, stop), offsetDelta, axial)
 	return stop, delta, body.originProducer(), nil
 }
 

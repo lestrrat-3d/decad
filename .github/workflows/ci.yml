@@ -188,6 +188,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Timing comparisons must be made within one CPU class, so every test
+      # job records its runner CPU on one greppable line.
+      - name: Describe the runner CPU
+        if: runner.os == 'Linux'
+        run: |
+          model=$(lscpu 2>/dev/null | sed -n 's/^Model name:[[:space:]]*//p' | head -n 1)
+          if [ -n "$model" ]; then
+            echo "runner-cpu: ${model} x$(nproc)"
+          else
+            echo "runner-cpu: unknown"
+          fi
+
       - name: Download race test binaries
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -321,6 +333,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Timing comparisons must be made within one CPU class, so every test
+      # job records its runner CPU on one greppable line.
+      - name: Describe the runner CPU
+        if: runner.os == 'Linux'
+        run: |
+          model=$(lscpu 2>/dev/null | sed -n 's/^Model name:[[:space:]]*//p' | head -n 1)
+          if [ -n "$model" ]; then
+            echo "runner-cpu: ${model} x$(nproc)"
+          else
+            echo "runner-cpu: unknown"
+          fi
+
       - name: Install Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -344,14 +368,6 @@ jobs:
         with:
           name: race-tests-packages
           path: race-bin
-
-      # The CPU model and count tell which speed group of ubuntu-latest runner
-      # the dynamics job landed on, which its wall time depends on.
-      - name: Describe the runner CPU
-        if: matrix.packages == './dynamics/'
-        run: |
-          nproc
-          lscpu
 
       # Every package outside the root, apart from apitest/, runs UNFILTERED on
       # one runner, so these runners and the race shards together cover what an
@@ -517,6 +533,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Timing comparisons must be made within one CPU class, so every test
+      # job records its runner CPU on one greppable line.
+      - name: Describe the runner CPU
+        if: runner.os == 'Linux'
+        run: |
+          model=$(lscpu 2>/dev/null | sed -n 's/^Model name:[[:space:]]*//p' | head -n 1)
+          if [ -n "$model" ]; then
+            echo "runner-cpu: ${model} x$(nproc)"
+          else
+            echo "runner-cpu: unknown"
+          fi
 
       - name: Install Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

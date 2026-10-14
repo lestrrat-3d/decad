@@ -272,6 +272,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			AxialDelta:    cbp.z0Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: startFrame},
+			CapRecord:     &topo.CapRecord{Frame: cbp.frame, Xform: cbp.xform, Z: cbp.z0},
 		},
 	}
 	capEnd := &Face{
@@ -284,6 +285,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			AxialDelta:    cbp.z1Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: endFrame},
+			CapRecord:     &topo.CapRecord{Frame: cbp.frame, Xform: cbp.xform, Z: cbp.z1},
 		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {

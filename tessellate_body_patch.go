@@ -14,7 +14,7 @@ import (
 )
 
 // tessellateBodyPatch reuses a circular source prism's station grid or
-// triangulates an all-planar Body.Patch result over its shared vertices.
+// triangulates an all-planar PatchEdges result over its shared vertices.
 // Other curved sources need their own shared chording and are refused here.
 func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chord float64, verify Verification) (*Mesh, error) {
 	if prism, ok := bodyPatchCircularPrismSource(pp); ok {
@@ -27,22 +27,22 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 	if !stitchAllTetrahedronEligible(faces) {
 		for _, f := range faces {
 			if _, ok := f.n.Surface.(surfacegeom.Plane); !ok {
-				return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a Body.Patch result's %T face`,
+				return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a PatchEdges result's %T face`,
 					ErrUnsupported, f.Surface())
 			}
 			if f.n.NormalBound != 0 {
-				return nil, fmt.Errorf(`%w: a Body.Patch result's planar face has no zero-bound normal`, ErrUnsupported)
+				return nil, fmt.Errorf(`%w: a PatchEdges result's planar face has no zero-bound normal`, ErrUnsupported)
 			}
 			for _, l := range f.loops {
 				for _, ce := range l.coedges {
 					if _, ok := ce.edge.n.Curve.(surfacegeom.Line3); !ok {
-						return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a Body.Patch result's %T edge`,
+						return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a PatchEdges result's %T edge`,
 							ErrUnsupported, publicCurve(ce.edge.n.Curve))
 					}
 				}
 			}
 		}
-		return nil, fmt.Errorf(`%w: this evaluator cannot triangulate the Body.Patch result`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: this evaluator cannot triangulate the PatchEdges result`, ErrUnsupported)
 	}
 	vertices := b.Vertices()
 	mesh := &Mesh{n: topo.Mesh{Vertices: make([]r3.Vec, len(vertices))}}
@@ -73,7 +73,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
 	}
-	if err := tessellation.RequireCapBlendFacetAreas(mesh.n.Vertices, mesh.n.Triangles, "Body.Patch sheet"); err != nil {
+	if err := tessellation.RequireCapBlendFacetAreas(mesh.n.Vertices, mesh.n.Triangles, "PatchEdges sheet"); err != nil {
 		return nil, err
 	}
 	if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
@@ -84,7 +84,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, ctxErr
 			}
-			return nil, fmt.Errorf(`%w: a Body.Patch sheet's facets are not proven embedded: %s`, ErrUnsupported, err)
+			return nil, fmt.Errorf(`%w: a PatchEdges sheet's facets are not proven embedded: %s`, ErrUnsupported, err)
 		}
 	}
 	axial := make(map[*Face]float64, len(faces))
@@ -112,14 +112,14 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 			proofbound.PerturbedTriangleAreaAllow(a, bb, c, delta))
 	}
 	if proofbound.IsNonFinite(mesh.n.AreaSlack) {
-		return nil, fmt.Errorf(`%w: a Body.Patch result states no finite area bound`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: a PatchEdges result states no finite area bound`, ErrUnsupported)
 	}
 	return mesh, nil
 }
 
 // orientBodyPatchFilledFaces makes each new fill's mesh boundary run opposite
 // its source face's mesh boundary. The source face already carries its
-// feature's outward sense, including any reflection before Body.Patch. The
+// feature's outward sense, including any reflection before PatchEdges. The
 // patch's new plane frame can have the opposite local handedness, so its
 // triangle winding is settled by the shared mesh edge, not that frame.
 func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budget *proofbound.WorkBudget) error {
@@ -135,7 +135,7 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 			continue
 		}
 		if len(f.loops) == 0 || len(f.loops[0].coedges) == 0 {
-			return fmt.Errorf(`%w: a Body.Patch fill has no boundary walk to orient`, ErrDegenerate)
+			return fmt.Errorf(`%w: a PatchEdges fill has no boundary walk to orient`, ErrDegenerate)
 		}
 		ce := f.loops[0].coedges[0]
 		start, end := classOf[ce.Start()], classOf[ce.End()]
@@ -147,12 +147,12 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 			}
 		}
 		if source == nil {
-			return fmt.Errorf(`%w: a Body.Patch fill has no source face on its rim`, ErrDegenerate)
+			return fmt.Errorf(`%w: a PatchEdges fill has no source face on its rim`, ErrDegenerate)
 		}
 		patchSense := tessellation.PatchEdgeSense(m.n.Triangles, byFace[f], start, end)
 		sourceSense := tessellation.PatchEdgeSense(m.n.Triangles, byFace[source], start, end)
 		if patchSense == 0 || sourceSense == 0 {
-			return fmt.Errorf(`%w: a Body.Patch rim has no matching source and fill mesh edges`, ErrUnsupported)
+			return fmt.Errorf(`%w: a PatchEdges rim has no matching source and fill mesh edges`, ErrUnsupported)
 		}
 		if patchSense != sourceSense {
 			continue

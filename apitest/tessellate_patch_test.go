@@ -16,7 +16,7 @@ import (
 func TestPatchSheetTessellates(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
-	b, err := decad.New().Patch(t.Context(), s, p)
+	b, err := decad.PatchProfile(t.Context(), decad.New(), s, p)
 	require.NoError(t, err)
 	m, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -51,7 +51,7 @@ func TestPatchSheetTessellates(t *testing.T) {
 func TestPatchSheetWithHoleTessellates(t *testing.T) {
 	t.Parallel()
 	s, p := rectWithHoleSketch(t)
-	b, err := decad.New().Patch(t.Context(), s, p)
+	b, err := decad.PatchProfile(t.Context(), decad.New(), s, p)
 	require.NoError(t, err)
 	coarse, err := b.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestPatchSheetWithHoleTessellates(t *testing.T) {
 func TestPatchSheetReflectedMeshFollowsFaceNormal(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
-	b, err := decad.New().Patch(t.Context(), s, p)
+	b, err := decad.PatchProfile(t.Context(), decad.New(), s, p)
 	require.NoError(t, err)
 	plane, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestPatchSheetReflectedMeshFollowsFaceNormal(t *testing.T) {
 func TestPatchSheetPlacementBoundAndVerificationLevels(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
-	b, err := decad.New().Patch(t.Context(), s, p)
+	b, err := decad.PatchProfile(t.Context(), decad.New(), s, p)
 	require.NoError(t, err)
 	turn, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)

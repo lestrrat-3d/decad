@@ -22,7 +22,7 @@ The rules for rows live in `docs/layout.md`.
 | `thicken_axis.go` | Assembles thicken sections. See surface §16. |
 | `thicken_chain_sweep.go` | Thickens admitted one-arc and cardinal composite chain sheets. See surface §16.8. |
 | `offset.go` | `Offset`: a second sheet at a normal distance. See surface §17. |
-| `patch_body.go` | `Body.Patch` topology adapter and face build. See surface §5.2. |
+| `patch_body.go` | `PatchEdges` topology adapter and face build. See surface §5.2. |
 | `denotation.go` | Mints document tokens. |
 | `stitch_weld.go` | Adapts Stitch topology to Table J. See surface §6.2. |
 | `stitch.go` | `Stitch` evaluator and topology adapter. See surface §6.4. |
@@ -67,6 +67,7 @@ The rules for rows live in `docs/layout.md`.
 | `stops.go` | Body-relative stop resolution. See evaluator §5/§6/§11. |
 | `loft.go` | Loft entry points and chain ribbon assembly. See loft §2/§4/§10/§16. |
 | `loft_sections.go` | Public smooth-section loft entry point and source-face assembly. See loft-sections design. |
+| `cone_from_face.go` | `ConeFromFace`: the full tool cone one float step off a Revolve blank's selected conical face. See loft-face-sections design. |
 | `loft_faces.go` | Bounded source-cap loft admission and held wall assembly. See loft-face-sections design. |
 | `loft_faces_tangent.go` | `LoftFacesToConeTangent` and `ConeTangentEnd`: the LoftFaces loft whose last section is the plane exactly tangent to a point cone. See loft-face-sections design. |
 | `loft_faces_proof.go` | Exact cap-map, band embedding and occupied-volume proof for face-fed lofts. See loft-face-sections design. |

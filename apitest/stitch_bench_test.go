@@ -11,7 +11,7 @@ import (
 )
 
 // BenchmarkStitchPatchCappedTube measures Stitch's curved volume calculation
-// after a real extruded sheet has been capped through Body.Patch.
+// after a real extruded sheet has been capped through PatchEdges.
 func BenchmarkStitchPatchCappedTube(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
@@ -27,7 +27,7 @@ func BenchmarkStitchPatchCappedTube(b *testing.B) {
 			decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 			decad.WithSurfaceResult())
 		require.NoError(b, err)
-		capped, err := sheet.Patch(b.Context(), decad.Edges(decad.Free()).Exactly(2))
+		capped, err := decad.PatchEdges(b.Context(), sheet, decad.Edges(decad.Free()).Exactly(2))
 		require.NoError(b, err)
 		b.StartTimer()
 		solid, err := decad.Stitch(b.Context(), capped)

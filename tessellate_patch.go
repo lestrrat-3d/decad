@@ -17,7 +17,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// tessellatePatch chords a Document.Patch's recorded planar region once,
+// tessellatePatch chords a PatchProfile's recorded planar region once,
 // triangulates it with holes, and attributes every facet to its one live face.
 // Its trim and coordinate bounds cover both directions between the analytic
 // patch and the held facets. A sheet has no occupied volume to prove.

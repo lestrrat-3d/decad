@@ -119,9 +119,8 @@ func (up unstitchPayload) transform() r3.Transform { return up.xform }
 
 // axialDelta reports the held face's own proven axial displacement
 // (stops.go's axialDisplacement interface), so an unstitched sheet's
-// payload-wide fallback (payloadAxialDelta) reads the same figure
-// selectedFaceAxialDelta already reads straight off the face when it holds
-// one (topo.Face.HasAxialDelta) — zero, honestly, for a face that does not.
+// payload-wide fallback (payloadAxialDelta) reads the figure the face holds
+// (topo.Face.HasAxialDelta) — zero, honestly, for a face that does not.
 func (up unstitchPayload) axialDelta() float64 { return up.face.n.AxialDelta }
 
 func (up unstitchPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
@@ -212,7 +211,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 // CurveToken.Compose, internal/denotation/token.go, rather than overwritten — this is one
 // of the copiers that lets a later Stitch prove an unstitched-and-restitched
 // pair coincident again even where a bound makes bit-identity alone fall
-// short), and topo.Face.AxialDelta.
+// short), topo.Face.AxialDelta, and topo.Face.CapRecord.
 //
 // topo.Face.AxialDelta, topo.Face.HasAxialDelta and topo.Face.NormalBound carry forward
 // rather than reading as absent, because the copy carries the identical
@@ -229,7 +228,11 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 // rather than invent one — a narrowing is sound, but inventing an error
 // model is not. topo.Face.Denoted, a revolve face's denoted surface, is an exact
 // enclosure rather than a dimensionless figure, so it does compose: the copy
-// carries its exact image under xform (Face.denotedUnder).
+// carries its exact image under xform (Face.denotedUnder). topo.Face.CapRecord,
+// the plane a ToFace stop reads, is carried by CapRecord.Under: the same record
+// under the identity placement, and none under any other, since a held
+// composition of the record with the placement is not the exact image of its
+// plane; a copy without a record is not a ToFace stop.
 func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform, delta float64) (*Face, error) {
 	if xform != r3.Identity() && srcFace.n.NormalBound != 0 {
 		return nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
@@ -316,6 +319,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			NormalBound:   srcFace.n.NormalBound,
 			Denoted:       srcFace.denotedUnder(xform),
 			Surface:       transformed,
+			CapRecord:     srcFace.n.CapRecord.Under(xform),
 		},
 	}
 	for _, l := range srcFace.loops {

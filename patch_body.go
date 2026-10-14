@@ -21,7 +21,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Body.Patch of docs/surface-design.md §5.2: a planar fill of
+// This file is PatchEdges of docs/surface-design.md §5.2: a planar fill of
 // one or more closed chains of a body's own free edges, amended by this PR
 // from a one-chain rule to "one or more chains, each proven independently"
 // (§5.2's own amendment note). It reuses unstitch.go's held-B-rep-under-a-
@@ -78,7 +78,7 @@ import (
 // audit after a placement, because rounding can bring two placed points into
 // contact — or apart — that the unplaced ones were not.
 
-// Body.Patch's own two Table R rows this PR adds, beside the existing R4
+// PatchEdges's own two Table R rows this PR adds, beside the existing R4
 // (gate 1), R5 (gate 2, and gate 4 remapped), R6 (gate 3) and R16 (selector)
 // rows §5.2 already names.
 const (
@@ -90,26 +90,26 @@ const (
 	patchRowNoPayload = `docs/surface-design.md Table R row R19`
 )
 
-// Patch resolves sel against the receiver's own live topology, fills
-// every closed chain of free edges the selection proves, and returns a new
-// body carrying the receiver's own faces plus one new planar face per chain,
-// retiring the receiver (docs/surface-design.md §5.2). The receiver's own
-// topology is never mutated: the result is built by REBUILDING the receiver
-// from its own faces, so a retired receiver stays readable and unmodified
-// for any caller still holding it.
+// PatchEdges resolves sel against b's own live topology, fills every closed
+// chain of free edges the selection proves, and returns a new body carrying
+// b's own faces plus one new planar face per chain, retiring b
+// (docs/surface-design.md §5.2). b's own topology is never mutated: the
+// result is built by REBUILDING b from its own faces, so a retired b stays
+// readable and unmodified for any caller still holding it.
 //
-// A nil receiver, or one this evaluator did not build (b.payload == nil), is
-// [ErrUnsupported] (Table R row R19): a body reads its readable topology
-// regardless of payload, but Patch's own re-evaluation contract — a placed
-// copy replays from the recorded plane rather than re-proving it — needs the
-// same payload-carrying contract every other rebuilding operation
+// A nil context or a nil b is [ErrDegenerate]. A b this evaluator did not
+// build (b.payload == nil) is [ErrUnsupported] (Table R row R19): a body reads
+// its readable topology regardless of payload, but PatchEdges's own
+// re-evaluation contract — a placed copy replays from the recorded plane
+// rather than re-proving it — needs the same payload-carrying contract every
+// other rebuilding operation
 // (Transform, Copy) already requires. A body owned by a
-// different document is [ErrForeignBody], and a retired receiver is
+// different document is [ErrForeignBody], and a retired b is
 // [ErrRetiredBody]. sel's own resolution failure ([SelectionError] wrapping
 // [ErrNoMatch] or [ErrCardinality], Table R row R16) and every one of gates
 // 1-4's refusals (R4, R5, R6, R18) surface unchanged. A failed call leaves
-// the document and the receiver unchanged.
-func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error) {
+// the document and b unchanged.
+func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a patch`, ErrDegenerate)
 	}
@@ -121,7 +121,7 @@ func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error) {
 		return nil, err
 	}
 	if b.payload == nil {
-		return nil, fmt.Errorf(`%w: Body.Patch requires a receiver this evaluator built (%s)`, ErrUnsupported, patchRowNoPayload)
+		return nil, fmt.Errorf(`%w: PatchEdges requires a body this evaluator built (%s)`, ErrUnsupported, patchRowNoPayload)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -184,7 +184,7 @@ type bodyPatchChain struct {
 	level levelToken
 }
 
-// bodyPatchPayload is Body.Patch's own record: the retiring receiver's own
+// bodyPatchPayload is PatchEdges's own record: the retiring receiver's own
 // faces, its already-proven Bounds, and each chain's proven plane — never a
 // built topology (unstitch.go's "held-B-rep-under-a-rigid-motion" idea,
 // widened here from one face to a whole face set plus the faces the patch
@@ -227,7 +227,7 @@ func (pp bodyPatchPayload) placed(ctx context.Context, d *Document, ref producer
 func buildPatchChains(edges []*Edge) ([]bodyPatchChain, error) {
 	for _, e := range edges {
 		if !e.IsFree() {
-			return nil, fmt.Errorf(`%w: Body.Patch selection holds an edge that is not free (docs/surface-design.md Table R row R4)`, ErrDegenerate)
+			return nil, fmt.Errorf(`%w: PatchEdges selection holds an edge that is not free (docs/surface-design.md Table R row R4)`, ErrDegenerate)
 		}
 	}
 	groups, err := partitionPatchChains(edges)
@@ -448,11 +448,11 @@ func orientPatchChain(chain bodyPatchChain) ([]patchOrientedEdge, error) {
 	oriented := make([]patchchain.OrientedEdge[*Edge, *Vertex], len(chain.edges))
 	for i, e := range chain.edges {
 		if len(e.faces) != 1 {
-			return nil, fmt.Errorf(`%w: a Body.Patch chain edge is not free (%s)`, ErrDegenerate, patchRowFacesDisagree)
+			return nil, fmt.Errorf(`%w: a PatchEdges chain edge is not free (%s)`, ErrDegenerate, patchRowFacesDisagree)
 		}
 		dir, ok := coedgeDirectionFor(e.faces[0], e)
 		if !ok {
-			return nil, fmt.Errorf(`%w: a Body.Patch chain edge's adjacent face does not use it (%s)`, ErrDegenerate, patchRowFacesDisagree)
+			return nil, fmt.Errorf(`%w: a PatchEdges chain edge's adjacent face does not use it (%s)`, ErrDegenerate, patchRowFacesDisagree)
 		}
 		oriented[i] = patchchain.OrientedEdge[*Edge, *Vertex]{Edge: e, Start: e.start, End: e.end, Forward: !dir}
 	}
@@ -467,7 +467,7 @@ func orientPatchChain(chain bodyPatchChain) ([]patchOrientedEdge, error) {
 	return order, nil
 }
 
-// evalBodyPatchContext is Body.Patch's whole evaluator, shared by the
+// evalBodyPatchContext is PatchEdges's whole evaluator, shared by the
 // initial build and every later placement: it rebuilds the receiver's own
 // face set under xform (copyPatchFacesUnder), builds one new face per chain
 // on top of that same rebuild (buildPatchFace, which re-derives orientation
@@ -516,7 +516,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	}
 
 	// Kind and lumps/shells come from the existing sheetLumps, run only AFTER
-	// every face is attached (its own contract). Body.Patch never publishes a
+	// every face is attached (its own contract). PatchEdges never publishes a
 	// solid: closing a sheet's last free edge leaves a CLOSED sheet reporting
 	// BodySheet with IsSolid() false, since Stitch alone makes the material
 	// claim (docs/surface-design.md §2.1).
@@ -691,6 +691,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 				NormalBound:   f.n.NormalBound,
 				Denoted:       f.denotedUnder(xform),
 				Surface:       transformed,
+				CapRecord:     f.n.CapRecord.Under(xform),
 			},
 		}
 		for _, l := range f.loops {
@@ -733,7 +734,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 // approximately-coplanar data would carry, are discarded.
 //
 // Either way this re-runs gate 4's crossing audit, and reads the face's area
-// from the same moments engine Document.Patch's own single planar face uses.
+// from the same moments engine PatchProfile's own single planar face uses.
 func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, edgeCopy map[*Edge]*Edge, xform r3.Transform, delta float64) (*Face, error) {
 	ordered, err := orientPatchChain(chain)
 	if err != nil {
@@ -773,7 +774,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		return nil, err
 	}
 	if ig.Area <= 0 {
-		return nil, fmt.Errorf(`%w: a Body.Patch chain encloses no area`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: a PatchEdges chain encloses no area`, ErrDegenerate)
 	}
 	// The integrals are taken in the fitted frame's plane coordinates, which
 	// that frame's held axes carry to world orthonormal only to rounding.
@@ -810,7 +811,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		// publish an area its own truth may sit outside of.
 		charge, ok := patchchain.CurvedAreaCharge(frame, frameMap, frameCharge.Stretch, segs, areaEdges)
 		if !ok {
-			return nil, fmt.Errorf(`%w: a Body.Patch rim edge carries no proven bound on the curve it denotes, so its face area has none`, ErrUnsupported)
+			return nil, fmt.Errorf(`%w: a PatchEdges rim edge carries no proven bound on the curve it denotes, so its face area has none`, ErrUnsupported)
 		}
 		ig.AreaBound = proofbound.AbsSumUpper(ig.AreaBound, charge)
 	}
@@ -847,7 +848,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 }
 
 // patchChainIntegrals runs the same closed-form region integral
-// Document.Patch's own single planar face uses (moments.go), over a
+// PatchProfile's own single planar face uses (moments.go), over a
 // single-loop, no-hole record — reused rather than a bespoke shoelace sum,
 // so a patch face's Area answers on the identical Exactness/Bound terms
 // docs/surface-design.md §5.1 already states for a sketch-recorded patch.
@@ -867,7 +868,7 @@ func patchRemapCrossingError(err error) error {
 		return nil
 	}
 	if errors.Is(err, ErrUnsupported) {
-		return fmt.Errorf(`%w: a Body.Patch chain's plane-local walk crosses or touches itself (docs/surface-design.md Table R row R5)`, ErrDegenerate)
+		return fmt.Errorf(`%w: a PatchEdges chain's plane-local walk crosses or touches itself (docs/surface-design.md Table R row R5)`, ErrDegenerate)
 	}
 	return err
 }
@@ -944,7 +945,7 @@ func planeFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
 // (verify.go) — when all three hold, decided by
 // bodyPatchPayloadProvesSimple below:
 //
-//  1. its receiver — the body Body.Patch was called on — itself admits
+//  1. its receiver — the body PatchEdges was called on — itself admits
 //     under Rule S, decided by the identical payloadProvesSimple predicate,
 //     never a reimplementation of it;
 //  2. every new face's chain is a COMPLETE free-edge chain of that
@@ -953,7 +954,7 @@ func planeFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
 //     end planes.
 //
 // Under those three the patched assembly IS the receiver feature's own
-// solid boundary — every chain vertex and edge Body.Patch selected is the
+// solid boundary — every chain vertex and edge PatchEdges selected is the
 // SAME object the receiver's own build stamped, never a copy or a fit — so
 // the receiver's own construction proof carries onto the patched body
 // unchanged. Any chain this cannot decide keeps the payload undecided,
@@ -972,7 +973,7 @@ func planeFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
 // regardless of which of gate 3's two arms actually admitted the chain's
 // planarity. A chain with no shared id — the exact-arm case, a chain from
 // any receiver whose build mints no level token at all, or a chain a
-// SECOND Body.Patch call selects from an already-patched body
+// SECOND PatchEdges call selects from an already-patched body
 // (copyPatchFacesUnder does not propagate a level token onto the copies it
 // mints) — is undecided here, never guessed: Rule P names no distance
 // threshold that could stand in for the identity check CLAUDE.md's
@@ -986,7 +987,7 @@ func planeFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
 // them, so admitting on a proper subset would be unsound.
 //
 // Only prismPayload mints level tokens today, so Rule P admits a
-// Body.Patch-capped surface-extruded tube's rims and nothing wider yet.
+// PatchEdges-capped surface-extruded tube's rims and nothing wider yet.
 
 // bodyPatchPayloadProvesSimple decides payloadProvesSimple's bodyPatchPayload
 // arm — Rule P, this file's own doc comment above. bodies is

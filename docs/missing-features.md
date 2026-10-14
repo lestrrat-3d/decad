@@ -27,7 +27,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| `ToFace` onto a face whose normal is not exactly parallel to the sweep, or that carries a normal bound or denoted record (a rotated stop body whose float normal is tilted, a revolve cap, a band patch); use a `Distance` extent | `ErrUnsupported` (`stops.go`, `resolveToFace`) | `docs/evaluator-design.md` §5 |
+| `ToFace` onto a face whose normal is not exactly parallel to the sweep, whose denoted plane is not an exact level set of the sweep, that carries a normal bound or denoted record, or that carries no cap record (a rotated stop body whose float normal is tilted, a revolve cap, a band patch, a faceted boolean face, a placed sheet copy, a sweep or coil cap, a chain patch); use a `Distance` extent | `ErrUnsupported` (`stops.go`, `resolveToFace`) | `docs/evaluator-design.md` §5 |
 | Draft angle on a free-form wall, a circular corner that is not G1, or a surface result | `ErrUnsupported`, draft SD3/SD4/SD12 (`draft_build.go`) | `docs/draft-design.md` §14 |
 | Boolean, mass and interference readings of a draft body whose circular wall joins a neighbour G1 but not exactly tangent, or whose section holds a trimmed segment | `ErrUnsupported`, "no proof of the volume" (`capblend_admit.go`); `Verify` reads the pair `Suspect`; the mesh exports | `docs/draft-design.md` §9.1 |
 | `Draft` of a wall subset that moves one of two walls meeting at a circular corner, about a `NeutralFrame` or a non-cap face, or of a receiver that is not a straight prism | `ErrUnsupported`, draft SD4/SD20/SD23 (`draft.go`, `draft_build.go`) | `docs/draft-design.md` §10.2, §14 |
@@ -102,9 +102,9 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| `Thicken` of other composite or chain sweeps, loft, stitched, `Body.Patch` or `Unstitch` sheets | `ErrUnsupported` (R24); cardinal composite and exact-axis one-arc chain sweeps build, as do one-span profile sweeps | `docs/surface-design.md` §16.8 |
-| `Body.Patch` over a rim with a bounded vertex (a cut junction, a trimmed line end, a circle seam whose centre plus radius rounds) that no straight prism build stamped with one level token, such as a `Patch` sheet's rim | `ErrUnsupported` (R6) | `docs/surface-design.md` §5.2 |
-| Tessellation of `Body.Patch` with a curved face or edge outside a single-circle prism sheet filled in one call, or with a nonzero face-normal bound | `ErrUnsupported`: no shared chording for that face or edge | `docs/surface-design.md` §10; `docs/tessellation-design.md` §2 |
+| `Thicken` of other composite or chain sweeps, loft, stitched, `PatchEdges` or `Unstitch` sheets | `ErrUnsupported` (R24); cardinal composite and exact-axis one-arc chain sweeps build, as do one-span profile sweeps | `docs/surface-design.md` §16.8 |
+| `PatchEdges` over a rim with a bounded vertex (a cut junction, a trimmed line end, a circle seam whose centre plus radius rounds) that no straight prism build stamped with one level token, such as a `Patch` sheet's rim | `ErrUnsupported` (R6) | `docs/surface-design.md` §5.2 |
+| Tessellation of `PatchEdges` with a curved face or edge outside a single-circle prism sheet filled in one call, or with a nonzero face-normal bound | `ErrUnsupported`: no shared chording for that face or edge | `docs/surface-design.md` §10; `docs/tessellation-design.md` §2 |
 | `Stitch` closing a revolve sheet whose wall tags are not exactly their records: a tilted or round-anchored axis, a near-parallel or near-perpendicular side, a snapped centre | `ErrUnsupported` (R8, `stitchFluxTagsDenoted`) | `docs/surface-design.md` §6.4 |
 | `Extend` of a partially revolved ribbon | `ErrUnsupported` (RS14) | `docs/surface-intersection-design.md` §2.2 |
 | `Trim`/`Extend`/`Split` over a pair sharing no generator, except a point loft split by a finite world-XY line chain `Extrude` sheet | Refused outside the bounded point-loft split class | `docs/surface-intersection-design.md` §4, `docs/loft-point-design.md` "Planar split of a point loft" |

@@ -235,6 +235,53 @@ exactly. Placement drops both records. A source whose plane is not the tangent
 plane still passes through the ordinary embedding gates, which refuse an
 inconsistent end.
 
+## Cones from a revolved face
+
+`ConeFromFace(ctx, body, face, far)` builds a tool cone for a Revolve blank.
+The cone is the nearest representable strict offset from the selected face's
+exact line. This need not be one float step: the rounded value may already be
+strictly sided, or the bound may be MaxFloat64. The construction guarantees
+separation only from that line. Other blank and tool relations are left to
+later checks. `body` must
+pass `recordedRevolveSection`: a live, unplaced, full Revolve about world X of
+whole straight sides. That section has 4 to 128 recorded segments, strictly
+positive X coordinates, nonnegative radii, no holes and one side of the axis;
+it may be non-convex. `face` resolves to one non-axis side of that section
+with both end radii positive, unequal end stations and unequal end radii.
+
+The side's recorded endpoints `(x0, r0)`, `(x1, r1)` are floats, so the exact
+rational line through them is `x + k*r = C` with `k = -(x1-x0)/(r1-r0)`, which
+must be positive, and `C = x0 + k*r0`. The face's empty side is the outward
+side of the section walk. For a closed walk of exact shoelace orientation `o`,
+the side has sign `o * sign(r1 - r0)` of `f(x, r) = x + k*r - C`.
+
+The cone apex `A` is the float64 nearest `C` that lies strictly on that side.
+Its far radius `R` is the float64 nearest `(C - far)/k` strictly on that side.
+Then `f(A, 0)` and `f(far, R) = k*(R - (C-far)/k)` both have the side's sign,
+so the whole meridian segment from `(A, 0)` to `(far, R)` lies strictly off
+the face's line. Since `k > 0`, the radius decreases as x rises. `strictFloat`
+rounds toward the finite side when the exact value lies beyond the float64
+range, by exact comparison against the largest finite float. `far` must be a
+finite negative axial coordinate (below X = 0) and below both face ends, `A`
+must be above `far`, `R` must be positive, and `A > 0 > far` so that
+`exactPointCone` reads the result.
+
+Revolve classifies a generator as a cylinder when `|dr| <= 1e-9*hypot(dx, dr)`,
+and the directed rounding can cross that boundary. The built body is checked
+with `exactPointCone`, which needs a face classified Cone, before it is
+registered in the document. A failed check is `ErrUnsupported` and leaves the
+document and its provenance numbering unchanged.
+
+The result is the full Revolve of the triangle `(far, 0)`, `(far, R)`,
+`(A, 0)` in a private world-XY sketch. It is an ordinary Revolve body that
+depends on `body`. Every rounding step is decided by exact rational
+comparison, so for identical recorded endpoint and far bits the strict gap to
+the face is the same on every build. That establishes only the separation from
+the selected face line; other blank and tool relations keep their own checks.
+The spiral first-join gates (`spiralToolOuterGap`, `spiralFiniteConeSide`) read
+the same strict signs on amd64 and arm64. `internal/pointcone/offset.go` holds
+the arithmetic as plain data.
+
 ## Generic finite Revolve source gate
 
 The ordinary public `Union` also checks a bounded LoftFaces result after

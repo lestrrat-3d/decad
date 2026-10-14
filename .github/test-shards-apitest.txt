@@ -2012,5 +2012,8 @@
 10	0.00	TestCopyRotationMintsCapRolesUnderEveryCopy
 10	0.00	TestSpiralCopiedToothUnionNeedsExactRotation
 10	0.00	TestToFaceTiltedStopIsChargedOrRefused
-10	0.00	TestToFaceRefusesTiltPastOldTolerance
+10	0.00	TestToFaceRefusesNanoradianTilt
 10	0.00	TestToFacePlacedStopNormal
+10	0.00	TestToFaceChargesStopOriginLift
+10	0.00	TestToFaceRefusesFootprintDependentStop
+10	0.00	TestToFaceRefusesFacetedLoftCap

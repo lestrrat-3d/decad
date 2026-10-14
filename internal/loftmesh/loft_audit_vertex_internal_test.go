@@ -168,9 +168,18 @@ func checkVertexPairs(t *testing.T, f vertexFixture, data *LoftAuditData, label 
 			if count != 1 {
 				continue
 			}
+			plane := data.separatingPlaneCertificate(f.tris[i], f.tris[j], i, j, shared[0])
+			if data.exactLifts {
+				require.False(t, plane, "%s %s pair %d,%d: separating plane on data with exact lifts", f.name, label, i, j)
+			}
 			for _, shortcuts := range []LoftAuditShortcuts{{}, loftGenericShortcuts} {
 				wantOut, wantErr := auditLoftPairDataSignedReference(data, f.tris, i, j, shortcuts)
 				gotOut, gotErr := auditLoftPairDataSigned(data, f.tris, i, j, shortcuts, nil, nil)
+				if shortcuts.Certificates && plane && wantOut == LoftPairClassified && wantErr == nil {
+					// The separating plane admits a pair the reference
+					// classifies and admits: the only allowed difference.
+					wantOut = LoftPairVertexCertificate
+				}
 				require.Equal(t, wantOut, gotOut, "%s %s pair %d,%d", f.name, label, i, j)
 				if wantErr == nil {
 					require.NoError(t, gotErr, "%s %s pair %d,%d", f.name, label, i, j)
@@ -229,6 +238,12 @@ func TestVertexCertificateFloatKeepsAuditWork(t *testing.T) {
 				}
 				out, err := auditLoftPairDataSignedReference(data, f.tris, i, j, loftGenericShortcuts)
 				refused = refused || err != nil
+				if out == LoftPairClassified && err == nil && count == 1 {
+					shared, _ := tessellation.SharedVertexIndices(f.tris[i], f.tris[j])
+					if data.separatingPlaneCertificate(f.tris[i], f.tris[j], i, j, shared[0]) {
+						out = LoftPairVertexCertificate
+					}
+				}
 				switch out {
 				case LoftPairVertexCertificate:
 					vertexCerts++

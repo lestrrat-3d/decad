@@ -10,7 +10,7 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, prism/cup mesh assembly and dispatch. See tessellation design. |
-| `tessellate_patch.go` | Chords and triangulates a recorded `Document.Patch` sheet. See tessellation §5.1. |
+| `tessellate_patch.go` | Chords and triangulates a recorded `PatchProfile` sheet. See tessellation §5.1. |
 | `tessellate_stacked.go` | Stacked-slab mesh and volume proof. See stacked-prism §5. |
 | `tessellate_brep.go` | Meshes a brep body and proves its occupied volume. See general-boolean §4.4. |
 | `tessellate_brep_band.go` | Adapts route L band geometry to shared wall samples and emits mesh patches. See modify-general DG3. |
@@ -23,8 +23,8 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate_sweep_composite.go` | Plans shared profile stations and assembles composite Sweep meshes. See sweep Table D. |
 | `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
-| `tessellate_body_patch.go` | Triangulates planar Body.Patch sheets and proves face bounds. See tessellation §2. |
-| `tessellate_body_patch_prism.go` | Reuses circular surface-extrusion wall stations to mesh one or both Body.Patch fills with shared rim indices and verified face bounds. |
+| `tessellate_body_patch.go` | Triangulates planar PatchEdges sheets and proves face bounds. See tessellation §2. |
+| `tessellate_body_patch_prism.go` | Reuses circular surface-extrusion wall stations to mesh one or both PatchEdges fills with shared rim indices and verified face bounds. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |
 | `tessellate_chain_sweep.go` | Shared-station mesh and bounds for the cardinal composite chain sheet. See sweep §15.8. |
 | `tessellate_chain_arc.go` | Certified angular-cell mesh for one-line single-arc chain sheets. See sweep §15.9. |
