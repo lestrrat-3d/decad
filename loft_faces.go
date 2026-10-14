@@ -279,18 +279,18 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 	startGroup, endGroup := len(groups)-2, len(groups)-1
 	startOrigins := append([]provenance.Ref(nil), sections[0].mesh.groups[sections[0].group].origins...)
 	last := sections[len(sections)-1]
-	groups[startGroup] = facetGroup{origins: append(startOrigins, provenance.Ref{Producer: ref, Role: roleCapStart}),
+	groups[startGroup] = facetGroup{origins: append(startOrigins, provenance.Ref{Producer: ref, Role: provenance.RoleCapStart}),
 		surface: sections[0].face.n.Surface, planar: true, reversed: true, normalBound: 2}
 	if last.constructed != nil {
 		plane, err := loftFacesConstructedPlane(*last.constructed)
 		if err != nil {
 			return facetedPayload{}, err
 		}
-		groups[endGroup] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
+		groups[endGroup] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			surface: plane, planar: true, normalBound: 2}
 	} else {
 		endOrigins := append([]provenance.Ref(nil), last.mesh.groups[last.group].origins...)
-		groups[endGroup] = facetGroup{origins: append(endOrigins, provenance.Ref{Producer: ref, Role: roleCapEnd}),
+		groups[endGroup] = facetGroup{origins: append(endOrigins, provenance.Ref{Producer: ref, Role: provenance.RoleCapEnd}),
 			surface: last.face.n.Surface, planar: true, normalBound: 2}
 	}
 	for _, capTri := range base.tris[n:] {

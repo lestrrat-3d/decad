@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 )
@@ -44,7 +45,7 @@ func draftUndercuts(b *Body, dp draftPayload, pull r3.Vec) undercutOutcome {
 	for _, cap := range []struct {
 		role string
 		sign float64
-	}{{role: roleCapStart, sign: -1}, {role: roleCapEnd, sign: 1}} {
+	}{{role: provenance.RoleCapStart, sign: -1}, {role: provenance.RoleCapEnd, sign: 1}} {
 		f := roles[cap.role]
 		if f == nil {
 			return undercutOutcome{}

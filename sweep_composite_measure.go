@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
@@ -304,7 +305,7 @@ func restoreSweepArcCapRoles(body *Body, reverse bool) {
 	}
 	for _, face := range body.Faces() {
 		for i, origin := range face.n.Origins {
-			origin.Role = compositesweep.SwapCapRole(origin.Role, roleCapStart, roleCapEnd)
+			origin.Role = compositesweep.SwapCapRole(origin.Role, provenance.RoleCapStart, provenance.RoleCapEnd)
 			face.n.Origins[i] = origin
 		}
 	}

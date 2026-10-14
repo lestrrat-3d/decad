@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -133,11 +134,11 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	for _, p := range cbp.patches {
 		geomOfRole[p.role] = p.geom
 	}
-	capStart, err := faceOfRole(roleCapStart)
+	capStart, err := faceOfRole(provenance.RoleCapStart)
 	if err != nil {
 		return nil, err
 	}
-	capEnd, err := faceOfRole(roleCapEnd)
+	capEnd, err := faceOfRole(provenance.RoleCapEnd)
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -41,7 +42,7 @@ func validateNonnegativeLength(v units.Value, name string) error {
 	if v.Kind() != units.Length {
 		return fmt.Errorf("%w: %s must be a Length", ErrUnitKind, name)
 	}
-	if !finiteMeasurementValues(v.Base()) {
+	if !measurement.FiniteValues(v.Base()) {
 		return fmt.Errorf("%w: %s is non-finite", ErrNotFinite, name)
 	}
 	if v.Base() < 0 {
@@ -192,7 +193,7 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	if req.PointResolution.Kind() != units.Length || req.NormalResolution.Kind() != units.Angle {
 		return nil, fmt.Errorf("%w: contact resolutions must be Length and Angle", ErrUnitKind)
 	}
-	if !finiteMeasurementValues(req.PointResolution.Base(), req.NormalResolution.Base()) {
+	if !measurement.FiniteValues(req.PointResolution.Base(), req.NormalResolution.Base()) {
 		return nil, fmt.Errorf("%w: contact resolution is non-finite", ErrNotFinite)
 	}
 	if req.PointResolution.Base() <= 0 || req.NormalResolution.Base() <= 0 {
@@ -434,7 +435,7 @@ func classifyAnalyticContact(ctx context.Context, report *ContactReport) error {
 	switch res.verdict {
 	case reportvocab.PairDisjoint:
 		gap := pairGapMeasurement(res)
-		if !finiteMeasurementValues(gap.Value.Base(), gap.Bound.Base()) ||
+		if !measurement.FiniteValues(gap.Value.Base(), gap.Bound.Base()) ||
 			gap.Value.Base()-gap.Bound.Base() <= 0 {
 			report.Reason = ContactNoGapProof
 			return nil

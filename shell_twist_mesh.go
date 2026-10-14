@@ -45,7 +45,7 @@ func twistShellFacetedBody(ctx context.Context, d *Document, ref producerID,
 	groups := []facetGroup{
 		{origins: []provenance.Ref{{Producer: ref, Role: prismOuterFirstSideRole}}},
 		{origins: []provenance.Ref{{Producer: ref, Role: "shellSide(0,0)"}}},
-		{origins: []provenance.Ref{{Producer: ref, Role: roleCapStart}}, planar: true},
+		{origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}}, planar: true},
 		{origins: []provenance.Ref{{Producer: ref, Role: roleShellCap}}, planar: true},
 		{origins: []provenance.Ref{{Producer: ref, Role: "rim(0)"}}, planar: true},
 	}

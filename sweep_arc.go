@@ -134,10 +134,10 @@ func finishArcSweepBody(body *Body, payload sweepPayload) {
 					origins = append(origins, origin, second)
 					continue
 				}
-			case payload.reverseArcCaps && origin.Role == roleCapStart:
-				origin.Role = roleCapEnd
-			case payload.reverseArcCaps && origin.Role == roleCapEnd:
-				origin.Role = roleCapStart
+			case payload.reverseArcCaps && origin.Role == provenance.RoleCapStart:
+				origin.Role = provenance.RoleCapEnd
+			case payload.reverseArcCaps && origin.Role == provenance.RoleCapEnd:
+				origin.Role = provenance.RoleCapStart
 			}
 			origins = append(origins, origin)
 		}

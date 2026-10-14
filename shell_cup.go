@@ -381,7 +381,7 @@ func (p cupPlan) nameWalls(ctx context.Context, col stackedColumn, faces []*Face
 
 func (p cupPlan) capRole(slab, region int, _ bool) string {
 	if slab == p.floor {
-		return roleCapStart
+		return provenance.RoleCapStart
 	}
 	return fmt.Sprintf("rim(%d)", region)
 }
@@ -405,7 +405,7 @@ func (cupPlan) order(faces []*Face) []*Face {
 			return 0
 		case strings.HasPrefix(role, "shellSide("):
 			return 1
-		case role == roleCapStart:
+		case role == provenance.RoleCapStart:
 			return 2
 		case role == roleShellCap:
 			return 3

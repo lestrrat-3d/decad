@@ -446,9 +446,9 @@ func loftMirrorCylinderCapsOppose(lower, upper facetedPayload, upperMap []int,
 func loftMirrorCylinderCapOrigins(fp *facetedPayload, blank *Body, pairs []*Body,
 	groups [2]int) error {
 	for cap, group := range groups {
-		role := roleCapStart
+		role := provenance.RoleCapStart
 		if cap == 1 {
-			role = roleCapEnd
+			role = provenance.RoleCapEnd
 		}
 		seen := make(map[provenance.Ref]struct{})
 		var origins []provenance.Ref

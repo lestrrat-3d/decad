@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -25,7 +26,7 @@ func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord
 		rp.ax.DUBound != 0 || rp.ax.DVBound != 0 ||
 		!((math.Abs(rp.ax.DU) == 1 && rp.ax.DV == 0) ||
 			(rp.ax.DU == 0 && math.Abs(rp.ax.DV) == 1)) ||
-		!finiteMeasurementValues(rp.ax.AU, rp.ax.AV) {
+		!measurement.FiniteValues(rp.ax.AU, rp.ax.AV) {
 		return profileRecord{}, false
 	}
 
@@ -33,7 +34,7 @@ func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord
 	for i, segment := range rp.profile.Outer.Segments {
 		line, ok := segment.(lineSeg)
 		if !ok || line.TStart != 0 || line.TEnd != 1 ||
-			!finiteMeasurementValues(line.Start.U, line.Start.V, line.End.U, line.End.V) {
+			!measurement.FiniteValues(line.Start.U, line.Start.V, line.End.U, line.End.V) {
 			return profileRecord{}, false
 		}
 		corners[i] = line.Start

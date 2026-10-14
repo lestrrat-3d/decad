@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -26,7 +27,7 @@ func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) er
 		}
 		bounds, err := upper.Bounds()
 		if err != nil || bounds.Bound.Kind() != units.Length ||
-			!finiteMeasurementValues(bounds.Min.Z, bounds.Bound.Base()) || bounds.Bound.Base() < 0 ||
+			!measurement.FiniteValues(bounds.Min.Z, bounds.Bound.Base()) || bounds.Bound.Base() < 0 ||
 			proofarith.DyCmp(proofarith.DySubScalar(proofarith.MustDyOf(bounds.Min.Z),
 				proofarith.MustDyOf(bounds.Bound.Base())), box.lo[2]) <= 0 {
 			continue
@@ -70,7 +71,7 @@ func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 		return boundedFacetedExtent{}, false, nil
 	}
 	pp, ok := b.payload.(facetedPayload)
-	if !ok || len(pp.verts) == 0 || !finiteMeasurementValues(pp.meshBound, pp.volSymDiff) ||
+	if !ok || len(pp.verts) == 0 || !measurement.FiniteValues(pp.meshBound, pp.volSymDiff) ||
 		pp.meshBound < 0 || pp.volSymDiff < 0 {
 		return boundedFacetedExtent{}, false, nil
 	}
@@ -119,7 +120,7 @@ func boundedFacetedFloorGap(extent boundedFacetedExtent,
 	}
 	boundaryBound, _ := extent.bound.Float64()
 	bound := proofbound.AbsSumUpper(reading.Bound.Base(), boundaryBound)
-	if !finiteMeasurementValues(bound) || reading.Value.Base()-bound <= 0 {
+	if !measurement.FiniteValues(bound) || reading.Value.Base()-bound <= 0 {
 		return Measurement{}, false
 	}
 	reading.Bound = units.Millimeters(bound)

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
@@ -123,7 +124,7 @@ func planarNormal(dir proofarith.DyV3) (VecMeasurement, units.Value, bool) {
 		squared.Add(squared, new(big.Rat).Mul(scaled[k], scaled[k]))
 	}
 	low, high := proofbound.RatSqrtDown(squared), proofbound.RatSqrtUp(squared)
-	if low <= 0 || !finiteMeasurementValues(low, high) {
+	if low <= 0 || !measurement.FiniteValues(low, high) {
 		return VecMeasurement{}, units.Value{}, false
 	}
 	raw := r3.Vec{X: sweeppath.RatFloatNearest(scaled[0]), Y: sweeppath.RatFloatNearest(scaled[1]), Z: sweeppath.RatFloatNearest(scaled[2])}
@@ -145,7 +146,7 @@ func planarNormal(dir proofarith.DyV3) (VecMeasurement, units.Value, bool) {
 	}
 	bound := proofbound.Radius3D(proofbound.RatFloatUp(maxError))
 	angle := proofbound.UpRound(4 * bound)
-	if !finiteMeasurementValues(bound, angle) || angle >= math.Pi {
+	if !measurement.FiniteValues(bound, angle) || angle >= math.Pi {
 		return VecMeasurement{}, units.Value{}, false
 	}
 	return VecMeasurement{Value: value, Bound: units.Scalar(bound), Exactness: exactnessOf(bound)},

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
 
@@ -64,9 +65,9 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 			out.n.Vertices = append(out.n.Vertices, v)
 			bounds = append(bounds, partBounds[i])
 		}
-		internalCap := roleCapEnd
+		internalCap := provenance.RoleCapEnd
 		if partIndex == 1 {
-			internalCap = roleCapStart
+			internalCap = provenance.RoleCapStart
 		}
 		for i, tri := range mesh.n.Triangles {
 			if err := budget.Step(); err != nil {

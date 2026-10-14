@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
@@ -129,7 +130,7 @@ func TestEvalLoftUnitBoxTopology(t *testing.T) {
 		roles := f.originRefs()
 		require.Len(t, roles, 1)
 		role := roles[0].Role
-		if role == roleCapStart || role == roleCapEnd {
+		if role == provenance.RoleCapStart || role == provenance.RoleCapEnd {
 			capRoles = append(capRoles, role)
 			continue
 		}
@@ -137,7 +138,7 @@ func TestEvalLoftUnitBoxTopology(t *testing.T) {
 		_, isPlane := f.n.Surface.(surfacegeom.Plane)
 		require.True(t, isPlane, "every wall face's surface must be a Plane")
 	}
-	require.ElementsMatch(t, []string{roleCapStart, roleCapEnd}, capRoles)
+	require.ElementsMatch(t, []string{provenance.RoleCapStart, provenance.RoleCapEnd}, capRoles)
 
 	var wantWallRoles []string
 	for j := range 4 {
@@ -348,7 +349,7 @@ func TestEvalLoftHoleRimIsConcave(t *testing.T) {
 	var outerRimConvex, holeRimConvex []bool
 	for _, f := range body.Faces() {
 		role := f.Origins()[0].Role
-		if role != roleCapStart {
+		if role != provenance.RoleCapStart {
 			continue
 		}
 		for _, l := range f.Loops() {
@@ -632,7 +633,7 @@ func TestEvalLoftCollinearSplitKeepsTwoFacesPerCell(t *testing.T) {
 	wallPlanes := 0
 	for _, f := range faces {
 		role := f.Origins()[0].Role
-		if role == roleCapStart || role == roleCapEnd {
+		if role == provenance.RoleCapStart || role == provenance.RoleCapEnd {
 			continue
 		}
 		_, ok := f.n.Surface.(surfacegeom.Plane)
@@ -1340,7 +1341,7 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 	body := evalLoftFixture(t, pl)
 	var capStart *Face
 	for _, f := range body.Faces() {
-		if f.Origins()[0].Role == roleCapStart {
+		if f.Origins()[0].Role == provenance.RoleCapStart {
 			capStart = f
 			break
 		}

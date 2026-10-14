@@ -368,7 +368,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if rp.surfaceResult {
 		kind = BodySheet
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: !rp.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}})
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: !rp.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind)}})
 
 	// Partial sweeps get two planar cap faces; a full revolution has none.
 	var capStart, capEnd *Face
@@ -406,7 +406,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 				NormalBound: rp.phi0Delta(),
 				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi0, rp.phi0, true),
 				Surface:     surfacegeom.Plane{Frame: startFrame},
-				Origins:     []provenance.Ref{{Producer: ref, Role: roleCapStart}},
+				Origins:     []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 				Body:        bodyNode(body),
 			},
 		}
@@ -417,7 +417,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 				NormalBound: rp.phi1Delta(),
 				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi1, rp.phi1, false),
 				Surface:     surfacegeom.Plane{Frame: endFrame},
-				Origins:     []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
+				Origins:     []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 				Body:        bodyNode(body),
 			},
 		}
@@ -1191,7 +1191,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	if err != nil {
 		return nil, err
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}})
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet}})
 	b := rev.basis()
 	var allFaces []*Face
 	area := proofbound.BoundedScalar{}

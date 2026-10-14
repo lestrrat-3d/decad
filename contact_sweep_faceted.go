@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
@@ -310,7 +311,7 @@ func widenedBand(contact *ContactReport, etaA, etaB float64) (*Measurement, bool
 	width := new(big.Rat).Add(proofarith.FloatRat(contact.Gap.Bound.Base()),
 		new(big.Rat).Add(proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)))
 	published := proofbound.RatFloatUp(width)
-	if !finiteMeasurementValues(published) {
+	if !measurement.FiniteValues(published) {
 		return nil, false
 	}
 	return &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(published),

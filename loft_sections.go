@@ -169,9 +169,9 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 				Radius: units.Millimeters(built.ArcRadii[i])}
 		}
 	}
-	groups[built.EdgeCount] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: roleCapStart}},
+	groups[built.EdgeCount] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 		surface: surfacegeom.Plane{Frame: frameStart}, planar: true, reversed: true}
-	groups[built.EdgeCount+1] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
+	groups[built.EdgeCount+1] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 		surface: surfacegeom.Plane{Frame: frameEnd}, planar: true}
 	vertexBound := make([]float64, len(built.Vertices))
 	for i := range vertexBound {

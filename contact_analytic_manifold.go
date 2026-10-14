@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
@@ -243,7 +244,7 @@ func rulingSideNormal(side rulingSide, witness VecMeasurement,
 		tilt := proofbound.DivUpper(2*witness.Bound.Base(), proofarith.DyFloatDown(side.radius))
 		bound = proofbound.AbsSumUpper(bound, tilt)
 	}
-	if !finiteMeasurementValues(bound) {
+	if !measurement.FiniteValues(bound) {
 		return VecMeasurement{}, false
 	}
 	value, ok := clearance.DyVecOf(reading.Value)

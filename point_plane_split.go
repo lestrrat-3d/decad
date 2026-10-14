@@ -453,7 +453,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	groups = append(groups, base.groups[:len(base.groups)-1]...)
 	lowerGroup := len(groups)
 	if !hasApex {
-		groups = append(groups, pointPlaneCapGroup(ref, roleCapStart,
+		groups = append(groups, pointPlaneCapGroup(ref, provenance.RoleCapStart,
 			record.lower, base, false, record.lower.frameTowardFar))
 	}
 	upperGroup := len(groups)
@@ -461,7 +461,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	if record.upper != nil {
 		upperReversed = !record.upper.frameTowardFar
 	}
-	groups = append(groups, pointPlaneCapGroup(ref, roleCapEnd,
+	groups = append(groups, pointPlaneCapGroup(ref, provenance.RoleCapEnd,
 		record.upper, base, record.upper == nil, upperReversed))
 	triangles := make([][3]int, 0, 2*n+2*(len(base.tris)-n))
 	sources := make([]int, 0, cap(triangles))

@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
@@ -152,7 +153,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		top     bool
 		reverse bool
 		axial   float64
-	}{{0, roleCapStart, false, true, first.Z0Delta}, {len(sp.slabs) - 1, roleCapEnd, true, false, last.Z1Delta}} {
+	}{{0, provenance.RoleCapStart, false, true, first.Z0Delta}, {len(sp.slabs) - 1, provenance.RoleCapEnd, true, false, last.Z1Delta}} {
 		for r := range sp.slabs[end.slab].Regions {
 			face, err := stackedCapFace(b, sp, faceOfRole, end.role, end.slab, r)
 			if err != nil {

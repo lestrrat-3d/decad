@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tangentchain"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -83,7 +84,7 @@ func chainSlot(t *testing.T) *Body {
 func TestTangentChainBodyOrderAndCycle(t *testing.T) {
 	t.Parallel()
 	body := chainSlot(t)
-	capEnd := facesByRole(body)[roleCapEnd]
+	capEnd := facesByRole(body)[provenance.RoleCapEnd]
 	require.NotNil(t, capEnd)
 	inLoop := map[*Edge]struct{}{}
 	for _, e := range capEnd.Edges() {

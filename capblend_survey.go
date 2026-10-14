@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -114,7 +115,7 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	for _, cap := range []struct {
 		role string
 		sign float64
-	}{{role: roleCapStart, sign: -1}, {role: roleCapEnd, sign: 1}} {
+	}{{role: provenance.RoleCapStart, sign: -1}, {role: provenance.RoleCapEnd, sign: 1}} {
 		f := roles[cap.role]
 		if f == nil {
 			return undercutOutcome{}

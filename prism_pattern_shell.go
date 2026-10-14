@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 )
 
@@ -29,9 +30,9 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 		switch face.Origins()[0].Role {
 		case prismOuterFirstSideRole:
 			group = 0
-		case roleCapStart:
+		case provenance.RoleCapStart:
 			group = 1
-		case roleCapEnd:
+		case provenance.RoleCapEnd:
 			group = 2
 		}
 		if group < 0 || blankGroup[group] >= 0 {

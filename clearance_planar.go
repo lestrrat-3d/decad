@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -163,7 +164,7 @@ func planarDisjointResult(gap *pair.ScalarReading, delta *big.Rat, diam float64)
 	hiRat := new(big.Rat).Add(value, bound)
 	hiRat.Add(hiRat, delta)
 	lo, hi := proofbound.RatFloatDown(loRat), proofbound.RatFloatUp(hiRat)
-	if !(lo > 0) || !finiteMeasurementValues(lo, hi) {
+	if !(lo > 0) || !measurement.FiniteValues(lo, hi) {
 		return pairResult{}, false
 	}
 	return pairResult{verdict: reportvocab.PairDisjoint, lo: lo, hi: hi, exact: lo == hi, diam: diam}, true

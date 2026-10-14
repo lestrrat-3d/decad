@@ -428,7 +428,7 @@ func straightSweepCapEdge(edge *Edge) bool {
 	for _, face := range facing {
 		for _, origin := range face.n.Origins {
 			switch {
-			case origin.Role == roleCapStart || origin.Role == roleCapEnd:
+			case origin.Role == provenance.RoleCapStart || origin.Role == provenance.RoleCapEnd:
 				capRole = true
 			case strings.HasPrefix(origin.Role, "side(0,"):
 				wallRole = true

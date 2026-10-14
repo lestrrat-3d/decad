@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
@@ -231,7 +232,7 @@ func rotationalSweepRadiusPerCorner(body *Body, from r3.Transform, center r3.Vec
 		}
 	}
 	radius := proofbound.RatSqrtUp(best)
-	if !finiteMeasurementValues(radius) {
+	if !measurement.FiniteValues(radius) {
 		return nil, false
 	}
 	return proofarith.FloatRat(radius), true

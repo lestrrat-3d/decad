@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -125,7 +126,7 @@ func planarSupportBand(budget *proofbound.WorkBudget, report *ContactReport, a, 
 		return err
 	}
 	g := proofbound.RatFloatUp(upper)
-	if !finiteMeasurementValues(g) {
+	if !measurement.FiniteValues(g) {
 		return nil
 	}
 	report.Relation, report.Reason = ContactBand, ContactNoReason

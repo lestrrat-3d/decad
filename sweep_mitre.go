@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
@@ -203,7 +204,7 @@ func tessellateMitredSweep(ctx context.Context, b *Body, mp mitredSweepPayload, 
 		return nil, err
 	}
 	volSymDiff := proofbound.SweptVolumeAllow(mp.delta, areaUpper)
-	if !finiteMeasurementValues(slack, volSymDiff) {
+	if !measurement.FiniteValues(slack, volSymDiff) {
 		return nil, fmt.Errorf(`%w: the mitred sweep states no finite proof for a required mesh bound`, ErrUnsupported)
 	}
 	mesh.n.AreaSlack = slack

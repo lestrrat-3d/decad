@@ -175,9 +175,9 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 		src = append(src, group)
 		if wallIndex >= 0 {
 			record.wallGroups[half][wallIndex] = group
-		} else if capRole == roleCapStart {
+		} else if capRole == provenance.RoleCapStart {
 			record.capGroups[0] = group
-		} else if capRole == roleCapEnd {
+		} else if capRole == provenance.RoleCapEnd {
 			record.capGroups[1] = group
 		}
 	}
@@ -203,9 +203,9 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 			role, wallIndex := "", i
 			if i >= item.payload.walls {
 				wallIndex = -1
-				role = roleCapStart
+				role = provenance.RoleCapStart
 				if half == 1 {
-					role = roleCapEnd
+					role = provenance.RoleCapEnd
 				}
 			}
 			add(triangle, item.mesh.source[i], role, half, wallIndex)

@@ -430,9 +430,9 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			}
 		}
 		capGroup := source.capGroups[cap]
-		role := roleCapStart
+		role := provenance.RoleCapStart
 		if cap == 1 {
-			role = roleCapEnd
+			role = provenance.RoleCapEnd
 		}
 		mesh.groups[capGroup].origins = append(append([]provenance.Ref(nil), mesh.groups[capGroup].origins...),
 			provenance.Ref{Producer: ref, Role: role})

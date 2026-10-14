@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
@@ -329,7 +330,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 			path.End.Z, proofbound.ProductUpper(poly.MaxRadiusL1, upperTheta), poly.PerimeterUpper)
 	}
 	for _, face := range body.Faces() {
-		if face.n.Origins[0].Role != roleCapStart && face.n.Origins[0].Role != roleCapEnd {
+		if face.n.Origins[0].Role != provenance.RoleCapStart && face.n.Origins[0].Role != provenance.RoleCapEnd {
 			face.n.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 		}
 		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, area, areaBound)

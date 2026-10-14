@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -41,7 +42,7 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 		!signedAxisTransform(pp.Xform) || !signedAxisTransform(pose) {
 		return sourceBoxContactProof{}, false
 	}
-	if !proofbound.FiniteVec(pp.Frame.Origin()) || !finiteMeasurementValues(pp.Z0, pp.Z1) {
+	if !proofbound.FiniteVec(pp.Frame.Origin()) || !measurement.FiniteValues(pp.Z0, pp.Z1) {
 		return sourceBoxContactProof{}, false
 	}
 	var umin, umax, vmin, vmax float64
@@ -57,7 +58,7 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 		umin, umax = math.Min(umin, p.U), math.Max(umax, p.U)
 		vmin, vmax = math.Min(vmin, p.V), math.Max(vmax, p.V)
 	}
-	if !finiteMeasurementValues(umin, umax, vmin, vmax) || pp.Z0 >= pp.Z1 {
+	if !measurement.FiniteValues(umin, umax, vmin, vmax) || pp.Z0 >= pp.Z1 {
 		return sourceBoxContactProof{}, false
 	}
 	numeric, ok := box.SourceAxisBox(pp.Frame, pp.Xform, pose,

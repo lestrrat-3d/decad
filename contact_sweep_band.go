@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
@@ -379,7 +380,7 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 		featureS: featureS, normal: support.Normal, origin: r.solidTriVertex(support),
 		direction: normal, angle: angle, heldDepth: heldDepth, depth: depth, depthUp: proofbound.RatFloatUp(depth),
 		deltaM: support.pathM.delta.Rat(), nHigh: support.NormalHigh, support: *support, rate: rate, widening: widening}
-	if !finiteMeasurementValues(proof.depthUp) {
+	if !measurement.FiniteValues(proof.depthUp) {
 		return nil, false, nil
 	}
 	for _, e := range entries {
@@ -480,7 +481,7 @@ func planarTrackPoint(point [3]*big.Rat, deviation, resolution *big.Rat) (VecMea
 	}
 	bound := new(big.Rat).Add(proofarith.FloatRat(value.Bound.Base()), deviation)
 	published := proofbound.RatFloatUp(bound)
-	if !finiteMeasurementValues(published) || bound.Cmp(resolution) > 0 ||
+	if !measurement.FiniteValues(published) || bound.Cmp(resolution) > 0 ||
 		proofarith.FloatRat(published).Cmp(resolution) > 0 {
 		return VecMeasurement{}, false
 	}

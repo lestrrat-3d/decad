@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
@@ -233,7 +234,7 @@ func TestEvalCupChargesOffsetDisplacement(t *testing.T) {
 			offsetCap := roleShellCap
 			base := [4]float64{-6, 6, -2, 2}
 			if sense == Outward {
-				offsetCap, base = roleCapStart, [4]float64{-8, 8, -4, 4}
+				offsetCap, base = provenance.RoleCapStart, [4]float64{-8, 8, -4, 4}
 			}
 			capArea, err := faceWithRole(t, body, offsetCap).Area()
 			require.NoError(t, err)

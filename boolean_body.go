@@ -297,9 +297,9 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 			if group < 0 || group >= len(next.groups) {
 				return nil, fmt.Errorf("%w: placed mirror join lost an outer cap", ErrUnsupported)
 			}
-			role := roleCapStart
+			role := provenance.RoleCapStart
 			if cap == 1 {
-				role = roleCapEnd
+				role = provenance.RoleCapEnd
 			}
 			origins := append([]provenance.Ref(nil), next.groups[group].origins...)
 			next.groups[group].origins = append(origins, provenance.Ref{Producer: ref, Role: role})
@@ -465,7 +465,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	comp, adj := audit.Comp, audit.Adj
 	members, compVol, contains := audit.Members, audit.CompVol, audit.Contains
 
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}})
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}}})
 	if len(pp.vertexBound) != len(verts) {
 		return nil, fmt.Errorf(`%w: a faceted payload carries %d vertex bounds for %d vertices`, ErrBooleanFailed, len(pp.vertexBound), len(verts))
 	}

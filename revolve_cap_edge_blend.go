@@ -126,7 +126,7 @@ func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolvemesh
 	}
 	roles := facesByRole(body)
 	roleOrder := [5]string{prismWallRole(0, 1), prismWallRole(0, 2), prismWallRole(0, 3),
-		roleCapStart, roleCapEnd}
+		provenance.RoleCapStart, provenance.RoleCapEnd}
 	for _, role := range roleOrder {
 		if roles[role] == nil {
 			return nil, fmt.Errorf("%w: the quarter-turn rim has no source %s face", ErrUnsupported, role)

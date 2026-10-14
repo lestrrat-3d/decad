@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -325,7 +326,7 @@ func TestMitredSweepPublishesPerVertexBounds(t *testing.T) {
 	}
 	capCorners := 0
 	for k, tri := range mp.tris {
-		if mp.faceRoles[mp.triFace[k]] != roleCapStart {
+		if mp.faceRoles[mp.triFace[k]] != provenance.RoleCapStart {
 			continue
 		}
 		for _, v := range tri {
@@ -334,7 +335,7 @@ func TestMitredSweepPublishesPerVertexBounds(t *testing.T) {
 		}
 	}
 	require.Positive(t, capCorners)
-	capBound, ok := mesh.sourceBound(faceOfRole[roleCapStart])
+	capBound, ok := mesh.sourceBound(faceOfRole[provenance.RoleCapStart])
 	require.True(t, ok)
 	require.Zero(t, capBound)
 

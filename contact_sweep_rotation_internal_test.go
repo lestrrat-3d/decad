@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
@@ -126,7 +127,7 @@ func transferChargeRational(p rotationalSweepPath, pose r3.Transform, f *big.Rat
 		}
 	}
 	norm := proofbound.RatSqrtUp(motionbound.MagnitudeSquaredUpper(entries...))
-	if !finiteMeasurementValues(norm) {
+	if !measurement.FiniteValues(norm) {
 		return nil, false
 	}
 	return new(big.Rat).Mul(proofarith.FloatRat(norm), p.delta.Rat()), true

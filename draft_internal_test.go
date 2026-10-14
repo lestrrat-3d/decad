@@ -42,7 +42,7 @@ func TestDraftKeptWallsReadsRoles(t *testing.T) {
 	own := face(provenance.Ref{Producer: 7, Role: "side(0,1)"})
 	coalesced := face(provenance.Ref{Producer: 7, Role: "side(1,2)"}, provenance.Ref{Producer: 7, Role: "side(1,3)"})
 	foreign := face(provenance.Ref{Producer: 8, Role: "side(0,1)"})
-	capStart := face(provenance.Ref{Producer: 7, Role: roleCapStart})
+	capStart := face(provenance.Ref{Producer: 7, Role: provenance.RoleCapStart})
 	require.True(t, own.isWallOf(7))
 	require.False(t, foreign.isWallOf(7))
 	require.False(t, capStart.isWallOf(7))

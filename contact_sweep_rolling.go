@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
@@ -424,7 +425,7 @@ func (r *rollingPairSweep) track(first *SweepSample, support placedruling.Plane,
 	proof := &rollingTrackProof{paths: r.paths, m: r.m, s: r.s, ends: ends, radius: r.cylinder.Radius.Rat(),
 		normal: support.Normal, origin: support.Origin, featureM: featureM, featureS: featureS,
 		direction: normal, angle: angle, coefficients: coefficients, depth: depth, depthUp: proofbound.RatFloatUp(depth)}
-	if !finiteMeasurementValues(proof.depthUp) {
+	if !measurement.FiniteValues(proof.depthUp) {
 		return nil, false, nil
 	}
 	if depth.Sign() > 0 || end.Cmp(big.NewRat(1, 1)) < 0 {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/coilshell"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -135,12 +136,12 @@ func TestCoilRoundWireSpring(t *testing.T) {
 			require.NoError(t, err)
 			require.InDelta(t, math.Pi, length.Value.Base(), length.Bound.Base()+1e-15)
 		}
-		start := coilFace(t, b, roleCapStart).Loops()[0].CoEdges()[0].Edge().n.Curve.(surfacegeom.Circle3)
+		start := coilFace(t, b, provenance.RoleCapStart).Loops()[0].CoEdges()[0].Edge().n.Curve.(surfacegeom.Circle3)
 		require.InDelta(t, 0, start.Center.Sub(r3.NewVec(3, 0, 0)).Len(), 1e-15)
 		require.InDelta(t, 1, math.Abs(start.Axis.Z), 1e-15)
 		// After five whole turns the end rim sits 7.5 mm up the axis in the
 		// start rim's own plane.
-		end := coilFace(t, b, roleCapEnd).Loops()[0].CoEdges()[0].Edge().n.Curve.(surfacegeom.Circle3)
+		end := coilFace(t, b, provenance.RoleCapEnd).Loops()[0].CoEdges()[0].Edge().n.Curve.(surfacegeom.Circle3)
 		require.InDelta(t, 0, end.Center.Sub(r3.NewVec(3, 7.5, 0)).Len(), 1e-12)
 		require.InDelta(t, 0, end.Axis.Sub(start.Axis).Len(), 1e-12)
 	})
@@ -427,6 +428,6 @@ func TestCoilArcMeshProofsEncloseTheBody(t *testing.T) {
 	require.LessOrEqual(t, gap, mesh.n.AreaSlack+area.Bound.Base()+1e-9)
 
 	for k := range mesh.Triangles() {
-		require.Contains(t, []string{roleCapStart, roleCapEnd, coilWallRole}, mesh.source[k].Origins()[0].Role)
+		require.Contains(t, []string{provenance.RoleCapStart, provenance.RoleCapEnd, coilWallRole}, mesh.source[k].Origins()[0].Role)
 	}
 }

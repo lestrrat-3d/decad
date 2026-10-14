@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
@@ -280,7 +281,7 @@ func (p rotationalSweepPath) pointDeviationFrom(pose r3.Transform, ideal sweepId
 		return nil, 0, false, err
 	}
 	bound := proofbound.RatSqrtUp(squared)
-	return actual, bound, finiteMeasurementValues(bound), nil
+	return actual, bound, measurement.FiniteValues(bound), nil
 }
 
 // pointDeviationSquared stages the source points through pose and returns
@@ -401,7 +402,7 @@ func separatedIdealGap(contact *ContactReport, etaA, etaB float64) (*Measurement
 		return nil, false
 	}
 	published := proofbound.RatFloatUp(newBound)
-	if !finiteMeasurementValues(published) || value.Cmp(proofarith.FloatRat(published)) <= 0 {
+	if !measurement.FiniteValues(published) || value.Cmp(proofarith.FloatRat(published)) <= 0 {
 		return nil, false
 	}
 	gap := *contact.Gap
@@ -518,7 +519,7 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 	}
 	value := sweeppath.RatFloatNearest(gap)
 	bound := proofarith.RationalFloatError(gap, value)
-	if !finiteMeasurementValues(value, bound) {
+	if !measurement.FiniteValues(value, bound) {
 		return SweepEvent{}, false
 	}
 	deviation := new(big.Rat).Add(etaA, etaB)
@@ -549,7 +550,7 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 				return SweepEvent{}, false
 			}
 			published := proofbound.RatFloatUp(bound)
-			if !finiteMeasurementValues(published) || published > r.req.PointResolution.Base() {
+			if !measurement.FiniteValues(published) || published > r.req.PointResolution.Base() {
 				return SweepEvent{}, false
 			}
 			position.Bound = units.Millimeters(published)

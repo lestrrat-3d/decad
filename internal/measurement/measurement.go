@@ -2,6 +2,7 @@ package measurement
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -82,4 +83,15 @@ func ExactnessOf(bound float64) Exactness {
 		return Exact
 	}
 	return Approximate
+}
+
+// FiniteValues reports whether every value is finite: neither NaN nor an
+// infinity.
+func FiniteValues(values ...float64) bool {
+	for _, value := range values {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return false
+		}
+	}
+	return true
 }

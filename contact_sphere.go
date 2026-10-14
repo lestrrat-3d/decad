@@ -3,6 +3,7 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -82,7 +83,7 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 		arc.Start.V != arc.Center.V || arc.End.V != arc.Center.V ||
 		arc.Start.U <= arc.Center.U || arc.End.U >= arc.Center.U ||
 		!sameEnds ||
-		!finiteMeasurementValues(arc.Center.U, arc.Center.V, arc.Start.U, arc.End.U) {
+		!measurement.FiniteValues(arc.Center.U, arc.Center.V, arc.Start.U, arc.End.U) {
 		return sourceSphereContactProof{}, false
 	}
 	radius := proofarith.DySubScalar(proofarith.MustDyOf(arc.Start.U), proofarith.MustDyOf(arc.Center.U))

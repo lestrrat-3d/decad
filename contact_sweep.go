@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
@@ -100,7 +101,7 @@ func validateRestSpeed(v units.Value) error {
 	if v.Kind() != units.Velocity {
 		return fmt.Errorf("%w: rest speed must be a Velocity", ErrUnitKind)
 	}
-	if !finiteMeasurementValues(v.Base()) {
+	if !measurement.FiniteValues(v.Base()) {
 		return fmt.Errorf("%w: rest speed is non-finite", ErrNotFinite)
 	}
 	if v.Base() < 0 {
@@ -229,7 +230,7 @@ func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) {
 		return nil, fmt.Errorf("%w: contact-track fraction must be dimensionless", ErrUnitKind)
 	}
 	f, ok := sweeppath.ExactBaseValue(fraction)
-	if !ok || !finiteMeasurementValues(fraction.Base()) {
+	if !ok || !measurement.FiniteValues(fraction.Base()) {
 		return nil, fmt.Errorf("%w: nonfinite contact-track fraction", ErrNotFinite)
 	}
 	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
@@ -248,7 +249,7 @@ func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) {
 	}
 	value := sweeppath.RatFloatNearest(depth)
 	bound := proofarith.RationalFloatError(depth, value)
-	if !finiteMeasurementValues(value, bound) {
+	if !measurement.FiniteValues(value, bound) {
 		return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
 	}
 	return &Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
@@ -262,7 +263,7 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		return nil, fmt.Errorf("%w: contact-track fraction must be dimensionless", ErrUnitKind)
 	}
 	f, ok := sweeppath.ExactBaseValue(fraction)
-	if !ok || !finiteMeasurementValues(fraction.Base()) {
+	if !ok || !measurement.FiniteValues(fraction.Base()) {
 		return nil, fmt.Errorf("%w: nonfinite contact-track fraction", ErrNotFinite)
 	}
 	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
@@ -466,7 +467,7 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	if req.PointResolution.Kind() != units.Length || req.NormalResolution.Kind() != units.Angle {
 		return nil, fmt.Errorf("%w: contact resolutions must be Length and Angle", ErrUnitKind)
 	}
-	if !finiteMeasurementValues(req.PointResolution.Base(), req.NormalResolution.Base()) {
+	if !measurement.FiniteValues(req.PointResolution.Base(), req.NormalResolution.Base()) {
 		return nil, fmt.Errorf("%w: nonfinite contact resolution", ErrNotFinite)
 	}
 	if req.PointResolution.Base() <= 0 || req.NormalResolution.Base() <= 0 {

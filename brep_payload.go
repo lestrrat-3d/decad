@@ -224,7 +224,7 @@ func brepOfPrismWithRoles(pp prismPayload) (brepPayload, []string, error) {
 		brepFace{frame: pp.Frame, region: &region, outward: true, z0: pp.Z1, z1: pp.Z1,
 			z0Delta: pp.Z1Delta, z1Delta: pp.Z1Delta, delta: pp.SectionDelta},
 	)
-	sourceRoles = append(sourceRoles, roleCapStart, roleCapEnd)
+	sourceRoles = append(sourceRoles, provenance.RoleCapStart, provenance.RoleCapEnd)
 	bp.assignRoles()
 	return bp, sourceRoles, nil
 }
@@ -286,8 +286,8 @@ func brepOfStackedWithRoles(ctx context.Context, sp stackedPrismPayload) (brepPa
 		sourceRoles = append(sourceRoles, sourceRole)
 	}
 	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
-	addPlanar(first.Regions[0], first.Z0, first.Z0Delta, false, roleCapStart)
-	addPlanar(last.Regions[0], last.Z1, last.Z1Delta, true, roleCapEnd)
+	addPlanar(first.Regions[0], first.Z0, first.Z0Delta, false, provenance.RoleCapStart)
+	addPlanar(last.Regions[0], last.Z1, last.Z1Delta, true, provenance.RoleCapEnd)
 	for k, boundary := range sp.interfaces {
 		z, zDelta := sp.slabs[k].Z1, sp.slabs[k].Z1Delta
 		for e, region := range boundary.LowerExposed {
@@ -541,7 +541,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	if err != nil {
 		return nil, err
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}})
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySolid}})
 	refView := bp.refView()
 
 	// Vertices are shared by reference coordinates. Each carries the largest

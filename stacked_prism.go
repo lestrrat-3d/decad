@@ -233,9 +233,9 @@ func (stackedOwnPlan) nameWalls(_ context.Context, col stackedColumn, faces []*F
 
 func (stackedOwnPlan) capRole(_, _ int, top bool) string {
 	if top {
-		return roleCapEnd
+		return provenance.RoleCapEnd
 	}
-	return roleCapStart
+	return provenance.RoleCapStart
 }
 
 func (stackedOwnPlan) patchRole(patch stackedrecord.Patch) string { return patch.Role }
@@ -378,7 +378,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	if err != nil {
 		return nil, err
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}})
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySolid}})
 	work := freeform.NewFreeformWork()
 	base := sp.outerPrism()
 	colDelta := make([]float64, len(columns))

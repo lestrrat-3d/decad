@@ -2,6 +2,7 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -31,14 +32,14 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 		len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
 		!pairbox.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) ||
 		!signedAxisTransform(pp.Xform) || !signedAxisTransform(pose) ||
-		!proofbound.FiniteVec(pp.Frame.Origin()) || !finiteMeasurementValues(pp.Z0, pp.Z1) ||
+		!proofbound.FiniteVec(pp.Frame.Origin()) || !measurement.FiniteValues(pp.Z0, pp.Z1) ||
 		pp.Z0 >= pp.Z1 {
 		return sourceCylinderContactProof{}, false
 	}
 	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
 	if !ok || !circle.CCW || circle.TStart != 0 || circle.TEnd != 1 ||
 		circle.Radius.Kind() != units.Length ||
-		!finiteMeasurementValues(circle.Center.U, circle.Center.V, circle.Radius.Base()) ||
+		!measurement.FiniteValues(circle.Center.U, circle.Center.V, circle.Radius.Base()) ||
 		circle.Radius.Base() <= 0 {
 		return sourceCylinderContactProof{}, false
 	}
@@ -102,7 +103,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 	if _, _, ok := clearance.SignedAxis(r3.Vec{X: rp.ax.DU, Y: rp.ax.DV}); !ok {
 		return sourceCylinderContactProof{}, false
 	}
-	if !finiteMeasurementValues(rp.ax.AU, rp.ax.AV) {
+	if !measurement.FiniteValues(rp.ax.AU, rp.ax.AV) {
 		return sourceCylinderContactProof{}, false
 	}
 	axis, _, ok := clearance.SignedAxis(pose.ApplyDir(rp.xform.ApplyDir(rp.basis().W)))
