@@ -83,16 +83,16 @@ func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S,
 	opts ...SweepOption) (*Body, error) {
 	switch v := any(sec).(type) {
 	case *sketch.Profile:
-		return sweepProfile(ctx, d, s, v, path, opts)
+		return sweepProfile(ctx, d, s, v, pathNode(path), opts)
 	case *sketch.Chain:
-		return sweepChain(ctx, d, s, v, path, opts)
+		return sweepChain(ctx, d, s, v, pathNode(path), opts)
 	default:
 		return nil, fmt.Errorf(`%w: Sweep section %T is not a profile or chain`, ErrDegenerate, sec)
 	}
 }
 
 // sweepProfile is the profile-fed Sweep body (docs/sweep-design.md §3-§17).
-func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, path *Path,
+func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, path *sweepinput.Path,
 	opts []SweepOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a sweep`, ErrDegenerate)
@@ -107,7 +107,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 		return nil, err
 	}
 
-	cfg, err := decodeSweepOptions(opts, len(path.segments))
+	cfg, err := decodeSweepOptions(opts, len(path.Segments))
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 		return nil, err
 	}
 	work := freeform.NewFreeformWork()
-	if len(path.records) > 1 && !cfg.Mitred && !cfg.Scaled {
+	if len(path.Records) > 1 && !cfg.Mitred && !cfg.Scaled {
 		work = newCompositeSweepWork(profile)
 	}
 	recordArea, err := falsifyRecordedArea(profile, profileArea, work)
@@ -128,7 +128,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if len(path.records) == 0 || len(path.segments) == 0 {
+	if len(path.Records) == 0 || len(path.Segments) == 0 {
 		return nil, fmt.Errorf(`%w: a sweep path must contain at least one span`, ErrDegenerate)
 	}
 
@@ -137,10 +137,10 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
 	}
 	if cfg.Twisted {
-		if samePathPoint(path.Start(), path.End()) {
+		if sweepinput.SamePathPoint(path.Start, path.End) {
 			return nil, fmt.Errorf(`%w: a closed sweep path cannot carry nonzero twist`, ErrUnsupported)
 		}
-		if err := validateSweepPathGeometry(path, plane); err != nil {
+		if err := sweepinput.ValidateSweepPathGeometry(path, plane); err != nil {
 			return nil, err
 		}
 		body, err := evalTwistedSweep(ctx, d, d.nextProducerID(), profile, plane,
@@ -167,7 +167,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 		d.commit(body)
 		return body, nil
 	}
-	if err := validateSweepPathGeometry(path, plane); err != nil {
+	if err := sweepinput.ValidateSweepPathGeometry(path, plane); err != nil {
 		return nil, err
 	}
 	if err := sweepinput.ValidateAnalyticProfile(profile); err != nil {
@@ -175,12 +175,12 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	}
 
 	ref := d.nextProducerID()
-	if samePathPoint(path.Start(), path.End()) {
+	if sweepinput.SamePathPoint(path.Start, path.End) {
 		if surfaceResult {
 			return nil, fmt.Errorf(`%w: a closed sweep surface result is not implemented`, ErrUnsupported)
 		}
 		var body *Body
-		if _, circle := sweepinput.ClosedCircle(path.records); circle {
+		if _, circle := sweepinput.ClosedCircle(path.Records); circle {
 			body, err = evalClosedCircleSweep(ctx, d, ref, profile, plane, frame, path, work)
 		} else {
 			body, err = evalClosedCyclicSweep(ctx, d, ref, profile, plane, frame, path, work)
@@ -194,7 +194,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 		d.commit(body)
 		return body, nil
 	}
-	segments := path.Segments()
+	segments := pathSegments(path)
 
 	var body *Body
 	if len(segments) > 1 {
@@ -202,7 +202,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	} else {
 		switch segment := segments[0].(type) {
 		case LineTo:
-			height, heightBound, lineErr := validateStraightSweepPath(path, frame)
+			height, heightBound, lineErr := sweepinput.ValidateStraightSweepPath(path, frame)
 			if lineErr != nil {
 				return nil, lineErr
 			}
@@ -224,7 +224,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 				finishStraightSweepBody(body, sweepPayload{prism: prism, path: path, surfaceResult: surfaceResult})
 			}
 		case ArcThrough:
-			body, err = evalArcSweepContext(ctx, d, ref, profile, plane, frame, path, path.records[0], work, surfaceResult)
+			body, err = evalArcSweepContext(ctx, d, ref, profile, plane, frame, path, path.Records[0], work, surfaceResult)
 		default:
 			err = fmt.Errorf(`%w: sweep path span %T is not supported`, ErrUnsupported, segment)
 		}
@@ -237,45 +237,6 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	}
 	d.commit(body)
 	return body, nil
-}
-
-// validateSweepPathStart is Table S row S5: the path starts in the profile
-// plane and its first tangent follows the plane's positive normal. It reads
-// no internal join.
-func validateSweepPathStart(path *Path, plane planeRecord) error {
-	return sweepinput.ValidateStart(path.Start(), plane, path.records[0].TangentIn)
-}
-
-func validateSweepPathGeometry(path *Path, plane planeRecord) error {
-	if err := validateSweepPathStart(path, plane); err != nil {
-		return err
-	}
-	tangents := make([]sweepinput.Tangents, len(path.records))
-	for i, record := range path.records {
-		tangents[i] = sweepinput.Tangents{In: record.TangentIn, Out: record.TangentOut}
-	}
-	return sweepinput.ValidateJoins(tangents)
-}
-
-func validateStraightSweepPath(path *Path, frame r3.Frame) (float64, float64, error) {
-	start := path.Start()
-	end := path.End()
-	if samePathPoint(start, end) {
-		return 0, 0, fmt.Errorf(`%w: closed sweep paths are not implemented`, ErrUnsupported)
-	}
-	segments := path.Segments()
-	if len(segments) != 1 {
-		return 0, 0, fmt.Errorf(`%w: this evaluator sweeps one straight path span only`, ErrUnsupported)
-	}
-	_, ok := segments[0].(LineTo)
-	if !ok {
-		return 0, 0, fmt.Errorf(`%w: the sweep path span is not straight`, ErrUnsupported)
-	}
-	return sweepinput.StraightSpan(start, end, frame.N())
-}
-
-func samePathPoint(a, b r3.Vec) bool {
-	return a.X == b.X && a.Y == b.Y && a.Z == b.Z
 }
 
 // sweepPayload deliberately remains distinct from prismPayload and
@@ -302,7 +263,7 @@ type sweepPayload struct {
 	closedComposite bool
 	reverseArcCaps  bool
 	spans           []sweepSpanPayload
-	path            *Path
+	path            *sweepinput.Path
 	surfaceResult   bool
 }
 
@@ -312,10 +273,10 @@ type sweepPayload struct {
 func straightSweepPrismReduction(payload featurePayload) (prismPayload, bool) {
 	sp, ok := payload.(sweepPayload)
 	if !ok || sp.surfaceResult || sp.arc || sp.closedCircle || sp.closedComposite ||
-		len(sp.spans) != 0 || sp.path == nil || len(sp.path.records) != 1 || len(sp.path.segments) != 1 {
+		len(sp.spans) != 0 || sp.path == nil || len(sp.path.Records) != 1 || len(sp.path.Segments) != 1 {
 		return prismPayload{}, false
 	}
-	if _, line := sp.path.segments[0].(LineTo); !line {
+	if sp.path.Segments[0].Arc {
 		return prismPayload{}, false
 	}
 	return sp.prism, true
@@ -380,7 +341,7 @@ type chainSweepPayload struct {
 	chain   chainPayload
 	revolve chainRevolvePayload
 	arc     bool
-	path    *Path
+	path    *sweepinput.Path
 	spans   []chainSweepSpanPayload
 }
 
@@ -421,7 +382,7 @@ func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref produce
 }
 
 // sweepChain is the chain-fed Sweep body (docs/sweep-design.md §15).
-func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, path *Path,
+func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, path *sweepinput.Path,
 	opts []SweepOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a sweep`, ErrDegenerate)
@@ -449,10 +410,10 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 		return nil, err
 	}
 	// The option refusal follows the seam gate and precedes every path gate.
-	if err := refuseChainSweepOptions(opts, len(path.segments)); err != nil {
+	if err := refuseChainSweepOptions(opts, len(path.Segments)); err != nil {
 		return nil, err
 	}
-	if len(path.records) == 0 || len(path.segments) == 0 {
+	if len(path.Records) == 0 || len(path.Segments) == 0 {
 		return nil, fmt.Errorf(`%w: a sweep path must contain at least one span`, ErrDegenerate)
 	}
 
@@ -460,17 +421,17 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
 	}
-	if err := validateSweepPathGeometry(path, plane); err != nil {
+	if err := sweepinput.ValidateSweepPathGeometry(path, plane); err != nil {
 		return nil, err
 	}
 	if err := sweepinput.ValidateAnalyticSegments(chain.Segments, "chain"); err != nil {
 		return nil, err
 	}
-	if samePathPoint(path.Start(), path.End()) {
+	if sweepinput.SamePathPoint(path.Start, path.End) {
 		return nil, fmt.Errorf(`%w: closed sweep paths are not implemented`, ErrUnsupported)
 	}
 
-	segments := path.Segments()
+	segments := pathSegments(path)
 	if len(segments) > 1 {
 		return d.sweepCompositeChain(ctx, chain, plane, path)
 	}
@@ -480,7 +441,7 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 	if _, ok := segments[0].(LineTo); !ok {
 		return nil, fmt.Errorf(`%w: this chain Sweep path span is not admitted`, ErrUnsupported)
 	}
-	height, heightBound, err := validateStraightSweepPath(path, frame)
+	height, heightBound, err := sweepinput.ValidateStraightSweepPath(path, frame)
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -130,7 +131,7 @@ func straightTwistCellDeparture(poly twistsweep.TwistPolygon, angleUpper, statio
 }
 
 func evalStationedTwistedSweep(ctx context.Context, d *Document, ref producerID,
-	profile profileRecord, plane planeRecord, path *Path, angle units.Value,
+	profile profileRecord, plane planeRecord, path *sweepinput.Path, angle units.Value,
 	recordArea float64, xform r3.Transform) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -176,10 +177,10 @@ func evalStationedTwistedSweep(ctx context.Context, d *Document, ref producerID,
 // independently certified station count or committing a partial body. There
 // are at most two attempts, each with its own fixed cell and audit ceiling.
 func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref producerID,
-	profile profileRecord, plane planeRecord, path *Path, angle units.Value,
+	profile profileRecord, plane planeRecord, path *sweepinput.Path, angle units.Value,
 	recordArea float64, xform r3.Transform, poly twistsweep.TwistPolygon, theta float64,
 	thetaIv proofbound.RatInterval, absTheta *big.Rat, cells int, optional bool) (*Body, error) {
-	stations, err := straightTwistStations(path.End().Z, theta, thetaIv, poly, cells)
+	stations, err := straightTwistStations(path.End.Z, theta, thetaIv, poly, cells)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +236,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 		return nil, err
 	}
 	cellAngle := proofbound.RatFloatUp(new(big.Rat).Quo(absTheta, big.NewRat(int64(cells), 1)))
-	cellHeight := proofbound.RatFloatUp(new(big.Rat).Quo(twistsweep.TwistRat(path.End().Z), big.NewRat(int64(cells), 1)))
+	cellHeight := proofbound.RatFloatUp(new(big.Rat).Quo(twistsweep.TwistRat(path.End.Z), big.NewRat(int64(cells), 1)))
 	delta, volSymDiff := 0.0, 0.0
 	for i, loft := range held {
 		stationError := max(stations[i].PointError, stations[i+1].PointError)
@@ -258,7 +259,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	if proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(volSymDiff) {
 		return nil, fmt.Errorf(`%w: stationed twist has no finite boundary proof`, ErrUnsupported)
 	}
-	volumeIv := proofbound.IntervalScale(poly.AreaInterval, twistsweep.TwistRat(path.End().Z))
+	volumeIv := proofbound.IntervalScale(poly.AreaInterval, twistsweep.TwistRat(path.End.Z))
 	if twistsweep.TwistRat(volSymDiff).Cmp(volumeIv.Lo) >= 0 {
 		return nil, fmt.Errorf(`%w: stationed twist boundary tube exceeds the true occupied volume`, ErrUnsupported)
 	}
@@ -270,16 +271,16 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	}
 	var trueAreaIv proofbound.RatInterval
 	if poly.HasArc {
-		trueAreaIv, err = twistMixedAreaInterval(poly, twistsweep.TwistRat(path.End().Z), thetaIv)
+		trueAreaIv, err = twistMixedAreaInterval(poly, twistsweep.TwistRat(path.End.Z), thetaIv)
 	} else {
-		trueAreaIv, err = twistsweep.TwistAreaInterval(poly, twistsweep.TwistRat(path.End().Z), thetaIv)
+		trueAreaIv, err = twistsweep.TwistAreaInterval(poly, twistsweep.TwistRat(path.End.Z), thetaIv)
 	}
 	if err != nil {
 		return nil, err
 	}
 	if poly.HasArc {
 		wallBound, wallErr := twistMixedWallAreaL1(held, stations, poly,
-			proofbound.RatFloatUp(absTheta), path.End().Z)
+			proofbound.RatFloatUp(absTheta), path.End.Z)
 		if wallErr != nil {
 			return nil, wallErr
 		}
@@ -300,12 +301,12 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 		Exactness: exactnessOf(volumeBound)}
 	body.area = Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
 		Exactness: exactnessOf(areaBound)}
-	center := r3.NewVec(0, 0, path.End().Z/2)
+	center := r3.NewVec(0, 0, path.End.Z/2)
 	worldCenter := xform.Apply(center)
 	centerBound := 0.0
 	if xform != r3.Identity() {
 		tr := xform.Translation()
-		centerBound = proofbound.RigidRoundAllow(path.End().Z/2,
+		centerBound = proofbound.RigidRoundAllow(path.End.Z/2,
 			max(math.Abs(tr.X), math.Abs(tr.Y), math.Abs(tr.Z)))
 	}
 	body.centroid = VecMeasurement{Value: worldCenter, Bound: units.Millimeters(centerBound),
@@ -323,7 +324,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	for _, edge := range body.Edges() {
 		edge.curve = FacetedCurve{Bound: units.Millimeters(delta)}
 		edge.n.LengthBound = proofbound.AbsSumUpper(edge.n.LengthBound, edge.n.Length,
-			path.End().Z, proofbound.ProductUpper(poly.MaxRadiusL1, upperTheta), poly.PerimeterUpper)
+			path.End.Z, proofbound.ProductUpper(poly.MaxRadiusL1, upperTheta), poly.PerimeterUpper)
 	}
 	for _, face := range body.Faces() {
 		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {

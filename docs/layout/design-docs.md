@@ -88,7 +88,7 @@ The rules for rows live in `docs/layout.md`.
 | `section_circle_cap.go` | One-cap oblique circle clip entry; the certified circle-line trim and cap polygon live in `internal/sectionclip/`. See section design. |
 | `section_rectangle_axis.go` | Exact rectangular-prism section on an interior cardinal vertical plane. See section design. |
 | `section_oblique_clip.go` | Exact rational clipping of a rectangular prism by an oblique plane; the rational point type and arithmetic live in `internal/sectionclip/`. See section design. |
-| `path.go` | The immutable spatial `Path`, sealed segments and `internal/sweepinput/` record adapter. See sweep §2–§3. |
+| `path.go` | The immutable spatial `Path`, sealed segments and its recorded `internal/sweepinput.Path`. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |
 | `selection_error.go` | Public selector error types and query rendering adapters. See API §9. |

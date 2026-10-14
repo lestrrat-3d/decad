@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
+	"github.com/lestrrat-3d/decad/internal/sweeptransport"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -100,7 +101,7 @@ func evalCompositeSweepContext(
 	profile profileRecord,
 	plane planeRecord,
 	frame r3.Frame,
-	path *Path,
+	path *sweepinput.Path,
 	work *freeform.FreeformWork,
 	surfaceResult bool,
 ) (*Body, error) {
@@ -114,19 +115,19 @@ func evalCompositeSweepContextWithClosure(
 	profile profileRecord,
 	plane planeRecord,
 	frame r3.Frame,
-	path *Path,
+	path *sweepinput.Path,
 	work *freeform.FreeformWork,
 	surfaceResult, closedComposite bool,
 ) (*Body, error) {
-	if err := compositesweep.Preflight(profile, len(path.records)); err != nil {
+	if err := compositesweep.Preflight(profile, len(path.Records)); err != nil {
 		return nil, err
 	}
-	var frames []sweepTransportFrame
+	var frames []sweeptransport.Frame
 	var err error
 	if closedComposite {
-		frames, err = transportClosedSweepFrames(ctx, path, plane)
+		frames, err = sweeptransport.TransportClosedSweepFrames(ctx, path, plane)
 	} else {
-		frames, err = transportSweepFramesContext(ctx, path, plane)
+		frames, err = sweeptransport.TransportSweepFramesContext(ctx, path, plane)
 	}
 	if err != nil {
 		return nil, err
@@ -149,12 +150,12 @@ func evalCompositeSweepContextWithClosure(
 			Frame:   frame,
 			Xform:   r3.Identity(),
 		}},
-		spans:           make([]sweepSpanPayload, len(path.records)),
+		spans:           make([]sweepSpanPayload, len(path.Records)),
 		path:            path,
 		surfaceResult:   surfaceResult,
 		closedComposite: closedComposite,
 	}
-	for i, record := range path.records {
+	for i, record := range path.Records {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}

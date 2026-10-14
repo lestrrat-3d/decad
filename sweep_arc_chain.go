@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -12,10 +13,10 @@ import (
 // owns the axis and angle; the open source walk still determines sheet kind
 // and free rims.
 func (d *Document) sweepArcChain(ctx context.Context, chain chainRecord,
-	plane planeRecord, frame r3.Frame, path *Path) (*Body, error) {
+	plane planeRecord, frame r3.Frame, path *sweepinput.Path) (*Body, error) {
 	work := freeform.NewFreeformWork()
 	view := profileRecord{Outer: loopRecord(chain)}
-	span, err := compositeArcSweepSpan(ctx, view, plane, frame, path.records[0], work)
+	span, err := compositeArcSweepSpan(ctx, view, plane, frame, path.Records[0], work)
 	if err != nil {
 		return nil, err
 	}

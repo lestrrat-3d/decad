@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
+	"github.com/lestrrat-3d/decad/internal/sweeptransport"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -38,53 +39,12 @@ func (sp *chainSweepSpanPayload) build(ctx context.Context, d *Document, ref pro
 	return evalChainExtrudeContext(ctx, d, ref, sp.chain, work)
 }
 
-// cardinalChainSweepClass admits the source-backed class whose line and arc
-// spans lie on opposite sides of their common XY section. Every equality is
-// checked over the exact binary-rational values of the public inputs; rounded
-// arithmetic cannot turn a near-half-circle into this exact class.
-func cardinalChainSweepClass(chain chainRecord, plane planeRecord, path *Path) error {
-	if plane.Origin != (r3.Vec{}) || plane.U != r3.NewVec(1, 0, 0) ||
-		plane.V != r3.NewVec(0, 1, 0) || len(chain.Segments) != 1 ||
-		len(path.records) != 2 || path.Start() != (r3.Vec{}) {
-		return fmt.Errorf(`%w: composite chain Sweep requires one XY line and a cardinal two-span path`, ErrUnsupported)
-	}
-	line, ok := chain.Segments[0].(lineSeg)
-	if !ok || line.Start.U != 0 || line.Start.V != 0 || line.End.V != 0 ||
-		line.TStart != 0 || line.TEnd != 1 {
-		return fmt.Errorf(`%w: composite chain Sweep requires one forward radial source line`, ErrUnsupported)
-	}
-	width := line.End.U
-	straight := path.records[0]
-	arc := path.records[1]
-	arcSegment, ok := path.segments[1].(ArcThrough)
-	if !ok {
-		return fmt.Errorf(`%w: composite chain Sweep requires an ArcThrough second span`, ErrUnsupported)
-	}
-	radius := arcSegment.Through.X
-	height := straight.End.Z
-	if width <= 0 || radius <= width || height <= 0 || straight.Arc != nil || arc.Arc == nil ||
-		straight.End.X != 0 || straight.End.Y != 0 ||
-		arc.Start != straight.End || arcSegment.Through.Y != 0 || arc.End.Y != 0 || arc.End.Z != height ||
-		!dyadicSumEquals(height, radius, arcSegment.Through.Z) ||
-		!dyadicSumEquals(radius, radius, arc.End.X) ||
-		!dyadicSumEquals(radius-width, width, radius) ||
-		!dyadicSumEquals(arc.End.X-width, width, arc.End.X) {
-		return fmt.Errorf(`%w: composite chain Sweep requires a positive-Z line, tangent XZ half-circle, and radial source inside its radius`, ErrUnsupported)
-	}
-	return nil
-}
-
-func dyadicSumEquals(a, b, sum float64) bool {
-	return new(big.Rat).Add(new(big.Rat).SetFloat64(a), new(big.Rat).SetFloat64(b)).Cmp(
-		new(big.Rat).SetFloat64(sum)) == 0
-}
-
 func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, plane planeRecord,
-	path *Path) (*Body, error) {
-	if err := cardinalChainSweepClass(chain, plane, path); err != nil {
+	path *sweepinput.Path) (*Body, error) {
+	if err := sweepinput.CardinalChainSweepClass(chain, plane, path); err != nil {
 		return nil, err
 	}
-	frames, err := transportSweepFramesContext(ctx, path, plane)
+	frames, err := sweeptransport.TransportSweepFramesContext(ctx, path, plane)
 	if err != nil {
 		return nil, err
 	}
@@ -98,12 +58,12 @@ func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, p
 	}
 	work := freeform.NewFreeformWork()
 	view := profileRecord{Outer: loopRecord(chain)}
-	straight, err := compositeLineSweepSpan(view, frames[0].Frame, path.records[0])
+	straight, err := compositeLineSweepSpan(view, frames[0].Frame, path.Records[0])
 	if err != nil {
 		return nil, err
 	}
 	arcPlane := planeRecord{Origin: frames[1].Frame.Origin(), U: frames[1].Frame.U(), V: frames[1].Frame.V()}
-	arc, err := compositeArcSweepSpan(ctx, view, arcPlane, frames[1].Frame, path.records[1], work)
+	arc, err := compositeArcSweepSpan(ctx, view, arcPlane, frames[1].Frame, path.Records[1], work)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +200,7 @@ func (e chainSweepExtent) AuditExtent(ctx context.Context, direction r3.Vec,
 }
 
 func auditCompositeChainSeparation(ctx context.Context, payload chainSweepPayload, parts []*Body) error {
-	frames, err := transportSweepFramesContext(ctx, payload.path, planeRecord{
+	frames, err := sweeptransport.TransportSweepFramesContext(ctx, payload.path, planeRecord{
 		Origin: payload.spans[0].chain.frame.Origin(),
 		U:      payload.spans[0].chain.frame.U(), V: payload.spans[0].chain.frame.V(),
 	})

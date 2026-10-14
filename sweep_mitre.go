@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -54,8 +55,8 @@ func mitredSweepPreflight(loopIdx [][]int, spans int) error {
 // sweepMitred runs Table SM's gates in §5's order and builds the body. The
 // options were validated by the caller (SM3, SM9's surface-result arm), and
 // the profile is already authenticated.
-func sweepMitred(ctx context.Context, d *Document, profile profileRecord, plane planeRecord, path *Path, cfg featureoption.SweepConfig) (*Body, error) {
-	segments := path.Segments()
+func sweepMitred(ctx context.Context, d *Document, profile profileRecord, plane planeRecord, path *sweepinput.Path, cfg featureoption.SweepConfig) (*Body, error) {
+	segments := pathSegments(path)
 	for k, segment := range segments {
 		if _, ok := segment.(LineTo); !ok {
 			return nil, fmt.Errorf(`%w: a mitred or scaled sweep follows LineTo segments only; path segment %d is %T`, ErrUnsupported, k, segment)
@@ -64,10 +65,10 @@ func sweepMitred(ctx context.Context, d *Document, profile profileRecord, plane 
 	if cfg.Scaled && !cfg.Mitred && len(segments) > 1 {
 		return nil, fmt.Errorf(`%w: WithSectionScale on a path of %d spans requires WithMitredJoins`, ErrUnsupported, len(segments))
 	}
-	if err := validateSweepPathStart(path, plane); err != nil {
+	if err := sweepinput.ValidateSweepPathStart(path, plane); err != nil {
 		return nil, err
 	}
-	if samePathPoint(path.Start(), path.End()) {
+	if sweepinput.SamePathPoint(path.Start, path.End) {
 		return nil, fmt.Errorf(`%w: closed sweep paths are not implemented`, ErrUnsupported)
 	}
 	_, loopIdx, err := mitredSweepLoops(profile)
@@ -107,7 +108,7 @@ func sweepMitred(ctx context.Context, d *Document, profile profileRecord, plane 
 type mitredSweepPayload struct {
 	profile profileRecord
 	plane   planeRecord
-	path    *Path
+	path    *sweepinput.Path
 	factors []float64
 	xform   r3.Transform
 

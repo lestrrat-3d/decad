@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 	"github.com/lestrrat-3d/r3"
 )
@@ -26,7 +27,7 @@ func thickenChainSweep(ctx context.Context, d *Document, sp chainSweepPayload,
 // solid one-arc Sweep. The original open-chain reduction cannot describe it.
 func thickenArcChainSweep(ctx context.Context, d *Document, sp chainSweepPayload,
 	side ThickenSide, tmm, tDelta float64) (*Body, error) {
-	if sp.path == nil || len(sp.path.records) != 1 {
+	if sp.path == nil || len(sp.path.Records) != 1 {
 		return nil, fmt.Errorf(`%w: this chain Sweep has no one-arc Thicken path`, ErrUnsupported)
 	}
 	reverse := sp.revolve.phi0 < 0 && sp.revolve.phi1 == 0
@@ -63,7 +64,7 @@ func thickenCompositeChainSweep(ctx context.Context, d *Document, sp chainSweepP
 	straight := sp.spans[0].chain
 	frame := straight.frame
 	plane := planeRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()}
-	if err := cardinalChainSweepClass(straight.chains[0], plane, sp.path); err != nil {
+	if err := sweepinput.CardinalChainSweepClass(straight.chains[0], plane, sp.path); err != nil {
 		return nil, err
 	}
 	amount, err := thickenAmount(tmm, tDelta, side)
@@ -76,7 +77,7 @@ func thickenCompositeChainSweep(ctx context.Context, d *Document, sp chainSweepP
 	// The path's exact half-circle rotates about U=R along +V. RibbonProfile's
 	// interval scan checks every moving piece against that axis, so the whole
 	// offset family has positive hoop radius before either solid span builds.
-	arc, ok := sp.path.segments[1].(ArcThrough)
+	arc, ok := sp.path.Segments[1], sp.path.Segments[1].Arc
 	if !ok {
 		return nil, fmt.Errorf(`%w: the chain sweep has no cardinal arc source`, ErrUnsupported)
 	}

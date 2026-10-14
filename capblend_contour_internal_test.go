@@ -48,7 +48,7 @@ func ratStraightEdgeBound(held float64, squared *big.Rat, endpointDeltas ...floa
 // general three-coordinate form (capSlantEdge, loftmesh.EdgeLength,
 // compositeLineSweepSpan), capcontour.CapEdgeLengthBound's plane form, the big.Rat that
 // proof.RatSquaredDistance3 still hands its dividing callers, and the dot product of
-// the exact tangent validateStraightSweepPath substitutes for the distance.
+// the exact tangent sweepinput.ValidateStraightSweepPath substitutes for the distance.
 //
 // Shown to fail: dropping proof.DySquaredDistance3's third coordinate turns the
 // squared-length leg red; answering a finite bound where the squared length

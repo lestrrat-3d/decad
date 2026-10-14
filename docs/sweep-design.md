@@ -775,7 +775,7 @@ this section to say so, and on Table SC to state which path shapes it admits.
 **The two reductions are not the same call as their chain siblings, and the
 difference is the height.** A chain `Extrude` takes its interval from an `Extent`
 the document resolves; a straight chain sweep takes it from the path's two
-recorded points, so the interval carries `validateStraightSweepPath`'s own
+recorded points, so the interval carries `sweepinput.ValidateStraightSweepPath`'s own
 composed bound — the square root's committed error against the exact rational
 squared length, plus the per-component departure of the held sweep vector from
 the exact tangent. On an axis-aligned frame every one of those terms is zero

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
@@ -21,7 +22,7 @@ import (
 type twistedSweepPayload struct {
 	profile    profileRecord
 	plane      planeRecord
-	path       *Path
+	path       *sweepinput.Path
 	angle      units.Value
 	recordArea float64
 	xform      r3.Transform
@@ -204,19 +205,19 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 }
 
 func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile profileRecord,
-	plane planeRecord, path *Path, angle units.Value, recordArea float64, xform r3.Transform) (*Body, error) {
+	plane planeRecord, path *sweepinput.Path, angle units.Value, recordArea float64, xform r3.Transform) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if len(path.records) == 2 {
+	if len(path.Records) == 2 {
 		return evalCompositeTwistedSweep(ctx, d, ref, profile, plane, path, angle, recordArea, xform)
 	}
-	if len(path.records) != 1 || len(path.segments) != 1 ||
+	if len(path.Records) != 1 || len(path.Segments) != 1 ||
 		plane.Origin != (r3.Vec{}) || plane.U != r3.NewVec(1, 0, 0) || plane.V != r3.NewVec(0, 1, 0) ||
-		path.Start() != (r3.Vec{}) || path.End().X != 0 || path.End().Y != 0 || path.End().Z <= 0 {
+		path.Start != (r3.Vec{}) || path.End.X != 0 || path.End.Y != 0 || path.End.Z <= 0 {
 		return nil, fmt.Errorf(`%w: nonzero twist currently needs one positive Z line from an origin XY sketch`, ErrUnsupported)
 	}
-	if _, ok := path.segments[0].(LineTo); !ok {
+	if path.Segments[0].Arc {
 		return nil, fmt.Errorf(`%w: nonzero twist currently needs one straight path span`, ErrUnsupported)
 	}
 	poly, err := twistsweep.TwistPolygonOf(profile)
@@ -244,7 +245,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		return nil, fmt.Errorf(`%w: the twisted sweep cannot enclose the endpoint rotation`, ErrUnsupported)
 	}
 	sinHeld, cosHeld := math.Sincos(theta)
-	end := planeRecord{Origin: path.End(), U: r3.NewVec(cosHeld, sinHeld, 0), V: r3.NewVec(-sinHeld, cosHeld, 0)}
+	end := planeRecord{Origin: path.End, U: r3.NewVec(cosHeld, sinHeld, 0), V: r3.NewVec(-sinHeld, cosHeld, 0)}
 	f0, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
 	if err != nil {
 		return nil, err
@@ -283,7 +284,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	if proofbound.IsNonFinite(delta) || delta <= 0 {
 		return nil, fmt.Errorf(`%w: the twisted boundary has no finite displacement proof`, ErrUnsupported)
 	}
-	areaIv, err := twistsweep.TwistAreaInterval(poly, twistsweep.TwistRat(path.End().Z), angleIv)
+	areaIv, err := twistsweep.TwistAreaInterval(poly, twistsweep.TwistRat(path.End.Z), angleIv)
 	if err != nil {
 		return nil, err
 	}
@@ -299,23 +300,23 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	// unrounded Loft facets. Loft's own occupied-volume proof then covers
 	// every held-vertex displacement, including axial placement rounding.
 	volSymDiff := proofbound.AbsSumUpper(
-		twistSymDiff(path.End().Z, poly.PerimeterUpper, idealDelta),
+		twistSymDiff(path.End.Z, poly.PerimeterUpper, idealDelta),
 		held.proof.VolSymDiff,
 	)
 	if proofbound.IsNonFinite(trueArea) || proofbound.IsNonFinite(trueAreaBound) ||
 		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(volSymDiff) {
 		return nil, fmt.Errorf(`%w: the twisted sweep's proof is not finite`, ErrUnsupported)
 	}
-	volume := new(big.Rat).Mul(poly.Area, twistsweep.TwistRat(path.End().Z))
+	volume := new(big.Rat).Mul(poly.Area, twistsweep.TwistRat(path.End.Z))
 	vol, volBound := mitredEnclosure(volume, volume)
 	heldBody.volume = Measurement{Value: units.CubicMillimeters(vol), Exactness: exactnessOf(volBound), Bound: units.CubicMillimeters(volBound)}
 	heldBody.area = Measurement{Value: units.SquareMillimeters(trueArea), Exactness: Approximate, Bound: units.SquareMillimeters(trueAreaBound)}
-	center := r3.NewVec(0, 0, path.End().Z/2)
+	center := r3.NewVec(0, 0, path.End.Z/2)
 	heldCenter := xform.Apply(center)
 	centerBound := 0.0
 	if xform != r3.Identity() {
 		tr := xform.Translation()
-		centerBound = proofbound.RigidRoundAllow(path.End().Z/2, max(math.Abs(tr.X), math.Abs(tr.Y), math.Abs(tr.Z)))
+		centerBound = proofbound.RigidRoundAllow(path.End.Z/2, max(math.Abs(tr.X), math.Abs(tr.Y), math.Abs(tr.Z)))
 	}
 	heldBody.centroid = VecMeasurement{Value: heldCenter, Exactness: exactnessOf(centerBound), Bound: units.Millimeters(centerBound)}
 	heldBody.bounds.Bound = units.Millimeters(proofbound.AbsSumUpper(heldBody.bounds.Bound.Base(), delta))
@@ -328,7 +329,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		// is at most h+R|angle|; a cap edge is shorter than the perimeter.
 		edge.curve = FacetedCurve{Bound: units.Millimeters(delta)}
 		edge.n.LengthBound = proofbound.AbsSumUpper(edge.n.LengthBound,
-			edge.n.Length, path.End().Z, proofbound.UpRound(poly.MaxRadiusL1*upper), poly.PerimeterUpper)
+			edge.n.Length, path.End.Z, proofbound.UpRound(poly.MaxRadiusL1*upper), poly.PerimeterUpper)
 	}
 	for _, face := range heldBody.Faces() {
 		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {

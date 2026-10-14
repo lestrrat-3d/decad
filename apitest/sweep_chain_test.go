@@ -215,7 +215,7 @@ func tiltedLineChainSketch(tb testing.TB) (*sketch.Sketch, *sketch.Chain) {
 // the height bound says, while a sweep edge's length IS the height and carries
 // nothing else, so it reads Exact at a zero bound the moment the leg is gone.
 //
-// Shown-to-fail: dropping validateStraightSweepPath's composed height bound —
+// Shown-to-fail: dropping sweepinput.ValidateStraightSweepPath's composed height bound —
 // capcontour.StraightEdgeBound's square-root error against the exact rational squared
 // length, plus each dyadicFloatError between the recorded tangent and the held
 // sweep vector — turns the two sweep-edge assertions below red. See this PR's

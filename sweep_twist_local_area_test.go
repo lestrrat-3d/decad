@@ -75,7 +75,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	var stations []straightTwistStation
 	var held loftPayload
 	for _, candidate := range []int{refinedCells, baseCells} {
-		candidateStations, stationErr := straightTwistStations(source.path.End().Z, angle,
+		candidateStations, stationErr := straightTwistStations(source.path.End.Z, angle,
 			angleIv, poly, candidate)
 		require.NoError(t, stationErr)
 		part, buildErr := evalLoft(t.Context(), doc, body.origin.producer, loftPayload{
@@ -113,7 +113,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 		math.Max(stations[0].PointError, stations[1].PointError))
 	bound := twistsweep.TwistWallCellAreaL1(vLo, vHi, wLo, wHi, claim, e,
 		poly.MaxRadiusL1, proofbound.DivUpper(proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), float64(cells)),
-		proofbound.DivUpper(source.path.End().Z, float64(cells)))
+		proofbound.DivUpper(source.path.End.Z, float64(cells)))
 	require.True(t, !proofbound.IsNonFinite(bound))
 	t.Logf("cells=%d source_segment=%d cell=%d bound=%g arc=%g energy=%g matched=%g endpoint=%g",
 		cells, held.segment[0][j], j, bound, claim.ArcLength, claim.Energy, claim.Matched, e)
@@ -144,7 +144,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 			sin, cos := math.Sincos(u * turn)
 			ts := r3.NewVec(cos*dp.X-sin*dp.Y, sin*dp.X+cos*dp.Y, 0)
 			tu := r3.NewVec(-turn*(sin*p.X+cos*p.Y), turn*(cos*p.X-sin*p.Y),
-				source.path.End().Z/float64(cells))
+				source.path.End.Z/float64(cells))
 			heldArea := heldArea0
 			if u > s {
 				heldArea = heldArea1
@@ -194,7 +194,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	}
 	require.Equal(t, len(source.mesh.n.Triangles), global)
 	wallBound, err := twistMixedWallAreaL1(heldCells, stations, poly,
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End().Z)
+		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End.Z)
 	require.NoError(t, err)
 	t.Logf("all wall-cell absolute area allowance=%g", wallBound)
 	require.Less(t, wallBound, 20.0)
@@ -212,18 +212,18 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	corrupt[0].side = append([]uint8(nil), corrupt[0].side...)
 	corrupt[0].side[2*j+1] = 0
 	_, err = twistMixedWallAreaL1(corrupt, stations, poly,
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End().Z)
+		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End.Z)
 	require.ErrorIs(t, err, ErrUnsupported)
 	corrupt[0] = heldCells[0]
 	corrupt[0].tris = append([][3]int(nil), corrupt[0].tris...)
 	corrupt[0].tris[2*j+1][2] = corrupt[0].tris[2*j+1][1]
 	_, err = twistMixedWallAreaL1(corrupt, stations, poly,
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End().Z)
+		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End.Z)
 	require.ErrorIs(t, err, ErrUnsupported)
 	corrupt[0] = heldCells[0]
 	corrupt[0].twistAreaCells = nil
 	_, err = twistMixedWallAreaL1(corrupt, stations, poly,
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End().Z)
+		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End.Z)
 	require.ErrorIs(t, err, ErrUnsupported)
 	corrupt[0] = heldCells[0]
 	corrupt[0].twistAreaCells = [][]twistsweep.TwistAreaCellClaims{
@@ -231,6 +231,6 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	}
 	corrupt[0].twistAreaCells[0][j].Matched = -1
 	_, err = twistMixedWallAreaL1(corrupt, stations, poly,
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End().Z)
+		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End.Z)
 	require.ErrorIs(t, err, ErrUnsupported)
 }

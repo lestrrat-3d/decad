@@ -93,8 +93,8 @@ func testLengthLower(q *big.Rat) *big.Rat {
 func TestMitredSweepJoinPlanesAndWallsAreExact(t *testing.T) {
 	t.Parallel()
 	_, mp := mitredTreeBranch(t)
-	points := []r3.Vec{mp.path.Start()}
-	for _, r := range mp.path.records {
+	points := []r3.Vec{mp.path.Start}
+	for _, r := range mp.path.Records {
 		points = append(points, r.End)
 	}
 	n := len(points) - 1
@@ -141,9 +141,9 @@ func TestMitredSweepJoinPlanesAndWallsAreExact(t *testing.T) {
 // moments about the origin over the rational vertices, splitting every wall
 // along its OTHER diagonal: a planar quad's volume does not depend on it.
 func testExactVolumeMoments(mp mitredSweepPayload) (*big.Rat, [3]*big.Rat) {
-	stride := len(mp.exact) / (len(mp.path.records) + 1)
+	stride := len(mp.exact) / (len(mp.path.Records) + 1)
 	var tris [][3]int
-	for k := range len(mp.path.records) {
+	for k := range len(mp.path.Records) {
 		for v := range stride {
 			next := (v + 1) % stride
 			b0, b1 := k*stride+v, k*stride+next
@@ -151,7 +151,7 @@ func testExactVolumeMoments(mp mitredSweepPayload) (*big.Rat, [3]*big.Rat) {
 			tris = append(tris, [3]int{b0, b1, t0}, [3]int{b1, t1, t0})
 		}
 	}
-	walls := 2 * len(mp.path.records) * stride
+	walls := 2 * len(mp.path.Records) * stride
 	tris = append(tris, mp.tris[walls:]...)
 	vol6 := new(big.Rat)
 	moments := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}

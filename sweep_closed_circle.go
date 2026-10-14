@@ -15,14 +15,14 @@ import (
 // existing full Revolve evaluator. That evaluator supplies axis-incidence,
 // topology, four bounded readings, and an occupied-volume mesh proof.
 func evalClosedCircleSweep(ctx context.Context, d *Document, ref producerID,
-	profile profileRecord, plane planeRecord, frame r3.Frame, path *Path,
+	profile profileRecord, plane planeRecord, frame r3.Frame, path *sweepinput.Path,
 	work *freeform.FreeformWork,
 ) (*Body, error) {
-	carrier, ok := sweepinput.ClosedCircle(path.records)
+	carrier, ok := sweepinput.ClosedCircle(path.Records)
 	if !ok {
 		return nil, fmt.Errorf(`%w: the closed sweep path is outside the exact two-arc full-circle class`, ErrUnsupported)
 	}
-	first := path.records[0]
+	first := path.Records[0]
 	geometry, err := sweeparc.Derive(first.Start, carrier, first.ArcPhi, first.ArcAngle, plane)
 	if err != nil {
 		return nil, err
