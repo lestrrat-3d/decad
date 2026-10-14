@@ -10,6 +10,9 @@ import (
 // Exact Bernstein arithmetic uses one shared integer denominator. The
 // common denominator avoids normalizing a big.Rat after each operation.
 
+// bernsteinUnit is the read-only interval end 1. It is never written.
+var bernsteinUnit = big.NewRat(1, 1)
+
 func ratZero() *big.Rat             { return new(big.Rat) }
 func ratOne() *big.Rat              { return big.NewRat(1, 1) }
 func ratAdd(a, b *big.Rat) *big.Rat { return proofarith.AddRat(new(big.Rat), a, b) }
@@ -37,7 +40,27 @@ func bernsteinIntegerRow(coeff []*big.Rat) ([]*big.Int, *big.Int) {
 	return nums, den
 }
 
+// bernsteinBinomialTable holds the binomial rows for n in 0..32. Read only.
+// These are constants of n alone, computed once at package initialisation;
+// no caller may write into a returned big.Int.
+var bernsteinBinomialTable = func() [][]*big.Int {
+	table := make([][]*big.Int, 33)
+	for n := range table {
+		table[n] = bernsteinBinomialsFresh(n)
+	}
+	return table
+}()
+
+// bernsteinBinomials returns the binomial row C(n, 0..n). The result may be a
+// shared table row: callers must only read it.
 func bernsteinBinomials(n int) []*big.Int {
+	if n >= 0 && n < len(bernsteinBinomialTable) {
+		return bernsteinBinomialTable[n]
+	}
+	return bernsteinBinomialsFresh(n)
+}
+
+func bernsteinBinomialsFresh(n int) []*big.Int {
 	out := make([]*big.Int, n+1)
 	out[0] = big.NewInt(1)
 	for i := 1; i <= n; i++ {
@@ -168,6 +191,16 @@ func BernsteinMul(a, b []*big.Rat) []*big.Rat {
 // right half of the split at lo stays unreduced over den·q^n, and only the
 // kept half of the second split is reduced.
 func BernsteinRestrict(a []*big.Rat, lo, hi *big.Rat) []*big.Rat {
+	// Restricting to [0, 1] is the identity. The coefficients are already in
+	// lowest terms, so a copy has the same numerators and denominators the
+	// general path would normalise them to.
+	if lo.Sign() == 0 && hi.Cmp(bernsteinUnit) == 0 {
+		out := make([]*big.Rat, len(a))
+		for i, c := range a {
+			out[i] = new(big.Rat).Set(c)
+		}
+		return out
+	}
 	n := len(a) - 1
 	work, den := bernsteinIntegerRow(a)
 	p, q := lo.Num(), lo.Denom()

@@ -50,7 +50,8 @@ func revolveLoftFacesTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 			return nil, false, err
 		}
 	}
-	box := polynomial.BernsteinRectRestrict(q, lfZero(), lfOne(), tLo, tHi)
+	timeRows := polynomial.BernsteinRectTimeRestrict(q, tLo, tHi)
+	box := polynomial.BernsteinRectSourceRestrict(timeRows, lfZero(), lfOne())
 	kind, _ := loftface.ClassifyRows(box)
 	whole := revolveLoftFacesMappedCell{segment: segment, span: span,
 		band: band, side: kind, sLo: lfZero(), sHi: lfOne(), tLo: tLo, tHi: tHi}
@@ -62,7 +63,7 @@ func revolveLoftFacesTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 		whole.side = revolveLoftFacesAxialMiss
 		return []revolveLoftFacesMappedCell{whole}, true, nil
 	}
-	if cells, ok := revolveLoftFacesBracketTimeRoot(q, j,
+	if cells, ok := revolveLoftFacesBracketTimeRoot(timeRows, j,
 		segment, span, band, tLo, tHi); ok {
 		return cells, true, nil
 	}
@@ -107,9 +108,12 @@ func revolveLoftFacesOpenTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 	return cells, ok, err
 }
 
-func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
+// revolveLoftFacesBracketTimeRoot looks for one source bracket where the
+// meridian rows cross. timeRows are the meridian rows already restricted to
+// band time [tLo, tHi]; j is restricted here.
+func revolveLoftFacesBracketTimeRoot(timeRows, j [3][]*big.Rat,
 	segment, span, band int, tLo, tHi *big.Rat) ([]revolveLoftFacesMappedCell, bool) {
-	box := polynomial.BernsteinRectRestrict(q, lfZero(), lfOne(), tLo, tHi)
+	box := polynomial.BernsteinRectSourceRestrict(timeRows, lfZero(), lfOne())
 	for _, orientation := range []int{1, -1} {
 		oriented := box
 		if orientation < 0 {
@@ -134,7 +138,7 @@ func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 			}
 		}
 	check:
-		middle := polynomial.BernsteinRectRestrict(q, sLo, sHi, tLo, tHi)
+		middle := polynomial.BernsteinRectSourceRestrict(timeRows, sLo, sHi)
 		if orientation < 0 {
 			middle = loftface.NegateRows(middle)
 		}
@@ -142,7 +146,7 @@ func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 			continue
 		}
 		if sLo.Sign() > 0 {
-			left := polynomial.BernsteinRectRestrict(q, lfZero(), sLo, tLo, tHi)
+			left := polynomial.BernsteinRectSourceRestrict(timeRows, lfZero(), sLo)
 			if orientation > 0 {
 				left = loftface.NegateRows(left)
 			}
@@ -151,7 +155,7 @@ func revolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 			}
 		}
 		if sHi.Cmp(lfOne()) < 0 {
-			right := polynomial.BernsteinRectRestrict(q, sHi, lfOne(), tLo, tHi)
+			right := polynomial.BernsteinRectSourceRestrict(timeRows, sHi, lfOne())
 			if orientation < 0 {
 				right = loftface.NegateRows(right)
 			}

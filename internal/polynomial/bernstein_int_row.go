@@ -92,13 +92,7 @@ func (r BernsteinIntRow) Deriv() BernsteinIntRow {
 func (r BernsteinIntRow) Mul(o BernsteinIntRow) BernsteinIntRow {
 	n, m := len(r.nums)-1, len(o.nums)-1
 	binom := bernsteinBinomials(n + m)
-	lcm := big.NewInt(1)
-	var g big.Int
-	for _, c := range binom {
-		g.GCD(nil, nil, lcm, c)
-		lcm.Quo(lcm, &g)
-		lcm.Mul(lcm, c)
-	}
+	lcm := bernsteinBinomialLCM(n + m)
 	an, bn := make([]*big.Int, n+1), make([]*big.Int, m+1)
 	an0, bn0 := bernsteinBinomials(n), bernsteinBinomials(m)
 	for i := range an {
@@ -140,4 +134,35 @@ func (r BernsteinIntRow) reduced() BernsteinIntRow {
 		nums[i] = new(big.Int).Quo(n, g)
 	}
 	return BernsteinIntRow{nums: nums, den: new(big.Int).Quo(r.den, g)}
+}
+
+// bernsteinBinomialLCMTable holds lcm(C(n, 0..n)) for n in 0..32. Read only.
+// These are constants of n alone, computed once at package initialisation;
+// no caller may write into a returned big.Int.
+var bernsteinBinomialLCMTable = func() []*big.Int {
+	table := make([]*big.Int, len(bernsteinBinomialTable))
+	for n := range table {
+		table[n] = bernsteinBinomialLCMFresh(n)
+	}
+	return table
+}()
+
+// bernsteinBinomialLCM returns lcm(C(n, 0..n)). The result may be a shared
+// table value: callers must only read it.
+func bernsteinBinomialLCM(n int) *big.Int {
+	if n >= 0 && n < len(bernsteinBinomialLCMTable) {
+		return bernsteinBinomialLCMTable[n]
+	}
+	return bernsteinBinomialLCMFresh(n)
+}
+
+func bernsteinBinomialLCMFresh(n int) *big.Int {
+	lcm := big.NewInt(1)
+	var g big.Int
+	for _, c := range bernsteinBinomialsFresh(n) {
+		g.GCD(nil, nil, lcm, c)
+		lcm.Quo(lcm, &g)
+		lcm.Mul(lcm, c)
+	}
+	return lcm
 }

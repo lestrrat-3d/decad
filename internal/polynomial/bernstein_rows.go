@@ -119,6 +119,12 @@ func BernsteinRowsPointSign(q [3][]*big.Rat, s *big.Rat) int {
 // range [sLo, sHi] and the band time range [tLo, tHi].
 func BernsteinRectRestrict(rows [3][]*big.Rat,
 	sLo, sHi, tLo, tHi *big.Rat) [3][]*big.Rat {
+	return BernsteinRectSourceRestrict(BernsteinRectTimeRestrict(rows, tLo, tHi), sLo, sHi)
+}
+
+// BernsteinRectTimeRestrict restricts every source column of the three rows
+// to band time [tLo, tHi]. The result is fresh; rows is not changed.
+func BernsteinRectTimeRestrict(rows [3][]*big.Rat, tLo, tHi *big.Rat) [3][]*big.Rat {
 	var restricted [3][]*big.Rat
 	for row := range restricted {
 		restricted[row] = make([]*big.Rat, len(rows[row]))
@@ -130,8 +136,16 @@ func BernsteinRectRestrict(rows [3][]*big.Rat,
 			restricted[row][column] = coeff[row]
 		}
 	}
+	return restricted
+}
+
+// BernsteinRectSourceRestrict restricts each of the three rows to source
+// [sLo, sHi]. The result is fresh; rows is not changed, so one time
+// restriction can serve several source ranges.
+func BernsteinRectSourceRestrict(rows [3][]*big.Rat, sLo, sHi *big.Rat) [3][]*big.Rat {
+	var restricted [3][]*big.Rat
 	for row := range restricted {
-		restricted[row] = BernsteinRestrict(restricted[row], sLo, sHi)
+		restricted[row] = BernsteinRestrict(rows[row], sLo, sHi)
 	}
 	return restricted
 }

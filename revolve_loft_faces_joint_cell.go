@@ -61,14 +61,14 @@ func revolveLoftFacesKnotRootCellWith(memo *loftface.MeridianMemo, trim *loftFac
 	if startX.Cmp(endX) > 0 {
 		startX, endX = endX, startX
 	}
+	timeRows := polynomial.BernsteinRectTimeRestrict(q, root.Time.Lo, root.Time.Hi)
 	for depth := range 13 {
 		width := big.NewRat(1, int64(1<<depth))
 		sLo, sHi := lfZero(), width
 		if atEnd {
 			sLo, sHi = lfSub(lfOne(), width), lfOne()
 		}
-		box := polynomial.BernsteinRectRestrict(q, sLo, sHi,
-			root.Time.Lo, root.Time.Hi)
+		box := polynomial.BernsteinRectSourceRestrict(timeRows, sLo, sHi)
 
 		var derivative [3][]*big.Rat
 		for row := range box {
@@ -96,8 +96,7 @@ func revolveLoftFacesKnotRootCellWith(memo *loftface.MeridianMemo, trim *loftFac
 			if !atEnd {
 				outerLo, outerHi = sHi, lfOne()
 			}
-			outer := polynomial.BernsteinRectRestrict(q, outerLo, outerHi,
-				root.Time.Lo, root.Time.Hi)
+			outer := polynomial.BernsteinRectSourceRestrict(timeRows, outerLo, outerHi)
 
 			if fixedSide > 0 && !polynomial.BernsteinRowsPositive(outer) ||
 				fixedSide < 0 && !polynomial.BernsteinRowsPositive(loftface.NegateRows(outer)) {
