@@ -135,6 +135,28 @@ func TestMassAccumulatorAddMeshMatchesThreeLiftReference(t *testing.T) {
 			ga, gab := got.Area()
 			massFloatBits(t, wa, ga)
 			massFloatBits(t, wab, gab)
+
+			wallAreas := make([]WallArea, tc.walls)
+			for k, tri := range tc.tris[:tc.walls] {
+				a := proofarith.XptOf(tc.verts[tri[0]])
+				b := proofarith.XptOf(tc.verts[tri[1]])
+				c := proofarith.XptOf(tc.verts[tri[2]])
+				lo, hi := WallTriangleArea(proofarith.Xsub(b, a), proofarith.Xsub(c, a))
+				wallAreas[k] = WallArea{Lo: lo, Hi: hi}
+			}
+			cached := NewMassAccumulator(tc.anchor, tc.delta, tc.section, tc.section)
+			cached.AddMeshWithWallAreas(tc.verts, tc.tris, wallAreas)
+			cv, cb := cached.Volume(tc.verts, tc.tris)
+			massFloatBits(t, gv, cv)
+			massFloatBits(t, gb, cb)
+			cc, ccb, ce := cached.Centroid(tc.verts, tc.tris)
+			require.Equal(t, ge == nil, ce == nil)
+			massVecBits(t, gc, cc)
+			massFloatBits(t, gcb, ccb)
+			ca, cab := cached.Area()
+			massFloatBits(t, ga, ca)
+			massFloatBits(t, gab, cab)
+			require.Equal(t, got, cached)
 		})
 	}
 }
@@ -171,13 +193,23 @@ func BenchmarkMassAccumulatorIndexed(b *testing.B) {
 	for j := 1; j < n-1; j++ {
 		tris = append(tris, [3]int{0, j + 1, j}, [3]int{n, n + j, n + j + 1})
 	}
-	for _, mode := range []string{"reference", "indexed"} {
+	wallAreas := make([]WallArea, walls)
+	for k, tri := range tris[:walls] {
+		a, c, d := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+		ax := proofarith.XptOf(a)
+		lo, hi := WallTriangleArea(proofarith.Xsub(proofarith.XptOf(c), ax), proofarith.Xsub(proofarith.XptOf(d), ax))
+		wallAreas[k] = WallArea{Lo: lo, Hi: hi}
+	}
+	for _, mode := range []string{"reference", "indexed", "cached"} {
 		b.Run(mode, func(b *testing.B) {
 			for b.Loop() {
 				m := NewMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
-				if mode == "indexed" {
+				switch mode {
+				case "indexed":
 					m.AddMesh(verts, tris, walls)
-				} else {
+				case "cached":
+					m.AddMeshWithWallAreas(verts, tris, wallAreas)
+				default:
 					for k, tri := range tris {
 						referenceMassAdd(m, verts[tri[0]], verts[tri[1]], verts[tri[2]], k < walls)
 					}

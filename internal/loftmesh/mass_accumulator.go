@@ -162,6 +162,16 @@ func (m *MassAccumulator) prepareVertex(p r3.Vec) massVertex {
 // exact lift and anchored rational coordinates are shared only within this
 // call, and only between triangles that name the same mesh index.
 func (m *MassAccumulator) AddMesh(verts []r3.Vec, tris [][3]int, walls int) {
+	m.addMesh(verts, tris, walls, nil)
+}
+
+// AddMeshWithWallAreas uses one bracket computed from each wall triangle in
+// tris order. The caller must pass the brackets for these verts and tris.
+func (m *MassAccumulator) AddMeshWithWallAreas(verts []r3.Vec, tris [][3]int, wallAreas []WallArea) {
+	m.addMesh(verts, tris, len(wallAreas), wallAreas)
+}
+
+func (m *MassAccumulator) addMesh(verts []r3.Vec, tris [][3]int, walls int, wallAreas []WallArea) {
 	prepared := make([]massVertex, len(verts))
 	at := func(i int) massVertex {
 		if !prepared[i].ready {
@@ -170,11 +180,19 @@ func (m *MassAccumulator) AddMesh(verts []r3.Vec, tris [][3]int, walls int) {
 		return prepared[i]
 	}
 	for k, tri := range tris {
-		m.addPrepared(at(tri[0]), at(tri[1]), at(tri[2]), k < walls)
+		if k < walls && wallAreas != nil {
+			m.addPreparedArea(at(tri[0]), at(tri[1]), at(tri[2]), true, &wallAreas[k])
+		} else {
+			m.addPrepared(at(tri[0]), at(tri[1]), at(tri[2]), k < walls)
+		}
 	}
 }
 
 func (m *MassAccumulator) addPrepared(a, b, c massVertex, wall bool) {
+	m.addPreparedArea(a, b, c, wall, nil)
+}
+
+func (m *MassAccumulator) addPreparedArea(a, b, c massVertex, wall bool, area *WallArea) {
 	sa, sb, sc := a.offset, b.offset, c.offset
 
 	triVol6 := proofarith.XdotRat(sa, proofarith.Xcross(sb, sc))
@@ -199,9 +217,14 @@ func (m *MassAccumulator) addPrepared(a, b, c massVertex, wall bool) {
 	if !wall {
 		return
 	}
-	// sb-sa and sc-sa are b-a and c-a exactly: the anchor cancels over
-	// rationals, so the already-lifted vertices serve the area bracket too.
-	lo, hi := WallTriangleArea(proofarith.Xsub(sb, sa), proofarith.Xsub(sc, sa))
+	// In the fallback, sb-sa and sc-sa are b-a and c-a exactly because the
+	// anchor cancels over rationals. The cached path reads the same bracket.
+	var lo, hi float64
+	if area != nil {
+		lo, hi = area.Lo, area.Hi
+	} else {
+		lo, hi = WallTriangleArea(proofarith.Xsub(sb, sa), proofarith.Xsub(sc, sa))
+	}
 	m.WallAreaSum += lo
 	m.WallAreaAbs = proofbound.UpRound(m.WallAreaAbs + lo)
 	m.WallAreaSlack = proofbound.UpRound(m.WallAreaSlack + proofbound.UpRound(hi-lo))

@@ -411,7 +411,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	}
 	body := bornBody(&Body{doc: d, n: topo.Body{Solid: !pl.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind)}})
 
-	capStart, capEnd, walls, err := buildLoftTopology(ctx, body, ref, a, cap0Rat, cap1Rat)
+	capStart, capEnd, walls, wallAreas, err := buildLoftTopology(ctx, body, ref, a, cap0Rat, cap1Rat)
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +473,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
 	}
 
-	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
+	mass := buildLoftMassWithWallAreas(pl, a, pairs, sectionDelta, sectionMatchedDelta, wallAreas)
 	body.n.Volume = measurementToInternal(mass.volume(a.Verts, a.Tris))
 	centroid, err := mass.centroid(a.Verts, a.Tris)
 	if err != nil {
@@ -619,6 +619,10 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 // exact correction and twist legs. The chorded terms remain zero for a
 // LineSeg-only build, whose cells are all faceted.
 func buildLoftMass(pl loftPayload, a loftmesh.Assembly, pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta float64) *loftMassAccumulator {
+	return buildLoftMassWithWallAreas(pl, a, pairs, sectionDelta, sectionMatchedDelta, nil)
+}
+
+func buildLoftMassWithWallAreas(pl loftPayload, a loftmesh.Assembly, pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta float64, wallAreas []loftmesh.WallArea) *loftMassAccumulator {
 	anchor := pl.xform.Apply(pl.plane0.Origin)
 	chorded := loftmesh.IsChorded(pairs, sectionDelta, sectionMatchedDelta)
 	matchedDelta := 0.0
@@ -626,9 +630,17 @@ func buildLoftMass(pl loftPayload, a loftmesh.Assembly, pairs []loftmesh.LoopPai
 		matchedDelta = loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.Delta)
 	}
 	mass := newLoftMassAccumulator(anchor, a.Delta, sectionDelta, matchedDelta)
-	mass.AddMesh(a.Verts, a.Tris, a.Walls)
+	if wallAreas == nil {
+		mass.AddMesh(a.Verts, a.Tris, a.Walls)
+	} else {
+		mass.AddMeshWithWallAreas(a.Verts, a.Tris, wallAreas)
+	}
 	if chorded {
-		mass.Chorded = loftmesh.ComputeLoftChordedAllow(pairs, a.VIdx, a.WIdx, a.Verts, anchor, matchedDelta, a.Delta, a.Reversed)
+		if wallAreas == nil {
+			mass.Chorded = loftmesh.ComputeLoftChordedAllow(pairs, a.VIdx, a.WIdx, a.Verts, anchor, matchedDelta, a.Delta, a.Reversed)
+		} else {
+			mass.Chorded = loftmesh.ComputeLoftChordedAllowWithWallAreas(pairs, a.VIdx, a.WIdx, a.Verts, anchor, matchedDelta, a.Delta, a.Reversed, wallAreas)
+		}
 	}
 	return mass
 }

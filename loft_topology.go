@@ -72,7 +72,7 @@ func planeFromTriangle(verts []r3.Vec, tri [3]int) (surfacegeom.Plane, error) {
 // §12 PR 2a) widens that bracket by internal/proofbound/bounds.go's proofbound.PerturbedTriangleAreaAllow,
 // the same per-triangle correction the mass accumulator sums into Area's own
 // bound.
-func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i, j, side int, delta float64) (*Face, error) {
+func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i, j, side int, delta float64, area *loftmesh.WallArea) (*Face, error) {
 	surf, err := planeFromTriangle(verts, tri)
 	if err != nil {
 		return nil, err
@@ -81,6 +81,9 @@ func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i
 	u := proofarith.Xsub(proofarith.XptOf(b), proofarith.XptOf(a))
 	v := proofarith.Xsub(proofarith.XptOf(c), proofarith.XptOf(a))
 	lo, hi := loftmesh.WallTriangleArea(u, v)
+	if area != nil {
+		*area = loftmesh.WallArea{Lo: lo, Hi: hi}
+	}
 	areaBound := proofbound.UpRound(hi - lo)
 	if delta > 0 {
 		areaBound = proofbound.AbsSumUpper(areaBound, proofbound.PerturbedTriangleAreaAllow(a, b, c, delta))
@@ -133,7 +136,7 @@ func loftLoopCoedges(co []coedge, reversed bool) []coedge {
 // whole-shell reversal into the directed boundary each face publishes. A walk
 // emitted without it agrees with its face's Plane on one axial spelling of a
 // section pair and opposes it on the mirror.
-func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftmesh.Assembly, cap0Rat, cap1Rat *big.Rat) (*Face, *Face, []*Face, error) {
+func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftmesh.Assembly, cap0Rat, cap1Rat *big.Rat) (*Face, *Face, []*Face, []loftmesh.WallArea, error) {
 	vertexObjs := make([]*Vertex, len(a.Verts))
 	for i, p := range a.Verts {
 		vertexObjs[i] = loftVertex(p, a.Delta)
@@ -156,10 +159,14 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 	}
 
 	var walls []*Face
+	var wallAreas []loftmesh.WallArea
 	var capStartLoops, capEndLoops []*Loop
 	for i := range loopCount {
 		if err := ctx.Err(); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
+		}
+		if wallAreas == nil {
+			wallAreas = make([]loftmesh.WallArea, 0, a.Walls)
 		}
 		n := len(a.VIdx[i])
 		isOuter := i == 0
@@ -188,9 +195,10 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 		for j := range n {
 			jn := (j + 1) % n
 
-			lowerFace, err := buildLoftWallFace(body, ref, a.Verts, lowerTri[i][j], i, j, 0, a.Delta)
+			var lowerArea loftmesh.WallArea
+			lowerFace, err := buildLoftWallFace(body, ref, a.Verts, lowerTri[i][j], i, j, 0, a.Delta, &lowerArea)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, err
 			}
 			lowerFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
 				{edge: rimBottom[j], forward: true},
@@ -198,10 +206,12 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 				{edge: diagE[j], forward: false},
 			}, a.Reversed)}}
 			walls = append(walls, lowerFace)
+			wallAreas = append(wallAreas, lowerArea)
 
-			upperFace, err := buildLoftWallFace(body, ref, a.Verts, upperTri[i][j], i, j, 1, a.Delta)
+			var upperArea loftmesh.WallArea
+			upperFace, err := buildLoftWallFace(body, ref, a.Verts, upperTri[i][j], i, j, 1, a.Delta, &upperArea)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, err
 			}
 			upperFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
 				{edge: diagE[j], forward: true},
@@ -209,6 +219,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 				{edge: rungE[j], forward: false},
 			}, a.Reversed)}}
 			walls = append(walls, upperFace)
+			wallAreas = append(wallAreas, upperArea)
 
 			capStartCo[n-1-j] = coedge{edge: rimBottom[j], forward: false}
 			capEndCo[j] = coedge{edge: rimTop[j], forward: true}
@@ -219,11 +230,11 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 
 	capStartSurf, err := planeFromTriangle(a.Verts, a.Tris[a.Walls])
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	capEndSurf, err := planeFromTriangle(a.Verts, a.Tris[a.Walls+a.CapStartCount])
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	cap0Val, _ := cap0Rat.Float64()
 	cap1Val, _ := cap1Rat.Float64()
@@ -260,5 +271,5 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 		},
 	}
 
-	return capStart, capEnd, walls, nil
+	return capStart, capEnd, walls, wallAreas, nil
 }
