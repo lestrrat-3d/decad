@@ -691,6 +691,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 				NormalBound:   f.n.NormalBound,
 				Denoted:       f.denotedUnder(xform),
 				Surface:       transformed,
+				CapRecord:     f.n.CapRecord.Under(xform),
 			},
 		}
 		for _, l := range f.loops {

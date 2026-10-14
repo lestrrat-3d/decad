@@ -1485,3 +1485,5 @@
 10	0.00	TestConeFromFaceNonConvexSectionIsAccepted
 10	0.00	TestConeFromFaceMoreRefusals
 10	0.00	TestConeFromFaceCancelledDuringConstruction
+10	0.00	TestResolveToFaceChargesDenotedPlaneOnGenericFrame
+10	0.00	TestResolveToFaceRefusesFootprintDependentStop

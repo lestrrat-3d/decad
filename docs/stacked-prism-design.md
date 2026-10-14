@@ -334,7 +334,7 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |
 | `Tessellate`, `export.STL` / `OBJ` / `STEP` | §5; a body with one shell meets STEP's one-shell rule, and a closed shell's void shell is STEP's refusal |
 | `ThroughAll` / `ThroughAllSide` stops | `extentAlong` (§4), `ErrUnsupported` at `sectionDelta > 0` as for a prism |
-| `ToFace` stops | read the selected face's own `axialDelta` |
+| `ToFace` stops | read the selected face's own `axialDelta` and cap record |
 | `Verify` structural audit | every edge bounds two faces by construction (§3) |
 | `Verify` tolerance gate | `gateWitnessPrisms` reads every outer run's prism over its own interval, whose wall stations are all points of the body, and shrinks their maximum by `sectionDelta + axialDelta` plus the widest station gap (`docs/verification-design.md` §3) |
 | `Verify` wall survey | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (modify-reach Table DX, DX9); a pocket floor is a wall the 2D spanning-disk proof does not read |

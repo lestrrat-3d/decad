@@ -409,6 +409,10 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	if err != nil {
 		return nil, err
 	}
+	// Section 0 lifts through frame0 and section 1 through frame1
+	// (loftmesh.Assemble), so each cap denotes its own section plane.
+	capStart.n.CapRecord = &topo.CapRecord{Frame: pl.frame0, Xform: pl.xform}
+	capEnd.n.CapRecord = &topo.CapRecord{Frame: pl.frame1, Xform: pl.xform}
 	for k, wall := range walls {
 		li, cell := a.Cell[k][0], a.Cell[k][1]
 		if li >= len(pl.blendSegs) {

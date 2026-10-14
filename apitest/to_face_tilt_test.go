@@ -186,9 +186,10 @@ func TestToFaceTiltedStopIsChargedOrRefused(t *testing.T) {
 	}
 }
 
-// TestToFaceRefusesTiltPastOldTolerance pins that a stop tilted by 1.1e-9, past
-// the cross-product ratio the gate once accepted, is refused.
-func TestToFaceRefusesTiltPastOldTolerance(t *testing.T) {
+// TestToFaceRefusesNanoradianTilt pins that a stop plate tilted by 1.1e-9 off
+// the sweep is refused: its cap normal is not exactly parallel to the sweep
+// normal.
+func TestToFaceRefusesNanoradianTilt(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, -1.1e-9), r3.NewVec(0, 1, 0))
