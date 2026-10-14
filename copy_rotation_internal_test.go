@@ -156,8 +156,11 @@ func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
 	exactY := new(big.Rat).Mul(lin[1][0], big.NewRat(2, 1))
 	got := new(big.Rat)
 	got.SetFloat64(g.centroid.Value.Y)
-	delta, _ := new(big.Rat).Sub(got, exactY).Abs(new(big.Rat)).Float64()
-	require.LessOrEqual(t, delta, g.centroid.Bound.Base())
+	delta := new(big.Rat).Sub(got, exactY)
+	delta.Abs(delta)
+	bound := new(big.Rat)
+	require.NotNil(t, bound.SetFloat64(g.centroid.Bound.Base()))
+	require.LessOrEqual(t, delta.Cmp(bound), 0, "reading strays from exact Q*c beyond its bound")
 }
 
 func TestCopyRotationExactSourceVertsDropForRotation(t *testing.T) {

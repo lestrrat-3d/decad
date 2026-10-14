@@ -250,8 +250,8 @@ with no evaluated pair never reaches it.
 
 `PatternCopies` is not equivalent: its instances denote the float matrix.
 Other payloads place by `r3.RotationAround(center, axis, angle)`, exactly as
-`WithCopyPlacement` of that transform. §4.3's rule that non-frame-keeping
-instances go through `Copy` with `WithCopyPlacement` is unchanged.
+`WithCopyPlacement` of that transform. Non-frame-keeping instances go through
+`Copy` with `WithCopyPlacement` (§4.3).
 
 ## 5. The mirror join
 

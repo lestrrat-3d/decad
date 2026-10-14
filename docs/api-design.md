@@ -1388,7 +1388,8 @@ any body that descends from one by `Copy`, `Transform` or `ScaledAt`, with
 `ErrUnsupported`: the check has no pose proof for a re-placed exact rotation.
 The refusal applies where a mover is placed, so a mover that is fixed, or that
 has no evaluated pair, does not reach it. A copy made with `WithCopyPlacement`
-is not affected.
+is not affected when its source has no preceding exact placement; a source
+that descends from an exact copy keeps the mark through every later copy.
 A nil option is `ErrDegenerate`, and a body this evaluator did not build is
 `ErrUnsupported`. Cancellation during a faceted rebuild leaves the source
 and live-body set unchanged.
