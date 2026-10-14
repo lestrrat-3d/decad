@@ -31,58 +31,97 @@ func spiralHeldHeelSwitch(ctx context.Context, held *meshbool.StitchedMesh,
 	return spiralHeldSwitchPath(ctx, held, blankHeel, toothRoot, true)
 }
 
-func spiralHeldShortSwitch(ctx context.Context, held *meshbool.StitchedMesh,
-	blankCap, toothSide int) (spiralHeldSwitch, bool, error) {
-	return spiralHeldSwitchPath(ctx, held, blankCap, toothSide, false)
+// spiralHeldEdge is one undirected held edge, lo < hi.
+type spiralHeldEdge struct{ lo, hi int }
+
+// spiralHeldEdgeOwners holds the source groups of an edge's first two facets,
+// in facet order, and how many facets use the edge.
+type spiralHeldEdgeOwners struct {
+	src   [2]int
+	count uint8
 }
 
-func spiralHeldSwitchPath(ctx context.Context, held *meshbool.StitchedMesh,
-	blankHeel, toothRoot int, monotone bool) (spiralHeldSwitch, bool, error) {
-	if ctx == nil || held == nil || blankHeel < 0 || toothRoot < 0 || blankHeel == toothRoot ||
-		len(held.Tris) == 0 || len(held.Tris) > 1<<17 ||
+// spiralHeldEdges is the facet-owner table of one held mesh. It depends only
+// on the mesh, so a caller may build it once and use it for several switches
+// of that unchanged mesh within one call. ok is false when an index is
+// invalid or an edge does not have exactly two facets.
+func spiralHeldEdges(ctx context.Context,
+	held *meshbool.StitchedMesh) (map[spiralHeldEdge]spiralHeldEdgeOwners, bool, error) {
+	if ctx == nil || held == nil || len(held.Tris) == 0 || len(held.Tris) > 1<<17 ||
 		len(held.Src) != len(held.Tris) || len(held.VertexBound) != len(held.Verts) {
-		return spiralHeldSwitch{}, false, nil
+		return nil, false, nil
 	}
-	type edge struct{ lo, hi int }
-	owners := make(map[edge][2]int, len(held.Tris)*3/2)
-	counts := make(map[edge]uint8, len(held.Tris)*3/2)
+	owners := make(map[spiralHeldEdge]spiralHeldEdgeOwners, len(held.Tris)*3/2)
 	for i, tri := range held.Tris {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
-				return spiralHeldSwitch{}, false, err
+				return nil, false, err
 			}
 		}
 		for side := range 3 {
 			a, b := tri[side], tri[(side+1)%3]
 			if a < 0 || b < 0 || a >= len(held.Verts) || b >= len(held.Verts) || a == b {
-				return spiralHeldSwitch{}, false, nil
+				return nil, false, nil
 			}
 			if a > b {
 				a, b = b, a
 			}
-			key := edge{a, b}
-			if counts[key] >= 2 {
-				return spiralHeldSwitch{}, false, nil
-			}
+			key := spiralHeldEdge{a, b}
 			owner := owners[key]
-			owner[counts[key]] = held.Src[i]
+			if owner.count >= 2 {
+				return nil, false, nil
+			}
+			owner.src[owner.count] = held.Src[i]
+			owner.count++
 			owners[key] = owner
-			counts[key]++
 		}
+	}
+	seen := 0
+	for _, owner := range owners {
+		if seen%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, false, err
+			}
+		}
+		seen++
+		if owner.count != 2 {
+			return nil, false, nil
+		}
+	}
+	return owners, true, nil
+}
+
+func spiralHeldSwitchPath(ctx context.Context, held *meshbool.StitchedMesh,
+	blankHeel, toothRoot int, monotone bool) (spiralHeldSwitch, bool, error) {
+	if blankHeel < 0 || toothRoot < 0 || blankHeel == toothRoot {
+		return spiralHeldSwitch{}, false, nil
+	}
+	owners, ok, err := spiralHeldEdges(ctx, held)
+	if err != nil || !ok {
+		return spiralHeldSwitch{}, false, err
+	}
+	return spiralHeldSwitchFrom(ctx, held, owners, blankHeel, toothRoot, monotone)
+}
+
+// spiralHeldSwitchFrom is spiralHeldSwitchPath over a table that
+// spiralHeldEdges built from this same, unchanged held mesh.
+func spiralHeldSwitchFrom(ctx context.Context, held *meshbool.StitchedMesh,
+	owners map[spiralHeldEdge]spiralHeldEdgeOwners,
+	blankHeel, toothRoot int, monotone bool) (spiralHeldSwitch, bool, error) {
+	if blankHeel < 0 || toothRoot < 0 || blankHeel == toothRoot {
+		return spiralHeldSwitch{}, false, nil
 	}
 	adj := make(map[int][]int)
 	seamEdges := 0
 	seen := 0
-	for key, pair := range owners {
+	for key, owner := range owners {
 		if seen%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return spiralHeldSwitch{}, false, err
 			}
 		}
 		seen++
-		if counts[key] != 2 {
-			return spiralHeldSwitch{}, false, nil
-		}
+		pair := owner.src
 		if pair[0] != blankHeel || pair[1] != toothRoot {
 			if pair[0] != toothRoot || pair[1] != blankHeel {
 				continue
@@ -349,6 +388,9 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 	}
 	roles := [...]int{0, 2, 3, 5}
 	maxDistance := 0.0
+	// Every switch below reads the same unchanged held mesh, so its edge
+	// table is built once, at the first switch, and reused within this call.
+	var edges map[spiralHeldEdge]spiralHeldEdgeOwners
 	for end := range 2 {
 		if err := ctx.Err(); err != nil {
 			return 0, false, err
@@ -382,8 +424,15 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 			if toothFace < 0 {
 				return 0, false, nil
 			}
-			chain, ok, err := spiralHeldShortSwitch(ctx, held,
-				blankCap, len(blank.Faces())+toothFace)
+			if edges == nil {
+				built, ok, err := spiralHeldEdges(ctx, held)
+				if err != nil || !ok {
+					return 0, false, err
+				}
+				edges = built
+			}
+			chain, ok, err := spiralHeldSwitchFrom(ctx, held, edges,
+				blankCap, len(blank.Faces())+toothFace, false)
 			if err != nil || !ok {
 				return 0, false, err
 			}
