@@ -108,6 +108,23 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 			if clean {
 				return 0, nil
 			}
+		} else if sweep == 0 && memo {
+			queryFacet := make([]bool, len(e.h.Tris))
+			for _, i := range check {
+				queryFacet[i] = true
+			}
+			// The scan counts its own steps: a discarded scan must not move
+			// the repair path's step count or polling points.
+			repairBudget := e.budget
+			e.budget = proofbound.NewWorkBudget(ctx)
+			clean, err := e.serialClean(check, queryFacet)
+			e.budget = repairBudget
+			if err != nil {
+				return 0, err
+			}
+			if clean {
+				return 0, nil
+			}
 		}
 		if memo && e.pairs == nil {
 			// Repair needs replayable pair answers; a clean first scan does not.
@@ -1364,4 +1381,40 @@ func ExactRigidImage(b r3.Basis, t, p r3.Vec) proof.Xpt {
 		return new(big.Int).Mul(r.Num(), new(big.Int).Quo(w, r.Denom()))
 	}
 	return proof.Xpt(proof.XhpStripTwosOwned(proof.Xhp{X: num(x), Y: num(y), Z: num(z), W: w}))
+}
+
+// serialClean is parallelClean's first scan on the calling goroutine over the
+// grid: each box-overlapping pair involving a query facet is decided once,
+// without the pair memo. A pair of two query facets is decided when the lower
+// index is scanned: whenever two facets' boxes meet, the grid lists each for
+// the other (both register in and query the cells their padded boxes reach,
+// and a wide facet is listed for every query), a pair whose boxes do not meet
+// is embedded, and pairEmbedded is symmetric (HeldPairsAsymmetric is empty),
+// so skipping it from the higher index misses nothing. A failing pair or a
+// collapsed facet reports false and sends the caller through the ordered
+// repair scan.
+func (e *heldEmbedding) serialClean(query []int, queryFacet []bool) (bool, error) {
+	for _, i := range query {
+		if !e.facetOpenFloat(i) {
+			if _, _, n := e.facet(i); zeroXpt(n) {
+				return false, nil
+			}
+		}
+		cands, err := e.candidates(i)
+		if err != nil {
+			return false, err
+		}
+		for _, j := range cands {
+			if err := e.budget.Step(); err != nil {
+				return false, err
+			}
+			if j == i || j < i && queryFacet[j] {
+				continue
+			}
+			if !e.pairEmbedded(i, j) {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
 }
