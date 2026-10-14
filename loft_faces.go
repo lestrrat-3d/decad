@@ -35,7 +35,13 @@ func (d *Document) LoftFaces(ctx context.Context, sections ...*Face) (*Body, err
 	if err != nil {
 		return nil, err
 	}
-	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris); err != nil {
+	if layout, ok := loftFacesCapLayout(selected[0].slice.base.tris[:len(selected[0].ring)],
+		len(selected)-1, len(mesh.tris)); ok {
+		err = loftmesh.LoftCrossingAuditWithCaps(ctx, mesh.verts, mesh.tris, layout)
+	} else {
+		err = loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris)
+	}
+	if err != nil {
 		return nil, err
 	}
 	if err := orientLoftFaces(&mesh, selected[0].slice.base, source, embedding.sign); err != nil {
@@ -172,6 +178,39 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 			slice: fp.pointPlane, limit: limit, group: group, ring: ring}
 	}
 	return sections, source, nil
+}
+
+// loftFacesCapLayout is assembleLoftFaces' wall and cap structure: 2n walls
+// per band, then start/end cap triangles interleaved. The start ring is
+// vertices [0, n), the end ring [bands*n, (bands+1)*n), and the rings between
+// them are Interior. sides are the source fan's side triangles.
+func loftFacesCapLayout(sides [][3]int, bands, triCount int) (loftmesh.LoftCapLayout, bool) {
+	ring, ok := loftmesh.FanRing(sides)
+	if !ok || bands < 1 {
+		return loftmesh.LoftCapLayout{}, false
+	}
+	n := len(sides)
+	walls := 2 * n * bands
+	if triCount < walls || (triCount-walls)%2 != 0 {
+		return loftmesh.LoftCapLayout{}, false
+	}
+	shift := func(offset int) []int {
+		out := make([]int, len(ring))
+		for i, r := range ring {
+			out[i] = offset + r
+		}
+		return out
+	}
+	layout := loftmesh.LoftCapLayout{Walls: walls,
+		Loops0: [][]int{shift(0)}, Loops1: [][]int{shift(bands * n)}}
+	for t := walls; t < triCount; t += 2 {
+		layout.Cap0 = append(layout.Cap0, t)
+		layout.Cap1 = append(layout.Cap1, t+1)
+	}
+	for v := n; v < bands*n; v++ {
+		layout.Interior = append(layout.Interior, v)
+	}
+	return layout, true
 }
 
 func assembleLoftFaces(ctx context.Context, ref producerID,

@@ -26,11 +26,16 @@ import (
 // LoftAuditStructure is the loft's own split of its triangle set:
 // tris[:Walls] are the wall triangles, the next CapStartCount the first cap's
 // triangles, and the rest the second cap's. Loops0 and Loops1 are each cap's
-// polygon loops as vertex-index cycles (Assembly's vIdx and wIdx).
+// polygon loops as vertex-index cycles (Assembly's vIdx and wIdx). Interior
+// lists vertices that belong to neither cap's loops but lie between the caps:
+// the rings of a banded loft's interior sections. CapFamilyProof treats them
+// as the opposite side of each cap, like the other cap's loop vertices. Nil
+// for a two-ring loft.
 type LoftAuditStructure struct {
 	Walls          int
 	CapStartCount  int
 	Loops0, Loops1 [][]int
+	Interior       []int
 }
 
 // loftGenericShortcuts is what LoftCrossingAudit runs, and

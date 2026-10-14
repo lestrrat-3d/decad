@@ -1279,15 +1279,17 @@ deterministic.
 
 **Each cap is decided by one proof, over exact signs alone.** Let `C` be one
 cap's triangles, `L` its polygon loops as vertex-index cycles, `O` the other
-cap's loop vertices, `Π` the exact plane of `C`'s first triangle and `n` its
-exact normal. The cap's pairs — with the walls, among its own triangles, and
-with the other cap — are decided when all of these hold:
+cap's loop vertices and the vertices of any interior section rings the caller
+names, `Π` the exact plane of `C`'s first triangle and `n` its exact normal.
+The cap's pairs — with the walls, among its own triangles, and with the other
+cap — are decided when all of these hold:
 
-- **(s)** the index structure is the one assembly builds: every loop has at
-  least three vertices, no index repeats across `L` and `O`, no vertex of `C`
-  is in `O` and no vertex of the other cap is in `L`, every wall triangle has
-  a vertex in `O` and its others in `L`, those `L` vertices are one vertex or
-  one loop edge, and every loop edge is an edge of some wall triangle;
+- **(s)** the index structure is the one assembly builds: every loop of `L`
+  has at least three vertices, no index repeats across `L` and `O`, no vertex
+  of `C` is in `O` and no vertex of the other cap is in `L`, every wall
+  triangle has a vertex in `O` and its others in `L`, those `L` vertices are
+  one vertex or one loop edge, and every loop edge is an edge of some wall
+  triangle;
 - **(a)** every vertex of `L`, and every vertex of every triangle of `C`, has
   exact sign 0 against `Π`;
 - **(b)** every vertex of `O`, and every vertex of every triangle of the other
@@ -1311,7 +1313,8 @@ wherever a vertex sits inside another triangle's edge. A wall triangle meets
 side — which (s) makes one polygon vertex or one polygon edge, so its contact
 with each cap triangle is exactly what their shared indices expect, and two
 triangles of `C` meet exactly in their shared edge or vertex. (b) also puts
-the other cap strictly off `Π`, so the two caps are disjoint.
+the other cap strictly off `Π`, so the two caps are disjoint. An apex fan has
+no second cap: its apex is `O`, and the argument is unchanged.
 `internal/loftmesh/loft_cap_proof.go`'s `CapFamilyProof` carries the proof in
 full.
 
@@ -1320,9 +1323,19 @@ to the pairwise test with the wall-wall candidates. Because the proof relies
 on the wall-wall audit, a failing wall-wall pair sends the audit back over the
 decided pairs that precede it in lexicographic order before it refuses, so
 the refused pair stays the reference path's. A loft calls the structured
-entry, which runs the sweep and the cap proofs. The generic entry — the mitred
-sweep, `Stitch`, `LoftChain` and the mesh mass-properties reading — runs the
-sweep and tests every candidate pairwise. The zero shortcut set still tests
+entry, which runs the sweep and the cap proofs. A point loft's apex fan, both
+slabs of a point-plane split and a face-fed loft call the caps entry: it
+reorders the caller's triangles as walls, first cap, second cap, runs the
+structured audit when a cap is exactly planar and the mesh has at most
+1,000,000 triangle pairs (the most the generic audit takes without streaming
+its rows, so its row preflight and every S8 ceiling are out of reach), and
+runs the generic audit instead, or after any refusal on the same budget.
+Without cancellation its verdict and refusal text equal a direct generic
+call's; under cancellation the result may be the cancellation error in place
+of a geometric refusal, and the audit never accepts a mesh the generic audit
+refuses. The
+generic entry — the mitred sweep, `Stitch`, `LoftChain` and the mesh
+mass-properties reading — runs the sweep and tests every candidate pairwise. The zero shortcut set still tests
 every pair of every triangle through the exact classification, and every
 shortcut's verdict is tested against it.
 
