@@ -68,6 +68,11 @@ func TestLoftDirectCircleRoundedAxisKeepsFacetedTopology(t *testing.T) {
 }
 
 func directLoftCircles(t *testing.T, outerCircle bool, r0, r1, x1, y1 float64) *decad.Body {
+	return directLoftCirclesWithOuterRadii(t, outerCircle, 4, 4, r0, r1, x1, y1)
+}
+
+func directLoftCirclesWithOuterRadii(t *testing.T, outerCircle bool,
+	outer0, outer1, r0, r1, x1, y1 float64) *decad.Body {
 	t.Helper()
 	world := sketch.NewWorld()
 	upper, err := world.CreateOffsetPlane(world.XY(), 2)
@@ -80,7 +85,11 @@ func directLoftCircles(t *testing.T, outerCircle bool, r0, r1, x1, y1 float64) *
 		if outerCircle {
 			outer := s.CreatePoint(0, 0)
 			s.Fix(outer)
-			s.CreateCircle(outer, 4)
+			outerRadius := outer0
+			if i == 1 {
+				outerRadius = outer1
+			}
+			s.CreateCircle(outer, outerRadius)
 		} else {
 			rect := s.CreateRectangle(-5, -5, 5, 5)
 			s.Fix(rect.A)
@@ -101,6 +110,31 @@ func directLoftCircles(t *testing.T, outerCircle bool, r0, r1, x1, y1 float64) *
 	return body
 }
 
+func requireFacetedLoftHole(t *testing.T, body *decad.Body, wantVolume float64) {
+	t.Helper()
+	requireManifold(t, body)
+	for _, face := range body.Faces() {
+		require.IsType(t, decad.Plane{}, face.Surface())
+	}
+	for _, role := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
+		faces, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(body)
+		require.NoError(t, err)
+		require.Len(t, faces[0].Loops(), 2)
+		require.Greater(t, len(faces[0].Loops()[1].Edges()), 1)
+		for _, edge := range faces[0].Loops()[1].Edges() {
+			require.IsType(t, decad.Line3{}, edge.Curve())
+		}
+	}
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-wantVolume), volume.Bound.Base())
+}
+
+func TestDirectLoftChangedOuterCircleKeepsFacetedHole(t *testing.T) {
+	body := directLoftCirclesWithOuterRadii(t, true, 4, 5, 1, 2, 1, 0)
+	requireFacetedLoftHole(t, body, 36*math.Pi)
+}
+
 // directCircleWallArea integrates the ruled circle pair independently of
 // Decad's held triangles. The angular trapezoid rule samples the smooth
 // periodic integrand at 16,384 equally spaced angles.
@@ -116,6 +150,42 @@ func directCircleWallArea(r0, r1, dx, dy float64) float64 {
 		sum += math.Sqrt(1 + slope*slope)
 	}
 	return height * (r0 + r1) / 2 * (2 * math.Pi / n) * sum
+}
+
+// denseMovingCircleWallArea uses a separate midpoint calculation with
+// compensated summation so the 512-cell production sum cannot certify itself.
+func denseMovingCircleWallArea(r0, r1, dx, dy float64, cells int) float64 {
+	var sum, correction float64
+	for i := range cells {
+		angle := 2 * math.Pi * (float64(i) + 0.5) / float64(cells)
+		slope := r1 - r0 + dx*math.Cos(angle) + dy*math.Sin(angle)
+		term := math.Hypot(2, slope)
+		y := term - correction
+		next := sum + y
+		correction = (next - sum) - y
+		sum = next
+	}
+	return (r0 + r1) / 2 * (2 * math.Pi / float64(cells)) * sum
+}
+
+func TestDirectLoftMovingHoleAreaEnclosesDenseQuadrature(t *testing.T) {
+	body := directLoftCirclesWithOuterRadii(t, true, 200, 200, 1, 2, 100, 0)
+	var wall *decad.Face
+	for _, face := range body.Faces() {
+		if _, ok := face.Surface().(decad.NURBSSurface); ok {
+			require.Nil(t, wall)
+			wall = face
+		}
+	}
+	require.NotNil(t, wall)
+	area, err := wall.Area()
+	require.NoError(t, err)
+	const cells = 1 << 20
+	reference := denseMovingCircleWallArea(1, 2, 100, 0, cells)
+	// For f=sqrt(4+(1+100*cos(theta))^2), |f''| <= 100+100^2/2.
+	// The midpoint rule's area error is at most meanRadius*span^3*|f''|/(24*N^2).
+	referenceError := 1.5 * math.Pow(2*math.Pi, 3) * 5100 / (24 * cells * cells)
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-reference), area.Bound.Base()+referenceError)
 }
 
 // quarterTurnCircleWallArea numerically integrates the independent analytic
@@ -292,32 +362,35 @@ func TestDirectLoftRotatedCircleFramesPublishRuledHole(t *testing.T) {
 	}
 }
 
+func TestDirectLoftNonCardinalAndOffAxisQuarterTurnsKeepFacetedHoles(t *testing.T) {
+	s := math.Sqrt2 / 2
+	for _, tc := range []struct {
+		name                    string
+		u, v                    r3.Vec
+		bottomCenter, topCenter r3.Vec
+		wantVolume              float64
+	}{
+		{"45 degree upper frame", r3.NewVec(s, s, 0), r3.NewVec(-s, s, 0), r3.Vec{}, r3.Vec{},
+			2 * math.Pi * (27 + 14*s) / 3},
+		{"lower center off axis", r3.NewVec(0, 1, 0), r3.NewVec(-1, 0, 0), r3.NewVec(1, 0, 0),
+			r3.Vec{}, 18 * math.Pi},
+		{"lower center off axis V", r3.NewVec(0, 1, 0), r3.NewVec(-1, 0, 0), r3.NewVec(0, 1, 0),
+			r3.Vec{}, 18 * math.Pi},
+		{"upper center off axis", r3.NewVec(0, 1, 0), r3.NewVec(-1, 0, 0), r3.Vec{},
+			r3.NewVec(1, 0, 0), 18 * math.Pi},
+		{"upper center off axis V", r3.NewVec(0, 1, 0), r3.NewVec(-1, 0, 0), r3.Vec{},
+			r3.NewVec(0, 1, 0), 18 * math.Pi},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := directLoftRotatedCircleFrameBody(t, tc.u, tc.v, tc.bottomCenter, tc.topCenter)
+			requireFacetedLoftHole(t, body, tc.wantVolume)
+		})
+	}
+}
+
 func directLoftRotatedCircleFrameCase(t *testing.T, u, v r3.Vec) {
 	t.Helper()
-	world := sketch.NewWorld()
-	upperFrame, err := r3.NewFrame(r3.NewVec(0, 0, 2), u, v)
-	require.NoError(t, err)
-	upper, err := world.CreatePlaneFromFrame(upperFrame)
-	require.NoError(t, err)
-	var sections [2]*sketch.Sketch
-	var profiles [2]*sketch.Profile
-	for i, plane := range []*sketch.Plane{world.XY(), upper} {
-		s, err := world.CreateSketch(plane)
-		require.NoError(t, err)
-		center := s.CreatePoint(0, 0)
-		s.Fix(center)
-		s.CreateCircle(center, 4)
-		holeRadius := 1.0
-		if i == 1 {
-			holeRadius = 2
-		}
-		s.CreateCircle(center, holeRadius)
-		_, err = s.Solve(t.Context())
-		require.NoError(t, err)
-		sections[i], profiles[i] = s, s.Profiles()[0]
-	}
-	body, err := decad.New().Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
-	require.NoError(t, err)
+	body := directLoftRotatedCircleFrameBody(t, u, v, r3.Vec{}, r3.Vec{})
 	volume, err := body.Volume()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(volume.Value.Base()-18*math.Pi), volume.Bound.Base())
@@ -356,4 +429,37 @@ func directLoftRotatedCircleFrameCase(t *testing.T, u, v r3.Vec) {
 		require.True(t, ok)
 		require.NotEqual(t, use.IsForward(), wallUse.IsForward())
 	}
+}
+
+func directLoftRotatedCircleFrameBody(t *testing.T, u, v, bottomCenter, topCenter r3.Vec) *decad.Body {
+	t.Helper()
+	world := sketch.NewWorld()
+	upperFrame, err := r3.NewFrame(r3.NewVec(0, 0, 2), u, v)
+	require.NoError(t, err)
+	upper, err := world.CreatePlaneFromFrame(upperFrame)
+	require.NoError(t, err)
+	var sections [2]*sketch.Sketch
+	var profiles [2]*sketch.Profile
+	for i, plane := range []*sketch.Plane{world.XY(), upper} {
+		s, err := world.CreateSketch(plane)
+		require.NoError(t, err)
+		outer := s.CreatePoint(0, 0)
+		s.Fix(outer)
+		s.CreateCircle(outer, 4)
+		holeRadius := 1.0
+		holeCenter := bottomCenter
+		if i == 1 {
+			holeRadius = 2
+			holeCenter = topCenter
+		}
+		center := s.CreatePoint(holeCenter.X, holeCenter.Y)
+		s.Fix(center)
+		s.CreateCircle(center, holeRadius)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		sections[i], profiles[i] = s, s.Profiles()[0]
+	}
+	body, err := decad.New().Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
+	require.NoError(t, err)
+	return body
 }

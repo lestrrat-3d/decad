@@ -56,14 +56,17 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 		return loftCircleWallNone
 	}
 	level := pl.frame0.ToLocal(pl.frame1.Origin())
-	if !loftBoreHasExactAxis(pl.frame0, pl.frame1, 0, 0, level.Z) {
-		return loftCircleWallNone
-	}
 	sameAxes := pl.frame0.U() == pl.frame1.U() && pl.frame0.V() == pl.frame1.V()
-	if !sameAxes {
+	if sameAxes {
+		if !loftBoreHasExactAxis(pl.frame0, pl.frame1, 0, 0, level.Z) {
+			return loftCircleWallNone
+		}
+	} else {
 		// A cardinal quarter-turn gives an exact ruled circle pair and an
 		// angularly constant area integrand. Both local centers must be on
 		// the common axis; other frame rotations need their own area bound.
+		// The world-XY and exact-height gates below prove the common axis
+		// for this cardinal case without the general exact-axis check.
 		quarterTurn := pl.frame1.U() == (r3.Vec{Y: 1}) && pl.frame1.V() == (r3.Vec{X: -1})
 		quarterTurn = quarterTurn ||
 			pl.frame1.U() == (r3.Vec{Y: -1}) && pl.frame1.V() == (r3.Vec{X: 1})
@@ -169,6 +172,8 @@ func loftMovingCircleWallArea(pl loftPayload, bottom, top circleSeg) (proofbound
 		sin, cos := memo.SinCos(turn)
 		slope := proofbound.IntervalAdd(proofbound.PointInterval(dr),
 			proofbound.IntervalAdd(proofbound.IntervalScale(cos, dx), proofbound.IntervalScale(sin, dy)))
+		// The square cannot be negative. An overflowing root would also
+		// overflow a chorded wall span, which the earlier centroid gate refuses.
 		speed, ok := proofbound.IntervalSqrt(proofbound.IntervalAdd(
 			proofbound.PointInterval(h2), proofbound.IntervalSquare(slope)))
 		if !ok {
@@ -178,6 +183,8 @@ func loftMovingCircleWallArea(pl loftPayload, bottom, top circleSeg) (proofbound
 	}
 	d2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
 	lipschitz := proofarith.FloatRat(proofbound.RatSqrtUp(d2))
+	// An unrepresentable center shift makes a corresponding wall span
+	// unrepresentable; the chorded centroid gate refuses it before this call.
 	if lipschitz == nil {
 		return proofbound.BoundedScalar{}, false
 	}
@@ -190,6 +197,8 @@ func loftMovingCircleWallArea(pl loftPayload, bottom, top circleSeg) (proofbound
 	midpoint := new(big.Rat).Quo(new(big.Rat).Add(areaInterval.Lo, areaInterval.Hi), big.NewRat(2, 1))
 	held, _ := midpoint.Float64()
 	bound := proofbound.IntervalFloatError(areaInterval, held)
+	// A saturated ruled-wall area also saturates the earlier chorded
+	// wall-area upper and its positive centroid volume leg.
 	if proofbound.IsNonFinite(held) || proofbound.IsNonFinite(bound) {
 		return proofbound.BoundedScalar{}, false
 	}

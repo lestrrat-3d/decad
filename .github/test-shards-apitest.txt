@@ -1877,6 +1877,9 @@
 10	21.79	TestCrossCylinderBoreMouthChamferVerified
 10	0.00	TestDocumentSweptBoxRefusals
 10	0.00	TestDirectLoftWholeCircleHolePublishesCircularTopology
+10	0.00	TestDirectLoftChangedOuterCircleKeepsFacetedHole
+10	0.00	TestDirectLoftMovingHoleAreaEnclosesDenseQuadrature
+10	0.00	TestDirectLoftNonCardinalAndOffAxisQuarterTurnsKeepFacetedHoles
 10	0.00	TestDirectLoftVaryingCircleHolesPublishCurvedWalls
 10	0.00	TestDirectLoftVaryingHoleWithCurvedOuterWallPublishesCone
 10	0.00	TestDirectLoftRotatedCircleFramesPublishRuledHole
