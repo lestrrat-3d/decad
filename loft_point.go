@@ -241,7 +241,12 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 			tris[i][1], tris[i][2] = tris[i][2], tris[i][1]
 		}
 	}
-	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris); err != nil {
+	if layout, ok := pointLoftCapLayout(tris, len(pair.W)); ok {
+		err = loftmesh.LoftCrossingAuditWithCaps(ctx, verts, tris, layout)
+	} else {
+		err = loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris)
+	}
+	if err != nil {
 		return nil, err
 	}
 	// Match the far chord to its source curve in the section plane, then
@@ -329,4 +334,26 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 		pointSection: &record, pointPlaneSourceEligible: true,
 	}
 	return buildFacetedBody(ctx, d, ref, pp)
+}
+
+// pointLoftCapLayout is a point loft's wall and cap structure as
+// buildPointLoft assembles it: sides apex fan triangles (0, b, c), then the
+// far cap's triangles over the ring vertices 1..sides.
+func pointLoftCapLayout(tris [][3]int, sides int) (loftmesh.LoftCapLayout, bool) {
+	if sides > len(tris) {
+		return loftmesh.LoftCapLayout{}, false
+	}
+	ring, ok := loftmesh.FanRing(tris[:sides])
+	if !ok {
+		return loftmesh.LoftCapLayout{}, false
+	}
+	loop := make([]int, len(ring))
+	for i, r := range ring {
+		loop[i] = r + 1
+	}
+	layout := loftmesh.LoftCapLayout{Walls: sides, Loops0: [][]int{loop}, Loops1: [][]int{{0}}}
+	for t := sides; t < len(tris); t++ {
+		layout.Cap0 = append(layout.Cap0, t)
+	}
+	return layout, true
 }

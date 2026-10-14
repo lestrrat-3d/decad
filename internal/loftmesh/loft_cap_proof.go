@@ -64,16 +64,17 @@ const (
 // CapFamilyProof decides one cap's triangle family (which 0: tris[Walls :
 // Walls+CapStartCount], which 1: the rest) as a whole, from exact signs alone
 // (docs/loft-design.md §6). Write C for the cap's triangles, L for its loops,
-// O for the other cap's loop vertices, Π for the exact plane of C's first
-// triangle and n for that triangle's exact normal. The conditions, tested in
-// this order:
+// O for the other cap's loop vertices and the structure's Interior vertices,
+// Π for the exact plane of C's first triangle and n for that triangle's exact
+// normal. The conditions, tested in this order:
 //
-//   - (s) the index structure is the one Assemble builds: every loop has at
-//     least three vertices, no vertex index appears twice across L and O, no
-//     vertex of C is in O and no vertex of the other cap is in L, every wall
-//     triangle has at least one vertex in O and its other vertices in L, its
-//     L vertices are one vertex or the two ends of one loop edge, and every
-//     loop edge is an edge of some wall triangle;
+//   - (s) the index structure is the one Assemble builds: every loop of L has
+//     at least three vertices (an O loop may be a single apex), no vertex
+//     index appears twice across L and O, no vertex of C is in O and no
+//     vertex of the other cap is in L, every wall triangle has at least one
+//     vertex in O and its other vertices in L, its L vertices are one vertex
+//     or the two ends of one loop edge, and every loop edge is an edge of
+//     some wall triangle;
 //   - (a) every vertex of L, and every vertex of every triangle of C, has
 //     exact sign 0 against Π;
 //   - (b) every vertex of O, and every vertex of every triangle of the other
@@ -108,6 +109,13 @@ const (
 // proves the two caps disjoint, since C lies in Π by (a) and the other cap's
 // triangles are hulls of vertices (b) puts strictly on one side. So every pair with a triangle in C is
 // admitted by the reference path.
+//
+// An apex fan with no second cap passes Loops1 = [][]int{{apex}} and no
+// second-cap triangles: (s) and (b) then read the apex as O, and the argument
+// is unchanged, since the apex is strictly on one side of Π. Interior
+// vertices are O vertices: a wall triangle with no L vertex lies strictly on
+// one side of Π by (b) and meets no cap triangle; the argument for walls with
+// L vertices is unchanged.
 //
 // A failed condition admits nothing: the caller tests that cap's pairs
 // pairwise.
@@ -150,6 +158,12 @@ func CapFamilyProof(data *LoftAuditData, tris [][3]int, s LoftAuditStructure, wh
 			role[v] = capRoleOther
 		}
 	}
+	for _, v := range s.Interior {
+		if v < 0 || v >= nv || role[v] != capRoleNone {
+			return LoftCapStructure
+		}
+		role[v] = capRoleOther
+	}
 	if !capStructureHolds(tris, s.Walls, from, to, otherFrom, otherTo, role, next, loops) {
 		return LoftCapStructure
 	}
@@ -186,6 +200,11 @@ func CapFamilyProof(data *LoftAuditData, tris [][3]int, s LoftAuditStructure, wh
 			if !oneSide(v) {
 				return LoftCapOtherSide
 			}
+		}
+	}
+	for _, v := range s.Interior {
+		if !oneSide(v) {
+			return LoftCapOtherSide
 		}
 	}
 	for t := otherFrom; t < otherTo; t++ {
