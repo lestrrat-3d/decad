@@ -37,7 +37,7 @@ func Example_decad_pattern() {
 	}
 
 	// Four instances about the z axis: the receiver plus three copies.
-	copies, err := block.PatternCopies(ctx, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 4})
+	copies, err := decad.PatternCopies(ctx, block, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 4})
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return
@@ -52,7 +52,7 @@ func Example_decad_pattern() {
 	}
 
 	// Two more along +y at 10 mm, patterned from the first copy.
-	row, err := copies[0].PatternCopies(ctx, decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(10), Count: 3})
+	row, err := decad.PatternCopies(ctx, copies[0], decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(10), Count: 3})
 	if err != nil {
 		fmt.Printf("failed to pattern the row: %s\n", err)
 		return

@@ -48,7 +48,7 @@ func TestPatternCopiesLinearExact(t *testing.T) {
 	t.Parallel()
 	sc := newMirrorScene()
 	peg := sc.box(t, sc.w.XY(), 0, 0, 5, 5, mirrorAlong(5))
-	copies, err := peg.PatternCopies(t.Context(), decad.LinearPattern{Dir: patternX, Step: units.Millimeters(10), Count: 4})
+	copies, err := decad.PatternCopies(t.Context(), peg, decad.LinearPattern{Dir: patternX, Step: units.Millimeters(10), Count: 4})
 	require.NoError(t, err)
 	require.Len(t, copies, 3)
 	require.Equal(t, append([]*decad.Body{peg}, copies...), sc.doc.Bodies(), "the receiver stays live, copies follow in order")
@@ -74,7 +74,7 @@ func TestPatternCopiesLinearInches(t *testing.T) {
 	t.Parallel()
 	sc := newMirrorScene()
 	peg := sc.box(t, sc.w.XY(), 0, 0, 5, 5, mirrorAlong(5))
-	copies, err := peg.PatternCopies(t.Context(), decad.LinearPattern{Dir: patternX, Step: units.Inches(0.3), Count: 3})
+	copies, err := decad.PatternCopies(t.Context(), peg, decad.LinearPattern{Dir: patternX, Step: units.Inches(0.3), Count: 3})
 	require.NoError(t, err)
 	require.Len(t, copies, 2)
 	inch := new(big.Rat).Quo(new(big.Rat).Mul(new(big.Rat).SetFloat64(0.3), new(big.Rat).SetFloat64(units.Inch.Factor())), new(big.Rat).SetFloat64(units.Millimeter.Factor()))
@@ -101,7 +101,7 @@ func TestPatternCopiesCircular(t *testing.T) {
 		t.Parallel()
 		sc := newMirrorScene()
 		pin := sc.cylinder(t, sc.w.XY(), 20, 0, 2, mirrorAlong(5))
-		copies, err := pin.PatternCopies(t.Context(), decad.CircularPattern{Axis: patternZ, Count: 6})
+		copies, err := decad.PatternCopies(t.Context(), pin, decad.CircularPattern{Axis: patternZ, Count: 6})
 		require.NoError(t, err)
 		require.Len(t, copies, 5)
 		root3 := new(big.Float).SetPrec(512).Sqrt(new(big.Float).SetPrec(512).SetInt64(3))
@@ -125,7 +125,7 @@ func TestPatternCopiesCircular(t *testing.T) {
 		t.Parallel()
 		sc := newMirrorScene()
 		block := sc.box(t, sc.w.XY(), 18, -1, 22, 1, mirrorAlong(5))
-		copies, err := block.PatternCopies(t.Context(), decad.CircularPattern{Axis: patternZ, Count: 4})
+		copies, err := decad.PatternCopies(t.Context(), block, decad.CircularPattern{Axis: patternZ, Count: 4})
 		require.NoError(t, err)
 		require.Len(t, copies, 3)
 		for i, want := range []r3.Vec{{X: 0, Y: 20, Z: 2.5}, {X: -20, Y: 0, Z: 2.5}, {X: 0, Y: -20, Z: 2.5}} {
@@ -180,7 +180,7 @@ func TestPatternCopiesRotationSense(t *testing.T) {
 			require.NoError(t, err)
 			sb, err := src.Bound.In(units.Millimeter)
 			require.NoError(t, err)
-			copies, err := block.PatternCopies(t.Context(), decad.CircularPattern{Axis: tc.Axis, Count: 8})
+			copies, err := decad.PatternCopies(t.Context(), block, decad.CircularPattern{Axis: tc.Axis, Count: 8})
 			require.NoError(t, err)
 			for i, c := range copies {
 				k := ((tc.Sense*(i+1))%8 + 8) % 8
@@ -209,7 +209,7 @@ func TestPatternCopiesNonCoDirectional(t *testing.T) {
 		t.Parallel()
 		sc := newMirrorScene()
 		peg := sc.box(t, sc.w.XY(), 0, 0, 5, 5, mirrorAlong(5))
-		copies, err := peg.PatternCopies(t.Context(), decad.LinearPattern{Dir: patternZ, Step: units.Millimeters(10), Count: 3})
+		copies, err := decad.PatternCopies(t.Context(), peg, decad.LinearPattern{Dir: patternZ, Step: units.Millimeters(10), Count: 3})
 		require.NoError(t, err)
 		require.Len(t, copies, 2)
 		for i, c := range copies {
@@ -222,7 +222,7 @@ func TestPatternCopiesNonCoDirectional(t *testing.T) {
 		t.Parallel()
 		sc := newMirrorScene()
 		peg := sc.box(t, sc.w.XY(), 0, 0, 5, 5, mirrorAlong(5))
-		copies, err := peg.PatternCopies(t.Context(), decad.CircularPattern{Axis: patternX, Count: 2})
+		copies, err := decad.PatternCopies(t.Context(), peg, decad.CircularPattern{Axis: patternX, Count: 2})
 		require.NoError(t, err)
 		require.Len(t, copies, 1)
 		centroid, err := copies[0].Centroid()
@@ -250,7 +250,7 @@ func TestPatternCopiesStacked(t *testing.T) {
 	pocket := sc.box(t, top, 3, 3, 7, 7, mirrorAlong(4))
 	part, err := decad.Cut(t.Context(), plate, pocket)
 	require.NoError(t, err)
-	copies, err := part.PatternCopies(t.Context(), decad.LinearPattern{Dir: patternX, Step: units.Millimeters(20), Count: 3})
+	copies, err := decad.PatternCopies(t.Context(), part, decad.LinearPattern{Dir: patternX, Step: units.Millimeters(20), Count: 3})
 	require.NoError(t, err)
 	for i, c := range copies {
 		v, err := c.Volume()
@@ -296,17 +296,17 @@ func TestPatternCopiesGates(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.Name, func(t *testing.T) {
-			_, err := peg.PatternCopies(tc.Ctx, tc.Spec)
+			_, err := decad.PatternCopies(tc.Ctx, peg, tc.Spec)
 			require.ErrorIs(t, err, tc.Want)
 			require.Equal(t, []*decad.Body{peg}, sc.doc.Bodies())
 		})
 	}
 	// A pointer variant names the same pattern its value does.
-	copies, err := peg.PatternCopies(t.Context(), &decad.LinearPattern{Dir: patternX, Step: mm, Count: 2})
+	copies, err := decad.PatternCopies(t.Context(), peg, &decad.LinearPattern{Dir: patternX, Step: mm, Count: 2})
 	require.NoError(t, err)
 	require.Len(t, copies, 1)
 	require.NoError(t, sc.doc.Remove(peg))
-	_, err = peg.PatternCopies(t.Context(), decad.LinearPattern{Dir: patternX, Step: mm, Count: 2})
+	_, err = decad.PatternCopies(t.Context(), peg, decad.LinearPattern{Dir: patternX, Step: mm, Count: 2})
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
@@ -363,7 +363,7 @@ func TestPatternCopiesUnionStack(t *testing.T) {
 			require.NoError(t, err)
 			sb, err := src.Bound.In(units.Millimeter)
 			require.NoError(t, err)
-			copies, err := part.PatternCopies(t.Context(), decad.LinearPattern{Dir: patternX, Step: tc.Step, Count: 2})
+			copies, err := decad.PatternCopies(t.Context(), part, decad.LinearPattern{Dir: patternX, Step: tc.Step, Count: 2})
 			require.NoError(t, err)
 			require.Len(t, copies, 1)
 			c := copies[0]

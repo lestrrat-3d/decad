@@ -47,7 +47,7 @@ func Example_decad_patterned() {
 	}
 
 	// Six drills at 10 mm along +x, as one body.
-	row, err := drill.Patterned(ctx, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 6})
+	row, err := decad.Patterned(ctx, drill, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 6})
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return

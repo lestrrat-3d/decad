@@ -225,7 +225,7 @@ func TestTessellateBrepFilletPlaced(t *testing.T) {
 	require.NoError(t, err)
 	mirrored, err := MirroredCopy(t.Context(), out, MirrorFrame{Frame: plane})
 	require.NoError(t, err)
-	patterned, err := out.PatternCopies(t.Context(), LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(50), Count: 2})
+	patterned, err := PatternCopies(t.Context(), out, LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(50), Count: 2})
 	require.NoError(t, err)
 	require.Len(t, patterned, 1)
 	for name, body := range map[string]*Body{"translated": moved, "turned": turned, "mirrored": mirrored, "pattern": patterned[0]} {

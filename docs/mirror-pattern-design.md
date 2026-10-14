@@ -184,8 +184,8 @@ type LinearPattern struct{ Dir r3.Vec; Step units.Value; Count int }
 // Count, never by a float: a quarter turn is exactly a quarter turn.
 type CircularPattern struct{ Center, Axis r3.Vec; Count int }
 
-func (b *Body) PatternCopies(ctx context.Context, spec PatternSpec) ([]*Body, error)
-func (b *Body) Patterned(ctx context.Context, spec PatternSpec) (*Body, error)
+func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, error)
+func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error)
 ```
 
 `PatternCopies` leaves the receiver live and returns `Count − 1` new live
