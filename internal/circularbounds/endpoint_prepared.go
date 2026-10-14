@@ -85,3 +85,22 @@ func (p PreparedEndpoint) At(t *big.Rat) (proofbound.RatInterval, proofbound.Rat
 	return proofbound.IntervalAdd(proofbound.PointInterval(p.cu), proofbound.IntervalMul(p.radius, cos)),
 		proofbound.IntervalAdd(proofbound.PointInterval(p.cv), proofbound.IntervalMul(p.radius, sin)), true
 }
+
+// CanShareCircleTurn reports whether both endpoints use the same turn-based
+// circle proof and need its trigonometric interval at interior stations.
+func (p PreparedEndpoint) CanShareCircleTurn(other PreparedEndpoint) bool {
+	return p.circle && other.circle && p.radius.Lo.Sign() != 0 && other.radius.Lo.Sign() != 0
+}
+
+// AtSharedCircleTurn encloses two circles at the same exact turn. The caller
+// checks CanShareCircleTurn and the equality of their recorded parameters.
+func (p PreparedEndpoint) AtSharedCircleTurn(other PreparedEndpoint, t *big.Rat) (
+	u0, v0, u1, v1 proofbound.RatInterval,
+) {
+	sin, cos := quarterTurnSinCos(t)
+	u0 = proofbound.IntervalAdd(proofbound.PointInterval(p.cu), proofbound.IntervalScale(cos, p.radius.Lo))
+	v0 = proofbound.IntervalAdd(proofbound.PointInterval(p.cv), proofbound.IntervalScale(sin, p.radius.Lo))
+	u1 = proofbound.IntervalAdd(proofbound.PointInterval(other.cu), proofbound.IntervalScale(cos, other.radius.Lo))
+	v1 = proofbound.IntervalAdd(proofbound.PointInterval(other.cv), proofbound.IntervalScale(sin, other.radius.Lo))
+	return u0, v0, u1, v1
+}
