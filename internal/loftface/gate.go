@@ -10,7 +10,8 @@ import (
 
 // gateNode holds one map's exact values at one tile-grid node for the
 // three inverse rows: the denominator g, the per-axis derivative numerators
-// row·(q_axis g − q g_axis) and the scalar row·F(node).
+// row·(q_axis g − q g_axis) and the scalar row·F(node). Nodes on one grid
+// line share their derivative rationals; every reader only reads them.
 type gateNode struct {
 	g      *big.Rat
 	deriv  [3][2]*big.Rat
@@ -20,13 +21,34 @@ type gateNode struct {
 // gateGrid evaluates a cap map at every (tiles+1)² node once. Every tile
 // corner is one of these nodes, and the per-row quantities are the same
 // exact rationals that the corner-by-corner reference in the tests and
-// ScalarRange form:
-// row·(q_axis g − q g_axis) = g (row·q_axis) − g_axis (row·q) and
-// row·(constant + q/g) = row·constant + (row·q)/g by distributivity.
+// ScalarRange form. With g = G0 + GU u + GV v and
+// row·q = row·Q0 + (row·QU) u + (row·QV) v, the derivative numerators
+// row·(q_axis g − q g_axis) = g (row·q_axis) − g_axis (row·q) reduce to
+//
+//	(G0 rowQU − GU rowQ0) + v (GV rowQU − GU rowQV)  for the u axis, and
+//	(G0 rowQV − GV rowQ0) + u (GU rowQV − GV rowQU)  for the v axis,
+//
+// so a node's derivatives depend on one coordinate each, and each is
+// computed once per grid line. The scalar row·(constant + q/g) is
+// row·constant + (row·q)/g by distributivity.
 func gateGrid(m Map, rows [3]RatVec, us, vs []*big.Rat) ([][]gateNode, error) {
-	var rowQu, rowQv, rowConstant [3]*big.Rat
+	var rowQu, rowQv, rowConstant, rowQ0 [3]*big.Rat
+	var byV, byU [3][]*big.Rat // deriv[r][0] by v index, deriv[r][1] by u index
 	for r, row := range rows {
 		rowQu[r], rowQv[r], rowConstant[r] = VDot(row, m.QU), VDot(row, m.QV), VDot(row, m.Constant)
+		rowQ0[r] = VDot(row, m.Q0)
+		a0 := ratSub(ratMul(m.G0, rowQu[r]), ratMul(m.GU, rowQ0[r]))
+		b0 := ratSub(ratMul(m.GV, rowQu[r]), ratMul(m.GU, rowQv[r]))
+		a1 := ratSub(ratMul(m.G0, rowQv[r]), ratMul(m.GV, rowQ0[r]))
+		b1 := ratSub(ratMul(m.GU, rowQv[r]), ratMul(m.GV, rowQu[r]))
+		byV[r] = make([]*big.Rat, len(vs))
+		for j, v := range vs {
+			byV[r][j] = ratAdd(a0, ratMul(b0, v))
+		}
+		byU[r] = make([]*big.Rat, len(us))
+		for i, u := range us {
+			byU[r][i] = ratAdd(a1, ratMul(b1, u))
+		}
 	}
 	grid := make([][]gateNode, len(us))
 	for i, u := range us {
@@ -36,13 +58,12 @@ func gateGrid(m Map, rows [3]RatVec, us, vs []*big.Rat) ([][]gateNode, error) {
 			if g.Sign() <= 0 {
 				return nil, fmt.Errorf("%w: loft cap ray denominator is not positive", decaderr.ErrUnsupported)
 			}
-			q := m.Numerator(u, v)
 			inverseG := ratDiv(ratOne(), g)
 			node := gateNode{g: g}
-			for r, row := range rows {
-				rowQ := VDot(row, q)
-				node.deriv[r][0] = ratSub(ratMul(g, rowQu[r]), ratMul(m.GU, rowQ))
-				node.deriv[r][1] = ratSub(ratMul(g, rowQv[r]), ratMul(m.GV, rowQ))
+			for r := range rows {
+				rowQ := ratAdd(ratAdd(rowQ0[r], ratMul(rowQu[r], u)), ratMul(rowQv[r], v))
+				node.deriv[r][0] = byV[r][j]
+				node.deriv[r][1] = byU[r][i]
 				node.scalar[r] = ratAdd(rowConstant[r], ratMul(rowQ, inverseG))
 			}
 			grid[i][j] = node
