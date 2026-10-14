@@ -86,7 +86,7 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool,
 	if err := budget.Err(); err != nil {
 		return nil, false, err
 	}
-	if len(b.lumps) != 1 {
+	if len(b.n.Lumps) != 1 {
 		return nil, false, nil
 	}
 	g := &bodyGeom{body: b}
@@ -231,15 +231,17 @@ func newCEdge(e *Edge) (*clearance.CEdge, bool) {
 // exists, else the loop-less closed face's own synthesized point off stored
 // surface data (§2).
 func shellWitness(sh *FaceShell) (r3.Vec, bool) {
-	for _, f := range sh.faces {
-		for _, e := range f.Edges() {
-			if e.n.Start != nil {
-				return e.n.Start.Position, true
+	for _, f := range sh.n.Faces {
+		for _, l := range f.Loops {
+			for _, ce := range l.CoEdges {
+				if ce.Edge.Start != nil {
+					return ce.Edge.Start.Position, true
+				}
 			}
 		}
 	}
-	for _, f := range sh.faces {
-		switch s := f.n.Surface.(type) {
+	for _, f := range sh.n.Faces {
+		switch s := f.Surface.(type) {
 		case surfacegeom.Sphere:
 			r, err := s.Radius.In(units.Millimeter)
 			if err != nil {

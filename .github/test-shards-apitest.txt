@@ -2060,3 +2060,4 @@
 10	0.00	TestSectionMatchingLoftRefusesDifferentHoleRecords
 10	0.00	TestSectionMatchingLoftRefusesFacetedCutHole
 10	0.00	TestSectionMatchingLoftRefusesFilletRewrite
+10	0.00	TestBodyLumpsAndShellsKeepTheirIdentity

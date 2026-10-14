@@ -410,7 +410,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	// The held topology's lump and void counts (proposal §9): descriptive
 	// data every body carries, using the current count definitions,
 	// independent of the validity verdict decided below.
-	topology := HeldTopology{Lumps: len(b.lumps)}
+	topology := HeldTopology{Lumps: len(b.n.Lumps)}
 	for _, s := range b.Shells() {
 		if s.IsVoid() {
 			topology.Voids++

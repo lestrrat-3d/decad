@@ -104,9 +104,9 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	require.False(t, accepted)
 	tooth.payload = originalPayload
 	shell := blank.Shells()[0]
-	originalFaces := shell.faces
-	t.Cleanup(func() { shell.faces = originalFaces })
-	shell.faces = append(slices.Clone(originalFaces), bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}, Body: bodyNode(blank)}}))
+	originalFaces := shell.n.Faces
+	t.Cleanup(func() { shell.n.Faces = originalFaces })
+	shell.n.Faces = append(slices.Clone(originalFaces), faceNode(bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}, Body: bodyNode(blank)}})))
 	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted)
 }

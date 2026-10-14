@@ -526,7 +526,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	for _, f := range allFaces {
 		f.n.Body = bodyNode(body)
 	}
-	body.lumps = sheetLumps(allFaces)
+	body.n.Lumps = lumpNodes(sheetLumps(allFaces))
 
 	// Area is the receiver's own faces' area plus each new face's, composed
 	// through proofbound.BoundedAdd — never a re-derived reading — exactly the sum

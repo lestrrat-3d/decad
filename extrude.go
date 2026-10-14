@@ -658,7 +658,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 		allFaces = append(allFaces, faces...)
 		total = proofbound.BoundedAdd(total, area)
 	}
-	body.lumps = sheetLumps(allFaces)
+	body.n.Lumps = lumpNodes(sheetLumps(allFaces))
 
 	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(total.Value),

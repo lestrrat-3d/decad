@@ -284,10 +284,10 @@ func stackedLumps(faces []*Face, anchors map[*Face]struct{}) ([]*Lump, error) {
 			}
 		}
 		if !anchored {
-			voids = append(voids, &FaceShell{faces: group, n: topo.FaceShell{Open: shellIsOpen(group), Void: true}})
+			voids = append(voids, bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen(group), Void: true, Faces: faceNodes(group)}}))
 			continue
 		}
-		outer = append(outer, &Lump{shells: []*FaceShell{{faces: group, n: topo.FaceShell{Open: shellIsOpen(group)}}}})
+		outer = append(outer, bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen(group), Faces: faceNodes(group)}}))}}}))
 	}
 	switch {
 	case len(voids) == 0:
@@ -296,7 +296,7 @@ func stackedLumps(faces []*Face, anchors map[*Face]struct{}) ([]*Lump, error) {
 		return nil, fmt.Errorf(`%w: a stacked body with %d outer shells and %d cavities needs a nesting proof this evaluator does not run`,
 			ErrUnsupported, len(outer), len(voids))
 	}
-	outer[0].shells = append(outer[0].shells, voids...)
+	outer[0].n.Shells = append(outer[0].n.Shells, faceShellNodes(voids)...)
 	return outer, nil
 }
 
@@ -514,7 +514,9 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		return nil, err
 	}
 	faces = append(faces, planar...)
-	body.lumps, err = stackedLumps(plan.order(faces), anchors)
+	var lumps []*Lump
+	lumps, err = stackedLumps(plan.order(faces), anchors)
+	body.n.Lumps = lumpNodes(lumps)
 	if err != nil {
 		return nil, err
 	}

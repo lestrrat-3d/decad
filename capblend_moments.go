@@ -294,7 +294,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		return nil, err
 	}
 	faces = append(faces, capStart, capEnd)
-	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
+	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}
 
 	volume := proofbound.BoundedAdd(slabVolume, bandVolume)
 	body.n.Volume = measurement.Measurement{

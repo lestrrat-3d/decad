@@ -619,9 +619,9 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		shells[ci] = &FaceShell{faces: compFaces[ci], n: topo.FaceShell{Void: compVol[ci].Sign() < 0}}
+		shells[ci] = bornFaceShell(&FaceShell{n: topo.FaceShell{Void: compVol[ci].Sign() < 0, Faces: faceNodes(compFaces[ci])}})
 		if compVol[ci].Sign() > 0 {
-			l := &Lump{shells: []*FaceShell{shells[ci]}}
+			l := bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(shells[ci])}}})
 			lumpOf[ci] = l
 			lumps = append(lumps, l)
 		}
@@ -632,10 +632,10 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	}
 	for ci, parent := range parents {
 		if parent >= 0 {
-			lumpOf[parent].shells = append(lumpOf[parent].shells, shells[ci])
+			lumpOf[parent].n.Shells = append(lumpOf[parent].n.Shells, faceShellNode(shells[ci]))
 		}
 	}
-	body.lumps = lumps
+	body.n.Lumps = lumpNodes(lumps)
 
 	// Measurements: exact rational integrals over the held mesh, reported
 	// with the composed proven bounds (§9: the bound shapes of the

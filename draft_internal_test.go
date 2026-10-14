@@ -47,7 +47,7 @@ func TestDraftKeptWallsReadsRoles(t *testing.T) {
 	require.False(t, foreign.isWallOf(7))
 	require.False(t, capStart.isWallOf(7))
 
-	b := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{own, coalesced, capStart}}}}}})
+	b := bornBody(&Body{n: topo.Body{Lumps: []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: []*topo.Face{faceNode(own), faceNode(coalesced), faceNode(capStart)}}}))}}}))}}})
 	kept, err := draftKeptWalls(b, 7, []*Face{own, coalesced})
 	require.NoError(t, err)
 	require.Empty(t, kept)

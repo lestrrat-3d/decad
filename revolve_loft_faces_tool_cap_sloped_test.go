@@ -108,13 +108,13 @@ func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
 		require.False(t, certified, "a replaced live cap-face origin cannot own the arc")
 		circle.capFace.n.Origins = originalOrigins
 		shell := blank.Shells()[0]
-		originalFaces := shell.faces
-		t.Cleanup(func() { shell.faces = originalFaces })
-		shell.faces = append(slices.Clone(originalFaces), bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}, Body: bodyNode(blank)}}))
+		originalFaces := shell.n.Faces
+		t.Cleanup(func() { shell.n.Faces = originalFaces })
+		shell.n.Faces = append(slices.Clone(originalFaces), faceNode(bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}, Body: bodyNode(blank)}})))
 		_, certified, arcErr = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, circle)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "an unclassified live blank face cannot own the arc")
-		shell.faces = originalFaces
+		shell.n.Faces = originalFaces
 		found++
 	}
 	require.Positive(t, found)

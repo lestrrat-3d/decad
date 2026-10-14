@@ -85,9 +85,9 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 	})
 	t.Run("extra blank face", func(t *testing.T) {
 		shell := blank.Shells()[0]
-		original := shell.faces
-		defer func() { shell.faces = original }()
-		shell.faces = append(slices.Clone(original), bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}, Body: bodyNode(blank)}}))
+		original := shell.n.Faces
+		defer func() { shell.n.Faces = original }()
+		shell.n.Faces = append(slices.Clone(original), faceNode(bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}, Body: bodyNode(blank)}})))
 		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
 		if err != nil || complete {
 			t.Fatalf("an unclassified live blank face was admitted: %v, %t", err, complete)

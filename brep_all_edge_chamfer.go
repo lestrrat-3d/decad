@@ -424,8 +424,8 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf(`%w: all-edge chamfer has an unsewn planar edge`, ErrUnsupported)
 		}
 	}
-	body.lumps = sheetLumps(faces)
-	if len(body.lumps) != 1 || body.lumps[0].shells[0].n.Open {
+	body.n.Lumps = lumpNodes(sheetLumps(faces))
+	if len(body.n.Lumps) != 1 || body.n.Lumps[0].Shells[0].Open {
 		return nil, fmt.Errorf(`%w: all-edge chamfer has an open shell`, ErrUnsupported)
 	}
 	if err := geometry.measure(body, polygons); err != nil {

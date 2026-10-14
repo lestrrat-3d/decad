@@ -350,7 +350,7 @@ func patchTestReceiverWithOneChain(payload featurePayload, edges []*Edge) *Body 
 		e.n.Faces = []*topo.Face{faceNode(face)}
 	}
 	receiver := bornBody(&Body{payload: payload})
-	receiver.lumps = sheetLumps([]*Face{face})
+	receiver.n.Lumps = lumpNodes(sheetLumps([]*Face{face}))
 	face.n.Body = bodyNode(receiver)
 	return receiver
 }
@@ -401,7 +401,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	inner.n.Faces = []*topo.Face{faceNode(innerFace)}
 
 	receiver := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}})
-	receiver.lumps = sheetLumps([]*Face{outerFace, innerFace})
+	receiver.n.Lumps = lumpNodes(sheetLumps([]*Face{outerFace, innerFace}))
 	outerFace.n.Body = bodyNode(receiver)
 	innerFace.n.Body = bodyNode(receiver)
 

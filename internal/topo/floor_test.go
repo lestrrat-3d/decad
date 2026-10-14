@@ -62,6 +62,6 @@ func TestBodyMovedFields(t *testing.T) {
 	for f := range typ.Fields() {
 		got = append(got, f.Name)
 	}
-	require.Equal(t, []string{"Solid", "PlanarConvexity", "PlanarSnapshot", "PlanarHints", "Origin", "Volume", "Area", "Centroid", "Bounds", "Kind", "Owner"}, got)
+	require.Equal(t, []string{"Solid", "PlanarConvexity", "PlanarSnapshot", "PlanarHints", "Origin", "Volume", "Area", "Centroid", "Bounds", "Kind", "Lumps", "Owner"}, got)
 	require.NotContains(t, got, "SweepRadii")
 }

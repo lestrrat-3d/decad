@@ -110,7 +110,7 @@ func TestFacetedAxisSupportRejectsMalformedPlacementProvenance(t *testing.T) {
 	wrongVerts.exactSourceVerts = append([]r3.Vec(nil), valid.exactSourceVerts...)
 	wrongVerts.exactSourceVerts[0].X += 1
 	for _, corrupt := range []facetedPayload{missing, wrongTris, wrongVerts} {
-		body := bornBody(&Body{lumps: placed.lumps, n: topo.Body{Solid: placed.n.Solid, Kind: placed.n.Kind}, payload: corrupt})
+		body := bornBody(&Body{n: topo.Body{Solid: placed.n.Solid, Kind: placed.n.Kind, Lumps: placed.n.Lumps}, payload: corrupt})
 		_, ok, err := sourceFacetedAxisSupport(t.Context(), body, r3.Identity(), 2, 0)
 		require.NoError(t, err)
 		require.False(t, ok)

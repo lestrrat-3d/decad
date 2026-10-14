@@ -598,7 +598,7 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "SurveyLoops"}
 
 	_, _, err := newBodyGeomBudget(proofbound.NewWorkBudget(ctx), bornBody(&Body{
-		lumps:   body.lumps,
+		n:       topo.Body{Lumps: body.n.Lumps},
 		payload: pp,
 	}))
 	require.ErrorIs(t, err, context.Canceled)
