@@ -11,37 +11,11 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
-
-// pocketShellBand records the rounded transition below an exact rectangular
-// blind pocket or across a coaxial counterbore shoulder. A blind pocket has
-// an outward-rounded side ring and a square cap ring; its four circular side
-// walks collapse to sphere poles. A counterbore has a quarter-torus side ring
-// and a circular cap ring.
-type pocketShellBand struct {
-	outer, pocket, inner bossRect
-	round                *counterboreShellRound
-	rounded              profileRecord
-	z0, floorZ, topZ     float64
-	lowerZ, t            float64
-	floorFace            int
-	frame                r3.Frame
-}
-
-func (b *pocketShellBand) capProfile() profileRecord {
-	if b.round != nil {
-		return b.round.large.outer
-	}
-	return b.pocket.profile()
-}
-
-func (b *pocketShellBand) capOutward() bool {
-	return b.round == nil || b.round.sign > 0
-}
 
 // shellBlindPocket takes only the exact two-slab rectangular blind Cut whose
 // top cap is removed inward. A different stack retains route S's SG3 refusal.
@@ -57,14 +31,14 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 		!brepgeom.LoopsEqual(lower.Regions[0].Outer, upper.Regions[0].Outer) {
 		return nil, false, nil
 	}
-	outer, oOK := recordedBossRect(lower.Regions[0])
+	outer, oOK := prismshell.RecordedBossRect(lower.Regions[0])
 	pocketLoop, err := offset2d.ReverseLoopRecordContext(ctx, upper.Regions[0].Holes[0])
 	if err != nil {
 		return nil, true, err
 	}
-	pocket, pOK := recordedBossRect(profileRecord{Outer: pocketLoop})
-	if !oOK || !pOK || !(pocket.u0 > outer.u0 && pocket.v0 > outer.v0 &&
-		pocket.u1 < outer.u1 && pocket.v1 < outer.v1) {
+	pocket, pOK := prismshell.RecordedBossRect(profileRecord{Outer: pocketLoop})
+	if !oOK || !pOK || !(pocket.U0 > outer.U0 && pocket.V0 > outer.V0 &&
+		pocket.U1 < outer.U1 && pocket.V1 < outer.V1) {
 		return nil, false, nil
 	}
 	if call.sense != Inward || len(call.removed) != 1 ||
@@ -80,13 +54,13 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 		return refuse("requires exact slab sections, levels, and thickness")
 	}
 	t := call.tmm
-	if !(lower.Z1-lower.Z0 > 2*t && outer.width() > 2*t && outer.height() > 2*t &&
-		pocket.width() > 2*t && pocket.height() > 2*t &&
-		pocket.u0 > outer.u0+2*t && pocket.v0 > outer.v0+2*t &&
-		pocket.u1 < outer.u1-2*t && pocket.v1 < outer.v1-2*t) {
+	if !(lower.Z1-lower.Z0 > 2*t && outer.Width() > 2*t && outer.Height() > 2*t &&
+		pocket.Width() > 2*t && pocket.Height() > 2*t &&
+		pocket.U0 > outer.U0+2*t && pocket.V0 > outer.V0+2*t &&
+		pocket.U1 < outer.U1-2*t && pocket.V1 < outer.V1-2*t) {
 		return refuse("has insufficient floor, outer-wall, pocket, or cavity clearance")
 	}
-	inner := outer.inset(t)
+	inner := outer.Inset(t)
 	lowerZ := lower.Z1 - t
 	if proofbound.ExactSumRound(lowerZ, lower.Z1, -t) != 0 ||
 		proofbound.ExactSumRound(lower.Z0+t, lower.Z0, t) != 0 ||
@@ -96,11 +70,11 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 		return refuse("needs exactly represented offset coordinates")
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	rounded, err := offsetProfile(budget, pocket.profile(), -1, t)
+	rounded, err := offsetProfile(budget, pocket.Profile(), -1, t)
 	if err != nil {
 		return nil, true, err
 	}
-	delta, err := offsetSectionDelta(budget, pocket.profile(), -1, t, 0)
+	delta, err := offsetSectionDelta(budget, pocket.Profile(), -1, t, 0)
 	if err != nil {
 		return nil, true, err
 	}
@@ -119,7 +93,7 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 	if err != nil {
 		return nil, true, err
 	}
-	if len(read.walks) != 8 || !brepgeom.LoopsEqual(loopRecord{Segments: collapsed}, pocket.profile().Outer) {
+	if len(read.walks) != 8 || !brepgeom.LoopsEqual(loopRecord{Segments: collapsed}, pocket.Profile().Outer) {
 		return refuse("does not collapse to the source pocket floor")
 	}
 	for _, walk := range read.walks {
@@ -154,28 +128,28 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: seg, z0: z0, z1: z1})
 		}
 	}
-	addPlane(inner.profile(), lower.Z0+t, true)
-	addWalls(inner.profile(), lower.Z0+t, upper.Z1, true)
-	outerRim := outer.profile()
+	addPlane(inner.Profile(), lower.Z0+t, true)
+	addWalls(inner.Profile(), lower.Z0+t, upper.Z1, true)
+	outerRim := outer.Profile()
 	outerRim.Holes = []loopRecord{}
-	hole, err := offset2d.ReverseLoopRecordContext(ctx, inner.profile().Outer)
+	hole, err := offset2d.ReverseLoopRecordContext(ctx, inner.Profile().Outer)
 	if err != nil {
 		return nil, true, err
 	}
 	outerRim.Holes = append(outerRim.Holes, hole)
 	addPlane(outerRim, upper.Z1, true)
 	pocketRim := rounded
-	hole, err = offset2d.ReverseLoopRecordContext(ctx, pocket.profile().Outer)
+	hole, err = offset2d.ReverseLoopRecordContext(ctx, pocket.Profile().Outer)
 	if err != nil {
 		return nil, true, err
 	}
 	pocketRim.Holes = []loopRecord{hole}
 	addPlane(pocketRim, upper.Z1, true)
 	addWalls(rounded, lower.Z1, upper.Z1, false)
-	floorFace := addPlane(pocket.profile(), lowerZ, false)
-	result.pocketShell = &pocketShellBand{outer: outer, pocket: pocket, inner: inner, rounded: rounded,
-		z0: lower.Z0, floorZ: lower.Z1, topZ: upper.Z1, lowerZ: lowerZ, t: t,
-		floorFace: floorFace, frame: sp.frame}
+	floorFace := addPlane(pocket.Profile(), lowerZ, false)
+	result.pocketShell = &prismshell.PocketShellBand{Outer: outer, Pocket: pocket, Inner: inner, Rounded: rounded,
+		Z0: lower.Z0, FloorZ: lower.Z1, TopZ: upper.Z1, LowerZ: lowerZ, T: t,
+		FloorFace: floorFace, Frame: sp.frame}
 	result.assignRoles()
 	body, err := evalBrepContext(ctx, source.doc, source.doc.nextProducerID(), result)
 	return body, true, err
@@ -188,12 +162,12 @@ func pocketShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopolo
 	placeVertex func([3]float64, float64, float64, float64) *Vertex,
 	out *brepOpenSet, bi int) error {
 	band := bp.pocketShell
-	e := btopo.embeds[band.floorFace]
+	e := btopo.embeds[band.FloorFace]
 	for ring, spec := range []struct {
 		loop loopRecord
 		z    float64
-	}{{band.rounded.Outer, band.floorZ}, {band.capProfile().Outer, band.lowerZ}} {
-		view := prismPayload{Payload: prismrecord.Payload{Frame: band.frame, Xform: bp.xform, Z0: spec.z, Z1: spec.z}}
+	}{{band.Rounded.Outer, band.FloorZ}, {band.CapProfile().Outer, band.LowerZ}} {
+		view := prismPayload{Payload: prismrecord.Payload{Frame: band.Frame, Xform: bp.xform, Z0: spec.z, Z1: spec.z}}
 		for _, seg := range spec.loop.Segments {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -232,21 +206,21 @@ func attachPocketShellBand(ctx context.Context, body *Body, ref producerID,
 	bp brepPayload, open brepOpenSet) ([]*Face, error) {
 	band := bp.pocketShell
 	bi := len(bp.loopBands)
-	b := brepLoopBand{face: band.floorFace, loop: 0, orig: band.rounded.Outer,
-		setback: capSetback{dc: band.t, ds: band.t}, sigma: 1, kind: brepBandFillet}
-	capRegion := band.capProfile()
-	fake := brepFace{frame: band.frame, region: &capRegion,
-		z0: band.lowerZ, z1: band.lowerZ, outward: band.capOutward(), role: "pocketShellBand"}
+	b := brepLoopBand{face: band.FloorFace, loop: 0, orig: band.Rounded.Outer,
+		setback: capSetback{dc: band.T, ds: band.T}, sigma: 1, kind: brepBandFillet}
+	capRegion := band.CapProfile()
+	fake := brepFace{frame: band.Frame, region: &capRegion,
+		z0: band.LowerZ, z1: band.LowerZ, outward: band.CapOutward(), role: "pocketShellBand"}
 	copyBP := bp
 	copyBP.faces = append([]brepFace(nil), bp.faces...)
-	copyBP.faces[band.floorFace] = fake
+	copyBP.faces[band.FloorFace] = fake
 	copyBP.loopBands = append(append([]brepLoopBand(nil), bp.loopBands...), b)
 	embeds, err := brepEmbeds(bp.faces)
 	if err != nil {
 		return nil, err
 	}
 	patches, _, err := attachFilletBand(ctx, body, ref, copyBP, bi, open,
-		embeds[band.floorFace], freeform.NewFreeformWork())
+		embeds[band.FloorFace], freeform.NewFreeformWork())
 	return patches, err
 }
 
@@ -254,7 +228,7 @@ func attachPocketShellBand(ctx context.Context, body *Body, ref producerID,
 // Minkowski expansion of the blind pocket within that cavity.
 func measurePocketShell(ctx context.Context, bp brepPayload, body *Body) error {
 	b := bp.pocketShell
-	if b.round != nil {
+	if b.Round != nil {
 		return measureCounterboreShell(ctx, bp, body)
 	}
 	point := func(x float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(x)) }
@@ -263,25 +237,25 @@ func measurePocketShell(ctx context.Context, bp brepPayload, body *Body) error {
 		return proofbound.IntervalScale(a, big.NewRat(n, d))
 	}
 	pi := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
-	area := func(r bossRect) proofbound.RatInterval {
-		return mul(sub(point(r.u1), point(r.u0)), sub(point(r.v1), point(r.v0)))
+	area := func(r prismshell.BossRect) proofbound.RatInterval {
+		return mul(sub(point(r.U1), point(r.U0)), sub(point(r.V1), point(r.V0)))
 	}
-	centerU := func(r bossRect) proofbound.RatInterval { return scale(add(point(r.u0), point(r.u1)), 1, 2) }
-	centerV := func(r bossRect) proofbound.RatInterval { return scale(add(point(r.v0), point(r.v1)), 1, 2) }
-	t := point(b.t)
-	outerH := sub(point(b.topZ), point(b.z0))
-	pocketH := sub(point(b.topZ), point(b.floorZ))
-	innerH := sub(point(b.topZ), add(point(b.z0), t))
-	w := sub(point(b.pocket.u1), point(b.pocket.u0))
-	d := sub(point(b.pocket.v1), point(b.pocket.v0))
+	centerU := func(r prismshell.BossRect) proofbound.RatInterval { return scale(add(point(r.U0), point(r.U1)), 1, 2) }
+	centerV := func(r prismshell.BossRect) proofbound.RatInterval { return scale(add(point(r.V0), point(r.V1)), 1, 2) }
+	t := point(b.T)
+	outerH := sub(point(b.TopZ), point(b.Z0))
+	pocketH := sub(point(b.TopZ), point(b.FloorZ))
+	innerH := sub(point(b.TopZ), add(point(b.Z0), t))
+	w := sub(point(b.Pocket.U1), point(b.Pocket.U0))
+	d := sub(point(b.Pocket.V1), point(b.Pocket.V0))
 	perimHalf := add(w, d)
 	t2, t3, t4 := mul(t, t), mul(mul(t, t), t), mul(mul(t, t), mul(t, t))
-	outerV := mul(area(b.outer), outerH)
-	pocketV := mul(area(b.pocket), pocketH)
-	innerV := mul(area(b.inner), innerH)
-	roundedArea := add(add(area(b.pocket), scale(mul(perimHalf, t), 2, 1)), mul(pi, t2))
+	outerV := mul(area(b.Outer), outerH)
+	pocketV := mul(area(b.Pocket), pocketH)
+	innerV := mul(area(b.Inner), innerH)
+	roundedArea := add(add(area(b.Pocket), scale(mul(perimHalf, t), 2, 1)), mul(pi, t2))
 	upperV := mul(roundedArea, pocketH)
-	lowerV := add(add(mul(area(b.pocket), t), scale(mul(mul(perimHalf, pi), t2), 1, 2)),
+	lowerV := add(add(mul(area(b.Pocket), t), scale(mul(mul(perimHalf, pi), t2), 1, 2)),
 		scale(mul(pi, t3), 2, 3))
 	obstacleV := add(upperV, lowerV)
 	volume := add(sub(sub(outerV, pocketV), innerV), obstacleV)
@@ -290,18 +264,18 @@ func measurePocketShell(ctx context.Context, bp brepPayload, body *Body) error {
 	}
 	v, ve := heldOf(volume)
 	body.volume = Measurement{Value: units.CubicMillimeters(v), Bound: units.CubicMillimeters(ve), Exactness: exactnessOf(ve)}
-	outerCZ := scale(add(point(b.z0), point(b.topZ)), 1, 2)
-	pocketCZ := scale(add(point(b.floorZ), point(b.topZ)), 1, 2)
-	innerCZ := scale(add(add(point(b.z0), t), point(b.topZ)), 1, 2)
-	lowerFirst := sub(mul(point(b.floorZ), lowerV),
-		add(add(scale(mul(area(b.pocket), t2), 1, 2), scale(mul(perimHalf, t3), 2, 3)),
+	outerCZ := scale(add(point(b.Z0), point(b.TopZ)), 1, 2)
+	pocketCZ := scale(add(point(b.FloorZ), point(b.TopZ)), 1, 2)
+	innerCZ := scale(add(add(point(b.Z0), t), point(b.TopZ)), 1, 2)
+	lowerFirst := sub(mul(point(b.FloorZ), lowerV),
+		add(add(scale(mul(area(b.Pocket), t2), 1, 2), scale(mul(perimHalf, t3), 2, 3)),
 			scale(mul(pi, t4), 1, 4)))
 	upperFirst := mul(upperV, pocketCZ)
 	obstacleZ := add(lowerFirst, upperFirst)
-	mu := add(sub(sub(mul(outerV, centerU(b.outer)), mul(pocketV, centerU(b.pocket))),
-		mul(innerV, centerU(b.inner))), mul(obstacleV, centerU(b.pocket)))
-	mv := add(sub(sub(mul(outerV, centerV(b.outer)), mul(pocketV, centerV(b.pocket))),
-		mul(innerV, centerV(b.inner))), mul(obstacleV, centerV(b.pocket)))
+	mu := add(sub(sub(mul(outerV, centerU(b.Outer)), mul(pocketV, centerU(b.Pocket))),
+		mul(innerV, centerU(b.Inner))), mul(obstacleV, centerU(b.Pocket)))
+	mv := add(sub(sub(mul(outerV, centerV(b.Outer)), mul(pocketV, centerV(b.Pocket))),
+		mul(innerV, centerV(b.Inner))), mul(obstacleV, centerV(b.Pocket)))
 	mz := add(sub(sub(mul(outerV, outerCZ), mul(pocketV, pocketCZ)),
 		mul(innerV, innerCZ)), obstacleZ)
 	ivs := []proofbound.RatInterval{mu, mv, mz}
