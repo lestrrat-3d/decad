@@ -99,6 +99,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			AxialDelta:    pp.Z0Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: startFrame},
+			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z0},
 		},
 	}
 	capEnd := &Face{
@@ -110,6 +111,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			AxialDelta:    pp.Z1Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: endFrame},
+			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z1},
 		},
 	}
 

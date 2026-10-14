@@ -609,6 +609,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				NormalBound:   f.n.NormalBound,
 				Denoted:       f.denotedUnder(xform),
 				Surface:       transformed,
+				CapRecord:     f.n.CapRecord.Under(xform),
 			},
 		}
 		for _, l := range f.loops {

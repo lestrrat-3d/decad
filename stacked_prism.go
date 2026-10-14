@@ -437,6 +437,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 				AxialDelta:    axial,
 				HasAxialDelta: true,
 				Surface:       surfacegeom.Plane{Frame: frame},
+				CapRecord:     &topo.CapRecord{Frame: base.Frame, Xform: base.Xform, Z: z},
 			}}, nil
 	}
 	// One bottom cap per region of the first slab and one top cap per region

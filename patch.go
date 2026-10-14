@@ -188,6 +188,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 			AxialDelta:    0,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: frame},
+			CapRecord:     &topo.CapRecord{Frame: prismView.Frame, Xform: prismView.Xform, Z: 0},
 		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {

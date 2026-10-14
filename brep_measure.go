@@ -54,6 +54,7 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 				AxialDelta:    f.z0Delta,
 				HasAxialDelta: true,
 				Surface:       surfacegeom.Plane{Frame: frame},
+				CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: f.z0},
 			}}, nil
 	}
 	w := btopo.walls[fi]

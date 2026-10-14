@@ -1467,6 +1467,14 @@ image under the placement's held basis and translation (`Face.denotedUnder`),
 never a re-reading of the copy's rounded tag. `copyFaceUnderContext`,
 `rebuildStitchTopology` and `PatchEdges`'s `copyPatchFacesUnder` all carry it.
 
+**A planar cap's copy carries its source's `CapRecord` under the identity
+placement and none under any other.** The record is the plane the cap denotes,
+the exact input of a `ToFace` stop (`docs/evaluator-design.md` §5). A copy under
+the identity placement denotes the same plane, so it holds the same record
+(`CapRecord.Under`). A copy under any other placement denotes the exact image
+of that plane, and a held composition of the record with the placement is not
+that image, so the copy holds no record and is not a `ToFace` stop.
+
 **Each result's own `Bounds` is a tight box exactly when its face is bounded
 entirely by straight (`Line3`) edges on a `Plane` surface, and the sound
 whole-receiver box otherwise.** A straight-edged planar face's enclosed

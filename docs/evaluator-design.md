@@ -433,12 +433,31 @@ case explicitly — the feature call resolves which live bodies actually bound
 the stops from live bodies without consuming them. (`ToFaceAngular` is the
 revolve analog and lands there, §6/§11.) A `ToFace` stop face must be an
 analytic Plane whose held normal is exactly parallel to the sweep normal, by a
-rational cross product of zero and not a tolerance, and whose face states no
-normal departure (`NormalBound` 0, no `Denoted` surface). Any other face is
-`ErrUnsupported`, however small its tilt, because the cap this evaluator builds
-is perpendicular to the sweep and nothing would charge a tilt. That includes a
-stop body whose placement rounds its normal, every revolve cap and a cap-loop
-chamfer band patch; a `Distance` extent reaches them. A nonzero
+rational cross product of zero and not a tolerance, whose face states no
+normal departure (`NormalBound` 0, no `Denoted` surface), and which carries its
+producer's `topo.CapRecord` and an axial displacement. The record is the plane
+the cap denotes: the plane-local level `z` carried through the payload frame
+`(O, U, V, N)` and the placement `(B, t)`, every held value read as an exact
+rational. The plane it denotes is `m·(x − P) = 0` with `m = (B·U) × (B·V)` and
+`P = B(O + z·N) + t`, not the held tag, whose origin is a rounded lift and whose
+normal is a rounded cross product. It must be an exact level set of the sweep
+frame `(O', U', V', N')`: `m·U' = m·V' = 0` in rationals. The stop is then the
+single exact level `c = m·(P − O') / (m·N')` (`extent.PlaneStop`), and the cap
+this evaluator builds, perpendicular to the sweep at one level, charges no
+footprint-dependent departure. The published displacement is the sum of three
+terms: the exact distance from the held stop to `c + travel·offset`
+(`extent.StopLevelError`, so a rounded tag origin or a non-unit held normal is
+charged and never trusted), the offset's conversion bound, and `k` times the
+face's `axialDelta`, with `k = max(|m·(B·N)|, |m|) / |m·N'|` rounded up, which is
+exactly 1 when the frames and the placement are exactly orthonormal. Any other
+face is `ErrUnsupported`, however small its tilt, because nothing would charge
+it. That includes a stop body whose placement rounds its normal, every revolve
+cap, a cap-loop chamfer band patch, a stop plane that is not an exact level set
+of the sweep, a face of a faceted boolean (a mirrored-loft union, a loft or
+cylinder union), a copy placed by a non-identity transform (`CapRecord.Under`
+keeps the record only under the identity placement), and a sweep, mitred-sweep,
+twist or coil end cap and a `Body.Patch` chain patch, none of which states a
+record; a `Distance` extent reaches them. A nonzero
 `WithTaper` builds a draft body over `Distance`, `ToFace`, `ThroughAll`,
 `Symmetric`, or `TwoSided`. `docs/draft-design.md` owns the tapered extrude:
 its sharp offset family, its one- and two-slab payloads, its refusals and its

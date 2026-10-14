@@ -3,7 +3,30 @@ package topo
 import (
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
+	"github.com/lestrrat-3d/r3"
 )
+
+// CapRecord is the record a planar cap face denotes: the plane-local level Z
+// carried through Frame and Xform, every held value read as an exact rational.
+// The face lies on {Xform(O + u*U + v*V + Z*N) : u, v real}, displaced from it
+// along its normal by at most the face's AxialDelta. It is immutable once a
+// producer sets it.
+type CapRecord struct {
+	Frame r3.Frame
+	Xform r3.Transform
+	Z     float64
+}
+
+// Under is the plane record of a copy placed by xform: r itself under the
+// identity placement, and nil under any other, since the copy then denotes
+// the exact image of r's plane under xform and a held composition of the two
+// transforms is not that image. A nil r answers nil.
+func (r *CapRecord) Under(xform r3.Transform) *CapRecord {
+	if r == nil || xform != r3.Identity() {
+		return nil
+	}
+	return r
+}
 
 // Face is the data of the root Face handle, which holds one by
 // value.
@@ -69,4 +92,7 @@ type Face struct {
 	// Surface is the face's tagged geometry in its internal variant. Root
 	// Face.Surface converts it to the public variant with publicSurface.
 	Surface surfacegeom.Surface
+	// CapRecord is the plane this planar face denotes, nil where the producer
+	// states none. A ToFace stop reads it; a face without it is not a stop.
+	CapRecord *CapRecord
 }

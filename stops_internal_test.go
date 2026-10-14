@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
@@ -240,6 +241,7 @@ func TestResolveToFaceRefusesStatedNormalDeparture(t *testing.T) {
 	}{
 		{name: "normal bound", mutate: func(f *Face) { f.n.NormalBound = 1e-12 }},
 		{name: "denoted surface", mutate: func(f *Face) { f.n.Denoted = &surfacenormal.Revolved{Valid: true} }},
+		{name: "no record", mutate: func(f *Face) { f.n.CapRecord = nil }},
 		{name: "none", mutate: func(*Face) {}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -319,4 +321,115 @@ func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 func TestAngularStopEdgeNamesPublicCurveType(t *testing.T) {
 	e := &Edge{n: topo.Edge{Curve: surfacegeom.Ellipse3{}}}
 	require.Equal(t, "decad.Ellipse3", angularStopEdge(e).CurveType)
+}
+
+// genericPlateHost evaluates a 20×20 plate on the frame f, extruded from level
+// 0 to z1, and returns the host document, the body and the far cap selector.
+func genericPlateHost(t *testing.T, f r3.Frame, z1 float64) (*Document, *Body, *FaceQuery) {
+	t.Helper()
+	doc := &Document{}
+	host, err := evalPrism(doc, 1, prismPayload{Payload: prismrecord.Payload{
+		Profile: profileRecord{Outer: synthRectLoop(0, 0, 20, 20)},
+		Frame:   f,
+		Z0:      0,
+		Z1:      z1,
+		Xform:   r3.Identity(),
+	}}, freeform.NewFreeformWork())
+	require.NoError(t, err)
+	doc.bodies = []*Body{host}
+	return doc, host, Faces(FaceCreatedBy(FeatureRef{producer: 1, Role: roleCapEnd}))
+}
+
+func genericPlateFrames(t *testing.T) (f, flipped, skewed, shifted r3.Frame) {
+	t.Helper()
+	mk := func(o, u, v r3.Vec) r3.Frame {
+		fr, err := r3.NewFrame(o, u, v)
+		require.NoError(t, err)
+		return fr
+	}
+	f = mk(r3.Vec{}, r3.NewVec(1, 1, 0), r3.NewVec(-1, 1, 1))
+	flipped = mk(f.Origin(), f.V(), f.U().Scale(-1))
+	skewed = mk(f.Origin(), f.U().Add(f.V()), f.V().Sub(f.U()))
+	shifted = mk(f.Origin().Add(f.U().Scale(1e6)), f.U(), f.V())
+	return f, flipped, skewed, shifted
+}
+
+// TestResolveToFaceChargesDenotedPlaneOnGenericFrame pins that the stop's
+// published displacement covers its exact distance from the plane the stop
+// cap's record denotes, on a generic frame whose held tag origin and normal are
+// rounded. Each case is a sweep frame whose plane is an exact level set of the
+// plate frame's plane, so the stop is the single level
+// c = m·(P − O')/(m·N') with m = U×V, P = O + z·N, computed here in rationals.
+func TestResolveToFaceChargesDenotedPlaneOnGenericFrame(t *testing.T) {
+	t.Parallel()
+	f, flipped, _, shifted := genericPlateFrames(t)
+	ratVec := func(v r3.Vec) [3]*big.Rat {
+		return [3]*big.Rat{new(big.Rat).SetFloat64(v.X), new(big.Rat).SetFloat64(v.Y), new(big.Rat).SetFloat64(v.Z)}
+	}
+	dot := func(a, b [3]*big.Rat) *big.Rat {
+		s := new(big.Rat)
+		for i := range a {
+			s.Add(s, new(big.Rat).Mul(a[i], b[i]))
+		}
+		return s
+	}
+	for _, tc := range []struct {
+		name  string
+		z1    float64
+		sweep r3.Frame
+	}{
+		{name: "same frame at 1e3", z1: 1e3, sweep: f},
+		{name: "flipped axes at 1e3", z1: 1e3, sweep: flipped},
+		{name: "flipped axes at 1e9", z1: 1e9, sweep: flipped},
+		{name: "origin 1e6 along U at 1e6", z1: 1e6, sweep: shifted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc, host, ref := genericPlateHost(t, f, tc.z1)
+			stop, delta, _, err := doc.resolveToFace(ToFace{Body: host, Face: ref}, tc.sweep, 1, "a to-face extent")
+			require.NoError(t, err)
+
+			u, v, n, o := ratVec(f.U()), ratVec(f.V()), ratVec(f.N()), ratVec(f.Origin())
+			m := [3]*big.Rat{}
+			for i := range m {
+				j, k := (i+1)%3, (i+2)%3
+				m[i] = new(big.Rat).Sub(new(big.Rat).Mul(u[j], v[k]), new(big.Rat).Mul(u[k], v[j]))
+			}
+			z := new(big.Rat).SetFloat64(tc.z1)
+			so, sn := ratVec(tc.sweep.Origin()), ratVec(tc.sweep.N())
+			var rel [3]*big.Rat
+			for i := range rel {
+				p := new(big.Rat).Add(o[i], new(big.Rat).Mul(z, n[i]))
+				rel[i] = p.Sub(p, so[i])
+			}
+			c := new(big.Rat).Quo(dot(m, rel), dot(m, sn))
+			gap := new(big.Rat).Sub(new(big.Rat).SetFloat64(stop), c)
+			gap.Abs(gap)
+			t.Logf("stop %.17g, exact level %s, gap %s, published delta %g", stop, c.FloatString(25), gap.FloatString(25), delta)
+			require.LessOrEqual(t, gap.Cmp(new(big.Rat).SetFloat64(delta)), 0,
+				"the published displacement must cover the stop's exact distance from the denoted level")
+		})
+	}
+}
+
+// TestResolveToFaceRefusesFootprintDependentStop pins that a stop cap whose
+// denoted plane is not an exact level set of the sweep is refused. The sweep
+// frame's held normal is exactly parallel to the plate cap's held normal, yet
+// its axes are a rounding step off the plate frame's, so the cap's denoted
+// plane meets the sweep at a level that varies across a distant footprint.
+func TestResolveToFaceRefusesFootprintDependentStop(t *testing.T) {
+	t.Parallel()
+	f, _, skewed, _ := genericPlateFrames(t)
+	doc, host, ref := genericPlateHost(t, f, 10)
+	face, err := ref.SelectFaces(host)
+	require.NoError(t, err)
+	require.Len(t, face, 1)
+	pl, ok := face[0].Surface().(Plane)
+	require.True(t, ok)
+	require.True(t, extent.ExactlyParallel(pl.Frame.N(), skewed.N()), "the held normals must pass the exact-parallel gate")
+
+	stop, _, producer, err := doc.resolveToFace(ToFace{Body: host, Face: ref}, skewed, 1, "a to-face extent")
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Zero(t, stop)
+	require.Zero(t, producer)
 }
