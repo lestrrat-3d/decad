@@ -25,6 +25,24 @@ func adversarialRats() []*big.Rat {
 			add(big.NewInt(n), big.NewInt(d))
 		}
 	}
+	// Values not in lowest terms: numerator and denominator scaled in place,
+	// as no production path does (see proof.AddRat). Every comparison below is
+	// by value, so the representation of a result does not matter.
+	for _, u := range []struct{ n, d, k int64 }{
+		{1, 9, 3}, {3, 7, 2}, {-5, 8, 3}, {7, 2, 2}, {1, 3, 1 << 20}, {-1, 5, 7},
+	} {
+		r := big.NewRat(u.n, u.d)
+		r.Num().Mul(r.Num(), big.NewInt(u.k))
+		r.Denom().Mul(r.Denom(), big.NewInt(u.k))
+		out = append(out, r)
+	}
+	big70 := new(big.Rat).SetFrac(big.NewInt(5), big.NewInt(7))
+	big70.Num().Lsh(big70.Num(), 70)
+	big70.Denom().Lsh(big70.Denom(), 70)
+	out = append(out, big70)
+	zeroOverFive := new(big.Rat).SetFrac(big.NewInt(0), big.NewInt(1))
+	zeroOverFive.Denom().SetInt64(5)
+	out = append(out, zeroOverFive)
 	add(huge, big.NewInt(3))
 	add(new(big.Int).Neg(huge), big.NewInt(3))
 	add(big.NewInt(1), huge)
@@ -251,4 +269,23 @@ func TestRoundingBoundsMatchRawRat(t *testing.T) {
 		require.Zero(t, want.Z.Cmp(got.Z))
 		require.Zero(t, want.W.Cmp(got.W))
 	}
+}
+
+// TestChainProbeMidpointOfNonReducedEndpoint pins the value of a midpoint
+// whose endpoint U is the non-reduced 3/9. The value is 1/6 by Cmp. The
+// representation is 3/18, where big.Rat gives 1/6, so Key2 would read
+// "3/18|0" and not "1/6|0"; no production input has such an endpoint, because
+// every coordinate comes from a constructor that returns lowest terms.
+func TestChainProbeMidpointOfNonReducedEndpoint(t *testing.T) {
+	third := big.NewRat(1, 9)
+	third.Num().SetInt64(3) // 3/9
+	tc := &TriCutter{Index: map[string]int{}, Work: proofbound.NewWorkBudget(t.Context())}
+	a := NewXP2(third, new(big.Rat))
+	b := NewXP2(new(big.Rat), new(big.Rat))
+	tc.AddVert(a, proof.XptOf(r3.NewVec(0, 0, 0)), true)
+	tc.AddVert(b, proof.XptOf(r3.NewVec(1, 0, 0)), true)
+	mid, err := tc.ChainProbe(ChainPath{Verts: []int{0, 1}})
+	require.NoError(t, err)
+	require.Zero(t, mid.U.Cmp(big.NewRat(1, 6)))
+	require.Zero(t, mid.V.Sign())
 }
