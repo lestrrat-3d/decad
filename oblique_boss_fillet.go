@@ -154,7 +154,7 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 	if err != nil {
 		return nil, err
 	}
-	volume, heldVolume, err := meshVolumeMeasurement(ctx, audit.XVerts, mesh.tris, volumeGap)
+	volume, heldVolume, err := meshVolumeMeasurement(ctx, audit, volumeGap)
 	if err != nil {
 		return nil, err
 	}

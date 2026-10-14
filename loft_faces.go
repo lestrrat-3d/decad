@@ -51,7 +51,7 @@ func (d *Document) LoftFaces(ctx context.Context, sections ...*Face) (*Body, err
 	if err != nil {
 		return nil, err
 	}
-	_, heldRat, err := meshVolumeMeasurement(ctx, audit.XVerts, mesh.tris, 0)
+	_, heldRat, err := meshVolumeMeasurement(ctx, audit, 0)
 	if err != nil {
 		return nil, err
 	}

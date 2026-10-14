@@ -912,7 +912,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 				fmt.Errorf("%w: combined spiral join boundary proof", ErrUnsupported))
 		}
 	}
-	volume, volumeRat, err := meshVolumeMeasurement(ctx, audit.XVerts, payload.tris, payload.volSymDiff)
+	volume, volumeRat, err := meshVolumeMeasurement(ctx, audit, payload.volSymDiff)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
