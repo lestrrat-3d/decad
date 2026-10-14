@@ -74,6 +74,26 @@ func displacementOver(walks []survey2d.SideWalk, joins []Join, amounts []float64
 		delta = math.Max(delta, proofbound.IntervalFloatError(exact, held))
 	}
 	n := len(walks)
+	// A miter reads each adjoining walk's carrier. Neighboring miters read
+	// the same exact carrier, so build it once per walk when first needed.
+	type cachedCarrier struct {
+		carrier Carrier
+		ready   bool
+	}
+	var carriers []cachedCarrier
+	carrierAt := func(i int) (Carrier, bool) {
+		if carriers == nil {
+			carriers = make([]cachedCarrier, n)
+		}
+		if carriers[i].ready {
+			return carriers[i].carrier, true
+		}
+		c, ok := CarrierOver(walks[i], spans[i])
+		if ok {
+			carriers[i] = cachedCarrier{carrier: c, ready: true}
+		}
+		return c, ok
+	}
 	for i, j := range joins {
 		if n == 0 {
 			break
@@ -94,8 +114,8 @@ func displacementOver(walks []survey2d.SideWalk, joins []Join, amounts []float64
 			delta = math.Max(delta, Union(a, b).Reach(j.M.U, j.M.V))
 			continue
 		}
-		ca, okA := CarrierOver(prev, spans[p])
-		cb, okB := CarrierOver(cur, spans[i])
+		ca, okA := carrierAt(p)
+		cb, okB := carrierAt(i)
 		if !okA || !okB {
 			return 0, false
 		}
