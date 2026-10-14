@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 func ringXY(p RingVec) XY {
@@ -44,6 +45,9 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 	r2 := proofarith.MulRat(new(big.Rat), proofarith.FloatRat(blankRadius), proofarith.FloatRat(blankRadius))
 	bore2 := proofarith.MulRat(new(big.Rat), proofarith.FloatRat(boreRadius), proofarith.FloatRat(boreRadius))
 	witness := false
+	// levelBoxes holds each tooth's outward-rounded Z interval, filled on the
+	// first outer edge. A level is the same at both ends of a mapped edge.
+	var levelBoxes [][2]float64
 	for edgeIndex, edge := range edges {
 		if err := ctx.Err(); err != nil {
 			return result, err
@@ -68,11 +72,23 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 		}
 		if min2.Cmp(r2) > 0 {
 			result.Outer++
+			if levelBoxes == nil {
+				levelBoxes = make([][2]float64, len(teeth))
+				for i := range teeth {
+					levelBoxes[i] = [2]float64{
+						proofbound.RatFloatDown(teeth[i].Level), proofbound.RatFloatUp(teeth[i].Level),
+					}
+				}
+			}
+			// Axes 0 and 1 of the mapped edge are those of the edge itself.
+			xy := RingEdgeBox(a, b)
 			for toothIndex, tooth := range teeth {
 				mappedA, mappedB := a, b
 				mappedA[2], mappedB[2] = tooth.Level, tooth.Level
+				box := xy
+				box[2] = levelBoxes[toothIndex]
 				if err := RingWallClear(ctx, mappedA, mappedB,
-					RingEdgeBox(mappedA, mappedB), tooth.Bound2,
+					box, tooth.Bound2,
 					tooth.Exterior, &result); err != nil {
 					return result, fmt.Errorf("ring edge %d tooth %d from %v to %v at proxy z=%s: %w",
 						edgeIndex, toothIndex, edge[0].Vec(), edge[1].Vec(), tooth.Level.RatString(), err)

@@ -99,92 +99,25 @@ func TriTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, 
 	return TriTriClassifyCore(ta, tb, xta, xtb, na, nb, pa, pb, sa, sb, useFilter, r3.Vec{}, r3.Vec{}, false)
 }
 
+// TriContactSpan is the kind and the end points of an exact
+// triangle/triangle intersection, without the boundary, edge and angle
+// records TriContact adds.
+type TriContactSpan struct {
+	Kind   ContactKind
+	P0, P1 proof.Xpt
+}
+
 func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, pb *[3]Xp2, sa, sb *[3]int,
 	useFilter bool, fna, fnb r3.Vec, normalsPrepared bool,
 ) (TriContact, error) {
+	span, crossing, err := triTriSpan(ta, tb, xta, xtb, na, nb, pa, pb, sa, sb, useFilter, fna, fnb, normalsPrepared)
 	out := TriContact{EdgeA: -1, EdgeB: -1}
-	var signsB, signsA [3]int
-	if sb != nil {
-		signsB = *sb
-	} else {
-		for i := range 3 {
-			signsB[i] = proof.OrientSignPrepared(ta[0], ta[1], ta[2], tb[i], xta[0], xtb[i], na)
-		}
+	if err != nil {
+		return out, err
 	}
-	if AllOneSide(signsB) {
+	out.Kind, out.P0, out.P1 = span.Kind, span.P0, span.P1
+	if !crossing {
 		return out, nil
-	}
-	if sa != nil {
-		signsA = *sa
-	} else {
-		for i := range 3 {
-			signsA[i] = proof.OrientSignPrepared(tb[0], tb[1], tb[2], ta[i], xtb[0], xta[i], nb)
-		}
-	}
-	if AllOneSide(signsA) {
-		return out, nil
-	}
-
-	if CountZero(signsA) == 3 || CountZero(signsB) == 3 {
-		// Coplanar. The intersection of two coplanar closed triangles is a
-		// convex polygon: positive area — or a positive-length shared boundary
-		// — is a face-on-face tangency (§9 refuses it); anything else is at
-		// most a point, carried for the isolated-point rule.
-		if useFilter && CoplanarFloatSeparated(ta, tb, na) {
-			return out, nil
-		}
-		overlap := false
-		if pa != nil && pb != nil {
-			overlap = CoplanarOverlapProjected(*pa, *pb)
-		} else {
-			overlap = CoplanarOverlap(xta, xtb, na)
-		}
-		if overlap {
-			out.Kind = ContactRegion
-			return out, nil
-		}
-		if p, ok := CoplanarTouch(xta, xtb, na, nb); ok {
-			out.Kind, out.P0, out.P1 = ContactPoint, p, p
-		}
-		return out, nil
-	}
-
-	// Non-coplanar: the planes are distinct and non-parallel (a parallel pair
-	// would leave every vertex strictly on one side, already returned), so they
-	// meet in exactly one line, and every point of the intersection lies on it.
-	if useFilter {
-		if !normalsPrepared {
-			fna, fnb = na.Vec(), nb.Vec()
-		}
-		if TriTriMissesFilter(ta, tb, fna, fnb, signsA, signsB) {
-			return out, nil
-		}
-	}
-	ptsA := planeCrossingsPrepared(xta, xtb[0], nb, signsA)
-	ptsB := planeCrossingsPrepared(xtb, xta[0], na, signsB)
-	if len(ptsA) == 0 || len(ptsB) == 0 {
-		return out, nil
-	}
-	if len(ptsA) > 2 || len(ptsB) > 2 {
-		return out, fmt.Errorf(`%w: a facet crosses a plane more than twice`, decaderr.ErrBooleanFailed)
-	}
-	dir := proof.Xcross(na, nb)
-	loA, hiA := OrderOnLine(ptsA, dir)
-	loB, hiB := OrderOnLine(ptsB, dir)
-	lo, hi := loA, hiA
-	if CmpOnLine(loB, lo, dir) > 0 {
-		lo = loB
-	}
-	if CmpOnLine(hiB, hi, dir) < 0 {
-		hi = hiB
-	}
-	switch CmpOnLine(lo, hi, dir) {
-	case 1:
-		return out, nil // the intervals miss: no contact at all
-	case 0:
-		out.Kind, out.P0, out.P1 = ContactPoint, lo, lo
-	default:
-		out.Kind, out.P0, out.P1 = ContactSegment, lo, hi
 	}
 	out.Sin2 = SinSquared(na, nb)
 	out.P0OnA = OnTriBoundary(out.P0, xta, na)
@@ -198,6 +131,110 @@ func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xp
 		out.P1OnA, out.P1OnB = out.P0OnA, out.P0OnB
 	}
 	return out, nil
+}
+
+// TriTriContactSpanCore takes exactly the arguments of TriTriClassifyCore. It
+// returns the Kind, P0, P1 and error TriTriClassifyCore returns for the same
+// arguments, and skips the boundary, edge and angle records. Use it only where
+// those records are never read.
+func TriTriContactSpanCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, pb *[3]Xp2, sa, sb *[3]int,
+	useFilter bool, fna, fnb r3.Vec, normalsPrepared bool,
+) (TriContactSpan, error) {
+	span, _, err := triTriSpan(ta, tb, xta, xtb, na, nb, pa, pb, sa, sb, useFilter, fna, fnb, normalsPrepared)
+	return span, err
+}
+
+// triTriSpan is the classification shared by TriTriClassifyCore and
+// TriTriContactSpanCore. crossing is true only when the non-coplanar branch
+// produced a point or a segment.
+func triTriSpan(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, pb *[3]Xp2, sa, sb *[3]int,
+	useFilter bool, fna, fnb r3.Vec, normalsPrepared bool,
+) (TriContactSpan, bool, error) {
+	var span TriContactSpan
+	var signsB, signsA [3]int
+	if sb != nil {
+		signsB = *sb
+	} else {
+		for i := range 3 {
+			signsB[i] = proof.OrientSignPrepared(ta[0], ta[1], ta[2], tb[i], xta[0], xtb[i], na)
+		}
+	}
+	if AllOneSide(signsB) {
+		return span, false, nil
+	}
+	if sa != nil {
+		signsA = *sa
+	} else {
+		for i := range 3 {
+			signsA[i] = proof.OrientSignPrepared(tb[0], tb[1], tb[2], ta[i], xtb[0], xta[i], nb)
+		}
+	}
+	if AllOneSide(signsA) {
+		return span, false, nil
+	}
+
+	if CountZero(signsA) == 3 || CountZero(signsB) == 3 {
+		// Coplanar. The intersection of two coplanar closed triangles is a
+		// convex polygon: positive area — or a positive-length shared boundary
+		// — is a face-on-face tangency (§9 refuses it); anything else is at
+		// most a point, carried for the isolated-point rule.
+		if useFilter && CoplanarFloatSeparated(ta, tb, na) {
+			return span, false, nil
+		}
+		overlap := false
+		if pa != nil && pb != nil {
+			overlap = CoplanarOverlapProjected(*pa, *pb)
+		} else {
+			overlap = CoplanarOverlap(xta, xtb, na)
+		}
+		if overlap {
+			span.Kind = ContactRegion
+			return span, false, nil
+		}
+		if p, ok := CoplanarTouch(xta, xtb, na, nb); ok {
+			span.Kind, span.P0, span.P1 = ContactPoint, p, p
+		}
+		return span, false, nil
+	}
+
+	// Non-coplanar: the planes are distinct and non-parallel (a parallel pair
+	// would leave every vertex strictly on one side, already returned), so they
+	// meet in exactly one line, and every point of the intersection lies on it.
+	if useFilter {
+		if !normalsPrepared {
+			fna, fnb = na.Vec(), nb.Vec()
+		}
+		if TriTriMissesFilter(ta, tb, fna, fnb, signsA, signsB) {
+			return span, false, nil
+		}
+	}
+	ptsA := planeCrossingsPrepared(xta, xtb[0], nb, signsA)
+	ptsB := planeCrossingsPrepared(xtb, xta[0], na, signsB)
+	if len(ptsA) == 0 || len(ptsB) == 0 {
+		return span, false, nil
+	}
+	if len(ptsA) > 2 || len(ptsB) > 2 {
+		return TriContactSpan{}, false, fmt.Errorf(`%w: a facet crosses a plane more than twice`, decaderr.ErrBooleanFailed)
+	}
+	dir := proof.Xcross(na, nb)
+	loA, hiA := OrderOnLine(ptsA, dir)
+	loB, hiB := OrderOnLine(ptsB, dir)
+	lo, hi := loA, hiA
+	if CmpOnLine(loB, lo, dir) > 0 {
+		lo = loB
+	}
+	if CmpOnLine(hiB, hi, dir) < 0 {
+		hi = hiB
+	}
+	switch CmpOnLine(lo, hi, dir) {
+	case 1:
+		return span, false, nil // the intervals miss: no contact at all
+	case 0:
+		span.Kind, span.P0, span.P1 = ContactPoint, lo, lo
+	default:
+		span.Kind, span.P0, span.P1 = ContactSegment, lo, hi
+	}
+	return span, true, nil
 }
 
 // AllOneSide reports whether all three plane-side signs are strictly the same:
