@@ -126,7 +126,7 @@ func TestEvalLoftUnitBoxTopology(t *testing.T) {
 	var capRoles []string
 	var wallRoles []string
 	for _, f := range faces {
-		roles := f.Origins()
+		roles := f.originRefs()
 		require.Len(t, roles, 1)
 		role := roles[0].Role
 		if role == roleCapStart || role == roleCapEnd {
@@ -156,10 +156,10 @@ func TestEvalLoftRolesUseTheGivenProducerID(t *testing.T) {
 	body, err := evalLoft(t.Context(), New(), ref, boxLoftPayload(t), budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 
-	require.Equal(t, ref, body.Origin().producer)
+	require.Equal(t, ref, body.n.Origin.Producer)
 	for _, f := range body.Faces() {
-		for _, o := range f.Origins() {
-			require.Equal(t, ref, o.producer)
+		for _, o := range f.originRefs() {
+			require.Equal(t, ref, o.Producer)
 		}
 	}
 }

@@ -181,9 +181,9 @@ func TestMeshMassReadsARevolveTheAnalyticPathRefuses(t *testing.T) {
 	require.True(t, ok)
 	rp.sectionDelta = 1.0 / 1024
 	displaced := &Body{
-		doc: quarter.doc, origin: quarter.origin, lumps: quarter.lumps,
+		doc: quarter.doc, lumps: quarter.lumps,
 		volume: quarter.volume, area: quarter.area, centroid: quarter.centroid, bounds: quarter.bounds,
-		n: topo.Body{Solid: quarter.n.Solid}, kind: quarter.kind, payload: rp,
+		n: topo.Body{Solid: quarter.n.Solid, Origin: quarter.n.Origin}, kind: quarter.kind, payload: rp,
 	}
 	_, err := massmoment.RevolveProperties(t.Context(), massRevolveRecord(rp), vecMeasurementToInternal(displaced.centroid), meshLadderDensity)
 	require.ErrorIs(t, err, ErrUnsupported, "premise: the analytic path refuses the displacement")

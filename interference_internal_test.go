@@ -14,8 +14,10 @@ import (
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -236,8 +238,8 @@ func TestInterferencePairDiameterUsesAllFacetedPayloadVertices(t *testing.T) {
 
 func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 	t.Parallel()
-	a := &Body{origin: FeatureRef{producer: 12}}
-	b := &Body{origin: FeatureRef{producer: 34}}
+	a := &Body{n: topo.Body{Origin: provenance.Ref{Producer: 12}}}
+	b := &Body{n: topo.Body{Origin: provenance.Ref{Producer: 34}}}
 
 	for _, tc := range []struct {
 		name        string

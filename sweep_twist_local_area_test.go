@@ -78,7 +78,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 		candidateStations, stationErr := straightTwistStations(source.path.End.Z, angle,
 			angleIv, poly, candidate)
 		require.NoError(t, stationErr)
-		part, buildErr := evalLoft(t.Context(), doc, body.origin.producer, loftPayload{
+		part, buildErr := evalLoft(t.Context(), doc, body.n.Origin.Producer, loftPayload{
 			profile0: source.profile, profile1: source.profile,
 			plane0: candidateStations[0].Plane, plane1: candidateStations[1].Plane,
 			frame0: candidateStations[0].Frame, frame1: candidateStations[1].Frame,
@@ -163,7 +163,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	heldCells := make([]loftPayload, cells)
 	heldCells[0] = held
 	for i := 1; i < cells; i++ {
-		part, err := evalLoft(t.Context(), doc, body.origin.producer, loftPayload{
+		part, err := evalLoft(t.Context(), doc, body.n.Origin.Producer, loftPayload{
 			profile0: source.profile, profile1: source.profile,
 			plane0: stations[i].Plane, plane1: stations[i+1].Plane,
 			frame0: stations[i].Frame, frame1: stations[i+1].Frame,

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -60,7 +61,7 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 		return nil, err
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}, kind: BodySolid}
+	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySolid}
 	faces, err := buildCoilTopology(ctx, body, ref, rec, sh, m.Area, walls)
 	if err != nil {
 		return nil, err
@@ -293,23 +294,23 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 	}
 	faces := []*Face{
 		{loops: capStartLoops,
-			origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
-			body:    body, n: topo.Face{
+			body: body, n: topo.Face{
 				Area:          capArea,
 				AreaBound:     capBound,
 				AxialDelta:    sh.Delta,
 				HasAxialDelta: true,
 				Surface:       capStartSurf,
+				Origins:       []provenance.Ref{{Producer: ref, Role: roleCapStart}},
 			},
 		},
 		{loops: capEndLoops,
-			origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
-			body:    body, n: topo.Face{
+			body: body, n: topo.Face{
 				Area:          capArea,
 				AreaBound:     capBound,
 				AxialDelta:    sh.Delta,
 				HasAxialDelta: true,
 				Surface:       capEndSurf,
+				Origins:       []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
 			},
 		},
 	}
@@ -336,12 +337,12 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			}
 		}
 		face := &Face{
-			origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,%d)", seg.Loop, seg.Index)}},
-			body:    body,
+			body: body,
 			n: topo.Face{
 				Area:      area,
 				AreaBound: areaBound,
 				Surface:   surfacegeom.Faceted{Bound: units.Millimeters(bound)},
+				Origins:   []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(%d,%d)", seg.Loop, seg.Index)}},
 			},
 		}
 		if seg.Closed {

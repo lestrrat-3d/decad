@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -80,12 +81,12 @@ type loftCylinderChamferToothFace struct {
 // Union copied these precise Loft face triangles, and Cut retained their
 // groups. Match by authenticated origin instead of interpreting a role string
 // on a faceted result that may coalesce several public edges.
-func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[FeatureRef][]loftCylinderChamferToothFace, error) {
+func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[provenance.Ref][]loftCylinderChamferToothFace, error) {
 	if source.blank == nil || len(source.teeth) == 0 ||
 		len(source.originalTeeth) != len(source.teeth) || source.blankRadius <= 0 {
 		return nil, fmt.Errorf("%w: loft/cylinder chamfer lost its source operands", ErrUnsupported)
 	}
-	faces := make(map[FeatureRef][]loftCylinderChamferToothFace)
+	faces := make(map[provenance.Ref][]loftCylinderChamferToothFace)
 	for toothIndex, tooth := range source.teeth {
 		if tooth == nil || source.originalTeeth[toothIndex] == nil {
 			return nil, fmt.Errorf("%w: loft/cylinder tooth source is absent", ErrUnsupported)
@@ -112,10 +113,10 @@ func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[Featur
 		for j := range root {
 			for side := range 2 {
 				f := toothFaces[2+2*j+side]
-				if len(f.origins) == 0 {
+				if len(f.n.Origins) == 0 {
 					return nil, fmt.Errorf("%w: loft/cylinder tooth face lost its origin", ErrUnsupported)
 				}
-				origin := f.origins[0]
+				origin := f.n.Origins[0]
 				faces[origin] = append(faces[origin], loftCylinderChamferToothFace{
 					body: tooth, loft: lp, root: root, cell: j, bound: lp.proof.FacetDeparture,
 					scale: proofarith.FloatRat(original.xform.Basis().EZ.Z),

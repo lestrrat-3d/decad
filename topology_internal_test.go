@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -69,4 +70,42 @@ func TestNormalAtRefusesNURBSSurface(t *testing.T) {
 	_, err := f.NormalAt(r3.NewVec(0, 0, 0))
 	require.ErrorIs(t, err, ErrUnsupported,
 		`a NURBSSurface has no closed-form normal to publish a bound for`)
+}
+
+// TestFaceOriginsConvertsTheNodeRoles pins the public form of the provenance
+// the face node holds (docs/evaluator-design.md §3): Origins returns nil when
+// the node holds no role, as the copy it replaced did, and a held role comes
+// back as the matching FeatureRef.
+func TestFaceOriginsConvertsTheNodeRoles(t *testing.T) {
+	t.Parallel()
+
+	t.Run("NoRolesIsNil", func(t *testing.T) {
+		t.Parallel()
+		require.Nil(t, (&Face{}).Origins())
+	})
+
+	t.Run("EmptyNodeSliceIsNil", func(t *testing.T) {
+		t.Parallel()
+		f := &Face{n: topo.Face{Origins: []provenance.Ref{}}}
+		require.Nil(t, f.Origins())
+	})
+
+	t.Run("HeldRoleIsItsFeatureRef", func(t *testing.T) {
+		t.Parallel()
+		f := &Face{n: topo.Face{Origins: []provenance.Ref{{Producer: 3, Role: "capEnd"}}}}
+		require.Equal(t, []FeatureRef{{producer: 3, Role: "capEnd"}}, f.Origins())
+	})
+
+	t.Run("ReturnsACopy", func(t *testing.T) {
+		t.Parallel()
+		f := &Face{n: topo.Face{Origins: []provenance.Ref{{Producer: 3, Role: "capEnd"}}}}
+		f.Origins()[0].Role = "changed"
+		require.Equal(t, "capEnd", f.n.Origins[0].Role)
+	})
+
+	t.Run("RefConvertersRoundTrip", func(t *testing.T) {
+		t.Parallel()
+		x := FeatureRef{producer: 7, Role: "capStart"}
+		require.Equal(t, x, featureRefOf(refOf(x)))
+	})
 }

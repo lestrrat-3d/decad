@@ -20,7 +20,7 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		for _, origin := range face.origins {
+		for _, origin := range face.n.Origins {
 			byRole[origin.Role] = face
 		}
 	}
@@ -32,7 +32,7 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		part, err := evalDraftContext(ctx, body.doc, body.origin.producer, payload)
+		part, err := evalDraftContext(ctx, body.doc, body.n.Origin.Producer, payload)
 		if err != nil {
 			return nil, err
 		}
@@ -73,10 +73,10 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 				return nil, err
 			}
 			face := mesh.source[i]
-			if len(face.origins) == 0 {
+			if len(face.n.Origins) == 0 {
 				return nil, fmt.Errorf(`%w: a draft mesh facet has no source role`, ErrDegenerate)
 			}
-			role := face.origins[0].Role
+			role := face.n.Origins[0].Role
 			if role == internalCap {
 				continue
 			}

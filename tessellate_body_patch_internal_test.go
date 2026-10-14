@@ -31,7 +31,7 @@ func TestBodyPatchMeshChargesTheFilledCapsAxialBound(t *testing.T) {
 
 	patches := 0
 	for _, f := range filled.Faces() {
-		if len(f.origins) != 1 || f.origins[0].Role != rolePatch {
+		if len(f.n.Origins) != 1 || f.n.Origins[0].Role != rolePatch {
 			continue
 		}
 		patches++

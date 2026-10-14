@@ -328,7 +328,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 			path.End.Z, proofbound.ProductUpper(poly.MaxRadiusL1, upperTheta), poly.PerimeterUpper)
 	}
 	for _, face := range body.Faces() {
-		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {
+		if face.n.Origins[0].Role != roleCapStart && face.n.Origins[0].Role != roleCapEnd {
 			face.n.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 		}
 		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, area, areaBound)

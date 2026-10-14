@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
@@ -145,8 +146,8 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 			break
 		}
 	}
-	if openingIdx < 0 || !opening.isPlanar() || len(opening.origins) != 1 ||
-		opening.origins[0] != CapEnd(bossBody) {
+	if openingIdx < 0 || !opening.isPlanar() || len(opening.n.Origins) != 1 ||
+		opening.n.Origins[0] != refOf(CapEnd(bossBody)) {
 		return src, false
 	}
 	var topVerts map[int]struct{}
@@ -169,7 +170,7 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 	}
 	if len(topVerts) != 4 || len(topTris) != 2 || src.topGroup < 0 || src.topGroup >= len(fp.groups) ||
 		len(fp.groups[src.topGroup].origins) != 1 || !fp.groups[src.topGroup].planar ||
-		fp.groups[src.topGroup].origins[0] != CapEnd(bossBody) {
+		fp.groups[src.topGroup].origins[0] != refOf(CapEnd(bossBody)) {
 		return src, false
 	}
 	for fi, group := range fp.src {
@@ -181,7 +182,7 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 		if i == src.topGroup {
 			continue
 		}
-		if slices.Contains(group.origins, CapEnd(bossBody)) {
+		if slices.Contains(group.origins, refOf(CapEnd(bossBody))) {
 			return src, false
 		}
 	}
@@ -364,7 +365,7 @@ func prismUnionBossShellMeshOf(ctx context.Context, ref producerID, fp facetedPa
 	out.groups = append(out.groups, fp.groups...)
 	addGroup := func(role string, planar bool) int {
 		i := len(out.groups)
-		out.groups = append(out.groups, facetGroup{origins: []FeatureRef{{producer: ref, Role: role}}, planar: planar})
+		out.groups = append(out.groups, facetGroup{origins: []provenance.Ref{{Producer: ref, Role: role}}, planar: planar})
 		return i
 	}
 	// The source's top cap is replaced by the opening's narrow horizontal rim.

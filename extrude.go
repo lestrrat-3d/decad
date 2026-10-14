@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -637,7 +638,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
 	var allFaces []*Face
 	total := proofbound.BoundedScalar{}
 	var captures []chainWalkCapture
@@ -858,13 +859,13 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		}
 		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
 		face := &Face{
-			origins: origins,
-			body:    body,
+			body: body,
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
 				Reversed:  faceReversed,
 				Surface:   surf,
+				Origins:   origins,
 			},
 			loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 				{edge: bottomEdge, forward: true},

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
@@ -252,7 +253,7 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 	groups := make([]facetGroup, (len(sections)-1)*segmentCount+2)
 	for band := range len(sections) - 1 {
 		for segment := range segmentCount {
-			groups[band*segmentCount+segment] = facetGroup{origins: []FeatureRef{{producer: ref,
+			groups[band*segmentCount+segment] = facetGroup{origins: []provenance.Ref{{Producer: ref,
 				Role: fmt.Sprintf("side(%d,%d)", band, segment)}}}
 		}
 		for j := range n {
@@ -276,20 +277,20 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 		}
 	}
 	startGroup, endGroup := len(groups)-2, len(groups)-1
-	startOrigins := append([]FeatureRef(nil), sections[0].mesh.groups[sections[0].group].origins...)
+	startOrigins := append([]provenance.Ref(nil), sections[0].mesh.groups[sections[0].group].origins...)
 	last := sections[len(sections)-1]
-	groups[startGroup] = facetGroup{origins: append(startOrigins, FeatureRef{producer: ref, Role: roleCapStart}),
+	groups[startGroup] = facetGroup{origins: append(startOrigins, provenance.Ref{Producer: ref, Role: roleCapStart}),
 		surface: sections[0].face.n.Surface, planar: true, reversed: true, normalBound: 2}
 	if last.constructed != nil {
 		plane, err := loftFacesConstructedPlane(*last.constructed)
 		if err != nil {
 			return facetedPayload{}, err
 		}
-		groups[endGroup] = facetGroup{origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
+		groups[endGroup] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
 			surface: plane, planar: true, normalBound: 2}
 	} else {
-		endOrigins := append([]FeatureRef(nil), last.mesh.groups[last.group].origins...)
-		groups[endGroup] = facetGroup{origins: append(endOrigins, FeatureRef{producer: ref, Role: roleCapEnd}),
+		endOrigins := append([]provenance.Ref(nil), last.mesh.groups[last.group].origins...)
+		groups[endGroup] = facetGroup{origins: append(endOrigins, provenance.Ref{Producer: ref, Role: roleCapEnd}),
 			surface: last.face.n.Surface, planar: true, normalBound: 2}
 	}
 	for _, capTri := range base.tris[n:] {

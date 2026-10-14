@@ -77,10 +77,10 @@ identity; no other rule of this section changes.
 
 | Type | Holds |
 |---|---|
-| `Body` | owning `*Document`, origin `FeatureRef`, `BodyKind`, `[]*Lump`, cached measurements (computed at build, immutable after) |
+| `Body` | owning `*Document`, origin (a `provenance.Ref` in the node; `Body.Origin()` converts it to `FeatureRef`), `BodyKind`, `[]*Lump`, cached measurements (computed at build, immutable after) |
 | `Lump` | `[]*FaceShell` — a connected piece of a body, solid or sheet; a sheet lump holds exactly one shell (`docs/surface-design.md` §2.2) |
 | `FaceShell` | `[]*Face`, `void bool`, `open bool` — `open` is true when the shell has a free edge (`docs/surface-design.md` §2.2) |
-| `Face` | tagged `Surface` (the `surfacegeom` variant in the node; `Face.Surface()` converts to the public one), `[]*Loop` (first outer), origin roles (≥1 `FeatureRef`s, exposed as `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body |
+| `Face` | tagged `Surface` (the `surfacegeom` variant in the node; `Face.Surface()` converts to the public one), `[]*Loop` (first outer), origin roles (≥1 `provenance.Ref`s in the node, exposed as `FeatureRef`s by `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body |
 | `Loop` | ordered `[]CoEdge` (directed edge uses in boundary-walk order), `outer bool` |
 | `CoEdge` | shared `*Edge` plus walk sense; public `Edge`/`Start`/`End`/`IsForward` accessors |
 | `Edge` | tagged `Curve` (the `surfacegeom` variant in the node; `Edge.Curve()` converts to the public one), `Start`/`End` `*Vertex`, ALL adjacent faces (exactly 2 on a closed manifold body; `Edge.Faces()` reports the actual count, which is precisely how `len != 2` surfaces non-manifold topology — core §6.1; exactly 1 is a FREE edge on a sheet body, `docs/surface-design.md` §2.2), `convex bool` |
@@ -98,7 +98,8 @@ Rules:
   `Stitch` is the one operation that makes the material claim.
   `docs/surface-design.md` §2.1 owns the kind and §6 owns that claim.
 - **Provenance is structural.** `FeatureRef` identifies a private document-local
-  producer plus a stable role within it — `side(i, j)` (loop `i`, segment
+  producer plus a stable role within it; the topology nodes hold the same two
+  values as `provenance.Ref`, and `FeatureRef` is its public form — `side(i, j)` (loop `i`, segment
   `j`) for a swept wall; `side(i, j, k)` for a Loft wall triangle;
   `capStart`, `capEnd`, and the revolve/boolean analogs. This bullet owns the
   role MECHANISM, not every grammar it carries: `docs/loft-design.md` §7 owns

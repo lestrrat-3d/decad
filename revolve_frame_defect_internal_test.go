@@ -254,7 +254,7 @@ func TestRevolveReadingsCoverFrameDefect(t *testing.T) {
 				caps := 0
 				for _, f := range b.Faces() {
 					phi := rp.phi0
-					switch f.origins[0].Role {
+					switch f.n.Origins[0].Role {
 					case roleCapStart:
 					case roleCapEnd:
 						phi = rp.phi1

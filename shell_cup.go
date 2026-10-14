@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -398,7 +399,7 @@ func (p cupPlan) columnDelta(col stackedColumn) float64 {
 // kept cap, the pocket floor, then the rims, each group in build order.
 func (cupPlan) order(faces []*Face) []*Face {
 	rank := func(f *Face) int {
-		role := f.origins[0].Role
+		role := f.n.Origins[0].Role
 		switch {
 		case strings.HasPrefix(role, "side("):
 			return 0
@@ -445,16 +446,16 @@ func renameCavityRoles(ctx context.Context, faces []*Face, ref producerID) error
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		for i, o := range f.origins {
+		for i, o := range f.n.Origins {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if o.producer != ref {
+			if o.Producer != ref {
 				continue
 			}
 			var li, j int
 			if n, _ := fmt.Sscanf(o.Role, "side(%d,%d)", &li, &j); n == 2 {
-				f.origins[i] = FeatureRef{producer: ref, Role: fmt.Sprintf("shellSide(%d,%d)", li, j)}
+				f.n.Origins[i] = provenance.Ref{Producer: ref, Role: fmt.Sprintf("shellSide(%d,%d)", li, j)}
 			}
 		}
 	}

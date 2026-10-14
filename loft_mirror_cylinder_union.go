@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -449,18 +450,18 @@ func loftMirrorCylinderCapOrigins(fp *facetedPayload, blank *Body, pairs []*Body
 		if cap == 1 {
 			role = roleCapEnd
 		}
-		seen := make(map[FeatureRef]struct{})
-		var origins []FeatureRef
-		add := func(ref FeatureRef) {
+		seen := make(map[provenance.Ref]struct{})
+		var origins []provenance.Ref
+		add := func(ref provenance.Ref) {
 			if _, exists := seen[ref]; !exists {
 				seen[ref] = struct{}{}
 				origins = append(origins, ref)
 			}
 		}
 		for _, face := range blank.Faces() {
-			for _, origin := range face.Origins() {
-				if origin.producer == blank.origin.producer && origin.Role == role {
-					for _, source := range face.Origins() {
+			for _, origin := range face.originRefs() {
+				if origin.Producer == blank.n.Origin.Producer && origin.Role == role {
+					for _, source := range face.originRefs() {
 						add(source)
 					}
 				}

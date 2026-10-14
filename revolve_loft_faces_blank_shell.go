@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -219,7 +220,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		}
 		group[i] = len(out.mesh.groups)
 		out.mesh.groups = append(out.mesh.groups,
-			facetGroup{origins: append([]FeatureRef(nil), span.origins...), planar: span.face.isPlanar()})
+			facetGroup{origins: append([]provenance.Ref(nil), span.origins...), planar: span.face.isPlanar()})
 	}
 	appendPoint := func(point r3.Vec, bound float64) int {
 		index := len(out.mesh.verts)

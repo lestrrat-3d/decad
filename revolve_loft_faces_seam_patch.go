@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -15,7 +16,7 @@ type revolveLoftFacesSeamPatch struct {
 	vertices     []r3.Vec
 	triangles    [][3]int
 	vertexBounds []float64
-	origins      []FeatureRef
+	origins      []provenance.Ref
 	seam         []int
 	stationIDs   []int
 }
@@ -58,8 +59,8 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 		len(trim.base.groups[group].origins) == 0 {
 		return blank, loft, false, nil
 	}
-	blank.origins = append([]FeatureRef(nil), section.origins...)
-	loft.origins = append([]FeatureRef(nil), trim.base.groups[group].origins...)
+	blank.origins = append([]provenance.Ref(nil), section.origins...)
+	loft.origins = append([]provenance.Ref(nil), trim.base.groups[group].origins...)
 	blank.vertices, loft.vertices = make([]r3.Vec, 3*len(seam)), make([]r3.Vec, 3*len(seam))
 	blank.vertexBounds = make([]float64, 3*len(seam))
 	loft.vertexBounds = make([]float64, 3*len(seam))

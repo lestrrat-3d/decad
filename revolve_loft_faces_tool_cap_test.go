@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -105,7 +107,7 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	originalFaces := shell.faces
 	t.Cleanup(func() { shell.faces = originalFaces })
 	shell.faces = append(slices.Clone(originalFaces), &Face{
-		body: blank, origins: []FeatureRef{{Role: "unmatched side"}},
+		body: blank, n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}},
 	})
 	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted)

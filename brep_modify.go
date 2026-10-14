@@ -55,8 +55,8 @@ func (a *asymmetricChamfer) matchesRecordFace(ref *Face, index int) bool {
 		}
 		faceRole, wallRole = a.recordRoles[index], a.recordRoles[index]
 	}
-	for _, origin := range ref.origins {
-		if origin.producer == a.body.origin.producer &&
+	for _, origin := range ref.n.Origins {
+		if origin.Producer == a.body.n.Origin.Producer &&
 			(origin.Role == faceRole || origin.Role == wallRole) {
 			return true
 		}

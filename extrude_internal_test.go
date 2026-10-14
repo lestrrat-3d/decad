@@ -785,7 +785,7 @@ func requireSamePrismBuild(t *testing.T, want, got *Body) {
 		require.Equal(t, wantFaces[i].n.Surface, gotFaces[i].n.Surface, "face %d's surface", i)
 		require.Equal(t, wantFaces[i].n.Area, gotFaces[i].n.Area, "face %d's area", i)
 		require.Equal(t, wantFaces[i].n.AreaBound, gotFaces[i].n.AreaBound, "face %d's area bound", i)
-		require.Equal(t, wantFaces[i].origins, gotFaces[i].origins, "face %d's roles", i)
+		require.Equal(t, wantFaces[i].n.Origins, gotFaces[i].n.Origins, "face %d's roles", i)
 		require.Equal(t, wantFaces[i].n.AxialDelta, gotFaces[i].n.AxialDelta, "face %d's axial displacement", i)
 	}
 	require.Len(t, got.Edges(), len(want.Edges()), "edge count")

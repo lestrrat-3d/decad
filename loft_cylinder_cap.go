@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
@@ -26,8 +27,8 @@ func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 		}
 		var source *Face
 		for _, face := range blank.Faces() {
-			for _, origin := range face.Origins() {
-				if origin != (FeatureRef{producer: blank.origin.producer, Role: roles[cap]}) {
+			for _, origin := range face.originRefs() {
+				if origin != (provenance.Ref{Producer: blank.n.Origin.Producer, Role: roles[cap]}) {
 					continue
 				}
 				if source != nil {
@@ -66,8 +67,8 @@ func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 			return fmt.Errorf("%w: loft/cylinder cap group has no facets", ErrUnsupported)
 		}
 		g := &pp.groups[group]
-		g.origins = append(append([]FeatureRef(nil), g.origins...),
-			FeatureRef{producer: ref, Role: roles[cap]})
+		g.origins = append(append([]provenance.Ref(nil), g.origins...),
+			provenance.Ref{Producer: ref, Role: roles[cap]})
 		g.surface = plane
 		g.planar = true
 		g.normalBound = source.n.NormalBound

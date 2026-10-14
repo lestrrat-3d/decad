@@ -20,10 +20,10 @@ func twistMixedAreaSlackLocal(profile profileRecord, poly twistsweep.TwistPolygo
 	}
 	byRole := make(map[string]*Face, len(body.Faces()))
 	for _, face := range body.Faces() {
-		if len(face.origins) != 1 {
+		if len(face.n.Origins) != 1 {
 			return 0, fmt.Errorf(`%w: a mixed twisted face lost its source role`, ErrUnsupported)
 		}
-		role := face.origins[0].Role
+		role := face.n.Origins[0].Role
 		if byRole[role] != nil {
 			return 0, fmt.Errorf(`%w: a mixed twisted source role has two faces`, ErrUnsupported)
 		}

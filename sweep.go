@@ -524,10 +524,10 @@ func finishChainSweepBody(body *Body, payload chainSweepPayload) {
 // the index is restored here rather than threaded through that builder.
 func prefixSweepSpanZeroRole(body *Body) {
 	for _, face := range body.Faces() {
-		for i, origin := range face.origins {
+		for i, origin := range face.n.Origins {
 			if suffix, ok := strings.CutPrefix(origin.Role, "side("); ok {
 				origin.Role = "side(0," + suffix
-				face.origins[i] = origin
+				face.n.Origins[i] = origin
 			}
 		}
 	}

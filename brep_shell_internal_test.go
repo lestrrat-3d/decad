@@ -177,7 +177,7 @@ func shellFacePred(t *testing.T, body *Body, dir r3.Vec, level float64) FacePred
 		found = f
 	}
 	require.NotNil(t, found, "a face faces %v at %g", dir, level)
-	return FaceCreatedBy(found.Origins()[0])
+	return FaceCreatedBy(featureRefOf(found.originRefs()[0]))
 }
 
 // shellRecordRole is the role of the record's one planar face across
@@ -690,7 +690,7 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 			}
 		}
 		require.NotNil(t, fillet)
-		refuses(t, p8, Faces(FaceCreatedBy(fillet.Origins()[0])).Exactly(1), mm2, nil, "modify-general SG5", "straight wall along a section axis")
+		refuses(t, p8, Faces(FaceCreatedBy(featureRefOf(fillet.originRefs()[0]))).Exactly(1), mm2, nil, "modify-general SG5", "straight wall along a section axis")
 		p7 := internalLBracket(t)
 		refuses(t, p7, shellFaceAt(t, p7, shellY, 8), mm2, nil, "modify-general SG5", "reflex corner")
 	})

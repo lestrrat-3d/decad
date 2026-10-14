@@ -242,13 +242,13 @@ func requireCoversMappedReference(t *testing.T, ref, b *Body, m fdMap) {
 		if !ok {
 			continue
 		}
-		require.Equal(t, rf[i].origins[0].Role, bf[i].origins[0].Role)
+		require.Equal(t, rf[i].n.Origins[0].Role, bf[i].n.Origins[0].Role)
 		a0, err := rf[i].Area()
 		require.NoError(t, err)
 		a1, err := bf[i].Area()
 		require.NoError(t, err)
 		r := fdMissRatio(a1.Value.Base(), a1.Bound.Base(), a0.Value.Base(), a0.Bound.Base(), m.areaFactor(fdVecOf(pl.Frame.N())))
-		require.LessOrEqual(t, r, slack, "face %s area misses by %g× its bound", rf[i].origins[0].Role, r)
+		require.LessOrEqual(t, r, slack, "face %s area misses by %g× its bound", rf[i].n.Origins[0].Role, r)
 		checked++
 	}
 	re, be := ref.Edges(), b.Edges()

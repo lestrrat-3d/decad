@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -190,7 +191,7 @@ func TestCurvedCallScopeStillRefusesChangedGraph(t *testing.T) {
 	})
 	t.Run("changed source ref", func(t *testing.T) {
 		original := graph.cells[0].source.ref
-		graph.cells[0].source.ref = FeatureRef{Role: "changed graph source"}
+		graph.cells[0].source.ref = provenance.Ref{Role: "changed graph source"}
 		require.False(t, current())
 		graph.cells[0].source.ref = original
 	})

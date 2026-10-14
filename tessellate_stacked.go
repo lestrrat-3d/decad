@@ -239,7 +239,7 @@ func stackedCapFace(b *Body, sp stackedPrismPayload, faceOfRole func(string) (*F
 					if nb == face {
 						continue
 					}
-					for _, origin := range nb.origins {
+					for _, origin := range nb.n.Origins {
 						if strings.HasPrefix(origin.Role, prefix) {
 							return face, nil
 						}
@@ -252,7 +252,7 @@ func stackedCapFace(b *Body, sp stackedPrismPayload, faceOfRole func(string) (*F
 }
 
 func faceHasRole(face *Face, role string) bool {
-	for _, origin := range face.origins {
+	for _, origin := range face.n.Origins {
 		if origin.Role == role {
 			return true
 		}

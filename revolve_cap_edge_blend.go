@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -134,14 +135,14 @@ func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolvemesh
 	groups := make([]facetGroup, 6)
 	for i, role := range roleOrder {
 		f := roles[role]
-		groups[i] = facetGroup{origins: f.Origins(), planar: f.isPlanar()}
+		groups[i] = facetGroup{origins: f.originRefs(), planar: f.isPlanar()}
 	}
 	ref := body.doc.nextProducerID()
 	blendRole := "fillet(0,1)"
 	if source.Kind == revolvemesh.RimChamfer {
 		blendRole = "chamfer(0,1)"
 	}
-	groups[5] = facetGroup{origins: []FeatureRef{{producer: ref, Role: blendRole}}}
+	groups[5] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: blendRole}}}
 	tris := make([][3]int, 0, 8*n)
 	src := make([]int, 0, 8*n)
 	add := func(group, a, b, c int) {

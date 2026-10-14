@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -179,8 +180,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			}
 		}
 		held, bound := heldOf(areaIv)
-		face := &Face{origins: []FeatureRef{{producer: ref, Role: b.patchRole(p)}}, body: body,
-			loops: loops, n: topo.Face{Area: held, AreaBound: bound, Surface: surf}}
+		face := &Face{body: body,
+			loops: loops, n: topo.Face{Area: held, AreaBound: bound, Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(p)}}}}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		// capV, a cap contact vertex, lies on the patch's surface; the outward
 		// normal there is F's own, which faces −m along F's normal for a band

@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/denotation"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 )
 
 // Document is the data of the root Document handle, which holds one by
@@ -19,4 +20,7 @@ type Document struct {
 	// NextCurve is root denotation.go's own counter behind mintCurve: the CURVE
 	// half of the shared-denotation certificate.
 	NextCurve denotation.CurveID
+	// NextProducer is the identity the next successful operation occupies. It
+	// is written only by root commit, commitMany and commitSpan.
+	NextProducer provenance.Producer
 }

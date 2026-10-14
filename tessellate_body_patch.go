@@ -131,7 +131,7 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 		if err := budget.Step(); err != nil {
 			return err
 		}
-		if len(f.origins) != 1 || f.origins[0].producer != b.origin.producer || f.origins[0].Role != rolePatch {
+		if len(f.n.Origins) != 1 || f.n.Origins[0].Producer != b.n.Origin.Producer || f.n.Origins[0].Role != rolePatch {
 			continue
 		}
 		if len(f.loops) == 0 || len(f.loops[0].coedges) == 0 {

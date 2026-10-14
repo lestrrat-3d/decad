@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
@@ -51,9 +52,9 @@ func (m *obliqueBossMesh) quad(a, b, c, d, source int) {
 
 func obliqueBossFaceGroup(body *Body, role string) (facetGroup, bool) {
 	for _, face := range body.Faces() {
-		for _, origin := range face.Origins() {
-			if origin.Role == role && origin.producer == body.origin.producer {
-				return facetGroup{origins: face.Origins(), planar: face.isPlanar()}, true
+		for _, origin := range face.originRefs() {
+			if origin.Role == role && origin.Producer == body.n.Origin.Producer {
+				return facetGroup{origins: face.originRefs(), planar: face.isPlanar()}, true
 			}
 		}
 	}
@@ -61,7 +62,7 @@ func obliqueBossFaceGroup(body *Body, role string) (facetGroup, bool) {
 }
 
 func obliqueBossHasOrigin(face *Face, group facetGroup) bool {
-	for _, origin := range face.Origins() {
+	for _, origin := range face.originRefs() {
 		if slices.Contains(group.origins, origin) {
 			return true
 		}
@@ -170,7 +171,7 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 		vertexBound[i] = bound
 	}
 	ref := b.doc.nextProducerID()
-	mesh.groups[8].origins[0].producer = ref
+	mesh.groups[8].origins[0].Producer = ref
 	result, err := buildFacetedBodyWithProof(ctx, b.doc, ref, facetedPayload{
 		verts: mesh.verts, tris: mesh.tris, src: mesh.src, groups: mesh.groups,
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
@@ -308,7 +309,7 @@ func buildObliqueBossFilletMesh(ctx context.Context,
 		}
 		m.groups = append(m.groups, group)
 	}
-	m.groups = append(m.groups, facetGroup{origins: []FeatureRef{{Role: "junctionFillet"}}})
+	m.groups = append(m.groups, facetGroup{origins: []provenance.Ref{{Role: "junctionFillet"}}})
 	samples := obliqueBossSamples(rec, radius)
 	n := len(samples)
 	outer, lower, plane, side, far := make([]int, n), make([]int, n),

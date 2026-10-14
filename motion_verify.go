@@ -385,11 +385,11 @@ func (r *motionRun) readBodies(groups [][]*Body) {
 	// distinct from static geometry without changing the caller's document.
 	live := r.d.liveBodies()
 	r.transient = &Document{
-		bodies:       live,
-		nextProducer: r.d.nextProducer,
+		bodies: live,
 		n: topo.Document{
-			NextLevel: r.d.n.NextLevel,
-			NextCurve: r.d.n.NextCurve,
+			NextLevel:    r.d.n.NextLevel,
+			NextCurve:    r.d.n.NextCurve,
+			NextProducer: r.d.n.NextProducer,
 		},
 	}
 	isMover := make(map[*Body]struct{})

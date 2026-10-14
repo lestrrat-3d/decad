@@ -64,7 +64,7 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 		part, ok := tool.payload.(facetedPayload)
 		if !ok || part.copyLineage == nil ||
 			part.copyLineage.source != set.source ||
-			part.copyLineage.sourceProducer != set.source.origin.producer ||
+			part.copyLineage.sourceProducer != set.source.n.Origin.Producer ||
 			part.copyLineage.sourcePlacement != first.xform ||
 			part.copyLineage.targetPlacement != part.xform ||
 			part.copyLineage.motion != set.moves[i] ||

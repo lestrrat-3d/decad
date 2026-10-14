@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -51,12 +52,12 @@ func TestRevolveLoftFacesConstantXRejectsSubstitutedSourceRef(t *testing.T) {
 		maps: make([]loftFaceMap, 3),
 	}
 	trim.base.groups = make([]facetGroup, 2*segmentCount+2)
-	bound := make([][]FeatureRef, 2)
+	bound := make([][]provenance.Ref, 2)
 	for band := range bound {
-		bound[band] = make([]FeatureRef, segmentCount)
+		bound[band] = make([]provenance.Ref, segmentCount)
 		for segment := range bound[band] {
-			ref := FeatureRef{producer: 7, Role: fmt.Sprintf("side(%d,%d)", band, segment)}
-			trim.base.groups[band*segmentCount+segment].origins = []FeatureRef{ref}
+			ref := provenance.Ref{Producer: 7, Role: fmt.Sprintf("side(%d,%d)", band, segment)}
+			trim.base.groups[band*segmentCount+segment].origins = []provenance.Ref{ref}
 			bound[band][segment] = ref
 		}
 	}
@@ -160,7 +161,7 @@ func TestRevolveLoftFacesVerticalClipsLiveSourceSpan(t *testing.T) {
 	span := freeform.BezierSpan{{U: one, V: zero}, {U: big.NewRat(3, 1), V: zero}}
 	trim := &loftFacesTrimRecord{maps: []loftFaceMap{makeMap(big.NewRat(5, 1)), makeMap(big.NewRat(6, 1))}}
 	cell, ok := revolveLoftFacesVerticalBezier(trim, 3, 0, 0,
-		big.NewRat(1, 2), big.NewRat(3, 2), big.NewRat(5, 2), FeatureRef{}, span)
+		big.NewRat(1, 2), big.NewRat(3, 2), big.NewRat(5, 2), provenance.Ref{}, span)
 	require.True(t, ok)
 	require.Zero(t, cell.lower.Side)
 	require.Equal(t, -1, cell.lower.Before)

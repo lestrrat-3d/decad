@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -86,7 +88,7 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		original := shell.faces
 		defer func() { shell.faces = original }()
 		shell.faces = append(slices.Clone(original), &Face{
-			body: blank, origins: []FeatureRef{{Role: "unmatched side"}},
+			body: blank, n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}},
 		})
 		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
 		if err != nil || complete {
@@ -131,7 +133,7 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 	})
 	t.Run("wrong vertical triangle owner", func(t *testing.T) {
 		contactIndex := -1
-		var ref FeatureRef
+		var ref provenance.Ref
 		var owner *Face
 		for _, entry := range manifest.vertical {
 			if entry.outcome != revolveLoftFacesVerticalContact {
@@ -156,7 +158,7 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		})
 	})
 	t.Run("wrong nonvertical triangle owner", func(t *testing.T) {
-		var ref FeatureRef
+		var ref provenance.Ref
 		var owner *Face
 		for _, entry := range manifest.nonvertical {
 			for _, cell := range entry.cells {
@@ -226,7 +228,7 @@ func mutateCurvedCapFaceOwner(t *testing.T, tooth *Body,
 	assertChangedCurvedTrimRefuses(t, tooth, proof)
 }
 
-func rejectChangedCurvedSourceOwner(t *testing.T, tooth *Body, ref FeatureRef,
+func rejectChangedCurvedSourceOwner(t *testing.T, tooth *Body, ref provenance.Ref,
 	owner *Face, accepts func() bool) {
 	t.Helper()
 	original := tooth.payload

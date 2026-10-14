@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -14,7 +15,7 @@ import (
 // have rational coordinates. The referenced LoftFaces face is live.
 type revolveLoftFacesToolCapBoundary struct {
 	segment, span int
-	ref           FeatureRef
+	ref           provenance.Ref
 	face          *Face
 	parameter     loftFaceInterval
 	box           [3]loftFaceInterval
@@ -221,7 +222,7 @@ func revolveLoftFacesToolCapSourceCurrent(ctx context.Context,
 }
 
 func revolveLoftFacesToolCapFaceOriginCurrent(circle revolveLoftFacesToolCapCircle) bool {
-	return circle.capFace != nil && slices.Contains(circle.capFace.Origins(), circle.capOrigin)
+	return circle.capFace != nil && slices.Contains(circle.capFace.originRefs(), circle.capOrigin)
 }
 
 func revolveLoftFacesToolBoundaryOutward(edge sketch.BoundaryEdge,

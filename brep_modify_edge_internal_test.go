@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
@@ -171,8 +172,8 @@ func requireChord(t *testing.T, loop loopRecord, a, b planePoint) {
 func blendFaces(body *Body, kind string) []*Face {
 	var out []*Face
 	for _, f := range body.Faces() {
-		for _, o := range f.Origins() {
-			if o.producer == body.origin.producer && strings.HasPrefix(o.Role, kind+"(") {
+		for _, o := range f.originRefs() {
+			if o.Producer == body.n.Origin.Producer && strings.HasPrefix(o.Role, kind+"(") {
 				out = append(out, f)
 			}
 		}
@@ -320,11 +321,11 @@ func TestBrepModifyEdgeFilletConcavePlanarEdge(t *testing.T) {
 // floor(0,0).
 func pocketFloorEdges(t *testing.T, pocket *Body, dir r3.Vec, n int) *EdgeQuery {
 	t.Helper()
-	floor := FeatureRef{producer: pocket.origin.producer, Role: "floor(0,0)"}
+	floor := provenance.Ref{Producer: pocket.n.Origin.Producer, Role: "floor(0,0)"}
 	if dir == (r3.Vec{}) {
-		return Edges(CreatedBy(floor)).Exactly(n)
+		return Edges(CreatedBy(featureRefOf(floor))).Exactly(n)
 	}
-	return Edges(ParallelTo(dir), CreatedBy(floor)).Exactly(n)
+	return Edges(ParallelTo(dir), CreatedBy(featureRefOf(floor))).Exactly(n)
 }
 
 // TestBrepModifyEdgeFilletPocketFloorEdges rounds the Pocket's two floor

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 )
@@ -42,11 +43,11 @@ func twistShellFacetedBody(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	groups := []facetGroup{
-		{origins: []FeatureRef{{producer: ref, Role: prismOuterFirstSideRole}}},
-		{origins: []FeatureRef{{producer: ref, Role: "shellSide(0,0)"}}},
-		{origins: []FeatureRef{{producer: ref, Role: roleCapStart}}, planar: true},
-		{origins: []FeatureRef{{producer: ref, Role: roleShellCap}}, planar: true},
-		{origins: []FeatureRef{{producer: ref, Role: "rim(0)"}}, planar: true},
+		{origins: []provenance.Ref{{Producer: ref, Role: prismOuterFirstSideRole}}},
+		{origins: []provenance.Ref{{Producer: ref, Role: "shellSide(0,0)"}}},
+		{origins: []provenance.Ref{{Producer: ref, Role: roleCapStart}}, planar: true},
+		{origins: []provenance.Ref{{Producer: ref, Role: roleShellCap}}, planar: true},
+		{origins: []provenance.Ref{{Producer: ref, Role: "rim(0)"}}, planar: true},
 	}
 	payload := facetedPayload{
 		verts: held.Verts, vertexBound: vertexBound, tris: held.Tris,

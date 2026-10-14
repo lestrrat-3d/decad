@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -17,7 +18,7 @@ import (
 type revolveLoftFacesVerticalCell struct {
 	segment, span, band int
 	source              freeform.BezierSpan // nil for a whole live Sketch arc
-	ref                 FeatureRef
+	ref                 provenance.Ref
 	face                *Face
 	lower, upper        loftface.VerticalLimit
 	retained            []loftface.VerticalPiece
@@ -26,7 +27,7 @@ type revolveLoftFacesVerticalCell struct {
 type revolveLoftFacesVerticalSide struct {
 	*revolveLoftFacesConstantXSource
 	face    *Face
-	origins []FeatureRef
+	origins []provenance.Ref
 }
 
 type revolveLoftFacesVerticalOutcome uint8
@@ -69,7 +70,7 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
 	face, ok := revolveSpanFace(proof.blank, section)
-	if !ok || face != section.face || !verticalOriginsMatch(face.Origins(), section.origins) {
+	if !ok || face != section.face || !verticalOriginsMatch(face.originRefs(), section.origins) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
 	payload, ok := proof.tooth.payload.(facetedPayload)
@@ -88,7 +89,7 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 	}
 	return &revolveLoftFacesVerticalSide{
 		revolveLoftFacesConstantXSource: source, face: face,
-		origins: append([]FeatureRef(nil), section.origins...),
+		origins: append([]provenance.Ref(nil), section.origins...),
 	}, revolveLoftFacesVerticalContact, nil
 }
 
@@ -207,7 +208,7 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 // A proof's cached refs can only name the live source segment for their
 // band. Rebuild from the producer groups before exporting any contact cell.
 func revolveLoftFacesSourceRefsCurrent(trim *loftFacesTrimRecord, tooth *Body,
-	bound [][]FeatureRef) bool {
+	bound [][]provenance.Ref) bool {
 	if trim == nil || tooth == nil {
 		return false
 	}
@@ -228,7 +229,7 @@ func revolveLoftFacesSourceRefsCurrent(trim *loftFacesTrimRecord, tooth *Body,
 	return true
 }
 
-func revolveLoftFacesVerticalLiveFace(tooth *Body, ref FeatureRef) *Face {
+func revolveLoftFacesVerticalLiveFace(tooth *Body, ref provenance.Ref) *Face {
 	if tooth == nil {
 		return nil
 	}
@@ -245,7 +246,7 @@ func revolveLoftFacesVerticalLiveFace(tooth *Body, ref FeatureRef) *Face {
 	return face
 }
 
-func verticalOriginsMatch(actual, recorded []FeatureRef) bool {
+func verticalOriginsMatch(actual, recorded []provenance.Ref) bool {
 	if len(actual) != len(recorded) {
 		return false
 	}
@@ -295,14 +296,14 @@ func revolveLoftFacesVerticalLimits(trim *loftFacesTrimRecord,
 
 func revolveLoftFacesVerticalBezier(trim *loftFacesTrimRecord,
 	segment, spanIndex, band int, time, lower, upper *big.Rat,
-	ref FeatureRef, span freeform.BezierSpan) (revolveLoftFacesVerticalCell, bool) {
+	ref provenance.Ref, span freeform.BezierSpan) (revolveLoftFacesVerticalCell, bool) {
 	return revolveLoftFacesVerticalBezierWith(nil, trim, segment, spanIndex, band,
 		time, lower, upper, ref, span)
 }
 
 func revolveLoftFacesVerticalBezierWith(memo *loftface.MeridianMemo, trim *loftFacesTrimRecord,
 	segment, spanIndex, band int, time, lower, upper *big.Rat,
-	ref FeatureRef, span freeform.BezierSpan) (revolveLoftFacesVerticalCell, bool) {
+	ref provenance.Ref, span freeform.BezierSpan) (revolveLoftFacesVerticalCell, bool) {
 	cell := revolveLoftFacesVerticalCell{segment: segment, span: spanIndex,
 		band: band, source: span, ref: ref}
 	first, last := trim.maps[band], trim.maps[band+1]
@@ -336,7 +337,7 @@ func revolveLoftFacesVerticalBezierWith(memo *loftface.MeridianMemo, trim *loftF
 // exact squared radius across all of its source parameters at this time.
 func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 	x *big.Rat, segment, band int, time, lower, upper *big.Rat,
-	ref FeatureRef) (revolveLoftFacesVerticalCell, bool) {
+	ref provenance.Ref) (revolveLoftFacesVerticalCell, bool) {
 	cell := revolveLoftFacesVerticalCell{segment: segment, band: band, ref: ref}
 	unit := revolveSectionSpan{start: planePoint{V: 1}, end: planePoint{U: 1, V: 1}}
 	radial, ok := mappedArcRadialTimeBand(ctx, trim, segment, band, unit)

@@ -516,23 +516,23 @@ func TestCoilRefusals(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			s, p := coilSquare(t)
 			doc := New()
-			before := doc.nextProducer
+			before := doc.n.NextProducer
 			err := c.run(doc, s, p)
 			require.ErrorIs(t, err, c.sentinel)
 			require.Empty(t, doc.Bodies())
-			require.Equal(t, before, doc.nextProducer)
+			require.Equal(t, before, doc.n.NextProducer)
 		})
 	}
 
 	refuse := func(t *testing.T, sentinel error, says string, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value) {
 		t.Helper()
 		doc := New()
-		before := doc.nextProducer
+		before := doc.n.NextProducer
 		_, err := Coil(t.Context(), doc, s, p, axis, pitch, turns)
 		require.ErrorIs(t, err, sentinel)
 		require.ErrorContains(t, err, says)
 		require.Empty(t, doc.Bodies())
-		require.Equal(t, before, doc.nextProducer)
+		require.Equal(t, before, doc.n.NextProducer)
 	}
 	t.Run("CS5 touching the axis", func(t *testing.T) {
 		s, p := coilLoopsSketch(t, [][2]float64{{0, 0}, {1, 0}, {1, 1}, {0, 1}})

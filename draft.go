@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -24,8 +25,8 @@ const roleSidePrefix = "side("
 
 // isWallOf reports whether f carries a side(i, j) role minted by producer.
 func (f *Face) isWallOf(producer producerID) bool {
-	for _, o := range f.origins {
-		if o.producer == producer && strings.HasPrefix(o.Role, roleSidePrefix) {
+	for _, o := range f.n.Origins {
+		if o.Producer == producer && strings.HasPrefix(o.Role, roleSidePrefix) {
 			return true
 		}
 	}
@@ -172,7 +173,7 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 	if err := requireFlatAnalyticNeutral(neutralFace); err != nil {
 		return nil, err
 	}
-	producer := b.origin.producer
+	producer := b.n.Origin.Producer
 	nearStart, err := neutralCap(neutralFace, b)
 	if err != nil {
 		return nil, err
@@ -292,16 +293,16 @@ func neutralCap(f *Face, b *Body) (bool, error) {
 		return false, fmt.Errorf(`%w: the neutral face must be a cap of the receiver, and it belongs to another body (draft SD20)`, ErrUnsupported)
 	}
 	switch {
-	case f.hasRole(b.origin.producer, roleCapStart):
+	case f.hasRole(b.n.Origin.Producer, roleCapStart):
 		return true, nil
-	case f.hasRole(b.origin.producer, roleCapEnd):
+	case f.hasRole(b.n.Origin.Producer, roleCapEnd):
 		return false, nil
 	}
 	return false, fmt.Errorf(`%w: the neutral face must be the receiver's capStart or capEnd; a wall or any other face is staged (draft SD20)`, ErrUnsupported)
 }
 
 func (f *Face) hasRole(producer producerID, role string) bool {
-	return slices.Contains(f.origins, FeatureRef{producer: producer, Role: role})
+	return slices.Contains(f.n.Origins, provenance.Ref{Producer: producer, Role: role})
 }
 
 // draftKeptWalls is SD22 then SD21 (docs/draft-design.md §10.2): a selected
@@ -327,8 +328,8 @@ func draftKeptWalls(b *Body, producer producerID, selected []*Face) (map[offset2
 		if !f.isWallOf(producer) || slices.Contains(selected, f) {
 			continue
 		}
-		for _, o := range f.origins {
-			if o.producer != producer {
+		for _, o := range f.n.Origins {
+			if o.Producer != producer {
 				continue
 			}
 			var li, j int

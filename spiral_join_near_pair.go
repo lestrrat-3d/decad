@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/provenance"
 )
 
 // spiralNearPairKind is the source verdict for one otherwise undecidable
@@ -56,13 +58,13 @@ func spiralNearTrimSides(proof *spiralFirstJoinSource) bool {
 		spiralFiniteConeSide(proof.tooth.heel, blank.toeRoot, blank.ded, -1)
 }
 
-func spiralUniqueFaceWithOrigin(body *Body, want FeatureRef) *Face {
+func spiralUniqueFaceWithOrigin(body *Body, want provenance.Ref) *Face {
 	if body == nil {
 		return nil
 	}
 	var result *Face
 	for _, face := range body.Faces() {
-		for _, origin := range face.Origins() {
+		for _, origin := range face.originRefs() {
 			if origin != want {
 				continue
 			}
@@ -78,12 +80,12 @@ func spiralUniqueFaceWithOrigin(body *Body, want FeatureRef) *Face {
 // The original LoftFaces groups carry the producer identity that the two
 // cone Booleans preserve on a surviving side. Do not infer it from a nearby
 // polygon or from the result face's position in its face list.
-func spiralOriginalSideRef(trim *loftFacesTrimRecord, band, segment int) (FeatureRef, bool) {
+func spiralOriginalSideRef(trim *loftFacesTrimRecord, band, segment int) (provenance.Ref, bool) {
 	if trim == nil || band < 0 || band >= 8 || segment < 0 || segment >= 6 {
-		return FeatureRef{}, false
+		return provenance.Ref{}, false
 	}
 	role := fmt.Sprintf("side(%d,%d)", band, segment)
-	var result FeatureRef
+	var result provenance.Ref
 	found := false
 	for _, group := range trim.base.groups {
 		for _, origin := range group.origins {
@@ -91,7 +93,7 @@ func spiralOriginalSideRef(trim *loftFacesTrimRecord, band, segment int) (Featur
 				continue
 			}
 			if found && result != origin {
-				return FeatureRef{}, false
+				return provenance.Ref{}, false
 			}
 			result, found = origin, true
 		}
@@ -99,9 +101,9 @@ func spiralOriginalSideRef(trim *loftFacesTrimRecord, band, segment int) (Featur
 	return result, found
 }
 
-func spiralCapGroupRef(groups []facetGroup, group int) (FeatureRef, bool) {
+func spiralCapGroupRef(groups []facetGroup, group int) (provenance.Ref, bool) {
 	if group < 0 || group >= len(groups) || len(groups[group].origins) != 1 {
-		return FeatureRef{}, false
+		return provenance.Ref{}, false
 	}
 	return groups[group].origins[0], true
 }
@@ -122,7 +124,7 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 		return nil, false
 	}
 	blankFace := func(edge int) *Face {
-		return spiralUniqueFaceWithOrigin(blank, FeatureRef{producer: blank.origin.producer,
+		return spiralUniqueFaceWithOrigin(blank, provenance.Ref{Producer: blank.n.Origin.Producer,
 			Role: fmt.Sprintf("side(0,%d)", proof.blank.edgeIndex[edge])})
 	}
 	heel, root, toe := blankFace(2), blankFace(3), blankFace(4)

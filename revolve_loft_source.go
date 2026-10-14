@@ -7,6 +7,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
@@ -21,7 +22,7 @@ type revolveSectionSpan struct {
 	start, end  planePoint
 	sourceEdges []int
 	face        *Face
-	origins     []FeatureRef
+	origins     []provenance.Ref
 }
 
 // revolveSectionCertificate describes the authenticated finite section and
@@ -121,7 +122,7 @@ func recordedRevolveSection(blank *Body) ([]revolveSectionSpan, int, r3.Frame, b
 			return nil, -1, empty, false
 		}
 		usedFaces[face] = struct{}{}
-		span.face, span.origins = face, face.Origins()
+		span.face, span.origins = face, face.originRefs()
 	}
 	if axisSpan < 0 {
 		return nil, -1, empty, false
@@ -163,14 +164,14 @@ func revolveSpanFace(blank *Body, span revolveSectionSpan) (*Face, bool) {
 	}
 	var matched *Face
 	for _, face := range blank.Faces() {
-		origins := face.Origins()
+		origins := face.originRefs()
 		if len(origins) != len(roles) {
 			continue
 		}
 		seen := make(map[string]struct{}, len(origins))
 		valid := true
 		for _, origin := range origins {
-			if origin.producer != blank.origin.producer {
+			if origin.Producer != blank.n.Origin.Producer {
 				valid = false
 				break
 			}

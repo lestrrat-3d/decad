@@ -39,7 +39,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 				fmt.Errorf("%w: circular blank changed its three source faces", ErrUnsupported)
 		}
 		blankGroup[group] = len(mesh.groups)
-		mesh.groups = append(mesh.groups, facetGroup{origins: face.Origins(), planar: group != 0})
+		mesh.groups = append(mesh.groups, facetGroup{origins: face.originRefs(), planar: group != 0})
 	}
 	for _, group := range blankGroup {
 		if group < 0 {
@@ -67,7 +67,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 				if !ok {
 					group = len(mesh.groups)
 					groups[face] = group
-					mesh.groups = append(mesh.groups, facetGroup{origins: face.Origins()})
+					mesh.groups = append(mesh.groups, facetGroup{origins: face.originRefs()})
 				}
 				old := part.mesh.n.Triangles[k]
 				var mapped [3]int

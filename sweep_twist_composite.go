@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -96,7 +97,7 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 	}
 	byRole := map[string]*Face{}
 	for _, face := range body.Faces() {
-		for _, origin := range face.origins {
+		for _, origin := range face.n.Origins {
 			byRole[origin.Role] = face
 		}
 	}
@@ -362,7 +363,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 			proofbound.RatFloatUp(length.Hi), longitudinalExtra, poly.PerimeterUpper)
 	}
 	for _, face := range body.Faces() {
-		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {
+		if face.n.Origins[0].Role != roleCapStart && face.n.Origins[0].Role != roleCapEnd {
 			face.n.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 		}
 		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, area, areaBound)
@@ -536,8 +537,7 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 				return fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
 			}
 			face := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}},
-				origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}},
-				body:    body, n: topo.Face{Area: area, AreaBound: areaBound, Surface: surfacegeom.Faceted{}},
+				body: body, n: topo.Face{Area: area, AreaBound: areaBound, Surface: surfacegeom.Faceted{}, Origins: []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}}},
 			}
 			merged = append(merged, face)
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -24,7 +25,7 @@ type middleSidePrep struct {
 	ideal     []proofarith.Xpt
 	middle    [2]int
 	clipBound float64
-	faces     map[FeatureRef][]loftCylinderChamferToothFace
+	faces     map[provenance.Ref][]loftCylinderChamferToothFace
 	old       *loftmesh.LoftAuditData
 	oldBoxes  [][2]r3.Vec
 	grid      *loftmesh.ChamferBoxGrid

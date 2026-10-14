@@ -45,7 +45,7 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 	}
 	face, live := revolveSpanFace(proof.blank, span)
 	if !live || face != circle.blankFace ||
-		!verticalOriginsMatch(face.Origins(), span.origins) {
+		!verticalOriginsMatch(face.originRefs(), span.origins) {
 		return nil, false, nil
 	}
 	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(trim.heel, span)

@@ -152,8 +152,8 @@ func (d *Document) resolveJoinWalls(b *Body, plane MirrorPlane) ([]joinWall, err
 	var walls []joinWall
 	for fi, f := range faces {
 		found := false
-		for _, o := range f.origins {
-			if o.producer != producer {
+		for _, o := range f.n.Origins {
+			if o.Producer != producer {
 				continue
 			}
 			var k, i, j int

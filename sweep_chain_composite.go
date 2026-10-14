@@ -8,9 +8,11 @@ import (
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/sweeptransport"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -130,7 +132,7 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 	rewriteCompositeEdge(parts[0], previous.end, following.start)
 	following.start.faces = append(following.start.faces, previous.end.faces...)
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
 	faces := []*Face{parts[0].Faces()[0], parts[1].Faces()[0]}
 	for i, face := range faces {
 		rewriteCompositeSideRoles(face, i)

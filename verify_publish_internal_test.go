@@ -805,13 +805,12 @@ func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
 	built := rectangularPrism(t, 100, 60, 10)
 	body := &Body{
 		doc:      built.doc,
-		origin:   built.origin,
 		lumps:    built.lumps,
 		volume:   built.volume,
 		area:     built.area,
 		centroid: built.centroid,
 		bounds:   built.bounds,
-		n:        topo.Body{Solid: built.n.Solid},
+		n:        topo.Body{Solid: built.n.Solid, Origin: built.n.Origin},
 	}
 
 	res := publishBody(t, body,

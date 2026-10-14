@@ -103,12 +103,12 @@ type radiusOutcome struct {
 
 // facesByRole indexes a body's faces by their own-step feature role.
 func facesByRole(b *Body) map[string]*Face {
-	step := b.origin.producer
+	step := b.n.Origin.Producer
 	faces := b.Faces()
 	faceRoles := make([][]string, len(faces))
 	for i, f := range faces {
-		for _, o := range f.origins {
-			if o.producer == step {
+		for _, o := range f.n.Origins {
+			if o.Producer == step {
 				faceRoles[i] = append(faceRoles[i], o.Role)
 			}
 		}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -56,7 +57,7 @@ func internalHoledPlateBody(t *testing.T, doc *Document) *Body {
 // build names the walk or cap it came from.
 func roleOf(t *testing.T, f *Face) string {
 	t.Helper()
-	origins := f.Origins()
+	origins := f.originRefs()
 	require.NotEmpty(t, origins)
 	return origins[0].Role
 }
@@ -226,7 +227,7 @@ func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	disc := internalDiscBody(t, doc, 8, 10)
-	capSel := Faces(FaceCreatedBy(FeatureRef{producer: disc.Origin().producer, Role: roleCapEnd}))
+	capSel := Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: disc.n.Origin.Producer, Role: roleCapEnd})))
 	cup, err := Shell(t.Context(), disc, capSel, units.Millimeters(1))
 	require.NoError(t, err)
 	_, ok := cup.payload.(cupPayload)

@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -44,7 +45,7 @@ type revolveLoftFacesSourceCertificate struct {
 	heelX      *big.Rat
 	crossings  [2]revolveLoftFacesCrossing
 	sides      []int
-	sourceRefs [][]FeatureRef
+	sourceRefs [][]provenance.Ref
 	toeFace    *Face
 	heelFace   *Face
 }
@@ -399,15 +400,15 @@ func revolveLoftFacesStationSide(ctx context.Context, trim *loftFacesTrimRecord,
 	return 1
 }
 
-func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]FeatureRef, bool) {
+func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]provenance.Ref, bool) {
 	n := len(trim.source.profile.Outer.Segments)
 	if len(trim.base.groups) != (len(trim.maps)-1)*n+2 {
 		return nil, false
 	}
-	refs := make([][]FeatureRef, len(trim.maps)-1)
+	refs := make([][]provenance.Ref, len(trim.maps)-1)
 	var producer producerID
 	for band := range refs {
-		refs[band] = make([]FeatureRef, n)
+		refs[band] = make([]provenance.Ref, n)
 		for segment := range n {
 			group := trim.base.groups[band*n+segment]
 			if len(group.origins) != 1 ||
@@ -416,16 +417,16 @@ func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]Fea
 			}
 			ref := group.origins[0]
 			if band == 0 && segment == 0 {
-				producer = ref.producer
-			} else if ref.producer != producer {
+				producer = ref.Producer
+			} else if ref.Producer != producer {
 				return nil, false
 			}
 			refs[band][segment] = ref
 		}
 	}
 	for _, face := range tooth.Faces() {
-		for _, origin := range face.Origins() {
-			if origin.producer != producer {
+		for _, origin := range face.originRefs() {
+			if origin.Producer != producer {
 				continue
 			}
 			found := false
@@ -442,10 +443,10 @@ func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]Fea
 	return refs, true
 }
 
-func revolveLoftFacesUniqueOriginFace(body *Body, want FeatureRef) (*Face, bool) {
+func revolveLoftFacesUniqueOriginFace(body *Body, want provenance.Ref) (*Face, bool) {
 	var result *Face
 	for _, face := range body.Faces() {
-		for _, origin := range face.Origins() {
+		for _, origin := range face.originRefs() {
 			if origin != want {
 				continue
 			}
@@ -458,7 +459,7 @@ func revolveLoftFacesUniqueOriginFace(body *Body, want FeatureRef) (*Face, bool)
 	return result, true
 }
 
-func revolveLoftFacesRefFaceIndex(p facetedPayload, want FeatureRef, faceCount int) (int, bool) {
+func revolveLoftFacesRefFaceIndex(p facetedPayload, want provenance.Ref, faceCount int) (int, bool) {
 	if len(p.src) != len(p.tris) || len(p.faceOf) != len(p.tris) {
 		return -1, false
 	}

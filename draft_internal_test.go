@@ -5,6 +5,8 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,11 +38,11 @@ func TestDraftReceiverClasses(t *testing.T) {
 // is no wall is SD21.
 func TestDraftKeptWallsReadsRoles(t *testing.T) {
 	t.Parallel()
-	face := func(origins ...FeatureRef) *Face { return &Face{origins: origins} }
-	own := face(FeatureRef{producer: 7, Role: "side(0,1)"})
-	coalesced := face(FeatureRef{producer: 7, Role: "side(1,2)"}, FeatureRef{producer: 7, Role: "side(1,3)"})
-	foreign := face(FeatureRef{producer: 8, Role: "side(0,1)"})
-	capStart := face(FeatureRef{producer: 7, Role: roleCapStart})
+	face := func(origins ...provenance.Ref) *Face { return &Face{n: topo.Face{Origins: origins}} }
+	own := face(provenance.Ref{Producer: 7, Role: "side(0,1)"})
+	coalesced := face(provenance.Ref{Producer: 7, Role: "side(1,2)"}, provenance.Ref{Producer: 7, Role: "side(1,3)"})
+	foreign := face(provenance.Ref{Producer: 8, Role: "side(0,1)"})
+	capStart := face(provenance.Ref{Producer: 7, Role: roleCapStart})
 	require.True(t, own.isWallOf(7))
 	require.False(t, foreign.isWallOf(7))
 	require.False(t, capStart.isWallOf(7))

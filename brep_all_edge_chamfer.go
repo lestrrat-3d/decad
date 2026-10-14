@@ -9,6 +9,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -353,7 +354,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}, kind: BodySolid}
+	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySolid}
 	polygons := geometry.polygons()
 	vertices := map[r3.Vec]*Vertex{}
 	vertex := func(v r3.Vec) *Vertex {
@@ -378,8 +379,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf(`%w: all-edge chamfer plane: %s`, ErrUnsupported, err)
 		}
 		face := &Face{
-			origins: []FeatureRef{{producer: ref, Role: axisMap.faceRole(polygonIndex)}},
-			body:    body, n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound, Surface: surfacegeom.Plane{Frame: frame}}}
+			body: body, n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound, Surface: surfacegeom.Plane{Frame: frame}, Origins: []provenance.Ref{{Producer: ref, Role: axisMap.faceRole(polygonIndex)}}}}
 		loop := &Loop{n: topo.Loop{Outer: true}}
 		for i, a := range points {
 			b := points[(i+1)%len(points)]
@@ -450,8 +450,8 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 		AreaBound: wallArea.Bound,
 		Surface: surfacegeom.Cylinder{Origin: r3.NewVec(p.center[0], p.box[1][0], p.center[1]),
 			Axis: r3.NewVec(0, 1, 0), Radius: units.Millimeters(p.radius)},
-	},
-		origins: []FeatureRef{{producer: ref, Role: "wall(6)"}}, body: body}
+		Origins: []provenance.Ref{{Producer: ref, Role: "wall(6)"}},
+	}, body: body}
 	for side := range 2 {
 		face := faces[2+side]
 		area := proofbound.BoundedSub(proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound), disk)

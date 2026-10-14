@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -425,7 +426,7 @@ func straightSweepCapEdge(edge *Edge) bool {
 	}
 	capRole, wallRole := false, false
 	for _, face := range facing {
-		for _, origin := range face.origins {
+		for _, origin := range face.n.Origins {
 			switch {
 			case origin.Role == roleCapStart || origin.Role == roleCapEnd:
 				capRole = true
@@ -636,12 +637,12 @@ func addBlendRoles(ctx context.Context, body *Body, ref producerID, blendSegs []
 				if err := ctx.Err(); err != nil {
 					return err
 				}
-				for _, o := range f.origins {
+				for _, o := range f.n.Origins {
 					if err := ctx.Err(); err != nil {
 						return err
 					}
-					if o.producer == ref && o.Role == side {
-						f.origins = append(f.origins, FeatureRef{producer: ref, Role: blend})
+					if o.Producer == ref && o.Role == side {
+						f.n.Origins = append(f.n.Origins, provenance.Ref{Producer: ref, Role: blend})
 						break
 					}
 				}

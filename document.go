@@ -21,9 +21,8 @@ import (
 // safe to read from anywhere.
 type Document struct {
 	// n is the node data internal packages read and build (internal/topo).
-	n            topo.Document
-	bodies       []*Body
-	nextProducer producerID
+	n      topo.Document
+	bodies []*Body
 }
 
 // DocumentOption is a placeholder option tier for New. No options exist yet;
@@ -86,7 +85,7 @@ func Remove(b *Body) error {
 // (docs/evaluator-design.md §8): a failed evaluation never reaches here, so
 // a rejected operation leaves the document untouched.
 func (d *Document) commit(produced *Body, consumed ...*Body) {
-	d.nextProducer++
+	d.n.NextProducer++
 	d.n.Mu.Lock()
 	defer d.n.Mu.Unlock()
 	for _, c := range consumed {
@@ -106,7 +105,7 @@ func (d *Document) commit(produced *Body, consumed ...*Body) {
 // [Document.Bodies]'s point of view, exactly as commit already is for one
 // producer.
 func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
-	d.nextProducer += producerID(len(produced))
+	d.n.NextProducer += producerID(len(produced))
 	d.n.Mu.Lock()
 	defer d.n.Mu.Unlock()
 	for _, c := range consumed {
@@ -122,7 +121,7 @@ func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
 // identity those transient bodies minted roles under unique, so a later
 // producer never repeats one a result's provenance can carry.
 func (d *Document) commitSpan(produced *Body, span producerID, consumed ...*Body) {
-	d.nextProducer += span
+	d.n.NextProducer += span
 	d.n.Mu.Lock()
 	defer d.n.Mu.Unlock()
 	for _, c := range consumed {
@@ -152,7 +151,7 @@ func (d *Document) isLive(b *Body) bool {
 }
 
 // nextProducerID is the identity the next successful operation will occupy.
-func (d *Document) nextProducerID() producerID { return d.nextProducer }
+func (d *Document) nextProducerID() producerID { return d.n.NextProducer }
 
 // requireLive gates a body-consuming operation: the body must belong to this
 // document (ErrForeignBody) and still be part of the model (ErrRetiredBody).
@@ -376,4 +375,4 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactr
 }
 
 // originProducer returns the private identity of the operation that produced this body.
-func (b *Body) originProducer() producerID { return b.origin.producer }
+func (b *Body) originProducer() producerID { return b.n.Origin.Producer }

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -34,9 +35,9 @@ type brepRegion = brepgeom.Region
 func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi int, body *Body, ref producerID) (*Face, error) {
 	f := bp.faces[fi]
 	pp := f.view(bp.xform)
-	origins := []FeatureRef{{producer: ref, Role: f.role}}
+	origins := []provenance.Ref{{Producer: ref, Role: f.role}}
 	if f.blend != "" {
-		origins = append(origins, FeatureRef{producer: ref, Role: fmt.Sprintf("%s(%d)", f.blend, fi)})
+		origins = append(origins, provenance.Ref{Producer: ref, Role: fmt.Sprintf("%s(%d)", f.blend, fi)})
 	}
 	if f.planar() {
 		frame, err := pp.CapFrame(f.z0, !f.outward)
@@ -47,7 +48,7 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 		if err != nil {
 			return nil, err
 		}
-		return &Face{origins: origins, body: body,
+		return &Face{body: body,
 			n: topo.Face{
 				Area:          region.Published.Value,
 				AreaBound:     region.Published.Bound,
@@ -55,6 +56,7 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 				HasAxialDelta: true,
 				Surface:       surfacegeom.Plane{Frame: frame},
 				CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: f.z0},
+				Origins:       origins,
 			}}, nil
 	}
 	w := btopo.walls[fi]
@@ -64,11 +66,12 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 		return nil, err
 	}
 	area := brepgeom.WallArea(f.delta, f.z0, f.z1, f.z0Delta, f.z1Delta, w)
-	return &Face{origins: origins, body: body, n: topo.Face{
+	return &Face{body: body, n: topo.Face{
 		Area:      area.Value,
 		AreaBound: area.Bound,
 		Reversed:  reversed,
 		Surface:   surf,
+		Origins:   origins,
 	}}, nil
 }
 

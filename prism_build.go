@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -58,7 +59,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	if pp.SurfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: !pp.SurfaceResult}, kind: kind}
+	body := &Body{doc: d, n: topo.Body{Solid: !pp.SurfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: kind}
 
 	// The LEVEL half of the shared-denotation certificate (denotation.go):
 	// minted only when this payload's own section is drawn straight from its
@@ -91,8 +92,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		return nil, err
 	}
 	capStart := &Face{
-		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
-		body:    body,
+		body: body,
 		n: topo.Face{
 			Area:          ig.Area,
 			AreaBound:     ig.AreaBound,
@@ -100,11 +100,11 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: startFrame},
 			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z0},
+			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapStart}},
 		},
 	}
 	capEnd := &Face{
-		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
-		body:    body,
+		body: body,
 		n: topo.Face{
 			Area:          ig.Area,
 			AreaBound:     ig.AreaBound,
@@ -112,6 +112,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: endFrame},
 			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z1},
+			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
 		},
 	}
 
@@ -652,13 +653,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		}
 		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
 		face := &Face{
-			origins: origins,
-			body:    body,
+			body: body,
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
 				Reversed:  faceReversed,
 				Surface:   surf,
+				Origins:   origins,
 			},
 		}
 		if singleClosed {
@@ -691,13 +692,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	return faces, bottomCo, topCo, total, nil
 }
 
-func sideOriginsContext(ctx context.Context, ref producerID, roleLoop int, segs []int) ([]FeatureRef, error) {
-	origins := make([]FeatureRef, len(segs))
+func sideOriginsContext(ctx context.Context, ref producerID, roleLoop int, segs []int) ([]provenance.Ref, error) {
+	origins := make([]provenance.Ref, len(segs))
 	for oi, si := range segs {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		origins[oi] = FeatureRef{producer: ref, Role: fmt.Sprintf("side(%d,%d)", roleLoop, si)}
+		origins[oi] = provenance.Ref{Producer: ref, Role: fmt.Sprintf("side(%d,%d)", roleLoop, si)}
 	}
 	return origins, nil
 }

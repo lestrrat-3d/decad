@@ -272,8 +272,8 @@ func (a *asymmetricChamfer) capSetbacks(caps prismCaps, edges []*Edge, startLoop
 // built from, read from its side(i,j) roles under b's own producer.
 func faceSideSegments(b *Body, f *Face, li int) map[int]struct{} {
 	var roles []string
-	for _, o := range f.origins {
-		if o.producer == b.origin.producer {
+	for _, o := range f.n.Origins {
+		if o.Producer == b.n.Origin.Producer {
 			roles = append(roles, o.Role)
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -46,7 +47,7 @@ func coneFromFaceSelector(t *testing.T, blank *Body, a, b planePoint) FaceSelect
 	for _, span := range spans {
 		if span.face != nil && (span.start == a && span.end == b || span.start == b && span.end == a) {
 			require.NotEmpty(t, span.origins)
-			return Faces(FaceCreatedBy(span.origins[0])).Exactly(1)
+			return Faces(FaceCreatedBy(featureRefOf(span.origins[0]))).Exactly(1)
 		}
 	}
 	require.FailNow(t, "section side not found")
@@ -95,7 +96,7 @@ func TestConeFromFaceRefuses(t *testing.T) {
 		t.Helper()
 		for _, face := range body.Faces() {
 			if want(face.Surface()) {
-				return Faces(FaceCreatedBy(face.Origins()[0])).Exactly(1)
+				return Faces(FaceCreatedBy(featureRefOf(face.originRefs()[0]))).Exactly(1)
 			}
 		}
 		require.FailNow(t, "no face of the wanted kind")
@@ -204,7 +205,7 @@ func coneFromFaceShallowSection() []planePoint {
 
 // coneFromFaceNextFeatureOrigins revolves a small triangle into d and returns
 // the creating origins of its faces, which carry the producer numbering.
-func coneFromFaceNextFeatureOrigins(t *testing.T, d *Document) [][]FeatureRef {
+func coneFromFaceNextFeatureOrigins(t *testing.T, d *Document) [][]provenance.Ref {
 	t.Helper()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -223,9 +224,9 @@ func coneFromFaceNextFeatureOrigins(t *testing.T, d *Document) [][]FeatureRef {
 	next, err := Revolve(t.Context(), d, s, s.Profiles()[0],
 		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
 	require.NoError(t, err)
-	var origins [][]FeatureRef
+	var origins [][]provenance.Ref
 	for _, face := range next.Faces() {
-		origins = append(origins, face.Origins())
+		origins = append(origins, face.originRefs())
 	}
 	return origins
 }
@@ -336,7 +337,7 @@ func TestConeFromFaceMoreRefusals(t *testing.T) {
 	}
 	t.Run("non-revolve body", func(t *testing.T) {
 		box := extrudedBox(t)
-		sel := Faces(FaceCreatedBy(box.Faces()[0].Origins()[0])).Exactly(1)
+		sel := Faces(FaceCreatedBy(featureRefOf(box.Faces()[0].originRefs()[0]))).Exactly(1)
 		_, err := ConeFromFace(t.Context(), box, sel, far)
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.Len(t, box.doc.Bodies(), 1)
@@ -344,10 +345,10 @@ func TestConeFromFaceMoreRefusals(t *testing.T) {
 	t.Run("selectors", func(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, coneFromFaceSpiralSection())
 		before := blank.doc.nextProducerID()
-		foreign := extrudedBox(t).Faces()[0].Origins()[0]
+		foreign := extrudedBox(t).Faces()[0].originRefs()[0]
 		// A selector that matches nothing and one that fails its assertion
 		// are both cardinality failures of the implicit exactly-one.
-		_, err := ConeFromFace(t.Context(), blank, Faces(FaceCreatedBy(foreign)), far)
+		_, err := ConeFromFace(t.Context(), blank, Faces(FaceCreatedBy(featureRefOf(foreign))), far)
 		require.ErrorIs(t, err, ErrCardinality)
 		_, err = ConeFromFace(t.Context(), blank, Faces().Exactly(2), far)
 		require.ErrorIs(t, err, ErrCardinality)

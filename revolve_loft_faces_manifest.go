@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
+
+	"github.com/lestrrat-3d/decad/internal/provenance"
 )
 
 // This is a source-only record. A mapped cell names its complete Sketch
@@ -12,14 +14,14 @@ import (
 // Tool clipping and held-switch construction are separate certificates.
 type revolveLoftFacesSourceCell struct {
 	mapped revolveLoftFacesMappedCell
-	ref    FeatureRef
+	ref    provenance.Ref
 	face   *Face
 }
 
 type revolveLoftFacesNonverticalSide struct {
 	sectionIndex int
 	face         *Face
-	origins      []FeatureRef
+	origins      []provenance.Ref
 	cells        []revolveLoftFacesSourceCell
 }
 
@@ -86,7 +88,7 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 				ErrUnsupported, sectionIndex)
 		}
 		entry := revolveLoftFacesNonverticalSide{sectionIndex: sectionIndex,
-			face: section.face, origins: append([]FeatureRef(nil), section.origins...)}
+			face: section.face, origins: append([]provenance.Ref(nil), section.origins...)}
 		for _, cell := range mapped {
 			if cell.band < 0 || cell.band >= len(proof.sourceRefs) ||
 				cell.segment < 0 || cell.segment >= len(proof.sourceRefs[cell.band]) ||

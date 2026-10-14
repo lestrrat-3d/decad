@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -170,8 +171,8 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 	area := proofbound.BoundedScalar{}
 	newPatch := func(surf surfacegeom.Surface, loop *Loop, capV *Vertex, piece filletband.Piece) error {
 		held, bound := heldOf(filletband.PatchArea(piece, rIv))
-		face := &Face{origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
-			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: surf}}
+		face := &Face{
+			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(len(patches))}}}}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		nrm, err := face.NormalAt(capV.n.Position)
 		if err != nil {
