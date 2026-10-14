@@ -136,9 +136,14 @@ func ChamferMiddleHeldRootInside(verts []r3.Vec, tris [][3]int, walls, root int,
 // was proved inside R. Inside returns true for such a slab without the clip.
 // A gap between answered slabs is never inside the interval, so a query
 // spanning one runs the exact check.
+//
 // Every other query is computed. A memo belongs to one tooth in one proof
-// call; it checks that the tooth arguments did not change and computes
-// directly when they did. It is not safe for concurrent use.
+// call: one worker state of one reach proof, never across proofs. The tooth
+// meshes (verts and tris) must not change for the memo's lifetime; the memo
+// compares slice identity and lengths, never contents, so an in-place change
+// could return true where the direct check returns false. It computes
+// directly when the tooth arguments' identity, walls, root or radius differ.
+// It is not safe for concurrent use.
 type ChamferHeldRootMemo struct {
 	verts  []r3.Vec
 	tris   [][3]int
