@@ -37,13 +37,13 @@ func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 	if err != nil {
 		return nil, err
 	}
-	ref := b.doc.nextProducerID()
+	ref := b.n.Doc.NextProducer
 	held, err := twistsweep.TwistShellSampledMesh(ctx, stations, height, thickness,
 		p.angle, poly.AreaInterval)
 	if err != nil {
 		return nil, err
 	}
-	out, err := twistShellFacetedBody(ctx, b.doc, ref, held,
+	out, err := twistShellFacetedBody(ctx, documentHandle(b.n.Doc), ref, held,
 		poly.AreaInterval, source.Area, height, thickness)
 	if err != nil {
 		return nil, err
@@ -65,17 +65,17 @@ func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 		facets.meshBound = proofbound.AbsSumUpper(facets.meshBound, gap.Boundary)
 		facets.volSymDiff = proofbound.AbsSumUpper(facets.volSymDiff, gap.Volume)
 		facets.areaSlack = proofbound.AbsSumUpper(facets.areaSlack, gap.Area)
-		out, err = facets.placed(ctx, b.doc, ref, p.xform)
+		out, err = facets.placed(ctx, documentHandle(b.n.Doc), ref, p.xform)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if err := b.doc.requireLive(b); err != nil {
+	if err := documentHandle(b.n.Doc).requireLive(b); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.doc.commit(out, b)
+	documentHandle(b.n.Doc).commit(out, b)
 	return out, nil
 }

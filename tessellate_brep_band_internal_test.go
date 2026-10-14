@@ -138,7 +138,7 @@ func TestTessellateBrepBands(t *testing.T) {
 		t.Run(fx.name, func(t *testing.T) {
 			t.Parallel()
 			out := fx.build(t)
-			rep, err := out.doc.Verify(t.Context())
+			rep, err := documentHandle(out.n.Doc).Verify(t.Context())
 			require.NoError(t, err)
 			br, err := rep.ForBody(out)
 			require.NoError(t, err)
@@ -278,7 +278,7 @@ func TestBrepBandBooleanAdmission(t *testing.T) {
 	t.Parallel()
 	_, pocket := internalRouteEPocket(t)
 	top, _ := chamferLoopOf(t, pocket, routeEZ, r3.NewVec(0, 0, 10), 0, 1.5)
-	corner := internalOffsetBox(t, top.doc, 35, 35, 45, 45, -5, Distance{D: units.Millimeters(30), Dir: Along})
+	corner := internalOffsetBox(t, documentHandle(top.n.Doc), 35, 35, 45, 45, -5, Distance{D: units.Millimeters(30), Dir: Along})
 	got, err := Cut(t.Context(), top, corner)
 	require.NoError(t, err)
 	want := big.NewRat(14584625, 1000)
@@ -286,7 +286,7 @@ func TestBrepBandBooleanAdmission(t *testing.T) {
 
 	_, pocket = internalRouteEPocket(t)
 	mouth, _ := chamferLoopOf(t, pocket, routeEZ, r3.NewVec(0, 0, 10), 1, 1.5)
-	tool := internalOffsetBox(t, mouth.doc, 35, 35, 45, 45, -5, Distance{D: units.Millimeters(30), Dir: Along})
+	tool := internalOffsetBox(t, documentHandle(mouth.n.Doc), 35, 35, 45, 45, -5, Distance{D: units.Millimeters(30), Dir: Along})
 	_, err = Cut(t.Context(), mouth, tool)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "reflex corner")
@@ -309,7 +309,7 @@ func TestBrepBandSurveys(t *testing.T) {
 		pull  r3.Vec
 		lists int
 	}{{r3.NewVec(0, 0, 1), 0}, {r3.NewVec(0, 0, -1), 1}} {
-		rep, err := rim.doc.Verify(t.Context(), WithPullDirection(tc.pull))
+		rep, err := documentHandle(rim.n.Doc).Verify(t.Context(), WithPullDirection(tc.pull))
 		require.NoError(t, err)
 		br, err := rep.ForBody(rim)
 		require.NoError(t, err)
@@ -321,7 +321,7 @@ func TestBrepBandSurveys(t *testing.T) {
 	}
 
 	radius := func(body *Body) ScalarOutcome {
-		rep, err := body.doc.Verify(t.Context(), WithConcaveRadius())
+		rep, err := documentHandle(body.n.Doc).Verify(t.Context(), WithConcaveRadius())
 		require.NoError(t, err)
 		br, err := rep.ForBody(body)
 		require.NoError(t, err)

@@ -49,7 +49,7 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control ConeFromFace`, ErrDegenerate)
 	}
-	if body == nil || body.doc == nil {
+	if body == nil || body.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: ConeFromFace names no body of a document`, ErrDegenerate)
 	}
 	farMM, err := far.In(units.Millimeter)
@@ -59,7 +59,7 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d := body.doc
+	d := documentHandle(body.n.Doc)
 	if err := d.requireLive(body); err != nil {
 		return nil, err
 	}

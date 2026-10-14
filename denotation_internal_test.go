@@ -25,8 +25,8 @@ import (
 // refuses the pair regardless of what sameCurve says about the token alone.
 func TestSameCurveRequiresEqualXform(t *testing.T) {
 	t.Parallel()
-	d := &Document{}
-	tok := d.mintCurve()
+	d := bornDocument(&Document{})
+	tok := d.n.MintCurve()
 	require.NotZero(t, tok.ID)
 	require.True(t, sameCurve(tok, tok), "a token always denotes the same curve as itself")
 
@@ -47,22 +47,22 @@ func TestSameCurveRequiresEqualXform(t *testing.T) {
 func TestSameCurveDeclinesTheZeroToken(t *testing.T) {
 	t.Parallel()
 	require.False(t, sameCurve(curveToken{}, curveToken{}))
-	d := &Document{}
-	tok := d.mintCurve()
+	d := bornDocument(&Document{})
+	tok := d.n.MintCurve()
 	require.False(t, sameCurve(curveToken{}, tok))
 	require.False(t, sameCurve(tok, curveToken{}))
 }
 
-// TestMintCurveNeverRepeats is denotation.go's own soundness argument for
+// TestMintCurveNeverRepeats is the document node's own soundness argument for
 // two independently built bodies driven directly: two mints from the SAME
 // document counter never collide, exactly as two separate Extrude calls
 // never share a curveID (apitest/stitch_test.go's own
 // TestStitchRefusesIdenticalBoundedRimsWithNoSharedDenotation).
 func TestMintCurveNeverRepeats(t *testing.T) {
 	t.Parallel()
-	d := &Document{}
-	a := d.mintCurve()
-	b := d.mintCurve()
+	d := bornDocument(&Document{})
+	a := d.n.MintCurve()
+	b := d.n.MintCurve()
 	require.NotEqual(t, a.ID, b.ID)
 	require.False(t, sameCurve(a, b))
 }

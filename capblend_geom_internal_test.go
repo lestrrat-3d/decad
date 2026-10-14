@@ -265,12 +265,12 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 	work := freeform.NewFreeformWork()
 	// The supplied boundary hangs off the vertices the slant edges start
 	// from, which the first build mints beside the side coedges it reads.
-	_, _, topCo, _, err := buildLoopSidesAs(t.Context(), bornBody(&Body{doc: body.doc}), ref, pp, 0, false, loop, work, nil, levelToken{}, levelToken{}, false) //nolint:dogsled // only the top coedges are read
+	_, _, topCo, _, err := buildLoopSidesAs(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, pp, 0, false, loop, work, nil, levelToken{}, levelToken{}, false) //nolint:dogsled // only the top coedges are read
 	require.NoError(t, err)
-	again, err := buildCapBand(t.Context(), bornBody(&Body{doc: body.doc}), ref, cbp, 0, loop, cbp.z1, -1, topCo, nil, work)
+	again, err := buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.z1, -1, topCo, nil, work)
 	require.NoError(t, err)
 	require.Len(t, again.capCo, 7, "six walls and the reflex corner's arc")
-	supplied, err := buildCapBand(t.Context(), bornBody(&Body{doc: body.doc}), ref, cbp, 0, loop, cbp.z1, -1, topCo, again.capCo, work)
+	supplied, err := buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.z1, -1, topCo, again.capCo, work)
 	require.NoError(t, err)
 
 	require.Len(t, supplied.capCo, len(again.capCo))
@@ -288,16 +288,16 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 	}
 
 	short := again.capCo[:len(again.capCo)-1]
-	_, err = buildCapBand(t.Context(), bornBody(&Body{doc: body.doc}), ref, cbp, 0, loop, cbp.z1, -1, topCo, short, work)
+	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.z1, -1, topCo, short, work)
 	require.ErrorContains(t, err, "supplied cap boundary")
 
 	backward := append([]topo.CoEdge(nil), again.capCo...)
 	backward[0].Forward = false
-	_, err = buildCapBand(t.Context(), bornBody(&Body{doc: body.doc}), ref, cbp, 0, loop, cbp.z1, -1, topCo, backward, work)
+	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.z1, -1, topCo, backward, work)
 	require.ErrorContains(t, err, "supplied cap boundary")
 
 	swapped := append([]topo.CoEdge(nil), again.capCo...)
 	swapped[0], swapped[2] = swapped[2], swapped[0]
-	_, err = buildCapBand(t.Context(), bornBody(&Body{doc: body.doc}), ref, cbp, 0, loop, cbp.z1, -1, topCo, swapped, work)
+	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.z1, -1, topCo, swapped, work)
 	require.Error(t, err)
 }

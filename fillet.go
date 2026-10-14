@@ -146,10 +146,10 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a fillet`, ErrDegenerate)
 	}
-	if b == nil || b.doc == nil {
+	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	// Stage 1 pre-gates (§4): a live receiver (S17), a valid magnitude (S15),
 	// a non-zero one (S13), then a selector that matches (S16).
 	if err := d.requireLive(b); err != nil {

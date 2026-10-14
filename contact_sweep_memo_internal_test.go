@@ -351,7 +351,7 @@ func TestSweepRunMemoChangesNoReport(t *testing.T) {
 		z, _ := corner[2].Float64()
 		low = min(low, z)
 	}
-	floor := internalOffsetBox(t, box.body.doc, -200, -200, 200, 200, low-.05-10,
+	floor := internalOffsetBox(t, documentHandle(box.body.n.Doc), -200, -200, 200, 200, low-.05-10,
 		Distance{D: units.Millimeters(10), Dir: Along})
 	still, err := sweeppath.Validate(encodedPairPath(PoseSegment{From: r3.Identity(), To: r3.Identity(),
 		Duration: units.Seconds(1.0 / 256)}))
@@ -363,7 +363,7 @@ func TestSweepRunMemoChangesNoReport(t *testing.T) {
 	run := func(open bool) (*SweepReport, sweepMemoStats) {
 		a, b := floorPath, box
 		a.memo, b.memo = &sweepPathMemo{Closed: !open}, &sweepPathMemo{Closed: !open}
-		sweep := &rotationalPairSweep{doc: floor.doc, a: a, b: b, req: req, resolution: big.NewRat(1, 1<<30),
+		sweep := &rotationalPairSweep{doc: documentHandle(floor.n.Doc), a: a, b: b, req: req, resolution: big.NewRat(1, 1<<30),
 			report: &SweepReport{}}
 		report, err := sweep.execute(t.Context())
 		require.NoError(t, err)

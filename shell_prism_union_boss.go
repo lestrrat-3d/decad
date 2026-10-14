@@ -279,7 +279,7 @@ type prismUnionBossShellMesh struct {
 
 func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPayload,
 	src prismUnionBossShellSource, t float64) (*Body, error) {
-	ref := source.doc.nextProducerID()
+	ref := source.n.Doc.NextProducer
 	mesh, err := prismUnionBossShellMeshOf(ctx, ref, fp, src, t)
 	if err != nil {
 		return nil, err
@@ -354,7 +354,7 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 		dPair:     facetedSourceDiameterUpper(mesh.verts, bound),
 		xform:     r3.Identity(), contactAudited: true,
 	}
-	return buildFacetedBodyWithProof(ctx, source.doc, ref, payload, audit, Measurement{}, nil)
+	return buildFacetedBodyWithProof(ctx, documentHandle(source.n.Doc), ref, payload, audit, Measurement{}, nil)
 }
 
 func prismUnionBossShellMeshOf(ctx context.Context, ref producerID, fp facetedPayload,

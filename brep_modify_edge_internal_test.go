@@ -516,7 +516,7 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			body := tc.body(t)
-			before := body.doc.Bodies()
+			before := documentHandle(body.n.Doc).Bodies()
 			sel := tc.sel
 			var err error
 			if tc.chamfer {
@@ -528,8 +528,8 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 			for _, w := range tc.want {
 				require.ErrorContains(t, err, w)
 			}
-			require.NoError(t, body.doc.requireLive(body))
-			require.Equal(t, before, body.doc.Bodies())
+			require.NoError(t, documentHandle(body.n.Doc).requireLive(body))
+			require.Equal(t, before, documentHandle(body.n.Doc).Bodies())
 		})
 	}
 }

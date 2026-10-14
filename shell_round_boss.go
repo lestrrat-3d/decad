@@ -114,7 +114,7 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 		Z0: a.Z0, InterfaceZ: a.Z1, TopZ: b.Z1, LowerZ: lowerZ,
 		T: t, LedgeFace: ledgeFace, Frame: sp.frame}
 	result.assignRoles()
-	body, err := evalBrepContext(ctx, source.doc, source.doc.nextProducerID(), result)
+	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
 	return body, true, err
 }
 

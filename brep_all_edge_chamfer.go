@@ -146,7 +146,7 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 		p.center[1]+p.radius >= p.box[2][1]-distance {
 		return nil, true, fmt.Errorf(`%w: the bore reaches the all-edge chamfer`, ErrUnsupported)
 	}
-	body, err := evalAllEdgeChamfer(ctx, source.doc, source.doc.nextProducerID(), p)
+	body, err := evalAllEdgeChamfer(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, p)
 	return body, true, err
 }
 
@@ -355,7 +355,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySolid}})
+	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySolid, Doc: documentNode(d)}})
 	polygons := geometry.polygons()
 	vertices := map[r3.Vec]*Vertex{}
 	vertex := func(v r3.Vec) *Vertex {

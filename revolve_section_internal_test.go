@@ -121,7 +121,7 @@ func displacedRevolve(t *testing.T, ref *Body, shift, grow float64) (*Body, floa
 		rp.sectionDelta = math.Abs(grow) * (1 + 1e-9)
 	}
 	rp.sectionWhole = true
-	body, err := evalRevolve(ref.doc, ref.doc.nextProducerID(), rp)
+	body, err := evalRevolve(documentHandle(ref.n.Doc), ref.n.Doc.NextProducer, rp)
 	require.NoError(t, err)
 	return body, rp.sectionDelta
 }

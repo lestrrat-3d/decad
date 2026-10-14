@@ -112,10 +112,10 @@ func (b *Body) patternReceiver(ctx context.Context, spec PatternSpec) (*Document
 	if ctx == nil {
 		return nil, resolvedPattern{}, false, fmt.Errorf(`%w: a nil context cannot control a pattern`, ErrDegenerate)
 	}
-	if b == nil || b.doc == nil {
+	if b == nil || b.n.Doc == nil {
 		return nil, resolvedPattern{}, false, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {
 		return nil, resolvedPattern{}, false, err
 	}

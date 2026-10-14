@@ -316,8 +316,8 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 	next.verts, next.tris, next.walls = nil, nil, 0
 	next.cell, next.side, next.capStartCount = nil, nil, 0
 	next.proof = loftmesh.MeshProof{}
-	ref := b.doc.nextProducerID()
-	body, err := evalLoft(ctx, b.doc, ref, next, budget, work0, work1)
+	ref := b.n.Doc.NextProducer
+	body, err := evalLoft(ctx, documentHandle(b.n.Doc), ref, next, budget, work0, work1)
 	if err != nil {
 		return nil, err
 	}

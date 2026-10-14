@@ -118,7 +118,7 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a draft`, ErrDegenerate)
 	}
-	if b == nil || b.doc == nil {
+	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
 	for _, o := range opts {
@@ -126,7 +126,7 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
 	}
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 
 	// Stage 1: SD1, SD2, SD17, SD18 and SD19's cardinality.
 	if angle.Kind() != units.Angle {

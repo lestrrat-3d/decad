@@ -113,11 +113,11 @@ func tryDraftCircleRimChamfer(ctx context.Context, b *Body, edges []*Edge, setba
 	if side < 0 {
 		return nil, true, fmt.Errorf(`%w: the tapered rim's bevel meridian crosses its axis`, ErrDegenerate)
 	}
-	phi0, phi1, full, den, _, err := b.doc.resolveAngularExtent(FullRevolution{}, angularStops{})
+	phi0, phi1, full, den, _, err := documentHandle(b.n.Doc).resolveAngularExtent(FullRevolution{}, angularStops{})
 	if err != nil {
 		return nil, true, err
 	}
-	result, err := evalRevolveContextWork(ctx, b.doc, b.doc.nextProducerID(), revolvePayload{
+	result, err := evalRevolveContextWork(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, revolvePayload{
 		profile: profile, frame: frame, ax: ax, phi0: phi0, phi1: phi1, full: full,
 		den: den, xform: dp.xform, radialProof: ax.RadialProof,
 		sectionDelta: sectionDelta, sectionWhole: true,

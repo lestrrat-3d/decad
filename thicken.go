@@ -57,10 +57,10 @@ func Thicken(ctx context.Context, b *Body, thickness units.Value, opts ...Thicke
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if b == nil || b.doc == nil {
+	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}

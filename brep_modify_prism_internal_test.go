@@ -64,8 +64,8 @@ func requireRefusesUnchanged(t *testing.T, body *Body, before []*Body, err error
 	for _, w := range want {
 		require.ErrorContains(t, err, w)
 	}
-	require.NoError(t, body.doc.requireLive(body))
-	require.Equal(t, before, body.doc.Bodies())
+	require.NoError(t, documentHandle(body.n.Doc).requireLive(body))
+	require.Equal(t, before, documentHandle(body.n.Doc).Bodies())
 }
 
 // TestBrepModifyRoutePFilletsS1LateralEdges pins BB1: S1 reads as the

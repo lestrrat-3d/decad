@@ -174,7 +174,7 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 		LowerZ: lowerZ, T: t, LedgeFace: ledgeFace, Frame: sp.frame,
 		OuterFaceCount: outerFaceCount, Closed: closed}
 	result.assignRoles()
-	body, err := evalBrepContext(ctx, source.doc, source.doc.nextProducerID(), result)
+	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
 	return body, true, err
 }
 

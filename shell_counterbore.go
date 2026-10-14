@@ -182,7 +182,7 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 		Round: &prismshell.CounterboreShellRound{Small: small, Large: large, Plate: plate, Inset: inset,
 			FarZ: farZ, StepZ: stepZ, NearZ: nearZ, Sign: sign, T: t, Center: c, Frame: sp.frame}}
 	result.assignRoles()
-	body, err := evalBrepContext(ctx, source.doc, source.doc.nextProducerID(), result)
+	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
 	return body, true, err
 }
 

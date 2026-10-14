@@ -194,7 +194,7 @@ func TestVerifyJointBoxKeepsTheNextProducerIdentity(t *testing.T) {
 func TestVerifyJointBoxRefusesABodyItDidNotBuild(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	foreignBuilt := bornBody(&Body{doc: doc, n: topo.Body{Kind: topo.BodySolid}})
+	foreignBuilt := bornBody(&Body{n: topo.Body{Kind: topo.BodySolid, Doc: documentNode(doc)}})
 	doc.commit(foreignBuilt)
 	l := NewLinkage()
 	slide, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*Body{foreignBuilt})
@@ -303,7 +303,7 @@ func internalRockerTheta4(th2 float64) float64 {
 func rockerGateBoxRun(t *testing.T) *boxRun {
 	t.Helper()
 	l, crank := internalRocker(t)
-	doc := crank.bodies[0].doc
+	doc := documentHandle(crank.bodies[0].n.Doc)
 	gate, err := l.Ground().Prismatic(r3.NewVec(0, -1, 0), []*Body{internalBoxBodyAtZ(t, doc, -50, 72, 150, 82, 19, 10)})
 	require.NoError(t, err)
 	spec, axes, err := l.resolveBox(JointBox{

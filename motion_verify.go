@@ -385,14 +385,14 @@ func (r *motionRun) readBodies(groups [][]*Body) {
 	// live identity, then mint only on this copy: successive pose bodies stay
 	// distinct from static geometry without changing the caller's document.
 	live := r.d.liveBodies()
-	r.transient = &Document{
-		bodies: live,
+	r.transient = bornDocument(&Document{
 		n: topo.Document{
 			NextLevel:    r.d.n.NextLevel,
 			NextCurve:    r.d.n.NextCurve,
 			NextProducer: r.d.n.NextProducer,
+			LiveSet:      bodyNodes(live),
 		},
-	}
+	})
 	isMover := make(map[*Body]struct{})
 	for g, bodies := range groups {
 		for _, b := range bodies {

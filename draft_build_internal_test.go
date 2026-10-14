@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -94,7 +95,7 @@ func TestDraftConeWallsReadNoChordLocusTerm(t *testing.T) {
 	loop := cbp.loops()[0]
 	near, err := draftNearRim(t.Context(), cbp.prismLike(0, 0), 0, loop, nearZ, nearDelta, work)
 	require.NoError(t, err)
-	band, err := buildCapBand(t.Context(), bornBody(&Body{doc: b.doc}), b.n.Origin.Producer, cbp, 0, loop, farZ, matSign, near, nil, work)
+	band, err := buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: b.n.Doc}}), b.n.Origin.Producer, cbp, 0, loop, farZ, matSign, near, nil, work)
 	require.NoError(t, err)
 	cones := 0
 	for _, g := range band.geom {

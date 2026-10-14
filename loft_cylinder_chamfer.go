@@ -182,7 +182,7 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	if len(selected) != 0 {
 		return nil, true, fmt.Errorf("%w: loft/cylinder chamfer selection includes a bore or side edge", ErrUnsupported)
 	}
-	body, err := buildLoftCylinderCapChamfer(ctx, b.doc, b.doc.nextProducerID(), fp, source, d)
+	body, err := buildLoftCylinderCapChamfer(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, fp, source, d)
 	return body, true, err
 }
 

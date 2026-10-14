@@ -99,7 +99,7 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 		req.asym.recordRoles = sourceRoles
 		// Routes E and L map public reference faces to their record faces.
 		// Route P has no reference-face mapping for this option.
-		body, err := brepLoopRoute(ctx, b.doc, bp, req)
+		body, err := brepLoopRoute(ctx, documentHandle(b.n.Doc), bp, req)
 		if err != nil {
 			return brepRoute{}, err
 		}
@@ -118,7 +118,7 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 		}
 		return brepRoute{body: body}, nil
 	default:
-		body, err := brepLoopRoute(ctx, b.doc, bp, req)
+		body, err := brepLoopRoute(ctx, documentHandle(b.n.Doc), bp, req)
 		if err != nil {
 			return brepRoute{}, err
 		}
@@ -158,13 +158,13 @@ func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepM
 // after the receiver's liveness and the context are read once more at the
 // commit edge (modify §13's atomic commit).
 func commitModifyResult(ctx context.Context, b, body *Body) (*Body, error) {
-	if err := b.doc.requireLive(b); err != nil {
+	if err := documentHandle(b.n.Doc).requireLive(b); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.doc.commit(body, b)
+	documentHandle(b.n.Doc).commit(body, b)
 	return body, nil
 }
 

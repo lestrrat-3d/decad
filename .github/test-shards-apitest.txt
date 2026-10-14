@@ -2068,3 +2068,5 @@
 10	0.00	TestSectionRuledLoftRefusesShiftedCutOrigin
 10	0.00	TestSectionRuledLoftRefusesNonzeroAlignment
 10	0.00	TestSectionRuledLoftRefusesDisplacedVertices
+10	0.00	TestBodyDocumentIsTheDocument
+10	0.00	TestZeroAndNilBodyOperandsAreRejected

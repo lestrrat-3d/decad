@@ -29,7 +29,7 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer needs one exact equal setback", ErrUnsupported)
 	}
 	if record.join == nil || record.join.blank == nil || record.lowerBore == nil ||
-		record.lowerBore.doc != b.doc || record.join.blank.doc != b.doc {
+		record.lowerBore.n.Doc != b.n.Doc || record.join.blank.n.Doc != b.n.Doc {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer lost its authenticated source", ErrUnsupported)
 	}
 	lower, ok := record.lowerBore.payload.(facetedPayload)
@@ -56,7 +56,7 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 		return nil, true, err
 	}
 	var half loftCylinderOneCapData
-	ref := b.doc.nextProducerID()
+	ref := b.n.Doc.NextProducer
 	reserve, err := loftMirrorCylinderChamferReflectionReserve(lower, record, setback)
 	if err != nil {
 		return nil, true, err
@@ -74,12 +74,12 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 	if allowance <= 0 || proofbound.AbsSumUpper(allowance, totalReserve) > 0.1 {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer has no reflection allowance", ErrUnsupported)
 	}
-	lowerBody, err := buildLoftCylinderOneCapChamfer(ctx, b.doc, ref, lower, source,
+	lowerBody, err := buildLoftCylinderOneCapChamfer(ctx, documentHandle(b.n.Doc), ref, lower, source,
 		setback, allowance, shifts, &half)
 	if err != nil {
 		return nil, true, err
 	}
-	result, err := buildLoftMirrorCylinderCapChamfer(ctx, b.doc, ref, fp, record,
+	result, err := buildLoftMirrorCylinderCapChamfer(ctx, documentHandle(b.n.Doc), ref, fp, record,
 		lowerBody, half, reserve, bridgeReserve, setback)
 	return result, true, err
 }

@@ -639,7 +639,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet}})
+	body := bornBody(&Body{n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet, Doc: documentNode(d)}})
 	var allFaces []*Face
 	total := proofbound.BoundedScalar{}
 	var captures []chainWalkCapture

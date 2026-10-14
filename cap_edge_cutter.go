@@ -92,7 +92,7 @@ func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edge
 	if proofbound.IsNonFinite(span) {
 		return nil, true, fmt.Errorf(`%w: the cap-edge cutter has no finite sweep span`, ErrNotFinite)
 	}
-	d := body.doc
+	d := documentHandle(body.n.Doc)
 	ref := d.nextProducerID()
 	tool, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
 		Profile: profile, Frame: frame, Z0: -span, Z1: span, Xform: r3.Identity(),

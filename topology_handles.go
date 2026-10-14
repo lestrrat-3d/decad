@@ -352,3 +352,54 @@ func lumpNodes(ls []*Lump) []*topo.Lump {
 	}
 	return out
 }
+
+// bodyHandles returns the handles of ns in order, or nil for an empty ns,
+// as append([]*Body(nil), ...) of the same bodies would.
+func bodyHandles(ns []*topo.Body) []*Body {
+	if len(ns) == 0 {
+		return nil
+	}
+	out := make([]*Body, len(ns))
+	for i, n := range ns {
+		out[i] = bodyHandle(n)
+	}
+	return out
+}
+
+// bodyNodes returns the nodes of bs in order, or nil for an empty bs.
+func bodyNodes(bs []*Body) []*topo.Body {
+	if len(bs) == 0 {
+		return nil
+	}
+	out := make([]*topo.Body, len(bs))
+	for i, b := range bs {
+		out[i] = bodyNode(b)
+	}
+	return out
+}
+
+// bornDocument sets d's node Owner to d and returns d. Every root Document is
+// born through it, so documentHandle maps the document node a body links
+// back to the one handle that holds it.
+func bornDocument(d *Document) *Document {
+	d.n.Owner = d
+	return d
+}
+
+// documentHandle returns the handle that holds n, or nil for a nil n. A node
+// whose handle was not born through bornDocument is an evaluator invariant
+// failure, and the assertion panics.
+func documentHandle(n *topo.Document) *Document {
+	if n == nil {
+		return nil
+	}
+	return n.Owner.(*Document) //nolint:forcetypeassert // every document node is born in its handle; a bare one must fail loudly
+}
+
+// documentNode returns d's node, or nil for a nil d.
+func documentNode(d *Document) *topo.Document {
+	if d == nil {
+		return nil
+	}
+	return &d.n
+}

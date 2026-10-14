@@ -159,7 +159,7 @@ func TestBlindStackedAdmissionLeavesOtherCutsToMesh(t *testing.T) {
 		})
 	}
 	_, pocket := internalPocket(t)
-	blindAgain := internalOffsetBox(t, pocket.doc, 1, 1, 2, 2, 6,
+	blindAgain := internalOffsetBox(t, documentHandle(pocket.n.Doc), 1, 1, 2, 2, 6,
 		Distance{D: units.Millimeters(4), Dir: Along})
 	_, admitted, err := tryStackedThroughCut(t.Context(), pocket, blindAgain)
 	require.NoError(t, err)
@@ -169,7 +169,7 @@ func TestBlindStackedAdmissionLeavesOtherCutsToMesh(t *testing.T) {
 	require.True(t, admitted, "two same-depth pockets share the existing interface")
 	require.NoError(t, stackedrecord.Falsify(t.Context(),
 		stackedrecord.Record{Slabs: result.slabs, Interfaces: result.interfaces}))
-	opposite := internalOffsetBox(t, pocket.doc, 1, 1, 2, 2, 0,
+	opposite := internalOffsetBox(t, documentHandle(pocket.n.Doc), 1, 1, 2, 2, 0,
 		Distance{D: units.Millimeters(6), Dir: Along})
 	opposed, admitted, err := tryStackedBlindCut(t.Context(), pocket, opposite)
 	require.NoError(t, err)
@@ -184,7 +184,7 @@ func TestBlindStackedAdmissionLeavesOtherCutsToMesh(t *testing.T) {
 		{name: "overlap", x0: 2, y0: 3, x1: 4, y1: 4},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			tool := internalOffsetBox(t, pocket.doc, tc.x0, tc.y0, tc.x1, tc.y1, 0,
+			tool := internalOffsetBox(t, documentHandle(pocket.n.Doc), tc.x0, tc.y0, tc.x1, tc.y1, 0,
 				Distance{D: units.Millimeters(6), Dir: Along})
 			_, admitted, err := tryStackedBlindCut(t.Context(), pocket, tool)
 			require.NoError(t, err)

@@ -187,10 +187,10 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a boolean`, ErrDegenerate)
 	}
-	if a == nil || a.doc == nil {
+	if a == nil || a.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the first operand belongs to no document`, ErrDegenerate)
 	}
-	d := a.doc
+	d := documentHandle(a.n.Doc)
 	if err := d.requireLive(a); err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 // fallback (pattern.go) chains it over instances not yet registered and
 // commits only the last result. a and b MUST belong to one document.
 func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref producerID) (*Body, error) {
-	d := a.doc
+	d := documentHandle(a.n.Doc)
 	if body, ok, err := tryLoftMirrorUnion(ctx, op, d, ref, a, b); err != nil {
 		return nil, err
 	} else if ok {
@@ -492,7 +492,7 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 	if !ok {
 		return nil, false, nil
 	}
-	d := a.doc
+	d := documentHandle(a.n.Doc)
 	body, err := evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, false, err

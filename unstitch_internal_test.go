@@ -18,9 +18,9 @@ import (
 // its own seam-unreachable fixtures.
 func TestUnstitchNoPayloadIsDegenerate(t *testing.T) {
 	t.Parallel()
-	d := &Document{}
-	b := bornBody(&Body{doc: d, n: topo.Body{Kind: topo.BodySheet}})
-	d.bodies = append(d.bodies, b)
+	d := bornDocument(&Document{})
+	b := bornBody(&Body{n: topo.Body{Kind: topo.BodySheet, Doc: documentNode(d)}})
+	d.n.LiveSet = append(d.n.LiveSet, bodyNode(b))
 
 	_, err := Unstitch(t.Context(), b)
 	require.ErrorIs(t, err, ErrDegenerate)

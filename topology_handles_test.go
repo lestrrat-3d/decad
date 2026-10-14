@@ -4,8 +4,10 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,6 +25,7 @@ var bornHandles = map[string]string{
 	"Loop":      "bornLoop",
 	"FaceShell": "bornFaceShell",
 	"Lump":      "bornLump",
+	"Document":  "bornDocument",
 }
 
 // TestTopologyHandlesAreBorn parses every root .go file, tests included, and
@@ -162,4 +165,106 @@ func elidedPointerElem(typ ast.Expr) string {
 		return ""
 	}
 	return id.Name
+}
+
+// documentWriteFields are the topo.Document fields only root and the node's
+// own methods write: the live set and the producer counter (root commit,
+// commitMany, commitSpan, retire, New and VerifyMotion's transient document)
+// and the level and curve counters (MintLevel and MintCurve in
+// internal/topo/document.go). No other type has a field with these names, so a
+// match by name is a write to a document node.
+var documentWriteFields = map[string]struct{}{
+	"LiveSet":      {},
+	"NextProducer": {},
+	"NextLevel":    {},
+	"NextCurve":    {},
+}
+
+// TestTopoDocumentWriteGuard parses every non-test .go file under internal/
+// except internal/topo/document.go and fails on a write to a document node's
+// live set or counters, or on a write lock of its LiveMu: an assignment, op=
+// assignment, ++ or -- whose left side ends in one of documentWriteFields; a
+// composite literal that sets one of them; a call of X.LiveMu.Lock or
+// X.LiveMu.Unlock. Reads, RLock and RUnlock, and calls of MintLevel,
+// MintCurve, IsLive and Live pass. Root is the writer and is not scanned
+// (docs/evaluator-design.md §8).
+func TestTopoDocumentWriteGuard(t *testing.T) {
+	t.Parallel()
+	var bad []string
+	err := filepath.WalkDir("internal", func(path string, de fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if de.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") ||
+			filepath.ToSlash(path) == "internal/topo/document.go" {
+			return nil
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, path, src, 0)
+		if err != nil {
+			return err
+		}
+		bad = append(bad, documentNodeWrites(fset, f)...)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Empty(t, bad, "only root writes a document node's live set and counters, and only root locks LiveMu for writing")
+}
+
+func documentNodeWrites(fset *token.FileSet, f *ast.File) []string {
+	var bad []string
+	report := func(n ast.Node, what string) {
+		bad = append(bad, fset.Position(n.Pos()).String()+": "+what)
+	}
+	written := func(e ast.Expr) (string, bool) {
+		for {
+			switch x := e.(type) {
+			case *ast.ParenExpr:
+				e = x.X
+			case *ast.IndexExpr:
+				e = x.X
+			case *ast.StarExpr:
+				e = x.X
+			case *ast.SelectorExpr:
+				_, ok := documentWriteFields[x.Sel.Name]
+				return x.Sel.Name, ok
+			default:
+				return "", false
+			}
+		}
+	}
+	ast.Inspect(f, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.AssignStmt:
+			for _, lhs := range x.Lhs {
+				if name, ok := written(lhs); ok {
+					report(lhs, name+" written")
+				}
+			}
+		case *ast.IncDecStmt:
+			if name, ok := written(x.X); ok {
+				report(x.X, name+" written")
+			}
+		case *ast.KeyValueExpr:
+			if id, ok := x.Key.(*ast.Ident); ok {
+				if _, guarded := documentWriteFields[id.Name]; guarded {
+					report(x, id.Name+" set in a literal")
+				}
+			}
+		case *ast.CallExpr:
+			sel, ok := x.Fun.(*ast.SelectorExpr)
+			if !ok || (sel.Sel.Name != "Lock" && sel.Sel.Name != "Unlock") {
+				return true
+			}
+			if mu, ok := sel.X.(*ast.SelectorExpr); ok && mu.Sel.Name == "LiveMu" {
+				report(x, "LiveMu."+sel.Sel.Name+" called")
+			}
+		}
+		return true
+	})
+	return bad
 }

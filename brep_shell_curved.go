@@ -106,6 +106,6 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 		},
 		interfaces: []stackedrecord.Interface{{LowerExposed: ring}, {UpperExposed: ring}},
 	}
-	result, err := evalStackedContext(ctx, source.doc, source.doc.nextProducerID(), sp)
+	result, err := evalStackedContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, sp)
 	return result, true, err
 }

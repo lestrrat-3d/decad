@@ -53,7 +53,7 @@ import "github.com/lestrrat-3d/r3"
 // pp.dir(0, 0, 1) under whatever placement composes onto it, and only its
 // ORIGIN'S position along that exact direction is ever in question.
 //
-// mintLevel's one caller today — prism_build.go's evalPrismContext — mints
+// MintLevel's (internal/topo Document) one caller today — prism_build.go's evalPrismContext — mints
 // only when pp.sectionDelta == 0 AND the payload's frame axes are RECORDED
 // rather than computed: a straight prism's frame is always the sketch
 // plane's own frame, carried through unchanged from

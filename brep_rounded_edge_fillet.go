@@ -41,7 +41,7 @@ func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload
 	if err != nil {
 		return nil, true, fmt.Errorf(`%w: the rounded cap-edge cutter has no frame: %v`, ErrUnsupported, err)
 	}
-	d := body.doc
+	d := documentHandle(body.n.Doc)
 	ref := d.nextProducerID()
 	tool, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
 		Profile: capedge.QuarterCutter(radius), Frame: frame, Z0: -42, Z1: 42, Xform: r3.Identity(),

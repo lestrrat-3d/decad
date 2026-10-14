@@ -81,7 +81,7 @@ func filletSelection(t *testing.T, body *Body, sel *EdgeQuery, r float64, bands 
 	}
 	out, err := Fillet(t.Context(), body, sel, units.Millimeters(r))
 	require.NoError(t, err)
-	require.Error(t, body.doc.requireLive(body), "the receiver is retired")
+	require.Error(t, documentHandle(body.n.Doc).requireLive(body), "the receiver is retired")
 	bp, ok := out.payload.(brepPayload)
 	require.True(t, ok, "route L builds a brep, got %T", out.payload)
 	require.Nil(t, bp.stack)
@@ -1183,7 +1183,7 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 	require.GreaterOrEqual(t, box.Max.X+box.Bound.Base(), 40.0)
 	require.LessOrEqual(t, box.Min.Y-box.Bound.Base(), 0.0)
 	require.GreaterOrEqual(t, box.Max.Y+box.Bound.Base(), 20.0)
-	report, err := out.doc.Verify(t.Context())
+	report, err := documentHandle(out.n.Doc).Verify(t.Context())
 	require.NoError(t, err)
 	reading, err := report.ForBody(out)
 	require.NoError(t, err)
@@ -1317,14 +1317,14 @@ func TestBrepLoopFilletRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			body := tc.body(t)
-			before := body.doc.Bodies()
+			before := documentHandle(body.n.Doc).Bodies()
 			_, err := Fillet(t.Context(), body, edgesQuery(tc.sel(t, body)), units.Millimeters(tc.r))
 			require.ErrorIs(t, err, tc.is)
 			for _, w := range tc.want {
 				require.ErrorContains(t, err, w)
 			}
-			require.NoError(t, body.doc.requireLive(body))
-			require.Equal(t, before, body.doc.Bodies())
+			require.NoError(t, documentHandle(body.n.Doc).requireLive(body))
+			require.Equal(t, before, documentHandle(body.n.Doc).Bodies())
 		})
 	}
 }

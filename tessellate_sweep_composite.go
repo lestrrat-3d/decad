@@ -57,7 +57,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			return nil, err
 		}
 		span := sp.spans[i]
-		part, err := span.build(ctx, b.doc, b.n.Origin.Producer, spanWork)
+		part, err := span.build(ctx, documentHandle(b.n.Doc), b.n.Origin.Producer, spanWork)
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}

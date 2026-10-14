@@ -12,10 +12,10 @@ import (
 // certified pattern evaluators construct all tools in one operation.
 func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	a := operands[0]
-	if a == nil || a.doc == nil {
+	if a == nil || a.n.Doc == nil {
 		return nil, fmt.Errorf("%w: the first operand belongs to no document", ErrDegenerate)
 	}
-	d := a.doc
+	d := documentHandle(a.n.Doc)
 	seen := make(map[*Body]struct{}, len(operands))
 	for _, operand := range operands {
 		if err := d.requireLive(operand); err != nil {

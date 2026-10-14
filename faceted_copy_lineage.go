@@ -35,8 +35,8 @@ type facetedCopyLineage struct {
 // placed from source's own payload.
 func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, direct bool,
 	exact *exactrotation.Rotation) {
-	if image == nil || source == nil || image.doc != source.doc ||
-		source.doc.requireLive(source) != nil {
+	if image == nil || source == nil || image.n.Doc != source.n.Doc ||
+		documentHandle(source.n.Doc).requireLive(source) != nil {
 		return
 	}
 	base, baseOK := source.payload.(facetedPayload)
@@ -131,11 +131,11 @@ func facetedCopyFaceOwners(source, image *Body, first, placed facetedPayload) (m
 // certifyFacetedCopies consumes live source and Copy outputs. It rechecks
 // their recorded transforms and face provenance before using shell separation.
 func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, error) {
-	if ctx == nil || len(tools) < 2 || tools[0] == nil || tools[0].doc == nil {
+	if ctx == nil || len(tools) < 2 || tools[0] == nil || tools[0].n.Doc == nil {
 		return nil, fmt.Errorf("%w: copied tools lack a live faceted source", ErrUnsupported)
 	}
 	source := tools[0]
-	d := source.doc
+	d := documentHandle(source.n.Doc)
 	first, ok := source.payload.(facetedPayload)
 	if !ok || d.requireLive(source) != nil {
 		return nil, fmt.Errorf("%w: copied tools lack a live faceted source", ErrUnsupported)
@@ -158,7 +158,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if tool == nil || tool.doc != d || d.requireLive(tool) != nil {
+		if tool == nil || tool.n.Doc != documentNode(d) || d.requireLive(tool) != nil {
 			return nil, fmt.Errorf("%w: copied tool %d is not live in the source document", ErrUnsupported, i+1)
 		}
 		part, partOK := tool.payload.(facetedPayload)

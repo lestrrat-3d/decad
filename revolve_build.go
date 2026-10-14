@@ -368,7 +368,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if rp.surfaceResult {
 		kind = BodySheet
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: !rp.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind)}})
+	body := bornBody(&Body{n: topo.Body{Solid: !rp.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind), Doc: documentNode(d)}})
 
 	// Partial sweeps get two planar cap faces; a full revolution has none.
 	var capStart, capEnd *Face
@@ -706,7 +706,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			center, jAxis, jRadius := rp.junctionCircle(b, j.z, j.rho)
 			switch {
 			case rp.full && !j.onAxis:
-				seam := rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0())
+				seam := rp.sweptVertex(b, j.z, j.rho, at, body.n.Doc.MintCurve(), rp.end0())
 				latitudeLength := 2 * math.Pi * j.rho
 				latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(w.AxisRadiusUpper, proofbound.TwoPiUpper()))
 				if rhoEnc, ok := junctionRadiusInterval(j.rho, w.StartVBound); ok {
@@ -723,7 +723,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 						// shared, by construction, between side faces i-1 and i
 						// of THIS build alone (fullRevLoops below), exactly the
 						// role a prism's own rim edge plays for its two caps.
-						Denot: body.doc.mintCurve(),
+						Denot: body.n.Doc.MintCurve(),
 						Curve: surfacegeom.Circle3{Center: center, Axis: jAxis, Radius: jRadius},
 						Start: vertexNode(seam),
 						End:   vertexNode(seam),
@@ -731,11 +731,11 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				})
 			case !rp.full:
 				if j.onAxis {
-					j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0(), rp.end1())
+					j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.n.Doc.MintCurve(), rp.end0(), rp.end1())
 					j.v1 = j.v0
 				} else {
-					j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0())
-					j.v1 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end1())
+					j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.n.Doc.MintCurve(), rp.end0())
+					j.v1 = rp.sweptVertex(b, j.z, j.rho, at, body.n.Doc.MintCurve(), rp.end1())
 					arcLength := j.rho * dphi
 					dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
 					arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(w.AxisRadiusUpper, dphiUpper))
@@ -754,7 +754,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 							// (denotation.go): this junction arc is shared, by
 							// construction, between side faces i-1 and i of THIS
 							// build alone.
-							Denot: body.doc.mintCurve(),
+							Denot: body.n.Doc.MintCurve(),
 							Curve: surfacegeom.Arc3{Center: center, Axis: jAxis, Radius: jRadius},
 							Start: vertexNode(j.v0),
 							End:   vertexNode(j.v1),
@@ -1191,7 +1191,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	if err != nil {
 		return nil, err
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet}})
+	body := bornBody(&Body{n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet, Doc: documentNode(d)}})
 	b := rev.basis()
 	var allFaces []*Face
 	area := proofbound.BoundedScalar{}
@@ -1299,7 +1299,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		center := rp.point(b, j.z, 0, 0)
 		switch {
 		case rp.full && !j.onAxis:
-			seam := rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0())
+			seam := rp.sweptVertex(b, j.z, j.rho, at, body.n.Doc.MintCurve(), rp.end0())
 			latitudeLength := 2 * math.Pi * j.rho
 			latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(axisRadiusUpper, proofbound.TwoPiUpper()))
 			if rhoEnc, ok := junctionRadiusInterval(j.rho, rhoBound); ok {
@@ -1311,7 +1311,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 					Convex:      turn > 0,
 					Length:      latitudeLength,
 					LengthBound: frame.LengthBound(latitudeLength, latitudeBound),
-					Denot:       body.doc.mintCurve(),
+					Denot:       body.n.Doc.MintCurve(),
 					Curve:       surfacegeom.Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
 					Start:       vertexNode(seam),
 					End:         vertexNode(seam),
@@ -1319,11 +1319,11 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			})
 		case !rp.full:
 			if j.onAxis {
-				j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0(), rp.end1())
+				j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.n.Doc.MintCurve(), rp.end0(), rp.end1())
 				j.v1 = j.v0
 			} else {
-				j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0())
-				j.v1 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end1())
+				j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.n.Doc.MintCurve(), rp.end0())
+				j.v1 = rp.sweptVertex(b, j.z, j.rho, at, body.n.Doc.MintCurve(), rp.end1())
 				arcLength := j.rho * dphi
 				dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
 				arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(axisRadiusUpper, dphiUpper))
@@ -1338,7 +1338,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 						Convex:      turn > 0,
 						Length:      arcLength,
 						LengthBound: frame.LengthBound(arcLength, arcBound),
-						Denot:       body.doc.mintCurve(),
+						Denot:       body.n.Doc.MintCurve(),
 						Curve:       surfacegeom.Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
 						Start:       vertexNode(j.v0),
 						End:         vertexNode(j.v1),

@@ -42,7 +42,7 @@ func (l PointLocation) String() string {
 // can leave points near it undecided; a finer tolerance may decide them.
 // Retired bodies remain readable. A sheet or unsound solid is ErrNotSolid.
 func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (PointLocation, error) {
-	if ctx == nil || b == nil || b.doc == nil {
+	if ctx == nil || b == nil || b.n.Doc == nil {
 		return PointUndecided, fmt.Errorf(`%w: point location requires a body and context`, ErrDegenerate)
 	}
 	if err := ctx.Err(); err != nil {
@@ -71,7 +71,7 @@ func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (Poin
 // proved, its lower bound is zero. tol is the positive tessellation chord
 // tolerance. Retired bodies remain readable; sheets return ErrNotSolid.
 func (b *Body) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error) {
-	if ctx == nil || b == nil || b.doc == nil {
+	if ctx == nil || b == nil || b.n.Doc == nil {
 		return Measurement{}, fmt.Errorf(`%w: point distance requires a body and context`, ErrDegenerate)
 	}
 	if err := ctx.Err(); err != nil {
@@ -131,7 +131,7 @@ func (b *Body) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (
 // retired body. tol is the positive tessellation chord tolerance. A verified
 // two-sided face displacement bounds the returned measurement.
 func (f *Face) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error) {
-	if ctx == nil || f == nil || f.n.Body == nil || bodyHandle(f.n.Body).doc == nil {
+	if ctx == nil || f == nil || f.n.Body == nil || f.n.Body.Doc == nil {
 		return Measurement{}, fmt.Errorf(`%w: face distance requires a face and context`, ErrDegenerate)
 	}
 	if err := ctx.Err(); err != nil {

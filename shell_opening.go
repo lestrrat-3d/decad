@@ -103,7 +103,7 @@ func classifyRemovedSweepFaces(b *Body, caps prismCaps, pp prismPayload, removed
 // as a prism over the receiver's sweep (BO1), and otherwise the slabs are
 // stated as a brepPayload (BO2, shell_opening_brep.go).
 func (b *Body) shellSideOpening(ctx context.Context, pp prismPayload, removedStart, removedEnd bool, sides map[int]struct{}, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
 		return nil, err

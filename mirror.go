@@ -110,10 +110,10 @@ func MirroredCopy(ctx context.Context, b *Body, plane MirrorPlane) (*Body, error
 // the reflection across it. The receiver gates come first so a call on a
 // retired or foreign body reports that, whatever plane it names.
 func (b *Body) mirrorTransform(plane MirrorPlane) (r3.Transform, error) {
-	if b == nil || b.doc == nil {
+	if b == nil || b.n.Doc == nil {
 		return r3.Transform{}, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {
 		return r3.Transform{}, err
 	}

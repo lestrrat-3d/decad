@@ -75,7 +75,7 @@ func TestRevolveShellSectionDelta(t *testing.T) {
 			require.True(t, rp.sectionWhole)
 			// The wall survey reads the recorded meridian, so it stays
 			// undecided over a displaced one, as a displaced prism's does.
-			report, err := shelled.doc.Verify(t.Context(), WithMinWallThickness(units.Millimeters(0.5)))
+			report, err := documentHandle(shelled.n.Doc).Verify(t.Context(), WithMinWallThickness(units.Millimeters(0.5)))
 			require.NoError(t, err)
 			require.Equal(t, ScalarUndecided, report.Bodies[0].Wall.Outcome)
 			require.Equal(t, Suspect, report.Status)
@@ -115,7 +115,7 @@ func TestRevolveShellDisplacedUndercutUndecided(t *testing.T) {
 			shelled, err := Shell(t.Context(), body, tc.faces, units.Millimeters(0.3), tc.opts...)
 			require.NoError(t, err)
 			require.Positive(t, shelled.payload.(revolvePayload).sectionDelta)
-			report, err := shelled.doc.Verify(t.Context(), WithPullDirection(tc.pull))
+			report, err := documentHandle(shelled.n.Doc).Verify(t.Context(), WithPullDirection(tc.pull))
 			require.NoError(t, err)
 			require.Equal(t, CoverageUndecided, report.Bodies[0].Undercut.Coverage)
 			require.Empty(t, report.Bodies[0].Undercut.Faces, `no face of a displaced meridian is listed as an undercut`)

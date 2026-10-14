@@ -425,3 +425,103 @@ func TestBodyLumpsAndShellsKeepTheirIdentity(t *testing.T) {
 	var zeroShell decad.FaceShell
 	require.Nil(t, zeroShell.Faces())
 }
+
+// TestBodyDocumentIsTheDocument pins identity across the body and document
+// links: every body built in a document answers that same document, and so
+// do a Transform result and a Copy; Bodies lists the live bodies in commit
+// order in a fresh slice (a moved source leaves, a copy's source stays); a
+// removed body still names its document; a document with no live body, new
+// or emptied by Remove, has nil Bodies. The zero Body has a nil Document.
+func TestBodyDocumentIsTheDocument(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	require.Nil(t, doc.Bodies())
+	a := boxBody(t, doc, 0, 0, 10, 10, 5)
+	b := boxBody(t, doc, 20, 0, 30, 10, 5)
+	require.Same(t, doc, a.Document())
+	require.Same(t, doc, b.Document())
+
+	up, err := r3.Translation(r3.Vec{X: 0, Y: 0, Z: 50})
+	require.NoError(t, err)
+	moved, err := decad.Transform(t.Context(), a, up)
+	require.NoError(t, err)
+	require.Same(t, doc, moved.Document())
+	copied, err := decad.Copy(t.Context(), b)
+	require.NoError(t, err)
+	require.Same(t, doc, copied.Document())
+
+	live := doc.Bodies()
+	require.Len(t, live, 3)
+	for i, want := range []*decad.Body{b, moved, copied} {
+		require.Same(t, want, live[i], "the live set lists bodies in commit order")
+	}
+	require.False(t, slices.Contains(live, a), "a moved source leaves the live set")
+	live[0] = nil
+	require.NotNil(t, doc.Bodies()[0], "Bodies returns a fresh slice")
+	_, err = decad.Transform(t.Context(), a, up)
+	require.ErrorIs(t, err, decad.ErrRetiredBody)
+
+	for _, body := range doc.Bodies() {
+		require.NoError(t, decad.Remove(body))
+	}
+	require.Nil(t, doc.Bodies())
+	require.Same(t, doc, b.Document(), "a removed body still names its document")
+	require.ErrorIs(t, decad.Remove(b), decad.ErrRetiredBody)
+
+	var zero decad.Body
+	require.Nil(t, zero.Document())
+}
+
+// TestZeroAndNilBodyOperandsAreRejected passes a zero Body (it belongs to no
+// document) and a nil *Body as target, tool and subject. Each call answers the
+// same error as before bodies reached their document through a node, and none
+// panics.
+func TestZeroAndNilBodyOperandsAreRejected(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	box := boxBody(t, doc, 0, 0, 10, 10, 5)
+	other := boxBody(t, doc, 20, 0, 30, 10, 5)
+	move, err := r3.Translation(r3.Vec{Z: 1})
+	require.NoError(t, err)
+	ctx := t.Context()
+	for name, tc := range map[string]struct {
+		call func() (*decad.Body, error)
+		want error
+		text string
+	}{
+		"union zero target": {func() (*decad.Body, error) { return decad.Union(ctx, &decad.Body{}, box, other) },
+			decad.ErrDegenerate, "the first operand belongs to no document"},
+		"union zero only": {func() (*decad.Body, error) { return decad.Union(ctx, &decad.Body{}, &decad.Body{}) },
+			decad.ErrDegenerate, "the first operand belongs to no document"},
+		"union zero tool": {func() (*decad.Body, error) { return decad.Union(ctx, box, &decad.Body{}, other) },
+			decad.ErrForeignBody, "body is owned by a different document"},
+		"union nil tool": {func() (*decad.Body, error) { return decad.Union(ctx, box, nil, other) },
+			decad.ErrDegenerate, "a nil body names nothing to operate on"},
+		"cut zero target": {func() (*decad.Body, error) { return decad.Cut(ctx, &decad.Body{}, box) },
+			decad.ErrDegenerate, "the first operand belongs to no document"},
+		"cut zero tool": {func() (*decad.Body, error) { return decad.Cut(ctx, box, &decad.Body{}) },
+			decad.ErrForeignBody, "body is owned by a different document"},
+		"cut nil tool": {func() (*decad.Body, error) { return decad.Cut(ctx, box, nil) },
+			decad.ErrDegenerate, "a nil body names nothing to operate on"},
+		"intersect zero": {func() (*decad.Body, error) { return decad.Intersect(ctx, &decad.Body{}, box) },
+			decad.ErrDegenerate, "the first operand belongs to no document"},
+		"copy zero": {func() (*decad.Body, error) { return decad.Copy(ctx, &decad.Body{}) },
+			decad.ErrDegenerate, "the body belongs to no document"},
+		"copy nil": {func() (*decad.Body, error) { return decad.Copy(ctx, nil) },
+			decad.ErrDegenerate, "the body belongs to no document"},
+		"transform zero": {func() (*decad.Body, error) { return decad.Transform(ctx, &decad.Body{}, move) },
+			decad.ErrDegenerate, "the body belongs to no document"},
+		"transform nil": {func() (*decad.Body, error) { return decad.Transform(ctx, nil, move) },
+			decad.ErrDegenerate, "the body belongs to no document"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				got, err := tc.call()
+				require.Nil(t, got)
+				require.ErrorIs(t, err, tc.want)
+				require.ErrorContains(t, err, tc.text)
+			})
+		})
+	}
+	require.Len(t, doc.Bodies(), 2, "a rejected call leaves the live set unchanged")
+}

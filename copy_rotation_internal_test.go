@@ -200,7 +200,7 @@ func TestPlacedWithChargesTheGapToExactRotation(t *testing.T) {
 	require.NoError(t, err)
 	composed, err := source.xform.Then(off)
 	require.NoError(t, err)
-	body, err := source.placedWith(t.Context(), joined.doc, joined.doc.nextProducerID(), composed, q)
+	body, err := source.placedWith(t.Context(), documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, composed, q)
 	require.NoError(t, err)
 	placed := body.payload.(facetedPayload)
 	require.Len(t, placed.verts, len(source.verts))
@@ -242,7 +242,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	composed, err := source.xform.Then(d)
 	require.NoError(t, err)
 
-	body, err := source.placedWith(t.Context(), joined.doc, joined.doc.nextProducerID(), composed, q)
+	body, err := source.placedWith(t.Context(), documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, composed, q)
 	require.NoError(t, err)
 	exact := body.payload.(facetedPayload)
 	require.Nil(t, exact.pointSection)
@@ -255,7 +255,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 
 	// A nonidentity float delta moves the true solid, so it drops the point-loft
 	// source while retaining the float similarity, sector, and mirror-copy records.
-	body, err = source.placed(t.Context(), joined.doc, joined.doc.nextProducerID(), composed)
+	body, err = source.placed(t.Context(), documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, composed)
 	require.NoError(t, err)
 	float := body.payload.(facetedPayload)
 	require.Nil(t, float.pointSection)
@@ -265,7 +265,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 
 	t.Run("identity delta", func(t *testing.T) {
 		require.Equal(t, r3.Identity(), source.xform)
-		body, err := source.placed(t.Context(), joined.doc, joined.doc.nextProducerID(), r3.Identity())
+		body, err := source.placed(t.Context(), documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, r3.Identity())
 		require.NoError(t, err)
 		// An exact identity delta leaves the point-loft source valid.
 		require.NotNil(t, body.payload.(facetedPayload).pointSection)
@@ -358,7 +358,7 @@ func TestCopyRotationMotionRefusalSurvivesDescendants(t *testing.T) {
 				maker = mirrorJoinedLoft
 			}
 			source := maker(t)
-			doc := source.doc
+			doc := documentHandle(source.n.Doc)
 			exact, err := Copy(t.Context(), source, turn())
 			require.NoError(t, err)
 			mover := tc.build(t, doc, source, exact)
@@ -379,8 +379,8 @@ func TestCopyRotationMotionRefusalSurvivesDescendants(t *testing.T) {
 		control, err := Copy(t.Context(), source, WithCopyPlacement(rot))
 		require.NoError(t, err)
 		require.False(t, control.payload.(facetedPayload).exactPlaced)
-		internalBoxBody(t, source.doc, 6, -2, 10, 2, 10)
-		require.NoError(t, verifyTranslated(t, source.doc, control))
+		internalBoxBody(t, documentHandle(source.n.Doc), 6, -2, 10, 2, 10)
+		require.NoError(t, verifyTranslated(t, documentHandle(source.n.Doc), control))
 	})
 }
 
