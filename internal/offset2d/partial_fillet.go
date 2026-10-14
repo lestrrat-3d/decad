@@ -15,6 +15,20 @@ import (
 func PartialFilletContour(budget *proofbound.WorkBudget, walks []survey2d.SideWalk,
 	selected, sphere []bool, amounts []float64, tol float64,
 ) ([]sectionrecord.CurveSegment, []Join, []int, []int, error) {
+	return partialContour(budget, walks, selected, sphere, amounts, tol, false)
+}
+
+// PartialChamferContour joins adjacent selected carriers at their sharp
+// intersection. This keeps a concave pair of chamfer patches planar.
+func PartialChamferContour(budget *proofbound.WorkBudget, walks []survey2d.SideWalk,
+	selected []bool, amounts []float64, tol float64,
+) ([]sectionrecord.CurveSegment, []Join, []int, []int, error) {
+	return partialContour(budget, walks, selected, make([]bool, len(walks)), amounts, tol, true)
+}
+
+func partialContour(budget *proofbound.WorkBudget, walks []survey2d.SideWalk,
+	selected, sphere []bool, amounts []float64, tol float64, sharpSelected bool,
+) ([]sectionrecord.CurveSegment, []Join, []int, []int, error) {
 	n := len(walks)
 	joins := make([]Join, n)
 	for k := range n {
@@ -24,7 +38,7 @@ func PartialFilletContour(budget *proofbound.WorkBudget, walks []survey2d.SideWa
 		prev := (k + n - 1) % n
 		var join Join
 		var err error
-		if selected[prev] && selected[k] {
+		if selected[prev] && selected[k] && !sharpSelected {
 			join, err = CornerJoin(walks[prev], walks[k], 1, amounts[k], tol)
 		} else {
 			join, err = SharpCornerJoin(walks[prev], walks[k], amounts[prev], amounts[k], tol)

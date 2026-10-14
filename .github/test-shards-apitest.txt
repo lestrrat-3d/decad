@@ -2096,3 +2096,5 @@
 10	0.00	TestExtrudeToPartialRevolveStartCapWithUncertainAxisRefuses
 10	0.00	TestExtrudeToPartialRevolveStartCapWithUncertainAngleRefuses
 10	0.00	TestExtrudeToTranslatedRevolveStartCapChargesStopLevel
+10	0.00	TestBrepAdjacentBossRootChamferAddsCornerMaterial
+10	0.00	TestBrepAdjacentUnderBossRootChamferAddsCornerMaterial

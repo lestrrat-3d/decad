@@ -144,8 +144,8 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 			amounts[i] = r.call.loop.dc
 		}
 	}
-	segs, joins, capWalk, capArc, err := offset2d.PartialFilletContour(
-		r.budget, cl.Walks, selected, make([]bool, len(selected)), amounts, shellTol)
+	segs, joins, capWalk, capArc, err := offset2d.PartialChamferContour(
+		r.budget, cl.Walks, selected, amounts, shellTol)
 	if err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
 	}

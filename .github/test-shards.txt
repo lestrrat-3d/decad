@@ -1533,3 +1533,4 @@
 10	0.00	TestPointPlaneCapDroppedCoordinateMatchesRawRat
 10	0.00	TestLoftFaceRatHelpersAcceptNonReducedOperandsByValue
 10	0.00	TestPointPlaneCapDroppedCoordinateAcceptsNonReducedByValue
+10	0.00	TestSpiralCombinedBoundsDetachSourceMap
