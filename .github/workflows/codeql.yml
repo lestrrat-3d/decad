@@ -13,6 +13,11 @@ permissions:
   contents: read
   security-events: write
 
+concurrency:
+  # A newer push to the same branch or PR cancels the older, still running or queued run.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze
