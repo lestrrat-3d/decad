@@ -144,3 +144,41 @@ func TestInverseHeldResultBetaCoversExactTranspose(t *testing.T) {
 		require.LessOrEqual(t, sq.Cmp(new(big.Rat).Mul(extra, extra)), 0, "vertex %d", i)
 	}
 }
+
+// TestInverseHeldResultGapCoversMoveDefect pairs an exact record with a float
+// move that is off the record's rotation by far more than rounding, at vertices
+// far from the axis, so the gap charge dominates the rounding allowance. Each
+// returned vertex must still lie within its bound of the exact Q^T applied to
+// the held vertex.
+func TestInverseHeldResultGapCoversMoveDefect(t *testing.T) {
+	t.Parallel()
+
+	angle := 2 * math.Pi * 23 / 31
+	rec, _ := axisRecord(t, r3.Vec{X: 1}, units.Radians(angle))
+	_, off := axisRecord(t, r3.Vec{X: 1}, units.Radians(angle+1e-6))
+	baseVerts, baseTris := inverseTetra(r3.Vec{})
+	blank := &meshbool.BoolMesh{Verts: baseVerts, Tris: baseTris, VertexBound: make([]float64, 4)}
+	heldVerts := []r3.Vec{{X: 3, Y: 4e3, Z: -3e3}, {X: -2, Y: -5e3, Z: 1e3}, {X: 0.5, Y: 2e3, Z: 6e3}, {X: 1, Y: 1, Z: 1}}
+	held := &meshbool.StitchedMesh{Verts: heldVerts, VertexBound: []float64{0.01, 0, 0.02, 0.01}, Round: 1e-9}
+	verts, beta, _, _, ok := spiralsector.InverseHeldResult(t.Context(), blank, baseVerts, 0.001, held, off, rec)
+	require.True(t, ok)
+
+	q := rec.Linear()
+	ratOf := func(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
+	for i, v := range heldVerts {
+		in := [3]*big.Rat{ratOf(v.X), ratOf(v.Y), ratOf(v.Z)}
+		got := [3]*big.Rat{ratOf(verts[i].X), ratOf(verts[i].Y), ratOf(verts[i].Z)}
+		sq := new(big.Rat)
+		for r := range got {
+			want := new(big.Rat)
+			for c := range in {
+				want.Add(want, new(big.Rat).Mul(q[c][r], in[c]))
+			}
+			d := new(big.Rat).Sub(got[r], want)
+			sq.Add(sq, d.Mul(d, d))
+		}
+		extra := new(big.Rat).Sub(ratOf(beta[i]), ratOf(held.VertexBound[i]))
+		require.GreaterOrEqual(t, extra.Sign(), 0)
+		require.LessOrEqual(t, sq.Cmp(new(big.Rat).Mul(extra, extra)), 0, "vertex %d", i)
+	}
+}
