@@ -519,8 +519,8 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 // forward reports whether use ui walks its edge in the edge's own direction,
 // which is its owner use's natural one. A whole circle compares senses: it has
 // no endpoints to compare.
-func (topo *brepTopology) forward(ui int) bool {
-	return brepgeom.Forward(topo.uses, topo.edges, topo.edgeOf, ui)
+func (btopo *brepTopology) forward(ui int) bool {
+	return brepgeom.Forward(btopo.uses, btopo.edges, btopo.edgeOf, ui)
 }
 
 func brepIsRim(p brepPart) bool { return brepgeom.IsRim(p) }
@@ -533,7 +533,7 @@ func brepIsRim(p brepPart) bool { return brepgeom.IsRim(p) }
 // edges bound one record face each, and the band's patches, attached after
 // the record's faces, bound their other side (brep_loop_band.go).
 func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPayload) (*Body, error) {
-	topo, err := brepTopologyContext(ctx, bp)
+	btopo, err := brepTopologyContext(ctx, bp)
 	if err != nil {
 		return nil, err
 	}
@@ -572,11 +572,11 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		}
 		return pv.v
 	}
-	for ui, u := range topo.uses {
+	for ui, u := range btopo.uses {
 		// A whole circle's seam is its rim's: a loop that walks the same
 		// circle from another seam places no vertex of its own. A band's
 		// whole circle places its seam with its band edge (brepOpenEdges).
-		closedOpen := u.Key.Closed && topo.edgeOf[ui] < 0
+		closedOpen := u.Key.Closed && btopo.edgeOf[ui] < 0
 		if (u.Part != brepLoopSeg && !brepIsRim(u.Part)) || (u.Part == brepLoopSeg && u.Key.Closed) || closedOpen {
 			continue
 		}
@@ -588,21 +588,21 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	// placed by a use above, so it adds no displacement of its own.
 	vertexAt := func(c [3]float64) *Vertex { return placeVertex(c, 0, 0, 0) }
 
-	edges := make([]*Edge, len(topo.edges))
-	for ei, pair := range topo.edges {
-		edge, err := brepEdge(ctx, bp, topo, pair, vertexAt)
+	edges := make([]*Edge, len(btopo.edges))
+	for ei, pair := range btopo.edges {
+		edge, err := brepEdge(ctx, bp, btopo, pair, vertexAt)
 		if err != nil {
 			return nil, err
 		}
 		edges[ei] = edge
 	}
-	open, err := brepOpenEdges(ctx, bp, topo, placeVertex)
+	open, err := brepOpenEdges(ctx, bp, btopo, placeVertex)
 	if err != nil {
 		return nil, err
 	}
 	coedgeOf := func(ui int) coedge {
-		if ei := topo.edgeOf[ui]; ei >= 0 {
-			return coedge{edge: edges[ei], forward: topo.forward(ui)}
+		if ei := btopo.edgeOf[ui]; ei >= 0 {
+			return coedge{edge: edges[ei], forward: btopo.forward(ui)}
 		}
 		return open.coedge[ui]
 	}
@@ -612,19 +612,19 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		face, err := brepFaceBody(ctx, bp, topo, fi, body, ref)
+		face, err := brepFaceBody(ctx, bp, btopo, fi, body, ref)
 		if err != nil {
 			return nil, err
 		}
-		uses := topo.faceUses[fi]
+		uses := btopo.faceUses[fi]
 		switch {
 		case f.planar():
-			loops := make([]*Loop, len(topo.planar[fi]))
+			loops := make([]*Loop, len(btopo.planar[fi]))
 			for li := range loops {
 				loops[li] = &Loop{outer: li == 0}
 			}
 			for _, ui := range uses {
-				l := loops[topo.uses[ui].Loop]
+				l := loops[btopo.uses[ui].Loop]
 				l.coedges = append(l.coedges, coedgeOf(ui))
 			}
 			face.loops = loops
@@ -677,7 +677,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	} else if bp.pocketShell != nil {
 		err = measurePocketShell(ctx, bp, body)
 	} else {
-		err = measureBrepContext(ctx, bp, topo, body, bands.mass)
+		err = measureBrepContext(ctx, bp, btopo, body, bands.mass)
 	}
 	if err != nil {
 		return nil, err
@@ -703,12 +703,12 @@ func (bp brepPayload) refView() prismPayload {
 // walk length, a side line runs bottom to top over the wall's bounded height,
 // and a loop segment shared by two planar faces is a line of its walk's
 // length. Convexity reads evaluator §3's walked boundary (brepEdgeConvex).
-func brepEdge(ctx context.Context, bp brepPayload, topo *brepTopology, pair [2]int, vertexAt func([3]float64) *Vertex) (*Edge, error) {
-	owner := topo.uses[pair[0]]
+func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]int, vertexAt func([3]float64) *Vertex) (*Edge, error) {
+	owner := btopo.uses[pair[0]]
 	f := bp.faces[owner.Face]
 	start := vertexAt(owner.DirFrom)
 	end := vertexAt(owner.DirTo)
-	convex, err := brepEdgeConvex(ctx, topo, pair)
+	convex, err := brepEdgeConvex(ctx, btopo, pair)
 	if err != nil {
 		return nil, err
 	}
@@ -716,7 +716,7 @@ func brepEdge(ctx context.Context, bp brepPayload, topo *brepTopology, pair [2]i
 	case brepSide0, brepSide1:
 		// One piece of the side line: its own two levels, read along the
 		// sweep axis in reference coordinates.
-		axis := topo.embeds[owner.Face].Axis[2]
+		axis := btopo.embeds[owner.Face].Axis[2]
 		lo, hi := owner.DirFrom[axis], owner.DirTo[axis]
 		if lo > hi {
 			lo, hi = hi, lo
@@ -725,7 +725,7 @@ func brepEdge(ctx context.Context, bp brepPayload, topo *brepTopology, pair [2]i
 		return &Edge{curve: Line3{}, start: start, end: end, convex: convex,
 			length: hi - lo, lengthBound: height.Bound}, nil
 	case brepRim0, brepRim1:
-		w := topo.walls[owner.Face]
+		w := btopo.walls[owner.Face]
 		pp := f.view(bp.xform)
 		bottom, top, _, _, err := buildWallGeometry(pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}},
 			convex, w.Closed, start, end, start, end)
@@ -756,9 +756,9 @@ func brepEdge(ctx context.Context, bp brepPayload, topo *brepTopology, pair [2]i
 // restating a wall along the same axis, and a line two such planar faces
 // share (brepFace.sweep). Any other line reads the owner planar face's loop
 // role: outer convex, hole concave.
-func brepEdgeConvex(ctx context.Context, topo *brepTopology, pair [2]int) (bool, error) {
+func brepEdgeConvex(ctx context.Context, btopo *brepTopology, pair [2]int) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	return brepgeom.Convex(pair, topo.uses, topo.embeds, topo.walls, ErrUnsupported)
+	return brepgeom.Convex(pair, btopo.uses, btopo.embeds, btopo.walls, ErrUnsupported)
 }

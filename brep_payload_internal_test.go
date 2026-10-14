@@ -680,15 +680,15 @@ func TestBrepCoordinateEnvelopeReadsArcsTightly(t *testing.T) {
 	require.NoError(t, err)
 	bp, err := brepOfPrism(prism.payload.(prismPayload))
 	require.NoError(t, err)
-	topo, err := brepTopologyContext(t.Context(), bp)
+	btopo, err := brepTopologyContext(t.Context(), bp)
 	require.NoError(t, err)
 	worst := 0.0
 	for i := range 4096 {
 		th := 2 * math.Pi * float64(i) / 4096
 		worst = math.Max(worst, 15+5*math.Abs(math.Cos(th))+5*math.Abs(math.Sin(th)))
 	}
-	require.LessOrEqual(t, worst, topo.coordUpper)
-	require.InDelta(t, 15+5*math.Sqrt2, topo.coordUpper, 1e-12)
+	require.LessOrEqual(t, worst, btopo.coordUpper)
+	require.InDelta(t, 15+5*math.Sqrt2, btopo.coordUpper, 1e-12)
 }
 
 // TestBrepFaceReversedFlipsTheOutwardSide pins the cavity rule of

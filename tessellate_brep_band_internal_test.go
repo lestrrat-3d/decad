@@ -362,12 +362,12 @@ func TestBrepBandMotionCoversContourDisplacement(t *testing.T) {
 	delta := bp.faces[bp.loopBands[0].face].delta
 	require.Positive(t, delta)
 
-	topo, err := brepTopologyContext(t.Context(), bp)
+	btopo, err := brepTopologyContext(t.Context(), bp)
 	require.NoError(t, err)
-	bands, _, err := brepChordBands(t.Context(), bp, topo, 0.05)
+	bands, _, err := brepChordBands(t.Context(), bp, btopo, 0.05)
 	require.NoError(t, err)
 	n := 0
-	bands[0].place(topo.embeds[bands[0].band.face], func([3]float64, proofbound.WalkEndBound) int { n++; return n - 1 })
+	bands[0].place(btopo.embeds[bands[0].band.face], func([3]float64, proofbound.WalkEndBound) int { n++; return n - 1 })
 	store, round := make([]float64, n), make([]float64, n)
 	motion, err := brepBandMotion(t.Context(), bands, store, round)
 	require.NoError(t, err)

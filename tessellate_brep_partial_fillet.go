@@ -73,7 +73,7 @@ func (bc *brepBandChord) placePartialRings(e brepEmbed,
 }
 
 // partialOpenPolys adapts recorded B-rep uses to the internal band layout.
-func (bc *brepBandChord) partialOpenPolys(topo *brepTopology, canon [][3]float64) (map[int][]int, error) {
+func (bc *brepBandChord) partialOpenPolys(btopo *brepTopology, canon [][3]float64) (map[int][]int, error) {
 	terminals := make([]partialband.Terminal, len(bc.band.terminals))
 	for i, terminal := range bc.band.terminals {
 		terminals[i] = partialband.Terminal{Face: terminal.face, Loop: terminal.loop, Seg: terminal.seg}
@@ -85,8 +85,8 @@ func (bc *brepBandChord) partialOpenPolys(topo *brepTopology, canon [][3]float64
 	return partialband.OpenPolys(partialband.OpenPolyInput{
 		Layout: bc.partial, Face: bc.band.face, Loop: bc.band.loop,
 		Orig: bc.band.orig.Segments, CapWalk: bc.band.capWalk, Terminals: terminals,
-		RingV: ringV, Canon: canon, Uses: topo.uses, FaceUses: topo.faceUses,
-		Open: topo.open, Embed: topo.embeds[bc.band.face], SideZ: bc.sideZ,
+		RingV: ringV, Canon: canon, Uses: btopo.uses, FaceUses: btopo.faceUses,
+		Open: btopo.open, Embed: btopo.embeds[bc.band.face], SideZ: bc.sideZ,
 	})
 }
 

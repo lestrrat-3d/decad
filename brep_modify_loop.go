@@ -36,7 +36,7 @@ import (
 // edge matched (-1 none, -2 several).
 type brepLoopRead struct {
 	bp      brepPayload
-	topo    *brepTopology
+	btopo   *brepTopology
 	call    brepModifyRequest
 	budget  *proofbound.WorkBudget
 	loopUse map[[3]int]int
@@ -319,7 +319,7 @@ func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) 
 			if ei < 0 {
 				return nil, nil, false, nil
 			}
-			owner := r.topo.uses[r.topo.edges[ei][0]]
+			owner := r.btopo.uses[r.btopo.edges[ei][0]]
 			along := !owner.Key.Circular && owner.DirFrom[axis] != owner.DirTo[axis]
 			for other := range 3 {
 				if other != axis && owner.DirFrom[other] != owner.DirTo[other] {
@@ -356,8 +356,8 @@ func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) 
 		if ei < 0 {
 			return nil, nil, false, nil // admitLoops gives the existing SL1 reason
 		}
-		for _, ui := range r.topo.edges[ei] {
-			u := r.topo.uses[ui]
+		for _, ui := range r.btopo.edges[ei] {
+			u := r.btopo.uses[ui]
 			if u.Part != brepLoopSeg {
 				continue
 			}
@@ -372,9 +372,9 @@ func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) 
 	var loopMatches, singleMatches []int
 	for i, ei := range r.matched {
 		covering := 0
-		for _, ui := range r.topo.edges[ei] {
-			u := r.topo.uses[ui]
-			if u.Part == brepLoopSeg && len(selected[faceLoop{u.Face, u.Loop}]) == len(r.topo.planar[u.Face][u.Loop]) {
+		for _, ui := range r.btopo.edges[ei] {
+			u := r.btopo.uses[ui]
+			if u.Part == brepLoopSeg && len(selected[faceLoop{u.Face, u.Loop}]) == len(r.btopo.planar[u.Face][u.Loop]) {
 				covering++
 			}
 		}
@@ -446,12 +446,12 @@ func (r *brepLoopRead) buildSelectedLoops(ctx context.Context, d *Document, loop
 // topology and each planar loop segment's use. Matching the selected edges is
 // matchEdges's.
 func newBrepLoopRead(ctx context.Context, bp brepPayload, call brepModifyRequest) (*brepLoopRead, error) {
-	topo, err := brepTopologyContext(ctx, bp)
+	btopo, err := brepTopologyContext(ctx, bp)
 	if err != nil {
 		return nil, err
 	}
-	r := &brepLoopRead{bp: bp, topo: topo, call: call, budget: proofbound.NewWorkBudget(ctx), loopUse: map[[3]int]int{}}
-	for ui, u := range topo.uses {
+	r := &brepLoopRead{bp: bp, btopo: btopo, call: call, budget: proofbound.NewWorkBudget(ctx), loopUse: map[[3]int]int{}}
+	for ui, u := range btopo.uses {
 		if u.Part == brepLoopSeg {
 			r.loopUse[[3]int{u.Face, u.Loop, u.Seg}] = ui
 		}
@@ -484,7 +484,7 @@ func (r *brepLoopRead) refuse(row, reason string) error {
 
 // partner is the other use of use ui's edge.
 func (r *brepLoopRead) partner(ui int) int {
-	pair := r.topo.edges[r.topo.edgeOf[ui]]
+	pair := r.btopo.edges[r.btopo.edgeOf[ui]]
 	if pair[0] == ui {
 		return pair[1]
 	}
@@ -504,11 +504,11 @@ func (r *brepLoopRead) matchEdges() error {
 	r.matched = make([]int, len(r.call.edges))
 	for i, e := range r.call.edges {
 		r.matched[i] = -1
-		for ei, pair := range r.topo.edges {
+		for ei, pair := range r.btopo.edges {
 			if err := survey2d.WallBudgetStep(r.budget); err != nil {
 				return err
 			}
-			if !brepEdgeMatches(refView, r.topo.uses[pair[0]], e, tol) {
+			if !brepEdgeMatches(refView, r.btopo.uses[pair[0]], e, tol) {
 				continue
 			}
 			if r.matched[i] != -1 {
@@ -561,7 +561,7 @@ func (r *brepLoopRead) singleStraightEdges() bool {
 		if ei < 0 {
 			return false
 		}
-		owner := r.topo.uses[r.topo.edges[ei][0]]
+		owner := r.btopo.uses[r.btopo.edges[ei][0]]
 		if owner.Key.Circular {
 			return false
 		}
@@ -602,8 +602,8 @@ func (r *brepLoopRead) admitLoops() ([]brepLoopSel, error) {
 		case -2:
 			return nil, r.refuse("SL1", fmt.Sprintf(`%s matches more than one edge of the receiver's face record`, selectedEdgeContext(i, r.call.edges[i])))
 		}
-		for _, ui := range r.topo.edges[ei] {
-			u := r.topo.uses[ui]
+		for _, ui := range r.btopo.edges[ei] {
+			u := r.btopo.uses[ui]
 			if u.Part != brepLoopSeg {
 				continue
 			}
@@ -615,7 +615,7 @@ func (r *brepLoopRead) admitLoops() ([]brepLoopSel, error) {
 			selected[fl][u.Seg] = struct{}{}
 		}
 	}
-	complete := func(fl faceLoop) bool { return len(selected[fl]) == len(r.topo.planar[fl.face][fl.loop]) }
+	complete := func(fl faceLoop) bool { return len(selected[fl]) == len(r.btopo.planar[fl.face][fl.loop]) }
 	chosen := map[faceLoop]struct{}{}
 	var out []brepLoopSel
 	for i := range r.call.edges {
@@ -691,7 +691,7 @@ func (r *brepLoopRead) naturalFaceLoops(fi int) (string, error) {
 // (sigma −1), along it they rise off F (sigma +1).
 func (r *brepLoopRead) classifyLoop(sel *brepLoopSel) error {
 	f := r.bp.faces[sel.face]
-	eF := r.topo.embeds[sel.face]
+	eF := r.btopo.embeds[sel.face]
 	n := eF.Axis[2]
 	level := eF.Canon(0, 0, f.z0)[n]
 	outward := -eF.Sign[2]
@@ -706,15 +706,15 @@ func (r *brepLoopRead) classifyLoop(sel *brepLoopSel) error {
 	if why != "" {
 		return refuse(why)
 	}
-	segs := len(r.topo.planar[sel.face][sel.loop])
+	segs := len(r.btopo.planar[sel.face][sel.loop])
 	sel.beside = make([]brepLoopBeside, segs)
 	for s := range segs {
 		if err := survey2d.WallBudgetStep(r.budget); err != nil {
 			return err
 		}
-		pu := r.topo.uses[r.partner(r.loopUse[[3]int{sel.face, sel.loop, s}])]
+		pu := r.btopo.uses[r.partner(r.loopUse[[3]int{sel.face, sel.loop, s}])]
 		a := r.bp.faces[pu.Face]
-		eA := r.topo.embeds[pu.Face]
+		eA := r.btopo.embeds[pu.Face]
 		b := brepLoopBeside{use: r.partner(r.loopUse[[3]int{sel.face, sel.loop, s}])}
 		switch {
 		case !a.planar() && eA.Axis[2] == n && brepIsRim(pu.Part):
@@ -728,10 +728,10 @@ func (r *brepLoopRead) classifyLoop(sel *brepLoopSel) error {
 			b.far = []float64{eA.Sign[2]*far + 0}
 		case a.planar() && eA.Axis[2] != n && pu.Part == brepLoopSeg:
 			b.planar = true
-			nA := len(r.topo.planar[pu.Face][pu.Loop])
+			nA := len(r.btopo.planar[pu.Face][pu.Loop])
 			for k, s2 := range [2]int{(pu.Seg + nA - 1) % nA, (pu.Seg + 1) % nA} {
 				ui := r.loopUse[[3]int{pu.Face, pu.Loop, s2}]
-				nu := r.topo.uses[ui]
+				nu := r.btopo.uses[ui]
 				far, ok := brepLineAlong(nu, n, level)
 				if !ok {
 					return refuse(fmt.Sprintf(`brep face %s beside the loop continues past the loop's vertex on a segment that is not a straight line along the face's normal`, a.role))
@@ -813,10 +813,10 @@ func (r *brepLoopRead) assignLoopSetbacks(sels []brepLoopSel) error {
 		assignment := -1
 		for segment, beside := range sel.beside {
 			ui := r.loopUse[[3]int{sel.face, sel.loop, segment}]
-			edge := selected[r.topo.edgeOf[ui]]
+			edge := selected[r.btopo.edgeOf[ui]]
 			ref := r.call.asym.refs[edge]
 			capFace := r.call.asym.matchesRecordFace(ref, sel.face)
-			sideFace := r.call.asym.matchesRecordFace(ref, r.topo.uses[beside.use].Face)
+			sideFace := r.call.asym.matchesRecordFace(ref, r.btopo.uses[beside.use].Face)
 			if capFace == sideFace {
 				return r.refuseAsymmetricLoop("SX16", fmt.Sprintf(`the reference for brep face %s's loop segment %d has no single adjacent record-face identity`,
 					r.bp.faces[sel.face].role, segment))
@@ -867,12 +867,12 @@ func (r *brepLoopRead) requireBandReach(sels []brepLoopSel) error {
 	reach := map[piece]float64{}
 	for _, sel := range sels {
 		f := r.bp.faces[sel.face]
-		eF := r.topo.embeds[sel.face]
+		eF := r.btopo.embeds[sel.face]
 		level := eF.Canon(0, 0, f.z0)[eF.Axis[2]]
 		for _, b := range sel.beside {
-			a := r.bp.faces[r.topo.uses[b.use].Face]
+			a := r.bp.faces[r.btopo.uses[b.use].Face]
 			for k, far := range b.far {
-				key := piece{face: r.topo.uses[b.use].Face, use: -1}
+				key := piece{face: r.btopo.uses[b.use].Face, use: -1}
 				height := math.Abs(far - level)
 				if b.planar {
 					key.use = b.nb[k]
@@ -1017,7 +1017,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 	for _, sel := range sels {
 		setback := sel.setback
 		f := r.bp.faces[sel.face]
-		eF := r.topo.embeds[sel.face]
+		eF := r.btopo.embeds[sel.face]
 		n := eF.Axis[2]
 		band := brepLoopBand{face: sel.face, loop: sel.loop, orig: cloneLoopRecord(f.regionLoop(sel.loop)), setback: setback, sigma: sel.sigma, kind: r.call.loopKind}
 		delta, err := views[sel.face].loopContourDelta(ctx, sel.loop, band.orig, setback.dc, setback.dcDelta)
@@ -1028,8 +1028,8 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		sideZ, sideDelta := band.sideLevel(f)
 		sideRef := eF.Canon(0, 0, sideZ)[n]
 		for _, b := range sel.beside {
-			pu := r.topo.uses[b.use]
-			eA := r.topo.embeds[pu.Face]
+			pu := r.btopo.uses[b.use]
+			eA := r.btopo.embeds[pu.Face]
 			a := &faces[pu.Face]
 			if !b.planar {
 				local := eA.Sign[2]*sideRef + 0
@@ -1090,7 +1090,7 @@ func (r *brepLoopRead) trimPlanar(trims map[int][]map[int]*cornerBlend, pu brepU
 			trims[pu.Face][i] = map[int]*cornerBlend{}
 		}
 	}
-	e := r.topo.embeds[pu.Face]
+	e := r.btopo.embeds[pu.Face]
 	walks := loops[pu.Loop].Walks
 	count := len(walks)
 	seg := walks[pu.Seg]

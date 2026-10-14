@@ -75,7 +75,7 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 	if err := r.matchEdges(); err != nil {
 		return nil, err
 	}
-	planar := r.topo.planar[sel.face]
+	planar := r.btopo.planar[sel.face]
 	if sel.loop >= len(planar) || len(planar[sel.loop]) != len(selected) {
 		return nil, r.refuse("SL1", `restating the straight walls changed the selected partial loop`)
 	}
@@ -85,8 +85,8 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 			return nil, r.refuse("SL1", `restating the straight walls lost a selected edge`)
 		}
 		found := false
-		for _, ui := range r.topo.edges[ei] {
-			u := r.topo.uses[ui]
+		for _, ui := range r.btopo.edges[ei] {
+			u := r.btopo.uses[ui]
 			if u.Face == sel.face && u.Loop == sel.loop && u.Part == brepLoopSeg &&
 				u.Seg >= 0 && u.Seg < len(again) {
 				again[u.Seg] = true
@@ -184,7 +184,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 	band := brepLoopBand{face: sel.face, loop: sel.loop, orig: cloneLoopRecord(orig),
 		setback: *r.call.loop, sigma: sel.sigma, kind: brepBandChamfer,
 		selected: slices.Clone(selected), capWalk: capWalk, capArc: capArc, restore: restore}
-	eF := r.topo.embeds[sel.face]
+	eF := r.btopo.embeds[sel.face]
 	n := eF.Axis[2]
 	sideZ, sideDelta := band.sideLevel(f)
 	sideRef := eF.Canon(0, 0, sideZ)[n]
@@ -194,7 +194,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 			continue
 		}
 		b := sel.beside[i]
-		pu := r.topo.uses[b.use]
+		pu := r.btopo.uses[b.use]
 		if _, ok := restore[pu.Face]; !ok {
 			restore[pu.Face] = r.bp.faces[pu.Face]
 		}
@@ -206,7 +206,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 			a.delta = math.Max(a.delta, sideDelta)
 			continue
 		}
-		eA := r.topo.embeds[pu.Face]
+		eA := r.btopo.embeds[pu.Face]
 		local := eA.Sign[2] * sideRef
 		if pu.Part == brepRim0 {
 			a.z0, a.z0Delta = local, proofbound.AbsSumUpper(math.Max(a.z0Delta, f.z0Delta), sideDelta)
@@ -287,8 +287,8 @@ func (r *brepLoopRead) partialTerminalChamfer(sel brepLoopSel, orig, contour loo
 	capWalk []int, eb *brepEdgeBlend, k int, sideRef float64) error {
 	v := eb.v[k]
 	seg := -1
-	for _, ui := range r.topo.edges[r.matched[eb.ordinal]] {
-		u := r.topo.uses[ui]
+	for _, ui := range r.btopo.edges[r.matched[eb.ordinal]] {
+		u := r.btopo.uses[ui]
 		if u.Face == sel.face && u.Loop == sel.loop && u.Part == brepLoopSeg {
 			seg = u.Seg
 			break
@@ -310,7 +310,7 @@ func (r *brepLoopRead) partialTerminalChamfer(sel brepLoopSel, orig, contour loo
 		return r.refuse("SL1", `a terminal is not a single straight walk`)
 	}
 	f := r.bp.faces[sel.face]
-	eF := r.topo.embeds[sel.face]
+	eF := r.btopo.embeds[sel.face]
 	var capRef [3]float64
 	switch {
 	case eF.Canon(ow.Walks[0].StartU, ow.Walks[0].StartV, f.z0) == v:
@@ -324,7 +324,7 @@ func (r *brepLoopRead) partialTerminalChamfer(sel brepLoopSel, orig, contour loo
 	side := v
 	side[n] = sideRef
 	endFace := r.bp.faces[eb.end[k].face]
-	eEnd := r.topo.embeds[eb.end[k].face]
+	eEnd := r.btopo.embeds[eb.end[k].face]
 	capLocal, sideLocal := eEnd.Local(capRef), eEnd.Local(side)
 	if capLocal[2] != endFace.z0 || sideLocal[2] != endFace.z0 {
 		return r.refuse("SL1", `a terminal line leaves its end face`)

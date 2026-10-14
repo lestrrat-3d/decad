@@ -278,7 +278,7 @@ type brepOpenSet struct {
 // loop's role. Every non-closed end is a vertex the record's own use already
 // placed; a whole circle's seam is placed here at its walk's start, which is
 // where buildCapBand reads the band's seam.
-func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, placeVertex func(c [3]float64, faceDelta, levelDelta, endAllow float64) *Vertex) (brepOpenSet, error) {
+func brepOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology, placeVertex func(c [3]float64, faceDelta, levelDelta, endAllow float64) *Vertex) (brepOpenSet, error) {
 	n := len(bp.loopBands)
 	if bp.bossShell != nil {
 		n++
@@ -293,8 +293,8 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 		return out, nil
 	}
 	openAt := map[brepgeom.EdgeKey]int{}
-	for _, ui := range topo.open {
-		openAt[topo.uses[ui].Key] = ui
+	for _, ui := range btopo.open {
+		openAt[btopo.uses[ui].Key] = ui
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
@@ -303,7 +303,7 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 			return brepOpenSet{}, err
 		}
 		f := bp.faces[b.face]
-		e := topo.embeds[b.face]
+		e := btopo.embeds[b.face]
 		hole := b.loop != 0
 		capView := f.view(bp.xform)
 		capSelected := map[int]bool{}
@@ -320,15 +320,15 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 				}
 			}
 		}
-		for _, ui := range topo.faceUses[b.face] {
-			u := topo.uses[ui]
+		for _, ui := range btopo.faceUses[b.face] {
+			u := btopo.uses[ui]
 			if u.Loop != b.loop {
 				continue
 			}
 			if b.selected != nil && !capSelected[u.Seg] {
 				continue
 			}
-			if topo.edgeOf[ui] >= 0 {
+			if btopo.edgeOf[ui] >= 0 {
 				return brepOpenSet{}, fmt.Errorf(`%w: chamfer band %d's cap contour pairs with a face of the record`, ErrUnsupported, bi)
 			}
 			start, end := placeVertex(u.DirFrom, 0, 0, 0), placeVertex(u.DirTo, 0, 0, 0)
@@ -365,7 +365,7 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 			if !ok {
 				return brepOpenSet{}, fmt.Errorf(`%w: chamfer band %d's side contour is not a boundary of the record`, ErrUnsupported, bi)
 			}
-			u := topo.uses[ui]
+			u := btopo.uses[ui]
 			beside := bp.faces[u.Face]
 			from, to := e.Canon(w.StartU, w.StartV, sideZ), e.Canon(w.EndU, w.EndV, sideZ)
 			var start, end *Vertex
@@ -395,17 +395,17 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 		}
 		for _, t := range b.terminals {
 			ui := -1
-			for _, candidate := range topo.faceUses[t.face] {
-				u := topo.uses[candidate]
+			for _, candidate := range btopo.faceUses[t.face] {
+				u := btopo.uses[candidate]
 				if u.Part == brepLoopSeg && u.Loop == t.loop && u.Seg == t.seg {
 					ui = candidate
 					break
 				}
 			}
-			if ui < 0 || topo.edgeOf[ui] >= 0 {
+			if ui < 0 || btopo.edgeOf[ui] >= 0 {
 				return brepOpenSet{}, fmt.Errorf(`%w: fillet band %d's terminal is not an open planar edge`, ErrUnsupported, bi)
 			}
-			u := topo.uses[ui]
+			u := btopo.uses[ui]
 			start, end := placeVertex(u.DirFrom, 0, 0, 0), placeVertex(u.DirTo, 0, 0, 0)
 			view := bp.faces[t.face].view(bp.xform)
 			edge, err := brepBandEdge(view, u.Walk, t.loop != 0, start, end)
@@ -417,17 +417,17 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology, plac
 		}
 	}
 	if bp.bossShell != nil {
-		if err := bossShellOpenEdges(ctx, bp, topo, openAt, placeVertex, &out, len(bp.loopBands)); err != nil {
+		if err := bossShellOpenEdges(ctx, bp, btopo, openAt, placeVertex, &out, len(bp.loopBands)); err != nil {
 			return brepOpenSet{}, err
 		}
 	}
 	if bp.pocketShell != nil {
-		if err := pocketShellOpenEdges(ctx, bp, topo, openAt, placeVertex, &out, len(bp.loopBands)); err != nil {
+		if err := pocketShellOpenEdges(ctx, bp, btopo, openAt, placeVertex, &out, len(bp.loopBands)); err != nil {
 			return brepOpenSet{}, err
 		}
 	}
-	if len(out.coedge) != len(topo.open) {
-		return brepOpenSet{}, fmt.Errorf(`%w: the record's chamfer bands bound %d of its %d one-sided edges`, ErrUnsupported, len(out.coedge), len(topo.open))
+	if len(out.coedge) != len(btopo.open) {
+		return brepOpenSet{}, fmt.Errorf(`%w: the record's chamfer bands bound %d of its %d one-sided edges`, ErrUnsupported, len(out.coedge), len(btopo.open))
 	}
 	return out, nil
 }

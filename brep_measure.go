@@ -29,7 +29,7 @@ type brepRegion = brepgeom.Region
 // attaches its loops. A planar face's plane is the cap frame its view states
 // at its level, turned to its outward normal; a swept face's surface is the
 // prism wall's own (buildWallGeometry).
-func brepFaceBody(ctx context.Context, bp brepPayload, topo *brepTopology, fi int, body *Body, ref producerID) (*Face, error) {
+func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi int, body *Body, ref producerID) (*Face, error) {
 	f := bp.faces[fi]
 	pp := f.view(bp.xform)
 	origins := []FeatureRef{{producer: ref, Role: f.role}}
@@ -41,7 +41,7 @@ func brepFaceBody(ctx context.Context, bp brepPayload, topo *brepTopology, fi in
 		if err != nil {
 			return nil, err
 		}
-		region, err := topo.region(ctx, bp, fi)
+		region, err := btopo.region(ctx, bp, fi)
 		if err != nil {
 			return nil, err
 		}
@@ -49,7 +49,7 @@ func brepFaceBody(ctx context.Context, bp brepPayload, topo *brepTopology, fi in
 			area: region.Published.Value, areaBound: region.Published.Bound,
 			axialDelta: f.z0Delta, hasAxialDelta: true}, nil
 	}
-	w := topo.walls[fi]
+	w := btopo.walls[fi]
 	_, _, surf, reversed, err := buildWallGeometry(pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}},
 		false, w.Closed, nil, nil, nil, nil)
 	if err != nil {
@@ -61,41 +61,41 @@ func brepFaceBody(ctx context.Context, bp brepPayload, topo *brepTopology, fi in
 }
 
 // region reads a planar face's region once per topology.
-func (topo *brepTopology) region(ctx context.Context, bp brepPayload, fi int) (brepRegion, error) {
-	if r, ok := topo.regions[fi]; ok {
+func (btopo *brepTopology) region(ctx context.Context, bp brepPayload, fi int) (brepRegion, error) {
+	if r, ok := btopo.regions[fi]; ok {
 		return r, nil
 	}
 	f := bp.faces[fi]
-	r, err := brepgeom.RegionOf(ctx, f.region, f.delta, topo.planar[fi])
+	r, err := brepgeom.RegionOf(ctx, f.region, f.delta, btopo.planar[fi])
 	if err != nil {
 		return brepRegion{}, err
 	}
-	if topo.regions == nil {
-		topo.regions = map[int]brepRegion{}
+	if btopo.regions == nil {
+		btopo.regions = map[int]brepRegion{}
 	}
-	topo.regions[fi] = r
+	btopo.regions[fi] = r
 	return r, nil
 }
 
 // measureBrepContext adapts the body's face records to brepgeom.IntegrateFaces
 // and publishes its readings, topology bounds and final validation.
-func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology, body *Body, bands brepBandMass) error {
-	restored, err := bp.filletRestored(topo)
+func measureBrepContext(ctx context.Context, bp brepPayload, btopo *brepTopology, body *Body, bands brepBandMass) error {
+	restored, err := bp.filletRestored(btopo)
 	if err != nil {
 		return err
 	}
 	readings, err := brepgeom.IntegrateFaces(ctx, len(bp.faces), func(fi int) (brepgeom.FaceMeasure, error) {
 		f, rf := bp.faces[fi], restored[fi]
 		record := brepgeom.FaceMeasure{
-			Embed: topo.embeds[fi], Planar: f.planar(), Outward: f.outward,
+			Embed: btopo.embeds[fi], Planar: f.planar(), Outward: f.outward,
 			Z0: f.z0, Z1: f.z1, RestoredZ0: rf.z0, RestoredZ1: rf.z1,
 			Z0Delta: f.z0Delta, Z1Delta: f.z1Delta, Delta: f.delta,
 		}
 		if !record.Planar {
-			record.Wall, record.Walk = f.wall, topo.walls[fi]
+			record.Wall, record.Walk = f.wall, btopo.walls[fi]
 			return record, nil
 		}
-		region, err := topo.region(ctx, bp, fi)
+		region, err := btopo.region(ctx, bp, fi)
 		if err != nil {
 			return brepgeom.FaceMeasure{}, err
 		}
@@ -105,7 +105,7 @@ func measureBrepContext(ctx context.Context, bp brepPayload, topo *brepTopology,
 		}
 		return record, err
 	}, brepgeom.FaceMass{Vol3: bands.vol3, Moments: bands.moments, Area: bands.area},
-		topo.coordUpper, bp.sectionDelta(), bp.axialDelta())
+		btopo.coordUpper, bp.sectionDelta(), bp.axialDelta())
 	if err != nil {
 		return err
 	}

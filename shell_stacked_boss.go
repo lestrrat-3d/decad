@@ -353,12 +353,12 @@ func closedBossShellEdgePairs(faces []*Face) bool {
 
 // bossShellOpenEdges supplies the two four-edge rings in the common
 // counter-clockwise walk. Each ordinary face uses its edge in its own sense.
-func bossShellOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology,
+func bossShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology,
 	openAt map[brepgeom.EdgeKey]int,
 	placeVertex func([3]float64, float64, float64, float64) *Vertex,
 	out *brepOpenSet, bi int) error {
 	band := bp.bossShell
-	e := topo.embeds[band.ledgeFace]
+	e := btopo.embeds[band.ledgeFace]
 	for ring, spec := range []struct {
 		profile profileRecord
 		z       float64
@@ -377,7 +377,7 @@ func bossShellOpenEdges(ctx context.Context, bp brepPayload, topo *brepTopology,
 			if !ok {
 				return fmt.Errorf("%w: a boss shell ring has no open record edge", ErrUnsupported)
 			}
-			u := topo.uses[ui]
+			u := btopo.uses[ui]
 			from, to := e.Canon(w.StartU, w.StartV, spec.z), e.Canon(w.EndU, w.EndV, spec.z)
 			start, end := placeVertex(from, 0, 0, 0), placeVertex(to, 0, 0, 0)
 			edge, err := brepBandEdge(view, w, true, start, end)

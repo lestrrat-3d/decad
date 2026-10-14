@@ -403,15 +403,15 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 // and section displacements are kept as the rewritten record states them,
 // which is never less than the receiver's. A record with no fillet band
 // returns its faces unchanged.
-func (bp brepPayload) filletRestored(topo *brepTopology) ([]brepFace, error) {
+func (bp brepPayload) filletRestored(btopo *brepTopology) ([]brepFace, error) {
 	out := bp.faces
 	if !bp.hasFilletBand() {
 		return out, nil
 	}
 	out = append([]brepFace(nil), bp.faces...)
 	openAt := map[brepgeom.EdgeKey]int{}
-	for _, ui := range topo.open {
-		openAt[topo.uses[ui].Key] = ui
+	for _, ui := range btopo.open {
+		openAt[btopo.uses[ui].Key] = ui
 	}
 	cloneRegion := func(fi int) *profileRecord {
 		src := out[fi].region
@@ -433,7 +433,7 @@ func (bp brepPayload) filletRestored(topo *brepTopology) ([]brepFace, error) {
 			continue
 		}
 		f := bp.faces[b.face]
-		eF := topo.embeds[b.face]
+		eF := btopo.embeds[b.face]
 		n := eF.Axis[2]
 		levelRef := eF.Canon(0, 0, f.z0)[n]
 		sideZ, _ := b.sideLevel(f)
@@ -455,8 +455,8 @@ func (bp brepPayload) filletRestored(topo *brepTopology) ([]brepFace, error) {
 			if !ok {
 				return nil, fmt.Errorf(`%w: fillet band %d's side contour is not a boundary of the record`, ErrUnsupported, bi)
 			}
-			u := topo.uses[ui]
-			eA := topo.embeds[u.Face]
+			u := btopo.uses[ui]
+			eA := btopo.embeds[u.Face]
 			a := &out[u.Face]
 			switch u.Part {
 			case brepRim0:
