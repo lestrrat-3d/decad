@@ -390,12 +390,21 @@ func SegAlongEdge(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) int {
 func segmentBoundaryEdges(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) (bool, bool, int) {
 	points := [2]proof.Xpt{p0, p1}
 	var known, on [2]uint8
+	var edgeKnown uint8
+	var edgeNormals [3]proof.Xpt
 	onEdge := func(point, edge int) bool {
 		bit := uint8(1 << edge)
 		if known[point]&bit == 0 {
 			known[point] |= bit
 			a, b := xt[edge], xt[(edge+1)%3]
-			if PlaneSide(a, b, points[point], n) == 0 && PointOnSegment3D(a, b, points[point]) {
+			if edgeKnown&bit == 0 {
+				// ((b-a)×(p-a))·n = (n×(b-a))·(p-a).
+				// The same edge normal serves both contact endpoints.
+				edgeNormals[edge] = proof.Xcross(n, proof.Xsub(b, a))
+				edgeKnown |= bit
+			}
+			if proof.XdotDiffSign(edgeNormals[edge], points[point], a) == 0 &&
+				PointOnSegment3D(a, b, points[point]) {
 				on[point] |= bit
 			}
 		}
