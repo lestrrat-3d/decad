@@ -473,7 +473,7 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 		} else if partner.Corners, ok = dr.cornersAt(end, other, theirs, below, true); !ok {
 			continue
 		}
-		if l := linkagebound.LowerHull(side, partner); l != nil && l.Cmp(best) > 0 {
+		if l := linkagebound.LowerHullAbove(side, partner, best); l != nil && l.Cmp(best) > 0 {
 			best = l
 		}
 	}

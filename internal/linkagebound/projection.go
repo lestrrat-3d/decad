@@ -2,6 +2,7 @@
 package linkagebound
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
@@ -15,6 +16,10 @@ type Bounds struct {
 	Vel    [][][3]proofbound.RatInterval
 	Pad    *big.Rat
 	PrismK int
+	// LoF and HiF are Lo and Hi as the floats RoundCorners read them back
+	// from, entry for entry. They are nil for a Bounds built another way;
+	// readers then convert Lo and Hi.
+	LoF, HiF [][3]float64
 }
 
 type Side struct {
@@ -135,7 +140,22 @@ func Lower(a, b Side) *big.Rat {
 // lower ends and read exactly: any fixed nonzero vector serves as n, so none
 // needs a proof, and a zero or non-finite one is skipped.
 func FaceNormals(c Bounds) []motionbound.RatVec {
+	var out []motionbound.RatVec
+	for _, v := range faceNormalVecs(c) {
+		r, _ := motionbound.RatVecOf(v)
+		out = append(out, r)
+	}
+	return out
+}
+
+// faceNormalVecs is FaceNormals' directions as the floats they are formed in,
+// in the same order, with the same zero and non-finite directions left out.
+// Each component is a float, so motionbound.RatVecOf reads it exactly.
+func faceNormalVecs(c Bounds) []r3.Vec {
 	at := func(n int) r3.Vec {
+		if len(c.LoF) == len(c.Lo) {
+			return r3.NewVec(c.LoF[n][0], c.LoF[n][1], c.LoF[n][2])
+		}
 		f := func(q *big.Rat) float64 { v, _ := q.Float64(); return v }
 		return r3.NewVec(f(c.Lo[n][0]), f(c.Lo[n][1]), f(c.Lo[n][2]))
 	}
@@ -152,13 +172,23 @@ func FaceNormals(c Bounds) []motionbound.RatVec {
 	case len(c.Lo) == 8:
 		vecs = append(vecs, at(1).Sub(at(0)), at(2).Sub(at(0)), at(4).Sub(at(0)))
 	}
-	var out []motionbound.RatVec
+	out := vecs[:0]
 	for _, v := range vecs {
-		if r, ok := motionbound.RatVecOf(v); ok && !ZeroVec(r) {
-			out = append(out, r)
+		if !finiteVec(v) || (v.X == 0 && v.Y == 0 && v.Z == 0) {
+			continue
 		}
+		out = append(out, v)
 	}
 	return out
+}
+
+func finiteVec(v r3.Vec) bool {
+	for _, x := range [3]float64{v.X, v.Y, v.Z} {
+		if math.IsNaN(x) || math.IsInf(x, 0) {
+			return false
+		}
+	}
+	return true
 }
 
 // ExtentsAlong is Side.extents along any nonzero direction n:
@@ -249,47 +279,73 @@ type HullWitness struct {
 // LowerHullWithWitness also returns the first direction attaining the bound.
 // The upper norm is used to charge that direction's derivative shares.
 func LowerHullWithWitness(a, b Side) HullWitness {
-	one, zero := big.NewRat(1, 1), new(big.Rat)
-	dirs := []motionbound.RatVec{{one, zero, zero}, {zero, one, zero}, {zero, zero, one}}
-	dirs = append(dirs, FaceNormals(a.Corners)...)
-	dirs = append(dirs, FaceNormals(b.Corners)...)
+	return LowerHullWithWitnessAbove(a, b, nil)
+}
+
+// LowerHullAbove is LowerHull with LowerHullWithWitnessAbove's floor.
+func LowerHullAbove(a, b Side, floor *big.Rat) *big.Rat {
+	return LowerHullWithWitnessAbove(a, b, floor).Bound
+}
+
+// LowerHullWithWitnessAbove is LowerHullWithWitness for a caller that keeps
+// the bound only when it exceeds floor (nil: no floor). Whenever
+// LowerHullWithWitness's bound exceeds floor it returns exactly that witness;
+// otherwise its Bound is nil or at most floor.
+//
+// It skips a direction only when it proves the direction cannot be the first
+// to attain a bound above floor, and never decides a value: every direction it
+// evaluates runs the exact path. A face normal with one nonzero component is a
+// scaled coordinate direction, whose candidates are at most the coordinate
+// candidates already taken (the extents scale by the component's magnitude and
+// the rounded norms only shrink the quotient; this needs a nonnegative
+// remainder and span, which floatSide checks). Any other direction is skipped
+// when hullDirectionBelow proves both candidates below the best bound so far
+// or below floor.
+func LowerHullWithWitnessAbove(a, b Side, floor *big.Rat) HullWitness {
 	pads := new(big.Rat)
 	for _, p := range []*big.Rat{a.Corners.Pad, b.Corners.Pad} {
 		if p != nil {
 			pads.Add(pads, p)
 		}
 	}
+	padsLo, _ := ratEnclose(pads)
+	limit := math.Inf(-1)
+	if floor != nil {
+		limit, _ = ratEnclose(floor)
+	}
+	fa, fb := floatSide(a), floatSide(b)
+	filter := fa.ok && fb.ok
 	var best *big.Rat
 	var winner motionbound.RatVec
 	var winnerNorm *big.Rat
 	winnerSense := 0
 	var aAxisUp, aAxisDown, bAxisUp, bAxisDown [3]*big.Rat
-	for direction, n := range dirs {
-		sq := axisSq(n)
-		normUp := sqrtUpRat(sq)
-		normDown := proofarith.FloatRat(proofbound.RatSqrtDown(sq))
-		if normUp == nil || normDown == nil || normDown.Sign() <= 0 {
-			continue
-		}
-		if direction >= 3 {
-			var component *big.Rat
-			axial := true
-			for _, v := range n {
-				if v.Sign() == 0 {
-					continue
-				}
-				if component != nil {
-					axial = false
-					break
-				}
-				component = v
+	one, zero := big.NewRat(1, 1), new(big.Rat)
+	dirs := []motionbound.RatVec{{one, zero, zero}, {zero, one, zero}, {zero, zero, one}}
+	vecs := faceNormalVecs(a.Corners)
+	vecs = append(vecs, faceNormalVecs(b.Corners)...)
+	for direction := range 3 + len(vecs) {
+		var n motionbound.RatVec
+		var normUp, normDown *big.Rat
+		if direction < 3 {
+			// RatSqrtUp and RatSqrtDown of 1 are both exactly 1.
+			n = dirs[direction]
+			normUp, normDown = big.NewRat(1, 1), big.NewRat(1, 1)
+		} else {
+			v := vecs[direction-3]
+			if filter && (nonzeroComponents(v) == 1 || hullDirectionBelow(fa, fb, v, padsLo, limit)) {
+				continue
 			}
-			// Both senses of an exact axial direction were already checked.
-			if axial && component != nil {
-				magnitude := new(big.Rat).Abs(component)
-				if normUp.Cmp(magnitude) == 0 && normDown.Cmp(magnitude) == 0 {
-					continue
-				}
+			n, _ = motionbound.RatVecOf(v)
+			sq := axisSq(n)
+			normUp = sqrtUpRat(sq)
+			normDown = proofarith.FloatRat(proofbound.RatSqrtDown(sq))
+			if normUp == nil || normDown == nil || normDown.Sign() <= 0 {
+				continue
+			}
+			if !filter && exactAxial(n, normUp, normDown) {
+				// Both senses of an exact axial direction were already checked.
+				continue
 			}
 		}
 		var aUp, aDown, bUp, bDown *big.Rat
@@ -321,8 +377,41 @@ func LowerHullWithWitness(a, b Side) HullWitness {
 			if best == nil || l.Cmp(best) > 0 {
 				best = l
 				winner, winnerNorm, winnerSense = n, normUp, candidate.sense
+				if lo, _ := ratEnclose(best); lo > limit {
+					limit = lo
+				}
 			}
 		}
 	}
 	return HullWitness{Bound: best, Axis: winner, Norm: winnerNorm, Sense: winnerSense}
+}
+
+func nonzeroComponents(v r3.Vec) int {
+	count := 0
+	for _, x := range [3]float64{v.X, v.Y, v.Z} {
+		if x != 0 {
+			count++
+		}
+	}
+	return count
+}
+
+// exactAxial reports whether n has one nonzero component whose magnitude both
+// rounded norms equal.
+func exactAxial(n motionbound.RatVec, normUp, normDown *big.Rat) bool {
+	var component *big.Rat
+	for _, v := range n {
+		if v.Sign() == 0 {
+			continue
+		}
+		if component != nil {
+			return false
+		}
+		component = v
+	}
+	if component == nil {
+		return false
+	}
+	magnitude := new(big.Rat).Abs(component)
+	return normUp.Cmp(magnitude) == 0 && normDown.Cmp(magnitude) == 0
 }

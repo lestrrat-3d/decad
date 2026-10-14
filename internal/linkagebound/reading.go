@@ -90,12 +90,19 @@ func ReadPoints(frames []motionbound.MotionFrame, params []motionbound.MotionPar
 // RoundOut widens an enclosure to the floats around it, read back as exact
 // rationals; ok is false when an end overflows a float.
 func RoundOut(iv proofbound.RatInterval) (proofbound.RatInterval, bool) {
-	lo := proofarith.FloatRat(proofbound.RatFloatDown(iv.Lo))
-	hi := proofarith.FloatRat(proofbound.RatFloatUp(iv.Hi))
+	out, _, _, ok := roundOutFloats(iv)
+	return out, ok
+}
+
+// roundOutFloats is RoundOut that also returns the two floats it read the
+// enclosure back from.
+func roundOutFloats(iv proofbound.RatInterval) (proofbound.RatInterval, float64, float64, bool) {
+	lof, hif := proofbound.RatFloatDown(iv.Lo), proofbound.RatFloatUp(iv.Hi)
+	lo, hi := proofarith.FloatRat(lof), proofarith.FloatRat(hif)
 	if lo == nil || hi == nil {
-		return proofbound.RatInterval{}, false
+		return proofbound.RatInterval{}, 0, 0, false
 	}
-	return proofbound.IntervalOwned(lo, hi), true
+	return proofbound.IntervalOwned(lo, hi), lof, hif, true
 }
 
 // RoundCorners rounds a corner reading outward (Bounds); ok is false
@@ -104,14 +111,16 @@ func RoundCorners(r Reading) (Bounds, bool) {
 	out := Bounds{
 		Lo: make([][3]*big.Rat, len(r.Pos)), Hi: make([][3]*big.Rat, len(r.Pos)),
 		Vel: make([][][3]proofbound.RatInterval, len(r.Pos)), Pad: r.Pad, PrismK: r.PrismK,
+		LoF: make([][3]float64, len(r.Pos)), HiF: make([][3]float64, len(r.Pos)),
 	}
 	for c := range r.Pos {
 		for d := range 3 {
-			iv, ok := RoundOut(r.Pos[c][d])
+			iv, lof, hif, ok := roundOutFloats(r.Pos[c][d])
 			if !ok {
 				return Bounds{}, false
 			}
 			out.Lo[c][d], out.Hi[c][d] = iv.Lo, iv.Hi
+			out.LoF[c][d], out.HiF[c][d] = lof, hif
 		}
 		out.Vel[c] = make([][3]proofbound.RatInterval, len(r.Vel[c]))
 		for n, v := range r.Vel[c] {
