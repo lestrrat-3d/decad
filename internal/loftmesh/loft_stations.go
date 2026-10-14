@@ -311,6 +311,41 @@ func LoftCircularStationChain(side LoftCircularSide, m int) ([]LoftStation, floa
 	return pts, delta
 }
 
+// sharedCircleStationChains uses one exact turn enclosure where both recorded
+// circles denote the same parameter at every station. Other pairs retain the
+// independent station walks above, including their refusal behavior.
+func sharedCircleStationChains(a, b LoftCircularSide, m int) (
+	[]LoftStation, []LoftStation, float64, float64, bool,
+) {
+	ba, okA := a.Bounder.(loftCircularBounder)
+	bb, okB := b.Bounder.(loftCircularBounder)
+	if !okA || !okB || !a.RangeOK || !b.RangeOK || !ba.valid || !bb.valid ||
+		a.TStart.Cmp(b.TStart) != 0 || a.DT.Cmp(b.DT) != 0 || !ba.endpoint.CanShareCircleTurn(bb.endpoint) {
+		return nil, nil, 0, 0, false
+	}
+	pts0, pts1 := make([]LoftStation, m), make([]LoftStation, m)
+	pts0[0] = LoftStation{U: a.Walk.StartU, V: a.Walk.StartV}
+	pts1[0] = LoftStation{U: b.Walk.StartU, V: b.Walk.StartV}
+	d0 := math.Max(WalkEndPlaneDelta(a.Walk.StartBound), WalkEndPlaneDelta(a.Walk.EndBound))
+	d0 = math.Max(d0, a.EndRadialUpper)
+	d1 := math.Max(WalkEndPlaneDelta(b.Walk.StartBound), WalkEndPlaneDelta(b.Walk.EndBound))
+	d1 = math.Max(d1, b.EndRadialUpper)
+	for k := 1; k < m; k++ {
+		t := float64(k) / float64(m)
+		theta0 := a.Walk.Th0 + t*(a.Walk.Th1-a.Walk.Th0)
+		sin0, cos0 := math.Sincos(theta0)
+		pts0[k] = LoftStation{U: a.Walk.CU + a.Walk.Radius*cos0, V: a.Walk.CV + a.Walk.Radius*sin0}
+		theta1 := b.Walk.Th0 + t*(b.Walk.Th1-b.Walk.Th0)
+		sin1, cos1 := math.Sincos(theta1)
+		pts1[k] = LoftStation{U: b.Walk.CU + b.Walk.Radius*cos1, V: b.Walk.CV + b.Walk.Radius*sin1}
+		tk := new(big.Rat).Add(a.TStart, new(big.Rat).Mul(big.NewRat(int64(k), int64(m)), a.DT))
+		bound0, bound1 := ba.sharedCircleBoundsAt(bb, tk, pts0[k].U, pts0[k].V, pts1[k].U, pts1[k].V)
+		d0 = math.Max(d0, WalkEndPlaneDelta(bound0))
+		d1 = math.Max(d1, WalkEndPlaneDelta(bound1))
+	}
+	return pts0, pts1, d0, d1, true
+}
+
 // LoftCircularCellStations is the circular arm. It settles the pair's shared
 // station count through SettleRecordStationCount — docs/loft-design.md §5.1's
 // JOINT WALK-UP, whose own doc comment owns that rule — and then walks BOTH
@@ -371,8 +406,11 @@ func LoftCircularCellStations(a, b LoftCircularSide, target float64) ([]LoftStat
 	if err != nil {
 		return nil, nil, 0, nil, 0, err
 	}
-	stations0, d0 := LoftCircularStationChain(a, m)
-	stations1, d1 := LoftCircularStationChain(b, m)
+	stations0, stations1, d0, d1, shared := sharedCircleStationChains(a, b, m)
+	if !shared {
+		stations0, d0 = LoftCircularStationChain(a, m)
+		stations1, d1 = LoftCircularStationChain(b, m)
+	}
 	stationUpper := math.Max(d0, d1)
 	if proofbound.IsNonFinite(stationUpper) {
 		return nil, nil, 0, nil, 0, ErrLoftStationDisplacementUnderivable

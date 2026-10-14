@@ -33,6 +33,17 @@ func (b loftCircularBounder) BoundAt(t *big.Rat, u, v float64) proofbound.WalkEn
 	}
 }
 
+func (b loftCircularBounder) sharedCircleBoundsAt(other loftCircularBounder, t *big.Rat,
+	u0, v0, u1, v1 float64,
+) (proofbound.WalkEndBound, proofbound.WalkEndBound) {
+	ivU0, ivV0, ivU1, ivV1 := b.endpoint.AtSharedCircleTurn(other.endpoint, t)
+	return proofbound.WalkEndBound{
+			U: proofbound.IntervalFloatError(ivU0, u0), V: proofbound.IntervalFloatError(ivV0, v0),
+		}, proofbound.WalkEndBound{
+			U: proofbound.IntervalFloatError(ivU1, u1), V: proofbound.IntervalFloatError(ivV1, v1),
+		}
+}
+
 func RecordCircularSide(w survey2d.SegmentWalk, seg sectionrecord.CurveSegment) LoftCircularSide {
 	radius, sweep, enclosed := circularbounds.WalkEnclosures(circularbounds.RecordSegment(seg))
 	tStart, dt, rangeOK := CircularSegmentRange(seg)
