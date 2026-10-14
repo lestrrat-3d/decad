@@ -1448,3 +1448,4 @@
 10	0.00	TestGatePointsNeverStoreOrReturnUnderCancel
 10	0.00	TestPointLoftAuditsDecideCapsAsFamilies
 10	0.00	TestLoftCylinderRingTeethReuseMatchesFresh
+10	0.00	TestFacetedPlacementMovesCurvedTags

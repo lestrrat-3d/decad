@@ -338,6 +338,15 @@ vertex depends on that vertex's inputs alone (`internal/proofbound/bounds.go`,
 addition. The exact-source record for a translation-only placement is kept or
 dropped under the same conditions as today, with §4.1's zero condition.
 
+Placement carries every analytic group tag (`Plane`, `Cylinder`, `Cone`,
+`Sphere`, `Torus`) to its float image under the delta
+(`surfaceplace.TransformSurface`) unless the delta is exactly the identity.
+The moved tag is a bounded stand-in (`docs/api-design.md` §6.1) and its
+group's `normalBound` is 2, the largest distance of two unit normals. A denoted
+group proves `NormalAt` against the denoted patch's exact image and does not
+read `normalBound`. A reflection flips only a `Plane` group's orientation. A
+`NURBSSurface` tag is a marker with no geometry and does not move.
+
 ### 4.4 Faceted restatement
 
 `tessellateFaceted` publishes the payload's `vertexBound` on the `Mesh`,

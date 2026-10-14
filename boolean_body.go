@@ -255,20 +255,23 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 		}
 		// A later structural trim requires the unplaced source. Its retained
 		// public surface identity still moves with this faceted restatement.
-		if cone, ok := next.groups[i].surface.(Cone); ok {
-			cone.Origin = delta.Apply(cone.Origin)
-			cone.Axis = delta.ApplyDir(cone.Axis)
-			next.groups[i].surface = cone
-		}
-		if plane, ok := next.groups[i].surface.(Plane); ok && delta != r3.Identity() {
-			moved, err := surfaceplace.TransformSurface(internalSurface(plane), delta)
-			if err != nil {
-				return nil, err
-			}
-			next.groups[i].surface = publicSurface(moved)
-			next.groups[i].normalBound = 2
-			if delta.IsReflection() {
-				next.groups[i].reversed = !next.groups[i].reversed
+		// The moved tag is the float image of the source tag, a bounded
+		// stand-in. NormalAt proves a denoted group against the denoted
+		// patch's exact image and never reads normalBound. Any other group is
+		// charged the largest distance of two unit normals.
+		if tag := next.groups[i].surface; tag != nil && delta != r3.Identity() {
+			switch tag.(type) {
+			case Plane, Cylinder, Cone, Sphere, Torus:
+				moved, err := surfaceplace.TransformSurface(internalSurface(tag), delta)
+				if err != nil {
+					return nil, err
+				}
+				next.groups[i].surface = publicSurface(moved)
+				next.groups[i].normalBound = 2
+				// Only a Plane normal is U x V, which a reflection negates.
+				if _, planar := tag.(Plane); planar && delta.IsReflection() {
+					next.groups[i].reversed = !next.groups[i].reversed
+				}
 			}
 		}
 		if next.groups[i].denoted != nil {
