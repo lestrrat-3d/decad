@@ -58,7 +58,7 @@ func Example_decad_remove() {
 	}
 	fmt.Printf("with addition: %s, passed: %v\n", report.Status, report.Passed())
 
-	if err := doc.Remove(added); err != nil {
+	if err := decad.Remove(added); err != nil {
 		fmt.Printf("failed to remove: %s\n", err)
 		return
 	}
@@ -76,7 +76,7 @@ func Example_decad_remove() {
 		return
 	}
 	fmt.Printf("removed body volume: %s\n", vol.Value)
-	fmt.Printf("remove again refused as retired: %v\n", errors.Is(doc.Remove(added), decad.ErrRetiredBody))
+	fmt.Printf("remove again refused as retired: %v\n", errors.Is(decad.Remove(added), decad.ErrRetiredBody))
 	// Output:
 	// with addition: Interfering, passed: false
 	// after remove: Sound, passed: true, live bodies: 1

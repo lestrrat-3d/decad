@@ -59,20 +59,18 @@ func (d *Document) liveBodies() []*Body {
 // Remove produces no body, so no producer identity advances, and every other
 // body, including one built from b, keeps its geometry and provenance.
 //
-// b MUST NOT be nil (ErrDegenerate). A body another document owns is
-// ErrForeignBody, and a body already retired — consumed by a feature or
-// removed before — is ErrRetiredBody. A refused call leaves the document
-// unchanged. Remove may run concurrently with Bodies and Verify; a Verify
+// b MUST NOT be nil (ErrDegenerate), and a body that belongs to no document
+// is ErrDegenerate. The document is the one b names; a body already retired
+// — consumed by a feature or removed before — is ErrRetiredBody. A refused
+// call leaves the document unchanged. Remove may run concurrently with Bodies and Verify; a Verify
 // already under way reports on the set as it stood when the call began.
-func (d *Document) Remove(b *Body) error {
-	if d == nil {
-		return fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
-	}
+func Remove(b *Body) error {
 	if b == nil {
 		return fmt.Errorf(`%w: a nil body names nothing to remove`, ErrDegenerate)
 	}
-	if b.doc != d {
-		return ErrForeignBody
+	d := b.doc
+	if d == nil {
+		return fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
 	d.n.Mu.Lock()
 	defer d.n.Mu.Unlock()

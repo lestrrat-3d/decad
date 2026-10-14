@@ -130,7 +130,7 @@ func TestConeFromFaceRefuses(t *testing.T) {
 	t.Run("retired body", func(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, section)
 		sel := faceOf(t, blank, isCone)
-		require.NoError(t, blank.doc.Remove(blank))
+		require.NoError(t, Remove(blank))
 		_, err := ConeFromFace(t.Context(), blank, sel, far)
 		require.ErrorIs(t, err, ErrRetiredBody)
 	})

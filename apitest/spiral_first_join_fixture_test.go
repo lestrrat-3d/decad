@@ -269,7 +269,7 @@ func spiralSlabs(t *testing.T, doc *decad.Document, d spiralDims, f spiralFrame,
 		order[i] = ranked{body: piece, distance: centroid.Value.Dot(f.coneVec)}
 	}
 	sort.Slice(order, func(i, j int) bool { return order[i].distance < order[j].distance })
-	require.NoError(t, doc.Remove(order[0].body))
+	require.NoError(t, decad.Remove(order[0].body))
 	slabs := make([]*decad.Body, 0, len(order)-1)
 	for _, o := range order[1:] {
 		slabs = append(slabs, o.body)
@@ -435,7 +435,7 @@ func spiralBlankAndTooth(t *testing.T, doc *decad.Document) (*decad.Body, *decad
 	curved, err := doc.LoftFaces(t.Context(), spiralLoftSections(t, crowned, f)...)
 	require.NoError(t, err)
 	for _, slab := range crowned {
-		require.NoError(t, doc.Remove(slab))
+		require.NoError(t, decad.Remove(slab))
 	}
 
 	toeCone := spiralEndCone(t, doc, section[4].station+section[4].radius*math.Tan(d.coneAngle), d)

@@ -325,13 +325,13 @@ func TestCopyRotationMotionRefusalSurvivesDescendants(t *testing.T) {
 			return b
 		}},
 		{"retired source then transform", nil, func(t *testing.T, doc *Document, source, exact *Body) *Body {
-			require.NoError(t, doc.Remove(source))
+			require.NoError(t, Remove(source))
 			b, err := Transform(t.Context(), exact, shift)
 			require.NoError(t, err)
 			return b
 		}},
 		{"retired source then copy", nil, func(t *testing.T, doc *Document, source, exact *Body) *Body {
-			require.NoError(t, doc.Remove(source))
+			require.NoError(t, Remove(source))
 			b, err := Copy(t.Context(), exact)
 			require.NoError(t, err)
 			return b
