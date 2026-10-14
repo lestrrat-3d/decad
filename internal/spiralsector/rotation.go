@@ -2,9 +2,22 @@ package spiralsector
 
 import (
 	"math"
+	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/r3"
 )
+
+// AxisCopyMap returns the exact linear map of a copy whose true solid is the
+// image under a rotation about the X axis through the origin, and false for a
+// nil record or any record that is not such a rotation. It is a structural
+// check on an exact record, never a residual, so it can only refuse.
+func AxisCopyMap(rec *exactrotation.Rotation) ([3][3]*big.Rat, bool) {
+	if rec == nil || !rec.FixesXAxisAtOrigin() {
+		return [3][3]*big.Rat{}, false
+	}
+	return rec.Linear(), true
+}
 
 // NearAxisRotation reports whether t is a pure rotation about the X axis whose
 // X basis vector is within one float step of unit length.

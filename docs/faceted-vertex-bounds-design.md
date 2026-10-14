@@ -232,7 +232,12 @@ producer, source and target placements, and exact recorded motion. A copy of a
 copy retains the original source. The generic copied-tool proof rechecks these
 records, one-to-one live face owners, unchanged triangle order, and source and
 held shell separation. The legacy curved join still requires the nine-section
-trim and axial motions for its first-tooth seam checks. The call builds
+trim and, for every copy, a direct `WithCopyRotation` copy about the X axis
+through the origin. That exact rotation leaves the blank invariant, so the
+first tooth's source facts hold for each copy; a float placement matrix is not
+orthogonal and would scale the blank, so a copy without the record is refused
+at the entrance ("carries no exact X-axis rotation"). A moved copy or a copy of
+a copy carries no such record and is refused. The call builds
 one transient tool operand and commits only after one Union and complete
 boundary, mass, and topology proofs. A refusal leaves all input bodies live.
 
@@ -284,8 +289,14 @@ checks every switched output edge. Each copy's complete held cap and root
 chains are compared with the same authenticated source curves. The expensive
 source-only root-flank slabs are prepared once; four independent workers
 check their own output chains against those immutable boxes. The inverse
-comparison fixes local X to the held blank-ring coordinate and charges the
-recorded transform's X defect in the exact back/forward matrix residual.
+comparison maps each held vertex by the float inverse of the copy's motion and
+fixes local X to the held blank-ring coordinate, which the exact rotation's
+transpose preserves. It charges the entrywise gap between the float inverse and
+that transpose once per copy, applied to every vertex's reach, plus the
+inverse's rounding. The transpose is an isometry, so no stretch factor applies,
+and the blank's radial allowance is the same gap times the blank radius. The
+helper refuses unless the record fixes the X axis through the origin and the
+float motion has zero translation, and it refuses any non-finite charge.
 Whole-output area allowance and the ordinary Boolean volume proof still
 apply before publication.
 
@@ -354,6 +365,13 @@ group's `normalBound` is 2, the largest distance of two unit normals. A denoted
 group proves `NormalAt` against the denoted patch's exact image and does not
 read `normalBound`. A reflection flips only a `Plane` group's orientation. A
 `NURBSSurface` tag is a marker with no geometry and does not move.
+
+An exact-rotation placement (`WithCopyRotation`) places the held mesh by the
+same float transform, but denotes an exactly orthogonal rational rotation. It
+adds `|Q - D|·|v|_max + |t_Q - t_D|` to each vertex's rounding allowance in
+place of the stretch factor and determinant charge, where `Q` is the exact
+rotation and `D` the float one. It drops every analytic surface tag and
+`denoted` patch, because those describe the float placement.
 
 ### 4.4 Faceted restatement
 
