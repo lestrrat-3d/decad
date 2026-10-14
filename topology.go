@@ -258,6 +258,7 @@ func (borrowedCurve) curve() {}
 
 // Vertex is a topological point.
 type Vertex struct {
+	_ noCopy
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Vertex
 }
@@ -329,9 +330,9 @@ func (ce CoEdge) Start() *Vertex {
 		return nil
 	}
 	if ce.forward {
-		return ce.edge.start
+		return vertexHandle(ce.edge.n.Start)
 	}
-	return ce.edge.end
+	return vertexHandle(ce.edge.n.End)
 }
 
 // End returns the vertex where this loop use ends. It returns nil for the zero
@@ -341,9 +342,9 @@ func (ce CoEdge) End() *Vertex {
 		return nil
 	}
 	if ce.forward {
-		return ce.edge.end
+		return vertexHandle(ce.edge.n.End)
 	}
-	return ce.edge.start
+	return vertexHandle(ce.edge.n.Start)
 }
 
 // IsForward reports whether this loop use walks from Edge.Start to Edge.End.
@@ -353,8 +354,6 @@ func (ce CoEdge) IsForward() bool { return ce.forward }
 // Edge is a topological edge: a tagged curve between two vertices, with the
 // faces adjacent to it.
 type Edge struct {
-	start *Vertex
-	end   *Vertex
 	faces []*Face
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Edge
@@ -364,10 +363,10 @@ type Edge struct {
 func (e *Edge) Curve() Curve { return publicCurve(e.n.Curve) }
 
 // Start returns the edge's start vertex.
-func (e *Edge) Start() *Vertex { return e.start }
+func (e *Edge) Start() *Vertex { return vertexHandle(e.n.Start) }
 
 // End returns the edge's end vertex.
-func (e *Edge) End() *Vertex { return e.end }
+func (e *Edge) End() *Vertex { return vertexHandle(e.n.End) }
 
 // Faces returns the faces adjacent to this edge. What len(Faces()) means is
 // read per body kind (docs/surface-design.md §2.2, core §6.1): on a
@@ -752,10 +751,10 @@ func (b *Body) Edges() []*Edge {
 
 // Vertices returns the body's vertices, deduplicated.
 func (b *Body) Vertices() []*Vertex {
-	seen := map[*Vertex]struct{}{}
+	seen := map[*topo.Vertex]struct{}{}
 	var out []*Vertex
 	for _, e := range b.Edges() {
-		for _, v := range []*Vertex{e.start, e.end} {
+		for _, v := range [2]*topo.Vertex{e.n.Start, e.n.End} {
 			if v == nil {
 				continue
 			}
@@ -763,7 +762,7 @@ func (b *Body) Vertices() []*Vertex {
 				continue
 			}
 			seen[v] = struct{}{}
-			out = append(out, v)
+			out = append(out, vertexHandle(v))
 		}
 	}
 	return out

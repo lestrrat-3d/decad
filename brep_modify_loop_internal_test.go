@@ -471,7 +471,7 @@ func TestBrepLoopChamferContourBound(t *testing.T) {
 	}
 	vertices := map[*Vertex]struct{}{}
 	for _, e := range out.Edges() {
-		vertices[e.start], vertices[e.end] = struct{}{}, struct{}{}
+		vertices[vertexHandle(e.n.Start)], vertices[vertexHandle(e.n.End)] = struct{}{}, struct{}{}
 	}
 	for i := range lines {
 		l0, l1 := lines[(i+len(lines)-1)%len(lines)], lines[i]

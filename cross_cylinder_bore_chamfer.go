@@ -33,7 +33,7 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 		return nil, false, nil
 	}
 	if fp.xform != r3.Identity() || len(edges) != 1 ||
-		edges[0].start != edges[0].end || len(body.Edges()) != 4 {
+		edges[0].n.Start != edges[0].n.End || len(body.Edges()) != 4 {
 		return nil, true, fmt.Errorf("%w: the cross-bore chamfer needs one complete unplaced mouth loop", ErrUnsupported)
 	}
 	if _, ok := edges[0].n.Curve.(surfacegeom.FacetedCurve); !ok {
@@ -42,7 +42,7 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	outer, outerOK := crossBoreFaceGroup(rec.target, prismOuterFirstSideRole)
 	bore, boreOK := crossBoreFaceGroup(rec.tool, prismOuterFirstSideRole)
 	if !outerOK || !boreOK || !crossBoreEdgeHasOrigins(edges[0], outer, bore) ||
-		!(edges[0].start.n.Position.X > rec.radius/2) {
+		!(edges[0].n.Start.Position.X > rec.radius/2) {
 		return nil, true, fmt.Errorf("%w: the selected edge is not the positive cross-bore mouth", ErrUnsupported)
 	}
 	if asym != nil || setbackDelta != 0 || !(setback > 0) ||

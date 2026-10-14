@@ -524,7 +524,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
-		nv := &Vertex{n: topo.Vertex{Position: verts[class], Bound: units.Millimeters(bound), Denot: plan.table.Tokens[class].Compose(xform)}}
+		nv := bornVertex(&Vertex{n: topo.Vertex{Position: verts[class], Bound: units.Millimeters(bound), Denot: plan.table.Tokens[class].Compose(xform)}})
 		newVertByClass[class] = nv
 		classOf[nv] = class
 		return nv
@@ -542,8 +542,8 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if eb, ok := buildByOld[old]; ok {
 			return eb, nil
 		}
-		startClass := plan.table.classOf(old.start)
-		endClass := plan.table.classOf(old.end)
+		startClass := plan.table.classOf(vertexHandle(old.n.Start))
+		endClass := plan.table.classOf(vertexHandle(old.n.End))
 		gid, isWelded := plan.group[old]
 		if isWelded {
 			if eb, ok := buildByGroup[gid]; ok {
@@ -560,8 +560,6 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
-			start: vertexForClass(startClass),
-			end:   vertexForClass(endClass),
 			n: topo.Edge{
 				Convex:          old.n.Convex,
 				Length:          old.n.Length,
@@ -573,6 +571,8 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				// above — is a sound representative for the other's identity too.
 				Denot: old.n.Denot.Compose(xform),
 				Curve: curve,
+				Start: vertexNode(vertexForClass(startClass)),
+				End:   vertexNode(vertexForClass(endClass)),
 			},
 		}
 		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
@@ -627,7 +627,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				// their shared rim in opposite senses — so the coedge's
 				// forward flag is restated against the CANONICAL edge's own
 				// direction rather than copied verbatim.
-				oldStartClass := plan.table.classOf(ce.edge.start)
+				oldStartClass := plan.table.classOf(vertexHandle(ce.edge.n.Start))
 				forward := ce.forward
 				if oldStartClass != eb.startClass {
 					forward = !forward
@@ -761,8 +761,8 @@ func stitchLumpsProvenSeparate(components [][]*Face) bool {
 		func(f *Face, visit func(*Vertex)) {
 			for _, l := range f.loops {
 				for _, ce := range l.coedges {
-					visit(ce.edge.start)
-					visit(ce.edge.end)
+					visit(vertexHandle(ce.edge.n.Start))
+					visit(vertexHandle(ce.edge.n.End))
 				}
 			}
 		},
@@ -921,7 +921,7 @@ func fixWeldedEdgeConvexity(welded map[*Edge]struct{}) {
 		if bwd.n.Reversed {
 			nb = nb.Scale(-1)
 		}
-		d := e.end.n.Position.Sub(e.start.n.Position)
+		d := e.n.End.Position.Sub(e.n.Start.Position)
 		e.n.Convex = na.Cross(nb).Dot(d) > 0
 	}
 }

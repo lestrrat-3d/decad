@@ -254,14 +254,14 @@ func requireCoversMappedReference(t *testing.T, ref, b *Body, m fdMap) {
 	re, be := ref.Edges(), b.Edges()
 	require.Len(t, be, len(re))
 	for i := range re {
-		if _, ok := re[i].n.Curve.(surfacegeom.Line3); !ok || re[i].start == nil || re[i].n.LengthUnbounded {
+		if _, ok := re[i].n.Curve.(surfacegeom.Line3); !ok || re[i].n.Start == nil || re[i].n.LengthUnbounded {
 			continue
 		}
 		l0, err := re[i].Length()
 		require.NoError(t, err)
 		l1, err := be[i].Length()
 		require.NoError(t, err)
-		d := fdVecOf(re[i].end.n.Position.Sub(re[i].start.n.Position))
+		d := fdVecOf(re[i].n.End.Position.Sub(re[i].n.Start.Position))
 		r := fdMissRatio(l1.Value.Base(), l1.Bound.Base(), l0.Value.Base(), l0.Bound.Base(), m.lengthFactor(d))
 		require.LessOrEqual(t, r, slack, "edge length misses by %g× its bound", r)
 		checked++

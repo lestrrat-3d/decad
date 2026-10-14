@@ -276,7 +276,7 @@ func (rp revolvePayload) sweptVertex(b revolvemesh.RevolveBasis, z, rho float64,
 	for _, end := range ends {
 		gap = math.Max(gap, rp.sweptGap(held, at, end))
 	}
-	return &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(gap), Denot: denot}}
+	return bornVertex(&Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(gap), Denot: denot}})
 }
 
 // frameCharge is massmoment.MapCharge over the map the record denotes
@@ -714,8 +714,6 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 				}
 				j.lat = &Edge{
-					start: seam,
-					end:   seam,
 					n: topo.Edge{
 						Convex:      turn > 0,
 						Length:      latitudeLength,
@@ -727,6 +725,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 						// role a prism's own rim edge plays for its two caps.
 						Denot: body.doc.mintCurve(),
 						Curve: surfacegeom.Circle3{Center: center, Axis: jAxis, Radius: jRadius},
+						Start: vertexNode(seam),
+						End:   vertexNode(seam),
 					},
 				}
 			case !rp.full:
@@ -746,8 +746,6 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 						}
 					}
 					j.arc = &Edge{
-						start: j.v0,
-						end:   j.v1,
 						n: topo.Edge{
 							Convex:      turn > 0,
 							Length:      arcLength,
@@ -758,6 +756,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 							// build alone.
 							Denot: body.doc.mintCurve(),
 							Curve: surfacegeom.Arc3{Center: center, Axis: jAxis, Radius: jRadius},
+							Start: vertexNode(j.v0),
+							End:   vertexNode(j.v1),
 						},
 					}
 				}
@@ -794,13 +794,13 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				// never reaches it — Table W row 3's on-axis-edge omission
 				// delivered by omission, not a special case to "fix" here.
 				shared := &Edge{
-					start: js[i].v0,
-					end:   js[(i+1)%n].v0,
 					n: topo.Edge{
 						Convex:      dphi < math.Pi,
 						Length:      w.Length,
 						LengthBound: frame.LengthBound(w.Length, w.LengthBound),
 						Curve:       surfacegeom.Line3{},
+						Start:       vertexNode(js[i].v0),
+						End:         vertexNode(js[(i+1)%n].v0),
 					},
 				}
 				cap0[i], cap1[i] = shared, shared
@@ -1034,15 +1034,15 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 		e.n.Curve = surfacegeom.NURBSCurve{}
 		if closed {
 			v := rp.sweptVertex(b, w.StartU, w.StartV, seam, curveToken{}, end)
-			e.start, e.end = v, v
+			e.n.Start, e.n.End = vertexNode(v), vertexNode(v)
 		} else {
-			e.start, e.end = vs, ve
+			e.n.Start, e.n.End = vertexNode(vs), vertexNode(ve)
 		}
 		return e
 	}
 	if !w.IsCircular() {
 		e.n.Curve = surfacegeom.Line3{}
-		e.start, e.end = vs, ve
+		e.n.Start, e.n.End = vertexNode(vs), vertexNode(ve)
 		return e
 	}
 	// The cap plane at φ is the profile plane rotated about the axis, so
@@ -1065,11 +1065,11 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	if closed {
 		v := rp.sweptVertex(b, w.StartU, w.StartV, seam, curveToken{}, end)
 		e.n.Curve = surfacegeom.Circle3{Center: center, Axis: axis, Radius: radius}
-		e.start, e.end = v, v
+		e.n.Start, e.n.End = vertexNode(v), vertexNode(v)
 		return e
 	}
 	e.n.Curve = surfacegeom.Arc3{Center: center, Axis: axis, Radius: radius}
-	e.start, e.end = vs, ve
+	e.n.Start, e.n.End = vertexNode(vs), vertexNode(ve)
 	return e
 }
 
@@ -1307,14 +1307,14 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 			}
 			j.lat = &Edge{
-				start: seam,
-				end:   seam,
 				n: topo.Edge{
 					Convex:      turn > 0,
 					Length:      latitudeLength,
 					LengthBound: frame.LengthBound(latitudeLength, latitudeBound),
 					Denot:       body.doc.mintCurve(),
 					Curve:       surfacegeom.Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+					Start:       vertexNode(seam),
+					End:         vertexNode(seam),
 				},
 			}
 		case !rp.full:
@@ -1334,14 +1334,14 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 					}
 				}
 				j.arc = &Edge{
-					start: j.v0,
-					end:   j.v1,
 					n: topo.Edge{
 						Convex:      turn > 0,
 						Length:      arcLength,
 						LengthBound: frame.LengthBound(arcLength, arcBound),
 						Denot:       body.doc.mintCurve(),
 						Curve:       surfacegeom.Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+						Start:       vertexNode(j.v0),
+						End:         vertexNode(j.v1),
 					},
 				}
 			}

@@ -440,10 +440,10 @@ func (e selectorEdge) SelectorLineDirection() (r3.Vec, bool) {
 	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok {
 		return r3.Vec{}, false
 	}
-	return e.end.n.Position.Sub(e.start.n.Position), true
+	return e.n.End.Position.Sub(e.n.Start.Position), true
 }
 func (e selectorEdge) SelectorEndpoints() (r3.Vec, r3.Vec) {
-	return e.start.n.Position, e.end.n.Position
+	return e.n.Start.Position, e.n.End.Position
 }
 func (e selectorEdge) SelectorLengthMM() float64 { return e.n.Length }
 func (e selectorEdge) SelectorHasOrigin(ref provenance.Ref) bool {

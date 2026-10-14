@@ -260,7 +260,7 @@ func buildPatchChains(edges []*Edge) ([]bodyPatchChain, error) {
 func partitionPatchChains(edges []*Edge) ([][]*Edge, error) {
 	refs := make([]patchchain.EdgeRef[*Edge, *Vertex], len(edges))
 	for i, e := range edges {
-		refs[i] = patchchain.EdgeRef[*Edge, *Vertex]{Edge: e, Start: e.start, End: e.end}
+		refs[i] = patchchain.EdgeRef[*Edge, *Vertex]{Edge: e, Start: vertexHandle(e.n.Start), End: vertexHandle(e.n.End)}
 	}
 	return patchchain.Partition(refs, func(v *Vertex) string { return renderCoord3(v.n.Position) })
 }
@@ -382,7 +382,7 @@ func patchChainVertices(edges []*Edge) []*Vertex {
 	seen := map[*Vertex]struct{}{}
 	var out []*Vertex
 	for _, e := range edges {
-		for _, v := range [2]*Vertex{e.start, e.end} {
+		for _, v := range [2]*Vertex{vertexHandle(e.n.Start), vertexHandle(e.n.End)} {
 			if _, ok := seen[v]; ok {
 				continue
 			}
@@ -456,7 +456,7 @@ func orientPatchChain(chain bodyPatchChain) ([]patchOrientedEdge, error) {
 		if !ok {
 			return nil, fmt.Errorf(`%w: a PatchEdges chain edge's adjacent face does not use it (%s)`, ErrDegenerate, patchRowFacesDisagree)
 		}
-		oriented[i] = patchchain.OrientedEdge[*Edge, *Vertex]{Edge: e, Start: e.start, End: e.end, Forward: !dir}
+		oriented[i] = patchchain.OrientedEdge[*Edge, *Vertex]{Edge: e, Start: vertexHandle(e.n.Start), End: vertexHandle(e.n.End), Forward: !dir}
 	}
 	walk, err := patchchain.Orient(oriented, patchRowFacesDisagree)
 	if err != nil {
@@ -484,7 +484,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	for _, f := range srcFaces {
 		for _, l := range f.loops {
 			for _, ce := range l.coedges {
-				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.n.Position), proofbound.VecMaxAbs(ce.edge.end.n.Position))
+				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.n.Start.Position), proofbound.VecMaxAbs(ce.edge.n.End.Position))
 			}
 		}
 	}
@@ -623,7 +623,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		// The CURVE half of the shared-denotation certificate (denotation.go)
 		// restates under xform, composing rather than overwriting, exactly
 		// as unstitch.go's copyFaceUnderContext does.
-		nv := &Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(bound), Denot: old.n.Denot.Compose(xform)}}
+		nv := bornVertex(&Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(bound), Denot: old.n.Denot.Compose(xform)}})
 		newVertByOld[old] = nv
 		return nv, nil
 	}
@@ -637,11 +637,11 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if err != nil {
 			return nil, err
 		}
-		start, err := vertexFor(old.start)
+		start, err := vertexFor(vertexHandle(old.n.Start))
 		if err != nil {
 			return nil, err
 		}
-		end, err := vertexFor(old.end)
+		end, err := vertexFor(vertexHandle(old.n.End))
 		if err != nil {
 			return nil, err
 		}
@@ -651,8 +651,6 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		}
 		lengthBound = place.LengthBound(old.n.Length, lengthBound)
 		ne := &Edge{
-			start: start,
-			end:   end,
 			n: topo.Edge{
 				Convex:          old.n.Convex,
 				Length:          old.n.Length,
@@ -660,6 +658,8 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 				LengthUnbounded: old.n.LengthUnbounded,
 				Denot:           old.n.Denot.Compose(xform),
 				Curve:           curve,
+				Start:           vertexNode(start),
+				End:             vertexNode(end),
 			},
 		}
 		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
@@ -798,8 +798,8 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		ne := edgeCopy[oe.old]
 		areaEdges[i] = patchchain.AreaEdge{
 			Curve: ne.n.Curve, Forward: oe.forward,
-			Start:  patchchain.AreaVertex{Position: ne.start.n.Position, Bound: ne.start.n.Bound.Base()},
-			End:    patchchain.AreaVertex{Position: ne.end.n.Position, Bound: ne.end.n.Bound.Base()},
+			Start:  patchchain.AreaVertex{Position: ne.n.Start.Position, Bound: ne.n.Start.Bound.Base()},
+			End:    patchchain.AreaVertex{Position: ne.n.End.Position, Bound: ne.n.End.Bound.Base()},
 			Length: ne.n.Length, LengthBound: ne.n.LengthBound, LengthUnbounded: ne.n.LengthUnbounded,
 			CurveBound: ne.n.CurveBound, CurveBounded: ne.n.CurveBounded,
 		}
@@ -889,9 +889,9 @@ func patchChainOrientedNormal(ordered []patchOrientedEdge, edgeCopy map[*Edge]*E
 func patchChainWalkOrigin(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) r3.Vec {
 	first := edgeCopy[ordered[0].old]
 	if !ordered[0].forward {
-		return first.end.n.Position
+		return first.n.End.Position
 	}
-	return first.start.n.Position
+	return first.n.Start.Position
 }
 
 // patchChainLevelNormal adapts the recorded level normal's sign decision.
@@ -918,7 +918,7 @@ func patchGeometryEdges(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) [
 	out := make([]patchchain.GeometryEdge, len(ordered))
 	for i, oe := range ordered {
 		ne := edgeCopy[oe.old]
-		g := patchchain.GeometryEdge{Start: ne.start.n.Position, End: ne.end.n.Position, Forward: oe.forward}
+		g := patchchain.GeometryEdge{Start: ne.n.Start.Position, End: ne.n.End.Position, Forward: oe.forward}
 		switch c := ne.n.Curve.(type) {
 		case surfacegeom.Line3:
 			g.Kind = patchchain.Line
@@ -1047,7 +1047,7 @@ func patchChainSharedLevel(edges []*Edge) (levelID, bool) {
 		return 0, false
 	}
 	for _, e := range edges {
-		if e.n.Level.ID != id || e.start.n.Level.ID != id || e.end.n.Level.ID != id {
+		if e.n.Level.ID != id || e.n.Start.Level.ID != id || e.n.End.Level.ID != id {
 			return 0, false
 		}
 	}

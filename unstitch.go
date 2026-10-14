@@ -141,7 +141,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	maxInputAbs := 0.0
 	for _, l := range srcFace.loops {
 		for _, ce := range l.coedges {
-			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.n.Position), proofbound.VecMaxAbs(ce.edge.end.n.Position))
+			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.n.Start.Position), proofbound.VecMaxAbs(ce.edge.n.End.Position))
 		}
 	}
 	delta := 0.0
@@ -257,7 +257,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		// restates under xform, composing rather than overwriting, so a
 		// vertex unstitched and later placed still carries the true
 		// accumulated motion.
-		nv := &Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(bound), Denot: old.n.Denot.Compose(xform)}}
+		nv := bornVertex(&Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(bound), Denot: old.n.Denot.Compose(xform)}})
 		newVertByOld[old] = nv
 		return nv, nil
 	}
@@ -271,11 +271,11 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if err != nil {
 			return nil, err
 		}
-		start, err := vertexFor(old.start)
+		start, err := vertexFor(vertexHandle(old.n.Start))
 		if err != nil {
 			return nil, err
 		}
-		end, err := vertexFor(old.end)
+		end, err := vertexFor(vertexHandle(old.n.End))
 		if err != nil {
 			return nil, err
 		}
@@ -284,8 +284,6 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
-			start: start,
-			end:   end,
 			n: topo.Edge{
 				Convex:          old.n.Convex,
 				Length:          old.n.Length,
@@ -293,6 +291,8 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 				LengthUnbounded: old.n.LengthUnbounded,
 				Denot:           old.n.Denot.Compose(xform),
 				Curve:           curve,
+				Start:           vertexNode(start),
+				End:             vertexNode(end),
 			},
 		}
 		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
@@ -414,10 +414,10 @@ func facePolygonBounds(nf *Face) (Box, error) {
 	}
 	for _, l := range nf.loops {
 		for _, ce := range l.coedges {
-			if err := fold(ce.edge.start); err != nil {
+			if err := fold(vertexHandle(ce.edge.n.Start)); err != nil {
 				return Box{}, err
 			}
-			if err := fold(ce.edge.end); err != nil {
+			if err := fold(vertexHandle(ce.edge.n.End)); err != nil {
 				return Box{}, err
 			}
 		}

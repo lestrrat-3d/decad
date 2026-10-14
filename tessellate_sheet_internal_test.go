@@ -183,9 +183,9 @@ func TestRequireSheetMeshCatchesADuplicatedDirectedEdge(t *testing.T) {
 func TestFreeChainCountsByFaceCountsConnectedComponentsNotEdges(t *testing.T) {
 	t.Parallel()
 	face := &Face{}
-	vA, vB, vC := &Vertex{}, &Vertex{}, &Vertex{}
-	e1 := &Edge{start: vA, end: vB, faces: []*Face{face}}
-	e2 := &Edge{start: vB, end: vC, faces: []*Face{face}}
+	vA, vB, vC := bornVertex(&Vertex{}), bornVertex(&Vertex{}), bornVertex(&Vertex{})
+	e1 := &Edge{n: topo.Edge{Start: vertexNode(vA), End: vertexNode(vB)}, faces: []*Face{face}}
+	e2 := &Edge{n: topo.Edge{Start: vertexNode(vB), End: vertexNode(vC)}, faces: []*Face{face}}
 	face.loops = []*Loop{{coedges: []coedge{{edge: e1}, {edge: e2}}}}
 	body := &Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{face}}}}}}
 

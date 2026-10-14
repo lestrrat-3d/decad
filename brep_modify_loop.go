@@ -179,9 +179,9 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 		return nil, false, nil
 	}
 	var corner *Vertex
-	for _, v := range [2]*Vertex{r.call.edges[0].start, r.call.edges[0].end} {
-		if v != nil && (r.call.edges[1].start == v || r.call.edges[1].end == v) &&
-			(r.call.edges[2].start == v || r.call.edges[2].end == v) {
+	for _, v := range [2]*Vertex{vertexHandle(r.call.edges[0].n.Start), vertexHandle(r.call.edges[0].n.End)} {
+		if v != nil && (vertexHandle(r.call.edges[1].n.Start) == v || vertexHandle(r.call.edges[1].n.End) == v) &&
+			(vertexHandle(r.call.edges[2].n.Start) == v || vertexHandle(r.call.edges[2].n.End) == v) {
 			corner = v
 			break
 		}
@@ -247,24 +247,24 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 		var near [2]*Vertex
 		for j, originalIndex := range others {
 			original := r.call.edges[originalIndex]
-			far := original.start
+			far := vertexHandle(original.n.Start)
 			if far == corner {
-				far = original.end
+				far = vertexHandle(original.n.End)
 			}
-			oldDir := original.end.n.Position.Sub(original.start.n.Position)
+			oldDir := original.n.End.Position.Sub(original.n.Start.Position)
 			for _, edge := range loopEdges {
 				if _, ok := edge.n.Curve.(surfacegeom.Line3); !ok {
 					continue
 				}
-				other := edge.start
+				other := vertexHandle(edge.n.Start)
 				switch {
-				case edge.start.n.Position.Sub(far.n.Position).Len() <= 1e-6:
-					other = edge.end
-				case edge.end.n.Position.Sub(far.n.Position).Len() <= 1e-6:
+				case edge.n.Start.Position.Sub(far.n.Position).Len() <= 1e-6:
+					other = vertexHandle(edge.n.End)
+				case edge.n.End.Position.Sub(far.n.Position).Len() <= 1e-6:
 				default:
 					continue
 				}
-				newDir := edge.end.n.Position.Sub(edge.start.n.Position)
+				newDir := edge.n.End.Position.Sub(edge.n.Start.Position)
 				if oldDir.Cross(newDir).Len() > 1e-6*oldDir.Len()*newDir.Len() {
 					continue
 				}
@@ -280,8 +280,8 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 			if _, ok := edge.n.Curve.(surfacegeom.Arc3); !ok {
 				continue
 			}
-			if (edge.start == near[0] && edge.end == near[1]) ||
-				(edge.start == near[1] && edge.end == near[0]) {
+			if (vertexHandle(edge.n.Start) == near[0] && vertexHandle(edge.n.End) == near[1]) ||
+				(vertexHandle(edge.n.Start) == near[1] && vertexHandle(edge.n.End) == near[0]) {
 				arc = edge
 				break
 			}
@@ -526,7 +526,7 @@ func (r *brepLoopRead) matchEdges() error {
 // brepEdgeMatches reports whether body edge e is the record edge owner names,
 // within tol after lifting through refView.
 func brepEdgeMatches(refView prismPayload, owner brepUse, e *Edge, tol float64) bool {
-	if e.start == nil || e.end == nil {
+	if e.n.Start == nil || e.n.End == nil {
 		return false
 	}
 	lift := func(c [3]float64) r3.Vec { return refView.Point(c[0], c[1], c[2]) }
@@ -551,7 +551,7 @@ func brepEdgeMatches(refView prismPayload, owner brepUse, e *Edge, tol float64) 
 	default:
 		return false
 	}
-	return matchEndpoints(e.start.n.Position, e.end.n.Position, lift(owner.DirFrom), lift(owner.DirTo), tol)
+	return matchEndpoints(e.n.Start.Position, e.n.End.Position, lift(owner.DirFrom), lift(owner.DirTo), tol)
 }
 
 // singleStraightEdges reports whether the selection is route E's class: every

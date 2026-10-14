@@ -74,7 +74,7 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 	}
 	blends := make(map[int]loftCornerBlend, len(edges))
 	for _, edge := range edges {
-		if _, ok := edge.n.Curve.(surfacegeom.Line3); !ok || edge.start == nil || edge.end == nil {
+		if _, ok := edge.n.Curve.(surfacegeom.Line3); !ok || edge.n.Start == nil || edge.n.End == nil {
 			return nil, fmt.Errorf(`%w: the selected loft edge is not an axial corner`, ErrUnsupported)
 		}
 		matched := -1
@@ -86,8 +86,8 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 			w := walks[i]
 			bottom := pl.xform.Apply(pl.frame0.ToWorldUV(w.StartU, w.StartV))
 			top := pl.xform.Apply(pl.frame1.ToWorldUV(w.StartU, w.StartV))
-			if (edge.start.n.Position == bottom && edge.end.n.Position == top) ||
-				(edge.start.n.Position == top && edge.end.n.Position == bottom) {
+			if (edge.n.Start.Position == bottom && edge.n.End.Position == top) ||
+				(edge.n.Start.Position == top && edge.n.End.Position == bottom) {
 				if matched >= 0 {
 					return nil, fmt.Errorf(`%w: a loft edge matches more than one section corner`, ErrUnsupported)
 				}

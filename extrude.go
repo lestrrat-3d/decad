@@ -788,7 +788,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	// mirroring buildLoopSidesAs's own rimVertex.
 	rimVertex := func(u, v, z, zDelta, extra float64) *Vertex {
 		held, lift := prismView.LiftedVertex(u, v, z)
-		return &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(zDelta, lift), extra))}}
+		return bornVertex(&Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(zDelta, lift), extra))}})
 	}
 
 	// Rim posts 0..n, no wraparound: post i sits at walk i's start for
@@ -835,7 +835,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 			prev, w := walks[i-1], walks[i]
 			convex = prev.TanOutU*w.TanInV-prev.TanOutV*w.TanInU > 0
 		}
-		vertical[i] = &Edge{start: bottomV[i], end: topV[i], n: topo.Edge{Convex: convex, Length: pp.z1 - pp.z0, LengthBound: height.Bound, Curve: surfacegeom.Line3{}}}
+		vertical[i] = &Edge{n: topo.Edge{Convex: convex, Length: pp.z1 - pp.z0, LengthBound: height.Bound, Curve: surfacegeom.Line3{}, Start: vertexNode(bottomV[i]), End: vertexNode(topV[i])}}
 	}
 
 	faces := make([]*Face, 0, n)

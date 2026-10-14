@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -202,4 +203,34 @@ func TestSolidBodiesReportSolidKindAndNoFreeBoundary(t *testing.T) {
 		require.Equal(t, r3.NewVec(0, -15, -15), box.Min)
 		require.Equal(t, r3.NewVec(10, 15, 15), box.Max)
 	})
+}
+
+// TestEdgeVerticesAreTheBodyVertices pins vertex identity across the topology
+// accessors: a box's 12 edges share its 8 vertices, every Edge.Start and
+// Edge.End is (by ==) one of the vertices Body.Vertices returns, a second read
+// returns the same pointer, and the zero CoEdge has no vertices.
+func TestEdgeVerticesAreTheBodyVertices(t *testing.T) {
+	t.Parallel()
+	body := coedgeBox(t)
+	vertices := body.Vertices()
+	require.Len(t, vertices, 8)
+	edges := body.Edges()
+	require.Len(t, edges, 12)
+	uses := map[*decad.Vertex]int{}
+	for _, e := range edges {
+		for _, v := range []*decad.Vertex{e.Start(), e.End()} {
+			require.NotNil(t, v)
+			require.True(t, slices.Contains(vertices, v), "an edge end is one of the body's own vertices")
+			uses[v]++
+		}
+		require.Same(t, e.Start(), e.Start())
+		require.Same(t, e.End(), e.End())
+	}
+	require.Len(t, uses, 8)
+	for _, n := range uses {
+		require.Equal(t, 3, n, "each box corner ends three edges")
+	}
+	require.Nil(t, decad.CoEdge{}.Start())
+	require.Nil(t, decad.CoEdge{}.End())
+	require.Nil(t, decad.CoEdge{}.Edge())
 }

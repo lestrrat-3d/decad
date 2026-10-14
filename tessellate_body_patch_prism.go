@@ -154,7 +154,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		at := chain.edges[0].start.n.Position
+		at := chain.edges[0].n.Start.Position
 		ring := -1
 		for k := range 2 {
 			if at == source.n.Vertices[k] {

@@ -211,7 +211,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 	segs := rec.Profile.Segments
 	vertexAt := func(j int64, v int) *Vertex {
 		k := sh.At(j, v)
-		return &Vertex{n: topo.Vertex{Position: sh.Verts[k], Bound: units.Millimeters(sh.VertexBound[k])}}
+		return bornVertex(&Vertex{n: topo.Vertex{Position: sh.Verts[k], Bound: units.Millimeters(sh.VertexBound[k])}})
 	}
 	startV := make([]*Vertex, len(segs))
 	endV := make([]*Vertex, len(segs))
@@ -258,8 +258,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			chain = math.Max(chain, sh.VertexBound[sh.At(j, v)])
 		}
 		helix[i] = &Edge{
-			start: startV[i], end: endV[i],
-			n: topo.Edge{Convex: cross.Sign() > 0, Length: hLength, LengthBound: hBound, Curve: surfacegeom.FacetedCurve{Bound: units.Millimeters(chain)}},
+			n: topo.Edge{Convex: cross.Sign() > 0, Length: hLength, LengthBound: hBound, Curve: surfacegeom.FacetedCurve{Bound: units.Millimeters(chain)}, Start: vertexNode(startV[i]), End: vertexNode(endV[i])},
 		}
 	}
 
@@ -387,8 +386,8 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 		if err != nil {
 			return nil, nil, err
 		}
-		return &Edge{start: s0, end: s1, n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound, Curve: surfacegeom.Line3{}}},
-			&Edge{start: e0, end: e1, n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound, Curve: surfacegeom.Line3{}}}, nil
+		return &Edge{n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(s0), End: vertexNode(s1)}},
+			&Edge{n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(e0), End: vertexNode(e1)}}, nil
 	}
 	length, lengthBound, err := coilshell.Held(rec.Stretched(seg.Length), "rim length")
 	if err != nil {
@@ -423,21 +422,25 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 	} else {
 		c0, c1 = surfacegeom.Arc3{Center: centre0, Axis: axis0.Scale(sign), Radius: r}, surfacegeom.Arc3{Center: centre1, Axis: axis1.Scale(sign), Radius: r}
 	}
-	start := &Edge{start: s0, end: s1, n: topo.Edge{
+	start := &Edge{n: topo.Edge{
 		Convex:       convex,
 		Length:       length,
 		LengthBound:  lengthBound,
 		CurveBound:   rims[0].Bound,
 		CurveBounded: rims[0].Bounded,
 		Curve:        c0,
+		Start:        vertexNode(s0),
+		End:          vertexNode(s1),
 	}}
-	end := &Edge{start: e0, end: e1, n: topo.Edge{
+	end := &Edge{n: topo.Edge{
 		Convex:       convex,
 		Length:       length,
 		LengthBound:  lengthBound,
 		CurveBound:   rims[1].Bound,
 		CurveBounded: rims[1].Bounded,
 		Curve:        c1,
+		Start:        vertexNode(e0),
+		End:          vertexNode(e1),
 	}}
 	return start, end, nil
 }

@@ -28,15 +28,15 @@ import (
 // never a residual against a fitted plane.
 func TestProvePatchChainPlaneRejectsANonPlanarChain(t *testing.T) {
 	t.Parallel()
-	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}}
-	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}}
-	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 1)}}
-	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 0)}}
+	v0 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}})
+	v1 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})
+	v2 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 1)}})
+	v3 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 0)}})
 	edges := []*Edge{
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v0, end: v1},
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v1, end: v2},
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v2, end: v3},
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v3, end: v0},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v0), End: vertexNode(v1)}},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v2), End: vertexNode(v3)}},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v3), End: vertexNode(v0)}},
 	}
 	_, _, hasAxialBound, err := provePatchChainPlane(edges)
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -50,15 +50,15 @@ func TestProvePatchChainPlaneRejectsANonPlanarChain(t *testing.T) {
 // and nothing else about the fixture's shape.
 func TestProvePatchChainPlaneAcceptsAPlanarChain(t *testing.T) {
 	t.Parallel()
-	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}}
-	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}}
-	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 0)}}
-	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 0)}}
+	v0 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}})
+	v1 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})
+	v2 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 0)}})
+	v3 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 0)}})
 	edges := []*Edge{
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v0, end: v1},
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v1, end: v2},
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v2, end: v3},
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v3, end: v0},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v0), End: vertexNode(v1)}},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v2), End: vertexNode(v3)}},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v3), End: vertexNode(v0)}},
 	}
 	_, _, hasAxialBound, err := provePatchChainPlane(edges)
 	require.NoError(t, err)
@@ -79,15 +79,15 @@ func boundedSquareChain(id levelID, bound units.Value) ([]*Edge, levelToken) {
 	if id != 0 {
 		tok = levelToken{ID: id, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	}
-	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 10), Bound: bound, Level: tok}}
-	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Bound: bound, Level: tok}}
-	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Bound: bound, Level: tok}}
-	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Bound: bound, Level: tok}}
+	v0 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 10), Bound: bound, Level: tok}})
+	v1 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Bound: bound, Level: tok}})
+	v2 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Bound: bound, Level: tok}})
+	v3 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Bound: bound, Level: tok}})
 	return []*Edge{
-		{start: v0, end: v1, n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}}},
-		{start: v1, end: v2, n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}}},
-		{start: v2, end: v3, n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}}},
-		{start: v3, end: v0, n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}}},
+		{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v0), End: vertexNode(v1)}},
+		{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}},
+		{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v2), End: vertexNode(v3)}},
+		{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v3), End: vertexNode(v0)}},
 	}, tok
 }
 
@@ -150,19 +150,19 @@ func TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels
 	levelB := levelToken{ID: 2, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	bound := units.Millimeters(0.002)
 
-	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Bound: bound}}
-	v1Twin := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Bound: bound, Level: levelB}}
+	v1 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Bound: bound}})
+	v1Twin := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Bound: bound, Level: levelB}})
 	require.Equal(t, v1.n.Position, v1Twin.n.Position, "the two vertices' held coordinates are bit-identical")
 	require.Equal(t, v1.n.Bound, v1Twin.n.Bound, "the two vertices' held bounds are bit-identical")
 
-	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 10), Bound: bound, Level: levelA}}
-	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Bound: bound, Level: levelA}}
-	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Bound: bound, Level: levelA}}
+	v0 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 10), Bound: bound, Level: levelA}})
+	v2 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Bound: bound, Level: levelA}})
+	v3 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Bound: bound, Level: levelA}})
 	edges := []*Edge{
-		{start: v0, end: v1Twin, n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}}},
-		{start: v1Twin, end: v2, n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}}},
-		{start: v2, end: v3, n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}}},
-		{start: v3, end: v0, n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}}},
+		{n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}, Start: vertexNode(v0), End: vertexNode(v1Twin)}},
+		{n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}, Start: vertexNode(v1Twin), End: vertexNode(v2)}},
+		{n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}, Start: vertexNode(v2), End: vertexNode(v3)}},
+		{n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}, Start: vertexNode(v3), End: vertexNode(v0)}},
 	}
 
 	_, _, hasAxialBound, err := provePatchChainPlane(edges)
@@ -226,19 +226,19 @@ func TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame(t *
 	tok := levelToken{ID: 1, Origin: corner(0, 0), Normal: axis}
 
 	bound := units.Millimeters(0.002)
-	v0 := &Vertex{n: topo.Vertex{Position: corner(0, 0), Bound: bound, Level: tok}}
-	v1 := &Vertex{n: topo.Vertex{Position: corner(10, 0), Bound: bound, Level: tok}}
-	v2 := &Vertex{n: topo.Vertex{Position: corner(10, 10), Bound: bound, Level: tok}}
+	v0 := bornVertex(&Vertex{n: topo.Vertex{Position: corner(0, 0), Bound: bound, Level: tok}})
+	v1 := bornVertex(&Vertex{n: topo.Vertex{Position: corner(10, 0), Bound: bound, Level: tok}})
+	v2 := bornVertex(&Vertex{n: topo.Vertex{Position: corner(10, 10), Bound: bound, Level: tok}})
 	// v3's held position is perturbed off the true plane by 1e-6 mm along the
 	// axis — far more than any float64 evaluation of corner() itself could
 	// ever depart from it, standing in for "held data this arm never
 	// verifies coplanar".
-	v3 := &Vertex{n: topo.Vertex{Position: corner(0, 10).Add(axis.Scale(1e-6)), Bound: bound, Level: tok}}
+	v3 := bornVertex(&Vertex{n: topo.Vertex{Position: corner(0, 10).Add(axis.Scale(1e-6)), Bound: bound, Level: tok}})
 	edges := []*Edge{
-		{start: v0, end: v1, n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}}},
-		{start: v1, end: v2, n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}}},
-		{start: v2, end: v3, n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}}},
-		{start: v3, end: v0, n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}}},
+		{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v0), End: vertexNode(v1)}},
+		{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}},
+		{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v2), End: vertexNode(v3)}},
+		{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v3), End: vertexNode(v0)}},
 	}
 	edgeCopy := map[*Edge]*Edge{}
 	for _, e := range edges {
@@ -276,10 +276,10 @@ func TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame(t *
 // none.
 func TestOrientPatchChainRejectsDisagreeingAdjacentFaces(t *testing.T) {
 	t.Parallel()
-	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}}
-	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}}
-	a := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v1, end: v2}
-	b := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v1, end: v2}
+	v1 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}})
+	v2 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})
+	a := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}}
+	b := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}}
 	faceA := &Face{loops: []*Loop{{coedges: []coedge{{edge: a, forward: true}}, n: topo.Loop{Outer: true}}}}
 	faceB := &Face{loops: []*Loop{{coedges: []coedge{{edge: b, forward: true}}, n: topo.Loop{Outer: true}}}}
 	a.faces = []*Face{faceA}
@@ -300,14 +300,14 @@ func TestOrientPatchChainRejectsDisagreeingAdjacentFaces(t *testing.T) {
 // boundary (docs/surface-design.md Table R row R5).
 func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 	t.Parallel()
-	a := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}}
-	b := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 0)}}
-	c := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}}
-	d := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 0)}}
-	e1 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: a, end: b}
-	e2 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: b, end: c}
-	e3 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: c, end: d}
-	e4 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: d, end: a}
+	a := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}})
+	b := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 0)}})
+	c := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})
+	d := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 0)}})
+	e1 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(a), End: vertexNode(b)}}
+	e2 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(b), End: vertexNode(c)}}
+	e3 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(c), End: vertexNode(d)}}
+	e4 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(d), End: vertexNode(a)}}
 	edges := []*Edge{e1, e2, e3, e4}
 	edgeCopy := map[*Edge]*Edge{}
 	for _, e := range edges {
@@ -386,10 +386,8 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	t.Parallel()
 	tok := levelToken{ID: 1, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	outer, _ := boundedSquareChain(1, units.Millimeters(0))
-	cv := &Vertex{n: topo.Vertex{Position: r3.NewVec(5, 5, 10), Level: tok}}
-	inner := &Edge{
-		start: cv, end: cv, n: topo.Edge{Level: tok, Curve: surfacegeom.Circle3{Center: r3.NewVec(5, 5, 10), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(1)}},
-	}
+	cv := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(5, 5, 10), Level: tok}})
+	inner := &Edge{n: topo.Edge{Level: tok, Curve: surfacegeom.Circle3{Center: r3.NewVec(5, 5, 10), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(1)}, Start: vertexNode(cv), End: vertexNode(cv)}}
 
 	outerLoop := &Loop{n: topo.Loop{Outer: true}}
 	for _, e := range outer {
@@ -427,15 +425,15 @@ func TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch(t *testing.T) {
 	t.Parallel()
 	levelA := levelToken{ID: 1, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	levelB := levelToken{ID: 2, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
-	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 10), Level: levelA}}
-	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Level: levelA}}
-	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Level: levelB}}
-	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Level: levelA}}
+	v0 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 10), Level: levelA}})
+	v1 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Level: levelA}})
+	v2 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Level: levelB}})
+	v3 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Level: levelA}})
 	edges := []*Edge{
-		{start: v0, end: v1, n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}}},
-		{start: v1, end: v2, n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}}},
-		{start: v2, end: v3, n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}}},
-		{start: v3, end: v0, n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}}},
+		{n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}, Start: vertexNode(v0), End: vertexNode(v1)}},
+		{n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}},
+		{n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}, Start: vertexNode(v2), End: vertexNode(v3)}},
+		{n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}, Start: vertexNode(v3), End: vertexNode(v0)}},
 	}
 	receiver := patchTestReceiverWithOneChain(prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}, edges)
 

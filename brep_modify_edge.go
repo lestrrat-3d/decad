@@ -330,7 +330,7 @@ func (r *brepEdgeRoute) admitEdge(ordinal int, e *Edge) (*brepEdgeBlend, error) 
 	default:
 		return nil, r.refuse(eb, "SB4", fmt.Sprintf(`the edge is a %T, not a straight line`, publicCurve(e.n.Curve)))
 	}
-	if e.start == nil || e.end == nil {
+	if e.n.Start == nil || e.n.End == nil {
 		return nil, r.refuse(eb, "SB4", `the edge has no vertices`)
 	}
 	refView := r.bp.refView()
@@ -346,7 +346,7 @@ func (r *brepEdgeRoute) admitEdge(ordinal int, e *Edge) (*brepEdgeBlend, error) 
 		}
 		p := refView.Point(owner.DirFrom[0], owner.DirFrom[1], owner.DirFrom[2])
 		q := refView.Point(owner.DirTo[0], owner.DirTo[1], owner.DirTo[2])
-		if !matchEndpoints(e.start.n.Position, e.end.n.Position, p, q, tol) {
+		if !matchEndpoints(e.n.Start.Position, e.n.End.Position, p, q, tol) {
 			continue
 		}
 		if found >= 0 {

@@ -94,15 +94,15 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		}
 		prev, next := (i+len(quads)-1)%len(quads), (i+1)%len(quads)
 		if b.selected[prev] {
-			if quads[prev].cap.end != quads[i].cap.start ||
-				quads[prev].side.end != quads[i].side.start ||
+			if quads[prev].cap.n.End != quads[i].cap.n.Start ||
+				quads[prev].side.n.End != quads[i].side.n.Start ||
 				quads[prev].points[2] != quads[i].points[3] ||
 				quads[prev].points[1] != quads[i].points[0] {
 				return nil, brepBandMass{}, fmt.Errorf(`%w: two partial chamfer strips disagree at their shared corner`, ErrUnsupported)
 			}
 			slant, _, err := capSlantEdge(proofbound.NewWorkBudget(ctx),
 				planePoint{U: e.Local(quads[i].points[3])[0], V: e.Local(quads[i].points[3])[1]},
-				quads[i].cap.start, quads[i].side.start,
+				vertexHandle(quads[i].cap.n.Start), vertexHandle(quads[i].side.n.Start),
 				e.Local(quads[i].points[0])[0], e.Local(quads[i].points[0])[1],
 				f.z0, sideZ, 0, 0, survey2d.SideWalk{}, survey2d.SideWalk{}, b.setback, true)
 			if err != nil {
@@ -111,10 +111,10 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 			lead[i], trail[i] = slant, slant
 		}
 		if !b.selected[prev] {
-			lead[i] = partialChamferTerminal(open.terminal[bi], quads[i].cap.start, quads[i].side.start)
+			lead[i] = partialChamferTerminal(open.terminal[bi], vertexHandle(quads[i].cap.n.Start), vertexHandle(quads[i].side.n.Start))
 		}
 		if !b.selected[next] {
-			trail[next] = partialChamferTerminal(open.terminal[bi], quads[i].cap.end, quads[i].side.end)
+			trail[next] = partialChamferTerminal(open.terminal[bi], vertexHandle(quads[i].cap.n.End), vertexHandle(quads[i].side.n.End))
 		}
 	}
 	var patches []*Face
@@ -131,17 +131,17 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		next := (i + 1) % len(quads)
 		start, end := lead[i], trail[next]
 		capE, sideE := quads[i].cap, quads[i].side
-		if start == nil || end == nil || !edgeConnects(start, capE.start, sideE.start) ||
-			!edgeConnects(end, capE.end, sideE.end) {
+		if start == nil || end == nil || !edgeConnects(start, vertexHandle(capE.n.Start), vertexHandle(sideE.n.Start)) ||
+			!edgeConnects(end, vertexHandle(capE.n.End), vertexHandle(sideE.n.End)) {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d does not close`, ErrUnsupported, i)
 		}
-		plane, err := planeFromThree(sideE.start.n.Position, sideE.end.n.Position, capE.end.n.Position)
+		plane, err := planeFromThree(sideE.n.Start.Position, sideE.n.End.Position, capE.n.End.Position)
 		if err != nil {
 			return nil, brepBandMass{}, err
 		}
 		loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
-			{edge: end, forward: end.start == sideE.end}, {edge: capE, forward: false},
-			{edge: start, forward: start.start == capE.start}}, n: topo.Loop{Outer: true}}
+			{edge: end, forward: end.n.Start == sideE.n.End}, {edge: capE, forward: false},
+			{edge: start, forward: start.n.Start == capE.n.Start}}, n: topo.Loop{Outer: true}}
 		areaIv, volume3, moments, err := partialband.ChamferQuadMass(quads[i].points)
 		if err != nil {
 			return nil, brepBandMass{}, err
@@ -149,7 +149,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		held, bound := heldOf(areaIv)
 		face := &Face{
 			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: plane, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(len(patches))}}}}
-		normal, err := face.NormalAt(sideE.start.n.Position)
+		normal, err := face.NormalAt(sideE.n.Start.Position)
 		if err != nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d has no normal: %v`,
 				ErrUnsupported, i, err)

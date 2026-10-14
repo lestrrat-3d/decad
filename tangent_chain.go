@@ -40,7 +40,9 @@ type tangentChainGraph struct {
 
 func (g tangentChainGraph) Edges() []*Edge { return g.edges }
 
-func (g tangentChainGraph) Endpoints(e *Edge) (*Vertex, *Vertex) { return e.start, e.end }
+func (g tangentChainGraph) Endpoints(e *Edge) (*Vertex, *Vertex) {
+	return vertexHandle(e.n.Start), vertexHandle(e.n.End)
+}
 
 func (g tangentChainGraph) Continue(e, c *Edge, v *Vertex) clearance.DegState {
 	return tangentContinues(e, c, v)
@@ -55,7 +57,7 @@ func (g tangentChainGraph) Ambiguous(v *Vertex, proven, undecided int) error {
 // v (§5 tests 1-5). Every "yes" is exact; a "no" may come from the oracle's
 // noise floor or from an exact sign.
 func tangentContinues(e, c *Edge, v *Vertex) clearance.DegState {
-	if c.start == c.end || (c.start != v && c.end != v) {
+	if c.n.Start == c.n.End || (vertexHandle(c.n.Start) != v && vertexHandle(c.n.End) != v) {
 		return clearance.DegNo
 	}
 	te, okE := rayAway(e, v)
@@ -139,12 +141,12 @@ func newChainDir(f r3.Vec) (chainDir, bool) {
 // about its axis from start to end. Any other curve is not an analytic
 // variant the oracle reads.
 func rayAway(e *Edge, v *Vertex) (chainDir, bool) {
-	if e.start == nil || e.end == nil {
+	if e.n.Start == nil || e.n.End == nil {
 		return chainDir{}, false
 	}
-	other := e.end
-	if v == e.end {
-		other = e.start
+	other := vertexHandle(e.n.End)
+	if v == vertexHandle(e.n.End) {
+		other = vertexHandle(e.n.Start)
 	}
 	switch c := e.n.Curve.(type) {
 	case surfacegeom.Line3:
@@ -162,7 +164,7 @@ func rayAway(e *Edge, v *Vertex) (chainDir, bool) {
 		}
 		exact := proofarith.DvCross(proofarith.DyVec(c.Axis), proofarith.DvSub(proofarith.DyVec(v.n.Position), proofarith.DyVec(c.Center)))
 		f := c.Axis.Cross(v.n.Position.Sub(c.Center))
-		if v == e.end && v != e.start {
+		if v == vertexHandle(e.n.End) && v != vertexHandle(e.n.Start) {
 			exact = dvNeg(exact)
 			f = f.Scale(-1)
 		}

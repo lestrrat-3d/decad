@@ -24,8 +24,8 @@ func selectedStraightEdgesShareVertex(edges []*Edge) bool {
 			return false
 		}
 		for _, earlier := range edges[:i] {
-			if edge.start == earlier.start || edge.start == earlier.end ||
-				edge.end == earlier.start || edge.end == earlier.end {
+			if edge.n.Start == earlier.n.Start || edge.n.Start == earlier.n.End ||
+				edge.n.End == earlier.n.Start || edge.n.End == earlier.n.End {
 				return true
 			}
 		}

@@ -1074,7 +1074,7 @@ func TestBrepLoopFilletBoundFixture(t *testing.T) {
 	}
 	vertices := map[*Vertex]struct{}{}
 	for _, e := range out.Edges() {
-		vertices[e.start], vertices[e.end] = struct{}{}, struct{}{}
+		vertices[vertexHandle(e.n.Start)], vertices[vertexHandle(e.n.End)] = struct{}{}, struct{}{}
 	}
 	for i := range lines {
 		l0, l1 := lines[(i+len(lines)-1)%len(lines)], lines[i]
@@ -1232,8 +1232,8 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 		require.Greater(t, edge.n.Length, 1.0)
 		require.Greater(t, edge.n.LengthBound, 0.0)
 		require.LessOrEqual(t, math.Abs(edge.n.Length-wantLength), edge.n.LengthBound+1e-6)
-		require.InDelta(t, 9, edge.end.n.Position.Z, 1e-8)
-		require.InDelta(t, 10, edge.start.n.Position.Z, 1e-8)
+		require.InDelta(t, 9, edge.n.End.Position.Z, 1e-8)
+		require.InDelta(t, 10, edge.n.Start.Position.Z, 1e-8)
 	}
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
