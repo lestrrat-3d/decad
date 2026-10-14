@@ -14,19 +14,20 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// Build evaluates docs/loft-sections-design.md's exact positive homothetic
-// class. It returns a closed held mesh and non-cancelling certificates for the
-// quadratic surface which that mesh represents.
+// Build returns a closed held mesh and non-cancelling certificates for an
+// admitted LoftSections surface. Rectangular builders also retain its exact
+// height curves for an interior Section query.
 type Build struct {
-	Vertices   []r3.Vec
-	Triangles  [][3]int
-	Sources    []int
-	EdgeCount  int
-	MeshBound  float64
-	VolSymDiff float64
-	AreaSlack  float64
-	Diameter   float64
-	ArcRadii   [4]float64
+	Vertices           []r3.Vec
+	Triangles          [][3]int
+	Sources            []int
+	EdgeCount          int
+	MeshBound          float64
+	VolSymDiff         float64
+	AreaSlack          float64
+	Diameter           float64
+	ArcRadii           [4]float64
+	RectangularSection *RectangularSection
 }
 
 func rint(n int64) *big.Rat      { return big.NewRat(n, 1) }

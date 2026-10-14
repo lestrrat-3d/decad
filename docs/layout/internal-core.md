@@ -55,7 +55,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines, and exact partial-chamfer quad gates and mass. See loop-fillet §7.1, modify-general §4.3a. |
 | `internal/stationbound/` | Bounds circular chord stations, offset cap stations and chain-sweep arc stations against their exact recorded parameters. |
 | `internal/loftmesh/` | Loft and chain pairing gates, stations, assembly, mass sums, projected cap proof, body reading finiteness gate, mirrored-cylinder bridge terms and reserve, cap chamfer source bound, split-ring and collar grids, triangle clearance and middle-collar proofs, and grouped contact scans. |
-| `internal/smoothloft/` | Three-section homothety, independent rectangles, varying curves, and four-section rounded rectangles. See loft-sections design. |
+| `internal/smoothloft/` | Three-section homothety, independent rectangles with exact height curves for Section, varying curves, and four-section rounded rectangles. See loft-sections design. |
 | `internal/loftfillet/` | Loft fit/circle root-fillet candidate, tangent-root certificate, connector and carrier departures, section contact audits and circle-bore containment. See loft §17–§18. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, cap frames, construction and area proofs, quarter-turn cap-rim blend stations and bounds, and sector-bore cap fans, station steps and projected patches. |
 | `internal/revolveplan/` | Revolve mesh walk resolution, coordinate ceilings and chord counts. See tessellation §8. |

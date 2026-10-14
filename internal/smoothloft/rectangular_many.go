@@ -118,7 +118,8 @@ func BuildManyRectangles(ctx context.Context, profiles []momentinput.Profile,
 	diameter := add(mul(rint(2), add(maximumWidth, maximumDepth)), height)
 	result := Build{Vertices: vertices, Triangles: triangles, Sources: sources, EdgeCount: 4,
 		MeshBound: proofbound.RatFloatUp(meshBound), VolSymDiff: proofbound.RatFloatUp(volumeGap),
-		AreaSlack: proofbound.RatFloatUp(areaGap), Diameter: proofbound.RatFloatUp(diameter)}
+		AreaSlack: proofbound.RatFloatUp(areaGap), Diameter: proofbound.RatFloatUp(diameter),
+		RectangularSection: manyRectangularSection(planes[0].Origin, step, spans)}
 	for _, value := range [...]float64{result.MeshBound, result.VolSymDiff, result.AreaSlack, result.Diameter} {
 		if math.IsNaN(value) || math.IsInf(value, 0) {
 			return Build{}, fmt.Errorf("%w: rectangular section proof exceeds float64", decaderr.ErrUnsupported)

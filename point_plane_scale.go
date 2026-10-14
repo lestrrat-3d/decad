@@ -104,6 +104,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 		return nil, err
 	}
 	next := fp
+	next.smoothRectSection = nil
 	next.verts, next.tris = mesh.Verts, mesh.Tris
 	next.vertexBound, next.meshBound = mesh.VertexBound, mesh.MeshBound
 	next.volSymDiff, next.areaSlack = mesh.VolSymDiff, mesh.AreaSlack

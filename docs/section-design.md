@@ -60,6 +60,24 @@ record through the same seam proof as an exact prism. This is an exact planar
 section, including any recorded holes, and can enter ordinary profile
 consumers. It does not treat a tessellated BRep face as a source profile.
 
+## Exact interior section of a rectangular LoftSections result
+
+The three-, four-, and five-to-thirty-two-section independent rectangular
+builders retain their admitted exact half-width and half-height curves. For
+three sources these are one quadratic over the full height; for four they are
+one cubic; for five or more they are the piecewise cubic spans. The certificate
+is attached only to the original faceted body. Placement, scaling, Boolean
+operations and modify rewrites do not carry it.
+
+An interior Section requires the canonical world-XY frame at the source's
+common in-plane origin. The requested level must lie strictly between the
+outer caps; an intermediate source level is allowed. Evaluate the retained
+curves with exact rationals at that level. Both half-dimensions must be
+positive and exactly representable as finite binary64 values. Their rectangle
+is the source solid's exact cross-section. Reconstruct its four whole lines
+through Sketch and require the returned valid region to match before returning
+it. A cap-level, oblique, shifted, inexact or altered-body request refuses.
+
 ## Parallel section of an authenticated matching-profile Loft
 
 An authenticated two-section solid Loft with identical full profile records,

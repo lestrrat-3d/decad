@@ -25,6 +25,7 @@ import (
 // cut by a cardinal plane with an exact circle,
 // a direct matching-profile, full line-boundary or varying circular-boundary Loft
 // cut by an exact world-XY interior plane,
+// an original rectangular LoftSections cut by an exact world-XY interior plane,
 // a rectangular prism cut by an interior cardinal vertical plane, and
 // a bounded oblique cut of an exact rectangular or whole-circle prism,
 // including a certified crossing of one circle-prism cap. The
@@ -104,6 +105,13 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		}
 		return sectionBrepStack(ctx, operand, plane)
 	}
+	if fp, ok := b.n.Payload.(facetedPayload); ok {
+		profile, admitted := smoothRectangularSectionRecord(fp, plane)
+		if !admitted {
+			return nil, nil, fmt.Errorf(`%w: section needs an original rectangular smooth loft`, ErrUnsupported)
+		}
+		return reconstructExactSection(ctx, profile, plane)
+	}
 	pp, ok := b.n.Payload.(prismPayload)
 	if !ok || pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 {
 		return nil, nil, fmt.Errorf(`%w: section needs an exact straight prism`, ErrUnsupported)
@@ -134,6 +142,32 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		}
 	}
 	return reconstructExactSection(ctx, profile, plane)
+}
+
+func smoothRectangularSectionRecord(fp facetedPayload, plane r3.Frame) (profileRecord, bool) {
+	// Placement drops the certificate. The xform and normal checks are
+	// reject-only backstops for future producers and placement paths.
+	if fp.smoothRectSection == nil || fp.xform != r3.Identity() ||
+		plane.U() != r3.NewVec(1, 0, 0) || plane.V() != r3.NewVec(0, 1, 0) ||
+		plane.N() != r3.NewVec(0, 0, 1) {
+		return profileRecord{}, false
+	}
+	origin := fp.smoothRectSection.Origin()
+	if plane.Origin().X != origin.X || plane.Origin().Y != origin.Y {
+		return profileRecord{}, false
+	}
+	w, h, ok := fp.smoothRectSection.At(plane.Origin().Z)
+	if !ok {
+		return profileRecord{}, false
+	}
+	a, b := planePoint{U: -w, V: -h}, planePoint{U: w, V: -h}
+	c, d := planePoint{U: w, V: h}, planePoint{U: -w, V: h}
+	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: a, End: b, TStart: 0, TEnd: 1},
+		lineSeg{Start: b, End: c, TStart: 0, TEnd: 1},
+		lineSeg{Start: c, End: d, TStart: 0, TEnd: 1},
+		lineSeg{Start: d, End: a, TStart: 0, TEnd: 1},
+	}}}, true
 }
 
 // sectionBrepStack reads only the certified slab profiles of an A1 Union.
