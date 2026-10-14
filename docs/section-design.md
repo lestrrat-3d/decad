@@ -223,13 +223,24 @@ sides of the plane; a cap, apex, tangent or exterior cut returns
 `ErrUnsupported`. The three lines enclose a disk whose radius decreases
 linearly from the base radius to zero at the apex. Divide the exact signed
 base-plane distance by the exact base-to-apex height, and calculate the cut
-radius as a rational value. Require that radius and the projected circle
-centre have finite, exactly representable binary64 coordinates. A radius such
-as 10/3 mm returns `ErrUnsupported` instead of a rounded Sketch circle.
+radius as a rational value. Require the projected circle centre to have
+finite, exactly representable binary64 coordinates. An exactly representable
+positive radius reconstructs one complete counterclockwise circle in Sketch.
+Require Sketch's fresh profile record to match before returning it. That exact
+profile can enter ordinary profile consumers, including `Extrude`.
 
-Reconstruct one complete counterclockwise circle in Sketch and require its
-fresh profile record to match before returning it. The exact profile can
-enter ordinary profile consumers, including `Extrude`.
+For an inexact radius, round the rational value down and up to binary64 with
+exact rational comparisons. Refuse a zero lower radius or a nonfinite upper
+radius. The lower disk lies inside the true section, which lies inside the
+upper disk. The gap between their radii bounds radial displacement; twice
+that gap bounds plane-local L1 displacement. The held plane-basis lengths
+convert it to a world-distance bound. Sample the lower circle with the same
+rational half-angle stations, chord bound, convexity check, feature-scale gate
+and 0.05 mm limit as the bounded sphere section. The radial map and convex
+combinations of matched chord endpoints cover both occupied regions.
+Reconstruct the inner polygon through the private revision-bound Sketch
+certificate. Only straight solid `Extrude` with an independent `Distance` may
+consume this bounded profile; its prism proof carries the displacement.
 
 ## Oblique plane of an authenticated source sphere
 
@@ -557,6 +568,10 @@ reusing its bound.
   16π mm² section; its 2 mm Extrude encloses 32π mm³ and passes the same mesh
   check. A frame shifted along its own plane retains the same section. Refuse
   tangent and exterior cuts.
+- A full Revolve cone with a 5 mm base radius and 3 mm height cut 1 mm from its
+  base returns a bounded 10/3 mm radius section. Its 2 mm Extrude encloses
+  200π/9 mm³ and passes `Tessellate(0.1 mm, VerifyAll)`; `MeasureProfile`
+  refuses the bounded Sketch.
 - Check translated and rigidly placed rectangular prisms, reversed section
   axes, triangle through hexagon section rings, and cuts that refuse at a
   source vertex, tangent, exterior or uncertain topology.

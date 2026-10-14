@@ -8,15 +8,16 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionclip"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// cardinalConeSectionRecord cuts one authenticated full right cone. The three
+// cardinalConeSection cuts one authenticated full right cone. The three
 // complete meridian lines must join a base-axis point, base-rim point and apex.
-// All comparisons use their exact recorded binary values. A rational radius
-// that cannot be written exactly in the returned Sketch is refused.
-func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord, bool) {
+// All comparisons use their exact recorded binary values. An inexact radius
+// is represented by an inner polygon with a certified section displacement.
+func cardinalConeSection(rp revolvePayload, plane r3.Frame) (profileRecord, []planePoint, float64, bool) {
 	if !rp.full || rp.surfaceResult || rp.sectionDelta != 0 ||
 		len(rp.profile.Holes) != 0 || len(rp.profile.Outer.Segments) != 3 ||
 		!box.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
@@ -27,7 +28,7 @@ func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord
 		!((math.Abs(rp.ax.DU) == 1 && rp.ax.DV == 0) ||
 			(rp.ax.DU == 0 && math.Abs(rp.ax.DV) == 1)) ||
 		!measurement.FiniteValues(rp.ax.AU, rp.ax.AV) {
-		return profileRecord{}, false
+		return profileRecord{}, nil, 0, false
 	}
 
 	var corners [3]planePoint
@@ -35,16 +36,16 @@ func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord
 		line, ok := segment.(lineSeg)
 		if !ok || line.TStart != 0 || line.TEnd != 1 ||
 			!measurement.FiniteValues(line.Start.U, line.Start.V, line.End.U, line.End.V) {
-			return profileRecord{}, false
+			return profileRecord{}, nil, 0, false
 		}
 		corners[i] = line.Start
 		next, ok := rp.profile.Outer.Segments[(i+1)%3].(lineSeg)
 		if !ok || line.End != next.Start {
-			return profileRecord{}, false
+			return profileRecord{}, nil, 0, false
 		}
 	}
 	if corners[0] == corners[1] || corners[1] == corners[2] || corners[2] == corners[0] {
-		return profileRecord{}, false
+		return profileRecord{}, nil, 0, false
 	}
 
 	// The resolved axis has a zero error bound, and the original meridian has
@@ -65,11 +66,11 @@ func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord
 		} else if outer < 0 {
 			outer = i
 		} else {
-			return profileRecord{}, false
+			return profileRecord{}, nil, 0, false
 		}
 	}
 	if len(axisCorners) != 2 || outer < 0 {
-		return profileRecord{}, false
+		return profileRecord{}, nil, 0, false
 	}
 	base, apex := axisCorners[0], axisCorners[1]
 	if proofarith.DyCmp(axial[base], axial[outer]) != 0 {
@@ -77,7 +78,7 @@ func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord
 	}
 	if proofarith.DyCmp(axial[base], axial[outer]) != 0 ||
 		proofarith.DyCmp(axial[base], axial[apex]) == 0 {
-		return profileRecord{}, false
+		return profileRecord{}, nil, 0, false
 	}
 
 	// Compare the placed base and apex with the requested cardinal plane.
@@ -95,13 +96,13 @@ func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord
 	u, v, n := proofarith.DyVec(plane.U()), proofarith.DyVec(plane.V()), proofarith.DyVec(plane.N())
 	if !proofarith.DvEqual(proofarith.DvCross(u, v), n) ||
 		!proofarith.DvIsZero(proofarith.DvCross(proofarith.DvSub(apexWorld, baseWorld), n)) {
-		return profileRecord{}, false
+		return profileRecord{}, nil, 0, false
 	}
 	baseDelta := proofarith.DvSub(baseWorld, proofarith.DyVec(plane.Origin()))
 	apexDelta := proofarith.DvSub(apexWorld, proofarith.DyVec(plane.Origin()))
 	baseSide, apexSide := proofarith.DvDot(baseDelta, n), proofarith.DvDot(apexDelta, n)
 	if baseSide.Sign() == 0 || apexSide.Sign() == 0 || baseSide.Sign() == apexSide.Sign() {
-		return profileRecord{}, false
+		return profileRecord{}, nil, 0, false
 	}
 	height := proofarith.DySubScalar(apexSide, baseSide)
 	cutFromBase := new(big.Rat).Neg(baseSide.Rat())
@@ -112,12 +113,38 @@ func cardinalConeSectionRecord(rp revolvePayload, plane r3.Frame) (profileRecord
 	radiusMM, radiusExact := radius.Float64()
 	centerU, exactU := proofarith.DvDot(baseDelta, u).Float64()
 	centerV, exactV := proofarith.DvDot(baseDelta, v).Float64()
-	if !radiusExact || radiusMM <= 0 || math.IsInf(radiusMM, 0) ||
-		!exactU || !exactV {
-		return profileRecord{}, false
+	if radiusMM <= 0 || math.IsInf(radiusMM, 0) || !exactU || !exactV {
+		return profileRecord{}, nil, 0, false
 	}
-	return profileRecord{Outer: loopRecord{Segments: []curveSegment{circleSeg{
-		Center: planePoint{U: centerU, V: centerV}, Radius: units.Millimeters(radiusMM),
-		CCW: true, TStart: 0, TEnd: 1,
-	}}}}, true
+	if radiusExact {
+		return profileRecord{Outer: loopRecord{Segments: []curveSegment{circleSeg{
+			Center: planePoint{U: centerU, V: centerV}, Radius: units.Millimeters(radiusMM),
+			CCW: true, TStart: 0, TEnd: 1,
+		}}}}, nil, 0, true
+	}
+	lower, upper := proofbound.RatFloatDown(radius), proofbound.RatFloatUp(radius)
+	if !sectionclip.ObliqueCircleFinite(lower, upper) || lower <= 0 || upper <= lower {
+		return profileRecord{}, nil, 0, false
+	}
+	// The exact disk contains the lower disk and lies in the upper disk.
+	// The radial gap plus chord and rounded-vertex bounds covers both
+	// occupied regions and their boundaries.
+	gap := proofarith.DySubScalar(proofarith.DyOfFinite(upper), proofarith.DyOfFinite(lower))
+	gapLocal := proofbound.RatFloatUp(proofarith.DyMul(gap, proofarith.DyInt(2)).Rat())
+	gapWorld := proofbound.ProductUpper(gapLocal,
+		max(proofbound.DvLenUpper(u), proofbound.DvLenUpper(v)))
+	if !sectionclip.ObliqueCircleFinite(gapLocal, gapWorld) {
+		return profileRecord{}, nil, 0, false
+	}
+	center := sectionclip.SectionRatPoint{U: proofarith.FloatRat(centerU), V: proofarith.FloatRat(centerV)}
+	a := sectionclip.SectionRatPoint{U: proofarith.FloatRat(lower), V: proofarith.FloatRat(0)}
+	b := sectionclip.SectionRatPoint{U: proofarith.FloatRat(0), V: proofarith.FloatRat(lower)}
+	for _, perQuadrant := range [...]int{8, 16, 32} {
+		polygon, delta, proved := sectionclip.ObliqueCirclePolygon(center, a, b, 1,
+			plane, perQuadrant, gapLocal, gapWorld)
+		if proved {
+			return profileRecord{}, polygon, delta, true
+		}
+	}
+	return profileRecord{}, nil, 0, false
 }

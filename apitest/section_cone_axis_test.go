@@ -70,6 +70,29 @@ func TestSectionCardinalConeFeedsVerifiedExtrude(t *testing.T) {
 	require.Equal(t, []*decad.Body{cone}, doc.Bodies())
 }
 
+func TestSectionCardinalConeInexactRadiusFeedsVerifiedExtrude(t *testing.T) {
+	doc, cone := sectionConeSource(t, 3)
+	section, profiles, err := cone.Section(t.Context(), sectionConePlane(t, 1))
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	_, err = decad.MeasureProfile(section, profiles[0])
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+		D: units.Millimeters(2), Dir: decad.Along,
+	})
+	require.NoError(t, err)
+	volume, err := child.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-200*math.Pi/9), volume.Bound.Base())
+	require.Greater(t, volume.Bound.Base(), 0.0)
+	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Equal(t, []*decad.Body{cone}, doc.Bodies())
+}
+
 func TestSectionCardinalConePlacementAndAxisSense(t *testing.T) {
 	doc, cone := sectionConeSource(t, 10)
 	motion, err := r3.FromBasis(r3.Basis{
@@ -126,9 +149,4 @@ func TestSectionCardinalConeRefusesUnprovedCuts(t *testing.T) {
 			require.Equal(t, []*decad.Body{cone}, doc.Bodies())
 		})
 	}
-	_, thirds := sectionConeSource(t, 3)
-	section, profiles, err := thirds.Section(t.Context(), sectionConePlane(t, 1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Nil(t, section)
-	require.Nil(t, profiles)
 }

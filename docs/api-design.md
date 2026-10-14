@@ -379,7 +379,7 @@ query design owns its proof and refusal rules.
 
 `Section` returns Sketch profiles on the requested plane for admitted exact
 prisms, exact cardinal cylinder chords, cardinal or central oblique source-sphere
-cuts, exact cardinal right-cone circles, and bounded rectangular-prism or
+cuts, exact or bounded cardinal right-cone cuts, and bounded rectangular-prism or
 full-cylinder cuts. `docs/section-design.md` owns the gates and reconstruction
 proof. An exact profile uses the ordinary Sketch seam. A bounded profile
 carries a private source certificate and currently enters only straight solid `Extrude`
