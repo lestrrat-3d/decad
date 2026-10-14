@@ -264,7 +264,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	if err != nil {
 		return nil, err
 	}
-	capStart := &Face{
+	capStart := bornFace(&Face{
 		loops: startLoopObjs,
 		n: topo.Face{
 			Area:          startArea.Value,
@@ -276,8 +276,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
 		},
-	}
-	capEnd := &Face{
+	})
+	capEnd := bornFace(&Face{
 		loops: endLoopObjs,
 		n: topo.Face{
 			Area:          endArea.Value,
@@ -289,7 +289,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
 		},
-	}
+	})
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
 		return nil, err
 	}

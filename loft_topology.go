@@ -85,7 +85,7 @@ func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i
 	if delta > 0 {
 		areaBound = proofbound.AbsSumUpper(areaBound, proofbound.PerturbedTriangleAreaAllow(a, b, c, delta))
 	}
-	return &Face{
+	return bornFace(&Face{
 		n: topo.Face{
 			Area:      lo,
 			AreaBound: areaBound,
@@ -93,7 +93,7 @@ func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i
 			Origins:   []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(%d,%d,%d)", i, j, side)}},
 			Body:      bodyNode(body),
 		},
-	}, nil
+	}), nil
 }
 
 // loftLoopCoedges carries §5's whole-shell reversal into one face's directed
@@ -235,7 +235,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 		capStartBound = proofbound.AbsSumUpper(capStartBound, loftmesh.CapTriangleAreaAllow(a.Verts, capStartTris, a.Delta))
 		capEndBound = proofbound.AbsSumUpper(capEndBound, loftmesh.CapTriangleAreaAllow(a.Verts, capEndTris, a.Delta))
 	}
-	capStart := &Face{
+	capStart := bornFace(&Face{
 		loops: capStartLoops,
 		n: topo.Face{
 			Area:          cap0Val,
@@ -246,8 +246,8 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
 		},
-	}
-	capEnd := &Face{
+	})
+	capEnd := bornFace(&Face{
 		loops: capEndLoops,
 		n: topo.Face{
 			Area:          cap1Val,
@@ -258,7 +258,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
 		},
-	}
+	})
 
 	return capStart, capEnd, walls, nil
 }

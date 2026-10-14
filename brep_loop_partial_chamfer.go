@@ -147,7 +147,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 			return nil, brepBandMass{}, err
 		}
 		held, bound := heldOf(areaIv)
-		face := &Face{loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: plane, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(len(patches))}}, Body: bodyNode(body)}}
+		face := bornFace(&Face{loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: plane, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(len(patches))}}, Body: bodyNode(body)}})
 		normal, err := face.NormalAt(sideE.n.Start.Position)
 		if err != nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d has no normal: %v`,
@@ -169,7 +169,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 			}
 		}
 		for _, ce := range loop.coedges {
-			ce.edge.faces = append(ce.edge.faces, face)
+			ce.edge.n.Faces = append(ce.edge.n.Faces, faceNode(face))
 		}
 		patches = append(patches, face)
 		mass.area = proofbound.BoundedAdd(mass.area, proofbound.MeasuredScalar(held, bound))

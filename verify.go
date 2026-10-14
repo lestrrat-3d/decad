@@ -645,7 +645,7 @@ func auditBoundary(b *Body) bool {
 		}
 	}
 	for _, e := range b.Edges() {
-		if len(e.faces) != 2 {
+		if len(e.n.Faces) != 2 {
 			return false
 		}
 	}
@@ -700,7 +700,7 @@ func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutc
 	}
 
 	for _, e := range b.Edges() {
-		if len(e.faces) == 0 || len(e.faces) > 2 {
+		if len(e.n.Faces) == 0 || len(e.n.Faces) > 2 {
 			return reportvocab.SheetAuditViolated
 		}
 	}
@@ -722,10 +722,10 @@ func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutc
 		}
 	}
 	for _, e := range b.Edges() {
-		if uses[e] != len(e.faces) {
+		if uses[e] != len(e.n.Faces) {
 			return reportvocab.SheetAuditViolated
 		}
-		if len(e.faces) == 2 && (forward[e] != 1 || backward[e] != 1) {
+		if len(e.n.Faces) == 2 && (forward[e] != 1 || backward[e] != 1) {
 			return reportvocab.SheetAuditViolated
 		}
 	}

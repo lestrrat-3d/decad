@@ -123,9 +123,9 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 // patch's new plane frame can have the opposite local handedness, so its
 // triangle winding is settled by the shared mesh edge, not that frame.
 func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budget *proofbound.WorkBudget) error {
-	byFace := make(map[*Face][]int, len(b.Faces()))
+	byFace := make(map[*topo.Face][]int, len(b.Faces()))
 	for i, f := range m.source {
-		byFace[f] = append(byFace[f], i)
+		byFace[faceNode(f)] = append(byFace[faceNode(f)], i)
 	}
 	for _, f := range b.Faces() {
 		if err := budget.Step(); err != nil {
@@ -139,9 +139,9 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 		}
 		ce := f.loops[0].coedges[0]
 		start, end := classOf[ce.Start()], classOf[ce.End()]
-		var source *Face
-		for _, adjacent := range ce.edge.faces {
-			if adjacent != f {
+		var source *topo.Face
+		for _, adjacent := range ce.edge.n.Faces {
+			if adjacent != &f.n {
 				source = adjacent
 				break
 			}
@@ -149,7 +149,7 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 		if source == nil {
 			return fmt.Errorf(`%w: a PatchEdges fill has no source face on its rim`, ErrDegenerate)
 		}
-		patchSense := tessellation.PatchEdgeSense(m.n.Triangles, byFace[f], start, end)
+		patchSense := tessellation.PatchEdgeSense(m.n.Triangles, byFace[&f.n], start, end)
 		sourceSense := tessellation.PatchEdgeSense(m.n.Triangles, byFace[source], start, end)
 		if patchSense == 0 || sourceSense == 0 {
 			return fmt.Errorf(`%w: a PatchEdges rim has no matching source and fill mesh edges`, ErrUnsupported)
@@ -157,7 +157,7 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 		if patchSense != sourceSense {
 			continue
 		}
-		for _, ti := range byFace[f] {
+		for _, ti := range byFace[&f.n] {
 			m.n.Triangles[ti][1], m.n.Triangles[ti][2] = m.n.Triangles[ti][2], m.n.Triangles[ti][1]
 		}
 	}

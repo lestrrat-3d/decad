@@ -530,7 +530,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			// Every patch of one source face carries that face's OWN origins:
 			// both strips of a split cap came from the cap, and both must
 			// still say so, or FaceCreatedBy and the surveys lose them.
-			f = &Face{
+			f = bornFace(&Face{
 				n: topo.Face{
 					HeldPlanar:  pp.groups[pp.src[i]].planar,
 					Denoted:     pp.groups[pp.src[i]].denoted,
@@ -539,7 +539,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 					Origins:     append([]provenance.Ref(nil), pp.groups[pp.src[i]].origins...),
 					Body:        bodyNode(body),
 				},
-			}
+			})
 			group := pp.groups[pp.src[i]]
 			if group.hasCentroid && groupPatch[pp.src[i]] == patch[i] {
 				f.n.Centroid, f.n.HasCentroid = vecMeasurementToInternal(group.centroid), true
@@ -873,7 +873,6 @@ func buildFacetedTopology(
 	edgeObj := map[*facetedtopology.Edge]*Edge{}
 	for _, chain := range plan.Edges {
 		e := &Edge{
-			faces: []*Face{faces[chain.Faces[0]], faces[chain.Faces[1]]},
 			n: topo.Edge{
 				Convex:          chain.Convex,
 				Length:          chain.Length,
@@ -882,6 +881,7 @@ func buildFacetedTopology(
 				Curve:           surfacegeom.FacetedCurve{Bound: units.Millimeters(chain.Bound)},
 				Start:           vertexNode(vertexOf(chain.Vertices[0])),
 				End:             vertexNode(vertexOf(chain.Vertices[len(chain.Vertices)-1])),
+				Faces:           []*topo.Face{faceNode(faces[chain.Faces[0]]), faceNode(faces[chain.Faces[1]])},
 			},
 		}
 		if axialSectionJoin {

@@ -172,7 +172,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 		}
 	}
 	for original, copies := range copiesByOriginalEdge {
-		if len(original.faces) == 2 {
+		if len(original.n.Faces) == 2 {
 			if len(copies) != 2 {
 				return nil, nil, "an original two-face edge lacks two copies"
 			}

@@ -681,7 +681,7 @@ func internalSheetBody(t *testing.T, doc *Document, x0, y0, x1, y1, h float64) *
 func firstInteriorEdge(t *testing.T, b *Body) *Edge {
 	t.Helper()
 	for _, e := range b.Edges() {
-		if len(e.faces) == 2 {
+		if len(e.n.Faces) == 2 {
 			return e
 		}
 	}
@@ -745,14 +745,15 @@ func TestAuditSheetBoundaryStructuralViolations(t *testing.T) {
 		t.Parallel()
 		requireSheetAuditViolated(t, func(t *testing.T, doc *Document, b *Body) {
 			e := firstInteriorEdge(t, b)
-			require.Len(t, e.faces, 2)
-			extra := &Face{
+			require.Len(t, e.n.Faces, 2)
+			extra := bornFace(&Face{
 				n:     topo.Face{Body: bodyNode(b)},
 				loops: []*Loop{{coedges: []coedge{{edge: e, forward: true}}}},
-			}
+			})
 			shell := b.lumps[0].shells[0]
 			shell.faces = append(shell.faces, extra)
-			e.faces = append(e.faces, extra)
+			e.n.Faces = append(e.n.Faces, faceNode(extra))
+			require.Len(t, e.Faces(), 3, "the third face reached the edge the audit reads")
 		})
 	})
 

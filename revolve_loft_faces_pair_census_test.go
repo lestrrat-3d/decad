@@ -72,7 +72,7 @@ func TestCurvedSourcePairCensusRefusesUnownedRetainedFace(t *testing.T) {
 	shell := trimmed.Shells()[0]
 	original := shell.faces
 	t.Cleanup(func() { shell.faces = original })
-	shell.faces = append(slices.Clone(original), &Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unowned source face"}}, Body: bodyNode(trimmed)}})
+	shell.faces = append(slices.Clone(original), bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unowned source face"}}, Body: bodyNode(trimmed)}}))
 	_, certified, err := revolveLoftFacesCensus(t.Context(), proof)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.False(t, certified,

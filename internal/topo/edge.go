@@ -64,4 +64,7 @@ type Edge struct {
 	// Edge.End map them back to their handles.
 	Start *Vertex
 	End   *Vertex
+	// Faces are the nodes of the faces adjacent to the edge, in the order
+	// they were linked. Root Edge.Faces maps them back to their handles.
+	Faces []*Face
 }

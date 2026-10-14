@@ -118,7 +118,7 @@ func TestChordLoopSampleReachesArcNaturalEnd(t *testing.T) {
 	pp, ok := pie.payload.(prismPayload)
 	require.True(t, ok, `got %T`, pie.payload)
 	arc := onlyArc(t, pp.Profile.Outer.Segments)
-	face := &Face{}
+	face := bornFace(&Face{})
 	cl, err := tessellation.ChordLoop(t.Context(), pp.Profile.Outer, 0.2, 10, freeform.NewFreeformWork(), nil, 0,
 		func(survey2d.SideWalk) (*Face, error) { return face, nil }, stationbound.ChordStationBound)
 	require.NoError(t, err)

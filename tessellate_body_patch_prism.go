@@ -40,7 +40,7 @@ func bodyPatchCircularPrismSource(pp bodyPatchPayload) (prismPayload, bool) {
 		if _, ok := chain.edges[0].n.Curve.(surfacegeom.Circle3); !ok {
 			return prismPayload{}, false
 		}
-		if len(chain.edges[0].faces) != 1 || chain.edges[0].faces[0] != pp.faces[0] {
+		if len(chain.edges[0].n.Faces) != 1 || chain.edges[0].n.Faces[0] != faceNode(pp.faces[0]) {
 			return prismPayload{}, false
 		}
 	}

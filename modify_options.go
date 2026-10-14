@@ -157,9 +157,9 @@ func resolveAsymmetricReference(b *Body, a *asymmetricChamferOpts, edges []*Edge
 	for ei, e := range edges {
 		var ref *Face
 		count := 0
-		for _, f := range e.faces {
-			if _, ok := resolved[f]; ok {
-				ref = f
+		for _, f := range e.n.Faces {
+			if _, ok := resolved[faceHandle(f)]; ok {
+				ref = faceHandle(f)
 				count++
 			}
 		}
@@ -235,12 +235,12 @@ func (a *asymmetricChamfer) capSetbacks(caps prismCaps, edges []*Edge, startLoop
 	var seen, capRef [2]bool
 	for ei, e := range edges {
 		c, capFace := -1, (*Face)(nil)
-		for _, f := range e.faces {
+		for _, f := range e.n.Faces {
 			switch {
-			case f == caps.start && f != nil:
-				c, capFace = 0, f
-			case f == caps.end && f != nil:
-				c, capFace = 1, f
+			case f == faceNode(caps.start) && f != nil:
+				c, capFace = 0, faceHandle(f)
+			case f == faceNode(caps.end) && f != nil:
+				c, capFace = 1, faceHandle(f)
 			}
 		}
 		if c < 0 {

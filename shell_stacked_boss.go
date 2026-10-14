@@ -255,7 +255,7 @@ func closedBossShellEdgePairs(faces []*Face) bool {
 		return false
 	}
 	for edge, uses := range edges {
-		if uses != 2 || len(edge.faces) != 2 || edge.faces[0] == edge.faces[1] {
+		if uses != 2 || len(edge.n.Faces) != 2 || edge.n.Faces[0] == edge.n.Faces[1] {
 			return false
 		}
 	}

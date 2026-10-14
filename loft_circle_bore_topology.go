@@ -359,10 +359,10 @@ func buildLoftVaryingCircularHoleTopology(ctx context.Context, body *Body, pl lo
 		return walls, nil, nil
 	}
 	surface, normalBound := loftCircularWallSurface(pl, bottomSeg, topSeg, kind)
-	wall := &Face{n: topo.Face{
+	wall := bornFace(&Face{n: topo.Face{
 		Surface: surface, Reversed: kind != loftCircleWallRuled && kind != loftCircleWallQuarterTurn,
 		NormalBound: normalBound, Origins: origins, Body: bodyNode(body),
-	}}
+	}})
 	wall.loops = []*Loop{
 		{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{{edge: bottom, forward: true}}, a.Reversed)},
 		{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{{edge: top, forward: false}}, a.Reversed)},
@@ -465,8 +465,8 @@ func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producer
 	}
 	// buildLoopSidesAs links its side face immediately, while evalLoft links
 	// every live face after this rewrite. Clear those two private links once.
-	bottom[0].edge.faces = nil
-	top[0].edge.faces = nil
+	bottom[0].edge.n.Faces = nil
+	top[0].edge.n.Faces = nil
 	filtered := make([]*Face, 0, len(walls))
 	for k, face := range walls {
 		if err := ctx.Err(); err != nil {

@@ -190,7 +190,7 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 			},
 		}
 		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
-		face := &Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}}
+		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}})
 
 		_, err := st.faceHalfPlane(face)
 		require.ErrorIs(t, err, ErrUnsupported)
@@ -204,7 +204,7 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 			},
 		}
 		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
-		face := &Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}}
+		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}})
 
 		_, err := st.faceHalfPlane(face)
 		require.ErrorIs(t, err, ErrUnsupported)
@@ -221,7 +221,7 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 			},
 		}
 		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
-		face := &Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}}
+		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}})
 
 		phi, err := st.faceHalfPlane(face)
 		require.NoError(t, err)

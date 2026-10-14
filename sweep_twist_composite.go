@@ -449,7 +449,7 @@ func sewTwistLoftJoin(ctx context.Context, from, to *Face, previous *Body, sewn 
 		rewriteCompositeVertex(previous, old.End(), end)
 		discarded := old.edge
 		rewriteCompositeEdge(previous, discarded, shared.edge)
-		shared.edge.faces = append(shared.edge.faces, discarded.faces...)
+		shared.edge.n.Faces = append(shared.edge.n.Faces, discarded.n.Faces...)
 		sewn[shared.edge] = struct{}{}
 	}
 	return nil
@@ -537,13 +537,13 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 			if current != first || len(boundary) != 0 {
 				return fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
 			}
-			face := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}}, n: topo.Face{Area: area, AreaBound: areaBound, Surface: surfacegeom.Faceted{}, Origins: []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}}, Body: bodyNode(body)}}
+			face := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}}, n: topo.Face{Area: area, AreaBound: areaBound, Surface: surfacegeom.Faceted{}, Origins: []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}}, Body: bodyNode(body)}})
 			merged = append(merged, face)
 		}
 	}
 	merged = append(merged, old[len(old)-1])
 	for _, edge := range body.Edges() {
-		edge.faces = nil
+		edge.n.Faces = nil
 	}
 	body.lumps[0].shells[0].faces = merged
 	if err := attachFaceLoopsContext(ctx, merged); err != nil {

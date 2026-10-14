@@ -309,7 +309,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 	if delta > 0 {
 		axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 	}
-	nf := &Face{
+	nf := bornFace(&Face{
 		n: topo.Face{
 			Area:          srcFace.n.Area,
 			AreaBound:     srcFace.n.AreaBound,
@@ -323,7 +323,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			CapRecord:     srcFace.n.CapRecord.Under(xform),
 			Origins:       append([]provenance.Ref(nil), srcFace.n.Origins...),
 		},
-	}
+	})
 	for _, l := range srcFace.loops {
 		if err := ctx.Err(); err != nil {
 			return nil, err

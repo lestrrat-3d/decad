@@ -178,7 +178,7 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 		if current != first || len(boundary) != 0 {
 			return nil, fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
 		}
-		face := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}},
+		face := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}},
 			n: topo.Face{
 				Area:      area,
 				AreaBound: areaBound,
@@ -186,7 +186,7 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 				Origins:   []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(0,0,%d)", j)}},
 				Body:      bodyNode(body),
 			},
-		}
+		})
 		for k := range held.walls {
 			cell := held.cell[k]
 			if held.segment[0][cell[1]] == j {
@@ -198,7 +198,7 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 	// Detach the old triangle uses before attaching the merged faces. The
 	// unused diagonal edges then disappear from Body.Edges traversal.
 	for _, edge := range body.Edges() {
-		edge.faces = nil
+		edge.n.Faces = nil
 	}
 	body.lumps[0].shells[0].faces = merged
 	if err := attachFaceLoopsContext(ctx, merged); err != nil {

@@ -293,7 +293,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		return nil, err
 	}
 	faces := []*Face{
-		{loops: capStartLoops, n: topo.Face{
+		bornFace(&Face{loops: capStartLoops, n: topo.Face{
 			Area:          capArea,
 			AreaBound:     capBound,
 			AxialDelta:    sh.Delta,
@@ -302,8 +302,8 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
 		},
-		},
-		{loops: capEndLoops, n: topo.Face{
+		}),
+		bornFace(&Face{loops: capEndLoops, n: topo.Face{
 			Area:          capArea,
 			AreaBound:     capBound,
 			AxialDelta:    sh.Delta,
@@ -312,7 +312,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
 		},
-		},
+		}),
 	}
 	for i, seg := range segs {
 		if err := ctx.Err(); err != nil {
@@ -336,7 +336,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 				bound = math.Max(bound, sh.VertexBound[sh.At(j, v)])
 			}
 		}
-		face := &Face{
+		face := bornFace(&Face{
 			n: topo.Face{
 				Area:      area,
 				AreaBound: areaBound,
@@ -344,7 +344,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 				Origins:   []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(%d,%d)", seg.Loop, seg.Index)}},
 				Body:      bodyNode(body),
 			},
-		}
+		})
 		if seg.Closed {
 			face.loops = []*Loop{
 				{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{{edge: rimStart[i], forward: true}}, sh.Reversed)},

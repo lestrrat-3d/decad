@@ -47,9 +47,9 @@ func TestLoftCircleBoreTopologyShapeRefusals(t *testing.T) {
 				Segments: []curveSegment{circleSeg{TStart: 1, TEnd: 0}},
 			}}}},
 			a:     loftmesh.Assembly{VIdx: [][]int{{}, {}}, Walls: 1},
-			start: &Face{loops: []*Loop{{}, {}}},
-			end:   &Face{loops: []*Loop{{}, {}}},
-			walls: []*Face{{}},
+			start: bornFace(&Face{loops: []*Loop{{}, {}}}),
+			end:   bornFace(&Face{loops: []*Loop{{}, {}}}),
+			walls: []*Face{bornFace(&Face{})},
 		}
 	}
 	baseline := valid()

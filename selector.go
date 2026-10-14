@@ -447,19 +447,19 @@ func (e selectorEdge) SelectorEndpoints() (r3.Vec, r3.Vec) {
 }
 func (e selectorEdge) SelectorLengthMM() float64 { return e.n.Length }
 func (e selectorEdge) SelectorHasOrigin(ref provenance.Ref) bool {
-	for _, face := range e.faces {
-		if slices.Contains(face.n.Origins, ref) {
+	for _, face := range e.n.Faces {
+		if slices.Contains(face.Origins, ref) {
 			return true
 		}
 	}
 	return false
 }
 func (e selectorEdge) SelectorOnOuterLoop(ref provenance.Ref) bool {
-	for _, face := range e.faces {
-		if !slices.Contains(face.n.Origins, ref) {
+	for _, face := range e.n.Faces {
+		if !slices.Contains(face.Origins, ref) {
 			continue
 		}
-		for _, loop := range face.loops {
+		for _, loop := range faceHandle(face).loops {
 			if !loop.n.Outer {
 				continue
 			}

@@ -234,3 +234,60 @@ func TestEdgeVerticesAreTheBodyVertices(t *testing.T) {
 	require.Nil(t, decad.CoEdge{}.End())
 	require.Nil(t, decad.CoEdge{}.Edge())
 }
+
+// TestEdgeFacesAreTheBodyFaces pins face identity across the edge links: on a
+// box every Edge.Faces element is (by ==) one of the faces Body.Faces returns,
+// each edge has two distinct ones and each face bounds four edges, and a
+// second read returns the same pointers in a fresh slice. On an open sheet a
+// rim edge has exactly one face, and the zero Edge has nil faces.
+func TestEdgeFacesAreTheBodyFaces(t *testing.T) {
+	t.Parallel()
+	body := coedgeBox(t)
+	faces := body.Faces()
+	require.Len(t, faces, 6)
+	edges := body.Edges()
+	require.Len(t, edges, 12)
+	uses := map[*decad.Face]int{}
+	for _, e := range edges {
+		adjacent := e.Faces()
+		require.Len(t, adjacent, 2)
+		require.NotSame(t, adjacent[0], adjacent[1])
+		for i, f := range adjacent {
+			require.True(t, slices.Contains(faces, f), "an edge's face is one of the body's own faces")
+			require.Same(t, f, e.Faces()[i])
+			uses[f]++
+		}
+		adjacent[0] = nil
+		require.NotNil(t, e.Faces()[0], "Faces returns a fresh slice")
+		require.False(t, e.IsFree())
+	}
+	require.Len(t, uses, 6)
+	for _, n := range uses {
+		require.Equal(t, 4, n, "each box face bounds four edges")
+	}
+
+	s, p := plateSketch(t)
+	sheet, err := decad.Extrude(t.Context(), decad.New(), s, p,
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	sheetFaces := sheet.Faces()
+	require.Len(t, sheetFaces, 4)
+	free := 0
+	for _, e := range sheet.Edges() {
+		adjacent := e.Faces()
+		for _, f := range adjacent {
+			require.True(t, slices.Contains(sheetFaces, f), "a sheet edge's face is one of the sheet's own faces")
+		}
+		if e.IsFree() {
+			require.Len(t, adjacent, 1)
+			free++
+			continue
+		}
+		require.Len(t, adjacent, 2)
+	}
+	require.Equal(t, 8, free, "the open tube's two rims are its free edges")
+
+	var zero decad.Edge
+	require.Nil(t, zero.Faces())
+	require.False(t, zero.IsFree())
+}

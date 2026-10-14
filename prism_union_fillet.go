@@ -92,7 +92,7 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 	}
 	curve, ok := result.n.Curve.(surfacegeom.FacetedCurve)
 	if !ok || curve.Bound.Mag() != 0 || result.n.Start.Bound.Mag() != 0 || result.n.End.Bound.Mag() != 0 ||
-		len(result.faces) != 2 {
+		len(result.n.Faces) != 2 {
 		return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
 	}
 	corners := [4][2]float64{{rect.U0, rect.V0}, {rect.U1, rect.V0}, {rect.U1, rect.V1}, {rect.U0, rect.V1}}
@@ -175,22 +175,22 @@ func prismUnionFilletBand(origin r3.Vec, corner [2]float64, xOther, yOther, z0, 
 }
 
 func prismUnionFilletSourceFaces(result, source *Edge) bool {
-	if len(source.faces) != 2 || len(result.faces) != 2 {
+	if len(source.n.Faces) != 2 || len(result.n.Faces) != 2 {
 		return false
 	}
-	for _, face := range source.faces {
-		if !face.isPlanar() || len(face.n.Origins) != 1 || face.n.Origins[0].Role == provenance.RoleCapStart ||
-			face.n.Origins[0].Role == provenance.RoleCapEnd {
+	for _, face := range source.n.Faces {
+		if !faceHandle(face).isPlanar() || len(face.Origins) != 1 || face.Origins[0].Role == provenance.RoleCapStart ||
+			face.Origins[0].Role == provenance.RoleCapEnd {
 			return false
 		}
 	}
-	for _, face := range result.faces {
-		if len(face.n.Origins) != 1 || !face.isPlanar() {
+	for _, face := range result.n.Faces {
+		if len(face.Origins) != 1 || !faceHandle(face).isPlanar() {
 			return false
 		}
 	}
-	a, b := source.faces[0].n.Origins[0], source.faces[1].n.Origins[0]
-	x, y := result.faces[0].n.Origins[0], result.faces[1].n.Origins[0]
+	a, b := source.n.Faces[0].Origins[0], source.n.Faces[1].Origins[0]
+	x, y := result.n.Faces[0].Origins[0], result.n.Faces[1].Origins[0]
 	return a != b && ((a == x && b == y) || (a == y && b == x))
 }
 

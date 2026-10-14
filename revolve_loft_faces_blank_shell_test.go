@@ -173,7 +173,7 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	liveShell := trimmed.Shells()[0]
 	originalFaces := liveShell.faces
 	t.Cleanup(func() { liveShell.faces = originalFaces })
-	liveShell.faces = append(slices.Clone(originalFaces), &Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unowned retained face"}}, Body: bodyNode(trimmed)}})
+	liveShell.faces = append(slices.Clone(originalFaces), bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unowned retained face"}}, Body: bodyNode(trimmed)}}))
 	_, admitted, err = revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
 		sectionIndex, cellIndex)
 	require.ErrorIs(t, err, ErrUnsupported)

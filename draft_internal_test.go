@@ -38,7 +38,7 @@ func TestDraftReceiverClasses(t *testing.T) {
 // is no wall is SD21.
 func TestDraftKeptWallsReadsRoles(t *testing.T) {
 	t.Parallel()
-	face := func(origins ...provenance.Ref) *Face { return &Face{n: topo.Face{Origins: origins}} }
+	face := func(origins ...provenance.Ref) *Face { return bornFace(&Face{n: topo.Face{Origins: origins}}) }
 	own := face(provenance.Ref{Producer: 7, Role: "side(0,1)"})
 	coalesced := face(provenance.Ref{Producer: 7, Role: "side(1,2)"}, provenance.Ref{Producer: 7, Role: "side(1,3)"})
 	foreign := face(provenance.Ref{Producer: 8, Role: "side(0,1)"})

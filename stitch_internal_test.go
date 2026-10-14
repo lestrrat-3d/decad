@@ -40,18 +40,18 @@ func TestStitchOrientationRefusesMobiusAssembly(t *testing.T) {
 	e23 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{})), End: vertexNode(bornVertex(&Vertex{}))}}
 	e31 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{})), End: vertexNode(bornVertex(&Vertex{}))}}
 
-	f1 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
+	f1 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 		{edge: e12, forward: true}, {edge: e31, forward: true},
-	}}}}
-	f2 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
+	}}}})
+	f2 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 		{edge: e12, forward: true}, {edge: e23, forward: true},
-	}}}}
-	f3 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
+	}}}})
+	f3 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 		{edge: e23, forward: true}, {edge: e31, forward: true},
-	}}}}
-	e12.faces = []*Face{f1, f2}
-	e23.faces = []*Face{f2, f3}
-	e31.faces = []*Face{f3, f1}
+	}}}})
+	e12.n.Faces = []*topo.Face{faceNode(f1), faceNode(f2)}
+	e23.n.Faces = []*topo.Face{faceNode(f2), faceNode(f3)}
+	e31.n.Faces = []*topo.Face{faceNode(f3), faceNode(f1)}
 
 	err := deriveStitchOrientation([]*Face{f1, f2, f3})
 	require.ErrorIs(t, err, ErrDegenerate)
@@ -66,10 +66,10 @@ func TestStitchOrientationRefusesMobiusAssembly(t *testing.T) {
 func TestStitchClosureRefusesNonManifoldEdge(t *testing.T) {
 	t.Parallel()
 	e := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{})), End: vertexNode(bornVertex(&Vertex{}))}}
-	f1 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}}}
-	f2 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: false}}}}}
-	f3 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}}}
-	e.faces = []*Face{f1, f2, f3}
+	f1 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}}})
+	f2 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: false}}}}})
+	f3 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}}})
+	e.n.Faces = []*topo.Face{faceNode(f1), faceNode(f2), faceNode(f3)}
 
 	err := checkStitchClosure([]*Face{f1, f2, f3})
 	require.ErrorIs(t, err, ErrDegenerate)
@@ -103,7 +103,7 @@ func stitchTestSquareFace(corner r3.Vec) *Face {
 	if err != nil {
 		panic(err)
 	}
-	f := &Face{
+	f := bornFace(&Face{
 		loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 			{edge: edges[0], forward: true},
 			{edge: edges[1], forward: true},
@@ -111,9 +111,9 @@ func stitchTestSquareFace(corner r3.Vec) *Face {
 			{edge: edges[3], forward: true},
 		}}},
 		n: topo.Face{Area: 100, Surface: surfacegeom.Plane{Frame: frame}},
-	}
+	})
 	for _, e := range edges {
-		e.faces = []*Face{f}
+		e.n.Faces = []*topo.Face{faceNode(f)}
 	}
 	return f
 }
@@ -160,8 +160,8 @@ func TestStitchRuleSRefusesMultipleSourceBodies(t *testing.T) {
 	t.Parallel()
 	bodyA := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}})
 	bodyB := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}})
-	faceA := &Face{n: topo.Face{Body: bodyNode(bodyA)}}
-	faceB := &Face{n: topo.Face{Body: bodyNode(bodyB)}}
+	faceA := bornFace(&Face{n: topo.Face{Body: bodyNode(bodyA)}})
+	faceB := bornFace(&Face{n: topo.Face{Body: bodyNode(bodyB)}})
 
 	require.False(t, stitchRuleSAdmits(context.Background(), []*Face{faceA, faceB}))
 	// The single-body case is what Rule S DOES admit, confirming the
@@ -194,16 +194,16 @@ func stitchTestFanAroundVertex(v *Vertex, outer [3]*Vertex) [3]*Face {
 		// Triangle (v, outer[i], outer[j]): v -> outer[i] via radial[i]
 		// forward, outer[i] -> outer[j] via rim[i] forward, outer[j] -> v
 		// via radial[j] backward.
-		faces[i] = &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
+		faces[i] = bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 			{edge: radial[i], forward: true},
 			{edge: rim[i], forward: true},
 			{edge: radial[j], forward: false},
-		}}}}
+		}}}})
 	}
 	for i := range 3 {
 		j := (i + 1) % 3
-		radial[i].faces = append(radial[i].faces, faces[i], faces[j])
-		rim[i].faces = []*Face{faces[i]}
+		radial[i].n.Faces = append(radial[i].n.Faces, faceNode(faces[i]), faceNode(faces[j]))
+		rim[i].n.Faces = []*topo.Face{faceNode(faces[i])}
 	}
 	return faces
 }
@@ -245,7 +245,7 @@ func TestStitchVertexLinkAuditRefusesPinchedVertex(t *testing.T) {
 // NURBSCurve edge outright — so no fixture reaches this through Stitch.
 func TestStitchFluxRefusesNURBSSurface(t *testing.T) {
 	t.Parallel()
-	f := &Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}}
+	f := bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})
 	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 }
@@ -262,7 +262,7 @@ func TestStitchFluxRefusesNURBSSurface(t *testing.T) {
 // public seam.
 func TestStitchFluxRefusesNonzeroNormalBound(t *testing.T) {
 	t.Parallel()
-	f := &Face{n: topo.Face{NormalBound: 1e-9, Surface: surfacegeom.Plane{Frame: mustPlaneFrame()}}}
+	f := bornFace(&Face{n: topo.Face{NormalBound: 1e-9, Surface: surfacegeom.Plane{Frame: mustPlaneFrame()}}})
 	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 }
@@ -367,7 +367,7 @@ func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound flo
 	length := 2 * math.Pi * r
 	e0 := &Edge{n: topo.Edge{Length: length, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, Start: vertexNode(v0), End: vertexNode(v0)}}
 	e1 := &Edge{n: topo.Edge{Length: length, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, height), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, Start: vertexNode(v1), End: vertexNode(v1)}}
-	f := &Face{
+	f := bornFace(&Face{
 		loops: []*Loop{
 			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e0, forward: true}}},
 			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e1, forward: true}}},
@@ -377,8 +377,8 @@ func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound flo
 			AreaBound: areaBound,
 			Surface:   surfacegeom.Cylinder{Origin: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)},
 		},
-	}
-	e0.faces, e1.faces = []*Face{f}, []*Face{f}
+	})
+	e0.n.Faces, e1.n.Faces = []*topo.Face{faceNode(f)}, []*topo.Face{faceNode(f)}
 	return f
 }
 
@@ -452,11 +452,11 @@ func stitchTestPlaneDiskFace(r, rimBound float64) *Face {
 	}
 	v := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, 0)}})
 	e := &Edge{n: topo.Edge{Length: 2 * math.Pi * r, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, Start: vertexNode(v), End: vertexNode(v)}}
-	f := &Face{
+	f := bornFace(&Face{
 		n:     topo.Face{Surface: surfacegeom.Plane{Frame: frame}},
 		loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}},
-	}
-	e.faces = []*Face{f}
+	})
+	e.n.Faces = []*topo.Face{faceNode(f)}
 	return f
 }
 
@@ -502,11 +502,11 @@ func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
 	center := frame.Origin().Add(frame.U()).Add(frame.V().Scale(0.5))
 	vertex := bornVertex(&Vertex{n: topo.Vertex{Position: center.Add(frame.U().Scale(radius))}})
 	edge := &Edge{n: topo.Edge{Length: 2 * math.Pi * radius, Curve: surfacegeom.Circle3{Center: center, Axis: frame.N(), Radius: units.Millimeters(radius)}, Start: vertexNode(vertex), End: vertexNode(vertex)}}
-	face := &Face{
+	face := bornFace(&Face{
 		n:     topo.Face{Surface: surfacegeom.Plane{Frame: frame}},
 		loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: edge, forward: true}}}},
-	}
-	edge.faces = []*Face{face}
+	})
+	edge.n.Faces = []*topo.Face{faceNode(face)}
 
 	anchor := r3.NewVec(1, 1, 1)
 	flux, mx, my, mz, err := stitchFaceFluxAndMoment(face, anchor)
@@ -560,14 +560,14 @@ func stitchTestConeFace(halfAngle, r0, z0, r1, z1, rimBound float64) *Face {
 	length1 := 2 * math.Pi * r1
 	e0 := &Edge{n: topo.Edge{Length: length0, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: center0, Axis: axis, Radius: units.Millimeters(r0)}, Start: vertexNode(v0), End: vertexNode(v0)}}
 	e1 := &Edge{n: topo.Edge{Length: length1, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: center1, Axis: axis, Radius: units.Millimeters(r1)}, Start: vertexNode(v1), End: vertexNode(v1)}}
-	f := &Face{
+	f := bornFace(&Face{
 		n: topo.Face{Surface: surfacegeom.Cone{Origin: r3.NewVec(0, 0, 0), Axis: axis, Radius: units.Millimeters(0), HalfAngle: units.Radians(halfAngle)}},
 		loops: []*Loop{
 			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e0, forward: true}}},
 			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e1, forward: true}}},
 		},
-	}
-	e0.faces, e1.faces = []*Face{f}, []*Face{f}
+	})
+	e0.n.Faces, e1.n.Faces = []*topo.Face{faceNode(f)}, []*topo.Face{faceNode(f)}
 	return f
 }
 
@@ -751,13 +751,13 @@ func sphereRevolveFacesForInternalTest(t *testing.T, diameter float64) []*Face {
 // through the origin, where the profile's own exact-rational radius gives
 // an area bound at the same ulp scale every OTHER term here carries too).
 func stitchTestSphereFace(center r3.Vec, radius, areaBound float64) *Face {
-	return &Face{
+	return bornFace(&Face{
 		n: topo.Face{
 			Area:      4 * math.Pi * radius * radius,
 			AreaBound: areaBound,
 			Surface:   surfacegeom.Sphere{Center: center, Radius: units.Millimeters(radius)},
 		},
-	}
+	})
 }
 
 // TestStitchSphereFluxReusesAreaBound is the Sphere arm's own radius-bound
@@ -811,13 +811,13 @@ func TestStitchSphereFluxReusesAreaBound(t *testing.T) {
 func TestStitchSphereFluxDerivesRadiusFromAreaNotBareField(t *testing.T) {
 	t.Parallel()
 	const trueRadius = 5.0
-	f := &Face{
+	f := bornFace(&Face{
 		n: topo.Face{
 			Area:      4 * math.Pi * trueRadius * trueRadius,
 			AreaBound: 0,
 			Surface:   surfacegeom.Sphere{Center: r3.NewVec(0, 0, 0), Radius: units.Millimeters(999)},
 		},
-	}
+	})
 
 	flux, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
 	require.NoError(t, err)
@@ -847,11 +847,11 @@ func TestStitchSphereFluxRefusesFaceWithABoundaryLoop(t *testing.T) {
 			End: vertexNode(v),
 		},
 	}
-	f := &Face{
+	f := bornFace(&Face{
 		loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}},
 		n:     topo.Face{Area: 4 * math.Pi * 25, Surface: surfacegeom.Sphere{Center: r3.NewVec(5, 0, 0), Radius: units.Millimeters(5)}},
-	}
-	e.faces = []*Face{f}
+	})
+	e.n.Faces = []*topo.Face{faceNode(f)}
 
 	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -969,14 +969,14 @@ func stitchTestTorusFace(center, axis r3.Vec, major, minor, e0, e1 float64) *Fac
 		}
 	}
 	e0Edge, e1Edge := rim(e0), rim(e1)
-	f := &Face{
+	f := bornFace(&Face{
 		n: topo.Face{Surface: surfacegeom.Torus{Center: center, Axis: axis, Major: units.Millimeters(major), Minor: units.Millimeters(minor)}},
 		loops: []*Loop{
 			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e0Edge, forward: true}}},
 			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e1Edge, forward: true}}},
 		},
-	}
-	e0Edge.faces, e1Edge.faces = []*Face{f}, []*Face{f}
+	})
+	e0Edge.n.Faces, e1Edge.n.Faces = []*topo.Face{faceNode(f)}, []*topo.Face{faceNode(f)}
 	return f
 }
 
@@ -1209,7 +1209,7 @@ func stitchTestLumpFace(vs []*Vertex) *Face {
 		e := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(vs[i]), End: vertexNode(vs[(i+1)%len(vs)])}}
 		coedges[i] = coedge{edge: e, forward: true}
 	}
-	return &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: coedges}}}
+	return bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: coedges}}})
 }
 
 // TestTessellateStitchClearsSymDiffForOverlappingLumps is docs/surface-design.md's
@@ -1238,7 +1238,7 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 	trisB := stitchTestClosedBoxTriangles(8)
 	tris := append(append([][3]int{}, trisA[:]...), trisB[:]...)
 
-	faceA, faceB := &Face{}, &Face{}
+	faceA, faceB := bornFace(&Face{}), bornFace(&Face{})
 	triFaces := make([]*Face, 0, len(tris))
 	for range trisA {
 		triFaces = append(triFaces, faceA)
@@ -1342,7 +1342,7 @@ func TestStitchConeArmChargesApexDeparture(t *testing.T) {
 // the internal variant the face node holds.
 func TestStitchFluxRefusalNamesThePublicSurfaceType(t *testing.T) {
 	t.Parallel()
-	face := &Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}}
+	face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})
 	flux, mx, my, _, err := stitchFaceFluxAndMoment(face, r3.Vec{})
 	require.Zero(t, flux)
 	require.Zero(t, mx)

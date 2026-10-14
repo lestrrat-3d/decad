@@ -37,7 +37,7 @@ func TestSideOriginsContextPollsEachSegment(t *testing.T) {
 func TestFullRevolveShellsContextPollsEachLoop(t *testing.T) {
 	t.Parallel()
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 2}
-	perLoop := []revLoopParts{{}, {faces: []*Face{{}}, runs: []int{0}}}
+	perLoop := []revLoopParts{{}, {faces: []*Face{bornFace(&Face{})}, runs: []int{0}}}
 
 	shells, err := fullRevolveShellsContext(ctx, perLoop, false)
 
@@ -49,7 +49,7 @@ func TestFullRevolveShellsContextPollsEachLoop(t *testing.T) {
 func TestAddBlendRolesContextPollsNestedMetadata(t *testing.T) {
 	t.Parallel()
 	ref := producerID(1)
-	face := &Face{n: topo.Face{Origins: []provenance.Ref{{Producer: ref, Role: "side(0,0)"}}}}
+	face := bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Producer: ref, Role: "side(0,0)"}}}})
 	body := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{face}}}}}})
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 5}
 
@@ -63,7 +63,7 @@ func TestAddBlendRolesContextPollsNestedMetadata(t *testing.T) {
 func TestRenameCavityRolesContextPollsNestedMetadata(t *testing.T) {
 	t.Parallel()
 	ref := producerID(1)
-	face := &Face{n: topo.Face{Origins: []provenance.Ref{{Producer: ref, Role: "side(0,0)"}}}}
+	face := bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Producer: ref, Role: "side(0,0)"}}}})
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 3}
 
 	err := renameCavityRoles(ctx, []*Face{face}, ref)

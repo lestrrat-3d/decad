@@ -65,7 +65,7 @@ func TestShellClosedPrismLevelsCarryThicknessConversion(t *testing.T) {
 // connected face set with no anchor is a void, attached to the one outer
 // shell, and several outer shells beside a cavity are ErrUnsupported.
 func TestStackedLumpsNeedsOneOuterShellForACavity(t *testing.T) {
-	outerA, outerB, cavity := &Face{}, &Face{}, &Face{}
+	outerA, outerB, cavity := bornFace(&Face{}), bornFace(&Face{}), bornFace(&Face{})
 	anchors := map[*Face]struct{}{outerA: {}, outerB: {}}
 	lumps, err := stackedLumps([]*Face{outerA, cavity}, anchors)
 	require.NoError(t, err)

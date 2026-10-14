@@ -49,7 +49,7 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 		if err != nil {
 			return nil, err
 		}
-		return &Face{
+		return bornFace(&Face{
 			n: topo.Face{
 				Area:          region.Published.Value,
 				AreaBound:     region.Published.Bound,
@@ -59,7 +59,7 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 				CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: f.z0},
 				Origins:       origins,
 				Body:          bodyNode(body),
-			}}, nil
+			}}), nil
 	}
 	w := btopo.walls[fi]
 	_, _, surf, reversed, err := buildWallGeometry(pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}},
@@ -68,14 +68,14 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 		return nil, err
 	}
 	area := brepgeom.WallArea(f.delta, f.z0, f.z1, f.z0Delta, f.z1Delta, w)
-	return &Face{n: topo.Face{
+	return bornFace(&Face{n: topo.Face{
 		Area:      area.Value,
 		AreaBound: area.Bound,
 		Reversed:  reversed,
 		Surface:   surf,
 		Origins:   origins,
 		Body:      bodyNode(body),
-	}}, nil
+	}}), nil
 }
 
 // region reads a planar face's region once per topology.
