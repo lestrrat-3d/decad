@@ -60,7 +60,7 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	if err != nil {
 		return nil, err
 	}
-	_, heldRat, err := meshVolumeMeasurement(ctx, audit.XVerts, mesh.tris, 0)
+	_, heldRat, err := meshVolumeMeasurement(ctx, audit, 0)
 	if err != nil {
 		return nil, err
 	}

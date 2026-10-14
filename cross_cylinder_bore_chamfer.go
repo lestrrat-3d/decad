@@ -71,7 +71,7 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	if err != nil {
 		return nil, true, err
 	}
-	volume, heldVolume, err := meshVolumeMeasurement(ctx, audit.XVerts, mesh.tris, volumeGap)
+	volume, heldVolume, err := meshVolumeMeasurement(ctx, audit, volumeGap)
 	if err != nil {
 		return nil, true, err
 	}

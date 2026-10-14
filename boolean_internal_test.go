@@ -736,19 +736,31 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 	t.Run("volume", func(t *testing.T) {
 		gap := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 54))
 		exactVolume := new(big.Rat).Add(big.NewRat(1, 1), gap)
-		x := new(big.Rat).Mul(exactVolume, big.NewRat(6, 1))
-		verts := []proofarith.Xpt{
-			proofarith.XptOf(r3.Vec{}),
-			xptFromRat(x, big.NewRat(0, 1), big.NewRat(0, 1)),
-			proofarith.XptOf(r3.NewVec(0, 1, 0)),
-			proofarith.XptOf(r3.NewVec(0, 0, 1)),
-		}
-		tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
-		reading, gotVolume, err := meshVolumeMeasurement(t.Context(), verts, tris, tiny)
+		audit := &facetproof.MeshAudit{CompVol: []*big.Rat{exactVolume}}
+		reading, gotVolume, err := meshVolumeMeasurement(t.Context(), audit, tiny)
 		require.NoError(t, err)
 		require.Equal(t, 0, exactVolume.Cmp(gotVolume))
+		require.Equal(t, math.Float64bits(1), math.Float64bits(reading.Value.Base()))
+		require.Equal(t, Approximate, reading.Exactness)
 		wantBound := new(big.Rat).Add(gap, new(big.Rat).SetFloat64(tiny))
 		require.GreaterOrEqual(t, new(big.Rat).SetFloat64(reading.Bound.Base()).Cmp(wantBound), 0)
+	})
+	t.Run("cancelled volume", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		reading, volume, err := meshVolumeMeasurement(ctx,
+			&facetproof.MeshAudit{CompVol: []*big.Rat{big.NewRat(1, 1)}}, 0)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Equal(t, Measurement{}, reading)
+		require.Nil(t, volume)
+	})
+	t.Run("nonpositive volume", func(t *testing.T) {
+		reading, volume, err := meshVolumeMeasurement(t.Context(),
+			&facetproof.MeshAudit{CompVol: []*big.Rat{big.NewRat(1, 1), big.NewRat(-1, 1)}}, 0)
+		require.ErrorIs(t, err, ErrBooleanFailed)
+		require.ErrorContains(t, err, "the boolean result encloses no volume")
+		require.Equal(t, Measurement{}, reading)
+		require.Nil(t, volume)
 	})
 
 	t.Run("centroid", func(t *testing.T) {
@@ -826,6 +838,13 @@ func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, eval.audit)
 			require.NotNil(t, eval.volumeRat)
+			wantValue, wantBound, wantRat, err := facetproof.Volume(t.Context(),
+				eval.audit.XVerts, eval.payload.tris, eval.payload.volSymDiff)
+			require.NoError(t, err)
+			require.Zero(t, wantRat.Cmp(eval.volumeRat))
+			require.Equal(t, math.Float64bits(wantValue), math.Float64bits(eval.volume.Value.Base()))
+			require.Equal(t, math.Float64bits(wantBound), math.Float64bits(eval.volume.Bound.Base()))
+			require.Equal(t, exactnessOf(wantBound), eval.volume.Exactness)
 
 			result, err := tc.op(t.Context(), a, b)
 			require.NoError(t, err)

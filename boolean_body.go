@@ -11,7 +11,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
-	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -727,12 +726,16 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	return body, nil
 }
 
-// meshVolumeMeasurement integrates one stitched, oriented, closed mesh in
-// exact rational arithmetic and composes the shared symmetric-difference
-// allowance with the final rational-to-float rounding. It reuses the audit's
-// exact vertices while retaining the original facet-order sum.
-func meshVolumeMeasurement(ctx context.Context, xverts []proof.Xpt, tris [][3]int, volSymDiff float64) (Measurement, *big.Rat, error) {
-	volF, bound, volRat, err := facetproof.Volume(ctx, xverts, tris, volSymDiff)
+// meshVolumeMeasurement reads the audited mesh's exact component volumes and
+// composes the symmetric-difference allowance with final float rounding.
+func meshVolumeMeasurement(ctx context.Context, audit *facetproof.MeshAudit, volSymDiff float64) (Measurement, *big.Rat, error) {
+	if err := ctx.Err(); err != nil {
+		return Measurement{}, nil, err
+	}
+	volF, bound, volRat, err := facetproof.VolumeFromAudit(audit, volSymDiff)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return Measurement{}, nil, ctxErr
+	}
 	if err != nil {
 		return Measurement{}, nil, err
 	}
