@@ -8,14 +8,15 @@ import (
 )
 
 // Env is what a builder needs from its caller: the document node it mints
-// level and curve identities through and that owns the result, and the
-// producer the result's roles are minted under. Ref is not always
-// Doc.NextProducer: a motion check builds under a transient producer, and a
-// pattern builds a span of producers before it commits
-// (docs/evaluator-design.md §8).
+// level and curve identities through and that owns the result, the producer
+// the result's roles are minted under, and the allocator every node of the
+// result comes from. Ref is not always Doc.NextProducer: a motion check
+// builds under a transient producer, and a pattern builds a span of producers
+// before it commits (docs/evaluator-design.md §8).
 type Env struct {
-	Doc *Document
-	Ref provenance.Producer
+	Doc   *Document
+	Ref   provenance.Producer
+	Alloc Alloc
 }
 
 // Payload is the evaluator's own record of how a body was built: what
