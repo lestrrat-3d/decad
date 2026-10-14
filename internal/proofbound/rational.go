@@ -7,18 +7,42 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
+// RatAdd is the exact sum of values, zero for an empty list, in lowest terms.
+// It folds with proofarith.AddRat, which returns big.Rat.Add's value without
+// a normalising GCD when the operands' denominators are powers of two. The
+// result is a fresh Rat that shares no memory with any operand.
 func RatAdd(values ...*big.Rat) *big.Rat {
 	out := new(big.Rat)
 	for _, value := range values {
-		out.Add(out, value)
+		proofarith.AddRat(out, out, value)
 	}
-	return out
+	return storeIntDenominator(out, len(values))
 }
 
+// RatMul is the exact product of values, one for an empty list, in lowest
+// terms. The fold starts from a copy of the first value and uses
+// proofarith.MulRat, which returns big.Rat.Mul's value without a normalising
+// GCD when the operands' denominators are powers of two. The result is a
+// fresh Rat that shares no memory with any operand.
 func RatMul(values ...*big.Rat) *big.Rat {
-	out := big.NewRat(1, 1)
-	for _, value := range values {
-		out.Mul(out, value)
+	if len(values) == 0 {
+		return new(big.Rat).SetInt64(1)
+	}
+	out := new(big.Rat).Set(values[0])
+	for _, value := range values[1:] {
+		proofarith.MulRat(out, out, value)
+	}
+	return storeIntDenominator(out, len(values))
+}
+
+// storeIntDenominator gives an integer result a stored denominator of 1, as
+// big.Rat's own operations leave it. AddRat, MulRat and RatFrac may leave a zero
+// denominator unstored, so that Denom would return a fresh detached 1 on every
+// call; big.Rat.Add and Mul always store it. n is the number of folded values:
+// an empty RatAdd returns the zero Rat unchanged, as the legacy fold did.
+func storeIntDenominator(out *big.Rat, n int) *big.Rat {
+	if n > 0 && out.IsInt() {
+		out.SetInt(out.Num())
 	}
 	return out
 }

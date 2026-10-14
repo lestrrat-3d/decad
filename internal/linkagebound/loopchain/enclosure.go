@@ -155,7 +155,7 @@ func Value(sc Scene, ask Ask, j int) (motionbound.MotionParam, motionbound.Motio
 	r0 := sc.ZeroReadings[j]
 	lo := new(big.Rat).Sub(proofarith.FloatRat(iv.Lo), proofarith.FloatRat(r0.Hi))
 	hi := new(big.Rat).Sub(proofarith.FloatRat(iv.Hi), proofarith.FloatRat(r0.Lo))
-	turn := big.NewRat(ask.Turns[j], 1)
+	turn := new(big.Rat).SetInt64(ask.Turns[j])
 	if sc.Signs[j] < 0 {
 		lo, hi = hi.Neg(hi), lo.Neg(lo)
 		turn.Neg(turn)
@@ -242,7 +242,7 @@ func (sc Scene) foldRefusal(fold *sketch.FoldError, cause error) error {
 // turnsOverlap rejects a continued angle when its shifted first reading and
 // its predecessor's last reading are proven disjoint for every enclosed π.
 func turnsOverlap(f sketch.Interval, m int64, l sketch.Interval) bool {
-	turn := big.NewRat(m, 1)
+	turn := new(big.Rat).SetInt64(m)
 	shiftLo := motionbound.ParamLower(motionbound.MotionParam{Turn: turn, Base: proofarith.FloatRat(f.Lo)})
 	shiftHi := motionbound.ParamUpper(motionbound.MotionParam{Turn: turn, Base: proofarith.FloatRat(f.Hi)})
 	return shiftLo.Cmp(proofarith.FloatRat(l.Hi)) <= 0 && proofarith.FloatRat(l.Lo).Cmp(shiftHi) <= 0

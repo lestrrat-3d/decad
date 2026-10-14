@@ -277,13 +277,13 @@ func (c *Chain) Decompose(ctx context.Context, dependents int, floor *big.Rat) (
 			return nil
 		}
 		mid := new(big.Rat).Add(a, b)
-		mid.Quo(mid, big.NewRat(2, 1))
+		mid.Quo(mid, new(big.Rat).SetInt64(2))
 		if err := walk(a, mid); err != nil {
 			return err
 		}
 		return walk(mid, b)
 	}
-	if err := walk(new(big.Rat), big.NewRat(1, 1)); err != nil {
+	if err := walk(new(big.Rat), new(big.Rat).SetInt64(1)); err != nil {
 		return Decomposition{}, err
 	}
 	result.Reach = make([]*big.Rat, dependents)

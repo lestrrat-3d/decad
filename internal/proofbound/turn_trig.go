@@ -1,6 +1,10 @@
 package proofbound
 
-import "math/big"
+import (
+	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+)
 
 // This file encloses sin(2*pi*t) and cos(2*pi*t) for an exact rational turn t.
 // The bounds support circular moments, sweep endpoints, and radial geometry.
@@ -90,9 +94,10 @@ func FixedCeil(q *big.Rat) *big.Int {
 	return quo
 }
 
-// FixedToRat converts a fixed-point integer back to an exact big.Rat.
+// FixedToRat converts a fixed-point integer back to an exact big.Rat in lowest
+// terms; the power-of-two denominator reduces by a shift, not a GCD.
 func FixedToRat(v *big.Int) *big.Rat {
-	return new(big.Rat).SetFrac(v, TrigFixedOne)
+	return storeIntDenominator(proofarith.RatFrac(new(big.Rat), v, TrigFixedOne), 1)
 }
 
 // TrigFixedSeries evaluates fixed-point sin(x), cos(x) for X representing
@@ -256,7 +261,7 @@ func turnSinCosInterval(t *big.Rat, firstOctant func(*big.Rat) (RatInterval, Rat
 	}
 	f.Sub(f, new(big.Rat).SetInt(fl))
 
-	eight := big.NewRat(8, 1)
+	eight := new(big.Rat).SetInt64(8)
 	scaled := new(big.Rat).Mul(f, eight)
 	kBig := new(big.Int).Quo(scaled.Num(), scaled.Denom())
 	k := kBig.Int64()
