@@ -2775,6 +2775,19 @@ both sections and runs the normal loft evaluator. A pair outside these gates
 uses the general boolean path; the global sketch reconstruction ceiling is
 unchanged.
 
+When both sections place the circle's upper center at exactly the same world
+coordinate, the certified Cut marks the resulting Loft for analytic bore
+topology. Otherwise the accepted Cut keeps its tessellated Loft topology.
+The evaluator keeps the held polygonal outer walls, assembly, mass and
+tessellation proofs. It replaces only the hole-wall triangles with one
+cylindrical face and their cap rim chords with one full `Circle3` per cap.
+Every former hole-wall `side(i,j,k)` role belongs to that cylinder, so the
+unchanged held triangle mesh still resolves its source face at `VerifyAll`.
+The cap face area subtracts the bounded whole-circle integral from the held
+outer polygon area. A direct Loft of circular-hole sketches, or a Loft that
+lacks the certified through-Cut mark, keeps its original tessellated rim.
+Placement and duplication rebuild the same topology from that mark.
+
 `OuterLoopOf(CapStart(body))` and `OuterLoopOf(CapEnd(body))` select only the
 held outer cap edges, excluding the circular bore rims. An equal-distance
 `Chamfer` of both complete outer loops accepts a matching axial loft with

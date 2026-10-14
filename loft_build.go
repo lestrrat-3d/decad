@@ -78,6 +78,10 @@ type loftPayload struct {
 	// replaces the recorded float trim. Each value bounds that increase for
 	// every cell of the named outer-loop segment.
 	constructionLengthExtra map[int]float64
+	// analyticBore is set only by the certified whole-circle through Cut.
+	// Its loft mesh still supplies mass and tessellation proofs, while the
+	// public topology uses one cylindrical wall for the new hole.
+	analyticBore bool
 
 	// surfaceResult is WithSurfaceResult's own flag (docs/surface-design.md
 	// §4): true when the build must omit both section caps and publish a
@@ -426,6 +430,12 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		seg := pairs[li].Segment[cell]
 		if _, blend := pl.blendSegs[li][seg]; blend {
 			wall.n.Origins = append(wall.n.Origins, provenance.Ref{Producer: ref, Role: fmt.Sprintf("fillet(%d,%d)", li, seg)})
+		}
+	}
+	if pl.analyticBore {
+		walls, err = buildLoftAnalyticBoreTopology(ctx, body, ref, pl, a, capStart, capEnd, walls)
+		if err != nil {
+			return nil, err
 		}
 	}
 	if err := ctx.Err(); err != nil {

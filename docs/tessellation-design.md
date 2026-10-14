@@ -530,13 +530,14 @@ increments the one global angular count; rebuild and re-audit.
 
 Build one `role -> *Face` map from the body's live topology. A coalesced wall
 may carry several `side(i,j)` origins; all of them MUST resolve to the same face.
-A Loft wall cell has two distinct faces, `side(i,j,0)` and `side(i,j,1)`,
-even when its two triangles are coplanar — evaluator §3 owns the
+A Loft wall cell normally has two distinct faces, `side(i,j,0)` and
+`side(i,j,1)`, even when its two triangles are coplanar — evaluator §3 owns the
 provenance-role mechanism and loft §7 owns what a loft's `i`, `j` and `k`
-index. No Loft wall
-triangle coalesces with one in another cell, so a flat split rung keeps its two
-source faces. Missing or conflicting roles are an evaluator invariant failure
-and no mesh is returned.
+index. No ordinary Loft wall triangle coalesces with one in another cell, so
+a flat split rung keeps its two source faces. A certified whole-circle
+through-Cut is the sole exception: all held triangles on its hole wall map
+to one cylindrical face carrying their original roles. Missing or conflicting
+roles are an evaluator invariant failure and no mesh is returned.
 
 Assign sources by patch:
 
