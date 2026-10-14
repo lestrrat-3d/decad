@@ -57,7 +57,7 @@ func Example_decad_splitRevolve() {
 		return
 	}
 
-	pieces, err := doc.Split(context.Background(), cylinder, disc)
+	pieces, err := decad.Split(context.Background(), cylinder, disc)
 	if err != nil {
 		fmt.Printf("failed to split cylinder: %s\n", err)
 		return

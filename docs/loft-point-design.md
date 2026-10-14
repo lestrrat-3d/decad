@@ -41,7 +41,7 @@ result option.
 
 ## Planar split of a point loft
 
-`Document.Split` admits an unplaced `LoftFromPoint` body and one unplaced,
+`Split` admits an unplaced `LoftFromPoint` body and one unplaced,
 single-line chain `Extrude` sheet whose source sketch is world XY and whose
 straight sweep is along world Z. The line and sweep must span every cut
 section, and every source ray must cross the sheet plane strictly between the

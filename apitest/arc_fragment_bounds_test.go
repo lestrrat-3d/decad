@@ -139,7 +139,7 @@ func TestArcFragmentSplitHemispheresAreTight(t *testing.T) {
 	doc := decad.New()
 	ball := splitRevolveSolid(t, doc, splitRevolveBall, decad.FullRevolution{})
 	disc := splitRevolveSheet(t, doc, 0, 0, 8, 0, decad.FullRevolution{})
-	pieces, err := doc.Split(t.Context(), ball, disc)
+	pieces, err := decad.Split(t.Context(), ball, disc)
 	require.NoError(t, err)
 	require.Len(t, pieces, 2)
 	// Each hemisphere walks the meridian arc over half its range, [0, 1/2]

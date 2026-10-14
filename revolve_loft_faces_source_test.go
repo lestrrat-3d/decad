@@ -90,7 +90,7 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 			Two: DistanceSide{D: units.Millimeters(20)},
 		})
 		require.NoError(t, sheetErr)
-		parts, splitErr := doc.Split(t.Context(), inner, sheet)
+		parts, splitErr := Split(t.Context(), inner, sheet)
 		require.NoError(t, splitErr)
 		require.Len(t, parts, 2)
 		inner = parts[0]

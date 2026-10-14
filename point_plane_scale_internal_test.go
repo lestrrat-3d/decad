@@ -44,7 +44,7 @@ func TestPointPlaneScaleCarriesSourceThroughLaterPlacement(t *testing.T) {
 		Two: DistanceSide{D: units.Millimeters(30)},
 	})
 	require.NoError(t, err)
-	pieces, err := doc.Split(t.Context(), tooth, sheet)
+	pieces, err := Split(t.Context(), tooth, sheet)
 	require.NoError(t, err)
 	require.Len(t, pieces, 2)
 	turn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(0.2))

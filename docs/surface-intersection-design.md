@@ -716,12 +716,12 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
 1. **PR1 — the gate and `Trim` over the prism family.** S1–S7,
    `prismcells.BuildScene`'s `ChainRecord` arm, §3.2's side reading over
    `prismcells.Classify` unchanged, §3.3's open-walk chaining, `chainPayload`'s
-   walk set and section displacement, §7's exactness, and `Body.Trim`. Tests:
+   walk set and section displacement, §7's exactness, and `Trim`. Tests:
    surface §15's T170–T174 and T181.
-2. **PR2 — `Document.Split` over the prism family.** §3.2's cell selection,
+2. **PR2 — `Split` over the prism family.** §3.2's cell selection,
    per-cell recording of the private arrangement, and one `prismPayload` per piece
    through `evalPrism` unchanged. Tests: T175–T177.
-3. **PR3 — `Body.Extend` over the prism family.** §3.1's full-domain entity
+3. **PR3 — `Extend` over the prism family.** §3.1's full-domain entity
    recreation, §3.2's nearest-cut reading, and RS4's refusal. Tests:
    T178–T179.
 4. **PR4 — `Trim` and `Extend` over the revolve family.** S1's and S4's revolve
@@ -729,7 +729,7 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
    S6, the meridian scene, and §7.1's fold into the axis-coordinate walk. Tests:
    T180, T182 and T183. A trimmed revolve sheet's own mesh waits on surface
    increment 4, exactly as a profile-fed revolve sheet's does.
-5. **PR5 — `Document.Split` over the revolve family** (landed).
+5. **PR5 — `Split` over the revolve family** (landed).
    `revolvePayload.sectionDelta` reaches the Pappus volume, the centroid and
    every other solid reading (§7.2). `surface_split_revolve.go` runs PR2's
    `prismcells.SplitPieces` over the two meridian views, reruns the axis gates per piece

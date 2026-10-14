@@ -749,7 +749,7 @@ components are not proven separate, rather than publish an unrecorded cavity.
 
 An operation is a package-level function. A query is a method. This section
 owns the rule; a companion design that writes an operation as a method
-(`func (b *Body) Trim(...)`, `func (d *Document) Loft(...)`) means the
+(`func (b *Body) Patch(...)`, `func (d *Document) Loft(...)`) means the
 free function the table below names for it.
 
 **An operation is any call that builds a body, retires a body, or registers a
@@ -787,8 +787,6 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 
 | Shipped method form | Free function |
 |---|---|
-| `Body.Trim`, `Body.Extend` | `Trim(ctx, b, tool, side)`, `Extend(ctx, b, edges, tool)` |
-| `Document.Split` | `Split(ctx, target, tool)` |
 | `Body.Patch` | `PatchEdges(ctx, b, sel)` |
 | `Document.Patch` | `PatchProfile(ctx, doc, s, p)`, so the two patch forms stop sharing one name |
 | `Body.ScaledAt` | `ScaledAt(ctx, b, anchor, factor)` |
@@ -2128,7 +2126,7 @@ them. `Thicken` admits the sheet families §16.1 names and `Offset` the two
 `ErrUnsupported`. `Trim`, `Extend` and `Split` build over a pair whose two
 sweeps share one generator and refuse every other pair
 (`docs/surface-design.md` §1.1, §1.2); a sheet operand in any boolean refuses
-permanently, and `Document.Split` carries that intent instead
+permanently, and `Split` carries that intent instead
 (`docs/surface-design.md` Table X).
 Ruled and Boundary Fill refuse permanently, because the surface each
 needs is a fit through a boundary nothing generated (`docs/surface-design.md`

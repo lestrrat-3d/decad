@@ -58,7 +58,7 @@ func Example_decad_body_trim() {
 		return
 	}
 
-	trimmed, err := sheet.Trim(context.Background(), tool, decad.KeepOutside)
+	trimmed, err := decad.Trim(context.Background(), sheet, tool, decad.KeepOutside)
 	if err != nil {
 		fmt.Printf("failed to trim: %s\n", err)
 		return

@@ -50,9 +50,9 @@ func TestLoftFacesTwoAndThreeCapsFromPointSlabs(t *testing.T) {
 		require.NoError(t, err)
 		return sheet
 	}
-	first, err := doc.Split(t.Context(), loft, makeSheet(9))
+	first, err := decad.Split(t.Context(), loft, makeSheet(9))
 	require.NoError(t, err)
-	second, err := doc.Split(t.Context(), first[0], makeSheet(8))
+	second, err := decad.Split(t.Context(), first[0], makeSheet(8))
 	require.NoError(t, err)
 	near, far := second[1], first[1]
 	sections := []*decad.Face{
