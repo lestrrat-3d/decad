@@ -327,7 +327,8 @@ face against the current source-side and tool-cap records. A strict gap is a
 miss; a mapped source crossing or retained vertical cell is a source candidate;
 an occupied heel circle carries its ordered source-bound arc. Missing face
 roles, duplicate pairs and undecidable side values refuse the whole census.
-Later mesh consumers must rederive the census before using its mutable cells.
+Each top-level mesh consumer derives the census from the live source before
+using its cells, once per source certificate in its call.
 These source verdicts do not prove a shared seam, retained patch or volume.
 One census computes each distinct set of meridian rows once; equal inputs, compared exactly,
 reuse the rows within that census only.
@@ -351,15 +352,15 @@ the Revolve meridian residual and LoftFaces time, station and rounding error.
 The patches retain their source origins. Their vertex bounds do not include
 curve and twist error over whole faces, so they are not a closed shell or a
 Boolean result.
-The checked patch constructor rederives the live source certificate and
-face-pair census. It matches one whole-arc contact and its rational root
-bracket, then requires every issued station of that arc through its shared
-endpoint. The point-loft record compares station coordinates and their
+The checked patch constructor uses the live source certificate and
+face-pair census of its top-level call. It matches one whole-arc contact and
+its rational root bracket, then requires every issued station of that arc
+through its shared endpoint. The point-loft record compares station coordinates and their
 rounding bound against the values issued at construction. Changed or missing
 stations and partial arc runs refuse the patch.
 
 The blank-shell constructor selects a whole radial-arc source cell from the
-current face-pair census. It compares every supplied side cell with a fresh
+current face-pair census. It compares every supplied side cell with the live
 source census and requires every live blank and retained LoftFaces face to
 have a source role. It inserts the complete arc station run into one angular
 grid shared by all Revolve section sides. The contacted straight meridian
@@ -373,7 +374,7 @@ oriented, connected genus-zero mesh with positive exact volume and no exact
 facet crossings. The neutral producer yields 494 vertices and 984 triangles.
 The shell is an internal construction piece; it does not admit `Union`.
 
-The cap-ring constructor rederives the face-pair census and splits that shell
+The cap-ring constructor derives the live face-pair census and splits that shell
 at each occupied heel-cap circle. It rechecks each arc against the live source,
 requires its exact circle to lie strictly inside one straight section side,
 and orders multiple cuts by their exact meridian fractions. Both bands next

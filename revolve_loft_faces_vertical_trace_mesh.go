@@ -13,13 +13,14 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This consumer rederives the live graph and all-run shell, then adds one
+// This consumer builds the live graph and all-run shell, then adds one
 // connected vertical source path to its planar Revolve face. It does not
 // classify retained facets or publish a Boolean result.
 func revolveLoftFacesBlankShellWithVerticalTrace(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate, selectedCellID int,
 ) (*revolveLoftFacesBlankSeamShell, *revolveLoftFacesContactGraph,
 	*revolveLoftFacesVerticalTrace, bool, error) {
+	ctx = revolveLoftFacesWithCallScope(ctx)
 	shell, graph, built, err := revolveLoftFacesBlankShellWithAllRuns(ctx, proof)
 	if err != nil || !built || shell == nil || graph == nil {
 		return nil, nil, nil, false, err

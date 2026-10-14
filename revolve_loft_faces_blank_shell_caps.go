@@ -8,6 +8,7 @@ import "context"
 func revolveLoftFacesBlankShellWithCapRings(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate, sectionIndex, cellIndex int,
 ) (*revolveLoftFacesBlankSeamShell, bool, error) {
+	ctx = revolveLoftFacesWithCallScope(ctx)
 	graph, ok, err := revolveLoftFacesContactGraphOf(ctx, proof)
 	if err != nil || !ok || graph == nil || graph.manifest == nil {
 		return nil, false, err

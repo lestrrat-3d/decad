@@ -110,7 +110,7 @@ func (g *revolveLoftFacesContactGraph) verticalCellID(section int, blank *Face,
 // manifest receives one graph entry, including cells with no retained face.
 func revolveLoftFacesContactGraphOf(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate) (*revolveLoftFacesContactGraph, bool, error) {
-	census, ok, err := revolveLoftFacesCensus(ctx, proof)
+	census, ok, err := revolveLoftFacesCensusIn(ctx, proof)
 	if err != nil || !ok || census == nil || census.manifest == nil || proof == nil {
 		return nil, false, err
 	}
@@ -387,18 +387,16 @@ func (g *revolveLoftFacesContactGraph) endpointCellMatches(event revolveLoftFace
 		revolveLoftFacesGraphSameVerticalCell(*cell.vertical, *tie.verticalCell)
 }
 
-// A stored graph is never authority by itself. Rebuild the source proof and
-// compare all pair, cell, arc and station identities before a later use.
+// A stored graph is never authority by itself. Before a later use it is
+// compared with the graph built from a source certificate of the live bodies.
+// Within one top-level call that certificate and graph are built once
+// (revolveLoftFacesLiveGraph) and shared by every later check.
 func revolveLoftFacesContactGraphCurrent(ctx context.Context,
 	g *revolveLoftFacesContactGraph) (bool, error) {
 	if g == nil {
 		return false, nil
 	}
-	proof, ok, err := certifyRevolveLoftFacesSource(ctx, g.blank, g.tooth)
-	if err != nil || !ok {
-		return false, err
-	}
-	fresh, ok, err := revolveLoftFacesContactGraphOf(ctx, proof)
+	_, fresh, ok, err := revolveLoftFacesLiveGraph(ctx, g.blank, g.tooth)
 	if err != nil || !ok || !revolveLoftFacesSameShellManifest(g.manifest, fresh.manifest) ||
 		len(g.pairs) != len(fresh.pairs) || len(g.cells) != len(fresh.cells) ||
 		len(g.arcs) != len(fresh.arcs) || len(g.runs) != len(fresh.runs) {

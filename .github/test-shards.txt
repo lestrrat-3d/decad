@@ -1433,3 +1433,6 @@
 8	0.00	TestCICPUClassShard8
 9	0.00	TestCICPUClassShard9
 10	0.00	TestCICPUClassShard10
+1	0.00	TestCurvedCallScopeSharesLiveRecords
+1	0.00	TestCurvedCallScopeShellMatchesUnscoped
+1	0.00	TestCurvedCallScopeStillRefusesChangedGraph
