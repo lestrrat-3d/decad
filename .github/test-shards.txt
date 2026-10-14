@@ -1475,3 +1475,6 @@
 10	0.00	TestLoftFacesToConeTangentRefusalKeepsProvenance
 10	0.00	TestResolveToFaceRefusesStatedNormalDeparture
 10	0.00	TestStitchFluxRefusalNamesThePublicSurfaceType
+10	0.00	TestConeFromFaceIsStrictlyOffBlankFaces
+10	0.00	TestConeFromFaceRefuses
+10	0.00	TestConeFromFaceCancelled

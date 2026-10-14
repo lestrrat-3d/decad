@@ -1024,6 +1024,18 @@ without a finite nonzero `(Y, Z)`, and a section count outside 1 to 31 are
 refused with `ErrUnsupported`, `ErrRetiredBody` or `ErrDegenerate`. The
 construction is in `docs/loft-face-sections-design.md`.
 
+`ConeFromFace(ctx, body, face, far)` is a free function that returns the full
+cone about the world X axis of a Revolve `body` whose meridian extends the
+selected conical `face`, moved off the face by one float step (`far` is a
+`units.Value` length). `face` resolves under the implicit exactly-one. It reads
+the exact recorded section, never the rounded `Cone` tag, so the cone lies
+strictly on the face's empty side on every platform. The result is an ordinary
+Revolve body, `body` stays live, and `far` must be a finite negative axial
+coordinate (below X = 0) that is also below both ends of the face. An
+unsupported body or face, a `far` that is not below the face, or a `far` that
+is not negative is `ErrUnsupported`. The rule is in
+`docs/loft-face-sections-design.md`.
+
 Each takes the **sketch** as well as the profile, because a `sketch.Profile`'s
 geometry is plane-local and the plane is the sketch's (§7). `p` MUST be a
 current, unaltered profile of `s`: another sketch's profile or a foreign

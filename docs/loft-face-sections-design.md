@@ -235,6 +235,36 @@ exactly. Placement drops both records. A source whose plane is not the tangent
 plane still passes through the ordinary embedding gates, which refuse an
 inconsistent end.
 
+## Cones from a revolved face
+
+`ConeFromFace(ctx, body, face, far)` builds a tool cone for a Revolve blank
+whose strict blank and tool relations then hold by construction. `body` must
+pass `recordedRevolveSection`: a live, unplaced, full Revolve about world X of
+whole straight sides. `face` resolves to one non-axis side of that section
+with both end radii positive, unequal end stations and unequal end radii.
+
+The side's recorded endpoints `(x0, r0)`, `(x1, r1)` are floats, so the exact
+rational line through them is `x + k*r = C` with `k = -(x1-x0)/(r1-r0)`, which
+must be positive, and `C = x0 + k*r0`. The face's empty side is the outward
+side of the section walk. For a closed walk of exact shoelace orientation `o`,
+the side has sign `o * sign(r1 - r0)` of `f(x, r) = x + k*r - C`.
+
+The cone apex `A` is the float64 nearest `C` that lies strictly on that side.
+Its far radius `R` is the float64 nearest `(C - far)/k` strictly on that side.
+Then `f(A, 0)` and `f(far, R) = k*(R - (C-far)/k)` both have the side's sign,
+so the whole meridian segment from `(A, 0)` to `(far, R)` lies strictly off
+the face's line. `far` must be a finite negative axial coordinate (below X = 0) and below both
+face ends, `A` must be above `far`, `R` must be positive, and `A > 0 > far` so that
+`exactPointCone` reads the result.
+
+The result is the full Revolve of the triangle `(far, 0)`, `(far, R)`,
+`(A, 0)` in a private world-XY sketch. It is an ordinary Revolve body that
+depends on `body`. Every rounding step is decided by exact rational
+comparison, so the strict gap to the face is the same on every build, and the
+spiral first-join gates (`spiralToolOuterGap`, `spiralFiniteConeSide`) read
+the same strict signs on amd64 and arm64. `internal/pointcone/offset.go` holds
+the arithmetic as plain data.
+
 ## Generic finite Revolve source gate
 
 The ordinary public `Union` also checks a bounded LoftFaces result after
