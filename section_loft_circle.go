@@ -47,9 +47,9 @@ func loftCircleSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, boo
 	if !okBottom || !okTop {
 		return profileRecord{}, false
 	}
-	u, okU := loftCircleSectionLerp(bottom.Center.U, top.Center.U, fraction)
-	v, okV := loftCircleSectionLerp(bottom.Center.V, top.Center.V, fraction)
-	radius, okRadius := loftCircleSectionLerp(bottom.Radius.Base(), top.Radius.Base(), fraction)
+	u, okU := loftSectionLerpExact(bottom.Center.U, top.Center.U, fraction)
+	v, okV := loftSectionLerpExact(bottom.Center.V, top.Center.V, fraction)
+	radius, okRadius := loftSectionLerpExact(bottom.Radius.Base(), top.Radius.Base(), fraction)
 	if !okU || !okV || !okRadius || radius <= 0 {
 		return profileRecord{}, false
 	}
@@ -62,7 +62,9 @@ func loftCircleSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, boo
 	}, true
 }
 
-func loftCircleSectionLerp(a, b float64, fraction *big.Rat) (float64, bool) {
+// loftSectionLerpExact returns an interpolation only when binary64 holds its
+// exact rational value.
+func loftSectionLerpExact(a, b float64, fraction *big.Rat) (float64, bool) {
 	value := new(big.Rat).Add(proofarith.FloatRat(a),
 		new(big.Rat).Mul(fraction, new(big.Rat).Sub(proofarith.FloatRat(b), proofarith.FloatRat(a))))
 	held, exact := value.Float64()

@@ -72,9 +72,30 @@ Each paired outer or hole boundary point has the same local coordinates in
 both records, so its ruled path is vertical. Every level strictly between the two caps has
 the recorded profile as its material region. Reconstruct that profile on a
 fresh Sketch and require its matching valid region before returning it.
-Cap-level, oblique, translated, twisted and differing-section requests return
-`ErrUnsupported`. Cut and Fillet rewrites refuse because their inserted holes
+Cap-level, oblique, translated and twisted requests return `ErrUnsupported`.
+Differing sections use the line-only or circular-hole classes below when
+admitted. Cut and Fillet rewrites refuse because their inserted holes
 or connector arcs were not authenticated by both source Sketch profiles.
+
+## Parallel section of an authenticated line-only Loft
+
+An authenticated two-section solid Loft with full `LineSeg` boundaries and
+zero segment alignment may return an exact interior world-XY section. Both
+source frames and the requested frame must have canonical world-XY axes and
+the same in-plane origin. The source levels must be strictly ordered, and the
+requested level must lie strictly between them. Identity placement, zero
+vertex displacement, zero section displacement and unmodified source records
+are required. A trimmed line or a curved boundary returns `ErrUnsupported`.
+
+For each paired line cell, Loft's material wall is its two held triangles.
+At the requested level, intersect the lower and upper endpoint rungs and the
+fixed diagonal from the lower line's start to the upper line's end. These
+three points form two section lines, including the diagonal kink when the
+wall quad is not planar. Compute every coordinate from the two recorded
+profiles and the exact rational level fraction. Refuse any coordinate that
+cannot be represented exactly as finite binary64. Repeat for the outer loop
+and each paired hole, then reconstruct the resulting region on a fresh
+Sketch and require its matching valid profile. Cut and Fillet rewrites refuse.
 
 ## Parallel section of an authenticated circular-hole Loft
 
