@@ -364,3 +364,116 @@ func TestCapsOnSideRefusesEarlierCapAcrossPlane(t *testing.T) {
 	negative.G0 = rat(-1, 1)
 	require.False(t, loftface.CapsOnSide(final, []loftface.Map{far, negative}, box, 1), "nonpositive denominator")
 }
+
+// affineMap is the cap map P(u, v) = constant + u*qu + v*qv with denominator 1.
+func affineMap(constant, qu, qv [3]int64) loftface.Map {
+	vec := func(a [3]int64) loftface.RatVec { return loftface.RatVec{rat(a[0], 1), rat(a[1], 1), rat(a[2], 1)} }
+	return loftface.Map{
+		Constant: vec(constant), Q0: vec([3]int64{}), QU: vec(qu), QV: vec(qv),
+		G0: rat(1, 1), GU: rat(0, 1), GV: rat(0, 1),
+	}
+}
+
+// With a negative slope the squared pullback is still C*v^2, but the
+// inequality x + slope*r >= apex that G1 and non-intrusion need is lost. The
+// final cap P = (8+u, u, v) over u in [-4,-3] reaches (4,-4,0), which
+// satisfies x - r = 0 < 8, and the cone set K contains (4,-8,0) with phi = 4
+// on the other side of the plane from the preceding cap.
+func TestConeHelpersRefuseNonpositiveSlope(t *testing.T) {
+	apex, far := rat(8, 1), rat(0, 1)
+	box := [4]*big.Rat{rat(-4, 1), rat(-3, 1), rat(-1, 1), rat(1, 1)}
+	final := affineMap([3]int64{8, 0, 0}, [3]int64{1, 1, 0}, [3]int64{0, 0, 1})
+	previous := affineMap([3]int64{7, 1, 0}, [3]int64{1, 1, 0}, [3]int64{0, 0, 1})
+
+	// The pullback is exactly v^2 for slope 1 and slope -1 alike.
+	for _, slope := range []*big.Rat{rat(1, 1), rat(-1, 1)} {
+		q := loftface.ConePullback(final, apex, slope)
+		for i := range 5 {
+			require.Zero(t, q[i].Sign(), "slope %s coefficient %d", slope, i)
+		}
+		require.Zero(t, q[5].Cmp(rat(1, 1)), "slope %s", slope)
+	}
+	_, ok := loftface.ConeOnLoftSide(final, previous, box, apex, rat(1, 1), far)
+	require.True(t, ok, "the positive slope is the valid counterpart")
+	require.True(t, loftface.ConeTangentAlongRuling(final, box, apex, rat(1, 1)))
+
+	for _, slope := range []*big.Rat{rat(-1, 1), rat(0, 1)} {
+		require.False(t, loftface.ConeTangentAlongRuling(final, box, apex, slope), "ruling, slope %s", slope)
+		side, ok := loftface.ConeOnLoftSide(final, previous, box, apex, slope, far)
+		require.False(t, ok, "loft side, slope %s", slope)
+		require.Zero(t, side)
+	}
+}
+
+// Each pullback term other than v^2 is isolated by a map that violates only
+// that one coefficient. Deleting any single check then admits the map.
+func TestConeTangentAlongRulingIsolatesEachTerm(t *testing.T) {
+	apex, slope := rat(8, 1), rat(1, 1)
+	box := [4]*big.Rat{rat(-4, 1), rat(-3, 1), rat(-1, 1), rat(1, 1)}
+	for _, tc := range []struct {
+		name  string
+		m     loftface.Map
+		index int
+		want  int64
+	}{
+		// P = (5, 4, v): y^2 - (8-x)^2 = 7.
+		{"q0", affineMap([3]int64{5, 4, 0}, [3]int64{}, [3]int64{0, 0, 1}), 0, 7},
+		// P = (9+u, 1-u, v): (1-u)^2 + v^2 - (1+u)^2 = -4u + v^2.
+		{"q1", affineMap([3]int64{9, 1, 0}, [3]int64{1, -1, 0}, [3]int64{0, 0, 1}), 1, -4},
+		// P = (7-v, 1, 2v): 1 + 4v^2 - (1+v)^2 = 3v^2 - 2v.
+		{"q2", affineMap([3]int64{7, 1, 0}, [3]int64{}, [3]int64{-1, 0, 2}), 2, -2},
+	} {
+		q := loftface.ConePullback(tc.m, apex, slope)
+		for i := range 5 {
+			if i == tc.index {
+				require.Zero(t, q[i].Cmp(rat(tc.want, 1)), "%s: coefficient %d", tc.name, i)
+				continue
+			}
+			require.Zero(t, q[i].Sign(), "%s: coefficient %d", tc.name, i)
+		}
+		require.Positive(t, q[5].Sign(), tc.name)
+		require.False(t, loftface.ConeTangentAlongRuling(tc.m, box, apex, slope), tc.name)
+	}
+}
+
+func TestTangentPlanePsiHasBothSigns(t *testing.T) {
+	final, _ := sideFixture(t)
+	// Moving along N = QU x QV by c gives phi = c*|N|^2 at the shifted cap.
+	above := movedAlongNormal(final, rat(1, 8)).At(rat(-3, 1), rat(1, 2))
+	below := movedAlongNormal(final, rat(-1, 8)).At(rat(-3, 1), rat(1, 2))
+	for _, side := range []int{1, -1} {
+		plane, ok := loftface.NewTangentPlane(final, side)
+		require.True(t, ok)
+		require.Equal(t, side, plane.Side)
+		require.Positive(t, plane.Phi(above).Sign())
+		require.Negative(t, plane.Phi(below).Sign())
+		require.Equal(t, side, plane.Psi(above).Sign(), "side %d above", side)
+		require.Equal(t, -side, plane.Psi(below).Sign(), "side %d below", side)
+		require.Zero(t, plane.Psi(above).Cmp(new(big.Rat).Mul(rat(int64(side), 1), plane.Phi(above))))
+		require.Zero(t, plane.Psi(final.At(rat(-3, 1), rat(1, 2))).Sign(), "a point of the plane")
+	}
+}
+
+// The map P(u, v) = (1,2,3) + ((2,4,-2) + u*(1,2,0) + v*(0,1,1)) / 2 has its
+// (u,v) = (0,0) point at (2,4,2) and tangent directions (1/2,1,0) and
+// (0,1/2,1/2). The plane through (2,4,2) with normal (1,2,0) x (0,1,1) =
+// (2,-1,1) is 2x - y + z = 2, found by hand and independent of capPlane.
+func TestNewTangentPlaneWithNonzeroOriginAndDenominator(t *testing.T) {
+	m := affineMap([3]int64{1, 2, 3}, [3]int64{1, 2, 0}, [3]int64{0, 1, 1})
+	m.Q0 = loftface.RatVec{rat(2, 1), rat(4, 1), rat(-2, 1)}
+	m.G0 = rat(2, 1)
+	plane, ok := loftface.NewTangentPlane(m, -1)
+	require.True(t, ok)
+	for i, want := range []int64{2, -1, 1} {
+		require.Zero(t, plane.N[i].Cmp(rat(want, 1)), "N[%d] = %s", i, plane.N[i])
+	}
+	require.Zero(t, plane.D.Cmp(rat(2, 1)), "D = %s", plane.D)
+	require.Equal(t, -1, plane.Side)
+	for _, uv := range [][2]*big.Rat{{rat(0, 1), rat(0, 1)}, {rat(3, 1), rat(-5, 7)}, {rat(-1, 3), rat(4, 1)}} {
+		require.Zero(t, plane.Phi(m.At(uv[0], uv[1])).Sign(), "point %v is on the plane", uv)
+	}
+	// The origin (2,4,2) is on the plane; the unshifted-origin plane through
+	// the constant (1,2,3) would give phi = 2-2+3-2 = 1 there instead.
+	require.Zero(t, plane.Phi(loftface.RatVec{rat(2, 1), rat(4, 1), rat(2, 1)}).Sign())
+	require.Zero(t, plane.Phi(loftface.RatVec{rat(1, 1), rat(2, 1), rat(3, 1)}).Cmp(rat(1, 1)))
+}

@@ -45,6 +45,14 @@ func TestCapPlaneTouchesRootCircle(t *testing.T) {
 		require.False(t, loftface.CapPlaneTouchesRootCircle(capMap, corners, m, b, x, tilted),
 			"a source straddling the cap plane has no single side (slope %d)", slope)
 	}
+	// P = (u, -1-u-v, v) has Y = 1 at the first corner (-1,-1) and Y < 1 at
+	// the other three. A zero at the first corner must not read as "no sign
+	// yet".
+	firstCorner := planeYMap(rat(-1, 1))
+	firstCorner.QU = loftface.RatVec{rat(1, 1), rat(-1, 1), rat(0, 1)}
+	firstCorner.QV = loftface.RatVec{rat(0, 1), rat(-1, 1), rat(1, 1)}
+	require.False(t, loftface.CapPlaneTouchesRootCircle(capMap, corners, m, b, x, firstCorner),
+		"a source on the cap plane at the first corner has no strict side")
 	// Y = (v+1)/2 reaches the cap plane at two corners and stays on the
 	// source side at the others.
 	grazing := planeYMap(rat(1, 2))
@@ -179,6 +187,19 @@ func TestCapOutsideNestedCone(t *testing.T) {
 		moved := tangent
 		moved.Constant = loftface.RatVec{rat(8, 1), rat(1, 1), rat(0, 1)}
 		require.False(t, check(moved, box, outerApex, outerSlope, outerFar, innerApex, innerSlope))
+	})
+	t.Run("q0 alone", func(t *testing.T) {
+		// P = (5, 4, v): y^2 - (8-x)^2 = 7, every other coefficient 0.
+		q0 := affineMap([3]int64{5, 4, 0}, [3]int64{}, [3]int64{0, 0, 1})
+		require.Positive(t, loftface.ConePullback(q0, outerApex, outerSlope)[0].Sign())
+		require.False(t, check(q0, box, outerApex, outerSlope, outerFar, innerApex, innerSlope))
+	})
+	t.Run("q1 alone", func(t *testing.T) {
+		// P = (9+u, 1-u, v): -4u + v^2, with X in [5,6] below the inner apex 7.
+		q1 := affineMap([3]int64{9, 1, 0}, [3]int64{1, -1, 0}, [3]int64{0, 0, 1})
+		wideInner := rat(7, 1)
+		require.Negative(t, loftface.ConePullback(q1, outerApex, outerSlope)[1].Sign())
+		require.False(t, check(q1, box, outerApex, outerSlope, outerFar, wideInner, innerSlope))
 	})
 	t.Run("pullback has no v^2 term", func(t *testing.T) {
 		flat := tangent

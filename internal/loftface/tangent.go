@@ -142,9 +142,9 @@ func ConeStrictOutsideForm(q [6]*big.Rat) bool {
 		q[4].Sign() == 0 && q[3].Sign() > 0 && q[5].Sign() > 0
 }
 
-// tangentPullbackForm reports whether q is exactly slope^2*v^2 with
-// slope^2 > 0: the pullback of a plane that touches the cone along the
-// ruling v = 0 and nowhere else.
+// tangentPullbackForm reports whether q is exactly C*v^2 with C > 0: the
+// pullback of a plane that is nowhere inside the cone and meets it, at
+// most, along the ruling v = 0. It takes no slope, so it accepts any C > 0.
 func tangentPullbackForm(q [6]*big.Rat) bool {
 	for _, i := range []int{0, 1, 2, 3, 4} {
 		if q[i].Sign() != 0 {
@@ -154,15 +154,25 @@ func tangentPullbackForm(q [6]*big.Rat) bool {
 	return q[5].Sign() > 0
 }
 
-// ConeTangentAlongRuling reports whether the cap plane of m touches the cone
-// x + slope*r = apex along one ruling over the source box. The
-// denominator-cleared pullback must be exactly C*v^2 with C > 0, which is
-// the strict form with A = 0, and the box must lie strictly on one side of
-// u = 0. Then k^2 r^2 - (apex-x)^2 >= 0 on the whole plane with equality
-// only on v = 0, so no cap point lies in the open interior of the cone.
-// The caller has proved the map denominator positive over the box.
+// ConeTangentAlongRuling reports whether the cap of m has no point in the
+// open interior of the cone x + slope*r < apex over the source box. It is a
+// pullback and non-intrusion check, not a contact check. It requires:
+//
+//  1. slope > 0, which the inequality needs: for slope <= 0 the squared
+//     pullback no longer separates the cone's nappe from the opposite one;
+//  2. the denominator-cleared pullback is exactly C*v^2 with C > 0, the
+//     strict form with A = 0;
+//  3. the box lies strictly on one side of u = 0.
+//
+// Then k^2 r^2 - (apex-x)^2 >= 0 over the cap, with equality only on v = 0,
+// and the one-sided box excludes the apex point of the issued map. The check
+// does not prove that the cap touches the nappe, that the map is not
+// collapsed, or that the apex is excluded for an arbitrary map. Any apex or
+// ruling-contact reading needs the caller's authenticated map, the tangent
+// end record. The caller has proved the map denominator positive over the
+// box.
 func ConeTangentAlongRuling(m Map, box [4]*big.Rat, apex, slope *big.Rat) bool {
-	if apex == nil || slope == nil || box[0].Sign() <= 0 && box[1].Sign() >= 0 {
+	if apex == nil || slope == nil || slope.Sign() <= 0 || box[0].Sign() <= 0 && box[1].Sign() >= 0 {
 		return false
 	}
 	return tangentPullbackForm(ConePullback(m, apex, slope))
@@ -241,19 +251,20 @@ func NewTangentPlane(final Map, side int) (TangentPlane, bool) {
 // tangent cap map and previous the cap map before it, whose box corners
 // give the loft side. It requires:
 //
-//  1. the pullback of the cone x + slope*r = apex to final's plane is
+//  1. slope > 0, which the open-interior argument below needs;
+//  2. the pullback of the cone x + slope*r = apex to final's plane is
 //     exactly C*v^2 with C > 0, so the plane meets no interior point of the
 //     cone;
-//  2. apex > far, and the axis point m = ((apex+far)/2, 0, 0), which is in
+//  3. apex > far, and the axis point m = ((apex+far)/2, 0, 0), which is in
 //     the open interior of the finite cone, is not on the plane;
-//  3. previous has a positive denominator over the box and phi of one
+//  4. previous has a positive denominator over the box and phi of one
 //     strict sign s at all four box corners;
-//  4. s*phi(m) > 0.
+//  5. s*phi(m) > 0.
 //
 // The interior of the finite cone is convex and misses the plane, so it
 // lies wholly on m's side, which is then the loft side s. It returns s.
 func ConeOnLoftSide(final, previous Map, box [4]*big.Rat, apex, slope, far *big.Rat) (int, bool) {
-	if apex == nil || slope == nil || far == nil || apex.Cmp(far) <= 0 {
+	if apex == nil || slope == nil || far == nil || slope.Sign() <= 0 || apex.Cmp(far) <= 0 {
 		return 0, false
 	}
 	if !tangentPullbackForm(ConePullback(final, apex, slope)) {
