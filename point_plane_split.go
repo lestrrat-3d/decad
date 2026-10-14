@@ -40,6 +40,14 @@ func ratOfPointPlane(v float64) *big.Rat { return proofarith.FloatRat(v) }
 
 func pointPlaneAbs(q *big.Rat) *big.Rat { return new(big.Rat).Abs(q) }
 
+// pointPlaneAdd, pointPlaneSub and pointPlaneMul return a fresh Rat and read
+// their operands only. Operands must be in lowest terms: the result always
+// equals the exact value, but is in lowest terms only for reduced operands (a
+// 3/9 operand gives 3/9 where big.Rat gives 1/3). Every producer in this
+// package reduces: FloatRat through ratOfPointPlane and lfF, big.NewRat
+// literals, lfOne, lfZero, and results of these helpers and of raw Quo, Abs and
+// Neg. The guard TestNoRatWritesThroughNumDenom (internal/proof) bars in-place
+// Num and Denom writes outside internal/proof.
 func pointPlaneAdd(a, b *big.Rat) *big.Rat { return proofarith.AddRat(new(big.Rat), a, b) }
 
 func pointPlaneSub(a, b *big.Rat) *big.Rat { return proofarith.SubRat(new(big.Rat), a, b) }

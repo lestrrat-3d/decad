@@ -118,8 +118,15 @@ func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
 	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(tool, section)
 	require.True(t, decided)
 	require.True(t, crosses)
+	requireReducedRat := func(q *big.Rat) {
+		t.Helper()
+		require.Positive(t, q.Denom().Sign())
+		require.Zero(t, new(big.Int).GCD(nil, nil, new(big.Int).Abs(q.Num()), q.Denom()).Cmp(big.NewInt(1)))
+	}
 	require.Zero(t, x.Cmp(big.NewRat(16, 3)))
+	requireReducedRat(x)
 	require.Zero(t, radius.Cmp(big.NewRat(8, 3)))
+	requireReducedRat(radius)
 	require.Zero(t, lfSub(lfAdd(x, radius), tool.apex).Sign())
 
 	// A vertical Revolve side can also meet the cone at an interior circle.
@@ -128,7 +135,9 @@ func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
 	require.True(t, decided)
 	require.True(t, crosses)
 	require.Zero(t, x.Cmp(big.NewRat(6, 1)))
+	requireReducedRat(x)
 	require.Zero(t, radius.Cmp(big.NewRat(2, 1)))
+	requireReducedRat(radius)
 
 	// A complete generator on one strict side has no contact circle.
 	section = revolveSectionSpan{start: planePoint{U: 5, V: 1}, end: planePoint{U: 6, V: 1}}

@@ -171,3 +171,45 @@ func TestPointPlaneCapDroppedCoordinateMatchesRawRat(t *testing.T) {
 		}
 	}
 }
+
+// nonReducedRat returns n/d stored as given, for example 3/9. Writing through
+// Num is allowed in test files (the guard skips them). No production input
+// reaches such a Rat: every producer reduces, so the helpers' lowest-terms
+// precondition holds there. For these operands the helpers still return the
+// exact value, but the stored Num and Denom may differ from big.Rat's, so only
+// the value is compared.
+func nonReducedRat(n, d int64) *big.Rat {
+	q := big.NewRat(1, d)
+	q.Num().SetInt64(n)
+	return q
+}
+
+func TestLoftFaceRatHelpersAcceptNonReducedOperandsByValue(t *testing.T) {
+	operands := []*big.Rat{
+		nonReducedRat(3, 9), nonReducedRat(-3, 9), nonReducedRat(6, 4), nonReducedRat(0, 1), big.NewRat(1, 3),
+	}
+	for _, c := range ratHelperCases() {
+		for _, a := range operands {
+			for _, b := range operands {
+				if c.div && b.Sign() == 0 {
+					continue
+				}
+				require.Zero(t, c.got(a, b).Cmp(c.want(a, b)), "%s(%s, %s)", c.name, ratSnapshot(a), ratSnapshot(b))
+			}
+		}
+	}
+}
+
+func TestPointPlaneCapDroppedCoordinateAcceptsNonReducedByValue(t *testing.T) {
+	plane := &pointPlaneLimit{nx: nonReducedRat(3, 9), ny: nonReducedRat(-6, 9)}
+	center := [3]*big.Rat{big.NewRat(2, 3), big.NewRat(5, 7), big.NewRat(-1, 4)}
+	anchor := [3]*big.Rat{big.NewRat(1, 5), big.NewRat(-2, 3), big.NewRat(3, 8)}
+	for keep := range 2 {
+		drop := 1 - keep
+		normal := [2]*big.Rat{plane.nx, plane.ny}
+		slope := new(big.Rat).Quo(normal[keep], normal[drop])
+		want := new(big.Rat).Sub(anchor[drop], new(big.Rat).Mul(slope, new(big.Rat).Sub(center[keep], anchor[keep])))
+		got := pointPlaneCapDroppedCoordinate(center, anchor, plane, keep)
+		require.Zero(t, got.Cmp(want))
+	}
+}

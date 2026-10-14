@@ -1531,3 +1531,5 @@
 10	0.00	TestLoftFaceRatHelpersMatchRawRat
 10	0.00	TestLoftFaceDivByZeroPanicsLikeQuo
 10	0.00	TestPointPlaneCapDroppedCoordinateMatchesRawRat
+10	0.00	TestLoftFaceRatHelpersAcceptNonReducedOperandsByValue
+10	0.00	TestPointPlaneCapDroppedCoordinateAcceptsNonReducedByValue
