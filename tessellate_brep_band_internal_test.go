@@ -242,7 +242,7 @@ func TestTessellateBrepBandsPlaced(t *testing.T) {
 	require.NoError(t, err)
 	plane, err := r3.NewFrame(r3.NewVec(0, 0, -3), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	mirrored, err := out.MirroredCopy(t.Context(), MirrorFrame{Frame: plane})
+	mirrored, err := MirroredCopy(t.Context(), out, MirrorFrame{Frame: plane})
 	require.NoError(t, err)
 	for name, body := range map[string]*Body{"translated": moved, "mirrored": mirrored} {
 		t.Run(name, func(t *testing.T) {

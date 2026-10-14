@@ -142,8 +142,8 @@ across a plane the body's own record states.
 ### 4.2 Mirror
 
 ```go
-func (b *Body) Mirrored(ctx context.Context, plane MirrorPlane, opts ...MirrorOption) (*Body, error)
-func (b *Body) MirroredCopy(ctx context.Context, plane MirrorPlane) (*Body, error)
+func Mirrored(ctx context.Context, b *Body, plane MirrorPlane, opts ...MirrorOption) (*Body, error)
+func MirroredCopy(ctx context.Context, b *Body, plane MirrorPlane) (*Body, error)
 
 type MirrorOption interface{ mirrorOption() }
 func WithJoin() MirrorOption

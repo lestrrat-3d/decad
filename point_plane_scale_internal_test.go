@@ -54,7 +54,7 @@ func TestPointPlaneScaleCarriesSourceThroughLaterPlacement(t *testing.T) {
 	placedPayload := placed.payload.(facetedPayload)
 	require.NotNil(t, placedPayload.pointPlane)
 	require.False(t, placedPayload.pointPlaneSourceEligible)
-	scaled, err := placed.ScaledAt(t.Context(), r3.NewVec(5, 0, 0), units.Scalar(0.9))
+	scaled, err := ScaledAt(t.Context(), placed, r3.NewVec(5, 0, 0), units.Scalar(0.9))
 	require.NoError(t, err)
 	scaledPayload := scaled.payload.(facetedPayload)
 	require.Same(t, placedPayload.pointPlane, scaledPayload.pointPlane)

@@ -46,11 +46,11 @@ func Example_decad_mirror() {
 	}
 
 	plusX := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(1, 0, 0)))
-	_, err = l.MirroredCopy(ctx, decad.MirrorFace{Body: l, Face: plusX})
+	_, err = decad.MirroredCopy(ctx, l, decad.MirrorFace{Body: l, Face: plusX})
 	fmt.Printf("mirror across the +x wall: cardinality error: %t\n", errors.Is(err, decad.ErrCardinality))
 
 	minusX := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(-1, 0, 0)))
-	image, err := l.MirroredCopy(ctx, decad.MirrorFace{Body: l, Face: minusX})
+	image, err := decad.MirroredCopy(ctx, l, decad.MirrorFace{Body: l, Face: minusX})
 	if err != nil {
 		fmt.Printf("failed to mirror: %s\n", err)
 		return

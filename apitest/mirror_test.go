@@ -205,7 +205,7 @@ func TestMirroredCopyEveryPayload(t *testing.T) {
 			t.Parallel()
 			sc := newMirrorScene()
 			src := tc.Build(t, sc)
-			img, err := src.MirroredCopy(t.Context(), mirrorAtX30(t))
+			img, err := decad.MirroredCopy(t.Context(), src, mirrorAtX30(t))
 			require.NoError(t, err)
 			require.ElementsMatch(t, []*decad.Body{src, img}, sc.doc.Bodies(), "a copy leaves its source live")
 
@@ -256,7 +256,7 @@ func TestMirroredCopyFlipsTheLsFacing(t *testing.T) {
 	t.Parallel()
 	sc := newMirrorScene()
 	l := sc.mirrorL(t)
-	img, err := l.MirroredCopy(t.Context(), mirrorAtX30(t))
+	img, err := decad.MirroredCopy(t.Context(), l, mirrorAtX30(t))
 	require.NoError(t, err)
 
 	plusX := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(1, 0, 0)))
@@ -299,7 +299,7 @@ func TestMirroredRetiresTheReceiver(t *testing.T) {
 	t.Parallel()
 	sc := newMirrorScene()
 	l := sc.mirrorL(t)
-	img, err := l.Mirrored(t.Context(), mirrorAtX30(t))
+	img, err := decad.Mirrored(t.Context(), l, mirrorAtX30(t))
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{img}, sc.doc.Bodies())
 
@@ -308,9 +308,9 @@ func TestMirroredRetiresTheReceiver(t *testing.T) {
 	require.Equal(t, decad.Exact, v.Exactness)
 	require.Equal(t, 1750.0, volumeMM(t, v))
 
-	_, err = l.Mirrored(t.Context(), mirrorAtX30(t))
+	_, err = decad.Mirrored(t.Context(), l, mirrorAtX30(t))
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
-	_, err = l.MirroredCopy(t.Context(), mirrorAtX30(t))
+	_, err = decad.MirroredCopy(t.Context(), l, mirrorAtX30(t))
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
@@ -329,7 +329,7 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		t.Parallel()
 		sc := newMirrorScene()
 		box := sc.box(t, sc.w.XY(), 0, 0, 20, 10, mirrorAlong(10))
-		img, err := box.MirroredCopy(t.Context(), decad.MirrorFace{
+		img, err := decad.MirroredCopy(t.Context(), box, decad.MirrorFace{
 			Body: box, Face: decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(1, 0, 0)))})
 		require.NoError(t, err)
 		requireMirrorBox(t, img, r3.NewVec(20, 0, 0), r3.NewVec(40, 10, 10))
@@ -341,7 +341,7 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		// top cap reflects the box onto z ∈ [10, 20].
 		sc := newMirrorScene()
 		box := sc.box(t, sc.w.XY(), 0, 0, 20, 10, mirrorAlong(10))
-		img, err := box.Mirrored(t.Context(), decad.MirrorFace{Body: box, Face: topCap(box)})
+		img, err := decad.Mirrored(t.Context(), box, decad.MirrorFace{Body: box, Face: topCap(box)})
 		require.NoError(t, err)
 		requireMirrorBox(t, img, r3.NewVec(0, 0, 10), r3.NewVec(20, 10, 20))
 		require.Equal(t, []*decad.Body{img}, sc.doc.Bodies())
@@ -351,7 +351,7 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		sc := newMirrorScene()
 		box := sc.box(t, sc.w.XY(), 0, 0, 20, 10, mirrorAlong(10))
 		wall := sc.box(t, sc.w.XY(), 30, 0, 35, 10, mirrorAlong(10))
-		img, err := box.MirroredCopy(t.Context(), decad.MirrorFace{
+		img, err := decad.MirroredCopy(t.Context(), box, decad.MirrorFace{
 			Body: wall, Face: decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(-1, 0, 0)))})
 		require.NoError(t, err)
 		requireMirrorBox(t, img, r3.NewVec(40, 0, 0), r3.NewVec(60, 10, 10))
@@ -361,7 +361,7 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		t.Parallel()
 		sc := newMirrorScene()
 		l := sc.mirrorL(t)
-		_, err := l.Mirrored(t.Context(), decad.MirrorFace{
+		_, err := decad.Mirrored(t.Context(), l, decad.MirrorFace{
 			Body: l, Face: decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(1, 0, 0)))})
 		require.ErrorIs(t, err, decad.ErrCardinality)
 		var se *decad.SelectionError
@@ -374,7 +374,7 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		t.Parallel()
 		sc := newMirrorScene()
 		box := sc.box(t, sc.w.XY(), 0, 0, 20, 10, mirrorAlong(10))
-		_, err := box.MirroredCopy(t.Context(), decad.MirrorFace{Body: box, Face: decad.Faces(decad.Cylindrical())})
+		_, err := decad.MirroredCopy(t.Context(), box, decad.MirrorFace{Body: box, Face: decad.Faces(decad.Cylindrical())})
 		require.ErrorIs(t, err, decad.ErrCardinality)
 		var se *decad.SelectionError
 		require.ErrorAs(t, err, &se)
@@ -385,7 +385,7 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		t.Parallel()
 		sc := newMirrorScene()
 		pin := sc.cylinder(t, sc.w.XY(), 0, 0, 3, mirrorAlong(10))
-		_, err := pin.MirroredCopy(t.Context(), decad.MirrorFace{Body: pin, Face: decad.Faces(decad.Cylindrical())})
+		_, err := decad.MirroredCopy(t.Context(), pin, decad.MirrorFace{Body: pin, Face: decad.Faces(decad.Cylindrical())})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Equal(t, []*decad.Body{pin}, sc.doc.Bodies())
 	})
@@ -413,7 +413,7 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, faces, 1)
 		require.IsType(t, decad.Faceted{}, faces[0].Surface(), "the premise: the wall carries no analytic Plane")
-		_, err = drilled.MirroredCopy(t.Context(), decad.MirrorFace{Body: drilled, Face: sel})
+		_, err = decad.MirroredCopy(t.Context(), drilled, decad.MirrorFace{Body: drilled, Face: sel})
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 	t.Run("body gates", func(t *testing.T) {
@@ -422,19 +422,19 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		box := sc.box(t, sc.w.XY(), 0, 0, 20, 10, mirrorAlong(10))
 		wall := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(1, 0, 0)))
 
-		_, err := box.MirroredCopy(t.Context(), decad.MirrorFace{Face: wall})
+		_, err := decad.MirroredCopy(t.Context(), box, decad.MirrorFace{Face: wall})
 		require.ErrorIs(t, err, decad.ErrDegenerate, "a nil face body")
-		_, err = box.MirroredCopy(t.Context(), decad.MirrorFace{Body: box})
+		_, err = decad.MirroredCopy(t.Context(), box, decad.MirrorFace{Body: box})
 		require.ErrorIs(t, err, decad.ErrDegenerate, "a nil face selector")
 
 		other := newMirrorScene()
 		foreign := other.box(t, other.w.XY(), 0, 0, 20, 10, mirrorAlong(10))
-		_, err = box.MirroredCopy(t.Context(), decad.MirrorFace{Body: foreign, Face: wall})
+		_, err = decad.MirroredCopy(t.Context(), box, decad.MirrorFace{Body: foreign, Face: wall})
 		require.ErrorIs(t, err, decad.ErrForeignBody)
 
 		retired := sc.box(t, sc.w.XY(), 30, 0, 40, 10, mirrorAlong(10))
 		require.NoError(t, sc.doc.Remove(retired))
-		_, err = box.MirroredCopy(t.Context(), decad.MirrorFace{Body: retired, Face: wall})
+		_, err = decad.MirroredCopy(t.Context(), box, decad.MirrorFace{Body: retired, Face: wall})
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 		require.Equal(t, []*decad.Body{box}, sc.doc.Bodies())
 	})
@@ -491,23 +491,23 @@ func TestMirrorFrameGates(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.Name, func(t *testing.T) {
-			_, err := box.Mirrored(tc.Ctx, tc.Plane, tc.Opts...)
+			_, err := decad.Mirrored(tc.Ctx, box, tc.Plane, tc.Opts...)
 			require.ErrorIs(t, err, tc.Want, "Mirrored")
-			_, err = box.MirroredCopy(tc.Ctx, tc.Plane)
+			_, err = decad.MirroredCopy(tc.Ctx, box, tc.Plane)
 			require.ErrorIs(t, err, tc.Want, "MirroredCopy")
 			require.Equal(t, []*decad.Body{box}, sc.doc.Bodies())
 		})
 	}
 
-	_, err = box.Mirrored(t.Context(), plane, nil)
+	_, err = decad.Mirrored(t.Context(), box, plane, nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a nil option")
 	var none *decad.Body
-	_, err = none.MirroredCopy(t.Context(), plane)
+	_, err = decad.MirroredCopy(t.Context(), none, plane)
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a nil receiver")
 	require.Equal(t, []*decad.Body{box}, sc.doc.Bodies())
 
 	// A pointer variant names the same plane its value does.
-	img, err := box.MirroredCopy(t.Context(), &plane)
+	img, err := decad.MirroredCopy(t.Context(), box, &plane)
 	require.NoError(t, err)
 	requireMirrorBox(t, img, r3.NewVec(40, 0, 0), r3.NewVec(60, 10, 10))
 }

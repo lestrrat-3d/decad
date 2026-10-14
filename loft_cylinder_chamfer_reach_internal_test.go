@@ -81,7 +81,7 @@ func reachTestInput(t *testing.T) loftCylinderChamferReachInput {
 	middleSketch, middleProfile := reachTestSection(t, world, middlePlane, 0.03)
 	lower, err := doc.Loft(t.Context(), bottomSketch, bottomProfile, middleSketch, middleProfile)
 	require.NoError(t, err)
-	upper, err := lower.MirroredCopy(t.Context(), MirrorFrame{Frame: middleFrame})
+	upper, err := MirroredCopy(t.Context(), lower, MirrorFrame{Frame: middleFrame})
 	require.NoError(t, err)
 	pair, err := Union(t.Context(), lower, upper)
 	require.NoError(t, err)

@@ -125,7 +125,7 @@ func TestPrismGroupGateDiameterSpansEveryLump(t *testing.T) {
 func TestPrismGroupMirrorJoinRefuses(t *testing.T) {
 	doc := New()
 	group, _ := internalBoxGroup(t, doc)
-	_, err := group.Mirrored(t.Context(), MirrorFace{Body: group, Face: Faces(Planar(), Facing(r3.NewVec(-1, 0, 0)))}, WithJoin())
+	_, err := Mirrored(t.Context(), group, MirrorFace{Body: group, Face: Faces(Planar(), Facing(r3.NewVec(-1, 0, 0)))}, WithJoin())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "prism group")
 }

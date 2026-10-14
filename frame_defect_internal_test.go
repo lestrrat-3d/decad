@@ -442,7 +442,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 		{name: "mirror", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			mf, err := r3.NewFrame(r3.NewVec(0.3, -2, 1), r3.NewVec(1, 0.2, 0.1), r3.NewVec(0, 1, -0.3))
 			require.NoError(t, err)
-			return fdExtrude(t, f).Mirrored(t.Context(), MirrorFrame{Frame: mf})
+			return Mirrored(t.Context(), fdExtrude(t, f), MirrorFrame{Frame: mf})
 		}},
 		{name: "unstitch", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			parts, err := Unstitch(t.Context(), fdExtrude(t, f, WithSurfaceResult()))
