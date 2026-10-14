@@ -1,8 +1,11 @@
 package loftmesh
 
 import (
+	"cmp"
+	"iter"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -251,26 +254,135 @@ func projectedPatchProofLimited(budget *proofbound.WorkBudget, verts []r3.Vec,
 	if area.Sign() != sigma {
 		return ProjectedPatchBoundary
 	}
-	for i := range loop {
-		a, b := points[i], points[(i+1)%len(loop)]
-		for j := i + 1; j < len(loop); j++ {
+	return patchBoundarySimple(budget, points, remaining)
+}
+
+// patchBoundarySimple proves that no two boundary edges meet except
+// adjacent edges at their shared vertex. Two edges whose projected u
+// ranges are strictly apart cannot meet, so they are skipped. The range of
+// an edge is [min, max] of its end points' u, taken from the held float Fu,
+// and a skip is allowed only when every Fu and Fv is exactly the point's
+// rational U or V (a float64 vertex lifted by proof.XptOf always is): then
+// the float comparison is the exact comparison of the rational ranges. Any other
+// boundary, and any non-finite coordinate, takes the quadratic check, where
+// the sweep's ordering is undefined or inexact. The edges are taken in order
+// of their low u end, and each is tested against the later edges whose low
+// u end does not pass its own high u end (see patchUOverlapPairs): exactly
+// the pairs the u test of the quadratic check does not reject, touching
+// ranges included. Each tested pair uses one unit of the shared check
+// allowance and one budget step.
+func patchBoundarySimple(budget *proofbound.WorkBudget, points []meshbool.Xp2,
+	remaining *uint64) ProjectedPatchCondition {
+	n := len(points)
+	lo, hi, order, ok := patchUSweepOrder(points)
+	if !ok {
+		return patchBoundarySimpleQuadratic(budget, points, remaining)
+	}
+	for x, y := range patchUOverlapPairs(lo, hi, order) {
+		if *remaining == 0 || budget.Step() != nil {
+			return ProjectedPatchStructure
+		}
+		*remaining--
+		i, j := int(min(x, y)), int(max(x, y))
+		a, b := points[i], points[(i+1)%n]
+		c, d := points[j], points[(j+1)%n]
+		if math.Max(a.Fv, b.Fv) < math.Min(c.Fv, d.Fv) ||
+			math.Max(c.Fv, d.Fv) < math.Min(a.Fv, b.Fv) {
+			continue
+		}
+		// The adjacency and crossing tests below are those of the quadratic check.
+		adjacent := j == i+1 || (i == 0 && j == n-1)
+		if adjacent {
+			if j == i+1 && !patchAdjacentEdgesMeetOnlyAtVertex(a, b, d) {
+				return ProjectedPatchSelfContact
+			}
+			if i == 0 && j == n-1 && !patchAdjacentEdgesMeetOnlyAtVertex(c, d, b) {
+				return ProjectedPatchSelfContact
+			}
+			continue
+		}
+		if patchSegmentsMeet(a, b, c, d) {
+			return ProjectedPatchSelfContact
+		}
+	}
+	return ProjectedPatchHolds
+}
+
+// patchUSweepOrder returns each edge's u range and the edges ordered by low
+// u end (ties by index). It reports false when some coordinate is
+// non-finite or some Fu or Fv is not exactly the point's rational U or V.
+func patchUSweepOrder(points []meshbool.Xp2) (lo, hi []float64, order []int32, ok bool) {
+	n := len(points)
+	lo, hi = make([]float64, n), make([]float64, n)
+	for i := range n {
+		a, b := points[i].Fu, points[(i+1)%n].Fu
+		if math.IsNaN(a) || math.IsNaN(b) || math.IsInf(a, 0) || math.IsInf(b, 0) ||
+			math.IsNaN(points[i].Fv) || math.IsInf(points[i].Fv, 0) ||
+			points[i].U == nil || points[i].V == nil ||
+			new(big.Rat).SetFloat64(a).Cmp(points[i].U) != 0 ||
+			new(big.Rat).SetFloat64(points[i].Fv).Cmp(points[i].V) != 0 {
+			return nil, nil, nil, false
+		}
+		lo[i], hi[i] = math.Min(a, b), math.Max(a, b)
+	}
+	order = make([]int32, n)
+	for i := range order {
+		order[i] = int32(i)
+	}
+	slices.SortFunc(order, func(x, y int32) int {
+		if c := cmp.Compare(lo[x], lo[y]); c != 0 {
+			return c
+		}
+		return cmp.Compare(x, y)
+	})
+	return lo, hi, order, true
+}
+
+// patchUOverlapPairs yields every pair of edges, as (x, y) with x earlier in
+// order, whose u ranges [lo, hi] are not strictly apart. order lists the
+// edges by low u end. A pair is cut only when lo[y] > hi[x], a comparison of
+// two finite floats with no rounding; touching ranges are yielded.
+func patchUOverlapPairs(lo, hi []float64, order []int32) iter.Seq2[int32, int32] {
+	return func(yield func(int32, int32) bool) {
+		for k, x := range order {
+			for _, y := range order[k+1:] {
+				if lo[y] > hi[x] {
+					break
+				}
+				if !yield(x, y) {
+					return
+				}
+			}
+		}
+	}
+}
+
+// patchBoundarySimpleQuadratic tests every pair of boundary edges. It is
+// the fallback for a boundary whose projected coordinates are not all
+// finite, where the sweep's ordering is undefined.
+func patchBoundarySimpleQuadratic(budget *proofbound.WorkBudget, points []meshbool.Xp2,
+	remaining *uint64) ProjectedPatchCondition {
+	n := len(points)
+	for i := range n {
+		a, b := points[i], points[(i+1)%n]
+		for j := i + 1; j < n; j++ {
 			if *remaining == 0 || budget.Step() != nil {
 				return ProjectedPatchStructure
 			}
-			*remaining -= 1
-			c, d := points[j], points[(j+1)%len(loop)]
+			*remaining--
+			c, d := points[j], points[(j+1)%n]
 			if math.Max(a.Fu, b.Fu) < math.Min(c.Fu, d.Fu) ||
 				math.Max(c.Fu, d.Fu) < math.Min(a.Fu, b.Fu) ||
 				math.Max(a.Fv, b.Fv) < math.Min(c.Fv, d.Fv) ||
 				math.Max(c.Fv, d.Fv) < math.Min(a.Fv, b.Fv) {
 				continue
 			}
-			adjacent := j == i+1 || (i == 0 && j == len(loop)-1)
+			adjacent := j == i+1 || (i == 0 && j == n-1)
 			if adjacent {
 				if j == i+1 && !patchAdjacentEdgesMeetOnlyAtVertex(a, b, d) {
 					return ProjectedPatchSelfContact
 				}
-				if i == 0 && j == len(loop)-1 && !patchAdjacentEdgesMeetOnlyAtVertex(c, d, b) {
+				if i == 0 && j == n-1 && !patchAdjacentEdgesMeetOnlyAtVertex(c, d, b) {
 					return ProjectedPatchSelfContact
 				}
 				continue
