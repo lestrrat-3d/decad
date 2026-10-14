@@ -1528,3 +1528,8 @@
 10	0.00	TestLoftSectionCircularHoleClearanceAcrossLevels
 10	0.00	TestPrismIntersectArrangedRecordMatchesAuthenticated
 10	0.00	TestPrismBodyNodesAreBorn
+10	0.00	TestLoftFaceRatHelpersMatchRawRat
+10	0.00	TestLoftFaceDivByZeroPanicsLikeQuo
+10	0.00	TestPointPlaneCapDroppedCoordinateMatchesRawRat
+10	0.00	TestLoftFaceRatHelpersAcceptNonReducedOperandsByValue
+10	0.00	TestPointPlaneCapDroppedCoordinateAcceptsNonReducedByValue
