@@ -247,7 +247,7 @@ func TestTessellateLoftRefusesAnUnrestatablePayload(t *testing.T) {
 
 	t.Run("a body whose topology contradicts its payload", func(t *testing.T) {
 		// The payload names side(0,j,k) roles the body no longer carries.
-		stripped := &Body{doc: body.doc, origin: body.origin, n: topo.Body{Solid: true}}
+		stripped := &Body{doc: body.doc, n: topo.Body{Solid: true, Origin: body.n.Origin}}
 		mesh, err := tessellateLoft(t.Context(), stripped, base)
 		require.Nil(t, mesh)
 		require.ErrorIs(t, err, ErrDegenerate)

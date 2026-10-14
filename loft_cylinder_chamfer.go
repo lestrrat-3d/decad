@@ -140,14 +140,14 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	}
 	var caps [2]*Face
 	for _, face := range b.Faces() {
-		for _, origin := range face.origins {
-			if origin == CapStart(b) {
+		for _, origin := range face.n.Origins {
+			if origin == refOf(CapStart(b)) {
 				if caps[0] != nil {
 					return nil, true, fmt.Errorf("%w: loft/cylinder start cap is split", ErrUnsupported)
 				}
 				caps[0] = face
 			}
-			if origin == CapEnd(b) {
+			if origin == refOf(CapEnd(b)) {
 				if caps[1] != nil {
 					return nil, true, fmt.Errorf("%w: loft/cylinder end cap is split", ErrUnsupported)
 				}

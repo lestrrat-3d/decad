@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -326,7 +327,7 @@ func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 func TestBodyPatchRejectsAReceiverWithNoPayload(t *testing.T) {
 	t.Parallel()
 	d := New()
-	b := &Body{doc: d, origin: FeatureRef{Role: roleBody}, kind: BodySheet}
+	b := &Body{doc: d, n: topo.Body{Origin: provenance.Ref{Role: roleBody}}, kind: BodySheet}
 	d.bodies = append(d.bodies, b)
 
 	_, err := PatchEdges(t.Context(), b, Edges(Free()))

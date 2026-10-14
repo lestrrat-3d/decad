@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -199,11 +200,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// with p the patch's index in this band, or a draft view's side(loop, j)
 	// over the recorded segments the walk coalesced, exactly the roles a
 	// prism's own wall carries (docs/draft-design.md Table BD).
-	wallOrigins := func(segs []int, p int) ([]FeatureRef, error) {
+	wallOrigins := func(segs []int, p int) ([]provenance.Ref, error) {
 		if cbp.draft {
 			return sideOriginsContext(ctx, ref, li, segs)
 		}
-		return []FeatureRef{{producer: ref, Role: fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, p)}}, nil
+		return []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, p)}}, nil
 	}
 
 	// A single closed circle has no corner: one Cone patch, full turn.
@@ -471,9 +472,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// (pBV -> apex), slantIn reversed (apex -> pAV) — a closed
 		// triangle-like boundary each coedge's end matching the next's start.
 		face := &Face{
-			n:       topo.Face{Surface: surf},
-			origins: []FeatureRef{{producer: ref, Role: role}},
-			body:    body,
+			n:    topo.Face{Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: role}}},
+			body: body,
 			loops: []*Loop{{coedges: []coedge{
 				{edge: arc, forward: true},
 				{edge: slantOut[i], forward: true},
@@ -659,9 +659,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			return capBandResult{}, err
 		}
 		face := &Face{
-			n:       topo.Face{Surface: surf},
-			origins: origins,
-			body:    body,
+			n:    topo.Face{Surface: surf, Origins: origins},
+			body: body,
 			loops: []*Loop{{coedges: []coedge{
 				{edge: side, forward: true},
 				{edge: trailSlant, forward: false},
@@ -1091,13 +1090,13 @@ func capPatchWindowSkew(g capPatchGeom) float64 {
 // original wall's own sense (a hole/clockwise wall's material lies outside
 // its cylinder, so its chamfer cone's geometric normal needs reversing too —
 // extrude.go's same rule for a clockwise circular wall).
-func buildConePatch(pl prismPayload, body *Body, origins []FeatureRef, cu, cv, sideRadius, capRadius, sideZ, capZ float64, reversed bool, sideEdge, capEdge *Edge) *Face {
+func buildConePatch(pl prismPayload, body *Body, origins []provenance.Ref, cu, cv, sideRadius, capRadius, sideZ, capZ float64, reversed bool, sideEdge, capEdge *Edge) *Face {
 	surf := coneSurface(pl, cu, cv, sideRadius, capRadius, sideZ, capZ)
 	loops := []*Loop{
 		{coedges: []coedge{{edge: sideEdge, forward: true}}, n: topo.Loop{Outer: true}},
 		{coedges: []coedge{{edge: capEdge, forward: false}}, n: topo.Loop{Outer: true}},
 	}
-	face := &Face{origins: origins, body: body, n: topo.Face{Reversed: reversed, Surface: surf}, loops: loops}
+	face := &Face{body: body, n: topo.Face{Reversed: reversed, Surface: surf, Origins: origins}, loops: loops}
 	sideEdge.faces = append(sideEdge.faces, face)
 	capEdge.faces = append(capEdge.faces, face)
 	return face

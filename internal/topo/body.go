@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 )
 
 // Body is the data of the root Body handle, which holds one by
@@ -26,4 +27,8 @@ type Body struct {
 	// (root contact_faceted_pair.go). It only speeds the next relation's
 	// distance scan, never changes its result.
 	PlanarHints sync.Map
+
+	// Origin is the producing feature's role. Root Body.Origin converts it to
+	// the public FeatureRef form.
+	Origin provenance.Ref
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
@@ -264,7 +265,7 @@ type EdgePredicate struct {
 	dir    r3.Vec
 	point  r3.Vec
 	length units.Value
-	ref    FeatureRef
+	ref    provenance.Ref
 }
 
 // FacePredicate is one clause of a FaceQuery. Predicates come
@@ -275,7 +276,7 @@ type EdgePredicate struct {
 type FacePredicate struct {
 	kind string
 	dir  r3.Vec
-	ref  FeatureRef
+	ref  provenance.Ref
 }
 
 // Convex matches edges Edge.IsConvex reports convex — the walked-boundary
@@ -315,13 +316,13 @@ func LongerThan(l units.Value) EdgePredicate {
 // (docs/evaluator-design.md §3). A negative producer identity or empty role is rejected at
 // resolve as ErrDegenerate.
 func CreatedBy(f FeatureRef) EdgePredicate {
-	return EdgePredicate{kind: selectorquery.CreatedByKind, ref: f}
+	return EdgePredicate{kind: selectorquery.CreatedByKind, ref: refOf(f)}
 }
 
 // OuterLoopOf matches edges on the outer boundary loop of a face carrying f.
 // On a holed cap, it excludes every inner-loop rim edge, including a bore.
 func OuterLoopOf(f FeatureRef) EdgePredicate {
-	return EdgePredicate{kind: selectorquery.OuterLoopOfKind, ref: f}
+	return EdgePredicate{kind: selectorquery.OuterLoopOfKind, ref: refOf(f)}
 }
 
 // Circular matches edges whose curve is a full circle or a circular arc.
@@ -367,7 +368,7 @@ func Facing(v r3.Vec) FacePredicate {
 // (docs/evaluator-design.md §3). A negative producer identity or empty role is rejected at
 // resolve as ErrDegenerate.
 func FaceCreatedBy(f FeatureRef) FacePredicate {
-	return FacePredicate{kind: selectorquery.FaceCreatedByKind, ref: f}
+	return FacePredicate{kind: selectorquery.FaceCreatedByKind, ref: refOf(f)}
 }
 
 // CapStart names the start-cap role of b's own producing feature, so
@@ -381,14 +382,14 @@ func FaceCreatedBy(f FeatureRef) FacePredicate {
 // preserves only its operands' cap origins, so name those with
 // FaceCreatedBy(CapStart(originalBody)).
 func CapStart(b *Body) FeatureRef {
-	return FeatureRef{producer: b.Origin().producer, Role: roleCapStart}
+	return featureRefOf(provenance.Ref{Producer: b.n.Origin.Producer, Role: roleCapStart})
 }
 
 // CapEnd names the end-cap role of b's own producing feature — the sibling of
 // CapStart. A body whose feature mints no end cap (a cup, a full revolution) still
 // gets a well-formed ref that matches nothing.
 func CapEnd(b *Body) FeatureRef {
-	return FeatureRef{producer: b.Origin().producer, Role: roleCapEnd}
+	return featureRefOf(provenance.Ref{Producer: b.n.Origin.Producer, Role: roleCapEnd})
 }
 
 // Walls matches every face a sweep made: the faces carrying a side(i, j) role
@@ -397,13 +398,13 @@ func CapEnd(b *Body) FeatureRef {
 // (docs/draft-design.md §10). On a body whose producer mints no side roles it
 // matches nothing, an ordinary ErrNoMatch at resolve. b must not be nil.
 func Walls(b *Body) FacePredicate {
-	return FacePredicate{kind: selectorquery.WallsKind, ref: FeatureRef{producer: b.Origin().producer, Role: roleSidePrefix}}
+	return FacePredicate{kind: selectorquery.WallsKind, ref: provenance.Ref{Producer: b.n.Origin.Producer, Role: roleSidePrefix}}
 }
 
 // validatePredicateRef rejects provenance that cannot name a feature role.
-func validatePredicateRef(ref FeatureRef, what string) error {
-	if ref.producer < 0 {
-		return fmt.Errorf(`%w: a %s predicate cannot reference negative producer %d`, ErrDegenerate, what, ref.producer)
+func validatePredicateRef(ref provenance.Ref, what string) error {
+	if ref.Producer < 0 {
+		return fmt.Errorf(`%w: a %s predicate cannot reference negative producer %d`, ErrDegenerate, what, ref.Producer)
 	}
 	if ref.Role == "" {
 		return fmt.Errorf(`%w: a %s predicate requires a non-empty provenance role`, ErrDegenerate, what)
@@ -411,14 +412,14 @@ func validatePredicateRef(ref FeatureRef, what string) error {
 	return nil
 }
 
-func (p EdgePredicate) clause() selectorquery.EdgeClause[FeatureRef] {
-	return selectorquery.EdgeClause[FeatureRef]{
+func (p EdgePredicate) clause() selectorquery.EdgeClause[provenance.Ref] {
+	return selectorquery.EdgeClause[provenance.Ref]{
 		Kind: p.kind, Direction: p.dir, Point: p.point, Length: p.length, Ref: p.ref,
 	}
 }
 
-func (p FacePredicate) clause() selectorquery.FaceClause[FeatureRef] {
-	return selectorquery.FaceClause[FeatureRef]{Kind: p.kind, Direction: p.dir, Ref: p.ref}
+func (p FacePredicate) clause() selectorquery.FaceClause[provenance.Ref] {
+	return selectorquery.FaceClause[provenance.Ref]{Kind: p.kind, Direction: p.dir, Ref: p.ref}
 }
 
 func (p EdgePredicate) validate() error { return p.clause().Validate(validatePredicateRef) }
@@ -445,17 +446,17 @@ func (e selectorEdge) SelectorEndpoints() (r3.Vec, r3.Vec) {
 	return e.start.n.Position, e.end.n.Position
 }
 func (e selectorEdge) SelectorLengthMM() float64 { return e.n.Length }
-func (e selectorEdge) SelectorHasOrigin(ref FeatureRef) bool {
+func (e selectorEdge) SelectorHasOrigin(ref provenance.Ref) bool {
 	for _, face := range e.faces {
-		if slices.Contains(face.origins, ref) {
+		if slices.Contains(face.n.Origins, ref) {
 			return true
 		}
 	}
 	return false
 }
-func (e selectorEdge) SelectorOnOuterLoop(ref FeatureRef) bool {
+func (e selectorEdge) SelectorOnOuterLoop(ref provenance.Ref) bool {
 	for _, face := range e.faces {
-		if !slices.Contains(face.origins, ref) {
+		if !slices.Contains(face.n.Origins, ref) {
 			continue
 		}
 		for _, loop := range face.loops {
@@ -501,11 +502,11 @@ func (f selectorFace) SelectorCylindrical() bool {
 	_, ok := f.n.Surface.(surfacegeom.Cylinder)
 	return ok
 }
-func (f selectorFace) SelectorHasOrigin(ref FeatureRef) bool {
-	return slices.Contains(f.origins, ref)
+func (f selectorFace) SelectorHasOrigin(ref provenance.Ref) bool {
+	return slices.Contains(f.n.Origins, ref)
 }
-func (f selectorFace) SelectorIsWallOf(ref FeatureRef) bool {
-	return f.isWallOf(ref.producer)
+func (f selectorFace) SelectorIsWallOf(ref provenance.Ref) bool {
+	return f.isWallOf(ref.Producer)
 }
 
 // errNilSelector rejects a nil query.

@@ -308,15 +308,15 @@ func draftMeshSubset(t *testing.T, holes int, draw func(*sketch.Sketch), h, deg 
 		require.NoError(t, err)
 		var q *FaceQuery
 		for _, f := range b.Faces() {
-			if !f.isWallOf(b.origin.producer) || !pick(f) {
+			if !f.isWallOf(b.n.Origin.Producer) || !pick(f) {
 				continue
 			}
-			for _, o := range f.origins {
+			for _, o := range f.n.Origins {
 				if q == nil {
-					q = Faces(FaceCreatedBy(o))
+					q = Faces(FaceCreatedBy(featureRefOf(o)))
 					continue
 				}
-				q.Or(FaceCreatedBy(o))
+				q.Or(FaceCreatedBy(featureRefOf(o)))
 			}
 		}
 		require.NotNil(t, q)
@@ -349,7 +349,7 @@ func TestDraftSubsetMeshVolumeProofCoversTheClosedForm(t *testing.T) {
 		[2]float64{10, 10}, [2]float64{10, 20}, [2]float64{0, 20})
 	hasRole := func(role string) func(*Face) bool {
 		return func(f *Face) bool {
-			for _, o := range f.origins {
+			for _, o := range f.n.Origins {
 				if o.Role == role {
 					return true
 				}

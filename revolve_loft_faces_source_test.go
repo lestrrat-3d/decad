@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -11,9 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func neutralArcSeamCap(t *testing.T, slab *Body, role FeatureRef) *Face {
+func neutralArcSeamCap(t *testing.T, slab *Body, role provenance.Ref) *Face {
 	t.Helper()
-	faces, err := Faces(FaceCreatedBy(role)).SelectFaces(slab)
+	faces, err := Faces(FaceCreatedBy(featureRefOf(role))).SelectFaces(slab)
 	require.NoError(t, err)
 	require.Len(t, faces, 1)
 	return faces[0]
@@ -98,9 +99,9 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 		slabs = append(slabs, parts[1])
 	}
 	sections := make([]*Face, 0, 9)
-	sections = append(sections, neutralArcSeamCap(t, slabs[7], CapStart(slabs[7])))
+	sections = append(sections, neutralArcSeamCap(t, slabs[7], refOf(CapStart(slabs[7]))))
 	for i := range slices.Backward(slabs) {
-		sections = append(sections, neutralArcSeamCap(t, slabs[i], CapEnd(slabs[i])))
+		sections = append(sections, neutralArcSeamCap(t, slabs[i], refOf(CapEnd(slabs[i]))))
 	}
 	loft, err := doc.LoftFaces(t.Context(), sections...)
 	require.NoError(t, err)
@@ -199,7 +200,7 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 	})
 
 	var owner *Face
-	var ref FeatureRef
+	var ref provenance.Ref
 	for band, face := range proof.crossings[0].faces {
 		if face != nil {
 			owner = face
@@ -209,10 +210,10 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 	}
 	require.NotNil(t, owner)
 	t.Run("missing crossing owner", func(t *testing.T) {
-		original := owner.origins
-		defer func() { owner.origins = original }()
-		owner.origins = slices.DeleteFunc(slices.Clone(original),
-			func(got FeatureRef) bool { return got == ref })
+		original := owner.n.Origins
+		defer func() { owner.n.Origins = original }()
+		owner.n.Origins = slices.DeleteFunc(slices.Clone(original),
+			func(got provenance.Ref) bool { return got == ref })
 		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
 		require.NoError(t, err)
 		require.False(t, certified)
@@ -226,9 +227,9 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 			}
 		}
 		require.NotNil(t, other)
-		original := other.origins
-		defer func() { other.origins = original }()
-		other.origins = append(slices.Clone(original), ref)
+		original := other.n.Origins
+		defer func() { other.n.Origins = original }()
+		other.n.Origins = append(slices.Clone(original), ref)
 		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
 		require.NoError(t, err)
 		require.False(t, certified)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegroup"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
@@ -23,7 +24,7 @@ type compositeSpanPart struct {
 func compositeSpanPartOf(body *Body) (compositeSpanPart, error) {
 	part := compositeSpanPart{body: body}
 	for _, face := range body.Faces() {
-		for _, origin := range face.origins {
+		for _, origin := range face.n.Origins {
 			switch origin.Role {
 			case roleCapStart:
 				if part.startCap != nil {
@@ -161,10 +162,9 @@ func assembleCompositeSweepBodyWithJoinMode(
 		kind = BodySheet
 	}
 	body := &Body{
-		doc:    d,
-		origin: FeatureRef{producer: ref, Role: roleBody},
-		n:      topo.Body{Solid: !surfaceResult},
-		kind:   kind,
+		doc:  d,
+		n:    topo.Body{Solid: !surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}},
+		kind: kind,
 	}
 	var faces []*Face
 	if !surfaceResult && !closed {
@@ -311,13 +311,13 @@ func rewriteCompositeEdge(body *Body, old, replacement *Edge) {
 }
 
 func rewriteCompositeSideRoles(face *Face, span int) {
-	for i, origin := range face.origins {
+	for i, origin := range face.n.Origins {
 		role, ok := compositesweep.RewriteSideRole(origin.Role, span)
 		if !ok {
 			continue
 		}
 		origin.Role = role
-		face.origins[i] = origin
+		face.n.Origins[i] = origin
 	}
 }
 

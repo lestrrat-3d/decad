@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
@@ -116,7 +117,7 @@ type revolvePayload struct {
 	blendKind string
 	// sourceSideOrigins records the source faces of an arranged meridian wall.
 	// A Boolean result retains them when Transform or Copy rebuilds its payload.
-	sourceSideOrigins [][][]FeatureRef
+	sourceSideOrigins [][][]provenance.Ref
 	// draftCircleCaps retains the two axial cap roles when a one-sided
 	// circular draft rim fillet or chamfer is rebuilt as a full revolution. In that
 	// five-segment meridian, side(0,1) is the far cap and side(0,4) the
@@ -366,7 +367,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if rp.surfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: !rp.surfaceResult}, kind: kind}
+	body := &Body{doc: d, n: topo.Body{Solid: !rp.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: kind}
 
 	// Partial sweeps get two planar cap faces; a full revolution has none.
 	var capStart, capEnd *Face
@@ -398,25 +399,25 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// tighter bound than the snap/unsnap mismatch can actually cost it.
 		capAdmitAllow := revolvemass.AdmitBandCharge(rp.ax.RadialAdmitAllow, rp.ax.AxialExtentUpper)
 		capStart = &Face{
-			origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
-			body:    body,
+			body: body,
 			n: topo.Face{
 				Area:        ig.Area,
 				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
 				NormalBound: rp.phi0Delta(),
 				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi0, rp.phi0, true),
 				Surface:     surfacegeom.Plane{Frame: startFrame},
+				Origins:     []provenance.Ref{{Producer: ref, Role: roleCapStart}},
 			},
 		}
 		capEnd = &Face{
-			origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
-			body:    body,
+			body: body,
 			n: topo.Face{
 				Area:        ig.Area,
 				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
 				NormalBound: rp.phi1Delta(),
 				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi1, rp.phi1, false),
 				Surface:     surfacegeom.Plane{Frame: endFrame},
+				Origins:     []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
 			},
 		}
 	}
@@ -886,14 +887,14 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
-			origins: origins,
-			body:    body,
+			body: body,
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
 				Reversed:  reversed,
 				Denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
 				Surface:   surf,
+				Origins:   origins,
 			},
 		}
 		switch {
@@ -1189,7 +1190,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
 	b := rev.basis()
 	var allFaces []*Face
 	area := proofbound.BoundedScalar{}
@@ -1380,14 +1381,14 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
-			origins: origins,
-			body:    body,
+			body: body,
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
 				Reversed:  reversed,
 				Denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
 				Surface:   surf,
+				Origins:   origins,
 			},
 		}
 		if rp.full {

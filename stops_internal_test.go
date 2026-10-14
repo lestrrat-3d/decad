@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -46,7 +47,7 @@ func TestResolveThroughAllDecidesInPathOutsideDisplacement(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	doc := func(hi, bound float64) *Document {
 		return &Document{bodies: []*Body{{
-			origin:  FeatureRef{producer: 1},
+			n:       topo.Body{Origin: provenance.Ref{Producer: 1}},
 			payload: stubExtent{hi: hi, bound: bound},
 		}}}
 	}
@@ -81,7 +82,7 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 	profile := profileRecord{Outer: synthRectLoop(0, 0, 1, 1)}
 	stopBody := func(ref producerID, z1, z1Delta float64) *Body {
 		return &Body{
-			origin: FeatureRef{producer: ref},
+			n: topo.Body{Origin: provenance.Ref{Producer: ref}},
 			payload: prismPayload{Payload: prismrecord.Payload{
 				Profile: profile,
 				Frame:   frame,
@@ -256,7 +257,7 @@ func TestResolveToFaceRefusesStatedNormalDeparture(t *testing.T) {
 			}}, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			doc.bodies = []*Body{host}
-			ref := Faces(FaceCreatedBy(FeatureRef{producer: 1, Role: roleCapEnd}))
+			ref := Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: 1, Role: roleCapEnd})))
 			faces, err := ref.SelectFaces(host)
 			require.NoError(t, err)
 			require.Len(t, faces, 1)
@@ -303,7 +304,7 @@ func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stop, delta, _, err := doc.resolveToFace(ToFace{
 				Body: host,
-				Face: Faces(FaceCreatedBy(FeatureRef{producer: 1, Role: tc.role})),
+				Face: Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: 1, Role: tc.role}))),
 			}, frame, 1, "a to-face extent")
 			require.NoError(t, err)
 			require.Equal(t, tc.stop, stop)
@@ -337,7 +338,7 @@ func genericPlateHost(t *testing.T, f r3.Frame, z1 float64) (*Document, *Body, *
 	}}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	doc.bodies = []*Body{host}
-	return doc, host, Faces(FaceCreatedBy(FeatureRef{producer: 1, Role: roleCapEnd}))
+	return doc, host, Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: 1, Role: roleCapEnd})))
 }
 
 func genericPlateFrames(t *testing.T) (f, flipped, skewed, shifted r3.Frame) {

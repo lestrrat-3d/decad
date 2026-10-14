@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -29,7 +30,7 @@ type pointConeTrimRecord struct {
 type pointConeLimit struct {
 	apex, far, slope *big.Rat
 	surface          surfacegeom.Cone
-	origins          []FeatureRef
+	origins          []provenance.Ref
 	denoted          *surfacenormal.Revolved
 	reversed         bool
 
@@ -112,12 +113,12 @@ func exactPointCone(b *Body) (*pointConeLimit, bool) {
 		}
 	}
 	var surface surfacegeom.Cone
-	var origins []FeatureRef
+	var origins []provenance.Ref
 	var denoted *surfacenormal.Revolved
 	var reversed bool
 	for _, face := range b.Faces() {
 		if cone, ok := face.n.Surface.(surfacegeom.Cone); ok {
-			surface, origins = cone, face.Origins()
+			surface, origins = cone, face.originRefs()
 			denoted, reversed = face.n.Denoted, face.n.Reversed
 			break
 		}

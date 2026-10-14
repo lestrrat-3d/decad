@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -68,22 +70,22 @@ func TestRevolveLoftFacesHeelVerticalArcConsumesLiveNeutralSource(t *testing.T) 
 		require.NoError(t, arcErr)
 		require.False(t, certified, "a certified source miss has no occupied arc")
 		changed = circle
-		changed.capOrigin = FeatureRef{}
+		changed.capOrigin = provenance.Ref{}
 		_, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, changed)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "the occupied arc must name its live cap origin")
-		originalOrigins := circle.capFace.origins
-		t.Cleanup(func() { circle.capFace.origins = originalOrigins })
-		circle.capFace.origins = []FeatureRef{{Role: "unrelated cap"}}
+		originalOrigins := circle.capFace.n.Origins
+		t.Cleanup(func() { circle.capFace.n.Origins = originalOrigins })
+		circle.capFace.n.Origins = []provenance.Ref{{Role: "unrelated cap"}}
 		_, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, circle)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "a replaced live cap-face origin cannot own the arc")
-		circle.capFace.origins = originalOrigins
+		circle.capFace.n.Origins = originalOrigins
 		shell := blank.Shells()[0]
 		originalFaces := shell.faces
 		t.Cleanup(func() { shell.faces = originalFaces })
 		shell.faces = append(slices.Clone(originalFaces), &Face{
-			body: blank, origins: []FeatureRef{{Role: "unmatched side"}},
+			body: blank, n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}},
 		})
 		_, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, circle)
 		require.NoError(t, arcErr)

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
@@ -146,8 +147,8 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 			return nil, brepBandMass{}, err
 		}
 		held, bound := heldOf(areaIv)
-		face := &Face{origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
-			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: plane}}
+		face := &Face{
+			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: plane, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(len(patches))}}}}
 		normal, err := face.NormalAt(sideE.start.n.Position)
 		if err != nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d has no normal: %v`,

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -137,7 +138,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
 	prismView := pp.prism()
 
 	// pw resolves every boundary segment's walk exactly once for this whole
@@ -179,9 +180,8 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, err
 	}
 	face := &Face{
-		origins: []FeatureRef{{producer: ref, Role: rolePatch}},
-		body:    body,
-		loops:   faceLoops,
+		body:  body,
+		loops: faceLoops,
 		n: topo.Face{
 			Area:          ig.Area,
 			AreaBound:     ig.AreaBound,
@@ -189,6 +189,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: frame},
 			CapRecord:     &topo.CapRecord{Frame: prismView.Frame, Xform: prismView.Xform, Z: 0},
+			Origins:       []provenance.Ref{{Producer: ref, Role: rolePatch}},
 		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {

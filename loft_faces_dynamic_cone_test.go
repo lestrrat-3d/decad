@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -44,14 +45,14 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 	second, err := Split(t.Context(), first[0], sheet(4.5))
 	require.NoError(t, err)
 	near, far := second[1], first[1]
-	section := func(body *Body, role FeatureRef) *Face {
-		fs, e := Faces(FaceCreatedBy(role)).SelectFaces(body)
+	section := func(body *Body, role provenance.Ref) *Face {
+		fs, e := Faces(FaceCreatedBy(featureRefOf(role))).SelectFaces(body)
 		require.NoError(t, e)
 		require.Len(t, fs, 1)
 		return fs[0]
 	}
-	loft, err := doc.LoftFaces(t.Context(), section(near, CapStart(near)),
-		section(near, CapEnd(near)), section(far, CapEnd(far)))
+	loft, err := doc.LoftFaces(t.Context(), section(near, refOf(CapStart(near))),
+		section(near, refOf(CapEnd(near))), section(far, refOf(CapEnd(far))))
 	require.NoError(t, err)
 	baseRecord := loft.payload.(facetedPayload).loftFacesCap
 	require.Len(t, baseRecord.maps, 3)

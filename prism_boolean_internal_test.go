@@ -1978,14 +1978,14 @@ func TestPrismOverlapVolumeCancellationLeavesDocumentUntouched(t *testing.T) {
 	u := internalPolyPrismBody(t, doc, crossUPts, 5)
 	bar := internalPolyPrismBody(t, doc, crossBarPts, 5)
 	beforeBodies := append([]*Body{}, doc.Bodies()...)
-	beforeProducer := doc.nextProducer
+	beforeProducer := doc.n.NextProducer
 
 	ctx := &internalCancelContext{Context: t.Context(), limit: 40}
 	_, ok, err := prismOverlapVolume(ctx, u, bar)
 	require.False(t, ok)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, beforeBodies, doc.Bodies())
-	require.Equal(t, beforeProducer, doc.nextProducer)
+	require.Equal(t, beforeProducer, doc.n.NextProducer)
 	require.NoError(t, doc.requireLive(u), "the operand must not be retired by a canceled reading")
 	require.NoError(t, doc.requireLive(bar))
 }

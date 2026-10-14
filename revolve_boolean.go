@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -120,7 +121,7 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 	result.sectionDelta = sceneDelta.Merged(0, 0, reexpress.Delta, cutDelta)
 	result.sectionWhole = false
 	result.radialProof = ax.RadialProof
-	result.sourceSideOrigins = [][][]FeatureRef{sources}
+	result.sourceSideOrigins = [][][]provenance.Ref{sources}
 	result.blendSegs = nil
 	result.blendKind = ""
 	body, err := evalRevolveContext(ctx, d, ref, result)
@@ -178,8 +179,8 @@ func revolveBooleanTaggedSegments(tags map[sketch.Entity]prismcells.Origin, coun
 
 func revolveBooleanSources(ctx context.Context, a, b *Body, ra, rb revolvePayload,
 	tags map[sketch.Entity]prismcells.Origin, coincident prismcells.CoincidentReading,
-	chain []sketch.BoundaryEdge) ([][]FeatureRef, bool, error) {
-	sources := make([][]FeatureRef, len(chain))
+	chain []sketch.BoundaryEdge) ([][]provenance.Ref, bool, error) {
+	sources := make([][]provenance.Ref, len(chain))
 	for i, edge := range chain {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
@@ -208,7 +209,7 @@ func revolveBooleanSources(ctx context.Context, a, b *Body, ra, rb revolvePayloa
 }
 
 func revolveBooleanSourceFace(a, b *Body, ra, rb revolvePayload,
-	origin prismcells.Origin) ([]FeatureRef, bool, error) {
+	origin prismcells.Origin) ([]provenance.Ref, bool, error) {
 	if origin.Region != 0 || origin.Hole != -1 {
 		return nil, false, nil
 	}
@@ -227,10 +228,10 @@ func revolveBooleanSourceFace(a, b *Body, ra, rb revolvePayload,
 	if source.ax.IsAxis(source.ax.Walk(walk)) {
 		return nil, true, nil
 	}
-	ref := FeatureRef{producer: body.origin.producer, Role: prismWallRole(0, origin.Segment)}
+	ref := provenance.Ref{Producer: body.n.Origin.Producer, Role: prismWallRole(0, origin.Segment)}
 	for _, face := range body.Faces() {
-		if slices.Contains(face.origins, ref) {
-			return slices.Clone(face.origins), true, nil
+		if slices.Contains(face.n.Origins, ref) {
+			return slices.Clone(face.n.Origins), true, nil
 		}
 	}
 	return nil, false, nil

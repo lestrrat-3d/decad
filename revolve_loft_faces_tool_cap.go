@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 )
 
 // A tool-cap circle is the exact intersection of one authenticated finite
@@ -13,7 +14,7 @@ import (
 type revolveLoftFacesToolCapCircle struct {
 	blankFace  *Face
 	capFace    *Face
-	capOrigin  FeatureRef
+	capOrigin  provenance.Ref
 	span       int
 	tool       int // 0 is the Cut cone, 1 is the Intersect cone.
 	x, radius  *big.Rat
@@ -66,7 +67,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 		}
 		origin := p.groups[tool.group].origins[0]
 		found := false
-		for _, faceOrigin := range tool.face.Origins() {
+		for _, faceOrigin := range tool.face.originRefs() {
 			found = found || faceOrigin == origin
 		}
 		if !found {

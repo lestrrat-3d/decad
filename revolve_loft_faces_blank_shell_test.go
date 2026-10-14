@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -172,7 +174,7 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	originalFaces := liveShell.faces
 	t.Cleanup(func() { liveShell.faces = originalFaces })
 	liveShell.faces = append(slices.Clone(originalFaces), &Face{
-		body: trimmed, origins: []FeatureRef{{Role: "unowned retained face"}},
+		body: trimmed, n: topo.Face{Origins: []provenance.Ref{{Role: "unowned retained face"}}},
 	})
 	_, admitted, err = revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
 		sectionIndex, cellIndex)

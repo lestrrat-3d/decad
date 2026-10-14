@@ -43,7 +43,7 @@ func loftCylinderProofTooth(ctx context.Context, d *Document, tooth *Body,
 		normalized.Basis().EX != basis.EX || normalized.Basis().EY != basis.EY {
 		return nil, 0, false, nil
 	}
-	proxy, err := lp.placed(ctx, d, tooth.origin.producer, normalized)
+	proxy, err := lp.placed(ctx, d, tooth.n.Origin.Producer, normalized)
 	if err != nil {
 		return nil, 0, true, err
 	}

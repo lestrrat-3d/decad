@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
@@ -121,8 +122,8 @@ func finishArcSweepBody(body *Body, payload sweepPayload) {
 		payload.revolve = built
 	}
 	for _, face := range body.Faces() {
-		origins := make([]FeatureRef, 0, len(face.origins)*2)
-		for _, origin := range face.origins {
+		origins := make([]provenance.Ref, 0, len(face.n.Origins)*2)
+		for _, origin := range face.n.Origins {
 			switch {
 			case strings.HasPrefix(origin.Role, "side("):
 				suffix := strings.TrimPrefix(origin.Role, "side(")
@@ -140,7 +141,7 @@ func finishArcSweepBody(body *Body, payload sweepPayload) {
 			}
 			origins = append(origins, origin)
 		}
-		face.origins = origins
+		face.n.Origins = origins
 	}
 	body.payload = payload
 }

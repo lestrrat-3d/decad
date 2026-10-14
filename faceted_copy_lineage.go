@@ -53,7 +53,7 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 		return
 	}
 	placed.copyLineage = &facetedCopyLineage{
-		source: source, sourceProducer: source.origin.producer,
+		source: source, sourceProducer: source.n.Origin.Producer,
 		sourcePlacement: base.xform, targetPlacement: targetPlacement,
 		motion: motion, direct: direct,
 	}
@@ -118,8 +118,8 @@ func facetedCopyFaceOwners(source, image *Body, first, placed facetedPayload) (m
 		return nil, false
 	}
 	for original, copyFace := range owners {
-		copyOrigins := copyFace.Origins()
-		for _, sourceOrigin := range original.Origins() {
+		copyOrigins := copyFace.originRefs()
+		for _, sourceOrigin := range original.originRefs() {
 			if !slices.Contains(copyOrigins, sourceOrigin) {
 				return nil, false
 			}
@@ -172,7 +172,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 		}
 		record := part.copyLineage
 		if record == nil || record.source != source ||
-			record.sourceProducer != source.origin.producer ||
+			record.sourceProducer != source.n.Origin.Producer ||
 			record.sourcePlacement != first.xform ||
 			record.targetPlacement != part.xform || !record.motion.IsValid() {
 			return nil, fmt.Errorf("%w: copied tool %d lost its source placement", ErrUnsupported, i+1)

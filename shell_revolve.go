@@ -193,8 +193,8 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 // face naming no such role is not a side face of this revolve.
 func revolveSideFaceSegments(b *Body, f *Face, segs map[int]struct{}) error {
 	var roles []string
-	for _, o := range f.origins {
-		if o.producer == b.origin.producer {
+	for _, o := range f.n.Origins {
+		if o.Producer == b.n.Origin.Producer {
 			roles = append(roles, o.Role)
 		}
 	}

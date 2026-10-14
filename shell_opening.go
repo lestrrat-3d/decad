@@ -41,9 +41,9 @@ func classifyRemovedFaces(b *Body, caps prismCaps, removed []*Face) (bool, bool,
 			continue
 		}
 		named := false
-		for _, o := range f.origins {
+		for _, o := range f.n.Origins {
 			var li, j int
-			if o.producer != b.origin.producer {
+			if o.Producer != b.n.Origin.Producer {
 				continue
 			}
 			if n, _ := fmt.Sscanf(o.Role, "side(%d,%d)", &li, &j); n != 2 {
@@ -78,10 +78,10 @@ func classifyRemovedSweepFaces(b *Body, caps prismCaps, pp prismPayload, removed
 			end = true
 			continue
 		}
-		if len(f.origins) != 1 || f.origins[0].producer != b.origin.producer {
+		if len(f.n.Origins) != 1 || f.n.Origins[0].Producer != b.n.Origin.Producer {
 			return false, false, nil, fmt.Errorf(`%w: a selected Sweep wall has no single source segment (shell-opening SO6)`, ErrUnsupported)
 		}
-		role := f.origins[0].Role
+		role := f.n.Origins[0].Role
 		var span, loop, segment int
 		n, err := fmt.Sscanf(role, "side(%d,%d,%d)", &span, &loop, &segment)
 		if err != nil || n != 3 || fmt.Sprintf("side(%d,%d,%d)", span, loop, segment) != role ||

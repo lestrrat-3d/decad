@@ -49,7 +49,7 @@ func TestTopoDependsOnlyOnFloor(t *testing.T) {
 }
 
 // TestBodyMovedFields holds the Body node's field list fixed. The root Body
-// handle keeps the document link, origin, lumps, measurements, kind, payload,
+// handle keeps the document link, lumps, measurements, kind, payload,
 // the tessellation cache, pairReports and sweepRadii, because their types
 // name root types or pull packages outside the floor (sweepRadii's type
 // reaches sweepmemo, motionbound and capband). Adding a field here is a
@@ -62,6 +62,6 @@ func TestBodyMovedFields(t *testing.T) {
 	for f := range typ.Fields() {
 		got = append(got, f.Name)
 	}
-	require.Equal(t, []string{"Solid", "PlanarConvexity", "PlanarSnapshot", "PlanarHints"}, got)
+	require.Equal(t, []string{"Solid", "PlanarConvexity", "PlanarSnapshot", "PlanarHints", "Origin"}, got)
 	require.NotContains(t, got, "SweepRadii")
 }

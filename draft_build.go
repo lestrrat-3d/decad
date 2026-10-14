@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -195,7 +196,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 	cbp := dp.band()
 	loops := cbp.loops()
 	nearZ, nearDelta, farZ, matSign := dp.levels()
-	body := &Body{doc: doc, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}}
+	body := &Body{doc: doc, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}}
 	pl := cbp.prismLike(0, 0)
 
 	var faces []*Face
@@ -226,7 +227,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			return nil, fmt.Errorf(`%w: the tapered extrude's wall band on loop %d built %d walls over %d patch geometries`, ErrDegenerate, li, len(band.patches), len(band.geom))
 		}
 		for p, f := range band.patches {
-			dp.patches = append(dp.patches, capPatch{role: f.origins[0].Role, geom: band.geom[p]})
+			dp.patches = append(dp.patches, capPatch{role: f.n.Origins[0].Role, geom: band.geom[p]})
 		}
 	}
 
@@ -243,25 +244,25 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		return nil, err
 	}
 	capStart := &Face{
-		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
-		body:    body,
-		loops:   startLoops,
+		body:  body,
+		loops: startLoops,
 		n: topo.Face{
 			AxialDelta:    dp.z0Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: startFrame},
 			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.z0},
+			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapStart}},
 		},
 	}
 	capEnd := &Face{
-		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
-		body:    body,
-		loops:   endLoops,
+		body:  body,
+		loops: endLoops,
 		n: topo.Face{
 			AxialDelta:    dp.z1Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: endFrame},
 			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.z1},
+			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
 		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {

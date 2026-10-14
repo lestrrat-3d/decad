@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -71,7 +73,7 @@ func TestCurvedSourcePairCensusRefusesUnownedRetainedFace(t *testing.T) {
 	original := shell.faces
 	t.Cleanup(func() { shell.faces = original })
 	shell.faces = append(slices.Clone(original), &Face{
-		body: trimmed, origins: []FeatureRef{{Role: "unowned source face"}},
+		body: trimmed, n: topo.Face{Origins: []provenance.Ref{{Role: "unowned source face"}}},
 	})
 	_, certified, err := revolveLoftFacesCensus(t.Context(), proof)
 	require.ErrorIs(t, err, ErrUnsupported)

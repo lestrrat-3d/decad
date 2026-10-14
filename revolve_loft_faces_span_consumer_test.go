@@ -11,6 +11,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 )
 
 func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
@@ -69,7 +70,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 	if manifestErr != nil || !complete || len(manifest) == 0 {
 		t.Fatalf("live nonvertical source was not certified: %v, %t", manifestErr, complete)
 	}
-	var ref FeatureRef
+	var ref provenance.Ref
 	var owner *Face
 	for _, side := range manifest {
 		if len(side.cells) == 0 {
@@ -86,10 +87,10 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		t.Fatal("the real source has no retained noncrossing wall")
 	}
 	t.Run("missing noncrossing owner", func(t *testing.T) {
-		original := owner.origins
-		defer func() { owner.origins = original }()
-		owner.origins = slices.DeleteFunc(slices.Clone(original),
-			func(got FeatureRef) bool { return got == ref })
+		original := owner.n.Origins
+		defer func() { owner.n.Origins = original }()
+		owner.n.Origins = slices.DeleteFunc(slices.Clone(original),
+			func(got provenance.Ref) bool { return got == ref })
 		_, certified, err := revolveLoftFacesNonverticalManifest(t.Context(), proof)
 		if err != nil || certified {
 			t.Fatalf("missing live origin was admitted: %v, %t", err, certified)

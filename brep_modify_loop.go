@@ -233,7 +233,7 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 		}
 		var face *Face
 		for _, candidate := range step.Faces() {
-			for _, origin := range candidate.origins {
+			for _, origin := range candidate.n.Origins {
 				if origin.Role == bp.faces[capSel.face].role {
 					face = candidate
 				}

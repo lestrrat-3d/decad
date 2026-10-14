@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -121,14 +122,14 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 	mesh := &joinedMesh{verts: fp.verts, tris: fp.tris, src: fp.src, groups: fp.groups}
 	var caps [2]*Face
 	for _, face := range b.Faces() {
-		for _, origin := range face.origins {
-			if origin == CapStart(b) {
+		for _, origin := range face.n.Origins {
+			if origin == refOf(CapStart(b)) {
 				if caps[0] != nil {
 					return fmt.Errorf("%w: mirrored start cap is split", ErrUnsupported)
 				}
 				caps[0] = face
 			}
-			if origin == CapEnd(b) {
+			if origin == refOf(CapEnd(b)) {
 				if caps[1] != nil {
 					return fmt.Errorf("%w: mirrored end cap is split", ErrUnsupported)
 				}
@@ -336,7 +337,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
 		areaSlack: areaSlack, dPair: diameter, contactAudited: true, xform: r3.Identity()}
 	for cap, group := range capGroups {
-		result.groups[group].origins = append([]FeatureRef(nil), old.groups[record.capGroups[cap]].origins...)
+		result.groups[group].origins = append([]provenance.Ref(nil), old.groups[record.capGroups[cap]].origins...)
 	}
 	if err := loftCylinderTagCaps(&result, record.join.blank, capGroups,
 		[2]float64{blank.Z0, blank.Z1}, ref); err != nil {

@@ -155,7 +155,7 @@ func TestRevolveAxisBandPartialSweepAreaContainsEnclosedArea(t *testing.T) {
 	// band charge; each's own snapped-loop area is radius*length exactly.
 	var found int
 	for _, f := range body.Faces() {
-		if f.origins[0].Role != roleCapStart && f.origins[0].Role != roleCapEnd {
+		if f.n.Origins[0].Role != roleCapStart && f.n.Origins[0].Role != roleCapEnd {
 			continue
 		}
 		found++

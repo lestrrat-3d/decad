@@ -257,7 +257,7 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 		require.Equal(t, wantFaces[i].n.AreaBound, gotFaces[i].n.AreaBound, "face %d area bound", i)
 		require.Equal(t, len(wantFaces[i].Loops()), len(gotFaces[i].Loops()), "face %d loops", i)
 	}
-	require.Equal(t, want.body.origin, o.body.origin)
+	require.Equal(t, want.body.n.Origin, o.body.n.Origin)
 }
 
 // callOld answers as the pre-PR interleaved loop does.

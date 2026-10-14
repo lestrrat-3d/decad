@@ -46,8 +46,8 @@ func requireRoles(t *testing.T, body *Body, faces []*Face, want ...string) {
 	t.Helper()
 	got := []string{}
 	for _, f := range faces {
-		for _, o := range f.Origins() {
-			if o.producer == body.origin.producer {
+		for _, o := range f.originRefs() {
+			if o.Producer == body.n.Origin.Producer {
 				got = append(got, o.Role)
 			}
 		}

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
@@ -27,7 +28,7 @@ type pointPlaneLimit struct {
 	a, b                    planePoint
 	z0, z1                  float64
 	surface                 surfacegeom.Plane
-	origins                 []FeatureRef
+	origins                 []provenance.Ref
 	normalBound, mapStretch float64
 	centroid                VecMeasurement
 	hasCentroid             bool
@@ -119,7 +120,7 @@ func exactPointPlaneSheet(tool *Body, apex r3.Vec) (*pointPlaneLimit, bool) {
 	}
 	return &pointPlaneLimit{nx: nx, ny: ny, d: d,
 		a: line.Start, b: line.End, z0: cp.z0, z1: cp.z1,
-		surface: surface, origins: face.Origins(), normalBound: face.n.NormalBound,
+		surface: surface, origins: face.originRefs(), normalBound: face.n.NormalBound,
 		frameTowardFar: dot.Sign() > 0}, true
 }
 
@@ -333,15 +334,15 @@ func pointPlaneCapGroup(ref producerID, role string, plane *pointPlaneLimit,
 			proofarith.Xcross(proofarith.XptOf(profilePlane.U),
 				proofarith.XptOf(profilePlane.V)),
 		)
-		origins := append([]FeatureRef(nil), base.groups[len(base.groups)-1].origins...)
-		origins = append(origins, FeatureRef{producer: ref, Role: role})
+		origins := append([]provenance.Ref(nil), base.groups[len(base.groups)-1].origins...)
+		origins = append(origins, provenance.Ref{Producer: ref, Role: role})
 		sourceCap := base.groups[len(base.groups)-1]
 		return facetGroup{origins: origins, surface: surfacegeom.Plane{Frame: frame}, planar: true,
 			reversed: apexSide.Sign() > 0,
 			centroid: sourceCap.centroid, hasCentroid: sourceCap.hasCentroid}
 	}
-	origins := append([]FeatureRef(nil), plane.origins...)
-	origins = append(origins, FeatureRef{producer: ref, Role: role})
+	origins := append([]provenance.Ref(nil), plane.origins...)
+	origins = append(origins, provenance.Ref{Producer: ref, Role: role})
 	return facetGroup{origins: origins, surface: plane.surface, planar: true,
 		normalBound: plane.normalBound, reversed: reverse,
 		centroid: plane.centroid, hasCentroid: plane.hasCentroid}

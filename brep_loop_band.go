@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 )
@@ -541,7 +542,7 @@ func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp bre
 		geom := make([]capPatch, len(band.patches))
 		for p, patch := range band.patches {
 			role := b.patchRole(p)
-			patch.origins = []FeatureRef{{producer: ref, Role: role}}
+			patch.n.Origins = []provenance.Ref{{Producer: ref, Role: role}}
 			if b.sigma > 0 {
 				patch.n.Reversed = !patch.n.Reversed
 			}

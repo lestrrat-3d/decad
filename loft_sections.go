@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/smoothloft"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -161,16 +162,16 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 	ref := d.nextProducerID()
 	groups := make([]facetGroup, built.EdgeCount+2)
 	for i := range built.EdgeCount {
-		groups[i] = facetGroup{origins: []FeatureRef{{producer: ref,
+		groups[i] = facetGroup{origins: []provenance.Ref{{Producer: ref,
 			Role: fmt.Sprintf("side(0,%d)", i)}}, surface: surfacegeom.NURBSSurface{}}
 		if i < len(built.ArcRadii) && built.ArcRadii[i] > 0 {
 			groups[i].surface = surfacegeom.Cylinder{Origin: start.Origin, Axis: r3.Vec{Z: 1},
 				Radius: units.Millimeters(built.ArcRadii[i])}
 		}
 	}
-	groups[built.EdgeCount] = facetGroup{origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
+	groups[built.EdgeCount] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: roleCapStart}},
 		surface: surfacegeom.Plane{Frame: frameStart}, planar: true, reversed: true}
-	groups[built.EdgeCount+1] = facetGroup{origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
+	groups[built.EdgeCount+1] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
 		surface: surfacegeom.Plane{Frame: frameEnd}, planar: true}
 	vertexBound := make([]float64, len(built.Vertices))
 	for i := range vertexBound {

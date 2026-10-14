@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
@@ -405,7 +406,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	default:
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: solid}, kind: kind}
+	body := &Body{doc: d, n: topo.Body{Solid: solid, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: kind}
 	for _, f := range newFaces {
 		f.body = body
 	}
@@ -598,7 +599,6 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 		nf := &Face{
-			origins: append([]FeatureRef(nil), f.origins...),
 			n: topo.Face{
 				Area:          f.n.Area,
 				AreaBound:     f.n.AreaBound,
@@ -610,6 +610,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				Denoted:       f.denotedUnder(xform),
 				Surface:       transformed,
 				CapRecord:     f.n.CapRecord.Under(xform),
+				Origins:       append([]provenance.Ref(nil), f.n.Origins...),
 			},
 		}
 		for _, l := range f.loops {

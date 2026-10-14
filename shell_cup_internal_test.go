@@ -253,7 +253,7 @@ func TestEvalCupChargesOffsetDisplacement(t *testing.T) {
 			}
 			var offsetWalls []offsetWall
 			for _, f := range body.Faces() {
-				if !strings.HasPrefix(f.origins[0].Role, wallPrefix) {
+				if !strings.HasPrefix(f.n.Origins[0].Role, wallPrefix) {
 					continue
 				}
 				a, err := f.Area()

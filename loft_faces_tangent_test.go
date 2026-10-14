@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -69,15 +70,15 @@ func newTangentLoftFixtureTurned(t *testing.T, sin, cos float64) tangentLoftFixt
 	second, err := Split(t.Context(), first[0], sheet(4.5))
 	require.NoError(t, err)
 	f := tangentLoftFixture{doc: doc, world: world, s: s, near: second[1], far: first[1]}
-	pick := func(body *Body, role FeatureRef) *Face {
-		fs, e := Faces(FaceCreatedBy(role)).SelectFaces(body)
+	pick := func(body *Body, role provenance.Ref) *Face {
+		fs, e := Faces(FaceCreatedBy(featureRefOf(role))).SelectFaces(body)
 		require.NoError(t, e)
 		require.Len(t, fs, 1)
 		return fs[0]
 	}
-	f.toe = pick(f.near, CapStart(f.near))
-	f.heel = pick(f.near, CapEnd(f.near))
-	f.farCapFace = pick(f.far, CapEnd(f.far))
+	f.toe = pick(f.near, refOf(CapStart(f.near)))
+	f.heel = pick(f.near, refOf(CapEnd(f.near)))
+	f.farCapFace = pick(f.far, refOf(CapEnd(f.far)))
 	return f
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 
@@ -403,7 +404,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	if pl.surfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: !pl.surfaceResult}, kind: kind}
+	body := &Body{doc: d, n: topo.Body{Solid: !pl.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: kind}
 
 	capStart, capEnd, walls, err := buildLoftTopology(ctx, body, ref, a, cap0Rat, cap1Rat)
 	if err != nil {
@@ -423,7 +424,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		}
 		seg := pairs[li].Segment[cell]
 		if _, blend := pl.blendSegs[li][seg]; blend {
-			wall.origins = append(wall.origins, FeatureRef{producer: ref, Role: fmt.Sprintf("fillet(%d,%d)", li, seg)})
+			wall.n.Origins = append(wall.n.Origins, provenance.Ref{Producer: ref, Role: fmt.Sprintf("fillet(%d,%d)", li, seg)})
 		}
 	}
 	if err := ctx.Err(); err != nil {

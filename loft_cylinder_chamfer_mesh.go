@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -433,8 +434,8 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		if cap == 1 {
 			role = roleCapEnd
 		}
-		mesh.groups[capGroup].origins = append(append([]FeatureRef(nil), mesh.groups[capGroup].origins...),
-			FeatureRef{producer: ref, Role: role})
+		mesh.groups[capGroup].origins = append(append([]provenance.Ref(nil), mesh.groups[capGroup].origins...),
+			provenance.Ref{Producer: ref, Role: role})
 		capTris, err := loftcylinder.ChamferCapTriangles(ctx, mesh.verts, inset[cap], source.inner[cap], cap == 0)
 		if err != nil {
 			return nil, fmt.Errorf("loft/cylinder cap %d: %w", cap, err)
@@ -443,7 +444,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			mesh.add(t, capGroup)
 		}
 		bandGroup := len(mesh.groups)
-		mesh.groups = append(mesh.groups, facetGroup{origins: []FeatureRef{{producer: ref,
+		mesh.groups = append(mesh.groups, facetGroup{origins: []provenance.Ref{{Producer: ref,
 			Role: fmt.Sprintf("chamferCap(%d,0,0)", cap)}}})
 		bandFirst := len(mesh.tris)
 		bandTris, err := loftcylinder.ChamferBandTriangles(clipped.rings[cap], inset[cap],

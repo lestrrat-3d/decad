@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -132,23 +133,23 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 	endArea, endBound := faceArea(sweepmitre.SlotCapEnd)
 	faces = append(faces,
 		&Face{loops: capStartLoops,
-			origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
-			body:    body, n: topo.Face{
+			body: body, n: topo.Face{
 				Area:          startArea,
 				AreaBound:     startBound,
 				AxialDelta:    delta,
 				HasAxialDelta: true,
 				Surface:       capStartSurf,
+				Origins:       []provenance.Ref{{Producer: ref, Role: roleCapStart}},
 			},
 		},
 		&Face{loops: capEndLoops,
-			origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
-			body:    body, n: topo.Face{
+			body: body, n: topo.Face{
 				Area:          endArea,
 				AreaBound:     endBound,
 				AxialDelta:    delta,
 				HasAxialDelta: true,
 				Surface:       capEndSurf,
+				Origins:       []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
 			},
 		},
 	)
@@ -167,12 +168,12 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 				slot := sweepmitre.SlotWall0 + w
 				area, bound := faceArea(slot)
 				face := &Face{
-					origins: []FeatureRef{{producer: ref, Role: a.Roles[slot]}},
-					body:    body,
+					body: body,
 					n: topo.Face{
 						Area:      area,
 						AreaBound: bound,
 						Surface:   surf,
+						Origins:   []provenance.Ref{{Producer: ref, Role: a.Roles[slot]}},
 					},
 				}
 				face.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{

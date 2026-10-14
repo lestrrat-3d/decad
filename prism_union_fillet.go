@@ -178,18 +178,18 @@ func prismUnionFilletSourceFaces(result, source *Edge) bool {
 		return false
 	}
 	for _, face := range source.faces {
-		if !face.isPlanar() || len(face.origins) != 1 || face.origins[0].Role == roleCapStart ||
-			face.origins[0].Role == roleCapEnd {
+		if !face.isPlanar() || len(face.n.Origins) != 1 || face.n.Origins[0].Role == roleCapStart ||
+			face.n.Origins[0].Role == roleCapEnd {
 			return false
 		}
 	}
 	for _, face := range result.faces {
-		if len(face.origins) != 1 || !face.isPlanar() {
+		if len(face.n.Origins) != 1 || !face.isPlanar() {
 			return false
 		}
 	}
-	a, b := source.faces[0].origins[0], source.faces[1].origins[0]
-	x, y := result.faces[0].origins[0], result.faces[1].origins[0]
+	a, b := source.faces[0].n.Origins[0], source.faces[1].n.Origins[0]
+	x, y := result.faces[0].n.Origins[0], result.faces[1].n.Origins[0]
 	return a != b && ((a == x && b == y) || (a == y && b == x))
 }
 

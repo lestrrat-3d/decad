@@ -60,14 +60,14 @@ func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
 			require.NoError(t, err)
 			b, err = Transform(t.Context(), b, tr)
 			require.NoError(t, err)
-			beforeProducer := doc.nextProducer
+			beforeProducer := doc.n.NextProducer
 			beforeBodies := doc.Bodies()
 			ctx := &internalBooleanBuildCancelContext{Context: t.Context(), target: target}
 
 			_, err = Union(ctx, a, b)
 			require.ErrorIs(t, err, context.Canceled)
 			require.True(t, ctx.entered)
-			require.Equal(t, beforeProducer, doc.nextProducer)
+			require.Equal(t, beforeProducer, doc.n.NextProducer)
 			require.Equal(t, beforeBodies, doc.Bodies())
 		})
 	}

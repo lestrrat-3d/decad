@@ -5,6 +5,7 @@ import (
 	"math"
 	"sync/atomic"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -464,9 +465,8 @@ func (l *Loop) Edges() []*Edge {
 
 // Face is a topological face: a tagged surface bounded by loops.
 type Face struct {
-	loops   []*Loop
-	origins []FeatureRef
-	body    *Body
+	loops []*Loop
+	body  *Body
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Face
 	// centroid is present only for a face with its own proved area-centroid
@@ -650,7 +650,7 @@ func (f *Face) isPlanar() bool {
 // Origins returns every feature role that created this face —
 // canonicalization may merge coplanar faces, and a merged face carries ALL
 // contributing roles (core §6.1).
-func (f *Face) Origins() []FeatureRef { return append([]FeatureRef(nil), f.origins...) }
+func (f *Face) Origins() []FeatureRef { return featureRefsOf(f.n.Origins) }
 
 // FaceShell is a connected set of faces.
 type FaceShell struct {
@@ -688,9 +688,8 @@ func (l *Lump) Shells() []*FaceShell { return append([]*FaceShell(nil), l.shells
 // Body is an immutable solid: every operation returns a new one, and the
 // input body is retired from its document (core §6).
 type Body struct {
-	doc    *Document
-	origin FeatureRef
-	lumps  []*Lump
+	doc   *Document
+	lumps []*Lump
 
 	// The evaluator computes measurements at build time; a Body never
 	// recomputes (immutability is what makes it goroutine-safe to read).
@@ -721,7 +720,7 @@ type Body struct {
 func (b *Body) Document() *Document { return b.doc }
 
 // Origin returns the feature that created this body.
-func (b *Body) Origin() FeatureRef { return b.origin }
+func (b *Body) Origin() FeatureRef { return featureRefOf(b.n.Origin) }
 
 // Lumps returns the body's disjoint pieces; more than one means the body is
 // disconnected.
@@ -813,4 +812,27 @@ func (b *Body) Centroid() (VecMeasurement, error) {
 		return VecMeasurement{}, ErrNotSolid
 	}
 	return b.centroid, nil
+}
+
+// originRefs returns a copy of the face's origin roles in their internal form,
+// nil when it has none, exactly as Origins copies the public form.
+func (f *Face) originRefs() []provenance.Ref { return append([]provenance.Ref(nil), f.n.Origins...) }
+
+// featureRefOf is the public form of an internal provenance reference.
+func featureRefOf(r provenance.Ref) FeatureRef { return FeatureRef{producer: r.Producer, Role: r.Role} }
+
+// refOf is the internal form of a public FeatureRef.
+func refOf(f FeatureRef) provenance.Ref { return provenance.Ref{Producer: f.producer, Role: f.Role} }
+
+// featureRefsOf copies rs into their public form. It returns nil for an empty
+// input, as append([]FeatureRef(nil), ...) does.
+func featureRefsOf(rs []provenance.Ref) []FeatureRef {
+	if len(rs) == 0 {
+		return nil
+	}
+	out := make([]FeatureRef, len(rs))
+	for i, r := range rs {
+		out[i] = featureRefOf(r)
+	}
+	return out
 }

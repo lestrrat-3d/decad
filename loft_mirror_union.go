@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -160,9 +161,9 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 		if !exists {
 			group = len(groups)
 			groupOf[face] = group
-			g := facetGroup{origins: face.Origins()}
+			g := facetGroup{origins: face.originRefs()}
 			if capRole != "" {
-				g.origins = append(g.origins, FeatureRef{producer: ref, Role: capRole})
+				g.origins = append(g.origins, provenance.Ref{Producer: ref, Role: capRole})
 				g.surface = face.n.Surface
 				g.planar = true
 				g.normalBound = face.n.NormalBound

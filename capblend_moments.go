@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -34,7 +35,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	}
 	work := freeform.NewFreeformWork()
 	loops := cbp.loops()
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}}
+	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}}
 
 	var faces []*Face
 	startLoopObjs := make([]*Loop, len(loops))
@@ -57,10 +58,10 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	bandDeltas := map[capBandKey]float64{}
 	collectPatchGeoms := func(band capBandResult) {
 		for i, f := range band.patches {
-			if len(f.origins) == 0 {
+			if len(f.n.Origins) == 0 {
 				continue
 			}
-			patchGeoms = append(patchGeoms, capPatch{role: f.origins[0].Role, geom: band.geom[i]})
+			patchGeoms = append(patchGeoms, capPatch{role: f.n.Origins[0].Role, geom: band.geom[i]})
 		}
 	}
 
@@ -263,9 +264,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		return nil, err
 	}
 	capStart := &Face{
-		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
-		body:    body,
-		loops:   startLoopObjs,
+		body:  body,
+		loops: startLoopObjs,
 		n: topo.Face{
 			Area:          startArea.Value,
 			AreaBound:     startArea.Bound,
@@ -273,12 +273,12 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: startFrame},
 			CapRecord:     &topo.CapRecord{Frame: cbp.frame, Xform: cbp.xform, Z: cbp.z0},
+			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapStart}},
 		},
 	}
 	capEnd := &Face{
-		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
-		body:    body,
-		loops:   endLoopObjs,
+		body:  body,
+		loops: endLoopObjs,
 		n: topo.Face{
 			Area:          endArea.Value,
 			AreaBound:     endArea.Bound,
@@ -286,6 +286,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: endFrame},
 			CapRecord:     &topo.CapRecord{Frame: cbp.frame, Xform: cbp.xform, Z: cbp.z1},
+			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
 		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {

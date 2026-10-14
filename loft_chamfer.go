@@ -51,11 +51,11 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 	}
 	var caps [2]*Face
 	for _, face := range b.Faces() {
-		for _, origin := range face.origins {
-			if origin == CapStart(b) {
+		for _, origin := range face.n.Origins {
+			if origin == refOf(CapStart(b)) {
 				caps[0] = face
 			}
-			if origin == CapEnd(b) {
+			if origin == refOf(CapEnd(b)) {
 				caps[1] = face
 			}
 		}

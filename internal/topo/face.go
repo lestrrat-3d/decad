@@ -1,6 +1,7 @@
 package topo
 
 import (
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/r3"
@@ -95,4 +96,9 @@ type Face struct {
 	// CapRecord is the plane this planar face denotes, nil where the producer
 	// states none. A ToFace stop reads it; a face without it is not a stop.
 	CapRecord *CapRecord
+
+	// Origins is every feature role that created the face, in the order they
+	// were merged. A merged face carries all contributing roles. Root
+	// Face.Origins converts it to the public FeatureRef form.
+	Origins []provenance.Ref
 }

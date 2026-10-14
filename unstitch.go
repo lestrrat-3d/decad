@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
@@ -152,7 +153,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 		return nil, err
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
 	nf.body = body
 	if err := attachFaceLoopsContext(ctx, []*Face{nf}); err != nil {
 		return nil, err
@@ -308,7 +309,6 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 	}
 	nf := &Face{
-		origins: append([]FeatureRef(nil), srcFace.origins...),
 		n: topo.Face{
 			Area:          srcFace.n.Area,
 			AreaBound:     srcFace.n.AreaBound,
@@ -320,6 +320,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			Denoted:       srcFace.denotedUnder(xform),
 			Surface:       transformed,
 			CapRecord:     srcFace.n.CapRecord.Under(xform),
+			Origins:       append([]provenance.Ref(nil), srcFace.n.Origins...),
 		},
 	}
 	for _, l := range srcFace.loops {

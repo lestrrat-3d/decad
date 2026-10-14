@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -166,9 +167,9 @@ func addDraftCircleShellRoles(ctx context.Context, body *Body, ref producerID) e
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		for _, source := range face.origins {
+		for _, source := range face.n.Origins {
 			role, ok := roles[source.Role]
-			if !ok || source.producer != ref {
+			if !ok || source.Producer != ref {
 				continue
 			}
 			if face.n.Surface.Kind() != role.kind {
@@ -178,7 +179,7 @@ func addDraftCircleShellRoles(ctx context.Context, body *Body, ref producerID) e
 			if _, exists := seen[role.name]; exists {
 				return fmt.Errorf(`%w: the tapered circular shell repeats %s`, ErrUnsupported, role.name)
 			}
-			face.origins = append(face.origins, FeatureRef{producer: ref, Role: role.name})
+			face.n.Origins = append(face.n.Origins, provenance.Ref{Producer: ref, Role: role.name})
 			seen[role.name] = struct{}{}
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -222,8 +223,8 @@ func (stackedOwnPlan) wallRoleLoop(col stackedColumn) int { return col.LoopIndex
 
 func (stackedOwnPlan) nameWalls(_ context.Context, col stackedColumn, faces []*Face, _ producerID) error {
 	for _, face := range faces {
-		for i := range face.origins {
-			face.origins[i].Role = fmt.Sprintf("slab(%d).region(%d).%s", col.Start, col.Region, face.origins[i].Role)
+		for i := range face.n.Origins {
+			face.n.Origins[i].Role = fmt.Sprintf("slab(%d).region(%d).%s", col.Start, col.Region, face.n.Origins[i].Role)
 		}
 	}
 	return nil
@@ -376,7 +377,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}, kind: BodySolid}
+	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySolid}
 	work := freeform.NewFreeformWork()
 	base := sp.outerPrism()
 	colDelta := make([]float64, len(columns))
@@ -430,7 +431,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		if err != nil {
 			return nil, err
 		}
-		return &Face{origins: []FeatureRef{{producer: ref, Role: role}},
+		return &Face{
 			body: body, n: topo.Face{
 				Area:          area.Value,
 				AreaBound:     area.Bound,
@@ -438,6 +439,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 				HasAxialDelta: true,
 				Surface:       surfacegeom.Plane{Frame: frame},
 				CapRecord:     &topo.CapRecord{Frame: base.Frame, Xform: base.Xform, Z: z},
+				Origins:       []provenance.Ref{{Producer: ref, Role: role}},
 			}}, nil
 	}
 	// One bottom cap per region of the first slab and one top cap per region

@@ -97,7 +97,7 @@ func TestRevolveShellOpeningSectionDelta(t *testing.T) {
 					}
 				}
 				require.NotNil(t, hit)
-				refs = append(refs, FaceCreatedBy(hit.Origins()[0]))
+				refs = append(refs, FaceCreatedBy(featureRefOf(hit.originRefs()[0])))
 			}
 			sel := Faces(refs[0])
 			for _, r := range refs[1:] {

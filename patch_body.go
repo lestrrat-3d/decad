@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -520,7 +521,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	// solid: closing a sheet's last free edge leaves a CLOSED sheet reporting
 	// BodySheet with IsSolid() false, since Stitch alone makes the material
 	// claim (docs/surface-design.md §2.1).
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
 	for _, f := range allFaces {
 		f.body = body
 	}
@@ -680,7 +681,6 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 		nf := &Face{
-			origins: append([]FeatureRef(nil), f.origins...),
 			n: topo.Face{
 				Area:          f.n.Area,
 				AreaBound:     place.AreaOf(proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound)).Bound,
@@ -692,6 +692,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 				Denoted:       f.denotedUnder(xform),
 				Surface:       transformed,
 				CapRecord:     f.n.CapRecord.Under(xform),
+				Origins:       append([]provenance.Ref(nil), f.n.Origins...),
 			},
 		}
 		for _, l := range f.loops {
@@ -831,8 +832,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	}
 
 	return &Face{
-		origins: []FeatureRef{{producer: ref, Role: rolePatch}},
-		loops:   []*Loop{{coedges: coedges, n: topo.Loop{Outer: true}}},
+		loops: []*Loop{{coedges: coedges, n: topo.Loop{Outer: true}}},
 		n: topo.Face{
 			Area:      ig.Area,
 			AreaBound: ig.AreaBound,
@@ -843,6 +843,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 			AxialDelta:    axialDelta,
 			HasAxialDelta: chain.hasAxialBound,
 			Surface:       surfacegeom.Plane{Frame: frame},
+			Origins:       []provenance.Ref{{Producer: ref, Role: rolePatch}},
 		},
 	}, nil
 }

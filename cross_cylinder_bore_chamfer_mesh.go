@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -151,9 +152,9 @@ func crossBoreFeet(rec *crossCylinderBoreRecord, setback, theta float64) (r3.Vec
 
 func crossBoreFaceGroup(body *Body, role string) (facetGroup, bool) {
 	for _, face := range body.Faces() {
-		for _, origin := range face.Origins() {
-			if origin.producer == body.origin.producer && origin.Role == role {
-				return facetGroup{origins: face.Origins(), planar: face.isPlanar()}, true
+		for _, origin := range face.originRefs() {
+			if origin.Producer == body.n.Origin.Producer && origin.Role == role {
+				return facetGroup{origins: face.originRefs(), planar: face.isPlanar()}, true
 			}
 		}
 	}
@@ -177,7 +178,7 @@ func crossBoreMeshGroups(rec *crossCylinderBoreRecord) ([]facetGroup, error) {
 		}
 		groups = append(groups, group)
 	}
-	groups = append(groups, facetGroup{origins: []FeatureRef{{Role: "boreMouthChamfer"}}})
+	groups = append(groups, facetGroup{origins: []provenance.Ref{{Role: "boreMouthChamfer"}}})
 	return groups, nil
 }
 

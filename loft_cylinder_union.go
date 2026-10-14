@@ -478,7 +478,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf("%w: a circular blank has changed face roles", ErrUnsupported)
 		}
 		blankGroups[group] = len(mesh.groups)
-		mesh.groups = append(mesh.groups, facetGroup{origins: f.Origins(), planar: group != 0})
+		mesh.groups = append(mesh.groups, facetGroup{origins: f.originRefs(), planar: group != 0})
 	}
 	for _, group := range blankGroups {
 		if group < 0 {
@@ -518,7 +518,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 					mapped[corner] = part.vertex[capIndex][station]
 				}
 				group := len(mesh.groups)
-				mesh.groups = append(mesh.groups, facetGroup{origins: f.Origins(), planar: true})
+				mesh.groups = append(mesh.groups, facetGroup{origins: f.originRefs(), planar: true})
 				mesh.add(mapped, group)
 			}
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -37,7 +38,7 @@ import (
 // facetGroup is one source face's provenance, carried into the payload so a
 // rebuild (Transform) reproduces the same origins.
 type facetGroup struct {
-	origins []FeatureRef
+	origins []provenance.Ref
 	// centroid is available only when this entire source group has a separate
 	// certificate. A disconnected group cannot give that reading to a patch.
 	centroid    VecMeasurement
@@ -283,8 +284,8 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 			if cap == 1 {
 				role = roleCapEnd
 			}
-			origins := append([]FeatureRef(nil), next.groups[group].origins...)
-			next.groups[group].origins = append(origins, FeatureRef{producer: ref, Role: role})
+			origins := append([]provenance.Ref(nil), next.groups[group].origins...)
+			next.groups[group].origins = append(origins, provenance.Ref{Producer: ref, Role: role})
 		}
 	}
 	for i := range next.groups {
@@ -447,7 +448,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	comp, adj := audit.Comp, audit.Adj
 	members, compVol, contains := audit.Members, audit.CompVol, audit.Contains
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}}
+	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}}
 	if len(pp.vertexBound) != len(verts) {
 		return nil, fmt.Errorf(`%w: a faceted payload carries %d vertex bounds for %d vertices`, ErrBooleanFailed, len(pp.vertexBound), len(verts))
 	}
@@ -513,13 +514,13 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			// both strips of a split cap came from the cap, and both must
 			// still say so, or FaceCreatedBy and the surveys lose them.
 			f = &Face{
-				origins: append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
-				body:    body,
+				body: body,
 				n: topo.Face{
 					HeldPlanar:  pp.groups[pp.src[i]].planar,
 					Denoted:     pp.groups[pp.src[i]].denoted,
 					NormalBound: pp.groups[pp.src[i]].normalBound,
 					Reversed:    pp.groups[pp.src[i]].reversed,
+					Origins:     append([]provenance.Ref(nil), pp.groups[pp.src[i]].origins...),
 				},
 			}
 			group := pp.groups[pp.src[i]]

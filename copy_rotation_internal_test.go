@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -135,9 +136,9 @@ func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
 	q, d, err := exactrotation.New(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(90))
 	require.NoError(t, err)
 	_ = d
-	origin := FeatureRef{producer: 1, Role: roleCapStart}
+	origin := provenance.Ref{Producer: 1, Role: roleCapStart}
 	g := facetGroup{
-		origins: []FeatureRef{origin}, hasCentroid: true, planar: true, reversed: true,
+		origins: []provenance.Ref{origin}, hasCentroid: true, planar: true, reversed: true,
 		centroid:    VecMeasurement{Value: r3.NewVec(2, 0, 5), Exactness: Exact},
 		surface:     surfacegeom.Plane{},
 		normalBound: 3,
@@ -148,7 +149,7 @@ func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
 	require.Zero(t, g.normalBound)
 	require.True(t, g.planar)
 	require.True(t, g.reversed)
-	require.Equal(t, []FeatureRef{origin}, g.origins)
+	require.Equal(t, []provenance.Ref{origin}, g.origins)
 	require.InDelta(t, 0, g.centroid.Value.X, 1e-12)
 	require.InDelta(t, 2, g.centroid.Value.Y, 1e-12)
 	require.InDelta(t, 5, g.centroid.Value.Z, 1e-12)

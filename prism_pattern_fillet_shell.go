@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -128,7 +129,7 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		}
 		arcBound = max(arcBound, bound)
 		group := len(mesh.groups)
-		mesh.groups = append(mesh.groups, facetGroup{origins: []FeatureRef{{producer: ref,
+		mesh.groups = append(mesh.groups, facetGroup{origins: []provenance.Ref{{Producer: ref,
 			Role: fmt.Sprintf("fillet(%d,%d)", contact.part, station)}}})
 		for capIndex := range 2 {
 			old := part.vertex[capIndex][station]

@@ -670,7 +670,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		}
 		faceID[f] = len(groups)
 		groups = append(groups, facetGroup{
-			origins: f.Origins(),
+			origins: f.originRefs(),
 			planar:  f.isPlanar(),
 		})
 	}
