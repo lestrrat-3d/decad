@@ -341,5 +341,11 @@ func gateWorstCount(ctx context.Context, firstGrid, secondGrid [][]gateNode,
 		}
 		worstLo = x
 	}
+	// The early stop and the end of the candidates both land here. A call
+	// cancelled after the last poll above must not return success, as the
+	// unfiltered scan would have seen the cancellation at its next row.
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
 	return worst, exactCount, nil
 }

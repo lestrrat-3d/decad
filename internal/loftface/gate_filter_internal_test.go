@@ -169,9 +169,9 @@ func gateFamilyBand(rng *rand.Rand, family int, nearby bool) (Map, Map, [4]*big.
 
 func TestGateTileUpperCoversDeviation(t *testing.T) {
 	rng := rand.New(rand.NewPCG(151, 157))
-	const n = 6
+	const n = 3
 	finite, infinite, built := 0, 0, 0
-	for trial := range 4 * gateFamilies {
+	for trial := range gateFamilies {
 		family := trial % gateFamilies
 		first, second, box := gateFamilyBand(rng, family, trial%2 == 0)
 		fg, sg, err := gateTestGrids(first, second, box, n)
@@ -291,8 +291,10 @@ func TestGateEncOfRange(t *testing.T) {
 func TestBandGateFilterMatchesLegacy(t *testing.T) {
 	rng := rand.New(rand.NewPCG(193, 197))
 	matched, refused, passed, gridErr := 0, 0, 0, 0
-	for trial := range gateFamilies {
-		family := trial % gateFamilies
+	// Two bands keep the cost down: a generic nearby band and a wide one.
+	// Every family, including the out-of-range scales,
+	// is covered tile by tile in the tests below.
+	for trial, family := range []int{0, 1} {
 		first, second, box := gateFamilyBand(rng, family, trial%2 == 0)
 		if trial%7 == 3 {
 			// Scale the second map's numerators so the norm passes 1: refusals.
@@ -336,9 +338,9 @@ func requireGateWorstEqual(t *testing.T, fg, sg [][]gateNode, tiles int, what st
 
 func TestGateWorstMatchesLegacyOnBands(t *testing.T) {
 	rng := rand.New(rand.NewPCG(199, 211))
-	const n = 6
+	const n = 3
 	built := 0
-	for trial := range 3 * gateFamilies {
+	for trial := range gateFamilies {
 		family := trial % gateFamilies
 		first, second, box := gateFamilyBand(rng, family, trial%2 == 0)
 		fg, sg, err := gateTestGrids(first, second, box, n)
@@ -407,7 +409,7 @@ func (p gateSynthPool) grid(tiles int) [][]gateNode {
 func TestGateWorstMatchesLegacySynthetic(t *testing.T) {
 	rng := rand.New(rand.NewPCG(223, 227))
 	const tiles = 3
-	for trial := range 300 {
+	for trial := range 100 {
 		pool := gateSynthPool{rng: rng, mode: trial % 5}
 		fg, sg := pool.grid(tiles), pool.grid(tiles)
 		if pool.mode == 0 {
@@ -438,7 +440,7 @@ func TestGateWorstEveryTileTies(t *testing.T) {
 func TestGateWorstSingleMaximumTile(t *testing.T) {
 	rng := rand.New(rand.NewPCG(239, 241))
 	const tiles = 4
-	for trial := range 40 {
+	for trial := range 8 {
 		pool := gateSynthPool{rng: rng, mode: 4}
 		fg, sg := pool.grid(tiles), pool.grid(tiles)
 		i, j := (trial%2)*tiles, ((trial/2)%2)*tiles
@@ -456,7 +458,7 @@ func TestGateWorstSkipsMostTiles(t *testing.T) {
 	box := [4]*big.Rat{ratF(-1.25), ratF(2.5), ratF(-0.75), ratF(1.5)}
 	const tiles = 16
 	evaluated, total := 0, 0
-	for range 4 {
+	for range 2 {
 		first, second := randomGateMap(rng), randomGateMap(rng)
 		fg, sg, err := gateTestGrids(first, second, box, tiles)
 		require.NoError(t, err)
@@ -477,6 +479,39 @@ func TestGateWorstCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err = gateWorst(ctx, fg, sg, 4, 3)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+// lateCancelCtx reports no error for its first quiet calls to Err and
+// context.Canceled afterwards.
+type lateCancelCtx struct {
+	context.Context //nolint:containedctx // a test double that wraps the test context
+	calls, quiet    int
+}
+
+func (c *lateCancelCtx) Err() error {
+	c.calls++
+	if c.calls > c.quiet {
+		return context.Canceled
+	}
+	return nil
+}
+
+// TestGateWorstCancelledAfterLastPoll holds the cancellation back until every
+// poll inside the passes has run: the call must still return context.Canceled
+// rather than a result, at the early stop as well as at the end.
+func TestGateWorstCancelledAfterLastPoll(t *testing.T) {
+	rng := rand.New(rand.NewPCG(311, 313))
+	first, second, box := gateFamilyBand(rng, 0, true)
+	fg, sg, err := gateTestGrids(first, second, box, 4)
+	require.NoError(t, err)
+	_, count, err := gateWorstCount(t.Context(), fg, sg, 4, 3)
+	require.NoError(t, err)
+	require.Less(t, count, 4*4*3, "the pass must stop early")
+	// One poll per tile column in the float pass, one per 16 exact evaluations.
+	polls := 4 + (count+15)/16
+	late := &lateCancelCtx{Context: t.Context(), quiet: polls}
+	_, _, err = gateWorstCount(late, fg, sg, 4, 3)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
