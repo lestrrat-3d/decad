@@ -139,8 +139,8 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	}
 
 	maxInputAbs := 0.0
-	for _, l := range srcFace.loops {
-		for _, ce := range l.n.CoEdges {
+	for _, l := range srcFace.n.Loops {
+		for _, ce := range l.CoEdges {
 			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.Edge.Start.Position), proofbound.VecMaxAbs(ce.Edge.End.Position))
 		}
 	}
@@ -324,19 +324,19 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			Origins:       append([]provenance.Ref(nil), srcFace.n.Origins...),
 		},
 	})
-	for _, l := range srcFace.loops {
+	for _, l := range srcFace.n.Loops {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		coedges := make([]topo.CoEdge, len(l.n.CoEdges))
-		for i, ce := range l.n.CoEdges {
+		coedges := make([]topo.CoEdge, len(l.CoEdges))
+		for i, ce := range l.CoEdges {
 			ne, err := edgeFor(edgeHandle(ce.Edge))
 			if err != nil {
 				return nil, err
 			}
 			coedges[i] = topo.CoEdge{Edge: edgeNode(ne), Forward: ce.Forward}
 		}
-		nf.loops = append(nf.loops, &Loop{n: topo.Loop{Outer: l.n.Outer, CoEdges: coedges}})
+		nf.n.Loops = append(nf.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: l.Outer, CoEdges: coedges}})))
 	}
 	return nf, nil
 }
@@ -375,8 +375,8 @@ func faceBounds(srcFace, nf *Face, srcBounds Box, xform r3.Transform, delta floa
 // loop, is a Line3 — the one Curve variant a straight-line polygon's own
 // bounding box needs (see faceBounds).
 func faceIsStraightEdged(f *Face) bool {
-	for _, l := range f.loops {
-		for _, ce := range l.n.CoEdges {
+	for _, l := range f.n.Loops {
+		for _, ce := range l.CoEdges {
 			if _, ok := ce.Edge.Curve.(surfacegeom.Line3); !ok {
 				return false
 			}
@@ -412,8 +412,8 @@ func facePolygonBounds(nf *Face) (Box, error) {
 		maxBound = max(maxBound, v.n.Bound.Base())
 		return nil
 	}
-	for _, l := range nf.loops {
-		for _, ce := range l.n.CoEdges {
+	for _, l := range nf.n.Loops {
+		for _, ce := range l.CoEdges {
 			if err := fold(vertexHandle(ce.Edge.Start)); err != nil {
 				return Box{}, err
 			}

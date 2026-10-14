@@ -92,7 +92,7 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 	}
 	faces := b.Faces()
 	if len(faces) != 1 || faces[0].n.NormalBound != 0 || faces[0].n.Reversed ||
-		len(faces[0].loops) != 0 || len(b.Edges()) != 0 {
+		len(faces[0].n.Loops) != 0 || len(b.Edges()) != 0 {
 		return sourceSphereContactProof{}, false
 	}
 	if _, ok := faces[0].n.Surface.(surfacegeom.Sphere); !ok {

@@ -867,14 +867,14 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 				Surface:   surf,
 				Origins:   origins,
 				Body:      bodyNode(body),
+				Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+					{Edge: edgeNode(bottomEdge), Forward: true},
+					{Edge: edgeNode(vertical[i+1]), Forward: true},
+					{Edge: edgeNode(topEdge), Forward: false},
+					{Edge: edgeNode(vertical[i]), Forward: false},
+				},
+				}}))},
 			},
-			loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-				{Edge: edgeNode(bottomEdge), Forward: true},
-				{Edge: edgeNode(vertical[i+1]), Forward: true},
-				{Edge: edgeNode(topEdge), Forward: false},
-				{Edge: edgeNode(vertical[i]), Forward: false},
-			},
-			}}},
 		})
 		for _, e := range []*Edge{bottomEdge, topEdge, vertical[i], vertical[i+1]} {
 			e.n.Faces = append(e.n.Faces, faceNode(face))

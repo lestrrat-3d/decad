@@ -189,3 +189,64 @@ func coedgeEnd(n topo.CoEdge) *topo.Vertex {
 	}
 	return n.Edge.Start
 }
+
+// bornLoop sets l's node Owner to l and returns l. Every root Loop is born
+// through it, so loopHandle maps any loop node a face links back to the one
+// handle that holds it.
+func bornLoop(l *Loop) *Loop {
+	l.n.Owner = l
+	return l
+}
+
+// loopHandle returns the handle that holds n, or nil for a nil n. A node whose
+// handle was not born through bornLoop is an evaluator invariant failure, and
+// the assertion panics.
+func loopHandle(n *topo.Loop) *Loop {
+	if n == nil {
+		return nil
+	}
+	return n.Owner.(*Loop) //nolint:forcetypeassert // every loop node is born in its handle; a bare one must fail loudly
+}
+
+// loopNode returns l's node, or nil for a nil l.
+func loopNode(l *Loop) *topo.Loop {
+	if l == nil {
+		return nil
+	}
+	return &l.n
+}
+
+// loopHandles returns the handles of ns in order, or nil for an empty ns,
+// as append([]*Loop(nil), ...) of the same loops would.
+func loopHandles(ns []*topo.Loop) []*Loop {
+	if len(ns) == 0 {
+		return nil
+	}
+	out := make([]*Loop, len(ns))
+	for i, n := range ns {
+		out[i] = loopHandle(n)
+	}
+	return out
+}
+
+// loopNodes returns the nodes of ls in order, or nil for an empty ls.
+func loopNodes(ls []*Loop) []*topo.Loop {
+	if len(ls) == 0 {
+		return nil
+	}
+	out := make([]*topo.Loop, len(ls))
+	for i, l := range ls {
+		out[i] = loopNode(l)
+	}
+	return out
+}
+
+// loopEdges returns the handles of the edges n's uses traverse, in walk order:
+// Loop.Edges's answer for a loop node.
+func loopEdges(n *topo.Loop) []*Edge {
+	out := make([]*Edge, len(n.CoEdges))
+	for i, ce := range n.CoEdges {
+		out[i] = edgeHandle(ce.Edge)
+	}
+	return out
+}

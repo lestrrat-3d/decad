@@ -189,8 +189,8 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 				End: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}})),
 			},
 		})
-		loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: true}}}}
-		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}})
+		loop := bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: true}}}})
+		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}, Loops: []*topo.Loop{loopNode(loop)}}})
 
 		_, err := st.faceHalfPlane(face)
 		require.ErrorIs(t, err, ErrUnsupported)
@@ -203,8 +203,8 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 				End: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}})),
 			},
 		})
-		loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: true}}}}
-		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}})
+		loop := bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: true}}}})
+		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}, Loops: []*topo.Loop{loopNode(loop)}}})
 
 		_, err := st.faceHalfPlane(face)
 		require.ErrorIs(t, err, ErrUnsupported)
@@ -220,8 +220,8 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 				End: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}})),
 			},
 		})
-		loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: true}}}}
-		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}})
+		loop := bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: true}}}})
+		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}, Loops: []*topo.Loop{loopNode(loop)}}})
 
 		phi, err := st.faceHalfPlane(face)
 		require.NoError(t, err)

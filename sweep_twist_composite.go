@@ -418,16 +418,16 @@ func publishCompositeTwistCentroid(body *Body, xform r3.Transform,
 // recorded station coordinates at a join instead of pairing coedge positions.
 // Both adjoining Lofts use the same held frame, so equality is exact here.
 func sewTwistLoftJoin(ctx context.Context, from, to *Face, previous *Body, sewn map[*Edge]struct{}) error {
-	if len(from.loops) != 1 || len(to.loops) != 1 {
+	if len(from.n.Loops) != 1 || len(to.n.Loops) != 1 {
 		return fmt.Errorf(`%w: a twisted Loft join needs one section loop`, ErrUnsupported)
 	}
-	for _, old := range from.loops[0].n.CoEdges {
+	for _, old := range from.n.Loops[0].CoEdges {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		var shared topo.CoEdge
 		matches := 0
-		for _, candidate := range to.loops[0].n.CoEdges {
+		for _, candidate := range to.n.Loops[0].CoEdges {
 			if coedgeStart(old).Position == coedgeStart(candidate).Position &&
 				coedgeEnd(old).Position == coedgeEnd(candidate).Position ||
 				coedgeStart(old).Position == coedgeEnd(candidate).Position &&
@@ -483,10 +483,10 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 			area, areaBound := 0.0, 0.0
 			for cell := group.from; cell < group.through; cell++ {
 				face := old[1+cell*profileEdges+j]
-				if len(face.loops) != 1 {
+				if len(face.n.Loops) != 1 {
 					return fmt.Errorf(`%w: a twisted Loft wall has multiple loops`, ErrUnsupported)
 				}
-				for _, use := range face.loops[0].n.CoEdges {
+				for _, use := range face.n.Loops[0].CoEdges {
 					uses[edgeHandle(use.Edge)] = append(uses[edgeHandle(use.Edge)], use)
 				}
 				area = proofbound.AbsSumUpper(area, face.n.Area)
@@ -514,7 +514,7 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 			}
 			var first *Vertex
 			firstCell := old[1+group.from*profileEdges+j]
-			for _, use := range firstCell.loops[0].n.CoEdges {
+			for _, use := range firstCell.n.Loops[0].CoEdges {
 				if kept, ok := boundary[vertexHandle(coedgeStart(use))]; ok && kept.Edge == use.Edge {
 					first = vertexHandle(coedgeStart(use))
 					break
@@ -537,7 +537,7 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 			if current != first || len(boundary) != 0 {
 				return fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
 			}
-			face := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: outline}}}, n: topo.Face{Area: area, AreaBound: areaBound, Surface: surfacegeom.Faceted{}, Origins: []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}}, Body: bodyNode(body)}})
+			face := bornFace(&Face{n: topo.Face{Area: area, AreaBound: areaBound, Surface: surfacegeom.Faceted{}, Origins: []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}}, Body: bodyNode(body), Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: outline}}))}}})
 			merged = append(merged, face)
 		}
 	}

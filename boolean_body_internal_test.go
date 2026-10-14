@@ -25,12 +25,12 @@ func TestFacetedAreaBoundCompositionRoundsOutward(t *testing.T) {
 	for range 10 {
 		lengths = append(lengths, short)
 	}
-	face := bornFace(&Face{loops: []*Loop{{}}})
+	face := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{}))}}})
 	exactPerimeter := new(big.Rat)
 	oldPerimeter := 0.0
 	for _, length := range lengths {
 		bound := proofbound.ChainLengthBound(1, 0, length)
-		face.loops[0].n.CoEdges = append(face.loops[0].n.CoEdges, topo.CoEdge{Edge: edgeNode(bornEdge(&Edge{
+		face.n.Loops[0].CoEdges = append(face.n.Loops[0].CoEdges, topo.CoEdge{Edge: edgeNode(bornEdge(&Edge{
 			n: topo.Edge{Length: length, LengthBound: bound},
 		}))})
 		exactPerimeter.Add(exactPerimeter, new(big.Rat).SetFloat64(length))

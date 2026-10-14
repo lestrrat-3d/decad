@@ -218,8 +218,8 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			return nil, wrapStageError(`the tapered extrude's walls`, err)
 		}
 		faces = append(faces, band.patches...)
-		nearLoops[li] = &Loop{n: topo.Loop{Outer: li == 0, CoEdges: nearCo}}
-		farLoops[li] = &Loop{n: topo.Loop{Outer: li == 0, CoEdges: band.capCo}}
+		nearLoops[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: nearCo}})
+		farLoops[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: band.capCo}})
 		bands[li] = band
 		dp.farDelta = math.Max(dp.farDelta, band.delta)
 		dp.bandDelta[capBandKey{loop: li, start: !dp.nearStart}] = band.delta
@@ -244,7 +244,6 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		return nil, err
 	}
 	capStart := bornFace(&Face{
-		loops: startLoops,
 		n: topo.Face{
 			AxialDelta:    dp.z0Delta,
 			HasAxialDelta: true,
@@ -252,10 +251,10 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.z0},
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
+			Loops:         loopNodes(startLoops),
 		},
 	})
 	capEnd := bornFace(&Face{
-		loops: endLoops,
 		n: topo.Face{
 			AxialDelta:    dp.z1Delta,
 			HasAxialDelta: true,
@@ -263,6 +262,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.z1},
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
+			Loops:         loopNodes(endLoops),
 		},
 	})
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {

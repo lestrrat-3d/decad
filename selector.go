@@ -459,11 +459,11 @@ func (e selectorEdge) SelectorOnOuterLoop(ref provenance.Ref) bool {
 		if !slices.Contains(face.Origins, ref) {
 			continue
 		}
-		for _, loop := range faceHandle(face).loops {
-			if !loop.n.Outer {
+		for _, loop := range face.Loops {
+			if !loop.Outer {
 				continue
 			}
-			for _, ce := range loop.n.CoEdges {
+			for _, ce := range loop.CoEdges {
 				if ce.Edge == edgeNode(e.Edge) {
 					return true
 				}

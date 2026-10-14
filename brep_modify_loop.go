@@ -239,10 +239,10 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 				}
 			}
 		}
-		if face == nil || capSel.loop >= len(face.loops) {
+		if face == nil || capSel.loop >= len(face.n.Loops) {
 			return nil, true, fmt.Errorf(`%w: the rounded corner lost its cap face`, ErrUnsupported)
 		}
-		loopEdges := face.loops[capSel.loop].Edges()
+		loopEdges := loopEdges(face.n.Loops[capSel.loop])
 		var shortened [2]*Edge
 		var near [2]*Vertex
 		for j, originalIndex := range others {

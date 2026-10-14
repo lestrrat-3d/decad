@@ -614,9 +614,9 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				Origins:       append([]provenance.Ref(nil), f.n.Origins...),
 			},
 		})
-		for _, l := range f.loops {
-			coedges := make([]topo.CoEdge, len(l.n.CoEdges))
-			for j, ce := range l.n.CoEdges {
+		for _, l := range f.n.Loops {
+			coedges := make([]topo.CoEdge, len(l.CoEdges))
+			for j, ce := range l.CoEdges {
 				eb, err := edgeFor(edgeHandle(ce.Edge))
 				if err != nil {
 					return nil, nil, nil, err
@@ -634,7 +634,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				}
 				coedges[j] = topo.CoEdge{Edge: edgeNode(eb.edge), Forward: forward}
 			}
-			nf.loops = append(nf.loops, &Loop{n: topo.Loop{Outer: l.n.Outer, CoEdges: coedges}})
+			nf.n.Loops = append(nf.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: l.Outer, CoEdges: coedges}})))
 		}
 		newFaces[i] = nf
 	}
@@ -644,8 +644,8 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 // coedgeDirectionFor returns f's own forward flag for its use of e, and
 // whether f actually uses e at all.
 func coedgeDirectionFor(f *Face, e *Edge) (bool, bool) {
-	for _, l := range f.loops {
-		for _, ce := range l.n.CoEdges {
+	for _, l := range f.n.Loops {
+		for _, ce := range l.CoEdges {
 			if ce.Edge == edgeNode(e) {
 				return ce.Forward, true
 			}
@@ -659,13 +659,13 @@ func coedgeDirectionFor(f *Face, e *Edge) (bool, bool) {
 // negated, and f.n.Reversed toggles with it — the outward side flips together
 // with the walk that names it.
 func reverseFaceOrientation(f *Face) {
-	for _, l := range f.loops {
-		n := len(l.n.CoEdges)
+	for _, l := range f.n.Loops {
+		n := len(l.CoEdges)
 		rev := make([]topo.CoEdge, n)
-		for i, ce := range l.n.CoEdges {
+		for i, ce := range l.CoEdges {
 			rev[n-1-i] = topo.CoEdge{Edge: ce.Edge, Forward: !ce.Forward}
 		}
-		l.n.CoEdges = rev
+		l.CoEdges = rev
 	}
 	f.n.Reversed = !f.n.Reversed
 }
@@ -684,8 +684,8 @@ func stitchTopology(faces []*Face) stitchweld.Topology[*Face, *Edge] {
 		}
 		seen[f] = struct{}{}
 		var uses []stitchweld.Use[*Edge]
-		for _, l := range f.loops {
-			for _, ce := range l.n.CoEdges {
+		for _, l := range f.n.Loops {
+			for _, ce := range l.CoEdges {
 				uses = append(uses, stitchweld.Use[*Edge]{Edge: edgeHandle(ce.Edge), Forward: ce.Forward})
 				adjacent := faceHandles(ce.Edge.Faces)
 				btopo.Adjacent[edgeHandle(ce.Edge)] = adjacent
@@ -743,8 +743,8 @@ func checkStitchClosure(faces []*Face) error {
 
 func stitchHasFreeEdge(faces []*Face) bool {
 	for _, f := range faces {
-		for _, l := range f.loops {
-			for _, ce := range l.n.CoEdges {
+		for _, l := range f.n.Loops {
+			for _, ce := range l.CoEdges {
 				if len(ce.Edge.Faces) == 1 {
 					return true
 				}
@@ -760,8 +760,8 @@ func stitchHasFreeEdge(faces []*Face) bool {
 func stitchLumpsProvenSeparate(components [][]*Face) bool {
 	return stitchweld.LumpsProvenSeparate(components,
 		func(f *Face, visit func(*Vertex)) {
-			for _, l := range f.loops {
-				for _, ce := range l.n.CoEdges {
+			for _, l := range f.n.Loops {
+				for _, ce := range l.CoEdges {
 					visit(vertexHandle(ce.Edge.Start))
 					visit(vertexHandle(ce.Edge.End))
 				}
@@ -824,10 +824,10 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 		frame := pl.Frame
 		var pts []planePoint
 		var verts []*Vertex
-		loopIdx := make([][]int, len(f.loops))
-		for li, l := range f.loops {
-			idxs := make([]int, len(l.n.CoEdges))
-			for i, ce := range l.n.CoEdges {
+		loopIdx := make([][]int, len(f.n.Loops))
+		for li, l := range f.n.Loops {
+			idxs := make([]int, len(l.CoEdges))
+			for i, ce := range l.CoEdges {
 				v := vertexHandle(coedgeStart(ce))
 				local := frame.ToLocal(v.Position().Value)
 				idxs[i] = len(pts)
@@ -836,8 +836,8 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 			}
 			loopIdx[li] = idxs
 		}
-		for li, l := range f.loops {
-			wantCCW := l.n.Outer
+		for li, l := range f.n.Loops {
+			wantCCW := l.Outer
 			isCCW := shoelace(pts, loopIdx[li]) > 0
 			if wantCCW != isCCW {
 				reverseIntSlice(loopIdx[li])

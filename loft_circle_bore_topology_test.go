@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -47,8 +48,8 @@ func TestLoftCircleBoreTopologyShapeRefusals(t *testing.T) {
 				Segments: []curveSegment{circleSeg{TStart: 1, TEnd: 0}},
 			}}}},
 			a:     loftmesh.Assembly{VIdx: [][]int{{}, {}}, Walls: 1},
-			start: bornFace(&Face{loops: []*Loop{{}, {}}}),
-			end:   bornFace(&Face{loops: []*Loop{{}, {}}}),
+			start: bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{})), loopNode(bornLoop(&Loop{}))}}}),
+			end:   bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{})), loopNode(bornLoop(&Loop{}))}}}),
 			walls: []*Face{bornFace(&Face{})},
 		}
 	}
@@ -66,8 +67,8 @@ func TestLoftCircleBoreTopologyShapeRefusals(t *testing.T) {
 			f.pl.profile0.Holes[0].Segments = append(f.pl.profile0.Holes[0].Segments, lineSeg{})
 		}},
 		{"wrong station count", func(f *fixture) { f.a.VIdx = f.a.VIdx[:1] }},
-		{"wrong start loops", func(f *fixture) { f.start.loops = f.start.loops[:1] }},
-		{"wrong end loops", func(f *fixture) { f.end.loops = f.end.loops[:1] }},
+		{"wrong start loops", func(f *fixture) { f.start.n.Loops = f.start.n.Loops[:1] }},
+		{"wrong end loops", func(f *fixture) { f.end.n.Loops = f.end.n.Loops[:1] }},
 		{"wrong wall count", func(f *fixture) { f.walls = nil }},
 		{"noncircle segment", func(f *fixture) { f.pl.profile0.Holes[0].Segments[0] = lineSeg{} }},
 		{"counterclockwise circle", func(f *fixture) {

@@ -245,8 +245,8 @@ func closedBossShellLumps(faces []*Face, outerFaceCount int) ([]*Lump, error) {
 func closedBossShellEdgePairs(faces []*Face) bool {
 	edges := map[*Edge]int{}
 	for _, face := range faces {
-		for _, loop := range face.loops {
-			for _, use := range loop.n.CoEdges {
+		for _, loop := range face.n.Loops {
+			for _, use := range loop.CoEdges {
 				edges[edgeHandle(use.Edge)]++
 			}
 		}

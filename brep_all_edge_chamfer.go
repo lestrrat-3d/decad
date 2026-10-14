@@ -79,10 +79,10 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 			seen[axis][side] = true
 			planes++
 			if axis == 1 {
-				if len(f.loops) != 2 || len(f.loops[1].n.CoEdges) != 1 {
+				if len(f.n.Loops) != 2 || len(f.n.Loops[1].CoEdges) != 1 {
 					return nil, false, nil
 				}
-				circle, ok := f.loops[1].n.CoEdges[0].Edge.Curve.(surfacegeom.Circle3)
+				circle, ok := f.n.Loops[1].CoEdges[0].Edge.Curve.(surfacegeom.Circle3)
 				if !ok || circle.Center.Y != p.box[1][side] ||
 					circle.Axis != (r3.Vec{Y: 1}) && circle.Axis != (r3.Vec{Y: -1}) {
 					return nil, false, nil
@@ -92,7 +92,7 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 				} else if p.center != [2]float64{circle.Center.X, circle.Center.Z} || p.radius != circle.Radius.Base() {
 					return nil, false, nil
 				}
-			} else if len(f.loops) != 1 {
+			} else if len(f.n.Loops) != 1 {
 				return nil, false, nil
 			}
 		case surfacegeom.Cylinder:
@@ -107,15 +107,15 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 	if planes != 6 || boreFace == nil || p.radius <= 0 ||
 		boreSurface.Axis != (r3.Vec{Y: 1}) && boreSurface.Axis != (r3.Vec{Y: -1}) ||
 		boreSurface.Origin.X != p.center[0] || boreSurface.Origin.Z != p.center[1] ||
-		boreSurface.Radius.Base() != p.radius || !boreFace.n.Reversed || len(boreFace.loops) != 2 {
+		boreSurface.Radius.Base() != p.radius || !boreFace.n.Reversed || len(boreFace.n.Loops) != 2 {
 		return nil, false, nil
 	}
 	var rims [2]bool
-	for _, loop := range boreFace.loops {
-		if len(loop.n.CoEdges) != 1 {
+	for _, loop := range boreFace.n.Loops {
+		if len(loop.CoEdges) != 1 {
 			return nil, false, nil
 		}
-		edge := loop.n.CoEdges[0].Edge
+		edge := loop.CoEdges[0].Edge
 		circle, ok := edge.Curve.(surfacegeom.Circle3)
 		if !ok || !edge.CurveBounded || edge.CurveBound != 0 ||
 			circle.Radius.Base() != p.radius {
@@ -223,7 +223,7 @@ func (p allEdgeChamferPayload) outerBoxEdge(e *Edge) bool {
 }
 
 func (p allEdgeChamferPayload) boxPlane(f *Face, plane surfacegeom.Plane) (int, int, bool) {
-	if len(f.loops) == 0 || len(f.loops[0].n.CoEdges) != 4 {
+	if len(f.n.Loops) == 0 || len(f.n.Loops[0].CoEdges) != 4 {
 		return 0, 0, false
 	}
 	n := plane.Frame.N()
@@ -245,7 +245,7 @@ func (p allEdgeChamferPayload) boxPlane(f *Face, plane surfacegeom.Plane) (int, 
 		return 0, 0, false
 	}
 	seen := map[[3]float64]struct{}{}
-	for _, ce := range f.loops[0].n.CoEdges {
+	for _, ce := range f.n.Loops[0].CoEdges {
 		if _, ok := ce.Edge.Curve.(surfacegeom.Line3); !ok || coedgeStart(ce).Bound.Base() != 0 {
 			return 0, 0, false
 		}
@@ -380,7 +380,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf(`%w: all-edge chamfer plane: %s`, ErrUnsupported, err)
 		}
 		face := bornFace(&Face{n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound, Surface: surfacegeom.Plane{Frame: frame}, Origins: []provenance.Ref{{Producer: ref, Role: axisMap.faceRole(polygonIndex)}}, Body: bodyNode(body)}})
-		loop := &Loop{n: topo.Loop{Outer: true}}
+		loop := bornLoop(&Loop{n: topo.Loop{Outer: true}})
 		for i, a := range points {
 			b := points[(i+1)%len(points)]
 			key := lineKey{a, b}
@@ -408,7 +408,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 			}
 			loop.n.CoEdges = append(loop.n.CoEdges, topo.CoEdge{Edge: edgeNode(e), Forward: vertexHandle(e.n.Start) == vertex(a)})
 		}
-		face.loops = []*Loop{loop}
+		face.n.Loops = []*topo.Loop{loopNode(loop)}
 		faces = append(faces, face)
 	}
 	bore, err := geometry.addBoreTopology(body, ref, faces, vertex)
@@ -472,8 +472,8 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 			Start: vertexNode(seam),
 			End:   vertexNode(seam),
 		}})
-		face.loops = append(face.loops, &Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: side == 1}}}})
-		bore.loops = append(bore.loops, &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: side == 0}}}})
+		face.n.Loops = append(face.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: side == 1}}}})))
+		bore.n.Loops = append(bore.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: side == 0}}}})))
 	}
 	return bore, nil
 }

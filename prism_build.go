@@ -158,8 +158,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		}
 		faces = append(faces, sideFaces...)
 		perimeter = proofbound.BoundedAdd(perimeter, loopLen)
-		capStart.loops = append(capStart.loops, &Loop{n: topo.Loop{Outer: li == 0, CoEdges: bottom}})
-		capEnd.loops = append(capEnd.loops, &Loop{n: topo.Loop{Outer: li == 0, CoEdges: top}})
+		capStart.n.Loops = append(capStart.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: bottom}})))
+		capEnd.n.Loops = append(capEnd.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: top}})))
 	}
 	// A surface result omits both caps from the shell (Table W,
 	// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
@@ -291,11 +291,11 @@ func attachFaceLoopsContext(ctx context.Context, faces []*Face) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		for _, l := range f.loops {
+		for _, l := range f.n.Loops {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			for _, ce := range l.n.CoEdges {
+			for _, ce := range l.CoEdges {
 				if err := ctx.Err(); err != nil {
 					return err
 				}
@@ -666,18 +666,18 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		if singleClosed {
 			// A closed cylindrical band has TWO boundary loops — one circle
 			// per cap — not one loop holding both.
-			face.loops = []*Loop{
-				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(bottomEdge), Forward: true}}}},
-				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(topEdge), Forward: false}}}},
+			face.n.Loops = []*topo.Loop{
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(bottomEdge), Forward: true}}}})),
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(topEdge), Forward: false}}}})),
 			}
 		} else {
-			face.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
 				{Edge: edgeNode(bottomEdge), Forward: true},
 				{Edge: edgeNode(vertical[(i+1)%n]), Forward: true},
 				{Edge: edgeNode(topEdge), Forward: false},
 				{Edge: edgeNode(vertical[i]), Forward: false},
 			},
-			}}}
+			}}))}
 		}
 
 		bottomEdge.n.Faces = append(bottomEdge.n.Faces, faceNode(face))

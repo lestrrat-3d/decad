@@ -156,11 +156,11 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 		}
 		if record.capGroups[cap] < 0 || record.wallGroups[cap] < 0 ||
 			!loftCylinderAuditAnnulus(ctx, mesh, record.outer[cap], record.inner[cap],
-				record.capGroups[cap], z, cap == 0) || len(face.loops) != 2 ||
-			!loftCylinderChamferCapWalk(face.loops[0], fp.verts, record.outer[cap], cap == 0) {
+				record.capGroups[cap], z, cap == 0) || len(face.n.Loops) != 2 ||
+			!loftCylinderChamferCapWalk(face.n.Loops[0], fp.verts, record.outer[cap], cap == 0) {
 			return fmt.Errorf("%w: mirrored bore cap %d has no audited outer loop", ErrUnsupported, cap)
 		}
-		for _, ce := range face.loops[0].n.CoEdges {
+		for _, ce := range face.n.Loops[0].CoEdges {
 			edge := ce.Edge
 			if _, yes := selected[edge]; !yes {
 				return fmt.Errorf("%w: mirrored chamfer needs both complete outer cap loops", ErrUnsupported)

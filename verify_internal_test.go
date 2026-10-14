@@ -695,10 +695,10 @@ func firstInteriorEdge(t *testing.T, b *Body) *Edge {
 func backwardCoedgeSite(t *testing.T, b *Body, e *Edge) (*Loop, int) {
 	t.Helper()
 	for _, f := range b.Faces() {
-		for _, l := range f.loops {
-			for i, ce := range l.n.CoEdges {
+		for _, l := range f.n.Loops {
+			for i, ce := range l.CoEdges {
 				if ce.Edge == edgeNode(e) && !ce.Forward {
-					return l, i
+					return loopHandle(l), i
 				}
 			}
 		}
@@ -747,8 +747,7 @@ func TestAuditSheetBoundaryStructuralViolations(t *testing.T) {
 			e := firstInteriorEdge(t, b)
 			require.Len(t, e.n.Faces, 2)
 			extra := bornFace(&Face{
-				n:     topo.Face{Body: bodyNode(b)},
-				loops: []*Loop{{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}},
+				n: topo.Face{Body: bodyNode(b), Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}},
 			})
 			shell := b.lumps[0].shells[0]
 			shell.faces = append(shell.faces, extra)
@@ -770,7 +769,7 @@ func TestAuditSheetBoundaryStructuralViolations(t *testing.T) {
 		t.Parallel()
 		requireSheetAuditViolated(t, func(t *testing.T, doc *Document, b *Body) {
 			f := b.Faces()[0]
-			f.loops = append(f.loops, &Loop{})
+			f.n.Loops = append(f.n.Loops, loopNode(bornLoop(&Loop{})))
 		})
 	})
 }

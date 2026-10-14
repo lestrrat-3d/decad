@@ -73,10 +73,10 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 		selected[edgeNode(edge)] = struct{}{}
 	}
 	for _, cap := range caps {
-		if len(cap.loops) == 0 || !cap.loops[0].n.Outer {
+		if len(cap.n.Loops) == 0 || !cap.n.Loops[0].Outer {
 			return nil, false, nil
 		}
-		for _, ce := range cap.loops[0].n.CoEdges {
+		for _, ce := range cap.n.Loops[0].CoEdges {
 			edge := ce.Edge
 			if _, ok := selected[edge]; !ok {
 				return nil, false, nil
@@ -87,8 +87,8 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 	if len(selected) != 0 {
 		return nil, false, nil
 	}
-	outer := make([]curveSegment, 0, len(caps[1].loops[0].n.CoEdges))
-	for _, ce := range caps[1].loops[0].n.CoEdges {
+	outer := make([]curveSegment, 0, len(caps[1].n.Loops[0].CoEdges))
+	for _, ce := range caps[1].n.Loops[0].CoEdges {
 		start := pl.frame0.ToLocal(coedgeStart(ce).Position)
 		stop := pl.frame0.ToLocal(coedgeEnd(ce).Position)
 		outer = append(outer, lineSeg{
@@ -117,9 +117,9 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 // alignment or a different floating-point cap sample must not be silently
 // replaced by the other end's polygon when the cap band is built.
 func matchingLoftHeldCapOuters(frame r3.Frame, start, end *Face) bool {
-	if len(start.loops) == 0 || len(end.loops) == 0 ||
-		!start.loops[0].n.Outer || !end.loops[0].n.Outer ||
-		len(start.loops[0].n.CoEdges) != len(end.loops[0].n.CoEdges) {
+	if len(start.n.Loops) == 0 || len(end.n.Loops) == 0 ||
+		!start.n.Loops[0].Outer || !end.n.Loops[0].Outer ||
+		len(start.n.Loops[0].CoEdges) != len(end.n.Loops[0].CoEdges) {
 		return false
 	}
 	keyOf := func(ce topo.CoEdge) [2]planePoint {
@@ -131,11 +131,11 @@ func matchingLoftHeldCapOuters(frame r3.Frame, start, end *Face) bool {
 		}
 		return [2]planePoint{p, q}
 	}
-	counts := make(map[[2]planePoint]int, len(start.loops[0].n.CoEdges))
-	for _, ce := range start.loops[0].n.CoEdges {
+	counts := make(map[[2]planePoint]int, len(start.n.Loops[0].CoEdges))
+	for _, ce := range start.n.Loops[0].CoEdges {
 		counts[keyOf(ce)]++
 	}
-	for _, ce := range end.loops[0].n.CoEdges {
+	for _, ce := range end.n.Loops[0].CoEdges {
 		key := keyOf(ce)
 		if counts[key] == 0 {
 			return false

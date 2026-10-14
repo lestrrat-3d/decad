@@ -276,8 +276,8 @@ func faceIsTetrahedronEligible(f *Face) bool {
 	if f.n.NormalBound != 0 {
 		return false
 	}
-	for _, l := range f.loops {
-		for _, ce := range l.n.CoEdges {
+	for _, l := range f.n.Loops {
+		for _, ce := range l.CoEdges {
 			if _, ok := ce.Edge.Curve.(surfacegeom.Line3); !ok {
 				return false
 			}
@@ -317,8 +317,8 @@ func auditVertexLinksForStitchFaces(ctx context.Context, faces []*Face) error {
 	budget := proofbound.NewWorkBudget(ctx)
 	uses := map[*Edge][]compositeCoedgeUse{}
 	for _, face := range faces {
-		for _, loop := range face.loops {
-			for _, ce := range loop.n.CoEdges {
+		for _, loop := range face.n.Loops {
+			for _, ce := range loop.CoEdges {
 				if err := budget.Step(); err != nil {
 					return err
 				}
@@ -377,12 +377,12 @@ func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz proofboun
 
 func stitchFluxFaceInput(f *Face) stitchflux.FaceInput {
 	input := stitchflux.FaceInput{
-		Loops:     make([]stitchflux.LoopSource, len(f.loops)),
+		Loops:     make([]stitchflux.LoopSource, len(f.n.Loops)),
 		Area:      f.n.Area,
 		AreaBound: f.n.AreaBound,
 	}
-	for i, l := range f.loops {
-		input.Loops[i] = stitchLoopSource{loop: l}
+	for i, l := range f.n.Loops {
+		input.Loops[i] = stitchLoopSource{loop: loopHandle(l)}
 	}
 	return input
 }
@@ -448,12 +448,12 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 	envelopes := make([]stitchflux.MassEnvelopeFace, 0, len(faces))
 	for _, f := range faces {
 		envelope := stitchflux.MassEnvelopeFace{Surface: f.n.Surface, Area: f.n.Area, AreaBound: f.n.AreaBound}
-		for i, loop := range f.loops {
-			for _, ce := range loop.n.CoEdges {
+		for i, loop := range f.n.Loops {
+			for _, ce := range loop.CoEdges {
 				envelope.Vertices = append(envelope.Vertices, vertexHandle(coedgeStart(ce)).Position().Value)
 			}
-			if len(loop.n.CoEdges) > 0 {
-				edge := loop.n.CoEdges[0].Edge
+			if len(loop.CoEdges) > 0 {
+				edge := loop.CoEdges[0].Edge
 				rim := stitchflux.CircleRim{
 					Length: edge.Length, LengthBound: edge.LengthBound, LengthUnbounded: edge.LengthUnbounded,
 				}
@@ -535,8 +535,8 @@ func stitchFluxTagsDenoted(faces []*Face) bool {
 // denotation gate without giving the internal package topology ownership.
 func stitchTaggedFace(f *Face) stitchflux.TaggedFace {
 	tagged := stitchflux.TaggedFace{Denoted: f.n.Denoted, Surface: f.n.Surface}
-	for _, loop := range f.loops {
-		for _, ce := range loop.n.CoEdges {
+	for _, loop := range f.n.Loops {
+		for _, ce := range loop.CoEdges {
 			tagged.Curves = append(tagged.Curves, ce.Edge.Curve)
 		}
 	}

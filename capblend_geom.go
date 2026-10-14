@@ -473,13 +473,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// (pBV -> apex), slantIn reversed (apex -> pAV) — a closed
 		// triangle-like boundary each coedge's end matching the next's start.
 		face := bornFace(&Face{
-			n: topo.Face{Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: role}}, Body: bodyNode(body)},
-			loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			n: topo.Face{Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: role}}, Body: bodyNode(body), Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
 				{Edge: edgeNode(arc), Forward: true},
 				{Edge: edgeNode(slantOut[i]), Forward: true},
 				{Edge: edgeNode(slantIn[i]), Forward: false},
 			},
-			}}},
+			}}))},
+			},
 		})
 		// Orientation: a corner's own offset carrier is an EROSION, and at a
 		// REFLEX corner the eroded boundary is the arc of radius dc about the
@@ -662,14 +662,14 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			return capBandResult{}, err
 		}
 		face := bornFace(&Face{
-			n: topo.Face{Surface: surf, Origins: origins, Body: bodyNode(body)},
-			loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			n: topo.Face{Surface: surf, Origins: origins, Body: bodyNode(body), Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
 				{Edge: side, Forward: true},
 				{Edge: edgeNode(trailSlant), Forward: false},
 				{Edge: edgeNode(capEdge), Forward: false},
 				{Edge: edgeNode(leadSlant), Forward: true},
 			},
-			}}},
+			}}))},
+			},
 		})
 		// Orientation: the reference is the ORIGINAL wall's own outward
 		// convention (the same "tangent rotated a quarter turn" rule
@@ -1100,10 +1100,10 @@ func capPatchWindowSkew(g capPatchGeom) float64 {
 func buildConePatch(pl prismPayload, body *Body, origins []provenance.Ref, cu, cv, sideRadius, capRadius, sideZ, capZ float64, reversed bool, sideEdge, capEdge *Edge) *Face {
 	surf := coneSurface(pl, cu, cv, sideRadius, capRadius, sideZ, capZ)
 	loops := []*Loop{
-		{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideEdge), Forward: true}}}},
-		{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(capEdge), Forward: false}}}},
+		bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideEdge), Forward: true}}}}),
+		bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(capEdge), Forward: false}}}}),
 	}
-	face := bornFace(&Face{n: topo.Face{Reversed: reversed, Surface: surf, Origins: origins, Body: bodyNode(body)}, loops: loops})
+	face := bornFace(&Face{n: topo.Face{Reversed: reversed, Surface: surf, Origins: origins, Body: bodyNode(body), Loops: loopNodes(loops)}})
 	sideEdge.n.Faces = append(sideEdge.n.Faces, faceNode(face))
 	capEdge.n.Faces = append(capEdge.n.Faces, faceNode(face))
 	return face

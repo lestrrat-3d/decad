@@ -62,8 +62,8 @@ func refuseSheetOperand(b *Body, operation string) error {
 // shell open, including a solid's.
 func shellIsOpen(faces []*Face) bool {
 	for _, f := range faces {
-		for _, l := range f.loops {
-			for _, ce := range l.n.CoEdges {
+		for _, l := range f.n.Loops {
+			for _, ce := range l.CoEdges {
 				if len(ce.Edge.Faces) == 1 {
 					return true
 				}
@@ -84,8 +84,8 @@ func shellIsOpen(faces []*Face) bool {
 func splitConnectedFaces(faces []*Face) [][]*Face {
 	byEdge := map[*topo.Edge][]*Face{}
 	for _, f := range faces {
-		for _, l := range f.loops {
-			for _, ce := range l.n.CoEdges {
+		for _, l := range f.n.Loops {
+			for _, ce := range l.CoEdges {
 				byEdge[ce.Edge] = append(byEdge[ce.Edge], f)
 			}
 		}

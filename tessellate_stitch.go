@@ -94,16 +94,16 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 			return nil, nil, "an original face occurs more than once"
 		}
 		paired[original] = sp.liveFaces[i]
-		if len(copied.loops) != len(original.loops) {
+		if len(copied.n.Loops) != len(original.n.Loops) {
 			return nil, nil, "an unstitched face changed its loop layout"
 		}
-		for li, loop := range copied.loops {
-			oldLoop := original.loops[li]
-			if len(loop.n.CoEdges) != len(oldLoop.n.CoEdges) || loop.n.Outer != oldLoop.n.Outer {
+		for li, loop := range copied.n.Loops {
+			oldLoop := original.n.Loops[li]
+			if len(loop.CoEdges) != len(oldLoop.CoEdges) || loop.Outer != oldLoop.Outer {
 				return nil, nil, "an unstitched face changed its coedge layout"
 			}
-			for ci, ce := range loop.n.CoEdges {
-				old := oldLoop.n.CoEdges[ci]
+			for ci, ce := range loop.CoEdges {
+				old := oldLoop.CoEdges[ci]
 				if ce.Forward != old.Forward {
 					return nil, nil, "an unstitched coedge changed direction"
 				}

@@ -212,8 +212,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
 		}
 
-		startLoopObjs[li] = &Loop{n: topo.Loop{Outer: li == 0, CoEdges: startCo}}
-		endLoopObjs[li] = &Loop{n: topo.Loop{Outer: li == 0, CoEdges: endCo}}
+		startLoopObjs[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: startCo}})
+		endLoopObjs[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: endCo}})
 
 		startBoundary := loop
 		if onStart {
@@ -265,7 +265,6 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		return nil, err
 	}
 	capStart := bornFace(&Face{
-		loops: startLoopObjs,
 		n: topo.Face{
 			Area:          startArea.Value,
 			AreaBound:     startArea.Bound,
@@ -275,10 +274,10 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			CapRecord:     &topo.CapRecord{Frame: cbp.frame, Xform: cbp.xform, Z: cbp.z0},
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
+			Loops:         loopNodes(startLoopObjs),
 		},
 	})
 	capEnd := bornFace(&Face{
-		loops: endLoopObjs,
 		n: topo.Face{
 			Area:          endArea.Value,
 			AreaBound:     endArea.Bound,
@@ -288,6 +287,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			CapRecord:     &topo.CapRecord{Frame: cbp.frame, Xform: cbp.xform, Z: cbp.z1},
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
+			Loops:         loopNodes(endLoopObjs),
 		},
 	})
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {

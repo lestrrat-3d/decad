@@ -180,8 +180,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			}
 		}
 		held, bound := heldOf(areaIv)
-		face := bornFace(&Face{
-			loops: loops, n: topo.Face{Area: held, AreaBound: bound, Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(p)}}, Body: bodyNode(body)}})
+		face := bornFace(&Face{n: topo.Face{Area: held, AreaBound: bound, Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(p)}}, Body: bodyNode(body), Loops: loopNodes(loops)}})
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		// capV, a cap contact vertex, lies on the patch's surface; the outward
 		// normal there is F's own, which faces −m along F's normal for a band
@@ -241,8 +240,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		side, capE := sideCo[0].Edge, capCo[0].Edge
 		side.Convex, capE.Convex = convex, convex
 		if err := newPatch(walkSurface(fr.walks[0]), []*Loop{
-			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: side, Forward: true}}}},
-			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: capE, Forward: false}}}},
+			bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: side, Forward: true}}}}),
+			bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: capE, Forward: false}}}}),
 		}, vertexHandle(capE.Start)); err != nil {
 			return nil, brepBandMass{}, err
 		}
@@ -345,12 +344,12 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 					return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's sphere patch %d does not close`, ErrUnsupported, bi, i)
 				}
 				sideCo[i].Edge.Convex = convex
-				if err := newPatch(walkSurface(fr.walks[i]), []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+				if err := newPatch(walkSurface(fr.walks[i]), []*Loop{bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
 					{Edge: sideCo[i].Edge, Forward: true},
 					{Edge: edgeNode(trail[next]), Forward: false},
 					{Edge: edgeNode(lead[i]), Forward: true},
 				},
-				}}}, pole); err != nil {
+				}})}, pole); err != nil {
 					return nil, brepBandMass{}, err
 				}
 				continue
@@ -360,25 +359,25 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's walk %d does not close on its contour and side vertices`, ErrUnsupported, bi, i)
 			}
 			wall.n.Convex, sideCo[i].Edge.Convex = convex, convex
-			if err := newPatch(walkSurface(fr.walks[i]), []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			if err := newPatch(walkSurface(fr.walks[i]), []*Loop{bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
 				{Edge: sideCo[i].Edge, Forward: true},
 				{Edge: edgeNode(trail[next]), Forward: false},
 				{Edge: edgeNode(wall), Forward: false},
 				{Edge: edgeNode(lead[i]), Forward: true},
 			},
-			}}}, vertexHandle(wall.n.Start)); err != nil {
+			}})}, vertexHandle(wall.n.Start)); err != nil {
 				return nil, brepBandMass{}, err
 			}
 			if fr.loop.Corners[next] != filletband.Reflex {
 				continue
 			}
 			v := fr.walks[next]
-			if err := newPatch(torus(v.StartU, v.StartV, r), []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			if err := newPatch(torus(v.StartU, v.StartV, r), []*Loop{bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
 				{Edge: edgeNode(supplied.arc[next]), Forward: true},
 				{Edge: edgeNode(lead[next]), Forward: true},
 				{Edge: edgeNode(trail[next]), Forward: false},
 			},
-			}}}, vertexHandle(supplied.arc[next].n.Start)); err != nil {
+			}})}, vertexHandle(supplied.arc[next].n.Start)); err != nil {
 				return nil, brepBandMass{}, err
 			}
 		}
