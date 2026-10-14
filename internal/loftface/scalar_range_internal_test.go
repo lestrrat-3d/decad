@@ -39,6 +39,14 @@ func tryScalarRange(f func() Interval) (out Interval, panicked any) {
 // on the interval (numerator and denominator of both ends) or on the panic.
 func requireScalarRangeMatches(t *testing.T, m Map, row RatVec, corners [4][2]*big.Rat) {
 	t.Helper()
+	before := snapshotScalarRangeInputs(m, row, corners)
+	defer func() {
+		t.Helper()
+		after := snapshotScalarRangeInputs(m, row, corners)
+		for i := range before {
+			requireRatEqual(t, before[i], after[i])
+		}
+	}()
 	want, wantPanic := tryScalarRange(func() Interval { return legacyScalarRange(m, row, corners) })
 	got, gotPanic := tryScalarRange(func() Interval { return ScalarRange(m, row, corners) })
 	require.Equal(t, wantPanic, gotPanic)
@@ -47,6 +55,28 @@ func requireScalarRangeMatches(t *testing.T, m Map, row RatVec, corners [4][2]*b
 	}
 	requireRatEqual(t, want.Lo, got.Lo)
 	requireRatEqual(t, want.Hi, got.Hi)
+}
+
+// snapshotScalarRangeInputs returns fresh copies (no aliasing) of every
+// rational that ScalarRange reads, so a call that mutates one in place shows.
+func snapshotScalarRangeInputs(m Map, row RatVec, corners [4][2]*big.Rat) []*big.Rat {
+	var out []*big.Rat
+	add := func(x *big.Rat) {
+		out = append(out, new(big.Rat).SetFrac(new(big.Int).Set(x.Num()), new(big.Int).Set(x.Denom())))
+	}
+	for _, vec := range []RatVec{row, m.Constant, m.Q0, m.QU, m.QV} {
+		for _, x := range vec {
+			add(x)
+		}
+	}
+	for _, x := range []*big.Rat{m.G0, m.GU, m.GV} {
+		add(x)
+	}
+	for _, c := range corners {
+		add(c[0])
+		add(c[1])
+	}
+	return out
 }
 
 func randScalarRangeVec(rng *rand.Rand) RatVec {
@@ -130,7 +160,7 @@ func TestScalarRangeMatchesLegacyEdges(t *testing.T) {
 	requireScalarRangeMatches(t, odd, RatVec{big.NewRat(1, 61), big.NewRat(-5, 67), big.NewRat(9, 71)},
 		TileCorners(big.NewRat(-1, 73), big.NewRat(2, 79), big.NewRat(-3, 83), big.NewRat(4, 89)))
 
-	// A zero denominator at one corner panics in both bodies with the same value.
+	// With initialised rationals, a zero denominator at one corner panics in both bodies with the same value.
 	zeroG := Map{Constant: m.Constant, Q0: m.Q0, QU: m.QU, QV: m.QV, G0: new(big.Rat), GU: one, GV: new(big.Rat)}
 	_, panicked := tryScalarRange(func() Interval {
 		return ScalarRange(zeroG, row, TileCorners(new(big.Rat), one, half, one))

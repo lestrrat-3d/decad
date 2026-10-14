@@ -169,8 +169,10 @@ func TileCorners(u0, u1, v0, v1 *big.Rat) [4][2]*big.Rat {
 // v row . QV) / G(u, v): the dot product is linear, and F(u, v) is Constant
 // plus Q(u, v) scaled by 1/G(u, v). The four row dot products do not depend on
 // the corner, so each is taken once. Every operation is exact, so the value is
-// the same lowest-terms rational the corner-by-corner form gives. A zero
-// denominator panics in the division, as it does in Map.At.
+// the same lowest-terms rational the corner-by-corner form gives. For
+// fully initialised rationals, a zero denominator panics in the division with
+// the same value as in Map.At. A nil component is not a rational and is outside
+// the contract.
 func ScalarRange(m Map, row RatVec, corners [4][2]*big.Rat) Interval {
 	c, q0, qu, qv := VDot(row, m.Constant), VDot(row, m.Q0), VDot(row, m.QU), VDot(row, m.QV)
 	var out Interval
