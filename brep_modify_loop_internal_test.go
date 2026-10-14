@@ -168,7 +168,7 @@ func chamferLoopOf(t *testing.T, body *Body, n, p r3.Vec, li int, d float64) (*B
 	f := planarBodyFace(t, body, n, p)
 	out, err := Chamfer(t.Context(), body, loopQuery(f.Loops()[li]), units.Millimeters(d))
 	require.NoError(t, err)
-	require.Error(t, body.doc.requireLive(body), "the receiver is retired")
+	require.Error(t, documentHandle(body.n.Doc).requireLive(body), "the receiver is retired")
 	bp, ok := out.payload.(brepPayload)
 	require.True(t, ok, "route L builds a brep, got %T", out.payload)
 	require.Nil(t, bp.stack)
@@ -499,7 +499,7 @@ func TestBrepLoopChamferContourBound(t *testing.T) {
 			"the vertex at (%v, %v) is within its bound %v of the denoted corner", fx, fy, held.n.Bound)
 	}
 
-	before := out.doc.Bodies()
+	before := documentHandle(out.n.Doc).Bodies()
 	floor := planarBodyFace(t, out, routeEZ, r3.NewVec(0, 0, 5))
 	_, err := Chamfer(t.Context(), out, loopQuery(floor.Loops()[0]), units.Millimeters(1))
 	requireRefusesUnchanged(t, out, before, err, "brep-modify SB1")
@@ -573,7 +573,7 @@ func TestBrepLoopChamferRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			body := tc.body(t)
-			before := body.doc.Bodies()
+			before := documentHandle(body.n.Doc).Bodies()
 			sel := edgesQuery(tc.sel(t, body))
 			var err error
 			switch {
@@ -589,13 +589,13 @@ func TestBrepLoopChamferRefusals(t *testing.T) {
 	t.Run("a contour that vanishes", func(t *testing.T) {
 		t.Parallel()
 		body := plate(t)
-		before := body.doc.Bodies()
+		before := documentHandle(body.n.Doc).Bodies()
 		top := planarBodyFace(t, body, routeEZ, r3.NewVec(0, 0, 20))
 		_, err := Chamfer(t.Context(), body, loopQuery(top.Loops()[0]), units.Millimeters(3))
 		require.ErrorIs(t, err, ErrDegenerate)
 		require.ErrorContains(t, err, "no regular cap contour")
-		require.NoError(t, body.doc.requireLive(body))
-		require.Equal(t, before, body.doc.Bodies())
+		require.NoError(t, documentHandle(body.n.Doc).requireLive(body))
+		require.Equal(t, before, documentHandle(body.n.Doc).Bodies())
 	})
 }
 

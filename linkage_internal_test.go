@@ -406,7 +406,7 @@ func TestVerifyLinkageKeepsTheNextProducerIdentity(t *testing.T) {
 func TestVerifyLinkageRefusesABodyItDidNotBuild(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	foreignBuilt := bornBody(&Body{doc: doc, n: topo.Body{Kind: topo.BodySolid}})
+	foreignBuilt := bornBody(&Body{n: topo.Body{Kind: topo.BodySolid, Doc: documentNode(doc)}})
 	doc.commit(foreignBuilt)
 	l := NewLinkage()
 	slide, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*Body{foreignBuilt})

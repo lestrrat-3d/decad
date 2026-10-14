@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -1922,8 +1923,8 @@ func TestPrismOverlapVolumeDeclinesExactlyTangentPair(t *testing.T) {
 	}}
 	pb := pa
 	pb.Profile = profileRecord{Outer: synthRectLoop(10, 0, 20, 10)}
-	a := bornBody(&Body{doc: doc, payload: pa})
-	b := bornBody(&Body{doc: doc, payload: pb})
+	a := bornBody(&Body{n: topo.Body{Doc: documentNode(doc)}, payload: pa})
+	b := bornBody(&Body{n: topo.Body{Doc: documentNode(doc)}, payload: pb})
 
 	volume, ok, err := prismOverlapVolume(t.Context(), a, b)
 	require.NoError(t, err)
@@ -1945,8 +1946,8 @@ func TestPrismOverlapVolumeArrangementCapRefuses(t *testing.T) {
 		Profile: profileRecord{Outer: synthDenseRectLoop(prismcells.MaxArrangementSegments/8 + 1)},
 		Frame:   frame, Z0: 0, Z1: 10, Xform: r3.Identity(),
 	}}
-	a := bornBody(&Body{doc: doc, payload: pp})
-	b := bornBody(&Body{doc: doc, payload: pp})
+	a := bornBody(&Body{n: topo.Body{Doc: documentNode(doc)}, payload: pp})
+	b := bornBody(&Body{n: topo.Body{Doc: documentNode(doc)}, payload: pp})
 
 	_, ok, err := prismOverlapVolume(t.Context(), a, b)
 	require.False(t, ok)
@@ -2011,8 +2012,8 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 		pb := pa
 		pb.Profile = profileRecord{Outer: synthRectLoop(5, 5, 15, 15)}
 		pb.Xform = shifted
-		a := bornBody(&Body{doc: doc, payload: pa})
-		b := bornBody(&Body{doc: doc, payload: pb})
+		a := bornBody(&Body{n: topo.Body{Doc: documentNode(doc)}, payload: pa})
+		b := bornBody(&Body{n: topo.Body{Doc: documentNode(doc)}, payload: pb})
 		_, ok, err := prismOverlapVolume(t.Context(), a, b)
 		require.NoError(t, err)
 		require.False(t, ok, "G3: a non-coplanar pair must never admit")
@@ -2026,8 +2027,8 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 		pb := pa
 		pb.Profile = profileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}
 		pb.Xform = prismMirrorAcrossX(t, 0)
-		a := bornBody(&Body{doc: doc, payload: pa})
-		b := bornBody(&Body{doc: doc, payload: pb})
+		a := bornBody(&Body{n: topo.Body{Doc: documentNode(doc)}, payload: pa})
+		b := bornBody(&Body{n: topo.Body{Doc: documentNode(doc)}, payload: pb})
 		got, ok, err := prismOverlapVolume(t.Context(), a, b)
 		require.NoError(t, err)
 		require.True(t, ok)
@@ -2039,8 +2040,8 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 		pb.Profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			ellipseSeg{Center: planePoint{U: 20, V: 0}, Rx: units.Millimeters(4), Ry: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1},
 		}}}
-		a := bornBody(&Body{doc: doc, payload: pa})
-		b := bornBody(&Body{doc: doc, payload: pb})
+		a := bornBody(&Body{n: topo.Body{Doc: documentNode(doc)}, payload: pa})
+		b := bornBody(&Body{n: topo.Body{Doc: documentNode(doc)}, payload: pb})
 		_, ok, err := prismOverlapVolume(t.Context(), a, b)
 		require.NoError(t, err)
 		require.False(t, ok, "G4: a non-analytic (ellipse) segment must never admit")

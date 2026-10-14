@@ -60,7 +60,7 @@ type revolveJunction struct {
 // (docs/modify-reach-design.md §4 stages 4 to 6, §7). Stage 1 — the live
 // receiver, the magnitude and the selector — has already run in the caller.
 func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edges []*Edge, rp revolvePayload, op revolveBlendOp) (*Body, error) {
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	// The section-displacement guard, read as a modify refusal: the rewrite
 	// is of the recorded meridian, and a meridian displaced from the one it
 	// denotes has no proven rewrite (prismrecord.Payload.RequireExactSection's prism reading).

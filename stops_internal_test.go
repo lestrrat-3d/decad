@@ -46,10 +46,12 @@ func TestResolveThroughAllDecidesInPathOutsideDisplacement(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	doc := func(hi, bound float64) *Document {
-		return &Document{bodies: []*Body{bornBody(&Body{
-			n:       topo.Body{Origin: provenance.Ref{Producer: 1}},
-			payload: stubExtent{hi: hi, bound: bound},
-		})}}
+		return bornDocument(&Document{n: topo.Document{
+			LiveSet: []*topo.Body{bodyNode(bornBody(&Body{
+				n:       topo.Body{Origin: provenance.Ref{Producer: 1}},
+				payload: stubExtent{hi: hi, bound: bound},
+			}))},
+		}})
 	}
 
 	t.Run("beyond the plane", func(t *testing.T) {
@@ -94,10 +96,12 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 	}
 
 	t.Run("bounds a lower held contender", func(t *testing.T) {
-		doc := &Document{bodies: []*Body{
-			stopBody(1, 9.25, 1),
-			stopBody(2, 10, 0),
-		}}
+		doc := bornDocument(&Document{n: topo.Document{
+			LiveSet: []*topo.Body{
+				bodyNode(stopBody(1, 9.25, 1)),
+				bodyNode(stopBody(2, 10, 0)),
+			},
+		}})
 
 		stop, bound, refs, err := doc.resolveThroughAll(frame, 1)
 		require.NoError(t, err)
@@ -107,10 +111,12 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 	})
 
 	t.Run("refuses an unrepresentable contender", func(t *testing.T) {
-		doc := &Document{bodies: []*Body{
-			stopBody(1, math.MaxFloat64, math.MaxFloat64),
-			stopBody(2, math.MaxFloat64, 0),
-		}}
+		doc := bornDocument(&Document{n: topo.Document{
+			LiveSet: []*topo.Body{
+				bodyNode(stopBody(1, math.MaxFloat64, math.MaxFloat64)),
+				bodyNode(stopBody(2, math.MaxFloat64, 0)),
+			},
+		}})
 
 		_, _, _, err := doc.resolveThroughAll(frame, 1)
 		require.ErrorIs(t, err, ErrUnsupported)
@@ -247,7 +253,7 @@ func TestResolveToFaceRefusesStatedNormalDeparture(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			doc := &Document{}
+			doc := bornDocument(&Document{})
 			host, err := evalPrism(doc, 1, prismPayload{Payload: prismrecord.Payload{
 				Profile: profileRecord{Outer: synthRectLoop(0, 0, 1, 1)},
 				Frame:   frame,
@@ -256,7 +262,7 @@ func TestResolveToFaceRefusesStatedNormalDeparture(t *testing.T) {
 				Xform:   r3.Identity(),
 			}}, freeform.NewFreeformWork())
 			require.NoError(t, err)
-			doc.bodies = []*Body{host}
+			doc.n.LiveSet = []*topo.Body{bodyNode(host)}
 			ref := Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: 1, Role: provenance.RoleCapEnd})))
 			faces, err := ref.SelectFaces(host)
 			require.NoError(t, err)
@@ -280,7 +286,7 @@ func TestResolveToFaceRefusesStatedNormalDeparture(t *testing.T) {
 func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
-	doc := &Document{}
+	doc := bornDocument(&Document{})
 	host, err := evalPrism(doc, 1, prismPayload{Payload: prismrecord.Payload{
 		Profile: profileRecord{Outer: synthRectLoop(0, 0, 1, 1)},
 		Frame:   frame,
@@ -290,7 +296,7 @@ func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 		Xform:   r3.Identity(),
 	}}, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	doc.bodies = []*Body{host}
+	doc.n.LiveSet = []*topo.Body{bodyNode(host)}
 
 	for _, tc := range []struct {
 		name  string
@@ -328,7 +334,7 @@ func TestAngularStopEdgeNamesPublicCurveType(t *testing.T) {
 // 0 to z1, and returns the host document, the body and the far cap selector.
 func genericPlateHost(t *testing.T, f r3.Frame, z1 float64) (*Document, *Body, *FaceQuery) {
 	t.Helper()
-	doc := &Document{}
+	doc := bornDocument(&Document{})
 	host, err := evalPrism(doc, 1, prismPayload{Payload: prismrecord.Payload{
 		Profile: profileRecord{Outer: synthRectLoop(0, 0, 20, 20)},
 		Frame:   f,
@@ -337,7 +343,7 @@ func genericPlateHost(t *testing.T, f r3.Frame, z1 float64) (*Document, *Body, *
 		Xform:   r3.Identity(),
 	}}, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	doc.bodies = []*Body{host}
+	doc.n.LiveSet = []*topo.Body{bodyNode(host)}
 	return doc, host, Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: 1, Role: provenance.RoleCapEnd})))
 }
 

@@ -34,13 +34,13 @@ func (b *Body) tryChamferPrismUnion(ctx context.Context, edges []*Edge,
 		if !prismUnionFilletBandSeparate(pair[1], band) {
 			return nil, true, fmt.Errorf("%w: another Union source occupies the selected chamfer corner", ErrUnsupported)
 		}
-		out, err := chamferPrismUnionSource(ctx, b.doc, pp, sourceEdge, corner, setback)
+		out, err := chamferPrismUnionSource(ctx, documentHandle(b.n.Doc), pp, sourceEdge, corner, setback)
 		if err != nil {
 			return nil, true, err
 		}
 		// The removed triangular prism lies inside the certified corner box,
 		// which is strictly separate from the unchanged source's true body.
-		joined, err := booleanBody(ctx, meshbool.OpUnion, out, pair[1], b.doc.nextProducerID())
+		joined, err := booleanBody(ctx, meshbool.OpUnion, out, pair[1], b.n.Doc.NextProducer)
 		if err != nil {
 			return nil, true, err
 		}

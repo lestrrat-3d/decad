@@ -171,9 +171,9 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 	for i := range vertexBound {
 		vertexBound[i] = bound
 	}
-	ref := b.doc.nextProducerID()
+	ref := b.n.Doc.NextProducer
 	mesh.groups[8].origins[0].Producer = ref
-	result, err := buildFacetedBodyWithProof(ctx, b.doc, ref, facetedPayload{
+	result, err := buildFacetedBodyWithProof(ctx, documentHandle(b.n.Doc), ref, facetedPayload{
 		verts: mesh.verts, tris: mesh.tris, src: mesh.src, groups: mesh.groups,
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
 		areaSlack: areaSlack, dPair: dPair, contactAudited: true, xform: r3.Identity(),

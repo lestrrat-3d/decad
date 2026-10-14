@@ -209,7 +209,7 @@ func requireThroughShell(t *testing.T, body *Body, sel FaceSelector, th units.Va
 // lumps.
 func requireThroughShellLumps(t *testing.T, body *Body, sel FaceSelector, th units.Value, a, b *big.Rat, lumps int) (*Body, brepPayload) {
 	t.Helper()
-	doc := body.doc
+	doc := documentHandle(body.n.Doc)
 	result, err := Shell(t.Context(), body, sel, th)
 	require.NoError(t, err)
 	bp, ok := result.payload.(brepPayload)
@@ -644,7 +644,7 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 	t.Parallel()
 	refuses := func(t *testing.T, body *Body, sel FaceSelector, th units.Value, opts []ShellOption, want ...string) {
 		t.Helper()
-		before := body.doc.Bodies()
+		before := documentHandle(body.n.Doc).Bodies()
 		_, err := Shell(t.Context(), body, sel, th, opts...)
 		requireRefusesUnchanged(t, body, before, err, want...)
 	}
@@ -796,7 +796,7 @@ func shellLoopCorners(t *testing.T, bp brepPayload, fi int, loop loopRecord) [][
 // occupied-volume proof to cover a + b·π.
 func requireShellSound(t *testing.T, result *Body, a, b *big.Rat) {
 	t.Helper()
-	rep, err := result.doc.Verify(t.Context())
+	rep, err := documentHandle(result.n.Doc).Verify(t.Context())
 	require.NoError(t, err)
 	br, err := rep.ForBody(result)
 	require.NoError(t, err)

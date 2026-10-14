@@ -195,7 +195,7 @@ func TestBrepFilletBooleanOperand(t *testing.T) {
 		t.Parallel()
 		_, pocket := internalRouteEPocket(t)
 		out, _ := filletLoopOfFace(t, pocket, routeEZ, r3.NewVec(0, 0, 10), 1, 1.5)
-		tool := internalOffsetBox(t, out.doc, -5, -5, 5, 45, -5, Distance{D: units.Millimeters(20), Dir: Along})
+		tool := internalOffsetBox(t, documentHandle(out.n.Doc), -5, -5, 5, 45, -5, Distance{D: units.Millimeters(20), Dir: Along})
 		got, err := Cut(t.Context(), out, tool)
 		require.NoError(t, err)
 		lo, hi := pp(q(12865, 1), q(225, 8), q(27, 16)).enclosed()
@@ -254,7 +254,7 @@ func TestBrepFilletSurveys(t *testing.T) {
 		pull  r3.Vec
 		lists int
 	}{{r3.NewVec(0, 0, 1), 0}, {r3.NewVec(0, 0, -1), 1}} {
-		rep, err := root.doc.Verify(t.Context(), WithPullDirection(tc.pull))
+		rep, err := documentHandle(root.n.Doc).Verify(t.Context(), WithPullDirection(tc.pull))
 		require.NoError(t, err)
 		br, err := rep.ForBody(root)
 		require.NoError(t, err)
@@ -266,7 +266,7 @@ func TestBrepFilletSurveys(t *testing.T) {
 	}
 	_, pocket := internalRouteEPocket(t)
 	mouth, _ := filletLoopOfFace(t, pocket, routeEZ, r3.NewVec(0, 0, 10), 1, 1.5)
-	rep, err := mouth.doc.Verify(t.Context(), WithPullDirection(r3.NewVec(0, 0, -1)))
+	rep, err := documentHandle(mouth.n.Doc).Verify(t.Context(), WithPullDirection(r3.NewVec(0, 0, -1)))
 	require.NoError(t, err)
 	br, err := rep.ForBody(mouth)
 	require.NoError(t, err)
@@ -281,7 +281,7 @@ func TestBrepFilletSurveys(t *testing.T) {
 
 	_, pocket = internalRouteEPocket(t)
 	floor, _ := filletLoopOfFace(t, pocket, routeEZ, r3.NewVec(0, 0, 5), 0, 1.5)
-	rep, err = floor.doc.Verify(t.Context(), WithConcaveRadius())
+	rep, err = documentHandle(floor.n.Doc).Verify(t.Context(), WithConcaveRadius())
 	require.NoError(t, err)
 	br, err = rep.ForBody(floor)
 	require.NoError(t, err)
@@ -289,7 +289,7 @@ func TestBrepFilletSurveys(t *testing.T) {
 	require.NotNil(t, br.ConcaveRadius.Minimum)
 	require.InDelta(t, 1.5, br.ConcaveRadius.Minimum.Value.Base(), 1e-12)
 
-	rep, err = mouth.doc.Verify(t.Context(), WithConcaveRadius())
+	rep, err = documentHandle(mouth.n.Doc).Verify(t.Context(), WithConcaveRadius())
 	require.NoError(t, err)
 	br, err = rep.ForBody(mouth)
 	require.NoError(t, err)
@@ -299,7 +299,7 @@ func TestBrepFilletSurveys(t *testing.T) {
 	// loop's convex fillet adds none.
 	_, s1 := internalCrossDrilled(t)
 	top, _ := filletLoopOfFace(t, s1, routeEZ, r3.NewVec(0, 0, 20), 0, 2)
-	rep, err = top.doc.Verify(t.Context(), WithConcaveRadius())
+	rep, err = documentHandle(top.n.Doc).Verify(t.Context(), WithConcaveRadius())
 	require.NoError(t, err)
 	br, err = rep.ForBody(top)
 	require.NoError(t, err)
@@ -336,7 +336,7 @@ func TestBrepFilletUndercutAgainstSamples(t *testing.T) {
 			}
 			for _, pull := range pulls {
 				p, _ := pull.Normalize()
-				rep, err := out.doc.Verify(t.Context(), WithPullDirection(pull))
+				rep, err := documentHandle(out.n.Doc).Verify(t.Context(), WithPullDirection(pull))
 				require.NoError(t, err)
 				br, err := rep.ForBody(out)
 				require.NoError(t, err)

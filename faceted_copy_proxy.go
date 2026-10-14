@@ -20,7 +20,7 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 	proxy *Mesh) ([]facetproof.PlacedMesh, error) {
 	if ctx == nil || set == nil || set.source == nil || proxy == nil ||
 		len(set.tools) < 2 || len(set.moves) != len(set.tools) ||
-		set.source.doc.requireLive(set.source) != nil ||
+		documentHandle(set.source.n.Doc).requireLive(set.source) != nil ||
 		!proxy.n.BoundaryOK || !proxy.n.SymDiffOK {
 		return nil, fmt.Errorf("%w: copied proxy lacks a live source proof", ErrUnsupported)
 	}
@@ -57,8 +57,8 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 	copies[0] = shellseparation.HeldCopy{Verts: proxy.n.Vertices, Tris: proxy.n.Triangles, Linked: true}
 	for i := 1; i < len(set.tools); i++ {
 		tool := set.tools[i]
-		if tool == nil || tool.doc != set.source.doc ||
-			set.source.doc.requireLive(tool) != nil {
+		if tool == nil || tool.n.Doc != set.source.n.Doc ||
+			documentHandle(set.source.n.Doc).requireLive(tool) != nil {
 			return nil, fmt.Errorf("%w: copied proxy tool %d lost its live placement", ErrUnsupported, i+1)
 		}
 		part, ok := tool.payload.(facetedPayload)

@@ -533,7 +533,7 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 	}
 	record := first.loftMirrorJoin
 	if record.lower == nil || record.upper == nil || record.stationCount < 3 ||
-		record.lower.doc != d || record.upper.doc != d {
+		record.lower.n.Doc != documentNode(d) || record.upper.n.Doc != documentNode(d) {
 		return nil, false, nil
 	}
 	lower, lowOK := record.lower.payload.(loftPayload)
@@ -569,7 +569,7 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 	var bridgeBound, bridgeVolume float64
 	for i, pair := range pairs {
 		payload, ok := pair.payload.(facetedPayload)
-		if !ok || !payload.contactAudited || pair.doc != d {
+		if !ok || !payload.contactAudited || pair.n.Doc != documentNode(d) {
 			return nil, false, nil
 		}
 		motion, ok := loftMirrorCylinderPairMotion(payload, record)

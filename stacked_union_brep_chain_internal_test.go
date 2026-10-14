@@ -224,7 +224,7 @@ func TestStackedUnionBrepOperandMisses(t *testing.T) {
 		crossing, err := Union(t.Context(), plate, round)
 		require.NoError(t, err)
 		require.Positive(t, requireBrep(t, crossing).stack.delta)
-		second := internalBoxBodyAtZ(t, plate.doc, -20, 10, -10, 20, 10, 15)
+		second := internalBoxBodyAtZ(t, documentHandle(plate.n.Doc), -20, 10, -10, 20, 10, 15)
 		_, ok, err := tryStackedUnion(t.Context(), crossing, second)
 		require.NoError(t, err)
 		require.False(t, ok)

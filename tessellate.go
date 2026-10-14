@@ -348,7 +348,7 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if b == nil || b.doc == nil {
+	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
 	chord, err := sectionrecord.MagnitudeIn(tol, units.Length, units.Millimeter, "the chord tolerance")

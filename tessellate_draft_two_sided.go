@@ -33,7 +33,7 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		part, err := evalDraftContext(ctx, body.doc, body.n.Origin.Producer, payload)
+		part, err := evalDraftContext(ctx, documentHandle(body.n.Doc), body.n.Origin.Producer, payload)
 		if err != nil {
 			return nil, err
 		}

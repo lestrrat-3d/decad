@@ -60,7 +60,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	if pp.SurfaceResult {
 		kind = BodySheet
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: !pp.SurfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind)}})
+	body := bornBody(&Body{n: topo.Body{Solid: !pp.SurfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind), Doc: documentNode(d)}})
 
 	// The LEVEL half of the shared-denotation certificate (denotation.go):
 	// minted only when this payload's own section is drawn straight from its
@@ -76,8 +76,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	var levelZ0, levelZ1 levelToken
 	if pp.SectionDelta == 0 {
 		levelNormal := pp.Dir(0, 0, 1)
-		levelZ0 = d.mintLevel(pp.Point(0, 0, pp.Z0), levelNormal)
-		levelZ1 = d.mintLevel(pp.Point(0, 0, pp.Z1), levelNormal)
+		levelZ0 = d.n.MintLevel(pp.Point(0, 0, pp.Z0), levelNormal)
+		levelZ1 = d.n.MintLevel(pp.Point(0, 0, pp.Z1), levelNormal)
 	}
 
 	// Topology: one shell over every loop's side faces plus the two caps.
@@ -458,7 +458,7 @@ func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPay
 // leave every certificate check refusing by default.
 //
 // mintCurveTokens is the CURVE half of the shared-denotation certificate:
-// true mints a fresh curveID (body.doc.mintCurve) for every rim vertex and
+// true mints a fresh curveID (body.n.Doc.MintCurve) for every rim vertex and
 // rim edge this loop places, at EITHER end, unconditionally — unlike the
 // LEVEL half, minting a curve identity claims nothing about the section
 // itself, so it needs no sectionDelta==0 precondition; freshness alone is
@@ -470,7 +470,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		if !mintCurveTokens {
 			return curveToken{}
 		}
-		return body.doc.mintCurve()
+		return body.n.Doc.MintCurve()
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, proofbound.BoundedScalar{}, err

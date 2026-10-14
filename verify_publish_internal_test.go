@@ -804,12 +804,12 @@ func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
 	t.Parallel()
 	built := rectangularPrism(t, 100, 60, 10)
 	body := bornBody(&Body{
-		doc: built.doc,
 		n: topo.Body{Solid: built.n.Solid, Origin: built.n.Origin, Volume: built.n.Volume,
 			Area:     built.n.Area,
 			Centroid: built.n.Centroid,
 			Bounds:   built.n.Bounds,
 			Lumps:    built.n.Lumps,
+			Doc:      built.n.Doc,
 		},
 	})
 

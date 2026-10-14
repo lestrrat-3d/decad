@@ -44,7 +44,7 @@ import (
 // has already run in Shell. removed is nil for a WithNoOpenings full turn. s
 // is +1 inward, −1 outward.
 func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*Face, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	// The section-displacement guard, read as a modify refusal: the offset
 	// is of the recorded meridian, and a meridian displaced from the one it
 	// denotes has no proven offset (prismrecord.Payload.RequireExactSection's prism reading).

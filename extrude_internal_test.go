@@ -612,7 +612,7 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 	})
 	t.Run("buildLoopSidesAs", func(t *testing.T) {
 		pp := prismPayload{Payload: prismrecord.Payload{Profile: near, Frame: identityFrame(t), Z1: 5, Xform: r3.Identity()}}
-		body := bornBody(&Body{doc: New(), n: topo.Body{Solid: true}})
+		body := bornBody(&Body{n: topo.Body{Solid: true, Doc: documentNode(New())}})
 		_, _, _, _, err := buildLoopSidesAs(t.Context(), body, 0, pp, 0, false, far.Outer, freeform.NewFreeformWork(), pw, levelToken{}, levelToken{}, false)
 		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})

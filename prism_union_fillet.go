@@ -55,7 +55,7 @@ func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
 			!prismUnionFilletBandSeparate(pair[1], band) {
 			continue
 		}
-		out, err := filletPrismUnionSource(ctx, b.doc, pp, sourceEdge, corner, radius)
+		out, err := filletPrismUnionSource(ctx, documentHandle(b.n.Doc), pp, sourceEdge, corner, radius)
 		if err != nil {
 			return nil, true, err
 		}
@@ -63,7 +63,7 @@ func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
 		// strictly outside the other source's true box. Thus R∩B is empty,
 		// and (A\R)∪B equals (A∪B)\R. The ordinary Boolean rebuild supplies
 		// its own occupied-volume and boundary certificates.
-		joined, err := booleanBody(ctx, meshbool.OpUnion, out, pair[1], b.doc.nextProducerID())
+		joined, err := booleanBody(ctx, meshbool.OpUnion, out, pair[1], b.n.Doc.NextProducer)
 		if err != nil {
 			return nil, true, err
 		}

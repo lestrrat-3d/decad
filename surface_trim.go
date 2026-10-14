@@ -33,10 +33,10 @@ func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, 
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an extension`, ErrDegenerate)
 	}
-	if b == nil || b.doc == nil {
+	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
@@ -207,10 +207,10 @@ func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a trim`, ErrDegenerate)
 	}
-	if b == nil || b.doc == nil {
+	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
@@ -402,10 +402,10 @@ func Split(ctx context.Context, target, tool *Body) ([]*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a split`, ErrDegenerate)
 	}
-	if target == nil || target.doc == nil {
+	if target == nil || target.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the split target belongs to no document`, ErrDegenerate)
 	}
-	d := target.doc
+	d := documentHandle(target.n.Doc)
 	if err := d.requireLive(target); err != nil {
 		return nil, err
 	}
@@ -506,7 +506,7 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 // free-end fragments before publishing its regions, so an inside stub and an
 // outside stub arrive identically (§4's own row, RS3).
 func (b *Body) trimRevolve(ctx context.Context, budget *proofbound.WorkBudget, tool *Body, keepInside bool) (*Body, error) {
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	rcv, rcvView, tlView, err := admitTrimRevolvePair(ctx, budget, b, tool)
 	if err != nil {
 		return nil, err
@@ -718,7 +718,7 @@ func revolveChainClearOfAxis(ctx context.Context, rp chainRevolvePayload) (bool,
 // MERIDIAN views (§3.1), and the widened range goes back into the receiver's
 // own record. Only the gate and the free-edge reading differ.
 func (b *Body) extendRevolve(ctx context.Context, budget *proofbound.WorkBudget, selected []*Edge, tool *Body) (*Body, error) {
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	rcv, rcvView, tlView, err := admitExtendRevolvePair(ctx, budget, b, tool)
 	if err != nil {
 		return nil, err

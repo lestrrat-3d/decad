@@ -86,9 +86,9 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	if proofbound.IsNonFinite(dPair) {
 		return nil, true, fmt.Errorf("%w: the cross-bore chamfer has no finite diameter", ErrUnsupported)
 	}
-	ref := body.doc.nextProducerID()
+	ref := body.n.Doc.NextProducer
 	mesh.groups[4].origins[0].Producer = ref
-	result, err := buildFacetedBodyWithProof(ctx, body.doc, ref, facetedPayload{
+	result, err := buildFacetedBodyWithProof(ctx, documentHandle(body.n.Doc), ref, facetedPayload{
 		verts: mesh.verts, tris: mesh.tris, src: mesh.src, groups: mesh.groups,
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
 		areaSlack: areaSlack, dPair: dPair, contactAudited: true, xform: r3.Identity(),

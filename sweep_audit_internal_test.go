@@ -20,7 +20,7 @@ func TestSweepAuditAcceptsSeparatedStraightSpans(t *testing.T) {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 	profile := unitSquareProfile()
-	doc := &Document{}
+	doc := bornDocument(&Document{})
 	spans := make([]sweepAuditSpan, 3)
 	for i := range spans {
 		body, buildErr := evalPrismContext(t.Context(), doc, producerID(i+1), prismPayload{Payload: prismrecord.Payload{
@@ -45,7 +45,7 @@ func TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs(t *testing.T) {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 	profile := unitSquareProfile()
-	doc := &Document{}
+	doc := bornDocument(&Document{})
 	build := func(z0, z1 float64) sweepAuditSpan {
 		body, buildErr := evalPrismContext(t.Context(), doc, 1, prismPayload{Payload: prismrecord.Payload{
 			Profile: profile,

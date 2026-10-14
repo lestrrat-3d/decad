@@ -158,10 +158,10 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a shell`, ErrDegenerate)
 	}
-	if b == nil || b.doc == nil {
+	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 
 	// Stage 1 pre-gates (§4): a live receiver (S17), the options, a valid
 	// magnitude (S15), a non-zero one (S14), then a selector that matches (S16).
@@ -529,7 +529,7 @@ func refuseClosedShell(payload featurePayload) error {
 // The offset loops carry their proven displacement as the stack's section
 // displacement.
 func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	if err := pp.RequireExactSection("shells"); err != nil {
 		return nil, err
 	}

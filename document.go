@@ -16,13 +16,12 @@ import (
 // producer identities used for topology provenance. It is immediate-mode —
 // the caller's Go function is the feature tree (core §6) — and it is NOT
 // safe for concurrent mutation (core §12), with one guarded exception: the
-// live body set sits behind mu, so Bodies, Remove and Verify may run
+// live body set sits behind its node's LiveMu, so Bodies, Remove and Verify may run
 // concurrently with one another. The bodies it hands out are immutable and
 // safe to read from anywhere.
 type Document struct {
 	// n is the node data internal packages read and build (internal/topo).
-	n      topo.Document
-	bodies []*Body
+	n topo.Document
 }
 
 // DocumentOption is a placeholder option tier for New. No options exist yet;
@@ -34,7 +33,7 @@ type DocumentOption interface {
 
 // New returns an empty document.
 func New(_ ...DocumentOption) *Document {
-	return &Document{}
+	return bornDocument(&Document{})
 }
 
 // Bodies returns the live bodies — the model as it stands. The slice is a
@@ -43,11 +42,10 @@ func (d *Document) Bodies() []*Body {
 	return d.liveBodies()
 }
 
-// liveBodies is the snapshot every internal reader of the live set walks.
+// liveBodies is the handle snapshot every root reader of the live set walks:
+// the node's Live copy, taken under LiveMu, mapped to its handles.
 func (d *Document) liveBodies() []*Body {
-	d.n.Mu.RLock()
-	defer d.n.Mu.RUnlock()
-	return append([]*Body(nil), d.bodies...)
+	return bodyHandles(d.n.Live())
 }
 
 // Remove takes b out of the live model by the caller's own hand: b leaves
@@ -67,13 +65,13 @@ func Remove(b *Body) error {
 	if b == nil {
 		return fmt.Errorf(`%w: a nil body names nothing to remove`, ErrDegenerate)
 	}
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	if d == nil {
 		return fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d.n.Mu.Lock()
-	defer d.n.Mu.Unlock()
-	if !slices.Contains(d.bodies, b) {
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
+	if !slices.Contains(d.n.LiveSet, bodyNode(b)) {
 		return ErrRetiredBody
 	}
 	d.retire(b)
@@ -86,12 +84,12 @@ func Remove(b *Body) error {
 // a rejected operation leaves the document untouched.
 func (d *Document) commit(produced *Body, consumed ...*Body) {
 	d.n.NextProducer++
-	d.n.Mu.Lock()
-	defer d.n.Mu.Unlock()
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
 	for _, c := range consumed {
 		d.retire(c)
 	}
-	d.bodies = append(d.bodies, produced)
+	d.n.LiveSet = append(d.n.LiveSet, bodyNode(produced))
 }
 
 // commitMany is commit's N-producer variant (docs/surface-design.md §6.5):
@@ -106,12 +104,12 @@ func (d *Document) commit(produced *Body, consumed ...*Body) {
 // producer.
 func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
 	d.n.NextProducer += producerID(len(produced))
-	d.n.Mu.Lock()
-	defer d.n.Mu.Unlock()
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
 	for _, c := range consumed {
 		d.retire(c)
 	}
-	d.bodies = append(d.bodies, produced...)
+	d.n.LiveSet = append(d.n.LiveSet, bodyNodes(produced)...)
 }
 
 // commitSpan is commit for an operation that evaluated several bodies under
@@ -122,32 +120,26 @@ func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
 // producer never repeats one a result's provenance can carry.
 func (d *Document) commitSpan(produced *Body, span producerID, consumed ...*Body) {
 	d.n.NextProducer += span
-	d.n.Mu.Lock()
-	defer d.n.Mu.Unlock()
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
 	for _, c := range consumed {
 		d.retire(c)
 	}
-	d.bodies = append(d.bodies, produced)
+	d.n.LiveSet = append(d.n.LiveSet, bodyNode(produced))
 }
 
 // retire removes a body from the live set. The body itself is untouched —
 // retiring is a change of document membership, not of the body (core §6).
-// The caller holds mu.
+// The caller holds LiveMu.
 func (d *Document) retire(b *Body) {
-	for i, live := range d.bodies {
-		if live != b {
+	n := bodyNode(b)
+	for i, live := range d.n.LiveSet {
+		if live != n {
 			continue
 		}
-		d.bodies = append(d.bodies[:i], d.bodies[i+1:]...)
+		d.n.LiveSet = append(d.n.LiveSet[:i], d.n.LiveSet[i+1:]...)
 		return
 	}
-}
-
-// isLive reports whether b is currently part of the model.
-func (d *Document) isLive(b *Body) bool {
-	d.n.Mu.RLock()
-	defer d.n.Mu.RUnlock()
-	return slices.Contains(d.bodies, b)
 }
 
 // nextProducerID is the identity the next successful operation will occupy.
@@ -159,10 +151,10 @@ func (d *Document) requireLive(b *Body) error {
 	if b == nil {
 		return fmt.Errorf(`%w: a nil body names nothing to operate on`, ErrDegenerate)
 	}
-	if b.doc != d {
+	if b.n.Doc != documentNode(d) {
 		return ErrForeignBody
 	}
-	if !d.isLive(b) {
+	if !d.n.IsLive(bodyNode(b)) {
 		return ErrRetiredBody
 	}
 	return nil
@@ -194,10 +186,10 @@ func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a placement`, ErrDegenerate)
 	}
-	if body == nil || body.doc == nil {
+	if body == nil || body.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := body.doc
+	d := documentHandle(body.n.Doc)
 	if err := d.requireLive(body); err != nil {
 		return nil, err
 	}
@@ -327,10 +319,10 @@ func Copy(ctx context.Context, source *Body, opts ...CopyOption) (*Body, error) 
 // A non-nil exact record asks a faceted payload for the exact-rotation
 // placement; every other payload places by motion alone.
 func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactrotation.Rotation) (*Body, error) {
-	if b == nil || b.doc == nil {
+	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}

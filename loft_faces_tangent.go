@@ -42,7 +42,7 @@ func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ..
 		return nil, fmt.Errorf("%w: LoftFacesToConeTangent needs a context, a cone and 1 to %d cap faces",
 			ErrDegenerate, maxLoftFacesSections-1)
 	}
-	d := end.Cone.doc
+	d := documentHandle(end.Cone.n.Doc)
 	if d == nil {
 		return nil, fmt.Errorf("%w: the cone belongs to no document", ErrDegenerate)
 	}

@@ -24,7 +24,7 @@ The rules for rows live in `docs/layout.md`.
 | `thicken_chain_sweep.go` | Thickens admitted one-arc and cardinal composite chain sheets. See surface §16.8. |
 | `offset.go` | `Offset`: a second sheet at a normal distance. See surface §17. |
 | `patch_body.go` | `PatchEdges` topology adapter and face build. See surface §5.2. |
-| `denotation.go` | Mints document tokens. |
+| `denotation.go` | Level and curve token names and comparisons; the document node mints them. |
 | `stitch_weld.go` | Adapts Stitch topology to Table J. See surface §6.2. |
 | `stitch.go` | `Stitch` evaluator and topology adapter. See surface §6.4. |
 | `stitch_flux.go` | Stitch face flux, mass and tag adapters. See surface §6.4. |

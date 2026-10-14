@@ -327,8 +327,8 @@ func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 func TestBodyPatchRejectsAReceiverWithNoPayload(t *testing.T) {
 	t.Parallel()
 	d := New()
-	b := bornBody(&Body{doc: d, n: topo.Body{Origin: provenance.Ref{Role: provenance.RoleBody}, Kind: topo.BodySheet}})
-	d.bodies = append(d.bodies, b)
+	b := bornBody(&Body{n: topo.Body{Origin: provenance.Ref{Role: provenance.RoleBody}, Kind: topo.BodySheet, Doc: documentNode(d)}})
+	d.n.LiveSet = append(d.n.LiveSet, bodyNode(b))
 
 	_, err := PatchEdges(t.Context(), b, Edges(Free()))
 	require.ErrorIs(t, err, ErrUnsupported)

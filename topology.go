@@ -652,8 +652,6 @@ func (l *Lump) Shells() []*FaceShell { return faceShellHandles(l.n.Shells) }
 // Body is an immutable solid: every operation returns a new one, and the
 // input body is retired from its document (core §6).
 type Body struct {
-	doc *Document
-
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Body
 
@@ -673,7 +671,7 @@ type Body struct {
 }
 
 // Document returns the document that owns (or owned) this body.
-func (b *Body) Document() *Document { return b.doc }
+func (b *Body) Document() *Document { return documentHandle(b.n.Doc) }
 
 // Origin returns the feature that created this body.
 func (b *Body) Origin() FeatureRef { return featureRefOf(b.n.Origin) }

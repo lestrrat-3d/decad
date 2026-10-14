@@ -32,7 +32,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 		return nil, fmt.Errorf("%w: joined-prism fillet has no selected roots", ErrUnsupported)
 	}
 	rec := old.prismPatternJoin
-	ref := body.doc.nextProducerID()
+	ref := body.n.Doc.NextProducer
 	mesh, _, arcBound, err := prismPatternFilletShell(ctx, rec, contacts, radius, ref)
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 		[2]float64{rec.source.blank.Z0, rec.source.blank.Z1}, ref); err != nil {
 		return nil, err
 	}
-	out, err := buildFacetedBody(ctx, body.doc, ref, result)
+	out, err := buildFacetedBody(ctx, documentHandle(body.n.Doc), ref, result)
 	if err != nil {
 		return nil, err
 	}

@@ -20,7 +20,7 @@ import (
 // and the document's body set unchanged.
 func requireBrepModifyRefuses(t *testing.T, body *Body, want string) {
 	t.Helper()
-	doc := body.doc
+	doc := documentHandle(body.n.Doc)
 	before := doc.Bodies()
 	edges := Edges(Convex()).AtLeast(1)
 	_, err := Fillet(t.Context(), body, edges, units.Millimeters(1))
@@ -70,7 +70,7 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 	t.Parallel()
 	refuses := func(t *testing.T, body *Body, shell ...string) {
 		t.Helper()
-		before := body.doc.Bodies()
+		before := documentHandle(body.n.Doc).Bodies()
 		edges := Edges(Convex(), EndpointAt(r3.NewVec(0, 0, 0))).Exactly(3)
 		_, err := Chamfer(t.Context(), body, edges, units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, rowSL1, "chamfers")

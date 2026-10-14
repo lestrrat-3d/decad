@@ -132,7 +132,7 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 	rewriteCompositeEdge(parts[0], previous.end, following.start)
 	following.start.n.Faces = append(following.start.n.Faces, previous.end.n.Faces...)
 
-	body := bornBody(&Body{doc: d, n: topo.Body{Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet}})
+	body := bornBody(&Body{n: topo.Body{Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet, Doc: documentNode(d)}})
 	faces := []*Face{parts[0].Faces()[0], parts[1].Faces()[0]}
 	for i, face := range faces {
 		rewriteCompositeSideRoles(face, i)

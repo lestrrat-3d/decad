@@ -378,7 +378,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	if err != nil {
 		return nil, err
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySolid}})
+	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySolid, Doc: documentNode(d)}})
 	work := freeform.NewFreeformWork()
 	base := sp.outerPrism()
 	colDelta := make([]float64, len(columns))

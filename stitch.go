@@ -75,7 +75,7 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 			return nil, fmt.Errorf(`%w: Stitch requires every operand to carry an evaluator payload`, ErrDegenerate)
 		}
 	}
-	d := bodies[0].doc
+	d := documentHandle(bodies[0].n.Doc)
 	for _, b := range bodies {
 		if err := d.requireLive(b); err != nil {
 			return nil, err
@@ -407,7 +407,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	default:
 	}
 
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: solid, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind)}})
+	body := bornBody(&Body{n: topo.Body{Solid: solid, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind), Doc: documentNode(d)}})
 	for _, f := range newFaces {
 		f.n.Body = bodyNode(body)
 	}

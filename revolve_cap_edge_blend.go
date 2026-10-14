@@ -137,7 +137,7 @@ func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolvemesh
 		f := roles[role]
 		groups[i] = facetGroup{origins: f.originRefs(), planar: f.isPlanar()}
 	}
-	ref := body.doc.nextProducerID()
+	ref := body.n.Doc.NextProducer
 	blendRole := "fillet(0,1)"
 	if source.Kind == revolvemesh.RimChamfer {
 		blendRole = "chamfer(0,1)"
@@ -199,13 +199,13 @@ func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolvemesh
 	fp := facetedPayload{verts: verts, tris: tris, src: src, groups: groups,
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: missing,
 		areaSlack: areaSlack, dPair: dPair, xform: r3.Identity()}
-	out, err := buildFacetedBody(ctx, body.doc, ref, fp)
+	out, err := buildFacetedBody(ctx, documentHandle(body.n.Doc), ref, fp)
 	if err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body.doc.commit(out, body)
+	documentHandle(body.n.Doc).commit(out, body)
 	return out, nil
 }

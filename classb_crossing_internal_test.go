@@ -27,7 +27,7 @@ func requireCrossingBrep(t *testing.T, result *Body, want float64) brepPayload {
 	require.NoError(t, err)
 	held, _ := internalMeshVolumeRat(mesh).Float64()
 	require.InDelta(t, want, held, mesh.n.VolSymDiff+1e-9*want)
-	report, err := result.doc.Verify(t.Context())
+	report, err := documentHandle(result.n.Doc).Verify(t.Context())
 	require.NoError(t, err)
 	br, err := report.ForBody(result)
 	require.NoError(t, err)

@@ -28,7 +28,7 @@ func internalBrepBody(t *testing.T, src *Body) *Body {
 		t.Fatalf("no face view for %T", src.payload)
 	}
 	require.NoError(t, err)
-	return internalCommitBrep(t, src.doc, bp)
+	return internalCommitBrep(t, documentHandle(src.n.Doc), bp)
 }
 
 func internalCommitBrep(t *testing.T, doc *Document, bp brepPayload) *Body {

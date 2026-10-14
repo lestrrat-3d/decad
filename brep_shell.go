@@ -249,7 +249,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	// brepTopologyContext (an unpaired edge is ErrUnsupported) and measures
 	// the body (a non-positive volume is ErrDegenerate).
 	out.assignRoles()
-	return evalBrepContext(ctx, b.doc, b.doc.nextProducerID(), out)
+	return evalBrepContext(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, out)
 }
 
 // throughSection is A ⊖ t's section: eroded, and for a removed wall run the

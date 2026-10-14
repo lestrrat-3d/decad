@@ -196,7 +196,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 	cbp := dp.band()
 	loops := cbp.loops()
 	nearZ, nearDelta, farZ, matSign := dp.levels()
-	body := bornBody(&Body{doc: doc, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}}})
+	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Doc: documentNode(doc)}})
 	pl := cbp.prismLike(0, 0)
 
 	var faces []*Face

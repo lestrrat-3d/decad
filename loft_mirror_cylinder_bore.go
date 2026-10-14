@@ -40,7 +40,7 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 	}
 	record := joined.loftMirrorCylinderJoin
 	if record.blank == nil || record.source == nil || record.lowerHalf == nil ||
-		len(record.pairs) == 0 || record.lowerHalf.doc != d || record.blank.doc != d ||
+		len(record.pairs) == 0 || record.lowerHalf.n.Doc != documentNode(d) || record.blank.n.Doc != documentNode(d) ||
 		record.bridgeBound < 0 || record.bridgeVolume < 0 ||
 		proofbound.IsNonFinite(record.bridgeBound) || proofbound.IsNonFinite(record.bridgeVolume) {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its bore sources", ErrUnsupported)

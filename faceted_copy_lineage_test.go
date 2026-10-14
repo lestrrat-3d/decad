@@ -36,11 +36,11 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 
 	overlap, err := Copy(t.Context(), source)
 	require.NoError(t, err)
-	before := source.doc.Bodies()
+	before := documentHandle(source.n.Doc).Bodies()
 	_, err = certifyFacetedCopies(t.Context(), []*Body{source, overlap})
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "not separate")
-	require.Equal(t, before, source.doc.Bodies())
+	require.Equal(t, before, documentHandle(source.n.Doc).Bodies())
 
 	quarter, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(90))
 	require.NoError(t, err)

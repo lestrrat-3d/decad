@@ -89,7 +89,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.Z0, pa.Z0Delta, pbZ0, pb.Z0Delta)
 	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.Z1, pa.Z1Delta, pbZ1, pb.Z1Delta)
 
-	d := a.doc
+	d := documentHandle(a.n.Doc)
 	values := make([]float64, 0, len(selected))
 	boundTerms := make([]float64, 0, len(selected))
 	for _, p := range selected {

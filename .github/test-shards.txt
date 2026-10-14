@@ -1522,3 +1522,6 @@
 10	0.00	TestLoftCircleBoreExactAxisProof
 10	0.00	TestLoftCircleBoreTopologyShapeRefusals
 10	0.00	TestLoftWallAreaCacheMatchesHeldTriangles
+10	0.00	TestTopoDocumentWriteGuard
+10	0.00	TestCertifyFacetedCopiesRejectsBodiesOutsideTheDocument
+10	0.00	TestDocumentHandleAndNodeIdentity

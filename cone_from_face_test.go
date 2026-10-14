@@ -71,7 +71,7 @@ func TestConeFromFaceIsStrictlyOffBlankFaces(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			blank := spiralTestRevolveBlank(t, section)
-			doc := blank.doc
+			doc := documentHandle(blank.n.Doc)
 			before := len(doc.Bodies())
 			cone, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, tc.a, tc.b), far)
 			require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestConeFromFaceRefuses(t *testing.T) {
 			_, err := ConeFromFace(t.Context(), blank, sel, value)
 			require.ErrorIs(t, err, ErrDegenerate, name)
 		}
-		require.Len(t, blank.doc.Bodies(), 1, "refusals leave the document unchanged")
+		require.Len(t, documentHandle(blank.n.Doc).Bodies(), 1, "refusals leave the document unchanged")
 	})
 	t.Run("selector cardinality", func(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, section)
@@ -180,10 +180,10 @@ func TestConeFromFaceCancelled(t *testing.T) {
 	sel := coneFromFaceSelector(t, blank, coneFromFaceSpiralSection()[3], coneFromFaceSpiralSection()[2])
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	before := blank.doc.Bodies()
+	before := documentHandle(blank.n.Doc).Bodies()
 	_, err := ConeFromFace(ctx, blank, sel, units.Millimeters(-5))
 	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, before, blank.doc.Bodies())
+	require.Equal(t, before, documentHandle(blank.n.Doc).Bodies())
 }
 
 // coneFromFaceNonConvexSection is a counter-clockwise, non-convex section
@@ -238,10 +238,10 @@ func coneFromFaceRefusalKeepsDocument(t *testing.T, section []planePoint, a, b p
 	want error, message string) {
 	t.Helper()
 	control := spiralTestRevolveBlank(t, section)
-	wantOrigins := coneFromFaceNextFeatureOrigins(t, control.doc)
+	wantOrigins := coneFromFaceNextFeatureOrigins(t, documentHandle(control.n.Doc))
 
 	blank := spiralTestRevolveBlank(t, section)
-	doc := blank.doc
+	doc := documentHandle(blank.n.Doc)
 	before := doc.Bodies()
 	producer := doc.nextProducerID()
 	_, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, a, b), far)
@@ -262,7 +262,7 @@ func TestConeFromFaceShallowGeneratorKeepsDocument(t *testing.T) {
 // but not a point cone and checks that the refusal precedes registration.
 func TestCommitExactPointConeRefusalKeepsDocument(t *testing.T) {
 	blank := spiralTestRevolveBlank(t, coneFromFaceSpiralSection())
-	doc := blank.doc
+	doc := documentHandle(blank.n.Doc)
 	before := doc.Bodies()
 	producer := doc.nextProducerID()
 	world := sketch.NewWorld()
@@ -340,11 +340,11 @@ func TestConeFromFaceMoreRefusals(t *testing.T) {
 		sel := Faces(FaceCreatedBy(featureRefOf(box.Faces()[0].originRefs()[0]))).Exactly(1)
 		_, err := ConeFromFace(t.Context(), box, sel, far)
 		require.ErrorIs(t, err, ErrUnsupported)
-		require.Len(t, box.doc.Bodies(), 1)
+		require.Len(t, documentHandle(box.n.Doc).Bodies(), 1)
 	})
 	t.Run("selectors", func(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, coneFromFaceSpiralSection())
-		before := blank.doc.nextProducerID()
+		before := blank.n.Doc.NextProducer
 		foreign := extrudedBox(t).Faces()[0].originRefs()[0]
 		// A selector that matches nothing and one that fails its assertion
 		// are both cardinality failures of the implicit exactly-one.
@@ -352,8 +352,8 @@ func TestConeFromFaceMoreRefusals(t *testing.T) {
 		require.ErrorIs(t, err, ErrCardinality)
 		_, err = ConeFromFace(t.Context(), blank, Faces().Exactly(2), far)
 		require.ErrorIs(t, err, ErrCardinality)
-		require.Len(t, blank.doc.Bodies(), 1)
-		require.Equal(t, before, blank.doc.nextProducerID())
+		require.Len(t, documentHandle(blank.n.Doc).Bodies(), 1)
+		require.Equal(t, before, blank.n.Doc.NextProducer)
 	})
 }
 
@@ -367,7 +367,7 @@ func TestConeFromFaceCancelledDuringConstruction(t *testing.T) {
 		require.Less(t, cancelAt, 200, "the call never completed")
 		blank := spiralTestRevolveBlank(t, section)
 		sel := coneFromFaceSelector(t, blank, section[3], section[2])
-		doc := blank.doc
+		doc := documentHandle(blank.n.Doc)
 		before, producer := doc.Bodies(), doc.nextProducerID()
 		ctx := &cancelAfterContext{Context: t.Context(), cancelAt: cancelAt}
 		_, err := ConeFromFace(ctx, blank, sel, units.Millimeters(-5))

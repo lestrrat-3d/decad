@@ -10,8 +10,8 @@ import (
 )
 
 // Body is the data of the root Body handle, which holds one by
-// value. The handle keeps the document link, origin, lumps, measurements, kind, payload and the
-// other caches, which name root types.
+// value. The handle keeps the payload and the other caches, which name root
+// types.
 type Body struct {
 	// Solid reports whether the body is a valid solid, a decided answer
 	// (docs/api-design.md core §6).
@@ -49,6 +49,10 @@ type Body struct {
 	// Kind says whether the body is a solid or a sheet. Root Body.Kind
 	// converts it to the public BodyKind form.
 	Kind BodyKind
+	// Doc is the node of the document that owns (or owned) the body, nil for
+	// a body built outside any document. Root Body.Document maps it back to
+	// its handle.
+	Doc *Document
 	// Lumps are the nodes of the body's disjoint pieces. Root Body.Lumps
 	// maps them back to their handles.
 	Lumps []*Lump

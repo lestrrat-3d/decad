@@ -154,7 +154,7 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 		Z0: lower.Z0, FloorZ: lower.Z1, TopZ: upper.Z1, LowerZ: lowerZ, T: t,
 		FloorFace: floorFace, Frame: sp.frame}
 	result.assignRoles()
-	body, err := evalBrepContext(ctx, source.doc, source.doc.nextProducerID(), result)
+	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
 	return body, true, err
 }
 

@@ -49,10 +49,10 @@ type joinWall struct {
 // then §5.1's admission J1-J7 in order, assembles the joined record (§5.2),
 // audits it (§5.3) and commits the result in place of the receiver.
 func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, error) {
-	if b == nil || b.doc == nil {
+	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := b.doc
+	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
