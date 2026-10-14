@@ -379,7 +379,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		face := &Face{surface: Plane{Frame: frame},
 			origins: []FeatureRef{{producer: ref, Role: axisMap.faceRole(polygonIndex)}},
 			body:    body, n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound}}
-		loop := &Loop{outer: true}
+		loop := &Loop{n: topo.Loop{Outer: true}}
 		for i, a := range points {
 			b := points[(i+1)%len(points)]
 			key := lineKey{a, b}
@@ -421,7 +421,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		}
 	}
 	body.lumps = sheetLumps(faces)
-	if len(body.lumps) != 1 || body.lumps[0].shells[0].open {
+	if len(body.lumps) != 1 || body.lumps[0].shells[0].n.Open {
 		return nil, fmt.Errorf(`%w: all-edge chamfer has an open shell`, ErrUnsupported)
 	}
 	if err := geometry.measure(body, polygons); err != nil {
@@ -464,7 +464,7 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 			CurveBounded: true,
 		}}
 		face.loops = append(face.loops, &Loop{coedges: []coedge{{edge: edge, forward: side == 1}}})
-		bore.loops = append(bore.loops, &Loop{coedges: []coedge{{edge: edge, forward: side == 0}}, outer: true})
+		bore.loops = append(bore.loops, &Loop{coedges: []coedge{{edge: edge, forward: side == 0}}, n: topo.Loop{Outer: true}})
 	}
 	return bore, nil
 }

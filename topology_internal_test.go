@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -42,7 +43,7 @@ func TestFreeEdgeAndOpenShellReadTheirOwnState(t *testing.T) {
 
 	t.Run("ShellIsOpenReadsItsOwnStoredField", func(t *testing.T) {
 		t.Parallel()
-		require.True(t, (&FaceShell{open: true}).IsOpen())
+		require.True(t, (&FaceShell{n: topo.FaceShell{Open: true}}).IsOpen())
 		require.False(t, (&FaceShell{}).IsOpen())
 	})
 

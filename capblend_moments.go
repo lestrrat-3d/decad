@@ -209,8 +209,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
 		}
 
-		startLoopObjs[li] = &Loop{coedges: startCo, outer: li == 0}
-		endLoopObjs[li] = &Loop{coedges: endCo, outer: li == 0}
+		startLoopObjs[li] = &Loop{coedges: startCo, n: topo.Loop{Outer: li == 0}}
+		endLoopObjs[li] = &Loop{coedges: endCo, n: topo.Loop{Outer: li == 0}}
 
 		startBoundary := loop
 		if onStart {

@@ -623,7 +623,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		case f.planar():
 			loops := make([]*Loop, len(btopo.planar[fi]))
 			for li := range loops {
-				loops[li] = &Loop{outer: li == 0}
+				loops[li] = &Loop{n: topo.Loop{Outer: li == 0}}
 			}
 			for _, ui := range uses {
 				l := loops[btopo.uses[ui].Loop]
@@ -632,11 +632,11 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 			face.loops = loops
 		case len(uses) == 2:
 			face.loops = []*Loop{
-				{coedges: []coedge{coedgeOf(uses[0])}, outer: true},
-				{coedges: []coedge{coedgeOf(uses[1])}, outer: true},
+				{coedges: []coedge{coedgeOf(uses[0])}, n: topo.Loop{Outer: true}},
+				{coedges: []coedge{coedgeOf(uses[1])}, n: topo.Loop{Outer: true}},
 			}
 		default:
-			l := &Loop{outer: true}
+			l := &Loop{n: topo.Loop{Outer: true}}
 			for _, ui := range uses {
 				l.coedges = append(l.coedges, coedgeOf(ui))
 			}

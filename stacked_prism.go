@@ -281,10 +281,10 @@ func stackedLumps(faces []*Face, anchors map[*Face]struct{}) ([]*Lump, error) {
 			}
 		}
 		if !anchored {
-			voids = append(voids, &FaceShell{faces: group, open: shellIsOpen(group), void: true})
+			voids = append(voids, &FaceShell{faces: group, n: topo.FaceShell{Open: shellIsOpen(group), Void: true}})
 			continue
 		}
-		outer = append(outer, &Lump{shells: []*FaceShell{{faces: group, open: shellIsOpen(group)}}})
+		outer = append(outer, &Lump{shells: []*FaceShell{{faces: group, n: topo.FaceShell{Open: shellIsOpen(group)}}}})
 	}
 	switch {
 	case len(voids) == 0:
@@ -465,7 +465,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 				if end.top {
 					coedges = columns[e.Column].top
 				}
-				f.loops = append(f.loops, &Loop{coedges: coedges, outer: e.Loop == 0})
+				f.loops = append(f.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: e.Loop == 0}})
 			}
 			if len(planar) == 0 {
 				capArea = part.area
@@ -499,7 +499,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 				if pl.Top {
 					coedges = columns[pl.Column].top
 				}
-				f.loops = append(f.loops, &Loop{coedges: coedges, outer: pl.Outer})
+				f.loops = append(f.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: pl.Outer}})
 			}
 			planar = append(planar, f)
 		}

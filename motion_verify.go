@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -386,8 +387,10 @@ func (r *motionRun) readBodies(groups [][]*Body) {
 	r.transient = &Document{
 		bodies:       live,
 		nextProducer: r.d.nextProducer,
-		nextLevel:    r.d.nextLevel,
-		nextCurve:    r.d.nextCurve,
+		n: topo.Document{
+			NextLevel: r.d.n.NextLevel,
+			NextCurve: r.d.n.NextCurve,
+		},
 	}
 	isMover := make(map[*Body]struct{})
 	for g, bodies := range groups {

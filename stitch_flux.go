@@ -391,7 +391,7 @@ type stitchLoopSource struct{ loop *Loop }
 
 func (s stitchLoopSource) EdgeCount() int { return len(s.loop.coedges) }
 
-func (s stitchLoopSource) IsOuter() bool { return s.loop.outer }
+func (s stitchLoopSource) IsOuter() bool { return s.loop.n.Outer }
 
 func (s stitchLoopSource) Circle() (stitchflux.CircleRim, bool, string) {
 	edge := s.loop.coedges[0].edge

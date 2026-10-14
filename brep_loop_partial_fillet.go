@@ -210,7 +210,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			}
 			surf := Sphere{Center: pl.Point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
 			loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
-				{edge: end, forward: false}, {edge: start, forward: true}}, outer: true}
+				{edge: end, forward: false}, {edge: start, forward: true}}, n: topo.Loop{Outer: true}}
 			if err := newPatch(surf, loop, pole, piece); err != nil {
 				return nil, brepBandMass{}, err
 			}
@@ -231,7 +231,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		endForward := end.start == sideE.end
 		loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
 			{edge: end, forward: endForward}, {edge: capE, forward: false},
-			{edge: start, forward: startForward}}, outer: true}
+			{edge: start, forward: startForward}}, n: topo.Loop{Outer: true}}
 		if err := newPatch(surf, loop, capE.start, piece); err != nil {
 			return nil, brepBandMass{}, err
 		}
@@ -248,7 +248,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		torus := Torus{Center: pl.Point(v.StartU, v.StartV, sideZ), Axis: pl.Dir(0, 0, 1),
 			Major: units.Millimeters(r), Minor: units.Millimeters(r)}
 		horn := &Loop{coedges: []coedge{{edge: arc, forward: true},
-			{edge: lead[next], forward: true}, {edge: trail[next], forward: false}}, outer: true}
+			{edge: lead[next], forward: true}, {edge: trail[next], forward: false}}, n: topo.Loop{Outer: true}}
 		if err := newPatch(torus, horn, arc.start, pieces[p]); err != nil {
 			return nil, brepBandMass{}, err
 		}

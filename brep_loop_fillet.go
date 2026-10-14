@@ -239,8 +239,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		side, capE := sideCo[0].edge, capCo[0].edge
 		side.n.Convex, capE.n.Convex = convex, convex
 		if err := newPatch(walkSurface(fr.walks[0]), []*Loop{
-			{coedges: []coedge{{edge: side, forward: true}}, outer: true},
-			{coedges: []coedge{{edge: capE, forward: false}}, outer: true},
+			{coedges: []coedge{{edge: side, forward: true}}, n: topo.Loop{Outer: true}},
+			{coedges: []coedge{{edge: capE, forward: false}}, n: topo.Loop{Outer: true}},
 		}, capE.start); err != nil {
 			return nil, brepBandMass{}, err
 		}
@@ -347,7 +347,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 					{edge: sideCo[i].edge, forward: true},
 					{edge: trail[next], forward: false},
 					{edge: lead[i], forward: true},
-				}, outer: true}}, pole); err != nil {
+				}, n: topo.Loop{Outer: true}}}, pole); err != nil {
 					return nil, brepBandMass{}, err
 				}
 				continue
@@ -362,7 +362,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				{edge: trail[next], forward: false},
 				{edge: wall, forward: false},
 				{edge: lead[i], forward: true},
-			}, outer: true}}, wall.start); err != nil {
+			}, n: topo.Loop{Outer: true}}}, wall.start); err != nil {
 				return nil, brepBandMass{}, err
 			}
 			if fr.loop.Corners[next] != filletband.Reflex {
@@ -373,7 +373,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				{edge: supplied.arc[next], forward: true},
 				{edge: lead[next], forward: true},
 				{edge: trail[next], forward: false},
-			}, outer: true}}, supplied.arc[next].start); err != nil {
+			}, n: topo.Loop{Outer: true}}}, supplied.arc[next].start); err != nil {
 				return nil, brepBandMass{}, err
 			}
 		}

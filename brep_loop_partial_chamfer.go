@@ -140,7 +140,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		}
 		loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
 			{edge: end, forward: end.start == sideE.end}, {edge: capE, forward: false},
-			{edge: start, forward: start.start == capE.start}}, outer: true}
+			{edge: start, forward: start.start == capE.start}}, n: topo.Loop{Outer: true}}
 		areaIv, volume3, moments, err := partialband.ChamferQuadMass(quads[i].points)
 		if err != nil {
 			return nil, brepBandMass{}, err

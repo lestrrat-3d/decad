@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/surfacegroup"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // This file is the shared surface-result vocabulary of docs/surface-design.md
@@ -133,7 +134,7 @@ func sheetLumps(faces []*Face) []*Lump {
 	groups := splitConnectedFaces(faces)
 	lumps := make([]*Lump, len(groups))
 	for i, g := range groups {
-		lumps[i] = &Lump{shells: []*FaceShell{{faces: g, open: shellIsOpen(g)}}}
+		lumps[i] = &Lump{shells: []*FaceShell{{faces: g, n: topo.FaceShell{Open: shellIsOpen(g)}}}}
 	}
 	return lumps
 }
