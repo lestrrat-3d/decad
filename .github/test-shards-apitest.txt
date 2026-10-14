@@ -2045,7 +2045,6 @@
 10	0.00	TestSectionDirectHoleFreeLoftRefusesUnprovedCases
 10	0.00	TestSectionDirectHoleFreeLoftRefusesTwistedCorrespondence
 10	0.00	TestLoopCoEdgeEdgesAreTheBodyEdges
-10	0.00	TestSectionDirectLoftRefusesHoleFreeAndCutSources
 10	0.00	TestLoftDirectBoreExactLiftRefusals
 10	0.00	TestLoftCutExactToolCenterRefusesRewrite
 10	0.00	TestLoftCutRoundedYToolCenterKeepsFacetedTopology
