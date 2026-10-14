@@ -168,16 +168,24 @@ func placedCapCentroid(source VecMeasurement, motion r3.Transform) (VecMeasureme
 	if err != nil {
 		return VecMeasurement{}, err
 	}
+	tr := motion.Translation()
+	t := [3]*big.Rat{ratOfPointPlane(tr.X), ratOfPointPlane(tr.Y), ratOfPointPlane(tr.Z)}
+	return placedCapCentroidBy(source, linear, t)
+}
+
+// placedCapCentroidBy applies the exact affine map p -> linear*p + t to the
+// true cap centroid. Rational evaluation rounds the reported point once; the
+// map's proved stretch, zero for an exactly orthogonal linear part, carries the
+// source radius to the new one.
+func placedCapCentroidBy(source VecMeasurement, linear [3][3]*big.Rat, t [3]*big.Rat) (VecMeasurement, error) {
 	charge, err := massmoment.MapChargeOf(linear)
 	if err != nil {
 		return VecMeasurement{}, err
 	}
 	p := [3]float64{source.Value.X, source.Value.Y, source.Value.Z}
-	tr := motion.Translation()
-	t := [3]float64{tr.X, tr.Y, tr.Z}
 	var exact [3]*big.Rat
 	for i := range exact {
-		exact[i] = ratOfPointPlane(t[i])
+		exact[i] = new(big.Rat).Set(t[i])
 		for j := range p {
 			exact[i].Add(exact[i], pointPlaneMul(linear[i][j], ratOfPointPlane(p[j])))
 		}

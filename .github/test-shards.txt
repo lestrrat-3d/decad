@@ -1452,3 +1452,5 @@
 10	0.00	TestFacetedPlacementKeepsDenotedProof
 10	0.00	TestFacetedPlacementReflectsPlaneTag
 10	0.00	TestAngularStopEdgeNamesPublicCurveType
+10	0.00	TestPlacedCapCentroidByExactRotation
+10	0.00	TestPlacedCapCentroidReadsPlacementAsExactMap

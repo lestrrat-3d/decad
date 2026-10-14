@@ -42,6 +42,39 @@ func PlaceMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Ve
 func placeMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
 	vertexBound []float64, volSymDiff, areaSlack, stretch, volumeCharge float64,
 	delta r3.Transform, workers int) (PlacedMesh, error) {
+	return placeMeshGap(ctx, budget, verts, tris, vertexBound, volSymDiff, areaSlack, stretch, volumeCharge,
+		delta, workers, nil)
+}
+
+// PlaceMeshDenoting places verts by d exactly as PlaceMesh does, for a source
+// that the result denotes under an exactly orthogonal map Q with translation
+// t, where linearGap bounds the entrywise absolute sum of Q - D and
+// translationGap bounds the entrywise absolute sum of t - tD (D, tD being d's
+// basis and translation read exactly). Q keeps length, area and volume, so the
+// stretch and determinant charges are zero. Each vertex instead pays
+// linearGap * max|v_j| + translationGap, because a true point within beta of
+// the held source vertex v lies within |p - v| + |(Q - D)v| + |t - tD| of D v
+// + tD before the vertex's own rounding and embedding correction.
+//
+// linearGap and translationGap must be finite and non-negative.
+func PlaceMeshDenoting(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
+	vertexBound []float64, volSymDiff, areaSlack float64, d r3.Transform,
+	linearGap, translationGap float64) (PlacedMesh, error) {
+	if proofbound.IsNonFinite(linearGap) || proofbound.IsNonFinite(translationGap) ||
+		linearGap < 0 || translationGap < 0 {
+		return PlacedMesh{}, fmt.Errorf("%w: placement gap is not a finite bound", decaderr.ErrUnsupported)
+	}
+	return placeMeshGap(ctx, budget, verts, tris, vertexBound, volSymDiff, areaSlack, 0, 0, d,
+		orderedwork.EachWorkers(len(verts), placeParallelMin), &denotingGap{linear: linearGap, translation: translationGap})
+}
+
+// denotingGap is the distance between the float placement and the exactly
+// orthogonal map the placed mesh denotes.
+type denotingGap struct{ linear, translation float64 }
+
+func placeMeshGap(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
+	vertexBound []float64, volSymDiff, areaSlack, stretch, volumeCharge float64,
+	delta r3.Transform, workers int, gap *denotingGap) (PlacedMesh, error) {
 	if proofbound.IsNonFinite(volSymDiff) || proofbound.IsNonFinite(areaSlack) ||
 		proofbound.IsNonFinite(stretch) || proofbound.IsNonFinite(volumeCharge) ||
 		volSymDiff < 0 || areaSlack < 0 || stretch < 0 || volumeCharge < 0 ||
@@ -52,6 +85,7 @@ func placeMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Ve
 	tr := delta.Translation()
 	maxTrans := math.Max(math.Abs(tr.X), math.Max(math.Abs(tr.Y), math.Abs(tr.Z)))
 	vertexAllow := make([]float64, len(verts))
+	extra := make([]float64, len(verts))
 	exact := make([]proof.Xpt, len(verts))
 	basis := delta.Basis()
 	// An image panics on a non-finite coordinate, so such a placement takes
@@ -62,7 +96,11 @@ func placeMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Ve
 	}
 	place := func(i int) error {
 		v := verts[i]
-		vertexAllow[i] = proofbound.RigidRoundAllow(math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))), maxTrans)
+		maxAbs := math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z)))
+		vertexAllow[i] = proofbound.RigidRoundAllow(maxAbs, maxTrans)
+		if gap != nil {
+			extra[i] = proofbound.AbsSumUpper(proofbound.ProductUpper(gap.linear, maxAbs), gap.translation)
+		}
 		exact[i] = proof.ExactAffineImage(basis.EX, basis.EY, basis.EZ, tr, v)
 		next.Verts[i] = exact[i].Vec()
 		return nil
@@ -106,6 +144,9 @@ func placeMesh(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Ve
 		a := vertexAllow[i]
 		if moved != nil {
 			a = math.Max(a, moved[i])
+		}
+		if gap != nil {
+			a = proofbound.AbsSumUpper(a, extra[i])
 		}
 		allow = math.Max(allow, a)
 		next.VertexBound[i] = proofbound.AbsSumUpper(proofbound.ProductUpper(lengthStretch, beta), a)
