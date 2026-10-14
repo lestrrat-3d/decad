@@ -117,7 +117,10 @@ func gateScalarRange(corners [4]*gateNode, row int) Interval {
 
 // BandGate proves injectivity over the entire source rectangle, not at
 // sampled stations. Its exact rational interval boxes only tighten bounds;
-// they do not change the one fixed matrix used for the whole band.
+// they do not change the one fixed matrix used for the whole band. A float
+// pass bounds each tile row's deviation from above; tile rows whose bound
+// cannot exceed the exact maximum found so far are not evaluated exactly,
+// since they cannot change it (gate_filter.go).
 func BandGate(ctx context.Context, first, second Map,
 	box [4]*big.Rat) (float64, float64, int, error) {
 	centerU := ratDiv(ratAdd(box[0], box[1]), big.NewRat(2, 1))
@@ -153,32 +156,9 @@ func BandGate(ctx context.Context, first, second Map,
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	worst := ratZero()
-	for iu := range tiles {
-		if err := ctx.Err(); err != nil {
-			return 0, 0, 0, err
-		}
-		for iv := range tiles {
-			// Corner order matches TileCorners: (u0,v0),(u0,v1),(u1,v0),(u1,v1).
-			firstCorners := [4]*gateNode{&firstGrid[iu][iv], &firstGrid[iu][iv+1],
-				&firstGrid[iu+1][iv], &firstGrid[iu+1][iv+1]}
-			secondCorners := [4]*gateNode{&secondGrid[iu][iv], &secondGrid[iu][iv+1],
-				&secondGrid[iu+1][iv], &secondGrid[iu+1][iv+1]}
-			for row := range rows {
-				deviation := ratZero()
-				for axis := range 2 {
-					hull := IntervalHull(gateDerivRange(firstCorners, row, axis),
-						gateDerivRange(secondCorners, row, axis))
-					deviation = ratAdd(deviation, IntervalAbs(hull, big.NewRat(int64(boolInt(row == axis)), 1)))
-				}
-				velocity := IntervalSub(gateScalarRange(secondCorners, row),
-					gateScalarRange(firstCorners, row))
-				deviation = ratAdd(deviation, IntervalAbs(velocity, big.NewRat(int64(boolInt(row == 2)), 1)))
-				if deviation.Cmp(worst) > 0 {
-					worst = deviation
-				}
-			}
-		}
+	worst, err := gateWorst(ctx, firstGrid, secondGrid, tiles, len(rows))
+	if err != nil {
+		return 0, 0, 0, err
 	}
 	if worst.Cmp(ratOne()) >= 0 {
 		return RatUp(worst), 0, det.Sign(),
