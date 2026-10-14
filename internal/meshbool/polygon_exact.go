@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -36,6 +37,44 @@ func NewXP2(u, v *big.Rat) Xp2 {
 		floatFromExact: true,
 		FloatFinite:    xp2FloatSafe(u, fu) && xp2FloatSafe(v, fv),
 	}
+}
+
+// newXP2FromFloats is NewXP2(MustRatOf(fu), MustRatOf(fv)) without the
+// GCD and the float round trip. A finite float is an integer mantissa times a
+// power of two, so proof.FloatRat builds the same lowest-terms rational that
+// big.Rat.SetFloat64 builds by normalising. The rational is exactly the
+// float, so big.Rat.Float64 would return the input float (+0 for a zero of
+// either sign); the cache is set to that float directly. It panics, with
+// MustRatOf's message, on a NaN or an infinity.
+func newXP2FromFloats(fu, fv float64) Xp2 {
+	u, v := liftProjectionFloat(fu), liftProjectionFloat(fv)
+	return Xp2{
+		U:              u,
+		V:              v,
+		Fu:             cacheFloat(fu),
+		Fv:             cacheFloat(fv),
+		floatFromExact: true,
+		FloatFinite:    xp2FloatSafe(u, cacheFloat(fu)) && xp2FloatSafe(v, cacheFloat(fv)),
+	}
+}
+
+// liftProjectionFloat lifts a nonzero finite float with proof.FloatRat. Zero
+// and non-finite input take MustRatOf, so a zero keeps the representation
+// SetFloat64 gives it and a non-finite float panics as before.
+func liftProjectionFloat(f float64) *big.Rat {
+	if f == 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+		return polynomial.MustRatOf(f)
+	}
+	return proof.FloatRat(f)
+}
+
+// cacheFloat is the float big.Rat.Float64 returns for the rational f lifts
+// to: f itself, except that -0 lifts to the rational 0 and comes back as +0.
+func cacheFloat(f float64) float64 {
+	if f == 0 {
+		return 0
+	}
+	return f
 }
 
 // NewXP2FromXpt keeps the projected point's homogeneous numerators alongside

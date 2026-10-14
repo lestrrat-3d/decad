@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -229,7 +228,9 @@ func NewParityMesh(verts []r3.Vec, tris [][3]int) *ParityMesh {
 // VertexProjection returns vertex vi projected onto the (u, v) plane a ray
 // sweeping axis leaves, constructing it on first use and caching it unchanged.
 // The returned Xp2 is read-only: its rationals are the cache's own, so a caller
-// must never make one the destination of an arithmetic operation.
+// must never make one the destination of an arithmetic operation. The
+// rationals are the exact vertex coordinates, lifted by newXP2FromFloats; a
+// non-finite coordinate panics.
 func (pm *ParityMesh) VertexProjection(axis, u, v, vi int) Xp2 {
 	slot := pm.Projections[axis]
 	if slot == nil {
@@ -238,7 +239,7 @@ func (pm *ParityMesh) VertexProjection(axis, u, v, vi int) Xp2 {
 	}
 	if slot[vi].U == nil {
 		vert := pm.Verts[vi]
-		slot[vi] = NewXP2(polynomial.MustRatOf(CoordOf(vert, u)), polynomial.MustRatOf(CoordOf(vert, v)))
+		slot[vi] = newXP2FromFloats(CoordOf(vert, u), CoordOf(vert, v))
 	}
 	return slot[vi]
 }
