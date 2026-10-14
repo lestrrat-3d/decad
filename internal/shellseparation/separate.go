@@ -504,22 +504,17 @@ func slabFacets(p Shell, lo, hi, axialExtra float64) ([]int, r3.Vec, bool) {
 	return selected, center, proofbound.FiniteVec(center)
 }
 
-func slabProjection(p Shell, facets []int, slabLo, slabHi float64, ny, nz *big.Rat,
-	norm, axialExtra float64) (*big.Rat, *big.Rat, bool) {
-	var lo, hi *big.Rat
-	if len(p.VertexBound) != len(p.Verts) {
-		return nil, nil, false
-	}
-	include := func(value, charge *big.Rat) {
-		lower, upper := ratSub(value, charge), ratAdd(value, charge)
-		if lo == nil || lower.Cmp(lo) < 0 {
-			lo = lower
-		}
-		if hi == nil || upper.Cmp(hi) > 0 {
-			hi = upper
-		}
-	}
-	for _, i := range facets {
+// slabCandidates visits every candidate extreme point of the clipped facets:
+// each vertex inside the enlarged slab and each strict crossing of a facet
+// edge with an enlarged slab limit. Each test compares exact floats, so it is
+// the same test as the exact rational comparison. visit gets the candidate's
+// position in facets, the vertex or edge start k, the limit (-1 for a vertex,
+// 0 for the lower limit, 1 for the upper), the exact float charge, and an
+// outward enclosure of the candidate's value. It returns false for an
+// invalid bound, as slabProjection always has.
+func slabCandidates(p Shell, facets []int, slabLo, slabHi float64, dir direction,
+	norm, axialExtra float64, visit func(f, k, limit int, charge, lo, hi float64)) bool {
+	for f, i := range facets {
 		tri := p.Tris[i]
 		beta := max(p.VertexBound[tri[0]], p.VertexBound[tri[1]], p.VertexBound[tri[2]])
 		if axialExtra > 0 {
@@ -531,51 +526,130 @@ func slabProjection(p Shell, facets []int, slabLo, slabHi float64, ny, nz *big.R
 		if proofbound.IsNonFinite(beta) || beta < 0 ||
 			proofbound.IsNonFinite(chargeBound) ||
 			proofbound.IsNonFinite(lower) || proofbound.IsNonFinite(upper) {
-			return nil, nil, false
+			return false
 		}
-		charge := ratF(chargeBound)
-		xLo := ratF(lower)
-		xHi := ratF(upper)
-		var x, value [3]*big.Rat
+		var x, vLo, vHi [3]float64
 		for k, vi := range tri {
 			v := p.Verts[vi]
-			x[k] = ratF(v.X)
-			value[k] = ratAdd(ratMul(ny, ratF(v.Y)), ratMul(nz, ratF(v.Z)))
-			if x[k].Cmp(xLo) >= 0 && x[k].Cmp(xHi) <= 0 {
-				include(value[k], charge)
+			x[k] = v.X
+			vLo[k], vHi[k] = dir.value(v.Y, v.Z)
+			if x[k] >= lower && x[k] <= upper {
+				visit(f, k, -1, chargeBound, vLo[k], vHi[k])
 			}
 		}
 		for k := range 3 {
 			next := (k + 1) % 3
-			if x[k].Cmp(x[next]) == 0 {
+			if x[k] == x[next] {
 				continue
 			}
-			for _, limit := range [...]*big.Rat{xLo, xHi} {
-				if (x[k].Cmp(limit) < 0 && x[next].Cmp(limit) > 0) ||
-					(x[k].Cmp(limit) > 0 && x[next].Cmp(limit) < 0) {
-					t := new(big.Rat).Quo(ratSub(limit, x[k]), ratSub(x[next], x[k]))
-					include(ratAdd(value[k], ratMul(t, ratSub(value[next], value[k]))), charge)
+			for li, limit := range [...]float64{lower, upper} {
+				if (x[k] < limit && x[next] > limit) || (x[k] > limit && x[next] < limit) {
+					lo, hi := crossingEnclosure(x[k], x[next], limit, vLo[k], vHi[k], vLo[next], vHi[next])
+					visit(f, k, li, chargeBound, lo, hi)
 				}
 			}
 		}
 	}
+	return true
+}
+
+func slabProjection(p Shell, facets []int, slabLo, slabHi float64, ny, nz *big.Rat,
+	norm, axialExtra float64) (*big.Rat, *big.Rat, bool) {
+	if len(p.VertexBound) != len(p.Verts) {
+		return nil, nil, false
+	}
+	dir := newDirection(ny, nz)
+	// The smallest float upper end of any candidate's lower value, and the
+	// greatest float lower end of any candidate's upper value.
+	lowCut, highCut := math.Inf(1), math.Inf(-1)
+	found := false
+	if !slabCandidates(p, facets, slabLo, slabHi, dir, norm, axialExtra,
+		func(_, _, _ int, charge, lo, hi float64) {
+			found = true
+			lowCut = min(lowCut, fSubUp(hi, charge))
+			highCut = max(highCut, fAddDown(lo, charge))
+		}) {
+		return nil, nil, false
+	}
+	if !found {
+		return nil, nil, true
+	}
+	var lo, hi *big.Rat
+	slabCandidates(p, facets, slabLo, slabHi, dir, norm, axialExtra,
+		func(f, k, limit int, charge, vlo, vhi float64) {
+			needLo := !(fSubDown(vlo, charge) > lowCut)
+			needHi := !(fAddUp(vhi, charge) < highCut)
+			if !needLo && !needHi {
+				return
+			}
+			value := slabCandidateExact(p, facets[f], k, limit, slabLo, slabHi, dir, axialExtra)
+			c := ratF(charge)
+			if needLo {
+				if lower := ratSub(value, c); lo == nil || lower.Cmp(lo) < 0 {
+					lo = lower
+				}
+			}
+			if needHi {
+				if upper := ratAdd(value, c); hi == nil || upper.Cmp(hi) > 0 {
+					hi = upper
+				}
+			}
+		})
 	return lo, hi, true
+}
+
+// slabCandidateExact is the exact value of one candidate from slabCandidates,
+// by the same expressions slabProjection has always used.
+func slabCandidateExact(p Shell, i, k, limit int, slabLo, slabHi float64, dir direction,
+	axialExtra float64) *big.Rat {
+	tri := p.Tris[i]
+	vk := p.Verts[tri[k]]
+	valueK := dir.exact(vk.Y, vk.Z)
+	if limit < 0 {
+		return valueK
+	}
+	beta := max(p.VertexBound[tri[0]], p.VertexBound[tri[1]], p.VertexBound[tri[2]])
+	if axialExtra > 0 {
+		beta = proofbound.AbsSumUpper(beta, axialExtra)
+	}
+	edge := math.Nextafter(slabLo-beta, math.Inf(-1))
+	if limit == 1 {
+		edge = math.Nextafter(slabHi+beta, math.Inf(1))
+	}
+	vn := p.Verts[tri[(k+1)%3]]
+	valueN := dir.exact(vn.Y, vn.Z)
+	xk, xn, l := ratF(vk.X), ratF(vn.X), ratF(edge)
+	t := new(big.Rat).Quo(ratSub(l, xk), ratSub(xn, xk))
+	return ratAdd(valueK, ratMul(t, ratSub(valueN, valueK)))
 }
 
 func projection(p Shell, ny, nz *big.Rat, norm float64) (*big.Rat, *big.Rat, bool) {
 	if len(p.Verts) == 0 || proofbound.IsNonFinite(p.MeshBound) || p.MeshBound < 0 {
 		return nil, nil, false
 	}
-	var lo, hi *big.Rat
+	// Every vertex carries the same charge, so the float pass filters the
+	// projected values themselves (see extremum.go).
+	dir := newDirection(ny, nz)
+	lowCut, highCut := math.Inf(1), math.Inf(-1)
 	for _, v := range p.Verts {
 		if !proofbound.FiniteVec(v) {
 			return nil, nil, false
 		}
-		value := ratAdd(ratMul(ny, ratF(v.Y)), ratMul(nz, ratF(v.Z)))
-		if lo == nil || value.Cmp(lo) < 0 {
+		vlo, vhi := dir.value(v.Y, v.Z)
+		lowCut, highCut = min(lowCut, vhi), max(highCut, vlo)
+	}
+	var lo, hi *big.Rat
+	for _, v := range p.Verts {
+		vlo, vhi := dir.value(v.Y, v.Z)
+		needLo, needHi := !(vlo > lowCut), !(vhi < highCut)
+		if !needLo && !needHi {
+			continue
+		}
+		value := dir.exact(v.Y, v.Z)
+		if needLo && (lo == nil || value.Cmp(lo) < 0) {
 			lo = value
 		}
-		if hi == nil || value.Cmp(hi) > 0 {
+		if needHi && (hi == nil || value.Cmp(hi) > 0) {
 			hi = value
 		}
 	}
