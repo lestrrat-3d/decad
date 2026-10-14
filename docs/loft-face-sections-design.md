@@ -320,7 +320,11 @@ Before a later consumer uses its endpoints, it rederives the contact circle
 and the complete constant-X source cells from the live Sketch, LoftFaces,
 trim cones and Revolve. A changed band, time, root bracket, source face or
 cell sign refuses the arc. The comparison includes retained source intervals
-and mapped boxes, not only the two selected circle crossings.
+and mapped boxes, not only the two selected circle crossings. Inside one call,
+an arc that the face-pair census derived is compared with a private deep copy
+of that derivation, which the census made from the same live producers
+earlier in the call. The copy never leaves the census, and nothing writes to
+it.
 
 The source pair census rechecks every live Revolve face and retained LoftFaces
 face against the current source-side and tool-cap records. A strict gap is a
@@ -337,11 +341,12 @@ Each occupied heel cap arc endpoint also binds to one live source-side cell.
 For a sloped Revolve side, the cap radial and side meridian polynomials
 coincide at the authenticated LoftFaces band time; the selected transverse
 cell has one root. For a vertical side, the cap and source cell share the
-same exact root bracket and mapped XYZ box. The check rederives the arc
-from current producers. It reads the face-pair verdicts from the census its
-caller derived from the same source certificate earlier in the same call: the
-contact graph and the cap-ring constructor pass their own census, and a
-caller without one derives a fresh census. It requires one live face and
+same exact root bracket and mapped XYZ box. The check compares the arc
+with the census's own derivation when the census produced it, and rederives
+any other arc from current producers. It reads the face-pair verdicts from
+the census its caller derived from the same source certificate earlier in the
+same call: the contact graph and the cap-ring constructor pass their own
+census, and a caller without one derives a fresh census. It requires one live face and
 source reference for each endpoint, and refuses ambiguous ownership or an
 excluded time boundary. It does not place a mesh vertex or admit `Union`.
 
@@ -375,7 +380,8 @@ facet crossings. The neutral producer yields 494 vertices and 984 triangles.
 The shell is an internal construction piece; it does not admit `Union`.
 
 The cap-ring constructor derives the live face-pair census and splits that shell
-at each occupied heel-cap circle. It rechecks each arc against the live source,
+at each occupied heel-cap circle. It checks each arc against the live source,
+through the census's own derivation for arcs that census produced,
 requires its exact circle to lie strictly inside one straight section side,
 and orders multiple cuts by their exact meridian fractions. Both bands next
 to a cut reuse the same ring vertex indices. The complete shell then repeats
@@ -383,9 +389,9 @@ the crossing, Euler, volume, and face-bound audits. A changed arc refuses.
 The neutral producer yields two cap rings, 658 vertices, and 1312 triangles.
 The shell still does not admit `Union`.
 
-For each occupied heel arc, the endpoint builder rederives its live source
-record. It projects each source-box center onto the exact circle and bounds
-the full movement to every point in that box, including float rounding.
+For each occupied heel arc, the endpoint builder checks its live source
+record the same way. It projects each source-box center onto the exact circle
+and bounds the full movement to every point in that box, including float rounding.
 The focused neutral test requires all four endpoint bounds below 0.1 mm.
 The builder inserts those four angular rays into every blank ring and uses
 the same bounded held point on each owning heel circle. Each cap source box

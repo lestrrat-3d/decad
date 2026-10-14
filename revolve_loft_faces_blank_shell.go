@@ -151,7 +151,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 	}
 	capVertices := make([]revolveLoftFacesCapSeamVertex, 0, 2*len(capCuts))
 	for i := range capCuts {
-		vertices, built, err := revolveLoftFacesCapArcSeamVertices(ctx, proof, capCuts[i].arc)
+		vertices, built, err := revolveLoftFacesCapArcSeamVerticesIn(ctx, proof, census, capCuts[i].arc)
 		if err != nil || !built {
 			return nil, false, err
 		}
@@ -303,7 +303,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 			cut.arc.circle.radius.Cmp(cut.radius) != 0 {
 			return nil, false, nil
 		}
-		current, err := revolveLoftFacesToolCapOccupiedArcCurrent(ctx, proof, cut.arc)
+		current, err := revolveLoftFacesToolCapOccupiedArcCurrentIn(ctx, proof, census, cut.arc)
 		if err != nil || !current {
 			return nil, false, err
 		}

@@ -30,6 +30,16 @@ type revolveLoftFacesFacePair struct {
 type revolveLoftFacesPairCensus struct {
 	manifest *revolveLoftFacesContactManifest
 	pairs    []revolveLoftFacesFacePair
+	// ownArcs holds each occupied arc this census derived, with a private
+	// deep copy taken at derivation. The copies are never handed out.
+	ownArcs []revolveLoftFacesCensusArc
+}
+
+// revolveLoftFacesCensusArc is an occupied arc this census derived and a
+// private deep copy of it taken at derivation. The copy is never handed out.
+type revolveLoftFacesCensusArc struct {
+	arc     *revolveLoftFacesToolCapOccupiedArc
+	derived revolveLoftFacesToolCapOccupiedArc
 }
 
 // The census classifies every actual face pair from live producers. It does
@@ -167,6 +177,8 @@ func revolveLoftFacesCensus(ctx context.Context,
 						return nil, false, arcErr
 					}
 					pair.verdict, pair.toolArc = revolveLoftFacesPairToolArc, arc
+					result.ownArcs = append(result.ownArcs, revolveLoftFacesCensusArc{
+						arc: arc, derived: revolveLoftFacesCloneToolCapOccupiedArc(arc)})
 				}
 			} else {
 				switch manifest.sideOutcome[sectionIndex] {
