@@ -27,7 +27,7 @@ func evalArcSweepContext(
 	profile profileRecord,
 	plane planeRecord,
 	frame r3.Frame,
-	path *Path,
+	path *sweepinput.Path,
 	pathRecord sweepinput.PathRecord,
 	work *freeform.FreeformWork,
 	surfaceResult bool,

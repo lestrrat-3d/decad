@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/sweeptransport"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +23,7 @@ func TestTransportSweepFramesAcrossOrthogonalBends(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	frames, err := transportSweepFramesContext(t.Context(), path, plane)
+	frames, err := sweeptransport.TransportSweepFramesContext(t.Context(), pathNode(path), plane)
 	require.NoError(t, err)
 	require.Len(t, frames, 4)
 
@@ -87,7 +88,7 @@ func TestTransportSweepFramesRejectsNonTangentJoin(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = transportSweepFramesContext(t.Context(), path, plane)
+	_, err = sweeptransport.TransportSweepFramesContext(t.Context(), pathNode(path), plane)
 	require.Error(t, err)
 	require.True(t, errors.Is(err, ErrUnsupported))
 }
@@ -105,7 +106,7 @@ func TestTransportSweepFramesRejectsReversedTangentJoin(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = transportSweepFramesContext(t.Context(), path, plane)
+	_, err = sweeptransport.TransportSweepFramesContext(t.Context(), pathNode(path), plane)
 	require.Error(t, err)
 	require.True(t, errors.Is(err, ErrUnsupported))
 }

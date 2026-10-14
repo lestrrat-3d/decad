@@ -157,3 +157,10 @@ func TestNewPathUsesExactArcCollinearity(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, end, path.End())
 }
+
+func TestZeroPathHasNoSegments(t *testing.T) {
+	p := &decad.Path{}
+	require.Nil(t, p.Segments())
+	require.Equal(t, r3.Vec{}, p.Start())
+	require.Equal(t, r3.Vec{}, p.End())
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
@@ -21,7 +22,7 @@ import (
 type compositeTwistedSweepPayload struct {
 	profile    profileRecord
 	plane      planeRecord
-	path       *Path
+	path       *sweepinput.Path
 	angle      units.Value
 	recordArea float64
 	xform      r3.Transform
@@ -34,40 +35,6 @@ func (p compositeTwistedSweepPayload) transform() r3.Transform { return p.xform 
 func (p compositeTwistedSweepPayload) placed(ctx context.Context, d *Document,
 	ref producerID, xform r3.Transform) (*Body, error) {
 	return evalCompositeTwistedSweep(ctx, d, ref, p.profile, p.plane, p.path, p.angle, p.recordArea, xform)
-}
-
-func twistCardinalPathOf(path *Path, plane planeRecord, poly twistsweep.TwistPolygon) (twistsweep.TwistCardinalPath, error) {
-	if path == nil || len(path.records) != 2 ||
-		plane.Origin != (r3.Vec{}) || plane.U != r3.NewVec(1, 0, 0) ||
-		plane.V != r3.NewVec(0, 1, 0) || path.Start() != (r3.Vec{}) {
-		return twistsweep.TwistCardinalPath{}, fmt.Errorf(`%w: composite twist needs an origin XY sketch and two path spans`, ErrUnsupported)
-	}
-	line, arc := path.records[0], path.records[1]
-	if line.Arc != nil || arc.Arc == nil || line.End.X != 0 || line.End.Y != 0 || line.End.Z <= 0 ||
-		arc.Start != line.End {
-		return twistsweep.TwistCardinalPath{}, fmt.Errorf(`%w: composite twist needs a positive Z line followed by an arc`, ErrUnsupported)
-	}
-	r := arc.End.X
-	h := line.End.Z
-	carrier := arc.Arc
-	if r <= 0 || arc.End.Y != 0 || arc.End.Z != h+r ||
-		carrier.Center[0].Cmp(twistsweep.TwistRat(r)) != 0 || carrier.Center[1].Sign() != 0 ||
-		carrier.Center[2].Cmp(twistsweep.TwistRat(h)) != 0 ||
-		carrier.RadiusStart[0].Cmp(new(big.Rat).Neg(twistsweep.TwistRat(r))) != 0 ||
-		carrier.RadiusStart[1].Sign() != 0 || carrier.RadiusStart[2].Sign() != 0 ||
-		carrier.RadiusEnd[0].Sign() != 0 || carrier.RadiusEnd[1].Sign() != 0 ||
-		carrier.RadiusEnd[2].Cmp(twistsweep.TwistRat(r)) != 0 ||
-		carrier.Axis[0].Sign() != 0 || carrier.Axis[1].Sign() <= 0 || carrier.Axis[2].Sign() != 0 ||
-		arc.ArcAngle.Turn == nil || arc.ArcAngle.Turn.Cmp(big.NewRat(1, 4)) != 0 {
-		return twistsweep.TwistCardinalPath{}, fmt.Errorf(`%w: composite twist needs a positive cardinal quarter arc in XZ`, ErrUnsupported)
-	}
-	// The profile stays on the inside of the arc's polar radius. This also
-	// separates the true arc from the preceding line except at their join.
-	if !proofbound.FiniteVec(arc.End) ||
-		twistsweep.TwistRat(r).Cmp(new(big.Rat).Mul(big.NewRat(8, 1), twistsweep.TwistRat(poly.MaxRadiusL1))) <= 0 {
-		return twistsweep.TwistCardinalPath{}, fmt.Errorf(`%w: the twisted profile approaches the arc axis`, ErrUnsupported)
-	}
-	return twistsweep.TwistCardinalPath{Height: h, Radius: r}, nil
 }
 
 // The true boundary and the ideal Loft boundary share a triangle-domain
@@ -239,7 +206,7 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 }
 
 func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
-	profile profileRecord, plane planeRecord, path *Path, angle units.Value,
+	profile profileRecord, plane planeRecord, path *sweepinput.Path, angle units.Value,
 	recordArea float64, xform r3.Transform) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -251,7 +218,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if poly.HasArc {
 		return nil, fmt.Errorf(`%w: a composite twisted sweep needs straight profile edges`, ErrUnsupported)
 	}
-	geometry, err := twistCardinalPathOf(path, plane, poly)
+	geometry, err := twistsweep.TwistCardinalPathOf(path, plane, poly)
 	if err != nil {
 		return nil, err
 	}

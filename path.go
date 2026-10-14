@@ -32,10 +32,8 @@ func (ArcThrough) pathSegment() {}
 // Path is an immutable ordered spatial curve. Its coordinates are in
 // millimetres.
 type Path struct {
-	start    r3.Vec
-	end      r3.Vec
-	segments []PathSegment
-	records  []sweepinput.PathRecord
+	// n is the recorded path internal packages read (internal/sweepinput).
+	n sweepinput.Path
 }
 
 // NewPath records an ordered spatial path beginning at start. It requires at
@@ -48,7 +46,7 @@ func NewPath(start r3.Vec, segments ...PathSegment) (*Path, error) {
 		return nil, fmt.Errorf(`%w: a path requires at least one segment`, ErrDegenerate)
 	}
 
-	owned := make([]PathSegment, len(segments))
+	owned := make([]sweepinput.Segment, len(segments))
 	records := make([]sweepinput.PathRecord, len(segments))
 	current := start
 	for i, raw := range segments {
@@ -68,20 +66,46 @@ func NewPath(start r3.Vec, segments ...PathSegment) (*Path, error) {
 			return nil, err
 		}
 		current = records[i].End
-		owned[i] = segment
+		owned[i] = input
 	}
-	return &Path{start: start, end: current, segments: owned, records: records}, nil
+	return &Path{n: sweepinput.Path{Start: start, End: current, Segments: owned, Records: records}}, nil
 }
 
 // Start returns the path's recorded initial point.
-func (p *Path) Start() r3.Vec { return p.start }
+func (p *Path) Start() r3.Vec { return p.n.Start }
 
 // End returns the path's recorded final point.
-func (p *Path) End() r3.Vec { return p.end }
+func (p *Path) End() r3.Vec { return p.n.End }
 
 // Segments returns a copy of the path's ordered segment values.
 func (p *Path) Segments() []PathSegment {
-	return append([]PathSegment(nil), p.segments...)
+	return pathSegments(&p.n)
+}
+
+// pathSegments rebuilds the public segment values of a recorded path, in order:
+// the values Segments returns, nil when it has none.
+func pathSegments(p *sweepinput.Path) []PathSegment {
+	if len(p.Segments) == 0 {
+		return nil
+	}
+	out := make([]PathSegment, len(p.Segments))
+	for i, s := range p.Segments {
+		if s.Arc {
+			out[i] = ArcThrough{Through: s.Through, End: s.End}
+			continue
+		}
+		out[i] = LineTo{End: s.End}
+	}
+	return out
+}
+
+// pathNode is the recorded path p holds, or nil for a nil p, so a callee's own
+// nil check still answers.
+func pathNode(p *Path) *sweepinput.Path {
+	if p == nil {
+		return nil
+	}
+	return &p.n
 }
 
 // ownPathSegment rejects types outside decad's sealed set and copies pointer

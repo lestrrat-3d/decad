@@ -75,3 +75,11 @@ func RecordSegment(start r3.Vec, segment Segment, index int) (PathRecord, error)
 		ArcAngle:   angle,
 	}, nil
 }
+
+// Path is the recorded form of a root Path: its start and end points, the
+// owned segment inputs in order, and each segment's exact derived geometry.
+type Path struct {
+	Start, End r3.Vec
+	Segments   []Segment
+	Records    []PathRecord
+}

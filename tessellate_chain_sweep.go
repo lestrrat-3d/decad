@@ -161,7 +161,7 @@ func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float
 			fmt.Errorf(`%w: this chain sweep mesh requires one cardinal line and one positive half-circle`, ErrUnsupported)
 	}
 	if b.Kind() != BodySheet || len(sp.spans) != 2 || sp.spans[0].arc || !sp.spans[1].arc ||
-		sp.spans[1].reverseArcRims || sp.path == nil || len(sp.path.segments) != 2 ||
+		sp.spans[1].reverseArcRims || sp.path == nil || len(sp.path.Segments) != 2 ||
 		sp.spans[0].chain.xform != r3.Identity() ||
 		sp.spans[1].revolve.xform != r3.Identity() || len(sp.spans[0].chain.chains) != 1 ||
 		len(sp.spans[1].revolve.chains) != 1 {
@@ -179,12 +179,12 @@ func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float
 		return refuse()
 	}
 	w := seg.End.U
-	line, ok := sp.path.segments[0].(LineTo)
-	if !ok || sp.path.start != (r3.Vec{}) || line.End.X != 0 || line.End.Y != 0 || line.End.Z <= 0 {
+	line, ok := sp.path.Segments[0], !sp.path.Segments[0].Arc
+	if !ok || sp.path.Start != (r3.Vec{}) || line.End.X != 0 || line.End.Y != 0 || line.End.Z <= 0 {
 		return refuse()
 	}
 	height := line.End.Z
-	arc, ok := sp.path.segments[1].(ArcThrough)
+	arc, ok := sp.path.Segments[1], sp.path.Segments[1].Arc
 	if !ok || arc.Through.Y != 0 || arc.End.Y != 0 || arc.End.Z != height {
 		return refuse()
 	}
