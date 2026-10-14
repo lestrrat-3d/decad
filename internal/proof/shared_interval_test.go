@@ -73,15 +73,29 @@ func newShared(t *testing.T, r *rand.Rand, inputs []*big.Rat) (*proof.SharedDeno
 	return s, draws
 }
 
+// sameRatTerms reports whether every check of requireSameRatTerms passes.
+func sameRatTerms(want, got *big.Rat) bool {
+	return want.Cmp(got) == 0 && want.Num().Cmp(got.Num()) == 0 && want.Denom().Cmp(got.Denom()) == 0
+}
+
+// requireSameRatTerms compares with plain Go first and runs the checks below only on a
+// mismatch, so a passing call skips t.Helper and require.
 func requireSameRatTerms(t *testing.T, want, got *big.Rat, msgAndArgs ...any) {
+	if sameRatTerms(want, got) {
+		return
+	}
 	t.Helper()
 	require.Zero(t, want.Cmp(got), append([]any{"want %s, got %s", want.RatString(), got.RatString()}, msgAndArgs...)...)
 	require.Zero(t, want.Num().Cmp(got.Num()), msgAndArgs...)
 	require.Zero(t, want.Denom().Cmp(got.Denom()), msgAndArgs...)
 }
 
+// requireSameSharedInterval takes the same fast path as requireSameRatTerms.
 func requireSameSharedInterval(t *testing.T, s *proof.SharedDenom, want proof.RatInterval, got proof.SInterval,
 	msgAndArgs ...any) {
+	if sameRatTerms(want.Lo, s.Rat(got.Lo)) && sameRatTerms(want.Hi, s.Rat(got.Hi)) {
+		return
+	}
 	t.Helper()
 	requireSameRatTerms(t, want.Lo, s.Rat(got.Lo), msgAndArgs...)
 	requireSameRatTerms(t, want.Hi, s.Rat(got.Hi), msgAndArgs...)

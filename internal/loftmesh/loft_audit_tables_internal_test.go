@@ -132,7 +132,20 @@ func loftTableSoup(vertices, triangles int) ([]r3.Vec, [][3]int) {
 	return verts, tris
 }
 
+// sameInt reports whether every check of requireSameInt passes.
+func sameInt(want, got *big.Int) bool {
+	if (want == nil) != (got == nil) {
+		return false
+	}
+	return want == nil || want.Cmp(got) == 0
+}
+
+// requireSameInt compares with plain Go first and runs the checks below only on a
+// mismatch, so a passing call skips t.Helper and require.
 func requireSameInt(t *testing.T, want, got *big.Int) {
+	if sameInt(want, got) {
+		return
+	}
 	t.Helper()
 	require.Equal(t, want == nil, got == nil)
 	if want != nil {
@@ -140,7 +153,11 @@ func requireSameInt(t *testing.T, want, got *big.Int) {
 	}
 }
 
+// requireSameXpt takes the same fast path as requireSameInt.
 func requireSameXpt(t *testing.T, want, got proof.Xpt) {
+	if sameInt(want.X, got.X) && sameInt(want.Y, got.Y) && sameInt(want.Z, got.Z) && sameInt(want.W, got.W) {
+		return
+	}
 	t.Helper()
 	requireSameInt(t, want.X, got.X)
 	requireSameInt(t, want.Y, got.Y)
@@ -148,7 +165,25 @@ func requireSameXpt(t *testing.T, want, got proof.Xpt) {
 	requireSameInt(t, want.W, got.W)
 }
 
+// sameXp2 reports whether every check of requireSameXp2 passes.
+func sameXp2(want, got meshbool.Xp2) bool {
+	if (want.U == nil) != (got.U == nil) || (want.V == nil) != (got.V == nil) {
+		return false
+	}
+	if want.U != nil && (want.U.Cmp(got.U) != 0 || want.V.Cmp(got.V) != 0) {
+		return false
+	}
+	return sameInt(want.Hu, got.Hu) && sameInt(want.Hv, got.Hv) && sameInt(want.Hw, got.Hw) &&
+		math.Float64bits(want.Fu) == math.Float64bits(got.Fu) &&
+		math.Float64bits(want.Fv) == math.Float64bits(got.Fv) &&
+		want.FloatFinite == got.FloatFinite
+}
+
+// requireSameXp2 takes the same fast path as requireSameInt.
 func requireSameXp2(t *testing.T, want, got meshbool.Xp2) {
+	if sameXp2(want, got) {
+		return
+	}
 	t.Helper()
 	require.Equal(t, want.U == nil, got.U == nil)
 	require.Equal(t, want.V == nil, got.V == nil)
@@ -164,7 +199,18 @@ func requireSameXp2(t *testing.T, want, got meshbool.Xp2) {
 	require.Equal(t, want.FloatFinite, got.FloatFinite)
 }
 
+// sameVec reports whether every check of requireSameVec passes.
+func sameVec(want, got r3.Vec) bool {
+	return math.Float64bits(want.X) == math.Float64bits(got.X) &&
+		math.Float64bits(want.Y) == math.Float64bits(got.Y) &&
+		math.Float64bits(want.Z) == math.Float64bits(got.Z)
+}
+
+// requireSameVec takes the same fast path as requireSameInt.
 func requireSameVec(t *testing.T, want, got r3.Vec) {
+	if sameVec(want, got) {
+		return
+	}
 	t.Helper()
 	require.Equal(t, math.Float64bits(want.X), math.Float64bits(got.X))
 	require.Equal(t, math.Float64bits(want.Y), math.Float64bits(got.Y))
@@ -218,7 +264,7 @@ func requireSameLoftTables(t *testing.T, tris [][3]int, selected []bool, want, g
 		}
 		p := ProjectionPairIndex(meshbool.ProjAxes(got.Norms[i]))
 		for j, vi := range tri {
-			if u, ok := seen[key{p, vi}]; ok {
+			if u, ok := seen[key{p, vi}]; ok && u != got.Projections[i][j].U {
 				require.Same(t, u, got.Projections[i][j].U)
 			}
 			seen[key{p, vi}] = got.Projections[i][j].U

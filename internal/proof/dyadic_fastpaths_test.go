@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 	"math/rand/v2"
+	"reflect"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -167,11 +168,52 @@ func dyadicFromParts(t *testing.T, mant *big.Int, exp int) proof.Dyadic {
 	return d
 }
 
+// dyadicIs reports whether every check of requireDyadicIs passes, in the same
+// order. It never reports true when one of them fails.
+func dyadicIs(want *big.Rat, d proof.Dyadic) bool {
+	if independentDyadicRat(d).Cmp(want) != 0 || d.Rat().Cmp(want) != 0 {
+		return false
+	}
+	if want.Sign() != d.Sign() || (want.Sign() == 0) != d.IsZero() {
+		return false
+	}
+	if d.Mant() != nil && int(d.Mant().Bit(0)) != 1 {
+		return false
+	}
+	storage := big.NewInt(12345)
+	if d.MantInto(storage) != storage {
+		return false
+	}
+	if d.Mant() == nil {
+		if storage.Sign() != 0 {
+			return false
+		}
+	} else if storage.Cmp(d.Mant()) != 0 {
+		return false
+	}
+	wantF, wantExact := want.Float64()
+	if wantF == 0 && want.Sign() != 0 {
+		wantExact = false
+	}
+	gotF, gotExact := d.Float64()
+	if math.Float64bits(wantF) != math.Float64bits(gotF) || wantExact != gotExact {
+		return false
+	}
+	back, ok := proof.DyOfRat(want)
+	return ok && reflect.DeepEqual(back, d)
+}
+
 // requireDyadicIs checks d against the exact value want through every reading
 // the type offers: its mantissa and exponent, Rat, Sign, IsZero, MantInto into
 // reused storage, Float64 against big.Rat's own rounding, and the canonical
 // form, which a round trip through big.Rat must reproduce field for field.
+//
+// It compares with plain Go first (dyadicIs) and runs the checks below only on a
+// mismatch, so a passing call skips t.Helper and require.
 func requireDyadicIs(t *testing.T, want *big.Rat, d proof.Dyadic, msg string) {
+	if dyadicIs(want, d) {
+		return
+	}
 	t.Helper()
 	require.Zero(t, independentDyadicRat(d).Cmp(want), msg)
 	require.Zero(t, d.Rat().Cmp(want), "%s: Rat", msg)
