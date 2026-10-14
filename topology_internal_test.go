@@ -41,8 +41,8 @@ func TestFreeEdgeAndOpenShellReadTheirOwnState(t *testing.T) {
 
 	t.Run("ShellIsOpenReadsItsOwnStoredField", func(t *testing.T) {
 		t.Parallel()
-		require.True(t, (&Shell{open: true}).IsOpen())
-		require.False(t, (&Shell{}).IsOpen())
+		require.True(t, (&FaceShell{open: true}).IsOpen())
+		require.False(t, (&FaceShell{}).IsOpen())
 	})
 
 	t.Run("BodyKindReadsItsOwnStoredField", func(t *testing.T) {

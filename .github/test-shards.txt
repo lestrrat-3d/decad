@@ -652,6 +652,7 @@
 4	0.03	TestContactPairFacetedFloorRefusesUnprovedPatches
 4	0.04	TestEnumeratePrunedRodsMatchTheFullWalk
 4	0.01	TestEvalLoftLoopWalksFollowTheFaceNormal
+4	0.00	TestFacetedCopyLineageDirectTransfer
 4	0.60	TestFacetedRestatementPublishesItsPayloadsOwnProofRecord
 4	0.05	TestFallbackGateDiameterReadsCurvedWallStations
 4	5.20	TestFloatRatMatchesSetFloat64
@@ -1421,3 +1422,14 @@
 8	0.00	TestCurvedHeelArcSideTiesUseCallerCensus
 8	0.00	TestLoftCylinderChamferReachSerialPasses
 2	0.00	TestLoftCylinderChamferReachGridLimitFallsBack
+0	0.00	TestCICPUClassShard0
+1	0.00	TestCICPUClassShard1
+2	0.00	TestCICPUClassShard2
+3	0.00	TestCICPUClassShard3
+4	0.00	TestCICPUClassShard4
+5	0.00	TestCICPUClassShard5
+6	0.00	TestCICPUClassShard6
+7	0.00	TestCICPUClassShard7
+8	0.00	TestCICPUClassShard8
+9	0.00	TestCICPUClassShard9
+10	0.00	TestCICPUClassShard10

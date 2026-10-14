@@ -770,9 +770,7 @@ value it reads, so a retired body still answers it (§6). The query set is:
 
 **The topology type is `FaceShell`.** The package-level name `Shell` belongs to
 the shell operation, so the connected set of faces between a `Lump` and its
-`Face`s is `FaceShell`, and `Body.Shells()` returns `[]*FaceShell`. A companion
-design that writes `Shell` as the topology type (`Shell.IsVoid`, `*Shell`) means
-`FaceShell`.
+`Face`s is `FaceShell`, and `Body.Shells()` returns `[]*FaceShell`.
 
 **Form of a free function.** Parameters appear in this order: `ctx` when the
 operation takes one, then the owning `*Document` when no body argument

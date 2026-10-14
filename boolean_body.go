@@ -526,16 +526,16 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// Shells and lumps: positive components are outer shells (one lump
 	// each); a negative component is a void of its innermost positive
 	// container.
-	shells := make([]*Shell, len(members))
+	shells := make([]*FaceShell, len(members))
 	lumpOf := map[int]*Lump{}
 	var lumps []*Lump
 	for ci := range members {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		shells[ci] = &Shell{faces: compFaces[ci], void: compVol[ci].Sign() < 0}
+		shells[ci] = &FaceShell{faces: compFaces[ci], void: compVol[ci].Sign() < 0}
 		if compVol[ci].Sign() > 0 {
-			l := &Lump{shells: []*Shell{shells[ci]}}
+			l := &Lump{shells: []*FaceShell{shells[ci]}}
 			lumpOf[ci] = l
 			lumps = append(lumps, l)
 		}

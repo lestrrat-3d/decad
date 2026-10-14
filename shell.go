@@ -122,7 +122,7 @@ func WithShellSense(s ShellSense) ShellOption {
 // the one call form that takes a nil sel, and a non-nil sel beside it is
 // ErrDegenerate (docs/modify-reach-design.md §2, SX1). A full-turn revolve
 // builds it: the meridian's wall region swept a whole turn, an outer shell
-// around one void shell (Shell.IsVoid) that is the cavity. So does a
+// around one void shell (FaceShell.IsVoid) that is the cavity. So does a
 // hole-free straight prism: both caps keep a floor t thick, so an inward wall
 // needs t below half the sweep (SX11, ErrDegenerate). A two-slab rectangular
 // boss Union builds the bounded inward cavity of modify-general §3.1a. Other
@@ -521,7 +521,7 @@ func refuseClosedShell(payload featurePayload) error {
 // [z0 − t, z0], the band between Q and P on [z0, z1], and Q on [z1, z1 + t]. The
 // two interfaces expose the cavity region (Q inward, P outward) as the
 // cavity's floor and ceiling, and the cavity walls with them form one void
-// shell inside the outer one (Shell.IsVoid).
+// shell inside the outer one (FaceShell.IsVoid).
 //
 // The gates are the cup's with both caps kept: S18 and S10's section limit
 // (inward), then SX11, the axial cavity h − 2t, which must stay positive

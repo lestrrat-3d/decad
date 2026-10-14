@@ -187,7 +187,7 @@ func assembleCompositeSweepBodyWithJoinMode(
 		parts[len(parts)-1].endCap.body = body
 		faces = append(faces, parts[len(parts)-1].endCap)
 	}
-	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
+	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
 
 	for _, edge := range body.Edges() {
 		edge.faces = liveCompositeFaces(edge.faces, body)

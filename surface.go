@@ -133,7 +133,7 @@ func sheetLumps(faces []*Face) []*Lump {
 	groups := splitConnectedFaces(faces)
 	lumps := make([]*Lump, len(groups))
 	for i, g := range groups {
-		lumps[i] = &Lump{shells: []*Shell{{faces: g, open: shellIsOpen(g)}}}
+		lumps[i] = &Lump{shells: []*FaceShell{{faces: g, open: shellIsOpen(g)}}}
 	}
 	return lumps
 }

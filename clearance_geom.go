@@ -229,7 +229,7 @@ func newCEdge(e *Edge) (*clearance.CEdge, bool) {
 // shellWitness returns a point provenly on the shell: a vertex where one
 // exists, else the loop-less closed face's own synthesized point off stored
 // surface data (§2).
-func shellWitness(sh *Shell) (r3.Vec, bool) {
+func shellWitness(sh *FaceShell) (r3.Vec, bool) {
 	for _, f := range sh.faces {
 		for _, e := range f.Edges() {
 			if e.start != nil {

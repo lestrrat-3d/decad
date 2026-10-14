@@ -128,7 +128,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	if err := attachFaceLoopsContext(ctx, faces); err != nil {
 		return nil, err
 	}
-	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
+	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
 
 	body.volume = mitredVolume(vol6)
 	if body.centroid, err = mitredCentroid(anchor, vol6, moments); err != nil {

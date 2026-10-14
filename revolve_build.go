@@ -488,7 +488,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		if rp.surfaceResult {
 			lumps = make([]*Lump, len(shells))
 			for i, sh := range shells {
-				lumps[i] = &Lump{shells: []*Shell{sh}}
+				lumps[i] = &Lump{shells: []*FaceShell{sh}}
 			}
 		} else {
 			lumps = []*Lump{{shells: shells}}
@@ -517,7 +517,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			// each becomes its own Lump instead of one shell regardless.
 			lumps = sheetLumps(faces)
 		} else {
-			lumps = []*Lump{{shells: []*Shell{{faces: faces, open: shellIsOpen(faces)}}}}
+			lumps = []*Lump{{shells: []*FaceShell{{faces: faces, open: shellIsOpen(faces)}}}}
 		}
 	}
 	body.lumps = lumps
@@ -944,8 +944,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 // others, so its two axis ends bracket every other on-axis junction of the
 // loop. A sheet bounds no cavity at all (decision B, §2.2), so void is always
 // false there.
-func fullRevolveShellsContext(ctx context.Context, perLoop []revLoopParts, sheet bool) ([]*Shell, error) {
-	var shells []*Shell
+func fullRevolveShellsContext(ctx context.Context, perLoop []revLoopParts, sheet bool) ([]*FaceShell, error) {
+	var shells []*FaceShell
 	for li, parts := range perLoop {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -966,7 +966,7 @@ func fullRevolveShellsContext(ctx context.Context, perLoop []revLoopParts, sheet
 				continue
 			}
 			void := !sheet && (li != 0 || r != parts.outerRun)
-			shells = append(shells, &Shell{faces: group, open: shellIsOpen(group), void: void})
+			shells = append(shells, &FaceShell{faces: group, open: shellIsOpen(group), void: void})
 		}
 	}
 	return shells, nil
