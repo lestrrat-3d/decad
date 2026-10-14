@@ -142,29 +142,58 @@ func NewMassAccumulator(anchor r3.Vec, delta, sectionDelta, sectionMatchedDelta 
 // nothing until publication, and the area sum's own terms are the endpoints
 // of a proven per-triangle enclosure rather than a float evaluation.
 func (m *MassAccumulator) Add(a, b, c r3.Vec, wall bool) {
-	sa := proofarith.Xsub(proofarith.XptOf(a), m.anchor)
-	sb := proofarith.Xsub(proofarith.XptOf(b), m.anchor)
-	sc := proofarith.Xsub(proofarith.XptOf(c), m.anchor)
+	m.addPrepared(m.prepareVertex(a), m.prepareVertex(b), m.prepareVertex(c), wall)
+}
+
+type massVertex struct {
+	point   r3.Vec
+	offset  proofarith.Xpt
+	x, y, z *big.Rat
+	ready   bool
+}
+
+func (m *MassAccumulator) prepareVertex(p r3.Vec) massVertex {
+	offset := proofarith.Xsub(proofarith.XptOf(p), m.anchor)
+	x, y, z := proofarith.XhpRat(proofarith.Xhp(offset))
+	return massVertex{point: p, offset: offset, x: x, y: y, z: z, ready: true}
+}
+
+// AddMesh folds an indexed triangle set in its original order. A vertex's
+// exact lift and anchored rational coordinates are shared only within this
+// call, and only between triangles that name the same mesh index.
+func (m *MassAccumulator) AddMesh(verts []r3.Vec, tris [][3]int, walls int) {
+	prepared := make([]massVertex, len(verts))
+	at := func(i int) massVertex {
+		if !prepared[i].ready {
+			prepared[i] = m.prepareVertex(verts[i])
+		}
+		return prepared[i]
+	}
+	for k, tri := range tris {
+		m.addPrepared(at(tri[0]), at(tri[1]), at(tri[2]), k < walls)
+	}
+}
+
+func (m *MassAccumulator) addPrepared(a, b, c massVertex, wall bool) {
+	sa, sb, sc := a.offset, b.offset, c.offset
 
 	triVol6 := proofarith.XdotRat(sa, proofarith.Xcross(sb, sc))
 	proofarith.AddRat(m.Vol6, m.Vol6, triVol6)
 
-	saX, saY, saZ := proofarith.XhpRat(proofarith.Xhp(sa))
-	sbX, sbY, sbZ := proofarith.XhpRat(proofarith.Xhp(sb))
-	scX, scY, scZ := proofarith.XhpRat(proofarith.Xhp(sc))
-	sumX := proofbound.RatAdd(saX, sbX, scX)
-	sumY := proofbound.RatAdd(saY, sbY, scY)
-	sumZ := proofbound.RatAdd(saZ, sbZ, scZ)
+	sumX := proofbound.RatAdd(a.x, b.x, c.x)
+	sumY := proofbound.RatAdd(a.y, b.y, c.y)
+	sumZ := proofbound.RatAdd(a.z, b.z, c.z)
 	proofarith.AddRat(m.MomX, m.MomX, proofarith.MulRat(new(big.Rat), triVol6, sumX))
 	proofarith.AddRat(m.MomY, m.MomY, proofarith.MulRat(new(big.Rat), triVol6, sumY))
 	proofarith.AddRat(m.MomZ, m.MomZ, proofarith.MulRat(new(big.Rat), triVol6, sumZ))
 
-	m.foldBounds(a)
-	m.foldBounds(b)
-	m.foldBounds(c)
+	m.foldBounds(a.point)
+	m.foldBounds(b.point)
+	m.foldBounds(c.point)
 
 	if m.delta > 0 {
-		m.PerturbAreaSum = proofbound.UpRound(m.PerturbAreaSum + proofbound.PerturbedTriangleAreaAllow(a, b, c, m.delta))
+		m.PerturbAreaSum = proofbound.UpRound(m.PerturbAreaSum +
+			proofbound.PerturbedTriangleAreaAllow(a.point, b.point, c.point, m.delta))
 	}
 
 	if !wall {
