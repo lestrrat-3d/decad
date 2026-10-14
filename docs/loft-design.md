@@ -48,7 +48,7 @@ mixed-kind pairing or a same-kind pairing this evaluator has no construction
 for, is `ErrUnsupported` at the call — Table S row S3. A `LineSeg` pair walls
 with an exact `Plane` (§5); a same-kind circular pair walls with flat
 triangles over a chord chain built between the two recorded curves (§5.1) —
-the body is the resulting polyhedron, never a curved ruled surface, and the
+the held proof body is the resulting triangle mesh, and the
 departure of that chord chain from the recorded arc or circle it approximates
 publishes as a section displacement (§5.2), the same discipline
 `docs/prism-boolean-design.md` §7 and its Implementation notes already state
@@ -59,7 +59,10 @@ two curves' own Bézier span decompositions define, rather than a circular
 walk (§5.1's free-form arm), and its departure from the two recorded curves
 publishes as the same section displacement (§5.2). Same-kind is necessary
 rather than sufficient for a circular pair: Table P row P5 also requires
-two `CircleSeg`s to agree in walk sense. A same-kind Tier A free-form pair
+two `CircleSeg`s to agree in walk sense. A certified whole-circle hole pair
+may publish analytic rims and one curved hole wall under §18. Its held
+triangle mesh and bounded mass proof remain the Loft representation.
+A same-kind Tier A free-form pair
 uses the least common multiple of its span counts to give both chains one
 station coordinate (§5.1). A full-circle loop's
 correspondence has exactly one segment (`record.go`), so its alignment offset
@@ -392,13 +395,15 @@ after the loft is built refuses a FRESH `Document.Loft` on that profile while
 which is the evaluate-from-the-record rule every other feature's placement
 follows (`docs/evaluator-design.md` §1).
 
-## 5. Construction — flat triangular walls, never a curved ruled surface
+## 5. Construction — held triangular walls and certified circular topology
 
-**Every wall is two flat triangles, split along the same fixed diagonal
-`tessellate.go` already uses for a prism's lateral quad.** A loft reuses that
-convention as its actual TOPOLOGY, not merely its tessellation. The local
-order below fixes the diagonal and roles. The cap seed plus whole-shell rule
-that follows fixes outward winding.
+**Every wall cell holds two flat triangles, split along the same fixed diagonal
+`tessellate.go` already uses for a prism's lateral quad.** Ordinary Loft
+publishes those triangles as its topology. Section §18 replaces the topology
+of a certified whole-circle hole with one analytic wall and two circular rims;
+its held triangles continue to carry the mass and tessellation proofs. The
+local order below fixes the diagonal and roles. The cap seed plus whole-shell
+rule that follows fixes outward winding.
 
 For cell `j` of a loop — `V_j -> V_{j+1}` on `p0`, `W_j -> W_{j+1}` on `p1`,
 at the index §7's grammar gives that cell, over stations already rotated by
@@ -427,7 +432,7 @@ oriented material boundary.
 **§7's Table B owns a loft's `side(i,j,k)` grammar**, and evaluator §3 owns
 the provenance-role mechanism that grammar instantiates.
 
-**Every Loft wall triangle is exempt from evaluator §3's
+**Every ordinary Loft wall triangle is exempt from evaluator §3's
 adjacent-coplanar-side-face canonicalization**, and evaluator §3 owns that
 rule. No wall triangle merges with its mate or with a triangle in another
 cell. A wall quad is generally non-planar — `V_j`, `V_{j+1}`, `W_{j+1}`,
@@ -2784,9 +2789,38 @@ cylindrical face and their cap rim chords with one full `Circle3` per cap.
 Every former hole-wall `side(i,j,k)` role belongs to that cylinder, so the
 unchanged held triangle mesh still resolves its source face at `VerifyAll`.
 The cap face area subtracts the bounded whole-circle integral from the held
-outer polygon area. A direct Loft of circular-hole sketches, or a Loft that
-lacks the certified through-Cut mark, keeps its original tessellated rim.
-Placement and duplication rebuild the same topology from that mark.
+outer polygon area. Placement and duplication rebuild Cut topology from the
+same mark.
+
+A direct Loft also publishes one `Circle3` per cap rim and one curved hole
+wall when its authenticated sections have identical outer records, one whole
+clockwise circle hole each, the same in-plane frame axes, zero alignment and
+an exact common axial frame displacement. A pair with bit-identical circle
+records uses the cylindrical builder above. Equal rounded radii without
+identical records keep faceted topology. Unequal circles
+need the additional gate of line-only outer loops, identity placement, exact
+world-XY section axes and an exactly representable axial height. These
+conditions make each retained outer wall planar with a bounded area. A fixed
+center with changing radius gives a `Cone`; a moving center gives a rational
+ruled `NURBSSurface`, including when its radius also changes. A moving-center
+wall is not a right cylinder or cone.
+
+The ruled surface follows directly from the two circle records. One quarter
+circle has homogeneous quadratic weights `[1,1,2]` and controls
+`[(1,0),(1,1),(0,1)]`. Its normalized coordinates are
+`((1-t²)/(1+t²), 2t/(1+t²))`; the identity
+`(1-t²)²+(2t)²=(1+t²)²` proves the exact circle. Rotate that quarter four
+times, then interpolate the two circles' weighted controls at equal parameter
+values. Shared frame axes and zero alignment prove correspondence, so the
+degree-(2,1) net describes exactly the line between corresponding circle
+points. The authenticated records determine this private net; the public
+`NURBSSurface` remains an opaque tag.
+
+The direct Loft retains its original held triangles, source roles and mass
+proof. Its complete bounded area minus both bounded cap areas and every
+retained planar outer face area bounds the one curved hole wall. The two cap
+areas use their respective whole-circle integrals. An unproved source pair,
+frame, placement or outer-wall area keeps the original faceted topology.
 
 `OuterLoopOf(CapStart(body))` and `OuterLoopOf(CapEnd(body))` select only the
 held outer cap edges, excluding the circular bore rims. An equal-distance

@@ -79,11 +79,14 @@ type Torus struct {
 }
 
 // NURBSSurface is a free-form face's geometry — the exact extruded or
-// revolved surface of a recorded free-form curve (docs/spline-design.md §7):
+// revolved surface of a recorded free-form curve (docs/spline-design.md §7),
+// or a direct Loft's ruled surface between two authenticated whole circles:
 // extruded, the control net is the curve's control points against the two
 // sweep ends, degree (p, 1), weights carried through; revolved, the standard
 // rational quadratic circle representation, degree (p, 2), weights
-// multiplied. A NURBSSurface built from a recorded control net IS the
+// multiplied. A ruled circle pair derives a rational degree-(2,1) net from
+// both circle records using the same four quarter-arc parameters and weights.
+// A NURBSSurface built from such a source-derived control net IS the
 // surface, not an approximation of it — core §6.1's Exact-by-construction
 // promise for an analytic variant holds unstrained. Its control net stays
 // private in v1: this is a tagged, opaque marker carrying no exported

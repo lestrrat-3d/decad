@@ -432,8 +432,16 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 			wall.n.Origins = append(wall.n.Origins, provenance.Ref{Producer: ref, Role: fmt.Sprintf("fillet(%d,%d)", li, seg)})
 		}
 	}
-	if pl.analyticBore {
+	directCircle := directLoftCircularHole(pl)
+	var circularWall *Face
+	if pl.analyticBore || directCircle == loftCircleWallCylinder {
 		walls, err = buildLoftAnalyticBoreTopology(ctx, body, ref, pl, a, capStart, capEnd, walls)
+		if err != nil {
+			return nil, err
+		}
+	} else if directCircle != loftCircleWallNone {
+		walls, circularWall, err = buildLoftVaryingCircularHoleTopology(ctx,
+			pl, directCircle, a, capStart, capEnd, walls)
 		if err != nil {
 			return nil, err
 		}
@@ -478,6 +486,27 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	}
 	body.n.Bounds = boxToInternal(bounds)
 	body.n.Area = measurementToInternal(mass.area(cap0Rat, cap1Rat))
+	if circularWall != nil {
+		// The Loft mass proof bounds the complete true surface. The two
+		// circular-hole caps and every retained straight outer wall each
+		// bound their own true areas, so outward subtraction isolates the
+		// single curved hole wall without treating another face as exact.
+		wallArea := proofbound.BoundedSub(
+			proofbound.BoundedSub(measurementScalar(measurementFromInternal(body.n.Area)),
+				proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound)),
+			proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound))
+		for _, face := range walls {
+			if face == circularWall {
+				continue
+			}
+			wallArea = proofbound.BoundedSub(wallArea,
+				proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound))
+		}
+		if proofbound.IsNonFinite(wallArea.Value) || proofbound.IsNonFinite(wallArea.Bound) {
+			return nil, fmt.Errorf(`%w: the circular loft wall area has no finite bound`, ErrUnsupported)
+		}
+		circularWall.n.Area, circularWall.n.AreaBound = wallArea.Value, wallArea.Bound
+	}
 	if pl.surfaceResult {
 		// §4.3: a surface result's area is the solid's area minus the two
 		// omitted caps'. Each cap's area and bound are read back from the

@@ -161,7 +161,7 @@ func circleUseTangent(use decad.CoEdge, radial r3.Vec) r3.Vec {
 	return tangent
 }
 
-func TestDirectLoftCircleHoleDoesNotClaimThroughCutTopology(t *testing.T) {
+func TestDirectLoftWholeCircleHolePublishesCircularTopology(t *testing.T) {
 	world := sketch.NewWorld()
 	upper, err := world.CreateOffsetPlane(world.XY(), 2)
 	require.NoError(t, err)
@@ -181,13 +181,29 @@ func TestDirectLoftCircleHoleDoesNotClaimThroughCutTopology(t *testing.T) {
 	}
 	body, err := decad.New().Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
-	faces, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(body))).Exactly(1).SelectFaces(body)
-	require.NoError(t, err)
-	require.Len(t, faces[0].Loops(), 2)
-	require.Greater(t, len(faces[0].Loops()[1].Edges()), 1)
-	for _, edge := range faces[0].Loops()[1].Edges() {
-		require.IsType(t, decad.Line3{}, edge.Curve())
+	requireManifold(t, body)
+	for _, role := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
+		faces, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(body)
+		require.NoError(t, err)
+		require.Len(t, faces[0].Loops(), 2)
+		require.Len(t, faces[0].Loops()[1].Edges(), 1)
+		edge := faces[0].Loops()[1].Edges()[0]
+		circle, ok := edge.Curve().(decad.Circle3)
+		require.True(t, ok)
+		require.Equal(t, units.Millimeters(1), circle.Radius)
+		require.Same(t, edge.Start(), edge.End())
+		require.Len(t, edge.Faces(), 2)
 	}
+	_, err = decad.Faces(decad.Cylindrical()).Exactly(1).SelectFaces(body)
+	require.NoError(t, err)
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-(200-2*math.Pi)), volume.Bound.Base())
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	requireBoreRimsOppositeUses(t, body)
 }
 
 func TestExtrudedBoxThroughBoreCutPublishesCircularTopology(t *testing.T) {

@@ -126,8 +126,10 @@ Rules:
   rationals that meet at one point, with no junction bound reaching off the
   line (`internal/boundarywalk`). A near-collinear kink keeps both faces, so
   no merge drops a vertex the record has. Ordinary Loft wall triangles do not
-  merge with another face. A certified whole-circle through-Cut replaces only
-  its hole-wall triangles with one cylindrical face that retains their roles.
+  merge with another face. A certified whole-circle through-Cut or direct Loft
+  replaces only its hole-wall triangles with one curved face that retains their
+  roles. Direct Loft admits a cylinder, cone or rational ruled surface under
+  loft §18's source and area gates.
   This keeps
   `side(i,j,0)`/`side(i,j,1)` distinct within a cell and preserves every
   cross-cell rung between coplanar Loft triangles. A full cylinder is one

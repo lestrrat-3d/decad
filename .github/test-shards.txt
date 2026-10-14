@@ -1404,6 +1404,7 @@
 10	17.15	TestCurvedContactGraphHeldAnchors
 10	10.81	TestCurvedSourceCapCirclesSplitClosedBlankShell
 10	5.93	TestCurvedSourcePairCensusCoversLiveFaces
+10	0.00	TestDirectLoftCircleGateRejectsEqualBaseDifferentRecord
 10	0.01	TestDisplacedStationCellNeedsTheStationShiftLeg
 10	0.03	TestEvalPrismContinuesCallerFreeformWork
 10	2.10	TestExactSumRoundDyadicMatchesRational
@@ -1474,6 +1475,7 @@
 10	0.10	TestRevolveSymDiffRefusesAnAbsentAngularTerm
 10	0.52	TestRotationalSweepRadiusMatchesPerCornerForm
 10	0.00	TestRvLenUpperEnclosesTheExactNorm
+10	0.00	TestRuledCircleQuarterControlNet
 10	0.02	TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding
 10	0.00	TestShellRectCircleWitnessKeepsToleranceAndFallsBack
 10	0.01	TestSideOpeningBrepChargesInexactThickness
