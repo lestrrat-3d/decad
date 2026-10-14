@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/smoothloft"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -68,6 +69,9 @@ type facetGroup struct {
 // measurements compose from. It is what Transform re-evaluates under a composed
 // motion (docs/evaluator-design.md §8).
 type facetedPayload struct {
+	// smoothRectSection is the immutable exact height curve of an original
+	// rectangular LoftSections result. Placement and similarity drop it.
+	smoothRectSection *smoothloft.RectangularSection
 	// axialSectionJoin marks a proven XY section swept through one axial
 	// interval. Its held vertical boundary chains retain a Z direction for
 	// selectors even though their curve type remains bounded FacetedCurve.
@@ -243,6 +247,7 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		return nil, err
 	}
 	next := fp
+	next.smoothRectSection = nil
 	next.axialSectionJoin = false
 	next.prismPatternJoin = nil
 	next.xform = composed

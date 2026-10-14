@@ -126,7 +126,8 @@ func buildFourRectangles(ctx context.Context, sections [4]rectangularSection,
 	diameter := add(mul(rint(2), add(w.maximum, h.maximum)), height)
 	result := Build{Vertices: vertices, Triangles: triangles, Sources: sources, EdgeCount: 4,
 		MeshBound: proofbound.RatFloatUp(delta), VolSymDiff: proofbound.RatFloatUp(volumeGap),
-		AreaSlack: proofbound.RatFloatUp(areaGap), Diameter: proofbound.RatFloatUp(diameter)}
+		AreaSlack: proofbound.RatFloatUp(areaGap), Diameter: proofbound.RatFloatUp(diameter),
+		RectangularSection: fourRectangularSection(planes[0].Origin, planes[3].Origin, w, h)}
 	for _, value := range [...]float64{result.MeshBound, result.VolSymDiff, result.AreaSlack, result.Diameter} {
 		if math.IsNaN(value) || math.IsInf(value, 0) {
 			return Build{}, fmt.Errorf("%w: four rectangular section proof exceeds float64",

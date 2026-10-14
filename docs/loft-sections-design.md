@@ -616,3 +616,9 @@ allowances with that span's own `W_i,K_i,P_w,i,P_h,i,M_w,i,M_h,i,N_i`.
 Sum those allowances across spans before upward rounding. The global
 diameter bound is `2(max_i W_i + max_i K_i) + Σ_i H_i`. The resulting
 faceted payload supplies `Volume`, `Area`, and `Tessellate(VerifyAll)`.
+
+The independent rectangular builders in §§10–12 also retain their admitted
+exact height-curve controls in the original body's payload. `Body.Section`
+uses those controls for an exact interior world-XY rectangle when its
+half-dimensions are representable. See `docs/section-design.md`. Placement,
+scaling and shape-changing operations drop this source certificate.
