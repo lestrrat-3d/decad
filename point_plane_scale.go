@@ -122,6 +122,7 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 	next.loftCylinderBore = nil
 	next.loftMirrorJoin = nil
 	next.loftMirrorCopy = nil
+	next.mirrorCapGroups = nil
 	next.loftMirrorCylinderJoin = nil
 	next.loftMirrorCylinderBore = nil
 	next.revolveLoftJoin = nil

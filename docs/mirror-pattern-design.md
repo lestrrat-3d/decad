@@ -216,6 +216,34 @@ receiver, and every non-co-directional motion, instances through
 `Copy` with `WithCopyPlacement` under the composed rigid motion, which is what a caller's own
 loop would do.
 
+### 4.4 Exact rotation copies
+
+```go
+func WithCopyRotation(center, axis r3.Vec, angle units.Value) CopyOption
+```
+
+A rotated instance that must keep a rotation exact copies through
+`WithCopyRotation`, not `WithCopyPlacement`. A float rotation matrix is not
+exactly orthogonal. A faceted copy placed by it denotes the stored matrix read
+as an exact rational map, which scales an X-axis Revolve blank by about one
+float step. `WithCopyRotation` records an exactly orthogonal rational rotation
+instead: the rotation about exactly the given axis, chosen near `angle` (it is
+not in general the rotation by exactly that transcendental angle). A rotation
+about the X axis through the origin then leaves that blank exactly invariant.
+
+A faceted exact copy denotes `Q*S + t`, where `S` is the source's true solid.
+The held vertices are the float placement's, charged for their distance to `Q`.
+The copy carries no analytic surface tag, no denoted patch, no point-loft
+source record and no loft mirror copy proof, because each describes the float
+placement. Its faces read as `Faceted`. The loft mirror cap roles survive as
+provenance. Only a copy made directly from the source records the rotation in
+its lineage; `Transform` and a copy of a copy record none.
+
+`PatternCopies` is not equivalent: its instances denote the float matrix.
+Other payloads place by `r3.RotationAround(center, axis, angle)`, exactly as
+`WithCopyPlacement` of that transform. §4.3's rule that non-frame-keeping
+instances go through `Copy` with `WithCopyPlacement` is unchanged.
+
 ## 5. The mirror join
 
 ### 5.1 Admission

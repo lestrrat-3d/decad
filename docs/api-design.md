@@ -1357,6 +1357,7 @@ rebuilding the whole feature chain per instance. `Copy` closes that gap:
 ```go
 func Copy(ctx context.Context, source *Body, opts ...CopyOption) (*Body, error)
 func WithCopyPlacement(t r3.Transform) CopyOption
+func WithCopyRotation(center, axis r3.Vec, angle units.Value) CopyOption
 ```
 
 `Copy` returns a NEW live body and leaves its source **live**: the source is
@@ -1365,6 +1366,23 @@ immutable payload under a new producer identity at the same placement. With
 `WithCopyPlacement(t)`, it re-evaluates the payload under the composed rigid
 motion exactly as `Transform` does. Repeated placement options use the last value.
 The zero `Transform{}` is `ErrDegenerate`; `r3.Identity()` is a valid no-op.
+`WithCopyRotation(center, axis, angle)` places the copy by the rotation about the axis
+through `center`. `WithCopyPlacement` and `WithCopyRotation` are both placement
+options, so the last of either wins. A zero or non-finite axis is `ErrDegenerate`, a non-finite
+center or angle is `ErrNotFinite`, an angle that is not an angle is
+`ErrUnitKind`, and a zero angle is the identity. A faceted copy made with it
+denotes an exactly orthogonal rational rotation about exactly that axis, chosen
+near `angle`: it agrees with `angle` to within a few float steps and is not in
+general the rotation by exactly that transcendental angle. The copy's held
+vertices are the ones `WithCopyPlacement` of `r3.RotationAround(center, axis,
+angle)` would hold, and their bounds charge the distance to the exact rotation.
+Every other payload is placed by `r3.RotationAround(center, axis, angle)`,
+exactly as `WithCopyPlacement` of that transform.
+An exact faceted copy carries no analytic surface tags: every face reads as
+`Faceted`, so `Face.NormalAt` refuses it, and `ToFace` stops and `MirrorFace`
+refuse it. It also stops being a point-loft source and a loft mirror join copy,
+so cone trims and the loft mirror cylinder joins treat it as any other faceted
+body. A copy that needs those readings uses `WithCopyPlacement`.
 A nil option is `ErrDegenerate`, and a body this evaluator did not build is
 `ErrUnsupported`. Cancellation during a faceted rebuild leaves the source
 and live-body set unchanged.

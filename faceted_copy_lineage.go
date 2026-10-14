@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/shellseparation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -21,13 +22,18 @@ type facetedCopyLineage struct {
 	// direct is true only when placed applied motion to the source payload
 	// itself, so the image's true solid is exactly motion of the source's.
 	direct bool
+	// exact is the rational rotation the image denotes, set only for a direct
+	// copy made with WithCopyRotation. A Transform, a copy of a copy and every
+	// ordinary placement leave it nil.
+	exact *exactrotation.Rotation
 }
 
 // bindFacetedCopyLineage records a rigid image only while its source remains
 // live. Losing an optional copy proof never prevents an otherwise valid Copy
 // or Transform from producing a body. direct is true only when image was
 // placed from source's own payload.
-func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, direct bool) {
+func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, direct bool,
+	exact *exactrotation.Rotation) {
 	if image == nil || source == nil || image.doc != source.doc ||
 		source.doc.requireLive(source) != nil {
 		return
@@ -49,6 +55,9 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 		source: source, sourceProducer: source.origin.producer,
 		sourcePlacement: base.xform, targetPlacement: targetPlacement,
 		motion: motion, direct: direct,
+	}
+	if direct {
+		placed.copyLineage.exact = exact
 	}
 	image.payload = placed
 }

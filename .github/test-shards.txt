@@ -1454,3 +1454,10 @@
 10	0.00	TestAngularStopEdgeNamesPublicCurveType
 10	0.00	TestPlacedCapCentroidByExactRotation
 10	0.00	TestPlacedCapCentroidReadsPlacementAsExactMap
+10	0.00	TestCopyRotationRecordsExactPlacementOnDirectCopy
+10	0.00	TestCopyRotationLineageExactIsDirectOnly
+10	0.00	TestCopyRotationOrdinaryCopyOfExactCopyKeepsNoTags
+10	0.00	TestExactGroupPlacedMapsCentroidAndDropsTags
+10	0.00	TestCopyRotationExactSourceVertsDropForRotation
+10	0.00	TestPlacedWithChargesTheGapToExactRotation
+10	0.00	TestPlacedWithDropsFloatPlacementRecords

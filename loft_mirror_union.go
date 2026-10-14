@@ -216,10 +216,11 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris); err != nil {
 		return nil, err
 	}
+	capGroups := record.capGroups
 	fp := facetedPayload{verts: verts, tris: tris, src: src, groups: groups,
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
 		areaSlack: areaSlack, dPair: pairDiameter, contactAudited: true,
-		loftMirrorJoin: record, xform: r3.Identity()}
+		loftMirrorJoin: record, mirrorCapGroups: &capGroups, xform: r3.Identity()}
 	return buildFacetedBody(ctx, d, ref, fp)
 }
 

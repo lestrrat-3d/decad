@@ -322,3 +322,18 @@ func TestAccessorsReturnCopies(t *testing.T) {
 	require.Zero(t, rec.Linear()[0][0].Cmp(big.NewRat(1, 1)))
 	require.NotZero(t, rec.Translation()[0].Cmp(big.NewRat(7, 1)))
 }
+
+func TestIsIdentity(t *testing.T) {
+	zero, _, err := exactrotation.New(r3.Vec{}, r3.Vec{Z: 1}, units.Radians(0))
+	require.NoError(t, err)
+	require.True(t, zero.IsIdentity())
+
+	turned, _, err := exactrotation.New(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(30))
+	require.NoError(t, err)
+	require.False(t, turned.IsIdentity())
+
+	// A zero angle about an off-origin center is still the identity map.
+	offset, _, err := exactrotation.New(r3.NewVec(1, 2, 3), r3.Vec{X: 1}, units.Radians(0))
+	require.NoError(t, err)
+	require.True(t, offset.IsIdentity())
+}

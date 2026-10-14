@@ -780,6 +780,21 @@ allowance. Each held vertex starts at the nearest float to its exact rational
 image under that map, before the embedding check can move it to another
 corner of the image's float box. Vertex rounding and a swept-volume allowance
 are added after the exact map. A non-finite bound refuses the placement.
+A faceted copy made with `WithCopyRotation` instead denotes an exactly
+orthogonal rational rotation `Q` with translation `t`, recorded at Copy time.
+Its held vertices are placed by the same float basis, and each vertex pays
+`|Q - D|` times its largest coordinate plus `|t - t_D|` in place of the length
+stretch and determinant charge, because `Q` keeps length, area and volume. The
+group centroids are re-derived as `Q*c + t` in rational arithmetic with no
+stretch charge. Every record that describes the float placement instead of `Q`
+is dropped: every group surface tag and denoted patch, `pointSection`,
+`pointPlane`, `pointSimilarity`, the point-plane cap displacement,
+`revolveLoftSector` and `loftMirrorCopy`. The cap-role provenance of a loft
+mirror join is a separate record, so each exact copy still mints both outer-cap
+roles under its own identity. The zero-bound exact source mesh survives only an
+exactly identity record. The copy lineage keeps the rotation only for a copy
+made directly from the source's own payload; `Transform` and a copy of a copy
+record none.
 When a zero-bound faceted Boolean undergoes translation-only placement, its
 payload also carries the original exact mesh beside the rebuilt held mesh.
 The contact reader may use that source to prove an exact support plane after

@@ -2005,3 +2005,8 @@
 10	0.00	TestBrepSectionRefusesBodyWithoutCertifiedSlabs
 10	0.00	TestSpiralFirstToothUnionIsCertified
 10	0.00	TestZeroPathHasNoSegments
+10	0.00	TestCopyRotationOptionErrors
+10	0.00	TestCopyRotationLastPlacementOptionWins
+10	0.00	TestCopyRotationPrismMatchesPlacement
+10	0.00	TestCopyRotationFacetedCopyIsFacetedAndRotates
+10	0.00	TestCopyRotationMintsCapRolesUnderEveryCopy

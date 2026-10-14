@@ -198,6 +198,28 @@ func (r *Rotation) FixesXAxisAtOrigin() bool {
 	return true
 }
 
+// IsIdentity reports whether the matrix is exactly the identity and every
+// translation component is exactly zero.
+func (r *Rotation) IsIdentity() bool {
+	for i := range r.m {
+		for j := range r.m[i] {
+			want := int64(0)
+			if i == j {
+				want = 1
+			}
+			if r.m[i][j].Cmp(big.NewRat(want, 1)) != 0 {
+				return false
+			}
+		}
+	}
+	for _, q := range r.t {
+		if q.Sign() != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // Gap bounds how far d lies from the exact record. linear is an upper bound on
 // the entrywise absolute sum of m - D, so |(m - D)v| <= linear * max|v_j|.
 // translation bounds the entrywise absolute sum of t - tD. ok is false when
