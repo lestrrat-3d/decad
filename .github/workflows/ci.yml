@@ -12,7 +12,10 @@ permissions:
 
 jobs:
   # Lint and test jobs run independently. The race shards share the two test
-  # binaries race-binary builds: the root package's and apitest's.
+  # binaries race-binary builds: the root package's and apitest's. The job
+  # that runs the packages outside the root also takes the binaries of the four
+  # packages whose tests import the root package, so it compiles the root
+  # package under -race zero times.
   #
   # Each Linux job that compiles keeps its own Go build cache through
   # .github/actions/go-build-cache-restore and go-build-cache-save, so it
@@ -70,9 +73,9 @@ jobs:
           go-version-file: go.mod
           cache: false
 
-      # The sources are every package the two test binaries compile: the root
-      # package, apitest/, and everything outside dynamics/ and examples/. A
-      # pull request that changes none of them restores both binaries, links
+      # The sources are every package the test binaries compile: the root
+      # package, apitest/, examples/, and everything outside dynamics/. A pull
+      # request that changes none of them restores every binary, links
       # included.
       - name: Restore Go build cache
         uses: ./.github/actions/go-build-cache-restore
@@ -81,23 +84,40 @@ jobs:
           sources: |
             :(glob)**/*.go
             :(exclude)dynamics
-            :(exclude)examples
             :(exclude)_gallery
             :(exclude)_shardgen
 
       - name: Download dependencies
         run: go mod download
 
-      # With an -o directory and two packages, go test -c writes
-      # race-bin/decad.test and race-bin/apitest.test.
+      # With an -o directory, go test -c writes one <package>.test per package:
+      # race-bin/decad.test, apitest.test, examples.test, decadtest.test,
+      # export.test and decaderr.test. The last four are the packages outside
+      # the root whose tests import it; the job that runs them below needs no
+      # root compile of its own.
       - name: Build race test binaries
-        run: go test -c -race -o race-bin/ . ./apitest/
+        run: go test -c -race -o race-bin/ . ./apitest/ ./examples/ ./decadtest/ ./export/ ./internal/decaderr/
 
+      # The shards download race-tests, so it holds their two binaries alone.
       - name: Upload race test binaries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: race-tests
-          path: race-bin/
+          path: |
+            race-bin/decad.test
+            race-bin/apitest.test
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload race test binaries of the other packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: race-tests-packages
+          path: |
+            race-bin/examples.test
+            race-bin/decadtest.test
+            race-bin/export.test
+            race-bin/decaderr.test
           if-no-files-found: error
           retention-days: 1
 
@@ -271,6 +291,7 @@ jobs:
   # (`budget:`) sits far below it, so growth in the scenes is reported long
   # before the timeout would fail the job.
   test:
+    needs: [race-binary]
     strategy:
       fail-fast: false
       matrix:
@@ -320,6 +341,13 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Download race test binaries of the other packages
+        if: startsWith(matrix.packages, './examples/')
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: race-tests-packages
+          path: race-bin
+
       # The CPU model and count tell which speed group of ubuntu-latest runner
       # the dynamics job landed on, which its wall time depends on.
       - name: Describe the runner CPU
@@ -363,12 +391,44 @@ jobs:
       # a stored result instead of running the test when nothing it depends on
       # changed. -count=1 makes every test run, so the cache saves compile
       # time only.
+      #
+      # The four packages whose tests import the root package run from the
+      # binaries race-binary built, one after another in the background while
+      # go test runs the rest. Each binary runs from its package directory, as
+      # go test does, with the same -race build, -count=1, -v and timeout. The
+      # rest is the operand list minus those four, so a new internal package
+      # still runs here, and go test compiles the root package only if one of
+      # them imports it. The step waits for both and fails when either failed.
       - name: Run tests outside the root package (Ubuntu shard)
         if: matrix.packages != '' && matrix.packages != './dynamics/'
         shell: bash
         run: |
           start=$SECONDS
-          go test ${{ matrix.race }} -count=1 -v -timeout ${{ matrix.timeout }} ${{ matrix.packages }}
+          mod="$(go list -m)"
+          rest="$(go list ${{ matrix.packages }} | grep -v -x -E "${mod}/(examples|decadtest|export|internal/decaderr)")"
+          logdir="$(mktemp -d)"
+          (
+            rc=0
+            for dir in examples decadtest export internal/decaderr; do
+              bin="$GITHUB_WORKSPACE/race-bin/$(basename "$dir").test"
+              chmod +x "$bin"
+              echo "=== $dir"
+              (cd "$dir" && "$bin" -test.count=1 -test.v -test.timeout ${{ matrix.timeout }}) || rc=1
+            done
+            exit "$rc"
+          ) >"$logdir/prebuilt.log" 2>&1 &
+          prebuilt_pid=$!
+          rest_rc=0
+          prebuilt_rc=0
+          go test ${{ matrix.race }} -count=1 -v -timeout ${{ matrix.timeout }} $rest || rest_rc=$?
+          wait "$prebuilt_pid" || prebuilt_rc=$?
+          echo "::group::prebuilt race test binaries"
+          cat "$logdir/prebuilt.log"
+          echo "::endgroup::"
+          if [ "$rest_rc" -ne 0 ] || [ "$prebuilt_rc" -ne 0 ]; then
+            echo "::error::${{ matrix.packages }} failed: go test exit ${rest_rc}, prebuilt binaries exit ${prebuilt_rc}"
+            exit 1
+          fi
           elapsed=$(( SECONDS - start ))
           echo "${{ matrix.packages }} finished in ${elapsed}s"
           budget='${{ matrix.budget }}'
