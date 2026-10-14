@@ -148,11 +148,11 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 	work1.RaiseLimit(limit)
 	work0.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
 	work1.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
-	recordArea0, err := falsifyRecordedArea(profile0, area0, work0)
+	recordArea0, err := falsifyLoftRecordedArea(profile0, area0, work0)
 	if err != nil {
 		return nil, err
 	}
-	recordArea1, err := falsifyRecordedArea(profile1, area1, work1)
+	recordArea1, err := falsifyLoftRecordedArea(profile1, area1, work1)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +186,16 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 	}
 	d.commit(body)
 	return body, nil
+}
+
+// falsifyLoftRecordedArea compares the recorded area's own reading against
+// sketch's authenticated area. Loft needs only area from the integral.
+func falsifyLoftRecordedArea(profile profileRecord, sketchArea float64, work *freeform.FreeformWork) (float64, error) {
+	area, err := profile.EvaluatorArea(work)
+	if err != nil {
+		return 0, err
+	}
+	return compareRecordedArea(area, sketchArea)
 }
 
 // This section is LoftChain of docs/loft-design.md §16: the ruled ribbon

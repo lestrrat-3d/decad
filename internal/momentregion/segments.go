@@ -72,6 +72,33 @@ func (s State) AddLine(seg sectionrecord.LineSeg, anchor sectionrecord.Point2, o
 	s.AddExact(exact)
 }
 
+// AddLineArea folds only the area field for a line in the profile-area
+// falsifier. It keeps AddLine's coordinate envelope and area operations.
+func (s State) AddLineArea(seg sectionrecord.LineSeg, anchor sectionrecord.Point2) {
+	shifted := seg
+	shifted.Start = sectionrecord.Point2{U: seg.Start.U - anchor.U, V: seg.Start.V - anchor.V}
+	shifted.End = sectionrecord.Point2{U: seg.End.U - anchor.U, V: seg.End.V - anchor.V}
+	u0, v0 := Lerp2(shifted.Start, shifted.End, shifted.TStart)
+	u1, v1 := Lerp2(shifted.Start, shifted.End, shifted.TEnd)
+	_, _, coordUpper := boundarywalk.LineWalkBounds(shifted, math.Hypot(u1-u0, v1-v0))
+	*s.CoordUpper = math.Max(*s.CoordUpper, coordUpper)
+
+	line := momentline.Line{
+		Start:  momentline.Point{U: seg.Start.U, V: seg.Start.V},
+		End:    momentline.Point{U: seg.End.U, V: seg.End.V},
+		TStart: seg.TStart, TEnd: seg.TEnd,
+	}
+	value, bound, area := momentline.EvaluateArea(line, momentline.Point{U: anchor.U, V: anchor.V})
+	Accumulate(s.Fields[0].Value, s.Fields[0].Bound, value, bound)
+	if area == nil {
+		s.DropExact()
+		return
+	}
+	exact := NewExactMoments()
+	exact.Area = area
+	s.AddExact(exact)
+}
+
 // AddCircular folds a bounded circular integral into the region sums.
 // envelope is a proven bound on |u| + |v| over the segment in the anchor's
 // coordinates (circularL1Upper); the region's coordinate envelope takes the

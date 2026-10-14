@@ -286,6 +286,18 @@ func (r Profile) EvaluatorIntegrals(order freeform.MomentIntegralOrder, work *fr
 	return integrateMomentRecord(pre, order)
 }
 
+// EvaluatorArea runs the same record validation and area publication as
+// EvaluatorIntegrals, while line segments omit unused first moments.
+func (r Profile) EvaluatorArea(work *freeform.FreeformWork) (float64, error) {
+	pre, err := ValidateFieldsWithPoll(nil, r, work)
+	if err != nil {
+		return 0, err
+	}
+	ig, err := integrateMomentRecordWithPoll(func() error { return survey2d.WallBudgetStep(nil) },
+		pre, freeform.MomentAreaOrder, true, true)
+	return ig.Area, err
+}
+
 // EvaluatorIntegralsContext integrates fields while polling the caller's context.
 func (r Profile) EvaluatorIntegralsContext(ctx context.Context, order freeform.MomentIntegralOrder, work *freeform.FreeformWork) (Integrals, error) {
 	pre, err := ValidateFieldsWithPoll(ctx.Err, r, work)
@@ -313,7 +325,7 @@ func integrateMomentRecordBudget(pre FieldPreflight, order freeform.MomentIntegr
 }
 
 func integrateMomentRecordMode(pre FieldPreflight, order freeform.MomentIntegralOrder, checkFinite bool, budget *proofbound.WorkBudget) (Integrals, error) {
-	return integrateMomentRecordWithPoll(func() error { return survey2d.WallBudgetStep(budget) }, pre, order, checkFinite)
+	return integrateMomentRecordWithPoll(func() error { return survey2d.WallBudgetStep(budget) }, pre, order, checkFinite, false)
 }
 
 func integrateMomentRecordUncheckedContext(ctx context.Context, pre FieldPreflight, order freeform.MomentIntegralOrder) (Integrals, error) {
@@ -321,10 +333,11 @@ func integrateMomentRecordUncheckedContext(ctx context.Context, pre FieldPreflig
 }
 
 func integrateMomentRecordModeContext(ctx context.Context, pre FieldPreflight, order freeform.MomentIntegralOrder, checkFinite bool) (Integrals, error) {
-	return integrateMomentRecordWithPoll(ctx.Err, pre, order, checkFinite)
+	return integrateMomentRecordWithPoll(ctx.Err, pre, order, checkFinite, false)
 }
 
-func integrateMomentRecordWithPoll(poll func() error, pre FieldPreflight, order freeform.MomentIntegralOrder, checkFinite bool) (Integrals, error) {
+func integrateMomentRecordWithPoll(poll func() error, pre FieldPreflight, order freeform.MomentIntegralOrder,
+	checkFinite, areaOnly bool) (Integrals, error) {
 	var ig Integrals
 	for loopIndex, loop := range append([]LoopRecord{pre.Record.Outer}, pre.Record.Holes...) {
 		if poll != nil {
@@ -338,7 +351,14 @@ func integrateMomentRecordWithPoll(poll func() error, pre FieldPreflight, order 
 					return Integrals{}, err
 				}
 			}
-			if err := ig.AddFor(segment, pre.PlanAt(loopIndex, segmentIndex), pre.Anchor, order); err != nil {
+			plan := pre.PlanAt(loopIndex, segmentIndex)
+			var err error
+			if areaOnly {
+				err = ig.state().AddSegmentArea(segment, momentregion.Plan{Spans: plan.Spans, Reversed: plan.Reversed}, pre.Anchor)
+			} else {
+				err = ig.AddFor(segment, plan, pre.Anchor, order)
+			}
+			if err != nil {
 				return Integrals{}, err
 			}
 			if checkFinite && !ig.IsFinite(order) {
