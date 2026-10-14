@@ -103,8 +103,17 @@ func adversarialFloats() []float64 {
 	return vals
 }
 
+// requireSameBitsf requires got to carry the bits of want. Two NaNs match
+// whatever their payloads: which payload math.Min and math.Max keep is
+// architecture dependent (amd64 and arm64 differ), and no caller reads it. The
+// distance callers compare the result (dist > slack, min, a non-finite check
+// that returns 0), and a NaN fails every comparison whatever its payload.
+// Every non-NaN result, including signed zeros and infinities, stays bit-exact.
 func requireSameBitsf(t *testing.T, want, got float64, format string, args ...any) {
 	t.Helper()
+	if math.IsNaN(want) && math.IsNaN(got) {
+		return
+	}
 	if math.Float64bits(want) == math.Float64bits(got) {
 		return
 	}
@@ -123,6 +132,32 @@ func TestMinFloat64MatchesMathMin(t *testing.T) {
 	for range 1_000_000 {
 		x, y := randomFloat(rng, vals), randomFloat(rng, vals)
 		requireSameBitsf(t, math.Min(x, y), minFloat64(x, y), "min(%v, %v)", x, y)
+	}
+}
+
+// TestMinFloat64NaNPayloads pins NaN operands of several payloads in both
+// positions: a NaN against a number or another NaN is NaN, and a NaN against
+// -Inf is -Inf, exactly as math.Min says.
+func TestMinFloat64NaNPayloads(t *testing.T) {
+	nans := []float64{
+		math.Float64frombits(0x7ff8000000000001),
+		math.Float64frombits(0x7ff8000000000005),
+		math.Float64frombits(0xfff8000000000001),
+		math.Float64frombits(0x7ff0000000000001),
+	}
+	others := []float64{0, math.Copysign(0, -1), 1, -1, math.Inf(1), math.Inf(-1), nans[0], nans[1]}
+	for _, n := range nans {
+		require.True(t, math.IsNaN(n))
+		for _, o := range others {
+			for _, got := range []float64{minFloat64(n, o), minFloat64(o, n)} {
+				if math.IsInf(o, -1) {
+					requireSameBitsf(t, o, got, "min(%#x, %v)", math.Float64bits(n), o)
+					continue
+				}
+				require.True(t, math.IsNaN(got), "min(%#x, %v) = %v", math.Float64bits(n), o, got)
+			}
+			require.Equal(t, math.IsNaN(math.Min(n, o)), math.IsNaN(minFloat64(n, o)))
+		}
 	}
 }
 
