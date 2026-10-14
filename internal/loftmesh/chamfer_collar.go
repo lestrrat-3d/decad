@@ -279,15 +279,72 @@ func ChamferExactTriBox(tri [3]proofarith.Xpt) ([2]r3.Vec, bool) {
 	return box, true
 }
 
+// ChamferCorner is one exact point's outward-rounded float box and its
+// float image, as ChamferExactTriBox and Xpt.Vec compute them. Box[0] holds
+// the per-axis downward roundings and Box[1] the upward ones.
+type ChamferCorner struct {
+	Box   [2]r3.Vec
+	Float r3.Vec
+}
+
+// ChamferCornerOf rounds one exact point once.
+func ChamferCornerOf(p proofarith.Xpt) ChamferCorner {
+	var c ChamferCorner
+	for axis := range 3 {
+		coord := meshbool.RatCoordOf(p, axis)
+		lo, hi := proofbound.RatFloatDown(coord), proofbound.RatFloatUp(coord)
+		switch axis {
+		case 0:
+			c.Box[0].X, c.Box[1].X = lo, hi
+		case 1:
+			c.Box[0].Y, c.Box[1].Y = lo, hi
+		default:
+			c.Box[0].Z, c.Box[1].Z = lo, hi
+		}
+	}
+	c.Float = p.Vec()
+	return c
+}
+
+// ChamferCornersBox is ChamferExactTriBox of the triangle with these
+// corners: the same box, and false exactly when that returns false.
+func ChamferCornersBox(a, b, c ChamferCorner) ([2]r3.Vec, bool) {
+	box := [2]r3.Vec{
+		{X: min(a.Box[0].X, b.Box[0].X, c.Box[0].X), Y: min(a.Box[0].Y, b.Box[0].Y, c.Box[0].Y),
+			Z: min(a.Box[0].Z, b.Box[0].Z, c.Box[0].Z)},
+		{X: max(a.Box[1].X, b.Box[1].X, c.Box[1].X), Y: max(a.Box[1].Y, b.Box[1].Y, c.Box[1].Y),
+			Z: max(a.Box[1].Z, b.Box[1].Z, c.Box[1].Z)},
+	}
+	for _, pair := range [3][2]float64{{box[0].X, box[1].X}, {box[0].Y, box[1].Y}, {box[0].Z, box[1].Z}} {
+		if proofbound.IsNonFinite(pair[0]) || proofbound.IsNonFinite(pair[1]) || pair[0] > pair[1] {
+			return [2]r3.Vec{}, false
+		}
+	}
+	return box, true
+}
+
+// chamferPrismFaceCorners lists, for each face ChamferMiddlePrism builds, the
+// indices into its corners array of that face's three corners: 0..2 are
+// base[0..2] and 3..5 are q[0..2]. Face 0 is q; faces 1+2i and 2+2i, with
+// j = (i+1) % 3, are {base[i], base[j], q[j]} and {base[i], q[j], q[i]}.
+var chamferPrismFaceCorners = [7][3]int{
+	{3, 4, 5},
+	{0, 1, 4}, {0, 4, 3},
+	{1, 2, 5}, {1, 5, 4},
+	{2, 0, 3}, {2, 3, 5},
+}
+
 // The seven non-base faces bound one triangular prism. Exact contacts with
 // the old shell may occur only on its original base facet. The old shell has
 // no vertex inside the strict middle slab, so it cannot hide a separate
 // boundary component inside this prism. One strict q-face witness then puts
-// every open inward segment in the old held solid.
+// every open inward segment in the old held solid. The corners array holds
+// the rounded corners of base[0..2] at indices 0..2 and of q[0..2] at 3..5.
 func ChamferMiddlePrism(ctx context.Context, triCount int,
 	old *LoftAuditData, oldBoxes [][2]r3.Vec, oldGrid *ChamferBoxGrid,
 	oldParity *meshbool.ParityMesh,
-	oldIndices []int, base, q [3]proofarith.Xpt, shift proofarith.Xpt) error {
+	oldIndices []int, base, q [3]proofarith.Xpt, shift proofarith.Xpt,
+	corners [6]ChamferCorner) error {
 	if len(oldBoxes) != triCount || oldGrid == nil ||
 		meshbool.RatCoordOf(shift, 2).Sign() != 0 {
 		return fmt.Errorf("%w: retained middle prism has incomplete source geometry", decaderr.ErrUnsupported)
@@ -314,11 +371,12 @@ func ChamferMiddlePrism(ctx context.Context, triCount int,
 		if proofarith.XdotSign(normal, normal) == 0 {
 			return fmt.Errorf("%w: retained middle collar has a flat side", decaderr.ErrUnsupported)
 		}
-		box, ok := ChamferExactTriBox(face)
+		fc := chamferPrismFaceCorners[i]
+		box, ok := ChamferCornersBox(corners[fc[0]], corners[fc[1]], corners[fc[2]])
 		if !ok {
 			return fmt.Errorf("%w: retained middle collar has an unbounded box", decaderr.ErrUnsupported)
 		}
-		floatFace := [3]r3.Vec{face[0].Vec(), face[1].Vec(), face[2].Vec()}
+		floatFace := [3]r3.Vec{corners[fc[0]].Float, corners[fc[1]].Float, corners[fc[2]].Float}
 		plane := NewLoftExactPlane(face[0], normal)
 		candidates, err := oldGrid.candidates(box)
 		if err != nil {
