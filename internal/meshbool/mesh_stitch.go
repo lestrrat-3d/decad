@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
@@ -338,11 +339,17 @@ func keepRoundedEmbedded(ctx context.Context, xverts []proof.Xpt, remap []int, o
 			h.Moved[fi] = true
 		}
 	}
+	couldMove := false
 	for fi, n := range count {
 		if n > 1 {
 			h.Moved[fi] = true
 		}
 		h.Movable[fi] = n == 1 && h.Moved[fi]
+		couldMove = couldMove || h.Movable[fi]
+	}
+	var before []r3.Vec
+	if couldMove {
+		before = slices.Clone(out.Verts)
 	}
 	moved, err := EnforceHeldEmbedding(ctx, h)
 	if err != nil {
@@ -355,7 +362,10 @@ func keepRoundedEmbedded(ctx context.Context, xverts []proof.Xpt, remap []int, o
 					return nil, err
 				}
 			}
-			gaps[i] = CoordDistance(p, out.Verts[remap[i]])
+			fi := remap[i]
+			if out.Verts[fi] != before[fi] {
+				gaps[i] = CoordDistance(p, out.Verts[fi])
+			}
 		}
 	}
 	return gaps, nil
