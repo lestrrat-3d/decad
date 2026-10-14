@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/r3"
@@ -547,7 +547,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				return eb, nil
 			}
 		}
-		curve, err := surfacegeom.TransformCurve(internalCurve(old.curve), xform)
+		curve, err := surfaceplace.TransformCurve(internalCurve(old.curve), xform)
 		if err != nil {
 			return nil, err
 		}
@@ -569,7 +569,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			// above — is a sound representative for the other's identity too.
 			denot: old.denot.Compose(xform),
 		}
-		ne.curveBound, ne.curveBounded = surfacegeom.PlacedCurveBound(
+		ne.curveBound, ne.curveBounded = surfaceplace.PlacedCurveBound(
 			internalCurve(old.curve), old.curveBound, old.curveBounded, curve, xform)
 		eb := &edgeBuild{edge: ne, startClass: startClass, endClass: endClass}
 		buildByOld[old] = eb
@@ -585,7 +585,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, err
 		}
-		transformed, err := surfacegeom.TransformSurface(internalSurface(f.surface), xform)
+		transformed, err := surfaceplace.TransformSurface(internalSurface(f.surface), xform)
 		if err != nil {
 			return nil, nil, nil, err
 		}

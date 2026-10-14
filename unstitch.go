@@ -7,7 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -260,7 +260,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if ne, ok := newEdgeByOld[old]; ok {
 			return ne, nil
 		}
-		curve, err := surfacegeom.TransformCurve(internalCurve(old.curve), xform)
+		curve, err := surfaceplace.TransformCurve(internalCurve(old.curve), xform)
 		if err != nil {
 			return nil, err
 		}
@@ -286,13 +286,13 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			lengthUnbounded: old.lengthUnbounded,
 			denot:           old.denot.Compose(xform),
 		}
-		ne.curveBound, ne.curveBounded = surfacegeom.PlacedCurveBound(
+		ne.curveBound, ne.curveBounded = surfaceplace.PlacedCurveBound(
 			internalCurve(old.curve), old.curveBound, old.curveBounded, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}
 
-	transformed, err := surfacegeom.TransformSurface(internalSurface(srcFace.surface), xform)
+	transformed, err := surfaceplace.TransformSurface(internalSurface(srcFace.surface), xform)
 	if err != nil {
 		return nil, err
 	}

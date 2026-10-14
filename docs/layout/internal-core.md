@@ -22,7 +22,8 @@ The rules for rows live in `docs/layout.md`.
 | `internal/pointcone/` | Point-loft cone crossing samples, far-cap subdivision and contact split, cap and triangle crossing bounds, and sector cap paths, subdivision, merged angles and root-edge order. See loft-point design. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching, query rendering, residual counts, and face-role indexes. See API §9. |
-| `internal/surfacegeom/` | Private face and edge geometry carriers and placement transforms. Public surface and curve variants live in `topology.go`. See API §6.1, surface §6. |
+| `internal/surfacegeom/` | Private face and edge geometry carriers. Public surface and curve variants live in `topology.go`. See API §6.1, surface §6. |
+| `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |
 | `internal/reportvocab/` | Contact and sweep enums; Verify reports, motion verification records and survey diagnostics. |
 | `internal/extent/` | Unit bounds and stop levels for extents. See API §8.1, evaluator §5/§6. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation, segment record and area bounds. See surface §5.2. |

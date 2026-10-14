@@ -13,8 +13,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
+	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -260,7 +260,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 			next.groups[i].surface = cone
 		}
 		if plane, ok := next.groups[i].surface.(Plane); ok && delta != r3.Identity() {
-			moved, err := surfacegeom.TransformSurface(internalSurface(plane), delta)
+			moved, err := surfaceplace.TransformSurface(internalSurface(plane), delta)
 			if err != nil {
 				return nil, err
 			}
