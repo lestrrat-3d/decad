@@ -1,10 +1,11 @@
-package surfacegeom_test
+package surfaceplace_test
 
 import (
 	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -46,7 +47,7 @@ func TestTransformCurveEllipse3(t *testing.T) {
 
 	for name, xf := range map[string]r3.Transform{"identity": r3.Identity(), "placed": placement, "mirrored": mirror} {
 		t.Run(name, func(t *testing.T) {
-			got, err := surfacegeom.TransformCurve(src, xf)
+			got, err := surfaceplace.TransformCurve(src, xf)
 			require.NoError(t, err)
 			c, ok := got.(surfacegeom.Ellipse3)
 			require.True(t, ok, "an Ellipse3 stays an Ellipse3")

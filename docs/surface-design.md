@@ -677,7 +677,7 @@ carried through the screw motion at the cap's turn and the exact denoted
 map, its centre, its two in-plane axes and its radius as exact leaves. A
 coil's rim vertices carry their station bound `β`, so `Body.Patch` refuses
 a coil sheet's rim at R6 before it reads the curve bound.
-Every copier carries the bound through its placement (`surfacegeom.PlacedCurveBound`).
+Every copier carries the bound through its placement (`surfaceplace.PlacedCurveBound`).
 A circular rim edge whose bound cannot be proven — a cap copy at an end with
 no denotation, or a bound not below half the radius — leaves the face with
 no proven area, and `Body.Patch` refuses with `ErrUnsupported` (R46). At an

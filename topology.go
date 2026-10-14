@@ -451,8 +451,8 @@ type Edge struct {
 	// circle. It says nothing about where along the circle the curve ends;
 	// the end vertices' own bounds say that. A builder that proves it sets
 	// both (prismPayload.CircleCurveBound); every copier carries it through
-	// its placement (surfacegeom.PlacedCurveBound). An edge no builder bounds leaves
-	// curveBounded false, and a reading that needs the bound refuses.
+	// its placement (surfaceplace.PlacedCurveBound). An edge no builder bounds
+	// leaves curveBounded false, and a reading that needs the bound refuses.
 	curveBound   float64
 	curveBounded bool
 	// level is the LEVEL half of the shared-denotation certificate
