@@ -231,20 +231,27 @@ func CircleOutsideMaps(maps []Map, box [4]*big.Rat,
 		return false
 	}
 	corners := BoxCorners(box)
-	axis := [3]RatVec{{ratOne(), ratZero(), ratZero()},
-		{ratZero(), ratOne(), ratZero()}, {ratZero(), ratZero(), ratOne()}}
 	for _, mapped := range maps {
 		if PositiveDenominator(mapped, box) != nil {
 			return false
 		}
 	}
 	radius2 := ratMul(radius, radius)
+	// Each map is evaluated at most once, when the first band that needs it
+	// is reached, so an early refusal never costs an evaluation.
+	ranges := make([]*[3]Interval, len(maps))
+	rangeOf := func(i int) *[3]Interval {
+		if ranges[i] == nil {
+			r := cornerAxisRanges(maps[i], corners)
+			ranges[i] = &r
+		}
+		return ranges[i]
+	}
 	for band := 0; band+1 < len(maps); band++ {
+		first, second := rangeOf(band), rangeOf(band+1)
 		var range3 [3]Interval
-		for coordinate, direction := range axis {
-			first := ScalarRange(maps[band], direction, corners)
-			second := ScalarRange(maps[band+1], direction, corners)
-			range3[coordinate] = IntervalHull(first, second)
+		for coordinate := range range3 {
+			range3[coordinate] = IntervalHull(first[coordinate], second[coordinate])
 		}
 		if x.Cmp(range3[0].Lo) < 0 || x.Cmp(range3[0].Hi) > 0 {
 			continue
