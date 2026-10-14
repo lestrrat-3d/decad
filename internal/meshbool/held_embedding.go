@@ -803,9 +803,8 @@ func (e *heldEmbedding) coneBox(i, k int) [2]r3.Vec {
 	return box
 }
 
-// pairSeparated decides the common pairs without the full classifier, by the
-// facets' interned exact planes and exact adaptive orientation signs over the
-// held floats:
+// pairSeparated decides the common pairs without the full classifier, by
+// exact plane membership and adaptive orientation signs over the held floats:
 //
 //   - a facet with no plane fails;
 //   - one shared edge, two planes: the planes meet only in the edge's line,
@@ -849,6 +848,23 @@ func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, b
 			s0 = s
 		}
 		return true
+	}
+	if len(sharedI) == 2 && e.sideSigns == nil {
+		// A nondegenerate facet sharing this edge is coplanar exactly when
+		// its other corner lies on i's plane. The repair and serial scans
+		// need no canonical plane key for this decision.
+		_, _, ni := e.facet(i)
+		_, _, nj := e.facet(j)
+		if zeroXpt(ni) || zeroXpt(nj) {
+			return false, true, pairSideSigns{}
+		}
+		if e.planeSign(i, otherJ.verts[0]) != 0 {
+			return true, true, pairSideSigns{}
+		}
+		a, b := ti[sharedI[0]], ti[sharedI[1]]
+		u, v, _ := e.planeAxes(i)
+		return e.orient2(a, b, otherI.verts[0], u, v)*e.orient2(a, b, otherJ.verts[0], u, v) < 0,
+			true, pairSideSigns{}
 	}
 	pi, pj := e.planeOf(i), e.planeOf(j)
 	if pi == -2 || pj == -2 {
