@@ -6,7 +6,9 @@ import (
 	"math"
 	"math/big"
 	"math/rand/v2"
+	"runtime"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -73,7 +75,7 @@ func TestKeepRoundedEmbeddedGapsMatchFinalPositions(t *testing.T) {
 	t.Run("seeded layered slivers", func(t *testing.T) {
 		var movedCases, refusedCases, passedCases int
 		for seed := range uint64(300) {
-			h := stitchLayered(rand.New(rand.NewPCG(seed, 0)))
+			h := stitchLayered(rand.New(rand.NewPCG(seed, 0)), 2+int(seed%4))
 			remap := make([]int, len(h.Verts))
 			for i := range remap {
 				remap[i] = i
@@ -99,7 +101,7 @@ func TestKeepRoundedEmbeddedGapsMatchFinalPositions(t *testing.T) {
 // of the layered slivers in held_embedding_test.go), each apex 2^-60 to a
 // random side of its shared edge's line, other vertices nudged one ulp at
 // random. The held vertices are the nearest floats or the nudged ones.
-func stitchLayered(rng *rand.Rand) HeldRounding {
+func stitchLayered(rng *rand.Rand, layers int) HeldRounding {
 	var h HeldRounding
 	w := new(big.Int).Lsh(big.NewInt(1), 61)
 	ratOf := func(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
@@ -131,7 +133,7 @@ func stitchLayered(rng *rand.Rand) HeldRounding {
 		h.Exact = append(h.Exact, exact)
 		return len(h.Verts) - 1
 	}
-	for k := range 2 + rng.IntN(4) {
+	for k := range layers {
 		z := 1 + float64(k)*math.Ldexp(1, -52)
 		sx, sy := 0.25*float64(rng.IntN(3)), 0.25*float64(rng.IntN(2))
 		a := add(sx, sy, z, 0)
@@ -139,6 +141,11 @@ func stitchLayered(rng *rand.Rand) HeldRounding {
 		c := add(sx+1, sy, z, 0)
 		p := add(sx+0.5, sy+0.5, z, int64(rng.IntN(3)-1))
 		h.Tris = append(h.Tris, [3]int{a, c, b}, [3]int{a, b, p})
+	}
+	for i, v := range h.Verts {
+		moved := CoordDistance(h.Exact[i], v).Sign() != 0
+		h.Moved = append(h.Moved, moved)
+		h.Movable = append(h.Movable, moved)
 	}
 	return h
 }
@@ -292,4 +299,97 @@ func TestKeepSideKeyMemoMatchesKey(t *testing.T) {
 			})
 		}
 	}
+}
+
+// errCountCtx counts Err calls and reports cancellation from the cancelAt-th
+// call on (never when cancelAt is 0).
+type errCountCtx struct {
+	context.Context //nolint:containedctx // a test wrapper counting Err calls
+	calls           int
+	cancelAt        int
+	// skipScan leaves the polls serialClean's own step count makes
+	// uncounted, so calls and cancelAt number the repair path's polls only.
+	skipScan bool
+}
+
+func inSerialClean() bool {
+	pcs := make([]uintptr, 32)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	for {
+		f, more := frames.Next()
+		if strings.HasSuffix(f.Function, ".serialClean") {
+			return true
+		}
+		if !more {
+			return false
+		}
+	}
+}
+
+func (c *errCountCtx) Err() error {
+	if c.skipScan && inSerialClean() {
+		return nil
+	}
+	c.calls++
+	if c.cancelAt > 0 && c.calls >= c.cancelAt {
+		return context.Canceled
+	}
+	return nil
+}
+
+func TestMaxGapPollsContext(t *testing.T) {
+	gaps := make([]*big.Rat, 1000)
+	for i := range gaps {
+		gaps[i] = big.NewRat(int64(i), 7)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err := maxGap(ctx, gaps)
+	require.ErrorIs(t, err, context.Canceled)
+
+	counter := &errCountCtx{Context: t.Context()}
+	worst, err := maxGap(counter, gaps)
+	require.NoError(t, err)
+	require.Zero(t, worst.Cmp(big.NewRat(999, 7)))
+	require.Equal(t, 4, counter.calls, `one poll per 256 vertices`)
+}
+
+// TestSerialCleanFallbackKeepsRepairPolling: when the memo-free first scan
+// finds a failing pair, the repair path runs with the step count and polling
+// points it has without that scan. A large layered case that falls back
+// polls the context exactly as often as the path that never scans first, and
+// a cancellation landing at any poll gives the same outcome.
+func TestSerialCleanFallbackKeepsRepairPolling(t *testing.T) {
+	var h HeldRounding
+	for seed := range uint64(200) {
+		c := stitchLayered(rand.New(rand.NewPCG(seed, 1)), 6+int(seed%40))
+		probe := &errCountCtx{Context: t.Context(), skipScan: true}
+		n, err := enforceHeldEmbedding(probe, cloneStitchHeld(c), false)
+		if (err != nil || n > 0) && probe.calls > 4 {
+			h = c
+			break
+		}
+	}
+	require.NotEmpty(t, h.Tris, `a seeded case must fall back to repair and poll more than once`)
+	run := func(memo bool, cancelAt int) (int, int, error) {
+		ctx := &errCountCtx{Context: t.Context(), cancelAt: cancelAt, skipScan: true}
+		n, err := enforceHeldEmbedding(ctx, cloneStitchHeld(h), memo)
+		return n, ctx.calls, err
+	}
+	_, plainCalls, _ := run(false, 0)
+	_, memoCalls, _ := run(true, 0)
+	require.Equal(t, plainCalls, memoCalls, `Err call count`)
+	for k := 1; k <= plainCalls; k++ {
+		n0, c0, err0 := run(false, k)
+		n1, c1, err1 := run(true, k)
+		require.Equal(t, err0 == nil, err1 == nil, `cancel at poll %d`, k)
+		require.Equal(t, n0, n1, `cancel at poll %d`, k)
+		require.Equal(t, c0, c1, `cancel at poll %d`, k)
+	}
+}
+
+func cloneStitchHeld(h HeldRounding) HeldRounding {
+	c := h
+	c.Verts = slices.Clone(h.Verts)
+	return c
 }

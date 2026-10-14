@@ -113,7 +113,12 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 			for _, i := range check {
 				queryFacet[i] = true
 			}
+			// The scan counts its own steps: a discarded scan must not move
+			// the repair path's step count or polling points.
+			repairBudget := e.budget
+			e.budget = proofbound.NewWorkBudget(ctx)
 			clean, err := e.serialClean(check, queryFacet)
+			e.budget = repairBudget
 			if err != nil {
 				return 0, err
 			}

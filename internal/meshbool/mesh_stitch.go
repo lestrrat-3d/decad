@@ -190,11 +190,9 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	// coordinates can round at once (internal/proofbound/bounds.go,
 	// proofbound.Radius3D). A positive rational error can round to zero as
 	// float64, so preserve that proof before widening it to a 3D radius.
-	worst := new(big.Rat)
-	for _, d := range gaps {
-		if d.Cmp(worst) > 0 {
-			worst = d
-		}
+	worst, err := maxGap(ctx, gaps)
+	if err != nil {
+		return nil, err
 	}
 	if worst.Sign() > 0 {
 		w, _ := worst.Float64()
@@ -229,6 +227,22 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		}
 	}
 	return out, nil
+}
+
+// maxGap is the largest of gaps, polling ctx every 256 vertices.
+func maxGap(ctx context.Context, gaps []*big.Rat) (*big.Rat, error) {
+	worst := new(big.Rat)
+	for i, d := range gaps {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		if d.Cmp(worst) > 0 {
+			worst = d
+		}
+	}
+	return worst, nil
 }
 
 // HeldVertexBounds is docs/faceted-vertex-bounds-design.md §3.4's weld, per
