@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -86,7 +87,7 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 	}
 	addWalls := func(p profileRecord, z0, z1 float64) {
 		for _, seg := range p.Outer.Segments {
-			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: reverseSegment(seg), z0: z0, z1: z1})
+			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: brepgeom.ReverseSegment(seg), z0: z0, z1: z1})
 		}
 	}
 	lower := plate.Inset(t)
