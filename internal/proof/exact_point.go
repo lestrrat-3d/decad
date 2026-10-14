@@ -23,7 +23,16 @@ func (p Xpt) Vec() r3.Vec { return XhpVec(Xhp(p)) }
 
 // Xsub is a − b, exact, with the common power of two stripped on return (the
 // growth control every construction pays — see XhpStripTwosOwned).
-func Xsub(a, b Xpt) Xpt { return Xpt(XhpStripTwosOwned(XhpSub(Xhp(a), Xhp(b)))) }
+//
+// Two power-of-two weights are aligned by a shift (xhpSubAligned); the
+// strip then leaves the same four integers XhpSub's product form leaves,
+// because a point with a power-of-two weight has exactly one stripped spelling.
+func Xsub(a, b Xpt) Xpt {
+	if d, ok := xhpSubAligned(Xhp(a), Xhp(b)); ok {
+		return Xpt(XhpStripTwosOwned(d))
+	}
+	return Xpt(XhpStripTwosOwned(XhpSub(Xhp(a), Xhp(b))))
+}
 
 // XdotNum is the raw numerator of a·b over the positive denominator a.w·b.w —
 // the value a sign-only consumer reads directly, and the value a
@@ -266,7 +275,26 @@ func XhpStripTwosOwned(p Xhp) Xhp {
 // arithmetic operation: measured, a depth-3 XhpLerp chain drops from
 // big.Rat's 31.4us to 9.6us with xhpStripTwos alone, but only to 23.4us with
 // a full XhpCanon on every construction — nearly the whole win, given back.
+//
+// A power-of-two W makes the divisor 2^min(tz(W), tz(x), tz(y), tz(z)) over the
+// nonzero coordinates, so that case is four right shifts and no GCD.
 func XhpCanon(p Xhp) Xhp {
+	if k, ok := pow2Exp(p.W); ok {
+		for _, v := range [3]*big.Int{p.X, p.Y, p.Z} {
+			if v.Sign() == 0 {
+				continue
+			}
+			if t := v.TrailingZeroBits(); t < k {
+				k = t
+			}
+		}
+		return Xhp{
+			X: new(big.Int).Rsh(p.X, k),
+			Y: new(big.Int).Rsh(p.Y, k),
+			Z: new(big.Int).Rsh(p.Z, k),
+			W: new(big.Int).Rsh(p.W, k),
+		}
+	}
 	g := new(big.Int).Set(p.W)
 	for _, v := range [3]*big.Int{p.X, p.Y, p.Z} {
 		if v.Sign() == 0 {
@@ -283,9 +311,18 @@ func XhpCanon(p Xhp) Xhp {
 }
 
 // XhpCross is a × b, exact: its numerators over the positive denominator
-// a.w·b.w.
+// a.w·b.w, which two power-of-two weights 2^i and 2^j form as 2^(i+j) by
+// setting one bit.
 func XhpCross(a, b Xhp) Xhp {
 	var term big.Int
+	w := new(big.Int)
+	i, aok := pow2Exp(a.W)
+	j, bok := pow2Exp(b.W)
+	if aok && bok {
+		w.SetBit(w, int(i+j), 1)
+	} else {
+		w.Mul(a.W, b.W)
+	}
 	axis := func(a0, b0, a1, b1 *big.Int) *big.Int {
 		out := new(big.Int).Mul(a0, b0)
 		return out.Sub(out, term.Mul(a1, b1))
@@ -294,7 +331,7 @@ func XhpCross(a, b Xhp) Xhp {
 		X: axis(a.Y, b.Z, a.Z, b.Y),
 		Y: axis(a.Z, b.X, a.X, b.Z),
 		Z: axis(a.X, b.Y, a.Y, b.X),
-		W: new(big.Int).Mul(a.W, b.W),
+		W: w,
 	}
 }
 
@@ -327,8 +364,60 @@ func XhpLerp(a, b Xhp, tn, td *big.Int) Xhp {
 // every intermediate xhp carries a positive denominator by construction, so
 // the final numerator's sign IS the determinant's sign.
 func XhpOrientSign(a, b, c, d Xhp) int {
-	ba, ca, da := XhpSub(b, a), XhpSub(c, a), XhpSub(d, a)
+	ba, ca, da := xhpSubSign(b, a), xhpSubSign(c, a), xhpSubSign(d, a)
 	return XhpDotNum(XhpCross(ba, ca), da).Sign()
+}
+
+// xhpSubSign is p − q up to a positive factor of the weight: the aligned form
+// when both weights are powers of two, XhpSub otherwise. The factor is
+// positive, so a sign read off the numerators is unchanged.
+func xhpSubSign(p, q Xhp) Xhp {
+	if d, ok := xhpSubAligned(p, q); ok {
+		return d
+	}
+	return XhpSub(p, q)
+}
+
+// xhpSubAligned is p − q for weights 2^i and 2^j, over the larger of the two
+// weights: the numerators of the operand with the smaller weight are shifted
+// left by |i−j|, and the difference over that weight is XhpSub's result divided
+// by 2^min(i, j). It reports false, and builds nothing, when either weight is
+// not a positive power of two. Every integer of the result is freshly
+// allocated, W included, because XhpStripTwosOwned shifts them in place.
+func xhpSubAligned(p, q Xhp) (Xhp, bool) {
+	i, ok := pow2Exp(p.W)
+	if !ok {
+		return Xhp{}, false
+	}
+	j, ok := pow2Exp(q.W)
+	if !ok {
+		return Xhp{}, false
+	}
+	axis := func(pn, qn *big.Int) *big.Int {
+		switch {
+		case i < j:
+			out := new(big.Int).Lsh(pn, j-i)
+			return out.Sub(out, qn)
+		case i > j:
+			var term big.Int
+			return new(big.Int).Sub(pn, term.Lsh(qn, i-j))
+		}
+		return new(big.Int).Sub(pn, qn)
+	}
+	w := p.W
+	if j > i {
+		w = q.W
+	}
+	return Xhp{X: axis(p.X, q.X), Y: axis(p.Y, q.Y), Z: axis(p.Z, q.Z), W: new(big.Int).Set(w)}, true
+}
+
+// pow2Exp reports k when w is exactly 2^k.
+func pow2Exp(w *big.Int) (uint, bool) {
+	if w.Sign() <= 0 {
+		return 0, false
+	}
+	k := w.TrailingZeroBits()
+	return k, w.BitLen() == int(k)+1
 }
 
 // XhpRat materialises p's three coordinates as big.Rat — the one place a
