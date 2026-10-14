@@ -226,7 +226,7 @@ func chainRimPost(v *Vertex) *compositesweep.RimPost {
 	if v == nil {
 		return nil
 	}
-	return &compositesweep.RimPost{Position: v.position, Bound: v.bound.Base()}
+	return &compositesweep.RimPost{Position: v.n.Position, Bound: v.n.Bound.Base()}
 }
 
 type chainSweepExtent struct{ span chainSweepSpanPayload }

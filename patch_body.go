@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -258,7 +259,7 @@ func partitionPatchChains(edges []*Edge) ([][]*Edge, error) {
 	for i, e := range edges {
 		refs[i] = patchchain.EdgeRef[*Edge, *Vertex]{Edge: e, Start: e.start, End: e.end}
 	}
-	return patchchain.Partition(refs, func(v *Vertex) string { return renderCoord3(v.position) })
+	return patchchain.Partition(refs, func(v *Vertex) string { return renderCoord3(v.n.Position) })
 }
 
 // renderCoord3 formats a world position for a Table R diagnostic, the 3D
@@ -308,16 +309,16 @@ func provePatchChainPlaneLevel(edges []*Edge) (levelToken, float64, bool) {
 	if len(verts) == 0 {
 		return levelToken{}, 0, false
 	}
-	lvl := verts[0].level
+	lvl := verts[0].n.Level
 	if lvl.ID == 0 {
 		return levelToken{}, 0, false
 	}
 	bound := 0.0
 	for _, v := range verts {
-		if !sameLevel(v.level, lvl) {
+		if !sameLevel(v.n.Level, lvl) {
 			return levelToken{}, 0, false
 		}
-		bound = math.Max(bound, v.bound.Base())
+		bound = math.Max(bound, v.n.Bound.Base())
 	}
 	for _, e := range edges {
 		if !sameLevel(e.level, lvl) {
@@ -362,7 +363,7 @@ func provePatchChainPlaneExact(edges []*Edge) error {
 	verts := patchChainVertices(edges)
 	points := make([]patchchain.Vertex, len(verts))
 	for i, v := range verts {
-		points[i] = patchchain.Vertex{Position: v.position, Bound: v.bound.Base()}
+		points[i] = patchchain.Vertex{Position: v.n.Position, Bound: v.n.Bound.Base()}
 	}
 	curves := make([]patchchain.Edge, len(edges))
 	for i, e := range edges {
@@ -480,7 +481,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	for _, f := range srcFaces {
 		for _, l := range f.loops {
 			for _, ce := range l.coedges {
-				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.position), proofbound.VecMaxAbs(ce.edge.end.position))
+				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.n.Position), proofbound.VecMaxAbs(ce.edge.end.n.Position))
 			}
 		}
 	}
@@ -608,18 +609,18 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if nv, ok := newVertByOld[old]; ok {
 			return nv, nil
 		}
-		p := xform.Apply(old.position)
+		p := xform.Apply(old.n.Position)
 		if !proofbound.FiniteVec(p) {
 			return nil, fmt.Errorf(`%w: a placed patch vertex is not representable`, ErrUnsupported)
 		}
-		bound := old.bound.Base()
+		bound := old.n.Bound.Base()
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
 		// The CURVE half of the shared-denotation certificate (denotation.go)
 		// restates under xform, composing rather than overwriting, exactly
 		// as unstitch.go's copyFaceUnderContext does.
-		nv := &Vertex{position: p, bound: units.Millimeters(bound), denot: old.denot.Compose(xform)}
+		nv := &Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(bound), Denot: old.n.Denot.Compose(xform)}}
 		newVertByOld[old] = nv
 		return nv, nil
 	}
@@ -789,8 +790,8 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		ne := edgeCopy[oe.old]
 		areaEdges[i] = patchchain.AreaEdge{
 			Curve: internalCurve(ne.curve), Forward: oe.forward,
-			Start:  patchchain.AreaVertex{Position: ne.start.position, Bound: ne.start.bound.Base()},
-			End:    patchchain.AreaVertex{Position: ne.end.position, Bound: ne.end.bound.Base()},
+			Start:  patchchain.AreaVertex{Position: ne.start.n.Position, Bound: ne.start.n.Bound.Base()},
+			End:    patchchain.AreaVertex{Position: ne.end.n.Position, Bound: ne.end.n.Bound.Base()},
 			Length: ne.length, LengthBound: ne.lengthBound, LengthUnbounded: ne.lengthUnbounded,
 			CurveBound: ne.curveBound, CurveBounded: ne.curveBounded,
 		}
@@ -878,9 +879,9 @@ func patchChainOrientedNormal(ordered []patchOrientedEdge, edgeCopy map[*Edge]*E
 func patchChainWalkOrigin(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) r3.Vec {
 	first := edgeCopy[ordered[0].old]
 	if !ordered[0].forward {
-		return first.end.position
+		return first.end.n.Position
 	}
-	return first.start.position
+	return first.start.n.Position
 }
 
 // patchChainLevelNormal adapts the recorded level normal's sign decision.
@@ -907,7 +908,7 @@ func patchGeometryEdges(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) [
 	out := make([]patchchain.GeometryEdge, len(ordered))
 	for i, oe := range ordered {
 		ne := edgeCopy[oe.old]
-		g := patchchain.GeometryEdge{Start: ne.start.position, End: ne.end.position, Forward: oe.forward}
+		g := patchchain.GeometryEdge{Start: ne.start.n.Position, End: ne.end.n.Position, Forward: oe.forward}
 		switch c := ne.curve.(type) {
 		case Line3:
 			g.Kind = patchchain.Line
@@ -1036,7 +1037,7 @@ func patchChainSharedLevel(edges []*Edge) (levelID, bool) {
 		return 0, false
 	}
 	for _, e := range edges {
-		if e.level.ID != id || e.start.level.ID != id || e.end.level.ID != id {
+		if e.level.ID != id || e.start.n.Level.ID != id || e.end.n.Level.ID != id {
 			return 0, false
 		}
 	}

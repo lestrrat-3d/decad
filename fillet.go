@@ -491,18 +491,18 @@ func selectedEdgeContext(ordinal int, edge *Edge) string {
 	}
 	if c, ok := edge.curve.(Circle3); ok {
 		return fmt.Sprintf(`selected edge[%d] closed circle through (%s), centre (%s), radius %s`,
-			ordinal, renderVec(edge.start.position), renderVec(c.Center), c.Radius)
+			ordinal, renderVec(edge.start.n.Position), renderVec(c.Center), c.Radius)
 	}
 	if c, ok := edge.curve.(Ellipse3); ok {
 		return fmt.Sprintf(`selected edge[%d] ellipse arc from (%s) to (%s), centre (%s), semi-axes %s and %s`,
-			ordinal, renderVec(edge.start.position), renderVec(edge.end.position), renderVec(c.Center),
+			ordinal, renderVec(edge.start.n.Position), renderVec(edge.end.n.Position), renderVec(c.Center),
 			c.SemiMajor, c.SemiMinor)
 	}
 	if edge.start == edge.end {
-		return fmt.Sprintf(`selected edge[%d] closed through (%s)`, ordinal, renderVec(edge.start.position))
+		return fmt.Sprintf(`selected edge[%d] closed through (%s)`, ordinal, renderVec(edge.start.n.Position))
 	}
 	return fmt.Sprintf(`selected edge[%d] from (%s) to (%s)`, ordinal,
-		renderVec(edge.start.position), renderVec(edge.end.position))
+		renderVec(edge.start.n.Position), renderVec(edge.end.n.Position))
 }
 
 func selectedEdgesContext(edges []*Edge) string {
@@ -554,7 +554,7 @@ func matchCornerBudget(budget *proofbound.WorkBudget, pp prismPayload, loops []c
 			}
 			j0 := pp.Point(w.StartU, w.StartV, pp.Z0)
 			j1 := pp.Point(w.StartU, w.StartV, pp.Z1)
-			if matchEndpoints(e.start.position, e.end.position, j0, j1, tol) {
+			if matchEndpoints(e.start.n.Position, e.end.n.Position, j0, j1, tol) {
 				return li, ci, true, nil
 			}
 		}

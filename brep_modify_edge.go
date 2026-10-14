@@ -345,7 +345,7 @@ func (r *brepEdgeRoute) admitEdge(ordinal int, e *Edge) (*brepEdgeBlend, error) 
 		}
 		p := refView.Point(owner.DirFrom[0], owner.DirFrom[1], owner.DirFrom[2])
 		q := refView.Point(owner.DirTo[0], owner.DirTo[1], owner.DirTo[2])
-		if !matchEndpoints(e.start.position, e.end.position, p, q, tol) {
+		if !matchEndpoints(e.start.n.Position, e.end.n.Position, p, q, tol) {
 			continue
 		}
 		if found >= 0 {

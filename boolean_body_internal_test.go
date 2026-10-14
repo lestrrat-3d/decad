@@ -143,11 +143,11 @@ func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 
 	kept, finer := 0, 0
 	for _, v := range body.Vertices() {
-		beta, ok := own[v.position]
+		beta, ok := own[v.n.Position]
 		if !ok {
 			continue
 		}
-		require.Equal(t, units.Millimeters(beta), v.Position().Bound, `trunk vertex %v reports its own bound`, v.position)
+		require.Equal(t, units.Millimeters(beta), v.Position().Bound, `trunk vertex %v reports its own bound`, v.n.Position)
 		kept++
 		if beta < fp.meshBound {
 			finer++

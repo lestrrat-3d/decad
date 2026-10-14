@@ -44,7 +44,7 @@ func TestShellClosedPrismLevelsCarryThicknessConversion(t *testing.T) {
 	for _, f := range closed.Shells()[1].Faces() {
 		for _, e := range f.Edges() {
 			_, ok := e.Curve().(Line3)
-			if !ok || math.Abs(e.End().position.Z-e.Start().position.Z) < 1 {
+			if !ok || math.Abs(e.End().n.Position.Z-e.Start().n.Position.Z) < 1 {
 				continue
 			}
 			vertical++

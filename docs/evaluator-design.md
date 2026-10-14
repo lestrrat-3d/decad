@@ -67,6 +67,11 @@ Concrete structs with unexported fields; the accessors of core §6/§6.1 are the
 whole public surface. Identity is the pointer, scoped to one body — never an
 index (core §3 invariant #3).
 
+Each topology type keeps its name, methods and godoc in the root package and
+holds its data by value in an `internal/topo` node (`Vertex` holds a
+`topo.Vertex`), so internal packages can read and build it. The handle's
+pointer is still the identity; no other rule of this section changes.
+
 | Type | Holds |
 |---|---|
 | `Body` | owning `*Document`, origin `FeatureRef`, `BodyKind`, `[]*Lump`, cached measurements (computed at build, immutable after) |

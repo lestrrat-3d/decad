@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
@@ -565,11 +566,11 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 			held, lift := refView.LiftedVertex(c[0], c[1], c[2])
 			// The bound starts as zero millimetres, so an Exact vertex
 			// publishes a length as every other vertex does.
-			pv = placedVertex{v: &Vertex{position: held, bound: units.Millimeters(0)}, lift: lift}
+			pv = placedVertex{v: &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(0)}}, lift: lift}
 			vertices[c] = pv
 		}
-		if b := proofbound.AbsSumUpper(proofbound.AbsSumUpper(faceDelta, levelDelta, pv.lift), endAllow); b > pv.v.bound.Base() {
-			pv.v.bound = units.Millimeters(b)
+		if b := proofbound.AbsSumUpper(proofbound.AbsSumUpper(faceDelta, levelDelta, pv.lift), endAllow); b > pv.v.n.Bound.Base() {
+			pv.v.n.Bound = units.Millimeters(b)
 		}
 		return pv.v
 	}

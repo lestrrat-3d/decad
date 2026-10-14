@@ -121,10 +121,10 @@ func capBuiltApexPatch(apex *Vertex, capEdge *Edge, capEnds []*Vertex) capPatchB
 	}
 	ends := make([]r3.Vec, len(capped.Ends))
 	for i := range ends {
-		ends[i] = apex.position
+		ends[i] = apex.n.Position
 	}
 	return capPatchBuilt{
-		SideDir: capDirectrixRef{Center: apex.position, Ends: ends},
+		SideDir: capDirectrixRef{Center: apex.n.Position, Ends: ends},
 		CapDir:  capped,
 	}
 }
@@ -159,7 +159,7 @@ func capDirectrixFromEdge(e *Edge, ends ...*Vertex) capDirectrixRef {
 		if v == nil {
 			return capDirectrixRef{}
 		}
-		out.Ends = append(out.Ends, v.position)
+		out.Ends = append(out.Ends, v.n.Position)
 	}
 	return out
 }

@@ -318,7 +318,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	heldBody.bounds.Bound = units.Millimeters(proofbound.AbsSumUpper(heldBody.bounds.Bound.Base(), delta))
 	heldBody.bounds.Exactness = Approximate
 	for _, vertex := range heldBody.Vertices() {
-		vertex.bound = units.Millimeters(proofbound.AbsSumUpper(vertex.bound.Base(), delta))
+		vertex.n.Bound = units.Millimeters(proofbound.AbsSumUpper(vertex.n.Bound.Base(), delta))
 	}
 	for _, edge := range heldBody.Edges() {
 		// A helix edge is not the chord the held Loft exposes. Its true length

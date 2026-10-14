@@ -41,7 +41,7 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	outer, outerOK := crossBoreFaceGroup(rec.target, prismOuterFirstSideRole)
 	bore, boreOK := crossBoreFaceGroup(rec.tool, prismOuterFirstSideRole)
 	if !outerOK || !boreOK || !crossBoreEdgeHasOrigins(edges[0], outer, bore) ||
-		!(edges[0].start.position.X > rec.radius/2) {
+		!(edges[0].start.n.Position.X > rec.radius/2) {
 		return nil, true, fmt.Errorf("%w: the selected edge is not the positive cross-bore mouth", ErrUnsupported)
 	}
 	if asym != nil || setbackDelta != 0 || !(setback > 0) ||
