@@ -1419,3 +1419,5 @@
 8	0.00	TestCrossBoreSignTestsMatchReference
 8	0.00	TestCurvedCensusMeridianMemoMatchesDirect
 8	0.00	TestCurvedHeelArcSideTiesUseCallerCensus
+8	0.00	TestLoftCylinderChamferReachSerialPasses
+2	0.00	TestLoftCylinderChamferReachGridLimitFallsBack
