@@ -300,6 +300,24 @@ func TestRatDistanceUpMatchesRatFloatUp(t *testing.T) {
 			}
 		}
 	})
+	t.Run("fallback cutoffs", func(t *testing.T) {
+		// The fast path covers [2^-1021, 2^1023): the lower cutoff is on it
+		// and the upper cutoff is on the fallback.
+		big3 := ratDistanceBigDen(rng, 4000, 4000)
+		for _, c := range []struct {
+			e        int
+			wantFast bool
+		}{{-1021, true}, {1023, false}} {
+			x := ratDistanceDyadic(big.NewInt(1), c.e)
+			d := proofarith.LazySub(proofarith.LazyOf(x), proofarith.LazyOf(new(big.Rat)))
+			_, _, ok := d.Float64()
+			require.Equal(t, c.wantFast, ok, "path of 2^%d", c.e)
+			check(x, new(big.Rat))
+			// The same difference reached through a nonzero subtraction.
+			check(new(big.Rat).Add(big3, x), big3)
+			check(new(big.Rat).Sub(big3, x), big3)
+		}
+	})
 	t.Run("shared denominator", func(t *testing.T) {
 		for range 300 {
 			d := lazyBoundInt(rng, 4000)
