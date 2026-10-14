@@ -899,7 +899,7 @@ different topology split but must preserve role/query meaning.
 
 ### Positive uniform scale of a prism, stack, full Revolve, or faceted Boolean
 
-`Body.ScaledAt` admits a solid `prismPayload` whose outer and hole loops contain
+`ScaledAt` admits a solid `prismPayload` whose outer and hole loops contain
 only whole `LineSeg`, `CircleSeg`, and `ArcSeg` records and whose section and
 sweep levels carry zero displacement. A `CircleSeg` fills its loop alone.
 Rigid placement of such a prism is admitted. The source prism's

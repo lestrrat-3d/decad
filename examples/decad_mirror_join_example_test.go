@@ -44,7 +44,7 @@ func Example_decad_mirror_join() {
 	}
 
 	wall := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(-1, 0, 0)))
-	tee, err := half.Mirrored(ctx, decad.MirrorFace{Body: half, Face: wall}, decad.WithJoin())
+	tee, err := decad.Mirrored(ctx, half, decad.MirrorFace{Body: half, Face: wall}, decad.WithJoin())
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return

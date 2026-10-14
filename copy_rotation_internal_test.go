@@ -38,7 +38,7 @@ func mirrorJoinedLoft(t *testing.T) *Body {
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 10), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	upper, err := lower.MirroredCopy(t.Context(), MirrorFrame{Frame: frame})
+	upper, err := MirroredCopy(t.Context(), lower, MirrorFrame{Frame: frame})
 	require.NoError(t, err)
 	joined, err := Union(t.Context(), upper, lower)
 	require.NoError(t, err)
@@ -337,7 +337,7 @@ func TestCopyRotationMotionRefusalSurvivesDescendants(t *testing.T) {
 			return b
 		}},
 		{"scaled", boxUnion, func(t *testing.T, _ *Document, _, exact *Body) *Body {
-			b, err := exact.ScaledAt(t.Context(), r3.Vec{}, units.Scalar(1))
+			b, err := ScaledAt(t.Context(), exact, r3.Vec{}, units.Scalar(1))
 			require.NoError(t, err)
 			return b
 		}},

@@ -380,7 +380,7 @@ func spiralCrownSlabs(t *testing.T, slabs []*decad.Body, f spiralFrame, total fl
 		u := (f.heel - distances[i]) / f.span
 		factor := 1 - spiralCrownPerRad*(math.Abs(total)/2)*u
 		require.Positive(t, factor)
-		scaled, err := slab.ScaledAt(t.Context(), spiralRootAnchor(t, heels[i]), units.Scalar(factor))
+		scaled, err := decad.ScaledAt(t.Context(), slab, spiralRootAnchor(t, heels[i]), units.Scalar(factor))
 		require.NoError(t, err)
 		out[i] = scaled
 	}

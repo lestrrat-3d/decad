@@ -31,10 +31,10 @@ type pointPlaneSimilarityStep struct {
 // ScaledAt returns the positive uniform image of an authenticated point-loft
 // Split slab, exact line/circular solid prism, line-only stack or stack-backed
 // BRep, complete solid Revolve, or audited faceted Boolean result about anchor,
-// then retires the receiver.
+// then retires b. A nil context or a nil b is ErrDegenerate.
 // Source roles and certified boundary and occupied-volume bounds follow the
 // image. A refused or canceled call leaves the document unchanged.
-func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) (*Body, error) {
+func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("%w: a nil context cannot control a scale", ErrDegenerate)
 	}

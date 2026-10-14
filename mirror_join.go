@@ -21,7 +21,7 @@ type mirrorJoinOption struct{}
 
 func (mirrorJoinOption) mirrorOption() {}
 
-// WithJoin makes [Body.Mirrored] return the union of the receiver and its
+// WithJoin makes [Mirrored] return the union of the receiver and its
 // mirror image as one body: the symmetric-part operation
 // (docs/mirror-pattern-design.md §5). The plane must be a [MirrorFace] of the
 // receiver itself naming one or more planar walls on one line of its section;

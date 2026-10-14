@@ -349,7 +349,7 @@ func TestDraftMeshPlacedAndMirrored(t *testing.T) {
 			require.NoError(t, err)
 			mirror, err := r3.NewFrame(r3.NewVec(30, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
 			require.NoError(t, err)
-			mirrored, err := b.MirroredCopy(t.Context(), decad.MirrorFrame{Frame: mirror})
+			mirrored, err := decad.MirroredCopy(t.Context(), b, decad.MirrorFrame{Frame: mirror})
 			require.NoError(t, err)
 			for _, c := range []*decad.Body{placed, mirrored} {
 				mesh, err := c.Tessellate(t.Context(), units.Millimeters(0.05))

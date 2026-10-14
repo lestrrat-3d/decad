@@ -273,7 +273,7 @@ func TestStackedUnionMirrorJoinRefuses(t *testing.T) {
 	plate, boss := internalBossOnPlate(t, 0, 10, 15)
 	got, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
-	_, err = got.Mirrored(t.Context(), MirrorFace{Body: got, Face: Faces(Planar(), Facing(r3.NewVec(-1, 0, 0)))}, WithJoin())
+	_, err = Mirrored(t.Context(), got, MirrorFace{Body: got, Face: Faces(Planar(), Facing(r3.NewVec(-1, 0, 0)))}, WithJoin())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "union-built stack")
 }

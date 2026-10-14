@@ -27,7 +27,7 @@ func joinRectangle(t *testing.T, u0, u1 float64) *Body {
 	doc := New()
 	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(3), Dir: Along})
 	require.NoError(t, err)
-	joined, err := body.Mirrored(t.Context(), MirrorFace{
+	joined, err := Mirrored(t.Context(), body, MirrorFace{
 		Body: body, Face: Faces(Planar(), Facing(r3.NewVec(-1, 0, 0)))}, WithJoin())
 	require.NoError(t, err)
 	return joined

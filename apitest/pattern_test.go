@@ -173,7 +173,7 @@ func TestPatternCopiesRotationSense(t *testing.T) {
 			block := sc.box(t, sc.w.XY(), 10, 2, 16, 5, mirrorAlong(5))
 			if tc.Mirror {
 				var err error
-				block, err = block.Mirrored(t.Context(), mirrorAtX30(t))
+				block, err = decad.Mirrored(t.Context(), block, mirrorAtX30(t))
 				require.NoError(t, err)
 			}
 			src, err := block.Centroid()

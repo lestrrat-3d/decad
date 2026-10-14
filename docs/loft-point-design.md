@@ -116,7 +116,7 @@ original pose, from becoming a structural Split source again.
 
 ## Anchored uniform scale of a Split slab
 
-`Body.ScaledAt(ctx, anchor, factor)` accepts a complete authenticated Split
+`ScaledAt(ctx, b, anchor, factor)` accepts a complete authenticated Split
 slab with a finite, positive dimensionless factor. The anchor is a world
 point in millimetres. It maps each held vertex by `anchor + factor*(p-anchor)`;
 an exact rational image of the stored floats encloses the rounding of that

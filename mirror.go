@@ -44,7 +44,7 @@ type MirrorFace struct {
 func (MirrorFrame) mirrorPlane() {}
 func (MirrorFace) mirrorPlane()  {}
 
-// MirrorOption configures [Body.Mirrored]. [WithJoin] is the one option.
+// MirrorOption configures [Mirrored]. [WithJoin] is the one option.
 type MirrorOption interface {
 	mirrorOption()
 }
@@ -53,8 +53,8 @@ type MirrorOption interface {
 // names no plane to mirror across.
 var errNilMirrorPlane = fmt.Errorf(`%w: nil mirror plane`, ErrDegenerate)
 
-// Mirrored returns a new body carrying the receiver's mirror image across
-// plane, retiring the receiver. It calls [Transform] under r3.Reflection of the
+// Mirrored returns a new body carrying b's mirror image across plane,
+// retiring b. It calls [Transform] under r3.Reflection of the
 // resolved plane (docs/mirror-pattern-design.md §4.2): the reflection is
 // carried in the body's accumulated placement, and every reading — volume,
 // centroid, outward normals, tessellation winding, export — follows it.
@@ -63,10 +63,10 @@ var errNilMirrorPlane = fmt.Errorf(`%w: nil mirror plane`, ErrDegenerate)
 // evaluator did not build is ErrUnsupported, and a canceled context stops the
 // rebuild before the document changes — plus the plane's own resolution (see
 // [MirrorFrame] and [MirrorFace]). A nil plane or a nil option is
-// ErrDegenerate. With [WithJoin] it returns the union of the receiver and its
-// image instead, on the class WithJoin states. A refused call leaves the
+// ErrDegenerate, as is a nil b. With [WithJoin] it returns the union of b and
+// its image instead, on the class WithJoin states. A refused call leaves the
 // document unchanged.
-func (b *Body) Mirrored(ctx context.Context, plane MirrorPlane, opts ...MirrorOption) (*Body, error) {
+func Mirrored(ctx context.Context, b *Body, plane MirrorPlane, opts ...MirrorOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a mirror`, ErrDegenerate)
 	}
@@ -91,11 +91,11 @@ func (b *Body) Mirrored(ctx context.Context, plane MirrorPlane, opts ...MirrorOp
 	return Transform(ctx, b, t)
 }
 
-// MirroredCopy returns a new live body carrying the receiver's mirror image
-// across plane, leaving the receiver LIVE. It calls [Copy] with
-// [WithCopyPlacement] under r3.Reflection of the resolved plane, with the
-// gates [Body.Mirrored] states.
-func (b *Body) MirroredCopy(ctx context.Context, plane MirrorPlane) (*Body, error) {
+// MirroredCopy returns a new live body carrying b's mirror image across
+// plane, leaving b LIVE. It calls [Copy] with [WithCopyPlacement] under
+// r3.Reflection of the resolved plane, with the gates [Mirrored] states.
+// A nil b is ErrDegenerate.
+func MirroredCopy(ctx context.Context, b *Body, plane MirrorPlane) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a mirror`, ErrDegenerate)
 	}

@@ -16,7 +16,7 @@ func TestStraightPrismScaledAtAcceptsPlacedSource(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), prism, turn)
 	require.NoError(t, err)
-	scaled, err := placed.ScaledAt(t.Context(), r3.NewVec(1, 2, 3), units.Scalar(0.9))
+	scaled, err := decad.ScaledAt(t.Context(), placed, r3.NewVec(1, 2, 3), units.Scalar(0.9))
 	require.NoError(t, err)
 	volume, err := scaled.Volume()
 	require.NoError(t, err)
@@ -31,7 +31,7 @@ func TestStraightPrismScaledAtAcceptsPlacedSource(t *testing.T) {
 func TestStraightPrismScaledAtPreservesVolumeAndCapRoles(t *testing.T) {
 	doc := decad.New()
 	prism := boxBody(t, doc, 0, 0, 4, 3, 5)
-	scaled, err := prism.ScaledAt(t.Context(), r3.NewVec(1, 1, 1), units.Scalar(1.5))
+	scaled, err := decad.ScaledAt(t.Context(), prism, r3.NewVec(1, 1, 1), units.Scalar(1.5))
 	require.NoError(t, err)
 	volume, err := scaled.Volume()
 	require.NoError(t, err)
@@ -53,7 +53,7 @@ func TestStraightPrismScaledAtPreservesVolumeAndCapRoles(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := decad.Copy(t.Context(), scaled, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
-	again, err := placed.ScaledAt(t.Context(), r3.NewVec(0, 0, 0), units.Scalar(0.75))
+	again, err := decad.ScaledAt(t.Context(), placed, r3.NewVec(0, 0, 0), units.Scalar(0.75))
 	require.NoError(t, err)
 	volume, err = again.Volume()
 	require.NoError(t, err)
@@ -68,7 +68,7 @@ func TestStraightPrismScaledAtPreservesVolumeAndCapRoles(t *testing.T) {
 func TestStraightPrismScaledAtKeepsPolygonHole(t *testing.T) {
 	doc := decad.New()
 	prism := holedBoxSymmetric(t, doc, 10, 4, 2)
-	scaled, err := prism.ScaledAt(t.Context(), r3.NewVec(0, 0, 0), units.Scalar(1.25))
+	scaled, err := decad.ScaledAt(t.Context(), prism, r3.NewVec(0, 0, 0), units.Scalar(1.25))
 	require.NoError(t, err)
 	volume, err := scaled.Volume()
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestPrismScaledAtRefusesSheetSource(t *testing.T) {
 	sheet, err := decad.Extrude(t.Context(), sheetDoc, s, profile,
 		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	_, err = sheet.ScaledAt(t.Context(), r3.NewVec(0, 0, 0), units.Scalar(2))
+	_, err = decad.ScaledAt(t.Context(), sheet, r3.NewVec(0, 0, 0), units.Scalar(2))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{sheet}, sheetDoc.Bodies())
 }

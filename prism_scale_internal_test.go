@@ -23,7 +23,7 @@ func TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding(t *testing.T) 
 	source, err := Extrude(t.Context(), doc, profile, profile.Profiles()[0],
 		Distance{D: units.Millimeters(2), Dir: Along})
 	require.NoError(t, err)
-	scaled, err := source.ScaledAt(t.Context(), r3.NewVec(1e6, -2e6, 3e6), units.Scalar(1.3))
+	scaled, err := ScaledAt(t.Context(), source, r3.NewVec(1e6, -2e6, 3e6), units.Scalar(1.3))
 	require.NoError(t, err)
 	mesh, err := scaled.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
 	require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding(t *testing.T) 
 	placedPayload := placed.payload.(facetedPayload)
 	require.GreaterOrEqual(t, placedPayload.dPair,
 		facetedSourceDiameterUpper(placedPayload.verts, placedPayload.meshBound))
-	again, err := placed.ScaledAt(t.Context(), r3.NewVec(-2e6, 1e6, 5e5), units.Scalar(0.8))
+	again, err := ScaledAt(t.Context(), placed, r3.NewVec(-2e6, 1e6, 5e5), units.Scalar(0.8))
 	require.NoError(t, err)
 	againPayload := again.payload.(facetedPayload)
 	require.GreaterOrEqual(t, againPayload.dPair,

@@ -18,7 +18,7 @@ func TestFullRevolveScaledAtPreservesSphereVolumeAndSourceFace(t *testing.T) {
 	require.Len(t, sphere.Faces(), 1)
 	role := sphere.Faces()[0].Origins()[0]
 	anchor := r3.NewVec(1, 2, 3)
-	scaled, err := sphere.ScaledAt(t.Context(), anchor, units.Scalar(2))
+	scaled, err := decad.ScaledAt(t.Context(), sphere, anchor, units.Scalar(2))
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
 
@@ -50,7 +50,7 @@ func TestFullRevolveScaledAtPreservesPlanarFaceRoles(t *testing.T) {
 	doc := decad.New()
 	cylinder, err := decad.Revolve(t.Context(), doc, s, profile, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
-	scaled, err := cylinder.ScaledAt(t.Context(), r3.NewVec(1, 2, 3), units.Scalar(1.25))
+	scaled, err := decad.ScaledAt(t.Context(), cylinder, r3.NewVec(1, 2, 3), units.Scalar(1.25))
 	require.NoError(t, err)
 	volume, err := scaled.Volume()
 	require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestScaledAtRefusesPartialRevolveWithoutRetiringSource(t *testing.T) {
 	wedge, err := decad.Revolve(t.Context(), doc, s, profile, uAxis,
 		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
-	_, err = wedge.ScaledAt(t.Context(), r3.Vec{}, units.Scalar(2))
+	_, err = decad.ScaledAt(t.Context(), wedge, r3.Vec{}, units.Scalar(2))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{wedge}, doc.Bodies())
 }
@@ -93,9 +93,9 @@ func TestFullRevolveScaledAtRepeatsAfterRigidPlacement(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), sphere, motion)
 	require.NoError(t, err)
-	first, err := placed.ScaledAt(t.Context(), r3.Vec{}, units.Scalar(2))
+	first, err := decad.ScaledAt(t.Context(), placed, r3.Vec{}, units.Scalar(2))
 	require.NoError(t, err)
-	again, err := first.ScaledAt(t.Context(), r3.NewVec(1, 2, 3), units.Scalar(0.5))
+	again, err := decad.ScaledAt(t.Context(), first, r3.NewVec(1, 2, 3), units.Scalar(0.5))
 	require.NoError(t, err)
 	volume, err := again.Volume()
 	require.NoError(t, err)
@@ -113,7 +113,7 @@ func TestScaledAtRefusesSheetRevolveWithoutRetiringSource(t *testing.T) {
 	sheet, err := decad.Revolve(t.Context(), doc, s, profile, uAxis,
 		decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	_, err = sheet.ScaledAt(t.Context(), r3.Vec{}, units.Scalar(2))
+	_, err = decad.ScaledAt(t.Context(), sheet, r3.Vec{}, units.Scalar(2))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{sheet}, doc.Bodies())
 }
