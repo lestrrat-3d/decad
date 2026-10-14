@@ -300,7 +300,10 @@ func TestPatchUOverlapPairsYieldsExactlyOverlappingPairs(t *testing.T) {
 		got := map[[2]int]struct{}{}
 		for x, y := range patchUOverlapPairs(lo, hi, order) {
 			pair := [2]int{int(min(x, y)), int(max(x, y))}
-			require.NotContains(t, got, pair, "rim %d yields pair %v twice", k, pair)
+			// A map lookup, not require.NotContains: NotContains walks every key
+			// by reflection, which is quadratic in the pairs of the star 400 rim.
+			_, dup := got[pair]
+			require.False(t, dup, "rim %d yields pair %v twice", k, pair)
 			got[pair] = struct{}{}
 		}
 		require.Equal(t, want, got, "rim %d %v", k, rim)
