@@ -85,6 +85,7 @@ func circleWallIntegral(cu, r, pitch, turns float64) float64 {
 }
 
 func TestCoilRoundWireSpring(t *testing.T) {
+	t.Parallel()
 	s, p := coilRoundWire(t, 0.5)
 	doc := New()
 	b, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(5))

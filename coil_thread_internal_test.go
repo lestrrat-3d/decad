@@ -88,6 +88,7 @@ func requireThreadResult(t *testing.T, doc *Document, res *Body, exactOverPi *bi
 // from a revolved cylinder: the cut removes the screw sweep of the groove's
 // part inside ρ = 5, Θ·Q = 2π·Q, from π·5²·20. The report reads Sound.
 func TestCoilExternalThread(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
 	cylinder, err := Revolve(t.Context(), doc, cs, cpf, coilAxisV, FullRevolution{})
@@ -222,6 +223,7 @@ func clipPolygon(pts [][2]*big.Rat, keep func(p [2]*big.Rat) *big.Rat) [][2]*big
 // that part below ζ = 0 and k = pitch/2π, so the volume is
 // π·(500 − 6Q − (2/1.5)·M⁻) at three turns.
 func TestCoilThreadRunsOutOfTheEnd(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
 	cylinder, err := Revolve(t.Context(), doc, cs, cpf, coilAxisV, FullRevolution{})

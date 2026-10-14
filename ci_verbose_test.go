@@ -2,7 +2,10 @@ package decad
 
 import (
 	"flag"
+	"fmt"
 	"os"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -15,10 +18,37 @@ import (
 // so a test that needs setup must extend this function, not add a second.
 func TestMain(m *testing.M) {
 	flag.Parse()
-	if os.Getenv("GITHUB_ACTIONS") == "true" {
+	ci := os.Getenv("GITHUB_ACTIONS") == "true"
+	if ci {
 		if err := flag.Set("test.v", "true"); err != nil {
 			panic(err)
 		}
 	}
-	os.Exit(m.Run())
+	code := m.Run()
+	if ci {
+		memProbe()
+	}
+	os.Exit(code)
+}
+
+// memProbe prints peak and current process memory. Measurement only.
+func memProbe() {
+	var hwm, rss string
+	if data, err := os.ReadFile("/proc/self/status"); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			f := strings.Fields(line)
+			if len(f) < 2 {
+				continue
+			}
+			switch f[0] {
+			case "VmHWM:":
+				hwm = f[1]
+			case "VmRSS:":
+				rss = f[1]
+			}
+		}
+	}
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	fmt.Fprintf(os.Stderr, "MEMPROBE vmhwm_kb=%s vmrss_kb=%s goheapsys=%d gosys=%d\n", hwm, rss, ms.HeapSys, ms.Sys)
 }
