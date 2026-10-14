@@ -81,7 +81,7 @@ The rules for rows live in `docs/layout.md`.
 | `record.go` | Root-owned `Point2`, structural record aliases, and slice adapters. See sketch-seam §2. |
 | `seam.go` | Sketch chain recording adapters and `MeasureProfile`; profile recording lives in `internal/sectioncert/`. See sketch-seam §1–§2. |
 | `section.go` | Public planar section query over certified prism, stack-backed BRep, Loft, sphere and cone records. See section design. |
-| `section_loft_circle.go` | Exact parallel section of an authenticated circular-hole Loft and shared exact scalar interpolation. See section design. |
+| `section_loft_circle.go` | Exact parallel section of authenticated circular-boundary and circular-hole Lofts, with shared exact scalar interpolation. See section design. |
 | `section_loft_matching.go` | Exact parallel section of an authenticated Loft with matching profiles. See section design. |
 | `section_loft_ruled_lines.go` | Exact parallel section of an authenticated Loft with full line boundaries. See section design. |
 | `section_circle_axis.go` | Exact whole-circle prism section on a cardinal plane with an exact chord. See section design. |

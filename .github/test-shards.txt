@@ -1525,3 +1525,4 @@
 10	0.00	TestTopoDocumentWriteGuard
 10	0.00	TestCertifyFacetedCopiesRejectsBodiesOutsideTheDocument
 10	0.00	TestDocumentHandleAndNodeIdentity
+10	0.00	TestLoftSectionCircularHoleClearanceAcrossLevels

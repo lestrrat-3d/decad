@@ -120,6 +120,33 @@ publish a valid matching profile. This exact profile can enter ordinary
 `Extrude`; the source Loft and its document do not change. A rotated or
 oblique section, a cap-level section, and a placed Loft keep `ErrUnsupported`.
 
+## Parallel section of an authenticated circular-boundary Loft
+
+An authenticated two-section solid Loft with one whole counterclockwise
+outer circle and any number of paired whole clockwise circular holes may
+return an exact interior section. Every paired loop has zero alignment.
+The source planes, source frames and requested frame use canonical world-XY
+axes and the same in-plane origin. The Loft has identity placement and no
+Cut or Fillet rewrite. Its held circular chords may carry a positive mesh
+displacement; the section reads the authenticated source circles themselves.
+
+Each Loft wall pairs points at the same circle angle. At a fixed fraction
+between its cap levels, every boundary is therefore a circle whose center
+and radius are the linear interpolation of its paired source records. The
+fraction comes from the exact rational cap and request levels. Each center
+coordinate and radius must be finite and exactly representable as binary64.
+The radius must remain positive. Prove containment of each hole in the outer
+circle and separation of every hole pair over the entire cap interval.
+Each signed gap is a quadratic in the sweep fraction: the squared radius
+gap minus squared center distance for containment, or squared center
+distance minus squared radius sum for separation. Require both endpoints
+and any interior minimum to be strictly positive in exact rational
+arithmetic. Endpoint separation alone does not prove that moving holes
+stay apart. Reconstruct all circles on a fresh Sketch and require one valid
+matching material region before returning it. A cap-level or oblique
+request, a shifted request origin, a placed Loft or an inexact interpolated
+circle returns `ErrUnsupported`.
+
 ## Cardinal plane of an authenticated source sphere
 
 This class reads the occupied-ball certificate from `sourceSphereAtPose` for a
@@ -465,6 +492,12 @@ reusing its bound.
 - A rigidly translated prism must section on the correspondingly translated
   plane. A source profile with a hole must return the same outer and hole
   boundaries when Sketch can certify their reconstruction.
+- Loft two real Sketch whole-circle profiles of radii 1 and 3 mm across 2 mm.
+  A midlevel Section returns radius 2 mm; its 2 mm Extrude encloses 8π mm³
+  and passes `Tessellate(0.1 mm, VerifyAll)`. Check a translated source frame,
+  a moving outer circle, one moving hole and two paired holes. Refuse cap,
+  tilted, shifted source or request, placed and inexact X/Y or radius
+  interpolation requests.
 - Extrude a 1 mm whole circle by 5 mm. Section it by a cardinal plane through
   its axis and check the exact 2×5 mm rectangle. Re-extrude the returned
   profile by 2 mm and require `Tessellate(0.1 mm, VerifyAll)` to certify the
