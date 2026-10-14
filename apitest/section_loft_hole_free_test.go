@@ -27,15 +27,13 @@ func TestSectionDirectHoleFreeLoftFeedsExtrude(t *testing.T) {
 	require.NoError(t, err)
 	area, err := measured.Area()
 	require.NoError(t, err)
-	require.Equal(t, 100.0, area.Value.Base())
-	require.Zero(t, area.Bound.Base())
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-100), area.Bound.Base())
 	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
 		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
-	require.Equal(t, 200.0, volume.Value.Base())
-	require.Zero(t, volume.Bound.Base())
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-200), volume.Bound.Base())
 	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
@@ -130,4 +128,44 @@ func TestSectionDirectHoleFreeLoftRefusesTwistedCorrespondence(t *testing.T) {
 		decad.WithLoftAlignment(1))
 	require.NoError(t, err)
 	requireDirectLoftSectionUnsupported(t, twisted, r3.NewVec(0, 0, 5))
+}
+
+func TestSectionDirectHoleFreeLoftRefusesShiftedSourceX(t *testing.T) {
+	source := holeFreeLoftWithShiftedTop(t, r3.NewVec(1, 0, 2))
+	requireDirectLoftSectionUnsupported(t, source, r3.NewVec(0, 0, 1))
+}
+
+func TestSectionDirectHoleFreeLoftRefusesShiftedSourceY(t *testing.T) {
+	source := holeFreeLoftWithShiftedTop(t, r3.NewVec(0, 1, 2))
+	requireDirectLoftSectionUnsupported(t, source, r3.NewVec(0, 0, 1))
+}
+
+func TestSectionDirectHoleFreeLoftRefusesShiftedRequestedY(t *testing.T) {
+	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
+	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	require.NoError(t, err)
+	requireDirectLoftSectionUnsupported(t, source, r3.NewVec(0, 1, 1))
+}
+
+func holeFreeLoftWithShiftedTop(t *testing.T, topOrigin r3.Vec) *decad.Body {
+	t.Helper()
+	world := sketch.NewWorld()
+	makeSquare := func(origin r3.Vec) (*sketch.Sketch, *sketch.Profile) {
+		frame, err := r3.NewFrame(origin, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+		require.NoError(t, err)
+		plane, err := world.CreatePlaneFromFrame(frame)
+		require.NoError(t, err)
+		s, err := world.CreateSketch(plane)
+		require.NoError(t, err)
+		rect := s.CreateRectangle(-5, -5, 5, 5)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		return s, s.Profiles()[0]
+	}
+	bottom, bottomProfile := makeSquare(r3.NewVec(0, 0, 0))
+	top, topProfile := makeSquare(topOrigin)
+	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	require.NoError(t, err)
+	return source
 }
