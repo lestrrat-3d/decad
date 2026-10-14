@@ -1521,3 +1521,4 @@
 10	0.00	TestFaceBodyIsTheBodyHandle
 10	0.00	TestLoftCircleBoreExactAxisProof
 10	0.00	TestLoftCircleBoreTopologyShapeRefusals
+10	0.00	TestLoftWallAreaCacheMatchesHeldTriangles

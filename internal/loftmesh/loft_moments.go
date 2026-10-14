@@ -9,6 +9,10 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
+// WallArea is the exact held wall triangle's floating area bracket.
+// Its values are reusable across topology, mass, and chord proofs.
+type WallArea struct{ Lo, Hi float64 }
+
 // WallTriangleArea brackets one wall triangle's own area between two floats,
 // both PROVEN. u and v are the triangle's exact rational edge vectors, so
 // |u×v|² is an exact rational and the area is the square root of |u×v|²/4;

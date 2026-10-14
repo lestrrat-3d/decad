@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -124,6 +125,21 @@ func TestComputeLoftChordedAllowMatchesSeparateBounds(t *testing.T) {
 			want := referenceComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.25, 0.01, tc.reversed)
 			got := ComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.25, 0.01, tc.reversed)
 			requireChordedAllowExact(t, want, got)
+			var wallAreas []WallArea
+			for i, p := range pairs {
+				for j := range p.V {
+					jn := (j + 1) % len(p.V)
+					vLo := proofarith.XptOf(verts[vIdx[i][j]])
+					vHi := proofarith.XptOf(verts[vIdx[i][jn]])
+					wLo := proofarith.XptOf(verts[wIdx[i][j]])
+					wHi := proofarith.XptOf(verts[wIdx[i][jn]])
+					lo0, hi0 := WallTriangleArea(proofarith.Xsub(vHi, vLo), proofarith.Xsub(wHi, vLo))
+					lo1, hi1 := WallTriangleArea(proofarith.Xsub(wHi, vLo), proofarith.Xsub(wLo, vLo))
+					wallAreas = append(wallAreas, WallArea{Lo: lo0, Hi: hi0}, WallArea{Lo: lo1, Hi: hi1})
+				}
+			}
+			cached := ComputeLoftChordedAllowWithWallAreas(pairs, vIdx, wIdx, verts, anchor, 0.25, 0.01, tc.reversed, wallAreas)
+			requireChordedAllowExact(t, want, cached)
 			require.Equal(t, originalPairs, pairs)
 			require.Equal(t, originalVerts, verts)
 		})

@@ -486,7 +486,7 @@ func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, ver
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		lowerFace, err := buildLoftWallFace(body, ref, verts, lowerTri[j], 0, j, 0, delta)
+		lowerFace, err := buildLoftWallFace(body, ref, verts, lowerTri[j], 0, j, 0, delta, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -497,7 +497,7 @@ func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, ver
 		}}}
 		walls = append(walls, lowerFace)
 
-		upperFace, err := buildLoftWallFace(body, ref, verts, upperTri[j], 0, j, 1, delta)
+		upperFace, err := buildLoftWallFace(body, ref, verts, upperTri[j], 0, j, 1, delta, nil)
 		if err != nil {
 			return nil, err
 		}

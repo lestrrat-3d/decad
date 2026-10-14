@@ -100,6 +100,22 @@ func ComputeLoftChordedAllow(
 	pairs []LoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec,
 	matchedDelta, delta float64, reversed bool,
 ) LoftChordedAllow {
+	return computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matchedDelta, delta, reversed, nil)
+}
+
+// ComputeLoftChordedAllowWithWallAreas reads the two held triangle brackets
+// for each cell in assembly order, including cells the proof does not charge.
+func ComputeLoftChordedAllowWithWallAreas(
+	pairs []LoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec,
+	matchedDelta, delta float64, reversed bool, wallAreas []WallArea,
+) LoftChordedAllow {
+	return computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matchedDelta, delta, reversed, wallAreas)
+}
+
+func computeLoftChordedAllow(
+	pairs []LoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec,
+	matchedDelta, delta float64, reversed bool, wallAreas []WallArea,
+) LoftChordedAllow {
 	var wallAreaUpper, wallLeg, twistVolumeUpper, maxTwistOffsetUpper, seamPerimeterUpper float64
 	var capTube, areaExcess, bilinearAreaBound, twistAreaAllow float64
 	piUp := math.Nextafter(math.Pi, math.Inf(1))
@@ -110,9 +126,11 @@ func ComputeLoftChordedAllow(
 	}
 	areaCorrection := new(big.Rat)
 
+	cell := 0
 	for i, p := range pairs {
 		n := len(p.V)
 		for j := range n {
+			cell++
 			jn := (j + 1) % n
 			vLo, vHi := verts[vIdx[i][j]], verts[vIdx[i][jn]]
 			wLo, wHi := verts[wIdx[i][j]], verts[wIdx[i][jn]]
@@ -175,9 +193,14 @@ func ComputeLoftChordedAllow(
 			)
 			bilinearValue, bilinearBound := proofbound.CellBilinearArea(vLo, vHi, wLo, wHi)
 			bilinearAreaBound = proofbound.AbsSumUpper(bilinearAreaBound, bilinearBound)
-			vLoX := proofarith.XptOf(vLo)
-			lowerLo, _ := WallTriangleArea(proofarith.Xsub(proofarith.XptOf(vHi), vLoX), proofarith.Xsub(proofarith.XptOf(wHi), vLoX))
-			upperLo, _ := WallTriangleArea(proofarith.Xsub(proofarith.XptOf(wHi), vLoX), proofarith.Xsub(proofarith.XptOf(wLo), vLoX))
+			var lowerLo, upperLo float64
+			if wallAreas != nil {
+				lowerLo, upperLo = wallAreas[2*(cell-1)].Lo, wallAreas[2*(cell-1)+1].Lo
+			} else {
+				vLoX := proofarith.XptOf(vLo)
+				lowerLo, _ = WallTriangleArea(proofarith.Xsub(proofarith.XptOf(vHi), vLoX), proofarith.Xsub(proofarith.XptOf(wHi), vLoX))
+				upperLo, _ = WallTriangleArea(proofarith.Xsub(proofarith.XptOf(wHi), vLoX), proofarith.Xsub(proofarith.XptOf(wLo), vLoX))
+			}
 			areaCorrection.Add(areaCorrection, polynomial.MustRatOf(bilinearValue))
 			areaCorrection.Sub(areaCorrection, polynomial.MustRatOf(lowerLo))
 			areaCorrection.Sub(areaCorrection, polynomial.MustRatOf(upperLo))
