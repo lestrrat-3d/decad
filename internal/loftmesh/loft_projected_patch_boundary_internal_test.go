@@ -233,9 +233,9 @@ func TestPatchBoundarySweepChecksEveryIntersectingPair(t *testing.T) {
 
 func TestPatchBoundarySweepTouchingAndOneUlpRanges(t *testing.T) {
 	up := math.Nextafter(1, 2)
-	// Edge (0,0)-(1,0) and edge (a,1)-(a,3), non adjacent: they share a point
-	// only when a == 1. The vertical edge's low u end is 1 (touch), one ulp
-	// above 1 (apart by one ulp), or below 1 (overlap by one ulp, no contact).
+	// Edge (0,0)-(1,0) and edge (a,1)-(a,3), non adjacent: their v ranges are
+	// disjoint, so they never meet. Their u ranges touch (a == 1), are apart
+	// by one ulp, or overlap by one ulp; the verdict is Holds in every case.
 	for _, tc := range []struct {
 		a    float64
 		want ProjectedPatchCondition
@@ -274,4 +274,35 @@ func TestPatchBoundarySweepInexactFloatFallsBack(t *testing.T) {
 	got, used := runPatchBoundary(t, patchBoundarySimple, points, patchBoundaryAllowance)
 	require.Equal(t, want, got)
 	require.Equal(t, wantUsed, used)
+}
+
+// TestPatchUOverlapPairsYieldsExactlyOverlappingPairs compares the sweep's
+// pairs with a plain O(n^2) loop over closed u ranges: the sweep must yield
+// every pair whose ranges overlap or touch, and no other pair.
+func TestPatchUOverlapPairsYieldsExactlyOverlappingPairs(t *testing.T) {
+	rng := rand.New(rand.NewPCG(83, 89))
+	rims := ulpRims(rng, 2000)
+	for _, rim := range patchRims() {
+		rims = append(rims, rim.pts)
+	}
+	for k, rim := range rims {
+		points := rimPoints(rim, [2]int{0, 1})
+		lo, hi, order, ok := patchUSweepOrder(points)
+		require.True(t, ok)
+		want := map[[2]int]struct{}{}
+		for i := range lo {
+			for j := i + 1; j < len(lo); j++ {
+				if lo[i] <= hi[j] && lo[j] <= hi[i] {
+					want[[2]int{i, j}] = struct{}{}
+				}
+			}
+		}
+		got := map[[2]int]struct{}{}
+		for x, y := range patchUOverlapPairs(lo, hi, order) {
+			pair := [2]int{int(min(x, y)), int(max(x, y))}
+			require.NotContains(t, got, pair, "rim %d yields pair %v twice", k, pair)
+			got[pair] = struct{}{}
+		}
+		require.Equal(t, want, got, "rim %d %v", k, rim)
+	}
 }
