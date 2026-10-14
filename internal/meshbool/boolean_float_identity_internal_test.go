@@ -255,3 +255,109 @@ func BenchmarkTriTriDistance(b *testing.B) {
 		_ = sink
 	})
 }
+
+// triTriFoldPositions is the number of minimum folds in TriTriDistance: nine
+// edge-edge distances, then six vertex-to-triangle distances in the order
+// ta[0], tb[0], ta[1], tb[1], ta[2], tb[2].
+const triTriFoldPositions = 15
+
+// triTriDistanceDropNaNAt is TriTriDistance with the fold at position pos
+// ignoring a NaN operand, the way `if x < best { best = x }` does.
+func triTriDistanceDropNaNAt(ta, tb [3]r3.Vec, pos int) float64 {
+	best := math.Inf(1)
+	n := 0
+	fold := func(x float64) {
+		n++
+		if n-1 == pos {
+			if x < best {
+				best = x
+			}
+			return
+		}
+		best = math.Min(best, x)
+	}
+	for i := range 3 {
+		for j := range 3 {
+			fold(oldSegSegDist3(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3]))
+		}
+	}
+	for i := range 3 {
+		fold(oldPointTriDistance(ta[i], tb))
+		fold(oldPointTriDistance(tb[i], ta))
+	}
+	if best <= 0 || best != best || best > math.MaxFloat64 || best < -math.MaxFloat64 {
+		return 0
+	}
+	return best * (1 - 1e-12)
+}
+
+func rotateTri(t [3]r3.Vec, r int) [3]r3.Vec {
+	return [3]r3.Vec{t[r%3], t[(r+1)%3], t[(r+2)%3]}
+}
+
+// TestTriTriDistanceNaNInOneFold pins one pair per fold position. In each pair
+// exactly one fold value is NaN and the other fourteen are finite, so the true
+// result is 0 (a NaN distance refuses) while a fold that drops NaN returns a
+// positive number.
+func TestTriTriDistanceNaNInOneFold(t *testing.T) {
+	// The NaN comes from Inf/Inf in PointTriDistance(tb[2], ta): the foot
+	// parameter divides an overflowed dot product by an overflowed norm.
+	a := 1e140
+	z := math.MaxFloat64 / (a * a)
+	lo, hi := math.Nextafter(z, 0), math.Nextafter(z, math.Inf(1))
+	point := [2][3]r3.Vec{
+		{{}, {X: a}, {Y: a}},
+		{{X: -1e20, Z: lo}, {X: -1e20, Z: lo}, {X: -1e20, Z: hi}},
+	}
+	// The NaN comes from an edge-edge distance whose edge vectors overflow.
+	edge := [2][3]r3.Vec{
+		{{X: 1e154, Y: 1e-140, Z: -1}, {X: 1e140, Y: -1e20, Z: 1e20}, {Y: 1e20, Z: 1.7976931348623156e+28}},
+		{{Y: -1, Z: -1}, {Z: 1e-160}, {Y: 1e-160, Z: -1}},
+	}
+	// Rotating a triangle's corners moves the NaN to another fold; swapping the
+	// triangles moves a vertex-to-triangle NaN between the ta and tb folds.
+	cases := []struct {
+		pos     int
+		base    [2][3]r3.Vec
+		swap    bool
+		ra, rb  int
+		comment string
+	}{
+		{0, edge, false, 0, 0, "edge ta0 tb0"},
+		{1, edge, false, 0, 2, "edge ta0 tb1"},
+		{2, edge, false, 0, 1, "edge ta0 tb2"},
+		{3, edge, false, 2, 0, "edge ta1 tb0"},
+		{4, edge, false, 2, 2, "edge ta1 tb1"},
+		{5, edge, false, 2, 1, "edge ta1 tb2"},
+		{6, edge, false, 1, 0, "edge ta2 tb0"},
+		{7, edge, false, 1, 2, "edge ta2 tb1"},
+		{8, edge, false, 1, 1, "edge ta2 tb2"},
+		{9, point, true, 0, 2, "point ta0"},
+		{10, point, false, 0, 2, "point tb0"},
+		{11, point, true, 0, 1, "point ta1"},
+		{12, point, false, 0, 1, "point tb1"},
+		{13, point, true, 0, 0, "point ta2"},
+		{14, point, false, 0, 0, "point tb2"},
+	}
+	require.Len(t, cases, triTriFoldPositions)
+	for _, c := range cases {
+		ta, tb := rotateTri(c.base[0], c.ra), rotateTri(c.base[1], c.rb)
+		if c.swap {
+			ta, tb = tb, ta
+		}
+		t.Run(c.comment, func(t *testing.T) {
+			require.Zero(t, TriTriDistance(ta, tb))
+			requireSameBitsf(t, oldTriTriDistance(ta, tb), TriTriDistance(ta, tb), "oracle")
+			// Only the fold at c.pos drops the NaN, so the witness must tell
+			// that fold apart from every other.
+			for pos := range triTriFoldPositions {
+				got := triTriDistanceDropNaNAt(ta, tb, pos)
+				if pos == c.pos {
+					require.Greater(t, got, 0.0, "dropping NaN at fold %d must change the result", pos)
+					continue
+				}
+				require.Zero(t, got, "dropping NaN at fold %d must not change the result", pos)
+			}
+		})
+	}
+}
