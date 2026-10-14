@@ -20,8 +20,8 @@ import (
 // crosses one existing through hole. Its section and interface scenes are
 // Sketch's; stackedbrep splits the partial hole walls at the pocket floor.
 func tryCrossingBlindCut(ctx context.Context, a, b *Body) (brepPayload, bool, error) {
-	target, targetOK := a.payload.(prismPayload)
-	tool, toolOK := b.payload.(prismPayload)
+	target, targetOK := a.n.Payload.(prismPayload)
+	tool, toolOK := b.n.Payload.(prismPayload)
 	if !targetOK || !toolOK || len(target.Profile.Holes) != 1 || len(tool.Profile.Holes) != 0 {
 		return brepPayload{}, false, nil
 	}

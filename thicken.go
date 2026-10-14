@@ -86,7 +86,7 @@ func Thicken(ctx context.Context, b *Body, thickness units.Value, opts ...Thicke
 		return nil, fmt.Errorf(`%w: Thicken requires a sheet body`, ErrUnsupported)
 	}
 	var result *Body
-	switch payload := b.payload.(type) {
+	switch payload := b.n.Payload.(type) {
 	case patchPayload:
 		result, err = thickenPatch(ctx, d, payload, side, tmm, tDelta)
 	case prismPayload:
@@ -129,7 +129,7 @@ func thickenSweep(ctx context.Context, d *Document, sp sweepPayload, side Thicke
 		if err != nil {
 			return nil, err
 		}
-		built, ok := body.payload.(revolvePayload)
+		built, ok := body.n.Payload.(revolvePayload)
 		if !ok {
 			return nil, fmt.Errorf(`%w: a thickened arc sweep has no revolve reduction`, ErrDegenerate)
 		}

@@ -168,8 +168,8 @@ func TestStitchAuditRefusesOverlappingAssembly(t *testing.T) {
 // into a closed set at all.
 func TestStitchRuleSRefusesMultipleSourceBodies(t *testing.T) {
 	t.Parallel()
-	bodyA := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}})
-	bodyB := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}})
+	bodyA := bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}}})
+	bodyB := bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}}})
 	faceA := bornFace(&Face{n: topo.Face{Body: bodyNode(bodyA)}})
 	faceB := bornFace(&Face{n: topo.Face{Body: bodyNode(bodyB)}})
 

@@ -896,7 +896,7 @@ func TestAddPrismFacesOmitsCapsForSurfaceResult(t *testing.T) {
 		Distance{D: units.Millimeters(10), Dir: Along}, WithSurfaceResult())
 	require.NoError(t, err)
 
-	pp, ok := sheet.payload.(prismPayload)
+	pp, ok := sheet.n.Payload.(prismPayload)
 	require.True(t, ok)
 	require.True(t, pp.SurfaceResult)
 	sweepDir := pp.Dir(0, 0, 1)
@@ -933,7 +933,7 @@ func TestNewBodyGeomRefusesSurfaceResultRevolve(t *testing.T) {
 	sheet, err := Revolve(t.Context(), doc, s, s.Profiles()[0], axis, extent, WithSurfaceResult())
 	require.NoError(t, err)
 
-	rp, ok := sheet.payload.(revolvePayload)
+	rp, ok := sheet.n.Payload.(revolvePayload)
 	require.True(t, ok)
 	require.True(t, rp.surfaceResult)
 	require.False(t, rp.full)

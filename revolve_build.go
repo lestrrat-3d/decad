@@ -155,13 +155,14 @@ func (rp revolvePayload) meridian() prismPayload {
 	return prismPayload{Payload: prismrecord.Payload{Profile: rp.profile, Frame: rp.frame, Xform: rp.xform}}
 }
 
-// transform is the accumulated rigid placement.
-func (rp revolvePayload) transform() r3.Transform { return rp.xform }
+// Transform is the accumulated rigid placement.
+func (rp revolvePayload) Transform() r3.Transform { return rp.xform }
 
-// placed re-evaluates the same record under the composed motion.
-func (rp revolvePayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+// Placed re-evaluates the same record under the composed motion.
+func (rp revolvePayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	rp.xform = composed
-	return evalRevolveContext(ctx, d, ref, rp)
+	return placedNode(evalRevolveContext(ctx, d, ref, rp))
 }
 
 // lift is the record rp's sweep basis is built from: the plane frame and the
@@ -604,7 +605,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}
-	body.payload = rp
+	body.n.Payload = rp
 	return body, nil
 }
 
@@ -1238,7 +1239,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}
-	body.payload = rp
+	body.n.Payload = rp
 	return body, nil
 }
 

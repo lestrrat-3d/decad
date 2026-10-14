@@ -16,8 +16,8 @@ import (
 // The shared Intersect admission used by the overlap-area reading stays
 // hole-free; this body-only arm uses the same gates and work cap explicitly.
 func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool, error) {
-	ah, aok := a.payload.(prismPayload)
-	bh, bok := b.payload.(prismPayload)
+	ah, aok := a.n.Payload.(prismPayload)
+	bh, bok := b.n.Payload.(prismPayload)
 	if !aok || !bok {
 		return prismPayload{}, false, nil
 	}

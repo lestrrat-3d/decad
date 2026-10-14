@@ -101,7 +101,7 @@ func movedProfile(t *testing.T, p profileRecord, k, shift, grow float64) (profil
 // carrying the displacement as a whole-section sectionDelta, and evaluates it.
 func displacedRevolve(t *testing.T, ref *Body, shift, grow float64) (*Body, float64) {
 	t.Helper()
-	rp := ref.payload.(revolvePayload)
+	rp := ref.n.Payload.(revolvePayload)
 	k := 1 + revolveSectionScale
 	if shift != 0 || grow != 0 {
 		k = 1

@@ -144,18 +144,19 @@ func (f brepFace) view(xform r3.Transform) prismPayload {
 	return pp
 }
 
-func (bp brepPayload) transform() r3.Transform { return bp.xform }
+func (bp brepPayload) Transform() r3.Transform { return bp.xform }
 
-// placed re-evaluates the record under the composed motion. A reflection is
+// Placed re-evaluates the record under the composed motion. A reflection is
 // read at build time, as prismPayload.reflected() is, so the record itself is
 // unchanged.
-func (bp brepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (bp brepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	bp.xform = composed
-	return evalBrepContext(ctx, d, ref, bp)
+	return placedNode(evalBrepContext(ctx, d, ref, bp))
 }
 
-// axialDelta is the largest level displacement over every face.
-func (bp brepPayload) axialDelta() float64 {
+// AxialDelta is the largest level displacement over every face.
+func (bp brepPayload) AxialDelta() float64 {
 	var out float64
 	for _, f := range bp.faces {
 		out = max(out, f.z0Delta, f.z1Delta)
@@ -694,7 +695,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		return nil, err
 	}
 	bp.loopPatches = bands.geom
-	body.payload = bp
+	body.n.Payload = bp
 	return body, nil
 }
 

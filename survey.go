@@ -405,7 +405,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		results.WallAsked = true
 		out := wallOutcome{}
 		var err error
-		switch pl := b.payload.(type) {
+		switch pl := b.n.Payload.(type) {
 		case prismPayload:
 			reading, readErr := wallsurvey.PrismWall(budget, pl.Profile,
 				survey2d.PrismHeight{Z0: pl.Z0, Z1: pl.Z1, Z0Delta: pl.Z0Delta, Z1Delta: pl.Z1Delta},
@@ -440,7 +440,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			return surveyResults{}, nil, err
 		}
 		results.Wall = out
-		wallDiags := reportvocab.WallDiagnostics[*Body, JointCell](b, b.payload,
+		wallDiags := reportvocab.WallDiagnostics[*Body, JointCell](b, b.n.Payload,
 			reportvocab.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason},
 			cfg.Wall.Tool, cfg.ToolMM)
 		results.WallDiagnostics = diagnosticsFromInternal(wallDiags)
@@ -453,7 +453,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 	if cfg.Pull != nil {
 		results.UndercutAsked = true
 		out := undercutOutcome{}
-		switch pl := b.payload.(type) {
+		switch pl := b.n.Payload.(type) {
 		case prismPayload:
 			out = prismUndercuts(b, pl, *cfg.Pull)
 		case revolvePayload:
@@ -472,7 +472,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			out.reason = surveyPayloadStaged
 		}
 		results.Undercut = out
-		undercutDiags := reportvocab.UndercutDiagnostics[*Body, *Face, JointCell](b, b.payload,
+		undercutDiags := reportvocab.UndercutDiagnostics[*Body, *Face, JointCell](b, b.n.Payload,
 			reportvocab.UndercutSurvey[*Face]{Faces: out.faces, OK: out.ok,
 				Undecided: out.undecided, Reason: out.reason})
 		results.UndercutDiagnostics = diagnosticsFromInternal(undercutDiags)
@@ -486,7 +486,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		results.RadiusAsked = true
 		out := radiusOutcome{}
 		ok := false
-		switch pl := b.payload.(type) {
+		switch pl := b.n.Payload.(type) {
 		case prismPayload:
 			reading := radiussurvey.Prism(pl.Profile, pl.SectionDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
@@ -507,7 +507,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			out.reason = surveyPayloadStaged
 		}
 		results.Radius = out
-		radiusDiags := reportvocab.RadiusDiagnostics[*Body, JointCell](b, b.payload,
+		radiusDiags := reportvocab.RadiusDiagnostics[*Body, JointCell](b, b.n.Payload,
 			reportvocab.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason}, ok)
 		results.RadiusDiagnostics = diagnosticsFromInternal(radiusDiags)
 		diags = append(diags, results.RadiusDiagnostics...)

@@ -86,37 +86,37 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		refusesEntry(t)
 	})
 	t.Run("changed body facet", func(t *testing.T) {
-		original := trimmed.payload
+		original := trimmed.n.Payload
 		changed := original.(facetedPayload)
 		changed.verts = slices.Clone(changed.verts)
 		changed.verts[0].X += 1
-		trimmed.payload = changed
-		defer func() { trimmed.payload = original }()
+		trimmed.n.Payload = changed
+		defer func() { trimmed.n.Payload = original }()
 		refusesEntry(t)
 	})
 	t.Run("changed body facet after context", func(t *testing.T) {
-		original := trimmed.payload
+		original := trimmed.n.Payload
 		changed := original.(facetedPayload)
 		changed.verts = slices.Clone(changed.verts)
 		changed.verts[0].X += 1
-		trimmed.payload = changed
-		defer func() { trimmed.payload = original }()
+		trimmed.n.Payload = changed
+		defer func() { trimmed.n.Payload = original }()
 		refuses(t, classifier)
 	})
 	t.Run("changed body bound after context", func(t *testing.T) {
-		original := trimmed.payload
+		original := trimmed.n.Payload
 		changed := original.(facetedPayload)
 		changed.meshBound = math.Nextafter(changed.meshBound, 0)
-		trimmed.payload = changed
-		defer func() { trimmed.payload = original }()
+		trimmed.n.Payload = changed
+		defer func() { trimmed.n.Payload = original }()
 		refuses(t, classifier)
 	})
 	t.Run("changed body volume proof after context", func(t *testing.T) {
-		original := trimmed.payload
+		original := trimmed.n.Payload
 		changed := original.(facetedPayload)
 		changed.volSymDiff = math.Nextafter(changed.volSymDiff, math.Inf(1))
-		trimmed.payload = changed
-		defer func() { trimmed.payload = original }()
+		trimmed.n.Payload = changed
+		defer func() { trimmed.n.Payload = original }()
 		refuses(t, classifier)
 	})
 	t.Run("changed owned tool facet after context", func(t *testing.T) {

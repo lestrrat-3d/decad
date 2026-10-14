@@ -58,15 +58,15 @@ func internalCrossDrilled(t *testing.T) (*Document, *Body) {
 
 func requireMeshPathResult(t *testing.T, body *Body) {
 	t.Helper()
-	_, faceted := body.payload.(facetedPayload)
-	require.True(t, faceted, `the pair took the mesh path, got %T`, body.payload)
+	_, faceted := body.n.Payload.(facetedPayload)
+	require.True(t, faceted, `the pair took the mesh path, got %T`, body.n.Payload)
 }
 
 func TestClassBCutCrossDrilledBox(t *testing.T) {
 	t.Parallel()
 	doc, result := internalCrossDrilled(t)
-	bp, ok := result.payload.(brepPayload)
-	require.True(t, ok, `a cross-drilled box builds a brep body, got %T`, result.payload)
+	bp, ok := result.n.Payload.(brepPayload)
+	require.True(t, ok, `a cross-drilled box builds a brep body, got %T`, result.n.Payload)
 	require.Len(t, doc.Bodies(), 1, `both operands are consumed`)
 	requireClosedTopology(t, result)
 	require.Len(t, result.Faces(), 7)
@@ -131,8 +131,8 @@ func TestClassBCutCrossSlot(t *testing.T) {
 	})
 	result, err := Cut(t.Context(), box, slot)
 	require.NoError(t, err)
-	_, ok := result.payload.(brepPayload)
-	require.True(t, ok, `a cross slot builds a brep body, got %T`, result.payload)
+	_, ok := result.n.Payload.(brepPayload)
+	require.True(t, ok, `a cross slot builds a brep body, got %T`, result.n.Payload)
 	requireClosedTopology(t, result)
 	// B1: 16000 − 10·10·20, Exact, and every face planar.
 	require.Len(t, result.Faces(), 10)
@@ -177,8 +177,8 @@ func TestClassBRootedCutKeepsThePrismsConvexity(t *testing.T) {
 	})
 	result, err := Cut(t.Context(), l, drill)
 	require.NoError(t, err)
-	bp, ok := result.payload.(brepPayload)
-	require.True(t, ok, `got %T`, result.payload)
+	bp, ok := result.n.Payload.(brepPayload)
+	require.True(t, ok, `got %T`, result.n.Payload)
 	requireClosedTopology(t, result)
 	// 24000 − 9π·8: the drill reaches y = 12 inside the arm x 20..40.
 	lo, hi := piEnclosed(big.NewRat(24000, 1), big.NewRat(-72, 1))
@@ -230,8 +230,8 @@ func TestClassBCutExactOffsetPlane(t *testing.T) {
 				s.Fix(c)
 				s.CreateCircle(c, 3)
 			})
-			x := box.payload.(prismPayload)
-			_, admitted, err := admitClassBPair(t.Context(), box.payload, drill.payload, box.payload.transform(), 0)
+			x := box.n.Payload.(prismPayload)
+			_, admitted, err := admitClassBPair(t.Context(), box.n.Payload, drill.n.Payload, box.n.Payload.Transform(), 0)
 			require.NoError(t, err)
 			require.Equal(t, tc.brep, admitted)
 			if !tc.brep {
@@ -244,7 +244,7 @@ func TestClassBCutExactOffsetPlane(t *testing.T) {
 				requireMeshPathResult(t, result)
 				return
 			}
-			bp, ok := result.payload.(brepPayload)
+			bp, ok := result.n.Payload.(brepPayload)
 			require.True(t, ok)
 			require.Equal(t, x.Frame.Origin(), bp.faces[len(bp.faces)-1].frame.Origin(), `the tool's walls share the box's origin`)
 			lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(-180, 1))
@@ -283,7 +283,7 @@ func TestClassBCutGateMissesTakeMeshPath(t *testing.T) {
 		{name: "a hair from perpendicular", tool: func(t *testing.T, doc *Document) *Body {
 			tilt := 1e-12
 			body := toolOn(t, doc, frameOf(t, r3.NewVec(20, 10, 10), r3.NewVec(1, 0, 0), r3.NewVec(0, tilt, 1)), 3)
-			n := body.payload.(prismPayload).Frame.N()
+			n := body.n.Payload.(prismPayload).Frame.N()
 			require.NotZero(t, n.Dot(r3.NewVec(0, 0, 1)), `the fixture's normals are not exactly perpendicular`)
 			return body
 		}},
@@ -354,9 +354,9 @@ func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
 	doc := New()
 	box := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
 	drill := internalDrillAlongY(t, doc, 20, 10, 3)
-	placement := box.payload.transform()
+	placement := box.n.Payload.Transform()
 
-	direct, ok, err := classBOfPayloads(t.Context(), meshbool.OpCut, box.payload, drill.payload, placement, 0)
+	direct, ok, err := classBOfPayloads(t.Context(), meshbool.OpCut, box.n.Payload, drill.n.Payload, placement, 0)
 	require.NoError(t, err)
 	require.True(t, ok)
 	viaBodies, ok, err := tryClassB(t.Context(), meshbool.OpCut, box, drill)
@@ -379,7 +379,7 @@ func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
 
 	shift, err := r3.Translation(r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
-	_, ok, err = classBOfPayloads(t.Context(), meshbool.OpCut, box.payload, drill.payload, shift, 0)
+	_, ok, err = classBOfPayloads(t.Context(), meshbool.OpCut, box.n.Payload, drill.n.Payload, shift, 0)
 	require.NoError(t, err)
 	require.False(t, ok)
 

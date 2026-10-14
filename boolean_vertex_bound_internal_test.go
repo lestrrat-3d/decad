@@ -151,7 +151,7 @@ func unionVertexBoundFixture(t *testing.T, a, b *Body) vertexBoundFixture {
 	}
 	u, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
-	result, ok := u.payload.(facetedPayload)
+	result, ok := u.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Len(t, result.vertexBound, len(result.verts))
 	held := map[r3.Vec]int{}
@@ -428,6 +428,6 @@ func TestHeldGateCertifiesEachUnionsRimCeiling(t *testing.T) {
 		unions++
 	})
 	require.Equal(t, 20, unions)
-	_, ok := body.payload.(facetedPayload)
+	_, ok := body.n.Payload.(facetedPayload)
 	require.True(t, ok)
 }

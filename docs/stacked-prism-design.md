@@ -54,7 +54,7 @@ There is exactly one interface between each pair of adjacent slabs.
 
 Material is the union of every slab's regions swept over that slab's interval.
 The payload is evaluator-private, re-evaluates under `Transform` through the
-same `featurePayload` interface every other payload implements, and carries the
+same `topo.Payload` interface every other payload implements, and carries the
 accumulated placement in `xform` exactly as `prismPayload` does.
 
 `sectionDelta` is one bound for the whole payload: the largest section
@@ -253,8 +253,8 @@ needed.
 | `Area` | the first region's area (bottom cap) + the last region's area (top cap) + each exposed record's area (`momentinput.LoopEnclosedArea` of its outer loop) + `Σ_columns perimeter · height` |
 | `Centroid` | `Σ_k m_k · c_k / Σ_k m_k`, with `m_k = A_k · h_k` and `c_k` the region's centroid lifted to the slab's bounded midpoint through `prismPayload.Point`; taken component by component in bounded arithmetic, each `c_k` component carrying `prismrecord.Payload.PointBound`'s radius as its bound, and the three component bounds folded into one radius through `radius3D`. `prismrecord.Payload.CentroidGeometryBound`, the largest over the outer runs, plus `sectionDelta`, caps the result as `evalPrism`'s does |
 | `Bounds` | the union of `prismBoundsContext` over each outer run: one outer-only prism per run of slabs sharing an outer record, over that run's interval with its end levels' displacements and the payload's `sectionDelta`, the largest run bound covering the union. A cut-built stack is one run, the outer-only prism on the full interval |
-| `extentAlong` | the extreme over every outer run's reading |
-| `axialDelta` | the largest level displacement over every slab |
+| `ExtentAlong` | the extreme over every outer run's reading |
+| `AxialDelta` | the largest level displacement over every slab |
 
 A column whose plan states a displacement (a cup's offset loop, §2.4) builds
 its walls with that displacement added to `sectionDelta`, so its vertices,
@@ -333,8 +333,8 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | `Cut` by a prism-group tool | `docs/general-boolean-design.md` §3 A5 on a prism target: one arrangement for every lump |
 | `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |
 | `Tessellate`, `export.STL` / `OBJ` / `STEP` | §5; a body with one shell meets STEP's one-shell rule, and a closed shell's void shell is STEP's refusal |
-| `ThroughAll` / `ThroughAllSide` stops | `extentAlong` (§4), `ErrUnsupported` at `sectionDelta > 0` as for a prism |
-| `ToFace` stops | read the selected face's own `axialDelta` and cap record |
+| `ThroughAll` / `ThroughAllSide` stops | `ExtentAlong` (§4), `ErrUnsupported` at `sectionDelta > 0` as for a prism |
+| `ToFace` stops | read the selected face's own `AxialDelta` and cap record |
 | `Verify` structural audit | every edge bounds two faces by construction (§3) |
 | `Verify` tolerance gate | `gateWitnessPrisms` reads every outer run's prism over its own interval, whose wall stations are all points of the body, and shrinks their maximum by `sectionDelta + axialDelta` plus the widest station gap (`docs/verification-design.md` §3) |
 | `Verify` wall survey | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (modify-reach Table DX, DX9); a pocket floor is a wall the 2D spanning-disk proof does not read |

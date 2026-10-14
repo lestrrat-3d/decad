@@ -34,7 +34,7 @@ func (b sourceBoxContactProof) axisBox() box.AxisBox {
 // eight corners of a source-certified rectangle through its recorded frame,
 // accumulated placement, and query pose with exact dyadic operations.
 func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || pp.SurfaceResult ||
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		!box.RectangularProfile(pp.Profile) ||

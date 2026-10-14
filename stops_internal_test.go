@@ -25,14 +25,13 @@ import (
 // the scale-relative contact tolerance itself.
 type stubExtent struct{ hi, bound float64 }
 
-func (stubExtent) transform() r3.Transform { return r3.Identity() }
+func (stubExtent) Transform() r3.Transform { return r3.Identity() }
 
-func (stubExtent) placed(context.Context, *Document, producerID, r3.Transform) (*Body, error) {
+func (stubExtent) Placed(context.Context, topo.Env, r3.Transform) (*topo.Body, error) {
 	return nil, ErrUnsupported
 }
 
-//nolint:unparam // the error result is the directionalExtent interface's, and this stub never fails.
-func (s stubExtent) extentAlong(r3.Vec) (float64, float64, float64, error) {
+func (s stubExtent) ExtentAlong(r3.Vec) (float64, float64, float64, error) {
 	return -s.hi, s.hi, s.bound, nil
 }
 
@@ -48,8 +47,7 @@ func TestResolveThroughAllDecidesInPathOutsideDisplacement(t *testing.T) {
 	doc := func(hi, bound float64) *Document {
 		return bornDocument(&Document{n: topo.Document{
 			LiveSet: []*topo.Body{bodyNode(bornBody(&Body{
-				n:       topo.Body{Origin: provenance.Ref{Producer: 1}},
-				payload: stubExtent{hi: hi, bound: bound},
+				n: topo.Body{Origin: provenance.Ref{Producer: 1}, Payload: stubExtent{hi: hi, bound: bound}},
 			}))},
 		}})
 	}
@@ -84,14 +82,14 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 	profile := profileRecord{Outer: synthRectLoop(0, 0, 1, 1)}
 	stopBody := func(ref producerID, z1, z1Delta float64) *Body {
 		return bornBody(&Body{
-			n: topo.Body{Origin: provenance.Ref{Producer: ref}},
-			payload: prismPayload{Payload: prismrecord.Payload{
+			n: topo.Body{Origin: provenance.Ref{Producer: ref}, Payload: prismPayload{Payload: prismrecord.Payload{
 				Profile: profile,
 				Frame:   frame,
 				Z1:      z1,
 				Z1Delta: z1Delta,
 				Xform:   r3.Identity(),
 			}},
+			},
 		})
 	}
 

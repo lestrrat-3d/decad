@@ -122,7 +122,7 @@ func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error) {
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
-	if b.payload == nil {
+	if b.n.Payload == nil {
 		return nil, fmt.Errorf(`%w: PatchEdges requires a body this evaluator built (%s)`, ErrUnsupported, patchRowNoPayload)
 	}
 	if err := ctx.Err(); err != nil {
@@ -171,7 +171,7 @@ type bodyPatchChain struct {
 	edges []*Edge
 	// axialBound and hasAxialBound are the proven axial displacement gate 3's
 	// LEVEL arm (provePatchChainPlaneLevel) admitted this chain under —
-	// stamped onto the new face's own axialDelta exactly as prism_build.go
+	// stamped onto the new face's own AxialDelta exactly as prism_build.go
 	// stamps a prism cap's (buildPatchFace, docs/surface-design.md §5.2).
 	// hasAxialBound stays false, and axialBound zero, whenever gate 3 instead
 	// admitted the chain through its existing exact (zero-bound) arm.
@@ -190,8 +190,8 @@ type bodyPatchChain struct {
 // faces, its already-proven Bounds, and each chain's proven plane — never a
 // built topology (unstitch.go's "held-B-rep-under-a-rigid-motion" idea,
 // widened here from one face to a whole face set plus the faces the patch
-// mints on top of it). placed() replays evalBodyPatchContext from these same
-// values under the composed transform, exactly as unstitchPayload.placed
+// mints on top of it). Placed() replays evalBodyPatchContext from these same
+// values under the composed transform, exactly as unstitchPayload.Placed
 // replays evalUnstitchFaceContext.
 type bodyPatchPayload struct {
 	xform r3.Transform
@@ -212,10 +212,11 @@ type bodyPatchPayload struct {
 	chains []bodyPatchChain
 }
 
-func (pp bodyPatchPayload) transform() r3.Transform { return pp.xform }
+func (pp bodyPatchPayload) Transform() r3.Transform { return pp.xform }
 
-func (pp bodyPatchPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
-	return evalBodyPatchContext(ctx, d, ref, pp.faces, pp.bounds, pp.chains, composed)
+func (pp bodyPatchPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
+	return placedNode(evalBodyPatchContext(ctx, d, ref, pp.faces, pp.bounds, pp.chains, composed))
 }
 
 // buildPatchChains runs gates 1-3 against the selector's resolved edges: gate
@@ -278,7 +279,7 @@ func renderCoord3(p r3.Vec) string {
 // nonzero bound, and never reads a coordinate, a residual or a bound
 // magnitude (docs/surface-design.md §5.2's own two-arm amendment). Its
 // return states what the level arm admitted: the levelToken and axialBound
-// are what buildPatchFace reads for the new face's own plane and axialDelta,
+// are what buildPatchFace reads for the new face's own plane and AxialDelta,
 // mirroring what a prism cap already carries; a chain the exact arm admits
 // instead publishes the zero token and a zero axialBound, unchanged.
 func provePatchChainPlane(edges []*Edge) (levelToken, float64, bool, error) {
@@ -303,7 +304,7 @@ func provePatchChainPlane(edges []*Edge) (levelToken, float64, bool, error) {
 // (docs/surface-design.md §5.2), so nothing here reads a position or a
 // bound to decide admission; the returned token and bound are read back off
 // the chain's own vertices only to state what the new face's own plane and
-// axialDelta must publish, never to decide whether this arm admits. ok is
+// AxialDelta must publish, never to decide whether this arm admits. ok is
 // false whenever the chain holds no vertex, any vertex or edge carries no
 // level (the zero value, "no certificate"), or not every one of them shares
 // the same id.
@@ -558,7 +559,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 		return nil, err
 	}
 
-	body.payload = bodyPatchPayload{xform: xform, delta: delta, faces: srcFaces, bounds: srcBounds, chains: chains}
+	body.n.Payload = bodyPatchPayload{xform: xform, delta: delta, faces: srcFaces, bounds: srcBounds, chains: chains}
 	return body, nil
 }
 
@@ -580,10 +581,10 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 // attached, so the plain per-pointer cache is the whole of what sharing
 // needs here.
 //
-// Each copy carries its source face's own axialDelta, hasAxialDelta and
+// Each copy carries its source face's own AxialDelta, hasAxialDelta and
 // normalBound, on unstitch.go's copyFaceUnderContext's terms: the copy holds
 // the identical surface and tag, so both figures are as true of it as of
-// the source. axialDelta widens by delta under a non-identity placement, and
+// the source. AxialDelta widens by delta under a non-identity placement, and
 // a placed copy of a face whose normalBound is nonzero refuses with
 // [ErrUnsupported], since no dimensionless term bounds the placement's own
 // rotation of the tag frame. A revolve face's denoted surface (topo.Face.Denoted)
@@ -760,7 +761,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		// A placement's own rounding (proofbound.RigidRoundAllow) displaces the token's
 		// origin exactly as it displaces every other placed coordinate this
 		// evaluator publishes (copyPatchFacesUnder's own vertex/edge
-		// widening), so it folds into the SAME axialDelta the token's own
+		// widening), so it folds into the SAME AxialDelta the token's own
 		// bound already states.
 		if delta > 0 {
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
@@ -997,11 +998,11 @@ func planeFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
 // function already reads an operand's source body from.
 func bodyPatchPayloadProvesSimple(ctx context.Context, pp bodyPatchPayload) bool {
 	bodies := stitchOperandBodies(pp.faces)
-	if len(bodies) != 1 || bodies[0] == nil || bodies[0].payload == nil {
+	if len(bodies) != 1 || bodies[0] == nil || bodies[0].n.Payload == nil {
 		return false
 	}
 	receiver := bodies[0]
-	if !payloadProvesSimple(ctx, receiver.payload) {
+	if !payloadProvesSimple(ctx, receiver.n.Payload) {
 		return false
 	}
 

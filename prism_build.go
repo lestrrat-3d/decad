@@ -279,7 +279,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// later rigid re-evaluation read it back; the record itself is unchanged, so
 	// the payload the body carries denotes exactly what it did before.
 	pp.Walks = pw
-	body.payload = pp
+	body.n.Payload = pp
 	return body, nil
 }
 

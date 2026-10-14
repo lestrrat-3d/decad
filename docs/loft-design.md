@@ -1505,7 +1505,7 @@ paragraph names and §6's crossing audit on the rounded vertex set. §5's
 whole-shell orientation step re-decides the sign from the placed triangle
 set on its own, so a mirror
 flips `reversed` and needs no separate winding-flip case — unlike
-`facetedPayload.placed`'s `IsReflection()` handling, which moves a held mesh
+`facetedPayload.Placed`'s `IsReflection()` handling, which moves a held mesh
 rather than re-lifting one.
 
 ## 8. Mass properties — derived, not asserted

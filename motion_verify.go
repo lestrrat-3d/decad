@@ -70,7 +70,7 @@ func (d *Document) resolveMovers(moving []*Body) error {
 			return fmt.Errorf(`%w: a body is listed twice in the moving set`, ErrDegenerate)
 		}
 		seen[b] = struct{}{}
-		if b.payload == nil {
+		if b.n.Payload == nil {
 			return fmt.Errorf(`%w: this evaluator cannot move a body it did not build`, ErrUnsupported)
 		}
 	}
@@ -410,11 +410,11 @@ func (r *motionRun) readBodies(groups [][]*Body) {
 		mv := &r.movers[i]
 		mv.r0 = moverRecordRadius(r.ctx, mv.body)
 		mv.heldRadius = math.Inf(1)
-		if fp, ok := mv.body.payload.(facetedPayload); ok {
+		if fp, ok := mv.body.n.Payload.(facetedPayload); ok {
 			mv.heldRadius = motionbound.HeldRadiusUpper(fp.verts, fp.meshBound)
 		}
 		mv.area = proofbound.AbsSumUpper(mv.body.n.Area.Value.Base(), mv.body.n.Area.Bound.Base())
-		mv.sigma = motionbound.BasisSigmaLower(mv.body.payload.transform())
+		mv.sigma = motionbound.BasisSigmaLower(mv.body.n.Payload.Transform())
 	}
 }
 
@@ -961,11 +961,11 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 		placed[i] = r.constPlaced[i]
 		return placed[i], nil
 	}
-	if fp, ok := mv.body.payload.(facetedPayload); ok && fp.exactPlaced {
+	if fp, ok := mv.body.n.Payload.(facetedPayload); ok && fp.exactPlaced {
 		return nil, fmt.Errorf("%w: motion verification cannot re-place a body that descends from an "+
 			"exact-rotation copy (WithCopyRotation), because its pose has no deviation proof", ErrUnsupported)
 	}
-	placement := mv.body.payload.transform()
+	placement := mv.body.n.Payload.Transform()
 	composed, err := placement.Then(group.pose)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: composing the pose onto a moving body's placement failed: %w`, ErrNotFinite, err)
@@ -981,7 +981,7 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 		transient = r.poseBodies[i].get(key)
 	}
 	if transient == nil {
-		transient, err = mv.body.payload.placed(r.ctx, r.transient, transientProducer, composed)
+		transient, err = placePayload(r.ctx, mv.body.n.Payload, r.transient, transientProducer, composed)
 		if err != nil {
 			return nil, err
 		}
@@ -992,7 +992,7 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 		}
 	}
 	var delta r3.Transform
-	_, faceted := mv.body.payload.(facetedPayload)
+	_, faceted := mv.body.n.Payload.(facetedPayload)
 	if faceted {
 		delta, err = facetedPlacementDelta(placement, composed)
 		if err != nil {

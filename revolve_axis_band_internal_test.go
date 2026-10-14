@@ -294,7 +294,7 @@ func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
 	body, err := Revolve(t.Context(), doc, s, profiles[0], tiltedAxis, FullRevolution{})
 	require.NoError(t, err)
 
-	rp, ok := body.payload.(revolvePayload)
+	rp, ok := body.n.Payload.(revolvePayload)
 	require.True(t, ok)
 	require.Positive(t, rp.ax.RadialAdmitAllow,
 		"this fixture must actually exercise the charged (survStraddle) path, not the strict one")

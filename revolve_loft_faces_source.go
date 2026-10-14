@@ -56,7 +56,7 @@ func certifyRevolveLoftFacesSource(ctx context.Context, blank, tooth *Body) (
 	if ctx == nil || blank == nil || tooth == nil {
 		return nil, false, nil
 	}
-	p, ok := tooth.payload.(facetedPayload)
+	p, ok := tooth.n.Payload.(facetedPayload)
 	if !ok || p.xform != r3.Identity() || p.loftFacesTrim == nil ||
 		!revolveLoftFacesTrimCurrent(tooth, p.loftFacesTrim) {
 		return nil, false, nil
@@ -127,7 +127,7 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 	if tooth == nil {
 		return false
 	}
-	p, ok := tooth.payload.(facetedPayload)
+	p, ok := tooth.n.Payload.(facetedPayload)
 	if !ok || p.loftFacesTrim != trim {
 		return false
 	}
@@ -291,7 +291,7 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		return nil, false, nil
 	}
 	proof.sourceRefs = refs
-	p, _ := tooth.payload.(facetedPayload)
+	p, _ := tooth.n.Payload.(facetedPayload)
 	faces := tooth.Faces()
 	for i := range proof.crossings {
 		crossing := &proof.crossings[i]

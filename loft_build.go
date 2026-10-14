@@ -32,7 +32,7 @@ import (
 // loft_stations.go places the chord stations and proves their departure, and
 // loft_topology.go assembles the flat-triangle solid (§5) and its topology.
 //
-// loftPayload.placed and its delta field are §12 PR 2a (Table D, D7): a
+// loftPayload.Placed and its delta field are §12 PR 2a (Table D, D7): a
 // placement re-lifts both records under the composed motion and re-runs
 // §5-§8 from scratch — every record-only Table S gate (S1-S8) and S13's
 // coordinate-range gate, plus the placement-only S12, while S9-S11 and S4's
@@ -239,30 +239,31 @@ func (pl loftPayload) rewriteWorkLimit(p uint64) uint64 {
 	return limit
 }
 
-// transform is the accumulated rigid placement.
-func (pl loftPayload) transform() r3.Transform { return pl.xform }
+// Transform is the accumulated rigid placement.
+func (pl loftPayload) Transform() r3.Transform { return pl.xform }
 
-// axialDelta reports the displacement of every held loft vertex. Its planar
+// AxialDelta reports the displacement of every held loft vertex. Its planar
 // caps are built from those vertices, so a ToFace stop against either cap
 // inherits this bound.
-func (pl loftPayload) axialDelta() float64 { return pl.delta }
+func (pl loftPayload) AxialDelta() float64 { return pl.delta }
 
-// placed re-evaluates the same two records under the composed motion
+// Placed re-evaluates the same two records under the composed motion
 // (docs/loft-design.md §7, §12 PR 2a): it re-lifts every vertex from the
 // record under the FULL composed transform rather than moving the held mesh
 // incrementally, so delta does not accumulate across repeated placements —
 // one rounding, not one per placement, an advantage over
-// facetedPayload.placed's move-the-held-mesh path (boolean_body.go). It is a
+// facetedPayload.Placed's move-the-held-mesh path (boolean_body.go). It is a
 // re-evaluation path: no moments preflight has run on either record within
 // this call, so the build opens two fresh counters, one per record, exactly
-// as prismPayload.placed opens its own (extrude.go). §5's whole-shell
+// as prismPayload.Placed opens its own (extrude.go). §5's whole-shell
 // orientation step re-decides the sign from the placed triangle set on its
 // own, so a mirror flips `reversed` with no separate winding-flip case
 // needed here. next := pl carries surfaceResult over unchanged — only the
 // triangle set and the proof composed from it are cleared below — so a
 // placed, duplicated or placed-copied sheet reproduces the sheet with no
 // further code (docs/surface-design.md §4.2).
-func (pl loftPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (pl loftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	next := pl
 	next.xform = composed
 	next.verts, next.tris, next.walls = nil, nil, 0
@@ -273,7 +274,7 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref producerID, c
 	next.capStartCount, next.cell, next.side, next.segment = 0, nil, nil, nil
 	next.twistAreaCells = nil
 	next.proof = loftmesh.MeshProof{}
-	return evalLoft(ctx, d, ref, next, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	return placedNode(evalLoft(ctx, d, ref, next, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 }
 
 // validateLoftBodyMeasurements is evalLoft's own finiteness gate (design O2);
@@ -597,7 +598,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// chording commits.
 	pl.sectionDelta = sectionDelta
 	pl.chorded = loftmesh.IsChorded(pairs, sectionDelta, sectionMatchedDelta)
-	body.payload = pl
+	body.n.Payload = pl
 	return body, nil
 }
 

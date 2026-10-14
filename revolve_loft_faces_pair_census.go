@@ -64,7 +64,7 @@ func revolveLoftFacesCensus(ctx context.Context,
 		len(blankFaces)*len(trimmedFaces) > 1<<16 {
 		return nil, false, nil
 	}
-	payload, ok := proof.tooth.payload.(facetedPayload)
+	payload, ok := proof.tooth.n.Payload.(facetedPayload)
 	if !ok || payload.loftFacesTrim != proof.trim ||
 		!revolveLoftFacesTrimCurrent(proof.tooth, proof.trim) {
 		return nil, false, nil

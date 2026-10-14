@@ -16,7 +16,7 @@ func TestSpiralTangentRecordCurrent(t *testing.T) {
 	c := buildTangentTrimChain(t)
 	trimBody, err := Intersect(t.Context(), c.cut, c.heelTool)
 	require.NoError(t, err)
-	trim := trimBody.payload.(facetedPayload).loftFacesTrim
+	trim := trimBody.n.Payload.(facetedPayload).loftFacesTrim
 	require.NotNil(t, trim)
 	require.NotNil(t, trim.tangent)
 	require.True(t, spiralTangentRecordCurrent(trim), "the real record is current")

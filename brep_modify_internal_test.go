@@ -43,7 +43,7 @@ func requireBrepModifyRefuses(t *testing.T, body *Body, want string) {
 // section displacement the record handed to the brep route carries.
 func requireSB1Names(t *testing.T, body *Body) {
 	t.Helper()
-	bp, _, ok, err := brepModifyRecord(t.Context(), body.payload, "fillets")
+	bp, _, ok, err := brepModifyRecord(t.Context(), body.n.Payload, "fillets")
 	require.NoError(t, err)
 	require.True(t, ok)
 	delta := bp.sectionDelta()
@@ -85,8 +85,8 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 	t.Run("stacked pocket", func(t *testing.T) {
 		t.Parallel()
 		_, pocket := internalPocket(t)
-		sp, ok := pocket.payload.(stackedPrismPayload)
-		require.True(t, ok, "the pocket is a stacked prism, got %T", pocket.payload)
+		sp, ok := pocket.n.Payload.(stackedPrismPayload)
+		require.True(t, ok, "the pocket is a stacked prism, got %T", pocket.n.Payload)
 		require.Zero(t, sp.sectionDelta)
 		refuses(t, pocket, "brep-modify SB10", "modify-general SG3")
 	})
@@ -117,8 +117,8 @@ func TestBrepModifySB1RefusesADisplacedReceiver(t *testing.T) {
 		key := internalBoxBodyAtZ(t, doc, -2, -1, 2, 41, 0, 12)
 		keyway, err := Cut(t.Context(), rod, key)
 		require.NoError(t, err)
-		_, ok := keyway.payload.(brepPayload)
-		require.True(t, ok, "the keyway is a brep, got %T", keyway.payload)
+		_, ok := keyway.n.Payload.(brepPayload)
+		require.True(t, ok, "the keyway is a brep, got %T", keyway.n.Payload)
 		requireSB1Names(t, keyway)
 	})
 	t.Run("crossing round boss", func(t *testing.T) {
@@ -128,8 +128,8 @@ func TestBrepModifySB1RefusesADisplacedReceiver(t *testing.T) {
 		plate, boss := internalBossOnPlate(t, 18, 10, 15)
 		union, err := Union(t.Context(), plate, boss)
 		require.NoError(t, err)
-		_, ok := union.payload.(brepPayload)
-		require.True(t, ok, "the crossing boss union is a brep, got %T", union.payload)
+		_, ok := union.n.Payload.(brepPayload)
+		require.True(t, ok, "the crossing boss union is a brep, got %T", union.n.Payload)
 		requireSB1Names(t, union)
 	})
 	t.Run("stacked placed boss", func(t *testing.T) {
@@ -145,8 +145,8 @@ func TestBrepModifySB1RefusesADisplacedReceiver(t *testing.T) {
 		require.NoError(t, err)
 		union, err := Union(t.Context(), plate, boss)
 		require.NoError(t, err)
-		sp, ok := union.payload.(stackedPrismPayload)
-		require.True(t, ok, "the union is a stacked prism, got %T", union.payload)
+		sp, ok := union.n.Payload.(stackedPrismPayload)
+		require.True(t, ok, "the union is a stacked prism, got %T", union.n.Payload)
 		require.Positive(t, sp.sectionDelta)
 		requireSB1Names(t, union)
 	})

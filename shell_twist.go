@@ -54,7 +54,7 @@ func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 		if proofErr != nil {
 			return nil, proofErr
 		}
-		facets, ok := out.payload.(facetedPayload)
+		facets, ok := out.n.Payload.(facetedPayload)
 		if !ok {
 			return nil, fmt.Errorf(`%w: twisted shell lost its held cup`, ErrUnsupported)
 		}
@@ -65,7 +65,7 @@ func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 		facets.meshBound = proofbound.AbsSumUpper(facets.meshBound, gap.Boundary)
 		facets.volSymDiff = proofbound.AbsSumUpper(facets.volSymDiff, gap.Volume)
 		facets.areaSlack = proofbound.AbsSumUpper(facets.areaSlack, gap.Area)
-		out, err = facets.placed(ctx, documentHandle(b.n.Doc), ref, p.xform)
+		out, err = placePayload(ctx, facets, documentHandle(b.n.Doc), ref, p.xform)
 		if err != nil {
 			return nil, err
 		}

@@ -57,12 +57,12 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 	if !ok {
 		return nil, fmt.Errorf("%w: combined source has no first-tooth role table", ErrUnsupported)
 	}
-	firstPart, ok := first.payload.(facetedPayload)
+	firstPart, ok := first.n.Payload.(facetedPayload)
 	if !ok {
 		return nil, fmt.Errorf("%w: first spiral tooth lost its faceted source", ErrUnsupported)
 	}
 	allFaces := combined.Faces()
-	combinedPart, ok := combined.payload.(facetedPayload)
+	combinedPart, ok := combined.n.Payload.(facetedPayload)
 	if !ok {
 		return nil, fmt.Errorf("%w: combined spiral tool lost its faceted source", ErrUnsupported)
 	}
@@ -71,7 +71,7 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 		short: short, groups: make([]map[int]int, len(source.tools))}
 	start := 0
 	for copyIndex, tool := range source.tools {
-		part, ok := tool.payload.(facetedPayload)
+		part, ok := tool.n.Payload.(facetedPayload)
 		if !ok {
 			return nil, fmt.Errorf("%w: spiral copy lost its faceted source", ErrUnsupported)
 		}
@@ -234,7 +234,7 @@ func spiralInverseHeldResult(ctx context.Context, blankHeld *meshbool.BoolMesh,
 	first *Body, held *meshbool.StitchedMesh, move r3.Transform, rec *exactrotation.Rotation) (
 	[]r3.Vec, []float64, float64, float64, bool,
 ) {
-	firstPart, ok := first.payload.(facetedPayload)
+	firstPart, ok := first.n.Payload.(facetedPayload)
 	if !ok {
 		return nil, nil, 0, 0, false
 	}
@@ -246,7 +246,7 @@ func spiralInverseHeldResult(ctx context.Context, blankHeld *meshbool.BoolMesh,
 // charges are summed before the ordinary mesh Boolean can consume them.
 func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	blank, combined *Body, original *Mesh, pairTol float64) (*Mesh, *spiralCombineSource, error) {
-	p, ok := combined.payload.(facetedPayload)
+	p, ok := combined.n.Payload.(facetedPayload)
 	if !ok || p.spiralTools == nil || op != meshbool.OpUnion {
 		return original, nil, nil
 	}
@@ -324,7 +324,7 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 	source *spiralCombineSource) (*Body, error) {
 	meta := &spiralCombinedTools{source: source, owner: make(map[*Face]*Face)}
 	p := facetedPayload{xform: r3.Identity(), spiralTools: meta, contactAudited: true}
-	firstPart, ok := source.tools[0].payload.(facetedPayload)
+	firstPart, ok := source.tools[0].n.Payload.(facetedPayload)
 	if !ok {
 		return nil, fmt.Errorf("%w: first spiral tooth lost its faceted source", ErrUnsupported)
 	}
@@ -333,7 +333,7 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		part, ok := tooth.payload.(facetedPayload)
+		part, ok := tooth.n.Payload.(facetedPayload)
 		if !ok || len(part.vertexBound) != len(part.verts) ||
 			len(part.src) != len(part.tris) || len(part.faceOf) != len(part.tris) {
 			return nil, fmt.Errorf("%w: spiral tool has no complete held-mesh proof", ErrUnsupported)
@@ -390,14 +390,14 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	composite, ok := body.payload.(facetedPayload)
+	composite, ok := body.n.Payload.(facetedPayload)
 	if !ok {
 		return nil, fmt.Errorf("%w: combined spiral tool lost its faceted source", ErrBooleanFailed)
 	}
 	faces := body.Faces()
 	triangle := 0
 	for _, tooth := range source.tools {
-		part, ok := tooth.payload.(facetedPayload)
+		part, ok := tooth.n.Payload.(facetedPayload)
 		if !ok {
 			return nil, fmt.Errorf("%w: spiral copy lost its faceted source", ErrBooleanFailed)
 		}

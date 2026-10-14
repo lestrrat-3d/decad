@@ -22,7 +22,7 @@ func positiveBoundFacetedFixture(t *testing.T, reverse bool) (*Document, *Body, 
 	}
 	union, err := Union(t.Context(), base, upper)
 	require.NoError(t, err)
-	pp, ok := union.payload.(facetedPayload)
+	pp, ok := union.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Positive(t, pp.meshBound)
 	require.Positive(t, pp.volSymDiff)
@@ -43,7 +43,7 @@ func TestPositiveBoundFacetedUnionRetainsExactLowerFace(t *testing.T) {
 func positiveBoundFacetedUnionRetainsExactLowerFace(t *testing.T, reverse bool) {
 	t.Helper()
 	doc, floor, body := positiveBoundFacetedFixture(t, reverse)
-	pp := body.payload.(facetedPayload)
+	pp := body.n.Payload.(facetedPayload)
 	require.NotNil(t, pp.lowerSupport)
 	mass, err := body.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(.001))
 	require.NoError(t, err)
@@ -63,14 +63,14 @@ func positiveBoundFacetedUnionRetainsExactLowerFace(t *testing.T, reverse bool) 
 	require.NoError(t, err)
 	placed, err := Transform(t.Context(), body, shift)
 	require.NoError(t, err)
-	require.Nil(t, placed.payload.(facetedPayload).lowerSupport)
+	require.Nil(t, placed.n.Payload.(facetedPayload).lowerSupport)
 	uncertain, err := doc.ContactPair(t.Context(), floor, placed, r3.Identity(), r3.Identity(),
 		ContactRequest{PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)})
 	require.NoError(t, err)
 	// Without the exact support certificate the held mesh decides the pair,
 	// and its mesh bound turns the held touch into the §10.4 band.
 	require.Equal(t, ContactBand, uncertain.Relation)
-	require.Equal(t, 2*placed.payload.(facetedPayload).meshBound, uncertain.Gap.Bound.Base())
+	require.Equal(t, 2*placed.n.Payload.(facetedPayload).meshBound, uncertain.Gap.Bound.Base())
 }
 
 func TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace(t *testing.T) {
@@ -83,7 +83,7 @@ func TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace(t *testing.T) {
 	require.NoError(t, err)
 	union, err := Union(t.Context(), base, upper)
 	require.NoError(t, err)
-	pp := union.payload.(facetedPayload)
+	pp := union.n.Payload.(facetedPayload)
 	require.Positive(t, pp.meshBound)
 	require.Nil(t, pp.lowerSupport)
 	_, proven, err := sourceFacetedAxisSupport(t.Context(), union, r3.Identity(), 2, 0)

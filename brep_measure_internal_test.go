@@ -114,7 +114,7 @@ func TestBrepConcaveRadiusReadsConcaveWalls(t *testing.T) {
 	t.Run("convex arc", func(t *testing.T) {
 		doc := New()
 		body := internalBrepBody(t, internalHalfDiscPrism(t, doc))
-		out, ok := brepMinRadius(body, body.payload.(brepPayload))
+		out, ok := brepMinRadius(body, body.n.Payload.(brepPayload))
 		require.True(t, ok)
 		require.True(t, out.ok)
 		require.Nil(t, out.reading, "no wall curves away from the material")
@@ -245,7 +245,7 @@ func internalPinThroughS1(t *testing.T, doc *Document) *Body {
 func TestBrepConsumersOnTheClassBCutResult(t *testing.T) {
 	t.Parallel()
 	doc, s1 := internalCrossDrilled(t)
-	_, isBrep := s1.payload.(brepPayload)
+	_, isBrep := s1.n.Payload.(brepPayload)
 	require.True(t, isBrep, "the public Cut builds S1 as a brep body")
 	box := internalBoxBody(t, doc, 45, 0, 50, 20, 20)
 	pin := internalPinThroughS1(t, doc)

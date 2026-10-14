@@ -21,7 +21,7 @@ type crossCylinderBoreRecord struct {
 }
 
 func crossCylinderCircleSource(body *Body, u, v r3.Vec) (prismPayload, circleSeg, bool) {
-	pp, ok := body.payload.(prismPayload)
+	pp, ok := body.n.Payload.(prismPayload)
 	if !ok || !body.n.Solid || body.n.Kind != topo.BodySolid || pp.SurfaceResult ||
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		pp.Xform != r3.Identity() || pp.Frame.Origin() != (r3.Vec{}) ||

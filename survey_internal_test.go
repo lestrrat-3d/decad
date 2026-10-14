@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/verifyoption"
 	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 
@@ -637,7 +638,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 
 	badRecord, err := bad.payload(t.Context())
 	require.NoError(t, err)
-	body := bornBody(&Body{payload: badRecord})
+	body := bornBody(&Body{n: topo.Body{Payload: badRecord}})
 	results, diags, err := runSurveys(proofbound.NewWorkBudget(t.Context()), body, verifyConfig{
 		Wall:     &wallSpec{Tool: units.Millimeters(1)},
 		ToolMM:   1,
@@ -1429,7 +1430,7 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 			b, err = Copy(t.Context(), b, WithCopyPlacement(*pl.xform))
 			require.NoError(t, err)
 		}
-		pp, ok := b.payload.(prismPayload)
+		pp, ok := b.n.Payload.(prismPayload)
 		require.True(t, ok)
 		m, ok := survey2d.NewPlacedFrameMap(pp.Frame, pp.Xform)
 		require.True(t, ok)

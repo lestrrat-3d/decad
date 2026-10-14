@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/verifyoption"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -604,7 +605,7 @@ func bodyValidityEvidence(ctx context.Context, b *Body) validityEvidence {
 		evidence.Sheet = auditSheetBoundary(ctx, b)
 	default:
 		evidence.Clean = auditBoundary(b)
-		evidence.Built = b.payload != nil
+		evidence.Built = b.n.Payload != nil
 		evidence.Solid = b.n.Solid
 	}
 	return evidence
@@ -629,7 +630,7 @@ func auditBoundary(b *Body) bool {
 			case surfacegeom.KindSphere, surfacegeom.KindTorus:
 				continue
 			case surfacegeom.KindFaceted:
-				fp, ok := b.payload.(facetedPayload)
+				fp, ok := b.n.Payload.(facetedPayload)
 				if ok && fp.contactAudited && len(faces) == 1 && len(fp.tris) > 0 && len(b.Edges()) == 0 {
 					continue
 				}
@@ -730,7 +731,7 @@ func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutc
 		}
 	}
 
-	if payloadProvesSimple(ctx, b.payload) {
+	if payloadProvesSimple(ctx, b.n.Payload) {
 		return reportvocab.SheetAuditProven
 	}
 	return reportvocab.SheetAuditUndecided
@@ -815,7 +816,7 @@ func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutc
 //     this leg (non-self-intersection) asks, and it is exactly the audit this
 //     increment relaxes to admit a sheet's free rims in the first place, so it
 //     cannot also be read as proving the thing it was relaxed away from.
-func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
+func payloadProvesSimple(ctx context.Context, p topo.Payload) bool {
 	switch pp := p.(type) {
 	case prismPayload:
 		return pp.SurfaceResult && pp.SectionDelta == 0

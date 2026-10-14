@@ -15,7 +15,7 @@ func axisBoxPrism(b *Body) bool {
 	if !b.n.Solid || b.n.Kind != topo.BodySolid || b.n.Bounds.Exactness != measurement.Exact || b.n.Bounds.Bound.Base() != 0 {
 		return false
 	}
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	if !ok || pp.SurfaceResult || pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 {
 		return false
 	}

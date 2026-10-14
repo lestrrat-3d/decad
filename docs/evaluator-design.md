@@ -103,7 +103,7 @@ value: it holds a `noCopy` marker that `go vet`'s copylocks check enforces.
 
 | Type | Holds |
 |---|---|
-| `Body` | owning `*Document` (the document node in the node, which `Body.Document()` maps to its handle), origin (a `provenance.Ref` in the node; `Body.Origin()` converts it to `FeatureRef`), `BodyKind` (a `topo.BodyKind` in the node; `Body.Kind()` converts it), `[]*Lump` (lump nodes in the node, which `Body.Lumps()` maps to their handles), cached measurements (computed at build, immutable after; `measurement.Measurement`, `VecMeasurement` and `Box` in the node, which `Volume`, `Area`, `Centroid` and `Bounds` convert) |
+| `Body` | owning `*Document` (the document node in the node, which `Body.Document()` maps to its handle), origin (a `provenance.Ref` in the node; `Body.Origin()` converts it to `FeatureRef`), `BodyKind` (a `topo.BodyKind` in the node; `Body.Kind()` converts it), `[]*Lump` (lump nodes in the node, which `Body.Lumps()` maps to their handles), cached measurements (computed at build, immutable after; `measurement.Measurement`, `VecMeasurement` and `Box` in the node, which `Volume`, `Area`, `Centroid` and `Bounds` convert), the payload it was built from (a `topo.Payload` in the node, §8) |
 | `Lump` | `[]*FaceShell` (shell nodes in its `topo.Lump`, which `Lump.Shells()` maps to their handles) — a connected piece of a body, solid or sheet; a sheet lump holds exactly one shell (`docs/surface-design.md` §2.2) |
 | `FaceShell` | `[]*Face` (face nodes in the node, which `FaceShell.Faces()` maps to their handles), `void bool`, `open bool` — `open` is true when the shell has a free edge (`docs/surface-design.md` §2.2) |
 | `Face` | tagged `Surface` (the `surfacegeom` variant in the node; `Face.Surface()` converts to the public one), `[]*Loop` (first outer; loop nodes in the node, which `Face.Loops()` maps to their handles), origin roles (≥1 `provenance.Ref`s in the node, exposed as `FeatureRef`s by `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body (the `Body` node in the `Face` node; root maps it to the handle through `Owner`) |
@@ -480,7 +480,7 @@ footprint-dependent departure. The published displacement is the sum of three
 terms: the exact distance from the held stop to `c + travel·offset`
 (`extent.StopLevelError`, so a rounded tag origin or a non-unit held normal is
 charged and never trusted), the offset's conversion bound, and `k` times the
-face's `axialDelta`, with `k = max(|m·(B·N)|, |m|) / |m·N'|` rounded up, which is
+face's `AxialDelta`, with `k = max(|m·(B·N)|, |m|) / |m·N'|` rounded up, which is
 exactly 1 when the frames and the placement are exactly orthonormal. Any other
 face is `ErrUnsupported`, however small its tilt, because nothing would charge
 it. That includes a stop body whose placement rounds its normal, every revolve
@@ -815,18 +815,25 @@ increments live in `MintLevel` and `MintCurve`. That is what lets a `Remove` run
 feature's check-then-commit are still unguarded, which is why the document as a whole stays unsafe
 for concurrent mutation (core §12).
 
-Every payload is a root type, because its `placed` reads `*Document` and
-builds a `*Body` (`featurePayload`). Where a payload's plain data has an
-internal owner, the root type embeds that owner by value and keeps only
-what needs the root package: `transform`, `placed`, methods that satisfy
-root interfaces, and fields that hold root types. `prismPayload` is
+Every payload implements `topo.Payload`, and the body node holds it
+(`Payload`). `Placed` takes the builder environment `topo.Env` (the document
+node, which mints level and curve identities and owns the result, and the
+producer the result's roles are minted under) and returns a body node; it never
+commits. `Transform`, `Copy`, a pattern instance and a motion check reach it
+through `placePayload` (`topology_handles.go`), which builds the environment
+and maps the node back to its handle; the caller commits. A payload that still
+lives in the root package recovers its document handle from the node's `Owner`
+in `Placed` and runs its root builder. Where such a payload's plain data has an
+internal owner, the root type embeds that owner by value and keeps only what
+needs the root package: `Transform`, `Placed`, methods that satisfy root
+interfaces, and fields that hold root types. `prismPayload` is
 `struct{ prismrecord.Payload }`; the owner's exported fields (`Profile`,
 `Frame`, `Z0`/`Z1`, `Z0Delta`/`Z1Delta`, `Xform`, `BlendSegs`,
 `BlendKind`, `SectionDelta`, `Walks`, `SurfaceResult`) are promoted.
 Readings that read nothing but the record (`Point`, `Dir`, `LiftedVertex`,
 the point bounds and the lift factor) are methods of the owner and are
 promoted as well. A value copy of the wrapper copies the record exactly as a copy of the flat
-struct did, so `placed`'s copy-then-set-`Xform` is unchanged.
+struct did, so `Placed`'s copy-then-set-`Xform` is unchanged.
 
 `Transform` and `Copy` pass the caller's context through payload re-evaluation.
 Faceted placement polls that context while transforming vertices, auditing and
@@ -903,7 +910,7 @@ A placement changes the MOTION and nothing else, so a prism's re-evaluation
 reuses the plane-local walk resolution the original build published rather than
 resolving the same section again. `prismPayload` carries a private
 `*momentinput.ProfileWalks` (`Walks`) for its own record; `evalPrismContext` publishes the set it
-resolved onto the body it just built, and `placed` — the one path that carries a
+resolved onto the body it just built, and `Placed` — the one path that carries a
 payload forward unchanged but for `Xform` — hands it back to the next build.
 What makes it sound is that a walk holds nothing placement-dependent: `walkOf`
 answers in the section's own (u, v), and the frame, the placement and the

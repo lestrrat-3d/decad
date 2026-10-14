@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -55,12 +56,12 @@ func (cp classBPair) d() int { return cp.axis[2] }
 // silent miss: the caller takes the mesh path unchanged. It is
 // classBOfPayloads over the operands' payloads, placed as the first operand
 // is.
-func tryClassB(ctx context.Context, op meshbool.OperationKind, a, b *Body) (featurePayload, bool, error) {
+func tryClassB(ctx context.Context, op meshbool.OperationKind, a, b *Body) (topo.Payload, bool, error) {
 	// A body this evaluator did not build has no payload and no class.
-	if a.payload == nil || b.payload == nil {
+	if a.n.Payload == nil || b.n.Payload == nil {
 		return nil, false, nil
 	}
-	return classBOfPayloads(ctx, op, a.payload, b.payload, a.payload.transform(), 0)
+	return classBOfPayloads(ctx, op, a.n.Payload, b.n.Payload, a.n.Payload.Transform(), 0)
 }
 
 // classBOfPayloads is class B's entry over two payloads and the one placement
@@ -79,10 +80,10 @@ func tryClassB(ctx context.Context, op meshbool.OperationKind, a, b *Body) (feat
 // A positive delta widens every box B7 and the through reach compare by it,
 // and refuses the crossing reach, which charges the crossings it cuts no
 // angle for a displacement its records do not carry.
-func classBOfPayloads(ctx context.Context, op meshbool.OperationKind, a, b featurePayload, placement r3.Transform, delta float64) (featurePayload, bool, error) {
-	pairs := [][2]featurePayload{{a, b}}
+func classBOfPayloads(ctx context.Context, op meshbool.OperationKind, a, b topo.Payload, placement r3.Transform, delta float64) (topo.Payload, bool, error) {
+	pairs := [][2]topo.Payload{{a, b}}
 	if op != meshbool.OpCut {
-		pairs = append(pairs, [2]featurePayload{b, a})
+		pairs = append(pairs, [2]topo.Payload{b, a})
 	}
 	for _, pair := range pairs {
 		cp, ok, err := admitClassBPair(ctx, pair[0], pair[1], placement, delta)
@@ -119,7 +120,7 @@ func classBOfPayloads(ctx context.Context, op meshbool.OperationKind, a, b featu
 // classBFaceView is X's face view, or ok=false where X has none this
 // increment reads: a prism (not a surface result), a stacked prism whose
 // slabs keep one outer loop and one region, or a brep body.
-func classBFaceView(ctx context.Context, payload featurePayload) (brepPayload, bool, error) {
+func classBFaceView(ctx context.Context, payload topo.Payload) (brepPayload, bool, error) {
 	switch p := payload.(type) {
 	case prismPayload:
 		if p.SurfaceResult {
@@ -160,7 +161,7 @@ func classBFaceView(ctx context.Context, payload featurePayload) (brepPayload, b
 // the brep record itself needs: one shared placement, and Y's axes carried
 // bit for bit as signed reference axes at the reference origin (§4.1). Every
 // miss is silent. delta widens B7's boxes (classBOfPayloads).
-func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, placement r3.Transform, delta float64) (classBPair, bool, error) {
+func admitClassBPair(ctx context.Context, xPayload, yPayload topo.Payload, placement r3.Transform, delta float64) (classBPair, bool, error) {
 	// B1: X exposes a face view; Y is a prism.
 	y, okY := yPayload.(prismPayload)
 	if !okY || y.SurfaceResult {
@@ -289,7 +290,7 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload featurePayload, pla
 //   - Union keeps X's other faces, the slab faces, and Y's walls with Y's caps
 //     over the parts of [a, b] outside X.
 //   - Intersect is Y's section swept over the inside interval: a prism.
-func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, reach []classbgeom.Slab) (featurePayload, bool, error) {
+func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, reach []classbgeom.Slab) (topo.Payload, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	slabs := make([]classbgeom.SlabFace, len(reach))
 	for i, s := range reach {

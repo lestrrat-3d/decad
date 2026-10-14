@@ -66,7 +66,7 @@ func auditCompositeSweepWithClosure(ctx context.Context, spans []sweepAuditSpan,
 func (span sweepAuditSpan) AuditExtent(
 	ctx context.Context, direction r3.Vec, work *freeform.FreeformWork,
 ) (float64, float64, float64, error) {
-	switch payload := span.body.payload.(type) {
+	switch payload := span.body.n.Payload.(type) {
 	case prismPayload:
 		return payload.extentBoundedAlong(ctx, direction, work, payload.Walks)
 	case revolvePayload:
@@ -84,7 +84,7 @@ func (span sweepAuditSpan) AuditExtent(
 // half-plane gate then keeps the whole swept section between its two endpoint
 // tangent planes.
 func sweepAuditEndpointSupports(body *Body) bool {
-	switch payload := body.payload.(type) {
+	switch payload := body.n.Payload.(type) {
 	case prismPayload:
 		return true
 	case draftPayload:

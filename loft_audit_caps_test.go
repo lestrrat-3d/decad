@@ -80,7 +80,7 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	pointLoft := capsAuditFixtureLoft(t, doc)
-	loftPayload, ok := pointLoft.payload.(facetedPayload)
+	loftPayload, ok := pointLoft.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	n := len(loftPayload.verts) - 1
 	sides := loftPayload.tris[:n]
@@ -98,7 +98,7 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 	cases = append(cases, audited{"point loft", layout, loftPayload.verts, loftPayload.tris, 1})
 
 	addSlab := func(name string, slab *Body, proofs int) {
-		payload, ok := slab.payload.(facetedPayload)
+		payload, ok := slab.n.Payload.(facetedPayload)
 		require.True(t, ok)
 		require.NotNil(t, payload.pointPlane)
 		require.Equal(t, sides, payload.pointPlane.base.tris[:n])
@@ -123,7 +123,7 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 		neutralArcSeamCap(t, slab1, refOf(CapEnd(slab1))),
 		neutralArcSeamCap(t, slab0, refOf(CapEnd(slab0))))
 	require.NoError(t, err)
-	facesPayload, ok := loft.payload.(facetedPayload)
+	facesPayload, ok := loft.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	facesLayout, ok := loftFacesCapLayout(sides, 2, len(facesPayload.tris))
 	require.True(t, ok)

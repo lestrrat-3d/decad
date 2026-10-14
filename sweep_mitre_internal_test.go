@@ -41,7 +41,7 @@ func mitredTreeBranch(t *testing.T) (*Body, mitredSweepPayload) {
 	body, err := Sweep(t.Context(), New(), s, s.Profiles()[0], path, WithMitredJoins(), WithSectionScale(
 		units.Scalar(1.375/1.5), units.Scalar(1.25/1.5), units.Scalar(1.125/1.5), units.Scalar(1/1.5)))
 	require.NoError(t, err)
-	mp, ok := body.payload.(mitredSweepPayload)
+	mp, ok := body.n.Payload.(mitredSweepPayload)
 	require.True(t, ok)
 	return body, mp
 }
@@ -455,7 +455,7 @@ func TestMitredSweepMomentsMatchRationalSum(t *testing.T) {
 		}
 		payloads := map[string]mitredSweepPayload{"tree branch": branch}
 		for name, body := range bodies {
-			mp, ok := body.payload.(mitredSweepPayload)
+			mp, ok := body.n.Payload.(mitredSweepPayload)
 			require.True(t, ok, name)
 			payloads[name] = mp
 		}

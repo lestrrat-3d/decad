@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-go/option/v3"
 )
 
@@ -133,7 +134,7 @@ func (m *Mesh) withholdProofs() {
 // held mesh they cannot keep embedded (meshbool.EnforceHeldEmbedding,
 // docs/evaluator-design.md §9). Restatement moves no coordinate, so there is
 // no audit for a lower level to decline.
-func payloadAuditsFacetContact(p featurePayload) bool {
+func payloadAuditsFacetContact(p topo.Payload) bool {
 	if _, ok := p.(allEdgeChamferPayload); ok {
 		return true
 	}

@@ -10,7 +10,7 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `topology.go` | Topology types from `Body` to `Vertex` and public surface and curve variants. See API §6.1 and evaluator §3. |
-| `topology_handles.go` | Born-handle constructors and the node-to-handle mapping of linked topology nodes. See evaluator §3. |
+| `topology_handles.go` | Born-handle constructors and the node-to-handle mapping of linked topology nodes, and `placePayload`, the root path into `topo.Payload.Placed`. See evaluator §3, §8. |
 | `document.go` | `Document`: live body set, commit, `Remove`, liveness gates, `Transform` and `Copy`. See evaluator §8. |
 | `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
 | `mirror_join.go` | `WithJoin` adapters over `internal/mirrorjoin/`'s splice and section audit. See mirror-pattern §5. |

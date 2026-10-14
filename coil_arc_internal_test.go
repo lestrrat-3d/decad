@@ -168,7 +168,7 @@ func TestCoilRoundWireSpring(t *testing.T) {
 		for _, gap := range []float64{lo.X - box.Min.X, lo.Y - box.Min.Y, lo.Z - box.Min.Z, box.Max.X - hi.X, box.Max.Y - hi.Y, box.Max.Z - hi.Z} {
 			require.LessOrEqual(t, gap, bound)
 		}
-		require.LessOrEqual(t, b.payload.(coilPayload).delta, box.Bound.Base())
+		require.LessOrEqual(t, b.n.Payload.(coilPayload).delta, box.Bound.Base())
 	})
 	t.Run("verify is sound", func(t *testing.T) {
 		rep, err := doc.Verify(t.Context())
@@ -231,7 +231,7 @@ func TestCoilSlotSpring(t *testing.T) {
 		mid := c.Center.Add(c.Axis.Cross(a))
 		require.InDelta(t, 0.4, mid.Sub(c.Center).Len(), 1e-12)
 		d := math.Inf(1)
-		for _, v := range b.payload.(coilPayload).verts {
+		for _, v := range b.n.Payload.(coilPayload).verts {
 			d = math.Min(d, v.Sub(mid).Len())
 		}
 		require.Less(t, d, 1e-9, "the counter-clockwise quarter point is a held station")
@@ -327,7 +327,7 @@ func TestCoilArcFacetBoundHoldsTheSurface(t *testing.T) {
 			s, p := c.profile(t)
 			b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(3), units.Scalar(c.turns))
 			require.NoError(t, err)
-			cp := b.payload.(coilPayload)
+			cp := b.n.Payload.(coilPayload)
 			rec, err := coilRecordOfPayload(cp)
 			require.NoError(t, err)
 			stride, n := len(rec.Pts), rec.N

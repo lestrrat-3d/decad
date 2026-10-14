@@ -18,7 +18,7 @@ import (
 // certificate proves the new hole lies inside the existing outer loop.
 // Every other pair keeps the general boolean path.
 func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, b *Body) (*Body, bool, error) {
-	pl, ok := a.payload.(loftPayload)
+	pl, ok := a.n.Payload.(loftPayload)
 	if !ok || pl.surfaceResult || len(pl.profile0.Holes) != 0 ||
 		!sectionrecord.IdenticalRecord(pl.profile0, pl.profile1) ||
 		pl.frame0.U() != pl.frame1.U() || pl.frame0.V() != pl.frame1.V() ||
@@ -30,7 +30,7 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 			return nil, false, nil
 		}
 	}
-	tool, ok := b.payload.(prismPayload)
+	tool, ok := b.n.Payload.(prismPayload)
 	if !ok || tool.SurfaceResult || tool.Xform != r3.Identity() ||
 		tool.SectionDelta != 0 || tool.Z0Delta != 0 || tool.Z1Delta != 0 ||
 		tool.Frame.U() != pl.frame0.U() || tool.Frame.V() != pl.frame0.V() ||

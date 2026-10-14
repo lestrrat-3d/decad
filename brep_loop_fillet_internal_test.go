@@ -76,14 +76,14 @@ func filletLoopOfFace(t *testing.T, body *Body, n, p r3.Vec, li int, r float64) 
 func filletSelection(t *testing.T, body *Body, sel *EdgeQuery, r float64, bands int) (*Body, brepPayload) {
 	t.Helper()
 	before := 0
-	if bp, ok := body.payload.(brepPayload); ok {
+	if bp, ok := body.n.Payload.(brepPayload); ok {
 		before = len(bp.loopBands)
 	}
 	out, err := Fillet(t.Context(), body, sel, units.Millimeters(r))
 	require.NoError(t, err)
 	require.Error(t, documentHandle(body.n.Doc).requireLive(body), "the receiver is retired")
-	bp, ok := out.payload.(brepPayload)
-	require.True(t, ok, "route L builds a brep, got %T", out.payload)
+	bp, ok := out.n.Payload.(brepPayload)
+	require.True(t, ok, "route L builds a brep, got %T", out.n.Payload)
 	require.Nil(t, bp.stack)
 	require.Len(t, bp.loopBands, before+bands)
 	for _, b := range bp.loopBands[before:] {
@@ -505,7 +505,7 @@ func internalFourHolePlate(t *testing.T) *Body {
 	require.NotNil(t, prof)
 	body, err := Extrude(t.Context(), New(), s, prof, Distance{D: units.Millimeters(8), Dir: Along})
 	require.NoError(t, err)
-	_, ok := body.payload.(prismPayload)
+	_, ok := body.n.Payload.(prismPayload)
 	require.True(t, ok)
 	return body
 }
@@ -733,7 +733,7 @@ func TestVertexBlendObliqueTopEdge(t *testing.T) {
 	require.NoError(t, err)
 	require.Error(t, doc.requireLive(body))
 	require.Equal(t, []*Body{out}, doc.Bodies())
-	_, faceted := out.payload.(facetedPayload)
+	_, faceted := out.n.Payload.(facetedPayload)
 	require.True(t, faceted)
 	wantVolume := 32400 - 53*(1-math.Pi/4)
 	require.LessOrEqual(t, math.Abs(out.n.Volume.Value.Base()-wantVolume), out.n.Volume.Bound.Base()+1e-6)
@@ -757,7 +757,7 @@ func TestVertexBlendEdgeBesideObliqueWalls(t *testing.T) {
 	require.NoError(t, err)
 	require.Error(t, doc.requireLive(body))
 	require.Equal(t, []*Body{out}, doc.Bodies())
-	_, faceted := out.payload.(facetedPayload)
+	_, faceted := out.n.Payload.(facetedPayload)
 	require.True(t, faceted)
 	wantVolume := 32400 - 44*(1-math.Pi/4) - (28.0/45.0)*(5.0/3.0-math.Pi/2)
 	require.LessOrEqual(t, math.Abs(out.n.Volume.Value.Base()-wantVolume), out.n.Volume.Bound.Base()+1e-6)
@@ -886,7 +886,7 @@ func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
 	step, err := Fillet(t.Context(), body, Edges(ParallelTo(routeEZ), EndpointAt(corner)).Exactly(1), units.Millimeters(2))
 	require.NoError(t, err)
 	top := planarBodyFace(t, step, routeEZ, corner).Loops()[0].Edges()
-	bp, err := brepOfPrism(step.payload.(prismPayload))
+	bp, err := brepOfPrism(step.n.Payload.(prismPayload))
 	require.NoError(t, err)
 	r, err := newBrepLoopRead(t.Context(), bp, brepModifyRequest{edges: []*Edge{top[0], top[3], top[4]}})
 	require.NoError(t, err)
@@ -1365,7 +1365,7 @@ func TestVertexBlendPocketMouthOpenChain(t *testing.T) {
 // 56 + 2√2 past the record's own faces; and the mesh closes with its proof.
 // Shown to fail with brepBoundsContext's band
 // extents deleted (the rotated box then missed the patches' bulge) and with
-// extentAlong's band arm deleted (the stop then read the record's faces
+// ExtentAlong's band arm deleted (the stop then read the record's faces
 // alone, 58/√2).
 func TestBrepLoopFilletConsumers(t *testing.T) {
 	t.Parallel()
@@ -1386,7 +1386,7 @@ func TestBrepLoopFilletConsumers(t *testing.T) {
 	require.InDelta(t, out.n.Area.Value.Base(), placed.n.Area.Value.Base(), 1e-9)
 	require.ElementsMatch(t, filletRoles(out), filletRoles(placed))
 
-	lo, hi, bound, err := bp.extentAlong(r3.NewVec(1, 0, 1).Scale(1 / math.Sqrt2))
+	lo, hi, bound, err := bp.ExtentAlong(r3.NewVec(1, 0, 1).Scale(1 / math.Sqrt2))
 	require.NoError(t, err)
 	want := (56 + 2*math.Sqrt2) / math.Sqrt2
 	require.LessOrEqual(t, hi-bound, want)

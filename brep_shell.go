@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 	"github.com/lestrrat-3d/decad/internal/throughshell"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -134,7 +135,7 @@ type throughRemoval = throughshell.Removal
 // SG5 read them. The connected-run check remains with prismshell.SideOpeningRegions.
 func (tc throughCut) removedFaces(b *Body, bp brepPayload, removed []*Face) (throughRemoval, error) {
 	index := map[*Face]int{}
-	if _, ok := b.payload.(brepPayload); ok {
+	if _, ok := b.n.Payload.(brepPayload); ok {
 		roles := facesByRole(b)
 		for fi, f := range bp.faces {
 			if face := roles[f.role]; face != nil {
@@ -417,7 +418,7 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded profileR
 		z1, z1Delta = step(z1, z1Delta, -call.tmm)
 	}
 	charge := max(delta, z0Delta, z1Delta)
-	var cut featurePayload = prismPayload{Payload: prismrecord.Payload{Profile: eroded, Frame: tc.caps.Frame, Z0: z0, Z1: z1, Xform: bp.xform}}
+	var cut topo.Payload = prismPayload{Payload: prismrecord.Payload{Profile: eroded, Frame: tc.caps.Frame, Z0: z0, Z1: z1, Xform: bp.xform}}
 	for i, tool := range tc.tools {
 		lo, loDelta := step(tool.lo, 0, -call.tmm)
 		hi, hiDelta := step(tool.hi, 0, call.tmm)

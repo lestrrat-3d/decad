@@ -129,7 +129,7 @@ func loftCapBandSlabVolume(ctx context.Context, body *Body, mesh *Mesh, cbp capB
 	// The true band and its mesh can each move on both sides of a nominal
 	// level. Two copies of the inherited axial and tessellation allowances
 	// cover those opposite motions before the two cap slabs are summed.
-	levelError := proofbound.AbsSumUpper(cbp.axialDelta(), mesh.n.Bound)
+	levelError := proofbound.AbsSumUpper(cbp.AxialDelta(), mesh.n.Bound)
 	startHeight := proofbound.AbsSumUpper(cbp.start.axialUpper(), proofbound.ProductUpper(2, levelError))
 	endHeight := proofbound.AbsSumUpper(cbp.end.axialUpper(), proofbound.ProductUpper(2, levelError))
 	area := proofbound.ProductUpper(4, proofbound.ProductUpper(radius, radius))

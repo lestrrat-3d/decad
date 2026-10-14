@@ -24,7 +24,7 @@ func TestStationedTwistOccupiedVolumeProof(t *testing.T) {
 	body, err := Sweep(t.Context(), New(), s, s.Profiles()[0], path,
 		WithSweepTwist(units.Radians(2)))
 	require.NoError(t, err)
-	payload, ok := body.payload.(twistedSweepPayload)
+	payload, ok := body.n.Payload.(twistedSweepPayload)
 	require.True(t, ok)
 	require.NotNil(t, payload.mesh)
 	volume, err := body.Volume()

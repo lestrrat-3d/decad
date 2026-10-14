@@ -333,7 +333,7 @@ func TestCapBandMassBoundsChargeTheSideLevelMove(t *testing.T) {
 // TestCapBlendSetbackConversionCarriesAllDerivedSideLevels keeps a cap-loop
 // chamfer from treating a non-millimetre setback as exact after it reaches the
 // payload. Both cap senses derive the side level from that converted setback,
-// and a later ThroughAll stop reads the payload's axialDelta.
+// and a later ThroughAll stop reads the payload's AxialDelta.
 func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
 	t.Parallel()
 	d, dDelta, err := extent.MagnitudeInBounded(units.Inches(0.1), units.Length, units.Millimeter, "the chamfer setback")
@@ -364,7 +364,7 @@ func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
 			}
 			body, err := evalCapBlendContext(t.Context(), New(), 0, cbp)
 			require.NoError(t, err)
-			require.GreaterOrEqual(t, cbp.axialDelta(), dDelta)
+			require.GreaterOrEqual(t, cbp.AxialDelta(), dDelta)
 
 			side := 0
 			for _, vertex := range body.Vertices() {
@@ -659,7 +659,7 @@ func chamferedCircularBand(t *testing.T, section func(*sketch.Sketch), h, d floa
 		require.NoError(t, err)
 	}
 
-	cbp, ok := chamfered.payload.(capBlendPayload)
+	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
 	roles := facesByRole(chamfered)
 	var out bandUnderTest
@@ -737,7 +737,7 @@ func chamferedRectFlatPatches(t *testing.T, motion r3.Transform) []bandUnderTest
 	placed, err := Transform(t.Context(), chamfered, motion)
 	require.NoError(t, err)
 
-	cbp, ok := placed.payload.(capBlendPayload)
+	cbp, ok := placed.n.Payload.(capBlendPayload)
 	require.True(t, ok)
 	roles := facesByRole(placed)
 	pl := cbp.prismLike(cbp.z0, cbp.z1)
@@ -1280,7 +1280,7 @@ func TestCapBandConeAreaBoundEnclosesBuiltRuledPatch(t *testing.T) {
 			out, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(tc.dc),
 				WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(tc.ds)))
 			require.NoError(t, err)
-			cbp, ok := out.payload.(capBlendPayload)
+			cbp, ok := out.n.Payload.(capBlendPayload)
 			require.True(t, ok)
 
 			mitered := 0
@@ -1342,7 +1342,7 @@ func TestCapBandConePatchChargesItsCornerSlivers(t *testing.T) {
 			out, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(tc.dc),
 				WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(tc.ds)))
 			require.NoError(t, err)
-			cbp, ok := out.payload.(capBlendPayload)
+			cbp, ok := out.n.Payload.(capBlendPayload)
 			require.True(t, ok)
 
 			const n = 4000
@@ -1423,7 +1423,7 @@ func TestCapBlendAuditReadsTheSetbackSpan(t *testing.T) {
 			require.Len(t, prof.Holes, 2)
 			body, err := Extrude(t.Context(), New(), s, prof, Distance{D: units.Millimeters(20), Dir: Along})
 			require.NoError(t, err)
-			pp, ok := body.payload.(prismPayload)
+			pp, ok := body.n.Payload.(prismPayload)
 			require.True(t, ok)
 
 			end := capSetback{dc: dc, dcDelta: tc.dcDelta, ds: dc}

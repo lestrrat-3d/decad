@@ -708,13 +708,13 @@ func BenchmarkMomentAreaInvoluteFit(b *testing.B) {
 // prismPayloadOf reads back the payload a prism build published on its body.
 func prismPayloadOf(t *testing.T, b *Body) prismPayload {
 	t.Helper()
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	require.True(t, ok, "a prism build must publish a prismPayload")
 	return pp
 }
 
 // rebuiltUnder re-evaluates pp under motion on a counter the caller can read
-// afterwards. It is prismPayload.placed's own body with the counter lifted out:
+// afterwards. It is prismPayload.Placed's own body with the counter lifted out:
 // placed mints one internally, which is the single thing about the placement
 // path a test cannot otherwise observe. The payload it carries over and the
 // build it runs are the same.
@@ -833,7 +833,7 @@ func TestPlacedReusesPublishedWalks(t *testing.T) {
 	turn, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), units.Radians(math.Pi/3))
 	require.NoError(t, err)
 
-	placed, err := source.placed(t.Context(), New(), 0, turn)
+	placed, err := placePayload(t.Context(), source, New(), 0, turn)
 	require.NoError(t, err)
 	require.Same(t, source.Walks, prismPayloadOf(t, placed).Walks,
 		"a rigid placement must carry the source's resolution, not allocate a second one")
@@ -909,7 +909,7 @@ func placementChain(t *testing.T, pp prismPayload, drop bool) (*Body, []*momenti
 		}
 		composed, err := pp.Xform.Then(step)
 		require.NoError(t, err, "composing placement %d", k+1)
-		body, err = pp.placed(t.Context(), New(), 0, composed)
+		body, err = placePayload(t.Context(), pp, New(), 0, composed)
 		require.NoError(t, err, "placement %d", k+1)
 		pp = prismPayloadOf(t, body)
 		carried = append(carried, pp.Walks)
@@ -1120,7 +1120,7 @@ func benchInvoluteFitPayload(b *testing.B) prismPayload {
 func BenchmarkPlacedFreeformPrism(b *testing.B) {
 	built, err := evalPrism(New(), 0, benchInvoluteFitPayload(b), freeform.NewFreeformWork())
 	require.NoError(b, err)
-	source, ok := built.payload.(prismPayload)
+	source, ok := built.n.Payload.(prismPayload)
 	require.True(b, ok)
 	turn, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), units.Radians(math.Pi/3))
 	require.NoError(b, err)

@@ -443,7 +443,7 @@ func TestCapBandCoordUpperCoversTheCornerLoci(t *testing.T) {
 	require.NoError(t, err)
 	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
-	cbp, ok := chamfered.payload.(capBlendPayload)
+	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
 	require.Len(t, cbp.profile.Holes, 1)
 

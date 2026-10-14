@@ -118,7 +118,7 @@ func sweepRatIsZero(v sweepRatVec) bool { return sweeparc.IsZero(v) }
 // join pairing reads when it takes one span's end cap against the next span's
 // start cap. A closed full-circle reduction has no cap.
 func finishArcSweepBody(body *Body, payload sweepPayload) {
-	if built, ok := body.payload.(revolvePayload); ok {
+	if built, ok := body.n.Payload.(revolvePayload); ok {
 		payload.revolve = built
 	}
 	for _, face := range body.Faces() {
@@ -143,5 +143,5 @@ func finishArcSweepBody(body *Body, payload sweepPayload) {
 		}
 		face.n.Origins = origins
 	}
-	body.payload = payload
+	body.n.Payload = payload
 }

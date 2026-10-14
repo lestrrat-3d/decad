@@ -48,7 +48,7 @@ func TestMirrorJoinChargesTheReflectionRounding(t *testing.T) {
 	t.Run("u = 0.1", func(t *testing.T) {
 		t.Parallel()
 		joined := joinRectangle(t, 0.1, 5)
-		pp, ok := joined.payload.(prismPayload)
+		pp, ok := joined.n.Payload.(prismPayload)
 		require.True(t, ok)
 		tenth := proofarith.FloatRat(0.1)
 		image := new(big.Rat).Sub(new(big.Rat).Mul(big.NewRat(2, 1), tenth), big.NewRat(5, 1))
@@ -72,7 +72,7 @@ func TestMirrorJoinChargesTheReflectionRounding(t *testing.T) {
 	t.Run("u = 8", func(t *testing.T) {
 		t.Parallel()
 		joined := joinRectangle(t, 8, 13)
-		pp, ok := joined.payload.(prismPayload)
+		pp, ok := joined.n.Payload.(prismPayload)
 		require.True(t, ok)
 		require.Zero(t, pp.SectionDelta)
 		v, err := joined.Volume()

@@ -132,8 +132,8 @@ func internalBandedBox(t *testing.T) (*Document, *Body) {
 	pin := internalCircleBodyAt(t, doc, 8, 10, 2, -1, 22)
 	out, err := Cut(t.Context(), s1, pin)
 	require.NoError(t, err)
-	_, ok := out.payload.(brepPayload)
-	require.True(t, ok, "the vertical hole cuts the brep through class B, got %T", out.payload)
+	_, ok := out.n.Payload.(brepPayload)
+	require.True(t, ok, "the vertical hole cuts the brep through class B, got %T", out.n.Payload)
 	return doc, out
 }
 
@@ -212,8 +212,8 @@ func requireThroughShellLumps(t *testing.T, body *Body, sel FaceSelector, th uni
 	doc := documentHandle(body.n.Doc)
 	result, err := Shell(t.Context(), body, sel, th)
 	require.NoError(t, err)
-	bp, ok := result.payload.(brepPayload)
-	require.True(t, ok, "route S builds a brep, got %T", result.payload)
+	bp, ok := result.n.Payload.(brepPayload)
+	require.True(t, ok, "route S builds a brep, got %T", result.n.Payload)
 	lo, hi := piEnclosed(a, b)
 	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 	require.Len(t, result.Lumps(), lumps)
@@ -271,7 +271,7 @@ func shellWallLevels(bp brepPayload, r float64) [][2]float64 {
 func TestBrepShellThroughCutReadsP1(t *testing.T) {
 	t.Parallel()
 	_, s1 := internalCrossDrilled(t)
-	bp := s1.payload.(brepPayload)
+	bp := s1.n.Payload.(brepPayload)
 	embeds, err := brepEmbeds(bp.faces)
 	require.NoError(t, err)
 	for k := range 2 {
@@ -519,7 +519,7 @@ func TestBrepShellThroughCutNotchedCap(t *testing.T) {
 	body := internalDrilledBox(t, [2]float64{20, 15.5})
 	result, err := Shell(t.Context(), body, Faces(Facing(shellUp)).Exactly(1), units.Millimeters(2))
 	require.NoError(t, err)
-	bp, ok := result.payload.(brepPayload)
+	bp, ok := result.n.Payload.(brepPayload)
 	require.True(t, ok)
 	requireClosedTopology(t, result)
 	rim := bp.faces[len(bp.faces)-1]
@@ -660,8 +660,8 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 		})
 		p6c, err := Cut(t.Context(), box, port)
 		require.NoError(t, err)
-		bp, ok := p6c.payload.(brepPayload)
-		require.True(t, ok, "the blind port is a brep, got %T", p6c.payload)
+		bp, ok := p6c.n.Payload.(brepPayload)
+		require.True(t, ok, "the blind port is a brep, got %T", p6c.n.Payload)
 		floor := shellRecordRole(t, bp, 0, 10)
 		refuses(t, p6c, shellFaceAt(t, p6c, shellUp, 30), mm2, nil, "modify-general SG3", "along reference axis 2, "+floor)
 	})
@@ -670,7 +670,7 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 		plate, boss := internalBossOnPlate(t, 0, 10, 15)
 		p3, err := Union(t.Context(), plate, boss)
 		require.NoError(t, err)
-		bp, err := brepOfStacked(t.Context(), p3.payload.(stackedPrismPayload))
+		bp, err := brepOfStacked(t.Context(), p3.n.Payload.(stackedPrismPayload))
 		require.NoError(t, err)
 		third := shellRecordRole(t, bp, 2, 10)
 		refuses(t, p3, Faces(Facing(shellUp.Scale(-1))).Exactly(1), mm2, nil, "modify-general SG3", third+" is a third planar face")
@@ -710,8 +710,8 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 		u := internalPolygonPrism(t, doc, [][2]float64{{0, 0}, {40, 0}, {40, 20}, {11, 20}, {11, 10}, {10, 10}, {10, 20}, {0, 20}}, 20)
 		body, err := Cut(t.Context(), u, internalAlongXHole(t, doc, 5, 5.5, 15, 10, 2))
 		require.NoError(t, err)
-		_, ok := body.payload.(brepPayload)
-		require.True(t, ok, "the drilled arm is a brep, got %T", body.payload)
+		_, ok := body.n.Payload.(brepPayload)
+		require.True(t, ok, "the drilled arm is a brep, got %T", body.n.Payload)
 		refuses(t, body, top, mm2, nil, "modify-general SG6", "reaches past the wall it pierces")
 	})
 	t.Run("SG1 and SG2", func(t *testing.T) {
@@ -733,7 +733,7 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 	t.Parallel()
 	_, body := internalBandedBox(t)
-	bp := body.payload.(brepPayload)
+	bp := body.n.Payload.(brepPayload)
 	embeds, err := brepEmbeds(bp.faces)
 	require.NoError(t, err)
 	tc, reason, ok, err := readThroughCut(t.Context(), bp, embeds, 2)
@@ -998,7 +998,7 @@ func TestBrepShellThroughCutWallOpeningDisplaced(t *testing.T) {
 func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
 	t.Parallel()
 	_, s1 := internalCrossDrilled(t)
-	bp := s1.payload.(brepPayload)
+	bp := s1.n.Payload.(brepPayload)
 	embeds, err := brepEmbeds(bp.faces)
 	require.NoError(t, err)
 	tc, reason, ok, err := readThroughCut(t.Context(), bp, embeds, 2)
@@ -1055,8 +1055,8 @@ func TestBrepShellThroughCutDisplacedCrossing(t *testing.T) {
 	box := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
 	body, err := Cut(t.Context(), box, internalDrillAlongY(t, doc, 20, zc, 3.1))
 	require.NoError(t, err)
-	_, ok := body.payload.(brepPayload)
-	require.True(t, ok, "the drilled box is a brep, got %T", body.payload)
+	_, ok := body.n.Payload.(brepPayload)
+	require.True(t, ok, "the drilled box is a brep, got %T", body.n.Payload)
 	before := doc.Bodies()
 
 	result, err := Shell(t.Context(), body, Faces(Facing(shellUp)).Exactly(1), units.Millimeters(1))
@@ -1115,8 +1115,8 @@ func TestBrepShellThroughCutDisplacedWallGap(t *testing.T) {
 	box := internalBoxBody(t, doc, x0, y0, x1, 20, h)
 	body, err := Cut(t.Context(), box, internalDrillAlongY(t, doc, xc, 15, r))
 	require.NoError(t, err)
-	_, ok := body.payload.(brepPayload)
-	require.True(t, ok, "the drilled box is a brep, got %T", body.payload)
+	_, ok := body.n.Payload.(brepPayload)
+	require.True(t, ok, "the drilled box is a brep, got %T", body.n.Payload)
 	before := doc.Bodies()
 
 	result, err := Shell(t.Context(), body, Faces(Facing(shellUp)).Exactly(1), units.Millimeters(th))

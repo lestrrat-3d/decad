@@ -26,7 +26,7 @@ func TestRevolveMassPropertiesRefusesUnchargedTerms(t *testing.T) {
 		SketchLine{Start: planePoint{}, End: planePoint{U: 1}},
 		AngleExtent{A: units.Degrees(90), Dir: Along})
 	require.NoError(t, err)
-	base, ok := body.payload.(revolvePayload)
+	base, ok := body.n.Payload.(revolvePayload)
 	require.True(t, ok)
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
 	_, err = massmoment.RevolveProperties(t.Context(), massRevolveRecord(base), body.n.Centroid, density)

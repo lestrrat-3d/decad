@@ -19,7 +19,7 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 		len(record.join.pairs) != len(source.originalTeeth) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its upper tooth source", ErrUnsupported)
 	}
-	loft, ok := record.join.source.lower.payload.(loftPayload)
+	loft, ok := record.join.source.lower.n.Payload.(loftPayload)
 	if !ok || !loft.authenticatedReconstruction {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its source Loft", ErrUnsupported)
 	}
@@ -27,7 +27,7 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 	byMotion := make(map[r3.Transform]*big.Rat, len(record.join.pairs))
 	var sweptTotal, greatest float64
 	for i, pair := range record.join.pairs {
-		fp, ok := pair.payload.(facetedPayload)
+		fp, ok := pair.n.Payload.(facetedPayload)
 		if !ok || !fp.contactAudited {
 			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its source", ErrUnsupported, i)
 		}
@@ -69,7 +69,7 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 	// placed lower Loft, rather than relying on the caller's pair order.
 	shifts := make([]*big.Rat, len(source.originalTeeth))
 	for i, tooth := range source.originalTeeth {
-		lp, ok := tooth.payload.(loftPayload)
+		lp, ok := tooth.n.Payload.(loftPayload)
 		if !ok || !lp.authenticatedReconstruction ||
 			lp.sourceIdentity != loft.sourceIdentity {
 			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its source identity", ErrUnsupported, i)
@@ -97,12 +97,12 @@ func loftMirrorCylinderChamferUpperCapBridge(ctx context.Context, old, upper fac
 	if shift == 0 {
 		return 0, nil
 	}
-	blank, ok := record.join.blank.payload.(prismPayload)
+	blank, ok := record.join.blank.n.Payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(blank) || len(half.ideal) != len(upper.verts) ||
 		half.band[0] >= half.band[1] || len(record.outer[1]) < 3 {
 		return 0, fmt.Errorf("%w: mirrored cap bridge lost its upper band", ErrUnsupported)
 	}
-	loft, ok := record.join.source.lower.payload.(loftPayload)
+	loft, ok := record.join.source.lower.n.Payload.(loftPayload)
 	if !ok || !loft.authenticatedReconstruction {
 		return 0, fmt.Errorf("%w: mirrored cap bridge lost its source frame", ErrUnsupported)
 	}

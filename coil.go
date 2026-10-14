@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -102,14 +103,15 @@ type coilPayload struct {
 	maxRound    float64
 }
 
-func (cp coilPayload) transform() r3.Transform { return cp.xform }
+func (cp coilPayload) Transform() r3.Transform { return cp.xform }
 
-// placed re-runs §5 from the record under the composed motion (§5.6, Table CD
+// Placed re-runs §5 from the record under the composed motion (§5.6, Table CD
 // row CD7): the stations, the held table, β, δ, the orientation and the audit
 // are rebuilt, so δ never accumulates across placements. Volume and Area
 // read the record's closed forms under the composed map (§5.3), so they move
 // only by that map's determinant and defect.
-func (cp coilPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (cp coilPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	next := coilPayload{
 		profile:  cp.profile,
 		frame:    cp.frame,
@@ -120,7 +122,7 @@ func (cp coilPayload) placed(ctx context.Context, d *Document, ref producerID, c
 		leftHand: cp.leftHand,
 		xform:    composed,
 	}
-	return evalCoil(ctx, d, ref, next)
+	return placedNode(evalCoil(ctx, d, ref, next))
 }
 
 // Coil moves the closed profile p of sketch s along the screw motion about

@@ -25,7 +25,7 @@ link anywhere along the drive — or finds where one does.
 
 **It lives in the root package**, in `linkage.go`, `linkage_verify.go` and `linkage_bound.go`, beside
 `motion.go`, and not in a subpackage like `dynamics/`. The reason is what a pose evaluation needs: the
-transient placement of a payload under a composed transform (`payload.placed` with the reserved
+transient placement of a payload under a composed transform (`payload.Placed` with the reserved
 `transientProducer`, motion §5.1), the clearance kernel with its per-call carrier cache
 (`clearancePairCached`), the overlap transfer (`transferredOverlap`) and the exact ideal-pose enclosure
 `η` is charged against (`internal/motionbound.IdealPose`). `dynamics/` sits above the root because the

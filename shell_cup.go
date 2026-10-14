@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -90,9 +91,9 @@ type cupView struct {
 	xform          r3.Transform
 }
 
-// axialDelta reports the largest held-level displacement to a body-relative
+// AxialDelta reports the largest held-level displacement to a body-relative
 // stop resolved against this cup's faces (stops.go).
-func (cp cupView) axialDelta() float64 {
+func (cp cupView) AxialDelta() float64 {
 	return math.Max(cp.zOpenDelta, math.Max(cp.zOuterDelta, cp.zCavDelta))
 }
 
@@ -152,22 +153,22 @@ func (cp cupView) cavityPrism() prismPayload {
 	return pp
 }
 
-// extentAlong is the cup's extent interval along an arbitrary world direction
+// ExtentAlong is the cup's extent interval along an arbitrary world direction
 // g, beside the displacement its ends carry — the OUTER prism's reading
 // (docs/modify-design.md §10, Table D, D5). The cavity is interior and reaches
 // no farther than the outer region, so the outward extent is the solid outer
-// prism's, read by the same prismPayload.extentAlong the outer prism's bounds
+// prism's, read by the same prismPayload.ExtentAlong the outer prism's bounds
 // already use. This is what a through-all stop consults when a cup is a live
 // body in the sweep's path. An outward cup's outer region is the offset one:
 // its recorded extent is read, and its offsetDelta joins the displacement the
 // ends carry — moving every boundary point by at most offsetDelta moves an
 // extreme along g by at most offsetDelta·|g|, and |g| ≤ its L1 norm.
-func (cp cupView) extentAlong(g r3.Vec) (float64, float64, float64, error) {
+func (cp cupView) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 	outer := cp.outerPrism()
 	outer.Profile = cp.outer
 	displaced := outer.SectionDelta
 	outer.SectionDelta = 0
-	lo, hi, delta, err := outer.extentAlong(g)
+	lo, hi, delta, err := outer.ExtentAlong(g)
 	if err != nil || displaced == 0 {
 		return lo, hi, delta, err
 	}
@@ -251,21 +252,22 @@ type cupPayload struct {
 	sense          ShellSense
 }
 
-// transform is the accumulated rigid placement.
-func (cp cupPayload) transform() r3.Transform { return cp.stack.xform }
+// Transform is the accumulated rigid placement.
+func (cp cupPayload) Transform() r3.Transform { return cp.stack.xform }
 
-// placed re-evaluates the same cup under the composed motion (evaluator §8).
-func (cp cupPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+// Placed re-evaluates the same cup under the composed motion (evaluator §8).
+func (cp cupPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	cp.stack.xform = composed
-	return evalCupContext(ctx, d, ref, cp)
+	return placedNode(evalCupContext(ctx, d, ref, cp))
 }
 
-// axialDelta reports the largest held-level displacement (stops.go).
-func (cp cupPayload) axialDelta() float64 { return cp.stack.axialDelta() }
+// AxialDelta reports the largest held-level displacement (stops.go).
+func (cp cupPayload) AxialDelta() float64 { return cp.stack.AxialDelta() }
 
-// extentAlong is the view's outer-prism extent (cupView.extentAlong).
-func (cp cupPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
-	return cp.view().extentAlong(g)
+// ExtentAlong is the view's outer-prism extent (cupView.ExtentAlong).
+func (cp cupPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
+	return cp.view().ExtentAlong(g)
 }
 
 // floorSlab is the index of the slab holding the outer region: the first
@@ -429,7 +431,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	if err != nil {
 		return nil, err
 	}
-	body.payload = cp
+	body.n.Payload = cp
 	return body, nil
 }
 

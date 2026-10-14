@@ -110,7 +110,7 @@ func requireCupPrismLevelBounds(t *testing.T, prism prismPayload, a, b proofboun
 //     area misses, inward and outward.
 //   - stackedBoundsContext's outer-run displacement: the outward Bounds
 //     miss.
-//   - cupView.extentAlong's offset term: the outward extent misses.
+//   - cupView.ExtentAlong's offset term: the outward extent misses.
 //   - The cup gate witness's offset term (verify_gate.go): the outward gate
 //     diameter exceeds the smallest denoted cup's.
 //   - The interference guard (interference.go): two equal displaced records
@@ -240,7 +240,7 @@ func TestEvalCupChargesOffsetDisplacement(t *testing.T) {
 			require.NoError(t, err)
 			bounds, err := body.Bounds()
 			require.NoError(t, err)
-			lo, hi, extentDelta, err := cp.extentAlong(r3.NewVec(1, 0, 0))
+			lo, hi, extentDelta, err := cp.ExtentAlong(r3.NewVec(1, 0, 0))
 			require.NoError(t, err)
 			// The offset region's own wall faces: cavity walls inward, outer walls
 			// outward, each over that region's height.

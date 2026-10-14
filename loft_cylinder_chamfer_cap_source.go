@@ -32,7 +32,7 @@ func loftCylinderChamferExteriorLineage(fp facetedPayload,
 		if body == nil {
 			return fmt.Errorf("%w: cap lacks an original tooth", ErrUnsupported)
 		}
-		lp, ok := body.payload.(loftPayload)
+		lp, ok := body.n.Payload.(loftPayload)
 		if !ok || !lp.authenticatedReconstruction || lp.proof.FacetDeparture < 0 ||
 			lp.proof.FacetDeparture > fp.meshBound || len(lp.verts)%2 != 0 ||
 			len(lp.segment) != 1 {
@@ -69,7 +69,7 @@ func loftCylinderChamferCapToothOf(body *Body, capIndex int, z float64) (loftcyl
 	if body == nil {
 		return loftcylinder.ChamferCapTooth{}, fmt.Errorf("%w: cap lacks a source tooth", ErrUnsupported)
 	}
-	lp, ok := body.payload.(loftPayload)
+	lp, ok := body.n.Payload.(loftPayload)
 	if !ok || !lp.authenticatedReconstruction || len(lp.verts)%2 != 0 ||
 		lp.proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.proof.FacetDeparture) {
 		return loftcylinder.ChamferCapTooth{}, fmt.Errorf("%w: cap tooth has no matched Loft contour", ErrUnsupported)

@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedbrep"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -100,7 +101,7 @@ var errUBMiss = brepgeom.ErrStackedWallMiss
 // brep states the stacked union as a brepPayload. ok=false with a nil error
 // is a silent miss. A non-nil error is cancellation or a refusal past the
 // gate that the stacked path itself raises.
-func (st *stackedUnionState) brep(ctx context.Context, levels []stackedrecord.UnionLevel, reach [][2]int) (featurePayload, bool, error) {
+func (st *stackedUnionState) brep(ctx context.Context, levels []stackedrecord.UnionLevel, reach [][2]int) (topo.Payload, bool, error) {
 	if !st.reexpress.Identity || st.va.proxy.SectionDelta != 0 || st.vb.proxy.SectionDelta != 0 {
 		// B's records enter every scene verbatim only under the identity
 		// re-expression; a re-expressed B would be recorded once per scene.

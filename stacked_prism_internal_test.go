@@ -51,10 +51,10 @@ func cloneStackedForAudit(sp stackedPrismPayload) stackedPrismPayload {
 
 func TestStackedPayloadAuditRejectsBrokenRecords(t *testing.T) {
 	doc, pocket := internalPocket(t)
-	base := pocket.payload.(stackedPrismPayload)
+	base := pocket.n.Payload.(stackedPrismPayload)
 	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: base.slabs, Interfaces: base.interfaces}))
 	other := internalBoxBody(t, doc, 1, 1, 2, 2, 10)
-	otherHole, err := offset2d.ReverseLoopRecordContext(t.Context(), other.payload.(prismPayload).Profile.Outer)
+	otherHole, err := offset2d.ReverseLoopRecordContext(t.Context(), other.n.Payload.(prismPayload).Profile.Outer)
 	require.NoError(t, err)
 	cases := []struct {
 		name   string
@@ -93,7 +93,7 @@ func TestBlindStackedLevelChargesExactOffsetSum(t *testing.T) {
 		Symmetric{D: units.Millimeters(0.3)})
 	pocket, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	sp := pocket.payload.(stackedPrismPayload)
+	sp := pocket.n.Payload.(stackedPrismPayload)
 	inner := new(big.Rat).Add(proofarith.FloatRat(0.1), proofarith.FloatRat(0.3))
 	held, _ := inner.Float64()
 	require.Equal(t, held, sp.slabs[0].Z1)
@@ -107,11 +107,11 @@ func TestBlindStackedLevelCarriesToolConversion(t *testing.T) {
 	plate := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	tool := internalOffsetBox(t, doc, 3, 3, 7, 7, 10,
 		Distance{D: units.Inches(0.2), Dir: Against})
-	toolDelta := tool.payload.(prismPayload).Z0Delta
+	toolDelta := tool.n.Payload.(prismPayload).Z0Delta
 	require.Positive(t, toolDelta)
 	pocket, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	sp := pocket.payload.(stackedPrismPayload)
+	sp := pocket.n.Payload.(stackedPrismPayload)
 	require.GreaterOrEqual(t, sp.slabs[0].Z1Delta, toolDelta)
 	volume, err := pocket.Volume()
 	require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestBlindStackedPlacedToolChargesSectionDisplacement(t *testing.T) {
 	require.NoError(t, err)
 	pocket, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	sp := pocket.payload.(stackedPrismPayload)
+	sp := pocket.n.Payload.(stackedPrismPayload)
 	require.Positive(t, sp.sectionDelta)
 	volume, err := pocket.Volume()
 	require.NoError(t, err)

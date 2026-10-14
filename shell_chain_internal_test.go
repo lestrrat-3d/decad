@@ -109,7 +109,7 @@ func TestRevolveShellOpeningSectionDelta(t *testing.T) {
 			}
 			shelled, err := Shell(t.Context(), body, sel, units.Millimeters(tc.t), opts...)
 			require.NoError(t, err)
-			rp := shelled.payload.(revolvePayload)
+			rp := shelled.n.Payload.(revolvePayload)
 			if !tc.displaced {
 				require.Zero(t, rp.sectionDelta, `an exact rim publishes no displacement`)
 				require.False(t, rp.sectionWhole)

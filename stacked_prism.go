@@ -28,18 +28,19 @@ type stackedPrismPayload struct {
 	sectionDelta float64
 }
 
-func (sp stackedPrismPayload) transform() r3.Transform { return sp.xform }
+func (sp stackedPrismPayload) Transform() r3.Transform { return sp.xform }
 
 func (sp stackedPrismPayload) opposedSectionExact() bool {
 	return sp.sectionDelta == 0 || !stackedrecord.HasOpposed(sp.interfaces)
 }
 
-func (sp stackedPrismPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (sp stackedPrismPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	sp.xform = composed
-	return evalStackedContext(ctx, d, ref, sp)
+	return placedNode(evalStackedContext(ctx, d, ref, sp))
 }
 
-func (sp stackedPrismPayload) axialDelta() float64 {
+func (sp stackedPrismPayload) AxialDelta() float64 {
 	var delta float64
 	for _, slab := range sp.slabs {
 		delta = max(delta, slab.Z0Delta, slab.Z1Delta)
@@ -63,7 +64,7 @@ func (sp stackedPrismPayload) outerPrism() prismPayload {
 // has one run per distinct outer, and every run's prism is material of the
 // body, since a union-built slab region is hole-free (§2.2's union reading).
 // The union of the runs' prisms is the body's outer envelope, which is what
-// Bounds, extentAlong, the centroid's geometric cap and the tolerance gate's
+// Bounds, ExtentAlong, the centroid's geometric cap and the tolerance gate's
 // witnesses read.
 func (sp stackedPrismPayload) outerRuns() []prismPayload {
 	base := sp.outerPrism()
@@ -79,11 +80,11 @@ func (sp stackedPrismPayload) outerRuns() []prismPayload {
 	return runs
 }
 
-func (sp stackedPrismPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
+func (sp stackedPrismPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 	runs := sp.outerRuns()
 	var lo, hi, bound float64
 	for i, run := range runs {
-		rlo, rhi, rbound, err := run.extentAlong(g)
+		rlo, rhi, rbound, err := run.ExtentAlong(g)
 		if err != nil {
 			return 0, 0, 0, err
 		}
@@ -567,7 +568,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		}
 		if sp.sectionDelta > 0 {
 			centroidBound = max(centroidBound, proofbound.AbsSumUpper(geometryBound,
-				sp.sectionDelta, sp.axialDelta()))
+				sp.sectionDelta, sp.AxialDelta()))
 		} else {
 			// The column displacements are already charged into every part's
 			// moments, so the envelope is a ceiling on that sound answer. It is
@@ -577,7 +578,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 			// factor, as the cup's own envelope is.
 			geometryBound = proofbound.AbsSumUpper(geometryBound, proofbound.ProductUpper(3, proofbound.AbsSumUpper(
 				proofbound.ProductUpper(proofbound.AbsSumUpper(vecL1(base.Frame.U()), vecL1(base.Frame.V())), maxColDelta),
-				proofbound.ProductUpper(vecL1(base.Frame.N()), sp.axialDelta()),
+				proofbound.ProductUpper(vecL1(base.Frame.N()), sp.AxialDelta()),
 			)))
 			centroidBound = math.Min(centroidBound, geometryBound)
 		}
@@ -602,6 +603,6 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}
-	body.payload = sp
+	body.n.Payload = sp
 	return body, nil
 }

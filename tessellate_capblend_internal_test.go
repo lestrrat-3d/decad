@@ -51,7 +51,7 @@ func chamferedSectionBody(t *testing.T, section func(*sketch.Sketch), d float64)
 	require.NoError(t, err)
 	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
-	cbp, ok := chamfered.payload.(capBlendPayload)
+	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
 	return chamfered, cbp
 }
@@ -478,7 +478,7 @@ func TestCapBlendMeshMotionCarriesEachLevelBound(t *testing.T) {
 	require.NoError(t, err)
 	chamfered, err := Chamfer(t.Context(), pin, Edges(CreatedBy(CapEnd(pin))), units.Millimeters(1))
 	require.NoError(t, err)
-	cbp, ok := chamfered.payload.(capBlendPayload)
+	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
 	capLevel := cbp.capBandLevel(cbp.z1, -1)
 	require.Positive(t, capLevel.Bound, `a ToFace stop's end level is computed, and says so`)
@@ -522,7 +522,7 @@ func TestCapBlendMeshMotionCarriesPlacementRounding(t *testing.T) {
 	require.NoError(t, err)
 	moved, err := Transform(t.Context(), chamfered, rot)
 	require.NoError(t, err)
-	cbp, ok := moved.payload.(capBlendPayload)
+	cbp, ok := moved.n.Payload.(capBlendPayload)
 	require.True(t, ok)
 	mesh, err := tessellateCapBlend(t.Context(), moved, cbp, 1, VerifyAll)
 	require.NoError(t, err)
@@ -636,7 +636,7 @@ func asymChamferedSectionBody(t *testing.T, section func(*sketch.Sketch), dc, ds
 	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(dc),
 		WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(ds)))
 	require.NoError(t, err)
-	cbp, ok := chamfered.payload.(capBlendPayload)
+	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
 	require.Equal(t, capSetback{dc: dc, ds: ds}, cbp.end)
 	return chamfered, cbp
@@ -739,7 +739,7 @@ func TestCapBlendMeshCapMotionCarriesSetbackRounding(t *testing.T) {
 	require.NoError(t, err)
 	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), inch)
 	require.NoError(t, err)
-	cbp, ok := chamfered.payload.(capBlendPayload)
+	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
 	require.Positive(t, cbp.end.dcDelta, `the premise: the conversion to millimetres rounds`)
 

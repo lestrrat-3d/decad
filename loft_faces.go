@@ -128,7 +128,7 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 		if err := d.requireLive(body); err != nil {
 			return nil, nil, err
 		}
-		fp, ok := body.payload.(facetedPayload)
+		fp, ok := body.n.Payload.(facetedPayload)
 		if !ok || fp.pointPlane == nil || fp.pointPlane.base.pointSection == nil ||
 			len(fp.verts) == 0 || len(fp.faceOf) != len(fp.tris) {
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has no authenticated Split cap", ErrUnsupported, i)

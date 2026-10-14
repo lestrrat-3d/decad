@@ -82,7 +82,7 @@ func TestLoftFitSplineWedgeMatchesExtrude(t *testing.T) {
 	require.Equal(t, Approximate, bounds.Exactness)
 	require.Positive(t, bounds.Bound.Base())
 
-	lp, ok := body.payload.(loftPayload)
+	lp, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)
 	require.Positive(t, lp.sectionDelta, "a chorded free-form pair publishes its measured sagitta")
 	require.Greater(t, lp.walls, 2*3, "the free-form pair must chord into more than one cell")
@@ -153,7 +153,7 @@ func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
 
 	area, err := body.Area()
 	require.NoError(t, err)
-	lp := body.payload.(loftPayload)
+	lp := body.n.Payload.(loftPayload)
 	built, pairs, a := loftWedgeAreaRebuild(t, lp, false)
 	require.Equal(t, area.Bound.Base(), built.Bound.Base(), "the rebuild must reproduce the published Area")
 	unsharp, _, _ := loftWedgeAreaRebuild(t, lp, true)
@@ -334,8 +334,8 @@ func TestLoftFreeformReversedRangeBuildsTheSameStations(t *testing.T) {
 	sameSense := evalLoftFixture(t, loftPayloadFor(t, loopOf(forward), loopOf(forward), r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 3)))
 	opposite := evalLoftFixture(t, loftPayloadFor(t, loopOf(forward), loopOf(reversed), r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 3)))
 
-	a := sameSense.payload.(loftPayload)
-	b := opposite.payload.(loftPayload)
+	a := sameSense.n.Payload.(loftPayload)
+	b := opposite.n.Payload.(loftPayload)
 	require.Greater(t, a.walls, 4, "the spline must chord into several cells")
 	require.Equal(t, a.verts, b.verts, "the reversed record must build the identical station coordinates")
 	require.Equal(t, a.tris, b.tris)
@@ -372,7 +372,7 @@ func TestLoftFreeformTwistedClosedSplineBracketsDenseReference(t *testing.T) {
 	doc := New()
 	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
-	lp := body.payload.(loftPayload)
+	lp := body.n.Payload.(loftPayload)
 	require.Positive(t, lp.sectionDelta)
 
 	c0 := denseWalkSamples(t, lp.profile0.Outer.Segments[0], 2048)
@@ -443,8 +443,8 @@ func TestLoftFreeformWedgePlacedAndTessellated(t *testing.T) {
 	placed, err := Copy(t.Context(), body, WithCopyPlacement(motion))
 	require.NoError(t, err)
 
-	src := body.payload.(loftPayload)
-	moved := placed.payload.(loftPayload)
+	src := body.n.Payload.(loftPayload)
+	moved := placed.n.Payload.(loftPayload)
 	require.Greater(t, moved.delta, src.delta, "a placement adds its rigid rounding to every vertex")
 
 	placedVol, err := placed.Volume()
@@ -459,7 +459,7 @@ func TestLoftFreeformWedgePlacedAndTessellated(t *testing.T) {
 	require.LessOrEqual(t, placedCen.Value.Sub(want).Len(), placedCen.Bound.Base()+srcCen.Bound.Base())
 
 	for _, b := range []*Body{body, placed} {
-		lp := b.payload.(loftPayload)
+		lp := b.n.Payload.(loftPayload)
 		mesh, err := b.Tessellate(t.Context(), units.Millimeters(1), WithVerification(VerifyAll))
 		require.NoError(t, err)
 		require.Len(t, mesh.Triangles(), len(lp.tris))
@@ -592,7 +592,7 @@ func TestLoftDegreeOneTwistedPairPublishesTheRuledBody(t *testing.T) {
 
 	t.Run("degree-1 NURBS pair encloses the ruled body", func(t *testing.T) {
 		body := build(t, true)
-		lp := body.payload.(loftPayload)
+		lp := body.n.Payload.(loftPayload)
 		require.Zero(t, lp.delta, "two unplaced XY planes through the origin's own axis lift exactly")
 		require.Zero(t, lp.sectionDelta, "a degree-1 NURBSSeg is its own chord")
 
@@ -629,8 +629,8 @@ func TestLoftDegreeOneTwistedPairPublishesTheRuledBody(t *testing.T) {
 	// IS the surface. The NURBS sheet's walls are bilinear patches the audit
 	// never cleared, so the proof does not transfer.
 	t.Run("only the LineSeg sheet proves itself simple", func(t *testing.T) {
-		require.False(t, payloadProvesSimple(t.Context(), build(t, true, WithSurfaceResult()).payload))
-		require.True(t, payloadProvesSimple(t.Context(), build(t, false, WithSurfaceResult()).payload))
+		require.False(t, payloadProvesSimple(t.Context(), build(t, true, WithSurfaceResult()).n.Payload))
+		require.True(t, payloadProvesSimple(t.Context(), build(t, false, WithSurfaceResult()).n.Payload))
 	})
 }
 

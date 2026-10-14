@@ -196,7 +196,7 @@ func TestCoilSquareSpring(t *testing.T) {
 		requireEnclosesBig(t, area.Value.Base(), area.Bound.Base()+2*quadErr, total, "body area")
 	})
 	t.Run("enclosures hold the exact values", func(t *testing.T) {
-		cp := b.payload.(coilPayload)
+		cp := b.n.Payload.(coilPayload)
 		rec, err := coilRecordOfPayload(cp)
 		require.NoError(t, err)
 		m := coil.RegionMoments(rec.Rho, rec.Zeta, rec.LoopIdx, big.NewRat(1, 1), rec.Axis.Side)
@@ -235,7 +235,7 @@ func TestCoilSquareSpring(t *testing.T) {
 		require.Equal(t, 4, helices)
 	})
 	t.Run("held table bounds", func(t *testing.T) {
-		cp := b.payload.(coilPayload)
+		cp := b.n.Payload.(coilPayload)
 		require.Len(t, cp.verts, 4*(512+1))
 		maxBeta := 0.0
 		for _, beta := range cp.vertexBound {
@@ -252,7 +252,7 @@ func TestCoilSquareSpring(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, Sound, rep.Status)
 		require.Equal(t, ValidityValid, rep.Bodies[0].Validity.Outcome)
-		cp := b.payload.(coilPayload)
+		cp := b.n.Payload.(coilPayload)
 		held, ok := diameter.Points(cp.verts)
 		require.True(t, ok)
 		want, ok := diameter.LowerForDisplacement(held, cp.delta)
@@ -261,7 +261,7 @@ func TestCoilSquareSpring(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 		require.Equal(t, want, got)
-		require.True(t, payloadProvesSimple(t.Context(), b.payload))
+		require.True(t, payloadProvesSimple(t.Context(), b.n.Payload))
 	})
 }
 
@@ -338,7 +338,7 @@ func TestCoilFractionalTurnCentroid(t *testing.T) {
 	wantZ := new(big.Float).SetPrec(512).Quo(big.NewFloat(-76), new(big.Float).SetPrec(512).Mul(pi, big.NewFloat(75)))
 	requireEnclosesBig(t, c.Value.Z, c.Bound.Base(), wantZ, "centroid z")
 
-	cp := b.payload.(coilPayload)
+	cp := b.n.Payload.(coilPayload)
 	rec, err := coilRecordOfPayload(cp)
 	require.NoError(t, err)
 	m := coil.RegionMoments(rec.Rho, rec.Zeta, rec.LoopIdx, big.NewRat(1, 1), rec.Axis.Side)
@@ -359,7 +359,7 @@ func TestCoilLeftHandMirrors(t *testing.T) {
 	left, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5), WithLeftHand())
 	require.NoError(t, err)
 
-	rv, lv := right.payload.(coilPayload).verts, left.payload.(coilPayload).verts
+	rv, lv := right.n.Payload.(coilPayload).verts, left.n.Payload.(coilPayload).verts
 	require.Len(t, lv, len(rv))
 	for i := range rv {
 		require.Equal(t, r3.NewVec(rv[i].X, rv[i].Y, -rv[i].Z), lv[i], "vertex %d", i)
@@ -605,7 +605,7 @@ func TestCoilRepeatAndPlacement(t *testing.T) {
 	require.NoError(t, err)
 	second, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5))
 	require.NoError(t, err)
-	fp, sp := first.payload.(coilPayload), second.payload.(coilPayload)
+	fp, sp := first.n.Payload.(coilPayload), second.n.Payload.(coilPayload)
 	require.Equal(t, fp.verts, sp.verts)
 	require.Equal(t, fp.vertexBound, sp.vertexBound)
 	require.Equal(t, fp.tris, sp.tris)
@@ -625,7 +625,7 @@ func TestCoilRepeatAndPlacement(t *testing.T) {
 	require.NoError(t, err)
 	placedB, err := Transform(t.Context(), second, rot)
 	require.NoError(t, err)
-	require.Equal(t, placedA.payload.(coilPayload).verts, placedB.payload.(coilPayload).verts)
+	require.Equal(t, placedA.n.Payload.(coilPayload).verts, placedB.n.Payload.(coilPayload).verts)
 
 	// L = rot·[U V N] is orthonormal only to rounding, so the placed coil
 	// denotes the affine image of the unplaced one: its volume is det(L)
@@ -652,7 +652,7 @@ func TestCoilRepeatAndPlacement(t *testing.T) {
 	}
 	det := dot(ex, cross(ey, ez))
 	require.NotZero(t, det.Cmp(big.NewRat(1, 1)), "the fixture's rotation must not be exactly orthonormal")
-	pcp := placedA.payload.(coilPayload)
+	pcp := placedA.n.Payload.(coilPayload)
 	prec, err := coilRecordOfPayload(pcp)
 	require.NoError(t, err)
 	pm := coil.RegionMoments(prec.Rho, prec.Zeta, prec.LoopIdx, big.NewRat(1, 1), prec.Axis.Side)
@@ -756,7 +756,7 @@ func TestCoilFacetBoundHoldsTheSurface(t *testing.T) {
 			const pitch = 1.5
 			b, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(pitch), units.Scalar(c.turns))
 			require.NoError(t, err)
-			cp := b.payload.(coilPayload)
+			cp := b.n.Payload.(coilPayload)
 			rec, err := coilRecordOfPayload(cp)
 			require.NoError(t, err)
 			stride, n := len(rec.Pts), rec.N

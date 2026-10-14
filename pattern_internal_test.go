@@ -39,7 +39,7 @@ func patternPrism(t *testing.T, u0, v0, u1, v1, r float64) *Body {
 
 func patternInstance(t *testing.T, b *Body) prismPayload {
 	t.Helper()
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	require.True(t, ok)
 	return pp
 }
@@ -176,13 +176,13 @@ func TestPatternCopiesUnionStackArm(t *testing.T) {
 			require.NoError(t, err)
 			part, err := Union(t.Context(), box(w.XY(), 0, 0, 10, 10), box(top, 3, 3, 7, 7))
 			require.NoError(t, err)
-			sp, ok := part.payload.(stackedPrismPayload)
+			sp, ok := part.n.Payload.(stackedPrismPayload)
 			require.True(t, ok)
 			runs := sp.outerRuns()
 			require.Len(t, runs, 2, "the premise: the outer loop changes between slabs")
 			copies, err := PatternCopies(t.Context(), part, LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: tc.Step, Count: 2})
 			require.NoError(t, err)
-			inst, ok := copies[0].payload.(stackedPrismPayload)
+			inst, ok := copies[0].n.Payload.(stackedPrismPayload)
 			require.True(t, ok)
 			if tc.Keep {
 				require.Equal(t, r3.Identity(), inst.xform)

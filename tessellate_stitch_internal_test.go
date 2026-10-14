@@ -67,7 +67,7 @@ func TestStitchCurvedMeshInheritsEverySourceFaceBound(t *testing.T) {
 	require.NoError(t, err)
 	mesh, err := stitched.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
-	sp, ok := stitched.payload.(stitchPayload)
+	sp, ok := stitched.n.Payload.(stitchPayload)
 	require.True(t, ok)
 	require.Len(t, sp.faces, 4)
 	require.Equal(t, source.Bound(), mesh.Bound())
@@ -92,7 +92,7 @@ func TestStitchCurvedWeldedRevolveSiblingRejectsWrongEdgeAncestry(t *testing.T) 
 	require.Len(t, pieces, 2)
 	stitched, err := Stitch(t.Context(), pieces...)
 	require.NoError(t, err)
-	sp, ok := stitched.payload.(stitchPayload)
+	sp, ok := stitched.n.Payload.(stitchPayload)
 	require.True(t, ok)
 	require.GreaterOrEqual(t, sp.plan.groups, 2)
 
@@ -142,12 +142,12 @@ func TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound(t *testing
 	require.NoError(t, err)
 	mesh, err := stitched.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
-	sp, ok := stitched.payload.(stitchPayload)
+	sp, ok := stitched.n.Payload.(stitchPayload)
 	require.True(t, ok)
 	require.Len(t, sp.faces, 2)
 
 	for i, copied := range sp.faces {
-		up, ok := bodyHandle(copied.n.Body).payload.(unstitchPayload)
+		up, ok := bodyHandle(copied.n.Body).n.Payload.(unstitchPayload)
 		require.True(t, ok)
 		want, ok := source.sourceBound(up.face)
 		require.True(t, ok)
@@ -211,7 +211,7 @@ func TestStitchTessellateClassBoundIsIndependentOfPlacement(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, BodySolid, solid.Kind())
 
-	sp, ok := solid.payload.(stitchPayload)
+	sp, ok := solid.n.Payload.(stitchPayload)
 	require.True(t, ok)
 	require.Zero(t, sp.delta, "no placement is in play: the identity transform's own fast path")
 

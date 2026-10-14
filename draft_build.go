@@ -278,7 +278,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 	if err := measureDraftBody(ctx, body, dp, cbp, bands, nearCap, farCap, work); err != nil {
 		return nil, err
 	}
-	body.payload = dp
+	body.n.Payload = dp
 	return body, nil
 }
 

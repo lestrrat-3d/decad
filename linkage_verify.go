@@ -617,7 +617,7 @@ func (dr *linkageDriver) staticHull(k int) (cornerBounds, bool) {
 // of its Bounds box inflated by its own Bound.
 func bodyPoints(b *Body, hull bool) (cornerReading, bool) {
 	if hull {
-		if pp, isPrism := b.payload.(prismPayload); isPrism {
+		if pp, isPrism := b.n.Payload.(prismPayload); isPrism {
 			points, pad, k, ok := linkagebound.PrismHullPoints(linkagebound.PrismHull{
 				Outer: pp.Profile.Outer, Frame: pp.Frame, Transform: pp.Xform,
 				Z0: pp.Z0, Z1: pp.Z1, SectionDelta: pp.SectionDelta,

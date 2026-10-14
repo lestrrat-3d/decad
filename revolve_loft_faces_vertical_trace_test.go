@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -175,7 +176,7 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	wrongCenter.Offset[0] = lfAdd(wrongCenter.Offset[0], lfOne())
 	_, centered := revolveLoftFacesVerticalTraceArcRadius(&wrongCenter, *pieces[1].arc)
 	require.False(t, centered, "a moved Sketch arc is not centered on the blank axis")
-	payload := tooth.payload.(facetedPayload)
+	payload := tooth.n.Payload.(facetedPayload)
 	trim := *payload.loftFacesTrim
 	source := *trim.source
 	live := *source.source
@@ -184,7 +185,7 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	source.source = &live
 	trim.source = &source
 	payload.loftFacesTrim = &trim
-	partialTooth := bornBody(&Body{payload: payload})
+	partialTooth := bornBody(&Body{n: topo.Body{Payload: payload}})
 	partialGraph := *graph
 	partialGraph.tooth = partialTooth
 	_, chained = revolveLoftFacesVerticalTraceChain(&partialGraph, arc)

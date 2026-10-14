@@ -46,13 +46,14 @@ type patchPayload struct {
 	walks   *momentinput.ProfileWalks
 }
 
-// transform is the accumulated rigid placement.
-func (pp patchPayload) transform() r3.Transform { return pp.xform }
+// Transform is the accumulated rigid placement.
+func (pp patchPayload) Transform() r3.Transform { return pp.xform }
 
-// placed re-evaluates the same record under the composed motion (core §8).
-func (pp patchPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+// Placed re-evaluates the same record under the composed motion (core §8).
+func (pp patchPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	pp.xform = composed
-	return evalPatchContext(ctx, d, ref, pp, freeform.NewFreeformWork())
+	return placedNode(evalPatchContext(ctx, d, ref, pp, freeform.NewFreeformWork()))
 }
 
 // prism is a *view* of pp as a zero-height prismPayload — never a body this
@@ -227,7 +228,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, err
 	}
 	pp.walks = pw
-	body.payload = pp
+	body.n.Payload = pp
 	return body, nil
 }
 

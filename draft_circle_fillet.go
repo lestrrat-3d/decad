@@ -23,7 +23,7 @@ import (
 // between its top plane and cone, so the full-revolve evaluator builds the
 // torus, mass readings and occupied-volume proof from that meridian.
 func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius, radiusDelta float64) (*Body, bool, error) {
-	dp, ok := b.payload.(draftPayload)
+	dp, ok := b.n.Payload.(draftPayload)
 	if !ok || !dp.nearStart || dp.taper <= 0 || len(dp.kept) != 0 ||
 		len(dp.profile.Holes) != 0 || len(dp.profile.Outer.Segments) != 1 || len(edges) != 1 {
 		return nil, false, nil

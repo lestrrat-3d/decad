@@ -42,7 +42,7 @@ import (
 func planarPairAdmits(a, b *Body) bool {
 	served, coils := false, 0
 	for _, body := range []*Body{a, b} {
-		switch body.payload.(type) {
+		switch body.n.Payload.(type) {
 		case mitredSweepPayload, facetedPayload:
 			served = true
 		case coilPayload:
@@ -57,7 +57,7 @@ func planarPairAdmits(a, b *Body) bool {
 		return served
 	}
 	for _, body := range []*Body{a, b} {
-		switch body.payload.(type) {
+		switch body.n.Payload.(type) {
 		case coilPayload, prismPayload, stitchPayload:
 		default:
 			return false

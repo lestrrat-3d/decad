@@ -52,7 +52,7 @@ func chamferedFlange(t *testing.T) (*Body, capBlendPayload) {
 	require.NoError(t, err)
 	chamfered, err := Chamfer(t.Context(), filleted, Edges(CreatedBy(CapEnd(filleted))), units.Millimeters(1))
 	require.NoError(t, err)
-	cbp, ok := chamfered.payload.(capBlendPayload)
+	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
 	return chamfered, cbp
 }

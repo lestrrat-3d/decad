@@ -172,7 +172,7 @@ func TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels
 
 // TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta is
 // docs/surface-design.md §15's T29: buildPatchFace over a chain gate 3's
-// level arm admitted sets the new face's own axialDelta/hasAxialDelta from
+// level arm admitted sets the new face's own AxialDelta/hasAxialDelta from
 // the chain's proven bound — the same fields a prism cap already carries
 // (prism_build.go) — rather than leaving them at their zero value.
 func TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta(t *testing.T) {
@@ -207,7 +207,7 @@ func TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta(t *testing.
 // (frame.ToWorldUV(u, v) rounds differently per (u, v) — see denotation.go's
 // own doc comment), so a normal FITTED to them (patchChainOrientedNormal's
 // Newell sum) would carry that same rounding as an unbounded tilt no
-// axialDelta covers. This fixture deliberately perturbs one vertex's held
+// AxialDelta covers. This fixture deliberately perturbs one vertex's held
 // coordinate by far more than any float64 rounding could — 1e-6 mm, which a
 // genuine rotated-frame build would never actually produce — to prove the
 // PUBLISHED plane does not track that perturbation at all: it comes from the
@@ -340,7 +340,7 @@ func TestBodyPatchRejectsAReceiverWithNoPayload(t *testing.T) {
 // than a real Extrude, since only one of the three conditions is ever the
 // thing under test and the other two must hold cleanly for the isolation to
 // mean anything.
-func patchTestReceiverWithOneChain(payload featurePayload, edges []*Edge) *Body {
+func patchTestReceiverWithOneChain(payload topo.Payload, edges []*Edge) *Body {
 	loop := bornLoop(&Loop{n: topo.Loop{Outer: true}})
 	for _, e := range edges {
 		loop.n.CoEdges = append(loop.n.CoEdges, topo.CoEdge{Edge: edgeNode(e), Forward: true})
@@ -349,7 +349,7 @@ func patchTestReceiverWithOneChain(payload featurePayload, edges []*Edge) *Body 
 	for _, e := range edges {
 		e.n.Faces = []*topo.Face{faceNode(face)}
 	}
-	receiver := bornBody(&Body{payload: payload})
+	receiver := bornBody(&Body{n: topo.Body{Payload: payload}})
 	receiver.n.Lumps = lumpNodes(sheetLumps([]*Face{face}))
 	face.n.Body = bodyNode(receiver)
 	return receiver
@@ -400,7 +400,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	innerFace := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(inner), Forward: true}}}}))}}})
 	inner.n.Faces = []*topo.Face{faceNode(innerFace)}
 
-	receiver := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}})
+	receiver := bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}}})
 	receiver.n.Lumps = lumpNodes(sheetLumps([]*Face{outerFace, innerFace}))
 	outerFace.n.Body = bodyNode(receiver)
 	innerFace.n.Body = bodyNode(receiver)

@@ -30,7 +30,7 @@ import (
 // evalStitchContext is the whole evaluator and is shared, unchanged, by the
 // initial build and by every later Transform/Copy
 // re-evaluation: the payload records the operand faces and the weld plan,
-// never a built topology, and placed() replays this same function under a
+// never a built topology, and Placed() replays this same function under a
 // composed transform (docs/surface-design.md's "recorded weld" decision).
 // Table J's admission is never re-run on a placed (rounded) coordinate; the
 // crossing audit IS re-run, because a rigid motion can make two placed
@@ -71,7 +71,7 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 		return nil, fmt.Errorf(`%w: Stitch requires at least one body`, ErrDegenerate)
 	}
 	for _, b := range bodies {
-		if b == nil || b.payload == nil {
+		if b == nil || b.n.Payload == nil {
 			return nil, fmt.Errorf(`%w: Stitch requires every operand to carry an evaluator payload`, ErrDegenerate)
 		}
 	}
@@ -111,7 +111,7 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 // stitchPayload is Stitch's own record. It carries the operand faces
 // (readable even after the operands retire — a Body is never mutated or
 // freed on retirement, core §6) and the weld plan buildStitchWeldPlan
-// derived from them, never a previously built topology: placed() replays
+// derived from them, never a previously built topology: Placed() replays
 // evalStitchContext from these same two values under the composed
 // transform, so the admission Table J proved is REPLAYED, never re-derived,
 // while the crossing audit and the global orientation sign are re-decided
@@ -160,10 +160,11 @@ type stitchPayload struct {
 	auditClean bool
 }
 
-func (sp stitchPayload) transform() r3.Transform { return sp.xform }
+func (sp stitchPayload) Transform() r3.Transform { return sp.xform }
 
-func (sp stitchPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
-	return evalStitchContext(ctx, d, ref, sp.faces, sp.plan, composed)
+func (sp stitchPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
+	return placedNode(evalStitchContext(ctx, d, ref, sp.faces, sp.plan, composed))
 }
 
 // evalStitchContext is Stitch's whole evaluator, shared by the initial build
@@ -466,7 +467,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	if !allTetra {
 		payloadTris, payloadTriFaces, payloadVertBound = nil, nil, nil
 	}
-	body.payload = stitchPayload{
+	body.n.Payload = stitchPayload{
 		xform:      xform,
 		delta:      delta,
 		faces:      srcFaces,
@@ -491,11 +492,11 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 // §6, correction 1's construction note), so nothing here aliases an operand's
 // own Face, Loop, CoEdge, Edge or Vertex.
 //
-// axialDelta, hasAxialDelta and normalBound copy the same way
+// AxialDelta, hasAxialDelta and normalBound copy the same way
 // unstitch.go's copyFaceUnderContext does, and for the same reason: the copy
 // carries the operand's identical surface and identical tag, so both
 // readings stay exactly as true of the copy as they were of the operand.
-// hasAxialDelta and normalBound copy verbatim; axialDelta additionally
+// hasAxialDelta and normalBound copy verbatim; AxialDelta additionally
 // widens by delta under a non-identity placement. A placed copy of an
 // operand face whose normalBound is nonzero refuses with [ErrUnsupported]
 // rather than invent the dimensionless term a sound composition would need

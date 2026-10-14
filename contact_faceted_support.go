@@ -15,7 +15,7 @@ import (
 )
 
 func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) error {
-	pp, ok := result.payload.(facetedPayload)
+	pp, ok := result.n.Payload.(facetedPayload)
 	if !ok || pp.meshBound <= 0 || len(pp.exactSourceVerts) != 0 {
 		return nil
 	}
@@ -41,7 +41,7 @@ func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) er
 			pp.lowerSupport = &facetproof.LowerSupport{Plane: box.lo[2], SourceGroup: sourceGroup,
 				FootLo: [2]proofarith.Dyadic{box.lo[0], box.lo[1]},
 				FootHi: [2]proofarith.Dyadic{box.hi[0], box.hi[1]}}
-			result.payload = pp
+			result.n.Payload = pp
 			_, proven, err := sourceFacetedAxisSupport(ctx, result, r3.Identity(), 2, 0)
 			if err != nil {
 				return err
@@ -50,7 +50,7 @@ func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) er
 				return nil
 			}
 			pp.lowerSupport = nil
-			result.payload = pp
+			result.n.Payload = pp
 			break
 		}
 	}
@@ -70,7 +70,7 @@ func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 	if b == nil || !b.n.Solid || b.n.Kind != topo.BodySolid || !signedAxisTransform(pose) {
 		return boundedFacetedExtent{}, false, nil
 	}
-	pp, ok := b.payload.(facetedPayload)
+	pp, ok := b.n.Payload.(facetedPayload)
 	if !ok || len(pp.verts) == 0 || !measurement.FiniteValues(pp.meshBound, pp.volSymDiff) ||
 		pp.meshBound < 0 || pp.volSymDiff < 0 {
 		return boundedFacetedExtent{}, false, nil
@@ -154,7 +154,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		!b.n.Solid || b.n.Kind != topo.BodySolid || !signedAxisTransform(pose) {
 		return facetedAxisSupport{}, false, nil
 	}
-	pp, ok := b.payload.(facetedPayload)
+	pp, ok := b.n.Payload.(facetedPayload)
 	if !ok {
 		return facetedAxisSupport{}, false, nil
 	}

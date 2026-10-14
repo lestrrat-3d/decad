@@ -38,12 +38,12 @@ func tryLoftMirrorUnion(ctx context.Context, op meshbool.OperationKind,
 	if op != meshbool.OpUnion || !a.IsSolid() || !b.IsSolid() {
 		return nil, false, nil
 	}
-	lower, ok := a.payload.(loftPayload)
+	lower, ok := a.n.Payload.(loftPayload)
 	if !ok || lower.xform != r3.Identity() {
 		a, b = b, a
-		lower, ok = a.payload.(loftPayload)
+		lower, ok = a.n.Payload.(loftPayload)
 	}
-	upper, upperOK := b.payload.(loftPayload)
+	upper, upperOK := b.n.Payload.(loftPayload)
 	if !ok || !upperOK || lower.xform != r3.Identity() ||
 		!lower.authenticatedReconstruction || !upper.authenticatedReconstruction ||
 		lower.surfaceResult || upper.surfaceResult || lower.sourceIdentity == nil ||

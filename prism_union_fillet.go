@@ -28,10 +28,10 @@ import (
 type prismUnionFilletRecord struct{ first, second *Body }
 
 func recognizePrismUnionFillet(a, b *Body) *prismUnionFilletRecord {
-	if _, ok := a.payload.(prismPayload); !ok {
+	if _, ok := a.n.Payload.(prismPayload); !ok {
 		return nil
 	}
-	if _, ok := b.payload.(prismPayload); !ok {
+	if _, ok := b.n.Payload.(prismPayload); !ok {
 		return nil
 	}
 	return &prismUnionFilletRecord{first: a, second: b}
@@ -43,7 +43,7 @@ func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
 		return nil, false, nil
 	}
 	for _, pair := range [][2]*Body{{rec.first, rec.second}, {rec.second, rec.first}} {
-		pp, ok := pair[0].payload.(prismPayload)
+		pp, ok := pair[0].n.Payload.(prismPayload)
 		if !ok {
 			continue
 		}

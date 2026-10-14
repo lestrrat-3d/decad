@@ -31,7 +31,7 @@ func spiralPrepareFirstUnion(ctx context.Context, op meshbool.OperationKind,
 	if _, ok := exactSpiralBlank(blank); !ok {
 		return held, nil, nil
 	}
-	payload, ok := tooth.payload.(facetedPayload)
+	payload, ok := tooth.n.Payload.(facetedPayload)
 	if !ok || payload.loftFacesTrim == nil {
 		return held, nil, nil
 	}

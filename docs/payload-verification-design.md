@@ -188,7 +188,7 @@ Requirements:
 - Build no temporary prism caps. They are not cup faces.
 - Keep one rim face per paired loop. Hole/post loop polarity follows
   `evalCupContext`'s existing topology.
-- Add `cupPayload` to `payloadExtent` through `cp.extentAlong(g)`'s outer-prism
+- Add `cupPayload` to `payloadExtent` through `cp.ExtentAlong(g)`'s outer-prism
   reading, taken as an exact interval only where it publishes a zero
   displacement.
 - Use outer-prism extrema for support points. Cavity lies inside.

@@ -25,7 +25,7 @@ func loftCylinderChamferCapRadialReach(source loftCylinderChamferSource,
 		if tooth == nil {
 			return 0, fmt.Errorf("%w: cap radial band lacks a source tooth", ErrUnsupported)
 		}
-		lp, ok := tooth.payload.(loftPayload)
+		lp, ok := tooth.n.Payload.(loftPayload)
 		if !ok || !lp.authenticatedReconstruction {
 			return 0, fmt.Errorf("%w: cap slit lacks an authenticated tooth", ErrUnsupported)
 		}

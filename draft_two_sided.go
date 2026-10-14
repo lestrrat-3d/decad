@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -16,28 +17,29 @@ type twoSidedDraftPayload struct {
 	positive draftPayload
 }
 
-func (dp twoSidedDraftPayload) transform() r3.Transform { return dp.positive.xform }
+func (dp twoSidedDraftPayload) Transform() r3.Transform { return dp.positive.xform }
 
-func (dp twoSidedDraftPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
-	lo0, hi0, delta0, err := dp.negative.extentAlong(g)
+func (dp twoSidedDraftPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
+	lo0, hi0, delta0, err := dp.negative.ExtentAlong(g)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	lo1, hi1, delta1, err := dp.positive.extentAlong(g)
+	lo1, hi1, delta1, err := dp.positive.ExtentAlong(g)
 	if err != nil {
 		return 0, 0, 0, err
 	}
 	return math.Min(lo0, lo1), math.Max(hi0, hi1), math.Max(delta0, delta1), nil
 }
 
-func (dp twoSidedDraftPayload) axialDelta() float64 {
-	return math.Max(dp.negative.axialDelta(), dp.positive.axialDelta())
+func (dp twoSidedDraftPayload) AxialDelta() float64 {
+	return math.Max(dp.negative.AxialDelta(), dp.positive.AxialDelta())
 }
 
-func (dp twoSidedDraftPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (dp twoSidedDraftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	dp.negative.xform = composed
 	dp.positive.xform = composed
-	return evalTwoSidedDraftContext(ctx, d, ref, dp)
+	return placedNode(evalTwoSidedDraftContext(ctx, d, ref, dp))
 }
 
 func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, dp twoSidedDraftPayload) (*Body, error) {
@@ -49,11 +51,11 @@ func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, 
 	if err != nil {
 		return nil, wrapStageError("along-side taper", err)
 	}
-	negativePayload, ok := negative.payload.(draftPayload)
+	negativePayload, ok := negative.n.Payload.(draftPayload)
 	if !ok {
 		return nil, fmt.Errorf(`%w: the against-side taper lost its draft record`, ErrDegenerate)
 	}
-	positivePayload, ok := positive.payload.(draftPayload)
+	positivePayload, ok := positive.n.Payload.(draftPayload)
 	if !ok {
 		return nil, fmt.Errorf(`%w: the along-side taper lost its draft record`, ErrDegenerate)
 	}
@@ -87,7 +89,7 @@ func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, 
 	}
 	dp.negative = negativePayload
 	dp.positive = positivePayload
-	body.payload = dp
+	body.n.Payload = dp
 	return body, nil
 }
 

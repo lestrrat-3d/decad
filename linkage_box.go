@@ -299,7 +299,7 @@ func (d *Document) requireLinkage(l *Linkage) error {
 			if err := d.requireLive(b); err != nil {
 				return err
 			}
-			if b.payload == nil {
+			if b.n.Payload == nil {
 				return fmt.Errorf(`%w: this evaluator cannot move a body it did not build`, ErrUnsupported)
 			}
 		}

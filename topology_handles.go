@@ -1,6 +1,11 @@
 package decad
 
-import "github.com/lestrrat-3d/decad/internal/topo"
+import (
+	"context"
+
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/r3"
+)
 
 // Each topology handle holds its internal/topo node by value, and a node that
 // another node links to carries its handle in Owner. The helpers here are the
@@ -402,4 +407,25 @@ func documentNode(d *Document) *topo.Document {
 		return nil
 	}
 	return &d.n
+}
+
+// placePayload re-evaluates p under composed as producer ref of d and returns
+// the produced body's handle. It is the one root path into
+// topo.Payload.Placed: it builds the environment from d and maps the node
+// back. It never commits.
+func placePayload(ctx context.Context, p topo.Payload, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+	nb, err := p.Placed(ctx, topo.Env{Doc: &d.n, Ref: ref}, composed)
+	if err != nil {
+		return nil, err
+	}
+	return bodyHandle(nb), nil
+}
+
+// placedNode is the node form of a root builder's result, for a root payload's
+// Placed: the body's node, or the error unchanged.
+func placedNode(b *Body, err error) (*topo.Body, error) {
+	if err != nil {
+		return nil, err
+	}
+	return bodyNode(b), nil
 }

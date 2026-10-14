@@ -38,7 +38,7 @@ func replayMemoTestSweeps(t *testing.T) map[string]*SweepReport {
 		return pose
 	}
 	still := PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(1)}
-	rest := 8 + 1.5*knob.payload.(facetedPayload).meshBound
+	rest := 8 + 1.5*knob.n.Payload.(facetedPayload).meshBound
 	drift := func(v r3.Vec, linear, angular float64, seconds float64) RigidDriftSegment {
 		zero := units.MillimetersPerSecond(0)
 		return RigidDriftSegment{From: at(v), LinearVelocity: QuantityVec{X: units.MillimetersPerSecond(linear),

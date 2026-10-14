@@ -269,7 +269,7 @@ func TestLoftCentroidShiftFormEnclosesTwoArcLobe(t *testing.T) {
 			}
 			cen, err := body.Centroid()
 			require.NoError(t, err)
-			lp := body.payload.(loftPayload)
+			lp := body.n.Payload.(loftPayload)
 			gap := cen.Value.Sub(want).Len()
 			t.Logf("walls=%d delta=%.3g sectionDelta=%.3g bound=%.4g gap=%.4g got=%v want=%v", lp.walls, lp.delta, lp.sectionDelta, cen.Bound.Base(), gap, cen.Value, want)
 			require.Positive(t, gap, "the chorded centroid must differ from the true one, or the row shows nothing")
@@ -426,7 +426,7 @@ func TestLoftCentroidToothBoundReadsToothSize(t *testing.T) {
 			require.NoError(t, err)
 			ratio, diameter := loftCentroidRatio(t, body, cen.Bound.Base())
 
-			lp := body.payload.(loftPayload)
+			lp := body.n.Payload.(loftPayload)
 			mass, a, matchedDelta := loftCentroidRebuild(t, lp)
 			radius := mass.CentroidRadius(a.Verts, a.Tris, cen.Value, 0)
 			retired := retiredAnchorCentroidBound(t, mass, a, lp.xform.Apply(lp.plane0.Origin), matchedDelta, cen.Value)

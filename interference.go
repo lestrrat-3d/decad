@@ -25,9 +25,9 @@ import (
 // cupPayload.thickness and cupPayload.sense, because it does not change set
 // identity.
 func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error) {
-	switch pa := a.payload.(type) {
+	switch pa := a.n.Payload.(type) {
 	case prismPayload:
-		pb, ok := b.payload.(prismPayload)
+		pb, ok := b.n.Payload.(prismPayload)
 		if !ok || pa.Frame != pb.Frame || pa.Z0 != pb.Z0 || pa.Z1 != pb.Z1 || pa.Xform != pb.Xform {
 			return false, nil
 		}
@@ -41,13 +41,13 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 		}
 		return momentinput.ExactProfileEqual(budget, pa.Profile, pb.Profile)
 	case cupPayload:
-		other, ok := b.payload.(cupPayload)
+		other, ok := b.n.Payload.(cupPayload)
 		if !ok {
 			return false, nil
 		}
 		return cupViewsEqual(budget, pa.view(), other.view())
 	case revolvePayload:
-		pb, ok := b.payload.(revolvePayload)
+		pb, ok := b.n.Payload.(revolvePayload)
 		if !ok || pa.frame != pb.frame || pa.ax != pb.ax || pa.phi0 != pb.phi0 ||
 			pa.phi1 != pb.phi1 || pa.full != pb.full || pa.xform != pb.xform {
 			return false, nil

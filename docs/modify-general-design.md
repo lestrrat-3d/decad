@@ -422,7 +422,7 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    flips a planar face's `outward` and walks a swept face's wall the other
    way (`brepgeom.ReverseSegment`, extended to a `CircleSeg` by flipping `CCW` and
    swapping its range, with `side0`/`side1` exchanged), the rule
-   `brepPayload.placed` applies under a reflection. The rim at `R` (level
+   `brepPayload.Placed` applies under a reflection. The rim at `R` (level
    `L_R`, outward as `R`'s): the cavity faces in `R`'s plane are the planar
    cavity faces across `R`'s axis at level `L_R`, and at a removed wall the
    straight cavity walls along `k` on `R`'s carrier as the rectangles they
@@ -784,7 +784,7 @@ below reads the bands where the plain brep reader would miss them:
 | **DG9** | wall survey | staged `Suspect`, as for every brep. The wall behind every kept face is `t` by construction, but the material between two features the erosion left solid is not, and no reader proves which is which | staged `Suspect` |
 | **DG10** | STEP | analytic: planes and cylinders | analytic where every patch is a `Plane`; a `Cone` sends the whole body to the faceted writer (`docs/step-export-design.md`) |
 | **DG11** | a later `Fillet`/`Chamfer`/`Shell` | Tables RB/EB/SB/TC/LB over the record; RB1 needs `delta = 0`, so a shell whose offsets are exact floats takes route E or L again, and one whose offsets rounded is SB1 | the same over the rewritten record; an edge of a band patch is not in the record and matches nothing (route E's SB6, route L's SL1) |
-| **DG12** | `Transform`, `Mirrored`, `PatternCopies` | re-lifts every face frame | the same; `loopBands` are re-attached by the re-evaluation, as `capBlendPayload.placed` re-derives its bands |
+| **DG12** | `Transform`, `Mirrored`, `PatternCopies` | re-lifts every face frame | the same; `loopBands` are re-attached by the re-evaluation, as `capBlendPayload.Placed` re-derives its bands |
 
 BG3's and BG4's consumer rules are stated in §3.1a and §3.1c.
 BG6 reads §3.1b's downstream gates and §3.1e's proof.

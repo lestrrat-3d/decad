@@ -17,8 +17,8 @@ import (
 // and a volume within its bound of want.
 func requireCrossingBrep(t *testing.T, result *Body, want float64) brepPayload {
 	t.Helper()
-	bp, ok := result.payload.(brepPayload)
-	require.True(t, ok, `the pair builds a brep body, got %T`, result.payload)
+	bp, ok := result.n.Payload.(brepPayload)
+	require.True(t, ok, `the pair builds a brep body, got %T`, result.n.Payload)
 	requireClosedTopology(t, result)
 	require.InDelta(t, want, result.n.Volume.Value.Base(), result.n.Volume.Bound.Base()+1e-9*want)
 	// The mesh closes and its occupied-volume proof covers its distance from
@@ -96,8 +96,8 @@ func TestClassBCrossingBlindCrossHole(t *testing.T) {
 	require.NoError(t, err)
 	// The drill reaches y = 11: 16000 − 9π·11.
 	lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(-99, 1))
-	_, ok := result.payload.(brepPayload)
-	require.True(t, ok, `got %T`, result.payload)
+	_, ok := result.n.Payload.(brepPayload)
+	require.True(t, ok, `got %T`, result.n.Payload)
 	requireClosedTopology(t, result)
 	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 	// The hole's floor is a whole disc at y = 11, and its wall runs from the
@@ -132,8 +132,8 @@ func TestClassBCrossingToolCrossingAWall(t *testing.T) {
 	})
 	result, err := Cut(t.Context(), box, slot)
 	require.NoError(t, err)
-	_, ok := result.payload.(brepPayload)
-	require.True(t, ok, `got %T`, result.payload)
+	_, ok := result.n.Payload.(brepPayload)
+	require.True(t, ok, `got %T`, result.n.Payload)
 	requireClosedTopology(t, result)
 	// The slot removes x 35..40 and z 5..15 of the box from y = 0 to where
 	// it ends, 4.65 + 5.65 along y.
@@ -165,8 +165,8 @@ func TestClassBCrossingSlotFloorCornersReadConcave(t *testing.T) {
 	})
 	result, err := Cut(t.Context(), box, slot)
 	require.NoError(t, err)
-	_, ok := result.payload.(brepPayload)
-	require.True(t, ok, `got %T`, result.payload)
+	_, ok := result.n.Payload.(brepPayload)
+	require.True(t, ok, `got %T`, result.n.Payload)
 	requireClosedTopology(t, result)
 	require.Equal(t, 16000.0-10*5*20, result.n.Volume.Value.Base())
 	require.Len(t, result.Faces(), 10)

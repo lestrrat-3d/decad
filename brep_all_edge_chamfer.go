@@ -29,12 +29,12 @@ type allEdgeChamferPayload struct {
 	d      float64
 }
 
-func (p allEdgeChamferPayload) transform() r3.Transform { return p.xform }
+func (p allEdgeChamferPayload) Transform() r3.Transform { return p.xform }
 
-func (p allEdgeChamferPayload) placed(ctx context.Context, d *Document, ref producerID,
-	composed r3.Transform) (*Body, error) {
+func (p allEdgeChamferPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	p.xform = composed
-	return evalAllEdgeChamfer(ctx, d, ref, p)
+	return placedNode(evalAllEdgeChamfer(ctx, d, ref, p))
 }
 
 // tryAllEdgeChamfer accepts only the complete straight-edge set of an exact
@@ -43,7 +43,7 @@ func (p allEdgeChamferPayload) placed(ctx context.Context, d *Document, ref prod
 func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 	edges []*Edge, distance, distanceDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
 	if len(edges) != 12 || asym != nil || len(bp.faces) != 7 || bp.xform != r3.Identity() ||
-		bp.sectionDelta() != 0 || bp.axialDelta() != 0 || len(bp.loopBands) != 0 ||
+		bp.sectionDelta() != 0 || bp.AxialDelta() != 0 || len(bp.loopBands) != 0 ||
 		bp.bossShell != nil || bp.pocketShell != nil {
 		return nil, false, nil
 	}
@@ -431,7 +431,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 	if err := geometry.measure(body, polygons); err != nil {
 		return nil, err
 	}
-	body.payload = p
+	body.n.Payload = p
 	return body, nil
 }
 

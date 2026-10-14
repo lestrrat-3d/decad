@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -62,15 +63,16 @@ type draftPayload struct {
 	bandDelta map[capBandKey]float64
 }
 
-// transform is the accumulated rigid placement.
-func (dp draftPayload) transform() r3.Transform { return dp.xform }
+// Transform is the accumulated rigid placement.
+func (dp draftPayload) Transform() r3.Transform { return dp.xform }
 
-// placed re-evaluates the same record under the composed motion: every gate
+// Placed re-evaluates the same record under the composed motion: every gate
 // the build runs is a fact of the record, so a placed body re-derives the
 // identical far section and walls (docs/draft-design.md Table DD row DD12).
-func (dp draftPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (dp draftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	dp.xform = composed
-	return evalDraftContext(ctx, d, ref, dp)
+	return placedNode(evalDraftContext(ctx, d, ref, dp))
 }
 
 // band is the capBlendPayload view the draft's walls are built through: every
@@ -115,17 +117,17 @@ func (dp draftPayload) levels() (nearZ, nearDelta, farZ, matSign float64) {
 	return dp.z1, dp.z1Delta, dp.z0, +1
 }
 
-// extentAlong is the through-all stop's reading of the draft body (stops.go):
+// ExtentAlong is the through-all stop's reading of the draft body (stops.go):
 // the band view's own patch extrema, which read the near section at the
 // sketch plane and the far section at the far level, each beside its own
 // displacement.
-func (dp draftPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
+func (dp draftPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 	return dp.band().extentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
 }
 
-// axialDelta is the larger sweep-level displacement a body-relative stop
+// AxialDelta is the larger sweep-level displacement a body-relative stop
 // resolving against this body must preserve.
-func (dp draftPayload) axialDelta() float64 { return math.Max(dp.z0Delta, dp.z1Delta) }
+func (dp draftPayload) AxialDelta() float64 { return math.Max(dp.z0Delta, dp.z1Delta) }
 
 // draftOffset is §8.1's offset amount: d = h·tan α as a float, beside dDelta,
 // the reach from d of the exact product of three enclosures — the sweep

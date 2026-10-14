@@ -61,7 +61,7 @@ func internalEmbeddedFlankSketch(t *testing.T, world *sketch.World,
 
 func requireEmbeddedFlanks(t *testing.T, body *Body, source []fitSplineSeg) {
 	t.Helper()
-	payload, ok := body.payload.(loftPayload)
+	payload, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok, "the body must retain its loft payload")
 	for _, section := range []profileRecord{payload.profile0, payload.profile1} {
 		var retained []fitSplineSeg

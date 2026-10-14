@@ -351,7 +351,7 @@ extreme widens `e`, which the extreme vertex's own bound alone would miss.
 
 ### 4.3 Transform
 
-`facetedPayload.placed` adds `RigidRoundAllow(|v|_max, |translation|_max)` to
+`facetedPayload.Placed` adds `RigidRoundAllow(|v|_max, |translation|_max)` to
 each vertex's own `β(v)`, at that vertex's own largest coordinate magnitude
 rather than the body's, since the rounding a rigid motion commits on one
 vertex depends on that vertex's inputs alone (`internal/proofbound/bounds.go`,

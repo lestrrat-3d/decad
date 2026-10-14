@@ -58,10 +58,10 @@ func TestMotionPoseDeviationReachesThePoseGap(t *testing.T) {
 		got := pose.pairs[0][0]
 		require.True(t, got.hasGap)
 
-		placement := arm.payload.transform()
+		placement := arm.n.Payload.Transform()
 		composed, err := placement.Then(pose.result.Pose)
 		require.NoError(t, err)
-		transient, err := arm.payload.placed(t.Context(), doc, transientProducer, composed)
+		transient, err := placePayload(t.Context(), arm.n.Payload, doc, transientProducer, composed)
 		require.NoError(t, err)
 		_, fast := clearanceAxisBoxes(transient, wall)
 		require.False(t, fast, `a rotated arm is not an axis box`)
@@ -112,7 +112,7 @@ func TestMotionPoseDeviationIsZeroForAnExactPose(t *testing.T) {
 			require.NoError(t, err)
 			param, ok := motionbound.ExactMotionParam(tc.at)
 			require.True(t, ok)
-			placement := arm.payload.transform()
+			placement := arm.n.Payload.Transform()
 			composed, err := placement.Then(pose)
 			require.NoError(t, err)
 			eta, linear := motionbound.PoseDeviation(composed, placement, spec.Frame.At(param), math.Inf(1))
@@ -324,10 +324,10 @@ func farCornerOverlap(t *testing.T, doc *Document, arm, block *Body, swing Revol
 	run := motionRunFor(t, doc, []*Body{arm}, swing)
 	pose, err := swing.PoseAt(swing.To)
 	require.NoError(t, err)
-	placement := arm.payload.transform()
+	placement := arm.n.Payload.Transform()
 	composed, err := placement.Then(pose)
 	require.NoError(t, err)
-	transient, err := arm.payload.placed(t.Context(), doc, transientProducer, composed)
+	transient, err := placePayload(t.Context(), arm.n.Payload, doc, transientProducer, composed)
 	require.NoError(t, err)
 	eta, linear := motionbound.PoseDeviation(composed, placement, run.spec.Frame.At(run.spec.ToP), run.movers[0].r0)
 	require.Greater(t, eta, 0.0)
@@ -706,7 +706,7 @@ func TestMotionTranslationPoseChargesFacetedReplacement(t *testing.T) {
 	require.NoError(t, err)
 	source, err := Union(t.Context(), a, rotated)
 	require.NoError(t, err)
-	_, ok := source.payload.(facetedPayload)
+	_, ok := source.n.Payload.(facetedPayload)
 	require.True(t, ok)
 
 	shift := r3.NewVec(1, 0, 0)
@@ -727,7 +727,7 @@ func TestMotionTranslationPoseChargesFacetedReplacement(t *testing.T) {
 		if rotatedMover == nil {
 			rotatedMover = mover
 		}
-		fp := mover.payload.(facetedPayload)
+		fp := mover.n.Payload.(facetedPayload)
 		run := motionRunFor(t, doc, []*Body{mover}, motion)
 		pose, err := run.evaluatePose(big.NewRat(1, 3), units.Millimeters(1))
 		require.NoError(t, err)

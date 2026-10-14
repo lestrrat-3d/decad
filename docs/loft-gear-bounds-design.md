@@ -302,7 +302,7 @@ across segments lowers it for a given station count by more than a constant.
 
 **Where it is computed.** `Document.Loft` stores the two integrals
 `falsifyRecordedArea` already ran on the payload (`loftPayload.recordArea`), and
-`placed` carries them over unchanged. `loftStationCapGate` computes the target once
+`Placed` carries them over unchanged. `loftStationCapGate` computes the target once
 per evaluation from them and the walks `validateLoftRecords` resolves, decides S15
 against it, and returns it to the station generators. The target itself is not
 stored: its perimeter half reads the walks, which only `evalLoft` resolves, and

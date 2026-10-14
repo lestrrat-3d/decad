@@ -230,7 +230,7 @@ func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
 	capSel := Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: disc.n.Origin.Producer, Role: provenance.RoleCapEnd})))
 	cup, err := Shell(t.Context(), disc, capSel, units.Millimeters(1))
 	require.NoError(t, err)
-	_, ok := cup.payload.(cupPayload)
+	_, ok := cup.n.Payload.(cupPayload)
 	require.True(t, ok, `a one-cap shell of a disc builds the cup payload`)
 
 	mesh, err := tessellateContext(t.Context(), cup, units.Millimeters(0.05), VerifyAll)
@@ -265,7 +265,7 @@ func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
 	require.NoError(t, err)
 	drilled, err := Cut(t.Context(), plate, placed)
 	require.NoError(t, err)
-	fp, ok := drilled.payload.(facetedPayload)
+	fp, ok := drilled.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Positive(t, fp.meshBound)
 	require.Positive(t, fp.volSymDiff)
@@ -429,7 +429,7 @@ func TestFreeformPrismProofRecordCoversItsOwnChording(t *testing.T) {
 // cover.
 func freeformWallChordDeviation(t *testing.T, body *Body, mesh *Mesh) float64 {
 	t.Helper()
-	pp, ok := body.payload.(prismPayload)
+	pp, ok := body.n.Payload.(prismPayload)
 	require.True(t, ok)
 
 	var spans []freeform.BezierSpan

@@ -608,9 +608,9 @@ Four gates, in this order, and each is reject-only:
    Newell sum, which the exact arm's own admitted chains use safely, because
    gate 3 there already proved those SAME coordinates bit-for-bit coplanar)
    would tilt the published plane away from the true one by that same
-   rounding, with no term in `axialDelta` to cover a TILT — `axialDelta` only
+   rounding, with no term in `AxialDelta` to cover a TILT — `AxialDelta` only
    ever states an OFFSET along an already-exact normal, on the same terms a
-   prism cap's own `axialDelta` does. So a chain the level arm admits instead
+   prism cap's own `AxialDelta` does. So a chain the level arm admits instead
    takes its plane's origin and normal from the token directly (`origin`,
    `normal`, transformed by this evaluation's own placement) — the same
    frame-derived construction `prismrecord.Payload.CapFrame` already uses
@@ -619,11 +619,11 @@ Four gates, in this order, and each is reject-only:
    settle which of the token's two normal directions matches the chain's own
    walk sense (`patchChainLevelNormal`): its magnitude, and any tilt fitting
    approximately-coplanar data would carry, are discarded, never published.
-   `buildPatchFace` then sets the new face's `axialDelta`/`hasAxialDelta`
+   `buildPatchFace` then sets the new face's `AxialDelta`/`hasAxialDelta`
    from the token's own bound (folded with any placement rounding), the same
    fields `prism_build.go` already sets on a prism's own caps (no new field
    on `Face`). A chain the first, exact arm admits keeps its existing plane
-   (fitted from its own proven-exact vertices) and a zero `axialDelta`,
+   (fitted from its own proven-exact vertices) and a zero `AxialDelta`,
    unchanged.
 4. **Each chain is simple in that plane.** The plane-local walk does not cross
    or touch itself, decided by `internal/sectionaudit`'s §5 section audit —
@@ -1430,23 +1430,23 @@ original sheet's own shape rather than losing it to every edge going free.
 mechanism restricted to one face**, `stitchPayload`'s own idea narrowed from a
 whole welded set to a single held `*Face`: it records that face and the
 retiring receiver's own already-proven `Bounds`, never a built topology, and
-`placed()` deep-copies fresh surface, loop, edge and vertex geometry under the
-composed transform every time, exactly as `stitchPayload.placed` replays
+`Placed()` deep-copies fresh surface, loop, edge and vertex geometry under the
+composed transform every time, exactly as `stitchPayload.Placed` replays
 `evalStitchContext`. Nothing in either result aliases the receiver's own
 `*Face`, `*Edge` or `*Vertex`, so a retired receiver stays readable and
 unmodified for any caller still holding it.
 
-**Every result carries its source face's own `axialDelta`, `hasAxialDelta`
+**Every result carries its source face's own `AxialDelta`, `hasAxialDelta`
 and `normalBound`, never their zero value.** The copy shares the source
 face's identical surface and identical tag — `Unstitch` mints no new
 geometry of its own — so `normalBound` (how far that surface departs from
-that tag) and `axialDelta` (that same tag's own displacement along that same
+that tag) and `AxialDelta` (that same tag's own displacement along that same
 normal) stay exactly as true of the copy as they were of the source.
 `hasAxialDelta` and `normalBound` copy verbatim; `Unstitch`'s public
 call always places under the identity transform (`Unstitch`), so a
 verbatim copy is correct for every call the public API makes today.
-`unstitchPayload.placed`'s own replay under a composed, non-identity
-transform additionally widens `axialDelta` by `absSumUpper` against the
+`unstitchPayload.Placed`'s own replay under a composed, non-identity
+transform additionally widens `AxialDelta` by `absSumUpper` against the
 placement's own proven displacement, the same treatment the vertex bound and
 edge `lengthBound` already receive. `normalBound` is dimensionless while
 that displacement is a length, so no such composition covers it, and this
@@ -1978,7 +1978,7 @@ opposite direction from the source face's triangles along their shared rim;
 the whole set reverses under a later reflected placement. A filled open rim
 therefore has no mesh free edge, and an unfilled rim remains a mesh free edge.
 The sheet audit checks both cases. Each face bound includes its largest
-vertex bound and its `axialDelta`; the area proof charges those terms per
+vertex bound and its `AxialDelta`; the area proof charges those terms per
 triangle. `VerifyBoundary` and `VerifyAll` also check facet contact. A
 `PatchEdges` result whose source is one complete circular surface extrusion
 also tessellates when it fills one or both whole-circle rims in the same call.
@@ -2773,7 +2773,7 @@ The row-9 curved-mesh obligations are:
 | T26 | `PatchEdges` capping BOTH rims of a `Symmetric` (both ends unit-converted, so both bounded) surface-extruded wall in ONE call — the LEVEL certificate's own flagship | no error, where the same chain carried no level token would be R6; `Kind() == BodySheet`; 6 faces; `Edges(Free())` matches nothing; `Area` is `Approximate` with `Bound.Base() > 0` |
 | T27 | gate 3's level arm admits a chain whose vertices and edges all carry one shared, non-zero `levelID`, and refuses the same shape carrying no level token at all | direct unit coverage of `provePatchChainPlane`'s two arms (`patch_body_internal_test.go`), since a real body's own free-edge chain always carries a level token when its build minted one |
 | T28 | two vertices whose held coordinates and held bounds are bit-identical, minted under two different `levelID`s | `PatchEdges`'s own public seam cannot construct one chain spanning two independently built bodies — a chain requires two edges to SHARE a vertex pointer, which only one evaluator's own build or a zero-bound weld creates, and Table J refuses a zero-bound weld of a bounded pair — so this is pinned directly against `provePatchChainPlane`: still `ErrUnsupported`, proving the certificate is an identity check, never a tolerance |
-| T29 | `buildPatchFace` over a chain the level arm admitted | the new face's `axialDelta`/`hasAxialDelta` carry the chain's own proven axial bound, the same fields a prism cap already publishes |
+| T29 | `buildPatchFace` over a chain the level arm admitted | the new face's `AxialDelta`/`hasAxialDelta` carry the chain's own proven axial bound, the same fields a prism cap already publishes |
 | T30 | `PatchEdges` capping both rims of a `Distance` (one end recorded, one end unit-converted) surface-extruded wall in one call — the single-bounded-end case | no error: the recorded end's chain passes gate 3's first (exact) arm, the computed end's chain passes the second (level) arm, in the same call |
 | T31 | `annularSketch` revolved a full turn as a surface, stitched alone | `Kind() == BodySolid`; `Volume` 2000π mm³, `Approximate`, enclosing the analytic value within its own `Bound`; `Area` 800π mm², bit-identical to the equivalent solid revolve's; `Centroid` (5, 0, 0), `Approximate`; `Edges(Free())` matches nothing |
 | T32 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, which proves the flux arms against the unrelated revolve engine rather than against its own arithmetic |
@@ -2824,7 +2824,7 @@ The row-9 curved-mesh obligations are:
 | T77 | the same two boxes as T76 translated apart so no vertex is shared, `Stitch`ed in one call (`TestStitchTwoDisjointBoxesFormATwoLumpSolid`) | `Kind() == BodySolid`; 16 vertices, 2 lumps, `Volume` `Exact` at 120000 mm³ — the narrowing T76 proves is a pinch refusal, not a blanket one |
 | T78 | T76's two boxes with both top patches omitted, leaving an open, all-planar assembly that still shares the one pinched corner vertex (`TestStitchRefusesOpenAssemblyPinchedAtOneVertex`) | `ErrDegenerate` (R7) even though free edges remain — the vertex-link audit refuses the open arm exactly as it does the closed one (§6.3's amended Table C, §6.4) |
 | T80 | a chamfered rectangular plate's own flat band patch (`normalBound` nonzero under a far placement), unstitched at identity | the unstitched face's `NormalAt` published bound at the patch's own held corner still covers the SOURCE face's own `normalBound` — asserted against that face's own value, never a literal, since the bound is architecture-dependent. Shown-to-fail: reverting `copyFaceUnderContext`'s carried `normalBound` to its old zero value turns this red, the published bound falling under the source's own `normalBound` |
-| T81 | a pin extruded `ToFace` against a plate's own cap, where the plate's own extrude depth is stated in inches (a genuine unit-conversion rounding, so the cap's own `axialDelta` is nonzero) — once against the un-unstitched plate, once against that SAME plate unstitched into its six free sheets first | the two pins' own `Bounds` agree exactly, `Exactness` and `Bound` alike — the equality is the assertion, stronger than either number alone. Shown-to-fail: reverting `copyFaceUnderContext`'s carried `axialDelta`/`hasAxialDelta` to their old zero value turns the unstitched-cap pin's own `Bounds` `Exact` at a zero bound while the un-unstitched pin's stays `Approximate`, breaking the equality |
+| T81 | a pin extruded `ToFace` against a plate's own cap, where the plate's own extrude depth is stated in inches (a genuine unit-conversion rounding, so the cap's own `AxialDelta` is nonzero) — once against the un-unstitched plate, once against that SAME plate unstitched into its six free sheets first | the two pins' own `Bounds` agree exactly, `Exactness` and `Bound` alike — the equality is the assertion, stronger than either number alone. Shown-to-fail: reverting `copyFaceUnderContext`'s carried `AxialDelta`/`hasAxialDelta` to their old zero value turns the unstitched-cap pin's own `Bounds` `Exact` at a zero bound while the un-unstitched pin's stays `Approximate`, breaking the equality |
 | T82 | the same far-placed chamfered plate's own flat band patch (T80's fixture), unstitched at identity then placed again under a second, non-identity motion | `ErrUnsupported`: `normalBound` is dimensionless and carries no term to absorb a placement's own length-scale rounding, so this evaluator refuses the placed copy rather than invent one. Shown-to-fail: removing `copyFaceUnderContext`'s placed-nonzero-`normalBound` refusal turns this `NoError`, publishing a placed copy whose `normalBound` no longer covers the tag's true departure |
 | T90 | a hand-built revolve payload for a dipped shaft profile (axis exact, an admitted nonzero radial-minimum interval charged by hand), driven directly at `evalRevolveContext` (internal — `TestRevolveAxisBandVolumeContainsEnclosedVolume`) | `Volume` is `Approximate` with a strictly positive `Bound`, and its interval contains the volume the body's own (snapped-topology) cylindrical faces enclose. Shown-to-fail: dropping `revolveAxisAdmitVolumeCharge`'s own charge turns the containment assertion red |
 | T91 | the same shape as T90, a quarter sweep instead of a full turn, driven directly at `evalRevolveContext` (internal — `TestRevolveAxisBandPartialSweepAreaContainsEnclosedArea`) | each of the two cap faces' `Area` is `Approximate` with a strictly positive `Bound`, and its interval contains the area the cap's own snapped loop encloses — the sharper of the two measured consequences, since a cap's loop and its published area come from two different profiles (snapped, unsnapped) whenever the charge is nonzero. Shown-to-fail: dropping the cap `areaBound`'s own charge turns the containment assertion red |
@@ -2994,7 +2994,7 @@ The copy and revolve-tag obligations are:
 | # | Fixture | Assertion |
 |---|---------|-----------|
 | T209 | a holed disk's end-cap chamfer, unstitched, each cone band sheet's free rims filled by `PatchEdges` | the copied band's `NormalAt` equals its source's, bound included, and placing the patched sheet is `ErrUnsupported`. Shown-to-fail: `copyPatchFacesUnder` without `normalBound` published 2.2e-16 against the source's 8.7e-16 and placed the copy |
-| T210 | a plate extruded 3 in, unstitched; its end cap and four walls stitched back into an open box whose bottom rim `PatchEdges` fills; a pin `ToFace` the patched cap | the pin's `Bounds` equal those of the same pin stopped at the unstitched cap, `Approximate`. Shown-to-fail: `copyPatchFacesUnder` without `axialDelta` published the stop `Exact` with a zero bound |
+| T210 | a plate extruded 3 in, unstitched; its end cap and four walls stitched back into an open box whose bottom rim `PatchEdges` fills; a pin `ToFace` the patched cap | the pin's `Bounds` equal those of the same pin stopped at the unstitched cap, `Approximate`. Shown-to-fail: `copyPatchFacesUnder` without `AxialDelta` published the stop `Exact` with a zero bound |
 | T211 | full-turn revolve sheets of a quadrilateral whose side climbs 5e-10 over a unit run (tagged `Cylinder`), and of one whose side leans 5e-10 off perpendicular (tagged `Plane`) | `Stitch` is `ErrUnsupported` (R8); were it admitted, its volume and centroid would have to enclose the record's exact Pappus readings. Shown-to-fail: without `stitchFluxTagsDenoted` the volumes sat 2.1e-9 and 1.6e-9 mm³ off under 7.0e-15 and 5.7e-15 bounds |
 | T212 | a decimal trapezoid's full-turn sheet (two `Cylinder`, two `Cone` walls), stitched; and, internally, T46-style cone wall whose tag apex is moved 1e-6 mm along the axis with its record unchanged | the stitched volume and centroid enclose the record's exact Pappus readings; the moved apex's flux and moment bounds enclose the exact-apex readings. Shown-to-fail: dropping `ConeInput.ApexBound`'s widening left the moved flux 9.4e-6 off under a 3.6e-14 bound |
 | T213 | one-span straight and quarter-arc sweep sheets thickened on their admitted sides | the solid keeps `side(0,i,j)` roles and path-order caps, measures the reduced annulus's volume, verifies Sound, tessellates with a volume proof, and replays under placement; a composite sheet keeps R24 |

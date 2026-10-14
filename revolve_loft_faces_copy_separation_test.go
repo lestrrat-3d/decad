@@ -15,8 +15,8 @@ func TestCurvedLoftFacesRealCopySeparation(t *testing.T) {
 	require.NoError(t, err)
 	image, err := Copy(t.Context(), source, WithCopyPlacement(turn))
 	require.NoError(t, err)
-	original := source.payload.(facetedPayload)
-	placed := image.payload.(facetedPayload)
+	original := source.n.Payload.(facetedPayload)
+	placed := image.n.Payload.(facetedPayload)
 	require.Same(t, trim, original.loftFacesTrim)
 	require.NotNil(t, placed.copyLineage)
 	require.Same(t, source, placed.copyLineage.source)
@@ -43,7 +43,7 @@ func TestCurvedLoftFacesRealCopySeparation(t *testing.T) {
 	overlap, err := Copy(t.Context(), source)
 	require.NoError(t, err)
 	require.False(t, shellseparation.Separate(t.Context(), []shellseparation.Shell{
-		shell(original), shell(overlap.payload.(facetedPayload)),
+		shell(original), shell(overlap.n.Payload.(facetedPayload)),
 	}, []r3.Transform{r3.Identity(), r3.Identity()}, nil, shellseparation.SourceShell,
 		shellseparation.AxisX, true))
 }

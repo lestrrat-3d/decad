@@ -314,7 +314,7 @@ A pose is evaluated by re-evaluating each mover's payload under the composed mot
 of interference §3 over every (placed mover, static) pair. Three rules make it non-mutating and sound:
 
 - **`VerifyMotion` MUST NOT call public `Transform`, `Copy`.** Those register a body and
-  advance the producer identity (core §8). The check calls the payload's private `placed` with the composed
+  advance the producer identity (core §8). The check calls the payload's `Placed` with the composed
   transform and a reserved transient producer identity that never enters the document, and never calls
   `commit`. Interference §2's invariants hold verbatim: `Document.Bodies()` membership and order, every
   body's live/retired state, and the next producer identity are unchanged by a call, successful or not. The

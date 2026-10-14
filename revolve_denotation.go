@@ -15,7 +15,7 @@ func (rp revolvePayload) phi1Delta() float64 { return rp.den.Phi1.Delta(rp.phi1)
 
 // angularDelta is the larger of the two ends' displacements: the figure a
 // reading that cannot attribute its error to one particular end takes,
-// mirroring prismPayload.axialDelta().
+// mirroring prismPayload.AxialDelta().
 func (rp revolvePayload) angularDelta() float64 { return math.Max(rp.phi0Delta(), rp.phi1Delta()) }
 
 // sweep is the proven bound on the sweep width every mass and edge reading

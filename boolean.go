@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -141,7 +142,7 @@ func Intersect(ctx context.Context, a, b *Body) (*Body, error) {
 // payload, whose request stays the pair tolerance and whose facets the local
 // gate does not read.
 func heldFloorOf(b *Body) (floor float64, restating bool) {
-	switch p := b.payload.(type) {
+	switch p := b.n.Payload.(type) {
 	case facetedPayload:
 		return p.meshBound, true
 	case mitredSweepPayload:
@@ -993,7 +994,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 	case b.Kind() == BodySheet:
 		err = fmt.Errorf(`%w: a sheet's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
 	default:
-		switch pl := b.payload.(type) {
+		switch pl := b.n.Payload.(type) {
 		case capBlendPayload:
 			if pl.loftSource != nil {
 				// The loft-only cap band proves its occupied volume with
@@ -1231,7 +1232,7 @@ func sectionDisplacementOf(b *Body) float64 {
 	if b == nil {
 		return 0
 	}
-	switch p := b.payload.(type) {
+	switch p := b.n.Payload.(type) {
 	case prismPayload:
 		return p.SectionDelta
 	case stackedPrismPayload:
@@ -1307,7 +1308,7 @@ func chordOperandOf(ctx context.Context, b *Body) (meshbool.ChordOperand, error)
 // it grows with the chain, which is what the gate exists to refuse. Every
 // other payload answers zero.
 func heldPrimitiveFloorOf(b *Body) float64 {
-	switch p := b.payload.(type) {
+	switch p := b.n.Payload.(type) {
 	case facetedPayload:
 		if p.loftFacesPrimitive {
 			return p.meshBound
@@ -1335,7 +1336,7 @@ func coordDisplacementOf(ctx context.Context, b *Body) float64 {
 	if b == nil {
 		return 0
 	}
-	rp, ok := b.payload.(revolvePayload)
+	rp, ok := b.n.Payload.(revolvePayload)
 	if !ok {
 		return 0
 	}
@@ -1354,7 +1355,7 @@ func coordDisplacementOf(ctx context.Context, b *Body) float64 {
 
 // analyticBooleanBody evaluates an analytic boolean's result payload under
 // producer identity ref, without committing it.
-func analyticBooleanBody(ctx context.Context, d *Document, ref producerID, payload featurePayload) (*Body, error) {
+func analyticBooleanBody(ctx context.Context, d *Document, ref producerID, payload topo.Payload) (*Body, error) {
 	switch p := payload.(type) {
 	case prismPayload:
 		return evalPrismContext(ctx, d, ref, p, freeform.NewFreeformWork())

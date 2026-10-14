@@ -64,14 +64,14 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 		return src, false
 	}
 	var ok bool
-	src.plate, ok = plateBody.payload.(prismPayload)
+	src.plate, ok = plateBody.n.Payload.(prismPayload)
 	if !ok || src.plate.SectionDelta != 0 || src.plate.Z0Delta != 0 || src.plate.Z1Delta != 0 ||
 		src.plate.SurfaceResult || src.plate.Xform != r3.Identity() ||
 		src.plate.Frame.U() != (r3.Vec{X: 1}) || src.plate.Frame.V() != (r3.Vec{Y: 1}) ||
 		src.plate.Frame.N() != (r3.Vec{Z: 1}) {
 		return src, false
 	}
-	src.boss, ok = bossBody.payload.(prismPayload)
+	src.boss, ok = bossBody.n.Payload.(prismPayload)
 	if !ok || src.boss.SectionDelta != 0 || src.boss.Z0Delta != 0 || src.boss.Z1Delta != 0 ||
 		src.boss.SurfaceResult || src.boss.Frame.U() != (r3.Vec{X: 1}) ||
 		src.boss.Frame.V() != (r3.Vec{Y: 1}) || src.boss.Frame.N() != (r3.Vec{Z: 1}) {

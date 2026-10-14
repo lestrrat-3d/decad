@@ -30,7 +30,7 @@ func blendAxisReceiver(t *testing.T) revolvePayload {
 	axis := SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}}
 	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], axis, FullRevolution{})
 	require.NoError(t, err)
-	rp, ok := body.payload.(revolvePayload)
+	rp, ok := body.n.Payload.(revolvePayload)
 	require.True(t, ok)
 	return rp
 }

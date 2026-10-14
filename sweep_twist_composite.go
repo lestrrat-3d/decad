@@ -33,11 +33,11 @@ type compositeTwistedSweepPayload struct {
 	delta      float64
 }
 
-func (p compositeTwistedSweepPayload) transform() r3.Transform { return p.xform }
+func (p compositeTwistedSweepPayload) Transform() r3.Transform { return p.xform }
 
-func (p compositeTwistedSweepPayload) placed(ctx context.Context, d *Document,
-	ref producerID, xform r3.Transform) (*Body, error) {
-	return evalCompositeTwistedSweep(ctx, d, ref, p.profile, p.plane, p.path, p.angle, p.recordArea, xform)
+func (p compositeTwistedSweepPayload) Placed(ctx context.Context, env topo.Env, xform r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
+	return placedNode(evalCompositeTwistedSweep(ctx, d, ref, p.profile, p.plane, p.path, p.angle, p.recordArea, xform))
 }
 
 // The true boundary and the ideal Loft boundary share a triangle-domain
@@ -253,7 +253,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, buildErr)
 		}
 		var heldOK bool
-		held[i], heldOK = part.payload.(loftPayload)
+		held[i], heldOK = part.n.Payload.(loftPayload)
 		if !heldOK {
 			return nil, fmt.Errorf(`%w: a twisted sweep cell lost its Loft payload`, ErrUnsupported)
 		}
@@ -274,7 +274,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 				return fmt.Errorf(`%w: twisted sweep span audit count changed`, ErrDegenerate)
 			}
 			for i, span := range spans {
-				if span.body == nil || span.body.payload == nil ||
+				if span.body == nil || span.body.n.Payload == nil ||
 					span.startCap == nil || span.endCap == nil || len(held[i].verts) != 2*len(poly.Points) {
 					return fmt.Errorf(`%w: twisted sweep cell %d has incomplete Loft geometry`, ErrUnsupported, i)
 				}
@@ -373,7 +373,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}
-	body.payload = compositeTwistedSweepPayload{
+	body.n.Payload = compositeTwistedSweepPayload{
 		profile: profile, plane: plane, path: path, angle: angle,
 		recordArea: recordArea, xform: xform, mesh: mesh, delta: delta,
 	}

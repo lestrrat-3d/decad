@@ -33,7 +33,7 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 	if op != meshbool.OpCut {
 		return nil, false, nil
 	}
-	joined, ok := target.payload.(facetedPayload)
+	joined, ok := target.n.Payload.(facetedPayload)
 	if !ok || joined.loftMirrorCylinderJoin == nil || !joined.contactAudited ||
 		joined.xform != r3.Identity() {
 		return nil, false, nil
@@ -45,12 +45,12 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 		proofbound.IsNonFinite(record.bridgeBound) || proofbound.IsNonFinite(record.bridgeVolume) {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its bore sources", ErrUnsupported)
 	}
-	lower, ok := record.lowerHalf.payload.(facetedPayload)
+	lower, ok := record.lowerHalf.n.Payload.(facetedPayload)
 	if !ok || lower.loftCylinderJoin == nil || !lower.contactAudited ||
 		lower.xform != r3.Identity() {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its lower-half proof", ErrUnsupported)
 	}
-	blank, ok := record.blank.payload.(prismPayload)
+	blank, ok := record.blank.n.Payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(blank) ||
 		lower.loftCylinderJoin.z0 != blank.Z0 ||
 		!loftMirrorCylinderLevels(blank.Z0, lower.loftCylinderJoin.z1, blank.Z1) {
@@ -71,7 +71,7 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 	if err != nil || !matched {
 		return lowerBore, matched, err
 	}
-	prism, ok := tool.payload.(prismPayload)
+	prism, ok := tool.n.Payload.(prismPayload)
 	if !ok {
 		return nil, true, fmt.Errorf("%w: mirrored circular bore lost its cutter source", ErrUnsupported)
 	}
@@ -85,12 +85,12 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 
 func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerID,
 	record *loftMirrorCylinderJoinRecord, lowerBody *Body) (*Body, error) {
-	lower, ok := lowerBody.payload.(facetedPayload)
+	lower, ok := lowerBody.n.Payload.(facetedPayload)
 	if !ok || lower.loftCylinderBore == nil || !lower.contactAudited ||
 		lower.xform != r3.Identity() || record.source.lower == nil {
 		return nil, fmt.Errorf("%w: mirrored circular bore lost its lower annulus", ErrUnsupported)
 	}
-	loft, ok := record.source.lower.payload.(loftPayload)
+	loft, ok := record.source.lower.n.Payload.(loftPayload)
 	if !ok || !loft.authenticatedReconstruction {
 		return nil, fmt.Errorf("%w: mirrored circular bore lost its Loft source", ErrUnsupported)
 	}
@@ -98,11 +98,11 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 	if err != nil {
 		return nil, fmt.Errorf("%w: mirrored circular bore has no source reflection: %s", ErrUnsupported, err)
 	}
-	upperBody, err := lower.placed(ctx, d, ref, reflection)
+	upperBody, err := placePayload(ctx, lower, d, ref, reflection)
 	if err != nil {
 		return nil, err
 	}
-	upper, ok := upperBody.payload.(facetedPayload)
+	upper, ok := upperBody.n.Payload.(facetedPayload)
 	if !ok || !upper.contactAudited || len(lower.verts) != len(upper.verts) ||
 		len(lower.tris) != len(upper.tris) || len(lower.src) != len(upper.src) {
 		return nil, fmt.Errorf("%w: reflected circular bore lacks a matching held shell", ErrUnsupported)
@@ -232,7 +232,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 			return nil, err
 		}
 	}
-	fullBlank, ok := record.blank.payload.(prismPayload)
+	fullBlank, ok := record.blank.n.Payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(fullBlank) {
 		return nil, fmt.Errorf("%w: reflected circular bore lost its exact blank", ErrUnsupported)
 	}

@@ -506,16 +506,17 @@ func (pp chainPayload) prism() prismPayload {
 	}}
 }
 
-// transform is the accumulated rigid placement.
-func (pp chainPayload) transform() r3.Transform { return pp.xform }
+// Transform is the accumulated rigid placement.
+func (pp chainPayload) Transform() r3.Transform { return pp.xform }
 
-// placed re-evaluates the same record under the composed motion (core §8). A
+// Placed re-evaluates the same record under the composed motion (core §8). A
 // re-evaluation path: no moments preflight has run on this record within the
 // call, so the build opens the record's one free-form work counter itself
-// (docs/spline-design.md §5.2), exactly as prismPayload.placed does.
-func (pp chainPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+// (docs/spline-design.md §5.2), exactly as prismPayload.Placed does.
+func (pp chainPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	pp.xform = composed
-	return evalChainExtrudeContext(ctx, d, ref, pp, freeform.NewFreeformWork())
+	return placedNode(evalChainExtrudeContext(ctx, d, ref, pp, freeform.NewFreeformWork()))
 }
 
 // extrudeChain is the chain-fed Extrude body (docs/surface-design.md §13).
@@ -702,7 +703,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}
-	body.payload = pp
+	body.n.Payload = pp
 	return body, nil
 }
 

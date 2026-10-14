@@ -19,7 +19,7 @@ import (
 // extrude. The source draft proves the circle and sweep; a five-line meridian
 // gives the full-revolve evaluator two cones and its mass and mesh proofs.
 func tryDraftCircleRimChamfer(ctx context.Context, b *Body, edges []*Edge, setback, setbackDelta float64) (*Body, bool, error) {
-	dp, ok := b.payload.(draftPayload)
+	dp, ok := b.n.Payload.(draftPayload)
 	if !ok || !dp.nearStart || dp.taper <= 0 || len(dp.kept) != 0 ||
 		len(dp.profile.Holes) != 0 || len(dp.profile.Outer.Segments) != 1 || len(edges) != 1 {
 		return nil, false, nil

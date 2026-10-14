@@ -195,7 +195,7 @@ func TestRevolveReadingsCoverFrameDefect(t *testing.T) {
 				b, err = Transform(t.Context(), b, c.place)
 				require.NoError(t, err)
 			}
-			rp := b.payload.(revolvePayload)
+			rp := b.n.Payload.(revolvePayload)
 			m := revolveDefectMapOf(t, rp)
 			det := massmoment.Determinant(m.l)
 			require.NotZero(t, det.Cmp(big.NewRat(1, 1)), "the fixture's map must not be exactly orthonormal")

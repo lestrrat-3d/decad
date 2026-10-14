@@ -79,7 +79,7 @@ func TestFacetedAreaBoundsCoverSliverFacet(t *testing.T) {
 	sliver := internalPolyPrismBody(t, doc, [][2]float64{{-100.1, 7.1}, {100.3, 7.3}, {0.123, 7.20004}}, 10)
 	union, err := Union(t.Context(), sliver, internalCrossingFramedBox(t, doc))
 	require.NoError(t, err)
-	fp, ok := union.payload.(facetedPayload)
+	fp, ok := union.n.Payload.(facetedPayload)
 	require.True(t, ok, `the union takes the mesh path`)
 
 	faceTris := map[int][][3]int{}

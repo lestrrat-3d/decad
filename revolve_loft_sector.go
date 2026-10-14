@@ -54,7 +54,7 @@ func certifyRevolveLoftSector(blank, sector *Body) (*revolveLoftSectorCertificat
 	if sector == nil {
 		return nil, false
 	}
-	fp, ok := sector.payload.(facetedPayload)
+	fp, ok := sector.n.Payload.(facetedPayload)
 	if !ok || fp.xform != r3.Identity() || fp.pointCone == nil ||
 		fp.pointCone.lower == nil || fp.pointCone.upper == nil ||
 		fp.pointCone.base.pointSection == nil ||

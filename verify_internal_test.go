@@ -202,21 +202,21 @@ func TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum(t *testing.T) {
 		exactDiameter = 498_258_033.0
 	)
 	doc := New()
-	pp, isPrism := internalBoxBody(t, doc, 0, 0, bx, by, bh).payload.(prismPayload)
+	pp, isPrism := internalBoxBody(t, doc, 0, 0, bx, by, bh).n.Payload.(prismPayload)
 	require.True(t, isPrism)
 
 	const delta = 0.125
 	pp.SectionDelta = delta
 	pp.Z1Delta = delta
-	require.InDelta(t, delta, pp.axialDelta(), 0)
+	require.InDelta(t, delta, pp.AxialDelta(), 0)
 
 	witness, displacement, ok := gateWitnessPrism(pp)
 	require.True(t, ok, `a displaced prism earns a witness prism instead of losing its gate reference`)
 	require.Zero(t, witness.SectionDelta, `the witness prism's own section is read as held, never as displaced`)
-	require.Equal(t, proofbound.AbsSumUpper(delta, pp.axialDelta()), displacement,
+	require.Equal(t, proofbound.AbsSumUpper(delta, pp.AxialDelta()), displacement,
 		`the charged displacement is the SUM of the section and axial terms, since they are perpendicular`)
 
-	d, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: pp}))
+	d, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: pp}}))
 	require.NoError(t, err)
 	require.True(t, ok, `Verify forms a tolerance-gate reference for a displaced prism`)
 
@@ -326,7 +326,7 @@ func denseFreeformCapPoints(t *testing.T, pp prismPayload, samples int) []r3.Vec
 func TestBodyGateDiameterFreeformArmAnswersHandComputedMaximum(t *testing.T) {
 	t.Parallel()
 	pp := freeformTrianglePayload(t, 0, 10)
-	body := bornBody(&Body{payload: pp})
+	body := bornBody(&Body{n: topo.Body{Payload: pp}})
 
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
@@ -348,7 +348,7 @@ func TestBodyGateDiameterFreeformArmAnswersHandComputedMaximum(t *testing.T) {
 func TestBodyGateDiameterFreeformArmUnderstatesNeverOverstates(t *testing.T) {
 	t.Parallel()
 	pp := prismPayload{Payload: prismrecord.Payload{Profile: sCurveFreeformProfile(), Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
-	body := bornBody(&Body{payload: pp})
+	body := bornBody(&Body{n: topo.Body{Payload: pp}})
 
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
@@ -367,7 +367,7 @@ func TestBodyGateDiameterFreeformArmUnderstatesNeverOverstates(t *testing.T) {
 func TestBodyGateDiameterFreeformArmBelowBoxDiagonal(t *testing.T) {
 	t.Parallel()
 	pp := prismPayload{Payload: prismrecord.Payload{Profile: sCurveFreeformProfile(), Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
-	body := bornBody(&Body{payload: pp})
+	body := bornBody(&Body{n: topo.Body{Payload: pp}})
 
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
@@ -396,11 +396,11 @@ func TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain(t *testing.T) {
 	deduped := build([]planePoint{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}, {U: 10 + 5e-13, V: 0}})
 	clean := build([]planePoint{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}})
 
-	dD, dOK, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: deduped}))
+	dD, dOK, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: deduped}}))
 	require.NoError(t, err)
 	require.True(t, dOK)
 
-	cD, cOK, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: clean}))
+	cD, cOK, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: clean}}))
 	require.NoError(t, err)
 	require.True(t, cOK)
 
@@ -413,20 +413,20 @@ func TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain(t *testing.T) {
 func TestBodyGateDiameterFreeformArmDisplacementShrinksDiameter(t *testing.T) {
 	t.Parallel()
 	base := freeformTrianglePayload(t, 0, 10)
-	baseD, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: base}))
+	baseD, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: base}}))
 	require.NoError(t, err)
 	require.True(t, ok)
 
 	shrunk := base
 	shrunk.Z0Delta = 0.5
-	shrunkD, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: shrunk}))
+	shrunkD, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: shrunk}}))
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Less(t, shrunkD, baseD)
 
 	collapsed := base
 	collapsed.Z0Delta = baseD
-	_, ok, err = bodyGateDiameter(t.Context(), bornBody(&Body{payload: collapsed}))
+	_, ok, err = bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: collapsed}}))
 	require.NoError(t, err)
 	require.False(t, ok, "a shrink that collapses to non-positive must report no diameter")
 }
@@ -444,7 +444,7 @@ func TestBodyGateDiameterFreeformArmDoesNotWidenRevolvePayload(t *testing.T) {
 		phi0:    0, phi1: 2 * math.Pi, full: true,
 		xform: r3.Identity(),
 	}
-	_, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: rp}))
+	_, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: rp}}))
 	require.NoError(t, err)
 	require.False(t, ok, "the free-form arm must never answer for a non-prismPayload payload")
 }
@@ -460,7 +460,7 @@ func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
 		},
 	}}}
 	pp := prismPayload{Payload: prismrecord.Payload{Profile: collapsed, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
-	_, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: pp}))
+	_, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: pp}}))
 	require.NoError(t, err)
 	require.False(t, ok, "a curve this arm cannot certify must never publish a diameter")
 }
@@ -483,7 +483,7 @@ func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T
 	}}
 
 	collapsedShrink := freeformTrianglePayload(t, 0, 10)
-	baseD, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: collapsedShrink}))
+	baseD, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: collapsedShrink}}))
 	require.NoError(t, err)
 	require.True(t, ok)
 	collapsedShrink.Z0Delta = baseD
@@ -493,11 +493,11 @@ func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T
 		"collapsed shrink":    collapsedShrink,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, armOK, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.axialDelta)
+			_, armOK, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.AxialDelta)
 			require.NoError(t, err)
 			require.False(t, armOK, "the arm must withhold on this path")
 
-			body := bornBody(&Body{payload: pp})
+			body := bornBody(&Body{n: topo.Body{Payload: pp}})
 			_, fallbackOK, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), body)
 			require.NoError(t, err)
 			require.False(t, fallbackOK,
@@ -555,16 +555,16 @@ func TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism(t *testing.T) {
 		SectionDelta: 0.1,
 	}}
 
-	armD, armOK, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.axialDelta)
+	armD, armOK, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.AxialDelta)
 	require.NoError(t, err)
 	require.False(t, armOK, "no free-form segment is present, so the new arm must decline outright")
 	require.Zero(t, armD)
 
-	want, wantOK, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), bornBody(&Body{payload: pp}))
+	want, wantOK, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), bornBody(&Body{n: topo.Body{Payload: pp}}))
 	require.NoError(t, err)
 	require.True(t, wantOK)
 
-	got, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: pp}))
+	got, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: pp}}))
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, want, got, "a section-displaced analytic prism's reading must be unchanged, bit for bit")
@@ -637,14 +637,14 @@ func TestBodyGateDiameterFreeformArmCancelsDuringWitnessMaximum(t *testing.T) {
 
 	// The fixture really does answer, so the cancelled run below cannot pass
 	// by declining: its witnesses span (0,0,0) to (10,0,10), sqrt(200) apart.
-	d, ok, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.axialDelta)
+	d, ok, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.AxialDelta)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.InDelta(t, math.Sqrt(200), d, 1e-9)
 
 	// One poll per segment, then the maximum's own first budget poll.
 	ctx := &cancelAfterPolls{Context: t.Context(), pass: segments}
-	d, ok, err = diameter.PrismFreeformSection(ctx, pp.Payload, pp.axialDelta)
+	d, ok, err = diameter.PrismFreeformSection(ctx, pp.Payload, pp.AxialDelta)
 	require.ErrorIs(t, err, context.Canceled, "cancellation must propagate as an error, not as (0, false, nil)")
 	require.False(t, ok)
 	require.Zero(t, d)
@@ -655,7 +655,7 @@ func TestBodyGateDiameterFreeformArmCancelsDuringWitnessMaximum(t *testing.T) {
 	// never reads this arm's cancellation as a body with no usable diameter.
 	cancelled, stop := context.WithCancel(t.Context())
 	stop()
-	_, ok, err = bodyGateDiameter(cancelled, bornBody(&Body{payload: pp}))
+	_, ok, err = bodyGateDiameter(cancelled, bornBody(&Body{n: topo.Body{Payload: pp}}))
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, ok)
 }
@@ -785,7 +785,7 @@ func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
 		t.Parallel()
 		doc := New()
 		b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
-		b.payload = nil
+		b.n.Payload = nil
 		require.Equal(t, reportvocab.SheetAuditUndecided, auditSheetBoundary(t.Context(), b))
 	})
 
@@ -793,10 +793,10 @@ func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
 		t.Parallel()
 		doc := New()
 		b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
-		pp, ok := b.payload.(prismPayload)
+		pp, ok := b.n.Payload.(prismPayload)
 		require.True(t, ok)
 		pp.SectionDelta = 1e-6
-		b.payload = pp
+		b.n.Payload = pp
 		require.Equal(t, reportvocab.SheetAuditUndecided, auditSheetBoundary(t.Context(), b))
 	})
 }
@@ -870,7 +870,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		doc.commit(body)
 		placed, err := Transform(t.Context(), body, motion)
 		require.NoError(t, err)
-		placedPayload, ok := placed.payload.(revolvePayload)
+		placedPayload, ok := placed.n.Payload.(revolvePayload)
 		require.True(t, ok)
 		require.True(t, placedPayload.radialProof)
 		require.True(t, revolvePayloadProvesSimple(t.Context(), placedPayload))
@@ -1032,7 +1032,7 @@ func TestBodyGateDiameterReadsCurvedWallStations(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			body := internalArcChordPrism(t, New(), tc.sweepDeg, tc.h)
-			pp, isPrism := body.payload.(prismPayload)
+			pp, isPrism := body.n.Payload.(prismPayload)
 			require.True(t, isPrism)
 			_, modelled := newBodyGeom(body)
 			require.True(t, modelled, `the exact carrier model reads this prism`)
@@ -1060,17 +1060,17 @@ func TestFallbackGateDiameterReadsCurvedWallStations(t *testing.T) {
 	exact, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok)
-	pp, isPrism := body.payload.(prismPayload)
+	pp, isPrism := body.n.Payload.(prismPayload)
 	require.True(t, isPrism)
 	pp.SectionDelta = math.Ldexp(1, -40)
 
-	d, ok, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), bornBody(&Body{payload: pp}))
+	d, ok, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), bornBody(&Body{n: topo.Body{Payload: pp}}))
 	require.NoError(t, err)
 	require.True(t, ok)
 	requireStationDiameter(t, d, 0.001, arcChordDiameterSquare(t, pp))
 	require.Less(t, d, exact, `the displacement charge pulls the reading below the undisplaced body's reading`)
 
-	routed, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: pp}))
+	routed, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: pp}}))
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, d, routed, `bodyGateDiameter routes a displaced prism through fallbackGateDiameter`)

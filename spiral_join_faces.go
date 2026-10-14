@@ -9,7 +9,7 @@ type spiralStarGroups struct {
 }
 
 func spiralTrimFaceGroup(tooth *Body, sourceGroup int) int {
-	p, ok := tooth.payload.(facetedPayload)
+	p, ok := tooth.n.Payload.(facetedPayload)
 	if !ok {
 		return -1
 	}

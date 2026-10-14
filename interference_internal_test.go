@@ -225,11 +225,13 @@ func TestCoplanarRelationCancellationIsBounded(t *testing.T) {
 
 func TestInterferencePairDiameterUsesAllFacetedPayloadVertices(t *testing.T) {
 	t.Parallel()
-	a := bornBody(&Body{payload: facetedPayload{verts: []r3.Vec{
-		r3.NewVec(0, 0, 0),
-		r3.NewVec(100, 0, 0),
-	}}})
-	b := bornBody(&Body{payload: facetedPayload{verts: []r3.Vec{r3.NewVec(0, 0, 0)}}})
+	a := bornBody(&Body{n: topo.Body{
+		Payload: facetedPayload{verts: []r3.Vec{
+			r3.NewVec(0, 0, 0),
+			r3.NewVec(100, 0, 0),
+		}},
+	}})
+	b := bornBody(&Body{n: topo.Body{Payload: facetedPayload{verts: []r3.Vec{r3.NewVec(0, 0, 0)}}}})
 
 	diameter, err := interferencePairDiameter(t.Context(), a, b)
 	require.NoError(t, err)
@@ -542,8 +544,8 @@ func TestAnalyticBodiesEqualCancellationIsBounded(t *testing.T) {
 		segs[i] = lineSeg{Start: planePoint{U: float64(i)}, End: planePoint{U: float64(i + 1)}, TEnd: 1}
 	}
 	profile := profileRecord{Outer: loopRecord{Segments: segs}}
-	a := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}})
-	b := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}})
+	a := bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}}})
+	b := bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}}})
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "ExactLoopEqual"}
 
 	_, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)
@@ -571,7 +573,7 @@ func TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := analyticBodiesEqual(proofbound.NewWorkBudget(t.Context()), tc.x, tc.y)
 			require.NoError(t, err)
-			require.Equal(t, reflect.DeepEqual(tc.x.payload, tc.y.payload), got,
+			require.Equal(t, reflect.DeepEqual(tc.x.n.Payload, tc.y.n.Payload), got,
 				`the budgeted walk must agree with set identity for plain prism records`)
 		})
 	}
@@ -583,7 +585,7 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 	// A real prism, its recorded section swapped for a 300-sided polygon:
 	// resolving the carrier profile must poll before the carrier faces are built.
 	body := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
-	pp, ok := body.payload.(prismPayload)
+	pp, ok := body.n.Payload.(prismPayload)
 	require.True(t, ok)
 	const sides = 300
 	corner := func(i int) planePoint {
@@ -598,8 +600,7 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "SurveyLoops"}
 
 	_, _, err := newBodyGeomBudget(proofbound.NewWorkBudget(ctx), bornBody(&Body{
-		n:       topo.Body{Lumps: body.n.Lumps},
-		payload: pp,
+		n: topo.Body{Lumps: body.n.Lumps, Payload: pp},
 	}))
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,

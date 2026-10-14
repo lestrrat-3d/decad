@@ -353,10 +353,10 @@ func TestLinkagePairGapCarriesBothDeviations(t *testing.T) {
 	require.True(t, got.hasGap)
 
 	placed := func(b *Body, group int) (*Body, float64) {
-		placement := b.payload.transform()
+		placement := b.n.Payload.Transform()
 		composed, err := placement.Then(pose.groups[group].pose)
 		require.NoError(t, err)
-		transient, err := b.payload.placed(t.Context(), run.transient, transientProducer, composed)
+		transient, err := placePayload(t.Context(), b.n.Payload, run.transient, transientProducer, composed)
 		require.NoError(t, err)
 		eta, _ := motionbound.PoseDeviation(composed, placement, pose.groups[group].ideals[0], moverRecordRadius(t.Context(), b))
 		return transient, eta
@@ -770,7 +770,7 @@ func TestLinkageProjectionSegmentTerm(t *testing.T) {
 // Legs seen to fail when deleted: the pad (the displaced level reads zero),
 // and the pads in the bound (the padded pair reads 10).
 func prismHullPointsForTest(b *Body) ([]motionbound.RatVec, *big.Rat, int, bool) {
-	pp := b.payload.(prismPayload)
+	pp := b.n.Payload.(prismPayload)
 	return linkagebound.PrismHullPoints(linkagebound.PrismHull{
 		Outer: pp.Profile.Outer, Frame: pp.Frame, Transform: pp.Xform,
 		Z0: pp.Z0, Z1: pp.Z1, SectionDelta: pp.SectionDelta,
@@ -794,9 +794,9 @@ func TestLinkageHullPoints(t *testing.T) {
 		require.Equal(t, float64(3*(n/4)), z, "point %d: bottom four, then top four", n)
 	}
 
-	pp := block.payload.(prismPayload)
+	pp := block.n.Payload.(prismPayload)
 	pp.Z1Delta = 0.25
-	_, pad, _, ok = prismHullPointsForTest(bornBody(&Body{payload: pp}))
+	_, pad, _, ok = prismHullPointsForTest(bornBody(&Body{n: topo.Body{Payload: pp}}))
 	require.True(t, ok)
 	require.InDelta(t, 4*math.Sqrt(3)*0.25, linkRatFloat(t, pad), 1e-12)
 	require.GreaterOrEqual(t, linkRatFloat(t, pad), 4*math.Sqrt(3)*0.25)
@@ -856,7 +856,7 @@ func TestLinkageHullPointsInsideRestBox(t *testing.T) {
 	far, err := r3.Translation(r3.NewVec(shift, 0, 0))
 	require.NoError(t, err)
 	containing := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)}, Frame: frame, Z0: 0, Z1: 10, Xform: far}}
-	union, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, bornBody(&Body{payload: inner}), bornBody(&Body{payload: containing}))
+	union, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, bornBody(&Body{n: topo.Body{Payload: inner}}), bornBody(&Body{n: topo.Body{Payload: containing}}))
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Positive(t, union.SectionDelta)
@@ -864,7 +864,7 @@ func TestLinkageHullPointsInsideRestBox(t *testing.T) {
 	require.NoError(t, err)
 	for name, body := range map[string]*Body{
 		"a box": block, "a box turned about Z and lifted": turned, "a box turned about (1, 1, 1)": tilted,
-		"a displaced union": bornBody(&Body{payload: union, n: topo.Body{Bounds: boxToInternal(unionBox)}}),
+		"a displaced union": bornBody(&Body{n: topo.Body{Bounds: boxToInternal(unionBox), Payload: union}}),
 	} {
 		points, pad, _, ok := prismHullPointsForTest(body)
 		require.True(t, ok, name)

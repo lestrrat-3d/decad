@@ -27,7 +27,7 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 		return nil, err
 	}
 	if !ok {
-		if pp, facetedPayloadOK := faceted.payload.(facetedPayload); facetedPayloadOK && pp.meshBound > 0 {
+		if pp, facetedPayloadOK := faceted.n.Payload.(facetedPayload); facetedPayloadOK && pp.meshBound > 0 {
 			return d.sweepBoundedFacetedFloorClear(ctx, a, b, pa, pb, req, report, floor, facetedFirst)
 		}
 		return facetedSweepUndecided(report, pa.Duration), nil

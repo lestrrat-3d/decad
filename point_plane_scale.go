@@ -58,10 +58,10 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	fp, ok := b.payload.(facetedPayload)
+	fp, ok := b.n.Payload.(facetedPayload)
 	if !ok {
 		var err error
-		switch source := b.payload.(type) {
+		switch source := b.n.Payload.(type) {
 		case prismPayload:
 			fp, err = prismScaleSource(ctx, b, source, s)
 		case revolvePayload:

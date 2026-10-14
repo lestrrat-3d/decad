@@ -26,7 +26,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 	if cylinder, ok := sourceRevolvedCylinderAtPose(b, pose); ok {
 		return cylinder, true
 	}
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || pp.SurfaceResult ||
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
@@ -90,7 +90,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 // body's outer bounds. A rectangle with one edge exactly on a cardinal axis
 // sweeps one complete disk at every level of its axial interval.
 func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProof, bool) {
-	rp, ok := b.payload.(revolvePayload)
+	rp, ok := b.n.Payload.(revolvePayload)
 	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || rp.surfaceResult || !rp.full ||
 		rp.sectionDelta != 0 || !pairbox.RectangularProfile(rp.profile) ||
 		!pairbox.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||

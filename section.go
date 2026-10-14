@@ -44,7 +44,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 	if b.Kind() != BodySolid || !b.IsSolid() {
 		return nil, nil, fmt.Errorf(`%w: a section needs a sound solid`, ErrNotSolid)
 	}
-	if pl, ok := b.payload.(loftPayload); ok {
+	if pl, ok := b.n.Payload.(loftPayload); ok {
 		profile, admitted := loftCircleSectionRecord(pl, plane)
 		if !admitted {
 			profile, admitted = loftMatchingSectionRecord(pl, plane)
@@ -57,7 +57,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		}
 		return reconstructExactSection(ctx, profile, plane)
 	}
-	if rp, ok := b.payload.(revolvePayload); ok {
+	if rp, ok := b.n.Payload.(revolvePayload); ok {
 		profile, polygon, delta, admitted := cardinalSphereSection(b, plane)
 		if !admitted {
 			faces := b.Faces()
@@ -94,14 +94,14 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		}
 		return reconstructExactSection(ctx, profile, plane)
 	}
-	if _, ok := b.payload.(brepPayload); ok {
+	if _, ok := b.n.Payload.(brepPayload); ok {
 		operand, admitted := stackedUnionOperandOf(b)
 		if !admitted {
 			return nil, nil, fmt.Errorf(`%w: section needs an authenticated BRep slab`, ErrUnsupported)
 		}
 		return sectionBrepStack(ctx, operand, plane)
 	}
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	if !ok || pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 {
 		return nil, nil, fmt.Errorf(`%w: section needs an exact straight prism`, ErrUnsupported)
 	}

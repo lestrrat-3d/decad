@@ -61,10 +61,10 @@ func buildTangentTrimChain(t *testing.T) tangentTrimChain {
 	c.loft, err = LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: c.heelTool, Radial: r3.NewVec(0, tangentCos, tangentSin)},
 		f.toe, f.heel)
 	require.NoError(t, err)
-	c.loftRecord = c.loft.payload.(facetedPayload).loftFacesCap
+	c.loftRecord = c.loft.n.Payload.(facetedPayload).loftFacesCap
 	c.cut, err = Cut(t.Context(), c.loft, c.toeTool)
 	require.NoError(t, err)
-	require.NotNil(t, c.cut.payload.(facetedPayload).loftFacesToe)
+	require.NotNil(t, c.cut.n.Payload.(facetedPayload).loftFacesToe)
 	return c
 }
 
@@ -72,7 +72,7 @@ func buildTangentTrimChain(t *testing.T) tangentTrimChain {
 // recorded final and preceding cap maps, the source box and the heel cone.
 func tangentGateInputs(t *testing.T, c tangentTrimChain) (final, previous loftFaceMap, box [4]*big.Rat, heel *pointConeLimit) {
 	t.Helper()
-	record := c.cut.payload.(facetedPayload).loftFacesToe.cap
+	record := c.cut.n.Payload.(facetedPayload).loftFacesToe.cap
 	var err error
 	box, err = lfSourceBox(record.source)
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	// vertex lies beyond the slab.
 	plane, ok := loftface.NewTangentPlane(final, side)
 	require.True(t, ok)
-	toe := c.cut.payload.(facetedPayload).loftFacesToe
+	toe := c.cut.n.Payload.(facetedPayload).loftFacesToe
 	var meshes *tangentHeelMeshes
 	var eval booleanEvaluation
 	for scale := 4.0; scale <= 32; scale *= 2 {
@@ -181,9 +181,9 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 
 	trim, err := Intersect(t.Context(), c.cut, c.heelTool)
 	require.NoError(t, err)
-	require.Equal(t, eval.payload.volSymDiff, trim.payload.(facetedPayload).volSymDiff,
+	require.Equal(t, eval.payload.volSymDiff, trim.n.Payload.(facetedPayload).volSymDiff,
 		"the published allowance is the composed one")
-	trimRecord := trim.payload.(facetedPayload).loftFacesTrim
+	trimRecord := trim.n.Payload.(facetedPayload).loftFacesTrim
 	require.NotNil(t, trimRecord, "the tangent heel Intersect keeps the trim record")
 	require.NotNil(t, trimRecord.tangent)
 	require.Same(t, c.loftRecord.tangent, trimRecord.tangent, "the trim record copies the cap record's tangent end")
@@ -223,7 +223,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	require.True(t, ok)
 	plane, ok := loftface.NewTangentPlane(final, side)
 	require.True(t, ok)
-	toe := c.cut.payload.(facetedPayload).loftFacesToe
+	toe := c.cut.n.Payload.(facetedPayload).loftFacesToe
 	var held *Mesh
 	for scale := 4.0; scale <= 32 && held == nil; scale *= 2 {
 		tolMM, _, err := pairChordTolerance(t.Context(), c.cut, c.heelTool)
@@ -338,7 +338,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 // cut's cap record.
 func movePreviousCap(t *testing.T, cut *Body, factor int64) {
 	t.Helper()
-	p := cut.payload.(facetedPayload)
+	p := cut.n.Payload.(facetedPayload)
 	toe := *p.loftFacesToe
 	record := *toe.cap
 	record.maps = append([]loftFaceMap(nil), record.maps...)
@@ -349,7 +349,7 @@ func movePreviousCap(t *testing.T, cut *Body, factor int64) {
 	record.maps[previous] = moved
 	toe.cap = &record
 	p.loftFacesToe = &toe
-	cut.payload = p
+	cut.n.Payload = p
 }
 
 func TestLoftFacesTangentHeelRefusesWrongSide(t *testing.T) {
@@ -365,7 +365,7 @@ func TestLoftFacesTangentHeelRefusesWrongSide(t *testing.T) {
 			trim, err := Intersect(t.Context(), c.cut, c.heelTool)
 			if !test.refused {
 				require.NoError(t, err)
-				require.NotNil(t, trim.payload.(facetedPayload).loftFacesTrim)
+				require.NotNil(t, trim.n.Payload.(facetedPayload).loftFacesTrim)
 				return
 			}
 			require.ErrorIs(t, err, ErrUnsupported)
@@ -382,11 +382,11 @@ func TestLoftFacesTangentHeelRefusesWrongSide(t *testing.T) {
 // result has no facet of.
 func TestLoftFacesTangentHeelRefusesMissingToolFace(t *testing.T) {
 	c := buildTangentTrimChain(t)
-	p := c.cut.payload.(facetedPayload)
+	p := c.cut.n.Payload.(facetedPayload)
 	toe := *p.loftFacesToe
 	toe.toeCapFace = toe.capFace
 	p.loftFacesToe = &toe
-	c.cut.payload = p
+	c.cut.n.Payload = p
 
 	trim, err := Intersect(t.Context(), c.cut, c.heelTool)
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -411,7 +411,7 @@ func TestLoftFacesTangentHeelRefusesOtherCone(t *testing.T) {
 
 	trim, err := Intersect(t.Context(), c.cut, other)
 	if err == nil {
-		require.Nil(t, trim.payload.(facetedPayload).loftFacesTrim, "no trim record is issued")
+		require.Nil(t, trim.n.Payload.(facetedPayload).loftFacesTrim, "no trim record is issued")
 		return
 	}
 	require.ErrorIs(t, err, ErrUnsupported)

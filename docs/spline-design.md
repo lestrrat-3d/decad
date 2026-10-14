@@ -1001,7 +1001,7 @@ rational span unchanged.
 
 | Question | Polynomial Bézier span (Tier A) | Rational span | Consumer |
 |---|---|---|---|
-| directional extreme | `d/dt(g·C(t)) = 0`, degree `≤ p−1` per span | `(g·U)′W − (g·U)W′ = 0`, degree `≤ 2p−1` per span — the positive `W²` denominator cleared | `extentAlong`, `Box`, through-all stops |
+| directional extreme | `d/dt(g·C(t)) = 0`, degree `≤ p−1` per span | `(g·U)′W − (g·U)W′ = 0`, degree `≤ 2p−1` per span — the positive `W²` denominator cleared | `ExtentAlong`, `Box`, through-all stops |
 | chord sagitta | the control points' distance to the chord SEGMENT `P_0 P_p`, MEASURED per subdivision level (§6.1) | the same distance on the span's own control points, MEASURED per level | `chordCount`, tessellation |
 | tangent/normal DIRECTION cone | hodograph control hull — a degree `p−1` Bézier with control points `p·ΔP_i` — a CONE only where that hull excludes the origin (§6.3) | the control hull of the numerator hodograph `(U′W − UW′, V′W − VW′)`, degree `≤ 2p−1` — the positive `W²` scales `C′` and never rotates it, so the direction cone is the numerator's, under the same origin-exclusion test (§6.3) | undercut survey |
 | speed, for a Lipschitz bound | that same hodograph hull's maximum norm | the numerator hodograph hull's maximum norm divided by the square of `W`'s proven positive LOWER bound | extreme-VALUE brackets |
@@ -1214,7 +1214,7 @@ S9). So a gate that compares a free-form bracket against a threshold at build
 time refuses as R11 when the bracket straddles it. Two gates do:
 
 - **a through-all stop's in-path test.** `stops.go` decides, on each body's own
-  `extentAlong` interval and the displacement that reading publishes, whether
+  `ExtentAlong` interval and the displacement that reading publishes, whether
   the sweep meets that body. A free-form body's extent is a bracket (§6.2), and
   the decision is made OUTSIDE it — beyond the sketch plane by more than the
   displacement, or short of it by more — so a bracket that straddles the sketch
@@ -1233,7 +1233,7 @@ tangency, and a tangency is a contact the §5 audit refuses anyway. That
 refinement is a measured-target loop, so it carries §6.1's iteration cap.
 
 **Current state.** The through-all stop's gate IS the straddle test above:
-`stops.go` reads each payload's `extentAlong` interval beside its displacement,
+`stops.go` reads each payload's `ExtentAlong` interval beside its displacement,
 charges that displacement to the level it resolves, and refuses only where it
 straddles the sketch plane in the travel sense. The wider refusal — ANY nonzero
 bracket bound — survives in `prismPayload.extentAlongWork` and its revolve twin,

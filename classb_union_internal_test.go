@@ -36,8 +36,8 @@ func internalPinAlongX(t *testing.T, doc *Document, x0, l float64) *Body {
 
 func requireBrep(t *testing.T, body *Body) brepPayload {
 	t.Helper()
-	bp, ok := body.payload.(brepPayload)
-	require.True(t, ok, `the pair builds a brep body, got %T`, body.payload)
+	bp, ok := body.n.Payload.(brepPayload)
+	require.True(t, ok, `the pair builds a brep body, got %T`, body.n.Payload)
 	requireClosedTopology(t, body)
 	return bp
 }
@@ -96,8 +96,8 @@ func TestClassBRootedPin(t *testing.T) {
 		pin := internalPinAlongX(t, doc, 30, 20)
 		got, err := Intersect(t.Context(), plate, pin)
 		require.NoError(t, err)
-		_, ok := got.payload.(prismPayload)
-		require.True(t, ok, `the inside of a rooted pin is a prism, got %T`, got.payload)
+		_, ok := got.n.Payload.(prismPayload)
+		require.True(t, ok, `the inside of a rooted pin is a prism, got %T`, got.n.Payload)
 		requireVolumeCovers(t, got, 0, 90)
 	})
 }
@@ -139,7 +139,7 @@ func TestClassBThroughPin(t *testing.T) {
 			} else {
 				got, err = Intersect(t.Context(), a, b)
 				require.NoError(t, err)
-				_, ok := got.payload.(prismPayload)
+				_, ok := got.n.Payload.(prismPayload)
 				require.True(t, ok)
 			}
 			requireVolumeCovers(t, got, tc.A, tc.B)
@@ -274,7 +274,7 @@ func TestClassBStackedTarget(t *testing.T) {
 	pocket := internalBoxBodyAtZ(t, doc, 5, 5, 15, 15, 6, 4)
 	part, err := Cut(t.Context(), plate, pocket)
 	require.NoError(t, err)
-	_, stacked := part.payload.(stackedPrismPayload)
+	_, stacked := part.n.Payload.(stackedPrismPayload)
 	require.True(t, stacked, `the premise: a blind cut builds a stacked prism`)
 	got, err := Cut(t.Context(), part, internalDrillAlongY(t, doc, 10, 3, 2))
 	require.NoError(t, err)
@@ -304,7 +304,7 @@ func TestClassBMissesAFaceInsideTheTube(t *testing.T) {
 	})
 	holed, err := Cut(t.Context(), bar, vertical)
 	require.NoError(t, err)
-	_, prism := holed.payload.(prismPayload)
+	_, prism := holed.n.Payload.(prismPayload)
 	require.True(t, prism, `the premise: the vertical hole is a co-directional cut`)
 	w2 := sketch.NewWorld()
 	plane, err := w2.CreateOffsetPlane(w2.XZ(), -10)

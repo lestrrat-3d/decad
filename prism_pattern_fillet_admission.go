@@ -16,7 +16,7 @@ import (
 // edge with the same held endpoints is insufficient without that source map.
 func prismPatternFilletContactsOf(ctx context.Context, body *Body, edges []*Edge,
 	radius float64) ([]prismPatternFilletContact, error) {
-	fp, ok := body.payload.(facetedPayload)
+	fp, ok := body.n.Payload.(facetedPayload)
 	if !ok || fp.prismPatternJoin == nil || radius <= 0 || proofbound.IsNonFinite(radius) {
 		return nil, fmt.Errorf("%w: fillet has no certified joined-prism source or radius", ErrUnsupported)
 	}

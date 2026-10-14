@@ -54,7 +54,7 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 	loft, err := doc.LoftFaces(t.Context(), section(near, refOf(CapStart(near))),
 		section(near, refOf(CapEnd(near))), section(far, refOf(CapEnd(far))))
 	require.NoError(t, err)
-	baseRecord := loft.payload.(facetedPayload).loftFacesCap
+	baseRecord := loft.n.Payload.(facetedPayload).loftFacesCap
 	require.Len(t, baseRecord.maps, 3)
 	require.Len(t, baseRecord.bounds, 3)
 	require.Len(t, baseRecord.stationGroup, len(baseRecord.source.sourceStation))
@@ -78,10 +78,10 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 	}
 	cut, err := Cut(t.Context(), loft, cone(7.5))
 	require.NoError(t, err)
-	require.NotNil(t, cut.payload.(facetedPayload).loftFacesToe)
+	require.NotNil(t, cut.n.Payload.(facetedPayload).loftFacesToe)
 	trim, err := Intersect(t.Context(), cut, cone(8))
 	require.NoError(t, err)
-	trimRecord := trim.payload.(facetedPayload).loftFacesTrim
+	trimRecord := trim.n.Payload.(facetedPayload).loftFacesTrim
 	require.NotNil(t, trimRecord)
 	require.Same(t, baseRecord.source, trimRecord.source)
 	require.Len(t, trimRecord.maps, 3)

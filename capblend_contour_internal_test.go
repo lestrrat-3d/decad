@@ -314,7 +314,7 @@ func capHeldBody(t *testing.T, section func(*sketch.Sketch), h, d float64) capBl
 	require.NoError(t, err)
 	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
-	cbp, ok := chamfered.payload.(capBlendPayload)
+	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
 	return cbp
 }

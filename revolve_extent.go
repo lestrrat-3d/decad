@@ -22,7 +22,7 @@ import (
 // bound, and the meridian bound the walk carries. See
 // docs/evaluator-design.md §6.
 
-// extentAlong is the through-all stop's reading of the revolved solid
+// ExtentAlong is the through-all stop's reading of the revolved solid
 // (stops.go): its extent interval along an arbitrary world direction g, beside
 // the proven displacement extentBoundedAlong states for its two ends. The
 // swept radial factor's range over the angular interval turns the extreme into
@@ -32,7 +32,7 @@ import (
 // end a sweep extreme or a computed arc radius holds only to a bracket
 // publishes that bracket's width, and the stop charges it to the level it
 // resolves (docs/evaluator-design.md §5/§6).
-func (rp revolvePayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
+func (rp revolvePayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 	return rp.extentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
 }
 
