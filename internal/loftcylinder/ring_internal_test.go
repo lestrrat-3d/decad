@@ -26,7 +26,7 @@ func TestRingPlaneRejectPreservesExactDistance(t *testing.T) {
 	} {
 		a := RingVertex(r3.Vec{X: 0.25, Y: 0.25, Z: heights[0]})
 		b := RingVertex(r3.Vec{X: 0.5, Y: 0.25, Z: heights[1]})
-		if !ringPlaneApart(a, b, wall, bound2) {
+		if !ringPlaneApart(ringSegmentPlaneOf(a, b, bound2), &wall) {
 			continue
 		}
 		rejected++
@@ -40,7 +40,7 @@ func TestRingPlaneRejectPreservesExactDistance(t *testing.T) {
 	}
 	below := RingVertex(r3.Vec{X: 0.25, Y: 0.25, Z: -1})
 	above := RingVertex(r3.Vec{X: 0.25, Y: 0.25, Z: 1})
-	if ringPlaneApart(below, above, wall, bound2) {
+	if ringPlaneApart(ringSegmentPlaneOf(below, above, bound2), &wall) {
 		t.Fatal("plane rejected a crossing segment")
 	}
 }

@@ -10,14 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-func ringXY(p RingVec) XY {
-	return XY{X: p[0], Y: p[1]}
-}
-
-func ringRadius2(p RingVec) *big.Rat {
-	return SourceDot(ringXY(p), ringXY(p))
-}
-
 // RingToothLevel is one tooth's circle record and walls at its mapped ring height.
 type RingToothLevel struct {
 	Circle   SourceCircle
@@ -38,6 +30,14 @@ type RingToothLevel struct {
 // both cap planes, and either root collar.
 func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []RingToothLevel,
 	blankRadius, boreRadius float64) (RingOccupancy, error) {
+	return RingEdgesInsideShared(ctx, edges, teeth, blankRadius, boreRadius, new(RingEdgeRecords))
+}
+
+// RingEdgesInsideShared is RingEdgesInside with the per-edge records of
+// records, which a second check of the same edges at other tooth levels can
+// reuse. records must not be nil.
+func RingEdgesInsideShared(ctx context.Context, edges [][2]proofarith.Xpt, teeth []RingToothLevel,
+	blankRadius, boreRadius float64, records *RingEdgeRecords) (RingOccupancy, error) {
 	var result RingOccupancy
 	refuse := func(reason string) (RingOccupancy, error) {
 		return result, fmt.Errorf("%w: %s", decaderr.ErrUnsupported, reason)
@@ -46,49 +46,47 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 	bore2 := proofarith.MulRat(new(big.Rat), proofarith.FloatRat(boreRadius), proofarith.FloatRat(boreRadius))
 	witness := false
 	// levelBoxes holds each tooth's outward-rounded Z interval, filled on the
-	// first outer edge. A level is the same at both ends of a mapped edge.
+	// first outer or seam edge. A level is the same at both ends of a mapped
+	// edge.
 	var levelBoxes [][2]float64
+	fillLevelBoxes := func() {
+		if levelBoxes != nil {
+			return
+		}
+		levelBoxes = make([][2]float64, len(teeth))
+		for i := range teeth {
+			levelBoxes[i] = [2]float64{
+				proofbound.RatFloatDown(teeth[i].Level), proofbound.RatFloatUp(teeth[i].Level),
+			}
+		}
+	}
 	// seams holds each tooth's level records, each built on its first seam edge.
 	var seams []ringSeamLevel
 	for edgeIndex, edge := range edges {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		a, b := RingPoint(edge[0]), RingPoint(edge[1])
-		amin, bmin := ringXY(a), ringXY(b)
-		min2 := sourceRadiusMin2(amin, bmin)
-		if min2.Cmp(bore2) <= 0 {
+		rec := records.recordOf(edgeIndex, edge, bore2, r2)
+		amin, bmin := rec.amin, rec.bmin
+		if rec.reachesBore {
 			return refuse("ring may reach the centered bore")
 		}
-		ra, rb := ringRadius2(a), ringRadius2(b)
-		if ra.Cmp(r2) < 0 || rb.Cmp(r2) < 0 {
+		if rec.witness {
 			witness = true
 		}
-		max2 := ra
-		if rb.Cmp(max2) > 0 {
-			max2 = rb
-		}
-		if max2.Cmp(r2) < 0 {
+		switch rec.class {
+		case ringEdgeInner:
 			result.Inner++
 			continue
-		}
-		if min2.Cmp(r2) > 0 {
+		case ringEdgeOuter:
 			result.Outer++
-			if levelBoxes == nil {
-				levelBoxes = make([][2]float64, len(teeth))
-				for i := range teeth {
-					levelBoxes[i] = [2]float64{
-						proofbound.RatFloatDown(teeth[i].Level), proofbound.RatFloatUp(teeth[i].Level),
-					}
-				}
-			}
+			fillLevelBoxes()
 			// Axes 0 and 1 of the mapped edge are those of the edge itself.
-			xy := RingEdgeBox(a, b)
+			xy := rec.box()
 			for toothIndex, tooth := range teeth {
-				mappedA, mappedB := a, b
-				mappedA[2], mappedB[2] = tooth.Level, tooth.Level
-				box := xy
-				box[2] = levelBoxes[toothIndex]
+				mappedA := RingVec{amin.X, amin.Y, tooth.Level}
+				mappedB := RingVec{bmin.X, bmin.Y, tooth.Level}
+				box := RingBox{xy[0], xy[1], levelBoxes[toothIndex]}
 				if err := RingWallClear(ctx, mappedA, mappedB,
 					box, tooth.Bound2,
 					tooth.Exterior, &result); err != nil {
@@ -99,6 +97,8 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 			continue
 		}
 		result.Seam++
+		fillLevelBoxes()
+		xy := rec.box()
 		if seams == nil {
 			seams = make([]ringSeamLevel, len(teeth))
 		}
@@ -122,10 +122,10 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 					return refuse("ring may touch a true connector wall")
 				}
 			}
-			mappedA, mappedB := a, b
-			mappedA[2], mappedB[2] = tooth.Level, tooth.Level
+			mappedA := RingVec{amin.X, amin.Y, tooth.Level}
+			mappedB := RingVec{bmin.X, bmin.Y, tooth.Level}
 			if err := RingWallClear(ctx, mappedA, mappedB,
-				RingEdgeBox(mappedA, mappedB), tooth.Bound2,
+				RingBox{xy[0], xy[1], levelBoxes[toothIndex]}, tooth.Bound2,
 				tooth.Fitted, &result); err != nil {
 				return result, fmt.Errorf("ring seam edge %d tooth %d from %v to %v at proxy z=%s: %w",
 					edgeIndex, toothIndex, edge[0].Vec(), edge[1].Vec(), tooth.Level.RatString(), err)

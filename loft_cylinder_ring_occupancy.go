@@ -103,7 +103,8 @@ type loftCylinderRingTeeth map[loftCylinderRingToothKey]loftCylinderRingTooth
 // exact radius. The caller separately proves its cutter band's full surface,
 // both cap planes, and either root collar.
 func loftCylinderSourceRingInside(ctx context.Context, fp facetedPayload,
-	edges [][2]proofarith.Xpt, teeth loftCylinderRingTeeth) (loftcylinder.RingOccupancy, error) {
+	edges [][2]proofarith.Xpt, teeth loftCylinderRingTeeth,
+	records *loftcylinder.RingEdgeRecords) (loftcylinder.RingOccupancy, error) {
 	if !fp.contactAudited || fp.xform != r3.Identity() {
 		return loftcylinder.RingOccupancy{},
 			fmt.Errorf("%w: split ring has no audited source body", ErrUnsupported)
@@ -116,11 +117,12 @@ func loftCylinderSourceRingInside(ctx context.Context, fp facetedPayload,
 	if err := loftCylinderChamferBridgeSources(&source); err != nil {
 		return loftcylinder.RingOccupancy{}, err
 	}
-	return loftCylinderSourceRingInsideInputs(ctx, source, edges, teeth)
+	return loftCylinderSourceRingInsideInputs(ctx, source, edges, teeth, records)
 }
 
 func loftCylinderSourceRingInsideInputs(ctx context.Context, source loftCylinderChamferSource,
-	edges [][2]proofarith.Xpt, teeth loftCylinderRingTeeth) (loftcylinder.RingOccupancy, error) {
+	edges [][2]proofarith.Xpt, teeth loftCylinderRingTeeth,
+	records *loftcylinder.RingEdgeRecords) (loftcylinder.RingOccupancy, error) {
 	var result loftcylinder.RingOccupancy
 	refuse := func(reason string) (loftcylinder.RingOccupancy, error) {
 		return result, fmt.Errorf("%w: %s", ErrUnsupported, reason)
@@ -177,5 +179,8 @@ func loftCylinderSourceRingInsideInputs(ctx context.Context, source loftCylinder
 		toothRecords[i] = loftcylinder.RingToothLevel{Circle: tooth.circle, Level: mapped,
 			Bound2: tooth.bound2, Exterior: tooth.exterior, Fitted: tooth.fitted}
 	}
-	return loftcylinder.RingEdgesInside(ctx, edges, toothRecords, source.blankRadius, source.boreRadius)
+	if records == nil {
+		records = new(loftcylinder.RingEdgeRecords)
+	}
+	return loftcylinder.RingEdgesInsideShared(ctx, edges, toothRecords, source.blankRadius, source.boreRadius, records)
 }
