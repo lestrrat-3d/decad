@@ -359,10 +359,11 @@ func ringPlaneApart(a, b RingVec,
 func RingWallClear(ctx context.Context, a, b RingVec,
 	box RingBox, bound2 *big.Rat, walls []RingWall,
 	result *RingOccupancy) error {
-	for wallIndex, wall := range walls {
-		if !ringBoxesMeet(box, wall.Box) {
+	for wallIndex := range walls {
+		if !ringBoxesMeet(box, walls[wallIndex].Box) {
 			continue
 		}
+		wall := walls[wallIndex]
 		result.Candidates++
 		if result.Candidates > 1000000 || result.Candidates%256 == 0 && ctx.Err() != nil {
 			if err := ctx.Err(); err != nil {
