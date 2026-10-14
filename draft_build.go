@@ -269,7 +269,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		return nil, err
 	}
 	faces = append(faces, capStart, capEnd)
-	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
+	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}
 
 	nearCap, farCap := capStart, capEnd
 	if !dp.nearStart {

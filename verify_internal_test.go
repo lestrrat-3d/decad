@@ -749,8 +749,8 @@ func TestAuditSheetBoundaryStructuralViolations(t *testing.T) {
 			extra := bornFace(&Face{
 				n: topo.Face{Body: bodyNode(b), Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}},
 			})
-			shell := b.lumps[0].shells[0]
-			shell.faces = append(shell.faces, extra)
+			shell := b.n.Lumps[0].Shells[0]
+			shell.Faces = append(shell.Faces, faceNode(extra))
 			e.n.Faces = append(e.n.Faces, faceNode(extra))
 			require.Len(t, e.Faces(), 3, "the third face reached the edge the audit reads")
 		})

@@ -368,3 +368,60 @@ func TestFaceLoopsKeepTheirIdentity(t *testing.T) {
 	require.Nil(t, zero.Loops())
 	require.Nil(t, zero.Edges())
 }
+
+// TestBodyLumpsAndShellsKeepTheirIdentity pins identity across the body, lump
+// and shell links: on a box a second Body.Lumps, Lump.Shells or
+// FaceShell.Faces read returns the same pointers in a fresh slice,
+// Body.Shells is the lumps' shells in order and Body.Faces the shells' faces
+// in order. The zero Body, Lump and FaceShell have nil lumps, shells and
+// faces.
+func TestBodyLumpsAndShellsKeepTheirIdentity(t *testing.T) {
+	t.Parallel()
+	body := coedgeBox(t)
+	lumps := body.Lumps()
+	require.Len(t, lumps, 1)
+	var shells []*decad.FaceShell
+	for i, l := range lumps {
+		require.Same(t, l, body.Lumps()[i])
+		for j, s := range l.Shells() {
+			require.Same(t, s, l.Shells()[j])
+			shells = append(shells, s)
+		}
+	}
+	require.Len(t, shells, 1)
+	bodyShells := body.Shells()
+	require.Len(t, bodyShells, len(shells))
+	var faces []*decad.Face
+	for i, s := range shells {
+		require.Same(t, s, bodyShells[i])
+		require.False(t, s.IsVoid())
+		require.False(t, s.IsOpen())
+		for j, f := range s.Faces() {
+			require.Same(t, f, s.Faces()[j])
+			faces = append(faces, f)
+		}
+	}
+	require.Len(t, faces, 6)
+	bodyFaces := body.Faces()
+	require.Len(t, bodyFaces, len(faces))
+	for i := range faces {
+		require.Same(t, faces[i], bodyFaces[i])
+	}
+	lumps[0] = nil
+	require.NotNil(t, body.Lumps()[0], "Lumps returns a fresh slice")
+	shellsOf := body.Lumps()[0].Shells()
+	shellsOf[0] = nil
+	require.NotNil(t, body.Lumps()[0].Shells()[0], "Shells returns a fresh slice")
+	facesOf := shells[0].Faces()
+	facesOf[0] = nil
+	require.NotNil(t, shells[0].Faces()[0], "Faces returns a fresh slice")
+
+	var zeroBody decad.Body
+	require.Nil(t, zeroBody.Lumps())
+	require.Nil(t, zeroBody.Shells())
+	require.Nil(t, zeroBody.Faces())
+	var zeroLump decad.Lump
+	require.Nil(t, zeroLump.Shells())
+	var zeroShell decad.FaceShell
+	require.Nil(t, zeroShell.Faces())
+}

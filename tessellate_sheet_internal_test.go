@@ -187,7 +187,7 @@ func TestFreeChainCountsByFaceCountsConnectedComponentsNotEdges(t *testing.T) {
 	e1 := bornEdge(&Edge{n: topo.Edge{Start: vertexNode(vA), End: vertexNode(vB), Faces: []*topo.Face{faceNode(face)}}})
 	e2 := bornEdge(&Edge{n: topo.Edge{Start: vertexNode(vB), End: vertexNode(vC), Faces: []*topo.Face{faceNode(face)}}})
 	face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(e1)}, {Edge: edgeNode(e2)}}}}))}
-	body := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{face}}}}}})
+	body := bornBody(&Body{n: topo.Body{Lumps: []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: []*topo.Face{faceNode(face)}}}))}}}))}}})
 
 	counts := freeChainCountsByFace(body)
 	require.Equal(t, 1, counts[face], `two free edges sharing an interned vertex form one connected chain, not two`)
@@ -210,7 +210,7 @@ func TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet(t *testing.T) {
 	sharedEdge := bornEdge(&Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(faceA), faceNode(faceB)}}})
 	faceA.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(sharedEdge)}}}}))}
 	faceB.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(sharedEdge)}}}}))}
-	body := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{faceA, faceB}}}}}})
+	body := bornBody(&Body{n: topo.Body{Lumps: []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: []*topo.Face{faceNode(faceA), faceNode(faceB)}}}))}}}))}}})
 	require.Empty(t, freeChainCountsByFace(body), `premise: this body records no free edge`)
 
 	require.NoError(t, requireSheetMesh(t.Context(), body, mesh), `no free edge on either side: the manifold-with-boundary audit passes for the same reason the closed-mesh audit would`)

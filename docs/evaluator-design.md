@@ -70,8 +70,8 @@ index (core §3 invariant #3).
 Each topology type keeps its name, methods and godoc in the root package and
 holds its data by value in an `internal/topo` node (`Vertex` holds a
 `topo.Vertex`, `Edge` a `topo.Edge`, `CoEdge` a `topo.CoEdge`, `Face` a
-`topo.Face`, `Loop` a `topo.Loop`, `FaceShell` a `topo.FaceShell`, `Document` a
-`topo.Document`,
+`topo.Face`, `Loop` a `topo.Loop`, `FaceShell` a `topo.FaceShell`, `Lump` a
+`topo.Lump`, `Document` a `topo.Document`,
 `Mesh` a `topo.Mesh`, `Body` a `topo.Body`), so
 internal packages can read and build it. The handle's pointer is still the
 identity; no other rule of this section changes.
@@ -79,28 +79,31 @@ identity; no other rule of this section changes.
 A node links to the nodes it shares by node pointer: an `Edge` node holds its
 `Start` and `End` vertex nodes and its adjacent `Faces` face nodes, a `Loop`
 node holds its `CoEdges` by value, each a `topo.CoEdge` with its `Edge` node and
-walk sense, and a `Face` node holds its `Loops` loop nodes (the outer loop
-first) and its `Body` node. A node another node links to carries `Owner`, the
-handle that holds it, set once when the handle is born (`bornVertex`,
-`bornBody`, `bornFace`, `bornEdge` and `bornLoop` in `topology_handles.go`;
-every root `Vertex`, `Body`, `Face`, `Edge` and `Loop` is born through them, and
+walk sense, a `Face` node holds its `Loops` loop nodes (the outer loop first)
+and its `Body` node, a `FaceShell` node holds its `Faces`, a `Lump` node its
+`Shells` (the outer shell first), and a `Body` node its `Lumps`. A node another
+node links to carries `Owner`, the handle that holds it, set once when the
+handle is born (`bornVertex`, `bornBody`, `bornFace`, `bornEdge`, `bornLoop`,
+`bornFaceShell` and `bornLump` in `topology_handles.go`; every root `Vertex`,
+`Body`, `Face`, `Edge`, `Loop`, `FaceShell` and `Lump` is born through them, and
 `TestTopologyHandlesAreBorn` fails on any other construction). A `CoEdge` is a
 value that nothing links to, so it has no `Owner`: the public `CoEdge` holds
 its node by value and `Loop.CoEdges` wraps each stored use. Root maps a linked
 node back to its handle through `Owner` only where a handle leaves the code
 (`Edge.Start`, `Edge.End`, `Edge.Faces`, `CoEdge.Edge`, `CoEdge.Start`,
-`CoEdge.End`, `Loop.Edges`, `Face.Loops`, `Face.Edges`, `Body.Edges`,
-`Body.Vertices`, and the body, face, edge or loop a root function needs as a
-handle); reads of node data go node to node, and
+`CoEdge.End`, `Loop.Edges`, `Face.Loops`, `Face.Edges`, `FaceShell.Faces`,
+`Lump.Shells`, `Body.Lumps`, `Body.Shells`, `Body.Faces`, `Body.Edges`,
+`Body.Vertices`, and the body, face, edge, loop, shell or lump a root function
+needs as a handle); reads of node data go node to node, and
 a linked node compared with a handle compares nodes. Node and handle pointers pair one to one,
 so identity, `==` and map keys are unchanged. A handle is never copied by
 value: it holds a `noCopy` marker that `go vet`'s copylocks check enforces.
 
 | Type | Holds |
 |---|---|
-| `Body` | owning `*Document`, origin (a `provenance.Ref` in the node; `Body.Origin()` converts it to `FeatureRef`), `BodyKind` (a `topo.BodyKind` in the node; `Body.Kind()` converts it), `[]*Lump`, cached measurements (computed at build, immutable after; `measurement.Measurement`, `VecMeasurement` and `Box` in the node, which `Volume`, `Area`, `Centroid` and `Bounds` convert) |
-| `Lump` | `[]*FaceShell` — a connected piece of a body, solid or sheet; a sheet lump holds exactly one shell (`docs/surface-design.md` §2.2) |
-| `FaceShell` | `[]*Face`, `void bool`, `open bool` — `open` is true when the shell has a free edge (`docs/surface-design.md` §2.2) |
+| `Body` | owning `*Document`, origin (a `provenance.Ref` in the node; `Body.Origin()` converts it to `FeatureRef`), `BodyKind` (a `topo.BodyKind` in the node; `Body.Kind()` converts it), `[]*Lump` (lump nodes in the node, which `Body.Lumps()` maps to their handles), cached measurements (computed at build, immutable after; `measurement.Measurement`, `VecMeasurement` and `Box` in the node, which `Volume`, `Area`, `Centroid` and `Bounds` convert) |
+| `Lump` | `[]*FaceShell` (shell nodes in its `topo.Lump`, which `Lump.Shells()` maps to their handles) — a connected piece of a body, solid or sheet; a sheet lump holds exactly one shell (`docs/surface-design.md` §2.2) |
+| `FaceShell` | `[]*Face` (face nodes in the node, which `FaceShell.Faces()` maps to their handles), `void bool`, `open bool` — `open` is true when the shell has a free edge (`docs/surface-design.md` §2.2) |
 | `Face` | tagged `Surface` (the `surfacegeom` variant in the node; `Face.Surface()` converts to the public one), `[]*Loop` (first outer; loop nodes in the node, which `Face.Loops()` maps to their handles), origin roles (≥1 `provenance.Ref`s in the node, exposed as `FeatureRef`s by `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body (the `Body` node in the `Face` node; root maps it to the handle through `Owner`) |
 | `Loop` | ordered `[]CoEdge` (directed edge uses in boundary-walk order; `topo.CoEdge` values in the node, which `Loop.CoEdges()` wraps), `outer bool` |
 | `CoEdge` | shared `*Edge` plus walk sense (the edge node and `Forward` in its `topo.CoEdge`); public `Edge`/`Start`/`End`/`IsForward` accessors map the edge and its vertices to their handles |

@@ -486,10 +486,10 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		if rp.surfaceResult {
 			lumps = make([]*Lump, len(shells))
 			for i, sh := range shells {
-				lumps[i] = &Lump{shells: []*FaceShell{sh}}
+				lumps[i] = bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(sh)}}})
 			}
 		} else {
-			lumps = []*Lump{{shells: shells}}
+			lumps = []*Lump{bornLump(&Lump{n: topo.Lump{Shells: faceShellNodes(shells)}})}
 		}
 	} else {
 		var faces []*Face
@@ -515,10 +515,10 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			// each becomes its own Lump instead of one shell regardless.
 			lumps = sheetLumps(faces)
 		} else {
-			lumps = []*Lump{{shells: []*FaceShell{{faces: faces, n: topo.FaceShell{Open: shellIsOpen(faces)}}}}}
+			lumps = []*Lump{bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen(faces), Faces: faceNodes(faces)}}))}}})}
 		}
 	}
-	body.lumps = lumps
+	body.n.Lumps = lumpNodes(lumps)
 	if err := addBlendRoles(ctx, body, ref, rp.blendSegs, rp.blendKind); err != nil {
 		return nil, err
 	}
@@ -972,7 +972,7 @@ func fullRevolveShellsContext(ctx context.Context, perLoop []revLoopParts, sheet
 				continue
 			}
 			void := !sheet && (li != 0 || r != parts.outerRun)
-			shells = append(shells, &FaceShell{faces: group, n: topo.FaceShell{Open: shellIsOpen(group), Void: void}})
+			shells = append(shells, bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen(group), Void: void, Faces: faceNodes(group)}}))
 		}
 	}
 	return shells, nil
@@ -1220,7 +1220,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 		allFaces = append(allFaces, faces...)
 		area = proofbound.BoundedAdd(area, walkArea)
 	}
-	body.lumps = sheetLumps(allFaces)
+	body.n.Lumps = lumpNodes(sheetLumps(allFaces))
 	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(area.Value),
 		Exactness: measurement.ExactnessOf(area.Bound),

@@ -159,8 +159,8 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	if err := attachFaceLoopsContext(ctx, []*Face{nf}); err != nil {
 		return nil, err
 	}
-	shell := &FaceShell{faces: []*Face{nf}, n: topo.FaceShell{Open: shellIsOpen([]*Face{nf})}}
-	body.lumps = []*Lump{{shells: []*FaceShell{shell}}}
+	shell := bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen([]*Face{nf}), Faces: []*topo.Face{faceNode(nf)}}})
+	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(shell)}}}))}
 
 	// Area is the face's own reading, unaffected by delta: this evaluator
 	// never recomputes area from placed coordinates — it copies the analytic

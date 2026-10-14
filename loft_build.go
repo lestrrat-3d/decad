@@ -467,13 +467,13 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		if err := attachFaceLoopsContext(ctx, walls); err != nil {
 			return nil, err
 		}
-		body.lumps = sheetLumps(walls)
+		body.n.Lumps = lumpNodes(sheetLumps(walls))
 	} else {
 		faces := append([]*Face{capStart, capEnd}, walls...)
 		if err := attachFaceLoopsContext(ctx, faces); err != nil {
 			return nil, err
 		}
-		body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
+		body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}
 	}
 
 	mass := buildLoftMassWithWallAreas(pl, a, pairs, sectionDelta, sectionMatchedDelta, wallAreas)

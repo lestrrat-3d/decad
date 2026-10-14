@@ -70,7 +70,7 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 	if err := attachFaceLoopsContext(ctx, faces); err != nil {
 		return nil, err
 	}
-	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
+	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}
 
 	if err := publishCoilReadings(body, rec, sh, m, walls); err != nil {
 		return nil, err

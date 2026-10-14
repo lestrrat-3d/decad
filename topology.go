@@ -616,7 +616,7 @@ func (f *Face) Origins() []FeatureRef { return featureRefsOf(f.n.Origins) }
 
 // FaceShell is a connected set of faces.
 type FaceShell struct {
-	faces []*Face
+	_ noCopy
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.FaceShell
 }
@@ -637,21 +637,22 @@ func (s *FaceShell) IsVoid() bool { return s.n.Void }
 func (s *FaceShell) IsOpen() bool { return s.n.Open }
 
 // Faces returns the shell's faces.
-func (s *FaceShell) Faces() []*Face { return append([]*Face(nil), s.faces...) }
+func (s *FaceShell) Faces() []*Face { return faceHandles(s.n.Faces) }
 
 // Lump is a connected solid piece of a body.
 type Lump struct {
-	shells []*FaceShell
+	_ noCopy
+	// n is the node data internal packages read and build (internal/topo).
+	n topo.Lump
 }
 
 // Shells returns the lump's shells, the outer shell first.
-func (l *Lump) Shells() []*FaceShell { return append([]*FaceShell(nil), l.shells...) }
+func (l *Lump) Shells() []*FaceShell { return faceShellHandles(l.n.Shells) }
 
 // Body is an immutable solid: every operation returns a new one, and the
 // input body is retired from its document (core §6).
 type Body struct {
-	doc   *Document
-	lumps []*Lump
+	doc *Document
 
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Body
@@ -679,13 +680,15 @@ func (b *Body) Origin() FeatureRef { return featureRefOf(b.n.Origin) }
 
 // Lumps returns the body's disjoint pieces; more than one means the body is
 // disconnected.
-func (b *Body) Lumps() []*Lump { return append([]*Lump(nil), b.lumps...) }
+func (b *Body) Lumps() []*Lump { return lumpHandles(b.n.Lumps) }
 
 // Shells returns the body's shells across all lumps.
 func (b *Body) Shells() []*FaceShell {
 	var out []*FaceShell
-	for _, l := range b.lumps {
-		out = append(out, l.Shells()...)
+	for _, l := range b.n.Lumps {
+		for _, s := range l.Shells {
+			out = append(out, faceShellHandle(s))
+		}
 	}
 	return out
 }
@@ -693,24 +696,47 @@ func (b *Body) Shells() []*FaceShell {
 // Faces returns the body's faces across all shells.
 func (b *Body) Faces() []*Face {
 	var out []*Face
-	for _, s := range b.Shells() {
-		out = append(out, s.Faces()...)
+	for _, l := range b.n.Lumps {
+		for _, s := range l.Shells {
+			for _, f := range s.Faces {
+				out = append(out, faceHandle(f))
+			}
+		}
 	}
 	return out
 }
 
 // Edges returns the body's edges, deduplicated.
 func (b *Body) Edges() []*Edge {
+	nodes := bodyEdgeNodes(&b.n)
+	if len(nodes) == 0 {
+		return nil
+	}
+	out := make([]*Edge, len(nodes))
+	for i, n := range nodes {
+		out[i] = edgeHandle(n)
+	}
+	return out
+}
+
+// bodyEdgeNodes returns the nodes of n's edges, each once, in the order
+// Body.Edges returns their handles: first seen walking lumps, shells, faces,
+// loops and their uses.
+func bodyEdgeNodes(n *topo.Body) []*topo.Edge {
 	seen := map[*topo.Edge]struct{}{}
-	var out []*Edge
-	for _, f := range b.Faces() {
-		for _, l := range f.n.Loops {
-			for _, ce := range l.CoEdges {
-				if _, ok := seen[ce.Edge]; ok {
-					continue
+	var out []*topo.Edge
+	for _, l := range n.Lumps {
+		for _, s := range l.Shells {
+			for _, f := range s.Faces {
+				for _, lp := range f.Loops {
+					for _, ce := range lp.CoEdges {
+						if _, ok := seen[ce.Edge]; ok {
+							continue
+						}
+						seen[ce.Edge] = struct{}{}
+						out = append(out, ce.Edge)
+					}
 				}
-				seen[ce.Edge] = struct{}{}
-				out = append(out, edgeHandle(ce.Edge))
 			}
 		}
 	}
@@ -721,8 +747,8 @@ func (b *Body) Edges() []*Edge {
 func (b *Body) Vertices() []*Vertex {
 	seen := map[*topo.Vertex]struct{}{}
 	var out []*Vertex
-	for _, e := range b.Edges() {
-		for _, v := range [2]*topo.Vertex{e.n.Start, e.n.End} {
+	for _, e := range bodyEdgeNodes(&b.n) {
+		for _, v := range [2]*topo.Vertex{e.Start, e.End} {
 			if v == nil {
 				continue
 			}

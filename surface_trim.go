@@ -115,13 +115,13 @@ func extendEndSegment(b *Body, pp chainPayload, edge *Edge) (int, int, bool, err
 	if !edge.IsFree() {
 		return 0, 0, false, fmt.Errorf(`%w: Extend needs a free sweep edge at an open section end`, ErrUnsupported)
 	}
-	for ci, lump := range b.lumps {
-		if ci >= len(pp.chains) || len(lump.shells) != 1 || len(lump.shells[0].faces) == 0 {
+	for ci, lump := range b.n.Lumps {
+		if ci >= len(pp.chains) || len(lump.Shells) != 1 || len(lump.Shells[0].Faces) == 0 {
 			continue
 		}
-		faces := lump.shells[0].faces
-		first := faces[0].n.Loops[0].CoEdges
-		last := faces[len(faces)-1].n.Loops[0].CoEdges
+		faces := lump.Shells[0].Faces
+		first := faces[0].Loops[0].CoEdges
+		last := faces[len(faces)-1].Loops[0].CoEdges
 		if edge == edgeHandle(first[3].Edge) {
 			return ci, 0, true, nil
 		}
@@ -903,15 +903,15 @@ func extendRevolveEndSegment(b *Body, pp chainRevolvePayload, edge *Edge) (int, 
 	if !edge.IsFree() {
 		return miss()
 	}
-	for ci, lump := range b.lumps {
-		if ci >= len(pp.chains) || len(lump.shells) != 1 || len(lump.shells[0].faces) == 0 {
+	for ci, lump := range b.n.Lumps {
+		if ci >= len(pp.chains) || len(lump.Shells) != 1 || len(lump.Shells[0].Faces) == 0 {
 			continue
 		}
-		faces := lump.shells[0].faces
-		if named, ok := revolveLatitudeLoopEdge(faces[0], true); ok && named == edge {
+		faces := lump.Shells[0].Faces
+		if named, ok := revolveLatitudeLoopEdge(faceHandle(faces[0]), true); ok && named == edge {
 			return ci, 0, true, nil
 		}
-		if named, ok := revolveLatitudeLoopEdge(faces[len(faces)-1], false); ok && named == edge {
+		if named, ok := revolveLatitudeLoopEdge(faceHandle(faces[len(faces)-1]), false); ok && named == edge {
 			return ci, len(pp.chains[ci].Segments) - 1, false, nil
 		}
 	}

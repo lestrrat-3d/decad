@@ -134,7 +134,7 @@ func sheetLumps(faces []*Face) []*Lump {
 	groups := splitConnectedFaces(faces)
 	lumps := make([]*Lump, len(groups))
 	for i, g := range groups {
-		lumps[i] = &Lump{shells: []*FaceShell{{faces: g, n: topo.FaceShell{Open: shellIsOpen(g)}}}}
+		lumps[i] = bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen(g), Faces: faceNodes(g)}}))}}})
 	}
 	return lumps
 }

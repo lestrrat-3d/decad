@@ -131,7 +131,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	if err := attachFaceLoopsContext(ctx, faces); err != nil {
 		return nil, err
 	}
-	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
+	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}
 
 	body.n.Volume = measurementToInternal(mitredVolume(vol6))
 	centroid, err := mitredCentroid(anchor, vol6, moments)

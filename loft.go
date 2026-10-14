@@ -408,7 +408,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	if err := attachFaceLoopsContext(ctx, walls); err != nil {
 		return nil, err
 	}
-	body.lumps = sheetLumps(walls)
+	body.n.Lumps = lumpNodes(sheetLumps(walls))
 
 	mass := newLoftMassAccumulator(anchor, delta, 0, 0)
 	for _, t := range tris {

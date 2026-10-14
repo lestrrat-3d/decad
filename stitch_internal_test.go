@@ -1263,9 +1263,9 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 	}
 
 	body := bornBody(&Body{n: topo.Body{Solid: true, Kind: topo.BodySolid}})
-	body.lumps = []*Lump{
-		{shells: []*FaceShell{{faces: []*Face{stitchTestLumpFace(vertexObjs[0:8])}}}},
-		{shells: []*FaceShell{{faces: []*Face{stitchTestLumpFace(vertexObjs[8:16])}}}},
+	body.n.Lumps = []*topo.Lump{
+		lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: []*topo.Face{faceNode(stitchTestLumpFace(vertexObjs[0:8]))}}}))}}})),
+		lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: []*topo.Face{faceNode(stitchTestLumpFace(vertexObjs[8:16]))}}}))}}})),
 	}
 
 	sp := stitchPayload{

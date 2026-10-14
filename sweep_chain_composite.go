@@ -138,7 +138,7 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 		rewriteCompositeSideRoles(face, i)
 		face.n.Body = bodyNode(body)
 	}
-	body.lumps = sheetLumps(faces)
+	body.n.Lumps = lumpNodes(sheetLumps(faces))
 	if err := auditCompositeBoundary(ctx, body, map[*Edge]struct{}{following.start: {}}); err != nil {
 		return nil, err
 	}

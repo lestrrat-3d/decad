@@ -197,8 +197,8 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, err
 	}
 
-	shell := &FaceShell{faces: []*Face{face}, n: topo.FaceShell{Open: true}}
-	body.lumps = []*Lump{{shells: []*FaceShell{shell}}}
+	shell := bornFaceShell(&FaceShell{n: topo.FaceShell{Open: true, Faces: []*topo.Face{faceNode(face)}}})
+	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(shell)}}}))}
 
 	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(ig.Area),

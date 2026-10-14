@@ -187,7 +187,7 @@ func assembleCompositeSweepBodyWithJoinMode(
 		parts[len(parts)-1].endCap.n.Body = bodyNode(body)
 		faces = append(faces, parts[len(parts)-1].endCap)
 	}
-	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
+	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}
 
 	for _, edge := range body.Edges() {
 		edge.n.Faces = liveCompositeFaces(edge.n.Faces, body)
@@ -198,7 +198,7 @@ func assembleCompositeSweepBodyWithJoinMode(
 		// outer caps that used to bridge them are gone, so each becomes its own
 		// Lump. It must run after the live-face filter above, per this
 		// function's own doc comment.
-		body.lumps = sheetLumps(faces)
+		body.n.Lumps = lumpNodes(sheetLumps(faces))
 	}
 	if err := auditCompositeBoundary(ctx, body, sewnEdges); err != nil {
 		return nil, err

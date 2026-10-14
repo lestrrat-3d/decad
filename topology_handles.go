@@ -250,3 +250,105 @@ func loopEdges(n *topo.Loop) []*Edge {
 	}
 	return out
 }
+
+// bornFaceShell sets s's node Owner to s and returns s. Every root FaceShell is
+// born through it, so faceShellHandle maps any shell node a lump links back to
+// the one handle that holds it.
+func bornFaceShell(s *FaceShell) *FaceShell {
+	s.n.Owner = s
+	return s
+}
+
+// faceShellHandle returns the handle that holds n, or nil for a nil n. A node
+// whose handle was not born through bornFaceShell is an evaluator invariant
+// failure, and the assertion panics.
+func faceShellHandle(n *topo.FaceShell) *FaceShell {
+	if n == nil {
+		return nil
+	}
+	return n.Owner.(*FaceShell) //nolint:forcetypeassert // every shell node is born in its handle; a bare one must fail loudly
+}
+
+// faceShellNode returns s's node, or nil for a nil s.
+func faceShellNode(s *FaceShell) *topo.FaceShell {
+	if s == nil {
+		return nil
+	}
+	return &s.n
+}
+
+// faceShellHandles returns the handles of ns in order, or nil for an empty ns,
+// as append([]*FaceShell(nil), ...) of the same shells would.
+func faceShellHandles(ns []*topo.FaceShell) []*FaceShell {
+	if len(ns) == 0 {
+		return nil
+	}
+	out := make([]*FaceShell, len(ns))
+	for i, n := range ns {
+		out[i] = faceShellHandle(n)
+	}
+	return out
+}
+
+// faceShellNodes returns the nodes of ss in order, or nil for an empty ss.
+func faceShellNodes(ss []*FaceShell) []*topo.FaceShell {
+	if len(ss) == 0 {
+		return nil
+	}
+	out := make([]*topo.FaceShell, len(ss))
+	for i, s := range ss {
+		out[i] = faceShellNode(s)
+	}
+	return out
+}
+
+// bornLump sets l's node Owner to l and returns l. Every root Lump is born
+// through it, so lumpHandle maps any lump node a body links back to the one
+// handle that holds it.
+func bornLump(l *Lump) *Lump {
+	l.n.Owner = l
+	return l
+}
+
+// lumpHandle returns the handle that holds n, or nil for a nil n. A node whose
+// handle was not born through bornLump is an evaluator invariant failure, and
+// the assertion panics.
+func lumpHandle(n *topo.Lump) *Lump {
+	if n == nil {
+		return nil
+	}
+	return n.Owner.(*Lump) //nolint:forcetypeassert // every lump node is born in its handle; a bare one must fail loudly
+}
+
+// lumpNode returns l's node, or nil for a nil l.
+func lumpNode(l *Lump) *topo.Lump {
+	if l == nil {
+		return nil
+	}
+	return &l.n
+}
+
+// lumpHandles returns the handles of ns in order, or nil for an empty ns,
+// as append([]*Lump(nil), ...) of the same lumps would.
+func lumpHandles(ns []*topo.Lump) []*Lump {
+	if len(ns) == 0 {
+		return nil
+	}
+	out := make([]*Lump, len(ns))
+	for i, n := range ns {
+		out[i] = lumpHandle(n)
+	}
+	return out
+}
+
+// lumpNodes returns the nodes of ls in order, or nil for an empty ls.
+func lumpNodes(ls []*Lump) []*topo.Lump {
+	if len(ls) == 0 {
+		return nil
+	}
+	out := make([]*topo.Lump, len(ls))
+	for i, l := range ls {
+		out[i] = lumpNode(l)
+	}
+	return out
+}

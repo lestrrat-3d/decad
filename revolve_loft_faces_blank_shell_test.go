@@ -171,14 +171,14 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	}
 	require.True(t, checkedReplacedOtherSide)
 	liveShell := trimmed.Shells()[0]
-	originalFaces := liveShell.faces
-	t.Cleanup(func() { liveShell.faces = originalFaces })
-	liveShell.faces = append(slices.Clone(originalFaces), bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unowned retained face"}}, Body: bodyNode(trimmed)}}))
+	originalFaces := liveShell.n.Faces
+	t.Cleanup(func() { liveShell.n.Faces = originalFaces })
+	liveShell.n.Faces = append(slices.Clone(originalFaces), faceNode(bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unowned retained face"}}, Body: bodyNode(trimmed)}})))
 	_, admitted, err = revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
 		sectionIndex, cellIndex)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.False(t, admitted)
-	liveShell.faces = originalFaces
+	liveShell.n.Faces = originalFaces
 	t.Logf("source-aligned Revolve shell: %d vertices, %d triangles, chord bound %.6g mm",
 		len(shell.mesh.verts), len(shell.mesh.tris), shell.chordBound)
 }

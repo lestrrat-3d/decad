@@ -182,7 +182,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// reproduces the previous single-shell, single-lump body for a solid
 	// unchanged; a surface result's holed profile, whose loops touch nowhere
 	// once their caps are omitted, is what actually needs more than one.
-	body.lumps = sheetLumps(faces)
+	body.n.Lumps = lumpNodes(sheetLumps(faces))
 
 	// Measurements carry the closed forms' proven float bounds
 	// (docs/evaluator-design.md §5), plus — where the payload carries one — the

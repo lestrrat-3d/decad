@@ -201,7 +201,7 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 	for _, edge := range body.Edges() {
 		edge.n.Faces = nil
 	}
-	body.lumps[0].shells[0].faces = merged
+	body.n.Lumps[0].Shells[0].Faces = faceNodes(merged)
 	if err := attachFaceLoopsContext(ctx, merged); err != nil {
 		return nil, err
 	}

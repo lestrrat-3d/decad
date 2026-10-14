@@ -49,6 +49,9 @@ type Body struct {
 	// Kind says whether the body is a solid or a sheet. Root Body.Kind
 	// converts it to the public BodyKind form.
 	Kind BodyKind
+	// Lumps are the nodes of the body's disjoint pieces. Root Body.Lumps
+	// maps them back to their handles.
+	Lumps []*Lump
 	// Owner is the root Body handle that holds this node by value. Root
 	// sets it when the handle is born and maps a node back to its handle
 	// through it; nothing else writes it.

@@ -411,7 +411,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	for _, f := range newFaces {
 		f.n.Body = bodyNode(body)
 	}
-	body.lumps = sheetLumps(newFaces)
+	body.n.Lumps = lumpNodes(sheetLumps(newFaces))
 
 	// Area is the sum of the constituent faces' own area/areaBound through
 	// proofbound.BoundedAdd (correction 2, docs/surface-design.md §6.4/§8): never a

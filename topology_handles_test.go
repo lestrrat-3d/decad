@@ -16,11 +16,13 @@ import (
 // (topology_handles.go). A handle born any other way has a node with no
 // Owner, and the first link read that maps it back panics.
 var bornHandles = map[string]string{
-	"Vertex": "bornVertex",
-	"Body":   "bornBody",
-	"Face":   "bornFace",
-	"Edge":   "bornEdge",
-	"Loop":   "bornLoop",
+	"Vertex":    "bornVertex",
+	"Body":      "bornBody",
+	"Face":      "bornFace",
+	"Edge":      "bornEdge",
+	"Loop":      "bornLoop",
+	"FaceShell": "bornFaceShell",
+	"Lump":      "bornLump",
 }
 
 // TestTopologyHandlesAreBorn parses every root .go file, tests included, and
