@@ -223,13 +223,14 @@ type errPoseUnbuildable interface {
 }
 
 type motionMover struct {
-	body     *Body
-	group    int
-	validity ValidityResult
-	rho      float64 // ρ_max under VerifyMotion's revolute or between motion
-	r0       float64 // the record radius motionbound.PoseDeviation charges at
-	area     float64 // a proven upper bound on the mover's surface area at rest
-	sigma    float64 // a proven lower bound on its placement's smallest singular value
+	body       *Body
+	group      int
+	validity   ValidityResult
+	rho        float64 // ρ_max under VerifyMotion's revolute or between motion
+	r0         float64 // the record radius motionbound.PoseDeviation charges at
+	heldRadius float64 // the faceted mover's current true-solid radius
+	area       float64 // a proven upper bound on the mover's surface area at rest
+	sigma      float64 // a proven lower bound on its placement's smallest singular value
 }
 
 type motionStatic struct {
@@ -408,6 +409,10 @@ func (r *motionRun) readBodies(groups [][]*Body) {
 	for i := range r.movers {
 		mv := &r.movers[i]
 		mv.r0 = moverRecordRadius(r.ctx, mv.body)
+		mv.heldRadius = math.Inf(1)
+		if fp, ok := mv.body.payload.(facetedPayload); ok {
+			mv.heldRadius = motionbound.HeldRadiusUpper(fp.verts, fp.meshBound)
+		}
 		mv.area = proofbound.AbsSumUpper(mv.body.area.Value.Base(), mv.body.area.Bound.Base())
 		mv.sigma = motionbound.BasisSigmaLower(mv.body.payload.transform())
 	}
@@ -986,9 +991,23 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 			}
 		}
 	}
+	var delta r3.Transform
+	_, faceted := mv.body.payload.(facetedPayload)
+	if faceted {
+		delta, err = facetedPlacementDelta(placement, composed)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var eta, linear float64
 	for _, ideal := range group.ideals {
 		e, l := motionbound.PoseDeviation(composed, placement, ideal, mv.r0)
+		if faceted {
+			// The record term stays unbounded for rotation poses; the delta
+			// term also charges translations applied to the current held mesh.
+			eDelta, lDelta := motionbound.PoseDeviation(delta, r3.Identity(), ideal, mv.heldRadius)
+			e, l = math.Max(e, eDelta), math.Max(l, lDelta)
+		}
 		eta, linear = math.Max(eta, e), math.Max(linear, l)
 	}
 	// The volume an overlap can lose between the float pose and the ideal one

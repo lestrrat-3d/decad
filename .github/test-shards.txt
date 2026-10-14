@@ -1435,6 +1435,7 @@
 10	0.00	TestMappedRadialJointTimePartition
 10	0.07	TestMeshMassFirstMomentLegCoversQuarterTurn
 10	0.00	TestMotionExceedsResolution
+10	0.00	TestMotionTranslationPoseChargesFacetedReplacement
 10	0.00	TestOffsetPrismUnrepresentableOffset
 10	0.08	TestOutwardRoundingNeverPublishesAFlushedZero
 10	0.01	TestPairReportMemoEvictsOldest
