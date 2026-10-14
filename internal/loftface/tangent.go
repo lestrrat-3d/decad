@@ -142,6 +142,32 @@ func ConeStrictOutsideForm(q [6]*big.Rat) bool {
 		q[4].Sign() == 0 && q[3].Sign() > 0 && q[5].Sign() > 0
 }
 
+// tangentPullbackForm reports whether q is exactly slope^2*v^2 with
+// slope^2 > 0: the pullback of a plane that touches the cone along the
+// ruling v = 0 and nowhere else.
+func tangentPullbackForm(q [6]*big.Rat) bool {
+	for _, i := range []int{0, 1, 2, 3, 4} {
+		if q[i].Sign() != 0 {
+			return false
+		}
+	}
+	return q[5].Sign() > 0
+}
+
+// ConeTangentAlongRuling reports whether the cap plane of m touches the cone
+// x + slope*r = apex along one ruling over the source box. The
+// denominator-cleared pullback must be exactly C*v^2 with C > 0, which is
+// the strict form with A = 0, and the box must lie strictly on one side of
+// u = 0. Then k^2 r^2 - (apex-x)^2 >= 0 on the whole plane with equality
+// only on v = 0, so no cap point lies in the open interior of the cone.
+// The caller has proved the map denominator positive over the box.
+func ConeTangentAlongRuling(m Map, box [4]*big.Rat, apex, slope *big.Rat) bool {
+	if apex == nil || slope == nil || box[0].Sign() <= 0 && box[1].Sign() >= 0 {
+		return false
+	}
+	return tangentPullbackForm(ConePullback(m, apex, slope))
+}
+
 // MapEqual reports whether two maps hold exactly the same coefficients.
 func MapEqual(a, b Map) bool {
 	for i := range a.Constant {
@@ -159,4 +185,127 @@ func RoundPoint(p RatVec) r3.Vec {
 	y, _ := p[1].Float64()
 	z, _ := p[2].Float64()
 	return r3.Vec{X: x, Y: y, Z: z}
+}
+
+// TangentPlane is the exact plane Pi of a cone-tangent cap: phi(P) = N.P - D.
+// Side is the strict sign of phi on the loft side of the plane, the sign that
+// phi takes on the preceding cap. Side*phi is therefore positive on the side
+// where the cone lies.
+type TangentPlane struct {
+	N    RatVec
+	D    *big.Rat
+	Side int
+}
+
+// Phi returns the exact plane functional N.p - D.
+func (p TangentPlane) Phi(point RatVec) *big.Rat {
+	return ratSub(VDot(p.N, point), p.D)
+}
+
+// Psi returns Side*phi(point): positive on the cone's side of the plane.
+func (p TangentPlane) Psi(point RatVec) *big.Rat {
+	value := p.Phi(point)
+	if p.Side < 0 {
+		value.Neg(value)
+	}
+	return value
+}
+
+// capPlane returns the exact plane of an affine cap map: constant
+// denominator, N = QU x QV nonzero, D = N.(Constant + Q0/G0). The side is
+// left at zero. It reports false for a projective or collapsed map.
+func capPlane(m Map) (TangentPlane, bool) {
+	if m.G0 == nil || m.G0.Sign() <= 0 || m.GU == nil || m.GU.Sign() != 0 || m.GV == nil || m.GV.Sign() != 0 {
+		return TangentPlane{}, false
+	}
+	n := VCross(m.QU, m.QV)
+	if n[0].Sign() == 0 && n[1].Sign() == 0 && n[2].Sign() == 0 {
+		return TangentPlane{}, false
+	}
+	origin := VAdd(m.Constant, VScale(m.Q0, ratDiv(ratOne(), m.G0)))
+	return TangentPlane{N: n, D: VDot(n, origin)}, true
+}
+
+// NewTangentPlane returns the plane of the affine cap map final with the
+// given loft side, which must be -1 or +1.
+func NewTangentPlane(final Map, side int) (TangentPlane, bool) {
+	if side != -1 && side != 1 {
+		return TangentPlane{}, false
+	}
+	plane, ok := capPlane(final)
+	plane.Side = side
+	return plane, ok
+}
+
+// ConeOnLoftSide is the exact side gate of a cone-tangent cap. final is the
+// tangent cap map and previous the cap map before it, whose box corners
+// give the loft side. It requires:
+//
+//  1. the pullback of the cone x + slope*r = apex to final's plane is
+//     exactly C*v^2 with C > 0, so the plane meets no interior point of the
+//     cone;
+//  2. apex > far, and the axis point m = ((apex+far)/2, 0, 0), which is in
+//     the open interior of the finite cone, is not on the plane;
+//  3. previous has a positive denominator over the box and phi of one
+//     strict sign s at all four box corners;
+//  4. s*phi(m) > 0.
+//
+// The interior of the finite cone is convex and misses the plane, so it
+// lies wholly on m's side, which is then the loft side s. It returns s.
+func ConeOnLoftSide(final, previous Map, box [4]*big.Rat, apex, slope, far *big.Rat) (int, bool) {
+	if apex == nil || slope == nil || far == nil || apex.Cmp(far) <= 0 {
+		return 0, false
+	}
+	if !tangentPullbackForm(ConePullback(final, apex, slope)) {
+		return 0, false
+	}
+	plane, ok := capPlane(final)
+	if !ok || PositiveDenominator(previous, box) != nil {
+		return 0, false
+	}
+	side := 0
+	for _, corner := range BoxCorners(box) {
+		sign := plane.Phi(previous.At(corner[0], corner[1])).Sign()
+		if sign == 0 || (side != 0 && sign != side) {
+			return 0, false
+		}
+		side = sign
+	}
+	mid := ratDiv(ratAdd(apex, far), big.NewRat(2, 1))
+	if plane.Phi(RatVec{mid, ratZero(), ratZero()}).Sign() != side {
+		return 0, false
+	}
+	return side, true
+}
+
+// CapsOnSide is the exact earlier-cap gate of a cone-tangent cap (G2). final is
+// the tangent cap map and side the strict loft side that ConeOnLoftSide
+// returned. Every map in earlier must have a positive denominator over the
+// box and phi of sign side at all four box corners.
+//
+// The numerator of phi after clearing the positive denominator is affine in
+// (u, v), so strict positivity of side*phi at the four corners holds over the
+// whole box: every earlier cap lies strictly in {side*phi > 0}. On band i the
+// loft point is (1-t)*C_i(p) + t*C_(i+1)(p) and phi is affine, so with every
+// earlier cap strictly positive the loft lies in {side*phi >= 0} and meets the
+// plane only in the end cap itself.
+func CapsOnSide(final Map, earlier []Map, box [4]*big.Rat, side int) bool {
+	if side != -1 && side != 1 || len(earlier) == 0 {
+		return false
+	}
+	plane, ok := capPlane(final)
+	if !ok {
+		return false
+	}
+	for _, m := range earlier {
+		if PositiveDenominator(m, box) != nil {
+			return false
+		}
+		for _, corner := range BoxCorners(box) {
+			if plane.Phi(m.At(corner[0], corner[1])).Sign() != side {
+				return false
+			}
+		}
+	}
+	return true
 }
