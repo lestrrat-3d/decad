@@ -14,8 +14,8 @@ import (
 // (boolean-built) measurement reports. NO measurement site computes a bound
 // inline: each error mechanism the mesh boolean is subject to has exactly one
 // helper here, and every site routes through it. One reader below owns no
-// mechanism of its own: CellAllowsOf returns all three of a wall cell's bounds,
-// publishing exactly what the three helpers listed below publish.
+// mechanism of its own: CellAllowsOf returns all four of a wall cell's bounds,
+// publishing exactly what the four helpers listed below publish.
 //
 // The mechanisms, and the helper that owns each:
 //
