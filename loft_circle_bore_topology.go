@@ -56,15 +56,17 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 		return loftCircleWallNone
 	}
 	level := pl.frame0.ToLocal(pl.frame1.Origin())
-	if level.X != 0 || level.Y != 0 ||
-		!loftBoreHasExactAxis(pl.frame0, pl.frame1, 0, 0, level.Z) {
-		return loftCircleWallNone
-	}
 	sameAxes := pl.frame0.U() == pl.frame1.U() && pl.frame0.V() == pl.frame1.V()
-	if !sameAxes {
+	if sameAxes {
+		if !loftBoreHasExactAxis(pl.frame0, pl.frame1, 0, 0, level.Z) {
+			return loftCircleWallNone
+		}
+	} else {
 		// A cardinal quarter-turn gives an exact ruled circle pair and an
 		// angularly constant area integrand. Both local centers must be on
 		// the common axis; other frame rotations need their own area bound.
+		// The world-XY and exact-height gates below prove the common axis
+		// for this cardinal case without the general exact-axis check.
 		quarterTurn := pl.frame1.U() == (r3.Vec{Y: 1}) && pl.frame1.V() == (r3.Vec{X: -1})
 		quarterTurn = quarterTurn ||
 			pl.frame1.U() == (r3.Vec{Y: -1}) && pl.frame1.V() == (r3.Vec{X: 1})
@@ -77,7 +79,8 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 	// for both rims, so equal world radii alone do not authorize that reuse.
 	if sameAxes && sectionrecord.IdenticalRecord(bottom, top) {
 		if loftBoreHasExactAxis(pl.frame0, pl.frame1,
-			bottom.Center.U, bottom.Center.V, level.Z) {
+			bottom.Center.U, bottom.Center.V, level.Z) &&
+			loftBoreCylinderExactGeometry(pl.frame0, pl.xform, bottom.Center.U, bottom.Center.V) {
 			return loftCircleWallCylinder
 		}
 		return loftCircleWallNone
@@ -106,6 +109,22 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 		return loftCircleWallCone
 	}
 	return loftCircleWallRuled
+}
+
+// The shared cylinder builder publishes no normal departure. Use it only
+// when its held center and the exact frame map denote a true round cylinder.
+func loftBoreCylinderExactGeometry(frame r3.Frame, xform r3.Transform, u, v float64) bool {
+	pp := prismPayload{Payload: prismrecord.Payload{Frame: frame, Xform: xform}}
+	center := pp.Point(u, v, 0)
+	if pp.PointRound(u, v, 0, center) != 0 {
+		return false
+	}
+	linear, err := massmoment.PrismRotation(frame, xform)
+	if err != nil {
+		return false
+	}
+	charge, err := massmoment.MapChargeOf(linear)
+	return err == nil && charge.Stretch == 0
 }
 
 // loftConeWallArea bounds the lateral area of the exact circular frustum
@@ -153,6 +172,8 @@ func loftMovingCircleWallArea(pl loftPayload, bottom, top circleSeg) (proofbound
 		sin, cos := memo.SinCos(turn)
 		slope := proofbound.IntervalAdd(proofbound.PointInterval(dr),
 			proofbound.IntervalAdd(proofbound.IntervalScale(cos, dx), proofbound.IntervalScale(sin, dy)))
+		// The square cannot be negative. An overflowing root would also
+		// overflow a chorded wall span, which the earlier centroid gate refuses.
 		speed, ok := proofbound.IntervalSqrt(proofbound.IntervalAdd(
 			proofbound.PointInterval(h2), proofbound.IntervalSquare(slope)))
 		if !ok {
@@ -162,6 +183,8 @@ func loftMovingCircleWallArea(pl loftPayload, bottom, top circleSeg) (proofbound
 	}
 	d2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
 	lipschitz := proofarith.FloatRat(proofbound.RatSqrtUp(d2))
+	// An unrepresentable center shift makes a corresponding wall span
+	// unrepresentable; the chorded centroid gate refuses it before this call.
 	if lipschitz == nil {
 		return proofbound.BoundedScalar{}, false
 	}
@@ -174,6 +197,8 @@ func loftMovingCircleWallArea(pl loftPayload, bottom, top circleSeg) (proofbound
 	midpoint := new(big.Rat).Quo(new(big.Rat).Add(areaInterval.Lo, areaInterval.Hi), big.NewRat(2, 1))
 	held, _ := midpoint.Float64()
 	bound := proofbound.IntervalFloatError(areaInterval, held)
+	// A saturated ruled-wall area also saturates the earlier chorded
+	// wall-area upper and its positive centroid volume leg.
 	if proofbound.IsNonFinite(held) || proofbound.IsNonFinite(bound) {
 		return proofbound.BoundedScalar{}, false
 	}
@@ -437,8 +462,7 @@ func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producer
 		return nil, fmt.Errorf("%w: a through-bore loft lost its certified hole", ErrUnsupported)
 	}
 	level := pl.frame0.ToLocal(pl.frame1.Origin())
-	if level.X != 0 || level.Y != 0 ||
-		!loftBoreHasExactAxis(pl.frame0, pl.frame1, circle.Center.U, circle.Center.V, level.Z) {
+	if !loftBoreHasExactAxis(pl.frame0, pl.frame1, circle.Center.U, circle.Center.V, level.Z) {
 		return nil, fmt.Errorf("%w: a through-bore loft has no common circle axis", ErrUnsupported)
 	}
 	pp := prismPayload{Payload: prismrecord.Payload{

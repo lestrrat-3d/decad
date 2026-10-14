@@ -43,6 +43,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Detached profile validation past 11585 reconstruction chords; authenticated Loft still stops above its 46340-chord cap | `ErrUnsupported`: R7 sketch reconstruction work budget | `docs/loft-gear-bounds-design.md` §7, `docs/spline-design.md` R7 |
 | Loft with differing loop or segment counts | `ErrUnsupported` (S1/S2) | `docs/loft-design.md` Table S |
 | Loft of mixed-kind or reversed pairs | Refused permanently | `docs/loft-design.md` §1 "Permanently out of scope" |
+| Analytic cylinder topology for a Loft bore whose held center rounds or whose frame map has a nonzero orthonormality defect | The Loft keeps faceted bore faces because the cylinder builder publishes no wall-normal departure bound | `docs/loft-design.md` §18 |
 | `LoftChain` with curved segments or non-parallel planes | `ErrUnsupported` (R36, R35) | `docs/surface-design.md` §1.2 |
 | `Extrude` over a chain with `WithTaper` (any angle) or `WithSurfaceResult()` | `ErrUnsupported` after the seam gates and before the extent; a chain extrude always returns a sheet and has no draft build | `docs/surface-design.md` §13.2 |
 | Hole, rib, web, emboss features | No entry point exists | none |
