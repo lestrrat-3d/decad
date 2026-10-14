@@ -7,28 +7,17 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
-type obliqueIV = proofbound.RatInterval
-
-type obliqueIVPoint struct{ x, y, z obliqueIV }
-
-func obliqueRatDot(a, b r3.Vec) *big.Rat {
-	out := new(big.Rat)
-	for _, pair := range [3][2]float64{{a.X, b.X}, {a.Y, b.Y}, {a.Z, b.Z}} {
-		out.Add(out, new(big.Rat).Mul(proofarith.FloatRat(pair[0]), proofarith.FloatRat(pair[1])))
-	}
-	return out
-}
-
 func obliqueBasisAdmitted(rec *obliqueBossRecord) bool {
 	if rec.axis.Z <= 0.94 {
 		return false
 	}
-	tiltSquared := obliqueRatDot(r3.Vec{X: rec.axis.X, Y: rec.axis.Y},
+	tiltSquared := obliqueboss.ObliqueRatDot(r3.Vec{X: rec.axis.X, Y: rec.axis.Y},
 		r3.Vec{X: rec.axis.X, Y: rec.axis.Y})
 	tiltLimit := proofarith.FloatRat(0.349)
 	if tiltSquared.Cmp(new(big.Rat).Mul(tiltLimit, tiltLimit)) >= 0 {
@@ -38,14 +27,14 @@ func obliqueBasisAdmitted(rec *obliqueBossRecord) bool {
 	lo.Mul(lo, lo)
 	hi.Mul(hi, hi)
 	for _, basis := range []r3.Vec{rec.axis, rec.ex, rec.ey} {
-		square := obliqueRatDot(basis, basis)
+		square := obliqueboss.ObliqueRatDot(basis, basis)
 		if square.Cmp(lo) <= 0 || square.Cmp(hi) >= 0 {
 			return false
 		}
 	}
 	dotLimit := proofarith.FloatRat(0.0009)
 	for _, pair := range [][2]r3.Vec{{rec.axis, rec.ex}, {rec.axis, rec.ey}, {rec.ex, rec.ey}} {
-		if new(big.Rat).Abs(obliqueRatDot(pair[0], pair[1])).Cmp(dotLimit) >= 0 {
+		if new(big.Rat).Abs(obliqueboss.ObliqueRatDot(pair[0], pair[1])).Cmp(dotLimit) >= 0 {
 			return false
 		}
 	}
@@ -66,73 +55,6 @@ func obliqueBossDiameterBound(rec *obliqueBossRecord, boundaryBound float64) flo
 	return proofbound.Radius3D(max(w, h, z))
 }
 
-func obliqueIVOf(f float64) obliqueIV {
-	return proofbound.PointInterval(proofarith.FloatRat(f))
-}
-
-func obliqueZeroPoint() obliqueIVPoint {
-	z := obliqueIVOf(0)
-	return obliqueIVPoint{z, z, z}
-}
-
-func obliqueIVVec(v r3.Vec) obliqueIVPoint {
-	return obliqueIVPoint{obliqueIVOf(v.X), obliqueIVOf(v.Y), obliqueIVOf(v.Z)}
-}
-
-func (p obliqueIVPoint) add(q obliqueIVPoint) obliqueIVPoint {
-	return obliqueIVPoint{
-		proofbound.IntervalAdd(p.x, q.x),
-		proofbound.IntervalAdd(p.y, q.y),
-		proofbound.IntervalAdd(p.z, q.z),
-	}
-}
-
-func (p obliqueIVPoint) sub(q obliqueIVPoint) obliqueIVPoint {
-	return obliqueIVPoint{
-		proofbound.IntervalSub(p.x, q.x),
-		proofbound.IntervalSub(p.y, q.y),
-		proofbound.IntervalSub(p.z, q.z),
-	}
-}
-
-func (p obliqueIVPoint) mul(q obliqueIV) obliqueIVPoint {
-	return obliqueIVPoint{
-		proofbound.IntervalMul(p.x, q),
-		proofbound.IntervalMul(p.y, q),
-		proofbound.IntervalMul(p.z, q),
-	}
-}
-
-func (p obliqueIVPoint) norm() (obliqueIV, bool) {
-	squares := proofbound.IntervalAdd(proofbound.IntervalSquare(p.x), proofbound.IntervalSquare(p.y))
-	squares = proofbound.IntervalAdd(squares, proofbound.IntervalSquare(p.z))
-	return proofbound.SqrtInterval(squares)
-}
-
-func (p obliqueIVPoint) normalized() (obliqueIVPoint, bool) {
-	norm, ok := p.norm()
-	if !ok || norm.Lo.Sign() <= 0 {
-		return obliqueIVPoint{}, false
-	}
-	x, ok := proofbound.IntervalQuo(p.x, norm)
-	if !ok {
-		return obliqueIVPoint{}, false
-	}
-	y, ok := proofbound.IntervalQuo(p.y, norm)
-	if !ok {
-		return obliqueIVPoint{}, false
-	}
-	z, ok := proofbound.IntervalQuo(p.z, norm)
-	return obliqueIVPoint{x, y, z}, ok
-}
-
-func (p obliqueIVPoint) error(held r3.Vec) float64 {
-	return proofbound.Radius3D(max(
-		proofbound.IntervalFloatError(p.x, held.X),
-		proofbound.IntervalFloatError(p.y, held.Y),
-		proofbound.IntervalFloatError(p.z, held.Z)))
-}
-
 // obliqueSampleError encloses the exact value of every sampled ideal patch
 // point. Trigonometry and normal lengths use rational outward intervals;
 // no assumed libm ulp count enters the published boundary bound.
@@ -145,35 +67,35 @@ func obliqueSampleError(rec *obliqueBossRecord, radius float64,
 	if !ok {
 		return 0, fmt.Errorf("%w: an oblique sample has no trigonometric enclosure", ErrUnsupported)
 	}
-	d := obliqueIVVec(rec.ex).mul(cs).add(obliqueIVVec(rec.ey).mul(sn))
-	rPlus := proofbound.IntervalAdd(obliqueIVOf(rec.radius), obliqueIVOf(radius))
-	topPlus := proofbound.IntervalAdd(obliqueIVOf(rec.top), obliqueIVOf(radius))
+	d := obliqueboss.ObliqueIVVec(rec.ex).Mul(cs).Add(obliqueboss.ObliqueIVVec(rec.ey).Mul(sn))
+	rPlus := proofbound.IntervalAdd(obliqueboss.ObliqueIVOf(rec.radius), obliqueboss.ObliqueIVOf(radius))
+	topPlus := proofbound.IntervalAdd(obliqueboss.ObliqueIVOf(rec.top), obliqueboss.ObliqueIVOf(radius))
 	tNumerator := proofbound.IntervalSub(
-		proofbound.IntervalSub(topPlus, obliqueIVOf(rec.base.Z)),
-		proofbound.IntervalMul(rPlus, d.z))
-	t, ok := proofbound.IntervalQuo(tNumerator, obliqueIVOf(rec.axis.Z))
+		proofbound.IntervalSub(topPlus, obliqueboss.ObliqueIVOf(rec.base.Z)),
+		proofbound.IntervalMul(rPlus, d.Z))
+	t, ok := proofbound.IntervalQuo(tNumerator, obliqueboss.ObliqueIVOf(rec.axis.Z))
 	if !ok {
 		return 0, fmt.Errorf("%w: an oblique sample has no axial enclosure", ErrUnsupported)
 	}
-	c := obliqueIVVec(rec.base).add(d.mul(rPlus)).add(obliqueIVVec(rec.axis).mul(t))
-	vertical := obliqueZeroPoint()
-	vertical.z = obliqueIVOf(radius)
-	p := c.sub(vertical)
-	s := c.sub(d.mul(obliqueIVOf(radius)))
-	far := obliqueIVVec(rec.base).add(d.mul(obliqueIVOf(rec.radius))).
-		add(obliqueIVVec(rec.axis).mul(obliqueIVOf(rec.length)))
-	worst := max(p.error(held[2]), s.error(held[3]), far.error(held[4]))
+	c := obliqueboss.ObliqueIVVec(rec.base).Add(d.Mul(rPlus)).Add(obliqueboss.ObliqueIVVec(rec.axis).Mul(t))
+	vertical := obliqueboss.ObliqueZeroPoint()
+	vertical.Z = obliqueboss.ObliqueIVOf(radius)
+	p := c.Sub(vertical)
+	s := c.Sub(d.Mul(obliqueboss.ObliqueIVOf(radius)))
+	far := obliqueboss.ObliqueIVVec(rec.base).Add(d.Mul(obliqueboss.ObliqueIVOf(rec.radius))).
+		Add(obliqueboss.ObliqueIVVec(rec.axis).Mul(obliqueboss.ObliqueIVOf(rec.length)))
+	worst := max(p.Error(held[2]), s.Error(held[3]), far.Error(held[4]))
 	for j := 1; j < obliqueBossBlendCells; j++ {
 		v := big.NewRat(int64(j), obliqueBossBlendCells)
-		q := obliqueZeroPoint()
-		q.z = proofbound.PointInterval(new(big.Rat).Sub(big.NewRat(1, 1), v))
-		q = q.add(d.mul(proofbound.PointInterval(v)))
-		n, ok := q.normalized()
+		q := obliqueboss.ObliqueZeroPoint()
+		q.Z = proofbound.PointInterval(new(big.Rat).Sub(big.NewRat(1, 1), v))
+		q = q.Add(d.Mul(proofbound.PointInterval(v)))
+		n, ok := q.Normalized()
 		if !ok {
 			return 0, fmt.Errorf("%w: an oblique blend normal has no enclosure", ErrUnsupported)
 		}
-		point := c.sub(n.mul(obliqueIVOf(radius)))
-		worst = max(worst, point.error(held[4+j]))
+		point := c.Sub(n.Mul(obliqueboss.ObliqueIVOf(radius)))
+		worst = max(worst, point.Error(held[4+j]))
 	}
 	return worst, nil
 }
@@ -204,8 +126,8 @@ func proveObliqueBossFillet(ctx context.Context, rec *obliqueBossRecord,
 		}
 		sampleError = max(sampleError, e)
 	}
-	farCenter := obliqueIVVec(rec.base).add(obliqueIVVec(rec.axis).mul(obliqueIVOf(rec.length)))
-	sampleError = max(sampleError, farCenter.error(mesh.verts[len(mesh.verts)-1]))
+	farCenter := obliqueboss.ObliqueIVVec(rec.base).Add(obliqueboss.ObliqueIVVec(rec.axis).Mul(obliqueboss.ObliqueIVOf(rec.length)))
+	sampleError = max(sampleError, farCenter.Error(mesh.verts[len(mesh.verts)-1]))
 	if proofbound.IsNonFinite(sampleError) {
 		return 0, 0, 0, fmt.Errorf("%w: an oblique sample has no finite position bound", ErrUnsupported)
 	}
