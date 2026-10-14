@@ -159,87 +159,93 @@ func denotedRimPoints(t *testing.T, rec coilshell.Record, cu, cv float64, r *big
 // centre's own gap |D| (the round wire and the placed slot), and the axial
 // term 2·ax (the slot). The radius gap |r − heldRadius| and the map's
 // orthonormality term r·e sit below the other legs on these fixtures, so
-// deleting either left the test green.
+// deleting either left the test green. Each base coil is built once, checked
+// unplaced, then transformed and checked placed.
 func TestCoilRimCurveBoundHoldsTheDenotedCircle(t *testing.T) {
 	rot, err := r3.Rotation(r3.NewVec(1, 2, 2), units.Degrees(37))
 	require.NoError(t, err)
 	for _, c := range []struct {
 		name    string
 		profile func(*testing.T) (*sketch.Sketch, *sketch.Profile)
-		placed  bool
 	}{
-		{"round wire", func(t *testing.T) (*sketch.Sketch, *sketch.Profile) { return coilRoundWire(t, 0.5) }, false},
-		{"round wire placed", func(t *testing.T) (*sketch.Sketch, *sketch.Profile) { return coilRoundWire(t, 0.5) }, true},
-		{"slot", coilSlot, false},
-		{"slot placed", coilSlot, true},
+		{"round wire", func(t *testing.T) (*sketch.Sketch, *sketch.Profile) { return coilRoundWire(t, 0.5) }},
+		{"slot", coilSlot},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s, p := c.profile(t)
 			b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.3))
 			require.NoError(t, err)
-			if c.placed {
-				b, err = Transform(t.Context(), b, rot)
+			t.Run("unplaced", func(t *testing.T) { requireCoilRimsHoldTheDenotedCircle(t, b) })
+			t.Run("placed", func(t *testing.T) {
+				placed, err := Transform(t.Context(), b, rot)
 				require.NoError(t, err)
-			}
-			rec, err := coilRecordOfPayload(b.payload.(coilPayload))
-			require.NoError(t, err)
-			rims, worst := 0, 0.0
-			for _, e := range b.Edges() {
-				var centre, axis r3.Vec
-				var radius float64
-				switch cv := e.n.Curve.(type) {
-				case surfacegeom.Circle3:
-					centre, axis, radius = cv.Center, cv.Axis, cv.Radius.Base()
-				case surfacegeom.Arc3:
-					centre, axis, radius = cv.Center, cv.Axis, cv.Radius.Base()
-				default:
-					continue
-				}
-				rims++
-				require.True(t, e.n.CurveBounded, "a coil rim proves its curve bound")
-				require.Less(t, e.n.CurveBound, 1e-12)
-				turn := new(big.Rat)
-				for _, f := range e.Faces() {
-					if f.Origins()[0].Role == roleCapEnd {
-						turn = rec.Turns
-					}
-				}
-				// The rim's recorded circle is the one whose start-cap lift
-				// sits nearest the held centre at the rim's own turn.
-				best := math.Inf(1)
-				for _, seg := range rec.Profile.Segments {
-					if !seg.IsArc() {
-						continue
-					}
-					cu, cv := coilshell.Centre(seg)
-					fu, _ := cu.Float64()
-					fv, _ := cv.Float64()
-					rr := new(big.Float).SetPrec(512)
-					switch rs := seg.Record.(type) {
-					case sectionrecord.CircleSeg:
-						rr.SetFloat64(rs.Radius.Base())
-					case sectionrecord.ArcSeg:
-						du := new(big.Float).SetPrec(512).Sub(new(big.Float).SetFloat64(rs.Start.U), new(big.Float).SetFloat64(rs.Center.U))
-						dv := new(big.Float).SetPrec(512).Sub(new(big.Float).SetFloat64(rs.Start.V), new(big.Float).SetFloat64(rs.Center.V))
-						rr.Add(new(big.Float).SetPrec(512).Mul(du, du), new(big.Float).SetPrec(512).Mul(dv, dv))
-						rr.Sqrt(rr)
-					}
-					pts := denotedRimPoints(t, rec, fu, fv, rr, turn)
-					gap := 0.0
-					for _, pt := range pts {
-						g, _ := bigCircleGap(pt, centre, axis, radius).Float64()
-						gap = math.Max(gap, g)
-					}
-					best = math.Min(best, gap)
-				}
-				// 1e-100 charges the reference's own 512-bit arithmetic.
-				require.LessOrEqual(t, best, e.n.CurveBound+1e-100, "the denoted rim lies within the curve bound")
-				worst = math.Max(worst, best)
-			}
-			require.Positive(t, rims)
-			require.Positive(t, worst, "the fixture's rims round")
+				requireCoilRimsHoldTheDenotedCircle(t, placed)
+			})
 		})
 	}
+}
+
+// requireCoilRimsHoldTheDenotedCircle asserts every rim of the coil body b
+// holds the circle it denotes within its curve bound.
+func requireCoilRimsHoldTheDenotedCircle(t *testing.T, b *Body) {
+	t.Helper()
+	rec, err := coilRecordOfPayload(b.payload.(coilPayload))
+	require.NoError(t, err)
+	rims, worst := 0, 0.0
+	for _, e := range b.Edges() {
+		var centre, axis r3.Vec
+		var radius float64
+		switch cv := e.n.Curve.(type) {
+		case surfacegeom.Circle3:
+			centre, axis, radius = cv.Center, cv.Axis, cv.Radius.Base()
+		case surfacegeom.Arc3:
+			centre, axis, radius = cv.Center, cv.Axis, cv.Radius.Base()
+		default:
+			continue
+		}
+		rims++
+		require.True(t, e.n.CurveBounded, "a coil rim proves its curve bound")
+		require.Less(t, e.n.CurveBound, 1e-12)
+		turn := new(big.Rat)
+		for _, f := range e.Faces() {
+			if f.Origins()[0].Role == roleCapEnd {
+				turn = rec.Turns
+			}
+		}
+		// The rim's recorded circle is the one whose start-cap lift
+		// sits nearest the held centre at the rim's own turn.
+		best := math.Inf(1)
+		for _, seg := range rec.Profile.Segments {
+			if !seg.IsArc() {
+				continue
+			}
+			cu, cv := coilshell.Centre(seg)
+			fu, _ := cu.Float64()
+			fv, _ := cv.Float64()
+			rr := new(big.Float).SetPrec(512)
+			switch rs := seg.Record.(type) {
+			case sectionrecord.CircleSeg:
+				rr.SetFloat64(rs.Radius.Base())
+			case sectionrecord.ArcSeg:
+				du := new(big.Float).SetPrec(512).Sub(new(big.Float).SetFloat64(rs.Start.U), new(big.Float).SetFloat64(rs.Center.U))
+				dv := new(big.Float).SetPrec(512).Sub(new(big.Float).SetFloat64(rs.Start.V), new(big.Float).SetFloat64(rs.Center.V))
+				rr.Add(new(big.Float).SetPrec(512).Mul(du, du), new(big.Float).SetPrec(512).Mul(dv, dv))
+				rr.Sqrt(rr)
+			}
+			pts := denotedRimPoints(t, rec, fu, fv, rr, turn)
+			gap := 0.0
+			for _, pt := range pts {
+				g, _ := bigCircleGap(pt, centre, axis, radius).Float64()
+				gap = math.Max(gap, g)
+			}
+			best = math.Min(best, gap)
+		}
+		// 1e-100 charges the reference's own 512-bit arithmetic.
+		require.LessOrEqual(t, best, e.n.CurveBound+1e-100, "the denoted rim lies within the curve bound")
+		worst = math.Max(worst, best)
+	}
+	require.Positive(t, rims)
+	require.Positive(t, worst, "the fixture's rims round")
 }
 
 // TestCoilUnstitchCarriesTheRimCurveBound unstitches a coil and reads the
