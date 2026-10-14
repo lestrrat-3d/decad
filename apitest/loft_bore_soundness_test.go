@@ -69,7 +69,7 @@ func TestLoftDirectBoreExactLiftRefusals(t *testing.T) {
 func TestLoftCutExactToolCenterRefusesRewrite(t *testing.T) {
 	frame, err := r3.NewFrame(r3.NewVec(1e9, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	blank, doc := loftBoreSoundnessBlank(t, frame, 2)
+	blank, doc := loftBoreSoundnessBlank(t, frame)
 	toolFrame, err := r3.NewFrame(r3.NewVec(1e9, 0, -1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	tool := loftBoreSoundnessTool(t, doc, toolFrame, .427, 0, 4, decad.Along)
@@ -78,6 +78,50 @@ func TestLoftCutExactToolCenterRefusesRewrite(t *testing.T) {
 	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(cut)
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 	require.Empty(t, cylinders)
+}
+
+func TestLoftCutRoundedYToolCenterKeepsFacetedTopology(t *testing.T) {
+	frame, err := r3.NewFrame(r3.NewVec(0, 1e9, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	blank, doc := loftBoreSoundnessBlank(t, frame)
+	toolFrame, err := r3.NewFrame(r3.NewVec(0, 1e9, -1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	tool := loftBoreSoundnessTool(t, doc, toolFrame, 0, .427, 4, decad.Along)
+	cut, err := decad.Cut(t.Context(), blank, tool)
+	require.NoError(t, err)
+	requireLoftCutFacetedVolume(t, cut)
+}
+
+func TestLoftCutRoundedZToolCenterKeepsFacetedTopology(t *testing.T) {
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 10), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	blank, doc := loftBoreSoundnessBlank(t, frame)
+	toolFrame, err := r3.NewFrame(r3.NewVec(0, 0, .427), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	tool := loftBoreSoundnessTool(t, doc, toolFrame, 0, 0, 14, decad.Along)
+	cut, err := decad.Cut(t.Context(), blank, tool)
+	require.NoError(t, err)
+	requireLoftCutFacetedVolume(t, cut)
+}
+
+func TestLoftCutTiltedFrameMapKeepsFacetedTopology(t *testing.T) {
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 4), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	blank, doc := loftBoreSoundnessBlank(t, frame)
+	tool := loftBoreSoundnessTool(t, doc, frame, 0, 0, 4, decad.Along)
+	cut, err := decad.Cut(t.Context(), blank, tool)
+	require.NoError(t, err)
+	requireLoftCutFacetedVolume(t, cut)
+}
+
+func requireLoftCutFacetedVolume(t *testing.T, cut *decad.Body) {
+	t.Helper()
+	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(cut)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+	require.Empty(t, cylinders)
+	volume, err := cut.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-2*(100-math.Pi)), volume.Bound.Base())
 }
 
 func TestLoftCutExactToolSpanKeepsUncutCap(t *testing.T) {
@@ -95,7 +139,7 @@ func TestLoftCutExactToolSpanKeepsUncutCap(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			frame, err := r3.NewFrame(r3.NewVec(0, 0, tc.originZ), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 			require.NoError(t, err)
-			blank, doc := loftBoreSoundnessBlank(t, frame, 2)
+			blank, doc := loftBoreSoundnessBlank(t, frame)
 			toolFrame, err := r3.NewFrame(r3.NewVec(0, 0, tc.toolZ), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 			require.NoError(t, err)
 			tool := loftBoreSoundnessTool(t, doc, toolFrame, 0, 0, tc.height, tc.dir)
@@ -114,12 +158,12 @@ func TestLoftCutExactToolSpanKeepsUncutCap(t *testing.T) {
 	}
 }
 
-func loftBoreSoundnessBlank(t *testing.T, frame r3.Frame, height float64) (*decad.Body, *decad.Document) {
+func loftBoreSoundnessBlank(t *testing.T, frame r3.Frame) (*decad.Body, *decad.Document) {
 	t.Helper()
 	world := sketch.NewWorld()
 	lower, err := world.CreatePlaneFromFrame(frame)
 	require.NoError(t, err)
-	upper, err := world.CreateOffsetPlane(lower, height)
+	upper, err := world.CreateOffsetPlane(lower, 2)
 	require.NoError(t, err)
 	var sections [2]*sketch.Sketch
 	var profiles [2]*sketch.Profile

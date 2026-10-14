@@ -2048,4 +2048,7 @@
 10	0.00	TestSectionDirectLoftRefusesHoleFreeAndCutSources
 10	0.00	TestLoftDirectBoreExactLiftRefusals
 10	0.00	TestLoftCutExactToolCenterRefusesRewrite
+10	0.00	TestLoftCutRoundedYToolCenterKeepsFacetedTopology
+10	0.00	TestLoftCutRoundedZToolCenterKeepsFacetedTopology
+10	0.00	TestLoftCutTiltedFrameMapKeepsFacetedTopology
 10	0.00	TestLoftCutExactToolSpanKeepsUncutCap
