@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +32,7 @@ func legacyRingWallClear(ctx context.Context, a, b RingVec,
 			}
 			return fmt.Errorf("%w: ring wall clearance work limit", decaderr.ErrUnsupported)
 		}
-		if ringPlaneApart(a, b, wall, bound2) {
+		if legacyRingPlaneApart(a, b, wall, bound2) {
 			continue
 		}
 		q := ringSegmentTriangle2(a, b, wall.Points)
@@ -49,6 +50,28 @@ func legacyRingWallClear(ctx context.Context, a, b RingVec,
 		}
 	}
 	return nil
+}
+
+// legacyRingPlaneApart is the body ringPlaneApart had when it compared
+// normalised big.Rat values.
+func legacyRingPlaneApart(a, b RingVec, wall RingWall, bound2 *big.Rat) bool {
+	if bound2 == nil || bound2.Sign() <= 0 || wall.Normal2 == nil ||
+		wall.Normal2.Sign() == 0 || wall.Plane0 == nil {
+		return false
+	}
+	da := proofarith.SubRat(new(big.Rat), RingDot(a, wall.Normal), wall.Plane0)
+	db := proofarith.SubRat(new(big.Rat), RingDot(b, wall.Normal), wall.Plane0)
+	if da.Sign() == 0 || da.Sign() != db.Sign() {
+		return false
+	}
+	if da.Sign() < 0 {
+		da.Neg(da)
+		db.Neg(db)
+	}
+	if db.Cmp(da) < 0 {
+		da = db
+	}
+	return proofarith.MulRat(new(big.Rat), da, da).Cmp(proofarith.MulRat(new(big.Rat), bound2, wall.Normal2)) > 0
 }
 
 func newTestRingWall(tri [3]r3.Vec, displacement float64) RingWall {

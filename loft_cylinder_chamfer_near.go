@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -56,13 +57,15 @@ func loftCylinderChamferNearBandReach(ctx context.Context, mesh *joinedMesh,
 				edges = append(edges, edge)
 				sourceEdges = append(sourceEdges, [2]proofarith.Xpt{edge.A, edge.B})
 			}
-			if _, err := loftCylinderSourceRingInside(ctx, fp, sourceEdges, teeth); err != nil {
+			// The direct and the reflected check read the same edges.
+			records := new(loftcylinder.RingEdgeRecords)
+			if _, err := loftCylinderSourceRingInside(ctx, fp, sourceEdges, teeth, records); err != nil {
 				return err
 			}
 			if len(reflectedShift) != 0 {
 				shifted := source
 				shifted.ringLevelShift = reflectedShift
-				if _, err := loftCylinderSourceRingInsideInputs(ctx, shifted, sourceEdges, teeth); err != nil {
+				if _, err := loftCylinderSourceRingInsideInputs(ctx, shifted, sourceEdges, teeth, records); err != nil {
 					return fmt.Errorf("reflected cap split ring: %w", err)
 				}
 			}

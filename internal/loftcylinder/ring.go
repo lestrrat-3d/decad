@@ -329,28 +329,56 @@ func RingCycle(edges [][2]proofarith.Xpt) (*big.Rat, bool) {
 	return level, len(visited) == len(adjacent)
 }
 
+// ringSegmentPlane is a segment's ends and a bound in uncancelled fractions,
+// read by every wall of one RingWallClear call.
+type ringSegmentPlane struct {
+	a, b   [3]proofarith.LazyRat
+	bound2 proofarith.LazyRat
+	usable bool
+}
+
+func ringSegmentPlaneOf(a, b RingVec, bound2 *big.Rat) ringSegmentPlane {
+	if bound2 == nil || bound2.Sign() <= 0 {
+		return ringSegmentPlane{}
+	}
+	s := ringSegmentPlane{bound2: proofarith.LazyOf(bound2), usable: true}
+	for i := range a {
+		s.a[i], s.b[i] = proofarith.LazyOf(a[i]), proofarith.LazyOf(b[i])
+	}
+	return s
+}
+
+func ringLazyDot(a [3]proofarith.LazyRat, n RingVec) proofarith.LazyRat {
+	sum := proofarith.LazyMul(a[0], proofarith.LazyOf(n[0]))
+	for i := 1; i < 3; i++ {
+		sum = proofarith.LazyAdd(sum, proofarith.LazyMul(a[i], proofarith.LazyOf(n[i])))
+	}
+	return sum
+}
+
 // A same-side segment farther than bound from the entire triangle plane
 // cannot meet that triangle or its parameter-matched true Loft wall. This
-// only rejects pairs; unresolved pairs use the complete exact distance.
-func ringPlaneApart(a, b RingVec,
-	wall RingWall, bound2 *big.Rat) bool {
-	if bound2 == nil || bound2.Sign() <= 0 || wall.Normal2 == nil ||
-		wall.Normal2.Sign() == 0 || wall.Plane0 == nil {
+// only rejects pairs; unresolved pairs use the complete exact distance. The
+// test multiplies the two sides of (min distance)^2 > bound2 * |normal|^2
+// through, so no fraction is cancelled.
+func ringPlaneApart(seg ringSegmentPlane, wall *RingWall) bool {
+	if !seg.usable || wall.Normal2 == nil || wall.Normal2.Sign() == 0 || wall.Plane0 == nil {
 		return false
 	}
-	da := proofarith.SubRat(new(big.Rat), RingDot(a, wall.Normal), wall.Plane0)
-	db := proofarith.SubRat(new(big.Rat), RingDot(b, wall.Normal), wall.Plane0)
+	plane0 := proofarith.LazyOf(wall.Plane0)
+	da := proofarith.LazySub(ringLazyDot(seg.a, wall.Normal), plane0)
+	db := proofarith.LazySub(ringLazyDot(seg.b, wall.Normal), plane0)
 	if da.Sign() == 0 || da.Sign() != db.Sign() {
 		return false
 	}
 	if da.Sign() < 0 {
-		da.Neg(da)
-		db.Neg(db)
+		da, db = proofarith.LazyNeg(da), proofarith.LazyNeg(db)
 	}
-	if db.Cmp(da) < 0 {
+	if proofarith.LazyCmp(db, da) < 0 {
 		da = db
 	}
-	return proofarith.MulRat(new(big.Rat), da, da).Cmp(proofarith.MulRat(new(big.Rat), bound2, wall.Normal2)) > 0
+	return proofarith.LazyCmp(proofarith.LazyMul(da, da),
+		proofarith.LazyMul(seg.bound2, proofarith.LazyOf(wall.Normal2))) > 0
 }
 
 // RingWallClear checks the segment from a to b, whose float box is box,
@@ -359,6 +387,10 @@ func ringPlaneApart(a, b RingVec,
 func RingWallClear(ctx context.Context, a, b RingVec,
 	box RingBox, bound2 *big.Rat, walls []RingWall,
 	result *RingOccupancy) error {
+	// Most calls meet no wall, so the segment's fractions are built on the
+	// first candidate.
+	var seg ringSegmentPlane
+	segBuilt := false
 	for wallIndex := range walls {
 		if !ringBoxesMeet(box, walls[wallIndex].Box) {
 			continue
@@ -371,7 +403,10 @@ func RingWallClear(ctx context.Context, a, b RingVec,
 			}
 			return fmt.Errorf("%w: ring wall clearance work limit", decaderr.ErrUnsupported)
 		}
-		if ringPlaneApart(a, b, wall, bound2) {
+		if !segBuilt {
+			seg, segBuilt = ringSegmentPlaneOf(a, b, bound2), true
+		}
+		if ringPlaneApart(seg, &wall) {
 			continue
 		}
 		q := ringSegmentTriangle2(a, b, wall.Points)

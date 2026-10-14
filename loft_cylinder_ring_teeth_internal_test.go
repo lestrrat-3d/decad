@@ -134,8 +134,8 @@ func TestLoftCylinderRingTeethReuseMatchesFresh(t *testing.T) {
 	for range 2 {
 		for _, src := range sources {
 			for _, ring := range rings {
-				want, wantErr := loftCylinderSourceRingInsideInputs(t.Context(), src, ring, nil)
-				got, gotErr := loftCylinderSourceRingInsideInputs(t.Context(), src, ring, teeth)
+				want, wantErr := loftCylinderSourceRingInsideInputs(t.Context(), src, ring, nil, nil)
+				got, gotErr := loftCylinderSourceRingInsideInputs(t.Context(), src, ring, teeth, nil)
 				requireRingResultEqual(t, want, got, wantErr, gotErr)
 				sawOK = sawOK || wantErr == nil
 				sawErr = sawErr || wantErr != nil
@@ -166,7 +166,7 @@ func TestLoftCylinderRingTeethReuseMatchesFresh(t *testing.T) {
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	empty := make(loftCylinderRingTeeth)
-	_, err = loftCylinderSourceRingInsideInputs(cancelled, source, rings[0], empty)
+	_, err = loftCylinderSourceRingInsideInputs(cancelled, source, rings[0], empty, nil)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, empty)
 
@@ -174,21 +174,21 @@ func TestLoftCylinderRingTeethReuseMatchesFresh(t *testing.T) {
 	// through the facet entry point with seam edges, so the seam records feed
 	// a real proof; a second call on the shared memo equals a fresh call.
 	finger := ringTeethFinger(0.05, 0.03, level)
-	fresh, err := loftCylinderSourceRingInside(t.Context(), fp, finger, nil)
+	fresh, err := loftCylinderSourceRingInside(t.Context(), fp, finger, nil, nil)
 	require.NoError(t, err)
 	require.Positive(t, fresh.Seam)
 	require.Positive(t, fresh.Outer)
 	seamTeeth := make(loftCylinderRingTeeth)
 	for range 2 {
-		got, err := loftCylinderSourceRingInside(t.Context(), fp, finger, seamTeeth)
+		got, err := loftCylinderSourceRingInside(t.Context(), fp, finger, seamTeeth, nil)
 		require.NoError(t, err)
 		requireRingResultEqual(t, fresh, got, nil, nil)
 	}
 	require.Len(t, seamTeeth, len(source.teeth))
 
 	// The facet entry point reads the same records.
-	want, wantErr := loftCylinderSourceRingInsideInputs(t.Context(), source, rings[0], nil)
-	got, gotErr := loftCylinderSourceRingInside(t.Context(), fp, rings[0], teeth)
+	want, wantErr := loftCylinderSourceRingInsideInputs(t.Context(), source, rings[0], nil, nil)
+	got, gotErr := loftCylinderSourceRingInside(t.Context(), fp, rings[0], teeth, nil)
 	require.Equal(t, wantErr == nil, gotErr == nil)
 	if wantErr == nil {
 		requireRingResultEqual(t, want, got, wantErr, gotErr)

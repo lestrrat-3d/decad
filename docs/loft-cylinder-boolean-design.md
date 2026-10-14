@@ -200,6 +200,15 @@ circle record proves each root wall stays inside the blank at this height,
 so those hidden walls cannot form the union boundary. An exact whole-edge
 radius minimum classifies edges; endpoint radii alone do not.
 
+Cap Chamfer checks one split ring twice, directly and at the reflected tooth
+levels, over the same edges. A `RingEdgeRecords` value holds each edge's exact
+XY ends, its class (inside, outside, seam, or reaching the bore) and its XY box,
+built when the edge is first read. The second check reuses a record only for
+the same edge points and the same blank and bore radii; any other input
+rebuilds it. The class comparisons and the wall plane test compare exact
+fractions by cross-multiplication without cancelling common factors, so every
+comparison returns the sign the lowest-terms values give.
+
 The circle sector claim makes every circle point on a crossing edge
 strictly occupied by the tooth. No edge touches any source tooth wall or
 an exposed blank or bore wall. Since the exact edge set is one connected
