@@ -42,6 +42,8 @@ satisfies `||M_i^-1 DF_i-I||∞ < 1` everywhere on the rectangle times that
 band. Integrating the derivative along a source-domain segment then proves
 `F_i` is injective. Subdividing the rectangle may tighten interval bounds,
 but it cannot change the map or turn a sampled test into an admission gate.
+The gate's norm is the exact maximum over the tiles; a float upper bound only
+skips the exact evaluation of a tile that cannot reach that maximum.
 
 For each interior section, its exact supporting plane is derived from the
 cut map and ordered similarities. The entire preceding cap must lie
