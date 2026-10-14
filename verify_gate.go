@@ -252,7 +252,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return d, ok, nil
 	}
 	if _, ok := body.payload.(bodyPatchPayload); ok {
-		// Body.Patch's own payload reuses the patchPayload arm immediately
+		// PatchEdges's own payload reuses the patchPayload arm immediately
 		// above verbatim: its Bounds is the rebuilt receiver's own box
 		// (docs/surface-design.md §5.2), so the same box-based lower bound
 		// applies for the same reason.

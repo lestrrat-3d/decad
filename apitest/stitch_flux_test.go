@@ -187,7 +187,7 @@ func TestStitchCurvedVolumeBoundWidensWhenPlaced(t *testing.T) {
 }
 
 // TestStitchPatchCappedTubeClosesToASolid is T34: an extruded tube capped
-// on both rims by Body.Patch, in one call, then stitched — this design's
+// on both rims by PatchEdges, in one call, then stitched — this design's
 // own motivating "walls, then cap, then stitch" flow (§6.1). Rule P admits
 // the closure: the receiver's own prismPayload proves simple under Rule S
 // (a plain Distance extrude, sectionDelta zero), and each of the two new
@@ -211,10 +211,10 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, free, 2)
 
-	patched, err := sheet.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(2))
+	patched, err := decad.PatchEdges(t.Context(), sheet, decad.Edges(decad.Free()).Exactly(2))
 	require.NoError(t, err)
 	_, err = decad.Edges(decad.Free()).SelectEdges(patched)
-	require.ErrorIs(t, err, decad.ErrNoMatch, "Body.Patch itself closes the tube")
+	require.ErrorIs(t, err, decad.ErrNoMatch, "PatchEdges itself closes the tube")
 
 	solid, err := decad.Stitch(t.Context(), patched)
 	require.NoError(t, err)
@@ -244,7 +244,7 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 // field to ask "zero bound" of — stitch_weld.go's own doc comment). So no
 // two curved rims from different features ever weld into a closed set
 // through the public seam at all — confirmed directly: a surface-extruded
-// cylinder wall plus two Document.Patch discs at its own exact end planes,
+// cylinder wall plus two PatchProfile discs at its own exact end planes,
 // bit-identical circles at bit-identical planes, still leaves all four rims
 // free after Stitch. Rule S's own single-source-body restriction is
 // pinned instead by TestStitchRuleSRefusesMultipleSourceBodies

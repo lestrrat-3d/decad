@@ -735,7 +735,7 @@ func trianglePatch(ctx context.Context, doc *decad.Document, w *sketch.World, pl
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return doc.Patch(ctx, s, s.Profiles()[0])
+	return decad.PatchProfile(ctx, doc, s, s.Profiles()[0])
 }
 
 // partsBinOmega is the parts-bin cylinder's spin about −x, in rad/s; it rolls

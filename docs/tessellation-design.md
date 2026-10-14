@@ -698,7 +698,7 @@ placement and section-displacement allowances remain.
 
 ### 5.1 Planar Patch sheet
 
-`Document.Patch` uses its recorded profile as a single planar face. The mesh
+`PatchProfile` uses its recorded profile as a single planar face. The mesh
 chords each outer and hole loop with §3's station bounds, proves the same
 cross-loop clearance as a prism cap, then triangulates that polygon with
 holes. Each planar triangle points to the patch's one live face. The

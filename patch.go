@@ -21,7 +21,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Document.Patch of docs/surface-design.md §5.1: a single planar
+// This file is PatchProfile of docs/surface-design.md §5.1: a single planar
 // face built from a recorded profile, on the sketch plane's own frame. It is
 // the seam call (sectioncert.RecordProfile) plus one evaluation, evalPatchContext, that
 // mirrors evalPrismContext's order without ever building a solid.
@@ -64,7 +64,7 @@ func (pp patchPayload) prism() prismPayload {
 	return prismPayload{Payload: prismrecord.Payload{Profile: pp.profile, Frame: pp.frame, Xform: pp.xform, Walks: pp.walks}}
 }
 
-// Patch records p through the seam exactly as Extrude does — the same
+// PatchProfile records p through the seam exactly as Extrude does — the same
 // authentication, staleness, foreign-entity and TExact admission gates of
 // docs/api-design.md §7 and docs/sketch-seam-design.md, with no relaxation —
 // and builds a single planar face on s.Plane().Frame(), carrying the
@@ -76,8 +76,8 @@ func (pp patchPayload) prism() prismPayload {
 // boundary decad cannot record exactly is ErrUnrecordableProfile. A recorded
 // boundary carrying a free-form segment this evaluator cannot integrate is
 // ErrUnsupported (Table R row R3). A failed evaluation leaves the document
-// untouched.
-func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
+// untouched. A nil context or a nil d is ErrDegenerate.
+func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a patch`, ErrDegenerate)
 	}

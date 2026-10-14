@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins the three Body.Patch cases decad's public seam admits no
+// This file pins the three PatchEdges cases decad's public seam admits no
 // way to author directly (docs/surface-design.md §5.2), the same reason
 // stitch_internal_test.go carries its own R7 (non-orientable) fixture: gate
 // 3's non-planar refusal (every builder's own free-edge chains are planar by
@@ -114,7 +114,7 @@ func TestProvePatchChainPlaneAdmitsABoundedCoLevelChain(t *testing.T) {
 // certificate existed. This is what pins T12's own "a bounded chain that
 // carries no shared level token" half: a real revolve seam or a one-cap
 // shell's open rim never carries a level token, since neither builder mints
-// one, and neither is reachable through decad's public seam as a Body.Patch
+// one, and neither is reachable through decad's public seam as a PatchEdges
 // fixture without changing an untouched file.
 func TestProvePatchChainPlaneRefusesABoundedChainWithNoLevelToken(t *testing.T) {
 	t.Parallel()
@@ -136,11 +136,11 @@ func TestProvePatchChainPlaneRefusesABoundedChainWithNoLevelToken(t *testing.T) 
 // compares the coordinate or the bound, only the identity, so bit-identical
 // held data is not what admits a chain.
 //
-// This shape is not reachable through Body.Patch's own public seam: a chain
+// This shape is not reachable through PatchEdges's own public seam: a chain
 // requires two consecutive edges to SHARE a vertex POINTER, which only one
 // evaluator's own build or a zero-bound weld creates, and Table J refuses a
 // zero-bound weld of a bounded pair (docs/surface-design.md §6.2) — so no
-// selector over any two live bodies can ever hand Body.Patch one chain
+// selector over any two live bodies can ever hand PatchEdges one chain
 // spanning two independently minted levels. Pinning it here, directly
 // against provePatchChainPlane, is what the brief's own fallback asks for.
 func TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels(t *testing.T) {
@@ -295,7 +295,7 @@ func TestOrientPatchChainRejectsDisagreeingAdjacentFaces(t *testing.T) {
 // sense" derivation succeeds (every builder here agrees, by construction: a
 // single adjacent face per edge, each walked forward), so this reaches gate
 // 4, whose ErrUnsupported crossing refusal (sectionaudit.Crossing) is
-// remapped to ErrDegenerate at Body.Patch's own
+// remapped to ErrDegenerate at PatchEdges's own
 // boundary (docs/surface-design.md Table R row R5).
 func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 	t.Parallel()
@@ -329,7 +329,7 @@ func TestBodyPatchRejectsAReceiverWithNoPayload(t *testing.T) {
 	b := &Body{doc: d, origin: FeatureRef{Role: roleBody}, kind: BodySheet}
 	d.bodies = append(d.bodies, b)
 
-	_, err := b.Patch(t.Context(), Edges(Free()))
+	_, err := PatchEdges(t.Context(), b, Edges(Free()))
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 

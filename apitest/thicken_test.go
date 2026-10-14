@@ -15,7 +15,7 @@ func TestThickenPatchRectangle(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	patch, err := doc.Patch(t.Context(), s, p)
+	patch, err := decad.PatchProfile(t.Context(), doc, s, p)
 	require.NoError(t, err)
 	solid, err := decad.Thicken(t.Context(), patch, units.Millimeters(2))
 	require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestThickenPatchSides(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, p := plateSketch(t)
 			doc := decad.New()
-			patch, err := doc.Patch(t.Context(), s, p)
+			patch, err := decad.PatchProfile(t.Context(), doc, s, p)
 			require.NoError(t, err)
 			solid, err := decad.Thicken(t.Context(), patch, units.Millimeters(2),
 				decad.WithThickenSide(decad.ThickenPositive), decad.WithThickenSide(tc.side))
@@ -67,7 +67,7 @@ func TestThickenPatchHole(t *testing.T) {
 	t.Parallel()
 	s, p := rectWithHoleSketch(t)
 	doc := decad.New()
-	patch, err := doc.Patch(t.Context(), s, p)
+	patch, err := decad.PatchProfile(t.Context(), doc, s, p)
 	require.NoError(t, err)
 	solid, err := decad.Thicken(t.Context(), patch, units.Millimeters(2))
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestThickenPatchConversionBound(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	patch, err := doc.Patch(t.Context(), s, s.Profiles()[0])
+	patch, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[0])
 	require.NoError(t, err)
 	solid, err := decad.Thicken(t.Context(), patch, units.Inches(0.1))
 	require.NoError(t, err)
@@ -111,7 +111,7 @@ func TestThickenPatchRefusals(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	patch, err := doc.Patch(t.Context(), s, p)
+	patch, err := decad.PatchProfile(t.Context(), doc, s, p)
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name  string

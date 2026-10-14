@@ -17,7 +17,7 @@ func TestBodyPatchCircularPrismSheetTessellates(t *testing.T) {
 	sourceMesh, err := tube.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	require.True(t, sourceMesh.BoundaryVerified())
-	filled, err := tube.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(2))
+	filled, err := decad.PatchEdges(t.Context(), tube, decad.Edges(decad.Free()).Exactly(2))
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, filled.Kind())
 	require.Len(t, filled.Faces(), 3)
@@ -72,7 +72,7 @@ func requireLiveBodyPatchMeshFaces(t *testing.T, body *decad.Body, mesh *decad.M
 func TestBodyPatchCircularPrismOneRimTessellates(t *testing.T) {
 	t.Parallel()
 	tube := circularPatchTube(t)
-	filled, err := tube.Patch(t.Context(), decad.Edges(decad.Free(),
+	filled, err := decad.PatchEdges(t.Context(), tube, decad.Edges(decad.Free(),
 		decad.EndpointAt(r3.NewVec(10, 0, 0))).Exactly(1))
 	require.NoError(t, err)
 	mesh, err := filled.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
@@ -86,7 +86,7 @@ func TestBodyPatchCircularPrismOneRimTessellates(t *testing.T) {
 func TestBodyPatchCircularPrismPlacementAndReflection(t *testing.T) {
 	t.Parallel()
 	tube := circularPatchTube(t)
-	filled, err := tube.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(2))
+	filled, err := decad.PatchEdges(t.Context(), tube, decad.Edges(decad.Free()).Exactly(2))
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestBodyPatchCircularPrismPlacementAndReflection(t *testing.T) {
 	}
 	reflectedSource, err := decad.Transform(t.Context(), circularPatchTube(t), reflection)
 	require.NoError(t, err)
-	filledAfterReflection, err := reflectedSource.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(2))
+	filledAfterReflection, err := decad.PatchEdges(t.Context(), reflectedSource, decad.Edges(decad.Free()).Exactly(2))
 	require.NoError(t, err)
 	mesh, err := filledAfterReflection.Tessellate(t.Context(), units.Millimeters(0.2),
 		decad.WithVerification(decad.VerifyAll))
@@ -121,10 +121,10 @@ func TestBodyPatchCircularPrismPlacementAndReflection(t *testing.T) {
 func TestBodyPatchCircularPrismNestedFillMeshRefuses(t *testing.T) {
 	t.Parallel()
 	tube := circularPatchTube(t)
-	oneRim, err := tube.Patch(t.Context(), decad.Edges(decad.Free(),
+	oneRim, err := decad.PatchEdges(t.Context(), tube, decad.Edges(decad.Free(),
 		decad.EndpointAt(r3.NewVec(10, 0, 0))).Exactly(1))
 	require.NoError(t, err)
-	bothRims, err := oneRim.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(1))
+	bothRims, err := decad.PatchEdges(t.Context(), oneRim, decad.Edges(decad.Free()).Exactly(1))
 	require.NoError(t, err)
 	_, err = bothRims.Tessellate(t.Context(), units.Millimeters(0.2),
 		decad.WithVerification(decad.VerifyAll))

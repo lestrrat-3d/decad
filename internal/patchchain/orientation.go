@@ -112,7 +112,7 @@ func OrientedNormal(edges []GeometryEdge) (r3.Vec, error) {
 		sum = sum.Add(a.Cross(b))
 	}
 	if _, ok := sum.Normalize(); !ok {
-		return r3.Vec{}, fmt.Errorf(`%w: a Body.Patch chain's orientation is degenerate`, decaderr.ErrDegenerate)
+		return r3.Vec{}, fmt.Errorf(`%w: a PatchEdges chain's orientation is degenerate`, decaderr.ErrDegenerate)
 	}
 	return sum, nil
 }
@@ -123,7 +123,7 @@ func OrientedNormal(edges []GeometryEdge) (r3.Vec, error) {
 func LevelNormal(fitted, tokenNormal r3.Vec) (r3.Vec, error) {
 	sign := fitted.Dot(tokenNormal)
 	if sign == 0 {
-		return r3.Vec{}, fmt.Errorf(`%w: a Body.Patch chain's orientation is degenerate against its own level`, decaderr.ErrDegenerate)
+		return r3.Vec{}, fmt.Errorf(`%w: a PatchEdges chain's orientation is degenerate against its own level`, decaderr.ErrDegenerate)
 	}
 	if sign < 0 {
 		return tokenNormal.Scale(-1), nil
@@ -137,7 +137,7 @@ func LevelNormal(fitted, tokenNormal r3.Vec) (r3.Vec, error) {
 func PlaneFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
 	n, ok := normal.Normalize()
 	if !ok {
-		return r3.Frame{}, fmt.Errorf(`%w: a Body.Patch chain's plane normal is degenerate`, decaderr.ErrDegenerate)
+		return r3.Frame{}, fmt.Errorf(`%w: a PatchEdges chain's plane normal is degenerate`, decaderr.ErrDegenerate)
 	}
 	ref := r3.NewVec(1, 0, 0)
 	if math.Abs(n.Dot(ref)) > 0.9 {
@@ -145,7 +145,7 @@ func PlaneFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
 	}
 	u, ok := ref.Sub(n.Scale(ref.Dot(n))).Normalize()
 	if !ok {
-		return r3.Frame{}, fmt.Errorf(`%w: a Body.Patch chain's plane normal is degenerate`, decaderr.ErrDegenerate)
+		return r3.Frame{}, fmt.Errorf(`%w: a PatchEdges chain's plane normal is degenerate`, decaderr.ErrDegenerate)
 	}
 	v := n.Cross(u)
 	return r3.NewFrame(origin, u, v)
@@ -191,7 +191,7 @@ func SegmentsInFrame(frame r3.Frame, edges []GeometryEdge) ([]sectionrecord.Curv
 				segs[i] = sectionrecord.ArcSeg{Center: center, Start: p2End, End: p2Start, TStart: 1, TEnd: 0}
 			}
 		default:
-			return nil, fmt.Errorf(`%w: Body.Patch cannot represent curve kind %s`, decaderr.ErrUnsupported, edge.CurveName)
+			return nil, fmt.Errorf(`%w: PatchEdges cannot represent curve kind %s`, decaderr.ErrUnsupported, edge.CurveName)
 		}
 	}
 	return segs, nil

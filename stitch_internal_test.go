@@ -241,7 +241,7 @@ func TestStitchVertexLinkAuditRefusesPinchedVertex(t *testing.T) {
 // TestStitchFluxRefusesNURBSSurface is docs/surface-design.md's T37: a
 // NURBSSurface face driven directly at stitchFaceFluxAndMoment, on the
 // sealed switch's own default arm. decad's public seam has no way to close
-// a free-form-walled sheet at all — Body.Patch refuses any chain carrying a
+// a free-form-walled sheet at all — PatchEdges refuses any chain carrying a
 // NURBSCurve edge outright — so no fixture reaches this through Stitch.
 func TestStitchFluxRefusesNURBSSurface(t *testing.T) {
 	t.Parallel()

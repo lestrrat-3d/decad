@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Body.Patch fills one or more closed chains of a body's own free edges
+// PatchEdges fills one or more closed chains of a body's own free edges
 // (docs/surface-design.md §5.2). A surface-extruded tube has no caps and two
 // congruent free-edge rims, and no edge predicate can tell them apart —
 // Edges(Free()) always resolves to both — so the contract fills every
@@ -46,7 +46,7 @@ func Example_decad_body_patch() {
 		return
 	}
 
-	capped, err := tube.Patch(context.Background(), decad.Edges(decad.Free()).Exactly(len(rims)))
+	capped, err := decad.PatchEdges(context.Background(), tube, decad.Edges(decad.Free()).Exactly(len(rims)))
 	if err != nil {
 		fmt.Printf("failed to patch the tube: %s\n", err)
 		return

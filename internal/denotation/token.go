@@ -8,7 +8,7 @@ import "github.com/lestrrat-3d/r3"
 // over two different code paths — coplanarity and coincidence do not follow
 // from one another, so admitting one never discharges the other.
 //
-// The LEVEL half (levelToken, below) lets Body.Patch admit a bounded chain
+// The LEVEL half (levelToken, below) lets PatchEdges admit a bounded chain
 // of rim vertices its exact gate 3 arm refuses today: N vertices sharing one
 // levelID are provably coplanar by shared construction.
 //
@@ -37,7 +37,7 @@ import "github.com/lestrrat-3d/r3"
 // world-space point and direction prismrecord.Payload.CapFrame already
 // derives for a solid prism's caps (pp.point(0, 0, z) and pp.dir(0, 0, 1)),
 // never a value fitted to held vertex coordinates. This is what lets
-// Body.Patch's level arm publish an EXACT plane for a chain it admits by
+// PatchEdges's level arm publish an EXACT plane for a chain it admits by
 // identity alone: the held vertices at one recorded level are only
 // APPROXIMATELY coplanar in float64 — frame.ToWorldUV(u, v) rounds
 // differently for each distinct (u, v), so two vertices sharing one level
@@ -64,7 +64,7 @@ import "github.com/lestrrat-3d/r3"
 // COMPUTED (revolve_axis.go's axisFrame), and a revolve's own seam
 // half-plane has a BOUNDED normal, not merely a bounded offset — so
 // revolve_build.go mints no level token at all, and a revolve seam chain
-// stays refused by Body.Patch's existing exact gate (R6). A section
+// stays refused by PatchEdges's existing exact gate (R6). A section
 // re-expressed by the analytic prism boolean reduction sets sectionDelta
 // nonzero and so mints no token either: its coordinates are computed, not
 // recorded, and the whole point of this certificate is that it never covers
