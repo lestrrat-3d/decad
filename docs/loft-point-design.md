@@ -147,6 +147,10 @@ tool axis is world X, its apex is at positive X, and its finite far cap is
 at negative X. Every source fan vertex minus the source mesh bound must
 lie strictly ahead of that far cap. A tool outside this class takes the
 ordinary mesh Boolean path.
+An untrimmed point-loft target enters this arm only while its source record
+survives. Ordinary placement keeps that record only for exactly identity
+deltas; an exact rotation copy drops it regardless of angle. Later float
+composition to identity cannot restore it, so that pair takes the mesh path.
 
 The cone is recorded as `g(p)=x+k·hypot(y,z)` and `alpha(p)=a/g(p)`,
 with exact-rational apex `a` and slope `k` read from the meridian. A

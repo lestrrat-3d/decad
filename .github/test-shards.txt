@@ -1444,6 +1444,7 @@
 10	0.00	TestPatternedOverlapIsNotProvenDisjoint
 10	3.69	TestPlacedProxyShellsChargeExactCopies
 10	0.56	TestPlacedReusesPublishedWalks
+10	0.00	TestPointConeTrimRejectsRoundTrippedPointLoft
 10	0.17	TestPointPlaneCapCentroidMatchesThreeMoments
 10	0.11	TestPreparedParityProjectionReuse
 10	0.00	TestPrismBooleanGateG2AdmitsAReflectedOperand
