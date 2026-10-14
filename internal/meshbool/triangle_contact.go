@@ -548,9 +548,27 @@ func PointOnTri(p proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) bool {
 	return (s0 >= 0 && s1 >= 0 && s2 >= 0) || (s0 <= 0 && s1 <= 0 && s2 <= 0)
 }
 
+// PlaneSide is the sign of ((b-a) x (p-a)) . n. It returns 0 without exact
+// work when p holds the same four coordinate pointers as a or as b: p-a is then
+// the zero vector, or p-a equals b-a and their cross product is zero. This
+// holds for any weights. The shortcut applies only when a, b and n have every
+// coordinate set (p then has them too, sharing a or b), so a nil field still
+// panics in the exact path.
 func PlaneSide(a, b, p, n proof.Xpt) int {
+	if xptComplete(a) && xptComplete(b) && xptComplete(n) &&
+		(xptShared(p, a) || xptShared(p, b)) {
+		return 0
+	}
 	return proof.XdotSign(proof.Xcross(proof.Xsub(b, a), proof.Xsub(p, a)), n)
 }
+
+// xptShared reports whether p and q hold the same four coordinate pointers.
+func xptShared(p, q proof.Xpt) bool {
+	return p.X == q.X && p.Y == q.Y && p.Z == q.Z && p.W == q.W
+}
+
+// xptComplete reports whether all four coordinates are set.
+func xptComplete(p proof.Xpt) bool { return p.X != nil && p.Y != nil && p.Z != nil && p.W != nil }
 
 func PointOnSegment3D(a, b, p proof.Xpt) bool {
 	delta := proof.Xsub(b, a)
