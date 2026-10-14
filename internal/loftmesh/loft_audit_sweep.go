@@ -342,7 +342,7 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 	// count, and refuses the moment that passes the ceiling, so the work
 	// before an S8 refusal is O(F log² F + ceiling).
 	var order pairScan
-	var count uint64
+	var count, scanned uint64
 	var starts []int
 	if shortcuts.Sweep {
 		if provenPatches != 0 {
@@ -358,7 +358,7 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 		if sc.exceeded {
 			return work, errLoftAuditCeiling()
 		}
-		starts, count = sc.starts, sc.count
+		starts, count, scanned = sc.starts, sc.count, sc.scanned
 	} else {
 		var ok bool
 		count, ok = proofbound.WallChoose2(uint64(len(members)))
@@ -396,7 +396,7 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 	sparse := data == nil && structure == nil && shortcuts.Sweep && provenPatches != 0 && !streamed
 	if sparse {
 		var err error
-		cands, err = sweepCandidates(budget, order, starts, count, keepEveryPair)
+		cands, err = sweepCandidatesByRows(budget, order, members, starts, count, scanned)
 		if err != nil {
 			return work, err
 		}
@@ -934,6 +934,71 @@ func sweepCandidates(budget *proofbound.WorkBudget, s pairScan, starts []int, co
 	}
 	for i := range len(starts) - 1 {
 		slices.Sort(c.js[starts[i]:starts[i+1]])
+	}
+	return c, nil
+}
+
+// loftRowPairScan is a scan that walks by pairs and by rows.
+type loftRowPairScan interface {
+	pairScan
+	loftRowScan
+}
+
+// sweepCandidatesByRows is sweepCandidates for keepEveryPair. A row scan with
+// at least loftRowParallelMin members fills the list by rows on several
+// goroutines (sweepCandidatesRowsWorkers); every other scan, or fewer members,
+// takes sweepCandidates' serial walk. scanned is the S8 count's figure for the
+// same complete walk.
+func sweepCandidatesByRows(budget *proofbound.WorkBudget, s pairScan, members, starts []int,
+	count, scanned uint64) (loftCandidates, error) {
+	workers := orderedwork.EachWorkers(len(members), loftRowParallelMin)
+	if rows, ok := s.(loftRowPairScan); ok && workers >= 2 {
+		return sweepCandidatesRowsWorkers(budget, rows, members, starts, count, scanned, workers)
+	}
+	return sweepCandidates(budget, s, starts, count, keepEveryPair)
+}
+
+// sweepCandidatesRowsWorkers fills sweepCandidates' list for keepEveryPair by
+// rows. Row i's partners come from tree.walkRow, which passes exactly the
+// partners visit pairs with i as the lower index. Each worker writes only row
+// i's own slots js[starts[i]:starts[i+1]] and sorts them, so the list equals
+// sweepCandidates'. Workers never touch budget: after the walks the caller
+// steps budget scanned times, the units visit steps over the same complete
+// walk, so a budget fails at the same step with the same error. A row whose
+// partner count differs from starts is refused, and no partner is written
+// outside its row's slots. If a cancellation poll stops the workers, the
+// serial walk runs on the same budget, because the serial walk polls only every
+// WorkPollInterval steps and may finish the list, or reach a later refusal,
+// before it sees the cancellation.
+func sweepCandidatesRowsWorkers(budget *proofbound.WorkBudget, tree loftRowPairScan, members, starts []int,
+	count, scanned uint64, workers int) (loftCandidates, error) {
+	c := loftCandidates{starts: starts, js: make([]int32, count)}
+	mismatch := make([]bool, len(members))
+	if _, err := orderedwork.Each(len(members), workers, 64, budget.Err, func(k int) error {
+		i := members[k]
+		row := c.js[starts[i]:starts[i]:starts[i+1]]
+		n := 0
+		_, exceeded := tree.walkRow(i, math.MaxUint64, func(j int) {
+			if n < cap(row) {
+				row = append(row, int32(j))
+			}
+			n++
+		})
+		if exceeded || n != starts[i+1]-starts[i] {
+			mismatch[k] = true
+			return nil
+		}
+		slices.Sort(row)
+		return nil
+	}); err != nil {
+		return sweepCandidates(budget, tree, starts, count, keepEveryPair)
+	}
+	if _, err := budget.StepN(scanned); err != nil {
+		return loftCandidates{}, err
+	}
+	if slices.Contains(mismatch, true) {
+		return loftCandidates{}, fmt.Errorf("%w: row-ordered loft candidates differ from S8 count",
+			decaderr.ErrUnsupported)
 	}
 	return c, nil
 }
