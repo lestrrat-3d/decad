@@ -184,7 +184,8 @@ func TestDirectLoftMovingHoleAreaEnclosesDenseQuadrature(t *testing.T) {
 	reference := denseMovingCircleWallArea(1, 2, 100, 0, cells)
 	// For f=sqrt(4+(1+100*cos(theta))^2), |f''| <= 100+100^2/2.
 	// The midpoint rule's area error is at most meanRadius*span^3*|f''|/(24*N^2).
-	referenceError := 1.5 * math.Pow(2*math.Pi, 3) * 5100 / (24 * cells * cells)
+	twoPi := 2 * math.Pi
+	referenceError := 1.5 * twoPi * twoPi * twoPi * 5100 / (24 * cells * cells)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-reference), area.Bound.Base()+referenceError)
 }
 
