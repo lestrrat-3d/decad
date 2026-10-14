@@ -835,7 +835,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 			prev, w := walks[i-1], walks[i]
 			convex = prev.TanOutU*w.TanInV-prev.TanOutV*w.TanInU > 0
 		}
-		vertical[i] = &Edge{n: topo.Edge{Convex: convex, Length: pp.z1 - pp.z0, LengthBound: height.Bound, Curve: surfacegeom.Line3{}, Start: vertexNode(bottomV[i]), End: vertexNode(topV[i])}}
+		vertical[i] = bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: pp.z1 - pp.z0, LengthBound: height.Bound, Curve: surfacegeom.Line3{}, Start: vertexNode(bottomV[i]), End: vertexNode(topV[i])}})
 	}
 
 	faces := make([]*Face, 0, n)
@@ -868,11 +868,12 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 				Origins:   origins,
 				Body:      bodyNode(body),
 			},
-			loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
-				{edge: bottomEdge, forward: true},
-				{edge: vertical[i+1], forward: true},
-				{edge: topEdge, forward: false},
-				{edge: vertical[i], forward: false},
+			loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+				{Edge: edgeNode(bottomEdge), Forward: true},
+				{Edge: edgeNode(vertical[i+1]), Forward: true},
+				{Edge: edgeNode(topEdge), Forward: false},
+				{Edge: edgeNode(vertical[i]), Forward: false},
+			},
 			}}},
 		})
 		for _, e := range []*Edge{bottomEdge, topEdge, vertical[i], vertical[i+1]} {

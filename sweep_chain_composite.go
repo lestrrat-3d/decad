@@ -158,24 +158,24 @@ type chainRimPair struct{ start, end *Edge }
 
 func chainSpanRims(part *Body, arc, reverse bool) (chainRimPair, error) {
 	face := part.Faces()[0]
-	if len(face.loops) != 1 || len(face.loops[0].coedges) != 4 {
+	if len(face.loops) != 1 || len(face.loops[0].n.CoEdges) != 4 {
 		return chainRimPair{}, fmt.Errorf(`%w: a composite chain span has no four-edge source wall`, ErrUnsupported)
 	}
-	coedges := face.loops[0].coedges
-	start, end := coedges[0].edge, coedges[2].edge
+	coedges := face.loops[0].n.CoEdges
+	start, end := coedges[0].Edge, coedges[2].Edge
 	if arc && reverse {
 		start, end = end, start
 	}
 	if start == nil || end == nil || start == end {
 		return chainRimPair{}, fmt.Errorf(`%w: a composite chain span has incomplete path rims`, ErrUnsupported)
 	}
-	if _, ok := start.n.Curve.(surfacegeom.Line3); !ok {
+	if _, ok := start.Curve.(surfacegeom.Line3); !ok {
 		return chainRimPair{}, fmt.Errorf(`%w: a composite chain start rim is not source-linear`, ErrUnsupported)
 	}
-	if _, ok := end.n.Curve.(surfacegeom.Line3); !ok {
+	if _, ok := end.Curve.(surfacegeom.Line3); !ok {
 		return chainRimPair{}, fmt.Errorf(`%w: a composite chain end rim is not source-linear`, ErrUnsupported)
 	}
-	return chainRimPair{start: start, end: end}, nil
+	return chainRimPair{start: edgeHandle(start), end: edgeHandle(end)}, nil
 }
 
 func certifyChainRimPair(from, to *Edge) error {

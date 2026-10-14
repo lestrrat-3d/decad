@@ -63,8 +63,8 @@ func refuseSheetOperand(b *Body, operation string) error {
 func shellIsOpen(faces []*Face) bool {
 	for _, f := range faces {
 		for _, l := range f.loops {
-			for _, ce := range l.coedges {
-				if len(ce.edge.n.Faces) == 1 {
+			for _, ce := range l.n.CoEdges {
+				if len(ce.Edge.Faces) == 1 {
 					return true
 				}
 			}
@@ -82,11 +82,11 @@ func shellIsOpen(faces []*Face) bool {
 // order; the slices themselves are ordered by the first face of theirs that
 // appears in faces.
 func splitConnectedFaces(faces []*Face) [][]*Face {
-	byEdge := map[*Edge][]*Face{}
+	byEdge := map[*topo.Edge][]*Face{}
 	for _, f := range faces {
 		for _, l := range f.loops {
-			for _, ce := range l.coedges {
-				byEdge[ce.edge] = append(byEdge[ce.edge], f)
+			for _, ce := range l.n.CoEdges {
+				byEdge[ce.Edge] = append(byEdge[ce.Edge], f)
 			}
 		}
 	}

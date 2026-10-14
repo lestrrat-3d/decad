@@ -483,8 +483,8 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	maxInputAbs := 0.0
 	for _, f := range srcFaces {
 		for _, l := range f.loops {
-			for _, ce := range l.coedges {
-				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.n.Start.Position), proofbound.VecMaxAbs(ce.edge.n.End.Position))
+			for _, ce := range l.n.CoEdges {
+				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.Edge.Start.Position), proofbound.VecMaxAbs(ce.Edge.End.Position))
 			}
 		}
 	}
@@ -650,7 +650,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		lengthBound = place.LengthBound(old.n.Length, lengthBound)
-		ne := &Edge{
+		ne := bornEdge(&Edge{
 			n: topo.Edge{
 				Convex:          old.n.Convex,
 				Length:          old.n.Length,
@@ -661,7 +661,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 				Start:           vertexNode(start),
 				End:             vertexNode(end),
 			},
-		}
+		})
 		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
 			old.n.Curve, old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		newEdgeByOld[old] = ne
@@ -697,15 +697,15 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			},
 		})
 		for _, l := range f.loops {
-			coedges := make([]coedge, len(l.coedges))
-			for j, ce := range l.coedges {
-				ne, err := edgeFor(ce.edge)
+			coedges := make([]topo.CoEdge, len(l.n.CoEdges))
+			for j, ce := range l.n.CoEdges {
+				ne, err := edgeFor(edgeHandle(ce.Edge))
 				if err != nil {
 					return nil, nil, err
 				}
-				coedges[j] = coedge{edge: ne, forward: ce.forward}
+				coedges[j] = topo.CoEdge{Edge: edgeNode(ne), Forward: ce.Forward}
 			}
-			nf.loops = append(nf.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: l.n.Outer}})
+			nf.loops = append(nf.loops, &Loop{n: topo.Loop{Outer: l.n.Outer, CoEdges: coedges}})
 		}
 		newFaces[i] = nf
 	}
@@ -827,13 +827,13 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		return nil, patchRemapCrossingError(err)
 	}
 
-	coedges := make([]coedge, len(ordered))
+	coedges := make([]topo.CoEdge, len(ordered))
 	for i, oe := range ordered {
-		coedges[i] = coedge{edge: edgeCopy[oe.old], forward: oe.forward}
+		coedges[i] = topo.CoEdge{Edge: edgeNode(edgeCopy[oe.old]), Forward: oe.forward}
 	}
 
 	return bornFace(&Face{
-		loops: []*Loop{{coedges: coedges, n: topo.Loop{Outer: true}}},
+		loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: coedges}}},
 		n: topo.Face{
 			Area:      ig.Area,
 			AreaBound: ig.AreaBound,

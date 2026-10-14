@@ -246,8 +246,8 @@ func closedBossShellEdgePairs(faces []*Face) bool {
 	edges := map[*Edge]int{}
 	for _, face := range faces {
 		for _, loop := range face.loops {
-			for _, use := range loop.coedges {
-				edges[use.edge]++
+			for _, use := range loop.n.CoEdges {
+				edges[edgeHandle(use.Edge)]++
 			}
 		}
 	}
@@ -295,12 +295,12 @@ func bossShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology
 			if err != nil {
 				return err
 			}
-			out.coedge[ui] = coedge{edge: edge, forward: u.DirFrom == from && u.DirTo == to}
+			out.coedge[ui] = topo.CoEdge{Edge: edgeNode(edge), Forward: u.DirFrom == from && u.DirTo == to}
 			if ring == 0 {
-				out.side[bi] = append(out.side[bi], coedge{edge: edge, forward: true})
+				out.side[bi] = append(out.side[bi], topo.CoEdge{Edge: edgeNode(edge), Forward: true})
 			}
 			if ring == 1 {
-				out.cap[bi] = append(out.cap[bi], coedge{edge: edge, forward: true})
+				out.cap[bi] = append(out.cap[bi], topo.CoEdge{Edge: edgeNode(edge), Forward: true})
 			}
 		}
 	}

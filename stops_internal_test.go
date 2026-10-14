@@ -137,7 +137,7 @@ func TestRejectAxisCrossingRefusesUnprobableCurve(t *testing.T) {
 	m := st.r0
 
 	t.Run("Line3 stays permitted", func(t *testing.T) {
-		require.NoError(t, extent.RejectAxisCrossing(st.stopGeometry(), angularStopEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}}), m))
+		require.NoError(t, extent.RejectAxisCrossing(st.stopGeometry(), angularStopEdge(bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}})), m))
 	})
 	for _, tc := range []struct {
 		name  string
@@ -147,7 +147,7 @@ func TestRejectAxisCrossingRefusesUnprobableCurve(t *testing.T) {
 		{name: "FacetedCurve", curve: surfacegeom.FacetedCurve{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := extent.RejectAxisCrossing(st.stopGeometry(), angularStopEdge(&Edge{n: topo.Edge{Curve: tc.curve}}), m)
+			err := extent.RejectAxisCrossing(st.stopGeometry(), angularStopEdge(bornEdge(&Edge{n: topo.Edge{Curve: tc.curve}})), m)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.ErrorContains(t, err, tc.name, "the refusal names the curve type it cannot probe")
 		})
@@ -184,12 +184,12 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 	}
 
 	t.Run("NURBSCurve rim", func(t *testing.T) {
-		edge := &Edge{
+		edge := bornEdge(&Edge{
 			n: topo.Edge{Curve: surfacegeom.NURBSCurve{}, Start: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})),
 				End: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}})),
 			},
-		}
-		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
+		})
+		loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: true}}}}
 		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}})
 
 		_, err := st.faceHalfPlane(face)
@@ -198,12 +198,12 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 	})
 
 	t.Run("FacetedCurve rim", func(t *testing.T) {
-		edge := &Edge{
+		edge := bornEdge(&Edge{
 			n: topo.Edge{Curve: surfacegeom.FacetedCurve{}, Start: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})),
 				End: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}})),
 			},
-		}
-		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
+		})
+		loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: true}}}}
 		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}})
 
 		_, err := st.faceHalfPlane(face)
@@ -215,12 +215,12 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 		// Regression: the vertex-only edge kind this audit has always
 		// permitted keeps returning its agreed half-plane angle, never a
 		// refusal, once the vertices themselves agree.
-		edge := &Edge{
+		edge := bornEdge(&Edge{
 			n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})),
 				End: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}})),
 			},
-		}
-		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
+		})
+		loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: true}}}}
 		face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}})
 
 		phi, err := st.faceHalfPlane(face)
@@ -320,7 +320,7 @@ func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 // TestAngularStopEdgeNamesPublicCurveType pins that the refusal text keeps
 // the public variant name although the edge node holds the internal twin.
 func TestAngularStopEdgeNamesPublicCurveType(t *testing.T) {
-	e := &Edge{n: topo.Edge{Curve: surfacegeom.Ellipse3{}}}
+	e := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Ellipse3{}}})
 	require.Equal(t, "decad.Ellipse3", angularStopEdge(e).CurveType)
 }
 

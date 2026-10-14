@@ -100,7 +100,7 @@ func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop loopRecord, work *fre
 // through loopContourDelta.
 type capBandResult struct {
 	patches []*Face
-	capCo   []coedge
+	capCo   []topo.CoEdge
 	geom    []capPatchGeom
 	delta   float64
 	// closure is the band's capBandClosure: the area of the slivers between its
@@ -124,7 +124,7 @@ type capPatchGeom = capband.Patch
 // into that corner, all forward, whose vertices the band's slant edges then
 // start from. Nil mints them here, as a prism's cap blend does. A supplied
 // boundary whose shape or joined vertices are not the band's is an error.
-func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendPayload, li int, loop loopRecord, capZ float64, matSign float64, sideCo []coedge, suppliedCap []coedge, work *freeform.FreeformWork) (capBandResult, error) {
+func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendPayload, li int, loop loopRecord, capZ float64, matSign float64, sideCo []topo.CoEdge, suppliedCap []topo.CoEdge, work *freeform.FreeformWork) (capBandResult, error) {
 	if err := ctx.Err(); err != nil {
 		return capBandResult{}, err
 	}
@@ -223,7 +223,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		if !ok {
 			return capBandResult{}, capband.ErrContourUnbounded
 		}
-		seam0 := sideCo[0].edge // the side wall's own whole-circle bottom/top edge
+		seam0 := sideCo[0].Edge // the side wall's own whole-circle bottom/top edge
 		capLevelDelta := proofbound.AbsSumUpper(delta, capDelta)
 		// wholeCircleEdge's own delta parameter feeds ONLY its seam vertex's
 		// bound — its returned Edge's own lengthBound comes from
@@ -243,7 +243,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		if err != nil {
 			return capBandResult{}, err
 		}
-		patch := buildConePatch(pl, body, origins, w.CU, w.CV, w.Radius, capRadius, sideZ, capZ, false, seam0, capEdge)
+		patch := buildConePatch(pl, body, origins, w.CU, w.CV, w.Radius, capRadius, sideZ, capZ, false, edgeHandle(seam0), capEdge)
 		sign := 1.0
 		if w.Th1 < w.Th0 {
 			sign = -1
@@ -291,8 +291,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// A cornerless band has no corner to pair its two directrices at, so
 		// the one ruling its azimuth spread is measured on is the pair of SEAM
 		// vertices — the one place either circle names a parameter origin.
-		setPatchReadings(patch, geom, capBuiltPatch(seam0, capEdge, []*Vertex{seam0.Start()}, []*Vertex{capEdge.Start()}), delta, capDelta)
-		capLoop := []coedge{{edge: capEdge, forward: true}}
+		setPatchReadings(patch, geom, capBuiltPatch(edgeHandle(seam0), capEdge, []*Vertex{vertexHandle(seam0.Start)}, []*Vertex{capEdge.Start()}), delta, capDelta)
+		capLoop := []topo.CoEdge{{Edge: edgeNode(capEdge), Forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}, delta: delta}, nil
 	}
 
@@ -332,7 +332,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// sideCo[i-1].edge.End()), reused rather than re-created, so a reflex
 	// corner's apex patch and its two neighboring wall patches close on the
 	// SAME vertex.
-	sideVertexAt := func(i int) *Vertex { return sideCo[i].edge.Start() }
+	sideVertexAt := func(i int) *Vertex { return vertexHandle(sideCo[i].Edge.Start) }
 
 	// Pass 1: every corner's connector edge(s), independent of wall build
 	// order (so a reflex corner at index 0 wraps around correctly). A miter
@@ -425,7 +425,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			arcByCorner[i] = supplied.arc[i]
 			continue
 		}
-		arcByCorner[i] = &Edge{
+		arcByCorner[i] = bornEdge(&Edge{
 			n: topo.Edge{
 				Convex: false,
 				Length: arcLength,
@@ -436,7 +436,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				Start: vertexNode(pAV),
 				End:   vertexNode(pBV),
 			},
-		}
+		})
 		// The connector denotes the arc of every setback in dc's span about
 		// the recorded corner, which both neighbouring walks' held ends
 		// enclose within their own bounds.
@@ -449,7 +449,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 
 	var patches []*Face
 	var geoms []capPatchGeom
-	capCo := make([]coedge, 0, 2*n)
+	capCo := make([]topo.CoEdge, 0, 2*n)
 
 	// Pass 2: the apex patches (Cone-with-corner-apex, one per reflex
 	// corner), independent of wall order.
@@ -474,11 +474,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// triangle-like boundary each coedge's end matching the next's start.
 		face := bornFace(&Face{
 			n: topo.Face{Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: role}}, Body: bodyNode(body)},
-			loops: []*Loop{{coedges: []coedge{
-				{edge: arc, forward: true},
-				{edge: slantOut[i], forward: true},
-				{edge: slantIn[i], forward: false},
-			}, n: topo.Loop{Outer: true}}},
+			loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+				{Edge: edgeNode(arc), Forward: true},
+				{Edge: edgeNode(slantOut[i]), Forward: true},
+				{Edge: edgeNode(slantIn[i]), Forward: false},
+			},
+			}}},
 		})
 		// Orientation: a corner's own offset carrier is an EROSION, and at a
 		// REFLEX corner the eroded boundary is the arc of radius dc about the
@@ -560,7 +561,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		start, end := capWallFoot(joins, i, n)
 		nextI := (i + 1) % n
 		capA, capB := vertexHandle(slantOut[i].n.Start), vertexHandle(slantIn[nextI].n.Start)
-		side := sideCo[i].edge
+		side := sideCo[i].Edge
 		leadSlant, trailSlant := slantOut[i], slantIn[nextI]
 
 		// A circular wall's cap-level radius is resolved ONCE per wall and
@@ -614,7 +615,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// Both endpoints are contour points, so both carry the band's own
 			// displacement; the square root's own committed error is measured
 			// against the exact squared length.
-			capEdge = &Edge{n: topo.Edge{
+			capEdge = bornEdge(&Edge{n: topo.Edge{
 				Convex:      !cbp.draft || li == 0,
 				Length:      held,
 				LengthBound: capcontour.CapEdgeLengthBound(held, end, start, delta),
@@ -622,7 +623,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				Start:       vertexNode(capA),
 				End:         vertexNode(capB),
 			},
-			}
+			})
 		default:
 			sweepSigned := capTh1 - capTh0
 			held := math.Abs(capRadius * sweepSigned)
@@ -662,12 +663,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		}
 		face := bornFace(&Face{
 			n: topo.Face{Surface: surf, Origins: origins, Body: bodyNode(body)},
-			loops: []*Loop{{coedges: []coedge{
-				{edge: side, forward: true},
-				{edge: trailSlant, forward: false},
-				{edge: capEdge, forward: false},
-				{edge: leadSlant, forward: true},
-			}, n: topo.Loop{Outer: true}}},
+			loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+				{Edge: side, Forward: true},
+				{Edge: edgeNode(trailSlant), Forward: false},
+				{Edge: edgeNode(capEdge), Forward: false},
+				{Edge: edgeNode(leadSlant), Forward: true},
+			},
+			}}},
 		})
 		// Orientation: the reference is the ORIGINAL wall's own outward
 		// convention (the same "tangent rotated a quarter turn" rule
@@ -692,7 +694,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		if err := fixPatchOrientation(face, pl, samplePoint, refU, refV, axialRef); err != nil {
 			return capBandResult{}, err
 		}
-		side.n.Faces = append(side.n.Faces, faceNode(face))
+		side.Faces = append(side.Faces, faceNode(face))
 		trailSlant.n.Faces = append(trailSlant.n.Faces, faceNode(face))
 		capEdge.n.Faces = append(capEdge.n.Faces, faceNode(face))
 		leadSlant.n.Faces = append(leadSlant.n.Faces, faceNode(face))
@@ -764,15 +766,15 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// patch's tag is fixed through three of its four built corners, so the
 		// fourth's own departure from it is what capPatchNormalAllow measures
 		// there.
-		setPatchReadings(face, g, capBuiltPatch(side, capEdge,
-			[]*Vertex{side.Start(), side.End()}, []*Vertex{capA, capB}), delta, capDelta)
+		setPatchReadings(face, g, capBuiltPatch(edgeHandle(side), capEdge,
+			[]*Vertex{vertexHandle(side.Start), vertexHandle(side.End)}, []*Vertex{capA, capB}), delta, capDelta)
 		geoms = append(geoms, g)
-		capCo = append(capCo, coedge{edge: capEdge, forward: true})
+		capCo = append(capCo, topo.CoEdge{Edge: edgeNode(capEdge), Forward: true})
 		if arc := arcByCorner[nextI]; arc != nil {
 			// shell_offset.go's reflex-corner arc walks pA -> pB in the
 			// SAME sense as the boundary's own travel direction (inward,
 			// s=+1: a clockwise arc whose tangent continues the walk).
-			capCo = append(capCo, coedge{edge: arc, forward: true})
+			capCo = append(capCo, topo.CoEdge{Edge: edgeNode(arc), Forward: true})
 		}
 	}
 	closure, err := capBandClosureOf(walks, joins, slantIn, slantOut, slantInHeld, slantOutHeld)
@@ -793,15 +795,15 @@ type suppliedCapEdges struct {
 // band's n wall edges and the arcs of the reflex corners joins marks. A
 // single closed circle passes joins nil. A boundary of another length, or a
 // backward coedge, is not the band's.
-func suppliedCapWalls(co []coedge, joins []cornerJoin, n int) (suppliedCapEdges, error) {
+func suppliedCapWalls(co []topo.CoEdge, joins []cornerJoin, n int) (suppliedCapEdges, error) {
 	out := suppliedCapEdges{wall: make([]*Edge, n), arc: make([]*Edge, n)}
 	next := 0
 	take := func() (*Edge, error) {
-		if next >= len(co) || !co[next].forward {
+		if next >= len(co) || !co[next].Forward {
 			return nil, fmt.Errorf("a cap-loop band's supplied cap boundary of %d coedges is not the band's %d walls and their reflex arcs", len(co), n)
 		}
 		next++
-		return co[next-1].edge, nil
+		return edgeHandle(co[next-1].Edge), nil
 	}
 	for i := range n {
 		e, err := take()
@@ -915,7 +917,7 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP planePoint, capV, apex *Ve
 	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
 	squared, squaredOK := proofarith.DySquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
 	heldBound := capcontour.StraightEdgeBound(held, squared, squaredOK, delta, levelDelta)
-	e := &Edge{n: topo.Edge{
+	e := bornEdge(&Edge{n: topo.Edge{
 		Convex:      true,
 		Length:      held,
 		LengthBound: heldBound,
@@ -923,7 +925,7 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP planePoint, capV, apex *Ve
 		Start:       vertexNode(capV),
 		End:         vertexNode(apex),
 	},
-	}
+	})
 	if affine || dc <= 0 || (!prev.IsCircular() && !cur.IsCircular()) {
 		return e, heldBound, nil
 	}
@@ -966,7 +968,7 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 	}
 	held := 2 * math.Pi * r
 	center := pl.Point(cu, cv, z)
-	e := &Edge{
+	e := bornEdge(&Edge{
 		n: topo.Edge{
 			Convex:      ccw,
 			Length:      held,
@@ -975,7 +977,7 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 			Start:       vertexNode(seam),
 			End:         vertexNode(seam),
 		},
-	}
+	})
 	// The held radius sits within its own gap from exactRadius's ends of
 	// every radius the offset denotes, and the contour within delta of it.
 	radiusBound := math.Inf(1)
@@ -1001,7 +1003,7 @@ func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1
 	if th1 < th0 {
 		axis = axis.Scale(-1)
 	}
-	return &Edge{
+	return bornEdge(&Edge{
 		n: topo.Edge{
 			Convex:      th1 > th0,
 			Length:      length,
@@ -1010,7 +1012,7 @@ func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1
 			Start:       vertexNode(start),
 			End:         vertexNode(end),
 		},
-	}
+	})
 }
 
 // planeFromThree builds a Plane surface through three world points, its
@@ -1098,8 +1100,8 @@ func capPatchWindowSkew(g capPatchGeom) float64 {
 func buildConePatch(pl prismPayload, body *Body, origins []provenance.Ref, cu, cv, sideRadius, capRadius, sideZ, capZ float64, reversed bool, sideEdge, capEdge *Edge) *Face {
 	surf := coneSurface(pl, cu, cv, sideRadius, capRadius, sideZ, capZ)
 	loops := []*Loop{
-		{coedges: []coedge{{edge: sideEdge, forward: true}}, n: topo.Loop{Outer: true}},
-		{coedges: []coedge{{edge: capEdge, forward: false}}, n: topo.Loop{Outer: true}},
+		{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideEdge), Forward: true}}}},
+		{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(capEdge), Forward: false}}}},
 	}
 	face := bornFace(&Face{n: topo.Face{Reversed: reversed, Surface: surf, Origins: origins, Body: bodyNode(body)}, loops: loops})
 	sideEdge.n.Faces = append(sideEdge.n.Faces, faceNode(face))

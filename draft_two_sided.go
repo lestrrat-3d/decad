@@ -93,11 +93,11 @@ func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, 
 
 func reverseDraftFaceLoops(face *Face) {
 	for _, loop := range face.loops {
-		for i, j := 0, len(loop.coedges)-1; i < j; i, j = i+1, j-1 {
-			loop.coedges[i], loop.coedges[j] = loop.coedges[j], loop.coedges[i]
+		for i, j := 0, len(loop.n.CoEdges)-1; i < j; i, j = i+1, j-1 {
+			loop.n.CoEdges[i], loop.n.CoEdges[j] = loop.n.CoEdges[j], loop.n.CoEdges[i]
 		}
-		for i := range loop.coedges {
-			loop.coedges[i].forward = !loop.coedges[i].forward
+		for i := range loop.n.CoEdges {
+			loop.n.CoEdges[i].Forward = !loop.n.CoEdges[i].Forward
 		}
 	}
 }
@@ -111,9 +111,9 @@ func auditDraftMiddleRim(ctx context.Context, from, to *Face) error {
 func draftRimEnds(face *Face) [][]brepgeom.RimEdgeEnds {
 	loops := make([][]brepgeom.RimEdgeEnds, len(face.loops))
 	for li, loop := range face.loops {
-		ends := make([]brepgeom.RimEdgeEnds, len(loop.coedges))
-		for ci, ce := range loop.coedges {
-			ends[ci] = brepgeom.RimEdgeEnds{Start: ce.Start().n.Position, End: ce.End().n.Position}
+		ends := make([]brepgeom.RimEdgeEnds, len(loop.n.CoEdges))
+		for ci, ce := range loop.n.CoEdges {
+			ends[ci] = brepgeom.RimEdgeEnds{Start: coedgeStart(ce).Position, End: coedgeEnd(ce).Position}
 		}
 		loops[li] = ends
 	}

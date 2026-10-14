@@ -361,11 +361,11 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 	}
 	outerEdges := make([]*Edge, 4)
 	for i := range 4 {
-		outerEdges[i] = &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(verts[i]), End: vertexNode(verts[(i+1)%4])}}
+		outerEdges[i] = bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(verts[i]), End: vertexNode(verts[(i+1)%4])}})
 	}
 	holeEdges := make([]*Edge, 4)
 	for i := range 4 {
-		holeEdges[i] = &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(verts[4+i]), End: vertexNode(verts[4+(i+1)%4])}}
+		holeEdges[i] = bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(verts[4+i]), End: vertexNode(verts[4+(i+1)%4])}})
 	}
 	frame, err := r3.NewFrame(corner, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	if err != nil {
@@ -373,17 +373,19 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 	}
 	f = bornFace(&Face{
 		loops: []*Loop{
-			{n: topo.Loop{Outer: true}, coedges: []coedge{
-				{edge: outerEdges[0], forward: true},
-				{edge: outerEdges[1], forward: true},
-				{edge: outerEdges[2], forward: true},
-				{edge: outerEdges[3], forward: true},
+			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+				{Edge: edgeNode(outerEdges[0]), Forward: true},
+				{Edge: edgeNode(outerEdges[1]), Forward: true},
+				{Edge: edgeNode(outerEdges[2]), Forward: true},
+				{Edge: edgeNode(outerEdges[3]), Forward: true},
+			},
 			}},
-			{n: topo.Loop{Outer: false}, coedges: []coedge{
-				{edge: holeEdges[0], forward: true},
-				{edge: holeEdges[1], forward: true},
-				{edge: holeEdges[2], forward: true},
-				{edge: holeEdges[3], forward: true},
+			{n: topo.Loop{Outer: false, CoEdges: []topo.CoEdge{
+				{Edge: edgeNode(holeEdges[0]), Forward: true},
+				{Edge: edgeNode(holeEdges[1]), Forward: true},
+				{Edge: edgeNode(holeEdges[2]), Forward: true},
+				{Edge: edgeNode(holeEdges[3]), Forward: true},
+			},
 			}},
 		},
 		n: topo.Face{Area: 96, Surface: surfacegeom.Plane{Frame: frame}},

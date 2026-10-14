@@ -463,8 +463,8 @@ func (e selectorEdge) SelectorOnOuterLoop(ref provenance.Ref) bool {
 			if !loop.n.Outer {
 				continue
 			}
-			for _, ce := range loop.coedges {
-				if ce.edge == e.Edge {
+			for _, ce := range loop.n.CoEdges {
+				if ce.Edge == edgeNode(e.Edge) {
 					return true
 				}
 			}

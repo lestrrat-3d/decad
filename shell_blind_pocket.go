@@ -16,6 +16,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -190,11 +191,11 @@ func pocketShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopolo
 			if err != nil {
 				return err
 			}
-			out.coedge[ui] = coedge{edge: edge, forward: u.DirFrom == from && u.DirTo == to}
+			out.coedge[ui] = topo.CoEdge{Edge: edgeNode(edge), Forward: u.DirFrom == from && u.DirTo == to}
 			if ring == 0 {
-				out.side[bi] = append(out.side[bi], coedge{edge: edge, forward: true})
+				out.side[bi] = append(out.side[bi], topo.CoEdge{Edge: edgeNode(edge), Forward: true})
 			} else {
-				out.cap[bi] = append(out.cap[bi], coedge{edge: edge, forward: true})
+				out.cap[bi] = append(out.cap[bi], topo.CoEdge{Edge: edgeNode(edge), Forward: true})
 			}
 		}
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -262,8 +263,8 @@ func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (
 // and the side contour (orig at the side level, in orig's walk order), each
 // walked forward along its loop.
 type brepOpenSet struct {
-	coedge    map[int]coedge
-	cap, side [][]coedge
+	coedge    map[int]topo.CoEdge
+	cap, side [][]topo.CoEdge
 	capBySeg  []map[int]*Edge
 	terminal  []map[brepBandTerminal]*Edge
 }
@@ -287,8 +288,8 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology, pla
 	if bp.pocketShell != nil {
 		n++
 	}
-	out := brepOpenSet{coedge: map[int]coedge{}, cap: make([][]coedge, n),
-		side: make([][]coedge, n), capBySeg: make([]map[int]*Edge, n),
+	out := brepOpenSet{coedge: map[int]topo.CoEdge{}, cap: make([][]topo.CoEdge, n),
+		side: make([][]topo.CoEdge, n), capBySeg: make([]map[int]*Edge, n),
 		terminal: make([]map[brepBandTerminal]*Edge, n)}
 	if n == 0 {
 		return out, nil
@@ -341,7 +342,7 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology, pla
 			if err != nil {
 				return brepOpenSet{}, err
 			}
-			co := coedge{edge: edge, forward: true}
+			co := topo.CoEdge{Edge: edgeNode(edge), Forward: true}
 			out.coedge[ui] = co
 			out.cap[bi] = append(out.cap[bi], co)
 			if b.selected != nil {
@@ -388,8 +389,8 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology, pla
 			if err != nil {
 				return brepOpenSet{}, err
 			}
-			out.coedge[ui] = coedge{edge: edge, forward: forward}
-			out.side[bi] = append(out.side[bi], coedge{edge: edge, forward: true})
+			out.coedge[ui] = topo.CoEdge{Edge: edgeNode(edge), Forward: forward}
+			out.side[bi] = append(out.side[bi], topo.CoEdge{Edge: edgeNode(edge), Forward: true})
 		}
 		if len(b.terminals) > 0 {
 			out.terminal[bi] = map[brepBandTerminal]*Edge{}
@@ -413,7 +414,7 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology, pla
 			if err != nil {
 				return brepOpenSet{}, err
 			}
-			out.coedge[ui] = coedge{edge: edge, forward: true}
+			out.coedge[ui] = topo.CoEdge{Edge: edgeNode(edge), Forward: true}
 			out.terminal[bi][t] = edge
 		}
 	}

@@ -271,12 +271,12 @@ func loftCircularRim(pl loftPayload, a loftmesh.Assembly, side int) (*Edge, bool
 		edgeAxis = axis
 	}
 	vertex := loftVertex(a.Verts[indices[0]], a.Delta)
-	return &Edge{n: topo.Edge{
+	return bornEdge(&Edge{n: topo.Edge{
 		Convex: false, Length: walk.Length, LengthBound: walk.LengthBound,
 		Curve:      surfacegeom.Circle3{Center: center, Axis: edgeAxis, Radius: circle.Radius},
 		CurveBound: curveBound, CurveBounded: true,
 		Start: vertexNode(vertex), End: vertexNode(vertex),
-	}}, true, nil
+	}}), true, nil
 }
 
 // A whole circle has the rational quadratic quarter-arc parametrization
@@ -364,13 +364,11 @@ func buildLoftVaryingCircularHoleTopology(ctx context.Context, body *Body, pl lo
 		NormalBound: normalBound, Origins: origins, Body: bodyNode(body),
 	}})
 	wall.loops = []*Loop{
-		{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{{edge: bottom, forward: true}}, a.Reversed)},
-		{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{{edge: top, forward: false}}, a.Reversed)},
+		{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(bottom), Forward: true}}, a.Reversed)}},
+		{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(top), Forward: false}}, a.Reversed)}},
 	}
-	start.loops[1] = &Loop{n: start.loops[1].n,
-		coedges: loftLoopCoedges([]coedge{{edge: bottom, forward: false}}, a.Reversed)}
-	end.loops[1] = &Loop{n: end.loops[1].n,
-		coedges: loftLoopCoedges([]coedge{{edge: top, forward: true}}, a.Reversed)}
+	start.loops[1] = &Loop{n: topo.Loop{Outer: start.loops[1].n.Outer, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(bottom), Forward: false}}, a.Reversed)}}
+	end.loops[1] = &Loop{n: topo.Loop{Outer: end.loops[1].n.Outer, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(top), Forward: true}}, a.Reversed)}}
 	if err := loftCircleCapAreas(ctx, pl, a, start, end); err != nil {
 		return nil, nil, err
 	}
@@ -461,12 +459,12 @@ func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producer
 	// Carry the Loft assembly's whole-shell reversal onto the cylinder too;
 	// the cap loops below already receive the same reversal.
 	for _, loop := range wall.loops {
-		loop.coedges = loftLoopCoedges(loop.coedges, a.Reversed)
+		loop.n.CoEdges = loftLoopCoedges(loop.n.CoEdges, a.Reversed)
 	}
 	// buildLoopSidesAs links its side face immediately, while evalLoft links
 	// every live face after this rewrite. Clear those two private links once.
-	bottom[0].edge.n.Faces = nil
-	top[0].edge.n.Faces = nil
+	bottom[0].Edge.Faces = nil
+	top[0].Edge.Faces = nil
 	filtered := make([]*Face, 0, len(walls))
 	for k, face := range walls {
 		if err := ctx.Err(); err != nil {
@@ -482,10 +480,8 @@ func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producer
 		return nil, fmt.Errorf("%w: a through-bore has no source wall cells", ErrUnsupported)
 	}
 	filtered = append(filtered, wall)
-	start.loops[1] = &Loop{n: start.loops[1].n,
-		coedges: loftLoopCoedges([]coedge{{edge: bottom[0].edge, forward: false}}, a.Reversed)}
-	end.loops[1] = &Loop{n: end.loops[1].n,
-		coedges: loftLoopCoedges([]coedge{{edge: top[0].edge, forward: true}}, a.Reversed)}
+	start.loops[1] = &Loop{n: topo.Loop{Outer: start.loops[1].n.Outer, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: bottom[0].Edge, Forward: false}}, a.Reversed)}}
+	end.loops[1] = &Loop{n: topo.Loop{Outer: end.loops[1].n.Outer, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: top[0].Edge, Forward: true}}, a.Reversed)}}
 	if err := loftCircleCapAreas(ctx, pl, a, start, end); err != nil {
 		return nil, err
 	}

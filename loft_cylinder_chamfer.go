@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -73,7 +74,7 @@ func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, 
 // coalesce adjacent segments, so their endpoints must partition that whole
 // boundary once in the cap's walk direction.
 func loftCylinderChamferCapWalk(loop *Loop, verts []r3.Vec, ring []int, bottom bool) bool {
-	if loop == nil || !loop.n.Outer || len(loop.coedges) < 3 || len(loop.coedges) > len(ring) {
+	if loop == nil || !loop.n.Outer || len(loop.n.CoEdges) < 3 || len(loop.n.CoEdges) > len(ring) {
 		return false
 	}
 	index := make(map[r3.Vec]int, len(ring))
@@ -87,13 +88,13 @@ func loftCylinderChamferCapWalk(loop *Loop, verts []r3.Vec, ring []int, bottom b
 		index[verts[vertex]] = i
 	}
 	covered := 0
-	for i, use := range loop.coedges {
-		if use.Start() == nil || use.End() == nil ||
-			use.End().n.Position != loop.coedges[(i+1)%len(loop.coedges)].Start().n.Position {
+	for i, use := range loop.n.CoEdges {
+		if coedgeStart(use) == nil || coedgeEnd(use) == nil ||
+			coedgeEnd(use).Position != coedgeStart(loop.n.CoEdges[(i+1)%len(loop.n.CoEdges)]).Position {
 			return false
 		}
-		a, okA := index[use.Start().n.Position]
-		b, okB := index[use.End().n.Position]
+		a, okA := index[coedgeStart(use).Position]
+		b, okB := index[coedgeEnd(use).Position]
 		if !okA || !okB {
 			return false
 		}
@@ -158,9 +159,9 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	if caps[0] == nil || caps[1] == nil {
 		return nil, true, fmt.Errorf("%w: loft/cylinder result has no current cap faces", ErrUnsupported)
 	}
-	selected := make(map[*Edge]struct{}, len(edges))
+	selected := make(map[*topo.Edge]struct{}, len(edges))
 	for _, edge := range edges {
-		selected[edge] = struct{}{}
+		selected[edgeNode(edge)] = struct{}{}
 	}
 	if len(selected) != len(edges) {
 		return nil, true, fmt.Errorf("%w: loft/cylinder chamfer repeats an edge", ErrUnsupported)
@@ -170,7 +171,8 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 			face.loops[0], fp.verts, source.outer[cap], cap == 0) {
 			return nil, true, fmt.Errorf("%w: loft/cylinder cap %d has no outer loop", ErrUnsupported, cap)
 		}
-		for _, edge := range face.loops[0].Edges() {
+		for _, ce := range face.loops[0].n.CoEdges {
+			edge := ce.Edge
 			if _, yes := selected[edge]; !yes {
 				return nil, true, fmt.Errorf("%w: loft/cylinder chamfer needs both complete outer cap loops", ErrUnsupported)
 			}

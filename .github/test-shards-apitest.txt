@@ -2041,3 +2041,4 @@
 10	0.00	TestSectionDirectHoleFreeCircleLoftFeedsExtrude
 10	0.00	TestSectionDirectHoleFreeLoftRefusesUnprovedCases
 10	0.00	TestSectionDirectHoleFreeLoftRefusesTwistedCorrespondence
+10	0.00	TestLoopCoEdgeEdgesAreTheBodyEdges

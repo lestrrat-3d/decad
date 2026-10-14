@@ -464,8 +464,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		perLoop[li] = parts
 		sideArea = proofbound.BoundedAdd(sideArea, parts.area)
 		if !rp.full {
-			capStart.loops = append(capStart.loops, &Loop{coedges: parts.startCo, n: topo.Loop{Outer: li == 0}})
-			capEnd.loops = append(capEnd.loops, &Loop{coedges: parts.endCo, n: topo.Loop{Outer: li == 0}})
+			capStart.loops = append(capStart.loops, &Loop{n: topo.Loop{Outer: li == 0, CoEdges: parts.startCo}})
+			capEnd.loops = append(capEnd.loops, &Loop{n: topo.Loop{Outer: li == 0, CoEdges: parts.endCo}})
 		}
 	}
 
@@ -611,8 +611,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 // revLoopParts is what one recorded loop contributes to the revolved body.
 type revLoopParts struct {
 	faces   []*Face
-	startCo []coedge                 // the loop's start-cap coedges, walk order (partial only)
-	endCo   []coedge                 // the loop's end-cap coedges, walk order (partial only)
+	startCo []topo.CoEdge            // the loop's start-cap coedges, walk order (partial only)
+	endCo   []topo.CoEdge            // the loop's end-cap coedges, walk order (partial only)
 	area    proofbound.BoundedScalar // the loop's side-face area
 	// runs[i] is faces[i]'s run: the off-axis stretch of the loop between two
 	// on-axis walks that holds it. A loop with fewer than two on-axis walks is
@@ -713,7 +713,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					enc := proofbound.IntervalMul(proofbound.TwoPiInterval(), rhoEnc)
 					latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 				}
-				j.lat = &Edge{
+				j.lat = bornEdge(&Edge{
 					n: topo.Edge{
 						Convex:      turn > 0,
 						Length:      latitudeLength,
@@ -728,7 +728,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 						Start: vertexNode(seam),
 						End:   vertexNode(seam),
 					},
-				}
+				})
 			case !rp.full:
 				if j.onAxis {
 					j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0(), rp.end1())
@@ -745,7 +745,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 							arcBound = math.Min(arcBound, proofbound.IntervalFloatError(enc, arcLength))
 						}
 					}
-					j.arc = &Edge{
+					j.arc = bornEdge(&Edge{
 						n: topo.Edge{
 							Convex:      turn > 0,
 							Length:      arcLength,
@@ -759,7 +759,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 							Start: vertexNode(j.v0),
 							End:   vertexNode(j.v1),
 						},
-					}
+					})
 				}
 			}
 			for _, je := range []*Edge{j.lat, j.arc} {
@@ -793,7 +793,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				// them, so nothing else references this edge and Body.Edges()
 				// never reaches it — Table W row 3's on-axis-edge omission
 				// delivered by omission, not a special case to "fix" here.
-				shared := &Edge{
+				shared := bornEdge(&Edge{
 					n: topo.Edge{
 						Convex:      dphi < math.Pi,
 						Length:      w.Length,
@@ -802,7 +802,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 						Start:       vertexNode(js[i].v0),
 						End:         vertexNode(js[(i+1)%n].v0),
 					},
-				}
+				})
 				cap0[i], cap1[i] = shared, shared
 				continue
 			}
@@ -861,8 +861,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		}
 		if kinds[i] == wallAxis {
 			if !rp.full {
-				parts.startCo = append(parts.startCo, coedge{edge: cap0[i], forward: true})
-				parts.endCo = append(parts.endCo, coedge{edge: cap1[i], forward: true})
+				parts.startCo = append(parts.startCo, topo.CoEdge{Edge: edgeNode(cap0[i]), Forward: true})
+				parts.endCo = append(parts.endCo, topo.CoEdge{Edge: edgeNode(cap1[i]), Forward: true})
 			}
 			continue
 		}
@@ -909,19 +909,19 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// copies — two loops, one whole closed edge each, mirroring the
 			// prism's whole-circle two-loop discipline.
 			face.loops = []*Loop{
-				{coedges: []coedge{{edge: cap0[i], forward: true}}, n: topo.Loop{Outer: true}},
-				{coedges: []coedge{{edge: cap1[i], forward: false}}, n: topo.Loop{Outer: true}},
+				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(cap0[i]), Forward: true}}}},
+				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(cap1[i]), Forward: false}}}},
 			}
 		default:
-			co := []coedge{{edge: cap0[i], forward: true}}
+			co := []topo.CoEdge{{Edge: edgeNode(cap0[i]), Forward: true}}
 			if a := js[(i+1)%n].arc; a != nil {
-				co = append(co, coedge{edge: a, forward: true})
+				co = append(co, topo.CoEdge{Edge: edgeNode(a), Forward: true})
 			}
-			co = append(co, coedge{edge: cap1[i], forward: false})
+			co = append(co, topo.CoEdge{Edge: edgeNode(cap1[i]), Forward: false})
 			if a := js[i].arc; a != nil {
-				co = append(co, coedge{edge: a, forward: false})
+				co = append(co, topo.CoEdge{Edge: edgeNode(a), Forward: false})
 			}
-			face.loops = []*Loop{{coedges: co, n: topo.Loop{Outer: true}}}
+			face.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: co}}}
 		}
 		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
 			return revLoopParts{}, err
@@ -930,8 +930,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		parts.runs = append(parts.runs, run)
 		parts.area = proofbound.BoundedAdd(parts.area, faceArea)
 		if !rp.full {
-			parts.startCo = append(parts.startCo, coedge{edge: cap0[i], forward: true})
-			parts.endCo = append(parts.endCo, coedge{edge: cap1[i], forward: true})
+			parts.startCo = append(parts.startCo, topo.CoEdge{Edge: edgeNode(cap0[i]), Forward: true})
+			parts.endCo = append(parts.endCo, topo.CoEdge{Edge: edgeNode(cap1[i]), Forward: true})
 		}
 	}
 	return parts, nil
@@ -994,10 +994,10 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 	}
 	var loops []*Loop
 	if j0.lat != nil {
-		loops = append(loops, &Loop{coedges: []coedge{{edge: j0.lat, forward: true}}, n: topo.Loop{Outer: outer0}})
+		loops = append(loops, &Loop{n: topo.Loop{Outer: outer0, CoEdges: []topo.CoEdge{{Edge: edgeNode(j0.lat), Forward: true}}}})
 	}
 	if j1.lat != nil {
-		loops = append(loops, &Loop{coedges: []coedge{{edge: j1.lat, forward: false}}, n: topo.Loop{Outer: outer1}})
+		loops = append(loops, &Loop{n: topo.Loop{Outer: outer1, CoEdges: []topo.CoEdge{{Edge: edgeNode(j1.lat), Forward: false}}}})
 	}
 	if len(loops) == 2 && !loops[0].n.Outer {
 		loops[0], loops[1] = loops[1], loops[0]
@@ -1029,7 +1029,7 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	if w.Kind == survey2d.WalkFreeform {
 		convex = freeformConvex
 	}
-	e := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: frame.LengthBound(w.Length, w.LengthBound)}}
+	e := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: frame.LengthBound(w.Length, w.LengthBound)}})
 	if w.Kind == survey2d.WalkFreeform {
 		e.n.Curve = surfacegeom.NURBSCurve{}
 		if closed {
@@ -1306,7 +1306,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				enc := proofbound.IntervalMul(proofbound.TwoPiInterval(), rhoEnc)
 				latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 			}
-			j.lat = &Edge{
+			j.lat = bornEdge(&Edge{
 				n: topo.Edge{
 					Convex:      turn > 0,
 					Length:      latitudeLength,
@@ -1316,7 +1316,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 					Start:       vertexNode(seam),
 					End:         vertexNode(seam),
 				},
-			}
+			})
 		case !rp.full:
 			if j.onAxis {
 				j.v0 = rp.sweptVertex(b, j.z, j.rho, at, body.doc.mintCurve(), rp.end0(), rp.end1())
@@ -1333,7 +1333,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 						arcBound = math.Min(arcBound, proofbound.IntervalFloatError(enc, arcLength))
 					}
 				}
-				j.arc = &Edge{
+				j.arc = bornEdge(&Edge{
 					n: topo.Edge{
 						Convex:      turn > 0,
 						Length:      arcLength,
@@ -1343,7 +1343,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 						Start:       vertexNode(j.v0),
 						End:         vertexNode(j.v1),
 					},
-				}
+				})
 			}
 		}
 		for _, je := range []*Edge{j.lat, j.arc} {
@@ -1401,15 +1401,15 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			plane := segPlaneWalks(resolved, w.Segs)
 			cap0 := rp.capEdge(b, w.SegmentWalk, plane, false, js[i].v0, js[i+1].v0, sweptPoint{}, rp.end0(), false, false, frame)
 			cap1 := rp.capEdge(b, w.SegmentWalk, plane, false, js[i].v1, js[i+1].v1, sweptPoint{}, rp.end1(), false, false, frame)
-			co := []coedge{{edge: cap0, forward: true}}
+			co := []topo.CoEdge{{Edge: edgeNode(cap0), Forward: true}}
 			if a := js[i+1].arc; a != nil {
-				co = append(co, coedge{edge: a, forward: true})
+				co = append(co, topo.CoEdge{Edge: edgeNode(a), Forward: true})
 			}
-			co = append(co, coedge{edge: cap1, forward: false})
+			co = append(co, topo.CoEdge{Edge: edgeNode(cap1), Forward: false})
 			if a := js[i].arc; a != nil {
-				co = append(co, coedge{edge: a, forward: false})
+				co = append(co, topo.CoEdge{Edge: edgeNode(a), Forward: false})
 			}
-			face.loops = []*Loop{{coedges: co, n: topo.Loop{Outer: true}}}
+			face.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: co}}}
 		}
 		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
 			return nil, proofbound.BoundedScalar{}, err

@@ -60,7 +60,7 @@ func TestUnstitchChamferBandNormalAtBoundCoversSource(t *testing.T) {
 	src, results, idx := unstitchOneChamferBand(t)
 	newFace := results[idx].Faces()[0]
 
-	pt := newFace.loops[0].coedges[0].edge.n.Start.Position
+	pt := newFace.loops[0].n.CoEdges[0].Edge.Start.Position
 	reading, err := newFace.NormalAt(pt)
 	require.NoError(t, err)
 	bound, err := reading.Bound.In(units.One)

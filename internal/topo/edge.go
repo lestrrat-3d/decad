@@ -67,4 +67,8 @@ type Edge struct {
 	// Faces are the nodes of the faces adjacent to the edge, in the order
 	// they were linked. Root Edge.Faces maps them back to their handles.
 	Faces []*Face
+	// Owner is the root Edge handle that holds this node by value. Root
+	// sets it when the handle is born and maps a node back to its handle
+	// through it; nothing else writes it.
+	Owner any
 }

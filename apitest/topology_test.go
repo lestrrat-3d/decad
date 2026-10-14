@@ -291,3 +291,41 @@ func TestEdgeFacesAreTheBodyFaces(t *testing.T) {
 	require.Nil(t, zero.Faces())
 	require.False(t, zero.IsFree())
 }
+
+// TestLoopCoEdgeEdgesAreTheBodyEdges pins edge identity across the loop
+// links: on a box Body.Edges lists each of its 12 edges once, a second read
+// returns the same pointers, and every CoEdge.Edge and Loop.Edges element is
+// (by ==) one of them, two uses per edge. The zero Loop has no uses: CoEdges
+// is nil and Edges is empty.
+func TestLoopCoEdgeEdgesAreTheBodyEdges(t *testing.T) {
+	t.Parallel()
+	body := coedgeBox(t)
+	edges := body.Edges()
+	require.Len(t, edges, 12)
+	for i, e := range edges {
+		require.NotNil(t, e)
+		require.False(t, slices.Contains(edges[:i], e), "Body.Edges lists each edge once")
+		require.Same(t, e, body.Edges()[i])
+	}
+	uses := map[*decad.Edge]int{}
+	for _, face := range body.Faces() {
+		for _, loop := range face.Loops() {
+			undirected := loop.Edges()
+			for i, use := range loop.CoEdges() {
+				require.True(t, slices.Contains(edges, use.Edge()), "a loop's edge is one of the body's own edges")
+				require.Same(t, use.Edge(), loop.CoEdges()[i].Edge())
+				require.Same(t, use.Edge(), undirected[i])
+				uses[use.Edge()]++
+			}
+		}
+	}
+	require.Len(t, uses, 12)
+	for _, n := range uses {
+		require.Equal(t, 2, n, "each box edge has two loop uses")
+	}
+
+	var zero decad.Loop
+	require.Nil(t, zero.CoEdges())
+	require.NotNil(t, zero.Edges())
+	require.Empty(t, zero.Edges())
+}

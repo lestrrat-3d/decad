@@ -79,10 +79,10 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 			seen[axis][side] = true
 			planes++
 			if axis == 1 {
-				if len(f.loops) != 2 || len(f.loops[1].coedges) != 1 {
+				if len(f.loops) != 2 || len(f.loops[1].n.CoEdges) != 1 {
 					return nil, false, nil
 				}
-				circle, ok := f.loops[1].coedges[0].edge.n.Curve.(surfacegeom.Circle3)
+				circle, ok := f.loops[1].n.CoEdges[0].Edge.Curve.(surfacegeom.Circle3)
 				if !ok || circle.Center.Y != p.box[1][side] ||
 					circle.Axis != (r3.Vec{Y: 1}) && circle.Axis != (r3.Vec{Y: -1}) {
 					return nil, false, nil
@@ -112,12 +112,12 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 	}
 	var rims [2]bool
 	for _, loop := range boreFace.loops {
-		if len(loop.coedges) != 1 {
+		if len(loop.n.CoEdges) != 1 {
 			return nil, false, nil
 		}
-		edge := loop.coedges[0].edge
-		circle, ok := edge.n.Curve.(surfacegeom.Circle3)
-		if !ok || !edge.n.CurveBounded || edge.n.CurveBound != 0 ||
+		edge := loop.n.CoEdges[0].Edge
+		circle, ok := edge.Curve.(surfacegeom.Circle3)
+		if !ok || !edge.CurveBounded || edge.CurveBound != 0 ||
 			circle.Radius.Base() != p.radius {
 			return nil, false, nil
 		}
@@ -223,7 +223,7 @@ func (p allEdgeChamferPayload) outerBoxEdge(e *Edge) bool {
 }
 
 func (p allEdgeChamferPayload) boxPlane(f *Face, plane surfacegeom.Plane) (int, int, bool) {
-	if len(f.loops) == 0 || len(f.loops[0].coedges) != 4 {
+	if len(f.loops) == 0 || len(f.loops[0].n.CoEdges) != 4 {
 		return 0, 0, false
 	}
 	n := plane.Frame.N()
@@ -245,11 +245,11 @@ func (p allEdgeChamferPayload) boxPlane(f *Face, plane surfacegeom.Plane) (int, 
 		return 0, 0, false
 	}
 	seen := map[[3]float64]struct{}{}
-	for _, ce := range f.loops[0].coedges {
-		if _, ok := ce.edge.n.Curve.(surfacegeom.Line3); !ok || ce.Start().n.Bound.Base() != 0 {
+	for _, ce := range f.loops[0].n.CoEdges {
+		if _, ok := ce.Edge.Curve.(surfacegeom.Line3); !ok || coedgeStart(ce).Bound.Base() != 0 {
 			return 0, 0, false
 		}
-		v := ce.Start().n.Position
+		v := coedgeStart(ce).Position
 		c := [3]float64{v.X, v.Y, v.Z}
 		if c[axis] != p.box[axis][side] {
 			return 0, 0, false
@@ -396,17 +396,17 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 						proofbound.BoundedMul(v, v))
 				}
 				length := proofbound.BoundedSqrt(lengthSquared)
-				e = &Edge{n: topo.Edge{
+				e = bornEdge(&Edge{n: topo.Edge{
 					Convex:      true,
 					Length:      length.Value,
 					LengthBound: length.Bound,
 					Curve:       surfacegeom.Line3{},
 					Start:       vertexNode(vertex(a)),
 					End:         vertexNode(vertex(b)),
-				}}
+				}})
 				lines[key] = e
 			}
-			loop.coedges = append(loop.coedges, coedge{edge: e, forward: vertexHandle(e.n.Start) == vertex(a)})
+			loop.n.CoEdges = append(loop.n.CoEdges, topo.CoEdge{Edge: edgeNode(e), Forward: vertexHandle(e.n.Start) == vertex(a)})
 		}
 		face.loops = []*Loop{loop}
 		faces = append(faces, face)
@@ -462,7 +462,7 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 		center := r3.NewVec(p.center[0], p.box[1][side], p.center[1])
 		seam := vertex(center.Add(r3.NewVec(p.radius, 0, 0)))
 		circumference := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), pi), r)
-		edge := &Edge{n: topo.Edge{
+		edge := bornEdge(&Edge{n: topo.Edge{
 			Convex:       false,
 			Length:       circumference.Value,
 			LengthBound:  circumference.Bound,
@@ -471,9 +471,9 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 				Radius: units.Millimeters(p.radius)},
 			Start: vertexNode(seam),
 			End:   vertexNode(seam),
-		}}
-		face.loops = append(face.loops, &Loop{coedges: []coedge{{edge: edge, forward: side == 1}}})
-		bore.loops = append(bore.loops, &Loop{coedges: []coedge{{edge: edge, forward: side == 0}}, n: topo.Loop{Outer: true}})
+		}})
+		face.loops = append(face.loops, &Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: side == 1}}}})
+		bore.loops = append(bore.loops, &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: side == 0}}}})
 	}
 	return bore, nil
 }

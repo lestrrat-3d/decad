@@ -122,3 +122,70 @@ func faceNodes(fs []*Face) []*topo.Face {
 	}
 	return out
 }
+
+// bornEdge sets e's node Owner to e and returns e. Every root Edge is born
+// through it, so edgeHandle maps any edge node a loop's coedge links back to
+// the one handle that holds it.
+func bornEdge(e *Edge) *Edge {
+	e.n.Owner = e
+	return e
+}
+
+// edgeHandle returns the handle that holds n, or nil for a nil n. A node whose
+// handle was not born through bornEdge is an evaluator invariant failure, and
+// the assertion panics.
+func edgeHandle(n *topo.Edge) *Edge {
+	if n == nil {
+		return nil
+	}
+	return n.Owner.(*Edge) //nolint:forcetypeassert // every edge node is born in its handle; a bare one must fail loudly
+}
+
+// edgeNode returns e's node, or nil for a nil e.
+func edgeNode(e *Edge) *topo.Edge {
+	if e == nil {
+		return nil
+	}
+	return &e.n
+}
+
+// coedgeHandle returns the public CoEdge value that holds n. A CoEdge is a
+// value with no Owner: nothing links to one, so the mapping is a copy.
+func coedgeHandle(n topo.CoEdge) CoEdge { return CoEdge{n: n} }
+
+// coedgeHandles returns the public CoEdge values that hold ns in order, or nil
+// for an empty ns, as append([]CoEdge(nil), ...) of the same uses would.
+func coedgeHandles(ns []topo.CoEdge) []CoEdge {
+	if len(ns) == 0 {
+		return nil
+	}
+	out := make([]CoEdge, len(ns))
+	for i, n := range ns {
+		out[i] = coedgeHandle(n)
+	}
+	return out
+}
+
+// coedgeStart returns the node of the vertex where the use n starts, or nil
+// for a use with no edge: CoEdge.Start's answer, as a node.
+func coedgeStart(n topo.CoEdge) *topo.Vertex {
+	if n.Edge == nil {
+		return nil
+	}
+	if n.Forward {
+		return n.Edge.Start
+	}
+	return n.Edge.End
+}
+
+// coedgeEnd returns the node of the vertex where the use n ends, or nil for a
+// use with no edge: CoEdge.End's answer, as a node.
+func coedgeEnd(n topo.CoEdge) *topo.Vertex {
+	if n.Edge == nil {
+		return nil
+	}
+	if n.Forward {
+		return n.Edge.End
+	}
+	return n.Edge.Start
+}

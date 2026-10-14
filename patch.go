@@ -169,7 +169,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		if err != nil {
 			return nil, err
 		}
-		faceLoops = append(faceLoops, &Loop{coedges: coedges, n: topo.Loop{Outer: li == 0}})
+		faceLoops = append(faceLoops, &Loop{n: topo.Loop{Outer: li == 0, CoEdges: coedges}})
 	}
 
 	// The positive side is the sketch plane's own normal — the sense
@@ -244,7 +244,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 // same convention buildLoopSides derives it by. resolved is pp.profile's
 // pre-resolved segment walks, or nil to resolve each segment through walkOf
 // as before (internal/momentinput/profile_walks.go).
-func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks) ([]coedge, error) {
+func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks) ([]topo.CoEdge, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -316,7 +316,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 		}
 	}
 
-	coedges := make([]coedge, 0, n)
+	coedges := make([]topo.CoEdge, 0, n)
 	for i, w := range walks {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -359,14 +359,14 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 		default:
 			curve = surfacegeom.Line3{}
 		}
-		edge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve, Start: vertexNode(start), End: vertexNode(end)}}
+		edge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve, Start: vertexNode(start), End: vertexNode(end)}})
 		switch c := curve.(type) {
 		case surfacegeom.Circle3:
 			edge.n.CurveBound, edge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
 		case surfacegeom.Arc3:
 			edge.n.CurveBound, edge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
 		}
-		coedges = append(coedges, coedge{edge: edge, forward: true})
+		coedges = append(coedges, topo.CoEdge{Edge: edgeNode(edge), Forward: true})
 	}
 	return coedges, nil
 }

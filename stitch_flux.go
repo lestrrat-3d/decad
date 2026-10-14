@@ -277,8 +277,8 @@ func faceIsTetrahedronEligible(f *Face) bool {
 		return false
 	}
 	for _, l := range f.loops {
-		for _, ce := range l.coedges {
-			if _, ok := ce.edge.n.Curve.(surfacegeom.Line3); !ok {
+		for _, ce := range l.n.CoEdges {
+			if _, ok := ce.Edge.Curve.(surfacegeom.Line3); !ok {
 				return false
 			}
 		}
@@ -318,11 +318,11 @@ func auditVertexLinksForStitchFaces(ctx context.Context, faces []*Face) error {
 	uses := map[*Edge][]compositeCoedgeUse{}
 	for _, face := range faces {
 		for _, loop := range face.loops {
-			for _, ce := range loop.coedges {
+			for _, ce := range loop.n.CoEdges {
 				if err := budget.Step(); err != nil {
 					return err
 				}
-				uses[ce.edge] = append(uses[ce.edge], compositeCoedgeUse{face: face, forward: ce.forward})
+				uses[edgeHandle(ce.Edge)] = append(uses[edgeHandle(ce.Edge)], compositeCoedgeUse{face: face, forward: ce.Forward})
 			}
 		}
 	}
@@ -389,21 +389,21 @@ func stitchFluxFaceInput(f *Face) stitchflux.FaceInput {
 
 type stitchLoopSource struct{ loop *Loop }
 
-func (s stitchLoopSource) EdgeCount() int { return len(s.loop.coedges) }
+func (s stitchLoopSource) EdgeCount() int { return len(s.loop.n.CoEdges) }
 
 func (s stitchLoopSource) IsOuter() bool { return s.loop.n.Outer }
 
 func (s stitchLoopSource) Circle() (stitchflux.CircleRim, bool, string) {
-	edge := s.loop.coedges[0].edge
-	circle, ok := edge.n.Curve.(surfacegeom.Circle3)
+	edge := s.loop.n.CoEdges[0].Edge
+	circle, ok := edge.Curve.(surfacegeom.Circle3)
 	if !ok {
-		return stitchflux.CircleRim{}, false, fmt.Sprintf("%T", publicCurve(edge.n.Curve))
+		return stitchflux.CircleRim{}, false, fmt.Sprintf("%T", publicCurve(edge.Curve))
 	}
 	return stitchflux.CircleRim{
 		Center:          circle.Center,
-		Length:          edge.n.Length,
-		LengthBound:     edge.n.LengthBound,
-		LengthUnbounded: edge.n.LengthUnbounded,
+		Length:          edge.Length,
+		LengthBound:     edge.LengthBound,
+		LengthUnbounded: edge.LengthUnbounded,
 	}, true, ""
 }
 
@@ -449,13 +449,13 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 	for _, f := range faces {
 		envelope := stitchflux.MassEnvelopeFace{Surface: f.n.Surface, Area: f.n.Area, AreaBound: f.n.AreaBound}
 		for i, loop := range f.loops {
-			for _, ce := range loop.coedges {
-				envelope.Vertices = append(envelope.Vertices, ce.Start().Position().Value)
+			for _, ce := range loop.n.CoEdges {
+				envelope.Vertices = append(envelope.Vertices, vertexHandle(coedgeStart(ce)).Position().Value)
 			}
-			if len(loop.coedges) > 0 {
-				edge := loop.coedges[0].edge
+			if len(loop.n.CoEdges) > 0 {
+				edge := loop.n.CoEdges[0].Edge
 				rim := stitchflux.CircleRim{
-					Length: edge.n.Length, LengthBound: edge.n.LengthBound, LengthUnbounded: edge.n.LengthUnbounded,
+					Length: edge.Length, LengthBound: edge.LengthBound, LengthUnbounded: edge.LengthUnbounded,
 				}
 				envelope.Rims = append(envelope.Rims, rim)
 				if i == 0 {
@@ -536,8 +536,8 @@ func stitchFluxTagsDenoted(faces []*Face) bool {
 func stitchTaggedFace(f *Face) stitchflux.TaggedFace {
 	tagged := stitchflux.TaggedFace{Denoted: f.n.Denoted, Surface: f.n.Surface}
 	for _, loop := range f.loops {
-		for _, ce := range loop.coedges {
-			tagged.Curves = append(tagged.Curves, ce.edge.n.Curve)
+		for _, ce := range loop.n.CoEdges {
+			tagged.Curves = append(tagged.Curves, ce.Edge.Curve)
 		}
 	}
 	return tagged

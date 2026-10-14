@@ -559,7 +559,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if delta > 0 {
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
-		ne := &Edge{
+		ne := bornEdge(&Edge{
 			n: topo.Edge{
 				Convex:          old.n.Convex,
 				Length:          old.n.Length,
@@ -574,7 +574,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				Start: vertexNode(vertexForClass(startClass)),
 				End:   vertexNode(vertexForClass(endClass)),
 			},
-		}
+		})
 		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
 			old.n.Curve, old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		eb := &edgeBuild{edge: ne, startClass: startClass, endClass: endClass}
@@ -615,9 +615,9 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			},
 		})
 		for _, l := range f.loops {
-			coedges := make([]coedge, len(l.coedges))
-			for j, ce := range l.coedges {
-				eb, err := edgeFor(ce.edge)
+			coedges := make([]topo.CoEdge, len(l.n.CoEdges))
+			for j, ce := range l.n.CoEdges {
+				eb, err := edgeFor(edgeHandle(ce.Edge))
 				if err != nil {
 					return nil, nil, nil, err
 				}
@@ -627,14 +627,14 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				// their shared rim in opposite senses — so the coedge's
 				// forward flag is restated against the CANONICAL edge's own
 				// direction rather than copied verbatim.
-				oldStartClass := plan.table.classOf(vertexHandle(ce.edge.n.Start))
-				forward := ce.forward
+				oldStartClass := plan.table.classOf(vertexHandle(ce.Edge.Start))
+				forward := ce.Forward
 				if oldStartClass != eb.startClass {
 					forward = !forward
 				}
-				coedges[j] = coedge{edge: eb.edge, forward: forward}
+				coedges[j] = topo.CoEdge{Edge: edgeNode(eb.edge), Forward: forward}
 			}
-			nf.loops = append(nf.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: l.n.Outer}})
+			nf.loops = append(nf.loops, &Loop{n: topo.Loop{Outer: l.n.Outer, CoEdges: coedges}})
 		}
 		newFaces[i] = nf
 	}
@@ -645,9 +645,9 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 // whether f actually uses e at all.
 func coedgeDirectionFor(f *Face, e *Edge) (bool, bool) {
 	for _, l := range f.loops {
-		for _, ce := range l.coedges {
-			if ce.edge == e {
-				return ce.forward, true
+		for _, ce := range l.n.CoEdges {
+			if ce.Edge == edgeNode(e) {
+				return ce.Forward, true
 			}
 		}
 	}
@@ -660,12 +660,12 @@ func coedgeDirectionFor(f *Face, e *Edge) (bool, bool) {
 // with the walk that names it.
 func reverseFaceOrientation(f *Face) {
 	for _, l := range f.loops {
-		n := len(l.coedges)
-		rev := make([]coedge, n)
-		for i, ce := range l.coedges {
-			rev[n-1-i] = coedge{edge: ce.edge, forward: !ce.forward}
+		n := len(l.n.CoEdges)
+		rev := make([]topo.CoEdge, n)
+		for i, ce := range l.n.CoEdges {
+			rev[n-1-i] = topo.CoEdge{Edge: ce.Edge, Forward: !ce.Forward}
 		}
-		l.coedges = rev
+		l.n.CoEdges = rev
 	}
 	f.n.Reversed = !f.n.Reversed
 }
@@ -685,10 +685,10 @@ func stitchTopology(faces []*Face) stitchweld.Topology[*Face, *Edge] {
 		seen[f] = struct{}{}
 		var uses []stitchweld.Use[*Edge]
 		for _, l := range f.loops {
-			for _, ce := range l.coedges {
-				uses = append(uses, stitchweld.Use[*Edge]{Edge: ce.edge, Forward: ce.forward})
-				adjacent := faceHandles(ce.edge.n.Faces)
-				btopo.Adjacent[ce.edge] = adjacent
+			for _, ce := range l.n.CoEdges {
+				uses = append(uses, stitchweld.Use[*Edge]{Edge: edgeHandle(ce.Edge), Forward: ce.Forward})
+				adjacent := faceHandles(ce.Edge.Faces)
+				btopo.Adjacent[edgeHandle(ce.Edge)] = adjacent
 				queue = append(queue, adjacent...)
 			}
 		}
@@ -744,8 +744,8 @@ func checkStitchClosure(faces []*Face) error {
 func stitchHasFreeEdge(faces []*Face) bool {
 	for _, f := range faces {
 		for _, l := range f.loops {
-			for _, ce := range l.coedges {
-				if ce.edge.IsFree() {
+			for _, ce := range l.n.CoEdges {
+				if len(ce.Edge.Faces) == 1 {
 					return true
 				}
 			}
@@ -761,9 +761,9 @@ func stitchLumpsProvenSeparate(components [][]*Face) bool {
 	return stitchweld.LumpsProvenSeparate(components,
 		func(f *Face, visit func(*Vertex)) {
 			for _, l := range f.loops {
-				for _, ce := range l.coedges {
-					visit(vertexHandle(ce.edge.n.Start))
-					visit(vertexHandle(ce.edge.n.End))
+				for _, ce := range l.n.CoEdges {
+					visit(vertexHandle(ce.Edge.Start))
+					visit(vertexHandle(ce.Edge.End))
 				}
 			}
 		},
@@ -826,9 +826,9 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 		var verts []*Vertex
 		loopIdx := make([][]int, len(f.loops))
 		for li, l := range f.loops {
-			idxs := make([]int, len(l.coedges))
-			for i, ce := range l.coedges {
-				v := ce.Start()
+			idxs := make([]int, len(l.n.CoEdges))
+			for i, ce := range l.n.CoEdges {
+				v := vertexHandle(coedgeStart(ce))
 				local := frame.ToLocal(v.Position().Value)
 				idxs[i] = len(pts)
 				pts = append(pts, planePoint{U: local.X, V: local.Y})

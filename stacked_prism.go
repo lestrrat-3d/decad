@@ -175,8 +175,8 @@ func stackedPatchArea(ctx context.Context, sectionDelta float64, colDelta []floa
 
 type stackedColumn struct {
 	stackedrecord.Column
-	bottom    []coedge
-	top       []coedge
+	bottom    []topo.CoEdge
+	top       []topo.CoEdge
 	perimeter proofbound.BoundedScalar
 }
 
@@ -471,7 +471,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 				if end.top {
 					coedges = columns[e.Column].top
 				}
-				f.loops = append(f.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: e.Loop == 0}})
+				f.loops = append(f.loops, &Loop{n: topo.Loop{Outer: e.Loop == 0, CoEdges: coedges}})
 			}
 			if len(planar) == 0 {
 				capArea = part.area
@@ -505,7 +505,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 				if pl.Top {
 					coedges = columns[pl.Column].top
 				}
-				f.loops = append(f.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: pl.Outer}})
+				f.loops = append(f.loops, &Loop{n: topo.Loop{Outer: pl.Outer, CoEdges: coedges}})
 			}
 			planar = append(planar, f)
 		}

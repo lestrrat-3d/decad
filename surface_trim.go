@@ -120,12 +120,12 @@ func extendEndSegment(b *Body, pp chainPayload, edge *Edge) (int, int, bool, err
 			continue
 		}
 		faces := lump.shells[0].faces
-		first := faces[0].loops[0].coedges
-		last := faces[len(faces)-1].loops[0].coedges
-		if edge == first[3].edge {
+		first := faces[0].loops[0].n.CoEdges
+		last := faces[len(faces)-1].loops[0].n.CoEdges
+		if edge == edgeHandle(first[3].Edge) {
 			return ci, 0, true, nil
 		}
-		if edge == last[1].edge {
+		if edge == edgeHandle(last[1].Edge) {
 			return ci, len(pp.chains[ci].Segments) - 1, false, nil
 		}
 	}
@@ -924,10 +924,10 @@ func extendRevolveEndSegment(b *Body, pp chainRevolvePayload, edge *Edge) (int, 
 // at all, so that end answers absent and the caller refuses.
 func revolveLatitudeLoopEdge(f *Face, start bool) (*Edge, bool) {
 	for _, l := range f.loops {
-		if len(l.coedges) != 1 || l.coedges[0].forward != start {
+		if len(l.n.CoEdges) != 1 || l.n.CoEdges[0].Forward != start {
 			continue
 		}
-		return l.coedges[0].edge, true
+		return edgeHandle(l.n.CoEdges[0].Edge), true
 	}
 	return nil, false
 }

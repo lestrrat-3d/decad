@@ -107,7 +107,7 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		uses := map[*Edge][]coedge{}
+		uses := map[*Edge][]topo.CoEdge{}
 		area, areaBound, firstFacet := 0.0, 0.0, -1
 		for k := range held.walls {
 			cell := held.cell[k]
@@ -118,15 +118,15 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 				continue
 			}
 			face := oldFaces[2+k]
-			if len(face.loops) != 1 || len(face.loops[0].coedges) != 3 ||
+			if len(face.loops) != 1 || len(face.loops[0].n.CoEdges) != 3 ||
 				len(face.n.Origins) == 0 {
 				return nil, fmt.Errorf(`%w: a twisted wall has no Loft triangle`, ErrUnsupported)
 			}
 			if firstFacet < 0 {
 				firstFacet = k
 			}
-			for _, use := range face.loops[0].coedges {
-				uses[use.edge] = append(uses[use.edge], use)
+			for _, use := range face.loops[0].n.CoEdges {
+				uses[edgeHandle(use.Edge)] = append(uses[edgeHandle(use.Edge)], use)
 			}
 			area = proofbound.AbsSumUpper(area, face.n.Area)
 			areaBound = proofbound.AbsSumUpper(areaBound, face.n.AreaBound)
@@ -134,17 +134,17 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 		if firstFacet < 0 {
 			return nil, fmt.Errorf(`%w: a twisted source wall has no facets`, ErrUnsupported)
 		}
-		boundary := map[*Vertex]coedge{}
+		boundary := map[*Vertex]topo.CoEdge{}
 		for _, edgeUses := range uses {
 			switch len(edgeUses) {
 			case 1:
 				use := edgeUses[0]
-				if _, exists := boundary[use.Start()]; exists {
+				if _, exists := boundary[vertexHandle(coedgeStart(use))]; exists {
 					return nil, fmt.Errorf(`%w: a twisted wall boundary branches`, ErrUnsupported)
 				}
-				boundary[use.Start()] = use
+				boundary[vertexHandle(coedgeStart(use))] = use
 			case 2:
-				if edgeUses[0].forward == edgeUses[1].forward {
+				if edgeUses[0].Forward == edgeUses[1].Forward {
 					return nil, fmt.Errorf(`%w: twisted wall facets use a seam in the same direction`, ErrUnsupported)
 				}
 			default:
@@ -155,16 +155,16 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 			return nil, fmt.Errorf(`%w: a twisted wall has no closed boundary`, ErrUnsupported)
 		}
 		var first *Vertex
-		for _, use := range oldFaces[2+firstFacet].loops[0].coedges {
-			if kept, ok := boundary[use.Start()]; ok && kept.edge == use.edge {
-				first = use.Start()
+		for _, use := range oldFaces[2+firstFacet].loops[0].n.CoEdges {
+			if kept, ok := boundary[vertexHandle(coedgeStart(use))]; ok && kept.Edge == use.Edge {
+				first = vertexHandle(coedgeStart(use))
 				break
 			}
 		}
 		if first == nil {
 			return nil, fmt.Errorf(`%w: a twisted wall has no deterministic outline start`, ErrUnsupported)
 		}
-		outline := make([]coedge, 0, len(boundary))
+		outline := make([]topo.CoEdge, 0, len(boundary))
 		current := first
 		for range len(boundary) {
 			use, ok := boundary[current]
@@ -172,13 +172,13 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 				return nil, fmt.Errorf(`%w: a twisted wall outline is disconnected`, ErrUnsupported)
 			}
 			outline = append(outline, use)
-			current = use.End()
-			delete(boundary, use.Start())
+			current = vertexHandle(coedgeEnd(use))
+			delete(boundary, vertexHandle(coedgeStart(use)))
 		}
 		if current != first || len(boundary) != 0 {
 			return nil, fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
 		}
-		face := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}},
+		face := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: outline}}},
 			n: topo.Face{
 				Area:      area,
 				AreaBound: areaBound,
