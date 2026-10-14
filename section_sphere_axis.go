@@ -4,6 +4,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionclip"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -45,7 +46,7 @@ func cardinalSphereSection(b *Body, plane r3.Frame) (profileRecord, []planePoint
 		}}}}, nil, 0, true
 	}
 	upper := proofarith.DySqrtUp(q)
-	if !obliqueCircleFinite(upper) || upper <= radius {
+	if !sectionclip.ObliqueCircleFinite(upper) || upper <= radius {
 		return profileRecord{}, nil, 0, false
 	}
 	// Both brackets are proven by exact square comparisons. Every point on
@@ -56,14 +57,14 @@ func cardinalSphereSection(b *Body, plane r3.Frame) (profileRecord, []planePoint
 	gapL1 := proofbound.RatFloatUp(proofarith.DyMul(gap, proofarith.DyInt(2)).Rat())
 	gapWorld := proofbound.ProductUpper(gapL1,
 		max(proofbound.DvLenUpper(u), proofbound.DvLenUpper(v)))
-	if !obliqueCircleFinite(gapL1, gapWorld) {
+	if !sectionclip.ObliqueCircleFinite(gapL1, gapWorld) {
 		return profileRecord{}, nil, 0, false
 	}
-	center := sectionRatPoint{u: proofarith.FloatRat(centerU), v: proofarith.FloatRat(centerV)}
-	a := sectionRatPoint{u: proofarith.FloatRat(radius), v: proofarith.FloatRat(0)}
-	basisV := sectionRatPoint{u: proofarith.FloatRat(0), v: proofarith.FloatRat(radius)}
+	center := sectionclip.SectionRatPoint{U: proofarith.FloatRat(centerU), V: proofarith.FloatRat(centerV)}
+	a := sectionclip.SectionRatPoint{U: proofarith.FloatRat(radius), V: proofarith.FloatRat(0)}
+	basisV := sectionclip.SectionRatPoint{U: proofarith.FloatRat(0), V: proofarith.FloatRat(radius)}
 	for _, perQuadrant := range [...]int{8, 16, 32} {
-		polygon, bound, proved := obliqueCirclePolygon(center, a, basisV, 1,
+		polygon, bound, proved := sectionclip.ObliqueCirclePolygon(center, a, basisV, 1,
 			plane, perQuadrant, gapL1, gapWorld)
 		if proved {
 			return profileRecord{}, polygon, bound, true

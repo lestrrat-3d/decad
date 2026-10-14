@@ -11,6 +11,7 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `internal/stackedrecord/` | Derives and audits slab interfaces, wall columns, and exposed patch rings. See stacked-prism §2.2–§3. |
 | `internal/twistsweep/` | Twist polygon admission, twisted-wall offset source, composite and straight twist stations, wall cell areas, placed proof and sampled cup mesh. See shell-twisted-sweep design. |
+| `internal/sectionclip/` | Exact rational section clip helpers: rational plane point and arithmetic, oblique ellipse and cap polygons, certified circle-line trim, oblique sphere polygon. See section design. |
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
 | `internal/compositesweep/` | Composite Sweep limits, bounded measurements, separation and cross-span facet audits, rim-join certificate, and span side-role renumbering and cap-role swaps. See sweep §7, §9. |
 | `internal/diameter/` | Lower-bound diameter of held witness points, including vertex, axis-extreme and prism station witnesses and the free-form prism section arm. See verification §3. |

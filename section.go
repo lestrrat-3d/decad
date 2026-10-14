@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectionclip"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -60,7 +61,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		}
 		if !admitted {
 			if sphere, authenticated := sourceSphereAtPose(b, r3.Identity()); authenticated {
-				polygon, delta, admitted = obliqueSpherePolygon(sphere.center, sphere.radius, plane)
+				polygon, delta, admitted = sectionclip.ObliqueSpherePolygon(sphere.center, sphere.radius, plane)
 			}
 		}
 		if !admitted {
