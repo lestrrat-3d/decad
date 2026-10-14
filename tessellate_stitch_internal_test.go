@@ -450,7 +450,7 @@ func TestTessellateStitchRefusesARepeatedDirectedEdge(t *testing.T) {
 		tris:      [][3]int{{0, 1, 2}, {0, 1, 2}},
 		triFaces:  []*Face{f, f},
 	}
-	b := &Body{kind: BodySolid, solid: true}
+	b := &Body{kind: BodySolid, n: topo.Body{Solid: true}}
 
 	mesh, err := tessellateStitch(t.Context(), b, sp)
 	require.ErrorIs(t, err, ErrUnsupported)

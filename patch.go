@@ -136,7 +136,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
 	prismView := pp.prism()
 
 	// pw resolves every boundary segment's walk exactly once for this whole

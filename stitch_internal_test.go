@@ -1260,7 +1260,7 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 		vertexObjs[i] = &Vertex{n: topo.Vertex{Position: p}}
 	}
 
-	body := &Body{kind: BodySolid, solid: true}
+	body := &Body{kind: BodySolid, n: topo.Body{Solid: true}}
 	body.lumps = []*Lump{
 		{shells: []*FaceShell{{faces: []*Face{stitchTestLumpFace(vertexObjs[0:8])}}}},
 		{shells: []*FaceShell{{faces: []*Face{stitchTestLumpFace(vertexObjs[8:16])}}}},

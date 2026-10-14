@@ -59,7 +59,7 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 		return nil, err
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true, kind: BodySolid}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}, kind: BodySolid}
 	faces, err := buildCoilTopology(ctx, body, ref, rec, sh, m.Area, walls)
 	if err != nil {
 		return nil, err

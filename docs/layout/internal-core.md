@@ -62,4 +62,4 @@ The rules for rows live in `docs/layout.md`.
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds, and chain-arc source points and area density. See tessellation §8–§11, sweep §15.9. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
 | `internal/loftcylinder/` | Exact cap XY audits, source circle and connector gates, ring distances and occupancy, cap chamfer clearance, triangles, band strips, compaction and audits, triangle radii, root radius gaps, and radial and wedge gates of the loft/cylinder Union. See loft-cylinder-boolean design. |
-| `internal/topo/` | Vertex, Edge, Face, Loop, FaceShell, Document and Mesh node data the root handles hold by value. See evaluator §3. |
+| `internal/topo/` | Vertex, Edge, Face, Loop, FaceShell, Document, Mesh and Body node data the root handles hold by value. See evaluator §3. |

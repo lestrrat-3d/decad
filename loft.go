@@ -399,7 +399,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 		return nil, err
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
 	walls, err := buildChainLoftTopology(ctx, body, ref, verts, tris, vIdx, wIdx, delta)
 	if err != nil {
 		return nil, err

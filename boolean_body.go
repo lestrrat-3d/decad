@@ -382,7 +382,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	comp, adj := audit.Comp, audit.Adj
 	members, compVol, contains := audit.Members, audit.CompVol, audit.Contains
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}}
 	if len(pp.vertexBound) != len(verts) {
 		return nil, fmt.Errorf(`%w: a faceted payload carries %d vertex bounds for %d vertices`, ErrBooleanFailed, len(pp.vertexBound), len(verts))
 	}

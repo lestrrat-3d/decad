@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegroup"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // compositeSpanPart is one closed single-span reduction before its internal
@@ -162,7 +163,7 @@ func assembleCompositeSweepBodyWithJoinMode(
 	body := &Body{
 		doc:    d,
 		origin: FeatureRef{producer: ref, Role: roleBody},
-		solid:  !surfaceResult,
+		n:      topo.Body{Solid: !surfaceResult},
 		kind:   kind,
 	}
 	var faces []*Face

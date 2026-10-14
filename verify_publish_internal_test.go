@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -809,7 +810,7 @@ func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
 		area:     built.area,
 		centroid: built.centroid,
 		bounds:   built.bounds,
-		solid:    built.solid,
+		n:        topo.Body{Solid: built.n.Solid},
 	}
 
 	res := publishBody(t, body,

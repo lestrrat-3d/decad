@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -246,7 +247,7 @@ func TestTessellateLoftRefusesAnUnrestatablePayload(t *testing.T) {
 
 	t.Run("a body whose topology contradicts its payload", func(t *testing.T) {
 		// The payload names side(0,j,k) roles the body no longer carries.
-		stripped := &Body{doc: body.doc, origin: body.origin, solid: true}
+		stripped := &Body{doc: body.doc, origin: body.origin, n: topo.Body{Solid: true}}
 		mesh, err := tessellateLoft(t.Context(), stripped, base)
 		require.Nil(t, mesh)
 		require.ErrorIs(t, err, ErrDegenerate)

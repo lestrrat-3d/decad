@@ -375,7 +375,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if rp.surfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: !rp.surfaceResult, kind: kind}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: !rp.surfaceResult}, kind: kind}
 
 	// Partial sweeps get two planar cap faces; a full revolution has none.
 	var capStart, capEnd *Face
@@ -1198,7 +1198,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
 	b := rev.basis()
 	var allFaces []*Face
 	area := proofbound.BoundedScalar{}

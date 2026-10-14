@@ -605,7 +605,7 @@ func bodyValidityEvidence(ctx context.Context, b *Body) validityEvidence {
 	default:
 		evidence.Clean = auditBoundary(b)
 		evidence.Built = b.payload != nil
-		evidence.Solid = b.solid
+		evidence.Solid = b.n.Solid
 	}
 	return evidence
 }

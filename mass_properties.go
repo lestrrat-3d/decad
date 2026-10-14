@@ -77,7 +77,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	if density.Mag() == 0 {
 		return MassProperties{}, fmt.Errorf("%w: density is zero", ErrDegenerate)
 	}
-	if !b.solid || b.kind != BodySolid {
+	if !b.n.Solid || b.kind != BodySolid {
 		return MassProperties{}, ErrNotSolid
 	}
 	if b.payload == nil {

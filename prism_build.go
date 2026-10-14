@@ -70,7 +70,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	if pp.SurfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: !pp.SurfaceResult, kind: kind}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: !pp.SurfaceResult}, kind: kind}
 
 	// The LEVEL half of the shared-denotation certificate (denotation.go):
 	// minted only when this payload's own section is drawn straight from its
