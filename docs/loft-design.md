@@ -2809,10 +2809,17 @@ exact world-XY section axes and an exactly representable axial height. A
 fixed center with changing radius gives a `Cone` whose lateral area is
 enclosed directly by the frustum formula, so the outer loop may be curved.
 A moving center gives a rational ruled `NURBSSurface`, including when its
-radius also changes; this case requires line-only outer loops so the complete
-Loft area can isolate the hole wall. A moving-center wall is not a right
-cylinder or cone. The world-XY gate makes both changing circles' center lifts
-exact without requiring those centers to coincide.
+radius also changes. Its lateral area reads directly from the two circle
+records, so the outer loop may be curved. Let `dr` be the radius change,
+`(dx,dy)` the center shift, and `h` the height. Integrating the linear radius
+over the sweep parameter leaves the mean radius times
+`∫₀²π sqrt(h²+(dr+dx cosθ+dy sinθ)²) dθ`. The square-root integrand is
+`sqrt(dx²+dy²)`-Lipschitz in angle. At 512 equal angular midpoint cells, the
+integral differs from the midpoint sum by at most
+`sqrt(dx²+dy²)π²/512`; proven sine/cosine intervals and outward square roots
+enclose the sum. A moving-center wall is not a right cylinder or cone. The
+world-XY gate makes both changing circles' center lifts exact without
+requiring those centers to coincide.
 
 A second ruled case admits a cardinal quarter-turn of the upper in-plane
 frame around the common world-Z axis. Both circle centers must be the local
@@ -2841,12 +2848,11 @@ records determine this private net; the public
 `NURBSSurface` remains an opaque tag.
 
 The direct Loft retains its original held triangles, source roles and mass
-proof. A moving-center wall with matching frame axes uses the complete
-bounded area minus both bounded cap areas and every retained planar outer
-face area. Coaxial cones and quarter-turn ruled walls use their direct
-bounded area formulas. The two cap areas use their respective whole-circle
-integrals. An unproved source pair, frame, placement or wall area keeps the
-original faceted topology.
+proof. Moving-center, coaxial-cone and quarter-turn hole walls use their
+direct bounded area formulas. A matching-circle cylinder still isolates its
+area from the complete Loft and its other bounded faces. The two cap areas
+use their respective whole-circle integrals. An unproved source pair, frame,
+placement or wall area keeps the original faceted topology.
 
 `OuterLoopOf(CapStart(body))` and `OuterLoopOf(CapEnd(body))` select only the
 held outer cap edges, excluding the circular bore rims. An equal-distance
