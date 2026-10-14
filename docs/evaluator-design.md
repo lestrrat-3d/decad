@@ -770,7 +770,7 @@ because provenance roles are stable (§3).
 
 `Document` owns the live body set and a private monotonic producer identity used for topology provenance. Every feature call validates live inputs, evaluates geometry without mutation, and commits only after success. Commit retires consumed bodies, registers the result, and advances the producer identity. Cancellation and every other failure leave the document unchanged.
 
-`Document.Remove` is commit's retire step with no feature around it: it gates the body exactly as
+`Remove` is commit's retire step with no feature around it: it gates the body exactly as
 `requireLive` does, retires it, and registers nothing, so the producer identity does not advance.
 The live body set sits behind the document's own lock. `commit`, `commitMany` and `Remove` change
 it under that lock, and every reader — `Bodies`, `Verify`, `VerifyMotion`, the `ThroughAll` stop

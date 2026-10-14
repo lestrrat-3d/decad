@@ -24,7 +24,7 @@ func TestDocumentRemoveMintsNoProducer(t *testing.T) {
 	require.NoError(t, err)
 
 	before := d.nextProducerID()
-	require.NoError(t, d.Remove(body))
+	require.NoError(t, Remove(body))
 	require.Equal(t, before, d.nextProducerID())
 	require.Empty(t, d.bodies)
 	require.Equal(t, before-1, body.originProducer(), `the removed body keeps the identity it was built under`)

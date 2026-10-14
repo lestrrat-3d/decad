@@ -37,7 +37,7 @@ func TestPointDistanceFromBox(t *testing.T) {
 			require.Zero(t, distance.Bound.Base())
 		})
 	}
-	require.NoError(t, doc.Remove(box))
+	require.NoError(t, decad.Remove(box))
 	retired, err := box.DistanceToPoint(t.Context(), r3.NewVec(12, 5, 5), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Equal(t, 2.0, retired.Value.Base())

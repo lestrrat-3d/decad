@@ -27,7 +27,7 @@ func TestSectionSketchFeedsExtrude(t *testing.T) {
 		D: units.Millimeters(5), Dir: decad.Along,
 	})
 	require.NoError(t, err)
-	require.NoError(t, sourceDoc.Remove(source))
+	require.NoError(t, decad.Remove(source))
 	cutPlane, err := w.CreateOffsetPlane(w.XY(), 2.5)
 	require.NoError(t, err)
 	frame, err := cutPlane.Frame()

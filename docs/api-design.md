@@ -286,8 +286,9 @@ type Document struct{ /* ... */ }
 func New(opts ...DocumentOption) *Document
 
 func (d *Document) Bodies() []*Body            // live bodies
-func (d *Document) Remove(b *Body) error        // retire a live body by hand
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
+
+func Remove(b *Body) error                      // retire a live body by hand; the body names its document
 ```
 
 `DocumentOption` has no constructor yet. Its sealed method set includes
@@ -315,14 +316,14 @@ remains readable, but it is gone from `Document.Bodies()` and
 on the body a `ToFace` names (§8.1), so the source stays live and the copy is a
 new body beside it.
 
-**`Document.Remove` is the same retirement by the caller's own hand.** A caller
+**`Remove` is the same retirement by the caller's own hand.** A caller
 that added bodies it now rejects — say, support bodies `Verify` found
 interfering — takes them back out. A removed body is a retired body in every
 respect: it stays readable, its selectors and `Origin` still answer, and no
 operation takes it, so there is no way back into the model. Remove produces
 nothing, so no producer identity advances, and a body already built from the
-removed one keeps its geometry and its provenance. A nil body is
-`ErrDegenerate`, another document's body is `ErrForeignBody`, and a body
+removed one keeps its geometry and its provenance. A nil body, or a
+body that belongs to no document, is `ErrDegenerate`, and a body
 already retired — consumed or removed — is `ErrRetiredBody` (§12).
 
 **A retired body is no longer part of the model, so no operation takes one.** It is
@@ -790,7 +791,6 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 | `Document.Loft`, `LoftFaces`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
 | `Document.Sweep` over a profile or a chain | `Sweep(ctx, doc, s, sec, path, opts...)`, one generic function over `Section` (§8) |
 | `Document.LoftChain` | the same name with `ctx, doc` leading |
-| `Document.Remove` | `Remove(b)` |
 
 **Every operation that builds a body from a sketch takes a `ctx`, `Extrude`,
 `Revolve` over a chain included.** Each checks `ctx` at
@@ -2056,7 +2056,7 @@ the resulting bodies, measurements, and verification reports directly.
   (a selector carrying no cardinality assertion matched nothing), `ErrCardinality`
   (a cardinality assertion failed), `ErrForeignBody` (an operation was handed bodies
   owned by different documents, an extent or axis named a body owned by another
-  document, §8.1, or `Document.Remove` was handed another document's body, §6), `ErrForeignProfile` (a feature was handed a profile built from
+  document, §8.1), `ErrForeignProfile` (a feature was handed a profile built from
   a different sketch than the one given, or a boundary entity the source sketch
   does not own, §7),
   `ErrStaleProfile` (a feature was handed a profile built before the sketch's

@@ -199,7 +199,7 @@ func TestVerifyReflectedOperandMeasuresInterference(t *testing.T) {
 	l := polyPrismBody(t, doc, reflectedLPts, reflectedHeight)
 	image, err := decad.Copy(t.Context(), l, decad.WithCopyPlacement(mirrorAcrossX30(t)))
 	require.NoError(t, err)
-	require.NoError(t, doc.Remove(l))
+	require.NoError(t, decad.Remove(l))
 	pin := reflectedDiscBody(t, doc, 57.5, 12, 1.5)
 
 	report, err := doc.Verify(t.Context())
