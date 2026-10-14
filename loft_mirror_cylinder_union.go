@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -59,6 +60,14 @@ func tryLoftMirrorCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 
 func tryLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID,
 	blank *Body, pairs []*Body, source *loftMirrorJoinRecord) (*Body, bool, error) {
+	return loftMirrorCylinderPairs(ctx, d, ref, blank, pairs, source, orderedwork.MaxEachWorkers)
+}
+
+// loftMirrorCylinderPairs is tryLoftMirrorCylinderPairs with the cap on the
+// goroutines that place the lower teeth. The placements are independent, so
+// the cap changes the wall time and nothing else.
+func loftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID,
+	blank *Body, pairs []*Body, source *loftMirrorJoinRecord, placeWorkers int) (*Body, bool, error) {
 	pp, blankOK := blank.payload.(prismPayload)
 	if !blankOK || !loftMirrorCylinderBlank(pp) || len(pairs) == 0 || len(pairs) > 32 {
 		return nil, false, nil
@@ -101,41 +110,22 @@ func tryLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID
 	if err != nil {
 		return nil, true, err
 	}
-	lowerTeeth := make([]*Body, len(pairs))
-	upperBridges := make([]float64, len(pairs))
-	var bridgeBound, bridgeVolume float64
-	for i, pair := range pairs {
-		payload, ok := pair.payload.(facetedPayload)
-		if !ok || !payload.contactAudited || pair.doc != d {
-			return nil, false, nil
+	checked := loftMirrorCylinderCheckPairs(d, pairs, record, middle)
+	workers := min(placeWorkers, orderedwork.EachWorkers(checked.stop, 2))
+	lowerTeeth, err := loftMirrorCylinderPlaceTeeth(checked.stop, workers, func(i int) (*Body, error) {
+		if checked.motions[i] == r3.Identity() {
+			return record.lower, nil
 		}
-		motion, ok := loftMirrorCylinderPairMotion(payload, record)
-		if !ok {
-			return nil, true, fmt.Errorf("%w: mirrored cylinder pair %d has no authenticated axial placement", ErrUnsupported, i+1)
-		}
-		if !loftCylinderAxialPlacement(motion) {
-			shift, swept, ok, err := loftMirrorCylinderUpperBridge(pair, motion, middle)
-			if err != nil {
-				return nil, true, err
-			}
-			if !ok {
-				return nil, true, fmt.Errorf("%w: mirrored cylinder pair %d has no upper axial bridge", ErrUnsupported, i+1)
-			}
-			bridgeBound = max(bridgeBound, shift)
-			bridgeVolume = proofbound.AbsSumUpper(bridgeVolume, swept)
-			upperBridges[i] = shift
-		}
-		tooth := record.lower
-		if motion != r3.Identity() {
-			tooth, err = lower.placed(ctx, d, ref, motion)
-			if err != nil {
-				return nil, true, err
-			}
-		}
-		lowerTeeth[i] = tooth
+		return lower.placed(ctx, d, ref, checked.motions[i])
+	})
+	if err != nil {
+		return nil, true, err
+	}
+	if checked.stop < len(pairs) {
+		return nil, checked.admit, checked.err
 	}
 	lowerJoin, admitted, err := tryLoftCylinderUnionTeethWithUpperBridge(
-		ctx, d, ref, halfBlank, lowerTeeth, upperBridges)
+		ctx, d, ref, halfBlank, lowerTeeth, checked.upperBridges)
 	if err != nil {
 		return nil, true, err
 	}
@@ -143,8 +133,83 @@ func tryLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID
 		return nil, true, fmt.Errorf("%w: mirrored cylinder's lower slab lacks a certified circular Join", ErrUnsupported)
 	}
 	result, err := buildLoftMirrorCylinderUnion(ctx, d, ref, blank, pairs, record,
-		lowerJoin, reflection, bridgeBound, bridgeVolume)
+		lowerJoin, reflection, checked.bridgeBound, checked.bridgeVolume)
 	return result, true, err
+}
+
+// loftMirrorPairChecks is the serial checking pass over a Union's pairs.
+// Pairs [0, stop) passed every check; stop == len(pairs) means all did.
+// Otherwise the pair at stop ends the Union with (nil, admit, err) once the
+// placements below it have succeeded.
+type loftMirrorPairChecks struct {
+	motions      []r3.Transform
+	upperBridges []float64
+	bridgeBound  float64
+	bridgeVolume float64
+	stop         int
+	admit        bool
+	err          error
+}
+
+// loftMirrorCylinderCheckPairs runs, in pair order, every check the Union makes
+// on a pair except its placement, and stops at the first pair that fails one.
+func loftMirrorCylinderCheckPairs(d *Document, pairs []*Body, record *loftMirrorJoinRecord,
+	middle float64) loftMirrorPairChecks {
+	c := loftMirrorPairChecks{
+		motions:      make([]r3.Transform, len(pairs)),
+		upperBridges: make([]float64, len(pairs)),
+		stop:         len(pairs),
+	}
+	refuse := func(i int, admit bool, err error) loftMirrorPairChecks {
+		c.stop, c.admit, c.err = i, admit, err
+		return c
+	}
+	for i, pair := range pairs {
+		payload, ok := pair.payload.(facetedPayload)
+		if !ok || !payload.contactAudited || pair.doc != d {
+			return refuse(i, false, nil)
+		}
+		motion, ok := loftMirrorCylinderPairMotion(payload, record)
+		if !ok {
+			return refuse(i, true, fmt.Errorf(
+				"%w: mirrored cylinder pair %d has no authenticated axial placement", ErrUnsupported, i+1))
+		}
+		if !loftCylinderAxialPlacement(motion) {
+			shift, swept, ok, err := loftMirrorCylinderUpperBridge(pair, motion, middle)
+			if err != nil {
+				return refuse(i, true, err)
+			}
+			if !ok {
+				return refuse(i, true, fmt.Errorf(
+					"%w: mirrored cylinder pair %d has no upper axial bridge", ErrUnsupported, i+1))
+			}
+			c.bridgeBound = max(c.bridgeBound, shift)
+			c.bridgeVolume = proofbound.AbsSumUpper(c.bridgeVolume, swept)
+			c.upperBridges[i] = shift
+		}
+		c.motions[i] = motion
+	}
+	return c
+}
+
+// loftMirrorCylinderPlaceTeeth runs place(i) for every i in [0, n) on up to
+// workers goroutines and returns the bodies in index order. On failure it
+// returns the error of the lowest failing index, the one a loop over [0, n)
+// meets first; every lower index has run. place must write nothing another
+// index reads.
+func loftMirrorCylinderPlaceTeeth(n, workers int, place func(i int) (*Body, error)) ([]*Body, error) {
+	teeth := make([]*Body, n)
+	if _, err := orderedwork.Each(n, workers, 1, nil, func(i int) error {
+		tooth, err := place(i)
+		if err != nil {
+			return err
+		}
+		teeth[i] = tooth
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return teeth, nil
 }
 
 func loftMirrorCylinderPairMotion(fp facetedPayload, source *loftMirrorJoinRecord) (r3.Transform, bool) {
