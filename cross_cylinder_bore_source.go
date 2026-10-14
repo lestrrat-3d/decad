@@ -43,10 +43,10 @@ func crossCylinderCircleBound(body *Body, radius float64) (float64, bool) {
 		if _, ok := edge.curve.(Circle3); !ok {
 			continue
 		}
-		if !edge.curveBounded || proofbound.IsNonFinite(edge.curveBound) {
+		if !edge.n.CurveBounded || proofbound.IsNonFinite(edge.n.CurveBound) {
 			return 0, false
 		}
-		bound = max(bound, edge.curveBound)
+		bound = max(bound, edge.n.CurveBound)
 		count++
 	}
 	return bound, count == 2 && bound < radius/1000

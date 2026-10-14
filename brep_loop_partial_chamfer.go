@@ -176,7 +176,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		for k := range 3 {
 			mass.moments[k] = proofbound.IntervalAdd(mass.moments[k], proofbound.PointInterval(moments[k]))
 		}
-		capE.convex, sideE.convex = true, true
+		capE.n.Convex, sideE.n.Convex = true, true
 	}
 	return patches, mass, nil
 }

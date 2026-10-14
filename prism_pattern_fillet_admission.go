@@ -27,8 +27,8 @@ func prismPatternFilletContactsOf(ctx context.Context, body *Body, edges []*Edge
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if edge == nil || !edge.selectorDirectionProven ||
-			edge.selectorDirection != (r3.Vec{Z: 1}) && edge.selectorDirection != (r3.Vec{Z: -1}) {
+		if edge == nil || !edge.n.SelectorDirectionProven ||
+			edge.n.SelectorDirection != (r3.Vec{Z: 1}) && edge.n.SelectorDirection != (r3.Vec{Z: -1}) {
 			return nil, fmt.Errorf("%w: joined-prism fillet selection has an unproved axial edge", ErrUnsupported)
 		}
 		matched := false

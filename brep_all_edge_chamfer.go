@@ -114,7 +114,7 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 		}
 		edge := loop.coedges[0].edge
 		circle, ok := edge.curve.(Circle3)
-		if !ok || !edge.curveBounded || edge.curveBound != 0 ||
+		if !ok || !edge.n.CurveBounded || edge.n.CurveBound != 0 ||
 			circle.Radius.Base() != p.radius {
 			return nil, false, nil
 		}
@@ -395,8 +395,11 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 						proofbound.BoundedMul(v, v))
 				}
 				length := proofbound.BoundedSqrt(lengthSquared)
-				e = &Edge{curve: Line3{}, start: vertex(a), end: vertex(b), convex: true,
-					length: length.Value, lengthBound: length.Bound}
+				e = &Edge{curve: Line3{}, start: vertex(a), end: vertex(b), n: topo.Edge{
+					Convex:      true,
+					Length:      length.Value,
+					LengthBound: length.Bound,
+				}}
 				lines[key] = e
 			}
 			loop.coedges = append(loop.coedges, coedge{edge: e, forward: e.start == vertex(a)})
@@ -451,8 +454,12 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 		seam := vertex(center.Add(r3.NewVec(p.radius, 0, 0)))
 		circumference := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), pi), r)
 		edge := &Edge{curve: Circle3{Center: center, Axis: r3.NewVec(0, -1, 0),
-			Radius: units.Millimeters(p.radius)}, start: seam, end: seam, convex: false,
-			length: circumference.Value, lengthBound: circumference.Bound, curveBounded: true}
+			Radius: units.Millimeters(p.radius)}, start: seam, end: seam, n: topo.Edge{
+			Convex:       false,
+			Length:       circumference.Value,
+			LengthBound:  circumference.Bound,
+			CurveBounded: true,
+		}}
 		face.loops = append(face.loops, &Loop{coedges: []coedge{{edge: edge, forward: side == 1}}})
 		bore.loops = append(bore.loops, &Loop{coedges: []coedge{{edge: edge, forward: side == 0}}, outer: true})
 	}

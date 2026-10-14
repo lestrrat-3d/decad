@@ -82,10 +82,10 @@ func boundedSquareChain(id levelID, bound units.Value) ([]*Edge, levelToken) {
 	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Bound: bound, Level: tok}}
 	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Bound: bound, Level: tok}}
 	return []*Edge{
-		{curve: Line3{}, start: v0, end: v1, level: tok},
-		{curve: Line3{}, start: v1, end: v2, level: tok},
-		{curve: Line3{}, start: v2, end: v3, level: tok},
-		{curve: Line3{}, start: v3, end: v0, level: tok},
+		{curve: Line3{}, start: v0, end: v1, n: topo.Edge{Level: tok}},
+		{curve: Line3{}, start: v1, end: v2, n: topo.Edge{Level: tok}},
+		{curve: Line3{}, start: v2, end: v3, n: topo.Edge{Level: tok}},
+		{curve: Line3{}, start: v3, end: v0, n: topo.Edge{Level: tok}},
 	}, tok
 }
 
@@ -157,10 +157,10 @@ func TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels
 	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Bound: bound, Level: levelA}}
 	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Bound: bound, Level: levelA}}
 	edges := []*Edge{
-		{curve: Line3{}, start: v0, end: v1Twin, level: levelA},
-		{curve: Line3{}, start: v1Twin, end: v2, level: levelA},
-		{curve: Line3{}, start: v2, end: v3, level: levelA},
-		{curve: Line3{}, start: v3, end: v0, level: levelA},
+		{curve: Line3{}, start: v0, end: v1Twin, n: topo.Edge{Level: levelA}},
+		{curve: Line3{}, start: v1Twin, end: v2, n: topo.Edge{Level: levelA}},
+		{curve: Line3{}, start: v2, end: v3, n: topo.Edge{Level: levelA}},
+		{curve: Line3{}, start: v3, end: v0, n: topo.Edge{Level: levelA}},
 	}
 
 	_, _, hasAxialBound, err := provePatchChainPlane(edges)
@@ -233,10 +233,10 @@ func TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame(t *
 	// verifies coplanar".
 	v3 := &Vertex{n: topo.Vertex{Position: corner(0, 10).Add(axis.Scale(1e-6)), Bound: bound, Level: tok}}
 	edges := []*Edge{
-		{curve: Line3{}, start: v0, end: v1, level: tok},
-		{curve: Line3{}, start: v1, end: v2, level: tok},
-		{curve: Line3{}, start: v2, end: v3, level: tok},
-		{curve: Line3{}, start: v3, end: v0, level: tok},
+		{curve: Line3{}, start: v0, end: v1, n: topo.Edge{Level: tok}},
+		{curve: Line3{}, start: v1, end: v2, n: topo.Edge{Level: tok}},
+		{curve: Line3{}, start: v2, end: v3, n: topo.Edge{Level: tok}},
+		{curve: Line3{}, start: v3, end: v0, n: topo.Edge{Level: tok}},
 	}
 	edgeCopy := map[*Edge]*Edge{}
 	for _, e := range edges {
@@ -387,7 +387,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	cv := &Vertex{n: topo.Vertex{Position: r3.NewVec(5, 5, 10), Level: tok}}
 	inner := &Edge{
 		curve: Circle3{Center: r3.NewVec(5, 5, 10), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(1)},
-		start: cv, end: cv, level: tok,
+		start: cv, end: cv, n: topo.Edge{Level: tok},
 	}
 
 	outerLoop := &Loop{outer: true}
@@ -431,10 +431,10 @@ func TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch(t *testing.T) {
 	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Level: levelB}}
 	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Level: levelA}}
 	edges := []*Edge{
-		{curve: Line3{}, start: v0, end: v1, level: levelA},
-		{curve: Line3{}, start: v1, end: v2, level: levelA},
-		{curve: Line3{}, start: v2, end: v3, level: levelA},
-		{curve: Line3{}, start: v3, end: v0, level: levelA},
+		{curve: Line3{}, start: v0, end: v1, n: topo.Edge{Level: levelA}},
+		{curve: Line3{}, start: v1, end: v2, n: topo.Edge{Level: levelA}},
+		{curve: Line3{}, start: v2, end: v3, n: topo.Edge{Level: levelA}},
+		{curve: Line3{}, start: v3, end: v0, n: topo.Edge{Level: levelA}},
 	}
 	receiver := patchTestReceiverWithOneChain(prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}, edges)
 

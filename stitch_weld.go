@@ -59,7 +59,7 @@ func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 					continue
 				}
 				_, isLine := e.curve.(Line3)
-				if !isLine && e.denot.ID == 0 { // J2, then J5, or the certificate
+				if !isLine && e.n.Denot.ID == 0 { // J2, then J5, or the certificate
 					continue
 				}
 				candidates = append(candidates, stitchweld.Candidate[*Edge]{
@@ -81,7 +81,7 @@ func stitchEdgesJoin(a, b *Edge) bool {
 	if aLine && bLine {
 		return true
 	}
-	return sameCurve(a.denot, b.denot) && sameCurveVariant(a.curve, b.curve)
+	return sameCurve(a.n.Denot, b.n.Denot) && sameCurveVariant(a.curve, b.curve)
 }
 
 // sameCurveVariant compares held Circle3 and Arc3 parameters, allowing

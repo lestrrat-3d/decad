@@ -401,9 +401,9 @@ func (s stitchLoopSource) Circle() (stitchflux.CircleRim, bool, string) {
 	}
 	return stitchflux.CircleRim{
 		Center:          circle.Center,
-		Length:          edge.length,
-		LengthBound:     edge.lengthBound,
-		LengthUnbounded: edge.lengthUnbounded,
+		Length:          edge.n.Length,
+		LengthBound:     edge.n.LengthBound,
+		LengthUnbounded: edge.n.LengthUnbounded,
 	}, true, ""
 }
 
@@ -455,7 +455,7 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 			if len(loop.coedges) > 0 {
 				edge := loop.coedges[0].edge
 				rim := stitchflux.CircleRim{
-					Length: edge.length, LengthBound: edge.lengthBound, LengthUnbounded: edge.lengthUnbounded,
+					Length: edge.n.Length, LengthBound: edge.n.LengthBound, LengthUnbounded: edge.n.LengthUnbounded,
 				}
 				envelope.Rims = append(envelope.Rims, rim)
 				if i == 0 {

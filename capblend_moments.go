@@ -351,7 +351,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 func capContourPerimeterUpper(capCo []coedge) float64 {
 	total := proofbound.BoundedScalar{}
 	for _, ce := range capCo {
-		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(ce.edge.length, ce.edge.lengthBound))
+		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(ce.edge.n.Length, ce.edge.n.LengthBound))
 	}
 	return proofbound.AbsSumUpper(total.Value, total.Bound)
 }

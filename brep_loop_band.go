@@ -446,7 +446,7 @@ func brepBandEdge(view prismPayload, w survey2d.SegmentWalk, hole bool, start, e
 	if err != nil {
 		return nil, err
 	}
-	edge.lengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(view.SectionDelta, 1))
+	edge.n.LengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(view.SectionDelta, 1))
 	return edge, nil
 }
 

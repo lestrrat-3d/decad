@@ -1228,9 +1228,9 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 		wantLength += math.Sqrt(1+25*math.Sin(phi)*math.Sin(phi)/(25+10*offset)) * math.Pi / (2 * steps)
 	}
 	for _, edge := range seams {
-		require.Greater(t, edge.length, 1.0)
-		require.Greater(t, edge.lengthBound, 0.0)
-		require.LessOrEqual(t, math.Abs(edge.length-wantLength), edge.lengthBound+1e-6)
+		require.Greater(t, edge.n.Length, 1.0)
+		require.Greater(t, edge.n.LengthBound, 0.0)
+		require.LessOrEqual(t, math.Abs(edge.n.Length-wantLength), edge.n.LengthBound+1e-6)
 		require.InDelta(t, 9, edge.end.n.Position.Z, 1e-8)
 		require.InDelta(t, 10, edge.start.n.Position.Z, 1e-8)
 	}

@@ -717,18 +717,20 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 				}
 				j.lat = &Edge{
-					curve:       Circle3{Center: center, Axis: jAxis, Radius: jRadius},
-					start:       seam,
-					end:         seam,
-					convex:      turn > 0,
-					length:      latitudeLength,
-					lengthBound: frame.LengthBound(latitudeLength, latitudeBound),
-					// The CURVE half of the shared-denotation certificate
-					// (denotation.go): this junction latitude circle is
-					// shared, by construction, between side faces i-1 and i
-					// of THIS build alone (fullRevLoops below), exactly the
-					// role a prism's own rim edge plays for its two caps.
-					denot: body.doc.mintCurve(),
+					curve: Circle3{Center: center, Axis: jAxis, Radius: jRadius},
+					start: seam,
+					end:   seam,
+					n: topo.Edge{
+						Convex:      turn > 0,
+						Length:      latitudeLength,
+						LengthBound: frame.LengthBound(latitudeLength, latitudeBound),
+						// The CURVE half of the shared-denotation certificate
+						// (denotation.go): this junction latitude circle is
+						// shared, by construction, between side faces i-1 and i
+						// of THIS build alone (fullRevLoops below), exactly the
+						// role a prism's own rim edge plays for its two caps.
+						Denot: body.doc.mintCurve(),
+					},
 				}
 			case !rp.full:
 				if j.onAxis {
@@ -747,23 +749,25 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 						}
 					}
 					j.arc = &Edge{
-						curve:       Arc3{Center: center, Axis: jAxis, Radius: jRadius},
-						start:       j.v0,
-						end:         j.v1,
-						convex:      turn > 0,
-						length:      arcLength,
-						lengthBound: frame.LengthBound(arcLength, arcBound),
-						// The CURVE half of the shared-denotation certificate
-						// (denotation.go): this junction arc is shared, by
-						// construction, between side faces i-1 and i of THIS
-						// build alone.
-						denot: body.doc.mintCurve(),
+						curve: Arc3{Center: center, Axis: jAxis, Radius: jRadius},
+						start: j.v0,
+						end:   j.v1,
+						n: topo.Edge{
+							Convex:      turn > 0,
+							Length:      arcLength,
+							LengthBound: frame.LengthBound(arcLength, arcBound),
+							// The CURVE half of the shared-denotation certificate
+							// (denotation.go): this junction arc is shared, by
+							// construction, between side faces i-1 and i of THIS
+							// build alone.
+							Denot: body.doc.mintCurve(),
+						},
 					}
 				}
 			}
 			for _, je := range []*Edge{j.lat, j.arc} {
 				if je != nil {
-					je.curveBound, je.curveBounded = rp.latitudeCurveBound(at, center, jAxis, jRadius.Base())
+					je.n.CurveBound, je.n.CurveBounded = rp.latitudeCurveBound(at, center, jAxis, jRadius.Base())
 				}
 			}
 			js[i] = j
@@ -793,12 +797,14 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				// never reaches it — Table W row 3's on-axis-edge omission
 				// delivered by omission, not a special case to "fix" here.
 				shared := &Edge{
-					curve:       Line3{},
-					start:       js[i].v0,
-					end:         js[(i+1)%n].v0,
-					convex:      dphi < math.Pi,
-					length:      w.Length,
-					lengthBound: frame.LengthBound(w.Length, w.LengthBound),
+					curve: Line3{},
+					start: js[i].v0,
+					end:   js[(i+1)%n].v0,
+					n: topo.Edge{
+						Convex:      dphi < math.Pi,
+						Length:      w.Length,
+						LengthBound: frame.LengthBound(w.Length, w.LengthBound),
+					},
 				}
 				cap0[i], cap1[i] = shared, shared
 				continue
@@ -1024,7 +1030,7 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	if w.Kind == survey2d.WalkFreeform {
 		convex = freeformConvex
 	}
-	e := &Edge{convex: convex, length: w.Length, lengthBound: frame.LengthBound(w.Length, w.LengthBound)}
+	e := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: frame.LengthBound(w.Length, w.LengthBound)}}
 	if w.Kind == survey2d.WalkFreeform {
 		e.curve = NURBSCurve{}
 		if closed {
@@ -1056,7 +1062,7 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	axis := rp.xform.ApplyDir(normal).Scale(sign)
 	center := rp.point(b, w.CU, w.CV, end.phi)
 	radius := units.Millimeters(w.Radius)
-	e.curveBound, e.curveBounded = rp.denotationInput().CapArcCurveBound(plane, end.den, end.phi, center, axis, w.Radius)
+	e.n.CurveBound, e.n.CurveBounded = rp.denotationInput().CapArcCurveBound(plane, end.den, end.phi, center, axis, w.Radius)
 	if closed {
 		v := rp.sweptVertex(b, w.StartU, w.StartV, seam, curveToken{}, end)
 		e.curve = Circle3{Center: center, Axis: axis, Radius: radius}
@@ -1302,13 +1308,15 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 			}
 			j.lat = &Edge{
-				curve:       Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
-				start:       seam,
-				end:         seam,
-				convex:      turn > 0,
-				length:      latitudeLength,
-				lengthBound: frame.LengthBound(latitudeLength, latitudeBound),
-				denot:       body.doc.mintCurve(),
+				curve: Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+				start: seam,
+				end:   seam,
+				n: topo.Edge{
+					Convex:      turn > 0,
+					Length:      latitudeLength,
+					LengthBound: frame.LengthBound(latitudeLength, latitudeBound),
+					Denot:       body.doc.mintCurve(),
+				},
 			}
 		case !rp.full:
 			if j.onAxis {
@@ -1327,19 +1335,21 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 					}
 				}
 				j.arc = &Edge{
-					curve:       Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
-					start:       j.v0,
-					end:         j.v1,
-					convex:      turn > 0,
-					length:      arcLength,
-					lengthBound: frame.LengthBound(arcLength, arcBound),
-					denot:       body.doc.mintCurve(),
+					curve: Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+					start: j.v0,
+					end:   j.v1,
+					n: topo.Edge{
+						Convex:      turn > 0,
+						Length:      arcLength,
+						LengthBound: frame.LengthBound(arcLength, arcBound),
+						Denot:       body.doc.mintCurve(),
+					},
 				}
 			}
 		}
 		for _, je := range []*Edge{j.lat, j.arc} {
 			if je != nil {
-				je.curveBound, je.curveBounded = rp.latitudeCurveBound(at, center, wDir.Scale(sweepSign), j.rho)
+				je.n.CurveBound, je.n.CurveBounded = rp.latitudeCurveBound(at, center, wDir.Scale(sweepSign), j.rho)
 			}
 		}
 		js[i] = j

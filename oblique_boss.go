@@ -84,10 +84,10 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 		if _, ok := edge.curve.(Circle3); !ok {
 			continue
 		}
-		if !edge.curveBounded {
+		if !edge.n.CurveBounded {
 			return nil
 		}
-		sourceBound = max(sourceBound, edge.curveBound)
+		sourceBound = max(sourceBound, edge.n.CurveBound)
 		capCount++
 	}
 	if capCount != 2 || !(sourceBound < radius/1000) {

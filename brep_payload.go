@@ -724,8 +724,11 @@ func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]
 			lo, hi = hi, lo
 		}
 		height := proofbound.BoundedSub(proofbound.MeasuredScalar(hi, owner.SideDelta[1]), proofbound.MeasuredScalar(lo, owner.SideDelta[0]))
-		return &Edge{curve: Line3{}, start: start, end: end, convex: convex,
-			length: hi - lo, lengthBound: height.Bound}, nil
+		return &Edge{curve: Line3{}, start: start, end: end, n: topo.Edge{
+			Convex:      convex,
+			Length:      hi - lo,
+			LengthBound: height.Bound,
+		}}, nil
 	case brepRim0, brepRim1:
 		w := btopo.walls[owner.Face]
 		pp := f.view(bp.xform)
@@ -738,12 +741,15 @@ func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]
 		if owner.Part == brepRim1 {
 			edge = top
 		}
-		edge.lengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1))
+		edge.n.LengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1))
 		return edge, nil
 	default:
 		w := owner.Walk
-		return &Edge{curve: Line3{}, start: start, end: end, convex: convex, length: w.Length,
-			lengthBound: proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1))}, nil
+		return &Edge{curve: Line3{}, start: start, end: end, n: topo.Edge{
+			Convex:      convex,
+			Length:      w.Length,
+			LengthBound: proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1)),
+		}}, nil
 	}
 }
 

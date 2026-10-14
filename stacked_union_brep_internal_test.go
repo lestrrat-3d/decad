@@ -255,7 +255,7 @@ func TestStackedUnionBrepRootedFlushBoss(t *testing.T) {
 	require.Equal(t, 17500.0, got.volume.Value.Base())
 	long := 0
 	for _, e := range got.Edges() {
-		if e.length == 25 {
+		if e.n.Length == 25 {
 			long++
 		}
 	}
@@ -389,7 +389,7 @@ func TestStackedUnionBrepRootedCrossingBoss(t *testing.T) {
 		if _, line := e.curve.(Line3); !line {
 			continue
 		}
-		switch e.length {
+		switch e.n.Length {
 		case 5:
 			short++
 		case 15:

@@ -134,7 +134,7 @@ func requireSameConvexity(t *testing.T, want, got *Body) {
 			if e.IsConvex() {
 				convex = 1
 			}
-			out[[2]float64{convex, e.length}]++
+			out[[2]float64{convex, e.n.Length}]++
 		}
 		return out
 	}
