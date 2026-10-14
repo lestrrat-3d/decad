@@ -60,6 +60,20 @@ record through the same seam proof as an exact prism. This is an exact planar
 section, including any recorded holes, and can enter ordinary profile
 consumers. It does not treat a tessellated BRep face as a source profile.
 
+## Parallel section of an authenticated matching hole-free Loft
+
+An authenticated two-section solid Loft with identical hole-free profile
+records and zero segment alignment may return an exact interior section. The
+two source frames and requested frame must have canonical world-XY axes,
+matching in-plane origins and strictly ordered levels. Identity placement,
+zero blend-construction displacement and authenticated source records are required.
+Each paired boundary point has the same local coordinates in both records,
+so its ruled path is vertical. Every level strictly between the two caps has
+the recorded profile as its material region. Reconstruct that profile on a
+fresh Sketch and require its matching valid region before returning it.
+Cap-level, oblique, translated, twisted and differing-section requests return
+`ErrUnsupported`.
+
 ## Parallel section of an authenticated circular-hole Loft
 
 An authenticated two-section solid Loft with identical outer records, one

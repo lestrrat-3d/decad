@@ -2036,4 +2036,8 @@
 10	0.00	TestSectionDirectLoftAnnulusRefusesCapAndTilt
 10	0.00	TestSectionDirectLoftRefusesPlacementAndShiftedOrigin
 10	0.00	TestSectionDirectLoftRefusesNonExactCenter
-10	0.00	TestSectionDirectLoftRefusesHoleFreeAndCutSources
+10	0.00	TestSectionDirectLoftRefusesCutSource
+10	0.00	TestSectionDirectHoleFreeLoftFeedsExtrude
+10	0.00	TestSectionDirectHoleFreeCircleLoftFeedsExtrude
+10	0.00	TestSectionDirectHoleFreeLoftRefusesUnprovedCases
+10	0.00	TestSectionDirectHoleFreeLoftRefusesTwistedCorrespondence
