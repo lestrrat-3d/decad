@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
@@ -131,9 +132,9 @@ func loftGearSketches(t *testing.T, g loftGear, count int) (*sketch.Sketch, *ske
 func loftGearAssembly(t *testing.T, g loftGear, count int) loftmesh.Assembly {
 	t.Helper()
 	s0, p0, s1, p1 := loftGearSketches(t, g, count)
-	profile0, plane0, _, err := recordProfile(s0, p0)
+	profile0, plane0, _, err := sectioncert.RecordProfile(s0, p0)
 	require.NoError(t, err)
-	profile1, plane1, _, err := recordProfile(s1, p1)
+	profile1, plane1, _, err := sectioncert.RecordProfile(s1, p1)
 	require.NoError(t, err)
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(profile0, profile1, plane0, plane1, nil, loftRecordAreas(t, profile0, profile1), work0, work1)
@@ -393,9 +394,9 @@ func TestLoftStationWalkWorkPerStation(t *testing.T) {
 			t.Parallel()
 			c.skipHeavy(t)
 			s0, sp0, s1, sp1 := loftGearSketches(t, loftGearZ(c.teeth), c.count)
-			profile0, plane0, area0, err := recordProfile(s0, sp0)
+			profile0, plane0, area0, err := sectioncert.RecordProfile(s0, sp0)
 			require.NoError(t, err)
-			profile1, plane1, area1, err := recordProfile(s1, sp1)
+			profile1, plane1, area1, err := sectioncert.RecordProfile(s1, sp1)
 			require.NoError(t, err)
 			work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 			p := uint64(len(profile0.Outer.Segments))
@@ -451,9 +452,9 @@ func TestLoftStationWalkWorkPerStation(t *testing.T) {
 func TestLoftStationWalkRefusesAtTheRaisedWorkLimit(t *testing.T) {
 	t.Parallel()
 	s0, sp0, s1, sp1 := loftGearSketches(t, loftGearZ(8), 1)
-	profile0, plane0, _, err := recordProfile(s0, sp0)
+	profile0, plane0, _, err := sectioncert.RecordProfile(s0, sp0)
 	require.NoError(t, err)
-	profile1, plane1, _, err := recordProfile(s1, sp1)
+	profile1, plane1, _, err := sectioncert.RecordProfile(s1, sp1)
 	require.NoError(t, err)
 	areas := loftRecordAreas(t, profile0, profile1)
 

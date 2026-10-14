@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -20,7 +21,7 @@ import (
 
 // This file is Document.Patch of docs/surface-design.md §5.1: a single planar
 // face built from a recorded profile, on the sketch plane's own frame. It is
-// the seam call (recordProfile) plus one evaluation, evalPatchContext, that
+// the seam call (sectioncert.RecordProfile) plus one evaluation, evalPatchContext, that
 // mirrors evalPrismContext's order without ever building a solid.
 //
 // patchPayload records what the body was built from — profile, frame and
@@ -84,7 +85,7 @@ func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	profile, plane, profileArea, err := recordProfile(s, p)
+	profile, plane, profileArea, err := sectioncert.RecordProfile(s, p)
 	if err != nil {
 		return nil, err
 	}

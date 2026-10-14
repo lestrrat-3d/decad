@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/coil"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -38,7 +39,7 @@ func coilFullTurnArc(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 // reads what the same circle recorded as a CircleSeg reads.
 func TestCoilFullTurnArcClosesLikeACircle(t *testing.T) {
 	s, p := coilFullTurnArc(t)
-	rec, _, _, err := recordProfile(s, p)
+	rec, _, _, err := sectioncert.RecordProfile(s, p)
 	require.NoError(t, err)
 	require.Len(t, rec.Outer.Segments, 1)
 	arc, ok := rec.Outer.Segments[0].(sectionrecord.ArcSeg)

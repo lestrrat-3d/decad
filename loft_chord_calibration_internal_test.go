@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -241,7 +242,7 @@ func wedgeFeatureSize(t *testing.T, sketchOn func(*testing.T, *sketch.World, *sk
 	size := math.Inf(1)
 	for _, plane := range []*sketch.Plane{base, top} {
 		s, p := sketchOn(t, w, plane)
-		rec, _, sketchArea, err := recordProfile(s, p)
+		rec, _, sketchArea, err := sectioncert.RecordProfile(s, p)
 		require.NoError(t, err)
 		area, err := falsifyRecordedArea(rec, sketchArea, freeform.NewFreeformWork())
 		require.NoError(t, err)
@@ -322,7 +323,7 @@ func TestLoftChordCalibrationTrueOutlineIsTheChordedTwin(t *testing.T) {
 	t.Run("A10a: the arc outline is the chorded circle wedge's twin", func(t *testing.T) {
 		w, base, _ := wedgePlanes(t)
 		s, p := wedgeArcSketch(t, w, base)
-		rec, _, _, err := recordProfile(s, p)
+		rec, _, _, err := sectioncert.RecordProfile(s, p)
 		require.NoError(t, err)
 		require.Len(t, rec.Outer.Segments, 3, "two radial lines plus the arc")
 
@@ -341,7 +342,7 @@ func TestLoftChordCalibrationTrueOutlineIsTheChordedTwin(t *testing.T) {
 	t.Run("A10b: the spline outline is the chorded spline wedge's twin", func(t *testing.T) {
 		w, base, _ := wedgePlanes(t)
 		s, p := wedgeSplineSketch(t, w, base)
-		rec, _, _, err := recordProfile(s, p)
+		rec, _, _, err := sectioncert.RecordProfile(s, p)
 		require.NoError(t, err)
 		require.Len(t, rec.Outer.Segments, 3, "two radial lines plus the fit spline")
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +45,7 @@ func neutralSimpleSourceSketch(t *testing.T, extra bool) (*sketch.Sketch, *sketc
 func neutralSimpleSourceRecord(t *testing.T, s *sketch.Sketch,
 	profile *sketch.Profile) *loftFacesTrimRecord {
 	t.Helper()
-	recorded, plane, _, err := recordProfile(s, profile)
+	recorded, plane, _, err := sectioncert.RecordProfile(s, profile)
 	require.NoError(t, err)
 	frame, err := s.Plane().Frame()
 	require.NoError(t, err)

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -94,7 +95,7 @@ func TestLoftEmbeddedFlankRecordsSurviveFilletAndBore(t *testing.T) {
 	require.NoError(t, err)
 	s0, p0 := internalEmbeddedFlankSketch(t, world, world.XY())
 	s1, p1 := internalEmbeddedFlankSketch(t, world, upper)
-	sourceRecord, _, _, err := recordProfile(s0, p0)
+	sourceRecord, _, _, err := sectioncert.RecordProfile(s0, p0)
 	require.NoError(t, err)
 	var source []fitSplineSeg
 	var rootCorners []r3.Vec

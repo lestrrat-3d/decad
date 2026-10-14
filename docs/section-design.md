@@ -370,7 +370,7 @@ Admission explicitly checks every certified boundary line and endpoint for
 live membership in that Sketch, reference status, the expected `Source()`, and
 `IsStale() == false`. Sketch revision does not hash reference source or stale
 flags, so matching revisions alone cannot establish this. The central
-`recordProfile` and `recordChain` gates scan all Sketch points and entities for
+`sectioncert.RecordProfile` and `recordChain` gates scan all Sketch points and entities for
 the section-source marker or attached certificate before recording any profile
 or chain. They refuse even a second ordinary region in the same Sketch when a
 bounded section marker exists. An in-place load, a reference refresh or a

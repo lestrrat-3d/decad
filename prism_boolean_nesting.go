@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -215,7 +216,7 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 // the ProfileRecord and error are surfaced.
 func prismRecordProfileContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (profileRecord, error) {
 	return prismProfileRecordContext(ctx, func() (profileRecord, error) {
-		profile, _, _, err := recordProfile(s, p)
+		profile, _, _, err := sectioncert.RecordProfile(s, p)
 		return profile, err
 	})
 }

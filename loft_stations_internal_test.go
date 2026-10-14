@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -1412,7 +1413,7 @@ type loftTargetReading struct {
 // depends on neither.
 func readLoftTarget(t *testing.T, s *sketch.Sketch, p *sketch.Profile) loftTargetReading {
 	t.Helper()
-	rec, _, sketchArea, err := recordProfile(s, p)
+	rec, _, sketchArea, err := sectioncert.RecordProfile(s, p)
 	require.NoError(t, err)
 	area, err := falsifyRecordedArea(rec, sketchArea, freeform.NewFreeformWork())
 	require.NoError(t, err)

@@ -480,7 +480,7 @@ refuses S15 under the shared cap. The former even-share measurement was 6.0 s
 and 55.6 M work units at 7937 cells; the shared allocation needs a fresh cost
 measurement. The reconstruction charge refuses a
 record past its ceiling before sketch arranges anything, in well under a millisecond,
-and the z = 70 gear refuses there in 2.1 s, its `recordProfile` included.
+and the z = 70 gear refuses there in 2.1 s, its `sectioncert.RecordProfile` included.
 
 ## 8. Required tests
 
