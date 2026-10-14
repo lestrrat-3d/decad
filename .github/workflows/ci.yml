@@ -11,9 +11,9 @@ permissions:
   contents: read
 
 concurrency:
-  # A newer push to the same branch or PR cancels the older, still running or queued run.
+  # PR runs: a newer push cancels the older run. main runs: the running one finishes, and only the newest waiting run is kept.
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Lint and test jobs run independently. The race shards share the two test
