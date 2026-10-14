@@ -237,8 +237,12 @@ inconsistent end.
 
 ## Cones from a revolved face
 
-`ConeFromFace(ctx, body, face, far)` builds a tool cone for a Revolve blank
-whose strict blank and tool relations then hold by construction. `body` must
+`ConeFromFace(ctx, body, face, far)` builds a tool cone for a Revolve blank.
+The cone is the nearest representable strict offset from the selected face's
+exact line. This need not be one float step: the rounded value may already be
+strictly sided, or the bound may be MaxFloat64. The construction guarantees
+separation only from that line. Other blank and tool relations are left to
+later checks. `body` must
 pass `recordedRevolveSection`: a live, unplaced, full Revolve about world X of
 whole straight sides. That section has 4 to 128 recorded segments, strictly
 positive X coordinates, nonnegative radii, no holes and one side of the axis;

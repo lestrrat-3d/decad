@@ -1026,12 +1026,16 @@ construction is in `docs/loft-face-sections-design.md`.
 
 `ConeFromFace(ctx, body, face, far)` is a free function that returns the full
 cone about the world X axis of a Revolve `body` whose meridian extends the
-selected conical `face`, moved off the face by one float step (`far` is a
-`units.Value` length). `face` resolves under the implicit exactly-one. It reads
-the exact recorded section, never the rounded `Cone` tag, so the cone lies
-strictly on the face's empty side on every platform. The result is an ordinary
-Revolve body, `body` stays live, and `far` must be a finite negative axial
-coordinate (below X = 0) that is also below both ends of the face. An
+selected conical `face`, using the nearest representable strict offset from
+that face's exact line (`far` is a `units.Value` length). This need not be one
+float step: the rounded value may already be strictly sided, or the bound may
+be MaxFloat64. The construction guarantees separation only from the selected
+face line; later checks handle
+other blank and tool relations. `face` resolves under the implicit exactly-one
+rule. The function reads the exact recorded section, never the rounded `Cone`
+tag. The result is an ordinary Revolve body, and `body` stays live. `far` must
+be a finite negative axial coordinate (below X = 0) that is also below both
+ends of the face. An
 unsupported body or face, a `far` that is not below the face, or a `far` that
 is not negative is `ErrUnsupported`, as is a cone Revolve would classify as
 a cylinder. A `nil` ctx, a `nil` body or a body of no document is

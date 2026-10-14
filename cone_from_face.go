@@ -11,7 +11,11 @@ import (
 )
 
 // ConeFromFace builds the full cone about body's axis that extends the
-// selected face's straight meridian, moved off body by one float step.
+// selected face's straight meridian, using the nearest representable strict
+// offset from that face's exact line. This need not be one float step: the
+// rounded value may already be strictly sided, or the bound may be MaxFloat64.
+// The construction guarantees separation only from the selected face line.
+// Other blank and tool relations keep their own checks.
 //
 // body must be a live, unplaced, full Revolve about world X whose recorded
 // section is a closed straight-sided walk of 4 to 128 whole segments with
