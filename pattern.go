@@ -74,11 +74,10 @@ func resolvePatternSpec(spec PatternSpec) (patternrecord.Spec, error) {
 }
 
 // PatternCopies returns Count−1 new live bodies, instances 1..Count−1 of
-// spec in order, and leaves the receiver live (docs/mirror-pattern-design.md
-// §4.3).
+// spec in order, and leaves b live (docs/mirror-pattern-design.md §4.3).
 //
-// The gates are Copy's — a nil context is ErrDegenerate, a body this
-// evaluator did not build is ErrUnsupported, a retired or foreign receiver is
+// The gates are Copy's — a nil context or a nil b is ErrDegenerate, a body
+// this evaluator did not build is ErrUnsupported, a retired or foreign b is
 // refused — plus the spec's own: a nil spec or a Count below 2 is
 // ErrDegenerate; a non-finite Dir, Axis or Center is ErrNotFinite and a zero
 // Dir or Axis ErrDegenerate; a Step that is not a length is ErrUnitKind, a
@@ -91,7 +90,7 @@ func resolvePatternSpec(spec PatternSpec) (patternrecord.Spec, error) {
 // normal, keeps one frame: each instance is the receiver's own record moved
 // in its plane, so a pattern of integer-millimetre holes stays Exact. Its
 // readings carry the motion's rounding as a section displacement.
-func (b *Body) PatternCopies(ctx context.Context, spec PatternSpec) ([]*Body, error) {
+func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, error) {
 	d, rp, keeping, err := b.patternReceiver(ctx, spec)
 	if err != nil {
 		return nil, err
@@ -301,9 +300,8 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 	}
 }
 
-// Patterned returns ONE body holding every instance of spec, the receiver
-// included, and retires the receiver (docs/mirror-pattern-design.md §4.3,
-// §6.1). Its gates are PatternCopies'. The instances combine by the first
+// Patterned returns ONE body holding every instance of spec, b included,
+// and retires b (docs/mirror-pattern-design.md §4.3, §6.1). Its gates are PatternCopies'. The instances combine by the first
 // rule that applies:
 //
 //  1. A straight prism or a prism group on the frame-keeping arm whose
@@ -319,8 +317,8 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 //
 // Every instance and every intermediate result is built before anything is
 // registered, so a refusal or a canceled context leaves the document
-// unchanged and the receiver live.
-func (b *Body) Patterned(ctx context.Context, spec PatternSpec) (*Body, error) {
+// unchanged and b live.
+func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 	d, rp, keeping, err := b.patternReceiver(ctx, spec)
 	if err != nil {
 		return nil, err

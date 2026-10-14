@@ -61,7 +61,7 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 	t.Run("integer step", func(t *testing.T) {
 		t.Parallel()
 		peg := patternPrism(t, 0, 0, 5, 5, 0)
-		copies, err := peg.PatternCopies(t.Context(), LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 4})
+		copies, err := PatternCopies(t.Context(), peg, LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 4})
 		require.NoError(t, err)
 		for _, c := range copies {
 			pp := patternInstance(t, c)
@@ -72,14 +72,14 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 	t.Run("along the sweep", func(t *testing.T) {
 		t.Parallel()
 		peg := patternPrism(t, 0, 0, 5, 5, 0)
-		copies, err := peg.PatternCopies(t.Context(), LinearPattern{Dir: r3.NewVec(0, 0, 1), Step: units.Millimeters(10), Count: 2})
+		copies, err := PatternCopies(t.Context(), peg, LinearPattern{Dir: r3.NewVec(0, 0, 1), Step: units.Millimeters(10), Count: 2})
 		require.NoError(t, err)
 		require.NotEqual(t, r3.Identity(), patternInstance(t, copies[0]).Xform, "a placed Copy instance carries the motion in its placement")
 	})
 	t.Run("quarter turns", func(t *testing.T) {
 		t.Parallel()
 		block := patternPrism(t, 18, -1, 22, 1, 0)
-		copies, err := block.PatternCopies(t.Context(), CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 4})
+		copies, err := PatternCopies(t.Context(), block, CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 4})
 		require.NoError(t, err)
 		for _, c := range copies {
 			require.Zero(t, patternInstance(t, c).SectionDelta)
@@ -89,7 +89,7 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 		t.Parallel()
 		peg := patternPrism(t, 0, 0, 5, 5, 0)
 		step := units.Inches(0.3)
-		copies, err := peg.PatternCopies(t.Context(), LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: step, Count: 2})
+		copies, err := PatternCopies(t.Context(), peg, LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: step, Count: 2})
 		require.NoError(t, err)
 		held, err := step.In(units.Millimeter)
 		require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestPatternCopiesChargesTheMotion(t *testing.T) {
 	t.Run("six pins", func(t *testing.T) {
 		t.Parallel()
 		pin := patternPrism(t, 20, 0, 0, 0, 2)
-		copies, err := pin.PatternCopies(t.Context(), CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 6})
+		copies, err := PatternCopies(t.Context(), pin, CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 6})
 		require.NoError(t, err)
 		root3 := new(big.Float).SetPrec(512).Sqrt(new(big.Float).SetPrec(512).SetInt64(3))
 		ten3 := new(big.Float).SetPrec(512).Mul(root3, new(big.Float).SetPrec(512).SetInt64(10))
@@ -180,7 +180,7 @@ func TestPatternCopiesUnionStackArm(t *testing.T) {
 			require.True(t, ok)
 			runs := sp.outerRuns()
 			require.Len(t, runs, 2, "the premise: the outer loop changes between slabs")
-			copies, err := part.PatternCopies(t.Context(), LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: tc.Step, Count: 2})
+			copies, err := PatternCopies(t.Context(), part, LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: tc.Step, Count: 2})
 			require.NoError(t, err)
 			inst, ok := copies[0].payload.(stackedPrismPayload)
 			require.True(t, ok)

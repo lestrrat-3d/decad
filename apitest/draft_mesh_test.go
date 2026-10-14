@@ -287,7 +287,7 @@ func TestDraftPatterned(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	a := draftCases()[0].build(t, doc)
-	got, err := a.Patterned(t.Context(), decad.LinearPattern{Dir: draftShift, Step: units.Millimeters(draftShift.Len()), Count: 2})
+	got, err := decad.Patterned(t.Context(), a, decad.LinearPattern{Dir: draftShift, Step: units.Millimeters(draftShift.Len()), Count: 2})
 	require.NoError(t, err)
 	d := bfMul(bf(boxHeight), taperTan(5))
 	requireVolumeCovers(t, "patterned union", got, bfSub(bfMul(bf(2), boxVolume(d)), draftOverlap(d)), 1e-9)

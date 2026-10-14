@@ -70,7 +70,7 @@ func TestPatternedEnclosedVoidTakesMeshPath(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	c := polyPrismBody(t, doc, [][2]float64{{0, 0}, {6, 1}, {6, 4}, {3, 3.5}, {3, 6.5}, {6, 6}, {6, 9}, {0, 10}}, 1)
-	got, err := c.Patterned(t.Context(), decad.LinearPattern{Dir: patternX, Step: units.Millimeters(5), Count: 2})
+	got, err := decad.Patterned(t.Context(), c, decad.LinearPattern{Dir: patternX, Step: units.Millimeters(5), Count: 2})
 	if err == nil {
 		volume, verr := got.Volume()
 		require.NoError(t, verr)
