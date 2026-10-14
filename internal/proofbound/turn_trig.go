@@ -214,8 +214,11 @@ func TurnSinCosInterval(t *big.Rat) (RatInterval, RatInterval) {
 // That evaluation is a pure function of the residual, and the period and
 // octant reductions are exact, so every answer equals TurnSinCosInterval's
 // for the same turn. A memo lives inside the call that made it and is never
-// stored past it, and it is not safe for concurrent use. Every answer carries freshly allocated endpoints; the memo
-// never hands out the values it holds.
+// stored past it, and it is not safe for concurrent use. Every answer
+// carries freshly allocated endpoints; the memo never hands out the values it
+// holds. The memo assumes PiLower, PiUpper and TrigFixedOne do not change
+// during its lifetime, so the equality with TurnSinCosInterval holds under
+// that assumption; nothing in the tree writes them after initialization.
 type TurnTrigMemo struct {
 	octant map[string][2]RatInterval
 }
