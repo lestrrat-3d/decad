@@ -249,7 +249,7 @@ func projectedPatchProofLimited(budget *proofbound.WorkBudget, verts []r3.Vec,
 		if points[i].U.Cmp(points[j].U) == 0 && points[i].V.Cmp(points[j].V) == 0 {
 			return ProjectedPatchBoundary
 		}
-		area.Add(area, meshbool.Cross2x(origin, points[i], points[j]))
+		proof.AddRat(area, area, meshbool.Cross2x(origin, points[i], points[j]))
 	}
 	if area.Sign() != sigma {
 		return ProjectedPatchBoundary

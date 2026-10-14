@@ -33,7 +33,7 @@ func chamferGridIndex(coord, step *big.Rat) (int64, bool) {
 	if coord == nil || step == nil || step.Sign() <= 0 {
 		return 0, false
 	}
-	q := new(big.Rat).Quo(coord, step)
+	q := proofarith.QuoRat(new(big.Rat), coord, step)
 	i := new(big.Int).Div(q.Num(), q.Denom())
 	return i.Int64(), i.IsInt64()
 }
@@ -194,7 +194,7 @@ func chamferPointEdgeWithin(p proofarith.Xpt,
 		return false
 	}
 	v := proofarith.Xsub(p, edge.A)
-	t := new(big.Rat).Quo(proofarith.XdotRat(v, d), den)
+	t := proofarith.QuoRat(new(big.Rat), proofarith.XdotRat(v, d), den)
 	if t.Sign() < 0 {
 		t.SetInt64(0)
 	} else if t.Cmp(big.NewRat(1, 1)) > 0 {

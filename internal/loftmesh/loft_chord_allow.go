@@ -180,9 +180,9 @@ func computeLoftChordedAllow(
 					cellMoment[axis].Neg(cellMoment[axis])
 				}
 			}
-			twistVolumeCorrection.Add(twistVolumeCorrection, cellTwist)
+			proofarith.AddRat(twistVolumeCorrection, twistVolumeCorrection, cellTwist)
 			for axis := range cellMoment {
-				twistMomentCorrection[axis].Add(twistMomentCorrection[axis], cellMoment[axis])
+				proofarith.AddRat(twistMomentCorrection[axis], twistMomentCorrection[axis], cellMoment[axis])
 			}
 			maxTwistOffsetUpper = math.Max(maxTwistOffsetUpper, allows.TwistOffsetUpper)
 
@@ -201,7 +201,7 @@ func computeLoftChordedAllow(
 				lowerLo, _ = WallTriangleArea(proofarith.Xsub(proofarith.XptOf(vHi), vLoX), proofarith.Xsub(proofarith.XptOf(wHi), vLoX))
 				upperLo, _ = WallTriangleArea(proofarith.Xsub(proofarith.XptOf(wHi), vLoX), proofarith.Xsub(proofarith.XptOf(wLo), vLoX))
 			}
-			areaCorrection.Add(areaCorrection, polynomial.MustRatOf(bilinearValue))
+			proofarith.AddRat(areaCorrection, areaCorrection, polynomial.MustRatOf(bilinearValue))
 			areaCorrection.Sub(areaCorrection, polynomial.MustRatOf(lowerLo))
 			areaCorrection.Sub(areaCorrection, polynomial.MustRatOf(upperLo))
 			stationLeg := proofbound.CellStationShiftAreaAllow(

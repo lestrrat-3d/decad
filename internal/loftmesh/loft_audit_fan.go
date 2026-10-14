@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // loftFanMin is the incident flat triangle count from which a vertex gets an
@@ -114,8 +115,8 @@ type loftFanRim struct {
 // loftFanHalf is 0 for the directions in the half-open upper half-plane around
 // v (above it, or level and to its right) and 1 for the others.
 func loftFanHalf(v, p meshbool.Xp2) int {
-	dv := p.V.Cmp(v.V)
-	if dv > 0 || dv == 0 && p.U.Cmp(v.U) > 0 {
+	dv := proof.CmpRat(p.V, v.V)
+	if dv > 0 || dv == 0 && proof.CmpRat(p.U, v.U) > 0 {
 		return 0
 	}
 	return 1
