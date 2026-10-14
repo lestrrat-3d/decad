@@ -385,7 +385,7 @@ func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (profileRecord
 	if !match.Valid {
 		return profileRecord{}, false, prismcells.InvalidRegionError("union")
 	}
-	recorded, err := prismRecordArrangedProfileContext(ctx, match)
+	recorded, err := prismcells.RecordArrangedProfileContext(ctx, match)
 	if err != nil {
 		return profileRecord{}, false, err
 	}

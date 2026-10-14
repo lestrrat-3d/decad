@@ -418,7 +418,7 @@ func classBPerpendicularRegion(ctx context.Context, cp classBPair, region profil
 	if err != nil || !resolved || sceneDelta.A != 0 || sceneDelta.B != 0 {
 		return profileRecord{}, false, err
 	}
-	profile, err := prismRecordProfileContext(ctx, s, match)
+	profile, err := prismcells.RecordProfileContext(ctx, s, match)
 	if err != nil {
 		return profileRecord{}, false, err
 	}
