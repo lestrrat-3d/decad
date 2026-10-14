@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -12,8 +13,10 @@ import (
 // The census keeps a private deep copy of each arc it derived, and a consumer
 // holding the census compares an owned arc with that copy instead of
 // rederiving it. This test holds the comparison to the full live check for
-// every change a consumer could make to an owned arc, in place or by
-// replacement.
+// seven sample changes of an owned arc, and requires the comparison with the
+// snapshot to refuse a change of each of the 19 rational leaves (in place and
+// by replacement) and of every scalar and identity field the arc equality
+// reads.
 func TestCurvedCensusOwnedArcsMatchLiveCheck(t *testing.T) {
 	blank, trimmed, _ := neutralArcSeamSource(t)
 	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
@@ -100,6 +103,88 @@ func TestCurvedCensusOwnedArcsMatchLiveCheck(t *testing.T) {
 		got, _ := both(census, own.arc)
 		require.True(t, got)
 
+		// Every field the equality reads must refuse a change through the
+		// snapshot comparison. The full check agrees on the samples above.
+		refuses := func(name string, apply func() (restore func())) {
+			restore := apply()
+			in, err := revolveLoftFacesToolCapOccupiedArcCurrentIn(t.Context(), proof, census, own.arc)
+			require.NoError(t, err, name)
+			require.False(t, in, name)
+			restore()
+			in, err = revolveLoftFacesToolCapOccupiedArcCurrentIn(t.Context(), proof, census, own.arc)
+			require.NoError(t, err, name)
+			require.True(t, in, name+" restored")
+		}
+		delta := big.NewRat(1, 1<<20)
+		leaves := ratLeaves(own.arc)
+		require.Len(t, leaves, 19)
+		for i, leaf := range leaves {
+			refuses(fmt.Sprintf("leaf %d in place", i), func() func() {
+				saved := new(big.Rat).Set(*leaf)
+				(*leaf).Add(*leaf, delta)
+				return func() { (*leaf).Set(saved) }
+			})
+			refuses(fmt.Sprintf("leaf %d replaced", i), func() func() {
+				saved := *leaf
+				*leaf = new(big.Rat).Add(saved, delta)
+				return func() { *leaf = saved }
+			})
+		}
+		a := own.arc
+		faces := trimmed.Faces()
+		otherFace := func(f *Face) *Face {
+			if f == faces[0] {
+				return faces[1]
+			}
+			return faces[0]
+		}
+		scalars := map[string]func() func(){
+			"band": func() func() { a.band++; return func() { a.band-- } },
+			"through": func() func() {
+				a.throughPositiveY = !a.throughPositiveY
+				return func() { a.throughPositiveY = !a.throughPositiveY }
+			},
+			"blankFace": func() func() {
+				f := a.circle.blankFace
+				a.circle.blankFace = otherFace(f)
+				return func() { a.circle.blankFace = f }
+			},
+			"capFace": func() func() {
+				f := a.circle.capFace
+				a.circle.capFace = otherFace(f)
+				return func() { a.circle.capFace = f }
+			},
+			"capOrigin": func() func() {
+				f := a.circle.capOrigin
+				a.circle.capOrigin.Role += "x"
+				return func() { a.circle.capOrigin = f }
+			},
+			"circle span": func() func() { a.circle.span++; return func() { a.circle.span-- } },
+			"tool":        func() func() { a.circle.tool++; return func() { a.circle.tool-- } },
+			"sourceMiss": func() func() {
+				a.circle.sourceMiss = !a.circle.sourceMiss
+				return func() { a.circle.sourceMiss = !a.circle.sourceMiss }
+			},
+		}
+		for name, apply := range scalars {
+			refuses(name, apply)
+		}
+		for bi, b := range [...]*revolveLoftFacesToolCapBoundary{&a.negativeZ, &a.positiveZ} {
+			refuses(fmt.Sprintf("boundary %d segment", bi), func() func() { b.segment++; return func() { b.segment-- } })
+			refuses(fmt.Sprintf("boundary %d span", bi), func() func() { b.span++; return func() { b.span-- } })
+			refuses(fmt.Sprintf("boundary %d outward", bi), func() func() { b.outward = !b.outward; return func() { b.outward = !b.outward } })
+			refuses(fmt.Sprintf("boundary %d ref", bi), func() func() {
+				f := b.ref
+				b.ref.Role += "x"
+				return func() { b.ref = f }
+			})
+			refuses(fmt.Sprintf("boundary %d face", bi), func() func() {
+				f := b.face
+				b.face = otherFace(f)
+				return func() { b.face = f }
+			})
+		}
+
 		// A deep copy is not owned and takes the full path.
 		clone := revolveLoftFacesCloneToolCapOccupiedArc(own.arc)
 		got, _ = both(census, &clone)
@@ -124,4 +209,18 @@ func TestCurvedCensusOwnedArcsMatchLiveCheck(t *testing.T) {
 		"update revolveLoftFacesCloneToolCapOccupiedArc and the Equal functions")
 	require.Equal(t, 7, reflect.TypeFor[revolveLoftFacesToolCapBoundary]().NumField(),
 		"update revolveLoftFacesCloneToolCapOccupiedArc and the Equal functions")
+}
+
+// ratLeaves returns the address of every rational an occupied arc holds: the
+// circle's x and radius, the time, and each boundary's parameter and box
+// bounds.
+func ratLeaves(a *revolveLoftFacesToolCapOccupiedArc) []**big.Rat {
+	out := []**big.Rat{&a.circle.x, &a.circle.radius, &a.time}
+	for _, b := range [...]*revolveLoftFacesToolCapBoundary{&a.negativeZ, &a.positiveZ} {
+		out = append(out, &b.parameter.Lo, &b.parameter.Hi)
+		for i := range b.box {
+			out = append(out, &b.box[i].Lo, &b.box[i].Hi)
+		}
+	}
+	return out
 }
