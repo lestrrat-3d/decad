@@ -285,8 +285,8 @@ jobs:
             exit 1
           fi
 
-  # The packages outside the root run on two Ubuntu runners. macOS and Windows
-  # run the whole suite without the race detector.
+  # The packages outside the root run on two Ubuntu runners. The main-only
+  # platform job below runs the whole suite on macOS and Windows.
   #
   # ./dynamics/ has a runner of its own. Its top-level tests call t.Parallel(),
   # so they run concurrently, and their time under -race depends on the
@@ -312,33 +312,21 @@ jobs:
             packages: "./dynamics/"
             timeout: "30m"
             budget: "600"
-          - os: macos-latest
-            race: ""
-            shard: ""
-            packages: ""
-          - os: windows-latest
-            race: ""
-            shard: ""
-            packages: ""
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # macOS and Windows keep setup-go's cache: each is the only job with its
-      # key, so the entry it saves holds its own build.
       - name: Install Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: ${{ runner.os != 'Linux' }}
+          cache: false
 
-      # Both Linux runners compile the root package, which changes in nearly
-      # every pull request, so their keys cover go.mod and go.sum alone. The
-      # cache name comes from the existing matrix fields, so the job names stay
-      # as they are.
+      # Both runners compile the root package, which changes in nearly every
+      # pull request, so their keys cover go.mod and go.sum alone. The cache
+      # name comes from the existing matrix fields.
       - name: Restore Go build cache
-        if: runner.os == 'Linux'
         uses: ./.github/actions/go-build-cache-restore
         with:
           name: race-${{ matrix.packages == './dynamics/' && 'dynamics' || 'packages' }}
@@ -442,17 +430,44 @@ jobs:
             exit 1
           fi
 
-      # The whole-suite run is the non-Linux leg: no shard, and no package
-      # operand of its own. The examples runner has a `packages:` operand, so
-      # this must test BOTH fields or it would re-run the entire suite there.
-      # Its apitest binary now includes the full eight-tooth bevel pattern.
+      - name: Save Go build cache
+        uses: ./.github/actions/go-build-cache-save
+
+  # The platform check names match the former macOS and Windows matrix legs.
+  test-platforms:
+    name: test (${{ matrix.os }})
+    if: github.event_name != 'pull_request'
+    needs: [race-binary]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            race: ""
+            shard: ""
+            packages: ""
+          - os: windows-latest
+            race: ""
+            shard: ""
+            packages: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      # The whole-suite runner has no shard or package operand. Check both so
+      # a future matrix change cannot make it repeat the Linux package tests.
       - name: Run tests
         if: matrix.shard == '' && matrix.packages == ''
         run: go test ${{ matrix.race }} -timeout 30m ./...
-
-      - name: Save Go build cache
-        if: runner.os == 'Linux'
-        uses: ./.github/actions/go-build-cache-save
 
   # Verify the tree is tidy.
   verify:
@@ -479,6 +494,7 @@ jobs:
   # renderer or the landing clip fails here.
   gallery:
     name: gallery (README images and landing clip)
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -556,6 +572,7 @@ jobs:
 
   # Scan the module and its dependencies for known vulnerabilities.
   govulncheck:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
       GOVULNCHECK_VERSION: v1.4.0
