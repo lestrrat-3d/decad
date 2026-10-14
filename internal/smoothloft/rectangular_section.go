@@ -40,9 +40,9 @@ func (s *RectangularSection) At(z float64) (float64, float64, bool) {
 			continue
 		}
 		t := div(sub(level, span.start), sub(span.end, span.start))
-		w, errW := exactFloat(fourCubicAt(span.width, t))
-		h, errH := exactFloat(fourCubicAt(span.depth, t))
-		return w, h, errW == nil && errH == nil && w > 0 && h > 0
+		w, exactW := fourCubicAt(span.width, t).Float64()
+		h, exactH := fourCubicAt(span.depth, t).Float64()
+		return w, h, exactW && exactH && !math.IsInf(w, 0) && !math.IsInf(h, 0) && w > 0 && h > 0
 	}
 	return 0, 0, false
 }
