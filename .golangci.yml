@@ -54,6 +54,14 @@ linters:
     - wsl
     - wsl_v5
   settings:
+    forbidigo:
+      # analyze-types matches a method by its type, so the pattern below names
+      # (*big.Rat).Add and its siblings whatever the receiver is called.
+      analyze-types: true
+      forbid:
+        - pattern: ^(fmt\.Print(|f|ln)|print|println)$
+        - pattern: ^big\.Rat\.(Add|Sub|Mul|Quo|Cmp)$
+          msg: raw big.Rat arithmetic; use proof.AddRat, SubRat, MulRat, QuoRat or CmpRat
     goconst:
       min-occurrences: 5
     govet:
@@ -86,9 +94,17 @@ linters:
       - linters:
           - forbidigo
         path: (^|/)cmd/
+      # The print ban never applied under internal/.
       - linters:
           - forbidigo
         path: (^|/)internal/
+        text: forbidden by pattern
+      # The big.Rat ban applies to non-test files of these packages and
+      # files only, where every raw Rat call is migrated to internal/proof.
+      - linters:
+          - forbidigo
+        text: raw big.Rat arithmetic
+        path-except: ^internal/(proofbound/|shellseparation/shell\.go$|massmoment/(tensor|prism_frame)\.go$|loftcylinder/ring_edge_records\.go$|momentregion/state\.go$|motionbound/interval_matrix\.go$|revolvemesh/tessellate_revolve_volume\.go$)
       - linters:
           - forbidigo
           - errcheck

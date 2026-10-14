@@ -92,10 +92,10 @@ func (s Side) Extents() (up, down [3]*big.Rat) {
 			linUp, linDown := s.FirstOrder(c, d)
 			hi := proofarith.AddRat(linUp, linUp, s.Corners.Hi[c][d])
 			lo := proofarith.SubRat(linDown, linDown, s.Corners.Lo[c][d])
-			if up[d] == nil || hi.Cmp(up[d]) > 0 {
+			if up[d] == nil || proofarith.CmpRat(hi, up[d]) > 0 {
 				up[d] = hi
 			}
-			if down[d] == nil || lo.Cmp(down[d]) > 0 {
+			if down[d] == nil || proofarith.CmpRat(lo, down[d]) > 0 {
 				down[d] = lo
 			}
 		}

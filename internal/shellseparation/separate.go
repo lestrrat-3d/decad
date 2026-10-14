@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -183,9 +184,9 @@ func exactXRotation(m [3][3]*big.Rat) bool {
 			return false
 		}
 	}
-	return m[1][1].Cmp(m[2][2]) == 0 &&
-		m[1][2].Cmp(new(big.Rat).Neg(m[2][1])) == 0 &&
-		m[0][0].Cmp(ratOne()) == 0
+	return proof.CmpRat(m[1][1], m[2][2]) == 0 &&
+		proof.CmpRat(m[1][2], new(big.Rat).Neg(m[2][1])) == 0 &&
+		proof.CmpRat(m[0][0], ratOne()) == 0
 }
 
 func separateCanonical(ctx context.Context, shells []Shell, moves []r3.Transform,
@@ -245,7 +246,7 @@ func separateCanonical(ctx context.Context, shells []Shell, moves []r3.Transform
 			if !okI || !okJ {
 				return false
 			}
-			if hiI.Cmp(loJ) < 0 || hiJ.Cmp(loI) < 0 {
+			if proof.CmpRat(hiI, loJ) < 0 || proof.CmpRat(hiJ, loI) < 0 {
 				continue
 			}
 			if transfer && len(shells) > 2 {
@@ -311,7 +312,7 @@ func sourceAxialDrift(p Shell, moves []r3.Transform, maps [][3][3]*big.Rat,
 		}
 		for _, reference := range []*big.Rat{ratOne(), firstScale} {
 			gap := ratAbs(ratSub(scale, reference))
-			if gap.Cmp(defect) > 0 {
+			if proof.CmpRat(gap, defect) > 0 {
 				defect = gap
 			}
 		}
@@ -364,9 +365,9 @@ func transferSeparation(p Shell, moves []r3.Transform, maps [][3][3]*big.Rat,
 		for column := range 3 {
 			entry := new(big.Rat)
 			for k := range 3 {
-				entry.Add(entry, ratMul(mi[row][k], m1[k][column]))
+				proof.AddRat(entry, entry, ratMul(mi[row][k], m1[k][column]))
 			}
-			deviation.Add(deviation, ratAbs(ratSub(entry, mj[row][column])))
+			proof.AddRat(deviation, deviation, ratAbs(ratSub(entry, mj[row][column])))
 		}
 	}
 	allowance := proofbound.AbsSumUpper(
@@ -448,7 +449,7 @@ func slabsClearance(ctx context.Context, pa, pb Shell, axialExtra float64) (floa
 		if !validA || !validB {
 			return 0, false
 		}
-		separate := loA == nil || loB == nil || hiA.Cmp(loB) < 0 || hiB.Cmp(loA) < 0
+		separate := loA == nil || loB == nil || proof.CmpRat(hiA, loB) < 0 || proof.CmpRat(hiB, loA) < 0
 		if !separate {
 			for _, axis := range slabHullAxes(pa, fa, pb, fb) {
 				if err := ctx.Err(); err != nil {
@@ -464,7 +465,7 @@ func slabsClearance(ctx context.Context, pa, pb Shell, axialExtra float64) (floa
 				if !validA || !validB {
 					return 0, false
 				}
-				if loA == nil || loB == nil || hiA.Cmp(loB) < 0 || hiB.Cmp(loA) < 0 {
+				if loA == nil || loB == nil || proof.CmpRat(hiA, loB) < 0 || proof.CmpRat(hiB, loA) < 0 {
 					separate = true
 					break
 				}
@@ -475,7 +476,7 @@ func slabsClearance(ctx context.Context, pa, pb Shell, axialExtra float64) (floa
 		}
 		if loA != nil && loB != nil {
 			var gap *big.Rat
-			if hiA.Cmp(loB) < 0 {
+			if proof.CmpRat(hiA, loB) < 0 {
 				gap = ratSub(loB, hiA)
 			} else if hiB.Cmp(loA) < 0 {
 				gap = ratSub(loA, hiB)
@@ -664,12 +665,12 @@ func slabProjection(p Shell, facets []int, slabLo, slabHi float64, ny, nz *big.R
 			value := slabCandidateExact(p, facets[f], k, limit, slabLo, slabHi, dir, axialExtra)
 			c := ratF(charge)
 			if needLo {
-				if lower := ratSub(value, c); lo == nil || lower.Cmp(lo) < 0 {
+				if lower := ratSub(value, c); lo == nil || proof.CmpRat(lower, lo) < 0 {
 					lo = lower
 				}
 			}
 			if needHi {
-				if upper := ratAdd(value, c); hi == nil || upper.Cmp(hi) > 0 {
+				if upper := ratAdd(value, c); hi == nil || proof.CmpRat(upper, hi) > 0 {
 					hi = upper
 				}
 			}
@@ -698,7 +699,7 @@ func slabCandidateExact(p Shell, i, k, limit int, slabLo, slabHi float64, dir di
 	vn := p.Verts[tri[(k+1)%3]]
 	valueN := dir.exact(vn.Y, vn.Z)
 	xk, xn, l := ratF(vk.X), ratF(vn.X), ratF(edge)
-	t := new(big.Rat).Quo(ratSub(l, xk), ratSub(xn, xk))
+	t := proof.QuoRat(new(big.Rat), ratSub(l, xk), ratSub(xn, xk))
 	return ratAdd(valueK, ratMul(t, ratSub(valueN, valueK)))
 }
 
@@ -725,10 +726,10 @@ func projection(p Shell, ny, nz *big.Rat, norm float64) (*big.Rat, *big.Rat, boo
 			continue
 		}
 		value := dir.exact(v.Y, v.Z)
-		if needLo && (lo == nil || value.Cmp(lo) < 0) {
+		if needLo && (lo == nil || proof.CmpRat(value, lo) < 0) {
 			lo = value
 		}
-		if needHi && (hi == nil || value.Cmp(hi) > 0) {
+		if needHi && (hi == nil || proof.CmpRat(value, hi) > 0) {
 			hi = value
 		}
 	}

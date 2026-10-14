@@ -3,6 +3,7 @@ package momentregion_test
 import (
 	"math"
 	"math/big"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -121,4 +122,83 @@ func sub(a, b float64) *big.Rat { return new(big.Rat).Sub(rat(a), rat(b)) }
 
 func ratSquareSum(a, b *big.Rat) *big.Rat {
 	return new(big.Rat).Add(new(big.Rat).Mul(a, a), new(big.Rat).Mul(b, b))
+}
+
+// TestAddExactMatchesRatAdd folds 300 random exact contributions into a State
+// and into six plain big.Rat sums that use Rat.Add, and requires the same
+// numerator and denominator in every field after each fold. The terms mix zero,
+// integers, float lifts (power-of-two denominators), fractions over odd
+// denominators and huge numerators over huge denominators, of either sign.
+func TestAddExactMatchesRatAdd(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(21, 23))
+	term := func() *big.Rat {
+		sign := int64(1 - 2*rng.IntN(2))
+		switch rng.IntN(6) {
+		case 0:
+			return new(big.Rat)
+		case 1:
+			return new(big.Rat).SetInt64(sign * rng.Int64N(40))
+		case 2:
+			return proofarith.FloatRat(rng.NormFloat64())
+		case 3:
+			return proofarith.FloatRat(math.Ldexp(rng.NormFloat64(), rng.IntN(200)-100))
+		case 4:
+			return new(big.Rat).SetFrac(big.NewInt(sign*rng.Int64N(1000)), big.NewInt(2*rng.Int64N(500)+1))
+		}
+		num := new(big.Int).Lsh(big.NewInt(rng.Int64N(1<<40)+1), uint(rng.IntN(200)))
+		den := new(big.Int).Lsh(big.NewInt(rng.Int64N(1<<40)*2+1), uint(rng.IntN(200)))
+		return new(big.Rat).SetFrac(num.Mul(num, big.NewInt(sign)), den)
+	}
+	var sums regionSums
+	sums.exact = momentregion.NewExactMoments()
+	state := sums.state()
+	var want [6]*big.Rat
+	for i := range want {
+		want[i] = new(big.Rat)
+	}
+	for step := range 300 {
+		exact := momentregion.NewExactMoments()
+		terms := [6]*big.Rat{term(), term(), term(), term(), term(), term()}
+		exact.Area, exact.Mu, exact.Mv, exact.Muu, exact.Muv, exact.Mvv = terms[0], terms[1], terms[2], terms[3], terms[4], terms[5]
+		state.AddExact(exact)
+		got := sums.exact.Fields()
+		for i := range want {
+			want[i].Add(want[i], terms[i])
+			require.True(t, got[i].Num().Cmp(want[i].Num()) == 0 && got[i].Denom().Cmp(want[i].Denom()) == 0,
+				"step %d field %d: got %v, want %v", step, i, got[i], want[i])
+		}
+	}
+}
+
+// TestChargeJunctionAddsTheExactThirdOrderChord starts the third-order sum at
+// a known point and requires ChargeJunction with an exact chord to add
+// freeform.PolyThirdMoments of the chord's two coordinate polynomials, each
+// with the chord's difference taken through big.Rat.Sub, as a point.
+func TestChargeJunctionAddsTheExactThirdOrderChord(t *testing.T) {
+	t.Parallel()
+	anchor := sectionrecord.Point2{U: 1, V: 2}
+	chord := &momentregion.ExactChord{
+		From: freeform.RatPoint{U: big.NewRat(7, 3), V: big.NewRat(-1, 5)},
+		To:   freeform.RatPoint{U: big.NewRat(11, 2), V: big.NewRat(9, 4)},
+	}
+	var sums regionSums
+	sums.exact = momentregion.NewExactMoments()
+	var start [4]proofbound.RatInterval
+	for i := range start {
+		start[i] = proofbound.PointInterval(big.NewRat(int64(i+1), 7))
+	}
+	sums.third = start
+	sums.state().ChargeJunction(1, 20, 20, chord, anchor, freeform.MomentThirdOrder)
+	require.False(t, sums.thirdDead)
+
+	exact := freeform.PolyThirdMoments(
+		polynomial.RatPoly{chord.From.U, new(big.Rat).Sub(chord.To.U, chord.From.U)},
+		polynomial.RatPoly{chord.From.V, new(big.Rat).Sub(chord.To.V, chord.From.V)},
+	)
+	for i, value := range exact {
+		want := new(big.Rat).Add(start[i].Lo, value)
+		require.Zerof(t, sums.third[i].Lo.Cmp(want), "third-order term %d lower end", i)
+		require.Zerof(t, sums.third[i].Hi.Cmp(want), "third-order term %d upper end", i)
+	}
 }

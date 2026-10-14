@@ -51,7 +51,8 @@ func (r *RingEdgeRecords) recordOf(index int, edge [2]proofarith.Xpt, bore2, bla
 		r.edges = append(r.edges, ringEdgeRecord{})
 	}
 	rec := &r.edges[index]
-	if rec.built && rec.sameSource(edge) && rec.boreSquared.Cmp(bore2) == 0 && rec.blankSquared.Cmp(blank2) == 0 {
+	if rec.built && rec.sameSource(edge) &&
+		proofarith.CmpRat(rec.boreSquared, bore2) == 0 && proofarith.CmpRat(rec.blankSquared, blank2) == 0 {
 		return rec
 	}
 	*rec = ringEdgeRecord{src: copyEdgeSource(edge), built: true,
@@ -110,7 +111,7 @@ func (rec *ringEdgeRecord) box() [2][2]float64 {
 	rec.boxed = true
 	for axis, ends := range [2][2]*big.Rat{{rec.amin.X, rec.bmin.X}, {rec.amin.Y, rec.bmin.Y}} {
 		lo, hi := ends[0], ends[1]
-		if lo.Cmp(hi) > 0 {
+		if proofarith.CmpRat(lo, hi) > 0 {
 			lo, hi = hi, lo
 		}
 		rec.xyBox[axis] = [2]float64{proofbound.RatFloatDown(lo), proofbound.RatFloatUp(hi)}

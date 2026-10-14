@@ -1102,7 +1102,7 @@ func CellTwistVolume(vLo, vHi, wLo, wHi r3.Vec) *big.Rat {
 	b := HeldDelta(wLo, vLo)
 	twist := proofarith.DvSub(HeldDelta(vLo, vHi), HeldDelta(wLo, wHi))
 	det := proofarith.DvDot(a, proofarith.DvCross(twist, b))
-	return new(big.Rat).Quo(det.Rat(), big.NewRat(12, 1))
+	return proofarith.QuoRat(new(big.Rat), det.Rat(), big.NewRat(12, 1))
 }
 
 // RatV3 is a triple of exact RATIONALS, for the one family of readings in this
@@ -1140,9 +1140,9 @@ func CellTwistMoment(vLo, vHi, wLo, wHi, anchor r3.Vec) RatV3 {
 		patch := bilinearPatchMomentIntegral(qLo, a, b, twist, axis)
 		held0 := triangleMomentIntegral(qLo, qHi, qWHi, axis)
 		held1 := triangleMomentIntegral(qLo, qWHi, qWLo, axis)
-		out[axis] = new(big.Rat).Sub(patch, held0)
-		out[axis].Sub(out[axis], held1)
-		out[axis].Mul(out[axis], big.NewRat(12, 1))
+		out[axis] = proofarith.SubRat(new(big.Rat), patch, held0)
+		proofarith.SubRat(out[axis], out[axis], held1)
+		proofarith.MulRat(out[axis], out[axis], big.NewRat(12, 1))
 	}
 	return out
 }
@@ -1206,7 +1206,7 @@ func bilinearPatchMomentIntegral(q0, a, b, twist proofarith.DyV3, axis int) *big
 		den := int64((degree[0] + 1) * (degree[1] + 1))
 		total = proofarith.DyAdd(total, proofarith.DyMul(coefficient, proofarith.DyInt(144/den)))
 	}
-	return new(big.Rat).Quo(total.Rat(), big.NewRat(144, 1))
+	return proofarith.QuoRat(new(big.Rat), total.Rat(), big.NewRat(144, 1))
 }
 
 func triangleMomentIntegral(q0, q1, q2 proofarith.DyV3, axis int) *big.Rat {
@@ -1237,7 +1237,7 @@ func triangleMomentIntegral(q0, q1, q2 proofarith.DyV3, axis int) *big.Rat {
 		}
 		total = proofarith.DyAdd(total, proofarith.DyMul(coefficient, proofarith.DyInt(24*num/den)))
 	}
-	return new(big.Rat).Quo(proofarith.DyMul(total, n).Rat(), big.NewRat(24, 1))
+	return proofarith.QuoRat(new(big.Rat), proofarith.DyMul(total, n).Rat(), big.NewRat(24, 1))
 }
 
 // CellTwistQuarterUpper is the CERTIFIED upper endpoint of |T|/4 for a wall
@@ -1632,14 +1632,14 @@ func CellTwistAreaProjectedAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	wb := proofarith.DvDot(w, b).Rat()
 	perp := func(v proofarith.DyV3, wv *big.Rat) *big.Rat {
 		out := proofarith.DvDot(v, v).Rat()
-		return out.Sub(out, new(big.Rat).Quo(new(big.Rat).Mul(wv, wv), ww))
+		return proofarith.SubRat(out, out, proofarith.QuoRat(new(big.Rat), proofarith.MulRat(new(big.Rat), wv, wv), ww))
 	}
-	num := new(big.Rat).Add(perp(a, wa), perp(b, wb))
+	num := proofarith.AddRat(new(big.Rat), perp(a, wa), perp(b, wb))
 	if num.Sign() <= 0 {
 		return 0
 	}
-	c := new(big.Rat).Sub(ww, new(big.Rat).Abs(wa))
-	c.Sub(c, new(big.Rat).Abs(wb))
+	c := proofarith.SubRat(new(big.Rat), ww, new(big.Rat).Abs(wa))
+	proofarith.SubRat(c, c, new(big.Rat).Abs(wb))
 	if c.Sign() <= 0 {
 		return math.Inf(1)
 	}
@@ -1647,8 +1647,8 @@ func CellTwistAreaProjectedAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if !ok {
 		return math.Inf(1)
 	}
-	num.Mul(num, wLen)
-	return RatFloatUp(num.Quo(num, c.Mul(c, big.NewRat(2, 1))))
+	proofarith.MulRat(num, num, wLen)
+	return RatFloatUp(proofarith.QuoRat(num, num, proofarith.MulRat(c, c, big.NewRat(2, 1))))
 }
 
 // CellTwistAreaQuadraticAllow is the cancellation-preserving arm. Write the
@@ -1704,8 +1704,8 @@ func CellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	// The quotient genuinely leaves the dyadic set — a division by twelve times
 	// a bracketed norm is no power of two — so this is where the exact vector
 	// arithmetic hands over to a general fraction (dyadic.go's own boundary).
-	denominator := new(big.Rat).Mul(big.NewRat(12, 1), centerLenRat)
-	return RatFloatUp(new(big.Rat).Quo(numerator.Rat(), denominator))
+	denominator := proofarith.MulRat(new(big.Rat), big.NewRat(12, 1), centerLenRat)
+	return RatFloatUp(proofarith.QuoRat(new(big.Rat), numerator.Rat(), denominator))
 }
 
 // UniformSpeedTangentEnergyUpper is the per-side TANGENT-DEVIATION ENERGY
@@ -1841,7 +1841,7 @@ func CellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	}
 	// Dividing by a bracketed norm leaves the dyadic set, so the quotient is
 	// taken as a general fraction (dyadic.go's own boundary).
-	lower := RatFloatDown(new(big.Rat).Quo(minDot.Rat(), lenRat))
+	lower := RatFloatDown(proofarith.QuoRat(new(big.Rat), minDot.Rat(), lenRat))
 	if IsNonFinite(lower) || lower <= 0 {
 		return 0
 	}
@@ -2554,19 +2554,19 @@ func ChordLocusVolumeAllow(denotedLo, denotedHi, fluxBuilt, builtBound, cornerFl
 	}
 	lo, hi := proofarith.FloatRat(denotedLo), proofarith.FloatRat(denotedHi)
 	b, bb := proofarith.FloatRat(fluxBuilt), proofarith.FloatRat(builtBound)
-	if lo == nil || hi == nil || b == nil || bb == nil || lo.Cmp(hi) > 0 {
+	if lo == nil || hi == nil || b == nil || bb == nil || proofarith.CmpRat(lo, hi) > 0 {
 		return math.Inf(1)
 	}
-	above := new(big.Rat).Sub(hi, new(big.Rat).Sub(b, bb))
-	below := new(big.Rat).Sub(new(big.Rat).Add(b, bb), lo)
+	above := proofarith.SubRat(new(big.Rat), hi, proofarith.SubRat(new(big.Rat), b, bb))
+	below := proofarith.SubRat(new(big.Rat), proofarith.AddRat(new(big.Rat), b, bb), lo)
 	gap := new(big.Rat)
-	if above.Cmp(gap) > 0 {
+	if proofarith.CmpRat(above, gap) > 0 {
 		gap = above
 	}
-	if below.Cmp(gap) > 0 {
+	if proofarith.CmpRat(below, gap) > 0 {
 		gap = below
 	}
-	return RatFloatUp(gap.Add(gap, proofarith.FloatRat(cornerFlux)))
+	return RatFloatUp(proofarith.AddRat(gap, gap, proofarith.FloatRat(cornerFlux)))
 }
 
 // ChordLocusRegionAllow bounds three times the VOLUME of the region between
@@ -2773,7 +2773,7 @@ func ChordLocusLengthAllow(speedUpper, dc, axialSpan, chordUpper float64) float6
 	if rdc == nil || raxial == nil {
 		return math.Inf(1)
 	}
-	zSpeed, exact := new(big.Rat).Quo(new(big.Rat).Abs(raxial), rdc).Float64()
+	zSpeed, exact := proofarith.QuoRat(new(big.Rat), new(big.Rat).Abs(raxial), rdc).Float64()
 	if !exact {
 		zSpeed = math.Nextafter(zSpeed, math.Inf(1))
 	}
@@ -3097,7 +3097,7 @@ func ExactFrameLocalRound(frame r3.Frame, p, axis r3.Vec, held float64) float64 
 	}
 	terms := [3]*big.Rat{}
 	for i := range terms {
-		terms[i] = RatMul(new(big.Rat).Sub(pR[i], oR[i]), axR[i])
+		terms[i] = RatMul(proofarith.SubRat(new(big.Rat), pR[i], oR[i]), axR[i])
 	}
 	return proofarith.RationalFloatError(RatAdd(terms[0], terms[1], terms[2]), held)
 }

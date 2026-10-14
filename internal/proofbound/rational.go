@@ -48,14 +48,14 @@ func storeIntDenominator(out *big.Rat, n int) *big.Rat {
 }
 
 func RatMin(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) <= 0 {
+	if proofarith.CmpRat(a, b) <= 0 {
 		return a
 	}
 	return b
 }
 
 func RatMax(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) >= 0 {
+	if proofarith.CmpRat(a, b) >= 0 {
 		return a
 	}
 	return b

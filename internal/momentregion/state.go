@@ -107,7 +107,7 @@ func (s State) AddExact(exact freeform.ExactMoments) {
 	}
 	running := s.Exact.Fields()
 	for i, term := range exact.Fields() {
-		running[i].Add(running[i], term)
+		proofarith.AddRat(running[i], running[i], term)
 	}
 }
 
@@ -152,8 +152,8 @@ func (s State) ChargeJunction(gap, anchorReach, originReach float64, chord *Exac
 			s.DropExact()
 		} else {
 			s.AddExact(momentline.ExactChordMoments(
-				new(big.Rat).Sub(chord.From.U, au), new(big.Rat).Sub(chord.From.V, av),
-				new(big.Rat).Sub(chord.To.U, au), new(big.Rat).Sub(chord.To.V, av),
+				proofarith.SubRat(new(big.Rat), chord.From.U, au), proofarith.SubRat(new(big.Rat), chord.From.V, av),
+				proofarith.SubRat(new(big.Rat), chord.To.U, au), proofarith.SubRat(new(big.Rat), chord.To.V, av),
 				order,
 			))
 		}
@@ -163,8 +163,8 @@ func (s State) ChargeJunction(gap, anchorReach, originReach float64, chord *Exac
 	}
 	if chord != nil {
 		exact := freeform.PolyThirdMoments(
-			polynomial.RatPoly{chord.From.U, new(big.Rat).Sub(chord.To.U, chord.From.U)},
-			polynomial.RatPoly{chord.From.V, new(big.Rat).Sub(chord.To.V, chord.From.V)},
+			polynomial.RatPoly{chord.From.U, proofarith.SubRat(new(big.Rat), chord.To.U, chord.From.U)},
+			polynomial.RatPoly{chord.From.V, proofarith.SubRat(new(big.Rat), chord.To.V, chord.From.V)},
 		)
 		var terms [4]proofbound.RatInterval
 		for i, value := range exact {

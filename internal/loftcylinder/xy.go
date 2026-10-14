@@ -157,17 +157,17 @@ func edgesMeetXP(a, b, c, d meshbool.Xp2) bool {
 // EdgesMeet reports whether two closed segments share a point, by exact comparisons.
 func EdgesMeet(a, b, c, d XY) bool {
 	between := func(a, b, p *big.Rat) bool {
-		return (a.Cmp(p) <= 0 && p.Cmp(b) <= 0) ||
-			(b.Cmp(p) <= 0 && p.Cmp(a) <= 0)
+		return (proofarith.CmpRat(a, p) <= 0 && proofarith.CmpRat(p, b) <= 0) ||
+			(proofarith.CmpRat(b, p) <= 0 && proofarith.CmpRat(p, a) <= 0)
 	}
-	if a.X.Cmp(c.X) > 0 && a.X.Cmp(d.X) > 0 &&
-		b.X.Cmp(c.X) > 0 && b.X.Cmp(d.X) > 0 ||
-		a.X.Cmp(c.X) < 0 && a.X.Cmp(d.X) < 0 &&
-			b.X.Cmp(c.X) < 0 && b.X.Cmp(d.X) < 0 ||
-		a.Y.Cmp(c.Y) > 0 && a.Y.Cmp(d.Y) > 0 &&
-			b.Y.Cmp(c.Y) > 0 && b.Y.Cmp(d.Y) > 0 ||
-		a.Y.Cmp(c.Y) < 0 && a.Y.Cmp(d.Y) < 0 &&
-			b.Y.Cmp(c.Y) < 0 && b.Y.Cmp(d.Y) < 0 {
+	if proofarith.CmpRat(a.X, c.X) > 0 && proofarith.CmpRat(a.X, d.X) > 0 &&
+		proofarith.CmpRat(b.X, c.X) > 0 && proofarith.CmpRat(b.X, d.X) > 0 ||
+		proofarith.CmpRat(a.X, c.X) < 0 && proofarith.CmpRat(a.X, d.X) < 0 &&
+			proofarith.CmpRat(b.X, c.X) < 0 && proofarith.CmpRat(b.X, d.X) < 0 ||
+		proofarith.CmpRat(a.Y, c.Y) > 0 && proofarith.CmpRat(a.Y, d.Y) > 0 &&
+			proofarith.CmpRat(b.Y, c.Y) > 0 && proofarith.CmpRat(b.Y, d.Y) > 0 ||
+		proofarith.CmpRat(a.Y, c.Y) < 0 && proofarith.CmpRat(a.Y, d.Y) < 0 &&
+			proofarith.CmpRat(b.Y, c.Y) < 0 && proofarith.CmpRat(b.Y, d.Y) < 0 {
 		return false
 	}
 	abc, abd := Orient(a, b, c).Sign(), Orient(a, b, d).Sign()

@@ -41,8 +41,8 @@ func IntervalQuo(a, b RatInterval) (RatInterval, bool) {
 // corner products of an interval straddling zero put a NEGATIVE value at the
 // low end, and a square never takes one.
 func IntervalSquare(a RatInterval) RatInterval {
-	lo2 := new(big.Rat).Mul(a.Lo, a.Lo)
-	hi2 := new(big.Rat).Mul(a.Hi, a.Hi)
+	lo2 := proofarith.MulRat(new(big.Rat), a.Lo, a.Lo)
+	hi2 := proofarith.MulRat(new(big.Rat), a.Hi, a.Hi)
 	if a.Lo.Sign() >= 0 {
 		return Interval(lo2, hi2)
 	}
@@ -50,7 +50,7 @@ func IntervalSquare(a RatInterval) RatInterval {
 		return Interval(hi2, lo2)
 	}
 	hi := lo2
-	if hi2.Cmp(hi) > 0 {
+	if proofarith.CmpRat(hi2, hi) > 0 {
 		hi = hi2
 	}
 	return Interval(new(big.Rat), hi)

@@ -2,6 +2,7 @@ package loftcylinder
 
 import (
 	"math/big"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -49,4 +50,74 @@ func TestLoftCylinderEdgesMeetXPAgreesWithRational(t *testing.T) {
 				edgesMeetXP(xp(tc.a), xp(tc.b), xp(tc.c), xp(far)))
 		})
 	}
+}
+
+// edgesMeetRaw is EdgesMeet as it read before its comparisons went through
+// proof.CmpRat: the same bounding-box rejection and exact orientation tests,
+// with big.Rat.Cmp.
+func edgesMeetRaw(a, b, c, d XY) bool {
+	between := func(a, b, p *big.Rat) bool {
+		return (a.Cmp(p) <= 0 && p.Cmp(b) <= 0) ||
+			(b.Cmp(p) <= 0 && p.Cmp(a) <= 0)
+	}
+	if a.X.Cmp(c.X) > 0 && a.X.Cmp(d.X) > 0 &&
+		b.X.Cmp(c.X) > 0 && b.X.Cmp(d.X) > 0 ||
+		a.X.Cmp(c.X) < 0 && a.X.Cmp(d.X) < 0 &&
+			b.X.Cmp(c.X) < 0 && b.X.Cmp(d.X) < 0 ||
+		a.Y.Cmp(c.Y) > 0 && a.Y.Cmp(d.Y) > 0 &&
+			b.Y.Cmp(c.Y) > 0 && b.Y.Cmp(d.Y) > 0 ||
+		a.Y.Cmp(c.Y) < 0 && a.Y.Cmp(d.Y) < 0 &&
+			b.Y.Cmp(c.Y) < 0 && b.Y.Cmp(d.Y) < 0 {
+		return false
+	}
+	abc, abd := Orient(a, b, c).Sign(), Orient(a, b, d).Sign()
+	cda, cdb := Orient(c, d, a).Sign(), Orient(c, d, b).Sign()
+	if abc == 0 && between(a.X, b.X, c.X) && between(a.Y, b.Y, c.Y) ||
+		abd == 0 && between(a.X, b.X, d.X) && between(a.Y, b.Y, d.Y) ||
+		cda == 0 && between(c.X, d.X, a.X) && between(c.Y, d.Y, a.Y) ||
+		cdb == 0 && between(c.X, d.X, b.X) && between(c.Y, d.Y, b.Y) {
+		return true
+	}
+	return abc != abd && cda != cdb
+}
+
+// TestEdgesMeetMatchesRawComparisons runs EdgesMeet and its raw-comparison
+// form over 30,000 random segment pairs. Most take their coordinates from a
+// 5x5 grid of integers, thirds and halves, so shared endpoints, collinear
+// overlaps and touching boxes are common; the rest use huge-denominator
+// rationals and float lifts.
+func TestEdgesMeetMatchesRawComparisons(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(81, 83))
+	grid := func() *big.Rat {
+		den := []int64{1, 1, 3, 2}[rng.IntN(4)]
+		return big.NewRat(rng.Int64N(7)-2, den)
+	}
+	wide := func() *big.Rat {
+		if rng.IntN(2) == 0 {
+			return new(big.Rat).SetFloat64(float64(rng.IntN(7)-3) / 4)
+		}
+		den := new(big.Int).Lsh(big.NewInt(2*rng.Int64N(1000)+1), uint(rng.IntN(80)))
+		return new(big.Rat).SetFrac(big.NewInt(rng.Int64N(9)-4), den)
+	}
+	meets := 0
+	for i := range 30000 {
+		coord := grid
+		if i%5 == 0 {
+			coord = wide
+		}
+		pts := [4]XY{}
+		for k := range pts {
+			pts[k] = XY{coord(), coord()}
+		}
+		got := EdgesMeet(pts[0], pts[1], pts[2], pts[3])
+		want := edgesMeetRaw(pts[0], pts[1], pts[2], pts[3])
+		require.Equal(t, want, got, "segments %v-%v and %v-%v", pts[0], pts[1], pts[2], pts[3])
+		require.Equal(t, got, EdgesMeet(pts[3], pts[2], pts[1], pts[0]), "the predicate is symmetric")
+		if got {
+			meets++
+		}
+	}
+	require.Greater(t, meets, 3000, "the sample must hold plenty of touching pairs")
+	require.Less(t, meets, 27000, "the sample must hold plenty of disjoint pairs")
 }

@@ -186,9 +186,9 @@ func TrigFixedSeries(x *big.Int) (sin, cos, errUnits *big.Int) {
 // outward-rounded endpoint of the enclosed angle and taking the monotone
 // endpoints: sin increasing, cos decreasing on [0, pi/4].
 func TurnFirstOctantSinCos(u *big.Rat) (RatInterval, RatInterval) {
-	twoU := new(big.Rat).Mul(big.NewRat(2, 1), u)
-	lo := FixedFloor(new(big.Rat).Mul(PiLower, twoU))
-	hi := FixedCeil(new(big.Rat).Mul(PiUpper, twoU))
+	twoU := proofarith.MulRat(new(big.Rat), big.NewRat(2, 1), u)
+	lo := FixedFloor(proofarith.MulRat(new(big.Rat), PiLower, twoU))
+	hi := FixedCeil(proofarith.MulRat(new(big.Rat), PiUpper, twoU))
 	if lo.Sign() < 0 {
 		lo = new(big.Int)
 	}
@@ -256,17 +256,17 @@ func copyInterval(x RatInterval) RatInterval {
 func turnSinCosInterval(t *big.Rat, firstOctant func(*big.Rat) (RatInterval, RatInterval)) (RatInterval, RatInterval) {
 	f := new(big.Rat).Set(t)
 	fl := new(big.Int).Quo(f.Num(), f.Denom())
-	if new(big.Rat).SetInt(fl).Cmp(f) > 0 {
+	if proofarith.CmpRat(new(big.Rat).SetInt(fl), f) > 0 {
 		fl.Sub(fl, big.NewInt(1))
 	}
-	f.Sub(f, new(big.Rat).SetInt(fl))
+	proofarith.SubRat(f, f, new(big.Rat).SetInt(fl))
 
 	eight := new(big.Rat).SetInt64(8)
-	scaled := new(big.Rat).Mul(f, eight)
+	scaled := proofarith.MulRat(new(big.Rat), f, eight)
 	kBig := new(big.Int).Quo(scaled.Num(), scaled.Denom())
 	k := kBig.Int64()
-	s := new(big.Rat).Sub(f, new(big.Rat).SetFrac64(k, 8))
-	sc := new(big.Rat).Sub(big.NewRat(1, 8), s)
+	s := proofarith.SubRat(new(big.Rat), f, new(big.Rat).SetFrac64(k, 8))
+	sc := proofarith.SubRat(new(big.Rat), big.NewRat(1, 8), s)
 
 	// Even octants read the residual's own pair, odd octants the complement's;
 	// only the pair the switch below returns is evaluated.

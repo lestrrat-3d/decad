@@ -11,10 +11,10 @@ import (
 // AxisDot returns the exact rational dot product of point and axis.
 func AxisDot(point, axis r3.Vec) *big.Rat {
 	term := func(a, b float64) *big.Rat {
-		return new(big.Rat).Mul(proofarith.FloatRat(a), proofarith.FloatRat(b))
+		return proofarith.MulRat(new(big.Rat), proofarith.FloatRat(a), proofarith.FloatRat(b))
 	}
-	sum := new(big.Rat).Add(term(point.X, axis.X), term(point.Y, axis.Y))
-	return sum.Add(sum, term(point.Z, axis.Z))
+	sum := proofarith.AddRat(new(big.Rat), term(point.X, axis.X), term(point.Y, axis.Y))
+	return proofarith.AddRat(sum, sum, term(point.Z, axis.Z))
 }
 
 // CenterAxisInterval encloses the projection of a held center onto axis.

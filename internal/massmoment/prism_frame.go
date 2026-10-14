@@ -16,7 +16,7 @@ func PrismMidLevel(z0Held, z1Held float64) (*big.Rat, error) {
 	if z0 == nil || z1 == nil {
 		return nil, fmt.Errorf("%w: prism levels are not finite", decaderr.ErrNotFinite)
 	}
-	return new(big.Rat).Quo(new(big.Rat).Add(z0, z1), big.NewRat(2, 1)), nil
+	return proofarith.QuoRat(new(big.Rat), proofarith.AddRat(new(big.Rat), z0, z1), big.NewRat(2, 1)), nil
 }
 
 // PrismRotation maps frame-local axes through the held placement basis.
@@ -34,7 +34,7 @@ func PrismRotation(frame r3.Frame, xform r3.Transform) ([3][3]*big.Rat, error) {
 				if entry == nil || axis == nil {
 					return out, fmt.Errorf("%w: prism orientation is not finite", decaderr.ErrNotFinite)
 				}
-				sum.Add(sum, entry.Mul(entry, axis))
+				proofarith.AddRat(sum, sum, proofarith.MulRat(entry, entry, axis))
 			}
 			out[i][k] = sum
 		}
