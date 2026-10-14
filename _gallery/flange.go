@@ -78,13 +78,13 @@ func flangeBody(ctx context.Context, shape flangeShape) (*decad.Body, error) {
 		}
 	}
 	if shape.fillet >= minFillet {
-		plate, err = plate.Fillet(ctx, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(shape.fillet))
+		plate, err = decad.Fillet(ctx, plate, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(shape.fillet))
 		if err != nil {
 			return nil, fmt.Errorf("fillet the plate: %w", err)
 		}
 	}
 	if shape.chamfer >= minChamfer {
-		plate, err = plate.Chamfer(ctx, decad.Edges(decad.CreatedBy(decad.CapEnd(plate))), units.Millimeters(shape.chamfer))
+		plate, err = decad.Chamfer(ctx, plate, decad.Edges(decad.CreatedBy(decad.CapEnd(plate))), units.Millimeters(shape.chamfer))
 		if err != nil {
 			return nil, fmt.Errorf("chamfer the cap loop: %w", err)
 		}

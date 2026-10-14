@@ -79,7 +79,7 @@ func checkDraftCircleFilletRoles(t *testing.T, b *decad.Body) {
 func TestDraftCircleEndRimFilletVerified(t *testing.T) {
 	t.Parallel()
 	base := draftedDisk(t, r3.NewVec(0, 0, 0), 5)
-	rounded, err := base.Fillet(t.Context(), draftedDiskEndRim(base), units.Millimeters(1))
+	rounded, err := decad.Fillet(t.Context(), base, draftedDiskEndRim(base), units.Millimeters(1))
 	require.NoError(t, err)
 	checkDraftCircleFilletRoles(t, rounded)
 	volume, err := rounded.Volume()
@@ -100,7 +100,7 @@ func TestDraftCircleEndRimFilletPlacement(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := decad.Copy(t.Context(), base, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
-	rounded, err := placed.Fillet(t.Context(), draftedDiskEndRim(placed), units.Millimeters(1))
+	rounded, err := decad.Fillet(t.Context(), placed, draftedDiskEndRim(placed), units.Millimeters(1))
 	require.NoError(t, err)
 	checkDraftCircleFilletRoles(t, rounded)
 	placedCopy, err := decad.Copy(t.Context(), rounded, decad.WithCopyPlacement(shift))
@@ -121,16 +121,16 @@ func TestDraftCircleEndRimFilletPlacement(t *testing.T) {
 func TestDraftCircleEndRimFilletRefusalsLeaveSourceLive(t *testing.T) {
 	t.Parallel()
 	base := draftedDisk(t, r3.NewVec(0, 0, 0), 5)
-	_, err := base.Fillet(t.Context(), draftedDiskEndRim(base), units.Millimeters(10))
+	_, err := decad.Fillet(t.Context(), base, draftedDiskEndRim(base), units.Millimeters(10))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = base.Fillet(t.Context(),
+	_, err = decad.Fillet(t.Context(), base,
 		decad.Edges(decad.CreatedBy(decad.CapStart(base)), decad.Circular()).Exactly(1), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = base.Fillet(t.Context(), draftedDiskEndRim(base), units.Millimeters(1))
+	_, err = decad.Fillet(t.Context(), base, draftedDiskEndRim(base), units.Millimeters(1))
 	require.NoError(t, err)
 
 	flare := draftedDisk(t, r3.NewVec(0, 0, 0), -5)
-	_, err = flare.Fillet(t.Context(), draftedDiskEndRim(flare), units.Millimeters(1))
+	_, err = decad.Fillet(t.Context(), flare, draftedDiskEndRim(flare), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 1, func(s *sketch.Sketch) {
@@ -140,7 +140,7 @@ func TestDraftCircleEndRimFilletRefusalsLeaveSourceLive(t *testing.T) {
 		s.Fix(c)
 	})
 	annulus := taperExtrude(t, decad.New(), s, p, 10, 5, decad.Along)
-	_, err = annulus.Fillet(t.Context(),
+	_, err = decad.Fillet(t.Context(), annulus,
 		decad.Edges(decad.OuterLoopOf(decad.CapEnd(annulus)), decad.Circular()).Exactly(1),
 		units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

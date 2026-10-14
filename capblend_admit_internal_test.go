@@ -48,9 +48,9 @@ func chamferedFlange(t *testing.T) (*Body, capBlendPayload) {
 
 	drilled, err := Cut(t.Context(), plate, bore)
 	require.NoError(t, err)
-	filleted, err := drilled.Fillet(t.Context(), Edges(ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(12))
+	filleted, err := Fillet(t.Context(), drilled, Edges(ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(12))
 	require.NoError(t, err)
-	chamfered, err := filleted.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(filleted))), units.Millimeters(1))
+	chamfered, err := Chamfer(t.Context(), filleted, Edges(CreatedBy(CapEnd(filleted))), units.Millimeters(1))
 	require.NoError(t, err)
 	cbp, ok := chamfered.payload.(capBlendPayload)
 	require.True(t, ok)

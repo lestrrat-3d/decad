@@ -16,7 +16,7 @@ import (
 )
 
 // This file is the revolve junction rewrite of docs/modify-reach-design.md §7
-// (Table RX row RX2): Body.Fillet and Body.Chamfer on a revolvePayload
+// (Table RX row RX2): Fillet and Chamfer on a revolvePayload
 // receiver. A revolve's meridian has the same corner-to-edge mapping a prism's
 // section has — an off-axis corner between two consecutive walks sweeps a
 // latitude Circle3 on a full turn and a junction Arc3 on a partial one — so

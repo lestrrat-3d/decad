@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is randomized property testing for Body.Fillet (fillet.go,
+// This file is randomized property testing for Fillet (fillet.go,
 // fillet_audit.go), the same treatment revolve and the boolean got. The rest of
 // the fillet suite is fixed hand-chosen cases; the two PR #32 review passes both
 // named the §5 audit's geometric space — the accept-then-un-tessellatable class
@@ -312,7 +312,7 @@ func runFilletCase(t *testing.T, fc filletCase, plan filletPlan, r float64) bool
 	count := len(edges)
 	require.Positivef(t, count, "%s/%s selected no corner", fc.name, plan.name)
 
-	filleted, err := body.Fillet(t.Context(), plan.sel(), units.Millimeters(r))
+	filleted, err := decad.Fillet(t.Context(), body, plan.sel(), units.Millimeters(r))
 	if err != nil {
 		// Refuse: a known sentinel, and the document is untouched.
 		require.Truef(t, errors.Is(err, decad.ErrDegenerate) || errors.Is(err, decad.ErrUnsupported),
@@ -475,7 +475,7 @@ func TestFilletScaleInvariant(t *testing.T) {
 			for i, k := range scales {
 				_, body := fc.build(t, k)
 				r := spec.frac * fc.convexMaxR * k
-				_, err := body.Fillet(t.Context(), convexLateral(), units.Millimeters(r))
+				_, err := decad.Fillet(t.Context(), body, convexLateral(), units.Millimeters(r))
 				verdicts[i] = err == nil
 				if err != nil {
 					require.Truef(t, errors.Is(err, decad.ErrDegenerate) || errors.Is(err, decad.ErrUnsupported),
@@ -521,7 +521,7 @@ func FuzzFillet(f *testing.F) {
 		body, err := decad.Extrude(t.Context(), doc, s, pickProfile(t, s, 4, 0), decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 		require.NoError(t, err)
 
-		filleted, err := body.Fillet(t.Context(), convexLateral(), units.Millimeters(r))
+		filleted, err := decad.Fillet(t.Context(), body, convexLateral(), units.Millimeters(r))
 		if err != nil {
 			require.Truef(t, errors.Is(err, decad.ErrDegenerate) || errors.Is(err, decad.ErrUnsupported),
 				"w=%g h=%g r=%g refused with an unexpected error: %v", w, h, r, err)

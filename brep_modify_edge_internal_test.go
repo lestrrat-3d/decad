@@ -191,7 +191,7 @@ func blendFaces(body *Body, kind string) []*Face {
 func TestBrepModifyEdgeFilletS1VerticalEdge(t *testing.T) {
 	t.Parallel()
 	doc, s1 := internalCrossDrilled(t)
-	out, err := s1.Fillet(t.Context(), edgeAt(routeEZ, r3.Vec{}), units.Millimeters(2))
+	out, err := Fillet(t.Context(), s1, edgeAt(routeEZ, r3.Vec{}), units.Millimeters(2))
 	require.NoError(t, err)
 	require.Error(t, doc.requireLive(s1), "the receiver is retired")
 	bp := requireBrepResult(t, out, 8)
@@ -223,7 +223,7 @@ func TestBrepModifyEdgeFilletS1VerticalEdge(t *testing.T) {
 func TestBrepModifyEdgeChamferB1VerticalEdge(t *testing.T) {
 	t.Parallel()
 	_, b1 := internalSquareCrossHole(t)
-	out, err := b1.Chamfer(t.Context(), edgeAt(routeEZ, r3.Vec{}), units.Millimeters(2))
+	out, err := Chamfer(t.Context(), b1, edgeAt(routeEZ, r3.Vec{}), units.Millimeters(2))
 	require.NoError(t, err)
 	requireBrepResult(t, out, 11)
 	require.Equal(t, Exact, out.volume.Exactness)
@@ -244,7 +244,7 @@ func TestBrepModifyEdgeFilletPocketCorners(t *testing.T) {
 	t.Parallel()
 	doc, pocket := internalRouteEPocket(t)
 	sel := Edges(ParallelTo(routeEZ), Concave()).Exactly(4)
-	out, err := pocket.Fillet(t.Context(), sel, units.Millimeters(2))
+	out, err := Fillet(t.Context(), pocket, sel, units.Millimeters(2))
 	require.NoError(t, err)
 	bp := requireBrepResult(t, out, 15)
 	lo, hi := piEnclosed(big.NewRat(15080, 1), big.NewRat(-20, 1))
@@ -284,7 +284,7 @@ func TestBrepModifyEdgeFilletPocketCorners(t *testing.T) {
 func TestBrepModifyEdgeChamferCornerBoss(t *testing.T) {
 	t.Parallel()
 	_, boss := internalCornerBoss(t)
-	out, err := boss.Chamfer(t.Context(), edgeAt(routeEZ, r3.NewVec(10, -10, 25)), units.Millimeters(2))
+	out, err := Chamfer(t.Context(), boss, edgeAt(routeEZ, r3.NewVec(10, -10, 25)), units.Millimeters(2))
 	require.NoError(t, err)
 	bp := requireBrepResult(t, out, 10)
 	require.Equal(t, Exact, out.volume.Exactness)
@@ -307,7 +307,7 @@ func TestBrepModifyEdgeFilletConcavePlanarEdge(t *testing.T) {
 	edges, err := sel.SelectEdges(boss)
 	require.NoError(t, err)
 	require.False(t, edges[0].IsConvex(), "the receiver reads a junction of two planar walls from the walk's turn")
-	out, err := boss.Fillet(t.Context(), sel, units.Millimeters(1))
+	out, err := Fillet(t.Context(), boss, sel, units.Millimeters(1))
 	require.NoError(t, err)
 	requireBrepResult(t, out, 12)
 	lo, hi := piEnclosed(big.NewRat(17140, 1), big.NewRat(-15, 4))
@@ -341,7 +341,7 @@ func pocketFloorEdges(t *testing.T, pocket *Body, dir r3.Vec, n int) *EdgeQuery 
 func TestBrepModifyEdgeFilletPocketFloorEdges(t *testing.T) {
 	t.Parallel()
 	_, pocket := internalRouteEPocket(t)
-	out, err := pocket.Fillet(t.Context(), pocketFloorEdges(t, pocket, routeEX, 2), units.Millimeters(1))
+	out, err := Fillet(t.Context(), pocket, pocketFloorEdges(t, pocket, routeEX, 2), units.Millimeters(1))
 	require.NoError(t, err)
 	bp := requireBrepResult(t, out, 13)
 	lo, hi := piEnclosed(big.NewRat(15040, 1), big.NewRat(-10, 1))
@@ -411,7 +411,7 @@ func TestBrepModifyEdgeFilletPocketFloorEdges(t *testing.T) {
 func TestBrepModifyEdgeChamferS1AlongX(t *testing.T) {
 	t.Parallel()
 	_, s1 := internalCrossDrilled(t)
-	out, err := s1.Chamfer(t.Context(), edgeAt(routeEX, r3.Vec{}), units.Millimeters(2))
+	out, err := Chamfer(t.Context(), s1, edgeAt(routeEX, r3.Vec{}), units.Millimeters(2))
 	require.NoError(t, err)
 	bp := requireBrepResult(t, out, 8)
 	lo, hi := piEnclosed(big.NewRat(15920, 1), big.NewRat(-180, 1))
@@ -480,7 +480,7 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 	t.Parallel()
 	chamferedS1 := func(t *testing.T) *Body {
 		_, s1 := internalCrossDrilled(t)
-		out, err := s1.Chamfer(t.Context(), edgeAt(routeEZ, r3.Vec{}), units.Millimeters(2))
+		out, err := Chamfer(t.Context(), s1, edgeAt(routeEZ, r3.Vec{}), units.Millimeters(2))
 		require.NoError(t, err)
 		return out
 	}
@@ -518,9 +518,9 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 			sel := tc.sel
 			var err error
 			if tc.chamfer {
-				_, err = body.Chamfer(t.Context(), sel, units.Millimeters(tc.size))
+				_, err = Chamfer(t.Context(), body, sel, units.Millimeters(tc.size))
 			} else {
-				_, err = body.Fillet(t.Context(), sel, units.Millimeters(tc.size))
+				_, err = Fillet(t.Context(), body, sel, units.Millimeters(tc.size))
 			}
 			require.ErrorIs(t, err, ErrUnsupported)
 			for _, w := range tc.want {
@@ -543,7 +543,7 @@ func TestBrepModifyEdgeRefusals(t *testing.T) {
 func TestBrepModifyEdgeConsumersOnS1Fillet(t *testing.T) {
 	t.Parallel()
 	doc, s1 := internalCrossDrilled(t)
-	out, err := s1.Fillet(t.Context(), edgeAt(routeEZ, r3.Vec{}), units.Millimeters(2))
+	out, err := Fillet(t.Context(), s1, edgeAt(routeEZ, r3.Vec{}), units.Millimeters(2))
 	require.NoError(t, err)
 	lo, hi := piEnclosed(big.NewRat(15920, 1), big.NewRat(-160, 1))
 

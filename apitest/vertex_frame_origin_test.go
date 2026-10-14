@@ -176,7 +176,7 @@ func TestVertexFrameOriginBoundEnclosesLift(t *testing.T) {
 		t.Run(fmt.Sprintf("chamfer@%v", o), func(t *testing.T) {
 			t.Parallel()
 			box := originBox(t, decad.New(), o, 0, 0, 4, 4, 2, decad.Along)
-			c, err := box.Chamfer(t.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(1))
+			c, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(1))
 			require.NoError(t, err)
 			cands := append(liftGrid(o, []float64{0, 4}, []float64{0, 4}, []float64{0, 1}), chamferTop(o)...)
 			worst := requireVerticesEnclosed(t, c, cands, 12)
@@ -242,7 +242,7 @@ func TestVertexFarBuiltPlacedBackBoundEnclosesLift(t *testing.T) {
 	t.Run("chamfer", func(t *testing.T) {
 		t.Parallel()
 		box := originBox(t, decad.New(), o, 0, 0, 4, 4, 2, decad.Along)
-		c, err := box.Chamfer(t.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(1))
+		c, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(1))
 		require.NoError(t, err)
 		moved, err := decad.Transform(t.Context(), c, back)
 		require.NoError(t, err)
@@ -357,7 +357,7 @@ func TestVertexIntegerOriginBoundStaysZero(t *testing.T) {
 	t.Run("chamfer", func(t *testing.T) {
 		t.Parallel()
 		box := extrude(t, decad.New(), 0, 0, 100, 60, 20)
-		c, err := box.Chamfer(t.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(5))
+		c, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(5))
 		require.NoError(t, err)
 		requireAllZero(t, c.Vertices())
 	})

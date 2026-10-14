@@ -62,7 +62,7 @@ type loftPayload struct {
 	// admitted both Sketch profiles. Certified fillet and bore rewrites retain
 	// that provenance when they re-evaluate their private loft records.
 	authenticatedReconstruction bool
-	// blendSegs names connector segments inserted by Body.Fillet. Every
+	// blendSegs names connector segments inserted by Fillet. Every
 	// triangle of a connector's loft cell also carries fillet(loop,segment).
 	blendSegs []map[int]struct{}
 	// A fitted-spline fillet records float trim parameters and a float arc.

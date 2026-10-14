@@ -113,7 +113,7 @@ func TestLoftCapBandNoBoreChamfersBothOuterLoops(t *testing.T) {
 	before, err := body.Volume()
 	require.NoError(t, err)
 	selector := Edges(OuterLoopOf(CapStart(body))).Or(OuterLoopOf(CapEnd(body)))
-	out, err := body.Chamfer(t.Context(), selector, units.Millimeters(0.1))
+	out, err := Chamfer(t.Context(), body, selector, units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 	require.Len(t, out.Shells(), 1)

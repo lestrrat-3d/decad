@@ -53,7 +53,7 @@ func Example_decad_asymmetric_brep_chamfer() {
 	front := decad.Faces(decad.Facing(r3.NewVec(0, -1, 0)))
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(40, 0, 0))).Exactly(1)
-	beveled, err := part.Chamfer(ctx, edge, units.Millimeters(2),
+	beveled, err := decad.Chamfer(ctx, part, edge, units.Millimeters(2),
 		decad.WithAsymmetricChamfer(front, units.Millimeters(3)))
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)

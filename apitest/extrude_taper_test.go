@@ -1060,10 +1060,10 @@ func TestTaperDownstreamRefusals(t *testing.T) {
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, 20))
 	b := taperExtrude(t, doc, s, p, 10, 5, decad.Along)
 
-	_, err := b.Fillet(t.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(b))), units.Millimeters(1))
+	_, err := decad.Fillet(t.Context(), b, decad.Edges(decad.CreatedBy(decad.CapEnd(b))), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "draft body")
-	_, err = b.Chamfer(t.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(b))), units.Millimeters(1))
+	_, err = decad.Chamfer(t.Context(), b, decad.Edges(decad.CreatedBy(decad.CapEnd(b))), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "draft body")
 	_, err = b.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(b))), units.Millimeters(1))

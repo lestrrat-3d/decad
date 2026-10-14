@@ -177,7 +177,7 @@ func TestBrepVertexReachesArcNaturalEnd(t *testing.T) {
 		t.Parallel()
 		cut, arc := drilledTombstone(t, decad.New())
 		corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(20, -30, 0)))
-		filleted, err := cut.Fillet(t.Context(), corner, units.Millimeters(2))
+		filleted, err := decad.Fillet(t.Context(), cut, corner, units.Millimeters(2))
 		require.NoError(t, err)
 		require.False(t, anyFaceIsFaceted(filleted))
 		require.Len(t, filleted.Faces(), len(cut.Faces())+1, `the corner gains one fillet face`)

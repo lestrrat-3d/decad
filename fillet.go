@@ -21,7 +21,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the fillet of docs/modify-design.md: Body.Fillet rounds the
+// This file is the fillet of docs/modify-design.md: Fillet rounds the
 // convex or concave lateral edges of a straight prism (Table R row R1). The
 // reduction is §2's — a lateral edge is a CORNER of the recorded 2D section,
 // and rounding it is a rewrite of that section into a tangent arc of radius r,
@@ -62,9 +62,9 @@ const filletTol = sectionaudit.Tolerance
 
 // Fillet rounds selected section corners of a straight prism, its admitted
 // one-line Sweep reduction, or a matching-section axial loft with a tangent
-// arc of radius r, returning the new body and retiring the receiver
-// (docs/modify-design.md §6, core §8). sel is resolved against the live
-// receiver; a query matching nothing is loud (ErrNoMatch / ErrCardinality,
+// arc of radius r, returning the new body and retiring b
+// (docs/modify-design.md §6, core §8). A nil b is ErrDegenerate. sel is
+// resolved against the live b; a query matching nothing is loud (ErrNoMatch / ErrCardinality,
 // S16). r is a length magnitude, gated like every other (S15); a zero r is
 // S13. One straight cap edge of a prism or one-line solid Sweep takes route E;
 // other unsupported cap selections are S1 (ErrUnsupported). A rewritten
@@ -140,7 +140,7 @@ const filletTol = sectionaudit.Tolerance
 // proof, exports to STEP, takes part in a mesh boolean, is surveyed for
 // undercuts and concave radii, and is placed, mirrored and patterned like any
 // brep body (docs/loop-fillet-design.md Table DF).
-func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
+func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a fillet`, ErrDegenerate)
 	}

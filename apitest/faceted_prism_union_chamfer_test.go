@@ -25,7 +25,7 @@ func TestFacetedPrismUnionUntouchedOuterEdgeChamfer(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 10}),
 	).Exactly(1)
-	chamfered, err := joined.Chamfer(t.Context(), selector, units.Millimeters(1))
+	chamfered, err := decad.Chamfer(t.Context(), joined, selector, units.Millimeters(1))
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{chamfered}, doc.Bodies())
 	require.Equal(t, 1, countRolePrefix(chamfered, "chamfer("))
@@ -57,7 +57,7 @@ func TestFacetedPrismUnionChamferReversedSources(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: 10, Z: 0}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: 10, Z: 10}),
 	).Exactly(1)
-	chamfered, err := joined.Chamfer(t.Context(), selector, units.Millimeters(1))
+	chamfered, err := decad.Chamfer(t.Context(), joined, selector, units.Millimeters(1))
 	require.NoError(t, err)
 	before, err := joined.Volume()
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestFacetedPrismUnionChamferRefusesToolInCornerBand(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 10}),
 	).Exactly(1)
-	chamfered, err := joined.Chamfer(t.Context(), selector, units.Millimeters(1))
+	chamfered, err := decad.Chamfer(t.Context(), joined, selector, units.Millimeters(1))
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "chamfer returned %v", err)
 	require.Nil(t, chamfered)
 	require.Equal(t, []*decad.Body{joined}, doc.Bodies())
@@ -110,7 +110,7 @@ func TestFacetedPrismUnionChamferRefusesPlacedUnion(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 1}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 11}),
 	).Exactly(1)
-	chamfered, err := placed.Chamfer(t.Context(), selector, units.Millimeters(1))
+	chamfered, err := decad.Chamfer(t.Context(), placed, selector, units.Millimeters(1))
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "chamfer returned %v", err)
 	require.Nil(t, chamfered)
 	require.Equal(t, []*decad.Body{placed}, doc.Bodies())
@@ -130,7 +130,7 @@ func TestFacetedPrismUnionChamferRefusesInexactFoot(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 10}),
 	).Exactly(1)
-	chamfered, err := joined.Chamfer(t.Context(), selector, units.Millimeters(0.3))
+	chamfered, err := decad.Chamfer(t.Context(), joined, selector, units.Millimeters(0.3))
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "chamfer returned %v", err)
 	require.Nil(t, chamfered)
 	require.Equal(t, []*decad.Body{joined}, doc.Bodies())

@@ -147,7 +147,7 @@ func TestTessellationCachePayloadClasses(t *testing.T) {
 		}},
 		{name: "cap blend", body: func(t *testing.T) *decad.Body {
 			_, box := capBlendBox(t)
-			body, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
+			body, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
 			require.NoError(t, err)
 			return body
 		}},

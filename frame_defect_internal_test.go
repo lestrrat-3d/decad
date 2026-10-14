@@ -398,11 +398,11 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 		}},
 		{name: "cap chamfer", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			b := fdExtrude(t, f)
-			return b.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(b))), units.Millimeters(0.25))
+			return Chamfer(t.Context(), b, Edges(CreatedBy(CapEnd(b))), units.Millimeters(0.25))
 		}},
 		{name: "edge fillet", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			b := fdExtrude(t, f)
-			return b.Fillet(t.Context(), Edges(ParallelTo(f.N())), units.Millimeters(0.25))
+			return Fillet(t.Context(), b, Edges(ParallelTo(f.N())), units.Millimeters(0.25))
 		}},
 		{name: "stacked union", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			a, b := fdTwoPrisms(t, f, 2, 3)
@@ -798,13 +798,13 @@ func TestCurveBoundsCoverMappedReference(t *testing.T) {
 		}},
 		{"cap chamfer trimmed arcs", false, func(t *testing.T, f r3.Frame) *Body {
 			b := fdSlotSolid(t, f)
-			chamfered, err := b.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(b))), units.Millimeters(0.25))
+			chamfered, err := Chamfer(t.Context(), b, Edges(CreatedBy(CapEnd(b))), units.Millimeters(0.25))
 			require.NoError(t, err)
 			return chamfered
 		}},
 		{"cap chamfer apex arc", false, func(t *testing.T, f r3.Frame) *Body {
 			b := fdExtrudeLoop(t, f, [][2]float64{{0, 0}, {4, 0}, {4, 2}, {2, 2}, {2, 4}, {0, 4}})
-			chamfered, err := b.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(b))), units.Millimeters(0.25))
+			chamfered, err := Chamfer(t.Context(), b, Edges(CreatedBy(CapEnd(b))), units.Millimeters(0.25))
 			require.NoError(t, err)
 			return chamfered
 		}},

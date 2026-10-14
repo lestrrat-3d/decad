@@ -19,7 +19,7 @@ func TestBrepSingleBossRootChamferAddsMaterial(t *testing.T) {
 
 	root := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(-5, -5, 5))).Exactly(1)
-	got, err := joined.Chamfer(t.Context(), root, units.Millimeters(1))
+	got, err := decad.Chamfer(t.Context(), joined, root, units.Millimeters(1))
 	require.NoError(t, err)
 	after, err := got.Volume()
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestBrepSingleBossPerpendicularRootChamferAddsMaterial(t *testing.T) {
 	joined := squareBossOnPlate(t)
 	root := decad.Edges(decad.ParallelTo(r3.NewVec(0, 1, 0)),
 		decad.EndpointAt(r3.NewVec(5, -5, 5))).Exactly(1)
-	got, err := joined.Chamfer(t.Context(), root, units.Millimeters(1))
+	got, err := decad.Chamfer(t.Context(), joined, root, units.Millimeters(1))
 	require.NoError(t, err)
 	after, err := got.Volume()
 	require.NoError(t, err)
@@ -70,7 +70,7 @@ func TestBrepSingleUnderBossRootChamferAddsMaterial(t *testing.T) {
 	require.NoError(t, err)
 	root := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(-5, -5, 0))).Exactly(1)
-	got, err := joined.Chamfer(t.Context(), root, units.Millimeters(1))
+	got, err := decad.Chamfer(t.Context(), joined, root, units.Millimeters(1))
 	require.NoError(t, err)
 	after, err := got.Volume()
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestBrepSingleBossTopEdgeChamferKeepsRouteE(t *testing.T) {
 	joined := squareBossOnPlate(t)
 	top := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(-5, -5, 10))).Exactly(1)
-	got, err := joined.Chamfer(t.Context(), top, units.Millimeters(1))
+	got, err := decad.Chamfer(t.Context(), joined, top, units.Millimeters(1))
 	require.NoError(t, err)
 	after, err := got.Volume()
 	require.NoError(t, err)
@@ -106,7 +106,7 @@ func TestBrepIndependentBossRootEdgesRefuseChamferRouteE(t *testing.T) {
 		decad.EndpointAt(r3.NewVec(-5, -5, 5)))
 	roots.Or(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(-5, 5, 5)))
-	got, err := joined.Chamfer(t.Context(), roots.Exactly(2), units.Millimeters(1))
+	got, err := decad.Chamfer(t.Context(), joined, roots.Exactly(2), units.Millimeters(1))
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "error: %v", err)
 	require.ErrorContains(t, err, "interior material wedge")
 	require.Nil(t, got)

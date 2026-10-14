@@ -269,7 +269,7 @@ func TestDisplacedBlockRestsOnTray(t *testing.T) {
 	doc := decad.New()
 	tray := tumbleTray(t, doc)
 	box := makeBox(t, doc, -6, -6, 6, 6, 0, 12)
-	block, err := box.Chamfer(t.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.1))
+	block, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.1))
 	require.NoError(t, err)
 	mesh, err := block.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)

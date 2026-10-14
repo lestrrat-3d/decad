@@ -1,7 +1,7 @@
 # Modify Design
 
 How the v1 evaluator builds the first straight-prism cases of the three modify
-ops — `Body.Fillet`, `Body.Chamfer`, `Body.Shell`.
+ops — `Fillet`, `Chamfer`, `Body.Shell`.
 
 `docs/modify-reach-design.md` owns the approved extension to revolve
 junctions, complete prism cap loops, side-opening/closed shells, tangent-chain
@@ -355,7 +355,7 @@ is ever made, and `Verify` reads the result exactly as it reads an extrude's.
 ## 6. Fillet
 
 ```go
-func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
+func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
 ```
 
 `r` is a magnitude, gated at the call like every other (S15), and a zero `r` is
@@ -479,7 +479,7 @@ setback option would be a second one.
 ## 7. Chamfer
 
 ```go
-func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
+func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
 ```
 
 For R9's straight Sweep, `Chamfer` resolves the selector on the published

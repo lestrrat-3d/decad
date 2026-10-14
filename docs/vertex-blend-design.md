@@ -1,6 +1,6 @@
 # Three-edge vertex blends
 
-`Body.Fillet` admits a complete planar-face loop together with independent
+`Fillet` admits a complete planar-face loop together with independent
 straight edges that end on that loop. The straight-edge rewrite runs first;
 the loop rewrite then fillets its new arc segments. A circular wall whose
 recorded radius equals the requested fillet radius produces a sphere patch at

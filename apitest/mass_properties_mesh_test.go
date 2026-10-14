@@ -337,7 +337,7 @@ func divergenceMoments(mesh *decad.Mesh) (*big.Rat, [3]*big.Rat, [3][3]*big.Rat)
 func TestMassPropertiesCapChamferFallback(t *testing.T) {
 	const a, b, h, c = 16, 8, 10, 2
 	box := boxBody(t, decad.New(), 0, 0, a, b, h)
-	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(c))
+	chamfered, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(c))
 	require.NoError(t, err)
 	got, err := chamfered.MassProperties(t.Context(), meshMassDensity)
 	require.NoError(t, err)

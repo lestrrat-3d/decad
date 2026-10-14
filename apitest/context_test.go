@@ -58,8 +58,8 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 			return err
 		}},
 		{"Body.Patch", func(ctx context.Context) error { _, err := body.Patch(ctx, nil); return err }},
-		{"Body.Fillet", func(ctx context.Context) error { _, err := body.Fillet(ctx, nil, units.Value{}); return err }},
-		{"Body.Chamfer", func(ctx context.Context) error { _, err := body.Chamfer(ctx, nil, units.Value{}); return err }},
+		{"Body.Fillet", func(ctx context.Context) error { _, err := decad.Fillet(ctx, body, nil, units.Value{}); return err }},
+		{"Body.Chamfer", func(ctx context.Context) error { _, err := decad.Chamfer(ctx, body, nil, units.Value{}); return err }},
 		{"Body.Shell", func(ctx context.Context) error { _, err := body.Shell(ctx, nil, units.Value{}); return err }},
 		{"Body.Thicken", func(ctx context.Context) error { _, err := body.Thicken(ctx, units.Value{}); return err }},
 		{"Body.Offset", func(ctx context.Context) error { _, err := body.Offset(ctx, units.Value{}); return err }},

@@ -101,7 +101,7 @@ func TestPatternedNHoleCut(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
 	require.NotNil(t, report.Bodies[0].Wall.Minimum, "the wall survey measures the holed plate")
-	filleted, err := got.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(1))
+	filleted, err := decad.Fillet(t.Context(), got, verticalConvexEdge(), units.Millimeters(1))
 	require.NoError(t, err)
 	fv, err := filleted.Volume()
 	require.NoError(t, err)

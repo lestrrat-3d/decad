@@ -427,7 +427,7 @@ func TestNewSTEPFileFilletedClassBCutAnalytic(t *testing.T) {
 		s.CreateCircle(c, 3)
 	})
 	sel := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.Vec{})).Exactly(1)
-	filleted, err := body.Fillet(t.Context(), sel, units.Millimeters(2))
+	filleted, err := decad.Fillet(t.Context(), body, sel, units.Millimeters(2))
 	require.NoError(t, err)
 	require.Len(t, filleted.Faces(), 8)
 	f, err := export.NewSTEPFile(t.Context(), filleted, units.Millimeters(0.1), header())

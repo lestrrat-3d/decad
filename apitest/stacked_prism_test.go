@@ -110,7 +110,7 @@ func TestBlindPocketFilletsItsOuterEdges(t *testing.T) {
 	tool := boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
 	pocket, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	filleted, err := pocket.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(1))
+	filleted, err := decad.Fillet(t.Context(), pocket, verticalConvexEdge(), units.Millimeters(1))
 	require.NoError(t, err)
 	volume, err := filleted.Volume()
 	require.NoError(t, err)

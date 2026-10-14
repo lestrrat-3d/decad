@@ -137,7 +137,7 @@ func TestLoftEmbeddedFlankRecordsSurviveFilletAndBore(t *testing.T) {
 	for _, corner := range corners[1:] {
 		query.Or(ParallelTo(axis), EndpointAt(corner))
 	}
-	filleted, err := lofted.Fillet(t.Context(), query.Exactly(4), units.Millimeters(0.01))
+	filleted, err := Fillet(t.Context(), lofted, query.Exactly(4), units.Millimeters(0.01))
 	require.NoError(t, err)
 	requireEmbeddedFlanks(t, filleted, source)
 	toolWorld := sketch.NewWorld()

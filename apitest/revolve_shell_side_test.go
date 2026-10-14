@@ -531,7 +531,7 @@ func TestRevolveShellSlantedRimRefusals(t *testing.T) {
 		// zone refuses it.
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, [][2]float64{{0, 5}, {20, 5}, {23, 9}, {19, 13}, {0, 13}}, decad.FullRevolution{})
-		filleted, err := ring.Fillet(t.Context(), decad.Edges(decad.Circular(), decad.Convex()), units.Millimeters(0.5))
+		filleted, err := decad.Fillet(t.Context(), ring, decad.Edges(decad.Circular(), decad.Convex()), units.Millimeters(0.5))
 		require.NoError(t, err)
 		shoulder := func(s decad.Surface) bool {
 			tor, ok := s.(decad.Torus)

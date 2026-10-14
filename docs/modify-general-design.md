@@ -1,6 +1,6 @@
 # Modify General Design
 
-The next reach of `Body.Fillet`, `Body.Chamfer` and `Body.Shell` over
+The next reach of `Fillet`, `Chamfer` and `Body.Shell` over
 analytic boolean results: a `brepPayload` (`docs/general-boolean-design.md`
 §4, "general-boolean §N" below) and a `stackedPrismPayload` through its face
 view (`docs/stacked-prism-design.md`). Companion to

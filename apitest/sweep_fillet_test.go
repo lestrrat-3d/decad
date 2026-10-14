@@ -39,7 +39,7 @@ func TestSweepLineFilletVerticalEdgesVerified(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, selected, 4)
 
-	rounded, err := body.Fillet(t.Context(), convexVerticalSweepEdges(), units.Millimeters(1))
+	rounded, err := decad.Fillet(t.Context(), body, convexVerticalSweepEdges(), units.Millimeters(1))
 	require.NoError(t, err)
 	volume, err := rounded.Volume()
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestSweepLineFilletVerticalEdgesVerified(t *testing.T) {
 func TestSweepLineFilletCapEdgeRefuses(t *testing.T) {
 	t.Parallel()
 	doc, body := straightSweepFilletSquare(t)
-	_, err := body.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))),
+	_, err := decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))),
 		units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "one cap edge at a time")
@@ -88,7 +88,7 @@ func TestSweepLineFilletSingleTopCapEdgeVerified(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, selected, 1)
 
-	rounded, err := body.Fillet(t.Context(), sel, units.Millimeters(1))
+	rounded, err := decad.Fillet(t.Context(), body, sel, units.Millimeters(1))
 	require.NoError(t, err)
 	volume, err := rounded.Volume()
 	require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestSweepLineFilletPlacedBottomCapEdgeVerified(t *testing.T) {
 	require.NoError(t, err)
 	sel := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(3, -2, 5))).Exactly(1)
-	rounded, err := placed.Fillet(t.Context(), sel, units.Millimeters(1))
+	rounded, err := decad.Fillet(t.Context(), placed, sel, units.Millimeters(1))
 	require.NoError(t, err)
 	volume, err := rounded.Volume()
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestSweepLineFilletPlacedReceiver(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), body, move)
 	require.NoError(t, err)
-	rounded, err := placed.Fillet(t.Context(), convexVerticalSweepEdges(), units.Millimeters(1))
+	rounded, err := decad.Fillet(t.Context(), placed, convexVerticalSweepEdges(), units.Millimeters(1))
 	require.NoError(t, err)
 	volume, err := rounded.Volume()
 	require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestSweepFilletRefusesArcCompositeAndMitredPaths(t *testing.T) {
 			doc := decad.New()
 			body, err := decad.Sweep(t.Context(), doc, s, profile, tc.path, tc.opts...)
 			require.NoError(t, err)
-			_, err = body.Fillet(t.Context(), decad.Edges().AtLeast(1), units.Millimeters(1))
+			_, err = decad.Fillet(t.Context(), body, decad.Edges().AtLeast(1), units.Millimeters(1))
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, []*decad.Body{body}, doc.Bodies())
 		})

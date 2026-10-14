@@ -25,7 +25,7 @@ func BenchmarkFilletBoxAllConvexEdges(b *testing.B) {
 		require.NoError(b, err)
 		require.Len(b, edges, 4)
 		b.StartTimer()
-		body, err := box.Fillet(b.Context(), selector, units.Millimeters(radius))
+		body, err := decad.Fillet(b.Context(), box, selector, units.Millimeters(radius))
 		b.StopTimer()
 		require.NoError(b, err)
 		require.True(b, body.IsSolid())
@@ -52,7 +52,7 @@ func BenchmarkChamferBoxAllConvexEdges(b *testing.B) {
 		require.NoError(b, err)
 		require.Len(b, edges, 4)
 		b.StartTimer()
-		body, err := box.Chamfer(b.Context(), selector, units.Millimeters(setback))
+		body, err := decad.Chamfer(b.Context(), box, selector, units.Millimeters(setback))
 		b.StopTimer()
 		require.NoError(b, err)
 		require.True(b, body.IsSolid())
@@ -76,7 +76,7 @@ func BenchmarkChamferBoxCapLoop(b *testing.B) {
 		require.NoError(b, err)
 		require.Len(b, edges, 4)
 		b.StartTimer()
-		body, err := box.Chamfer(b.Context(), selector, units.Millimeters(3))
+		body, err := decad.Chamfer(b.Context(), box, selector, units.Millimeters(3))
 		if err != nil {
 			b.Fatal(err)
 		}

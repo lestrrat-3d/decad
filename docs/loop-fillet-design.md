@@ -1,6 +1,6 @@
 # Loop Fillet Design
 
-`Body.Fillet` of a complete loop of a planar face: a prism's cap loop, a
+`Fillet` of a complete loop of a planar face: a prism's cap loop, a
 brep or stacked result's planar-face loop, a hole rim or boss root, and the
 honest form of a top edge ending on a fillet cylinder (brep-modify SB7). Companion to
 `docs/modify-general-design.md` ("modify-general §N"), whose route L this

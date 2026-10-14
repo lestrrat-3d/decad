@@ -44,7 +44,7 @@ func Example_decad_asymmetric_chamfer() {
 	// reference names, and 5 mm along the y = 20 wall.
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(40, 20, 0))).Exactly(1)
 	wall := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))
-	body, err := plate.Chamfer(context.Background(), edge, units.Millimeters(3),
+	body, err := decad.Chamfer(context.Background(), plate, edge, units.Millimeters(3),
 		decad.WithAsymmetricChamfer(wall, units.Millimeters(5)))
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)

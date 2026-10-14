@@ -59,7 +59,7 @@ func bandOctagonFloor(t *testing.T, doc *Document) *Body {
 func bandChamferedBlock(t *testing.T, doc *Document) *Body {
 	t.Helper()
 	box := internalBoxBody(t, doc, -6, -6, 6, 6, 12)
-	block, err := box.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(box))), units.Millimeters(.1))
+	block, err := Chamfer(t.Context(), box, Edges(CreatedBy(CapEnd(box))), units.Millimeters(.1))
 	require.NoError(t, err)
 	return block
 }
