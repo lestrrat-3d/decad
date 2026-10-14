@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md §15's T200-T206 for Body.Offset (§17):
+// This file is docs/surface-design.md §15's T200-T206 for Offset (§17):
 // the patch arm's translation, the prism arm's certified section offset, and
 // the refusal set of Table R rows R37-R41. T207, the internal exact-generation
 // gate, is offset_internal_test.go's, as are the whole-interval certification
@@ -65,7 +65,7 @@ func TestOffsetPatchPositive(t *testing.T) {
 	sourceBox, err := patch.Bounds()
 	require.NoError(t, err)
 
-	moved, err := patch.Offset(t.Context(), units.Millimeters(2))
+	moved, err := decad.Offset(t.Context(), patch, units.Millimeters(2))
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, moved.Kind())
@@ -106,9 +106,9 @@ func TestOffsetPatchNegative(t *testing.T) {
 	patch, err := doc.Patch(t.Context(), s, p)
 	require.NoError(t, err)
 
-	up, err := patch.Offset(t.Context(), units.Millimeters(2), decad.WithOffsetSide(decad.OffsetPositive))
+	up, err := decad.Offset(t.Context(), patch, units.Millimeters(2), decad.WithOffsetSide(decad.OffsetPositive))
 	require.NoError(t, err)
-	down, err := patch.Offset(t.Context(), units.Millimeters(2),
+	down, err := decad.Offset(t.Context(), patch, units.Millimeters(2),
 		decad.WithOffsetSide(decad.OffsetPositive), decad.WithOffsetSide(decad.OffsetNegative))
 	require.NoError(t, err)
 
@@ -134,7 +134,7 @@ func TestOffsetPatchNegative(t *testing.T) {
 func TestOffsetPrismRectangle(t *testing.T) {
 	t.Parallel()
 	doc, sheet := offsetPrismSheet(t)
-	grown, err := sheet.Offset(t.Context(), units.Millimeters(3))
+	grown, err := decad.Offset(t.Context(), sheet, units.Millimeters(3))
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, grown.Kind())
@@ -177,7 +177,7 @@ func TestOffsetPrismRectangle(t *testing.T) {
 func TestOffsetPairCannotDoubleCount(t *testing.T) {
 	t.Parallel()
 	doc, sheet := offsetPrismSheet(t)
-	grown, err := sheet.Offset(t.Context(), units.Millimeters(3))
+	grown, err := decad.Offset(t.Context(), sheet, units.Millimeters(3))
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 2)
 
@@ -220,7 +220,7 @@ func TestOffsetPrismCircle(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
 			sheet := offsetCircleSheet(t, doc, 10)
-			result, err := sheet.Offset(t.Context(), units.Millimeters(2), decad.WithOffsetSide(tc.side))
+			result, err := decad.Offset(t.Context(), sheet, units.Millimeters(2), decad.WithOffsetSide(tc.side))
 			require.NoError(t, err)
 
 			require.Equal(t, decad.BodySheet, result.Kind())
@@ -249,7 +249,7 @@ func TestOffsetPrismCircle(t *testing.T) {
 func TestOffsetPrismNeckRefusal(t *testing.T) {
 	t.Parallel()
 	doc, sheet := thickenNeckSheet(t)
-	_, err := sheet.Offset(t.Context(), units.Millimeters(3), decad.WithOffsetSide(decad.OffsetNegative))
+	_, err := decad.Offset(t.Context(), sheet, units.Millimeters(3), decad.WithOffsetSide(decad.OffsetNegative))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "crosses itself"), err.Error())
 	require.Len(t, doc.Bodies(), 1)
@@ -263,7 +263,7 @@ func TestOffsetPrismNeckRefusal(t *testing.T) {
 func TestOffsetPrismNarrowNeckAdmitted(t *testing.T) {
 	t.Parallel()
 	_, sheet := thickenNeckSheet(t)
-	eroded, err := sheet.Offset(t.Context(), units.Millimeters(1.5), decad.WithOffsetSide(decad.OffsetNegative))
+	eroded, err := decad.Offset(t.Context(), sheet, units.Millimeters(1.5), decad.WithOffsetSide(decad.OffsetNegative))
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, eroded.Kind())
 	require.Len(t, eroded.Faces(), 16, `twelve eroded walks plus one arc at each of the four reflex corners`)
@@ -287,9 +287,9 @@ func TestOffsetSecondOffset(t *testing.T) {
 	t.Parallel()
 	t.Run("rectangle", func(t *testing.T) {
 		doc, sheet := offsetPrismSheet(t)
-		grown, err := sheet.Offset(t.Context(), units.Millimeters(3))
+		grown, err := decad.Offset(t.Context(), sheet, units.Millimeters(3))
 		require.NoError(t, err)
-		_, err = grown.Offset(t.Context(), units.Millimeters(1))
+		_, err = decad.Offset(t.Context(), grown, units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.True(t, strings.Contains(err.Error(), "axis-parallel"), err.Error())
 		require.Len(t, doc.Bodies(), 2)
@@ -297,9 +297,9 @@ func TestOffsetSecondOffset(t *testing.T) {
 	t.Run("circle", func(t *testing.T) {
 		doc := decad.New()
 		sheet := offsetCircleSheet(t, doc, 10)
-		twelve, err := sheet.Offset(t.Context(), units.Millimeters(2))
+		twelve, err := decad.Offset(t.Context(), sheet, units.Millimeters(2))
 		require.NoError(t, err)
-		thirteen, err := twelve.Offset(t.Context(), units.Millimeters(1))
+		thirteen, err := decad.Offset(t.Context(), twelve, units.Millimeters(1))
 		require.NoError(t, err)
 		require.Len(t, thirteen.Faces(), 1)
 		area, err := thirteen.Area()
@@ -364,7 +364,7 @@ func TestOffsetStagedFamilies(t *testing.T) {
 		{"solid", solid, "requires a sheet body"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := tc.body.Offset(t.Context(), units.Millimeters(1))
+			_, err := decad.Offset(t.Context(), tc.body, units.Millimeters(1))
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Contains(t, err.Error(), tc.want)
 			require.Equal(t, before, doc.Bodies())
@@ -406,7 +406,7 @@ func TestOffsetRefusals(t *testing.T) {
 			decad.ErrDegenerate, "unknown offset side"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := patch.Offset(t.Context(), tc.value, tc.opts...)
+			_, err := decad.Offset(t.Context(), patch, tc.value, tc.opts...)
 			require.ErrorIs(t, err, tc.want)
 			require.Contains(t, err.Error(), tc.says)
 			require.Len(t, doc.Bodies(), 1)
@@ -415,10 +415,10 @@ func TestOffsetRefusals(t *testing.T) {
 
 	// R41: Thicken consumes its receiver, so an offset of that retired sheet
 	// refuses on liveness rather than on any geometry.
-	solid, err := patch.Thicken(t.Context(), units.Millimeters(2))
+	solid, err := decad.Thicken(t.Context(), patch, units.Millimeters(2))
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, solid.Kind())
-	_, err = patch.Offset(t.Context(), units.Millimeters(1))
+	_, err = decad.Offset(t.Context(), patch, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
@@ -433,14 +433,14 @@ func TestOffsetPatchConversionIsRefused(t *testing.T) {
 	doc := decad.New()
 	patch, err := doc.Patch(t.Context(), s, p)
 	require.NoError(t, err)
-	_, err = patch.Offset(t.Context(), units.Inches(0.1))
+	_, err = decad.Offset(t.Context(), patch, units.Inches(0.1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "conversion"), err.Error())
 	require.Len(t, doc.Bodies(), 1)
 
 	// The same distance in millimetres converts by a factor of one, reports a
 	// zero displacement, and builds: the refusal is the conversion's doing.
-	moved, err := patch.Offset(t.Context(), units.Millimeters(2.54))
+	moved, err := decad.Offset(t.Context(), patch, units.Millimeters(2.54))
 	require.NoError(t, err)
 	decadtest.MeasuresBounds(t, moved, r3.NewVec(0, 0, 2.54), r3.NewVec(100, 60, 2.54),
 		decadtest.Exactly())
@@ -468,7 +468,7 @@ func TestOffsetPrismCarriesTheSourceAxialDisplacement(t *testing.T) {
 	require.Equal(t, decad.Approximate, sourceBox.Exactness)
 	require.Positive(t, sourceBox.Bound.Base())
 
-	grown, err := sheet.Offset(t.Context(), units.Millimeters(3))
+	grown, err := decad.Offset(t.Context(), sheet, units.Millimeters(3))
 	require.NoError(t, err)
 	box, err := grown.Bounds()
 	require.NoError(t, err)

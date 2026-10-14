@@ -29,7 +29,7 @@ func Example_body_thicken_patch() {
 		fmt.Println(err)
 		return
 	}
-	solid, err := patch.Thicken(context.Background(), units.Millimeters(2))
+	solid, err := decad.Thicken(context.Background(), patch, units.Millimeters(2))
 	if err != nil {
 		fmt.Println(err)
 		return

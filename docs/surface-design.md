@@ -372,7 +372,7 @@ owning document, which is what lets `Union` take the same shape.
 
 `Body.Patch` retires its receiver and registers the filled body.
 `Document.Patch` consumes nothing — it builds from a sketch profile, as
-`Extrude` does. `Body.Offset` consumes nothing either: it registers its result
+`Extrude` does. `Offset` consumes nothing either: it registers its result
 and leaves its receiver LIVE, on the non-consuming terms `Copy` already
 takes, because the offset sheet and the sheet it came from
 are what a caller measures, stitches or thickens together (§17.1).
@@ -2165,8 +2165,8 @@ reverses a decision already taken.
 | `docs/api-design.md` §6 | `Body` gains `Kind()`; `Volume`/`Centroid`'s `ErrNotSolid` gains the by-kind reading (§8); `Lump`'s gloss becomes "a connected piece of a body"; `FaceShell` gains `IsOpen`; `Edge` gains `IsFree` |
 | `docs/api-design.md` §6.1 | `Edge.Faces()`'s `len != 2` gloss gains the per-kind reading (§2.2) |
 | `docs/api-design.md` §8 | the v1 feature vocabulary gains `Patch`, `Stitch`, `Unstitch` and `WithSurfaceResult`; the signatures land beside the existing ones |
-| `docs/api-design.md` §8 | `Body.Thicken`, `ThickenSide` and `WithThickenSide` add §16's sheet-to-solid path under §6's consuming-body rule |
-| `docs/api-design.md` §8 | `Body.Offset`, `OffsetSide` and `WithOffsetSide` add §17's sheet-to-sheet path under §6's NON-consuming rule, the one `Copy` already takes |
+| `docs/api-design.md` §8 | `Thicken`, `ThickenSide` and `WithThickenSide` add §16's sheet-to-solid path under §6's consuming-body rule |
+| `docs/api-design.md` §8 | `Offset`, `OffsetSide` and `WithOffsetSide` add §17's sheet-to-sheet path under §6's NON-consuming rule, the one `Copy` already takes |
 | `docs/api-design.md` §9 | the predicate list gains `Free()`, and the rendering table gains its `free` token |
 | `docs/api-design.md` §13 | the v1 non-goal list keeps sheet-metal, and names §1.2's staged commands, §1.3's permanent refusals and §1.4's unstaged one, so the list stays the whole of what is out |
 | `docs/evaluator-design.md` §3 | the `Lump` row states "connected piece"; the topology-model rules gain the free-edge reading |
@@ -2611,12 +2611,12 @@ ANSWER is accepted and reads `Suspect`.
 | 12 | `Sweep` over a chain along a ONE-SPAN straight path (`docs/sweep-design.md` §15, PR C1): `SweepOption` with the chain refusals of §13.2, Table SC's gate set, the chain prism reduction over the path's own height and composed length bound, and §15's T190–T195. An arc span and every composite path stay R34 |
 | 13 | A chain `Sweep`'s bounded cardinal composite (`docs/sweep-design.md` §15.8): two real chain spans, indexed wall-rim sew, separation and boundary audits, and a certified sheet mesh. Standalone arcs and other composites stay R34 |
 | 14 | `Document.LoftChain` over a `LineSeg`-only correspondence (`docs/loft-design.md` §16, PR L1): the sealed `ChainLoftOption` tier, Table SL's gate set, §16.2's exactly-parallel plane gate and per-wall positive side, the open-walk cell walk with its two free end rungs, and §15's T196–T199 and T208. A curved correspondence stays R36 and a non-parallel plane pair stays R35 |
-| 15 | `Body.Offset` for §17's patch and profile-fed prism families, both sides: the patch arm's translation over the existing placement rebuild; the prism arm's `offsetProfile` section reused from §16.2 with its exact-generation gate, its offset audit and its whole-interval certification, and WITHOUT the source-and-offset nesting audit an annulus needs; Table R's R37–R41; Table X's own row; and §15's T200–T207. Other sheet families stay R37 |
-| 16 | `Body.Thicken` on a profile-fed revolve sheet (§16.5): the exact axis class, the meridian annulus over §16.2's own offsets, the radial gate over the interval scan's own boxes, the re-resolved axis frame, and §15's T158–T161 |
-| 17 | `Body.Thicken` on a chain ribbon (§16.6): the closed-form assembled section, its exact-generation gate and endpoint crossing audit, all three sides, and §15's T162–T164 |
-| 18 | `Body.Thicken` on a chain revolve shell (§16.7): §16.6's assembled section under §16.5's sweep and radial gate, and §15's T165–T169. A free end on the axis stays R43 |
+| 15 | `Offset` for §17's patch and profile-fed prism families, both sides: the patch arm's translation over the existing placement rebuild; the prism arm's `offsetProfile` section reused from §16.2 with its exact-generation gate, its offset audit and its whole-interval certification, and WITHOUT the source-and-offset nesting audit an annulus needs; Table R's R37–R41; Table X's own row; and §15's T200–T207. Other sheet families stay R37 |
+| 16 | `Thicken` on a profile-fed revolve sheet (§16.5): the exact axis class, the meridian annulus over §16.2's own offsets, the radial gate over the interval scan's own boxes, the re-resolved axis frame, and §15's T158–T161 |
+| 17 | `Thicken` on a chain ribbon (§16.6): the closed-form assembled section, its exact-generation gate and endpoint crossing audit, all three sides, and §15's T162–T164 |
+| 18 | `Thicken` on a chain revolve shell (§16.7): §16.6's assembled section under §16.5's sweep and radial gate, and §15's T165–T169. A free end on the axis stays R43 |
 | 19 | The chain-fed prism ribbon's `Tessellate`/`STL`/`OBJ` mesh over a `LineSeg`-only chain (`tessellate_chain.go`): every wall's exact planar quad read straight off its topology with no chording. A curved or free-form wall, and the chain-fed revolve ribbon's mesh, stay R45 and row 10's own staging respectively |
-| 20 | `Body.Thicken` on one-span straight and arc sweep sheets (§16.8): reuse the prism or revolve offset proof, then publish the new solid as `sweepPayload` with its path and roles. Composite sweep sheets stay R24. T213 checks both reductions and replay |
+| 20 | `Thicken` on one-span straight and arc sweep sheets (§16.8): reuse the prism or revolve offset proof, then publish the new solid as `sweepPayload` with its path and roles. Composite sweep sheets stay R24. T213 checks both reductions and replay |
 | 21 | Cardinal composite chain `Sweep` `Thicken` (§16.8): exact ribbon section and radial interval; two-span solid sweep sews caps and proves measurements and mesh. Other chain sweeps stay R24 except row 22's one-arc class (T195c) |
 | 22 | One-arc chain `Sweep` `Thicken` (§16.8): §16.7 closes the source walk under its exact-axis gate, and the result uses the solid one-arc Sweep proof and path roles (T214) |
 

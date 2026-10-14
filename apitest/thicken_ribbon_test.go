@@ -57,7 +57,7 @@ func TestThickenRibbonStraight(t *testing.T) {
 			t.Parallel()
 			_, ribbon := thickenRibbonOf(t, [][2]float64{{0, 0}, {40, 0}})
 			require.Equal(t, decad.BodySheet, ribbon.Kind())
-			solid, err := ribbon.Thicken(t.Context(), units.Millimeters(tc.thicknes),
+			solid, err := decad.Thicken(t.Context(), ribbon, units.Millimeters(tc.thicknes),
 				decad.WithThickenSide(tc.side))
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySolid, solid.Kind())
@@ -79,7 +79,7 @@ func TestThickenRibbonCorner(t *testing.T) {
 	t.Run("outward", func(t *testing.T) {
 		t.Parallel()
 		_, ribbon := thickenRibbonOf(t, [][2]float64{{0, 0}, {40, 0}, {40, 30}})
-		solid, err := ribbon.Thicken(t.Context(), units.Millimeters(2))
+		solid, err := decad.Thicken(t.Context(), ribbon, units.Millimeters(2))
 		require.NoError(t, err)
 		require.Len(t, solid.Faces(), 9)
 		volume, err := solid.Volume()
@@ -94,7 +94,7 @@ func TestThickenRibbonCorner(t *testing.T) {
 	t.Run("inward", func(t *testing.T) {
 		t.Parallel()
 		_, ribbon := thickenRibbonOf(t, [][2]float64{{0, 0}, {40, 0}, {40, 30}})
-		solid, err := ribbon.Thicken(t.Context(), units.Millimeters(2),
+		solid, err := decad.Thicken(t.Context(), ribbon, units.Millimeters(2),
 			decad.WithThickenSide(decad.ThickenNegative))
 		require.NoError(t, err)
 		require.Len(t, solid.Faces(), 8)
@@ -114,7 +114,7 @@ func TestThickenRibbonNeck(t *testing.T) {
 	t.Run("contact refuses", func(t *testing.T) {
 		t.Parallel()
 		doc, ribbon := thickenRibbonOf(t, neck)
-		_, err := ribbon.Thicken(t.Context(), units.Millimeters(3),
+		_, err := decad.Thicken(t.Context(), ribbon, units.Millimeters(3),
 			decad.WithThickenSide(decad.ThickenNegative))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "the offset interval contains a nonadjacent line contact")
@@ -125,7 +125,7 @@ func TestThickenRibbonNeck(t *testing.T) {
 	t.Run("clear builds", func(t *testing.T) {
 		t.Parallel()
 		_, ribbon := thickenRibbonOf(t, neck)
-		solid, err := ribbon.Thicken(t.Context(), units.Millimeters(1),
+		solid, err := decad.Thicken(t.Context(), ribbon, units.Millimeters(1),
 			decad.WithThickenSide(decad.ThickenNegative))
 		require.NoError(t, err)
 		require.Len(t, solid.Faces(), 10)

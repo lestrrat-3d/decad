@@ -34,7 +34,7 @@ func Example_body_offset() {
 		fmt.Printf("failed to extrude the sheet: %s\n", err)
 		return
 	}
-	grown, err := sheet.Offset(context.Background(), units.Millimeters(3))
+	grown, err := decad.Offset(context.Background(), sheet, units.Millimeters(3))
 	if err != nil {
 		fmt.Printf("failed to offset the sheet: %s\n", err)
 		return

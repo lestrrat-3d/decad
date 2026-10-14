@@ -31,7 +31,7 @@ func Example_body_thicken_prism() {
 		fmt.Println(err)
 		return
 	}
-	solid, err := sheet.Thicken(context.Background(), units.Millimeters(5),
+	solid, err := decad.Thicken(context.Background(), sheet, units.Millimeters(5),
 		decad.WithThickenSide(decad.ThickenNegative))
 	if err != nil {
 		fmt.Println(err)

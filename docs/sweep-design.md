@@ -927,7 +927,7 @@ faces' certified area intervals give `VerifyAll` an area slack. The sheet
 publishes no occupied-volume proof. `VerifyNone` keeps identical triangles
 and withholds area and contact results. A placed composite sheet refuses until
 its transformed join-plane and station bounds have their own proof.
-`Body.Thicken` admits this exact cardinal sheet on its three thickness sides
+`Thicken` admits this exact cardinal sheet on its three thickness sides
 through `docs/surface-design.md` §16.8's generated rectangular section. Other
 chain sweeps still refuse at that consumer.
 
@@ -940,7 +940,7 @@ faces and free rims. A partial arc reports `ValidityUndecided`, as a partial
 chain `Revolve` does. `Transform` and `Copy` replay the same reduction under
 their composed placement.
 
-`Body.Thicken` sends this sheet through its chain `Revolve` reduction when
+`Thicken` sends this sheet through its chain `Revolve` reduction when
 §16.7's exact-axis and generated-section gates admit it. The result carries
 a closed profile in a solid one-arc `sweepPayload`; its wall and cap roles
 follow the original path order. See `docs/surface-design.md` §16.8.

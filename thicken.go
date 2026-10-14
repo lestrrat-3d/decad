@@ -39,7 +39,8 @@ const (
 // WithThickenSide selects the side that receives the material.
 func WithThickenSide(side ThickenSide) ThickenOption { return thickenSideOption{side: side} }
 
-// Thicken builds a solid from an admitted sheet and retires that sheet.
+// Thicken builds a solid from the admitted sheet b and retires b.
+// A nil context or a nil b is ErrDegenerate.
 // It extrudes a recorded planar patch through the signed thickness interval,
 // builds a certified annular wall around a profile-fed prism sheet, spins a
 // certified meridian annulus through a profile-fed revolve sheet's own
@@ -49,7 +50,7 @@ func WithThickenSide(side ThickenSide) ThickenOption { return thickenSideOption{
 // A one-arc chain sweep uses its chain Revolve reduction; a cardinal composite
 // chain sweep assembles one section and sweeps both spans.
 // Other sheet families are staged under docs/surface-design.md §16.8.
-func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error) {
+func Thicken(ctx context.Context, b *Body, thickness units.Value, opts ...ThickenOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a thicken`, ErrDegenerate)
 	}

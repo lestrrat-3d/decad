@@ -17,7 +17,7 @@ func TestThickenPatchRectangle(t *testing.T) {
 	doc := decad.New()
 	patch, err := doc.Patch(t.Context(), s, p)
 	require.NoError(t, err)
-	solid, err := patch.Thicken(t.Context(), units.Millimeters(2))
+	solid, err := decad.Thicken(t.Context(), patch, units.Millimeters(2))
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, solid.Kind())
 	require.True(t, solid.IsSolid())
@@ -28,7 +28,7 @@ func TestThickenPatchRectangle(t *testing.T) {
 	decadtest.MeasuresCentroid(t, solid, r3.NewVec(50, 30, 1), decadtest.Exactly())
 	require.Len(t, solid.Lumps(), 1)
 	require.False(t, solid.Shells()[0].IsOpen())
-	_, err = patch.Thicken(t.Context(), units.Millimeters(1))
+	_, err = decad.Thicken(t.Context(), patch, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
@@ -47,7 +47,7 @@ func TestThickenPatchSides(t *testing.T) {
 			doc := decad.New()
 			patch, err := doc.Patch(t.Context(), s, p)
 			require.NoError(t, err)
-			solid, err := patch.Thicken(t.Context(), units.Millimeters(2),
+			solid, err := decad.Thicken(t.Context(), patch, units.Millimeters(2),
 				decad.WithThickenSide(decad.ThickenPositive), decad.WithThickenSide(tc.side))
 			require.NoError(t, err)
 			decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(12000), decadtest.Exactly())
@@ -69,7 +69,7 @@ func TestThickenPatchHole(t *testing.T) {
 	doc := decad.New()
 	patch, err := doc.Patch(t.Context(), s, p)
 	require.NoError(t, err)
-	solid, err := patch.Thicken(t.Context(), units.Millimeters(2))
+	solid, err := decad.Thicken(t.Context(), patch, units.Millimeters(2))
 	require.NoError(t, err)
 	require.Len(t, solid.Faces(), 7)
 	t.Run("volume", func(t *testing.T) {
@@ -99,7 +99,7 @@ func TestThickenPatchConversionBound(t *testing.T) {
 	doc := decad.New()
 	patch, err := doc.Patch(t.Context(), s, s.Profiles()[0])
 	require.NoError(t, err)
-	solid, err := patch.Thicken(t.Context(), units.Inches(0.1))
+	solid, err := decad.Thicken(t.Context(), patch, units.Inches(0.1))
 	require.NoError(t, err)
 	vol, err := solid.Volume()
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestThickenPatchRefusals(t *testing.T) {
 		{"unknown side", units.Millimeters(2), []decad.ThickenOption{decad.WithThickenSide(100)}, decad.ErrDegenerate},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := patch.Thicken(t.Context(), tc.value, tc.opts...)
+			_, err := decad.Thicken(t.Context(), patch, tc.value, tc.opts...)
 			require.ErrorIs(t, err, tc.want)
 			require.Len(t, doc.Bodies(), 1)
 		})

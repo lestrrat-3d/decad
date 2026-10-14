@@ -59,7 +59,7 @@ func TestThickenRevolveWasherInward(t *testing.T) {
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 	require.Len(t, sheet.Faces(), 4)
 
-	solid, err := sheet.Thicken(t.Context(), units.Millimeters(2),
+	solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(2),
 		decad.WithThickenSide(decad.ThickenNegative))
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, solid.Kind())
@@ -92,7 +92,7 @@ func TestThickenRevolveWasherInward(t *testing.T) {
 	// The sheet is retired and still readable, and the document holds the
 	// result alone.
 	require.Equal(t, decad.BodySheet, sheet.Kind())
-	_, err = sheet.Thicken(t.Context(), units.Millimeters(1))
+	_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 	require.Len(t, doc.Bodies(), 1)
 }
@@ -116,7 +116,7 @@ func TestThickenRevolveTorus(t *testing.T) {
 			t.Parallel()
 			_, sheet := thickenTorusSheet(t, 20, 5)
 			require.Len(t, sheet.Faces(), 1)
-			solid, err := sheet.Thicken(t.Context(), units.Millimeters(tc.thickness),
+			solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(tc.thickness),
 				decad.WithThickenSide(tc.side))
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySolid, solid.Kind())
@@ -144,7 +144,7 @@ func TestThickenRevolvePartialSweep(t *testing.T) {
 	_, err := sheet.Volume()
 	require.ErrorIs(t, err, decad.ErrNotSolid)
 
-	solid, err := sheet.Thicken(t.Context(), units.Millimeters(2),
+	solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(2),
 		decad.WithThickenSide(decad.ThickenNegative))
 	require.NoError(t, err)
 	require.Len(t, solid.Faces(), 10)
@@ -166,7 +166,7 @@ func TestThickenRevolveAxisRefusals(t *testing.T) {
 	t.Run("reaches the axis", func(t *testing.T) {
 		t.Parallel()
 		doc, sheet := thickenTorusSheet(t, 6, 5)
-		_, err := sheet.Thicken(t.Context(), units.Millimeters(2))
+		_, err := decad.Thicken(t.Context(), sheet, units.Millimeters(2))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "reaches the revolve axis")
 		require.Contains(t, err.Error(), "-1.000000000")
@@ -193,7 +193,7 @@ func TestThickenRevolveAxisRefusals(t *testing.T) {
 		sheet, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], tilted, decad.FullRevolution{},
 			decad.WithSurfaceResult())
 		require.NoError(t, err)
-		_, err = sheet.Thicken(t.Context(), units.Millimeters(2))
+		_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(2))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "not parallel to a recorded plane axis")
 		require.Len(t, doc.Bodies(), 1)
@@ -216,7 +216,7 @@ func TestThickenArcSweepSheetKeepsPathAndMesh(t *testing.T) {
 	doc := decad.New()
 	sheet, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	solid, err := sheet.Thicken(t.Context(), units.Millimeters(0.5),
+	solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(0.5),
 		decad.WithThickenSide(decad.ThickenNegative))
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, solid.Kind())

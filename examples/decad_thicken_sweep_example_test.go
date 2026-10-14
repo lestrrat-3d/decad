@@ -36,7 +36,7 @@ func Example_decad_thickenSweep() {
 		fmt.Printf("failed to sweep: %s\n", err)
 		return
 	}
-	solid, err := sheet.Thicken(context.Background(), units.Millimeters(1),
+	solid, err := decad.Thicken(context.Background(), sheet, units.Millimeters(1),
 		decad.WithThickenSide(decad.ThickenNegative))
 	if err != nil {
 		fmt.Printf("failed to thicken: %s\n", err)
