@@ -336,8 +336,11 @@ Each occupied heel cap arc endpoint also binds to one live source-side cell.
 For a sloped Revolve side, the cap radial and side meridian polynomials
 coincide at the authenticated LoftFaces band time; the selected transverse
 cell has one root. For a vertical side, the cap and source cell share the
-same exact root bracket and mapped XYZ box. The check rederives the arc and
-all face-pair verdicts from current producers, requires one live face and
+same exact root bracket and mapped XYZ box. The check rederives the arc
+from current producers. It reads the face-pair verdicts from the census its
+caller derived from the same source certificate earlier in the same call: the
+contact graph and the cap-ring constructor pass their own census, and a
+caller without one derives a fresh census. It requires one live face and
 source reference for each endpoint, and refuses ambiguous ownership or an
 excluded time boundary. It does not place a mesh vertex or admit `Union`.
 

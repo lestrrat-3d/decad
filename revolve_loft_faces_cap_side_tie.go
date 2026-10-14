@@ -28,6 +28,15 @@ type revolveLoftFacesHeelArcSideTies struct {
 func revolveLoftFacesHeelArcSideTiesOf(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate,
 	arc *revolveLoftFacesToolCapOccupiedArc) (*revolveLoftFacesHeelArcSideTies, bool, error) {
+	return revolveLoftFacesHeelArcSideTiesIn(ctx, proof, nil, arc)
+}
+
+// census, when not nil, must be the census that revolveLoftFacesCensus
+// returned with ok for this same proof earlier in the caller's call. A nil
+// census is derived here, after the arc is checked against the live source.
+func revolveLoftFacesHeelArcSideTiesIn(ctx context.Context,
+	proof *revolveLoftFacesSourceCertificate, census *revolveLoftFacesPairCensus,
+	arc *revolveLoftFacesToolCapOccupiedArc) (*revolveLoftFacesHeelArcSideTies, bool, error) {
 	if ctx == nil || proof == nil || arc == nil || arc.time == nil ||
 		arc.circle.span < 0 || arc.circle.span >= len(proof.section.spans) {
 		return nil, false, nil
@@ -36,9 +45,14 @@ func revolveLoftFacesHeelArcSideTiesOf(ctx context.Context,
 	if err != nil || !current {
 		return nil, false, err
 	}
-	census, ok, err := revolveLoftFacesCensus(ctx, proof)
-	if err != nil || !ok {
-		return nil, false, err
+	if census == nil {
+		fresh, ok, err := revolveLoftFacesCensus(ctx, proof)
+		if err != nil || !ok {
+			return nil, false, err
+		}
+		census = fresh
+	} else if census.manifest == nil {
+		return nil, false, nil
 	}
 	var capPair *revolveLoftFacesFacePair
 	for index := range census.pairs {

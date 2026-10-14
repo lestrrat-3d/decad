@@ -155,7 +155,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		if err != nil || !built {
 			return nil, false, err
 		}
-		ties, tied, err := revolveLoftFacesHeelArcSideTiesOf(ctx, proof, capCuts[i].arc)
+		ties, tied, err := revolveLoftFacesHeelArcSideTiesIn(ctx, proof, census, capCuts[i].arc)
 		if err != nil || !tied {
 			return nil, false, err
 		}

@@ -15,8 +15,8 @@ includes the live face, `FeatureRef`, source segment and span, LoftFaces band,
 and exact source and band-time intervals. Miss cells own no seam station ID.
 
 An occupied heel-cap arc has one pair entry and two distinct endpoints. Each
-endpoint must have the unique source-side cell proved by
-`revolveLoftFacesHeelArcSideTiesOf`. A whole radial Sketch arc contact has one
+endpoint must have the unique source-side cell proved by the heel-arc
+side-tie check against the graph's own census. A whole radial Sketch arc contact has one
 complete station run. All cap endpoints and stations receive IDs from one
 counter, so unrelated event kinds cannot share an ID. No ID is inferred from
 nearby held coordinates.
