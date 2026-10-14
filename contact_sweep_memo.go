@@ -7,16 +7,12 @@ import (
 )
 
 type sweepPathMemo = sweepmemo.PathMemo
-type sweepMemoStats = sweepmemo.Stats
 type sweepDeviationKey = sweepmemo.DeviationKey
 type sweepDeviation = sweepmemo.Deviation
 type sweepRadiusKey = sweepmemo.RadiusKey
 type sweepRadiusMemo = sweepmemo.RadiusMemo
 type sweepIdealPose = sweepmemo.IdealPose
 type cornerSpans = sweepmemo.CornerSpans
-
-const sweepMemoCap = sweepmemo.PathCap
-const sweepRadiusMemoCap = sweepmemo.RadiusCap
 
 func newSweepPathMemo() *sweepPathMemo { return sweepmemo.NewPathMemo() }
 

@@ -301,16 +301,6 @@ func (rp revolvePayload) point(b revolvemesh.RevolveBasis, z, rho, phi float64) 
 // axis carries the corrected sign.
 func (rp revolvePayload) reflected() bool { return rp.xform.IsReflection() }
 
-// evalRevolve builds the analytic revolved body from the payload: side
-// surfaces of revolution per boundary segment, caps only for a partial
-// sweep, shared edges and vertices, and bounded mass measurements
-// (docs/evaluator-design.md §6). The payload's segment kinds are line, circle
-// and arc; anything else has already been rejected by the mass-property
-// integrals it runs first.
-func evalRevolve(d *Document, ref producerID, rp revolvePayload) (*Body, error) {
-	return evalRevolveWork(d, ref, freeform.NewFreeformWork(), rp)
-}
-
 // evalRevolveWork is the build an operation that already holds this record's
 // free-form work counter runs: the preflight below and every walkOf under it
 // continue that counter rather than open a second ceiling on the same record.

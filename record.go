@@ -52,16 +52,6 @@ type circleSeg = sectionrecord.CircleSeg
 
 type arcSeg = sectionrecord.ArcSeg
 
-type ellipseSeg = sectionrecord.EllipseSeg
-
-type ellipticalArcSeg = sectionrecord.EllipticalArcSeg
-
-type splineSeg = sectionrecord.SplineSeg
-
-type nurbsSeg = sectionrecord.NURBSSeg
-
-type closedSplineSeg = sectionrecord.ClosedSplineSeg
-
 type fitSplineSeg = sectionrecord.FitSplineSeg
 
 func cloneLoopRecord(loop loopRecord) loopRecord { return sectionrecord.CloneLoopRecord(loop) }

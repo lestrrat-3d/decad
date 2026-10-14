@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/clearance/curvecells"
 	"github.com/lestrrat-3d/decad/internal/clearance/spine"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 
@@ -1091,4 +1092,15 @@ func newBodyGeom(b *Body) (*bodyGeom, bool) {
 		return nil, false
 	}
 	return g, ok
+}
+
+func (k *pairKernel) oracle() clearance.Oracle {
+	return clearance.Oracle{Tol: k.tol}
+}
+
+func (k *pairKernel) principalCircleEdgeGap(ea, eb *clearance.CEdge, sink *cellSink) bool {
+	cells := curvecells.New(k.ctx, k.tol, k.slack)
+	ok := cells.PrincipalCircleEdgeGap(ea, eb, sink)
+	k.captureCurveCells(cells)
+	return ok
 }

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
@@ -376,3 +377,9 @@ func TestSweepRunMemoChangesNoReport(t *testing.T) {
 	require.Positive(t, stats.DeviationHits)
 	require.Equal(t, off, on)
 }
+
+type sweepMemoStats = sweepmemo.Stats
+
+const sweepMemoCap = sweepmemo.PathCap
+
+const sweepRadiusMemoCap = sweepmemo.RadiusCap

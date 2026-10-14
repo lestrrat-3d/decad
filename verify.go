@@ -50,7 +50,6 @@ type wallOptionValue struct{ encoded verifyoption.WallToken }
 func (verifyOptionValue) verifyOption() {}
 func (wallOptionValue) wallOption()     {}
 
-type wallSpec = verifyoption.WallSpec
 type verifyConfig = verifyoption.Config
 
 // WithTolerance sets the relative tolerance gate of verification §2.

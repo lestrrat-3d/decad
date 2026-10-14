@@ -361,10 +361,6 @@ func (l mirrorLine) admitRegions(budget *proofbound.WorkBudget, regions []joinRe
 	return l.line.AdmitRegions(budget, records)
 }
 
-func (l mirrorLine) mirrorReversedRun(budget *proofbound.WorkBudget, run []curveSegment) ([]curveSegment, float64, error) {
-	return l.line.ReverseRun(budget, run)
-}
-
 // assemble adapts §5.2's record splice and runs §5.3's section audit.
 func (l mirrorLine) assemble(budget *proofbound.WorkBudget, region joinRegion) (profileRecord, float64, error) {
 	work := freeform.NewFreeformWork()

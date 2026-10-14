@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/verifyoption"
 	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -1634,3 +1635,5 @@ func requireSoundCircularVerdict(t *testing.T, fixture string, verdict survey2d.
 		require.Falsef(t, strictlyBetween, "%s: arc about (%g, %g), pull %v: pullClear but a point of the recorded window is strictly inside (-1, 0)", fixture, w.CU, w.CV, pull)
 	}
 }
+
+type wallSpec = verifyoption.WallSpec
