@@ -367,7 +367,7 @@ func ChamferLerp(a, b r3.Vec, level *big.Rat, heldLevel float64) (r3.Vec, proofa
 		return r3.Vec{}, proofarith.Xpt{}, 0,
 			fmt.Errorf("%w: chamfer side level lies outside a wall", decaderr.ErrUnsupported)
 	}
-	exact := proofarith.Xlerp(proofarith.XptOf(a), proofarith.XptOf(b), t.Num(), t.Denom())
+	exact := proofarith.Xlerp(proofarith.XptOf(a), proofarith.XptOf(b), new(big.Int).Set(t.Num()), new(big.Int).Set(t.Denom()))
 	p := exact.Vec()
 	p.Z = heldLevel
 	if !proofbound.FiniteVec(p) {

@@ -46,7 +46,7 @@ type rootSpan struct {
 // rescaling, avoiding repeated rational normalization during root search.
 func (s rootSpan) signAt(x *big.Rat) int {
 	var acc, dpow, tmp big.Int
-	return polynomial.IpSign(s.pInt, x.Num(), x.Denom(), &acc, &dpow, &tmp)
+	return polynomial.IpSign(s.pInt, new(big.Int).Set(x.Num()), new(big.Int).Set(x.Denom()), &acc, &dpow, &tmp)
 }
 
 // CertifyRoot proves that one ideal contact root is bracketed

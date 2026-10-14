@@ -39,7 +39,7 @@ func ChainStart(lo, near, s *big.Rat, readingFloor int64) *big.Rat {
 }
 
 func gridStart(near, s *big.Rat, readingFloor int64, increasing bool) *big.Rat {
-	den := s.Denom()
+	den := new(big.Int).Set(s.Denom())
 	depth := den.BitLen() - 1
 	dyadic := new(big.Int).Lsh(big.NewInt(1), uint(depth)).Cmp(den) == 0
 	if dyadic && depth <= GridDepth {

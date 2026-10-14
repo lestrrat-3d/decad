@@ -26,10 +26,9 @@ func bernsteinIntegerRow(coeff []*big.Rat) ([]*big.Int, *big.Int) {
 	den := big.NewInt(1)
 	var gcd big.Int
 	for _, c := range coeff {
-		d := c.Denom()
-		gcd.GCD(nil, nil, den, d)
+		gcd.GCD(nil, nil, den, c.Denom())
 		den.Quo(den, &gcd)
-		den.Mul(den, d)
+		den.Mul(den, c.Denom())
 	}
 	nums := make([]*big.Int, len(coeff))
 	var scale big.Int
@@ -105,14 +104,14 @@ func bernsteinScaledNumerator(scaled []*big.Int, p, q *big.Int) *big.Int {
 // same sign as the exact value.
 func BernsteinSign(coeff []*big.Rat, parameter *big.Rat) int {
 	scaled, _ := bernsteinScaledCoefficients(coeff)
-	return bernsteinScaledNumerator(scaled, parameter.Num(), parameter.Denom()).Sign()
+	return bernsteinScaledNumerator(scaled, new(big.Int).Set(parameter.Num()), new(big.Int).Set(parameter.Denom())).Sign()
 }
 
 // BernsteinValue is the exact value of a Bernstein row at a rational
 // parameter.
 func BernsteinValue(coeff []*big.Rat, parameter *big.Rat) *big.Rat {
 	scaled, den := bernsteinScaledCoefficients(coeff)
-	p, q := parameter.Num(), parameter.Denom()
+	p, q := new(big.Int).Set(parameter.Num()), new(big.Int).Set(parameter.Denom())
 	num := bernsteinScaledNumerator(scaled, p, q)
 	qn := new(big.Int).Exp(q, big.NewInt(int64(len(coeff)-1)), nil)
 	return proofarith.RatFrac(new(big.Rat), num, qn.Mul(qn, den))
@@ -146,7 +145,7 @@ func BernsteinSplit(a []*big.Rat, at *big.Rat) ([]*big.Rat, []*big.Rat) {
 	n := len(a) - 1
 	left, right := make([]*big.Rat, n+1), make([]*big.Rat, n+1)
 	work, den := bernsteinIntegerRow(a)
-	p, q := at.Num(), at.Denom()
+	p, q := new(big.Int).Set(at.Num()), new(big.Int).Set(at.Denom())
 	qp := new(big.Int).Sub(q, p)
 	scale := new(big.Int).Set(den)
 	var t1, t2 big.Int
@@ -203,7 +202,7 @@ func BernsteinRestrict(a []*big.Rat, lo, hi *big.Rat) []*big.Rat {
 	}
 	n := len(a) - 1
 	work, den := bernsteinIntegerRow(a)
-	p, q := lo.Num(), lo.Denom()
+	p, q := new(big.Int).Set(lo.Num()), new(big.Int).Set(lo.Denom())
 	qp := new(big.Int).Sub(q, p)
 	// right[n-level] = work[n-level] / (den*q^level) after level updates;
 	// scaling by q^(n-level) puts every entry over den*q^n.
@@ -223,7 +222,7 @@ func BernsteinRestrict(a []*big.Rat, lo, hi *big.Rat) []*big.Rat {
 		}
 	}
 	t := ratDiv(ratSub(hi, lo), ratSub(ratOne(), lo))
-	pp, qq := t.Num(), t.Denom()
+	pp, qq := new(big.Int).Set(t.Num()), new(big.Int).Set(t.Denom())
 	qpp := new(big.Int).Sub(qq, pp)
 	scale := new(big.Int).Mul(den, qPow[n])
 	left := make([]*big.Rat, n+1)

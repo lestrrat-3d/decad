@@ -112,8 +112,8 @@ func SpanHodographGapSquared(w *FreeformWork, span BezierSpan) (*big.Rat, error)
 	}
 	den := big.NewInt(1)
 	for _, point := range span {
-		den = RatLCM(den, point.U.Denom())
-		den = RatLCM(den, point.V.Denom())
+		den = RatLCM(den, new(big.Int).Set(point.U.Denom()))
+		den = RatLCM(den, new(big.Int).Set(point.V.Denom()))
 	}
 	u := make([]*big.Int, n)
 	v := make([]*big.Int, n)

@@ -301,8 +301,8 @@ func DyadicSpanOf(w *FreeformWork, span BezierSpan) (DyadicSpan, error) {
 	}
 	den := big.NewInt(1)
 	for _, point := range span {
-		den = RatLCM(den, point.U.Denom())
-		den = RatLCM(den, point.V.Denom())
+		den = RatLCM(den, new(big.Int).Set(point.U.Denom()))
+		den = RatLCM(den, new(big.Int).Set(point.V.Denom()))
 	}
 	points := make([]DyadicPoint, len(span))
 	for i, point := range span {

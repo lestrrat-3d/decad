@@ -203,16 +203,21 @@ func ScaledNum(r *big.Rat, den *big.Int) *big.Int {
 //   - EdgeCross2Fracs keeps a Cross2x result's Num and Denom in a ClipFrac,
 //     which compares by cross multiplication and tolerates any form.
 //
-// The precondition rests on two things. The producer audit: every producer the
-// repository uses reduces; the one standard-library path that does not is
-// Rat.GobDecode, which installs the encoded numerator and denominator as they
-// are, and the repository does not call it; each write through Num and Denom
-// in this package builds an odd numerator over a power of two, an integer, or
-// a lowest-terms result. And a runtime detector that checked every operand and
-// result of the five helpers and found no violation: more than 100M checks
-// over the packages under internal/, more than 222M over apitest, 241,365,639
-// over the root package, and more than 21M over internal/meshbool.
-// CmpRat has no such precondition.
+// The precondition rests on three things together, none of which is a proof
+// alone. The producer audit: every producer the repository uses reduces; the
+// one standard-library path that does not is Rat.GobDecode, which installs the
+// encoded numerator and denominator as they are, and the repository does not
+// call it; each write through Num and Denom in this package builds an odd
+// numerator over a power of two, an integer, or a lowest-terms result. A
+// runtime detector that checked every operand and result of the five helpers
+// and found no violation: more than 100M checks over the packages under
+// internal/, more than 222M over apitest, 241,365,639 over the root package,
+// and more than 21M over internal/meshbool. And TestNoRatWritesThroughNumDenom,
+// a tripwire for the write shapes it knows: it refuses most uses of Num and
+// Denom outside this package, GobDecode calls and any import of encoding/gob.
+// It does not prove that no other path produces a non-reduced Rat; reflection,
+// unsafe and user-defined methods named like math/big methods are out of its
+// scope. CmpRat has no such precondition.
 func AddRat(z, a, b *big.Rat) *big.Rat {
 	i, okA := denomExp(a)
 	j, okB := denomExp(b)

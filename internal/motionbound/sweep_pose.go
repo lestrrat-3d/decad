@@ -41,7 +41,7 @@ func SweepIdealPoseAt(fromRot IvMat, fromT RatVec, delta [3]proofarith.Dyadic,
 	var shift IvVec
 	for axis := range 3 {
 		pivot := new(big.Rat).Add(frame.Center[axis], new(big.Rat).Mul(velocity[axis], elapsed))
-		den := proofarith.LcmInt(rotDen, pivot.Denom())
+		den := proofarith.LcmInt(rotDen, new(big.Int).Set(pivot.Denom()))
 		multiplier := new(big.Int).Quo(den, rotDen)
 		pivotN := proofarith.ScaledNum(pivot, den)
 		low := lo[axis].Mul(lo[axis], multiplier)
@@ -108,8 +108,8 @@ func SweepPointDeviationSquared(source, actual []proofarith.DyV3, rot ScaledIvMa
 	var den, rotMultiplier, observedMultiplier, shiftLo, shiftHi, toWhole [3]*big.Int
 	whole := big.NewInt(1)
 	for axis := range 3 {
-		den[axis] = proofarith.LcmInt(proofarith.LcmInt(rotDen, shift[axis].Lo.Denom()),
-			shift[axis].Hi.Denom())
+		den[axis] = proofarith.LcmInt(proofarith.LcmInt(rotDen, new(big.Int).Set(shift[axis].Lo.Denom())),
+			new(big.Int).Set(shift[axis].Hi.Denom()))
 		rotMultiplier[axis] = new(big.Int).Quo(den[axis], rotDen)
 		observedMultiplier[axis] = new(big.Int).Quo(den[axis], q)
 		shiftLo[axis], shiftHi[axis] = proofarith.ScaledNum(shift[axis].Lo, den[axis]),

@@ -47,9 +47,8 @@ type SturmChainInt []IntPoly
 func ClearDenoms(p RatPoly) IntPoly {
 	den := big.NewInt(1)
 	for _, c := range p {
-		d := c.Denom()
-		g := new(big.Int).GCD(nil, nil, den, d)
-		den.Mul(den, new(big.Int).Quo(d, g))
+		g := new(big.Int).GCD(nil, nil, den, c.Denom())
+		den.Mul(den, new(big.Int).Quo(c.Denom(), g))
 	}
 	out := make(IntPoly, len(p))
 	for i, c := range p {
@@ -108,7 +107,7 @@ func IpSign(p IntPoly, num, den *big.Int, acc, dpow, tmp *big.Int) int {
 // (TestSturmVarAtMatchesRationalHornerSigns).
 func SturmVarAt(chain SturmChainInt, x *big.Rat) int {
 	acc, dpow, tmp := new(big.Int), new(big.Int), new(big.Int)
-	num, den := x.Num(), x.Denom()
+	num, den := new(big.Int).Set(x.Num()), new(big.Int).Set(x.Denom())
 	vars, prev := 0, 0
 	for _, p := range chain {
 		s := IpSign(p, num, den, acc, dpow, tmp)

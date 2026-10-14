@@ -97,8 +97,8 @@ func (c *MeridianMemo) hash(first, second Map, span freeform.BezierSpan, m, b *b
 		h.WriteByte(0xff)
 	}
 	write := func(r *big.Rat) bool {
-		writeInt(r.Num())
-		writeInt(r.Denom())
+		writeInt(new(big.Int).Set(r.Num()))
+		writeInt(new(big.Int).Set(r.Denom()))
 		return true
 	}
 	meridianMapRats(first, write)
