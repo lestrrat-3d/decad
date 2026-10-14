@@ -2025,3 +2025,6 @@
 10	0.00	TestSpiralTangentFirstToothUnionIsCertified
 10	0.00	TestSpiralTangentPatternedUnionRefuses
 10	0.00	TestEdgeVerticesAreTheBodyVertices
+10	0.00	TestLoftCircleBoreRoundedAxisDoesNotPublishCylinder
+10	0.00	TestLoftCircleBoreRoundedAdmissionRefusals
+10	0.00	TestLoftDirectCircleRoundedAxisKeepsFacetedTopology
