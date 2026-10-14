@@ -29,7 +29,7 @@ func TestCurvedLoftFacesRealCopySeparation(t *testing.T) {
 	moves := []r3.Transform{r3.Identity(), turn}
 	require.True(t, shellseparation.Separate(t.Context(),
 		[]shellseparation.Shell{shell(original), shell(placed)}, moves,
-		shellseparation.SourceShell,
+		nil, shellseparation.SourceShell,
 		shellseparation.AxisX, true))
 	held, err := shellseparation.PlacedHeldShells(t.Context(), []shellseparation.HeldCopy{
 		{Verts: original.verts, Tris: original.tris, Linked: true},
@@ -37,13 +37,13 @@ func TestCurvedLoftFacesRealCopySeparation(t *testing.T) {
 	}, moves)
 	require.NoError(t, err)
 	require.True(t, shellseparation.Separate(t.Context(), held, moves,
-		shellseparation.HeldCopyShell,
+		nil, shellseparation.HeldCopyShell,
 		shellseparation.AxisX, true))
 
 	overlap, err := Copy(t.Context(), source)
 	require.NoError(t, err)
 	require.False(t, shellseparation.Separate(t.Context(), []shellseparation.Shell{
 		shell(original), shell(overlap.payload.(facetedPayload)),
-	}, []r3.Transform{r3.Identity(), r3.Identity()}, shellseparation.SourceShell,
+	}, []r3.Transform{r3.Identity(), r3.Identity()}, nil, shellseparation.SourceShell,
 		shellseparation.AxisX, true))
 }

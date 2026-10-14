@@ -5,8 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
-	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -14,64 +14,56 @@ import (
 
 // InverseHeldResult maps a copy's stitched held result back to the first
 // tooth's frame. Inverse placement is used only for comparing output chains
-// with their unplaced source curves. The certified output β is stretched and
-// charged for inverse float rounding, the residual tooth transform, and the
-// blank's slight radial scaling under the stored axis-rotation matrix.
+// with their unplaced source curves.
+//
+// rec is the exact rotation the copy's true solid is the image under. It must
+// fix the X axis through the origin, and move must have zero translation, so the
+// inverse is the exact orthogonal map Q^T with no translation. The certified
+// output β is charged for the float inverse's entrywise gap to Q^T, applied once
+// per copy, and for the inverse's rounding. Q^T is an isometry, so β takes no
+// stretch factor, and Q^T fixes the blank's radius, so the radial allowance is
+// the gap alone. The result is refused when any charge is not finite.
 func InverseHeldResult(ctx context.Context, blankHeld *meshbool.BoolMesh,
-	firstVerts []r3.Vec, firstMeshBound float64, held *meshbool.StitchedMesh, move r3.Transform) (
+	firstVerts []r3.Vec, firstMeshBound float64, held *meshbool.StitchedMesh, move r3.Transform,
+	rec *exactrotation.Rotation) (
 	[]r3.Vec, []float64, float64, float64, bool,
 ) {
+	q, ok := AxisCopyMap(rec)
+	if !ok || move.Translation() != (r3.Vec{}) {
+		return nil, nil, 0, 0, false
+	}
 	inv, err := move.Inverse()
-	if err != nil {
+	if err != nil || inv.Translation() != (r3.Vec{}) {
 		return nil, nil, 0, 0, false
 	}
-	forward, err := massmoment.PlacementRotation(move)
-	if err != nil {
+	if len(held.VertexBound) != len(held.Verts) || len(firstVerts) == 0 ||
+		proofbound.IsNonFinite(firstMeshBound) || firstMeshBound < 0 {
 		return nil, nil, 0, 0, false
 	}
-	back, err := massmoment.PlacementRotation(inv)
-	if err != nil {
-		return nil, nil, 0, 0, false
+	// Entry (i,j) of the float inverse against entry (j,i) of Q.
+	basis := inv.Basis()
+	cols := [3]r3.Vec{basis.EX, basis.EY, basis.EZ}
+	gapSum := new(big.Rat)
+	for j, col := range cols {
+		for i, f := range [3]float64{col.X, col.Y, col.Z} {
+			entry := new(big.Rat).SetFloat64(f)
+			if entry == nil {
+				return nil, nil, 0, 0, false
+			}
+			gapSum.Add(gapSum, ratAbs(new(big.Rat).Sub(q[j][i], entry)))
+		}
 	}
-	// The admitted near-axis motion has no X/YZ cross terms. Keep the local
-	// blank ring's held X coordinate exact, and charge the omitted one-ULP
-	// axial inverse through the canonical back*forward residual below.
-	back[0][0] = ratOne()
-	back[0][1], back[0][2] = ratZero(), ratZero()
-	charge, err := massmoment.MapChargeOf(back)
-	if err != nil {
-		return nil, nil, 0, 0, false
-	}
-	if len(held.VertexBound) != len(held.Verts) || len(firstVerts) == 0 {
-		return nil, nil, 0, 0, false
-	}
-	maxTooth, maxBlank := 0.0, 0.0
-	for _, v := range firstVerts {
-		maxTooth = max(maxTooth, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
-	}
+	gap := proofbound.RatFloatUp(gapSum)
+	maxBlank := 0.0
 	for _, v := range blankHeld.Verts {
 		maxBlank = max(maxBlank, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
 	}
-	toothRadius := proofbound.AbsSumUpper(proofbound.Radius3D(maxTooth), firstMeshBound)
 	blankRadius := proofbound.AbsSumUpper(proofbound.Radius3D(maxBlank),
 		facetproof.FacetBoundMax(blankHeld.Tris, blankHeld.VertexBound))
-	deviation := new(big.Rat)
-	for row := range 3 {
-		for column := range 3 {
-			entry := new(big.Rat)
-			for k := range 3 {
-				entry.Add(entry, ratMul(back[row][k], forward[k][column]))
-			}
-			if row == column {
-				entry.Sub(entry, ratOne())
-			}
-			deviation.Add(deviation, ratAbs(entry))
-		}
+	radialExtra := proofbound.ProductUpper(gap, blankRadius)
+	if proofbound.IsNonFinite(gap) || proofbound.IsNonFinite(blankRadius) || proofbound.IsNonFinite(radialExtra) {
+		return nil, nil, 0, 0, false
 	}
-	toothExtra := proofbound.ProductUpper(proofbound.RatFloatUp(deviation), toothRadius)
-	blankExtra := proofbound.ProductUpper(charge.Stretch, blankRadius)
-	radialExtra := blankExtra
-	commonExtra := proofbound.AbsSumUpper(toothExtra, blankExtra)
 	verts := make([]r3.Vec, len(held.Verts))
 	beta := make([]float64, len(held.VertexBound))
 	maxExtra := 0.0
@@ -84,17 +76,20 @@ func InverseHeldResult(ctx context.Context, blankHeld *meshbool.BoolMesh,
 		if !proofbound.FiniteVec(v) || proofbound.IsNonFinite(held.VertexBound[i]) {
 			return nil, nil, 0, 0, false
 		}
+		// Q^T fixes X exactly, so the held X coordinate is the exact image's.
 		verts[i] = inv.Apply(v)
 		verts[i].X = v.X
-		if !proofbound.FiniteVec(verts[i]) {
+		reach := max(math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
+		extra := proofbound.AbsSumUpper(proofbound.RigidRoundAllow(reach, 0), proofbound.ProductUpper(gap, reach))
+		beta[i] = proofbound.AbsSumUpper(held.VertexBound[i], extra)
+		if !proofbound.FiniteVec(verts[i]) || proofbound.IsNonFinite(extra) || proofbound.IsNonFinite(beta[i]) {
 			return nil, nil, 0, 0, false
 		}
-		round := proofbound.RigidRoundAllow(max(math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z)), 0)
-		extra := proofbound.AbsSumUpper(round, commonExtra)
-		beta[i] = proofbound.AbsSumUpper(
-			proofbound.ProductUpper(proofbound.AbsSumUpper(1, charge.Stretch), held.VertexBound[i]), extra)
 		maxExtra = max(maxExtra, extra)
 	}
-	return verts, beta, proofbound.AbsSumUpper(
-		proofbound.ProductUpper(proofbound.AbsSumUpper(1, charge.Stretch), held.Round), maxExtra), radialExtra, true
+	round := proofbound.AbsSumUpper(held.Round, maxExtra)
+	if proofbound.IsNonFinite(round) {
+		return nil, nil, 0, 0, false
+	}
+	return verts, beta, round, radialExtra, true
 }

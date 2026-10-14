@@ -2,9 +2,12 @@ package facetproof_test
 
 import (
 	"math"
+	"math/big"
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -102,5 +105,136 @@ func TestPlaceMeshAreaRoundMatchesPerFacetLoop(t *testing.T) {
 		want := proofbound.AbsSumUpper(0, proofbound.ProductUpper(0, 0),
 			proofbound.ProductUpper(2, proofbound.ProductUpper(0, heldArea)), areaRound)
 		require.Equal(t, math.Float64bits(want), math.Float64bits(placed.AreaSlack), "reflect=%v", reflect)
+	}
+}
+
+func tetraMesh() ([]r3.Vec, [][3]int) {
+	verts := []r3.Vec{{X: 1.1, Y: 0.3, Z: -0.7}, {X: 9.3, Y: 0.1, Z: 0.2}, {X: 0.4, Y: 7.7, Z: 0.9}, {X: 0.6, Y: 0.8, Z: 6.1}}
+	return verts, [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
+}
+
+// meshVolume is the exact signed volume of a closed mesh of float vertices.
+func meshVolume(verts []r3.Vec, tris [][3]int) *big.Rat {
+	vol := new(big.Rat)
+	for _, tri := range tris {
+		var p [3][3]*big.Rat
+		for k, vi := range tri {
+			v := verts[vi]
+			p[k] = [3]*big.Rat{proof.FloatRat(v.X), proof.FloatRat(v.Y), proof.FloatRat(v.Z)}
+		}
+		mul := func(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }
+		sub := func(a, b *big.Rat) *big.Rat { return new(big.Rat).Sub(a, b) }
+		cx := sub(mul(p[1][1], p[2][2]), mul(p[1][2], p[2][1]))
+		cy := sub(mul(p[1][2], p[2][0]), mul(p[1][0], p[2][2]))
+		cz := sub(mul(p[1][0], p[2][1]), mul(p[1][1], p[2][0]))
+		triple := new(big.Rat).Add(mul(p[0][0], cx), new(big.Rat).Add(mul(p[0][1], cy), mul(p[0][2], cz)))
+		vol.Add(vol, triple)
+	}
+	return vol.Quo(vol, big.NewRat(6, 1))
+}
+
+// The placed vertices of a PlaceMeshDenoting result lie within their vertex
+// bounds of Q*v + t, with d any float transform within the stated gap of the
+// exact record, and the volume change stays within VolSymDiff. A d that is NOT
+// the record's own float transform makes the gap term load-bearing.
+func TestPlaceMeshDenotingCoversExactImage(t *testing.T) {
+	t.Parallel()
+	verts, tris := tetraMesh()
+	for _, tc := range []struct {
+		name   string
+		offset float64
+	}{{"own float transform", 0}, {"transform off by 1e-6 rad", 1e-6}} {
+		t.Run(tc.name, func(t *testing.T) {
+			center, axis, theta := r3.Vec{X: 2, Y: -1, Z: 3}, r3.Vec{X: 1, Y: 2, Z: 2}, 1.1
+			rec, _, err := exactrotation.New(center, axis, units.Radians(theta))
+			require.NoError(t, err)
+			d, err := r3.RotationAround(center, axis, units.Radians(theta+tc.offset))
+			require.NoError(t, err)
+			linear, translation, ok := rec.Gap(d)
+			require.True(t, ok)
+			bounds := make([]float64, len(verts))
+			placed, err := facetproof.PlaceMeshDenoting(t.Context(), proofbound.NewWorkBudget(t.Context()),
+				verts, tris, bounds, 0, 0, d, linear, translation)
+			require.NoError(t, err)
+			m, tr := rec.Linear(), rec.Translation()
+			for i, v := range verts {
+				vv := [3]*big.Rat{proof.FloatRat(v.X), proof.FloatRat(v.Y), proof.FloatRat(v.Z)}
+				h := placed.Verts[i]
+				held := [3]*big.Rat{proof.FloatRat(h.X), proof.FloatRat(h.Y), proof.FloatRat(h.Z)}
+				dist2 := new(big.Rat)
+				for r := range 3 {
+					img := new(big.Rat).Set(tr[r])
+					for c := range 3 {
+						img.Add(img, new(big.Rat).Mul(m[r][c], vv[c]))
+					}
+					diff := img.Sub(img, held[r])
+					dist2.Add(dist2, diff.Mul(diff, diff))
+				}
+				bound := proof.FloatRat(placed.VertexBound[i])
+				require.LessOrEqual(t, dist2.Cmp(bound.Mul(bound, bound)), 0,
+					"vertex %d lies within its bound of Q*v + t", i)
+			}
+			// Q keeps volume, so the exact source volume is the true one.
+			change := new(big.Rat).Sub(meshVolume(placed.Verts, placed.Tris), meshVolume(verts, tris))
+			require.LessOrEqual(t, change.Abs(change).Cmp(proof.FloatRat(placed.VolSymDiff)), 0)
+			require.False(t, math.IsInf(placed.MeshBound, 0) || math.IsNaN(placed.MeshBound))
+			require.False(t, math.IsInf(placed.AreaSlack, 0) || math.IsNaN(placed.AreaSlack))
+		})
+	}
+}
+
+// The gap term is charged per vertex: a larger gap widens every vertex bound.
+func TestPlaceMeshDenotingChargesGapPerVertex(t *testing.T) {
+	t.Parallel()
+	verts, tris := tetraMesh()
+	d, err := r3.RotationAround(r3.Vec{}, r3.Vec{Z: 1}, units.Radians(0.5))
+	require.NoError(t, err)
+	place := func(linear, translation float64) facetproof.PlacedMesh {
+		placed, err := facetproof.PlaceMeshDenoting(t.Context(), proofbound.NewWorkBudget(t.Context()),
+			verts, tris, make([]float64, len(verts)), 0, 0, d, linear, translation)
+		require.NoError(t, err)
+		return placed
+	}
+	base, wide := place(0, 0), place(1e-3, 1e-3)
+	for i, v := range verts {
+		maxAbs := math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z)))
+		// The gap is at least linear*max|v| + translation, independent of the
+		// float rounding allowance that base already holds.
+		require.GreaterOrEqual(t, wide.VertexBound[i], 1e-3*maxAbs+1e-3)
+		require.Greater(t, wide.VertexBound[i], base.VertexBound[i])
+	}
+	require.Greater(t, wide.VolSymDiff, base.VolSymDiff)
+	require.Greater(t, wide.AreaSlack, base.AreaSlack)
+}
+
+// PlaceMeshDenoting places the vertices exactly as PlaceMesh does and keeps the
+// source's volume and area charges apart from the placement's own rounding: it
+// adds no stretch or determinant term.
+func TestPlaceMeshDenotingPlacesVerticesAsPlaceMesh(t *testing.T) {
+	t.Parallel()
+	verts, tris := tetraMesh()
+	d, err := r3.RotationAround(r3.Vec{}, r3.Vec{X: 1}, units.Radians(math.Pi/2))
+	require.NoError(t, err)
+	zero := make([]float64, len(verts))
+	want, err := facetproof.PlaceMesh(t.Context(), proofbound.NewWorkBudget(t.Context()), verts, tris, zero, 0, 0, 0, 0, d)
+	require.NoError(t, err)
+	got, err := facetproof.PlaceMeshDenoting(t.Context(), proofbound.NewWorkBudget(t.Context()),
+		verts, tris, zero, 0, 0, d, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, want.Verts, got.Verts)
+	require.Equal(t, want.Tris, got.Tris)
+	// Zero gaps add no term beyond the one-ulp outward rounding of the sum.
+	for i := range want.VertexBound {
+		require.InDelta(t, want.VertexBound[i], got.VertexBound[i], 1e-20)
+	}
+}
+
+func TestPlaceMeshDenotingRefusesBadGap(t *testing.T) {
+	t.Parallel()
+	verts, tris := tetraMesh()
+	for _, gap := range [][2]float64{{-1, 0}, {0, -1}, {math.Inf(1), 0}, {0, math.NaN()}} {
+		_, err := facetproof.PlaceMeshDenoting(t.Context(), proofbound.NewWorkBudget(t.Context()), verts, tris,
+			make([]float64, len(verts)), 0, 0, r3.Identity(), gap[0], gap[1])
+		require.ErrorIs(t, err, decaderr.ErrUnsupported, "gap %v", gap)
 	}
 }

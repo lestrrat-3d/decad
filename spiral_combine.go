@@ -6,6 +6,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -213,7 +214,8 @@ func spiralValidateCombinedCopy(ctx context.Context, blank *Body, blankHeld *mes
 	if copyIndex != 0 {
 		var ok bool
 		local.Verts, local.VertexBound, local.Round, radialExtra, ok =
-			spiralInverseHeldResult(ctx, blankHeld, first, result, admission.source.moves[copyIndex])
+			spiralInverseHeldResult(ctx, blankHeld, first, result, admission.source.moves[copyIndex],
+				admission.source.copies.exact[copyIndex])
 		if !ok {
 			if err := ctx.Err(); err != nil {
 				return false, err
@@ -226,18 +228,17 @@ func spiralValidateCombinedCopy(ctx context.Context, blank *Body, blankHeld *mes
 }
 
 // Inverse placement is used only for comparing output chains with their
-// unplaced source curves. The certified output β is stretched and charged for
-// inverse float rounding, the residual tooth transform, and the blank's
-// slight radial scaling under the stored axis-rotation matrix.
+// unplaced source curves. The certified output β is charged for the float
+// inverse's gap to the exact record's transpose and for its rounding.
 func spiralInverseHeldResult(ctx context.Context, blankHeld *meshbool.BoolMesh,
-	first *Body, held *meshbool.StitchedMesh, move r3.Transform) (
+	first *Body, held *meshbool.StitchedMesh, move r3.Transform, rec *exactrotation.Rotation) (
 	[]r3.Vec, []float64, float64, float64, bool,
 ) {
 	firstPart, ok := first.payload.(facetedPayload)
 	if !ok {
 		return nil, nil, 0, 0, false
 	}
-	return spiralsector.InverseHeldResult(ctx, blankHeld, firstPart.verts, firstPart.meshBound, held, move)
+	return spiralsector.InverseHeldResult(ctx, blankHeld, firstPart.verts, firstPart.meshBound, held, move, rec)
 }
 
 // spiralPrepareCombinedUnion transports the first join's certified temporary
@@ -341,6 +342,7 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 			if source.copies == nil || source.copies.tools[copyIndex] != tooth ||
 				part.copyLineage == nil || part.copyLineage.source != source.tools[0] ||
 				part.copyLineage.motion != source.moves[copyIndex] ||
+				part.copyLineage.exact == nil || part.copyLineage.exact != source.copies.exact[copyIndex] ||
 				len(part.verts) != len(firstPart.verts) || len(part.tris) != len(firstPart.tris) {
 				return nil, fmt.Errorf("%w: spiral copy lost its audited source", ErrUnsupported)
 			}

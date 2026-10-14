@@ -47,10 +47,10 @@ func TestCartesianAxesSeparateRecordedCopies(t *testing.T) {
 			image := placedShell(source, turn)
 			require.True(t, shellseparation.Separate(t.Context(),
 				[]shellseparation.Shell{source, image},
-				[]r3.Transform{r3.Identity(), turn}, shellseparation.SourceShell, tc.axis, true))
+				[]r3.Transform{r3.Identity(), turn}, nil, shellseparation.SourceShell, tc.axis, true))
 			require.False(t, shellseparation.Separate(t.Context(),
 				[]shellseparation.Shell{source, source},
-				[]r3.Transform{r3.Identity(), r3.Identity()}, shellseparation.SourceShell, tc.axis, false))
+				[]r3.Transform{r3.Identity(), r3.Identity()}, nil, shellseparation.SourceShell, tc.axis, false))
 		})
 	}
 }
@@ -78,7 +78,7 @@ func TestSeparationHasNoCopyCountCap(t *testing.T) {
 				shells[i] = placedShell(source, turn)
 			}
 			require.True(t, shellseparation.Separate(t.Context(), shells, moves,
-				shellseparation.SourceShell, tc.axis, true))
+				nil, shellseparation.SourceShell, tc.axis, true))
 		})
 	}
 }
@@ -90,7 +90,7 @@ func TestLongitudinallyTranslatedCopiesSeparateWithoutAngularGap(t *testing.T) {
 	image := placedShell(source, move)
 	require.True(t, shellseparation.Separate(t.Context(),
 		[]shellseparation.Shell{source, image},
-		[]r3.Transform{r3.Identity(), move}, shellseparation.SourceShell,
+		[]r3.Transform{r3.Identity(), move}, nil, shellseparation.SourceShell,
 		shellseparation.AxisX, false))
 }
 
@@ -116,7 +116,7 @@ func TestSeparationRefusesMalformedProofEvenWhenProjectedApart(t *testing.T) {
 			bad.Tris = append([][3]int(nil), image.Tris...)
 			change(&bad)
 			require.False(t, shellseparation.Separate(t.Context(),
-				[]shellseparation.Shell{source, bad}, moves, shellseparation.SourceShell,
+				[]shellseparation.Shell{source, bad}, moves, nil, shellseparation.SourceShell,
 				shellseparation.AxisX, true))
 		})
 	}

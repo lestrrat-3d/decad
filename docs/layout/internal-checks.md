@@ -13,6 +13,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/twistsweep/` | Twist polygon admission, cardinal composite path, twisted-wall offset source, composite and straight twist stations, wall cell areas, placed proof and sampled cup mesh. See shell-twisted-sweep design. |
 | `internal/sectionclip/` | Exact rational section clip helpers: rational plane point and arithmetic, oblique ellipse and cap polygons, certified circle-line trim, oblique sphere polygon. See section design. |
 | `internal/sectioncert/` | Private bounded-section Sketch provenance, guarded Extrude recording, and `RecordProfile`, the Sketch-profile recording seam. See section design, sketch-seam §1–§2. |
+| `internal/exactrotation/` | Exactly orthogonal rational rotation recorded at Copy time: scale-safe quaternion construction, exact translation, structural X-axis test, and the reject-only gap against r3's float rotation. See file comments. |
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
 | `internal/compositesweep/` | Composite Sweep limits, bounded measurements, separation and cross-span facet audits, rim-join certificate, and span side-role renumbering and cap-role swaps. See sweep §7, §9. |
 | `internal/diameter/` | Lower-bound diameter of held witness points, including vertex, axis-extreme and prism station witnesses and the free-form prism section arm. See verification §3. |
@@ -65,6 +66,6 @@ The rules for rows live in `docs/layout.md`.
 | `internal/stitchweld/` | Stitch welds, topology and bounds. See surface §6.2–6.4. |
 | `internal/denotation/` | Level and curve identity certificates. See surface §5.2, §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
-| `internal/spiralsector/` | Spiral first-join contact, inverse copy placement, output-edge and blank-meridian gates. See faceted-vertex-bounds §3.6–§3.7. |
+| `internal/spiralsector/` | Spiral first-join contact, exact X-axis copy map (`AxisCopyMap`), inverse copy placement against the exact transpose, output-edge and blank-meridian gates. See faceted-vertex-bounds §3.6–§3.7. |
 | `internal/shellseparation/` | Bounded source-shell and held-copy separation, exact slab projections, and placement error. See faceted-vertex-bounds §3.7. |
 | `internal/obliqueboss/` | Rational interval-vector arithmetic for the oblique boss fillet proof: interval points, exact dot product, enclosed normalisation and held-vertex error. See oblique-boss-fillet design. |

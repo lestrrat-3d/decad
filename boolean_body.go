@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
+	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -83,13 +84,18 @@ type facetedPayload struct {
 	booleanSimilaritySource bool
 	// obliqueBoss retains the two authenticated prism sources for one complete
 	// plate-to-cylinder junction. A later Fillet rebuilds from these records.
-	obliqueBoss            *obliqueBossRecord
-	prismUnionFillet       *prismUnionFilletRecord
-	crossCylinderBore      *crossCylinderBoreRecord
-	loftCylinderJoin       *loftCylinderJoinRecord
-	loftCylinderBore       *loftCylinderBoreRecord
-	loftMirrorJoin         *loftMirrorJoinRecord
-	loftMirrorCopy         *loftMirrorPlacementRecord
+	obliqueBoss       *obliqueBossRecord
+	prismUnionFillet  *prismUnionFilletRecord
+	crossCylinderBore *crossCylinderBoreRecord
+	loftCylinderJoin  *loftCylinderJoinRecord
+	loftCylinderBore  *loftCylinderBoreRecord
+	loftMirrorJoin    *loftMirrorJoinRecord
+	loftMirrorCopy    *loftMirrorPlacementRecord
+	// mirrorCapGroups names the two outer-cap groups of a loft mirror join.
+	// It is provenance only: every placement keeps it, so each copy mints the
+	// cap roles under its own identity, whether or not the loftMirrorCopy
+	// proof survives the placement.
+	mirrorCapGroups        *[2]int
 	loftMirrorCylinderJoin *loftMirrorCylinderJoinRecord
 	loftMirrorCylinderBore *loftMirrorCylinderBoreRecord
 	// contactAudited records a whole-mesh exact contact audit at construction.
@@ -117,6 +123,17 @@ type facetedPayload struct {
 	loftFacesCap  *loftFacesCapRecord
 	loftFacesToe  *loftFacesToeRecord
 	loftFacesTrim *loftFacesTrimRecord
+	// exactPlaced marks a body whose current true solid is the image of an
+	// exact-rotation placement (placedWith with a record), at any angle and
+	// whether the copy was direct or not. The pose model of
+	// motionbound.PoseDeviation does not describe re-placing such a solid by
+	// a float transform, so motionRun.place refuses it. Every later placement,
+	// Copy, Transform and ScaledAt builds its payload from the receiver's and
+	// MUST keep the mark, whatever happens to copyLineage or to the source's
+	// liveness. A future placement path that does not start from the
+	// receiver's payload must carry it over by hand. Only an exact placement
+	// sets it; a fresh payload never has it.
+	exactPlaced bool
 	// copyLineage names the live faceted source and its recorded rigid image.
 	// A Boolean result has no copy lineage; Copy and placement issue it.
 	copyLineage *facetedCopyLineage
@@ -187,6 +204,19 @@ func (fp facetedPayload) transform() r3.Transform { return fp.xform }
 // embedded (facetproof.PlaceMesh), a reflection flips the windings, and the
 // topology and measurements rebuild from the moved mesh.
 func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+	return fp.placedWith(ctx, d, ref, composed, nil)
+}
+
+// placedWith is placed for a copy that denotes the exact rotation exact, or
+// the float placement alone when exact is nil. With a record the result
+// denotes Q*S + t_Q, where S is fp's true solid: the held mesh is placed by
+// the float delta as ever, charged for its distance to Q, and every record
+// that describes the float placement rather than Q is dropped (every group
+// surface tag and denoted patch, pointSection, pointPlane, pointSimilarity,
+// revolveLoftSector and loftMirrorCopy). A dropped record is never rebuilt
+// from a later float placement.
+func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref producerID, composed r3.Transform,
+	exact *exactrotation.Rotation) (*Body, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
 		return nil, err
@@ -232,9 +262,21 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	if fp.pointCone != nil && fp.xform == r3.Identity() {
 		next.revolveLoftSector = &revolveLoftSectorPlacement{source: fp.pointCone, motion: composed}
 	}
+	if exact != nil {
+		next.loftMirrorCopy = nil
+		next.revolveLoftSector = nil
+		next.pointSection = nil
+		next.pointPlane = nil
+		next.pointSimilarity = nil
+		next.pointPlaneCapDisplacement = 0
+		next.exactPlaced = true
+	}
 	next.groups = append([]facetGroup(nil), fp.groups...)
-	if next.loftMirrorCopy != nil {
-		for cap, group := range next.loftMirrorCopy.source.capGroups {
+	if fp.loftMirrorJoin != nil && fp.mirrorCapGroups == nil {
+		return nil, fmt.Errorf("%w: a loft mirror join lost its outer-cap groups", ErrUnsupported)
+	}
+	if fp.mirrorCapGroups != nil {
+		for cap, group := range fp.mirrorCapGroups {
 			if group < 0 || group >= len(next.groups) {
 				return nil, fmt.Errorf("%w: placed mirror join lost an outer cap", ErrUnsupported)
 			}
@@ -247,6 +289,12 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 		}
 	}
 	for i := range next.groups {
+		if exact != nil {
+			if err := exactGroupPlaced(&next.groups[i], exact); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if next.groups[i].hasCentroid {
 			reading, err := placedCapCentroid(next.groups[i].centroid, delta)
 			if err != nil {
@@ -280,23 +328,37 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 			next.groups[i].denoted = &denoted
 		}
 	}
-	if !facetproof.TranslationOnly(delta) || !facetproof.TranslationOnly(composed) {
+	if exact != nil && !exact.IsIdentity() {
+		next.exactSourceVerts, next.exactSourceTris = nil, nil
+	} else if !facetproof.TranslationOnly(delta) || !facetproof.TranslationOnly(composed) {
 		next.exactSourceVerts, next.exactSourceTris = nil, nil
 	} else if len(fp.exactSourceVerts) == 0 && fp.meshBound == 0 && fp.volSymDiff == 0 &&
 		fp.xform == r3.Identity() {
 		next.exactSourceVerts = append([]r3.Vec(nil), fp.verts...)
 		next.exactSourceTris = append([][3]int(nil), fp.tris...)
 	}
-	linear, err := massmoment.PlacementRotation(delta)
-	if err != nil {
-		return nil, err
+	var charge massmoment.MapCharge
+	var placed facetproof.PlacedMesh
+	if exact != nil {
+		linearGap, translationGap, ok := exact.Gap(delta)
+		if !ok {
+			return nil, fmt.Errorf("%w: the exact rotation has no finite gap to the float placement", ErrUnsupported)
+		}
+		placed, err = facetproof.PlaceMeshDenoting(ctx, budget, fp.verts, fp.tris, fp.vertexBound,
+			fp.volSymDiff, fp.areaSlack, delta, linearGap, translationGap)
+	} else {
+		var linear [3][3]*big.Rat
+		linear, err = massmoment.PlacementRotation(delta)
+		if err != nil {
+			return nil, err
+		}
+		charge, err = massmoment.MapChargeOf(linear)
+		if err != nil {
+			return nil, err
+		}
+		placed, err = facetproof.PlaceMesh(ctx, budget, fp.verts, fp.tris, fp.vertexBound,
+			fp.volSymDiff, fp.areaSlack, charge.Stretch, charge.Volume, delta)
 	}
-	charge, err := massmoment.MapChargeOf(linear)
-	if err != nil {
-		return nil, err
-	}
-	placed, err := facetproof.PlaceMesh(ctx, budget, fp.verts, fp.tris, fp.vertexBound,
-		fp.volSymDiff, fp.areaSlack, charge.Stretch, charge.Volume, delta)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +369,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	if proofbound.IsNonFinite(next.dPair) {
 		return nil, fmt.Errorf("%w: the placed pair diameter has no finite proof", ErrUnsupported)
 	}
-	if fp.pointPlane != nil {
+	if fp.pointPlane != nil && exact == nil {
 		// PlaceMesh's MeshBound includes the held-coordinate rounding and any
 		// embedding correction, but does not stretch the previous source gap.
 		// Add both terms; the possible double charge is conservative.
@@ -315,7 +377,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 			proofbound.ProductUpper(fp.pointPlaneCapDisplacement,
 				proofbound.AbsSumUpper(1, charge.Stretch)), placed.MeshBound)
 	}
-	if fp.pointPlane != nil {
+	if fp.pointPlane != nil && exact == nil {
 		record := pointPlaneSimilarityRecord{slice: fp.pointPlane}
 		if fp.pointSimilarity != nil {
 			record.steps = append(record.steps, fp.pointSimilarity.steps...)
@@ -817,5 +879,24 @@ func buildFacetedTopology(
 			f.loops = append(f.loops, loop)
 		}
 	}
+	return nil
+}
+
+// exactGroupPlaced restates one source group for a copy that denotes the exact
+// rotation q. The cap centroid moves by q itself, which is exactly orthogonal,
+// so the placed reading adds no stretch charge. The analytic surface tag and
+// its denoted patch describe the float placement, not q, so both are dropped;
+// the group's faces then read as Faceted with their held bound. planar,
+// reversed and origins describe the source face, which q maps rigidly, and
+// stay.
+func exactGroupPlaced(g *facetGroup, q *exactrotation.Rotation) error {
+	if g.hasCentroid {
+		reading, err := placedCapCentroidBy(g.centroid, q.Linear(), q.Translation())
+		if err != nil {
+			return err
+		}
+		g.centroid = reading
+	}
+	g.surface, g.denoted, g.normalBound = nil, nil, 0
 	return nil
 }

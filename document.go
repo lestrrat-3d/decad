@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
 )
 
@@ -222,7 +224,7 @@ func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error) {
 		return nil, err
 	}
 	if source, ok := body.payload.(facetedPayload); ok && source.copyLineage != nil {
-		bindFacetedCopyLineage(placed, source.copyLineage.source, composed, false)
+		bindFacetedCopyLineage(placed, source.copyLineage.source, composed, false, nil)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -231,48 +233,103 @@ func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error) {
 	return placed, nil
 }
 
-// CopyOption configures Copy. Only WithCopyPlacement changes the copy's
-// placement. An option from another package cannot implement this sealed tier.
-type CopyOption interface{ copyOption() }
+// CopyOption configures Copy. Only WithCopyPlacement and WithCopyRotation
+// change the copy's placement. An option from another package cannot implement
+// this sealed tier.
+type CopyOption interface {
+	option.Interface
+	copyOption()
+}
 
-type copyPlacementOption struct{ motion r3.Transform }
+type copyOption struct{ option.Interface }
 
-func (copyPlacementOption) copyOption() {}
+func (copyOption) copyOption() {}
+
+type identCopyPlacement struct{}
+type identCopyRotation struct{}
+
+// copyRotation is the value WithCopyRotation stores under identCopyRotation.
+type copyRotation struct {
+	center, axis r3.Vec
+	angle        units.Value
+}
 
 // WithCopyPlacement places a new copy under t. A zero or otherwise invalid
 // transform is ErrDegenerate when Copy evaluates the option.
 func WithCopyPlacement(t r3.Transform) CopyOption {
-	return copyPlacementOption{motion: t}
+	return copyOption{option.New(identCopyPlacement{}, t)}
+}
+
+// WithCopyRotation places a new copy by a rotation about the axis through
+// center along axis, by angle. The rotation a faceted copy denotes is an
+// exactly orthogonal rational rotation about exactly that axis, chosen near
+// angle: it agrees with angle to within a few float steps, but it is not in
+// general the rotation by exactly that transcendental angle. The held
+// placement's rounding is charged against that exact rotation. Other payloads
+// are placed by r3.RotationAround(center, axis, angle), exactly as
+// WithCopyPlacement of that transform.
+//
+// A faceted copy made this way carries no analytic surface tags: every face
+// reads as Faceted with its held bound, so Face.NormalAt refuses it and
+// ToFace stops and MirrorFace refuse it. It also stops being a point-loft
+// source. Use WithCopyPlacement for a copy that needs those readings.
+//
+// A zero or non-finite axis is ErrDegenerate, a non-finite center or angle is
+// ErrNotFinite, and an angle that is not an angle is ErrUnitKind, all when
+// Copy evaluates the option. A zero angle is the identity.
+func WithCopyRotation(center, axis r3.Vec, angle units.Value) CopyOption {
+	return copyOption{option.New(identCopyRotation{}, copyRotation{center: center, axis: axis, angle: angle})}
 }
 
 // Copy returns a new live body carrying source's geometry and leaves source
 // live. With no options, the copy has source's placement. WithCopyPlacement
-// composes a rigid motion onto it; repeated placement options use the last
-// value. The copy gets a new body identity and reproduces source provenance.
-// source MUST NOT be nil. A body this evaluator did not build is
-// ErrUnsupported. Invalid or nil options are ErrDegenerate. A canceled context
-// stops the rebuild before the document changes.
+// and WithCopyRotation compose a rigid motion onto it; repeated placement
+// options use the last value. The copy gets a new body identity and reproduces
+// source provenance. source MUST NOT be nil. A body this evaluator did not
+// build is ErrUnsupported. Invalid or nil options are ErrDegenerate. A
+// canceled context stops the rebuild before the document changes.
 func Copy(ctx context.Context, source *Body, opts ...CopyOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a copy`, ErrDegenerate)
 	}
 	motion := r3.Identity()
+	var exact *exactrotation.Rotation
 	for _, opt := range opts {
 		if opt == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
-		placement, ok := opt.(copyPlacementOption)
-		if !ok {
+		if c, ok := opt.(copyOption); ok && c.Interface == nil {
+			return nil, fmt.Errorf(`%w: a zero option names nothing to apply`, ErrDegenerate)
+		}
+		switch opt.Ident().(type) {
+		case identCopyPlacement:
+			t, ok := option.Get[r3.Transform](opt)
+			if !ok {
+				return nil, fmt.Errorf(`%w: WithCopyPlacement carries no transform`, ErrDegenerate)
+			}
+			motion, exact = t, nil
+		case identCopyRotation:
+			rot, ok := option.Get[copyRotation](opt)
+			if !ok {
+				return nil, fmt.Errorf(`%w: WithCopyRotation carries no rotation`, ErrDegenerate)
+			}
+			record, t, err := exactrotation.New(rot.center, rot.axis, rot.angle)
+			if err != nil {
+				return nil, err
+			}
+			motion, exact = t, record
+		default:
 			return nil, fmt.Errorf(`%w: the copy option is not a decad copy option (%T)`, ErrDegenerate, opt)
 		}
-		motion = placement.motion
 	}
-	return source.copyUnder(ctx, motion)
+	return source.copyUnder(ctx, motion, exact)
 }
 
 // copyUnder leaves its source live while re-evaluating at a new identity.
 // It mirrors Transform's gate order and commit (core §8, docs/api-design.md H4).
-func (b *Body) copyUnder(ctx context.Context, motion r3.Transform) (*Body, error) {
+// A non-nil exact record asks a faceted payload for the exact-rotation
+// placement; every other payload places by motion alone.
+func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactrotation.Rotation) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -294,16 +351,22 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform) (*Body, error
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
 	}
 	ref := d.nextProducerID()
-	copied, err := b.payload.placed(ctx, d, ref, composed)
+	var copied *Body
+	faceted, isFaceted := b.payload.(facetedPayload)
+	if isFaceted && exact != nil {
+		copied, err = faceted.placedWith(ctx, d, ref, composed, exact)
+	} else {
+		copied, err = b.payload.placed(ctx, d, ref, composed)
+	}
 	if err != nil {
 		return nil, err
 	}
-	if faceted, ok := b.payload.(facetedPayload); ok {
+	if isFaceted {
 		source := b
 		if record := faceted.copyLineage; record != nil {
 			source = record.source
 		}
-		bindFacetedCopyLineage(copied, source, composed, faceted.copyLineage == nil)
+		bindFacetedCopyLineage(copied, source, composed, faceted.copyLineage == nil, exact)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
