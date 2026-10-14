@@ -153,16 +153,17 @@ func TestAddExactMatchesRatAdd(t *testing.T) {
 	var sums regionSums
 	sums.exact = momentregion.NewExactMoments()
 	state := sums.state()
-	var want [6]*big.Rat
+	want := make([]*big.Rat, 6)
 	for i := range want {
 		want[i] = new(big.Rat)
 	}
 	for step := range 300 {
 		exact := momentregion.NewExactMoments()
-		terms := [6]*big.Rat{term(), term(), term(), term(), term(), term()}
+		terms := []*big.Rat{term(), term(), term(), term(), term(), term()}
 		exact.Area, exact.Mu, exact.Mv, exact.Muu, exact.Muv, exact.Mvv = terms[0], terms[1], terms[2], terms[3], terms[4], terms[5]
 		state.AddExact(exact)
-		got := sums.exact.Fields()
+		fields := sums.exact.Fields()
+		got := []*big.Rat{fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]}
 		for i := range want {
 			want[i].Add(want[i], terms[i])
 			require.True(t, got[i].Num().Cmp(want[i].Num()) == 0 && got[i].Denom().Cmp(want[i].Denom()) == 0,
@@ -184,11 +185,11 @@ func TestChargeJunctionAddsTheExactThirdOrderChord(t *testing.T) {
 	}
 	var sums regionSums
 	sums.exact = momentregion.NewExactMoments()
-	var start [4]proofbound.RatInterval
+	start := make([]proofbound.RatInterval, 4)
 	for i := range start {
 		start[i] = proofbound.PointInterval(big.NewRat(int64(i+1), 7))
 	}
-	sums.third = start
+	sums.third = [4]proofbound.RatInterval{start[0], start[1], start[2], start[3]}
 	sums.state().ChargeJunction(1, 20, 20, chord, anchor, freeform.MomentThirdOrder)
 	require.False(t, sums.thirdDead)
 
@@ -196,9 +197,10 @@ func TestChargeJunctionAddsTheExactThirdOrderChord(t *testing.T) {
 		polynomial.RatPoly{chord.From.U, new(big.Rat).Sub(chord.To.U, chord.From.U)},
 		polynomial.RatPoly{chord.From.V, new(big.Rat).Sub(chord.To.V, chord.From.V)},
 	)
-	for i, value := range exact {
+	third := []proofbound.RatInterval{sums.third[0], sums.third[1], sums.third[2], sums.third[3]}
+	for i, value := range []*big.Rat{exact[0], exact[1], exact[2], exact[3]} {
 		want := new(big.Rat).Add(start[i].Lo, value)
-		require.Zerof(t, sums.third[i].Lo.Cmp(want), "third-order term %d lower end", i)
-		require.Zerof(t, sums.third[i].Hi.Cmp(want), "third-order term %d upper end", i)
+		require.Zerof(t, third[i].Lo.Cmp(want), "third-order term %d lower end", i)
+		require.Zerof(t, third[i].Hi.Cmp(want), "third-order term %d upper end", i)
 	}
 }

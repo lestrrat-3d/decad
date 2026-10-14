@@ -39,25 +39,48 @@ func adversarialRat(rng *rand.Rand) *big.Rat {
 	return big.NewRat(sign, 1)
 }
 
+// The tests below hold matrices as slices of slices while they index them
+// around calls: a local [N]T of pointers indexed by a variable and read after
+// a call is the shape of golang/go#82026. ratRows and ivRows copy an array
+// through constant indexes; ratMatrix and ivMatrix build one back the same way.
+func ratRows(m [3][3]*big.Rat) [][]*big.Rat {
+	return [][]*big.Rat{
+		{m[0][0], m[0][1], m[0][2]}, {m[1][0], m[1][1], m[1][2]}, {m[2][0], m[2][1], m[2][2]},
+	}
+}
+
+func ivRows(m [3][3]proofbound.RatInterval) [][]proofbound.RatInterval {
+	return [][]proofbound.RatInterval{
+		{m[0][0], m[0][1], m[0][2]}, {m[1][0], m[1][1], m[1][2]}, {m[2][0], m[2][1], m[2][2]},
+	}
+}
+
+func ratMatrix(r []*big.Rat) [3][3]*big.Rat {
+	return [3][3]*big.Rat{{r[0], r[1], r[2]}, {r[3], r[4], r[5]}, {r[6], r[7], r[8]}}
+}
+
+func ivMatrix(r []proofbound.RatInterval) [3][3]proofbound.RatInterval {
+	return [3][3]proofbound.RatInterval{{r[0], r[1], r[2]}, {r[3], r[4], r[5]}, {r[6], r[7], r[8]}}
+}
+
 func adversarialMatrix(rng *rand.Rand) [3][3]*big.Rat {
-	var m [3][3]*big.Rat
-	for i := range m {
-		for j := range m[i] {
-			m[i][j] = adversarialRat(rng)
-		}
+	r := make([]*big.Rat, 9)
+	for i := range r {
+		r[i] = adversarialRat(rng)
 	}
 	if rng.IntN(4) == 0 {
 		// Entries sharing one *big.Rat reach MulRat with a == b.
-		m[1][1], m[2][2], m[0][1] = m[0][0], m[0][0], m[0][0]
+		r[4], r[8], r[1] = r[0], r[0], r[0]
 	}
-	return m
+	return ratMatrix(r)
 }
 
 func sameRat(x, y *big.Rat) bool {
 	return x.Num().Cmp(y.Num()) == 0 && x.Denom().Cmp(y.Denom()) == 0
 }
 
-func orthonormalityDefectRaw(m [3][3]*big.Rat) *big.Rat {
+func orthonormalityDefectRaw(matrix [3][3]*big.Rat) *big.Rat {
+	m := ratRows(matrix)
 	defect := new(big.Rat)
 	for i := range m {
 		for j := range m {
@@ -74,9 +97,11 @@ func orthonormalityDefectRaw(m [3][3]*big.Rat) *big.Rat {
 	return defect
 }
 
-func rotateTensorRaw(m [3][3]*big.Rat, local [3][3]proofbound.RatInterval) [3][3]proofbound.RatInterval {
-	var out [3][3]proofbound.RatInterval
+func rotateTensorRaw(matrix [3][3]*big.Rat, localTensor [3][3]proofbound.RatInterval) [][]proofbound.RatInterval {
+	m, local := ratRows(matrix), ivRows(localTensor)
+	out := make([][]proofbound.RatInterval, 3)
 	for i := range out {
+		out[i] = make([]proofbound.RatInterval, 3)
 		for j := range out[i] {
 			sum := proofbound.PointInterval(new(big.Rat))
 			for k := range local {
@@ -91,7 +116,8 @@ func rotateTensorRaw(m [3][3]*big.Rat, local [3][3]proofbound.RatInterval) [3][3
 	return out
 }
 
-func gershgorinLowerRaw(t [3][3]proofbound.RatInterval) *big.Rat {
+func gershgorinLowerRaw(tensor [3][3]proofbound.RatInterval) *big.Rat {
+	t := ivRows(tensor)
 	var lower *big.Rat
 	for i := range t {
 		row := new(big.Rat).Set(t[i][i].Lo)
@@ -107,13 +133,14 @@ func gershgorinLowerRaw(t [3][3]proofbound.RatInterval) *big.Rat {
 	return lower
 }
 
-func prismRotationRaw(frame r3.Frame, xform r3.Transform) [3][3]*big.Rat {
+func prismRotationRaw(frame r3.Frame, xform r3.Transform) [][]*big.Rat {
 	component := func(v r3.Vec, i int) float64 { return [3]float64{v.X, v.Y, v.Z}[i] }
 	basis := xform.Basis()
 	placement := [3]r3.Vec{basis.EX, basis.EY, basis.EZ}
 	frameAxes := [3]r3.Vec{frame.U(), frame.V(), frame.N()}
-	var out [3][3]*big.Rat
+	out := make([][]*big.Rat, 3)
 	for i := range out {
+		out[i] = make([]*big.Rat, 3)
 		for k := range out[i] {
 			sum := new(big.Rat)
 			for l := range placement {
@@ -137,13 +164,11 @@ func TestOrthonormalityDefectMatchesRawRat(t *testing.T) {
 		require.True(t, sameRat(got, want), "defect %v, want %v", got, want)
 	}
 	// An exactly orthonormal map has defect zero.
-	identity := [3][3]*big.Rat{}
-	for i := range identity {
-		for j := range identity[i] {
-			identity[i][j] = big.NewRat(int64(1-min(1, (i-j)*(i-j))), 1)
-		}
+	cells := make([]*big.Rat, 9)
+	for i := range cells {
+		cells[i] = big.NewRat(int64(1-min(1, (i/3-i%3)*(i/3-i%3))), 1)
 	}
-	require.Zero(t, massmoment.OrthonormalityDefect(identity).Sign())
+	require.Zero(t, massmoment.OrthonormalityDefect(ratMatrix(cells)).Sign())
 }
 
 func TestRotateTensorAndGershgorinMatchRawRat(t *testing.T) {
@@ -158,14 +183,13 @@ func TestRotateTensorAndGershgorinMatchRawRat(t *testing.T) {
 	}
 	for range 1500 {
 		m := adversarialMatrix(rng)
-		var local [3][3]proofbound.RatInterval
-		for i := range local {
-			for j := range local[i] {
-				local[i][j] = interval()
-			}
+		cells := make([]proofbound.RatInterval, 9)
+		for i := range cells {
+			cells[i] = interval()
 		}
+		local := ivMatrix(cells)
 		want := rotateTensorRaw(m, local)
-		got := massmoment.RotateTensor(m, local)
+		got := ivRows(massmoment.RotateTensor(m, local))
 		for i := range got {
 			for j := range got[i] {
 				require.True(t, sameRat(got[i][j].Lo, want[i][j].Lo) && sameRat(got[i][j].Hi, want[i][j].Hi),
@@ -187,8 +211,9 @@ func TestPrismRotationAndMidLevelMatchRawRat(t *testing.T) {
 		require.NoError(t, err)
 		xform, err := r3.Rotation(axis(), units.Degrees(rng.Float64()*360))
 		require.NoError(t, err)
-		got, err := massmoment.PrismRotation(frame, xform)
+		rotation, err := massmoment.PrismRotation(frame, xform)
 		require.NoError(t, err)
+		got := ratRows(rotation)
 		want := prismRotationRaw(frame, xform)
 		for i := range got {
 			for k := range got[i] {

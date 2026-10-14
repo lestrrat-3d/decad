@@ -90,8 +90,10 @@ func TestExactFrameLocalRoundMatchesRawArithmetic(t *testing.T) {
 	vec := func(scale float64) r3.Vec {
 		return r3.Vec{X: rng.NormFloat64() * scale, Y: rng.NormFloat64() * scale, Z: rng.NormFloat64() * scale}
 	}
-	rat := func(v r3.Vec) [3]*big.Rat {
-		return [3]*big.Rat{proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)}
+	// Slices, not arrays: a local array of pointers indexed by a variable and
+	// read around a call has the shape of golang/go#82026.
+	rat := func(v r3.Vec) []*big.Rat {
+		return []*big.Rat{proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)}
 	}
 	for range 300 {
 		frame, err := r3.NewFrame(vec(10), vec(1), vec(1))

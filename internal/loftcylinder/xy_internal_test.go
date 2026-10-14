@@ -106,7 +106,7 @@ func TestEdgesMeetMatchesRawComparisons(t *testing.T) {
 		if i%5 == 0 {
 			coord = wide
 		}
-		pts := [4]XY{}
+		pts := make([]XY, 4)
 		for k := range pts {
 			pts[k] = XY{coord(), coord()}
 		}

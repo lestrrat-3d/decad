@@ -53,7 +53,7 @@ func TestSlabsClearanceReadsTheGapOnEachSide(t *testing.T) {
 		}
 	}
 	near, far := shell(0, 0), shell(10, 0)
-	for _, order := range [][2]Shell{{near, far}, {far, near}} {
+	for _, order := range [][]Shell{{near, far}, {far, near}} {
 		clearance, valid := slabsClearance(t.Context(), order[0], order[1], 0)
 		require.True(t, valid)
 		require.InDelta(t, 9.0, clearance, 1e-6, "the gap along Y between the two triangles")
@@ -62,7 +62,7 @@ func TestSlabsClearanceReadsTheGapOnEachSide(t *testing.T) {
 	// A pair offset in both Y and Z still has a positive clearance, at most
 	// the Euclidean gap between the two triangles' nearest points.
 	aside := shell(6, 8)
-	for _, order := range [][2]Shell{{near, aside}, {aside, near}} {
+	for _, order := range [][]Shell{{near, aside}, {aside, near}} {
 		clearance, valid := slabsClearance(t.Context(), order[0], order[1], 0)
 		require.True(t, valid)
 		require.Greater(t, clearance, 9.0)
@@ -95,7 +95,7 @@ func TestSlabsClearanceReadsTheGapOnEachSide(t *testing.T) {
 		Verts: []r3.Vec{{Y: 5, Z: 1}, {X: 1, Y: 5.2, Z: 1}, {X: 1, Y: 4.8, Z: 1}},
 		Tris:  triangle, VertexBound: make([]float64, 3),
 	}
-	for _, order := range [][2]Shell{{long, short}, {short, long}} {
+	for _, order := range [][]Shell{{long, short}, {short, long}} {
 		clearance, valid := slabsClearance(t.Context(), order[0], order[1], 0)
 		require.True(t, valid)
 		require.Greater(t, clearance, 0.01)

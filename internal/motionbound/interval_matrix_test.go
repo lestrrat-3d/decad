@@ -80,15 +80,28 @@ func TestMagnitudeSquaredUpperMatchesRawRat(t *testing.T) {
 func TestMulPointsMatchesIntervalProduct(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(41, 43))
+	// The matrices are slices of slices while indexed around calls: a local
+	// array of pointers indexed by a variable and read after a call is the
+	// shape of golang/go#82026.
+	matrix := func(rows [][]proofbound.RatInterval) motionbound.IvMat {
+		return motionbound.IvMat{
+			{rows[0][0], rows[0][1], rows[0][2]},
+			{rows[1][0], rows[1][1], rows[1][2]},
+			{rows[2][0], rows[2][1], rows[2][2]},
+		}
+	}
+	grid := func() [][]proofbound.RatInterval {
+		return [][]proofbound.RatInterval{make([]proofbound.RatInterval, 3), make([]proofbound.RatInterval, 3), make([]proofbound.RatInterval, 3)}
+	}
 	for range 300 {
-		var left, right motionbound.IvMat
-		for i := range left {
-			for j := range left[i] {
+		left, right := grid(), grid()
+		for i := range 3 {
+			for j := range 3 {
 				left[i][j] = adversarialInterval(rng)
 				right[i][j] = proofbound.PointInterval(adversarialRat(rng))
 			}
 		}
-		got, ok := motionbound.NewScaledIvMat(left).MulPoints(right)
+		got, ok := motionbound.NewScaledIvMat(matrix(left)).MulPoints(matrix(right))
 		require.True(t, ok)
 		for i := range 3 {
 			for j := range 3 {
@@ -104,7 +117,7 @@ func TestMulPointsMatchesIntervalProduct(t *testing.T) {
 
 		i, j := rng.IntN(3), rng.IntN(3)
 		right[i][j] = proofbound.RatInterval{Lo: big.NewRat(-1, 3), Hi: big.NewRat(1, 7)}
-		_, ok = motionbound.NewScaledIvMat(left).MulPoints(right)
+		_, ok = motionbound.NewScaledIvMat(matrix(left)).MulPoints(matrix(right))
 		require.False(t, ok, "a non-point entry must be refused")
 	}
 }
