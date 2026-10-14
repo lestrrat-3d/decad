@@ -379,7 +379,7 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 			return err
 		}
 		if resolved {
-			region, err := prismRecordProfileContext(ctx, s, match)
+			region, err := prismcells.RecordProfileContext(ctx, s, match)
 			if err != nil {
 				return err
 			}
@@ -391,7 +391,7 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 			return err
 		}
 		if resolved {
-			region, err := prismRecordProfileContext(ctx, s, match)
+			region, err := prismcells.RecordProfileContext(ctx, s, match)
 			if err != nil {
 				return err
 			}

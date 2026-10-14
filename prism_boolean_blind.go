@@ -77,15 +77,15 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 			return stackedPrismPayload{}, false, err
 		}
 		match = enclosing.Outside
-		if _, err := prismRecordProfileContext(ctx, scene, enclosing.Inside); err != nil {
+		if _, err := prismcells.RecordProfileContext(ctx, scene, enclosing.Inside); err != nil {
 			return stackedPrismPayload{}, false, err
 		}
 	}
-	_, err = prismRecordProfileContext(ctx, scene, match)
+	_, err = prismcells.RecordProfileContext(ctx, scene, match)
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
-	cutRegion, err := prismRecordArrangedProfileContext(ctx, match)
+	cutRegion, err := prismcells.RecordArrangedProfileContext(ctx, match)
 	if err != nil {
 		return stackedPrismPayload{}, false, err
 	}
@@ -350,11 +350,11 @@ func cutStackedSlabs(ctx context.Context, budget *proofbound.WorkBudget, sp stac
 			}
 			continue
 		}
-		_, err = prismRecordProfileContext(ctx, scene, match)
+		_, err = prismcells.RecordProfileContext(ctx, scene, match)
 		if err != nil {
 			return stackedPrismPayload{}, false, err
 		}
-		profile, err := prismRecordArrangedProfileContext(ctx, match)
+		profile, err := prismcells.RecordArrangedProfileContext(ctx, match)
 		if err != nil {
 			return stackedPrismPayload{}, false, err
 		}

@@ -56,18 +56,6 @@ func (p MeasuredProfile) SecondMoments() (SecondMoments, error) {
 	}, nil
 }
 
-// recordArrangedProfile records a profile from a fresh sketch arrangement.
-// Callers that skip sketchrecord.AuthenticateProfile must own the sketch and
-// pass a profile returned by that same arrangement. The record walk checks
-// each fragment's TExact claim, range, and loop closure.
-func recordArrangedProfile(p *sketch.Profile) (profileRecord, error) {
-	outer, holes, err := sketchrecord.RecordProfileLoops(p)
-	if err != nil {
-		return profileRecord{}, err
-	}
-	return profileRecord{Outer: outer, Holes: holes}, nil
-}
-
 // recordChain converts a sketch chain — Profile's open counterpart — into the
 // structural records the evaluator carries: the open walk as a chain record
 // and the sketch plane as a plane record, read through s.Plane().Frame().

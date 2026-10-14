@@ -118,7 +118,7 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 		return prismPayload{}, false, err
 	}
 	if nested {
-		profile, err := prismRecordProfileContext(ctx, scene.Sketch, match)
+		profile, err := prismcells.RecordProfileContext(ctx, scene.Sketch, match)
 		if err != nil {
 			return prismPayload{}, false, err
 		}

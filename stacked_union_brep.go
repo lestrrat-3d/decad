@@ -561,7 +561,7 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 		if below == above {
 			continue
 		}
-		region, err := prismRecordArrangedProfileContext(ctx, p)
+		region, err := prismcells.RecordArrangedProfileContext(ctx, p)
 		if fallBack, err := prismcells.AmplifiedFallback(sc.delta.Amplified, err); fallBack || err != nil {
 			if err != nil {
 				return err

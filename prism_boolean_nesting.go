@@ -9,8 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/sectioncert"
-	"github.com/lestrrat-3d/sketch"
 )
 
 // tryPrismHoledIntersect admits one cleanly nested, one-hole prism under a
@@ -113,7 +111,7 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 	// Point of no return (§3.4): every further problem is a genuine refusal
 	// (RB8 below). The matched profile is authenticated verbatim through the
 	// existing public seam — no new authentication code (§5).
-	profile, err := prismRecordProfileContext(ctx, s, match)
+	profile, err := prismcells.RecordProfileContext(ctx, s, match)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -166,7 +164,7 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 		return prismPayload{Payload: result}, ok, err
 	}
 
-	profile, err := prismRecordProfileContext(ctx, s, match)
+	profile, err := prismcells.RecordProfileContext(ctx, s, match)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -205,49 +203,4 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 		SectionDelta: sectionDelta,
 	}}
 	return result, true, nil
-}
-
-// prismRecordProfileContext makes RecordProfile's own internal re-arrangement
-// (sketchrecord.AuthenticateProfile's fresh s.Profiles() call) observable to a
-// caller's context, the same way prismcells.ProfilesContext wraps the FIRST
-// arrangement. The scene is already capped by prismcells.MaxArrangementSegments, so
-// this second pass over it stays bounded too. The returned PlaneRecord is not
-// read here — the caller keeps operand A's own frame/xform (§4.1) — so only
-// the ProfileRecord and error are surfaced.
-func prismRecordProfileContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (profileRecord, error) {
-	return prismProfileRecordContext(ctx, func() (profileRecord, error) {
-		profile, _, _, err := sectioncert.RecordProfile(s, p)
-		return profile, err
-	})
-}
-
-// prismRecordArrangedProfileContext is for a profile returned by the private
-// scene's first Profiles call. The caller owns that scene and selects from its
-// returned slice, so no second authentication arrangement is needed.
-func prismRecordArrangedProfileContext(ctx context.Context, p *sketch.Profile) (profileRecord, error) {
-	return prismProfileRecordContext(ctx, func() (profileRecord, error) {
-		return recordArrangedProfile(p)
-	})
-}
-
-func prismProfileRecordContext(ctx context.Context, record func() (profileRecord, error)) (profileRecord, error) {
-	if err := ctx.Err(); err != nil {
-		return profileRecord{}, err
-	}
-	type prismRecordResult struct {
-		profile profileRecord
-		err     error
-	}
-	done := make(chan prismRecordResult)
-	go func() {
-		profile, err := record()
-		done <- prismRecordResult{profile: profile, err: err}
-	}()
-	select {
-	case result := <-done:
-		return result.profile, result.err
-	case <-ctx.Done():
-		<-done
-		return profileRecord{}, ctx.Err()
-	}
 }
