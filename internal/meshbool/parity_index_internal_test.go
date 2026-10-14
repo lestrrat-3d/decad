@@ -258,13 +258,19 @@ func TestParityIndexListsEveryFacetThatMatters(t *testing.T) {
 // requireLeftOutFacetsEndOutside checks one query on one ray: every facet
 // missing from the query's cell list classifies strictly outside, or is a
 // later facet of an axis-parallel line whose first facet is listed and
-// ambiguous. It returns the number of facets that were not outside and the
-// number left out.
+// ambiguous. A query whose float projection is not usable (NewXP2 marks it
+// !FloatFinite: a nonzero coordinate whose float lies outside [2^-300, 2^250],
+// as the 2^-1200 nudges beside a zero cell edge do) never reaches the index in
+// production, so it is skipped here and covered by
+// TestParityIndexSkipsUnusableFloatProjections. It returns the number of facets
+// that were not outside and the number left out.
 func requireLeftOutFacetsEndOutside(t *testing.T, pm *ParityMesh, idx *ParityIndex, group map[int]int,
 	axis, u, v, dir int, p proof.Xpt, qi int) (int, int) {
 	t.Helper()
 	pa := NewXP2(RatCoordOf(p, u), RatCoordOf(p, v))
-	require.True(t, pa.FloatFinite)
+	if !pa.FloatFinite {
+		return 0, 0
+	}
 	listed := map[int]bool{}
 	for _, ti := range idx.candidates(pa.Fu, pa.Fv) {
 		listed[int(ti)] = true
@@ -813,6 +819,39 @@ func TestParityIndexMembershipCap(t *testing.T) {
 			}
 			require.True(t, refused.indexBuilt[0], `the build was attempted`)
 			require.True(t, refused.index[0] == nil, `and refused`)
+		})
+	}
+}
+
+// TestParityIndexSkipsUnusableFloatProjections requires a query whose first-ray
+// projection is not FloatFinite to take the plain scan: the answer and error
+// equal the unindexed scan's and the first ray's index is not even built.
+func TestParityIndexSkipsUnusableFloatProjections(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	rng := rand.New(rand.NewPCG(0x31d7, 0x0c55))
+	for _, fx := range parityIndexFixtures() {
+		t.Run(fx.name, func(t *testing.T) {
+			all := parityAllFacets(len(fx.tris))
+			skipped, indexed := 0, 0
+			for qi, p := range parityIndexQueries(rng, fx) {
+				first := AxisRays[0]
+				pa := NewXP2(RatCoordOf(p, first.U), RatCoordOf(p, first.V))
+				pm := NewParityMesh(fx.verts, fx.tris)
+				plain := NewParityMesh(fx.verts, fx.tris)
+				plain.Unfiltered = true
+				require.Equal(t, answerOf(MeshParityPreparedContext(ctx, p, plain, all)),
+					answerOf(MeshParityAllContext(ctx, p, pm)), `query %d`, qi)
+				if pa.FloatFinite {
+					indexed++
+					require.True(t, pm.indexBuilt[first.Axis], `query %d: a usable projection uses the index`, qi)
+					continue
+				}
+				skipped++
+				require.False(t, pm.indexBuilt[first.Axis], `query %d: an unusable projection must skip the index`, qi)
+			}
+			require.Positive(t, indexed, `some queries must take the indexed path`)
+			t.Logf(`%d indexed, %d skipped`, indexed, skipped)
 		})
 	}
 }
