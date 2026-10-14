@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # A newer push to the same branch or PR cancels the older, still running or queued run.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Lint and test jobs run independently. The race shards share the two test
   # binaries race-binary builds: the root package's and apitest's. The job
