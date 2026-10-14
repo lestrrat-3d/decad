@@ -96,7 +96,7 @@ func classifyRemovedSweepFaces(b *Body, caps prismCaps, pp prismPayload, removed
 	return start, end, sides, nil
 }
 
-// shellSideOpening is Body.Shell's side opening on a hole-free straight
+// shellSideOpening is Shell's side opening on a hole-free straight
 // prism (docs/shell-opening-design.md): sides names the removed outer-loop
 // segments, and removedStart/removedEnd the removed caps. The regions are
 // built and audited first (prismshell.SideOpeningRegions); both caps removed records W

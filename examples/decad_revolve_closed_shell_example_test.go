@@ -46,7 +46,7 @@ func Example_decad_revolve_closed_shell() {
 		return
 	}
 
-	tank, err := rod.Shell(context.Background(), nil, units.Millimeters(2), decad.WithNoOpenings())
+	tank, err := decad.Shell(context.Background(), rod, nil, units.Millimeters(2), decad.WithNoOpenings())
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

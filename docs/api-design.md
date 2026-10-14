@@ -749,7 +749,7 @@ components are not proven separate, rather than publish an unrecorded cavity.
 
 An operation is a package-level function. A query is a method. This section
 owns the rule; a companion design that writes an operation as a method
-(`func (b *Body) Shell(...)`, `func (d *Document) Loft(...)`) means the
+(`func (b *Body) Offset(...)`, `func (d *Document) Loft(...)`) means the
 free function the table below names for it.
 
 **An operation is any call that builds a body, retires a body, or registers a
@@ -787,7 +787,6 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 
 | Shipped method form | Free function |
 |---|---|
-| `Body.Shell` | `Shell(ctx, b, sel, t, opts...)` |
 | `Body.Offset`, `Body.Thicken` | `Offset(ctx, b, ...)`, `Thicken(ctx, b, ...)` |
 | `Body.Trim`, `Body.Extend` | `Trim(ctx, b, tool, side)`, `Extend(ctx, b, edges, tool)` |
 | `Document.Split` | `Split(ctx, target, tool)` |
@@ -1234,7 +1233,7 @@ Modify operations return a new body, retiring the receiver, on the same terms:
 ```go
 func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
 func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
-func (b *Body) Shell(ctx context.Context, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
+func Shell(ctx context.Context, b *Body, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
 ```
 
 Each bounds cancellation latency in its cancellable construction

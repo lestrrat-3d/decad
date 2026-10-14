@@ -206,13 +206,13 @@ func BenchmarkTessPrismFreeformCold(b *testing.B) {
 }
 
 func BenchmarkTessCup(b *testing.B) {
-	body := must(benchBox().Shell(b.Context(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
+	body := must(decad.Shell(b.Context(), benchBox(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
 	runTess(b, body)
 }
 
 func BenchmarkTessCupCold(b *testing.B) {
 	runColdTess(b, func() *decad.Body {
-		return must(benchBox().Shell(b.Context(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
+		return must(decad.Shell(b.Context(), benchBox(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
 	})
 }
 

@@ -19,7 +19,7 @@ func TestShellCenteredStackedBoss(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, stack.Faces(), 11)
 
-	shelled, err := stack.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
+	shelled, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
 		units.Millimeters(1))
 	require.NoError(t, err)
 	volume, err := shelled.Volume()
@@ -81,7 +81,7 @@ func TestShellStackedBossClearanceRefusal(t *testing.T) {
 			boss := boxBodyAtZ(t, doc, tc.bossX0, -5, tc.bossX1, 5, 5, 5)
 			stack, err := decad.Union(t.Context(), plate, boss)
 			require.NoError(t, err)
-			_, err = stack.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
+			_, err = decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
 				units.Millimeters(tc.thickness))
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			_, err = stack.Volume()
@@ -97,7 +97,7 @@ func TestShellOffsetRectangularBoss(t *testing.T) {
 	boss := boxBodyAtZ(t, doc, -2, -4, 6, 2, 6, 4)
 	stack, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
-	shell, err := stack.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
+	shell, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
 		units.Millimeters(1))
 	require.NoError(t, err)
 	v, err := shell.Volume()

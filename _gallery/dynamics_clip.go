@@ -868,7 +868,7 @@ func shelledCup(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	return box.Shell(ctx, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(2))
+	return decad.Shell(ctx, box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(2))
 }
 
 // chamferedBlock is a 12 mm cube on z = 0 with its top loop chamfered

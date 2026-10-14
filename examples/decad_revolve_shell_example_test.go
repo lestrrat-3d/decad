@@ -50,7 +50,7 @@ func Example_decad_revolve_shell() {
 	// A half turn leaves both angular caps in the sketch plane, so one query
 	// names the pair. Removing them opens the trough along its length.
 	caps := decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1))).Exactly(2)
-	trough, err := half.Shell(context.Background(), caps, units.Millimeters(2))
+	trough, err := decad.Shell(context.Background(), half, caps, units.Millimeters(2))
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

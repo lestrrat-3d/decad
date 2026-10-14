@@ -52,7 +52,7 @@ func TestShellCoaxialCounterbore(t *testing.T) {
 					if fromTop {
 						selectedCap = decad.CapEnd(part)
 					}
-					shell, err := part.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(selectedCap)).Exactly(1),
+					shell, err := decad.Shell(t.Context(), part, decad.Faces(decad.FaceCreatedBy(selectedCap)).Exactly(1),
 						units.Millimeters(1))
 					require.NoError(t, err)
 					require.Len(t, shell.Lumps(), 1)
@@ -105,7 +105,7 @@ func TestShellCounterboreRefusesInsufficientShoulder(t *testing.T) {
 	part, err = decad.Cut(t.Context(), part, wide)
 	require.NoError(t, err)
 	before := doc.Bodies()
-	_, err = part.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(part))).Exactly(1),
+	_, err = decad.Shell(t.Context(), part, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(part))).Exactly(1),
 		units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "insufficient shoulder")

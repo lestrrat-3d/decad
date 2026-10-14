@@ -47,7 +47,7 @@ func Example_decad_shell_bands() {
 	}
 
 	// Remove both caps (planar, normal to the z sweep).
-	bands, err := box.Shell(context.Background(), decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(3))
+	bands, err := decad.Shell(context.Background(), box, decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(3))
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

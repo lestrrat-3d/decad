@@ -180,7 +180,7 @@ func heroPlate(ctx context.Context) (*decad.Body, error) {
 	// Facing(0,-1,0) is the cap nearest the camera (Along on this XZ sketch
 	// is -Y); opening it turns the slab into a shadow-box whose side walls
 	// and back keep a uniform 1.8mm thickness.
-	shelled, err := slab.Shell(ctx, decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(plateShellThickness))
+	shelled, err := decad.Shell(ctx, slab, decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(plateShellThickness))
 	if err != nil {
 		return nil, fmt.Errorf("shell backing plate: %w", err)
 	}

@@ -194,7 +194,7 @@ func TestBrepVertexReachesArcNaturalEnd(t *testing.T) {
 			s.CreateArc(o, a, b)
 			s.CreateLine(b, a)
 		})
-		shelled, err := d.Shell(t.Context(), sideFaceAt(t, d, r3.NewVec(-1, 0, 0), 0), units.Millimeters(1))
+		shelled, err := decad.Shell(t.Context(), d, sideFaceAt(t, d, r3.NewVec(-1, 0, 0), 0), units.Millimeters(1))
 		require.NoError(t, err)
 		require.False(t, anyFaceIsFaceted(shelled))
 		gap := requireArcEndsReached(t, shelled, arc, false)

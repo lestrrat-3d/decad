@@ -1,7 +1,7 @@
 # Modify Design
 
 How the v1 evaluator builds the first straight-prism cases of the three modify
-ops — `Fillet`, `Chamfer`, `Body.Shell`.
+ops — `Fillet`, `Chamfer`, `Shell`.
 
 `docs/modify-reach-design.md` owns the approved extension to revolve
 junctions, complete prism cap loops, side-opening/closed shells, tangent-chain
@@ -530,7 +530,7 @@ A chamfer takes reach §5's `WithTangentChain` and reach §6's
 ## 8. Shell
 
 ```go
-func (b *Body) Shell(ctx context.Context, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
+func Shell(ctx context.Context, b *Body, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
 ```
 
 `sel` names the faces to **remove** — the openings. What remains of the solid is

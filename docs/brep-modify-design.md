@@ -1,6 +1,6 @@
 # Brep Modify Design
 
-How `Fillet`, `Chamfer` and `Body.Shell` take an analytically
+How `Fillet`, `Chamfer` and `Shell` take an analytically
 trimmed boolean result — a `brepPayload` (`docs/general-boolean-design.md` §4,
 "general-boolean §N" below) — and, through its face view, a
 `stackedPrismPayload` (`docs/stacked-prism-design.md`). Companion to

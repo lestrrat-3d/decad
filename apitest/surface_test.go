@@ -304,7 +304,7 @@ func TestSheetRefusedByBooleanAndModifyOperations(t *testing.T) {
 		t.Parallel()
 		doc, sheet, _ := newSheetAndSolid(t)
 		before := doc.Bodies()
-		_, err := sheet.Shell(t.Context(), decad.Faces(), units.Millimeters(1))
+		_, err := decad.Shell(t.Context(), sheet, decad.Faces(), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	})

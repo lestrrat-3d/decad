@@ -47,7 +47,7 @@ func TestBlindPocketShellMeshVolumeProof(t *testing.T) {
 	tool := internalBoxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
 	pocket, err := Cut(t.Context(), outer, tool)
 	require.NoError(t, err)
-	shell, err := pocket.Shell(t.Context(), Faces(FaceCreatedBy(CapEnd(pocket))).Exactly(1), units.Millimeters(1))
+	shell, err := Shell(t.Context(), pocket, Faces(FaceCreatedBy(CapEnd(pocket))).Exactly(1), units.Millimeters(1))
 	require.NoError(t, err)
 	volume, err := shell.Volume()
 	require.NoError(t, err)

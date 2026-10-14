@@ -14,7 +14,7 @@ import (
 )
 
 // This file is the revolve shell of docs/modify-reach-design.md §9.3 (Table RX
-// row RX2, Table BX rows BX6 and BX7): Body.Shell on a revolvePayload receiver. A
+// row RX2, Table BX rows BX6 and BX7): Shell on a revolvePayload receiver. A
 // surface of revolution's normal lies in its meridian plane, so a wall of
 // thickness t behind every kept face is the meridian's own offset swept over
 // the receiver's unchanged angular interval. The offset is the same exact
@@ -39,7 +39,7 @@ import (
 // opening end at a smooth corner is that document's SO1, and a rim running past
 // the removed walk's far end its SO2.
 
-// shellRevolve is Body.Shell's revolve receiver, from reach §4's stage 4 on.
+// shellRevolve is Shell's revolve receiver, from reach §4's stage 4 on.
 // Stage 1 — the live receiver, the options, the magnitude and the selector —
 // has already run in Shell. removed is nil for a WithNoOpenings full turn. s
 // is +1 inward, −1 outward.

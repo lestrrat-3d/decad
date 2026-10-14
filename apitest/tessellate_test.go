@@ -150,7 +150,7 @@ func TestTessellatePayloadClasses(t *testing.T) {
 
 	t.Run("cup", func(t *testing.T) {
 		_, box := shellBox(t)
-		cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+		cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
 		require.NoError(t, err)
 		mesh, err := cup.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)

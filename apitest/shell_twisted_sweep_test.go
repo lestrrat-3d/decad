@@ -56,7 +56,7 @@ func twistedShellReceiver(t *testing.T, angle units.Value) (*decad.Document, *de
 
 func TestTwistedSweepRoundedShellVerifyAll(t *testing.T) {
 	doc, swept := twistedShellReceiver(t, units.Degrees(30))
-	cup, err := swept.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(swept))).Exactly(1),
+	cup, err := decad.Shell(t.Context(), swept, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(swept))).Exactly(1),
 		units.Millimeters(1))
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{cup}, doc.Bodies())
@@ -85,16 +85,16 @@ func TestTwistedSweepRoundedShellUnsupportedCallsAreAtomic(t *testing.T) {
 	start := decad.Faces(decad.FaceCreatedBy(decad.CapStart(swept))).Exactly(1)
 	for _, call := range []func() error{
 		func() error {
-			_, err := swept.Shell(t.Context(), start, units.Millimeters(1))
+			_, err := decad.Shell(t.Context(), swept, start, units.Millimeters(1))
 			return err
 		},
 		func() error {
-			_, err := swept.Shell(t.Context(), end, units.Millimeters(1),
+			_, err := decad.Shell(t.Context(), swept, end, units.Millimeters(1),
 				decad.WithShellSense(decad.Outward))
 			return err
 		},
 		func() error {
-			_, err := swept.Shell(t.Context(), end, units.Millimeters(3))
+			_, err := decad.Shell(t.Context(), swept, end, units.Millimeters(3))
 			return err
 		},
 	} {
@@ -116,7 +116,7 @@ func twistedShellPlacement(t *testing.T) r3.Transform {
 
 func TestTwistedSweepRoundedPlacedShellVerifyAll(t *testing.T) {
 	baselineDoc, baselineSweep := twistedShellReceiver(t, units.Degrees(30))
-	baseline, err := baselineSweep.Shell(t.Context(),
+	baseline, err := decad.Shell(t.Context(), baselineSweep,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(baselineSweep))).Exactly(1),
 		units.Millimeters(1))
 	require.NoError(t, err)
@@ -147,7 +147,7 @@ func TestTwistedSweepRoundedPlacedShellVerifyAll(t *testing.T) {
 			selected, err := end.SelectFaces(placed)
 			require.NoError(t, err)
 			require.Len(t, selected, 1)
-			cup, err := placed.Shell(t.Context(), end, units.Millimeters(1))
+			cup, err := decad.Shell(t.Context(), placed, end, units.Millimeters(1))
 			require.NoError(t, err)
 			require.Len(t, doc.Bodies(), tc.live)
 			require.Contains(t, doc.Bodies(), cup)
@@ -182,16 +182,16 @@ func TestTwistedSweepRoundedPlacedShellRefusalsAreAtomic(t *testing.T) {
 	end := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(placed))).Exactly(1)
 	for _, call := range []func() error{
 		func() error {
-			_, err := placed.Shell(t.Context(), start, units.Millimeters(1))
+			_, err := decad.Shell(t.Context(), placed, start, units.Millimeters(1))
 			return err
 		},
 		func() error {
-			_, err := placed.Shell(t.Context(), end, units.Millimeters(1),
+			_, err := decad.Shell(t.Context(), placed, end, units.Millimeters(1),
 				decad.WithShellSense(decad.Outward))
 			return err
 		},
 		func() error {
-			_, err := placed.Shell(t.Context(), end, units.Millimeters(3))
+			_, err := decad.Shell(t.Context(), placed, end, units.Millimeters(3))
 			return err
 		},
 	} {

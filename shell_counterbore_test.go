@@ -20,7 +20,7 @@ func TestCounterboreShellMeshVolumeProof(t *testing.T) {
 	wide := internalCircleBody(t, doc, 0, 5, 7, Distance{D: units.Millimeters(3), Dir: Along})
 	part, err = Cut(t.Context(), part, wide)
 	require.NoError(t, err)
-	shell, err := part.Shell(t.Context(), Faces(FaceCreatedBy(CapEnd(part))).Exactly(1), units.Millimeters(1))
+	shell, err := Shell(t.Context(), part, Faces(FaceCreatedBy(CapEnd(part))).Exactly(1), units.Millimeters(1))
 	require.NoError(t, err)
 	volume, err := shell.Volume()
 	require.NoError(t, err)

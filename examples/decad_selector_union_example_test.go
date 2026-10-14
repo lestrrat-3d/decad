@@ -68,7 +68,7 @@ func Example_decad_selector_union() {
 		}
 	}
 
-	shelled, err := ring.Shell(context.Background(), caps, units.Millimeters(1))
+	shelled, err := decad.Shell(context.Background(), ring, caps, units.Millimeters(1))
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

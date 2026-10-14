@@ -17,7 +17,7 @@ import (
 func closedShellBox(t *testing.T, th float64, opts ...decad.ShellOption) (*decad.Document, *decad.Body) {
 	t.Helper()
 	doc, box := shellBox(t)
-	closed, err := box.Shell(t.Context(), nil, units.Millimeters(th), append(opts, decad.WithNoOpenings())...)
+	closed, err := decad.Shell(t.Context(), box, nil, units.Millimeters(th), append(opts, decad.WithNoOpenings())...)
 	require.NoError(t, err)
 	return doc, closed
 }
@@ -142,7 +142,7 @@ func TestShellClosedPrismCylinder(t *testing.T) {
 	require.NoError(t, err)
 	rod, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
-	closed, err := rod.Shell(t.Context(), nil, units.Millimeters(2), decad.WithNoOpenings())
+	closed, err := decad.Shell(t.Context(), rod, nil, units.Millimeters(2), decad.WithNoOpenings())
 	require.NoError(t, err)
 	require.Len(t, closed.Shells(), 2)
 	require.Len(t, closed.Shells()[1].Faces(), 3, `a cylinder wall, a floor and a ceiling`)
@@ -160,20 +160,20 @@ func TestShellClosedPrismGatesAndConsumers(t *testing.T) {
 		// 10 mm < the inradius 30, so the section survives, but the two
 		// 10 mm caps meet in the 20 mm sweep.
 		doc, box := shellBox(t)
-		_, err := box.Shell(t.Context(), nil, units.Millimeters(10), decad.WithNoOpenings())
+		_, err := decad.Shell(t.Context(), box, nil, units.Millimeters(10), decad.WithNoOpenings())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "SX11")
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 	t.Run("t past the inradius (S10)", func(t *testing.T) {
 		_, box := shellBox(t)
-		_, err := box.Shell(t.Context(), nil, units.Millimeters(35), decad.WithNoOpenings())
+		_, err := decad.Shell(t.Context(), box, nil, units.Millimeters(35), decad.WithNoOpenings())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.NotContains(t, err.Error(), "SX11")
 	})
 	t.Run("an outward wall has no cavity limit", func(t *testing.T) {
 		_, box := shellBox(t)
-		closed, err := box.Shell(t.Context(), nil, units.Millimeters(12), decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
+		closed, err := decad.Shell(t.Context(), box, nil, units.Millimeters(12), decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
 		require.NoError(t, err)
 		require.Len(t, closed.Shells(), 2)
 	})

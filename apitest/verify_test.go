@@ -1060,7 +1060,7 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	// clearance kernel stages the cup payload, so the requested gap is
 	// unmeasured — DiagUndecidedClearance, never an unsupported-pair code.
 	doc, box1 := shellBox(t)
-	cup1, err := box1.Shell(t.Context(), topCap(box1), units.Millimeters(5))
+	cup1, err := decad.Shell(t.Context(), box1, topCap(box1), units.Millimeters(5))
 	require.NoError(t, err)
 	far, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
@@ -1069,7 +1069,7 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	s2, p2 := plateSketch(t)
 	box2, err := decad.Extrude(t.Context(), doc, s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
 	require.NoError(t, err)
-	_, err = box2.Shell(t.Context(), topCap(box2), units.Millimeters(5))
+	_, err = decad.Shell(t.Context(), box2, topCap(box2), units.Millimeters(5))
 	require.NoError(t, err)
 
 	// No clearance asked: the box test alone proves the pair apart, so neither
@@ -1367,7 +1367,7 @@ func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
 
 	t.Run("cup", func(t *testing.T) {
 		doc, pin, heldDiameter := computedToFacePin(t)
-		cup, err := pin.Shell(t.Context(), topCap(pin), units.Millimeters(1))
+		cup, err := decad.Shell(t.Context(), pin, topCap(pin), units.Millimeters(1))
 		require.NoError(t, err)
 		requireComputedToFaceDiameterThresholds(t, doc, cup, heldDiameter)
 	})
@@ -1389,7 +1389,7 @@ func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
 func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())

@@ -226,7 +226,7 @@ func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
 	doc := New()
 	disc := internalDiscBody(t, doc, 8, 10)
 	capSel := Faces(FaceCreatedBy(FeatureRef{producer: disc.Origin().producer, Role: roleCapEnd}))
-	cup, err := disc.Shell(t.Context(), capSel, units.Millimeters(1))
+	cup, err := Shell(t.Context(), disc, capSel, units.Millimeters(1))
 	require.NoError(t, err)
 	_, ok := cup.payload.(cupPayload)
 	require.True(t, ok, `a one-cap shell of a disc builds the cup payload`)

@@ -115,7 +115,7 @@ func TestModifyOptionGates(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		_, err = decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(5), nil)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		_, err = box.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5), nil)
+		_, err = decad.Shell(t.Context(), box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5), nil)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
@@ -131,7 +131,7 @@ func TestModifyOptionGates(t *testing.T) {
 	})
 	t.Run("ContradictorySense", func(t *testing.T) {
 		doc, box := filletBox(t)
-		_, err := box.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5),
+		_, err := decad.Shell(t.Context(), box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5),
 			decad.WithShellSense(decad.Inward), decad.WithShellSense(decad.Outward))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "SX1")
@@ -139,7 +139,7 @@ func TestModifyOptionGates(t *testing.T) {
 	})
 	t.Run("RepeatedSameIntent", func(t *testing.T) {
 		_, box := filletBox(t)
-		cup, err := box.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5),
+		cup, err := decad.Shell(t.Context(), box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5),
 			decad.WithShellSense(decad.Outward), decad.WithShellSense(decad.Outward))
 		require.NoError(t, err)
 		// Outward: the dilated section — the plate, a 5 mm band along its
@@ -179,7 +179,7 @@ func TestShellNoOpenings(t *testing.T) {
 		var typedNil *decad.FaceQuery
 		for _, sel := range []decad.FaceSelector{nil, typedNil} {
 			doc, box := filletBox(t)
-			closed, err := box.Shell(t.Context(), sel, units.Millimeters(5), decad.WithNoOpenings())
+			closed, err := decad.Shell(t.Context(), box, sel, units.Millimeters(5), decad.WithNoOpenings())
 			require.NoError(t, err)
 			require.Len(t, closed.Shells(), 2)
 			require.Equal(t, []*decad.Body{closed}, doc.Bodies())
@@ -187,12 +187,12 @@ func TestShellNoOpenings(t *testing.T) {
 	})
 	t.Run("NilSelectorWithoutOption", func(t *testing.T) {
 		_, box := filletBox(t)
-		_, err := box.Shell(t.Context(), nil, units.Millimeters(5))
+		_, err := decad.Shell(t.Context(), box, nil, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("SelectorConflicts", func(t *testing.T) {
 		doc, box := filletBox(t)
-		_, err := box.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5), decad.WithNoOpenings())
+		_, err := decad.Shell(t.Context(), box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5), decad.WithNoOpenings())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "SX1")
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
@@ -202,11 +202,11 @@ func TestShellNoOpenings(t *testing.T) {
 		// turn's builds (revolve_shell_test.go).
 		doc := decad.New()
 		partial := revolveMeridian(t, doc, shaftMeridian, halfTurn)
-		_, err := partial.Shell(t.Context(), nil, units.Millimeters(1), decad.WithNoOpenings())
+		_, err := decad.Shell(t.Context(), partial, nil, units.Millimeters(1), decad.WithNoOpenings())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "SX8")
 		full := revolveMeridian(t, doc, shaftMeridian, decad.FullRevolution{})
-		closed, err := full.Shell(t.Context(), nil, units.Millimeters(1), decad.WithNoOpenings())
+		closed, err := decad.Shell(t.Context(), full, nil, units.Millimeters(1), decad.WithNoOpenings())
 		require.NoError(t, err)
 		require.Equal(t, []*decad.Body{partial, closed}, doc.Bodies())
 	})
@@ -230,7 +230,7 @@ func TestShellNoOpenings(t *testing.T) {
 			}
 		}
 		require.NotNil(t, holed)
-		_, err = holed.Shell(t.Context(), nil, units.Millimeters(2), decad.WithNoOpenings())
+		_, err = decad.Shell(t.Context(), holed, nil, units.Millimeters(2), decad.WithNoOpenings())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "SX8")
 	})

@@ -46,7 +46,7 @@ func Example_decad_shell_stacked_boss() {
 		fmt.Println(err)
 		return
 	}
-	shell, err := stack.Shell(ctx, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
+	shell, err := decad.Shell(ctx, stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
 		units.Millimeters(1))
 	if err != nil {
 		fmt.Println(err)

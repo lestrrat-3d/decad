@@ -1,6 +1,6 @@
 # Shell of a straight twisted Sweep
 
-`Body.Shell` admits an inward, one-cap opening on a one-line twisted solid whose
+`Shell` admits an inward, one-cap opening on a one-line twisted solid whose
 Sketch section is a smooth, centrally symmetric, strictly convex sequence of
 whole Lines and Arcs. The path starts at the origin, follows positive Z, and
 uses the origin XY profile plane. The opening must select `capEnd`. Thickness

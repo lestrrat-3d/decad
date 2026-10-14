@@ -48,7 +48,7 @@ func Example_decad_revolve_side_shell() {
 	}
 
 	// Remove the disk at x = 40, the one planar face facing +x.
-	cup, err := rod.Shell(context.Background(), decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(1, 0, 0))), units.Millimeters(2))
+	cup, err := decad.Shell(context.Background(), rod, decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(1, 0, 0))), units.Millimeters(2))
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

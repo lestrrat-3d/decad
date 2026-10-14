@@ -213,7 +213,7 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 			name: "Shell",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -273,7 +273,7 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 			name: "Cup",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -408,7 +408,7 @@ func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
 			target: "renameCavityRoles",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -475,7 +475,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			target: "integrateMomentRecordModeContext",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -510,7 +510,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			target: "coalesceWalksContext",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -520,7 +520,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			target: "ReverseLoopRecordContext",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},

@@ -34,7 +34,7 @@ func Example_decad_closed_shell() {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	sealed, err := box.Shell(context.Background(), nil, units.Millimeters(5), decad.WithNoOpenings())
+	sealed, err := decad.Shell(context.Background(), box, nil, units.Millimeters(5), decad.WithNoOpenings())
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

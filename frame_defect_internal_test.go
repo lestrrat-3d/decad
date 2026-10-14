@@ -414,7 +414,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 		}},
 		{name: "cup shell", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			b := fdExtrude(t, f)
-			return b.Shell(t.Context(), Faces(FaceCreatedBy(CapEnd(b))), units.Millimeters(0.25))
+			return Shell(t.Context(), b, Faces(FaceCreatedBy(CapEnd(b))), units.Millimeters(0.25))
 		}},
 		{name: "patch", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			w := sketch.NewWorld()
@@ -664,7 +664,7 @@ func TestPlaneMapMassCoversFrameDefect(t *testing.T) {
 		// The cavity is 2.5 × 1.5 × 1.75 inside the 3 × 2 × 2 block.
 		{name: "cup", volume: big.NewRat(87, 16), build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			b := fdExtrude(t, f)
-			return b.Shell(t.Context(), Faces(FaceCreatedBy(CapEnd(b))), units.Millimeters(0.25))
+			return Shell(t.Context(), b, Faces(FaceCreatedBy(CapEnd(b))), units.Millimeters(0.25))
 		}},
 		{name: "composite sweep", xyOnly: true, build: func(t *testing.T, _ r3.Frame) (*Body, error) { return fdCompositeSweep(t) }},
 	} {

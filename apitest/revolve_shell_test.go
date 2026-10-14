@@ -87,7 +87,7 @@ func TestRevolveShellOffAxisRing(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, halfTurn)
-		shelled, err := ring.Shell(t.Context(), bothAngularCaps(), units.Millimeters(1))
+		shelled, err := decad.Shell(t.Context(), ring, bothAngularCaps(), units.Millimeters(1))
 		require.NoError(t, err)
 		require.Equal(t, []*decad.Body{shelled}, doc.Bodies(), `the shell retires its receiver`)
 		require.True(t, shelled.IsSolid())
@@ -114,7 +114,7 @@ func TestRevolveShellOffAxisRing(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, halfTurn)
-		shelled, err := ring.Shell(t.Context(), bothAngularCaps(), units.Millimeters(1), decad.WithShellSense(decad.Outward))
+		shelled, err := decad.Shell(t.Context(), ring, bothAngularCaps(), units.Millimeters(1), decad.WithShellSense(decad.Outward))
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		// The 1 mm dilation is the core z ∈ [0, 20], ρ ∈ [4, 11] (∫ρ dA =
@@ -132,7 +132,7 @@ func TestRevolveShellSolidCylinder(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		cyl := revolveMeridian(t, doc, cylinderMeridian, halfTurn)
-		shelled, err := cyl.Shell(t.Context(), bothAngularCaps(), units.Millimeters(2))
+		shelled, err := decad.Shell(t.Context(), cyl, bothAngularCaps(), units.Millimeters(2))
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		// The axis walk grows no wall: the cavity is z ∈ [2, 18], ρ ∈ [0, 8],
@@ -153,7 +153,7 @@ func TestRevolveShellSolidCylinder(t *testing.T) {
 		// z ∈ [7, 13], ρ ∈ [0, 3], ∫ρ dA = 27.
 		doc := decad.New()
 		cyl := revolveMeridian(t, doc, cylinderMeridian, halfTurn)
-		shelled, err := cyl.Shell(t.Context(), bothAngularCaps(), units.Millimeters(7))
+		shelled, err := decad.Shell(t.Context(), cyl, bothAngularCaps(), units.Millimeters(7))
 		require.NoError(t, err)
 		decadtest.MeasuresVolume(t, shelled, halfTurnVolume(1000-27))
 	})
@@ -161,7 +161,7 @@ func TestRevolveShellSolidCylinder(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		cyl := revolveMeridian(t, doc, cylinderMeridian, halfTurn)
-		shelled, err := cyl.Shell(t.Context(), bothAngularCaps(), units.Millimeters(2), decad.WithShellSense(decad.Outward))
+		shelled, err := decad.Shell(t.Context(), cyl, bothAngularCaps(), units.Millimeters(2), decad.WithShellSense(decad.Outward))
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		// The dilation is z ∈ [0, 20], ρ ∈ [0, 12] (1440), two end strips
@@ -247,7 +247,7 @@ func TestRevolveShellConeApex(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			cone := revolveMeridian(t, doc, tc.meridian, halfTurn)
-			shelled, err := cone.Shell(t.Context(), bothAngularCaps(), units.Millimeters(1), tc.opts...)
+			shelled, err := decad.Shell(t.Context(), cone, bothAngularCaps(), units.Millimeters(1), tc.opts...)
 			require.NoError(t, err)
 			requireManifold(t, shelled)
 			vol, err := shelled.Volume()
@@ -303,7 +303,7 @@ func TestRevolveShellClosedCone(t *testing.T) {
 
 	doc := decad.New()
 	cone := revolveMeridian(t, doc, coneMeridian, decad.FullRevolution{})
-	shelled, err := cone.Shell(t.Context(), nil, units.Millimeters(1), decad.WithNoOpenings())
+	shelled, err := decad.Shell(t.Context(), cone, nil, units.Millimeters(1), decad.WithNoOpenings())
 	require.NoError(t, err)
 	requireManifold(t, shelled)
 	requireOuterAndVoid(t, shelled)
@@ -354,7 +354,7 @@ func TestRevolveShellPlaced(t *testing.T) {
 	require.NoError(t, err)
 	// Both caps turned with the body, so their shared normal is the image of z.
 	caps := decad.Faces(decad.NormalTo(motion.ApplyDir(r3.NewVec(0, 0, 1)))).Exactly(2)
-	shelled, err := placed.Shell(t.Context(), caps, units.Millimeters(2))
+	shelled, err := decad.Shell(t.Context(), placed, caps, units.Millimeters(2))
 	require.NoError(t, err)
 	requireManifold(t, shelled)
 	decadtest.MeasuresVolume(t, shelled, halfTurnVolume(488))
@@ -399,14 +399,14 @@ func TestRevolveShellRefusals(t *testing.T) {
 		// The ring's two end annuli are not one connected run of side faces.
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, decad.FullRevolution{})
-		_, err := ring.Shell(t.Context(), decad.Faces(decad.Planar()), units.Millimeters(1))
+		_, err := decad.Shell(t.Context(), ring, decad.Faces(decad.Planar()), units.Millimeters(1))
 		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `SX8`)
 	})
 	t.Run("kept angular cap", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, halfTurn)
-		_, err := ring.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapStart(ring))), units.Millimeters(1))
+		_, err := decad.Shell(t.Context(), ring, decad.Faces(decad.FaceCreatedBy(decad.CapStart(ring))), units.Millimeters(1))
 		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `SX8`)
 	})
 	t.Run("both caps and a side face", func(t *testing.T) {
@@ -414,7 +414,7 @@ func TestRevolveShellRefusals(t *testing.T) {
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, halfTurn)
 		// Both angular caps, and the two end annuli: two separate runs.
-		_, err := ring.Shell(t.Context(), decad.Faces(decad.Planar()).Exactly(4), units.Millimeters(1))
+		_, err := decad.Shell(t.Context(), ring, decad.Faces(decad.Planar()).Exactly(4), units.Millimeters(1))
 		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `one connected run`)
 	})
 	t.Run("holed meridian", func(t *testing.T) {
@@ -423,21 +423,21 @@ func TestRevolveShellRefusals(t *testing.T) {
 		doc := decad.New()
 		body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, halfTurn)
 		require.NoError(t, err)
-		_, err = body.Shell(t.Context(), bothAngularCaps(), units.Millimeters(1))
+		_, err = decad.Shell(t.Context(), body, bothAngularCaps(), units.Millimeters(1))
 		requireShellRefused(t, doc, body, err, decad.ErrUnsupported, `SX8`)
 	})
 	t.Run("two axis walks", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		spool := revolveMeridian(t, doc, [][2]float64{{0, 0}, {5, 0}, {5, 5}, {15, 5}, {15, 0}, {20, 0}, {20, 10}, {0, 10}}, halfTurn)
-		_, err := spool.Shell(t.Context(), bothAngularCaps(), units.Millimeters(1))
+		_, err := decad.Shell(t.Context(), spool, bothAngularCaps(), units.Millimeters(1))
 		requireShellRefused(t, doc, spool, err, decad.ErrUnsupported, `more than one walk`)
 	})
 	t.Run("outward wall reaching across the axis", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, [][2]float64{{0, 1}, {20, 1}, {20, 5}, {0, 5}}, halfTurn)
-		_, err := ring.Shell(t.Context(), bothAngularCaps(), units.Millimeters(2), decad.WithShellSense(decad.Outward))
+		_, err := decad.Shell(t.Context(), ring, bothAngularCaps(), units.Millimeters(2), decad.WithShellSense(decad.Outward))
 		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `mirror image`)
 	})
 	t.Run("inward offset crossing its mirror image on the axis", func(t *testing.T) {
@@ -447,14 +447,14 @@ func TestRevolveShellRefusals(t *testing.T) {
 		// pass each other on the axis, so the cavity would split.
 		doc := decad.New()
 		flange := revolveMeridian(t, doc, [][2]float64{{0, 0}, {2, 0}, {2, 5}, {20, 5}, {20, 10}, {0, 10}}, halfTurn)
-		_, err := flange.Shell(t.Context(), bothAngularCaps(), units.Millimeters(1.5))
+		_, err := decad.Shell(t.Context(), flange, bothAngularCaps(), units.Millimeters(1.5))
 		requireShellRefused(t, doc, flange, err, decad.ErrUnsupported, `in order`)
 	})
 	t.Run("inward wall at the cavity limit", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		cyl := revolveMeridian(t, doc, cylinderMeridian, halfTurn)
-		_, err := cyl.Shell(t.Context(), bothAngularCaps(), units.Millimeters(10))
+		_, err := decad.Shell(t.Context(), cyl, bothAngularCaps(), units.Millimeters(10))
 		requireShellRefused(t, doc, cyl, err, decad.ErrDegenerate, `inradius`)
 	})
 }
@@ -475,8 +475,7 @@ func TestRevolveShellTessellates(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			shelled, err := revolveMeridian(t, decad.New(), tc.meridian, halfTurn).
-				Shell(t.Context(), bothAngularCaps(), units.Millimeters(1))
+			shelled, err := decad.Shell(t.Context(), revolveMeridian(t, decad.New(), tc.meridian, halfTurn), bothAngularCaps(), units.Millimeters(1))
 			require.NoError(t, err)
 			mesh, err := shelled.Tessellate(t.Context(), units.Millimeters(0.05))
 			require.NoError(t, err)
@@ -607,7 +606,7 @@ func TestRevolveShellClosed(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			receiver := tc.body(t, doc)
-			shelled, err := receiver.Shell(t.Context(), nil, units.Millimeters(1), tc.opts...)
+			shelled, err := decad.Shell(t.Context(), receiver, nil, units.Millimeters(1), tc.opts...)
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{shelled}, doc.Bodies(), `the shell retires its receiver`)
 			require.True(t, shelled.IsSolid())
@@ -660,7 +659,7 @@ func TestRevolveShellClosedShaft(t *testing.T) {
 	// whose centroid sits 4/(3π) below ρ = 5 (5π/4 − 1/3).
 	doc := decad.New()
 	shaft := revolveMeridian(t, doc, shaftMeridian, decad.FullRevolution{})
-	shelled, err := shaft.Shell(t.Context(), nil, units.Millimeters(1), decad.WithNoOpenings())
+	shelled, err := decad.Shell(t.Context(), shaft, nil, units.Millimeters(1), decad.WithNoOpenings())
 	require.NoError(t, err)
 	requireManifold(t, shelled)
 	decadtest.MeasuresVolume(t, shelled, fullTurnVolume(shaftQ-404-4.5-1.0/3+5*math.Pi/4))
@@ -713,7 +712,7 @@ func TestRevolveShellClosedRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, halfTurn)
-		_, err := ring.Shell(t.Context(), nil, units.Millimeters(1), noOpenings)
+		_, err := decad.Shell(t.Context(), ring, nil, units.Millimeters(1), noOpenings)
 		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `SX8`)
 	})
 	t.Run("holed meridian", func(t *testing.T) {
@@ -722,35 +721,35 @@ func TestRevolveShellClosedRefusals(t *testing.T) {
 		doc := decad.New()
 		body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
-		_, err = body.Shell(t.Context(), nil, units.Millimeters(1), noOpenings)
+		_, err = decad.Shell(t.Context(), body, nil, units.Millimeters(1), noOpenings)
 		requireShellRefused(t, doc, body, err, decad.ErrUnsupported, `SX8`)
 	})
 	t.Run("two axis walks", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		spool := revolveMeridian(t, doc, [][2]float64{{0, 0}, {5, 0}, {5, 5}, {15, 5}, {15, 0}, {20, 0}, {20, 10}, {0, 10}}, decad.FullRevolution{})
-		_, err := spool.Shell(t.Context(), nil, units.Millimeters(1), noOpenings)
+		_, err := decad.Shell(t.Context(), spool, nil, units.Millimeters(1), noOpenings)
 		requireShellRefused(t, doc, spool, err, decad.ErrUnsupported, `more than one walk`)
 	})
 	t.Run("outward wall reaching across the axis", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, [][2]float64{{0, 1}, {20, 1}, {20, 5}, {0, 5}}, decad.FullRevolution{})
-		_, err := ring.Shell(t.Context(), nil, units.Millimeters(2), noOpenings, decad.WithShellSense(decad.Outward))
+		_, err := decad.Shell(t.Context(), ring, nil, units.Millimeters(2), noOpenings, decad.WithShellSense(decad.Outward))
 		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `mirror image`)
 	})
 	t.Run("inward wall at the cavity limit", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		cyl := revolveMeridian(t, doc, cylinderMeridian, decad.FullRevolution{})
-		_, err := cyl.Shell(t.Context(), nil, units.Millimeters(10), noOpenings)
+		_, err := decad.Shell(t.Context(), cyl, nil, units.Millimeters(10), noOpenings)
 		requireShellRefused(t, doc, cyl, err, decad.ErrDegenerate, `inradius`)
 	})
 	t.Run("selector beside the option", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, decad.FullRevolution{})
-		_, err := ring.Shell(t.Context(), decad.Faces(decad.Planar()), units.Millimeters(1), noOpenings)
+		_, err := decad.Shell(t.Context(), ring, decad.Faces(decad.Planar()), units.Millimeters(1), noOpenings)
 		requireShellRefused(t, doc, ring, err, decad.ErrDegenerate, `SX1`)
 	})
 }

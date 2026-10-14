@@ -144,7 +144,7 @@ func TestSideOpeningBrepChargesInexactThickness(t *testing.T) {
 
 	box := internalBoxBody(t, New(), 0, 0, 40, 20, 10)
 	opening := Faces(Facing(r3.NewVec(-1, 0, 0)))
-	body, err := box.Shell(t.Context(), opening, thickness)
+	body, err := Shell(t.Context(), box, opening, thickness)
 	require.NoError(t, err)
 	bp, ok := body.payload.(brepPayload)
 	require.True(t, ok, "got %T", body.payload)
