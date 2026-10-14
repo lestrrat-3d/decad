@@ -3,6 +3,7 @@ package proof
 import (
 	"math"
 	"math/big"
+	"math/bits"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -189,21 +190,79 @@ func XhpVec(p Xhp) r3.Vec {
 // xhpFractionFloat64 rounds an integer quotient directly, avoiding the full
 // GCD that big.Rat.SetFrac performs before its Float64 conversion.
 func xhpFractionFloat64(num, den *big.Int) float64 {
+	f, _ := quotientFloat64(num, den)
+	return f
+}
+
+// quotientFloat64 is big.Rat.Float64 of num/den without forming the Rat: the
+// nearest float64 (ties to even) and big.Rat.Float64's exactness flag, for a
+// den that need not be in lowest terms. A positive power-of-two den takes the
+// shift path of powerOfTwoQuotient; any other den takes the integer division.
+func quotientFloat64(num, den *big.Int) (float64, bool) {
 	if num.Sign() == 0 {
-		return 0
+		return 0, true
+	}
+	exp := num.BitLen() - den.BitLen()
+	if isPositivePowerOfTwo(den) {
+		mantissa, haveRem := powerOfTwoQuotient(num)
+		return roundQuotient(num.Sign() < 0, exp, mantissa, haveRem)
 	}
 	var a, b, quotient, remainder big.Int
 	a.Abs(num)
 	b.Set(den)
-	exp := a.BitLen() - b.BitLen()
 	if shift := 54 - exp; shift > 0 {
 		a.Lsh(&a, uint(shift))
 	} else if shift < 0 {
 		b.Lsh(&b, uint(-shift))
 	}
 	quotient.QuoRem(&a, &b, &remainder)
-	mantissa := quotient.Uint64()
-	haveRem := remainder.Sign() != 0
+	return roundQuotient(num.Sign() < 0, exp, quotient.Uint64(), remainder.Sign() != 0)
+}
+
+// isPositivePowerOfTwo reports whether x is 2^k for some k >= 0.
+func isPositivePowerOfTwo(x *big.Int) bool {
+	return x.Sign() > 0 && x.TrailingZeroBits() == uint(x.BitLen()-1)
+}
+
+// powerOfTwoQuotient returns the mantissa and remainder flag the integer
+// division of quotientFloat64 produces when den = 2^k and num is nonzero. The
+// division scales |num|/den by 2^(54-exp), exp = BitLen(num) - (k+1), which is
+// |num| · 2^(55-BitLen(num)) whatever k is. That is the top 55 bits of |num|,
+// zero-padded below when |num| is shorter, and it leaves a remainder exactly
+// when a nonzero bit of |num| lies below those 55.
+func powerOfTwoQuotient(num *big.Int) (uint64, bool) {
+	alen := num.BitLen()
+	words := num.Bits()
+	if alen <= 55 {
+		return absShiftedLow64(words, 0) << uint(55-alen), false
+	}
+	shift := uint(alen - 55)
+	return absShiftedLow64(words, shift), num.TrailingZeroBits() < shift
+}
+
+// absShiftedLow64 returns the low 64 bits of |x| >> shift for the little-endian
+// words of |x|. The bits above 64 are dropped.
+func absShiftedLow64(words []big.Word, shift uint) uint64 {
+	const wordBits = bits.UintSize
+	idx, off := int(shift/wordBits), shift%wordBits
+	var out uint64
+	for i := 0; idx+i < len(words) && uint(i)*wordBits < 64+off; i++ {
+		chunk := uint64(words[idx+i])
+		if i == 0 {
+			out = chunk >> off
+			continue
+		}
+		out |= chunk << (uint(i)*wordBits - off)
+	}
+	return out
+}
+
+// roundQuotient finishes big.Rat.Float64's rounding from the scaled quotient:
+// mantissa holds 54 or 55 bits, exp is BitLen(num) - BitLen(den) and haveRem
+// records a nonzero division remainder. It returns the float and Float64's
+// exactness flag, which stays true for a positive subnormal quotient that
+// flushes to zero and turns false on overflow to infinity.
+func roundQuotient(negative bool, exp int, mantissa uint64, haveRem bool) (float64, bool) {
 	if mantissa>>54 == 1 {
 		if mantissa&1 != 0 {
 			haveRem = true
@@ -217,19 +276,26 @@ func xhpFractionFloat64(num, den *big.Int) float64 {
 		mantissa >>= shift
 		exp = -1021
 	}
-	if mantissa&1 != 0 && (haveRem || mantissa&2 != 0) {
-		mantissa++
-		if mantissa >= 1<<54 {
-			mantissa >>= 1
-			exp++
+	exact := !haveRem
+	if mantissa&1 != 0 {
+		exact = false
+		if haveRem || mantissa&2 != 0 {
+			mantissa++
+			if mantissa >= 1<<54 {
+				mantissa >>= 1
+				exp++
+			}
 		}
 	}
 	mantissa >>= 1
 	value := math.Ldexp(float64(mantissa), exp-53)
-	if num.Sign() < 0 {
-		return -value
+	if math.IsInf(value, 0) {
+		exact = false
 	}
-	return value
+	if negative {
+		return -value, exact
+	}
+	return value, exact
 }
 
 // XhpStripTwosOwned takes ownership of p and divides all four integers by

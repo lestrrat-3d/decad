@@ -84,6 +84,19 @@ func CmpFloatRat(f float64, q *big.Rat) int {
 	return lhs.Cmp(new(big.Int).Lsh(rhs, uint(-exp)))
 }
 
+// RatFloat64 is q.Float64(): the nearest float64 (ties to even) and
+// big.Rat.Float64's exactness flag, the same bits and the same flag for every
+// q. A power-of-two denominator, which every FloatRat difference has, rounds by
+// shifting the numerator; any other denominator calls q.Float64. q is only
+// read and must not be nil.
+func RatFloat64(q *big.Rat) (float64, bool) {
+	den := q.Denom()
+	if !isPositivePowerOfTwo(den) {
+		return q.Float64()
+	}
+	return quotientFloat64(q.Num(), den)
+}
+
 // RationalFloatError returns |exact-held| rounded upward.
 func RationalFloatError(exact *big.Rat, held float64) float64 {
 	heldRat := FloatRat(held)
@@ -92,7 +105,7 @@ func RationalFloatError(exact *big.Rat, held float64) float64 {
 	}
 	d := SubRat(new(big.Rat), exact, heldRat)
 	d.Abs(d)
-	out, exactFloat := d.Float64()
+	out, exactFloat := RatFloat64(d)
 	// Float64 can report exact even when a positive subnormal fraction flushed
 	// to zero. The rational sign is the proof that this bound cannot be zero.
 	if d.Sign() > 0 && out == 0 {

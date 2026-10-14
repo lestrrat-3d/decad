@@ -97,7 +97,7 @@ func RatOf(f float64) (*big.Rat, bool) {
 // caller may fold it — freeform.FreeformExtremeFloats is the one conversion the fold
 // runs, and it is what turns the saturation into freeform.ErrFreeformExtremeUnrepresentable.
 func RatFloatDown(q *big.Rat) float64 {
-	f, _ := q.Float64()
+	f, _ := proofarith.RatFloat64(q)
 	if IsNonFinite(f) {
 		return f
 	}
@@ -108,7 +108,7 @@ func RatFloatDown(q *big.Rat) float64 {
 }
 
 func RatFloatUp(q *big.Rat) float64 {
-	f, _ := q.Float64()
+	f, _ := proofarith.RatFloat64(q)
 	if IsNonFinite(f) {
 		return f
 	}

@@ -281,3 +281,40 @@ func TestRatFloatDownUpNonFiniteAndNil(t *testing.T) {
 	samePanic(t, func() { legacyRatFloatDown(nil) }, func() { proofbound.RatFloatDown(nil) }, "RatFloatDown(nil)")
 	samePanic(t, func() { legacyRatFloatUp(nil) }, func() { proofbound.RatFloatUp(nil) }, "RatFloatUp(nil)")
 }
+
+// TestRatFloatDownUpMatchLegacyDyadic feeds rationals with a power-of-two
+// denominator, which round by shifting: exact floats, halfway ties, a tie plus
+// or minus one unit, integers, and values beyond either end of the float range.
+func TestRatFloatDownUpMatchLegacyDyadic(t *testing.T) {
+	check := func(q *big.Rat) {
+		t.Helper()
+		msg := fmt.Sprintf("q=%d bits / 2^%d", q.Num().BitLen(), q.Denom().BitLen()-1)
+		requireSameFloatBits(t, legacyRatFloatDown(q), proofbound.RatFloatDown(q), "RatFloatDown "+msg)
+		requireSameFloatBits(t, legacyRatFloatUp(q), proofbound.RatFloatUp(q), "RatFloatUp "+msg)
+	}
+	rng := rand.New(rand.NewPCG(231, 233))
+	pow2 := func(k int) *big.Int { return new(big.Int).Lsh(big.NewInt(1), uint(k)) }
+	for range 4000 {
+		odd := new(big.Int).SetUint64(rng.Uint64()&(1<<54-1) | 1<<53 | 1)
+		s := rng.IntN(1300)
+		tie := new(big.Int).Lsh(odd, uint(s))
+		for _, n := range []*big.Int{
+			tie, new(big.Int).Add(tie, big.NewInt(1)), new(big.Int).Sub(tie, big.NewInt(1)),
+			new(big.Int).Add(tie, pow2(s/2)),
+		} {
+			for _, k := range []int{0, 1, rng.IntN(1500), 1074, 1075, 1076} {
+				q := new(big.Rat).SetFrac(n, pow2(k))
+				check(q)
+				check(new(big.Rat).Neg(q))
+			}
+		}
+		f := randomFinite(rng)
+		check(proofarith.FloatRat(f))
+		check(new(big.Rat).Sub(proofarith.FloatRat(f), proofarith.FloatRat(randomFinite(rng))))
+	}
+	for _, k := range []int{1023, 1024, 1025, 1100} {
+		check(new(big.Rat).SetInt(pow2(k)))
+		check(new(big.Rat).SetInt(new(big.Int).Sub(pow2(k), big.NewInt(1))))
+		check(new(big.Rat).SetFrac(big.NewInt(-1), pow2(k)))
+	}
+}
