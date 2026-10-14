@@ -49,8 +49,8 @@ type TriContact struct {
 	Kind   ContactKind
 	P0, P1 proof.Xpt
 	// p0OnA … p1OnB record whether each endpoint lies on each triangle's own
-	// closed BOUNDARY — decided by asking what the point is (OnTriBoundary),
-	// never by which triangle's crossing list it happened to be drawn from.
+	// closed BOUNDARY — decided by the exact edge predicates used by
+	// OnTriBoundary, never by which crossing list supplied the point.
 	P0OnA, P1OnA, P0OnB, P1OnB bool
 	// edgeA and edgeB name the facet edge a SEGMENT contact runs ALONG (−1
 	// when it runs along none): an in-plane edge. Whether such an edge grazes
@@ -120,14 +120,12 @@ func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xp
 		return out, nil
 	}
 	out.Sin2 = SinSquared(na, nb)
-	out.P0OnA = OnTriBoundary(out.P0, xta, na)
-	out.P0OnB = OnTriBoundary(out.P0, xtb, nb)
 	if out.Kind == ContactSegment {
-		out.P1OnA = OnTriBoundary(out.P1, xta, na)
-		out.P1OnB = OnTriBoundary(out.P1, xtb, nb)
-		out.EdgeA = SegAlongEdge(out.P0, out.P1, xta, na)
-		out.EdgeB = SegAlongEdge(out.P0, out.P1, xtb, nb)
+		out.P0OnA, out.P1OnA, out.EdgeA = segmentBoundaryEdges(out.P0, out.P1, xta, na)
+		out.P0OnB, out.P1OnB, out.EdgeB = segmentBoundaryEdges(out.P0, out.P1, xtb, nb)
 	} else {
+		out.P0OnA = OnTriBoundary(out.P0, xta, na)
+		out.P0OnB = OnTriBoundary(out.P0, xtb, nb)
 		out.P1OnA, out.P1OnB = out.P0OnA, out.P0OnB
 	}
 	return out, nil
@@ -385,6 +383,43 @@ func SegAlongEdge(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) int {
 		}
 	}
 	return -1
+}
+
+// segmentBoundaryEdges shares each exact point-on-edge result between the
+// boundary flags and the first common edge, retaining their short-circuit order.
+func segmentBoundaryEdges(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) (bool, bool, int) {
+	points := [2]proof.Xpt{p0, p1}
+	var known, on [2]uint8
+	onEdge := func(point, edge int) bool {
+		bit := uint8(1 << edge)
+		if known[point]&bit == 0 {
+			known[point] |= bit
+			a, b := xt[edge], xt[(edge+1)%3]
+			if PlaneSide(a, b, points[point], n) == 0 && PointOnSegment3D(a, b, points[point]) {
+				on[point] |= bit
+			}
+		}
+		return on[point]&bit != 0
+	}
+	var on0, on1 bool
+	for edge := range 3 {
+		if onEdge(0, edge) {
+			on0 = true
+			break
+		}
+	}
+	for edge := range 3 {
+		if onEdge(1, edge) {
+			on1 = true
+			break
+		}
+	}
+	for edge := range 3 {
+		if onEdge(0, edge) && onEdge(1, edge) {
+			return on0, on1, edge
+		}
+	}
+	return on0, on1, -1
 }
 
 // SinSquared is the exact sin²θ of the angle between two facet planes:
