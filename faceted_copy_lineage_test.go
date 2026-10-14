@@ -46,7 +46,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	require.NoError(t, err)
 	third, err := Copy(t.Context(), image, WithCopyPlacement(quarter))
 	require.NoError(t, err)
-	thirdPayload := third.payload.(facetedPayload)
+	thirdPayload := third.n.Payload.(facetedPayload)
 	require.Nil(t, thirdPayload.loftFacesTrim)
 	require.Same(t, source, thirdPayload.copyLineage.source)
 	set, err = certifyFacetedCopies(t.Context(), []*Body{source, image, third})
@@ -66,11 +66,11 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, placed, 2)
 
-	part := image.payload.(facetedPayload)
+	part := image.n.Payload.(facetedPayload)
 	changed := *part.copyLineage
 	changed.motion = r3.Identity()
 	part.copyLineage = &changed
-	image.payload = part
+	image.n.Payload = part
 	_, err = certifyFacetedCopies(t.Context(), []*Body{source, image})
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "changed its recorded motion")
@@ -87,12 +87,12 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 	require.NoError(t, err)
 	b, err := Copy(t.Context(), source, WithCopyPlacement(rotate(240)))
 	require.NoError(t, err)
-	require.True(t, a.payload.(facetedPayload).copyLineage.direct)
-	require.True(t, b.payload.(facetedPayload).copyLineage.direct)
+	require.True(t, a.n.Payload.(facetedPayload).copyLineage.direct)
+	require.True(t, b.n.Payload.(facetedPayload).copyLineage.direct)
 
 	c, err := Copy(t.Context(), a, WithCopyPlacement(rotate(90)))
 	require.NoError(t, err)
-	cLineage := c.payload.(facetedPayload).copyLineage
+	cLineage := c.n.Payload.(facetedPayload).copyLineage
 	require.Same(t, source, cLineage.source)
 	require.False(t, cLineage.direct)
 
@@ -104,7 +104,7 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 	tools := []*Body{source, a, b}
 	shells := make([]shellseparation.Shell, len(tools))
 	for i, tool := range tools {
-		shells[i] = facetedShell(tool.payload.(facetedPayload))
+		shells[i] = facetedShell(tool.n.Payload.(facetedPayload))
 	}
 	for _, linked := range []bool{true, false} {
 		require.True(t, shellseparation.Separate(t.Context(), shells, set.moves,
@@ -116,7 +116,7 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 
 	moved, err := Transform(t.Context(), a, rotate(30))
 	require.NoError(t, err)
-	require.False(t, moved.payload.(facetedPayload).copyLineage.direct)
+	require.False(t, moved.n.Payload.(facetedPayload).copyLineage.direct)
 }
 
 // looseBounds widens every held bound of body by half a millimetre. A wider
@@ -124,13 +124,13 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 // but a direct pairwise slab check must charge it.
 func looseBounds(body *Body) {
 	const delta = 0.5
-	part := body.payload.(facetedPayload)
+	part := body.n.Payload.(facetedPayload)
 	part.vertexBound = append([]float64(nil), part.vertexBound...)
 	for i := range part.vertexBound {
 		part.vertexBound[i] += delta
 	}
 	part.meshBound += delta
-	body.payload = part
+	body.n.Payload = part
 }
 
 func TestFacetedCopyTransferSeparation(t *testing.T) {
@@ -151,8 +151,8 @@ func TestFacetedCopyTransferSeparation(t *testing.T) {
 	a := copyOf(source, 20)
 	direct := copyOf(source, 40)
 	nested := copyOf(a, 20)
-	require.True(t, direct.payload.(facetedPayload).copyLineage.direct)
-	require.False(t, nested.payload.(facetedPayload).copyLineage.direct)
+	require.True(t, direct.n.Payload.(facetedPayload).copyLineage.direct)
+	require.False(t, nested.n.Payload.(facetedPayload).copyLineage.direct)
 	// Only the second copy carries the wider bound, and both copies sit at the
 	// same 40 degree placement, so lineage is the only difference between sets.
 	looseBounds(direct)
@@ -185,7 +185,7 @@ func TestFacetedCopyTransferSeparation(t *testing.T) {
 		moves := make([]r3.Transform, len(tools))
 		moves[0] = r3.Identity()
 		for i, tool := range tools {
-			part := tool.payload.(facetedPayload)
+			part := tool.n.Payload.(facetedPayload)
 			shells[i] = facetedShell(part)
 			if i > 0 {
 				moves[i] = part.copyLineage.motion

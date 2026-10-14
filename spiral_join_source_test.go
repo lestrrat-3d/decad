@@ -19,7 +19,7 @@ func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) 
 	blank, tooth, _ := spiralTangentBlankAndTooth(t, doc)
 	section, ok := exactSpiralBlank(blank)
 	require.True(t, ok)
-	trim := tooth.payload.(facetedPayload).loftFacesTrim
+	trim := tooth.n.Payload.(facetedPayload).loftFacesTrim
 	require.NotNil(t, trim)
 	require.True(t, spiralTangentRecordCurrent(trim))
 	m, b := section.section.meridianEquation()
@@ -45,7 +45,7 @@ func TestSpiralFirstJoinDeclinesTangentToeCapPastToeCircle(t *testing.T) {
 	blank, tooth, _ := spiralTangentBlankAndToothWithTools(t, New(), -3.02, false)
 	section, ok := exactSpiralBlank(blank)
 	require.True(t, ok)
-	trim := tooth.payload.(facetedPayload).loftFacesTrim
+	trim := tooth.n.Payload.(facetedPayload).loftFacesTrim
 	require.NotNil(t, trim)
 	require.True(t, spiralTangentRecordCurrent(trim))
 	m, b := section.section.meridianEquation()

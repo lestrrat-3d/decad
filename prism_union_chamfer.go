@@ -23,7 +23,7 @@ func (b *Body) tryChamferPrismUnion(ctx context.Context, edges []*Edge,
 		return nil, false, nil
 	}
 	for _, pair := range [][2]*Body{{rec.first, rec.second}, {rec.second, rec.first}} {
-		pp, ok := pair[0].payload.(prismPayload)
+		pp, ok := pair[0].n.Payload.(prismPayload)
 		if !ok {
 			continue
 		}

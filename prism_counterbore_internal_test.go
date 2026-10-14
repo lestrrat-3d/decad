@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -61,11 +62,11 @@ func TestCounterboreReverseArrangementProvesEmptyCut(t *testing.T) {
 	wide := internalCircleBody(t, doc, 0, 4, 7, Distance{D: units.Millimeters(3), Dir: Along})
 	pocket, err := Cut(t.Context(), plate, wide)
 	require.NoError(t, err)
-	sp, ok := pocket.payload.(stackedPrismPayload)
+	sp, ok := pocket.n.Payload.(stackedPrismPayload)
 	require.True(t, ok)
 	tool := internalCircleBody(t, doc, 0, 2, 0, Distance{D: units.Millimeters(10), Dir: Along})
 	budget := proofbound.NewWorkBudget(t.Context())
-	proxy := bornBody(&Body{payload: sp.outerPrism()})
+	proxy := bornBody(&Body{n: topo.Body{Payload: sp.outerPrism()}})
 	target, cutter, admitted, err := admitPrismPairBudget(budget, meshbool.OpCut, proxy, tool)
 	require.NoError(t, err)
 	require.True(t, admitted)

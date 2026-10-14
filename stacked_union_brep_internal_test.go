@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -280,9 +281,9 @@ func TestStackedUnionBrepMisses(t *testing.T) {
 		doc := New()
 		plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10)
 		boss := internalBoxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15)
-		pp := plate.payload.(prismPayload)
+		pp := plate.n.Payload.(prismPayload)
 		pp.SectionDelta = 1e-12
-		_, ok, err := tryStackedUnion(t.Context(), bornBody(&Body{payload: pp}), boss)
+		_, ok, err := tryStackedUnion(t.Context(), bornBody(&Body{n: topo.Body{Payload: pp}}), boss)
 		require.NoError(t, err)
 		require.False(t, ok)
 	})
@@ -305,7 +306,7 @@ func TestStackedUnionBrepMisses(t *testing.T) {
 		require.NoError(t, err)
 		boss, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(25), Dir: Along})
 		require.NoError(t, err)
-		require.Zero(t, boss.payload.(prismPayload).SectionDelta)
+		require.Zero(t, boss.n.Payload.(prismPayload).SectionDelta)
 		_, ok, err := tryStackedUnion(t.Context(), plate, boss)
 		require.NoError(t, err)
 		require.False(t, ok)

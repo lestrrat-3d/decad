@@ -259,10 +259,10 @@ func (d *Document) resolveNeutralFace(nf NeutralFace) (*Face, error) {
 // recorded section is the section it denotes. A draft body is refused by name,
 // since a second draft is SX10's composition rule.
 func draftReceiver(b *Body) (prismPayload, error) {
-	if _, ok := b.payload.(draftPayload); ok {
+	if _, ok := b.n.Payload.(draftPayload); ok {
 		return prismPayload{}, fmt.Errorf(`%w: this evaluator drafts a straight prism once; the receiver is already a draft body (draft SD23)`, ErrUnsupported)
 	}
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	if !ok {
 		return prismPayload{}, fmt.Errorf(`%w: this evaluator drafts a straight prism only (an extrude, its filleted or chamfered result, a tube, or any of these placed) (draft SD23)`, ErrUnsupported)
 	}

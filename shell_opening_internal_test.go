@@ -70,7 +70,7 @@ func TestSideOpeningRegionsUChannel(t *testing.T) {
 	t.Run("inward", func(t *testing.T) {
 		t.Parallel()
 		box := internalBoxBody(t, New(), 0, 0, 40, 20, 10)
-		pp := box.payload.(prismPayload)
+		pp := box.n.Payload.(prismPayload)
 		budget := proofbound.NewWorkBudget(t.Context())
 		sec, err := testSideOpeningRegions(budget, pp, internalSideSegments(t, pp, false, 0), 2, 1, units.Millimeters(2), 2)
 		require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestSideOpeningRegionsUChannel(t *testing.T) {
 	t.Run("outward, one kept wall", func(t *testing.T) {
 		t.Parallel()
 		box := internalBoxBody(t, New(), 0, 0, 40, 20, 10)
-		pp := box.payload.(prismPayload)
+		pp := box.n.Payload.(prismPayload)
 		sides := internalSideSegments(t, pp, false, 0)
 		for k := range internalSideSegments(t, pp, false, 40) {
 			sides[k] = struct{}{}
@@ -113,7 +113,7 @@ func TestSideOpeningRegionsLPrism(t *testing.T) {
 	t.Parallel()
 	pt := func(u, v float64) planePoint { return planePoint{U: u, V: v} }
 	l := internalPolyPrismBodyAtZ(t, New(), [][2]float64{{0, 0}, {30, 0}, {30, 10}, {10, 10}, {10, 30}, {0, 30}}, 0, 10)
-	pp := l.payload.(prismPayload)
+	pp := l.n.Payload.(prismPayload)
 	budget := proofbound.NewWorkBudget(t.Context())
 	sec, err := testSideOpeningRegions(budget, pp, internalSideSegments(t, pp, false, 10), 2, 1, units.Millimeters(2), 2)
 	require.NoError(t, err)
@@ -146,8 +146,8 @@ func TestSideOpeningBrepChargesInexactThickness(t *testing.T) {
 	opening := Faces(Facing(r3.NewVec(-1, 0, 0)))
 	body, err := Shell(t.Context(), box, opening, thickness)
 	require.NoError(t, err)
-	bp, ok := body.payload.(brepPayload)
-	require.True(t, ok, "got %T", body.payload)
+	bp, ok := body.n.Payload.(brepPayload)
+	require.True(t, ok, "got %T", body.n.Payload)
 	require.Nil(t, bp.stack)
 	covers := func(bound float64) bool { return proofarith.FloatRat(bound).Cmp(gap) >= 0 }
 	floors := 0
@@ -231,7 +231,7 @@ func TestSideOpeningRegionsOblique(t *testing.T) {
 	t.Run("oblique removed face", func(t *testing.T) {
 		t.Parallel()
 		tri := internalPolyPrismBodyAtZ(t, New(), [][2]float64{{0, 0}, {12, 0}, {0, 9}}, 0, 10)
-		pp := tri.payload.(prismPayload)
+		pp := tri.n.Payload.(prismPayload)
 		budget := proofbound.NewWorkBudget(t.Context())
 		sec, err := testSideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, pt(12, 0), pt(0, 9)), 2, 1, units.Millimeters(3), 3)
 		require.NoError(t, err)
@@ -247,7 +247,7 @@ func TestSideOpeningRegionsOblique(t *testing.T) {
 	t.Run("slanted reflex end", func(t *testing.T) {
 		t.Parallel()
 		l := internalPolyPrismBodyAtZ(t, New(), [][2]float64{{0, 0}, {30, 0}, {30, 10}, {14, 10}, {10, 30}, {0, 30}}, 0, 10)
-		pp := l.payload.(prismPayload)
+		pp := l.n.Payload.(prismPayload)
 		budget := proofbound.NewWorkBudget(t.Context())
 		sec, err := testSideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, pt(14, 10), pt(10, 30)), 2, 1, units.Millimeters(2), 2)
 		require.NoError(t, err)
@@ -304,7 +304,7 @@ func TestSideOpeningCutReachCoversExactCut(t *testing.T) {
 	for _, f := range families {
 		for _, tmm := range []float64{0.5, 1, 1.25, 1.5, 2, 2.5, 3} {
 			body := internalPolyPrismBodyAtZ(t, New(), f.pts, 0, 10)
-			pp := body.payload.(prismPayload)
+			pp := body.n.Payload.(prismPayload)
 			budget := proofbound.NewWorkBudget(t.Context())
 			sec, err := testSideOpeningRegions(budget, pp, internalSideSegmentsOn(t, pp, f.a, f.b), 2, 1, units.Millimeters(tmm), tmm)
 			require.NoError(t, err, "%s at t = %g", f.name, tmm)
@@ -341,7 +341,7 @@ func internalDSectionPrism(t *testing.T) (prismPayload, int, int) {
 	require.NoError(t, err)
 	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
-	pp := body.payload.(prismPayload)
+	pp := body.n.Payload.(prismPayload)
 	arc, chord := -1, -1
 	for i, seg := range pp.Profile.Outer.Segments {
 		switch seg.(type) {
@@ -518,7 +518,7 @@ func TestSideOpeningRegionsArcArcCut(t *testing.T) {
 	require.NoError(t, err)
 	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
-	pp := body.payload.(prismPayload)
+	pp := body.n.Payload.(prismPayload)
 	removed := map[int]struct{}{}
 	for i, seg := range pp.Profile.Outer.Segments {
 		if a, ok := seg.(arcSeg); ok && a.Center == (planePoint{}) {
@@ -567,7 +567,7 @@ func internalArcSectionPrism(t *testing.T, build func(s *sketch.Sketch)) (prismP
 	require.NoError(t, err)
 	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
-	pp := body.payload.(prismPayload)
+	pp := body.n.Payload.(prismPayload)
 	removed := map[int]struct{}{}
 	for i, seg := range pp.Profile.Outer.Segments {
 		if a, ok := seg.(arcSeg); ok && a.Center == (planePoint{}) {

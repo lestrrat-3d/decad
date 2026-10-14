@@ -109,7 +109,7 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 	require.NoError(t, err)
 	trimmed, err := Intersect(t.Context(), toe, neutralArcSeamCone(t, doc, 8))
 	require.NoError(t, err)
-	trimmedPayload, ok := trimmed.payload.(facetedPayload)
+	trimmedPayload, ok := trimmed.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.NotNil(t, trimmedPayload.loftFacesTrim)
 	blankWorld := sketch.NewWorld()

@@ -57,7 +57,7 @@ func TestCertifyFacetedCopiesRejectsBodiesOutsideTheDocument(t *testing.T) {
 		bindFacetedCopyLineage(image, nil, r3.Identity(), false, nil)
 		bindFacetedCopyLineage(zero, source, r3.Identity(), false, nil)
 	})
-	require.Nil(t, zero.payload)
+	require.Nil(t, zero.n.Payload)
 }
 
 // TestDocumentHandleAndNodeIdentity checks the mapping the document compares

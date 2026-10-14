@@ -23,7 +23,7 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
-	fp, ok := b.payload.(facetedPayload)
+	fp, ok := b.n.Payload.(facetedPayload)
 	if !ok || fp.pointPlane == nil || fp.pointPlane.lower == nil ||
 		fp.pointPlane.base.pointSection == nil ||
 		proofbound.IsNonFinite(fp.pointPlaneCapDisplacement) || fp.pointPlaneCapDisplacement < 0 {

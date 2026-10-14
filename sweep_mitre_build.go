@@ -161,6 +161,6 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	mp.exact, mp.verts, mp.tris, mp.triFace, mp.faceRoles, mp.delta = exact, verts, a.Tris, a.TriFace, a.Roles, delta
 	mp.vertexBound = vertexBound
 	mp.localVol6, mp.localMoments = localVol6, localMoments
-	body.payload = mp
+	body.n.Payload = mp
 	return body, nil
 }

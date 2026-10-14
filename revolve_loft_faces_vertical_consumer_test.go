@@ -66,8 +66,8 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		mutateCurvedCapFaceOwner(t, tooth, proof, false)
 	})
 	t.Run("cap face index outside live faces", func(t *testing.T) {
-		original := tooth.payload
-		defer func() { tooth.payload = original }()
+		original := tooth.n.Payload
+		defer func() { tooth.n.Payload = original }()
 		payload := original.(facetedPayload)
 		payload.faceOf = slices.Clone(payload.faceOf)
 		changed := false
@@ -80,7 +80,7 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		if !changed {
 			t.Fatal("the real producer lacks a toe cap triangle")
 		}
-		tooth.payload = payload
+		tooth.n.Payload = payload
 		assertChangedCurvedTrimRefuses(t, tooth, proof)
 	})
 	t.Run("extra blank face", func(t *testing.T) {
@@ -112,15 +112,15 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		}
 	})
 	t.Run("changed tooth transform", func(t *testing.T) {
-		original := tooth.payload
-		defer func() { tooth.payload = original }()
+		original := tooth.n.Payload
+		defer func() { tooth.n.Payload = original }()
 		payload := original.(facetedPayload)
 		shift, err := r3.Translation(r3.Vec{X: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
 		payload.xform = shift
-		tooth.payload = payload
+		tooth.n.Payload = payload
 		if revolveLoftFacesTrimCurrent(tooth, proof.trim) {
 			t.Fatal("changed tooth transform retained a current source record")
 		}
@@ -199,8 +199,8 @@ func assertChangedCurvedTrimRefuses(t *testing.T, tooth *Body,
 func mutateCurvedCapFaceOwner(t *testing.T, tooth *Body,
 	proof *revolveLoftFacesSourceCertificate, capToSource bool) {
 	t.Helper()
-	original := tooth.payload
-	defer func() { tooth.payload = original }()
+	original := tooth.n.Payload
+	defer func() { tooth.n.Payload = original }()
 	payload := original.(facetedPayload)
 	payload.faceOf = slices.Clone(payload.faceOf)
 	capGroup := proof.trim.toeCapGroup
@@ -222,15 +222,15 @@ func mutateCurvedCapFaceOwner(t *testing.T, tooth *Body,
 	} else {
 		payload.faceOf[sourceTriangle] = payload.faceOf[capTriangle]
 	}
-	tooth.payload = payload
+	tooth.n.Payload = payload
 	assertChangedCurvedTrimRefuses(t, tooth, proof)
 }
 
 func rejectChangedCurvedSourceOwner(t *testing.T, tooth *Body, ref provenance.Ref,
 	owner *Face, accepts func() bool) {
 	t.Helper()
-	original := tooth.payload
-	defer func() { tooth.payload = original }()
+	original := tooth.n.Payload
+	defer func() { tooth.n.Payload = original }()
 	payload := original.(facetedPayload)
 	payload.faceOf = slices.Clone(payload.faceOf)
 	other := -1
@@ -254,7 +254,7 @@ func rejectChangedCurvedSourceOwner(t *testing.T, tooth *Body, ref provenance.Re
 	if !changed {
 		t.Fatal("the retained source has no triangle")
 	}
-	tooth.payload = payload
+	tooth.n.Payload = payload
 	if accepts() {
 		t.Fatal("changed live triangle owner was admitted")
 	}

@@ -986,7 +986,7 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 			proofbound.RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(exactRadius.Hi, heldRat))))
 		radiusBound = proofbound.AbsSumUpper(gap, delta)
 	}
-	e.n.CurveBound, e.n.CurveBounded = pl.CircleCurveBound(cu, cv, z, pl.axialDelta(), 0, r, radiusBound, center, axis)
+	e.n.CurveBound, e.n.CurveBounded = pl.CircleCurveBound(cu, cv, z, pl.AxialDelta(), 0, r, radiusBound, center, axis)
 	return e
 }
 

@@ -189,9 +189,9 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	if want.body == nil {
 		return
 	}
-	wantPayload, ok := want.body.payload.(facetedPayload)
+	wantPayload, ok := want.body.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	gotPayload, ok := o.body.payload.(facetedPayload)
+	gotPayload, ok := o.body.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Equal(t, wantPayload.verts, gotPayload.verts)
 	require.Equal(t, wantPayload.tris, gotPayload.tris)
@@ -218,8 +218,8 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	require.Equal(t, wantRecord.capOutlines, gotRecord.capOutlines)
 	require.Equal(t, wantRecord.bridgeBound, gotRecord.bridgeBound)
 	require.Equal(t, wantRecord.bridgeVolume, gotRecord.bridgeVolume)
-	wantHalf := wantRecord.lowerHalf.payload.(facetedPayload)
-	gotHalf := gotRecord.lowerHalf.payload.(facetedPayload)
+	wantHalf := wantRecord.lowerHalf.n.Payload.(facetedPayload)
+	gotHalf := gotRecord.lowerHalf.n.Payload.(facetedPayload)
 	wantJoin, gotJoin := wantHalf.loftCylinderJoin, gotHalf.loftCylinderJoin
 	require.NotNil(t, wantJoin)
 	require.NotNil(t, gotJoin)
@@ -228,7 +228,7 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	// The lower half's Join record holds the placed teeth, the part this
 	// change computes on goroutines: every tooth body and its proof witness.
 	// The half blank is evaluated afresh by each call.
-	require.Equal(t, wantJoin.blank.payload, gotJoin.blank.payload)
+	require.Equal(t, wantJoin.blank.n.Payload, gotJoin.blank.n.Payload)
 	require.Equal(t, measurementFromInternal(wantJoin.blank.n.Volume), measurementFromInternal(gotJoin.blank.n.Volume))
 	require.Equal(t, boxFromInternal(wantJoin.blank.n.Bounds), boxFromInternal(gotJoin.blank.n.Bounds))
 	require.Equal(t, wantJoin.axialBridge, gotJoin.axialBridge)
@@ -241,7 +241,7 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	for _, pair := range [][2][]*Body{{wantJoin.teeth, gotJoin.teeth}, {wantJoin.proofTeeth, gotJoin.proofTeeth}} {
 		require.Len(t, pair[1], len(pair[0]))
 		for i := range pair[0] {
-			require.Equal(t, pair[0][i].payload, pair[1][i].payload, "tooth %d payload", i)
+			require.Equal(t, pair[0][i].n.Payload, pair[1][i].n.Payload, "tooth %d payload", i)
 			require.Equal(t, measurementFromInternal(pair[0][i].n.Volume), measurementFromInternal(pair[1][i].n.Volume), "tooth %d volume", i)
 			require.Equal(t, boxFromInternal(pair[0][i].n.Bounds), boxFromInternal(pair[1][i].n.Bounds), "tooth %d bounds", i)
 		}
@@ -308,7 +308,7 @@ func TestLoftMirrorCylinderPairsParallelMatchesSerial(t *testing.T) {
 		require.NotNil(t, serial.body)
 		moved := 0
 		for _, p := range f.pairs {
-			if p.payload.(facetedPayload).xform != r3.Identity() {
+			if p.n.Payload.(facetedPayload).xform != r3.Identity() {
 				moved++
 			}
 		}
@@ -330,11 +330,11 @@ func TestLoftMirrorCylinderPairsParallelMatchesSerial(t *testing.T) {
 		// A copy whose placement record names another source ends the Union
 		// with an error naming that pair, whichever teeth are placed beside it.
 		pairs := f.pairs
-		good := pairs[2].payload
+		good := pairs[2].n.Payload
 		fp := good.(facetedPayload)
 		fp.loftMirrorCopy = &loftMirrorPlacementRecord{source: &loftMirrorJoinRecord{}, motion: fp.loftMirrorCopy.motion}
-		pairs[2].payload = fp
-		t.Cleanup(func() { pairs[2].payload = good })
+		pairs[2].n.Payload = fp
+		t.Cleanup(func() { pairs[2].n.Payload = good })
 		serial := f.callOld(t.Context(), ref, pairs)
 		require.ErrorIs(t, serial.err, ErrUnsupported)
 		require.ErrorContains(t, serial.err, "pair 3 has no authenticated axial placement")
@@ -352,8 +352,8 @@ func TestLoftMirrorCylinderPlaceTeethCancelled(t *testing.T) {
 	t.Parallel()
 	f := newTeethFixture(t)
 	ref := f.d.nextProducerID()
-	record := f.pairs[0].payload.(facetedPayload).loftMirrorJoin
-	lower := record.lower.payload.(loftPayload)
+	record := f.pairs[0].n.Payload.(facetedPayload).loftMirrorJoin
+	lower := record.lower.n.Payload.(loftPayload)
 	checked := loftMirrorCylinderCheckPairs(f.d, f.pairs, record, lower.frame1.Origin().Z)
 	run := func(cancelAt int64, workers int) (int64, []*Body, error) {
 		ctx := &pollCancelContext{Context: t.Context(), cancelAt: cancelAt}
@@ -361,7 +361,7 @@ func TestLoftMirrorCylinderPlaceTeethCancelled(t *testing.T) {
 			if checked.motions[i] == r3.Identity() {
 				return record.lower, nil
 			}
-			return lower.placed(ctx, f.d, ref, checked.motions[i])
+			return placePayload(ctx, lower, f.d, ref, checked.motions[i])
 		})
 		return ctx.calls.Load(), teeth, err
 	}
@@ -430,8 +430,8 @@ func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 	t.Parallel()
 	f := newTeethFixture(t)
 	ref := f.d.nextProducerID()
-	record := f.pairs[0].payload.(facetedPayload).loftMirrorJoin
-	lower := record.lower.payload.(loftPayload)
+	record := f.pairs[0].n.Payload.(facetedPayload).loftMirrorJoin
+	lower := record.lower.n.Payload.(loftPayload)
 	checked := loftMirrorCylinderCheckPairs(f.d, f.pairs, record, lower.frame1.Origin().Z)
 	require.Equal(t, len(f.pairs), checked.stop)
 	live, stopLive := context.WithCancel(t.Context())
@@ -447,7 +447,7 @@ func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 			if checked.motions[i] == r3.Identity() {
 				return record.lower, nil
 			}
-			return lower.placed(ctx, f.d, ref, checked.motions[i])
+			return placePayload(ctx, lower, f.d, ref, checked.motions[i])
 		}
 	}
 	serial, err := loftMirrorCylinderPlaceTeeth(checked.stop, 1, placeWith())
@@ -456,7 +456,7 @@ func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, parallel, len(serial))
 	for i := range serial {
-		want, got := serial[i].payload.(loftPayload), parallel[i].payload.(loftPayload)
+		want, got := serial[i].n.Payload.(loftPayload), parallel[i].n.Payload.(loftPayload)
 		if checked.motions[i] == r3.Identity() {
 			require.Same(t, serial[i], parallel[i])
 			continue
@@ -522,11 +522,11 @@ func TestLoftMirrorCylinderPlaceTeethFirstError(t *testing.T) {
 // ends the call. Test-only; the production function must answer as it does.
 func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID,
 	blank *Body, pairs []*Body, source *loftMirrorJoinRecord) (*Body, bool, error) {
-	pp, blankOK := blank.payload.(prismPayload)
+	pp, blankOK := blank.n.Payload.(prismPayload)
 	if !blankOK || !loftMirrorCylinderBlank(pp) || len(pairs) == 0 || len(pairs) > 32 {
 		return nil, false, nil
 	}
-	first, firstOK := pairs[0].payload.(facetedPayload)
+	first, firstOK := pairs[0].n.Payload.(facetedPayload)
 	if !firstOK || first.loftMirrorJoin == nil || first.xform != r3.Identity() ||
 		!first.contactAudited || source != nil && source != first.loftMirrorJoin {
 		return nil, false, nil
@@ -536,8 +536,8 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 		record.lower.n.Doc != documentNode(d) || record.upper.n.Doc != documentNode(d) {
 		return nil, false, nil
 	}
-	lower, lowOK := record.lower.payload.(loftPayload)
-	upper, upOK := record.upper.payload.(loftPayload)
+	lower, lowOK := record.lower.n.Payload.(loftPayload)
+	upper, upOK := record.upper.n.Payload.(loftPayload)
 	if !lowOK || !upOK || !lower.authenticatedReconstruction ||
 		!upper.authenticatedReconstruction || lower.sourceIdentity == nil ||
 		lower.sourceIdentity != upper.sourceIdentity ||
@@ -568,7 +568,7 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 	upperBridges := make([]float64, len(pairs))
 	var bridgeBound, bridgeVolume float64
 	for i, pair := range pairs {
-		payload, ok := pair.payload.(facetedPayload)
+		payload, ok := pair.n.Payload.(facetedPayload)
 		if !ok || !payload.contactAudited || pair.n.Doc != documentNode(d) {
 			return nil, false, nil
 		}
@@ -590,7 +590,7 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 		}
 		tooth := record.lower
 		if motion != r3.Identity() {
-			tooth, err = lower.placed(ctx, d, ref, motion)
+			tooth, err = placePayload(ctx, lower, d, ref, motion)
 			if err != nil {
 				return nil, true, err
 			}

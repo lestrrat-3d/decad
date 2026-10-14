@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -203,23 +204,23 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	if o.NoOpenings {
 		// The one nil-selector shell: no face is removed, so there is no
 		// selection to resolve. SX10 still leads for a cap-blend receiver.
-		if err := requireNotCapBlendReceiver(b.payload, "shells"); err != nil {
+		if err := requireNotCapBlendReceiver(b.n.Payload, "shells"); err != nil {
 			return nil, err
 		}
 		// Reach §9.3: a full turn over a hole-free meridian keeps every face
 		// and sweeps its closed wall region over the whole turn.
-		if rp, ok := b.payload.(revolvePayload); ok && rp.full && len(rp.profile.Holes) == 0 {
+		if rp, ok := b.n.Payload.(revolvePayload); ok && rp.full && len(rp.profile.Holes) == 0 {
 			return b.shellRevolve(ctx, rp, nil, s, t, tmm, tDelta)
 		}
 		// Reach BX5: a hole-free straight prism keeps both caps and lines
 		// them with a wall, closing a cavity.
-		if pp, ok := b.payload.(prismPayload); ok && len(pp.Profile.Holes) == 0 {
+		if pp, ok := b.n.Payload.(prismPayload); ok && len(pp.Profile.Holes) == 0 {
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
-		if pp, ok := straightSweepPrismReduction(b.payload); ok && len(pp.Profile.Holes) == 0 {
+		if pp, ok := straightSweepPrismReduction(b.n.Payload); ok && len(pp.Profile.Holes) == 0 {
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
-		if sp, ok := b.payload.(stackedPrismPayload); ok && sense == Inward {
+		if sp, ok := b.n.Payload.(stackedPrismPayload); ok && sense == Inward {
 			view, _, err := brepOfStackedWithRoles(ctx, sp)
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, ctxErr
@@ -249,7 +250,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 				}
 			}
 		}
-		return nil, refuseClosedShell(b.payload)
+		return nil, refuseClosedShell(b.n.Payload)
 	}
 	// Reject foreign implementations before invoking their callback.
 	switch {
@@ -265,24 +266,24 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 
 	// SX10: a capBlendPayload receiver is staged before the generic "not a
 	// prism" refusal, so the more specific reason leads.
-	if err := requireNotCapBlendReceiver(b.payload, "shells"); err != nil {
+	if err := requireNotCapBlendReceiver(b.n.Payload, "shells"); err != nil {
 		return nil, err
 	}
 	if out, taken, err := tryDraftCircleShell(ctx, b, removed, sense, tmm, tDelta); taken {
 		return out, err
 	}
-	if err := requireNotDraftReceiver(b.payload, "shells"); err != nil {
+	if err := requireNotDraftReceiver(b.n.Payload, "shells"); err != nil {
 		return nil, err
 	}
 	// Reach RX2 (docs/modify-reach-design.md §9.3): a revolve receiver shells
 	// its meridian and sweeps the wall over its own angular interval.
-	if rp, ok := b.payload.(revolvePayload); ok {
+	if rp, ok := b.n.Payload.(revolvePayload); ok {
 		return b.shellRevolve(ctx, rp, removed, s, t, tmm, tDelta)
 	}
-	if tp, ok := b.payload.(twistedSweepPayload); ok {
+	if tp, ok := b.n.Payload.(twistedSweepPayload); ok {
 		return b.shellTwistedSweep(ctx, tp, removed, sense, tmm, tDelta)
 	}
-	if fp, ok := b.payload.(facetedPayload); ok && fp.prismUnionFillet != nil {
+	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.prismUnionFillet != nil {
 		if out, matched, err := b.shellPrismUnionBoss(ctx, fp, removed, sense, tmm, tDelta); matched || err != nil {
 			return out, err
 		}
@@ -306,12 +307,12 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	// caps by role, and side faces by the receiver's exact prism segment,
 	// which routes the call to the side opening (shell-opening §5). A brep
 	// receiver's route P takes caps only (SB3).
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	caps := prismCapsOf(b)
 	var sweepStraight bool
 	if route.prism != nil {
 		pp, ok, caps = *route.prism, true, route.caps
-	} else if sweepPrism, admitted := straightSweepPrismReduction(b.payload); admitted {
+	} else if sweepPrism, admitted := straightSweepPrismReduction(b.n.Payload); admitted {
 		pp, ok, sweepStraight = sweepPrism, true, true
 	}
 	if !ok {
@@ -491,7 +492,7 @@ func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp 
 // meridian SX8, a partial revolve SX8 (it keeps both angular caps), and any
 // other receiver base S3. Every one is
 // ErrUnsupported: the closed body exists, and this evaluator does not build it.
-func refuseClosedShell(payload featurePayload) error {
+func refuseClosedShell(payload topo.Payload) error {
 	switch p := payload.(type) {
 	case facetedPayload:
 		return fmt.Errorf(`%w: this evaluator modifies no faceted boolean result (modify-reach SX9)`, ErrUnsupported)

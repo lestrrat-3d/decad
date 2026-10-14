@@ -52,7 +52,7 @@ func roundedTwistLocalAreaSource(t *testing.T) (*Document, *Body, twistedSweepPa
 	doc := New()
 	body, err := Sweep(t.Context(), doc, s, profile, path, WithSweepTwist(units.Degrees(30)))
 	require.NoError(t, err)
-	payload, ok := body.payload.(twistedSweepPayload)
+	payload, ok := body.n.Payload.(twistedSweepPayload)
 	require.True(t, ok)
 	return doc, body, payload
 }
@@ -86,7 +86,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 			retainTwistAreaCells: true,
 		}, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 		require.NoError(t, buildErr)
-		candidateHeld, ok := part.payload.(loftPayload)
+		candidateHeld, ok := part.n.Payload.(loftPayload)
 		require.True(t, ok)
 		n := len(candidateHeld.segment[0])
 		if len(source.mesh.n.Vertices) == (candidate+1)*n &&
@@ -171,7 +171,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 			retainTwistAreaCells: true,
 		}, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 		require.NoError(t, err)
-		heldCells[i], ok = part.payload.(loftPayload)
+		heldCells[i], ok = part.n.Payload.(loftPayload)
 		require.True(t, ok)
 	}
 	for i, cell := range heldCells {

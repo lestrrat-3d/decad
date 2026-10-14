@@ -33,7 +33,7 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 
 	check := func(t *testing.T, body *Body) {
 		t.Helper()
-		payload := body.payload.(chainPayload)
+		payload := body.n.Payload.(chainPayload)
 		profile := payload.prism().Profile
 		work := freeform.NewFreeformWork()
 		captures := make([]chainWalkCapture, len(payload.chains))

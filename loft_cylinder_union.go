@@ -75,14 +75,14 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 	}
 	var blank *Body
 	var teeth []*Body
-	if _, ok := a.payload.(prismPayload); ok {
+	if _, ok := a.n.Payload.(prismPayload); ok {
 		blank, teeth = a, []*Body{b}
-	} else if _, ok := b.payload.(prismPayload); ok {
+	} else if _, ok := b.n.Payload.(prismPayload); ok {
 		blank, teeth = b, []*Body{a}
-	} else if fp, ok := a.payload.(facetedPayload); ok && fp.loftCylinderJoin != nil && fp.xform == r3.Identity() {
+	} else if fp, ok := a.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil && fp.xform == r3.Identity() {
 		blank = fp.loftCylinderJoin.blank
 		teeth = append(append([]*Body(nil), fp.loftCylinderJoin.teeth...), b)
-	} else if fp, ok := b.payload.(facetedPayload); ok && fp.loftCylinderJoin != nil && fp.xform == r3.Identity() {
+	} else if fp, ok := b.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil && fp.xform == r3.Identity() {
 		blank = fp.loftCylinderJoin.blank
 		teeth = append(append([]*Body(nil), fp.loftCylinderJoin.teeth...), a)
 	} else {
@@ -103,7 +103,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 	if upperBridges != nil && len(upperBridges) != len(teeth) {
 		return nil, false, nil
 	}
-	pp, ok := blank.payload.(prismPayload)
+	pp, ok := blank.n.Payload.(prismPayload)
 	if !ok || pp.SurfaceResult || pp.Xform != r3.Identity() ||
 		pp.Z0Delta != 0 || pp.Z1Delta != 0 || pp.SectionDelta != 0 ||
 		len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
@@ -122,7 +122,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 	parts := make([]loftCylinderTooth, len(teeth))
 	var source *loftSourceIdentity
 	for i, tooth := range teeth {
-		lp, ok := tooth.payload.(loftPayload)
+		lp, ok := tooth.n.Payload.(loftPayload)
 		if !ok || !lp.authenticatedReconstruction || lp.surfaceResult ||
 			lp.sourceIdentity == nil || len(lp.profile0.Holes) != 0 ||
 			len(lp.profile1.Holes) != 0 || len(lp.profile0.Outer.Segments) != 6 ||
@@ -150,7 +150,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 			return nil, false, nil
 		}
 		tooth = proofTooth
-		lp, ok = tooth.payload.(loftPayload)
+		lp, ok = tooth.n.Payload.(loftPayload)
 		if !ok || !loftCylinderAxialPlacement(lp.xform) {
 			return nil, false, nil
 		}

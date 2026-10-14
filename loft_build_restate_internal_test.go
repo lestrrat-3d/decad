@@ -39,7 +39,7 @@ func TestLoftSheetAuditRejectsCapInPlaceOfWall(t *testing.T) {
 // loftProofOf reads the payload's own composed mesh proof off a built body.
 func loftProofOf(t *testing.T, body *Body) (loftPayload, loftmesh.MeshProof) {
 	t.Helper()
-	lp, ok := body.payload.(loftPayload)
+	lp, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok, "a lofted body carries a loftPayload")
 	return lp, lp.proof
 }

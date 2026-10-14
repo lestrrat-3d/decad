@@ -504,12 +504,12 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	boxB, okB := sourceBoxAtPose(b, pb.From)
 	if !okA || !okB {
 		if okA {
-			if _, faceted := b.payload.(facetedPayload); faceted {
+			if _, faceted := b.n.Payload.(facetedPayload); faceted {
 				return d.sweepFacetedFloor(ctx, a, b, pa, pb, req, report, boxA, false)
 			}
 		}
 		if okB {
-			if _, faceted := a.payload.(facetedPayload); faceted {
+			if _, faceted := a.n.Payload.(facetedPayload); faceted {
 				return d.sweepFacetedFloor(ctx, a, b, pa, pb, req, report, boxB, true)
 			}
 		}
@@ -635,7 +635,7 @@ func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 	report := &ContactReport{A: r.a, B: r.b, Request: r.req.ContactRequest}
 	if r.facetedFloor {
 		floor, faceted := a, b
-		if _, ok := r.a.payload.(facetedPayload); ok {
+		if _, ok := r.a.n.Payload.(facetedPayload); ok {
 			floor, faceted = b, a
 		}
 		if proofarith.DyCmp(faceted.lo[2], floor.hi[2]) < 0 {

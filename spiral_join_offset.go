@@ -32,7 +32,7 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		len(original.source) != len(original.n.Triangles) {
 		return nil, false, nil
 	}
-	p, ok := tooth.payload.(facetedPayload)
+	p, ok := tooth.n.Payload.(facetedPayload)
 	if !ok || p.loftFacesTrim != proof.tooth {
 		return nil, false, nil
 	}

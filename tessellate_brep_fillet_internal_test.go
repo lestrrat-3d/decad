@@ -143,7 +143,7 @@ func TestTessellateBrepFilletPatchesWithinBound(t *testing.T) {
 func TestBrepFilletMotionCoversEnds(t *testing.T) {
 	t.Parallel()
 	out, _ := filletLoopOfFace(t, internalTrapezoidPocket(t), routeEZ, r3.NewVec(0, 0, 10), 0, 1)
-	bp := out.payload.(brepPayload)
+	bp := out.n.Payload.(brepPayload)
 	delta := bp.faces[bp.loopBands[0].face].delta
 	require.Positive(t, delta)
 

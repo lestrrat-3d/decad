@@ -426,7 +426,7 @@ and S5 (stage 4) decide whether the blend exists before any trim is measured
 | **BB4** | route E fillet/chamfer | `brepPayload`, `stack` nil | the receiver's faces, rewritten and restated in place, plus one swept face per edge; every edge on exactly two faces | `face(k)`/`wall(k)` by result index; each blend face also carries `fillet(k)`/`chamfer(k)` for its own `k` |
 
 The blend role rides on `brepFace.blend`, so a placement re-mints it
-(`brepPayload.placed` re-evaluates the record). No face carries a receiver role
+(`brepPayload.Placed` re-evaluates the record). No face carries a receiver role
 or an operand's provenance (modify §11, general-boolean §4.2). A BB4 result is
 a brep like any other: route E admits it again under Table EB, and SB7 refuses
 an edge that now ends on a blend face.

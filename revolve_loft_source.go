@@ -45,7 +45,7 @@ func recordedRevolveSection(blank *Body) ([]revolveSectionSpan, int, r3.Frame, b
 	if blank == nil {
 		return nil, -1, empty, false
 	}
-	rp, ok := blank.payload.(revolvePayload)
+	rp, ok := blank.n.Payload.(revolvePayload)
 	if !ok || !rp.full || rp.surfaceResult || rp.sectionDelta != 0 ||
 		rp.xform != r3.Identity() || len(rp.profile.Holes) != 0 ||
 		rp.frame.Origin() != (r3.Vec{}) || rp.frame.U() != (r3.Vec{X: 1}) ||
@@ -141,7 +141,7 @@ func revolveForwardCollinear(a, b, c planePoint) bool {
 }
 
 func revolveSpanFace(blank *Body, span revolveSectionSpan) (*Face, bool) {
-	rp, ok := blank.payload.(revolvePayload)
+	rp, ok := blank.n.Payload.(revolvePayload)
 	if !ok {
 		return nil, false
 	}

@@ -115,7 +115,7 @@ func Offset(ctx context.Context, b *Body, distance units.Value, opts ...OffsetOp
 		return nil, fmt.Errorf(`%w: Offset requires a sheet body`, ErrUnsupported)
 	}
 	var result *Body
-	switch payload := b.payload.(type) {
+	switch payload := b.n.Payload.(type) {
 	case patchPayload:
 		result, err = offsetPatch(ctx, d, payload, side, dmm, dDelta)
 	case prismPayload:
@@ -167,11 +167,11 @@ func offsetPatch(ctx context.Context, d *Document, pp patchPayload, side OffsetS
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the offset translation is not a placement: %s`, ErrUnsupported, err)
 	}
-	composed, err := pp.transform().Then(motion)
+	composed, err := pp.Transform().Then(motion)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: composing the offset placement failed: %s`, ErrUnsupported, err)
 	}
-	return pp.placed(ctx, d, d.nextProducerID(), composed)
+	return placePayload(ctx, pp, d, d.nextProducerID(), composed)
 }
 
 // offsetPrism is §17.2's prism arm: the source's own sweep over the offset

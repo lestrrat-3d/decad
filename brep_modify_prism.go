@@ -114,7 +114,7 @@ type brepPrismRead struct {
 // prism's start cap and top its end cap. A stacked receiver's faces carry the
 // stacked body's roles, not its face view's, so it names no cap face.
 func (r brepPrismRead) caps(b *Body, bp brepPayload) prismCaps {
-	if _, ok := b.payload.(brepPayload); !ok {
+	if _, ok := b.n.Payload.(brepPayload); !ok {
 		return prismCaps{}
 	}
 	roles := facesByRole(b)

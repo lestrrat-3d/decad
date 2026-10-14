@@ -25,7 +25,7 @@ func TestShellClosedPrismLevelsCarryThicknessConversion(t *testing.T) {
 	box := internalBoxBody(t, doc, 0, 0, 100, 60, 20)
 	closed, err := Shell(t.Context(), box, nil, units.Inches(0.1), WithNoOpenings())
 	require.NoError(t, err)
-	sp := closed.payload.(stackedPrismPayload)
+	sp := closed.n.Payload.(stackedPrismPayload)
 	require.Len(t, sp.slabs, 3)
 	require.Positive(t, sp.slabs[0].Z1Delta, `z0 + t carries the conversion`)
 	require.Positive(t, sp.slabs[2].Z0Delta, `z1 − t carries the conversion`)

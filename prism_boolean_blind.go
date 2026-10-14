@@ -10,6 +10,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // tryBlindStackedCut admits a cleanly nested blind tool against a prism,
@@ -160,7 +161,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 // reuses an exact existing interface. Every reached slab needs its own
 // whole-loop cut proof, and the resulting interfaces must pass the audit.
 func tryStackedBlindCut(ctx context.Context, a, b *Body) (stackedPrismPayload, bool, error) {
-	sp, ok := a.payload.(stackedPrismPayload)
+	sp, ok := a.n.Payload.(stackedPrismPayload)
 	if !ok || len(sp.outerRuns()) != 1 {
 		return stackedPrismPayload{}, false, nil
 	}
@@ -171,7 +172,7 @@ func tryStackedBlindCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	outer := sp.outerPrism()
-	proxy := bornBody(&Body{payload: outer})
+	proxy := bornBody(&Body{n: topo.Body{Payload: outer}})
 	_, tool, ok, err := admitPrismPairBudget(budget, meshbool.OpCut, proxy, b)
 	if err != nil || !ok {
 		return stackedPrismPayload{}, false, err
@@ -266,7 +267,7 @@ func tryStackedBlindCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 // private scene proves either a new region or that the tool lies wholly in an
 // existing hole and leaves that slab unchanged.
 func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload, bool, error) {
-	sp, ok := a.payload.(stackedPrismPayload)
+	sp, ok := a.n.Payload.(stackedPrismPayload)
 	if !ok {
 		return stackedPrismPayload{}, false, nil
 	}
@@ -278,7 +279,7 @@ func tryStackedThroughCut(ctx context.Context, a, b *Body) (stackedPrismPayload,
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	outer := sp.outerPrism()
-	proxy := bornBody(&Body{payload: outer})
+	proxy := bornBody(&Body{n: topo.Body{Payload: outer}})
 	_, tool, ok, err := admitPrismPairBudget(budget, meshbool.OpCut, proxy, b)
 	if err != nil || !ok {
 		return stackedPrismPayload{}, false, err

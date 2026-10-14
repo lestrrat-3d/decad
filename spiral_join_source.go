@@ -159,7 +159,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	if !ok {
 		return nil, false, nil
 	}
-	p, ok := tooth.payload.(facetedPayload)
+	p, ok := tooth.n.Payload.(facetedPayload)
 	if !ok || p.loftFacesTrim == nil || p.xform != r3.Identity() {
 		return nil, false, nil
 	}

@@ -44,13 +44,13 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 	if op != meshbool.OpCut {
 		return nil, false, nil
 	}
-	joined, ok := target.payload.(facetedPayload)
+	joined, ok := target.n.Payload.(facetedPayload)
 	if !ok || joined.loftCylinderJoin == nil || !joined.contactAudited ||
 		joined.xform != r3.Identity() {
 		return nil, false, nil
 	}
 	record := joined.loftCylinderJoin
-	prism, ok := tool.payload.(prismPayload)
+	prism, ok := tool.n.Payload.(prismPayload)
 	if !ok || prism.SurfaceResult || prism.Xform != r3.Identity() ||
 		prism.SectionDelta != 0 || prism.Z0Delta != 0 || prism.Z1Delta != 0 ||
 		prism.Frame.U() != (r3.Vec{X: 1}) || prism.Frame.V() != (r3.Vec{Y: 1}) ||

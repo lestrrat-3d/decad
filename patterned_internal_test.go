@@ -36,7 +36,7 @@ func patternedPrism(t *testing.T, doc *Document, u0, v0, u1, v1, r float64) *Bod
 
 func patternedGroup(t *testing.T, b *Body) stackedPrismPayload {
 	t.Helper()
-	sp, ok := b.payload.(stackedPrismPayload)
+	sp, ok := b.n.Payload.(stackedPrismPayload)
 	require.True(t, ok)
 	require.True(t, sp.isGroup())
 	return sp
@@ -62,7 +62,7 @@ func TestPatternedGroupDisplacement(t *testing.T) {
 		require.Zero(t, sp.sectionDelta)
 		got, err := Cut(t.Context(), plate, tool)
 		require.NoError(t, err)
-		pp, ok := got.payload.(prismPayload)
+		pp, ok := got.n.Payload.(prismPayload)
 		require.True(t, ok)
 		require.Len(t, pp.Profile.Holes, 6)
 		require.Zero(t, pp.SectionDelta)
@@ -80,7 +80,7 @@ func TestPatternedGroupDisplacement(t *testing.T) {
 			part, err = Cut(t.Context(), part, inst)
 			require.NoError(t, err)
 		}
-		pp, ok := part.payload.(prismPayload)
+		pp, ok := part.n.Payload.(prismPayload)
 		require.True(t, ok)
 		require.Positive(t, pp.SectionDelta, "the contrast: placed tools charge their re-expression")
 	})
@@ -129,7 +129,7 @@ func TestPatternedSixPinsGroup(t *testing.T) {
 	copies, err := PatternCopies(t.Context(), twin, CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 6})
 	require.NoError(t, err)
 	for i, c := range copies {
-		pp, ok := c.payload.(prismPayload)
+		pp, ok := c.n.Payload.(prismPayload)
 		require.True(t, ok)
 		require.Equal(t, pp.Profile, sp.slabs[0].Regions[i+1], "a copy and a group instance are the same record")
 		require.LessOrEqual(t, pp.SectionDelta, sp.sectionDelta)

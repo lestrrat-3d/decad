@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -270,7 +271,7 @@ type sweepPayload struct {
 // straightSweepPrismReduction returns the exact prism built for one solid,
 // zero-twist, one-line profile Sweep. Modifiers still apply their own edge or
 // face selection gates before using the reduction.
-func straightSweepPrismReduction(payload featurePayload) (prismPayload, bool) {
+func straightSweepPrismReduction(payload topo.Payload) (prismPayload, bool) {
 	sp, ok := payload.(sweepPayload)
 	if !ok || sp.surfaceResult || sp.arc || sp.closedCircle || sp.closedComposite ||
 		len(sp.spans) != 0 || sp.path == nil || len(sp.path.Records) != 1 || len(sp.path.Segments) != 1 {
@@ -282,7 +283,7 @@ func straightSweepPrismReduction(payload featurePayload) (prismPayload, bool) {
 	return sp.prism, true
 }
 
-func (sp sweepPayload) transform() r3.Transform {
+func (sp sweepPayload) Transform() r3.Transform {
 	if len(sp.spans) != 0 {
 		return sp.spans[0].transform()
 	}
@@ -292,7 +293,8 @@ func (sp sweepPayload) transform() r3.Transform {
 	return sp.prism.Xform
 }
 
-func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (sp sweepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	if len(sp.spans) != 0 {
 		sp.spans = append([]sweepSpanPayload(nil), sp.spans...)
 		sp.prism.Xform = composed
@@ -300,7 +302,7 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 			sp.spans[i].prism.Xform = composed
 			sp.spans[i].revolve.xform = composed
 		}
-		return replayCompositeSweep(ctx, d, ref, sp)
+		return placedNode(replayCompositeSweep(ctx, d, ref, sp))
 	}
 	if sp.arc {
 		sp.revolve.xform = composed
@@ -310,7 +312,7 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 			return nil, err
 		}
 		finishArcSweepBody(body, sp)
-		return body, nil
+		return bodyNode(body), nil
 	}
 	sp.prism.Xform = composed
 	body, err := evalPrismContext(ctx, d, ref, sp.prism, freeform.NewFreeformWork())
@@ -318,7 +320,7 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 		return nil, err
 	}
 	finishStraightSweepBody(body, sp)
-	return body, nil
+	return bodyNode(body), nil
 }
 
 // This section is the chain-fed form of Sweep, docs/sweep-design.md §15: the open sketch
@@ -345,21 +347,22 @@ type chainSweepPayload struct {
 	spans   []chainSweepSpanPayload
 }
 
-// transform is the accumulated rigid placement.
-func (sp chainSweepPayload) transform() r3.Transform {
+// Transform is the accumulated rigid placement.
+func (sp chainSweepPayload) Transform() r3.Transform {
 	if len(sp.spans) != 0 {
 		return sp.spans[0].transform()
 	}
 	if sp.arc {
-		return sp.revolve.transform()
+		return sp.revolve.Transform()
 	}
-	return sp.chain.transform()
+	return sp.chain.Transform()
 }
 
-// placed re-evaluates either one-span reduction under the composed motion
+// Placed re-evaluates either one-span reduction under the composed motion
 // (core §8). The cardinal composite refuses until its transformed join plane
 // and mesh stations have their own bound.
-func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (sp chainSweepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	if len(sp.spans) != 0 {
 		return nil, fmt.Errorf(`%w: composite chain Sweep placement has no transformed separation proof`, ErrUnsupported)
 	}
@@ -370,7 +373,7 @@ func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref produce
 			return nil, err
 		}
 		finishChainSweepBody(body, sp)
-		return body, nil
+		return bodyNode(body), nil
 	}
 	sp.chain.xform = composed
 	body, err := evalChainExtrudeContext(ctx, d, ref, sp.chain, freeform.NewFreeformWork())
@@ -378,7 +381,7 @@ func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref produce
 		return nil, err
 	}
 	finishChainSweepBody(body, sp)
-	return body, nil
+	return bodyNode(body), nil
 }
 
 // sweepChain is the chain-fed Sweep body (docs/sweep-design.md §15).
@@ -499,22 +502,22 @@ func refuseChainSweepOptions(opts []SweepOption, segments int) error {
 }
 
 func finishStraightSweepBody(body *Body, payload sweepPayload) {
-	if built, ok := body.payload.(prismPayload); ok {
+	if built, ok := body.n.Payload.(prismPayload); ok {
 		payload.prism = built
 	}
 	prefixSweepSpanZeroRole(body)
-	body.payload = payload
+	body.n.Payload = payload
 }
 
 func finishChainSweepBody(body *Body, payload chainSweepPayload) {
-	if built, ok := body.payload.(chainPayload); ok {
+	if built, ok := body.n.Payload.(chainPayload); ok {
 		payload.chain = built
 	}
-	if built, ok := body.payload.(chainRevolvePayload); ok {
+	if built, ok := body.n.Payload.(chainRevolvePayload); ok {
 		payload.revolve = built
 	}
 	prefixSweepSpanZeroRole(body)
-	body.payload = payload
+	body.n.Payload = payload
 }
 
 // prefixSweepSpanZeroRole rewrites every wall role a one-span reduction minted

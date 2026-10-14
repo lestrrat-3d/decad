@@ -34,7 +34,7 @@ import (
 // §6.2/§6.4). A payload that cannot state the interval at all, or that holds a
 // displacement this reading does not carry, returns ErrUnsupported.
 type directionalExtent interface {
-	extentAlong(g r3.Vec) (float64, float64, float64, error)
+	ExtentAlong(g r3.Vec) (float64, float64, float64, error)
 }
 
 // stopTol is the scale-relative tolerance the stop resolutions classify
@@ -47,7 +47,7 @@ const stopTol = 1e-9
 // level derived from such a face inherits it, so a stop cannot launder a held
 // coordinate back into an exact one.
 type axialDisplacement interface {
-	axialDelta() float64
+	AxialDelta() float64
 }
 
 // payloadAxialDelta returns the payload's stop-face displacement. The figure a
@@ -56,11 +56,11 @@ func payloadAxialDelta(b *Body) float64 {
 	if b == nil {
 		return 0
 	}
-	ad, ok := b.payload.(axialDisplacement)
+	ad, ok := b.n.Payload.(axialDisplacement)
 	if !ok {
 		return 0
 	}
-	return ad.axialDelta()
+	return ad.AxialDelta()
 }
 
 // resolveStopBody runs the body gates every body-relative stop shares with
@@ -262,11 +262,11 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 		if b.Kind() == BodySheet {
 			continue
 		}
-		ext, ok := b.payload.(directionalExtent)
+		ext, ok := b.n.Payload.(directionalExtent)
 		if !ok {
 			return 0, 0, nil, fmt.Errorf(`%w: a through-all stop needs every live body's directional extent, and this evaluator did not build one of them`, ErrUnsupported)
 		}
-		_, hi, bound, err := ext.extentAlong(dir)
+		_, hi, bound, err := ext.ExtentAlong(dir)
 		if err != nil {
 			return 0, 0, nil, err
 		}

@@ -190,7 +190,7 @@ func TestCoilRimCurveBoundHoldsTheDenotedCircle(t *testing.T) {
 // holds the circle it denotes within its curve bound.
 func requireCoilRimsHoldTheDenotedCircle(t *testing.T, b *Body) {
 	t.Helper()
-	rec, err := coilRecordOfPayload(b.payload.(coilPayload))
+	rec, err := coilRecordOfPayload(b.n.Payload.(coilPayload))
 	require.NoError(t, err)
 	rims, worst := 0, 0.0
 	for _, e := range b.Edges() {

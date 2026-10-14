@@ -27,7 +27,7 @@ func loftCylinderRingToothOf(body *Body, radius float64) (loftCylinderRingTooth,
 	if body == nil {
 		return loftCylinderRingTooth{}, fmt.Errorf("%w: ring tooth source is absent", ErrUnsupported)
 	}
-	lp, ok := body.payload.(loftPayload)
+	lp, ok := body.n.Payload.(loftPayload)
 	if !ok {
 		return loftCylinderRingTooth{}, fmt.Errorf("%w: ring tooth has no Loft source", ErrUnsupported)
 	}
@@ -159,7 +159,7 @@ func loftCylinderSourceRingInsideInputs(ctx context.Context, source loftCylinder
 			tooth.circle.Z1.Cmp(proofarith.FloatRat(source.z1)) != 0 {
 			return refuse("ring tooth has different blank cap levels")
 		}
-		original, ok := source.originalTeeth[i].payload.(loftPayload)
+		original, ok := source.originalTeeth[i].n.Payload.(loftPayload)
 		if !ok {
 			return refuse("ring has no authenticated original tooth")
 		}

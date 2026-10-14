@@ -32,7 +32,7 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 		len(proof.sourceRefs) != len(proof.trim.maps)-1 {
 		return nil, false, nil
 	}
-	p, ok := proof.tooth.payload.(facetedPayload)
+	p, ok := proof.tooth.n.Payload.(facetedPayload)
 	if !ok || p.loftFacesTrim != proof.trim ||
 		!revolveLoftFacesTrimCurrent(proof.tooth, proof.trim) ||
 		!pointSourceCurrent(proof.trim.source) {

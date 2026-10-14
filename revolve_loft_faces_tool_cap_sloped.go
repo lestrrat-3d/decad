@@ -28,7 +28,7 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 		return nil, false, err
 	}
 	trim := proof.trim
-	payload, ok := proof.tooth.payload.(facetedPayload)
+	payload, ok := proof.tooth.n.Payload.(facetedPayload)
 	if !ok || payload.loftFacesTrim != trim ||
 		!revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
 		trim.heelCapGroup < 0 || trim.heelCapGroup >= len(payload.groups) ||

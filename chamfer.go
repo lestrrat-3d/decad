@@ -219,7 +219,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 
 	// SX10: a capBlendPayload receiver is staged before the generic
 	// "not a prism" refusal, so the more specific reason leads.
-	if err := requireNotCapBlendReceiver(b.payload, "chamfers"); err != nil {
+	if err := requireNotCapBlendReceiver(b.n.Payload, "chamfers"); err != nil {
 		return nil, err
 	}
 	if asym == nil {
@@ -227,7 +227,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 			return out, err
 		}
 	}
-	if err := requireNotDraftReceiver(b.payload, "chamfers"); err != nil {
+	if err := requireNotDraftReceiver(b.n.Payload, "chamfers"); err != nil {
 		return nil, err
 	}
 	blend := revolveBlendOp{
@@ -252,7 +252,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		},
 		sel: sel, edges: edges, blend: &blend, asym: asym,
 		loop: &capSetback{dc: dmm, dcDelta: dDelta, ds: dmm, dsDelta: dDelta}, loopKind: brepBandChamfer}
-	if bp, ok := b.payload.(brepPayload); ok {
+	if bp, ok := b.n.Payload.(brepPayload); ok {
 		body, matched, err := tryAllEdgeChamfer(ctx, b, bp, edges, dmm, dDelta, asym)
 		if matched || err != nil {
 			if err != nil {
@@ -268,7 +268,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	if route.body != nil {
 		return commitModifyResult(ctx, b, route.body)
 	}
-	if lp, ok := b.payload.(loftPayload); ok {
+	if lp, ok := b.n.Payload.(loftPayload); ok {
 		body, recognized, err := tryLoftCapChamfer(ctx, b, lp, edges, dmm, dDelta, asym)
 		if recognized || err != nil {
 			if err != nil {
@@ -277,7 +277,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 			return commitModifyResult(ctx, b, body)
 		}
 	}
-	if fp, ok := b.payload.(facetedPayload); ok {
+	if fp, ok := b.n.Payload.(facetedPayload); ok {
 		if fp.prismUnionFillet != nil && asym == nil {
 			if body, recognized, err := b.tryChamferPrismUnion(ctx, edges, fp.prismUnionFillet, dmm, dDelta); recognized || err != nil {
 				return body, err
@@ -313,13 +313,13 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	// Reach RX2 (docs/modify-reach-design.md §7): a revolve receiver bevels its
 	// swept meridian junctions through the same corner rewrite. One certified
 	// quarter-turn radial cap rim takes the source-backed §7.2 route first.
-	if rp, ok := b.payload.(revolvePayload); ok {
+	if rp, ok := b.n.Payload.(revolvePayload); ok {
 		if out, matched, err := tryRevolveCapRimChamfer(ctx, b, rp, edges, dmm, dDelta, asym); matched || err != nil {
 			return out, err
 		}
 		return b.blendRevolveJunctions(ctx, sel, edges, rp, blend)
 	}
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	caps := prismCapsOf(b)
 	if route.prism != nil {
 		pp, ok, caps = *route.prism, true, route.caps
@@ -327,7 +327,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	// The selector has already resolved on the published Sweep. Only the
 	// certified one-line solid reads through its stored exact prism.
 	sweepStraight := false
-	if reduction, admitted := straightSweepPrismReduction(b.payload); admitted {
+	if reduction, admitted := straightSweepPrismReduction(b.n.Payload); admitted {
 		pp, ok, sweepStraight = reduction, true, true
 	}
 	if !ok {
@@ -344,7 +344,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	// rewrite in the exact prism face view, including a straight Sweep's
 	// stored reduction. Complete loops keep the cap-band route.
 	if straightPrismCapEdge(caps, edges) {
-		if original, ok := b.payload.(prismPayload); ok {
+		if original, ok := b.n.Payload.(prismPayload); ok {
 			if out, recognized, err := tryObliqueCapEdgeChamfer(ctx, b, original, edges, dmm, dDelta, asym); recognized {
 				return out, err
 			}

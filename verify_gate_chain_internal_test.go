@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -66,8 +67,8 @@ func TestChainGateDiameterRevolveNeverExceedsKnownCone(t *testing.T) {
 func TestChainGateDiameterCancelledBuildReturnsContextError(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	for _, payload := range []featurePayload{chainPayload{}, chainLoftPayload{}, chainRevolvePayload{}} {
-		body := bornBody(&Body{payload: payload})
+	for _, payload := range []topo.Payload{chainPayload{}, chainLoftPayload{}, chainRevolvePayload{}} {
+		body := bornBody(&Body{n: topo.Body{Payload: payload}})
 		_, _, err := bodyGateDiameter(ctx, body)
 		require.ErrorIs(t, err, context.Canceled)
 	}

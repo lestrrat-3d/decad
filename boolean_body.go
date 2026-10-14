@@ -197,16 +197,17 @@ type facetedPayload struct {
 	xform r3.Transform
 }
 
-// transform is the accumulated rigid placement.
-func (fp facetedPayload) transform() r3.Transform { return fp.xform }
+// Transform is the accumulated rigid placement.
+func (fp facetedPayload) Transform() r3.Transform { return fp.xform }
 
-// placed re-evaluates the held mesh under the composed motion: the vertices
+// Placed re-evaluates the held mesh under the composed motion: the vertices
 // move through the delta motion (float rounding is folded into the proven
 // bounds — the geometry is never silently trusted), the moved mesh is kept
 // embedded (facetproof.PlaceMesh), a reflection flips the windings, and the
 // topology and measurements rebuild from the moved mesh.
-func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
-	return fp.placedWith(ctx, d, ref, composed, nil)
+func (fp facetedPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
+	return placedNode(fp.placedWith(ctx, d, ref, composed, nil))
 }
 
 // facetedPlacementDelta is the float map applied to the held mesh. Motion
@@ -737,7 +738,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	pp.faceOf = faceOf
-	body.payload = pp
+	body.n.Payload = pp
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

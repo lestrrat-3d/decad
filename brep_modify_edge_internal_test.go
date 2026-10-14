@@ -55,8 +55,8 @@ func internalRouteEPocket(t *testing.T) (*Document, *Body) {
 	tool := internalOffsetBox(t, doc, 10, 15, 30, 25, 5, Distance{D: units.Millimeters(5), Dir: Along})
 	pocket, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	_, ok := pocket.payload.(stackedPrismPayload)
-	require.True(t, ok, "the pocket is a stacked prism, got %T", pocket.payload)
+	_, ok := pocket.n.Payload.(stackedPrismPayload)
+	require.True(t, ok, "the pocket is a stacked prism, got %T", pocket.n.Payload)
 	return doc, pocket
 }
 
@@ -86,8 +86,8 @@ func internalFlushBossUnion(t *testing.T, pts [][2]float64) (*Document, *Body) {
 	require.NoError(t, err)
 	union, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
-	_, ok := union.payload.(brepPayload)
-	require.True(t, ok, "the flush boss union is a brep, got %T", union.payload)
+	_, ok := union.n.Payload.(brepPayload)
+	require.True(t, ok, "the flush boss union is a brep, got %T", union.n.Payload)
 	return doc, union
 }
 
@@ -107,8 +107,8 @@ func edgeAt(dir r3.Vec, p r3.Vec) *EdgeQuery {
 // its record.
 func requireBrepResult(t *testing.T, body *Body, n int) brepPayload {
 	t.Helper()
-	bp, ok := body.payload.(brepPayload)
-	require.True(t, ok, "the result is a brep, got %T", body.payload)
+	bp, ok := body.n.Payload.(brepPayload)
+	require.True(t, ok, "the result is a brep, got %T", body.n.Payload)
 	require.Len(t, bp.faces, n)
 	require.Nil(t, bp.stack)
 	requireClosedTopology(t, body)
@@ -432,7 +432,7 @@ func TestBrepModifyEdgeChamferS1AlongX(t *testing.T) {
 func internalSplitWallS1(t *testing.T) *Body {
 	t.Helper()
 	doc, s1 := internalCrossDrilled(t)
-	bp := s1.payload.(brepPayload)
+	bp := s1.n.Payload.(brepPayload)
 	bp.faces = slices.Clone(bp.faces)
 	wall, side := -1, -1
 	for fi, f := range bp.faces {

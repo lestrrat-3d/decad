@@ -20,7 +20,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	if radiusDelta != 0 {
 		return nil, fmt.Errorf("%w: joined-prism fillet radius carries a displacement", ErrUnsupported)
 	}
-	old, ok := body.payload.(facetedPayload)
+	old, ok := body.n.Payload.(facetedPayload)
 	if !ok || old.prismPatternJoin == nil {
 		return nil, fmt.Errorf("%w: fillet has no certified joined-prism source", ErrUnsupported)
 	}

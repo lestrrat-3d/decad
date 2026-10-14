@@ -143,12 +143,12 @@ func admitExtendPair(budget *proofbound.WorkBudget, receiver, tool *Body) (chain
 			`%w: Extend needs a receiver and tool sharing a straight-sweep generator (receiver %s, tool %s)`,
 			ErrUnsupported, trimFamilyName(rf), trimFamilyName(tf))
 	}
-	rcv, ok := receiver.payload.(chainPayload)
+	rcv, ok := receiver.n.Payload.(chainPayload)
 	if !ok || receiver.Kind() != BodySheet {
 		return chainPayload{}, prismPayload{}, fmt.Errorf(`%w: Extend's receiver needs an open section`, ErrUnsupported)
 	}
 	var tl prismPayload
-	switch p := tool.payload.(type) {
+	switch p := tool.n.Payload.(type) {
 	case prismPayload:
 		tl = p
 	case chainPayload:
@@ -297,7 +297,7 @@ func trimFamilyName(f trimSweepFamily) string {
 
 // bodyTrimFamily reads S1 off a body's own payload.
 func bodyTrimFamily(b *Body) trimSweepFamily {
-	switch b.payload.(type) {
+	switch b.n.Payload.(type) {
 	case prismPayload, chainPayload:
 		return trimFamilyPrism
 	case revolvePayload, chainRevolvePayload:
@@ -316,7 +316,7 @@ func bodyTrimFamily(b *Body) trimSweepFamily {
 // once S1 has already proved the body is one of the four, so no fifth case
 // arises.
 func trimOperandSectionDelta(b *Body) float64 {
-	switch p := b.payload.(type) {
+	switch p := b.n.Payload.(type) {
 	case prismPayload:
 		return p.SectionDelta
 	case chainPayload:
@@ -366,12 +366,12 @@ func admitTrimPair(budget *proofbound.WorkBudget, receiver, tool *Body) (rcv, tl
 	// case) and the tool's must be one closed, hole-free loop (S5). Both are
 	// prism-family here, so an operand that is not a prismPayload is a
 	// chainPayload — an open walk.
-	rcv, rcvOk := receiver.payload.(prismPayload)
+	rcv, rcvOk := receiver.n.Payload.(prismPayload)
 	if !rcvOk {
 		return prismPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: Trim's receiver section is an open walk, which closes onto nothing for the tool to trim`, ErrUnsupported)
 	}
-	tl, tlOk := tool.payload.(prismPayload)
+	tl, tlOk := tool.n.Payload.(prismPayload)
 	if !tlOk {
 		return prismPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: Trim's tool section is an open walk, which bounds no region to keep a side of`, ErrUnsupported)
@@ -464,7 +464,7 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 			`%w: Split needs a solid and sheet sharing a straight-sweep generator (target %s, tool %s)`,
 			ErrUnsupported, trimFamilyName(rf), trimFamilyName(tf))
 	}
-	rcv, ok := target.payload.(prismPayload)
+	rcv, ok := target.n.Payload.(prismPayload)
 	if !ok || target.Kind() != BodySolid || !target.IsSolid() {
 		return prismPayload{}, prismPayload{}, fmt.Errorf(`%w: Split's target must be a solid prism`, ErrUnsupported)
 	}
@@ -472,7 +472,7 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 		return prismPayload{}, prismPayload{}, fmt.Errorf(`%w: Split's tool must be a sheet`, ErrUnsupported)
 	}
 	var tl prismPayload
-	switch p := tool.payload.(type) {
+	switch p := tool.n.Payload.(type) {
 	case prismPayload:
 		tl = p
 	case chainPayload:
@@ -560,11 +560,11 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 			ErrUnsupported, rcvDelta, tlDelta)
 	}
 
-	rcv, rcvOk := receiver.payload.(revolvePayload)
+	rcv, rcvOk := receiver.n.Payload.(revolvePayload)
 	if !rcvOk {
 		return fail(`%w: Trim's receiver meridian is an open walk, which closes onto nothing for the tool to trim`, ErrUnsupported)
 	}
-	tl, tlOk := tool.payload.(revolvePayload)
+	tl, tlOk := tool.n.Payload.(revolvePayload)
 	if !tlOk {
 		return fail(`%w: Trim's tool meridian is an open walk, which bounds no region to keep a side of`, ErrUnsupported)
 	}
@@ -778,7 +778,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 			ErrUnsupported, rcvDelta, tlDelta)
 	}
 
-	rcv, rcvOk := receiver.payload.(chainRevolvePayload)
+	rcv, rcvOk := receiver.n.Payload.(chainRevolvePayload)
 	if !rcvOk || receiver.Kind() != BodySheet {
 		return fail(`%w: Extend's receiver needs an open meridian to lengthen; a closed one has no free end and its other free direction is its own sweep`, ErrUnsupported)
 	}
@@ -793,7 +793,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 		return fail(`%w: Extend over the revolve family admits a full revolution alone; a partially revolved ribbon's swept free edge shares one loop with its wall's two cap edges, and no recorded fact separates them`, ErrUnsupported)
 	}
 	var tl revolvePayload
-	switch p := tool.payload.(type) {
+	switch p := tool.n.Payload.(type) {
 	case revolvePayload:
 		tl = p
 	case chainRevolvePayload:

@@ -39,10 +39,11 @@ type twistedSweepPayload struct {
 	volSymDiff  float64
 }
 
-func (p twistedSweepPayload) transform() r3.Transform { return p.xform }
+func (p twistedSweepPayload) Transform() r3.Transform { return p.xform }
 
-func (p twistedSweepPayload) placed(ctx context.Context, d *Document, ref producerID, xform r3.Transform) (*Body, error) {
-	return evalTwistedSweep(ctx, d, ref, p.profile, p.plane, p.path, p.angle, p.recordArea, xform)
+func (p twistedSweepPayload) Placed(ctx context.Context, env topo.Env, xform r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
+	return placedNode(evalTwistedSweep(ctx, d, ref, p.profile, p.plane, p.path, p.angle, p.recordArea, xform))
 }
 
 // For an arc-length parameter s, a rotating vertical wall has Jacobian
@@ -275,7 +276,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	if err != nil {
 		return nil, err
 	}
-	held, ok := heldBody.payload.(loftPayload)
+	held, ok := heldBody.n.Payload.(loftPayload)
 	if !ok {
 		return nil, fmt.Errorf(`%w: the twisted sweep lost its held Loft proof`, ErrUnsupported)
 	}
@@ -348,7 +349,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	if err := validateLoftBodyMeasurements(heldBody); err != nil {
 		return nil, err
 	}
-	heldBody.payload = twistedSweepPayload{
+	heldBody.n.Payload = twistedSweepPayload{
 		profile: profile, plane: plane, path: path, angle: angle,
 		recordArea: recordArea, xform: xform, held: held, sourceRoles: sourceRoles,
 		delta: delta, areaSlack: areaSlack, volSymDiff: volSymDiff,

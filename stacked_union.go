@@ -12,6 +12,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -49,7 +50,7 @@ type stackedUnionOperand struct {
 }
 
 func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
-	switch p := b.payload.(type) {
+	switch p := b.n.Payload.(type) {
 	case prismPayload:
 		return stackedUnionOperand{proxy: p, slabs: []stackedrecord.Slab{{
 			Regions: []profileRecord{p.Profile},
@@ -88,7 +89,7 @@ func (o stackedUnionOperand) view(region profileRecord) prismPayload {
 // refusal the caller propagates (prism-boolean §3.4). The payload is a
 // stackedPrismPayload when every interface resolves through the clean-nesting
 // match, and a brepPayload (stacked_union_brep.go) when one does not.
-func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, error) {
+func tryStackedUnion(ctx context.Context, a, b *Body) (topo.Payload, bool, error) {
 	va, aok := stackedUnionOperandOf(a)
 	vb, bok := stackedUnionOperandOf(b)
 	if !aok || !bok {
@@ -101,7 +102,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (featurePayload, bool, err
 	// G1-G4 on the outer prisms; G4, G6 and the trimmed-circular refusal on
 	// every region, since a stacked operand's proxy names its first slab only.
 	if _, _, ok, err := admitPrismPairBudget(budget, meshbool.OpUnion,
-		bornBody(&Body{payload: va.proxy}), bornBody(&Body{payload: vb.proxy})); err != nil || !ok {
+		bornBody(&Body{n: topo.Body{Payload: va.proxy}}), bornBody(&Body{n: topo.Body{Payload: vb.proxy}})); err != nil || !ok {
 		return nil, false, err
 	}
 	// A brep operand, or a slab holding several regions, is the brep build's

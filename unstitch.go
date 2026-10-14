@@ -52,14 +52,14 @@ func Unstitch(ctx context.Context, b *Body) ([]*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an unstitch`, ErrDegenerate)
 	}
-	if b == nil || b.n.Doc == nil || b.payload == nil {
+	if b == nil || b.n.Doc == nil || b.n.Payload == nil {
 		return nil, fmt.Errorf(`%w: Unstitch requires a body with an evaluator payload`, ErrDegenerate)
 	}
 	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
-	if _, ok := b.payload.(facetedPayload); ok {
+	if _, ok := b.n.Payload.(facetedPayload); ok {
 		return nil, fmt.Errorf(`%w: Unstitch does not accept a Faceted body (docs/surface-design.md Table R row R11)`, ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
@@ -91,8 +91,8 @@ func Unstitch(ctx context.Context, b *Body) ([]*Body, error) {
 // own), the rigid placement accumulated so far, and the receiver's own
 // already-proven Bounds — the same "record, never rebuild" contract
 // stitchPayload keeps for a whole welded set (stitch.go), restricted here to
-// one face. placed() replays evalUnstitchFaceContext from these same values
-// under the composed transform, exactly as stitchPayload.placed replays
+// one face. Placed() replays evalUnstitchFaceContext from these same values
+// under the composed transform, exactly as stitchPayload.Placed replays
 // evalStitchContext.
 type unstitchPayload struct {
 	xform r3.Transform
@@ -117,16 +117,17 @@ type unstitchPayload struct {
 	bounds Box
 }
 
-func (up unstitchPayload) transform() r3.Transform { return up.xform }
+func (up unstitchPayload) Transform() r3.Transform { return up.xform }
 
-// axialDelta reports the held face's own proven axial displacement
+// AxialDelta reports the held face's own proven axial displacement
 // (stops.go's axialDisplacement interface), so an unstitched sheet's
 // payload-wide fallback (payloadAxialDelta) reads the figure the face holds
 // (topo.Face.HasAxialDelta) — zero, honestly, for a face that does not.
-func (up unstitchPayload) axialDelta() float64 { return up.face.n.AxialDelta }
+func (up unstitchPayload) AxialDelta() float64 { return up.face.n.AxialDelta }
 
-func (up unstitchPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
-	return evalUnstitchFaceContext(ctx, d, ref, up.face, up.bounds, composed)
+func (up unstitchPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
+	return placedNode(evalUnstitchFaceContext(ctx, d, ref, up.face, up.bounds, composed))
 }
 
 // evalUnstitchFaceContext is Unstitch's whole evaluator for one face, shared
@@ -186,7 +187,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 		return nil, err
 	}
 
-	body.payload = unstitchPayload{xform: xform, delta: delta, face: srcFace, bounds: srcBounds}
+	body.n.Payload = unstitchPayload{xform: xform, delta: delta, face: srcFace, bounds: srcBounds}
 	return body, nil
 }
 
@@ -218,10 +219,10 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 // topo.Face.AxialDelta, topo.Face.HasAxialDelta and topo.Face.NormalBound carry forward
 // rather than reading as absent, because the copy carries the identical
 // surface and the identical tag: normalBound states how far that surface
-// departs from that tag, and axialDelta states the same tag's own
+// departs from that tag, and AxialDelta states the same tag's own
 // displacement along the same normal, so both readings are exactly as true
 // of the copy as they were of srcFace. hasAxialDelta and normalBound copy
-// verbatim; axialDelta additionally widens by delta under a non-identity
+// verbatim; AxialDelta additionally widens by delta under a non-identity
 // placement, exactly as the vertex bound and edge lengthBound do above.
 // normalBound cannot take the same composition: it is DIMENSIONLESS while
 // delta is a length, and this package has no term for how far a placement's

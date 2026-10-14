@@ -105,7 +105,7 @@ func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
 	if op != meshbool.OpCut {
 		return nil, false, nil
 	}
-	joined, ok := target.payload.(facetedPayload)
+	joined, ok := target.n.Payload.(facetedPayload)
 	if !ok || joined.revolveLoftJoin == nil {
 		return nil, false, nil
 	}
@@ -113,7 +113,7 @@ func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
 	if !ok {
 		return nil, true, fmt.Errorf("%w: joined section has no complete planar cap-ring record", ErrUnsupported)
 	}
-	prism, ok := tool.payload.(prismPayload)
+	prism, ok := tool.n.Payload.(prismPayload)
 	if !ok || prism.SurfaceResult || prism.Xform != r3.Identity() ||
 		prism.SectionDelta != 0 || prism.Z0Delta != 0 || prism.Z1Delta != 0 ||
 		prism.Frame.U() != (r3.Vec{Y: 1}) || prism.Frame.V() != (r3.Vec{Z: 1}) ||

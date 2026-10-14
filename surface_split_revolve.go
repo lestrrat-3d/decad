@@ -86,7 +86,7 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
 
-	rcv, ok := target.payload.(revolvePayload)
+	rcv, ok := target.n.Payload.(revolvePayload)
 	if !ok || target.Kind() != BodySolid || !target.IsSolid() {
 		return fail(`%w: Split's target must be a solid revolve`, ErrUnsupported)
 	}
@@ -94,7 +94,7 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 		return fail(`%w: Split's tool must be a sheet`, ErrUnsupported)
 	}
 	var tl revolvePayload
-	switch p := tool.payload.(type) {
+	switch p := tool.n.Payload.(type) {
 	case revolvePayload:
 		tl = p
 	case chainRevolvePayload:

@@ -56,11 +56,11 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
-	if b.payload == nil {
+	if b.n.Payload == nil {
 		return nil, fmt.Errorf(`%w: this evaluator cannot mirror a body it did not build`, ErrUnsupported)
 	}
 	// J1: a straight prism or a stacked prism, and a solid.
-	switch b.payload.(type) {
+	switch b.n.Payload.(type) {
 	case prismPayload, stackedPrismPayload:
 	default:
 		return nil, fmt.Errorf(`%w: a mirror join rewrites a prism's or a stacked prism's section; join any other body with MirroredCopy and Union`, ErrUnsupported)
@@ -68,7 +68,7 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 	if b.Kind() == BodySheet {
 		return nil, fmt.Errorf(`%w: a mirror join builds a solid and does not accept a sheet body`, ErrUnsupported)
 	}
-	if sp, ok := b.payload.(stackedPrismPayload); ok && sp.isGroup() {
+	if sp, ok := b.n.Payload.(stackedPrismPayload); ok && sp.isGroup() {
 		// A prism group's lumps are separate regions, which this join does
 		// not splice one by one.
 		return nil, fmt.Errorf(`%w: a mirror join does not rewrite a prism group (J1)`, ErrUnsupported)
@@ -83,7 +83,7 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 	budget := proofbound.NewWorkBudget(ctx)
 	ref := d.nextProducerID()
 	var body *Body
-	switch p := b.payload.(type) {
+	switch p := b.n.Payload.(type) {
 	case prismPayload:
 		joined, err := joinPrismPayload(budget, p, walls)
 		if err != nil {
@@ -147,7 +147,7 @@ func (d *Document) resolveJoinWalls(b *Body, plane MirrorPlane) ([]joinWall, err
 	if err != nil {
 		return nil, err
 	}
-	_, stacked := b.payload.(stackedPrismPayload)
+	_, stacked := b.n.Payload.(stackedPrismPayload)
 	producer := b.originProducer()
 	var walls []joinWall
 	for fi, f := range faces {

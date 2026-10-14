@@ -17,7 +17,7 @@ func internalBoxGroup(t *testing.T, doc *Document) (*Body, stackedPrismPayload) 
 	t.Helper()
 	group, err := Union(t.Context(), internalBoxBody(t, doc, 0, 0, 5, 10, 10), internalBoxBody(t, doc, 10, 0, 15, 10, 10))
 	require.NoError(t, err)
-	sp, ok := group.payload.(stackedPrismPayload)
+	sp, ok := group.n.Payload.(stackedPrismPayload)
 	require.True(t, ok)
 	require.True(t, sp.isGroup())
 	return group, sp
@@ -26,7 +26,7 @@ func internalBoxGroup(t *testing.T, doc *Document) (*Body, stackedPrismPayload) 
 func TestPrismGroupRegionsDisjointProof(t *testing.T) {
 	doc := New()
 	box := func(x0, y0, x1, y1 float64) profileRecord {
-		return internalBoxBody(t, doc, x0, y0, x1, y1, 1).payload.(prismPayload).Profile
+		return internalBoxBody(t, doc, x0, y0, x1, y1, 1).n.Payload.(prismPayload).Profile
 	}
 	cases := []struct {
 		name    string
@@ -87,7 +87,7 @@ func TestPrismGroupSixHoleCutIsUndisplaced(t *testing.T) {
 		group, err = Union(t.Context(), group, disc)
 		require.NoError(t, err)
 	}
-	sp := group.payload.(stackedPrismPayload)
+	sp := group.n.Payload.(stackedPrismPayload)
 	require.Len(t, sp.slabs[0].Regions, 6)
 	require.Zero(t, sp.sectionDelta)
 	pp, ok, err := tryPrismGroupCut(t.Context(), plate, group)
@@ -165,12 +165,12 @@ func TestPrismGroupDisplacedToolChargesTheCrossing(t *testing.T) {
 		require.NoError(t, err)
 		tool, err := Transform(t.Context(), group, turn)
 		require.NoError(t, err)
-		sp, ok := tool.payload.(stackedPrismPayload)
+		sp, ok := tool.n.Payload.(stackedPrismPayload)
 		require.True(t, ok)
 		require.True(t, sp.isGroup())
 
 		// δ_B: the re-expression's own rounding over the group's regions.
-		target := plate.payload.(prismPayload)
+		target := plate.n.Payload.(prismPayload)
 		toolOp, ok := prismGroupOperandOf(tool)
 		require.True(t, ok)
 		re, err := prismcells.NewReexpression(target.PlacementOperand(), toolOp.proxy.PlacementOperand())

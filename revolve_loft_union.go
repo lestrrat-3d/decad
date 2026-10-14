@@ -52,7 +52,7 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 				if i == blankIndex || i == firstIndex {
 					continue
 				}
-				placed, ok := operand.payload.(facetedPayload)
+				placed, ok := operand.n.Payload.(facetedPayload)
 				if !ok || placed.revolveLoftSector == nil ||
 					placed.revolveLoftSector.source != cert.trim ||
 					placed.xform != placed.revolveLoftSector.motion {
@@ -67,7 +67,7 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 			if err != nil {
 				return nil, true, err
 			}
-			payload, ok := body.payload.(facetedPayload)
+			payload, ok := body.n.Payload.(facetedPayload)
 			if !ok {
 				return nil, true, ErrUnsupported
 			}
@@ -76,7 +76,7 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 				placed: append([]facetedPayload(nil), sources[1:]...), capRing: ring,
 				boundaryBound: payload.meshBound, volumeBound: payload.volSymDiff,
 				areaBound: payload.areaSlack}
-			body.payload = payload
+			body.n.Payload = payload
 			return body, true, nil
 		}
 	}
@@ -119,14 +119,14 @@ func tryRevolveLoftSectorUnion(ctx context.Context, op meshbool.OperationKind,
 	if err != nil {
 		return nil, true, err
 	}
-	payload, ok := body.payload.(facetedPayload)
+	payload, ok := body.n.Payload.(facetedPayload)
 	if !ok {
 		return nil, true, ErrUnsupported
 	}
 	payload.revolveLoftJoin = &revolveLoftJoinRecord{certificate: cert, blank: blank,
 		first: cert.trimmed, capRing: ring, boundaryBound: payload.meshBound,
 		volumeBound: payload.volSymDiff, areaBound: payload.areaSlack}
-	body.payload = payload
+	body.n.Payload = payload
 	return body, true, nil
 }
 
@@ -139,12 +139,12 @@ func tryRevolveLoftNextSectorUnion(ctx context.Context, op meshbool.OperationKin
 		return nil, false, nil
 	}
 	joined, placed := a, b
-	jp, ok := joined.payload.(facetedPayload)
+	jp, ok := joined.n.Payload.(facetedPayload)
 	if !ok || jp.revolveLoftJoin == nil {
 		joined, placed = b, a
-		jp, ok = joined.payload.(facetedPayload)
+		jp, ok = joined.n.Payload.(facetedPayload)
 	}
-	p, placedOK := placed.payload.(facetedPayload)
+	p, placedOK := placed.n.Payload.(facetedPayload)
 	if !ok || !placedOK || jp.revolveLoftJoin == nil ||
 		jp.xform != r3.Identity() || p.revolveLoftSector == nil ||
 		p.revolveLoftSector.source == nil ||
@@ -166,7 +166,7 @@ func tryRevolveLoftNextSectorUnion(ctx context.Context, op meshbool.OperationKin
 	if err != nil {
 		return nil, true, err
 	}
-	result, ok := body.payload.(facetedPayload)
+	result, ok := body.n.Payload.(facetedPayload)
 	if !ok {
 		return nil, true, ErrUnsupported
 	}
@@ -175,6 +175,6 @@ func tryRevolveLoftNextSectorUnion(ctx context.Context, op meshbool.OperationKin
 		placed: append([]facetedPayload(nil), sectors[1:]...), capRing: ring,
 		boundaryBound: result.meshBound, volumeBound: result.volSymDiff,
 		areaBound: result.areaSlack}
-	body.payload = result
+	body.n.Payload = result
 	return body, true, nil
 }

@@ -115,7 +115,7 @@ func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
 		f.toe, f.heel)
 	require.NoError(t, err)
 
-	record := body.payload.(facetedPayload).loftFacesCap
+	record := body.n.Payload.(facetedPayload).loftFacesCap
 	require.NotNil(t, record)
 	require.Len(t, record.maps, 3)
 	require.Len(t, record.bounds, 3)
@@ -130,7 +130,7 @@ func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
 	require.Zero(t, q[5].Cmp(big.NewRat(9, 16)), "pullback v^2 coefficient is the squared slope")
 
 	// The held end ring is the rounded constructed map at each station.
-	end := body.payload.(facetedPayload)
+	end := body.n.Payload.(facetedPayload)
 	n := len(record.source.sourceStation)
 	for j, station := range record.source.sourceStation {
 		u, v := lfStationUV(station)

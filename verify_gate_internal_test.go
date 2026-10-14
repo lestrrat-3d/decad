@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -175,7 +176,7 @@ func TestCapBlendGateDiameterReadsSideLevels(t *testing.T) {
 		body := axisBoxBody(t, doc, 0, 0, 10, 10, 10)
 		chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(2))
 		require.NoError(t, err)
-		_, isCapBlend := chamfered.payload.(capBlendPayload)
+		_, isCapBlend := chamfered.n.Payload.(capBlendPayload)
 		require.True(t, isCapBlend)
 
 		d, ok, err := bodyGateDiameter(t.Context(), chamfered)
@@ -216,7 +217,7 @@ func TestCapBlendGateDiameterReadsCapContours(t *testing.T) {
 	body := internalCircleBody(t, doc, 0, 5, 0, Distance{D: units.Millimeters(20), Dir: Along})
 	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapStart(body))).Or(CreatedBy(CapEnd(body))), units.Millimeters(2))
 	require.NoError(t, err)
-	cbp, isCapBlend := chamfered.payload.(capBlendPayload)
+	cbp, isCapBlend := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, isCapBlend)
 	require.Len(t, cbp.startLoops, 1)
 	require.Len(t, cbp.endLoops, 1)
@@ -261,7 +262,7 @@ func TestCapBlendGateDiameterReadsTrimmedCapArcs(t *testing.T) {
 	require.NoError(t, err)
 	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapStart(body))).Or(CreatedBy(CapEnd(body))), units.Millimeters(2))
 	require.NoError(t, err)
-	cbp, isCapBlend := chamfered.payload.(capBlendPayload)
+	cbp, isCapBlend := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, isCapBlend)
 	trimmed := 0
 	for _, p := range cbp.patches {
@@ -332,7 +333,7 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 		t.Parallel()
 		for i := range placements {
 			body := placedBox(t, i)
-			pp, isPrism := body.payload.(prismPayload)
+			pp, isPrism := body.n.Payload.(prismPayload)
 			require.True(t, isPrism)
 			_, modelled := newBodyGeom(body)
 			require.True(t, modelled, `the exact carrier model reads this prism`)
@@ -343,20 +344,20 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 	t.Run("displaced prism", func(t *testing.T) {
 		t.Parallel()
 		for i := range placements {
-			pp := placedBox(t, i).payload.(prismPayload)
+			pp := placedBox(t, i).n.Payload.(prismPayload)
 			pp.SectionDelta = math.Ldexp(1, -40)
 			// The held section is the denoted one moved by at most
 			// sectionDelta, so the reading is shrunk below the held
 			// section's own diameter, which bounds it from above.
 			upper := exactPrismDiameterSquare(pp, box)
-			requireGateDiameterWithin(t, read(t, bornBody(&Body{payload: pp})), floatSqrtOf(upper)-gateFarSlack(), upper)
+			requireGateDiameterWithin(t, read(t, bornBody(&Body{n: topo.Body{Payload: pp}})), floatSqrtOf(upper)-gateFarSlack(), upper)
 		}
 	})
 	t.Run("brep", func(t *testing.T) {
 		t.Parallel()
 		for i := range placements {
 			body := placedBox(t, i)
-			pp := body.payload.(prismPayload)
+			pp := body.n.Payload.(prismPayload)
 			brep := internalBrepBody(t, body)
 			upper := exactPrismDiameterSquare(pp, box)
 			requireGateDiameterWithin(t, read(t, brep), floatSqrtOf(upper)-gateFarSlack(), upper)
@@ -368,7 +369,7 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			pp := freeformTrianglePayload(t, 1, 11)
 			pp.Xform = gateFarPlacement(t, i)
 			upper := exactPrismDiameterSquare(pp, [][2]float64{{0, 0}, {5, 4}, {10, 0}})
-			requireGateDiameterWithin(t, read(t, bornBody(&Body{payload: pp})), floatSqrtOf(upper)-gateFarSlack(), upper)
+			requireGateDiameterWithin(t, read(t, bornBody(&Body{n: topo.Body{Payload: pp}})), floatSqrtOf(upper)-gateFarSlack(), upper)
 		}
 	})
 	t.Run("draft", func(t *testing.T) {
@@ -380,11 +381,11 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 		// bound its diameter from above.
 		for i := range placements {
 			body := draftSquare(t)
-			dp, isDraft := body.payload.(draftPayload)
+			dp, isDraft := body.n.Payload.(draftPayload)
 			require.True(t, isDraft)
 			placed, err := Transform(t.Context(), body, gateFarPlacement(t, i))
 			require.NoError(t, err)
-			pdp := placed.payload.(draftPayload)
+			pdp := placed.n.Payload.(draftPayload)
 			nearZ, _, farZ, _ := pdp.levels()
 			view := prismPayload{Payload: prismrecord.Payload{Frame: pdp.frame, Xform: pdp.xform, Z0: nearZ, Z1: farZ}}
 			least := new(big.Rat).Sub(new(big.Rat).SetFloat64(dp.d), new(big.Rat).SetFloat64(dp.dDelta))
@@ -428,7 +429,7 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			require.NoError(t, err)
 			body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along}, WithTaper(units.Degrees(3)))
 			require.NoError(t, err)
-			dp := body.payload.(draftPayload)
+			dp := body.n.Payload.(draftPayload)
 			placement := gateFarPlacement(t, i)
 			placed, err := Transform(t.Context(), body, placement)
 			require.NoError(t, err)
@@ -567,7 +568,7 @@ func TestGateDiameterReadsArcWallStations(t *testing.T) {
 		t.Run(fmt.Sprintf("chain h %v", h), func(t *testing.T) {
 			t.Parallel()
 			body := internalArcChain(t, 240, h)
-			pp, isChain := body.payload.(chainPayload)
+			pp, isChain := body.n.Payload.(chainPayload)
 			require.True(t, isChain)
 			d, ok, err := bodyGateDiameter(t.Context(), body)
 			require.NoError(t, err)
@@ -577,7 +578,7 @@ func TestGateDiameterReadsArcWallStations(t *testing.T) {
 		t.Run(fmt.Sprintf("brep h %v", h), func(t *testing.T) {
 			t.Parallel()
 			prism := internalArcChordPrism(t, New(), 240, h)
-			pp := prism.payload.(prismPayload)
+			pp := prism.n.Payload.(prismPayload)
 			d, ok, err := bodyGateDiameter(t.Context(), internalBrepBody(t, prism))
 			require.NoError(t, err)
 			require.True(t, ok)
@@ -682,7 +683,7 @@ func TestRevolveGateDiameterReadsSheetsAndDisplacedSections(t *testing.T) {
 	t.Run("sheet", func(t *testing.T) {
 		t.Parallel()
 		sheet := halfDisc(t, WithSurfaceResult())
-		rp := sheet.payload.(revolvePayload)
+		rp := sheet.n.Payload.(revolvePayload)
 		require.True(t, rp.surfaceResult)
 		d, ok, err := bodyGateDiameter(t.Context(), sheet)
 		require.NoError(t, err)
@@ -695,9 +696,9 @@ func TestRevolveGateDiameterReadsSheetsAndDisplacedSections(t *testing.T) {
 		exact, ok, err := bodyGateDiameter(t.Context(), solid)
 		require.NoError(t, err)
 		require.True(t, ok)
-		rp := solid.payload.(revolvePayload)
+		rp := solid.n.Payload.(revolvePayload)
 		rp.sectionDelta = math.Ldexp(1, -20)
-		d, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: rp}))
+		d, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: rp}}))
 		require.NoError(t, err)
 		require.True(t, ok)
 		requireGateDiameterWithin(t, d, 20*math.Cos(diameter.StationStep/2)-4*rp.sectionDelta, big.NewRat(400, 1))
@@ -734,6 +735,6 @@ func TestPairGateDiameterReadsCoilStations(t *testing.T) {
 
 	d, err := interferencePairDiameter(t.Context(), spring, cube)
 	require.NoError(t, err)
-	floor := math.Hypot(6, 3.25) - 2*spring.payload.(coilPayload).maxRound - 1e-12
+	floor := math.Hypot(6, 3.25) - 2*spring.n.Payload.(coilPayload).maxRound - 1e-12
 	requireGateDiameterWithin(t, d, floor, big.NewRat(52, 1))
 }

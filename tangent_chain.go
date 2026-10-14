@@ -27,7 +27,7 @@ import (
 // returns the expanded set in body edge order. A faceted receiver is SX9
 // before any expansion runs: its curves and surfaces never enter the oracle.
 func expandTangentChain(ctx context.Context, b *Body, sel EdgeSelector, seeds []*Edge) ([]*Edge, error) {
-	if _, ok := b.payload.(facetedPayload); ok {
+	if _, ok := b.n.Payload.(facetedPayload); ok {
 		return nil, fmt.Errorf(`%w: a faceted boolean result carries no analytic carrier to prove a tangent continuation over; this evaluator modifies no faceted body (modify-reach SX9)`, ErrUnsupported)
 	}
 	return tangentchain.Expand(ctx, tangentChainGraph{edges: b.Edges(), selector: sel}, seeds)

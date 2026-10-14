@@ -25,7 +25,7 @@ func bodyPatchCircularPrismSource(pp bodyPatchPayload) (prismPayload, bool) {
 	if len(pp.faces) != 1 || len(pp.chains) == 0 || len(pp.chains) > 2 || pp.faces[0].n.Body == nil {
 		return prismPayload{}, false
 	}
-	prism, ok := bodyHandle(pp.faces[0].n.Body).payload.(prismPayload)
+	prism, ok := bodyHandle(pp.faces[0].n.Body).n.Payload.(prismPayload)
 	if !ok || !prism.SurfaceResult || prism.SectionDelta != 0 || len(prism.Profile.Holes) != 0 ||
 		len(prism.Profile.Outer.Segments) != 1 {
 		return prismPayload{}, false
@@ -187,7 +187,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		}
 		mesh.setFaceBound(face, proofbound.AbsSumUpper(
 			proofbound.ProductUpper(proofbound.AbsSumUpper(capSag, source.n.CoordBound,
-				prism.axialDelta()), lengthScale), placementRound, face.n.AxialDelta))
+				prism.AxialDelta()), lengthScale), placementRound, face.n.AxialDelta))
 	}
 	if err := tessellation.RequireCapBlendFacetAreas(mesh.n.Vertices, mesh.n.Triangles, "PatchEdges circular sheet"); err != nil {
 		return nil, err

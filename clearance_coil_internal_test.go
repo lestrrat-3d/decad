@@ -38,7 +38,7 @@ func coilCoreFixture(t *testing.T) (*Document, *Body, *Body) {
 func TestPlanarPairVerdictCoilAgainstPrism(t *testing.T) {
 	t.Parallel()
 	_, spring, core := coilCoreFixture(t)
-	payload, ok := spring.payload.(coilPayload)
+	payload, ok := spring.n.Payload.(coilPayload)
 	require.True(t, ok)
 	require.Positive(t, payload.delta)
 
@@ -61,7 +61,7 @@ func TestPlanarPairVerdictCoilAgainstPrism(t *testing.T) {
 func TestVerifyCoilClearanceAgainstPrism(t *testing.T) {
 	t.Parallel()
 	doc, spring, core := coilCoreFixture(t)
-	payload := spring.payload.(coilPayload)
+	payload := spring.n.Payload.(coilPayload)
 	report, err := doc.Verify(t.Context(), WithClearances())
 	require.NoError(t, err)
 	require.Empty(t, report.Interferences)
@@ -109,7 +109,7 @@ func TestPlanarPairAdmitsCoilPartners(t *testing.T) {
 	require.NoError(t, err)
 	faceted, err := Union(t.Context(), core, planarBox(t, doc, 0, 1, 0, 6, 2, 0.5))
 	require.NoError(t, err)
-	_, isFaceted := faceted.payload.(facetedPayload)
+	_, isFaceted := faceted.n.Payload.(facetedPayload)
 	require.True(t, isFaceted)
 
 	require.True(t, planarPairAdmits(spring, core))

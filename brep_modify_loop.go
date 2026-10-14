@@ -120,7 +120,7 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 			if err != nil {
 				return nil, err
 			}
-			rewritten, ok := step.payload.(brepPayload)
+			rewritten, ok := step.n.Payload.(brepPayload)
 			if !ok {
 				return nil, fmt.Errorf(`%w: the straight-edge fillet produced no brep record`, ErrUnsupported)
 			}
@@ -227,7 +227,7 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 		if err != nil {
 			return nil, true, err
 		}
-		bp, ok := step.payload.(brepPayload)
+		bp, ok := step.n.Payload.(brepPayload)
 		if !ok {
 			return nil, true, fmt.Errorf(`%w: the first corner blend produced no brep record`, ErrUnsupported)
 		}

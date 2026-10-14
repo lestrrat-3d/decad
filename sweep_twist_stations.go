@@ -203,7 +203,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, buildErr)
 		}
 		var heldOK bool
-		held[i], heldOK = part.payload.(loftPayload)
+		held[i], heldOK = part.n.Payload.(loftPayload)
 		if !heldOK {
 			return nil, fmt.Errorf(`%w: twisted sweep cell lost its Loft payload`, ErrUnsupported)
 		}
@@ -339,7 +339,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}
-	body.payload = twistedSweepPayload{
+	body.n.Payload = twistedSweepPayload{
 		profile: profile, plane: plane, path: path, angle: angle,
 		recordArea: recordArea, xform: xform, mesh: mesh,
 		delta: delta, areaSlack: mesh.n.AreaSlack, volSymDiff: volSymDiff,

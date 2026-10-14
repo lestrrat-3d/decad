@@ -554,7 +554,7 @@ held within the gap `boundarywalk.CircularPointBound` proves (or a line end's
 own walk-end bound), and `prismrecord.Payload.PointBound` carries that gap through the frame
 and placement and adds the lift's own rounding. `stationGateDiameter` reads
 the stations alone and shrinks their maximum by the widest such gap plus
-`axialDelta`, since each held level sits within `axialDelta` of the level it
+`AxialDelta`, since each held level sits within `AxialDelta` of the level it
 denotes. The stations never join `CFace.Wit`, which the clearance search
 reads. A wall that sweeps past 180° reads its own diameter up to rounding and
 that allowance, and every point of a wall of radius `R` lies within
@@ -653,7 +653,7 @@ exact statement about a boundary and that payload holds its own only within
 gives it the third arm of `fallbackGateDiameter`: the body's OWN recorded
 section, read through the same station witnesses every other prism is read
 through. §7 proves each recorded boundary point sits within `sectionDelta` of
-the section the payload denotes, and each recorded level within `axialDelta` of
+the section the payload denotes, and each recorded level within `AxialDelta` of
 the level it denotes; the two are perpendicular — one moves a coordinate IN the
 plane, the other moves a level ALONG the normal — so their sum, plus a
 station's own gap, bounds how far a held station sits from the body point
@@ -762,7 +762,7 @@ a chamfered cap level are not points of the body: a 10 mm cube chamfered 2 mm
 around its end cap is `√264` across, while the receiver's corners at the cap
 read `√300`. A loop chamfered on a cap is read from that cap's side level, the
 float sum the build places the band's side level at, and an unchamfered loop
-over the whole interval. `capBlendPayload.axialDelta` bounds how far each of
+over the whole interval. `capBlendPayload.AxialDelta` bounds how far each of
 those levels sits from the one it denotes. `capBlendGatePoints` joins those
 stations with the stations on every whole cap circle (the cap contour a
 cornerless closed circle offsets into, held at its centre and offset radius

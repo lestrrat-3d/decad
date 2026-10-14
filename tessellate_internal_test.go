@@ -50,7 +50,7 @@ func displacedUnionBody(t *testing.T, shift float64) *Body {
 func TestTessellateChargesSectionDisplacementToEveryProof(t *testing.T) {
 	t.Parallel()
 	got := displacedUnionBody(t, 1e14)
-	pp, ok := got.payload.(prismPayload)
+	pp, ok := got.n.Payload.(prismPayload)
 	require.True(t, ok, `the analytic reduction must own this pair`)
 	require.Positive(t, pp.SectionDelta)
 
@@ -452,8 +452,8 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 			Bounds:   body.n.Bounds,
 			Lumps:    body.n.Lumps,
 			Doc:      body.n.Doc,
+			Payload:  withoutWalks(published),
 		},
-		payload: withoutWalks(published),
 	})
 	resolvedAgain, err := withoutResolution.Tessellate(t.Context(), tol)
 	require.NoError(t, err)

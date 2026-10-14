@@ -1458,7 +1458,7 @@ subject and are not repeated here.
 only the call site each of its rows lands at. What the consumer does at
 `δ > 0` is that row's to state, and is deliberately not restated here:
 `wallsurvey.PrismWall` and `radiussurvey.Prism` are §12's "Surveys
-(wall/undercut/min-radius)" row, `prism_extent.go`'s `extentAlong` is its
+(wall/undercut/min-radius)" row, `prism_extent.go`'s `ExtentAlong` is its
 "`ThroughAll` / `ThroughAllSide`" row, `clearance_geom.go`'s
 `addPrismFaces` is its "Clearance kernel" row, and `verify.go`'s
 `gateWitnessPrism` is its "`Verify`'s structural/tolerance gates" row.

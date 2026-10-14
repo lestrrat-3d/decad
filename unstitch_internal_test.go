@@ -11,7 +11,7 @@ import (
 )
 
 // TestUnstitchNoPayloadIsDegenerate is Table R row R12's other half: a live
-// body this evaluator did not build (no featurePayload at all). decad's
+// body this evaluator did not build (no topo.Payload at all). decad's
 // public seam admits no way to construct one — every real body a caller can
 // reach already carries the payload of whatever built it — so this fixture
 // is hand-built directly, the same treatment stitch_internal_test.go gives

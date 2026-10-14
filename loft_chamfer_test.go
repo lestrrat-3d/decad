@@ -69,7 +69,7 @@ func TestLoftCapBandMotionRequiresReflexVertexIndices(t *testing.T) {
 
 func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 	body := notchedLoft(t, true)
-	source := body.payload.(loftPayload)
+	source := body.n.Payload.(loftPayload)
 	selector := Edges(OuterLoopOf(CapStart(body))).Or(OuterLoopOf(CapEnd(body)))
 	edges, err := selector.SelectEdges(body)
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, recognized)
 	require.True(t, out.IsSolid())
-	band := out.payload.(capBlendPayload)
+	band := out.n.Payload.(capBlendPayload)
 	require.IsType(t, fitSplineSeg{}, band.loftSource.profile.Outer.Segments[0])
 	for _, segment := range band.profile.Outer.Segments {
 		require.IsType(t, lineSeg{}, segment, "the band offsets the certified held polygon")
@@ -118,7 +118,7 @@ func TestLoftCapBandNoBoreChamfersBothOuterLoops(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 	require.Len(t, out.Shells(), 1)
-	band := out.payload.(capBlendPayload)
+	band := out.n.Payload.(capBlendPayload)
 	require.True(t, band.startLoops[0])
 	require.True(t, band.endLoops[0])
 	require.Empty(t, band.profile.Holes)
@@ -139,11 +139,11 @@ func TestLoftCapBandNoBoreChamfersBothOuterLoops(t *testing.T) {
 	after, err := out.Volume()
 	require.NoError(t, err)
 	require.Less(t, after.Value.Base()+after.Bound.Base(), before.Value.Base()-before.Bound.Base())
-	require.GreaterOrEqual(t, after.Bound.Base(), body.payload.(loftPayload).proof.VolSymDiff)
+	require.GreaterOrEqual(t, after.Bound.Base(), body.n.Payload.(loftPayload).proof.VolSymDiff)
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
-	require.Greater(t, mesh.n.VolSymDiff, body.payload.(loftPayload).proof.VolSymDiff)
+	require.Greater(t, mesh.n.VolSymDiff, body.n.Payload.(loftPayload).proof.VolSymDiff)
 	require.NoError(t, requireVolumeProvingPayload(t.Context(), out, 0))
 }

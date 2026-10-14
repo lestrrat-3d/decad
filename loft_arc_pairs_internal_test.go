@@ -200,7 +200,7 @@ func TestLoftConeFrustumWallAreaEnclosed(t *testing.T) {
 	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
 
-	loaded, ok := body.payload.(loftPayload)
+	loaded, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)
 	require.Greater(t, loaded.sectionDelta, 0.0, "a genuinely curved, un-congruent pairing must carry a positive sectionDelta")
 
@@ -696,7 +696,7 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 
-	loaded, ok := body.payload.(loftPayload)
+	loaded, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)
 	require.Equal(t, 0.0, loaded.delta, "m=1: no interior computed station, so delta must be exactly 0")
 	require.Greater(t, loaded.sectionDelta, 0.0, "m=1: the single chord still departs from the arc it denotes")
@@ -770,7 +770,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 
-	loaded, ok := body.payload.(loftPayload)
+	loaded, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)
 	require.GreaterOrEqual(t, proofarith.FloatRat(loaded.delta).Cmp(want), 0,
 		"delta must dominate the drifted arc end's own proven radial displacement; a zero here is the defect this test guards")
@@ -828,7 +828,7 @@ func TestLoftPlacedArcWedgeCarriesBothDisplacements(t *testing.T) {
 	placed, err := Copy(t.Context(), body, WithCopyPlacement(moved))
 	require.NoError(t, err)
 
-	loaded, ok := placed.payload.(loftPayload)
+	loaded, ok := placed.n.Payload.(loftPayload)
 	require.True(t, ok)
 	require.Greater(t, loaded.delta, 0.0, "a placed body's delta must be positive")
 	require.Greater(t, loaded.sectionDelta, 0.0, "a curved pair's sectionDelta must be positive whether or not the body is placed")
@@ -846,7 +846,7 @@ func TestLoftCopyPlacementTenTimesSectionDeltaUnchanged(t *testing.T) {
 	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
 
-	loaded0, ok := body.payload.(loftPayload)
+	loaded0, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)
 	want := loaded0.sectionDelta
 	require.Greater(t, want, 0.0)
@@ -856,7 +856,7 @@ func TestLoftCopyPlacementTenTimesSectionDeltaUnchanged(t *testing.T) {
 		require.NoError(t, err)
 		body, err = Copy(t.Context(), body, WithCopyPlacement(motion))
 		require.NoError(t, err)
-		loaded, ok := body.payload.(loftPayload)
+		loaded, ok := body.n.Payload.(loftPayload)
 		require.True(t, ok)
 		require.Equal(t, want, loaded.sectionDelta, "sectionDelta must not drift across repeated placements (iteration %d)", i)
 	}

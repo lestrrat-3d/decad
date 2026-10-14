@@ -358,7 +358,7 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 	if chord == 0 {
 		return nil, fmt.Errorf(`%w: a zero chord tolerance admits no chord`, ErrDegenerate)
 	}
-	if b.payload == nil {
+	if b.n.Payload == nil {
 		return nil, fmt.Errorf(`%w: this evaluator cannot tessellate a body it did not build`, ErrUnsupported)
 	}
 	key := math.Float64bits(chord)
@@ -378,7 +378,7 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 	if verify < VerifyAll {
 		mesh.withholdProofs()
 	}
-	mesh.n.BoundaryOK = verify >= VerifyBoundary || !payloadAuditsFacetContact(b.payload)
+	mesh.n.BoundaryOK = verify >= VerifyBoundary || !payloadAuditsFacetContact(b.n.Payload)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -394,28 +394,28 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 // off the payload at no cost and publishes them unconditionally;
 // tessellateContext withholds them afterwards.
 func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify Verification) (*Mesh, error) {
-	if p, ok := b.payload.(allEdgeChamferPayload); ok {
+	if p, ok := b.n.Payload.(allEdgeChamferPayload); ok {
 		return tessellateAllEdgeChamfer(ctx, b, p, chord, verify)
 	}
-	if fp, ok := b.payload.(facetedPayload); ok {
+	if fp, ok := b.n.Payload.(facetedPayload); ok {
 		return tessellateFaceted(ctx, b, fp, chord)
 	}
-	if cp, ok := b.payload.(cupPayload); ok {
+	if cp, ok := b.n.Payload.(cupPayload); ok {
 		return tessellateCup(ctx, b, cp.view(), chord, verify)
 	}
-	if sp, ok := b.payload.(stackedPrismPayload); ok {
+	if sp, ok := b.n.Payload.(stackedPrismPayload); ok {
 		return tessellateStacked(ctx, b, sp, chord, verify)
 	}
-	if bp, ok := b.payload.(brepPayload); ok {
+	if bp, ok := b.n.Payload.(brepPayload); ok {
 		return tessellateBrep(ctx, b, bp, chord, verify)
 	}
-	if lp, ok := b.payload.(loftPayload); ok {
+	if lp, ok := b.n.Payload.(loftPayload); ok {
 		// The loft path exactly restates the payload's complete set for a
 		// solid or its recorded wall range for a sheet, with no chording
 		// (internal/loftmesh.RestateLoft's own doc comment owns why).
 		return tessellateLoft(ctx, b, lp)
 	}
-	if tp, ok := b.payload.(twistedSweepPayload); ok {
+	if tp, ok := b.n.Payload.(twistedSweepPayload); ok {
 		if chord < tp.delta {
 			return nil, fmt.Errorf(`%w: the twisted sweep's held boundary is %g mm from its true wall; %g mm is finer`, ErrUnsupported, tp.delta, chord)
 		}
@@ -436,7 +436,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		mesh.n.SymDiffOK = true
 		return mesh, nil
 	}
-	if tp, ok := b.payload.(compositeTwistedSweepPayload); ok {
+	if tp, ok := b.n.Payload.(compositeTwistedSweepPayload); ok {
 		if chord < tp.delta {
 			return nil, fmt.Errorf(`%w: the composite twist's held boundary is %g mm from its true wall; %g mm is finer`,
 				ErrUnsupported, tp.delta, chord)
@@ -444,22 +444,22 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		mesh := *tp.mesh
 		return &mesh, nil
 	}
-	if pp, ok := b.payload.(patchPayload); ok {
+	if pp, ok := b.n.Payload.(patchPayload); ok {
 		return tessellatePatch(ctx, b, pp, chord, verify)
 	}
-	if rp, ok := b.payload.(revolvePayload); ok {
+	if rp, ok := b.n.Payload.(revolvePayload); ok {
 		return tessellateRevolve(ctx, b, rp, chord, verify)
 	}
-	if cbp, ok := b.payload.(capBlendPayload); ok {
+	if cbp, ok := b.n.Payload.(capBlendPayload); ok {
 		return tessellateCapBlend(ctx, b, cbp, chord, verify)
 	}
-	if dp, ok := b.payload.(draftPayload); ok {
+	if dp, ok := b.n.Payload.(draftPayload); ok {
 		return tessellateDraft(ctx, b, dp, chord, verify)
 	}
-	if dp, ok := b.payload.(twoSidedDraftPayload); ok {
+	if dp, ok := b.n.Payload.(twoSidedDraftPayload); ok {
 		return tessellateTwoSidedDraft(ctx, b, dp, chord, verify)
 	}
-	if sp, ok := b.payload.(stitchPayload); ok {
+	if sp, ok := b.n.Payload.(stitchPayload); ok {
 		if sp.tris == nil {
 			return tessellateStitchCurved(ctx, b, sp, chord, verify)
 		}
@@ -468,17 +468,17 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// reasoning tessellateLoft's own arm above states for a loft.
 		return tessellateStitch(ctx, b, sp)
 	}
-	if pp, ok := b.payload.(bodyPatchPayload); ok {
+	if pp, ok := b.n.Payload.(bodyPatchPayload); ok {
 		return tessellateBodyPatch(ctx, b, pp, chord, verify)
 	}
-	if cp, ok := b.payload.(chainPayload); ok {
+	if cp, ok := b.n.Payload.(chainPayload); ok {
 		// The chain-fed ribbon path takes no chord tolerance either, on the
 		// identical reasoning: every wall is already an exact planar quad,
 		// so there is no chording decision for a tolerance to bind
 		// (tessellate_chain.go's own doc comment owns why).
 		return tessellateChain(ctx, b, cp)
 	}
-	if sp, ok := b.payload.(chainSweepPayload); ok {
+	if sp, ok := b.n.Payload.(chainSweepPayload); ok {
 		if len(sp.spans) != 0 {
 			return tessellateChainSweep(ctx, b, sp, chord, verify)
 		}
@@ -492,17 +492,17 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// than a second one keyed on the wrapper type.
 		return tessellateChain(ctx, b, sp.chain)
 	}
-	if mp, ok := b.payload.(mitredSweepPayload); ok {
+	if mp, ok := b.n.Payload.(mitredSweepPayload); ok {
 		// docs/sweep-design.md Table DM row DM2: an exact restatement of the
 		// held triangles, refused below the payload's own delta.
 		return tessellateMitredSweep(ctx, b, mp, chord)
 	}
-	if cp, ok := b.payload.(coilPayload); ok {
+	if cp, ok := b.n.Payload.(coilPayload); ok {
 		// docs/helix-design.md Table CD row CD2: an exact restatement of the
 		// held triangles, refused below the payload's own delta.
 		return tessellateCoil(ctx, b, cp, chord, verify)
 	}
-	if sp, ok := b.payload.(sweepPayload); ok {
+	if sp, ok := b.n.Payload.(sweepPayload); ok {
 		// One-span sweeps reuse the prism or revolve mesh of their exact
 		// analytic reduction. A sheet carries no occupied-volume proof.
 		if len(sp.spans) != 0 {
@@ -513,11 +513,11 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		}
 		return tessellatePrism(ctx, b, sp.prism, sweepWallRole, chord, verify)
 	}
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, patch, stacked prism, brep, chain-fed prism, sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, patch, stacked prism, brep, chain-fed prism, sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, b.n.Payload)
 	}
 	return tessellatePrism(ctx, b, pp, prismWallRole, chord, verify)
 }
@@ -676,7 +676,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 			WallSlack: cl.WallSlack, CapSlack: cl.CapSlack, SegmentArea: cl.SegmentArea,
 			Walks: cl.Walks, PerimeterUpper: cl.PerimeterUpper})
 	}
-	topology := tessellation.PrismWalls(chorded, sheet, pp.axialDelta())
+	topology := tessellation.PrismWalls(chorded, sheet, pp.AxialDelta())
 	mesh.n.AreaSlack = topology.AreaSlack
 	pts2, sampleBound := topology.Points, topology.Bounds
 	faceTrim, faceAxial := topology.FaceTrim, topology.FaceAxial

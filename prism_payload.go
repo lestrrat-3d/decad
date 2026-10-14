@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -21,25 +22,25 @@ import (
 // section, frame, sweep levels and their displacements, placement, blend roles,
 // surface flag and walk cache — is prismrecord.Payload, embedded by value so a
 // copy of the wrapper copies the record exactly as before. The wrapper adds what
-// needs the root package: transform and placed (featurePayload), and the
-// readings that satisfy root interfaces (axialDelta, extentAlong). See
+// needs the root package: Transform and Placed (topo.Payload), and the
+// readings that satisfy root interfaces (AxialDelta, ExtentAlong). See
 // docs/evaluator-design.md §8.
 type prismPayload struct {
 	prismrecord.Payload
 }
 
-// axialDelta is the larger of the two ends' displacements: the figure a reading
+// AxialDelta is the larger of the two ends' displacements: the figure a reading
 // that cannot attribute its error to one particular end takes.
-func (pp prismPayload) axialDelta() float64 { return math.Max(pp.Z0Delta, pp.Z1Delta) }
+func (pp prismPayload) AxialDelta() float64 { return math.Max(pp.Z0Delta, pp.Z1Delta) }
 
 func vecL1(v r3.Vec) float64 {
 	return proofbound.AbsSumUpper(v.X, v.Y, v.Z)
 }
 
-// transform is the accumulated rigid placement.
-func (pp prismPayload) transform() r3.Transform { return pp.Xform }
+// Transform is the accumulated rigid placement.
+func (pp prismPayload) Transform() r3.Transform { return pp.Xform }
 
-// placed re-evaluates the same record under the composed motion. It is a
+// Placed re-evaluates the same record under the composed motion. It is a
 // re-evaluation path: no moments preflight has run on this record within the
 // call, so the build opens the record's one counter itself.
 //
@@ -49,7 +50,8 @@ func (pp prismPayload) transform() r3.Transform { return pp.Xform }
 // back instead of bracketing every free-form arc a second time. That counter is
 // still charged what the resolution cost, so a record near its ceiling refuses
 // here exactly as it did on the way in (docs/spline-design.md §5.2).
-func (pp prismPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (pp prismPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	pp.Xform = composed
-	return evalPrismContext(ctx, d, ref, pp, freeform.NewFreeformWork())
+	return placedNode(evalPrismContext(ctx, d, ref, pp, freeform.NewFreeformWork()))
 }

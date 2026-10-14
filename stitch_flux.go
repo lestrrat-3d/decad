@@ -232,10 +232,10 @@ import (
 // stitchBounds already reads operand bodies from.
 func stitchRuleSAdmits(ctx context.Context, srcFaces []*Face) bool {
 	bodies := stitchOperandBodies(srcFaces)
-	if len(bodies) != 1 || bodies[0] == nil || bodies[0].payload == nil {
+	if len(bodies) != 1 || bodies[0] == nil || bodies[0].n.Payload == nil {
 		return false
 	}
-	return payloadProvesSimple(ctx, bodies[0].payload)
+	return payloadProvesSimple(ctx, bodies[0].n.Payload)
 }
 
 // stitchAllTetrahedronEligible reports whether every face qualifies for

@@ -91,8 +91,8 @@ func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[proven
 		if tooth == nil || source.originalTeeth[toothIndex] == nil {
 			return nil, fmt.Errorf("%w: loft/cylinder tooth source is absent", ErrUnsupported)
 		}
-		lp, ok := tooth.payload.(loftPayload)
-		original, originalOK := source.originalTeeth[toothIndex].payload.(loftPayload)
+		lp, ok := tooth.n.Payload.(loftPayload)
+		original, originalOK := source.originalTeeth[toothIndex].n.Payload.(loftPayload)
 		if !ok || !lp.authenticatedReconstruction || lp.sourceIdentity == nil ||
 			!originalOK || original.sourceIdentity != lp.sourceIdentity ||
 			lp.proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.proof.FacetDeparture) ||

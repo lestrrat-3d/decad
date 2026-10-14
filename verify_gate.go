@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // This file proves the reference diameter Verify's tolerance gate is
@@ -56,7 +57,7 @@ import (
 // maximum reads above its own diameter, so no reading here takes them. A prism reads station witnesses along its walls
 // (stationGateDiameter), each held within a proven gap of a point of the
 // body, and shrinks their maximum by twice the widest gap plus its
-// axialDelta. fallbackGateDiameter applies the same reading to the prisms it
+// AxialDelta. fallbackGateDiameter applies the same reading to the prisms it
 // reads, over each one's own displacement. Every revolve, solid or sheet and
 // whatever its section displacement, sweeps its meridian stations to the
 // angles its farthest pair sits at (revolveGateDiameter) and compares each
@@ -129,10 +130,10 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	if body == nil {
 		return 0, false, nil
 	}
-	if payload, ok := body.payload.(facetedPayload); ok {
+	if payload, ok := body.n.Payload.(facetedPayload); ok {
 		return payload.diameter, tolerance.UsableMagnitude(payload.diameter), nil
 	}
-	if payload, ok := body.payload.(loftPayload); ok {
+	if payload, ok := body.n.Payload.(loftPayload); ok {
 		d, ok, err := diameter.PointsContext(ctx, payload.verts)
 		if err != nil || !ok {
 			return d, ok, err
@@ -143,7 +144,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = diameter.LowerForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
-	if payload, ok := body.payload.(twistedSweepPayload); ok {
+	if payload, ok := body.n.Payload.(twistedSweepPayload); ok {
 		points := payload.held.verts
 		if payload.mesh != nil {
 			// The stationed build sews several Lofts into this authenticated
@@ -157,7 +158,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = diameter.LowerForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
-	if payload, ok := body.payload.(compositeTwistedSweepPayload); ok {
+	if payload, ok := body.n.Payload.(compositeTwistedSweepPayload); ok {
 		d, ok, err := diameter.PointsContext(ctx, payload.mesh.n.Vertices)
 		if err != nil || !ok {
 			return d, ok, err
@@ -165,7 +166,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = diameter.LowerForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
-	if payload, ok := body.payload.(mitredSweepPayload); ok {
+	if payload, ok := body.n.Payload.(mitredSweepPayload); ok {
 		// A mitred sweep's boundary is a polyhedron over its held vertex
 		// table, each vertex within delta of the exact one, so the loft arm's
 		// reading and shrink apply unchanged (docs/sweep-design.md §16.6).
@@ -176,7 +177,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = diameter.LowerForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
-	if payload, ok := body.payload.(coilPayload); ok {
+	if payload, ok := body.n.Payload.(coilPayload); ok {
 		// A coil's held shell is a polyhedron over its vertex table, each
 		// vertex within delta of a true point, so the mitred arm's reading
 		// and shrink apply unchanged (docs/helix-design.md §7).
@@ -187,7 +188,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = diameter.LowerForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
-	if payload, ok := body.payload.(stitchPayload); ok {
+	if payload, ok := body.n.Payload.(stitchPayload); ok {
 		// Modelled on the loft arm immediately above: a stitched body's
 		// boundary is a polyhedron over its own shared vertex table exactly
 		// as a loft's is, so the same held-vertex-set diameter is a
@@ -203,7 +204,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = diameter.LowerForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
-	if payload, ok := body.payload.(chainPayload); ok {
+	if payload, ok := body.n.Payload.(chainPayload); ok {
 		budget := proofbound.NewWorkBudget(ctx)
 		g, ok, err := chainGatePoints(ctx, budget, body, payload)
 		if err != nil || !ok {
@@ -212,10 +213,10 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok, err := g.Diameter(budget)
 		return d, ok && d > 0, err
 	}
-	if payload, ok := body.payload.(draftPayload); ok {
+	if payload, ok := body.n.Payload.(draftPayload); ok {
 		return draftGateDiameter(ctx, body, payload)
 	}
-	if payload, ok := body.payload.(twoSidedDraftPayload); ok {
+	if payload, ok := body.n.Payload.(twoSidedDraftPayload); ok {
 		negative, okNeg, err := draftGateDiameter(ctx, body, payload.negative)
 		if err != nil {
 			return 0, false, err
@@ -226,16 +227,16 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		}
 		return math.Max(negative, positive), okNeg || okPos, nil
 	}
-	if _, ok := body.payload.(chainLoftPayload); ok {
+	if _, ok := body.n.Payload.(chainLoftPayload); ok {
 		return chainVertexGateDiameter(ctx, body, 0)
 	}
-	if payload, ok := body.payload.(chainRevolvePayload); ok {
+	if payload, ok := body.n.Payload.(chainRevolvePayload); ok {
 		return chainRevolveEdgeGateDiameter(ctx, body, payload.sectionDelta)
 	}
-	if payload, ok := body.payload.(brepPayload); ok {
+	if payload, ok := body.n.Payload.(brepPayload); ok {
 		return brepGateDiameter(ctx, body, payload)
 	}
-	if _, ok := body.payload.(patchPayload); ok {
+	if _, ok := body.n.Payload.(patchPayload); ok {
 		// A patch has no exact carrier model of its own (it is a single flat
 		// face, not a prism or a revolve), and no witness set gateWitnessPrism
 		// reads either. Its own box is a proven LOWER bound on its diameter
@@ -251,7 +252,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok := diameter.LowerForDisplacement(d, box.Bound.Base())
 		return d, ok, nil
 	}
-	if _, ok := body.payload.(bodyPatchPayload); ok {
+	if _, ok := body.n.Payload.(bodyPatchPayload); ok {
 		// PatchEdges's own payload reuses the patchPayload arm immediately
 		// above verbatim: its Bounds is the rebuilt receiver's own box
 		// (docs/surface-design.md §5.2), so the same box-based lower bound
@@ -262,7 +263,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return d, ok, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	switch payload := body.payload.(type) {
+	switch payload := body.n.Payload.(type) {
 	case revolvePayload:
 		// Every revolve reads its meridian stations, solid or sheet, with or
 		// without a section displacement: each point carries its own gap,
@@ -276,13 +277,13 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return 0, false, err
 	}
 	if ok {
-		if payload, isPrism := body.payload.(prismPayload); isPrism {
-			return stationGateDiameter(budget, []prismPayload{payload}, payload.axialDelta())
+		if payload, isPrism := body.n.Payload.(prismPayload); isPrism {
+			return stationGateDiameter(budget, []prismPayload{payload}, payload.AxialDelta())
 		}
 		return 0, false, nil
 	}
-	if payload, isPrism := body.payload.(prismPayload); isPrism {
-		if d, ok, err := diameter.PrismFreeformSection(ctx, payload.Payload, payload.axialDelta); ok || err != nil {
+	if payload, isPrism := body.n.Payload.(prismPayload); isPrism {
+		if d, ok, err := diameter.PrismFreeformSection(ctx, payload.Payload, payload.AxialDelta); ok || err != nil {
 			return d, ok, err
 		}
 	}
@@ -386,7 +387,7 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta 
 // reference, which is why gateWitnessPrisms hands back a displacement beside
 // the prisms to read.
 func fallbackGateDiameter(budget *proofbound.WorkBudget, body *Body) (float64, bool, error) {
-	witnesses, displacement, ok := gateWitnessPrisms(body.payload)
+	witnesses, displacement, ok := gateWitnessPrisms(body.n.Payload)
 	if !ok {
 		return 0, false, nil
 	}
@@ -421,7 +422,7 @@ func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
 	level := func(profile profileRecord, z float64) prismPayload {
 		return prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: dp.frame, Z0: z, Z1: z, Xform: dp.xform}}
 	}
-	return []prismPayload{level(dp.profile, nearZ), level(dp.far, farZ)}, proofbound.AbsSumUpper(dp.axialDelta(), dp.farDelta)
+	return []prismPayload{level(dp.profile, nearZ), level(dp.far, farZ)}, proofbound.AbsSumUpper(dp.AxialDelta(), dp.farDelta)
 }
 
 // gateWitnessPrism builds the straight prism fallbackGateDiameter reads its
@@ -448,7 +449,7 @@ func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
 // regardless of sense. Either way the whole cup body — walls, floor and
 // cavity alike — sits inside pl.outer's own full-height prism: the cavity
 // never reaches farther than the outer region, the same containment
-// cupPayload.extentAlong already relies on. Its outer walls run the cup's
+// cupPayload.ExtentAlong already relies on. Its outer walls run the cup's
 // full height, so every station on them is a point of the body. The
 // receiver's own section is its own denotation, because every modify op
 // refuses a receiver carrying a section displacement (fillet.go's
@@ -465,7 +466,7 @@ func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
 // recorded one. It does not need to be. What this gate needs is a lower bound
 // on the body's own diameter, and §7 proves every recorded boundary point sits
 // within sectionDelta of the section the payload denotes, while each recorded
-// level sits within axialDelta of the level it denotes. Those two displacements
+// level sits within AxialDelta of the level it denotes. Those two displacements
 // are perpendicular — one moves a coordinate IN the plane, the other moves a
 // level ALONG the normal — so their sum is an upper bound on how far a lifted
 // witness sits from the denoted body point below it, and diameter.LowerForDisplacement
@@ -474,26 +475,26 @@ func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
 // section outright: it builds the clearance kernel's certificate carriers,
 // which have to be exact statements about a boundary, and a witness set for a
 // diameter is neither a certificate nor a carrier.
-func gateWitnessPrism(payload featurePayload) (prismPayload, float64, bool) {
+func gateWitnessPrism(payload topo.Payload) (prismPayload, float64, bool) {
 	switch pl := payload.(type) {
 	case cupPayload:
 		cup := pl.view()
 		witness := cup.outerPrism()
 		witness.Profile = cup.outer
-		displacement := proofbound.AbsSumUpper(witness.SectionDelta, witness.axialDelta())
+		displacement := proofbound.AbsSumUpper(witness.SectionDelta, witness.AxialDelta())
 		witness.SectionDelta = 0
 		return witness, displacement, true
 	case prismPayload:
 		if pl.SectionDelta == 0 {
 			return prismPayload{}, 0, false
 		}
-		displacement := proofbound.AbsSumUpper(pl.SectionDelta, pl.axialDelta())
+		displacement := proofbound.AbsSumUpper(pl.SectionDelta, pl.AxialDelta())
 		witness := pl
 		witness.SectionDelta = 0
 		return witness, displacement, true
 	case sweepPayload:
 		witness := pl.prism
-		displacement := proofbound.AbsSumUpper(witness.SectionDelta, witness.axialDelta())
+		displacement := proofbound.AbsSumUpper(witness.SectionDelta, witness.AxialDelta())
 		witness.SectionDelta = 0
 		return witness, displacement, true
 	default:
@@ -508,16 +509,16 @@ func gateWitnessPrism(payload featurePayload) (prismPayload, float64, bool) {
 // slab's outer swept over the whole stack would hold points a union-built
 // stack does not reach, and would overstate its diameter. A capBlendPayload
 // reads capBlendWitnessPrisms.
-func gateWitnessPrisms(payload featurePayload) ([]prismPayload, float64, bool) {
+func gateWitnessPrisms(payload topo.Payload) ([]prismPayload, float64, bool) {
 	if pl, ok := payload.(capBlendPayload); ok {
-		return capBlendWitnessPrisms(pl), pl.axialDelta(), true
+		return capBlendWitnessPrisms(pl), pl.AxialDelta(), true
 	}
 	if pl, ok := payload.(stackedPrismPayload); ok {
 		runs := pl.outerRuns()
 		for i := range runs {
 			runs[i].SectionDelta = 0
 		}
-		return runs, proofbound.AbsSumUpper(pl.sectionDelta, pl.axialDelta()), true
+		return runs, proofbound.AbsSumUpper(pl.sectionDelta, pl.AxialDelta()), true
 	}
 	witness, displacement, ok := gateWitnessPrism(payload)
 	if !ok {
@@ -534,7 +535,7 @@ func gateWitnessPrisms(payload featurePayload) ([]prismPayload, float64, bool) {
 // side levels untouched. A loop chamfered on the start cap therefore starts
 // at z0 + ds, one chamfered on the end cap stops at z1 - ds, and an
 // unchamfered loop runs from z0 to z1. Those are the float sums the build
-// places each band's side level at, and capBlendPayload.axialDelta bounds how
+// places each band's side level at, and capBlendPayload.AxialDelta bounds how
 // far any of them sits from the level it denotes. The receiver's walls at the
 // cap levels are not points of the body wherever a band cuts them, and a
 // reading from them overstates the body's diameter: a 10 mm cube chamfered 2

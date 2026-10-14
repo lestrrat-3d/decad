@@ -126,8 +126,8 @@ func internalTrapezoidPocket(t *testing.T) *Body {
 	tool := internalOffsetBox(t, doc, 40, 10, 60, 30, 5, Distance{D: units.Millimeters(5), Dir: Along})
 	out, err := Cut(t.Context(), prism, tool)
 	require.NoError(t, err)
-	_, ok := out.payload.(stackedPrismPayload)
-	require.True(t, ok, "the trapezoid pocket is a stacked prism, got %T", out.payload)
+	_, ok := out.n.Payload.(stackedPrismPayload)
+	require.True(t, ok, "the trapezoid pocket is a stacked prism, got %T", out.n.Payload)
 	return out
 }
 
@@ -162,15 +162,15 @@ func requirePatchKinds(t *testing.T, body *Body, planes, cones int) []*Face {
 func chamferLoopOf(t *testing.T, body *Body, n, p r3.Vec, li int, d float64) (*Body, brepPayload) {
 	t.Helper()
 	before := 0
-	if bp, ok := body.payload.(brepPayload); ok {
+	if bp, ok := body.n.Payload.(brepPayload); ok {
 		before = len(bp.loopBands)
 	}
 	f := planarBodyFace(t, body, n, p)
 	out, err := Chamfer(t.Context(), body, loopQuery(f.Loops()[li]), units.Millimeters(d))
 	require.NoError(t, err)
 	require.Error(t, documentHandle(body.n.Doc).requireLive(body), "the receiver is retired")
-	bp, ok := out.payload.(brepPayload)
-	require.True(t, ok, "route L builds a brep, got %T", out.payload)
+	bp, ok := out.n.Payload.(brepPayload)
+	require.True(t, ok, "route L builds a brep, got %T", out.n.Payload)
 	require.Nil(t, bp.stack)
 	require.Len(t, bp.loopBands, before+1)
 	requireClosedTopology(t, out)
@@ -305,7 +305,7 @@ func TestBrepLoopChamferCrossDrilledBothLoops(t *testing.T) {
 	lo, hi := piEnclosed(big.NewRat(15739, 1), big.NewRat(-180, 1))
 	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 	requirePatchKinds(t, out, 8, 0)
-	bp := out.payload.(brepPayload)
+	bp := out.n.Payload.(brepPayload)
 	require.Len(t, bp.loopBands, 2)
 	for _, wall := range []curveSegment{
 		lineSeg{Start: planePoint{U: 40, V: 0}, End: planePoint{U: 40, V: 20}, TStart: 0, TEnd: 1},

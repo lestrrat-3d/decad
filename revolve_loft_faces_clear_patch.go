@@ -137,7 +137,7 @@ func newRevolveLoftFacesClearPatchContext(ctx context.Context,
 	if ctx == nil || source == nil || source.tooth == nil {
 		return nil, false, nil
 	}
-	payload, ok := source.tooth.payload.(facetedPayload)
+	payload, ok := source.tooth.n.Payload.(facetedPayload)
 	if !ok || !source.toolProof.current(source.tooth, payload) {
 		return nil, false, nil
 	}
@@ -279,7 +279,7 @@ func revolveLoftFacesClearPatchToolCurrent(source *revolveLoftFacesSourceCertifi
 	if source == nil || source.tooth == nil {
 		return false
 	}
-	payload, ok := source.tooth.payload.(facetedPayload)
+	payload, ok := source.tooth.n.Payload.(facetedPayload)
 	return ok && source.toolProof.current(source.tooth, payload)
 }
 

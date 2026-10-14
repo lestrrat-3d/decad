@@ -72,7 +72,7 @@ func obliqueBossHasOrigin(face *topo.Face, group facetGroup) bool {
 }
 
 func obliqueBossPlateWallRoles(rec *obliqueBossRecord) ([4]string, bool) {
-	pp, ok := rec.plate.payload.(prismPayload)
+	pp, ok := rec.plate.n.Payload.(prismPayload)
 	if !ok || len(pp.Profile.Outer.Segments) != 4 {
 		return [4]string{}, false
 	}

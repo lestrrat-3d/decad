@@ -34,7 +34,7 @@ func TestLoftWallAreaCacheMatchesHeldTriangles(t *testing.T) {
 	require.NoError(t, err)
 	body, err := New().Loft(t.Context(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
 	require.NoError(t, err)
-	pl, ok := body.payload.(loftPayload)
+	pl, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)
 	b := loftMassAtTarget(t, pl, 0)
 	a := b.a

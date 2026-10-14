@@ -65,7 +65,7 @@ func pointConeFacetGroup(cone *pointConeLimit, flip bool) facetGroup {
 // axis is world X. Every parameter is read from the authenticated meridian;
 // the rounded public Cone tag is used only for surface reporting.
 func exactPointCone(b *Body) (*pointConeLimit, bool) {
-	rp, ok := b.payload.(revolvePayload)
+	rp, ok := b.n.Payload.(revolvePayload)
 	if !ok || !rp.full || rp.surfaceResult || rp.sectionDelta != 0 || rp.xform != r3.Identity() ||
 		len(rp.profile.Holes) != 0 || len(rp.profile.Outer.Segments) != 3 ||
 		rp.frame.Origin() != (r3.Vec{}) || rp.frame.U() != (r3.Vec{X: 1}) ||
@@ -143,7 +143,7 @@ func tryPointConeBoolean(ctx context.Context, op meshbool.OperationKind, d *Docu
 	if !ok {
 		return nil, false, nil
 	}
-	fp, ok := target.payload.(facetedPayload)
+	fp, ok := target.n.Payload.(facetedPayload)
 	if !ok || fp.xform != r3.Identity() {
 		return nil, false, nil
 	}

@@ -344,7 +344,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	}
 	cbp.patches = patchGeoms
 	cbp.bandDelta = bandDeltas
-	body.payload = cbp
+	body.n.Payload = cbp
 	return body, nil
 }
 
@@ -447,7 +447,7 @@ func readBandMassWithSideArea(ctx context.Context, li int, loop loopRecord, cbp 
 // are positions and Bound is the absolute error on them (measurement.go), so a
 // box widened outward by the setback d would be a Min sitting d millimetres
 // from the true extreme while claiming an error of zero; §8.4 asks for bounds
-// from patch extrema for that reason, and capblend.go's extentAlong already
+// from patch extrema for that reason, and capblend.go's ExtentAlong already
 // states why padding the receiver prism by d proves nothing about attainment.
 //
 // The Bound is the reading's own, never a fixed zero. An extreme held by a

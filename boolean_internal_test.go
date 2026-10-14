@@ -695,7 +695,7 @@ func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
 
 	union, err := Union(t.Context(), wedge, bar)
 	require.NoError(t, err)
-	proof, ok := union.payload.(facetedPayload)
+	proof, ok := union.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Contains(t, proof.verts, r3.Vec{Y: 0.5 * scale})
 	require.Positive(t, proof.meshBound)
@@ -1168,7 +1168,7 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	before := body.payload.(facetedPayload)
+	before := body.n.Payload.(facetedPayload)
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
 	translation, err := r3.Translation(r3.NewVec(1e12, -2e12, 3e12))
@@ -1176,9 +1176,9 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	placement, err := rotation.Then(translation)
 	require.NoError(t, err)
 
-	placed, err := before.placed(t.Context(), doc, producerID(1), placement)
+	placed, err := placePayload(t.Context(), before, doc, producerID(1), placement)
 	require.NoError(t, err)
-	after := placed.payload.(facetedPayload)
+	after := placed.n.Payload.(facetedPayload)
 	want, ok := diameter.Points(after.verts)
 	require.True(t, ok)
 	require.NotEqual(t, before.diameter, want, "the placement must make a stale cached diameter observable")
@@ -1216,7 +1216,7 @@ func TestFacetedPlacementEnclosesExactPriorAndMotionBounds(t *testing.T) {
 	require.NoError(t, err)
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
-	before, ok := union.payload.(facetedPayload)
+	before, ok := union.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Zero(t, before.meshBound)
 	require.Zero(t, before.volSymDiff)
@@ -1225,9 +1225,9 @@ func TestFacetedPlacementEnclosesExactPriorAndMotionBounds(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
-	placed, err := before.placed(t.Context(), doc, producerID(0), move)
+	placed, err := placePayload(t.Context(), before, doc, producerID(0), move)
 	require.NoError(t, err)
-	after := placed.payload.(facetedPayload)
+	after := placed.n.Payload.(facetedPayload)
 	maxInput := 0.0
 	for _, v := range before.verts {
 		maxInput = math.Max(maxInput, math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))))

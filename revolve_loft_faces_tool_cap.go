@@ -43,7 +43,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 		proof.toeFace.n.Body != bodyNode(proof.tooth) || proof.heelFace.n.Body != bodyNode(proof.tooth) {
 		return out, false
 	}
-	p, ok := proof.tooth.payload.(facetedPayload)
+	p, ok := proof.tooth.n.Payload.(facetedPayload)
 	if !ok || p.loftFacesTrim != proof.trim ||
 		!revolveLoftFacesTrimCurrent(proof.tooth, proof.trim) ||
 		uniqueResultSourceFace(proof.tooth, proof.trim.toeCapGroup) != proof.toeFace ||

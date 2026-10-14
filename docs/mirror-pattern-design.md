@@ -104,7 +104,7 @@ placement a float composition the caller never asked for, orthonormalised by
 | `Union`/`Cut`/`Intersect` | a reflected operand enters the analytic path with its record re-wound (general-boolean class A4: M5, T1); M3's shared walls bound its union and build analytically (A3); M2's shared wall lies inside its union and the image is displaced, so `Union` takes the mesh path's coplanar refusal, and the mirror join builds it (§5) |
 | `Trim`/`Extend`/`Split` | refuse a reflected operand (`surface_trim.go`). Unchanged by this design |
 | `VerifyMotion`, contact sweeps | a reflection joined to a proper motion is `ErrDegenerate` (`motion.go`): no rigid path exists. `contact_sphere.go` and `contact_sweep_replay.go` refuse a reflected pose. Both unchanged |
-| Loft | `loftPayload.placed` re-lifts every vertex under the full composed transform (M8's bound is the re-lift rounding, the same term any placed loft carries) |
+| Loft | `loftPayload.Placed` re-lifts every vertex under the full composed transform (M8's bound is the re-lift rounding, the same term any placed loft carries) |
 
 **`r3` needs nothing new.** `r3.Reflection(mirror Frame)` and
 `Transform.IsReflection` are the whole requirement. No hand-off is filed.

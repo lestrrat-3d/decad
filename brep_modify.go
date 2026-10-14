@@ -3,6 +3,8 @@ package decad
 import (
 	"context"
 	"fmt"
+
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // This file is the receiver dispatch of docs/brep-modify-design.md
@@ -88,7 +90,7 @@ type brepRoute struct {
 // route L (docs/modify-general-design.md §4), as brepLoopRoute picks, which
 // builds the result or refuses with a Table SB or Table SL row.
 func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (brepRoute, error) {
-	bp, sourceRoles, ok, err := brepModifyRecord(ctx, b.payload, req.op)
+	bp, sourceRoles, ok, err := brepModifyRecord(ctx, b.n.Payload, req.op)
 	if err != nil || !ok {
 		return brepRoute{}, err
 	}
@@ -133,7 +135,7 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 // shellThroughCut names it when the record reads as no through-cut record
 // either (SG3), unless one of the bounded stacked routes matches first.
 func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepModifyRequest, refusal error) (*Body, error) {
-	if sp, ok := b.payload.(stackedPrismPayload); ok {
+	if sp, ok := b.n.Payload.(stackedPrismPayload); ok {
 		body, matched, err := shellStackedBoss(ctx, b, sp, bp, req.shellCall)
 		if matched || err != nil {
 			return body, err
@@ -174,7 +176,7 @@ func commitModifyResult(ctx context.Context, b, body *Body) (*Body, error) {
 // the brep route does not take. A stacked receiver with no face view (a
 // prism group, or a record its own audit refuses) is SB2: brepOfStacked's
 // error, naming the op.
-func brepModifyRecord(ctx context.Context, payload featurePayload, op string) (brepPayload, []string, bool, error) {
+func brepModifyRecord(ctx context.Context, payload topo.Payload, op string) (brepPayload, []string, bool, error) {
 	switch p := payload.(type) {
 	case brepPayload:
 		if p.bossShell != nil || p.pocketShell != nil {

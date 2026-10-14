@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismextent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -196,15 +197,16 @@ type capPatch struct {
 	geom capPatchGeom
 }
 
-// transform is the accumulated rigid placement.
-func (cbp capBlendPayload) transform() r3.Transform { return cbp.xform }
+// Transform is the accumulated rigid placement.
+func (cbp capBlendPayload) Transform() r3.Transform { return cbp.xform }
 
-// placed re-evaluates the same record under the composed motion (evaluator
+// Placed re-evaluates the same record under the composed motion (evaluator
 // §8): every gate this PR enforces is a closed-form fact of the RECORD, so a
 // placed body re-derives the identical chamfer.
-func (cbp capBlendPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (cbp capBlendPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	cbp.xform = composed
-	return evalCapBlendContext(ctx, d, ref, cbp)
+	return placedNode(evalCapBlendContext(ctx, d, ref, cbp))
 }
 
 // prismLike returns a prismPayload sharing the receiver's frame and
@@ -229,10 +231,10 @@ func (cbp capBlendPayload) capBandLevel(capZ, matSign float64) proofbound.Bounde
 	return proofbound.MeasuredScalar(capZ, capDelta)
 }
 
-// axialDelta is the larger sweep-level displacement a body-relative stop must
+// AxialDelta is the larger sweep-level displacement a body-relative stop must
 // preserve when it resolves against this cap blend. A chamfered end also
 // carries the setback conversion and float-sum rounding of its level.
-func (cbp capBlendPayload) axialDelta() float64 {
+func (cbp capBlendPayload) AxialDelta() float64 {
 	z0Delta, z1Delta := cbp.z0Delta, cbp.z1Delta
 	if len(cbp.startLoops) != 0 {
 		s := cbp.start
@@ -245,7 +247,7 @@ func (cbp capBlendPayload) axialDelta() float64 {
 	return math.Max(z0Delta, z1Delta)
 }
 
-// extentAlong is the through-all stop's reading of the cap-blend body
+// ExtentAlong is the through-all stop's reading of the cap-blend body
 // (stops.go): its extent interval along an arbitrary world direction g, beside
 // the proven displacement extentBoundedAlong states for its two ends (Table DX,
 // DX5: "analytic patch extrema"). A
@@ -280,7 +282,7 @@ func (cbp capBlendPayload) axialDelta() float64 {
 // round even there, and charges what it commits.
 // A direction along the sweep ignores contour displacement but
 // still reads the cap level's own inherited axial displacement.
-func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
+func (cbp capBlendPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 	return cbp.extentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
 }
 
@@ -429,7 +431,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 // exists, but composing another feature onto a cap-blend result is not built.
 // Called before the ordinary prismPayload cast in Fillet/Chamfer/Shell so the
 // more specific reason leads the generic "not a prism" refusal.
-func requireNotCapBlendReceiver(payload featurePayload, op string) error {
+func requireNotCapBlendReceiver(payload topo.Payload, op string) error {
 	if _, ok := payload.(capBlendPayload); ok {
 		return fmt.Errorf(`%w: this evaluator does not yet compose another modify op onto a cap-loop chamfer result; %s a receiver this evaluator built directly`, ErrUnsupported, op)
 	}
@@ -440,7 +442,7 @@ func requireNotCapBlendReceiver(payload featurePayload, op string) error {
 // (docs/draft-design.md Table DD row DD14) outside its bounded rim routes.
 // It runs beside requireNotCapBlendReceiver, so the refusal names the draft
 // body rather than the generic class.
-func requireNotDraftReceiver(payload featurePayload, op string) error {
+func requireNotDraftReceiver(payload topo.Payload, op string) error {
 	switch payload.(type) {
 	case draftPayload, twoSidedDraftPayload:
 		return fmt.Errorf(`%w: this evaluator %s a straight prism, a revolve or their modify results; this draft body (a tapered extrude) is outside its bounded rim routes (modify S3)`, ErrUnsupported, op)

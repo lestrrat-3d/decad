@@ -73,7 +73,7 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 	if !ok || face != section.face || !verticalOriginsMatch(face.originRefs(), section.origins) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
-	payload, ok := proof.tooth.payload.(facetedPayload)
+	payload, ok := proof.tooth.n.Payload.(facetedPayload)
 	if !ok || payload.loftFacesTrim != trim || !revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
 		!revolveLoftFacesSourceRefsCurrent(trim, proof.tooth, proof.sourceRefs) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
@@ -144,7 +144,7 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 		return nil, false, err
 	}
 	trim := proof.trim
-	payload, ok := proof.tooth.payload.(facetedPayload)
+	payload, ok := proof.tooth.n.Payload.(facetedPayload)
 	if !ok || payload.loftFacesTrim != trim || !revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
 		!revolveLoftFacesSourceRefsCurrent(trim, proof.tooth, proof.sourceRefs) {
 		return nil, false, nil
@@ -233,7 +233,7 @@ func revolveLoftFacesVerticalLiveFace(tooth *Body, ref provenance.Ref) *Face {
 	if tooth == nil {
 		return nil
 	}
-	payload, ok := tooth.payload.(facetedPayload)
+	payload, ok := tooth.n.Payload.(facetedPayload)
 	if !ok {
 		return nil
 	}

@@ -22,7 +22,7 @@ func TestLoftCylinderUnionCentroidDiameter(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 	_, joined := loftCylinderTabJoin(t)
-	payload, ok := joined.payload.(facetedPayload)
+	payload, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.NotNil(t, payload.loftCylinderJoin)
 	require.Positive(t, payload.volSymDiff)
@@ -41,7 +41,7 @@ func TestLoftCylinderUnionCentroidDiameter(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := Transform(ctx, joined, move)
 	require.NoError(t, err)
-	placedPayload, ok := placed.payload.(facetedPayload)
+	placedPayload, ok := placed.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	// Placement rounds the held vertices and adds their displacement to the
 	// boundary bound; the centroid's diameter must cover that moved source.
@@ -99,7 +99,7 @@ func TestLoftCylinderBoreCentroidDiameter(t *testing.T) {
 	require.NoError(t, err)
 	bored, err := Cut(ctx, joined, tool)
 	require.NoError(t, err)
-	fp, ok := bored.payload.(facetedPayload)
+	fp, ok := bored.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.NotNil(t, fp.loftCylinderBore)
 	require.GreaterOrEqual(t, fp.dPair, facetedSourceDiameterUpper(fp.verts, fp.meshBound))

@@ -126,17 +126,18 @@ type mitredSweepPayload struct {
 	localMoments [3]*big.Rat
 }
 
-func (mp mitredSweepPayload) transform() r3.Transform { return mp.xform }
+func (mp mitredSweepPayload) Transform() r3.Transform { return mp.xform }
 
-// axialDelta is every held vertex's displacement; a ToFace stop against
+// AxialDelta is every held vertex's displacement; a ToFace stop against
 // either cap inherits it.
-func (mp mitredSweepPayload) axialDelta() float64 { return mp.delta }
+func (mp mitredSweepPayload) AxialDelta() float64 { return mp.delta }
 
-// placed re-runs §16.3 from the record under the composed motion (Table DM
+// Placed re-runs §16.3 from the record under the composed motion (Table DM
 // row DM7): the construction rebuilds the unplaced rationals, applies the
 // motion to them exactly, rounds once, re-decides the shell orientation and
 // re-runs the crossing audit, so delta never accumulates across placements.
-func (mp mitredSweepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (mp mitredSweepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	next := mitredSweepPayload{
 		profile:      mp.profile,
 		plane:        mp.plane,
@@ -146,7 +147,7 @@ func (mp mitredSweepPayload) placed(ctx context.Context, d *Document, ref produc
 		localVol6:    mp.localVol6,
 		localMoments: mp.localMoments,
 	}
-	return evalMitredSweep(ctx, d, ref, next)
+	return placedNode(evalMitredSweep(ctx, d, ref, next))
 }
 
 // tessellateMitredSweep is Table DM row DM2's exact restatement: the held

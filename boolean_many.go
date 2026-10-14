@@ -76,7 +76,7 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 // every producer identity used by its intermediate features.
 func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body) (*Body, producerID, bool, error) {
 	for _, operand := range operands {
-		if _, ok := operand.payload.(prismPayload); !ok {
+		if _, ok := operand.n.Payload.(prismPayload); !ok {
 			return nil, 0, false, nil
 		}
 	}

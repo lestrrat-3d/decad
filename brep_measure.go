@@ -123,7 +123,7 @@ func measureBrepContext(ctx context.Context, bp brepPayload, btopo *brepTopology
 		}
 		return record, err
 	}, brepgeom.FaceMass{Vol3: bands.vol3, Moments: bands.moments, Area: bands.area},
-		btopo.coordUpper, bp.sectionDelta(), bp.axialDelta())
+		btopo.coordUpper, bp.sectionDelta(), bp.AxialDelta())
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func measureBrepContext(ctx context.Context, bp brepPayload, btopo *brepTopology
 // so each adds its own extents (filletBandExtent).
 func brepBoundsContext(ctx context.Context, bp brepPayload) (Box, error) {
 	minC, maxC, bound, err := brepgeom.Bounds(ctx, len(bp.faces)+len(bp.loopBands), bp.extentAt,
-		bp.sectionDelta(), bp.axialDelta())
+		bp.sectionDelta(), bp.AxialDelta())
 	if err != nil {
 		return Box{}, err
 	}
@@ -179,12 +179,12 @@ func (bp brepPayload) extentAt(ctx context.Context, item int, axis r3.Vec,
 	return lo, hi, bound, true, err
 }
 
-// extentAlong is the through-all stop's reading (stops.go): the union of every
+// ExtentAlong is the through-all stop's reading (stops.go): the union of every
 // face's own extent along g, and every fillet band's (filletBandExtent,
 // docs/loop-fillet-design.md §5.4), beside the largest of their bounds. Like
 // a prism's, it refuses a record carrying a section displacement, which moves
 // a coordinate the interval is stated over.
-func (bp brepPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
+func (bp brepPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 	if bp.sectionDelta() != 0 {
 		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a brep body with a proven section displacement`, ErrUnsupported)
 	}

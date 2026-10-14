@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -95,7 +96,7 @@ func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, err
 	if err != nil {
 		return nil, err
 	}
-	out, err := rp.buildInstances(ctx, d, d.nextProducerID(), b.payload, keeping)
+	out, err := rp.buildInstances(ctx, d, d.nextProducerID(), b.n.Payload, keeping)
 	if err != nil {
 		return nil, err
 	}
@@ -124,13 +125,13 @@ func (b *Body) patternReceiver(ctx context.Context, spec PatternSpec) (*Document
 		return nil, resolvedPattern{}, false, err
 	}
 	rp := resolvedPattern{Spec: resolved}
-	if b.payload == nil {
+	if b.n.Payload == nil {
 		return nil, resolvedPattern{}, false, fmt.Errorf(`%w: this evaluator cannot copy a body it did not build`, ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, resolvedPattern{}, false, err
 	}
-	keeping, err := rp.keepsFrame(proofbound.NewWorkBudget(ctx), b.payload)
+	keeping, err := rp.keepsFrame(proofbound.NewWorkBudget(ctx), b.n.Payload)
 	if err != nil {
 		return nil, resolvedPattern{}, false, err
 	}
@@ -139,7 +140,7 @@ func (b *Body) patternReceiver(ctx context.Context, spec PatternSpec) (*Document
 
 // buildInstances builds instances 1..Count−1 under the producer identities
 // base, base+1, ..., registering none of them.
-func (rp resolvedPattern) buildInstances(ctx context.Context, d *Document, base producerID, payload featurePayload, keeping bool) ([]*Body, error) {
+func (rp resolvedPattern) buildInstances(ctx context.Context, d *Document, base producerID, payload topo.Payload, keeping bool) ([]*Body, error) {
 	out := make([]*Body, 0, rp.Count-1)
 	for i := 1; i < rp.Count; i++ {
 		if err := ctx.Err(); err != nil {
@@ -166,21 +167,21 @@ type resolvedPattern struct{ patternrecord.Spec }
 
 // placedInstance is the Copy arm: the payload re-evaluated under its
 // placement composed with instance i's motion.
-func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref producerID, payload featurePayload, i int) (*Body, error) {
+func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref producerID, payload topo.Payload, i int) (*Body, error) {
 	m, err := rp.WorldMotion(i)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: pattern instance %d has no rigid motion: %s`, ErrDegenerate, i, err)
 	}
-	composed, err := payload.transform().Then(m)
+	composed, err := payload.Transform().Then(m)
 	if err != nil {
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
 	}
-	return payload.placed(ctx, d, ref, composed)
+	return placePayload(ctx, payload, d, ref, composed)
 }
 
 // patternFrame is the frame and placement a frame-keeping instance shares
 // with its receiver, and the regions it moves.
-func patternFrameOf(payload featurePayload) (r3.Frame, r3.Transform, []profileRecord, bool) {
+func patternFrameOf(payload topo.Payload) (r3.Frame, r3.Transform, []profileRecord, bool) {
 	switch p := payload.(type) {
 	case prismPayload:
 		return p.Frame, p.Xform, []profileRecord{p.Profile}, true
@@ -201,7 +202,7 @@ func patternFrameOf(payload featurePayload) (r3.Frame, r3.Transform, []profileRe
 // normal xform.ApplyDir(frame.N()), as prism-boolean G3 reads it: a linear
 // Dir whose exact rational dot product with that normal is zero, or a
 // circular Axis bit-identical to ±that normal.
-func (rp resolvedPattern) keepsFrame(budget *proofbound.WorkBudget, payload featurePayload) (bool, error) {
+func (rp resolvedPattern) keepsFrame(budget *proofbound.WorkBudget, payload topo.Payload) (bool, error) {
 	frame, xform, regions, ok := patternFrameOf(payload)
 	if !ok {
 		return false, nil
@@ -246,7 +247,7 @@ func moveRegion(budget *proofbound.WorkBudget, region profileRecord, mv pointMot
 // frameKeepingInstance builds instance i of the frame-keeping arm: the
 // receiver's own frame, placement, interval and axial displacements over its
 // record moved in the plane, charged δ_pattern into the section displacement.
-func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document, ref producerID, payload featurePayload, i int) (*Body, error) {
+func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document, ref producerID, payload topo.Payload, i int) (*Body, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	frame, xform, _, _ := patternFrameOf(payload)
 	mv, err := rp.Motion(frame, xform, i)
@@ -325,7 +326,7 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 	}
 	base := d.nextProducerID()
 	if keeping && b.Kind() != BodySheet {
-		sp, ok, err := rp.patternGroup(ctx, b.payload)
+		sp, ok, err := rp.patternGroup(ctx, b.n.Payload)
 		if err != nil {
 			return nil, err
 		}
@@ -341,7 +342,7 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 			return body, nil
 		}
 	}
-	instances, err := rp.buildInstances(ctx, d, base, b.payload, keeping)
+	instances, err := rp.buildInstances(ctx, d, base, b.n.Payload, keeping)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +377,7 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 // The group's section displacement is the receiver's own plus the largest
 // instance δ_pattern, and at least the disjointness scene's walk charge, as a
 // group Union's is (prism_group.go).
-func (rp resolvedPattern) patternGroup(ctx context.Context, payload featurePayload) (stackedPrismPayload, bool, error) {
+func (rp resolvedPattern) patternGroup(ctx context.Context, payload topo.Payload) (stackedPrismPayload, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	frame, xform, _, _ := patternFrameOf(payload)
 	var regions []profileRecord

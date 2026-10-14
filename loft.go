@@ -224,15 +224,16 @@ type chainLoftPayload struct {
 	xform          r3.Transform
 }
 
-// transform is the accumulated rigid placement.
-func (lp chainLoftPayload) transform() r3.Transform { return lp.xform }
+// Transform is the accumulated rigid placement.
+func (lp chainLoftPayload) Transform() r3.Transform { return lp.xform }
 
-// placed re-evaluates the same two records under the composed motion (core
+// Placed re-evaluates the same two records under the composed motion (core
 // §8), re-running every gate decided from the records and rebuilding from
 // scratch, exactly as docs/loft-design.md §4 states a loft placement does.
-func (lp chainLoftPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+func (lp chainLoftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	lp.xform = composed
-	return evalChainLoftContext(ctx, d, ref, lp, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	return placedNode(evalChainLoftContext(ctx, d, ref, lp, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 }
 
 // LoftChain builds a sheet ruled between the open chains c0 (of s0) and c1 (of
@@ -429,7 +430,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}
-	body.payload = lp
+	body.n.Payload = lp
 	return body, nil
 }
 

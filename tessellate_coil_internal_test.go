@@ -47,7 +47,7 @@ func TestCoilMeshRestatesTheHeldShell(t *testing.T) {
 	s, p := coilSquare(t)
 	b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 	require.NoError(t, err)
-	cp := b.payload.(coilPayload)
+	cp := b.n.Payload.(coilPayload)
 	mesh, err := b.Tessellate(t.Context(), units.Millimeters(cp.delta))
 	require.NoError(t, err)
 

@@ -66,7 +66,7 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
 		}
-		p, ok := body.payload.(prismPayload)
+		p, ok := body.n.Payload.(prismPayload)
 		if !ok {
 			return nil, true, fmt.Errorf("%w: copied-prism section %d lost its prism payload", ErrUnsupported, i+1)
 		}

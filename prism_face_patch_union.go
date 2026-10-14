@@ -6,15 +6,16 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // tryPrismFacePatchUnion admits two exact rectangular prisms whose interiors
 // are disjoint and whose boundaries share a positive-area patch on one face.
 // It re-expresses the second box as a prism in the first box's frame, then
 // lets the existing prism or stacked Union scenes split the shared patch.
-func tryPrismFacePatchUnion(ctx context.Context, a, b *Body) (featurePayload, bool, error) {
-	pa, okA := a.payload.(prismPayload)
-	pb, okB := b.payload.(prismPayload)
+func tryPrismFacePatchUnion(ctx context.Context, a, b *Body) (topo.Payload, bool, error) {
+	pa, okA := a.n.Payload.(prismPayload)
+	pb, okB := b.n.Payload.(prismPayload)
 	if !okA || !okB || pa.Xform != pb.Xform || pa.SurfaceResult || pb.SurfaceResult {
 		return nil, false, nil
 	}
@@ -43,14 +44,14 @@ func tryPrismFacePatchUnion(ctx context.Context, a, b *Body) (featurePayload, bo
 				Profile: prismplacement.BoxProfile(yBox), Frame: x.Frame, Xform: x.Xform,
 				Z0: yBox.Lo[2], Z1: yBox.Hi[2],
 			}}
-			var payload featurePayload
+			var payload topo.Payload
 			var built bool
 			var err error
 			if equalLevels {
 				payload, built, err = tryPrismBoolean(ctx, meshbool.OpUnion,
-					bornBody(&Body{payload: x}), bornBody(&Body{payload: yReframed}))
+					bornBody(&Body{n: topo.Body{Payload: x}}), bornBody(&Body{n: topo.Body{Payload: yReframed}}))
 			} else {
-				payload, built, err = tryStackedUnion(ctx, bornBody(&Body{payload: x}), bornBody(&Body{payload: yReframed}))
+				payload, built, err = tryStackedUnion(ctx, bornBody(&Body{n: topo.Body{Payload: x}}), bornBody(&Body{n: topo.Body{Payload: yReframed}}))
 			}
 			if err != nil || built {
 				return payload, built, err

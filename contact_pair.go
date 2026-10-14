@@ -236,7 +236,7 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 		}
 	}
 	if okA && !okB {
-		if _, faceted := b.payload.(facetedPayload); faceted {
+		if _, faceted := b.n.Payload.(facetedPayload); faceted {
 			if err := classifyFacetedFloorBox(ctx, report, b, poseB, boxA, false); err != nil {
 				return nil, err
 			}
@@ -258,7 +258,7 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 		}
 	}
 	if okB && !okA {
-		if _, faceted := a.payload.(facetedPayload); faceted {
+		if _, faceted := a.n.Payload.(facetedPayload); faceted {
 			if err := classifyFacetedFloorBox(ctx, report, a, poseA, boxB, true); err != nil {
 				return nil, err
 			}

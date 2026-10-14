@@ -162,9 +162,9 @@ func TestStackedUnionBrepOperandOverlappingBoss(t *testing.T) {
 func TestClassifyRegionsReadsEachRecord(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10).payload.(prismPayload).Profile
-	boss1 := internalBoxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15).payload.(prismPayload).Profile
-	boss2 := internalBoxBodyAtZ(t, doc, -20, 10, -10, 20, 10, 15).payload.(prismPayload).Profile
+	plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10).n.Payload.(prismPayload).Profile
+	boss1 := internalBoxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15).n.Payload.(prismPayload).Profile
+	boss2 := internalBoxBodyAtZ(t, doc, -20, 10, -10, 20, 10, 15).n.Payload.(prismPayload).Profile
 	budget := proofbound.NewWorkBudget(t.Context())
 	s, tags, _, err := prismcells.BuildProfileScene(budget, []profileRecord{plate, boss1}, []profileRecord{boss2}, &prismReexpression{Identity: true})
 	require.NoError(t, err)

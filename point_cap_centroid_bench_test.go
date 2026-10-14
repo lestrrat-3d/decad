@@ -54,7 +54,7 @@ func BenchmarkPointPlaneCapCentroidRealSplit(b *testing.B) {
 	require.NoError(b, err)
 	plane, ok := exactPointPlaneSheet(sheet, apex)
 	require.True(b, ok)
-	base := tooth.payload.(facetedPayload)
+	base := tooth.n.Payload.(facetedPayload)
 	require.NoError(b, validatePointPlane(base, plane))
 
 	b.ReportAllocs()

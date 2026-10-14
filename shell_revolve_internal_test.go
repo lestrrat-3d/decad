@@ -65,7 +65,7 @@ func TestRevolveShellSectionDelta(t *testing.T) {
 			body := shellMeridianBody(t, tc.pts, halfTurn)
 			shelled, err := Shell(t.Context(), body, caps, units.Millimeters(1), tc.opts...)
 			require.NoError(t, err)
-			rp := shelled.payload.(revolvePayload)
+			rp := shelled.n.Payload.(revolvePayload)
 			if !tc.displaced {
 				require.Zero(t, rp.sectionDelta, `an exact offset publishes no displacement`)
 				require.False(t, rp.sectionWhole)
@@ -114,7 +114,7 @@ func TestRevolveShellDisplacedUndercutUndecided(t *testing.T) {
 			body := shellMeridianBody(t, [][2]float64{{0, 0}, {30, 0}, {20, 10}, {0, 10}}, tc.extent)
 			shelled, err := Shell(t.Context(), body, tc.faces, units.Millimeters(0.3), tc.opts...)
 			require.NoError(t, err)
-			require.Positive(t, shelled.payload.(revolvePayload).sectionDelta)
+			require.Positive(t, shelled.n.Payload.(revolvePayload).sectionDelta)
 			report, err := documentHandle(shelled.n.Doc).Verify(t.Context(), WithPullDirection(tc.pull))
 			require.NoError(t, err)
 			require.Equal(t, CoverageUndecided, report.Bodies[0].Undercut.Coverage)

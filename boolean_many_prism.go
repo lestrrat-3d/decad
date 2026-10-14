@@ -32,7 +32,7 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 		if err := budget.Step(); err != nil {
 			return nil, true, err
 		}
-		p, ok := operand.payload.(prismPayload)
+		p, ok := operand.n.Payload.(prismPayload)
 		if !ok {
 			return nil, false, nil
 		}

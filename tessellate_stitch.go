@@ -79,7 +79,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 		if piece == nil || len(piece.Faces()) != 1 || piece.Faces()[0] != copied {
 			return nil, nil, "a source is not a single-face unstitched sheet"
 		}
-		up, ok := piece.payload.(unstitchPayload)
+		up, ok := piece.n.Payload.(unstitchPayload)
 		if !ok || up.xform != r3.Identity() || up.delta != 0 || up.face == nil {
 			return nil, nil, "an unstitched source has no identity copy proof"
 		}
@@ -127,7 +127,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 	if originalBody.Kind() != BodySheet {
 		return nil, nil, "the original is not a revolve sheet"
 	}
-	if _, ok := originalBody.payload.(revolvePayload); !ok {
+	if _, ok := originalBody.n.Payload.(revolvePayload); !ok {
 		return nil, nil, "the original has no revolve chording"
 	}
 	originalFaces := originalBody.Faces()
@@ -230,7 +230,7 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 	var sourceBody *Body
 	var paired map[*Face]*Face
 	if direct := bodyHandle(sp.faces[0].n.Body); direct != nil {
-		switch direct.payload.(type) {
+		switch direct.n.Payload.(type) {
 		case revolvePayload:
 			if direct.Kind() != BodySheet || sp.plan.groups != 0 ||
 				len(sp.plan.table.Classes) != len(sp.plan.table.Vertices) {
@@ -265,7 +265,7 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 			return refuse("this evaluator has no complete revolve-sheet face set")
 		}
 	}
-	rp, ok := sourceBody.payload.(revolvePayload)
+	rp, ok := sourceBody.n.Payload.(revolvePayload)
 	if !ok {
 		return refuse("this evaluator has no chording arm for the source construction")
 	}

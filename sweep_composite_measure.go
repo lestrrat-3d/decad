@@ -92,7 +92,7 @@ func replayCompositeSweepWork(
 	if err := aggregateCompositeSweepMeasurements(ctx, body, parts, payload.surfaceResult); err != nil {
 		return nil, err
 	}
-	body.payload = payload
+	body.n.Payload = payload
 	return body, nil
 }
 
@@ -284,7 +284,7 @@ func (span *sweepSpanPayload) build(
 			return nil, err
 		}
 		restoreSweepArcCapRoles(body, span.reverseArcCaps)
-		if built, ok := body.payload.(revolvePayload); ok {
+		if built, ok := body.n.Payload.(revolvePayload); ok {
 			span.revolve = built
 		}
 		return body, nil
@@ -293,7 +293,7 @@ func (span *sweepSpanPayload) build(
 	if err != nil {
 		return nil, err
 	}
-	if built, ok := body.payload.(prismPayload); ok {
+	if built, ok := body.n.Payload.(prismPayload); ok {
 		span.prism = built
 	}
 	return body, nil

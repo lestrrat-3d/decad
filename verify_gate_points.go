@@ -124,7 +124,7 @@ func chainGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *B
 		return gatePoints{}, false, err
 	}
 	view := pp.prism()
-	stations, read, err := prismGatePoints(budget, []prismPayload{view}, proofbound.AbsSumUpper(pp.sectionDelta, view.axialDelta()))
+	stations, read, err := prismGatePoints(budget, []prismPayload{view}, proofbound.AbsSumUpper(pp.sectionDelta, view.AxialDelta()))
 	if err != nil {
 		return gatePoints{}, false, err
 	}
@@ -149,7 +149,7 @@ func capBlendGateDiameter(ctx context.Context, budget *proofbound.WorkBudget, bo
 //
 //   - the stations of capBlendWitnessPrisms: every loop's wall between the
 //     side levels its bands leave, charged their gaps and the levels'
-//     displacement (capBlendPayload.axialDelta);
+//     displacement (capBlendPayload.AxialDelta);
 //   - the stations on every whole cap circle, the cap contour a cornerless
 //     closed circle offsets into, at its cap level. The band holds that
 //     circle at its own centre and offset radius, and each station carries
@@ -169,7 +169,7 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 	if err := ctx.Err(); err != nil {
 		return gatePoints{}, false, err
 	}
-	g, ok, err := prismGatePoints(budget, capBlendWitnessPrisms(cbp), cbp.axialDelta())
+	g, ok, err := prismGatePoints(budget, capBlendWitnessPrisms(cbp), cbp.AxialDelta())
 	if err != nil || !ok {
 		return gatePoints{}, false, err
 	}
@@ -190,7 +190,7 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 		rims = append(rims, rim)
 	}
 	if len(rims) > 0 {
-		caps, ok, err := prismGatePoints(budget, rims, proofbound.AbsSumUpper(cbp.axialDelta(), contour))
+		caps, ok, err := prismGatePoints(budget, rims, proofbound.AbsSumUpper(cbp.AxialDelta(), contour))
 		if err != nil {
 			return gatePoints{}, false, err
 		}
@@ -203,7 +203,7 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 		if !ok {
 			continue
 		}
-		arc, ok, err := prismGatePoints(budget, []prismPayload{rim}, proofbound.AbsSumUpper(cbp.axialDelta(), arcAllow))
+		arc, ok, err := prismGatePoints(budget, []prismPayload{rim}, proofbound.AbsSumUpper(cbp.AxialDelta(), arcAllow))
 		if err != nil {
 			return gatePoints{}, false, err
 		}
@@ -271,7 +271,7 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 			g.Join(gatePoints{Points: stations, Allow: stationAllow})
 		}
 	}
-	g.Allow = proofbound.AbsSumUpper(bp.sectionDelta(), bp.axialDelta(), g.Allow)
+	g.Allow = proofbound.AbsSumUpper(bp.sectionDelta(), bp.AxialDelta(), g.Allow)
 	return g, true, nil
 }
 
@@ -289,7 +289,7 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 // bounded.
 func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Body,
 	stations *diameter.StationMemo) (gatePoints, bool, error) {
-	switch pl := body.payload.(type) {
+	switch pl := body.n.Payload.(type) {
 	case facetedPayload:
 		return gatePoints{Points: pl.verts}, true, nil
 	case loftPayload:
@@ -334,13 +334,13 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 		return capBlendGatePoints(ctx, budget, body, pl)
 	case prismPayload:
 		if pl.SectionDelta == 0 {
-			if g, ok, err := prismGatePointsMemo(budget, []prismPayload{pl}, pl.axialDelta(), stations); err != nil || ok {
+			if g, ok, err := prismGatePointsMemo(budget, []prismPayload{pl}, pl.AxialDelta(), stations); err != nil || ok {
 				return g, ok, err
 			}
 			return vertexGatePoints(budget, body, 0)
 		}
 	}
-	if prisms, displacement, ok := gateWitnessPrisms(body.payload); ok {
+	if prisms, displacement, ok := gateWitnessPrisms(body.n.Payload); ok {
 		if g, ok, err := prismGatePoints(budget, prisms, displacement); err != nil || ok {
 			return g, ok, err
 		}

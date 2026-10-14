@@ -67,7 +67,7 @@ func TestDraftOffsetEnclosesTheExactProduct(t *testing.T) {
 func TestDraftPayloadRecordsTheFarSection(t *testing.T) {
 	t.Parallel()
 	b := draftSlot(t)
-	dp, ok := b.payload.(draftPayload)
+	dp, ok := b.n.Payload.(draftPayload)
 	require.True(t, ok)
 	require.True(t, dp.nearStart)
 	require.Greater(t, dp.d, 0.0)
@@ -88,7 +88,7 @@ func TestDraftPayloadRecordsTheFarSection(t *testing.T) {
 func TestDraftConeWallsReadNoChordLocusTerm(t *testing.T) {
 	t.Parallel()
 	b := draftSlot(t)
-	dp := b.payload.(draftPayload)
+	dp := b.n.Payload.(draftPayload)
 	cbp := dp.band()
 	nearZ, nearDelta, farZ, matSign := dp.levels()
 	work := freeform.NewFreeformWork()

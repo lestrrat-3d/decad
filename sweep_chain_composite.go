@@ -150,7 +150,7 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}
-	body.payload = payload
+	body.n.Payload = payload
 	return body, nil
 }
 

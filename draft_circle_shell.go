@@ -25,7 +25,7 @@ import (
 // construction displacement is charged as one whole-section revolve bound.
 func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense ShellSense,
 	tmm, tDelta float64) (*Body, bool, error) {
-	dp, ok := b.payload.(draftPayload)
+	dp, ok := b.n.Payload.(draftPayload)
 	if !ok || sense != Inward || !dp.nearStart || dp.taper <= 0 || len(dp.kept) != 0 ||
 		len(dp.profile.Holes) != 0 || len(dp.profile.Outer.Segments) != 1 ||
 		len(dp.far.Outer.Segments) != 1 || !exactSignedAxisFrame(dp.frame) {

@@ -371,7 +371,7 @@ func (k *pairKernel) coplanarContactCertified(ctx context.Context) (bool, error)
 // payloadExtent is the body's exact extent interval along a direction, read
 // off its own payload.
 func payloadExtent(ctx context.Context, b *Body, g r3.Vec) (float64, float64, bool) {
-	switch pl := b.payload.(type) {
+	switch pl := b.n.Payload.(type) {
 	case prismPayload:
 		lo, hi, err := pl.extentAlongContext(ctx, g)
 		if err != nil {

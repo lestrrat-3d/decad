@@ -42,7 +42,7 @@ func internalChainRibbonBody(t *testing.T, doc *Document) *Body {
 func TestTessellateChainBuildsOneExactQuadPerWall(t *testing.T) {
 	t.Parallel()
 	body := internalChainRibbonBody(t, New())
-	pp, ok := body.payload.(chainPayload)
+	pp, ok := body.n.Payload.(chainPayload)
 	require.True(t, ok)
 	mesh, err := tessellateChain(t.Context(), body, pp)
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestTessellateChainBuildsOneExactQuadPerWall(t *testing.T) {
 func TestTessellateChainRejectsWronglyAttributedWalls(t *testing.T) {
 	t.Parallel()
 	body := internalChainRibbonBody(t, New())
-	pp, ok := body.payload.(chainPayload)
+	pp, ok := body.n.Payload.(chainPayload)
 	require.True(t, ok)
 	mesh, err := tessellateChain(t.Context(), body, pp)
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestTessellateChainReflectedPlacementFlipsWinding(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := Transform(t.Context(), body, reflect)
 	require.NoError(t, err)
-	pp, ok := placed.payload.(chainPayload)
+	pp, ok := placed.n.Payload.(chainPayload)
 	require.True(t, ok)
 	require.True(t, pp.xform.IsReflection(), "premise: the placement negates the determinant")
 

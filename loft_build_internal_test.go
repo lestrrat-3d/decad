@@ -692,7 +692,7 @@ func TestLoftGateDiameterIsTheVertexDiameter(t *testing.T) {
 	require.True(t, ok)
 	require.InDelta(t, 1.7320508075688772, d, 1e-12) // sqrt(3)
 
-	pl := body.payload.(loftPayload)
+	pl := body.n.Payload.(loftPayload)
 	require.Zero(t, pl.delta, "this fixture is unplaced AND every station of its untrimmed square is PINNED (docs/loft-design.md §5.2)")
 	require.Zero(t, pl.sectionDelta, "S3 admits only LineSeg pairs, so every wall cell's chord IS the recorded segment")
 	held, ok, err := diameter.PointsContext(t.Context(), pl.verts)
@@ -713,13 +713,13 @@ func TestLoftPlacedGateDiameterShrinksByTwiceDelta(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	pl := unplaced.payload.(loftPayload)
+	pl := unplaced.n.Payload.(loftPayload)
 	rot, err := r3.Rotation(r3.NewVec(1, 1, 1), units.Degrees(29))
 	require.NoError(t, err)
 
-	placedBody, err := pl.placed(t.Context(), New(), producerID(1), rot)
+	placedBody, err := placePayload(t.Context(), pl, New(), producerID(1), rot)
 	require.NoError(t, err)
-	placedPl := placedBody.payload.(loftPayload)
+	placedPl := placedBody.n.Payload.(loftPayload)
 	require.Greater(t, placedPl.delta, 0.0)
 
 	placedD, ok, err := bodyGateDiameter(t.Context(), placedBody)
@@ -746,9 +746,9 @@ func TestLoftPlacedGateDiameterRoundsTheShrinkOutward(t *testing.T) {
 			move, err := r3.Translation(r3.NewVec(dx, 0, 0))
 			require.NoError(t, err)
 
-			placedBody, err := boxLoftPayloadOn(t, 0, 3).placed(t.Context(), New(), producerID(1), move)
+			placedBody, err := placePayload(t.Context(), boxLoftPayloadOn(t, 0, 3), New(), producerID(1), move)
 			require.NoError(t, err)
-			placedPl := placedBody.payload.(loftPayload)
+			placedPl := placedBody.n.Payload.(loftPayload)
 			require.Greater(t, placedPl.delta, 0.0)
 
 			held, ok, err := diameter.PointsContext(t.Context(), placedPl.verts)
@@ -799,7 +799,7 @@ func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
 				xform: r3.Identity(),
 			}
 
-			held := evalLoftFixture(t, pl).payload.(loftPayload)
+			held := evalLoftFixture(t, pl).n.Payload.(loftPayload)
 			d, ok, err := diameter.PointsContext(t.Context(), held.verts)
 			require.NoError(t, err)
 			require.True(t, ok)
@@ -814,7 +814,7 @@ func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
 			require.GreaterOrEqual(t, 2*delta, d,
 				"the fixture must sit in the collapse regime the doc's antecedence claim covers")
 
-			_, err = pl.placed(t.Context(), New(), producerID(1), move)
+			_, err = placePayload(t.Context(), pl, New(), producerID(1), move)
 			require.ErrorIs(t, err, ErrUnsupported)
 		})
 	}
@@ -1112,7 +1112,7 @@ func TestLoftFrameLiftRoundingChargedInDelta(t *testing.T) {
 			s1, p1 := straightSidedSketch(t, w, pl1, quad, false)
 			body, err := New().Loft(t.Context(), s0, p0, s1, p1)
 			require.NoError(t, err)
-			pl := body.payload.(loftPayload)
+			pl := body.n.Payload.(loftPayload)
 
 			exact := exactLoftVertexLifts(t, pl)
 			sawGap := false

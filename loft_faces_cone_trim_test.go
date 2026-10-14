@@ -89,11 +89,11 @@ func TestLoftCapConeRecordDoesNotSurviveRoundTripPlacement(t *testing.T) {
 	require.NoError(t, err)
 	drilled, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	p := drilled.payload.(facetedPayload)
+	p := drilled.n.Payload.(facetedPayload)
 	p.loftFacesCap = &loftFacesCapRecord{}
 	p.loftFacesToe = &loftFacesToeRecord{}
 	p.loftFacesTrim = &loftFacesTrimRecord{}
-	drilled.payload = p
+	drilled.n.Payload = p
 	move, err := r3.Translation(r3.NewVec(1, 2, 3))
 	require.NoError(t, err)
 	moved, err := Transform(t.Context(), drilled, move)
@@ -102,7 +102,7 @@ func TestLoftCapConeRecordDoesNotSurviveRoundTripPlacement(t *testing.T) {
 	require.NoError(t, err)
 	roundTrip, err := Transform(t.Context(), moved, back)
 	require.NoError(t, err)
-	final := roundTrip.payload.(facetedPayload)
+	final := roundTrip.n.Payload.(facetedPayload)
 	require.Nil(t, final.loftFacesCap)
 	require.Nil(t, final.loftFacesToe)
 	require.Nil(t, final.loftFacesTrim)

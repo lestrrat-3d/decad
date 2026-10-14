@@ -34,9 +34,9 @@ func TestCompositeTwistOccupiedVolumeProof(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, ok := body.payload.(compositeTwistedSweepPayload)
+	payload, ok := body.n.Payload.(compositeTwistedSweepPayload)
 	if !ok {
-		t.Fatalf("got payload %T", body.payload)
+		t.Fatalf("got payload %T", body.n.Payload)
 	}
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5), WithVerification(VerifyAll))
 	if err != nil {

@@ -264,8 +264,8 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *proofboun
 // G4 scan shares the operation budget because a large rejected profile must
 // remain cancelable too.
 func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKind, a, b *Body) (pa, pb prismPayload, ok bool, err error) {
-	pa, aok := a.payload.(prismPayload) // G1
-	pb, bok := b.payload.(prismPayload)
+	pa, aok := a.n.Payload.(prismPayload) // G1
+	pb, bok := b.n.Payload.(prismPayload)
 	if !aok || !bok {
 		return prismPayload{}, prismPayload{}, false, nil
 	}

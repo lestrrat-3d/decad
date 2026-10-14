@@ -43,7 +43,7 @@ func TestChainArcSweepAxisErrorChangesPublicMeshBound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sp := body.payload.(chainSweepPayload)
+	sp := body.n.Payload.(chainSweepPayload)
 	rp := sp.revolve.revolve()
 	resolved, err := revolveaxis.ResolveChain(t.Context(), sp.revolve.chains[0],
 		freeform.NewFreeformWork(), "axis-charge test", rp.chargedWalk, rp.ax.SnapTol)

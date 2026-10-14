@@ -38,7 +38,7 @@ func thickenArcChainSweep(ctx context.Context, d *Document, sp chainSweepPayload
 	if err != nil {
 		return nil, err
 	}
-	built, ok := body.payload.(revolvePayload)
+	built, ok := body.n.Payload.(revolvePayload)
 	if !ok {
 		return nil, fmt.Errorf(`%w: thickened chain arc has no solid Revolve reduction`, ErrDegenerate)
 	}

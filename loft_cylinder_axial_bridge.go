@@ -18,7 +18,7 @@ import (
 // exactly on the blank planes. Its mesh proof also covers the original source.
 func loftCylinderProofTooth(ctx context.Context, d *Document, tooth *Body,
 	z0, z1 float64) (*Body, float64, bool, error) {
-	lp, ok := tooth.payload.(loftPayload)
+	lp, ok := tooth.n.Payload.(loftPayload)
 	if !ok {
 		return nil, 0, false, nil
 	}
@@ -43,11 +43,11 @@ func loftCylinderProofTooth(ctx context.Context, d *Document, tooth *Body,
 		normalized.Basis().EX != basis.EX || normalized.Basis().EY != basis.EY {
 		return nil, 0, false, nil
 	}
-	proxy, err := lp.placed(ctx, d, tooth.n.Origin.Producer, normalized)
+	proxy, err := placePayload(ctx, lp, d, tooth.n.Origin.Producer, normalized)
 	if err != nil {
 		return nil, 0, true, err
 	}
-	proof, ok := proxy.payload.(loftPayload)
+	proof, ok := proxy.n.Payload.(loftPayload)
 	if !ok || proof.sourceIdentity != lp.sourceIdentity || len(proof.verts) != len(lp.verts) ||
 		!slices.Equal(proof.tris, lp.tris) || proof.walls != lp.walls ||
 		len(proof.segment) != len(lp.segment) {
@@ -87,6 +87,6 @@ func loftCylinderProofTooth(ctx context.Context, d *Document, tooth *Body,
 		proofbound.IsNonFinite(proof.proof.VolSymDiff) {
 		return nil, 0, false, nil
 	}
-	proxy.payload = proof
+	proxy.n.Payload = proof
 	return proxy, shift, true, nil
 }

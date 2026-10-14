@@ -15,19 +15,19 @@ import (
 // draft body is refused by name.
 func TestDraftReceiverClasses(t *testing.T) {
 	t.Parallel()
-	pp, err := draftReceiver(bornBody(&Body{payload: prismPayload{}}))
+	pp, err := draftReceiver(bornBody(&Body{n: topo.Body{Payload: prismPayload{}}}))
 	require.NoError(t, err)
 	require.Equal(t, prismPayload{}, pp)
 
-	_, err = draftReceiver(bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SectionDelta: 1e-6}}}))
+	_, err = draftReceiver(bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{SectionDelta: 1e-6}}}}))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "proven displacement")
 
-	_, err = draftReceiver(bornBody(&Body{payload: draftPayload{}}))
+	_, err = draftReceiver(bornBody(&Body{n: topo.Body{Payload: draftPayload{}}}))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "already a draft body")
 
-	_, err = draftReceiver(bornBody(&Body{payload: revolvePayload{}}))
+	_, err = draftReceiver(bornBody(&Body{n: topo.Body{Payload: revolvePayload{}}}))
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 

@@ -135,7 +135,7 @@ func TestOffsetPrismResultIsBoundedByTheOffsetLoopAlone(t *testing.T) {
 	doc := New()
 	result, err := offsetPrism(t.Context(), doc, pp, OffsetNegative, 1.5, 0)
 	require.NoError(t, err)
-	built, ok := result.payload.(prismPayload)
+	built, ok := result.n.Payload.(prismPayload)
 	require.True(t, ok)
 	require.Empty(t, built.Profile.Holes,
 		`one region: no hole walk, so the payload publishes no nesting relation to audit`)

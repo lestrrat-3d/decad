@@ -59,7 +59,7 @@ func (p *pointPlaneLimit) denominator(apex, far r3.Vec) *big.Rat {
 // exactPointPlaneSheet recognizes the actual step-E sheet class. A rectangle
 // drawn as Patch does not pass this gate because it has a different source.
 func exactPointPlaneSheet(tool *Body, apex r3.Vec) (*pointPlaneLimit, bool) {
-	cp, ok := tool.payload.(chainPayload)
+	cp, ok := tool.n.Payload.(chainPayload)
 	if !ok || tool.Kind() != BodySheet || cp.xform != r3.Identity() ||
 		cp.frame.Origin() != (r3.Vec{}) || cp.frame.U() != (r3.Vec{X: 1}) ||
 		cp.frame.V() != (r3.Vec{Y: 1}) || cp.sectionDelta != 0 ||
@@ -125,7 +125,7 @@ func exactPointPlaneSheet(tool *Body, apex r3.Vec) (*pointPlaneLimit, bool) {
 }
 
 func pointPlaneSource(target *Body) (pointPlaneSliceRecord, bool) {
-	fp, ok := target.payload.(facetedPayload)
+	fp, ok := target.n.Payload.(facetedPayload)
 	if !ok || target.Kind() != BodySolid || !target.IsSolid() ||
 		!fp.pointPlaneSourceEligible || fp.xform != r3.Identity() {
 		return pointPlaneSliceRecord{}, false

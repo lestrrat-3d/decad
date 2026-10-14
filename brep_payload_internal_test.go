@@ -19,13 +19,13 @@ func internalBrepBody(t *testing.T, src *Body) *Body {
 	t.Helper()
 	var bp brepPayload
 	var err error
-	switch p := src.payload.(type) {
+	switch p := src.n.Payload.(type) {
 	case prismPayload:
 		bp, err = brepOfPrism(p)
 	case stackedPrismPayload:
 		bp, err = brepOfStacked(t.Context(), p)
 	default:
-		t.Fatalf("no face view for %T", src.payload)
+		t.Fatalf("no face view for %T", src.n.Payload)
 	}
 	require.NoError(t, err)
 	return internalCommitBrep(t, documentHandle(src.n.Doc), bp)
@@ -213,9 +213,9 @@ func TestBrepFaceViewOfAllLinePrismMatchesItsMeasurements(t *testing.T) {
 			require.True(t, isPlane)
 		}
 		g := r3.NewVec(0.6, 0, 0.8)
-		plo, phi, pb, err := prism.payload.(prismPayload).extentAlong(g)
+		plo, phi, pb, err := prism.n.Payload.(prismPayload).ExtentAlong(g)
 		require.NoError(t, err)
-		blo, bhi, bb, err := brep.payload.(brepPayload).extentAlong(g)
+		blo, bhi, bb, err := brep.n.Payload.(brepPayload).ExtentAlong(g)
 		require.NoError(t, err)
 		require.Equal(t, [3]float64{plo, phi, pb}, [3]float64{blo, bhi, bb})
 	}
@@ -379,7 +379,7 @@ func TestBrepPlacementReEvaluatesUnderMotion(t *testing.T) {
 		require.NoError(t, err)
 		placed, err := Copy(t.Context(), brep, WithCopyPlacement(motion))
 		require.NoError(t, err)
-		_, ok := placed.payload.(brepPayload)
+		_, ok := placed.n.Payload.(brepPayload)
 		require.True(t, ok)
 		requireClosedTopology(t, placed)
 		require.Len(t, placed.Faces(), len(brep.Faces()))
@@ -482,7 +482,7 @@ func TestBrepFaceViewChargesSectionDisplacement(t *testing.T) {
 	require.NoError(t, err)
 	pocket, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	delta := pocket.payload.(stackedPrismPayload).sectionDelta
+	delta := pocket.n.Payload.(stackedPrismPayload).sectionDelta
 	require.Positive(t, delta, `the placed tool's re-expression is charged`)
 	brep := internalBrepBody(t, pocket)
 	// The denoted pocket is exact: 1000 − 64. Every wall's band 2·δ·L over its
@@ -568,7 +568,7 @@ func TestBrepFaceViewOfStackedUnionCoversItsMeasurements(t *testing.T) {
 			plate, boss := internalBossOnPlate(t, 0, tc.bossZ, tc.bossH)
 			union, err := Union(t.Context(), plate, boss)
 			require.NoError(t, err)
-			sp, ok := union.payload.(stackedPrismPayload)
+			sp, ok := union.n.Payload.(stackedPrismPayload)
 			require.True(t, ok)
 			require.Len(t, sp.slabs, tc.slabs)
 			brep := internalBrepBody(t, union)
@@ -616,7 +616,7 @@ func TestBrepFaceViewOfSquareBossUnionMatchesItsMeasurements(t *testing.T) {
 	boss := internalOffsetBox(t, doc, -5, -5, 5, 5, 10, Distance{D: units.Millimeters(15), Dir: Along})
 	union, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
-	_, ok := union.payload.(stackedPrismPayload)
+	_, ok := union.n.Payload.(stackedPrismPayload)
 	require.True(t, ok)
 	brep := internalBrepBody(t, union)
 	requireClosedTopology(t, brep)
@@ -639,7 +639,7 @@ func TestBrepFaceViewJoinsACrossingBuiltPrism(t *testing.T) {
 	bite := internalCircleBody(t, doc, 40, 5, 0, Distance{D: units.Millimeters(10), Dir: Along})
 	prism, err := Cut(t.Context(), box, bite)
 	require.NoError(t, err)
-	pp, ok := prism.payload.(prismPayload)
+	pp, ok := prism.n.Payload.(prismPayload)
 	require.True(t, ok)
 	// The premise: the cut's two fragments walk to their shared corner at
 	// two different floats.
@@ -653,7 +653,7 @@ func TestBrepFaceViewJoinsACrossingBuiltPrism(t *testing.T) {
 	lo, hi := piEnclosed(big.NewRat(8000, 1), big.NewRat(-125, 2))
 	requireCoversInterval(t, measurementFromInternal(brep.n.Volume), lo, hi)
 	requireCoversInterval(t, measurementFromInternal(prism.n.Volume), lo, hi)
-	for _, f := range brep.payload.(brepPayload).faces {
+	for _, f := range brep.n.Payload.(brepPayload).faces {
 		require.GreaterOrEqual(t, f.delta, pp.SectionDelta, `every face keeps the record's own displacement`)
 	}
 }
@@ -679,7 +679,7 @@ func TestBrepCoordinateEnvelopeReadsArcsTightly(t *testing.T) {
 	require.NoError(t, err)
 	prism, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
-	bp, err := brepOfPrism(prism.payload.(prismPayload))
+	bp, err := brepOfPrism(prism.n.Payload.(prismPayload))
 	require.NoError(t, err)
 	btopo, err := brepTopologyContext(t.Context(), bp)
 	require.NoError(t, err)

@@ -21,8 +21,8 @@ import (
 // the 3D result. A missed gate leaves the mesh path unchanged.
 func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind, d *Document,
 	ref producerID, a, b *Body) (*Body, bool, error) {
-	ra, aok := a.payload.(revolvePayload)
-	rb, bok := b.payload.(revolvePayload)
+	ra, aok := a.n.Payload.(revolvePayload)
+	rb, bok := b.n.Payload.(revolvePayload)
 	if !aok || !bok || !commonAxisRevolvePair(ra, rb) {
 		return nil, false, nil
 	}

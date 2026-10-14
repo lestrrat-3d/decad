@@ -30,8 +30,8 @@ func loftCylinderChamferBridgeSources(source *loftCylinderChamferSource) error {
 		if originalBody == nil || proofBody == nil {
 			return fmt.Errorf("%w: cap chamfer has an absent tooth", ErrUnsupported)
 		}
-		original, okOriginal := originalBody.payload.(loftPayload)
-		proxy, okProxy := proofBody.payload.(loftPayload)
+		original, okOriginal := originalBody.n.Payload.(loftPayload)
+		proxy, okProxy := proofBody.n.Payload.(loftPayload)
 		shift := source.axialBridge[i]
 		if !okOriginal || !okProxy || !original.authenticatedReconstruction ||
 			!proxy.authenticatedReconstruction || original.sourceIdentity == nil ||

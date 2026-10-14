@@ -42,7 +42,7 @@ func facetedFloorSweepFixture(t *testing.T) (*Document, *Body, *Body) {
 	b := internalCrossingFramedBox(t, doc)
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
-	_, faceted := union.payload.(facetedPayload)
+	_, faceted := union.n.Payload.(facetedPayload)
 	require.True(t, faceted)
 	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
 		Distance{D: units.Millimeters(10), Dir: Along})
@@ -199,8 +199,8 @@ func TestSweepPairFacetedFloorRefusesUnprovedPath(t *testing.T) {
 	require.NoError(t, err)
 	reflected, err := Transform(t.Context(), union, reflection)
 	require.NoError(t, err)
-	require.Positive(t, reflected.payload.(facetedPayload).meshBound)
-	require.Empty(t, reflected.payload.(facetedPayload).exactSourceVerts)
+	require.Positive(t, reflected.n.Payload.(facetedPayload).meshBound)
+	require.Empty(t, reflected.n.Payload.(facetedPayload).exactSourceVerts)
 	unproved, err := doc.SweepPair(t.Context(), floor, reflected, still,
 		facetedSweepPath(start, facetedSweepPose(t, r3.Vec{Z: -10})),
 		facetedSweepRequest(StopAtInitialContact))

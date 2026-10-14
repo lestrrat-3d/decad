@@ -60,7 +60,7 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 		radius.Cmp(circle.radius) != 0 {
 		return nil, false, nil
 	}
-	payload, ok := proof.tooth.payload.(facetedPayload)
+	payload, ok := proof.tooth.n.Payload.(facetedPayload)
 	if !ok || payload.loftFacesTrim != proof.trim ||
 		proof.trim.heelCapGroup < 0 || proof.trim.heelCapGroup >= len(payload.groups) ||
 		len(payload.groups[proof.trim.heelCapGroup].origins) != 1 ||

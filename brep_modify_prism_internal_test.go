@@ -37,8 +37,8 @@ func internalSquareHoleBox(t *testing.T) (*Document, *Body) {
 	})
 	result, err := Cut(t.Context(), box, tool)
 	require.NoError(t, err)
-	_, ok := result.payload.(brepPayload)
-	require.True(t, ok, "the public Cut builds B1 as a brep body, got %T", result.payload)
+	_, ok := result.n.Payload.(brepPayload)
+	require.True(t, ok, "the public Cut builds B1 as a brep body, got %T", result.n.Payload)
 	return doc, result
 }
 
@@ -78,8 +78,8 @@ func TestBrepModifyRoutePFilletsS1LateralEdges(t *testing.T) {
 	before := len(doc.Bodies())
 	result, err := Fillet(t.Context(), s1, Edges(ParallelTo(r3.NewVec(0, 1, 0))).Exactly(4), units.Millimeters(2))
 	require.NoError(t, err)
-	_, ok := result.payload.(prismPayload)
-	require.True(t, ok, "route P builds a prism, got %T", result.payload)
+	_, ok := result.n.Payload.(prismPayload)
+	require.True(t, ok, "route P builds a prism, got %T", result.n.Payload)
 	require.Len(t, result.Faces(), 11)
 	// The section is 800 less four corners of 4 − π and the Ø6 hole, swept
 	// over 20: 20·(784 − 5π).
@@ -110,8 +110,8 @@ func TestBrepModifyRoutePChamfersS1HoleRim(t *testing.T) {
 	rim := internalCrossDrilledBrepRim(t, s1, r3.NewVec(20, 0, 10))
 	result, err := Chamfer(t.Context(), s1, Edges(Circular(), EndpointAt(rim.n.Start.Position)).Exactly(1), units.Millimeters(1))
 	require.NoError(t, err)
-	_, ok := result.payload.(capBlendPayload)
-	require.True(t, ok, "route P builds a cap-loop chamfer, got %T", result.payload)
+	_, ok := result.n.Payload.(capBlendPayload)
+	require.True(t, ok, "route P builds a cap-loop chamfer, got %T", result.n.Payload)
 	lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(-550, 3))
 	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 	var cones []*Face
@@ -156,8 +156,8 @@ func TestBrepModifyRoutePShellsS1(t *testing.T) {
 		_, s1 := internalCrossDrilled(t)
 		result, err := Shell(t.Context(), s1, Faces(Facing(y)).Exactly(1), units.Millimeters(2))
 		require.NoError(t, err)
-		_, ok := result.payload.(cupPayload)
-		require.True(t, ok, "route P builds a cup, got %T", result.payload)
+		_, ok := result.n.Payload.(cupPayload)
+		require.True(t, ok, "route P builds a cup, got %T", result.n.Payload)
 		lo, hi := piEnclosed(big.NewRat(5632, 1), big.NewRat(270, 1))
 		requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 		// Open at y = 20: the outer rim and the hole's post top there, and
@@ -192,8 +192,8 @@ func TestBrepModifyRoutePChamfersB1SquareHole(t *testing.T) {
 	_, b1 := internalSquareHoleBox(t)
 	result, err := Chamfer(t.Context(), b1, Edges(ParallelTo(r3.NewVec(0, 1, 0)), Concave()).Exactly(4), units.Millimeters(2))
 	require.NoError(t, err)
-	_, ok := result.payload.(prismPayload)
-	require.True(t, ok, "route P builds a prism, got %T", result.payload)
+	_, ok := result.n.Payload.(prismPayload)
+	require.True(t, ok, "route P builds a prism, got %T", result.n.Payload)
 	require.Equal(t, Exact, Exactness(result.n.Volume.Exactness))
 	require.Equal(t, 14160.0, result.n.Volume.Value.Base())
 	require.Zero(t, result.n.Volume.Bound.Base())
@@ -221,7 +221,7 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 	t.Run("S1", func(t *testing.T) {
 		t.Parallel()
 		_, s1 := internalCrossDrilled(t)
-		bp := s1.payload.(brepPayload)
+		bp := s1.n.Payload.(brepPayload)
 		for _, k := range []int{0, 2} {
 			_, ok := read(t, bp, k)
 			require.False(t, ok, "S1 reads as no prism along axis %d", k)
@@ -282,7 +282,7 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 	t.Run("displaced swept rectangle", func(t *testing.T) {
 		t.Parallel()
 		_, s1 := internalCrossDrilled(t)
-		bp := s1.payload.(brepPayload)
+		bp := s1.n.Payload.(brepPayload)
 		faces := slices.Clone(bp.faces)
 		require.False(t, faces[0].planar())
 		faces[0].z1Delta = 1e-9

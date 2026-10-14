@@ -81,7 +81,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	if !b.n.Solid || b.n.Kind != topo.BodySolid {
 		return MassProperties{}, ErrNotSolid
 	}
-	if b.payload == nil {
+	if b.n.Payload == nil {
 		return MassProperties{}, fmt.Errorf("%w: body has no evaluator payload", ErrUnsupported)
 	}
 	if sphere, ok := sourceSphereRecord(b); ok {
@@ -97,7 +97,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return massPropertiesFromReadings(massmoment.SourceCylinder(ctx, cylinder.axis, cylinder.box.lo, cylinder.box.hi,
 			b.n.Centroid, density))
 	}
-	if revolve, ok := b.payload.(revolvePayload); ok {
+	if revolve, ok := b.n.Payload.(revolvePayload); ok {
 		result, err := massPropertiesFromReadings(
 			massmoment.RevolveProperties(ctx, massRevolveRecord(revolve), b.n.Centroid, density))
 		if err == nil || !errors.Is(err, ErrUnsupported) || ctx.Err() != nil {
@@ -107,19 +107,19 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		// verified mesh (docs/multibody-dynamics-design.md §8.5).
 		return verifiedMeshMassProperties(ctx, b, density)
 	}
-	if faceted, ok := b.payload.(facetedPayload); ok {
+	if faceted, ok := b.n.Payload.(facetedPayload); ok {
 		return facetedMassProperties(ctx, b, faceted, density)
 	}
-	if sweep, ok := b.payload.(sweepPayload); ok {
+	if sweep, ok := b.n.Payload.(sweepPayload); ok {
 		result, err := massPropertiesFromReadings(massmoment.SweepProperties(ctx, massSweepRecord(sweep), b.n.Centroid, density))
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
-	if cup, ok := b.payload.(cupPayload); ok {
+	if cup, ok := b.n.Payload.(cupPayload); ok {
 		outer, cavity := massCupRecords(cup.view())
 		result, err := massPropertiesFromReadings(massmoment.CupProperties(ctx, outer, cavity, b.n.Centroid, density))
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	if !ok {
 		return verifiedMeshMassProperties(ctx, b, density)
 	}

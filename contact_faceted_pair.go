@@ -235,7 +235,7 @@ func planarSnapshotOf(ctx context.Context, budget *proofbound.WorkBudget, b *Bod
 	}
 	entry := &planarsnapshot.SnapshotEntry{ChordBits: bits, ChordFree: true, Delta: proofarith.DyZero()}
 	var err error
-	switch payload := b.payload.(type) {
+	switch payload := b.n.Payload.(type) {
 	case prismPayload:
 		entry.Solid, entry.OK, err = planarPrismSolid(ctx, budget, payload, prismFaceIndex(b))
 	case facetedPayload:

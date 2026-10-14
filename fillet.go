@@ -197,16 +197,16 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 
 	// SX10: a capBlendPayload receiver is staged before the generic "not a
 	// prism" refusal, so the more specific reason leads.
-	if err := requireNotCapBlendReceiver(b.payload, "fillets"); err != nil {
+	if err := requireNotCapBlendReceiver(b.n.Payload, "fillets"); err != nil {
 		return nil, err
 	}
 	if out, matched, err := tryDraftCircleRimFillet(ctx, b, edges, rmm, rDelta); matched || err != nil {
 		return out, err
 	}
-	if err := requireNotDraftReceiver(b.payload, "fillets"); err != nil {
+	if err := requireNotDraftReceiver(b.n.Payload, "fillets"); err != nil {
 		return nil, err
 	}
-	if bp, ok := b.payload.(brepPayload); ok {
+	if bp, ok := b.n.Payload.(brepPayload); ok {
 		out, matched, err := tryRoundedBrepCapEdgeFillet(ctx, b, bp, edges, rmm, rDelta)
 		if err != nil {
 			return nil, err
@@ -243,26 +243,26 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 
 	// Reach RX2 (docs/modify-reach-design.md §7): a quarter-turn rectangular
 	// revolve also admits its one outer angular-cap radial rim.
-	if rp, ok := b.payload.(revolvePayload); ok {
+	if rp, ok := b.n.Payload.(revolvePayload); ok {
 		if out, matched, err := tryRevolveCapRimFillet(ctx, b, rp, edges, rmm, rDelta); matched || err != nil {
 			return out, err
 		}
 		return b.blendRevolveJunctions(ctx, sel, edges, rp, blend)
 	}
-	if lp, ok := b.payload.(loftPayload); ok {
+	if lp, ok := b.n.Payload.(loftPayload); ok {
 		return b.filletStraightLoft(ctx, sel, edges, lp, rmm)
 	}
-	if fp, ok := b.payload.(facetedPayload); ok && fp.obliqueBoss != nil {
+	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.obliqueBoss != nil {
 		return b.filletObliqueBoss(ctx, edges, fp.obliqueBoss, rmm, rDelta)
 	}
-	if fp, ok := b.payload.(facetedPayload); ok && fp.prismUnionFillet != nil {
+	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.prismUnionFillet != nil {
 		// A retained source pair alone does not authenticate this selection.
 		// Keep the ordinary S3 refusal and its complete edge context on a miss.
 		if out, matched, err := b.filletPrismUnion(ctx, edges, fp.prismUnionFillet, rmm, rDelta); matched || err != nil {
 			return out, err
 		}
 	}
-	if fp, ok := b.payload.(facetedPayload); ok && fp.prismPatternJoin != nil {
+	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.prismPatternJoin != nil {
 		out, err := prismPatternFilletBody(ctx, b, edges, rmm, rDelta)
 		if err != nil {
 			return nil, err
@@ -272,12 +272,12 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
 	// edge is a lateral edge mapped to a section corner (S1).
-	pp, ok := b.payload.(prismPayload)
+	pp, ok := b.n.Payload.(prismPayload)
 	// A one-span straight solid Sweep builds through evalPrismContext and keeps
 	// that exact reduction beside its path. Its original edges can be matched
 	// against the reduction's corners without replacing the public selector.
 	sweepReduction := false
-	if reduction, admitted := straightSweepPrismReduction(b.payload); admitted {
+	if reduction, admitted := straightSweepPrismReduction(b.n.Payload); admitted {
 		pp, ok = reduction, true
 		sweepReduction = true
 	}
@@ -337,7 +337,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 			// RF3 (docs/loop-fillet-design.md §3): a cap edge sends the
 			// prism through its brep face view. Route E, L or V then reads the
 			// whole selection (docs/vertex-blend-design.md §2).
-			if original, ok := b.payload.(prismPayload); ok {
+			if original, ok := b.n.Payload.(prismPayload); ok {
 				if out, recognized, err := tryObliqueCapEdgeFillet(ctx, b, original, edges, rmm, rDelta); recognized {
 					return out, err
 				}

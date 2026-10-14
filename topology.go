@@ -655,12 +655,6 @@ type Body struct {
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Body
 
-	// payload is the evaluator's own record of how this body was built —
-	// what Transform re-evaluates under a composed motion
-	// (docs/evaluator-design.md §8). Nil for a body this evaluator did not
-	// build.
-	payload featurePayload
-
 	tessellationCache atomic.Pointer[tessellationCacheEntry]
 	// pairReports keeps the recent ContactPair reports this body is the
 	// first operand of (internal/reportvocab/contact_memo.go); it changes no outcome either.

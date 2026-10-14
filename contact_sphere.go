@@ -29,7 +29,7 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 	if !ok {
 		return sourceSphereContactProof{}, false
 	}
-	rp, ok := b.payload.(revolvePayload)
+	rp, ok := b.n.Payload.(revolvePayload)
 	if !ok || !signedAxisTransform(rp.xform) || !pose.IsValid() || pose.IsReflection() {
 		return sourceSphereContactProof{}, false
 	}
@@ -52,7 +52,7 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 // sourceSphereRecord proves the unplaced occupied solid is one complete ball.
 // A rigid placement cannot change its radius or isotropic centroidal inertia.
 func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
-	rp, ok := b.payload.(revolvePayload)
+	rp, ok := b.n.Payload.(revolvePayload)
 	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || rp.surfaceResult || !rp.full ||
 		rp.sectionDelta != 0 || len(rp.profile.Holes) != 0 ||
 		len(rp.profile.Outer.Segments) != 2 ||

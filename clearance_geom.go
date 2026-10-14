@@ -92,7 +92,7 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool,
 	g := &bodyGeom{body: b}
 	var ok bool
 	var err error
-	switch pl := b.payload.(type) {
+	switch pl := b.n.Payload.(type) {
 	case prismPayload:
 		ok, err = g.addPrismFaces(budget, pl)
 	case revolvePayload:
@@ -301,13 +301,13 @@ func (g *bodyGeom) addPrismFaces(budget *proofbound.WorkBudget, pp prismPayload)
 	// point rounding (every anchor, axis point and witness came from the
 	// frame's point lift, each carrier recording the largest exact rounding
 	// its own lifts committed in CFace.LiftRound), its proven axial
-	// displacement (pp.axialDelta — the section's own sectionDelta is already
+	// displacement (pp.AxialDelta — the section's own sectionDelta is already
 	// refused above), and the worst per-face tilt a rounded carrier normal
 	// commits (every u, v and n came from the frame's direction lift). It is
 	// exactly zero for an unplaced, feature-built prism whose lifts are exact
 	// for its own coordinates, which keeps its Clearance rows Exact.
 	pointTerm := carrierLiftRound(built.Faces)
-	g.delta = proofbound.AbsSumUpper(pointTerm, pp.axialDelta(), clearance.BodyFaceTiltDelta(g.faces, pp.Frame, pp.Xform))
+	g.delta = proofbound.AbsSumUpper(pointTerm, pp.AxialDelta(), clearance.BodyFaceTiltDelta(g.faces, pp.Frame, pp.Xform))
 	g.carrierDelta = g.delta
 	return true, nil
 }
@@ -389,7 +389,7 @@ func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (
 		pointTerm = math.Max(pointTerm, face.LiftRound)
 		tiltTerm = math.Max(tiltTerm, clearance.BodyFaceTiltDelta([]*clearance.CFace{face}, f.frame, bp.xform))
 	}
-	g.delta = proofbound.AbsSumUpper(pointTerm, bp.axialDelta(), tiltTerm)
+	g.delta = proofbound.AbsSumUpper(pointTerm, bp.AxialDelta(), tiltTerm)
 	g.carrierDelta = g.delta
 	return true, nil
 }

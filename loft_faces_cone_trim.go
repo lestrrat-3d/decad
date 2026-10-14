@@ -96,7 +96,7 @@ func indexOfFace(faces []*Face, want *Face) int {
 // A source group can split into multiple result patches. The cap proof uses
 // one connected cap only, so retain the record only for one surviving face.
 func uniqueResultSourceFace(body *Body, source int) *Face {
-	p, ok := body.payload.(facetedPayload)
+	p, ok := body.n.Payload.(facetedPayload)
 	if !ok {
 		return nil
 	}
@@ -140,7 +140,7 @@ func uniquePayloadSourcePatches(ctx context.Context, p facetedPayload, adj [][]i
 }
 
 func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) error {
-	base, ok := source.payload.(facetedPayload)
+	base, ok := source.n.Payload.(facetedPayload)
 	if !ok || !base.loftFacesPrimitive || !loftFacesCapRecordReady(base.loftFacesCap) ||
 		base.xform != r3.Identity() {
 		return nil
@@ -174,13 +174,13 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 	if toeCapFace == nil {
 		return nil
 	}
-	p, ok := result.payload.(facetedPayload)
+	p, ok := result.n.Payload.(facetedPayload)
 	if !ok {
 		return nil
 	}
 	p.loftFacesToe = &loftFacesToeRecord{base: base, cap: base.loftFacesCap,
 		capFace: capFace, toeCapFace: toeCapFace, toe: cone, toeTool: tool}
-	result.payload = p
+	result.n.Payload = p
 	return nil
 }
 
@@ -205,7 +205,7 @@ func loftCapOutsideToeCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit)
 func unchangedLoftCap(ctx context.Context, source, result *Body, base facetedPayload, group int) (*Face, bool, error) {
 	resultFaces := result.Faces()
 	var held *facetedtopology.GroupedMesh
-	if p, ok := result.payload.(facetedPayload); ok {
+	if p, ok := result.n.Payload.(facetedPayload); ok {
 		held = &facetedtopology.GroupedMesh{Verts: p.verts, Tris: p.tris, Src: p.src, FaceOf: p.faceOf}
 	}
 	index, ok, err := facetedtopology.UnchangedGroupPatch(ctx,
@@ -222,7 +222,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	if op != meshbool.OpIntersect {
 		return nil, false, nil
 	}
-	p, ok := target.payload.(facetedPayload)
+	p, ok := target.n.Payload.(facetedPayload)
 	if !ok || p.loftFacesToe == nil || !loftFacesCapRecordReady(p.loftFacesToe.cap) ||
 		p.xform != r3.Identity() ||
 		p.loftFacesToe.capFace == nil || p.loftFacesToe.capFace.n.Body != bodyNode(target) {
@@ -323,7 +323,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	if err != nil {
 		return nil, true, asBooleanError(op, err)
 	}
-	result, ok := body.payload.(facetedPayload)
+	result, ok := body.n.Payload.(facetedPayload)
 	if !ok {
 		return body, true, nil
 	}
@@ -341,7 +341,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		toeCapGroup: toeCapSource, heelCapGroup: heelCapSource,
 		tangent: p.loftFacesToe.cap.tangent,
 	}
-	body.payload = result
+	body.n.Payload = result
 	return body, true, nil
 }
 

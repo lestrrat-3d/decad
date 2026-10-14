@@ -134,7 +134,7 @@ func vertexBoundTree(t *testing.T, n int, each func(tree, branch *Body)) (*Mesh,
 func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 	t.Parallel()
 	trunk, body := vertexBoundTree(t, 3, nil)
-	fp, ok := body.payload.(facetedPayload)
+	fp, ok := body.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	trunkBeta, err := trunk.vertexBounds()
 	require.NoError(t, err)
@@ -301,7 +301,7 @@ func TestFacetedPlacementChargesEachVertexAtItsOwnMagnitude(t *testing.T) {
 	require.NoError(t, err)
 	drilled, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	src, ok := drilled.payload.(facetedPayload)
+	src, ok := drilled.n.Payload.(facetedPayload)
 	require.True(t, ok)
 
 	turn, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(30))
@@ -312,7 +312,7 @@ func TestFacetedPlacementChargesEachVertexAtItsOwnMagnitude(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := Transform(t.Context(), drilled, motion)
 	require.NoError(t, err)
-	next, ok := placed.payload.(facetedPayload)
+	next, ok := placed.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Len(t, next.vertexBound, len(src.vertexBound))
 

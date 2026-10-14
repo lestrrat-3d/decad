@@ -281,7 +281,7 @@ func crossBoreSourceBodies(t *testing.T, targetY, toolY float64) (*Body, *Body) 
 
 func crossBoreCircleCenter(t *testing.T, body *Body) planePoint {
 	t.Helper()
-	pp, ok := body.payload.(prismPayload)
+	pp, ok := body.n.Payload.(prismPayload)
 	require.True(t, ok)
 	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
 	require.True(t, ok)

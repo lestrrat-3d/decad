@@ -29,14 +29,14 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 	if ctx.Err() != nil {
 		return math.Inf(1)
 	}
-	switch pl := b.payload.(type) {
+	switch pl := b.n.Payload.(type) {
 	case prismPayload:
 		coordUpper, err := momentinput.CoordinateEnvelope(pl.Profile, freeform.NewFreeformWork(), pl.Walks)
 		if err != nil {
 			return math.Inf(1)
 		}
 		coordUpper = proofbound.AbsSumUpper(coordUpper, pl.SectionDelta)
-		zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.Z0), math.Abs(pl.Z1)), pl.axialDelta())
+		zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.Z0), math.Abs(pl.Z1)), pl.AxialDelta())
 		return motionbound.LinearRecordRadius(pl.Frame, coordUpper, zUpper)
 	case draftPayload:
 		return draftMoverRecordRadius(pl)
@@ -66,6 +66,6 @@ func draftMoverRecordRadius(pl draftPayload) float64 {
 		return math.Inf(1)
 	}
 	coordUpper := math.Max(nearUpper, proofbound.AbsSumUpper(farUpper, pl.farDelta))
-	zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.z0), math.Abs(pl.z1)), pl.axialDelta())
+	zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.z0), math.Abs(pl.z1)), pl.AxialDelta())
 	return motionbound.LinearRecordRadius(pl.frame, coordUpper, zUpper)
 }

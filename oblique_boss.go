@@ -26,12 +26,12 @@ type obliqueBossRecord struct {
 // asserts that a mesh intersection alone authenticates a source surface.
 func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 	plate, boss := a, b
-	pp, plateOK := plate.payload.(prismPayload)
-	cp, circleOK := boss.payload.(prismPayload)
+	pp, plateOK := plate.n.Payload.(prismPayload)
+	cp, circleOK := boss.n.Payload.(prismPayload)
 	if !plateOK || !circleOK || len(cp.Profile.Outer.Segments) != 1 {
 		plate, boss = b, a
-		pp, plateOK = plate.payload.(prismPayload)
-		cp, circleOK = boss.payload.(prismPayload)
+		pp, plateOK = plate.n.Payload.(prismPayload)
+		cp, circleOK = boss.n.Payload.(prismPayload)
 	}
 	if !plateOK || !circleOK || pp.SurfaceResult || cp.SurfaceResult ||
 		pp.SectionDelta != 0 || cp.SectionDelta != 0 ||

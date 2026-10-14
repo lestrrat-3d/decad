@@ -30,7 +30,7 @@ func TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding(t *testing.T) 
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 
-	payload := scaled.payload.(facetedPayload)
+	payload := scaled.n.Payload.(facetedPayload)
 	require.GreaterOrEqual(t, payload.dPair, facetedSourceDiameterUpper(payload.verts, payload.meshBound))
 	centroid, err := scaled.Centroid()
 	require.NoError(t, err)
@@ -42,12 +42,12 @@ func TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding(t *testing.T) 
 	require.NoError(t, err)
 	placed, err := Copy(t.Context(), scaled, WithCopyPlacement(shift))
 	require.NoError(t, err)
-	placedPayload := placed.payload.(facetedPayload)
+	placedPayload := placed.n.Payload.(facetedPayload)
 	require.GreaterOrEqual(t, placedPayload.dPair,
 		facetedSourceDiameterUpper(placedPayload.verts, placedPayload.meshBound))
 	again, err := ScaledAt(t.Context(), placed, r3.NewVec(-2e6, 1e6, 5e5), units.Scalar(0.8))
 	require.NoError(t, err)
-	againPayload := again.payload.(facetedPayload)
+	againPayload := again.n.Payload.(facetedPayload)
 	require.GreaterOrEqual(t, againPayload.dPair,
 		facetedSourceDiameterUpper(againPayload.verts, againPayload.meshBound))
 }

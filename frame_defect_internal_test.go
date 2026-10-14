@@ -520,7 +520,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			require.NoError(t, err)
 			got, err := Cut(t.Context(), box, drill)
 			require.NoError(t, err)
-			_, ok := got.payload.(brepPayload)
+			_, ok := got.n.Payload.(brepPayload)
 			require.True(t, ok, "premise: the drilled block is a brep")
 			return got, nil
 		}},
@@ -572,7 +572,7 @@ func TestRevolveMassCoversFrameDefect(t *testing.T) {
 	require.NoError(t, err)
 	b, err = Transform(t.Context(), b, rot)
 	require.NoError(t, err)
-	rp := b.payload.(revolvePayload)
+	rp := b.n.Payload.(revolvePayload)
 	l, err := massmoment.PlaneMap(rp.frame, rp.xform)
 	require.NoError(t, err)
 	det := massmoment.Determinant(l)
@@ -601,7 +601,7 @@ func TestRevolveBoxChargesTheBasisRounding(t *testing.T) {
 	s, p := fdSketch(t, w, pl, [][2]float64{{2, 0}, {3, 0}, {3, 1}, {2, 1}})
 	b, err := Revolve(t.Context(), New(), s, p, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
-	rp := b.payload.(revolvePayload)
+	rp := b.n.Payload.(revolvePayload)
 	basis := rp.basis()
 	gaps := rp.lift().BasisRound(basis)
 	require.Positive(t, gaps[3], "premise: the float E1 is not the exact cross product")

@@ -46,7 +46,7 @@ func TestTwistShellOffsetSourceFromRoundedSketch(t *testing.T) {
 	require.NoError(t, err)
 	body, err := Sweep(t.Context(), New(), s, profile, path, WithSweepTwist(units.Degrees(30)))
 	require.NoError(t, err)
-	payload, ok := body.payload.(twistedSweepPayload)
+	payload, ok := body.n.Payload.(twistedSweepPayload)
 	require.True(t, ok)
 	proof, err := twistsweep.TwistOffsetSource(payload.profile, 5, payload.angle, 1, 0)
 	require.NoError(t, err)

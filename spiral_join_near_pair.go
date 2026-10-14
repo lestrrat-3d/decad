@@ -119,7 +119,7 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 		proof.blank.rootFace.n.Body != bodyNode(blank) {
 		return nil, false
 	}
-	p, ok := tooth.payload.(facetedPayload)
+	p, ok := tooth.n.Payload.(facetedPayload)
 	if !ok || p.loftFacesTrim != proof.tooth {
 		return nil, false
 	}

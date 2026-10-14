@@ -315,7 +315,7 @@ func requireLoftGearSound(t *testing.T, c loftGearCase) {
 	ratio, binding := loftBodyBindingRatio(t, t.Context(), body)
 	require.Less(t, ratio, toleranceRel, "every reading must sit inside the default tolerance")
 
-	lp := body.payload.(loftPayload)
+	lp := body.n.Payload.(loftPayload)
 	p := uint64(len(lp.profile0.Outer.Segments))
 	stations := lp.walls / 2
 	require.Less(t, stations, loftmesh.StationCap(p), "the build must settle inside stationCap(P)")

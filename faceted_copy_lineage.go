@@ -39,8 +39,8 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 		documentHandle(source.n.Doc).requireLive(source) != nil {
 		return
 	}
-	base, baseOK := source.payload.(facetedPayload)
-	placed, placedOK := image.payload.(facetedPayload)
+	base, baseOK := source.n.Payload.(facetedPayload)
+	placed, placedOK := image.n.Payload.(facetedPayload)
 	if !baseOK || !placedOK || placed.xform != targetPlacement {
 		return
 	}
@@ -60,7 +60,7 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 	if direct {
 		placed.copyLineage.exact = exact
 	}
-	image.payload = placed
+	image.n.Payload = placed
 }
 
 // facetedCopySet binds a source and its live rigid copies to their actual
@@ -136,7 +136,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 	}
 	source := tools[0]
 	d := documentHandle(source.n.Doc)
-	first, ok := source.payload.(facetedPayload)
+	first, ok := source.n.Payload.(facetedPayload)
 	if !ok || d.requireLive(source) != nil {
 		return nil, fmt.Errorf("%w: copied tools lack a live faceted source", ErrUnsupported)
 	}
@@ -161,7 +161,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 		if tool == nil || tool.n.Doc != documentNode(d) || d.requireLive(tool) != nil {
 			return nil, fmt.Errorf("%w: copied tool %d is not live in the source document", ErrUnsupported, i+1)
 		}
-		part, partOK := tool.payload.(facetedPayload)
+		part, partOK := tool.n.Payload.(facetedPayload)
 		if !partOK {
 			return nil, fmt.Errorf("%w: copied tool %d lost its faceted payload", ErrUnsupported, i+1)
 		}
@@ -224,7 +224,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 			return nil, err
 		}
 		for i := 1; i < len(tools); i++ {
-			part, ok := tools[i].payload.(facetedPayload)
+			part, ok := tools[i].n.Payload.(facetedPayload)
 			if !ok {
 				return nil, fmt.Errorf("%w: copied tool %d lost its faceted payload", ErrUnsupported, i+1)
 			}

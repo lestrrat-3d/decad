@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -586,16 +587,17 @@ func (rp chainRevolvePayload) walkView(ci int) revolvePayload {
 	return view
 }
 
-// transform is the accumulated rigid placement.
-func (rp chainRevolvePayload) transform() r3.Transform { return rp.xform }
+// Transform is the accumulated rigid placement.
+func (rp chainRevolvePayload) Transform() r3.Transform { return rp.xform }
 
-// placed re-evaluates the same record under the composed motion (core §8). A
+// Placed re-evaluates the same record under the composed motion (core §8). A
 // re-evaluation path: no preflight has run on this record within the call, so
 // the build opens the record's one free-form work counter itself
-// (docs/spline-design.md §5.2), exactly as revolvePayload.placed does.
-func (rp chainRevolvePayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+// (docs/spline-design.md §5.2), exactly as revolvePayload.Placed does.
+func (rp chainRevolvePayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
+	d, ref := documentHandle(env.Doc), env.Ref
 	rp.xform = composed
-	return evalChainRevolveContext(ctx, d, ref, rp, freeform.NewFreeformWork())
+	return placedNode(evalChainRevolveContext(ctx, d, ref, rp, freeform.NewFreeformWork()))
 }
 
 // revolveChain is the chain-fed Revolve body (docs/surface-design.md §13).

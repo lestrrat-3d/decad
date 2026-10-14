@@ -77,7 +77,7 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 	}
 
 	cp.verts, cp.vertexBound, cp.tris, cp.delta, cp.maxRound = sh.Verts, sh.VertexBound, sh.Tris, sh.Delta, sh.MaxRound
-	body.payload = cp
+	body.n.Payload = cp
 	return body, nil
 }
 

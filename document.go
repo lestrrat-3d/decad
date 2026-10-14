@@ -160,18 +160,6 @@ func (d *Document) requireLive(b *Body) error {
 	return nil
 }
 
-// featurePayload is the evaluator's own record of how a body was built —
-// what Transform re-evaluates under a composed motion (docs/evaluator-design.md
-// §8). Each feature's payload carries its accumulated rigid placement and
-// rebuilds the same record under a new one.
-type featurePayload interface {
-	// transform is the accumulated rigid placement.
-	transform() r3.Transform
-	// placed re-evaluates the same record under the composed motion, checking
-	// ctx during any long rebuild.
-	placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error)
-}
-
 // Transform returns a new body carrying body's geometry under the rigid
 // motion t, retiring body (core §8). body MUST NOT be nil. The zero transform is
 // invalid and is ErrDegenerate. A canceled context stops the rebuild before
@@ -196,23 +184,23 @@ func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error) {
 	if !t.IsValid() {
 		return nil, fmt.Errorf(`%w: an invalid transform names no placement`, ErrDegenerate)
 	}
-	if body.payload == nil {
+	if body.n.Payload == nil {
 		return nil, fmt.Errorf(`%w: this evaluator cannot place a body it did not build`, ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	composed, err := body.payload.transform().Then(t)
+	composed, err := body.n.Payload.Transform().Then(t)
 	if err != nil {
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
 	}
 	ref := d.nextProducerID()
-	placed, err := body.payload.placed(ctx, d, ref, composed)
+	placed, err := placePayload(ctx, body.n.Payload, d, ref, composed)
 	if err != nil {
 		return nil, err
 	}
-	if source, ok := body.payload.(facetedPayload); ok && source.copyLineage != nil {
+	if source, ok := body.n.Payload.(facetedPayload); ok && source.copyLineage != nil {
 		bindFacetedCopyLineage(placed, source.copyLineage.source, composed, false, nil)
 	}
 	if err := ctx.Err(); err != nil {
@@ -329,23 +317,23 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactr
 	if !motion.IsValid() {
 		return nil, fmt.Errorf(`%w: an invalid transform names no placement`, ErrDegenerate)
 	}
-	if b.payload == nil {
+	if b.n.Payload == nil {
 		return nil, fmt.Errorf(`%w: this evaluator cannot copy a body it did not build`, ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	composed, err := b.payload.transform().Then(motion)
+	composed, err := b.n.Payload.Transform().Then(motion)
 	if err != nil {
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
 	}
 	ref := d.nextProducerID()
 	var copied *Body
-	faceted, isFaceted := b.payload.(facetedPayload)
+	faceted, isFaceted := b.n.Payload.(facetedPayload)
 	if isFaceted && exact != nil {
 		copied, err = faceted.placedWith(ctx, d, ref, composed, exact)
 	} else {
-		copied, err = b.payload.placed(ctx, d, ref, composed)
+		copied, err = placePayload(ctx, b.n.Payload, d, ref, composed)
 	}
 	if err != nil {
 		return nil, err

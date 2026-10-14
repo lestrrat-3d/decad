@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
@@ -42,7 +43,7 @@ type prismGroupOperand struct {
 }
 
 func prismGroupOperandOf(b *Body) (prismGroupOperand, bool) {
-	switch p := b.payload.(type) {
+	switch p := b.n.Payload.(type) {
 	case prismPayload:
 		return prismGroupOperand{proxy: p, regions: []profileRecord{p.Profile}}, true
 	case stackedPrismPayload:
@@ -64,7 +65,7 @@ func prismGroupOperandOf(b *Body) (prismGroupOperand, bool) {
 func admitPrismGroupPair(budget *proofbound.WorkBudget, op meshbool.OperationKind,
 	oa, ob prismGroupOperand, holeFreeA, holeFreeB bool) (bool, error) {
 	if _, _, ok, err := admitPrismPairBudget(budget, op,
-		bornBody(&Body{payload: oa.proxy}), bornBody(&Body{payload: ob.proxy})); err != nil || !ok {
+		bornBody(&Body{n: topo.Body{Payload: oa.proxy}}), bornBody(&Body{n: topo.Body{Payload: ob.proxy}})); err != nil || !ok {
 		return false, err
 	}
 	for _, op := range []struct {
@@ -85,7 +86,7 @@ func admitPrismGroupPair(budget *proofbound.WorkBudget, op meshbool.OperationKin
 // Otherwise the crossing sub-case classifies every cell against the target
 // and against the group's regions together, and keeps target-and-not-tool.
 func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, error) {
-	target, aok := a.payload.(prismPayload)
+	target, aok := a.n.Payload.(prismPayload)
 	tool, bok := prismGroupOperandOf(b)
 	if !aok || !bok || !tool.group {
 		return prismPayload{}, false, nil
@@ -153,7 +154,7 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 // several loops. The survivors of the select-all merge are chained into
 // closed loops. One loop is a prism. Two or more loops proven pairwise
 // disjoint by prismcells.ProveGroupDisjoint form a prism group.
-func tryPrismGroupUnion(ctx context.Context, a, b *Body) (featurePayload, bool, error) {
+func tryPrismGroupUnion(ctx context.Context, a, b *Body) (topo.Payload, bool, error) {
 	oa, aok := prismGroupOperandOf(a)
 	ob, bok := prismGroupOperandOf(b)
 	if !aok || !bok {
@@ -185,7 +186,7 @@ func tryPrismGroupUnion(ctx context.Context, a, b *Body) (featurePayload, bool, 
 // a group after proving its regions disjoint. Its errors are the
 // caller's to route (prismcells.AmplifiedFallback).
 func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, scene prismcells.GroupScene,
-	oa, ob prismGroupOperand) (featurePayload, bool, error) {
+	oa, ob prismGroupOperand) (topo.Payload, bool, error) {
 	loops, cutDelta, resolved, err := prismcells.GroupUnionLoops(budget, scene)
 	if err != nil || !resolved {
 		return nil, false, err

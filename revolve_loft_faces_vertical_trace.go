@@ -135,7 +135,7 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 		side.upper.Cmp(arc.arc.circle.radius) != 0 {
 		return nil, false
 	}
-	payload, ok := graph.tooth.payload.(facetedPayload)
+	payload, ok := graph.tooth.n.Payload.(facetedPayload)
 	if !ok || payload.loftFacesTrim == nil ||
 		payload.loftFacesTrim.source == nil ||
 		payload.loftFacesTrim.source.source == nil {

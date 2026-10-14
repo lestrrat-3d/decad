@@ -149,7 +149,7 @@ func TestPlanarOverlapTransferChargesDisplacement(t *testing.T) {
 	doc := New()
 	floor := bandOctagonFloor(t, doc)
 	knob := bandKnobBody(t, doc)
-	delta := knob.payload.(facetedPayload).meshBound
+	delta := knob.n.Payload.(facetedPayload).meshBound
 	require.Greater(t, delta, math.Ldexp(1, -14))
 	half := big.NewRat(1, 2)
 	transfer := func(depth float64) ContactRelation {
@@ -181,7 +181,7 @@ func TestPlanarHullGapChargesDisplacement(t *testing.T) {
 	doc := New()
 	floor := bandOctagonFloor(t, doc)
 	knob := bandKnobBody(t, doc)
-	delta := proofarith.FloatRat(knob.payload.(facetedPayload).meshBound)
+	delta := proofarith.FloatRat(knob.n.Payload.(facetedPayload).meshBound)
 	gap := func(z float64) *big.Rat {
 		t.Helper()
 		still := PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(1)}
@@ -205,7 +205,7 @@ func TestReplayTransferChargeIsTheBasisDifference(t *testing.T) {
 	doc := New()
 	floor := bandOctagonFloor(t, doc)
 	knob := bandKnobBody(t, doc)
-	delta := knob.payload.(facetedPayload).meshBound
+	delta := knob.n.Payload.(facetedPayload).meshBound
 	require.Greater(t, delta, math.Ldexp(1, -14))
 	rest := r3.Vec{Z: 8 + 1.5*delta}
 	req := SweepRequest{ContactRequest: ContactRequest{PointResolution: units.Millimeters(1e-3),

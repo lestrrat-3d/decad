@@ -30,7 +30,7 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 	if len(operands) < 3 || len(operands) > 33 {
 		return nil, false, nil
 	}
-	blank, ok := operands[0].payload.(prismPayload)
+	blank, ok := operands[0].n.Payload.(prismPayload)
 	if !ok || len(blank.Profile.Holes) != 0 || len(blank.Profile.Outer.Segments) != 1 ||
 		blank.Xform != r3.Identity() {
 		return nil, false, nil
@@ -40,7 +40,7 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 		!prismpattern.WholeRange(circle.TStart, circle.TEnd) {
 		return nil, false, nil
 	}
-	first, ok := operands[1].payload.(prismPayload)
+	first, ok := operands[1].n.Payload.(prismPayload)
 	if !ok || first.Frame != blank.Frame || first.Z0 != blank.Z0 || first.Z1 != blank.Z1 ||
 		first.Xform != r3.Identity() || len(first.Profile.Holes) != 0 ||
 		len(first.Profile.Outer.Segments) < 4 {
@@ -73,7 +73,7 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
 		}
-		section, isPrism := body.payload.(prismPayload)
+		section, isPrism := body.n.Payload.(prismPayload)
 		if !isPrism || section.Frame != first.Frame || section.Z0 != first.Z0 ||
 			section.Z1 != first.Z1 || !prismpattern.AxialRotation(section.Xform) ||
 			len(section.Profile.Outer.Segments) != len(segments) ||

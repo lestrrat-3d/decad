@@ -97,7 +97,7 @@ func requireRingToothEqual(t *testing.T, want, got loftCylinderRingTooth) {
 func TestLoftCylinderRingTeethReuseMatchesFresh(t *testing.T) {
 	t.Parallel()
 	_, joined := loftCylinderTabJoin(t)
-	fp, ok := joined.payload.(facetedPayload)
+	fp, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	source, ok := loftCylinderChamferSourceOf(fp)
 	require.True(t, ok)

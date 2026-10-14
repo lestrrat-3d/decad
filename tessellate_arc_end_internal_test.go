@@ -115,8 +115,8 @@ func onlyArc(t *testing.T, segs []curveSegment) arcSeg {
 func TestChordLoopSampleReachesArcNaturalEnd(t *testing.T) {
 	t.Parallel()
 	pie := arcEndPie(t, New())
-	pp, ok := pie.payload.(prismPayload)
-	require.True(t, ok, `got %T`, pie.payload)
+	pp, ok := pie.n.Payload.(prismPayload)
+	require.True(t, ok, `got %T`, pie.n.Payload)
 	arc := onlyArc(t, pp.Profile.Outer.Segments)
 	face := bornFace(&Face{})
 	cl, err := tessellation.ChordLoop(t.Context(), pp.Profile.Outer, 0.2, 10, freeform.NewFreeformWork(), nil, 0,
@@ -181,8 +181,8 @@ func arcEndTombstone(t *testing.T) *Body {
 func TestBrepChordWallReachesArcNaturalEnd(t *testing.T) {
 	t.Parallel()
 	got := arcEndTombstone(t)
-	bp, ok := got.payload.(brepPayload)
-	require.True(t, ok, `got %T`, got.payload)
+	bp, ok := got.n.Payload.(brepPayload)
+	require.True(t, ok, `got %T`, got.n.Payload)
 	btopo, err := brepTopologyContext(t.Context(), bp)
 	require.NoError(t, err)
 	checked := 0
@@ -222,8 +222,8 @@ func TestCapBlendSideRingReachesArcNaturalEnd(t *testing.T) {
 	pie := arcEndPie(t, New())
 	chamfered, err := Chamfer(t.Context(), pie, Edges(CreatedBy(CapEnd(pie))), units.Millimeters(1))
 	require.NoError(t, err)
-	cbp, ok := chamfered.payload.(capBlendPayload)
-	require.True(t, ok, `got %T`, chamfered.payload)
+	cbp, ok := chamfered.n.Payload.(capBlendPayload)
+	require.True(t, ok, `got %T`, chamfered.n.Payload)
 	loops := cbp.loops()
 	require.Len(t, loops, 1)
 	arc := onlyArc(t, loops[0].Segments)
@@ -259,8 +259,8 @@ func TestRevolveJunctionReachesArcNaturalEnd(t *testing.T) {
 	axis := SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 0, V: 1}}
 	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], axis, FullRevolution{})
 	require.NoError(t, err)
-	rp, ok := body.payload.(revolvePayload)
-	require.True(t, ok, `got %T`, body.payload)
+	rp, ok := body.n.Payload.(revolvePayload)
+	require.True(t, ok, `got %T`, body.n.Payload)
 	arc := onlyArc(t, rp.profile.Outer.Segments)
 	r, err := revolveaxis.ResolveLoop(t.Context(), rp.profile.Outer, freeform.NewFreeformWork(), "test",
 		rp.chargedWalk, rp.ax.SnapTol)
@@ -305,8 +305,8 @@ func TestCapBlendCornerChordReachesArcNaturalEnd(t *testing.T) {
 	pie := arcEndPie(t, New())
 	chamfered, err := Chamfer(t.Context(), pie, Edges(CreatedBy(CapEnd(pie))), units.Millimeters(1))
 	require.NoError(t, err)
-	cbp, ok := chamfered.payload.(capBlendPayload)
-	require.True(t, ok, `got %T`, chamfered.payload)
+	cbp, ok := chamfered.n.Payload.(capBlendPayload)
+	require.True(t, ok, `got %T`, chamfered.n.Payload)
 	segs := cbp.loops()[0].Segments
 	arc := onlyArc(t, segs)
 	walks, joins := capBlendCornerSetup(t, cbp)

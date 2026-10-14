@@ -23,7 +23,7 @@ import (
 // walk's own bound. A direction whose extreme cannot be bracketed refuses
 // rather than publishing the held value. See docs/evaluator-design.md §5.
 
-// extentAlong is the through-all stop's reading of the prism (stops.go): the
+// ExtentAlong is the through-all stop's reading of the prism (stops.go): the
 // extent interval along an arbitrary world direction g — the lifted linear
 // functional point·g = origin·g + u·(U'·g) + v·(V'·g) + z·(N'·g), primes the
 // placed directions, extremized over the region boundary and the sweep —
@@ -41,7 +41,7 @@ import (
 // The stop and clearance callers hold no preflight counter for this record, so
 // the interface forms open the record's own — one per extent reading, never one
 // per segment.
-func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
+func (pp prismPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 	if pp.SectionDelta != 0 {
 		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a prism with a proven section displacement`, ErrUnsupported)
 	}
@@ -100,7 +100,7 @@ func prismPlacementCoeffAllow(pp prismPayload, g r3.Vec, base, gu, gv, gz, coord
 // prismBoundsContext adapts the internal three-axis reading to Box. A cached
 // walk set is reused across axes; nil resolves each axis as before.
 func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (Box, error) {
-	low, high, bound, err := prismextent.Bounds(ctx, work, walks, pp.SectionDelta, pp.axialDelta(), pp.extentBoundedAlong)
+	low, high, bound, err := prismextent.Bounds(ctx, work, walks, pp.SectionDelta, pp.AxialDelta(), pp.extentBoundedAlong)
 	if err != nil {
 		return Box{}, err
 	}

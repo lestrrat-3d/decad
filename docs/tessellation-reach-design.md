@@ -161,7 +161,7 @@ answering `+Inf` for an underivable enclosure is the same refusal.
 `capStartCount`, `cell` and `side` live on `loftAssembly` only. `matchedDelta` and
 `loftChordedAllow.maxTwistOffsetUpper` are locals of `evalLoft`; the payload's own doc comment says
 `matchedDelta` is deliberately not stored because nothing stored needed it. The restatement needs it, so the
-payload gains the COMPOSED proof terms, regenerated on every `placed` (which re-runs `evalLoft`), never the
+payload gains the COMPOSED proof terms, regenerated on every `Placed` (which re-runs `evalLoft`), never the
 raw `matchedDelta`:
 
 ```go
@@ -174,7 +174,7 @@ type MeshProof struct {
 ```
 
 `loftPayload` gains `capStartCount int`, `cell [][2]int`, `side []uint8`, `proof loftmesh.MeshProof`. All four are
-copied from `loftAssembly` / composed at the end of `evalLoft`; `placed` already nils the triangle fields and
+copied from `loftAssembly` / composed at the end of `evalLoft`; `Placed` already nils the triangle fields and
 re-evaluates, so nothing stored can disagree with the records.
 
 ### Composition (in `evalLoft`, after `mass.chorded` is set)
@@ -199,7 +199,7 @@ maps the returned face numbers back to live faces and calls `setFaceBound`. `Res
    rest → `capEnd`. A missing role is `ErrDegenerate` (tess §4).
 2. Copy `verts` and the selected triangle range (fresh slices — `Mesh` accessors already copy, but payload slices must not
    alias the mesh's). No chording, no retriangulation, no reflection flip: loft §5's whole-shell orientation
-   step already made every triangle outward, and `placed` re-runs it, so tess §4's "reflected placement
+   step already made every triangle outward, and `Placed` re-runs it, so tess §4's "reflected placement
    reverses once" rule is discharged by the payload. Assert the tetrahedron sum positive in the audit below.
 3. `faceBound[f] = proof.FacetDeparture` for every face; `bound = FacetDeparture`; `AreaSlack` from `proof`.
    A solid also publishes `volSymDiff` and `symDiffOK = true`.

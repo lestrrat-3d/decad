@@ -85,7 +85,7 @@ func planarPartAndBranch(t *testing.T, doc *Document, shift r3.Vec, top float64)
 	require.NoError(t, err)
 	branch, err = Transform(t.Context(), branch, move)
 	require.NoError(t, err)
-	payload, ok := branch.payload.(mitredSweepPayload)
+	payload, ok := branch.n.Payload.(mitredSweepPayload)
 	require.True(t, ok)
 	return part, branch, payload.delta
 }
@@ -179,7 +179,7 @@ func TestPlanarPairVerdictTouchNeedsZeroDisplacement(t *testing.T) {
 		require.NoError(t, err)
 		column, err := Sweep(t.Context(), doc, s, s.Profiles()[0], up, WithMitredJoins())
 		require.NoError(t, err)
-		payload, ok := column.payload.(mitredSweepPayload)
+		payload, ok := column.n.Payload.(mitredSweepPayload)
 		require.True(t, ok)
 		require.Zero(t, payload.delta, "every held vertex is its own rational")
 		lid := planarBox(t, doc, -1, -1, 10, 1, 1, 12)

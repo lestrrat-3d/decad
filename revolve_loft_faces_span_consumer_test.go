@@ -97,8 +97,8 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		}
 	})
 	t.Run("wrong noncrossing triangle owner", func(t *testing.T) {
-		original := tooth.payload
-		defer func() { tooth.payload = original }()
+		original := tooth.n.Payload
+		defer func() { tooth.n.Payload = original }()
 		payload := original.(facetedPayload)
 		payload.faceOf = slices.Clone(payload.faceOf)
 		other := -1
@@ -122,22 +122,22 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		if !changed {
 			t.Fatal("the retained wall has no source triangle")
 		}
-		tooth.payload = payload
+		tooth.n.Payload = payload
 		_, certified, err := revolveLoftFacesNonverticalManifest(t.Context(), proof)
 		if err != nil || certified {
 			t.Fatalf("wrong live face was admitted: %v, %t", err, certified)
 		}
 	})
 	t.Run("changed tooth transform", func(t *testing.T) {
-		original := tooth.payload
-		defer func() { tooth.payload = original }()
+		original := tooth.n.Payload
+		defer func() { tooth.n.Payload = original }()
 		payload := original.(facetedPayload)
 		shift, err := r3.Translation(r3.Vec{X: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
 		payload.xform = shift
-		tooth.payload = payload
+		tooth.n.Payload = payload
 		if revolveLoftFacesTrimCurrent(tooth, proof.trim) {
 			t.Fatal("changed tooth transform retained a current source record")
 		}

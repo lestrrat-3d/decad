@@ -21,7 +21,7 @@ func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 	require.Zero(t, mesh.Bound().Base())
-	unionPayload, ok := union.payload.(facetedPayload)
+	unionPayload, ok := union.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Zero(t, unionPayload.volSymDiff)
 
@@ -85,7 +85,7 @@ func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 	require.NoError(t, err)
 	widened, err := Transform(t.Context(), union, inexactShift)
 	require.NoError(t, err)
-	widenedPayload, ok := widened.payload.(facetedPayload)
+	widenedPayload, ok := widened.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Positive(t, widenedPayload.meshBound)
 	widenedProof, ok, err := sourceFacetedAxisSupport(t.Context(), widened, r3.Identity(), 2, 0)
@@ -98,7 +98,7 @@ func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 
 func TestFacetedAxisSupportRejectsMalformedPlacementProvenance(t *testing.T) {
 	_, _, placed := boundedFacetedFloorFixture(t)
-	valid := placed.payload.(facetedPayload)
+	valid := placed.n.Payload.(facetedPayload)
 	require.NotEmpty(t, valid.exactSourceVerts)
 	require.NotEmpty(t, valid.exactSourceTris)
 	missing := valid
@@ -110,7 +110,7 @@ func TestFacetedAxisSupportRejectsMalformedPlacementProvenance(t *testing.T) {
 	wrongVerts.exactSourceVerts = append([]r3.Vec(nil), valid.exactSourceVerts...)
 	wrongVerts.exactSourceVerts[0].X += 1
 	for _, corrupt := range []facetedPayload{missing, wrongTris, wrongVerts} {
-		body := bornBody(&Body{n: topo.Body{Solid: placed.n.Solid, Kind: placed.n.Kind, Lumps: placed.n.Lumps}, payload: corrupt})
+		body := bornBody(&Body{n: topo.Body{Solid: placed.n.Solid, Kind: placed.n.Kind, Lumps: placed.n.Lumps, Payload: corrupt}})
 		_, ok, err := sourceFacetedAxisSupport(t.Context(), body, r3.Identity(), 2, 0)
 		require.NoError(t, err)
 		require.False(t, ok)
@@ -124,7 +124,7 @@ func TestFacetedAxisSupportRejectsMalformedPlacementProvenance(t *testing.T) {
 	reflected, err := Transform(t.Context(), source, reflection)
 	require.NoError(t, err)
 	require.Same(t, doc, reflected.Document())
-	require.Empty(t, reflected.payload.(facetedPayload).exactSourceVerts)
+	require.Empty(t, reflected.n.Payload.(facetedPayload).exactSourceVerts)
 	_, ok, err := sourceFacetedAxisSupport(t.Context(), reflected, r3.Identity(), 2, 0)
 	require.NoError(t, err)
 	require.False(t, ok)
@@ -137,7 +137,7 @@ func TestFacetedAxisSupportRefusesTwoLowestFaces(t *testing.T) {
 		Distance{D: units.Millimeters(8), Dir: Along})
 	union, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
-	payload, ok := union.payload.(facetedPayload)
+	payload, ok := union.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Zero(t, payload.meshBound)
 	require.Zero(t, payload.volSymDiff)
@@ -161,7 +161,7 @@ func TestFacetedAxisSupportRefusesHoledFootprint(t *testing.T) {
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 	require.Zero(t, mesh.Bound().Base())
-	payload, ok := holed.payload.(facetedPayload)
+	payload, ok := holed.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Zero(t, payload.volSymDiff)
 	_, ok, err = sourceFacetedAxisSupport(t.Context(), holed, r3.Identity(), 2, 0)
