@@ -60,6 +60,29 @@ record through the same seam proof as an exact prism. This is an exact planar
 section, including any recorded holes, and can enter ordinary profile
 consumers. It does not treat a tessellated BRep face as a source profile.
 
+## Parallel section of an authenticated circular-hole Loft
+
+An authenticated two-section solid Loft with identical outer records, one
+whole circular hole in each section and zero segment alignment may return an
+exact section. The direct Loft circle-pair gate first proves the section
+origins' exact axial relation. The sections must use matching canonical
+world-XY axes, identity placement and zero blend-construction displacement.
+Cut-rewritten Lofts are excluded because their tool-to-Loft center conversion
+does not yet carry an exact displacement certificate.
+The requested frame must have those same axes and in-plane origin, at a level
+strictly between the two sections.
+
+The unchanged outer record denotes the same boundary at every level. The
+ruled hole wall connects points at equal circle angles, so a fixed sweep
+fraction gives a circle whose center and radius are the linear interpolations
+of the two authenticated records. Compute that fraction and each interpolated
+scalar as exact rationals. Refuse a coordinate or radius that is not exactly
+representable as finite binary64, or a nonpositive radius. Reconstruct the
+outer record and interpolated circle on a fresh Sketch, then require Sketch to
+publish a valid matching profile. This exact profile can enter ordinary
+`Extrude`; the source Loft and its document do not change. A rotated or
+oblique section, a cap-level section, and a placed Loft keep `ErrUnsupported`.
+
 ## Cardinal plane of an authenticated source sphere
 
 This class reads the occupied-ball certificate from `sourceSphereAtPose` for a
