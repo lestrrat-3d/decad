@@ -200,6 +200,27 @@ jobs:
             echo "runner-cpu: unknown"
           fi
 
+      # MEASUREMENT BRANCH ONLY: every test binary runs through this wrapper,
+      # which adds a distinct -test.cpuprofile per package directory, stamps
+      # each output line with the wall-clock time and keeps a copy of the log.
+      - name: Write profile wrapper
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/prof"
+          cat >"$GITHUB_WORKSPACE/prof-exec.sh" <<'EOF'
+          #!/bin/bash
+          set -o pipefail
+          bin=$1
+          shift
+          slug=$(pwd | sed "s#^$GITHUB_WORKSPACE/\\?##; s#[^A-Za-z0-9]#_#g")
+          [ -n "$slug" ] || slug=decad
+          {
+            echo "### binary-start $slug"
+            "$bin" "$@" -test.cpuprofile "$GITHUB_WORKSPACE/prof/$slug.cpu"
+          } 2>&1 | perl -e 'use Time::HiRes qw(time); $|=1; while(<STDIN>){printf "%.3f %s", time, $_}' | tee "$GITHUB_WORKSPACE/prof/$slug.v.log"
+          EOF
+          chmod +x "$GITHUB_WORKSPACE/prof-exec.sh"
+
       - name: Download race test binaries
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -240,6 +261,8 @@ jobs:
             0|10) timeout=45m; budget=2400 ;;
             1|2) budget=420 ;;
           esac
+          timeout=90m
+          budget=999999
           run_shard() {
             local bin="$GITHUB_WORKSPACE/race-bin/$1" shards="$2" dir="$3"
             chmod +x "$bin"
@@ -259,7 +282,7 @@ jobs:
             ' "$shards" -)"
             tests="${tests%|}"
             test -n "$tests"
-            (cd "$dir" && "$bin" -test.timeout "$timeout" -test.run "^(${tests})$")
+            (cd "$dir" && "$GITHUB_WORKSPACE/prof-exec.sh" "$bin" -test.v -test.timeout "$timeout" -test.run "^(${tests})$")
           }
           start=$SECONDS
           logdir="$(mktemp -d)"
@@ -298,6 +321,15 @@ jobs:
             echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the ${budget}s budget; re-measure and regenerate .github/test-shards.txt and .github/test-shards-apitest.txt (see _shardgen/main.go)"
             exit 1
           fi
+
+      - name: Upload profiles
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: profiles-${{ matrix.shard }}
+          path: prof/
+          if-no-files-found: warn
+          retention-days: 7
 
   # The packages outside the root run on two Ubuntu runners. The main-only
   # platform job below runs the whole suite on macOS and Windows.
@@ -362,6 +394,27 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      # MEASUREMENT BRANCH ONLY: every test binary runs through this wrapper,
+      # which adds a distinct -test.cpuprofile per package directory, stamps
+      # each output line with the wall-clock time and keeps a copy of the log.
+      - name: Write profile wrapper
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/prof"
+          cat >"$GITHUB_WORKSPACE/prof-exec.sh" <<'EOF'
+          #!/bin/bash
+          set -o pipefail
+          bin=$1
+          shift
+          slug=$(pwd | sed "s#^$GITHUB_WORKSPACE/\\?##; s#[^A-Za-z0-9]#_#g")
+          [ -n "$slug" ] || slug=decad
+          {
+            echo "### binary-start $slug"
+            "$bin" "$@" -test.cpuprofile "$GITHUB_WORKSPACE/prof/$slug.cpu"
+          } 2>&1 | perl -e 'use Time::HiRes qw(time); $|=1; while(<STDIN>){printf "%.3f %s", time, $_}' | tee "$GITHUB_WORKSPACE/prof/$slug.v.log"
+          EOF
+          chmod +x "$GITHUB_WORKSPACE/prof-exec.sh"
+
       - name: Download race test binaries of the other packages
         if: startsWith(matrix.packages, './examples/')
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -388,7 +441,8 @@ jobs:
         if: matrix.packages == './dynamics/'
         shell: bash
         run: |
-          (cd dynamics && ../dynamics.test -test.count=1 -test.v -test.timeout '${{ matrix.timeout }}')
+          echo "dynamics-run-start $(date +%s.%N)"
+          (cd dynamics && "$GITHUB_WORKSPACE/prof-exec.sh" ../dynamics.test -test.count=1 -test.v -test.timeout '${{ matrix.timeout }}')
           elapsed=$(( $(date +%s) - $(cat dynamics-start.txt) ))
           echo "./dynamics/ finished in ${elapsed}s"
           budget='${{ matrix.budget }}'
@@ -435,16 +489,16 @@ jobs:
               bin="$GITHUB_WORKSPACE/race-bin/$(basename "$dir").test"
               chmod +x "$bin"
               echo "=== $dir"
-              (cd "$dir" && "$bin" -test.count=1 -test.v -test.timeout ${{ matrix.timeout }}) || rc=1
+              (cd "$dir" && "$GITHUB_WORKSPACE/prof-exec.sh" "$bin" -test.count=1 -test.v -test.timeout ${{ matrix.timeout }}) || rc=1
             done
             echo "=== without -race: $(echo $norace)"
-            go test -count=1 -v -timeout ${{ matrix.timeout }} $norace || rc=1
+            go test -exec "$GITHUB_WORKSPACE/prof-exec.sh" -count=1 -v -timeout ${{ matrix.timeout }} $norace || rc=1
             exit "$rc"
           ) >"$logdir/prebuilt.log" 2>&1 &
           prebuilt_pid=$!
           rest_rc=0
           prebuilt_rc=0
-          go test ${{ matrix.race }} -count=1 -v -timeout ${{ matrix.timeout }} $rest || rest_rc=$?
+          go test -exec "$GITHUB_WORKSPACE/prof-exec.sh" ${{ matrix.race }} -count=1 -v -timeout ${{ matrix.timeout }} $rest || rest_rc=$?
           wait "$prebuilt_pid" || prebuilt_rc=$?
           echo "::group::prebuilt race test binaries"
           cat "$logdir/prebuilt.log"
@@ -460,6 +514,15 @@ jobs:
             echo "::error::${{ matrix.packages }} took ${elapsed}s, over the ${budget}s budget; find the tests that grew in the -v durations above"
             exit 1
           fi
+
+      - name: Upload profiles
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: profiles-${{ matrix.packages == './dynamics/' && 'dynamics' || 'packages' }}
+          path: prof/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Save Go build cache
         uses: ./.github/actions/go-build-cache-save
