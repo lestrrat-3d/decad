@@ -136,7 +136,7 @@ func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
 	q, d, err := exactrotation.New(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(90))
 	require.NoError(t, err)
 	_ = d
-	origin := provenance.Ref{Producer: 1, Role: roleCapStart}
+	origin := provenance.Ref{Producer: 1, Role: provenance.RoleCapStart}
 	g := facetGroup{
 		origins: []provenance.Ref{origin}, hasCentroid: true, planar: true, reversed: true,
 		centroid:    VecMeasurement{Value: r3.NewVec(2, 0, 5), Exactness: Exact},

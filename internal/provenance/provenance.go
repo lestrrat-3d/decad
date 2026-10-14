@@ -16,3 +16,12 @@ type Ref struct {
 	Producer Producer
 	Role     string
 }
+
+// The stable role names every analytic evaluator mints (evaluator §3): the
+// body's own Origin role, and the two ends of a prism sweep or of a revolve's
+// partial turn.
+const (
+	RoleBody     = "body"
+	RoleCapStart = "capStart"
+	RoleCapEnd   = "capEnd"
+)

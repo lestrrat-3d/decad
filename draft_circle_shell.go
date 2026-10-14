@@ -160,7 +160,7 @@ func addDraftCircleShellRoles(ctx context.Context, body *Body, ref producerID) e
 		"side(0,1)": {roleShellCap, surfacegeom.KindPlane},
 		"side(0,2)": {"shellSide(0,0)", surfacegeom.KindCone},
 		"side(0,3)": {"rim(0)", surfacegeom.KindPlane},
-		"side(0,5)": {roleCapStart, surfacegeom.KindPlane},
+		"side(0,5)": {provenance.RoleCapStart, surfacegeom.KindPlane},
 	}
 	seen := map[string]struct{}{}
 	for _, face := range body.Faces() {

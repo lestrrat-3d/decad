@@ -76,7 +76,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	exact, localExact, anchor := placed.Exact, placed.LocalExact, placed.Anchor
 	verts, vertexBound, delta := placed.Rounded, placed.VertexBound, placed.Delta
 
-	a := sweepmitre.Assemble(c, roleCapStart, roleCapEnd)
+	a := sweepmitre.Assemble(c, provenance.RoleCapStart, provenance.RoleCapEnd)
 	localVol6, localMoments := mp.localVol6, mp.localMoments
 	if localVol6 == nil {
 		if localExact == nil {
@@ -123,7 +123,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	if err != nil {
 		return nil, err
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}})
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySolid}})
 	faces, err := buildMitredTopology(ctx, body, ref, a, exact, verts, areas, delta)
 	if err != nil {
 		return nil, err
@@ -154,7 +154,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	if err := validateLoftBodyMeasurements(body); err != nil {
 		return nil, err
 	}
-	if !finiteMeasurementValues(bound) {
+	if !measurement.FiniteValues(bound) {
 		return nil, fmt.Errorf(`%w: the mitred sweep's area has no finite bound`, ErrUnsupported)
 	}
 

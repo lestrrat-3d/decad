@@ -382,14 +382,14 @@ func FaceCreatedBy(f FeatureRef) FacePredicate {
 // preserves only its operands' cap origins, so name those with
 // FaceCreatedBy(CapStart(originalBody)).
 func CapStart(b *Body) FeatureRef {
-	return featureRefOf(provenance.Ref{Producer: b.n.Origin.Producer, Role: roleCapStart})
+	return featureRefOf(provenance.Ref{Producer: b.n.Origin.Producer, Role: provenance.RoleCapStart})
 }
 
 // CapEnd names the end-cap role of b's own producing feature — the sibling of
 // CapStart. A body whose feature mints no end cap (a cup, a full revolution) still
 // gets a well-formed ref that matches nothing.
 func CapEnd(b *Body) FeatureRef {
-	return featureRefOf(provenance.Ref{Producer: b.n.Origin.Producer, Role: roleCapEnd})
+	return featureRefOf(provenance.Ref{Producer: b.n.Origin.Producer, Role: provenance.RoleCapEnd})
 }
 
 // Walls matches every face a sweep made: the faces carrying a side(i, j) role

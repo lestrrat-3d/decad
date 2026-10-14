@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
@@ -178,8 +179,8 @@ func prismUnionFilletSourceFaces(result, source *Edge) bool {
 		return false
 	}
 	for _, face := range source.faces {
-		if !face.isPlanar() || len(face.n.Origins) != 1 || face.n.Origins[0].Role == roleCapStart ||
-			face.n.Origins[0].Role == roleCapEnd {
+		if !face.isPlanar() || len(face.n.Origins) != 1 || face.n.Origins[0].Role == provenance.RoleCapStart ||
+			face.n.Origins[0].Role == provenance.RoleCapEnd {
 			return false
 		}
 	}

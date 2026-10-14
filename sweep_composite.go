@@ -26,12 +26,12 @@ func compositeSpanPartOf(body *Body) (compositeSpanPart, error) {
 	for _, face := range body.Faces() {
 		for _, origin := range face.n.Origins {
 			switch origin.Role {
-			case roleCapStart:
+			case provenance.RoleCapStart:
 				if part.startCap != nil {
 					return compositeSpanPart{}, fmt.Errorf(`%w: a sweep span carries more than one start cap`, ErrUnsupported)
 				}
 				part.startCap = face
-			case roleCapEnd:
+			case provenance.RoleCapEnd:
 				if part.endCap != nil {
 					return compositeSpanPart{}, fmt.Errorf(`%w: a sweep span carries more than one end cap`, ErrUnsupported)
 				}
@@ -163,7 +163,7 @@ func assembleCompositeSweepBodyWithJoinMode(
 	}
 	body := bornBody(&Body{
 		doc: d,
-		n:   topo.Body{Solid: !surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)},
+		n:   topo.Body{Solid: !surfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind)},
 	})
 	var faces []*Face
 	if !surfaceResult && !closed {

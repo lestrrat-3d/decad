@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 
 	"github.com/lestrrat-3d/r3"
@@ -32,8 +33,8 @@ func TestSweepAuditAcceptsSeparatedStraightSpans(t *testing.T) {
 		require.NoError(t, buildErr)
 		spans[i] = sweepAuditSpan{
 			body:     body,
-			startCap: sweepAuditFaceWithRole(t, body, roleCapStart),
-			endCap:   sweepAuditFaceWithRole(t, body, roleCapEnd),
+			startCap: sweepAuditFaceWithRole(t, body, provenance.RoleCapStart),
+			endCap:   sweepAuditFaceWithRole(t, body, provenance.RoleCapEnd),
 		}
 	}
 
@@ -56,8 +57,8 @@ func TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs(t *testing.T) {
 		require.NoError(t, buildErr)
 		return sweepAuditSpan{
 			body:     body,
-			startCap: sweepAuditFaceWithRole(t, body, roleCapStart),
-			endCap:   sweepAuditFaceWithRole(t, body, roleCapEnd),
+			startCap: sweepAuditFaceWithRole(t, body, provenance.RoleCapStart),
+			endCap:   sweepAuditFaceWithRole(t, body, provenance.RoleCapEnd),
 		}
 	}
 

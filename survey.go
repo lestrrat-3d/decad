@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
@@ -129,8 +130,8 @@ func facesByRole(b *Body) map[string]*Face {
 //
 // A surface result (pp.surfaceResult) publishes no cap face at all
 // (prism_build.go), so the cap loop below is skipped for one rather than
-// probed and refused on a nil role lookup: on a SOLID a nil roleCapStart or
-// roleCapEnd is a real build defect and the existing total refusal must
+// probed and refused on a nil role lookup: on a SOLID a nil provenance.RoleCapStart or
+// provenance.RoleCapEnd is a real build defect and the existing total refusal must
 // still catch it, so the guard reads pp.surfaceResult, never f == nil. Every
 // wall input this function reads — the placed frame's exact directions, the
 // walk's plane-local tangent or circular range, the caller's pull — is
@@ -169,7 +170,7 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 		for _, cap := range []struct {
 			role string
 			sign float64
-		}{{role: roleCapStart, sign: -1}, {role: roleCapEnd, sign: 1}} {
+		}{{role: provenance.RoleCapStart, sign: -1}, {role: provenance.RoleCapEnd, sign: 1}} {
 			f := roles[cap.role]
 			if f == nil {
 				return undercutOutcome{}
@@ -214,7 +215,7 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 	}
 	faces := []*Face{}
 	for _, decision := range revolvesurvey.UndercutRoles(
-		loops, rp.ax, pw, c0, c1, rp.phi0, rp.phi1, rp.full, [2]string{roleCapStart, roleCapEnd},
+		loops, rp.ax, pw, c0, c1, rp.phi0, rp.phi1, rp.full, [2]string{provenance.RoleCapStart, provenance.RoleCapEnd},
 	) {
 		f := roles[decision.Role]
 		if f == nil {
@@ -324,7 +325,7 @@ func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 		role string
 		sign float64
 	}{
-		{role: roleCapStart, sign: -sOpen},
+		{role: provenance.RoleCapStart, sign: -sOpen},
 		{role: roleShellCap, sign: sOpen},
 	}
 	for i := range oLoops {

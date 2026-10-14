@@ -99,7 +99,7 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 		return nil, fmt.Errorf(`%w: the twist's held wall count changed`, ErrUnsupported)
 	}
 	sources := map[string]*Face{
-		roleCapStart: oldFaces[0], roleCapEnd: oldFaces[1],
+		provenance.RoleCapStart: oldFaces[0], provenance.RoleCapEnd: oldFaces[1],
 	}
 	merged := make([]*Face, 0, 2+count)
 	merged = append(merged, oldFaces[:2]...)
@@ -335,7 +335,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 			edge.n.Length, path.End.Z, proofbound.UpRound(poly.MaxRadiusL1*upper), poly.PerimeterUpper)
 	}
 	for _, face := range heldBody.Faces() {
-		if face.n.Origins[0].Role != roleCapStart && face.n.Origins[0].Role != roleCapEnd {
+		if face.n.Origins[0].Role != provenance.RoleCapStart && face.n.Origins[0].Role != provenance.RoleCapEnd {
 			face.n.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 		}
 		// Each triangular parameter patch is a subset of a wall whose area

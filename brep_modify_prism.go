@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 )
 
 // This file is route P of docs/brep-modify-design.md ("brep-modify §N"): a
@@ -31,7 +32,7 @@ type prismCaps struct {
 // prismCapsOf names a prism body's own capStart and capEnd faces.
 func prismCapsOf(b *Body) prismCaps {
 	roles := facesByRole(b)
-	return prismCaps{start: roles[roleCapStart], end: roles[roleCapEnd]}
+	return prismCaps{start: roles[provenance.RoleCapStart], end: roles[provenance.RoleCapEnd]}
 }
 
 // sectionLoop maps one cap face's loop index to its section loop index.

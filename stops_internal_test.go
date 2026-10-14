@@ -257,7 +257,7 @@ func TestResolveToFaceRefusesStatedNormalDeparture(t *testing.T) {
 			}}, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			doc.bodies = []*Body{host}
-			ref := Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: 1, Role: roleCapEnd})))
+			ref := Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: 1, Role: provenance.RoleCapEnd})))
 			faces, err := ref.SelectFaces(host)
 			require.NoError(t, err)
 			require.Len(t, faces, 1)
@@ -298,8 +298,8 @@ func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 		stop  float64
 		delta float64
 	}{
-		{name: "exact start cap", role: roleCapStart, stop: 10, delta: 0},
-		{name: "computed end cap", role: roleCapEnd, stop: 20, delta: 0.25},
+		{name: "exact start cap", role: provenance.RoleCapStart, stop: 10, delta: 0},
+		{name: "computed end cap", role: provenance.RoleCapEnd, stop: 20, delta: 0.25},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stop, delta, _, err := doc.resolveToFace(ToFace{
@@ -338,7 +338,7 @@ func genericPlateHost(t *testing.T, f r3.Frame, z1 float64) (*Document, *Body, *
 	}}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	doc.bodies = []*Body{host}
-	return doc, host, Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: 1, Role: roleCapEnd})))
+	return doc, host, Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: 1, Role: provenance.RoleCapEnd})))
 }
 
 func genericPlateFrames(t *testing.T) (f, flipped, skewed, shifted r3.Frame) {

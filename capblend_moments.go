@@ -36,7 +36,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	}
 	work := freeform.NewFreeformWork()
 	loops := cbp.loops()
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}})
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}}})
 
 	var faces []*Face
 	startLoopObjs := make([]*Loop, len(loops))
@@ -273,7 +273,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: startFrame},
 			CapRecord:     &topo.CapRecord{Frame: cbp.frame, Xform: cbp.xform, Z: cbp.z0},
-			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapStart}},
+			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
 		},
 	}
@@ -286,7 +286,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: endFrame},
 			CapRecord:     &topo.CapRecord{Frame: cbp.frame, Xform: cbp.xform, Z: cbp.z1},
-			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
+			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
 		},
 	}

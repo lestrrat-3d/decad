@@ -140,7 +140,7 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 // Preserve their axial cap names so face and rim selectors still work after
 // the draft's rebuild and after placement.
 func addDraftCircleCapRoles(ctx context.Context, body *Body, ref producerID) error {
-	roles := map[string]string{"side(0,1)": roleCapEnd, "side(0,4)": roleCapStart}
+	roles := map[string]string{"side(0,1)": provenance.RoleCapEnd, "side(0,4)": provenance.RoleCapStart}
 	seen := map[string]bool{}
 	for _, face := range body.Faces() {
 		if err := ctx.Err(); err != nil {
@@ -158,7 +158,7 @@ func addDraftCircleCapRoles(ctx context.Context, body *Body, ref producerID) err
 			seen[capRole] = true
 		}
 	}
-	if !seen[roleCapStart] || !seen[roleCapEnd] {
+	if !seen[provenance.RoleCapStart] || !seen[provenance.RoleCapEnd] {
 		return fmt.Errorf(`%w: the tapered circular rim lost a planar cap`, ErrUnsupported)
 	}
 	return nil

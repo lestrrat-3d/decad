@@ -2,7 +2,6 @@ package decad
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -62,13 +61,13 @@ type Box struct {
 func ratIntervalMeasurement(lo, hi *big.Rat) (Measurement, bool) {
 	mid := new(big.Rat).Quo(new(big.Rat).Add(lo, hi), big.NewRat(2, 1))
 	value := sweeppath.RatFloatNearest(mid)
-	if !finiteMeasurementValues(value) {
+	if !measurement.FiniteValues(value) {
 		return Measurement{}, false
 	}
 	held := proofarith.FloatRat(value)
 	spread := proofbound.RatMax(new(big.Rat).Abs(new(big.Rat).Sub(lo, held)), new(big.Rat).Abs(new(big.Rat).Sub(hi, held)))
 	bound := proofbound.RatFloatUp(spread)
-	if !finiteMeasurementValues(value, bound) {
+	if !measurement.FiniteValues(value, bound) {
 		return Measurement{}, false
 	}
 	return Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
@@ -168,15 +167,15 @@ func boxPtrToInternal(b *Box) *measurement.Box {
 // for.
 func validateAnalyticBodyMeasurements(body *Body) error {
 	finiteMeasurement := func(m Measurement) bool {
-		return finiteMeasurementValues(m.Value.Base(), m.Bound.Base())
+		return measurement.FiniteValues(m.Value.Base(), m.Bound.Base())
 	}
 	finiteVecMeasurement := func(m VecMeasurement) bool {
-		return finiteMeasurementValues(
+		return measurement.FiniteValues(
 			m.Value.X, m.Value.Y, m.Value.Z, m.Bound.Base(),
 		)
 	}
 	finiteBox := func(b Box) bool {
-		return finiteMeasurementValues(
+		return measurement.FiniteValues(
 			b.Min.X, b.Min.Y, b.Min.Z,
 			b.Max.X, b.Max.Y, b.Max.Z,
 			b.Bound.Base(),
@@ -197,15 +196,6 @@ func validateAnalyticBodyMeasurements(body *Body) error {
 		}
 	}
 	return nil
-}
-
-func finiteMeasurementValues(values ...float64) bool {
-	for _, value := range values {
-		if math.IsNaN(value) || math.IsInf(value, 0) {
-			return false
-		}
-	}
-	return true
 }
 
 // chargePrismMap widens every reading a plane-coordinate build published —

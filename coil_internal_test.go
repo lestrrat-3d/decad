@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -661,7 +662,7 @@ func TestCoilRepeatAndPlacement(t *testing.T) {
 	ux := cross(ex, ey)
 	capScale := new(big.Float).SetPrec(512).SetRat(dot(ux, ux))
 	capScale.Sqrt(capScale)
-	capArea, err := coilFace(t, placedA, roleCapStart).Area()
+	capArea, err := coilFace(t, placedA, provenance.RoleCapStart).Area()
 	require.NoError(t, err)
 	requireEnclosesBig(t, capArea.Value.Base(), capArea.Bound.Base(), capScale, "placed cap area")
 

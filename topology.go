@@ -19,19 +19,14 @@ import (
 // index. A Body is immutable after construction, so it is safe to read from
 // many goroutines (core §12).
 
-// The stable cap-role names the analytic evaluators mint (evaluator §3): the
-// two ends of a prism sweep, and a revolve's caps on a partial turn.
+// The stable role name only the root mints (evaluator §3); the roles every
+// analytic evaluator mints live in internal/provenance.
 const (
-	roleCapStart = "capStart"
-	roleCapEnd   = "capEnd"
 	// rolePatch is a Patch face's own Origin() role (docs/surface-design.md
 	// §5.1). It stays internal this increment: a one-face body is already
 	// selected by Faces(Planar()), and no public FeatureRef helper names it
 	// yet — Stitch is what decides the right shape for one.
 	rolePatch = "patch"
-	// roleBody is the body's own Origin() role, minted by every evaluator
-	// build.
-	roleBody = "body"
 )
 
 // FeatureRef identifies the stable role that created a body, face, or edge.

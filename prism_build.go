@@ -60,7 +60,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	if pp.SurfaceResult {
 		kind = BodySheet
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: !pp.SurfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}})
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: !pp.SurfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind)}})
 
 	// The LEVEL half of the shared-denotation certificate (denotation.go):
 	// minted only when this payload's own section is drawn straight from its
@@ -100,7 +100,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: startFrame},
 			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z0},
-			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapStart}},
+			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
 		},
 	}
@@ -112,7 +112,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: endFrame},
 			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z1},
-			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
+			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
 		},
 	}

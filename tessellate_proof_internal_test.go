@@ -101,7 +101,7 @@ func TestPrismProofRecordChargesEveryFaceItsOwnDisplacement(t *testing.T) {
 			// its bound covers the sagitta it took.
 			require.GreaterOrEqual(t, d, sagitta, `the hole wall %q must charge its own chord sagitta`, role)
 			sawWall++
-		case role == roleCapStart || role == roleCapEnd:
+		case role == provenance.RoleCapStart || role == provenance.RoleCapEnd:
 			// A planar carrier does not make a TRIMMED patch exact: each cap's
 			// rim is the same chorded circle, so each cap charges it too.
 			require.GreaterOrEqual(t, d, sagitta, `cap %q must charge the trim sagitta of the loop bounding it`, role)
@@ -227,7 +227,7 @@ func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	disc := internalDiscBody(t, doc, 8, 10)
-	capSel := Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: disc.n.Origin.Producer, Role: roleCapEnd})))
+	capSel := Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: disc.n.Origin.Producer, Role: provenance.RoleCapEnd})))
 	cup, err := Shell(t.Context(), disc, capSel, units.Millimeters(1))
 	require.NoError(t, err)
 	_, ok := cup.payload.(cupPayload)
@@ -404,7 +404,7 @@ func TestFreeformPrismProofRecordCoversItsOwnChording(t *testing.T) {
 			curved = d
 			continue
 		}
-		if _, isPlane := f.n.Surface.(surfacegeom.Plane); isPlane && roleOf(t, f) != roleCapStart && roleOf(t, f) != roleCapEnd {
+		if _, isPlane := f.n.Surface.(surfacegeom.Plane); isPlane && roleOf(t, f) != provenance.RoleCapStart && roleOf(t, f) != provenance.RoleCapEnd {
 			straight = d
 		}
 	}

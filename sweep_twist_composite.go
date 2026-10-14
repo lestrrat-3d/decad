@@ -137,7 +137,7 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 				t >= held.walls+held.capStartCount && cell != len(cells)-1 {
 				continue
 			}
-			role := roleCapStart
+			role := provenance.RoleCapStart
 			if t < held.walls {
 				segment := held.segment[0][t/2]
 				if segment < 0 || segment >= profileEdges {
@@ -145,7 +145,7 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 				}
 				role = fmt.Sprintf("side(%d,0,%d)", pathSpanOfCell[cell], segment)
 			} else if t >= held.walls+held.capStartCount {
-				role = roleCapEnd
+				role = provenance.RoleCapEnd
 			}
 			face := byRole[role]
 			if face == nil {
@@ -364,7 +364,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 			proofbound.RatFloatUp(length.Hi), longitudinalExtra, poly.PerimeterUpper)
 	}
 	for _, face := range body.Faces() {
-		if face.n.Origins[0].Role != roleCapStart && face.n.Origins[0].Role != roleCapEnd {
+		if face.n.Origins[0].Role != provenance.RoleCapStart && face.n.Origins[0].Role != provenance.RoleCapEnd {
 			face.n.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 		}
 		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, area, areaBound)

@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -28,7 +29,7 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 		return nil, false, nil
 	}
 	if call.sense != Inward || len(call.removed) != 1 ||
-		call.removed[0] != facesByRole(source)[roleCapEnd] {
+		call.removed[0] != facesByRole(source)[provenance.RoleCapEnd] {
 		return nil, false, nil
 	}
 	refuse := func(why string) (*Body, bool, error) {

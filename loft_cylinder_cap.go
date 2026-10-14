@@ -20,7 +20,7 @@ func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 	if blank == nil || len(pp.tris) != len(pp.src) || groups[0] == groups[1] {
 		return fmt.Errorf("%w: loft/cylinder caps have no separate source groups", ErrUnsupported)
 	}
-	roles := [2]string{roleCapStart, roleCapEnd}
+	roles := [2]string{provenance.RoleCapStart, provenance.RoleCapEnd}
 	for cap, group := range groups {
 		if group < 0 || group >= len(pp.groups) {
 			return fmt.Errorf("%w: loft/cylinder cap names no source group", ErrUnsupported)

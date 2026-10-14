@@ -243,7 +243,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			AxialDelta:    a.Delta,
 			HasAxialDelta: true,
 			Surface:       capStartSurf,
-			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapStart}},
+			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
 		},
 	}
@@ -255,7 +255,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			AxialDelta:    a.Delta,
 			HasAxialDelta: true,
 			Surface:       capEndSurf,
-			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
+			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
 		},
 	}

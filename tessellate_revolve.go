@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
@@ -423,11 +424,11 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			return nil, fmt.Errorf(`%w: a surface-result revolve wall loop needs at least three meridian samples`, ErrDegenerate)
 		}
 	default:
-		capStart, err := p.faceOf(roleCapStart)
+		capStart, err := p.faceOf(provenance.RoleCapStart)
 		if err != nil {
 			return nil, err
 		}
-		capEnd, err := p.faceOf(roleCapEnd)
+		capEnd, err := p.faceOf(provenance.RoleCapEnd)
 		if err != nil {
 			return nil, err
 		}

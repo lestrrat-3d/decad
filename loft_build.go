@@ -409,7 +409,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	if pl.surfaceResult {
 		kind = BodySheet
 	}
-	body := bornBody(&Body{doc: d, n: topo.Body{Solid: !pl.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}})
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: !pl.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind)}})
 
 	capStart, capEnd, walls, err := buildLoftTopology(ctx, body, ref, a, cap0Rat, cap1Rat)
 	if err != nil {
@@ -660,7 +660,7 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload, privateRoles .
 		WallCount: lp.walls, StartCapCount: lp.capStartCount,
 		WallCell: lp.cell, WallSide: lp.side,
 		Sheet:      sheet,
-		FaceOfRole: faceOfRole, StartCapRole: roleCapStart, EndCapRole: roleCapEnd,
+		FaceOfRole: faceOfRole, StartCapRole: provenance.RoleCapStart, EndCapRole: provenance.RoleCapEnd,
 		FacetDepartureMM: lp.proof.FacetDeparture,
 		AreaSlackMM2:     lp.proof.AreaSlack,
 		VolumeSymDiffMM3: lp.proof.VolSymDiff,

@@ -10,7 +10,7 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
-| `internal/measurement/` | Private bounded reading carriers and `ExactnessOf`. Public types live in `measurement.go`. See API §5.3, §6. |
+| `internal/measurement/` | Private bounded reading carriers, `ExactnessOf` and the `FiniteValues` gate. Public types live in `measurement.go`. See API §5.3, §6. |
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact box paths, contact, oriented, sphere-box and cylinder-box proofs, patches, clips and witnesses. |
 | `internal/pair/sphere/` | Exact sphere-pair relation, gap and bounded response witness. See contact-geometry §4.3. |
@@ -22,7 +22,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/pointcone/` | Point-loft cone crossing samples, far-cap subdivision and contact split, cap and triangle crossing bounds, and sector cap paths, subdivision, merged angles and root-edge order, and the strict-side offset of a cone meridian (`offset.go`). See loft-point and loft-face-sections designs. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching, query rendering, residual counts, and face-role indexes. See API §9. |
-| `internal/provenance/` | Producer identity and feature-role reference the topology nodes hold; root `FeatureRef` is the public form. See evaluator §3. |
+| `internal/provenance/` | Producer identity, feature-role reference and the `RoleBody`/`RoleCapStart`/`RoleCapEnd` names the topology nodes hold; root `FeatureRef` is the public form. See evaluator §3. |
 | `internal/surfacegeom/` | Private face and edge geometry carriers. Public surface and curve variants live in `topology.go`; `Edge.Curve` and `Face.Surface` convert the node's curve and surface to the public variant. See API §6.1, surface §6. |
 | `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |
 | `internal/reportvocab/` | Contact and sweep enums; Verify reports, motion verification records, survey diagnostics, and pair, interference and sheet outcomes. |

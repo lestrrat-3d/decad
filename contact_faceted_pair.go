@@ -7,9 +7,11 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -298,7 +300,7 @@ func planarPrismSolid(ctx context.Context, budget *proofbound.WorkBudget,
 		Outer: pp.Profile.Outer, Holes: pp.Profile.Holes,
 		Frame: pp.Frame, Transform: pp.Xform, Z0: pp.Z0, Z1: pp.Z1,
 		SectionDelta: pp.SectionDelta, Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta,
-		SurfaceResult: pp.SurfaceResult, CapStartRole: roleCapStart, CapEndRole: roleCapEnd,
+		SurfaceResult: pp.SurfaceResult, CapStartRole: provenance.RoleCapStart, CapEndRole: provenance.RoleCapEnd,
 	}, faceIndex, triangulation.Triangulate)
 }
 
@@ -341,12 +343,12 @@ func planarHeldSolid(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]in
 func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
 	none := proofarith.DyZero()
 	if !sp.auditClean || len(sp.tris) == 0 || len(sp.triFaces) != len(sp.tris) ||
-		len(sp.vertBound) != len(sp.verts) || !finiteMeasurementValues(sp.delta) || sp.delta < 0 {
+		len(sp.vertBound) != len(sp.verts) || !measurement.FiniteValues(sp.delta) || sp.delta < 0 {
 		return planar.PlanarSolid{}, none, false, nil
 	}
 	displacement := sp.delta
 	for _, bound := range sp.vertBound {
-		if !finiteMeasurementValues(bound) || bound < 0 {
+		if !measurement.FiniteValues(bound) || bound < 0 {
 			return planar.PlanarSolid{}, none, false, nil
 		}
 		displacement = max(displacement, bound)
@@ -384,7 +386,7 @@ func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload)
 func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body,
 	cp coilPayload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
 	none := proofarith.DyZero()
-	if !finiteMeasurementValues(cp.delta) || cp.delta < 0 {
+	if !measurement.FiniteValues(cp.delta) || cp.delta < 0 {
 		return planar.PlanarSolid{}, none, false, nil
 	}
 	mesh, err := tessellateCoil(ctx, b, cp, cp.delta, VerifyNone)
@@ -456,7 +458,7 @@ func planarHeldMeshSolid(ctx context.Context, budget *proofbound.WorkBudget, b *
 		}
 		return planar.PlanarSolid{}, none, false, chordFree, nil
 	}
-	if !mesh.n.BoundaryOK || !finiteMeasurementValues(mesh.n.Bound) || mesh.n.Bound < 0 ||
+	if !mesh.n.BoundaryOK || !measurement.FiniteValues(mesh.n.Bound) || mesh.n.Bound < 0 ||
 		len(mesh.source) != len(mesh.n.Triangles) {
 		return planar.PlanarSolid{}, none, false, chordFree, nil
 	}
@@ -504,7 +506,7 @@ func (p *planarBandPair) classify(ctx context.Context, budget *proofbound.WorkBu
 			return err
 		}
 		charged := new(big.Rat).Add(bound, delta)
-		if published := proofbound.RatFloatUp(charged); finiteMeasurementValues(published) &&
+		if published := proofbound.RatFloatUp(charged); measurement.FiniteValues(published) &&
 			value.Cmp(proofarith.FloatRat(published)) > 0 {
 			report.Relation, report.Reason = ContactSeparated, ContactNoReason
 			report.Gap = &Measurement{Value: units.Millimeters(result.Gap.ValueMM),
@@ -591,7 +593,7 @@ func (p *planarBandPair) liftedBand(budget *proofbound.WorkBudget, report *Conta
 	}
 	g := proofbound.RatFloatUp(upper)
 	charged := proofbound.RatFloatUp(new(big.Rat).Add(proofarith.FloatRat(g), proofarith.DyAdd(p.deltaA, p.deltaB).Rat()))
-	if !finiteMeasurementValues(g, charged) {
+	if !measurement.FiniteValues(g, charged) {
 		return false, nil
 	}
 	report.Relation, report.Reason = ContactBand, ContactNoReason
@@ -680,7 +682,7 @@ func (p *planarBandPair) convexity(ctx context.Context, budget *proofbound.WorkB
 func (p *planarBandPair) publishBand(ctx context.Context, budget *proofbound.WorkBudget, report *ContactReport,
 	points []planar.PatchPoint) error {
 	band := proofbound.RatFloatUp(new(big.Rat).Mul(big.NewRat(2, 1), proofarith.DyAdd(p.deltaA, p.deltaB).Rat()))
-	if !finiteMeasurementValues(band) {
+	if !measurement.FiniteValues(band) {
 		report.Reason = ContactNoGapProof
 		return nil
 	}
@@ -755,7 +757,7 @@ func (p *planarBandPair) chargedManifold(budget *proofbound.WorkBudget, report *
 				own = p.deltaB
 			}
 			published := proofbound.RatFloatUp(new(big.Rat).Add(proofarith.FloatRat(position.Bound.Base()), own.Rat()))
-			if !finiteMeasurementValues(published) || proofarith.FloatRat(published).Cmp(resolution) > 0 {
+			if !measurement.FiniteValues(published) || proofarith.FloatRat(published).Cmp(resolution) > 0 {
 				return nil, ContactPointTooCoarse, nil
 			}
 			position.Bound, position.Exactness = units.Millimeters(published), exactnessFromBound(published)
@@ -765,7 +767,7 @@ func (p *planarBandPair) chargedManifold(budget *proofbound.WorkBudget, report *
 			continue
 		}
 		widened := proofbound.RatFloatUp(new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), delta))
-		if !finiteMeasurementValues(widened) {
+		if !measurement.FiniteValues(widened) {
 			return nil, ContactNoGapProof, nil
 		}
 		point.Separation.Bound, point.Separation.Exactness = units.Millimeters(widened), exactnessFromBound(widened)

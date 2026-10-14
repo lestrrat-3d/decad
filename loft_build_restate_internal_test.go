@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -193,8 +194,8 @@ func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
 	capStart := mesh.source[lp.walls]
 	capEnd := mesh.source[len(mesh.n.Triangles)-1]
 	require.NotSame(t, capStart, capEnd)
-	require.Equal(t, roleCapStart, capStart.Origins()[0].Role)
-	require.Equal(t, roleCapEnd, capEnd.Origins()[0].Role)
+	require.Equal(t, provenance.RoleCapStart, capStart.Origins()[0].Role)
+	require.Equal(t, provenance.RoleCapEnd, capEnd.Origins()[0].Role)
 	walls := map[*Face]struct{}{}
 	for k := range lp.walls {
 		walls[mesh.source[k]] = struct{}{}

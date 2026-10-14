@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/spherepath"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
@@ -103,7 +104,7 @@ func (r *SweepReport) HasAffineReplayProof() bool {
 // rounding can change the reported relation beyond PointResolution is refused.
 func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error) {
 	if r == nil || r.replay == nil || elapsed.Kind() != units.Time ||
-		!finiteMeasurementValues(elapsed.Base()) {
+		!measurement.FiniteValues(elapsed.Base()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no replay proof", ErrUnsupported)
 	}
 	t, ok := sweeppath.ExactBaseValue(elapsed)
@@ -122,7 +123,7 @@ func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Tr
 // clock endpoints differ slightly from the rounded sweep duration.
 func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error) {
 	if r == nil || r.replay == nil || time.Kind() != units.Time || start.Kind() != units.Time ||
-		end.Kind() != units.Time || !finiteMeasurementValues(time.Base(), start.Base(), end.Base()) {
+		end.Kind() != units.Time || !measurement.FiniteValues(time.Base(), start.Base(), end.Base()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no replay proof", ErrUnsupported)
 	}
 	timeValue, timeOK := sweeppath.ExactBaseValue(time)
@@ -448,7 +449,7 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay pose is not separated", ErrUnsupported)
 	}
 	norm := proofbound.RatSqrtUp(normSquared.Rat())
-	if !finiteMeasurementValues(norm) || norm <= 0 {
+	if !measurement.FiniteValues(norm) || norm <= 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotating replay gap has no finite bound", ErrUnsupported)
 	}
 	lower := new(big.Rat).Quo(gap.Rat(), proofarith.FloatRat(norm))
@@ -499,7 +500,7 @@ func translatedReplayBox(box sourceBoxContactProof, from, at r3.Transform) (sour
 	before := [3]float64{start.X, start.Y, start.Z}
 	after := [3]float64{end.X, end.Y, end.Z}
 	for i := range 3 {
-		if !finiteMeasurementValues(before[i], after[i]) {
+		if !measurement.FiniteValues(before[i], after[i]) {
 			return sourceBoxContactProof{}, false
 		}
 		move := proofarith.DySubScalar(proofarith.MustDyOf(after[i]), proofarith.MustDyOf(before[i]))
@@ -516,7 +517,7 @@ func translatedReplaySphere(sphere sourceSphereContactProof, from, at r3.Transfo
 	before := [3]float64{start.X, start.Y, start.Z}
 	after := [3]float64{end.X, end.Y, end.Z}
 	for i := range 3 {
-		if !finiteMeasurementValues(before[i], after[i]) {
+		if !measurement.FiniteValues(before[i], after[i]) {
 			return sourceSphereContactProof{}, false
 		}
 		move := proofarith.DySubScalar(proofarith.MustDyOf(after[i]), proofarith.MustDyOf(before[i]))

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -145,9 +146,9 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			if err != nil {
 				return nil, err
 			}
-			if sp.closedComposite && (role == roleCapStart || role == roleCapEnd) ||
-				role == roleCapStart && (sp.surfaceResult || i != 0) ||
-				role == roleCapEnd && (sp.surfaceResult || i != len(sp.spans)-1) {
+			if sp.closedComposite && (role == provenance.RoleCapStart || role == provenance.RoleCapEnd) ||
+				role == provenance.RoleCapStart && (sp.surfaceResult || i != 0) ||
+				role == provenance.RoleCapEnd && (sp.surfaceResult || i != len(sp.spans)-1) {
 				continue
 			}
 			face, ok := byRole[role]
@@ -251,7 +252,7 @@ func compositeSpanFaceRole(face *Face, span int, reverseCaps bool) (string, erro
 	if len(origins) == 0 {
 		return "", fmt.Errorf(`%w: a sweep span face has no origin role`, ErrDegenerate)
 	}
-	return compositesweep.SpanFaceRole(origins[0].Role, span, reverseCaps, roleCapStart, roleCapEnd), nil
+	return compositesweep.SpanFaceRole(origins[0].Role, span, reverseCaps, provenance.RoleCapStart, provenance.RoleCapEnd), nil
 }
 
 type compositeStationKey struct{ loop, segment int }

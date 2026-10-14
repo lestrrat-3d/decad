@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -539,10 +540,10 @@ func sweepArcRole(reverseCaps bool) func(string) string {
 		}
 		if reverseCaps {
 			switch role {
-			case roleCapStart:
-				return roleCapEnd
-			case roleCapEnd:
-				return roleCapStart
+			case provenance.RoleCapStart:
+				return provenance.RoleCapEnd
+			case provenance.RoleCapEnd:
+				return provenance.RoleCapStart
 			}
 		}
 		return role
@@ -615,11 +616,11 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 	var capStart, capEnd *Face
 	if !sheet {
 		var err error
-		capStart, err = faceOfRole(roleCapStart)
+		capStart, err = faceOfRole(provenance.RoleCapStart)
 		if err != nil {
 			return nil, err
 		}
-		capEnd, err = faceOfRole(roleCapEnd)
+		capEnd, err = faceOfRole(provenance.RoleCapEnd)
 		if err != nil {
 			return nil, err
 		}
@@ -928,7 +929,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 		}
 		return f, nil
 	}
-	capStart, err := faceOfRole(roleCapStart)
+	capStart, err := faceOfRole(provenance.RoleCapStart)
 	if err != nil {
 		return nil, err
 	}

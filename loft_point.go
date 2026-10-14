@@ -220,7 +220,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 			Role: fmt.Sprintf("side(0,%d)", j)}}, planar: planar}
 	}
 	capGroup := len(groups) - 1
-	groups[capGroup] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: roleCapEnd}}, planar: true}
+	groups[capGroup] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}}, planar: true}
 	if center, proved := pointFarCapCentroid(record.profile, record.plane); proved {
 		groups[capGroup].centroid, groups[capGroup].hasCentroid = center, true
 	}

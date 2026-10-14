@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -92,8 +93,8 @@ func TestBrepModifyRoutePFilletsS1LateralEdges(t *testing.T) {
 		}
 	}
 	require.Equal(t, 4, fillets)
-	require.Contains(t, roles, roleCapStart)
-	require.Contains(t, roles, roleCapEnd)
+	require.Contains(t, roles, provenance.RoleCapStart)
+	require.Contains(t, roles, provenance.RoleCapEnd)
 	require.ErrorIs(t, doc.requireLive(s1), ErrRetiredBody, "the receiver is retired")
 	require.Len(t, doc.Bodies(), before)
 }

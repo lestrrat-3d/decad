@@ -293,9 +293,9 @@ func neutralCap(f *Face, b *Body) (bool, error) {
 		return false, fmt.Errorf(`%w: the neutral face must be a cap of the receiver, and it belongs to another body (draft SD20)`, ErrUnsupported)
 	}
 	switch {
-	case f.hasRole(b.n.Origin.Producer, roleCapStart):
+	case f.hasRole(b.n.Origin.Producer, provenance.RoleCapStart):
 		return true, nil
-	case f.hasRole(b.n.Origin.Producer, roleCapEnd):
+	case f.hasRole(b.n.Origin.Producer, provenance.RoleCapEnd):
 		return false, nil
 	}
 	return false, fmt.Errorf(`%w: the neutral face must be the receiver's capStart or capEnd; a wall or any other face is staged (draft SD20)`, ErrUnsupported)
@@ -314,7 +314,7 @@ func (f *Face) hasRole(producer producerID, role string) bool {
 // subset's corners admit the draft is stage 3's question (SD4).
 func draftKeptWalls(b *Body, producer producerID, selected []*Face) (map[offset2d.DraftWall]struct{}, error) {
 	for _, f := range selected {
-		if f.hasRole(producer, roleCapStart) || f.hasRole(producer, roleCapEnd) {
+		if f.hasRole(producer, provenance.RoleCapStart) || f.hasRole(producer, provenance.RoleCapEnd) {
 			return nil, fmt.Errorf(`%w: the selection contains a cap of the receiver, which has no trace on the neutral plane to tilt about (draft SD22)`, ErrDegenerate)
 		}
 	}

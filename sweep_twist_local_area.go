@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 )
 
@@ -41,7 +42,7 @@ func twistMixedAreaSlackLocal(profile profileRecord, poly twistsweep.TwistPolygo
 		}
 	}
 	capCharge := new(big.Rat)
-	for _, role := range []string{roleCapStart, roleCapEnd} {
+	for _, role := range []string{provenance.RoleCapStart, provenance.RoleCapEnd} {
 		face := byRole[role]
 		area, ok := held[face]
 		if face == nil || !ok || area.Lo.Sign() < 0 {

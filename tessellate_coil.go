@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/coilshell"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -54,11 +55,11 @@ func tessellateCoil(ctx context.Context, b *Body, cp coilPayload, chord float64,
 		}
 		segment = append(segment, f)
 	}
-	capStart, err := face(roleCapStart)
+	capStart, err := face(provenance.RoleCapStart)
 	if err != nil {
 		return nil, err
 	}
-	capEnd, err := face(roleCapEnd)
+	capEnd, err := face(provenance.RoleCapEnd)
 	if err != nil {
 		return nil, err
 	}

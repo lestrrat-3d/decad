@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -47,8 +48,8 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 	}
 	top := upper.Radius > lower.Radius
 	roles := facesByRole(source)
-	if top && call.removed[0] != roles[roleCapEnd] ||
-		!top && call.removed[0] != roles[roleCapStart] {
+	if top && call.removed[0] != roles[provenance.RoleCapEnd] ||
+		!top && call.removed[0] != roles[provenance.RoleCapStart] {
 		return nil, false, nil
 	}
 	refuse := func(why string) (*Body, bool, error) {

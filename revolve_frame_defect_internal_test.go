@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -255,8 +256,8 @@ func TestRevolveReadingsCoverFrameDefect(t *testing.T) {
 				for _, f := range b.Faces() {
 					phi := rp.phi0
 					switch f.n.Origins[0].Role {
-					case roleCapStart:
-					case roleCapEnd:
+					case provenance.RoleCapStart:
+					case provenance.RoleCapEnd:
 						phi = rp.phi1
 					default:
 						continue

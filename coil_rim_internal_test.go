@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/coil"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -208,7 +209,7 @@ func requireCoilRimsHoldTheDenotedCircle(t *testing.T, b *Body) {
 		require.Less(t, e.n.CurveBound, 1e-12)
 		turn := new(big.Rat)
 		for _, f := range e.Faces() {
-			if f.Origins()[0].Role == roleCapEnd {
+			if f.Origins()[0].Role == provenance.RoleCapEnd {
 				turn = rec.Turns
 			}
 		}
@@ -256,7 +257,7 @@ func TestCoilUnstitchCarriesTheRimCurveBound(t *testing.T) {
 	b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.3))
 	require.NoError(t, err)
 	var want float64
-	for _, e := range coilFace(t, b, roleCapEnd).Loops()[0].CoEdges() {
+	for _, e := range coilFace(t, b, provenance.RoleCapEnd).Loops()[0].CoEdges() {
 		require.True(t, e.Edge().n.CurveBounded)
 		want = e.Edge().n.CurveBound
 	}
@@ -264,7 +265,7 @@ func TestCoilUnstitchCarriesTheRimCurveBound(t *testing.T) {
 	require.NoError(t, err)
 	found := false
 	for _, sh := range sheets {
-		if sh.Faces()[0].Origins()[0].Role != roleCapEnd {
+		if sh.Faces()[0].Origins()[0].Role != provenance.RoleCapEnd {
 			continue
 		}
 		for _, e := range sh.Edges() {

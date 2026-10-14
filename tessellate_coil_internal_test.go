@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -63,12 +64,12 @@ func TestCoilMeshRestatesTheHeldShell(t *testing.T) {
 	faceMax := map[*Face]float64{}
 	for k, tri := range mesh.Triangles() {
 		f := mesh.source[k]
-		want := roleCapEnd
+		want := provenance.RoleCapEnd
 		switch {
 		case k < walls:
 			want = fmt.Sprintf("side(0,%d)", (k/2)%4)
 		case k < walls+2:
-			want = roleCapStart
+			want = provenance.RoleCapStart
 		}
 		require.Equal(t, want, f.Origins()[0].Role, "triangle %d", k)
 		faceMax[f] = max(faceMax[f], cp.vertexBound[tri[0]], cp.vertexBound[tri[1]], cp.vertexBound[tri[2]])
