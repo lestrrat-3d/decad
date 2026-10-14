@@ -77,9 +77,7 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 	}
 	twiceArea := new(big.Rat)
 	var moments [3]*big.Rat
-	for k := range moments {
-		moments[k] = new(big.Rat)
-	}
+	moments[u], moments[v] = new(big.Rat), new(big.Rat)
 	perimeter := 0.0
 	for i, a := range polygon {
 		if i%32 == 0 {
@@ -90,8 +88,8 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 		b := polygon[(i+1)%len(polygon)]
 		perimeter = proofbound.AbsSumUpper(perimeter, pointCapDistanceUpper(a, b))
 	}
-	// Signed triangles from one boundary vertex integrate every world
-	// coordinate, including the coordinate dropped by the projection.
+	// Signed triangles from one boundary vertex integrate the projected
+	// coordinates. The exact plane relation recovers the third coordinate.
 	anchor := polygon[0]
 	for i := 1; i+1 < len(polygon); i++ {
 		a, b := polygon[i], polygon[i+1]
@@ -99,7 +97,7 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 			pointPlaneMul(pointPlaneSub(a[u], anchor[u]), pointPlaneSub(b[v], anchor[v])),
 			pointPlaneMul(pointPlaneSub(b[u], anchor[u]), pointPlaneSub(a[v], anchor[v])))
 		twiceArea.Add(twiceArea, cross)
-		for k := range moments {
+		for _, k := range [2]int{u, v} {
 			three := pointPlaneAdd(pointPlaneAdd(anchor[k], a[k]), b[k])
 			moments[k].Add(moments[k], pointPlaneMul(three, cross))
 		}
@@ -109,9 +107,10 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 	}
 	den := pointPlaneMul(big.NewRat(3, 1), twiceArea)
 	var center [3]*big.Rat
-	for k := range center {
+	for _, k := range [2]int{u, v} {
 		center[k] = new(big.Rat).Quo(moments[k], den)
 	}
+	center[1-u] = pointPlaneCapDroppedCoordinate(center, anchor, plane, u)
 	// The projected area is a conservative lower bound on physical area:
 	// dropping the dominant normal component cannot enlarge a planar patch.
 	areaLower := proofbound.RatFloatDown(new(big.Rat).Quo(pointPlaneAbs(twiceArea), big.NewRat(2, 1)))
@@ -144,6 +143,17 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 	}
 	return VecMeasurement{Value: value, Exactness: exactnessOf(bound),
 		Bound: units.Millimeters(bound)}, true, nil
+}
+
+// pointPlaneCapDroppedCoordinate uses the mapped anchor's exact plane offset
+// to recover the horizontal coordinate omitted from the area moments.
+func pointPlaneCapDroppedCoordinate(center, anchor [3]*big.Rat,
+	plane *pointPlaneLimit, keep int) *big.Rat {
+	drop := 1 - keep
+	normal := [2]*big.Rat{plane.nx, plane.ny}
+	slope := new(big.Rat).Quo(normal[keep], normal[drop])
+	return pointPlaneSub(anchor[drop],
+		pointPlaneMul(slope, pointPlaneSub(center[keep], anchor[keep])))
 }
 
 // Each coordinate's exact difference is rounded up once by
