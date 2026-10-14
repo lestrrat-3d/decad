@@ -142,7 +142,8 @@ func ComputeLoftChordedAllow(
 			// the tighter of the two readings of the same row.
 			cellMatched := ChordCellDeltaUpper(p.MatchedDelta[j], delta)
 
-			cellWallUpper := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, p.ArcUpperV[j], p.ArcUpperW[j], cellMatched)
+			allows := proofbound.CellAllowsOf(vLo, vHi, wLo, wHi, p.ArcUpperV[j], p.ArcUpperW[j], cellMatched)
+			cellWallUpper := allows.ChordCurveAreaUpper
 			wallAreaUpper = proofbound.AbsSumUpper(wallAreaUpper, cellWallUpper)
 			wallLeg = proofbound.AbsSumUpper(wallLeg, proofbound.ProductUpper(cellMatched, cellWallUpper))
 			joint := proofbound.ProductUpper(piUp, proofbound.ProductUpper(cellMatched, cellMatched))
@@ -152,7 +153,7 @@ func ComputeLoftChordedAllow(
 				proofbound.ProductUpper(twice, p.ArcUpperV[j]), joint,
 				proofbound.ProductUpper(twice, p.ArcUpperW[j]), joint,
 			)
-			twistVolumeUpper = proofbound.AbsSumUpper(twistVolumeUpper, proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, wHi))
+			twistVolumeUpper = proofbound.AbsSumUpper(twistVolumeUpper, allows.TwistVolumeAllow)
 			cellTwist := proofbound.CellTwistVolume(vLo, vHi, wLo, wHi)
 			cellMoment := proofbound.CellTwistMomentFromVolume(vLo, vHi, wLo, wHi, anchor, cellTwist)
 			if reversed {
@@ -165,7 +166,7 @@ func ComputeLoftChordedAllow(
 			for axis := range cellMoment {
 				twistMomentCorrection[axis].Add(twistMomentCorrection[axis], cellMoment[axis])
 			}
-			maxTwistOffsetUpper = math.Max(maxTwistOffsetUpper, proofbound.CellTwistOffsetUpper(vLo, vHi, wLo, wHi))
+			maxTwistOffsetUpper = math.Max(maxTwistOffsetUpper, allows.TwistOffsetUpper)
 
 			ruledLeg := proofbound.CellChordCurveAreaAllow(
 				vLo, vHi, wLo, wHi,
@@ -185,7 +186,7 @@ func ComputeLoftChordedAllow(
 				p.ArcUpperV[j], p.ArcUpperW[j], cellMatched, delta,
 			)
 			areaExcess = proofbound.AbsSumUpper(areaExcess, ruledLeg, stationLeg)
-			twistAreaAllow = proofbound.AbsSumUpper(twistAreaAllow, proofbound.CellTwistAreaAllow(vLo, vHi, wLo, wHi))
+			twistAreaAllow = proofbound.AbsSumUpper(twistAreaAllow, allows.TwistAreaAllow)
 		}
 	}
 
