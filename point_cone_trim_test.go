@@ -6,8 +6,62 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPointConeTrimRejectsRoundTrippedPointLoft(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		deg  float64
+	}{
+		{"30deg", 30},
+		{"1deg", 1},
+		{"0.001deg", 0.001},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := New()
+			tooth := pointLoftTooth(t, doc)
+			motion, err := r3.RotationAround(r3.Vec{X: 1000, Y: 1, Z: 1},
+				r3.Vec{Z: 1}, units.Degrees(tc.deg))
+			require.NoError(t, err)
+			inverse, err := motion.Inverse()
+			require.NoError(t, err)
+			round, err := motion.Then(inverse)
+			require.NoError(t, err)
+			require.Equal(t, r3.Identity(), round)
+
+			moved, err := Transform(t.Context(), tooth, motion)
+			require.NoError(t, err)
+			back, err := Transform(t.Context(), moved, inverse)
+			require.NoError(t, err)
+			fp, ok := back.payload.(facetedPayload)
+			require.True(t, ok)
+			require.Equal(t, r3.Identity(), fp.xform)
+			require.True(t, fp.pointSection == nil, "a nonidentity delta must drop the source record")
+
+			got, err := Cut(t.Context(), back, pointLoftConeTool(t, doc, 5))
+			require.NoError(t, err)
+			gfp, ok := got.payload.(facetedPayload)
+			require.True(t, ok)
+			require.Nil(t, gfp.pointCone)
+		})
+	}
+
+	t.Run("unplaced copy", func(t *testing.T) {
+		doc := New()
+		cloned, err := Copy(t.Context(), pointLoftTooth(t, doc))
+		require.NoError(t, err)
+		fp, ok := cloned.payload.(facetedPayload)
+		require.True(t, ok)
+		require.NotNil(t, fp.pointSection)
+		got, err := Cut(t.Context(), cloned, pointLoftConeTool(t, doc, 5))
+		require.NoError(t, err)
+		gfp, ok := got.payload.(facetedPayload)
+		require.True(t, ok)
+		require.NotNil(t, gfp.pointCone)
+	})
+}
 
 func TestPointConeUpperFarPlaneNodeRequiresCapCharge(t *testing.T) {
 	t.Parallel()

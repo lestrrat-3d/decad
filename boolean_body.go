@@ -102,7 +102,8 @@ type facetedPayload struct {
 	// PlaceMesh preserves it by checking every rounded facet after placement.
 	contactAudited bool
 	// pointSection retains the authenticated Sketch source of a point loft.
-	// Boolean results have nil here; placement keeps the source record.
+	// Boolean results have nil here; ordinary placement keeps it only for an
+	// exactly identity delta, and exact rotation copies drop it.
 	pointSection *pointSectionRecord
 	pointCone    *pointConeTrimRecord
 	pointPlane   *pointPlaneSliceRecord
@@ -254,6 +255,11 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	next.loftMirrorCylinderJoin = nil
 	next.loftMirrorCylinderBore = nil
 	next.revolveLoftSector = nil
+	// The true solid follows each exact reading of delta, even when the
+	// accumulated float placement later returns to identity.
+	if delta != r3.Identity() {
+		next.pointSection = nil
+	}
 	if fp.loftMirrorJoin != nil && fp.xform == r3.Identity() {
 		next.loftMirrorCopy = &loftMirrorPlacementRecord{source: fp.loftMirrorJoin, motion: composed}
 	} else if fp.loftMirrorCopy != nil {
