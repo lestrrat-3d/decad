@@ -52,6 +52,9 @@ func lfSimilarity(section loftFaceSection) (loftFaceAffine, error) {
 }
 
 func lfCapMap(section loftFaceSection, source *pointSectionRecord) (loftFaceMap, error) {
+	if section.constructed != nil {
+		return *section.constructed, nil
+	}
 	affine, err := lfSimilarity(section)
 	if err != nil {
 		return loftFaceMap{}, err

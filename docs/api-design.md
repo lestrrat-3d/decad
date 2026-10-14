@@ -1005,6 +1005,29 @@ profile and exact cut-plane maps through rigid placement and positive
 uniform scale. Its bounded source class and proof are in
 `docs/loft-face-sections-design.md`.
 
+```go
+// ConeTangentEnd names the cone that the last, constructed section touches.
+type ConeTangentEnd struct {
+	Cone   *Body  // a live, unplaced, full straight-meridian Revolve cone about world X
+	Radial r3.Vec // direction of the touching ruling's radius; X must be 0, (Y, Z) nonzero
+}
+
+// LoftFacesToConeTangent lofts through 1 to 31 selected caps, then a
+// constructed last section tangent to end.Cone along one ruling.
+func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ...*Face) (*Body, error)
+```
+
+`LoftFacesToConeTangent` is a free function. Its `sections` follow `LoftFaces`
+(the least slab's toe cap, then heel caps in source order), and its last
+section is built from `end.Cone`'s exact apex and slope instead of being
+selected. The result is an ordinary LoftFaces body: its end face carries the
+cap-end role of the new loft and a rounded `Plane` tag, and `Cut` and
+`Intersect` continue from it as they do from `LoftFaces`. A cone that is not an
+exact point cone, a placed or retired cone, a `Radial` with a nonzero `X` or
+without a finite nonzero `(Y, Z)`, and a section count outside 1 to 31 are
+refused with `ErrUnsupported`, `ErrRetiredBody` or `ErrDegenerate`. The
+construction is in `docs/loft-face-sections-design.md`.
+
 Each takes the **sketch** as well as the profile, because a `sketch.Profile`'s
 geometry is plane-local and the plane is the sketch's (§7). `p` MUST be a
 current, unaltered profile of `s`: another sketch's profile or a foreign

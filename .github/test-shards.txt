@@ -1468,3 +1468,6 @@
 10	0.00	TestExactRotationAtTinyAngleHasHiddenTranslation
 10	0.00	TestPlacedProxyShellsChargeExactCopies
 10	0.00	TestSpiralCopyKeepsToeCertificateOnlyUnderExactRotation
+10	0.00	TestLoftFacesToConeTangentBuildsExactEnd
+10	0.00	TestLoftFacesToConeTangentRefuses
+10	0.00	TestLoftFacesToConeTangentCancelled

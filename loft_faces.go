@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -26,6 +27,14 @@ func (d *Document) LoftFaces(ctx context.Context, sections ...*Face) (*Body, err
 	if err != nil {
 		return nil, err
 	}
+	return buildLoftFaces(ctx, d, selected, source, nil)
+}
+
+// buildLoftFaces lofts through the collected sections and commits the body.
+// A non-nil tangent means the last section is the constructed cone-tangent
+// end described by tangent; every earlier section is a selected cap.
+func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection,
+	source *pointSectionRecord, tangent *loftface.TangentEnd) (*Body, error) {
 	ref := d.nextProducerID()
 	mesh, err := assembleLoftFaces(ctx, ref, selected, source)
 	if err != nil {
@@ -77,7 +86,8 @@ func (d *Document) LoftFaces(ctx context.Context, sections ...*Face) (*Body, err
 		maps:         append([]loftFaceMap(nil), embedding.maps...),
 		bounds:       capBounds,
 		stationGroup: append([]int(nil), selected[0].slice.base.src[:len(source.sourceStation)]...),
-		final:        embedding.maps[len(embedding.maps)-1], group: len(mesh.groups) - 1}
+		final:        embedding.maps[len(embedding.maps)-1], group: len(mesh.groups) - 1,
+		tangent: tangent}
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, mesh, audit, Measurement{}, nil)
 	if err != nil {
 		return nil, err
@@ -97,6 +107,11 @@ type loftFaceSection struct {
 	limit *pointPlaneLimit
 	group int
 	ring  []r3.Vec
+	// constructed is the exact cap map of a section that no selected cap
+	// supplies (the cone-tangent end). Then face, body, mesh and limit are
+	// unset, and slice is the first selected section's, read only for its
+	// base mesh bound.
+	constructed *loftFaceMap
 }
 
 func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSectionRecord, error) {
@@ -261,11 +276,21 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 	}
 	startGroup, endGroup := len(groups)-2, len(groups)-1
 	startOrigins := append([]FeatureRef(nil), sections[0].mesh.groups[sections[0].group].origins...)
-	endOrigins := append([]FeatureRef(nil), sections[len(sections)-1].mesh.groups[sections[len(sections)-1].group].origins...)
+	last := sections[len(sections)-1]
 	groups[startGroup] = facetGroup{origins: append(startOrigins, FeatureRef{producer: ref, Role: roleCapStart}),
 		surface: sections[0].face.surface, planar: true, reversed: true, normalBound: 2}
-	groups[endGroup] = facetGroup{origins: append(endOrigins, FeatureRef{producer: ref, Role: roleCapEnd}),
-		surface: sections[len(sections)-1].face.surface, planar: true, normalBound: 2}
+	if last.constructed != nil {
+		plane, err := loftFacesConstructedPlane(*last.constructed)
+		if err != nil {
+			return facetedPayload{}, err
+		}
+		groups[endGroup] = facetGroup{origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
+			surface: plane, planar: true, normalBound: 2}
+	} else {
+		endOrigins := append([]FeatureRef(nil), last.mesh.groups[last.group].origins...)
+		groups[endGroup] = facetGroup{origins: append(endOrigins, FeatureRef{producer: ref, Role: roleCapEnd}),
+			surface: last.face.surface, planar: true, normalBound: 2}
+	}
 	for _, capTri := range base.tris[n:] {
 		if capTri[0] == 0 || capTri[1] == 0 || capTri[2] == 0 {
 			return facetedPayload{}, fmt.Errorf("%w: LoftFaces source cap includes the apex", ErrUnsupported)
@@ -277,4 +302,15 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 		src = append(src, startGroup, endGroup)
 	}
 	return facetedPayload{verts: verts, tris: tris, src: src, groups: groups, xform: r3.Identity()}, nil
+}
+
+// loftFacesConstructedPlane returns the rounded Plane tag of a constructed
+// planar end map. The tag is for reporting only; the exact map is the proof.
+func loftFacesConstructedPlane(m loftFaceMap) (Plane, error) {
+	u, v := loftface.RoundPoint(m.QU), loftface.RoundPoint(m.QV)
+	frame, err := r3.NewFrame(loftface.RoundPoint(m.Constant), u, v)
+	if err != nil {
+		return Plane{}, fmt.Errorf("%w: the constructed loft end has no plane frame: %s", ErrUnsupported, err)
+	}
+	return Plane{Frame: frame}, nil
 }
