@@ -247,6 +247,37 @@ func TestDirectLoftVaryingHoleWithCurvedOuterWallPublishesCone(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 }
 
+func TestDirectLoftMovingHoleWithCurvedOuterWallPublishesRuledFace(t *testing.T) {
+	body := directLoftCircles(t, true, 1, 2, 1, 0)
+	requireManifold(t, body)
+	var bore *decad.Face
+	for _, face := range body.Faces() {
+		if _, ok := face.Surface().(decad.NURBSSurface); ok {
+			require.Nil(t, bore)
+			bore = face
+		}
+	}
+	require.NotNil(t, bore)
+	area, err := bore.Area()
+	require.NoError(t, err)
+	require.Less(t, area.Bound.Base(), 0.1)
+	require.LessOrEqual(t,
+		math.Abs(area.Value.Base()-directCircleWallArea(1, 2, 1, 0)), area.Bound.Base()+1e-7)
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-82*math.Pi/3), volume.Bound.Base())
+	for _, role := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
+		faces, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(body)
+		require.NoError(t, err)
+		require.Len(t, faces[0].Loops()[1].Edges(), 1)
+		require.IsType(t, decad.Circle3{}, faces[0].Loops()[1].Edges()[0].Curve())
+	}
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
 func TestDirectLoftRotatedCircleFramesPublishRuledHole(t *testing.T) {
 	for _, tc := range []struct {
 		name string

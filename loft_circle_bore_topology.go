@@ -105,14 +105,6 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 	if bottom.Center == top.Center {
 		return loftCircleWallCone
 	}
-	// Isolating a moving-center wall from the complete Loft area requires
-	// independently bounded outer wall areas. Equal line segments supply
-	// planar outer wall cells; curved outer walls need another area proof.
-	for _, segment := range pl.profile0.Outer.Segments {
-		if _, ok := segment.(lineSeg); !ok {
-			return loftCircleWallNone
-		}
-	}
 	return loftCircleWallRuled
 }
 
@@ -134,6 +126,53 @@ func loftConeWallArea(pl loftPayload, bottom, top circleSeg) (proofbound.Bounded
 		proofbound.IntervalScale(proofbound.TwoPiInterval(),
 			new(big.Rat).Quo(radiusSum, big.NewRat(2, 1))), slant)
 	held := math.Pi * (r0 + r1) * math.Hypot(pl.frame0.ToLocal(pl.frame1.Origin()).Z, r1-r0)
+	bound := proofbound.IntervalFloatError(areaInterval, held)
+	if proofbound.IsNonFinite(held) || proofbound.IsNonFinite(bound) {
+		return proofbound.BoundedScalar{}, false
+	}
+	return proofbound.MeasuredScalar(held, bound), true
+}
+
+// loftMovingCircleWallArea bounds the wall ruled between corresponding circle
+// points. Its speed is r(t)*sqrt(h²+(dr+dx*cosθ+dy*sinθ)²); integrating the
+// linear radius over t leaves the mean radius times one angular integral.
+// The angular speed is |(dx,dy)|-Lipschitz, so midpoint quadrature has an
+// absolute error at most |(dx,dy)|*π²/cells.
+func loftMovingCircleWallArea(pl loftPayload, bottom, top circleSeg) (proofbound.BoundedScalar, bool) {
+	r0, r1 := proofarith.FloatRat(bottom.Radius.Base()), proofarith.FloatRat(top.Radius.Base())
+	dr := new(big.Rat).Sub(r1, r0)
+	dx := new(big.Rat).Sub(proofarith.FloatRat(top.Center.U), proofarith.FloatRat(bottom.Center.U))
+	dy := new(big.Rat).Sub(proofarith.FloatRat(top.Center.V), proofarith.FloatRat(bottom.Center.V))
+	h := new(big.Rat).Sub(proofarith.FloatRat(pl.plane1.Origin.Z), proofarith.FloatRat(pl.plane0.Origin.Z))
+	h2 := new(big.Rat).Mul(h, h)
+	const cells int64 = 512
+	memo := proofbound.NewTurnTrigMemo()
+	sum := proofbound.PointInterval(new(big.Rat))
+	for i := range cells {
+		turn := big.NewRat(2*i+1, 2*cells)
+		sin, cos := memo.SinCos(turn)
+		slope := proofbound.IntervalAdd(proofbound.PointInterval(dr),
+			proofbound.IntervalAdd(proofbound.IntervalScale(cos, dx), proofbound.IntervalScale(sin, dy)))
+		speed, ok := proofbound.IntervalSqrt(proofbound.IntervalAdd(
+			proofbound.PointInterval(h2), proofbound.IntervalSquare(slope)))
+		if !ok {
+			return proofbound.BoundedScalar{}, false
+		}
+		sum = proofbound.IntervalAdd(sum, speed)
+	}
+	d2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
+	lipschitz := proofarith.FloatRat(proofbound.RatSqrtUp(d2))
+	if lipschitz == nil {
+		return proofbound.BoundedScalar{}, false
+	}
+	pi2 := new(big.Rat).Mul(proofbound.PiUpper, proofbound.PiUpper)
+	quadratureError := new(big.Rat).Quo(new(big.Rat).Mul(lipschitz, pi2), big.NewRat(cells, 1))
+	integral := proofbound.IntervalWiden(proofbound.IntervalMul(
+		proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, cells)), sum), quadratureError)
+	meanRadius := new(big.Rat).Quo(new(big.Rat).Add(r0, r1), big.NewRat(2, 1))
+	areaInterval := proofbound.IntervalScale(integral, meanRadius)
+	midpoint := new(big.Rat).Quo(new(big.Rat).Add(areaInterval.Lo, areaInterval.Hi), big.NewRat(2, 1))
+	held, _ := midpoint.Float64()
 	bound := proofbound.IntervalFloatError(areaInterval, held)
 	if proofbound.IsNonFinite(held) || proofbound.IsNonFinite(bound) {
 		return proofbound.BoundedScalar{}, false

@@ -488,16 +488,19 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	body.n.Area = measurementToInternal(mass.area(cap0Rat, cap1Rat))
 	if circularWall != nil {
 		var wallArea proofbound.BoundedScalar
-		if directCircle == loftCircleWallCone || directCircle == loftCircleWallQuarterTurn {
+		if directCircle != loftCircleWallCylinder {
 			bottom, bottomOK := pl.profile0.Holes[0].Segments[0].(circleSeg)
 			top, topOK := pl.profile1.Holes[0].Segments[0].(circleSeg)
 			if !bottomOK || !topOK {
 				return nil, fmt.Errorf(`%w: a circular loft wall lost its circle pair`, ErrUnsupported)
 			}
 			var ok bool
-			if directCircle == loftCircleWallCone {
+			switch directCircle {
+			case loftCircleWallCone:
 				wallArea, ok = loftConeWallArea(pl, bottom, top)
-			} else {
+			case loftCircleWallRuled:
+				wallArea, ok = loftMovingCircleWallArea(pl, bottom, top)
+			case loftCircleWallQuarterTurn:
 				wallArea, ok = loftQuarterTurnWallArea(pl, bottom, top)
 			}
 			if !ok {
