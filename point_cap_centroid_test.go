@@ -133,11 +133,6 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 	}
 	anchor := polygon[0]
 	for i := 1; i+1 < len(polygon); i++ {
-		if i%32 == 0 {
-			if err := ctx.Err(); err != nil {
-				return VecMeasurement{}, [3]*big.Rat{}, false, err
-			}
-		}
 		a, b := polygon[i], polygon[i+1]
 		cross := pointPlaneSub(
 			pointPlaneMul(pointPlaneSub(a[u], anchor[u]), pointPlaneSub(b[v], anchor[v])),
@@ -344,7 +339,7 @@ func TestPointPlaneCapCentroidRefusalsMatchThreeMoments(t *testing.T) {
 		cancel()
 		requirePointCapThreeMomentMatch(t, testPointCapBase(r3.Vec{}, good, 0), plane, ctx)
 	})
-	t.Run("canceled_during_moments", func(t *testing.T) {
+	t.Run("canceled_before_radius", func(t *testing.T) {
 		far := make([]r3.Vec, 48)
 		for i := range far {
 			angle := 2 * math.Pi * float64(i) / float64(len(far))
