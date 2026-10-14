@@ -80,7 +80,8 @@ The rules for rows live in `docs/layout.md`.
 | `identity.go` | The root spelling of the provenance producer identity and the shared zero-vector predicate. |
 | `record.go` | Root-owned `Point2`, structural record aliases, and slice adapters. See sketch-seam §2. |
 | `seam.go` | Sketch chain recording adapters and `MeasureProfile`; profile recording lives in `internal/sectioncert/`. See sketch-seam §1–§2. |
-| `section.go` | Public planar section query over certified prism, stack-backed BRep, sphere and cone records. See section design. |
+| `section.go` | Public planar section query over certified prism, stack-backed BRep, Loft, sphere and cone records. See section design. |
+| `section_loft_circle.go` | Exact parallel section of an authenticated circular-hole Loft. See section design. |
 | `section_circle_axis.go` | Exact whole-circle prism section on a cardinal plane with an exact chord. See section design. |
 | `section_cone_axis.go` | Exact full right-cone section on a cardinal plane with an exact circle. See section design. |
 | `section_sphere_axis.go` | Authenticated source-sphere section on a cardinal plane with an exact circle or bounded polygon. See section design. |

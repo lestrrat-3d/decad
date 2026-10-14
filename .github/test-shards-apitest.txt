@@ -2031,3 +2031,6 @@
 10	0.00	TestLoftDirectCircleRoundedAxisKeepsFacetedTopology
 10	0.00	TestDirectLoftMovingHoleWithCurvedOuterWallPublishesRuledFace
 10	0.00	TestEdgeFacesAreTheBodyFaces
+10	0.00	TestSectionDirectLoftAnnulusFeedsExtrude
+10	0.00	TestSectionDirectLoftRectangularOuterFeedsExtrude
+10	0.00	TestSectionDirectLoftAnnulusRefusesCapAndTilt
