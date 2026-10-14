@@ -2083,3 +2083,5 @@
 10	0.00	TestSectionSmoothRectangularLoftSourceCurves
 10	0.00	TestSectionSmoothRectangularLoftTranslatedSourceFrame
 10	0.00	TestSectionSmoothRectangularLoftRefusesUnprovedPlanesAndCopies
+10	0.00	TestSectionSmoothRectangularLoftRefusesInexactWidth
+10	0.00	TestSectionSmoothRectangularLoftRefusesInexactHeight

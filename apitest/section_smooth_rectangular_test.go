@@ -34,6 +34,13 @@ func TestSectionSmoothRectangularLoftRealFlow(t *testing.T) {
 	volume, err := child.Volume()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(volume.Value.Base()-124.25), volume.Bound.Base())
+	box, err := child.Bounds()
+	require.NoError(t, err)
+	require.Less(t, box.Bound.Base(), 0.01)
+	require.LessOrEqual(t, math.Abs(box.Min.X+3.5), box.Bound.Base())
+	require.LessOrEqual(t, math.Abs(box.Max.X-3.5), box.Bound.Base())
+	require.LessOrEqual(t, math.Abs(box.Min.Y+4.4375), box.Bound.Base())
+	require.LessOrEqual(t, math.Abs(box.Max.Y-4.4375), box.Bound.Base())
 	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -127,6 +134,7 @@ func TestSectionSmoothRectangularLoftRefusesUnprovedPlanesAndCopies(t *testing.T
 		{"lower cap", false, r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
 		{"upper cap", false, r3.NewVec(0, 0, 16), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
 		{"shifted origin", false, r3.NewVec(1, 0, 6), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
+		{"shifted Y origin", false, r3.NewVec(0, 1, 6), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
 		{"rotated plane", false, r3.NewVec(0, 0, 6), r3.NewVec(0, 1, 0), r3.NewVec(-1, 0, 0)},
 		{"inexact section", false, r3.NewVec(0, 0, 0.1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
 		{"placed body", true, r3.NewVec(1, 0, 6), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
@@ -145,4 +153,34 @@ func TestSectionSmoothRectangularLoftRefusesUnprovedPlanesAndCopies(t *testing.T
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 		})
 	}
+	t.Run("identity copy", func(t *testing.T) {
+		copied, err := decad.Copy(t.Context(), body)
+		require.NoError(t, err)
+		frame, err := r3.NewFrame(r3.NewVec(0, 0, 6), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+		require.NoError(t, err)
+		_, _, err = copied.Section(t.Context(), frame)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
+}
+
+func TestSectionSmoothRectangularLoftRefusesInexactWidth(t *testing.T) {
+	sections := manyRectangleSections(t, []float64{2, 3, 4, 5, 6},
+		[]float64{3, 3, 3, 3, 3}, []float64{0, 4, 8, 12, 16})
+	body, err := decad.New().LoftSections(t.Context(), sections...)
+	require.NoError(t, err)
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0.1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	_, _, err = body.Section(t.Context(), frame)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+}
+
+func TestSectionSmoothRectangularLoftRefusesInexactHeight(t *testing.T) {
+	sections := manyRectangleSections(t, []float64{2, 2, 2, 2, 2},
+		[]float64{3, 4, 5, 6, 7}, []float64{0, 4, 8, 12, 16})
+	body, err := decad.New().LoftSections(t.Context(), sections...)
+	require.NoError(t, err)
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0.1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	_, _, err = body.Section(t.Context(), frame)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
