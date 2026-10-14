@@ -78,8 +78,10 @@ func ExtensionClearsCone(slab Slab, coneVerts []r3.Vec, coneTris [][3]int, plane
 }
 
 // ResultBeyondSlab reports whether some vertex of a Boolean result has
-// psi < -bound, which Gate E5 makes impossible. The caller passes
-// max(eps_K, eps_S) and refuses on true.
+// psi < -bound. Gate E5 proves clearance for the exact stitched geometry,
+// before final float rounding, but this check reads the rounded result
+// vertices, so it can refuse conservatively. It never admits anything. The
+// caller passes max(eps_K, eps_S) and refuses on true.
 func ResultBeyondSlab(verts []r3.Vec, plane TangentPlane, bound *big.Rat) bool {
 	floor := new(big.Rat).Neg(bound)
 	for _, v := range verts {

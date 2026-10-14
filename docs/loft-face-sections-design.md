@@ -116,8 +116,9 @@ A cone-tangent end (see "Cone-tangent end section") has `A = 0` and
 touches the heel cone along one ruling and nowhere else. The Intersect takes
 this branch only when the cap record carries a tangent end built for the heel
 cone's exact apex and slope, that end reproduces the recorded final map, and
-the rectangle lies strictly on one side of `u = 0`. The strict `A, C > 0`
-branch is unchanged and is tried first. The tangent branch exempts no face
+the rectangle lies strictly on one side of `u = 0`. The Intersect tries the
+strict `A, C > 0` branch first and falls through to the tangent branch only
+when the strict branch does not apply. The tangent branch exempts no face
 pair from the proximity gate. Two exact side gates guard it, and a failure of
 either refuses the Intersect with `ErrUnsupported`. Let `Pi` be the cap plane,
 `phi` its exact functional, and `s` the strict common sign of `phi` over the
@@ -137,7 +138,9 @@ corners of the preceding cap map (the loft side).
 
 With G1 and G2 the Intersect runs on the tooth extended by an exact prism `E`
 glued to the end cap on the side away from the loft. The prism is the end cap
-translated along `-s*N/|N|` for `h` millimetres, with `h = 1`. It lies in
+translated by `-h*s*N/U`, where `N` is the cap normal, `h = 1` mm and
+`U = RatSqrtUp(N.N)` is a rational upper bound of `|N|`. The displacement has
+length `h*|N|/U <= h`, strictly positive, and points along `-s*N`. It lies in
 `{s*phi <= 0}`, so it meets the tooth only in the end cap. The cone lies in
 `{s*phi >= 0}` by G1. On the open half-space `{s*phi > 0}` the extended tooth
 and the tooth coincide, so the regularized intersection of the extended tooth
@@ -145,7 +148,8 @@ with the cone is the intersection of the tooth with the cone. The argument uses
 no ruling, ruling interval or profile corner. It holds wherever the prism
 reaches, including the toe tool's removed material and the cone's far plane,
 because the exact cap stays in the tooth and the cone stays on the loft side.
-Correctness does not depend on `h`.
+Correctness needs only the direction and the positive length of the
+displacement, not its exact value.
 
 The held proxy replaces only the end-cap facets of the held tooth. Each ring
 vertex must equal, as floats, a station vertex of the last LoftFaces ring, and
