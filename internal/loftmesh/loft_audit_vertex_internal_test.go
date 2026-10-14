@@ -169,7 +169,7 @@ func checkVertexPairs(t *testing.T, f vertexFixture, data *LoftAuditData, label 
 				continue
 			}
 			for _, shortcuts := range []LoftAuditShortcuts{{}, loftGenericShortcuts} {
-				wantOut, wantErr := auditLoftPairDataSignedReference(data, f.tris, i, j, shortcuts, nil, nil)
+				wantOut, wantErr := auditLoftPairDataSignedReference(data, f.tris, i, j, shortcuts)
 				gotOut, gotErr := auditLoftPairDataSigned(data, f.tris, i, j, shortcuts, nil, nil)
 				require.Equal(t, wantOut, gotOut, "%s %s pair %d,%d", f.name, label, i, j)
 				if wantErr == nil {
@@ -182,7 +182,7 @@ func checkVertexPairs(t *testing.T, f vertexFixture, data *LoftAuditData, label 
 				decided++
 				// A float decision is a certificate: the exact path must
 				// reach the same one.
-				out, err := auditLoftPairDataSignedReference(data, f.tris, i, j, loftGenericShortcuts, nil, nil)
+				out, err := auditLoftPairDataSignedReference(data, f.tris, i, j, loftGenericShortcuts)
 				require.NoError(t, err, "%s %s pair %d,%d", f.name, label, i, j)
 				require.Equal(t, LoftPairVertexCertificate, out, "%s %s pair %d,%d", f.name, label, i, j)
 				continue
@@ -227,7 +227,7 @@ func TestVertexCertificateFloatKeepsAuditWork(t *testing.T) {
 				if count == 0 {
 					continue
 				}
-				out, err := auditLoftPairDataSignedReference(data, f.tris, i, j, loftGenericShortcuts, nil, nil)
+				out, err := auditLoftPairDataSignedReference(data, f.tris, i, j, loftGenericShortcuts)
 				refused = refused || err != nil
 				switch out {
 				case LoftPairVertexCertificate:
@@ -268,8 +268,7 @@ func TestVertexCertificateFloatDenseTablesMatchProjections(t *testing.T) {
 
 // auditLoftPairDataSignedReference is auditLoftPairDataSigned without the float vertex
 // certificate: the exact path every float decision is compared against.
-func auditLoftPairDataSignedReference(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts,
-	knownA, knownB *[3]int) (LoftPairOutcome, error) {
+func auditLoftPairDataSignedReference(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts) (LoftPairOutcome, error) {
 	ta := data.corners(i)
 	tb := data.corners(j)
 	xta := data.xtri(i)
@@ -291,12 +290,7 @@ func auditLoftPairDataSignedReference(data *LoftAuditData, tris [][3]int, i, j i
 		}
 	}
 
-	var signsB [3]int
-	if knownB != nil && sharedCount == 0 {
-		signsB = *knownB
-	} else {
-		signsB = data.planeSigns(i, xtb, tb)
-	}
+	signsB := data.planeSigns(i, xtb, tb)
 	if shortcuts.Certificates && sharedCount == 1 && meshbool.CountZero(signsB) == 3 &&
 		CoplanarIsolatedSharedVertex(data, tris[i], tris[j], i, j, shared[0]) {
 		return LoftPairVertexCertificate, nil
@@ -304,12 +298,7 @@ func auditLoftPairDataSignedReference(data *LoftAuditData, tris [][3]int, i, j i
 	if shortcuts.Certificates && sharedCount == 1 && IsolatedSharedVertex(tris[j], shared[0], signsB) {
 		return LoftPairVertexCertificate, nil
 	}
-	var signsA [3]int
-	if knownA != nil && sharedCount == 0 {
-		signsA = *knownA
-	} else {
-		signsA = data.planeSigns(j, xta, ta)
-	}
+	signsA := data.planeSigns(j, xta, ta)
 	if shortcuts.Certificates && sharedCount == 1 && IsolatedSharedVertex(tris[i], shared[0], signsA) {
 		return LoftPairVertexCertificate, nil
 	}

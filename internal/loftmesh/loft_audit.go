@@ -616,7 +616,7 @@ func AuditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
 // triangle's plane. IsolatedSharedVertex owns that reading and its proof; both
 // orientations are tried, because either triangle may be the one whose plane
 // isolates the vertex. The signs are the very arrays this function hands
-// meshbool.TriTriClassifyWithProjections, so the certificate reads work the pair was
+// meshbool.TriTriContactSpanCore, so the certificate reads work the pair was
 // going to pay for anyway and adds none of its own.
 //
 // A zero sign, or two differing signs, proves nothing and takes no shortcut:
@@ -704,12 +704,16 @@ func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, short
 	} else {
 		projA, projB = &data.Projections[i], &data.Projections[j]
 	}
-	contact, err := meshbool.TriTriClassifyCore(ta, tb, xta, xtb, na, nb,
+	// The audit reads only the contact's kind and end points, so it asks for
+	// the span alone: the same classification without the boundary, edge and
+	// angle records of a full TriContact, which nothing below reads.
+	span, err := meshbool.TriTriContactSpanCore(ta, tb, xta, xtb, na, nb,
 		projA, projB, &signsA, &signsB, !shortcuts.ExactInput,
 		data.floatNorms[i], data.floatNorms[j], true)
 	if err != nil {
 		return LoftPairClassified, err
 	}
+	contact := meshbool.TriContact{Kind: span.Kind, P0: span.P0, P1: span.P1, EdgeA: -1, EdgeB: -1}
 
 	switch sharedCount {
 	case 0:
