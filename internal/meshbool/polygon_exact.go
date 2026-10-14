@@ -12,23 +12,27 @@ import (
 )
 
 // Xp2 is an exact 2D point (a plane projection of an xpt). The cached float
-// coordinates only accelerate the conservative sign filter; the rational
-// coordinates remain the source of truth whenever the filter cannot decide.
+// coordinates only accelerate conservative filters; the rational coordinates
+// remain the source of truth whenever a filter cannot decide. Callers must not
+// mutate either coordinate or its float cache after construction.
 type Xp2 struct {
 	U, V        *big.Rat
 	Fu, Fv      float64
 	FloatFinite bool
-	Hu, Hv, Hw  *big.Int
+	// Only the constructors set this; a struct literal has no proven float cache.
+	floatFromExact bool
+	Hu, Hv, Hw     *big.Int
 }
 
 func NewXP2(u, v *big.Rat) Xp2 {
 	fu, _ := u.Float64()
 	fv, _ := v.Float64()
 	return Xp2{
-		U:  u,
-		V:  v,
-		Fu: fu,
-		Fv: fv,
+		U:              u,
+		V:              v,
+		Fu:             fu,
+		Fv:             fv,
+		floatFromExact: true,
 		FloatFinite: !math.IsNaN(fu) && !math.IsInf(fu, 0) &&
 			!math.IsNaN(fv) && !math.IsInf(fv, 0),
 	}
@@ -43,13 +47,14 @@ func NewXP2FromXpt(p proof.Xpt, u, v int) Xp2 {
 	fu, _ := ur.Float64()
 	fv, _ := vr.Float64()
 	return Xp2{
-		U:  ur,
-		V:  vr,
-		Fu: fu,
-		Fv: fv,
-		Hu: XIntCoordOf(p, u),
-		Hv: XIntCoordOf(p, v),
-		Hw: p.W,
+		U:              ur,
+		V:              vr,
+		Fu:             fu,
+		Fv:             fv,
+		floatFromExact: true,
+		Hu:             XIntCoordOf(p, u),
+		Hv:             XIntCoordOf(p, v),
+		Hw:             p.W,
 		FloatFinite: !math.IsNaN(fu) && !math.IsInf(fu, 0) &&
 			!math.IsNaN(fv) && !math.IsInf(fv, 0),
 	}
@@ -374,6 +379,12 @@ func EarClipX(budget *proofbound.WorkBudget, pts []Xp2, poly []int) ([][3]int, e
 	return tris, nil
 }
 
+func finiteRoundedCache(p Xp2) bool {
+	return p.floatFromExact && p.FloatFinite &&
+		!math.IsNaN(p.Fu) && !math.IsInf(p.Fu, 0) &&
+		!math.IsNaN(p.Fv) && !math.IsInf(p.Fv, 0)
+}
+
 // EarBlockedX reports whether another polygon vertex lies inside the closed
 // candidate ear — the exact analog of earBlocked, except that every OTHER
 // vertex can block (collinear duplicates included), which is the conservative
@@ -387,6 +398,7 @@ func EarBlockedX(budget *proofbound.WorkBudget, pts []Xp2, idx []int, i int) (bo
 	minV := math.Min(a.Fv, math.Min(b.Fv, c.Fv))
 	maxV := math.Max(a.Fv, math.Max(b.Fv, c.Fv))
 	finiteBox := a.FloatFinite && b.FloatFinite && c.FloatFinite
+	finiteA, finiteC := finiteRoundedCache(a), finiteRoundedCache(c)
 	for j := range n {
 		if err := budget.Step(); err != nil {
 			return false, err
@@ -402,10 +414,15 @@ func EarBlockedX(budget *proofbound.WorkBudget, pts []Xp2, idx []int, i int) (bo
 			(p.Fu < minU || p.Fu > maxU || p.Fv < minV || p.Fv > maxV) {
 			continue
 		}
-		if p.U.Cmp(a.U) == 0 && p.V.Cmp(a.V) == 0 {
+		finiteP := finiteRoundedCache(p)
+		// Unequal finite roundings disprove exact endpoint identity. Equal
+		// roundings, absent caches, and nonfinite values still compare exactly.
+		if (!finiteP || !finiteA || (p.Fu == a.Fu && p.Fv == a.Fv)) &&
+			p.U.Cmp(a.U) == 0 && p.V.Cmp(a.V) == 0 {
 			continue
 		}
-		if p.U.Cmp(c.U) == 0 && p.V.Cmp(c.V) == 0 {
+		if (!finiteP || !finiteC || (p.Fu == c.Fu && p.Fv == c.Fv)) &&
+			p.U.Cmp(c.U) == 0 && p.V.Cmp(c.V) == 0 {
 			continue
 		}
 		if PointInTriX(p, a, b, c) {
