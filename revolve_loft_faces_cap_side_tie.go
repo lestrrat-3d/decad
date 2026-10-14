@@ -32,8 +32,10 @@ func revolveLoftFacesHeelArcSideTiesOf(ctx context.Context,
 }
 
 // census, when not nil, must be the census that revolveLoftFacesCensus
-// returned with ok for this same proof earlier in the caller's call. A nil
-// census is derived here, after the arc is checked against the live source.
+// returned with ok for this same proof earlier in the caller's call. An arc
+// that census derived is compared with its snapshot; any other arc, or any
+// arc with a nil census, is rederived from the live source. A nil census is
+// derived here, after the arc is checked.
 func revolveLoftFacesHeelArcSideTiesIn(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate, census *revolveLoftFacesPairCensus,
 	arc *revolveLoftFacesToolCapOccupiedArc) (*revolveLoftFacesHeelArcSideTies, bool, error) {
@@ -41,7 +43,7 @@ func revolveLoftFacesHeelArcSideTiesIn(ctx context.Context,
 		arc.circle.span < 0 || arc.circle.span >= len(proof.section.spans) {
 		return nil, false, nil
 	}
-	current, err := revolveLoftFacesToolCapOccupiedArcCurrent(ctx, proof, arc)
+	current, err := revolveLoftFacesToolCapOccupiedArcCurrentIn(ctx, proof, census, arc)
 	if err != nil || !current {
 		return nil, false, err
 	}

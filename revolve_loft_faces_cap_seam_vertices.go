@@ -22,8 +22,17 @@ func revolveLoftFacesCapArcSeamVertices(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate,
 	arc *revolveLoftFacesToolCapOccupiedArc,
 ) ([2]revolveLoftFacesCapSeamVertex, bool, error) {
+	return revolveLoftFacesCapArcSeamVerticesIn(ctx, proof, nil, arc)
+}
+
+// revolveLoftFacesCapArcSeamVerticesIn takes the census under the contract of
+// revolveLoftFacesHeelArcSideTiesIn; a nil census rederives the arc.
+func revolveLoftFacesCapArcSeamVerticesIn(ctx context.Context,
+	proof *revolveLoftFacesSourceCertificate, census *revolveLoftFacesPairCensus,
+	arc *revolveLoftFacesToolCapOccupiedArc,
+) ([2]revolveLoftFacesCapSeamVertex, bool, error) {
 	var out [2]revolveLoftFacesCapSeamVertex
-	current, err := revolveLoftFacesToolCapOccupiedArcCurrent(ctx, proof, arc)
+	current, err := revolveLoftFacesToolCapOccupiedArcCurrentIn(ctx, proof, census, arc)
 	if err != nil || !current {
 		return out, false, err
 	}
