@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -109,7 +110,14 @@ func requireSameNearContacts(t *testing.T, want, got NearContacts, label string)
 	require.Equal(t, want.CloseB, got.CloseB, label)
 	require.Len(t, got.Spans, len(want.Spans), label)
 	for k := range want.Spans {
-		require.Equal(t, [2]int{want.Spans[k].I, want.Spans[k].J}, [2]int{got.Spans[k].I, got.Spans[k].J}, label)
+		w, g := want.Spans[k], got.Spans[k]
+		require.Equal(t, [2]int{w.I, w.J}, [2]int{g.I, g.J}, label)
+		for _, pt := range [][2]proof.Xpt{{w.P0, g.P0}, {w.P1, g.P1}} {
+			require.Zero(t, pt[0].X.Cmp(pt[1].X), label)
+			require.Zero(t, pt[0].Y.Cmp(pt[1].Y), label)
+			require.Zero(t, pt[0].Z.Cmp(pt[1].Z), label)
+			require.Zero(t, pt[0].W.Cmp(pt[1].W), label)
+		}
 	}
 }
 
