@@ -1202,7 +1202,7 @@ func stitchTestClosedBoxTriangles(off int) [12][3]int {
 // cyclic loop chaining every vertex in vs, in order, carrying no surface and
 // never triangulated — purely so stitchLumpFaceGroups (tessellate_stitch.go)
 // can read the component's own held vertex positions back through the
-// ordinary Lump -> Shell -> Face -> Loop -> CoEdge -> Edge -> Vertex chain,
+// ordinary Lump -> FaceShell -> Face -> Loop -> CoEdge -> Edge -> Vertex chain,
 // exactly as it does for a body Stitch itself built.
 func stitchTestLumpFace(vs []*Vertex) *Face {
 	coedges := make([]coedge, len(vs))
@@ -1255,8 +1255,8 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 
 	body := &Body{kind: BodySolid, solid: true}
 	body.lumps = []*Lump{
-		{shells: []*Shell{{faces: []*Face{stitchTestLumpFace(vertexObjs[0:8])}}}},
-		{shells: []*Shell{{faces: []*Face{stitchTestLumpFace(vertexObjs[8:16])}}}},
+		{shells: []*FaceShell{{faces: []*Face{stitchTestLumpFace(vertexObjs[0:8])}}}},
+		{shells: []*FaceShell{{faces: []*Face{stitchTestLumpFace(vertexObjs[8:16])}}}},
 	}
 
 	sp := stitchPayload{

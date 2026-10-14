@@ -327,10 +327,10 @@ func faceOrigins(body *decad.Body) map[decad.FeatureRef]struct{} {
 // requireSealedVoid asserts body is one lump of two closed shells, one of
 // them a void, and that every void face comes from the bore. It returns the
 // outer shell.
-func requireSealedVoid(t *testing.T, body *decad.Body, bore map[decad.FeatureRef]struct{}) *decad.Shell {
+func requireSealedVoid(t *testing.T, body *decad.Body, bore map[decad.FeatureRef]struct{}) *decad.FaceShell {
 	t.Helper()
 	require.Len(t, body.Lumps(), 1)
-	var outer, void []*decad.Shell
+	var outer, void []*decad.FaceShell
 	for _, s := range body.Lumps()[0].Shells() {
 		require.False(t, s.IsOpen())
 		if s.IsVoid() {

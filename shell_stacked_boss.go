@@ -233,7 +233,7 @@ func closedBossShellLumps(faces []*Face, outerFaceCount int) ([]*Lump, error) {
 		!closedBossShellEdgePairs(outer) || !closedBossShellEdgePairs(cavity) {
 		return nil, fmt.Errorf("%w: a closed boss shell needs two closed face components", ErrUnsupported)
 	}
-	return []*Lump{{shells: []*Shell{{faces: outer}, {faces: cavity, void: true}}}}, nil
+	return []*Lump{{shells: []*FaceShell{{faces: outer}, {faces: cavity, void: true}}}}, nil
 }
 
 // Each component must use every edge exactly twice. A free edge or a repeated

@@ -520,7 +520,7 @@ func sphereBody(t *testing.T, doc *decad.Document) *decad.Body {
 }
 
 // shellArea sums the areas of a shell's faces in square millimetres.
-func shellArea(t *testing.T, sh *decad.Shell) float64 {
+func shellArea(t *testing.T, sh *decad.FaceShell) float64 {
 	t.Helper()
 	total := 0.0
 	for _, f := range sh.Faces() {
@@ -535,7 +535,7 @@ func shellArea(t *testing.T, sh *decad.Shell) float64 {
 
 // requireOuterAndVoid asserts the body is one lump of exactly two shells, the
 // second of them the one void shell, and returns them outer first.
-func requireOuterAndVoid(t *testing.T, b *decad.Body) (*decad.Shell, *decad.Shell) {
+func requireOuterAndVoid(t *testing.T, b *decad.Body) (*decad.FaceShell, *decad.FaceShell) {
 	t.Helper()
 	lumps := b.Lumps()
 	require.Len(t, lumps, 1, `a closed shell is one piece of material`)

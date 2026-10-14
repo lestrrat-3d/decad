@@ -270,7 +270,7 @@ func stackedEnclosesCavity(sp stackedPrismPayload) (bool, error) {
 // nesting proof this build does not run, and is ErrUnsupported.
 func stackedLumps(faces []*Face, anchors map[*Face]struct{}) ([]*Lump, error) {
 	var outer []*Lump
-	var voids []*Shell
+	var voids []*FaceShell
 	for _, group := range splitConnectedFaces(faces) {
 		anchored := false
 		for _, f := range group {
@@ -280,10 +280,10 @@ func stackedLumps(faces []*Face, anchors map[*Face]struct{}) ([]*Lump, error) {
 			}
 		}
 		if !anchored {
-			voids = append(voids, &Shell{faces: group, open: shellIsOpen(group), void: true})
+			voids = append(voids, &FaceShell{faces: group, open: shellIsOpen(group), void: true})
 			continue
 		}
-		outer = append(outer, &Lump{shells: []*Shell{{faces: group, open: shellIsOpen(group)}}})
+		outer = append(outer, &Lump{shells: []*FaceShell{{faces: group, open: shellIsOpen(group)}}})
 	}
 	switch {
 	case len(voids) == 0:

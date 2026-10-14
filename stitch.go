@@ -257,7 +257,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// which arm Table C reaches. An open assembly earns no such check: it
 	// publishes no volume at all (Table C's first row), so there is nothing
 	// for a nested or interlocking pair of components to double-count. This
-	// evaluator cannot express a cavity at all — Shell.void is hardcoded
+	// evaluator cannot express a cavity at all — FaceShell.void is hardcoded
 	// false and sheetLumps builds one shell per lump, so admitting a nested
 	// pair would need a new recorded fact, a new shell-assembly rule and a
 	// per-component orientation derivation this increment does not add —

@@ -66,7 +66,7 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 	if err := attachFaceLoopsContext(ctx, faces); err != nil {
 		return nil, err
 	}
-	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
+	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
 
 	if err := publishCoilReadings(body, rec, sh, m, walls); err != nil {
 		return nil, err

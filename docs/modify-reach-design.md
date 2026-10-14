@@ -1293,7 +1293,7 @@ Builder rules:
 - join coincident side patches with equal carriers + orientation;
 - connect two region prisms across a shared plane only when their certified
   intersection has positive area; boundary-only contact does not connect them;
-- emit one `Lump` per connected component and one void `Shell` per enclosed
+- emit one `Lump` per connected component and one void `FaceShell` per enclosed
   cavity;
 - mint roles from slab + region + result-record indices.
 
@@ -1366,7 +1366,7 @@ is `h - k*t`, where `k` is kept cap count; reaching zero is SX11.
 
 `WithNoOpenings` uses both cap slabs and a closed middle wall section: `P \ Q`
 inward, `Q \ P` outward. It produces one outer shell plus one void shell.
-`Shell.IsVoid()` is true only on the inner shell.
+`FaceShell.IsVoid()` is true only on the inner shell.
 
 `shellClosedPrism` (`shell.go`) builds it as three slabs: inward `P` on
 `[z0, z0 + t]`, the band `{P, reverse(Q)}` on `[z0 + t, z1 − t]` and `P` on

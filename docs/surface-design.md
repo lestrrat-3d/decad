@@ -244,7 +244,7 @@ run on, or that it refused to promote (R8), keeps its kind.
 ### 2.2 Topology
 
 A sheet body uses `docs/api-design.md` §6.1's chain unchanged —
-`Body` → `Lump` → `Shell` → `Face` → `Loop` → `CoEdge` → `Edge` → `Vertex`.
+`Body` → `Lump` → `FaceShell` → `Face` → `Loop` → `CoEdge` → `Edge` → `Vertex`.
 Three things it holds differently, and nothing else changes:
 
 - **A `Lump` is a connected piece of a body, not a connected *solid* piece.**
@@ -261,7 +261,7 @@ Three things it holds differently, and nothing else changes:
 - **A shell may be open**, and says so:
 
   ```go
-  func (s *Shell) IsOpen() bool // true when the shell has at least one free edge
+  func (s *FaceShell) IsOpen() bool // true when the shell has at least one free edge
   ```
 
   `IsVoid()` is `false` on every sheet shell: a sheet bounds no cavity.
@@ -281,7 +281,7 @@ Three things it holds differently, and nothing else changes:
   interior edge on either; `3` or more is non-manifold on either.
 
 A `Stitch`ed **solid** with more than one lump denotes the disjoint union of
-the volume each lump encloses, never a shared or nested one: `Shell.void` is
+the volume each lump encloses, never a shared or nested one: `FaceShell.void` is
 hardcoded `false`, so a cavity — a void shell in the SAME lump as its outer
 shell — is not a fact this evaluator records at all, and `Stitch` refuses a
 boundary that would need one rather than publish a volume that double-counts
@@ -317,7 +317,7 @@ No feature builds one.
 ```go
 // Body kind and the two new decided predicates.
 func (b *Body) Kind() BodyKind
-func (s *Shell) IsOpen() bool
+func (s *FaceShell) IsOpen() bool
 func (e *Edge) IsFree() bool
 
 // A surface result from a feature that would otherwise build a solid.
@@ -1682,7 +1682,7 @@ forbids. No chording, and no reuse of `loftCrossingAudit`, reaches a curved
 wall soundly.
 
 The sheet audit instead runs three structural legs over the held
-`Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge` chain — every face has at
+`Body`→`Lump`→`FaceShell`→`Face`→`Loop`→`CoEdge`→`Edge` chain — every face has at
 least one loop of at least one coedge; every edge is adjacent to one or two
 faces (three or more is non-manifold); and every two-face edge is traversed by
 exactly one forward and one backward coedge, with a coedge-use count that
@@ -2162,7 +2162,7 @@ reverses a decision already taken.
 
 | Document | What changes |
 |---|---|
-| `docs/api-design.md` §6 | `Body` gains `Kind()`; `Volume`/`Centroid`'s `ErrNotSolid` gains the by-kind reading (§8); `Lump`'s gloss becomes "a connected piece of a body"; `Shell` gains `IsOpen`; `Edge` gains `IsFree` |
+| `docs/api-design.md` §6 | `Body` gains `Kind()`; `Volume`/`Centroid`'s `ErrNotSolid` gains the by-kind reading (§8); `Lump`'s gloss becomes "a connected piece of a body"; `FaceShell` gains `IsOpen`; `Edge` gains `IsFree` |
 | `docs/api-design.md` §6.1 | `Edge.Faces()`'s `len != 2` gloss gains the per-kind reading (§2.2) |
 | `docs/api-design.md` §8 | the v1 feature vocabulary gains `Patch`, `Stitch`, `Unstitch` and `WithSurfaceResult`; the signatures land beside the existing ones |
 | `docs/api-design.md` §8 | `Body.Thicken`, `ThickenSide` and `WithThickenSide` add §16's sheet-to-solid path under §6's consuming-body rule |
@@ -2597,7 +2597,7 @@ ANSWER is accepted and reads `Suspect`.
 
 | # | Lands |
 |---|---|
-| 1 | `BodyKind` and `Kind()`, `Shell.IsOpen`, `Edge.IsFree`, `Free()`; `WithSurfaceResult()` on `Extrude` and `Revolve`; `Document.Patch`; the sheet validity audit; `DiagUnsupportedPairSheet` and §9.3's box rule; every Table A amendment; prism sheet tessellation and export with the manifold-with-boundary audit. The revolve sheet mesh is staged to increment 4 (§10) |
+| 1 | `BodyKind` and `Kind()`, `FaceShell.IsOpen`, `Edge.IsFree`, `Free()`; `WithSurfaceResult()` on `Extrude` and `Revolve`; `Document.Patch`; the sheet validity audit; `DiagUnsupportedPairSheet` and §9.3's box rule; every Table A amendment; prism sheet tessellation and export with the manifold-with-boundary audit. The revolve sheet mesh is staged to increment 4 (§10) |
 | 2 | `Stitch` over exact all-planar boundaries (Table J with J5, Table C's first two rows), including its own directed-edge parity leg, derived orientation, and the recorded-weld replay a placement reuses; `Body.Patch`; the sheet-against-solid containment cast and clearance gap of §9.3, narrowing when `DiagUnsupportedPairSheet` fires. `Unstitch` is a separate follow-up: it needs no new proof this increment does not already carry, but it is its own PR |
 | 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate — two distinct proofs sharing one name, never one lifted "together": a LEVEL token proving N chain vertices coplanar by shared construction, which lifts §5.2 gate 3's bounded-chain half of R6 for a straight prism's own rim; a separate CURVE token proving two edges (or two vertices) denote one curve or point, which lifts Table J's J5 for a straight prism's own rim and a revolve's own internal junction, and does not follow from the level token proving anything — coplanarity and coincidence are different proofs over different code paths; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a surface-extruded prism sheet's positive side — the only sheet family this increment opens it on; a loft, stitch or one-span-sweep sheet moves from `DiagSurveyPrerequisite` to `DiagUnsupportedSurveyPayload` for it instead, and stays there until its own proof lands |
 | 4 | The revolve sheet mesh (§10): the meridian and angular chordings a surface result keeps, the caps it omits — and, where the profile meets the axis, the on-axis edge between two poles that only the caps carried (Table W) — the cap terms its area slack drops, and the manifold-with-boundary audit in the closed-mesh audit's place. It also settles which audit a CLOSED sheet runs |
