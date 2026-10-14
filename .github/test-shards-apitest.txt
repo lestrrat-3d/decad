@@ -2085,3 +2085,7 @@
 10	0.00	TestSectionSmoothRectangularLoftRefusesUnprovedPlanesAndCopies
 10	0.00	TestSectionSmoothRectangularLoftRefusesInexactWidth
 10	0.00	TestSectionSmoothRectangularLoftRefusesInexactHeight
+10	0.00	TestExtrudeToFullRevolveAxialFace
+10	0.00	TestExtrudeToNearlyPlanarRevolveFaceRefuses
+10	0.00	TestExtrudeToRevolveFaceWithUncertainAxisRefuses
+10	0.00	TestExtrudeToPlacedRevolveFaceWithTiltedRecordRefuses

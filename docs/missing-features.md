@@ -27,7 +27,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| `ToFace` onto a face whose normal is not exactly parallel to the sweep, whose denoted plane is not an exact level set of the sweep, that carries a normal bound or denoted record, or that carries no cap record (a rotated stop body whose float normal is tilted, a revolve cap, a band patch, a faceted boolean face, a placed sheet copy, a sweep or coil cap, a chain patch); use a `Distance` extent | `ErrUnsupported` (`stops.go`, `resolveToFace`) | `docs/evaluator-design.md` §5 |
+| `ToFace` on a tilted or uncertain face, or one without a cap record or exact planar Revolve wall record; use `Distance` | `ErrUnsupported` (`stops.go`, `resolveToFace`) | `docs/evaluator-design.md` §5 |
 | Draft angle on a free-form wall, a circular corner that is not G1, or a surface result | `ErrUnsupported`, draft SD3/SD4/SD12 (`draft_build.go`) | `docs/draft-design.md` §14 |
 | Boolean, mass and interference readings of a draft body whose circular wall joins a neighbour G1 but not exactly tangent, or whose section holds a trimmed segment | `ErrUnsupported`, "no proof of the volume" (`capblend_admit.go`); `Verify` reads the pair `Suspect`; the mesh exports | `docs/draft-design.md` §9.1 |
 | `Draft` of a wall subset that moves one of two walls meeting at a circular corner, about a `NeutralFrame` or a non-cap face, or of a receiver that is not a straight prism | `ErrUnsupported`, draft SD4/SD20/SD23 (`draft.go`, `draft_build.go`) | `docs/draft-design.md` §10.2, §14 |
