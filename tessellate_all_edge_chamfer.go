@@ -77,13 +77,13 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 	}
 	for fi, face := range faces[:18] {
 		plane, ok := face.n.Surface.(surfacegeom.Plane)
-		if !ok || len(face.loops) == 0 {
+		if !ok || len(face.n.Loops) == 0 {
 			return nil, fmt.Errorf(`%w: all-edge chamfer face %d is not planar`, ErrUnsupported, fi)
 		}
 		var points []sectionrecord.Point2
 		var meshIndices []int
-		outer := make([]int, 0, len(face.loops[0].n.CoEdges))
-		for _, ce := range face.loops[0].n.CoEdges {
+		outer := make([]int, 0, len(face.n.Loops[0].CoEdges))
+		for _, ce := range face.n.Loops[0].CoEdges {
 			v := coedgeStart(ce).Position
 			local := plane.Frame.ToLocal(v)
 			points = append(points, sectionrecord.Point2{U: local.X, V: local.Y})

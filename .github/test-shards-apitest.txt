@@ -2054,3 +2054,4 @@
 10	0.00	TestLoftCutRoundedZToolCenterKeepsFacetedTopology
 10	0.00	TestLoftCutTiltedFrameMapKeepsFacetedTopology
 10	0.00	TestLoftCutExactToolSpanKeepsUncutCap
+10	0.00	TestFaceLoopsKeepTheirIdentity

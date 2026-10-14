@@ -329,3 +329,42 @@ func TestLoopCoEdgeEdgesAreTheBodyEdges(t *testing.T) {
 	require.NotNil(t, zero.Edges())
 	require.Empty(t, zero.Edges())
 }
+
+// TestFaceLoopsKeepTheirIdentity pins loop identity across the face links: on
+// a box each face has one outer loop, a second Face.Loops read returns the
+// same pointers in a fresh slice, and Face.Edges is its loops' edges in order.
+// The zero Face has nil loops and nil edges.
+func TestFaceLoopsKeepTheirIdentity(t *testing.T) {
+	t.Parallel()
+	body := coedgeBox(t)
+	edges := body.Edges()
+	seen := map[*decad.Loop]struct{}{}
+	for _, face := range body.Faces() {
+		loops := face.Loops()
+		require.Len(t, loops, 1)
+		require.True(t, loops[0].IsOuter())
+		var want []*decad.Edge
+		for i, loop := range loops {
+			require.Same(t, loop, face.Loops()[i])
+			_, dup := seen[loop]
+			require.False(t, dup, "no two faces share a loop")
+			seen[loop] = struct{}{}
+			for _, e := range loop.Edges() {
+				require.True(t, slices.Contains(edges, e), "a face loop's edge is one of the body's own edges")
+				want = append(want, e)
+			}
+		}
+		got := face.Edges()
+		require.Len(t, got, len(want))
+		for i := range want {
+			require.Same(t, want[i], got[i])
+		}
+		loops[0] = nil
+		require.NotNil(t, face.Loops()[0], "Loops returns a fresh slice")
+	}
+	require.Len(t, seen, 6)
+
+	var zero decad.Face
+	require.Nil(t, zero.Loops())
+	require.Nil(t, zero.Edges())
+}

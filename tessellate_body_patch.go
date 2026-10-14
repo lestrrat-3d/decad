@@ -33,8 +33,8 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 			if f.n.NormalBound != 0 {
 				return nil, fmt.Errorf(`%w: a PatchEdges result's planar face has no zero-bound normal`, ErrUnsupported)
 			}
-			for _, l := range f.loops {
-				for _, ce := range l.n.CoEdges {
+			for _, l := range f.n.Loops {
+				for _, ce := range l.CoEdges {
 					if _, ok := ce.Edge.Curve.(surfacegeom.Line3); !ok {
 						return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a PatchEdges result's %T edge`,
 							ErrUnsupported, publicCurve(ce.Edge.Curve))
@@ -134,10 +134,10 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 		if len(f.n.Origins) != 1 || f.n.Origins[0].Producer != b.n.Origin.Producer || f.n.Origins[0].Role != rolePatch {
 			continue
 		}
-		if len(f.loops) == 0 || len(f.loops[0].n.CoEdges) == 0 {
+		if len(f.n.Loops) == 0 || len(f.n.Loops[0].CoEdges) == 0 {
 			return fmt.Errorf(`%w: a PatchEdges fill has no boundary walk to orient`, ErrDegenerate)
 		}
-		ce := f.loops[0].n.CoEdges[0]
+		ce := f.n.Loops[0].CoEdges[0]
 		start, end := classOf[vertexHandle(coedgeStart(ce))], classOf[vertexHandle(coedgeEnd(ce))]
 		var source *topo.Face
 		for _, adjacent := range ce.Edge.Faces {

@@ -20,6 +20,7 @@ var bornHandles = map[string]string{
 	"Body":   "bornBody",
 	"Face":   "bornFace",
 	"Edge":   "bornEdge",
+	"Loop":   "bornLoop",
 }
 
 // TestTopologyHandlesAreBorn parses every root .go file, tests included, and

@@ -410,8 +410,8 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 // and returns proofbound.PerimeterUpper over them.
 func facetedFacePerimeterUpper(f *Face, budget *proofbound.WorkBudget) (float64, error) {
 	var lengths, bounds []float64
-	for _, l := range f.loops {
-		for _, ce := range l.n.CoEdges {
+	for _, l := range f.n.Loops {
+		for _, ce := range l.CoEdges {
 			lengths = append(lengths, ce.Edge.Length)
 			bounds = append(bounds, ce.Edge.LengthBound)
 		}
@@ -893,11 +893,11 @@ func buildFacetedTopology(
 	for fi, loops := range plan.FaceLoops {
 		f := faces[fi]
 		for _, planned := range loops {
-			loop := &Loop{n: topo.Loop{Outer: planned.Outer}}
+			loop := bornLoop(&Loop{n: topo.Loop{Outer: planned.Outer}})
 			for _, ce := range planned.Coedges {
 				loop.n.CoEdges = append(loop.n.CoEdges, topo.CoEdge{Edge: edgeNode(edgeObj[ce.Edge]), Forward: ce.Forward})
 			}
-			f.loops = append(f.loops, loop)
+			f.n.Loops = append(f.n.Loops, loopNode(loop))
 		}
 	}
 	return nil

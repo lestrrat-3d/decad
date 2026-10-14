@@ -372,23 +372,23 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 		panic(err)
 	}
 	f = bornFace(&Face{
-		loops: []*Loop{
-			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+		n: topo.Face{Area: 96, Surface: surfacegeom.Plane{Frame: frame}, Loops: []*topo.Loop{
+			loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
 				{Edge: edgeNode(outerEdges[0]), Forward: true},
 				{Edge: edgeNode(outerEdges[1]), Forward: true},
 				{Edge: edgeNode(outerEdges[2]), Forward: true},
 				{Edge: edgeNode(outerEdges[3]), Forward: true},
 			},
-			}},
-			{n: topo.Loop{Outer: false, CoEdges: []topo.CoEdge{
+			}})),
+			loopNode(bornLoop(&Loop{n: topo.Loop{Outer: false, CoEdges: []topo.CoEdge{
 				{Edge: edgeNode(holeEdges[0]), Forward: true},
 				{Edge: edgeNode(holeEdges[1]), Forward: true},
 				{Edge: edgeNode(holeEdges[2]), Forward: true},
 				{Edge: edgeNode(holeEdges[3]), Forward: true},
 			},
-			}},
+			}})),
 		},
-		n: topo.Face{Area: 96, Surface: surfacegeom.Plane{Frame: frame}},
+		},
 	})
 	for _, e := range append(outerEdges, holeEdges...) {
 		e.n.Faces = []*topo.Face{faceNode(f)}

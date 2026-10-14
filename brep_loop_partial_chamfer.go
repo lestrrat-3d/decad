@@ -139,16 +139,16 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		if err != nil {
 			return nil, brepBandMass{}, err
 		}
-		loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideE), Forward: true},
+		loop := bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideE), Forward: true},
 			{Edge: edgeNode(end), Forward: end.n.Start == sideE.n.End}, {Edge: edgeNode(capE), Forward: false},
 			{Edge: edgeNode(start), Forward: start.n.Start == capE.n.Start}},
-		}}
+		}})
 		areaIv, volume3, moments, err := partialband.ChamferQuadMass(quads[i].points)
 		if err != nil {
 			return nil, brepBandMass{}, err
 		}
 		held, bound := heldOf(areaIv)
-		face := bornFace(&Face{loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: plane, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(len(patches))}}, Body: bodyNode(body)}})
+		face := bornFace(&Face{n: topo.Face{Area: held, AreaBound: bound, Surface: plane, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(len(patches))}}, Body: bodyNode(body), Loops: []*topo.Loop{loopNode(loop)}}})
 		normal, err := face.NormalAt(sideE.n.Start.Position)
 		if err != nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d has no normal: %v`,

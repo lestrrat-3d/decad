@@ -73,8 +73,8 @@ func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, 
 // The cap audit proves the mesh boundary is exactly ring. Public edges may
 // coalesce adjacent segments, so their endpoints must partition that whole
 // boundary once in the cap's walk direction.
-func loftCylinderChamferCapWalk(loop *Loop, verts []r3.Vec, ring []int, bottom bool) bool {
-	if loop == nil || !loop.n.Outer || len(loop.n.CoEdges) < 3 || len(loop.n.CoEdges) > len(ring) {
+func loftCylinderChamferCapWalk(loop *topo.Loop, verts []r3.Vec, ring []int, bottom bool) bool {
+	if loop == nil || !loop.Outer || len(loop.CoEdges) < 3 || len(loop.CoEdges) > len(ring) {
 		return false
 	}
 	index := make(map[r3.Vec]int, len(ring))
@@ -88,9 +88,9 @@ func loftCylinderChamferCapWalk(loop *Loop, verts []r3.Vec, ring []int, bottom b
 		index[verts[vertex]] = i
 	}
 	covered := 0
-	for i, use := range loop.n.CoEdges {
+	for i, use := range loop.CoEdges {
 		if coedgeStart(use) == nil || coedgeEnd(use) == nil ||
-			coedgeEnd(use).Position != coedgeStart(loop.n.CoEdges[(i+1)%len(loop.n.CoEdges)]).Position {
+			coedgeEnd(use).Position != coedgeStart(loop.CoEdges[(i+1)%len(loop.CoEdges)]).Position {
 			return false
 		}
 		a, okA := index[coedgeStart(use).Position]
@@ -167,11 +167,11 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 		return nil, true, fmt.Errorf("%w: loft/cylinder chamfer repeats an edge", ErrUnsupported)
 	}
 	for cap, face := range caps {
-		if len(face.loops) == 0 || !loftCylinderChamferCapWalk(
-			face.loops[0], fp.verts, source.outer[cap], cap == 0) {
+		if len(face.n.Loops) == 0 || !loftCylinderChamferCapWalk(
+			face.n.Loops[0], fp.verts, source.outer[cap], cap == 0) {
 			return nil, true, fmt.Errorf("%w: loft/cylinder cap %d has no outer loop", ErrUnsupported, cap)
 		}
-		for _, ce := range face.loops[0].n.CoEdges {
+		for _, ce := range face.n.Loops[0].CoEdges {
 			edge := ce.Edge
 			if _, yes := selected[edge]; !yes {
 				return nil, true, fmt.Errorf("%w: loft/cylinder chamfer needs both complete outer cap loops", ErrUnsupported)

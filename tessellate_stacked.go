@@ -234,8 +234,8 @@ func stackedCapFace(b *Body, sp stackedPrismPayload, faceOfRole func(string) (*F
 		if !faceHasRole(face, role) {
 			continue
 		}
-		for _, l := range face.loops {
-			for _, ce := range l.n.CoEdges {
+		for _, l := range face.n.Loops {
+			for _, ce := range l.CoEdges {
 				for _, nb := range ce.Edge.Faces {
 					if nb == faceNode(face) {
 						continue

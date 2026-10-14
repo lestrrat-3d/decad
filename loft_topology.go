@@ -200,12 +200,12 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			if err != nil {
 				return nil, nil, nil, nil, err
 			}
-			lowerFace.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
+			lowerFace.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
 				{Edge: edgeNode(rimBottom[j]), Forward: true},
 				{Edge: edgeNode(rungE[jn]), Forward: true},
 				{Edge: edgeNode(diagE[j]), Forward: false},
 			}, a.Reversed),
-			}}}
+			}}))}
 			walls = append(walls, lowerFace)
 			wallAreas = append(wallAreas, lowerArea)
 
@@ -214,20 +214,20 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			if err != nil {
 				return nil, nil, nil, nil, err
 			}
-			upperFace.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
+			upperFace.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
 				{Edge: edgeNode(diagE[j]), Forward: true},
 				{Edge: edgeNode(rimTop[j]), Forward: false},
 				{Edge: edgeNode(rungE[j]), Forward: false},
 			}, a.Reversed),
-			}}}
+			}}))}
 			walls = append(walls, upperFace)
 			wallAreas = append(wallAreas, upperArea)
 
 			capStartCo[n-1-j] = topo.CoEdge{Edge: edgeNode(rimBottom[j]), Forward: false}
 			capEndCo[j] = topo.CoEdge{Edge: edgeNode(rimTop[j]), Forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: isOuter, CoEdges: loftLoopCoedges(capStartCo, a.Reversed)}})
-		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: isOuter, CoEdges: loftLoopCoedges(capEndCo, a.Reversed)}})
+		capStartLoops = append(capStartLoops, bornLoop(&Loop{n: topo.Loop{Outer: isOuter, CoEdges: loftLoopCoedges(capStartCo, a.Reversed)}}))
+		capEndLoops = append(capEndLoops, bornLoop(&Loop{n: topo.Loop{Outer: isOuter, CoEdges: loftLoopCoedges(capEndCo, a.Reversed)}}))
 	}
 
 	capStartSurf, err := planeFromTriangle(a.Verts, a.Tris[a.Walls])
@@ -249,7 +249,6 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 		capEndBound = proofbound.AbsSumUpper(capEndBound, loftmesh.CapTriangleAreaAllow(a.Verts, capEndTris, a.Delta))
 	}
 	capStart := bornFace(&Face{
-		loops: capStartLoops,
 		n: topo.Face{
 			Area:          cap0Val,
 			AreaBound:     capStartBound,
@@ -258,10 +257,10 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			Surface:       capStartSurf,
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
+			Loops:         loopNodes(capStartLoops),
 		},
 	})
 	capEnd := bornFace(&Face{
-		loops: capEndLoops,
 		n: topo.Face{
 			Area:          cap1Val,
 			AreaBound:     capEndBound,
@@ -270,6 +269,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			Surface:       capEndSurf,
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
+			Loops:         loopNodes(capEndLoops),
 		},
 	})
 

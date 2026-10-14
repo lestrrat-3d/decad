@@ -482,8 +482,8 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 
 	maxInputAbs := 0.0
 	for _, f := range srcFaces {
-		for _, l := range f.loops {
-			for _, ce := range l.n.CoEdges {
+		for _, l := range f.n.Loops {
+			for _, ce := range l.CoEdges {
 				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.Edge.Start.Position), proofbound.VecMaxAbs(ce.Edge.End.Position))
 			}
 		}
@@ -696,16 +696,16 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 				Origins:       append([]provenance.Ref(nil), f.n.Origins...),
 			},
 		})
-		for _, l := range f.loops {
-			coedges := make([]topo.CoEdge, len(l.n.CoEdges))
-			for j, ce := range l.n.CoEdges {
+		for _, l := range f.n.Loops {
+			coedges := make([]topo.CoEdge, len(l.CoEdges))
+			for j, ce := range l.CoEdges {
 				ne, err := edgeFor(edgeHandle(ce.Edge))
 				if err != nil {
 					return nil, nil, err
 				}
 				coedges[j] = topo.CoEdge{Edge: edgeNode(ne), Forward: ce.Forward}
 			}
-			nf.loops = append(nf.loops, &Loop{n: topo.Loop{Outer: l.n.Outer, CoEdges: coedges}})
+			nf.n.Loops = append(nf.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: l.Outer, CoEdges: coedges}})))
 		}
 		newFaces[i] = nf
 	}
@@ -833,7 +833,6 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	}
 
 	return bornFace(&Face{
-		loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: coedges}}},
 		n: topo.Face{
 			Area:      ig.Area,
 			AreaBound: ig.AreaBound,
@@ -845,6 +844,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 			HasAxialDelta: chain.hasAxialBound,
 			Surface:       surfacegeom.Plane{Frame: frame},
 			Origins:       []provenance.Ref{{Producer: ref, Role: rolePatch}},
+			Loops:         []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: coedges}}))},
 		},
 	}), nil
 }

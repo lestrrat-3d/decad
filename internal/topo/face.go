@@ -106,6 +106,9 @@ type Face struct {
 	// certificate; whole-group readings are not copied onto split patches.
 	// Root Face.Centroid converts it to the public VecMeasurement form.
 	Centroid measurement.VecMeasurement
+	// Loops are the nodes of the face's boundary loops, the outer loop
+	// first. Root Face.Loops maps them back to their handles.
+	Loops []*Loop
 	// Body is the node of the body that holds this face, nil for a face no
 	// body holds. Root maps it back to its handle through Body.Owner.
 	Body *Body

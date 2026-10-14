@@ -41,8 +41,8 @@ type stitchWeldPlan struct {
 func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 	table := newStitchVertexTable()
 	for _, f := range faces {
-		for _, l := range f.loops {
-			for _, ce := range l.n.CoEdges {
+		for _, l := range f.n.Loops {
+			for _, ce := range l.CoEdges {
 				table.classOf(vertexHandle(coedgeStart(ce)))
 				table.classOf(vertexHandle(coedgeEnd(ce)))
 			}
@@ -52,8 +52,8 @@ func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 	var candidates []stitchweld.Candidate[*Edge]
 	seen := map[*topo.Edge]struct{}{}
 	for _, f := range faces {
-		for _, l := range f.loops {
-			for _, ce := range l.n.CoEdges {
+		for _, l := range f.n.Loops {
+			for _, ce := range l.CoEdges {
 				e := ce.Edge
 				if _, dup := seen[e]; dup {
 					continue

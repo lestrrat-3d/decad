@@ -40,18 +40,24 @@ func TestStitchOrientationRefusesMobiusAssembly(t *testing.T) {
 	e23 := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{})), End: vertexNode(bornVertex(&Vertex{}))}})
 	e31 := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{})), End: vertexNode(bornVertex(&Vertex{}))}})
 
-	f1 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-		{Edge: edgeNode(e12), Forward: true}, {Edge: edgeNode(e31), Forward: true},
-	},
-	}}}})
-	f2 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-		{Edge: edgeNode(e12), Forward: true}, {Edge: edgeNode(e23), Forward: true},
-	},
-	}}}})
-	f3 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-		{Edge: edgeNode(e23), Forward: true}, {Edge: edgeNode(e31), Forward: true},
-	},
-	}}}})
+	f1 := bornFace(&Face{n: topo.Face{
+		Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			{Edge: edgeNode(e12), Forward: true}, {Edge: edgeNode(e31), Forward: true},
+		},
+		}}))},
+	}})
+	f2 := bornFace(&Face{n: topo.Face{
+		Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			{Edge: edgeNode(e12), Forward: true}, {Edge: edgeNode(e23), Forward: true},
+		},
+		}}))},
+	}})
+	f3 := bornFace(&Face{n: topo.Face{
+		Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			{Edge: edgeNode(e23), Forward: true}, {Edge: edgeNode(e31), Forward: true},
+		},
+		}}))},
+	}})
 	e12.n.Faces = []*topo.Face{faceNode(f1), faceNode(f2)}
 	e23.n.Faces = []*topo.Face{faceNode(f2), faceNode(f3)}
 	e31.n.Faces = []*topo.Face{faceNode(f3), faceNode(f1)}
@@ -69,9 +75,9 @@ func TestStitchOrientationRefusesMobiusAssembly(t *testing.T) {
 func TestStitchClosureRefusesNonManifoldEdge(t *testing.T) {
 	t.Parallel()
 	e := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{})), End: vertexNode(bornVertex(&Vertex{}))}})
-	f1 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}}})
-	f2 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: false}}}}}})
-	f3 := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}}})
+	f1 := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}}})
+	f2 := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: false}}}}))}}})
+	f3 := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}}})
 	e.n.Faces = []*topo.Face{faceNode(f1), faceNode(f2), faceNode(f3)}
 
 	err := checkStitchClosure([]*Face{f1, f2, f3})
@@ -107,14 +113,14 @@ func stitchTestSquareFace(corner r3.Vec) *Face {
 		panic(err)
 	}
 	f := bornFace(&Face{
-		loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+		n: topo.Face{Area: 100, Surface: surfacegeom.Plane{Frame: frame}, Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
 			{Edge: edgeNode(edges[0]), Forward: true},
 			{Edge: edgeNode(edges[1]), Forward: true},
 			{Edge: edgeNode(edges[2]), Forward: true},
 			{Edge: edgeNode(edges[3]), Forward: true},
 		},
-		}}},
-		n: topo.Face{Area: 100, Surface: surfacegeom.Plane{Frame: frame}},
+		}}))},
+		},
 	})
 	for _, e := range edges {
 		e.n.Faces = []*topo.Face{faceNode(f)}
@@ -198,12 +204,14 @@ func stitchTestFanAroundVertex(v *Vertex, outer [3]*Vertex) [3]*Face {
 		// Triangle (v, outer[i], outer[j]): v -> outer[i] via radial[i]
 		// forward, outer[i] -> outer[j] via rim[i] forward, outer[j] -> v
 		// via radial[j] backward.
-		faces[i] = bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-			{Edge: edgeNode(radial[i]), Forward: true},
-			{Edge: edgeNode(rim[i]), Forward: true},
-			{Edge: edgeNode(radial[j]), Forward: false},
-		},
-		}}}})
+		faces[i] = bornFace(&Face{n: topo.Face{
+			Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+				{Edge: edgeNode(radial[i]), Forward: true},
+				{Edge: edgeNode(rim[i]), Forward: true},
+				{Edge: edgeNode(radial[j]), Forward: false},
+			},
+			}}))},
+		}})
 	}
 	for i := range 3 {
 		j := (i + 1) % 3
@@ -303,7 +311,7 @@ func TestStitchCurvedMassCorrectsInwardOrientation(t *testing.T) {
 		reverseFaceOrientation(f)
 	}
 
-	vol, cen, err := stitchCurvedMass(context.Background(), faces, vertexHandle(coedgeStart(faces[0].loops[0].n.CoEdges[0])).Position().Value, 0)
+	vol, cen, err := stitchCurvedMass(context.Background(), faces, vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value, 0)
 	require.NoError(t, err)
 	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed face set")
 	require.InDelta(t, 2000*3.141592653589793, vol.Value.Base(), 1e-6)
@@ -334,7 +342,7 @@ func TestStitchCurvedMassPlacementAllowanceWidensBounds(t *testing.T) {
 	sheet, err := Revolve(t.Context(), d, s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
 	require.NoError(t, err)
 	faces := sheet.Faces()
-	anchor := vertexHandle(coedgeStart(faces[0].loops[0].n.CoEdges[0])).Position().Value
+	anchor := vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
 
 	unplacedVol, unplacedCen, err := stitchCurvedMass(context.Background(), faces, anchor, 0)
 	require.NoError(t, err)
@@ -373,14 +381,14 @@ func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound flo
 	e0 := bornEdge(&Edge{n: topo.Edge{Length: length, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, Start: vertexNode(v0), End: vertexNode(v0)}})
 	e1 := bornEdge(&Edge{n: topo.Edge{Length: length, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, height), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, Start: vertexNode(v1), End: vertexNode(v1)}})
 	f := bornFace(&Face{
-		loops: []*Loop{
-			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e0), Forward: true}}}},
-			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e1), Forward: true}}}},
-		},
 		n: topo.Face{
 			Area:      area,
 			AreaBound: areaBound,
 			Surface:   surfacegeom.Cylinder{Origin: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)},
+			Loops: []*topo.Loop{
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e0), Forward: true}}}})),
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e1), Forward: true}}}})),
+			},
 		},
 	})
 	e0.n.Faces, e1.n.Faces = []*topo.Face{faceNode(f)}, []*topo.Face{faceNode(f)}
@@ -458,8 +466,7 @@ func stitchTestPlaneDiskFace(r, rimBound float64) *Face {
 	v := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, 0)}})
 	e := bornEdge(&Edge{n: topo.Edge{Length: 2 * math.Pi * r, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, Start: vertexNode(v), End: vertexNode(v)}})
 	f := bornFace(&Face{
-		n:     topo.Face{Surface: surfacegeom.Plane{Frame: frame}},
-		loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}},
+		n: topo.Face{Surface: surfacegeom.Plane{Frame: frame}, Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}},
 	})
 	e.n.Faces = []*topo.Face{faceNode(f)}
 	return f
@@ -508,8 +515,7 @@ func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
 	vertex := bornVertex(&Vertex{n: topo.Vertex{Position: center.Add(frame.U().Scale(radius))}})
 	edge := bornEdge(&Edge{n: topo.Edge{Length: 2 * math.Pi * radius, Curve: surfacegeom.Circle3{Center: center, Axis: frame.N(), Radius: units.Millimeters(radius)}, Start: vertexNode(vertex), End: vertexNode(vertex)}})
 	face := bornFace(&Face{
-		n:     topo.Face{Surface: surfacegeom.Plane{Frame: frame}},
-		loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: true}}}}},
+		n: topo.Face{Surface: surfacegeom.Plane{Frame: frame}, Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: true}}}}))}},
 	})
 	edge.n.Faces = []*topo.Face{faceNode(face)}
 
@@ -566,10 +572,10 @@ func stitchTestConeFace(halfAngle, r0, z0, r1, z1, rimBound float64) *Face {
 	e0 := bornEdge(&Edge{n: topo.Edge{Length: length0, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: center0, Axis: axis, Radius: units.Millimeters(r0)}, Start: vertexNode(v0), End: vertexNode(v0)}})
 	e1 := bornEdge(&Edge{n: topo.Edge{Length: length1, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: center1, Axis: axis, Radius: units.Millimeters(r1)}, Start: vertexNode(v1), End: vertexNode(v1)}})
 	f := bornFace(&Face{
-		n: topo.Face{Surface: surfacegeom.Cone{Origin: r3.NewVec(0, 0, 0), Axis: axis, Radius: units.Millimeters(0), HalfAngle: units.Radians(halfAngle)}},
-		loops: []*Loop{
-			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e0), Forward: true}}}},
-			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e1), Forward: true}}}},
+		n: topo.Face{Surface: surfacegeom.Cone{Origin: r3.NewVec(0, 0, 0), Axis: axis, Radius: units.Millimeters(0), HalfAngle: units.Radians(halfAngle)}, Loops: []*topo.Loop{
+			loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e0), Forward: true}}}})),
+			loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e1), Forward: true}}}})),
+		},
 		},
 	})
 	e0.n.Faces, e1.n.Faces = []*topo.Face{faceNode(f)}, []*topo.Face{faceNode(f)}
@@ -711,7 +717,7 @@ func TestStitchCurvedMassCorrectsInwardOrientationForCone(t *testing.T) {
 		reverseFaceOrientation(f)
 	}
 
-	anchor := vertexHandle(coedgeStart(faces[0].loops[0].n.CoEdges[0])).Position().Value
+	anchor := vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
 	vol, cen, err := stitchCurvedMass(context.Background(), faces, anchor, 0)
 	require.NoError(t, err)
 	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed Cone face set")
@@ -853,8 +859,7 @@ func TestStitchSphereFluxRefusesFaceWithABoundaryLoop(t *testing.T) {
 		},
 	})
 	f := bornFace(&Face{
-		loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}},
-		n:     topo.Face{Area: 4 * math.Pi * 25, Surface: surfacegeom.Sphere{Center: r3.NewVec(5, 0, 0), Radius: units.Millimeters(5)}},
+		n: topo.Face{Area: 4 * math.Pi * 25, Surface: surfacegeom.Sphere{Center: r3.NewVec(5, 0, 0), Radius: units.Millimeters(5)}, Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}},
 	})
 	e.n.Faces = []*topo.Face{faceNode(f)}
 
@@ -880,7 +885,7 @@ func TestStitchCurvedMassCorrectsInwardOrientationForSphere(t *testing.T) {
 	t.Parallel()
 	faces := sphereRevolveFacesForInternalTest(t, 10)
 	require.Len(t, faces, 1)
-	require.Empty(t, faces[0].loops, "the sphere face carries no boundary loop at all")
+	require.Empty(t, faces[0].n.Loops, "the sphere face carries no boundary loop at all")
 
 	for _, f := range faces {
 		reverseFaceOrientation(f)
@@ -975,10 +980,10 @@ func stitchTestTorusFace(center, axis r3.Vec, major, minor, e0, e1 float64) *Fac
 	}
 	e0Edge, e1Edge := rim(e0), rim(e1)
 	f := bornFace(&Face{
-		n: topo.Face{Surface: surfacegeom.Torus{Center: center, Axis: axis, Major: units.Millimeters(major), Minor: units.Millimeters(minor)}},
-		loops: []*Loop{
-			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e0Edge), Forward: true}}}},
-			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e1Edge), Forward: true}}}},
+		n: topo.Face{Surface: surfacegeom.Torus{Center: center, Axis: axis, Major: units.Millimeters(major), Minor: units.Millimeters(minor)}, Loops: []*topo.Loop{
+			loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e0Edge), Forward: true}}}})),
+			loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e1Edge), Forward: true}}}})),
+		},
 		},
 	})
 	e0Edge.n.Faces, e1Edge.n.Faces = []*topo.Face{faceNode(f)}, []*topo.Face{faceNode(f)}
@@ -1137,7 +1142,7 @@ func TestStitchCurvedMassCorrectsInwardOrientationForTorus(t *testing.T) {
 		reverseFaceOrientation(f)
 	}
 
-	anchor := vertexHandle(coedgeStart(faces[0].loops[0].n.CoEdges[0])).Position().Value
+	anchor := vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
 	vol, cen, err := stitchCurvedMass(context.Background(), faces, anchor, 0)
 	require.NoError(t, err)
 	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed Torus face set")
@@ -1214,7 +1219,7 @@ func stitchTestLumpFace(vs []*Vertex) *Face {
 		e := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(vs[i]), End: vertexNode(vs[(i+1)%len(vs)])}})
 		coedges[i] = topo.CoEdge{Edge: edgeNode(e), Forward: true}
 	}
-	return bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: coedges}}}})
+	return bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: coedges}}))}}})
 }
 
 // TestTessellateStitchClearsSymDiffForOverlappingLumps is docs/surface-design.md's

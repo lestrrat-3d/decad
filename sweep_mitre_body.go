@@ -118,8 +118,8 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 			capStartCo[m-1-j] = topo.CoEdge{Edge: edgeNode(sec[0][v]), Forward: false}
 			capEndCo[j] = topo.CoEdge{Edge: edgeNode(sec[a.Spans][v]), Forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: i == 0, CoEdges: loftLoopCoedges(capStartCo, a.Reversed)}})
-		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: i == 0, CoEdges: loftLoopCoedges(capEndCo, a.Reversed)}})
+		capStartLoops = append(capStartLoops, bornLoop(&Loop{n: topo.Loop{Outer: i == 0, CoEdges: loftLoopCoedges(capStartCo, a.Reversed)}}))
+		capEndLoops = append(capEndLoops, bornLoop(&Loop{n: topo.Loop{Outer: i == 0, CoEdges: loftLoopCoedges(capEndCo, a.Reversed)}}))
 	}
 	capStartSurf, err := planeFromTriangle(verts, a.Tris[a.Walls])
 	if err != nil {
@@ -132,7 +132,7 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 	startArea, startBound := faceArea(sweepmitre.SlotCapStart)
 	endArea, endBound := faceArea(sweepmitre.SlotCapEnd)
 	faces = append(faces,
-		bornFace(&Face{loops: capStartLoops, n: topo.Face{
+		bornFace(&Face{n: topo.Face{
 			Area:          startArea,
 			AreaBound:     startBound,
 			AxialDelta:    delta,
@@ -140,9 +140,10 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 			Surface:       capStartSurf,
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
+			Loops:         loopNodes(capStartLoops),
 		},
 		}),
-		bornFace(&Face{loops: capEndLoops, n: topo.Face{
+		bornFace(&Face{n: topo.Face{
 			Area:          endArea,
 			AreaBound:     endBound,
 			AxialDelta:    delta,
@@ -150,6 +151,7 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 			Surface:       capEndSurf,
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
+			Loops:         loopNodes(capEndLoops),
 		},
 		}),
 	)
@@ -176,13 +178,13 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 						Body:      bodyNode(body),
 					},
 				})
-				face.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
+				face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
 					{Edge: edgeNode(sec[k][v]), Forward: true},
 					{Edge: edgeNode(lon[k][next[v]]), Forward: true},
 					{Edge: edgeNode(sec[k+1][v]), Forward: false},
 					{Edge: edgeNode(lon[k][v]), Forward: false},
 				}, a.Reversed),
-				}}}
+				}}))}
 				faces = append(faces, face)
 			}
 		}

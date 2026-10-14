@@ -625,24 +625,24 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		case f.planar():
 			loops := make([]*Loop, len(btopo.planar[fi]))
 			for li := range loops {
-				loops[li] = &Loop{n: topo.Loop{Outer: li == 0}}
+				loops[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0}})
 			}
 			for _, ui := range uses {
 				l := loops[btopo.uses[ui].Loop]
 				l.n.CoEdges = append(l.n.CoEdges, coedgeOf(ui))
 			}
-			face.loops = loops
+			face.n.Loops = loopNodes(loops)
 		case len(uses) == 2:
-			face.loops = []*Loop{
-				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{coedgeOf(uses[0])}}},
-				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{coedgeOf(uses[1])}}},
+			face.n.Loops = []*topo.Loop{
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{coedgeOf(uses[0])}}})),
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{coedgeOf(uses[1])}}})),
 			}
 		default:
-			l := &Loop{n: topo.Loop{Outer: true}}
+			l := bornLoop(&Loop{n: topo.Loop{Outer: true}})
 			for _, ui := range uses {
 				l.n.CoEdges = append(l.n.CoEdges, coedgeOf(ui))
 			}
-			face.loops = []*Loop{l}
+			face.n.Loops = []*topo.Loop{loopNode(l)}
 		}
 		faces[fi] = face
 	}

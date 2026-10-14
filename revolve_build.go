@@ -464,8 +464,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		perLoop[li] = parts
 		sideArea = proofbound.BoundedAdd(sideArea, parts.area)
 		if !rp.full {
-			capStart.loops = append(capStart.loops, &Loop{n: topo.Loop{Outer: li == 0, CoEdges: parts.startCo}})
-			capEnd.loops = append(capEnd.loops, &Loop{n: topo.Loop{Outer: li == 0, CoEdges: parts.endCo}})
+			capStart.n.Loops = append(capStart.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: parts.startCo}})))
+			capEnd.n.Loops = append(capEnd.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: parts.endCo}})))
 		}
 	}
 
@@ -903,14 +903,14 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// A whole closed generator swept a full turn bounds a closed
 			// surface — a torus needs no boundary loop at all.
 		case rp.full:
-			face.loops = fullRevLoops(js[i], js[(i+1)%n], kinds[i])
+			face.n.Loops = loopNodes(fullRevLoops(js[i], js[(i+1)%n], kinds[i]))
 		case singleClosed:
 			// A closed generator's partial sweep is bounded by its two cap
 			// copies — two loops, one whole closed edge each, mirroring the
 			// prism's whole-circle two-loop discipline.
-			face.loops = []*Loop{
-				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(cap0[i]), Forward: true}}}},
-				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(cap1[i]), Forward: false}}}},
+			face.n.Loops = []*topo.Loop{
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(cap0[i]), Forward: true}}}})),
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(cap1[i]), Forward: false}}}})),
 			}
 		default:
 			co := []topo.CoEdge{{Edge: edgeNode(cap0[i]), Forward: true}}
@@ -921,7 +921,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			if a := js[i].arc; a != nil {
 				co = append(co, topo.CoEdge{Edge: edgeNode(a), Forward: false})
 			}
-			face.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: co}}}
+			face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: co}}))}
 		}
 		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
 			return revLoopParts{}, err
@@ -994,10 +994,10 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 	}
 	var loops []*Loop
 	if j0.lat != nil {
-		loops = append(loops, &Loop{n: topo.Loop{Outer: outer0, CoEdges: []topo.CoEdge{{Edge: edgeNode(j0.lat), Forward: true}}}})
+		loops = append(loops, bornLoop(&Loop{n: topo.Loop{Outer: outer0, CoEdges: []topo.CoEdge{{Edge: edgeNode(j0.lat), Forward: true}}}}))
 	}
 	if j1.lat != nil {
-		loops = append(loops, &Loop{n: topo.Loop{Outer: outer1, CoEdges: []topo.CoEdge{{Edge: edgeNode(j1.lat), Forward: false}}}})
+		loops = append(loops, bornLoop(&Loop{n: topo.Loop{Outer: outer1, CoEdges: []topo.CoEdge{{Edge: edgeNode(j1.lat), Forward: false}}}}))
 	}
 	if len(loops) == 2 && !loops[0].n.Outer {
 		loops[0], loops[1] = loops[1], loops[0]
@@ -1393,7 +1393,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			},
 		})
 		if rp.full {
-			face.loops = fullRevLoops(js[i], js[i+1], kinds[i])
+			face.n.Loops = loopNodes(fullRevLoops(js[i], js[i+1], kinds[i]))
 		} else {
 			// holeLoop is always false: a chain has no hole, and its whole
 			// walk takes the loop-0 (outer) convention
@@ -1409,7 +1409,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			if a := js[i].arc; a != nil {
 				co = append(co, topo.CoEdge{Edge: edgeNode(a), Forward: false})
 			}
-			face.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: co}}}
+			face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: co}}))}
 		}
 		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
 			return nil, proofbound.BoundedScalar{}, err

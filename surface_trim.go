@@ -120,8 +120,8 @@ func extendEndSegment(b *Body, pp chainPayload, edge *Edge) (int, int, bool, err
 			continue
 		}
 		faces := lump.shells[0].faces
-		first := faces[0].loops[0].n.CoEdges
-		last := faces[len(faces)-1].loops[0].n.CoEdges
+		first := faces[0].n.Loops[0].CoEdges
+		last := faces[len(faces)-1].n.Loops[0].CoEdges
 		if edge == edgeHandle(first[3].Edge) {
 			return ci, 0, true, nil
 		}
@@ -923,11 +923,11 @@ func extendRevolveEndSegment(b *Body, pp chainRevolvePayload, edge *Edge) (int, 
 // junction, false for its end. A junction ON the axis mints no latitude circle
 // at all, so that end answers absent and the caller refuses.
 func revolveLatitudeLoopEdge(f *Face, start bool) (*Edge, bool) {
-	for _, l := range f.loops {
-		if len(l.n.CoEdges) != 1 || l.n.CoEdges[0].Forward != start {
+	for _, l := range f.n.Loops {
+		if len(l.CoEdges) != 1 || l.CoEdges[0].Forward != start {
 			continue
 		}
-		return edgeHandle(l.n.CoEdges[0].Edge), true
+		return edgeHandle(l.CoEdges[0].Edge), true
 	}
 	return nil, false
 }

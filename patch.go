@@ -169,7 +169,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		if err != nil {
 			return nil, err
 		}
-		faceLoops = append(faceLoops, &Loop{n: topo.Loop{Outer: li == 0, CoEdges: coedges}})
+		faceLoops = append(faceLoops, bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: coedges}}))
 	}
 
 	// The positive side is the sketch plane's own normal — the sense
@@ -181,7 +181,6 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, err
 	}
 	face := bornFace(&Face{
-		loops: faceLoops,
 		n: topo.Face{
 			Area:          ig.Area,
 			AreaBound:     ig.AreaBound,
@@ -191,6 +190,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 			CapRecord:     &topo.CapRecord{Frame: prismView.Frame, Xform: prismView.Xform, Z: 0},
 			Origins:       []provenance.Ref{{Producer: ref, Role: rolePatch}},
 			Body:          bodyNode(body),
+			Loops:         loopNodes(faceLoops),
 		},
 	})
 	if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {

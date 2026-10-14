@@ -174,7 +174,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 	area := proofbound.BoundedScalar{}
 	newPatch := func(surf surfacegeom.Surface, loop *Loop, capV *Vertex, piece filletband.Piece) error {
 		held, bound := heldOf(filletband.PatchArea(piece, rIv))
-		face := bornFace(&Face{loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(len(patches))}}, Body: bodyNode(body)}})
+		face := bornFace(&Face{n: topo.Face{Area: held, AreaBound: bound, Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(len(patches))}}, Body: bodyNode(body), Loops: []*topo.Loop{loopNode(loop)}}})
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		nrm, err := face.NormalAt(capV.n.Position)
 		if err != nil {
@@ -215,9 +215,9 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 				return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet's sphere patch does not close`, ErrUnsupported)
 			}
 			surf := surfacegeom.Sphere{Center: pl.Point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
-			loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideE), Forward: true},
+			loop := bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideE), Forward: true},
 				{Edge: edgeNode(end), Forward: false}, {Edge: edgeNode(start), Forward: true}},
-			}}
+			}})
 			if err := newPatch(surf, loop, pole, piece); err != nil {
 				return nil, brepBandMass{}, err
 			}
@@ -236,10 +236,10 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			Axis: pl.Dir(tu, tv, 0), Radius: units.Millimeters(r)}
 		startForward := start.n.Start == capE.n.Start
 		endForward := end.n.Start == sideE.n.End
-		loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideE), Forward: true},
+		loop := bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideE), Forward: true},
 			{Edge: edgeNode(end), Forward: endForward}, {Edge: edgeNode(capE), Forward: false},
 			{Edge: edgeNode(start), Forward: startForward}},
-		}}
+		}})
 		if err := newPatch(surf, loop, vertexHandle(capE.n.Start), piece); err != nil {
 			return nil, brepBandMass{}, err
 		}
@@ -255,9 +255,9 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		v := fr.walks[next]
 		torus := surfacegeom.Torus{Center: pl.Point(v.StartU, v.StartV, sideZ), Axis: pl.Dir(0, 0, 1),
 			Major: units.Millimeters(r), Minor: units.Millimeters(r)}
-		horn := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(arc), Forward: true},
+		horn := bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(arc), Forward: true},
 			{Edge: edgeNode(lead[next]), Forward: true}, {Edge: edgeNode(trail[next]), Forward: false}},
-		}}
+		}})
 		if err := newPatch(torus, horn, vertexHandle(arc.n.Start), pieces[p]); err != nil {
 			return nil, brepBandMass{}, err
 		}

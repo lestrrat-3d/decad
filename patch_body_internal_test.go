@@ -180,7 +180,7 @@ func TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta(t *testing.
 	edges, tok := boundedSquareChain(1, units.Millimeters(0.002))
 	edgeCopy := map[*Edge]*Edge{}
 	for _, e := range edges {
-		f := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}}})
+		f := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}}})
 		e.n.Faces = []*topo.Face{faceNode(f)}
 		edgeCopy[e] = e
 	}
@@ -242,7 +242,7 @@ func TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame(t *
 	}
 	edgeCopy := map[*Edge]*Edge{}
 	for _, e := range edges {
-		f := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}}})
+		f := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}}})
 		e.n.Faces = []*topo.Face{faceNode(f)}
 		edgeCopy[e] = e
 	}
@@ -280,8 +280,8 @@ func TestOrientPatchChainRejectsDisagreeingAdjacentFaces(t *testing.T) {
 	v2 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})
 	a := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}})
 	b := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}})
-	faceA := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(a), Forward: true}}}}}})
-	faceB := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(b), Forward: true}}}}}})
+	faceA := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(a), Forward: true}}}}))}}})
+	faceB := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(b), Forward: true}}}}))}}})
 	a.n.Faces = []*topo.Face{faceNode(faceA)}
 	b.n.Faces = []*topo.Face{faceNode(faceB)}
 
@@ -311,7 +311,7 @@ func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 	edges := []*Edge{e1, e2, e3, e4}
 	edgeCopy := map[*Edge]*Edge{}
 	for _, e := range edges {
-		f := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}}})
+		f := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}}})
 		e.n.Faces = []*topo.Face{faceNode(f)}
 		edgeCopy[e] = e
 	}
@@ -341,11 +341,11 @@ func TestBodyPatchRejectsAReceiverWithNoPayload(t *testing.T) {
 // thing under test and the other two must hold cleanly for the isolation to
 // mean anything.
 func patchTestReceiverWithOneChain(payload featurePayload, edges []*Edge) *Body {
-	loop := &Loop{n: topo.Loop{Outer: true}}
+	loop := bornLoop(&Loop{n: topo.Loop{Outer: true}})
 	for _, e := range edges {
 		loop.n.CoEdges = append(loop.n.CoEdges, topo.CoEdge{Edge: edgeNode(e), Forward: true})
 	}
-	face := bornFace(&Face{loops: []*Loop{loop}})
+	face := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(loop)}}})
 	for _, e := range edges {
 		e.n.Faces = []*topo.Face{faceNode(face)}
 	}
@@ -389,15 +389,15 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	cv := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(5, 5, 10), Level: tok}})
 	inner := bornEdge(&Edge{n: topo.Edge{Level: tok, Curve: surfacegeom.Circle3{Center: r3.NewVec(5, 5, 10), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(1)}, Start: vertexNode(cv), End: vertexNode(cv)}})
 
-	outerLoop := &Loop{n: topo.Loop{Outer: true}}
+	outerLoop := bornLoop(&Loop{n: topo.Loop{Outer: true}})
 	for _, e := range outer {
 		outerLoop.n.CoEdges = append(outerLoop.n.CoEdges, topo.CoEdge{Edge: edgeNode(e), Forward: true})
 	}
-	outerFace := bornFace(&Face{loops: []*Loop{outerLoop}})
+	outerFace := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(outerLoop)}}})
 	for _, e := range outer {
 		e.n.Faces = []*topo.Face{faceNode(outerFace)}
 	}
-	innerFace := bornFace(&Face{loops: []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(inner), Forward: true}}}}}})
+	innerFace := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(inner), Forward: true}}}}))}}})
 	inner.n.Faces = []*topo.Face{faceNode(innerFace)}
 
 	receiver := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}})

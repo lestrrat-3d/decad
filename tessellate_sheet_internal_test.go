@@ -186,7 +186,7 @@ func TestFreeChainCountsByFaceCountsConnectedComponentsNotEdges(t *testing.T) {
 	vA, vB, vC := bornVertex(&Vertex{}), bornVertex(&Vertex{}), bornVertex(&Vertex{})
 	e1 := bornEdge(&Edge{n: topo.Edge{Start: vertexNode(vA), End: vertexNode(vB), Faces: []*topo.Face{faceNode(face)}}})
 	e2 := bornEdge(&Edge{n: topo.Edge{Start: vertexNode(vB), End: vertexNode(vC), Faces: []*topo.Face{faceNode(face)}}})
-	face.loops = []*Loop{{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(e1)}, {Edge: edgeNode(e2)}}}}}
+	face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(e1)}, {Edge: edgeNode(e2)}}}}))}
 	body := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{face}}}}}})
 
 	counts := freeChainCountsByFace(body)
@@ -208,8 +208,8 @@ func TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet(t *testing.T) {
 
 	faceA, faceB := bornFace(&Face{}), bornFace(&Face{})
 	sharedEdge := bornEdge(&Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(faceA), faceNode(faceB)}}})
-	faceA.loops = []*Loop{{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(sharedEdge)}}}}}
-	faceB.loops = []*Loop{{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(sharedEdge)}}}}}
+	faceA.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(sharedEdge)}}}}))}
+	faceB.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(sharedEdge)}}}}))}
 	body := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{faceA, faceB}}}}}})
 	require.Empty(t, freeChainCountsByFace(body), `premise: this body records no free edge`)
 

@@ -412,6 +412,7 @@ func (e *Edge) Length() (Measurement, error) {
 
 // Loop is one boundary loop of a face.
 type Loop struct {
+	_ noCopy
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Loop
 }
@@ -426,18 +427,11 @@ func (l *Loop) CoEdges() []CoEdge { return coedgeHandles(l.n.CoEdges) }
 
 // Edges returns the loop's edges in walk order. It is the compatibility view
 // of CoEdges: the same edge identities in the same order, without direction.
-func (l *Loop) Edges() []*Edge {
-	out := make([]*Edge, len(l.n.CoEdges))
-	for i, ce := range l.n.CoEdges {
-		out[i] = edgeHandle(ce.Edge)
-	}
-	return out
-}
+func (l *Loop) Edges() []*Edge { return loopEdges(&l.n) }
 
 // Face is a topological face: a tagged surface bounded by loops.
 type Face struct {
-	_     noCopy
-	loops []*Loop
+	_ noCopy
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Face
 }
@@ -576,13 +570,13 @@ func (f *Face) normalMeasurement(p, dir r3.Vec, tagAllow func() (float64, surfac
 func (f *Face) Surface() Surface { return publicSurface(f.n.Surface) }
 
 // Loops returns the face's boundary loops, the outer loop first.
-func (f *Face) Loops() []*Loop { return append([]*Loop(nil), f.loops...) }
+func (f *Face) Loops() []*Loop { return loopHandles(f.n.Loops) }
 
 // Edges returns the face's edges across all loops.
 func (f *Face) Edges() []*Edge {
 	var out []*Edge
-	for _, l := range f.loops {
-		out = append(out, l.Edges()...)
+	for _, l := range f.n.Loops {
+		out = append(out, loopEdges(l)...)
 	}
 	return out
 }
@@ -710,8 +704,8 @@ func (b *Body) Edges() []*Edge {
 	seen := map[*topo.Edge]struct{}{}
 	var out []*Edge
 	for _, f := range b.Faces() {
-		for _, l := range f.loops {
-			for _, ce := range l.n.CoEdges {
+		for _, l := range f.n.Loops {
+			for _, ce := range l.CoEdges {
 				if _, ok := seen[ce.Edge]; ok {
 					continue
 				}

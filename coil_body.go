@@ -281,8 +281,8 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			startCo[m-1-k] = topo.CoEdge{Edge: edgeNode(rimStart[i]), Forward: false}
 			endCo[k] = topo.CoEdge{Edge: edgeNode(rimEnd[i]), Forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: loop == 0, CoEdges: loftLoopCoedges(startCo, sh.Reversed)}})
-		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: loop == 0, CoEdges: loftLoopCoedges(endCo, sh.Reversed)}})
+		capStartLoops = append(capStartLoops, bornLoop(&Loop{n: topo.Loop{Outer: loop == 0, CoEdges: loftLoopCoedges(startCo, sh.Reversed)}}))
+		capEndLoops = append(capEndLoops, bornLoop(&Loop{n: topo.Loop{Outer: loop == 0, CoEdges: loftLoopCoedges(endCo, sh.Reversed)}}))
 	}
 	capStartSurf, err := planeFromTriangle(sh.Verts, sh.Tris[sh.Walls])
 	if err != nil {
@@ -293,7 +293,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		return nil, err
 	}
 	faces := []*Face{
-		bornFace(&Face{loops: capStartLoops, n: topo.Face{
+		bornFace(&Face{n: topo.Face{
 			Area:          capArea,
 			AreaBound:     capBound,
 			AxialDelta:    sh.Delta,
@@ -301,9 +301,10 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			Surface:       capStartSurf,
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
+			Loops:         loopNodes(capStartLoops),
 		},
 		}),
-		bornFace(&Face{loops: capEndLoops, n: topo.Face{
+		bornFace(&Face{n: topo.Face{
 			Area:          capArea,
 			AreaBound:     capBound,
 			AxialDelta:    sh.Delta,
@@ -311,6 +312,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			Surface:       capEndSurf,
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
+			Loops:         loopNodes(capEndLoops),
 		},
 		}),
 	}
@@ -346,18 +348,18 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			},
 		})
 		if seg.Closed {
-			face.loops = []*Loop{
-				{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(rimStart[i]), Forward: true}}, sh.Reversed)}},
-				{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(rimEnd[i]), Forward: false}}, sh.Reversed)}},
+			face.n.Loops = []*topo.Loop{
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(rimStart[i]), Forward: true}}, sh.Reversed)}})),
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(rimEnd[i]), Forward: false}}, sh.Reversed)}})),
 			}
 		} else {
-			face.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
+			face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
 				{Edge: edgeNode(rimStart[i]), Forward: true},
 				{Edge: edgeNode(helix[next]), Forward: true},
 				{Edge: edgeNode(rimEnd[i]), Forward: false},
 				{Edge: edgeNode(helix[i]), Forward: false},
 			}, sh.Reversed),
-			}}}
+			}}))}
 		}
 		faces = append(faces, face)
 	}
