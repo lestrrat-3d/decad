@@ -14,8 +14,7 @@ import (
 // The combined transport must restate one triangle's face bound without
 // changing the source map, even when the face points back to its handle.
 func TestSpiralCombinedBoundsDetachSourceMap(t *testing.T) {
-	face := &Face{}
-	face.n.Owner = face
+	face := bornFace(new(Face))
 	original := &Mesh{
 		n: topo.Mesh{
 			Vertices:    []r3.Vec{{}, {X: 1}, {Y: 1}},
