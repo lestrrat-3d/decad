@@ -1876,6 +1876,7 @@
 10	0.01	TestCopyRotationPrismMatchesPlacement
 10	21.79	TestCrossCylinderBoreMouthChamferVerified
 10	0.00	TestDocumentSweptBoxRefusals
+10	0.00	TestDirectLoftCircleHoleDoesNotClaimThroughCutTopology
 10	0.06	TestDraftCircleEndRimFilletVerified
 10	0.04	TestDraftCircleShellVerified
 10	0.01	TestDraftRetires
@@ -1888,6 +1889,7 @@
 10	0.07	TestExtrudeFreeformConvexityBothDirections
 10	0.10	TestExtrudeNGonPrismBoundsTighten
 10	0.01	TestExtrudeThroughAll
+10	0.00	TestExtrudedBoxThroughBoreCutPublishesCircularTopology
 10	0.01	TestExtrudeVertexReachesDenotedMergedRun
 10	0.00	TestFaceDistanceFromBoxCap
 10	0.40	TestFacetedBoxBoundIsA3DRadius
@@ -1906,6 +1908,7 @@
 10	3.31	TestLoftMirrorCylinderUnionJoinsRepeatedRadialTabs
 10	0.01	TestLoftMirrorUnionKeepsUnrelatedSourcesSeparate
 10	0.01	TestLoftSeamGates
+10	0.00	TestLoftThroughBoreCutPublishesCircularTopology
 10	1.04	TestLoftSectionsFourRoundedProfilesInterpolateNonAffineWidth
 10	0.02	TestLoftSectionsManyRectanglesRefuseUnprovedInputs
 10	0.00	TestLoopCoEdgesFollowDirectedBoundary

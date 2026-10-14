@@ -123,8 +123,10 @@ Rules:
   recorded segments lie on one exact line: parallel chords over the
   rationals that meet at one point, with no junction bound reaching off the
   line (`internal/boundarywalk`). A near-collinear kink keeps both faces, so
-  no merge drops a vertex the record has. No Loft wall triangle merges with
-  another face. This keeps
+  no merge drops a vertex the record has. Ordinary Loft wall triangles do not
+  merge with another face. A certified whole-circle through-Cut replaces only
+  its hole-wall triangles with one cylindrical face that retains their roles.
+  This keeps
   `side(i,j,0)`/`side(i,j,1)` distinct within a cell and preserves every
   cross-cell rung between coplanar Loft triangles. A full cylinder is one
   face with two circular-edge loops and no seam edge. v1 counts already match

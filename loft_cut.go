@@ -80,6 +80,11 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 	next := pl
 	next.profile0, next.profile1 = profile, profile
 	next.recordArea = [2]float64{ig.Area, ig.Area}
+	// A rounded frame lift may put the reconstructed upper circle a float
+	// step off its cap. Keep the existing tessellated Cut in that case.
+	next.analyticBore = pl.frame0.ToWorld(r3.NewVec(0, 0, end.Z)) == pl.frame1.Origin() &&
+		pl.frame0.ToWorld(r3.NewVec(hole.Center.U, hole.Center.V, end.Z)) ==
+			pl.frame1.ToWorldUV(hole.Center.U, hole.Center.V)
 	out, err := evalLoft(ctx, d, ref, next, budget, work0, work1)
 	if err != nil {
 		return nil, false, err
