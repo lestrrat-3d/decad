@@ -24,7 +24,7 @@ func Example_body_thicken_patch() {
 		return
 	}
 	doc := decad.New()
-	patch, err := doc.Patch(context.Background(), s, s.Profiles()[0])
+	patch, err := decad.PatchProfile(context.Background(), doc, s, s.Profiles()[0])
 	if err != nil {
 		fmt.Println(err)
 		return

@@ -966,7 +966,7 @@ func stitchedBoxForClearanceTest(t *testing.T) (doc *Document, box *Body) {
 	bs.Fix(brect.A)
 	_, err = bs.Solve(t.Context())
 	require.NoError(t, err)
-	bottom, err := doc.Patch(t.Context(), bs, bs.Profiles()[0])
+	bottom, err := PatchProfile(t.Context(), doc, bs, bs.Profiles()[0])
 	require.NoError(t, err)
 
 	topPlane, err := w.CreateOffsetPlane(w.XY(), 10)
@@ -977,7 +977,7 @@ func stitchedBoxForClearanceTest(t *testing.T) (doc *Document, box *Body) {
 	ts.Fix(trect.A)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	top, err := doc.Patch(t.Context(), ts, ts.Profiles()[0])
+	top, err := PatchProfile(t.Context(), doc, ts, ts.Profiles()[0])
 	require.NoError(t, err)
 
 	box, err = Stitch(t.Context(), walls, bottom, top)

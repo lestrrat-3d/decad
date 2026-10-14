@@ -703,7 +703,7 @@ func TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof(t *testin
 	s, p := offAxisPlateSketch(t)
 	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	capped, err := wall.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
+	capped, err := decad.PatchEdges(t.Context(), wall, decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
 	solid, err := decad.Stitch(t.Context(), capped)
 	require.NoError(t, err)

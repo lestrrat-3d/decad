@@ -262,7 +262,7 @@ func TestExtrudeVertexReachesDenotedCutEnds(t *testing.T) {
 				require.Equal(t, 2*junctions, bounded, `every junction publishes a bound on both caps`)
 				require.Equal(t, 2*junctions, shared, `every junction vertex meets both neighbours' ends`)
 
-				patch, err := doc.Patch(t.Context(), s, profile)
+				patch, err := decad.PatchProfile(t.Context(), doc, s, profile)
 				require.NoError(t, err)
 				bounded, _ = requireVerticesReachDenoted(t, patch, ends, inPlane)
 				require.Equal(t, junctions, bounded, `every patch junction publishes a bound`)

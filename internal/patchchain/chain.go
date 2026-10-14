@@ -1,4 +1,4 @@
-// Package patchchain holds the topology and exact plane checks for Body.Patch.
+// Package patchchain holds the topology and exact plane checks for PatchEdges.
 // Root adapters supply topology identities and curve records without importing
 // the public package into this internal package.
 package patchchain
@@ -25,7 +25,7 @@ func Partition[E comparable, V comparable](edges []EdgeRef[E, V], render func(V)
 	}
 	for v, n := range degree {
 		if n != 2 {
-			return nil, fmt.Errorf(`%w: Body.Patch selection is not exactly closed chains — a vertex at %s has degree %d over the selection, not 2 (docs/surface-design.md Table R row R5)`,
+			return nil, fmt.Errorf(`%w: PatchEdges selection is not exactly closed chains — a vertex at %s has degree %d over the selection, not 2 (docs/surface-design.md Table R row R5)`,
 				decaderr.ErrDegenerate, render(v), n)
 		}
 	}
@@ -66,7 +66,7 @@ func Partition[E comparable, V comparable](edges []EdgeRef[E, V], render func(V)
 				}
 			}
 			if !found {
-				return nil, fmt.Errorf(`%w: Body.Patch selection does not partition into closed chains (docs/surface-design.md Table R row R5)`, decaderr.ErrDegenerate)
+				return nil, fmt.Errorf(`%w: PatchEdges selection does not partition into closed chains (docs/surface-design.md Table R row R5)`, decaderr.ErrDegenerate)
 			}
 			visited[next] = true
 			chain = append(chain, next)

@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Body.Patch fills the two circular free rims of a surface-extruded tube.
+// PatchEdges fills the two circular free rims of a surface-extruded tube.
 // Its mesh shares the wall's chord stations with both new planar faces.
 func Example_bodyPatchCircularMesh() {
 	w := sketch.NewWorld()
@@ -32,7 +32,7 @@ func Example_bodyPatchCircularMesh() {
 		fmt.Println(err)
 		return
 	}
-	filled, err := tube.Patch(context.Background(), decad.Edges(decad.Free()).Exactly(2))
+	filled, err := decad.PatchEdges(context.Background(), tube, decad.Edges(decad.Free()).Exactly(2))
 	if err != nil {
 		fmt.Println(err)
 		return

@@ -59,7 +59,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 	}
 	faces := b.Faces()
 	if len(faces) != 1+len(pp.chains) || len(source.source) == 0 {
-		return nil, fmt.Errorf(`%w: a circular Body.Patch source has an incomplete face map`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: a circular PatchEdges source has an incomplete face map`, ErrUnsupported)
 	}
 	work := freeform.NewFreeformWork()
 	walks := prism.Walks
@@ -78,16 +78,16 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 	}
 	n := len(cl.Samples)
 	if n < 3 || len(source.n.Vertices) != 2*n {
-		return nil, fmt.Errorf(`%w: a circular Body.Patch source has no matching wall stations`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: a circular PatchEdges source has no matching wall stations`, ErrUnsupported)
 	}
 	capSag := proofbound.ProductUpper(cl.MaxSag, prism.LiftFactor())
 	if proofbound.IsNonFinite(capSag) {
-		return nil, fmt.Errorf(`%w: a circular Body.Patch source has no finite rim chording bound`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: a circular PatchEdges source has no finite rim chording bound`, ErrUnsupported)
 	}
 	for j, p := range cl.Samples {
 		if source.n.Vertices[2*j] != prism.Point(p.U, p.V, prism.Z0) ||
 			source.n.Vertices[2*j+1] != prism.Point(p.U, p.V, prism.Z1) {
-			return nil, fmt.Errorf(`%w: a circular Body.Patch source changed its wall stations`, ErrUnsupported)
+			return nil, fmt.Errorf(`%w: a circular PatchEdges source changed its wall stations`, ErrUnsupported)
 		}
 	}
 	loop := make([]int, n)
@@ -107,11 +107,11 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 	}
 	for i := range mesh.source {
 		if source.source[i] != pp.faces[0] {
-			return nil, fmt.Errorf(`%w: a circular Body.Patch source has multiple wall faces`, ErrUnsupported)
+			return nil, fmt.Errorf(`%w: a circular PatchEdges source has multiple wall faces`, ErrUnsupported)
 		}
 		mesh.source[i] = faces[0]
 	}
-	// A Body.Patch placement is applied once to the already placed source.
+	// A PatchEdges placement is applied once to the already placed source.
 	// Charge its exact linear stretch and its held point-rounding separately.
 	placementRound := 0.0
 	stretch := 0.0
@@ -141,7 +141,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 	mesh.n.CoordBound = proofbound.AbsSumUpper(proofbound.ProductUpper(source.n.CoordBound, lengthScale), placementRound)
 	wallBound, ok := source.sourceBound(pp.faces[0])
 	if !ok {
-		return nil, fmt.Errorf(`%w: a circular Body.Patch source states no wall bound`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: a circular PatchEdges source states no wall bound`, ErrUnsupported)
 	}
 	mesh.setFaceBound(faces[0], proofbound.AbsSumUpper(
 		proofbound.ProductUpper(wallBound, lengthScale), placementRound))
@@ -162,7 +162,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 			}
 		}
 		if ring < 0 || used[ring] {
-			return nil, fmt.Errorf(`%w: a circular Body.Patch rim has no unique wall station ring`, ErrUnsupported)
+			return nil, fmt.Errorf(`%w: a circular PatchEdges rim has no unique wall station ring`, ErrUnsupported)
 		}
 		used[ring] = true
 		face := faces[i+1]
@@ -178,7 +178,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		fillSense := tessellation.PatchEdgeSense(mesh.n.Triangles, byFace[face], a, z)
 		wallSense := tessellation.PatchEdgeSense(mesh.n.Triangles, byFace[faces[0]], a, z)
 		if fillSense == 0 || wallSense == 0 {
-			return nil, fmt.Errorf(`%w: a circular Body.Patch rim has no shared facet chord`, ErrUnsupported)
+			return nil, fmt.Errorf(`%w: a circular PatchEdges rim has no shared facet chord`, ErrUnsupported)
 		}
 		if fillSense == wallSense {
 			for ti := first; ti < len(mesh.n.Triangles); ti++ {
@@ -189,7 +189,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 			proofbound.ProductUpper(proofbound.AbsSumUpper(capSag, source.n.CoordBound,
 				prism.axialDelta()), lengthScale), placementRound, face.n.AxialDelta))
 	}
-	if err := tessellation.RequireCapBlendFacetAreas(mesh.n.Vertices, mesh.n.Triangles, "Body.Patch circular sheet"); err != nil {
+	if err := tessellation.RequireCapBlendFacetAreas(mesh.n.Vertices, mesh.n.Triangles, "PatchEdges circular sheet"); err != nil {
 		return nil, err
 	}
 	if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
@@ -200,7 +200,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, ctxErr
 			}
-			return nil, fmt.Errorf(`%w: a Body.Patch circular sheet's facets are not proven embedded: %s`, ErrUnsupported, err)
+			return nil, fmt.Errorf(`%w: a PatchEdges circular sheet's facets are not proven embedded: %s`, ErrUnsupported, err)
 		}
 	}
 	if verify < VerifyAll {
@@ -216,7 +216,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 			tessellation.FilletMeshAreaDeficit(mesh.n.Vertices, tris, face.n.Area, face.n.AreaBound))
 	}
 	if proofbound.IsNonFinite(mesh.n.AreaSlack) {
-		return nil, fmt.Errorf(`%w: a Body.Patch circular sheet states no finite area bound`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: a PatchEdges circular sheet states no finite area bound`, ErrUnsupported)
 	}
 	return mesh, nil
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Document.Patch builds a single planar face directly from a recorded
+// PatchProfile builds a single planar face directly from a recorded
 // profile, on the sketch plane's own frame (docs/surface-design.md §5.1). The
 // result is a one-face sheet body: Volume and Centroid answer ErrNotSolid,
 // while Area and Bounds answer over the one face.
@@ -29,7 +29,7 @@ func Example_decad_patch() {
 	}
 
 	doc := decad.New()
-	patch, err := doc.Patch(context.Background(), s, s.Profiles()[0])
+	patch, err := decad.PatchProfile(context.Background(), doc, s, s.Profiles()[0])
 	if err != nil {
 		fmt.Printf("failed to patch: %s\n", err)
 		return

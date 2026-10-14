@@ -781,7 +781,7 @@ func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutc
 // proven-simple prism or loft does, letting a clean stitched sheet read
 // ValidityValid instead of being permanently Suspect. A bodyPatchPayload
 // admits under Rule P (patch_body.go's bodyPatchPayloadProvesSimple,
-// docs/surface-design.md §6.4): Body.Patch itself proves only its own
+// docs/surface-design.md §6.4): PatchEdges itself proves only its own
 // chains simple in their own plane (gate 4, §5.2), never the whole
 // assembled boundary's non-self-intersection, but where its receiver itself
 // admits this same predicate, every new chain is a COMPLETE free-edge chain

@@ -305,7 +305,7 @@ the operation, with no `*Document` argument and no caller bookkeeping. Operands
 themselves are untouched: retiring is a change of *document* membership, not of
 the body, which stays immutable and readable. The rule is uniform — every
 operation that consumes a body (the booleans of §8, `Fillet` /
-`Chamfer` / `Shell`, the surface operations `Thicken` / `Body.Patch` /
+`Chamfer` / `Shell`, the surface operations `Thicken` / `PatchEdges` /
 `Stitch` / `Unstitch`, and `Transform`) retires its input body or
 bodies from the document and registers every body it returns. A retired body
 remains readable, but it is gone from `Document.Bodies()` and
@@ -749,7 +749,7 @@ components are not proven separate, rather than publish an unrecorded cavity.
 
 An operation is a package-level function. A query is a method. This section
 owns the rule; a companion design that writes an operation as a method
-(`func (b *Body) Patch(...)`, `func (d *Document) Loft(...)`) means the
+(`func (b *Body) ScaledAt(...)`, `func (d *Document) Loft(...)`) means the
 free function the table below names for it.
 
 **An operation is any call that builds a body, retires a body, or registers a
@@ -787,8 +787,6 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 
 | Shipped method form | Free function |
 |---|---|
-| `Body.Patch` | `PatchEdges(ctx, b, sel)` |
-| `Document.Patch` | `PatchProfile(ctx, doc, s, p)`, so the two patch forms stop sharing one name |
 | `Body.ScaledAt` | `ScaledAt(ctx, b, anchor, factor)` |
 | `Body.Mirrored`, `Body.MirroredCopy` | `Mirrored(ctx, b, plane, opts...)`, `MirroredCopy(ctx, b, plane)` |
 | `Body.Patterned`, `Body.PatternCopies` | `Patterned(ctx, b, spec)`, `PatternCopies(ctx, b, spec)` |
@@ -934,7 +932,7 @@ before extruding. decad never re-derives it.
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
 Fillet, Chamfer, Shell, Transform, ScaledAt, Copy, Loft, LoftSections, LoftFromPoint, Sweep, Coil,
-Patch, Stitch, Unstitch, Thicken**, plus the sweeps of an OPEN sketch curve —
+PatchProfile, PatchEdges, Stitch, Unstitch, Thicken**, plus the sweeps of an OPEN sketch curve —
 **LoftChain**, and **Extrude**, **Sweep** and **Revolve** given a
 `*sketch.Chain` — which take a `*sketch.Chain` where their siblings take a
 `*sketch.Profile` and always build a sheet.
@@ -951,7 +949,7 @@ an exact world point to one recorded Sketch profile. `docs/sweep-design.md` owns
 signature, spatial `Path`, frame transport, refusals, and staged reach.
 `docs/helix-design.md` owns `Coil`'s signature, its axis and its extent in
 turns.
-`docs/surface-design.md` owns `Patch`, `Stitch`, `Unstitch` and `Thicken`,
+`docs/surface-design.md` owns `PatchProfile`, `PatchEdges`, `Stitch`, `Unstitch` and `Thicken`,
 together with `WithSurfaceResult()`, the option that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
 sheet instead of closing it into a solid, and the chain-fed forms that
@@ -1314,8 +1312,8 @@ type SurfaceResultOption interface {
 
 func WithSurfaceResult() SurfaceResultOption
 
-func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
-func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
+func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
+func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error)
 
 func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
 func Unstitch(ctx context.Context, b *Body) ([]*Body, error)
@@ -1333,8 +1331,8 @@ func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.
 `ThickenCentered`; `docs/surface-design.md` §16 owns the receiver and proof
 limits. `WithSurfaceResult()` omits the faces that exist only to close the
 solid and changes nothing else — a wall keeps its surface, its role and every bound.
-`Document.Patch` builds a planar face from a recorded profile and consumes
-nothing; `Body.Patch` fills a closed chain of the receiver's free edges and
+`PatchProfile` builds a planar face from a recorded profile and consumes
+nothing; `PatchEdges` fills a closed chain of the body's free edges and
 retires it. `Stitch` retires every operand and `Unstitch` its operand, on §6's
 uniform terms, and neither takes a `*Document` because a `*Body` carries its
 own. `Stitch` closes an existing face assembly; `Thicken` builds a new skin
@@ -1352,7 +1350,7 @@ two exactly-parallel walks, and each refuses the rest at the call with
 `ErrUnsupported`. All four run §7's four gates over
 the internal chain recording path and return the same four sentinels a profile
 earns, and there is
-no chain-fed `Document.Patch`: an open walk encloses no region to fill, and a
+no chain-fed `PatchProfile`: an open walk encloses no region to fill, and a
 walk whose ends met is a `sketch.Profile`.
 
 Transform is a body operation on the same terms: it retires the input and

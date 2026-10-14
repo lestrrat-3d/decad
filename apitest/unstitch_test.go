@@ -168,20 +168,20 @@ func TestUnstitchRestitchRoundTripMatchesOriginal(t *testing.T) {
 // BOUNDED body, not only an exact one — TestUnstitchRestitchRoundTripMatchesOriginal
 // already covers the exact case. A Symmetric surface-extruded wall on an
 // off-axis, non-origin plane (offAxisPlateSketch) has both rims bounded;
-// Body.Patch caps both, and a single-operand Stitch closes the result to a
+// PatchEdges caps both, and a single-operand Stitch closes the result to a
 // BodySolid (docs/surface-design.md §15's T42, stitch_test.go). Unstitching
 // that solid frees every edge, INCLUDING the bounded rim edges Table J's J5
 // could never admit on bit-identity alone — the round trip closes again only
-// because each unstitched copy still carries the ORIGINAL curveID Body.Patch's
+// because each unstitched copy still carries the ORIGINAL curveID PatchEdges's
 // own rim edges minted, so the second Stitch's certificate route re-admits
-// exactly the same pairs the first Body.Patch call already proved coincident.
+// exactly the same pairs the first PatchEdges call already proved coincident.
 func TestUnstitchRestitchRoundTripClosesABoundedBox(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := offAxisPlateSketch(t)
 	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	capped, err := wall.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
+	capped, err := decad.PatchEdges(t.Context(), wall, decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
 	solid, err := decad.Stitch(t.Context(), capped)
 	require.NoError(t, err)

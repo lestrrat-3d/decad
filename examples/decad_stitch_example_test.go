@@ -57,12 +57,12 @@ func Example_decad_stitch() {
 		fmt.Printf("failed to extrude the walls: %s\n", err)
 		return
 	}
-	bottom, err := doc.Patch(context.Background(), s, prof)
+	bottom, err := decad.PatchProfile(context.Background(), doc, s, prof)
 	if err != nil {
 		fmt.Printf("failed to patch the bottom: %s\n", err)
 		return
 	}
-	topPatch, err := doc.Patch(context.Background(), ts, ts.Profiles()[0])
+	topPatch, err := decad.PatchProfile(context.Background(), doc, ts, ts.Profiles()[0])
 	if err != nil {
 		fmt.Printf("failed to patch the top: %s\n", err)
 		return

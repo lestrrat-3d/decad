@@ -58,7 +58,7 @@ import (
 //   - the chain revolve's latitude curve bound and the revolve's cap-arc
 //     curve bound: the revolve latitude and cap circle patches refused with
 //     R46. A revolve junction arc and a cap blend's arcs carry vertex bounds
-//     Body.Patch refuses first (R6), so TestCurveBoundsCoverMappedReference
+//     PatchEdges refuses first (R6), so TestCurveBoundsCoverMappedReference
 //     checks their curve bounds directly;
 //   - the endpoint-support arm of compositesweep's adjacent-span audit: the rotated
 //     composite sweep refused as "not certified on opposite sides".
@@ -421,7 +421,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			pl, err := w.CreatePlaneFromFrame(f)
 			require.NoError(t, err)
 			s, p := fdSketch(t, w, pl, fdRect)
-			return New().Patch(t.Context(), s, p)
+			return PatchProfile(t.Context(), New(), s, p)
 		}},
 		{name: "chain extrude", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			w := sketch.NewWorld()
@@ -450,7 +450,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			return parts[0], nil
 		}},
 		{name: "body patch", build: func(t *testing.T, f r3.Frame) (*Body, error) {
-			return fdExtrude(t, f, WithSurfaceResult()).Patch(t.Context(), Edges(Free()))
+			return PatchEdges(t.Context(), fdExtrude(t, f, WithSurfaceResult()), Edges(Free()))
 		}},
 		{name: "line sweep", xyOnly: true, build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			w := sketch.NewWorld()
@@ -469,20 +469,20 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 		// past the fitted frame's own stretch of the area.
 		{name: "thin body patch", build: func(t *testing.T, f r3.Frame) (*Body, error) {
 			thin := [][2]float64{{0, 0}, {100, 0}, {100, 1.0 / 128}, {0, 1.0 / 128}}
-			return fdExtrudeLoop(t, f, thin, WithSurfaceResult()).Patch(t.Context(), Edges(Free()))
+			return PatchEdges(t.Context(), fdExtrudeLoop(t, f, thin, WithSurfaceResult()), Edges(Free()))
 		}},
 		// A long thin slot: its rim mixes straight flanks with semicircular
 		// caps, so its fitted face's area is bounded edge by edge against
 		// the curves its rim denotes.
 		{name: "thin slot body patch", build: func(t *testing.T, f r3.Frame) (*Body, error) {
-			return fdSlotSheet(t, f, 100, 1.0/128).Patch(t.Context(), Edges(Free()))
+			return PatchEdges(t.Context(), fdSlotSheet(t, f, 100, 1.0/128), Edges(Free()))
 		}},
 		// A revolve's latitude circle: a radial line swept a full turn about
 		// the sketch's U axis into a disk whose one free edge it is. On a
-		// tilted plane the rim's vertices carry bounds, which Body.Patch
+		// tilted plane the rim's vertices carry bounds, which PatchEdges
 		// refuses (R6), so only the placed copy runs.
 		{name: "revolve latitude patch", xyOnly: true, exactCross: true, build: func(t *testing.T, f r3.Frame) (*Body, error) {
-			return fdRadialChainSheet(t, f, FullRevolution{}).Patch(t.Context(), Edges(Free()))
+			return PatchEdges(t.Context(), fdRadialChainSheet(t, f, FullRevolution{}), Edges(Free()))
 		}},
 		// A revolve's cap arc: a circle swept a quarter turn as a sheet; its
 		// start cap copy, at the exact angle zero, is patched.
@@ -499,7 +499,7 @@ func TestPlaneMapReadingsCoverFrameDefect(t *testing.T) {
 			require.NoError(t, err)
 			b, err := Revolve(t.Context(), New(), s, s.Profiles()[0], fdAxisU, AngleExtent{A: units.Degrees(90), Dir: Along}, WithSurfaceResult())
 			require.NoError(t, err)
-			return b.Patch(t.Context(), Edges(Free(), EndpointAt(r3.NewVec(1, 3, 0))))
+			return PatchEdges(t.Context(), b, Edges(Free(), EndpointAt(r3.NewVec(1, 3, 0))))
 		}},
 		{name: "class B drill", xyOnly: true, build: func(t *testing.T, _ r3.Frame) (*Body, error) {
 			w := sketch.NewWorld()
@@ -747,7 +747,7 @@ func fdCircleGap(p, center, axis fdVec, radius *big.Float) *big.Float {
 // reference's own bound κ₀ of a point the reference denotes, whose image Φ
 // denotes, so Φ(q) lies within κ₁ + (1 + e)·κ₀ of the held circle, e the
 // orthonormality defect of B·L. Most of these rims carry vertex bounds that
-// Body.Patch refuses (R6), so the bound is checked here directly.
+// PatchEdges refuses (R6), so the bound is checked here directly.
 //
 // Shown to fail: before the revolve and cap-blend builds stamped a curve
 // bound, every revolve latitude circle, junction arc and cap arc and every

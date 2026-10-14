@@ -163,7 +163,7 @@ Rules:
   `boundarywalk.DenotedStartBound` and `DenotedEndBound`). Every such use
   holds the same reference coordinates, so the largest of them reaches both
   neighbours' denoted ends, an arc's natural `t = 1` end included.
-  `Body.Patch` admits a rim with such a vertex only through its level-token
+  `PatchEdges` admits a rim with such a vertex only through its level-token
   arm, which a straight prism build stamps (`docs/surface-design.md` §5.2,
   Table R row R6).
 - **Every loop exposes its stored direction.** `Loop.CoEdges()` returns copied
@@ -465,8 +465,8 @@ body's and every face's `Area` and every edge's `Length` by e·(|x| + bound)
 the draft, the cap blend, the stacked prism (and the cup built on it) and the
 class-B brep take it as their last step; a brep's face frames are signed
 permutations of its first, so the first face's map stands for all. A face copy
-(`Unstitch`, `Body.Patch`) carries its source's readings through its
-placement alone and takes the placement's own charge; a `Body.Patch` face
+(`Unstitch`, `PatchEdges`) carries its source's readings through its
+placement alone and takes the placement's own charge; a `PatchEdges` face
 fitted to a rim takes its fitted frame's, and one fitted to a straight-edged
 rim instead bounds its area directly against the polygon its own vertices
 denote (`patchchain.PolygonAreaBound`), and one with a circular edge edge by edge
@@ -1407,8 +1407,8 @@ question reads `Suspect`.
 
 Sheet bodies and the surface operations follow `docs/surface-design.md` §14's
 count-free three-increment plan: the body kind with `WithSurfaceResult()` on
-Extrude and Revolve and `Document.Patch`; then `Stitch`/`Unstitch` over exact
-all-planar boundaries with `Body.Patch` and the sheet-against-solid pair
+Extrude and Revolve and `PatchProfile`; then `Stitch`/`Unstitch` over exact
+all-planar boundaries with `PatchEdges` and the sheet-against-solid pair
 proofs; then the remaining surface-result features, the shared-denotation join
 certificate and curved closure. An unlanded surface build returns
 `ErrUnsupported`; an unlanded pair question reads `Suspect`. These stages do
