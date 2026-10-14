@@ -127,17 +127,36 @@ type NearContacts struct {
 // reports a coplanar face-on-face overlap, which FacesNearMiss leaves to the
 // mesh pass's own refusal.
 func GatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo) (NearContacts, bool, error) {
+	return gatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo, NearContactRunner(), ContactBatchSize)
+}
+
+// gatherNearContacts is GatherNearContacts with the batch runner and the batch
+// size as parameters, so tests can observe batches and cancel between them.
+// The gate uses ContactBatchSize: the batch size fixes where ctx.Err is polled
+// relative to each read, and the poll schedule is the one the gate always had.
+// run must fill Measured and Dist as NearContactRunner does.
+func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo, run ContactBatchRunner, limit int) (NearContacts, bool, error) {
 	var nc NearContacts
 	seenA := map[int]bool{}
 	seenB := map[int]bool{}
 	work := 0
-	contacts := NewContactBatchExecutor(ctx, bmA, bmB, memo, ContactWorkers(ctx), func(pair ContactPair, c TriContact) error {
+	contacts := NewContactBatchExecutor(ctx, bmA, bmB, memo, ContactWorkers(ctx), nil)
+	contacts.Run = run
+	contacts.Limit = limit
+	contacts.ConsumeResult = func(pair ContactPair, r ContactBatchResult) error {
 		i, j := pair.I, pair.J
+		c := r.Contact
 		if c.Kind == ContactRegion {
 			return ErrContactBatchStop
 		}
-		if c.Kind == ContactNone && TriTriDistance(TriCorners(bmA, i), TriCorners(bmB, j)) > slack {
-			return nil
+		if c.Kind == ContactNone {
+			dist := r.Dist
+			if !r.Measured { // a memo hit: no worker measured it
+				dist = TriTriDistance(TriCorners(bmA, i), TriCorners(bmB, j))
+			}
+			if dist > slack {
+				return nil
+			}
 		}
 		if c.Kind == ContactSegment {
 			nc.Spans = append(nc.Spans, ContactSpan{I: i, J: j, P0: c.P0, P1: c.P1})
@@ -151,7 +170,7 @@ func GatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 			nc.CloseB = append(nc.CloseB, j)
 		}
 		return nil
-	})
+	}
 	// A face pair usually queues few contacts, so keep its initial buffers
 	// small without changing when the ordered batch is flushed.
 	contacts.initialCapacity = contactBatchInitialCapacity
