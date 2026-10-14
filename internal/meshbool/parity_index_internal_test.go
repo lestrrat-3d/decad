@@ -235,8 +235,11 @@ func TestParityIndexListsEveryFacetThatMatters(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(0x31d7, 0x0c55))
 	for _, fx := range parityIndexFixtures() {
+		// Queries are drawn in fixture order from the one source, so the
+		// subtests can run in parallel on identical inputs.
+		queries := parityIndexQueries(rng, fx)
 		t.Run(fx.name, func(t *testing.T) {
-			queries := parityIndexQueries(rng, fx)
+			t.Parallel()
 			pruned, mattered := 0, 0
 			for _, ray := range AxisRays {
 				pm := NewParityMesh(fx.verts, fx.tris)
@@ -318,14 +321,16 @@ func TestParityIndexMatchesTheUnindexedScan(t *testing.T) {
 	ctx := t.Context()
 	rng := rand.New(rand.NewPCG(0x77a3, 0x1f09))
 	for _, fx := range parityIndexFixtures() {
+		queries := parityIndexQueries(rng, fx)
 		t.Run(fx.name, func(t *testing.T) {
+			t.Parallel()
 			all := parityAllFacets(len(fx.tris))
 			indexed := NewParityMesh(fx.verts, fx.tris)
 			filtered := NewParityMesh(fx.verts, fx.tris)
 			plain := NewParityMesh(fx.verts, fx.tris)
 			plain.Unfiltered = true
 			kinds := map[parityAnswer]int{}
-			for qi, p := range parityIndexQueries(rng, fx) {
+			for qi, p := range queries {
 				want := answerOf(MeshParityPreparedContext(ctx, p, plain, all))
 				require.Equal(t, want, answerOf(MeshParityPreparedContext(ctx, p, filtered, all)), `query %d`, qi)
 				require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, indexed)), `query %d`, qi)
