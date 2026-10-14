@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -272,14 +273,27 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	if err != nil || !certified {
 		return nil, nil, err
 	}
-	next := *original
-	next.n.Vertices = make([]r3.Vec, 0, len(original.n.Vertices))
-	next.n.VertexBound = make([]float64, 0, len(original.n.Vertices))
-	next.n.VolSymDiff, next.n.AreaSlack = 0, 0
 	placedParts, err := meta.copies.placedProxyShells(ctx, proxy)
 	if err != nil {
 		return nil, nil, err
 	}
+	next, err := spiralCombinedProxyMesh(original, placedParts)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := massmoment.AuditMesh(ctx, next.n.Vertices, next.n.Triangles, true); err != nil {
+		return nil, nil, err
+	}
+	return next, meta, nil
+}
+
+// spiralCombinedProxyMesh copies the combined operand's mesh and gives its
+// restated face bounds a private map before writing any entries.
+func spiralCombinedProxyMesh(original *Mesh, placedParts []facetproof.PlacedMesh) (*Mesh, error) {
+	next := *original
+	next.n.Vertices = make([]r3.Vec, 0, len(original.n.Vertices))
+	next.n.VertexBound = make([]float64, 0, len(original.n.Vertices))
+	next.n.VolSymDiff, next.n.AreaSlack = 0, 0
 	for _, placed := range placedParts {
 		next.n.Vertices = append(next.n.Vertices, placed.Verts...)
 		next.n.VertexBound = append(next.n.VertexBound, placed.VertexBound...)
@@ -288,16 +302,13 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	}
 	if len(next.n.Vertices) != len(original.n.Vertices) || len(next.n.VertexBound) != len(next.n.Vertices) ||
 		proofbound.IsNonFinite(next.n.VolSymDiff) || proofbound.IsNonFinite(next.n.AreaSlack) {
-		return nil, nil, fmt.Errorf("%w: combined spiral proxy has no complete bound", ErrUnsupported)
+		return nil, fmt.Errorf("%w: combined spiral proxy has no complete bound", ErrUnsupported)
 	}
 	next.faceBound = nil
 	next.n.Bound = 0
 	next.setVertexBounds(next.n.VertexBound)
 	next.n.CoordBound = max(next.n.CoordBound, next.n.Bound)
-	if err := massmoment.AuditMesh(ctx, next.n.Vertices, next.n.Triangles, true); err != nil {
-		return nil, nil, err
-	}
-	return &next, meta, nil
+	return &next, nil
 }
 
 func spiralCombineBody(ctx context.Context, d *Document, ref producerID,
