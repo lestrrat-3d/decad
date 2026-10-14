@@ -420,6 +420,12 @@ Cut's local `boreBound` correspondence and exact outer-band separation.
 The source-circle proof depends only on the immutable tooth and blank radius.
 The middle-side audit retains each successful proof for later facets of that
 tooth; every facet still runs its own wall, height, and inward-patch checks.
+It also keeps, per tooth, the z interval spanned by the height slabs whose
+clipped held root triangles it has proved inside the blank disk, adding a slab
+only when it overlaps that interval. A later slab inside the interval needs no
+new clip: each clipped part is a subset of the parts already proved inside the
+disk. A gap between proved slabs is never covered, so a slab spanning it runs
+the exact clip.
 An outward-rounded box gap can omit a held wall triangle only when it strictly
 exceeds that tooth's matched Loft departure; all remaining pairs use the exact
 triangle clearance check.
