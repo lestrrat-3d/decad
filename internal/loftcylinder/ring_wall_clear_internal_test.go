@@ -273,3 +273,67 @@ func TestRingWallClearMatchesLegacyOnRandomRings(t *testing.T) {
 	require.Positive(t, passed)
 	require.Positive(t, minimums)
 }
+
+// mutatingContext runs hook on every Err call, as a context that edits the
+// caller's wall list while the poll runs.
+//
+//nolint:containedctx // test double that wraps a context to override Err
+type mutatingContext struct {
+	context.Context
+	hook func()
+}
+
+func (c mutatingContext) Err() error {
+	c.hook()
+	return nil
+}
+
+func TestRingWallClearReadsWallBeforePoll(t *testing.T) {
+	a := RingVertex(r3.Vec{X: 0, Y: 0, Z: 1})
+	b := RingVertex(r3.Vec{X: 0, Y: 0, Z: -1})
+	bound2 := big.NewRat(1, 4)
+	far := newTestRingWall([3]r3.Vec{{X: 5, Y: 0, Z: 0}, {X: 6, Y: 0, Z: 0}, {X: 5, Y: 1, Z: 0}}, 10)
+	touching := newTestRingWall([3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 1, Y: 0, Z: 0}, {X: 0, Y: 1, Z: 0}}, 10)
+	elsewhere := newTestRingWall([3]r3.Vec{{X: 40, Y: 40, Z: 40}, {X: 41, Y: 40, Z: 40}, {X: 40, Y: 41, Z: 40}}, 0.5)
+	build := func() []RingWall {
+		walls := make([]RingWall, 300)
+		for i := range walls {
+			walls[i] = far
+		}
+		walls[299] = elsewhere
+		return walls
+	}
+	box := RingEdgeBox(a, b)
+	// The 256th candidate is walls[255], where the poll fires first.
+	for name, mutate := range map[string]func(walls []RingWall){
+		"next candidate":    func(walls []RingWall) { walls[256].Points = touching.Points },
+		"current wall":      func(walls []RingWall) { walls[255].Points = touching.Points },
+		"earlier candidate": func(walls []RingWall) { walls[3].Points = touching.Points },
+		"non candidate":     func(walls []RingWall) { walls[299].Points = touching.Points },
+		"non candidate box": func(walls []RingWall) { walls[299].Box = far.Box },
+		"next candidate box": func(walls []RingWall) {
+			walls[256].Box = elsewhere.Box
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			oldWalls, newWalls := build(), build()
+			var oldRes, newRes RingOccupancy
+			oldErr := legacyRingWallClear(mutatingContext{t.Context(), func() { mutate(oldWalls) }},
+				a, b, box, bound2, oldWalls, &oldRes)
+			newErr := RingWallClear(mutatingContext{t.Context(), func() { mutate(newWalls) }},
+				a, b, box, bound2, newWalls, &newRes)
+			if oldErr == nil {
+				require.NoError(t, newErr)
+			} else {
+				require.EqualError(t, newErr, oldErr.Error())
+			}
+			require.Equal(t, oldRes.Candidates, newRes.Candidates)
+			if oldRes.MinimumClearance2 == nil {
+				require.Nil(t, newRes.MinimumClearance2)
+			} else {
+				require.NotNil(t, newRes.MinimumClearance2)
+				require.Zero(t, oldRes.MinimumClearance2.Cmp(newRes.MinimumClearance2))
+			}
+		})
+	}
+}
