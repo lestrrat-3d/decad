@@ -128,6 +128,7 @@ func TestRatSquareCmpMatchesBigRatSquare(t *testing.T) {
 	for i, f := range squareCmpFloats(rng, 4000) {
 		for _, q := range squareCmpRats(rng, f, i) {
 			cases++
+			snap := snapshotRat(q)
 			require.Equal(t, oldRatSquareAtMost(f, q), RatSquareAtMost(f, q), "atmost %v %v", f, q)
 			require.Equal(t, oldRatSquareEquals(f, q), RatSquareEquals(f, q), "equals %v %v", f, q)
 			if sq := proofarith.FloatRat(f); sq != nil {
@@ -139,6 +140,7 @@ func TestRatSquareCmpMatchesBigRatSquare(t *testing.T) {
 				_, ok := ratSquareCmp(f, q)
 				require.False(t, ok, "non-finite %v", f)
 			}
+			snap.requireUnchanged(t, q)
 		}
 	}
 	require.Greater(t, cases, 20000)
@@ -158,9 +160,13 @@ func TestRatSqrtUpMatchesOldWalk(t *testing.T) {
 		qs = append(qs, squareCmpRats(rng, f, i)...)
 	}
 	for _, q := range qs {
-		want, got := oldRatSqrtUp(q), RatSqrtUp(q)
+		want := oldRatSqrtUp(q)
+		snap := snapshotRat(q)
+		got := RatSqrtUp(q)
 		require.Equal(t, math.Float64bits(want), math.Float64bits(got), "up %v", q)
-		require.Equal(t, math.Float64bits(oldRatSqrtDown(q)), math.Float64bits(RatSqrtDown(q)), "down %v", q)
+		down := RatSqrtDown(q)
+		snap.requireUnchanged(t, q)
+		require.Equal(t, math.Float64bits(oldRatSqrtDown(q)), math.Float64bits(down), "down %v", q)
 		if q.Sign() <= 0 {
 			require.Zero(t, got, "non-positive %v", q)
 			continue
@@ -180,4 +186,18 @@ func TestRatSqrtUpMatchesOldWalk(t *testing.T) {
 			require.Less(t, prev.Cmp(q), 0, "previous candidate of %v is not below %v", got, q)
 		}
 	}
+}
+
+// ratSnapshot holds copies of a big.Rat's numerator and denominator, so a
+// later call that rewrote the argument in place is caught.
+type ratSnapshot struct{ num, denom *big.Int }
+
+func snapshotRat(q *big.Rat) ratSnapshot {
+	return ratSnapshot{num: new(big.Int).Set(q.Num()), denom: new(big.Int).Set(q.Denom())}
+}
+
+func (s ratSnapshot) requireUnchanged(t *testing.T, q *big.Rat) {
+	t.Helper()
+	require.Zero(t, s.num.Cmp(q.Num()), "numerator of the argument changed: was %v, now %v", s.num, q.Num())
+	require.Zero(t, s.denom.Cmp(q.Denom()), "denominator of the argument changed: was %v, now %v", s.denom, q.Denom())
 }
