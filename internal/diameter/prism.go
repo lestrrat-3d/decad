@@ -22,7 +22,16 @@ import (
 // whose gap the proof cannot state. Cancellation through budget returns the
 // error.
 func PrismStationWitnesses(budget *proofbound.WorkBudget, pp prismrecord.Payload, work *freeform.FreeformWork) ([]r3.Vec, float64, bool, error) {
-	stations, ok, err := SectionStations(budget, append([]sectionrecord.LoopRecord{pp.Profile.Outer}, pp.Profile.Holes...), work)
+	return PrismStationWitnessesMemo(budget, pp, work, nil)
+}
+
+// PrismStationWitnessesMemo is PrismStationWitnesses reading the section's
+// stations through memo, which a call shares across the prisms that place one
+// profile. A nil memo reads them fresh. The stations are plane-local, so the
+// placement never enters the memo's key; the lift is read fresh every time.
+func PrismStationWitnessesMemo(budget *proofbound.WorkBudget, pp prismrecord.Payload, work *freeform.FreeformWork,
+	memo *StationMemo) ([]r3.Vec, float64, bool, error) {
+	stations, ok, err := memo.SectionStations(budget, append([]sectionrecord.LoopRecord{pp.Profile.Outer}, pp.Profile.Holes...), work)
 	if err != nil || !ok {
 		return nil, 0, false, err
 	}

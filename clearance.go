@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/diameter"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -74,6 +75,9 @@ type pairKernel struct {
 	// clearanceRefused records a finite-input arithmetic range failure. The
 	// cell walk may continue finding overlap, but it cannot certify a gap.
 	clearanceRefused bool
+	// cache is the call's bodyGeomCache, which pairDiameter reads each
+	// body's gate points through. It is nil when the pair has no call.
+	cache *bodyGeomCache
 }
 
 func (k *pairKernel) oracle() clearance.Oracle {
@@ -89,11 +93,69 @@ func (k *pairKernel) oracle() clearance.Oracle {
 type bodyGeomCache struct {
 	mu      sync.Mutex
 	entries map[*Body]bodyGeomCacheEntry
+	// stations keeps the section stations of the profiles this call reads
+	// (diameter.StationMemo). It lives and dies with the cache.
+	stations diameter.StationMemo
 }
 
 type bodyGeomCacheEntry struct {
 	geom *bodyGeom
 	ok   bool
+	// gate is the body's gate points once read (gatePoints). It sits in the
+	// entry so evicting the body's entry drops it with the carrier model.
+	gate *gateReading
+}
+
+// gateReading is one body's bodyGatePoints answer.
+type gateReading struct {
+	points gatePoints
+	ok     bool
+}
+
+// gatePoints is bodyGatePoints read once per body per call: a body's
+// gate points depend on its payload alone, which a call never changes.
+// A reading is stored only in the body's existing entry, so it lives
+// and is evicted with the body's carrier model; a body with no entry
+// is read without storing. The budget's context is checked before a stored
+// reading is returned and, under the lock, before a reading is stored or a
+// concurrent winner returned, so a cancelled call neither stores nor returns a
+// reading. The
+// returned points are shared between hits and must not be modified.
+func (cache *bodyGeomCache) gatePoints(ctx context.Context, budget *proofbound.WorkBudget,
+	body *Body) (gatePoints, bool, error) {
+	if cache == nil {
+		return bodyGatePoints(ctx, budget, body, nil)
+	}
+	cache.mu.Lock()
+	entry, found := cache.entries[body]
+	cache.mu.Unlock()
+	if found && entry.gate != nil {
+		if err := budget.Err(); err != nil {
+			return gatePoints{}, false, err
+		}
+		return entry.gate.points, entry.gate.ok, nil
+	}
+	points, ok, err := bodyGatePoints(ctx, budget, body, &cache.stations)
+	if err != nil {
+		return gatePoints{}, false, err
+	}
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	// A reading is stored and returned only while the budget is live: a
+	// short read polls the context too rarely to have noticed a cancel.
+	if err := budget.Err(); err != nil {
+		return gatePoints{}, false, err
+	}
+	entry, found = cache.entries[body]
+	if !found {
+		return points, ok, nil
+	}
+	if entry.gate != nil {
+		return entry.gate.points, entry.gate.ok, nil
+	}
+	entry.gate = &gateReading{points: points, ok: ok}
+	cache.entries[body] = entry
+	return points, ok, nil
 }
 
 func (cache *bodyGeomCache) get(budget *proofbound.WorkBudget, body *Body) (*bodyGeom, bool, error) {
@@ -202,6 +264,7 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 		return pairResult{}, nil
 	}
 	k := newPairKernel(ctx, ga, gb)
+	k.cache = cache
 	diam, err := k.pairDiameter()
 	if err != nil {
 		return pairResult{}, err
@@ -419,7 +482,7 @@ func (k *pairKernel) nestingRelation() (pairVerdict, *Body, error) {
 // reading may understate the true diameter, which only lowers the noise
 // floor: the safe direction.
 func (k *pairKernel) pairDiameter() (float64, error) {
-	return pairGateDiameter(k.ctx, k.a.body, k.b.body)
+	return pairGateDiameterCached(k.ctx, k.a.body, k.b.body, k.cache)
 }
 
 // sheetSolidVerdict is docs/surface-design.md §9.3's pair decision procedure's
@@ -515,6 +578,7 @@ func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, c
 		return sheetSolidResult{verdict: sheetSolidUndecided}, nil
 	}
 	k := newPairKernel(ctx, gs, gb)
+	k.cache = cache
 	diam, err := k.pairDiameter()
 	if err != nil {
 		return sheetSolidResult{}, err
