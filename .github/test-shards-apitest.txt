@@ -2065,4 +2065,6 @@
 10	0.00	TestSectionRuledNonplanarWallsKeepDiagonalKinks
 10	0.00	TestSectionRuledLoftWithChangingHoleFeedsExtrude
 10	0.00	TestSectionRuledLoftRefusesNonexactCrossing
-10	0.00	TestSectionRuledLoftRefusesRoundedWorldPoint
+10	0.00	TestSectionRuledLoftRefusesShiftedCutOrigin
+10	0.00	TestSectionRuledLoftRefusesNonzeroAlignment
+10	0.00	TestSectionRuledLoftRefusesDisplacedVertices

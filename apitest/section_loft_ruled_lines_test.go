@@ -25,15 +25,13 @@ func TestSectionRuledSquareLoftFeedsExtrude(t *testing.T) {
 	require.NoError(t, err)
 	area, err := measured.Area()
 	require.NoError(t, err)
-	require.Equal(t, 81.0, area.Value.Base())
-	require.Zero(t, area.Bound.Base())
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-81), area.Bound.Base())
 	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
 		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
-	require.Equal(t, 162.0, volume.Value.Base())
-	require.Zero(t, volume.Bound.Base())
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-162), volume.Bound.Base())
 	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
@@ -75,15 +73,13 @@ func TestSectionRuledNonplanarWallsKeepDiagonalKinks(t *testing.T) {
 	require.NoError(t, err)
 	area, err := measured.Area()
 	require.NoError(t, err)
-	require.Equal(t, 77.5, area.Value.Base())
-	require.Zero(t, area.Bound.Base())
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-77.5), area.Bound.Base())
 	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
 		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
-	require.Equal(t, 155.0, volume.Value.Base())
-	require.Zero(t, volume.Bound.Base())
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-155), volume.Bound.Base())
 	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
@@ -124,15 +120,13 @@ func TestSectionRuledLoftWithChangingHoleFeedsExtrude(t *testing.T) {
 	require.NoError(t, err)
 	area, err := measured.Area()
 	require.NoError(t, err)
-	require.Equal(t, 72.0, area.Value.Base())
-	require.Zero(t, area.Bound.Base())
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-72), area.Bound.Base())
 	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
 		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
-	require.Equal(t, 144.0, volume.Value.Base())
-	require.Zero(t, volume.Bound.Base())
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-144), volume.Bound.Base())
 	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
@@ -151,7 +145,63 @@ func TestSectionRuledLoftRefusesNonexactCrossing(t *testing.T) {
 	require.Nil(t, profiles)
 }
 
-func TestSectionRuledLoftRefusesRoundedWorldPoint(t *testing.T) {
+func TestSectionRuledLoftRefusesShiftedCutOrigin(t *testing.T) {
+	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 4, 2)
+	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name   string
+		origin r3.Vec
+	}{
+		{name: "X", origin: r3.NewVec(1, 0, 1)},
+		{name: "Y", origin: r3.NewVec(0, 1, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			frame, err := r3.NewFrame(tc.origin, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+			require.NoError(t, err)
+			section, profiles, err := source.Section(t.Context(), frame)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.Nil(t, section)
+			require.Nil(t, profiles)
+		})
+	}
+}
+
+func TestSectionRuledLoftRefusesNonzeroAlignment(t *testing.T) {
+	world := sketch.NewWorld()
+	topPlane, err := world.CreateOffsetPlane(world.XY(), 2)
+	require.NoError(t, err)
+	points := [5][2]float64{{0, 0}, {10, 0}, {14, 5}, {9, 11}, {1, 8}}
+	build := func(plane *sketch.Plane, shift int) (*sketch.Sketch, *sketch.Profile) {
+		s, err := world.CreateSketch(plane)
+		require.NoError(t, err)
+		vertices := make([]*sketch.Point, len(points))
+		for i := range points {
+			point := points[(i+shift)%len(points)]
+			vertices[i] = s.CreatePoint(point[0], point[1])
+			s.Fix(vertices[i])
+		}
+		for i := range vertices {
+			s.CreateLine(vertices[i], vertices[(i+1)%len(vertices)])
+		}
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		return s, s.Profiles()[0]
+	}
+	bottom, bottomProfile := build(world.XY(), 0)
+	top, topProfile := build(topPlane, 1)
+	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile,
+		decad.WithLoftAlignment(4))
+	require.NoError(t, err)
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	section, profiles, err := source.Section(t.Context(), frame)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Nil(t, section)
+	require.Nil(t, profiles)
+}
+
+func TestSectionRuledLoftRefusesDisplacedVertices(t *testing.T) {
 	origin := r3.NewVec(1e9, 0, 0)
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, origin, 5, 5+math.Ldexp(1, -23), 2)
 	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)

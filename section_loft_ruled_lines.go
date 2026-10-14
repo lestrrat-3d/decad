@@ -12,6 +12,8 @@ import (
 // direct line-only Loft. Each line pair contributes two triangles with one
 // diagonal, so its interior section can contain a kink at that diagonal.
 // Zero vertex displacement ties the held triangle corners to the records.
+// Placement, source-origin, cap-level, and rewrite-marker guards are reject-only
+// for current Loft producers; keep them if those producers gain new routes.
 func loftRuledLineSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
 	if !pl.authenticatedReconstruction || pl.surfaceResult || pl.xform != r3.Identity() ||
 		pl.delta != 0 || pl.sectionDelta != 0 || pl.chorded ||
