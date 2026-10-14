@@ -87,8 +87,10 @@ type loftCylinderRingToothKey struct {
 
 // loftCylinderRingTeeth holds the tooth records one near-band proof has
 // built. A record is a function of its body's payload and the radius
-// alone, and every reader only reads it. Only successes are kept. A nil
-// map keeps nothing.
+// alone, and every reader only reads it. Only successfully built records are
+// kept, so a call that fails after building some teeth can leave those
+// records in the map. The near-band proof returns that error and drops the
+// map. A nil map keeps nothing.
 type loftCylinderRingTeeth map[loftCylinderRingToothKey]loftCylinderRingTooth
 
 // loftCylinderSourceRingInside proves that an unordered exact split ring lies

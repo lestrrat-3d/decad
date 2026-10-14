@@ -30,6 +30,30 @@ func ringTeethPolygon(rng *rand.Rand, sides int, radius, jitter, z float64) [][2
 	return edges
 }
 
+// ringTeethFinger returns a circle of radius 2 at height z with a thin radial
+// finger through the blank radius 3 at angle ang, half-width d in radians. Its
+// two radial edges are seam edges and its tip edge is an outer edge.
+func ringTeethFinger(ang, d, z float64) [][2]proofarith.Xpt {
+	polar := func(r, a float64) proofarith.Xpt {
+		return proofarith.XptOf(r3.Vec{X: r * math.Cos(a), Y: r * math.Sin(a), Z: z})
+	}
+	var points []proofarith.Xpt
+	for i := range 16 {
+		a := 2 * math.Pi * float64(i) / 16
+		if i == 1 {
+			points = append(points, polar(2.9, ang+d), polar(3.1, ang+d), polar(3.1, ang-d), polar(2.9, ang-d))
+		}
+		if i == 0 || a > 0.5 {
+			points = append(points, polar(2, a))
+		}
+	}
+	edges := make([][2]proofarith.Xpt, len(points))
+	for i := range edges {
+		edges[i] = [2]proofarith.Xpt{points[i], points[(i+1)%len(points)]}
+	}
+	return edges
+}
+
 func requireRingResultEqual(t *testing.T, want, got loftcylinder.RingOccupancy, wantErr, gotErr error) {
 	t.Helper()
 	if wantErr != nil {
@@ -99,6 +123,9 @@ func TestLoftCylinderRingTeethReuseMatchesFresh(t *testing.T) {
 		ringTeethPolygon(rng, 12, 3.02, 0, level),
 		ringTeethPolygon(rng, 16, 4, 0.1, level),
 		ringTeethPolygon(rng, 8, 2.9, 0.3, level),
+		ringTeethFinger(0.05, 0.03, level),
+		ringTeethFinger(-0.05, 0.01, level),
+		ringTeethFinger(0.2, 0.03, level),
 	}
 	sources := []loftCylinderChamferSource{source, other, shifted, broken}
 
@@ -142,6 +169,22 @@ func TestLoftCylinderRingTeethReuseMatchesFresh(t *testing.T) {
 	_, err = loftCylinderSourceRingInsideInputs(cancelled, source, rings[0], empty)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, empty)
+
+	// A ring that crosses the blank radius inside the tooth sector succeeds
+	// through the facet entry point with seam edges, so the seam records feed
+	// a real proof; a second call on the shared memo equals a fresh call.
+	finger := ringTeethFinger(0.05, 0.03, level)
+	fresh, err := loftCylinderSourceRingInside(t.Context(), fp, finger, nil)
+	require.NoError(t, err)
+	require.Positive(t, fresh.Seam)
+	require.Positive(t, fresh.Outer)
+	seamTeeth := make(loftCylinderRingTeeth)
+	for range 2 {
+		got, err := loftCylinderSourceRingInside(t.Context(), fp, finger, seamTeeth)
+		require.NoError(t, err)
+		requireRingResultEqual(t, fresh, got, nil, nil)
+	}
+	require.Len(t, seamTeeth, len(source.teeth))
 
 	// The facet entry point reads the same records.
 	want, wantErr := loftCylinderSourceRingInsideInputs(t.Context(), source, rings[0], nil)
