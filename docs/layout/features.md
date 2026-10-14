@@ -66,6 +66,7 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_extent.go` | Adapts revolve extent and box readings to `internal/revolveaxis/`. See evaluator §6. |
 | `revolve_denotation.go` | Payload sweep bounds over `internal/revolveangle/` proofs. See evaluator §6 and sweep §3. |
 | `stops.go` | Body-relative stop resolution. See evaluator §5/§6/§11. |
+| `internal/extent/stop_revolve.go` | Exact `ToFace` level for a planar revolved wall. See evaluator §5. |
 | `loft.go` | Loft entry points and chain ribbon assembly. See loft §2/§4/§10/§16. |
 | `loft_sections.go` | Public smooth-section loft entry point and source-face assembly. See loft-sections design. |
 | `cone_from_face.go` | `ConeFromFace`: the full tool cone one float step off a Revolve blank's selected conical face. See loft-face-sections design. |

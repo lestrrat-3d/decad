@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -152,16 +153,13 @@ func builtinFaceQuery(sel FaceSelector, what string) (*FaceQuery, error) {
 // surface, and the cap it emits is planar and perpendicular to the sweep — so
 // the face must be an analytic Plane whose held normal is EXACTLY parallel to
 // the sweep normal (a zero rational cross product, never a tolerance), which
-// states no departure of its surface from that tag (no normal bound, no
-// denoted surface), and which carries its producer's CapRecord and an axial
-// displacement. The plane that record denotes must be an exact level set of
-// the sweep (extent.PlaneStop), so the stop is the single exact level c and
-// the cap charges no footprint-dependent departure. Any other face — a
-// non-planar one, a planar one not exactly perpendicular to the sweep, one
-// stating a departure, one without a record (a faceted boolean face, a placed
-// copy, a sweep, twist, coil or mitred cap, a chain patch), or one whose
-// denoted plane is not a level set of the sweep — is a solid this evaluator
-// cannot build (ErrUnsupported, staged). A face coplanar with the sketch
+// states no normal departure. A cap carries a CapRecord and axial displacement;
+// a revolved straight wall instead carries a denoted meridian whose endpoints
+// must all have one exact axial coordinate. Its radial basis must span an
+// exact level set of the sweep (extent.RevolvedPlaneStop). The stop is then
+// one exact level c, and the cap charges no footprint-dependent departure.
+// A non-planar face, a tilted or uncertain plane, or a face with neither
+// certificate is refused (ErrUnsupported). A face coplanar with the sketch
 // plane stops the sweep before it starts (ErrDegenerate).
 //
 // travel is 0 for a standalone ToFace — the target face supplies the sense
@@ -194,16 +192,29 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 	if !extent.ExactlyParallel(pl.Frame.N(), n) {
 		return 0, 0, 0, fmt.Errorf(`%w: ToFace requires the stop face's normal exactly parallel to the sweep direction; this face's normal is tilted from it, however slightly, and the perpendicular cap this evaluator builds would charge nothing for the tilt — choose a face exactly perpendicular to the sweep or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
 	}
-	if face.n.NormalBound != 0 || face.n.Denoted != nil {
+	if face.n.NormalBound != 0 {
 		return 0, 0, 0, fmt.Errorf(`%w: ToFace cannot use this face: its surface departs from its planar tag by a stated tilt, which a perpendicular cap does not charge; use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
 	}
-	rec := face.n.CapRecord
-	if rec == nil || !face.n.HasAxialDelta {
-		return 0, 0, 0, fmt.Errorf(`%w: ToFace cannot use this face: it states no record of the exact plane it denotes (a faceted boolean face, a placed copy, a sweep or patch cap); use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
-	}
-	c, k, ok := extent.PlaneStop(rec.Frame, rec.Xform, rec.Z, frame)
-	if !ok {
-		return 0, 0, 0, fmt.Errorf(`%w: ToFace requires the plane the stop face denotes to be exactly perpendicular to the sweep; on this sketch plane its level would vary across the footprint, which the perpendicular cap does not charge; use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
+	var c *big.Rat
+	var k, axial float64
+	if denoted := face.n.Denoted; denoted != nil {
+		var ok bool
+		c, ok = extent.RevolvedPlaneStop(*denoted, frame)
+		if !ok {
+			return 0, 0, 0, fmt.Errorf(`%w: ToFace cannot prove that this revolved face denotes one plane perpendicular to the sweep; use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
+		}
+		k = 1
+	} else {
+		rec := face.n.CapRecord
+		if rec == nil || !face.n.HasAxialDelta {
+			return 0, 0, 0, fmt.Errorf(`%w: ToFace cannot use this face: it states no record of the exact plane it denotes (a faceted boolean face, a placed copy, a sweep or patch cap); use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
+		}
+		var ok bool
+		c, k, ok = extent.PlaneStop(rec.Frame, rec.Xform, rec.Z, frame)
+		if !ok {
+			return 0, 0, 0, fmt.Errorf(`%w: ToFace requires the plane the stop face denotes to be exactly perpendicular to the sweep; on this sketch plane its level would vary across the footprint, which the perpendicular cap does not charge; use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
+		}
+		axial = face.n.AxialDelta
 	}
 	zFace := pl.Frame.Origin().Sub(frame.Origin()).Dot(n)
 	tol := extent.RelativeStopTolerance(math.Max(pl.Frame.Origin().Len(), frame.Origin().Len()))
@@ -227,7 +238,6 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 	// (it covers the rounded tag origin, the difference, the dot product and
 	// the offset step alike), the offset's conversion into millimetres, and
 	// the face's proven axial displacement carried to a level displacement.
-	axial := face.n.AxialDelta
 	if k != 1 {
 		axial = proofbound.ProductUpper(k, axial)
 	}

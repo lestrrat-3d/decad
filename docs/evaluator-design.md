@@ -466,8 +466,8 @@ the stops from live bodies without consuming them. (`ToFaceAngular` is the
 revolve analog and lands there, §6/§11.) A `ToFace` stop face must be an
 analytic Plane whose held normal is exactly parallel to the sweep normal, by a
 rational cross product of zero and not a tolerance, whose face states no
-normal departure (`NormalBound` 0, no `Denoted` surface), and which carries its
-producer's `topo.CapRecord` and an axial displacement. The record is the plane
+normal departure (`NormalBound` 0). A cap carries its producer's
+`topo.CapRecord` and an axial displacement. The record is the plane
 the cap denotes: the plane-local level `z` carried through the payload frame
 `(O, U, V, N)` and the placement `(B, t)`, every held value read as an exact
 rational. The plane it denotes is `m·(x − P) = 0` with `m = (B·U) × (B·V)` and
@@ -481,15 +481,21 @@ terms: the exact distance from the held stop to `c + travel·offset`
 (`extent.StopLevelError`, so a rounded tag origin or a non-unit held normal is
 charged and never trusted), the offset's conversion bound, and `k` times the
 face's `AxialDelta`, with `k = max(|m·(B·N)|, |m|) / |m·N'|` rounded up, which is
-exactly 1 when the frames and the placement are exactly orthonormal. Any other
-face is `ErrUnsupported`, however small its tilt, because nothing would charge
-it. That includes a stop body whose placement rounds its normal, every revolve
+exactly 1 when the frames and the placement are exactly orthonormal. A planar
+Revolve wall can instead use its `Denoted` record. Every straight meridian end
+must have the same exact axial coordinate, and both radial basis vectors must
+span one exact level set of the sweep. `extent.RevolvedPlaneStop` computes that
+level from the record. `StopLevelError` charges the held plane tag's distance
+from it; the record has no remaining axial displacement. Any other face is
+`ErrUnsupported`, however small its tilt, because nothing would charge
+it. That includes a stop body whose placement rounds its normal, a revolve
+wall with an uncertain axis or nonconstant meridian level, an angular revolve
 cap, a cap-loop chamfer band patch, a stop plane that is not an exact level set
 of the sweep, a face of a faceted boolean (a mirrored-loft union, a loft or
-cylinder union), a copy placed by a non-identity transform (`CapRecord.Under`
-keeps the record only under the identity placement), and a sweep, mitred-sweep,
-twist or coil end cap and a `Body.Patch` chain patch, none of which states a
-record; a `Distance` extent reaches them. A nonzero
+cylinder union), a copied cap placed by a non-identity transform
+(`CapRecord.Under` keeps the record only under the identity placement), and a
+sweep, mitred-sweep, twist or coil end cap and a `Body.Patch` chain patch. A
+`Distance` extent reaches them. A nonzero
 `WithTaper` builds a draft body over `Distance`, `ToFace`, `ThroughAll`,
 `Symmetric`, or `TwoSided`. `docs/draft-design.md` owns the tapered extrude:
 its sharp offset family, its one- and two-slab payloads, its refusals and its
