@@ -47,14 +47,21 @@ func stationGateDiameter(budget *proofbound.WorkBudget, prisms []prismPayload, d
 // body at that level), so that each station is a point of the body (within
 // its gap and displacement).
 func prismGatePoints(budget *proofbound.WorkBudget, prisms []prismPayload, displacement float64) (gatePoints, bool, error) {
+	return prismGatePointsMemo(budget, prisms, displacement, nil)
+}
+
+// prismGatePointsMemo is prismGatePoints reading section stations through
+// stations (nil reads them fresh).
+func prismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismPayload, displacement float64,
+	stations *diameter.StationMemo) (gatePoints, bool, error) {
 	work := freeform.NewFreeformWork()
 	var g gatePoints
 	for _, pp := range prisms {
-		stations, stationAllow, read, err := diameter.PrismStationWitnesses(budget, pp.Payload, work)
+		points, stationAllow, read, err := diameter.PrismStationWitnessesMemo(budget, pp.Payload, work, stations)
 		if err != nil || !read {
 			return gatePoints{}, false, err
 		}
-		g.Join(gatePoints{Points: stations, Allow: stationAllow})
+		g.Join(gatePoints{Points: points, Allow: stationAllow})
 	}
 	g.Allow = proofbound.AbsSumUpper(displacement, g.Allow)
 	return g, true, nil
@@ -280,7 +287,8 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 // those whose stations cannot be read, reads its vertices with their
 // published bounds. ok is false, with no error, when none of those can be
 // bounded.
-func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Body) (gatePoints, bool, error) {
+func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Body,
+	stations *diameter.StationMemo) (gatePoints, bool, error) {
 	switch pl := body.payload.(type) {
 	case facetedPayload:
 		return gatePoints{Points: pl.verts}, true, nil
@@ -326,7 +334,7 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 		return capBlendGatePoints(ctx, budget, body, pl)
 	case prismPayload:
 		if pl.SectionDelta == 0 {
-			if g, ok, err := prismGatePoints(budget, []prismPayload{pl}, pl.axialDelta()); err != nil || ok {
+			if g, ok, err := prismGatePointsMemo(budget, []prismPayload{pl}, pl.axialDelta(), stations); err != nil || ok {
 				return g, ok, err
 			}
 			return vertexGatePoints(budget, body, 0)
@@ -340,7 +348,13 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 	return vertexGatePoints(budget, body, 0)
 }
 
-// pairGateDiameter reads the diameter D of the pair a and b (verification
+// pairGateDiameter reads the pair's diameter without a call cache
+// (pairGateDiameterCached with a nil cache).
+func pairGateDiameter(ctx context.Context, a, b *Body) (float64, error) {
+	return pairGateDiameterCached(ctx, a, b, nil)
+}
+
+// pairGateDiameterCached reads the diameter D of the pair a and b (verification
 // design §3): the greatest distance between two points drawn from either
 // body. It reads bodyGatePoints for both bodies together, so the reading
 // ranges over pairs across the two bodies as well as within each, and
@@ -349,11 +363,16 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 // bound on the pair's own diameter. A body with no point set leaves the pair
 // with the other body's points alone, and a pair with neither reads zero: an
 // understated D only tightens the gate.
-func pairGateDiameter(ctx context.Context, a, b *Body) (float64, error) {
+//
+// Each body's points come through cache.gatePoints, so a body read in an
+// earlier pair of the same call is not read again. The joined set g starts
+// empty and Join only appends into it, so a stored reading's slice is never
+// appended to; keep it that way. A nil cache reads every body fresh.
+func pairGateDiameterCached(ctx context.Context, a, b *Body, cache *bodyGeomCache) (float64, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	var g gatePoints
 	for _, body := range [2]*Body{a, b} {
-		points, ok, err := bodyGatePoints(ctx, budget, body)
+		points, ok, err := cache.gatePoints(ctx, budget, body)
 		if err != nil {
 			return 0, err
 		}

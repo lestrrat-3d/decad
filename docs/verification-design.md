@@ -609,6 +609,15 @@ witnesses. Two unit cylinders 1 mm tall, their axes 10 mm apart along
 `(0.6, 0.8)`, are `√145` across between wall points no carrier witness
 samples; the stations reach within 7.5° of each.
 
+Within one `Verify`, `VerifyMotion`, `VerifyLinkage` or `VerifyJointBox` call, a
+body's points are read once. The clearance kernel reads them through the call's
+`bodyGeomCache` (`bodyGeomCache.gatePoints`), which keeps the reading in the
+body's own cache entry, so the reading is dropped with the entry. The cache
+also owns a `diameter.StationMemo`, which keeps a prism's section stations by
+the float bits of its line, circle and arc loops, so the placed copies of one
+profile share them. Both live for one call and store nothing on a cancelled
+reading; every reading equals a fresh one bit for bit.
+
 **Every arm publishes through one witness-maximum reader, and that reader
 rounds toward zero.** `pointSetDiameterWithBudget` (`verify_gate.go`, backed by
 `internal/diameter/points.go`) is the single
