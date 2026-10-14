@@ -49,6 +49,8 @@ func TestOffsetMeridianStrictSide(t *testing.T) {
 				// Strict means no nearer float also lies strictly on the side.
 				back := math.Nextafter(apex, math.Inf(-side))
 				require.NotEqual(t, side, meridianSign(back, 0, k, c), "apex is the nearest strict float")
+				rBack := math.Nextafter(radius, math.Inf(-side))
+				require.NotEqual(t, side, meridianSign(tc.far, rBack, k, c), "radius is the nearest strict float")
 				if tc.dyadicApexMustMove {
 					cf, _ := tc.wantC.Float64()
 					require.NotEqual(t, cf, apex, "dyadic C must be stepped off")
@@ -56,6 +58,52 @@ func TestOffsetMeridianStrictSide(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestOffsetMeridianFiniteBeyondRange covers exact values past the float64
+// range, where the nearest rounding is infinite but a finite float still lies
+// strictly on the requested side.
+func TestOffsetMeridianFiniteBeyondRange(t *testing.T) {
+	big1023, big1022 := math.Ldexp(1, 1023), math.Ldexp(1, 1022)
+	apex, radius, k, c, err := pointcone.OffsetMeridian(big1023, 2, big1022, 3, -1, -1)
+	require.NoError(t, err)
+	require.Equal(t, math.MaxFloat64, apex)
+	require.Equal(t, 4.0, radius)
+	require.Zero(t, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 1022)).Cmp(k))
+	require.Zero(t, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 1024)).Cmp(c))
+	require.Equal(t, -1, meridianSign(apex, 0, k, c))
+	require.Equal(t, -1, meridianSign(-1, radius, k, c))
+}
+
+func TestOffsetMeridianFiniteRadiusBeyondRange(t *testing.T) {
+	// (C-far)/k is just above 2^1030, so the radius is the largest finite float.
+	apex, radius, k, c, err := pointcone.OffsetMeridian(1, math.Ldexp(1, 1000), 2, 1, -math.Ldexp(1, 30), -1)
+	require.NoError(t, err)
+	require.Equal(t, math.MaxFloat64, radius)
+	require.Equal(t, -1, meridianSign(apex, 0, k, c))
+	require.Equal(t, -1, meridianSign(-math.Ldexp(1, 30), radius, k, c))
+}
+
+func TestOffsetMeridianNoFiniteAnswer(t *testing.T) {
+	tiny, step := math.Ldexp(1, -100), math.Ldexp(1, 971)
+	tests := []struct {
+		name           string
+		x0, r0, x1, r1 float64
+		far            float64
+		side           int
+	}{
+		// C = 2^1024 needs a float above it, and none is finite.
+		{"nearest rounding is infinite", math.Ldexp(1, 1023), 2, math.Ldexp(1, 1022), 3, -1, 1},
+		// C is just above MaxFloat64, so the nearest float is MaxFloat64 and
+		// the step above it reaches infinity.
+		{"step above the maximum reaches infinity", math.MaxFloat64, tiny, math.MaxFloat64 - step, 1, -1, 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, _, _, err := pointcone.OffsetMeridian(tc.x0, tc.r0, tc.x1, tc.r1, tc.far, tc.side)
+			require.ErrorIs(t, err, pointcone.ErrUnsupportedMeridian)
+		})
 	}
 }
 
@@ -78,7 +126,8 @@ func TestOffsetMeridianRefuses(t *testing.T) {
 		{"infinite x", inf, 2, 2, 1, -1, 1, pointcone.ErrNonFiniteMeridian},
 		{"nan r", 1, nan, 2, 1, -1, 1, pointcone.ErrNonFiniteMeridian},
 		{"infinite far", 1, 2, 2, 1, -inf, 1, pointcone.ErrNonFiniteMeridian},
-		{"overflowing radius", 1e300, 1e-300, 2e300, 2e-300, -1e300, -1, pointcone.ErrUnsupportedMeridian},
+		{"radius needs a float above the maximum", 1, math.Ldexp(1, 1000), 2, 1, -math.Ldexp(1, 30), 1,
+			pointcone.ErrUnsupportedMeridian},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

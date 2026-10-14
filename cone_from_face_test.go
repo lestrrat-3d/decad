@@ -3,9 +3,11 @@ package decad
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -181,4 +183,201 @@ func TestConeFromFaceCancelled(t *testing.T) {
 	_, err := ConeFromFace(ctx, blank, sel, units.Millimeters(-5))
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, before, blank.doc.Bodies())
+}
+
+// coneFromFaceNonConvexSection is a counter-clockwise, non-convex section
+// whose selected side (1, 3)-(2, 1) is a cone with the outside half-plane
+// x + r/2 < 5/2, a side the notch of the section cuts back into the blank.
+func coneFromFaceNonConvexSection() []planePoint {
+	return []planePoint{{U: 2}, {U: 3}, {U: 3, V: 5}, {U: 1, V: 5}, {U: 1, V: 3}, {U: 2, V: 1}}
+}
+
+// coneFromFaceShallowSection has a cone side whose strictly offset generator
+// has slope 1e-9 against its length, the boundary where Revolve names a wall
+// a cylinder. Sketch rejects every triangle that shallow, so the cone is
+// refused while it is built.
+func coneFromFaceShallowSection() []planePoint {
+	const x1, xe = 1.0, 2.0000000009999998e+09
+	return []planePoint{{U: xe}, {U: xe + 1e9}, {U: xe + 1e9, V: 1e5}, {U: x1, V: 1e5}, {U: x1, V: 1002},
+		{U: xe, V: 1000}}
+}
+
+// coneFromFaceNextFeatureOrigins revolves a small triangle into d and returns
+// the creating origins of its faces, which carry the producer numbering.
+func coneFromFaceNextFeatureOrigins(t *testing.T, d *Document) [][]FeatureRef {
+	t.Helper()
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	corners := []planePoint{{U: 10}, {U: 12}, {U: 12, V: 2}}
+	points := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		points[i] = s.CreatePoint(c.U, c.V)
+		s.Fix(points[i])
+	}
+	for i := range points {
+		s.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	next, err := Revolve(t.Context(), d, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	require.NoError(t, err)
+	var origins [][]FeatureRef
+	for _, face := range next.Faces() {
+		origins = append(origins, face.Origins())
+	}
+	return origins
+}
+
+// coneFromFaceRefusalKeepsDocument runs a refused ConeFromFace and checks that
+// the document, its provenance numbering and the next produced feature match a
+// control document that never saw the call.
+func coneFromFaceRefusalKeepsDocument(t *testing.T, section []planePoint, a, b planePoint, far units.Value,
+	want error, message string) {
+	t.Helper()
+	control := spiralTestRevolveBlank(t, section)
+	wantOrigins := coneFromFaceNextFeatureOrigins(t, control.doc)
+
+	blank := spiralTestRevolveBlank(t, section)
+	doc := blank.doc
+	before := doc.Bodies()
+	producer := doc.nextProducerID()
+	_, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, a, b), far)
+	require.ErrorIs(t, err, want)
+	require.ErrorContains(t, err, message)
+	require.Equal(t, before, doc.Bodies())
+	require.Equal(t, producer, doc.nextProducerID())
+	require.Equal(t, wantOrigins, coneFromFaceNextFeatureOrigins(t, doc))
+}
+
+func TestConeFromFaceShallowGeneratorKeepsDocument(t *testing.T) {
+	section := coneFromFaceShallowSection()
+	coneFromFaceRefusalKeepsDocument(t, section, section[4], section[5], units.Millimeters(-1e9),
+		ErrUnsupported, "not one closed profile")
+}
+
+// TestCommitExactPointConeRefusalKeepsDocument builds a body that is a Revolve
+// but not a point cone and checks that the refusal precedes registration.
+func TestCommitExactPointConeRefusalKeepsDocument(t *testing.T) {
+	blank := spiralTestRevolveBlank(t, coneFromFaceSpiralSection())
+	doc := blank.doc
+	before := doc.Bodies()
+	producer := doc.nextProducerID()
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	corners := []planePoint{{U: 10}, {U: 12}, {U: 12, V: 2}, {U: 10, V: 2}}
+	points := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		points[i] = s.CreatePoint(c.U, c.V)
+		s.Fix(points[i])
+	}
+	for i := range points {
+		s.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	built, err := revolveProfileBuild(t.Context(), doc, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, nil)
+	require.NoError(t, err)
+	require.Equal(t, before, doc.Bodies(), "building registers nothing")
+	require.Equal(t, producer, doc.nextProducerID())
+
+	err = commitExactPointCone(t.Context(), doc, built)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Equal(t, before, doc.Bodies())
+	require.Equal(t, producer, doc.nextProducerID())
+}
+
+func TestConeFromFaceNonConvexSectionIsAccepted(t *testing.T) {
+	section := coneFromFaceNonConvexSection()
+	blank := spiralTestRevolveBlank(t, section)
+	cone, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, section[4], section[5]),
+		units.Millimeters(-5))
+	require.NoError(t, err)
+	limit, ok := exactPointCone(cone)
+	require.True(t, ok)
+	// The side lies on x + r/2 = 5/2 and the empty half-plane is x + r/2 < 5/2,
+	// so the apex is the float just below 5/2 and the far radius the float
+	// just below (5/2+5)/(1/2) = 15.
+	wantApex := math.Nextafter(2.5, math.Inf(-1))
+	wantRadius := math.Nextafter(15, math.Inf(-1))
+	require.Zero(t, limit.apex.Cmp(new(big.Rat).SetFloat64(wantApex)))
+	radius := new(big.Rat).Quo(new(big.Rat).Sub(limit.apex, limit.far), limit.slope)
+	require.Zero(t, radius.Cmp(new(big.Rat).SetFloat64(wantRadius)))
+}
+
+func TestConeFromFaceMoreRefusals(t *testing.T) {
+	far := units.Millimeters(-5)
+	t.Run("zero-body", func(t *testing.T) {
+		_, err := ConeFromFace(t.Context(), &Body{}, Faces(), far)
+		require.ErrorIs(t, err, ErrDegenerate)
+	})
+	extrudedBox := func(t *testing.T) *Body {
+		t.Helper()
+		world := sketch.NewWorld()
+		s, err := world.CreateSketch(world.XY())
+		require.NoError(t, err)
+		a, b := s.CreatePoint(0, 0), s.CreatePoint(4, 0)
+		c, e := s.CreatePoint(4, 3), s.CreatePoint(0, 3)
+		for _, p := range []*sketch.Point{a, b, c, e} {
+			s.Fix(p)
+		}
+		s.CreateLine(a, b)
+		s.CreateLine(b, c)
+		s.CreateLine(c, e)
+		s.CreateLine(e, a)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		box, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+		require.NoError(t, err)
+		return box
+	}
+	t.Run("non-revolve body", func(t *testing.T) {
+		box := extrudedBox(t)
+		sel := Faces(FaceCreatedBy(box.Faces()[0].Origins()[0])).Exactly(1)
+		_, err := ConeFromFace(t.Context(), box, sel, far)
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.Len(t, box.doc.Bodies(), 1)
+	})
+	t.Run("selectors", func(t *testing.T) {
+		blank := spiralTestRevolveBlank(t, coneFromFaceSpiralSection())
+		before := blank.doc.nextProducerID()
+		foreign := extrudedBox(t).Faces()[0].Origins()[0]
+		// A selector that matches nothing and one that fails its assertion
+		// are both cardinality failures of the implicit exactly-one.
+		_, err := ConeFromFace(t.Context(), blank, Faces(FaceCreatedBy(foreign)), far)
+		require.ErrorIs(t, err, ErrCardinality)
+		_, err = ConeFromFace(t.Context(), blank, Faces().Exactly(2), far)
+		require.ErrorIs(t, err, ErrCardinality)
+		require.Len(t, blank.doc.Bodies(), 1)
+		require.Equal(t, before, blank.doc.nextProducerID())
+	})
+}
+
+// TestConeFromFaceCancelledDuringConstruction cancels at every context poll
+// after the entry check, up to the first call that completes, and checks that
+// each canceled call leaves the document and its numbering unchanged.
+func TestConeFromFaceCancelledDuringConstruction(t *testing.T) {
+	section := coneFromFaceSpiralSection()
+	canceledLate := false
+	for cancelAt := 2; ; cancelAt++ {
+		require.Less(t, cancelAt, 200, "the call never completed")
+		blank := spiralTestRevolveBlank(t, section)
+		sel := coneFromFaceSelector(t, blank, section[3], section[2])
+		doc := blank.doc
+		before, producer := doc.Bodies(), doc.nextProducerID()
+		ctx := &cancelAfterContext{Context: t.Context(), cancelAt: cancelAt}
+		_, err := ConeFromFace(ctx, blank, sel, units.Millimeters(-5))
+		if err == nil {
+			require.Greater(t, cancelAt, 3, "the build polls the context after the entry check")
+			require.True(t, canceledLate, "a cancellation landed inside construction")
+			return
+		}
+		require.ErrorIs(t, err, context.Canceled, "cancelAt=%d", cancelAt)
+		require.Equal(t, before, doc.Bodies())
+		require.Equal(t, producer, doc.nextProducerID())
+		canceledLate = canceledLate || cancelAt > 3
+	}
 }

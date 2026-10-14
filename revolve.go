@@ -184,6 +184,19 @@ func Revolve[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec 
 // and extent gates.
 func revolveProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent,
 	opts []RevolveOption) (*Body, error) {
+	body, err := revolveProfileBuild(ctx, d, s, p, axis, a, opts)
+	if err != nil {
+		return nil, err
+	}
+	d.commit(body)
+	return body, nil
+}
+
+// revolveProfileBuild runs every gate and the build of revolveProfile and
+// returns the body without registering it in d, so a caller can refuse the
+// result before the document changes.
+func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis,
+	a AngularExtent, opts []RevolveOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a revolve`, ErrDegenerate)
 	}
@@ -292,7 +305,6 @@ func revolveProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body)
 	return body, nil
 }
 

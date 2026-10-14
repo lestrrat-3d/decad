@@ -1033,7 +1033,10 @@ strictly on the face's empty side on every platform. The result is an ordinary
 Revolve body, `body` stays live, and `far` must be a finite negative axial
 coordinate (below X = 0) that is also below both ends of the face. An
 unsupported body or face, a `far` that is not below the face, or a `far` that
-is not negative is `ErrUnsupported`. The rule is in
+is not negative is `ErrUnsupported`, as is a cone Revolve would classify as
+a cylinder. A `nil` ctx, a `nil` body or a body of no document is
+`ErrDegenerate`. Every refusal precedes registration, so the document and
+provenance numbering are unchanged. The rule is in
 `docs/loft-face-sections-design.md`.
 
 Each takes the **sketch** as well as the profile, because a `sketch.Profile`'s

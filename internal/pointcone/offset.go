@@ -60,11 +60,21 @@ func OffsetMeridian(x0, r0, x1, r1, far float64, side int) (float64, float64, *b
 }
 
 // strictFloat returns the float64 nearest q that is strictly greater than q
-// (side +1) or strictly less than q (side -1). It reports false when no
-// finite such float exists.
+// (side +1) or strictly less than q (side -1). When q rounds to infinity, the
+// answer is the largest finite float of q's sign if it lies strictly on the
+// requested side. It reports false when no finite such float exists.
 func strictFloat(q *big.Rat, side int) (float64, bool) {
 	f, _ := q.Float64()
-	if math.IsInf(f, 0) || math.IsNaN(f) {
+	if math.IsNaN(f) {
+		return 0, false
+	}
+	if math.IsInf(f, 0) {
+		// q lies beyond the finite range, so only the extreme finite float
+		// can be the nearest one strictly on the requested side.
+		edge := math.Copysign(math.MaxFloat64, f)
+		if exact := proofarith.FloatRat(edge); exact.Cmp(q) == side {
+			return edge, true
+		}
 		return 0, false
 	}
 	toward := math.Inf(side)

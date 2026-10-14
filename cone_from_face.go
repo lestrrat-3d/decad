@@ -13,33 +13,40 @@ import (
 // ConeFromFace builds the full cone about body's axis that extends the
 // selected face's straight meridian, moved off body by one float step.
 //
-// body must be a live, unplaced, full Revolve about world X whose section is
-// a closed walk of whole straight sides, and face must resolve under the
-// implicit exactly-one to one conical side of that section. The cone is read
-// from the recorded exact section data, never from the rounded public Cone
-// tag. The side's meridian is the exact line x + k*r = C. The result is the
-// full Revolve of the triangle (far, 0), (far, R), (A, 0), where A and R are
-// the float64 values nearest C and (C - far)/k that lie strictly on the empty
-// side of the face. The cone wall and the face share no point, so the
-// relation between the two is a strict sign that does not depend on how the
-// platform rounds a fused multiply-add. The result is an ordinary Revolve body
-// that depends on body and does not retire it.
+// body must be a live, unplaced, full Revolve about world X whose recorded
+// section is a closed straight-sided walk of 4 to 128 whole segments with
+// strictly positive X coordinates, nonnegative radii, no holes and one side of
+// the axis. face must resolve under the implicit exactly-one to one conical
+// side of that section. The cone is read from the recorded exact section data,
+// never from the rounded public Cone tag. The side's meridian is the exact
+// line x + k*r = C with k > 0, so the radius decreases as x rises. The result
+// is the full Revolve of the triangle (far, 0), (far, R), (A, 0), where A and
+// R are the float64 values nearest C and (C-far)/k that lie strictly on the
+// empty side of the face. The cone wall and the face line share no point, so
+// the relation between them is a strict sign that does not depend on how the
+// platform rounds a fused multiply-add, and for identical recorded endpoint
+// and far bits the strict gap is the same on every build. That establishes
+// only the separation from the selected face line. Other blank and tool
+// relations keep their own checks. The result is an ordinary Revolve body that
+// depends on body and does not retire it.
 //
 // far is the cone's far plane as an axial coordinate. It must be a finite
 // negative length (below X = 0, so the cone spans the origin) and strictly
-// below both ends of the face. A nil ctx, a nil body, or a far that is not a
-// finite length is ErrDegenerate. Selector failures are those of a ToFace
-// stop. A retired body is ErrRetiredBody. A body or face outside the
-// supported class (a plane or cylinder side, a section edge on the axis, a
-// side whose meridian does not slope toward the axis as x falls), a far that
-// is not below the face, or a far that is not negative is ErrUnsupported. A canceled ctx returns ctx.Err() unchanged. Every
-// failure leaves the document unchanged.
+// below both ends of the face. A nil ctx, a nil body, a body of no document,
+// or a far that is not a finite length is ErrDegenerate. Selector failures are
+// those of a ToFace stop. A retired body is ErrRetiredBody. A body or face
+// outside the supported class (a plane or cylinder side, a section edge on the
+// axis, a side whose meridian does not slope toward the axis as x rises), a
+// far that is not below the face, a far that is not negative, or a cone whose
+// float64 generator is not read back as an exact point cone is ErrUnsupported.
+// A canceled ctx returns ctx.Err() unchanged. Every failure leaves the
+// document and its provenance numbering unchanged.
 func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.Value) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control ConeFromFace`, ErrDegenerate)
 	}
-	if body == nil {
-		return nil, fmt.Errorf(`%w: ConeFromFace names no body`, ErrDegenerate)
+	if body == nil || body.doc == nil {
+		return nil, fmt.Errorf(`%w: ConeFromFace names no body of a document`, ErrDegenerate)
 	}
 	farMM, err := far.In(units.Millimeter)
 	if err != nil {
@@ -100,13 +107,26 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := exactPointCone(cone); !ok {
-		if err := d.Remove(cone); err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf(`%w: the offset cone is not an exact point cone`, ErrUnsupported)
+	if err := commitExactPointCone(ctx, d, cone); err != nil {
+		return nil, err
 	}
 	return cone, nil
+}
+
+// commitExactPointCone registers a built cone in d only when exactPointCone
+// reads it back. The recognizer also needs a face classified Cone, and Revolve
+// calls a generator that shallow a cylinder. The check runs before the body is
+// registered, so a refusal leaves the document and its provenance numbering
+// untouched.
+func commitExactPointCone(ctx context.Context, d *Document, cone *Body) error {
+	if _, ok := exactPointCone(cone); !ok {
+		return fmt.Errorf(`%w: the offset cone is not an exact point cone`, ErrUnsupported)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	d.commit(cone)
+	return nil
 }
 
 // revolveSpanOfFace returns the recorded section side that Revolve bound to
@@ -121,7 +141,8 @@ func revolveSpanOfFace(spans []revolveSectionSpan, face *Face) (revolveSectionSp
 }
 
 // revolveMeridianCone revolves the triangle (far, 0), (far, radius), (apex, 0)
-// about world X in a private sketch and registers the body in d.
+// about world X in a private sketch and returns the built body without
+// registering it in d.
 func revolveMeridianCone(ctx context.Context, d *Document, far, radius, apex float64) (*Body, error) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -144,6 +165,6 @@ func revolveMeridianCone(ctx context.Context, d *Document, far, radius, apex flo
 	if len(profiles) != 1 {
 		return nil, fmt.Errorf(`%w: the cone section is not one closed profile`, ErrUnsupported)
 	}
-	return Revolve(ctx, d, s, profiles[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	return revolveProfileBuild(ctx, d, s, profiles[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, nil)
 }
