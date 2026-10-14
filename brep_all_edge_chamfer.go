@@ -104,7 +104,7 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 	if planes != 6 || boreFace == nil || p.radius <= 0 ||
 		boreSurface.Axis != (r3.Vec{Y: 1}) && boreSurface.Axis != (r3.Vec{Y: -1}) ||
 		boreSurface.Origin.X != p.center[0] || boreSurface.Origin.Z != p.center[1] ||
-		boreSurface.Radius.Base() != p.radius || !boreFace.reversed || len(boreFace.loops) != 2 {
+		boreSurface.Radius.Base() != p.radius || !boreFace.n.Reversed || len(boreFace.loops) != 2 {
 		return nil, false, nil
 	}
 	var rims [2]bool
@@ -378,7 +378,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		}
 		face := &Face{surface: Plane{Frame: frame},
 			origins: []FeatureRef{{producer: ref, Role: axisMap.faceRole(polygonIndex)}},
-			body:    body, area: poly.area.Value, areaBound: poly.area.Bound}
+			body:    body, n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound}}
 		loop := &Loop{outer: true}
 		for i, a := range points {
 			b := points[(i+1)%len(points)]
@@ -443,13 +443,16 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 	wallArea := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), pi),
 		proofbound.BoundedMul(r, height))
 	bore := &Face{surface: Cylinder{Origin: r3.NewVec(p.center[0], p.box[1][0], p.center[1]),
-		Axis: r3.NewVec(0, 1, 0), Radius: units.Millimeters(p.radius)}, reversed: true,
-		origins: []FeatureRef{{producer: ref, Role: "wall(6)"}}, body: body,
-		area: wallArea.Value, areaBound: wallArea.Bound}
+		Axis: r3.NewVec(0, 1, 0), Radius: units.Millimeters(p.radius)}, n: topo.Face{
+		Reversed:  true,
+		Area:      wallArea.Value,
+		AreaBound: wallArea.Bound,
+	},
+		origins: []FeatureRef{{producer: ref, Role: "wall(6)"}}, body: body}
 	for side := range 2 {
 		face := faces[2+side]
-		area := proofbound.BoundedSub(proofbound.MeasuredScalar(face.area, face.areaBound), disk)
-		face.area, face.areaBound = area.Value, area.Bound
+		area := proofbound.BoundedSub(proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound), disk)
+		face.n.Area, face.n.AreaBound = area.Value, area.Bound
 		center := r3.NewVec(p.center[0], p.box[1][side], p.center[1])
 		seam := vertex(center.Add(r3.NewVec(p.radius, 0, 0)))
 		circumference := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), pi), r)

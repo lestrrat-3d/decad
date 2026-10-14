@@ -417,7 +417,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// analytically integrated area already is.
 	areaAcc := proofbound.BoundedScalar{}
 	for _, f := range newFaces {
-		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.area, f.areaBound))
+		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
 	}
 	if acc != nil && delta > 0 {
 		areaAcc.Bound = proofbound.AbsSumUpper(areaAcc.Bound, acc.PerturbAreaSum)
@@ -497,11 +497,11 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 // operand face whose normalBound is nonzero refuses with [ErrUnsupported]
 // rather than invent the dimensionless term a sound composition would need
 // (unstitch.go's copyFaceUnderContext doc comment). A revolve face's denoted
-// surface (Face.denoted) carries over as its exact image under xform.
+// surface (topo.Face.Denoted) carries over as its exact image under xform.
 func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.Transform, verts []r3.Vec, delta float64, srcFaces []*Face) ([]*Face, map[*Vertex]int, map[*Edge]struct{}, error) {
 	if xform != r3.Identity() {
 		for _, f := range srcFaces {
-			if f.normalBound != 0 {
+			if f.n.NormalBound != 0 {
 				return nil, nil, nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
 			}
 		}
@@ -592,21 +592,23 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		axialDelta := f.axialDelta
+		axialDelta := f.n.AxialDelta
 		if delta > 0 {
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 		nf := &Face{
-			surface:       publicSurface(transformed),
-			origins:       append([]FeatureRef(nil), f.origins...),
-			area:          f.area,
-			areaBound:     f.areaBound,
-			reversed:      f.reversed,
-			heldPlanar:    f.heldPlanar,
-			axialDelta:    axialDelta,
-			hasAxialDelta: f.hasAxialDelta,
-			normalBound:   f.normalBound,
-			denoted:       f.denotedUnder(xform),
+			surface: publicSurface(transformed),
+			origins: append([]FeatureRef(nil), f.origins...),
+			n: topo.Face{
+				Area:          f.n.Area,
+				AreaBound:     f.n.AreaBound,
+				Reversed:      f.n.Reversed,
+				HeldPlanar:    f.n.HeldPlanar,
+				AxialDelta:    axialDelta,
+				HasAxialDelta: f.n.HasAxialDelta,
+				NormalBound:   f.n.NormalBound,
+				Denoted:       f.denotedUnder(xform),
+			},
 		}
 		for _, l := range f.loops {
 			coedges := make([]coedge, len(l.coedges))
@@ -650,7 +652,7 @@ func coedgeDirectionFor(f *Face, e *Edge) (bool, bool) {
 
 // reverseFaceOrientation reverses f's whole boundary walk in place: every
 // loop's coedges are reordered back to front with their forward flag
-// negated, and f.reversed toggles with it — the outward side flips together
+// negated, and f.n.Reversed toggles with it — the outward side flips together
 // with the walk that names it.
 func reverseFaceOrientation(f *Face) {
 	for _, l := range f.loops {
@@ -661,7 +663,7 @@ func reverseFaceOrientation(f *Face) {
 		}
 		l.coedges = rev
 	}
-	f.reversed = !f.reversed
+	f.n.Reversed = !f.n.Reversed
 }
 
 func stitchTopology(faces []*Face) stitchweld.Topology[*Face, *Edge] {
@@ -842,7 +844,7 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 		}
 		for _, t := range tris2D {
 			a, b, c := classOf[verts[t[0]]], classOf[verts[t[1]]], classOf[verts[t[2]]]
-			if f.reversed {
+			if f.n.Reversed {
 				b, c = c, b
 			}
 			tris = append(tris, [3]int{a, b, c})
@@ -908,11 +910,11 @@ func fixWeldedEdgeConvexity(welded map[*Edge]struct{}) {
 			continue
 		}
 		na := pa.Frame.N()
-		if fwd.reversed {
+		if fwd.n.Reversed {
 			na = na.Scale(-1)
 		}
 		nb := pb.Frame.N()
-		if bwd.reversed {
+		if bwd.n.Reversed {
 			nb = nb.Scale(-1)
 		}
 		d := e.end.n.Position.Sub(e.start.n.Position)

@@ -329,8 +329,8 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {
 			face.surface = Faceted{Bound: units.Millimeters(delta)}
 		}
-		face.areaBound = proofbound.AbsSumUpper(face.areaBound, face.area, area, areaBound)
-		face.axialDelta, face.hasAxialDelta = delta, true
+		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, area, areaBound)
+		face.n.AxialDelta, face.n.HasAxialDelta = delta, true
 	}
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err

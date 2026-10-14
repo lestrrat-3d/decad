@@ -71,7 +71,7 @@ func planarBodyFace(t *testing.T, body *Body, n, p r3.Vec) *Face {
 			continue
 		}
 		normal := pl.Frame.N()
-		if f.reversed {
+		if f.n.Reversed {
 			normal = normal.Scale(-1)
 		}
 		if normal.Sub(n).Len() > 1e-12 || math.Abs(pl.Frame.Origin().Sub(p).Dot(n)) > 1e-9 {

@@ -105,20 +105,20 @@ func exactPointPlaneSheet(tool *Body, apex r3.Vec) (*pointPlaneLimit, bool) {
 	// endpoint order. Compare the actual face frame to the geometric plane
 	// after orienting that plane away from the apex.
 	frameNormal := surface.Frame.N()
-	if !proofbound.FiniteVec(frameNormal) || proofbound.IsNonFinite(face.normalBound) ||
-		face.normalBound < 0 {
+	if !proofbound.FiniteVec(frameNormal) || proofbound.IsNonFinite(face.n.NormalBound) ||
+		face.n.NormalBound < 0 {
 		return nil, false
 	}
 	dot := pointPlaneAdd(pointPlaneMul(nx, ratOfPointPlane(frameNormal.X)),
 		pointPlaneMul(ny, ratOfPointPlane(frameNormal.Y)))
 	allow := pointPlaneMul(pointPlaneAdd(pointPlaneAbs(nx), pointPlaneAbs(ny)),
-		ratOfPointPlane(face.normalBound))
+		ratOfPointPlane(face.n.NormalBound))
 	if pointPlaneAbs(dot).Cmp(allow) <= 0 {
 		return nil, false
 	}
 	return &pointPlaneLimit{nx: nx, ny: ny, d: d,
 		a: line.Start, b: line.End, z0: cp.z0, z1: cp.z1,
-		surface: surface, origins: face.Origins(), normalBound: face.normalBound,
+		surface: surface, origins: face.Origins(), normalBound: face.n.NormalBound,
 		frameTowardFar: dot.Sign() > 0}, true
 }
 

@@ -120,8 +120,8 @@ func (up unstitchPayload) transform() r3.Transform { return up.xform }
 // (stops.go's axialDisplacement interface), so an unstitched sheet's
 // payload-wide fallback (payloadAxialDelta) reads the same figure
 // selectedFaceAxialDelta already reads straight off the face when it holds
-// one (Face.hasAxialDelta) — zero, honestly, for a face that does not.
-func (up unstitchPayload) axialDelta() float64 { return up.face.axialDelta }
+// one (topo.Face.HasAxialDelta) — zero, honestly, for a face that does not.
+func (up unstitchPayload) axialDelta() float64 { return up.face.n.AxialDelta }
 
 func (up unstitchPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	return evalUnstitchFaceContext(ctx, d, ref, up.face, up.bounds, composed)
@@ -166,9 +166,9 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	// placement's held basis is orthonormal only to rounding, so
 	// chargePlacement widens the copied area and lengths for it.
 	body.area = Measurement{
-		Value:     units.SquareMillimeters(nf.area),
-		Exactness: exactnessOf(nf.areaBound),
-		Bound:     units.SquareMillimeters(nf.areaBound),
+		Value:     units.SquareMillimeters(nf.n.Area),
+		Exactness: exactnessOf(nf.n.AreaBound),
+		Bound:     units.SquareMillimeters(nf.n.AreaBound),
 	}
 	if err := chargePlacement(body, xform); err != nil {
 		return nil, err
@@ -211,9 +211,9 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 // CurveToken.Compose, internal/denotation/token.go, rather than overwritten — this is one
 // of the copiers that lets a later Stitch prove an unstitched-and-restitched
 // pair coincident again even where a bound makes bit-identity alone fall
-// short), and Face.axialDelta.
+// short), and topo.Face.AxialDelta.
 //
-// Face.axialDelta, Face.hasAxialDelta and Face.normalBound carry forward
+// topo.Face.AxialDelta, topo.Face.HasAxialDelta and topo.Face.NormalBound carry forward
 // rather than reading as absent, because the copy carries the identical
 // surface and the identical tag: normalBound states how far that surface
 // departs from that tag, and axialDelta states the same tag's own
@@ -226,11 +226,11 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 // own rounding can rotate the tag frame off the true rotation, so a placed
 // copy of a face whose normalBound is nonzero refuses with [ErrUnsupported]
 // rather than invent one — a narrowing is sound, but inventing an error
-// model is not. Face.denoted, a revolve face's denoted surface, is an exact
+// model is not. topo.Face.Denoted, a revolve face's denoted surface, is an exact
 // enclosure rather than a dimensionless figure, so it does compose: the copy
 // carries its exact image under xform (Face.denotedUnder).
 func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform, delta float64) (*Face, error) {
-	if xform != r3.Identity() && srcFace.normalBound != 0 {
+	if xform != r3.Identity() && srcFace.n.NormalBound != 0 {
 		return nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
 	}
 
@@ -299,21 +299,23 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 	if err != nil {
 		return nil, err
 	}
-	axialDelta := srcFace.axialDelta
+	axialDelta := srcFace.n.AxialDelta
 	if delta > 0 {
 		axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 	}
 	nf := &Face{
-		surface:       publicSurface(transformed),
-		origins:       append([]FeatureRef(nil), srcFace.origins...),
-		area:          srcFace.area,
-		areaBound:     srcFace.areaBound,
-		reversed:      srcFace.reversed,
-		heldPlanar:    srcFace.heldPlanar,
-		axialDelta:    axialDelta,
-		hasAxialDelta: srcFace.hasAxialDelta,
-		normalBound:   srcFace.normalBound,
-		denoted:       srcFace.denotedUnder(xform),
+		surface: publicSurface(transformed),
+		origins: append([]FeatureRef(nil), srcFace.origins...),
+		n: topo.Face{
+			Area:          srcFace.n.Area,
+			AreaBound:     srcFace.n.AreaBound,
+			Reversed:      srcFace.n.Reversed,
+			HeldPlanar:    srcFace.n.HeldPlanar,
+			AxialDelta:    axialDelta,
+			HasAxialDelta: srcFace.n.HasAxialDelta,
+			NormalBound:   srcFace.n.NormalBound,
+			Denoted:       srcFace.denotedUnder(xform),
+		},
 	}
 	for _, l := range srcFace.loops {
 		if err := ctx.Err(); err != nil {

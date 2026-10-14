@@ -35,7 +35,7 @@ import (
 //     exact unit normal of any surface at all, and the distance to the
 //     nearest unit vector is exactly |e|.
 //
-// Face.NormalAt separately composes this arm bound with Face.normalBound where
+// Face.NormalAt separately composes this arm bound with topo.Face.NormalBound where
 // the surface actually carried is only bounded-close to its published tag.
 //
 // Every enclosure here is a rational interval, so the answer never depends on

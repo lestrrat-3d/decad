@@ -168,17 +168,17 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 	newPatch := func(surf Surface, loop *Loop, capV *Vertex, piece filletband.Piece) error {
 		held, bound := heldOf(filletband.PatchArea(piece, rIv))
 		face := &Face{surface: surf, origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
-			body: body, loops: []*Loop{loop}, area: held, areaBound: bound}
+			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound}}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		nrm, err := face.NormalAt(capV.n.Position)
 		if err != nil {
 			return fmt.Errorf(`%w: a partial fillet patch's normal cannot be read: %v`, ErrUnsupported, err)
 		}
 		if nrm.Value.Dot(up) < 0 {
-			face.reversed = !face.reversed
+			face.n.Reversed = !face.n.Reversed
 		}
 		if b.sigma > 0 {
-			face.reversed = !face.reversed
+			face.n.Reversed = !face.n.Reversed
 		}
 		for _, ce := range loop.coedges {
 			ce.edge.faces = append(ce.edge.faces, face)

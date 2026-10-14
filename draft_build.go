@@ -242,20 +242,24 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		return nil, err
 	}
 	capStart := &Face{
-		surface:       Plane{Frame: startFrame},
-		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
-		body:          body,
-		loops:         startLoops,
-		axialDelta:    dp.z0Delta,
-		hasAxialDelta: true,
+		surface: Plane{Frame: startFrame},
+		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
+		body:    body,
+		loops:   startLoops,
+		n: topo.Face{
+			AxialDelta:    dp.z0Delta,
+			HasAxialDelta: true,
+		},
 	}
 	capEnd := &Face{
-		surface:       Plane{Frame: endFrame},
-		origins:       []FeatureRef{{producer: ref, Role: roleCapEnd}},
-		body:          body,
-		loops:         endLoops,
-		axialDelta:    dp.z1Delta,
-		hasAxialDelta: true,
+		surface: Plane{Frame: endFrame},
+		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
+		body:    body,
+		loops:   endLoops,
+		n: topo.Face{
+			AxialDelta:    dp.z1Delta,
+			HasAxialDelta: true,
+		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
 		return nil, err

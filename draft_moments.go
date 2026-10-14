@@ -89,8 +89,8 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 			proofbound.SectionDisplacementArea(band.delta, len(loop.Segments), capContourPerimeterUpper(band.capCo)))
 		farArea = proofbound.BoundedAdd(farArea, signed(far))
 	}
-	nearCap.area, nearCap.areaBound = nearArea.Value, nearArea.Bound
-	farCap.area, farCap.areaBound = farArea.Value, farArea.Bound
+	nearCap.n.Area, nearCap.n.AreaBound = nearArea.Value, nearArea.Bound
+	farCap.n.Area, farCap.n.AreaBound = farArea.Value, farArea.Bound
 
 	body.volume = Measurement{
 		Value:     units.CubicMillimeters(volume.Value),

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -104,7 +105,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		}
 		faces = append(faces, sideFaces...)
 		for _, f := range sideFaces {
-			sideArea = proofbound.BoundedAdd(sideArea, proofbound.MeasuredScalar(f.area, f.areaBound))
+			sideArea = proofbound.BoundedAdd(sideArea, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
 		}
 		_ = loopLen
 
@@ -261,24 +262,28 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		return nil, err
 	}
 	capStart := &Face{
-		surface:       Plane{Frame: startFrame},
-		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
-		body:          body,
-		loops:         startLoopObjs,
-		area:          startArea.Value,
-		areaBound:     startArea.Bound,
-		axialDelta:    cbp.z0Delta,
-		hasAxialDelta: true,
+		surface: Plane{Frame: startFrame},
+		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
+		body:    body,
+		loops:   startLoopObjs,
+		n: topo.Face{
+			Area:          startArea.Value,
+			AreaBound:     startArea.Bound,
+			AxialDelta:    cbp.z0Delta,
+			HasAxialDelta: true,
+		},
 	}
 	capEnd := &Face{
-		surface:       Plane{Frame: endFrame},
-		origins:       []FeatureRef{{producer: ref, Role: roleCapEnd}},
-		body:          body,
-		loops:         endLoopObjs,
-		area:          endArea.Value,
-		areaBound:     endArea.Bound,
-		axialDelta:    cbp.z1Delta,
-		hasAxialDelta: true,
+		surface: Plane{Frame: endFrame},
+		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
+		body:    body,
+		loops:   endLoopObjs,
+		n: topo.Face{
+			Area:          endArea.Value,
+			AreaBound:     endArea.Bound,
+			AxialDelta:    cbp.z1Delta,
+			HasAxialDelta: true,
+		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
 		return nil, err

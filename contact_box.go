@@ -70,11 +70,11 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	}
 	for _, face := range faces {
 		plane, ok := face.surface.(Plane)
-		if !ok || face.normalBound != 0 {
+		if !ok || face.n.NormalBound != 0 {
 			return sourceBoxContactProof{}, false
 		}
 		normal := plane.Frame.N()
-		if face.reversed {
+		if face.n.Reversed {
 			normal = normal.Scale(-1)
 		}
 		normal = pose.ApplyDir(normal)

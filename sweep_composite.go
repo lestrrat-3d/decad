@@ -356,7 +356,7 @@ func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]stru
 		if err := budget.Step(); err != nil {
 			return err
 		}
-		if proofbound.AdmitAbove(proofbound.MeasuredScalar(face.area, face.areaBound), 0) != proofbound.SurvAdmit {
+		if proofbound.AdmitAbove(proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound), 0) != proofbound.SurvAdmit {
 			return fmt.Errorf(`%w: a composite sweep face is not proven to have positive area`, ErrUnsupported)
 		}
 		if len(face.loops) == 0 {

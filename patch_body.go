@@ -532,7 +532,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	// face set plus the faces this call adds to it.
 	areaAcc := proofbound.BoundedScalar{}
 	for _, f := range allFaces {
-		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.area, f.areaBound))
+		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
 	}
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(areaAcc.Value),
@@ -583,12 +583,12 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 // the source. axialDelta widens by delta under a non-identity placement, and
 // a placed copy of a face whose normalBound is nonzero refuses with
 // [ErrUnsupported], since no dimensionless term bounds the placement's own
-// rotation of the tag frame. A revolve face's denoted surface (Face.denoted)
+// rotation of the tag frame. A revolve face's denoted surface (topo.Face.Denoted)
 // carries over as its exact image under xform.
 func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transform, delta float64) ([]*Face, map[*Edge]*Edge, error) {
 	if xform != r3.Identity() {
 		for _, f := range srcFaces {
-			if f.normalBound != 0 {
+			if f.n.NormalBound != 0 {
 				return nil, nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
 			}
 		}
@@ -674,21 +674,23 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if err != nil {
 			return nil, nil, err
 		}
-		axialDelta := f.axialDelta
+		axialDelta := f.n.AxialDelta
 		if delta > 0 {
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 		nf := &Face{
-			surface:       publicSurface(transformed),
-			origins:       append([]FeatureRef(nil), f.origins...),
-			area:          f.area,
-			areaBound:     place.AreaOf(proofbound.MeasuredScalar(f.area, f.areaBound)).Bound,
-			reversed:      f.reversed,
-			heldPlanar:    f.heldPlanar,
-			axialDelta:    axialDelta,
-			hasAxialDelta: f.hasAxialDelta,
-			normalBound:   f.normalBound,
-			denoted:       f.denotedUnder(xform),
+			surface: publicSurface(transformed),
+			origins: append([]FeatureRef(nil), f.origins...),
+			n: topo.Face{
+				Area:          f.n.Area,
+				AreaBound:     place.AreaOf(proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound)).Bound,
+				Reversed:      f.n.Reversed,
+				HeldPlanar:    f.n.HeldPlanar,
+				AxialDelta:    axialDelta,
+				HasAxialDelta: f.n.HasAxialDelta,
+				NormalBound:   f.n.NormalBound,
+				Denoted:       f.denotedUnder(xform),
+			},
 		}
 		for _, l := range f.loops {
 			coedges := make([]coedge, len(l.coedges))
@@ -827,17 +829,19 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	}
 
 	return &Face{
-		surface:   Plane{Frame: frame},
-		origins:   []FeatureRef{{producer: ref, Role: rolePatch}},
-		loops:     []*Loop{{coedges: coedges, outer: true}},
-		area:      ig.Area,
-		areaBound: ig.AreaBound,
-		// A chain gate 3's level arm admitted has a proven-bounded plane
-		// origin, never a zero one: the same fields prism_build.go already
-		// sets on a prism's own caps (docs/surface-design.md §5.2). A chain
-		// the exact arm admitted instead carries a zero, unset bound here.
-		axialDelta:    axialDelta,
-		hasAxialDelta: chain.hasAxialBound,
+		surface: Plane{Frame: frame},
+		origins: []FeatureRef{{producer: ref, Role: rolePatch}},
+		loops:   []*Loop{{coedges: coedges, outer: true}},
+		n: topo.Face{
+			Area:      ig.Area,
+			AreaBound: ig.AreaBound,
+			// A chain gate 3's level arm admitted has a proven-bounded plane
+			// origin, never a zero one: the same fields prism_build.go already
+			// sets on a prism's own caps (docs/surface-design.md §5.2). A chain
+			// the exact arm admitted instead carries a zero, unset bound here.
+			AxialDelta:    axialDelta,
+			HasAxialDelta: chain.hasAxialBound,
+		},
 	}, nil
 }
 

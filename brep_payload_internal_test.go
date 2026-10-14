@@ -232,7 +232,7 @@ func TestBrepFaceViewOfCircularPrismCoversItsMeasurements(t *testing.T) {
 	for _, f := range brep.Faces() {
 		if _, ok := f.Surface().(Cylinder); ok {
 			cylinders++
-			require.True(t, f.reversed, `the hole's wall faces into the hole`)
+			require.True(t, f.n.Reversed, `the hole's wall faces into the hole`)
 		}
 	}
 	require.Equal(t, 1, cylinders)
@@ -277,7 +277,7 @@ func TestBrepFaceViewOfStackedPrismMatchesItsMeasurements(t *testing.T) {
 	require.Equal(t, pocket.bounds, brep.bounds)
 	floors := 0
 	for _, f := range brep.Faces() {
-		if f.hasAxialDelta && f.Surface().(Plane).Frame.Origin().Z == 6 {
+		if f.n.HasAxialDelta && f.Surface().(Plane).Frame.Origin().Z == 6 {
 			floors++
 		}
 	}
@@ -582,7 +582,7 @@ func TestBrepFaceViewOfStackedUnionCoversItsMeasurements(t *testing.T) {
 			for _, f := range brep.Faces() {
 				if _, ok := f.Surface().(Cylinder); ok {
 					cylinders++
-					require.False(t, f.reversed, `the boss's wall faces out`)
+					require.False(t, f.n.Reversed, `the boss's wall faces out`)
 				}
 			}
 			require.Equal(t, 1, cylinders)

@@ -344,12 +344,12 @@ func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts 
 	faces := body.Faces()
 	areas := make([]proofbound.BoundedScalar, len(faces))
 	for i, face := range faces {
-		areas[i] = proofbound.MeasuredScalar(face.area, face.areaBound)
+		areas[i] = proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound)
 	}
 	var startCap, endCap proofbound.BoundedScalar
 	if surfaceResult {
-		startCap = proofbound.MeasuredScalar(parts[0].startCap.area, parts[0].startCap.areaBound)
-		endCap = proofbound.MeasuredScalar(parts[len(parts)-1].endCap.area, parts[len(parts)-1].endCap.areaBound)
+		startCap = proofbound.MeasuredScalar(parts[0].startCap.n.Area, parts[0].startCap.n.AreaBound)
+		endCap = proofbound.MeasuredScalar(parts[len(parts)-1].endCap.n.Area, parts[len(parts)-1].endCap.n.AreaBound)
 	}
 	readings, err := compositesweep.Aggregate(budget, spans, areas, surfaceResult, startCap, endCap)
 	if err != nil {

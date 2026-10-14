@@ -160,7 +160,7 @@ func capPatchUndercuts(roles map[string]*Face, pl prismPayload, patches []capPat
 		// (capblend_departure.go) into it directly, and its flat arm takes
 		// that same departure already composed into Face.NormalAt's own
 		// published bound (topology.go), since a flat patch has only the one
-		// reading to widen. Composing f.normalBound again here would charge a
+		// reading to widen. Composing f.n.NormalBound again here would charge a
 		// flat patch's departure twice.
 		allow := reading
 		if allow <= 0 {
@@ -224,7 +224,7 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 		v, _, ok := sampleAt(pl.Point(g.CU+r*cos, g.CV+r*sin, g.CapZ))
 		return v, ok
 	}
-	return capband.CircularNormalRange(g.Th0, g.Th1, g.WholeTurn, f.normalBound, model, sample)
+	return capband.CircularNormalRange(g.Th0, g.Th1, g.WholeTurn, f.n.NormalBound, model, sample)
 }
 
 // capBlendMinRadius is the tightest concave principal radius over a
@@ -235,7 +235,7 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 // patch's radius" is only a fact about the built surface where the built
 // surface really is that Plane or Cone. The build already proves and stamps
 // how far a patch's ruled surface can point away from the surface it
-// publishes (`f.normalBound`, `capblend_geom.go`'s `setPatchReadings`, derived
+// publishes (`f.n.NormalBound`, `capblend_geom.go`'s `setPatchReadings`, derived
 // in `capblend_departure.go`), and this survey answers only where that stamp
 // is an EXACT zero — a zero there means the built normal agrees with the
 // tag's everywhere on the patch, so the two surfaces share every tangent plane
@@ -296,7 +296,7 @@ func capBlendMinRadius(b *Body, cbp capBlendPayload) (radiusOutcome, bool) {
 		if f == nil {
 			return radiusOutcome{}, false
 		}
-		if capPatchWindowSkew(patch.geom) > 0 || f.normalBound != 0 {
+		if capPatchWindowSkew(patch.geom) > 0 || f.n.NormalBound != 0 {
 			return radiusOutcome{}, false
 		}
 	}

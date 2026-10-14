@@ -522,74 +522,21 @@ type Face struct {
 	loops   []*Loop
 	origins []FeatureRef
 	body    *Body
-	area    float64 // millimetres²
-	// areaBound is the proven error bound on area: analytic float evaluation
-	// or the composed chord bound for a boolean-built Faceted face.
-	areaBound float64
+	// n is the node data internal packages read and build (internal/topo).
+	n topo.Face
 	// centroid is present only for a face with its own proved area-centroid
 	// certificate; whole-group readings are not copied onto split patches.
-	centroid    VecMeasurement
-	hasCentroid bool
-	// axialDelta is the proven displacement of this planar face along its own
-	// normal. A body-relative ToFace stop carries this selected face's bound
-	// into the level it computes; hasAxialDelta distinguishes an exact zero
-	// from a face whose payload does not state an axial bound.
-	axialDelta    float64
-	hasAxialDelta bool
-	// heldPlanar records that a Faceted face descends only from PLANAR source
-	// faces, so the face it stands for in the true result is flat — and a rim
-	// between two such faces is a straight line, whose chord length is honest.
-	// The surface TAG cannot say this for an ordinary mesh boolean: its faces
-	// all read Faceted, including the ones that are plainly flat. A structural
-	// boolean may instead retain a certified source Plane.
-	heldPlanar bool
-	// reversed is true when the OUTWARD (material-leaving) normal is the
-	// surface's geometric normal negated — a hole's cylinder wall, whose
-	// material lies outside the cylinder.
-	reversed bool
-	// normalBound is the proven DIMENSIONLESS bound on NormalAt's own answer:
-	// how far the surface this face really carries can tilt away from the
-	// tagged variant the normal is computed from. It is zero for every face
-	// whose own geometry IS its tag, and for a revolve wall, whose departure
-	// rides in denoted instead. It is nonzero for a revolve's cap (its
-	// angular displacement, which NormalAt reads only where the cap carries
-	// no denoted plane) and for a cap-loop chamfer's band patch: the
-	// patch is RULED between two built directrices, and the `Cone` or `Plane`
-	// it publishes is that ruled surface only to within a bound measured from
-	// the numbers the body publishes for it
-	// (capblend_departure.go, docs/modify-reach-design.md §8.3). The bound is a
-	// world-space one, so it covers both a mitered corner's own angular skew and
-	// the placement's independent rounding of every coordinate the build emits —
-	// which leaves the tag even on a flat patch, and on a circular one whose two
-	// windows coincide exactly. A zero term there would omit a direction
-	// difference the built surface has. A band patch's bound also carries the
-	// turn between that ruled surface and the wall its records denote, since
-	// the cap contour it rules to is a solved offset held within a proven
-	// displacement (capband.DenotedNormalAllow). NormalAt separately composes
-	// its arithmetic proof (normal_bound.go).
-	normalBound float64
-	// denoted is the surface a revolve wall or cap DENOTES — a wall's
-	// recorded meridian segment swept about its recorded axis, or a cap's
-	// plane through that axis at its end's recorded angle, enclosed exactly
-	// (surfacenormal.Revolved) — where the tag is only a float re-expression
-	// of it. NormalAt judges such a face's normal against it rather than
-	// against the tag, so the bound covers the tag's whole departure; nil
-	// for every face whose tag is its own denotation. It is not
-	// normalBound: no dimensionless term states the departure for every p.
-	// Stitch's flux arms integrate the tag, so they admit a revolve wall only
-	// where its tag is exactly this surface (stitch_flux.go's
-	// stitchFluxTagsDenoted).
-	denoted *surfacenormal.Revolved
+	centroid VecMeasurement
 }
 
 // denotedUnder carries a face's denoted surface onto a copy placed by xform:
 // the exact image of the source face's own, never a re-reading of the copy's
 // rounded tag.
 func (f *Face) denotedUnder(xform r3.Transform) *surfacenormal.Revolved {
-	if f.denoted == nil || xform == r3.Identity() {
-		return f.denoted
+	if f.n.Denoted == nil || xform == r3.Identity() {
+		return f.n.Denoted
 	}
-	out := f.denoted.Transformed(xform)
+	out := f.n.Denoted.Transformed(xform)
 	return &out
 }
 
@@ -597,7 +544,7 @@ func (f *Face) denotedUnder(xform r3.Transform) *surfacenormal.Revolved {
 // arithmetic proof for the normal of the face's tagged surface
 // (normal_bound.go) and any proven departure of the surface actually carried
 // from that tag (normalBound). A revolve wall's or cap's bound is instead
-// proven against the surface its record denotes (Face.denoted), which covers
+// proven against the surface its record denotes (topo.Face.Denoted), which covers
 // its tag's departure and the arm's arithmetic at once. It is Exact only when the
 // whole bound is zero. A point that gives the surface no direction is
 // ErrDegenerate. A reading whose own enclosure cannot separate the direction
@@ -684,17 +631,17 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 // tagAllow nor normalBound enters. The sign is exact, so it never changes the
 // bound.
 func (f *Face) normalMeasurement(p, dir r3.Vec, tagAllow func() (float64, surfacenormal.Status), degenerate string) (VecMeasurement, error) {
-	if f.reversed {
+	if f.n.Reversed {
 		dir = dir.Scale(-1)
 	}
 	var allow float64
 	var st surfacenormal.Status
 	departure := 0.0
-	if f.denoted != nil {
-		allow, st = f.denoted.Allow(p, dir, f.reversed)
+	if f.n.Denoted != nil {
+		allow, st = f.n.Denoted.Allow(p, dir, f.n.Reversed)
 	} else {
 		allow, st = tagAllow()
-		departure = f.normalBound
+		departure = f.n.NormalBound
 	}
 	switch st {
 	case surfacenormal.Zero:
@@ -732,9 +679,9 @@ func (f *Face) Edges() []*Edge {
 // return Approximate with their proven bounds.
 func (f *Face) Area() (Measurement, error) {
 	return Measurement{
-		Value:     units.SquareMillimeters(f.area),
-		Exactness: exactnessOf(f.areaBound),
-		Bound:     units.SquareMillimeters(f.areaBound),
+		Value:     units.SquareMillimeters(f.n.Area),
+		Exactness: exactnessOf(f.n.AreaBound),
+		Bound:     units.SquareMillimeters(f.n.AreaBound),
 	}, nil
 }
 
@@ -742,7 +689,7 @@ func (f *Face) Area() (Measurement, error) {
 // Point-loft far caps and their planar Split caps provide one; other faces
 // currently return ErrUnsupported.
 func (f *Face) Centroid() (VecMeasurement, error) {
-	if !f.hasCentroid {
+	if !f.n.HasCentroid {
 		return VecMeasurement{}, fmt.Errorf("%w: this face has no bounded area centroid", ErrUnsupported)
 	}
 	return f.centroid, nil
@@ -752,7 +699,7 @@ func (f *Face) Centroid() (VecMeasurement, error) {
 // Plane is by construction, and a Faceted face is when every source it descends
 // from was. It is not the same question as the surface tag.
 func (f *Face) isPlanar() bool {
-	return f.surface.Kind() == KindPlane || f.heldPlanar
+	return f.surface.Kind() == KindPlane || f.n.HeldPlanar
 }
 
 // Origins returns every feature role that created this face —

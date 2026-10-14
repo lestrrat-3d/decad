@@ -73,7 +73,7 @@ func TestClassBCutCrossDrilledBox(t *testing.T) {
 	for _, f := range result.Faces() {
 		if _, ok := f.Surface().(Cylinder); ok {
 			cylinders++
-			require.True(t, f.reversed, `the hole's wall faces into the hole`)
+			require.True(t, f.n.Reversed, `the hole's wall faces into the hole`)
 		}
 		if _, planar := f.Surface().(Plane); planar && len(f.Loops()) == 2 {
 			holed++

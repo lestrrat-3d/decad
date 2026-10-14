@@ -37,11 +37,11 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 	}
 	for _, face := range faces {
 		plane, ok := face.surface.(Plane)
-		if !ok || face.normalBound != 0 {
+		if !ok || face.n.NormalBound != 0 {
 			return orientedSourceBox{}, false
 		}
 		normal := plane.Frame.N()
-		if face.reversed {
+		if face.n.Reversed {
 			normal = normal.Scale(-1)
 		}
 		mapped := false
@@ -259,11 +259,11 @@ func publishOrientedAxisPatch(report *ContactReport, a, b *orientedSourceBox) {
 func orientedSourceFace(body *Body, pose r3.Transform, axis, side int) *Face {
 	for _, face := range body.Faces() {
 		plane, ok := face.surface.(Plane)
-		if !ok || face.normalBound != 0 {
+		if !ok || face.n.NormalBound != 0 {
 			continue
 		}
 		normal := plane.Frame.N()
-		if face.reversed {
+		if face.n.Reversed {
 			normal = normal.Scale(-1)
 		}
 		normal = pose.ApplyDir(normal)

@@ -259,7 +259,7 @@ func measureCounterboreShell(ctx context.Context, bp brepPayload, body *Body) er
 		Bound: units.Millimeters(cb), Exactness: exactnessOf(cb)}
 	var surfaceArea proofbound.BoundedScalar
 	for _, face := range body.Faces() {
-		surfaceArea = proofbound.BoundedAdd(surfaceArea, proofbound.MeasuredScalar(face.area, face.areaBound))
+		surfaceArea = proofbound.BoundedAdd(surfaceArea, proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound))
 	}
 	body.area = Measurement{Value: units.SquareMillimeters(surfaceArea.Value),
 		Bound: units.SquareMillimeters(surfaceArea.Bound), Exactness: exactnessOf(surfaceArea.Bound)}

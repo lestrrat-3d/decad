@@ -186,8 +186,8 @@ func TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta(t *testing.
 	chain := bodyPatchChain{edges: edges, axialBound: 0.002, hasAxialBound: true, level: tok}
 	face, err := buildPatchFace(context.Background(), 0, chain, edgeCopy, r3.Identity(), 0)
 	require.NoError(t, err)
-	require.True(t, face.hasAxialDelta, "the new face carries the level arm's own axial bound")
-	require.Equal(t, 0.002, face.axialDelta)
+	require.True(t, face.n.HasAxialDelta, "the new face carries the level arm's own axial bound")
+	require.Equal(t, 0.002, face.n.AxialDelta)
 	plane, ok := face.surface.(Plane)
 	require.True(t, ok)
 	// orientPatchChain reverses each edge relative to this fixture's own

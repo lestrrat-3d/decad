@@ -111,7 +111,7 @@ func stitchTestSquareFace(corner r3.Vec) *Face {
 			{edge: edges[2], forward: true},
 			{edge: edges[3], forward: true},
 		}}},
-		area: 100,
+		n: topo.Face{Area: 100},
 	}
 	for _, e := range edges {
 		e.faces = []*Face{f}
@@ -263,7 +263,7 @@ func TestStitchFluxRefusesNURBSSurface(t *testing.T) {
 // public seam.
 func TestStitchFluxRefusesNonzeroNormalBound(t *testing.T) {
 	t.Parallel()
-	f := &Face{surface: Plane{Frame: mustPlaneFrame()}, normalBound: 1e-9}
+	f := &Face{surface: Plane{Frame: mustPlaneFrame()}, n: topo.Face{NormalBound: 1e-9}}
 	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 }
@@ -374,18 +374,20 @@ func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound flo
 			{outer: true, coedges: []coedge{{edge: e0, forward: true}}},
 			{outer: true, coedges: []coedge{{edge: e1, forward: true}}},
 		},
-		area:      area,
-		areaBound: areaBound,
+		n: topo.Face{
+			Area:      area,
+			AreaBound: areaBound,
+		},
 	}
 	e0.faces, e1.faces = []*Face{f}, []*Face{f}
 	return f
 }
 
 // TestStitchCylinderFluxReusesAreaBound is the Cylinder area-bound
-// composition's own shown-to-fail leg: K_F = σ·Radius·f.area reuses the
+// composition's own shown-to-fail leg: K_F = σ·Radius·f.n.Area reuses the
 // face's own already-proven area/areaBound rather than integrating
 // anything fresh (this file's own doc comment), so the flux's own bound
-// must scale with f.areaBound exactly through proofbound.BoundedMul's proofbound.ProductUpper
+// must scale with f.n.AreaBound exactly through proofbound.BoundedMul's proofbound.ProductUpper
 // term — driven directly at stitchFaceFluxAndMoment so neither stitchflux.PiScalar's
 // own tiny representation error nor any other term can mask the leg,
 // unlike the whole-pipeline reading where every term is the same tiny
@@ -397,7 +399,7 @@ func TestStitchCylinderFluxReusesAreaBound(t *testing.T) {
 	f := stitchTestCylinderFace(r, height, area, 1.0)                    // areaBound=1, far above ulp noise
 	flux, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, flux.Bound, r*1.0, "the flux bound must scale with f.areaBound through the Radius multiply")
+	require.GreaterOrEqual(t, flux.Bound, r*1.0, "the flux bound must scale with f.n.AreaBound through the Radius multiply")
 
 	zero := stitchTestCylinderFace(r, height, area, 0)
 	fluxZero, _, _, _, err := stitchFaceFluxAndMoment(zero, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
@@ -754,9 +756,11 @@ func sphereRevolveFacesForInternalTest(t *testing.T, diameter float64) []*Face {
 // an area bound at the same ulp scale every OTHER term here carries too).
 func stitchTestSphereFace(center r3.Vec, radius, areaBound float64) *Face {
 	return &Face{
-		surface:   Sphere{Center: center, Radius: units.Millimeters(radius)},
-		area:      4 * math.Pi * radius * radius,
-		areaBound: areaBound,
+		surface: Sphere{Center: center, Radius: units.Millimeters(radius)},
+		n: topo.Face{
+			Area:      4 * math.Pi * radius * radius,
+			AreaBound: areaBound,
+		},
 	}
 }
 
@@ -765,10 +769,10 @@ func stitchTestSphereFace(center r3.Vec, radius, areaBound float64) *Face {
 // circumference from at all (stitchflux.SphereFaceFluxAndMoment's own doc comment),
 // stitchflux.SphereRadius derives the radius from the face's own already-proven
 // area/areaBound instead (Area = 4*pi*R^2, inverted) — so both the flux and
-// the first moment's own bound must scale with f.areaBound, through TWO
+// the first moment's own bound must scale with f.n.AreaBound, through TWO
 // redundant paths that both have to be zeroed together to lose the signal:
 // stitchflux.SphereRadius's own inversion, AND the K_F formula's own direct
-// reuse of f.areaBound in Radius*Area (the identical reuse
+// reuse of f.n.AreaBound in Radius*Area (the identical reuse
 // TestStitchCylinderFluxReusesAreaBound isolates for the Cylinder arm,
 // which for Sphere has no independent edge-based radius to fall back on).
 // Zeroing either path ALONE still leaves the other carrying the signal —
@@ -788,8 +792,8 @@ func TestStitchSphereFluxReusesAreaBound(t *testing.T) {
 	f := stitchTestSphereFace(center, radius, 1.0) // areaBound=1, far above ulp noise
 	flux, mx, _, _, err := stitchFaceFluxAndMoment(f, anchor)
 	require.NoError(t, err)
-	require.Greater(t, flux.Bound, 0.1, "the flux bound must scale with f.areaBound")
-	require.Greater(t, mx.Bound, 0.1, "the moment bound must scale with f.areaBound")
+	require.Greater(t, flux.Bound, 0.1, "the flux bound must scale with f.n.AreaBound")
+	require.Greater(t, mx.Bound, 0.1, "the moment bound must scale with f.n.AreaBound")
 
 	zero := stitchTestSphereFace(center, radius, 0)
 	fluxZero, mxZero, _, _, err := stitchFaceFluxAndMoment(zero, anchor)
@@ -812,14 +816,16 @@ func TestStitchSphereFluxDerivesRadiusFromAreaNotBareField(t *testing.T) {
 	t.Parallel()
 	const trueRadius = 5.0
 	f := &Face{
-		surface:   Sphere{Center: r3.NewVec(0, 0, 0), Radius: units.Millimeters(999)},
-		area:      4 * math.Pi * trueRadius * trueRadius,
-		areaBound: 0,
+		surface: Sphere{Center: r3.NewVec(0, 0, 0), Radius: units.Millimeters(999)},
+		n: topo.Face{
+			Area:      4 * math.Pi * trueRadius * trueRadius,
+			AreaBound: 0,
+		},
 	}
 
 	flux, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
 	require.NoError(t, err)
-	wantFlux := trueRadius * f.area
+	wantFlux := trueRadius * f.n.Area
 	require.InDelta(t, wantFlux, flux.Value, 1e-6,
 		"the published flux must come from the area-derived radius (5 mm), never the bare Sphere.Radius field (999 mm)")
 }
@@ -849,7 +855,7 @@ func TestStitchSphereFluxRefusesFaceWithABoundaryLoop(t *testing.T) {
 	f := &Face{
 		surface: Sphere{Center: r3.NewVec(5, 0, 0), Radius: units.Millimeters(5)},
 		loops:   []*Loop{{outer: true, coedges: []coedge{{edge: e, forward: true}}}},
-		area:    4 * math.Pi * 25,
+		n:       topo.Face{Area: 4 * math.Pi * 25},
 	}
 	e.faces = []*Face{f}
 
@@ -1158,7 +1164,7 @@ func TestStitchCurvedMassCorrectsInwardOrientationForTorus(t *testing.T) {
 func TestFaceIsTetrahedronEligibleRefusesHeldPlanarFaceted(t *testing.T) {
 	f := stitchTestSquareFace(r3.Vec{})
 	f.surface = Faceted{}
-	f.heldPlanar = true
+	f.n.HeldPlanar = true
 	require.True(t, f.isPlanar(), "the fixture's own premise: isPlanar() alone would admit this face")
 	require.False(t, faceIsTetrahedronEligible(f),
 		"a heldPlanar Faceted face is not a Plane, and triangulateStitchFaces would error on it")
@@ -1313,7 +1319,7 @@ func TestStitchConeArmChargesApexDeparture(t *testing.T) {
 	}
 	require.NotNil(t, face)
 	require.True(t, stitchflux.TagIsDenoted(stitchTaggedFace(face)))
-	exactBound, ok := stitchflux.ConeApexDeparture(face.denoted, surfacegeom.Cone(cone))
+	exactBound, ok := stitchflux.ConeApexDeparture(face.n.Denoted, surfacegeom.Cone(cone))
 	require.True(t, ok)
 	require.Zero(t, exactBound, "an apex the walk states exactly is charged nothing")
 
@@ -1323,7 +1329,7 @@ func TestStitchConeArmChargesApexDeparture(t *testing.T) {
 
 	moved := cone
 	moved.Origin = cone.Origin.Add(r3.NewVec(1e-6, 0, 0))
-	movedBound, ok := stitchflux.ConeApexDeparture(face.denoted, surfacegeom.Cone(moved))
+	movedBound, ok := stitchflux.ConeApexDeparture(face.n.Denoted, surfacegeom.Cone(moved))
 	require.True(t, ok)
 	require.GreaterOrEqual(t, movedBound, 1e-6)
 	mFlux, mMx, _, _, err := coneFaceFluxAndMoment(face, moved, anchor, 1)

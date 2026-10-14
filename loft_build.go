@@ -477,8 +477,8 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		// carries none of the two caps' own rounding, which §4.3 requires
 		// the sheet's bound to include.
 		areaScalar := proofbound.BoundedSub(
-			proofbound.BoundedSub(measurementScalar(body.area), proofbound.MeasuredScalar(capStart.area, capStart.areaBound)),
-			proofbound.MeasuredScalar(capEnd.area, capEnd.areaBound),
+			proofbound.BoundedSub(measurementScalar(body.area), proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound)),
+			proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound),
 		)
 		// Published Approximate EXPLICITLY, never derived from the composed
 		// bound: the solid loft's own mass.area() always publishes

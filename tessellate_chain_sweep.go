@@ -254,7 +254,7 @@ func chainSweepTriangleArea(vertices []r3.Vec, tri [3]int) (float64, float64, bo
 }
 
 func chainSweepFaceAreaSlack(f *Face, held chainSweepAreaInterval) (float64, error) {
-	slack, ok := proofbound.AreaSlack(f.area, f.areaBound, held.lo, held.hi)
+	slack, ok := proofbound.AreaSlack(f.n.Area, f.n.AreaBound, held.lo, held.hi)
 	if !ok {
 		return 0, fmt.Errorf(`%w: a chain sweep face has no certified area interval`, ErrUnsupported)
 	}

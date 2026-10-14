@@ -289,7 +289,7 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 		mesh.source[i] = liveFace
 		// Today's identity-copy routes preserve this bit. Keep the winding
 		// aligned if an admitted stitch ever reverses a live face.
-		if sourceFace.reversed != liveFace.reversed {
+		if sourceFace.n.Reversed != liveFace.n.Reversed {
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
 		}
 	}

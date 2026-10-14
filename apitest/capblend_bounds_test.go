@@ -746,7 +746,7 @@ func TestCapBlendPlanePatchVolumeIsExact(t *testing.T) {
 }
 
 // TestCapBlendPatchFacesReportTheirOwnArea checks that every constructed patch
-// Face carries the area its own geometry has. An unset Face.area is a zero value
+// Face carries the area its own geometry has. An unset topo.Face.Area is a zero value
 // with a zero bound, which the public reading publishes as an EXACT zero — not a
 // missing answer but a wrong one, asserted as fact about a face the body's own
 // area sum meanwhile counts in full. The two readings must agree, and neither

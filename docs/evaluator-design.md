@@ -69,8 +69,8 @@ index (core §3 invariant #3).
 
 Each topology type keeps its name, methods and godoc in the root package and
 holds its data by value in an `internal/topo` node (`Vertex` holds a
-`topo.Vertex`, `Edge` a `topo.Edge`), so internal packages can read and
-build it. The handle's pointer is still the identity; no other rule of this
+`topo.Vertex`, `Edge` a `topo.Edge`, `Face` a `topo.Face`), so internal
+packages can read and build it. The handle's pointer is still the identity; no other rule of this
 section changes.
 
 | Type | Holds |
@@ -585,7 +585,7 @@ its origin and centre are placed from the walk's (z, ρ), a centre within the
 contact tolerance is snapped onto the axis (a `Sphere`), a segment within the
 classifier's 1e-9 slope of parallel or perpendicular is tagged a `Cylinder` or
 a `Plane`, and a `Cone`'s half angle is a float `atan2` of rounded runs. The
-build stores the denoted surface beside the tag (`Face.denoted`,
+build stores the denoted surface beside the tag (`topo.Face.Denoted`,
 `surfacenormal.Revolved`, built by
 `revolveaxis.DenotationInput.WallDenotation` through
 `revolvemesh.RevolveLift.StraightWallNormal`/`CircularWallNormal`): a
