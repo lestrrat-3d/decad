@@ -36,9 +36,9 @@ import (
 // publish an inconsistent choice.
 func TestStitchOrientationRefusesMobiusAssembly(t *testing.T) {
 	t.Parallel()
-	e12 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: &Vertex{}, end: &Vertex{}}
-	e23 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: &Vertex{}, end: &Vertex{}}
-	e31 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: &Vertex{}, end: &Vertex{}}
+	e12 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{})), End: vertexNode(bornVertex(&Vertex{}))}}
+	e23 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{})), End: vertexNode(bornVertex(&Vertex{}))}}
+	e31 := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{})), End: vertexNode(bornVertex(&Vertex{}))}}
 
 	f1 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 		{edge: e12, forward: true}, {edge: e31, forward: true},
@@ -65,7 +65,7 @@ func TestStitchOrientationRefusesMobiusAssembly(t *testing.T) {
 // (correction 1, docs/surface-design.md §6.4).
 func TestStitchClosureRefusesNonManifoldEdge(t *testing.T) {
 	t.Parallel()
-	e := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: &Vertex{}, end: &Vertex{}}
+	e := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{})), End: vertexNode(bornVertex(&Vertex{}))}}
 	f1 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}}}
 	f2 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: false}}}}}
 	f3 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}}}
@@ -93,11 +93,11 @@ func stitchTestSquareFace(corner r3.Vec) *Face {
 	}
 	verts := make([]*Vertex, 4)
 	for i, p := range c {
-		verts[i] = &Vertex{n: topo.Vertex{Position: p}}
+		verts[i] = bornVertex(&Vertex{n: topo.Vertex{Position: p}})
 	}
 	edges := make([]*Edge, 4)
 	for i := range 4 {
-		edges[i] = &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: verts[i], end: verts[(i+1)%4]}
+		edges[i] = &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(verts[i]), End: vertexNode(verts[(i+1)%4])}}
 	}
 	frame, err := r3.NewFrame(c[0], r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	if err != nil {
@@ -179,14 +179,14 @@ func TestStitchRuleSRefusesMultipleSourceBodies(t *testing.T) {
 // as a two-face PATH, also admitted.
 func stitchTestFanAroundVertex(v *Vertex, outer [3]*Vertex) [3]*Face {
 	radial := [3]*Edge{
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v, end: outer[0]},
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v, end: outer[1]},
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v, end: outer[2]},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v), End: vertexNode(outer[0])}},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v), End: vertexNode(outer[1])}},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v), End: vertexNode(outer[2])}},
 	}
 	rim := [3]*Edge{
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: outer[0], end: outer[1]},
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: outer[1], end: outer[2]},
-		{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: outer[2], end: outer[0]},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(outer[0]), End: vertexNode(outer[1])}},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(outer[1]), End: vertexNode(outer[2])}},
+		{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(outer[2]), End: vertexNode(outer[0])}},
 	}
 	var faces [3]*Face
 	for i := range 3 {
@@ -229,9 +229,9 @@ func stitchTestFanAroundVertex(v *Vertex, outer [3]*Vertex) [3]*Face {
 // other legs can never be mistaken for a fix or a break here.
 func TestStitchVertexLinkAuditRefusesPinchedVertex(t *testing.T) {
 	t.Parallel()
-	v := &Vertex{}
-	fanA := stitchTestFanAroundVertex(v, [3]*Vertex{{}, {}, {}})
-	fanB := stitchTestFanAroundVertex(v, [3]*Vertex{{}, {}, {}})
+	v := bornVertex(&Vertex{})
+	fanA := stitchTestFanAroundVertex(v, [3]*Vertex{bornVertex(&Vertex{}), bornVertex(&Vertex{}), bornVertex(&Vertex{})})
+	fanB := stitchTestFanAroundVertex(v, [3]*Vertex{bornVertex(&Vertex{}), bornVertex(&Vertex{}), bornVertex(&Vertex{})})
 
 	faces := append(append([]*Face{}, fanA[:]...), fanB[:]...)
 	err := auditVertexLinksForStitchFaces(context.Background(), faces)
@@ -362,11 +362,11 @@ func stitchTestCylinderFace(r, height, area, areaBound float64) *Face {
 // rB.value comes out r, matching every other field here) and rimBound is
 // otherwise free to set to whatever the test wants to prove propagates.
 func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound float64) *Face {
-	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, 0)}}
-	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, height)}}
+	v0 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, 0)}})
+	v1 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, height)}})
 	length := 2 * math.Pi * r
-	e0 := &Edge{start: v0, end: v0, n: topo.Edge{Length: length, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}}}
-	e1 := &Edge{start: v1, end: v1, n: topo.Edge{Length: length, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, height), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}}}
+	e0 := &Edge{n: topo.Edge{Length: length, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, Start: vertexNode(v0), End: vertexNode(v0)}}
+	e1 := &Edge{n: topo.Edge{Length: length, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, height), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, Start: vertexNode(v1), End: vertexNode(v1)}}
 	f := &Face{
 		loops: []*Loop{
 			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e0, forward: true}}},
@@ -450,8 +450,8 @@ func stitchTestPlaneDiskFace(r, rimBound float64) *Face {
 	if err != nil {
 		panic(err)
 	}
-	v := &Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, 0)}}
-	e := &Edge{start: v, end: v, n: topo.Edge{Length: 2 * math.Pi * r, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}}}
+	v := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, 0)}})
+	e := &Edge{n: topo.Edge{Length: 2 * math.Pi * r, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, Start: vertexNode(v), End: vertexNode(v)}}
 	f := &Face{
 		n:     topo.Face{Surface: surfacegeom.Plane{Frame: frame}},
 		loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}},
@@ -500,10 +500,8 @@ func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
 	require.NoError(t, err)
 	const radius = 2.0
 	center := frame.Origin().Add(frame.U()).Add(frame.V().Scale(0.5))
-	vertex := &Vertex{n: topo.Vertex{Position: center.Add(frame.U().Scale(radius))}}
-	edge := &Edge{
-		start: vertex, end: vertex, n: topo.Edge{Length: 2 * math.Pi * radius, Curve: surfacegeom.Circle3{Center: center, Axis: frame.N(), Radius: units.Millimeters(radius)}},
-	}
+	vertex := bornVertex(&Vertex{n: topo.Vertex{Position: center.Add(frame.U().Scale(radius))}})
+	edge := &Edge{n: topo.Edge{Length: 2 * math.Pi * radius, Curve: surfacegeom.Circle3{Center: center, Axis: frame.N(), Radius: units.Millimeters(radius)}, Start: vertexNode(vertex), End: vertexNode(vertex)}}
 	face := &Face{
 		n:     topo.Face{Surface: surfacegeom.Plane{Frame: frame}},
 		loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: edge, forward: true}}}},
@@ -556,12 +554,12 @@ func stitchTestConeFace(halfAngle, r0, z0, r1, z1, rimBound float64) *Face {
 	axis := r3.NewVec(0, 0, 1)
 	center0 := r3.NewVec(0, 0, z0)
 	center1 := r3.NewVec(0, 0, z1)
-	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(r0, 0, z0)}}
-	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(r1, 0, z1)}}
+	v0 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(r0, 0, z0)}})
+	v1 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(r1, 0, z1)}})
 	length0 := 2 * math.Pi * r0
 	length1 := 2 * math.Pi * r1
-	e0 := &Edge{start: v0, end: v0, n: topo.Edge{Length: length0, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: center0, Axis: axis, Radius: units.Millimeters(r0)}}}
-	e1 := &Edge{start: v1, end: v1, n: topo.Edge{Length: length1, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: center1, Axis: axis, Radius: units.Millimeters(r1)}}}
+	e0 := &Edge{n: topo.Edge{Length: length0, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: center0, Axis: axis, Radius: units.Millimeters(r0)}, Start: vertexNode(v0), End: vertexNode(v0)}}
+	e1 := &Edge{n: topo.Edge{Length: length1, LengthBound: rimBound, Curve: surfacegeom.Circle3{Center: center1, Axis: axis, Radius: units.Millimeters(r1)}, Start: vertexNode(v1), End: vertexNode(v1)}}
 	f := &Face{
 		n: topo.Face{Surface: surfacegeom.Cone{Origin: r3.NewVec(0, 0, 0), Axis: axis, Radius: units.Millimeters(0), HalfAngle: units.Radians(halfAngle)}},
 		loops: []*Loop{
@@ -843,11 +841,11 @@ func TestStitchSphereFluxDerivesRadiusFromAreaNotBareField(t *testing.T) {
 // unreachable Cone shape.
 func TestStitchSphereFluxRefusesFaceWithABoundaryLoop(t *testing.T) {
 	t.Parallel()
-	v := &Vertex{n: topo.Vertex{Position: r3.NewVec(5, 5, 0)}}
+	v := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(5, 5, 0)}})
 	e := &Edge{
-		start: v,
-		end:   v,
-		n:     topo.Edge{Length: 2 * math.Pi * 5, Curve: surfacegeom.Circle3{Center: r3.NewVec(5, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(5)}},
+		n: topo.Edge{Length: 2 * math.Pi * 5, Curve: surfacegeom.Circle3{Center: r3.NewVec(5, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(5)}, Start: vertexNode(v),
+			End: vertexNode(v),
+		},
 	}
 	f := &Face{
 		loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}},
@@ -965,10 +963,9 @@ func frustumShellAnalyticsForInternalTest(uLen, vLo0, vHi0, vLo1, vHi1 float64) 
 func stitchTestTorusFace(center, axis r3.Vec, major, minor, e0, e1 float64) *Face { //nolint:unparam // major is a real parameter of the shape this helper builds; every test so far happens to want the same one, but the formula-verification test below reads it back by name rather than as a bare literal.
 	rim := func(offset float64) *Edge {
 		rimCenter := center.Add(axis.Scale(offset))
-		v := &Vertex{n: topo.Vertex{Position: rimCenter}}
+		v := bornVertex(&Vertex{n: topo.Vertex{Position: rimCenter}})
 		return &Edge{
-			start: v, end: v,
-			n: topo.Edge{Length: 2 * math.Pi * major, Curve: surfacegeom.Circle3{Center: rimCenter, Axis: axis, Radius: units.Millimeters(major)}},
+			n: topo.Edge{Length: 2 * math.Pi * major, Curve: surfacegeom.Circle3{Center: rimCenter, Axis: axis, Radius: units.Millimeters(major)}, Start: vertexNode(v), End: vertexNode(v)},
 		}
 	}
 	e0Edge, e1Edge := rim(e0), rim(e1)
@@ -1209,7 +1206,7 @@ func stitchTestClosedBoxTriangles(off int) [12][3]int {
 func stitchTestLumpFace(vs []*Vertex) *Face {
 	coedges := make([]coedge, len(vs))
 	for i := range vs {
-		e := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: vs[i], end: vs[(i+1)%len(vs)]}
+		e := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(vs[i]), End: vertexNode(vs[(i+1)%len(vs)])}}
 		coedges[i] = coedge{edge: e, forward: true}
 	}
 	return &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: coedges}}}
@@ -1252,7 +1249,7 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 
 	vertexObjs := make([]*Vertex, len(verts))
 	for i, p := range verts {
-		vertexObjs[i] = &Vertex{n: topo.Vertex{Position: p}}
+		vertexObjs[i] = bornVertex(&Vertex{n: topo.Vertex{Position: p}})
 	}
 
 	body := &Body{n: topo.Body{Solid: true, Kind: topo.BodySolid}}

@@ -107,7 +107,7 @@ func obliqueBossPlateWallRoles(rec *obliqueBossRecord) ([4]string, bool) {
 // selector. Its source record supplies every geometric surface.
 func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 	rec *obliqueBossRecord, radius, radiusDelta float64) (*Body, error) {
-	if len(edges) != 1 || edges[0].start != edges[0].end {
+	if len(edges) != 1 || edges[0].n.Start != edges[0].n.End {
 		return nil, fmt.Errorf("%w: an oblique boss fillet needs its one complete junction edge", ErrUnsupported)
 	}
 	if _, ok := edges[0].n.Curve.(surfacegeom.FacetedCurve); !ok {

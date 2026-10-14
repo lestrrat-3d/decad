@@ -241,7 +241,7 @@ func validateCompositeSweepRims(ctx context.Context, parts []compositeSpanPart) 
 				toUse := to.loops[li].coedges[ci]
 				fromEdge := fromUse.edge
 				toEdge := toUse.edge
-				if fromEdge == nil || toEdge == nil || fromEdge.start == nil || fromEdge.end == nil || toEdge.start == nil || toEdge.end == nil {
+				if fromEdge == nil || toEdge == nil || fromEdge.n.Start == nil || fromEdge.n.End == nil || toEdge.n.Start == nil || toEdge.n.End == nil {
 					return fmt.Errorf(`%w: an adjacent sweep section carries incomplete rim topology`, ErrUnsupported)
 				}
 				if fromEdge == toEdge {
@@ -288,11 +288,11 @@ func rewriteCompositeVertex(body *Body, old, replacement *Vertex) {
 		return
 	}
 	for _, edge := range body.Edges() {
-		if edge.start == old {
-			edge.start = replacement
+		if vertexHandle(edge.n.Start) == old {
+			edge.n.Start = vertexNode(replacement)
 		}
-		if edge.end == old {
-			edge.end = replacement
+		if vertexHandle(edge.n.End) == old {
+			edge.n.End = vertexNode(replacement)
 		}
 	}
 }
@@ -445,7 +445,7 @@ func auditVertexLinks(
 			faces[i] = use.face
 		}
 		edges[edge] = surfacegroup.LinkEdge[*Face, *Vertex]{
-			Start: edge.start, End: edge.end, Faces: faces, EndpointsValid: edge.start != nil && edge.end != nil,
+			Start: vertexHandle(edge.n.Start), End: vertexHandle(edge.n.End), Faces: faces, EndpointsValid: edge.n.Start != nil && edge.n.End != nil,
 		}
 	}
 	violation, err := surfacegroup.AuditVertexLinks(budget, edges)

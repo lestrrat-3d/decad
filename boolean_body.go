@@ -866,15 +866,13 @@ func buildFacetedTopology(
 		if v, ok := vertexObj[vi]; ok {
 			return v
 		}
-		v := &Vertex{n: topo.Vertex{Position: verts[vi], Bound: units.Millimeters(vertexBound[vi])}}
+		v := bornVertex(&Vertex{n: topo.Vertex{Position: verts[vi], Bound: units.Millimeters(vertexBound[vi])}})
 		vertexObj[vi] = v
 		return v
 	}
 	edgeObj := map[*facetedtopology.Edge]*Edge{}
 	for _, chain := range plan.Edges {
 		e := &Edge{
-			start: vertexOf(chain.Vertices[0]),
-			end:   vertexOf(chain.Vertices[len(chain.Vertices)-1]),
 			faces: []*Face{faces[chain.Faces[0]], faces[chain.Faces[1]]},
 			n: topo.Edge{
 				Convex:          chain.Convex,
@@ -882,6 +880,8 @@ func buildFacetedTopology(
 				LengthBound:     chain.LengthBound,
 				LengthUnbounded: chain.LengthUnbounded,
 				Curve:           surfacegeom.FacetedCurve{Bound: units.Millimeters(chain.Bound)},
+				Start:           vertexNode(vertexOf(chain.Vertices[0])),
+				End:             vertexNode(vertexOf(chain.Vertices[len(chain.Vertices)-1])),
 			},
 		}
 		if axialSectionJoin {

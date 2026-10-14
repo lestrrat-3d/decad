@@ -355,17 +355,17 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 	classOf = map[*Vertex]int{}
 	positions = make([]r3.Vec, 8)
 	for i, p := range corners {
-		verts[i] = &Vertex{n: topo.Vertex{Position: p}}
+		verts[i] = bornVertex(&Vertex{n: topo.Vertex{Position: p}})
 		classOf[verts[i]] = i
 		positions[i] = p
 	}
 	outerEdges := make([]*Edge, 4)
 	for i := range 4 {
-		outerEdges[i] = &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: verts[i], end: verts[(i+1)%4]}
+		outerEdges[i] = &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(verts[i]), End: vertexNode(verts[(i+1)%4])}}
 	}
 	holeEdges := make([]*Edge, 4)
 	for i := range 4 {
-		holeEdges[i] = &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: verts[4+i], end: verts[4+(i+1)%4]}
+		holeEdges[i] = &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(verts[4+i]), End: vertexNode(verts[4+(i+1)%4])}}
 	}
 	frame, err := r3.NewFrame(corner, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	if err != nil {

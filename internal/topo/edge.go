@@ -60,4 +60,8 @@ type Edge struct {
 	// Curve is the edge's tagged geometry in its internal variant. Root
 	// Edge.Curve converts it to the public variant with publicCurve.
 	Curve surfacegeom.Curve
+	// Start and End are the edge's end vertices. Root Edge.Start and
+	// Edge.End map them back to their handles.
+	Start *Vertex
+	End   *Vertex
 }

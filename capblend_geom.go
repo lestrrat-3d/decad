@@ -169,7 +169,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// in an edge's length bound.
 	capVertexAt := func(p planePoint, base float64) *Vertex {
 		held, lift := pl.LiftedVertex(p.U, p.V, capZ)
-		return &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, lift))}}
+		return bornVertex(&Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, lift))}})
 	}
 
 	// levelDelta is the side level's conversion and float-sum rounding: sideZ
@@ -368,7 +368,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		if !j.Arc {
 			var capV *Vertex
 			if suppliedCap != nil {
-				capV = supplied.wall[i].start
+				capV = vertexHandle(supplied.wall[i].n.Start)
 			} else {
 				capV = capVertexAt(j.M, capLevelDelta)
 			}
@@ -388,7 +388,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		}
 		var pAV, pBV *Vertex
 		if suppliedCap != nil {
-			pAV, pBV = supplied.arc[i].start, supplied.arc[i].end
+			pAV, pBV = vertexHandle(supplied.arc[i].n.Start), vertexHandle(supplied.arc[i].n.End)
 		} else {
 			pAV = capVertexAt(j.PA, capLevelDelta)
 			pBV = capVertexAt(j.PB, capLevelDelta)
@@ -426,7 +426,6 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			continue
 		}
 		arcByCorner[i] = &Edge{
-			start: pAV, end: pBV,
 			n: topo.Edge{
 				Convex: false,
 				Length: arcLength,
@@ -434,6 +433,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 					capcontour.ApexJoin{VU: j.VertU, VV: j.VertV, PA: j.PA, PB: j.PB},
 					dc, dcDelta, arcLength, wraps, delta),
 				Curve: surfacegeom.Arc3{Center: liftCap(planePoint{U: j.VertU, V: j.VertV}), Axis: pl.Dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
+				Start: vertexNode(pAV),
+				End:   vertexNode(pBV),
 			},
 		}
 		// The connector denotes the arc of every setback in dc's span about
@@ -559,7 +560,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		w := walks[i]
 		start, end := capWallFoot(joins, i, n)
 		nextI := (i + 1) % n
-		capA, capB := slantOut[i].start, slantIn[nextI].start
+		capA, capB := vertexHandle(slantOut[i].n.Start), vertexHandle(slantIn[nextI].n.Start)
 		side := sideCo[i].edge
 		leadSlant, trailSlant := slantOut[i], slantIn[nextI]
 
@@ -606,7 +607,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		switch {
 		case suppliedCap != nil:
 			capEdge = supplied.wall[i]
-			if capEdge.start != capA || capEdge.end != capB {
+			if vertexHandle(capEdge.n.Start) != capA || vertexHandle(capEdge.n.End) != capB {
 				return capBandResult{}, fmt.Errorf("a cap-loop band's supplied cap edge %d does not join the vertices its slant edges start from", i)
 			}
 		case !w.IsCircular():
@@ -614,11 +615,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// Both endpoints are contour points, so both carry the band's own
 			// displacement; the square root's own committed error is measured
 			// against the exact squared length.
-			capEdge = &Edge{start: capA, end: capB, n: topo.Edge{
+			capEdge = &Edge{n: topo.Edge{
 				Convex:      !cbp.draft || li == 0,
 				Length:      held,
 				LengthBound: capcontour.CapEdgeLengthBound(held, end, start, delta),
 				Curve:       surfacegeom.Line3{},
+				Start:       vertexNode(capA),
+				End:         vertexNode(capB),
 			},
 			}
 		default:
@@ -914,11 +917,13 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP planePoint, capV, apex *Ve
 	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
 	squared, squaredOK := proofarith.DySquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
 	heldBound := capcontour.StraightEdgeBound(held, squared, squaredOK, delta, levelDelta)
-	e := &Edge{start: capV, end: apex, n: topo.Edge{
+	e := &Edge{n: topo.Edge{
 		Convex:      true,
 		Length:      held,
 		LengthBound: heldBound,
 		Curve:       surfacegeom.Line3{},
+		Start:       vertexNode(capV),
+		End:         vertexNode(apex),
 	},
 	}
 	if affine || dc <= 0 || (!prev.IsCircular() && !cur.IsCircular()) {
@@ -951,12 +956,12 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP planePoint, capV, apex *Ve
 func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta float64, exactRadius proofbound.RatInterval) *Edge {
 	seamU := cu + r
 	seamPos, lift := pl.LiftedVertex(seamU, cv, z)
-	seam := &Vertex{
+	seam := bornVertex(&Vertex{
 		n: topo.Vertex{
 			Position: seamPos,
 			Bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(delta, lift), proofarith.AddRoundError(cu, r, seamU))),
 		},
-	}
+	})
 	axis := pl.Dir(0, 0, 1)
 	if !ccw {
 		axis = axis.Scale(-1)
@@ -964,12 +969,13 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 	held := 2 * math.Pi * r
 	center := pl.Point(cu, cv, z)
 	e := &Edge{
-		start: seam, end: seam,
 		n: topo.Edge{
 			Convex:      ccw,
 			Length:      held,
 			LengthBound: capcontour.CapCircleLengthBound(exactRadius, held),
 			Curve:       surfacegeom.Circle3{Center: center, Axis: axis, Radius: units.Millimeters(r)},
+			Start:       vertexNode(seam),
+			End:         vertexNode(seam),
 		},
 	}
 	// The held radius sits within its own gap from exactRadius's ends of
@@ -998,12 +1004,13 @@ func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1
 		axis = axis.Scale(-1)
 	}
 	return &Edge{
-		start: start, end: end,
 		n: topo.Edge{
 			Convex:      th1 > th0,
 			Length:      length,
 			LengthBound: lengthBound,
 			Curve:       surfacegeom.Arc3{Center: pl.Point(cu, cv, z), Axis: axis, Radius: units.Millimeters(r)},
+			Start:       vertexNode(start),
+			End:         vertexNode(end),
 		},
 	}
 }

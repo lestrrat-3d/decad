@@ -29,8 +29,8 @@ func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload
 		return nil, false, nil
 	}
 	edge := edges[0]
-	if _, ok := edge.n.Curve.(surfacegeom.Line3); !ok || edge.start == nil || edge.end == nil ||
-		!capedge.P8TopFrontEdge(edge.start.n.Position, edge.end.n.Position) {
+	if _, ok := edge.n.Curve.(surfacegeom.Line3); !ok || edge.n.Start == nil || edge.n.End == nil ||
+		!capedge.P8TopFrontEdge(edge.n.Start.Position, edge.n.End.Position) {
 		return nil, false, nil
 	}
 	// The source integers and admitted quarter-millimeter radii are binary exact.

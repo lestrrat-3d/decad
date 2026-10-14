@@ -127,8 +127,8 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 	// Both edges denote the same two endpoints of the one recorded source
 	// line. The coordinate comparison above only rejects a failed restatement;
 	// it does not establish their source identity.
-	rewriteCompositeVertex(parts[0], previous.end.start, following.start.start)
-	rewriteCompositeVertex(parts[0], previous.end.end, following.start.end)
+	rewriteCompositeVertex(parts[0], vertexHandle(previous.end.n.Start), vertexHandle(following.start.n.Start))
+	rewriteCompositeVertex(parts[0], vertexHandle(previous.end.n.End), vertexHandle(following.start.n.End))
 	rewriteCompositeEdge(parts[0], previous.end, following.start)
 	following.start.faces = append(following.start.faces, previous.end.faces...)
 
@@ -180,8 +180,8 @@ func chainSpanRims(part *Body, arc, reverse bool) (chainRimPair, error) {
 
 func certifyChainRimPair(from, to *Edge) error {
 	return compositesweep.CertifyRimPair(
-		[2]*compositesweep.RimPost{chainRimPost(from.start), chainRimPost(from.end)},
-		[2]*compositesweep.RimPost{chainRimPost(to.start), chainRimPost(to.end)})
+		[2]*compositesweep.RimPost{chainRimPost(vertexHandle(from.n.Start)), chainRimPost(vertexHandle(from.n.End))},
+		[2]*compositesweep.RimPost{chainRimPost(vertexHandle(to.n.Start)), chainRimPost(vertexHandle(to.n.End))})
 }
 
 func chainRimPost(v *Vertex) *compositesweep.RimPost {

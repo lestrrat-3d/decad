@@ -185,9 +185,9 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 
 	t.Run("NURBSCurve rim", func(t *testing.T) {
 		edge := &Edge{
-			n:     topo.Edge{Curve: surfacegeom.NURBSCurve{}},
-			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
-			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
+			n: topo.Edge{Curve: surfacegeom.NURBSCurve{}, Start: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})),
+				End: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}})),
+			},
 		}
 		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
 		face := &Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}}
@@ -199,9 +199,9 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 
 	t.Run("FacetedCurve rim", func(t *testing.T) {
 		edge := &Edge{
-			n:     topo.Edge{Curve: surfacegeom.FacetedCurve{}},
-			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
-			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
+			n: topo.Edge{Curve: surfacegeom.FacetedCurve{}, Start: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})),
+				End: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}})),
+			},
 		}
 		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
 		face := &Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}}
@@ -216,9 +216,9 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 		// permitted keeps returning its agreed half-plane angle, never a
 		// refusal, once the vertices themselves agree.
 		edge := &Edge{
-			n:     topo.Edge{Curve: surfacegeom.Line3{}},
-			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
-			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
+			n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})),
+				End: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}})),
+			},
 		}
 		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
 		face := &Face{n: topo.Face{Surface: surfacegeom.Plane{Frame: planeFrame}}, loops: []*Loop{loop}}

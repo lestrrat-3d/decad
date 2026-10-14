@@ -37,14 +37,14 @@ import (
 // unplaced build still carries a positive delta wherever a station was
 // COMPUTED rather than pinned (loftPayload's own delta doc comment).
 func loftVertex(p r3.Vec, delta float64) *Vertex {
-	return &Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(delta)}}
+	return bornVertex(&Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(delta)}})
 }
 
 // loftEdge builds one straight loft edge between two vertex-table indices,
 // with the given walked-boundary convexity.
 func loftEdge(vertexObjs []*Vertex, positions []r3.Vec, a, b int, convex bool, delta float64) *Edge {
 	held, bound := loftmesh.EdgeLength(positions[a], positions[b], delta)
-	return &Edge{start: vertexObjs[a], end: vertexObjs[b], n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Line3{}}}
+	return &Edge{n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Line3{}, Start: vertexNode(vertexObjs[a]), End: vertexNode(vertexObjs[b])}}
 }
 
 // planeFromTriangle builds a face's Plane surface directly from one of its

@@ -96,10 +96,10 @@ func revolveRimSourceOf(rp revolvePayload, edges []*Edge, setback, setbackDelta 
 		return revolvemesh.RimSource{}, false
 	}
 	e := edges[0]
-	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok || e.start == nil || e.end == nil {
+	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok || e.n.Start == nil || e.n.End == nil {
 		return revolvemesh.RimSource{}, false
 	}
-	a, b := e.start.n.Position, e.end.n.Position
+	a, b := e.n.Start.Position, e.n.End.Position
 	lo, hi := r3.NewVec(xhi, 0, 0), r3.NewVec(xhi, outer, 0)
 	if (a != lo || b != hi) && (a != hi || b != lo) {
 		return revolvemesh.RimSource{}, false

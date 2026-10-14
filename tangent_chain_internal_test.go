@@ -135,15 +135,15 @@ func TestTangentContinuesFaceSheets(t *testing.T) {
 
 	var e *Edge
 	for _, cand := range box.Edges() {
-		a, b := cand.start.n.Position, cand.end.n.Position
+		a, b := cand.n.Start.Position, cand.n.End.Position
 		if a.Z == 4 && b.Z == 4 && a.Y == 0 && b.Y == 0 {
 			e = cand
 		}
 	}
 	require.NotNil(t, e)
-	v := e.end
+	v := vertexHandle(e.n.End)
 	if v.n.Position.X != 10 {
-		v = e.start
+		v = vertexHandle(e.n.Start)
 	}
 	var top, front, right *Face
 	for _, f := range box.Faces() {
@@ -168,13 +168,13 @@ func TestTangentContinuesFaceSheets(t *testing.T) {
 	require.NotNil(t, front)
 	require.NotNil(t, right)
 
-	far := &Vertex{n: topo.Vertex{Position: r3.NewVec(20, 0, 4)}}
-	cont := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v, end: far, faces: []*Face{front, top}}
+	far := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(20, 0, 4)}})
+	cont := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v), End: vertexNode(far)}, faces: []*Face{front, top}}
 	require.Equal(t, clearance.DegYes, tangentContinues(e, cont, v))
-	stop := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v, end: far, faces: []*Face{right, top}}
+	stop := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v), End: vertexNode(far)}, faces: []*Face{right, top}}
 	require.Equal(t, clearance.DegNo, tangentContinues(e, stop, v))
 	// The same line walked back over e is no continuation: its ray from v
 	// points along e's own.
-	back := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: v, end: &Vertex{n: topo.Vertex{Position: r3.NewVec(5, 0, 4)}}, faces: []*Face{front, top}}
+	back := &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v), End: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(5, 0, 4)}}))}, faces: []*Face{front, top}}
 	require.Equal(t, clearance.DegNo, tangentContinues(e, back, v))
 }

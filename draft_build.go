@@ -317,7 +317,7 @@ func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord,
 	level.Z0, level.Z1 = z, z
 	rimVertex := func(u, v, extra float64) *Vertex {
 		held, lift := pl.LiftedVertex(u, v, z)
-		return &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(zDelta, lift, extra))}}
+		return bornVertex(&Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(zDelta, lift, extra))}})
 	}
 	singleClosed := n == 1 && walks[0].Closed
 	verts := make([]*Vertex, n)

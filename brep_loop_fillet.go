@@ -243,7 +243,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		if err := newPatch(walkSurface(fr.walks[0]), []*Loop{
 			{coedges: []coedge{{edge: side, forward: true}}, n: topo.Loop{Outer: true}},
 			{coedges: []coedge{{edge: capE, forward: false}}, n: topo.Loop{Outer: true}},
-		}, capE.start); err != nil {
+		}, vertexHandle(capE.n.Start)); err != nil {
 			return nil, brepBandMass{}, err
 		}
 	} else {
@@ -253,9 +253,9 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		}
 		capAt := func(k int) *Vertex {
 			if supplied.wall[k] != nil {
-				return supplied.wall[k].start
+				return vertexHandle(supplied.wall[k].n.Start)
 			}
-			return supplied.wall[(k+1)%n].start
+			return vertexHandle(supplied.wall[(k+1)%n].n.Start)
 		}
 		meridianLen, meridianBound := heldOf(filletband.MeridianLength(rIv))
 		// meridian is the quarter circle of radius r about the ball centre
@@ -281,14 +281,13 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				}
 				axis = tangent
 			}
-			return &Edge{
-				start: capV, end: sideV, n: topo.Edge{Convex: convex, Length: meridianLen, LengthBound: meridianBound, Curve: surfacegeom.Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)}}}
+			return &Edge{n: topo.Edge{Convex: convex, Length: meridianLen, LengthBound: meridianBound, Curve: surfacegeom.Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)}, Start: vertexNode(capV), End: vertexNode(sideV)}}
 		}
 		lead, trail := make([]*Edge, n), make([]*Edge, n)
 		for k := range n {
 			j := fr.joins[k]
 			w := fr.walks[k]
-			sideV := sideCo[k].edge.start
+			sideV := vertexHandle(sideCo[k].edge.n.Start)
 			switch fr.loop.Corners[k] {
 			case filletband.Reflex:
 				arc := supplied.arc[k]
@@ -296,8 +295,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 					return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's LF6 corner %d has no connector arc`, ErrUnsupported, bi, k)
 				}
 				arc.n.Convex = convex
-				trail[k] = meridian(j.PA, w, straightWalk(w, nil), arc.start, sideV)
-				lead[k] = meridian(j.PB, w, straightWalk(w, nil), arc.end, sideV)
+				trail[k] = meridian(j.PA, w, straightWalk(w, nil), vertexHandle(arc.n.Start), sideV)
+				lead[k] = meridian(j.PB, w, straightWalk(w, nil), vertexHandle(arc.n.End), sideV)
 			case filletband.Tangent:
 				prev := fr.walks[(k+n-1)%n]
 				lead[k] = meridian(j.M, w, straightWalk(prev, &w), capAt(k), sideV)
@@ -310,8 +309,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 						ErrUnsupported, renderCoord(w.StartU), renderCoord(w.StartV))
 				}
 				held, bound := heldOf(length)
-				lead[k] = &Edge{start: capAt(k), end: sideV,
-					n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.FilletMiter3{}}}
+				lead[k] = &Edge{
+					n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.FilletMiter3{}, Start: vertexNode(capAt(k)), End: vertexNode(sideV)}}
 				trail[k] = lead[k]
 			default:
 				kappa, err := filletband.Kappa(fr.loop.Walks[(k+n-1)%n], fr.loop.Walks[k])
@@ -327,10 +326,11 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				semi := math.Hypot(bu, bv)
 				major := pl.Dir(bu/semi, bv/semi, 0)
 				axis, _ := major.Cross(up).Normalize()
-				lead[k] = &Edge{
-					start: capAt(k), end: sideV, n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis, Major: major,
-						SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
-					},
+				lead[k] = &Edge{n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis, Major: major,
+					SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
+					Start: vertexNode(capAt(k)),
+					End:   vertexNode(sideV),
+				},
 				}
 				trail[k] = lead[k]
 			}
@@ -340,8 +340,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			wall := supplied.wall[i]
 			if wall == nil {
 				pole := capAt(i)
-				if pole != capAt(next) || lead[i].start != pole || trail[next].start != pole ||
-					sideCo[i].edge.start != lead[i].end || sideCo[i].edge.end != trail[next].end {
+				if pole != capAt(next) || vertexHandle(lead[i].n.Start) != pole || vertexHandle(trail[next].n.Start) != pole ||
+					sideCo[i].edge.n.Start != lead[i].n.End || sideCo[i].edge.n.End != trail[next].n.End {
 					return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's sphere patch %d does not close`, ErrUnsupported, bi, i)
 				}
 				sideCo[i].edge.n.Convex = convex
@@ -354,8 +354,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				}
 				continue
 			}
-			if wall.start != lead[i].start || wall.end != trail[next].start ||
-				sideCo[i].edge.start != lead[i].end || sideCo[i].edge.end != trail[next].end {
+			if wall.n.Start != lead[i].n.Start || wall.n.End != trail[next].n.Start ||
+				sideCo[i].edge.n.Start != lead[i].n.End || sideCo[i].edge.n.End != trail[next].n.End {
 				return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's walk %d does not close on its contour and side vertices`, ErrUnsupported, bi, i)
 			}
 			wall.n.Convex, sideCo[i].edge.n.Convex = convex, convex
@@ -364,7 +364,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				{edge: trail[next], forward: false},
 				{edge: wall, forward: false},
 				{edge: lead[i], forward: true},
-			}, n: topo.Loop{Outer: true}}}, wall.start); err != nil {
+			}, n: topo.Loop{Outer: true}}}, vertexHandle(wall.n.Start)); err != nil {
 				return nil, brepBandMass{}, err
 			}
 			if fr.loop.Corners[next] != filletband.Reflex {
@@ -375,7 +375,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				{edge: supplied.arc[next], forward: true},
 				{edge: lead[next], forward: true},
 				{edge: trail[next], forward: false},
-			}, n: topo.Loop{Outer: true}}}, supplied.arc[next].start); err != nil {
+			}, n: topo.Loop{Outer: true}}}, vertexHandle(supplied.arc[next].n.Start)); err != nil {
 				return nil, brepBandMass{}, err
 			}
 		}

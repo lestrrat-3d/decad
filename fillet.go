@@ -478,7 +478,7 @@ func (m matchedCorner) String() string {
 // builders that mint a closed edge intern one *Vertex for its two ends
 // (boolean_body.go's vertexOf memoizes by mesh-vertex index; extrude.go
 // assigns a full circle's edge the same start and end vertex), so the test is
-// the pointer comparison edge.start == edge.end. A Circle3 additionally
+// the pointer comparison edge.Start() == edge.End(). A Circle3 additionally
 // reports the centre and radius no endpoint pair can carry, and falls under
 // that same closed case; every other closed curve — including a
 // boolean-built body's FacetedCurve rim — renders "closed through (p)"
@@ -488,23 +488,23 @@ func (m matchedCorner) String() string {
 // zero-length edge they are. Coordinates go through renderVec, so
 // value-equal geometry renders identically.
 func selectedEdgeContext(ordinal int, edge *Edge) string {
-	if edge == nil || edge.start == nil || edge.end == nil {
+	if edge == nil || edge.n.Start == nil || edge.n.End == nil {
 		return fmt.Sprintf(`selected edge[%d]`, ordinal)
 	}
 	if c, ok := edge.n.Curve.(surfacegeom.Circle3); ok {
 		return fmt.Sprintf(`selected edge[%d] closed circle through (%s), centre (%s), radius %s`,
-			ordinal, renderVec(edge.start.n.Position), renderVec(c.Center), c.Radius)
+			ordinal, renderVec(edge.n.Start.Position), renderVec(c.Center), c.Radius)
 	}
 	if c, ok := edge.n.Curve.(surfacegeom.Ellipse3); ok {
 		return fmt.Sprintf(`selected edge[%d] ellipse arc from (%s) to (%s), centre (%s), semi-axes %s and %s`,
-			ordinal, renderVec(edge.start.n.Position), renderVec(edge.end.n.Position), renderVec(c.Center),
+			ordinal, renderVec(edge.n.Start.Position), renderVec(edge.n.End.Position), renderVec(c.Center),
 			c.SemiMajor, c.SemiMinor)
 	}
-	if edge.start == edge.end {
-		return fmt.Sprintf(`selected edge[%d] closed through (%s)`, ordinal, renderVec(edge.start.n.Position))
+	if edge.n.Start == edge.n.End {
+		return fmt.Sprintf(`selected edge[%d] closed through (%s)`, ordinal, renderVec(edge.n.Start.Position))
 	}
 	return fmt.Sprintf(`selected edge[%d] from (%s) to (%s)`, ordinal,
-		renderVec(edge.start.n.Position), renderVec(edge.end.n.Position))
+		renderVec(edge.n.Start.Position), renderVec(edge.n.End.Position))
 }
 
 func selectedEdgesContext(edges []*Edge) string {
@@ -538,7 +538,7 @@ func matchCornerBudget(budget *proofbound.WorkBudget, pp prismPayload, loops []c
 	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok {
 		return 0, 0, false, nil
 	}
-	if e.start == nil || e.end == nil {
+	if e.n.Start == nil || e.n.End == nil {
 		return 0, 0, false, nil
 	}
 	const tol = 1e-6
@@ -556,7 +556,7 @@ func matchCornerBudget(budget *proofbound.WorkBudget, pp prismPayload, loops []c
 			}
 			j0 := pp.Point(w.StartU, w.StartV, pp.Z0)
 			j1 := pp.Point(w.StartU, w.StartV, pp.Z1)
-			if matchEndpoints(e.start.n.Position, e.end.n.Position, j0, j1, tol) {
+			if matchEndpoints(e.n.Start.Position, e.n.End.Position, j0, j1, tol) {
 				return li, ci, true, nil
 			}
 		}

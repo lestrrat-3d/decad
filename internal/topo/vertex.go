@@ -29,4 +29,8 @@ type Vertex struct {
 	// copyFaceUnderContext, patch_body.go's copyPatchFacesUnder). Zero ("no
 	// certificate") for every vertex no builder or copier stamps.
 	Denot denotation.CurveToken
+	// Owner is the root Vertex handle that holds this node by value. Root
+	// sets it when the handle is born and maps a node back to its handle
+	// through it; nothing else writes it.
+	Owner any
 }

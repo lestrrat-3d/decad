@@ -187,10 +187,10 @@ func (g *bodyGeom) addTopology(budget *proofbound.WorkBudget, b *Body) (bool, er
 func newCEdge(e *Edge) (*clearance.CEdge, bool) {
 	switch c := e.n.Curve.(type) {
 	case surfacegeom.Line3:
-		if e.start.n.Position.Sub(e.end.n.Position).Len() == 0 {
+		if e.n.Start.Position.Sub(e.n.End.Position).Len() == 0 {
 			return nil, true
 		}
-		ce := &clearance.CEdge{Line: true, A: e.start.n.Position, B: e.end.n.Position}
+		ce := &clearance.CEdge{Line: true, A: e.n.Start.Position, B: e.n.End.Position}
 		ce.Box = clearance.BoxOf(ce.A, ce.B)
 		return ce, true
 	case surfacegeom.Circle3:
@@ -208,13 +208,13 @@ func newCEdge(e *Edge) (*clearance.CEdge, bool) {
 		if err != nil {
 			return nil, false
 		}
-		rel := e.start.n.Position.Sub(c.Center)
+		rel := e.n.Start.Position.Sub(c.Center)
 		u, ok := rel.Normalize()
 		if !ok {
 			return nil, false
 		}
 		v := c.Axis.Cross(u)
-		relEnd := e.end.n.Position.Sub(c.Center)
+		relEnd := e.n.End.Position.Sub(c.Center)
 		sweep := math.Atan2(relEnd.Dot(v), relEnd.Dot(u))
 		if sweep <= 0 {
 			sweep += 2 * math.Pi
@@ -233,8 +233,8 @@ func newCEdge(e *Edge) (*clearance.CEdge, bool) {
 func shellWitness(sh *FaceShell) (r3.Vec, bool) {
 	for _, f := range sh.faces {
 		for _, e := range f.Edges() {
-			if e.start != nil {
-				return e.start.n.Position, true
+			if e.n.Start != nil {
+				return e.n.Start.Position, true
 			}
 		}
 	}

@@ -361,8 +361,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// counter-clockwise round keeps its convex rim. The loop's role
 		// decides nothing here. convex is boundarywalk.RimConvexity's own answer for
 		// this walk, computed by the caller.
-		bottomEdge := &Edge{start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve0}}
-		topEdge := &Edge{start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve1}}
+		bottomEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve0, Start: vertexNode(bStart), End: vertexNode(bEnd)}}
+		topEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve1, Start: vertexNode(tStart), End: vertexNode(tEnd)}}
 		bottomEdge.n.CurveBound, bottomEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
 		topEdge.n.CurveBound, topEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
 		surf := surfacegeom.Cylinder{Origin: center0, Axis: axis, Radius: radius}
@@ -380,8 +380,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// concavity falls out of the clockwise walk itself, exactly as it
 		// does for a circular hole wall. An R19 refusal already returned
 		// from boundarywalk.RimConvexity, before this switch ever ran.
-		bottomEdge := &Edge{start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}}}
-		topEdge := &Edge{start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}}}
+		bottomEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}, Start: vertexNode(bStart), End: vertexNode(bEnd)}}
+		topEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}, Start: vertexNode(tStart), End: vertexNode(tEnd)}}
 		// faceReversed stays false: an opaque NURBSSurface publishes no
 		// normal at all (§7's NormalAt refusal, topology.go), so
 		// topo.Face.Reversed — "the outward normal is the surface's geometric
@@ -392,8 +392,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// loop's: which side its material lies on is decided by the sense
 		// the whole loop is walked, and that sense IS the loop's role —
 		// the outer loop counter-clockwise, holes clockwise (moments.go).
-		bottomEdge := &Edge{start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}}}
-		topEdge := &Edge{start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}}}
+		bottomEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(bStart), End: vertexNode(bEnd)}}
+		topEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(tStart), End: vertexNode(tEnd)}}
 		mid := pp.Point((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, pp.Z0)
 		// tangent × N is the outward normal for a CCW outer walk (and a
 		// CW hole walk); a reflection flips the cross product, so the
@@ -552,7 +552,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	rimVertex := func(u, v, z, zDelta, extra float64, level levelToken) *Vertex {
 		held, lift := pp.LiftedVertex(u, v, z)
 		base := proofbound.AbsSumUpper(delta, zDelta, lift)
-		return &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, extra)), Level: level, Denot: mintCurve()}}
+		return bornVertex(&Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, extra)), Level: level, Denot: mintCurve()}})
 	}
 	var bottomV, topV []*Vertex
 	// seamBottom/seamTop are the SINGLE seam vertex a lone closed walk's rim
@@ -601,13 +601,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			prev := walks[(i+n-1)%n]
 			cross := prev.TanOutU*walks[i].TanInV - prev.TanOutV*walks[i].TanInU
 			vertical[i] = &Edge{
-				start: bottomV[i],
-				end:   topV[i],
 				n: topo.Edge{
 					Convex:      cross > 0,
 					Length:      pp.Z1 - pp.Z0,
 					LengthBound: height.Bound,
 					Curve:       surfacegeom.Line3{},
+					Start:       vertexNode(bottomV[i]),
+					End:         vertexNode(topV[i]),
 				},
 			}
 		}

@@ -1514,3 +1514,4 @@
 10	0.00	TestTangentCapExtensionOnRealChain
 10	0.00	TestFaceOriginsConvertsTheNodeRoles
 10	0.00	TestTwinEnumsMatch
+10	0.00	TestTopologyHandlesAreBorn

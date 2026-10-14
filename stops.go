@@ -400,11 +400,11 @@ func (st angularStops) stopGeometry() extent.AngularStop {
 func angularStopEdge(e *Edge) extent.AngularEdge {
 	curve := e.n.Curve
 	record := extent.AngularEdge{CurveType: fmt.Sprintf("%T", publicCurve(curve))}
-	if e.start != nil {
-		record.Start = &e.start.n.Position
+	if e.n.Start != nil {
+		record.Start = &e.n.Start.Position
 	}
-	if e.end != nil {
-		record.End = &e.end.n.Position
+	if e.n.End != nil {
+		record.End = &e.n.End.Position
 	}
 	switch c := curve.(type) {
 	case surfacegeom.Line3:

@@ -200,10 +200,10 @@ func rationalMidpointEquals(interval [2]float64, held float64) bool {
 }
 
 func (p allEdgeChamferPayload) outerBoxEdge(e *Edge) bool {
-	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok || e.start.n.Bound.Base() != 0 || e.end.n.Bound.Base() != 0 {
+	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok || e.n.Start.Bound.Base() != 0 || e.n.End.Bound.Base() != 0 {
 		return false
 	}
-	a, b := e.start.n.Position, e.end.n.Position
+	a, b := e.n.Start.Position, e.n.End.Position
 	x, y := [3]float64{a.X, a.Y, a.Z}, [3]float64{b.X, b.Y, b.Z}
 	varying := 0
 	for axis := range 3 {
@@ -362,7 +362,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		if found := vertices[v]; found != nil {
 			return found
 		}
-		made := &Vertex{n: topo.Vertex{Position: v, Bound: units.Millimeters(0)}}
+		made := bornVertex(&Vertex{n: topo.Vertex{Position: v, Bound: units.Millimeters(0)}})
 		vertices[v] = made
 		return made
 	}
@@ -397,15 +397,17 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 						proofbound.BoundedMul(v, v))
 				}
 				length := proofbound.BoundedSqrt(lengthSquared)
-				e = &Edge{start: vertex(a), end: vertex(b), n: topo.Edge{
+				e = &Edge{n: topo.Edge{
 					Convex:      true,
 					Length:      length.Value,
 					LengthBound: length.Bound,
 					Curve:       surfacegeom.Line3{},
+					Start:       vertexNode(vertex(a)),
+					End:         vertexNode(vertex(b)),
 				}}
 				lines[key] = e
 			}
-			loop.coedges = append(loop.coedges, coedge{edge: e, forward: e.start == vertex(a)})
+			loop.coedges = append(loop.coedges, coedge{edge: e, forward: vertexHandle(e.n.Start) == vertex(a)})
 		}
 		face.loops = []*Loop{loop}
 		faces = append(faces, face)
@@ -460,13 +462,15 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 		center := r3.NewVec(p.center[0], p.box[1][side], p.center[1])
 		seam := vertex(center.Add(r3.NewVec(p.radius, 0, 0)))
 		circumference := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), pi), r)
-		edge := &Edge{start: seam, end: seam, n: topo.Edge{
+		edge := &Edge{n: topo.Edge{
 			Convex:       false,
 			Length:       circumference.Value,
 			LengthBound:  circumference.Bound,
 			CurveBounded: true,
 			Curve: surfacegeom.Circle3{Center: center, Axis: r3.NewVec(0, -1, 0),
 				Radius: units.Millimeters(p.radius)},
+			Start: vertexNode(seam),
+			End:   vertexNode(seam),
 		}}
 		face.loops = append(face.loops, &Loop{coedges: []coedge{{edge: edge, forward: side == 1}}})
 		bore.loops = append(bore.loops, &Loop{coedges: []coedge{{edge: edge, forward: side == 0}}, n: topo.Loop{Outer: true}})

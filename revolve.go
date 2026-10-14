@@ -364,11 +364,11 @@ func (d *Document) resolveEdgeAxis(ea EdgeAxis) (ConstructionAxis, error) {
 	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok {
 		return ConstructionAxis{}, fmt.Errorf(`%w: a non-linear edge named as a revolve axis spins about no line`, ErrDegenerate)
 	}
-	dir := e.end.n.Position.Sub(e.start.n.Position)
+	dir := e.n.End.Position.Sub(e.n.Start.Position)
 	if zeroVec(dir) {
 		return ConstructionAxis{}, fmt.Errorf(`%w: a zero-length edge names no axis`, ErrDegenerate)
 	}
-	return ConstructionAxis{Origin: e.start.n.Position, Dir: dir}, nil
+	return ConstructionAxis{Origin: e.n.Start.Position, Dir: dir}, nil
 }
 
 // angFullEps separates "a full turn" from "past a full turn": an angular

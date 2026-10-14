@@ -66,7 +66,7 @@ func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 					continue
 				}
 				candidates = append(candidates, stitchweld.Candidate[*Edge]{
-					Edge: e, Start: table.classOf(e.start), End: table.classOf(e.end),
+					Edge: e, Start: table.classOf(vertexHandle(e.n.Start)), End: table.classOf(vertexHandle(e.n.End)),
 				})
 			}
 		}

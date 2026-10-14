@@ -298,7 +298,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 	rimVertex := func(u, v, extra float64) *Vertex {
 		held, lift := pp.LiftedVertex(u, v, pp.Z0)
 		base := proofbound.AbsSumUpper(pp.SectionDelta, pp.Z0Delta, lift)
-		return &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, extra))}}
+		return bornVertex(&Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, extra))}})
 	}
 	var seam *Vertex
 	var verts []*Vertex
@@ -359,7 +359,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 		default:
 			curve = surfacegeom.Line3{}
 		}
-		edge := &Edge{start: start, end: end, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve}}
+		edge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve, Start: vertexNode(start), End: vertexNode(end)}}
 		switch c := curve.(type) {
 		case surfacegeom.Circle3:
 			edge.n.CurveBound, edge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)

@@ -79,7 +79,7 @@ func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
 func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius float64) (
 	sectionrecord.Point2, compositesweep.AuditBox, *Edge, bool,
 ) {
-	if source == nil || result == nil || result.start == nil || result.end == nil ||
+	if source == nil || result == nil || result.n.Start == nil || result.n.End == nil ||
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 || pp.SurfaceResult ||
 		pp.Xform != r3.Identity() || pp.Frame.U() != (r3.Vec{X: 1}) ||
 		pp.Frame.V() != (r3.Vec{Y: 1}) || pp.Frame.N() != (r3.Vec{Z: 1}) {
@@ -90,7 +90,7 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 		return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
 	}
 	curve, ok := result.n.Curve.(surfacegeom.FacetedCurve)
-	if !ok || curve.Bound.Mag() != 0 || result.start.n.Bound.Mag() != 0 || result.end.n.Bound.Mag() != 0 ||
+	if !ok || curve.Bound.Mag() != 0 || result.n.Start.Bound.Mag() != 0 || result.n.End.Bound.Mag() != 0 ||
 		len(result.faces) != 2 {
 		return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
 	}
@@ -102,8 +102,8 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 		}
 		var sourceEdge *Edge
 		for _, edge := range source.Edges() {
-			if _, ok := edge.n.Curve.(surfacegeom.Line3); ok && edge.start != nil && edge.end != nil &&
-				edge.start.n.Bound.Mag() == 0 && edge.end.n.Bound.Mag() == 0 &&
+			if _, ok := edge.n.Curve.(surfacegeom.Line3); ok && edge.n.Start != nil && edge.n.End != nil &&
+				edge.n.Start.Bound.Mag() == 0 && edge.n.End.Bound.Mag() == 0 &&
 				prismUnionFilletSameEnds(edge, p0, p1) {
 				if sourceEdge != nil {
 					return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
@@ -129,8 +129,8 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 }
 
 func prismUnionFilletSameEnds(edge *Edge, p, q r3.Vec) bool {
-	return (edge.start.n.Position == p && edge.end.n.Position == q) ||
-		(edge.start.n.Position == q && edge.end.n.Position == p)
+	return (edge.n.Start.Position == p && edge.n.End.Position == q) ||
+		(edge.n.Start.Position == q && edge.n.End.Position == p)
 }
 
 func prismUnionFilletRadiusFits(rect momentinput.AxisRect, radius float64) bool {
