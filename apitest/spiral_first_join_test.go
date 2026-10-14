@@ -1,9 +1,11 @@
 package apitest_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -56,4 +58,68 @@ func TestSpiralFirstToothUnionIsCertified(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
+}
+
+// TestSpiralTangentFirstToothUnionIsCertified repeats the legacy assertions on a
+// tooth whose heel cap is exactly tangent to the blank's heel cone, built from
+// ConeFromFace and LoftFacesToConeTangent. No hand-written record is involved:
+// the real producers feed the real consumers.
+func TestSpiralTangentFirstToothUnionIsCertified(t *testing.T) {
+	doc := decad.New()
+	blank, tooth, curved := spiralTangentBlankAndTooth(t, doc)
+
+	// The planar end cap of the loft did not survive the heel Intersect.
+	for _, face := range tooth.Faces() {
+		require.NotContains(t, face.Origins(), decad.CapEnd(curved),
+			"the loft's planar end cap is trimmed away")
+	}
+
+	blankVolume, err := blank.Volume()
+	require.NoError(t, err)
+	toothVolume, err := tooth.Volume()
+	require.NoError(t, err)
+	blankV, toothV := blankVolume.Value.Base(), toothVolume.Value.Base()
+	require.Positive(t, blankV)
+	require.Positive(t, toothV)
+
+	joined, err := decad.Union(t.Context(), blank, tooth)
+	require.NoError(t, err)
+	require.True(t, joined.IsSolid())
+
+	joinedVolume, err := joined.Volume()
+	require.NoError(t, err)
+	joinedV := joinedVolume.Value.Base()
+	slack := joinedVolume.Bound.Base() + blankVolume.Bound.Base() + toothVolume.Bound.Base()
+	require.Greater(t, joinedV, blankV, "the tooth adds material outside the blank")
+	require.Less(t, joinedV-blankV, toothV+slack, "the gain cannot exceed the tooth")
+	require.InEpsilon(t, spiralJoinedVolume, joinedV, 5e-4)
+	require.Len(t, joined.Faces(), spiralJoinedFaces)
+
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
+// TestSpiralTangentPatternedUnionRefuses copies the cone-tangent tooth by a
+// exact rotation about the shaft axis and unites blank, tooth and copy. The
+// copy passes the exact-rotation entrance, so the refusal comes from the
+// tangent gate: the tooth's exact tangency and one-step gaps do not transfer
+// to a copy. Union returns ErrUnsupported and no operand is consumed.
+func TestSpiralTangentPatternedUnionRefuses(t *testing.T) {
+	doc := decad.New()
+	blank, tooth, _ := spiralTangentBlankAndTooth(t, doc)
+	copied, err := decad.Copy(t.Context(), tooth,
+		decad.WithCopyRotation(r3.Vec{}, r3.Vec{X: 1}, units.Radians(2*math.Pi/spiralTeeth)))
+	require.NoError(t, err)
+	require.Len(t, doc.Bodies(), 3)
+
+	_, err = decad.Union(t.Context(), blank, tooth, copied)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "a cone-tangent first tooth has no patterned-copy proof")
+	require.Len(t, doc.Bodies(), 3, "a refused Union leaves all three bodies live")
+	for _, body := range []*decad.Body{blank, tooth, copied} {
+		require.Contains(t, doc.Bodies(), body)
+	}
 }

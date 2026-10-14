@@ -2017,3 +2017,5 @@
 10	0.08	TestVertexBlendThreeEdgeOpenChain
 10	0.01	TestWallHeightArmAggregatesAgainstTheSectionSpan
 10	0.01	TestWallWedgePrismNoWall
+10	0.00	TestSpiralTangentFirstToothUnionIsCertified
+10	0.00	TestSpiralTangentPatternedUnionRefuses
