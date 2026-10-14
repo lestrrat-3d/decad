@@ -543,7 +543,7 @@ func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp bre
 			role := b.patchRole(p)
 			patch.origins = []FeatureRef{{producer: ref, Role: role}}
 			if b.sigma > 0 {
-				patch.reversed = !patch.reversed
+				patch.n.Reversed = !patch.n.Reversed
 			}
 			geom[p] = capPatch{role: role, geom: band.geom[p]}
 		}

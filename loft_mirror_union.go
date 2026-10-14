@@ -165,8 +165,8 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 				g.origins = append(g.origins, FeatureRef{producer: ref, Role: capRole})
 				g.surface = face.Surface()
 				g.planar = true
-				g.normalBound = face.normalBound
-				g.reversed = face.reversed
+				g.normalBound = face.n.NormalBound
+				g.reversed = face.n.Reversed
 			}
 			groups = append(groups, g)
 		}

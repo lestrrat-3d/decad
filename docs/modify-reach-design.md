@@ -824,7 +824,7 @@ halves of the departure proven exactly zero: the coinciding window buys back
 only the skew half, and the placement's own independent rounding of every
 emitted coordinate leaves the other half in place on any placed band. So a
 coinciding window alone no longer answers DX8. Only a patch whose own stamped
-departure (`capblend_geom.go`'s `f.normalBound`, derived in
+departure (`capblend_geom.go`'s `f.n.NormalBound`, derived in
 `internal/capband/departure.go`, plus `capband.DenotedNormalAllow`) is an exact
 zero does — an axis-aligned `Plane` patch of an unplaced band whose cap contour
 and levels are held exactly reaches that, and nothing else does. `Face.NormalAt` and DX7

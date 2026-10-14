@@ -1044,7 +1044,7 @@ loop refuses (`ErrUnsupported`, R8) rather than being guessed at.
 Anchored at the sphere's own `Center`, `p − Center` is parallel to `n` at
 every surface point, so `(p − Center)·n` is identically `σ·Radius` — the
 same identity the `Cylinder` arm uses, with `Center` standing in for a point
-on the cylinder's axis — giving `K_F = σ·Radius·f.area`, the identical shape
+on the cylinder's axis — giving `K_F = σ·Radius·f.n.Area`, the identical shape
 `Cylinder`'s own `K_F` takes. `Sphere` carries `Radius` as a bare
 `units.Value` with no bound field, exactly like `Cylinder` and `Cone`, but
 this arm cannot read `stitchflux.CircleRadius`'s edge-length route the way they
@@ -1052,7 +1052,7 @@ do: a zero-loop face has no rim edge to read a circumference from at all.
 Instead `stitchflux.SphereRadius` inverts the face's own already-proven
 `area`/`areaBound` (`Area = 4πR²`, so `R = √(Area/4π)`) through
 `boundedQuotient` and `boundedSqrt` — a reuse of an already-published
-reading, on the same terms `Cylinder`'s own `K_F` reuses `f.area` rather
+reading, on the same terms `Cylinder`'s own `K_F` reuses `f.n.Area` rather
 than integrating anything fresh, never a fresh trust of the bare `Radius`
 field. `boundedSqrt`'s own exact checks make the inversion itself sound:
 its rational bracket (`ratSqrtDown`/`ratSqrtUp`), or, for a zero-bound
@@ -1146,7 +1146,7 @@ full-circumference argument shows for two equal-radius circles — the face's
 own vector area is the zero vector, and `flux_F` is exactly `K_F` for every
 anchor.
 
-**`Face.normalBound` is nonzero exactly for a cap-blend band patch**
+**`topo.Face.NormalBound` is nonzero exactly for a cap-blend band patch**
 (topology.go's own field doc): the face is a ruled surface and the `Cone` or
 `Plane` it publishes is that surface only to within a measured departure.
 Integrating a closed form over the tag would be unsound for such a face, so
@@ -1157,7 +1157,7 @@ re-stitched into a closed set refuses on this gate alone (§15's T38).
 **A revolve face is admitted only where its tag IS the surface its record
 denotes, decided exactly; the Cone arm's apex is the one departure it charges
 instead.** A revolve wall's departure from its tag is not a `normalBound`:
-the wall carries the surface its record denotes beside the tag (`Face.denoted`,
+the wall carries the surface its record denotes beside the tag (`topo.Face.Denoted`,
 `docs/evaluator-design.md` §6). The tag departs from it wherever the build
 re-expresses the record in float: a side within the classifier's 1e-9 slope of
 parallel or perpendicular is tagged a `Cylinder` or a `Plane`, a centre within
@@ -1460,7 +1460,7 @@ placement reopens this gap, and neither publishes a reading tighter than its
 source face's (§15's T209, T210).
 
 **A revolve wall's or cap's copy also carries the surface its record
-denotes** (`Face.denoted`, `docs/evaluator-design.md` §6), which `NormalAt`
+denotes** (`topo.Face.Denoted`, `docs/evaluator-design.md` §6), which `NormalAt`
 proves the face's normal against in place of its tag. Unlike `normalBound`, it composes
 with any placement: it is an exact enclosure, so a placed copy holds its exact
 image under the placement's held basis and translation (`Face.denotedUnder`),

@@ -857,12 +857,14 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		}
 		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
 		face := &Face{
-			surface:   surf,
-			origins:   origins,
-			body:      body,
-			area:      faceArea.Value,
-			areaBound: faceArea.Bound,
-			reversed:  faceReversed,
+			surface: surf,
+			origins: origins,
+			body:    body,
+			n: topo.Face{
+				Area:      faceArea.Value,
+				AreaBound: faceArea.Bound,
+				Reversed:  faceReversed,
+			},
 			loops: []*Loop{{outer: true, coedges: []coedge{
 				{edge: bottomEdge, forward: true},
 				{edge: vertical[i+1], forward: true},

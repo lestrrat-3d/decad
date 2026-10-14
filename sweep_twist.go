@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -123,8 +124,8 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 			for _, use := range face.loops[0].coedges {
 				uses[use.edge] = append(uses[use.edge], use)
 			}
-			area = proofbound.AbsSumUpper(area, face.area)
-			areaBound = proofbound.AbsSumUpper(areaBound, face.areaBound)
+			area = proofbound.AbsSumUpper(area, face.n.Area)
+			areaBound = proofbound.AbsSumUpper(areaBound, face.n.AreaBound)
 		}
 		if firstFacet < 0 {
 			return nil, fmt.Errorf(`%w: a twisted source wall has no facets`, ErrUnsupported)
@@ -175,10 +176,12 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 		}
 		face := &Face{
 			surface: Faceted{}, loops: []*Loop{{outer: true, coedges: outline}},
-			origins:   []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(0,0,%d)", j)}},
-			body:      body,
-			area:      area,
-			areaBound: areaBound,
+			origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(0,0,%d)", j)}},
+			body:    body,
+			n: topo.Face{
+				Area:      area,
+				AreaBound: areaBound,
+			},
 		}
 		for k := range held.walls {
 			cell := held.cell[k]
@@ -334,8 +337,8 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		// Each triangular parameter patch is a subset of a wall whose area
 		// is at most the body's total area upper bound. The wide face bound
 		// is intentional until a triangular-domain quadrature is added.
-		face.areaBound = proofbound.AbsSumUpper(face.areaBound, face.area, trueArea, trueAreaBound)
-		face.axialDelta, face.hasAxialDelta = delta, true
+		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, trueArea, trueAreaBound)
+		face.n.AxialDelta, face.n.HasAxialDelta = delta, true
 	}
 	if err := validateLoftBodyMeasurements(heldBody); err != nil {
 		return nil, err

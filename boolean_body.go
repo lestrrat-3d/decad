@@ -448,16 +448,18 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			// both strips of a split cap came from the cap, and both must
 			// still say so, or FaceCreatedBy and the surveys lose them.
 			f = &Face{
-				origins:     append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
-				body:        body,
-				heldPlanar:  pp.groups[pp.src[i]].planar,
-				denoted:     pp.groups[pp.src[i]].denoted,
-				normalBound: pp.groups[pp.src[i]].normalBound,
-				reversed:    pp.groups[pp.src[i]].reversed,
+				origins: append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
+				body:    body,
+				n: topo.Face{
+					HeldPlanar:  pp.groups[pp.src[i]].planar,
+					Denoted:     pp.groups[pp.src[i]].denoted,
+					NormalBound: pp.groups[pp.src[i]].normalBound,
+					Reversed:    pp.groups[pp.src[i]].reversed,
+				},
 			}
 			group := pp.groups[pp.src[i]]
 			if group.hasCentroid && groupPatch[pp.src[i]] == patch[i] {
-				f.centroid, f.hasCentroid = group.centroid, true
+				f.centroid, f.n.HasCentroid = group.centroid, true
 			}
 			faceIdx[patch[i]] = f
 			facePlanar[f] = pp.groups[pp.src[i]].planar
@@ -465,7 +467,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			compFaces[comp[i]] = append(compFaces[comp[i]], f)
 		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
-		f.area += b.Sub(a).Cross(c.Sub(a)).Len() / 2
+		f.n.Area += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 		faceTermSlop[f] = proofbound.AbsSumUpper(faceTermSlop[f], proofbound.FacetAreaTermSlop(a, b, c))
 		facetFace[i] = f
 	}
@@ -520,7 +522,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			}
 			geom := facetproof.FacetedAreaGeom(faceDelta[f], loopLen, faceFacetArea[f])
 			bodyGeom = proofbound.AbsSumUpper(bodyGeom, geom)
-			f.areaBound = proofbound.AbsSumUpper(geom, pp.areaSlack, proofbound.SumSlop(facetsOf[f], f.area), faceTermSlop[f])
+			f.n.AreaBound = proofbound.AbsSumUpper(geom, pp.areaSlack, proofbound.SumSlop(facetsOf[f], f.n.Area), faceTermSlop[f])
 		}
 	}
 

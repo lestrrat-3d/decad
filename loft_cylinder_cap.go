@@ -69,8 +69,8 @@ func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 			FeatureRef{producer: ref, Role: roles[cap]})
 		g.surface = plane
 		g.planar = true
-		g.normalBound = source.normalBound
-		g.reversed = source.reversed
+		g.normalBound = source.n.NormalBound
+		g.reversed = source.n.Reversed
 	}
 	return nil
 }

@@ -52,14 +52,14 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 	var endFaces [2]*Face
 	var wallFace *Face
 	for _, face := range faces {
-		if face.normalBound != 0 {
+		if face.n.NormalBound != 0 {
 			return sourceCylinderContactProof{}, false
 		}
 		switch surface := face.surface.(type) {
 		case Plane:
 			planes++
 			normal := surface.Frame.N()
-			if face.reversed {
+			if face.n.Reversed {
 				normal = normal.Scale(-1)
 			}
 			faceAxis, side, valid := clearance.SignedAxis(pose.ApplyDir(normal))
@@ -121,14 +121,14 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 	planes, walls := 0, 0
 	var endFaces [2]*Face
 	for _, face := range faces {
-		if face.normalBound != 0 {
+		if face.n.NormalBound != 0 {
 			return sourceCylinderContactProof{}, false
 		}
 		switch surface := face.surface.(type) {
 		case Plane:
 			planes++
 			normal := surface.Frame.N()
-			if face.reversed {
+			if face.n.Reversed {
 				normal = normal.Scale(-1)
 			}
 			faceAxis, side, valid := clearance.SignedAxis(pose.ApplyDir(normal))

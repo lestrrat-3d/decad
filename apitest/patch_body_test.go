@@ -516,7 +516,7 @@ func TestBodyPatchContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 // TestBodyPatchCopyKeepsBandNormalBound patches the free rims of a
 // cap-loop chamfer's unstitched cone band. Body.Patch copies the band
 // unchanged, so the copy carries the same surface, the same tag and the same
-// departure of one from the other (Face.normalBound): its NormalAt must
+// departure of one from the other (topo.Face.NormalBound): its NormalAt must
 // publish exactly its source's reading, and a placed copy must refuse as an
 // unstitched or stitched copy of the band does, since no dimensionless term
 // bounds the placement's rotation of the tag.
@@ -577,7 +577,7 @@ func TestBodyPatchCopyKeepsBandNormalBound(t *testing.T) {
 // extruded 3 in, after the plate is unstitched, its end cap and four walls
 // are stitched back into an open box, and Body.Patch fills the box's exact
 // bottom rim. The inch depth's conversion into millimetres rounds, so the
-// cap's level carries a proven displacement (Face.axialDelta), and a stop
+// cap's level carries a proven displacement (topo.Face.AxialDelta), and a stop
 // read off the patched body's copy of the cap must carry it exactly as the
 // same stop read off the unstitched cap does (docs/surface-design.md's T81
 // for Unstitch).

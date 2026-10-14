@@ -144,7 +144,7 @@ func uniquePlaneFace(b *Body, normal r3.Vec, offset proofarith.Dyadic) (*Face, b
 			continue
 		}
 		faceNormal := plane.Frame.N()
-		if face.reversed {
+		if face.n.Reversed {
 			faceNormal = faceNormal.Scale(-1)
 		}
 		origin, okOrigin := clearance.DyVecOf(plane.Frame.Origin())

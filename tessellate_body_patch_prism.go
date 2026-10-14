@@ -183,7 +183,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		}
 		mesh.setFaceBound(face, proofbound.AbsSumUpper(
 			proofbound.ProductUpper(proofbound.AbsSumUpper(capSag, source.coordBound,
-				prism.axialDelta()), lengthScale), placementRound, face.axialDelta))
+				prism.axialDelta()), lengthScale), placementRound, face.n.AxialDelta))
 	}
 	if err := tessellation.RequireCapBlendFacetAreas(mesh.vertices, mesh.triangles, "Body.Patch circular sheet"); err != nil {
 		return nil, err
@@ -209,7 +209,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 			tris[i] = mesh.triangles[ti]
 		}
 		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
-			tessellation.FilletMeshAreaDeficit(mesh.vertices, tris, face.area, face.areaBound))
+			tessellation.FilletMeshAreaDeficit(mesh.vertices, tris, face.n.Area, face.n.AreaBound))
 	}
 	if proofbound.IsNonFinite(mesh.areaSlack) {
 		return nil, fmt.Errorf(`%w: a Body.Patch circular sheet states no finite area bound`, ErrUnsupported)

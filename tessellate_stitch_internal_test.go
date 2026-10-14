@@ -386,7 +386,7 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 				{edge: holeEdges[3], forward: true},
 			}},
 		},
-		area: 96,
+		n: topo.Face{Area: 96},
 	}
 	for _, e := range append(outerEdges, holeEdges...) {
 		e.faces = []*Face{f}

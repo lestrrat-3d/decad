@@ -62,7 +62,7 @@ func (bc *brepBandChord) emitPartialChamfer(m *Mesh, faceOfRole func(string) (*F
 		// contribute to the body's motion and area allowances.
 		bump(face, 0)
 		m.areaSlack = proofbound.AbsSumUpper(m.areaSlack,
-			tessellation.FilletMeshAreaDeficit(m.vertices, m.triangles[first:], face.area, face.areaBound))
+			tessellation.FilletMeshAreaDeficit(m.vertices, m.triangles[first:], face.n.Area, face.n.AreaBound))
 	}
 	return nil
 }

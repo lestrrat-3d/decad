@@ -35,11 +35,11 @@ func TestBodyPatchMeshChargesTheFilledCapsAxialBound(t *testing.T) {
 			continue
 		}
 		patches++
-		require.True(t, f.hasAxialDelta)
-		require.Greater(t, f.axialDelta, 0.0)
+		require.True(t, f.n.HasAxialDelta)
+		require.Greater(t, f.n.AxialDelta, 0.0)
 		bound, ok := mesh.sourceBound(f)
 		require.True(t, ok)
-		require.GreaterOrEqual(t, bound, f.axialDelta)
+		require.GreaterOrEqual(t, bound, f.n.AxialDelta)
 	}
 	require.Equal(t, 2, patches)
 	heldArea := 0.0

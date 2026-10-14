@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -46,8 +47,12 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 			return nil, err
 		}
 		return &Face{surface: Plane{Frame: frame}, origins: origins, body: body,
-			area: region.Published.Value, areaBound: region.Published.Bound,
-			axialDelta: f.z0Delta, hasAxialDelta: true}, nil
+			n: topo.Face{
+				Area:          region.Published.Value,
+				AreaBound:     region.Published.Bound,
+				AxialDelta:    f.z0Delta,
+				HasAxialDelta: true,
+			}}, nil
 	}
 	w := btopo.walls[fi]
 	_, _, surf, reversed, err := buildWallGeometry(pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}},
@@ -56,8 +61,11 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 		return nil, err
 	}
 	area := brepgeom.WallArea(f.delta, f.z0, f.z1, f.z0Delta, f.z1Delta, w)
-	return &Face{surface: surf, origins: origins, body: body, area: area.Value, areaBound: area.Bound,
-		reversed: reversed}, nil
+	return &Face{surface: surf, origins: origins, body: body, n: topo.Face{
+		Area:      area.Value,
+		AreaBound: area.Bound,
+		Reversed:  reversed,
+	}}, nil
 }
 
 // region reads a planar face's region once per topology.
@@ -265,7 +273,7 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 	for _, patches := range bp.loopPatches {
 		for _, patch := range patches {
 			f := roles[patch.role]
-			if f == nil || capPatchWindowSkew(patch.geom) > 0 || f.normalBound != 0 {
+			if f == nil || capPatchWindowSkew(patch.geom) > 0 || f.n.NormalBound != 0 {
 				return radiusOutcome{}, false
 			}
 		}

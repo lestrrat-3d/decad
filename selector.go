@@ -494,7 +494,7 @@ func (f selectorFace) SelectorPlanarNormal() (r3.Vec, bool) {
 }
 func (f selectorFace) SelectorOutwardPlanarNormal() (r3.Vec, bool) {
 	normal, ok := f.SelectorPlanarNormal()
-	if ok && f.reversed {
+	if ok && f.n.Reversed {
 		normal = normal.Scale(-1)
 	}
 	return normal, ok

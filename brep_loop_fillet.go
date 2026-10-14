@@ -179,7 +179,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		}
 		held, bound := heldOf(areaIv)
 		face := &Face{surface: surf, origins: []FeatureRef{{producer: ref, Role: b.patchRole(p)}}, body: body,
-			loops: loops, area: held, areaBound: bound}
+			loops: loops, n: topo.Face{Area: held, AreaBound: bound}}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		// capV, a cap contact vertex, lies on the patch's surface; the outward
 		// normal there is F's own, which faces −m along F's normal for a band
@@ -189,10 +189,10 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			return fmt.Errorf(`%w: a loop fillet band patch's outward orientation cannot be certified; its own normal reading refuses at its cap contact (%v)`, ErrUnsupported, err)
 		}
 		if nrm.Value.Dot(up) < 0 {
-			face.reversed = !face.reversed
+			face.n.Reversed = !face.n.Reversed
 		}
 		if b.sigma > 0 {
-			face.reversed = !face.reversed
+			face.n.Reversed = !face.n.Reversed
 		}
 		for _, l := range loops {
 			for _, ce := range l.coedges {

@@ -280,9 +280,9 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 	require.Equal(t, again.delta, supplied.delta)
 	require.Len(t, supplied.patches, len(again.patches))
 	for i, f := range supplied.patches {
-		require.Equal(t, again.patches[i].area, f.area, "patch %d", i)
-		require.Equal(t, again.patches[i].areaBound, f.areaBound, "patch %d", i)
-		require.Equal(t, again.patches[i].normalBound, f.normalBound, "patch %d", i)
+		require.Equal(t, again.patches[i].n.Area, f.n.Area, "patch %d", i)
+		require.Equal(t, again.patches[i].n.AreaBound, f.n.AreaBound, "patch %d", i)
+		require.Equal(t, again.patches[i].n.NormalBound, f.n.NormalBound, "patch %d", i)
 	}
 
 	short := again.capCo[:len(again.capCo)-1]

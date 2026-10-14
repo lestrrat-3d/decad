@@ -103,22 +103,26 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		return nil, err
 	}
 	capStart := &Face{
-		surface:       Plane{Frame: startFrame},
-		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
-		body:          body,
-		area:          ig.Area,
-		areaBound:     ig.AreaBound,
-		axialDelta:    pp.Z0Delta,
-		hasAxialDelta: true,
+		surface: Plane{Frame: startFrame},
+		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
+		body:    body,
+		n: topo.Face{
+			Area:          ig.Area,
+			AreaBound:     ig.AreaBound,
+			AxialDelta:    pp.Z0Delta,
+			HasAxialDelta: true,
+		},
 	}
 	capEnd := &Face{
-		surface:       Plane{Frame: endFrame},
-		origins:       []FeatureRef{{producer: ref, Role: roleCapEnd}},
-		body:          body,
-		area:          ig.Area,
-		areaBound:     ig.AreaBound,
-		axialDelta:    pp.Z1Delta,
-		hasAxialDelta: true,
+		surface: Plane{Frame: endFrame},
+		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
+		body:    body,
+		n: topo.Face{
+			Area:          ig.Area,
+			AreaBound:     ig.AreaBound,
+			AxialDelta:    pp.Z1Delta,
+			HasAxialDelta: true,
+		},
 	}
 
 	perimeter := proofbound.BoundedScalar{}
@@ -201,8 +205,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		ig.AreaBound,
 		proofbound.SectionDisplacementArea(delta, walks, proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound)),
 	))
-	capStart.areaBound = regionArea.Bound
-	capEnd.areaBound = regionArea.Bound
+	capStart.n.AreaBound = regionArea.Bound
+	capEnd.n.AreaBound = regionArea.Bound
 	volume := proofbound.BoundedMul(regionArea, height)
 	caps := proofbound.BoundedMul(proofbound.ExactScalar(2), regionArea)
 	sides := proofbound.BoundedMul(perimeter, height)
@@ -215,8 +219,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		// re-stamped from regionArea.bound just above — so it composes the
 		// POST-displacement bound rather than the one the caps carried before
 		// that re-stamp.
-		area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capStart.area, capStart.areaBound))
-		area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capEnd.area, capEnd.areaBound))
+		area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound))
+		area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound))
 	}
 	// volume and centroid are always computed and stored — a sheet needs them
 	// finite for validateAnalyticBodyMeasurements below — but Body.Volume and
@@ -388,7 +392,7 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		topEdge := &Edge{curve: NURBSCurve{}, start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
 		// faceReversed stays false: an opaque NURBSSurface publishes no
 		// normal at all (§7's NormalAt refusal, topology.go), so
-		// Face.reversed — "the outward normal is the surface's geometric
+		// topo.Face.Reversed — "the outward normal is the surface's geometric
 		// normal negated" — names nothing for this variant.
 		return bottomEdge, topEdge, NURBSSurface{}, false, nil
 	default:
@@ -658,12 +662,14 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		}
 		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
 		face := &Face{
-			surface:   surf,
-			origins:   origins,
-			body:      body,
-			area:      faceArea.Value,
-			areaBound: faceArea.Bound,
-			reversed:  faceReversed,
+			surface: surf,
+			origins: origins,
+			body:    body,
+			n: topo.Face{
+				Area:      faceArea.Value,
+				AreaBound: faceArea.Bound,
+				Reversed:  faceReversed,
+			},
 		}
 		if singleClosed {
 			// A closed cylindrical band has TWO boundary loops — one circle

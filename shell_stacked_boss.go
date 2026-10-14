@@ -394,7 +394,7 @@ func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
 	body.centroid = VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value), Bound: units.Millimeters(cb), Exactness: exactnessOf(cb)}
 	var a proofbound.BoundedScalar
 	for _, f := range body.Faces() {
-		a = proofbound.BoundedAdd(a, proofbound.MeasuredScalar(f.area, f.areaBound))
+		a = proofbound.BoundedAdd(a, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
 	}
 	body.area = Measurement{Value: units.SquareMillimeters(a.Value), Bound: units.SquareMillimeters(a.Bound), Exactness: exactnessOf(a.Bound)}
 	box, err := brepBoundsContext(ctx, bp)

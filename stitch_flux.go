@@ -33,7 +33,7 @@ import (
 // Plane: A_F = Frame.Origin(), K_F = 0 — (p−A_F)·n is identically zero on the
 // plane. Cylinder: A_F = Origin (any point on the axis — the formula is
 // invariant to which one, since a shift along the axis cancels between the
-// two terms below), K_F = σ·Radius·f.area, σ = −1 when f.reversed else +1 —
+// two terms below), K_F = σ·Radius·f.n.Area, σ = −1 when f.n.Reversed else +1 —
 // (p−O)·n is identically σ·Radius at every point of a cylinder wall, so the
 // K_F term reuses the face's own already-proven area/areaBound rather than
 // integrating anything fresh. Radius itself is never read bare off
@@ -273,7 +273,7 @@ func faceIsTetrahedronEligible(f *Face) bool {
 	if _, ok := f.surface.(Plane); !ok {
 		return false
 	}
-	if f.normalBound != 0 {
+	if f.n.NormalBound != 0 {
 		return false
 	}
 	for _, l := range f.loops {
@@ -345,14 +345,14 @@ func auditVertexLinksForStitchFaces(ctx context.Context, faces []*Face) error {
 // unsound for such a face). The sealed switch's default is Table R row R8,
 // unchanged for every surface this increment does not land an arm for.
 func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz proofbound.BoundedScalar, err error) {
-	if f.normalBound != 0 {
+	if f.n.NormalBound != 0 {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch closes a boundary holding a face whose published surface only approximates the geometry actually built (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
 		)
 	}
 	sign := 1.0
-	if f.reversed {
+	if f.n.Reversed {
 		sign = -1.0
 	}
 	switch s := f.surface.(type) {
@@ -378,8 +378,8 @@ func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz proofboun
 func stitchFluxFaceInput(f *Face) stitchflux.FaceInput {
 	input := stitchflux.FaceInput{
 		Loops:     make([]stitchflux.LoopSource, len(f.loops)),
-		Area:      f.area,
-		AreaBound: f.areaBound,
+		Area:      f.n.Area,
+		AreaBound: f.n.AreaBound,
 	}
 	for i, l := range f.loops {
 		input.Loops[i] = stitchLoopSource{loop: l}
@@ -408,7 +408,7 @@ func (s stitchLoopSource) Circle() (stitchflux.CircleRim, bool, string) {
 }
 
 func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
-	apexBound, ok := stitchflux.ConeApexDeparture(f.denoted, surfacegeom.Cone(cone))
+	apexBound, ok := stitchflux.ConeApexDeparture(f.n.Denoted, surfacegeom.Cone(cone))
 	if !ok {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path cannot state how far this cone's apex sits from the apex its record denotes (docs/surface-design.md Table R row R8)`,
@@ -447,7 +447,7 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 
 	envelopes := make([]stitchflux.MassEnvelopeFace, 0, len(faces))
 	for _, f := range faces {
-		envelope := stitchflux.MassEnvelopeFace{Surface: internalSurface(f.surface), Area: f.area, AreaBound: f.areaBound}
+		envelope := stitchflux.MassEnvelopeFace{Surface: internalSurface(f.surface), Area: f.n.Area, AreaBound: f.n.AreaBound}
 		for i, loop := range f.loops {
 			for _, ce := range loop.coedges {
 				envelope.Vertices = append(envelope.Vertices, ce.Start().Position().Value)
@@ -511,7 +511,7 @@ func sumStitchFlux(faces []*Face, anchor r3.Vec) (flux, momX, momY, momZ proofbo
 // of the flux arms for a revolve face. Every arm integrates the face's TAG —
 // a Cylinder's rims and area, a Plane's origin and normal, a Cone's apex and
 // axis, a Sphere's or Torus's centre — while a revolve face's tag is only a
-// float re-expression of the surface its record denotes (Face.denoted): a
+// float re-expression of the surface its record denotes (topo.Face.Denoted): a
 // segment within the classifier's slope tolerance of parallel or
 // perpendicular is tagged a Cylinder or a Plane, a centre within the contact
 // tolerance of the axis is snapped onto it, and every axial coordinate is
@@ -524,7 +524,7 @@ func sumStitchFlux(faces []*Face, anchor r3.Vec) (flux, momX, momY, momZ proofbo
 // a stitch's own placement rounding is its delta.
 func stitchFluxTagsDenoted(faces []*Face) bool {
 	for _, f := range faces {
-		if f.denoted != nil && !stitchflux.TagIsDenoted(stitchTaggedFace(f)) {
+		if f.n.Denoted != nil && !stitchflux.TagIsDenoted(stitchTaggedFace(f)) {
 			return false
 		}
 	}
@@ -534,7 +534,7 @@ func stitchFluxTagsDenoted(faces []*Face) bool {
 // stitchTaggedFace passes a face's surface and edge curves to the exact
 // denotation gate without giving the internal package topology ownership.
 func stitchTaggedFace(f *Face) stitchflux.TaggedFace {
-	tagged := stitchflux.TaggedFace{Denoted: f.denoted, Surface: internalSurface(f.surface)}
+	tagged := stitchflux.TaggedFace{Denoted: f.n.Denoted, Surface: internalSurface(f.surface)}
 	for _, loop := range f.loops {
 		for _, ce := range loop.coedges {
 			tagged.Curves = append(tagged.Curves, internalCurve(ce.edge.curve))

@@ -249,7 +249,7 @@ func outwardNumerator(f *Face, p r3.Vec) (chainDir, bool) {
 	if !ok {
 		return chainDir{}, false
 	}
-	if f.reversed {
+	if f.n.Reversed {
 		n.exact = dvNeg(n.exact)
 		n.f = n.f.Scale(-1)
 	}

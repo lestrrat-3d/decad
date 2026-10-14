@@ -856,14 +856,14 @@ func suppliedCapWalls(co []coedge, joins []cornerJoin, n int) (suppliedCapEdges,
 // geometry the moments pass then integrates, so those two can never disagree
 // either.
 func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt, delta, capDelta float64) {
-	f.area, f.areaBound = capband.AreaOf(g)
+	f.n.Area, f.n.AreaBound = capband.AreaOf(g)
 	dr := 0.0
 	if g.Circular {
 		delta = proofbound.AbsSumUpper(delta, g.Held.SideRadius, g.Held.CapRadius)
 		dr = g.CapRadius - g.SideRadius
 	}
 	denoted := capband.DenotedNormalAllow(delta, capDelta, g.LevelDelta, g.CapZ-g.SideZ, dr)
-	f.normalBound = math.Min(ruledNormalAllowUnbounded, proofbound.AbsSumUpper(capPatchNormalAllow(f, g, built), denoted))
+	f.n.NormalBound = math.Min(ruledNormalAllowUnbounded, proofbound.AbsSumUpper(capPatchNormalAllow(f, g, built), denoted))
 }
 
 // capSlantEdge is one cap-level contour point's slant edge down to the
@@ -1097,7 +1097,7 @@ func buildConePatch(pl prismPayload, body *Body, origins []FeatureRef, cu, cv, s
 		{coedges: []coedge{{edge: sideEdge, forward: true}}, outer: true},
 		{coedges: []coedge{{edge: capEdge, forward: false}}, outer: true},
 	}
-	face := &Face{surface: surf, origins: origins, body: body, reversed: reversed, loops: loops}
+	face := &Face{surface: surf, origins: origins, body: body, n: topo.Face{Reversed: reversed}, loops: loops}
 	sideEdge.faces = append(sideEdge.faces, face)
 	capEdge.faces = append(capEdge.faces, face)
 	return face
@@ -1117,7 +1117,7 @@ func capNameOf(matSign float64) string {
 
 // fixPatchOrientation empirically verifies a patch's outward normal sign
 // against a plane-local reference direction (refU, refV, refZ), reversing
-// face.reversed if the two disagree. samplePoint must lie on the patch's own
+// face.n.Reversed if the two disagree. samplePoint must lie on the patch's own
 // built surface. It reads the surface's OWN Face.NormalAt — the exact
 // formula every downstream reader (DX7's undercut survey included) uses — so
 // no consumer can see a different answer than what was checked here, and the
@@ -1129,7 +1129,7 @@ func capNameOf(matSign float64) string {
 // When NormalAt itself refuses at samplePoint, the sign is a build-time
 // question this evaluator cannot finish, so §11 gives it no undecided state:
 // fixPatchOrientation returns SX15 (docs/modify-reach-design.md §4) as
-// ErrUnsupported rather than leaving face.reversed at whatever the caller
+// ErrUnsupported rather than leaving face.n.Reversed at whatever the caller
 // constructed it with. NormalAt's own refusal there is ErrDegenerate, but
 // that sentinel and ErrUnsupported are opposite existence claims a caller
 // branches on (capblend.go's capband.ChamferAuditError), so the underlying error
@@ -1141,7 +1141,7 @@ func fixPatchOrientation(f *Face, pl prismPayload, samplePoint r3.Vec, refU, ref
 	}
 	ref := pl.Dir(refU, refV, refZ)
 	if n.Value.Dot(ref) < 0 {
-		f.reversed = !f.reversed
+		f.n.Reversed = !f.n.Reversed
 	}
 	return nil
 }

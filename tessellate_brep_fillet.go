@@ -205,7 +205,7 @@ func (bc *brepBandChord) finishPatch(m *Mesh, face *Face, eps, delta, levelDelta
 	if first < 0 {
 		return
 	}
-	m.areaSlack = proofbound.AbsSumUpper(m.areaSlack, tessellation.FilletMeshAreaDeficit(m.vertices, m.triangles[first:last], face.area, face.areaBound))
+	m.areaSlack = proofbound.AbsSumUpper(m.areaSlack, tessellation.FilletMeshAreaDeficit(m.vertices, m.triangles[first:last], face.n.Area, face.n.AreaBound))
 }
 
 // arcMotion fills in the motion of a reflex connector's cap samples, which the

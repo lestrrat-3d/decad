@@ -123,7 +123,7 @@ func requireFilletPatches(t *testing.T, body *Body, cylinders, tori int) []*Face
 		default:
 			t.Fatalf("a fillet patch is a %T", f.Surface())
 		}
-		require.Zero(t, f.normalBound, "a fillet patch's tag is its built surface")
+		require.Zero(t, f.n.NormalBound, "a fillet patch's tag is its built surface")
 	}
 	require.Equal(t, [2]int{cylinders, tori}, got, "cylinder and torus patches")
 	return patches
@@ -1205,10 +1205,10 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 			if math.Abs(surf.Axis.X) < 0.9 || math.Abs(surf.Origin.Y-20) > 2 {
 				continue
 			}
-			require.LessOrEqual(t, math.Abs(patch.area-straightArea), patch.areaBound+1e-5)
+			require.LessOrEqual(t, math.Abs(patch.n.Area-straightArea), patch.n.AreaBound+1e-5)
 			straightCount++
 		case Torus:
-			require.LessOrEqual(t, math.Abs(patch.area-curvedArea), patch.areaBound+1e-5)
+			require.LessOrEqual(t, math.Abs(patch.n.Area-curvedArea), patch.n.AreaBound+1e-5)
 			curvedCount++
 		}
 	}

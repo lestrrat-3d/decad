@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 type partialChamferQuad struct {
@@ -146,7 +147,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		}
 		held, bound := heldOf(areaIv)
 		face := &Face{surface: plane, origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
-			body: body, loops: []*Loop{loop}, area: held, areaBound: bound}
+			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound}}
 		normal, err := face.NormalAt(sideE.start.n.Position)
 		if err != nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d has no normal: %v`,
@@ -161,7 +162,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 				ErrUnsupported, i)
 		}
 		if aligned < 0 {
-			face.reversed = true
+			face.n.Reversed = true
 			volume3.Neg(volume3)
 			for k := range moments {
 				moments[k].Neg(moments[k])

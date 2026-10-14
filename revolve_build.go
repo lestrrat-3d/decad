@@ -407,22 +407,26 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// tighter bound than the snap/unsnap mismatch can actually cost it.
 		capAdmitAllow := revolvemass.AdmitBandCharge(rp.ax.RadialAdmitAllow, rp.ax.AxialExtentUpper)
 		capStart = &Face{
-			surface:     Plane{Frame: startFrame},
-			origins:     []FeatureRef{{producer: ref, Role: roleCapStart}},
-			body:        body,
-			area:        ig.Area,
-			areaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
-			normalBound: rp.phi0Delta(),
-			denoted:     rp.denotationInput().CapDenotation(rp.den.Phi0, rp.phi0, true),
+			surface: Plane{Frame: startFrame},
+			origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
+			body:    body,
+			n: topo.Face{
+				Area:        ig.Area,
+				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
+				NormalBound: rp.phi0Delta(),
+				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi0, rp.phi0, true),
+			},
 		}
 		capEnd = &Face{
-			surface:     Plane{Frame: endFrame},
-			origins:     []FeatureRef{{producer: ref, Role: roleCapEnd}},
-			body:        body,
-			area:        ig.Area,
-			areaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
-			normalBound: rp.phi1Delta(),
-			denoted:     rp.denotationInput().CapDenotation(rp.den.Phi1, rp.phi1, false),
+			surface: Plane{Frame: endFrame},
+			origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
+			body:    body,
+			n: topo.Face{
+				Area:        ig.Area,
+				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
+				NormalBound: rp.phi1Delta(),
+				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi1, rp.phi1, false),
+			},
 		}
 	}
 
@@ -441,15 +445,15 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		mzr.Bound = proofbound.AbsSumUpper(mzr.Bound, section.Second())
 		mrr.Bound = proofbound.AbsSumUpper(mrr.Bound, section.Second())
 		if !rp.full {
-			capStart.areaBound = proofbound.AbsSumUpper(capStart.areaBound, section.Band)
-			capEnd.areaBound = proofbound.AbsSumUpper(capEnd.areaBound, section.Band)
+			capStart.n.AreaBound = proofbound.AbsSumUpper(capStart.n.AreaBound, section.Band)
+			capEnd.n.AreaBound = proofbound.AbsSumUpper(capEnd.n.AreaBound, section.Band)
 		}
 	}
 	// Every charge above bounds the cap's plane-coordinate area; its image
 	// under the denoted map L takes L's own stretch last (frameCharge).
 	if !rp.full {
 		for _, c := range []*Face{capStart, capEnd} {
-			c.areaBound = frame.AreaOf(proofbound.MeasuredScalar(c.area, c.areaBound)).Bound
+			c.n.AreaBound = frame.AreaOf(proofbound.MeasuredScalar(c.n.Area, c.n.AreaBound)).Bound
 		}
 	}
 
@@ -545,8 +549,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// SAME admitted-band charge (capAdmitAllow, above) the individual cap
 		// Face fields already carry — never a narrower, uncharged bound the
 		// two would then disagree with.
-		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(capStart.area, capStart.areaBound))
-		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(capEnd.area, capEnd.areaBound))
+		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound))
+		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound))
 		if rp.surfaceResult {
 			// §4.3: a surface result's area is the solid's area minus the two
 			// omitted caps'. Each cap's area and bound are read back from the
@@ -558,8 +562,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			// value already composed from them. Collapsing this to sideArea
 			// alone would hold the same value but a smaller, uncomposed
 			// bound than §4.3's composed sum requires.
-			area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capStart.area, capStart.areaBound))
-			area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capEnd.area, capEnd.areaBound))
+			area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound))
+			area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound))
 		}
 	}
 	volume := proofbound.BoundedMul(q, sweep)
@@ -891,13 +895,15 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
-			surface:   surf,
-			origins:   origins,
-			body:      body,
-			area:      faceArea.Value,
-			areaBound: faceArea.Bound,
-			reversed:  reversed,
-			denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
+			surface: surf,
+			origins: origins,
+			body:    body,
+			n: topo.Face{
+				Area:      faceArea.Value,
+				AreaBound: faceArea.Bound,
+				Reversed:  reversed,
+				Denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
+			},
 		}
 		switch {
 		case rp.full && singleClosed:
@@ -1383,13 +1389,15 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
-			surface:   surf,
-			origins:   origins,
-			body:      body,
-			area:      faceArea.Value,
-			areaBound: faceArea.Bound,
-			reversed:  reversed,
-			denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
+			surface: surf,
+			origins: origins,
+			body:    body,
+			n: topo.Face{
+				Area:      faceArea.Value,
+				AreaBound: faceArea.Bound,
+				Reversed:  reversed,
+				Denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
+			},
 		}
 		if rp.full {
 			face.loops = fullRevLoops(js[i], js[i+1], kinds[i])

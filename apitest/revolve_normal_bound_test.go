@@ -730,7 +730,7 @@ func requireCapNormalsEnclose(t *testing.T, fx capFixture) float64 {
 // plane through the recorded axis at the recorded angle.
 //
 // Shown to fail: before each cap carried the plane its record denotes
-// (Face.denoted, revolvemesh.RevolveLift.CapNormal), the caps' bound was the
+// (topo.Face.Denoted, revolvemesh.RevolveLift.CapNormal), the caps' bound was the
 // tag's own arithmetic plus the angular displacement, and these caps sat
 // 1.31×, 1.33× and 1.23× that bound off the denoted normal (on amd64).
 func TestRevolveCapNormalCoversAxisFrameAndPlacement(t *testing.T) {

@@ -494,7 +494,7 @@ func (g *bodyGeom) addStitchFaces(budget *proofbound.WorkBudget, b *Body, sp sti
 			return false, nil
 		}
 		normal := pl.Frame.N()
-		if f.reversed {
+		if f.n.Reversed {
 			normal = normal.Scale(-1)
 		}
 		cf := &clearance.CFace{Kind: clearance.CkPlane, O: pl.Frame.Origin(), U: pl.Frame.U(), V: pl.Frame.V(), N: normal}

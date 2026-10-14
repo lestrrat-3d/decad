@@ -480,7 +480,7 @@ func ConeFaceFluxAndMoment(f FaceInput, cone ConeInput, anchor r3.Vec, sign floa
 // untested code with no fixture behind it.
 //
 // K_F. Anchored at the sphere's own Center, p−Center is parallel to n at
-// every surface point (n = σ·(p−Center)/Radius, σ = ±1 from f.reversed), so
+// every surface point (n = σ·(p−Center)/Radius, σ = ±1 from f.n.Reversed), so
 // (p−Center)·n = σ·Radius identically — the same identity the Cylinder arm
 // uses, with the sphere's own Center standing in for a point on the
 // cylinder's axis. So flux_F = K_F + (Center−anchor)·S_F, K_F =

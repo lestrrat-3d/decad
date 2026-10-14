@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -396,8 +397,8 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {
 			face.surface = Faceted{Bound: units.Millimeters(delta)}
 		}
-		face.areaBound = proofbound.AbsSumUpper(face.areaBound, face.area, area, areaBound)
-		face.axialDelta, face.hasAxialDelta = delta, true
+		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, area, areaBound)
+		face.n.AxialDelta, face.n.HasAxialDelta = delta, true
 	}
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
@@ -518,8 +519,8 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 				for _, use := range face.loops[0].coedges {
 					uses[use.edge] = append(uses[use.edge], use)
 				}
-				area = proofbound.AbsSumUpper(area, face.area)
-				areaBound = proofbound.AbsSumUpper(areaBound, face.areaBound)
+				area = proofbound.AbsSumUpper(area, face.n.Area)
+				areaBound = proofbound.AbsSumUpper(areaBound, face.n.AreaBound)
 			}
 			boundary := make(map[*Vertex]coedge)
 			for _, edgeUses := range uses {
@@ -569,7 +570,7 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 			face := &Face{
 				surface: Faceted{}, loops: []*Loop{{outer: true, coedges: outline}},
 				origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}},
-				body:    body, area: area, areaBound: areaBound,
+				body:    body, n: topo.Face{Area: area, AreaBound: areaBound},
 			}
 			merged = append(merged, face)
 		}

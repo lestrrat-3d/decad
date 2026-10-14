@@ -178,14 +178,16 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, err
 	}
 	face := &Face{
-		surface:       Plane{Frame: frame},
-		origins:       []FeatureRef{{producer: ref, Role: rolePatch}},
-		body:          body,
-		loops:         faceLoops,
-		area:          ig.Area,
-		areaBound:     ig.AreaBound,
-		axialDelta:    0,
-		hasAxialDelta: true,
+		surface: Plane{Frame: frame},
+		origins: []FeatureRef{{producer: ref, Role: rolePatch}},
+		body:    body,
+		loops:   faceLoops,
+		n: topo.Face{
+			Area:          ig.Area,
+			AreaBound:     ig.AreaBound,
+			AxialDelta:    0,
+			HasAxialDelta: true,
+		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
 		return nil, err

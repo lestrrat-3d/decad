@@ -151,7 +151,7 @@ func TestTangentContinuesFaceSheets(t *testing.T) {
 			continue
 		}
 		n := p.Frame.N()
-		if f.reversed {
+		if f.n.Reversed {
 			n = n.Scale(-1)
 		}
 		switch n {

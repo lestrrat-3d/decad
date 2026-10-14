@@ -28,7 +28,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 				return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a Body.Patch result's %T face`,
 					ErrUnsupported, f.Surface())
 			}
-			if f.normalBound != 0 {
+			if f.n.NormalBound != 0 {
 				return nil, fmt.Errorf(`%w: a Body.Patch result's planar face has no zero-bound normal`, ErrUnsupported)
 			}
 			for _, l := range f.loops {
@@ -87,7 +87,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 	}
 	axial := make(map[*Face]float64, len(faces))
 	for _, f := range faces {
-		axial[f] = f.axialDelta
+		axial[f] = f.n.AxialDelta
 	}
 	if err := composeFaceBounds(mesh, nil, axial, store, 0); err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 		}
 		face := mesh.source[i]
 		delta := math.Max(store[tri[0]], math.Max(store[tri[1]], store[tri[2]]))
-		delta = proofbound.AbsSumUpper(delta, face.axialDelta)
+		delta = proofbound.AbsSumUpper(delta, face.n.AxialDelta)
 		if delta == 0 {
 			continue
 		}

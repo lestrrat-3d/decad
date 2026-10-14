@@ -67,8 +67,8 @@ func payloadAxialDelta(b *Body) float64 {
 // over every face, such as ThroughAll; a ToFace stop names one face and must
 // not charge an unrelated cap's bound to it.
 func selectedFaceAxialDelta(b *Body, face *Face) float64 {
-	if face != nil && face.hasAxialDelta {
-		return face.axialDelta
+	if face != nil && face.n.HasAxialDelta {
+		return face.n.AxialDelta
 	}
 	return payloadAxialDelta(b)
 }
