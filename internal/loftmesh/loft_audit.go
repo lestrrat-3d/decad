@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
@@ -134,7 +135,7 @@ func (plane LoftExactPlane) Sign(p proof.Xpt, sum, term *big.Int) int {
 func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 	workers := loftDataWorkers(verts, len(tris))
 	d := newLoftAuditDataSelected(verts, liftLoftVertices(verts, nil, workers), tris, nil, false, workers)
-	d.fans = newLoftAuditFans(d, tris)
+	d.fans = newLoftAuditFans(d, d.tris)
 	return d
 }
 
@@ -153,7 +154,7 @@ func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int)
 func newCompactLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 	workers := loftDataWorkers(verts, len(tris))
 	d := newLoftAuditDataSelected(verts, liftLoftVertices(verts, nil, workers), tris, nil, true, workers)
-	d.fans = newLoftAuditFans(d, tris)
+	d.fans = newLoftAuditFans(d, d.tris)
 	return d
 }
 
@@ -227,7 +228,9 @@ func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
 		Planes:     make([]LoftExactPlane, len(tris)),
 		compact:    compact,
 	}
-	d.tris = tris
+	// The table owns a copy: a caller that reorders its own list afterwards
+	// cannot reach the corners every certificate and the entry check read.
+	d.tris = slices.Clone(tris)
 	if compact {
 		d.verts = verts
 	} else {

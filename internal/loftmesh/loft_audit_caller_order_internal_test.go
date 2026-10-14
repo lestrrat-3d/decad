@@ -3,10 +3,13 @@ package loftmesh
 import (
 	"errors"
 	"math/rand/v2"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -107,3 +110,101 @@ func TestAuditLoftPairDataCallerOrderRandom(t *testing.T) {
 }
 
 func errorsIsOrder(err error) bool { return errors.Is(err, ErrLoftAuditOrder) }
+
+// callerOrderLayouts builds the audit table of tris in each layout. Every
+// builder is handed the caller's slice, which the test then mutates.
+var callerOrderLayouts = map[string]func(verts []r3.Vec, tris [][3]int) *LoftAuditData{
+	"full":    NewLoftAuditData,
+	"compact": newCompactLoftAuditData,
+	"exact": func(verts []r3.Vec, tris [][3]int) *LoftAuditData {
+		exact := make([]proof.Xpt, len(verts))
+		for i, v := range verts {
+			exact[i] = proof.XptOf(v)
+		}
+		return NewLoftAuditDataWithExact(verts, exact, tris)
+	},
+	"selected": func(verts []r3.Vec, tris [][3]int) *LoftAuditData {
+		return newLoftAuditDataForCandidates(verts, tris, loftCandidates{starts: []int{0, 1, 1}, js: []int32{1}})
+	},
+}
+
+// TestLoftAuditTableOwnsItsCornerOrder mutates the caller's triangle list in
+// place after the table is built. The table keeps its own copy, so a list in
+// the new order is refused, a list in the old order keeps its outcome, and
+// writing one corner is the same as replacing the triple.
+func TestLoftAuditTableOwnsItsCornerOrder(t *testing.T) {
+	t.Parallel()
+	verts := []r3.Vec{{X: -3, Y: 4, Z: -3}, {X: 3, Y: -2, Z: -3}, {X: 4, Y: 3}, {X: -5, Y: 3, Z: -2}, {X: 4, Y: 2, Z: -4}}
+	original := [][3]int{{0, 1, 2}, {0, 3, 4}}
+	mutations := map[string]func(tris [][3]int){
+		"replace triple": func(tris [][3]int) { tris[1] = [3]int{3, 0, 4} },
+		"write corners":  func(tris [][3]int) { tris[1][0], tris[1][1] = 3, 0 },
+	}
+	for layout, build := range callerOrderLayouts {
+		for mutation, mutate := range mutations {
+			t.Run(layout+"/"+mutation, func(t *testing.T) {
+				t.Parallel()
+				tris := slices.Clone(original)
+				data := build(verts, tris)
+				for _, sc := range callerOrderShortcuts {
+					before, beforeErr := AuditLoftPairData(data, original, 0, 1, sc)
+					mutate(tris)
+					out, err := AuditLoftPairData(data, tris, 0, 1, sc)
+					require.ErrorIs(t, err, ErrLoftAuditOrder, "shortcuts %+v: outcome %v, err %v", sc, out, err)
+					after, afterErr := AuditLoftPairData(data, slices.Clone(original), 0, 1, sc)
+					require.Equal(t, before, after)
+					require.Equal(t, beforeErr, afterErr)
+					tris = slices.Clone(original)
+				}
+			})
+		}
+	}
+}
+
+// TestLoftAuditFansOwnTheirCornerOrder rotates every triple of the caller's
+// list in place after the table (and its fan table) is built. A list in the
+// original order must keep every fan decision, so the fan table cannot read
+// the caller's list.
+func TestLoftAuditFansOwnTheirCornerOrder(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(61, 67))
+	verts, tris := fanFixture(rng, []r3.Vec{{Z: 2}}, 24, 40, 3)
+	for layout, build := range map[string]func([]r3.Vec, [][3]int) *LoftAuditData{
+		"full": NewLoftAuditData, "compact": newCompactLoftAuditData,
+	} {
+		original := slices.Clone(tris)
+		caller := slices.Clone(tris)
+		data := build(verts, caller)
+		require.NotNil(t, data.fans, layout)
+		type verdict struct {
+			out        LoftPairOutcome
+			err        string
+			fan, fanOK bool
+		}
+		decide := func(list [][3]int) map[[2]int]verdict {
+			out := map[[2]int]verdict{}
+			for i := range list {
+				for j := i + 1; j < len(list); j++ {
+					if _, n := tessellation.SharedVertexIndices(list[i], list[j]); n != 1 {
+						continue
+					}
+					o, err := AuditLoftPairData(data, list, i, j, LoftAuditShortcuts{Certificates: true})
+					shared, _ := tessellation.SharedVertexIndices(list[i], list[j])
+					v := verdict{out: o}
+					v.fan, v.fanOK = data.fans.vertexCertificate(i, j, shared[0])
+					if err != nil {
+						v.err = err.Error()
+					}
+					out[[2]int{i, j}] = v
+				}
+			}
+			return out
+		}
+		before := decide(original)
+		require.NotEmpty(t, before)
+		for n, tri := range caller {
+			caller[n] = [3]int{tri[1], tri[2], tri[0]}
+		}
+		require.Equal(t, before, decide(slices.Clone(original)), layout)
+	}
+}
