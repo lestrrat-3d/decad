@@ -23,8 +23,21 @@ func FloatRat(value float64) *big.Rat {
 	if value == 0 {
 		return new(big.Rat)
 	}
-	// value = mant × 2^exp exactly, read from the bit pattern: a subnormal
-	// has no implicit leading bit and the exponent of the smallest normal.
+	mant, exp := floatOddMantissa(value)
+	r := new(big.Rat).SetInt64(mant)
+	if exp >= 0 {
+		r.Num().Lsh(r.Num(), uint(exp))
+	} else {
+		r.Denom().Lsh(r.Denom(), uint(-exp))
+	}
+	return r
+}
+
+// floatOddMantissa splits a nonzero finite float into mant × 2^exp exactly,
+// with mant odd and carrying value's sign. It reads the bit pattern: a
+// subnormal has no implicit leading bit and the exponent of the smallest
+// normal.
+func floatOddMantissa(value float64) (int64, int) {
 	raw := math.Float64bits(value)
 	mant := int64(raw & (1<<52 - 1))
 	exp := int(raw>>52) & 0x7ff
@@ -40,15 +53,35 @@ func FloatRat(value float64) *big.Rat {
 	// A negative mantissa has the same trailing zeros as its magnitude, so the
 	// arithmetic shift leaves it odd with its sign intact.
 	tz := bits.TrailingZeros64(uint64(mant))
-	mant >>= tz
-	exp += tz
-	r := new(big.Rat).SetInt64(mant)
-	if exp >= 0 {
-		r.Num().Lsh(r.Num(), uint(exp))
-	} else {
-		r.Denom().Lsh(r.Denom(), uint(-exp))
+	return mant >> tz, exp + tz
+}
+
+// CmpFloatRat returns -1, 0 or +1 as the finite float f is less than, equal to
+// or greater than q. It decides the same sign as FloatRat(f).Cmp(q) from one
+// integer product, one shift and one comparison, with no GCD: for f = m·2^e
+// and q = n/d (d > 0), the sign of f − q is the sign of m·d·2^e − n. It shifts
+// whichever side keeps both integers, so no fraction is formed. q is not
+// modified. f must be finite and q non-nil.
+func CmpFloatRat(f float64, q *big.Rat) int {
+	qs := q.Sign()
+	if f == 0 {
+		return -qs
 	}
-	return r
+	fs := 1
+	if f < 0 {
+		fs = -1
+	}
+	if fs != qs {
+		// A nonzero f against a zero or opposite-signed q: the signs decide.
+		return fs
+	}
+	mant, exp := floatOddMantissa(f)
+	lhs := new(big.Int).Mul(big.NewInt(mant), q.Denom())
+	rhs := q.Num()
+	if exp >= 0 {
+		return lhs.Lsh(lhs, uint(exp)).Cmp(rhs)
+	}
+	return lhs.Cmp(new(big.Int).Lsh(rhs, uint(-exp)))
 }
 
 // RationalFloatError returns |exact-held| rounded upward.
