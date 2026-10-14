@@ -52,8 +52,8 @@ func TestFreeEdgeAndOpenShellReadTheirOwnState(t *testing.T) {
 
 	t.Run("BodyKindReadsItsOwnStoredField", func(t *testing.T) {
 		t.Parallel()
-		require.Equal(t, BodySheet, (&Body{n: topo.Body{Kind: topo.BodySheet}}).Kind())
-		require.Equal(t, BodySolid, (&Body{}).Kind(), `BodySolid is the iota zero, so the zero value reads solid`)
+		require.Equal(t, BodySheet, (bornBody(&Body{n: topo.Body{Kind: topo.BodySheet}})).Kind())
+		require.Equal(t, BodySolid, (bornBody(&Body{})).Kind(), `BodySolid is the iota zero, so the zero value reads solid`)
 	})
 }
 

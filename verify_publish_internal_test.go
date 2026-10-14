@@ -779,7 +779,7 @@ func requireSurveysBlockedByValidity(t *testing.T, res *BodyReport, validityCode
 // invalid/undecided").
 func TestVerifyPublishInvalidValidityBlocksSurveys(t *testing.T) {
 	t.Parallel()
-	body := &Body{}
+	body := bornBody(&Body{})
 	res := publishBody(t, body,
 		WithMinWallThickness(units.Millimeters(1)),
 		WithPullDirection(r3.NewVec(0, 0, 1)),
@@ -803,7 +803,7 @@ func TestVerifyPublishInvalidValidityBlocksSurveys(t *testing.T) {
 func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
 	t.Parallel()
 	built := rectangularPrism(t, 100, 60, 10)
-	body := &Body{
+	body := bornBody(&Body{
 		doc:   built.doc,
 		lumps: built.lumps,
 		n: topo.Body{Solid: built.n.Solid, Origin: built.n.Origin, Volume: built.n.Volume,
@@ -811,7 +811,7 @@ func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
 			Centroid: built.n.Centroid,
 			Bounds:   built.n.Bounds,
 		},
-	}
+	})
 
 	res := publishBody(t, body,
 		WithMinWallThickness(units.Millimeters(1)),
@@ -833,7 +833,7 @@ func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
 // without the rest of verifyBody's plumbing.
 func TestVerifyPublishUndercutRunsOnAProvenSheet(t *testing.T) {
 	t.Parallel()
-	body := &Body{n: topo.Body{Kind: topo.BodySheet}}
+	body := bornBody(&Body{n: topo.Body{Kind: topo.BodySheet}})
 	req := VerifyRequest{Undercut: &UndercutRequest{PullDirection: r3.NewVec(0, 0, 1)}}
 	surveys := surveyResults{Undercut: undercutOutcome{ok: true, faces: []*Face{}}}
 

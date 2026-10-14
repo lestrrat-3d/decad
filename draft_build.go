@@ -196,7 +196,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 	cbp := dp.band()
 	loops := cbp.loops()
 	nearZ, nearDelta, farZ, matSign := dp.levels()
-	body := &Body{doc: doc, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}}
+	body := bornBody(&Body{doc: doc, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}})
 	pl := cbp.prismLike(0, 0)
 
 	var faces []*Face
@@ -244,7 +244,6 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		return nil, err
 	}
 	capStart := &Face{
-		body:  body,
 		loops: startLoops,
 		n: topo.Face{
 			AxialDelta:    dp.z0Delta,
@@ -252,10 +251,10 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			Surface:       surfacegeom.Plane{Frame: startFrame},
 			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.z0},
 			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapStart}},
+			Body:          bodyNode(body),
 		},
 	}
 	capEnd := &Face{
-		body:  body,
 		loops: endLoops,
 		n: topo.Face{
 			AxialDelta:    dp.z1Delta,
@@ -263,6 +262,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			Surface:       surfacegeom.Plane{Frame: endFrame},
 			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.z1},
 			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
+			Body:          bodyNode(body),
 		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {

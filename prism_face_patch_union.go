@@ -48,9 +48,9 @@ func tryPrismFacePatchUnion(ctx context.Context, a, b *Body) (featurePayload, bo
 			var err error
 			if equalLevels {
 				payload, built, err = tryPrismBoolean(ctx, meshbool.OpUnion,
-					&Body{payload: x}, &Body{payload: yReframed})
+					bornBody(&Body{payload: x}), bornBody(&Body{payload: yReframed}))
 			} else {
-				payload, built, err = tryStackedUnion(ctx, &Body{payload: x}, &Body{payload: yReframed})
+				payload, built, err = tryStackedUnion(ctx, bornBody(&Body{payload: x}), bornBody(&Body{payload: yReframed}))
 			}
 			if err != nil || built {
 				return payload, built, err

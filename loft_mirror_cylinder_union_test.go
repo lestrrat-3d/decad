@@ -486,7 +486,7 @@ func TestLoftMirrorCylinderPlaceTeethFirstError(t *testing.T) {
 		for _, workers := range []int{1, 2, 4} {
 			bodies := make([]*Body, n)
 			for i := range bodies {
-				bodies[i] = &Body{}
+				bodies[i] = bornBody(&Body{})
 			}
 			teeth, err := loftMirrorCylinderPlaceTeeth(n, workers, func(i int) (*Body, error) { return bodies[i], nil })
 			require.NoError(t, err)
@@ -504,7 +504,7 @@ func TestLoftMirrorCylinderPlaceTeethFirstError(t *testing.T) {
 				if slices.Contains(failing, i) {
 					return nil, fmt.Errorf("tooth %d", i)
 				}
-				return &Body{}, nil
+				return bornBody(&Body{}), nil
 			})
 			lowest := slices.Min(failing)
 			require.EqualError(t, err, fmt.Sprintf("tooth %d", lowest), "failing %v, %d workers", failing, workers)

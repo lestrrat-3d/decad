@@ -121,10 +121,10 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 	var source *pointSectionRecord
 	seen := make(map[*Body]bool, len(faces)-1)
 	for i, face := range faces {
-		if face == nil || face.body == nil {
+		if face == nil || face.n.Body == nil {
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d is not a body face", ErrDegenerate, i)
 		}
-		body := face.body
+		body := bodyHandle(face.n.Body)
 		if err := d.requireLive(body); err != nil {
 			return nil, nil, err
 		}
@@ -172,7 +172,7 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 		if complete, ok := pointCapGroupFace(body, fp, want); !ok || complete != face {
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d is not one complete cap patch", ErrUnsupported, i)
 		}
-		if i == 1 && body != faces[0].body {
+		if i == 1 && body != bodyHandle(faces[0].n.Body) {
 			return nil, nil, fmt.Errorf("%w: LoftFaces first toe and heel must share one slab", ErrUnsupported)
 		}
 		if i >= 1 {

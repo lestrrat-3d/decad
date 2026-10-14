@@ -97,8 +97,8 @@ func TestPrismBooleanGateG1RequiresBothOperandsPrismPayload(t *testing.T) {
 		Profile: profileRecord{Outer: synthLineLoop()},
 		Frame:   frame, Z0: 0, Z1: 10, Xform: r3.Identity(),
 	}}
-	a := &Body{payload: pp}
-	b := &Body{payload: facetedPayload{}} // any non-prismPayload featurePayload
+	a := bornBody(&Body{payload: pp})
+	b := bornBody(&Body{payload: facetedPayload{}}) // any non-prismPayload featurePayload
 
 	_, _, ok := admitPrismPair(a, b)
 	require.False(t, ok, "G1: a non-prismPayload operand must never admit")
@@ -119,7 +119,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		Profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
 		Frame:   frame, Z0: 0, Z1: 10, Xform: r3.Identity(),
 	}}
-	a := &Body{payload: pp}
+	a := bornBody(&Body{payload: pp})
 
 	t.Run("antiparallel normal (co-planar but not co-directional)", func(t *testing.T) {
 		antiFrame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, -1, 0))
@@ -127,7 +127,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		require.Equal(t, r3.NewVec(0, 0, -1), antiFrame.N())
 		antiPP := pp
 		antiPP.Frame = antiFrame
-		b := &Body{payload: antiPP}
+		b := bornBody(&Body{payload: antiPP})
 		_, _, ok := admitPrismPair(a, b)
 		require.False(t, ok)
 	})
@@ -137,7 +137,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		require.NoError(t, err)
 		shiftedPP := pp
 		shiftedPP.Xform = shifted
-		b := &Body{payload: shiftedPP}
+		b := bornBody(&Body{payload: shiftedPP})
 		pa, pb, ok := admitPrismPair(a, b)
 		require.True(t, ok)
 		require.Zero(t, prismplacement.ZShift(pa.PlacementOperand(), pb.PlacementOperand()).Cmp(big.NewRat(3, 1)))
@@ -151,7 +151,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		shiftedPP := pp
 		shiftedPP.Frame = frameB
 		shiftedPP.Xform = shifted
-		pa, pb, ok := admitPrismPair(a, &Body{payload: shiftedPP})
+		pa, pb, ok := admitPrismPair(a, bornBody(&Body{payload: shiftedPP}))
 		require.True(t, ok)
 		require.Zero(t, prismplacement.ZShift(pa.PlacementOperand(), pb.PlacementOperand()).Cmp(big.NewRat(5, 1)))
 	})
@@ -165,7 +165,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		require.NoError(t, err)
 		turnedPP := pp
 		turnedPP.Xform = turned
-		_, _, ok := admitPrismPair(a, &Body{payload: turnedPP})
+		_, _, ok := admitPrismPair(a, bornBody(&Body{payload: turnedPP}))
 		require.False(t, ok)
 	})
 
@@ -174,7 +174,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		require.NoError(t, err)
 		offsetPP := pp
 		offsetPP.Frame = frameB
-		b := &Body{payload: offsetPP}
+		b := bornBody(&Body{payload: offsetPP})
 		pa, pb, ok := admitPrismPair(a, b)
 		require.True(t, ok)
 		require.Zero(t, prismplacement.ZShift(pa.PlacementOperand(), pb.PlacementOperand()).Cmp(big.NewRat(-16, 1)),
@@ -186,7 +186,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		require.NoError(t, err)
 		offsetPP := pp
 		offsetPP.Frame = frameB
-		b := &Body{payload: offsetPP}
+		b := bornBody(&Body{payload: offsetPP})
 		_, _, ok := admitPrismPair(a, b)
 		require.False(t, ok)
 	})
@@ -224,12 +224,12 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		tiltedA.Frame = fa
 		tiltedB := pp
 		tiltedB.Frame = fb
-		_, _, ok := admitPrismPair(&Body{payload: tiltedA}, &Body{payload: tiltedB})
+		_, _, ok := admitPrismPair(bornBody(&Body{payload: tiltedA}), bornBody(&Body{payload: tiltedB}))
 		require.False(t, ok)
 	})
 
 	t.Run("exactly co-directional and coplanar clears G3", func(t *testing.T) {
-		b := &Body{payload: pp}
+		b := bornBody(&Body{payload: pp})
 		_, _, ok := admitPrismPair(a, b)
 		require.True(t, ok)
 	})
@@ -247,8 +247,8 @@ func TestPrismBooleanGateG4RefusesNonAnalyticSegment(t *testing.T) {
 		ellipseSeg{Center: planePoint{U: 20, V: 0}, Rx: units.Millimeters(4), Ry: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1},
 	}}}
 
-	a := &Body{payload: linePP}
-	b := &Body{payload: ellipsePP}
+	a := bornBody(&Body{payload: linePP})
+	b := bornBody(&Body{payload: ellipsePP})
 	_, _, ok := admitPrismPair(a, b)
 	require.False(t, ok, "G4: a non-analytic (ellipse) segment must never admit")
 
@@ -257,7 +257,7 @@ func TestPrismBooleanGateG4RefusesNonAnalyticSegment(t *testing.T) {
 	otherLinePP.Profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		circleSeg{Center: planePoint{U: 5, V: 5}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1},
 	}}}
-	c := &Body{payload: otherLinePP}
+	c := bornBody(&Body{payload: otherLinePP})
 	_, _, ok = admitPrismPair(a, c)
 	require.True(t, ok)
 }
@@ -358,14 +358,14 @@ func TestPrismIntersectShiftedEndpointChargesItsRounding(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	offset, err := r3.NewFrame(r3.Vec{Z: 0.1}, frame.U(), frame.V())
 	require.NoError(t, err)
-	a := &Body{payload: prismPayload{Payload: prismrecord.Payload{
+	a := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{
 		Profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
 		Frame:   frame, Z0: 0, Z1: 1, Xform: r3.Identity(),
-	}}}
-	b := &Body{payload: prismPayload{Payload: prismrecord.Payload{
+	}}})
+	b := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{
 		Profile: profileRecord{Outer: synthRectLoop(3, 3, 7, 7)},
 		Frame:   offset, Z0: 0, Z1: 0.3, Xform: r3.Identity(),
-	}}}
+	}}})
 
 	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpIntersect, a, b)
 	require.NoError(t, err)
@@ -413,13 +413,13 @@ func TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands(t *testing.T) {
 		Holes: []loopRecord{synthRectLoop(8, 8, 9, 9)},
 	}
 
-	a := &Body{payload: holeFree}
-	b := &Body{payload: holed}
+	a := bornBody(&Body{payload: holeFree})
+	b := bornBody(&Body{payload: holed})
 	_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, a, b)
 	require.NoError(t, err)
 	require.False(t, ok, "G6: a holed operand must never admit a Union")
 
-	c := &Body{payload: overlapping}
+	c := bornBody(&Body{payload: overlapping})
 	_, ok, err = tryPrismBoolean(t.Context(), meshbool.OpUnion, a, c)
 	require.NoError(t, err)
 	require.True(t, ok, "a hole-free pair otherwise identical clears G6")
@@ -454,7 +454,7 @@ func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	// contact classification.
 	pb.Profile = profileRecord{Outer: synthRectLoop(-5, 9.9, 15, 11.9)}
 	pb.Xform = rotation
-	_, _, admitted := admitPrismPair(&Body{payload: pa}, &Body{payload: pb})
+	_, _, admitted := admitPrismPair(bornBody(&Body{payload: pa}), bornBody(&Body{payload: pb}))
 	require.True(t, admitted, "the fixture must clear G1-G4 before the split guard runs")
 	require.True(t, prismplacement.UnionZIntervalMatches(pa.PlacementOperand(), pb.PlacementOperand()),
 		"the fixture must clear G5")
@@ -481,7 +481,7 @@ func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	_, inB := prismSceneDelta{}.Incoming(pa.SectionDelta, pb.SectionDelta, reexpression.Delta)
 	require.Positive(t, inB)
 
-	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
+	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, bornBody(&Body{payload: pa}), bornBody(&Body{payload: pb}))
 	require.NoError(t, err)
 	require.True(t, ok, "A6 charges the shallow crossing instead of rerouting it")
 	require.GreaterOrEqual(t, result.SectionDelta, inB/0.01,
@@ -579,7 +579,7 @@ func TestPrismUnionDisplacedSourceSplitChargesTheCrossing(t *testing.T) {
 		Profile: profileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)},
 		Frame:   frame, Z0: 0, Z1: 10, Xform: translation,
 	}}
-	first, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: inner}, &Body{payload: containing})
+	first, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, bornBody(&Body{payload: inner}), bornBody(&Body{payload: containing}))
 	require.NoError(t, err)
 	require.True(t, ok, "the containing first union must resolve analytically")
 	require.Positive(t, first.SectionDelta, "the nonidentity first union must carry its re-expression displacement")
@@ -605,7 +605,7 @@ func TestPrismUnionDisplacedSourceSplitChargesTheCrossing(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, split, "the shallow crossing must create a trimmed edge")
 
-	second, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: first}, &Body{payload: shallow})
+	second, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, bornBody(&Body{payload: first}), bornBody(&Body{payload: shallow}))
 	require.NoError(t, err)
 	require.True(t, ok, "A6 charges the shallow crossing instead of rerouting it")
 	require.GreaterOrEqual(t, second.SectionDelta, first.SectionDelta/0.01,
@@ -626,8 +626,8 @@ func TestTryPrismBooleanSingleOpenSegmentIsUnresolvedForCutAndIntersect(t *testi
 		Profile: profileRecord{Outer: synthLineLoop()},
 		Frame:   frame, Z0: 0, Z1: 10, Xform: r3.Identity(),
 	}}
-	a := &Body{payload: pp}
-	b := &Body{payload: pp}
+	a := bornBody(&Body{payload: pp})
+	b := bornBody(&Body{payload: pp})
 
 	for _, op := range []meshbool.OperationKind{meshbool.OpCut, meshbool.OpIntersect} {
 		_, ok, err := tryPrismBoolean(t.Context(), op, a, b)
@@ -643,8 +643,8 @@ func TestPrismUnionArrangementCapRejectsLargeLineOnlyScene(t *testing.T) {
 		Profile: profileRecord{Outer: synthDenseRectLoop(prismcells.MaxArrangementSegments/8 + 1)},
 		Frame:   frame, Z0: 0, Z1: 10, Xform: r3.Identity(),
 	}}
-	a := &Body{payload: pp}
-	b := &Body{payload: pp}
+	a := bornBody(&Body{payload: pp})
+	b := bornBody(&Body{payload: pp})
 
 	_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, a, b)
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -668,7 +668,7 @@ func TestPrismUnionPreservesEndDisplacements(t *testing.T) {
 	pb.Z0Delta = 0.5
 	pb.Z1Delta = 0.25
 
-	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
+	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, bornBody(&Body{payload: pa}), bornBody(&Body{payload: pb}))
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, 0.5, result.Z0Delta)
@@ -780,8 +780,8 @@ func TestPrismUnionMergedLoopJunctionsClose(t *testing.T) {
 		Profile: profileRecord{Outer: synthRectLoop(2, 2, 4, 4)},
 		Frame:   frame, Z0: 0, Z1: 10, Xform: r3.Identity(),
 	}}
-	a := &Body{payload: pa}
-	b := &Body{payload: pb}
+	a := bornBody(&Body{payload: pa})
+	b := bornBody(&Body{payload: pb})
 
 	_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, a, b)
 	require.False(t, ok)
@@ -794,7 +794,7 @@ func TestPrismUnionMergedLoopJunctionsClose(t *testing.T) {
 	// loop DOES join bit-exactly at every whole junction.
 	clean := pa
 	clean.Profile = profileRecord{Outer: synthRectLoop(0, 0, 10, 10)}
-	res, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: clean}, b)
+	res, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, bornBody(&Body{payload: clean}), b)
 	require.NoError(t, err)
 	require.True(t, ok)
 	requireMergedLoopSegmentsJoin(t, res.Profile.Outer.Segments)
@@ -1615,7 +1615,7 @@ func TestPrismBooleanTrimmedCircularSourceFallsBack(t *testing.T) {
 	}}
 
 	for _, op := range []meshbool.OperationKind{meshbool.OpUnion, meshbool.OpCut, meshbool.OpIntersect} {
-		_, ok, err := tryPrismBoolean(t.Context(), op, &Body{payload: trimmedArc}, &Body{payload: whole})
+		_, ok, err := tryPrismBoolean(t.Context(), op, bornBody(&Body{payload: trimmedArc}), bornBody(&Body{payload: whole}))
 		require.NoError(t, err)
 		require.False(t, ok, "%s over a trimmed circular source segment must fall back, never publish zero", op)
 	}
@@ -1710,14 +1710,14 @@ func TestPrismBooleanNearWholeCircleSourceFallsBack(t *testing.T) {
 	for _, op := range []meshbool.OperationKind{meshbool.OpUnion, meshbool.OpCut, meshbool.OpIntersect} {
 		t.Run(op.String(), func(t *testing.T) {
 			nearWhole := circleOperand(math.Nextafter(1, 0))
-			_, ok, err := tryPrismBoolean(t.Context(), op, &Body{payload: box}, &Body{payload: nearWhole})
+			_, ok, err := tryPrismBoolean(t.Context(), op, bornBody(&Body{payload: box}), bornBody(&Body{payload: nearWhole}))
 			require.NoError(t, err)
 			require.False(t, ok, "a circle recorded one ulp short of whole must fall back, never publish zero")
 		})
 	}
 
 	t.Run("the whole-circle control is admitted", func(t *testing.T) {
-		_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpCut, &Body{payload: box}, &Body{payload: circleOperand(1)})
+		_, ok, err := tryPrismBoolean(t.Context(), meshbool.OpCut, bornBody(&Body{payload: box}), bornBody(&Body{payload: circleOperand(1)}))
 		require.NoError(t, err)
 		require.True(t, ok, "the same pair with an exactly whole circle must reach the analytic result")
 	})
@@ -1752,7 +1752,7 @@ func TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, split, "the overlapping box must genuinely split A's own right wall")
 
-	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: pa}, &Body{payload: pb})
+	result, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, bornBody(&Body{payload: pa}), bornBody(&Body{payload: pb}))
 	require.NoError(t, err)
 	require.True(t, ok, "A6 charges the crossing instead of rerouting it")
 	require.GreaterOrEqual(t, result.SectionDelta, sceneDelta.A)
@@ -1922,8 +1922,8 @@ func TestPrismOverlapVolumeDeclinesExactlyTangentPair(t *testing.T) {
 	}}
 	pb := pa
 	pb.Profile = profileRecord{Outer: synthRectLoop(10, 0, 20, 10)}
-	a := &Body{doc: doc, payload: pa}
-	b := &Body{doc: doc, payload: pb}
+	a := bornBody(&Body{doc: doc, payload: pa})
+	b := bornBody(&Body{doc: doc, payload: pb})
 
 	volume, ok, err := prismOverlapVolume(t.Context(), a, b)
 	require.NoError(t, err)
@@ -1945,8 +1945,8 @@ func TestPrismOverlapVolumeArrangementCapRefuses(t *testing.T) {
 		Profile: profileRecord{Outer: synthDenseRectLoop(prismcells.MaxArrangementSegments/8 + 1)},
 		Frame:   frame, Z0: 0, Z1: 10, Xform: r3.Identity(),
 	}}
-	a := &Body{doc: doc, payload: pp}
-	b := &Body{doc: doc, payload: pp}
+	a := bornBody(&Body{doc: doc, payload: pp})
+	b := bornBody(&Body{doc: doc, payload: pp})
 
 	_, ok, err := prismOverlapVolume(t.Context(), a, b)
 	require.False(t, ok)
@@ -2011,8 +2011,8 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 		pb := pa
 		pb.Profile = profileRecord{Outer: synthRectLoop(5, 5, 15, 15)}
 		pb.Xform = shifted
-		a := &Body{doc: doc, payload: pa}
-		b := &Body{doc: doc, payload: pb}
+		a := bornBody(&Body{doc: doc, payload: pa})
+		b := bornBody(&Body{doc: doc, payload: pb})
 		_, ok, err := prismOverlapVolume(t.Context(), a, b)
 		require.NoError(t, err)
 		require.False(t, ok, "G3: a non-coplanar pair must never admit")
@@ -2026,8 +2026,8 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 		pb := pa
 		pb.Profile = profileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}
 		pb.Xform = prismMirrorAcrossX(t, 0)
-		a := &Body{doc: doc, payload: pa}
-		b := &Body{doc: doc, payload: pb}
+		a := bornBody(&Body{doc: doc, payload: pa})
+		b := bornBody(&Body{doc: doc, payload: pb})
 		got, ok, err := prismOverlapVolume(t.Context(), a, b)
 		require.NoError(t, err)
 		require.True(t, ok)
@@ -2039,8 +2039,8 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 		pb.Profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			ellipseSeg{Center: planePoint{U: 20, V: 0}, Rx: units.Millimeters(4), Ry: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1},
 		}}}
-		a := &Body{doc: doc, payload: pa}
-		b := &Body{doc: doc, payload: pb}
+		a := bornBody(&Body{doc: doc, payload: pa})
+		b := bornBody(&Body{doc: doc, payload: pb})
 		_, ok, err := prismOverlapVolume(t.Context(), a, b)
 		require.NoError(t, err)
 		require.False(t, ok, "G4: a non-analytic (ellipse) segment must never admit")

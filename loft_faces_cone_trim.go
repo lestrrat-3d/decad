@@ -225,7 +225,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	p, ok := target.payload.(facetedPayload)
 	if !ok || p.loftFacesToe == nil || !loftFacesCapRecordReady(p.loftFacesToe.cap) ||
 		p.xform != r3.Identity() ||
-		p.loftFacesToe.capFace == nil || p.loftFacesToe.capFace.body != target {
+		p.loftFacesToe.capFace == nil || p.loftFacesToe.capFace.n.Body != bodyNode(target) {
 		return nil, false, nil
 	}
 	cone, ok := exactPointCone(tool)

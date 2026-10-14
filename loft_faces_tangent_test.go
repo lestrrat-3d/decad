@@ -222,7 +222,7 @@ func TestLoftFacesToConeTangentRefuses(t *testing.T) {
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("cone without a document", func(t *testing.T) {
-		_, err := LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: &Body{}, Radial: good.Radial}, faces...)
+		_, err := LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: bornBody(&Body{}), Radial: good.Radial}, faces...)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("stale source", func(t *testing.T) {

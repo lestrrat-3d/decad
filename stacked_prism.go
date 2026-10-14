@@ -378,7 +378,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}}
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}})
 	work := freeform.NewFreeformWork()
 	base := sp.outerPrism()
 	colDelta := make([]float64, len(columns))
@@ -432,16 +432,16 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		if err != nil {
 			return nil, err
 		}
-		return &Face{
-			body: body, n: topo.Face{
-				Area:          area.Value,
-				AreaBound:     area.Bound,
-				AxialDelta:    axial,
-				HasAxialDelta: true,
-				Surface:       surfacegeom.Plane{Frame: frame},
-				CapRecord:     &topo.CapRecord{Frame: base.Frame, Xform: base.Xform, Z: z},
-				Origins:       []provenance.Ref{{Producer: ref, Role: role}},
-			}}, nil
+		return &Face{n: topo.Face{
+			Area:          area.Value,
+			AreaBound:     area.Bound,
+			AxialDelta:    axial,
+			HasAxialDelta: true,
+			Surface:       surfacegeom.Plane{Frame: frame},
+			CapRecord:     &topo.CapRecord{Frame: base.Frame, Xform: base.Xform, Z: z},
+			Origins:       []provenance.Ref{{Producer: ref, Role: role}},
+			Body:          bodyNode(body),
+		}}, nil
 	}
 	// One bottom cap per region of the first slab and one top cap per region
 	// of the last, so CapStart(group) selects every lump's bottom face

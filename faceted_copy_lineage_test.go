@@ -30,7 +30,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	for _, face := range source.Faces() {
 		owner := set.faceOwner[1][face]
 		require.NotNil(t, owner)
-		require.Same(t, image, owner.body)
+		require.Same(t, image, bodyHandle(owner.n.Body))
 	}
 	require.NotNil(t, blank, "the source is a real Revolve and LoftFaces pair")
 

@@ -225,11 +225,11 @@ func TestCoplanarRelationCancellationIsBounded(t *testing.T) {
 
 func TestInterferencePairDiameterUsesAllFacetedPayloadVertices(t *testing.T) {
 	t.Parallel()
-	a := &Body{payload: facetedPayload{verts: []r3.Vec{
+	a := bornBody(&Body{payload: facetedPayload{verts: []r3.Vec{
 		r3.NewVec(0, 0, 0),
 		r3.NewVec(100, 0, 0),
-	}}}
-	b := &Body{payload: facetedPayload{verts: []r3.Vec{r3.NewVec(0, 0, 0)}}}
+	}}})
+	b := bornBody(&Body{payload: facetedPayload{verts: []r3.Vec{r3.NewVec(0, 0, 0)}}})
 
 	diameter, err := interferencePairDiameter(t.Context(), a, b)
 	require.NoError(t, err)
@@ -238,8 +238,8 @@ func TestInterferencePairDiameterUsesAllFacetedPayloadVertices(t *testing.T) {
 
 func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 	t.Parallel()
-	a := &Body{n: topo.Body{Origin: provenance.Ref{Producer: 12}}}
-	b := &Body{n: topo.Body{Origin: provenance.Ref{Producer: 34}}}
+	a := bornBody(&Body{n: topo.Body{Origin: provenance.Ref{Producer: 12}}})
+	b := bornBody(&Body{n: topo.Body{Origin: provenance.Ref{Producer: 34}}})
 
 	for _, tc := range []struct {
 		name        string
@@ -542,8 +542,8 @@ func TestAnalyticBodiesEqualCancellationIsBounded(t *testing.T) {
 		segs[i] = lineSeg{Start: planePoint{U: float64(i)}, End: planePoint{U: float64(i + 1)}, TEnd: 1}
 	}
 	profile := profileRecord{Outer: loopRecord{Segments: segs}}
-	a := &Body{payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}}
-	b := &Body{payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}}
+	a := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}})
+	b := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}})
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "ExactLoopEqual"}
 
 	_, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)
@@ -597,10 +597,10 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 	pp.Profile = profileRecord{Outer: loopRecord{Segments: segs}}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "SurveyLoops"}
 
-	_, _, err := newBodyGeomBudget(proofbound.NewWorkBudget(ctx), &Body{
+	_, _, err := newBodyGeomBudget(proofbound.NewWorkBudget(ctx), bornBody(&Body{
 		lumps:   body.lumps,
 		payload: pp,
-	})
+	}))
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,
 		`the kernel model must poll while resolving carrier profile loops`)

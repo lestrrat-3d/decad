@@ -131,7 +131,7 @@ func (b *Body) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (
 // retired body. tol is the positive tessellation chord tolerance. A verified
 // two-sided face displacement bounds the returned measurement.
 func (f *Face) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error) {
-	if ctx == nil || f == nil || f.body == nil || f.body.doc == nil {
+	if ctx == nil || f == nil || f.n.Body == nil || bodyHandle(f.n.Body).doc == nil {
 		return Measurement{}, fmt.Errorf(`%w: face distance requires a face and context`, ErrDegenerate)
 	}
 	if err := ctx.Err(); err != nil {
@@ -140,7 +140,7 @@ func (f *Face) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (
 	if !proofbound.FiniteVec(p) {
 		return Measurement{}, fmt.Errorf(`%w: the query point must be finite`, ErrNotFinite)
 	}
-	mesh, err := tessellateContext(ctx, f.body, tol, VerifyBoundary)
+	mesh, err := tessellateContext(ctx, bodyHandle(f.n.Body), tol, VerifyBoundary)
 	if err != nil {
 		return Measurement{}, err
 	}

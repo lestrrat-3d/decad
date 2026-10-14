@@ -289,7 +289,7 @@ func requireFlatAnalyticNeutral(f *Face) error {
 // b itself. It reports whether the neutral cap is the start cap, which
 // is the end of the sweep the draft's near section sits at.
 func neutralCap(f *Face, b *Body) (bool, error) {
-	if f.body != b {
+	if f.n.Body != bodyNode(b) {
 		return false, fmt.Errorf(`%w: the neutral face must be a cap of the receiver, and it belongs to another body (draft SD20)`, ErrUnsupported)
 	}
 	switch {

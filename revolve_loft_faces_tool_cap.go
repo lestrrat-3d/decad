@@ -40,7 +40,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 		!revolveLoftFacesSectionFacesComplete(proof) ||
 		proof.toeFace == nil || proof.heelFace == nil ||
 		proof.toeFace == proof.heelFace ||
-		proof.toeFace.body != proof.tooth || proof.heelFace.body != proof.tooth {
+		proof.toeFace.n.Body != bodyNode(proof.tooth) || proof.heelFace.n.Body != bodyNode(proof.tooth) {
 		return out, false
 	}
 	p, ok := proof.tooth.payload.(facetedPayload)
@@ -77,7 +77,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 			if span.face == nil {
 				continue // The axis span has no boundary face.
 			}
-			if span.face.body != proof.blank || span.start.V < 0 || span.end.V < 0 ||
+			if span.face.n.Body != bodyNode(proof.blank) || span.start.V < 0 || span.end.V < 0 ||
 				span.start == span.end {
 				return revolveLoftFacesToolCapSides{}, false
 			}

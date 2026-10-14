@@ -456,7 +456,7 @@ func revolveLoftFacesUniqueOriginFace(body *Body, want provenance.Ref) (*Face, b
 			if origin != want {
 				continue
 			}
-			if face.body != body || result != nil {
+			if face.n.Body != bodyNode(body) || result != nil {
 				return nil, false
 			}
 			result = face

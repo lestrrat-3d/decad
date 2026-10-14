@@ -46,10 +46,10 @@ func TestResolveThroughAllDecidesInPathOutsideDisplacement(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	doc := func(hi, bound float64) *Document {
-		return &Document{bodies: []*Body{{
+		return &Document{bodies: []*Body{bornBody(&Body{
 			n:       topo.Body{Origin: provenance.Ref{Producer: 1}},
 			payload: stubExtent{hi: hi, bound: bound},
-		}}}
+		})}}
 	}
 
 	t.Run("beyond the plane", func(t *testing.T) {
@@ -81,7 +81,7 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	profile := profileRecord{Outer: synthRectLoop(0, 0, 1, 1)}
 	stopBody := func(ref producerID, z1, z1Delta float64) *Body {
-		return &Body{
+		return bornBody(&Body{
 			n: topo.Body{Origin: provenance.Ref{Producer: ref}},
 			payload: prismPayload{Payload: prismrecord.Payload{
 				Profile: profile,
@@ -90,7 +90,7 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 				Z1Delta: z1Delta,
 				Xform:   r3.Identity(),
 			}},
-		}
+		})
 	}
 
 	t.Run("bounds a lower held contender", func(t *testing.T) {

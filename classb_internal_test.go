@@ -383,7 +383,7 @@ func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok)
 
-	_, ok, err = tryClassB(t.Context(), meshbool.OpCut, &Body{}, drill)
+	_, ok, err = tryClassB(t.Context(), meshbool.OpCut, bornBody(&Body{}), drill)
 	require.NoError(t, err)
 	require.False(t, ok)
 }

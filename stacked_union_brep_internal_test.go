@@ -282,7 +282,7 @@ func TestStackedUnionBrepMisses(t *testing.T) {
 		boss := internalBoxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15)
 		pp := plate.payload.(prismPayload)
 		pp.SectionDelta = 1e-12
-		_, ok, err := tryStackedUnion(t.Context(), &Body{payload: pp}, boss)
+		_, ok, err := tryStackedUnion(t.Context(), bornBody(&Body{payload: pp}), boss)
 		require.NoError(t, err)
 		require.False(t, ok)
 	})

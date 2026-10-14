@@ -107,7 +107,7 @@ func revolveLoftFacesSectionFacesComplete(proof *revolveLoftFacesSourceCertifica
 		if span.face == nil {
 			continue // the Revolve axis has no boundary face
 		}
-		if span.face.body != proof.blank || seen[span.face] {
+		if span.face.n.Body != bodyNode(proof.blank) || seen[span.face] {
 			return false
 		}
 		seen[span.face] = true
@@ -116,7 +116,7 @@ func revolveLoftFacesSectionFacesComplete(proof *revolveLoftFacesSourceCertifica
 		return false
 	}
 	for _, face := range faces {
-		if face == nil || face.body != proof.blank || !seen[face] {
+		if face == nil || face.n.Body != bodyNode(proof.blank) || !seen[face] {
 			return false
 		}
 	}

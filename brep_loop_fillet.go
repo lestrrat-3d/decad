@@ -180,8 +180,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			}
 		}
 		held, bound := heldOf(areaIv)
-		face := &Face{body: body,
-			loops: loops, n: topo.Face{Area: held, AreaBound: bound, Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(p)}}}}
+		face := &Face{
+			loops: loops, n: topo.Face{Area: held, AreaBound: bound, Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(p)}}, Body: bodyNode(body)}}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		// capV, a cap contact vertex, lies on the patch's surface; the outward
 		// normal there is F's own, which faces −m along F's normal for a band

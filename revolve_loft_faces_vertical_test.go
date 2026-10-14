@@ -61,7 +61,7 @@ func TestRevolveLoftFacesConstantXRejectsSubstitutedSourceRef(t *testing.T) {
 			bound[band][segment] = ref
 		}
 	}
-	tooth := &Body{}
+	tooth := bornBody(&Body{})
 	require.True(t, revolveLoftFacesSourceRefsCurrent(trim, tooth, bound))
 	bound[0][0] = bound[0][1]
 	require.False(t, revolveLoftFacesSourceRefsCurrent(trim, tooth, bound),

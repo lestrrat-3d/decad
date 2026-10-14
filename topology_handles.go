@@ -45,3 +45,29 @@ func vertexNode(v *Vertex) *topo.Vertex {
 	}
 	return &v.n
 }
+
+// bornBody sets b's node Owner to b and returns b. Every root Body is born
+// through it, so bodyHandle maps the body node a face links back to the one
+// handle that holds it.
+func bornBody(b *Body) *Body {
+	b.n.Owner = b
+	return b
+}
+
+// bodyHandle returns the handle that holds n, or nil for a nil n. A node whose
+// handle was not born through bornBody is an evaluator invariant failure, and
+// the assertion panics.
+func bodyHandle(n *topo.Body) *Body {
+	if n == nil {
+		return nil
+	}
+	return n.Owner.(*Body) //nolint:forcetypeassert // every body node is born in its handle; a bare one must fail loudly
+}
+
+// bodyNode returns b's node, or nil for a nil b.
+func bodyNode(b *Body) *topo.Body {
+	if b == nil {
+		return nil
+	}
+	return &b.n
+}

@@ -70,14 +70,14 @@ func TestPrismBooleanGateG2AdmitsAReflectedOperand(t *testing.T) {
 	reflected := pp
 	reflected.Xform = prismMirrorAcrossX(t, 0)
 
-	pa, pb, ok := admitPrismPair(&Body{payload: pp}, &Body{payload: reflected})
+	pa, pb, ok := admitPrismPair(bornBody(&Body{payload: pp}), bornBody(&Body{payload: reflected}))
 	require.True(t, ok, "A4: a reflected operand clears G1-G4")
 	re, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.False(t, re.Identity)
 	require.True(t, re.Reflected, "one reflected placement makes the relative map improper")
 
-	pa, pb, ok = admitPrismPair(&Body{payload: reflected}, &Body{payload: reflected})
+	pa, pb, ok = admitPrismPair(bornBody(&Body{payload: reflected}), bornBody(&Body{payload: reflected}))
 	require.True(t, ok)
 	re, err = prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)

@@ -465,7 +465,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	comp, adj := audit.Comp, audit.Adj
 	members, compVol, contains := audit.Members, audit.CompVol, audit.Contains
 
-	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}}
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}})
 	if len(pp.vertexBound) != len(verts) {
 		return nil, fmt.Errorf(`%w: a faceted payload carries %d vertex bounds for %d vertices`, ErrBooleanFailed, len(pp.vertexBound), len(verts))
 	}
@@ -531,13 +531,13 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			// both strips of a split cap came from the cap, and both must
 			// still say so, or FaceCreatedBy and the surveys lose them.
 			f = &Face{
-				body: body,
 				n: topo.Face{
 					HeldPlanar:  pp.groups[pp.src[i]].planar,
 					Denoted:     pp.groups[pp.src[i]].denoted,
 					NormalBound: pp.groups[pp.src[i]].normalBound,
 					Reversed:    pp.groups[pp.src[i]].reversed,
 					Origins:     append([]provenance.Ref(nil), pp.groups[pp.src[i]].origins...),
+					Body:        bodyNode(body),
 				},
 			}
 			group := pp.groups[pp.src[i]]

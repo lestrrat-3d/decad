@@ -139,7 +139,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}}
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}})
 	prismView := pp.prism()
 
 	// pw resolves every boundary segment's walk exactly once for this whole
@@ -181,7 +181,6 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, err
 	}
 	face := &Face{
-		body:  body,
 		loops: faceLoops,
 		n: topo.Face{
 			Area:          ig.Area,
@@ -191,6 +190,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 			Surface:       surfacegeom.Plane{Frame: frame},
 			CapRecord:     &topo.CapRecord{Frame: prismView.Frame, Xform: prismView.Xform, Z: 0},
 			Origins:       []provenance.Ref{{Producer: ref, Role: rolePatch}},
+			Body:          bodyNode(body),
 		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {

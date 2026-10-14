@@ -368,7 +368,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if rp.surfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: !rp.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}}
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: !rp.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}})
 
 	// Partial sweeps get two planar cap faces; a full revolution has none.
 	var capStart, capEnd *Face
@@ -400,7 +400,6 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// tighter bound than the snap/unsnap mismatch can actually cost it.
 		capAdmitAllow := revolvemass.AdmitBandCharge(rp.ax.RadialAdmitAllow, rp.ax.AxialExtentUpper)
 		capStart = &Face{
-			body: body,
 			n: topo.Face{
 				Area:        ig.Area,
 				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
@@ -408,10 +407,10 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi0, rp.phi0, true),
 				Surface:     surfacegeom.Plane{Frame: startFrame},
 				Origins:     []provenance.Ref{{Producer: ref, Role: roleCapStart}},
+				Body:        bodyNode(body),
 			},
 		}
 		capEnd = &Face{
-			body: body,
 			n: topo.Face{
 				Area:        ig.Area,
 				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
@@ -419,6 +418,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi1, rp.phi1, false),
 				Surface:     surfacegeom.Plane{Frame: endFrame},
 				Origins:     []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
+				Body:        bodyNode(body),
 			},
 		}
 	}
@@ -888,7 +888,6 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
-			body: body,
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
@@ -896,6 +895,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				Denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
 				Surface:   surf,
 				Origins:   origins,
+				Body:      bodyNode(body),
 			},
 		}
 		switch {
@@ -1191,7 +1191,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}}
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}})
 	b := rev.basis()
 	var allFaces []*Face
 	area := proofbound.BoundedScalar{}
@@ -1382,7 +1382,6 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
-			body: body,
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
@@ -1390,6 +1389,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				Denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
 				Surface:   surf,
 				Origins:   origins,
+				Body:      bodyNode(body),
 			},
 		}
 		if rp.full {

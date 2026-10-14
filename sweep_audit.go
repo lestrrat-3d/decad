@@ -39,7 +39,7 @@ func auditCompositeSweepWithClosure(ctx context.Context, spans []sweepAuditSpan,
 		if span.body == nil || span.startCap == nil || span.endCap == nil {
 			return fmt.Errorf(`%w: composite sweep span %d has incomplete audit geometry`, ErrUnsupported, i)
 		}
-		if span.startCap.body != span.body || span.endCap.body != span.body {
+		if span.startCap.n.Body != bodyNode(span.body) || span.endCap.n.Body != bodyNode(span.body) {
 			return fmt.Errorf(`%w: composite sweep span %d has a cap from another body`, ErrUnsupported, i)
 		}
 		startPlane, startPlanar := span.startCap.n.Surface.(surfacegeom.Plane)

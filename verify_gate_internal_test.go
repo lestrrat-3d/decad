@@ -349,7 +349,7 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			// sectionDelta, so the reading is shrunk below the held
 			// section's own diameter, which bounds it from above.
 			upper := exactPrismDiameterSquare(pp, box)
-			requireGateDiameterWithin(t, read(t, &Body{payload: pp}), floatSqrtOf(upper)-gateFarSlack(), upper)
+			requireGateDiameterWithin(t, read(t, bornBody(&Body{payload: pp})), floatSqrtOf(upper)-gateFarSlack(), upper)
 		}
 	})
 	t.Run("brep", func(t *testing.T) {
@@ -368,7 +368,7 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			pp := freeformTrianglePayload(t, 1, 11)
 			pp.Xform = gateFarPlacement(t, i)
 			upper := exactPrismDiameterSquare(pp, [][2]float64{{0, 0}, {5, 4}, {10, 0}})
-			requireGateDiameterWithin(t, read(t, &Body{payload: pp}), floatSqrtOf(upper)-gateFarSlack(), upper)
+			requireGateDiameterWithin(t, read(t, bornBody(&Body{payload: pp})), floatSqrtOf(upper)-gateFarSlack(), upper)
 		}
 	})
 	t.Run("draft", func(t *testing.T) {
@@ -697,7 +697,7 @@ func TestRevolveGateDiameterReadsSheetsAndDisplacedSections(t *testing.T) {
 		require.True(t, ok)
 		rp := solid.payload.(revolvePayload)
 		rp.sectionDelta = math.Ldexp(1, -20)
-		d, ok, err := bodyGateDiameter(t.Context(), &Body{payload: rp})
+		d, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{payload: rp}))
 		require.NoError(t, err)
 		require.True(t, ok)
 		requireGateDiameterWithin(t, d, 20*math.Cos(diameter.StationStep/2)-4*rp.sectionDelta, big.NewRat(400, 1))

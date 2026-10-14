@@ -406,7 +406,7 @@ func TestVerifyLinkageKeepsTheNextProducerIdentity(t *testing.T) {
 func TestVerifyLinkageRefusesABodyItDidNotBuild(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	foreignBuilt := &Body{doc: doc, n: topo.Body{Kind: topo.BodySolid}}
+	foreignBuilt := bornBody(&Body{doc: doc, n: topo.Body{Kind: topo.BodySolid}})
 	doc.commit(foreignBuilt)
 	l := NewLinkage()
 	slide, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*Body{foreignBuilt})
@@ -796,7 +796,7 @@ func TestLinkageHullPoints(t *testing.T) {
 
 	pp := block.payload.(prismPayload)
 	pp.Z1Delta = 0.25
-	_, pad, _, ok = prismHullPointsForTest(&Body{payload: pp})
+	_, pad, _, ok = prismHullPointsForTest(bornBody(&Body{payload: pp}))
 	require.True(t, ok)
 	require.InDelta(t, 4*math.Sqrt(3)*0.25, linkRatFloat(t, pad), 1e-12)
 	require.GreaterOrEqual(t, linkRatFloat(t, pad), 4*math.Sqrt(3)*0.25)
@@ -856,7 +856,7 @@ func TestLinkageHullPointsInsideRestBox(t *testing.T) {
 	far, err := r3.Translation(r3.NewVec(shift, 0, 0))
 	require.NoError(t, err)
 	containing := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)}, Frame: frame, Z0: 0, Z1: 10, Xform: far}}
-	union, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, &Body{payload: inner}, &Body{payload: containing})
+	union, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, bornBody(&Body{payload: inner}), bornBody(&Body{payload: containing}))
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Positive(t, union.SectionDelta)
@@ -864,7 +864,7 @@ func TestLinkageHullPointsInsideRestBox(t *testing.T) {
 	require.NoError(t, err)
 	for name, body := range map[string]*Body{
 		"a box": block, "a box turned about Z and lifted": turned, "a box turned about (1, 1, 1)": tilted,
-		"a displaced union": {payload: union, n: topo.Body{Bounds: boxToInternal(unionBox)}},
+		"a displaced union": bornBody(&Body{payload: union, n: topo.Body{Bounds: boxToInternal(unionBox)}}),
 	} {
 		points, pad, _, ok := prismHullPointsForTest(body)
 		require.True(t, ok, name)

@@ -17,6 +17,7 @@ import (
 // Owner, and the first link read that maps it back panics.
 var bornHandles = map[string]string{
 	"Vertex": "bornVertex",
+	"Body":   "bornBody",
 }
 
 // TestTopologyHandlesAreBorn parses every root .go file, tests included, and

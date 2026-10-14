@@ -327,7 +327,7 @@ func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 func TestBodyPatchRejectsAReceiverWithNoPayload(t *testing.T) {
 	t.Parallel()
 	d := New()
-	b := &Body{doc: d, n: topo.Body{Origin: provenance.Ref{Role: roleBody}, Kind: topo.BodySheet}}
+	b := bornBody(&Body{doc: d, n: topo.Body{Origin: provenance.Ref{Role: roleBody}, Kind: topo.BodySheet}})
 	d.bodies = append(d.bodies, b)
 
 	_, err := PatchEdges(t.Context(), b, Edges(Free()))
@@ -349,9 +349,9 @@ func patchTestReceiverWithOneChain(payload featurePayload, edges []*Edge) *Body 
 	for _, e := range edges {
 		e.faces = []*Face{face}
 	}
-	receiver := &Body{payload: payload}
+	receiver := bornBody(&Body{payload: payload})
 	receiver.lumps = sheetLumps([]*Face{face})
-	face.body = receiver
+	face.n.Body = bodyNode(receiver)
 	return receiver
 }
 
@@ -400,10 +400,10 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	innerFace := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: inner, forward: true}}}}}
 	inner.faces = []*Face{innerFace}
 
-	receiver := &Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}}
+	receiver := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}})
 	receiver.lumps = sheetLumps([]*Face{outerFace, innerFace})
-	outerFace.body = receiver
-	innerFace.body = receiver
+	outerFace.n.Body = bodyNode(receiver)
+	innerFace.n.Body = bodyNode(receiver)
 
 	pp := bodyPatchPayload{
 		faces:  receiver.Faces(),

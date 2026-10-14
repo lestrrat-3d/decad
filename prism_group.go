@@ -64,7 +64,7 @@ func prismGroupOperandOf(b *Body) (prismGroupOperand, bool) {
 func admitPrismGroupPair(budget *proofbound.WorkBudget, op meshbool.OperationKind,
 	oa, ob prismGroupOperand, holeFreeA, holeFreeB bool) (bool, error) {
 	if _, _, ok, err := admitPrismPairBudget(budget, op,
-		&Body{payload: oa.proxy}, &Body{payload: ob.proxy}); err != nil || !ok {
+		bornBody(&Body{payload: oa.proxy}), bornBody(&Body{payload: ob.proxy})); err != nil || !ok {
 		return false, err
 	}
 	for _, op := range []struct {

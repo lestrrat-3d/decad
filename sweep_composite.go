@@ -161,10 +161,10 @@ func assembleCompositeSweepBodyWithJoinMode(
 	if surfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{
+	body := bornBody(&Body{
 		doc: d,
 		n:   topo.Body{Solid: !surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)},
-	}
+	})
 	var faces []*Face
 	if !surfaceResult && !closed {
 		faces = append(faces, parts[0].startCap)
@@ -178,13 +178,13 @@ func assembleCompositeSweepBodyWithJoinMode(
 				continue
 			}
 			rewriteCompositeSideRoles(face, k)
-			face.body = body
+			face.n.Body = bodyNode(body)
 			faces = append(faces, face)
 		}
 	}
 	if !surfaceResult && !closed {
-		parts[0].startCap.body = body
-		parts[len(parts)-1].endCap.body = body
+		parts[0].startCap.n.Body = bodyNode(body)
+		parts[len(parts)-1].endCap.n.Body = bodyNode(body)
 		faces = append(faces, parts[len(parts)-1].endCap)
 	}
 	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
@@ -323,7 +323,7 @@ func rewriteCompositeSideRoles(face *Face, span int) {
 func liveCompositeFaces(faces []*Face, body *Body) []*Face {
 	out := make([]*Face, 0, 2)
 	for _, face := range faces {
-		if face == nil || face.body != body || slices.Contains(out, face) {
+		if face == nil || face.n.Body != bodyNode(body) || slices.Contains(out, face) {
 			continue
 		}
 		out = append(out, face)

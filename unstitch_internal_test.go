@@ -19,7 +19,7 @@ import (
 func TestUnstitchNoPayloadIsDegenerate(t *testing.T) {
 	t.Parallel()
 	d := &Document{}
-	b := &Body{doc: d, n: topo.Body{Kind: topo.BodySheet}}
+	b := bornBody(&Body{doc: d, n: topo.Body{Kind: topo.BodySheet}})
 	d.bodies = append(d.bodies, b)
 
 	_, err := Unstitch(t.Context(), b)
@@ -40,7 +40,7 @@ func unstitchOneChamferBand(t *testing.T) (src *Face, results []*Body, idx int) 
 	require.Positive(t, band.face.n.NormalBound,
 		"a far-placed flat patch has a real departure from the plane it publishes")
 
-	body := band.face.body
+	body := bodyHandle(band.face.n.Body)
 	wantFaces := body.Faces()
 	idx = slices.Index(wantFaces, band.face)
 	require.GreaterOrEqual(t, idx, 0, "the band face must be one of its own body's faces")

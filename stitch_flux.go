@@ -228,7 +228,7 @@ import (
 // one source body, and that body's own evaluator payload must prove its
 // boundary simple by construction (payloadProvesSimple). srcFaces is the
 // PRE-rebuild operand face set (stitch.go's own srcFaces, read before the
-// new body's own topology and Face.body pointers exist) — the same set
+// new body's own topology and Face body links exist) — the same set
 // stitchBounds already reads operand bodies from.
 func stitchRuleSAdmits(ctx context.Context, srcFaces []*Face) bool {
 	bodies := stitchOperandBodies(srcFaces)

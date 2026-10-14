@@ -312,7 +312,7 @@ func TestConeFromFaceNonConvexSectionIsAccepted(t *testing.T) {
 func TestConeFromFaceMoreRefusals(t *testing.T) {
 	far := units.Millimeters(-5)
 	t.Run("zero-body", func(t *testing.T) {
-		_, err := ConeFromFace(t.Context(), &Body{}, Faces(), far)
+		_, err := ConeFromFace(t.Context(), bornBody(&Body{}), Faces(), far)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	extrudedBox := func(t *testing.T) *Body {

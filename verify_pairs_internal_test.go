@@ -22,7 +22,7 @@ func pairJobsByIndex(n int) ([]verifyPairJob, map[*Body]int) {
 	jobs := make([]verifyPairJob, n)
 	index := make(map[*Body]int, n)
 	for i := range jobs {
-		a := &Body{}
+		a := bornBody(&Body{})
 		jobs[i] = verifyPairJob{a: a}
 		index[a] = i
 	}

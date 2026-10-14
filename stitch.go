@@ -407,9 +407,9 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	default:
 	}
 
-	body := &Body{doc: d, n: topo.Body{Solid: solid, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}}
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: solid, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}})
 	for _, f := range newFaces {
-		f.body = body
+		f.n.Body = bodyNode(body)
 	}
 	body.lumps = sheetLumps(newFaces)
 
@@ -932,14 +932,14 @@ func stitchOperandBodies(srcFaces []*Face) []*Body {
 	seen := map[*Body]struct{}{}
 	var bodies []*Body
 	for _, f := range srcFaces {
-		if f.body == nil {
+		if f.n.Body == nil {
 			continue
 		}
-		if _, ok := seen[f.body]; ok {
+		if _, ok := seen[bodyHandle(f.n.Body)]; ok {
 			continue
 		}
-		seen[f.body] = struct{}{}
-		bodies = append(bodies, f.body)
+		seen[bodyHandle(f.n.Body)] = struct{}{}
+		bodies = append(bodies, bodyHandle(f.n.Body))
 	}
 	return bodies
 }

@@ -473,8 +473,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// (pBV -> apex), slantIn reversed (apex -> pAV) — a closed
 		// triangle-like boundary each coedge's end matching the next's start.
 		face := &Face{
-			n:    topo.Face{Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: role}}},
-			body: body,
+			n: topo.Face{Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: role}}, Body: bodyNode(body)},
 			loops: []*Loop{{coedges: []coedge{
 				{edge: arc, forward: true},
 				{edge: slantOut[i], forward: true},
@@ -662,8 +661,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			return capBandResult{}, err
 		}
 		face := &Face{
-			n:    topo.Face{Surface: surf, Origins: origins},
-			body: body,
+			n: topo.Face{Surface: surf, Origins: origins, Body: bodyNode(body)},
 			loops: []*Loop{{coedges: []coedge{
 				{edge: side, forward: true},
 				{edge: trailSlant, forward: false},
@@ -1103,7 +1101,7 @@ func buildConePatch(pl prismPayload, body *Body, origins []provenance.Ref, cu, c
 		{coedges: []coedge{{edge: sideEdge, forward: true}}, n: topo.Loop{Outer: true}},
 		{coedges: []coedge{{edge: capEdge, forward: false}}, n: topo.Loop{Outer: true}},
 	}
-	face := &Face{body: body, n: topo.Face{Reversed: reversed, Surface: surf, Origins: origins}, loops: loops}
+	face := &Face{n: topo.Face{Reversed: reversed, Surface: surf, Origins: origins, Body: bodyNode(body)}, loops: loops}
 	sideEdge.faces = append(sideEdge.faces, face)
 	capEdge.faces = append(capEdge.faces, face)
 	return face

@@ -27,7 +27,7 @@ func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
 		liveFaces: []*Face{{n: topo.Face{Surface: surfacegeom.Plane{}}}, {n: topo.Face{Surface: surfacegeom.NURBSSurface{}}}},
 		plan:      &stitchWeldPlan{table: newStitchVertexTable()},
 	}
-	_, err := tessellateStitchCurved(t.Context(), &Body{n: topo.Body{Kind: topo.BodySheet}}, sp, 0.1, VerifyAll)
+	_, err := tessellateStitchCurved(t.Context(), bornBody(&Body{n: topo.Body{Kind: topo.BodySheet}}), sp, 0.1, VerifyAll)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "NURBSSurface")
 }
@@ -147,7 +147,7 @@ func TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound(t *testing
 	require.Len(t, sp.faces, 2)
 
 	for i, copied := range sp.faces {
-		up, ok := copied.body.payload.(unstitchPayload)
+		up, ok := bodyHandle(copied.n.Body).payload.(unstitchPayload)
 		require.True(t, ok)
 		want, ok := source.sourceBound(up.face)
 		require.True(t, ok)
@@ -450,7 +450,7 @@ func TestTessellateStitchRefusesARepeatedDirectedEdge(t *testing.T) {
 		tris:      [][3]int{{0, 1, 2}, {0, 1, 2}},
 		triFaces:  []*Face{f, f},
 	}
-	b := &Body{n: topo.Body{Solid: true, Kind: topo.BodySolid}}
+	b := bornBody(&Body{n: topo.Body{Solid: true, Kind: topo.BodySolid}})
 
 	mesh, err := tessellateStitch(t.Context(), b, sp)
 	require.ErrorIs(t, err, ErrUnsupported)

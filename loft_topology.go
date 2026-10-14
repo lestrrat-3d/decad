@@ -86,12 +86,12 @@ func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i
 		areaBound = proofbound.AbsSumUpper(areaBound, proofbound.PerturbedTriangleAreaAllow(a, b, c, delta))
 	}
 	return &Face{
-		body: body,
 		n: topo.Face{
 			Area:      lo,
 			AreaBound: areaBound,
 			Surface:   surf,
 			Origins:   []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(%d,%d,%d)", i, j, side)}},
+			Body:      bodyNode(body),
 		},
 	}, nil
 }
@@ -237,7 +237,6 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 	}
 	capStart := &Face{
 		loops: capStartLoops,
-		body:  body,
 		n: topo.Face{
 			Area:          cap0Val,
 			AreaBound:     capStartBound,
@@ -245,11 +244,11 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			HasAxialDelta: true,
 			Surface:       capStartSurf,
 			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapStart}},
+			Body:          bodyNode(body),
 		},
 	}
 	capEnd := &Face{
 		loops: capEndLoops,
-		body:  body,
 		n: topo.Face{
 			Area:          cap1Val,
 			AreaBound:     capEndBound,
@@ -257,6 +256,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			HasAxialDelta: true,
 			Surface:       capEndSurf,
 			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
+			Body:          bodyNode(body),
 		},
 	}
 
