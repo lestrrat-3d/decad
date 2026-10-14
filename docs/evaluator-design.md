@@ -431,7 +431,14 @@ has no stated displacement to charge. A through-all
 dependency is ambient at the CALL but never in the RECORD: core §6.2's depends-on rule covers this
 case explicitly — the feature call resolves which live bodies actually bound
 the stops from live bodies without consuming them. (`ToFaceAngular` is the
-revolve analog and lands there, §6/§11.) A nonzero
+revolve analog and lands there, §6/§11.) A `ToFace` stop face must be an
+analytic Plane whose held normal is exactly parallel to the sweep normal, by a
+rational cross product of zero and not a tolerance, and whose face states no
+normal departure (`NormalBound` 0, no `Denoted` surface). Any other face is
+`ErrUnsupported`, however small its tilt, because the cap this evaluator builds
+is perpendicular to the sweep and nothing would charge a tilt. That includes a
+stop body whose placement rounds its normal, every revolve cap and a cap-loop
+chamfer band patch; a `Distance` extent reaches them. A nonzero
 `WithTaper` builds a draft body over `Distance`, `ToFace`, `ThroughAll`,
 `Symmetric`, or `TwoSided`. `docs/draft-design.md` owns the tapered extrude:
 its sharp offset family, its one- and two-slab payloads, its refusals and its

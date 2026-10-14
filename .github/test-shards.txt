@@ -1473,3 +1473,4 @@
 10	0.00	TestLoftFacesToConeTangentCancelled
 10	0.00	TestLoftFacesToConeTangentCancelledDuringEvaluation
 10	0.00	TestLoftFacesToConeTangentRefusalKeepsProvenance
+10	0.00	TestResolveToFaceRefusesStatedNormalDeparture

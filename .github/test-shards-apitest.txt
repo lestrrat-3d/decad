@@ -2011,3 +2011,6 @@
 10	0.00	TestCopyRotationFacetedCopyIsFacetedAndRotates
 10	0.00	TestCopyRotationMintsCapRolesUnderEveryCopy
 10	0.00	TestSpiralCopiedToothUnionNeedsExactRotation
+10	0.00	TestToFaceTiltedStopIsChargedOrRefused
+10	0.00	TestToFaceRefusesTiltPastOldTolerance
+10	0.00	TestToFacePlacedStopNormal

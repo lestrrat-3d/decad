@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
@@ -224,6 +225,50 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 		require.NoError(t, err)
 		require.InDelta(t, 0, phi, 1e-12, "the vertices sit exactly on r0, phi = 0")
 	})
+}
+
+// TestResolveToFaceRefusesStatedNormalDeparture pins that a stop face whose
+// tag is exactly parallel to the sweep is still refused when the face states a
+// departure of its true surface from that tag, since the perpendicular cap
+// charges none of it.
+func TestResolveToFaceRefusesStatedNormalDeparture(t *testing.T) {
+	t.Parallel()
+	frame := canonicalPrismFrame(t)
+	for _, tc := range []struct {
+		name   string
+		mutate func(f *Face)
+	}{
+		{name: "normal bound", mutate: func(f *Face) { f.n.NormalBound = 1e-12 }},
+		{name: "denoted surface", mutate: func(f *Face) { f.n.Denoted = &surfacenormal.Revolved{Valid: true} }},
+		{name: "none", mutate: func(*Face) {}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := &Document{}
+			host, err := evalPrism(doc, 1, prismPayload{Payload: prismrecord.Payload{
+				Profile: profileRecord{Outer: synthRectLoop(0, 0, 1, 1)},
+				Frame:   frame,
+				Z0:      10,
+				Z1:      20,
+				Xform:   r3.Identity(),
+			}}, freeform.NewFreeformWork())
+			require.NoError(t, err)
+			doc.bodies = []*Body{host}
+			ref := Faces(FaceCreatedBy(FeatureRef{producer: 1, Role: roleCapEnd}))
+			faces, err := ref.SelectFaces(host)
+			require.NoError(t, err)
+			require.Len(t, faces, 1)
+			tc.mutate(faces[0])
+
+			stop, _, _, err := doc.resolveToFace(ToFace{Body: host, Face: ref}, frame, 1, "a to-face extent")
+			if tc.name == "none" {
+				require.NoError(t, err)
+				require.Equal(t, 20.0, stop)
+				return
+			}
+			require.ErrorIs(t, err, ErrUnsupported)
+		})
+	}
 }
 
 // TestResolveToFaceUsesSelectedCapAxialDelta keeps a computed end's bound on

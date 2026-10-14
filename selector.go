@@ -400,9 +400,6 @@ func Walls(b *Body) FacePredicate {
 	return FacePredicate{kind: selectorquery.WallsKind, ref: FeatureRef{producer: b.Origin().producer, Role: roleSidePrefix}}
 }
 
-// parallelDirs is shared with the body-relative stop adapter.
-func parallelDirs(a, b r3.Vec) bool { return selectorquery.ParallelDirs(a, b) }
-
 // validatePredicateRef rejects provenance that cannot name a feature role.
 func validatePredicateRef(ref FeatureRef, what string) error {
 	if ref.producer < 0 {
