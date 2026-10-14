@@ -16,12 +16,20 @@ import (
 //
 // Enclosure argument. Every float operation below is one IEEE binary64
 // operation (+, -, *, /) on float operands, rounded to nearest, followed by a
-// step of one ulp outward (math.Nextafter). The exact result lies within half
-// an ulp of the rounded one, so the step lands on the far side of it. This
-// holds for every normal and subnormal result. An overflow to an infinity steps
-// to MaxFloat64 toward zero, which the exact result also passes; an infinite
-// outward end only widens the enclosure. A NaN end compares false everywhere,
-// which keeps the candidate for exact evaluation.
+// step of one ulp outward (math.Nextafter). The exact result of a finite
+// operation lies within half an ulp of the rounded one, so the step lands on
+// the far side of it, for normal and subnormal results and for an underflow to
+// either signed zero. A positive overflow gives [MaxFloat64, +Inf] and a
+// negative one [-Inf, -MaxFloat64]. A NaN end (for example 0 times Inf) is not
+// a bound: it compares false in every filter test, so it keeps the candidate
+// for exact evaluation and, in a cut, keeps every candidate.
+//
+// Contract. The inputs are finite floats (vertex coordinates, slab limits,
+// charges) and a direction of finite rationals, which ratEnclosure encloses
+// for any finite rational. A crossing needs a limit strictly between xk and
+// xn. The width these enclosures reach is not bounded by a fixed number of
+// ulps: cancellation and overflow can make it much wider, which only keeps more
+// candidates. What is proven is containment of the exact value, not tightness.
 //
 // Fused multiply-add. A product is always converted with an explicit float64
 // conversion before it is used, and the Go specification forbids fusing across
@@ -52,12 +60,16 @@ func fMulUp(a, b float64) float64   { return fUp(float64(a * b)) }
 func fQuoDown(a, b float64) float64 { return fDown(a / b) }
 func fQuoUp(a, b float64) float64   { return fUp(a / b) }
 
-// ratEnclosure returns floats lo <= r <= hi. A conversion that is not exact
-// rounds to the nearest float, so r lies strictly between its neighbours; an
-// overflow to an infinity has MaxFloat64 as its neighbour toward zero.
+// ratEnclosure returns floats lo <= r <= hi for any finite rational. A
+// conversion that is not exact rounds to the nearest float, so r lies strictly
+// between its neighbours; an overflow to an infinity has MaxFloat64 as its
+// neighbour toward zero; an underflow of a nonzero value to zero is treated as
+// inexact, so r lies between the zero and its smallest subnormal neighbour.
 func ratEnclosure(r *big.Rat) (float64, float64) {
 	f, exact := r.Float64()
-	if exact {
+	// Float64 reports exact for a nonzero value that underflows to zero, so
+	// the exactness flag alone does not justify a singleton.
+	if exact && !(f == 0 && r.Sign() != 0) {
 		return f, f
 	}
 	return fDown(f), fUp(f)
@@ -127,7 +139,10 @@ func crossingEnclosure(xk, xn, limit, kLo, kHi, nLo, nHi float64) (float64, floa
 	pLo := min(fMulDown(tLo, eLo), fMulDown(tHi, eLo), fMulDown(tLo, eHi), fMulDown(tHi, eHi))
 	pHi := max(fMulUp(tLo, eLo), fMulUp(tHi, eLo), fMulUp(tLo, eHi), fMulUp(tHi, eHi))
 	lo, hi := fAddDown(kLo, pLo), fAddUp(kHi, pHi)
-	// math.Max and math.Min return NaN for a NaN operand, which keeps the
-	// candidate.
+	// math.Max and math.Min return NaN for a NaN operand, except that
+	// math.Min(NaN, -Inf) is -Inf and math.Max(NaN, +Inf) is +Inf. A lower end
+	// is never +Inf and an upper end never -Inf for a finite exact value, so
+	// these exceptions keep a valid enclosure and a NaN end otherwise keeps
+	// the candidate.
 	return math.Max(lo, math.Min(kLo, nLo)), math.Min(hi, math.Max(kHi, nHi))
 }

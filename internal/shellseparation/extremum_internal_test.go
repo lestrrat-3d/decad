@@ -445,3 +445,48 @@ func TestProjectionMatchesReference(t *testing.T) {
 	_, _, ok = projection(bad, ratOne(), ratZero(), 1)
 	require.False(t, ok)
 }
+
+func TestRatEnclosureHoldsUnderflowingRationals(t *testing.T) {
+	// big.Rat.Float64 reports exact for a nonzero value that underflows to 0.
+	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 1200))
+	for _, q := range []*big.Rat{tiny, new(big.Rat).Neg(tiny)} {
+		lo, hi := ratEnclosure(q)
+		require.LessOrEqual(t, ratF(lo).Cmp(q), 0)
+		require.GreaterOrEqual(t, ratF(hi).Cmp(q), 0)
+	}
+	// The overflow side does not have the quirk: it reports inexact.
+	for _, sign := range []int64{1, -1} {
+		huge := new(big.Rat).SetFrac(new(big.Int).Mul(big.NewInt(sign), new(big.Int).Lsh(big.NewInt(1), 1100)),
+			big.NewInt(1))
+		lo, hi := ratEnclosure(huge)
+		if sign > 0 {
+			require.Equal(t, math.MaxFloat64, lo)
+			require.True(t, math.IsInf(hi, 1))
+			continue
+		}
+		require.True(t, math.IsInf(lo, -1))
+		require.Equal(t, -math.MaxFloat64, hi)
+	}
+}
+
+func TestSlabProjectionNaNEnclosureKeepsEveryCandidate(t *testing.T) {
+	// Direction (1, 0), Y = MaxFloat64 and a crossing at a limit one
+	// subnormal from xk make the crossing enclosure [NaN, NaN] (0 * Inf), so
+	// lowCut becomes NaN. Every candidate must then stay for exact evaluation.
+	// Dropping the NaN fallback (`lower < lowCut`) loses the exact result.
+	lo, hi := crossingEnclosure(0, 1, math.SmallestNonzeroFloat64, math.MaxFloat64, math.MaxFloat64, 0, 0)
+	require.True(t, math.IsNaN(lo) && math.IsNaN(hi), "fixture must give a NaN enclosure: %g %g", lo, hi)
+	s := Shell{
+		Verts:       []r3.Vec{{X: 0, Y: math.MaxFloat64}, {X: 1}, {X: 0, Y: -1}, {X: 0.5, Y: 2}, {X: 0.5, Y: 3}},
+		Tris:        [][3]int{{0, 1, 2}, {3, 4, 2}},
+		VertexBound: make([]float64, 5),
+	}
+	// A slab whose lower limit is the smallest subnormal makes the first edge cross it.
+	for _, slab := range [][2]float64{{math.SmallestNonzeroFloat64, 2}, {-1, math.SmallestNonzeroFloat64}} {
+		wantLo, wantHi, wantOK := slabProjectionReference(s, []int{0, 1}, slab[0], slab[1], ratOne(), ratZero(), 0, 0)
+		gotLo, gotHi, gotOK := slabProjection(s, []int{0, 1}, slab[0], slab[1], ratOne(), ratZero(), 0, 0)
+		require.Equal(t, wantOK, gotOK)
+		requireSameRat(t, wantLo, gotLo, "lo")
+		requireSameRat(t, wantHi, gotHi, "hi")
+	}
+}
