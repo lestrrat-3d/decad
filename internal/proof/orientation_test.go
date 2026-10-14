@@ -77,3 +77,96 @@ func TestOrientSignFloatAgreesWithExact(t *testing.T) {
 		require.Equal(t, want, proof.OrientSign(c[0], c[1], c[2], c[3]), "case %d", n)
 	}
 }
+
+func TestOrientSignFloatUnderflowWrongSign(t *testing.T) {
+	m := math.SmallestNonzeroFloat64
+	a := r3.Vec{X: 0.25, Y: 0.25, Z: m}
+	b := r3.Vec{X: 1, Y: math.Copysign(0, -1)}
+	c := r3.Vec{X: 0.98046875, Y: -0.1953125}
+	d := r3.Vec{X: 0.923828125, Y: -0.3828125}
+
+	sign, certain := proof.OrientSignFloat(a, b, c, d)
+	require.False(t, certain)
+	require.Zero(t, sign)
+	want := proof.OrientSignExact(proof.XptOf(a), proof.XptOf(b), proof.XptOf(c), proof.XptOf(d))
+	require.Equal(t, 1, want)
+	require.Equal(t, want, proof.OrientSign(a, b, c, d))
+	xa, xb, xc, xd := proof.XptOf(a), proof.XptOf(b), proof.XptOf(c), proof.XptOf(d)
+	n := proof.Xcross(proof.Xsub(xb, xa), proof.Xsub(xc, xa))
+	require.Equal(t, want, proof.OrientSignPrepared(a, b, c, d, xa, xd, n))
+}
+
+func TestOrientSignFloatUnderflowFalseNonzero(t *testing.T) {
+	m := math.SmallestNonzeroFloat64
+	a := r3.Vec{X: 0.25, Y: 0.25, Z: m}
+	b := r3.Vec{X: 1, Y: math.Copysign(0, -1)}
+	c := r3.Vec{X: 0.75, Y: -0.25}
+	d := r3.Vec{X: 0.5, Y: -0.5}
+
+	sign, certain := proof.OrientSignFloat(a, b, c, d)
+	require.False(t, certain)
+	require.Zero(t, sign)
+	require.Zero(t, proof.OrientSignExact(proof.XptOf(a), proof.XptOf(b), proof.XptOf(c), proof.XptOf(d)))
+	require.Zero(t, proof.OrientSign(a, b, c, d))
+}
+
+func TestOrientSignFloatGuardEdges(t *testing.T) {
+	a := r3.Vec{}
+	c := r3.Vec{Y: 1}
+	d := r3.Vec{Z: 1}
+	low := math.Ldexp(1, -300)
+	high := math.Ldexp(1, 250)
+	for _, tc := range []struct {
+		name    string
+		value   float64
+		certain bool
+	}{
+		{name: "lower endpoint", value: low, certain: true},
+		{name: "below lower endpoint", value: math.Nextafter(low, 0)},
+		{name: "upper endpoint", value: high, certain: true},
+		{name: "above upper endpoint", value: math.Nextafter(high, math.Inf(1))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := r3.Vec{X: tc.value}
+			sign, certain := proof.OrientSignFloat(a, b, c, d)
+			require.Equal(t, tc.certain, certain)
+			if certain {
+				want := proof.OrientSignExact(proof.XptOf(a), proof.XptOf(b), proof.XptOf(c), proof.XptOf(d))
+				require.Equal(t, want, sign)
+			} else {
+				require.Zero(t, sign)
+			}
+		})
+	}
+}
+
+func TestOrientSignFloatMixedScaleGuardedSample(t *testing.T) {
+	rng := rand.New(rand.NewPCG(0x643ce171, 0xa7289b04))
+	exponents := [...]int{-300, -250, -150, -20, 0, 20, 150, 249}
+	coord := func() float64 {
+		if rng.IntN(5) == 0 {
+			return 0
+		}
+		v := math.Ldexp(1+float64(rng.IntN(4))/4, exponents[rng.IntN(len(exponents))])
+		if rng.IntN(2) == 0 {
+			return -v
+		}
+		return v
+	}
+	var certainCount int
+	for i := range 512 {
+		pts := [4]r3.Vec{{}}
+		for j := 1; j < len(pts); j++ {
+			pts[j] = r3.Vec{X: coord(), Y: coord(), Z: coord()}
+		}
+		sign, certain := proof.OrientSignFloat(pts[0], pts[1], pts[2], pts[3])
+		if !certain {
+			continue
+		}
+		certainCount++
+		want := proof.OrientSignExact(proof.XptOf(pts[0]), proof.XptOf(pts[1]),
+			proof.XptOf(pts[2]), proof.XptOf(pts[3]))
+		require.Equal(t, want, sign, "case %d", i)
+	}
+	require.Positive(t, certainCount)
+}

@@ -54,7 +54,10 @@ func OrientSignPrepared(a, b, c, d r3.Vec, xa, xd, n Xpt) int {
 }
 
 // OrientSignFloat gives the same adaptive float decision to both plane-side
-// callers. An uncertain sign must be decided by exact integer arithmetic.
+// callers. Outside the exact-zero coordinate-plane shortcut, any nonzero
+// difference with absolute value outside [2^-300, 2^250] makes the result
+// uncertain, so callers use the exact path. An uncertain sign must be decided
+// by exact integer arithmetic.
 func OrientSignFloat(a, b, c, d r3.Vec) (int, bool) {
 	bax, bay, baz := b.X-a.X, b.Y-a.Y, b.Z-a.Z
 	cax, cay, caz := c.X-a.X, c.Y-a.Y, c.Z-a.Z
@@ -66,12 +69,23 @@ func OrientSignFloat(a, b, c, d r3.Vec) (int, bool) {
 		baz == 0 && caz == 0 && daz == 0 {
 		return 0, true
 	}
+	for _, v := range [...]float64{bax, bay, baz, cax, cay, caz, dax, day, daz} {
+		x := Abs(v)
+		if !(x == 0 || (x >= 0x1p-300 && x <= 0x1p250)) {
+			return 0, false
+		}
+	}
 	det := bax*(cay*daz-caz*day) + bay*(caz*dax-cax*daz) + baz*(cax*day-cay*dax)
 	perm := Abs(bax)*(Abs(cay)*Abs(daz)+Abs(caz)*Abs(day)) +
 		Abs(bay)*(Abs(caz)*Abs(dax)+Abs(cax)*Abs(daz)) +
 		Abs(baz)*(Abs(cax)*Abs(day)+Abs(cay)*Abs(dax))
-	// The true forward error is bounded by a few ulps of the permanent; 1e-12
-	// leaves three decades of margin, so a sign the filter accepts is proven.
+	// Admitted nonzero differences are normal, and rounded zero differences
+	// are exact. Every rounded difference is a multiple of 2^-352, so quadratic
+	// and cubic intermediates lie on grids of 2^-704 and 2^-1056. Subnormal
+	// results on those grids are exact; magnitudes below 6*2^750 cannot overflow.
+	// Each signed triple product has at most eight roundings, giving
+	// |Dhat-D| < 9e-16*Phat. When Phat is nonzero, it is at least 2^-900,
+	// so 1e-12*Phat stays normal and exceeds this error bound after rounding.
 	if err := 1e-12 * perm; det > err || det < -err {
 		if det > 0 {
 			return 1, true
