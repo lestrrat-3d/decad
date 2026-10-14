@@ -1380,10 +1380,10 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 // float evaluation of the motion only approximates.
 func ExactRigidImage(b r3.Basis, t, p r3.Vec) proof.Xpt {
 	coord := func(ex, ey, ez, tc float64) *big.Rat {
-		s := new(big.Rat).Mul(polynomial.MustRatOf(ex), polynomial.MustRatOf(p.X))
-		s.Add(s, new(big.Rat).Mul(polynomial.MustRatOf(ey), polynomial.MustRatOf(p.Y)))
-		s.Add(s, new(big.Rat).Mul(polynomial.MustRatOf(ez), polynomial.MustRatOf(p.Z)))
-		return s.Add(s, polynomial.MustRatOf(tc))
+		s := proof.MulRat(new(big.Rat), polynomial.MustRatOf(ex), polynomial.MustRatOf(p.X))
+		proof.AddRat(s, s, proof.MulRat(new(big.Rat), polynomial.MustRatOf(ey), polynomial.MustRatOf(p.Y)))
+		proof.AddRat(s, s, proof.MulRat(new(big.Rat), polynomial.MustRatOf(ez), polynomial.MustRatOf(p.Z)))
+		return proof.AddRat(s, s, polynomial.MustRatOf(tc))
 	}
 	x := coord(b.EX.X, b.EY.X, b.EZ.X, t.X)
 	y := coord(b.EX.Y, b.EY.Y, b.EZ.Y, t.Y)

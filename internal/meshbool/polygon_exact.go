@@ -125,11 +125,11 @@ func Cross2x(a, b, c Xp2) *big.Rat {
 		den := new(big.Int).Mul(new(big.Int).Mul(a.Hw, a.Hw), new(big.Int).Mul(b.Hw, c.Hw))
 		return new(big.Rat).SetFrac(cross2xHomNumerator(a, b, c), den)
 	}
-	bu := new(big.Rat).Sub(b.U, a.U)
-	bv := new(big.Rat).Sub(b.V, a.V)
-	cu := new(big.Rat).Sub(c.U, a.U)
-	cv := new(big.Rat).Sub(c.V, a.V)
-	return new(big.Rat).Sub(new(big.Rat).Mul(bu, cv), new(big.Rat).Mul(bv, cu))
+	bu := proof.SubRat(new(big.Rat), b.U, a.U)
+	bv := proof.SubRat(new(big.Rat), b.V, a.V)
+	cu := proof.SubRat(new(big.Rat), c.U, a.U)
+	cv := proof.SubRat(new(big.Rat), c.V, a.V)
+	return proof.SubRat(new(big.Rat), proof.MulRat(new(big.Rat), bu, cv), proof.MulRat(new(big.Rat), bv, cu))
 }
 
 func cross2xHomNumerator(a, b, c Xp2) *big.Int {
@@ -279,17 +279,17 @@ func Cross2xSign(a, b, c Xp2) int {
 		return 0
 	}
 	// A shared exact coordinate removes one product from the determinant.
-	if au == bu && a.U.Cmp(b.U) == 0 {
-		return -b.V.Cmp(a.V) * c.U.Cmp(a.U)
+	if au == bu && proof.CmpRat(a.U, b.U) == 0 {
+		return -proof.CmpRat(b.V, a.V) * proof.CmpRat(c.U, a.U)
 	}
-	if av == bv && a.V.Cmp(b.V) == 0 {
-		return b.U.Cmp(a.U) * c.V.Cmp(a.V)
+	if av == bv && proof.CmpRat(a.V, b.V) == 0 {
+		return proof.CmpRat(b.U, a.U) * proof.CmpRat(c.V, a.V)
 	}
-	if au == cu && a.U.Cmp(c.U) == 0 {
-		return b.U.Cmp(a.U) * c.V.Cmp(a.V)
+	if au == cu && proof.CmpRat(a.U, c.U) == 0 {
+		return proof.CmpRat(b.U, a.U) * proof.CmpRat(c.V, a.V)
 	}
-	if av == cv && a.V.Cmp(c.V) == 0 {
-		return -b.V.Cmp(a.V) * c.U.Cmp(a.U)
+	if av == cv && proof.CmpRat(a.V, c.V) == 0 {
+		return -proof.CmpRat(b.V, a.V) * proof.CmpRat(c.U, a.U)
 	}
 	return cross2xRatSign(a, b, c)
 }
@@ -329,8 +329,8 @@ func OnSegment2(a, b, p Xp2) (bool, bool) {
 		return false, false
 	}
 	// Collinear: order along the dominant axis of the segment.
-	du := new(big.Rat).Sub(b.U, a.U)
-	dv := new(big.Rat).Sub(b.V, a.V)
+	du := proof.SubRat(new(big.Rat), b.U, a.U)
+	dv := proof.SubRat(new(big.Rat), b.V, a.V)
 	var lo, hi, x *big.Rat
 	if du.Sign() != 0 {
 		lo, hi, x = a.U, b.U, p.U
@@ -338,16 +338,16 @@ func OnSegment2(a, b, p Xp2) (bool, bool) {
 		lo, hi, x = a.V, b.V, p.V
 	} else {
 		// A zero-length segment holds only its own point.
-		eq := p.U.Cmp(a.U) == 0 && p.V.Cmp(a.V) == 0
+		eq := proof.CmpRat(p.U, a.U) == 0 && proof.CmpRat(p.V, a.V) == 0
 		return eq, false
 	}
-	if lo.Cmp(hi) > 0 {
+	if proof.CmpRat(lo, hi) > 0 {
 		lo, hi = hi, lo
 	}
-	if x.Cmp(lo) < 0 || x.Cmp(hi) > 0 {
+	if proof.CmpRat(x, lo) < 0 || proof.CmpRat(x, hi) > 0 {
 		return false, false
 	}
-	interior := x.Cmp(lo) > 0 && x.Cmp(hi) < 0
+	interior := proof.CmpRat(x, lo) > 0 && proof.CmpRat(x, hi) < 0
 	return true, interior
 }
 
@@ -371,8 +371,8 @@ func PointInPoly2(budget *proofbound.WorkBudget, poly []Xp2, p Xp2) (bool, bool,
 			return false, false, err
 		}
 		a, b := poly[i], poly[(i+1)%n]
-		belowA := a.V.Cmp(p.V) <= 0
-		if belowA == (b.V.Cmp(p.V) <= 0) {
+		belowA := proof.CmpRat(a.V, p.V) <= 0
+		if belowA == (proof.CmpRat(b.V, p.V) <= 0) {
 			continue
 		}
 		// An upward edge crosses right of p when its orientation with p is

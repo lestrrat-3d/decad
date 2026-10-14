@@ -301,9 +301,9 @@ func CoordDistance(p proof.Xpt, v r3.Vec) *big.Rat {
 	px, py, pz := proof.XhpRat(proof.Xhp(p))
 	d := new(big.Rat)
 	for _, pair := range [][2]*big.Rat{{px, polynomial.MustRatOf(v.X)}, {py, polynomial.MustRatOf(v.Y)}, {pz, polynomial.MustRatOf(v.Z)}} {
-		dd := new(big.Rat).Sub(pair[0], pair[1])
+		dd := proof.SubRat(new(big.Rat), pair[0], pair[1])
 		dd.Abs(dd)
-		if dd.Cmp(d) > 0 {
+		if proof.CmpRat(dd, d) > 0 {
 			d = dd
 		}
 	}
