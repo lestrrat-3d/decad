@@ -25,3 +25,9 @@ examples, or changing CI shards.
 - A new test that has not been measured goes in shard 10, never in the lightest
   shard. Shards are rebalanced only by regenerating them with `_shardgen` from
   measured costs.
+
+## Per-test timing in CI
+
+Each test binary's `TestMain` (`ci_verbose_test.go`, `apitest/ci_verbose_test.go`)
+turns on `-test.v` when `GITHUB_ACTIONS` is `true`, so shard logs carry one
+`--- PASS: Name (x.xxs)` line per test. Keep it the only `TestMain` in its package.
