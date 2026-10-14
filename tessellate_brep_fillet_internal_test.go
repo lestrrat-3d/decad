@@ -56,19 +56,19 @@ func TestTessellateBrepFilletBands(t *testing.T) {
 			m, err := tessellateContext(t.Context(), out, units.Millimeters(0.05), VerifyAll)
 			require.NoError(t, err)
 			requireMeshOfBody(t, out, m)
-			require.True(t, m.symDiffOK)
-			require.Positive(t, m.volSymDiff)
+			require.True(t, m.n.SymDiffOK)
+			require.Positive(t, m.n.VolSymDiff)
 			lo, hi := fx.volume.enclosed()
-			requireMeshCovers(t, exactMeshVolume(m), m.volSymDiff, lo, hi)
+			requireMeshCovers(t, exactMeshVolume(m), m.n.VolSymDiff, lo, hi)
 
 			// The mesh's total facet area lies within the published slack of
 			// the body's area.
 			var meshArea float64
-			for _, tri := range m.triangles {
-				a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
+			for _, tri := range m.n.Triangles {
+				a, b, c := m.n.Vertices[tri[0]], m.n.Vertices[tri[1]], m.n.Vertices[tri[2]]
 				meshArea += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 			}
-			require.LessOrEqual(t, math.Abs(meshArea-out.area.Value.Base()), m.areaSlack+out.area.Bound.Base())
+			require.LessOrEqual(t, math.Abs(meshArea-out.area.Value.Base()), m.n.AreaSlack+out.area.Bound.Base())
 		})
 	}
 }
@@ -119,8 +119,8 @@ func TestTessellateBrepFilletPatchesWithinBound(t *testing.T) {
 				}
 				bound, ok := m.sourceBound(f)
 				require.True(t, ok)
-				tri := m.triangles[i]
-				a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
+				tri := m.n.Triangles[i]
+				a, b, c := m.n.Vertices[tri[0]], m.n.Vertices[tri[1]], m.n.Vertices[tri[2]]
 				for _, p := range []r3.Vec{a, b, c, a.Add(b).Scale(0.5), b.Add(c).Scale(0.5), a.Add(c).Scale(0.5),
 					a.Add(b).Add(c).Scale(1.0 / 3)} {
 					require.LessOrEqual(t, filletSurfaceDistance(t, f, p), bound, "cell %d of %v", i, f.Origins())
@@ -233,8 +233,8 @@ func TestTessellateBrepFilletPlaced(t *testing.T) {
 			m, err := tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)
 			require.NoError(t, err)
 			requireMeshOfBody(t, body, m)
-			require.True(t, m.symDiffOK)
-			requireMeshCovers(t, exactMeshVolume(m), m.volSymDiff, lo, hi)
+			require.True(t, m.n.SymDiffOK)
+			requireMeshCovers(t, exactMeshVolume(m), m.n.VolSymDiff, lo, hi)
 		})
 	}
 }
@@ -348,8 +348,8 @@ func TestBrepFilletUndercutAgainstSamples(t *testing.T) {
 					if _, ok := patches[f]; !ok {
 						continue
 					}
-					tri := m.triangles[i]
-					a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
+					tri := m.n.Triangles[i]
+					a, b, c := m.n.Vertices[tri[0]], m.n.Vertices[tri[1]], m.n.Vertices[tri[2]]
 					for _, pt := range []r3.Vec{a, b, c} {
 						n, err := f.NormalAt(pt)
 						if err != nil {

@@ -63,8 +63,8 @@ func internalSphereBody(t *testing.T) *Body {
 // over its facets.
 func internalMeshVolume(m *Mesh) float64 {
 	total := 0.0
-	for _, tri := range m.triangles {
-		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
+	for _, tri := range m.n.Triangles {
+		a, b, c := m.n.Vertices[tri[0]], m.n.Vertices[tri[1]], m.n.Vertices[tri[2]]
 		total += a.Dot(b.Cross(c)) / 6
 	}
 	return math.Abs(total)
@@ -213,9 +213,9 @@ func TestRevolveMeshSymDiffBoundsTheCylinderVolumeDeficit(t *testing.T) {
 
 	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
-	require.Positive(t, mesh.volSymDiff)
-	require.False(t, proofbound.IsNonFinite(mesh.volSymDiff))
+	require.True(t, mesh.n.SymDiffOK)
+	require.Positive(t, mesh.n.VolSymDiff)
+	require.False(t, proofbound.IsNonFinite(mesh.n.VolSymDiff))
 
 	vol, err := body.Volume()
 	require.NoError(t, err)
@@ -224,9 +224,9 @@ func TestRevolveMeshSymDiffBoundsTheCylinderVolumeDeficit(t *testing.T) {
 	held := internalMeshVolume(mesh)
 	deficit := analytic - held
 	require.Positive(t, deficit)
-	require.GreaterOrEqual(t, mesh.volSymDiff, deficit,
+	require.GreaterOrEqual(t, mesh.n.VolSymDiff, deficit,
 		`volSymDiff must cover the volume the chorded mesh actually loses`)
-	require.LessOrEqual(t, mesh.volSymDiff, deficit*1.1,
+	require.LessOrEqual(t, mesh.n.VolSymDiff, deficit*1.1,
 		`volSymDiff is far looser than the deficit it bounds`)
 }
 
@@ -238,9 +238,9 @@ func TestRevolveMeshSymDiffFallsWithTolerance(t *testing.T) {
 	require.NoError(t, err)
 	fine, err := tessellateContext(t.Context(), body, units.Millimeters(0.01), VerifyAll)
 	require.NoError(t, err)
-	require.True(t, coarse.symDiffOK)
-	require.True(t, fine.symDiffOK)
-	require.Less(t, fine.volSymDiff, coarse.volSymDiff)
+	require.True(t, coarse.n.SymDiffOK)
+	require.True(t, fine.n.SymDiffOK)
+	require.Less(t, fine.n.VolSymDiff, coarse.n.VolSymDiff)
 }
 
 func TestRevolveMeridianMomentChargesACurvedGenerator(t *testing.T) {
@@ -310,7 +310,7 @@ func TestPairChordToleranceClearsARevolveCoordinateReservation(t *testing.T) {
 	// is the whole point: without it planRevolveWithRoles refuses before it chords.
 	mesh, err := tessellateContext(t.Context(), placed, units.Millimeters(tol), VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
+	require.True(t, mesh.n.SymDiffOK)
 
 	_, err = tessellateContext(t.Context(), placed, units.Millimeters(dPair*meshbool.ChordFactor), VerifyAll)
 	require.ErrorIs(t, err, ErrUnsupported)

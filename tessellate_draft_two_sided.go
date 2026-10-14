@@ -48,8 +48,8 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 		if err != nil {
 			return nil, err
 		}
-		indices := make([]int, len(mesh.vertices))
-		for i, v := range mesh.vertices {
+		indices := make([]int, len(mesh.n.Vertices))
+		for i, v := range mesh.n.Vertices {
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
@@ -59,16 +59,16 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 				bounds[found] = math.Max(bounds[found], partBounds[i])
 				continue
 			}
-			indices[i] = len(out.vertices)
+			indices[i] = len(out.n.Vertices)
 			vertexIndex[key] = indices[i]
-			out.vertices = append(out.vertices, v)
+			out.n.Vertices = append(out.n.Vertices, v)
 			bounds = append(bounds, partBounds[i])
 		}
 		internalCap := roleCapEnd
 		if partIndex == 1 {
 			internalCap = roleCapStart
 		}
-		for i, tri := range mesh.triangles {
+		for i, tri := range mesh.n.Triangles {
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
@@ -94,16 +94,16 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 				return nil, fmt.Errorf(`%w: a draft mesh source face has no displacement bound`, ErrDegenerate)
 			}
 		}
-		out.areaSlack = proofbound.AbsSumUpper(out.areaSlack, mesh.areaSlack)
-		out.volSymDiff = proofbound.AbsSumUpper(out.volSymDiff, mesh.volSymDiff)
+		out.n.AreaSlack = proofbound.AbsSumUpper(out.n.AreaSlack, mesh.n.AreaSlack)
+		out.n.VolSymDiff = proofbound.AbsSumUpper(out.n.VolSymDiff, mesh.n.VolSymDiff)
 		if partIndex == 0 {
-			out.symDiffOK = mesh.symDiffOK
+			out.n.SymDiffOK = mesh.n.SymDiffOK
 		} else {
-			out.symDiffOK = out.symDiffOK && mesh.symDiffOK
+			out.n.SymDiffOK = out.n.SymDiffOK && mesh.n.SymDiffOK
 		}
 	}
 	out.setVertexBounds(bounds)
-	if err := liftTessellationError(tessellation.RequireClosedMesh(out.triangles)); err != nil {
+	if err := liftTessellationError(tessellation.RequireClosedMesh(out.n.Triangles)); err != nil {
 		return nil, fmt.Errorf("two-sided draft middle rim: %w", err)
 	}
 	return &out, budget.Err()

@@ -62,7 +62,7 @@ func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
 	}
 	q := prismPatternExactPlacedPoint(part, near)
 	f := prismPatternExactPlacedPoint(part, far)
-	heldRoot := part.mesh.vertices[2*station]
+	heldRoot := part.mesh.n.Vertices[2*station]
 	rootError := proofbound.AbsSumUpper(proofbound.IntervalFloatError(q.X, heldRoot.X),
 		proofbound.IntervalFloatError(q.Y, heldRoot.Y))
 	if rootError > part.mesh.Bound().Base() {

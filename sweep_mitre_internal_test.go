@@ -275,28 +275,28 @@ func TestMitredSweepDeltaAndMeshProofs(t *testing.T) {
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.01))
 	require.NoError(t, err)
 	require.Equal(t, mp.delta, mesh.Bound().Base())
-	require.True(t, mesh.symDiffOK)
+	require.True(t, mesh.n.SymDiffOK)
 
 	vol6, _ := testExactVolumeMoments(mp)
 	vol6.Abs(vol6)
 	exactVol := new(big.Rat).Quo(vol6, big.NewRat(6, 1))
 	held := new(big.Rat)
-	for _, tri := range mesh.triangles {
-		a, b, c := testRatVec(mesh.vertices[tri[0]]), testRatVec(mesh.vertices[tri[1]]), testRatVec(mesh.vertices[tri[2]])
+	for _, tri := range mesh.n.Triangles {
+		a, b, c := testRatVec(mesh.n.Vertices[tri[0]]), testRatVec(mesh.n.Vertices[tri[1]]), testRatVec(mesh.n.Vertices[tri[2]])
 		held.Add(held, testRatDot(a, testRatCross(b, c)))
 	}
 	held.Quo(held, big.NewRat(6, 1))
 	diff := new(big.Rat).Sub(held, exactVol)
 	require.Positive(t, diff.Abs(diff).Sign(), `the rounded mesh's volume differs from the exact one`)
-	require.LessOrEqual(t, diff.Cmp(new(big.Rat).SetFloat64(mesh.volSymDiff)), 0)
+	require.LessOrEqual(t, diff.Cmp(new(big.Rat).SetFloat64(mesh.n.VolSymDiff)), 0)
 
 	heldArea := 0.0
-	for _, tri := range mesh.triangles {
-		a, b, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
+	for _, tri := range mesh.n.Triangles {
+		a, b, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 		heldArea += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
-	require.Positive(t, mesh.areaSlack)
-	require.LessOrEqual(t, math.Abs(heldArea-body.area.Value.Base()), mesh.areaSlack+body.area.Bound.Base()+1e-12)
+	require.Positive(t, mesh.n.AreaSlack)
+	require.LessOrEqual(t, math.Abs(heldArea-body.area.Value.Base()), mesh.n.AreaSlack+body.area.Bound.Base()+1e-12)
 }
 
 // TestMitredSweepPublishesPerVertexBounds is docs/faceted-vertex-bounds-

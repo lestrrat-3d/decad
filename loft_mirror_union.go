@@ -128,12 +128,12 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 	}
 	lowerBound, upperBound := lowerMesh.Bound().Base(), upperMesh.Bound().Base()
 	bound := max(lowerBound, upperBound)
-	volumeGap := proofbound.AbsSumUpper(lowerMesh.volSymDiff, upperMesh.volSymDiff)
+	volumeGap := proofbound.AbsSumUpper(lowerMesh.n.VolSymDiff, upperMesh.n.VolSymDiff)
 	// Each Loft area slack contains the nonnegative error of BOTH of its caps.
 	// Removing two copies of the same true and held cap therefore adds at most
 	// twice either source's entire area slack to the two wall-area errors.
-	areaSlack := proofbound.AbsSumUpper(lowerMesh.areaSlack, upperMesh.areaSlack,
-		proofbound.ProductUpper(2, max(lowerMesh.areaSlack, upperMesh.areaSlack)))
+	areaSlack := proofbound.AbsSumUpper(lowerMesh.n.AreaSlack, upperMesh.n.AreaSlack,
+		proofbound.ProductUpper(2, max(lowerMesh.n.AreaSlack, upperMesh.n.AreaSlack)))
 	if proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
 		proofbound.IsNonFinite(areaSlack) || bound < 0 || volumeGap < 0 || areaSlack < 0 {
 		return nil, fmt.Errorf("%w: reflected loft proof is not finite", ErrUnsupported)
@@ -224,7 +224,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 }
 
 func loftMirrorMeshMatchesPayload(mesh *Mesh, lp loftPayload) bool {
-	return slices.Equal(mesh.vertices, lp.verts) && slices.Equal(mesh.triangles, lp.tris) &&
+	return slices.Equal(mesh.n.Vertices, lp.verts) && slices.Equal(mesh.n.Triangles, lp.tris) &&
 		len(mesh.source) == len(lp.tris)
 }
 

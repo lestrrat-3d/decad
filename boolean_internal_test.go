@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -139,7 +140,7 @@ func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *meshbool.BoolMesh {
 	t.Helper()
 	face := &Face{}
 	bm, err := prepBoolMeshContext(t.Context(), &Mesh{
-		vertices: tri[:], triangles: [][3]int{{0, 1, 2}},
+		n:      topo.Mesh{Vertices: tri[:], Triangles: [][3]int{{0, 1, 2}}},
 		source: []*Face{face}, faceBound: map[*Face]float64{face: 0},
 	}, []int{0})
 	require.NoError(t, err)
@@ -425,9 +426,9 @@ func closeGateFacePairs(t *testing.T, a, b *Body) (*meshbool.BoolMesh, *meshbool
 	require.NoError(t, err)
 	mb, err := tessellateContext(t.Context(), b, units.Millimeters(tolMM), VerifyAll)
 	require.NoError(t, err)
-	bmA, err := prepBoolMeshContext(t.Context(), ma, make([]int, len(ma.triangles)))
+	bmA, err := prepBoolMeshContext(t.Context(), ma, make([]int, len(ma.n.Triangles)))
 	require.NoError(t, err)
-	bmB, err := prepBoolMeshContext(t.Context(), mb, make([]int, len(mb.triangles)))
+	bmB, err := prepBoolMeshContext(t.Context(), mb, make([]int, len(mb.n.Triangles)))
 	require.NoError(t, err)
 	budget := proofbound.NewWorkBudget(t.Context())
 	fa, err := facesOfMesh(budget, ma)
@@ -685,10 +686,10 @@ func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
 	for _, operand := range []*Body{wedge, bar} {
 		mesh, meshErr := tessellateContext(t.Context(), operand, units.Millimeters(1), VerifyAll)
 		require.NoError(t, meshErr)
-		require.Zero(t, mesh.bound)
-		require.Zero(t, mesh.volSymDiff)
+		require.Zero(t, mesh.n.Bound)
+		require.Zero(t, mesh.n.VolSymDiff)
 		if operand == wedge {
-			require.Contains(t, mesh.vertices, r3.Vec{X: math.SmallestNonzeroFloat64, Y: scale})
+			require.Contains(t, mesh.n.Vertices, r3.Vec{X: math.SmallestNonzeroFloat64, Y: scale})
 		}
 	}
 
@@ -858,8 +859,10 @@ func TestPrepRefusesACollapsedOperandFacet(t *testing.T) {
 	// contact predicate here is blind to it: a point or tangent contact made on
 	// it would be classified by nothing at all. The operand is refused.
 	m := &Mesh{
-		vertices:  []r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 4, Y: 0, Z: 0}, {X: 2, Y: 0, Z: 0}},
-		triangles: [][3]int{{0, 1, 2}},
+		n: topo.Mesh{
+			Vertices:  []r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 4, Y: 0, Z: 0}, {X: 2, Y: 0, Z: 0}},
+			Triangles: [][3]int{{0, 1, 2}},
+		},
 	}
 	_, err := prepBoolMeshContext(t.Context(), m, []int{0})
 	require.ErrorIs(t, err, ErrUnsupported, `three collinear corners span no plane`)
@@ -927,9 +930,9 @@ func buildCircularWasherMeshes(t testing.TB) (*meshbool.BoolMesh, *meshbool.Bool
 	require.NoError(t, err)
 	mb, err := tessellateContext(t.Context(), tool, units.Millimeters(tolMM), VerifyAll)
 	require.NoError(t, err)
-	bmA, err := prepBoolMeshContext(t.Context(), ma, make([]int, len(ma.triangles)))
+	bmA, err := prepBoolMeshContext(t.Context(), ma, make([]int, len(ma.n.Triangles)))
 	require.NoError(t, err)
-	bmB, err := prepBoolMeshContext(t.Context(), mb, make([]int, len(mb.triangles)))
+	bmB, err := prepBoolMeshContext(t.Context(), mb, make([]int, len(mb.n.Triangles)))
 	require.NoError(t, err)
 	return bmA, bmB
 }
@@ -1250,14 +1253,14 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 	require.NoError(t, err)
 	symB, err := operandSymDiff(mb)
 	require.NoError(t, err)
-	require.Equal(t, ma.volSymDiff, symA, `the boolean reads the mesh's own proof, not a substitution`)
-	require.Equal(t, mb.volSymDiff, symB)
+	require.Equal(t, ma.n.VolSymDiff, symA, `the boolean reads the mesh's own proof, not a substitution`)
+	require.Equal(t, mb.n.VolSymDiff, symB)
 	require.Zero(t, symA, `an all-planar box at exact coordinates differs from its mesh by nothing`)
 	require.Positive(t, symB, `a chorded cylinder omits its own circular segments`)
 
 	// The forbidden product, for comparison: strictly larger than the proof the
 	// operand actually carries.
-	substituted := mb.bound * facetproof.MeshAreaUpper(mb.vertices, mb.triangles)
+	substituted := mb.n.Bound * facetproof.MeshAreaUpper(mb.n.Vertices, mb.n.Triangles)
 	require.Greater(t, substituted, symB)
 
 	eval, err := evaluateBoolean(t.Context(), meshbool.OpUnion, plate, pin)
@@ -1277,11 +1280,11 @@ func TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof(t *testing.T) {
 	// An export-only mesh — one whose payload class has no occupied-volume proof
 	// yet — is refused as a staging limit, never composed as a zero. Its
 	// boundary audits all ran, so the refusal names the missing volume proof.
-	_, err := operandSymDiff(&Mesh{volSymDiff: 17, symDiffOK: false, boundaryOK: true})
+	_, err := operandSymDiff(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: false, BoundaryOK: true}})
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "no proof of the volume")
 
-	got, err := operandSymDiff(&Mesh{volSymDiff: 17, symDiffOK: true, boundaryOK: true})
+	got, err := operandSymDiff(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: true, BoundaryOK: true}})
 	require.NoError(t, err)
 	require.Equal(t, 17.0, got)
 
@@ -1289,7 +1292,7 @@ func TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof(t *testing.T) {
 	// and by its own cause: every homotopy the volume proof composes has that
 	// audit as an antecedent (docs/tessellation-design.md §11), so blaming the
 	// payload class here would misstate why this operand cannot be composed.
-	_, err = operandSymDiff(&Mesh{volSymDiff: 17, symDiffOK: true, boundaryOK: false})
+	_, err = operandSymDiff(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: true, BoundaryOK: false}})
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "no facet-contact audit")
 }
@@ -1322,7 +1325,7 @@ func TestFacesOfMeshReadsTheMeshProofRecord(t *testing.T) {
 	t.Parallel()
 	stated, omitted := &Face{}, &Face{}
 	m := &Mesh{
-		triangles: [][3]int{{0, 1, 2}, {0, 2, 3}},
+		n:         topo.Mesh{Triangles: [][3]int{{0, 1, 2}, {0, 2, 3}}},
 		source:    []*Face{stated, stated},
 		faceBound: map[*Face]float64{stated: 0.25},
 	}

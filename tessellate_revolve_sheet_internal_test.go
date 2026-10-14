@@ -85,8 +85,8 @@ func TestRevolveSheetPublishesNoOccupiedVolumeProof(t *testing.T) {
 	sheet := internalOffAxisArcBody(t, true)
 	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
-	require.False(t, mesh.symDiffOK)
-	require.Zero(t, mesh.volSymDiff)
+	require.False(t, mesh.n.SymDiffOK)
+	require.Zero(t, mesh.n.VolSymDiff)
 }
 
 // TestRevolveSheetAreaSlackBelowSolidOnCircularMeridian proves the sheet's
@@ -101,7 +101,7 @@ func TestRevolveSheetAreaSlackBelowSolidOnCircularMeridian(t *testing.T) {
 	solid := internalOffAxisArcBody(t, false)
 	solidMesh, err := solid.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
-	require.Positive(t, solidMesh.areaSlack, `the fixture's circular wall must give the dropped cap term something to drop`)
+	require.Positive(t, solidMesh.n.AreaSlack, `the fixture's circular wall must give the dropped cap term something to drop`)
 
 	sheet := internalOffAxisArcBody(t, true)
 	sheetMesh, err := sheet.Tessellate(t.Context(), tol)
@@ -113,7 +113,7 @@ func TestRevolveSheetAreaSlackBelowSolidOnCircularMeridian(t *testing.T) {
 	// here) — so the threshold sits many orders of magnitude above the
 	// latter and well below the former, and stays robust to the
 	// architecture-specific FMA rounding that confound is made of.
-	gap := solidMesh.areaSlack - sheetMesh.areaSlack
+	gap := solidMesh.n.AreaSlack - sheetMesh.n.AreaSlack
 	require.Greater(t, gap, 1e-6, `the dropped cap term must dominate any coordinate-rounding confound`)
 }
 
@@ -138,16 +138,16 @@ func TestRevolveSheetOrientationSignIsAnchorDependent(t *testing.T) {
 	open := internalOffAxisArcBody(t, true)
 	openMesh, err := open.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
-	openSignA := tessellation.OrientationSign(openMesh.vertices, openMesh.triangles, anchorA)
-	openSignB := tessellation.OrientationSign(openMesh.vertices, openMesh.triangles, anchorB)
+	openSignA := tessellation.OrientationSign(openMesh.n.Vertices, openMesh.n.Triangles, anchorA)
+	openSignB := tessellation.OrientationSign(openMesh.n.Vertices, openMesh.n.Triangles, anchorB)
 	require.NotEqual(t, openSignA, openSignB,
 		`an open sheet mesh's signed-volume sum must be anchor-dependent, or the orientation guard protects against nothing`)
 
 	closed := internalOffAxisArcFullTurnBody(t, true)
 	closedMesh, err := closed.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
-	closedSignA := tessellation.OrientationSign(closedMesh.vertices, closedMesh.triangles, anchorA)
-	closedSignB := tessellation.OrientationSign(closedMesh.vertices, closedMesh.triangles, anchorB)
+	closedSignA := tessellation.OrientationSign(closedMesh.n.Vertices, closedMesh.n.Triangles, anchorA)
+	closedSignB := tessellation.OrientationSign(closedMesh.n.Vertices, closedMesh.n.Triangles, anchorB)
 	require.Equal(t, closedSignA, closedSignB,
 		`a closed sheet mesh's signed-volume sum must agree at every anchor, since it is the true enclosed volume`)
 }

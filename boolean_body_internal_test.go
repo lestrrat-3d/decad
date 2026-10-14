@@ -138,7 +138,7 @@ func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 	trunkBeta, err := trunk.vertexBounds()
 	require.NoError(t, err)
 	own := map[r3.Vec]float64{}
-	for i, v := range trunk.vertices {
+	for i, v := range trunk.n.Vertices {
 		own[v] = trunkBeta[i]
 	}
 
@@ -192,9 +192,9 @@ func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 	// farthest any vertex's own bound proves a true point stands.
 	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(fp.meshBound), VerifyAll)
 	require.NoError(t, err)
-	reachOf := make([]float64, len(mesh.vertices))
-	for _, tri := range mesh.triangles {
-		d := max(mesh.vertexBound[tri[0]], mesh.vertexBound[tri[1]], mesh.vertexBound[tri[2]])
+	reachOf := make([]float64, len(mesh.n.Vertices))
+	for _, tri := range mesh.n.Triangles {
+		d := max(mesh.n.VertexBound[tri[0]], mesh.n.VertexBound[tri[1]], mesh.n.VertexBound[tri[2]])
 		for _, v := range tri {
 			reachOf[v] = max(reachOf[v], d)
 		}
@@ -205,7 +205,7 @@ func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 	worst := new(big.Rat)
 	for axis := range 3 {
 		lo, hi := rat(meshbool.CoordOf(box.Min, axis)), rat(meshbool.CoordOf(box.Max, axis))
-		for i, v := range mesh.vertices {
+		for i, v := range mesh.n.Vertices {
 			c := rat(meshbool.CoordOf(v, axis))
 			for _, gap := range []*big.Rat{
 				new(big.Rat).Sub(lo, new(big.Rat).Sub(c, rat(reachOf[i]))),
@@ -219,12 +219,12 @@ func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 		// The held extreme is attained by a held vertex, so the nearest
 		// proven true point inside it is that vertex's own bound or less.
 		heldLo, heldHi := (*big.Rat)(nil), (*big.Rat)(nil)
-		for i, v := range mesh.vertices {
+		for i, v := range mesh.n.Vertices {
 			c := rat(meshbool.CoordOf(v, axis))
-			if in := new(big.Rat).Add(c, rat(mesh.vertexBound[i])); heldLo == nil || in.Cmp(heldLo) < 0 {
+			if in := new(big.Rat).Add(c, rat(mesh.n.VertexBound[i])); heldLo == nil || in.Cmp(heldLo) < 0 {
 				heldLo = in
 			}
-			if in := new(big.Rat).Sub(c, rat(mesh.vertexBound[i])); heldHi == nil || in.Cmp(heldHi) > 0 {
+			if in := new(big.Rat).Sub(c, rat(mesh.n.VertexBound[i])); heldHi == nil || in.Cmp(heldHi) > 0 {
 				heldHi = in
 			}
 		}

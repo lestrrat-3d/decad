@@ -70,7 +70,8 @@ index (core §3 invariant #3).
 Each topology type keeps its name, methods and godoc in the root package and
 holds its data by value in an `internal/topo` node (`Vertex` holds a
 `topo.Vertex`, `Edge` a `topo.Edge`, `Face` a `topo.Face`, `Loop` a
-`topo.Loop`, `FaceShell` a `topo.FaceShell`, `Document` a `topo.Document`), so
+`topo.Loop`, `FaceShell` a `topo.FaceShell`, `Document` a `topo.Document`,
+`Mesh` a `topo.Mesh`), so
 internal packages can read and build it. The handle's pointer is still the
 identity; no other rule of this section changes.
 

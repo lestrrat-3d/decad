@@ -467,7 +467,7 @@ func TestLoftFreeformWedgePlacedAndTessellated(t *testing.T) {
 		require.Positive(t, mesh.Bound().Base())
 		require.True(t, mesh.VolumeVerified())
 		meshVol := signedMeshVolume(mesh.Vertices(), mesh.Triangles())
-		require.LessOrEqual(t, math.Abs(meshVol-extVol.Value.Base()), mesh.volSymDiff+extVol.Bound.Base(),
+		require.LessOrEqual(t, math.Abs(meshVol-extVol.Value.Base()), mesh.n.VolSymDiff+extVol.Bound.Base(),
 			"the mesh's own volume must sit within its occupied-volume proof of the extruded body")
 	}
 }

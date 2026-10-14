@@ -84,8 +84,8 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 		if err != nil {
 			return nil, true, err
 		}
-		first := m.vertices[0]
-		last := m.vertices[2*rootStart]
+		first := m.n.Vertices[0]
+		last := m.n.Vertices[2*rootStart]
 		start, end := math.Atan2(first.Y, first.X), math.Atan2(last.Y, last.X)
 		startIV := proofbound.Atan2Interval(proofarith.FloatRat(first.Y), proofarith.FloatRat(first.X), false)
 		endIV := proofbound.Atan2Interval(proofarith.FloatRat(last.Y), proofarith.FloatRat(last.X), false)
@@ -140,15 +140,15 @@ func prismPatternMeshRoot(m *Mesh, body *Body, rootIndex int, z0, z1 float64) (i
 			}
 		}
 	}
-	return tessellation.PrismPatternMeshRoot(m.vertices, len(m.triangles), m.source, roots, z0, z1)
+	return tessellation.PrismPatternMeshRoot(m.n.Vertices, len(m.n.Triangles), m.source, roots, z0, z1)
 }
 
 // All held section vertices strictly separate after charging both verified
 // source-to-mesh bounds. A bounded region lies in the convex hull of its
 // boundary, so this one plane separates the complete source solids.
 func prismPatternMeshSeparated(a, b prismPatternPart) bool {
-	pa := a.mesh.vertices[0].Add(a.mesh.vertices[2*a.rootStart])
-	pb := b.mesh.vertices[0].Add(b.mesh.vertices[2*b.rootStart])
+	pa := a.mesh.n.Vertices[0].Add(a.mesh.n.Vertices[2*a.rootStart])
+	pb := b.mesh.n.Vertices[0].Add(b.mesh.n.Vertices[2*b.rootStart])
 	nx := new(big.Rat).Sub(proofarith.FloatRat(pa.X), proofarith.FloatRat(pb.X))
 	ny := new(big.Rat).Sub(proofarith.FloatRat(pa.Y), proofarith.FloatRat(pb.Y))
 	normSq := new(big.Rat).Add(new(big.Rat).Mul(nx, nx), new(big.Rat).Mul(ny, ny))
@@ -156,14 +156,14 @@ func prismPatternMeshSeparated(a, b prismPatternPart) bool {
 		return false
 	}
 	var minA, maxB *big.Rat
-	for _, v := range a.mesh.vertices {
+	for _, v := range a.mesh.n.Vertices {
 		dot := new(big.Rat).Add(new(big.Rat).Mul(nx, proofarith.FloatRat(v.X)),
 			new(big.Rat).Mul(ny, proofarith.FloatRat(v.Y)))
 		if minA == nil || dot.Cmp(minA) < 0 {
 			minA = dot
 		}
 	}
-	for _, v := range b.mesh.vertices {
+	for _, v := range b.mesh.n.Vertices {
 		dot := new(big.Rat).Add(new(big.Rat).Mul(nx, proofarith.FloatRat(v.X)),
 			new(big.Rat).Mul(ny, proofarith.FloatRat(v.Y)))
 		if maxB == nil || dot.Cmp(maxB) > 0 {

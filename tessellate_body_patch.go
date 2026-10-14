@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -43,7 +44,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 		return nil, fmt.Errorf(`%w: this evaluator cannot triangulate the Body.Patch result`, ErrUnsupported)
 	}
 	vertices := b.Vertices()
-	mesh := &Mesh{vertices: make([]r3.Vec, len(vertices))}
+	mesh := &Mesh{n: topo.Mesh{Vertices: make([]r3.Vec, len(vertices))}}
 	classOf := make(map[*Vertex]int, len(vertices))
 	store := make([]float64, len(vertices))
 	budget := proofbound.NewWorkBudget(ctx)
@@ -51,7 +52,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		mesh.vertices[i] = v.n.Position
+		mesh.n.Vertices[i] = v.n.Position
 		classOf[v] = i
 		store[i] = v.n.Bound.Base()
 	}
@@ -59,7 +60,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 		return nil, err
 	}
 	var err error
-	mesh.triangles, mesh.source, err = triangulateStitchFaces(ctx, faces, classOf)
+	mesh.n.Triangles, mesh.source, err = triangulateStitchFaces(ctx, faces, classOf)
 	if err != nil {
 		return nil, err
 	}
@@ -67,18 +68,18 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 		return nil, err
 	}
 	if pp.xform.IsReflection() {
-		for i := range mesh.triangles {
-			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
+		for i := range mesh.n.Triangles {
+			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
 	}
-	if err := tessellation.RequireCapBlendFacetAreas(mesh.vertices, mesh.triangles, "Body.Patch sheet"); err != nil {
+	if err := tessellation.RequireCapBlendFacetAreas(mesh.n.Vertices, mesh.n.Triangles, "Body.Patch sheet"); err != nil {
 		return nil, err
 	}
 	if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
 		return nil, err
 	}
 	if verify >= VerifyBoundary {
-		if err := loftmesh.LoftCrossingAudit(budget, mesh.vertices, mesh.triangles); err != nil {
+		if err := loftmesh.LoftCrossingAudit(budget, mesh.n.Vertices, mesh.n.Triangles); err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, ctxErr
 			}
@@ -95,7 +96,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 	if verify < VerifyAll {
 		return mesh, nil
 	}
-	for i, tri := range mesh.triangles {
+	for i, tri := range mesh.n.Triangles {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
@@ -105,11 +106,11 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 		if delta == 0 {
 			continue
 		}
-		a, bb, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
-		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
+		a, bb, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
+		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack,
 			proofbound.PerturbedTriangleAreaAllow(a, bb, c, delta))
 	}
-	if proofbound.IsNonFinite(mesh.areaSlack) {
+	if proofbound.IsNonFinite(mesh.n.AreaSlack) {
 		return nil, fmt.Errorf(`%w: a Body.Patch result states no finite area bound`, ErrUnsupported)
 	}
 	return mesh, nil
@@ -147,8 +148,8 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 		if source == nil {
 			return fmt.Errorf(`%w: a Body.Patch fill has no source face on its rim`, ErrDegenerate)
 		}
-		patchSense := tessellation.PatchEdgeSense(m.triangles, byFace[f], start, end)
-		sourceSense := tessellation.PatchEdgeSense(m.triangles, byFace[source], start, end)
+		patchSense := tessellation.PatchEdgeSense(m.n.Triangles, byFace[f], start, end)
+		sourceSense := tessellation.PatchEdgeSense(m.n.Triangles, byFace[source], start, end)
 		if patchSense == 0 || sourceSense == 0 {
 			return fmt.Errorf(`%w: a Body.Patch rim has no matching source and fill mesh edges`, ErrUnsupported)
 		}
@@ -156,7 +157,7 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 			continue
 		}
 		for _, ti := range byFace[f] {
-			m.triangles[ti][1], m.triangles[ti][2] = m.triangles[ti][2], m.triangles[ti][1]
+			m.n.Triangles[ti][1], m.n.Triangles[ti][2] = m.n.Triangles[ti][2], m.n.Triangles[ti][1]
 		}
 	}
 	return nil

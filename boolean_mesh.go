@@ -28,7 +28,7 @@ import (
 // The contact is exactly what this pipeline must not miss, so the operand is
 // refused rather than partly examined. Loud beats silently wrong.
 func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*meshbool.BoolMesh, error) {
-	bm, err := meshbool.PrepContext(ctx, m.vertices, m.triangles, src)
+	bm, err := meshbool.PrepContext(ctx, m.n.Vertices, m.n.Triangles, src)
 	if err != nil {
 		return nil, err
 	}

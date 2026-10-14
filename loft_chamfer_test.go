@@ -88,7 +88,7 @@ func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
-	require.Greater(t, mesh.volSymDiff, source.proof.VolSymDiff)
+	require.Greater(t, mesh.n.VolSymDiff, source.proof.VolSymDiff)
 	require.NoError(t, requireVolumeProvingPayload(t.Context(), out, 0))
 	for _, cap := range []FeatureRef{CapStart(out), CapEnd(out)} {
 		faces, err := Faces(FaceCreatedBy(cap)).Exactly(1).SelectFaces(out)
@@ -143,6 +143,6 @@ func TestLoftCapBandNoBoreChamfersBothOuterLoops(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
-	require.Greater(t, mesh.volSymDiff, body.payload.(loftPayload).proof.VolSymDiff)
+	require.Greater(t, mesh.n.VolSymDiff, body.payload.(loftPayload).proof.VolSymDiff)
 	require.NoError(t, requireVolumeProvingPayload(t.Context(), out, 0))
 }

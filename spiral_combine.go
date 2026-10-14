@@ -272,28 +272,28 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 		return nil, nil, err
 	}
 	next := *original
-	next.vertices = make([]r3.Vec, 0, len(original.vertices))
-	next.vertexBound = make([]float64, 0, len(original.vertices))
-	next.volSymDiff, next.areaSlack = 0, 0
+	next.n.Vertices = make([]r3.Vec, 0, len(original.n.Vertices))
+	next.n.VertexBound = make([]float64, 0, len(original.n.Vertices))
+	next.n.VolSymDiff, next.n.AreaSlack = 0, 0
 	placedParts, err := meta.copies.placedProxyShells(ctx, proxy)
 	if err != nil {
 		return nil, nil, err
 	}
 	for _, placed := range placedParts {
-		next.vertices = append(next.vertices, placed.Verts...)
-		next.vertexBound = append(next.vertexBound, placed.VertexBound...)
-		next.volSymDiff = proofbound.AbsSumUpper(next.volSymDiff, placed.VolSymDiff)
-		next.areaSlack = proofbound.AbsSumUpper(next.areaSlack, placed.AreaSlack)
+		next.n.Vertices = append(next.n.Vertices, placed.Verts...)
+		next.n.VertexBound = append(next.n.VertexBound, placed.VertexBound...)
+		next.n.VolSymDiff = proofbound.AbsSumUpper(next.n.VolSymDiff, placed.VolSymDiff)
+		next.n.AreaSlack = proofbound.AbsSumUpper(next.n.AreaSlack, placed.AreaSlack)
 	}
-	if len(next.vertices) != len(original.vertices) || len(next.vertexBound) != len(next.vertices) ||
-		proofbound.IsNonFinite(next.volSymDiff) || proofbound.IsNonFinite(next.areaSlack) {
+	if len(next.n.Vertices) != len(original.n.Vertices) || len(next.n.VertexBound) != len(next.n.Vertices) ||
+		proofbound.IsNonFinite(next.n.VolSymDiff) || proofbound.IsNonFinite(next.n.AreaSlack) {
 		return nil, nil, fmt.Errorf("%w: combined spiral proxy has no complete bound", ErrUnsupported)
 	}
 	next.faceBound = nil
-	next.bound = 0
-	next.setVertexBounds(next.vertexBound)
-	next.coordBound = max(next.coordBound, next.bound)
-	if err := massmoment.AuditMesh(ctx, next.vertices, next.triangles, true); err != nil {
+	next.n.Bound = 0
+	next.setVertexBounds(next.n.VertexBound)
+	next.n.CoordBound = max(next.n.CoordBound, next.n.Bound)
+	if err := massmoment.AuditMesh(ctx, next.n.Vertices, next.n.Triangles, true); err != nil {
 		return nil, nil, err
 	}
 	return &next, meta, nil

@@ -167,10 +167,10 @@ func internalConvexityByEnds(t *testing.T, body *Body) map[[2]r3.Vec]bool {
 // held vertex floats.
 func internalMeshVolumeRat(m *Mesh) *big.Rat {
 	total := new(big.Rat)
-	for _, tri := range m.triangles {
+	for _, tri := range m.n.Triangles {
 		var r [3][3]*big.Rat
 		for k, vi := range tri {
-			v := m.vertices[vi]
+			v := m.n.Vertices[vi]
 			r[k] = [3]*big.Rat{new(big.Rat).SetFloat64(v.X), new(big.Rat).SetFloat64(v.Y), new(big.Rat).SetFloat64(v.Z)}
 		}
 		det := new(big.Rat)
@@ -345,8 +345,8 @@ func TestBrepTessellationProvesOccupiedVolume(t *testing.T) {
 			tol := 0.05
 			mesh, err := tessellateContext(t.Context(), tc.body, units.Millimeters(tol), VerifyAll)
 			require.NoError(t, err)
-			require.True(t, mesh.symDiffOK)
-			require.LessOrEqual(t, mesh.bound, tol)
+			require.True(t, mesh.n.SymDiffOK)
+			require.LessOrEqual(t, mesh.n.Bound, tol)
 			for _, f := range tc.body.Faces() {
 				_, ok := mesh.sourceBound(f)
 				require.True(t, ok, `every face is a source of the mesh`)
@@ -355,7 +355,7 @@ func TestBrepTessellationProvesOccupiedVolume(t *testing.T) {
 			// most the published occupied volume.
 			held := internalMeshVolumeRat(mesh)
 			require.Positive(t, held.Sign(), `every facet faces outward`)
-			bound := new(big.Rat).SetFloat64(mesh.volSymDiff)
+			bound := new(big.Rat).SetFloat64(mesh.n.VolSymDiff)
 			require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, tc.lo)).Cmp(bound), 0)
 			require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, tc.hi)).Cmp(bound), 0)
 		})
@@ -494,8 +494,8 @@ func TestBrepFaceViewChargesSectionDisplacement(t *testing.T) {
 	mesh, err := tessellateContext(t.Context(), brep, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	held := internalMeshVolumeRat(mesh)
-	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, big.NewRat(936, 1))).Cmp(new(big.Rat).SetFloat64(mesh.volSymDiff)), 0)
-	require.GreaterOrEqual(t, mesh.volSymDiff, 2*delta*(40*10+16*4))
+	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, big.NewRat(936, 1))).Cmp(new(big.Rat).SetFloat64(mesh.n.VolSymDiff)), 0)
+	require.GreaterOrEqual(t, mesh.n.VolSymDiff, 2*delta*(40*10+16*4))
 }
 
 func TestBrepMeasurementsChargeFaceDisplacements(t *testing.T) {
@@ -516,8 +516,8 @@ func TestBrepMeasurementsChargeFaceDisplacements(t *testing.T) {
 	requireCoversInterval(t, brep.volume, lo, hi)
 	mesh, err := tessellateContext(t.Context(), brep, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, mesh.volSymDiff, 400*level+band)
-	require.GreaterOrEqual(t, mesh.bound, level)
+	require.GreaterOrEqual(t, mesh.n.VolSymDiff, 400*level+band)
+	require.GreaterOrEqual(t, mesh.n.Bound, level)
 }
 
 func TestBrepTessellationRefusesWallsCloserThanTheirChords(t *testing.T) {
@@ -601,7 +601,7 @@ func TestBrepFaceViewOfStackedUnionCoversItsMeasurements(t *testing.T) {
 			require.NoError(t, err)
 			lo, hi = piEnclosed(big.NewRat(16000, 1), big.NewRat(375, 1))
 			held := internalMeshVolumeRat(mesh)
-			bound := new(big.Rat).SetFloat64(mesh.volSymDiff)
+			bound := new(big.Rat).SetFloat64(mesh.n.VolSymDiff)
 			require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, lo)).Cmp(bound), 0)
 			require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, hi)).Cmp(bound), 0)
 		})

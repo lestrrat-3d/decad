@@ -398,7 +398,7 @@ func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 	for i, face := range faces {
 		faceAt[face] = i
 	}
-	faceOf := make([]int, len(mesh.triangles))
+	faceOf := make([]int, len(mesh.n.Triangles))
 	for t, face := range mesh.source {
 		at, ok := faceAt[face]
 		if !ok {
@@ -406,7 +406,7 @@ func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 		}
 		faceOf[t] = at
 	}
-	solid, ok, err := planarHeldSolid(budget, mesh.vertices, mesh.triangles, faceOf)
+	solid, ok, err := planarHeldSolid(budget, mesh.n.Vertices, mesh.n.Triangles, faceOf)
 	if err != nil || !ok {
 		return planar.PlanarSolid{}, none, false, err
 	}
@@ -455,11 +455,11 @@ func planarHeldMeshSolid(ctx context.Context, budget *proofbound.WorkBudget, b *
 		}
 		return planar.PlanarSolid{}, none, false, chordFree, nil
 	}
-	if !mesh.boundaryOK || !finiteMeasurementValues(mesh.bound) || mesh.bound < 0 ||
-		len(mesh.source) != len(mesh.triangles) {
+	if !mesh.n.BoundaryOK || !finiteMeasurementValues(mesh.n.Bound) || mesh.n.Bound < 0 ||
+		len(mesh.source) != len(mesh.n.Triangles) {
 		return planar.PlanarSolid{}, none, false, chordFree, nil
 	}
-	faceOf := make([]int, len(mesh.triangles))
+	faceOf := make([]int, len(mesh.n.Triangles))
 	for t, face := range mesh.source {
 		at, ok := faceAt[face]
 		if !ok {
@@ -467,11 +467,11 @@ func planarHeldMeshSolid(ctx context.Context, budget *proofbound.WorkBudget, b *
 		}
 		faceOf[t] = at
 	}
-	solid, ok, err := planarHeldSolid(budget, mesh.vertices, mesh.triangles, faceOf)
+	solid, ok, err := planarHeldSolid(budget, mesh.n.Vertices, mesh.n.Triangles, faceOf)
 	if err != nil || !ok {
 		return planar.PlanarSolid{}, none, false, chordFree, err
 	}
-	return solid, proofarith.MustDyOf(mesh.bound), true, chordFree, nil
+	return solid, proofarith.MustDyOf(mesh.n.Bound), true, chordFree, nil
 }
 
 // planarBandPair is one admitted pair at least one of whose held meshes

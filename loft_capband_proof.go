@@ -37,7 +37,7 @@ func proveLoftCapBandVolume(ctx context.Context, mesh *Mesh, body *Body,
 			return fmt.Errorf("%w: loft cap-band reflex corner has no chorded apex fan", ErrUnsupported)
 		}
 	}
-	motionMax, err := loftCapBandFiniteMotion(lms[0], mesh.vertices, motion)
+	motionMax, err := loftCapBandFiniteMotion(lms[0], mesh.n.Vertices, motion)
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func proveLoftCapBandVolume(ctx context.Context, mesh *Mesh, body *Body,
 	return publishSymDiff(mesh, []float64{
 		capBlendChordVolume(cbp, lms),
 		proofbound.SweptVolumeAllow(motionMax,
-			proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, motionMax)),
+			proofbound.PerturbedAreaUpper(mesh.n.Vertices, mesh.n.Triangles, motionMax)),
 		slab,
 		cbp.loftSource.proof.VolSymDiff,
 	})
@@ -117,7 +117,7 @@ func loftCapBandSlabVolume(ctx context.Context, body *Body, mesh *Mesh, cbp capB
 	}
 	include([3]float64{body.bounds.Min.X, body.bounds.Min.Y, body.bounds.Min.Z}, boxError)
 	include([3]float64{body.bounds.Max.X, body.bounds.Max.Y, body.bounds.Max.Z}, boxError)
-	for i, p := range mesh.vertices {
+	for i, p := range mesh.n.Vertices {
 		if i%1024 == 0 {
 			if err := ctx.Err(); err != nil {
 				return 0, err
@@ -129,7 +129,7 @@ func loftCapBandSlabVolume(ctx context.Context, body *Body, mesh *Mesh, cbp capB
 	// The true band and its mesh can each move on both sides of a nominal
 	// level. Two copies of the inherited axial and tessellation allowances
 	// cover those opposite motions before the two cap slabs are summed.
-	levelError := proofbound.AbsSumUpper(cbp.axialDelta(), mesh.bound)
+	levelError := proofbound.AbsSumUpper(cbp.axialDelta(), mesh.n.Bound)
 	startHeight := proofbound.AbsSumUpper(cbp.start.axialUpper(), proofbound.ProductUpper(2, levelError))
 	endHeight := proofbound.AbsSumUpper(cbp.end.axialUpper(), proofbound.ProductUpper(2, levelError))
 	area := proofbound.ProductUpper(4, proofbound.ProductUpper(radius, radius))

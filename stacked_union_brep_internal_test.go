@@ -228,7 +228,7 @@ func TestStackedUnionBrepCrossingBoss(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.VolumeVerified())
 	held := internalMeshVolumeRat(mesh)
-	bound := new(big.Rat).SetFloat64(mesh.volSymDiff)
+	bound := new(big.Rat).SetFloat64(mesh.n.VolSymDiff)
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, lo)).Cmp(bound), 0)
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, hi)).Cmp(bound), 0)
 }

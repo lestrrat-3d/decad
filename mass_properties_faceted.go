@@ -26,7 +26,7 @@ func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, dens
 		return MassProperties{}, err
 	}
 	if !mesh.BoundaryVerified() || !mesh.VolumeVerified() ||
-		mesh.volSymDiff != pp.volSymDiff || mesh.bound != pp.meshBound {
+		mesh.n.VolSymDiff != pp.volSymDiff || mesh.n.Bound != pp.meshBound {
 		return MassProperties{}, fmt.Errorf("%w: faceted mass has no matching verified mesh certificate", ErrUnsupported)
 	}
 	if err := massmoment.AuditMesh(ctx, pp.verts, pp.tris, pp.contactAudited); err != nil {

@@ -99,7 +99,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		}
 		v := refView.Point(c[0], c[1], c[2])
 		r := refView.PointRound(c[0], c[1], c[2], v)
-		mesh.vertices = append(mesh.vertices, v)
+		mesh.n.Vertices = append(mesh.n.Vertices, v)
 		round = append(round, r)
 		store = append(store, proofbound.AbsSumUpper(allow, r))
 		canon = append(canon, c)
@@ -156,7 +156,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		}
 		faceTrim[face] = wm.sag
 		faceAxial[face] = proofbound.AbsSumUpper(math.Max(f.z0Delta, f.z1Delta), f.delta)
-		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, wm.wallSlack)
+		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, wm.wallSlack)
 	}
 	if err := brepWallClearance(ctx, bp, btopo, walls, canon); err != nil {
 		return nil, err
@@ -313,7 +313,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		faceTrim[face] = trim
 		faceAxial[face] = proofbound.AbsSumUpper(f.z0Delta, f.delta)
 		faceCapSlack[face] = capSlack
-		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, capSlack)
+		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, capSlack)
 	}
 	if len(bands) > 0 {
 		geomOf := func(bi int) map[string]capPatchGeom {
@@ -334,20 +334,20 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		}
 	}
 	if bp.xform.IsReflection() {
-		for i := range mesh.triangles {
-			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
+		for i := range mesh.n.Triangles {
+			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
 	}
-	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.triangles)); err != nil {
+	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
 		return nil, err
 	}
 	if len(bands) > 0 {
 		// A band's strips and fans can collapse where its rings meet; the cap
 		// blend tessellator refuses the same two faults (tessellate_capblend.go).
-		if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
+		if err := tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles); err != nil {
 			return nil, err
 		}
-		if err := tessellation.RequireCapBlendFacetAreas(mesh.vertices, mesh.triangles, "chamfered brep"); err != nil {
+		if err := tessellation.RequireCapBlendFacetAreas(mesh.n.Vertices, mesh.n.Triangles, "chamfered brep"); err != nil {
 			return nil, err
 		}
 	}
@@ -367,7 +367,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	// section band over its height, each planar face's level displacement over
 	// its area, and every computed coordinate's swept volume. Absolute sums
 	// throughout: an occupied-volume bound admits no cancellation.
-	areaUpper := tessellation.FaceAreaUpper(mesh.vertices, mesh.triangles, mesh.source, store)
+	areaUpper := tessellation.FaceAreaUpper(mesh.n.Vertices, mesh.n.Triangles, mesh.source, store)
 	var terms []float64
 	for fi, f := range bp.faces {
 		face, err := faceOf(fi)
@@ -376,7 +376,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		}
 		if f.planar() {
 			region := brepPlanarDisplacement(f, btopo.planar[fi])
-			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, region)
+			mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, region)
 			terms = append(terms, proofbound.ProductUpper(f.z0Delta,
 				proofbound.AbsSumUpper(areaUpper[face], faceCapSlack[face], region)))
 			continue
@@ -384,14 +384,14 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		w := btopo.walls[fi]
 		height := proofbound.UpRound(f.z1 - f.z0)
 		moved := proofbound.AbsSumUpper(height, f.z0Delta, f.z1Delta)
-		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
+		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack,
 			proofbound.ProductUpper(proofbound.SectionDisplacementLength(f.delta, 1), moved))
 		terms = append(terms,
 			proofbound.ProductUpper(height, walls[fi].segmentArea),
 			proofbound.ProductUpper(moved, proofbound.SectionDisplacementArea(f.delta, 1, proofbound.AbsSumUpper(w.Length, w.LengthBound))))
 	}
-	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
-		tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, store))
+	mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack,
+		tessellation.StoreAreaAllow(mesh.n.Vertices, mesh.n.Triangles, store))
 	if len(bands) > 0 {
 		// A band the cap-loop chamfer's occupied-volume proof does not admit
 		// leaves the mesh export-only (docs/tessellation-reach-design.md §7),
@@ -401,7 +401,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			return nil, err
 		}
 		if refusal != nil {
-			mesh.symDiffOK = false
+			mesh.n.SymDiffOK = false
 			return &mesh, nil //nolint:nilerr // refusal is the admission result; err was checked above
 		}
 		motion, err := brepBandMotion(ctx, bands, store, round)
@@ -425,7 +425,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		}
 	}
 	terms = append(terms, proofbound.SweptVolumeAllow(storeMax,
-		proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax)))
+		proofbound.PerturbedAreaUpper(mesh.n.Vertices, mesh.n.Triangles, storeMax)))
 	if err := publishSymDiff(&mesh, terms); err != nil {
 		return nil, err
 	}

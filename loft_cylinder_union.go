@@ -523,7 +523,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 			}
 		}
 		toothBound = max(toothBound, part.mesh.Bound().Base())
-		toothVolume = proofbound.AbsSumUpper(toothVolume, part.mesh.volSymDiff)
+		toothVolume = proofbound.AbsSumUpper(toothVolume, part.mesh.n.VolSymDiff)
 		area, err := part.body.Area()
 		if err != nil {
 			return nil, err
@@ -772,7 +772,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(
 		proofarith.FloatRat(pp.Z1), proofarith.FloatRat(pp.Z0)))
 	annulusVolume := proofbound.ProductUpper(annulusArea, height)
-	volumeGap := proofbound.AbsSumUpper(blankMesh.volSymDiff, toothVolume, annulusVolume)
+	volumeGap := proofbound.AbsSumUpper(blankMesh.n.VolSymDiff, toothVolume, annulusVolume)
 	areaSlack := proofbound.AbsSumUpper(area, blankArea.Value.Base(), blankArea.Bound.Base(), toothArea)
 	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
 		return nil, fmt.Errorf("%w: circular join has no finite volume proof", ErrUnsupported)

@@ -341,10 +341,10 @@ func TestBrepShellThroughCutP1(t *testing.T) {
 
 	mesh, err := tessellateContext(t.Context(), result, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
+	require.True(t, mesh.n.SymDiffOK)
 	lo, hi := piEnclosed(big.NewRat(5632, 1), big.NewRat(220, 1))
 	held := internalMeshVolumeRat(mesh)
-	bound := new(big.Rat).SetFloat64(mesh.volSymDiff)
+	bound := new(big.Rat).SetFloat64(mesh.n.VolSymDiff)
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, lo)).Cmp(bound), 0)
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, hi)).Cmp(bound), 0)
 }
@@ -802,10 +802,10 @@ func requireShellSound(t *testing.T, result *Body, a, b *big.Rat) {
 	require.Equal(t, Sound, br.Status)
 	mesh, err := tessellateContext(t.Context(), result, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
+	require.True(t, mesh.n.SymDiffOK)
 	lo, hi := piEnclosed(a, b)
 	held := internalMeshVolumeRat(mesh)
-	bound := new(big.Rat).SetFloat64(mesh.volSymDiff)
+	bound := new(big.Rat).SetFloat64(mesh.n.VolSymDiff)
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, lo)).Cmp(bound), 0)
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, hi)).Cmp(bound), 0)
 }

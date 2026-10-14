@@ -200,7 +200,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 					return nil, err
 				}
 				bump(face, proofbound.AbsSumUpper(lm.sideSag[i], axial))
-				mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, tessellation.WalkWallSlack(w.SegmentWalk, lm.count[i], height))
+				mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, tessellation.WalkWallSlack(w.SegmentWalk, lm.count[i], height))
 				for k := range lm.count[i] {
 					g0 := lm.sideStart[i] + k
 					g1 := lm.sideStart[i] + k + 1
@@ -243,40 +243,40 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	// A reflected placement flips handedness, turning every counter-clockwise
 	// winding clockwise; reversing them restores outward orientation.
 	if pl.Reflected() {
-		for i := range mesh.triangles {
-			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
+		for i := range mesh.n.Triangles {
+			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
 	}
 
-	if err := tessellation.RequireClosedMesh(mesh.triangles); err != nil {
+	if err := tessellation.RequireClosedMesh(mesh.n.Triangles); err != nil {
 		return nil, fmt.Errorf(`%w: this %s's cells do not close into a watertight boundary`, ErrUnsupported, cbp.noun())
 	}
-	if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles); err != nil {
 		return nil, err
 	}
-	if err := tessellation.RequireCapBlendFacetAreas(mesh.vertices, mesh.triangles, cbp.noun()); err != nil {
+	if err := tessellation.RequireCapBlendFacetAreas(mesh.n.Vertices, mesh.n.Triangles, cbp.noun()); err != nil {
 		return nil, err
 	}
-	if tessellation.OrientationSign(mesh.vertices, mesh.triangles, pl.Point(0, 0, cbp.z0)) <= 0 {
+	if tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, pl.Point(0, 0, cbp.z0)) <= 0 {
 		return nil, fmt.Errorf(`%w: this %s's assembled cells do not enclose a positive volume`, ErrUnsupported, cbp.noun())
 	}
 
-	faceBounds, err := tessellation.ComposeCapBlendBounds(mesh.source, mesh.triangles, faceExtra, store, cbp.noun())
+	faceBounds, err := tessellation.ComposeCapBlendBounds(mesh.source, mesh.n.Triangles, faceExtra, store, cbp.noun())
 	if err != nil {
 		return nil, err
 	}
 	for f, bound := range faceBounds {
 		mesh.setFaceBound(f, bound)
 	}
-	mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack,
-		tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, store))
+	mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack,
+		tessellation.StoreAreaAllow(mesh.n.Vertices, mesh.n.Triangles, store))
 	if cbp.loftSource != nil {
 		for face, bound := range mesh.faceBound {
 			mesh.setFaceBound(face, proofbound.AbsSumUpper(bound, cbp.loftSource.proof.FacetDeparture))
 		}
-		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, cbp.loftSource.proof.AreaSlack)
+		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, cbp.loftSource.proof.AreaSlack)
 	}
-	if proofbound.IsNonFinite(mesh.areaSlack) {
+	if proofbound.IsNonFinite(mesh.n.AreaSlack) {
 		return nil, fmt.Errorf(`%w: this %s mesh states no finite area slack`, ErrUnsupported, cbp.noun())
 	}
 	if !proveVolume {
@@ -299,7 +299,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 		// to reproduce the exact offset family slice by slice, so the mesh serves
 		// export alone and requireVolumeProvingPayload/operandSymDiff refuse it
 		// with the same reason.
-		mesh.symDiffOK = false
+		mesh.n.SymDiffOK = false
 		return &mesh, nil //nolint:nilerr // refusal is the admission result; err was checked above
 	}
 	// Occupied volume (docs/tessellation-reach-design.md §7): the ideal
@@ -312,7 +312,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	}
 	terms := []float64{
 		capBlendChordVolume(cbp, lms),
-		proofbound.SweptVolumeAllow(motionMax, proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, motionMax)),
+		proofbound.SweptVolumeAllow(motionMax, proofbound.PerturbedAreaUpper(mesh.n.Vertices, mesh.n.Triangles, motionMax)),
 	}
 	if err := publishSymDiff(&mesh, terms); err != nil {
 		return nil, err
@@ -335,10 +335,10 @@ func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl pri
 	var store, motion []float64
 	addVertex := func(p planePoint, z, plane float64) (int, float64) {
 		held := pl.Point(p.U, p.V, z)
-		mesh.vertices = append(mesh.vertices, held)
+		mesh.n.Vertices = append(mesh.n.Vertices, held)
 		round := pl.PointRound(p.U, p.V, z, held)
 		store = append(store, proofbound.AbsSumUpper(plane, round))
-		return len(mesh.vertices) - 1, round
+		return len(mesh.n.Vertices) - 1, round
 	}
 	startLevel := cbp.capBandLevel(cbp.z0, 1)
 	endLevel := cbp.capBandLevel(cbp.z1, -1)
@@ -624,11 +624,11 @@ type capBlendBandWriter struct {
 }
 
 func (w capBlendBandWriter) AddTriangle(tri [3]int, face *Face) { w.m.addTriangle(tri, face) }
-func (w capBlendBandWriter) Vertices() []r3.Vec                 { return w.m.vertices }
-func (w capBlendBandWriter) Triangles() [][3]int                { return w.m.triangles }
+func (w capBlendBandWriter) Vertices() []r3.Vec                 { return w.m.n.Vertices }
+func (w capBlendBandWriter) Triangles() [][3]int                { return w.m.n.Triangles }
 func (w capBlendBandWriter) Bump(face *Face, delta float64)     { w.bump(face, delta) }
 func (w capBlendBandWriter) AddAreaSlack(patch, facets float64) {
-	w.m.areaSlack = proofbound.AbsSumUpper(w.m.areaSlack, patch, facets)
+	w.m.n.AreaSlack = proofbound.AbsSumUpper(w.m.n.AreaSlack, patch, facets)
 }
 
 // emitCapBlendCap triangulates one cap face over the ring bounding it per loop:
@@ -691,7 +691,7 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 		if !start {
 			chamfered = lm.onEnd
 		}
-		m.areaSlack = proofbound.AbsSumUpper(m.areaSlack, capBlendRingSegmentArea(lm, chamfered, cbp.loopOffset(lm.li)))
+		m.n.AreaSlack = proofbound.AbsSumUpper(m.n.AreaSlack, capBlendRingSegmentArea(lm, chamfered, cbp.loopOffset(lm.li)))
 	}
 	tris, err := triangulation.Triangulate(ctx, point2ToRecordSlice(pts), loopIdx)
 	if err != nil {

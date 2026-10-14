@@ -22,8 +22,8 @@ func exactMeshVolume(m *Mesh) *big.Rat {
 	rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
 	mul := func(x, y, z float64) *big.Rat { return new(big.Rat).Mul(new(big.Rat).Mul(rat(x), rat(y)), rat(z)) }
 	sum := new(big.Rat)
-	for _, tri := range m.triangles {
-		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
+	for _, tri := range m.n.Triangles {
+		a, b, c := m.n.Vertices[tri[0]], m.n.Vertices[tri[1]], m.n.Vertices[tri[2]]
 		// a · (b × c)
 		for _, term := range []*big.Rat{
 			mul(a.X, b.Y, c.Z), mul(a.Y, b.Z, c.X), mul(a.Z, b.X, c.Y),
@@ -53,7 +53,7 @@ func requireMeshCovers(t *testing.T, v *big.Rat, within float64, lo, hi *big.Rat
 // body, the band patches among them.
 func requireMeshOfBody(t *testing.T, body *Body, m *Mesh) {
 	t.Helper()
-	require.NoError(t, tessellation.RequireClosedMesh(m.triangles))
+	require.NoError(t, tessellation.RequireClosedMesh(m.n.Triangles))
 	seen := map[*Face]struct{}{}
 	for _, f := range m.source {
 		seen[f] = struct{}{}
@@ -148,7 +148,7 @@ func TestTessellateBrepBands(t *testing.T) {
 			requireMeshOfBody(t, out, m)
 			v := exactMeshVolume(m)
 			lo, hi := piEnclosed(fx.a, fx.b)
-			require.Equal(t, fx.proved, m.symDiffOK)
+			require.Equal(t, fx.proved, m.n.SymDiffOK)
 			if !fx.proved {
 				// A chord polygon lies within its sagitta of the curved surface it
 				// chords, so the mesh differs from the body by at most the chord
@@ -166,9 +166,9 @@ func TestTessellateBrepBands(t *testing.T) {
 				requireMeshCovers(t, v, chord*curved, lo, hi)
 				return
 			}
-			requireMeshCovers(t, v, m.volSymDiff, lo, hi)
+			requireMeshCovers(t, v, m.n.VolSymDiff, lo, hi)
 			if fx.b.Sign() == 0 {
-				require.Zero(t, m.volSymDiff)
+				require.Zero(t, m.n.VolSymDiff)
 				require.Zero(t, v.Cmp(fx.a), "planes alone: %s", v.FloatString(9))
 			}
 		})
@@ -190,7 +190,7 @@ func TestTessellateBrepBandsShareOneCount(t *testing.T) {
 	requireMeshOfBody(t, out, m)
 	onRing := func(z, radius float64) int {
 		n := 0
-		for _, v := range m.vertices {
+		for _, v := range m.n.Vertices {
 			if v.Z == z && abs(v.Sub(r3.NewVec(20, 20, z)).Len()-radius) < 1e-9 {
 				n++
 			}
@@ -205,10 +205,10 @@ func TestTessellateBrepBandsShareOneCount(t *testing.T) {
 	for i, f := range m.source {
 		if f == cone {
 			cells++
-			a := m.triangles[i]
+			a := m.n.Triangles[i]
 			zs := map[float64]int{}
 			for _, vi := range a {
-				zs[m.vertices[vi].Z]++
+				zs[m.n.Vertices[vi].Z]++
 			}
 			require.Len(t, zs, 2, "a cell spans the two circles")
 		}
@@ -249,7 +249,7 @@ func TestTessellateBrepBandsPlaced(t *testing.T) {
 			m, err := tessellateContext(t.Context(), body, units.Millimeters(chord), VerifyAll)
 			require.NoError(t, err)
 			requireMeshOfBody(t, body, m)
-			require.True(t, m.symDiffOK)
+			require.True(t, m.n.SymDiffOK)
 			require.Zero(t, exactMeshVolume(m).Cmp(want), "planes alone are exact: %s", exactMeshVolume(m).FloatString(9))
 		})
 	}
@@ -262,8 +262,8 @@ func TestTessellateBrepBandsPlaced(t *testing.T) {
 	require.NoError(t, err)
 	requireMeshOfBody(t, copyOf, m)
 	lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(1111, 3))
-	require.True(t, m.symDiffOK)
-	requireMeshCovers(t, exactMeshVolume(m), m.volSymDiff, lo, hi)
+	require.True(t, m.n.SymDiffOK)
+	requireMeshCovers(t, exactMeshVolume(m), m.n.VolSymDiff, lo, hi)
 }
 
 // TestBrepBandBooleanAdmission pins DG4: a route L body whose bands the
