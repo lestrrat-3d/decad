@@ -142,7 +142,7 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	}
 	addWalls := func(r prismshell.BossRect, z0, z1 float64) {
 		for _, seg := range r.Profile().Outer.Segments {
-			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: reverseSegment(seg), z0: z0, z1: z1})
+			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: brepgeom.ReverseSegment(seg), z0: z0, z1: z1})
 		}
 	}
 	addPlane(lower.Profile(), a.Z0+t, true)

@@ -969,7 +969,6 @@
 6	0.00	TestRefineRootCachedVariationMatchesRecount
 6	1.25	TestRepeatedPlacementAccumulatesNoError
 6	0.00	TestRequireLoopClearanceOmitsInvalidRetry
-6	0.00	TestReverseSegmentWalksACircleTheOtherWay
 6	0.02	TestRevolveArcFanSlackBoundsAPoleCell
 6	0.00	TestRevolveAxisBandVolumeContainsEnclosedVolume
 6	0.00	TestRevolveFanAreaSlackIsHalfTheDensityGap

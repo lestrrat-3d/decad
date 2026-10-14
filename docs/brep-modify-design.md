@@ -277,7 +277,7 @@ faces `G0`, `G1`:
 
 1. **Corner blend in `G0`.** `G0`'s region is walked into `cornerLoop`s as
    `offset2d.ProfileCornerLoopsBudget` does for a section; the corner at `V0` is the walk
-   junction whose point maps to `V0`'s reference coordinates (`brepCornerAt`,
+   junction whose point maps to `V0`'s reference coordinates (`brepgeom.BrepCornerAt`,
    an exact comparison, replacing `matchCornerBudget`'s lifted-point match).
    `computeFillet(loop, corner, r)` or `computeChamfer(loop, corner, dA, dB)` runs
    unchanged: S4 for a smooth or cusped junction, S5 for a fillet whose offsets
@@ -599,7 +599,7 @@ with PR 0.
 |---|---|---|---|---|
 | **0** | the dispatch: `modifyBrepReceiver` in `brep_modify.go` replacing `requireNotBrepReceiver` in `fillet.go`, `chamfer.go`, `shell.go`; the stacked receiver's `brepOfStacked` entry (SB2); SB1; every other brep call still refuses with reach SX16's text | `brep_modify.go`, `brep_payload.go`, `fillet.go`, `chamfer.go`, `shell.go` | SB1, SB2 fixtures; a stacked receiver reaches SB1 rather than SX10; `TestBrepModifyOpsAreStaged` narrowed | — |
 | **1** | route P: `recognisePrism` (P1–P5), `brepgeom.AxisFrame`, the re-expression into `F`, cap-face arguments on `classifyChamferSelection` and `classifyRemovedCaps`, SB3 | `brep_modify_prism.go`, `capblend.go`, `shell.go`, `internal/brepgeom/` | §9's five route P fixtures | 0 |
-| **2a** | route E without restatement: Table EB, `brepCornerAt`, the corner blend in both end faces and SB9, (sw)/(pl) trims, claims and the per-face audit, the blend face and `brepFace.blend`, `brepgeom.MapSegment`, assembly and closure | `brep_modify_edge.go`, `brep_payload.go`, `fillet_audit.go`, `internal/brepgeom/` | S1 `z`-edge fillet, B1 `z`-edge chamfer, Pocket vertical fillets, Boss chamfer, the chaining and SB4/SB5 refusals, the consumer and placement fixtures | 0 |
+| **2a** | route E without restatement: Table EB, `brepgeom.BrepCornerAt`, the corner blend in both end faces and SB9, (sw)/(pl) trims, claims and the per-face audit, the blend face and `brepFace.blend`, `brepgeom.MapSegment`, assembly and closure | `brep_modify_edge.go`, `brep_payload.go`, `fillet_audit.go`, `internal/brepgeom/` | S1 `z`-edge fillet, B1 `z`-edge chamfer, Pocket vertical fillets, Boss chamfer, the chaining and SB4/SB5 refusals, the consumer and placement fixtures | 0 |
 | **2b** | restatement: `brepgeom.Restate`, `brepgeom.PlanarFrame`, the whole-call restatement set, EB3/EB4 over restated faces | `brep_modify_edge.go`, `internal/brepgeom/` | Pocket floor-edge fillets, S1 `x`-edge chamfer, SB8 on a split wall | 2a |
 | **2c** | route E's asymmetric reference-face mapping; bypass route P for this option and refuse route L | `brep_modify.go`, `brep_modify_edge.go`, `brep_modify_loop.go`, `chamfer.go` | public boolean body: both reference faces on a vertical edge, restated end faces on a horizontal edge, and route L refusal | 2b |
 | **2d** | route L's asymmetric cap/side assignment and two-distance band | `brep_modify_loop.go`, `brep_loop_band.go` | public rounded, cross-drilled plate: both reference choices, analytic volume, verified mesh | 2c |

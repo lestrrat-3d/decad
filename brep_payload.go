@@ -119,7 +119,7 @@ func (f brepFace) reversed() brepFace {
 		f.outward = !f.outward
 		return f
 	}
-	f.wall = reverseSegment(f.wall)
+	f.wall = brepgeom.ReverseSegment(f.wall)
 	f.side0, f.side1 = f.side1, f.side0
 	return f
 }

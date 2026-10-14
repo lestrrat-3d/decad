@@ -37,7 +37,7 @@ const (
 
 // brepEdgeEnd is one end face's corner at an admitted edge's vertex: the
 // loop and corner of the face's corner walk whose junction is the vertex
-// (brepCornerAt), and which of the edge's two adjacent faces the arriving
+// (brepgeom.BrepCornerAt), and which of the edge's two adjacent faces the arriving
 // walk there pairs with.
 type brepEdgeEnd struct {
 	face     int
@@ -594,23 +594,6 @@ func (r *brepEdgeRoute) classifySides(eb *brepEdgeBlend) error {
 	return nil
 }
 
-// naturalRange reports whether a recorded segment is a line, arc or circle
-// over its whole natural range, 0→1 or 1→0.
-func naturalRange(seg curveSegment) bool {
-	var t0, t1 float64
-	switch s := seg.(type) {
-	case lineSeg:
-		t0, t1 = s.TStart, s.TEnd
-	case arcSeg:
-		t0, t1 = s.TStart, s.TEnd
-	case circleSeg:
-		t0, t1 = s.TStart, s.TEnd
-	default:
-		return false
-	}
-	return (t0 == 0 && t1 == 1) || (t0 == 1 && t1 == 0)
-}
-
 // requireNaturalFaces is EB5 (SB8): every segment of the end faces and the
 // adjacent faces runs over its natural range, and no loop of a planar one
 // holds two consecutive segments on one carrier — each corner walk is one
@@ -625,7 +608,7 @@ func (r *brepEdgeRoute) requireNaturalFaces(eb *brepEdgeBlend) error {
 	for _, fi := range faces {
 		f := r.bp.faces[fi]
 		if !f.planar() {
-			if !naturalRange(f.wall) {
+			if !brepgeom.NaturalRange(f.wall) {
 				return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s's wall runs over a narrowed range`, f.role))
 			}
 			continue
@@ -637,7 +620,7 @@ func (r *brepEdgeRoute) requireNaturalFaces(eb *brepEdgeBlend) error {
 		records := append([]loopRecord{f.region.Outer}, f.region.Holes...)
 		for li, loop := range records {
 			for _, seg := range loop.Segments {
-				if !naturalRange(seg) {
+				if !brepgeom.NaturalRange(seg) {
 					return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s holds a segment over a narrowed range`, f.role))
 				}
 			}
@@ -658,26 +641,8 @@ func (r *brepEdgeRoute) requireNaturalFaces(eb *brepEdgeBlend) error {
 	return nil
 }
 
-// brepCornerAt finds the corner of a planar face's corner walk whose
-// junction lies at reference coordinates v: the walk start that maps there
-// exactly (brep-modify §5.3 step 1). It reports false when none or several
-// do.
-func brepCornerAt(loops []cornerLoop, e brepEmbed, level float64, v [3]float64) (int, int, bool) {
-	li, ci, n := 0, 0, 0
-	for l, loop := range loops {
-		for c, w := range loop.Walks {
-			if w.Closed || e.Canon(w.StartU, w.StartV, level) != v {
-				continue
-			}
-			li, ci = l, c
-			n++
-		}
-	}
-	return li, ci, n == 1
-}
-
 // locateCorners is EB6 (SB8): in each end face the corner at the edge's
-// vertex is found (brepCornerAt), and its two walks are the traces of the
+// vertex is found (brepgeom.BrepCornerAt), and its two walks are the traces of the
 // two adjacent faces — the arriving and the leaving walk each pair, in the
 // receiver's topology, with one adjacent face's rim (sw) or with its
 // neighbouring segment of the edge (pl), one walk per face.
@@ -692,7 +657,7 @@ func (r *brepEdgeRoute) locateCorners(eb *brepEdgeBlend) error {
 		if err != nil {
 			return err
 		}
-		li, ci, ok := brepCornerAt(loops, r.btopo.embeds[end.face], g.z0, v)
+		li, ci, ok := brepgeom.BrepCornerAt(loops, r.btopo.embeds[end.face], g.z0, v)
 		if !ok {
 			return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s has no single corner at the edge's vertex (%s)`, g.role, r.render(v)))
 		}
@@ -1041,7 +1006,7 @@ func (r *brepEdgeRoute) blendFace(eb *brepEdgeBlend) brepFace {
 	z1, z1Delta := embed.Local(eb.v[1])[2], r.bp.faces[eb.end[1].face].z0Delta
 	wall := eb.blend[0].Connector
 	if inner := (z1 > z0) != g0.outward; !inner {
-		wall = reverseSegment(wall)
+		wall = brepgeom.ReverseSegment(wall)
 	}
 	if z1 < z0 {
 		z0, z1 = z1, z0
@@ -1049,24 +1014,4 @@ func (r *brepEdgeRoute) blendFace(eb *brepEdgeBlend) brepFace {
 	}
 	return brepFace{frame: g0.frame, wall: wall, z0: z0, z1: z1,
 		z0Delta: z0Delta, z1Delta: z1Delta, blend: r.call.blend.kind}
-}
-
-// reverseSegment walks a natural-range line, arc or circle the other way. A
-// line or arc is the same record over the reversed range. A circle flips its
-// CCW sense and swaps its range, so its centre and radius are unchanged.
-func reverseSegment(seg curveSegment) curveSegment {
-	switch s := seg.(type) {
-	case circleSeg:
-		s.CCW = !s.CCW
-		s.TStart, s.TEnd = s.TEnd, s.TStart
-		return s
-	case lineSeg:
-		s.TStart, s.TEnd = s.TEnd, s.TStart
-		return s
-	case arcSeg:
-		s.TStart, s.TEnd = s.TEnd, s.TStart
-		return s
-	default:
-		return seg
-	}
 }

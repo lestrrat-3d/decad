@@ -7,6 +7,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -650,7 +651,7 @@ func (r *brepLoopRead) admitLoops() ([]brepLoopSel, error) {
 func (r *brepLoopRead) naturalFaceLoops(fi int) (string, error) {
 	f := r.bp.faces[fi]
 	if !f.planar() {
-		if !naturalRange(f.wall) {
+		if !brepgeom.NaturalRange(f.wall) {
 			return fmt.Sprintf(`brep face %s's wall runs over a narrowed range`, f.role), nil
 		}
 		return "", nil
@@ -661,7 +662,7 @@ func (r *brepLoopRead) naturalFaceLoops(fi int) (string, error) {
 	}
 	for li, loop := range append([]loopRecord{f.region.Outer}, f.region.Holes...) {
 		for _, seg := range loop.Segments {
-			if !naturalRange(seg) {
+			if !brepgeom.NaturalRange(seg) {
 				return fmt.Sprintf(`brep face %s holds a segment over a narrowed range`, f.role), nil
 			}
 		}

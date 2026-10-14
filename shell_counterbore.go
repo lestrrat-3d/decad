@@ -147,7 +147,7 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 		}
 		for _, seg := range p.Outer.Segments {
 			if reverse {
-				seg = reverseSegment(seg)
+				seg = brepgeom.ReverseSegment(seg)
 			}
 			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: seg, z0: z0, z1: z1})
 		}

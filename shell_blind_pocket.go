@@ -123,7 +123,7 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 	addWalls := func(p profileRecord, z0, z1 float64, reversed bool) {
 		for _, seg := range p.Outer.Segments {
 			if reversed {
-				seg = reverseSegment(seg)
+				seg = brepgeom.ReverseSegment(seg)
 			}
 			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: seg, z0: z0, z1: z1})
 		}
