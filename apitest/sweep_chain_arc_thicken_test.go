@@ -21,7 +21,7 @@ func TestSweepChainArcThickenSolidAndReplay(t *testing.T) {
 	sheet, err := decad.Sweep(t.Context(), doc, s, chain, path)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
-	solid, err := sheet.Thicken(t.Context(), units.Millimeters(1))
+	solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(1))
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, solid.Kind())
 	require.True(t, solid.IsSolid())
@@ -71,7 +71,7 @@ func TestSweepChainArcThickenSolidAndReplay(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, placedMesh.BoundaryVerified())
 	require.True(t, placedMesh.VolumeVerified())
-	_, err = sheet.Thicken(t.Context(), units.Millimeters(1))
+	_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
@@ -95,7 +95,7 @@ func TestSweepChainArcThickenSides(t *testing.T) {
 			require.NoError(t, err)
 			sheet, err := decad.Sweep(t.Context(), decad.New(), s, chain, path)
 			require.NoError(t, err)
-			solid, err := sheet.Thicken(t.Context(), units.Millimeters(1),
+			solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(1),
 				decad.WithThickenSide(tc.side))
 			require.NoError(t, err)
 			volume, err := solid.Volume()
@@ -118,7 +118,7 @@ func TestSweepChainArcThickenPositiveAxisSideKeepsCapOrder(t *testing.T) {
 	require.NoError(t, err)
 	sheet, err := decad.Sweep(t.Context(), decad.New(), s, chain, path)
 	require.NoError(t, err)
-	solid, err := sheet.Thicken(t.Context(), units.Millimeters(1))
+	solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(1))
 	require.NoError(t, err)
 	volume, err := solid.Volume()
 	require.NoError(t, err)
@@ -146,7 +146,7 @@ func TestSweepChainArcThickenNoncardinalRefusesWithoutRetiringSheet(t *testing.T
 	doc := decad.New()
 	sheet, err := decad.Sweep(t.Context(), doc, s, chain, path)
 	require.NoError(t, err)
-	_, err = sheet.Thicken(t.Context(), units.Millimeters(1))
+	_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Len(t, doc.Bodies(), 1)
 	require.Same(t, sheet, doc.Bodies()[0])

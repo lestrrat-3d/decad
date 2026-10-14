@@ -35,7 +35,7 @@ func Example_body_thicken_revolve() {
 		fmt.Println(err)
 		return
 	}
-	solid, err := sheet.Thicken(context.Background(), units.Millimeters(2),
+	solid, err := decad.Thicken(context.Background(), sheet, units.Millimeters(2),
 		decad.WithThickenSide(decad.ThickenNegative))
 	if err != nil {
 		fmt.Println(err)

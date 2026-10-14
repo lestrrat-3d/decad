@@ -40,7 +40,7 @@ func Example_body_thicken_ribbon() {
 	}
 	// The inward side mitres the corner, so its 68 mm^2 section is the 70 mm
 	// walk times 2 mm less the 2x2 mm square the mitre removes.
-	solid, err := ribbon.Thicken(context.Background(), units.Millimeters(2),
+	solid, err := decad.Thicken(context.Background(), ribbon, units.Millimeters(2),
 		decad.WithThickenSide(decad.ThickenNegative))
 	if err != nil {
 		fmt.Println(err)

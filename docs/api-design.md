@@ -749,7 +749,7 @@ components are not proven separate, rather than publish an unrecorded cavity.
 
 An operation is a package-level function. A query is a method. This section
 owns the rule; a companion design that writes an operation as a method
-(`func (b *Body) Offset(...)`, `func (d *Document) Loft(...)`) means the
+(`func (b *Body) Trim(...)`, `func (d *Document) Loft(...)`) means the
 free function the table below names for it.
 
 **An operation is any call that builds a body, retires a body, or registers a
@@ -787,7 +787,6 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 
 | Shipped method form | Free function |
 |---|---|
-| `Body.Offset`, `Body.Thicken` | `Offset(ctx, b, ...)`, `Thicken(ctx, b, ...)` |
 | `Body.Trim`, `Body.Extend` | `Trim(ctx, b, tool, side)`, `Extend(ctx, b, edges, tool)` |
 | `Document.Split` | `Split(ctx, target, tool)` |
 | `Body.Patch` | `PatchEdges(ctx, b, sel)` |
@@ -1303,7 +1302,7 @@ func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
 
 func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
 func Unstitch(ctx context.Context, b *Body) ([]*Body, error)
-func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error)
+func Thicken(ctx context.Context, b *Body, thickness units.Value, opts ...ThickenOption) (*Body, error)
 func WithThickenSide(side ThickenSide) ThickenOption
 
 // The chain-fed forms. Each sweeps an OPEN sketch curve and always returns a

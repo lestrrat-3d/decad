@@ -17,11 +17,11 @@ The rules for rows live in `docs/layout.md`.
 | `surface.go` | `WithSurfaceResult`, sheet refusal, shell/lump and free-edge adapters over `internal/surfacegroup/`. See surface §2-§4, §7, §11. |
 | `feature_options.go` | Public feature option tiers and adapters to `internal/featureoption/`. See surface §4, sweep §2 and loft §2. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
-| `thicken.go` | `Body.Thicken`. See surface §16. |
+| `thicken.go` | `Thicken`. See surface §16. |
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
 | `thicken_axis.go` | Assembles thicken sections. See surface §16. |
 | `thicken_chain_sweep.go` | Thickens admitted one-arc and cardinal composite chain sheets. See surface §16.8. |
-| `offset.go` | `Body.Offset`: a second sheet at a normal distance. See surface §17. |
+| `offset.go` | `Offset`: a second sheet at a normal distance. See surface §17. |
 | `patch_body.go` | `Body.Patch` topology adapter and face build. See surface §5.2. |
 | `denotation.go` | Mints document tokens. |
 | `stitch_weld.go` | Adapts Stitch topology to Table J. See surface §6.2. |

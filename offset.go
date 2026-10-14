@@ -15,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Body.Offset of docs/surface-design.md §17: a SECOND sheet whose
+// This file is Offset of docs/surface-design.md §17: a SECOND sheet whose
 // every face lies at a stated normal distance from the source face it came
 // from. It admits §16's two receiver families and reads the same recorded
 // generator Thicken reads, and it differs from Thicken in exactly two ways.
@@ -64,7 +64,7 @@ const (
 func WithOffsetSide(side OffsetSide) OffsetOption { return offsetSideOption{side: side} }
 
 // Offset returns a second sheet whose every face lies at the stated normal
-// distance from the source face it came from, LEAVING THE RECEIVER LIVE.
+// distance from the source face of b it came from, LEAVING b LIVE.
 //
 // distance is a strictly positive [units.Value] of kind Length; its sign never
 // chooses a side, and [WithOffsetSide] does, the last occurrence winning. A
@@ -74,12 +74,12 @@ func WithOffsetSide(side OffsetSide) OffsetOption { return offsetSideOption{side
 // corner and mitering each concave one. Every other sheet family, and every
 // solid, is ErrUnsupported (docs/surface-design.md Table R row R37).
 //
-// A nil context or an option this package did not mint is ErrDegenerate, as is
-// a zero distance; a wrong-kind, non-finite or negative distance keeps
-// sectionrecord.MagnitudeIn's own sentinel (R40). A retired receiver is ErrRetiredBody (R41).
-// A refusal registers nothing and retires nothing, so the receiver is live
+// A nil context, a nil b or an option this package did not mint is
+// ErrDegenerate, as is a zero distance; a wrong-kind, non-finite or negative distance keeps
+// sectionrecord.MagnitudeIn's own sentinel (R40). A retired b is ErrRetiredBody (R41).
+// A refusal registers nothing and retires nothing, so b is live
 // after a refusal exactly as it is after a success.
-func (b *Body) Offset(ctx context.Context, distance units.Value, opts ...OffsetOption) (*Body, error) {
+func Offset(ctx context.Context, b *Body, distance units.Value, opts ...OffsetOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an offset`, ErrDegenerate)
 	}
