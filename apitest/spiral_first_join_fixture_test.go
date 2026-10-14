@@ -29,6 +29,13 @@ const (
 	spiralCrownPerRad   = 0.5
 )
 
+// spiralCapTilt turns the tooth's heel cap plane away from the heel cone by
+// 1e-5 rad. An exact back-cone plane is tangent to that cone, and the heel
+// cone-trim and seam certificates then see a quadratic coefficient that is
+// zero up to float rounding: its sign, and so the verdict, differs between
+// FMA and non-FMA builds. The tilt makes it 2e-5, far above that noise.
+const spiralCapTilt = -1e-5
+
 type spiralAxial struct{ station, radius float64 }
 
 type spiralDims struct {
@@ -140,7 +147,8 @@ func spiralPointTooth(t *testing.T, doc *decad.Document, d spiralDims) *decad.Bo
 	t.Helper()
 	world := sketch.NewWorld()
 	center := r3.NewVec(d.coneDist/math.Cos(d.coneAngle), 0, 0)
-	frame, err := r3.NewFrame(center, r3.NewVec(math.Sin(d.coneAngle), -math.Cos(d.coneAngle), 0),
+	tilted := d.coneAngle + spiralCapTilt
+	frame, err := r3.NewFrame(center, r3.NewVec(math.Sin(tilted), -math.Cos(tilted), 0),
 		r3.NewVec(0, 0, 1))
 	require.NoError(t, err)
 	plane, err := world.CreatePlaneFromFrame(frame)
