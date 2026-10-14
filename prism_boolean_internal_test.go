@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand"
@@ -1829,35 +1830,43 @@ func randomCrossingDiscPairFixtures(n int) []crossingDiscPairFixture {
 // refusing the pair outright the way a coincident-cap pair would (§1's own
 // "coplanar contact refuses outright" consequence, still standing for any
 // pair outside this design's admitted class).
+//
+// The fixtures are drawn once, from a fixed seed, before any case starts. The
+// 16 cases (eight fixtures, Intersect and Cut) run as parallel subtests because
+// they share nothing but the read-only fixture value: each builds its own
+// Documents and bodies, so every failing case reports on its own.
 func TestPrismCrossingDiscPairsMatchMeshAnswer(t *testing.T) {
 	t.Parallel()
 	for i, fx := range randomCrossingDiscPairFixtures(8) {
 		for _, op := range []meshbool.OperationKind{meshbool.OpIntersect, meshbool.OpCut} {
-			doc := New()
-			target := crossingDiscBody(t, doc, 0, fx.r1, Distance{D: units.Millimeters(fx.targetH), Dir: Along})
-			tool := crossingDiscBody(t, doc, fx.offset, fx.r2, Symmetric{D: units.Millimeters(fx.toolHalf)})
-			eval, err := evaluateBoolean(t.Context(), op, target, tool)
-			require.NoErrorf(t, err, "trial %d op %v: mesh path", i, op)
-			meshVol := eval.volume
+			t.Run(fmt.Sprintf("trial %d %v", i, op), func(t *testing.T) {
+				t.Parallel()
+				doc := New()
+				target := crossingDiscBody(t, doc, 0, fx.r1, Distance{D: units.Millimeters(fx.targetH), Dir: Along})
+				tool := crossingDiscBody(t, doc, fx.offset, fx.r2, Symmetric{D: units.Millimeters(fx.toolHalf)})
+				eval, err := evaluateBoolean(t.Context(), op, target, tool)
+				require.NoErrorf(t, err, "trial %d op %v: mesh path", i, op)
+				meshVol := eval.volume
 
-			doc2 := New()
-			target2 := crossingDiscBody(t, doc2, 0, fx.r1, Distance{D: units.Millimeters(fx.targetH), Dir: Along})
-			tool2 := crossingDiscBody(t, doc2, fx.offset, fx.r2, Symmetric{D: units.Millimeters(fx.toolHalf)})
-			pp, ok, err := tryPrismBoolean(t.Context(), op, target2, tool2)
-			require.NoErrorf(t, err, "trial %d op %v: analytic path", i, op)
-			require.Truef(t, ok, "trial %d op %v: the crossing classifier must admit this pair", i, op)
-			analyticBody, err := evalPrismContext(t.Context(), doc2, doc2.nextProducerID(), pp, freeform.NewFreeformWork())
-			require.NoError(t, err)
-			analyticVol, err := analyticBody.Volume()
-			require.NoError(t, err)
+				doc2 := New()
+				target2 := crossingDiscBody(t, doc2, 0, fx.r1, Distance{D: units.Millimeters(fx.targetH), Dir: Along})
+				tool2 := crossingDiscBody(t, doc2, fx.offset, fx.r2, Symmetric{D: units.Millimeters(fx.toolHalf)})
+				pp, ok, err := tryPrismBoolean(t.Context(), op, target2, tool2)
+				require.NoErrorf(t, err, "trial %d op %v: analytic path", i, op)
+				require.Truef(t, ok, "trial %d op %v: the crossing classifier must admit this pair", i, op)
+				analyticBody, err := evalPrismContext(t.Context(), doc2, doc2.nextProducerID(), pp, freeform.NewFreeformWork())
+				require.NoError(t, err)
+				analyticVol, err := analyticBody.Volume()
+				require.NoError(t, err)
 
-			diff := math.Abs(analyticVol.Value.Base() - meshVol.Value.Base())
-			require.LessOrEqualf(t, diff, meshVol.Bound.Base(),
-				"trial %d op %v: analytic %v and mesh %v (+-%v) disagree beyond the mesh bound",
-				i, op, analyticVol.Value.Base(), meshVol.Value.Base(), meshVol.Bound.Base())
-			require.Lessf(t, analyticVol.Bound.Base(), meshVol.Bound.Base(),
-				"trial %d op %v: the analytic bound %v must be tighter than the mesh bound %v",
-				i, op, analyticVol.Bound.Base(), meshVol.Bound.Base())
+				diff := math.Abs(analyticVol.Value.Base() - meshVol.Value.Base())
+				require.LessOrEqualf(t, diff, meshVol.Bound.Base(),
+					"trial %d op %v: analytic %v and mesh %v (+-%v) disagree beyond the mesh bound",
+					i, op, analyticVol.Value.Base(), meshVol.Value.Base(), meshVol.Bound.Base())
+				require.Lessf(t, analyticVol.Bound.Base(), meshVol.Bound.Base(),
+					"trial %d op %v: the analytic bound %v must be tighter than the mesh bound %v",
+					i, op, analyticVol.Bound.Base(), meshVol.Bound.Base())
+			})
 		}
 	}
 }
