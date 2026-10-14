@@ -36,6 +36,13 @@ func TestHeldOrient2MatchesRationalCross(t *testing.T) {
 	}
 }
 
+func TestHeldOrient2UnderflowUsesExactSign(t *testing.T) {
+	m := math.SmallestNonzeroFloat64
+	verts := []r3.Vec{{X: -0x1p-52}, {X: 0x1.e124924924925p+3, Y: 421 * m}, {X: 2.5, Y: 70 * m}}
+	e := newHeldEmbedding(HeldRounding{Verts: verts}, proofbound.NewWorkBudget(t.Context()), true)
+	require.Equal(t, -1, e.orient2(0, 1, 2, 0, 1))
+}
+
 func TestPairSeparatedReusesExactClassifierSigns(t *testing.T) {
 	crossingsByOrient := func(xt, xo [3]proof.Xpt, signs [3]int) []proof.Xpt {
 		var points []proof.Xpt

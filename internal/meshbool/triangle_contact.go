@@ -279,6 +279,23 @@ func FloatEdgeSeparates(a, b, inside [2]float64, tri [3][2]float64) bool {
 func Orient2Float(a, b, c [2]float64) int {
 	bx, by := b[0]-a[0], b[1]-a[1]
 	cx, cy := c[0]-a[0], c[1]-a[1]
+	// Each admitted nonzero rounded difference lies in [2^-300, 2^250]
+	// and on the 2^-352 binary64 grid. Products and their difference stay
+	// on the 2^-704 grid, so even cancellation cannot round a nonzero
+	// result through underflow. The maximum permanent is below 2^502.
+	// Each determinant product charges its two input subtraction roundings
+	// and its multiplication rounding; the final subtraction adds one more.
+	// With u=2^-53, gamma4=4u/(1-4u) bounds the determinant error by
+	// gamma4 times the exact permanent. The rounded permanent bounds that
+	// permanent from below by (1-u)^4. If nonzero, it is at least 2^-600,
+	// so 1e-12 times it stays normal and exceeds the error bound. A zero
+	// rounded difference means equal finite operands, hence exact zero.
+	for _, v := range [...]float64{bx, by, cx, cy} {
+		m := proof.Abs(v)
+		if !(v == 0 || m >= 0x1p-300 && m <= 0x1p250) {
+			return 0
+		}
+	}
 	det := bx*cy - by*cx
 	perm := proof.Abs(bx)*proof.Abs(cy) + proof.Abs(by)*proof.Abs(cx)
 	err := 1e-12 * perm
