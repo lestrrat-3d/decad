@@ -39,6 +39,7 @@ func coilFullTurnArc(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 // circle's topology: no helix edge closes the wall on itself, and the body
 // reads what the same circle recorded as a CircleSeg reads.
 func TestCoilFullTurnArcClosesLikeACircle(t *testing.T) {
+	t.Parallel()
 	s, p := coilFullTurnArc(t)
 	rec, _, _, err := sectioncert.RecordProfile(s, p)
 	require.NoError(t, err)

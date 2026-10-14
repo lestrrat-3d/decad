@@ -149,6 +149,7 @@ func TestCoilMassPropertiesSettleAtTheFirstStep(t *testing.T) {
 // of the projected arm, the union's area bound rose to 2.6 mm² and Verify
 // read Suspect.
 func TestCoilInterferenceAndUnionWithACore(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, -28}, {2.5, -28}, {2.5, 32}, {0, 32}})
 	core, err := Revolve(t.Context(), doc, cs, cpf, coilAxisV, FullRevolution{})
