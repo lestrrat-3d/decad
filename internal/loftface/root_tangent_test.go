@@ -201,6 +201,35 @@ func TestCapOutsideNestedCone(t *testing.T) {
 		require.Negative(t, loftface.ConePullback(q1, outerApex, outerSlope)[1].Sign())
 		require.False(t, check(q1, box, outerApex, outerSlope, outerFar, wideInner, innerSlope))
 	})
+	// The next two cases keep every other gate satisfied so that only the
+	// named coefficient can refuse. Both would otherwise accept a cap point
+	// inside the inner cone x + r = 799/100.
+	exact := func(t *testing.T, q [6]*big.Rat, want [6]*big.Rat) {
+		t.Helper()
+		for i := range want {
+			require.Zero(t, want[i].Cmp(q[i]), "q[%d] = %s, want %s", i, q[i], want[i])
+		}
+	}
+	t.Run("q2 alone", func(t *testing.T) {
+		// P = (7+u, 1-u+v, u+v) over [-1,-1/2] x [-1,0]; at (-1/2,-1/2)
+		// x + r = 13/2 + sqrt(2) < 799/100.
+		q2 := affineMap([3]int64{7, 1, 0}, [3]int64{1, -1, 1}, [3]int64{0, 1, 1})
+		narrow := [4]*big.Rat{rat(-1, 1), rat(-1, 2), rat(-1, 1), rat(0, 1)}
+		inner := rat(799, 100)
+		exact(t, loftface.ConePullback(q2, outerApex, outerSlope),
+			[6]*big.Rat{rat(0, 1), rat(0, 1), rat(2, 1), rat(1, 1), rat(0, 1), rat(2, 1)})
+		require.False(t, check(q2, narrow, outerApex, outerSlope, outerFar, inner, innerSlope))
+	})
+	t.Run("q4 alone", func(t *testing.T) {
+		// P = (8+u, u+v, v) over [-1,-1/2] x [0,1]; at (-1/2,1/4)
+		// x + r = 15/2 + sqrt(1/8) < 799/100.
+		q4 := affineMap([3]int64{8, 0, 0}, [3]int64{1, 1, 0}, [3]int64{0, 1, 1})
+		narrow := [4]*big.Rat{rat(-1, 1), rat(-1, 2), rat(0, 1), rat(1, 1)}
+		inner := rat(799, 100)
+		exact(t, loftface.ConePullback(q4, outerApex, outerSlope),
+			[6]*big.Rat{rat(0, 1), rat(0, 1), rat(0, 1), rat(0, 1), rat(2, 1), rat(2, 1)})
+		require.False(t, check(q4, narrow, outerApex, outerSlope, outerFar, inner, innerSlope))
+	})
 	t.Run("pullback has no v^2 term", func(t *testing.T) {
 		flat := tangent
 		flat.QV = loftface.RatVec{rat(0, 1), rat(0, 1), rat(0, 1)}
