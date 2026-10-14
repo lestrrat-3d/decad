@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -19,10 +20,10 @@ type loftFaceInterval = loftface.Interval
 func lfZero() *big.Rat             { return new(big.Rat) }
 func lfOne() *big.Rat              { return big.NewRat(1, 1) }
 func lfF(v float64) *big.Rat       { return ratOfPointPlane(v) }
-func lfAdd(a, b *big.Rat) *big.Rat { return new(big.Rat).Add(a, b) }
-func lfSub(a, b *big.Rat) *big.Rat { return new(big.Rat).Sub(a, b) }
-func lfMul(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }
-func lfDiv(a, b *big.Rat) *big.Rat { return new(big.Rat).Quo(a, b) }
+func lfAdd(a, b *big.Rat) *big.Rat { return proofarith.AddRat(new(big.Rat), a, b) }
+func lfSub(a, b *big.Rat) *big.Rat { return proofarith.SubRat(new(big.Rat), a, b) }
+func lfMul(a, b *big.Rat) *big.Rat { return proofarith.MulRat(new(big.Rat), a, b) }
+func lfDiv(a, b *big.Rat) *big.Rat { return proofarith.QuoRat(new(big.Rat), a, b) }
 func lfAbs(a *big.Rat) *big.Rat    { return new(big.Rat).Abs(a) }
 
 func lfSimilarity(section loftFaceSection) (loftFaceAffine, error) {

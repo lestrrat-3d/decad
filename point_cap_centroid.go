@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -108,7 +109,7 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 	den := pointPlaneMul(big.NewRat(3, 1), twiceArea)
 	var center [3]*big.Rat
 	for _, k := range [2]int{u, v} {
-		center[k] = new(big.Rat).Quo(moments[k], den)
+		center[k] = proofarith.QuoRat(new(big.Rat), moments[k], den)
 	}
 	center[1-u] = pointPlaneCapDroppedCoordinate(center, anchor, plane, u)
 	// The projected area is a conservative lower bound on physical area:
@@ -151,7 +152,7 @@ func pointPlaneCapDroppedCoordinate(center, anchor [3]*big.Rat,
 	plane *pointPlaneLimit, keep int) *big.Rat {
 	drop := 1 - keep
 	normal := [2]*big.Rat{plane.nx, plane.ny}
-	slope := new(big.Rat).Quo(normal[keep], normal[drop])
+	slope := proofarith.QuoRat(new(big.Rat), normal[keep], normal[drop])
 	return pointPlaneSub(anchor[drop],
 		pointPlaneMul(slope, pointPlaneSub(center[keep], anchor[keep])))
 }

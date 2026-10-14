@@ -40,11 +40,11 @@ func ratOfPointPlane(v float64) *big.Rat { return proofarith.FloatRat(v) }
 
 func pointPlaneAbs(q *big.Rat) *big.Rat { return new(big.Rat).Abs(q) }
 
-func pointPlaneAdd(a, b *big.Rat) *big.Rat { return new(big.Rat).Add(a, b) }
+func pointPlaneAdd(a, b *big.Rat) *big.Rat { return proofarith.AddRat(new(big.Rat), a, b) }
 
-func pointPlaneSub(a, b *big.Rat) *big.Rat { return new(big.Rat).Sub(a, b) }
+func pointPlaneSub(a, b *big.Rat) *big.Rat { return proofarith.SubRat(new(big.Rat), a, b) }
 
-func pointPlaneMul(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }
+func pointPlaneMul(a, b *big.Rat) *big.Rat { return proofarith.MulRat(new(big.Rat), a, b) }
 
 func (p *pointPlaneLimit) normalL1() *big.Rat {
 	return pointPlaneAdd(pointPlaneAbs(p.nx), pointPlaneAbs(p.ny))
