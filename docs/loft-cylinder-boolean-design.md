@@ -432,6 +432,22 @@ only when it overlaps that interval. A later slab inside the interval needs no
 new clip: each clipped part is a subset of the parts already proved inside the
 disk. A gap between proved slabs is never covered, so a slab spanning it runs
 the exact clip.
+The prism witness against the old shell and the held-tooth witnesses scan
+only the facets that a per-axis grid over the projection plane lists for the
+query's cell. A facet is omitted from a cell only if its closed projection,
+widened by the margin, is disjoint from the cell, and the margin exceeds the
+maximum float error of the placement arithmetic, so float placement can only
+add facets to a list. For a facet projecting to a segment the whole line is
+listed. Such an omitted facet ends strictly outside in the exact scan. Of the
+facets on one axis-parallel line only the first is listed, since it is the one
+that ends the scan. The margin is `1e-12·(|b| + (|x|+|a|)·(1+|s|)) + 2⁻¹⁰⁰⁰`
+on a line through `(a, b)` with float slope `s`, about 900 times the proven
+rounding error `10·2⁻⁵³·(|b| + (|x|+|a|)·(1+|s|)) + 2⁻¹⁰⁷¹` of the
+separately rounded operations that compute it. Every cell strip is also
+widened by one float step on each side, because the query's coordinate is
+the nearest float to an exact value that may lie just outside a cell edge.
+The grid is built once per parity mesh and decides no sign: the exact scan
+visits the listed facets in ascending order.
 An outward-rounded box gap can omit a held wall triangle only when it strictly
 exceeds that tooth's matched Loft departure; all remaining pairs use the exact
 triangle clearance check.

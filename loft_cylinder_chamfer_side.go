@@ -27,7 +27,6 @@ type middleSidePrep struct {
 	faces     map[FeatureRef][]loftCylinderChamferToothFace
 	old       *loftmesh.LoftAuditData
 	oldBoxes  [][2]r3.Vec
-	oldIdx    []int
 	grid      *loftmesh.ChamferBoxGrid
 }
 
@@ -39,7 +38,6 @@ type middleState struct {
 	grid         *loftmesh.ChamferBoxGrid
 	parity       *meshbool.ParityMesh
 	toothParity  map[*Body]*meshbool.ParityMesh
-	toothIndices map[*Body][]int
 	toothCircles map[*Body]loftcylinder.SourceCircle
 	toothRoots   map[*Body]*loftmesh.ChamferHeldRootMemo
 }
@@ -48,7 +46,6 @@ func newMiddleState(grid *loftmesh.ChamferBoxGrid, parity *meshbool.ParityMesh) 
 	return &middleState{
 		grid: grid, parity: parity,
 		toothParity:  make(map[*Body]*meshbool.ParityMesh),
-		toothIndices: make(map[*Body][]int),
 		toothCircles: make(map[*Body]loftcylinder.SourceCircle),
 		toothRoots:   make(map[*Body]*loftmesh.ChamferHeldRootMemo),
 	}
@@ -84,13 +81,9 @@ func newMiddleSidePrep(fp facetedPayload, mesh *joinedMesh, source loftCylinderC
 			return nil, fmt.Errorf("%w: joined source has an interior-height vertex", ErrUnsupported)
 		}
 	}
-	oldIndices := make([]int, len(fp.tris))
-	for i := range oldIndices {
-		oldIndices[i] = i
-	}
 	prep := &middleSidePrep{
 		fp: fp, mesh: mesh, source: source, ideal: ideal, middle: middle, clipBound: clipBound,
-		faces: faces, old: old, oldBoxes: oldBoxes, oldIdx: oldIndices, grid: oldGrid,
+		faces: faces, old: old, oldBoxes: oldBoxes, grid: oldGrid,
 	}
 	if middleSidePrepHook != nil {
 		middleSidePrepHook(prep)
@@ -172,14 +165,9 @@ func (prep *middleSidePrep) middleFacet(ctx context.Context, i int, st *middleSt
 				if !ok {
 					parity = meshbool.NewParityMesh(face.loft.verts, face.loft.tris)
 					st.toothParity[face.body] = parity
-					indices := make([]int, len(face.loft.tris))
-					for j := range indices {
-						indices[j] = j
-					}
-					st.toothIndices[face.body] = indices
 				}
 				if err := loftCylinderChamferMiddleToothSource(ctx, q, qBox, qBoxed, face,
-					parity, st.toothIndices[face.body], source.blankRadius, st.toothCircles, st.toothRoots); err != nil {
+					parity, source.blankRadius, st.toothCircles, st.toothRoots); err != nil {
 					last = err.Error()
 					continue
 				}
@@ -197,7 +185,7 @@ func (prep *middleSidePrep) middleFacet(ctx context.Context, i int, st *middleSt
 			baseRounded = true
 		}
 		if err := loftmesh.ChamferMiddlePrism(ctx, len(prep.fp.tris), prep.old, prep.oldBoxes, st.grid,
-			st.parity, prep.oldIdx, base, q, shift, corners); err != nil {
+			st.parity, base, q, shift, corners); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
@@ -215,7 +203,7 @@ func (prep *middleSidePrep) middleFacet(ctx context.Context, i int, st *middleSt
 // hidden root walls meet it, use the exact blank disk for that part instead.
 func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.Xpt,
 	qBox [2]r3.Vec, boxed bool,
-	face loftCylinderChamferToothFace, parity *meshbool.ParityMesh, indices []int,
+	face loftCylinderChamferToothFace, parity *meshbool.ParityMesh,
 	blankRadius float64, circles map[*Body]loftcylinder.SourceCircle,
 	roots map[*Body]*loftmesh.ChamferHeldRootMemo) error {
 	lp := face.loft
@@ -249,7 +237,7 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 	}
 	if fullClear {
 		witness := meshbool.XCentroid(q[0], q[1], q[2])
-		inside, on, err := meshbool.MeshParityPreparedContext(ctx, witness, parity, indices)
+		inside, on, err := meshbool.MeshParityAllContext(ctx, witness, parity)
 		if err != nil {
 			return err
 		}
@@ -300,7 +288,7 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 			continue
 		}
 		outside++
-		inside, on, err := meshbool.MeshParityPreparedContext(ctx, p, parity, indices)
+		inside, on, err := meshbool.MeshParityAllContext(ctx, p, parity)
 		if err != nil {
 			return err
 		}
