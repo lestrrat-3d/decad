@@ -209,7 +209,7 @@ func requireThroughShell(t *testing.T, body *Body, sel FaceSelector, th units.Va
 func requireThroughShellLumps(t *testing.T, body *Body, sel FaceSelector, th units.Value, a, b *big.Rat, lumps int) (*Body, brepPayload) {
 	t.Helper()
 	doc := body.doc
-	result, err := body.Shell(t.Context(), sel, th)
+	result, err := Shell(t.Context(), body, sel, th)
 	require.NoError(t, err)
 	bp, ok := result.payload.(brepPayload)
 	require.True(t, ok, "route S builds a brep, got %T", result.payload)
@@ -516,7 +516,7 @@ func sqrtEnclosed(t *testing.T, q *big.Rat) (*big.Rat, *big.Rat) {
 func TestBrepShellThroughCutNotchedCap(t *testing.T) {
 	t.Parallel()
 	body := internalDrilledBox(t, [2]float64{20, 15.5})
-	result, err := body.Shell(t.Context(), Faces(Facing(shellUp)).Exactly(1), units.Millimeters(2))
+	result, err := Shell(t.Context(), body, Faces(Facing(shellUp)).Exactly(1), units.Millimeters(2))
 	require.NoError(t, err)
 	bp, ok := result.payload.(brepPayload)
 	require.True(t, ok)
@@ -644,7 +644,7 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 	refuses := func(t *testing.T, body *Body, sel FaceSelector, th units.Value, opts []ShellOption, want ...string) {
 		t.Helper()
 		before := body.doc.Bodies()
-		_, err := body.Shell(t.Context(), sel, th, opts...)
+		_, err := Shell(t.Context(), body, sel, th, opts...)
 		requireRefusesUnchanged(t, body, before, err, want...)
 	}
 	top := Faces(Facing(shellUp)).Exactly(1)
@@ -1058,7 +1058,7 @@ func TestBrepShellThroughCutDisplacedCrossing(t *testing.T) {
 	require.True(t, ok, "the drilled box is a brep, got %T", body.payload)
 	before := doc.Bodies()
 
-	result, err := body.Shell(t.Context(), Faces(Facing(shellUp)).Exactly(1), units.Millimeters(1))
+	result, err := Shell(t.Context(), body, Faces(Facing(shellUp)).Exactly(1), units.Millimeters(1))
 	if err == nil {
 		rat := proofarith.FloatRat
 		rr := new(big.Rat).Add(rat(3.1), big.NewRat(1, 1))
@@ -1118,7 +1118,7 @@ func TestBrepShellThroughCutDisplacedWallGap(t *testing.T) {
 	require.True(t, ok, "the drilled box is a brep, got %T", body.payload)
 	before := doc.Bodies()
 
-	result, err := body.Shell(t.Context(), Faces(Facing(shellUp)).Exactly(1), units.Millimeters(th))
+	result, err := Shell(t.Context(), body, Faces(Facing(shellUp)).Exactly(1), units.Millimeters(th))
 	if err == nil {
 		rat := proofarith.FloatRat
 		mul := func(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }

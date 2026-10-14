@@ -31,7 +31,7 @@ func requireBrepModifyRefuses(t *testing.T, body *Body, want string) {
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, want)
 	require.ErrorContains(t, err, "chamfers")
-	_, err = body.Shell(t.Context(), Faces(Planar()).AtLeast(1), units.Millimeters(1))
+	_, err = Shell(t.Context(), body, Faces(Planar()).AtLeast(1), units.Millimeters(1))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, want)
 	require.ErrorContains(t, err, "shells")
@@ -74,7 +74,7 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 		edges := Edges(Convex(), EndpointAt(r3.NewVec(0, 0, 0))).Exactly(3)
 		_, err := Chamfer(t.Context(), body, edges, units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, rowSL1, "chamfers")
-		_, err = body.Shell(t.Context(), Faces(Planar()).AtLeast(1), units.Millimeters(1))
+		_, err = Shell(t.Context(), body, Faces(Planar()).AtLeast(1), units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, shell...)
 	}
 	t.Run("brep", func(t *testing.T) {

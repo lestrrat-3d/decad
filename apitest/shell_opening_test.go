@@ -137,7 +137,7 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 	t.Run("inward, both caps kept", func(t *testing.T) {
 		t.Parallel()
 		doc, box := polygonPrism(t, uChannelBox)
-		body, err := box.Shell(t.Context(), opening(t, box), units.Millimeters(2))
+		body, err := decad.Shell(t.Context(), box, opening(t, box), units.Millimeters(2))
 		require.NoError(t, err)
 		requireExactVolumeArea(t, body, 4352, 4472)
 		c, err := body.Centroid()
@@ -170,7 +170,7 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 		t.Parallel()
 		doc, box := polygonPrism(t, uChannelBox)
 		sel := opening(t, box).Or(decad.FaceCreatedBy(decad.CapEnd(box)))
-		body, err := box.Shell(t.Context(), sel, units.Millimeters(2))
+		body, err := decad.Shell(t.Context(), box, sel, units.Millimeters(2))
 		require.NoError(t, err)
 		// The cavity (0,38)×(2,18)×(2,10), 8 tall: 8000 − 608·8. The area is
 		// the box's 2800 less the 16×8 opening and the 38×16 top, plus the
@@ -183,7 +183,7 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 	t.Run("both caps removed is a prism over the wall section", func(t *testing.T) {
 		t.Parallel()
 		doc, box := polygonPrism(t, uChannelBox)
-		body, err := box.Shell(t.Context(), opening(t, box).Or(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(2))
+		body, err := decad.Shell(t.Context(), box, opening(t, box).Or(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(2))
 		require.NoError(t, err)
 		vol, err := body.Volume()
 		require.NoError(t, err)
@@ -202,7 +202,7 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 	t.Run("both caps removed at t = 5 keeps every walk", func(t *testing.T) {
 		t.Parallel()
 		_, box := polygonPrism(t, uChannelBox)
-		body, err := box.Shell(t.Context(), opening(t, box).Or(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(5))
+		body, err := decad.Shell(t.Context(), box, opening(t, box).Or(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(5))
 		require.NoError(t, err)
 		// The far wall x = 40 is 20 long and loses 5 at each end, so the
 		// cavity is (0,35)×(5,15): (800 − 350)·10.
@@ -213,7 +213,7 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 		t.Parallel()
 		doc, box := polygonPrism(t, uChannelBox)
 		sel := opening(t, box).Or(decad.NormalTo(r3.NewVec(0, 0, 1)))
-		body, err := box.Shell(t.Context(), sel, units.Millimeters(2), decad.WithShellSense(decad.Outward))
+		body, err := decad.Shell(t.Context(), box, sel, units.Millimeters(2), decad.WithShellSense(decad.Outward))
 		require.NoError(t, err)
 		// W is O = [0,42]×[−2,22] with its two corners beyond x = 40 rounded
 		// to radius 2 (modify §7's arc join), less the box's section: area
@@ -235,7 +235,7 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 		// 1008 − 2(4 − π), over 2: 6000 + 28π in all. Shown to fail with
 		// stackedbrep's tangentFoot deleted (the junction missed, SO5).
 		doc, box := polygonPrism(t, uChannelBox)
-		body, err := box.Shell(t.Context(), opening(t, box), units.Millimeters(2), decad.WithShellSense(decad.Outward))
+		body, err := decad.Shell(t.Context(), box, opening(t, box), units.Millimeters(2), decad.WithShellSense(decad.Outward))
 		require.NoError(t, err)
 		vol, err := body.Volume()
 		require.NoError(t, err)
@@ -271,7 +271,7 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 		// (40,−2), so O = [0,40]×[−2,20] over [−2,12], less the box.
 		doc, box := polygonPrism(t, uChannelBox)
 		sel := opening(t, box).Or(decad.Facing(r3.NewVec(0, 1, 0))).Or(decad.Facing(r3.NewVec(1, 0, 0)))
-		body, err := box.Shell(t.Context(), sel, units.Millimeters(2), decad.WithShellSense(decad.Outward))
+		body, err := decad.Shell(t.Context(), box, sel, units.Millimeters(2), decad.WithShellSense(decad.Outward))
 		require.NoError(t, err)
 		// The outer area: two 880 caps, the y = −2 wall 40·14 and the
 		// three removed planes' strips 2·(22·14 − 200) + (40·14 − 400);
@@ -316,7 +316,7 @@ func TestShellSideOpeningRefusals(t *testing.T) {
 			t.Parallel()
 			doc, box := polygonPrism(t, uChannelBox)
 			before := snapshotDocument(t, doc)
-			body, err := box.Shell(t.Context(), tc.sel(t, box), units.Millimeters(tc.t))
+			body, err := decad.Shell(t.Context(), box, tc.sel(t, box), units.Millimeters(tc.t))
 			require.Nil(t, body)
 			require.ErrorIs(t, err, tc.want)
 			require.ErrorContains(t, err, tc.text)
@@ -354,7 +354,7 @@ func TestShellSideOpeningObliqueRefusals(t *testing.T) {
 			t.Parallel()
 			doc, body := polygonPrism(t, tc.pts)
 			before := snapshotDocument(t, doc)
-			got, err := body.Shell(t.Context(), tc.sel, units.Millimeters(tc.t))
+			got, err := decad.Shell(t.Context(), body, tc.sel, units.Millimeters(tc.t))
 			require.Nil(t, got)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, tc.text)
@@ -385,7 +385,7 @@ func TestShellSideOpeningLPrism(t *testing.T) {
 	shellL := func(t *testing.T) (*decad.Document, *decad.Body) {
 		t.Helper()
 		doc, l := polygonPrism(t, lPrism)
-		body, err := l.Shell(t.Context(), sideFaceAt(t, l, plusX, 10), units.Millimeters(2))
+		body, err := decad.Shell(t.Context(), l, sideFaceAt(t, l, plusX, 10), units.Millimeters(2))
 		require.NoError(t, err)
 		return doc, body
 	}
@@ -420,7 +420,7 @@ func TestShellSideOpeningLPrism(t *testing.T) {
 	t.Run("a second shell reads as no prism (SB10)", func(t *testing.T) {
 		t.Parallel()
 		_, body := shellL(t)
-		_, err := body.Shell(t.Context(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1))
+		_, err := decad.Shell(t.Context(), body, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "SB10")
 	})
@@ -513,7 +513,7 @@ func TestShellSideOpeningOblique(t *testing.T) {
 	shell := func(t *testing.T, pts [][2]float64, sel *decad.FaceQuery, thickness float64, opts ...decad.ShellOption) (*decad.Document, *decad.Body) {
 		t.Helper()
 		doc, receiver := polygonPrism(t, pts)
-		body, err := receiver.Shell(t.Context(), sel, units.Millimeters(thickness), opts...)
+		body, err := decad.Shell(t.Context(), receiver, sel, units.Millimeters(thickness), opts...)
 		require.NoError(t, err)
 		require.Len(t, body.Lumps(), 1)
 		require.Len(t, body.Shells(), 1)
@@ -599,7 +599,7 @@ func TestShellSideOpeningOblique(t *testing.T) {
 		doc, receiver := polygonPrism(t, pts)
 		sel := sideFaceAt(t, receiver, r3.NewVec(0, 1, 0), 30).Or(decad.Facing(minusY)).
 			Or(decad.Facing(r3.NewVec(1, 0, 0))).Or(decad.Facing(r3.NewVec(-1, 0, 0))).Or(decad.Facing(n))
-		body, err := receiver.Shell(t.Context(), sel, units.Millimeters(2), decad.WithShellSense(decad.Outward))
+		body, err := decad.Shell(t.Context(), receiver, sel, units.Millimeters(2), decad.WithShellSense(decad.Outward))
 		require.NoError(t, err)
 		// Two O caps, the receiver's section at both interfaces, the kept wall
 		// 16·10 and its offset 16.4·14, the removed carriers' strips
@@ -720,7 +720,7 @@ func TestShellSideOpeningArcs(t *testing.T) {
 	t.Run("chord removed", func(t *testing.T) {
 		t.Parallel()
 		doc, d := arcPrism(t, dSection)
-		body, err := d.Shell(t.Context(), sideFaceAt(t, d, r3.NewVec(-1, 0, 0), 0), units.Millimeters(1))
+		body, err := decad.Shell(t.Context(), d, sideFaceAt(t, d, r3.NewVec(-1, 0, 0), 0), units.Millimeters(1))
 		require.NoError(t, err)
 		vol, err := body.Volume()
 		require.NoError(t, err)
@@ -746,7 +746,7 @@ func TestShellSideOpeningArcs(t *testing.T) {
 		removed := cylinderFaces(d, 0, 0, 5)
 		require.Len(t, removed, 1)
 		sel := decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0]))
-		body, err := d.Shell(t.Context(), sel, units.Millimeters(3))
+		body, err := decad.Shell(t.Context(), d, sel, units.Millimeters(3))
 		require.NoError(t, err)
 		// 125π − 4·(25·acos(3/5) − 12) = 48 + 125π − 100·acos(3/5).
 		vol, err := body.Volume()
@@ -795,7 +795,7 @@ func TestShellSideOpeningArcs(t *testing.T) {
 		removed = cylinderFaces(d, 0, 0, 5)
 		require.Len(t, removed, 1)
 		sel = decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0])).Or(decad.NormalTo(r3.NewVec(0, 0, 1)))
-		prism, err := d.Shell(t.Context(), sel, units.Millimeters(3))
+		prism, err := decad.Shell(t.Context(), d, sel, units.Millimeters(3))
 		require.NoError(t, err)
 		vol, err = prism.Volume()
 		require.NoError(t, err)
@@ -812,7 +812,7 @@ func TestShellSideOpeningArcs(t *testing.T) {
 		removed := cylinderFaces(d, 0, 0, 5)
 		require.Len(t, removed, 1)
 		sel := decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0]))
-		body, err := d.Shell(t.Context(), sel, units.Millimeters(3), decad.WithShellSense(decad.Outward))
+		body, err := decad.Shell(t.Context(), d, sel, units.Millimeters(3), decad.WithShellSense(decad.Outward))
 		require.NoError(t, err)
 		vol, err := body.Volume()
 		require.NoError(t, err)
@@ -854,7 +854,7 @@ func TestShellSideOpeningArcs(t *testing.T) {
 			return decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0]))
 		}
 		_, d := arcPrism(t, dSection)
-		body, err := d.Shell(t.Context(), arcFace(t, d).Or(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(2))
+		body, err := decad.Shell(t.Context(), d, arcFace(t, d).Or(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(2))
 		require.NoError(t, err)
 		vol, err := body.Volume()
 		require.NoError(t, err)
@@ -885,7 +885,7 @@ func TestShellSideOpeningArcs(t *testing.T) {
 				if tc.outward {
 					opts = append(opts, decad.WithShellSense(decad.Outward))
 				}
-				body, err := d.Shell(t.Context(), tc.sel(arcFace(t, d)), units.Millimeters(2), opts...)
+				body, err := decad.Shell(t.Context(), d, tc.sel(arcFace(t, d)), units.Millimeters(2), opts...)
 				require.NoError(t, err)
 				vol, err := body.Volume()
 				require.NoError(t, err)
@@ -925,7 +925,7 @@ func TestShellSideOpeningArcs(t *testing.T) {
 		removed := cylinderFaces(d, 5, 5, 5)
 		require.Len(t, removed, 1)
 		before := snapshotDocument(t, doc)
-		_, err := d.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0])), units.Millimeters(1))
+		_, err := decad.Shell(t.Context(), d, decad.Faces(decad.FaceCreatedBy(removed[0].Origins()[0])), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "SO1")
 		require.Equal(t, before.bodies, doc.Bodies())
@@ -1077,7 +1077,7 @@ func TestShellSideOpeningCircleJunctions(t *testing.T) {
 	t.Run("two arcs at an end corner", func(t *testing.T) {
 		t.Parallel()
 		doc, d := arcPrism(t, notchSection)
-		body, err := d.Shell(t.Context(), notchRemoved(t, d), units.Millimeters(4))
+		body, err := decad.Shell(t.Context(), d, notchRemoved(t, d), units.Millimeters(4))
 		require.NoError(t, err)
 		requireVolumeBracketed(t, body, r(1088, 1),
 			closedTerm{r(-278, 1), piLo, piHi}, closedTerm{r(2312, 1), atan815Lo, atan815Hi})
@@ -1096,7 +1096,7 @@ func TestShellSideOpeningCircleJunctions(t *testing.T) {
 	t.Run("two arcs at an end corner, both caps removed", func(t *testing.T) {
 		t.Parallel()
 		doc, d := arcPrism(t, notchSection)
-		body, err := d.Shell(t.Context(), notchRemoved(t, d).Or(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(4))
+		body, err := decad.Shell(t.Context(), d, notchRemoved(t, d).Or(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(4))
 		require.NoError(t, err)
 		vol, err := body.Volume()
 		require.NoError(t, err)
@@ -1111,7 +1111,7 @@ func TestShellSideOpeningCircleJunctions(t *testing.T) {
 		// circles meet at two walked ends and the record build misses.
 		doc, d := arcPrism(t, notchSection)
 		before := snapshotDocument(t, doc)
-		_, err := d.Shell(t.Context(), notchRemoved(t, d), units.Millimeters(2))
+		_, err := decad.Shell(t.Context(), d, notchRemoved(t, d), units.Millimeters(2))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "SO5")
 		require.Equal(t, before.bodies, doc.Bodies())
@@ -1139,7 +1139,7 @@ func TestShellSideOpeningCircleJunctions(t *testing.T) {
 				if tc.capsRemoved {
 					sel = sel.Or(decad.NormalTo(r3.NewVec(0, 0, 1)))
 				}
-				body, err := d.Shell(t.Context(), sel, units.Millimeters(1.25))
+				body, err := decad.Shell(t.Context(), d, sel, units.Millimeters(1.25))
 				require.NoError(t, err)
 				requireVolumeBracketed(t, body, tc.base,
 					closedTerm{tc.a, acos35Lo, acos35Hi}, closedTerm{tc.pi, piLo, piHi})
@@ -1160,7 +1160,7 @@ func TestShellSideOpeningCircleJunctions(t *testing.T) {
 	t.Run("an arc join on a slanted wall under kept caps", func(t *testing.T) {
 		t.Parallel()
 		doc, tri := polygonPrism(t, obliqueTriangle)
-		body, err := tri.Shell(t.Context(), decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(1),
+		body, err := decad.Shell(t.Context(), tri, decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(1),
 			decad.WithShellSense(decad.Outward))
 		require.NoError(t, err)
 		requireVolumeBracketed(t, body, r(404, 1),
@@ -1288,7 +1288,7 @@ func TestShellSideOpeningArcExtension(t *testing.T) {
 				if tc.capsRemoved {
 					sel = sel.Or(decad.NormalTo(r3.NewVec(0, 0, 1)))
 				}
-				body, err := d.Shell(t.Context(), sel, units.Millimeters(2.375), outward)
+				body, err := decad.Shell(t.Context(), d, sel, units.Millimeters(2.375), outward)
 				require.NoError(t, err)
 				requireVolumeBracketed(t, body, tc.base,
 					closedTerm{tc.beta, atan815Lo, atan815Hi}, closedTerm{r(845, 1), atan512Lo, atan512Hi})
@@ -1303,7 +1303,7 @@ func TestShellSideOpeningArcExtension(t *testing.T) {
 		t.Parallel()
 		doc, d := arcPrism(t, notchSection)
 		sel := notchRemoved(t, d).Or(decad.NormalTo(r3.NewVec(0, 0, 1)))
-		body, err := d.Shell(t.Context(), sel, units.Millimeters(4), outward)
+		body, err := decad.Shell(t.Context(), d, sel, units.Millimeters(4), outward)
 		require.NoError(t, err)
 		vol, err := body.Volume()
 		require.NoError(t, err)
@@ -1318,7 +1318,7 @@ func TestShellSideOpeningArcExtension(t *testing.T) {
 		t.Parallel()
 		doc, d := arcPrism(t, notchSection)
 		before := snapshotDocument(t, doc)
-		_, err := d.Shell(t.Context(), notchRemoved(t, d), units.Millimeters(4), outward)
+		_, err := decad.Shell(t.Context(), d, notchRemoved(t, d), units.Millimeters(4), outward)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "SO5")
 		require.Equal(t, before.bodies, doc.Bodies())
@@ -1342,7 +1342,7 @@ func TestShellSideOpeningArcExtension(t *testing.T) {
 			s.CreateLine(g, a)
 		})
 		before := snapshotDocument(t, doc)
-		_, err := d.Shell(t.Context(), planes().Or(decad.Facing(r3.NewVec(-5, -7, 0))), units.Millimeters(2.375), outward)
+		_, err := decad.Shell(t.Context(), d, planes().Or(decad.Facing(r3.NewVec(-5, -7, 0))), units.Millimeters(2.375), outward)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "drops a section feature")
 		require.Equal(t, before.bodies, doc.Bodies())

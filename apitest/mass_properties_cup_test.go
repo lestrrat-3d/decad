@@ -36,7 +36,7 @@ const cupDensity = 1.0 / 1024
 func cupBox(t *testing.T, thickness units.Value, opts ...decad.ShellOption) *decad.Body {
 	t.Helper()
 	box := boxBody(t, decad.New(), 0, 0, 16, 8, 10)
-	cup, err := box.Shell(t.Context(), topCap(box), thickness, opts...)
+	cup, err := decad.Shell(t.Context(), box, topCap(box), thickness, opts...)
 	require.NoError(t, err)
 	return cup
 }
@@ -140,7 +140,7 @@ func TestCupInchWallEnclosesDenotedCup(t *testing.T) {
 	rho := new(big.Rat).SetFloat64(cupDensity)
 	for _, plate := range [][2]int64{{16, 8}, {100, 60}} {
 		box := boxBody(t, decad.New(), 0, 0, float64(plate[0]), float64(plate[1]), 10)
-		cup, err := box.Shell(t.Context(), topCap(box), thickness)
+		cup, err := decad.Shell(t.Context(), box, topCap(box), thickness)
 		require.NoError(t, err)
 
 		hi := ratVec(plate[0], plate[1], 10)

@@ -106,7 +106,7 @@ func TestRevolveShellOpeningSectionDelta(t *testing.T) {
 			if tc.outward {
 				opts = append(opts, WithShellSense(Outward))
 			}
-			shelled, err := body.Shell(t.Context(), sel, units.Millimeters(tc.t), opts...)
+			shelled, err := Shell(t.Context(), body, sel, units.Millimeters(tc.t), opts...)
 			require.NoError(t, err)
 			rp := shelled.payload.(revolvePayload)
 			if !tc.displaced {

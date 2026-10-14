@@ -1080,7 +1080,7 @@ func TestFreeformPrismShellRefuses(t *testing.T) {
 		t.Run(fixture.name, func(t *testing.T) {
 			doc := decad.New()
 			body := fixture.build(t, doc)
-			_, err := body.Shell(t.Context(), bothCaps(), units.Millimeters(1))
+			_, err := decad.Shell(t.Context(), body, bothCaps(), units.Millimeters(1))
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, "free-form boundary segment")
 		})

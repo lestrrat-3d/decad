@@ -63,7 +63,7 @@ func TestRevolveShellSectionDelta(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			body := shellMeridianBody(t, tc.pts, halfTurn)
-			shelled, err := body.Shell(t.Context(), caps, units.Millimeters(1), tc.opts...)
+			shelled, err := Shell(t.Context(), body, caps, units.Millimeters(1), tc.opts...)
 			require.NoError(t, err)
 			rp := shelled.payload.(revolvePayload)
 			if !tc.displaced {
@@ -81,7 +81,7 @@ func TestRevolveShellSectionDelta(t *testing.T) {
 			require.Equal(t, Suspect, report.Status)
 			// A displaced meridian has no proven rewrite, so a second shell
 			// refuses rather than offsetting the recorded one.
-			_, err = shelled.Shell(t.Context(), Faces(NormalTo(r3.NewVec(0, 0, 1))).Exactly(2), units.Millimeters(0.1))
+			_, err = Shell(t.Context(), shelled, Faces(NormalTo(r3.NewVec(0, 0, 1))).Exactly(2), units.Millimeters(0.1))
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.Contains(t, err.Error(), `section displacement`)
 		})
@@ -112,7 +112,7 @@ func TestRevolveShellDisplacedUndercutUndecided(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			body := shellMeridianBody(t, [][2]float64{{0, 0}, {30, 0}, {20, 10}, {0, 10}}, tc.extent)
-			shelled, err := body.Shell(t.Context(), tc.faces, units.Millimeters(0.3), tc.opts...)
+			shelled, err := Shell(t.Context(), body, tc.faces, units.Millimeters(0.3), tc.opts...)
 			require.NoError(t, err)
 			require.Positive(t, shelled.payload.(revolvePayload).sectionDelta)
 			report, err := shelled.doc.Verify(t.Context(), WithPullDirection(tc.pull))

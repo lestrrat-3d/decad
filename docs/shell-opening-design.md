@@ -1,6 +1,6 @@
 # Shell Opening Design
 
-How `Body.Shell` removes one proper connected run of a prism's side faces
+How `Shell` removes one proper connected run of a prism's side faces
 (`docs/modify-reach-design.md` Table RX row RX1, Table BX row BX4 — "reach
 §N" below), and how the same rim rule lifts the right-angle restriction on a
 revolve side opening (reach §9.3.2). Companion to `docs/modify-design.md`

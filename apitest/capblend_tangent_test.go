@@ -47,7 +47,7 @@ func TestTangentJoinedOffsetsBuildBothFeatures(t *testing.T) {
 			require.InDelta(t, wantChamfer, chamferVolume.Value.Mag(), 1e-6)
 
 			rounded = roundedBox()
-			shelled, err := rounded.Shell(t.Context(), topCap(rounded), units.Millimeters(setback))
+			shelled, err := decad.Shell(t.Context(), rounded, topCap(rounded), units.Millimeters(setback))
 			require.NoError(t, err)
 			requireManifold(t, shelled)
 			shellVolume, err := shelled.Volume()

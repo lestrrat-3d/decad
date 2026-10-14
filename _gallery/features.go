@@ -368,7 +368,7 @@ func trayBodyAtThickness(ctx context.Context, thickness float64) (*decad.Body, e
 	if err != nil {
 		return nil, err
 	}
-	tray, err := block.Shell(ctx, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(thickness))
+	tray, err := decad.Shell(ctx, block, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(thickness))
 	if err != nil {
 		return nil, fmt.Errorf("shell the block: %w", err)
 	}

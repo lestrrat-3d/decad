@@ -449,7 +449,7 @@ func partsBinBottle(t *testing.T, doc *decad.Document) *decad.Body {
 func partsBinCup(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	box := boxBody(t, doc, -12, -8, 12, 8, 16)
-	cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(2))
+	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(2))
 	require.NoError(t, err)
 	return cup
 }

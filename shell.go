@@ -23,7 +23,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the shell of docs/modify-design.md §8: Body.Shell removes the
+// This file is the shell of docs/modify-design.md §8: Shell removes the
 // selected cap faces of a straight prism or a certified one-line Sweep prism
 // reduction and lines what remains with a wall of the given thickness.
 // On a prism the whole construction is the recorded
@@ -75,10 +75,10 @@ func WithShellSense(s ShellSense) ShellOption {
 	return shellOptionValue{encoded: modifyoption.WithShellSense(int(s))}
 }
 
-// Shell removes selected faces and lines the rest
-// with a wall of thickness t, returning the new body and retiring the receiver
-// (docs/modify-design.md §8, core §8). sel names the faces to REMOVE — the
-// openings — resolved against the live receiver; a query matching nothing is
+// Shell removes the faces of b that sel selects and lines the rest
+// with a wall of thickness t, returning the new body and retiring b
+// (docs/modify-design.md §8, core §8). A nil b is ErrDegenerate. sel names the
+// faces to REMOVE — the openings — resolved against the live b; a query matching nothing is
 // loud (ErrNoMatch / ErrCardinality, S16). t is a length magnitude, gated like
 // every other (S15); a zero t is S14 (the wall is the empty region). A
 // receiver outside the admitted prism, straight Sweep, revolve, brep and draft routes is S3,
@@ -154,7 +154,7 @@ func WithShellSense(s ShellSense) ShellOption {
 // nested rectangular slabs: removing the boss top inward builds the plate
 // and boss cavity with four cylinder root patches (modify-general §3.1a).
 // A coaxial two-level counterbore has a separate inward route (§3.1e).
-func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
+func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a shell`, ErrDegenerate)
 	}

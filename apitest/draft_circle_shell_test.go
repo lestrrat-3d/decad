@@ -52,7 +52,7 @@ func checkDraftCircleShellRoles(t *testing.T, b *decad.Body) {
 func TestDraftCircleShellVerified(t *testing.T) {
 	t.Parallel()
 	base := draftedDisk(t, r3.NewVec(0, 0, 0), 5)
-	cup, err := base.Shell(t.Context(),
+	cup, err := decad.Shell(t.Context(), base,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(base))).Exactly(1), units.Millimeters(1))
 	require.NoError(t, err)
 	checkDraftCircleShellRoles(t, cup)
@@ -85,7 +85,7 @@ func TestDraftCircleShellPlacement(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := decad.Copy(t.Context(), base, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
-	cup, err := placed.Shell(t.Context(),
+	cup, err := decad.Shell(t.Context(), placed,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(placed))).Exactly(1), units.Millimeters(1))
 	require.NoError(t, err)
 	moved, err := decad.Copy(t.Context(), cup, decad.WithCopyPlacement(shift))
@@ -107,16 +107,16 @@ func TestDraftCircleShellRefusals(t *testing.T) {
 	t.Parallel()
 	base := draftedDisk(t, r3.NewVec(0, 0, 0), 5)
 	top := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(base))).Exactly(1)
-	_, err := base.Shell(t.Context(), top, units.Millimeters(8))
+	_, err := decad.Shell(t.Context(), base, top, units.Millimeters(8))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = base.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapStart(base))).Exactly(1),
+	_, err = decad.Shell(t.Context(), base, decad.Faces(decad.FaceCreatedBy(decad.CapStart(base))).Exactly(1),
 		units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = base.Shell(t.Context(), top, units.Millimeters(1), decad.WithShellSense(decad.Outward))
+	_, err = decad.Shell(t.Context(), base, top, units.Millimeters(1), decad.WithShellSense(decad.Outward))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	flare := draftedDisk(t, r3.NewVec(0, 0, 0), -5)
-	_, err = flare.Shell(t.Context(),
+	_, err = decad.Shell(t.Context(), flare,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(flare))).Exactly(1), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
@@ -127,7 +127,7 @@ func TestDraftCircleShellRefusals(t *testing.T) {
 		s.Fix(c)
 	})
 	annulus := taperExtrude(t, decad.New(), s, p, 10, 5, decad.Along)
-	_, err = annulus.Shell(t.Context(),
+	_, err = decad.Shell(t.Context(), annulus,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(annulus))).Exactly(1), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

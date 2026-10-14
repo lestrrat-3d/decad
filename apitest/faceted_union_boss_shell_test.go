@@ -27,7 +27,7 @@ func TestFacetedUnionNestedBossShellVerified(t *testing.T) {
 			}
 			joined, err := decad.Union(t.Context(), first, second)
 			require.NoError(t, err)
-			shell, err := joined.Shell(t.Context(),
+			shell, err := decad.Shell(t.Context(), joined,
 				decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1))
 			require.NoError(t, err)
 			volume, err := shell.Volume()
@@ -65,7 +65,7 @@ func TestFacetedUnionNestedBossShellRefusesInsufficientClearance(t *testing.T) {
 	require.NoError(t, err)
 	joined, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
-	_, err = joined.Shell(t.Context(),
+	_, err = decad.Shell(t.Context(), joined,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1))
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "Shell returned %v", err)
 	_, err = joined.Volume()
@@ -86,7 +86,7 @@ func TestFacetedUnionNestedBossShellRefusesPlacedSourceRelation(t *testing.T) {
 	require.NoError(t, err)
 	joined, err = decad.Transform(t.Context(), joined, move)
 	require.NoError(t, err)
-	_, err = joined.Shell(t.Context(),
+	_, err = decad.Shell(t.Context(), joined,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1))
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "Shell returned %v", err)
 	_, err = joined.Volume()

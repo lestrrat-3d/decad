@@ -61,7 +61,7 @@ func TestStraightSweepShellCapOpenings(t *testing.T) {
 				body, err = decad.Transform(t.Context(), body, move)
 				require.NoError(t, err)
 			}
-			result, err := body.Shell(t.Context(), tc.selectFaces(body), units.Millimeters(1))
+			result, err := decad.Shell(t.Context(), body, tc.selectFaces(body), units.Millimeters(1))
 			require.NoError(t, err)
 			decadtest.MeasuresVolume(t, result, units.CubicMillimeters(tc.volume), decadtest.Exactly())
 			requireSoundAndMeshed(t, doc, result, tc.volume)
@@ -72,7 +72,7 @@ func TestStraightSweepShellCapOpenings(t *testing.T) {
 func TestStraightSweepClosedShell(t *testing.T) {
 	t.Parallel()
 	doc, body := straightSweepForShell(t)
-	result, err := body.Shell(t.Context(), nil, units.Millimeters(1), decad.WithNoOpenings())
+	result, err := decad.Shell(t.Context(), body, nil, units.Millimeters(1), decad.WithNoOpenings())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, result, units.CubicMillimeters(1408), decadtest.Exactly())
 	require.Len(t, result.Shells(), 2)
@@ -84,7 +84,7 @@ func TestStraightSweepShellSideOpening(t *testing.T) {
 	t.Parallel()
 	doc, body := straightSweepForShell(t)
 	side := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))).Exactly(1)
-	result, err := body.Shell(t.Context(), side, units.Millimeters(1))
+	result, err := decad.Shell(t.Context(), body, side, units.Millimeters(1))
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, result, units.CubicMillimeters(1264), decadtest.Exactly())
 	mesh, err := result.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
@@ -131,7 +131,7 @@ func TestStraightSweepShellSideOpeningCapsSenseAndPlacement(t *testing.T) {
 			if tc.outward {
 				opts = append(opts, decad.WithShellSense(decad.Outward))
 			}
-			result, err := body.Shell(t.Context(), sel, units.Millimeters(1), opts...)
+			result, err := decad.Shell(t.Context(), body, sel, units.Millimeters(1), opts...)
 			require.NoError(t, err)
 			if tc.outward {
 				volume, err := result.Volume()
@@ -155,7 +155,7 @@ func TestStraightSweepShellSideOpeningRefusesWholeBoundaryAndHole(t *testing.T) 
 		doc, body := straightSweepForShell(t)
 		allSides := decad.Faces(decad.NormalTo(r3.NewVec(1, 0, 0))).
 			Or(decad.NormalTo(r3.NewVec(0, 1, 0))).Exactly(4)
-		out, err := body.Shell(t.Context(), allSides, units.Millimeters(1))
+		out, err := decad.Shell(t.Context(), body, allSides, units.Millimeters(1))
 		require.Nil(t, out)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "not all")
@@ -193,7 +193,7 @@ func TestStraightSweepShellSideOpeningRefusesWholeBoundaryAndHole(t *testing.T) 
 			}
 		}
 		require.NotNil(t, hole)
-		out, err := body.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(hole.Origins()[0])).Exactly(1),
+		out, err := decad.Shell(t.Context(), body, decad.Faces(decad.FaceCreatedBy(hole.Origins()[0])).Exactly(1),
 			units.Millimeters(1))
 		require.Nil(t, out)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -229,7 +229,7 @@ func TestSweepShellSideOpeningRefusesOtherPaths(t *testing.T) {
 				}
 			}
 			require.NotNil(t, side)
-			out, err := body.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(side.Origins()[0])).Exactly(1),
+			out, err := decad.Shell(t.Context(), body, decad.Faces(decad.FaceCreatedBy(side.Origins()[0])).Exactly(1),
 				units.Millimeters(1))
 			require.Nil(t, out)
 			require.ErrorIs(t, err, decad.ErrUnsupported)

@@ -853,7 +853,7 @@ func TestBooleanChainOfConesContinuesPastEachJoint(t *testing.T) {
 func TestUnionCupOperand(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
 	cupVol, err := cup.Volume()
 	require.NoError(t, err)

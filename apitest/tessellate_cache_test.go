@@ -123,7 +123,7 @@ func TestTessellationCachePayloadClasses(t *testing.T) {
 		{name: "prism", body: holedPlateBody},
 		{name: "cup", body: func(t *testing.T) *decad.Body {
 			_, box := shellBox(t)
-			body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+			body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
 			require.NoError(t, err)
 			return body
 		}},

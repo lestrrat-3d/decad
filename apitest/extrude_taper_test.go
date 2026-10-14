@@ -1066,7 +1066,7 @@ func TestTaperDownstreamRefusals(t *testing.T) {
 	_, err = decad.Chamfer(t.Context(), b, decad.Edges(decad.CreatedBy(decad.CapEnd(b))), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "draft body")
-	_, err = b.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(b))), units.Millimeters(1))
+	_, err = decad.Shell(t.Context(), b, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(b))), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "draft body")
 	require.Equal(t, []*decad.Body{b}, doc.Bodies())

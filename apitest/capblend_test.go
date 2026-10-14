@@ -370,7 +370,7 @@ func TestCapBlendSX10RefusesFurtherModify(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
-	_, err = chamfered.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapStart(chamfered))), units.Millimeters(1))
+	_, err = decad.Shell(t.Context(), chamfered, decad.Faces(decad.FaceCreatedBy(decad.CapStart(chamfered))), units.Millimeters(1))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

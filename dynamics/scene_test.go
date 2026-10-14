@@ -876,7 +876,7 @@ const partsBinProofSteps = 24
 func partsBinCup(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	box := makeBox(t, doc, -12, -8, 12, 8, 0, 16)
-	cup, err := box.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(2))
+	cup, err := decad.Shell(t.Context(), box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(2))
 	require.NoError(t, err)
 	return cup
 }

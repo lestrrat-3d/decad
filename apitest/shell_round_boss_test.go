@@ -27,7 +27,7 @@ func TestShellRoundStackedBoss(t *testing.T) {
 			doc := decad.New()
 			stack := roundBossFromSketch(t, doc, tc.cx, tc.cy)
 			require.Len(t, stack.Faces(), 8)
-			shell, err := stack.Shell(t.Context(),
+			shell, err := decad.Shell(t.Context(), stack,
 				decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1))
 			require.NoError(t, err)
 			require.Len(t, shell.Faces(), 16)
@@ -101,7 +101,7 @@ func TestShellRoundStackedBossClearance(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
 			stack := roundBossFromSketch(t, doc, tc.cx, tc.cy)
-			_, err := stack.Shell(t.Context(),
+			_, err := decad.Shell(t.Context(), stack,
 				decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
 				units.Millimeters(tc.thickness))
 			require.ErrorIs(t, err, decad.ErrUnsupported)

@@ -85,7 +85,7 @@ func TestShellBothCapsHoledBands(t *testing.T) {
 		t.Run(tt.sense.String(), func(t *testing.T) {
 			t.Parallel()
 			box := twoHolePlate(t)
-			body, err := box.Shell(t.Context(), bothCaps(), units.Millimeters(tt.th), decad.WithShellSense(tt.sense))
+			body, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(tt.th), decad.WithShellSense(tt.sense))
 			require.NoError(t, err)
 			require.True(t, body.IsSolid())
 			requireManifold(t, body)
@@ -149,7 +149,7 @@ func TestShellBothCapsHoledBandsVerify(t *testing.T) {
 	t.Parallel()
 	box := twoHolePlate(t)
 	doc := box.Document()
-	body, err := box.Shell(t.Context(), bothCaps(), units.Millimeters(3))
+	body, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(3))
 	require.NoError(t, err)
 	require.Len(t, body.Lumps(), 3)
 	report, err := doc.Verify(t.Context())
@@ -171,7 +171,7 @@ func TestShellCupTwoHolesThroughStack(t *testing.T) {
 	const th = 3.0
 	h := shellBoxHeight
 	box := twoHolePlate(t)
-	body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(th))
+	body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
 	require.NoError(t, err)
 	requireManifold(t, body)
 	require.Len(t, body.Lumps(), 1, `every band hangs off the one floor`)

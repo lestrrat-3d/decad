@@ -153,7 +153,7 @@ func TestBrepModifyRoutePShellsS1(t *testing.T) {
 	t.Run("cup", func(t *testing.T) {
 		t.Parallel()
 		_, s1 := internalCrossDrilled(t)
-		result, err := s1.Shell(t.Context(), Faces(Facing(y)).Exactly(1), units.Millimeters(2))
+		result, err := Shell(t.Context(), s1, Faces(Facing(y)).Exactly(1), units.Millimeters(2))
 		require.NoError(t, err)
 		_, ok := result.payload.(cupPayload)
 		require.True(t, ok, "route P builds a cup, got %T", result.payload)

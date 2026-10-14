@@ -120,7 +120,7 @@ func TestOffsetSectionDeltaEnclosesDenotedOffset(t *testing.T) {
 			}
 			box, err := Extrude(t.Context(), New(), s, profile, Distance{D: units.Millimeters(10), Dir: Along})
 			require.NoError(t, err)
-			cup, err := box.Shell(t.Context(), Faces(FaceCreatedBy(CapEnd(box))), thickness, WithShellSense(tt.sense))
+			cup, err := Shell(t.Context(), box, Faces(FaceCreatedBy(CapEnd(box))), thickness, WithShellSense(tt.sense))
 			require.NoError(t, err)
 			record, ok := cup.payload.(cupPayload)
 			require.True(t, ok)

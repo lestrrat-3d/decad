@@ -37,9 +37,9 @@ func TestShellStackedBossMeshVolumeProof(t *testing.T) {
 			require.NoError(t, err)
 			var shell *Body
 			if tc.closed {
-				shell, err = stack.Shell(t.Context(), nil, units.Millimeters(1), WithNoOpenings())
+				shell, err = Shell(t.Context(), stack, nil, units.Millimeters(1), WithNoOpenings())
 			} else {
-				shell, err = stack.Shell(t.Context(), Faces(FaceCreatedBy(CapEnd(stack))).Exactly(1),
+				shell, err = Shell(t.Context(), stack, Faces(FaceCreatedBy(CapEnd(stack))).Exactly(1),
 					units.Millimeters(1))
 			}
 			require.NoError(t, err)

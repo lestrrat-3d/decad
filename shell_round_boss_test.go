@@ -14,7 +14,7 @@ import (
 func TestRoundBossShellMeshVolumeProof(t *testing.T) {
 	t.Parallel()
 	stack := internalRoundBoss(t)
-	shell, err := stack.Shell(t.Context(), Faces(FaceCreatedBy(CapEnd(stack))).Exactly(1), units.Millimeters(1))
+	shell, err := Shell(t.Context(), stack, Faces(FaceCreatedBy(CapEnd(stack))).Exactly(1), units.Millimeters(1))
 	require.NoError(t, err)
 	volume, err := shell.Volume()
 	require.NoError(t, err)

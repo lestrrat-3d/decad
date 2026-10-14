@@ -1199,7 +1199,7 @@ func TestVoidRevolveModifyOps(t *testing.T) {
 	doc, body := voidRevolve(t)
 	before, err := body.Volume()
 	require.NoError(t, err)
-	_, err = body.Shell(t.Context(), decad.Faces(), units.Millimeters(1))
+	_, err = decad.Shell(t.Context(), body, decad.Faces(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, `SX8`)
 	after, err := body.Volume()
