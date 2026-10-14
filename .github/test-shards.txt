@@ -1439,3 +1439,7 @@
 5	0.00	TestCurvedTimeStageCellsMatchLegacy
 4	0.00	TestCurvedCensusOwnedArcsMatchLiveCheck
 9	1.40	TestCrossBoreCapPatchesHold
+1	0.00	TestSpiralHeldEdgesRefusesBrokenMeshes
+1	0.00	TestSpiralHeldSwitchFromMatchesSwitchPath
+1	0.00	TestSpiralHeldSwitchFromMatchesSwitchPathRandomMeshes
+1	0.00	TestSpiralHeldSwitchFromMatchesSwitchPathCancelled
