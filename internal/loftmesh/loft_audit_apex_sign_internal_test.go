@@ -132,7 +132,7 @@ func TestApexPlaneSignMatchesExact(t *testing.T) {
 		require.Equal(t, 2, count)
 		apexIndex := tessellation.TriangleApexIndex(f.tris[j], shared[0], shared[1])
 		want := apexReferenceSign(plain, f.tris, i, j)
-		got := plain.apexPlaneSign(plain.corners(i), plain.corners(j), f.tris[j], apexIndex,
+		got := plain.apexPlaneSign(plain.corners(i), plain.corners(j), plain.xtri(i), plain.xtri(j),
 			plain.Norms[i], plain.Xverts[apexIndex], plain.Xverts[shared[0]])
 		require.Equal(t, want, got, "pair %d", p)
 		signs[want]++
@@ -152,7 +152,7 @@ func TestApexPlaneSignMatchesExact(t *testing.T) {
 
 		// Exact lifts that differ from the floats: the float answer is off.
 		wantX := apexReferenceSign(exact, f.tris, i, j)
-		gotX := exact.apexPlaneSign(exact.corners(i), exact.corners(j), f.tris[j], apexIndex,
+		gotX := exact.apexPlaneSign(exact.corners(i), exact.corners(j), exact.xtri(i), exact.xtri(j),
 			exact.Norms[i], exact.Xverts[apexIndex], exact.Xverts[shared[0]])
 		require.Equal(t, wantX, gotX, "exact-lift pair %d", p)
 		if wantX != want {
@@ -239,4 +239,90 @@ func TestApexPlaneSignKeepsAuditWork(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestApexPlaneSignCallerOrderDiffersFromTable passes AuditLoftPairData a
+// caller triple that lists triangle j's vertices in another order than the
+// table was built with. The apex (vertex 3) is first in the caller's triple and
+// second in the table's. Vertex 3 is off the plane z = 0 of triangle i, so the
+// exact path admits the pair by edge certificate.
+func TestApexPlaneSignCallerOrderDiffersFromTable(t *testing.T) {
+	t.Parallel()
+	verts := []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}
+	data := NewLoftAuditData(verts, [][3]int{{0, 1, 2}, {0, 1, 3}})
+	caller := [][3]int{{0, 1, 2}, {3, 0, 1}}
+	for _, sc := range []LoftAuditShortcuts{{Certificates: true}, {Certificates: true, Sweep: true}} {
+		got, err := AuditLoftPairData(data, caller, 0, 1, sc)
+		want, wantErr := auditLoftPairDataSignedReference(data, caller, 0, 1, sc)
+		require.NoError(t, wantErr)
+		require.NoError(t, err)
+		require.Equal(t, want, got)
+		require.Equal(t, LoftPairEdgeCertificate, got)
+	}
+}
+
+// permuteTriples returns tris with every triple's corners in a random order.
+func permuteTriples(rng *rand.Rand, tris [][3]int) [][3]int {
+	out := make([][3]int, len(tris))
+	for n, tri := range tris {
+		p := planePairPerms[rng.IntN(6)]
+		out[n] = [3]int{tri[p[0]], tri[p[1]], tri[p[2]]}
+	}
+	return out
+}
+
+// TestApexPlaneSignKeepsOutcomesUnderCallerPermutation audits the fixture's
+// shared-edge pairs with the caller's corner order permuted against the
+// table's, and compares each outcome and error with the exact-only reference.
+func TestApexPlaneSignKeepsOutcomesUnderCallerPermutation(t *testing.T) {
+	t.Parallel()
+	f := apexFixtureMesh(3000)
+	data := NewLoftAuditData(f.verts, f.tris)
+	rng := rand.New(rand.NewPCG(61, 67))
+	refused, edge := 0, 0
+	for round := range 2 {
+		caller := permuteTriples(rng, f.tris)
+		for p := range len(f.tris) / 2 {
+			i, j := 2*p, 2*p+1
+			got, gotErr := auditLoftPairDataSigned(data, caller, i, j, loftGenericShortcuts, nil, nil)
+			want, wantErr := auditLoftPairDataSignedReference(data, caller, i, j, loftGenericShortcuts)
+			require.Equal(t, want, got, "round %d pair %d", round, p)
+			if wantErr != nil {
+				require.EqualError(t, gotErr, wantErr.Error(), "round %d pair %d", round, p)
+				refused++
+				continue
+			}
+			require.NoError(t, gotErr, "round %d pair %d", round, p)
+			if got == LoftPairEdgeCertificate {
+				edge++
+			}
+		}
+	}
+	require.Positive(t, refused)
+	require.Positive(t, edge)
+}
+
+// TestApexPlaneSignDeclinesForeignPoints calls apexPlaneSign with an edge
+// endpoint that is no corner of triangle i's table entry, and with points that
+// carry no lift. Neither may be decided in floats: the first must equal the
+// exact dot product, the second must reach it (and panic on the missing lift).
+func TestApexPlaneSignDeclinesForeignPoints(t *testing.T) {
+	t.Parallel()
+	verts := []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}
+	data := NewLoftAuditData(verts, [][3]int{{0, 1, 2}, {0, 1, 3}})
+	ti, tj, xti, xtj := data.corners(0), data.corners(1), data.xtri(0), data.xtri(1)
+	// Vertex 3 is off triangle 0's plane, but as edgeA it makes apex - edgeA
+	// zero, so the exact sign is 0 while the float orientation of vertex 3 is not.
+	foreign := data.Xverts[3]
+	want := proof.XdotSign(data.Norms[0], proof.Xsub(data.Xverts[3], foreign))
+	require.Zero(t, want)
+	require.Equal(t, want, data.apexPlaneSign(ti, tj, xti, xtj, data.Norms[0], data.Xverts[3], foreign))
+	s, ok := proof.OrientSignFloat(ti[0], ti[1], ti[2], verts[3])
+	require.True(t, ok)
+	require.NotZero(t, s, "the control float sign is zero, so the check proves nothing")
+
+	var none [3]proof.Xpt
+	require.Panics(t, func() {
+		data.apexPlaneSign(ti, tj, none, none, data.Norms[0], proof.Xpt{}, proof.Xpt{})
+	})
 }
