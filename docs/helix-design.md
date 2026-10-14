@@ -755,8 +755,9 @@ count before any allocation; the trig enclosure runs once per distinct
 first-octant residual (at most `N + 1` fixed 200-bit series, 33 for a whole
 number of turns at 256 stations per turn), every vertex costs a dozen
 float operations, and the audit's work is charged against
-`proofbound.MaxFacetPairTestsPerCall`. The crossing audit's exact pair
-classifications take most of a build's time.
+`proofbound.MaxFacetPairTestsPerCall`. The crossing audit takes most of
+`Build`'s time: its candidate enumeration and exact per-triangle tables, with
+almost every pair decided by a float certificate (docs/loft-design.md §6).
 
 ## 11. Increments
 

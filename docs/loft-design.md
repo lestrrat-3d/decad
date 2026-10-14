@@ -1222,9 +1222,10 @@ of the same idea and only ever fires for a pair Table C gives no shared entity;
 a certificate is the accept side and only ever fires for a pair Table C DOES
 give one. A certificate admits under the identical rule this section already
 states — the pair's whole intersection IS that expected entity — so it changes
-only how SOON that admission is reached, never which pairs are admitted. Two
-certificates are stated, each proven from exact rational signs alone, never
-from a float tolerance:
+only how SOON that admission is reached, never which pairs are admitted. Four
+certificates are stated, each proven from signs that are exact: exact rational
+arithmetic, or a float filter whose error bound proves the sign. No sign comes
+from a tolerance:
 
 - **The noncoplanar shared edge.** For a pair Table C gives a common edge, one
   exact sign proving the two triangles' planes DISTINCT is enough: both planes
@@ -1255,9 +1256,18 @@ from a float tolerance:
   drops the same dominant axis for both and the projection is invertible on
   their plane. `cross2xSign` uses the cached projected points, with an exact
   rational fallback when its float filter cannot prove a sign.
+- **A separating plane through the shared vertex.** For a pair with one common
+  vertex, any plane through that vertex with the other triangle's two remaining
+  corners strictly on one side and this triangle's two remaining corners
+  strictly on the other confines the intersection to the vertex, by the same
+  convexity argument. The audit builds the plane through the vertex and two
+  float points chosen from the corners' directions; only the four strict signs,
+  each certified by the guarded float orientation filter, prove anything. An
+  undecided or zero sign leaves the pair to the exact classification.
 
 The noncoplanar certificates read signs the audit computes anyway. The
 coplanar certificate tests at most two lines before falling through. The
+separating-plane certificate costs four float orientation tests. The
 certificates can be disabled together, so the audit keeps an independent reference path — no broad-phase
 and no certificate, every pair through the exact classification — for the
 required tests to compare every verdict against.

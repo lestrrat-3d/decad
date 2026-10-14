@@ -20,6 +20,13 @@ func requireSameAuditOutcome(t *testing.T, data *LoftAuditData, tris [][3]int, i
 	t.Helper()
 	wantOut, wantErr := auditLoftPairDataSignedReference(data, tris, i, j, shortcuts)
 	gotOut, gotErr := auditLoftPairDataSigned(data, tris, i, j, shortcuts, nil, nil)
+	if shared, count := tessellation.SharedVertexIndices(tris[i], tris[j]); shortcuts.Certificates && count == 1 &&
+		wantOut == LoftPairClassified && wantErr == nil &&
+		data.separatingPlaneCertificate(tris[i], tris[j], i, j, shared[0]) {
+		// The separating plane admits a pair the reference classifies and
+		// admits: the only allowed difference.
+		wantOut = LoftPairVertexCertificate
+	}
 	require.Equal(t, wantOut, gotOut, "%s pair %d,%d", label, i, j)
 	if wantErr == nil {
 		require.NoError(t, gotErr, "%s pair %d,%d", label, i, j)

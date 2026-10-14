@@ -435,7 +435,7 @@ type LoftAuditShortcuts struct {
 //   - skips: a zero-shared-vertex pair a broad-phase tier proved apart.
 //   - edgeCerts: a pair the noncoplanar shared-edge certificate admitted
 //     (AuditLoftPairData's own doc comment carries its proof).
-//   - vertexCerts: a pair the isolated shared-vertex certificate admitted.
+//   - vertexCerts: a pair a shared-vertex certificate (B, C or D) admitted.
 //   - classifications: every other pair, which reached AuditLoftPairData
 //     without a certificate deciding it.
 //
@@ -627,6 +627,16 @@ func AuditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
 // second triangle. The second triangle meets the line only at the shared
 // vertex; the first stays entirely on its own side. Convexity confines their
 // intersection to that vertex. A zero sign falls through to classification.
+//
+// # Certificate D — a separating plane through the shared vertex
+//
+// A pair sharing exactly one vertex index is admitted once a plane through that
+// vertex has one triangle's two remaining corners strictly on one side and the
+// other triangle's two remaining corners strictly on the other. Convexity
+// confines the intersection to the vertex. separatingPlaneCertificate owns the
+// proof; it reads four float orientation signs, each certified by
+// proof.OrientSignFloat, and any undecided or zero sign falls through to the
+// path below.
 func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts) (LoftPairOutcome, error) {
 	return auditLoftPairDataSigned(data, tris, i, j, shortcuts, nil, nil)
 }
@@ -646,6 +656,9 @@ func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, short
 		}
 	}
 	if shortcuts.Certificates && sharedCount == 1 && data.vertexCertificateFloat(tris, i, j, shared[0]) {
+		return LoftPairVertexCertificate, nil
+	}
+	if shortcuts.Certificates && sharedCount == 1 && data.separatingPlaneCertificate(tris[i], tris[j], i, j, shared[0]) {
 		return LoftPairVertexCertificate, nil
 	}
 	ta := data.corners(i)
