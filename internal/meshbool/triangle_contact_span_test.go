@@ -1,6 +1,7 @@
 package meshbool_test
 
 import (
+	"math"
 	"math/big"
 	"math/rand/v2"
 	"testing"
@@ -10,6 +11,36 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
+
+func TestOrient2FloatUnderflowFallsBack(t *testing.T) {
+	m := math.SmallestNonzeroFloat64
+	a := r3.Vec{X: -0x1p-52}
+	b := r3.Vec{X: 0x1.e124924924925p+3, Y: 421 * m}
+	c := r3.Vec{X: 2.5, Y: 70 * m}
+	xp := func(p r3.Vec) meshbool.Xp2 { return meshbool.NewXP2FromXpt(proof.XptOf(p), 0, 1) }
+	require.Equal(t, -1, meshbool.Cross2x(xp(a), xp(b), xp(c)).Sign())
+	require.Zero(t, meshbool.Orient2Float([2]float64{a.X, a.Y}, [2]float64{b.X, b.Y}, [2]float64{c.X, c.Y}))
+}
+
+func TestTriTriContactSpanUnderflowKeepsCoplanarRegion(t *testing.T) {
+	m := math.SmallestNonzeroFloat64
+	a := r3.Vec{X: -0x1p-52}
+	b := r3.Vec{X: 0x1.e124924924925p+3, Y: 421 * m}
+	c := r3.Vec{X: 2.5, Y: 70 * m}
+	ta := [3]r3.Vec{a, b, {Y: -m}}
+	tb := [3]r3.Vec{c, {X: 2.5, Y: 71 * m}, {X: 3, Y: 85 * m}}
+	var xa, xb [3]proof.Xpt
+	for i := range 3 {
+		xa[i], xb[i] = proof.XptOf(ta[i]), proof.XptOf(tb[i])
+	}
+	na := proof.Xcross(proof.Xsub(xa[1], xa[0]), proof.Xsub(xa[2], xa[0]))
+	nb := proof.Xcross(proof.Xsub(xb[1], xb[0]), proof.Xsub(xb[2], xb[0]))
+	require.False(t, meshbool.CoplanarFloatSeparated(ta, tb, na))
+	span, err := meshbool.TriTriContactSpanCore(ta, tb, xa, xb, na, nb, nil, nil, nil, nil,
+		true, r3.Vec{}, r3.Vec{}, false)
+	require.NoError(t, err)
+	require.Equal(t, meshbool.ContactRegion, span.Kind)
+}
 
 func spanTestPointsEqual(a, b proof.Xpt) bool {
 	same := func(x, wx, y, wy *big.Int) bool {

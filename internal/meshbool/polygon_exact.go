@@ -15,6 +15,7 @@ import (
 // coordinates only accelerate conservative filters; the rational coordinates
 // remain the source of truth whenever a filter cannot decide. Callers must not
 // mutate either coordinate or its float cache after construction.
+// FloatFinite means both float coordinates are usable by the sign filter.
 type Xp2 struct {
 	U, V        *big.Rat
 	Fu, Fv      float64
@@ -33,8 +34,7 @@ func NewXP2(u, v *big.Rat) Xp2 {
 		Fu:             fu,
 		Fv:             fv,
 		floatFromExact: true,
-		FloatFinite: !math.IsNaN(fu) && !math.IsInf(fu, 0) &&
-			!math.IsNaN(fv) && !math.IsInf(fv, 0),
+		FloatFinite:    xp2FloatSafe(u, fu) && xp2FloatSafe(v, fv),
 	}
 }
 
@@ -55,9 +55,20 @@ func NewXP2FromXpt(p proof.Xpt, u, v int) Xp2 {
 		Hu:             XIntCoordOf(p, u),
 		Hv:             XIntCoordOf(p, v),
 		Hw:             p.W,
-		FloatFinite: !math.IsNaN(fu) && !math.IsInf(fu, 0) &&
-			!math.IsNaN(fv) && !math.IsInf(fv, 0),
+		FloatFinite:    xp2FloatSafe(ur, fu) && xp2FloatSafe(vr, fv),
 	}
+}
+
+// xp2FloatSafe admits exact zero or a normal rounded coordinate in
+// [2^-300, 2^250]. Within that interval, exact-to-float conversion has
+// relative error at most 2^-53; a rounded zero from a nonzero rational or
+// a subnormal need not have such a relative bound.
+func xp2FloatSafe(exact *big.Rat, rounded float64) bool {
+	if exact.Sign() == 0 {
+		return rounded == 0
+	}
+	m := math.Abs(rounded)
+	return m >= 0x1p-300 && m <= 0x1p250
 }
 
 // key2 is the exact 2D identity.
@@ -176,6 +187,18 @@ func HomCross2Frac(e0 Xp2, baU, baV *big.Int, p Xp2) ClipFrac {
 // the exact rational predicate for values close enough to zero that rounding
 // could change the answer. The scale uses the original coordinates, not only
 // their float differences, so cancellation during subtraction is covered too.
+// With all cached coordinates admitted, nonzero rounded coordinates lie on
+// the 2^-352 grid. Their differences and products lie on the 2^-352 and
+// 2^-704 grids; every nonzero result is normal. No arithmetic step can
+// lose a nonzero value to underflow, and all intermediates stay at most 2^503.
+// Each expanded determinant term charges two coordinate conversions, two
+// difference roundings, a product rounding and the final subtraction. With
+// u=2^-53, gamma6=6u/(1-6u) bounds the error by gamma6 times the exact
+// coordinate-product sum. That sum is at most the sum formed from rounded
+// coordinates divided by (1-u)^2; evaluating scale rounds at most four times.
+// Thus the error is below gamma6/(1-u)^6 times the computed scale, less
+// than 7e-16 times it. A positive scale is at least 2^-600, so the 1e-12
+// threshold stays normal and dominates that bound, including its rounding.
 func Cross2xSign(a, b, c Xp2) int {
 	au, av, bu, bv, cu, cv := a.Fu, a.Fv, b.Fu, b.Fv, c.Fu, c.Fv
 	if a.FloatFinite && b.FloatFinite && c.FloatFinite {
