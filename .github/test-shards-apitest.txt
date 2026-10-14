@@ -2094,3 +2094,5 @@
 10	0.00	TestExtrudeToPlacedRevolveFaceWithTiltedRecordRefuses
 10	0.00	TestExtrudeToPartialRevolveStartCap
 10	0.00	TestExtrudeToPartialRevolveStartCapWithUncertainAxisRefuses
+10	0.00	TestExtrudeToPartialRevolveStartCapWithUncertainAngleRefuses
+10	0.00	TestExtrudeToTranslatedRevolveStartCapChargesStopLevel
