@@ -23,7 +23,7 @@ nearby held coordinates.
 
 ## Held anchors and freshness
 
-The checked open-patch constructor rederives the graph, selects one whole-arc
+The checked open-patch constructor uses the live graph, selects one whole-arc
 run by exact source interval and live face, and binds each station ID to the
 actual seam index in both open patches. It checks the shared held point and
 each side's vertex bound.
@@ -53,7 +53,7 @@ records do not classify a triangle as retained or removed.
 
 ## Vertical source contact on the blank shell
 
-The vertical-trace consumer rebuilds the current graph and all-run shell. It
+The vertical-trace consumer builds the live graph and all-run shell. It
 selects one constant-X source cell by its graph ID and finds the cap arc with
 that cell's section and blank face. The graph's two endpoint-cell IDs choose
 the path ends. Exact mapped source endpoints link every retained piece on
@@ -82,12 +82,21 @@ band, and ray wedge. The rebuilt shell repeats orientation, Euler, exact
 facet-crossing, positive-volume and face-bound audits. The trace does not
 classify retained LoftFaces faces or produce a joined Union boundary.
 
-A stored graph is checked against a newly certified source and census before
-later use. The comparison includes every pair verdict, cell owner and exact
-interval, complete station run, and occupied cap arc. A changed source
-station, face, reference, interval, root, or event ID refuses. Graph records
+A stored graph is checked against the live graph before later use. The
+comparison includes every pair verdict, cell owner and exact interval,
+complete station run, and occupied cap arc. A changed source station, face,
+reference, interval, root, or event ID refuses. Graph records
 and the open patches remain construction pieces; the retained LoftFaces faces,
 joined shell, boundary displacement, and occupied-volume proofs are separate.
+
+A top-level consumer (the all-run shell, the cap-ring shell, the vertical
+trace and the clear-patch context) opens one call scope. Inside it, the source
+certificate and contact graph of a body pair are built from the live bodies the
+first time a check needs them, and every later check in the same call reuses
+them. A census is derived once per source certificate in the call. Nothing
+inside a call edits the bodies, so a rebuild inside the call would produce the
+same records. Separate top-level calls never share a scope, so a body changed
+between calls is certified again and a changed record refuses.
 
 ## Clear blank-shell triangles
 

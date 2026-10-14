@@ -217,6 +217,7 @@ func revolveLoftFacesAllRayOrderBounded(rays []revolveLoftFacesRay,
 func revolveLoftFacesBlankShellWithAllRuns(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate,
 ) (*revolveLoftFacesBlankSeamShell, *revolveLoftFacesContactGraph, bool, error) {
+	ctx = revolveLoftFacesWithCallScope(ctx)
 	graph, ok, err := revolveLoftFacesContactGraphOf(ctx, proof)
 	if err != nil || !ok || graph == nil || len(graph.runs) == 0 {
 		return nil, nil, false, err

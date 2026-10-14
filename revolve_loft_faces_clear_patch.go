@@ -156,7 +156,8 @@ func newRevolveLoftFacesClearPatchContext(ctx context.Context,
 		!source.toolProof.current(source.tooth, payload) {
 		return nil, false, err
 	}
-	shell, _, ok, err := revolveLoftFacesBlankShellWithAllRuns(ctx, source)
+	shell, _, ok, err := revolveLoftFacesBlankShellWithAllRuns(
+		revolveLoftFacesWithCallScope(ctx), source)
 	if err != nil || !ok || !source.toolProof.current(source.tooth, payload) {
 		return nil, false, err
 	}

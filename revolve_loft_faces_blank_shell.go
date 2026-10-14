@@ -109,7 +109,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		!revolveLoftFacesTrimCurrent(proof.tooth, proof.trim) {
 		return nil, false, nil
 	}
-	census, currentOK, err := revolveLoftFacesCensus(ctx, proof)
+	census, currentOK, err := revolveLoftFacesCensusIn(ctx, proof)
 	if err != nil || !currentOK {
 		return nil, false, err
 	}
