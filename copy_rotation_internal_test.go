@@ -252,15 +252,23 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	require.Nil(t, exact.loftMirrorCopy)
 	require.Zero(t, exact.pointPlaneCapDisplacement)
 
-	// Control: the float placement keeps the section source and records the
-	// similarity step and the sector it placed.
+	// A nonidentity float delta moves the true solid, so it drops the point-loft
+	// source while retaining the float similarity, sector, and mirror-copy records.
 	body, err = source.placed(t.Context(), joined.doc, joined.doc.nextProducerID(), composed)
 	require.NoError(t, err)
 	float := body.payload.(facetedPayload)
-	require.NotNil(t, float.pointSection)
+	require.Nil(t, float.pointSection)
 	require.NotNil(t, float.pointSimilarity)
 	require.NotNil(t, float.revolveLoftSector)
 	require.NotNil(t, float.loftMirrorCopy)
+
+	t.Run("identity delta", func(t *testing.T) {
+		require.Equal(t, r3.Identity(), source.xform)
+		body, err := source.placed(t.Context(), joined.doc, joined.doc.nextProducerID(), r3.Identity())
+		require.NoError(t, err)
+		// An exact identity delta leaves the point-loft source valid.
+		require.NotNil(t, body.payload.(facetedPayload).pointSection)
+	})
 }
 
 // exactCopyMotionMessage is the text only the exactPlaced refusal in
