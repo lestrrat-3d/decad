@@ -1,6 +1,7 @@
 package meshbool
 
 import (
+	"math"
 	"math/rand/v2"
 	"testing"
 
@@ -101,8 +102,8 @@ func TestContactMemoBlockArenaOverflow(t *testing.T) {
 	}
 	require.NotNil(t, memo.BlockIndex)
 	require.NotEmpty(t, memo.Sparse, "stores past the arena limit land in the overflow map")
-	require.Equal(t, limit<<contactMemoBlockShift, len(memo.Arena))
-	require.LessOrEqual(t, cap(memo.Arena), limit<<contactMemoBlockShift)
+	require.Equal(t, limit, memo.arenaBlocks)
+	requireArenaBounded(t, memo)
 	ref.requireAllMatch(t, memo)
 	for range 10000 {
 		ref.requireMatches(t, memo, r.IntN(rows), r.IntN(cols))
@@ -218,6 +219,7 @@ func TestContactMemoRandomSequencesMatchReference(t *testing.T) {
 			r := rand.New(rand.NewPCG(tc.seed, 71))
 			edges := []int{0, 1, 62, 63, 64, 65, 127, 128, tc.cols - 1, tc.cols - 2}
 			rowLimit := hot
+			far := farKeys(tc.rows, tc.cols)
 			pick := func() (int, int) {
 				i := r.IntN(rowLimit)
 				if r.IntN(8) == 0 {
@@ -230,13 +232,27 @@ func TestContactMemoRandomSequencesMatchReference(t *testing.T) {
 				return i, j
 			}
 			step := func() {
-				switch r.IntN(4) {
+				switch r.IntN(5) {
 				case 0: // an isolated key, sometimes one stored before
 					i, j := pick()
 					ref.store(memo, i, j, testContact(r, i, j))
 				case 1: // a run along a row
 					i, j := pick()
 					ref.storeBand(r, memo, i, j, min(1+r.IntN(2*contactMemoBlockSize), tc.cols-j))
+				case 2: // a far key, or an in-range key shifted by 2^32
+					k := far[r.IntN(len(far))]
+					i, j := pick()
+					switch r.IntN(3) {
+					case 0:
+						k = [2]int{i + 1<<32, j}
+					case 1:
+						k = [2]int{i, j + 1<<32}
+					}
+					if r.IntN(2) == 0 {
+						ref.store(memo, k[0], k[1], testContact(r, i, j))
+					}
+					ref.requireMatches(t, memo, k[0], k[1])
+					ref.requireMatches(t, memo, i, j)
 				default:
 					ref.requireMatches(t, memo, r.IntN(rowLimit), r.IntN(tc.cols))
 					i, j := pick()
@@ -255,18 +271,34 @@ func TestContactMemoRandomSequencesMatchReference(t *testing.T) {
 			ref.requireAllMatch(t, memo)
 			if tc.overflow {
 				require.NotEmpty(t, memo.Sparse, "the second phase fills past the arena limit")
-				require.LessOrEqual(t, cap(memo.Arena), memo.arenaLimit()<<contactMemoBlockShift)
+				requireArenaBounded(t, memo)
 			}
 		})
 	}
 }
 
+// requireArenaBounded pins the arena's memory: the retained blocks stay within
+// the limit, and no single allocation is larger than one chunk, so growth never
+// holds a second copy of the arena.
+func requireArenaBounded(t *testing.T, memo *ContactMemo) {
+	t.Helper()
+	total := 0
+	for _, chunk := range memo.Arena {
+		require.LessOrEqual(t, len(chunk), contactMemoChunkBlocks<<contactMemoBlockShift)
+		require.Equal(t, len(chunk), cap(chunk))
+		total += len(chunk)
+	}
+	require.LessOrEqual(t, total, memo.arenaLimit()<<contactMemoBlockShift)
+	require.GreaterOrEqual(t, total, memo.arenaBlocks<<contactMemoBlockShift)
+}
+
 // TestContactMemoArenaGrowthNeverPassesTheLimit opens blocks one at a time
-// from an empty arena: capacity doubles but stops at the limit, the limit's
-// blocks open, and the next block is refused without a write.
+// from an empty arena: chunks are allocated one at a time and never past the
+// limit, the limit's blocks open, and the next block is refused without a
+// write.
 func TestContactMemoArenaGrowthNeverPassesTheLimit(t *testing.T) {
 	t.Parallel()
-	const rows, cols, limit = 130, 64, 100 // one block per row; 100 is no power of two
+	const rows, cols, limit = 2600, 64, 2500 // one block per row; 2.4 chunks
 	memo := memoPair(rows, cols)
 	memo.BlockIndex = make([]uint32, rows)
 	memo.blockRows, memo.blockCols = rows, 1
@@ -274,10 +306,11 @@ func TestContactMemoArenaGrowthNeverPassesTheLimit(t *testing.T) {
 	for i := range rows {
 		opened := memo.storeBlock(i, cols-1, uint32(i+2))
 		require.Equal(t, i < limit, opened, "row %d", i)
-		require.LessOrEqual(t, cap(memo.Arena), limit<<contactMemoBlockShift)
-		require.LessOrEqual(t, len(memo.Arena), cap(memo.Arena))
+		requireArenaBounded(t, memo)
 	}
-	require.Equal(t, limit<<contactMemoBlockShift, len(memo.Arena))
+	require.Equal(t, limit, memo.arenaBlocks)
+	require.Len(t, memo.Arena, 3)
+	require.Len(t, memo.Arena[2], (limit-2*contactMemoChunkBlocks)<<contactMemoBlockShift)
 	for i := range limit {
 		status, ok := memo.lookupBlock(i, cols-1)
 		require.True(t, ok)
@@ -287,4 +320,81 @@ func TestContactMemoArenaGrowthNeverPassesTheLimit(t *testing.T) {
 	}
 	_, ok := memo.lookupBlock(limit, cols-1)
 	require.False(t, ok)
+}
+
+// farKeys returns keys outside a rows x cols product, among them keys that
+// wrap onto an in-range key when truncated to 32 bits.
+func farKeys(rows, cols int) [][2]int {
+	return [][2]int{
+		{-1, 0}, {0, -1}, {-1, -1}, {rows, 0}, {0, cols}, {rows, cols - 1}, {rows - 1, cols}, {0, cols + 20},
+		{1 << 30, 5}, {5, 1 << 30}, {-(1 << 30), 5}, {5, -(1 << 30)},
+		{1<<31 - 1, 3}, {1 << 31, 3}, {3, 1<<31 - 1}, {3, 1 << 31}, {1<<31 + 1, 1<<31 + 1},
+		{1 << 32, cols - 1}, {1<<32 + 7, 5}, {7, 1<<32 + 5}, {-(1 << 32), 5}, {5, -(1 << 32)},
+		{math.MinInt64, math.MinInt64}, {math.MaxInt64, math.MaxInt64}, {math.MinInt64, 0}, {0, math.MaxInt64},
+	}
+}
+
+// TestContactMemoFarKeysSurvivePromotion stores far keys before and after the
+// block promotion, including the keys that alias in-range keys under 32-bit
+// truncation, and requires every far key and its in-range alias to answer as a
+// map keyed by the full key does.
+func TestContactMemoFarKeysSurvivePromotion(t *testing.T) {
+	t.Parallel()
+	const rows, cols = 1000, 3000
+	segment := TriContact{Kind: ContactSegment, EdgeA: 1, EdgeB: 2}
+	other := TriContact{Kind: ContactSegment, EdgeA: 2, EdgeB: 0}
+	memo := memoPair(rows, cols)
+	ref := memoRef{}
+	keys := farKeys(rows, cols)
+	for n, k := range keys[:len(keys)/2] { // before promotion
+		v := segment
+		if n%2 == 0 {
+			v = TriContact{EdgeA: -1, EdgeB: -1}
+		}
+		ref.store(memo, k[0], k[1], v)
+	}
+	r := rand.New(rand.NewPCG(73, 79))
+	for i := range rows {
+		ref.storeBand(r, memo, i, 0, 40)
+	}
+	require.NotNil(t, memo.BlockIndex, "the clustered fill promotes")
+	for _, k := range keys[len(keys)/2:] { // after promotion
+		ref.store(memo, k[0], k[1], other)
+	}
+	// The reviewed case: a far key whose 32-bit truncation is (0, 2000).
+	ref.store(memo, 1<<32, 2000, segment)
+	ref.requireMatches(t, memo, 0, 2000)
+	ref.requireAllMatch(t, memo)
+	for _, k := range keys {
+		ref.requireMatches(t, memo, k[0], k[1])
+		// Its in-range alias under truncation to 32 bits.
+		if ai, aj := int(int32(k[0])), int(int32(k[1])); ai >= 0 && ai < rows && aj >= 0 && aj < cols {
+			ref.requireMatches(t, memo, ai, aj)
+		}
+	}
+	for j := range cols {
+		ref.requireMatches(t, memo, 0, j)
+	}
+}
+
+// TestContactMemoFarKeysInDenseTable pins the same rule once the dense table
+// holds the in-range keys.
+func TestContactMemoFarKeysInDenseTable(t *testing.T) {
+	t.Parallel()
+	const rows, cols = 500, 400
+	memo := memoPair(rows, cols)
+	ref := memoRef{}
+	segment := TriContact{Kind: ContactSegment, EdgeA: 1, EdgeB: 2}
+	ref.store(memo, 1<<32, 7, segment)
+	r := rand.New(rand.NewPCG(83, 89))
+	for i := range rows {
+		ref.storeBand(r, memo, i, 0, 40)
+	}
+	require.NotNil(t, memo.Dense)
+	for _, k := range farKeys(rows, cols) {
+		ref.requireMatches(t, memo, k[0], k[1])
+		ref.store(memo, k[0], k[1], segment)
+	}
+	ref.requireAllMatch(t, memo)
+	ref.requireMatches(t, memo, 0, 7)
 }

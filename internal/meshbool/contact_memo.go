@@ -30,20 +30,28 @@ package meshbool
 // least ContactMemoBlockPromoteMin entries sit in the map and they average
 // ContactMemoBlockMinFill or more per 64-column block they touch, the store
 // moves to block mode. BlockIndex holds one uint32 per (row, block): 0 for a
-// block never opened, k+1 for the block at Arena[64k : 64k+64], whose slots use
-// the dense table's status encoding. BlockIndex is capped at
-// ContactMemoBlockIndexLimit entries and Arena at ContactMemoBlockArenaLimit
-// blocks; a product whose index would be larger never enters block mode. A
-// store that needs a new block once the arena is full goes to Sparse instead,
-// so in block mode Sparse is the overflow map and grows as the map always did.
-// Lookup consults it whenever the entry's block is absent. A key outside
-// [0, rows) x [0, Cols) is never written to the arena, so it can neither alias
-// another key nor index out of range: Store and Lookup route it through
-// Sparse, as before block mode existed. Block mode changes where a status is
-// kept, never which status Lookup returns.
+// block never opened, k+1 for block k, whose 64 slots use the dense table's
+// status encoding. Blocks live in Arena, a list of fixed-size chunks allocated
+// one at a time, so growing the arena never holds two copies of it: its peak
+// is its retained size plus one chunk. BlockIndex is capped at
+// ContactMemoBlockIndexLimit entries and the arena at
+// ContactMemoBlockArenaLimit blocks; a product whose index would be larger
+// never enters block mode. A store that needs a new block once the arena is
+// full goes to Sparse instead, so in block mode Sparse is the overflow map and
+// grows as the map always did. Lookup consults it whenever the entry's block is
+// absent.
+//
+// Outside the dense table, a key outside [0, rows) x [0, Cols) is kept in Far
+// under its full int key, never truncated and never written to the block
+// index or the arena, so it cannot alias an in-range key. Sparse therefore
+// holds only in-range keys, which fit its int32 key because the operands have
+// fewer than 2^31 facets; the dense table likewise holds only in-range keys.
+// Block mode changes where a status is kept, never which status Lookup
+// returns.
 //
 // Status values must fit a uint32, as the dense table already requires; the
-// arena holds a status no larger than the dense table could.
+// arena holds a status no larger than the dense table could. ContactMemo is
+// not safe for concurrent use.
 type ContactMemo struct {
 	Ma, Mb *BoolMesh
 	Cols   int
@@ -51,11 +59,13 @@ type ContactMemo struct {
 	Values []TriContact
 	Sparse map[[2]int32]uint64
 
-	BlockIndex []uint32
-	Arena      []uint32
-	blockRows  int
-	blockCols  int
-	nextTry    int
+	BlockIndex  []uint32
+	Arena       [][]uint32
+	Far         map[[2]int]uint64
+	arenaBlocks int
+	blockRows   int
+	blockCols   int
+	nextTry     int
 	// blockArenaLimit overrides ContactMemoBlockArenaLimit when non-zero.
 	blockArenaLimit int
 }
@@ -74,6 +84,10 @@ const (
 	ContactMemoBlockPromoteMin = 1 << 15
 	ContactMemoBlockMinFill    = 8
 
+	// contactMemoChunkBlocks is the number of blocks in one arena chunk
+	// (256 KB).
+	contactMemoChunkBlocks = 1 << 10
+
 	contactMemoBlockShift = 6
 	contactMemoBlockSize  = 1 << contactMemoBlockShift
 )
@@ -86,7 +100,9 @@ func NewContactMemo(ma, mb *BoolMesh) *ContactMemo {
 func (c *ContactMemo) Lookup(i, j int) (TriContact, bool) {
 	var status uint64
 	var ok bool
-	if c.Dense != nil {
+	if !c.inRange(i, j) {
+		status, ok = c.Far[[2]int{i, j}]
+	} else if c.Dense != nil {
 		status = uint64(c.Dense[i*c.Cols+j])
 		ok = status != 0
 	} else if c.BlockIndex != nil {
@@ -109,6 +125,13 @@ func (c *ContactMemo) Store(i, j int, v TriContact) {
 		c.Values = append(c.Values, v)
 		status = uint64(len(c.Values) + 1)
 	}
+	if !c.inRange(i, j) {
+		if c.Far == nil {
+			c.Far = map[[2]int]uint64{}
+		}
+		c.Far[[2]int{i, j}] = status
+		return
+	}
 	if c.Dense != nil {
 		index := i*c.Cols + j
 		c.Dense[index] = uint32(status)
@@ -124,6 +147,11 @@ func (c *ContactMemo) Store(i, j int, v TriContact) {
 	c.Sparse[key] = status
 	c.PromoteDense()
 	c.promoteBlocks()
+}
+
+// inRange reports whether (i, j) lies inside the product of the two operands.
+func (c *ContactMemo) inRange(i, j int) bool {
+	return uint(i) < uint(len(c.Ma.Tris)) && uint(j) < uint(c.Cols)
 }
 
 func (c *ContactMemo) arenaLimit() int {
@@ -148,8 +176,8 @@ func (c *ContactMemo) blockSlot(i, j int) (int, bool) {
 func (c *ContactMemo) lookupBlock(i, j int) (uint64, bool) {
 	if bi, in := c.blockSlot(i, j); in {
 		if k := c.BlockIndex[bi]; k != 0 {
-			status := c.Arena[int(k-1)<<contactMemoBlockShift+j&(contactMemoBlockSize-1)]
-			return uint64(status), status != 0
+			status := c.slot(k, j)
+			return uint64(*status), *status != 0
 		}
 	}
 	if len(c.Sparse) == 0 {
@@ -169,30 +197,34 @@ func (c *ContactMemo) storeBlock(i, j int, status uint32) bool {
 	}
 	k := c.BlockIndex[bi]
 	if k == 0 {
-		blocks := len(c.Arena) >> contactMemoBlockShift
-		if blocks >= c.arenaLimit() {
+		if c.arenaBlocks >= c.arenaLimit() {
 			return false
 		}
 		c.growArena()
-		k = uint32(blocks + 1)
+		k = uint32(c.arenaBlocks)
 		c.BlockIndex[bi] = k
 	}
-	c.Arena[int(k-1)<<contactMemoBlockShift+j&(contactMemoBlockSize-1)] = status
+	*c.slot(k, j) = status
 	return true
 }
 
-// growArena appends one zeroed block. Capacity doubles but never passes the
-// arena limit, so the arena is never larger than arenaLimit() blocks.
+// slot returns column j's slot in block k (1-based). Block k-1 sits in chunk
+// (k-1)/contactMemoChunkBlocks at the offset of its position in that chunk.
+func (c *ContactMemo) slot(k uint32, j int) *uint32 {
+	n := int(k - 1)
+	chunk := c.Arena[n/contactMemoChunkBlocks]
+	return &chunk[(n%contactMemoChunkBlocks)<<contactMemoBlockShift+j&(contactMemoBlockSize-1)]
+}
+
+// growArena opens one zeroed block, allocating a new chunk when the last one
+// is full. A chunk is never larger than the blocks the limit still allows, so
+// the arena never holds more than arenaLimit() blocks and never copies.
 func (c *ContactMemo) growArena() {
-	n := len(c.Arena)
-	if n+contactMemoBlockSize > cap(c.Arena) {
-		limit := c.arenaLimit() << contactMemoBlockShift
-		grown := make([]uint32, n, min(max(2*cap(c.Arena), 16*contactMemoBlockSize), limit))
-		copy(grown, c.Arena)
-		c.Arena = grown
+	if c.arenaBlocks%contactMemoChunkBlocks == 0 {
+		n := min(contactMemoChunkBlocks, c.arenaLimit()-c.arenaBlocks)
+		c.Arena = append(c.Arena, make([]uint32, n<<contactMemoBlockShift))
 	}
-	c.Arena = c.Arena[:n+contactMemoBlockSize]
-	clear(c.Arena[n:])
+	c.arenaBlocks++
 }
 
 // promoteBlocks moves a large map into block mode when its in-range entries
@@ -225,7 +257,6 @@ func (c *ContactMemo) promoteBlocks() {
 	}
 	c.BlockIndex = make([]uint32, rows*blockCols)
 	c.blockRows, c.blockCols = rows, blockCols
-	c.Arena = make([]uint32, 0, min(2*blocks, c.arenaLimit())<<contactMemoBlockShift)
 	old := c.Sparse
 	c.Sparse = map[[2]int32]uint64{}
 	for key, status := range old {
