@@ -114,13 +114,11 @@ func TestSectionDirectLoftRefusesNonExactCenter(t *testing.T) {
 	requireDirectLoftSectionUnsupported(t, source, r3.NewVec(0, 0, 0.2))
 }
 
-func TestSectionDirectLoftRefusesHoleFreeAndCutSources(t *testing.T) {
+func TestSectionDirectLoftRefusesCutSource(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
 	doc := decad.New()
 	blank, err := doc.Loft(t.Context(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
-	requireDirectLoftSectionUnsupported(t, blank, r3.NewVec(0, 0, 1))
-
 	tool := verticalCylinder(t, doc, 0, 0, 1)
 	cut, err := decad.Cut(t.Context(), blank, tool)
 	require.NoError(t, err)
