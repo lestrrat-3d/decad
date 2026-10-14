@@ -243,20 +243,18 @@ func TestApexPlaneSignKeepsAuditWork(t *testing.T) {
 
 // TestApexPlaneSignCallerOrderDiffersFromTable passes AuditLoftPairData a
 // caller triple that lists triangle j's vertices in another order than the
-// table was built with. The apex (vertex 3) is first in the caller's triple and
-// second in the table's. Vertex 3 is off the plane z = 0 of triangle i, so the
-// exact path admits the pair by edge certificate.
+// table was built with. The table owns the order, so every path refuses it.
 func TestApexPlaneSignCallerOrderDiffersFromTable(t *testing.T) {
 	t.Parallel()
 	verts := []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}
-	data := NewLoftAuditData(verts, [][3]int{{0, 1, 2}, {0, 1, 3}})
+	table := [][3]int{{0, 1, 2}, {0, 1, 3}}
+	data := NewLoftAuditData(verts, table)
 	caller := [][3]int{{0, 1, 2}, {3, 0, 1}}
 	for _, sc := range []LoftAuditShortcuts{{Certificates: true}, {Certificates: true, Sweep: true}} {
-		got, err := AuditLoftPairData(data, caller, 0, 1, sc)
-		want, wantErr := auditLoftPairDataSignedReference(data, caller, 0, 1, sc)
-		require.NoError(t, wantErr)
+		_, err := AuditLoftPairData(data, caller, 0, 1, sc)
+		require.ErrorIs(t, err, ErrLoftAuditOrder)
+		got, err := AuditLoftPairData(data, table, 0, 1, sc)
 		require.NoError(t, err)
-		require.Equal(t, want, got)
 		require.Equal(t, LoftPairEdgeCertificate, got)
 	}
 }
@@ -272,16 +270,17 @@ func permuteTriples(rng *rand.Rand, tris [][3]int) [][3]int {
 }
 
 // TestApexPlaneSignKeepsOutcomesUnderCallerPermutation audits the fixture's
-// shared-edge pairs with the caller's corner order permuted against the
-// table's, and compares each outcome and error with the exact-only reference.
+// shared-edge pairs with every triple's corner order permuted, the table built
+// from the permuted order, and compares each outcome and error with the
+// exact-only reference.
 func TestApexPlaneSignKeepsOutcomesUnderCallerPermutation(t *testing.T) {
 	t.Parallel()
 	f := apexFixtureMesh(3000)
-	data := NewLoftAuditData(f.verts, f.tris)
 	rng := rand.New(rand.NewPCG(61, 67))
 	refused, edge := 0, 0
 	for round := range 2 {
 		caller := permuteTriples(rng, f.tris)
+		data := NewLoftAuditData(f.verts, caller)
 		for p := range len(f.tris) / 2 {
 			i, j := 2*p, 2*p+1
 			got, gotErr := auditLoftPairDataSigned(data, caller, i, j, loftGenericShortcuts, nil, nil)

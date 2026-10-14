@@ -1169,6 +1169,11 @@ classification above. Every cap triangle's contact with every wall triangle
 and every triangle of the opposite cap is decided too, by the cap proof below
 or pairwise when that proof fails.
 
+The pair function reads each triangle's corners and exact signs from the audit
+table, so the table owns the corner order: `AuditLoftPairData` refuses a pair
+whose caller corner list differs from the table's, corner for corner, with
+`ErrLoftAuditOrder`, before any certificate or classification runs.
+
 Every pair is tested with `boolean_mesh.go`'s `triTriClassify` and the adaptive
 orientation predicates in `internal/proof/orientation.go` — the
 identical exact machinery the mesh boolean already uses to decide whether two

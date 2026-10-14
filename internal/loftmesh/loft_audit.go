@@ -1,9 +1,11 @@
 package loftmesh
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
@@ -133,7 +135,7 @@ func (plane LoftExactPlane) Sign(p proof.Xpt, sum, term *big.Int) int {
 func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 	workers := loftDataWorkers(verts, len(tris))
 	d := newLoftAuditDataSelected(verts, liftLoftVertices(verts, nil, workers), tris, nil, false, workers)
-	d.fans = newLoftAuditFans(d, tris)
+	d.fans = newLoftAuditFans(d, d.tris)
 	return d
 }
 
@@ -142,9 +144,27 @@ func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 // broad-phase boxes by its certified exact-to-float error before omitting a
 // pair and use LoftAuditShortcuts.ExactInput to disable float-only filters.
 func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int) *LoftAuditData {
-	d := newLoftAuditDataSelected(verts, exact, tris, nil, false, loftDataWorkers(verts, len(tris)))
+	d := newLoftAuditDataSelected(verts, cloneXpts(exact), tris, nil, false, loftDataWorkers(verts, len(tris)))
 	d.exactLifts = true
 	return d
+}
+
+// cloneXpts returns a copy of exact whose points own fresh big integers, so a
+// caller that later writes to its points or to their integers cannot reach any
+// table built from the copy.
+func cloneXpts(exact []proof.Xpt) []proof.Xpt {
+	out := make([]proof.Xpt, len(exact))
+	for i, p := range exact {
+		out[i] = proof.Xpt{X: cloneBigInt(p.X), Y: cloneBigInt(p.Y), Z: cloneBigInt(p.Z), W: cloneBigInt(p.W)}
+	}
+	return out
+}
+
+func cloneBigInt(x *big.Int) *big.Int {
+	if x == nil {
+		return nil
+	}
+	return new(big.Int).Set(x)
 }
 
 // newCompactLoftAuditData retains one projection per vertex and axis. The
@@ -152,7 +172,7 @@ func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int)
 func newCompactLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 	workers := loftDataWorkers(verts, len(tris))
 	d := newLoftAuditDataSelected(verts, liftLoftVertices(verts, nil, workers), tris, nil, true, workers)
-	d.fans = newLoftAuditFans(d, tris)
+	d.fans = newLoftAuditFans(d, d.tris)
 	return d
 }
 
@@ -226,8 +246,12 @@ func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
 		Planes:     make([]LoftExactPlane, len(tris)),
 		compact:    compact,
 	}
+	// The table owns a copy: a caller that reorders its own list afterwards
+	// cannot reach the corners every certificate and the entry check read.
+	d.tris = slices.Clone(tris)
 	if compact {
-		d.verts, d.tris = verts, tris
+		// The compact table reads float corners from verts for its whole life.
+		d.verts = slices.Clone(verts)
 	} else {
 		d.Corners = make([][3]r3.Vec, len(tris))
 		d.Xtris = make([][3]proof.Xpt, len(tris))
@@ -340,6 +364,12 @@ func (d *LoftAuditData) projectionTriple(i int) [3]meshbool.Xp2 {
 func ErrLoftContact(i, j int, reason string) error {
 	return &LoftContactError{I: i, J: j, Reason: reason}
 }
+
+// ErrLoftAuditOrder is the error AuditLoftPairData returns when the caller's
+// corner list of triangle i or j is not equal, corner for corner and in order,
+// to the list the table was built from. The table owns the corner order: every
+// certificate pairs a corner position with the table's signs and corners.
+var ErrLoftAuditOrder = errors.New("loft audit: triangle corner list differs from the audit table's")
 
 // LoftContactError is ErrLoftContact's ErrDegenerate, carrying the two
 // triangle indices the audit classified.
@@ -565,7 +595,10 @@ func AuditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
 }
 
 // AuditLoftPairData classifies pair (i, j) and reports which decision path
-// settled it. PRECONDITION: both triangles have three DISTINCT vertex indices
+// settled it. tris[i] and tris[j] must equal the triangles the table was built
+// from, corner for corner and in order: the table owns the order, and any other
+// list returns ErrLoftAuditOrder before a path runs. PRECONDITION: both
+// triangles have three DISTINCT vertex indices
 // and are noncollapsed — S6 (TriangleCollapsed, run over every triangle before
 // the S7 pair loop starts) is what establishes that for the production caller,
 // and the test-only AuditLoftPair above is called with noncollapsed fixtures.
@@ -646,6 +679,10 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 // signs are read only for a pair sharing no vertex; nil means compute them.
 func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts,
 	knownA, knownB *[3]int) (LoftPairOutcome, error) {
+	if tris[i] != data.tris[i] || tris[j] != data.tris[j] {
+		return LoftPairClassified, fmt.Errorf("%w: pair %d,%d is %v,%v but the table holds %v,%v",
+			ErrLoftAuditOrder, i, j, tris[i], tris[j], data.tris[i], data.tris[j])
+	}
 	shared, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
 	if shortcuts.Certificates && sharedCount == 1 && data.fans != nil {
 		// Both triangles are flat at the common vertex's z, so they are exactly
