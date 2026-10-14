@@ -1479,6 +1479,8 @@
 10	0.01	TestSideOpeningBrepChargesInexactThickness
 10	0.00	TestSpanExtremeEnclosureHandlesRootAtOneHalf
 10	0.00	TestSpiralFiniteConeSideRequiresWholeGeneratorAndFiniteTool
+10	0.00	TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly
+10	0.00	TestSpiralFirstJoinDeclinesTangentToeCapPastToeCircle
 10	0.02	TestStackedUnionPayloadAuditRejectsBrokenInterfaces
 10	0.04	TestStackedUnionRecordsSlabsAndFloor
 10	0.00	TestStitchClosureRefusesNonManifoldEdge
