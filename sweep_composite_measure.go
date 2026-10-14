@@ -336,7 +336,7 @@ func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts 
 			continue
 		}
 		spans[i] = compositesweep.Span{
-			Solid: span.solid, Volume: measurementScalar(span.volume),
+			Solid: span.n.Solid, Volume: measurementScalar(span.volume),
 			Centroid: span.centroid.Value, CentroidBound: span.centroid.Bound.Base(),
 			Min: span.bounds.Min, Max: span.bounds.Max, BoxBound: span.bounds.Bound.Base(),
 		}

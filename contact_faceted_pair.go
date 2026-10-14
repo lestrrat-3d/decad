@@ -63,7 +63,7 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 		return false, err
 	}
 	if result.Nearest != (planar.PlanarHint{}) && result.Nearest != hint {
-		report.A.planarHints.Store(report.B, result.Nearest)
+		report.A.n.PlanarHints.Store(report.B, result.Nearest)
 	}
 	report.Relation, report.Gap, report.Overlap, report.Manifold = ContactUndecided, nil, nil, nil
 	report.Reason = sourceBoxReason(result.Reason)
@@ -122,7 +122,7 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 // hint never changes a relation (planar.ClassifyPlanarHinted), so one left by a
 // pose far from this one, or by a snapshot at another chord, only costs time.
 func planarHintOf(a, b *Body) planar.PlanarHint {
-	stored, _ := a.planarHints.Load(b)
+	stored, _ := a.n.PlanarHints.Load(b)
 	hint, _ := stored.(planar.PlanarHint)
 	return hint
 }
@@ -133,7 +133,7 @@ func planarHintOf(a, b *Body) planar.PlanarHint {
 // when that mesh has a curved face.
 func planarConvexity(ctx context.Context, budget *proofbound.WorkBudget, b *Body, chord float64) (bool, error) {
 	bits := math.Float64bits(chord)
-	if entry := b.planarConvexity.Load(); entry != nil && (entry.ChordFree || entry.ChordBits == bits) {
+	if entry := b.n.PlanarConvexity.Load(); entry != nil && (entry.ChordFree || entry.ChordBits == bits) {
 		return entry.Convex, nil
 	}
 	snapshot, err := planarSnapshotOf(ctx, budget, b, chord)
@@ -148,7 +148,7 @@ func planarConvexity(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 	if err != nil {
 		return false, err
 	}
-	b.planarConvexity.Store(&planarsnapshot.ConvexityEntry{ChordBits: bits, ChordFree: snapshot.ChordFree, Convex: convex})
+	b.n.PlanarConvexity.Store(&planarsnapshot.ConvexityEntry{ChordBits: bits, ChordFree: snapshot.ChordFree, Convex: convex})
 	return convex, nil
 }
 
@@ -179,7 +179,7 @@ func planarConvexity(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 func planarSolidAtPose(ctx context.Context, budget *proofbound.WorkBudget, b *Body,
 	pose r3.Transform, chord float64) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
 	none := proofarith.DyZero()
-	if b == nil || !b.solid || b.kind != BodySolid || !positiveAffine(pose) {
+	if b == nil || !b.n.Solid || b.kind != BodySolid || !positiveAffine(pose) {
 		return planar.PlanarSolid{}, none, false, nil
 	}
 	snapshot, err := planarSnapshotOf(ctx, budget, b, chord)
@@ -227,7 +227,7 @@ func placePlanarSnapshot(budget *proofbound.WorkBudget, snapshot *planarsnapshot
 // since it reads nothing but the body and the chord.
 func planarSnapshotOf(ctx context.Context, budget *proofbound.WorkBudget, b *Body, chord float64) (*planarsnapshot.SnapshotEntry, error) {
 	bits := math.Float64bits(chord)
-	if entry := b.planarSnapshot.Load(); entry != nil && entry.ServesChord(bits) {
+	if entry := b.n.PlanarSnapshot.Load(); entry != nil && entry.ServesChord(bits) {
 		return entry, nil
 	}
 	entry := &planarsnapshot.SnapshotEntry{ChordBits: bits, ChordFree: true, Delta: proofarith.DyZero()}
@@ -256,7 +256,7 @@ func planarSnapshotOf(ctx context.Context, budget *proofbound.WorkBudget, b *Bod
 	if !entry.OK {
 		entry.Solid, entry.Delta = planar.PlanarSolid{}, proofarith.DyZero()
 	}
-	b.planarSnapshot.Store(entry)
+	b.n.PlanarSnapshot.Store(entry)
 	return entry, nil
 }
 

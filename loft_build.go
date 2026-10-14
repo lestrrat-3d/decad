@@ -403,7 +403,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	if pl.surfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: !pl.surfaceResult, kind: kind}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: !pl.surfaceResult}, kind: kind}
 
 	capStart, capEnd, walls, err := buildLoftTopology(ctx, body, ref, a, cap0Rat, cap1Rat)
 	if err != nil {

@@ -404,7 +404,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	default:
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: solid, kind: kind}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: solid}, kind: kind}
 	for _, f := range newFaces {
 		f.body = body
 	}

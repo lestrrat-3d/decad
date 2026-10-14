@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -109,7 +110,7 @@ func TestFacetedAxisSupportRejectsMalformedPlacementProvenance(t *testing.T) {
 	wrongVerts.exactSourceVerts = append([]r3.Vec(nil), valid.exactSourceVerts...)
 	wrongVerts.exactSourceVerts[0].X += 1
 	for _, corrupt := range []facetedPayload{missing, wrongTris, wrongVerts} {
-		body := &Body{lumps: placed.lumps, solid: placed.solid, kind: placed.kind, payload: corrupt}
+		body := &Body{lumps: placed.lumps, n: topo.Body{Solid: placed.n.Solid}, kind: placed.kind, payload: corrupt}
 		_, ok, err := sourceFacetedAxisSupport(t.Context(), body, r3.Identity(), 2, 0)
 		require.NoError(t, err)
 		require.False(t, ok)

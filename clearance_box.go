@@ -9,7 +9,7 @@ import (
 // rectangle, its frame preserves the world axes, and it has no placement.
 // The body's exact Bounds then give the six actual planes of the solid.
 func axisBoxPrism(b *Body) bool {
-	if !b.solid || b.kind != BodySolid || b.bounds.Exactness != Exact || b.bounds.Bound.Base() != 0 {
+	if !b.n.Solid || b.kind != BodySolid || b.bounds.Exactness != Exact || b.bounds.Bound.Base() != 0 {
 		return false
 	}
 	pp, ok := b.payload.(prismPayload)

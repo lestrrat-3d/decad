@@ -3,10 +3,8 @@ package decad
 import (
 	"fmt"
 	"math"
-	"sync"
 	"sync/atomic"
 
-	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -754,8 +752,9 @@ type Body struct {
 	area     Measurement
 	centroid VecMeasurement
 	bounds   Box
-	solid    bool
-	kind     BodyKind
+	// n is the node data internal packages read and build (internal/topo).
+	n    topo.Body
+	kind BodyKind
 
 	// payload is the evaluator's own record of how this body was built —
 	// what Transform re-evaluates under a composed motion
@@ -764,24 +763,12 @@ type Body struct {
 	payload featurePayload
 
 	tessellationCache atomic.Pointer[tessellationCacheEntry]
-	// planarConvexity caches the exact planar convexity certificate and
-	// planarSnapshot the exact held snapshot it is read off, each keyed by
-	// the held chord when the snapshot depends on it
-	// (contact_faceted_pair.go); like the tessellation cache neither changes
-	// the body's logical geometry.
-	planarConvexity atomic.Pointer[planarsnapshot.ConvexityEntry]
-	planarSnapshot  atomic.Pointer[planarsnapshot.SnapshotEntry]
 	// pairReports keeps the recent ContactPair reports this body is the
 	// first operand of (internal/reportvocab/contact_memo.go); it changes no outcome either.
 	pairReports pairReportMemo
 	// sweepRadii keeps the recent sweep radii read on this body
 	// (contact_sweep_memo.go); it changes no outcome either.
 	sweepRadii sweepRadiusMemo
-	// planarHints maps each partner body to the nearest candidate pair the
-	// last exact planar relation with this body first found
-	// (contact_faceted_pair.go). It only speeds the next relation's
-	// distance scan, never changes its result.
-	planarHints sync.Map
 }
 
 // Document returns the document that owns (or owned) this body.
@@ -855,7 +842,7 @@ func (b *Body) Kind() BodyKind { return b.kind }
 
 // IsSolid reports whether the body is a valid solid — a decided answer
 // (core §6).
-func (b *Body) IsSolid() bool { return b.solid }
+func (b *Body) IsSolid() bool { return b.n.Solid }
 
 // Bounds returns the body's axis-aligned bounding box, as tight as the
 // evaluator can prove, reporting its own exactness (core §6).
@@ -864,7 +851,7 @@ func (b *Body) Bounds() (Box, error) { return b.bounds, nil }
 // Volume returns the enclosed volume. A body that is not a solid encloses
 // none: ErrNotSolid, never zero (core §4/§6).
 func (b *Body) Volume() (Measurement, error) {
-	if !b.solid {
+	if !b.n.Solid {
 		return Measurement{}, ErrNotSolid
 	}
 	return b.volume, nil
@@ -876,7 +863,7 @@ func (b *Body) Area() (Measurement, error) { return b.area, nil }
 // Centroid returns the centroid of the enclosed region. A body that is not a
 // solid has none: ErrNotSolid.
 func (b *Body) Centroid() (VecMeasurement, error) {
-	if !b.solid {
+	if !b.n.Solid {
 		return VecMeasurement{}, ErrNotSolid
 	}
 	return b.centroid, nil

@@ -64,7 +64,7 @@ type boundedFacetedExtent struct {
 
 func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 	pose r3.Transform) (boundedFacetedExtent, bool, error) {
-	if b == nil || !b.solid || b.kind != BodySolid || !signedAxisTransform(pose) {
+	if b == nil || !b.n.Solid || b.kind != BodySolid || !signedAxisTransform(pose) {
 		return boundedFacetedExtent{}, false, nil
 	}
 	pp, ok := b.payload.(facetedPayload)
@@ -148,7 +148,7 @@ type facetedAxisSupport struct {
 func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	axis, side int) (facetedAxisSupport, bool, error) {
 	if b == nil || axis < 0 || axis > 2 || (side != 0 && side != 1) ||
-		!b.solid || b.kind != BodySolid || !signedAxisTransform(pose) {
+		!b.n.Solid || b.kind != BodySolid || !signedAxisTransform(pose) {
 		return facetedAxisSupport{}, false, nil
 	}
 	pp, ok := b.payload.(facetedPayload)

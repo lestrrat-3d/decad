@@ -352,7 +352,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true, kind: BodySolid}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}, kind: BodySolid}
 	polygons := geometry.polygons()
 	vertices := map[r3.Vec]*Vertex{}
 	vertex := func(v r3.Vec) *Vertex {

@@ -51,7 +51,7 @@ func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (Poin
 	if !proofbound.FiniteVec(p) {
 		return PointUndecided, fmt.Errorf(`%w: the query point must be finite`, ErrNotFinite)
 	}
-	if !b.solid {
+	if !b.n.Solid {
 		return PointUndecided, ErrNotSolid
 	}
 	mesh, err := tessellateContext(ctx, b, tol, VerifyAll)
@@ -80,7 +80,7 @@ func (b *Body) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (
 	if !proofbound.FiniteVec(p) {
 		return Measurement{}, fmt.Errorf(`%w: the query point must be finite`, ErrNotFinite)
 	}
-	if !b.solid {
+	if !b.n.Solid {
 		return Measurement{}, ErrNotSolid
 	}
 	mesh, err := tessellateContext(ctx, b, tol, VerifyAll)

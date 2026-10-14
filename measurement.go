@@ -237,7 +237,7 @@ func chargeBodyMap(body *Body, c massmoment.MapCharge) {
 	if c == (massmoment.MapCharge{}) {
 		return
 	}
-	if body.solid {
+	if body.n.Solid {
 		v := c.VolumeOf(proofbound.MeasuredScalar(body.volume.Value.Base(), body.volume.Bound.Base()))
 		body.volume.Bound = units.CubicMillimeters(v.Bound)
 		body.volume.Exactness = exactnessOf(v.Bound)

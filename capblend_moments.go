@@ -33,7 +33,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	}
 	work := freeform.NewFreeformWork()
 	loops := cbp.loops()
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}}
 
 	var faces []*Face
 	startLoopObjs := make([]*Loop, len(loops))

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -182,7 +183,7 @@ func TestMeshMassReadsARevolveTheAnalyticPathRefuses(t *testing.T) {
 	displaced := &Body{
 		doc: quarter.doc, origin: quarter.origin, lumps: quarter.lumps,
 		volume: quarter.volume, area: quarter.area, centroid: quarter.centroid, bounds: quarter.bounds,
-		solid: quarter.solid, kind: quarter.kind, payload: rp,
+		n: topo.Body{Solid: quarter.n.Solid}, kind: quarter.kind, payload: rp,
 	}
 	_, err := massmoment.RevolveProperties(t.Context(), massRevolveRecord(rp), vecMeasurementToInternal(displaced.centroid), meshLadderDensity)
 	require.ErrorIs(t, err, ErrUnsupported, "premise: the analytic path refuses the displacement")

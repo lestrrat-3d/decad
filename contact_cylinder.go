@@ -24,7 +24,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 		return cylinder, true
 	}
 	pp, ok := b.payload.(prismPayload)
-	if !ok || !b.solid || b.kind != BodySolid || pp.SurfaceResult ||
+	if !ok || !b.n.Solid || b.kind != BodySolid || pp.SurfaceResult ||
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
 		!pairbox.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) ||
@@ -88,7 +88,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 // sweeps one complete disk at every level of its axial interval.
 func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProof, bool) {
 	rp, ok := b.payload.(revolvePayload)
-	if !ok || !b.solid || b.kind != BodySolid || rp.surfaceResult || !rp.full ||
+	if !ok || !b.n.Solid || b.kind != BodySolid || rp.surfaceResult || !rp.full ||
 		rp.sectionDelta != 0 || !pairbox.RectangularProfile(rp.profile) ||
 		!pairbox.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
 		!signedAxisTransform(rp.xform) || !signedAxisTransform(pose) ||

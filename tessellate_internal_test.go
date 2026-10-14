@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -452,7 +453,7 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 		area:     body.area,
 		centroid: body.centroid,
 		bounds:   body.bounds,
-		solid:    body.solid,
+		n:        topo.Body{Solid: body.n.Solid},
 		payload:  withoutWalks(published),
 	}
 	resolvedAgain, err := withoutResolution.Tessellate(t.Context(), tol)

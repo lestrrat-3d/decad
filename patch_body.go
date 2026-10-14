@@ -519,7 +519,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	// solid: closing a sheet's last free edge leaves a CLOSED sheet reporting
 	// BodySheet with IsSolid() false, since Stitch alone makes the material
 	// claim (docs/surface-design.md §2.1).
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
 	for _, f := range allFaces {
 		f.body = body
 	}

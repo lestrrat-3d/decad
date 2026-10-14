@@ -181,7 +181,7 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
-	if !a.solid || a.kind != BodySolid || !b.solid || b.kind != BodySolid {
+	if !a.n.Solid || a.kind != BodySolid || !b.n.Solid || b.kind != BodySolid {
 		return nil, ErrNotSolid
 	}
 	if !poseA.IsValid() || !poseB.IsValid() {
