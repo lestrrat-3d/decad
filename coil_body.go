@@ -292,24 +292,24 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		return nil, err
 	}
 	faces := []*Face{
-		{
-			surface: capStartSurf, loops: capStartLoops,
+		{loops: capStartLoops,
 			origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
 			body:    body, n: topo.Face{
 				Area:          capArea,
 				AreaBound:     capBound,
 				AxialDelta:    sh.Delta,
 				HasAxialDelta: true,
+				Surface:       capStartSurf,
 			},
 		},
-		{
-			surface: capEndSurf, loops: capEndLoops,
+		{loops: capEndLoops,
 			origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
 			body:    body, n: topo.Face{
 				Area:          capArea,
 				AreaBound:     capBound,
 				AxialDelta:    sh.Delta,
 				HasAxialDelta: true,
+				Surface:       capEndSurf,
 			},
 		},
 	}
@@ -336,12 +336,12 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			}
 		}
 		face := &Face{
-			surface: Faceted{Bound: units.Millimeters(bound)},
 			origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,%d)", seg.Loop, seg.Index)}},
 			body:    body,
 			n: topo.Face{
 				Area:      area,
 				AreaBound: areaBound,
+				Surface:   surfacegeom.Faceted{Bound: units.Millimeters(bound)},
 			},
 		}
 		if seg.Closed {

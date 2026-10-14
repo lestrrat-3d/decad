@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
@@ -262,7 +263,6 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		return nil, err
 	}
 	capStart := &Face{
-		surface: Plane{Frame: startFrame},
 		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
 		body:    body,
 		loops:   startLoopObjs,
@@ -271,10 +271,10 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			AreaBound:     startArea.Bound,
 			AxialDelta:    cbp.z0Delta,
 			HasAxialDelta: true,
+			Surface:       surfacegeom.Plane{Frame: startFrame},
 		},
 	}
 	capEnd := &Face{
-		surface: Plane{Frame: endFrame},
 		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
 		body:    body,
 		loops:   endLoopObjs,
@@ -283,6 +283,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			AreaBound:     endArea.Bound,
 			AxialDelta:    cbp.z1Delta,
 			HasAxialDelta: true,
+			Surface:       surfacegeom.Plane{Frame: endFrame},
 		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {

@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -70,7 +71,7 @@ func loftFacesCapRecordReady(record *loftFacesCapRecord) bool {
 func uniqueConeFace(body *Body) (*Face, bool) {
 	var coneFace *Face
 	for _, face := range body.Faces() {
-		if _, ok := face.Surface().(Cone); !ok {
+		if _, ok := face.n.Surface.(surfacegeom.Cone); !ok {
 			continue
 		}
 		if coneFace != nil {

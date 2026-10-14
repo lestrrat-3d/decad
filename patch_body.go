@@ -671,7 +671,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
-		transformed, err := surfaceplace.TransformSurface(internalSurface(f.surface), xform)
+		transformed, err := surfaceplace.TransformSurface(f.n.Surface, xform)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -680,7 +680,6 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 		nf := &Face{
-			surface: publicSurface(transformed),
 			origins: append([]FeatureRef(nil), f.origins...),
 			n: topo.Face{
 				Area:          f.n.Area,
@@ -691,6 +690,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 				HasAxialDelta: f.n.HasAxialDelta,
 				NormalBound:   f.n.NormalBound,
 				Denoted:       f.denotedUnder(xform),
+				Surface:       transformed,
 			},
 		}
 		for _, l := range f.loops {
@@ -830,7 +830,6 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	}
 
 	return &Face{
-		surface: Plane{Frame: frame},
 		origins: []FeatureRef{{producer: ref, Role: rolePatch}},
 		loops:   []*Loop{{coedges: coedges, n: topo.Loop{Outer: true}}},
 		n: topo.Face{
@@ -842,6 +841,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 			// the exact arm admitted instead carries a zero, unset bound here.
 			AxialDelta:    axialDelta,
 			HasAxialDelta: chain.hasAxialBound,
+			Surface:       surfacegeom.Plane{Frame: frame},
 		},
 	}, nil
 }

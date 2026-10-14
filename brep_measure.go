@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -46,12 +47,13 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 		if err != nil {
 			return nil, err
 		}
-		return &Face{surface: Plane{Frame: frame}, origins: origins, body: body,
+		return &Face{origins: origins, body: body,
 			n: topo.Face{
 				Area:          region.Published.Value,
 				AreaBound:     region.Published.Bound,
 				AxialDelta:    f.z0Delta,
 				HasAxialDelta: true,
+				Surface:       surfacegeom.Plane{Frame: frame},
 			}}, nil
 	}
 	w := btopo.walls[fi]
@@ -61,10 +63,11 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 		return nil, err
 	}
 	area := brepgeom.WallArea(f.delta, f.z0, f.z1, f.z0Delta, f.z1Delta, w)
-	return &Face{surface: surf, origins: origins, body: body, n: topo.Face{
+	return &Face{origins: origins, body: body, n: topo.Face{
 		Area:      area.Value,
 		AreaBound: area.Bound,
 		Reversed:  reversed,
+		Surface:   surf,
 	}}, nil
 }
 

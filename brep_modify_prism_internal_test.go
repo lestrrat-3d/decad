@@ -115,7 +115,7 @@ func TestBrepModifyRoutePChamfersS1HoleRim(t *testing.T) {
 	requireCoversInterval(t, result.volume, lo, hi)
 	var cones []*Face
 	for _, f := range result.Faces() {
-		if _, ok := f.Surface().(Cone); ok {
+		if _, ok := f.n.Surface.(surfacegeom.Cone); ok {
 			cones = append(cones, f)
 		}
 	}
@@ -330,7 +330,7 @@ func TestBrepModifyRoutePMapsTheStartCapsHoles(t *testing.T) {
 	requireCoversInterval(t, result.volume, lo, hi)
 	cones := 0
 	for _, f := range result.Faces() {
-		cone, ok := f.Surface().(Cone)
+		cone, ok := f.n.Surface.(surfacegeom.Cone)
 		if !ok {
 			continue
 		}

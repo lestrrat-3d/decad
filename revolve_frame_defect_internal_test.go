@@ -300,7 +300,7 @@ func TestRevolveReadingsCoverFrameDefect(t *testing.T) {
 				fa, err := f.Area()
 				require.NoError(t, err)
 				exact := annulus
-				if cyl, ok := f.surface.(Cylinder); ok {
+				if cyl, ok := f.n.Surface.(surfacegeom.Cylinder); ok {
 					exact = new(big.Float).SetPrec(512).Mul(wall, big.NewFloat(cyl.Radius.Base()))
 				}
 				requireEnclosesBig(t, fa.Value.Base(), fa.Bound.Base(), exact, "face area")

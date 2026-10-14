@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -138,7 +139,7 @@ func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
 	g := facetGroup{
 		origins: []FeatureRef{origin}, hasCentroid: true, planar: true, reversed: true,
 		centroid:    VecMeasurement{Value: r3.NewVec(2, 0, 5), Exactness: Exact},
-		surface:     Plane{},
+		surface:     surfacegeom.Plane{},
 		normalBound: 3,
 	}
 	require.NoError(t, exactGroupPlaced(&g, q))

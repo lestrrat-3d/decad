@@ -189,7 +189,7 @@ func TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta(t *testing.
 	require.NoError(t, err)
 	require.True(t, face.n.HasAxialDelta, "the new face carries the level arm's own axial bound")
 	require.Equal(t, 0.002, face.n.AxialDelta)
-	plane, ok := face.surface.(Plane)
+	plane, ok := face.n.Surface.(surfacegeom.Plane)
 	require.True(t, ok)
 	// orientPatchChain reverses each edge relative to this fixture's own
 	// dummy adjacent face, so the walk's own sense (and so the sign
@@ -249,7 +249,7 @@ func TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame(t *
 	chain := bodyPatchChain{edges: edges, axialBound: 0.002, hasAxialBound: true, level: tok}
 	face, err := buildPatchFace(context.Background(), 0, chain, edgeCopy, r3.Identity(), 0)
 	require.NoError(t, err)
-	plane, ok := face.surface.(Plane)
+	plane, ok := face.n.Surface.(surfacegeom.Plane)
 	require.True(t, ok)
 	// See the sibling test's own comment: the walk's sense (and so which
 	// sign patchChainLevelNormal settles on) is this fixture's own artifact.

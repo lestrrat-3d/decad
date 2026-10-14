@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -92,7 +93,7 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 		len(faces[0].loops) != 0 || len(b.Edges()) != 0 {
 		return sourceSphereContactProof{}, false
 	}
-	if _, ok := faces[0].surface.(Sphere); !ok {
+	if _, ok := faces[0].n.Surface.(surfacegeom.Sphere); !ok {
 		return sourceSphereContactProof{}, false
 	}
 	local := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()),

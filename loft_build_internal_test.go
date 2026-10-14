@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -133,7 +134,7 @@ func TestEvalLoftUnitBoxTopology(t *testing.T) {
 			continue
 		}
 		wallRoles = append(wallRoles, role)
-		_, isPlane := f.Surface().(Plane)
+		_, isPlane := f.n.Surface.(surfacegeom.Plane)
 		require.True(t, isPlane, "every wall face's surface must be a Plane")
 	}
 	require.ElementsMatch(t, []string{roleCapStart, roleCapEnd}, capRoles)
@@ -634,7 +635,7 @@ func TestEvalLoftCollinearSplitKeepsTwoFacesPerCell(t *testing.T) {
 		if role == roleCapStart || role == roleCapEnd {
 			continue
 		}
-		_, ok := f.Surface().(Plane)
+		_, ok := f.n.Surface.(surfacegeom.Plane)
 		require.True(t, ok)
 		wallPlanes++
 	}

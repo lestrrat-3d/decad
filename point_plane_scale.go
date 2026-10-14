@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -92,7 +93,7 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 		if group.denoted != nil {
 			return nil, fmt.Errorf("%w: a denoted surface has no similarity proof", ErrUnsupported)
 		}
-		if _, ok := group.surface.(Plane); group.surface != nil && !ok {
+		if _, ok := group.surface.(surfacegeom.Plane); group.surface != nil && !ok {
 			return nil, fmt.Errorf("%w: a retained curved surface has no similarity proof", ErrUnsupported)
 		}
 	}
@@ -152,13 +153,13 @@ func (b *Body) ScaledAt(ctx context.Context, anchor r3.Vec, factor units.Value) 
 				return nil, err
 			}
 		}
-		if plane, ok := group.surface.(Plane); ok {
+		if plane, ok := group.surface.(surfacegeom.Plane); ok {
 			origin := anchor.Add(plane.Frame.Origin().Sub(anchor).Scale(s))
 			frame, frameErr := r3.NewFrame(origin, plane.Frame.U(), plane.Frame.V())
 			if frameErr != nil {
 				return nil, fmt.Errorf("%w: a scaled cap frame is not representable: %s", ErrUnsupported, frameErr)
 			}
-			group.surface = Plane{Frame: frame}
+			group.surface = surfacegeom.Plane{Frame: frame}
 			// NewFrame may round the held axes again. The exact similar plane
 			// keeps its old normal; two unit normals differ by at most 2.
 			group.normalBound = 2

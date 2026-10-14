@@ -176,13 +176,13 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 		if current != first || len(boundary) != 0 {
 			return nil, fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
 		}
-		face := &Face{
-			surface: Faceted{}, loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}},
+		face := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}},
 			origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(0,0,%d)", j)}},
 			body:    body,
 			n: topo.Face{
 				Area:      area,
 				AreaBound: areaBound,
+				Surface:   surfacegeom.Faceted{},
 			},
 		}
 		for k := range held.walls {
@@ -334,7 +334,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	}
 	for _, face := range heldBody.Faces() {
 		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {
-			face.surface = Faceted{Bound: units.Millimeters(delta)}
+			face.n.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 		}
 		// Each triangular parameter patch is a subset of a wall whose area
 		// is at most the body's total area upper bound. The wide face bound

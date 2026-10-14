@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
@@ -99,7 +100,7 @@ func rulingSideOf(b *Body, carrier *clearance.CFace, outward proofarith.DyV3,
 	}
 	var wall *Face
 	for _, face := range b.Faces() {
-		if _, isCylinder := face.surface.(Cylinder); isCylinder {
+		if _, isCylinder := face.n.Surface.(surfacegeom.Cylinder); isCylinder {
 			wall = face
 		}
 	}
@@ -139,7 +140,7 @@ func rulingSideOf(b *Body, carrier *clearance.CFace, outward proofarith.DyV3,
 func uniquePlaneFace(b *Body, normal r3.Vec, offset proofarith.Dyadic) (*Face, bool) {
 	var found *Face
 	for _, face := range b.Faces() {
-		plane, ok := face.surface.(Plane)
+		plane, ok := face.n.Surface.(surfacegeom.Plane)
 		if !ok {
 			continue
 		}
@@ -280,7 +281,7 @@ func placedCylinderAt(b *Body, pose r3.Transform) (placedCylinder, bool) {
 	}
 	var wall *Face
 	for _, face := range b.Faces() {
-		if _, curved := face.surface.(Cylinder); curved {
+		if _, curved := face.n.Surface.(surfacegeom.Cylinder); curved {
 			wall = face
 		}
 	}

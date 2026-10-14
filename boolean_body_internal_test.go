@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -176,7 +177,7 @@ func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 		if !all {
 			continue
 		}
-		s, ok := faces[fi].Surface().(Faceted)
+		s, ok := faces[fi].n.Surface.(surfacegeom.Faceted)
 		require.True(t, ok)
 		require.Equal(t, units.Millimeters(want), s.Bound, `an untouched trunk face reports its own facets' bound`)
 		untouched++

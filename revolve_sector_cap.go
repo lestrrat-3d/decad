@@ -7,12 +7,13 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
 // revolveFarRootPoint maps a direction on the authenticated root cone back
 // to the point-loft source plane. The cone apex may lie anywhere on its axis.
-func revolveFarRootPoint(frame r3.Frame, cone Cone, slope, angle float64) (r3.Vec, bool) {
+func revolveFarRootPoint(frame r3.Frame, cone surfacegeom.Cone, slope, angle float64) (r3.Vec, bool) {
 	normal := frame.U().Cross(frame.V())
 	direction := r3.Vec{X: 1, Y: slope * math.Cos(angle), Z: slope * math.Sin(angle)}
 	den := normal.Dot(direction)

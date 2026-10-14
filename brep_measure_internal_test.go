@@ -141,8 +141,8 @@ func TestBrepArcWallHasTheAnalyticSTEPShape(t *testing.T) {
 	body := internalBrepBody(t, internalHalfDiscPrism(t, doc))
 	walls, arcPlanes := 0, 0
 	for _, face := range body.Faces() {
-		switch surface := face.Surface().(type) {
-		case Cylinder:
+		switch surface := face.n.Surface.(type) {
+		case surfacegeom.Cylinder:
 			walls++
 			require.Len(t, face.Loops(), 1)
 			coedges := face.Loops()[0].CoEdges()
@@ -165,7 +165,7 @@ func TestBrepArcWallHasTheAnalyticSTEPShape(t *testing.T) {
 				}
 			}
 			require.Equal(t, 2, arcs)
-		case Plane:
+		case surfacegeom.Plane:
 			for _, ce := range face.Loops()[0].CoEdges() {
 				if _, ok := ce.Edge().n.Curve.(surfacegeom.Arc3); ok {
 					arcPlanes++
@@ -256,7 +256,7 @@ func TestBrepConsumersOnTheClassBCutResult(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, CoverageComplete, br.Undercut.Coverage)
 	require.Len(t, br.Undercut.Faces, 1)
-	_, isCylinder := br.Undercut.Faces[0].Surface().(Cylinder)
+	_, isCylinder := br.Undercut.Faces[0].n.Surface.(surfacegeom.Cylinder)
 	require.True(t, isCylinder, "a pull up hooks only the hole")
 	require.Equal(t, ScalarMeasured, br.ConcaveRadius.Outcome)
 	radius := br.ConcaveRadius.Minimum.Measurement
@@ -284,7 +284,7 @@ func TestBrepConsumersOnTheClassBCutResult(t *testing.T) {
 	require.Len(t, br.Undercut.Faces, 3)
 	planes := 0
 	for _, f := range br.Undercut.Faces {
-		if _, ok := f.Surface().(Plane); !ok {
+		if _, ok := f.n.Surface.(surfacegeom.Plane); !ok {
 			continue
 		}
 		at := f.Loops()[0].CoEdges()[0].Start().Position().Value

@@ -179,7 +179,6 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, err
 	}
 	face := &Face{
-		surface: Plane{Frame: frame},
 		origins: []FeatureRef{{producer: ref, Role: rolePatch}},
 		body:    body,
 		loops:   faceLoops,
@@ -188,6 +187,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 			AreaBound:     ig.AreaBound,
 			AxialDelta:    0,
 			HasAxialDelta: true,
+			Surface:       surfacegeom.Plane{Frame: frame},
 		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {

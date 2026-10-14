@@ -26,7 +26,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 	// a ruled face with nonzero normalBound, so this gate rejects that case.
 	if !stitchAllTetrahedronEligible(faces) {
 		for _, f := range faces {
-			if _, ok := f.surface.(Plane); !ok {
+			if _, ok := f.n.Surface.(surfacegeom.Plane); !ok {
 				return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a Body.Patch result's %T face`,
 					ErrUnsupported, f.Surface())
 			}

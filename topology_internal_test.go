@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -64,7 +65,7 @@ func TestFreeEdgeAndOpenShellReadTheirOwnState(t *testing.T) {
 // build machinery.
 func TestNormalAtRefusesNURBSSurface(t *testing.T) {
 	t.Parallel()
-	f := &Face{surface: NURBSSurface{}}
+	f := &Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}}
 	_, err := f.NormalAt(r3.NewVec(0, 0, 0))
 	require.ErrorIs(t, err, ErrUnsupported,
 		`a NURBSSurface has no closed-form normal to publish a bound for`)

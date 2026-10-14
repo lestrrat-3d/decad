@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -429,12 +430,13 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		if err != nil {
 			return nil, err
 		}
-		return &Face{surface: Plane{Frame: frame}, origins: []FeatureRef{{producer: ref, Role: role}},
+		return &Face{origins: []FeatureRef{{producer: ref, Role: role}},
 			body: body, n: topo.Face{
 				Area:          area.Value,
 				AreaBound:     area.Bound,
 				AxialDelta:    axial,
 				HasAxialDelta: true,
+				Surface:       surfacegeom.Plane{Frame: frame},
 			}}, nil
 	}
 	// One bottom cap per region of the first slab and one top cap per region

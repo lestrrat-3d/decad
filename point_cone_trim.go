@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -27,7 +28,7 @@ type pointConeTrimRecord struct {
 
 type pointConeLimit struct {
 	apex, far, slope *big.Rat
-	surface          Cone
+	surface          surfacegeom.Cone
 	origins          []FeatureRef
 	denoted          *surfacenormal.Revolved
 	reversed         bool
@@ -110,12 +111,12 @@ func exactPointCone(b *Body) (*pointConeLimit, bool) {
 			}
 		}
 	}
-	var surface Cone
+	var surface surfacegeom.Cone
 	var origins []FeatureRef
 	var denoted *surfacenormal.Revolved
 	var reversed bool
 	for _, face := range b.Faces() {
-		if cone, ok := face.Surface().(Cone); ok {
+		if cone, ok := face.n.Surface.(surfacegeom.Cone); ok {
 			surface, origins = cone, face.Origins()
 			denoted, reversed = face.n.Denoted, face.n.Reversed
 			break
@@ -291,7 +292,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 		groups = append(groups, pointConeFacetGroup(lower, true))
 	}
 	for i := range farGroup {
-		groups[i].surface = NURBSSurface{}
+		groups[i].surface = surfacegeom.NURBSSurface{}
 	}
 	tris := make([][3]int, 0, 2*len(allCaps)+2*len(allSides))
 	src := make([]int, 0, cap(tris))
@@ -424,7 +425,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	coneGroup := len(groups)
 	groups = append(groups, pointConeFacetGroup(cone, true))
 	for i := range capGroup {
-		groups[i].surface = NURBSSurface{}
+		groups[i].surface = surfacegeom.NURBSSurface{}
 	}
 	tris := make([][3]int, 0, len(caps)*2+len(sides)*2)
 	src := make([]int, 0, cap(tris))

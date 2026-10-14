@@ -329,7 +329,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	}
 	for _, face := range body.Faces() {
 		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {
-			face.surface = Faceted{Bound: units.Millimeters(delta)}
+			face.n.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 		}
 		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, area, areaBound)
 		face.n.AxialDelta, face.n.HasAxialDelta = delta, true

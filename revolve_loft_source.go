@@ -7,6 +7,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -31,7 +32,7 @@ type revolveSectionCertificate struct {
 	frame              r3.Frame
 	axisSpan, rootSpan int
 	rootStart, rootEnd planePoint
-	rootCone           Cone
+	rootCone           surfacegeom.Cone
 	coneGap            float64
 }
 
@@ -180,7 +181,7 @@ func revolveSpanFace(blank *Body, span revolveSectionSpan) (*Face, bool) {
 			seen[origin.Role] = struct{}{}
 		}
 		if valid && len(seen) == len(roles) &&
-			face.Surface() == surface && face.n.Reversed == reversed {
+			face.n.Surface == surface && face.n.Reversed == reversed {
 			if matched != nil {
 				return nil, false
 			}
@@ -200,7 +201,7 @@ func revolveRootCandidates(blank *Body) []revolveSectionCertificate {
 		if span.face == nil || span.start.V == 0 || span.end.V == 0 {
 			continue
 		}
-		cone, ok := span.face.Surface().(Cone)
+		cone, ok := span.face.n.Surface.(surfacegeom.Cone)
 		if !ok || cone.Axis != (r3.Vec{X: 1}) ||
 			cone.Origin.Y != 0 || cone.Origin.Z != 0 ||
 			!proofbound.FiniteVec(cone.Origin) {

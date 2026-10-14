@@ -80,7 +80,7 @@ identity; no other rule of this section changes.
 | `Body` | owning `*Document`, origin `FeatureRef`, `BodyKind`, `[]*Lump`, cached measurements (computed at build, immutable after) |
 | `Lump` | `[]*FaceShell` — a connected piece of a body, solid or sheet; a sheet lump holds exactly one shell (`docs/surface-design.md` §2.2) |
 | `FaceShell` | `[]*Face`, `void bool`, `open bool` — `open` is true when the shell has a free edge (`docs/surface-design.md` §2.2) |
-| `Face` | tagged `Surface`, `[]*Loop` (first outer), origin roles (≥1 `FeatureRef`s, exposed as `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body |
+| `Face` | tagged `Surface` (the `surfacegeom` variant in the node; `Face.Surface()` converts to the public one), `[]*Loop` (first outer), origin roles (≥1 `FeatureRef`s, exposed as `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body |
 | `Loop` | ordered `[]CoEdge` (directed edge uses in boundary-walk order), `outer bool` |
 | `CoEdge` | shared `*Edge` plus walk sense; public `Edge`/`Start`/`End`/`IsForward` accessors |
 | `Edge` | tagged `Curve` (the `surfacegeom` variant in the node; `Edge.Curve()` converts to the public one), `Start`/`End` `*Vertex`, ALL adjacent faces (exactly 2 on a closed manifold body; `Edge.Faces()` reports the actual count, which is precisely how `len != 2` surfaces non-manifold topology — core §6.1; exactly 1 is a FREE edge on a sheet body, `docs/surface-design.md` §2.2), `convex bool` |

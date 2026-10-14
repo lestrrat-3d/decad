@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stationbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -75,7 +76,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		}
 	}
 	for fi, face := range faces[:18] {
-		plane, ok := face.surface.(Plane)
+		plane, ok := face.n.Surface.(surfacegeom.Plane)
 		if !ok || len(face.loops) == 0 {
 			return nil, fmt.Errorf(`%w: all-edge chamfer face %d is not planar`, ErrUnsupported, fi)
 		}

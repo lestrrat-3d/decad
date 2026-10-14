@@ -147,7 +147,7 @@ func TestTangentContinuesFaceSheets(t *testing.T) {
 	}
 	var top, front, right *Face
 	for _, f := range box.Faces() {
-		p, ok := f.surface.(Plane)
+		p, ok := f.n.Surface.(surfacegeom.Plane)
 		if !ok {
 			continue
 		}

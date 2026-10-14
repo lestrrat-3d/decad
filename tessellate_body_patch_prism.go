@@ -30,7 +30,7 @@ func bodyPatchCircularPrismSource(pp bodyPatchPayload) (prismPayload, bool) {
 		len(prism.Profile.Outer.Segments) != 1 {
 		return prismPayload{}, false
 	}
-	if _, ok := pp.faces[0].surface.(Cylinder); !ok {
+	if _, ok := pp.faces[0].n.Surface.(surfacegeom.Cylinder); !ok {
 		return prismPayload{}, false
 	}
 	for _, chain := range pp.chains {

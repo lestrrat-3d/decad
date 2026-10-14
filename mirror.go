@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -169,7 +170,7 @@ func (d *Document) resolveMirrorFace(mf MirrorFace) (r3.Frame, error) {
 	if err != nil {
 		return r3.Frame{}, err
 	}
-	pl, ok := face.Surface().(Plane)
+	pl, ok := face.n.Surface.(surfacegeom.Plane)
 	switch {
 	case ok:
 		return pl.Frame, nil

@@ -296,7 +296,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		return ne, nil
 	}
 
-	transformed, err := surfaceplace.TransformSurface(internalSurface(srcFace.surface), xform)
+	transformed, err := surfaceplace.TransformSurface(srcFace.n.Surface, xform)
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +305,6 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 	}
 	nf := &Face{
-		surface: publicSurface(transformed),
 		origins: append([]FeatureRef(nil), srcFace.origins...),
 		n: topo.Face{
 			Area:          srcFace.n.Area,
@@ -316,6 +315,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			HasAxialDelta: srcFace.n.HasAxialDelta,
 			NormalBound:   srcFace.n.NormalBound,
 			Denoted:       srcFace.denotedUnder(xform),
+			Surface:       transformed,
 		},
 	}
 	for _, l := range srcFace.loops {

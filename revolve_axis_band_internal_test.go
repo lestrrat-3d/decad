@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -309,7 +310,7 @@ func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
 	// every point) collapses to wallAxis, leaving a plain cylinder.
 	var foundRadius bool
 	for _, f := range body.Faces() {
-		if cyl, ok := f.Surface().(Cylinder); ok {
+		if cyl, ok := f.n.Surface.(surfacegeom.Cylinder); ok {
 			r, err := cyl.Radius.In(units.Millimeter)
 			require.NoError(t, err)
 			require.InDelta(t, radius, r, 1e-9)

@@ -20,11 +20,11 @@ import (
 
 func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
 	t.Parallel()
-	plane := &Face{surface: Plane{}}
-	freeform := &Face{surface: NURBSSurface{}}
+	plane := &Face{n: topo.Face{Surface: surfacegeom.Plane{}}}
+	freeform := &Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}}
 	sp := stitchPayload{
 		faces:     []*Face{plane, freeform},
-		liveFaces: []*Face{{surface: Plane{}}, {surface: NURBSSurface{}}},
+		liveFaces: []*Face{{n: topo.Face{Surface: surfacegeom.Plane{}}}, {n: topo.Face{Surface: surfacegeom.NURBSSurface{}}}},
 		plan:      &stitchWeldPlan{table: newStitchVertexTable()},
 	}
 	_, err := tessellateStitchCurved(t.Context(), &Body{kind: BodySheet}, sp, 0.1, VerifyAll)
@@ -372,7 +372,6 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 		panic(err)
 	}
 	f = &Face{
-		surface: Plane{Frame: frame},
 		loops: []*Loop{
 			{n: topo.Loop{Outer: true}, coedges: []coedge{
 				{edge: outerEdges[0], forward: true},
@@ -387,7 +386,7 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 				{edge: holeEdges[3], forward: true},
 			}},
 		},
-		n: topo.Face{Area: 96},
+		n: topo.Face{Area: 96, Surface: surfacegeom.Plane{Frame: frame}},
 	}
 	for _, e := range append(outerEdges, holeEdges...) {
 		e.faces = []*Face{f}

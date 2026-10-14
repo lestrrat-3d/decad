@@ -65,11 +65,11 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 	}
 	planes := 0
 	var boreFace *Face
-	var boreSurface Cylinder
+	var boreSurface surfacegeom.Cylinder
 	var seen [3][2]bool
 	for _, f := range source.Faces() {
-		switch surface := f.Surface().(type) {
-		case Plane:
+		switch surface := f.n.Surface.(type) {
+		case surfacegeom.Plane:
 			axis, side, ok := p.boxPlane(f, surface)
 			if !ok || seen[axis][side] {
 				return nil, false, nil
@@ -93,7 +93,7 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 			} else if len(f.loops) != 1 {
 				return nil, false, nil
 			}
-		case Cylinder:
+		case surfacegeom.Cylinder:
 			if boreFace != nil {
 				return nil, false, nil
 			}
@@ -220,7 +220,7 @@ func (p allEdgeChamferPayload) outerBoxEdge(e *Edge) bool {
 	return varying == 1
 }
 
-func (p allEdgeChamferPayload) boxPlane(f *Face, plane Plane) (int, int, bool) {
+func (p allEdgeChamferPayload) boxPlane(f *Face, plane surfacegeom.Plane) (int, int, bool) {
 	if len(f.loops) == 0 || len(f.loops[0].coedges) != 4 {
 		return 0, 0, false
 	}
@@ -377,9 +377,9 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		if err != nil {
 			return nil, fmt.Errorf(`%w: all-edge chamfer plane: %s`, ErrUnsupported, err)
 		}
-		face := &Face{surface: Plane{Frame: frame},
+		face := &Face{
 			origins: []FeatureRef{{producer: ref, Role: axisMap.faceRole(polygonIndex)}},
-			body:    body, n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound}}
+			body:    body, n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound, Surface: surfacegeom.Plane{Frame: frame}}}
 		loop := &Loop{n: topo.Loop{Outer: true}}
 		for i, a := range points {
 			b := points[(i+1)%len(points)]
@@ -444,11 +444,12 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 	height := proofbound.BoundedSub(proofbound.ExactScalar(p.box[1][1]), proofbound.ExactScalar(p.box[1][0]))
 	wallArea := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), pi),
 		proofbound.BoundedMul(r, height))
-	bore := &Face{surface: Cylinder{Origin: r3.NewVec(p.center[0], p.box[1][0], p.center[1]),
-		Axis: r3.NewVec(0, 1, 0), Radius: units.Millimeters(p.radius)}, n: topo.Face{
+	bore := &Face{n: topo.Face{
 		Reversed:  true,
 		Area:      wallArea.Value,
 		AreaBound: wallArea.Bound,
+		Surface: surfacegeom.Cylinder{Origin: r3.NewVec(p.center[0], p.box[1][0], p.center[1]),
+			Axis: r3.NewVec(0, 1, 0), Radius: units.Millimeters(p.radius)},
 	},
 		origins: []FeatureRef{{producer: ref, Role: "wall(6)"}}, body: body}
 	for side := range 2 {

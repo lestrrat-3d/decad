@@ -7,6 +7,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -122,11 +123,11 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 		if span.face == nil || len(span.origins) == 0 {
 			return empty, 0, fmt.Errorf("%w: revolved section face is missing", ErrUnsupported)
 		}
-		_, planar := span.face.Surface().(Plane)
+		_, planar := span.face.n.Surface.(surfacegeom.Plane)
 		groupForSpan[i] = len(mesh.groups)
 		mesh.groups = append(mesh.groups, facetGroup{
 			origins: append([]FeatureRef(nil), span.origins...),
-			surface: span.face.Surface(), denoted: span.face.n.Denoted,
+			surface: span.face.n.Surface, denoted: span.face.n.Denoted,
 			reversed: span.face.n.Reversed, planar: planar,
 		})
 	}

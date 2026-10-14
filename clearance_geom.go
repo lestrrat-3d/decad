@@ -239,14 +239,14 @@ func shellWitness(sh *FaceShell) (r3.Vec, bool) {
 		}
 	}
 	for _, f := range sh.faces {
-		switch s := f.surface.(type) {
-		case Sphere:
+		switch s := f.n.Surface.(type) {
+		case surfacegeom.Sphere:
 			r, err := s.Radius.In(units.Millimeter)
 			if err != nil {
 				return r3.Vec{}, false
 			}
 			return s.Center.Add(clearance.PerpTo(r3.NewVec(0, 0, 1)).Scale(r)), true
-		case Torus:
+		case surfacegeom.Torus:
 			major, err1 := s.Major.In(units.Millimeter)
 			minor, err2 := s.Minor.In(units.Millimeter)
 			if err1 != nil || err2 != nil {
@@ -487,7 +487,7 @@ func (g *bodyGeom) addStitchFaces(budget *proofbound.WorkBudget, b *Body, sp sti
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		pl, ok := f.surface.(Plane)
+		pl, ok := f.n.Surface.(surfacegeom.Plane)
 		if !ok {
 			// Every face of a closed, all-planar stitched body is a Plane
 			// (tessellate_stitch.go's own gate); anything else reaching here

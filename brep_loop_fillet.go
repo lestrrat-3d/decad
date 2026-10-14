@@ -160,7 +160,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 
 	var patches []*Face
 	area := proofbound.BoundedScalar{}
-	newPatch := func(surf Surface, loops []*Loop, capV *Vertex) error {
+	newPatch := func(surf surfacegeom.Surface, loops []*Loop, capV *Vertex) error {
 		p := len(patches)
 		piece := fr.pieces[p]
 		areaIv := filletband.PatchArea(piece, rIv)
@@ -179,8 +179,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			}
 		}
 		held, bound := heldOf(areaIv)
-		face := &Face{surface: surf, origins: []FeatureRef{{producer: ref, Role: b.patchRole(p)}}, body: body,
-			loops: loops, n: topo.Face{Area: held, AreaBound: bound}}
+		face := &Face{origins: []FeatureRef{{producer: ref, Role: b.patchRole(p)}}, body: body,
+			loops: loops, n: topo.Face{Area: held, AreaBound: bound, Surface: surf}}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		// capV, a cap contact vertex, lies on the patch's surface; the outward
 		// normal there is F's own, which faces −m along F's normal for a band
@@ -203,13 +203,13 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		patches = append(patches, face)
 		return nil
 	}
-	torus := func(cu, cv, major float64) Torus {
-		return Torus{Center: pl.Point(cu, cv, sideZ), Axis: pl.Dir(0, 0, 1), Major: units.Millimeters(major), Minor: units.Millimeters(r)}
+	torus := func(cu, cv, major float64) surfacegeom.Torus {
+		return surfacegeom.Torus{Center: pl.Point(cu, cv, sideZ), Axis: pl.Dir(0, 0, 1), Major: units.Millimeters(major), Minor: units.Millimeters(r)}
 	}
-	walkSurface := func(w survey2d.SideWalk) Surface {
+	walkSurface := func(w survey2d.SideWalk) surfacegeom.Surface {
 		if w.IsCircular() {
 			if filletband.SphereWalk(w, r) {
-				return Sphere{Center: pl.Point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
+				return surfacegeom.Sphere{Center: pl.Point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
 			}
 			major := w.Radius - r
 			if w.Th1 < w.Th0 {
@@ -218,7 +218,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			return torus(w.CU, w.CV, major)
 		}
 		tu, tv := walkTangent(w)
-		return Cylinder{Origin: pl.Point(w.StartU-r*tv, w.StartV+r*tu, sideZ), Axis: pl.Dir(tu, tv, 0), Radius: units.Millimeters(r)}
+		return surfacegeom.Cylinder{Origin: pl.Point(w.StartU-r*tv, w.StartV+r*tu, sideZ), Axis: pl.Dir(tu, tv, 0), Radius: units.Millimeters(r)}
 	}
 
 	// straightWalk is the first of a, b (when given) that is a straight walk,

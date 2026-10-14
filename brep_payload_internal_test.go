@@ -209,7 +209,7 @@ func TestBrepFaceViewOfAllLinePrismMatchesItsMeasurements(t *testing.T) {
 		require.LessOrEqual(t, brep.centroid.Bound.Base(), prism.centroid.Bound.Base())
 		require.Equal(t, prism.bounds, brep.bounds)
 		for _, f := range brep.Faces() {
-			_, isPlane := f.Surface().(Plane)
+			_, isPlane := f.n.Surface.(surfacegeom.Plane)
 			require.True(t, isPlane)
 		}
 		g := r3.NewVec(0.6, 0, 0.8)
@@ -231,7 +231,7 @@ func TestBrepFaceViewOfCircularPrismCoversItsMeasurements(t *testing.T) {
 	requireSameConvexity(t, prism, brep)
 	cylinders := 0
 	for _, f := range brep.Faces() {
-		if _, ok := f.Surface().(Cylinder); ok {
+		if _, ok := f.n.Surface.(surfacegeom.Cylinder); ok {
 			cylinders++
 			require.True(t, f.n.Reversed, `the hole's wall faces into the hole`)
 		}
@@ -278,7 +278,7 @@ func TestBrepFaceViewOfStackedPrismMatchesItsMeasurements(t *testing.T) {
 	require.Equal(t, pocket.bounds, brep.bounds)
 	floors := 0
 	for _, f := range brep.Faces() {
-		if f.n.HasAxialDelta && f.Surface().(Plane).Frame.Origin().Z == 6 {
+		if f.n.HasAxialDelta && f.n.Surface.(surfacegeom.Plane).Frame.Origin().Z == 6 {
 			floors++
 		}
 	}
@@ -294,7 +294,7 @@ func TestBrepCrossDrilledBoxMeasuresAcrossPermutedFrames(t *testing.T) {
 	require.Len(t, brep.Edges(), 14)
 	cylinders := 0
 	for _, f := range brep.Faces() {
-		if _, ok := f.Surface().(Cylinder); ok {
+		if _, ok := f.n.Surface.(surfacegeom.Cylinder); ok {
 			cylinders++
 		}
 	}
@@ -581,7 +581,7 @@ func TestBrepFaceViewOfStackedUnionCoversItsMeasurements(t *testing.T) {
 			// boss as its hole.
 			cylinders := 0
 			for _, f := range brep.Faces() {
-				if _, ok := f.Surface().(Cylinder); ok {
+				if _, ok := f.n.Surface.(surfacegeom.Cylinder); ok {
 					cylinders++
 					require.False(t, f.n.Reversed, `the boss's wall faces out`)
 				}

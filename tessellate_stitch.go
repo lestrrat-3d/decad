@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -217,8 +218,8 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 		if f == nil {
 			return refuse("this evaluator has no complete source-to-live face pairing")
 		}
-		switch f.Surface().(type) {
-		case Plane, Cylinder, Cone, Sphere, Torus:
+		switch f.n.Surface.(type) {
+		case surfacegeom.Plane, surfacegeom.Cylinder, surfacegeom.Cone, surfacegeom.Sphere, surfacegeom.Torus:
 		default:
 			return nil, fmt.Errorf(`%w: this evaluator has no chording arm for a stitched body's %T face`, ErrUnsupported, f.Surface())
 		}

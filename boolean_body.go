@@ -45,7 +45,7 @@ type facetGroup struct {
 	// surface is set by a source whose authenticated surface is retained,
 	// including structural trims and the smooth three-section loft. Ordinary
 	// mesh booleans leave it nil.
-	surface Surface
+	surface surfacegeom.Surface
 	denoted *surfacenormal.Revolved
 	// normalBound covers the tag's normal departure from its denoted patch.
 	// A placed planar tag conservatively uses the maximum distance of two
@@ -309,15 +309,15 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		// charged the largest distance of two unit normals.
 		if tag := next.groups[i].surface; tag != nil && delta != r3.Identity() {
 			switch tag.(type) {
-			case Plane, Cylinder, Cone, Sphere, Torus:
-				moved, err := surfaceplace.TransformSurface(internalSurface(tag), delta)
+			case surfacegeom.Plane, surfacegeom.Cylinder, surfacegeom.Cone, surfacegeom.Sphere, surfacegeom.Torus:
+				moved, err := surfaceplace.TransformSurface(tag, delta)
 				if err != nil {
 					return nil, err
 				}
-				next.groups[i].surface = publicSurface(moved)
+				next.groups[i].surface = moved
 				next.groups[i].normalBound = 2
 				// Only a Plane normal is U x V, which a reflection negates.
-				if _, planar := tag.(Plane); planar && delta.IsReflection() {
+				if _, planar := tag.(surfacegeom.Plane); planar && delta.IsReflection() {
 					next.groups[i].reversed = !next.groups[i].reversed
 				}
 			}
@@ -546,9 +546,9 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	for f, delta := range faceDelta {
 		group := pp.groups[faceGroup[f]]
 		if group.surface != nil {
-			f.surface = group.surface
+			f.n.Surface = group.surface
 		} else {
-			f.surface = Faceted{Bound: units.Millimeters(delta)}
+			f.n.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 		}
 	}
 

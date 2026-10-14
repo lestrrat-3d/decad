@@ -398,7 +398,6 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// tighter bound than the snap/unsnap mismatch can actually cost it.
 		capAdmitAllow := revolvemass.AdmitBandCharge(rp.ax.RadialAdmitAllow, rp.ax.AxialExtentUpper)
 		capStart = &Face{
-			surface: Plane{Frame: startFrame},
 			origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
 			body:    body,
 			n: topo.Face{
@@ -406,10 +405,10 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
 				NormalBound: rp.phi0Delta(),
 				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi0, rp.phi0, true),
+				Surface:     surfacegeom.Plane{Frame: startFrame},
 			},
 		}
 		capEnd = &Face{
-			surface: Plane{Frame: endFrame},
 			origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
 			body:    body,
 			n: topo.Face{
@@ -417,6 +416,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
 				NormalBound: rp.phi1Delta(),
 				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi1, rp.phi1, false),
+				Surface:     surfacegeom.Plane{Frame: endFrame},
 			},
 		}
 	}
@@ -886,7 +886,6 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
-			surface: surf,
 			origins: origins,
 			body:    body,
 			n: topo.Face{
@@ -894,6 +893,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				AreaBound: faceArea.Bound,
 				Reversed:  reversed,
 				Denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
+				Surface:   surf,
 			},
 		}
 		switch {
@@ -1093,12 +1093,12 @@ func (rp revolvePayload) latitudeCurveBound(at sweptPoint, center, axis r3.Vec, 
 // so those reverse exactly when the walk runs clockwise. Radial directions
 // are reflection-equivariant, so a reflected placement changes none of
 // this; only the plane frames (built from cross products) correct for it.
-func (rp revolvePayload) wallSurface(b revolvemesh.RevolveBasis, w survey2d.SegmentWalk, kind wallKind) (Surface, bool, error) {
+func (rp revolvePayload) wallSurface(b revolvemesh.RevolveBasis, w survey2d.SegmentWalk, kind wallKind) (surfacegeom.Surface, bool, error) {
 	place := func(z float64) r3.Vec { return rp.xform.Apply(b.A3.Add(b.W.Scale(z))) }
 	axis := rp.xform.ApplyDir(b.W)
 	switch kind {
 	case wallCylinder:
-		return Cylinder{
+		return surfacegeom.Cylinder{
 			Origin: place(w.StartU),
 			Axis:   axis,
 			Radius: units.Millimeters((w.StartV + w.EndV) / 2),
@@ -1118,7 +1118,7 @@ func (rp revolvePayload) wallSurface(b revolvemesh.RevolveBasis, w survey2d.Segm
 		if err != nil {
 			return nil, false, fmt.Errorf(`%w: the placed wall frame is degenerate: %s`, ErrDegenerate, err)
 		}
-		return Plane{Frame: f}, false, nil
+		return surfacegeom.Plane{Frame: f}, false, nil
 	case wallCone:
 		// The apex is where the wall meets the axis; the cone's radius
 		// grows along its stored Axis direction.
@@ -1128,26 +1128,26 @@ func (rp revolvePayload) wallSurface(b revolvemesh.RevolveBasis, w survey2d.Segm
 		if dz*dr < 0 {
 			growth = -1
 		}
-		return Cone{
+		return surfacegeom.Cone{
 			Origin:    place(apex),
 			Axis:      axis.Scale(growth),
 			Radius:    units.Millimeters(0),
 			HalfAngle: units.Radians(math.Atan2(math.Abs(dr), math.Abs(dz))),
 		}, w.TanInU > 0, nil
 	case wallSphere:
-		return Sphere{
+		return surfacegeom.Sphere{
 			Center: place(w.CU),
 			Radius: units.Millimeters(w.Radius),
 		}, w.Th1 < w.Th0, nil
 	case wallTorus:
-		return Torus{
+		return surfacegeom.Torus{
 			Center: place(w.CU),
 			Axis:   axis,
 			Major:  units.Millimeters(w.CV),
 			Minor:  units.Millimeters(w.Radius),
 		}, w.Th1 < w.Th0, nil
 	case wallFreeform:
-		return NURBSSurface{}, false, nil
+		return surfacegeom.NURBSSurface{}, false, nil
 	default:
 		return nil, false, fmt.Errorf(`%w: a wall on the axis sweeps no surface`, ErrDegenerate)
 	}
@@ -1380,7 +1380,6 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
-			surface: surf,
 			origins: origins,
 			body:    body,
 			n: topo.Face{
@@ -1388,6 +1387,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				AreaBound: faceArea.Bound,
 				Reversed:  reversed,
 				Denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
+				Surface:   surf,
 			},
 		}
 		if rp.full {

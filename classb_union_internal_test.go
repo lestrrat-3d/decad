@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -174,7 +175,7 @@ func TestClassBChain(t *testing.T) {
 	requireVolumeCovers(t, bar, 12000, -240)
 	holed := 0
 	for _, f := range bar.Faces() {
-		if _, planar := f.Surface().(Plane); planar && len(f.Loops()) == 4 {
+		if _, planar := f.n.Surface.(surfacegeom.Plane); planar && len(f.Loops()) == 4 {
 			holed++
 		}
 	}

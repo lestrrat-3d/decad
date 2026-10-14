@@ -55,13 +55,13 @@ func loftEdge(vertexObjs []*Vertex, positions []r3.Vec, a, b int, convex bool, d
 // wound outward). The Frame is the exact answer for the three vertices handed
 // to it whatever their own standing — §5's surface-parameter carve-out — while
 // the face's own area and its vertices' positions carry the payload's delta.
-func planeFromTriangle(verts []r3.Vec, tri [3]int) (Plane, error) {
+func planeFromTriangle(verts []r3.Vec, tri [3]int) (surfacegeom.Plane, error) {
 	a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
 	f, err := r3.NewFrame(a, b.Sub(a), c.Sub(a))
 	if err != nil {
-		return Plane{}, fmt.Errorf(`%w: a loft triangle has no plane: %s`, ErrDegenerate, err)
+		return surfacegeom.Plane{}, fmt.Errorf(`%w: a loft triangle has no plane: %s`, ErrDegenerate, err)
 	}
-	return Plane{Frame: f}, nil
+	return surfacegeom.Plane{Frame: f}, nil
 }
 
 // buildLoftWallFace builds one wall triangle's Face (§7's lower/upper wall
@@ -85,12 +85,12 @@ func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i
 		areaBound = proofbound.AbsSumUpper(areaBound, proofbound.PerturbedTriangleAreaAllow(a, b, c, delta))
 	}
 	return &Face{
-		surface: surf,
 		origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,%d,%d)", i, j, side)}},
 		body:    body,
 		n: topo.Face{
 			Area:      lo,
 			AreaBound: areaBound,
+			Surface:   surf,
 		},
 	}, nil
 }
@@ -235,7 +235,6 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 		capEndBound = proofbound.AbsSumUpper(capEndBound, loftmesh.CapTriangleAreaAllow(a.Verts, capEndTris, a.Delta))
 	}
 	capStart := &Face{
-		surface: capStartSurf,
 		loops:   capStartLoops,
 		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
 		body:    body,
@@ -244,10 +243,10 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			AreaBound:     capStartBound,
 			AxialDelta:    a.Delta,
 			HasAxialDelta: true,
+			Surface:       capStartSurf,
 		},
 	}
 	capEnd := &Face{
-		surface: capEndSurf,
 		loops:   capEndLoops,
 		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
 		body:    body,
@@ -256,6 +255,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			AreaBound:     capEndBound,
 			AxialDelta:    a.Delta,
 			HasAxialDelta: true,
+			Surface:       capEndSurf,
 		},
 	}
 

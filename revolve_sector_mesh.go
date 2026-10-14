@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -42,7 +43,7 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		if i == len(record.base.groups)-1 {
 			break
 		}
-		group.surface = NURBSSurface{}
+		group.surface = surfacegeom.NURBSSurface{}
 		if placedGroups != nil {
 			group = placedGroups[i]
 		}

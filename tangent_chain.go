@@ -211,10 +211,10 @@ func sameOutwardNormal(f, g *Face, p r3.Vec) clearance.DegState {
 func outwardNumerator(f *Face, p r3.Vec) (chainDir, bool) {
 	var n chainDir
 	var ok bool
-	switch s := f.surface.(type) {
-	case Plane:
+	switch s := f.n.Surface.(type) {
+	case surfacegeom.Plane:
 		n, ok = newChainDir(s.Frame.N())
-	case Cylinder:
+	case surfacegeom.Cylinder:
 		if !proofbound.FiniteVec(p) || !proofbound.FiniteVec(s.Origin) || !proofbound.FiniteVec(s.Axis) {
 			return chainDir{}, false
 		}
@@ -226,7 +226,7 @@ func outwardNumerator(f *Face, p r3.Vec) (chainDir, bool) {
 		exact := proofarith.DvSub(dvScale(rel, proofarith.DvDot(axis, axis)), dvScale(axis, proofarith.DvDot(rel, axis)))
 		relF := p.Sub(s.Origin)
 		n, ok = chainDir{exact: exact, f: relF.Sub(s.Axis.Scale(relF.Dot(s.Axis))), held: true}, true
-	case Sphere:
+	case surfacegeom.Sphere:
 		if !proofbound.FiniteVec(p) || !proofbound.FiniteVec(s.Center) {
 			return chainDir{}, false
 		}
@@ -235,7 +235,7 @@ func outwardNumerator(f *Face, p r3.Vec) (chainDir, bool) {
 			f:     p.Sub(s.Center),
 			held:  true,
 		}, true
-	case Cone, Torus:
+	case surfacegeom.Cone, surfacegeom.Torus:
 		m, err := f.NormalAt(p)
 		if err != nil {
 			return chainDir{}, false

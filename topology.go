@@ -180,32 +180,6 @@ type borrowedSurface struct{ inner surfacegeom.Surface }
 func (s borrowedSurface) Kind() SurfaceKind { return SurfaceKind(s.inner.Kind()) }
 func (borrowedSurface) surface()            {}
 
-func internalSurface(s Surface) surfacegeom.Surface {
-	if s == nil {
-		return nil
-	}
-	switch v := s.(type) {
-	case Plane:
-		return surfacegeom.Plane(v)
-	case Cylinder:
-		return surfacegeom.Cylinder(v)
-	case Cone:
-		return surfacegeom.Cone(v)
-	case Sphere:
-		return surfacegeom.Sphere(v)
-	case Torus:
-		return surfacegeom.Torus(v)
-	case NURBSSurface:
-		return surfacegeom.NURBSSurface(v)
-	case Faceted:
-		return surfacegeom.Faceted(v)
-	case borrowedSurface:
-		return v.inner
-	default:
-		panic(fmt.Sprintf("unhandled public surface %T", s))
-	}
-}
-
 // Curve is the sealed edge-geometry set. A switch on it needs a default
 // because later versions may add variants.
 type Curve interface{ curve() }
@@ -490,7 +464,6 @@ func (l *Loop) Edges() []*Edge {
 
 // Face is a topological face: a tagged surface bounded by loops.
 type Face struct {
-	surface Surface
 	loops   []*Loop
 	origins []FeatureRef
 	body    *Body
@@ -529,13 +502,13 @@ func (f *Face) denotedUnder(xform r3.Transform) *surfacenormal.Revolved {
 // waits on the faceted certificate stage
 // (docs/payload-verification-design.md §5.4, §13).
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
-	switch s := f.surface.(type) {
-	case Plane:
+	switch s := f.n.Surface.(type) {
+	case surfacegeom.Plane:
 		n := s.Frame.N()
 		return f.normalMeasurement(p, n, func() (float64, surfacenormal.Status) {
 			return surfacenormal.PlaneAllow(s.Frame, n)
 		}, "the frame of this plane names no direction")
-	case Cylinder:
+	case surfacegeom.Cylinder:
 		rel := p.Sub(s.Origin)
 		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
 		dir, ok := radial.Normalize()
@@ -545,7 +518,7 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		return f.normalMeasurement(p, dir, func() (float64, surfacenormal.Status) {
 			return surfacenormal.AxialAllow(p, s.Origin, s.Axis, dir)
 		}, "a point on the cylinder axis has no normal")
-	case Cone:
+	case surfacegeom.Cone:
 		rel := p.Sub(s.Origin)
 		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
 		dir, ok := radial.Normalize()
@@ -562,7 +535,7 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		return f.normalMeasurement(p, n, func() (float64, surfacenormal.Status) {
 			return surfacenormal.ConeAllow(p, s.Origin, s.Axis, half, n)
 		}, "the cone apex has no normal")
-	case Sphere:
+	case surfacegeom.Sphere:
 		dir, ok := p.Sub(s.Center).Normalize()
 		if !ok {
 			return VecMeasurement{}, fmt.Errorf(`%w: the sphere center has no normal`, ErrDegenerate)
@@ -570,7 +543,7 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		return f.normalMeasurement(p, dir, func() (float64, surfacenormal.Status) {
 			return surfacenormal.RadialAllow(p, s.Center, dir)
 		}, "the sphere center has no normal")
-	case Torus:
+	case surfacegeom.Torus:
 		major, err := s.Major.In(units.Millimeter)
 		if err != nil {
 			return VecMeasurement{}, fmt.Errorf(`decad: a torus's major radius is not a length: %w`, err)
@@ -632,7 +605,7 @@ func (f *Face) normalMeasurement(p, dir r3.Vec, tagAllow func() (float64, surfac
 }
 
 // Surface returns the face's tagged geometry.
-func (f *Face) Surface() Surface { return f.surface }
+func (f *Face) Surface() Surface { return publicSurface(f.n.Surface) }
 
 // Loops returns the face's boundary loops, the outer loop first.
 func (f *Face) Loops() []*Loop { return append([]*Loop(nil), f.loops...) }
@@ -671,7 +644,7 @@ func (f *Face) Centroid() (VecMeasurement, error) {
 // Plane is by construction, and a Faceted face is when every source it descends
 // from was. It is not the same question as the surface tag.
 func (f *Face) isPlanar() bool {
-	return f.surface.Kind() == KindPlane || f.n.HeldPlanar
+	return f.n.Surface.Kind() == surfacegeom.KindPlane || f.n.HeldPlanar
 }
 
 // Origins returns every feature role that created this face —

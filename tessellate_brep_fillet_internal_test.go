@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -77,11 +78,11 @@ func TestTessellateBrepFilletBands(t *testing.T) {
 // tag names.
 func filletSurfaceDistance(t *testing.T, f *Face, p r3.Vec) float64 {
 	t.Helper()
-	switch s := f.Surface().(type) {
-	case Cylinder:
+	switch s := f.n.Surface.(type) {
+	case surfacegeom.Cylinder:
 		rel := p.Sub(s.Origin)
 		return math.Abs(rel.Sub(s.Axis.Scale(rel.Dot(s.Axis))).Len() - s.Radius.Base())
-	case Torus:
+	case surfacegeom.Torus:
 		rel := p.Sub(s.Center)
 		z := rel.Dot(s.Axis)
 		rho := rel.Sub(s.Axis.Scale(z)).Len()
@@ -272,7 +273,7 @@ func TestBrepFilletSurveys(t *testing.T) {
 	require.Equal(t, CoverageComplete, br.Undercut.Coverage)
 	listed := 0
 	for _, f := range br.Undercut.Faces {
-		if _, ok := f.Surface().(Cylinder); ok || isTorus(f) {
+		if _, ok := f.n.Surface.(surfacegeom.Cylinder); ok || isTorus(f) {
 			listed++
 		}
 	}
@@ -307,7 +308,7 @@ func TestBrepFilletSurveys(t *testing.T) {
 }
 
 func isTorus(f *Face) bool {
-	_, ok := f.Surface().(Torus)
+	_, ok := f.n.Surface.(surfacegeom.Torus)
 	return ok
 }
 

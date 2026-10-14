@@ -471,7 +471,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// (pBV -> apex), slantIn reversed (apex -> pAV) — a closed
 		// triangle-like boundary each coedge's end matching the next's start.
 		face := &Face{
-			surface: surf,
+			n:       topo.Face{Surface: surf},
 			origins: []FeatureRef{{producer: ref, Role: role}},
 			body:    body,
 			loops: []*Loop{{coedges: []coedge{
@@ -633,7 +633,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			capEdge.n.CurveBound, capEdge.n.CurveBounded = pl.CircleCurveBound(w.CU, w.CV, capZ, capDelta, 0, capRadius, radialShift, center, axis)
 		}
 
-		var surf Surface
+		var surf surfacegeom.Surface
 		if !w.IsCircular() {
 			f, err := planeFromThree(liftSide(planePoint{U: w.StartU, V: w.StartV}), liftSide(planePoint{U: w.EndU, V: w.EndV}), capB.n.Position)
 			if err != nil {
@@ -659,7 +659,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			return capBandResult{}, err
 		}
 		face := &Face{
-			surface: surf,
+			n:       topo.Face{Surface: surf},
 			origins: origins,
 			body:    body,
 			loops: []*Loop{{coedges: []coedge{
@@ -1012,14 +1012,14 @@ func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1
 // planeFromThree builds a Plane surface through three world points, its
 // normal fixed by the winding p0->p1->p2 (right-hand rule); the caller flips
 // the face's reversed bit if that does not turn out to be the outward sense.
-func planeFromThree(p0, p1, p2 r3.Vec) (Plane, error) {
+func planeFromThree(p0, p1, p2 r3.Vec) (surfacegeom.Plane, error) {
 	u := p1.Sub(p0)
 	v := p2.Sub(p0)
 	f, err := r3.NewFrame(p0, u, v)
 	if err != nil {
-		return Plane{}, fmt.Errorf(`%w: a chamfer patch's three corners are degenerate: %s`, ErrDegenerate, err)
+		return surfacegeom.Plane{}, fmt.Errorf(`%w: a chamfer patch's three corners are degenerate: %s`, ErrDegenerate, err)
 	}
-	return Plane{Frame: f}, nil
+	return surfacegeom.Plane{Frame: f}, nil
 }
 
 // coneSurface builds the surface a circular chamfer patch's wall occupies from
@@ -1041,17 +1041,17 @@ func planeFromThree(p0, p1, p2 r3.Vec) (Plane, error) {
 // For a cone, Origin is the apex where the ruling reaches radius 0 (which may
 // lie outside [sideZ, capZ] for a regular frustum), Axis is the growth
 // direction, and Radius/HalfAngle are read off the same two (z, r) pairs.
-func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) Surface {
+func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) surfacegeom.Surface {
 	dz, dr := z1-z0, r1-r0
 	if dr == 0 {
-		return Cylinder{Origin: pl.Point(cu, cv, z0), Axis: pl.Dir(0, 0, 1), Radius: units.Millimeters(r0)}
+		return surfacegeom.Cylinder{Origin: pl.Point(cu, cv, z0), Axis: pl.Dir(0, 0, 1), Radius: units.Millimeters(r0)}
 	}
 	apexZ := z0 - r0*dz/dr
 	growth := 1.0
 	if dz*dr < 0 {
 		growth = -1
 	}
-	return Cone{
+	return surfacegeom.Cone{
 		Origin:    pl.Point(cu, cv, apexZ),
 		Axis:      pl.Dir(0, 0, growth),
 		Radius:    units.Millimeters(0),
@@ -1097,7 +1097,7 @@ func buildConePatch(pl prismPayload, body *Body, origins []FeatureRef, cu, cv, s
 		{coedges: []coedge{{edge: sideEdge, forward: true}}, n: topo.Loop{Outer: true}},
 		{coedges: []coedge{{edge: capEdge, forward: false}}, n: topo.Loop{Outer: true}},
 	}
-	face := &Face{surface: surf, origins: origins, body: body, n: topo.Face{Reversed: reversed}, loops: loops}
+	face := &Face{origins: origins, body: body, n: topo.Face{Reversed: reversed, Surface: surf}, loops: loops}
 	sideEdge.faces = append(sideEdge.faces, face)
 	capEdge.faces = append(capEdge.faces, face)
 	return face

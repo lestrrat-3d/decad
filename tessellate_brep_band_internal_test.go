@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -155,8 +156,8 @@ func TestTessellateBrepBands(t *testing.T) {
 				// times the area of the body's curved faces.
 				curved := 0.0
 				for _, f := range out.Faces() {
-					switch f.Surface().(type) {
-					case Cone, Cylinder:
+					switch f.n.Surface.(type) {
+					case surfacegeom.Cone, surfacegeom.Cylinder:
 						area, err := f.Area()
 						require.NoError(t, err)
 						curved += area.Value.Base()

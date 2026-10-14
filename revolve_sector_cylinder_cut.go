@@ -12,6 +12,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -66,10 +67,10 @@ func revolveSectorBoreCapRecord(joined facetedPayload) (revolveSectorBoreCaps, b
 		len(low.origins) == 0 || len(high.origins) == 0 {
 		return caps, false
 	}
-	if _, ok := low.face.Surface().(Plane); !ok {
+	if _, ok := low.face.n.Surface.(surfacegeom.Plane); !ok {
 		return caps, false
 	}
-	if _, ok := high.face.Surface().(Plane); !ok {
+	if _, ok := high.face.n.Surface.(surfacegeom.Plane); !ok {
 		return caps, false
 	}
 	caps.lowX, caps.highX = low.start.U, high.start.U
@@ -151,7 +152,7 @@ func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
 			if wall != nil {
 				return nil, true, fmt.Errorf("%w: cylinder wall is ambiguous", ErrUnsupported)
 			}
-			if _, ok := face.Surface().(Cylinder); !ok {
+			if _, ok := face.n.Surface.(surfacegeom.Cylinder); !ok {
 				return nil, true, fmt.Errorf("%w: tool has no cylindrical side", ErrUnsupported)
 			}
 			wall = face
@@ -266,7 +267,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	}
 	wallGroup := len(mesh.groups)
 	mesh.groups = append(mesh.groups, facetGroup{origins: wall.Origins(),
-		surface: wall.Surface(), normalBound: wall.n.NormalBound, reversed: !wall.n.Reversed})
+		surface: wall.n.Surface, normalBound: wall.n.NormalBound, reversed: !wall.n.Reversed})
 	vertexBound := append([]float64(nil), joined.vertexBound...)
 	innerLow, innerHigh := make([]int, n), make([]int, n)
 	for i := range n {

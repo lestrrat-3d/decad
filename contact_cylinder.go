@@ -5,6 +5,7 @@ import (
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -55,8 +56,8 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 		if face.n.NormalBound != 0 {
 			return sourceCylinderContactProof{}, false
 		}
-		switch surface := face.surface.(type) {
-		case Plane:
+		switch surface := face.n.Surface.(type) {
+		case surfacegeom.Plane:
 			planes++
 			normal := surface.Frame.N()
 			if face.n.Reversed {
@@ -67,7 +68,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 				return sourceCylinderContactProof{}, false
 			}
 			endFaces[side] = face
-		case Cylinder:
+		case surfacegeom.Cylinder:
 			walls++
 			wallFace = face
 		default:
@@ -124,8 +125,8 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 		if face.n.NormalBound != 0 {
 			return sourceCylinderContactProof{}, false
 		}
-		switch surface := face.surface.(type) {
-		case Plane:
+		switch surface := face.n.Surface.(type) {
+		case surfacegeom.Plane:
 			planes++
 			normal := surface.Frame.N()
 			if face.n.Reversed {
@@ -136,7 +137,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 				return sourceCylinderContactProof{}, false
 			}
 			endFaces[side] = face
-		case Cylinder:
+		case surfacegeom.Cylinder:
 			walls++
 		default:
 			return sourceCylinderContactProof{}, false

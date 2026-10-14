@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -38,7 +39,7 @@ func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 		if source == nil {
 			return fmt.Errorf("%w: loft/cylinder blank has no cap source", ErrUnsupported)
 		}
-		plane, ok := source.Surface().(Plane)
+		plane, ok := source.n.Surface.(surfacegeom.Plane)
 		if !ok || plane.Frame.Origin().Z != levels[cap] {
 			return fmt.Errorf("%w: loft/cylinder blank cap has no matching plane", ErrUnsupported)
 		}

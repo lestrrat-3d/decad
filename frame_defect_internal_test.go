@@ -238,7 +238,7 @@ func requireCoversMappedReference(t *testing.T, ref, b *Body, m fdMap) {
 	rf, bf := ref.Faces(), b.Faces()
 	require.Len(t, bf, len(rf))
 	for i := range rf {
-		pl, ok := rf[i].surface.(Plane)
+		pl, ok := rf[i].n.Surface.(surfacegeom.Plane)
 		if !ok {
 			continue
 		}

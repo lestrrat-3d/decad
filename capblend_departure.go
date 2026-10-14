@@ -53,7 +53,7 @@ func capPatchNormalAllow(f *Face, g capPatchGeom, b capPatchBuilt) float64 {
 
 // capPlaneDeparture reads the published plane tag before bounding its built patch.
 func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
-	tag, okTag := f.surface.(Plane)
+	tag, okTag := f.n.Surface.(surfacegeom.Plane)
 	if !okTag {
 		return 0, false
 	}
@@ -79,10 +79,10 @@ func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 // measures stays the tag's own implicit function whatever radius a tag states.
 func coneTagRadius(f *Face) (*big.Rat, bool) {
 	var value units.Value
-	switch s := f.surface.(type) {
-	case Cone:
+	switch s := f.n.Surface.(type) {
+	case surfacegeom.Cone:
 		value = s.Radius
-	case Cylinder:
+	case surfacegeom.Cylinder:
 		value = s.Radius
 	default:
 		return nil, false

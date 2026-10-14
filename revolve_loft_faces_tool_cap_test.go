@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,14 +34,14 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 			if index == proof.section.rootSpan || span.face == nil {
 				continue
 			}
-			cone, ok := span.face.surface.(Cone)
+			cone, ok := span.face.n.Surface.(surfacegeom.Cone)
 			if !ok {
 				continue
 			}
-			original := span.face.surface
-			defer func() { span.face.surface = original }()
+			original := span.face.n.Surface
+			defer func() { span.face.n.Surface = original }()
 			cone.Origin.X += 0.125
-			span.face.surface = cone
+			span.face.n.Surface = cone
 			_, accepted := revolveLoftFacesToolCapSidesOf(proof)
 			require.False(t, accepted)
 			return
