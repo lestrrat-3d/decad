@@ -48,6 +48,8 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 	// levelBoxes holds each tooth's outward-rounded Z interval, filled on the
 	// first outer edge. A level is the same at both ends of a mapped edge.
 	var levelBoxes [][2]float64
+	// seams holds each tooth's level records, each built on its first seam edge.
+	var seams []ringSeamLevel
 	for edgeIndex, edge := range edges {
 		if err := ctx.Err(); err != nil {
 			return result, err
@@ -97,24 +99,26 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 			continue
 		}
 		result.Seam++
+		if seams == nil {
+			seams = make([]ringSeamLevel, len(teeth))
+		}
 		sectorCount := 0
 		for toothIndex, tooth := range teeth {
 			mappedEdge := [2]proofarith.Xpt{
 				RingMappedPoint(edge[0], tooth.Level),
 				RingMappedPoint(edge[1], tooth.Level),
 			}
-			if tooth.Circle.ContainsTriangleSector(tooth.Level, tooth.Level,
+			seam := &seams[toothIndex]
+			if !seam.built {
+				*seam = ringSeamLevelOf(tooth)
+			}
+			if seam.sectorOK && triangleInSector(seam.sector, tooth.Level, tooth.Level,
 				[3]proofarith.Xpt{mappedEdge[0], mappedEdge[1], mappedEdge[1]}) {
 				sectorCount++
 			}
-			for _, connector := range tooth.Circle.Connector {
-				t := new(big.Rat).Quo(proofarith.SubRat(new(big.Rat), tooth.Level, tooth.Circle.Z0),
-					proofarith.SubRat(new(big.Rat), tooth.Circle.Z1, tooth.Circle.Z0))
-				inner := sourceLerp(connector.a[0], connector.a[1], t)
-				middle := sourceLerp(connector.d[0], connector.d[1], t)
-				outer := sourceLerp(connector.f[0], connector.f[1], t)
-				if EdgesMeet(amin, bmin, inner, middle) ||
-					EdgesMeet(amin, bmin, middle, outer) {
+			for _, slice := range seam.connectors {
+				if EdgesMeet(amin, bmin, slice[0], slice[1]) ||
+					EdgesMeet(amin, bmin, slice[1], slice[2]) {
 					return refuse("ring may touch a true connector wall")
 				}
 			}
@@ -135,4 +139,30 @@ func RingEdgesInside(ctx context.Context, edges [][2]proofarith.Xpt, teeth []Rin
 		return refuse("ring has no strict blank-inside witness")
 	}
 	return result, nil
+}
+
+// ringSeamLevel is what every seam edge reads of one tooth at its level:
+// the source crossing boxes, and the inner, middle and outer points of each
+// connector's slice. Each is a function of the tooth's circle and level.
+type ringSeamLevel struct {
+	built      bool
+	sector     [2]XYBox
+	sectorOK   bool
+	connectors [2][3]XY
+}
+
+func ringSeamLevelOf(tooth RingToothLevel) ringSeamLevel {
+	seam := ringSeamLevel{built: true}
+	boxes, err := tooth.Circle.CrossingBox(tooth.Level, tooth.Level)
+	seam.sector, seam.sectorOK = boxes, err == nil
+	for i, connector := range tooth.Circle.Connector {
+		t := new(big.Rat).Quo(proofarith.SubRat(new(big.Rat), tooth.Level, tooth.Circle.Z0),
+			proofarith.SubRat(new(big.Rat), tooth.Circle.Z1, tooth.Circle.Z0))
+		seam.connectors[i] = [3]XY{
+			sourceLerp(connector.a[0], connector.a[1], t),
+			sourceLerp(connector.d[0], connector.d[1], t),
+			sourceLerp(connector.f[0], connector.f[1], t),
+		}
+	}
+	return seam
 }
