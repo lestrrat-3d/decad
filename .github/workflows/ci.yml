@@ -393,16 +393,25 @@ jobs:
       # binaries race-binary built, one after another in the background while
       # go test runs the rest. Each binary runs from its package directory, as
       # go test does, with the same -race build, -count=1, -v and timeout. The
-      # rest is the operand list minus those four, so a new internal package
-      # still runs here, and go test compiles the root package only if one of
-      # them imports it. The step waits for both and fails when either failed.
+      # rest is the operand list minus those four and minus the packages in
+      # `norace`, so a new internal package still runs here, and go test
+      # compiles the root package only if one of them imports it.
+      #
+      # `norace` runs without -race, in a go test of its own after the four
+      # binaries, with the same -count, -v and timeout. Those packages' tests
+      # call t.Parallel nowhere and start no goroutine, and no library code
+      # they reach starts one, so the race detector has nothing to observe in
+      # them. A package that gains concurrent tests or code must leave this
+      # list. The step waits for both and fails when either failed.
       - name: Run tests outside the root package (Ubuntu shard)
         if: matrix.packages != '' && matrix.packages != './dynamics/'
         shell: bash
         run: |
           start=$SECONDS
           mod="$(go list -m)"
-          rest="$(go list ${{ matrix.packages }} | grep -v -x -E "${mod}/(examples|decadtest|export|internal/decaderr)")"
+          norace_re="${mod}/internal/(loftface|polynomial|linkagebound)"
+          norace="$(go list ${{ matrix.packages }} | grep -x -E "$norace_re")"
+          rest="$(go list ${{ matrix.packages }} | grep -v -x -E "${mod}/(examples|decadtest|export|internal/decaderr)|$norace_re")"
           logdir="$(mktemp -d)"
           (
             rc=0
@@ -412,6 +421,8 @@ jobs:
               echo "=== $dir"
               (cd "$dir" && "$bin" -test.count=1 -test.v -test.timeout ${{ matrix.timeout }}) || rc=1
             done
+            echo "=== without -race: $(echo $norace)"
+            go test -count=1 -v -timeout ${{ matrix.timeout }} $norace || rc=1
             exit "$rc"
           ) >"$logdir/prebuilt.log" 2>&1 &
           prebuilt_pid=$!
