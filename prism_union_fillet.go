@@ -16,6 +16,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -88,7 +89,7 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 	if !ok || pp.Z0 == pp.Z1 || !prismUnionFilletRadiusFits(rect, radius) {
 		return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
 	}
-	curve, ok := result.curve.(FacetedCurve)
+	curve, ok := result.n.Curve.(surfacegeom.FacetedCurve)
 	if !ok || curve.Bound.Mag() != 0 || result.start.n.Bound.Mag() != 0 || result.end.n.Bound.Mag() != 0 ||
 		len(result.faces) != 2 {
 		return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
@@ -101,7 +102,7 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 		}
 		var sourceEdge *Edge
 		for _, edge := range source.Edges() {
-			if _, ok := edge.curve.(Line3); ok && edge.start != nil && edge.end != nil &&
+			if _, ok := edge.n.Curve.(surfacegeom.Line3); ok && edge.start != nil && edge.end != nil &&
 				edge.start.n.Bound.Mag() == 0 && edge.end.n.Bound.Mag() == 0 &&
 				prismUnionFilletSameEnds(edge, p0, p1) {
 				if sourceEdge != nil {

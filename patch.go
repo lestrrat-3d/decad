@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -327,7 +328,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 		if err != nil {
 			return nil, err
 		}
-		var curve Curve
+		var curve surfacegeom.Curve
 		switch w.Kind {
 		case survey2d.WalkCircular:
 			// The same circular edgeSign rule buildLoopSidesAs's survey2d.WalkCircular
@@ -346,20 +347,20 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 			center := pp.Point(w.CU, w.CV, pp.Z0)
 			radius := units.Millimeters(w.Radius)
 			if singleClosed {
-				curve = Circle3{Center: center, Axis: edgeAxis, Radius: radius}
+				curve = surfacegeom.Circle3{Center: center, Axis: edgeAxis, Radius: radius}
 			} else {
-				curve = Arc3{Center: center, Axis: edgeAxis, Radius: radius}
+				curve = surfacegeom.Arc3{Center: center, Axis: edgeAxis, Radius: radius}
 			}
 		case survey2d.WalkFreeform:
-			curve = NURBSCurve{}
+			curve = surfacegeom.NURBSCurve{}
 		default:
-			curve = Line3{}
+			curve = surfacegeom.Line3{}
 		}
-		edge := &Edge{curve: curve, start: start, end: end, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
+		edge := &Edge{start: start, end: end, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve}}
 		switch c := curve.(type) {
-		case Circle3:
+		case surfacegeom.Circle3:
 			edge.n.CurveBound, edge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
-		case Arc3:
+		case surfacegeom.Arc3:
 			edge.n.CurveBound, edge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
 		}
 		coedges = append(coedges, coedge{edge: edge, forward: true})

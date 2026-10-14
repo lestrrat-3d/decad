@@ -2,6 +2,7 @@ package topo
 
 import (
 	"github.com/lestrrat-3d/decad/internal/denotation"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -56,4 +57,7 @@ type Edge struct {
 	// buildStitchWeldPlan reads to lift Table J's J5 for a bounded pair. Zero
 	// ("no certificate") for every edge no builder or copier stamps.
 	Denot denotation.CurveToken
+	// Curve is the edge's tagged geometry in its internal variant. Root
+	// Edge.Curve converts it to the public variant with publicCurve.
+	Curve surfacegeom.Curve
 }

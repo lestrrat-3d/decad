@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -34,9 +35,9 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 			}
 			for _, l := range f.loops {
 				for _, ce := range l.coedges {
-					if _, ok := ce.edge.curve.(Line3); !ok {
+					if _, ok := ce.edge.n.Curve.(surfacegeom.Line3); !ok {
 						return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a Body.Patch result's %T edge`,
-							ErrUnsupported, ce.edge.curve)
+							ErrUnsupported, publicCurve(ce.edge.n.Curve))
 					}
 				}
 			}

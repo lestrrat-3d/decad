@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -255,9 +256,8 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			chain = math.Max(chain, sh.VertexBound[sh.At(j, v)])
 		}
 		helix[i] = &Edge{
-			curve: FacetedCurve{Bound: units.Millimeters(chain)},
 			start: startV[i], end: endV[i],
-			n: topo.Edge{Convex: cross.Sign() > 0, Length: hLength, LengthBound: hBound},
+			n: topo.Edge{Convex: cross.Sign() > 0, Length: hLength, LengthBound: hBound, Curve: surfacegeom.FacetedCurve{Bound: units.Millimeters(chain)}},
 		}
 	}
 
@@ -385,8 +385,8 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 		if err != nil {
 			return nil, nil, err
 		}
-		return &Edge{curve: Line3{}, start: s0, end: s1, n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound}},
-			&Edge{curve: Line3{}, start: e0, end: e1, n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound}}, nil
+		return &Edge{start: s0, end: s1, n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound, Curve: surfacegeom.Line3{}}},
+			&Edge{start: e0, end: e1, n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound, Curve: surfacegeom.Line3{}}}, nil
 	}
 	length, lengthBound, err := coilshell.Held(rec.Stretched(seg.Length), "rim length")
 	if err != nil {
@@ -415,25 +415,27 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 	// is convex; a clockwise one is concave, the prism's rim rule.
 	convex := !seg.Reversed
 	r := units.Millimeters(radius)
-	var c0, c1 Curve
+	var c0, c1 surfacegeom.Curve
 	if seg.Closed {
-		c0, c1 = Circle3{Center: centre0, Axis: axis0.Scale(sign), Radius: r}, Circle3{Center: centre1, Axis: axis1.Scale(sign), Radius: r}
+		c0, c1 = surfacegeom.Circle3{Center: centre0, Axis: axis0.Scale(sign), Radius: r}, surfacegeom.Circle3{Center: centre1, Axis: axis1.Scale(sign), Radius: r}
 	} else {
-		c0, c1 = Arc3{Center: centre0, Axis: axis0.Scale(sign), Radius: r}, Arc3{Center: centre1, Axis: axis1.Scale(sign), Radius: r}
+		c0, c1 = surfacegeom.Arc3{Center: centre0, Axis: axis0.Scale(sign), Radius: r}, surfacegeom.Arc3{Center: centre1, Axis: axis1.Scale(sign), Radius: r}
 	}
-	start := &Edge{curve: c0, start: s0, end: s1, n: topo.Edge{
+	start := &Edge{start: s0, end: s1, n: topo.Edge{
 		Convex:       convex,
 		Length:       length,
 		LengthBound:  lengthBound,
 		CurveBound:   rims[0].Bound,
 		CurveBounded: rims[0].Bounded,
+		Curve:        c0,
 	}}
-	end := &Edge{curve: c1, start: e0, end: e1, n: topo.Edge{
+	end := &Edge{start: e0, end: e1, n: topo.Edge{
 		Convex:       convex,
 		Length:       length,
 		LengthBound:  lengthBound,
 		CurveBound:   rims[1].Bound,
 		CurveBounded: rims[1].Bounded,
+		Curve:        c1,
 	}}
 	return start, end, nil
 }

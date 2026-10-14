@@ -425,7 +425,6 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			continue
 		}
 		arcByCorner[i] = &Edge{
-			curve: Arc3{Center: liftCap(planePoint{U: j.VertU, V: j.VertV}), Axis: pl.Dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
 			start: pAV, end: pBV,
 			n: topo.Edge{
 				Convex: false,
@@ -433,13 +432,14 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				LengthBound: capcontour.CapApexArcBound(
 					capcontour.ApexJoin{VU: j.VertU, VV: j.VertV, PA: j.PA, PB: j.PB},
 					dc, dcDelta, arcLength, wraps, delta),
+				Curve: surfacegeom.Arc3{Center: liftCap(planePoint{U: j.VertU, V: j.VertV}), Axis: pl.Dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
 			},
 		}
 		// The connector denotes the arc of every setback in dc's span about
 		// the recorded corner, which both neighbouring walks' held ends
 		// enclose within their own bounds.
 		if span, ok := capcontour.OffsetSpan(dc, dcDelta); ok {
-			center, axis, _, _ := surfacegeom.CircleOf(internalCurve(arcByCorner[i].curve))
+			center, axis, _, _ := surfacegeom.CircleOf(arcByCorner[i].n.Curve)
 			cornerDelta := math.Min(capband.CornerGap(j.VertU, j.VertV, prev.EndU, prev.EndV, prev.EndBound), capband.CornerGap(j.VertU, j.VertV, cur.StartU, cur.StartV, cur.StartBound))
 			arcByCorner[i].n.CurveBound, arcByCorner[i].n.CurveBounded = pl.CircleCurveBound(j.VertU, j.VertV, capZ, capDelta, cornerDelta, dc, proofbound.IntervalFloatError(span, dc), center, axis)
 		}
@@ -614,12 +614,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// Both endpoints are contour points, so both carry the band's own
 			// displacement; the square root's own committed error is measured
 			// against the exact squared length.
-			capEdge = &Edge{
-				curve: Line3{}, start: capA, end: capB, n: topo.Edge{
-					Convex:      !cbp.draft || li == 0,
-					Length:      held,
-					LengthBound: capcontour.CapEdgeLengthBound(held, end, start, delta),
-				},
+			capEdge = &Edge{start: capA, end: capB, n: topo.Edge{
+				Convex:      !cbp.draft || li == 0,
+				Length:      held,
+				LengthBound: capcontour.CapEdgeLengthBound(held, end, start, delta),
+				Curve:       surfacegeom.Line3{},
+			},
 			}
 		default:
 			sweepSigned := capTh1 - capTh0
@@ -629,7 +629,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			// The trimmed arc lies on the offset circle about the wall's
 			// recorded centre, every radius of which sits within radialShift
 			// of the held capRadius.
-			center, axis, _, _ := surfacegeom.CircleOf(internalCurve(capEdge.curve))
+			center, axis, _, _ := surfacegeom.CircleOf(capEdge.n.Curve)
 			capEdge.n.CurveBound, capEdge.n.CurveBounded = pl.CircleCurveBound(w.CU, w.CV, capZ, capDelta, 0, capRadius, radialShift, center, axis)
 		}
 
@@ -915,12 +915,12 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP planePoint, capV, apex *Ve
 	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
 	squared, squaredOK := proofarith.DySquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
 	heldBound := capcontour.StraightEdgeBound(held, squared, squaredOK, delta, levelDelta)
-	e := &Edge{
-		curve: Line3{}, start: capV, end: apex, n: topo.Edge{
-			Convex:      true,
-			Length:      held,
-			LengthBound: heldBound,
-		},
+	e := &Edge{start: capV, end: apex, n: topo.Edge{
+		Convex:      true,
+		Length:      held,
+		LengthBound: heldBound,
+		Curve:       surfacegeom.Line3{},
+	},
 	}
 	if affine || dc <= 0 || (!prev.IsCircular() && !cur.IsCircular()) {
 		return e, heldBound, nil
@@ -965,12 +965,12 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 	held := 2 * math.Pi * r
 	center := pl.Point(cu, cv, z)
 	e := &Edge{
-		curve: Circle3{Center: center, Axis: axis, Radius: units.Millimeters(r)},
 		start: seam, end: seam,
 		n: topo.Edge{
 			Convex:      ccw,
 			Length:      held,
 			LengthBound: capcontour.CapCircleLengthBound(exactRadius, held),
+			Curve:       surfacegeom.Circle3{Center: center, Axis: axis, Radius: units.Millimeters(r)},
 		},
 	}
 	// The held radius sits within its own gap from exactRadius's ends of
@@ -999,12 +999,12 @@ func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1
 		axis = axis.Scale(-1)
 	}
 	return &Edge{
-		curve: Arc3{Center: pl.Point(cu, cv, z), Axis: axis, Radius: units.Millimeters(r)},
 		start: start, end: end,
 		n: topo.Edge{
 			Convex:      th1 > th0,
 			Length:      length,
 			LengthBound: lengthBound,
+			Curve:       surfacegeom.Arc3{Center: pl.Point(cu, cv, z), Axis: axis, Radius: units.Millimeters(r)},
 		},
 	}
 }

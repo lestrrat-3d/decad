@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -148,7 +149,7 @@ func internalConvexityByEnds(t *testing.T, body *Body) map[[2]r3.Vec]bool {
 	t.Helper()
 	out := map[[2]r3.Vec]bool{}
 	for _, e := range body.Edges() {
-		if _, line := e.Curve().(Line3); !line {
+		if _, line := e.n.Curve.(surfacegeom.Line3); !line {
 			continue
 		}
 		a, b := e.Start().Position().Value, e.End().Position().Value
@@ -314,7 +315,7 @@ func TestBrepCrossDrilledBoxMeasuresAcrossPermutedFrames(t *testing.T) {
 	// rims are whole circles of radius 3 about the drill axis.
 	circles := 0
 	for _, e := range brep.Edges() {
-		c, ok := e.Curve().(Circle3)
+		c, ok := e.n.Curve.(surfacegeom.Circle3)
 		if !ok {
 			continue
 		}

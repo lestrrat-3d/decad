@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -386,7 +387,7 @@ func TestStackedUnionBrepRootedCrossingBoss(t *testing.T) {
 	// notched wall x = 20, and 10..25, shared with the inside piece.
 	short, long := 0, 0
 	for _, e := range got.Edges() {
-		if _, line := e.curve.(Line3); !line {
+		if _, line := e.n.Curve.(surfacegeom.Line3); !line {
 			continue
 		}
 		switch e.n.Length {

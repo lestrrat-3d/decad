@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -438,7 +439,7 @@ func (e selectorEdge) SelectorLineDirection() (r3.Vec, bool) {
 	if e.n.SelectorDirectionProven {
 		return e.n.SelectorDirection, true
 	}
-	if _, ok := e.curve.(Line3); !ok {
+	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok {
 		return r3.Vec{}, false
 	}
 	return e.end.n.Position.Sub(e.start.n.Position), true
@@ -474,8 +475,8 @@ func (e selectorEdge) SelectorOnOuterLoop(ref FeatureRef) bool {
 	return false
 }
 func (e selectorEdge) SelectorCircular() bool {
-	switch e.curve.(type) {
-	case Circle3, Arc3:
+	switch e.n.Curve.(type) {
+	case surfacegeom.Circle3, surfacegeom.Arc3:
 		return true
 	default:
 		return false

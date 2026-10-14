@@ -1451,3 +1451,4 @@
 10	0.00	TestFacetedPlacementMovesCurvedTags
 10	0.00	TestFacetedPlacementKeepsDenotedProof
 10	0.00	TestFacetedPlacementReflectsPlaneTag
+10	0.00	TestAngularStopEdgeNamesPublicCurveType

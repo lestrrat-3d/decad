@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
@@ -571,13 +572,13 @@ func TestBrepModifyEdgeConsumersOnS1Fillet(t *testing.T) {
 	require.Len(t, coedges, 4)
 	arcs := 0
 	for i, ce := range coedges {
-		switch c := ce.Edge().Curve().(type) {
-		case Arc3:
+		switch c := ce.Edge().n.Curve.(type) {
+		case surfacegeom.Arc3:
 			arcs++
 			require.True(t, c.Axis == cyl.Axis || c.Axis == cyl.Axis.Scale(-1))
-			_, prevArc := coedges[(i+3)%4].Edge().Curve().(Arc3)
+			_, prevArc := coedges[(i+3)%4].Edge().n.Curve.(surfacegeom.Arc3)
 			require.False(t, prevArc, "arcs and lines alternate")
-		case Line3:
+		case surfacegeom.Line3:
 			run := ce.Edge().End().Position().Value.Sub(ce.Edge().Start().Position().Value)
 			require.Equal(t, r3.Vec{}, run.Cross(cyl.Axis))
 		default:

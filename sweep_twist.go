@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
@@ -327,7 +328,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	for _, edge := range heldBody.Edges() {
 		// A helix edge is not the chord the held Loft exposes. Its true length
 		// is at most h+R|angle|; a cap edge is shorter than the perimeter.
-		edge.curve = FacetedCurve{Bound: units.Millimeters(delta)}
+		edge.n.Curve = surfacegeom.FacetedCurve{Bound: units.Millimeters(delta)}
 		edge.n.LengthBound = proofbound.AbsSumUpper(edge.n.LengthBound,
 			edge.n.Length, path.End.Z, proofbound.UpRound(poly.MaxRadiusL1*upper), poly.PerimeterUpper)
 	}

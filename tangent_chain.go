@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tangentchain"
 	"github.com/lestrrat-3d/r3"
 )
@@ -145,8 +146,8 @@ func rayAway(e *Edge, v *Vertex) (chainDir, bool) {
 	if v == e.end {
 		other = e.start
 	}
-	switch c := e.curve.(type) {
-	case Line3:
+	switch c := e.n.Curve.(type) {
+	case surfacegeom.Line3:
 		if !proofbound.FiniteVec(v.n.Position) || !proofbound.FiniteVec(other.n.Position) {
 			return chainDir{}, false
 		}
@@ -155,7 +156,7 @@ func rayAway(e *Edge, v *Vertex) (chainDir, bool) {
 			f:     other.n.Position.Sub(v.n.Position),
 			held:  true,
 		}, true
-	case Arc3:
+	case surfacegeom.Arc3:
 		if !proofbound.FiniteVec(v.n.Position) || !proofbound.FiniteVec(c.Center) || !proofbound.FiniteVec(c.Axis) {
 			return chainDir{}, false
 		}

@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 )
@@ -252,7 +253,7 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 			}
 			oldDir := original.end.n.Position.Sub(original.start.n.Position)
 			for _, edge := range loopEdges {
-				if _, ok := edge.curve.(Line3); !ok {
+				if _, ok := edge.n.Curve.(surfacegeom.Line3); !ok {
 					continue
 				}
 				other := edge.start
@@ -276,7 +277,7 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 		}
 		var arc *Edge
 		for _, edge := range loopEdges {
-			if _, ok := edge.curve.(Arc3); !ok {
+			if _, ok := edge.n.Curve.(surfacegeom.Arc3); !ok {
 				continue
 			}
 			if (edge.start == near[0] && edge.end == near[1]) ||
@@ -530,16 +531,16 @@ func brepEdgeMatches(refView prismPayload, owner brepUse, e *Edge, tol float64) 
 	}
 	lift := func(c [3]float64) r3.Vec { return refView.Point(c[0], c[1], c[2]) }
 	key := owner.Key
-	switch c := e.curve.(type) {
-	case Line3:
+	switch c := e.n.Curve.(type) {
+	case surfacegeom.Line3:
 		if key.Circular {
 			return false
 		}
-	case Arc3:
+	case surfacegeom.Arc3:
 		if !key.Circular || key.Closed || lift(key.C).Sub(c.Center).Len() > tol {
 			return false
 		}
-	case Circle3:
+	case surfacegeom.Circle3:
 		if !key.Closed || lift(key.C).Sub(c.Center).Len() > tol || math.Abs(c.Radius.Base()-key.Radius) > tol {
 			return false
 		}

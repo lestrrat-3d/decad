@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/wallsurvey"
@@ -184,15 +185,15 @@ func (g *bodyGeom) addTopology(budget *proofbound.WorkBudget, b *Body) (bool, er
 }
 
 func newCEdge(e *Edge) (*clearance.CEdge, bool) {
-	switch c := e.curve.(type) {
-	case Line3:
+	switch c := e.n.Curve.(type) {
+	case surfacegeom.Line3:
 		if e.start.n.Position.Sub(e.end.n.Position).Len() == 0 {
 			return nil, true
 		}
 		ce := &clearance.CEdge{Line: true, A: e.start.n.Position, B: e.end.n.Position}
 		ce.Box = clearance.BoxOf(ce.A, ce.B)
 		return ce, true
-	case Circle3:
+	case surfacegeom.Circle3:
 		r, err := c.Radius.In(units.Millimeter)
 		if err != nil {
 			return nil, false
@@ -202,7 +203,7 @@ func newCEdge(e *Edge) (*clearance.CEdge, bool) {
 		ce := &clearance.CEdge{Center: c.Center, Axis: c.Axis, RefU: u, RefV: v, Radius: r, Ang: clearance.AngWindow{Full: true}}
 		ce.Box = clearance.CircleBox(c.Center, c.Axis, r)
 		return ce, true
-	case Arc3:
+	case surfacegeom.Arc3:
 		r, err := c.Radius.In(units.Millimeter)
 		if err != nil {
 			return nil, false

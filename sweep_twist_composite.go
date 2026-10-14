@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -356,7 +357,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	longitudinalExtra := proofbound.ProductUpper(poly.MaxRadiusL1,
 		proofbound.AbsSumUpper(proofbound.RatFloatUp(proofbound.HalfPiIv.Hi), upperTheta))
 	for _, edge := range body.Edges() {
-		edge.curve = FacetedCurve{Bound: units.Millimeters(delta)}
+		edge.n.Curve = surfacegeom.FacetedCurve{Bound: units.Millimeters(delta)}
 		edge.n.LengthBound = proofbound.AbsSumUpper(edge.n.LengthBound, edge.n.Length,
 			proofbound.RatFloatUp(length.Hi), longitudinalExtra, poly.PerimeterUpper)
 	}

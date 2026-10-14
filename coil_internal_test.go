@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -224,7 +225,7 @@ func TestCoilSquareSpring(t *testing.T) {
 		}
 		helices := 0
 		for _, e := range b.Edges() {
-			if _, ok := e.Curve().(FacetedCurve); ok {
+			if _, ok := e.n.Curve.(surfacegeom.FacetedCurve); ok {
 				helices++
 				// The outer square turns left at every corner.
 				require.True(t, e.IsConvex())

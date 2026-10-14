@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -148,15 +149,15 @@ func TestBrepArcWallHasTheAnalyticSTEPShape(t *testing.T) {
 			require.Len(t, coedges, 4)
 			arcs := 0
 			for i, ce := range coedges {
-				switch c := ce.Edge().Curve().(type) {
-				case Arc3:
+				switch c := ce.Edge().n.Curve.(type) {
+				case surfacegeom.Arc3:
 					arcs++
 					require.True(t, c.Axis == surface.Axis || c.Axis == surface.Axis.Scale(-1))
 					if i > 0 {
-						_, prevArc := coedges[i-1].Edge().Curve().(Arc3)
+						_, prevArc := coedges[i-1].Edge().n.Curve.(surfacegeom.Arc3)
 						require.False(t, prevArc, "arcs and lines alternate")
 					}
-				case Line3:
+				case surfacegeom.Line3:
 					run := ce.Edge().End().Position().Value.Sub(ce.Edge().Start().Position().Value)
 					require.Equal(t, r3.Vec{}, run.Cross(surface.Axis))
 				default:
@@ -166,7 +167,7 @@ func TestBrepArcWallHasTheAnalyticSTEPShape(t *testing.T) {
 			require.Equal(t, 2, arcs)
 		case Plane:
 			for _, ce := range face.Loops()[0].CoEdges() {
-				if _, ok := ce.Edge().Curve().(Arc3); ok {
+				if _, ok := ce.Edge().n.Curve.(surfacegeom.Arc3); ok {
 					arcPlanes++
 					break
 				}

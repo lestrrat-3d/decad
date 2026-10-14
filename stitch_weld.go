@@ -1,6 +1,9 @@
 package decad
 
-import "github.com/lestrrat-3d/decad/internal/stitchweld"
+import (
+	"github.com/lestrrat-3d/decad/internal/stitchweld"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+)
 
 // This file adapts docs/surface-design.md §6.2's Table J to the held
 // vertices and edges of the operand faces. The class and pair decisions in
@@ -58,7 +61,7 @@ func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 				if !e.IsFree() { // J1
 					continue
 				}
-				_, isLine := e.curve.(Line3)
+				_, isLine := e.n.Curve.(surfacegeom.Line3)
 				if !isLine && e.n.Denot.ID == 0 { // J2, then J5, or the certificate
 					continue
 				}
@@ -76,27 +79,27 @@ func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 // share an unordered pair of vertex classes. A Line3 needs no further data;
 // another variant joins only with the same nonzero token and held geometry.
 func stitchEdgesJoin(a, b *Edge) bool {
-	_, aLine := a.curve.(Line3)
-	_, bLine := b.curve.(Line3)
+	_, aLine := a.n.Curve.(surfacegeom.Line3)
+	_, bLine := b.n.Curve.(surfacegeom.Line3)
 	if aLine && bLine {
 		return true
 	}
-	return sameCurve(a.n.Denot, b.n.Denot) && sameCurveVariant(a.curve, b.curve)
+	return sameCurve(a.n.Denot, b.n.Denot) && sameCurveVariant(a.n.Curve, b.n.Curve)
 }
 
 // sameCurveVariant compares held Circle3 and Arc3 parameters, allowing
 // opposite axis signs. Any other pairing declines.
-func sameCurveVariant(a, b Curve) bool {
+func sameCurveVariant(a, b surfacegeom.Curve) bool {
 	switch av := a.(type) {
-	case Circle3:
-		bv, ok := b.(Circle3)
+	case surfacegeom.Circle3:
+		bv, ok := b.(surfacegeom.Circle3)
 		if !ok {
 			return false
 		}
 		return av.Center == bv.Center && av.Radius.Base() == bv.Radius.Base() &&
 			(av.Axis == bv.Axis || av.Axis == bv.Axis.Scale(-1))
-	case Arc3:
-		bv, ok := b.(Arc3)
+	case surfacegeom.Arc3:
+		bv, ok := b.(surfacegeom.Arc3)
 		if !ok {
 			return false
 		}

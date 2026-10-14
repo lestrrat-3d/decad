@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -131,7 +132,7 @@ func requireFilletPatches(t *testing.T, body *Body, cylinders, tori int) []*Face
 
 // filletEndCurves lists the edges that run between two fillet patches, by
 // curve kind.
-func filletEndCurves(body *Body) (ellipses []Ellipse3, meridians []Arc3, edges []*Edge) {
+func filletEndCurves(body *Body) (ellipses []surfacegeom.Ellipse3, meridians []surfacegeom.Arc3, edges []*Edge) {
 	patch := map[*Face]struct{}{}
 	for _, f := range filletPatchesOf(body) {
 		patch[f] = struct{}{}
@@ -147,10 +148,10 @@ func filletEndCurves(body *Body) (ellipses []Ellipse3, meridians []Arc3, edges [
 			continue
 		}
 		edges = append(edges, e)
-		switch c := e.Curve().(type) {
-		case Ellipse3:
+		switch c := e.n.Curve.(type) {
+		case surfacegeom.Ellipse3:
 			ellipses = append(ellipses, c)
-		case Arc3:
+		case surfacegeom.Arc3:
 			meridians = append(meridians, c)
 		}
 	}
@@ -312,7 +313,7 @@ func TestBrepLoopFilletCrossDrilled(t *testing.T) {
 		require.Equal(t, 1.0, tor.Minor.Base())
 		var radii []float64
 		for _, e := range patches[0].Edges() {
-			c, ok := e.Curve().(Circle3)
+			c, ok := e.n.Curve.(surfacegeom.Circle3)
 			require.True(t, ok, "a whole-turn patch is bounded by circles")
 			radii = append(radii, c.Radius.Base())
 			if c.Radius.Base() == 3 {
@@ -703,7 +704,7 @@ func TestVertexBlendBoxPartialCornerSet(t *testing.T) {
 		}
 	}
 	for _, e := range out.Edges() {
-		if _, ok := e.Curve().(Ellipse3); ok {
+		if _, ok := e.n.Curve.(surfacegeom.Ellipse3); ok {
 			ellipses++
 		}
 	}
@@ -1216,7 +1217,7 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 	require.Equal(t, 1, curvedCount)
 	var seams []*Edge
 	for _, edge := range out.Edges() {
-		if _, ok := edge.Curve().(FilletMiter3); ok {
+		if _, ok := edge.n.Curve.(surfacegeom.FilletMiter3); ok {
 			seams = append(seams, edge)
 		}
 	}

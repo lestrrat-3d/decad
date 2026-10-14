@@ -281,32 +281,6 @@ type borrowedCurve struct{ inner surfacegeom.Curve }
 
 func (borrowedCurve) curve() {}
 
-func internalCurve(c Curve) surfacegeom.Curve {
-	if c == nil {
-		return nil
-	}
-	switch v := c.(type) {
-	case Line3:
-		return surfacegeom.Line3(v)
-	case Circle3:
-		return surfacegeom.Circle3(v)
-	case Arc3:
-		return surfacegeom.Arc3(v)
-	case Ellipse3:
-		return surfacegeom.Ellipse3(v)
-	case FilletMiter3:
-		return surfacegeom.FilletMiter3(v)
-	case NURBSCurve:
-		return surfacegeom.NURBSCurve(v)
-	case FacetedCurve:
-		return surfacegeom.FacetedCurve(v)
-	case borrowedCurve:
-		return v.inner
-	default:
-		panic(fmt.Sprintf("unhandled public curve %T", c))
-	}
-}
-
 // Vertex is a topological point.
 type Vertex struct {
 	// n is the node data internal packages read and build (internal/topo).
@@ -404,7 +378,6 @@ func (ce CoEdge) IsForward() bool { return ce.forward }
 // Edge is a topological edge: a tagged curve between two vertices, with the
 // faces adjacent to it.
 type Edge struct {
-	curve Curve
 	start *Vertex
 	end   *Vertex
 	faces []*Face
@@ -413,7 +386,7 @@ type Edge struct {
 }
 
 // Curve returns the edge's tagged geometry.
-func (e *Edge) Curve() Curve { return e.curve }
+func (e *Edge) Curve() Curve { return publicCurve(e.n.Curve) }
 
 // Start returns the edge's start vertex.
 func (e *Edge) Start() *Vertex { return e.start }

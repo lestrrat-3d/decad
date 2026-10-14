@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
@@ -133,17 +134,17 @@ func TestRejectAxisCrossingRefusesUnprobableCurve(t *testing.T) {
 	m := st.r0
 
 	t.Run("Line3 stays permitted", func(t *testing.T) {
-		require.NoError(t, extent.RejectAxisCrossing(st.stopGeometry(), angularStopEdge(&Edge{curve: Line3{}}), m))
+		require.NoError(t, extent.RejectAxisCrossing(st.stopGeometry(), angularStopEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}}), m))
 	})
 	for _, tc := range []struct {
 		name  string
-		curve Curve
+		curve surfacegeom.Curve
 	}{
-		{name: "NURBSCurve", curve: NURBSCurve{}},
-		{name: "FacetedCurve", curve: FacetedCurve{}},
+		{name: "NURBSCurve", curve: surfacegeom.NURBSCurve{}},
+		{name: "FacetedCurve", curve: surfacegeom.FacetedCurve{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := extent.RejectAxisCrossing(st.stopGeometry(), angularStopEdge(&Edge{curve: tc.curve}), m)
+			err := extent.RejectAxisCrossing(st.stopGeometry(), angularStopEdge(&Edge{n: topo.Edge{Curve: tc.curve}}), m)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.ErrorContains(t, err, tc.name, "the refusal names the curve type it cannot probe")
 		})
@@ -181,7 +182,7 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 
 	t.Run("NURBSCurve rim", func(t *testing.T) {
 		edge := &Edge{
-			curve: NURBSCurve{},
+			n:     topo.Edge{Curve: surfacegeom.NURBSCurve{}},
 			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
 			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
 		}
@@ -195,7 +196,7 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 
 	t.Run("FacetedCurve rim", func(t *testing.T) {
 		edge := &Edge{
-			curve: FacetedCurve{},
+			n:     topo.Edge{Curve: surfacegeom.FacetedCurve{}},
 			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
 			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
 		}
@@ -212,7 +213,7 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 		// permitted keeps returning its agreed half-plane angle, never a
 		// refusal, once the vertices themselves agree.
 		edge := &Edge{
-			curve: Line3{},
+			n:     topo.Edge{Curve: surfacegeom.Line3{}},
 			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
 			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
 		}
@@ -266,4 +267,11 @@ func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 			require.GreaterOrEqual(t, delta, tc.delta)
 		})
 	}
+}
+
+// TestAngularStopEdgeNamesPublicCurveType pins that the refusal text keeps
+// the public variant name although the edge node holds the internal twin.
+func TestAngularStopEdgeNamesPublicCurveType(t *testing.T) {
+	e := &Edge{n: topo.Edge{Curve: surfacegeom.Ellipse3{}}}
+	require.Equal(t, "decad.Ellipse3", angularStopEdge(e).CurveType)
 }

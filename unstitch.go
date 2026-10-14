@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -261,7 +262,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if ne, ok := newEdgeByOld[old]; ok {
 			return ne, nil
 		}
-		curve, err := surfaceplace.TransformCurve(internalCurve(old.curve), xform)
+		curve, err := surfaceplace.TransformCurve(old.n.Curve, xform)
 		if err != nil {
 			return nil, err
 		}
@@ -278,7 +279,6 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
-			curve: publicCurve(curve),
 			start: start,
 			end:   end,
 			n: topo.Edge{
@@ -287,10 +287,11 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 				LengthBound:     lengthBound,
 				LengthUnbounded: old.n.LengthUnbounded,
 				Denot:           old.n.Denot.Compose(xform),
+				Curve:           curve,
 			},
 		}
 		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
-			internalCurve(old.curve), old.n.CurveBound, old.n.CurveBounded, curve, xform)
+			old.n.Curve, old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}
@@ -370,7 +371,7 @@ func faceBounds(srcFace, nf *Face, srcBounds Box, xform r3.Transform, delta floa
 func faceIsStraightEdged(f *Face) bool {
 	for _, l := range f.loops {
 		for _, ce := range l.coedges {
-			if _, ok := ce.edge.curve.(Line3); !ok {
+			if _, ok := ce.edge.n.Curve.(surfacegeom.Line3); !ok {
 				return false
 			}
 		}

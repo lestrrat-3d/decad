@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -360,11 +361,11 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 	}
 	outerEdges := make([]*Edge, 4)
 	for i := range 4 {
-		outerEdges[i] = &Edge{curve: Line3{}, start: verts[i], end: verts[(i+1)%4]}
+		outerEdges[i] = &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: verts[i], end: verts[(i+1)%4]}
 	}
 	holeEdges := make([]*Edge, 4)
 	for i := range 4 {
-		holeEdges[i] = &Edge{curve: Line3{}, start: verts[4+i], end: verts[4+(i+1)%4]}
+		holeEdges[i] = &Edge{n: topo.Edge{Curve: surfacegeom.Line3{}}, start: verts[4+i], end: verts[4+(i+1)%4]}
 	}
 	frame, err := r3.NewFrame(corner, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	if err != nil {

@@ -278,7 +278,7 @@ func faceIsTetrahedronEligible(f *Face) bool {
 	}
 	for _, l := range f.loops {
 		for _, ce := range l.coedges {
-			if _, ok := ce.edge.curve.(Line3); !ok {
+			if _, ok := ce.edge.n.Curve.(surfacegeom.Line3); !ok {
 				return false
 			}
 		}
@@ -395,9 +395,9 @@ func (s stitchLoopSource) IsOuter() bool { return s.loop.n.Outer }
 
 func (s stitchLoopSource) Circle() (stitchflux.CircleRim, bool, string) {
 	edge := s.loop.coedges[0].edge
-	circle, ok := edge.curve.(Circle3)
+	circle, ok := edge.n.Curve.(surfacegeom.Circle3)
 	if !ok {
-		return stitchflux.CircleRim{}, false, fmt.Sprintf("%T", edge.curve)
+		return stitchflux.CircleRim{}, false, fmt.Sprintf("%T", publicCurve(edge.n.Curve))
 	}
 	return stitchflux.CircleRim{
 		Center:          circle.Center,
@@ -537,7 +537,7 @@ func stitchTaggedFace(f *Face) stitchflux.TaggedFace {
 	tagged := stitchflux.TaggedFace{Denoted: f.n.Denoted, Surface: internalSurface(f.surface)}
 	for _, loop := range f.loops {
 		for _, ce := range loop.coedges {
-			tagged.Curves = append(tagged.Curves, internalCurve(ce.edge.curve))
+			tagged.Curves = append(tagged.Curves, ce.edge.n.Curve)
 		}
 	}
 	return tagged

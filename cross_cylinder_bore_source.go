@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -40,7 +41,7 @@ func crossCylinderCircleSource(body *Body, u, v r3.Vec) (prismPayload, circleSeg
 func crossCylinderCircleBound(body *Body, radius float64) (float64, bool) {
 	bound, count := 0.0, 0
 	for _, edge := range body.Edges() {
-		if _, ok := edge.curve.(Circle3); !ok {
+		if _, ok := edge.n.Curve.(surfacegeom.Circle3); !ok {
 			continue
 		}
 		if !edge.n.CurveBounded || proofbound.IsNonFinite(edge.n.CurveBound) {

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stationbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -36,7 +37,7 @@ func bodyPatchCircularPrismSource(pp bodyPatchPayload) (prismPayload, bool) {
 		if len(chain.edges) != 1 {
 			return prismPayload{}, false
 		}
-		if _, ok := chain.edges[0].curve.(Circle3); !ok {
+		if _, ok := chain.edges[0].n.Curve.(surfacegeom.Circle3); !ok {
 			return prismPayload{}, false
 		}
 		if len(chain.edges[0].faces) != 1 || chain.edges[0].faces[0] != pp.faces[0] {

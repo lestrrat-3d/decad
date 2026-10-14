@@ -167,10 +167,10 @@ func chainSpanRims(part *Body, arc, reverse bool) (chainRimPair, error) {
 	if start == nil || end == nil || start == end {
 		return chainRimPair{}, fmt.Errorf(`%w: a composite chain span has incomplete path rims`, ErrUnsupported)
 	}
-	if _, ok := start.curve.(Line3); !ok {
+	if _, ok := start.n.Curve.(surfacegeom.Line3); !ok {
 		return chainRimPair{}, fmt.Errorf(`%w: a composite chain start rim is not source-linear`, ErrUnsupported)
 	}
-	if _, ok := end.curve.(Line3); !ok {
+	if _, ok := end.n.Curve.(surfacegeom.Line3); !ok {
 		return chainRimPair{}, fmt.Errorf(`%w: a composite chain end rim is not source-linear`, ErrUnsupported)
 	}
 	return chainRimPair{start: start, end: end}, nil

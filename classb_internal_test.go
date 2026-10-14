@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -77,7 +78,7 @@ func TestClassBCutCrossDrilledBox(t *testing.T) {
 		}
 		if _, planar := f.Surface().(Plane); planar && len(f.Loops()) == 2 {
 			holed++
-			_, isCircle := f.Loops()[1].Edges()[0].Curve().(Circle3)
+			_, isCircle := f.Loops()[1].Edges()[0].n.Curve.(surfacegeom.Circle3)
 			require.True(t, isCircle, `a y wall's inner loop is the hole's rim`)
 		}
 	}
@@ -194,7 +195,7 @@ func TestClassBRootedCutKeepsThePrismsConvexity(t *testing.T) {
 	require.Equal(t, want, internalConvexityByEnds(t, result))
 	circles := 0
 	for _, e := range result.Edges() {
-		if _, ok := e.Curve().(Circle3); ok {
+		if _, ok := e.n.Curve.(surfacegeom.Circle3); ok {
 			circles++
 			require.False(t, e.IsConvex(), "a hole's rim reads concave")
 		}

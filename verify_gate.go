@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 )
 
@@ -310,8 +311,8 @@ func chainVertexGateDiameter(ctx context.Context, body *Body, extraAllow float64
 func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta float64) (float64, bool, error) {
 	return diameter.CircularArcs(ctx, func(yield func(diameter.ArcLength) bool) {
 		for _, edge := range body.Edges() {
-			switch edge.Curve().(type) {
-			case Circle3, Arc3:
+			switch edge.n.Curve.(type) {
+			case surfacegeom.Circle3, surfacegeom.Arc3:
 			default:
 				continue
 			}

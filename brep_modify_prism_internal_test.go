@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -45,7 +46,7 @@ func internalCrossDrilledBrepRim(t *testing.T, body *Body, center r3.Vec) *Edge 
 	t.Helper()
 	var rim *Edge
 	for _, e := range body.Edges() {
-		if c, ok := e.curve.(Circle3); ok && c.Center == center {
+		if c, ok := e.n.Curve.(surfacegeom.Circle3); ok && c.Center == center {
 			require.Nil(t, rim, "one rim edge is centred at %v", center)
 			rim = e
 		}

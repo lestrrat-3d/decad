@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/coilshell"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -124,7 +125,7 @@ func TestCoilRoundWireSpring(t *testing.T) {
 		require.Len(t, b.Vertices(), 2)
 		for _, e := range b.Edges() {
 			require.Len(t, e.Faces(), 2)
-			circle, ok := e.Curve().(Circle3)
+			circle, ok := e.n.Curve.(surfacegeom.Circle3)
 			require.True(t, ok, "a whole circle's rim is a closed Circle3")
 			require.Equal(t, e.Start(), e.End())
 			require.InDelta(t, 0.5, circle.Radius.Base(), 1e-15)
@@ -133,12 +134,12 @@ func TestCoilRoundWireSpring(t *testing.T) {
 			require.NoError(t, err)
 			require.InDelta(t, math.Pi, length.Value.Base(), length.Bound.Base()+1e-15)
 		}
-		start := coilFace(t, b, roleCapStart).Loops()[0].CoEdges()[0].Edge().Curve().(Circle3)
+		start := coilFace(t, b, roleCapStart).Loops()[0].CoEdges()[0].Edge().n.Curve.(surfacegeom.Circle3)
 		require.InDelta(t, 0, start.Center.Sub(r3.NewVec(3, 0, 0)).Len(), 1e-15)
 		require.InDelta(t, 1, math.Abs(start.Axis.Z), 1e-15)
 		// After five whole turns the end rim sits 7.5 mm up the axis in the
 		// start rim's own plane.
-		end := coilFace(t, b, roleCapEnd).Loops()[0].CoEdges()[0].Edge().Curve().(Circle3)
+		end := coilFace(t, b, roleCapEnd).Loops()[0].CoEdges()[0].Edge().n.Curve.(surfacegeom.Circle3)
 		require.InDelta(t, 0, end.Center.Sub(r3.NewVec(3, 7.5, 0)).Len(), 1e-12)
 		require.InDelta(t, 0, end.Axis.Sub(start.Axis).Len(), 1e-12)
 	})
@@ -198,17 +199,17 @@ func TestCoilSlotSpring(t *testing.T) {
 	arcs, lines, helices := 0, 0, 0
 	for _, e := range b.Edges() {
 		require.Len(t, e.Faces(), 2)
-		switch c := e.Curve().(type) {
-		case Arc3:
+		switch c := e.n.Curve.(type) {
+		case surfacegeom.Arc3:
 			arcs++
 			require.InDelta(t, 0.4, c.Radius.Base(), 1e-15)
 			require.True(t, e.IsConvex())
 			length, err := e.Length()
 			require.NoError(t, err)
 			require.InDelta(t, 0.4*math.Pi, length.Value.Base(), length.Bound.Base()+1e-15)
-		case Line3:
+		case surfacegeom.Line3:
 			lines++
-		case FacetedCurve:
+		case surfacegeom.FacetedCurve:
 			helices++
 			// The slot's junctions are tangent: no turn, so no convex edge.
 			require.False(t, e.IsConvex())
@@ -220,7 +221,7 @@ func TestCoilSlotSpring(t *testing.T) {
 	// Every arc rim runs counter-clockwise about its axis from its start to
 	// its end vertex: the midpoint of that sweep lies on the arc.
 	for _, e := range b.Edges() {
-		c, ok := e.Curve().(Arc3)
+		c, ok := e.n.Curve.(surfacegeom.Arc3)
 		if !ok {
 			continue
 		}
@@ -340,7 +341,7 @@ func TestCoilArcFacetBoundHoldsTheSurface(t *testing.T) {
 				}
 				require.Equal(t, 1, reversed)
 				for _, e := range b.Edges() {
-					if _, ok := e.Curve().(Arc3); ok {
+					if _, ok := e.n.Curve.(surfacegeom.Arc3); ok {
 						require.False(t, e.IsConvex())
 					}
 				}

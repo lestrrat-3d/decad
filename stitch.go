@@ -548,7 +548,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				return eb, nil
 			}
 		}
-		curve, err := surfaceplace.TransformCurve(internalCurve(old.curve), xform)
+		curve, err := surfaceplace.TransformCurve(old.n.Curve, xform)
 		if err != nil {
 			return nil, err
 		}
@@ -557,7 +557,6 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
-			curve: publicCurve(curve),
 			start: vertexForClass(startClass),
 			end:   vertexForClass(endClass),
 			n: topo.Edge{
@@ -570,10 +569,11 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				// that ever builds a new Edge for the group, per buildByGroup
 				// above — is a sound representative for the other's identity too.
 				Denot: old.n.Denot.Compose(xform),
+				Curve: curve,
 			},
 		}
 		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
-			internalCurve(old.curve), old.n.CurveBound, old.n.CurveBounded, curve, xform)
+			old.n.Curve, old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		eb := &edgeBuild{edge: ne, startClass: startClass, endClass: endClass}
 		buildByOld[old] = eb
 		if isWelded {
