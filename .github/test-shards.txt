@@ -653,6 +653,7 @@
 4	0.04	TestEnumeratePrunedRodsMatchTheFullWalk
 4	0.01	TestEvalLoftLoopWalksFollowTheFaceNormal
 4	0.00	TestFacetedCopyLineageDirectTransfer
+10	4.80	TestFacetedCopyTransferSeparation
 4	0.60	TestFacetedRestatementPublishesItsPayloadsOwnProofRecord
 4	0.05	TestFallbackGateDiameterReadsCurvedWallStations
 4	5.20	TestFloatRatMatchesSetFloat64

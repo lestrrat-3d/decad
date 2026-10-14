@@ -118,3 +118,79 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, moved.payload.(facetedPayload).copyLineage.direct)
 }
+
+// looseBounds widens every held bound of body by delta. A wider bound is
+// still a valid upper bound, so the held placement check accepts it, but a
+// direct pairwise slab check must charge it.
+func looseBounds(body *Body, delta float64) {
+	part := body.payload.(facetedPayload)
+	part.vertexBound = append([]float64(nil), part.vertexBound...)
+	for i := range part.vertexBound {
+		part.vertexBound[i] += delta
+	}
+	part.meshBound += delta
+	body.payload = part
+}
+
+func TestFacetedCopyTransferSeparation(t *testing.T) {
+	_, source, _ := neutralArcSeamSource(t)
+	rotate := func(degrees float64) r3.Transform {
+		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(degrees))
+		require.NoError(t, err)
+		return turn
+	}
+	copyOf := func(body *Body, degrees float64) *Body {
+		image, err := Copy(t.Context(), body, WithCopyPlacement(rotate(degrees)))
+		require.NoError(t, err)
+		return image
+	}
+	// Source plus two copies is the smallest set for which shell separation
+	// enters reference-gap transfer. The tooth clears its neighbour from about
+	// 13 degrees, so 20 degree steps leave real clearance.
+	a := copyOf(source, 20)
+	direct := copyOf(source, 40)
+	nested := copyOf(a, 20)
+	require.True(t, direct.payload.(facetedPayload).copyLineage.direct)
+	require.False(t, nested.payload.(facetedPayload).copyLineage.direct)
+	// Only the second copy carries the wider bound, and both copies sit at the
+	// same 40 degree placement, so lineage is the only difference between sets.
+	looseBounds(direct, 0.5)
+	looseBounds(nested, 0.5)
+
+	t.Run("direct set takes transfer", func(t *testing.T) {
+		// Transfer ignores the second copy's own bound because a direct copy's
+		// true solid is the source's image. A pairwise check must charge it and
+		// refuses, so certification succeeding proves transfer replaced it. The mixed
+		// lineage subtest shows that refusal on the same geometry.
+		tools := []*Body{source, a, direct}
+		set, err := certifyFacetedCopies(t.Context(), tools)
+		require.NoError(t, err)
+		require.Equal(t, shellseparation.AxisX, set.axis)
+	})
+	t.Run("mixed lineage refuses", func(t *testing.T) {
+		// Same geometry, but one copy is a copy of a copy. sourceLinked stays
+		// false, so only pairwise checks run and they refuse the wider bound.
+		_, err := certifyFacetedCopies(t.Context(), []*Body{source, a, nested})
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.ErrorContains(t, err, "not separate")
+	})
+	t.Run("uneven spacing refuses near clearance", func(t *testing.T) {
+		// The 20 to 30 degree pair is 10 degrees apart, inside the clearance,
+		// while the reference gap from the 20 degree copy is positive. Transfer
+		// must charge the 10 degree mismatch and decline, then the pairwise
+		// check refuses. One axis keeps the exact slab work small.
+		tools := []*Body{source, a, copyOf(source, 30)}
+		shells := make([]shellseparation.Shell, len(tools))
+		moves := make([]r3.Transform, len(tools))
+		moves[0] = r3.Identity()
+		for i, tool := range tools {
+			part := tool.payload.(facetedPayload)
+			shells[i] = facetedShell(part)
+			if i > 0 {
+				moves[i] = part.copyLineage.motion
+			}
+		}
+		require.False(t, shellseparation.Separate(t.Context(), shells, moves,
+			shellseparation.SourceShell, shellseparation.AxisX, true))
+	})
+}

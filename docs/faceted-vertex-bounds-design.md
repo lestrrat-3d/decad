@@ -259,7 +259,7 @@ transfer. `certifyFacetedCopies` checks live source and recorded `Copy` provenan
 allowing reference-gap transfer. Source-solid transfer also requires every copy to be
 placed directly from the source's own payload, because only then is the recorded motion
 exactly the placement applied to the source's true solid. A copy of a copy, or a moved
-copy, still gets direct pairwise slab checks. The first source's true departure, a held
+copy, uses direct pairwise checks when needed. The first source's true departure, a held
 Copy's placement rounding, and a Boolean proxy's own displacement remain
 different shell inputs; the kernel does not upgrade one to another.
 
