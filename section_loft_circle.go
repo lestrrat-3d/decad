@@ -14,7 +14,11 @@ import (
 // same region boundary at every level. Equal-angle correspondence makes the
 // moving hole a circle with linearly interpolated center and radius.
 func loftCircleSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
-	if pl.constructionDelta != 0 || pl.analyticBore || pl.xform != r3.Identity() ||
+	// An exact-axis Cut is refused by analyticBore. The direct-circle gate
+	// refuses non-analytic Cut and Fillet rewrites; their markers remain
+	// reject-only backstops if those gates change.
+	if pl.constructionDelta != 0 || len(pl.blendSegs) != 0 ||
+		pl.throughBoreCut || pl.analyticBore || pl.xform != r3.Identity() ||
 		directLoftCircularHole(pl) == loftCircleWallNone {
 		return profileRecord{}, false
 	}

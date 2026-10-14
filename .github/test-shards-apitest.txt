@@ -2055,3 +2055,8 @@
 10	0.00	TestLoftCutTiltedFrameMapKeepsFacetedTopology
 10	0.00	TestLoftCutExactToolSpanKeepsUncutCap
 10	0.00	TestFaceLoopsKeepTheirIdentity
+10	0.00	TestSectionMatchingRectangularHoleLoftFeedsExtrude
+10	0.00	TestSectionMatchingTwoCircleHolesLoftFeedsExtrude
+10	0.00	TestSectionMatchingLoftRefusesDifferentHoleRecords
+10	0.00	TestSectionMatchingLoftRefusesFacetedCutHole
+10	0.00	TestSectionMatchingLoftRefusesFilletRewrite

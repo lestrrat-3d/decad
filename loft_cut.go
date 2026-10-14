@@ -81,6 +81,7 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 	}
 	next := pl
 	next.profile0, next.profile1 = profile, profile
+	next.throughBoreCut = true
 	next.recordArea = [2]float64{ig.Area, ig.Area}
 	// The analytic wall has no normal-departure allowance. A rounded center
 	// or a non-isometric frame map keeps the Loft's tessellated bore topology.

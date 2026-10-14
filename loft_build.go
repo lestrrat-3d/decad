@@ -78,6 +78,9 @@ type loftPayload struct {
 	// replaces the recorded float trim. Each value bounds that increase for
 	// every cell of the named outer-loop segment.
 	constructionLengthExtra map[int]float64
+	// throughBoreCut marks a profile pair rewritten by Cut. The added hole
+	// did not come from the two authenticated source Sketch profiles.
+	throughBoreCut bool
 	// analyticBore is set only by the certified whole-circle through Cut.
 	// Its loft mesh still supplies mass and tessellation proofs, while the
 	// public topology uses one cylindrical wall for the new hole.
