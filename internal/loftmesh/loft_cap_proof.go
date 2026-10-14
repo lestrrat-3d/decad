@@ -348,6 +348,33 @@ func capStructureHolds(tris [][3]int, walls, from, to, otherFrom, otherTo int, r
 // capLoopAreaSign is the sign of one loop's exact shoelace area in the
 // projection onto axes (u, v), in the loop's own vertex order.
 func capLoopAreaSign(data *LoftAuditData, loop []int, u, v int) int {
+	coordsU := make([]proof.Dyadic, len(loop))
+	coordsV := make([]proof.Dyadic, len(loop))
+	for k, index := range loop {
+		p := data.Xverts[index]
+		var ok bool
+		coordsU[k], ok = proof.DyOfRat(meshbool.RatCoordOf(p, u))
+		if !ok {
+			return capLoopAreaSignRat(data, loop, u, v)
+		}
+		coordsV[k], ok = proof.DyOfRat(meshbool.RatCoordOf(p, v))
+		if !ok {
+			return capLoopAreaSignRat(data, loop, u, v)
+		}
+	}
+	area := proof.DyZero()
+	for k := range loop {
+		next := (k + 1) % len(loop)
+		area = proof.DyAdd(area, proof.DySubScalar(
+			proof.DyMul(coordsU[k], coordsV[next]),
+			proof.DyMul(coordsU[next], coordsV[k]),
+		))
+	}
+	return area.Sign()
+}
+
+// capLoopAreaSignRat accepts exact coordinates with non-dyadic denominators.
+func capLoopAreaSignRat(data *LoftAuditData, loop []int, u, v int) int {
 	area := new(big.Rat)
 	var cross, term big.Rat
 	for k, a := range loop {
