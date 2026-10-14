@@ -2772,7 +2772,11 @@ fillets, optional bore and both outer-cap chamfers.
 prism tool cuts one full circular through-bore. Both recorded sections must be
 identical and hole-free before the cut, share their in-plane axes, have zero
 alignment, and have no placement. The tool must share those axes and span both
-cap levels. `internal/loftfillet/circle_hole.go` proves that the circle's
+cap levels. Exact rational lifts of its endpoint levels must lie on or beyond
+the exact cap planes. The tool's circle center and the inserted hole center
+must have equal exact lifts, including the recovered axial coordinate. Tools
+with displaced section or endpoint records use the general boolean path.
+`internal/loftfillet/circle_hole.go` proves that the circle's
 containing square misses every outer carrier enclosure and junction, then uses
 exact winding of the carrier chords to prove the circle lies inside the
 authenticated outer loop. It inserts the same clockwise `CircleSeg` hole into
@@ -2784,8 +2788,9 @@ The certified Cut marks the resulting Loft for analytic bore topology only
 when exact rational lifts of both section origins and circle centers agree
 with one common axis and sweep level. It compares the recorded frames' exact
 axis directions as well. Rounded `Frame.ToLocal` and `Frame.ToWorld` readings
-cannot establish this proof. An accepted Cut without the proof keeps its
-tessellated Loft topology.
+cannot establish this proof. Cylindrical topology also requires an exact
+held center and an exactly orthonormal frame map. An accepted Cut without
+these proofs keeps its tessellated Loft topology.
 The evaluator keeps the held polygonal outer walls, assembly, mass and
 tessellation proofs. It replaces only the hole-wall triangles with one
 cylindrical face and their cap rim chords with one full `Circle3` per cap.
@@ -2802,8 +2807,11 @@ displacement. Exact rational lifts of both section origins must agree at one
 positive sweep level, and their frame axis directions must agree exactly.
 Rounded `ToLocal` and `ToWorld` equality does not prove either gate. A pair
 with bit-identical circle records and matching in-plane frame axes uses the
-cylindrical builder only when both circle-center lifts also agree as exact
-rationals. Equal rounded radii without identical records keep faceted
+cylindrical builder only when both circle-center lifts agree as exact
+rationals, its held center equals that exact lift, and its placed frame map
+is exactly orthonormal. Other pairs keep faceted topology because the shared
+cylinder builder publishes no wall-normal departure bound. Equal rounded
+radii without identical records keep faceted
 topology. Changing circles with matching axes require identity placement,
 exact world-XY section axes and an exactly representable axial height. A
 fixed center with changing radius gives a `Cone` whose lateral area is

@@ -2,9 +2,12 @@ package decad
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftfillet"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
@@ -29,6 +32,7 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 	}
 	tool, ok := b.payload.(prismPayload)
 	if !ok || tool.SurfaceResult || tool.Xform != r3.Identity() ||
+		tool.SectionDelta != 0 || tool.Z0Delta != 0 || tool.Z1Delta != 0 ||
 		tool.Frame.U() != pl.frame0.U() || tool.Frame.V() != pl.frame0.V() ||
 		len(tool.Profile.Holes) != 0 || len(tool.Profile.Outer.Segments) != 1 {
 		return nil, false, nil
@@ -40,13 +44,11 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 	}
 	centerWorld := tool.Point(circle.Center.U, circle.Center.V, 0)
 	center := pl.frame0.ToLocal(centerWorld)
-	if pl.frame0.ToWorld(center) != centerWorld {
+	if !loftToolCenterExact(tool, pl.frame0, circle.Center.U, circle.Center.V, center) {
 		return nil, false, nil
 	}
-	from := pl.frame0.ToLocal(tool.Point(0, 0, tool.Z0))
-	to := pl.frame0.ToLocal(tool.Point(0, 0, tool.Z1))
 	end := pl.frame0.ToLocal(pl.frame1.Origin())
-	if from.Z > 0 || to.Z < end.Z || end.Z <= 0 || end.X != 0 || end.Y != 0 {
+	if end.Z <= 0 || !loftToolSpansExactCaps(tool, pl.frame0, pl.frame1) {
 		return nil, false, nil
 	}
 	profile := pl.profile0
@@ -80,12 +82,86 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 	next := pl
 	next.profile0, next.profile1 = profile, profile
 	next.recordArea = [2]float64{ig.Area, ig.Area}
-	// The analytic wall has no allowance for a tilt between its section axes.
-	// A failed exact proof keeps the Loft's tessellated bore topology.
-	next.analyticBore = loftBoreHasExactAxis(pl.frame0, pl.frame1, hole.Center.U, hole.Center.V, end.Z)
+	// The analytic wall has no normal-departure allowance. A rounded center
+	// or a non-isometric frame map keeps the Loft's tessellated bore topology.
+	next.analyticBore = loftBoreHasExactAxis(pl.frame0, pl.frame1, hole.Center.U, hole.Center.V, end.Z) &&
+		loftBoreCylinderExactGeometry(pl.frame0, pl.xform, hole.Center.U, hole.Center.V)
 	out, err := evalLoft(ctx, d, ref, next, budget, work0, work1)
 	if err != nil {
 		return nil, false, err
 	}
 	return out, true, nil
+}
+
+// The candidate local coordinates are rounded readings. Compare their exact
+// lifts with the recorded tool center before reusing them in a hole record.
+func loftToolCenterExact(tool prismPayload, frame r3.Frame, u, v float64, candidate r3.Vec) bool {
+	toolCenter, err := massmoment.RevolveAnchor(tool.Frame, u, v)
+	if err != nil {
+		return false
+	}
+	loftCenter, err := massmoment.RevolveAnchor(frame, candidate.X, candidate.Y)
+	if err != nil {
+		return false
+	}
+	axis, err := massmoment.PlaneMap(frame, r3.Identity())
+	if err != nil {
+		return false
+	}
+	z := proofarith.FloatRat(candidate.Z)
+	if z == nil {
+		return false
+	}
+	for i := range toolCenter {
+		lift := new(big.Rat).Add(loftCenter[i], new(big.Rat).Mul(axis[i][2], z))
+		if toolCenter[i].Cmp(lift) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// The tool's exact endpoints must lie on or beyond the cap planes. A dot
+// with the lower frame's exact normal decides each side without a rounded
+// local-coordinate comparison.
+func loftToolSpansExactCaps(tool prismPayload, lower, upper r3.Frame) bool {
+	toolOrigin, err := massmoment.RevolveAnchor(tool.Frame, 0, 0)
+	if err != nil {
+		return false
+	}
+	bottom, err := massmoment.RevolveAnchor(lower, 0, 0)
+	if err != nil {
+		return false
+	}
+	top, err := massmoment.RevolveAnchor(upper, 0, 0)
+	if err != nil {
+		return false
+	}
+	toolMap, err := massmoment.PlaneMap(tool.Frame, r3.Identity())
+	if err != nil {
+		return false
+	}
+	loftMap, err := massmoment.PlaneMap(lower, r3.Identity())
+	if err != nil {
+		return false
+	}
+	for end, cap := range [2][3]*big.Rat{bottom, top} {
+		z := proofarith.FloatRat(tool.Z0)
+		if end == 1 {
+			z = proofarith.FloatRat(tool.Z1)
+		}
+		if z == nil {
+			return false
+		}
+		side := new(big.Rat)
+		for i := range toolOrigin {
+			point := new(big.Rat).Add(toolOrigin[i], new(big.Rat).Mul(toolMap[i][2], z))
+			delta := new(big.Rat).Sub(point, cap[i])
+			side.Add(side, new(big.Rat).Mul(delta, loftMap[i][2]))
+		}
+		if (end == 0 && side.Sign() > 0) || (end == 1 && side.Sign() < 0) {
+			return false
+		}
+	}
+	return true
 }

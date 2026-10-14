@@ -56,8 +56,7 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 		return loftCircleWallNone
 	}
 	level := pl.frame0.ToLocal(pl.frame1.Origin())
-	if level.X != 0 || level.Y != 0 ||
-		!loftBoreHasExactAxis(pl.frame0, pl.frame1, 0, 0, level.Z) {
+	if !loftBoreHasExactAxis(pl.frame0, pl.frame1, 0, 0, level.Z) {
 		return loftCircleWallNone
 	}
 	sameAxes := pl.frame0.U() == pl.frame1.U() && pl.frame0.V() == pl.frame1.V()
@@ -77,7 +76,8 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 	// for both rims, so equal world radii alone do not authorize that reuse.
 	if sameAxes && sectionrecord.IdenticalRecord(bottom, top) {
 		if loftBoreHasExactAxis(pl.frame0, pl.frame1,
-			bottom.Center.U, bottom.Center.V, level.Z) {
+			bottom.Center.U, bottom.Center.V, level.Z) &&
+			loftBoreCylinderExactGeometry(pl.frame0, pl.xform, bottom.Center.U, bottom.Center.V) {
 			return loftCircleWallCylinder
 		}
 		return loftCircleWallNone
@@ -106,6 +106,22 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 		return loftCircleWallCone
 	}
 	return loftCircleWallRuled
+}
+
+// The shared cylinder builder publishes no normal departure. Use it only
+// when its held center and the exact frame map denote a true round cylinder.
+func loftBoreCylinderExactGeometry(frame r3.Frame, xform r3.Transform, u, v float64) bool {
+	pp := prismPayload{Payload: prismrecord.Payload{Frame: frame, Xform: xform}}
+	center := pp.Point(u, v, 0)
+	if pp.PointRound(u, v, 0, center) != 0 {
+		return false
+	}
+	linear, err := massmoment.PrismRotation(frame, xform)
+	if err != nil {
+		return false
+	}
+	charge, err := massmoment.MapChargeOf(linear)
+	return err == nil && charge.Stretch == 0
 }
 
 // loftConeWallArea bounds the lateral area of the exact circular frustum
@@ -437,8 +453,7 @@ func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producer
 		return nil, fmt.Errorf("%w: a through-bore loft lost its certified hole", ErrUnsupported)
 	}
 	level := pl.frame0.ToLocal(pl.frame1.Origin())
-	if level.X != 0 || level.Y != 0 ||
-		!loftBoreHasExactAxis(pl.frame0, pl.frame1, circle.Center.U, circle.Center.V, level.Z) {
+	if !loftBoreHasExactAxis(pl.frame0, pl.frame1, circle.Center.U, circle.Center.V, level.Z) {
 		return nil, fmt.Errorf("%w: a through-bore loft has no common circle axis", ErrUnsupported)
 	}
 	pp := prismPayload{Payload: prismrecord.Payload{
