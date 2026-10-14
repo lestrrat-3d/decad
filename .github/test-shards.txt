@@ -1436,3 +1436,4 @@
 1	0.00	TestCurvedCallScopeSharesLiveRecords
 1	0.00	TestCurvedCallScopeShellMatchesUnscoped
 1	0.00	TestCurvedCallScopeStillRefusesChangedGraph
+5	0.00	TestCurvedTimeStageCellsMatchLegacy
