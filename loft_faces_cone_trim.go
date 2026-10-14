@@ -24,6 +24,9 @@ type loftFacesCapRecord struct {
 	stationGroup []int
 	final        loftFaceMap
 	group        int
+	// tangent is set only when the last section is a constructed
+	// cone-tangent end. It is nil for plain LoftFaces.
+	tangent *loftface.TangentEnd
 }
 
 // This record is issued to one unplaced Cut of the original LoftFaces mesh.
@@ -50,6 +53,9 @@ type loftFacesTrimRecord struct {
 	toe, heel                 *pointConeLimit
 	toeTool, heelTool         *Body
 	toeCapGroup, heelCapGroup int
+	// tangent is the cone-tangent end of the lofted tooth, copied from its
+	// cap record. It is nil unless the loft ended in a constructed section.
+	tangent *loftface.TangentEnd
 }
 
 func loftFacesCapRecordReady(record *loftFacesCapRecord) bool {
@@ -265,6 +271,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		toe:          p.loftFacesToe.toe, heel: cone,
 		toeTool: p.loftFacesToe.toeTool, heelTool: tool,
 		toeCapGroup: toeCapSource, heelCapGroup: heelCapSource,
+		tangent: p.loftFacesToe.cap.tangent,
 	}
 	body.payload = result
 	return body, true, nil
@@ -282,32 +289,7 @@ func loftCapOutsideHeelCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit
 	if box[1].Sign() >= 0 && box[0].Sign() <= 0 {
 		return false
 	}
-	g := [3]*big.Rat{m.G0, m.GU, m.GV}
-	coordinate := func(axis int) [3]*big.Rat {
-		return [3]*big.Rat{
-			lfAdd(lfMul(m.Constant[axis], g[0]), m.Q0[axis]),
-			lfAdd(lfMul(m.Constant[axis], g[1]), m.QU[axis]),
-			lfAdd(lfMul(m.Constant[axis], g[2]), m.QV[axis]),
-		}
-	}
-	x, y, z := coordinate(0), coordinate(1), coordinate(2)
-	d := [3]*big.Rat{}
-	for i := range d {
-		d[i] = lfSub(lfMul(cone.apex, g[i]), x[i])
-	}
-	quad := func(v [3]*big.Rat) [6]*big.Rat {
-		return [6]*big.Rat{lfMul(v[0], v[0]), lfMul(big.NewRat(2, 1), lfMul(v[0], v[1])),
-			lfMul(big.NewRat(2, 1), lfMul(v[0], v[2])), lfMul(v[1], v[1]),
-			lfMul(big.NewRat(2, 1), lfMul(v[1], v[2])), lfMul(v[2], v[2])}
-	}
-	y2, z2, d2 := quad(y), quad(z), quad(d)
-	k2 := lfMul(cone.slope, cone.slope)
-	var q [6]*big.Rat
-	for i := range q {
-		q[i] = lfSub(lfMul(k2, lfAdd(y2[i], z2[i])), d2[i])
-	}
-	return q[0].Sign() == 0 && q[1].Sign() == 0 && q[2].Sign() == 0 &&
-		q[4].Sign() == 0 && q[3].Sign() > 0 && q[5].Sign() > 0
+	return loftface.ConeStrictOutsideForm(loftface.ConePullback(m, cone.apex, cone.slope))
 }
 
 // The true cap and cone are disjoint by the source-map proof. Require the

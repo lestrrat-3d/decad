@@ -68,6 +68,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft.go` | Loft entry points and chain ribbon assembly. See loft §2/§4/§10/§16. |
 | `loft_sections.go` | Public smooth-section loft entry point and source-face assembly. See loft-sections design. |
 | `loft_faces.go` | Bounded source-cap loft admission and held wall assembly. See loft-face-sections design. |
+| `loft_faces_tangent.go` | `LoftFacesToConeTangent` and `ConeTangentEnd`: the LoftFaces loft whose last section is the plane exactly tangent to a point cone. See loft-face-sections design. |
 | `loft_faces_proof.go` | Exact cap-map, band embedding and occupied-volume proof for face-fed lofts. See loft-face-sections design. |
 | `loft_point.go` | Point-section Loft entry, live Sketch source check, apex fan and proof. See loft-point design. |
 | `loft_build.go` | Loft payload, evaluation, placement and tessellation adapter. See loft §5, §8, §12. |

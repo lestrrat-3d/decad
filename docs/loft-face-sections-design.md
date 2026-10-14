@@ -190,6 +190,51 @@ distant corners of each paired box with exact rationals and round the final
 distance upward. These two checks cover both complete curves and their
 endpoints without assuming that source X or angle is monotone.
 
+## Cone-tangent end section
+
+`LoftFacesToConeTangent(ctx, end, sections...)` lofts through the selected
+caps and then through a last section that no selected cap supplies. The last
+section is the plane that touches `end.Cone` along one ruling. It is built
+from the cone's exact apex `A` and slope `k` (read by `exactPointCone`) and the
+float direction `end.Radial = (0, y, z)`.
+
+`loftface.NewTangentEnd` chooses a unit vector `e = (e_y, e_z)` by the
+half-angle parameterisation: `e_y = (1-T^2)/(1+T^2)`, `e_z = 2T/(1+T^2)`, with
+`e_y` negated when the radial `y` is negative. The radial is scaled by its
+larger component before `T` is formed, so the norm and the half-angle
+denominator neither overflow nor collapse. A much smaller component can still
+underflow to zero after scaling, which only rounds the chosen direction.
+Float rounding only chooses the rational `T`; `e_y^2 + e_z^2 = 1` then holds
+exactly. `Rho` is the rational value of a float expression evaluated from the
+float of `k`; it is not the rational nearest `1/sqrt(1+k^2)`. The end map
+is
+
+    P(u, v) = (A, 0, 0) + u*Rho*(k, -e_y, -e_z) + v*(0, -e_z, e_y)
+
+with denominator 1, so it is an ordinary `loftface.Map` and the existing
+positive-denominator, plane-order and band gates consume it unchanged. Two
+identities hold for every `(u, v)` by `|e| = 1`:
+
+- `x + k*(e_y*y + e_z*z) = A`, so every point lies on the tangent plane of the
+  cone's ruling along `e`.
+- `k^2*(y^2 + z^2) - (A - x)^2 = k^2*v^2`, so the cone pullback of the end
+  plane is exactly `(0, 0, 0, 0, 0, k^2)`. The plane touches the cone along
+  `v = 0` and lies in its closed outside everywhere else.
+
+The map's `Stretch` is the Frobenius norm of its linear part, rounded up. The
+`u` axis has length `1 + O(2^-53)`; that is the declared construction, as for
+every rounded cap map, and is not an isometry claim. The held end ring is the
+float64 rounding of the map at each source station, and the station-rounding
+term of the cap bound charges that rounding.
+
+The end face carries the cap-end role of the new loft only, with a `Plane` tag
+rounded from the map, and no origin of a selected cap. `loftFacesCapRecord`
+holds the `TangentEnd` beside `final`, and the cone-trim record copies it, so
+a later check can require that its cone and map match the construction
+exactly. Placement drops both records. A source whose plane is not the tangent
+plane still passes through the ordinary embedding gates, which refuse an
+inconsistent end.
+
 ## Generic finite Revolve source gate
 
 The ordinary public `Union` also checks a bounded LoftFaces result after
