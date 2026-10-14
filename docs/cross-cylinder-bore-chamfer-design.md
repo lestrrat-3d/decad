@@ -66,8 +66,10 @@ wall, and one chamfer band. A full exact facet-contact and closed-shell
 audit checks it. The audit proposes each cap fan as a projected XY patch. It
 omits only the within-cap pairs of a cap whose patch proof holds, and
 classifies every other pair exactly, through the row-batched route. A cap
-whose proof fails keeps all its pairs. At each angular cell, paired source and held wall points
-use the same height or axial fraction. The band uses the same transverse
+whose proof fails keeps all its pairs. The row preflight charges the scan
+ceiling differently from the pairwise route, so a record near that ceiling
+can refuse on one route and not the other; every such refusal is still a refusal. At each angular cell, paired source and held wall
+points use the same height or axial fraction. The band uses the same transverse
 fraction. Three cell coordinate diagonals enclose the source-to-facet
 departure, with separate charges for held sample rounding, source-circle
 displacement, and outer/bore cylinder chord sagitta. Every outer-ring vertex

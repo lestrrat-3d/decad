@@ -28,11 +28,18 @@ func TestCrossBoreCapPatchesHold(t *testing.T) {
 			for _, v := range mesh.verts {
 				minZ, maxZ = min(minZ, v.Z), max(maxZ, v.Z)
 			}
+			var want [2][]int
+			for i, s := range mesh.src {
+				if s == 0 || s == 1 {
+					want[s] = append(want[s], i)
+				}
+			}
 			stations := len(patches[0].Triangles)
 			require.Positive(t, stations)
 			for s, patch := range patches {
 				require.Equal(t, [2]int{0, 1}, patch.Axes)
 				require.Len(t, patch.Triangles, stations)
+				require.Equal(t, want[s], patch.Triangles)
 				wantZ := minZ
 				if s == 1 {
 					wantZ = maxZ

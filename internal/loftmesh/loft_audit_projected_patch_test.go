@@ -81,3 +81,33 @@ func TestPatchAuditMatchesPairwiseOnFanCylinder(t *testing.T) {
 	require.ErrorIs(t, pairwise(), decaderr.ErrDegenerate)
 	require.ErrorIs(t, streaming(), decaderr.ErrDegenerate)
 }
+
+// TestPatchAuditFailedCapFallsBackToExactPairs has a bad contact only inside
+// one cap: the mesh is that cap alone, with no wall. The cap's proof fails,
+// so only the exact pair audit can find the overlap.
+func TestPatchAuditFailedCapFallsBackToExactPairs(t *testing.T) {
+	const n = 48
+	verts, fullTris, patches := fanCylinder(n)
+	top := patches[1].Triangles
+	tris := make([][3]int, 0, len(top))
+	capIdx := make([]int, 0, len(top))
+	for _, ti := range top {
+		capIdx = append(capIdx, len(tris))
+		tris = append(tris, fullTris[ti])
+	}
+	patch := []loftmesh.ProjectedPatch{{Triangles: capIdx, Axes: [2]int{0, 1}}}
+	audit := func() error {
+		return loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(t.Context()),
+			verts, tris, patch, loftmesh.MaxLoftAuditTriangles, 1_200_000_000)
+	}
+	require.Equal(t, loftmesh.ProjectedPatchHolds,
+		loftmesh.ProjectedPatchProof(proofbound.NewWorkBudget(t.Context()), verts, tris, patch[0]))
+	require.NoError(t, audit())
+
+	verts[n+10] = r3.Vec{X: -verts[n+10].X, Y: -verts[n+10].Y, Z: 1}
+	require.NotEqual(t, loftmesh.ProjectedPatchHolds,
+		loftmesh.ProjectedPatchProof(proofbound.NewWorkBudget(t.Context()), verts, tris, patch[0]))
+	require.ErrorIs(t, audit(), decaderr.ErrDegenerate)
+	require.ErrorIs(t, loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(t.Context()),
+		verts, tris, loftmesh.MaxLoftAuditTriangles, 1_200_000_000), decaderr.ErrDegenerate)
+}
