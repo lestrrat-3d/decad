@@ -67,7 +67,7 @@ func TestChainGateDiameterCancelledBuildReturnsContextError(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	for _, payload := range []featurePayload{chainPayload{}, chainLoftPayload{}, chainRevolvePayload{}} {
-		body := &Body{payload: payload}
+		body := bornBody(&Body{payload: payload})
 		_, _, err := bodyGateDiameter(ctx, body)
 		require.ErrorIs(t, err, context.Canceled)
 	}

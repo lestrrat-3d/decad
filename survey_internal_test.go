@@ -637,7 +637,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 
 	badRecord, err := bad.payload(t.Context())
 	require.NoError(t, err)
-	body := &Body{payload: badRecord}
+	body := bornBody(&Body{payload: badRecord})
 	results, diags, err := runSurveys(proofbound.NewWorkBudget(t.Context()), body, verifyConfig{
 		Wall:     &wallSpec{Tool: units.Millimeters(1)},
 		ToolMM:   1,

@@ -158,10 +158,10 @@ func TestStitchAuditRefusesOverlappingAssembly(t *testing.T) {
 // into a closed set at all.
 func TestStitchRuleSRefusesMultipleSourceBodies(t *testing.T) {
 	t.Parallel()
-	bodyA := &Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}}
-	bodyB := &Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}}
-	faceA := &Face{body: bodyA}
-	faceB := &Face{body: bodyB}
+	bodyA := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}})
+	bodyB := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}})
+	faceA := &Face{n: topo.Face{Body: bodyNode(bodyA)}}
+	faceB := &Face{n: topo.Face{Body: bodyNode(bodyB)}}
 
 	require.False(t, stitchRuleSAdmits(context.Background(), []*Face{faceA, faceB}))
 	// The single-body case is what Rule S DOES admit, confirming the
@@ -1252,7 +1252,7 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 		vertexObjs[i] = bornVertex(&Vertex{n: topo.Vertex{Position: p}})
 	}
 
-	body := &Body{n: topo.Body{Solid: true, Kind: topo.BodySolid}}
+	body := bornBody(&Body{n: topo.Body{Solid: true, Kind: topo.BodySolid}})
 	body.lumps = []*Lump{
 		{shells: []*FaceShell{{faces: []*Face{stitchTestLumpFace(vertexObjs[0:8])}}}},
 		{shells: []*FaceShell{{faces: []*Face{stitchTestLumpFace(vertexObjs[8:16])}}}},

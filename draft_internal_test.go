@@ -15,19 +15,19 @@ import (
 // draft body is refused by name.
 func TestDraftReceiverClasses(t *testing.T) {
 	t.Parallel()
-	pp, err := draftReceiver(&Body{payload: prismPayload{}})
+	pp, err := draftReceiver(bornBody(&Body{payload: prismPayload{}}))
 	require.NoError(t, err)
 	require.Equal(t, prismPayload{}, pp)
 
-	_, err = draftReceiver(&Body{payload: prismPayload{Payload: prismrecord.Payload{SectionDelta: 1e-6}}})
+	_, err = draftReceiver(bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{SectionDelta: 1e-6}}}))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "proven displacement")
 
-	_, err = draftReceiver(&Body{payload: draftPayload{}})
+	_, err = draftReceiver(bornBody(&Body{payload: draftPayload{}}))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "already a draft body")
 
-	_, err = draftReceiver(&Body{payload: revolvePayload{}})
+	_, err = draftReceiver(bornBody(&Body{payload: revolvePayload{}}))
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -47,7 +47,7 @@ func TestDraftKeptWallsReadsRoles(t *testing.T) {
 	require.False(t, foreign.isWallOf(7))
 	require.False(t, capStart.isWallOf(7))
 
-	b := &Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{own, coalesced, capStart}}}}}}
+	b := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{own, coalesced, capStart}}}}}})
 	kept, err := draftKeptWalls(b, 7, []*Face{own, coalesced})
 	require.NoError(t, err)
 	require.Empty(t, kept)

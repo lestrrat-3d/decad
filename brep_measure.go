@@ -49,7 +49,7 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 		if err != nil {
 			return nil, err
 		}
-		return &Face{body: body,
+		return &Face{
 			n: topo.Face{
 				Area:          region.Published.Value,
 				AreaBound:     region.Published.Bound,
@@ -58,6 +58,7 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 				Surface:       surfacegeom.Plane{Frame: frame},
 				CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: f.z0},
 				Origins:       origins,
+				Body:          bodyNode(body),
 			}}, nil
 	}
 	w := btopo.walls[fi]
@@ -67,12 +68,13 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 		return nil, err
 	}
 	area := brepgeom.WallArea(f.delta, f.z0, f.z1, f.z0Delta, f.z1Delta, w)
-	return &Face{body: body, n: topo.Face{
+	return &Face{n: topo.Face{
 		Area:      area.Value,
 		AreaBound: area.Bound,
 		Reversed:  reversed,
 		Surface:   surf,
 		Origins:   origins,
+		Body:      bodyNode(body),
 	}}, nil
 }
 

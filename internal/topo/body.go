@@ -49,6 +49,10 @@ type Body struct {
 	// Kind says whether the body is a solid or a sheet. Root Body.Kind
 	// converts it to the public BodyKind form.
 	Kind BodyKind
+	// Owner is the root Body handle that holds this node by value. Root
+	// sets it when the handle is born and maps a node back to its handle
+	// through it; nothing else writes it.
+	Owner any
 }
 
 // BodyKind is the root BodyKind's node form, with the same constant values:

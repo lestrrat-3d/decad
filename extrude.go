@@ -639,7 +639,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}}
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}})
 	var allFaces []*Face
 	total := proofbound.BoundedScalar{}
 	var captures []chainWalkCapture
@@ -860,13 +860,13 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		}
 		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
 		face := &Face{
-			body: body,
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
 				Reversed:  faceReversed,
 				Surface:   surf,
 				Origins:   origins,
+				Body:      bodyNode(body),
 			},
 			loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 				{edge: bottomEdge, forward: true},

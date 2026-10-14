@@ -75,7 +75,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 	originalVertexOf := map[*Vertex]*Vertex{}
 	copiesByOriginalEdge := map[*Edge]map[*Edge]struct{}{}
 	for i, copied := range sp.faces {
-		piece := copied.body
+		piece := bodyHandle(copied.n.Body)
 		if piece == nil || len(piece.Faces()) != 1 || piece.Faces()[0] != copied {
 			return nil, nil, "a source is not a single-face unstitched sheet"
 		}
@@ -85,9 +85,9 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 		}
 		original := up.face
 		if originalBody == nil {
-			originalBody = original.body
+			originalBody = bodyHandle(original.n.Body)
 		}
-		if originalBody == nil || original.body != originalBody || sp.liveFaces[i] == nil {
+		if originalBody == nil || original.n.Body != bodyNode(originalBody) || sp.liveFaces[i] == nil {
 			return nil, nil, "the unstitched faces have no common original"
 		}
 		if _, exists := paired[original]; exists {
@@ -229,7 +229,7 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 	}
 	var sourceBody *Body
 	var paired map[*Face]*Face
-	if direct := sp.faces[0].body; direct != nil {
+	if direct := bodyHandle(sp.faces[0].n.Body); direct != nil {
 		switch direct.payload.(type) {
 		case revolvePayload:
 			if direct.Kind() != BodySheet || sp.plan.groups != 0 ||
@@ -239,7 +239,7 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 			sourceBody = direct
 			paired = make(map[*Face]*Face, len(sp.faces))
 			for i, f := range sp.faces {
-				if f.body != direct || sp.liveFaces[i] == nil {
+				if f.n.Body != bodyNode(direct) || sp.liveFaces[i] == nil {
 					return refuse("this evaluator has no complete revolve-sheet face set")
 				}
 				if _, exists := paired[f]; exists {

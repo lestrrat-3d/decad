@@ -465,7 +465,6 @@ func (l *Loop) Edges() []*Edge {
 // Face is a topological face: a tagged surface bounded by loops.
 type Face struct {
 	loops []*Loop
-	body  *Body
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Face
 }

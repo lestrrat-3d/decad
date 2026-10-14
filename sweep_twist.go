@@ -179,12 +179,12 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 			return nil, fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
 		}
 		face := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}},
-			body: body,
 			n: topo.Face{
 				Area:      area,
 				AreaBound: areaBound,
 				Surface:   surfacegeom.Faceted{},
 				Origins:   []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(0,0,%d)", j)}},
+				Body:      bodyNode(body),
 			},
 		}
 		for k := range held.walls {

@@ -50,7 +50,7 @@ func TestAddBlendRolesContextPollsNestedMetadata(t *testing.T) {
 	t.Parallel()
 	ref := producerID(1)
 	face := &Face{n: topo.Face{Origins: []provenance.Ref{{Producer: ref, Role: "side(0,0)"}}}}
-	body := &Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{face}}}}}}
+	body := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{face}}}}}})
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 5}
 
 	err := addBlendRoles(ctx, body, ref, []map[int]struct{}{{0: {}}}, "fillet")

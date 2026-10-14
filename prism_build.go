@@ -60,7 +60,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	if pp.SurfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: !pp.SurfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}}
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: !pp.SurfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}})
 
 	// The LEVEL half of the shared-denotation certificate (denotation.go):
 	// minted only when this payload's own section is drawn straight from its
@@ -93,7 +93,6 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		return nil, err
 	}
 	capStart := &Face{
-		body: body,
 		n: topo.Face{
 			Area:          ig.Area,
 			AreaBound:     ig.AreaBound,
@@ -102,10 +101,10 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			Surface:       surfacegeom.Plane{Frame: startFrame},
 			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z0},
 			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapStart}},
+			Body:          bodyNode(body),
 		},
 	}
 	capEnd := &Face{
-		body: body,
 		n: topo.Face{
 			Area:          ig.Area,
 			AreaBound:     ig.AreaBound,
@@ -114,6 +113,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			Surface:       surfacegeom.Plane{Frame: endFrame},
 			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z1},
 			Origins:       []provenance.Ref{{Producer: ref, Role: roleCapEnd}},
+			Body:          bodyNode(body),
 		},
 	}
 
@@ -654,13 +654,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		}
 		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
 		face := &Face{
-			body: body,
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
 				Reversed:  faceReversed,
 				Surface:   surf,
 				Origins:   origins,
+				Body:      bodyNode(body),
 			},
 		}
 		if singleClosed {

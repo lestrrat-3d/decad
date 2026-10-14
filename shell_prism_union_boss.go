@@ -57,7 +57,7 @@ func (b *Body) shellPrismUnionBoss(ctx context.Context, fp facetedPayload,
 func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody, bossBody *Body,
 	opening *Face, t float64) (prismUnionBossShellSource, bool) {
 	var src prismUnionBossShellSource
-	if plateBody == nil || bossBody == nil || opening == nil || opening.body != result ||
+	if plateBody == nil || bossBody == nil || opening == nil || opening.n.Body != bodyNode(result) ||
 		len(fp.verts) != len(fp.vertexBound) || len(fp.tris) != len(fp.src) ||
 		len(fp.tris) != len(fp.faceOf) || fp.volSymDiff < 0 ||
 		proofbound.IsNonFinite(fp.volSymDiff) {

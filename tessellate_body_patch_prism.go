@@ -22,10 +22,10 @@ import (
 // extrusion. Its one source face supplies both rim station grids, and each
 // selected rim is exactly one of the source body's own full-circle edges.
 func bodyPatchCircularPrismSource(pp bodyPatchPayload) (prismPayload, bool) {
-	if len(pp.faces) != 1 || len(pp.chains) == 0 || len(pp.chains) > 2 || pp.faces[0].body == nil {
+	if len(pp.faces) != 1 || len(pp.chains) == 0 || len(pp.chains) > 2 || pp.faces[0].n.Body == nil {
 		return prismPayload{}, false
 	}
-	prism, ok := pp.faces[0].body.payload.(prismPayload)
+	prism, ok := bodyHandle(pp.faces[0].n.Body).payload.(prismPayload)
 	if !ok || !prism.SurfaceResult || prism.SectionDelta != 0 || len(prism.Profile.Holes) != 0 ||
 		len(prism.Profile.Outer.Segments) != 1 {
 		return prismPayload{}, false
@@ -53,7 +53,7 @@ func bodyPatchCircularPrismSource(pp bodyPatchPayload) (prismPayload, bool) {
 // two-sided sheet proof without making an occupied-volume claim.
 func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatchPayload,
 	prism prismPayload, chord float64, verify Verification) (*Mesh, error) {
-	source, err := tessellatePrism(ctx, pp.faces[0].body, prism, prismWallRole, chord, VerifyBoundary)
+	source, err := tessellatePrism(ctx, bodyHandle(pp.faces[0].n.Body), prism, prismWallRole, chord, VerifyBoundary)
 	if err != nil {
 		return nil, err
 	}

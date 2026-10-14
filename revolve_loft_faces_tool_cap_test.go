@@ -21,8 +21,8 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, sides.circles)
 	for _, circle := range sides.circles {
-		require.Same(t, blank, circle.blankFace.body)
-		require.Same(t, tooth, circle.capFace.body)
+		require.Same(t, blank, bodyHandle(circle.blankFace.n.Body))
+		require.Same(t, tooth, bodyHandle(circle.capFace.n.Body))
 		require.Positive(t, circle.radius.Sign())
 		tool := proof.trim.toe
 		if circle.tool == 1 {
@@ -106,9 +106,7 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	shell := blank.Shells()[0]
 	originalFaces := shell.faces
 	t.Cleanup(func() { shell.faces = originalFaces })
-	shell.faces = append(slices.Clone(originalFaces), &Face{
-		body: blank, n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}},
-	})
+	shell.faces = append(slices.Clone(originalFaces), &Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}, Body: bodyNode(blank)}})
 	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted)
 }

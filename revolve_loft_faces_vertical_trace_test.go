@@ -184,7 +184,7 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	source.source = &live
 	trim.source = &source
 	payload.loftFacesTrim = &trim
-	partialTooth := &Body{payload: payload}
+	partialTooth := bornBody(&Body{payload: payload})
 	partialGraph := *graph
 	partialGraph.tooth = partialTooth
 	_, chained = revolveLoftFacesVerticalTraceChain(&partialGraph, arc)

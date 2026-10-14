@@ -174,8 +174,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 	area := proofbound.BoundedScalar{}
 	newPatch := func(surf surfacegeom.Surface, loop *Loop, capV *Vertex, piece filletband.Piece) error {
 		held, bound := heldOf(filletband.PatchArea(piece, rIv))
-		face := &Face{
-			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(len(patches))}}}}
+		face := &Face{loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound, Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: b.patchRole(len(patches))}}, Body: bodyNode(body)}}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		nrm, err := face.NormalAt(capV.n.Position)
 		if err != nil {

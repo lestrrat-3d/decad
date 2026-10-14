@@ -14,12 +14,12 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 	root := math.Sqrt(10)
-	blank := &Body{payload: prismPayload{Payload: prismrecord.Payload{
+	blank := bornBody(&Body{payload: prismPayload{Payload: prismrecord.Payload{
 		Frame: frame, Xform: r3.Identity(), Z1: 2,
 		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			circleSeg{Center: planePoint{}, Radius: units.Millimeters(root), TStart: 0, TEnd: 1},
 		}}},
-	}}}
+	}}})
 	section := prismPayload{Payload: prismrecord.Payload{
 		Frame: frame, Xform: r3.Identity(), Z1: 2,
 		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
@@ -39,8 +39,8 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 	require.NoError(t, err)
 	copySection := section
 	copySection.Xform = turn
-	first := &Body{payload: section}
-	copyBody := &Body{payload: copySection}
+	first := bornBody(&Body{payload: section})
+	copyBody := bornBody(&Body{payload: copySection})
 	operands := []*Body{blank, first, copyBody}
 
 	source, matched, err := prismPatternSourceOf(t.Context(), operands)
@@ -52,7 +52,7 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 	// Rebuilding a similar section is not a Copy certificate.
 	separate := copySection
 	separate.Profile.Outer.Segments = append([]curveSegment(nil), copySection.Profile.Outer.Segments...)
-	operands[2] = &Body{payload: separate}
+	operands[2] = bornBody(&Body{payload: separate})
 	_, matched, err = prismPatternSourceOf(t.Context(), operands)
 	require.True(t, matched)
 	require.ErrorIs(t, err, ErrUnsupported)

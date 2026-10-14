@@ -284,7 +284,7 @@ func TestVerifyMotionRevolveKeepsLiveDenotationIdentities(t *testing.T) {
 func TestVerifyMotionRefusesABodyItDidNotBuild(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	foreignBuilt := &Body{doc: doc, n: topo.Body{Kind: topo.BodySolid}}
+	foreignBuilt := bornBody(&Body{doc: doc, n: topo.Body{Kind: topo.BodySolid}})
 	doc.commit(foreignBuilt)
 	before := doc.Bodies()
 	report, err := doc.VerifyMotion(t.Context(), []*Body{foreignBuilt}, Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(1)})

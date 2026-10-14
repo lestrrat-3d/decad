@@ -154,8 +154,8 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 		return nil, err
 	}
 
-	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}}
-	nf.body = body
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}})
+	nf.n.Body = bodyNode(body)
 	if err := attachFaceLoopsContext(ctx, []*Face{nf}); err != nil {
 		return nil, err
 	}

@@ -355,7 +355,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}}
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}})
 	polygons := geometry.polygons()
 	vertices := map[r3.Vec]*Vertex{}
 	vertex := func(v r3.Vec) *Vertex {
@@ -379,8 +379,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		if err != nil {
 			return nil, fmt.Errorf(`%w: all-edge chamfer plane: %s`, ErrUnsupported, err)
 		}
-		face := &Face{
-			body: body, n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound, Surface: surfacegeom.Plane{Frame: frame}, Origins: []provenance.Ref{{Producer: ref, Role: axisMap.faceRole(polygonIndex)}}}}
+		face := &Face{n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound, Surface: surfacegeom.Plane{Frame: frame}, Origins: []provenance.Ref{{Producer: ref, Role: axisMap.faceRole(polygonIndex)}}, Body: bodyNode(body)}}
 		loop := &Loop{n: topo.Loop{Outer: true}}
 		for i, a := range points {
 			b := points[(i+1)%len(points)]
@@ -454,7 +453,8 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 		Surface: surfacegeom.Cylinder{Origin: r3.NewVec(p.center[0], p.box[1][0], p.center[1]),
 			Axis: r3.NewVec(0, 1, 0), Radius: units.Millimeters(p.radius)},
 		Origins: []provenance.Ref{{Producer: ref, Role: "wall(6)"}},
-	}, body: body}
+		Body:    bodyNode(body),
+	}}
 	for side := range 2 {
 		face := faces[2+side]
 		area := proofbound.BoundedSub(proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound), disk)

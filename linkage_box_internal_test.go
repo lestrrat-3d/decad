@@ -194,7 +194,7 @@ func TestVerifyJointBoxKeepsTheNextProducerIdentity(t *testing.T) {
 func TestVerifyJointBoxRefusesABodyItDidNotBuild(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	foreignBuilt := &Body{doc: doc, n: topo.Body{Kind: topo.BodySolid}}
+	foreignBuilt := bornBody(&Body{doc: doc, n: topo.Body{Kind: topo.BodySolid}})
 	doc.commit(foreignBuilt)
 	l := NewLinkage()
 	slide, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*Body{foreignBuilt})

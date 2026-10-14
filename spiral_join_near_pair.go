@@ -116,7 +116,7 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 ) {
 	if blank == nil || tooth == nil || proof == nil || proof.blank == nil ||
 		proof.tooth == nil || proof.blank.rootFace == nil ||
-		proof.blank.rootFace.body != blank {
+		proof.blank.rootFace.n.Body != bodyNode(blank) {
 		return nil, false
 	}
 	p, ok := tooth.payload.(facetedPayload)
@@ -144,7 +144,7 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 	}
 	out := make(map[[2]*Face]spiralNearPairKind, 14)
 	add := func(a, b *Face, kind spiralNearPairKind) bool {
-		if a == nil || b == nil || a.body != blank || b.body != tooth ||
+		if a == nil || b == nil || a.n.Body != bodyNode(blank) || b.n.Body != bodyNode(tooth) ||
 			kind == spiralNearPairUnknown {
 			return false
 		}

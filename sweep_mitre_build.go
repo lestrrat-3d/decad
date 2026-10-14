@@ -123,7 +123,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}}
+	body := bornBody(&Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}})
 	faces, err := buildMitredTopology(ctx, body, ref, a, exact, verts, areas, delta)
 	if err != nil {
 		return nil, err
