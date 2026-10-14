@@ -1492,3 +1492,12 @@
 10	0.00	TestLoftMirrorCylinderPlaceTeethCancelled
 10	0.00	TestLoftMirrorCylinderPairsParallelMatchesSerial
 10	0.00	TestLoftMirrorCylinderPairsRefusalPlacesNothingPastIt
+10	0.00	TestCrossBoreCellMirrorMapsTurnsExactly
+10	0.00	TestCrossBoreMirroredCellsEncloseSamples
+10	0.00	TestCrossBoreMirroredMaximaFold
+10	0.00	TestCrossBoreMirroredMaximaFirstFailureAndContext
+10	0.00	TestCrossBoreCellsRefuseNearSymmetricPose
+10	0.00	TestCrossBoreMirroredRouteMatchesDirect
+10	0.00	TestCrossBoreMirroredRouteRefusesLikeDirect
+10	0.00	TestCrossBoreNegationIsExact
+10	0.00	TestCrossBoreCellSampleErrorReadsHeldZExactly

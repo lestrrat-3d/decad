@@ -8,9 +8,87 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/stretchr/testify/require"
 )
+
+// crossBoreCellProof is one cell proved directly, with no mirror map: its
+// exact part, compared with the samples crossBoreFeet builds at the cell's
+// own angle, Z read relative to c in float, exactly as
+// crossBoreCellProofReference and crossBoreCellProofFullEnds compare them.
+// The reference tests and the mirrored route's tests compare against it.
+func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
+	i int, angularGap *big.Rat) (crossBoreCellResult, error) {
+	exact, err := crossBoreCellExactProof(rec, setback, i, angularGap)
+	if err != nil {
+		return crossBoreCellResult{}, err
+	}
+	const n = 2 * crossBoreHalfStations
+	theta := 2 * math.Pi * float64(i) / n
+	outer, inner := crossBoreFeet(rec, setback, theta)
+	co, sn := math.Cos(theta), math.Sin(theta)
+	held := [9]float64{
+		outer.X, outer.Y, outer.Z - rec.centerZ,
+		inner.X, inner.Y, inner.Z - rec.centerZ,
+		-math.Sqrt(rec.radius*rec.radius - rec.bore*rec.bore*co*co), rec.bore * co, rec.bore * sn,
+	}
+	sampleError := 0.0
+	for c := range held {
+		sampleError = max(sampleError, proofbound.LazyIntervalFloatError(exact.coords[c], held[c]))
+	}
+	return crossBoreCellResult{
+		width: exact.width, sampleError: proofbound.Radius3D(sampleError),
+		speed: exact.speed, bandLength: exact.bandLength,
+	}, nil
+}
+
+// crossBoreCellMaxima is the direct route the mirrored one replaced: it folds
+// cell(i) for i in [0, n) into the componentwise maximum in index order and returns the error of the lowest failing cell,
+// whatever the worker count. With workers below 2 it polls ctx every 32
+// cells; otherwise it polls ctx before the fan-out and the calling goroutine
+// polls it while the workers run. cell runs on worker goroutines and must
+// not touch ctx or any shared budget.
+func crossBoreCellMaxima(ctx context.Context, n, workers int,
+	cell func(i int) (crossBoreCellResult, error)) (crossBoreCellResult, error) {
+	maximum := crossBoreCellResult{}
+	fold := func(c crossBoreCellResult) {
+		maximum.width = max(maximum.width, c.width)
+		maximum.sampleError = max(maximum.sampleError, c.sampleError)
+		maximum.speed = max(maximum.speed, c.speed)
+		maximum.bandLength = max(maximum.bandLength, c.bandLength)
+	}
+	if workers < 2 {
+		for i := range n {
+			if i%32 == 0 {
+				if err := ctx.Err(); err != nil {
+					return crossBoreCellResult{}, err
+				}
+			}
+			c, err := cell(i)
+			if err != nil {
+				return crossBoreCellResult{}, err
+			}
+			fold(c)
+		}
+		return maximum, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return crossBoreCellResult{}, err
+	}
+	cells := make([]crossBoreCellResult, n)
+	if _, err := orderedwork.Each(n, workers, crossBoreCellGrain, ctx.Err, func(i int) error {
+		c, err := cell(i)
+		cells[i] = c
+		return err
+	}); err != nil {
+		return crossBoreCellResult{}, err
+	}
+	for i := range n {
+		fold(cells[i])
+	}
+	return maximum, nil
+}
 
 func crossBoreSyntheticCell(i int) crossBoreCellResult {
 	h := uint64(i)*0x9E3779B97F4A7C15 + 0x1234567

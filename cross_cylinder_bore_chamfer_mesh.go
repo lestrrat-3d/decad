@@ -20,9 +20,13 @@ const (
 )
 
 type crossBoreMesh struct {
-	verts             []r3.Vec
-	tris              [][3]int
-	src               []int
+	verts []r3.Vec
+	tris  [][3]int
+	src   []int
+	// cellHeld[i] holds the indices of the held vertices at whole-turn cell
+	// i's angle 2πi/n: the outer foot, the bore foot and the negative-mouth
+	// point. The cell proof compares exactly these vertices.
+	cellHeld          [][3]int
 	groups            []facetGroup
 	outerStationError float64
 	outerAngularGap   float64
@@ -346,10 +350,12 @@ func buildCrossBoreChamferMeshWorkers(ctx context.Context,
 		m.triangle(topCenter, top[i], top[j], 1)
 	}
 	inner := make([]int, n)
+	m.cellHeld = make([][3]int, n)
 	for i := range inner {
 		theta := 2 * math.Pi * float64(i) / float64(n)
 		_, foot := crossBoreFeet(rec, setback, theta)
 		inner[i] = m.point(foot)
+		m.cellHeld[i] = [3]int{positiveOuter[i], inner[i], negativeOuter[i]}
 	}
 	for i := range inner {
 		j := (i + 1) % n

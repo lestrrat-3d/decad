@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
@@ -66,20 +65,29 @@ type crossBoreCellResult struct {
 	width, sampleError, speed, bandLength float64
 }
 
-// crossBoreCellProof proves every point of one angular cell, including the
-// ruled band between the two source-cylinder setbacks. The cross products of
-// the endpoint curves and their mixed pair are Bernstein coefficients for
-// polar progress at every transverse band position. Both Jacobian endpoints
-// have one sign, so no transverse band strip folds. Each clearance and fold
-// test computes only the interval endpoint it reads and decides its sign by
-// comparison. The source/held sample comparison charges libm and coordinate
-// rounding instead of assuming ulps.
+// crossBoreCellExact is one cell's exact part: the coordinate width, the
+// derivative speed and the band length, plus the nine coordinate enclosures
+// the held-sample comparison reads, in the order outer X, Y, Z−c, bore X, Y,
+// Z−c, negative-mouth X, Y, Z−c.
+type crossBoreCellExact struct {
+	width, speed, bandLength float64
+	coords                   [9]crossIV
+}
+
+// crossBoreCellExactProof proves every point of one angular cell, including
+// the ruled band between the two source-cylinder setbacks. The cross
+// products of the endpoint curves and their mixed pair are Bernstein
+// coefficients for polar progress at every transverse band position. Both
+// Jacobian endpoints have one sign, so no transverse band strip folds. Each
+// clearance and fold test computes only the interval endpoint it reads and
+// decides its sign by comparison. It reads no held vertex;
+// crossBoreCellSampleError compares those with the returned coords.
 //
 // The cell's intervals keep unreduced rationals (proofarith.LazyRat); a value
 // is read in lowest terms where it leaves the proof: a square-root input, the
 // sine/cosine span input and width, and the float readers.
-func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
-	i int, angularGap *big.Rat) (crossBoreCellResult, error) {
+func crossBoreCellExactProof(rec *crossCylinderBoreRecord, setback float64,
+	i int, angularGap *big.Rat) (crossBoreCellExact, error) {
 	const n = 2 * crossBoreHalfStations
 	turn := big.NewRat(int64(i), n)
 	s0, c0 := proofbound.TurnSinCosInterval(turn)
@@ -92,40 +100,40 @@ func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
 	xd, ok := crossDSqrt(crossDSub(crossDMul(Rd, Rd),
 		crossDMul(crossDMul(rd, rd), crossDMul(cd, cd))))
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the cross-bore seam has no real X", ErrUnsupported)
+		return crossBoreCellExact{}, fmt.Errorf("%w: the cross-bore seam has no real X", ErrUnsupported)
 	}
 	c2 := crossDMul(cd, cd)
 	Qd, ok := crossDSqrt(crossDSub(crossDMul(Rd, Rd),
 		crossDMul(crossDMul(rd, rd), crossDMul(c2, c2))))
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the cross-bore normal has no length", ErrUnsupported)
+		return crossBoreCellExact{}, fmt.Errorf("%w: the cross-bore normal has no length", ErrUnsupported)
 	}
 	do, ok := crossDQuo(crossDMul(crossDMul(dd, cd), xd), crossDMul(Rd, Qd))
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the outer setback has no finite angle", ErrUnsupported)
+		return crossBoreCellExact{}, fmt.Errorf("%w: the outer setback has no finite angle", ErrUnsupported)
 	}
 	sodo, codo, ok := crossDSinCos(do)
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the outer setback has no trig enclosure", ErrUnsupported)
+		return crossBoreCellExact{}, fmt.Errorf("%w: the outer setback has no trig enclosure", ErrUnsupported)
 	}
 	outX := crossDSub(crossDMul(xd, codo), crossDMul(crossDMul(rd, cd), sodo))
 	outY := crossDAdd(crossDMul(xd, sodo), crossDMul(crossDMul(rd, cd), codo))
 	outZ, ok := crossDQuo(crossDMul(crossDMul(dd, Rd), sd), Qd)
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the outer setback has no Z", ErrUnsupported)
+		return crossBoreCellExact{}, fmt.Errorf("%w: the outer setback has no Z", ErrUnsupported)
 	}
 	outZ = crossDAdd(crossDMul(rd, sd), outZ)
 	db, ok := crossDQuo(crossDMul(crossDMul(dd, cd), sd), Qd)
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the bore setback has no finite angle", ErrUnsupported)
+		return crossBoreCellExact{}, fmt.Errorf("%w: the bore setback has no finite angle", ErrUnsupported)
 	}
 	sodb, codb, ok := crossDSinCos(db)
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the bore setback has no trig enclosure", ErrUnsupported)
+		return crossBoreCellExact{}, fmt.Errorf("%w: the bore setback has no trig enclosure", ErrUnsupported)
 	}
 	dOverQ, ok := crossDQuo(dd, Qd)
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the bore setback has no X", ErrUnsupported)
+		return crossBoreCellExact{}, fmt.Errorf("%w: the bore setback has no X", ErrUnsupported)
 	}
 	inX := crossDMul(xd, crossDSub(crossConst(crossPoint(1)), dOverQ))
 	inY := crossDMul(rd, crossDSub(crossDMul(cd, codb), crossDMul(sd, sodb)))
@@ -158,7 +166,7 @@ func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
 		!polarPositive(inY, inZ, inY, inZ) || !polarPositive(outY, outZ, outY, outZ) ||
 		!polarMidPositive || !jacobianNegative(inY, inZ, diffY, diffZ) ||
 		!jacobianNegative(outY, outZ, diffY, diffZ) {
-		return crossBoreCellResult{}, fmt.Errorf("%w: a cross-bore chamfer cell loses clearance or folds", ErrUnsupported)
+		return crossBoreCellExact{}, fmt.Errorf("%w: a cross-bore chamfer cell loses clearance or folds", ErrUnsupported)
 	}
 	negativeX := crossSub(crossPoint(0), xd.v)
 	negativeY, negativeZ := crossMul(r, c), crossMul(r, s)
@@ -169,22 +177,6 @@ func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
 	} {
 		width = max(width, crossWidth(coordinate))
 	}
-	theta := 2 * math.Pi * float64(i) / n
-	outer, inner := crossBoreFeet(rec, setback, theta)
-	co, sn := math.Cos(theta), math.Sin(theta)
-	negative := r3.Vec{X: -math.Sqrt(rec.radius*rec.radius - rec.bore*rec.bore*co*co),
-		Y: rec.bore * co, Z: rec.bore * sn}
-	sampleError := 0.0
-	for _, pair := range []struct {
-		exact crossIV
-		held  float64
-	}{
-		{outX.v, outer.X}, {outY.v, outer.Y}, {outZ.v, outer.Z - rec.centerZ},
-		{inX.v, inner.X}, {inY.v, inner.Y}, {inZ.v, inner.Z - rec.centerZ},
-		{negativeX, negative.X}, {negativeY, negative.Y}, {negativeZ, negative.Z},
-	} {
-		sampleError = max(sampleError, proofbound.LazyIntervalFloatError(pair.exact, pair.held))
-	}
 	speed := 0.0
 	for _, dcoord := range []crossIV{outX.d, outY.d, outZ.d, inX.d, inY.d, inZ.d} {
 		speed = max(speed, proofbound.LazyIntervalAbsUpperUp(dcoord))
@@ -194,9 +186,9 @@ func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
 		proofbound.LazyIntervalAbsUpperUp(diffX),
 		proofbound.LazyIntervalAbsUpperUp(diffY),
 		proofbound.LazyIntervalAbsUpperUp(diffZ))
-	return crossBoreCellResult{
-		width: width, sampleError: proofbound.Radius3D(sampleError),
-		speed: proofbound.Radius3D(speed), bandLength: proofbound.Radius3D(bandCoord),
+	return crossBoreCellExact{
+		width: width, speed: proofbound.Radius3D(speed), bandLength: proofbound.Radius3D(bandCoord),
+		coords: [9]crossIV{outX.v, outY.v, outZ.v, inX.v, inY.v, inZ.v, negativeX, negativeY, negativeZ},
 	}, nil
 }
 
@@ -209,51 +201,165 @@ const (
 	crossBoreCellGrain = 16
 )
 
-// crossBoreCellMaxima folds cell(i) for i in [0, n) into the componentwise
-// maximum in index order and returns the error of the lowest failing cell,
-// whatever the worker count. With workers below 2 it polls ctx every 32
-// cells; otherwise it polls ctx before the fan-out and the calling goroutine
-// polls it while the workers run. cell runs on worker goroutines and must
-// not touch ctx or any shared budget.
-func crossBoreCellMaxima(ctx context.Context, n, workers int,
-	cell func(i int) (crossBoreCellResult, error)) (crossBoreCellResult, error) {
-	maximum := crossBoreCellResult{}
-	fold := func(c crossBoreCellResult) {
-		maximum.width = max(maximum.width, c.width)
-		maximum.sampleError = max(maximum.sampleError, c.sampleError)
-		maximum.speed = max(maximum.speed, c.speed)
-		maximum.bandLength = max(maximum.bandLength, c.bandLength)
+// crossNeg is the exact negation of an interval: [−Hi, −Lo].
+func crossNeg(a crossIV) crossIV {
+	return crossIV{Lo: proofarith.LazyNeg(a.Hi), Hi: proofarith.LazyNeg(a.Lo)}
+}
+
+// crossBoreCellSampleError compares one cell's held vertices with coords:
+// held holds the outer foot, the bore foot and the negative-mouth point the
+// mesh keeps at the cell's angle, and centerZ is the bore axis height c.
+// coords must enclose the cell's exact coordinates (X, Y, Z−c of each point)
+// once the Y enclosures are negated when flipY and the Z−c enclosures when
+// flipZ. Negation and the shift of a Z−c enclosure by c are exact, and
+// LazyIntervalFloatError reads the exact difference from the held float, so
+// the comparison rounds only its result, upward.
+func crossBoreCellSampleError(held *[3]r3.Vec, centerZ float64, coords *[9]crossIV, flipY, flipZ bool) float64 {
+	c := crossPoint(centerZ)
+	sampleError := 0.0
+	for p, point := range held {
+		x, y, z := coords[3*p], coords[3*p+1], coords[3*p+2]
+		if flipY {
+			y = crossNeg(y)
+		}
+		if flipZ {
+			z = crossNeg(z)
+		}
+		sampleError = max(sampleError,
+			proofbound.LazyIntervalFloatError(x, point.X),
+			proofbound.LazyIntervalFloatError(y, point.Y),
+			proofbound.LazyIntervalFloatError(crossAdd(z, c), point.Z))
 	}
+	return proofbound.Radius3D(sampleError)
+}
+
+// crossBoreCellMirror maps cell j of the n = 4,096 whole-turn cells to the
+// quarter-turn base cell k in [0, n/4] whose angular range is its
+// mirror image, and says which coordinates the mirror negates. With
+// θ_j = 2πj/n: j ≤ n/4 is its own base; j ≤ n/2 has θ_j = π − θ_k (Y
+// negated); j ≤ 3n/4 has θ_j = π + θ_k (Y and Z−c negated); otherwise
+// θ_j = 2π − θ_k (Z−c negated). The relations hold exactly for the turns
+// j/n and k/n, so they map the whole range θ_j ± 2π/n onto θ_k ± 2π/n.
+func crossBoreCellMirror(j int) (int, bool, bool) {
+	const n = 2 * crossBoreHalfStations
+	const quarter, half = n / 4, n / 2
+	switch {
+	case j <= quarter:
+		return j, false, false
+	case j <= half:
+		return half - j, true, false
+	case j <= half+quarter:
+		return j - half, true, true
+	default:
+		return n - j, false, true
+	}
+}
+
+// crossBoreCellEach runs fn(i) for every i in [0, n) and returns the error
+// of the lowest failing index, whatever the worker count. With workers below
+// 2 it polls ctx every 32 indices; otherwise it polls ctx before the fan-out
+// and the calling goroutine polls it while the workers run. fn runs on
+// worker goroutines and must not touch ctx or any shared budget.
+func crossBoreCellEach(ctx context.Context, n, workers int, fn func(i int) error) error {
 	if workers < 2 {
 		for i := range n {
 			if i%32 == 0 {
 				if err := ctx.Err(); err != nil {
-					return crossBoreCellResult{}, err
+					return err
 				}
 			}
-			c, err := cell(i)
-			if err != nil {
-				return crossBoreCellResult{}, err
+			if err := fn(i); err != nil {
+				return err
 			}
-			fold(c)
 		}
-		return maximum, nil
+		return nil
 	}
 	if err := ctx.Err(); err != nil {
-		return crossBoreCellResult{}, err
+		return err
 	}
-	cells := make([]crossBoreCellResult, n)
-	if _, err := orderedwork.Each(n, workers, crossBoreCellGrain, ctx.Err, func(i int) error {
-		c, err := cell(i)
-		cells[i] = c
+	_, err := orderedwork.Each(n, workers, crossBoreCellGrain, ctx.Err, fn)
+	return err
+}
+
+// crossBoreMirroredCellMaxima proves the base cells k in [0, n/4] of the
+// n = 4,096 whole-turn cells with exact
+// and returns the error of the lowest failing one. It then folds every cell
+// j in [0, n), base cells included, with sample(j, base, flipY, flipZ) for
+// its crossBoreCellMirror base and flags, so each cell's own held samples
+// are compared with its base cell's mirrored enclosures. width, speed and
+// bandLength are the base cells' maxima: a negated interval has the same
+// exact width and absolute upper bound, so the readings of base k cover
+// cells mapped onto it. The maxima are folded in index order whatever the
+// worker count, and a context cancelled before the call returns fails it.
+func crossBoreMirroredCellMaxima(ctx context.Context, workers int,
+	exact func(k int) (crossBoreCellExact, error),
+	sample func(j int, base *crossBoreCellExact, flipY, flipZ bool) float64) (crossBoreCellResult, error) {
+	const n = 2 * crossBoreHalfStations
+	bases := make([]crossBoreCellExact, n/4+1)
+	if err := crossBoreCellEach(ctx, len(bases), workers, func(k int) error {
+		b, err := exact(k)
+		bases[k] = b
 		return err
 	}); err != nil {
 		return crossBoreCellResult{}, err
 	}
-	for i := range n {
-		fold(cells[i])
+	samples := make([]float64, n)
+	if err := crossBoreCellEach(ctx, n, workers, func(j int) error {
+		k, flipY, flipZ := crossBoreCellMirror(j)
+		samples[j] = sample(j, &bases[k], flipY, flipZ)
+		return nil
+	}); err != nil {
+		return crossBoreCellResult{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return crossBoreCellResult{}, err
+	}
+	maximum := crossBoreCellResult{}
+	for k := range bases {
+		maximum.width = max(maximum.width, bases[k].width)
+		maximum.speed = max(maximum.speed, bases[k].speed)
+		maximum.bandLength = max(maximum.bandLength, bases[k].bandLength)
+	}
+	for _, e := range samples {
+		maximum.sampleError = max(maximum.sampleError, e)
 	}
 	return maximum, nil
+}
+
+// crossBoreMirrorPose reports whether rec is exactly the record admission
+// builds from its own two source bodies. Admission takes only the cardinal
+// pose, compared without tolerance: the target circle centred on the Z axis
+// in the XY frame, the tool circle centred at Y = 0 in the YZ frame, both
+// unplaced. Both source walls, x²+y² = R² and y²+(z−c)² = r², are then
+// exactly symmetric under y → −y and z−c → −(z−c), which is what
+// crossBoreMirroredCellMaxima's mirror map needs. A pose that is symmetric
+// only to rounding fails one of admission's exact comparisons.
+func crossBoreMirrorPose(rec *crossCylinderBoreRecord) bool {
+	again := recognizeCrossCylinderBore(rec.target, rec.tool)
+	return again != nil && *again == *rec
+}
+
+// proveCrossBoreCells proves the 4,096 whole-turn cells of rec's positive
+// mouth. It refuses a record that is not exactly admission's mirror-symmetric
+// pose before proving any cell. It then proves the 1,025 quarter-turn base
+// cells and compares every cell's held samples with its base cell's mirrored
+// enclosures (crossBoreMirroredCellMaxima). Both passes run concurrently and
+// fold in cell order.
+func proveCrossBoreCells(ctx context.Context, rec *crossCylinderBoreRecord,
+	setback float64, mesh *crossBoreMesh) (crossBoreCellResult, error) {
+	const n = 2 * crossBoreHalfStations
+	if !crossBoreMirrorPose(rec) {
+		return crossBoreCellResult{}, fmt.Errorf("%w: the cross-bore record is not the exact mirror-symmetric pose",
+			ErrUnsupported)
+	}
+	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
+	return crossBoreMirroredCellMaxima(ctx, orderedwork.EachWorkers(n/4+1, crossBoreCellParallelMin),
+		func(k int) (crossBoreCellExact, error) { return crossBoreCellExactProof(rec, setback, k, gap) },
+		func(j int, base *crossBoreCellExact, flipY, flipZ bool) float64 {
+			cell := mesh.cellHeld[j]
+			held := [3]r3.Vec{mesh.verts[cell[0]], mesh.verts[cell[1]], mesh.verts[cell[2]]}
+			return crossBoreCellSampleError(&held, rec.centerZ, &base.coords, flipY, flipZ)
+		})
 }
 
 // proveCrossBoreChamfer encloses all source-to-held boundary motion. Its
@@ -263,14 +369,11 @@ func crossBoreCellMaxima(ctx context.Context, n, workers int,
 // region is deliberate; it keeps the occupied-volume argument independent
 // of the exact band integral. Each source foot is at developed-cylinder
 // distance d from its seam point, so its Euclidean distance is at most d;
-// the ruled band lies in the resulting positive-mouth collar. The cells are
-// proved concurrently and folded in cell order.
+// the ruled band lies in the resulting positive-mouth collar.
 func proveCrossBoreChamfer(ctx context.Context, rec *crossCylinderBoreRecord,
 	setback float64, mesh *crossBoreMesh) (float64, float64, float64, error) {
 	const n = 2 * crossBoreHalfStations
-	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
-	maximum, err := crossBoreCellMaxima(ctx, n, orderedwork.EachWorkers(n, crossBoreCellParallelMin),
-		func(i int) (crossBoreCellResult, error) { return crossBoreCellProof(rec, setback, i, gap) })
+	maximum, err := proveCrossBoreCells(ctx, rec, setback, mesh)
 	if err != nil {
 		return 0, 0, 0, err
 	}
