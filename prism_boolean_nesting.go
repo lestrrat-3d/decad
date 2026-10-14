@@ -69,7 +69,7 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 // admission and work-budget/cancellation machinery. There is no assembly and no
 // §6 build-time audit on this path — the candidate is one s.Profiles() result
 // taken verbatim, so §5's authentication claim 1 (every individual segment is
-// authentic) already covers claim 2 (the assembly is correct) entirely. When
+// authentic) already covers claim 2 (the assembly is correct) entirely.
 // Intersect records the selected private-scene profile directly; Cut also
 // authenticates it against a fresh scene snapshot. When this search comes
 // back unresolved, resolveAndBuildPrismCut/Intersect fall
