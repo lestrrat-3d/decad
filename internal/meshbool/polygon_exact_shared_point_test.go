@@ -15,8 +15,9 @@ import (
 )
 
 // The oracle functions below are frozen copies of Cross2xSign, PlaneSide and
-// SegTriOverlap2 as they were before shared-pointer points returned 0 and a
-// zero endpoint sign ended the clip loop. A later production edit must NOT be
+// SegTriOverlap2 as they were before shared-pointer points returned 0.
+// SegTriOverlap2 itself is unchanged; its oracle pins it against the changed
+// Cross2xSign. A later production edit must NOT be
 // mirrored into them: a disagreement means production changed a verdict.
 
 func oracleCross2xSign(a, b, c Xp2) int {
@@ -360,25 +361,6 @@ func TestPlaneSideOneDifferentCoordinatePointer(t *testing.T) {
 	require.Equal(t, 8, nonzero, "every variant must be a point off the edge's plane test")
 }
 
-// TestSegTriOverlap2ZeroEndpointSignSkipsClip shows the early return fires:
-// both orders of an endpoint on a triangle edge and the other outside the
-// edge's half-plane allocate less than the frozen clip loop, which builds the
-// clip fractions first.
-func TestSegTriOverlap2ZeroEndpointSignSkipsClip(t *testing.T) {
-	// AllocsPerRun cannot run in a parallel test.
-	f := xp2Flavours[1]
-	ta, tb, tc := f.lift(pt2{0, 0}), f.lift(pt2{4, 0}), f.lift(pt2{0, 4})
-	on, out := f.lift(pt2{2, 0}), f.lift(pt2{2, -1})
-	for _, seg := range [][2]Xp2{{on, out}, {out, on}} {
-		var got bool
-		fast := testing.AllocsPerRun(20, func() { got = SegTriOverlap2(seg[0], seg[1], ta, tb, tc) })
-		require.False(t, got)
-		slow := testing.AllocsPerRun(20, func() { got = oracleSegTriOverlap2(seg[0], seg[1], ta, tb, tc) })
-		require.False(t, got)
-		require.Less(t, fast, slow)
-	}
-}
-
 // outcome is what a call did: the value it returned, or the value it panicked
 // with. The differential tests below compare it between the frozen old body
 // and the production function, so a panic that disappears, appears or changes
@@ -640,6 +622,103 @@ func TestSegTriOverlap2UntrustedFloatCacheMatchesOracle(t *testing.T) {
 			want := outcome(func() any { return oracleSegTriOverlap2(xs[0], xs[1], xs[2], xs[3], xs[4]) })
 			got := outcome(func() any { return SegTriOverlap2(xs[0], xs[1], xs[2], xs[3], xs[4]) })
 			require.Equal(t, want, got, "kind %d points %v", kind, xs)
+		}
+	}
+}
+
+// TestSegTriOverlap2StaleFloatCacheWitness is the re-review's witness: a
+// caller rewrites the public Fv of a constructor-built point. The filter then
+// reads a false float, but the old clip still runs on exact fractions (here
+// 0/0) and reports an overlap.
+func TestSegTriOverlap2StaleFloatCacheWitness(t *testing.T) {
+	t.Parallel()
+	for _, flavour := range xp2Flavours {
+		ta, tb, tc := flavour.lift(pt2{0, 0}), flavour.lift(pt2{2, 0}), flavour.lift(pt2{0, 2})
+		a, b := flavour.lift(pt2{0.5, 0}), flavour.lift(pt2{1, 0})
+		a.Fv = -1
+		require.True(t, oracleSegTriOverlap2(a, b, ta, tb, tc), flavour.name)
+		require.True(t, SegTriOverlap2(a, b, ta, tb, tc), flavour.name)
+	}
+}
+
+// floatCorruptions are the replacement values the sweeps write into a float
+// cache field.
+var floatCorruptions = []float64{0, math.Copysign(0, -1), -1, 0.25, 3, 1e300, -1e300, math.NaN(), math.Inf(1)}
+
+// corruptXp2Floats yields p with each public float field rewritten in turn,
+// leaving floatFromExact as the constructor set it.
+func corruptXp2Floats(p Xp2) []Xp2 {
+	var out []Xp2
+	for _, v := range floatCorruptions {
+		q := p
+		q.Fu = v
+		out = append(out, q)
+		q = p
+		q.Fv = v
+		out = append(out, q)
+	}
+	q := p
+	q.FloatFinite = !p.FloatFinite
+	return append(out, q)
+}
+
+func TestSegTriOverlap2FloatFieldSweepMatchesOracle(t *testing.T) {
+	t.Parallel()
+	tri := [3]pt2{{0, 0}, {2, 0}, {0, 2}}
+	segs := [][2]pt2{
+		{{0.5, 0}, {1, 0}}, {{1, 0}, {0.5, 0}}, {{1, 0}, {1, -1}}, {{1, -1}, {1, 0}},
+		{{1, 0}, {1, 0.5}}, {{0, 0}, {-1, -1}}, {{0.5, 0.5}, {1, 1}},
+	}
+	for _, flavour := range xp2Flavours {
+		for _, seg := range segs {
+			base := [5]Xp2{
+				flavour.lift(seg[0]), flavour.lift(seg[1]),
+				flavour.lift(tri[0]), flavour.lift(tri[1]), flavour.lift(tri[2]),
+			}
+			for i := range 5 {
+				for _, q := range corruptXp2Floats(base[i]) {
+					xs := base
+					xs[i] = q
+					want := outcome(func() any { return oracleSegTriOverlap2(xs[0], xs[1], xs[2], xs[3], xs[4]) })
+					got := outcome(func() any { return SegTriOverlap2(xs[0], xs[1], xs[2], xs[3], xs[4]) })
+					require.Equal(t, want, got, "%s seg %v point %d", flavour.name, seg, i)
+				}
+			}
+		}
+	}
+}
+
+func TestCross2xSignFloatFieldSweepMatchesOracle(t *testing.T) {
+	t.Parallel()
+	for kind := range 3 {
+		for _, pts := range [][3]pt2{{{1, 1}, {3, 3}, {2, 2}}, {{1, 1}, {3, 3}, {2, 2.5}}, {{0, 0}, {1, 0}, {0, 1}}} {
+			base := [3]Xp2{
+				sharedPointLifts(pts[0].x, pts[0].y)[kind],
+				sharedPointLifts(pts[1].x, pts[1].y)[kind],
+				sharedPointLifts(pts[2].x, pts[2].y)[kind],
+			}
+			for i := range 3 {
+				for _, q := range corruptXp2Floats(base[i]) {
+					for _, shape := range [][3]int{{0, 1, 2}, {0, 0, 2}, {0, 1, 0}, {0, 1, 1}} {
+						xs := base
+						xs[i] = q
+						args := [3]Xp2{xs[shape[0]], xs[shape[1]], xs[shape[2]]}
+						// A shared slot must hold one point, floats included.
+						if shape[0] == shape[1] {
+							args[1] = args[0]
+						}
+						if shape[0] == shape[2] {
+							args[2] = args[0]
+						}
+						if shape[1] == shape[2] {
+							args[2] = args[1]
+						}
+						want := outcome(func() any { return oracleCross2xSign(args[0], args[1], args[2]) })
+						got := outcome(func() any { return Cross2xSign(args[0], args[1], args[2]) })
+						require.Equal(t, want, got, "kind %d pts %v point %d shape %v", kind, pts, i, shape)
+					}
+				}
+			}
 		}
 	}
 }
