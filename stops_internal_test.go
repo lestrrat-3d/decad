@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -181,10 +182,10 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 	t.Run("NURBSCurve rim", func(t *testing.T) {
 		edge := &Edge{
 			curve: NURBSCurve{},
-			start: &Vertex{position: r3.NewVec(1, 0, 0)},
-			end:   &Vertex{position: r3.NewVec(1, 0, 5)},
+			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
+			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
 		}
-		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, outer: true}
+		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
 		face := &Face{surface: Plane{Frame: planeFrame}, loops: []*Loop{loop}}
 
 		_, err := st.faceHalfPlane(face)
@@ -195,10 +196,10 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 	t.Run("FacetedCurve rim", func(t *testing.T) {
 		edge := &Edge{
 			curve: FacetedCurve{},
-			start: &Vertex{position: r3.NewVec(1, 0, 0)},
-			end:   &Vertex{position: r3.NewVec(1, 0, 5)},
+			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
+			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
 		}
-		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, outer: true}
+		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
 		face := &Face{surface: Plane{Frame: planeFrame}, loops: []*Loop{loop}}
 
 		_, err := st.faceHalfPlane(face)
@@ -212,10 +213,10 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 		// refusal, once the vertices themselves agree.
 		edge := &Edge{
 			curve: Line3{},
-			start: &Vertex{position: r3.NewVec(1, 0, 0)},
-			end:   &Vertex{position: r3.NewVec(1, 0, 5)},
+			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
+			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
 		}
-		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, outer: true}
+		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
 		face := &Face{surface: Plane{Frame: planeFrame}, loops: []*Loop{loop}}
 
 		phi, err := st.faceHalfPlane(face)

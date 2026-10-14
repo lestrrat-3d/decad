@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -258,7 +259,7 @@ func partitionPatchChains(edges []*Edge) ([][]*Edge, error) {
 	for i, e := range edges {
 		refs[i] = patchchain.EdgeRef[*Edge, *Vertex]{Edge: e, Start: e.start, End: e.end}
 	}
-	return patchchain.Partition(refs, func(v *Vertex) string { return renderCoord3(v.position) })
+	return patchchain.Partition(refs, func(v *Vertex) string { return renderCoord3(v.n.Position) })
 }
 
 // renderCoord3 formats a world position for a Table R diagnostic, the 3D
@@ -308,19 +309,19 @@ func provePatchChainPlaneLevel(edges []*Edge) (levelToken, float64, bool) {
 	if len(verts) == 0 {
 		return levelToken{}, 0, false
 	}
-	lvl := verts[0].level
+	lvl := verts[0].n.Level
 	if lvl.ID == 0 {
 		return levelToken{}, 0, false
 	}
 	bound := 0.0
 	for _, v := range verts {
-		if !sameLevel(v.level, lvl) {
+		if !sameLevel(v.n.Level, lvl) {
 			return levelToken{}, 0, false
 		}
-		bound = math.Max(bound, v.bound.Base())
+		bound = math.Max(bound, v.n.Bound.Base())
 	}
 	for _, e := range edges {
-		if !sameLevel(e.level, lvl) {
+		if !sameLevel(e.n.Level, lvl) {
 			return levelToken{}, 0, false
 		}
 	}
@@ -362,7 +363,7 @@ func provePatchChainPlaneExact(edges []*Edge) error {
 	verts := patchChainVertices(edges)
 	points := make([]patchchain.Vertex, len(verts))
 	for i, v := range verts {
-		points[i] = patchchain.Vertex{Position: v.position, Bound: v.bound.Base()}
+		points[i] = patchchain.Vertex{Position: v.n.Position, Bound: v.n.Bound.Base()}
 	}
 	curves := make([]patchchain.Edge, len(edges))
 	for i, e := range edges {
@@ -410,9 +411,9 @@ func patchChainVertices(edges []*Edge) []*Vertex {
 func patchEdgeGeometryExact(e *Edge) bool {
 	switch e.curve.(type) {
 	case Circle3, Arc3:
-		return !e.lengthUnbounded
+		return !e.n.LengthUnbounded
 	default:
-		return e.lengthBound == 0 && !e.lengthUnbounded
+		return e.n.LengthBound == 0 && !e.n.LengthUnbounded
 	}
 }
 
@@ -480,7 +481,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	for _, f := range srcFaces {
 		for _, l := range f.loops {
 			for _, ce := range l.coedges {
-				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.position), proofbound.VecMaxAbs(ce.edge.end.position))
+				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.n.Position), proofbound.VecMaxAbs(ce.edge.end.n.Position))
 			}
 		}
 	}
@@ -518,7 +519,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	// solid: closing a sheet's last free edge leaves a CLOSED sheet reporting
 	// BodySheet with IsSolid() false, since Stitch alone makes the material
 	// claim (docs/surface-design.md §2.1).
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
 	for _, f := range allFaces {
 		f.body = body
 	}
@@ -531,7 +532,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	// face set plus the faces this call adds to it.
 	areaAcc := proofbound.BoundedScalar{}
 	for _, f := range allFaces {
-		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.area, f.areaBound))
+		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
 	}
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(areaAcc.Value),
@@ -587,7 +588,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transform, delta float64) ([]*Face, map[*Edge]*Edge, error) {
 	if xform != r3.Identity() {
 		for _, f := range srcFaces {
-			if f.normalBound != 0 {
+			if f.n.NormalBound != 0 {
 				return nil, nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
 			}
 		}
@@ -608,18 +609,18 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if nv, ok := newVertByOld[old]; ok {
 			return nv, nil
 		}
-		p := xform.Apply(old.position)
+		p := xform.Apply(old.n.Position)
 		if !proofbound.FiniteVec(p) {
 			return nil, fmt.Errorf(`%w: a placed patch vertex is not representable`, ErrUnsupported)
 		}
-		bound := old.bound.Base()
+		bound := old.n.Bound.Base()
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
 		// The CURVE half of the shared-denotation certificate (denotation.go)
 		// restates under xform, composing rather than overwriting, exactly
 		// as unstitch.go's copyFaceUnderContext does.
-		nv := &Vertex{position: p, bound: units.Millimeters(bound), denot: old.denot.Compose(xform)}
+		nv := &Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(bound), Denot: old.n.Denot.Compose(xform)}}
 		newVertByOld[old] = nv
 		return nv, nil
 	}
@@ -641,23 +642,25 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if err != nil {
 			return nil, err
 		}
-		lengthBound := old.lengthBound
+		lengthBound := old.n.LengthBound
 		if delta > 0 {
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
-		lengthBound = place.LengthBound(old.length, lengthBound)
+		lengthBound = place.LengthBound(old.n.Length, lengthBound)
 		ne := &Edge{
-			curve:           publicCurve(curve),
-			start:           start,
-			end:             end,
-			convex:          old.convex,
-			length:          old.length,
-			lengthBound:     lengthBound,
-			lengthUnbounded: old.lengthUnbounded,
-			denot:           old.denot.Compose(xform),
+			curve: publicCurve(curve),
+			start: start,
+			end:   end,
+			n: topo.Edge{
+				Convex:          old.n.Convex,
+				Length:          old.n.Length,
+				LengthBound:     lengthBound,
+				LengthUnbounded: old.n.LengthUnbounded,
+				Denot:           old.n.Denot.Compose(xform),
+			},
 		}
-		ne.curveBound, ne.curveBounded = surfaceplace.PlacedCurveBound(
-			internalCurve(old.curve), old.curveBound, old.curveBounded, curve, xform)
+		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
+			internalCurve(old.curve), old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}
@@ -671,21 +674,23 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if err != nil {
 			return nil, nil, err
 		}
-		axialDelta := f.axialDelta
+		axialDelta := f.n.AxialDelta
 		if delta > 0 {
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 		nf := &Face{
-			surface:       publicSurface(transformed),
-			origins:       append([]FeatureRef(nil), f.origins...),
-			area:          f.area,
-			areaBound:     place.AreaOf(proofbound.MeasuredScalar(f.area, f.areaBound)).Bound,
-			reversed:      f.reversed,
-			heldPlanar:    f.heldPlanar,
-			axialDelta:    axialDelta,
-			hasAxialDelta: f.hasAxialDelta,
-			normalBound:   f.normalBound,
-			denoted:       f.denotedUnder(xform),
+			surface: publicSurface(transformed),
+			origins: append([]FeatureRef(nil), f.origins...),
+			n: topo.Face{
+				Area:          f.n.Area,
+				AreaBound:     place.AreaOf(proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound)).Bound,
+				Reversed:      f.n.Reversed,
+				HeldPlanar:    f.n.HeldPlanar,
+				AxialDelta:    axialDelta,
+				HasAxialDelta: f.n.HasAxialDelta,
+				NormalBound:   f.n.NormalBound,
+				Denoted:       f.denotedUnder(xform),
+			},
 		}
 		for _, l := range f.loops {
 			coedges := make([]coedge, len(l.coedges))
@@ -696,7 +701,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 				}
 				coedges[j] = coedge{edge: ne, forward: ce.forward}
 			}
-			nf.loops = append(nf.loops, &Loop{coedges: coedges, outer: l.outer})
+			nf.loops = append(nf.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: l.n.Outer}})
 		}
 		newFaces[i] = nf
 	}
@@ -789,10 +794,10 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		ne := edgeCopy[oe.old]
 		areaEdges[i] = patchchain.AreaEdge{
 			Curve: internalCurve(ne.curve), Forward: oe.forward,
-			Start:  patchchain.AreaVertex{Position: ne.start.position, Bound: ne.start.bound.Base()},
-			End:    patchchain.AreaVertex{Position: ne.end.position, Bound: ne.end.bound.Base()},
-			Length: ne.length, LengthBound: ne.lengthBound, LengthUnbounded: ne.lengthUnbounded,
-			CurveBound: ne.curveBound, CurveBounded: ne.curveBounded,
+			Start:  patchchain.AreaVertex{Position: ne.start.n.Position, Bound: ne.start.n.Bound.Base()},
+			End:    patchchain.AreaVertex{Position: ne.end.n.Position, Bound: ne.end.n.Bound.Base()},
+			Length: ne.n.Length, LengthBound: ne.n.LengthBound, LengthUnbounded: ne.n.LengthUnbounded,
+			CurveBound: ne.n.CurveBound, CurveBounded: ne.n.CurveBounded,
 		}
 	}
 	if bound, ok := patchchain.PolygonAreaBound(ig.Area, areaEdges); ok {
@@ -824,17 +829,19 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	}
 
 	return &Face{
-		surface:   Plane{Frame: frame},
-		origins:   []FeatureRef{{producer: ref, Role: rolePatch}},
-		loops:     []*Loop{{coedges: coedges, outer: true}},
-		area:      ig.Area,
-		areaBound: ig.AreaBound,
-		// A chain gate 3's level arm admitted has a proven-bounded plane
-		// origin, never a zero one: the same fields prism_build.go already
-		// sets on a prism's own caps (docs/surface-design.md §5.2). A chain
-		// the exact arm admitted instead carries a zero, unset bound here.
-		axialDelta:    axialDelta,
-		hasAxialDelta: chain.hasAxialBound,
+		surface: Plane{Frame: frame},
+		origins: []FeatureRef{{producer: ref, Role: rolePatch}},
+		loops:   []*Loop{{coedges: coedges, n: topo.Loop{Outer: true}}},
+		n: topo.Face{
+			Area:      ig.Area,
+			AreaBound: ig.AreaBound,
+			// A chain gate 3's level arm admitted has a proven-bounded plane
+			// origin, never a zero one: the same fields prism_build.go already
+			// sets on a prism's own caps (docs/surface-design.md §5.2). A chain
+			// the exact arm admitted instead carries a zero, unset bound here.
+			AxialDelta:    axialDelta,
+			HasAxialDelta: chain.hasAxialBound,
+		},
 	}, nil
 }
 
@@ -878,9 +885,9 @@ func patchChainOrientedNormal(ordered []patchOrientedEdge, edgeCopy map[*Edge]*E
 func patchChainWalkOrigin(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) r3.Vec {
 	first := edgeCopy[ordered[0].old]
 	if !ordered[0].forward {
-		return first.end.position
+		return first.end.n.Position
 	}
-	return first.start.position
+	return first.start.n.Position
 }
 
 // patchChainLevelNormal adapts the recorded level normal's sign decision.
@@ -907,7 +914,7 @@ func patchGeometryEdges(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) [
 	out := make([]patchchain.GeometryEdge, len(ordered))
 	for i, oe := range ordered {
 		ne := edgeCopy[oe.old]
-		g := patchchain.GeometryEdge{Start: ne.start.position, End: ne.end.position, Forward: oe.forward}
+		g := patchchain.GeometryEdge{Start: ne.start.n.Position, End: ne.end.n.Position, Forward: oe.forward}
 		switch c := ne.curve.(type) {
 		case Line3:
 			g.Kind = patchchain.Line
@@ -1001,10 +1008,10 @@ func bodyPatchPayloadProvesSimple(ctx context.Context, pp bodyPatchPayload) bool
 	// certificate" would prove nothing about which plane it belongs to.
 	receiverFreeByLevel := map[levelID][]*Edge{}
 	for _, e := range receiver.Edges() {
-		if !e.IsFree() || e.level.ID == 0 {
+		if !e.IsFree() || e.n.Level.ID == 0 {
 			continue
 		}
-		receiverFreeByLevel[e.level.ID] = append(receiverFreeByLevel[e.level.ID], e)
+		receiverFreeByLevel[e.n.Level.ID] = append(receiverFreeByLevel[e.n.Level.ID], e)
 	}
 
 	for _, chain := range pp.chains {
@@ -1031,12 +1038,12 @@ func patchChainSharedLevel(edges []*Edge) (levelID, bool) {
 	if len(edges) == 0 {
 		return 0, false
 	}
-	id := edges[0].level.ID
+	id := edges[0].n.Level.ID
 	if id == 0 {
 		return 0, false
 	}
 	for _, e := range edges {
-		if e.level.ID != id || e.start.level.ID != id || e.end.level.ID != id {
+		if e.n.Level.ID != id || e.start.n.Level.ID != id || e.end.n.Level.ID != id {
 			return 0, false
 		}
 	}

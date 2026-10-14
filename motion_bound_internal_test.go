@@ -33,7 +33,7 @@ func TestPrismMoverRecordRadiusReadsArcsTightly(t *testing.T) {
 	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.01))
 	require.NoError(t, err)
 	worst := 0.0
-	for _, v := range mesh.vertices {
+	for _, v := range mesh.n.Vertices {
 		worst = max(worst, vecL1(v))
 	}
 	require.LessOrEqual(t, worst, radius)

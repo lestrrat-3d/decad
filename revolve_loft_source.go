@@ -180,7 +180,7 @@ func revolveSpanFace(blank *Body, span revolveSectionSpan) (*Face, bool) {
 			seen[origin.Role] = struct{}{}
 		}
 		if valid && len(seen) == len(roles) &&
-			face.Surface() == surface && face.reversed == reversed {
+			face.Surface() == surface && face.n.Reversed == reversed {
 			if matched != nil {
 				return nil, false
 			}

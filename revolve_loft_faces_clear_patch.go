@@ -49,21 +49,21 @@ func (s *revolveLoftFacesToolPayloadSnapshot) current(tooth *Body,
 
 func cloneRevolveLoftFacesProofMesh(m *Mesh) *Mesh {
 	cloned := *m
-	cloned.vertices = slices.Clone(m.vertices)
-	cloned.triangles = slices.Clone(m.triangles)
+	cloned.n.Vertices = slices.Clone(m.n.Vertices)
+	cloned.n.Triangles = slices.Clone(m.n.Triangles)
 	cloned.source = slices.Clone(m.source)
-	cloned.vertexBound = slices.Clone(m.vertexBound)
+	cloned.n.VertexBound = slices.Clone(m.n.VertexBound)
 	cloned.faceBound = maps.Clone(m.faceBound)
 	return &cloned
 }
 
 func sameRevolveLoftFacesProofMesh(a, b *Mesh) bool {
-	return a != nil && b != nil && slices.Equal(a.vertices, b.vertices) &&
-		slices.Equal(a.triangles, b.triangles) && slices.Equal(a.source, b.source) &&
-		slices.Equal(a.vertexBound, b.vertexBound) && maps.Equal(a.faceBound, b.faceBound) &&
-		a.bound == b.bound && a.coordBound == b.coordBound &&
-		a.areaSlack == b.areaSlack && a.volSymDiff == b.volSymDiff &&
-		a.symDiffOK == b.symDiffOK && a.boundaryOK == b.boundaryOK
+	return a != nil && b != nil && slices.Equal(a.n.Vertices, b.n.Vertices) &&
+		slices.Equal(a.n.Triangles, b.n.Triangles) && slices.Equal(a.source, b.source) &&
+		slices.Equal(a.n.VertexBound, b.n.VertexBound) && maps.Equal(a.faceBound, b.faceBound) &&
+		a.n.Bound == b.n.Bound && a.n.CoordBound == b.n.CoordBound &&
+		a.n.AreaSlack == b.n.AreaSlack && a.n.VolSymDiff == b.n.VolSymDiff &&
+		a.n.SymDiffOK == b.n.SymDiffOK && a.n.BoundaryOK == b.n.BoundaryOK
 }
 
 func cloneRevolveLoftFacesClearShell(shell *revolveLoftFacesBlankSeamShell) *revolveLoftFacesBlankSeamShell {
@@ -142,15 +142,15 @@ func newRevolveLoftFacesClearPatchContext(ctx context.Context,
 		return nil, false, nil
 	}
 	tool, err := tessellateContext(ctx, source.tooth, chord, VerifyAll)
-	if err != nil || tool == nil || !tool.boundaryOK || !tool.symDiffOK ||
-		proofbound.IsNonFinite(tool.bound) || tool.bound < 0 ||
-		proofbound.IsNonFinite(tool.volSymDiff) || tool.volSymDiff < 0 {
+	if err != nil || tool == nil || !tool.n.BoundaryOK || !tool.n.SymDiffOK ||
+		proofbound.IsNonFinite(tool.n.Bound) || tool.n.Bound < 0 ||
+		proofbound.IsNonFinite(tool.n.VolSymDiff) || tool.n.VolSymDiff < 0 {
 		return nil, false, err
 	}
 	fresh, err := tessellateFaceted(ctx, source.tooth, payload, payload.meshBound)
 	if fresh != nil {
 		// tessellateContext sets this flag after the payload restatement.
-		fresh.boundaryOK = true
+		fresh.n.BoundaryOK = true
 	}
 	if err != nil || !sameRevolveLoftFacesProofMesh(tool, fresh) ||
 		!source.toolProof.current(source.tooth, payload) {
@@ -191,9 +191,9 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 		!revolveLoftFacesSectionCurrent(source) ||
 		!revolveLoftFacesTrimCurrent(source.tooth, source.trim) ||
 		!revolveLoftFacesSourceRefsCurrent(source.trim, source.tooth, source.sourceRefs) ||
-		!tool.boundaryOK || !tool.symDiffOK ||
-		proofbound.IsNonFinite(tool.bound) || tool.bound < 0 ||
-		proofbound.IsNonFinite(tool.volSymDiff) || tool.volSymDiff < 0 ||
+		!tool.n.BoundaryOK || !tool.n.SymDiffOK ||
+		proofbound.IsNonFinite(tool.n.Bound) || tool.n.Bound < 0 ||
+		proofbound.IsNonFinite(tool.n.VolSymDiff) || tool.n.VolSymDiff < 0 ||
 		index < 0 || index >= len(shell.mesh.tris) ||
 		len(shell.triangleCells) != len(shell.mesh.tris) ||
 		len(shell.mesh.src) != len(shell.mesh.tris) ||
@@ -232,7 +232,7 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 	if proofbound.IsNonFinite(required) || shell.faceBound < required {
 		return pointquery.Undecided, false, nil
 	}
-	separation := proofbound.AbsSumUpper(shell.faceBound, tool.bound)
+	separation := proofbound.AbsSumUpper(shell.faceBound, tool.n.Bound)
 	if proofbound.IsNonFinite(separation) || separation <= 0 {
 		return pointquery.Undecided, false, nil
 	}
@@ -241,16 +241,16 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 		proof.XptOf(shell.mesh.verts[tri[1]]),
 		proof.XptOf(shell.mesh.verts[tri[2]]),
 	}
-	for _, facet := range tool.triangles {
+	for _, facet := range tool.n.Triangles {
 		if err := ctx.Err(); err != nil {
 			return pointquery.Undecided, false, err
 		}
 		var other [3]proof.Xpt
 		for i, vertex := range facet {
-			if vertex < 0 || vertex >= len(tool.vertices) || !proofbound.FiniteVec(tool.vertices[vertex]) {
+			if vertex < 0 || vertex >= len(tool.n.Vertices) || !proofbound.FiniteVec(tool.n.Vertices[vertex]) {
 				return pointquery.Undecided, false, nil
 			}
-			other[i] = proof.XptOf(tool.vertices[vertex])
+			other[i] = proof.XptOf(tool.n.Vertices[vertex])
 		}
 		if !meshbool.DisjointTriDistanceAbove(held, other, separation) {
 			return pointquery.Undecided, false, nil
@@ -266,8 +266,8 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 	if meshbool.PointRoundBound(centroid, point) >= shell.faceBound {
 		return pointquery.Undecided, false, nil
 	}
-	location, err := pointquery.Locate(ctx, point, tool.vertices, tool.triangles,
-		tool.bound, tool.volSymDiff)
+	location, err := pointquery.Locate(ctx, point, tool.n.Vertices, tool.n.Triangles,
+		tool.n.Bound, tool.n.VolSymDiff)
 	if err != nil || location != pointquery.Inside && location != pointquery.Outside {
 		return pointquery.Undecided, false, err
 	}

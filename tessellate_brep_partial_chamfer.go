@@ -42,7 +42,7 @@ func (bc *brepBandChord) emitPartialChamfer(m *Mesh, faceOfRole func(string) (*F
 		if err != nil {
 			return err
 		}
-		first := len(m.triangles)
+		first := len(m.n.Triangles)
 		for _, cell := range bc.partial.Cells {
 			if cell.Patch != p {
 				continue
@@ -61,8 +61,8 @@ func (bc *brepBandChord) emitPartialChamfer(m *Mesh, faceOfRole func(string) (*F
 		// displacement make the patch deviation zero. Stored vertices still
 		// contribute to the body's motion and area allowances.
 		bump(face, 0)
-		m.areaSlack = proofbound.AbsSumUpper(m.areaSlack,
-			tessellation.FilletMeshAreaDeficit(m.vertices, m.triangles[first:], face.area, face.areaBound))
+		m.n.AreaSlack = proofbound.AbsSumUpper(m.n.AreaSlack,
+			tessellation.FilletMeshAreaDeficit(m.n.Vertices, m.n.Triangles[first:], face.n.Area, face.n.AreaBound))
 	}
 	return nil
 }

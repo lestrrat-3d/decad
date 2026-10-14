@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -34,14 +35,14 @@ import (
 // unplaced build still carries a positive delta wherever a station was
 // COMPUTED rather than pinned (loftPayload's own delta doc comment).
 func loftVertex(p r3.Vec, delta float64) *Vertex {
-	return &Vertex{position: p, bound: units.Millimeters(delta)}
+	return &Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(delta)}}
 }
 
 // loftEdge builds one straight loft edge between two vertex-table indices,
 // with the given walked-boundary convexity.
 func loftEdge(vertexObjs []*Vertex, positions []r3.Vec, a, b int, convex bool, delta float64) *Edge {
 	held, bound := loftmesh.EdgeLength(positions[a], positions[b], delta)
-	return &Edge{curve: Line3{}, start: vertexObjs[a], end: vertexObjs[b], convex: convex, length: held, lengthBound: bound}
+	return &Edge{curve: Line3{}, start: vertexObjs[a], end: vertexObjs[b], n: topo.Edge{Convex: convex, Length: held, LengthBound: bound}}
 }
 
 // planeFromTriangle builds a face's Plane surface directly from one of its
@@ -83,11 +84,13 @@ func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i
 		areaBound = proofbound.AbsSumUpper(areaBound, proofbound.PerturbedTriangleAreaAllow(a, b, c, delta))
 	}
 	return &Face{
-		surface:   surf,
-		origins:   []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,%d,%d)", i, j, side)}},
-		body:      body,
-		area:      lo,
-		areaBound: areaBound,
+		surface: surf,
+		origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,%d,%d)", i, j, side)}},
+		body:    body,
+		n: topo.Face{
+			Area:      lo,
+			AreaBound: areaBound,
+		},
 	}, nil
 }
 
@@ -187,7 +190,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			lowerFace.loops = []*Loop{{outer: true, coedges: loftLoopCoedges([]coedge{
+			lowerFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
 				{edge: rimBottom[j], forward: true},
 				{edge: rungE[jn], forward: true},
 				{edge: diagE[j], forward: false},
@@ -198,7 +201,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			upperFace.loops = []*Loop{{outer: true, coedges: loftLoopCoedges([]coedge{
+			upperFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
 				{edge: diagE[j], forward: true},
 				{edge: rimTop[j], forward: false},
 				{edge: rungE[j], forward: false},
@@ -208,8 +211,8 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			capStartCo[n-1-j] = coedge{edge: rimBottom[j], forward: false}
 			capEndCo[j] = coedge{edge: rimTop[j], forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{outer: isOuter, coedges: loftLoopCoedges(capStartCo, a.Reversed)})
-		capEndLoops = append(capEndLoops, &Loop{outer: isOuter, coedges: loftLoopCoedges(capEndCo, a.Reversed)})
+		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: isOuter}, coedges: loftLoopCoedges(capStartCo, a.Reversed)})
+		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: isOuter}, coedges: loftLoopCoedges(capEndCo, a.Reversed)})
 	}
 
 	capStartSurf, err := planeFromTriangle(a.Verts, a.Tris[a.Walls])
@@ -231,24 +234,28 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 		capEndBound = proofbound.AbsSumUpper(capEndBound, loftmesh.CapTriangleAreaAllow(a.Verts, capEndTris, a.Delta))
 	}
 	capStart := &Face{
-		surface:       capStartSurf,
-		loops:         capStartLoops,
-		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
-		body:          body,
-		area:          cap0Val,
-		areaBound:     capStartBound,
-		axialDelta:    a.Delta,
-		hasAxialDelta: true,
+		surface: capStartSurf,
+		loops:   capStartLoops,
+		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
+		body:    body,
+		n: topo.Face{
+			Area:          cap0Val,
+			AreaBound:     capStartBound,
+			AxialDelta:    a.Delta,
+			HasAxialDelta: true,
+		},
 	}
 	capEnd := &Face{
-		surface:       capEndSurf,
-		loops:         capEndLoops,
-		origins:       []FeatureRef{{producer: ref, Role: roleCapEnd}},
-		body:          body,
-		area:          cap1Val,
-		areaBound:     capEndBound,
-		axialDelta:    a.Delta,
-		hasAxialDelta: true,
+		surface: capEndSurf,
+		loops:   capEndLoops,
+		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
+		body:    body,
+		n: topo.Face{
+			Area:          cap1Val,
+			AreaBound:     capEndBound,
+			AxialDelta:    a.Delta,
+			HasAxialDelta: true,
+		},
 	}
 
 	return capStart, capEnd, walls, nil

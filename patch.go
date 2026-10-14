@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -134,7 +135,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
 	prismView := pp.prism()
 
 	// pw resolves every boundary segment's walk exactly once for this whole
@@ -164,7 +165,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		if err != nil {
 			return nil, err
 		}
-		faceLoops = append(faceLoops, &Loop{coedges: coedges, outer: li == 0})
+		faceLoops = append(faceLoops, &Loop{coedges: coedges, n: topo.Loop{Outer: li == 0}})
 	}
 
 	// The positive side is the sketch plane's own normal — the sense
@@ -176,20 +177,22 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, err
 	}
 	face := &Face{
-		surface:       Plane{Frame: frame},
-		origins:       []FeatureRef{{producer: ref, Role: rolePatch}},
-		body:          body,
-		loops:         faceLoops,
-		area:          ig.Area,
-		areaBound:     ig.AreaBound,
-		axialDelta:    0,
-		hasAxialDelta: true,
+		surface: Plane{Frame: frame},
+		origins: []FeatureRef{{producer: ref, Role: rolePatch}},
+		body:    body,
+		loops:   faceLoops,
+		n: topo.Face{
+			Area:          ig.Area,
+			AreaBound:     ig.AreaBound,
+			AxialDelta:    0,
+			HasAxialDelta: true,
+		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
 		return nil, err
 	}
 
-	shell := &Shell{faces: []*Face{face}, open: true}
+	shell := &Shell{faces: []*Face{face}, n: topo.Shell{Open: true}}
 	body.lumps = []*Lump{{shells: []*Shell{shell}}}
 
 	body.area = Measurement{
@@ -290,7 +293,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 	rimVertex := func(u, v, extra float64) *Vertex {
 		held, lift := pp.LiftedVertex(u, v, pp.Z0)
 		base := proofbound.AbsSumUpper(pp.SectionDelta, pp.Z0Delta, lift)
-		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(base, extra))}
+		return &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, extra))}}
 	}
 	var seam *Vertex
 	var verts []*Vertex
@@ -351,12 +354,12 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 		default:
 			curve = Line3{}
 		}
-		edge := &Edge{curve: curve, start: start, end: end, convex: convex, length: w.Length, lengthBound: w.LengthBound}
+		edge := &Edge{curve: curve, start: start, end: end, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
 		switch c := curve.(type) {
 		case Circle3:
-			edge.curveBound, edge.curveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
+			edge.n.CurveBound, edge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
 		case Arc3:
-			edge.curveBound, edge.curveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
+			edge.n.CurveBound, edge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, c.Center, c.Axis)
 		}
 		coedges = append(coedges, coedge{edge: edge, forward: true})
 	}

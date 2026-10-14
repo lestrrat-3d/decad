@@ -155,8 +155,8 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	}
 	wallGroup := len(mesh.groups)
 	mesh.groups = append(mesh.groups, facetGroup{origins: wall.Origins(),
-		surface: wall.Surface(), normalBound: wall.normalBound,
-		reversed: !wall.reversed})
+		surface: wall.Surface(), normalBound: wall.n.NormalBound,
+		reversed: !wall.n.Reversed})
 	vertexBound := append([]float64(nil), joined.vertexBound...)
 	var inner [2][]int
 	for cap := range 2 {

@@ -47,7 +47,7 @@ func (g tangentChainGraph) Continue(e, c *Edge, v *Vertex) clearance.DegState {
 
 func (g tangentChainGraph) Ambiguous(v *Vertex, proven, undecided int) error {
 	return fmt.Errorf(`%w: the tangent chain branches or cannot be decided here: %d edges continue it and %d cannot be decided; this evaluator does not choose a branch or stop early (modify-reach SX2); selector %s, the chain through (%s)`,
-		ErrUnsupported, proven, undecided, g.selector, renderVec(v.position))
+		ErrUnsupported, proven, undecided, g.selector, renderVec(v.n.Position))
 }
 
 // tangentContinues decides whether c continues e through their shared vertex
@@ -82,7 +82,7 @@ func tangentContinues(e, c *Edge, v *Vertex) clearance.DegState {
 	}
 	a, bb := e.faces[0], e.faces[1]
 	cc, dd := c.faces[0], c.faces[1]
-	p := v.position
+	p := v.n.Position
 	straight := degAnd(sameOutwardNormal(a, cc, p), sameOutwardNormal(bb, dd, p))
 	crossed := degAnd(sameOutwardNormal(a, dd, p), sameOutwardNormal(bb, cc, p))
 	return degOr(straight, crossed)
@@ -147,20 +147,20 @@ func rayAway(e *Edge, v *Vertex) (chainDir, bool) {
 	}
 	switch c := e.curve.(type) {
 	case Line3:
-		if !proofbound.FiniteVec(v.position) || !proofbound.FiniteVec(other.position) {
+		if !proofbound.FiniteVec(v.n.Position) || !proofbound.FiniteVec(other.n.Position) {
 			return chainDir{}, false
 		}
 		return chainDir{
-			exact: proofarith.DvSub(proofarith.DyVec(other.position), proofarith.DyVec(v.position)),
-			f:     other.position.Sub(v.position),
+			exact: proofarith.DvSub(proofarith.DyVec(other.n.Position), proofarith.DyVec(v.n.Position)),
+			f:     other.n.Position.Sub(v.n.Position),
 			held:  true,
 		}, true
 	case Arc3:
-		if !proofbound.FiniteVec(v.position) || !proofbound.FiniteVec(c.Center) || !proofbound.FiniteVec(c.Axis) {
+		if !proofbound.FiniteVec(v.n.Position) || !proofbound.FiniteVec(c.Center) || !proofbound.FiniteVec(c.Axis) {
 			return chainDir{}, false
 		}
-		exact := proofarith.DvCross(proofarith.DyVec(c.Axis), proofarith.DvSub(proofarith.DyVec(v.position), proofarith.DyVec(c.Center)))
-		f := c.Axis.Cross(v.position.Sub(c.Center))
+		exact := proofarith.DvCross(proofarith.DyVec(c.Axis), proofarith.DvSub(proofarith.DyVec(v.n.Position), proofarith.DyVec(c.Center)))
+		f := c.Axis.Cross(v.n.Position.Sub(c.Center))
 		if v == e.end && v != e.start {
 			exact = dvNeg(exact)
 			f = f.Scale(-1)
@@ -249,7 +249,7 @@ func outwardNumerator(f *Face, p r3.Vec) (chainDir, bool) {
 	if !ok {
 		return chainDir{}, false
 	}
-	if f.reversed {
+	if f.n.Reversed {
 		n.exact = dvNeg(n.exact)
 		n.f = n.f.Scale(-1)
 	}

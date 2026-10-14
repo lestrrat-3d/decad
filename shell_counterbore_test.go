@@ -27,11 +27,11 @@ func TestCounterboreShellMeshVolumeProof(t *testing.T) {
 	for _, chord := range []float64{0.2, 0.05} {
 		mesh, err := tessellateContext(t.Context(), shell, units.Millimeters(chord), VerifyAll)
 		require.NoError(t, err)
-		require.True(t, mesh.symDiffOK)
+		require.True(t, mesh.n.SymDiffOK)
 		delta := new(big.Rat).Sub(internalMeshVolumeRat(mesh), new(big.Rat).SetFloat64(volume.Value.Base()))
 		delta.Abs(delta)
 		held, _ := delta.Float64()
-		require.LessOrEqual(t, held, proofbound.AbsSumUpper(mesh.volSymDiff, volume.Bound.Base()),
+		require.LessOrEqual(t, held, proofbound.AbsSumUpper(mesh.n.VolSymDiff, volume.Bound.Base()),
 			"chord %.3f signed mesh volume falls outside the occupied-volume proof", chord)
 	}
 }

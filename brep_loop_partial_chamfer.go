@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 type partialChamferQuad struct {
@@ -133,21 +134,21 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 			!edgeConnects(end, capE.end, sideE.end) {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d does not close`, ErrUnsupported, i)
 		}
-		plane, err := planeFromThree(sideE.start.position, sideE.end.position, capE.end.position)
+		plane, err := planeFromThree(sideE.start.n.Position, sideE.end.n.Position, capE.end.n.Position)
 		if err != nil {
 			return nil, brepBandMass{}, err
 		}
 		loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
 			{edge: end, forward: end.start == sideE.end}, {edge: capE, forward: false},
-			{edge: start, forward: start.start == capE.start}}, outer: true}
+			{edge: start, forward: start.start == capE.start}}, n: topo.Loop{Outer: true}}
 		areaIv, volume3, moments, err := partialband.ChamferQuadMass(quads[i].points)
 		if err != nil {
 			return nil, brepBandMass{}, err
 		}
 		held, bound := heldOf(areaIv)
 		face := &Face{surface: plane, origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
-			body: body, loops: []*Loop{loop}, area: held, areaBound: bound}
-		normal, err := face.NormalAt(sideE.start.position)
+			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound}}
+		normal, err := face.NormalAt(sideE.start.n.Position)
 		if err != nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d has no normal: %v`,
 				ErrUnsupported, i, err)
@@ -161,7 +162,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 				ErrUnsupported, i)
 		}
 		if aligned < 0 {
-			face.reversed = true
+			face.n.Reversed = true
 			volume3.Neg(volume3)
 			for k := range moments {
 				moments[k].Neg(moments[k])
@@ -176,7 +177,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		for k := range 3 {
 			mass.moments[k] = proofbound.IntervalAdd(mass.moments[k], proofbound.PointInterval(moments[k]))
 		}
-		capE.convex, sideE.convex = true, true
+		capE.n.Convex, sideE.n.Convex = true, true
 	}
 	return patches, mass, nil
 }

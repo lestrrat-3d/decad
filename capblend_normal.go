@@ -31,7 +31,7 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	return capband.PatchNormalModel(capband.NormalInput{
 		SinH: sinH, CosH: cosH, Origin: origin, Axis: axis, Pull: p,
 		World: world, CU: g.CU, CV: g.CV, CapZ: g.CapZ,
-		Radius: g.CapRadius, Th0: g.Th0, Reversed: f.reversed,
+		Radius: g.CapRadius, Th0: g.Th0, Reversed: f.n.Reversed,
 	})
 }
 

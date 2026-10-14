@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -58,7 +59,7 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 		return nil, err
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true, kind: BodySolid}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}, kind: BodySolid}
 	faces, err := buildCoilTopology(ctx, body, ref, rec, sh, m.Area, walls)
 	if err != nil {
 		return nil, err
@@ -207,7 +208,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 	segs := rec.Profile.Segments
 	vertexAt := func(j int64, v int) *Vertex {
 		k := sh.At(j, v)
-		return &Vertex{position: sh.Verts[k], bound: units.Millimeters(sh.VertexBound[k])}
+		return &Vertex{n: topo.Vertex{Position: sh.Verts[k], Bound: units.Millimeters(sh.VertexBound[k])}}
 	}
 	startV := make([]*Vertex, len(segs))
 	endV := make([]*Vertex, len(segs))
@@ -256,7 +257,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		helix[i] = &Edge{
 			curve: FacetedCurve{Bound: units.Millimeters(chain)},
 			start: startV[i], end: endV[i],
-			convex: cross.Sign() > 0, length: hLength, lengthBound: hBound,
+			n: topo.Edge{Convex: cross.Sign() > 0, Length: hLength, LengthBound: hBound},
 		}
 	}
 
@@ -279,8 +280,8 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			startCo[m-1-k] = coedge{edge: rimStart[i], forward: false}
 			endCo[k] = coedge{edge: rimEnd[i], forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{outer: loop == 0, coedges: loftLoopCoedges(startCo, sh.Reversed)})
-		capEndLoops = append(capEndLoops, &Loop{outer: loop == 0, coedges: loftLoopCoedges(endCo, sh.Reversed)})
+		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: loop == 0}, coedges: loftLoopCoedges(startCo, sh.Reversed)})
+		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: loop == 0}, coedges: loftLoopCoedges(endCo, sh.Reversed)})
 	}
 	capStartSurf, err := planeFromTriangle(sh.Verts, sh.Tris[sh.Walls])
 	if err != nil {
@@ -294,14 +295,22 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		{
 			surface: capStartSurf, loops: capStartLoops,
 			origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
-			body:    body, area: capArea, areaBound: capBound,
-			axialDelta: sh.Delta, hasAxialDelta: true,
+			body:    body, n: topo.Face{
+				Area:          capArea,
+				AreaBound:     capBound,
+				AxialDelta:    sh.Delta,
+				HasAxialDelta: true,
+			},
 		},
 		{
 			surface: capEndSurf, loops: capEndLoops,
 			origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
-			body:    body, area: capArea, areaBound: capBound,
-			axialDelta: sh.Delta, hasAxialDelta: true,
+			body:    body, n: topo.Face{
+				Area:          capArea,
+				AreaBound:     capBound,
+				AxialDelta:    sh.Delta,
+				HasAxialDelta: true,
+			},
 		},
 	}
 	for i, seg := range segs {
@@ -327,19 +336,21 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			}
 		}
 		face := &Face{
-			surface:   Faceted{Bound: units.Millimeters(bound)},
-			origins:   []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,%d)", seg.Loop, seg.Index)}},
-			body:      body,
-			area:      area,
-			areaBound: areaBound,
+			surface: Faceted{Bound: units.Millimeters(bound)},
+			origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,%d)", seg.Loop, seg.Index)}},
+			body:    body,
+			n: topo.Face{
+				Area:      area,
+				AreaBound: areaBound,
+			},
 		}
 		if seg.Closed {
 			face.loops = []*Loop{
-				{outer: true, coedges: loftLoopCoedges([]coedge{{edge: rimStart[i], forward: true}}, sh.Reversed)},
-				{outer: true, coedges: loftLoopCoedges([]coedge{{edge: rimEnd[i], forward: false}}, sh.Reversed)},
+				{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{{edge: rimStart[i], forward: true}}, sh.Reversed)},
+				{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{{edge: rimEnd[i], forward: false}}, sh.Reversed)},
 			}
 		} else {
-			face.loops = []*Loop{{outer: true, coedges: loftLoopCoedges([]coedge{
+			face.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
 				{edge: rimStart[i], forward: true},
 				{edge: helix[next], forward: true},
 				{edge: rimEnd[i], forward: false},
@@ -374,8 +385,8 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 		if err != nil {
 			return nil, nil, err
 		}
-		return &Edge{curve: Line3{}, start: s0, end: s1, convex: loopOuter, length: length, lengthBound: lengthBound},
-			&Edge{curve: Line3{}, start: e0, end: e1, convex: loopOuter, length: length, lengthBound: lengthBound}, nil
+		return &Edge{curve: Line3{}, start: s0, end: s1, n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound}},
+			&Edge{curve: Line3{}, start: e0, end: e1, n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound}}, nil
 	}
 	length, lengthBound, err := coilshell.Held(rec.Stretched(seg.Length), "rim length")
 	if err != nil {
@@ -410,9 +421,19 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 	} else {
 		c0, c1 = Arc3{Center: centre0, Axis: axis0.Scale(sign), Radius: r}, Arc3{Center: centre1, Axis: axis1.Scale(sign), Radius: r}
 	}
-	start := &Edge{curve: c0, start: s0, end: s1, convex: convex, length: length, lengthBound: lengthBound,
-		curveBound: rims[0].Bound, curveBounded: rims[0].Bounded}
-	end := &Edge{curve: c1, start: e0, end: e1, convex: convex, length: length, lengthBound: lengthBound,
-		curveBound: rims[1].Bound, curveBounded: rims[1].Bounded}
+	start := &Edge{curve: c0, start: s0, end: s1, n: topo.Edge{
+		Convex:       convex,
+		Length:       length,
+		LengthBound:  lengthBound,
+		CurveBound:   rims[0].Bound,
+		CurveBounded: rims[0].Bounded,
+	}}
+	end := &Edge{curve: c1, start: e0, end: e1, n: topo.Edge{
+		Convex:       convex,
+		Length:       length,
+		LengthBound:  lengthBound,
+		CurveBound:   rims[1].Bound,
+		CurveBounded: rims[1].Bounded,
+	}}
 	return start, end, nil
 }

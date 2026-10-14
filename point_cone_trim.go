@@ -117,7 +117,7 @@ func exactPointCone(b *Body) (*pointConeLimit, bool) {
 	for _, face := range b.Faces() {
 		if cone, ok := face.Surface().(Cone); ok {
 			surface, origins = cone, face.Origins()
-			denoted, reversed = face.denoted, face.reversed
+			denoted, reversed = face.n.Denoted, face.n.Reversed
 			break
 		}
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/r3"
@@ -223,7 +224,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// existing proof, never a second one.
 	vertBound := make([]float64, len(verts))
 	for v, class := range classOf {
-		vertBound[class] = v.bound.Base()
+		vertBound[class] = v.n.Bound.Base()
 	}
 	if err := attachFaceLoopsContext(ctx, newFaces); err != nil {
 		return nil, err
@@ -403,7 +404,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	default:
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: solid, kind: kind}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: solid}, kind: kind}
 	for _, f := range newFaces {
 		f.body = body
 	}
@@ -416,7 +417,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// analytically integrated area already is.
 	areaAcc := proofbound.BoundedScalar{}
 	for _, f := range newFaces {
-		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.area, f.areaBound))
+		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
 	}
 	if acc != nil && delta > 0 {
 		areaAcc.Bound = proofbound.AbsSumUpper(areaAcc.Bound, acc.PerturbAreaSum)
@@ -500,7 +501,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.Transform, verts []r3.Vec, delta float64, srcFaces []*Face) ([]*Face, map[*Vertex]int, map[*Edge]struct{}, error) {
 	if xform != r3.Identity() {
 		for _, f := range srcFaces {
-			if f.normalBound != 0 {
+			if f.n.NormalBound != 0 {
 				return nil, nil, nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
 			}
 		}
@@ -520,7 +521,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
-		nv := &Vertex{position: verts[class], bound: units.Millimeters(bound), denot: plan.table.Tokens[class].Compose(xform)}
+		nv := &Vertex{n: topo.Vertex{Position: verts[class], Bound: units.Millimeters(bound), Denot: plan.table.Tokens[class].Compose(xform)}}
 		newVertByClass[class] = nv
 		classOf[nv] = class
 		return nv
@@ -551,26 +552,28 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if err != nil {
 			return nil, err
 		}
-		lengthBound := old.lengthBound
+		lengthBound := old.n.LengthBound
 		if delta > 0 {
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
-			curve:           publicCurve(curve),
-			start:           vertexForClass(startClass),
-			end:             vertexForClass(endClass),
-			convex:          old.convex,
-			length:          old.length,
-			lengthBound:     lengthBound,
-			lengthUnbounded: old.lengthUnbounded,
-			// A welded pair's two edges are already proven to denote the same
-			// curve (Table J), so the FIRST one reached here — the only one
-			// that ever builds a new Edge for the group, per buildByGroup
-			// above — is a sound representative for the other's identity too.
-			denot: old.denot.Compose(xform),
+			curve: publicCurve(curve),
+			start: vertexForClass(startClass),
+			end:   vertexForClass(endClass),
+			n: topo.Edge{
+				Convex:          old.n.Convex,
+				Length:          old.n.Length,
+				LengthBound:     lengthBound,
+				LengthUnbounded: old.n.LengthUnbounded,
+				// A welded pair's two edges are already proven to denote the same
+				// curve (Table J), so the FIRST one reached here — the only one
+				// that ever builds a new Edge for the group, per buildByGroup
+				// above — is a sound representative for the other's identity too.
+				Denot: old.n.Denot.Compose(xform),
+			},
 		}
-		ne.curveBound, ne.curveBounded = surfaceplace.PlacedCurveBound(
-			internalCurve(old.curve), old.curveBound, old.curveBounded, curve, xform)
+		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
+			internalCurve(old.curve), old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		eb := &edgeBuild{edge: ne, startClass: startClass, endClass: endClass}
 		buildByOld[old] = eb
 		if isWelded {
@@ -589,21 +592,23 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		axialDelta := f.axialDelta
+		axialDelta := f.n.AxialDelta
 		if delta > 0 {
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
 		nf := &Face{
-			surface:       publicSurface(transformed),
-			origins:       append([]FeatureRef(nil), f.origins...),
-			area:          f.area,
-			areaBound:     f.areaBound,
-			reversed:      f.reversed,
-			heldPlanar:    f.heldPlanar,
-			axialDelta:    axialDelta,
-			hasAxialDelta: f.hasAxialDelta,
-			normalBound:   f.normalBound,
-			denoted:       f.denotedUnder(xform),
+			surface: publicSurface(transformed),
+			origins: append([]FeatureRef(nil), f.origins...),
+			n: topo.Face{
+				Area:          f.n.Area,
+				AreaBound:     f.n.AreaBound,
+				Reversed:      f.n.Reversed,
+				HeldPlanar:    f.n.HeldPlanar,
+				AxialDelta:    axialDelta,
+				HasAxialDelta: f.n.HasAxialDelta,
+				NormalBound:   f.n.NormalBound,
+				Denoted:       f.denotedUnder(xform),
+			},
 		}
 		for _, l := range f.loops {
 			coedges := make([]coedge, len(l.coedges))
@@ -625,7 +630,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				}
 				coedges[j] = coedge{edge: eb.edge, forward: forward}
 			}
-			nf.loops = append(nf.loops, &Loop{coedges: coedges, outer: l.outer})
+			nf.loops = append(nf.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: l.n.Outer}})
 		}
 		newFaces[i] = nf
 	}
@@ -658,7 +663,7 @@ func reverseFaceOrientation(f *Face) {
 		}
 		l.coedges = rev
 	}
-	f.reversed = !f.reversed
+	f.n.Reversed = !f.n.Reversed
 }
 
 func stitchTopology(faces []*Face) stitchweld.Topology[*Face, *Edge] {
@@ -761,7 +766,7 @@ func stitchLumpsProvenSeparate(components [][]*Face) bool {
 			if v == nil {
 				return r3.Vec{}, 0, false
 			}
-			return v.position, v.bound.Base(), true
+			return v.n.Position, v.n.Bound.Base(), true
 		})
 }
 
@@ -827,7 +832,7 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 			loopIdx[li] = idxs
 		}
 		for li, l := range f.loops {
-			wantCCW := l.outer
+			wantCCW := l.n.Outer
 			isCCW := shoelace(pts, loopIdx[li]) > 0
 			if wantCCW != isCCW {
 				reverseIntSlice(loopIdx[li])
@@ -839,7 +844,7 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 		}
 		for _, t := range tris2D {
 			a, b, c := classOf[verts[t[0]]], classOf[verts[t[1]]], classOf[verts[t[2]]]
-			if f.reversed {
+			if f.n.Reversed {
 				b, c = c, b
 			}
 			tris = append(tris, [3]int{a, b, c})
@@ -905,15 +910,15 @@ func fixWeldedEdgeConvexity(welded map[*Edge]struct{}) {
 			continue
 		}
 		na := pa.Frame.N()
-		if fwd.reversed {
+		if fwd.n.Reversed {
 			na = na.Scale(-1)
 		}
 		nb := pb.Frame.N()
-		if bwd.reversed {
+		if bwd.n.Reversed {
 			nb = nb.Scale(-1)
 		}
-		d := e.end.position.Sub(e.start.position)
-		e.convex = na.Cross(nb).Dot(d) > 0
+		d := e.end.n.Position.Sub(e.start.n.Position)
+		e.n.Convex = na.Cross(nb).Dot(d) > 0
 	}
 }
 

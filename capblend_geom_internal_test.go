@@ -154,10 +154,10 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 			}
 		}
 		require.NotNil(t, arc, `the band's cap-level arc is an edge of the body`)
-		require.Equal(t, math.Abs(capRadius*sweep), arc.length)
-		require.GreaterOrEqual(t, arc.lengthBound, withoutRadial+math.Abs(sweep)*gap*(1-1e-9),
+		require.Equal(t, math.Abs(capRadius*sweep), arc.n.Length)
+		require.GreaterOrEqual(t, arc.n.LengthBound, withoutRadial+math.Abs(sweep)*gap*(1-1e-9),
 			`the arc's bound %v carries its sweep %v times the radius gap %v on top of %v`,
-			arc.lengthBound, sweep, gap, withoutRadial)
+			arc.n.LengthBound, sweep, gap, withoutRadial)
 		checked++
 	}
 	require.Equal(t, 1, checked)
@@ -280,9 +280,9 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 	require.Equal(t, again.delta, supplied.delta)
 	require.Len(t, supplied.patches, len(again.patches))
 	for i, f := range supplied.patches {
-		require.Equal(t, again.patches[i].area, f.area, "patch %d", i)
-		require.Equal(t, again.patches[i].areaBound, f.areaBound, "patch %d", i)
-		require.Equal(t, again.patches[i].normalBound, f.normalBound, "patch %d", i)
+		require.Equal(t, again.patches[i].n.Area, f.n.Area, "patch %d", i)
+		require.Equal(t, again.patches[i].n.AreaBound, f.n.AreaBound, "patch %d", i)
+		require.Equal(t, again.patches[i].n.NormalBound, f.n.NormalBound, "patch %d", i)
 	}
 
 	short := again.capCo[:len(again.capCo)-1]

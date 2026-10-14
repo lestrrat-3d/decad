@@ -177,8 +177,8 @@ func TestFixPatchOrientation(t *testing.T) {
 			eu, ev, en := band.pl.Dir(1, 0, 0), band.pl.Dir(0, 1, 0), band.pl.Dir(0, 0, 1)
 			refU, refV, refZ := truth.Value.Dot(eu), truth.Value.Dot(ev), truth.Value.Dot(en)
 
-			before := band.face.reversed
-			band.face.reversed = !before // give the function real work to do
+			before := band.face.n.Reversed
+			band.face.n.Reversed = !before // give the function real work to do
 
 			sample := tc.sample(band, valid, cone)
 			err = fixPatchOrientation(band.face, band.pl, sample, refU, refV, refZ)
@@ -187,12 +187,12 @@ func TestFixPatchOrientation(t *testing.T) {
 				require.ErrorIs(t, err, ErrUnsupported)
 				require.False(t, errors.Is(err, ErrDegenerate),
 					"ErrDegenerate and ErrUnsupported are opposite existence claims; only one may ride along")
-				require.Equal(t, !before, band.face.reversed,
+				require.Equal(t, !before, band.face.n.Reversed,
 					"a refusal must not half-decide before returning")
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, before, band.face.reversed, "the function restores the correct sign")
+			require.Equal(t, before, band.face.n.Reversed, "the function restores the correct sign")
 			n, err := band.face.NormalAt(valid)
 			require.NoError(t, err)
 			ref := band.pl.Dir(refU, refV, refZ)
@@ -785,13 +785,13 @@ func TestCapPatchNormalRangeChargesAFlatPatchsDepartureOnce(t *testing.T) {
 
 	for i, band := range chamferedRectFlatPatches(t, motion) {
 		t.Run(fmt.Sprintf("patch %d", i), func(t *testing.T) {
-			require.Positive(t, band.face.normalBound,
+			require.Positive(t, band.face.n.NormalBound,
 				"a placed flat patch has a real departure from the plane it publishes")
 			lo, hi, allow, ok := capPatchNormalRange(band.face, band.pl, band.geom, pull)
 			require.True(t, ok)
 			require.Equal(t, lo, hi, "a flat patch's own normal component does not vary with position")
-			require.GreaterOrEqual(t, allow, band.face.normalBound, "the departure is still covered")
-			require.Less(t, allow, 1.2*band.face.normalBound, "the departure is covered only once")
+			require.GreaterOrEqual(t, allow, band.face.n.NormalBound, "the departure is still covered")
+			require.Less(t, allow, 1.2*band.face.n.NormalBound, "the departure is covered only once")
 		})
 	}
 }
@@ -858,7 +858,7 @@ func (b bandUnderTest) componentAt(t *testing.T, theta float64, pull r3.Vec) (fl
 	require.NoError(t, err)
 	bound, err := n.Bound.In(units.One)
 	require.NoError(t, err)
-	return n.Value.Dot(pull), bound * pull.Len(), math.Max(0, bound-b.face.normalBound) * pull.Len()
+	return n.Value.Dot(pull), bound * pull.Len(), math.Max(0, bound-b.face.n.NormalBound) * pull.Len()
 }
 
 // TestCapPatchNormalRangeCoversWhatThePatchTakes is the sampled half of the
@@ -934,7 +934,7 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 			band := chamferedCircularBand(t, tc.section, 10, 0.2, tc.motion)
 			lo, hi, allow, ok := capPatchNormalRange(band.face, band.pl, band.geom, pull)
 			require.True(t, ok)
-			require.GreaterOrEqual(t, allow, band.face.normalBound,
+			require.GreaterOrEqual(t, allow, band.face.n.NormalBound,
 				"the circular arm composes the patch's own departure inside capPatchNormalRange")
 
 			g := band.geom
@@ -956,7 +956,7 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 				// The patch's own normalBound is a separate charge: it covers the
 				// built surface against its tag and against the wall its records
 				// denote, which the offset radius's own rounding moves even here.
-				require.Less(t, allow-band.face.normalBound, tc.underArmBounds*arms,
+				require.Less(t, allow-band.face.n.NormalBound, tc.underArmBounds*arms,
 					"an undisplaced band must not be charged for a displacement it has not got")
 			}
 			const samples = 512

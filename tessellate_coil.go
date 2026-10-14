@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -81,12 +82,14 @@ func tessellateCoil(ctx context.Context, b *Body, cp coilPayload, chord float64,
 		return nil, fmt.Errorf(`%w: the coil's held triangle set is not a closed mesh`, ErrUnsupported)
 	}
 	mesh := &Mesh{
-		vertices:  append([]r3.Vec(nil), cp.verts...),
-		triangles: append([][3]int(nil), cp.tris...),
-		source:    src,
+		n: topo.Mesh{
+			Vertices:  append([]r3.Vec(nil), cp.verts...),
+			Triangles: append([][3]int(nil), cp.tris...),
+		},
+		source: src,
 	}
 	mesh.setVertexBounds(cp.vertexBound)
-	mesh.bound = cp.delta
+	mesh.n.Bound = cp.delta
 	if verify < VerifyAll {
 		return mesh, nil
 	}
@@ -96,8 +99,8 @@ func tessellateCoil(ctx context.Context, b *Body, cp coilPayload, chord float64,
 	if err != nil {
 		return nil, err
 	}
-	mesh.areaSlack = slack
-	mesh.volSymDiff = volSymDiff
-	mesh.symDiffOK = true
+	mesh.n.AreaSlack = slack
+	mesh.n.VolSymDiff = volSymDiff
+	mesh.n.SymDiffOK = true
 	return mesh, nil
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -32,7 +33,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	}
 	work := freeform.NewFreeformWork()
 	loops := cbp.loops()
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}}
 
 	var faces []*Face
 	startLoopObjs := make([]*Loop, len(loops))
@@ -104,7 +105,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		}
 		faces = append(faces, sideFaces...)
 		for _, f := range sideFaces {
-			sideArea = proofbound.BoundedAdd(sideArea, proofbound.MeasuredScalar(f.area, f.areaBound))
+			sideArea = proofbound.BoundedAdd(sideArea, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
 		}
 		_ = loopLen
 
@@ -208,8 +209,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
 		}
 
-		startLoopObjs[li] = &Loop{coedges: startCo, outer: li == 0}
-		endLoopObjs[li] = &Loop{coedges: endCo, outer: li == 0}
+		startLoopObjs[li] = &Loop{coedges: startCo, n: topo.Loop{Outer: li == 0}}
+		endLoopObjs[li] = &Loop{coedges: endCo, n: topo.Loop{Outer: li == 0}}
 
 		startBoundary := loop
 		if onStart {
@@ -261,24 +262,28 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		return nil, err
 	}
 	capStart := &Face{
-		surface:       Plane{Frame: startFrame},
-		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
-		body:          body,
-		loops:         startLoopObjs,
-		area:          startArea.Value,
-		areaBound:     startArea.Bound,
-		axialDelta:    cbp.z0Delta,
-		hasAxialDelta: true,
+		surface: Plane{Frame: startFrame},
+		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
+		body:    body,
+		loops:   startLoopObjs,
+		n: topo.Face{
+			Area:          startArea.Value,
+			AreaBound:     startArea.Bound,
+			AxialDelta:    cbp.z0Delta,
+			HasAxialDelta: true,
+		},
 	}
 	capEnd := &Face{
-		surface:       Plane{Frame: endFrame},
-		origins:       []FeatureRef{{producer: ref, Role: roleCapEnd}},
-		body:          body,
-		loops:         endLoopObjs,
-		area:          endArea.Value,
-		areaBound:     endArea.Bound,
-		axialDelta:    cbp.z1Delta,
-		hasAxialDelta: true,
+		surface: Plane{Frame: endFrame},
+		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
+		body:    body,
+		loops:   endLoopObjs,
+		n: topo.Face{
+			Area:          endArea.Value,
+			AreaBound:     endArea.Bound,
+			AxialDelta:    cbp.z1Delta,
+			HasAxialDelta: true,
+		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
 		return nil, err
@@ -351,7 +356,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 func capContourPerimeterUpper(capCo []coedge) float64 {
 	total := proofbound.BoundedScalar{}
 	for _, ce := range capCo {
-		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(ce.edge.length, ce.edge.lengthBound))
+		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(ce.edge.n.Length, ce.edge.n.LengthBound))
 	}
 	return proofbound.AbsSumUpper(total.Value, total.Bound)
 }

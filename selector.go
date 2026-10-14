@@ -475,21 +475,21 @@ func (p FacePredicate) matches(f *Face) bool { return p.clause().Matches(selecto
 // selectorEdge exposes only the analytic facts a predicate reads.
 type selectorEdge struct{ *Edge }
 
-func (e selectorEdge) SelectorConvex() bool { return e.convex }
+func (e selectorEdge) SelectorConvex() bool { return e.n.Convex }
 func (e selectorEdge) SelectorFree() bool   { return e.IsFree() }
 func (e selectorEdge) SelectorLineDirection() (r3.Vec, bool) {
-	if e.selectorDirectionProven {
-		return e.selectorDirection, true
+	if e.n.SelectorDirectionProven {
+		return e.n.SelectorDirection, true
 	}
 	if _, ok := e.curve.(Line3); !ok {
 		return r3.Vec{}, false
 	}
-	return e.end.position.Sub(e.start.position), true
+	return e.end.n.Position.Sub(e.start.n.Position), true
 }
 func (e selectorEdge) SelectorEndpoints() (r3.Vec, r3.Vec) {
-	return e.start.position, e.end.position
+	return e.start.n.Position, e.end.n.Position
 }
-func (e selectorEdge) SelectorLengthMM() float64 { return e.length }
+func (e selectorEdge) SelectorLengthMM() float64 { return e.n.Length }
 func (e selectorEdge) SelectorHasOrigin(ref FeatureRef) bool {
 	for _, face := range e.faces {
 		if slices.Contains(face.origins, ref) {
@@ -504,7 +504,7 @@ func (e selectorEdge) SelectorOnOuterLoop(ref FeatureRef) bool {
 			continue
 		}
 		for _, loop := range face.loops {
-			if !loop.outer {
+			if !loop.n.Outer {
 				continue
 			}
 			for _, ce := range loop.coedges {
@@ -537,7 +537,7 @@ func (f selectorFace) SelectorPlanarNormal() (r3.Vec, bool) {
 }
 func (f selectorFace) SelectorOutwardPlanarNormal() (r3.Vec, bool) {
 	normal, ok := f.SelectorPlanarNormal()
-	if ok && f.reversed {
+	if ok && f.n.Reversed {
 		normal = normal.Scale(-1)
 	}
 	return normal, ok

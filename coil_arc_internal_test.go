@@ -418,11 +418,11 @@ func TestCoilArcMeshProofsEncloseTheBody(t *testing.T) {
 	// 2π·2 turns · 3 · π·0.25 = 3π².
 	exact := new(big.Float).SetPrec(512).Mul(bigPi(), bigPi())
 	exact.Mul(exact, big.NewFloat(3))
-	requireEnclosesBig(t, held, mesh.volSymDiff+1e-12, exact, "held volume")
+	requireEnclosesBig(t, held, mesh.n.VolSymDiff+1e-12, exact, "held volume")
 	area, err := b.Area()
 	require.NoError(t, err)
 	gap := math.Abs(meshArea(mesh.Vertices(), mesh.Triangles()) - area.Value.Base())
-	require.LessOrEqual(t, gap, mesh.areaSlack+area.Bound.Base()+1e-9)
+	require.LessOrEqual(t, gap, mesh.n.AreaSlack+area.Bound.Base()+1e-9)
 
 	for k := range mesh.Triangles() {
 		require.Contains(t, []string{roleCapStart, roleCapEnd, coilWallRole}, mesh.source[k].Origins()[0].Role)

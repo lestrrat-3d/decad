@@ -237,7 +237,7 @@ func chargeBodyMap(body *Body, c massmoment.MapCharge) {
 	if c == (massmoment.MapCharge{}) {
 		return
 	}
-	if body.solid {
+	if body.n.Solid {
 		v := c.VolumeOf(proofbound.MeasuredScalar(body.volume.Value.Base(), body.volume.Bound.Base()))
 		body.volume.Bound = units.CubicMillimeters(v.Bound)
 		body.volume.Exactness = exactnessOf(v.Bound)
@@ -246,10 +246,10 @@ func chargeBodyMap(body *Body, c massmoment.MapCharge) {
 	body.area.Bound = units.SquareMillimeters(a.Bound)
 	body.area.Exactness = exactnessOf(a.Bound)
 	for _, f := range body.Faces() {
-		f.areaBound = c.AreaOf(proofbound.MeasuredScalar(f.area, f.areaBound)).Bound
+		f.n.AreaBound = c.AreaOf(proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound)).Bound
 	}
 	for _, e := range body.Edges() {
-		e.lengthBound = c.LengthBound(e.length, e.lengthBound)
+		e.n.LengthBound = c.LengthBound(e.n.Length, e.n.LengthBound)
 	}
 }
 

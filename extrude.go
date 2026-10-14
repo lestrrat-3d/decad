@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -221,7 +222,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if certificate != nil {
 		sectionDelta = certificate.delta
 	}
-	body, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+	nb, err := prismrecord.Build(ctx, d.env(ref), prismrecord.Payload{
 		Profile:       profile,
 		Frame:         frame,
 		SectionDelta:  sectionDelta,
@@ -231,13 +232,14 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 		Z1Delta:       sweep.z1Delta,
 		Xform:         r3.Identity(),
 		SurfaceResult: surfaceResult,
-	}}, work)
+	}, work)
 	if err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	body := publishNodeBody(d, nb)
 	d.commit(body)
 	return body, nil
 }
@@ -634,7 +636,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
 	var allFaces []*Face
 	total := proofbound.BoundedScalar{}
 	var captures []chainWalkCapture
@@ -783,7 +785,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	// mirroring buildLoopSidesAs's own rimVertex.
 	rimVertex := func(u, v, z, zDelta, extra float64) *Vertex {
 		held, lift := prismView.LiftedVertex(u, v, z)
-		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(zDelta, lift), extra))}
+		return &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(zDelta, lift), extra))}}
 	}
 
 	// Rim posts 0..n, no wraparound: post i sits at walk i's start for
@@ -830,7 +832,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 			prev, w := walks[i-1], walks[i]
 			convex = prev.TanOutU*w.TanInV-prev.TanOutV*w.TanInU > 0
 		}
-		vertical[i] = &Edge{curve: Line3{}, start: bottomV[i], end: topV[i], convex: convex, length: pp.z1 - pp.z0, lengthBound: height.Bound}
+		vertical[i] = &Edge{curve: Line3{}, start: bottomV[i], end: topV[i], n: topo.Edge{Convex: convex, Length: pp.z1 - pp.z0, LengthBound: height.Bound}}
 	}
 
 	faces := make([]*Face, 0, n)
@@ -855,13 +857,15 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		}
 		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
 		face := &Face{
-			surface:   surf,
-			origins:   origins,
-			body:      body,
-			area:      faceArea.Value,
-			areaBound: faceArea.Bound,
-			reversed:  faceReversed,
-			loops: []*Loop{{outer: true, coedges: []coedge{
+			surface: surf,
+			origins: origins,
+			body:    body,
+			n: topo.Face{
+				Area:      faceArea.Value,
+				AreaBound: faceArea.Bound,
+				Reversed:  faceReversed,
+			},
+			loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 				{edge: bottomEdge, forward: true},
 				{edge: vertical[i+1], forward: true},
 				{edge: topEdge, forward: false},

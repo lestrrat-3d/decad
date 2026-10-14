@@ -50,7 +50,7 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 // A rigid placement cannot change its radius or isotropic centroidal inertia.
 func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 	rp, ok := b.payload.(revolvePayload)
-	if !ok || !b.solid || b.kind != BodySolid || rp.surfaceResult || !rp.full ||
+	if !ok || !b.n.Solid || b.kind != BodySolid || rp.surfaceResult || !rp.full ||
 		rp.sectionDelta != 0 || len(rp.profile.Holes) != 0 ||
 		len(rp.profile.Outer.Segments) != 2 ||
 		!proofbound.FiniteVec(rp.frame.Origin()) ||
@@ -88,7 +88,7 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 		return sourceSphereContactProof{}, false
 	}
 	faces := b.Faces()
-	if len(faces) != 1 || faces[0].normalBound != 0 || faces[0].reversed ||
+	if len(faces) != 1 || faces[0].n.NormalBound != 0 || faces[0].n.Reversed ||
 		len(faces[0].loops) != 0 || len(b.Edges()) != 0 {
 		return sourceSphereContactProof{}, false
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
@@ -328,8 +329,8 @@ func facetedFacePerimeterUpper(f *Face, budget *proofbound.WorkBudget) (float64,
 	var lengths, bounds []float64
 	for _, l := range f.loops {
 		for _, ce := range l.coedges {
-			lengths = append(lengths, ce.edge.length)
-			bounds = append(bounds, ce.edge.lengthBound)
+			lengths = append(lengths, ce.edge.n.Length)
+			bounds = append(bounds, ce.edge.n.LengthBound)
 		}
 	}
 	return proofbound.PerimeterUpper(budget, lengths, bounds)
@@ -381,7 +382,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	comp, adj := audit.Comp, audit.Adj
 	members, compVol, contains := audit.Members, audit.CompVol, audit.Contains
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}}
 	if len(pp.vertexBound) != len(verts) {
 		return nil, fmt.Errorf(`%w: a faceted payload carries %d vertex bounds for %d vertices`, ErrBooleanFailed, len(pp.vertexBound), len(verts))
 	}
@@ -447,16 +448,18 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			// both strips of a split cap came from the cap, and both must
 			// still say so, or FaceCreatedBy and the surveys lose them.
 			f = &Face{
-				origins:     append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
-				body:        body,
-				heldPlanar:  pp.groups[pp.src[i]].planar,
-				denoted:     pp.groups[pp.src[i]].denoted,
-				normalBound: pp.groups[pp.src[i]].normalBound,
-				reversed:    pp.groups[pp.src[i]].reversed,
+				origins: append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
+				body:    body,
+				n: topo.Face{
+					HeldPlanar:  pp.groups[pp.src[i]].planar,
+					Denoted:     pp.groups[pp.src[i]].denoted,
+					NormalBound: pp.groups[pp.src[i]].normalBound,
+					Reversed:    pp.groups[pp.src[i]].reversed,
+				},
 			}
 			group := pp.groups[pp.src[i]]
 			if group.hasCentroid && groupPatch[pp.src[i]] == patch[i] {
-				f.centroid, f.hasCentroid = group.centroid, true
+				f.centroid, f.n.HasCentroid = group.centroid, true
 			}
 			faceIdx[patch[i]] = f
 			facePlanar[f] = pp.groups[pp.src[i]].planar
@@ -464,7 +467,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			compFaces[comp[i]] = append(compFaces[comp[i]], f)
 		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
-		f.area += b.Sub(a).Cross(c.Sub(a)).Len() / 2
+		f.n.Area += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 		faceTermSlop[f] = proofbound.AbsSumUpper(faceTermSlop[f], proofbound.FacetAreaTermSlop(a, b, c))
 		facetFace[i] = f
 	}
@@ -519,7 +522,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			}
 			geom := facetproof.FacetedAreaGeom(faceDelta[f], loopLen, faceFacetArea[f])
 			bodyGeom = proofbound.AbsSumUpper(bodyGeom, geom)
-			f.areaBound = proofbound.AbsSumUpper(geom, pp.areaSlack, proofbound.SumSlop(facetsOf[f], f.area), faceTermSlop[f])
+			f.n.AreaBound = proofbound.AbsSumUpper(geom, pp.areaSlack, proofbound.SumSlop(facetsOf[f], f.n.Area), faceTermSlop[f])
 		}
 	}
 
@@ -533,7 +536,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		shells[ci] = &Shell{faces: compFaces[ci], void: compVol[ci].Sign() < 0}
+		shells[ci] = &Shell{faces: compFaces[ci], n: topo.Shell{Void: compVol[ci].Sign() < 0}}
 		if compVol[ci].Sign() > 0 {
 			l := &Lump{shells: []*Shell{shells[ci]}}
 			lumpOf[ci] = l
@@ -776,24 +779,26 @@ func buildFacetedTopology(
 		if v, ok := vertexObj[vi]; ok {
 			return v
 		}
-		v := &Vertex{position: verts[vi], bound: units.Millimeters(vertexBound[vi])}
+		v := &Vertex{n: topo.Vertex{Position: verts[vi], Bound: units.Millimeters(vertexBound[vi])}}
 		vertexObj[vi] = v
 		return v
 	}
 	edgeObj := map[*facetedtopology.Edge]*Edge{}
 	for _, chain := range plan.Edges {
 		e := &Edge{
-			curve:           FacetedCurve{Bound: units.Millimeters(chain.Bound)},
-			start:           vertexOf(chain.Vertices[0]),
-			end:             vertexOf(chain.Vertices[len(chain.Vertices)-1]),
-			faces:           []*Face{faces[chain.Faces[0]], faces[chain.Faces[1]]},
-			convex:          chain.Convex,
-			length:          chain.Length,
-			lengthBound:     chain.LengthBound,
-			lengthUnbounded: chain.LengthUnbounded,
+			curve: FacetedCurve{Bound: units.Millimeters(chain.Bound)},
+			start: vertexOf(chain.Vertices[0]),
+			end:   vertexOf(chain.Vertices[len(chain.Vertices)-1]),
+			faces: []*Face{faces[chain.Faces[0]], faces[chain.Faces[1]]},
+			n: topo.Edge{
+				Convex:          chain.Convex,
+				Length:          chain.Length,
+				LengthBound:     chain.LengthBound,
+				LengthUnbounded: chain.LengthUnbounded,
+			},
 		}
 		if axialSectionJoin {
-			e.selectorDirection, e.selectorDirectionProven =
+			e.n.SelectorDirection, e.n.SelectorDirectionProven =
 				facetedtopology.AxialChainDirection(verts, chain.Vertices)
 		}
 		edgeObj[chain] = e
@@ -801,7 +806,7 @@ func buildFacetedTopology(
 	for fi, loops := range plan.FaceLoops {
 		f := faces[fi]
 		for _, planned := range loops {
-			loop := &Loop{outer: planned.Outer}
+			loop := &Loop{n: topo.Loop{Outer: planned.Outer}}
 			for _, ce := range planned.Coedges {
 				loop.coedges = append(loop.coedges, coedge{edge: edgeObj[ce.Edge], forward: ce.Forward})
 			}

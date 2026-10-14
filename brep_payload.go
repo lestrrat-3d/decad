@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
@@ -538,7 +539,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true, kind: BodySolid}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}, kind: BodySolid}
 	refView := bp.refView()
 
 	// Vertices are shared by reference coordinates. Each carries the largest
@@ -565,11 +566,11 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 			held, lift := refView.LiftedVertex(c[0], c[1], c[2])
 			// The bound starts as zero millimetres, so an Exact vertex
 			// publishes a length as every other vertex does.
-			pv = placedVertex{v: &Vertex{position: held, bound: units.Millimeters(0)}, lift: lift}
+			pv = placedVertex{v: &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(0)}}, lift: lift}
 			vertices[c] = pv
 		}
-		if b := proofbound.AbsSumUpper(proofbound.AbsSumUpper(faceDelta, levelDelta, pv.lift), endAllow); b > pv.v.bound.Base() {
-			pv.v.bound = units.Millimeters(b)
+		if b := proofbound.AbsSumUpper(proofbound.AbsSumUpper(faceDelta, levelDelta, pv.lift), endAllow); b > pv.v.n.Bound.Base() {
+			pv.v.n.Bound = units.Millimeters(b)
 		}
 		return pv.v
 	}
@@ -622,7 +623,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		case f.planar():
 			loops := make([]*Loop, len(btopo.planar[fi]))
 			for li := range loops {
-				loops[li] = &Loop{outer: li == 0}
+				loops[li] = &Loop{n: topo.Loop{Outer: li == 0}}
 			}
 			for _, ui := range uses {
 				l := loops[btopo.uses[ui].Loop]
@@ -631,11 +632,11 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 			face.loops = loops
 		case len(uses) == 2:
 			face.loops = []*Loop{
-				{coedges: []coedge{coedgeOf(uses[0])}, outer: true},
-				{coedges: []coedge{coedgeOf(uses[1])}, outer: true},
+				{coedges: []coedge{coedgeOf(uses[0])}, n: topo.Loop{Outer: true}},
+				{coedges: []coedge{coedgeOf(uses[1])}, n: topo.Loop{Outer: true}},
 			}
 		default:
-			l := &Loop{outer: true}
+			l := &Loop{n: topo.Loop{Outer: true}}
 			for _, ui := range uses {
 				l.coedges = append(l.coedges, coedgeOf(ui))
 			}
@@ -723,8 +724,11 @@ func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]
 			lo, hi = hi, lo
 		}
 		height := proofbound.BoundedSub(proofbound.MeasuredScalar(hi, owner.SideDelta[1]), proofbound.MeasuredScalar(lo, owner.SideDelta[0]))
-		return &Edge{curve: Line3{}, start: start, end: end, convex: convex,
-			length: hi - lo, lengthBound: height.Bound}, nil
+		return &Edge{curve: Line3{}, start: start, end: end, n: topo.Edge{
+			Convex:      convex,
+			Length:      hi - lo,
+			LengthBound: height.Bound,
+		}}, nil
 	case brepRim0, brepRim1:
 		w := btopo.walls[owner.Face]
 		pp := f.view(bp.xform)
@@ -737,12 +741,15 @@ func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]
 		if owner.Part == brepRim1 {
 			edge = top
 		}
-		edge.lengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1))
+		edge.n.LengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1))
 		return edge, nil
 	default:
 		w := owner.Walk
-		return &Edge{curve: Line3{}, start: start, end: end, convex: convex, length: w.Length,
-			lengthBound: proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1))}, nil
+		return &Edge{curve: Line3{}, start: start, end: end, n: topo.Edge{
+			Convex:      convex,
+			Length:      w.Length,
+			LengthBound: proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1)),
+		}}, nil
 	}
 }
 

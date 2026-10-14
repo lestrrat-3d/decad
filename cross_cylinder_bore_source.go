@@ -20,7 +20,7 @@ type crossCylinderBoreRecord struct {
 
 func crossCylinderCircleSource(body *Body, u, v r3.Vec) (prismPayload, circleSeg, bool) {
 	pp, ok := body.payload.(prismPayload)
-	if !ok || !body.solid || body.kind != BodySolid || pp.SurfaceResult ||
+	if !ok || !body.n.Solid || body.kind != BodySolid || pp.SurfaceResult ||
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		pp.Xform != r3.Identity() || pp.Frame.Origin() != (r3.Vec{}) ||
 		pp.Frame.U() != u || pp.Frame.V() != v ||
@@ -43,10 +43,10 @@ func crossCylinderCircleBound(body *Body, radius float64) (float64, bool) {
 		if _, ok := edge.curve.(Circle3); !ok {
 			continue
 		}
-		if !edge.curveBounded || proofbound.IsNonFinite(edge.curveBound) {
+		if !edge.n.CurveBounded || proofbound.IsNonFinite(edge.n.CurveBound) {
 			return 0, false
 		}
-		bound = max(bound, edge.curveBound)
+		bound = max(bound, edge.n.CurveBound)
 		count++
 	}
 	return bound, count == 2 && bound < radius/1000

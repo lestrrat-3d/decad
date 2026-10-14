@@ -73,7 +73,7 @@ func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, 
 // coalesce adjacent segments, so their endpoints must partition that whole
 // boundary once in the cap's walk direction.
 func loftCylinderChamferCapWalk(loop *Loop, verts []r3.Vec, ring []int, bottom bool) bool {
-	if loop == nil || !loop.outer || len(loop.coedges) < 3 || len(loop.coedges) > len(ring) {
+	if loop == nil || !loop.n.Outer || len(loop.coedges) < 3 || len(loop.coedges) > len(ring) {
 		return false
 	}
 	index := make(map[r3.Vec]int, len(ring))
@@ -89,11 +89,11 @@ func loftCylinderChamferCapWalk(loop *Loop, verts []r3.Vec, ring []int, bottom b
 	covered := 0
 	for i, use := range loop.coedges {
 		if use.Start() == nil || use.End() == nil ||
-			use.End().position != loop.coedges[(i+1)%len(loop.coedges)].Start().position {
+			use.End().n.Position != loop.coedges[(i+1)%len(loop.coedges)].Start().n.Position {
 			return false
 		}
-		a, okA := index[use.Start().position]
-		b, okB := index[use.End().position]
+		a, okA := index[use.Start().n.Position]
+		b, okB := index[use.End().n.Position]
 		if !okA || !okB {
 			return false
 		}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -28,7 +29,7 @@ func TestLoftSheetAuditRejectsCapInPlaceOfWall(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, lp.capStartCount, 0)
 
-	mesh.triangles[0] = lp.tris[lp.walls]
+	mesh.n.Triangles[0] = lp.tris[lp.walls]
 	err = requireSheetMesh(t.Context(), body, mesh)
 	require.True(t, errors.Is(err, ErrDegenerate), "a cap replacing a wall must fail free-edge attribution: %v", err)
 	t.Logf("wrong-drop audit: %v", err)
@@ -162,21 +163,21 @@ func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
 
 	mesh, err := tessellateLoft(t.Context(), body, lp)
 	require.NoError(t, err)
-	require.Equal(t, lp.tris, mesh.triangles, "the restatement retriangulates nothing")
-	require.Equal(t, lp.verts, mesh.vertices, "and moves, rounds and welds no coordinate")
-	require.NotSame(t, &lp.verts[0], &mesh.vertices[0], "the held mesh must not alias the payload's own arrays")
-	require.NotSame(t, &lp.tris[0], &mesh.triangles[0])
+	require.Equal(t, lp.tris, mesh.n.Triangles, "the restatement retriangulates nothing")
+	require.Equal(t, lp.verts, mesh.n.Vertices, "and moves, rounds and welds no coordinate")
+	require.NotSame(t, &lp.verts[0], &mesh.n.Vertices[0], "the held mesh must not alias the payload's own arrays")
+	require.NotSame(t, &lp.tris[0], &mesh.n.Triangles[0])
 
-	require.Equal(t, proof.FacetDeparture, mesh.bound)
-	require.Equal(t, proof.AreaSlack, mesh.areaSlack)
-	require.Equal(t, proof.VolSymDiff, mesh.volSymDiff)
-	require.True(t, mesh.symDiffOK, "the payload's occupied-volume proof has landed, so the boolean may compose it")
+	require.Equal(t, proof.FacetDeparture, mesh.n.Bound)
+	require.Equal(t, proof.AreaSlack, mesh.n.AreaSlack)
+	require.Equal(t, proof.VolSymDiff, mesh.n.VolSymDiff)
+	require.True(t, mesh.n.SymDiffOK, "the payload's occupied-volume proof has landed, so the boolean may compose it")
 
 	// Every source face states its own bound, and each is the payload's own
 	// facet departure: a face's facets ARE the payload's triangles for it, so
 	// there is no tighter per-face reading to publish and no face may be
 	// missing (facesOfMesh refuses a mesh that leaves one unstated).
-	require.Len(t, mesh.source, len(mesh.triangles))
+	require.Len(t, mesh.source, len(mesh.n.Triangles))
 	seen := map[*Face]struct{}{}
 	for _, f := range mesh.source {
 		seen[f] = struct{}{}
@@ -190,7 +191,7 @@ func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
 	// order, and the wall triangles carry one distinct face each — a loft
 	// coalesces no wall (docs/tessellation-design.md §4).
 	capStart := mesh.source[lp.walls]
-	capEnd := mesh.source[len(mesh.triangles)-1]
+	capEnd := mesh.source[len(mesh.n.Triangles)-1]
 	require.NotSame(t, capStart, capEnd)
 	require.Equal(t, roleCapStart, capStart.Origins()[0].Role)
 	require.Equal(t, roleCapEnd, capEnd.Origins()[0].Role)
@@ -246,7 +247,7 @@ func TestTessellateLoftRefusesAnUnrestatablePayload(t *testing.T) {
 
 	t.Run("a body whose topology contradicts its payload", func(t *testing.T) {
 		// The payload names side(0,j,k) roles the body no longer carries.
-		stripped := &Body{doc: body.doc, origin: body.origin, solid: true}
+		stripped := &Body{doc: body.doc, origin: body.origin, n: topo.Body{Solid: true}}
 		mesh, err := tessellateLoft(t.Context(), stripped, base)
 		require.Nil(t, mesh)
 		require.ErrorIs(t, err, ErrDegenerate)

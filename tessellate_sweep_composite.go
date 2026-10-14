@@ -87,7 +87,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
-		local := make([]int, len(piece.vertices))
+		local := make([]int, len(piece.n.Vertices))
 		for j := range local {
 			local[j] = -1
 		}
@@ -106,14 +106,14 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			}{{i, start[station]}, {endSection, end[station]}} {
 				shared := join[boundary.section][station]
 				if shared < 0 {
-					shared = len(mesh.vertices)
-					mesh.vertices = append(mesh.vertices, piece.vertices[boundary.index])
+					shared = len(mesh.n.Vertices)
+					mesh.n.Vertices = append(mesh.n.Vertices, piece.n.Vertices[boundary.index])
 					join[boundary.section][station] = shared
 					joinBound[boundary.section][station] = vertexBounds[boundary.index]
-				} else if mesh.vertices[shared] != piece.vertices[boundary.index] {
+				} else if mesh.n.Vertices[shared] != piece.n.Vertices[boundary.index] {
 					delta2, ok := proofarith.DySquaredDistance3(
-						mesh.vertices[shared].X, mesh.vertices[shared].Y, mesh.vertices[shared].Z,
-						piece.vertices[boundary.index].X, piece.vertices[boundary.index].Y, piece.vertices[boundary.index].Z)
+						mesh.n.Vertices[shared].X, mesh.n.Vertices[shared].Y, mesh.n.Vertices[shared].Z,
+						piece.n.Vertices[boundary.index].X, piece.n.Vertices[boundary.index].Y, piece.n.Vertices[boundary.index].Z)
 					if !ok {
 						return nil, fmt.Errorf(`%w: a shared sweep station has no finite displacement`, ErrUnsupported)
 					}
@@ -127,17 +127,17 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 				local[boundary.index] = shared
 			}
 		}
-		for j, v := range piece.vertices {
+		for j, v := range piece.n.Vertices {
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
 			if local[j] < 0 {
-				local[j] = len(mesh.vertices)
-				mesh.vertices = append(mesh.vertices, v)
+				local[j] = len(mesh.n.Vertices)
+				mesh.n.Vertices = append(mesh.n.Vertices, v)
 			}
 		}
 		coordinateBound = max(coordinateBound, proofbound.AbsSumUpper(spanCoordinateBound, maxMove))
-		for t, triangle := range piece.triangles {
+		for t, triangle := range piece.n.Triangles {
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
@@ -155,7 +155,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 				return nil, fmt.Errorf(`%w: the composite sweep carries no face for role %q`, ErrDegenerate, role)
 			}
 			mesh.addTriangle([3]int{local[triangle[0]], local[triangle[1]], local[triangle[2]]}, face)
-			if len(mesh.triangles) > maxCompositeMeshFacets {
+			if len(mesh.n.Triangles) > maxCompositeMeshFacets {
 				return nil, fmt.Errorf(`%w: the composite sweep mesh exceeds the fixed facet ceiling`, ErrUnsupported)
 			}
 			triangleSpan = append(triangleSpan, i)
@@ -166,43 +166,43 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			mesh.setFaceBound(face, proofbound.AbsSumUpper(bound, maxMove))
 		}
 		if verify >= VerifyAll {
-			if !piece.symDiffOK {
+			if !piece.n.SymDiffOK {
 				return nil, fmt.Errorf(`%w: sweep path span %d has no occupied-volume proof`, ErrUnsupported, i)
 			}
-			areaMove := revolvemesh.CoordinateAreaAllow(piece.vertices, piece.triangles, maxMove)
+			areaMove := revolvemesh.CoordinateAreaAllow(piece.n.Vertices, piece.n.Triangles, maxMove)
 			volumeMove := proofbound.SweptVolumeAllow(maxMove,
-				proofbound.PerturbedAreaUpper(piece.vertices, piece.triangles, maxMove))
-			mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, piece.areaSlack, areaMove)
-			mesh.volSymDiff = proofbound.AbsSumUpper(mesh.volSymDiff, piece.volSymDiff, volumeMove)
+				proofbound.PerturbedAreaUpper(piece.n.Vertices, piece.n.Triangles, maxMove))
+			mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, piece.n.AreaSlack, areaMove)
+			mesh.n.VolSymDiff = proofbound.AbsSumUpper(mesh.n.VolSymDiff, piece.n.VolSymDiff, volumeMove)
 		}
 	}
-	if proofbound.IsNonFinite(mesh.bound) || proofbound.IsNonFinite(coordinateBound) ||
-		proofbound.IsNonFinite(mesh.areaSlack) || proofbound.IsNonFinite(mesh.volSymDiff) {
+	if proofbound.IsNonFinite(mesh.n.Bound) || proofbound.IsNonFinite(coordinateBound) ||
+		proofbound.IsNonFinite(mesh.n.AreaSlack) || proofbound.IsNonFinite(mesh.n.VolSymDiff) {
 		return nil, fmt.Errorf(`%w: the composite sweep mesh has no finite proof bound`, ErrUnsupported)
 	}
-	mesh.coordBound = coordinateBound
+	mesh.n.CoordBound = coordinateBound
 	if err := requireMeshAudit(ctx, sp.surfaceResult, b, mesh); err != nil {
 		return nil, err
 	}
 	if !sp.surfaceResult {
-		if err := liftTessellationError(tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles)); err != nil {
+		if err := liftTessellationError(tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles)); err != nil {
 			return nil, err
 		}
 	}
 	auditBudget := proofbound.NewWorkBudget(ctx)
-	auditTris, err := revolvemesh.RequireRevolveFacetAreas(auditBudget, mesh.vertices, mesh.triangles, coordinateBound)
+	auditTris, err := revolvemesh.RequireRevolveFacetAreas(auditBudget, mesh.n.Vertices, mesh.n.Triangles, coordinateBound)
 	if err != nil {
 		return nil, err
 	}
 	if verify >= VerifyBoundary {
-		if err := compositesweep.CrossSpanContactAudit(auditBudget, auditTris, mesh.triangles, triangleSpan, coordinateBound); err != nil {
+		if err := compositesweep.CrossSpanContactAudit(auditBudget, auditTris, mesh.n.Triangles, triangleSpan, coordinateBound); err != nil {
 			return nil, err
 		}
 	}
-	if !sp.surfaceResult && tessellation.OrientationSign(mesh.vertices, mesh.triangles, r3.Vec{}) <= 0 {
+	if !sp.surfaceResult && tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, r3.Vec{}) <= 0 {
 		return nil, fmt.Errorf(`%w: the composite sweep mesh does not enclose a positive volume`, ErrUnsupported)
 	}
-	mesh.symDiffOK = verify >= VerifyAll && !sp.surfaceResult
+	mesh.n.SymDiffOK = verify >= VerifyAll && !sp.surfaceResult
 	return mesh, nil
 }
 
@@ -211,13 +211,13 @@ func compositeSpanRings(ctx context.Context, span sweepSpanPayload, mesh *Mesh,
 	start := make([]int, samples)
 	end := make([]int, samples)
 	if !span.arc {
-		if len(mesh.vertices) != 2*samples {
+		if len(mesh.n.Vertices) != 2*samples {
 			return nil, nil, 0, fmt.Errorf(`%w: a straight sweep span has a different profile station chain`, ErrUnsupported)
 		}
 		for j := range samples {
 			start[j], end[j] = 2*j, 2*j+1
 		}
-		return start, end, mesh.coordBound, nil
+		return start, end, mesh.n.CoordBound, nil
 	}
 	res, err := resolveRevolveWithLimit(ctx, span.revolve, compositeWorkLimit(freeformTarget))
 	if err != nil {
@@ -230,10 +230,10 @@ func compositeSpanRings(ctx context.Context, span sweepSpanPayload, mesh *Mesh,
 			}
 		}
 	}
-	if len(mesh.vertices)%samples != 0 {
+	if len(mesh.n.Vertices)%samples != 0 {
 		return nil, nil, 0, fmt.Errorf(`%w: an arc sweep span has an incomplete angular station chain`, ErrUnsupported)
 	}
-	angular := len(mesh.vertices) / samples
+	angular := len(mesh.n.Vertices) / samples
 	if angular < 2 {
 		return nil, nil, 0, fmt.Errorf(`%w: an arc sweep span has no angular cell`, ErrUnsupported)
 	}
@@ -243,7 +243,7 @@ func compositeSpanRings(ctx context.Context, span sweepSpanPayload, mesh *Mesh,
 			start[j], end[j] = end[j], start[j]
 		}
 	}
-	return start, end, mesh.coordBound, nil
+	return start, end, mesh.n.CoordBound, nil
 }
 
 func compositeSpanFaceRole(face *Face, span int, reverseCaps bool) (string, error) {

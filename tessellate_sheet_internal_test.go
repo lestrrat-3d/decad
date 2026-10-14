@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -61,14 +62,14 @@ func TestSheetMeshPublishesNoOccupiedVolumeProof(t *testing.T) {
 	solid := internalHoledPlateBody(t, New())
 	solidMesh, err := tessellateContext(t.Context(), solid, units.Millimeters(0.5), VerifyAll)
 	require.NoError(t, err)
-	require.True(t, solidMesh.symDiffOK)
-	require.Positive(t, solidMesh.volSymDiff)
+	require.True(t, solidMesh.n.SymDiffOK)
+	require.Positive(t, solidMesh.n.VolSymDiff)
 
 	sheet := internalHoledSheetBody(t, New())
 	sheetMesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(0.5), VerifyAll)
 	require.NoError(t, err)
-	require.False(t, sheetMesh.symDiffOK)
-	require.Zero(t, sheetMesh.volSymDiff)
+	require.False(t, sheetMesh.n.SymDiffOK)
+	require.Zero(t, sheetMesh.n.VolSymDiff)
 
 	_, err = operandSymDiff(sheetMesh)
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -111,11 +112,11 @@ func TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture(t *testing.T) {
 	sheetMesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(0.5), VerifyAll)
 	require.NoError(t, err)
 
-	require.Positive(t, solidMesh.areaSlack)
+	require.Positive(t, solidMesh.n.AreaSlack)
 	// The gap is the two omitted caps' own circular-segment deficit, not mere
 	// float noise from the smaller triangle count: require a gap wide enough
 	// that only dropping the cap terms explains it.
-	require.Greater(t, solidMesh.areaSlack-sheetMesh.areaSlack, 1.0)
+	require.Greater(t, solidMesh.n.AreaSlack-sheetMesh.n.AreaSlack, 1.0)
 }
 
 // TestRequireSheetMeshRejectsBrokenFreeEdgeAttribution is the free-edge
@@ -161,10 +162,10 @@ func TestRequireSheetMeshCatchesADuplicatedDirectedEdge(t *testing.T) {
 	require.NoError(t, err)
 
 	broken := *mesh
-	broken.triangles = append([][3]int(nil), mesh.triangles...)
+	broken.n.Triangles = append([][3]int(nil), mesh.n.Triangles...)
 	// Force the first two triangles to share the directed edge (t0, t1) in
 	// the same direction, which no valid mesh construction ever produces.
-	broken.triangles[1] = [3]int{broken.triangles[0][0], broken.triangles[0][1], broken.triangles[0][2]}
+	broken.n.Triangles[1] = [3]int{broken.n.Triangles[0][0], broken.n.Triangles[0][1], broken.n.Triangles[0][2]}
 	broken.source = append([]*Face(nil), mesh.source...)
 
 	err = requireSheetMesh(t.Context(), sheet, &broken)
@@ -202,8 +203,8 @@ func TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet(t *testing.T) {
 	t.Parallel()
 	verts := []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}
 	tris := [][3]int{{0, 1, 2}, {0, 2, 3}, {0, 3, 1}, {1, 3, 2}}
-	mesh := &Mesh{vertices: verts, triangles: tris, source: []*Face{{}, {}, {}, {}}}
-	require.NoError(t, tessellation.RequireClosedMesh(mesh.triangles), `premise: a tetrahedron is a closed mesh`)
+	mesh := &Mesh{n: topo.Mesh{Vertices: verts, Triangles: tris}, source: []*Face{{}, {}, {}, {}}}
+	require.NoError(t, tessellation.RequireClosedMesh(mesh.n.Triangles), `premise: a tetrahedron is a closed mesh`)
 
 	faceA, faceB := &Face{}, &Face{}
 	sharedEdge := &Edge{faces: []*Face{faceA, faceB}}
@@ -213,5 +214,5 @@ func TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet(t *testing.T) {
 	require.Empty(t, freeChainCountsByFace(body), `premise: this body records no free edge`)
 
 	require.NoError(t, requireSheetMesh(t.Context(), body, mesh), `no free edge on either side: the manifold-with-boundary audit passes for the same reason the closed-mesh audit would`)
-	require.NoError(t, tessellation.RequireSheetVertexLinks(t.Context(), len(mesh.vertices), mesh.triangles))
+	require.NoError(t, tessellation.RequireSheetVertexLinks(t.Context(), len(mesh.n.Vertices), mesh.n.Triangles))
 }

@@ -371,12 +371,12 @@ func TestDisplacedCupMesh(t *testing.T) {
 	require.NoError(t, err)
 	mesh, err := tessellateCup(t.Context(), body, cp, 0.1, VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
+	require.True(t, mesh.n.SymDiffOK)
 
 	held := new(big.Rat)
 	heldArea := 0.0
-	for _, tri := range mesh.triangles {
-		a, b, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
+	for _, tri := range mesh.n.Triangles {
+		a, b, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 		r := func(v r3.Vec) [3]*big.Rat {
 			return [3]*big.Rat{new(big.Rat).SetFloat64(v.X), new(big.Rat).SetFloat64(v.Y), new(big.Rat).SetFloat64(v.Z)}
 		}
@@ -399,7 +399,7 @@ func TestDisplacedCupMesh(t *testing.T) {
 		outerVolume := big.NewRat(16*8*10, 1)
 		cavity := new(big.Rat).Mul(rectArea(walls), big.NewRat(8, 1))
 		v := new(big.Rat).Sub(outerVolume, cavity)
-		requireRatCovered(t, Measurement{Value: units.CubicMillimeters(0), Bound: units.CubicMillimeters(mesh.volSymDiff)},
+		requireRatCovered(t, Measurement{Value: units.CubicMillimeters(0), Bound: units.CubicMillimeters(mesh.n.VolSymDiff)},
 			new(big.Rat).Sub(v, held))
 
 		perimeter := new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Add(
@@ -408,7 +408,7 @@ func TestDisplacedCupMesh(t *testing.T) {
 		denoted, _ := area.Float64()
 		// 1e-9 covers this test's own float sum of facet areas, far below
 		// the displacement's square-millimetre scale.
-		require.InDelta(t, denoted, heldArea, mesh.areaSlack+1e-9)
+		require.InDelta(t, denoted, heldArea, mesh.n.AreaSlack+1e-9)
 	})
 	// The recorded wall shellSide(0,0) lies on one cavity side; a denoted
 	// wall may sit δ from a mesh vertex on it.

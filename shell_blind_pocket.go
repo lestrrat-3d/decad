@@ -294,7 +294,7 @@ func measurePocketShell(ctx context.Context, bp brepPayload, body *Body) error {
 		Bound: units.Millimeters(cb), Exactness: exactnessOf(cb)}
 	var areaTotal proofbound.BoundedScalar
 	for _, f := range body.Faces() {
-		areaTotal = proofbound.BoundedAdd(areaTotal, proofbound.MeasuredScalar(f.area, f.areaBound))
+		areaTotal = proofbound.BoundedAdd(areaTotal, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
 	}
 	body.area = Measurement{Value: units.SquareMillimeters(areaTotal.Value),
 		Bound: units.SquareMillimeters(areaTotal.Bound), Exactness: exactnessOf(areaTotal.Bound)}

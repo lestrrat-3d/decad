@@ -32,7 +32,7 @@ func (b sourceBoxContactProof) axisBox() box.AxisBox {
 // accumulated placement, and query pose with exact dyadic operations.
 func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	pp, ok := b.payload.(prismPayload)
-	if !ok || !b.solid || b.kind != BodySolid || pp.SurfaceResult ||
+	if !ok || !b.n.Solid || b.kind != BodySolid || pp.SurfaceResult ||
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		!box.RectangularProfile(pp.Profile) ||
 		!box.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) ||
@@ -70,11 +70,11 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	}
 	for _, face := range faces {
 		plane, ok := face.surface.(Plane)
-		if !ok || face.normalBound != 0 {
+		if !ok || face.n.NormalBound != 0 {
 			return sourceBoxContactProof{}, false
 		}
 		normal := plane.Frame.N()
-		if face.reversed {
+		if face.n.Reversed {
 			normal = normal.Scale(-1)
 		}
 		normal = pose.ApplyDir(normal)

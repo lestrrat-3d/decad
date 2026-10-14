@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismextent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -611,7 +612,7 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 	})
 	t.Run("buildLoopSidesAs", func(t *testing.T) {
 		pp := prismPayload{Payload: prismrecord.Payload{Profile: near, Frame: identityFrame(t), Z1: 5, Xform: r3.Identity()}}
-		body := &Body{doc: New(), solid: true}
+		body := &Body{doc: New(), n: topo.Body{Solid: true}}
 		_, _, _, _, err := buildLoopSidesAs(t.Context(), body, 0, pp, 0, false, far.Outer, freeform.NewFreeformWork(), pw, levelToken{}, levelToken{}, false)
 		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
@@ -772,7 +773,7 @@ func placementMotions(t *testing.T) []struct {
 // claims about itself.
 func requireSamePrismBuild(t *testing.T, want, got *Body) {
 	t.Helper()
-	require.Equal(t, want.solid, got.solid, "solidity")
+	require.Equal(t, want.n.Solid, got.n.Solid, "solidity")
 	require.Equal(t, want.volume, got.volume, "volume, its exactness and its bound")
 	require.Equal(t, want.area, got.area, "area, its exactness and its bound")
 	require.Equal(t, want.centroid, got.centroid, "centroid, its exactness and its bound")
@@ -782,10 +783,10 @@ func requireSamePrismBuild(t *testing.T, want, got *Body) {
 	require.Len(t, gotFaces, len(wantFaces), "face count")
 	for i := range wantFaces {
 		require.Equal(t, wantFaces[i].surface, gotFaces[i].surface, "face %d's surface", i)
-		require.Equal(t, wantFaces[i].area, gotFaces[i].area, "face %d's area", i)
-		require.Equal(t, wantFaces[i].areaBound, gotFaces[i].areaBound, "face %d's area bound", i)
+		require.Equal(t, wantFaces[i].n.Area, gotFaces[i].n.Area, "face %d's area", i)
+		require.Equal(t, wantFaces[i].n.AreaBound, gotFaces[i].n.AreaBound, "face %d's area bound", i)
 		require.Equal(t, wantFaces[i].origins, gotFaces[i].origins, "face %d's roles", i)
-		require.Equal(t, wantFaces[i].axialDelta, gotFaces[i].axialDelta, "face %d's axial displacement", i)
+		require.Equal(t, wantFaces[i].n.AxialDelta, gotFaces[i].n.AxialDelta, "face %d's axial displacement", i)
 	}
 	require.Len(t, got.Edges(), len(want.Edges()), "edge count")
 	require.Len(t, got.Vertices(), len(want.Vertices()), "vertex count")

@@ -1,0 +1,67 @@
+package topo
+
+import (
+	"github.com/lestrrat-3d/decad/internal/denotation"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/r3"
+)
+
+// Edge is the data of the root Edge handle, which holds one by
+// value.
+type Edge struct {
+	// Curve is the edge's tagged geometry; root's Edge.Curve converts it.
+	Curve surfacegeom.Curve
+	// Start and End are the edge's end vertices.
+	Start *Vertex
+	End   *Vertex
+	// Faces are the faces adjacent to this edge.
+	Faces []*Face
+	// Owner is the root handle that holds this node (decad.Edge); only root
+	// sets it.
+	Owner any
+	// A source-proven straight generator can have a faceted held curve.
+	// ParallelTo reads this direction without changing Curve or its bound.
+	SelectorDirection       r3.Vec
+	SelectorDirectionProven bool
+	Convex                  bool    // the walked-boundary convexity — see IsConvex
+	Length                  float64 // held millimetres for the analytic curve set
+	// LengthBound is the proven error bound on length: zero only when the
+	// analytic curve's held result is exact, otherwise its evaluation bound;
+	// boolean-built chains carry their proven chord bound.
+	LengthBound float64
+	// LengthUnbounded marks an edge whose true length this evaluator cannot
+	// bound, so Length refuses rather than understate: a boolean rim on a
+	// curved source, whose chord chain understates the true curve's length
+	// by an amount no chord bound can cover, or a cap-blend miter ruling
+	// adjacent to a circular wall whose corner-foot locus this evaluator
+	// cannot enclose (docs/modify-reach-design.md §8.3).
+	LengthUnbounded bool
+	// curveBound, valid only where curveBounded is set, bounds how far the
+	// curve a Circle3 or Arc3 edge denotes lies from its held circle — the
+	// circle of the held Radius about the held Center, normal to the held
+	// Axis: every denoted point is within curveBound of that circle, and
+	// curveBound is below half the held radius, so projecting radially about
+	// the held centre carries the denoted curve continuously onto the held
+	// circle. It says nothing about where along the circle the curve ends;
+	// the end vertices' own bounds say that. A builder that proves it sets
+	// both (prismPayload.CircleCurveBound); every copier carries it through
+	// its placement (surfaceplace.PlacedCurveBound). An edge no builder bounds
+	// leaves curveBounded false, and a reading that needs the bound refuses.
+	CurveBound   float64
+	CurveBounded bool
+	// Level is the LEVEL half of the shared-denotation certificate
+	// (denotation.go): non-zero only for a rim edge a builder stamped at one
+	// denoted sweep level, and zero ("no certificate") for every edge no
+	// builder in this package mints one for.
+	Level denotation.LevelToken
+	// Denot is the CURVE half of the shared-denotation certificate
+	// (denotation.go): non-zero only for an edge a builder minted one for —
+	// today a straight prism's rim edge (prism_build.go) and a revolve's
+	// junction edge (revolve_build.go) — and propagated unchanged, composing
+	// xform, by every copier that reproduces the same curve (stitch.go's
+	// rebuildStitchTopology, unstitch.go's copyFaceUnderContext,
+	// patch_body.go's copyPatchFacesUnder). It is what stitch_weld.go's
+	// buildStitchWeldPlan reads to lift Table J's J5 for a bounded pair. Zero
+	// ("no certificate") for every edge no builder or copier stamps.
+	Denot denotation.CurveToken
+}

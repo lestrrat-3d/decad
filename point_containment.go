@@ -51,17 +51,17 @@ func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (Poin
 	if !proofbound.FiniteVec(p) {
 		return PointUndecided, fmt.Errorf(`%w: the query point must be finite`, ErrNotFinite)
 	}
-	if !b.solid {
+	if !b.n.Solid {
 		return PointUndecided, ErrNotSolid
 	}
 	mesh, err := tessellateContext(ctx, b, tol, VerifyAll)
 	if err != nil {
 		return PointUndecided, err
 	}
-	if !mesh.boundaryOK || !mesh.symDiffOK {
+	if !mesh.n.BoundaryOK || !mesh.n.SymDiffOK {
 		return PointUndecided, nil
 	}
-	result, err := pointquery.Locate(ctx, p, mesh.vertices, mesh.triangles, mesh.bound, mesh.volSymDiff)
+	result, err := pointquery.Locate(ctx, p, mesh.n.Vertices, mesh.n.Triangles, mesh.n.Bound, mesh.n.VolSymDiff)
 	return PointLocation(result), err
 }
 
@@ -80,24 +80,24 @@ func (b *Body) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (
 	if !proofbound.FiniteVec(p) {
 		return Measurement{}, fmt.Errorf(`%w: the query point must be finite`, ErrNotFinite)
 	}
-	if !b.solid {
+	if !b.n.Solid {
 		return Measurement{}, ErrNotSolid
 	}
 	mesh, err := tessellateContext(ctx, b, tol, VerifyAll)
 	if err != nil {
 		return Measurement{}, err
 	}
-	if !mesh.boundaryOK || proofbound.IsNonFinite(mesh.bound) || mesh.bound < 0 {
+	if !mesh.n.BoundaryOK || proofbound.IsNonFinite(mesh.n.Bound) || mesh.n.Bound < 0 {
 		return Measurement{}, fmt.Errorf(`%w: point distance needs a verified finite mesh boundary bound`, ErrUnsupported)
 	}
-	distanceSquared, err := pointquery.MeshDistanceSquared(ctx, p, mesh.vertices, mesh.triangles)
+	distanceSquared, err := pointquery.MeshDistanceSquared(ctx, p, mesh.n.Vertices, mesh.n.Triangles)
 	if err != nil {
 		return Measurement{}, err
 	}
 	location := pointquery.Undecided
-	if mesh.symDiffOK {
-		location, err = pointquery.LocateWithDistance(ctx, p, mesh.vertices, mesh.triangles,
-			mesh.bound, mesh.volSymDiff, distanceSquared)
+	if mesh.n.SymDiffOK {
+		location, err = pointquery.LocateWithDistance(ctx, p, mesh.n.Vertices, mesh.n.Triangles,
+			mesh.n.Bound, mesh.n.VolSymDiff, distanceSquared)
 		if err != nil {
 			return Measurement{}, err
 		}
@@ -110,7 +110,7 @@ func (b *Body) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (
 	if proofbound.IsNonFinite(distanceLo) || proofbound.IsNonFinite(distanceHi) {
 		return Measurement{}, fmt.Errorf(`%w: point distance exceeds the representable range`, ErrUnsupported)
 	}
-	bound := proofarith.FloatRat(mesh.bound)
+	bound := proofarith.FloatRat(mesh.n.Bound)
 	lo := new(big.Rat)
 	if location == pointquery.Outside {
 		lo.Sub(proofarith.FloatRat(distanceLo), bound)
@@ -144,16 +144,16 @@ func (f *Face) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (
 	if err != nil {
 		return Measurement{}, err
 	}
-	if !mesh.boundaryOK {
+	if !mesh.n.BoundaryOK {
 		return Measurement{}, fmt.Errorf(`%w: face distance needs a verified mesh boundary`, ErrUnsupported)
 	}
 	triangles := make([][3]int, 0)
-	if len(mesh.source) != len(mesh.triangles) {
+	if len(mesh.source) != len(mesh.n.Triangles) {
 		return Measurement{}, fmt.Errorf(`%w: mesh source faces do not match its triangles`, ErrBooleanFailed)
 	}
 	for i, source := range mesh.source {
 		if source == f {
-			triangles = append(triangles, mesh.triangles[i])
+			triangles = append(triangles, mesh.n.Triangles[i])
 		}
 	}
 	if len(triangles) == 0 {
@@ -166,7 +166,7 @@ func (f *Face) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (
 	if proofbound.IsNonFinite(bound) || bound < 0 {
 		return Measurement{}, fmt.Errorf(`%w: face distance needs a finite displacement bound`, ErrUnsupported)
 	}
-	distanceSquared, err := pointquery.MeshDistanceSquared(ctx, p, mesh.vertices, triangles)
+	distanceSquared, err := pointquery.MeshDistanceSquared(ctx, p, mesh.n.Vertices, triangles)
 	if err != nil {
 		return Measurement{}, err
 	}

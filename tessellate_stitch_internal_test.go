@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -222,7 +223,7 @@ func TestStitchTessellateClassBoundIsIndependentOfPlacement(t *testing.T) {
 	mesh, err := solid.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Equal(t, wantBound, mesh.Bound().Base())
-	require.Positive(t, mesh.areaSlack)
+	require.Positive(t, mesh.n.AreaSlack)
 }
 
 // internalStitchedBox builds T3's own worked box example (stitchBoxSheets,
@@ -278,8 +279,8 @@ func TestTessellateStitchPublishesZeroSymDiffForClosedZeroBoundBody(t *testing.T
 	box := internalStitchedBox(t, New())
 	mesh, err := box.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
-	require.Zero(t, mesh.volSymDiff)
+	require.True(t, mesh.n.SymDiffOK)
+	require.Zero(t, mesh.n.VolSymDiff)
 }
 
 // TestTessellateStitchDoesNotPublishSymDiffForAPlacedBody is the ZERO-BOUND
@@ -297,7 +298,7 @@ func TestTessellateStitchDoesNotPublishSymDiffForAPlacedBody(t *testing.T) {
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
-	require.False(t, mesh.symDiffOK)
+	require.False(t, mesh.n.SymDiffOK)
 }
 
 // TestTessellateStitchDoesNotPublishSymDiffForAnOpenSheet is the
@@ -326,7 +327,7 @@ func TestTessellateStitchDoesNotPublishSymDiffForAnOpenSheet(t *testing.T) {
 
 	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
-	require.False(t, mesh.symDiffOK)
+	require.False(t, mesh.n.SymDiffOK)
 }
 
 // stitchTestSquareFaceWithHole builds a hand-built planar face at z =
@@ -353,7 +354,7 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 	classOf = map[*Vertex]int{}
 	positions = make([]r3.Vec, 8)
 	for i, p := range corners {
-		verts[i] = &Vertex{position: p}
+		verts[i] = &Vertex{n: topo.Vertex{Position: p}}
 		classOf[verts[i]] = i
 		positions[i] = p
 	}
@@ -372,20 +373,20 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 	f = &Face{
 		surface: Plane{Frame: frame},
 		loops: []*Loop{
-			{outer: true, coedges: []coedge{
+			{n: topo.Loop{Outer: true}, coedges: []coedge{
 				{edge: outerEdges[0], forward: true},
 				{edge: outerEdges[1], forward: true},
 				{edge: outerEdges[2], forward: true},
 				{edge: outerEdges[3], forward: true},
 			}},
-			{outer: false, coedges: []coedge{
+			{n: topo.Loop{Outer: false}, coedges: []coedge{
 				{edge: holeEdges[0], forward: true},
 				{edge: holeEdges[1], forward: true},
 				{edge: holeEdges[2], forward: true},
 				{edge: holeEdges[3], forward: true},
 			}},
 		},
-		area: 96,
+		n: topo.Face{Area: 96},
 	}
 	for _, e := range append(outerEdges, holeEdges...) {
 		e.faces = []*Face{f}
@@ -449,7 +450,7 @@ func TestTessellateStitchRefusesARepeatedDirectedEdge(t *testing.T) {
 		tris:      [][3]int{{0, 1, 2}, {0, 1, 2}},
 		triFaces:  []*Face{f, f},
 	}
-	b := &Body{kind: BodySolid, solid: true}
+	b := &Body{kind: BodySolid, n: topo.Body{Solid: true}}
 
 	mesh, err := tessellateStitch(t.Context(), b, sp)
 	require.ErrorIs(t, err, ErrUnsupported)

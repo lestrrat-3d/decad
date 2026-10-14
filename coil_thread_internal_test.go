@@ -165,9 +165,9 @@ func TestCoilThreadPartnerKeepsItsBounds(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 
 	vol := new(big.Float).SetPrec(512).Mul(bigPi(), big.NewFloat(500))
-	requireEnclosesBig(t, meshSignedVolume(mesh.Vertices(), mesh.Triangles()), mesh.volSymDiff, vol, "partner mesh volume")
+	requireEnclosesBig(t, meshSignedVolume(mesh.Vertices(), mesh.Triangles()), mesh.n.VolSymDiff, vol, "partner mesh volume")
 	area := new(big.Float).SetPrec(512).Mul(bigPi(), big.NewFloat(250))
-	requireEnclosesBig(t, meshArea(mesh.Vertices(), mesh.Triangles()), mesh.areaSlack+1e-9, area, "partner mesh area")
+	requireEnclosesBig(t, meshArea(mesh.Vertices(), mesh.Triangles()), mesh.n.AreaSlack+1e-9, area, "partner mesh area")
 }
 
 // polygonMoments returns ∫ρ dA and ∫ρζ dA over a simple polygon given as

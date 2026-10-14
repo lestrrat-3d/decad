@@ -147,7 +147,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		if payload.mesh != nil {
 			// The stationed build sews several Lofts into this authenticated
 			// mesh. Its held Loft field is empty; delta bounds these vertices.
-			points = payload.mesh.vertices
+			points = payload.mesh.n.Vertices
 		}
 		d, ok, err := diameter.PointsContext(ctx, points)
 		if err != nil || !ok {
@@ -157,7 +157,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return d, ok, nil
 	}
 	if payload, ok := body.payload.(compositeTwistedSweepPayload); ok {
-		d, ok, err := diameter.PointsContext(ctx, payload.mesh.vertices)
+		d, ok, err := diameter.PointsContext(ctx, payload.mesh.n.Vertices)
 		if err != nil || !ok {
 			return d, ok, err
 		}

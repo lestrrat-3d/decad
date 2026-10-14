@@ -25,8 +25,8 @@ func TestBodyPatchMeshChargesTheFilledCapsAxialBound(t *testing.T) {
 	require.NoError(t, err)
 	mesh, err := filled.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
 	require.NoError(t, err)
-	require.Greater(t, mesh.bound, 0.0)
-	require.Greater(t, mesh.areaSlack, 0.0)
+	require.Greater(t, mesh.n.Bound, 0.0)
+	require.Greater(t, mesh.n.AreaSlack, 0.0)
 	require.False(t, mesh.VolumeVerified())
 
 	patches := 0
@@ -35,17 +35,17 @@ func TestBodyPatchMeshChargesTheFilledCapsAxialBound(t *testing.T) {
 			continue
 		}
 		patches++
-		require.True(t, f.hasAxialDelta)
-		require.Greater(t, f.axialDelta, 0.0)
+		require.True(t, f.n.HasAxialDelta)
+		require.Greater(t, f.n.AxialDelta, 0.0)
 		bound, ok := mesh.sourceBound(f)
 		require.True(t, ok)
-		require.GreaterOrEqual(t, bound, f.axialDelta)
+		require.GreaterOrEqual(t, bound, f.n.AxialDelta)
 	}
 	require.Equal(t, 2, patches)
 	heldArea := 0.0
-	for _, tri := range mesh.triangles {
-		a, b, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
+	for _, tri := range mesh.n.Triangles {
+		a, b, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 		heldArea += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
-	require.LessOrEqual(t, math.Abs(heldArea-52640), mesh.areaSlack)
+	require.LessOrEqual(t, math.Abs(heldArea-52640), mesh.n.AreaSlack)
 }

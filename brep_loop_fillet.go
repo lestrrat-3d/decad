@@ -13,6 +13,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -178,20 +179,20 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		}
 		held, bound := heldOf(areaIv)
 		face := &Face{surface: surf, origins: []FeatureRef{{producer: ref, Role: b.patchRole(p)}}, body: body,
-			loops: loops, area: held, areaBound: bound}
+			loops: loops, n: topo.Face{Area: held, AreaBound: bound}}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		// capV, a cap contact vertex, lies on the patch's surface; the outward
 		// normal there is F's own, which faces −m along F's normal for a band
 		// that removes material.
-		nrm, err := face.NormalAt(capV.position)
+		nrm, err := face.NormalAt(capV.n.Position)
 		if err != nil {
 			return fmt.Errorf(`%w: a loop fillet band patch's outward orientation cannot be certified; its own normal reading refuses at its cap contact (%v)`, ErrUnsupported, err)
 		}
 		if nrm.Value.Dot(up) < 0 {
-			face.reversed = !face.reversed
+			face.n.Reversed = !face.n.Reversed
 		}
 		if b.sigma > 0 {
-			face.reversed = !face.reversed
+			face.n.Reversed = !face.n.Reversed
 		}
 		for _, l := range loops {
 			for _, ce := range l.coedges {
@@ -236,10 +237,10 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's cap contour is no one whole circle`, ErrUnsupported, bi)
 		}
 		side, capE := sideCo[0].edge, capCo[0].edge
-		side.convex, capE.convex = convex, convex
+		side.n.Convex, capE.n.Convex = convex, convex
 		if err := newPatch(walkSurface(fr.walks[0]), []*Loop{
-			{coedges: []coedge{{edge: side, forward: true}}, outer: true},
-			{coedges: []coedge{{edge: capE, forward: false}}, outer: true},
+			{coedges: []coedge{{edge: side, forward: true}}, n: topo.Loop{Outer: true}},
+			{coedges: []coedge{{edge: capE, forward: false}}, n: topo.Loop{Outer: true}},
 		}, capE.start); err != nil {
 			return nil, brepBandMass{}, err
 		}
@@ -279,7 +280,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				axis = tangent
 			}
 			return &Edge{curve: Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)},
-				start: capV, end: sideV, convex: convex, length: meridianLen, lengthBound: meridianBound}
+				start: capV, end: sideV, n: topo.Edge{Convex: convex, Length: meridianLen, LengthBound: meridianBound}}
 		}
 		lead, trail := make([]*Edge, n), make([]*Edge, n)
 		for k := range n {
@@ -292,7 +293,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				if arc == nil {
 					return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's LF6 corner %d has no connector arc`, ErrUnsupported, bi, k)
 				}
-				arc.convex = convex
+				arc.n.Convex = convex
 				trail[k] = meridian(j.PA, w, straightWalk(w, nil), arc.start, sideV)
 				lead[k] = meridian(j.PB, w, straightWalk(w, nil), arc.end, sideV)
 			case filletband.Tangent:
@@ -308,7 +309,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				}
 				held, bound := heldOf(length)
 				lead[k] = &Edge{curve: FilletMiter3{}, start: capAt(k), end: sideV,
-					convex: convex, length: held, lengthBound: bound}
+					n: topo.Edge{Convex: convex, Length: held, LengthBound: bound}}
 				trail[k] = lead[k]
 			default:
 				kappa, err := filletband.Kappa(fr.loop.Walks[(k+n-1)%n], fr.loop.Walks[k])
@@ -327,7 +328,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				lead[k] = &Edge{
 					curve: Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis, Major: major,
 						SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
-					start: capAt(k), end: sideV, convex: convex, length: held, lengthBound: bound,
+					start: capAt(k), end: sideV, n: topo.Edge{Convex: convex, Length: held, LengthBound: bound},
 				}
 				trail[k] = lead[k]
 			}
@@ -341,12 +342,12 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 					sideCo[i].edge.start != lead[i].end || sideCo[i].edge.end != trail[next].end {
 					return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's sphere patch %d does not close`, ErrUnsupported, bi, i)
 				}
-				sideCo[i].edge.convex = convex
+				sideCo[i].edge.n.Convex = convex
 				if err := newPatch(walkSurface(fr.walks[i]), []*Loop{{coedges: []coedge{
 					{edge: sideCo[i].edge, forward: true},
 					{edge: trail[next], forward: false},
 					{edge: lead[i], forward: true},
-				}, outer: true}}, pole); err != nil {
+				}, n: topo.Loop{Outer: true}}}, pole); err != nil {
 					return nil, brepBandMass{}, err
 				}
 				continue
@@ -355,13 +356,13 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				sideCo[i].edge.start != lead[i].end || sideCo[i].edge.end != trail[next].end {
 				return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's walk %d does not close on its contour and side vertices`, ErrUnsupported, bi, i)
 			}
-			wall.convex, sideCo[i].edge.convex = convex, convex
+			wall.n.Convex, sideCo[i].edge.n.Convex = convex, convex
 			if err := newPatch(walkSurface(fr.walks[i]), []*Loop{{coedges: []coedge{
 				{edge: sideCo[i].edge, forward: true},
 				{edge: trail[next], forward: false},
 				{edge: wall, forward: false},
 				{edge: lead[i], forward: true},
-			}, outer: true}}, wall.start); err != nil {
+			}, n: topo.Loop{Outer: true}}}, wall.start); err != nil {
 				return nil, brepBandMass{}, err
 			}
 			if fr.loop.Corners[next] != filletband.Reflex {
@@ -372,7 +373,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				{edge: supplied.arc[next], forward: true},
 				{edge: lead[next], forward: true},
 				{edge: trail[next], forward: false},
-			}, outer: true}}, supplied.arc[next].start); err != nil {
+			}, n: topo.Loop{Outer: true}}}, supplied.arc[next].start); err != nil {
 				return nil, brepBandMass{}, err
 			}
 		}

@@ -59,10 +59,10 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 			store[i] = math.Max(store[i], bound)
 			return i
 		}
-		index[v] = len(mesh.vertices)
-		mesh.vertices = append(mesh.vertices, v)
+		index[v] = len(mesh.n.Vertices)
+		mesh.n.Vertices = append(mesh.n.Vertices, v)
 		store = append(store, bound)
-		return len(mesh.vertices) - 1
+		return len(mesh.n.Vertices) - 1
 	}
 	circle := [2][]int{make([]int, len(samples.Samples)), make([]int, len(samples.Samples))}
 	for side := range 2 {
@@ -83,7 +83,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		var meshIndices []int
 		outer := make([]int, 0, len(face.loops[0].coedges))
 		for _, ce := range face.loops[0].coedges {
-			v := ce.Start().position
+			v := ce.Start().n.Position
 			local := plane.Frame.ToLocal(v)
 			points = append(points, sectionrecord.Point2{U: local.X, V: local.Y})
 			meshIndices = append(meshIndices, add(v, 0))
@@ -94,7 +94,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 			side := fi - 2
 			hole := make([]int, 0, len(circle[side]))
 			for _, meshIndex := range circle[side] {
-				v := mesh.vertices[meshIndex]
+				v := mesh.n.Vertices[meshIndex]
 				local := plane.Frame.ToLocal(v)
 				points = append(points, sectionrecord.Point2{U: local.X, V: local.Y})
 				meshIndices = append(meshIndices, meshIndex)
@@ -120,18 +120,18 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		mesh.addTriangle([3]int{lo0, lo1, hi0}, faces[18])
 		mesh.addTriangle([3]int{lo1, hi1, hi0}, faces[18])
 	}
-	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.triangles)); err != nil {
+	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
 		return nil, err
 	}
-	if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles); err != nil {
 		return nil, err
 	}
 	anchor := r3.NewVec(p.box[0][0], p.box[1][0], p.box[2][0])
-	if tessellation.OrientationSign(mesh.vertices, mesh.triangles, anchor) <= 0 {
+	if tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, anchor) <= 0 {
 		return nil, fmt.Errorf(`%w: the all-edge chamfer mesh has no positive enclosed volume`, ErrUnsupported)
 	}
 	if verify >= VerifyBoundary {
-		if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), mesh.vertices, mesh.triangles); err != nil {
+		if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), mesh.n.Vertices, mesh.n.Triangles); err != nil {
 			return nil, err
 		}
 	}
@@ -141,9 +141,9 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		return nil, err
 	}
 	mesh.setVertexBounds(store)
-	mesh.areaSlack = proofbound.AbsSumUpper(samples.WallSlack,
+	mesh.n.AreaSlack = proofbound.AbsSumUpper(samples.WallSlack,
 		proofbound.ProductUpper(2, samples.CapSlack),
-		tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, store))
+		tessellation.StoreAreaAllow(mesh.n.Vertices, mesh.n.Triangles, store))
 	if verify >= VerifyAll {
 		storeMax, err := tessellation.StoreMax(store)
 		if err != nil {
@@ -151,7 +151,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		}
 		terms := []float64{proofbound.ProductUpper(height, samples.SegmentArea),
 			proofbound.SweptVolumeAllow(storeMax,
-				proofbound.PerturbedAreaUpper(mesh.vertices, mesh.triangles, storeMax))}
+				proofbound.PerturbedAreaUpper(mesh.n.Vertices, mesh.n.Triangles, storeMax))}
 		if err := publishSymDiff(&mesh, terms); err != nil {
 			return nil, err
 		}

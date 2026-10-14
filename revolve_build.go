@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -272,7 +273,7 @@ func (rp revolvePayload) sweptVertex(b revolvemesh.RevolveBasis, z, rho float64,
 	for _, end := range ends {
 		gap = math.Max(gap, rp.sweptGap(held, at, end))
 	}
-	return &Vertex{position: held, bound: units.Millimeters(gap), denot: denot}
+	return &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(gap), Denot: denot}}
 }
 
 // frameCharge is massmoment.MapCharge over the map the record denotes
@@ -374,7 +375,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if rp.surfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: !rp.surfaceResult, kind: kind}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: !rp.surfaceResult}, kind: kind}
 
 	// Partial sweeps get two planar cap faces; a full revolution has none.
 	var capStart, capEnd *Face
@@ -406,22 +407,26 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// tighter bound than the snap/unsnap mismatch can actually cost it.
 		capAdmitAllow := revolvemass.AdmitBandCharge(rp.ax.RadialAdmitAllow, rp.ax.AxialExtentUpper)
 		capStart = &Face{
-			surface:     Plane{Frame: startFrame},
-			origins:     []FeatureRef{{producer: ref, Role: roleCapStart}},
-			body:        body,
-			area:        ig.Area,
-			areaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
-			normalBound: rp.phi0Delta(),
-			denoted:     rp.denotationInput().CapDenotation(rp.den.Phi0, rp.phi0, true),
+			surface: Plane{Frame: startFrame},
+			origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
+			body:    body,
+			n: topo.Face{
+				Area:        ig.Area,
+				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
+				NormalBound: rp.phi0Delta(),
+				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi0, rp.phi0, true),
+			},
 		}
 		capEnd = &Face{
-			surface:     Plane{Frame: endFrame},
-			origins:     []FeatureRef{{producer: ref, Role: roleCapEnd}},
-			body:        body,
-			area:        ig.Area,
-			areaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
-			normalBound: rp.phi1Delta(),
-			denoted:     rp.denotationInput().CapDenotation(rp.den.Phi1, rp.phi1, false),
+			surface: Plane{Frame: endFrame},
+			origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
+			body:    body,
+			n: topo.Face{
+				Area:        ig.Area,
+				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
+				NormalBound: rp.phi1Delta(),
+				Denoted:     rp.denotationInput().CapDenotation(rp.den.Phi1, rp.phi1, false),
+			},
 		}
 	}
 
@@ -440,15 +445,15 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		mzr.Bound = proofbound.AbsSumUpper(mzr.Bound, section.Second())
 		mrr.Bound = proofbound.AbsSumUpper(mrr.Bound, section.Second())
 		if !rp.full {
-			capStart.areaBound = proofbound.AbsSumUpper(capStart.areaBound, section.Band)
-			capEnd.areaBound = proofbound.AbsSumUpper(capEnd.areaBound, section.Band)
+			capStart.n.AreaBound = proofbound.AbsSumUpper(capStart.n.AreaBound, section.Band)
+			capEnd.n.AreaBound = proofbound.AbsSumUpper(capEnd.n.AreaBound, section.Band)
 		}
 	}
 	// Every charge above bounds the cap's plane-coordinate area; its image
 	// under the denoted map L takes L's own stretch last (frameCharge).
 	if !rp.full {
 		for _, c := range []*Face{capStart, capEnd} {
-			c.areaBound = frame.AreaOf(proofbound.MeasuredScalar(c.area, c.areaBound)).Bound
+			c.n.AreaBound = frame.AreaOf(proofbound.MeasuredScalar(c.n.Area, c.n.AreaBound)).Bound
 		}
 	}
 
@@ -466,8 +471,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		perLoop[li] = parts
 		sideArea = proofbound.BoundedAdd(sideArea, parts.area)
 		if !rp.full {
-			capStart.loops = append(capStart.loops, &Loop{coedges: parts.startCo, outer: li == 0})
-			capEnd.loops = append(capEnd.loops, &Loop{coedges: parts.endCo, outer: li == 0})
+			capStart.loops = append(capStart.loops, &Loop{coedges: parts.startCo, n: topo.Loop{Outer: li == 0}})
+			capEnd.loops = append(capEnd.loops, &Loop{coedges: parts.endCo, n: topo.Loop{Outer: li == 0}})
 		}
 	}
 
@@ -517,7 +522,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			// each becomes its own Lump instead of one shell regardless.
 			lumps = sheetLumps(faces)
 		} else {
-			lumps = []*Lump{{shells: []*Shell{{faces: faces, open: shellIsOpen(faces)}}}}
+			lumps = []*Lump{{shells: []*Shell{{faces: faces, n: topo.Shell{Open: shellIsOpen(faces)}}}}}
 		}
 	}
 	body.lumps = lumps
@@ -544,8 +549,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// SAME admitted-band charge (capAdmitAllow, above) the individual cap
 		// Face fields already carry — never a narrower, uncharged bound the
 		// two would then disagree with.
-		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(capStart.area, capStart.areaBound))
-		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(capEnd.area, capEnd.areaBound))
+		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound))
+		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound))
 		if rp.surfaceResult {
 			// §4.3: a surface result's area is the solid's area minus the two
 			// omitted caps'. Each cap's area and bound are read back from the
@@ -557,8 +562,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			// value already composed from them. Collapsing this to sideArea
 			// alone would hold the same value but a smaller, uncomposed
 			// bound than §4.3's composed sum requires.
-			area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capStart.area, capStart.areaBound))
-			area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capEnd.area, capEnd.areaBound))
+			area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound))
+			area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound))
 		}
 	}
 	volume := proofbound.BoundedMul(q, sweep)
@@ -716,18 +721,20 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 				}
 				j.lat = &Edge{
-					curve:       Circle3{Center: center, Axis: jAxis, Radius: jRadius},
-					start:       seam,
-					end:         seam,
-					convex:      turn > 0,
-					length:      latitudeLength,
-					lengthBound: frame.LengthBound(latitudeLength, latitudeBound),
-					// The CURVE half of the shared-denotation certificate
-					// (denotation.go): this junction latitude circle is
-					// shared, by construction, between side faces i-1 and i
-					// of THIS build alone (fullRevLoops below), exactly the
-					// role a prism's own rim edge plays for its two caps.
-					denot: body.doc.mintCurve(),
+					curve: Circle3{Center: center, Axis: jAxis, Radius: jRadius},
+					start: seam,
+					end:   seam,
+					n: topo.Edge{
+						Convex:      turn > 0,
+						Length:      latitudeLength,
+						LengthBound: frame.LengthBound(latitudeLength, latitudeBound),
+						// The CURVE half of the shared-denotation certificate
+						// (denotation.go): this junction latitude circle is
+						// shared, by construction, between side faces i-1 and i
+						// of THIS build alone (fullRevLoops below), exactly the
+						// role a prism's own rim edge plays for its two caps.
+						Denot: body.doc.mintCurve(),
+					},
 				}
 			case !rp.full:
 				if j.onAxis {
@@ -746,23 +753,25 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 						}
 					}
 					j.arc = &Edge{
-						curve:       Arc3{Center: center, Axis: jAxis, Radius: jRadius},
-						start:       j.v0,
-						end:         j.v1,
-						convex:      turn > 0,
-						length:      arcLength,
-						lengthBound: frame.LengthBound(arcLength, arcBound),
-						// The CURVE half of the shared-denotation certificate
-						// (denotation.go): this junction arc is shared, by
-						// construction, between side faces i-1 and i of THIS
-						// build alone.
-						denot: body.doc.mintCurve(),
+						curve: Arc3{Center: center, Axis: jAxis, Radius: jRadius},
+						start: j.v0,
+						end:   j.v1,
+						n: topo.Edge{
+							Convex:      turn > 0,
+							Length:      arcLength,
+							LengthBound: frame.LengthBound(arcLength, arcBound),
+							// The CURVE half of the shared-denotation certificate
+							// (denotation.go): this junction arc is shared, by
+							// construction, between side faces i-1 and i of THIS
+							// build alone.
+							Denot: body.doc.mintCurve(),
+						},
 					}
 				}
 			}
 			for _, je := range []*Edge{j.lat, j.arc} {
 				if je != nil {
-					je.curveBound, je.curveBounded = rp.latitudeCurveBound(at, center, jAxis, jRadius.Base())
+					je.n.CurveBound, je.n.CurveBounded = rp.latitudeCurveBound(at, center, jAxis, jRadius.Base())
 				}
 			}
 			js[i] = j
@@ -792,12 +801,14 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				// never reaches it — Table W row 3's on-axis-edge omission
 				// delivered by omission, not a special case to "fix" here.
 				shared := &Edge{
-					curve:       Line3{},
-					start:       js[i].v0,
-					end:         js[(i+1)%n].v0,
-					convex:      dphi < math.Pi,
-					length:      w.Length,
-					lengthBound: frame.LengthBound(w.Length, w.LengthBound),
+					curve: Line3{},
+					start: js[i].v0,
+					end:   js[(i+1)%n].v0,
+					n: topo.Edge{
+						Convex:      dphi < math.Pi,
+						Length:      w.Length,
+						LengthBound: frame.LengthBound(w.Length, w.LengthBound),
+					},
 				}
 				cap0[i], cap1[i] = shared, shared
 				continue
@@ -884,13 +895,15 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
-			surface:   surf,
-			origins:   origins,
-			body:      body,
-			area:      faceArea.Value,
-			areaBound: faceArea.Bound,
-			reversed:  reversed,
-			denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
+			surface: surf,
+			origins: origins,
+			body:    body,
+			n: topo.Face{
+				Area:      faceArea.Value,
+				AreaBound: faceArea.Bound,
+				Reversed:  reversed,
+				Denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
+			},
 		}
 		switch {
 		case rp.full && singleClosed:
@@ -903,8 +916,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// copies — two loops, one whole closed edge each, mirroring the
 			// prism's whole-circle two-loop discipline.
 			face.loops = []*Loop{
-				{coedges: []coedge{{edge: cap0[i], forward: true}}, outer: true},
-				{coedges: []coedge{{edge: cap1[i], forward: false}}, outer: true},
+				{coedges: []coedge{{edge: cap0[i], forward: true}}, n: topo.Loop{Outer: true}},
+				{coedges: []coedge{{edge: cap1[i], forward: false}}, n: topo.Loop{Outer: true}},
 			}
 		default:
 			co := []coedge{{edge: cap0[i], forward: true}}
@@ -915,7 +928,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			if a := js[i].arc; a != nil {
 				co = append(co, coedge{edge: a, forward: false})
 			}
-			face.loops = []*Loop{{coedges: co, outer: true}}
+			face.loops = []*Loop{{coedges: co, n: topo.Loop{Outer: true}}}
 		}
 		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
 			return revLoopParts{}, err
@@ -966,7 +979,7 @@ func fullRevolveShellsContext(ctx context.Context, perLoop []revLoopParts, sheet
 				continue
 			}
 			void := !sheet && (li != 0 || r != parts.outerRun)
-			shells = append(shells, &Shell{faces: group, open: shellIsOpen(group), void: void})
+			shells = append(shells, &Shell{faces: group, n: topo.Shell{Open: shellIsOpen(group), Void: void}})
 		}
 	}
 	return shells, nil
@@ -988,12 +1001,12 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 	}
 	var loops []*Loop
 	if j0.lat != nil {
-		loops = append(loops, &Loop{coedges: []coedge{{edge: j0.lat, forward: true}}, outer: outer0})
+		loops = append(loops, &Loop{coedges: []coedge{{edge: j0.lat, forward: true}}, n: topo.Loop{Outer: outer0}})
 	}
 	if j1.lat != nil {
-		loops = append(loops, &Loop{coedges: []coedge{{edge: j1.lat, forward: false}}, outer: outer1})
+		loops = append(loops, &Loop{coedges: []coedge{{edge: j1.lat, forward: false}}, n: topo.Loop{Outer: outer1}})
 	}
-	if len(loops) == 2 && !loops[0].outer {
+	if len(loops) == 2 && !loops[0].n.Outer {
 		loops[0], loops[1] = loops[1], loops[0]
 	}
 	return loops
@@ -1023,7 +1036,7 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	if w.Kind == survey2d.WalkFreeform {
 		convex = freeformConvex
 	}
-	e := &Edge{convex: convex, length: w.Length, lengthBound: frame.LengthBound(w.Length, w.LengthBound)}
+	e := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: frame.LengthBound(w.Length, w.LengthBound)}}
 	if w.Kind == survey2d.WalkFreeform {
 		e.curve = NURBSCurve{}
 		if closed {
@@ -1055,7 +1068,7 @@ func (rp revolvePayload) capEdge(b revolvemesh.RevolveBasis, w survey2d.SegmentW
 	axis := rp.xform.ApplyDir(normal).Scale(sign)
 	center := rp.point(b, w.CU, w.CV, end.phi)
 	radius := units.Millimeters(w.Radius)
-	e.curveBound, e.curveBounded = rp.denotationInput().CapArcCurveBound(plane, end.den, end.phi, center, axis, w.Radius)
+	e.n.CurveBound, e.n.CurveBounded = rp.denotationInput().CapArcCurveBound(plane, end.den, end.phi, center, axis, w.Radius)
 	if closed {
 		v := rp.sweptVertex(b, w.StartU, w.StartV, seam, curveToken{}, end)
 		e.curve = Circle3{Center: center, Axis: axis, Radius: radius}
@@ -1185,7 +1198,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
 	b := rev.basis()
 	var allFaces []*Face
 	area := proofbound.BoundedScalar{}
@@ -1301,13 +1314,15 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				latitudeBound = math.Min(latitudeBound, proofbound.IntervalFloatError(enc, latitudeLength))
 			}
 			j.lat = &Edge{
-				curve:       Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
-				start:       seam,
-				end:         seam,
-				convex:      turn > 0,
-				length:      latitudeLength,
-				lengthBound: frame.LengthBound(latitudeLength, latitudeBound),
-				denot:       body.doc.mintCurve(),
+				curve: Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+				start: seam,
+				end:   seam,
+				n: topo.Edge{
+					Convex:      turn > 0,
+					Length:      latitudeLength,
+					LengthBound: frame.LengthBound(latitudeLength, latitudeBound),
+					Denot:       body.doc.mintCurve(),
+				},
 			}
 		case !rp.full:
 			if j.onAxis {
@@ -1326,19 +1341,21 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 					}
 				}
 				j.arc = &Edge{
-					curve:       Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
-					start:       j.v0,
-					end:         j.v1,
-					convex:      turn > 0,
-					length:      arcLength,
-					lengthBound: frame.LengthBound(arcLength, arcBound),
-					denot:       body.doc.mintCurve(),
+					curve: Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+					start: j.v0,
+					end:   j.v1,
+					n: topo.Edge{
+						Convex:      turn > 0,
+						Length:      arcLength,
+						LengthBound: frame.LengthBound(arcLength, arcBound),
+						Denot:       body.doc.mintCurve(),
+					},
 				}
 			}
 		}
 		for _, je := range []*Edge{j.lat, j.arc} {
 			if je != nil {
-				je.curveBound, je.curveBounded = rp.latitudeCurveBound(at, center, wDir.Scale(sweepSign), j.rho)
+				je.n.CurveBound, je.n.CurveBounded = rp.latitudeCurveBound(at, center, wDir.Scale(sweepSign), j.rho)
 			}
 		}
 		js[i] = j
@@ -1372,13 +1389,15 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
 		face := &Face{
-			surface:   surf,
-			origins:   origins,
-			body:      body,
-			area:      faceArea.Value,
-			areaBound: faceArea.Bound,
-			reversed:  reversed,
-			denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
+			surface: surf,
+			origins: origins,
+			body:    body,
+			n: topo.Face{
+				Area:      faceArea.Value,
+				AreaBound: faceArea.Bound,
+				Reversed:  reversed,
+				Denoted:   rp.denotationInput().WallDenotation(w, kinds[i], resolved.Plane),
+			},
 		}
 		if rp.full {
 			face.loops = fullRevLoops(js[i], js[i+1], kinds[i])
@@ -1397,7 +1416,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			if a := js[i].arc; a != nil {
 				co = append(co, coedge{edge: a, forward: false})
 			}
-			face.loops = []*Loop{{coedges: co, outer: true}}
+			face.loops = []*Loop{{coedges: co, n: topo.Loop{Outer: true}}}
 		}
 		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
 			return nil, proofbound.BoundedScalar{}, err

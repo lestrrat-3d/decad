@@ -74,12 +74,12 @@ func TestPrismProofRecordChargesEveryFaceItsOwnDisplacement(t *testing.T) {
 		require.True(t, ok, `every source face is present in the proof record`)
 		worst = math.Max(worst, d)
 	}
-	require.Equal(t, worst, mesh.bound, `Bound is the maximum sourceBound over the body`)
-	require.True(t, mesh.symDiffOK)
+	require.Equal(t, worst, mesh.n.Bound, `Bound is the maximum sourceBound over the body`)
+	require.True(t, mesh.n.SymDiffOK)
 
 	// The hole's chording: one closed circular walk, so the mesh holds one
 	// sample per chord on it beside the outline's four corners.
-	stations := len(mesh.vertices)/2 - 4
+	stations := len(mesh.n.Vertices)/2 - 4
 	require.Greater(t, stations, 2)
 	sagitta := tessellation.ChordSagitta(10, 2*math.Pi, stations)
 	require.Positive(t, sagitta)
@@ -142,8 +142,8 @@ func TestPlacedPrismChargesEveryFaceItsPlacementRounding(t *testing.T) {
 	// The placement's own contribution is the rigid-map rounding allowance at
 	// the section's own coordinate magnitude — a proven ceiling, not a fitted
 	// number, so the assertion is a relation and never a pinned literal.
-	require.Greater(t, mesh.bound, unplaced.bound)
-	require.LessOrEqual(t, mesh.bound-unplaced.bound, proofbound.RigidRoundAllow(100, 0),
+	require.Greater(t, mesh.n.Bound, unplaced.n.Bound)
+	require.LessOrEqual(t, mesh.n.Bound-unplaced.n.Bound, proofbound.RigidRoundAllow(100, 0),
 		`the placement adds no more than the rigid write's own allowance at this coordinate scale`)
 }
 
@@ -194,31 +194,31 @@ func TestPrismVolSymDiffBracketsTheCylindersOwnSegmentDeficit(t *testing.T) {
 	disc := internalDiscBody(t, doc, r, h)
 	mesh, err := tessellateContext(t.Context(), disc, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
+	require.True(t, mesh.n.SymDiffOK)
 
 	// One closed circular walk, so every mesh sample is one of its chords.
-	n := len(mesh.vertices) / 2
+	n := len(mesh.n.Vertices) / 2
 	require.Greater(t, n, 2)
 	// The exact volume between the true cylinder and the chorded prism: the n
 	// circular segments the chords omit, swept over the height.
 	deficit := h * (math.Pi*r*r - float64(n)*r*r*math.Sin(2*math.Pi/float64(n))/2)
 	require.Positive(t, deficit)
-	require.GreaterOrEqual(t, mesh.volSymDiff, deficit,
+	require.GreaterOrEqual(t, mesh.n.VolSymDiff, deficit,
 		`the occupied-volume bound must cover the segments the chording omits`)
-	require.LessOrEqual(t, mesh.volSymDiff, 2*deficit,
+	require.LessOrEqual(t, mesh.n.VolSymDiff, 2*deficit,
 		`and must not be looser than twice it — a prism with no displacement pays for nothing else`)
 
 	// It is a genuinely tighter proof than the bound × held area substitution
 	// docs/tessellation-design.md §11 forbids.
-	require.Less(t, mesh.volSymDiff, mesh.bound*facetproof.MeshAreaUpper(mesh.vertices, mesh.triangles))
+	require.Less(t, mesh.n.VolSymDiff, mesh.n.Bound*facetproof.MeshAreaUpper(mesh.n.Vertices, mesh.n.Triangles))
 
 	// A box chords nothing and displaces nothing, so its mesh IS its body.
 	box := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	flat, err := tessellateContext(t.Context(), box, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
-	require.Zero(t, flat.volSymDiff)
-	require.True(t, flat.symDiffOK)
-	require.Zero(t, flat.bound)
+	require.Zero(t, flat.n.VolSymDiff)
+	require.True(t, flat.n.SymDiffOK)
+	require.Zero(t, flat.n.Bound)
 }
 
 func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
@@ -233,8 +233,8 @@ func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
 
 	mesh, err := tessellateContext(t.Context(), cup, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
-	require.Positive(t, mesh.volSymDiff)
+	require.True(t, mesh.n.SymDiffOK)
+	require.Positive(t, mesh.n.VolSymDiff)
 
 	worst := 0.0
 	for _, f := range mesh.source {
@@ -243,13 +243,13 @@ func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
 		require.Positive(t, d, `every patch of a chorded cup is bounded by a curved trim (role %q)`, roleOf(t, f))
 		worst = math.Max(worst, d)
 	}
-	require.Equal(t, worst, mesh.bound)
+	require.Equal(t, worst, mesh.n.Bound)
 
 	// Both regions' chorded sections are charged: the outer wall and the cavity
 	// wall each omit their own circular segments over their own sweep height.
 	outerDeficit := (10.0) * (math.Pi*8*8 - 0.0)
-	require.Less(t, mesh.volSymDiff, outerDeficit, `the bound is a segment deficit, not the whole cylinder`)
-	require.Less(t, mesh.volSymDiff, mesh.bound*facetproof.MeshAreaUpper(mesh.vertices, mesh.triangles))
+	require.Less(t, mesh.n.VolSymDiff, outerDeficit, `the bound is a segment deficit, not the whole cylinder`)
+	require.Less(t, mesh.n.VolSymDiff, mesh.n.Bound*facetproof.MeshAreaUpper(mesh.n.Vertices, mesh.n.Triangles))
 }
 
 func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
@@ -270,18 +270,18 @@ func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
 
 	mesh, err := tessellateContext(t.Context(), drilled, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
-	require.Equal(t, fp.meshBound, mesh.bound)
-	require.Equal(t, fp.volSymDiff, mesh.volSymDiff)
-	require.Equal(t, fp.areaSlack, mesh.areaSlack)
-	require.True(t, mesh.symDiffOK)
+	require.Equal(t, fp.meshBound, mesh.n.Bound)
+	require.Equal(t, fp.volSymDiff, mesh.n.VolSymDiff)
+	require.Equal(t, fp.areaSlack, mesh.n.AreaSlack)
+	require.True(t, mesh.n.SymDiffOK)
 
 	// The restatement publishes the payload's own per-vertex record, and each
 	// face states the largest facet bound over its own facets
 	// (docs/faceted-vertex-bounds-design.md §4.4): the drilled faces carry the
 	// rim's bound and the untouched ones keep their own.
-	require.Equal(t, fp.vertexBound, mesh.vertexBound)
+	require.Equal(t, fp.vertexBound, mesh.n.VertexBound)
 	want := map[*Face]float64{}
-	for i, tri := range mesh.triangles {
+	for i, tri := range mesh.n.Triangles {
 		f := mesh.source[i]
 		want[f] = max(want[f], fp.vertexBound[tri[0]], fp.vertexBound[tri[1]], fp.vertexBound[tri[2]])
 	}
@@ -328,8 +328,8 @@ func internalFreeformArchBody(t *testing.T, doc *Document, height float64) *Body
 // gap between and the body's exactly measured Area and Volume.
 func meshHeldArea(m *Mesh) float64 {
 	total := 0.0
-	for _, tri := range m.triangles {
-		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
+	for _, tri := range m.n.Triangles {
+		a, b, c := m.n.Vertices[tri[0]], m.n.Vertices[tri[1]], m.n.Vertices[tri[2]]
 		total += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
 	return total
@@ -337,8 +337,8 @@ func meshHeldArea(m *Mesh) float64 {
 
 func meshHeldVolume(m *Mesh) float64 {
 	total := 0.0
-	for _, tri := range m.triangles {
-		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
+	for _, tri := range m.n.Triangles {
+		a, b, c := m.n.Vertices[tri[0]], m.n.Vertices[tri[1]], m.n.Vertices[tri[2]]
 		total += a.Dot(b.Cross(c)) / 6
 	}
 	return total
@@ -361,20 +361,20 @@ func TestFreeformPrismProofRecordCoversItsOwnChording(t *testing.T) {
 			body := internalFreeformArchBody(t, New(), height)
 			mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)
 			require.NoError(t, err)
-			require.True(t, mesh.symDiffOK, `a chorded free-form prism still proves its occupied volume`)
+			require.True(t, mesh.n.SymDiffOK, `a chorded free-form prism still proves its occupied volume`)
 
 			area, err := body.Area()
 			require.NoError(t, err)
 			held := meshHeldArea(mesh)
 			require.Less(t, held, area.Value.Base(), `the chorded facets hold less area than the curved boundary`)
-			require.GreaterOrEqual(t, mesh.areaSlack, area.Value.Base()-held,
+			require.GreaterOrEqual(t, mesh.n.AreaSlack, area.Value.Base()-held,
 				`the published area slack must cover the area the chording actually loses`)
 
 			volume, err := body.Volume()
 			require.NoError(t, err)
 			heldVol := meshHeldVolume(mesh)
 			require.Less(t, heldVol, volume.Value.Base(), `the inscribed chorded prism holds less volume than the curved one`)
-			require.GreaterOrEqual(t, mesh.volSymDiff, volume.Value.Base()-heldVol,
+			require.GreaterOrEqual(t, mesh.n.VolSymDiff, volume.Value.Base()-heldVol,
 				`the published occupied-volume bound must cover the volume the chording actually loses`)
 		})
 	}
@@ -389,7 +389,7 @@ func TestFreeformPrismProofRecordCoversItsOwnChording(t *testing.T) {
 		require.True(t, ok, `every source face is present in the proof record`)
 		worst = math.Max(worst, d)
 	}
-	require.Equal(t, worst, mesh.bound, `Bound is the maximum sourceBound over the body`)
+	require.Equal(t, worst, mesh.n.Bound, `Bound is the maximum sourceBound over the body`)
 
 	// The free-form wall pays for its own chording; the straight closing wall
 	// chords nothing and, under an unplaced axis-aligned payload, states an
@@ -448,10 +448,10 @@ func freeformWallChordDeviation(t *testing.T, body *Body, mesh *Mesh) float64 {
 		if _, isNURBS := f.Surface().(NURBSSurface); !isNURBS {
 			continue
 		}
-		tri := mesh.triangles[i]
+		tri := mesh.n.Triangles[i]
 		flat := map[[2]float64]struct{}{}
 		for _, v := range tri {
-			flat[[2]float64{mesh.vertices[v].X, mesh.vertices[v].Y}] = struct{}{}
+			flat[[2]float64{mesh.n.Vertices[v].X, mesh.n.Vertices[v].Y}] = struct{}{}
 		}
 		ends := make([][2]float64, 0, 2)
 		for p := range flat {

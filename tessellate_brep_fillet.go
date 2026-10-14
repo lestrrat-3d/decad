@@ -154,12 +154,12 @@ func (bc *brepBandChord) emitFillet(m *Mesh, faceOfRole func(string) (*Face, err
 			return
 		}
 		if first[p] < 0 {
-			first[p] = len(m.triangles)
+			first[p] = len(m.n.Triangles)
 		}
 		m.addTriangle([3]int{a, b, c}, faces[p])
-		last[p] = len(m.triangles)
+		last[p] = len(m.n.Triangles)
 	}
-	verts := func(k, c int) r3.Vec { return m.vertices[fr.ringV[k][c]] }
+	verts := func(k, c int) r3.Vec { return m.n.Vertices[fr.ringV[k][c]] }
 	for _, cell := range cells {
 		for k := range fr.n {
 			a, b := fr.ringV[k][cell.C0], fr.ringV[k][cell.C1]
@@ -205,7 +205,7 @@ func (bc *brepBandChord) finishPatch(m *Mesh, face *Face, eps, delta, levelDelta
 	if first < 0 {
 		return
 	}
-	m.areaSlack = proofbound.AbsSumUpper(m.areaSlack, tessellation.FilletMeshAreaDeficit(m.vertices, m.triangles[first:last], face.area, face.areaBound))
+	m.n.AreaSlack = proofbound.AbsSumUpper(m.n.AreaSlack, tessellation.FilletMeshAreaDeficit(m.n.Vertices, m.n.Triangles[first:last], face.n.Area, face.n.AreaBound))
 }
 
 // arcMotion fills in the motion of a reflex connector's cap samples, which the

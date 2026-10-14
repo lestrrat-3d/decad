@@ -435,8 +435,8 @@ func TestRevolveCircularMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
 			require.NoError(t, err)
 
 			held := 0.0
-			for _, tri := range mesh.triangles {
-				a, b, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
+			for _, tri := range mesh.n.Triangles {
+				a, b, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 				held += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 			}
 			area, err := body.Area()
@@ -446,9 +446,9 @@ func TestRevolveCircularMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
 
 			gap := math.Abs(analytic - held)
 			require.Positive(t, gap, `a chorded revolve holds less area than the surface it stands for`)
-			require.Positive(t, mesh.areaSlack)
-			require.GreaterOrEqual(t, mesh.areaSlack, gap, `areaSlack must cover the gap it exists to bound`)
-			require.Less(t, mesh.areaSlack, 0.5*analytic)
+			require.Positive(t, mesh.n.AreaSlack)
+			require.GreaterOrEqual(t, mesh.n.AreaSlack, gap, `areaSlack must cover the gap it exists to bound`)
+			require.Less(t, mesh.n.AreaSlack, 0.5*analytic)
 		})
 	}
 }

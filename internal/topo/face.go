@@ -1,0 +1,81 @@
+package topo
+
+import (
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/surfacenormal"
+)
+
+// Face is the data of the root Face handle, which holds one by
+// value.
+type Face struct {
+	// Surface is the face's tagged geometry; root's Face.Surface converts it.
+	Surface surfacegeom.Surface
+	// Loops are the face's boundary loops, the outer loop first.
+	Loops []*Loop
+	// Origins are every feature role that created this face.
+	Origins []provenance.Ref
+	// Body is the body this face belongs to.
+	Body *Body
+	// Centroid is present only where HasCentroid is set.
+	Centroid measurement.VecMeasurement
+	// Owner is the root handle that holds this node (decad.Face); only root
+	// sets it.
+	Owner any
+	Area  float64 // millimetres²
+	// AreaBound is the proven error bound on area: analytic float evaluation
+	// or the composed chord bound for a boolean-built Faceted face.
+	AreaBound   float64
+	HasCentroid bool
+	// AxialDelta is the proven displacement of this planar face along its own
+	// normal. A body-relative ToFace stop carries this selected face's bound
+	// into the level it computes; hasAxialDelta distinguishes an exact zero
+	// from a face whose payload does not state an axial bound.
+	AxialDelta    float64
+	HasAxialDelta bool
+	// HeldPlanar records that a Faceted face descends only from PLANAR source
+	// faces, so the face it stands for in the true result is flat — and a rim
+	// between two such faces is a straight line, whose chord length is honest.
+	// The surface TAG cannot say this for an ordinary mesh boolean: its faces
+	// all read Faceted, including the ones that are plainly flat. A structural
+	// boolean may instead retain a certified source Plane.
+	HeldPlanar bool
+	// Reversed is true when the OUTWARD (material-leaving) normal is the
+	// surface's geometric normal negated — a hole's cylinder wall, whose
+	// material lies outside the cylinder.
+	Reversed bool
+	// NormalBound is the proven DIMENSIONLESS bound on NormalAt's own answer:
+	// how far the surface this face really carries can tilt away from the
+	// tagged variant the normal is computed from. It is zero for every face
+	// whose own geometry IS its tag, and for a revolve wall, whose departure
+	// rides in denoted instead. It is nonzero for a revolve's cap (its
+	// angular displacement, which NormalAt reads only where the cap carries
+	// no denoted plane) and for a cap-loop chamfer's band patch: the
+	// patch is RULED between two built directrices, and the `Cone` or `Plane`
+	// it publishes is that ruled surface only to within a bound measured from
+	// the numbers the body publishes for it
+	// (capblend_departure.go, docs/modify-reach-design.md §8.3). The bound is a
+	// world-space one, so it covers both a mitered corner's own angular skew and
+	// the placement's independent rounding of every coordinate the build emits —
+	// which leaves the tag even on a flat patch, and on a circular one whose two
+	// windows coincide exactly. A zero term there would omit a direction
+	// difference the built surface has. A band patch's bound also carries the
+	// turn between that ruled surface and the wall its records denote, since
+	// the cap contour it rules to is a solved offset held within a proven
+	// displacement (capband.DenotedNormalAllow). NormalAt separately composes
+	// its arithmetic proof (normal_bound.go).
+	NormalBound float64
+	// Denoted is the surface a revolve wall or cap DENOTES — a wall's
+	// recorded meridian segment swept about its recorded axis, or a cap's
+	// plane through that axis at its end's recorded angle, enclosed exactly
+	// (surfacenormal.Revolved) — where the tag is only a float re-expression
+	// of it. NormalAt judges such a face's normal against it rather than
+	// against the tag, so the bound covers the tag's whole departure; nil
+	// for every face whose tag is its own denotation. It is not
+	// normalBound: no dimensionless term states the departure for every p.
+	// Stitch's flux arms integrate the tag, so they admit a revolve wall only
+	// where its tag is exactly this surface (stitch_flux.go's
+	// stitchFluxTagsDenoted).
+	Denoted *surfacenormal.Revolved
+}

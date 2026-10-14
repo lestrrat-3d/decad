@@ -254,14 +254,14 @@ func requireCoversMappedReference(t *testing.T, ref, b *Body, m fdMap) {
 	re, be := ref.Edges(), b.Edges()
 	require.Len(t, be, len(re))
 	for i := range re {
-		if _, ok := re[i].curve.(Line3); !ok || re[i].start == nil || re[i].lengthUnbounded {
+		if _, ok := re[i].curve.(Line3); !ok || re[i].start == nil || re[i].n.LengthUnbounded {
 			continue
 		}
 		l0, err := re[i].Length()
 		require.NoError(t, err)
 		l1, err := be[i].Length()
 		require.NoError(t, err)
-		d := fdVecOf(re[i].end.position.Sub(re[i].start.position))
+		d := fdVecOf(re[i].end.n.Position.Sub(re[i].start.n.Position))
 		r := fdMissRatio(l1.Value.Base(), l1.Bound.Base(), l0.Value.Base(), l0.Bound.Base(), m.lengthFactor(d))
 		require.LessOrEqual(t, r, slack, "edge length misses by %g× its bound", r)
 		checked++
@@ -839,8 +839,8 @@ func TestCurveBoundsCoverMappedReference(t *testing.T) {
 							continue
 						}
 						circles++
-						require.True(t, re[i].curveBounded, "reference edge %d carries no curve bound", i)
-						require.True(t, be[i].curveBounded, "edge %d carries no curve bound", i)
+						require.True(t, re[i].n.CurveBounded, "reference edge %d carries no curve bound", i)
+						require.True(t, be[i].n.CurveBounded, "edge %d carries no curve bound", i)
 						c1, a1, r1, ok := surfacegeom.CircleOf(internalCurve(be[i].curve))
 						require.True(t, ok)
 						an := fdVecOf(a0).unit()
@@ -850,8 +850,8 @@ func TestCurveBoundsCoverMappedReference(t *testing.T) {
 						}
 						e1 = e1.unit()
 						e2 := an.cross(e1)
-						allow := new(big.Float).SetPrec(frameDefectPrec).Mul(onePlus, fdf(re[i].curveBound))
-						allow.Add(allow, fdf(be[i].curveBound))
+						allow := new(big.Float).SetPrec(frameDefectPrec).Mul(onePlus, fdf(re[i].n.CurveBound))
+						allow.Add(allow, fdf(be[i].n.CurveBound))
 						// Rational points of the unit circle, so every sample
 						// lies on the reference circle to 512 bits.
 						for k, cs := range fdCirclePoints() {

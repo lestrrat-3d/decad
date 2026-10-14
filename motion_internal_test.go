@@ -218,13 +218,13 @@ func TestVerifyMotionKeepsTheNextProducerIdentity(t *testing.T) {
 	cube := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	internalBoxBody(t, doc, 25, 2, 35, 8, 10)
 	before := doc.nextProducerID()
-	levelBefore, curveBefore := doc.nextLevel, doc.nextCurve
+	levelBefore, curveBefore := doc.n.NextLevel, doc.n.NextCurve
 	report, err := doc.VerifyMotion(t.Context(), []*Body{cube}, Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(30)}, WithResolution(units.Millimeters(100)))
 	require.NoError(t, err)
 	require.Len(t, report.Poses, 2)
 	require.Equal(t, before, doc.nextProducerID())
-	require.Equal(t, levelBefore, doc.nextLevel)
-	require.Equal(t, curveBefore, doc.nextCurve)
+	require.Equal(t, levelBefore, doc.n.NextLevel)
+	require.Equal(t, curveBefore, doc.n.NextCurve)
 	const readers = 4
 	reports := make([]*MotionReport, readers)
 	errs := make([]error, readers)
@@ -241,8 +241,8 @@ func TestVerifyMotionKeepsTheNextProducerIdentity(t *testing.T) {
 		require.NoError(t, errs[i])
 		require.Equal(t, report, reports[i])
 	}
-	require.Equal(t, levelBefore, doc.nextLevel)
-	require.Equal(t, curveBefore, doc.nextCurve)
+	require.Equal(t, levelBefore, doc.n.NextLevel)
+	require.Equal(t, curveBefore, doc.n.NextCurve)
 	dup, err := Copy(t.Context(), cube)
 	require.NoError(t, err)
 	require.Equal(t, before, dup.originProducer())
@@ -263,7 +263,7 @@ func TestVerifyMotionRevolveKeepsLiveDenotationIdentities(t *testing.T) {
 	require.NoError(t, err)
 	static := internalBoxBody(t, doc, 15, -10, 25, 10, 10)
 	before := doc.Bodies()
-	levelBefore, curveBefore := doc.nextLevel, doc.nextCurve
+	levelBefore, curveBefore := doc.n.NextLevel, doc.n.NextCurve
 	report, err := doc.VerifyMotion(t.Context(), []*Body{mover},
 		Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(20)},
 		WithResolution(units.Millimeters(100)))
@@ -273,8 +273,8 @@ func TestVerifyMotionRevolveKeepsLiveDenotationIdentities(t *testing.T) {
 	require.Len(t, report.Poses[0].Diagnostics, 1)
 	require.Equal(t, DiagUndecidedClearance, report.Poses[0].Diagnostics[0].Code)
 	require.Equal(t, before, doc.Bodies())
-	require.Equal(t, levelBefore, doc.nextLevel)
-	require.Equal(t, curveBefore, doc.nextCurve)
+	require.Equal(t, levelBefore, doc.n.NextLevel)
+	require.Equal(t, curveBefore, doc.n.NextCurve)
 }
 
 // TestVerifyMotionRefusesABodyItDidNotBuild is §9 test 9's row the public

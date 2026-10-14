@@ -14,6 +14,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -193,7 +194,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 	cbp := dp.band()
 	loops := cbp.loops()
 	nearZ, nearDelta, farZ, matSign := dp.levels()
-	body := &Body{doc: doc, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
+	body := &Body{doc: doc, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}}
 	pl := cbp.prismLike(0, 0)
 
 	var faces []*Face
@@ -215,8 +216,8 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			return nil, wrapStageError(`the tapered extrude's walls`, err)
 		}
 		faces = append(faces, band.patches...)
-		nearLoops[li] = &Loop{coedges: nearCo, outer: li == 0}
-		farLoops[li] = &Loop{coedges: band.capCo, outer: li == 0}
+		nearLoops[li] = &Loop{coedges: nearCo, n: topo.Loop{Outer: li == 0}}
+		farLoops[li] = &Loop{coedges: band.capCo, n: topo.Loop{Outer: li == 0}}
 		bands[li] = band
 		dp.farDelta = math.Max(dp.farDelta, band.delta)
 		dp.bandDelta[capBandKey{loop: li, start: !dp.nearStart}] = band.delta
@@ -241,20 +242,24 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		return nil, err
 	}
 	capStart := &Face{
-		surface:       Plane{Frame: startFrame},
-		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
-		body:          body,
-		loops:         startLoops,
-		axialDelta:    dp.z0Delta,
-		hasAxialDelta: true,
+		surface: Plane{Frame: startFrame},
+		origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
+		body:    body,
+		loops:   startLoops,
+		n: topo.Face{
+			AxialDelta:    dp.z0Delta,
+			HasAxialDelta: true,
+		},
 	}
 	capEnd := &Face{
-		surface:       Plane{Frame: endFrame},
-		origins:       []FeatureRef{{producer: ref, Role: roleCapEnd}},
-		body:          body,
-		loops:         endLoops,
-		axialDelta:    dp.z1Delta,
-		hasAxialDelta: true,
+		surface: Plane{Frame: endFrame},
+		origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
+		body:    body,
+		loops:   endLoops,
+		n: topo.Face{
+			AxialDelta:    dp.z1Delta,
+			HasAxialDelta: true,
+		},
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
 		return nil, err
@@ -308,7 +313,7 @@ func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord,
 	level.Z0, level.Z1 = z, z
 	rimVertex := func(u, v, extra float64) *Vertex {
 		held, lift := pl.LiftedVertex(u, v, z)
-		return &Vertex{position: held, bound: units.Millimeters(proofbound.AbsSumUpper(zDelta, lift, extra))}
+		return &Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(zDelta, lift, extra))}}
 	}
 	singleClosed := n == 1 && walks[0].Closed
 	verts := make([]*Vertex, n)

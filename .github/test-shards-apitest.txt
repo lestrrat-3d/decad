@@ -2003,3 +2003,8 @@
 10	0.00	TestBrepUnionSectionFeedsExtrude
 10	0.00	TestBrepUnionSectionPlacementAndRefusals
 10	0.00	TestBrepSectionRefusesBodyWithoutCertifiedSlabs
+10	0.00	TestPhaseHSliceContactIdentity
+10	0.00	TestPhaseHSliceVerifyIdentity
+10	0.00	TestPhaseHSliceMeshIdentity
+10	0.00	TestPhaseHSliceTransformAndCopy
+10	0.00	TestPhaseHSliceNilAndEmpty

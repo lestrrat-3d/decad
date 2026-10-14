@@ -556,9 +556,9 @@ func TestBrepModifyEdgeConsumersOnS1Fillet(t *testing.T) {
 	tol := 0.05
 	mesh, err := tessellateContext(t.Context(), out, units.Millimeters(tol), VerifyAll)
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
+	require.True(t, mesh.n.SymDiffOK)
 	held := internalMeshVolumeRat(mesh)
-	bound := new(big.Rat).SetFloat64(mesh.volSymDiff)
+	bound := new(big.Rat).SetFloat64(mesh.n.VolSymDiff)
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, lo)).Cmp(bound), 0)
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, hi)).Cmp(bound), 0)
 

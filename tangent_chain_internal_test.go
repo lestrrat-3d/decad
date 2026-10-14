@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/tangentchain"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -133,14 +134,14 @@ func TestTangentContinuesFaceSheets(t *testing.T) {
 
 	var e *Edge
 	for _, cand := range box.Edges() {
-		a, b := cand.start.position, cand.end.position
+		a, b := cand.start.n.Position, cand.end.n.Position
 		if a.Z == 4 && b.Z == 4 && a.Y == 0 && b.Y == 0 {
 			e = cand
 		}
 	}
 	require.NotNil(t, e)
 	v := e.end
-	if v.position.X != 10 {
+	if v.n.Position.X != 10 {
 		v = e.start
 	}
 	var top, front, right *Face
@@ -150,7 +151,7 @@ func TestTangentContinuesFaceSheets(t *testing.T) {
 			continue
 		}
 		n := p.Frame.N()
-		if f.reversed {
+		if f.n.Reversed {
 			n = n.Scale(-1)
 		}
 		switch n {
@@ -166,13 +167,13 @@ func TestTangentContinuesFaceSheets(t *testing.T) {
 	require.NotNil(t, front)
 	require.NotNil(t, right)
 
-	far := &Vertex{position: r3.NewVec(20, 0, 4)}
+	far := &Vertex{n: topo.Vertex{Position: r3.NewVec(20, 0, 4)}}
 	cont := &Edge{curve: Line3{}, start: v, end: far, faces: []*Face{front, top}}
 	require.Equal(t, clearance.DegYes, tangentContinues(e, cont, v))
 	stop := &Edge{curve: Line3{}, start: v, end: far, faces: []*Face{right, top}}
 	require.Equal(t, clearance.DegNo, tangentContinues(e, stop, v))
 	// The same line walked back over e is no continuation: its ray from v
 	// points along e's own.
-	back := &Edge{curve: Line3{}, start: v, end: &Vertex{position: r3.NewVec(5, 0, 4)}, faces: []*Face{front, top}}
+	back := &Edge{curve: Line3{}, start: v, end: &Vertex{n: topo.Vertex{Position: r3.NewVec(5, 0, 4)}}, faces: []*Face{front, top}}
 	require.Equal(t, clearance.DegNo, tangentContinues(e, back, v))
 }

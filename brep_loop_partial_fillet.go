@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -79,8 +80,11 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			tangent = tangent.Scale(-1)
 		}
 		return &Edge{curve: Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: tangent,
-			Radius: units.Millimeters(r)}, start: capV, end: sideV, convex: convex,
-			length: meridianLen, lengthBound: meridianBound}
+			Radius: units.Millimeters(r)}, start: capV, end: sideV, n: topo.Edge{
+			Convex:      convex,
+			Length:      meridianLen,
+			LengthBound: meridianBound,
+		}}
 	}
 	for k := range n {
 		prev := (k + n - 1) % n
@@ -156,7 +160,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		axis, _ := major.Cross(up).Normalize()
 		lead[k] = &Edge{curve: Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis,
 			Major: major, SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
-			start: capV, end: sideV, convex: convex, length: held, lengthBound: bound}
+			start: capV, end: sideV, n: topo.Edge{Convex: convex, Length: held, LengthBound: bound}}
 		trail[k] = lead[k]
 	}
 	var patches []*Face
@@ -164,17 +168,17 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 	newPatch := func(surf Surface, loop *Loop, capV *Vertex, piece filletband.Piece) error {
 		held, bound := heldOf(filletband.PatchArea(piece, rIv))
 		face := &Face{surface: surf, origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
-			body: body, loops: []*Loop{loop}, area: held, areaBound: bound}
+			body: body, loops: []*Loop{loop}, n: topo.Face{Area: held, AreaBound: bound}}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
-		nrm, err := face.NormalAt(capV.position)
+		nrm, err := face.NormalAt(capV.n.Position)
 		if err != nil {
 			return fmt.Errorf(`%w: a partial fillet patch's normal cannot be read: %v`, ErrUnsupported, err)
 		}
 		if nrm.Value.Dot(up) < 0 {
-			face.reversed = !face.reversed
+			face.n.Reversed = !face.n.Reversed
 		}
 		if b.sigma > 0 {
-			face.reversed = !face.reversed
+			face.n.Reversed = !face.n.Reversed
 		}
 		for _, ce := range loop.coedges {
 			ce.edge.faces = append(ce.edge.faces, face)
@@ -206,11 +210,11 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			}
 			surf := Sphere{Center: pl.Point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
 			loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
-				{edge: end, forward: false}, {edge: start, forward: true}}, outer: true}
+				{edge: end, forward: false}, {edge: start, forward: true}}, n: topo.Loop{Outer: true}}
 			if err := newPatch(surf, loop, pole, piece); err != nil {
 				return nil, brepBandMass{}, err
 			}
-			sideE.convex = convex
+			sideE.n.Convex = convex
 			p++
 			continue
 		}
@@ -227,11 +231,11 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		endForward := end.start == sideE.end
 		loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
 			{edge: end, forward: endForward}, {edge: capE, forward: false},
-			{edge: start, forward: startForward}}, outer: true}
+			{edge: start, forward: startForward}}, n: topo.Loop{Outer: true}}
 		if err := newPatch(surf, loop, capE.start, piece); err != nil {
 			return nil, brepBandMass{}, err
 		}
-		capE.convex, sideE.convex = convex, convex
+		capE.n.Convex, sideE.n.Convex = convex, convex
 		p++
 		if !b.selected[next] || fr.loop.Corners[next] != filletband.Reflex {
 			continue
@@ -244,7 +248,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		torus := Torus{Center: pl.Point(v.StartU, v.StartV, sideZ), Axis: pl.Dir(0, 0, 1),
 			Major: units.Millimeters(r), Minor: units.Millimeters(r)}
 		horn := &Loop{coedges: []coedge{{edge: arc, forward: true},
-			{edge: lead[next], forward: true}, {edge: trail[next], forward: false}}, outer: true}
+			{edge: lead[next], forward: true}, {edge: trail[next], forward: false}}, n: topo.Loop{Outer: true}}
 		if err := newPatch(torus, horn, arc.start, pieces[p]); err != nil {
 			return nil, brepBandMass{}, err
 		}

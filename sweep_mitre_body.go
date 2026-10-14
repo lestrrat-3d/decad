@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -116,8 +117,8 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 			capStartCo[m-1-j] = coedge{edge: sec[0][v], forward: false}
 			capEndCo[j] = coedge{edge: sec[a.Spans][v], forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{outer: i == 0, coedges: loftLoopCoedges(capStartCo, a.Reversed)})
-		capEndLoops = append(capEndLoops, &Loop{outer: i == 0, coedges: loftLoopCoedges(capEndCo, a.Reversed)})
+		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: i == 0}, coedges: loftLoopCoedges(capStartCo, a.Reversed)})
+		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: i == 0}, coedges: loftLoopCoedges(capEndCo, a.Reversed)})
 	}
 	capStartSurf, err := planeFromTriangle(verts, a.Tris[a.Walls])
 	if err != nil {
@@ -133,14 +134,22 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 		&Face{
 			surface: capStartSurf, loops: capStartLoops,
 			origins: []FeatureRef{{producer: ref, Role: roleCapStart}},
-			body:    body, area: startArea, areaBound: startBound,
-			axialDelta: delta, hasAxialDelta: true,
+			body:    body, n: topo.Face{
+				Area:          startArea,
+				AreaBound:     startBound,
+				AxialDelta:    delta,
+				HasAxialDelta: true,
+			},
 		},
 		&Face{
 			surface: capEndSurf, loops: capEndLoops,
 			origins: []FeatureRef{{producer: ref, Role: roleCapEnd}},
-			body:    body, area: endArea, areaBound: endBound,
-			axialDelta: delta, hasAxialDelta: true,
+			body:    body, n: topo.Face{
+				Area:          endArea,
+				AreaBound:     endBound,
+				AxialDelta:    delta,
+				HasAxialDelta: true,
+			},
 		},
 	)
 
@@ -158,13 +167,15 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 				slot := sweepmitre.SlotWall0 + w
 				area, bound := faceArea(slot)
 				face := &Face{
-					surface:   surf,
-					origins:   []FeatureRef{{producer: ref, Role: a.Roles[slot]}},
-					body:      body,
-					area:      area,
-					areaBound: bound,
+					surface: surf,
+					origins: []FeatureRef{{producer: ref, Role: a.Roles[slot]}},
+					body:    body,
+					n: topo.Face{
+						Area:      area,
+						AreaBound: bound,
+					},
 				}
-				face.loops = []*Loop{{outer: true, coedges: loftLoopCoedges([]coedge{
+				face.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
 					{edge: sec[k][v], forward: true},
 					{edge: lon[k][next[v]], forward: true},
 					{edge: sec[k+1][v], forward: false},

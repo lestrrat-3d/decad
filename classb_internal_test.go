@@ -73,7 +73,7 @@ func TestClassBCutCrossDrilledBox(t *testing.T) {
 	for _, f := range result.Faces() {
 		if _, ok := f.Surface().(Cylinder); ok {
 			cylinders++
-			require.True(t, f.reversed, `the hole's wall faces into the hole`)
+			require.True(t, f.n.Reversed, `the hole's wall faces into the hole`)
 		}
 		if _, planar := f.Surface().(Plane); planar && len(f.Loops()) == 2 {
 			holed++
@@ -111,7 +111,7 @@ func TestClassBCutCrossDrilledBox(t *testing.T) {
 	mesh, err := tessellateContext(t.Context(), result, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	held := internalMeshVolumeRat(mesh)
-	bound := new(big.Rat).SetFloat64(mesh.volSymDiff)
+	bound := new(big.Rat).SetFloat64(mesh.n.VolSymDiff)
 	lo, hi = piEnclosed(big.NewRat(16000, 1), big.NewRat(-180, 1))
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, lo)).Cmp(bound), 0)
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, hi)).Cmp(bound), 0)

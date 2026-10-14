@@ -1421,3 +1421,5 @@
 8	0.00	TestCurvedHeelArcSideTiesUseCallerCensus
 8	0.00	TestLoftCylinderChamferReachSerialPasses
 2	0.00	TestLoftCylinderChamferReachGridLimitFallsBack
+10	0.00	TestNodeBuiltBodiesAreOwned
+10	0.00	TestNodeMappingNilAndBare

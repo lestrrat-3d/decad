@@ -50,6 +50,14 @@ func (pp prismPayload) transform() r3.Transform { return pp.Xform }
 // still charged what the resolution cost, so a record near its ceiling refuses
 // here exactly as it did on the way in (docs/spline-design.md §5.2).
 func (pp prismPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
-	pp.Xform = composed
-	return evalPrismContext(ctx, d, ref, pp, freeform.NewFreeformWork())
+	if len(pp.BlendSegs) != 0 {
+		// HS: blend roles stay with the root builder (fillet.go).
+		pp.Xform = composed
+		return evalPrismContext(ctx, d, ref, pp, freeform.NewFreeformWork())
+	}
+	nb, err := pp.Placed(ctx, d.env(ref), composed)
+	if err != nil {
+		return nil, err
+	}
+	return publishNodeBody(d, nb), nil
 }

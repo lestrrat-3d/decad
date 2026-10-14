@@ -181,8 +181,8 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 		return nil, err
 	}
 	area := proofbound.BoundedAdd(
-		proofbound.MeasuredScalar(faces[0].area, faces[0].areaBound),
-		proofbound.MeasuredScalar(faces[1].area, faces[1].areaBound))
+		proofbound.MeasuredScalar(faces[0].n.Area, faces[0].n.AreaBound),
+		proofbound.MeasuredScalar(faces[1].n.Area, faces[1].n.AreaBound))
 	body.area = scalarMeasurement(area, units.SquareMillimeter)
 	body.bounds = compositeChainBox(parts[0].bounds, parts[1].bounds)
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
@@ -226,7 +226,7 @@ func chainRimPost(v *Vertex) *compositesweep.RimPost {
 	if v == nil {
 		return nil
 	}
-	return &compositesweep.RimPost{Position: v.position, Bound: v.bound.Base()}
+	return &compositesweep.RimPost{Position: v.n.Position, Bound: v.n.Bound.Base()}
 }
 
 type chainSweepExtent struct{ span chainSweepSpanPayload }

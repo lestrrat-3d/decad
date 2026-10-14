@@ -283,15 +283,15 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 		if wallErr != nil {
 			return nil, wallErr
 		}
-		mesh.areaSlack, err = twistMixedAreaSlackLocal(profile, poly, body, heldByFace, wallBound)
+		mesh.n.AreaSlack, err = twistMixedAreaSlackLocal(profile, poly, body, heldByFace, wallBound)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		mesh.areaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(
+		mesh.n.AreaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(
 			proofbound.IntervalSub(trueAreaIv, heldAreaIv)))
 	}
-	if proofbound.IsNonFinite(mesh.areaSlack) {
+	if proofbound.IsNonFinite(mesh.n.AreaSlack) {
 		return nil, fmt.Errorf(`%w: stationed twist has no finite area proof`, ErrUnsupported)
 	}
 	volume, volumeBound := mitredEnclosure(volumeIv.Lo, volumeIv.Hi)
@@ -310,27 +310,27 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	}
 	body.centroid = VecMeasurement{Value: worldCenter, Bound: units.Millimeters(centerBound),
 		Exactness: exactnessOf(centerBound)}
-	minV, maxV := mesh.vertices[0], mesh.vertices[0]
-	for _, vertex := range mesh.vertices[1:] {
+	minV, maxV := mesh.n.Vertices[0], mesh.n.Vertices[0]
+	for _, vertex := range mesh.n.Vertices[1:] {
 		minV.X, minV.Y, minV.Z = min(minV.X, vertex.X), min(minV.Y, vertex.Y), min(minV.Z, vertex.Z)
 		maxV.X, maxV.Y, maxV.Z = max(maxV.X, vertex.X), max(maxV.Y, vertex.Y), max(maxV.Z, vertex.Z)
 	}
 	body.bounds = Box{Min: minV, Max: maxV, Bound: units.Millimeters(delta), Exactness: Approximate}
 	for _, vertex := range body.Vertices() {
-		vertex.bound = units.Millimeters(proofbound.AbsSumUpper(vertex.bound.Base(), delta))
+		vertex.n.Bound = units.Millimeters(proofbound.AbsSumUpper(vertex.n.Bound.Base(), delta))
 	}
 	upperTheta := proofbound.RatFloatUp(absTheta)
 	for _, edge := range body.Edges() {
 		edge.curve = FacetedCurve{Bound: units.Millimeters(delta)}
-		edge.lengthBound = proofbound.AbsSumUpper(edge.lengthBound, edge.length,
+		edge.n.LengthBound = proofbound.AbsSumUpper(edge.n.LengthBound, edge.n.Length,
 			path.End().Z, proofbound.ProductUpper(poly.MaxRadiusL1, upperTheta), poly.PerimeterUpper)
 	}
 	for _, face := range body.Faces() {
 		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {
 			face.surface = Faceted{Bound: units.Millimeters(delta)}
 		}
-		face.areaBound = proofbound.AbsSumUpper(face.areaBound, face.area, area, areaBound)
-		face.axialDelta, face.hasAxialDelta = delta, true
+		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, area, areaBound)
+		face.n.AxialDelta, face.n.HasAxialDelta = delta, true
 	}
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
@@ -338,7 +338,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	body.payload = twistedSweepPayload{
 		profile: profile, plane: plane, path: path, angle: angle,
 		recordArea: recordArea, xform: xform, mesh: mesh,
-		delta: delta, areaSlack: mesh.areaSlack, volSymDiff: volSymDiff,
+		delta: delta, areaSlack: mesh.n.AreaSlack, volSymDiff: volSymDiff,
 	}
 	return body, nil
 }

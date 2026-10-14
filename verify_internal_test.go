@@ -760,6 +760,11 @@ func TestAuditSheetBoundaryStructuralViolations(t *testing.T) {
 			e := firstInteriorEdge(t, b)
 			l, i := backwardCoedgeSite(t, b, e)
 			l.coedges[i].forward = true
+			// HS: a node-built body holds the coedge twice; the node is
+			// what the accessors read.
+			if l.n.Owner != nil {
+				l.n.CoEdges[i].Forward = true
+			}
 		})
 	})
 
@@ -767,7 +772,14 @@ func TestAuditSheetBoundaryStructuralViolations(t *testing.T) {
 		t.Parallel()
 		requireSheetAuditViolated(t, func(t *testing.T, doc *Document, b *Body) {
 			f := b.Faces()[0]
-			f.loops = append(f.loops, &Loop{})
+			empty := loopOf(handleAlloc{}.NewLoop())
+			f.loops = append(f.loops, empty)
+			// HS: a node-built face holds its loops twice; the node is
+			// what the accessors read, and the fabricated loop must be
+			// handle-born so the accessor can map it back.
+			if f.n.Owner != nil {
+				f.n.Loops = append(f.n.Loops, &empty.n)
+			}
 		})
 	})
 }

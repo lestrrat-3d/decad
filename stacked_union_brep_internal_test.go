@@ -228,7 +228,7 @@ func TestStackedUnionBrepCrossingBoss(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.VolumeVerified())
 	held := internalMeshVolumeRat(mesh)
-	bound := new(big.Rat).SetFloat64(mesh.volSymDiff)
+	bound := new(big.Rat).SetFloat64(mesh.n.VolSymDiff)
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, lo)).Cmp(bound), 0)
 	require.LessOrEqual(t, new(big.Rat).Abs(new(big.Rat).Sub(held, hi)).Cmp(bound), 0)
 }
@@ -255,7 +255,7 @@ func TestStackedUnionBrepRootedFlushBoss(t *testing.T) {
 	require.Equal(t, 17500.0, got.volume.Value.Base())
 	long := 0
 	for _, e := range got.Edges() {
-		if e.length == 25 {
+		if e.n.Length == 25 {
 			long++
 		}
 	}
@@ -389,7 +389,7 @@ func TestStackedUnionBrepRootedCrossingBoss(t *testing.T) {
 		if _, line := e.curve.(Line3); !line {
 			continue
 		}
-		switch e.length {
+		switch e.n.Length {
 		case 5:
 			short++
 		case 15:

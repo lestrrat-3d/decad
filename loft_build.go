@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -402,7 +403,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	if pl.surfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: !pl.surfaceResult, kind: kind}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: !pl.surfaceResult}, kind: kind}
 
 	capStart, capEnd, walls, err := buildLoftTopology(ctx, body, ref, a, cap0Rat, cap1Rat)
 	if err != nil {
@@ -477,8 +478,8 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		// carries none of the two caps' own rounding, which §4.3 requires
 		// the sheet's bound to include.
 		areaScalar := proofbound.BoundedSub(
-			proofbound.BoundedSub(measurementScalar(body.area), proofbound.MeasuredScalar(capStart.area, capStart.areaBound)),
-			proofbound.MeasuredScalar(capEnd.area, capEnd.areaBound),
+			proofbound.BoundedSub(measurementScalar(body.area), proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound)),
+			proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound),
 		)
 		// Published Approximate EXPLICITLY, never derived from the composed
 		// bound: the solid loft's own mass.area() always publishes
@@ -640,15 +641,15 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload, privateRoles .
 	for k, i := range out.SourceFaces {
 		src[k] = faces[i]
 	}
-	mesh := &Mesh{vertices: out.Vertices, triangles: out.Triangles, source: src}
+	mesh := &Mesh{n: topo.Mesh{Vertices: out.Vertices, Triangles: out.Triangles}, source: src}
 	for _, f := range src {
 		mesh.setFaceBound(f, out.BoundMM)
 	}
-	mesh.bound = out.BoundMM
-	mesh.areaSlack = out.AreaSlackMM2
+	mesh.n.Bound = out.BoundMM
+	mesh.n.AreaSlack = out.AreaSlackMM2
 	if out.VolumeProof {
-		mesh.volSymDiff = out.VolumeSymDiffMM3
-		mesh.symDiffOK = true
+		mesh.n.VolSymDiff = out.VolumeSymDiffMM3
+		mesh.n.SymDiffOK = true
 	}
 	return mesh, nil
 }

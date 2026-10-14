@@ -55,10 +55,10 @@ func capBandClosureOf(walks []survey2d.SideWalk, joins []cornerJoin, slantIn, sl
 	in := make([]float64, len(slantIn))
 	out := make([]float64, len(slantOut))
 	for i, edge := range slantIn {
-		in[i] = edge.length
+		in[i] = edge.n.Length
 	}
 	for i, edge := range slantOut {
-		out[i] = edge.length
+		out[i] = edge.n.Length
 	}
 	closure, ok := capband.ClosureOf(walks, capband.ContourJoins(joins), in, out, slantInHeld, slantOutHeld)
 	if !ok {

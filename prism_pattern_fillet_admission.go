@@ -27,8 +27,8 @@ func prismPatternFilletContactsOf(ctx context.Context, body *Body, edges []*Edge
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if edge == nil || !edge.selectorDirectionProven ||
-			edge.selectorDirection != (r3.Vec{Z: 1}) && edge.selectorDirection != (r3.Vec{Z: -1}) {
+		if edge == nil || !edge.n.SelectorDirectionProven ||
+			edge.n.SelectorDirection != (r3.Vec{Z: 1}) && edge.n.SelectorDirection != (r3.Vec{Z: -1}) {
 			return nil, fmt.Errorf("%w: joined-prism fillet selection has an unproved axial edge", ErrUnsupported)
 		}
 		matched := false
@@ -36,8 +36,8 @@ func prismPatternFilletContactsOf(ctx context.Context, body *Body, edges []*Edge
 			for _, station := range []int{0, part.rootStart} {
 				bottom := fp.verts[part.vertex[0][station]]
 				top := fp.verts[part.vertex[1][station]]
-				if (edge.start.position != bottom || edge.end.position != top) &&
-					(edge.start.position != top || edge.end.position != bottom) {
+				if (edge.start.n.Position != bottom || edge.end.n.Position != top) &&
+					(edge.start.n.Position != top || edge.end.n.Position != bottom) {
 					continue
 				}
 				key := [2]int{i, station}
@@ -133,7 +133,7 @@ func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecor
 			rootPoint = rec.source.rootArc.End
 		}
 		root := prismPatternExactPlacedPoint(part, rootPoint)
-		held := part.mesh.vertices[2*station]
+		held := part.mesh.n.Vertices[2*station]
 		rootError := proofbound.AbsSumUpper(
 			proofbound.IntervalFloatError(root.X, held.X),
 			proofbound.IntervalFloatError(root.Y, held.Y))

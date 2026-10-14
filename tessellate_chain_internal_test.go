@@ -46,10 +46,10 @@ func TestTessellateChainBuildsOneExactQuadPerWall(t *testing.T) {
 	require.True(t, ok)
 	mesh, err := tessellateChain(t.Context(), body, pp)
 	require.NoError(t, err)
-	require.Len(t, mesh.triangles, 6, "three walls, two triangles each")
-	require.Zero(t, mesh.bound, "an unplaced, axis-aligned chain's own vertices are exact")
-	require.False(t, mesh.symDiffOK, "a sheet publishes no occupied-volume proof")
-	require.Zero(t, mesh.volSymDiff)
+	require.Len(t, mesh.n.Triangles, 6, "three walls, two triangles each")
+	require.Zero(t, mesh.n.Bound, "an unplaced, axis-aligned chain's own vertices are exact")
+	require.False(t, mesh.n.SymDiffOK, "a sheet publishes no occupied-volume proof")
+	require.Zero(t, mesh.n.VolSymDiff)
 }
 
 // TestTessellateChainRejectsWronglyAttributedWalls is the free-edge
@@ -80,7 +80,7 @@ func TestTessellateChainRejectsWronglyAttributedWalls(t *testing.T) {
 	require.NoError(t, requireSheetMesh(t.Context(), body, mesh), "premise: the real mesh passes the audit as built")
 
 	const moveIdx = 0
-	moved := mesh.triangles[moveIdx]
+	moved := mesh.n.Triangles[moveIdx]
 	movedVerts := map[int]struct{}{moved[0]: {}, moved[1]: {}, moved[2]: {}}
 	homeFace := mesh.source[moveIdx]
 
@@ -90,7 +90,7 @@ search:
 		if f == homeFace {
 			continue
 		}
-		for _, v := range mesh.triangles[i] {
+		for _, v := range mesh.n.Triangles[i] {
 			if _, ok := movedVerts[v]; ok {
 				continue search
 			}
@@ -131,8 +131,8 @@ func TestTessellateChainReflectedPlacementFlipsWinding(t *testing.T) {
 
 	mesh, err := tessellateChain(t.Context(), placed, pp)
 	require.NoError(t, err)
-	for i, tri := range mesh.triangles {
-		a, b, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
+	for i, tri := range mesh.n.Triangles {
+		a, b, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 		normal := b.Sub(a).Cross(c.Sub(a))
 		face := mesh.source[i]
 		published, err := face.NormalAt(a)

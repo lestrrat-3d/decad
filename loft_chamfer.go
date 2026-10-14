@@ -71,7 +71,7 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 		selected[edge] = struct{}{}
 	}
 	for _, cap := range caps {
-		if len(cap.loops) == 0 || !cap.loops[0].outer {
+		if len(cap.loops) == 0 || !cap.loops[0].n.Outer {
 			return nil, false, nil
 		}
 		for _, edge := range cap.loops[0].Edges() {
@@ -86,8 +86,8 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 	}
 	outer := make([]curveSegment, 0, len(caps[1].loops[0].coedges))
 	for _, ce := range caps[1].loops[0].coedges {
-		start := pl.frame0.ToLocal(ce.Start().position)
-		stop := pl.frame0.ToLocal(ce.End().position)
+		start := pl.frame0.ToLocal(ce.Start().n.Position)
+		stop := pl.frame0.ToLocal(ce.End().n.Position)
 		outer = append(outer, lineSeg{
 			Start:  sectionrecord.Point2{U: start.X, V: start.Y},
 			End:    sectionrecord.Point2{U: stop.X, V: stop.Y},
@@ -115,12 +115,12 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 // replaced by the other end's polygon when the cap band is built.
 func matchingLoftHeldCapOuters(frame r3.Frame, start, end *Face) bool {
 	if len(start.loops) == 0 || len(end.loops) == 0 ||
-		!start.loops[0].outer || !end.loops[0].outer ||
+		!start.loops[0].n.Outer || !end.loops[0].n.Outer ||
 		len(start.loops[0].coedges) != len(end.loops[0].coedges) {
 		return false
 	}
 	keyOf := func(ce coedge) [2]planePoint {
-		a, b := frame.ToLocal(ce.Start().position), frame.ToLocal(ce.End().position)
+		a, b := frame.ToLocal(ce.Start().n.Position), frame.ToLocal(ce.End().n.Position)
 		p := planePoint{U: a.X, V: a.Y}
 		q := planePoint{U: b.X, V: b.Y}
 		if p.U > q.U || (p.U == q.U && p.V > q.V) {

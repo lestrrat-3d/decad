@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -65,7 +66,7 @@ func TestRevolveFreeformPartialCapAreaSlack(t *testing.T) {
 	require.NoError(t, err)
 	gap := math.Abs(meshArea(mesh.Vertices(), mesh.Triangles()) - area.Value.Base())
 	require.Greater(t, gap, 0.01, "the cap sliver must dominate this narrow sweep")
-	require.LessOrEqual(t, gap, mesh.areaSlack+area.Bound.Base()+1e-9)
+	require.LessOrEqual(t, gap, mesh.n.AreaSlack+area.Bound.Base()+1e-9)
 }
 
 func TestRevolveFreeformDisplacedSectionRefuses(t *testing.T) {
@@ -270,15 +271,15 @@ func TestRequireVertexLinksRejectsAPinchedVertex(t *testing.T) {
 		{0, 1, 2}, {0, 2, 3}, {0, 3, 1}, {1, 3, 2},
 		{0, 5, 4}, {0, 6, 5}, {0, 4, 6}, {4, 5, 6},
 	}
-	m := &Mesh{vertices: verts, triangles: tris}
-	require.NoError(t, tessellation.RequireClosedMesh(m.triangles), `the directed-edge audit passes, which is why the link audit exists`)
-	err := tessellation.RequireVertexLinks(t.Context(), len(m.vertices), m.triangles)
+	m := &Mesh{n: topo.Mesh{Vertices: verts, Triangles: tris}}
+	require.NoError(t, tessellation.RequireClosedMesh(m.n.Triangles), `the directed-edge audit passes, which is why the link audit exists`)
+	err := tessellation.RequireVertexLinks(t.Context(), len(m.n.Vertices), m.n.Triangles)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "cycles rather than one")
 
 	// One cone alone has a sound link at every vertex.
-	single := &Mesh{vertices: verts[:4], triangles: tris[:4]}
-	require.NoError(t, tessellation.RequireVertexLinks(t.Context(), len(single.vertices), single.triangles))
+	single := &Mesh{n: topo.Mesh{Vertices: verts[:4], Triangles: tris[:4]}}
+	require.NoError(t, tessellation.RequireVertexLinks(t.Context(), len(single.n.Vertices), single.n.Triangles))
 }
 
 // auditRevolveFacets runs the two facet audits buildRevolveMesh runs, in its
@@ -401,8 +402,8 @@ func TestRevolveMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
 			require.NoError(t, err)
 
 			held := 0.0
-			for _, tri := range mesh.triangles {
-				a, b, c := mesh.vertices[tri[0]], mesh.vertices[tri[1]], mesh.vertices[tri[2]]
+			for _, tri := range mesh.n.Triangles {
+				a, b, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 				held += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 			}
 			area, err := body.Area()
@@ -412,15 +413,15 @@ func TestRevolveMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
 
 			gap := math.Abs(analytic - held)
 			require.Positive(t, gap, `a chorded revolve holds less area than the surface it stands for`)
-			require.Positive(t, mesh.areaSlack)
-			require.GreaterOrEqual(t, mesh.areaSlack, gap, `areaSlack must cover the gap it exists to bound`)
+			require.Positive(t, mesh.n.AreaSlack)
+			require.GreaterOrEqual(t, mesh.n.AreaSlack, gap, `areaSlack must cover the gap it exists to bound`)
 			// It is a bound, not an estimate, and §10.2 forbids it from
 			// cancelling: a planar annulus cell's true density is LINEAR in the
 			// meridian parameter while its flat facet's is constant, so the
 			// non-cancelling integral of their difference reads well above the
 			// two areas' own near-agreement. It must still stay a small part of
 			// the surface it speaks for rather than swamping it.
-			require.Less(t, mesh.areaSlack, 0.25*analytic)
+			require.Less(t, mesh.n.AreaSlack, 0.25*analytic)
 		})
 	}
 }
@@ -500,21 +501,21 @@ func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2))
 	require.NoError(t, err)
-	require.True(t, mesh.symDiffOK)
+	require.True(t, mesh.n.SymDiffOK)
 	sym, err := operandSymDiff(mesh)
 	require.NoError(t, err)
 	require.Positive(t, sym)
-	require.Equal(t, mesh.volSymDiff, sym)
+	require.Equal(t, mesh.n.VolSymDiff, sym)
 	require.NoError(t, requireVolumeProvingPayload(t.Context(), body, 0))
 
 	// Every source face publishes a positive displacement beside it, so the
 	// mesh is a complete operand rather than an export-only one.
-	require.Positive(t, mesh.bound)
+	require.Positive(t, mesh.n.Bound)
 	for _, f := range mesh.source {
 		d, ok := mesh.sourceBound(f)
 		require.True(t, ok)
 		require.Positive(t, d)
-		require.LessOrEqual(t, d, mesh.bound)
+		require.LessOrEqual(t, d, mesh.n.Bound)
 	}
 
 	t.Run("torus proof record", func(t *testing.T) {
@@ -530,14 +531,14 @@ func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
 		require.NoError(t, err)
 		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2), WithVerification(VerifyAll))
 		require.NoError(t, err)
-		require.Len(t, mesh.triangles, 624)
-		require.True(t, mesh.boundaryOK)
-		require.True(t, mesh.symDiffOK)
+		require.Len(t, mesh.n.Triangles, 624)
+		require.True(t, mesh.n.BoundaryOK)
+		require.True(t, mesh.n.SymDiffOK)
 		// Captured from the same public cold build on 17c0b30 before the
 		// arithmetic change. The three bit patterns cover the published proof.
-		require.Equal(t, uint64(0x3fc971e5d844c3a0), math.Float64bits(mesh.bound))
-		require.Equal(t, uint64(0x404512d7dcf71848), math.Float64bits(mesh.areaSlack))
-		require.Equal(t, uint64(0x4060f7766e48d54b), math.Float64bits(mesh.volSymDiff))
+		require.Equal(t, uint64(0x3fc971e5d844c3a0), math.Float64bits(mesh.n.Bound))
+		require.Equal(t, uint64(0x404512d7dcf71848), math.Float64bits(mesh.n.AreaSlack))
+		require.Equal(t, uint64(0x4060f7766e48d54b), math.Float64bits(mesh.n.VolSymDiff))
 	})
 }
 

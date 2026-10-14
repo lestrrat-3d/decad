@@ -66,7 +66,7 @@ func TestChainArcSweepAxisErrorChangesPublicMeshBound(t *testing.T) {
 	phi0, _ := rp.den.Phi0.Enclosure()
 	phi1, _ := rp.den.Phi1.Enclosure()
 	span := proofbound.IntervalSub(phi1, phi0)
-	n := len(mesh.triangles) / 2
+	n := len(mesh.n.Triangles) / 2
 	angular, err := revolvemesh.AngularSequence(revolvemesh.AngularInput{
 		Phi0: rp.phi0, Phi1: rp.phi1, Den: rp.den,
 	}, n)
@@ -101,12 +101,12 @@ func TestChainArcSweepAxisErrorChangesPublicMeshBound(t *testing.T) {
 		for l := range angular.Samples {
 			gap := zero.lift().SweptPointGap(zero.axisBound(), zero.xform,
 				source.u, source.v, source.bound, angular.SinIv[l], angular.CosIv[l],
-				mesh.vertices[j*(n+1)+l])
+				mesh.n.Vertices[j*(n+1)+l])
 			vertexGapWithout = math.Max(vertexGapWithout, gap)
 		}
 	}
 	omittedBound := proofbound.UpRound(proofbound.AbsSumUpper(sagWithout, vertexGapWithout))
-	if !(mesh.bound > omittedBound) {
-		t.Fatalf("public bound must exceed the axis-free bound: public=%g omitted=%g", mesh.bound, omittedBound)
+	if !(mesh.n.Bound > omittedBound) {
+		t.Fatalf("public bound must exceed the axis-free bound: public=%g omitted=%g", mesh.n.Bound, omittedBound)
 	}
 }

@@ -71,7 +71,7 @@ func planarBodyFace(t *testing.T, body *Body, n, p r3.Vec) *Face {
 			continue
 		}
 		normal := pl.Frame.N()
-		if f.reversed {
+		if f.n.Reversed {
 			normal = normal.Scale(-1)
 		}
 		if normal.Sub(n).Len() > 1e-12 || math.Abs(pl.Frame.Origin().Sub(p).Dot(n)) > 1e-9 {
@@ -481,7 +481,7 @@ func TestBrepLoopChamferContourBound(t *testing.T) {
 		fy, _ := y.Float64()
 		var held *Vertex
 		for v := range vertices {
-			if v.position.Sub(r3.NewVec(fx, fy, 10)).Len() < 1e-9 {
+			if v.n.Position.Sub(r3.NewVec(fx, fy, 10)).Len() < 1e-9 {
 				require.Nil(t, held, "one vertex sits at the contour corner (%v, %v)", fx, fy)
 				held = v
 			}
@@ -489,13 +489,13 @@ func TestBrepLoopChamferContourBound(t *testing.T) {
 		require.NotNil(t, held, "a vertex sits at the contour corner (%v, %v)", fx, fy)
 		dist := new(big.Rat)
 		for k, want := range [3]*big.Rat{x, y, big.NewRat(10, 1)} {
-			got := new(big.Rat).SetFloat64([3]float64{held.position.X, held.position.Y, held.position.Z}[k])
+			got := new(big.Rat).SetFloat64([3]float64{held.n.Position.X, held.n.Position.Y, held.n.Position.Z}[k])
 			d := new(big.Rat).Sub(got, want)
 			dist.Add(dist, d.Mul(d, d))
 		}
-		bound := new(big.Rat).SetFloat64(held.bound.Base())
+		bound := new(big.Rat).SetFloat64(held.n.Bound.Base())
 		require.LessOrEqual(t, dist.Cmp(new(big.Rat).Mul(bound, bound)), 0,
-			"the vertex at (%v, %v) is within its bound %v of the denoted corner", fx, fy, held.bound)
+			"the vertex at (%v, %v) is within its bound %v of the denoted corner", fx, fy, held.n.Bound)
 	}
 
 	before := out.doc.Bodies()

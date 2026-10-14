@@ -57,9 +57,9 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 		if i, ok := index[v]; ok {
 			return i
 		}
-		i := len(mesh.vertices)
-		mesh.vertices = append(mesh.vertices, v.position)
-		vertexStore = append(vertexStore, v.bound.Mag())
+		i := len(mesh.n.Vertices)
+		mesh.n.Vertices = append(mesh.n.Vertices, v.n.Position)
+		vertexStore = append(vertexStore, v.n.Bound.Mag())
 		index[v] = i
 		return i
 	}
@@ -85,7 +85,7 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 		for i, ce := range coedges {
 			v := ce.Start()
 			corner[i] = meshIndexOf(v)
-			cornerDelta = math.Max(cornerDelta, v.bound.Mag())
+			cornerDelta = math.Max(cornerDelta, v.n.Bound.Mag())
 		}
 		v0, v1, v2, v3 := corner[0], corner[1], corner[2], corner[3]
 		tri1 := [3]int{v0, v1, v2}
@@ -105,14 +105,14 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 		return nil, err
 	}
 
-	mesh.areaSlack = tessellation.StoreAreaAllow(mesh.vertices, mesh.triangles, vertexStore)
+	mesh.n.AreaSlack = tessellation.StoreAreaAllow(mesh.n.Vertices, mesh.n.Triangles, vertexStore)
 	if pp.sectionDelta > 0 {
 		walks := 0
 		for _, chain := range pp.chains {
 			walks += len(chain.Segments)
 		}
 		wallMove := proofbound.ProductUpper(proofbound.SectionDisplacementLength(pp.sectionDelta, walks), math.Abs(pp.z1-pp.z0))
-		mesh.areaSlack = proofbound.AbsSumUpper(mesh.areaSlack, wallMove)
+		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, wallMove)
 	}
 
 	// A chain-fed body is a BodySheet by construction, always (Table G), so

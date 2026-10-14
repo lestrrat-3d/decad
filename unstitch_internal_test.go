@@ -36,7 +36,7 @@ func unstitchOneChamferBand(t *testing.T) (src *Face, results []*Body, idx int) 
 	t.Helper()
 	motion := placedFarMotion(t)
 	band := chamferedRectFlatPatches(t, motion)[0]
-	require.Positive(t, band.face.normalBound,
+	require.Positive(t, band.face.n.NormalBound,
 		"a far-placed flat patch has a real departure from the plane it publishes")
 
 	body := band.face.body
@@ -59,13 +59,13 @@ func TestUnstitchChamferBandNormalAtBoundCoversSource(t *testing.T) {
 	src, results, idx := unstitchOneChamferBand(t)
 	newFace := results[idx].Faces()[0]
 
-	pt := newFace.loops[0].coedges[0].edge.start.position
+	pt := newFace.loops[0].coedges[0].edge.start.n.Position
 	reading, err := newFace.NormalAt(pt)
 	require.NoError(t, err)
 	bound, err := reading.Bound.In(units.One)
 	require.NoError(t, err)
 
-	require.GreaterOrEqual(t, bound, src.normalBound,
+	require.GreaterOrEqual(t, bound, src.n.NormalBound,
 		"the unstitched face's own published bound must still cover the source's normalBound")
 }
 
@@ -78,7 +78,7 @@ func TestUnstitchPlacementOfNonzeroNormalBoundFaceRefuses(t *testing.T) {
 	t.Parallel()
 	_, results, idx := unstitchOneChamferBand(t)
 	sheet := results[idx]
-	require.Positive(t, sheet.Faces()[0].normalBound)
+	require.Positive(t, sheet.Faces()[0].n.NormalBound)
 
 	further, err := r3.Translation(r3.NewVec(1, 1, 1))
 	require.NoError(t, err)

@@ -52,7 +52,7 @@ func TestCoilMeshRestatesTheHeldShell(t *testing.T) {
 
 	require.Equal(t, cp.verts, mesh.Vertices())
 	require.Equal(t, cp.tris, mesh.Triangles())
-	require.Equal(t, cp.vertexBound, mesh.vertexBound)
+	require.Equal(t, cp.vertexBound, mesh.n.VertexBound)
 	require.Equal(t, cp.delta, mesh.Bound().Base())
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
@@ -114,12 +114,12 @@ func TestCoilMeshProofsEncloseTheBody(t *testing.T) {
 			require.NoError(t, err)
 			held := meshSignedVolume(mesh.Vertices(), mesh.Triangles())
 			exact := new(big.Float).SetPrec(512).Mul(bigPi(), big.NewFloat(c.volume))
-			requireEnclosesBig(t, held, mesh.volSymDiff+1e-12, exact, "held volume")
+			requireEnclosesBig(t, held, mesh.n.VolSymDiff+1e-12, exact, "held volume")
 
 			area, err := b.Area()
 			require.NoError(t, err)
 			gap := math.Abs(meshArea(mesh.Vertices(), mesh.Triangles()) - area.Value.Base())
-			require.LessOrEqual(t, gap, mesh.areaSlack+area.Bound.Base()+1e-9)
+			require.LessOrEqual(t, gap, mesh.n.AreaSlack+area.Bound.Base()+1e-9)
 		})
 	}
 }

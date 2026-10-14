@@ -58,7 +58,7 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 	if err != nil {
 		return facetedPayload{}, err
 	}
-	if !mesh.boundaryOK || !mesh.symDiffOK || len(mesh.vertices) == 0 || len(mesh.triangles) == 0 {
+	if !mesh.n.BoundaryOK || !mesh.n.SymDiffOK || len(mesh.n.Vertices) == 0 || len(mesh.n.Triangles) == 0 {
 		return facetedPayload{}, fmt.Errorf("%w: the source mesh has no complete similarity proof", ErrUnsupported)
 	}
 	vertexBound, err := mesh.vertexBounds()
@@ -86,8 +86,8 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 	if err != nil {
 		return facetedPayload{}, err
 	}
-	lo, hi := mesh.vertices[0], mesh.vertices[0]
-	for _, vertex := range mesh.vertices[1:] {
+	lo, hi := mesh.n.Vertices[0], mesh.n.Vertices[0]
+	for _, vertex := range mesh.n.Vertices[1:] {
 		lo = r3.NewVec(math.Min(lo.X, vertex.X), math.Min(lo.Y, vertex.Y), math.Min(lo.Z, vertex.Z))
 		hi = r3.NewVec(math.Max(hi.X, vertex.X), math.Max(hi.Y, vertex.Y), math.Max(hi.Z, vertex.Z))
 	}
@@ -95,21 +95,21 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 	// is within mesh.bound of the held boundary, so two such points add twice
 	// that displacement to the centroid allowance's diameter.
 	diameter := proofbound.AbsSumUpper(proofbound.DvLenUpper(proofbound.HeldDelta(hi, lo)),
-		proofbound.ProductUpper(2, mesh.bound))
+		proofbound.ProductUpper(2, mesh.n.Bound))
 	if proofbound.IsNonFinite(diameter) {
 		return facetedPayload{}, fmt.Errorf("%w: the source has no finite diameter bound", ErrUnsupported)
 	}
 	return facetedPayload{
 		similaritySource: true,
 		contactAudited:   true,
-		verts:            mesh.vertices,
+		verts:            mesh.n.Vertices,
 		vertexBound:      vertexBound,
-		tris:             mesh.triangles,
+		tris:             mesh.n.Triangles,
 		src:              source,
 		groups:           groups,
-		meshBound:        facetproof.FacetBoundMax(mesh.triangles, vertexBound),
-		volSymDiff:       mesh.volSymDiff,
-		areaSlack:        mesh.areaSlack,
+		meshBound:        facetproof.FacetBoundMax(mesh.n.Triangles, vertexBound),
+		volSymDiff:       mesh.n.VolSymDiff,
+		areaSlack:        mesh.n.AreaSlack,
 		dPair:            diameter,
 		xform:            r3.Identity(),
 	}, nil

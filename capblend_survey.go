@@ -224,7 +224,7 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 		v, _, ok := sampleAt(pl.Point(g.CU+r*cos, g.CV+r*sin, g.CapZ))
 		return v, ok
 	}
-	return capband.CircularNormalRange(g.Th0, g.Th1, g.WholeTurn, f.normalBound, model, sample)
+	return capband.CircularNormalRange(g.Th0, g.Th1, g.WholeTurn, f.n.NormalBound, model, sample)
 }
 
 // capBlendMinRadius is the tightest concave principal radius over a
@@ -296,7 +296,7 @@ func capBlendMinRadius(b *Body, cbp capBlendPayload) (radiusOutcome, bool) {
 		if f == nil {
 			return radiusOutcome{}, false
 		}
-		if capPatchWindowSkew(patch.geom) > 0 || f.normalBound != 0 {
+		if capPatchWindowSkew(patch.geom) > 0 || f.n.NormalBound != 0 {
 			return radiusOutcome{}, false
 		}
 	}

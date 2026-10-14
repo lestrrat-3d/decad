@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -280,10 +281,10 @@ func stackedLumps(faces []*Face, anchors map[*Face]struct{}) ([]*Lump, error) {
 			}
 		}
 		if !anchored {
-			voids = append(voids, &Shell{faces: group, open: shellIsOpen(group), void: true})
+			voids = append(voids, &Shell{faces: group, n: topo.Shell{Open: shellIsOpen(group), Void: true}})
 			continue
 		}
-		outer = append(outer, &Lump{shells: []*Shell{{faces: group, open: shellIsOpen(group)}}})
+		outer = append(outer, &Lump{shells: []*Shell{{faces: group, n: topo.Shell{Open: shellIsOpen(group)}}}})
 	}
 	switch {
 	case len(voids) == 0:
@@ -374,7 +375,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true, kind: BodySolid}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: true}, kind: BodySolid}
 	work := freeform.NewFreeformWork()
 	base := sp.outerPrism()
 	colDelta := make([]float64, len(columns))
@@ -429,8 +430,12 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 			return nil, err
 		}
 		return &Face{surface: Plane{Frame: frame}, origins: []FeatureRef{{producer: ref, Role: role}},
-			body: body, area: area.Value, areaBound: area.Bound,
-			axialDelta: axial, hasAxialDelta: true}, nil
+			body: body, n: topo.Face{
+				Area:          area.Value,
+				AreaBound:     area.Bound,
+				AxialDelta:    axial,
+				HasAxialDelta: true,
+			}}, nil
 	}
 	// One bottom cap per region of the first slab and one top cap per region
 	// of the last, so CapStart(group) selects every lump's bottom face
@@ -460,7 +465,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 				if end.top {
 					coedges = columns[e.Column].top
 				}
-				f.loops = append(f.loops, &Loop{coedges: coedges, outer: e.Loop == 0})
+				f.loops = append(f.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: e.Loop == 0}})
 			}
 			if len(planar) == 0 {
 				capArea = part.area
@@ -494,7 +499,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 				if pl.Top {
 					coedges = columns[pl.Column].top
 				}
-				f.loops = append(f.loops, &Loop{coedges: coedges, outer: pl.Outer})
+				f.loops = append(f.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: pl.Outer}})
 			}
 			planar = append(planar, f)
 		}
@@ -528,7 +533,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		area = proofbound.BoundedAdd(area, proofbound.BoundedMul(col.perimeter, height))
 	}
 	for _, face := range planar[capCount:] {
-		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(face.area, face.areaBound))
+		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound))
 	}
 	if volume.Value <= 0 {
 		return nil, fmt.Errorf(`%w: a stacked prism encloses no volume`, ErrDegenerate)

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -120,7 +121,7 @@ func (up unstitchPayload) transform() r3.Transform { return up.xform }
 // payload-wide fallback (payloadAxialDelta) reads the same figure
 // selectedFaceAxialDelta already reads straight off the face when it holds
 // one (Face.hasAxialDelta) — zero, honestly, for a face that does not.
-func (up unstitchPayload) axialDelta() float64 { return up.face.axialDelta }
+func (up unstitchPayload) axialDelta() float64 { return up.face.n.AxialDelta }
 
 func (up unstitchPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	return evalUnstitchFaceContext(ctx, d, ref, up.face, up.bounds, composed)
@@ -138,7 +139,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	maxInputAbs := 0.0
 	for _, l := range srcFace.loops {
 		for _, ce := range l.coedges {
-			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.position), proofbound.VecMaxAbs(ce.edge.end.position))
+			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.start.n.Position), proofbound.VecMaxAbs(ce.edge.end.n.Position))
 		}
 	}
 	delta := 0.0
@@ -151,12 +152,12 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 		return nil, err
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, n: topo.Body{Solid: false}, kind: BodySheet}
 	nf.body = body
 	if err := attachFaceLoopsContext(ctx, []*Face{nf}); err != nil {
 		return nil, err
 	}
-	shell := &Shell{faces: []*Face{nf}, open: shellIsOpen([]*Face{nf})}
+	shell := &Shell{faces: []*Face{nf}, n: topo.Shell{Open: shellIsOpen([]*Face{nf})}}
 	body.lumps = []*Lump{{shells: []*Shell{shell}}}
 
 	// Area is the face's own reading, unaffected by delta: this evaluator
@@ -165,9 +166,9 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	// placement's held basis is orthonormal only to rounding, so
 	// chargePlacement widens the copied area and lengths for it.
 	body.area = Measurement{
-		Value:     units.SquareMillimeters(nf.area),
-		Exactness: exactnessOf(nf.areaBound),
-		Bound:     units.SquareMillimeters(nf.areaBound),
+		Value:     units.SquareMillimeters(nf.n.Area),
+		Exactness: exactnessOf(nf.n.AreaBound),
+		Bound:     units.SquareMillimeters(nf.n.AreaBound),
 	}
 	if err := chargePlacement(body, xform); err != nil {
 		return nil, err
@@ -229,7 +230,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 // enclosure rather than a dimensionless figure, so it does compose: the copy
 // carries its exact image under xform (Face.denotedUnder).
 func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform, delta float64) (*Face, error) {
-	if xform != r3.Identity() && srcFace.normalBound != 0 {
+	if xform != r3.Identity() && srcFace.n.NormalBound != 0 {
 		return nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
 	}
 
@@ -238,11 +239,11 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if nv, ok := newVertByOld[old]; ok {
 			return nv, nil
 		}
-		p := xform.Apply(old.position)
+		p := xform.Apply(old.n.Position)
 		if !proofbound.FiniteVec(p) {
 			return nil, fmt.Errorf(`%w: a placed unstitch vertex is not representable`, ErrUnsupported)
 		}
-		bound := old.bound.Base()
+		bound := old.n.Bound.Base()
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
@@ -250,7 +251,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		// restates under xform, composing rather than overwriting, so a
 		// vertex unstitched and later placed still carries the true
 		// accumulated motion.
-		nv := &Vertex{position: p, bound: units.Millimeters(bound), denot: old.denot.Compose(xform)}
+		nv := &Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(bound), Denot: old.n.Denot.Compose(xform)}}
 		newVertByOld[old] = nv
 		return nv, nil
 	}
@@ -272,22 +273,24 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if err != nil {
 			return nil, err
 		}
-		lengthBound := old.lengthBound
+		lengthBound := old.n.LengthBound
 		if delta > 0 {
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
-			curve:           publicCurve(curve),
-			start:           start,
-			end:             end,
-			convex:          old.convex,
-			length:          old.length,
-			lengthBound:     lengthBound,
-			lengthUnbounded: old.lengthUnbounded,
-			denot:           old.denot.Compose(xform),
+			curve: publicCurve(curve),
+			start: start,
+			end:   end,
+			n: topo.Edge{
+				Convex:          old.n.Convex,
+				Length:          old.n.Length,
+				LengthBound:     lengthBound,
+				LengthUnbounded: old.n.LengthUnbounded,
+				Denot:           old.n.Denot.Compose(xform),
+			},
 		}
-		ne.curveBound, ne.curveBounded = surfaceplace.PlacedCurveBound(
-			internalCurve(old.curve), old.curveBound, old.curveBounded, curve, xform)
+		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
+			internalCurve(old.curve), old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}
@@ -296,21 +299,23 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 	if err != nil {
 		return nil, err
 	}
-	axialDelta := srcFace.axialDelta
+	axialDelta := srcFace.n.AxialDelta
 	if delta > 0 {
 		axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 	}
 	nf := &Face{
-		surface:       publicSurface(transformed),
-		origins:       append([]FeatureRef(nil), srcFace.origins...),
-		area:          srcFace.area,
-		areaBound:     srcFace.areaBound,
-		reversed:      srcFace.reversed,
-		heldPlanar:    srcFace.heldPlanar,
-		axialDelta:    axialDelta,
-		hasAxialDelta: srcFace.hasAxialDelta,
-		normalBound:   srcFace.normalBound,
-		denoted:       srcFace.denotedUnder(xform),
+		surface: publicSurface(transformed),
+		origins: append([]FeatureRef(nil), srcFace.origins...),
+		n: topo.Face{
+			Area:          srcFace.n.Area,
+			AreaBound:     srcFace.n.AreaBound,
+			Reversed:      srcFace.n.Reversed,
+			HeldPlanar:    srcFace.n.HeldPlanar,
+			AxialDelta:    axialDelta,
+			HasAxialDelta: srcFace.n.HasAxialDelta,
+			NormalBound:   srcFace.n.NormalBound,
+			Denoted:       srcFace.denotedUnder(xform),
+		},
 	}
 	for _, l := range srcFace.loops {
 		if err := ctx.Err(); err != nil {
@@ -324,7 +329,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			}
 			coedges[i] = coedge{edge: ne, forward: ce.forward}
 		}
-		nf.loops = append(nf.loops, &Loop{coedges: coedges, outer: l.outer})
+		nf.loops = append(nf.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: l.n.Outer}})
 	}
 	return nf, nil
 }
@@ -387,17 +392,17 @@ func facePolygonBounds(nf *Face) (Box, error) {
 	var lo, hi r3.Vec
 	maxBound := 0.0
 	fold := func(v *Vertex) error {
-		if !proofbound.FiniteVec(v.position) {
+		if !proofbound.FiniteVec(v.n.Position) {
 			return fmt.Errorf(`%w: a placed unstitch vertex is not representable`, ErrUnsupported)
 		}
 		if !have {
-			lo, hi = v.position, v.position
+			lo, hi = v.n.Position, v.n.Position
 			have = true
 		} else {
-			lo = r3.Vec{X: math.Min(lo.X, v.position.X), Y: math.Min(lo.Y, v.position.Y), Z: math.Min(lo.Z, v.position.Z)}
-			hi = r3.Vec{X: math.Max(hi.X, v.position.X), Y: math.Max(hi.Y, v.position.Y), Z: math.Max(hi.Z, v.position.Z)}
+			lo = r3.Vec{X: math.Min(lo.X, v.n.Position.X), Y: math.Min(lo.Y, v.n.Position.Y), Z: math.Min(lo.Z, v.n.Position.Z)}
+			hi = r3.Vec{X: math.Max(hi.X, v.n.Position.X), Y: math.Max(hi.Y, v.n.Position.Y), Z: math.Max(hi.Z, v.n.Position.Z)}
 		}
-		maxBound = max(maxBound, v.bound.Base())
+		maxBound = max(maxBound, v.n.Bound.Base())
 		return nil
 	}
 	for _, l := range nf.loops {

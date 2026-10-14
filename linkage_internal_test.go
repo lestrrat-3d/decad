@@ -386,14 +386,14 @@ func TestVerifyLinkageKeepsTheNextProducerIdentity(t *testing.T) {
 	slide, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*Body{cube})
 	require.NoError(t, err)
 	before := doc.nextProducerID()
-	levelBefore, curveBefore := doc.nextLevel, doc.nextCurve
+	levelBefore, curveBefore := doc.n.NextLevel, doc.n.NextCurve
 	report, err := doc.VerifyLinkage(t.Context(), l, Drive{{Link: slide, From: units.Millimeters(0), To: units.Millimeters(30)}},
 		WithResolution(units.Scalar(1)))
 	require.NoError(t, err)
 	require.Len(t, report.Poses, 2)
 	require.Equal(t, before, doc.nextProducerID())
-	require.Equal(t, levelBefore, doc.nextLevel)
-	require.Equal(t, curveBefore, doc.nextCurve)
+	require.Equal(t, levelBefore, doc.n.NextLevel)
+	require.Equal(t, curveBefore, doc.n.NextCurve)
 	dup, err := Copy(t.Context(), cube)
 	require.NoError(t, err)
 	require.Equal(t, before, dup.originProducer())

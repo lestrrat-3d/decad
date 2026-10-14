@@ -736,10 +736,10 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		// The temporary curved cap carries its actual moved-facet departure.
 		// Complete source-pair and output-curve gates below scope this one
 		// allowance to the authenticated first tooth join.
-		bmB.Gate = max(bmB.Gate, mb.bound)
+		bmB.Gate = max(bmB.Gate, mb.n.Bound)
 	}
 	if spiralCombine != nil {
-		bmB.Gate = max(bmB.Gate, mb.bound)
+		bmB.Gate = max(bmB.Gate, mb.n.Bound)
 	}
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
@@ -842,7 +842,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	roundVol := proofbound.SweptVolumeAllow(stitched.Round, stitched.PreArea)
 	volSymDiff, areaSlack := booleanProofBounds(
 		symA, symB, roundVol,
-		ma.areaSlack, mb.areaSlack, stitched.DropArea,
+		ma.n.AreaSlack, mb.n.AreaSlack, stitched.DropArea,
 	)
 	if spiralJoin != nil || combinedAdmission != nil {
 		allowance, ok, err := spiralJoinAreaAllowance(ctx, a, b, stitched)
@@ -1072,7 +1072,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 // operands at VerifyAll and the one-entry cache keys on the level — so this
 // arm holds the invariant for any other path to the same composition.
 func operandSymDiff(m *Mesh) (float64, error) {
-	return meshbool.OperandSymDiff(m.boundaryOK, m.symDiffOK, m.volSymDiff)
+	return meshbool.OperandSymDiff(m.n.BoundaryOK, m.n.SymDiffOK, m.n.VolSymDiff)
 }
 
 // refuseUndecidableProximityWithConeCap is the tangency gate (docs/evaluator-design.md §9,

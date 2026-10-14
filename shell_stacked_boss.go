@@ -14,6 +14,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -233,7 +234,7 @@ func closedBossShellLumps(faces []*Face, outerFaceCount int) ([]*Lump, error) {
 		!closedBossShellEdgePairs(outer) || !closedBossShellEdgePairs(cavity) {
 		return nil, fmt.Errorf("%w: a closed boss shell needs two closed face components", ErrUnsupported)
 	}
-	return []*Lump{{shells: []*Shell{{faces: outer}, {faces: cavity, void: true}}}}, nil
+	return []*Lump{{shells: []*Shell{{faces: outer}, {faces: cavity, n: topo.Shell{Void: true}}}}}, nil
 }
 
 // Each component must use every edge exactly twice. A free edge or a repeated
@@ -394,7 +395,7 @@ func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
 	body.centroid = VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value), Bound: units.Millimeters(cb), Exactness: exactnessOf(cb)}
 	var a proofbound.BoundedScalar
 	for _, f := range body.Faces() {
-		a = proofbound.BoundedAdd(a, proofbound.MeasuredScalar(f.area, f.areaBound))
+		a = proofbound.BoundedAdd(a, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
 	}
 	body.area = Measurement{Value: units.SquareMillimeters(a.Value), Bound: units.SquareMillimeters(a.Bound), Exactness: exactnessOf(a.Bound)}
 	box, err := brepBoundsContext(ctx, bp)

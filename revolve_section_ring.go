@@ -126,8 +126,8 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 		groupForSpan[i] = len(mesh.groups)
 		mesh.groups = append(mesh.groups, facetGroup{
 			origins: append([]FeatureRef(nil), span.origins...),
-			surface: span.face.Surface(), denoted: span.face.denoted,
-			reversed: span.face.reversed, planar: planar,
+			surface: span.face.Surface(), denoted: span.face.n.Denoted,
+			reversed: span.face.n.Reversed, planar: planar,
 		})
 	}
 	ring.groups = groupForSpan

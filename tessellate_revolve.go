@@ -322,13 +322,13 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	if err != nil {
 		return nil, err
 	}
-	mesh.vertices = vertices
+	mesh.n.Vertices = vertices
 	if deltaC > p.deltaCPrior || deltaR > p.deltaRPrior {
 		return nil, fmt.Errorf(`%w: this revolve's stored coordinates sit farther from the samples they denote than the tolerance split reserved for them`, ErrUnsupported)
 	}
 	deltaR = math.Min(deltaR, proofbound.RigidRoundAllow(proofbound.AbsSumUpper(p.coordMax, deltaC), proofbound.VecMaxAbs(rp.xform.Translation())))
 	coord := proofbound.AbsSumUpper(deltaC, deltaR)
-	mesh.coordBound = coord
+	mesh.n.CoordBound = coord
 
 	// Walls, cell by cell. Both rings off the axis give a planar quad on the
 	// fixed diagonal; exactly one on the axis gives a fan; both on the axis is
@@ -447,15 +447,15 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				proofbound.ProductUpper(2, capSlack))
 		}
 	}
-	if len(mesh.triangles) == 0 {
+	if len(mesh.n.Triangles) == 0 {
 		return nil, fmt.Errorf(`%w: this revolve's recorded section sweeps no face`, ErrDegenerate)
 	}
 
 	// A reflected placement flips handedness, turning every counter-clockwise
 	// winding clockwise; reversing them restores outward orientation.
 	if rp.reflected() {
-		for i := range mesh.triangles {
-			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
+		for i := range mesh.n.Triangles {
+			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
 	}
 
@@ -472,10 +472,10 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			return nil, err
 		}
 	} else {
-		if err := tessellation.RequireClosedMesh(mesh.triangles); err != nil {
+		if err := tessellation.RequireClosedMesh(mesh.n.Triangles); err != nil {
 			return nil, fmt.Errorf(`%w: this revolve's cells do not close into a watertight boundary`, ErrUnsupported)
 		}
-		if err := tessellation.RequireVertexLinks(ctx, len(mesh.vertices), mesh.triangles); err != nil {
+		if err := tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles); err != nil {
 			return nil, err
 		}
 	}
@@ -486,12 +486,12 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// facets. It also builds the audit triangles the facet-pair audit below
 	// consumes, so the two share one pass and one work budget.
 	auditBudget := proofbound.NewWorkBudget(ctx)
-	auditTris, err := revolvemesh.RequireRevolveFacetAreas(auditBudget, mesh.vertices, mesh.triangles, coord)
+	auditTris, err := revolvemesh.RequireRevolveFacetAreas(auditBudget, mesh.n.Vertices, mesh.n.Triangles, coord)
 	if err != nil {
 		return nil, err
 	}
 	if p.verify >= VerifyBoundary {
-		if err := revolvemesh.RevolveContactAudit(auditBudget, auditTris, mesh.triangles, coord); err != nil {
+		if err := revolvemesh.RevolveContactAudit(auditBudget, auditTris, mesh.n.Triangles, coord); err != nil {
 			// A crossing or an undecided contact is the one failure a finer
 			// angular sequence can still answer, and §3 makes the global count the
 			// thing an angular failure increments. A canceled context or an
@@ -509,7 +509,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// sheet — which carries no free edge at all — is closed and keeps it.
 	if !sheet || rp.full {
 		anchor := rp.xform.Apply(p.basis.A3)
-		if !proofbound.FiniteVec(anchor) || tessellation.OrientationSign(mesh.vertices, mesh.triangles, anchor) <= 0 {
+		if !proofbound.FiniteVec(anchor) || tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, anchor) <= 0 {
 			return nil, fmt.Errorf(`%w: this revolve's assembled cells do not enclose a positive volume`, ErrUnsupported)
 		}
 	}
@@ -639,7 +639,7 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 			m.setFaceBound(f, capBound)
 		}
 	}
-	if proofbound.IsNonFinite(m.bound) {
+	if proofbound.IsNonFinite(m.n.Bound) {
 		return fmt.Errorf(`%w: this revolve mesh states no finite displacement bound`, ErrUnsupported)
 	}
 	if p.verify < VerifyAll {
@@ -649,7 +649,7 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		// would otherwise leave behind).
 		return nil
 	}
-	slack := proofbound.AbsSumUpper(cellSlack, revolvemesh.CoordinateAreaAllow(m.vertices, m.triangles, coord))
+	slack := proofbound.AbsSumUpper(cellSlack, revolvemesh.CoordinateAreaAllow(m.n.Vertices, m.n.Triangles, coord))
 	if allow := revolveaxis.SectionAreaAllow(p.rp.sectionDelta, p.Sweep, p.rp.sweep().Bound,
 		p.resolved, !p.rp.full && !p.rp.surfaceResult, p.section); allow > 0 {
 		slack = proofbound.AbsSumUpper(slack, allow)
@@ -657,7 +657,7 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 	if proofbound.IsNonFinite(slack) {
 		return fmt.Errorf(`%w: this revolve mesh states no finite area slack`, ErrUnsupported)
 	}
-	m.areaSlack = slack
+	m.n.AreaSlack = slack
 	if p.rp.surfaceResult {
 		return nil
 	}
@@ -668,7 +668,7 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 	if allow := revolveaxis.SectionVolumeAllow(p.rp.sectionDelta, p.Sweep, p.rp.sweep().Bound, p.section); allow > 0 {
 		sym = proofbound.AbsSumUpper(sym, allow)
 	}
-	m.volSymDiff = sym
-	m.symDiffOK = true
+	m.n.VolSymDiff = sym
+	m.n.SymDiffOK = true
 	return nil
 }

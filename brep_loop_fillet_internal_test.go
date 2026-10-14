@@ -123,7 +123,7 @@ func requireFilletPatches(t *testing.T, body *Body, cylinders, tori int) []*Face
 		default:
 			t.Fatalf("a fillet patch is a %T", f.Surface())
 		}
-		require.Zero(t, f.normalBound, "a fillet patch's tag is its built surface")
+		require.Zero(t, f.n.NormalBound, "a fillet patch's tag is its built surface")
 	}
 	require.Equal(t, [2]int{cylinders, tori}, got, "cylinder and torus patches")
 	return patches
@@ -1084,13 +1084,13 @@ func TestBrepLoopFilletBoundFixture(t *testing.T) {
 		fy, _ := y.Float64()
 		var held *Vertex
 		for vv := range vertices {
-			if vv.position.Sub(r3.NewVec(fx, fy, 10)).Len() < 1e-9 {
+			if vv.n.Position.Sub(r3.NewVec(fx, fy, 10)).Len() < 1e-9 {
 				require.Nil(t, held)
 				held = vv
 			}
 		}
 		require.NotNil(t, held, "a vertex sits at the contour corner (%v, %v)", fx, fy)
-		requireCentroidCovers(t, VecMeasurement{Value: held.position, Bound: held.bound}, [3]*big.Rat{x, y, q(10, 1)})
+		requireCentroidCovers(t, VecMeasurement{Value: held.n.Position, Bound: held.n.Bound}, [3]*big.Rat{x, y, q(10, 1)})
 	}
 
 	// Leg 2. The receiver's moments: the trapezoid prism less the pocket.
@@ -1205,10 +1205,10 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 			if math.Abs(surf.Axis.X) < 0.9 || math.Abs(surf.Origin.Y-20) > 2 {
 				continue
 			}
-			require.LessOrEqual(t, math.Abs(patch.area-straightArea), patch.areaBound+1e-5)
+			require.LessOrEqual(t, math.Abs(patch.n.Area-straightArea), patch.n.AreaBound+1e-5)
 			straightCount++
 		case Torus:
-			require.LessOrEqual(t, math.Abs(patch.area-curvedArea), patch.areaBound+1e-5)
+			require.LessOrEqual(t, math.Abs(patch.n.Area-curvedArea), patch.n.AreaBound+1e-5)
 			curvedCount++
 		}
 	}
@@ -1228,17 +1228,17 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 		wantLength += math.Sqrt(1+25*math.Sin(phi)*math.Sin(phi)/(25+10*offset)) * math.Pi / (2 * steps)
 	}
 	for _, edge := range seams {
-		require.Greater(t, edge.length, 1.0)
-		require.Greater(t, edge.lengthBound, 0.0)
-		require.LessOrEqual(t, math.Abs(edge.length-wantLength), edge.lengthBound+1e-6)
-		require.InDelta(t, 9, edge.end.position.Z, 1e-8)
-		require.InDelta(t, 10, edge.start.position.Z, 1e-8)
+		require.Greater(t, edge.n.Length, 1.0)
+		require.Greater(t, edge.n.LengthBound, 0.0)
+		require.LessOrEqual(t, math.Abs(edge.n.Length-wantLength), edge.n.LengthBound+1e-6)
+		require.InDelta(t, 9, edge.end.n.Position.Z, 1e-8)
+		require.InDelta(t, 10, edge.start.n.Position.Z, 1e-8)
 	}
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.NotEmpty(t, mesh.Triangles())
-	incidence := make([]uint8, len(mesh.vertices))
-	for ti, tri := range mesh.triangles {
+	incidence := make([]uint8, len(mesh.n.Vertices))
+	for ti, tri := range mesh.n.Triangles {
 		var bit uint8
 		switch mesh.source[ti].Surface().(type) {
 		case Cylinder:
@@ -1255,7 +1255,7 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 	}
 	checked := 0
 	for vi, mask := range incidence {
-		p := mesh.vertices[vi]
+		p := mesh.n.Vertices[vi]
 		if mask != 3 || p.Z <= 9+1e-8 || p.Z >= 10-1e-8 || p.Y >= 20-1e-8 {
 			continue
 		}
@@ -1402,7 +1402,7 @@ func TestBrepLoopFilletConsumers(t *testing.T) {
 	for _, f := range filletPatchesOf(turned) {
 		for _, e := range f.Edges() {
 			for _, v := range []*Vertex{e.Start(), e.End()} {
-				p := v.position
+				p := v.n.Position
 				require.GreaterOrEqual(t, p.X, turned.bounds.Min.X-1e-9)
 				require.LessOrEqual(t, p.X, turned.bounds.Max.X+1e-9)
 			}
@@ -1413,5 +1413,5 @@ func TestBrepLoopFilletConsumers(t *testing.T) {
 	// their own tests in tessellate_brep_fillet_internal_test.go.
 	m, err := tessellateContext(t.Context(), out, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
-	require.True(t, m.symDiffOK)
+	require.True(t, m.n.SymDiffOK)
 }
