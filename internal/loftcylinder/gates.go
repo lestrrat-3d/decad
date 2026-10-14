@@ -28,7 +28,7 @@ func TriangleMinRadius2(verts []r3.Vec, tri [3]int) *big.Rat {
 		coords[i] = [2]*big.Rat{proofarith.FloatRat(verts[index].X), proofarith.FloatRat(verts[index].Y)}
 		for _, c := range coords[i] {
 			if c.Denom().Cmp(den) > 0 {
-				den = c.Denom()
+				den = new(big.Int).Set(c.Denom())
 			}
 		}
 	}

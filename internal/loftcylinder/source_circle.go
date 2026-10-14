@@ -275,8 +275,8 @@ func lcm(a, b *big.Int) *big.Int {
 }
 
 func sourceIntRayOf(ray sourceRay) sourceIntRay {
-	den := lcm(lcm(ray.origin.X.Denom(), ray.origin.Y.Denom()),
-		lcm(ray.direction.X.Denom(), ray.direction.Y.Denom()))
+	den := lcm(lcm(new(big.Int).Set(ray.origin.X.Denom()), new(big.Int).Set(ray.origin.Y.Denom())),
+		lcm(new(big.Int).Set(ray.direction.X.Denom()), new(big.Int).Set(ray.direction.Y.Denom())))
 	scale := func(q *big.Rat) *big.Int {
 		return new(big.Int).Mul(q.Num(), new(big.Int).Quo(den, q.Denom()))
 	}
@@ -304,7 +304,7 @@ func (c Connector) crossingBox(tLo, tHi, radius2 *big.Rat) XYBox {
 		intLo[half] = sourceIntRayOf(raysLo[half])
 		intHi[half] = sourceIntRayOf(raysHi[half])
 	}
-	rn, rd := radius2.Num(), radius2.Denom()
+	rn, rd := new(big.Int).Set(radius2.Num()), new(big.Int).Set(radius2.Denom())
 	sameT := tLo.Cmp(tHi) == 0
 	// low = L/2^k, high = H/2^k.
 	low, high := big.NewInt(0), big.NewInt(2)

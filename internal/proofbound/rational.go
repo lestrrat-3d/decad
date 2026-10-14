@@ -229,11 +229,9 @@ func ratSquareCmp(f float64, q *big.Rat) (int, bool) {
 	e2 := 2 * (exp - 53)
 	lhs := m.Mul(m, m)
 	lhs.Mul(lhs, q.Denom())
-	rhs := q.Num()
 	if e2 >= 0 {
 		lhs.Lsh(lhs, uint(e2))
-	} else {
-		rhs = new(big.Int).Lsh(rhs, uint(-e2))
+		return lhs.Cmp(q.Num()), true
 	}
-	return lhs.Cmp(rhs), true
+	return lhs.Cmp(new(big.Int).Lsh(q.Num(), uint(-e2))), true
 }

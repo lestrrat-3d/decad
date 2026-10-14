@@ -56,7 +56,7 @@ func NewScaledIvMat(m IvMat) ScaledIvMat {
 	den := big.NewInt(1)
 	for i := range 3 {
 		for j := range 3 {
-			den = proofarith.LcmInt(proofarith.LcmInt(den, m[i][j].Lo.Denom()), m[i][j].Hi.Denom())
+			den = proofarith.LcmInt(proofarith.LcmInt(den, new(big.Int).Set(m[i][j].Lo.Denom())), new(big.Int).Set(m[i][j].Hi.Denom()))
 		}
 	}
 	s := ScaledIvMat{Den: den}

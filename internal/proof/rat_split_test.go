@@ -133,7 +133,7 @@ func TestSplitGCDRatOpsMatchBigRat(t *testing.T) {
 // TestNonReducedWitness is the 3/9 operand the review used: the value is
 // exact, the representation is not lowest terms. Keys built from value text
 // would see 3/18 where big.Rat gives 1/6; no production path builds such an
-// operand (see the precondition on AddRat).
+// operand (TestNoRatWritesThroughNumDenom).
 func TestNonReducedWitness(t *testing.T) {
 	t.Parallel()
 	third := big.NewRat(1, 9)

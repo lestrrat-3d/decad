@@ -91,8 +91,8 @@ func ChamferMiddleHeldRootInside(verts []r3.Vec, tris [][3]int, walls, root int,
 	r := proofarith.FloatRat(radius)
 	rn2 := new(big.Int).Mul(r.Num(), r.Num())
 	rd2 := new(big.Int).Mul(r.Denom(), r.Denom())
-	loN, loD := zLo.Num(), zLo.Denom()
-	hiN, hiD := zHi.Num(), zHi.Denom()
+	loN, loD := new(big.Int).Set(zLo.Num()), new(big.Int).Set(zLo.Denom())
+	hiN, hiD := new(big.Int).Set(zHi.Num()), new(big.Int).Set(zHi.Denom())
 	var lhs, rhs, t big.Int
 	for j := 2 * root; j < walls; j++ {
 		tri := tris[j]

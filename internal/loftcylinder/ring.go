@@ -428,7 +428,7 @@ func RingWallClear(ctx context.Context, a, b RingVec,
 
 // RingMappedPoint maps p to height level, scaling its homogeneous weight.
 func RingMappedPoint(p proofarith.Xpt, level *big.Rat) proofarith.Xpt {
-	den := level.Denom()
+	den := new(big.Int).Set(level.Denom())
 	return proofarith.Xpt{
 		X: new(big.Int).Mul(p.X, den), Y: new(big.Int).Mul(p.Y, den),
 		Z: new(big.Int).Mul(p.W, level.Num()), W: new(big.Int).Mul(p.W, den),

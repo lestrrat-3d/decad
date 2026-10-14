@@ -21,12 +21,11 @@ func ScaleVertices(exact []sweeparc.RatVec, anchor sweeparc.RatVec) (*big.Int, [
 	den := big.NewInt(1)
 	var rem, g big.Int
 	widen := func(r *big.Rat) {
-		d := r.Denom()
-		if rem.Rem(den, d).Sign() == 0 {
+		if rem.Rem(den, r.Denom()).Sign() == 0 {
 			return
 		}
-		g.GCD(nil, nil, den, d)
-		den.Mul(den, rem.Quo(d, &g))
+		g.GCD(nil, nil, den, r.Denom())
+		den.Mul(den, rem.Quo(r.Denom(), &g))
 	}
 	for _, p := range exact {
 		for axis := range 3 {
@@ -168,12 +167,11 @@ func TriangleAreas(ctx context.Context, exact []sweeparc.RatVec, tris [][3]int) 
 		var rem, gcd big.Int
 		for _, vertex := range t {
 			for axis := range 3 {
-				d := exact[vertex][axis].Denom()
-				if rem.Rem(den, d).Sign() == 0 {
+				if rem.Rem(den, exact[vertex][axis].Denom()).Sign() == 0 {
 					continue
 				}
-				gcd.GCD(nil, nil, den, d)
-				den.Mul(den, rem.Quo(d, &gcd))
+				gcd.GCD(nil, nil, den, exact[vertex][axis].Denom())
+				den.Mul(den, rem.Quo(exact[vertex][axis].Denom(), &gcd))
 			}
 		}
 		var edge [2][3]big.Int

@@ -132,12 +132,12 @@ func ChamferNearPieces(tri [3]int, xverts []proofarith.Xpt,
 	var a, b proofarith.Xpt
 	switch {
 	case len(caps) == 1 && len(sides) == 2:
-		a = proofarith.Xlerp(sides[0], caps[0], fraction.Num(), fraction.Denom())
-		b = proofarith.Xlerp(sides[1], caps[0], fraction.Num(), fraction.Denom())
+		a = proofarith.Xlerp(sides[0], caps[0], new(big.Int).Set(fraction.Num()), new(big.Int).Set(fraction.Denom()))
+		b = proofarith.Xlerp(sides[1], caps[0], new(big.Int).Set(fraction.Num()), new(big.Int).Set(fraction.Denom()))
 		near = [][3]proofarith.Xpt{{sides[0], sides[1], b}, {sides[0], b, a}}
 	case len(caps) == 2 && len(sides) == 1:
-		a = proofarith.Xlerp(sides[0], caps[0], fraction.Num(), fraction.Denom())
-		b = proofarith.Xlerp(sides[0], caps[1], fraction.Num(), fraction.Denom())
+		a = proofarith.Xlerp(sides[0], caps[0], new(big.Int).Set(fraction.Num()), new(big.Int).Set(fraction.Denom()))
+		b = proofarith.Xlerp(sides[0], caps[1], new(big.Int).Set(fraction.Num()), new(big.Int).Set(fraction.Denom()))
 		near = [][3]proofarith.Xpt{{sides[0], a, b}}
 	default:
 		return nil, ChamferSplitEdge{},
@@ -171,13 +171,13 @@ func ChamferFarTriangles(tri [3]int, xverts []proofarith.Xpt,
 		}
 	}
 	if len(caps) == 1 && len(sides) == 2 {
-		a := proofarith.Xlerp(sides[0], caps[0], fraction.Num(), fraction.Denom())
-		b := proofarith.Xlerp(sides[1], caps[0], fraction.Num(), fraction.Denom())
+		a := proofarith.Xlerp(sides[0], caps[0], new(big.Int).Set(fraction.Num()), new(big.Int).Set(fraction.Denom()))
+		b := proofarith.Xlerp(sides[1], caps[0], new(big.Int).Set(fraction.Num()), new(big.Int).Set(fraction.Denom()))
 		return [][3]proofarith.Xpt{{caps[0], a, b}}, nil
 	}
 	if len(caps) == 2 && len(sides) == 1 {
-		a := proofarith.Xlerp(sides[0], caps[0], fraction.Num(), fraction.Denom())
-		b := proofarith.Xlerp(sides[0], caps[1], fraction.Num(), fraction.Denom())
+		a := proofarith.Xlerp(sides[0], caps[0], new(big.Int).Set(fraction.Num()), new(big.Int).Set(fraction.Denom()))
+		b := proofarith.Xlerp(sides[0], caps[1], new(big.Int).Set(fraction.Num()), new(big.Int).Set(fraction.Denom()))
 		return [][3]proofarith.Xpt{{caps[0], caps[1], b}, {caps[0], b, a}}, nil
 	}
 	return nil, fmt.Errorf("%w: cap band split lacks two axial levels", decaderr.ErrUnsupported)
@@ -200,7 +200,7 @@ func chamferPointEdgeWithin(p proofarith.Xpt,
 	} else if t.Cmp(big.NewRat(1, 1)) > 0 {
 		t.SetInt64(1)
 	}
-	nearest := proofarith.Xlerp(edge.A, edge.B, t.Num(), t.Denom())
+	nearest := proofarith.Xlerp(edge.A, edge.B, new(big.Int).Set(t.Num()), new(big.Int).Set(t.Denom()))
 	gap := proofarith.Xsub(p, nearest)
 	return proofarith.XdotRat(gap, gap).Cmp(reach2) < 0
 }

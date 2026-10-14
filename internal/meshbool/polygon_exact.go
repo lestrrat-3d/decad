@@ -207,7 +207,8 @@ func CmpClipFrac(x, y ClipFrac) int {
 func EdgeCross2Fracs(e0, e1, a, b Xp2) (ClipFrac, ClipFrac) {
 	if e0.Hu == nil || e1.Hu == nil || a.Hu == nil || b.Hu == nil {
 		fa, fb := Cross2x(e0, e1, a), Cross2x(e0, e1, b)
-		return ClipFrac{Num: fa.Num(), Den: fa.Denom()}, ClipFrac{Num: fb.Num(), Den: fb.Denom()}
+		return ClipFrac{Num: new(big.Int).Set(fa.Num()), Den: new(big.Int).Set(fa.Denom())},
+			ClipFrac{Num: new(big.Int).Set(fb.Num()), Den: new(big.Int).Set(fb.Denom())}
 	}
 	// The edge's own homogeneous difference, computed once for both points.
 	baU := new(big.Int).Sub(new(big.Int).Mul(e1.Hu, e0.Hw), new(big.Int).Mul(e0.Hu, e1.Hw))

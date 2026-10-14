@@ -149,11 +149,11 @@ func columnTriangleGap(tri [3][2]proof.Dyadic, box columnBox, needClearance bool
 			}
 		}
 		ax, ay := axis[0].Rat(), axis[1].Rat()
-		axisDen := proof.LcmInt(new(big.Int).Set(ax.Denom()), ay.Denom())
+		axisDen := proof.LcmInt(new(big.Int).Set(ax.Denom()), new(big.Int).Set(ay.Denom()))
 		boxLo, boxHi := box.project(proof.ScaledNum(ax, axisDen), proof.ScaledNum(ay, axisDen))
 		boxDen := new(big.Int).Mul(box.den, axisDen)
 		low, high := triLo.Rat(), triHi.Rat()
-		den := proof.LcmInt(proof.LcmInt(boxDen, low.Denom()), high.Denom())
+		den := proof.LcmInt(proof.LcmInt(boxDen, new(big.Int).Set(low.Denom())), new(big.Int).Set(high.Denom()))
 		scale := new(big.Int).Quo(den, boxDen)
 		// The gaps triLo − boxHi and boxLo − triHi over den.
 		gap := proof.ScaledNum(low, den)

@@ -988,7 +988,7 @@ func planeKey(d [3]*big.Int, off, w *big.Int) []byte {
 		num, den = new(big.Int).Rsh(off, tz), new(big.Int).Rsh(w, tz)
 	default:
 		r := new(big.Rat).SetFrac(off, w)
-		num, den = r.Num(), r.Denom()
+		num, den = new(big.Int).Set(r.Num()), new(big.Int).Set(r.Denom())
 	}
 	buf := make([]byte, 0, 96)
 	for _, v := range [5]*big.Int{d[0], d[1], d[2], num, den} {

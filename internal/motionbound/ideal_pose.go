@@ -99,8 +99,8 @@ func (mf MotionFrame) ScaledRotation(sin, cos proofbound.RatInterval) ScaledIvMa
 		squared.Add(squared, new(big.Int).Mul(axis[k], axis[k]))
 	}
 	sinUnit := proofbound.IntervalMul(sin, mf.Unit)
-	sinDen := proofarith.LcmInt(new(big.Int).Set(sinUnit.Lo.Denom()), sinUnit.Hi.Denom())
-	cosDen := proofarith.LcmInt(new(big.Int).Set(cos.Lo.Denom()), cos.Hi.Denom())
+	sinDen := proofarith.LcmInt(new(big.Int).Set(sinUnit.Lo.Denom()), new(big.Int).Set(sinUnit.Hi.Denom()))
+	cosDen := proofarith.LcmInt(new(big.Int).Set(cos.Lo.Denom()), new(big.Int).Set(cos.Hi.Denom()))
 	sinScale := new(big.Int).Mul(sinDen, axisDen)
 	cosScale := new(big.Int).Mul(cosDen, squared)
 	den := proofarith.LcmInt(sinScale, cosScale)

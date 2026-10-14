@@ -153,7 +153,7 @@ func loftCylinderChamferBridgeCap(ctx context.Context, fp facetedPayload,
 				return 0, fmt.Errorf("%w: top band edge does not span source cap", ErrUnsupported)
 			}
 			t := new(big.Rat).Quo(new(big.Rat).Sub(level, az), new(big.Rat).Sub(bz, az))
-			crossing = append(crossing, intern(proofarith.Xlerp(a, b, t.Num(), t.Denom())))
+			crossing = append(crossing, intern(proofarith.Xlerp(a, b, new(big.Int).Set(t.Num()), new(big.Int).Set(t.Denom()))))
 			dx := new(big.Rat).Sub(meshbool.RatCoordOf(a, 0), meshbool.RatCoordOf(b, 0))
 			dy := new(big.Rat).Sub(meshbool.RatCoordOf(a, 1), meshbool.RatCoordOf(b, 1))
 			span2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))

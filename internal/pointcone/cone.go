@@ -30,8 +30,8 @@ func ConstantsOf(apex, slope *big.Rat) *Consts {
 		d, _ := proofarith.DyOfRat(new(big.Rat).SetInt(z))
 		return d
 	}
-	an, ad := dyInt(apex.Num()), dyInt(apex.Denom())
-	kn, kd := dyInt(slope.Num()), dyInt(slope.Denom())
+	an, ad := dyInt(new(big.Int).Set(apex.Num())), dyInt(new(big.Int).Set(apex.Denom()))
+	kn, kd := dyInt(new(big.Int).Set(slope.Num())), dyInt(new(big.Int).Set(slope.Denom()))
 	sum := proofarith.DyAdd(kd, kn)
 	ankd := proofarith.DyMul(an, kd)
 	apexF, _ := apex.Float64()

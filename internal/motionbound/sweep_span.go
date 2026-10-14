@@ -32,7 +32,7 @@ func SweepCornerSpan(points []proofarith.DyV3, delta [3]proofarith.Dyadic,
 			for index, point := range points {
 				starts[index] = point[axis].Rat()
 			}
-			den := proofarith.LcmInt(proofarith.LcmInt(proofarith.CommonDenom(starts...), lo.Denom()), hi.Denom())
+			den := proofarith.LcmInt(proofarith.LcmInt(proofarith.CommonDenom(starts...), new(big.Int).Set(lo.Denom())), new(big.Int).Set(hi.Denom()))
 			output.Den[axis] = den
 			loN, hiN := proofarith.ScaledNum(lo, den), proofarith.ScaledNum(hi, den)
 			for index, start := range starts {
@@ -79,8 +79,8 @@ func SweepCornerSpan(points []proofarith.DyV3, delta [3]proofarith.Dyadic,
 		following, preceding := (axis+1)%3, (axis+2)%3
 		v := velocity[axis]
 		scaleF, scaleP := frame.Axis[following], frame.Axis[preceding]
-		scaleDen := proofarith.LcmInt(new(big.Int).Set(scaleF.Denom()), scaleP.Denom())
-		derivativeDen := proofarith.LcmInt(new(big.Int).Mul(spanDen, scaleDen), v.Denom())
+		scaleDen := proofarith.LcmInt(new(big.Int).Set(scaleF.Denom()), new(big.Int).Set(scaleP.Denom()))
+		derivativeDen := proofarith.LcmInt(new(big.Int).Mul(spanDen, scaleDen), new(big.Int).Set(v.Denom()))
 		multiplierF := new(big.Int).Quo(derivativeDen, new(big.Int).Mul(spanDen, scaleF.Denom()))
 		multiplierF.Mul(multiplierF, scaleF.Num())
 		multiplierP := new(big.Int).Quo(derivativeDen, new(big.Int).Mul(spanDen, scaleP.Denom()))
@@ -88,7 +88,7 @@ func SweepCornerSpan(points []proofarith.DyV3, delta [3]proofarith.Dyadic,
 		velocityN := proofarith.ScaledNum(v, derivativeDen)
 		shift := new(big.Rat).Add(frame.Center[axis], new(big.Rat).Mul(v, midTime))
 		travelDen := new(big.Int).Mul(derivativeDen, halfDuration.Denom())
-		den := proofarith.LcmInt(proofarith.LcmInt(midDen, shift.Denom()), travelDen)
+		den := proofarith.LcmInt(proofarith.LcmInt(midDen, new(big.Int).Set(shift.Denom())), travelDen)
 		output.Den[axis] = den
 		midMultiplier := new(big.Int).Quo(den, midDen)
 		travelMultiplier := new(big.Int).Quo(den, travelDen)
