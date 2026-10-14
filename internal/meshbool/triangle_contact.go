@@ -550,20 +550,24 @@ func PointOnTri(p proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) bool {
 
 // PlaneSide is the sign of ((b-a) x (p-a)) . n. It returns 0 without exact
 // work when p holds the same four coordinate pointers as a or as b: p-a is then
-// the zero vector, or p-a equals b-a and their cross product is zero.
+// the zero vector, or p-a equals b-a and their cross product is zero. This
+// holds for any weights. The shortcut applies only when a, b and n have every
+// coordinate set (p then has them too, sharing a or b), so a nil field still panics in the exact path.
 func PlaneSide(a, b, p, n proof.Xpt) int {
-	if xptShared(p, a) || xptShared(p, b) {
+	if xptComplete(a) && xptComplete(b) && xptComplete(n) &&
+		(xptShared(p, a) || xptShared(p, b)) {
 		return 0
 	}
 	return proof.XdotSign(proof.Xcross(proof.Xsub(b, a), proof.Xsub(p, a)), n)
 }
 
-// xptShared reports whether p and q hold the same four coordinate pointers,
-// which makes them one exact point. A nil pointer never matches.
+// xptShared reports whether p and q hold the same four coordinate pointers.
 func xptShared(p, q proof.Xpt) bool {
-	return p.X != nil && p.Y != nil && p.Z != nil && p.W != nil &&
-		p.X == q.X && p.Y == q.Y && p.Z == q.Z && p.W == q.W
+	return p.X == q.X && p.Y == q.Y && p.Z == q.Z && p.W == q.W
 }
+
+// xptComplete reports whether all four coordinates are set.
+func xptComplete(p proof.Xpt) bool { return p.X != nil && p.Y != nil && p.Z != nil && p.W != nil }
 
 func PointOnSegment3D(a, b, p proof.Xpt) bool {
 	delta := proof.Xsub(b, a)
@@ -637,10 +641,14 @@ func SegTriOverlap2(a, b, ta, tb, tc Xp2) bool {
 		case sa < 0 && sb < 0:
 			return false
 		case sa < 0 && sb == 0, sa == 0 && sb < 0:
-			// The clip parameter is exactly 1 (a raised lower bound) or
-			// exactly 0 (a lowered upper bound). Every bound stays in
-			// [0, 1], so lo < hi fails at the end whatever later edges do.
-			return false
+			// With exact signs and positive weights the clip parameter is
+			// exactly 1 (a raised lower bound) or exactly 0 (a lowered upper
+			// bound), and every bound stays in [0, 1], so lo < hi fails at
+			// the end whatever later edges do. clipExitExact states when
+			// those premises hold; otherwise the clip below runs as before.
+			if clipExitExact(a, b, ta, tb, tc) {
+				return false
+			}
 		}
 		// Exactly one of the two signs is negative here, so fa ≠ fb and the
 		// clip point t = −fa/(fb − fa) is defined. Writing fa = na/wa and
@@ -676,6 +684,40 @@ func SegTriOverlap2(a, b, ta, tb, tc Xp2) bool {
 		}
 	}
 	return CmpClipFrac(lo, hi) < 0
+}
+
+// clipExitExact reports whether the five points of one SegTriOverlap2 call
+// satisfy the premises of its zero-endpoint exit. Every point must carry a
+// trusted float cache (built by a constructor, or FloatFinite false), so a
+// float-decided sign equals the exact sign. A homogeneous point must have all
+// three fields set and a positive weight, since the clip formula divides by
+// those weights and Cross2xSign reads the numerator's sign as the sign. When
+// all five are homogeneous only the homogeneous fields are read; otherwise U
+// and V of all five must be set, because EdgeCross2Fracs then reads those.
+func clipExitExact(a, b, ta, tb, tc Xp2) bool {
+	pts := [5]Xp2{a, b, ta, tb, tc}
+	allHom := true
+	for _, p := range pts {
+		if !p.floatFromExact && p.FloatFinite {
+			return false
+		}
+		if p.Hu == nil {
+			allHom = false
+			continue
+		}
+		if !homComplete(p) || p.Hw.Sign() <= 0 {
+			return false
+		}
+	}
+	if allHom {
+		return true
+	}
+	for _, p := range pts {
+		if !ratComplete(p) {
+			return false
+		}
+	}
+	return true
 }
 
 // CoplanarOverlap reports whether two coplanar triangles share positive

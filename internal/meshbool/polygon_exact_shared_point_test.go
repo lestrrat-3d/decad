@@ -1,6 +1,7 @@
 package meshbool
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand/v2"
@@ -375,5 +376,270 @@ func TestSegTriOverlap2ZeroEndpointSignSkipsClip(t *testing.T) {
 		slow := testing.AllocsPerRun(20, func() { got = oracleSegTriOverlap2(seg[0], seg[1], ta, tb, tc) })
 		require.False(t, got)
 		require.Less(t, fast, slow)
+	}
+}
+
+// outcome is what a call did: the value it returned, or the value it panicked
+// with. The differential tests below compare it between the frozen old body
+// and the production function, so a panic that disappears, appears or changes
+// is a difference like a changed result.
+func outcome(call func() any) string {
+	var out string
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				out = fmt.Sprintf("panic: %v", r)
+			}
+		}()
+		out = fmt.Sprintf("value: %v", call())
+	}()
+	return out
+}
+
+// xp2Masked copies p keeping only the fields whose bit is set in mask (bit 0
+// U, 1 V, 2 Hu, 3 Hv, 4 Hw). The float cache stays as it was.
+func xp2Masked(p Xp2, mask int) Xp2 {
+	if mask&1 == 0 {
+		p.U = nil
+	}
+	if mask&2 == 0 {
+		p.V = nil
+	}
+	if mask&4 == 0 {
+		p.Hu = nil
+	}
+	if mask&8 == 0 {
+		p.Hv = nil
+	}
+	if mask&16 == 0 {
+		p.Hw = nil
+	}
+	return p
+}
+
+// xp2Weighted respells a homogeneous point with weight w (zero and negative
+// included): numerator and weight scale together, the rational and float
+// fields stay as the constructor made them.
+func xp2Weighted(p Xp2, w int64) Xp2 {
+	bw := big.NewInt(w)
+	p.Hu = new(big.Int).Mul(p.Hu, bw)
+	p.Hv = new(big.Int).Mul(p.Hv, bw)
+	p.Hw = new(big.Int).Mul(p.Hw, bw)
+	return p
+}
+
+// TestCross2xSignMalformedPointsMatchOracle enumerates every nil-field mask of
+// a shared pair and of the third point. Shared pointers must never turn a
+// panic of the old exact path into a 0.
+func TestCross2xSignMalformedPointsMatchOracle(t *testing.T) {
+	t.Parallel()
+	for _, finite := range []bool{false, true} {
+		for kind := range 3 {
+			base := sharedPointLifts(1, 1)[kind]
+			other := sharedPointLifts(3, 5)[kind]
+			base.FloatFinite, other.FloatFinite = finite, finite
+			for ma := range 32 {
+				for mc := range 32 {
+					a, c := xp2Masked(base, ma), xp2Masked(other, mc)
+					relifted := xp2Masked(sharedPointLifts(1, 1)[kind], ma)
+					relifted.FloatFinite = finite
+					for _, tri := range [][3]Xp2{
+						{a, a, c}, {a, c, a}, {c, a, a}, {a, relifted, c}, {a, a, a}, {a, c, c},
+					} {
+						want := outcome(func() any { return oracleCross2xSign(tri[0], tri[1], tri[2]) })
+						got := outcome(func() any { return Cross2xSign(tri[0], tri[1], tri[2]) })
+						require.Equal(t, want, got, "kind %d finite %v ma %d mc %d", kind, finite, ma, mc)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestCross2xSignMalformedSharedPairPanicsLikeTheOldPath(t *testing.T) {
+	t.Parallel()
+	a := NewXP2(big.NewRat(0, 1), big.NewRat(0, 1))
+	require.Panics(t, func() { oracleCross2xSign(a, a, Xp2{}) })
+	require.Panics(t, func() { Cross2xSign(a, a, Xp2{}) })
+
+	h := NewXP2FromXpt(proof.XptOf(r3.Vec{X: 1, Y: 1}), 0, 1)
+	c := NewXP2FromXpt(proof.XptOf(r3.Vec{X: 3, Y: 5}), 0, 1)
+	c.Hv = nil
+	require.Panics(t, func() { oracleCross2xSign(h, h, c) })
+	require.Panics(t, func() { Cross2xSign(h, h, c) })
+}
+
+func xptMasked(p proof.Xpt, mask int) proof.Xpt {
+	if mask&1 == 0 {
+		p.X = nil
+	}
+	if mask&2 == 0 {
+		p.Y = nil
+	}
+	if mask&4 == 0 {
+		p.Z = nil
+	}
+	if mask&8 == 0 {
+		p.W = nil
+	}
+	return p
+}
+
+func TestPlaneSideMalformedPointsMatchOracle(t *testing.T) {
+	t.Parallel()
+	a := proof.XptOf(r3.Vec{X: 1, Y: 2, Z: 0.5})
+	b := proof.XptOf(r3.Vec{X: 4, Y: 1, Z: 2})
+	n := proof.XptOf(r3.Vec{X: 1, Y: 2, Z: 3})
+	for ma := range 16 {
+		for mb := range 16 {
+			for mn := range 16 {
+				ma2, mb2, mn2 := xptMasked(a, ma), xptMasked(b, mb), xptMasked(n, mn)
+				for _, args := range [][4]proof.Xpt{{ma2, mb2, ma2, mn2}, {ma2, mb2, mb2, mn2}} {
+					want := outcome(func() any { return oraclePlaneSide(args[0], args[1], args[2], args[3]) })
+					got := outcome(func() any { return PlaneSide(args[0], args[1], args[2], args[3]) })
+					require.Equal(t, want, got, "ma %d mb %d mn %d", ma, mb, mn)
+				}
+			}
+		}
+	}
+}
+
+func TestPlaneSideSharedPointWithNilNormalPanics(t *testing.T) {
+	t.Parallel()
+	a := proof.XptOf(r3.Vec{X: 1, Y: 2, Z: 0.5})
+	b := proof.XptOf(r3.Vec{X: 4, Y: 1, Z: 2})
+	require.Panics(t, func() { oraclePlaneSide(a, b, a, proof.Xpt{}) })
+	require.Panics(t, func() { PlaneSide(a, b, a, proof.Xpt{}) })
+}
+
+// TestPlaneSideSharedPointWithOddWeightsMatchesOracle runs the shortcut with
+// zero and negative weights on every point, which the old exact path accepts.
+func TestPlaneSideSharedPointWithOddWeightsMatchesOracle(t *testing.T) {
+	t.Parallel()
+	mk := func(x, y, z, w int64) proof.Xpt {
+		return proof.Xpt{X: big.NewInt(x), Y: big.NewInt(y), Z: big.NewInt(z), W: big.NewInt(w)}
+	}
+	for _, wa := range []int64{1, 0, -2} {
+		for _, wb := range []int64{1, 0, -3} {
+			for _, wn := range []int64{1, 0, -1} {
+				a, b, n := mk(1, 2, 0, wa), mk(4, 1, 2, wb), mk(1, 2, 3, wn)
+				for _, args := range [][4]proof.Xpt{{a, b, a, n}, {a, b, b, n}} {
+					want := outcome(func() any { return oraclePlaneSide(args[0], args[1], args[2], args[3]) })
+					got := outcome(func() any { return PlaneSide(args[0], args[1], args[2], args[3]) })
+					require.Equal(t, want, got, "weights %d %d %d", wa, wb, wn)
+				}
+			}
+		}
+	}
+}
+
+// homPoint2 builds a homogeneous Xp2 from raw integers with no constructor,
+// so a zero or negative weight survives. FloatFinite stays false.
+func homPoint2(hu, hv, hw int64) Xp2 {
+	return Xp2{Hu: big.NewInt(hu), Hv: big.NewInt(hv), Hw: big.NewInt(hw)}
+}
+
+// TestSegTriOverlap2ZeroWeightWitness is the review's witness: a zero weight
+// on b makes the old clip form t = 0/0 and report an overlap.
+func TestSegTriOverlap2ZeroWeightWitness(t *testing.T) {
+	t.Parallel()
+	ta, tb, tc := homPoint2(0, 0, 1), homPoint2(2, 0, 1), homPoint2(0, 2, 1)
+	a, b := homPoint2(1, -1, 1), homPoint2(0, 0, 0)
+	require.True(t, oracleSegTriOverlap2(a, b, ta, tb, tc))
+	require.True(t, SegTriOverlap2(a, b, ta, tb, tc))
+}
+
+// TestSegTriOverlap2OddWeightsMatchOracle gives each of the five points every
+// weight in {2, 0, -1} over configurations whose clip loop reaches the zero
+// endpoint exit.
+func TestSegTriOverlap2OddWeightsMatchOracle(t *testing.T) {
+	t.Parallel()
+	tris := [][3]pt2{{{0, 0}, {4, 0}, {0, 4}}, {{0, 0}, {0, 4}, {4, 0}}}
+	segs := [][2]pt2{
+		{{2, 0}, {2, -1}}, {{2, -1}, {2, 0}}, {{2, 0}, {2, 1}}, {{0, 0}, {-1, -1}},
+		{{1, -1}, {0, 0}}, {{4, 0}, {5, 0}}, {{2, 2}, {3, 3}}, {{-1, 2}, {1, 2}},
+	}
+	weights := []int64{2, 0, -1}
+	lift := func(p pt2, w int64) Xp2 {
+		return xp2Weighted(NewXP2FromXpt(proof.XptOf(r3.Vec{X: p.x, Y: p.y}), 0, 1), w)
+	}
+	for _, tri := range tris {
+		for _, seg := range segs {
+			pts := [5]pt2{seg[0], seg[1], tri[0], tri[1], tri[2]}
+			for code := range 243 {
+				var xs [5]Xp2
+				c := code
+				for k := range xs {
+					xs[k] = lift(pts[k], weights[c%3])
+					c /= 3
+				}
+				want := outcome(func() any { return oracleSegTriOverlap2(xs[0], xs[1], xs[2], xs[3], xs[4]) })
+				got := outcome(func() any { return SegTriOverlap2(xs[0], xs[1], xs[2], xs[3], xs[4]) })
+				require.Equal(t, want, got, "tri %v seg %v weights code %d", tri, seg, code)
+			}
+		}
+	}
+}
+
+// TestSegTriOverlap2MalformedPointsMatchOracle nils every field mask of every
+// single point and every pair of points, for each flavour.
+func TestSegTriOverlap2MalformedPointsMatchOracle(t *testing.T) {
+	t.Parallel()
+	tri := [3]pt2{{0, 0}, {4, 0}, {0, 4}}
+	segs := [][2]pt2{{{2, 0}, {2, -1}}, {{2, -1}, {2, 0}}, {{2, 0}, {2, 1}}}
+	for _, flavour := range xp2Flavours {
+		for _, seg := range segs {
+			base := [5]Xp2{
+				flavour.lift(seg[0]), flavour.lift(seg[1]),
+				flavour.lift(tri[0]), flavour.lift(tri[1]), flavour.lift(tri[2]),
+			}
+			check := func(xs [5]Xp2, what string) {
+				want := outcome(func() any { return oracleSegTriOverlap2(xs[0], xs[1], xs[2], xs[3], xs[4]) })
+				got := outcome(func() any { return SegTriOverlap2(xs[0], xs[1], xs[2], xs[3], xs[4]) })
+				require.Equal(t, want, got, "%s %s %v", flavour.name, what, seg)
+			}
+			for i := range 5 {
+				for mi := range 32 {
+					xs := base
+					xs[i] = xp2Masked(xs[i], mi)
+					check(xs, fmt.Sprintf("point %d mask %d", i, mi))
+					for j := i + 1; j < 5; j++ {
+						for mj := range 32 {
+							xs2 := xs
+							xs2[j] = xp2Masked(xs2[j], mj)
+							check(xs2, fmt.Sprintf("points %d,%d masks %d,%d", i, j, mi, mj))
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// TestSegTriOverlap2UntrustedFloatCacheMatchesOracle corrupts the float caches
+// of literal-built points (FloatFinite set, no constructor proof). The filter
+// then decides signs from floats that disagree with the exact coordinates, and
+// the zero-endpoint exit must still match the old clip.
+func TestSegTriOverlap2UntrustedFloatCacheMatchesOracle(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(21, 23))
+	const side = 4
+	for kind := range 3 {
+		for range 30000 {
+			var xs [5]Xp2
+			for k := range xs {
+				x, y := float64(rng.IntN(side))/2, float64(rng.IntN(side))/2
+				p := sharedPointLifts(x, y)[kind]
+				if rng.IntN(2) == 0 {
+					p.floatFromExact = false
+					p.FloatFinite = true
+					p.Fu, p.Fv = float64(rng.IntN(side))/2-0.5, float64(rng.IntN(side))/2-0.5
+				}
+				xs[k] = p
+			}
+			want := outcome(func() any { return oracleSegTriOverlap2(xs[0], xs[1], xs[2], xs[3], xs[4]) })
+			got := outcome(func() any { return SegTriOverlap2(xs[0], xs[1], xs[2], xs[3], xs[4]) })
+			require.Equal(t, want, got, "kind %d points %v", kind, xs)
+		}
 	}
 }

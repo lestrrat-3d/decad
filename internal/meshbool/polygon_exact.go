@@ -245,7 +245,9 @@ func HomCross2Frac(e0 Xp2, baU, baV *big.Int, p Xp2) ClipFrac {
 // Once the filter abstains, two of the three points holding the same
 // coordinate pointers return 0 without big.Int work: (b-a) x (c-a) is zero
 // whenever a==b, a==c or b==c as exact points, and the exact paths below give
-// that same 0 for such inputs.
+// that same 0 for such inputs. The shortcut applies only when every field the
+// selected path reads (Hu, Hv, Hw, or U and V) is set on all three points; a
+// point missing one still reaches the path that panics on it.
 func Cross2xSign(a, b, c Xp2) int {
 	au, av, bu, bv, cu, cv := a.Fu, a.Fv, b.Fu, b.Fv, c.Fu, c.Fv
 	if a.FloatFinite && b.FloatFinite && c.FloatFinite {
@@ -263,13 +265,17 @@ func Cross2xSign(a, b, c Xp2) int {
 		}
 	}
 	if a.Hu != nil && b.Hu != nil && c.Hu != nil {
-		if homSharedPoint(a, b) || homSharedPoint(a, c) || homSharedPoint(b, c) {
+		// Every field the exact path reads must be set on all three points,
+		// so a malformed point still panics there instead of reading as 0.
+		if homComplete(a) && homComplete(b) && homComplete(c) &&
+			(homSharedPoint(a, b) || homSharedPoint(a, c) || homSharedPoint(b, c)) {
 			return 0
 		}
 		return cross2xHomNumerator(a, b, c).Sign()
 	}
 	// Two points that hold the same coordinate pointers are one exact point.
-	if ratSharedPoint(a, b) || ratSharedPoint(a, c) || ratSharedPoint(b, c) {
+	if ratComplete(a) && ratComplete(b) && ratComplete(c) &&
+		(ratSharedPoint(a, b) || ratSharedPoint(a, c) || ratSharedPoint(b, c)) {
 		return 0
 	}
 	// A shared exact coordinate removes one product from the determinant.
@@ -289,20 +295,21 @@ func Cross2xSign(a, b, c Xp2) int {
 }
 
 // homSharedPoint reports whether p and q hold the same three homogeneous
-// integer pointers. A *big.Int at one address has one value, so p and q are
-// the same exact point, and in cross2xHomNumerator two equal points make a
-// factor of the determinant the integer x*y - x*y, which is exactly zero
-// (see Cross2xSign). A nil pointer never matches, so a malformed point still
-// reaches the exact path that dereferences it. Equal values at distinct
-// addresses do not match and take the exact path.
+// integer pointers.
 func homSharedPoint(p, q Xp2) bool {
-	return p.Hu != nil && p.Hv != nil && p.Hw != nil && p.Hu == q.Hu && p.Hv == q.Hv && p.Hw == q.Hw
+	return p.Hu == q.Hu && p.Hv == q.Hv && p.Hw == q.Hw
 }
 
+// homComplete reports whether every homogeneous field is set, which is what
+// cross2xHomNumerator reads from each point.
+func homComplete(p Xp2) bool { return p.Hu != nil && p.Hv != nil && p.Hw != nil }
+
+// ratComplete reports whether both rational coordinates are set, which is what
+// the rational paths of Cross2xSign read from each point.
+func ratComplete(p Xp2) bool { return p.U != nil && p.V != nil }
+
 // ratSharedPoint is homSharedPoint for the rational coordinates U and V.
-func ratSharedPoint(p, q Xp2) bool {
-	return p.U != nil && p.V != nil && p.U == q.U && p.V == q.V
-}
+func ratSharedPoint(p, q Xp2) bool { return p.U == q.U && p.V == q.V }
 
 // PointInTriX reports whether p lies inside or on the closed triangle a, b,
 // c, whichever way it is wound — the exact analog of pointInTri.
