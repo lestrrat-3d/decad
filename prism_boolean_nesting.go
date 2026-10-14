@@ -69,8 +69,10 @@ func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool
 // admission and work-budget/cancellation machinery. There is no assembly and no
 // §6 build-time audit on this path — the candidate is one s.Profiles() result
 // taken verbatim, so §5's authentication claim 1 (every individual segment is
-// authentic) already covers claim 2 (the assembly is correct) entirely. When
-// this search comes back unresolved, resolveAndBuildPrismCut/Intersect fall
+// authentic) already covers claim 2 (the assembly is correct) entirely.
+// Intersect records the selected private-scene profile directly; Cut also
+// authenticates it against a fresh scene snapshot. When this search comes
+// back unresolved, resolveAndBuildPrismCut/Intersect fall
 // through to internal/prismcells/payload_resolve.go's edge-orientation classifier before
 // giving up — a pair whose operands' boundaries genuinely cross reaches that
 // classifier, not straight to the mesh path; only what NEITHER path resolves
@@ -147,12 +149,13 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 
 // resolveAndBuildPrismIntersect runs Intersect's clean-nesting structural
 // match (§4.2) in both directions first and, once it finds the unique nested
-// operand, authenticates its own region verbatim and builds §7's exactness.
+// operand, records its unchanged region from the private scene and builds
+// §7's exactness.
 // There is no §6 audit on this path, for the same reason as Cut's. When
 // neither direction matches, this tries internal/prismcells/payload_resolve.go's
 // edge-orientation classifier before giving up.
 func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	s, match, sceneDelta, nestedIsB, resolved, err := prismcells.ResolveIntersect(ctx, budget, pa.Profile, pb.Profile, reexpress)
+	_, match, sceneDelta, nestedIsB, resolved, err := prismcells.ResolveIntersect(ctx, budget, pa.Profile, pb.Profile, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -164,7 +167,7 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 		return prismPayload{Payload: result}, ok, err
 	}
 
-	profile, err := prismcells.RecordProfileContext(ctx, s, match)
+	profile, err := prismcells.RecordArrangedProfileContext(ctx, match)
 	if err != nil {
 		return prismPayload{}, false, err
 	}

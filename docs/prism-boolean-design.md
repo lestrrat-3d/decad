@@ -463,9 +463,10 @@ one direction must match. With the proof cell found, the match is the nested ope
 any admitted hole reproduce that operand's original loops. A structural match — entity identity, order, and `Whole`-ness, nothing
 geometric — is a pure data comparison against decad's own tag map. **When a
 unique such profile exists, it is not assembled at all: it is one of
-`s.Profiles()`'s own results, and is authenticated by handing it directly to
-the internal profile recording path — the full seam (§5) applies
-unmodified, no new authentication code.**
+`s.Profiles()`'s own results. `Cut` passes the matched profile through
+`RecordProfileContext`; `Intersect` records the fresh, unchanged result through
+`RecordArrangedProfileContext`. Both paths check each recorded edge's exact
+range (§5).**
 This reproduction is **byte-identical to the matched operand's own pre-cut
 record — same `Point2` floats — only where every one of that operand's own
 consumed segments is itself WHOLE.** `Whole = true` in THIS arrangement says
@@ -488,7 +489,7 @@ whole outer and hole loops. Both cells must report `Valid`, and the result
 cell alone becomes the payload's section. The proof cell excludes a disjoint
 pair; the result cell preserves the void in B. The existing G3 plane gate,
 G5 overlapping sweep intervals, work cap,
-`RecordProfile` authentication, and per-end bound selection apply unchanged.
+private-scene profile recording, and per-end bound selection apply unchanged.
 The crossing classifier does not admit this arm.
 
 **`Cut`/`Intersect`, crossing sub-case (boundary contact, not clean nesting):
@@ -728,6 +729,10 @@ not the caller's sketch — it is one decad built. Authentication here is
    know or care that decad authored the scene rather than a caller. So the
    existing `recordEdge`/`falsifyRange` conversion (§4.3) provides full,
    unmodified authentication for this claim.
+   `Intersect` passes the profile selected from its private scene's first
+   `s.Profiles()` result to `RecordArrangedProfileContext` without changing
+   the scene or profile. `Cut` uses `RecordProfileContext`, which also asks
+   `sketch` for a fresh profile snapshot.
 2. **The assembly is correct.** For the clean-nesting match this claim is
    free — the "assembly" is a single `s.Profiles()` result, unmodified, so
    claim 1 already covers it entirely. For `Union`'s merge, the *additional*
@@ -1224,7 +1229,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    unchanged (regression).
 2. **PR2 — `Cut`/`Intersect` clean-nesting sub-case.** The structural
    whole-loop match (§4.2), reusing PR1's scene infrastructure and §5's
-   direct `RecordProfile` authentication (no new authentication code). Tests:
+   existing profile recording (no new authentication code). Tests:
    a bore cut through a hole-free hub (the F1 workload) builds analytically
    with the correct hole added and the target's original outer loop
    byte-identical to its pre-cut record; an `Intersect` of a fully-nested pair
