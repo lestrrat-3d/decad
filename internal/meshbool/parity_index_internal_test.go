@@ -831,12 +831,10 @@ func TestParityIndexMembershipCap(t *testing.T) {
 // TestParityIndexSkipsUnusableFloatProjections requires a query whose first-ray
 // projection is not FloatFinite to take the plain scan: the answer and error
 // equal the unindexed scan's and the first ray's index is not even built. Every
-// query is compared with the plain scan, and every unusable one runs on a fresh
-// mesh, because "the index was not built" is a property of one mesh's first
-// use. A usable query shares one indexed mesh (its answers still equal the
-// plain scan's), and the "a usable projection builds the index" check runs on
-// a fresh mesh for the first usable query and every 64th after it: that check
-// reads only the predicate of one query, so a sample covers it.
+// query is compared with the plain scan, and every query, usable or not, also runs
+// on a fresh mesh, because whether the index was built is a property of one
+// mesh's first use. A usable query additionally runs on one shared indexed mesh
+// (the index kept across queries).
 func TestParityIndexSkipsUnusableFloatProjections(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(0x31d7, 0x0c55))
@@ -861,12 +859,10 @@ func TestParityIndexSkipsUnusableFloatProjections(t *testing.T) {
 					require.False(t, pm.indexBuilt[first.Axis], `query %d: an unusable projection must skip the index`, qi)
 					continue
 				}
-				if indexed%64 == 0 {
-					pm := NewParityMesh(fx.verts, fx.tris)
-					require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, pm)), `query %d`, qi)
-					require.True(t, pm.indexBuilt[first.Axis], `query %d: a usable projection uses the index`, qi)
-				}
 				indexed++
+				pm := NewParityMesh(fx.verts, fx.tris)
+				require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, pm)), `query %d`, qi)
+				require.True(t, pm.indexBuilt[first.Axis], `query %d: a usable projection uses the index`, qi)
 				require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, shared)), `query %d`, qi)
 			}
 			require.Positive(t, indexed, `some queries must take the indexed path`)
