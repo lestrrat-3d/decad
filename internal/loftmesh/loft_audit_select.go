@@ -14,19 +14,20 @@ const selectRounds = 64
 //
 // It is quickselect with a Hoare partition around a median-of-three pivot.
 // After selectRounds rounds it sorts the remaining range, so the worst case
-// is O(n log n). k must satisfy 0 <= k < len(x).
-func selectNth(x []int32, k int, cmp func(a, b int32) int) {
-	selectNthRounds(x, k, cmp, selectRounds)
+// is O(n log n). k must satisfy 0 <= k < len(x). It reports whether it fell
+// back to the sort.
+func selectNth(x []int32, k int, cmp func(a, b int32) int) bool {
+	return selectNthRounds(x, k, cmp, selectRounds)
 }
 
 // selectNthRounds is selectNth with the round cap as a parameter, so a test
-// can force the sort fallback.
-func selectNthRounds(x []int32, k int, cmp func(a, b int32) int, rounds int) {
+// can force the sort fallback. It reports whether the fallback ran.
+func selectNthRounds(x []int32, k int, cmp func(a, b int32) int, rounds int) bool {
 	lo, hi := 0, len(x)-1
 	for round := 0; lo < hi; round++ {
 		if round >= rounds {
 			slices.SortFunc(x[lo:hi+1], cmp)
-			return
+			return true
 		}
 		pivot := medianOfThree(x[lo], x[lo+(hi-lo)/2], x[hi], cmp)
 		i, j := lo, hi
@@ -53,9 +54,10 @@ func selectNthRounds(x []int32, k int, cmp func(a, b int32) int, rounds int) {
 		case k >= i:
 			lo = i
 		default:
-			return
+			return false
 		}
 	}
+	return false
 }
 
 func medianOfThree(a, b, c int32, cmp func(a, b int32) int) int32 {

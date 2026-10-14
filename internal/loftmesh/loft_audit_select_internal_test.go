@@ -300,3 +300,51 @@ func b2i(b bool) int {
 	}
 	return 0
 }
+
+// TestSelectNthProductionCapFires builds the 100 000-member organ-pipe order
+// the tree's root split sees, and requires that the production round cap
+// stops the selection (the sort fallback runs) where an uncapped selection
+// finishes without it, and that the tree built from it equals the sort build.
+// Removing the cap, or raising it past the rounds this input needs, fails it.
+func TestSelectNthProductionCapFires(t *testing.T) {
+	t.Parallel()
+	const n = 100000
+	boxes := make([][2]r3.Vec, n)
+	members := make([]int, n)
+	for i := range boxes {
+		// Distinct midpoints, organ-pipe in the member order.
+		x := float64(min(i, n-1-i)*2 + b2i(i >= n/2))
+		boxes[i] = cube(r3.Vec{X: x}, r3.Vec{X: x + 1, Y: 1, Z: 1})
+		members[i] = i
+	}
+	cmp := func(a, b int32) int {
+		alo, ahi := boxAxis(boxes[a], 0)
+		blo, bhi := boxAxis(boxes[b], 0)
+		amid, bmid := alo/2+ahi/2, blo/2+bhi/2
+		switch {
+		case amid < bmid:
+			return -1
+		case amid > bmid:
+			return 1
+		default:
+			return int(a) - int(b)
+		}
+	}
+	in := make([]int32, n)
+	for i := range in {
+		in[i] = int32(i)
+	}
+	capped := slices.Clone(in)
+	require.True(t, selectNth(capped, n/2, cmp), "the production cap of %d rounds must fire", selectRounds)
+	uncapped := slices.Clone(in)
+	require.False(t, selectNthRounds(uncapped, n/2, cmp, math.MaxInt), "the uncapped selection needs more than the cap")
+	// Both put the same members left of the median, which is the tree's invariant.
+	left := func(x []int32) []int32 {
+		l := slices.Clone(x[:n/2])
+		slices.Sort(l)
+		return l
+	}
+	require.Equal(t, left(uncapped), left(capped))
+
+	requireSameTree(t, newSortTreeScan(boxes, members), newTreeScan(boxes, members), "organ-pipe 100000")
+}
