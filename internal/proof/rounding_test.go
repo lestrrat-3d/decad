@@ -116,3 +116,60 @@ func TestRationalFloatErrorMatchesBigRatSub(t *testing.T) {
 	require.True(t, math.IsInf(proof.RationalFloatError(nil, 1), 1))
 	require.True(t, math.IsInf(proof.RationalFloatError(big.NewRat(1, 3), math.NaN()), 1))
 }
+
+func TestCmpFloatRatMatchesRatCmp(t *testing.T) {
+	t.Parallel()
+	check := func(f float64, q *big.Rat) {
+		t.Helper()
+		before := new(big.Rat).Set(q)
+		want := new(big.Rat).SetFloat64(f).Cmp(q)
+		require.Equal(t, want, proof.CmpFloatRat(f, q), "f=%v q=%v", f, q)
+		require.Zero(t, before.Cmp(q), "CmpFloatRat modified q")
+		require.Equal(t, before.Denom().String(), q.Denom().String())
+	}
+	exactQ := func(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
+	floats := []float64{
+		0, math.Copysign(0, -1), 1, -1, 0.1, -0.1, 3, 1 << 53, math.SmallestNonzeroFloat64, -math.SmallestNonzeroFloat64,
+		math.Float64frombits(1<<52 - 1), math.MaxFloat64, -math.MaxFloat64, math.Pi,
+	}
+	for e := -1074; e <= 1023; e++ {
+		p := math.Ldexp(1, e)
+		floats = append(floats, p, -p, math.Nextafter(p, 0), math.Nextafter(p, math.Inf(1)), 3*p/2)
+	}
+	rng := rand.New(rand.NewPCG(301, 303))
+	for range 10000 {
+		floats = append(floats, finiteBits(rng))
+	}
+	for _, f := range floats {
+		if math.IsInf(f, 0) {
+			continue
+		}
+		q := exactQ(f)
+		check(f, q)
+		check(f, new(big.Rat).Neg(q))
+		check(f, new(big.Rat))
+		for _, dir := range []float64{math.Inf(-1), math.Inf(1)} {
+			n := math.Nextafter(f, dir)
+			if math.IsInf(n, 0) {
+				continue
+			}
+			nq := exactQ(n)
+			check(f, nq)
+			check(f, new(big.Rat).Quo(new(big.Rat).Add(q, nq), big.NewRat(2, 1)))
+		}
+		check(f, new(big.Rat).Mul(q, big.NewRat(1000001, 1000000)))
+		check(f, new(big.Rat).Quo(q, big.NewRat(3, 1)))
+		check(f, new(big.Rat).Add(q, big.NewRat(1, 3)))
+		check(f, new(big.Rat).SetFrac(big.NewInt(int64(rng.IntN(2000)-1000)), big.NewInt(int64(rng.IntN(999)+1))))
+		huge := new(big.Int).Lsh(big.NewInt(int64(rng.IntN(1<<30)+1)), uint(rng.IntN(1300)))
+		check(f, new(big.Rat).SetFrac(huge, big.NewInt(int64(rng.IntN(1<<20)+1))))
+		check(f, new(big.Rat).SetFrac(big.NewInt(int64(rng.IntN(1<<20)+1)), huge))
+	}
+	// A Rat whose denominator is unstored is read without being written.
+	var zero big.Rat
+	check(1, &zero)
+	check(-1, &zero)
+	unstored := new(big.Rat).SetInt(big.NewInt(1))
+	unstored.SetFrac(big.NewInt(4), big.NewInt(2))
+	check(2, unstored)
+}
