@@ -24,21 +24,21 @@ func TestFreeEdgeAndOpenShellReadTheirOwnState(t *testing.T) {
 
 	t.Run("EdgeIsFreeReadsTheAdjacentFaceCount", func(t *testing.T) {
 		t.Parallel()
-		one := &Face{}
-		two := []*Face{{}, {}}
-		three := []*Face{{}, {}, {}}
+		one := bornFace(&Face{})
+		two := []*Face{bornFace(&Face{}), bornFace(&Face{})}
+		three := []*Face{bornFace(&Face{}), bornFace(&Face{}), bornFace(&Face{})}
 
-		require.True(t, (&Edge{faces: []*Face{one}}).IsFree(), `one adjacent face is a free edge`)
-		require.False(t, (&Edge{faces: two}).IsFree(), `two adjacent faces is interior`)
-		require.False(t, (&Edge{faces: three}).IsFree(), `three adjacent faces is non-manifold`)
+		require.True(t, (&Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(one)}}}).IsFree(), `one adjacent face is a free edge`)
+		require.False(t, (&Edge{n: topo.Edge{Faces: faceNodes(two)}}).IsFree(), `two adjacent faces is interior`)
+		require.False(t, (&Edge{n: topo.Edge{Faces: faceNodes(three)}}).IsFree(), `three adjacent faces is non-manifold`)
 		require.False(t, (&Edge{}).IsFree(), `zero adjacent faces is not free`)
 	})
 
 	t.Run("FreePredicateMatchesOnTheEdgesOwnState", func(t *testing.T) {
 		t.Parallel()
 		pred := EdgePredicate{kind: selectorquery.FreeKind}
-		free := &Edge{faces: []*Face{{}}}
-		interior := &Edge{faces: []*Face{{}, {}}}
+		free := &Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(bornFace(&Face{}))}}}
+		interior := &Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(bornFace(&Face{})), faceNode(bornFace(&Face{}))}}}
 
 		require.True(t, pred.matches(free), `selectorquery.FreeKind must match a one-face edge`)
 		require.False(t, pred.matches(interior), `selectorquery.FreeKind must not match a two-face edge`)
@@ -67,7 +67,7 @@ func TestFreeEdgeAndOpenShellReadTheirOwnState(t *testing.T) {
 // build machinery.
 func TestNormalAtRefusesNURBSSurface(t *testing.T) {
 	t.Parallel()
-	f := &Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}}
+	f := bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})
 	_, err := f.NormalAt(r3.NewVec(0, 0, 0))
 	require.ErrorIs(t, err, ErrUnsupported,
 		`a NURBSSurface has no closed-form normal to publish a bound for`)
@@ -82,24 +82,24 @@ func TestFaceOriginsConvertsTheNodeRoles(t *testing.T) {
 
 	t.Run("NoRolesIsNil", func(t *testing.T) {
 		t.Parallel()
-		require.Nil(t, (&Face{}).Origins())
+		require.Nil(t, (bornFace(&Face{})).Origins())
 	})
 
 	t.Run("EmptyNodeSliceIsNil", func(t *testing.T) {
 		t.Parallel()
-		f := &Face{n: topo.Face{Origins: []provenance.Ref{}}}
+		f := bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{}}})
 		require.Nil(t, f.Origins())
 	})
 
 	t.Run("HeldRoleIsItsFeatureRef", func(t *testing.T) {
 		t.Parallel()
-		f := &Face{n: topo.Face{Origins: []provenance.Ref{{Producer: 3, Role: "capEnd"}}}}
+		f := bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Producer: 3, Role: "capEnd"}}}})
 		require.Equal(t, []FeatureRef{{producer: 3, Role: "capEnd"}}, f.Origins())
 	})
 
 	t.Run("ReturnsACopy", func(t *testing.T) {
 		t.Parallel()
-		f := &Face{n: topo.Face{Origins: []provenance.Ref{{Producer: 3, Role: "capEnd"}}}}
+		f := bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Producer: 3, Role: "capEnd"}}}})
 		f.Origins()[0].Role = "changed"
 		require.Equal(t, "capEnd", f.n.Origins[0].Role)
 	})

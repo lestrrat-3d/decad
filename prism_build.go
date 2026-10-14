@@ -92,7 +92,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	if err != nil {
 		return nil, err
 	}
-	capStart := &Face{
+	capStart := bornFace(&Face{
 		n: topo.Face{
 			Area:          ig.Area,
 			AreaBound:     ig.AreaBound,
@@ -103,8 +103,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
 		},
-	}
-	capEnd := &Face{
+	})
+	capEnd := bornFace(&Face{
 		n: topo.Face{
 			Area:          ig.Area,
 			AreaBound:     ig.AreaBound,
@@ -115,7 +115,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
 		},
-	}
+	})
 
 	perimeter := proofbound.BoundedScalar{}
 	walks := 0
@@ -299,7 +299,7 @@ func attachFaceLoopsContext(ctx context.Context, faces []*Face) error {
 				if err := ctx.Err(); err != nil {
 					return err
 				}
-				ce.edge.faces = append(ce.edge.faces, f)
+				ce.edge.n.Faces = append(ce.edge.n.Faces, faceNode(f))
 			}
 		}
 	}
@@ -653,7 +653,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}
 		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
-		face := &Face{
+		face := bornFace(&Face{
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
@@ -662,7 +662,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 				Origins:   origins,
 				Body:      bodyNode(body),
 			},
-		}
+		})
 		if singleClosed {
 			// A closed cylindrical band has TWO boundary loops — one circle
 			// per cap — not one loop holding both.
@@ -679,11 +679,11 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			}, n: topo.Loop{Outer: true}}}
 		}
 
-		bottomEdge.faces = append(bottomEdge.faces, face)
-		topEdge.faces = append(topEdge.faces, face)
+		bottomEdge.n.Faces = append(bottomEdge.n.Faces, faceNode(face))
+		topEdge.n.Faces = append(topEdge.n.Faces, faceNode(face))
 		if !singleClosed {
-			vertical[i].faces = append(vertical[i].faces, face)
-			vertical[(i+1)%n].faces = append(vertical[(i+1)%n].faces, face)
+			vertical[i].n.Faces = append(vertical[i].n.Faces, faceNode(face))
+			vertical[(i+1)%n].n.Faces = append(vertical[(i+1)%n].n.Faces, faceNode(face))
 		}
 
 		faces = append(faces, face)

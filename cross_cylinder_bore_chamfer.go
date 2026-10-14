@@ -13,13 +13,13 @@ import (
 )
 
 func crossBoreEdgeHasOrigins(edge *Edge, outer, bore facetGroup) bool {
-	if len(edge.faces) != 2 {
+	if len(edge.n.Faces) != 2 {
 		return false
 	}
-	return (obliqueBossHasOrigin(edge.faces[0], outer) &&
-		obliqueBossHasOrigin(edge.faces[1], bore)) ||
-		(obliqueBossHasOrigin(edge.faces[1], outer) &&
-			obliqueBossHasOrigin(edge.faces[0], bore))
+	return (obliqueBossHasOrigin(edge.n.Faces[0], outer) &&
+		obliqueBossHasOrigin(edge.n.Faces[1], bore)) ||
+		(obliqueBossHasOrigin(edge.n.Faces[1], outer) &&
+			obliqueBossHasOrigin(edge.n.Faces[0], bore))
 }
 
 // tryCrossCylinderBoreMouthChamfer accepts one complete positive-X mouth

@@ -243,7 +243,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 	if err != nil {
 		return nil, err
 	}
-	capStart := &Face{
+	capStart := bornFace(&Face{
 		loops: startLoops,
 		n: topo.Face{
 			AxialDelta:    dp.z0Delta,
@@ -253,8 +253,8 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
 		},
-	}
-	capEnd := &Face{
+	})
+	capEnd := bornFace(&Face{
 		loops: endLoops,
 		n: topo.Face{
 			AxialDelta:    dp.z1Delta,
@@ -264,7 +264,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
 		},
-	}
+	})
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
 		return nil, err
 	}

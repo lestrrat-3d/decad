@@ -18,6 +18,7 @@ import (
 var bornHandles = map[string]string{
 	"Vertex": "bornVertex",
 	"Body":   "bornBody",
+	"Face":   "bornFace",
 }
 
 // TestTopologyHandlesAreBorn parses every root .go file, tests included, and

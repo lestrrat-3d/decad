@@ -80,11 +80,11 @@ func tangentContinues(e, c *Edge, v *Vertex) clearance.DegState {
 	if proofarith.DvDot(te.exact, tc.exact).Sign() >= 0 {
 		return clearance.DegNo
 	}
-	if len(e.faces) != 2 || len(c.faces) != 2 {
+	if len(e.n.Faces) != 2 || len(c.n.Faces) != 2 {
 		return clearance.DegUnknown
 	}
-	a, bb := e.faces[0], e.faces[1]
-	cc, dd := c.faces[0], c.faces[1]
+	a, bb := faceHandle(e.n.Faces[0]), faceHandle(e.n.Faces[1])
+	cc, dd := faceHandle(c.n.Faces[0]), faceHandle(c.n.Faces[1])
 	p := v.n.Position
 	straight := degAnd(sameOutwardNormal(a, cc, p), sameOutwardNormal(bb, dd, p))
 	crossed := degAnd(sameOutwardNormal(a, dd, p), sameOutwardNormal(bb, cc, p))

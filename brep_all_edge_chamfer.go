@@ -379,7 +379,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		if err != nil {
 			return nil, fmt.Errorf(`%w: all-edge chamfer plane: %s`, ErrUnsupported, err)
 		}
-		face := &Face{n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound, Surface: surfacegeom.Plane{Frame: frame}, Origins: []provenance.Ref{{Producer: ref, Role: axisMap.faceRole(polygonIndex)}}, Body: bodyNode(body)}}
+		face := bornFace(&Face{n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound, Surface: surfacegeom.Plane{Frame: frame}, Origins: []provenance.Ref{{Producer: ref, Role: axisMap.faceRole(polygonIndex)}}, Body: bodyNode(body)}})
 		loop := &Loop{n: topo.Loop{Outer: true}}
 		for i, a := range points {
 			b := points[(i+1)%len(points)]
@@ -420,7 +420,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	for _, e := range lines {
-		if len(e.faces) != 2 {
+		if len(e.n.Faces) != 2 {
 			return nil, fmt.Errorf(`%w: all-edge chamfer has an unsewn planar edge`, ErrUnsupported)
 		}
 	}
@@ -446,7 +446,7 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 	height := proofbound.BoundedSub(proofbound.ExactScalar(p.box[1][1]), proofbound.ExactScalar(p.box[1][0]))
 	wallArea := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), pi),
 		proofbound.BoundedMul(r, height))
-	bore := &Face{n: topo.Face{
+	bore := bornFace(&Face{n: topo.Face{
 		Reversed:  true,
 		Area:      wallArea.Value,
 		AreaBound: wallArea.Bound,
@@ -454,7 +454,7 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 			Axis: r3.NewVec(0, 1, 0), Radius: units.Millimeters(p.radius)},
 		Origins: []provenance.Ref{{Producer: ref, Role: "wall(6)"}},
 		Body:    bodyNode(body),
-	}}
+	}})
 	for side := range 2 {
 		face := faces[2+side]
 		area := proofbound.BoundedSub(proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound), disk)

@@ -449,10 +449,10 @@ type patchOrientedEdge struct {
 func orientPatchChain(chain bodyPatchChain) ([]patchOrientedEdge, error) {
 	oriented := make([]patchchain.OrientedEdge[*Edge, *Vertex], len(chain.edges))
 	for i, e := range chain.edges {
-		if len(e.faces) != 1 {
+		if len(e.n.Faces) != 1 {
 			return nil, fmt.Errorf(`%w: a PatchEdges chain edge is not free (%s)`, ErrDegenerate, patchRowFacesDisagree)
 		}
-		dir, ok := coedgeDirectionFor(e.faces[0], e)
+		dir, ok := coedgeDirectionFor(faceHandle(e.n.Faces[0]), e)
 		if !ok {
 			return nil, fmt.Errorf(`%w: a PatchEdges chain edge's adjacent face does not use it (%s)`, ErrDegenerate, patchRowFacesDisagree)
 		}
@@ -681,7 +681,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if delta > 0 {
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
-		nf := &Face{
+		nf := bornFace(&Face{
 			n: topo.Face{
 				Area:          f.n.Area,
 				AreaBound:     place.AreaOf(proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound)).Bound,
@@ -695,7 +695,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 				CapRecord:     f.n.CapRecord.Under(xform),
 				Origins:       append([]provenance.Ref(nil), f.n.Origins...),
 			},
-		}
+		})
 		for _, l := range f.loops {
 			coedges := make([]coedge, len(l.coedges))
 			for j, ce := range l.coedges {
@@ -832,7 +832,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		coedges[i] = coedge{edge: edgeCopy[oe.old], forward: oe.forward}
 	}
 
-	return &Face{
+	return bornFace(&Face{
 		loops: []*Loop{{coedges: coedges, n: topo.Loop{Outer: true}}},
 		n: topo.Face{
 			Area:      ig.Area,
@@ -846,7 +846,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 			Surface:       surfacegeom.Plane{Frame: frame},
 			Origins:       []provenance.Ref{{Producer: ref, Role: rolePatch}},
 		},
-	}, nil
+	}), nil
 }
 
 // patchChainIntegrals runs the same closed-form region integral

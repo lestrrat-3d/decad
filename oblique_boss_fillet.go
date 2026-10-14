@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -61,8 +62,8 @@ func obliqueBossFaceGroup(body *Body, role string) (facetGroup, bool) {
 	return facetGroup{}, false
 }
 
-func obliqueBossHasOrigin(face *Face, group facetGroup) bool {
-	for _, origin := range face.originRefs() {
+func obliqueBossHasOrigin(face *topo.Face, group facetGroup) bool {
+	for _, origin := range face.Origins {
 		if slices.Contains(group.origins, origin) {
 			return true
 		}
@@ -115,13 +116,13 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 	}
 	plateTop, topOK := obliqueBossFaceGroup(rec.plate, provenance.RoleCapEnd)
 	bossSide, sideOK := obliqueBossFaceGroup(rec.boss, prismOuterFirstSideRole)
-	if !topOK || !sideOK || len(edges[0].faces) != 2 {
+	if !topOK || !sideOK || len(edges[0].n.Faces) != 2 {
 		return nil, fmt.Errorf("%w: the selected edge is not the complete plate-to-cylinder junction", ErrUnsupported)
 	}
-	matched := (obliqueBossHasOrigin(edges[0].faces[0], plateTop) &&
-		obliqueBossHasOrigin(edges[0].faces[1], bossSide)) ||
-		(obliqueBossHasOrigin(edges[0].faces[1], plateTop) &&
-			obliqueBossHasOrigin(edges[0].faces[0], bossSide))
+	matched := (obliqueBossHasOrigin(edges[0].n.Faces[0], plateTop) &&
+		obliqueBossHasOrigin(edges[0].n.Faces[1], bossSide)) ||
+		(obliqueBossHasOrigin(edges[0].n.Faces[1], plateTop) &&
+			obliqueBossHasOrigin(edges[0].n.Faces[0], bossSide))
 	if !matched {
 		return nil, fmt.Errorf("%w: the selected edge is not the complete plate-to-cylinder junction", ErrUnsupported)
 	}

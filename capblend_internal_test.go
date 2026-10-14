@@ -1088,9 +1088,9 @@ func TestAsymmetricCapSetbacksRefuseMixedPicks(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, endEdges, 4)
 	side := func(e *Edge, capFace *Face) *Face {
-		for _, f := range e.faces {
-			if f != capFace {
-				return f
+		for _, f := range e.n.Faces {
+			if f != faceNode(capFace) {
+				return faceHandle(f)
 			}
 		}
 		return nil

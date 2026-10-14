@@ -138,7 +138,7 @@ func TestTriTriClassifyNamesTheInPlaneEdge(t *testing.T) {
 // meshbool.FacesNearMiss can be asked about.
 func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *meshbool.BoolMesh {
 	t.Helper()
-	face := &Face{}
+	face := bornFace(&Face{})
 	bm, err := prepBoolMeshContext(t.Context(), &Mesh{
 		n:      topo.Mesh{Vertices: tri[:], Triangles: [][3]int{{0, 1, 2}}},
 		source: []*Face{face}, faceBound: map[*Face]float64{face: 0},
@@ -1129,7 +1129,7 @@ func BenchmarkTriTriClassifyCircularPairs(b *testing.B) {
 
 func TestFacetFaceIndicesMapsConsistentFaces(t *testing.T) {
 	t.Parallel()
-	f0, f1 := &Face{}, &Face{}
+	f0, f1 := bornFace(&Face{}), bornFace(&Face{})
 	got, err := facetproof.FaceIndices(t.Context(), []*Face{f0, f1}, []*Face{f1, f0, f1})
 	require.NoError(t, err)
 	require.Equal(t, []int{1, 0, 1}, got,
@@ -1138,8 +1138,8 @@ func TestFacetFaceIndicesMapsConsistentFaces(t *testing.T) {
 
 func TestFacetFaceIndicesRejectsUnmappedFacet(t *testing.T) {
 	t.Parallel()
-	f0, f1 := &Face{}, &Face{}
-	orphan := &Face{} // a face absent from the built body's Faces()
+	f0, f1 := bornFace(&Face{}), bornFace(&Face{})
+	orphan := bornFace(&Face{}) // a face absent from the built body's Faces()
 	_, err := facetproof.FaceIndices(t.Context(), []*Face{f0, f1}, []*Face{f0, orphan})
 	// Without the miss guard, a Go map lookup yields the zero value 0 and the
 	// facet is silently attributed to face 0; the guard turns that invariant
@@ -1342,7 +1342,7 @@ func TestOperandSymDiffRefusesARealUnverifiedMesh(t *testing.T) {
 
 func TestFacesOfMeshReadsTheMeshProofRecord(t *testing.T) {
 	t.Parallel()
-	stated, omitted := &Face{}, &Face{}
+	stated, omitted := bornFace(&Face{}), bornFace(&Face{})
 	m := &Mesh{
 		n:         topo.Mesh{Triangles: [][3]int{{0, 1, 2}, {0, 2, 3}}},
 		source:    []*Face{stated, stated},

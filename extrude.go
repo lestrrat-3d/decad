@@ -859,7 +859,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 			return nil, proofbound.BoundedScalar{}, err
 		}
 		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
-		face := &Face{
+		face := bornFace(&Face{
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
@@ -874,9 +874,9 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 				{edge: topEdge, forward: false},
 				{edge: vertical[i], forward: false},
 			}}},
-		}
+		})
 		for _, e := range []*Edge{bottomEdge, topEdge, vertical[i], vertical[i+1]} {
-			e.faces = append(e.faces, face)
+			e.n.Faces = append(e.n.Faces, faceNode(face))
 		}
 		faces = append(faces, face)
 		total = proofbound.BoundedAdd(total, faceArea)

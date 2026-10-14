@@ -76,15 +76,16 @@ internal packages can read and build it. The handle's pointer is still the
 identity; no other rule of this section changes.
 
 A node links to the nodes it shares by node pointer: an `Edge` node holds its
-`Start` and `End` vertex nodes, and a `Face` node holds its `Body` node. A node
-another node links to carries `Owner`, the handle that holds it, set once when
-the handle is born (`bornVertex` and `bornBody` in `topology_handles.go`; every
-root `Vertex` and `Body` is born through them, and `TestTopologyHandlesAreBorn`
-fails on any other construction). Root maps a linked node back to its handle
-through `Owner` only where a handle leaves the code (`Edge.Start`, `Edge.End`,
-`CoEdge.Start`, `CoEdge.End`, `Body.Vertices`, and the body a face's code needs
-as a handle); reads of node data go node to node, and a face's body compared
-with a handle compares nodes. Node and handle pointers pair one to one,
+`Start` and `End` vertex nodes and its adjacent `Faces` face nodes, and a `Face`
+node holds its `Body` node. A node another node links to carries `Owner`, the
+handle that holds it, set once when the handle is born (`bornVertex`, `bornBody`
+and `bornFace` in `topology_handles.go`; every root `Vertex`, `Body` and `Face`
+is born through them, and `TestTopologyHandlesAreBorn` fails on any other
+construction). Root maps a linked node back to its handle through `Owner` only
+where a handle leaves the code (`Edge.Start`, `Edge.End`, `Edge.Faces`,
+`CoEdge.Start`, `CoEdge.End`, `Body.Vertices`, and the body or face a root
+function needs as a handle); reads of node data go node to node, and a linked
+node compared with a handle compares nodes. Node and handle pointers pair one to one,
 so identity, `==` and map keys are unchanged. A handle is never copied by
 value: it holds a `noCopy` marker that `go vet`'s copylocks check enforces.
 
@@ -96,7 +97,7 @@ value: it holds a `noCopy` marker that `go vet`'s copylocks check enforces.
 | `Face` | tagged `Surface` (the `surfacegeom` variant in the node; `Face.Surface()` converts to the public one), `[]*Loop` (first outer), origin roles (≥1 `provenance.Ref`s in the node, exposed as `FeatureRef`s by `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body (the `Body` node in the `Face` node; root maps it to the handle through `Owner`) |
 | `Loop` | ordered `[]CoEdge` (directed edge uses in boundary-walk order), `outer bool` |
 | `CoEdge` | shared `*Edge` plus walk sense; public `Edge`/`Start`/`End`/`IsForward` accessors |
-| `Edge` | tagged `Curve` (the `surfacegeom` variant in the node; `Edge.Curve()` converts to the public one), `Start`/`End` (vertex nodes in the node; `Edge.Start()`/`End()` map them to their handles), ALL adjacent faces (exactly 2 on a closed manifold body; `Edge.Faces()` reports the actual count, which is precisely how `len != 2` surfaces non-manifold topology — core §6.1; exactly 1 is a FREE edge on a sheet body, `docs/surface-design.md` §2.2), `convex bool` |
+| `Edge` | tagged `Curve` (the `surfacegeom` variant in the node; `Edge.Curve()` converts to the public one), `Start`/`End` (vertex nodes in the node; `Edge.Start()`/`End()` map them to their handles), ALL adjacent faces (face nodes in the node; `Edge.Faces()` maps them to their handles; exactly 2 on a closed manifold body; `Edge.Faces()` reports the actual count, which is precisely how `len != 2` surfaces non-manifold topology — core §6.1; exactly 1 is a FREE edge on a sheet body, `docs/surface-design.md` §2.2), `convex bool` |
 | `Vertex` | position (mm), the proven bound on it |
 
 Rules:

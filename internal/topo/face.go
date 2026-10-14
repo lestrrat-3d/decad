@@ -109,4 +109,8 @@ type Face struct {
 	// Body is the node of the body that holds this face, nil for a face no
 	// body holds. Root maps it back to its handle through Body.Owner.
 	Body *Body
+	// Owner is the root Face handle that holds this node by value. Root
+	// sets it when the handle is born and maps a node back to its handle
+	// through it; nothing else writes it.
+	Owner any
 }

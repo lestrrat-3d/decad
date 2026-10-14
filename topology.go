@@ -349,7 +349,6 @@ func (ce CoEdge) IsForward() bool { return ce.forward }
 // Edge is a topological edge: a tagged curve between two vertices, with the
 // faces adjacent to it.
 type Edge struct {
-	faces []*Face
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Edge
 }
@@ -369,7 +368,7 @@ func (e *Edge) End() *Vertex { return vertexHandle(e.n.End) }
 // face is a FREE edge — the boundary of the sheet, and the expected shape —
 // which IsFree reports and the Free() predicate selects. Two is an interior
 // edge on either kind; three or more is non-manifold on either.
-func (e *Edge) Faces() []*Face { return append([]*Face(nil), e.faces...) }
+func (e *Edge) Faces() []*Face { return faceHandles(e.n.Faces) }
 
 // IsConvex reports the edge's convexity under decad's WALKED-BOUNDARY
 // convention — a decided answer, not an approximation of one (core §6). It is
@@ -405,7 +404,7 @@ func (e *Edge) IsConvex() bool { return e.n.Convex }
 // §2.2). On a BodySolid the same count of one is non-manifold rather than
 // free; IsFree only names the count Faces reports, and Faces's own doc comment
 // states the per-kind reading in full.
-func (e *Edge) IsFree() bool { return len(e.faces) == 1 }
+func (e *Edge) IsFree() bool { return len(e.n.Faces) == 1 }
 
 // Length returns the edge's length: Exact only when the analytic result is
 // proved exactly representable, otherwise Approximate with its evaluation
@@ -459,6 +458,7 @@ func (l *Loop) Edges() []*Edge {
 
 // Face is a topological face: a tagged surface bounded by loops.
 type Face struct {
+	_     noCopy
 	loops []*Loop
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Face

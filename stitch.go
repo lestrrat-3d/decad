@@ -599,7 +599,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if delta > 0 {
 			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
 		}
-		nf := &Face{
+		nf := bornFace(&Face{
 			n: topo.Face{
 				Area:          f.n.Area,
 				AreaBound:     f.n.AreaBound,
@@ -613,7 +613,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				CapRecord:     f.n.CapRecord.Under(xform),
 				Origins:       append([]provenance.Ref(nil), f.n.Origins...),
 			},
-		}
+		})
 		for _, l := range f.loops {
 			coedges := make([]coedge, len(l.coedges))
 			for j, ce := range l.coedges {
@@ -687,8 +687,9 @@ func stitchTopology(faces []*Face) stitchweld.Topology[*Face, *Edge] {
 		for _, l := range f.loops {
 			for _, ce := range l.coedges {
 				uses = append(uses, stitchweld.Use[*Edge]{Edge: ce.edge, Forward: ce.forward})
-				btopo.Adjacent[ce.edge] = ce.edge.faces
-				queue = append(queue, ce.edge.faces...)
+				adjacent := faceHandles(ce.edge.n.Faces)
+				btopo.Adjacent[ce.edge] = adjacent
+				queue = append(queue, adjacent...)
 			}
 		}
 		btopo.Uses[f] = uses
@@ -890,19 +891,19 @@ func reverseIntSlice(s []int) {
 // which side either face calls outward.
 func fixWeldedEdgeConvexity(welded map[*Edge]struct{}) {
 	for e := range welded {
-		if len(e.faces) != 2 {
+		if len(e.n.Faces) != 2 {
 			continue
 		}
 		var fwd, bwd *Face
-		for _, f := range e.faces {
-			dir, ok := coedgeDirectionFor(f, e)
+		for _, f := range e.n.Faces {
+			dir, ok := coedgeDirectionFor(faceHandle(f), e)
 			if !ok {
 				continue
 			}
 			if dir {
-				fwd = f
+				fwd = faceHandle(f)
 			} else {
-				bwd = f
+				bwd = faceHandle(f)
 			}
 		}
 		if fwd == nil || bwd == nil {

@@ -25,7 +25,7 @@ func TestFacetedAreaBoundCompositionRoundsOutward(t *testing.T) {
 	for range 10 {
 		lengths = append(lengths, short)
 	}
-	face := &Face{loops: []*Loop{{}}}
+	face := bornFace(&Face{loops: []*Loop{{}}})
 	exactPerimeter := new(big.Rat)
 	oldPerimeter := 0.0
 	for _, length := range lengths {

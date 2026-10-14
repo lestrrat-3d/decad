@@ -385,7 +385,7 @@ func TestChordLoopReadsResolvedWalks(t *testing.T) {
 
 	// One face for every wall, so the two chordings' faceOf slices compare as
 	// the same pointers and the comparison below is about the geometry.
-	face := &Face{}
+	face := bornFace(&Face{})
 	wall := func(survey2d.SideWalk) (*Face, error) { return face, nil }
 
 	direct := freeform.NewFreeformWork()
@@ -418,7 +418,7 @@ func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 		lineSeg{Start: planePoint{U: 1}, End: planePoint{U: 1, V: 1}, TStart: 0, TEnd: 1},
 		lineSeg{Start: planePoint{U: 1, V: 1}, End: planePoint{}, TStart: 0, TEnd: 1},
 	}}}
-	face := &Face{}
+	face := bornFace(&Face{})
 	_, err = tessellation.ChordLoop(t.Context(), other.Outer, 0.2, 5, freeform.NewFreeformWork(), pw, 0,
 		func(survey2d.SideWalk) (*Face, error) { return face, nil }, stationbound.ChordStationBound)
 	require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)

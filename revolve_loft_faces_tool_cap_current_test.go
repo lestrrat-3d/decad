@@ -86,7 +86,7 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 		require.NoError(t, currentErr)
 		require.False(t, current, "a narrowed root bracket is not the certified source bracket")
 		changed = *arc
-		changed.positiveZ.face = &Face{}
+		changed.positiveZ.face = bornFace(&Face{})
 		current, currentErr = revolveLoftFacesToolCapOccupiedArcCurrent(t.Context(), proof, &changed)
 		require.NoError(t, currentErr)
 		require.False(t, current, "another retained face cannot own the source crossing")

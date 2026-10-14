@@ -180,7 +180,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 	if err != nil {
 		return nil, err
 	}
-	face := &Face{
+	face := bornFace(&Face{
 		loops: faceLoops,
 		n: topo.Face{
 			Area:          ig.Area,
@@ -192,7 +192,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 			Origins:       []provenance.Ref{{Producer: ref, Role: rolePatch}},
 			Body:          bodyNode(body),
 		},
-	}
+	})
 	if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
 		return nil, err
 	}

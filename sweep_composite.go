@@ -190,7 +190,7 @@ func assembleCompositeSweepBodyWithJoinMode(
 	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
 
 	for _, edge := range body.Edges() {
-		edge.faces = liveCompositeFaces(edge.faces, body)
+		edge.n.Faces = liveCompositeFaces(edge.n.Faces, body)
 	}
 	if surfaceResult {
 		// sheetLumps splits by connectivity (docs/surface-design.md §2.2): a
@@ -208,7 +208,7 @@ func assembleCompositeSweepBodyWithJoinMode(
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			if len(edge.faces) != 2 {
+			if len(edge.n.Faces) != 2 {
 				return nil, fmt.Errorf(`%w: a closed sweep rim lacks two incident faces`, ErrUnsupported)
 			}
 		}
@@ -276,7 +276,7 @@ func sewCompositeSweepJoin(
 			rewriteCompositeVertex(previous, fromStart, toStart)
 			rewriteCompositeVertex(previous, fromEnd, toEnd)
 			rewriteCompositeEdge(previous, discarded, shared)
-			shared.faces = append(shared.faces, discarded.faces...)
+			shared.n.Faces = append(shared.n.Faces, discarded.n.Faces...)
 			sewn[shared] = struct{}{}
 		}
 	}
@@ -320,10 +320,10 @@ func rewriteCompositeSideRoles(face *Face, span int) {
 	}
 }
 
-func liveCompositeFaces(faces []*Face, body *Body) []*Face {
-	out := make([]*Face, 0, 2)
+func liveCompositeFaces(faces []*topo.Face, body *Body) []*topo.Face {
+	out := make([]*topo.Face, 0, 2)
 	for _, face := range faces {
-		if face == nil || face.n.Body != bodyNode(body) || slices.Contains(out, face) {
+		if face == nil || face.Body != bodyNode(body) || slices.Contains(out, face) {
 			continue
 		}
 		out = append(out, face)
@@ -392,7 +392,7 @@ func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]stru
 		// free rim edge, or an interior edge on either kind), but never zero or
 		// three or more, and the use count read off every face's own loops must
 		// agree with Edge.Faces()'s own adjacency exactly either way.
-		if len(edge.faces) < 1 || len(edge.faces) > 2 || len(edgeUses) != len(edge.faces) {
+		if len(edge.n.Faces) < 1 || len(edge.n.Faces) > 2 || len(edgeUses) != len(edge.n.Faces) {
 			return fmt.Errorf(`%w: a composite sweep edge does not have one or two incident faces`, ErrUnsupported)
 		}
 		if len(edgeUses) != 2 {

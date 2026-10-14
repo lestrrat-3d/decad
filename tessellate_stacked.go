@@ -236,11 +236,11 @@ func stackedCapFace(b *Body, sp stackedPrismPayload, faceOfRole func(string) (*F
 		}
 		for _, l := range face.loops {
 			for _, ce := range l.coedges {
-				for _, nb := range ce.edge.faces {
-					if nb == face {
+				for _, nb := range ce.edge.n.Faces {
+					if nb == faceNode(face) {
 						continue
 					}
-					for _, origin := range nb.n.Origins {
+					for _, origin := range nb.Origins {
 						if strings.HasPrefix(origin.Role, prefix) {
 							return face, nil
 						}

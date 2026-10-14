@@ -399,7 +399,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// otherwise this is what keeps the published cap area from claiming a
 		// tighter bound than the snap/unsnap mismatch can actually cost it.
 		capAdmitAllow := revolvemass.AdmitBandCharge(rp.ax.RadialAdmitAllow, rp.ax.AxialExtentUpper)
-		capStart = &Face{
+		capStart = bornFace(&Face{
 			n: topo.Face{
 				Area:        ig.Area,
 				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
@@ -409,8 +409,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 				Origins:     []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 				Body:        bodyNode(body),
 			},
-		}
-		capEnd = &Face{
+		})
+		capEnd = bornFace(&Face{
 			n: topo.Face{
 				Area:        ig.Area,
 				AreaBound:   proofbound.AbsSumUpper(ig.AreaBound, capAdmitAllow),
@@ -420,7 +420,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 				Origins:     []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 				Body:        bodyNode(body),
 			},
-		}
+		})
 	}
 
 	// The section displacement's region charge (docs/surface-intersection-design.md
@@ -887,7 +887,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		}
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
-		face := &Face{
+		face := bornFace(&Face{
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
@@ -897,7 +897,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				Origins:   origins,
 				Body:      bodyNode(body),
 			},
-		}
+		})
 		switch {
 		case rp.full && singleClosed:
 			// A whole closed generator swept a full turn bounds a closed
@@ -1381,7 +1381,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		}
 		faceArea := frame.AreaOf(proofbound.BoundedMul(revolvemass.ChargedWallAxisMoment(
 			w.SegmentWalk, kinds[i], segs, rp.ax, rp.sectionWhole, rp.sectionDelta), sweep))
-		face := &Face{
+		face := bornFace(&Face{
 			n: topo.Face{
 				Area:      faceArea.Value,
 				AreaBound: faceArea.Bound,
@@ -1391,7 +1391,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 				Origins:   origins,
 				Body:      bodyNode(body),
 			},
-		}
+		})
 		if rp.full {
 			face.loops = fullRevLoops(js[i], js[i+1], kinds[i])
 		} else {

@@ -182,10 +182,10 @@ func TestRequireSheetMeshCatchesADuplicatedDirectedEdge(t *testing.T) {
 // test goes red.
 func TestFreeChainCountsByFaceCountsConnectedComponentsNotEdges(t *testing.T) {
 	t.Parallel()
-	face := &Face{}
+	face := bornFace(&Face{})
 	vA, vB, vC := bornVertex(&Vertex{}), bornVertex(&Vertex{}), bornVertex(&Vertex{})
-	e1 := &Edge{n: topo.Edge{Start: vertexNode(vA), End: vertexNode(vB)}, faces: []*Face{face}}
-	e2 := &Edge{n: topo.Edge{Start: vertexNode(vB), End: vertexNode(vC)}, faces: []*Face{face}}
+	e1 := &Edge{n: topo.Edge{Start: vertexNode(vA), End: vertexNode(vB), Faces: []*topo.Face{faceNode(face)}}}
+	e2 := &Edge{n: topo.Edge{Start: vertexNode(vB), End: vertexNode(vC), Faces: []*topo.Face{faceNode(face)}}}
 	face.loops = []*Loop{{coedges: []coedge{{edge: e1}, {edge: e2}}}}
 	body := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{face}}}}}})
 
@@ -203,11 +203,11 @@ func TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet(t *testing.T) {
 	t.Parallel()
 	verts := []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}
 	tris := [][3]int{{0, 1, 2}, {0, 2, 3}, {0, 3, 1}, {1, 3, 2}}
-	mesh := &Mesh{n: topo.Mesh{Vertices: verts, Triangles: tris}, source: []*Face{{}, {}, {}, {}}}
+	mesh := &Mesh{n: topo.Mesh{Vertices: verts, Triangles: tris}, source: []*Face{bornFace(&Face{}), bornFace(&Face{}), bornFace(&Face{}), bornFace(&Face{})}}
 	require.NoError(t, tessellation.RequireClosedMesh(mesh.n.Triangles), `premise: a tetrahedron is a closed mesh`)
 
-	faceA, faceB := &Face{}, &Face{}
-	sharedEdge := &Edge{faces: []*Face{faceA, faceB}}
+	faceA, faceB := bornFace(&Face{}), bornFace(&Face{})
+	sharedEdge := &Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(faceA), faceNode(faceB)}}}
 	faceA.loops = []*Loop{{coedges: []coedge{{edge: sharedEdge}}}}
 	faceB.loops = []*Loop{{coedges: []coedge{{edge: sharedEdge}}}}
 	body := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{faceA, faceB}}}}}})

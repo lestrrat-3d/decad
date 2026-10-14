@@ -472,14 +472,14 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// Walk order: arc (pAV -> pBV, cap level), slantOut forward
 		// (pBV -> apex), slantIn reversed (apex -> pAV) — a closed
 		// triangle-like boundary each coedge's end matching the next's start.
-		face := &Face{
+		face := bornFace(&Face{
 			n: topo.Face{Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: role}}, Body: bodyNode(body)},
 			loops: []*Loop{{coedges: []coedge{
 				{edge: arc, forward: true},
 				{edge: slantOut[i], forward: true},
 				{edge: slantIn[i], forward: false},
 			}, n: topo.Loop{Outer: true}}},
-		}
+		})
 		// Orientation: a corner's own offset carrier is an EROSION, and at a
 		// REFLEX corner the eroded boundary is the arc of radius dc about the
 		// corner with the surviving material radially OUTSIDE it — the removed
@@ -498,9 +498,9 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		if err := fixPatchOrientation(face, pl, pl.Point(j.VertU+dc*math.Cos(arcTh0[i]), j.VertV+dc*math.Sin(arcTh0[i]), capZ), -math.Cos(arcTh0[i]), -math.Sin(arcTh0[i]), -matSign); err != nil {
 			return capBandResult{}, err
 		}
-		slantIn[i].faces = append(slantIn[i].faces, face)
-		arc.faces = append(arc.faces, face)
-		slantOut[i].faces = append(slantOut[i].faces, face)
+		slantIn[i].n.Faces = append(slantIn[i].n.Faces, faceNode(face))
+		arc.n.Faces = append(arc.n.Faces, faceNode(face))
+		slantOut[i].n.Faces = append(slantOut[i].n.Faces, faceNode(face))
 		patches = append(patches, face)
 		// th0, th1 record the patch's ANGULAR EXTENT, not the connector's own
 		// clockwise walk — the same normalization every other patch's geometry
@@ -660,7 +660,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		if err != nil {
 			return capBandResult{}, err
 		}
-		face := &Face{
+		face := bornFace(&Face{
 			n: topo.Face{Surface: surf, Origins: origins, Body: bodyNode(body)},
 			loops: []*Loop{{coedges: []coedge{
 				{edge: side, forward: true},
@@ -668,7 +668,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				{edge: capEdge, forward: false},
 				{edge: leadSlant, forward: true},
 			}, n: topo.Loop{Outer: true}}},
-		}
+		})
 		// Orientation: the reference is the ORIGINAL wall's own outward
 		// convention (the same "tangent rotated a quarter turn" rule
 		// extrude.go's prism side walls use — it already covers hole walls
@@ -692,10 +692,10 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		if err := fixPatchOrientation(face, pl, samplePoint, refU, refV, axialRef); err != nil {
 			return capBandResult{}, err
 		}
-		side.faces = append(side.faces, face)
-		trailSlant.faces = append(trailSlant.faces, face)
-		capEdge.faces = append(capEdge.faces, face)
-		leadSlant.faces = append(leadSlant.faces, face)
+		side.n.Faces = append(side.n.Faces, faceNode(face))
+		trailSlant.n.Faces = append(trailSlant.n.Faces, faceNode(face))
+		capEdge.n.Faces = append(capEdge.n.Faces, faceNode(face))
+		leadSlant.n.Faces = append(leadSlant.n.Faces, faceNode(face))
 		patches = append(patches, face)
 
 		g := capPatchGeom{SideZ: sideZ, CapZ: capZ, LevelDelta: levelDelta}
@@ -1101,9 +1101,9 @@ func buildConePatch(pl prismPayload, body *Body, origins []provenance.Ref, cu, c
 		{coedges: []coedge{{edge: sideEdge, forward: true}}, n: topo.Loop{Outer: true}},
 		{coedges: []coedge{{edge: capEdge, forward: false}}, n: topo.Loop{Outer: true}},
 	}
-	face := &Face{n: topo.Face{Reversed: reversed, Surface: surf, Origins: origins, Body: bodyNode(body)}, loops: loops}
-	sideEdge.faces = append(sideEdge.faces, face)
-	capEdge.faces = append(capEdge.faces, face)
+	face := bornFace(&Face{n: topo.Face{Reversed: reversed, Surface: surf, Origins: origins, Body: bodyNode(body)}, loops: loops})
+	sideEdge.n.Faces = append(sideEdge.n.Faces, faceNode(face))
+	capEdge.n.Faces = append(capEdge.n.Faces, faceNode(face))
 	return face
 }
 

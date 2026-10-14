@@ -64,7 +64,7 @@ func shellIsOpen(faces []*Face) bool {
 	for _, f := range faces {
 		for _, l := range f.loops {
 			for _, ce := range l.coedges {
-				if len(ce.edge.faces) == 1 {
+				if len(ce.edge.n.Faces) == 1 {
 					return true
 				}
 			}
