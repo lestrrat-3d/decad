@@ -194,6 +194,12 @@ jobs:
           name: race-tests
           path: race-bin
 
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
       # Each shard regex is derived from ONE binary's own names, so it is
       # applied to that binary alone. A -run filter built from one package's
       # names matches nothing in another, so handing it ./... would run zero
@@ -222,14 +228,9 @@ jobs:
       - name: Run race tests (Ubuntu shard)
         shell: bash
         run: |
-          timeout=10m
-          budget=300
-          case '${{ matrix.shard }}' in
-            0|10) timeout=45m; budget=2400 ;;
-            1|2) budget=420 ;;
-          esac
+          timeout=330m
           run_shard() {
-            local bin="$GITHUB_WORKSPACE/race-bin/$1" shards="$2" dir="$3"
+            local bin="$GITHUB_WORKSPACE/race-bin/$1" shards="$2" dir="$3" out="$4"
             chmod +x "$bin"
             local tests
             tests="$("$bin" -test.list '.*' | awk -v shard='${{ matrix.shard }}' '
@@ -247,45 +248,22 @@ jobs:
             ' "$shards" -)"
             tests="${tests%|}"
             test -n "$tests"
-            (cd "$dir" && "$bin" -test.timeout "$timeout" -test.run "^(${tests})$")
+            (cd "$dir" && go tool test2json -p "$1" "$bin" -test.v=test2json -test.parallel 1 -test.timeout "$timeout" -test.run "^(${tests})$") >"$out"
           }
-          start=$SECONDS
-          logdir="$(mktemp -d)"
-          (
-            run_shard decad.test .github/test-shards.txt .
-          ) >"$logdir/decad.log" 2>&1 &
-          decad_pid=$!
-          (
-            run_shard apitest.test .github/test-shards-apitest.txt apitest
-          ) >"$logdir/apitest.log" 2>&1 &
-          apitest_pid=$!
-          decad_rc=0
-          apitest_rc=0
-          wait "$decad_pid" || decad_rc=$?
-          wait "$apitest_pid" || apitest_rc=$?
-          echo "::group::decad.test"
-          cat "$logdir/decad.log"
-          echo "::endgroup::"
-          echo "::group::apitest.test"
-          cat "$logdir/apitest.log"
-          echo "::endgroup::"
-          if [ "$decad_rc" -ne 0 ] || [ "$apitest_rc" -ne 0 ]; then
-            echo "::error::shard ${{ matrix.shard }} failed: decad.test exit ${decad_rc}, apitest.test exit ${apitest_rc}"
-            exit 1
-          fi
-          elapsed=$(( SECONDS - start ))
-          echo "shard ${{ matrix.shard }} finished in ${elapsed}s"
-          # Shard 0 holds a two-tooth bevel join. Shard 10 holds
-          # the one-tooth mass regression and three-tooth bevel race slice;
-          # normal CI runs all eight teeth. Both have 2400s budgets below their
-          # 45m timeouts. Shards 1 and 2 carry other costly tests
-          # and allow 420s; all other shards retain 300s.
-          # A budget failure reports test-cost drift before a timeout does.
-          # Re-measure and regenerate with the command in _shardgen/main.go.
-          if [ "$elapsed" -gt "$budget" ]; then
-            echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the ${budget}s budget; re-measure and regenerate .github/test-shards.txt and .github/test-shards-apitest.txt (see _shardgen/main.go)"
-            exit 1
-          fi
+          mkdir -p costs
+          rc=0
+          run_shard decad.test .github/test-shards.txt . "$GITHUB_WORKSPACE/costs/root-${{ matrix.shard }}.jsonl" || rc=1
+          run_shard apitest.test .github/test-shards-apitest.txt apitest "$GITHUB_WORKSPACE/costs/apitest-${{ matrix.shard }}.jsonl" || rc=1
+          exit $rc
+
+      - name: Upload costs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: costs-${{ matrix.shard }}
+          path: costs/
+          if-no-files-found: warn
+          retention-days: 3
 
   # The packages outside the root run on two Ubuntu runners. The main-only
   # platform job below runs the whole suite on macOS and Windows.
