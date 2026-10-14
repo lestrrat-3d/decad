@@ -33,7 +33,7 @@ func chamferGridIndex(coord, step *big.Rat) (int64, bool) {
 	if coord == nil || step == nil || step.Sign() <= 0 {
 		return 0, false
 	}
-	q := new(big.Rat).Quo(coord, step)
+	q := proofarith.QuoRat(new(big.Rat), coord, step)
 	i := new(big.Int).Div(q.Num(), q.Denom())
 	return i.Int64(), i.IsInt64()
 }
@@ -45,8 +45,11 @@ func ChamferEdgeGridOf(edges []ChamferSplitEdge,
 		return ChamferEdgeGrid{},
 			fmt.Errorf("%w: cap split ring exceeds the spatial work limit", decaderr.ErrUnsupported)
 	}
+	// Rat.Set keeps a caller's non-reduced form; SetFrac reduces. proof.QuoRat
+	// below needs lowest terms, so reach is rebuilt before any use.
+	reach = new(big.Rat).SetFrac(new(big.Int).Set(reach.Num()), new(big.Int).Set(reach.Denom()))
 	grid := ChamferEdgeGrid{
-		step:  new(big.Rat).Set(reach),
+		step:  reach,
 		cells: make(map[chamferGridCell][]int), edges: edges,
 	}
 	// Each source edge may occupy at most 128 grid cells on average. This
@@ -194,7 +197,7 @@ func chamferPointEdgeWithin(p proofarith.Xpt,
 		return false
 	}
 	v := proofarith.Xsub(p, edge.A)
-	t := new(big.Rat).Quo(proofarith.XdotRat(v, d), den)
+	t := proofarith.QuoRat(new(big.Rat), proofarith.XdotRat(v, d), den)
 	if t.Sign() < 0 {
 		t.SetInt64(0)
 	} else if t.Cmp(big.NewRat(1, 1)) > 0 {

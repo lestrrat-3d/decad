@@ -31,7 +31,7 @@ type WallArea struct{ Lo, Hi float64 }
 func WallTriangleArea(u, v proof.Xpt) (float64, float64) {
 	w := proof.Xcross(u, v)
 	q := proof.XdotRat(w, w)
-	q.Quo(q, big.NewRat(4, 1))
+	proof.QuoRat(q, q, big.NewRat(4, 1))
 	return proofbound.RatSqrtDown(q), proofbound.RatSqrtUp(q)
 }
 

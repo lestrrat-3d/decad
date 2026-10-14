@@ -381,10 +381,10 @@ func capLoopAreaSignRat(data *LoftAuditData, loop []int, u, v int) int {
 		pa, pb := data.Xverts[a], data.Xverts[loop[(k+1)%len(loop)]]
 		au, av := meshbool.RatCoordOf(pa, u), meshbool.RatCoordOf(pa, v)
 		bu, bv := meshbool.RatCoordOf(pb, u), meshbool.RatCoordOf(pb, v)
-		cross.Mul(au, bv)
-		term.Mul(bu, av)
-		cross.Sub(&cross, &term)
-		area.Add(area, &cross)
+		proof.MulRat(&cross, au, bv)
+		proof.MulRat(&term, bu, av)
+		proof.SubRat(&cross, &cross, &term)
+		proof.AddRat(area, area, &cross)
 	}
 	return area.Sign()
 }

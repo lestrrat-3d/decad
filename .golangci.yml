@@ -104,7 +104,7 @@ linters:
       - linters:
           - forbidigo
         text: raw big.Rat arithmetic
-        path-except: ^internal/(loftcylinder/ring_edge_records|massmoment/prism_frame|massmoment/tensor|meshbool/boolean|momentregion/state|motionbound/interval_matrix|proofbound/area_slack|proofbound/axis_interval|proofbound/bounds|proofbound/frame_box|proofbound/interval_arithmetic|proofbound/interval_trig|proofbound/log|proofbound/rat_interval|proofbound/rational|proofbound/turn_trig|revolvemesh/tessellate_revolve_volume|shellseparation/shell)\.go$
+        path-except: ^internal/(loftcylinder/ring_edge_records|loftmesh/loft_cap_proof|loftmesh/loft_moments|massmoment/prism_frame|massmoment/tensor|meshbool/boolean|momentregion/state|motionbound/interval_matrix|proofbound/area_slack|proofbound/axis_interval|proofbound/bounds|proofbound/frame_box|proofbound/interval_arithmetic|proofbound/interval_trig|proofbound/log|proofbound/rat_interval|proofbound/rational|proofbound/turn_trig|revolvemesh/tessellate_revolve_volume|shellseparation/shell)\.go$
       - linters:
           - forbidigo
           - errcheck

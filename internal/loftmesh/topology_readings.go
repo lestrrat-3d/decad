@@ -75,7 +75,7 @@ func CapPolygonAreaRat(pts []sectionrecord.Point2, loopIdx [][]int) *big.Rat {
 		for j := range n {
 			p, q := pts[idx[j]], pts[idx[(j+1)%n]]
 			term := new(big.Rat).Mul(polynomial.MustRatOf(p.U), polynomial.MustRatOf(q.V))
-			term.Sub(term, new(big.Rat).Mul(polynomial.MustRatOf(q.U), polynomial.MustRatOf(p.V)))
+			proofarith.SubRat(term, term, new(big.Rat).Mul(polynomial.MustRatOf(q.U), polynomial.MustRatOf(p.V)))
 			sum.Add(sum, term)
 		}
 	}
