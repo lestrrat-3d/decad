@@ -1,10 +1,12 @@
 package decad
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -255,4 +257,225 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	require.NotNil(t, float.pointSimilarity)
 	require.NotNil(t, float.revolveLoftSector)
 	require.NotNil(t, float.loftMirrorCopy)
+}
+
+// exactCopyMotionMessage is the text only the exactPlaced refusal in
+// motionRun.place carries.
+const exactCopyMotionMessage = "descends from an exact-rotation copy"
+
+// verifyTranslated runs VerifyMotion with mover sliding along X through a
+// static solid partner, so the pair is evaluated at every pose. The mover's
+// pose is never constant, so motionRun.place is really reached.
+func verifyTranslated(t *testing.T, doc *Document, mover *Body) error {
+	t.Helper()
+	_, err := doc.VerifyMotion(t.Context(), []*Body{mover},
+		Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(30)},
+		WithResolution(units.Millimeters(100)))
+	return err
+}
+
+// boxUnion is the faceted Boolean result of two boxes, one tilted, that
+// ScaledAt admits.
+func boxUnion(t *testing.T) *Body {
+	t.Helper()
+	doc := New()
+	a := internalBoxBody(t, doc, -2, -2, 8, 8, 10)
+	b := internalBoxBody(t, doc, -1, -1, 7, 3, 8)
+	turn, err := r3.RotationAround(r3.NewVec(3, 1, 4), r3.Vec{X: 1}, units.Degrees(20))
+	require.NoError(t, err)
+	b, err = Transform(t.Context(), b, turn)
+	require.NoError(t, err)
+	u, err := Union(t.Context(), a, b)
+	require.NoError(t, err)
+	return u
+}
+
+// TestCopyRotationMotionRefusalSurvivesDescendants checks that the refusal to
+// re-place an exact-copy descendant during motion verification follows the
+// persistent exactPlaced mark. Every case has its own live static solid
+// partner and a non-constant, evaluated pair, so the guard is reached; a case
+// that retires the source or earlier movers still leaves that partner.
+func TestCopyRotationMotionRefusalSurvivesDescendants(t *testing.T) {
+	shift, err := r3.Translation(r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	turn := func() CopyOption { return WithCopyRotation(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(30)) }
+	cases := []struct {
+		name   string
+		source func(t *testing.T) *Body // nil means mirrorJoinedLoft
+		build  func(t *testing.T, doc *Document, source, exact *Body) *Body
+	}{
+		{"exact copy", nil, func(t *testing.T, _ *Document, _, exact *Body) *Body { return exact }},
+		{"zero-angle second exact copy", nil, func(t *testing.T, _ *Document, _, exact *Body) *Body {
+			b, err := Copy(t.Context(), exact, WithCopyRotation(r3.Vec{}, r3.Vec{X: 1}, units.Degrees(0)))
+			require.NoError(t, err)
+			return b
+		}},
+		{"copy with no options", nil, func(t *testing.T, _ *Document, _, exact *Body) *Body {
+			b, err := Copy(t.Context(), exact)
+			require.NoError(t, err)
+			return b
+		}},
+		{"transform", nil, func(t *testing.T, _ *Document, _, exact *Body) *Body {
+			b, err := Transform(t.Context(), exact, shift)
+			require.NoError(t, err)
+			return b
+		}},
+		{"retired source then transform", nil, func(t *testing.T, doc *Document, source, exact *Body) *Body {
+			require.NoError(t, doc.Remove(source))
+			b, err := Transform(t.Context(), exact, shift)
+			require.NoError(t, err)
+			return b
+		}},
+		{"retired source then copy", nil, func(t *testing.T, doc *Document, source, exact *Body) *Body {
+			require.NoError(t, doc.Remove(source))
+			b, err := Copy(t.Context(), exact)
+			require.NoError(t, err)
+			return b
+		}},
+		{"scaled", boxUnion, func(t *testing.T, _ *Document, _, exact *Body) *Body {
+			b, err := exact.ScaledAt(t.Context(), r3.Vec{}, units.Scalar(1))
+			require.NoError(t, err)
+			return b
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			maker := tc.source
+			if maker == nil {
+				maker = mirrorJoinedLoft
+			}
+			source := maker(t)
+			doc := source.doc
+			exact, err := Copy(t.Context(), source, turn())
+			require.NoError(t, err)
+			mover := tc.build(t, doc, source, exact)
+			require.True(t, mover.payload.(facetedPayload).exactPlaced)
+			// A live static solid partner on the mover's path, added last so no
+			// case can retire it.
+			internalBoxBody(t, doc, 6, -2, 10, 2, 10)
+			err = verifyTranslated(t, doc, mover)
+			require.ErrorIs(t, err, ErrUnsupported)
+			require.ErrorContains(t, err, exactCopyMotionMessage)
+		})
+	}
+
+	t.Run("placement control", func(t *testing.T) {
+		source := mirrorJoinedLoft(t)
+		rot, err := r3.RotationAround(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(30))
+		require.NoError(t, err)
+		control, err := Copy(t.Context(), source, WithCopyPlacement(rot))
+		require.NoError(t, err)
+		require.False(t, control.payload.(facetedPayload).exactPlaced)
+		internalBoxBody(t, source.doc, 6, -2, 10, 2, 10)
+		require.NoError(t, verifyTranslated(t, source.doc, control))
+	})
+}
+
+func TestCopyRotationExactPlacedMarkFollowsPlacementOnly(t *testing.T) {
+	source := mirrorJoinedLoft(t)
+	require.False(t, source.payload.(facetedPayload).exactPlaced)
+	zero, err := Copy(t.Context(), source, WithCopyRotation(r3.Vec{}, r3.Vec{X: 1}, units.Degrees(0)))
+	require.NoError(t, err)
+	require.True(t, zero.payload.(facetedPayload).exactPlaced, "a zero angle is still an exact placement")
+	again, err := Copy(t.Context(), zero)
+	require.NoError(t, err)
+	require.True(t, again.payload.(facetedPayload).exactPlaced)
+}
+
+// pointLoftTooth is a fitted-side point loft with its apex at the origin.
+func pointLoftTooth(t *testing.T, doc *Document) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.YZ(), 8)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	pts := []*sketch.Point{
+		s.CreatePoint(3, -1), s.CreatePoint(4, -1.5), s.CreatePoint(5, -1),
+		s.CreatePoint(5, 1), s.CreatePoint(3, 1),
+	}
+	for _, p := range pts {
+		s.Fix(p)
+	}
+	_, err = s.CreateFitSpline(pts[0], pts[1], pts[2])
+	require.NoError(t, err)
+	for i := 2; i < len(pts); i++ {
+		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	tooth, err := doc.LoftFromPoint(t.Context(), r3.Vec{}, s, s.Profiles()[0])
+	require.NoError(t, err)
+	return tooth
+}
+
+// pointLoftConeTool is the full X-axis cone that exactPointCone recognizes.
+func pointLoftConeTool(t *testing.T, doc *Document, apex float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	pts := []*sketch.Point{s.CreatePoint(-2, 0), s.CreatePoint(-2, apex+2), s.CreatePoint(apex, 0)}
+	for _, p := range pts {
+		s.Fix(p)
+	}
+	for i := range pts {
+		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	tool, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	require.NoError(t, err)
+	return tool
+}
+
+// TestCopyRotationRoundTripDropsPointSource checks that a float round trip
+// cannot restore the point-loft source of an exact copy. An exact rotation
+// about X through (0,1,1) at 2^-60 has a nonzero exact translation, yet the
+// inverse float rotation brings the accumulated placement back to the float
+// identity; the dropped pointSection must keep the cone trim from matching.
+func TestCopyRotationRoundTripDropsPointSource(t *testing.T) {
+	doc := New()
+	tooth := pointLoftTooth(t, doc)
+	cone := pointLoftConeTool(t, doc, 5)
+	require.NotNil(t, tooth.payload.(facetedPayload).pointSection)
+	control, matched, err := tryPointConeBoolean(t.Context(), meshbool.OpCut, doc, doc.nextProducerID(), tooth, cone)
+	require.NoError(t, err)
+	require.True(t, matched, "the unplaced point loft takes the cone trim")
+	require.NotNil(t, control.payload.(facetedPayload).pointCone)
+
+	center, axis, angle := r3.NewVec(0, 1, 1), r3.Vec{X: 1}, units.Radians(math.Ldexp(1, -60))
+	record, _, err := exactrotation.New(center, axis, angle)
+	require.NoError(t, err)
+	nonzero := false
+	for _, v := range record.Translation() {
+		nonzero = nonzero || v.Sign() != 0
+	}
+	require.True(t, nonzero, "the exact translation is nonzero")
+
+	exact, err := Copy(t.Context(), tooth, WithCopyRotation(center, axis, angle))
+	require.NoError(t, err)
+
+	d, err := r3.RotationAround(center, axis, angle)
+	require.NoError(t, err)
+	back, err := d.Inverse()
+	require.NoError(t, err)
+	round, err := Transform(t.Context(), exact, back)
+	require.NoError(t, err)
+	rp := round.payload.(facetedPayload)
+	require.Equal(t, r3.Identity(), rp.xform, "the float round trip is the identity")
+	require.True(t, rp.exactPlaced)
+
+	_, matched, err = tryPointConeBoolean(t.Context(), meshbool.OpCut, doc, doc.nextProducerID(), round, cone)
+	require.NoError(t, err)
+	require.False(t, matched, "the cone trim must not match a round-tripped exact copy")
+
+	cut, err := Cut(t.Context(), round, cone)
+	require.NoError(t, err)
+	require.True(t, cut.payload.(facetedPayload).pointCone == nil, "the Cut result carries no pointCone")
+
+	// The record itself is gone from the exact copy and from the round trip.
+	require.True(t, exact.payload.(facetedPayload).pointSection == nil)
+	require.True(t, rp.pointSection == nil)
 }

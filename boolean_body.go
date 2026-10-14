@@ -123,6 +123,17 @@ type facetedPayload struct {
 	loftFacesCap  *loftFacesCapRecord
 	loftFacesToe  *loftFacesToeRecord
 	loftFacesTrim *loftFacesTrimRecord
+	// exactPlaced marks a body whose current true solid is the image of an
+	// exact-rotation placement (placedWith with a record), at any angle and
+	// whether the copy was direct or not. The pose model of
+	// motionbound.PoseDeviation does not describe re-placing such a solid by
+	// a float transform, so motionRun.place refuses it. Every later placement,
+	// Copy, Transform and ScaledAt builds its payload from the receiver's and
+	// MUST keep the mark, whatever happens to copyLineage or to the source's
+	// liveness. A future placement path that does not start from the
+	// receiver's payload must carry it over by hand. Only an exact placement
+	// sets it; a fresh payload never has it.
+	exactPlaced bool
 	// copyLineage names the live faceted source and its recorded rigid image.
 	// A Boolean result has no copy lineage; Copy and placement issue it.
 	copyLineage *facetedCopyLineage
@@ -258,6 +269,7 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		next.pointPlane = nil
 		next.pointSimilarity = nil
 		next.pointPlaneCapDisplacement = 0
+		next.exactPlaced = true
 	}
 	next.groups = append([]facetGroup(nil), fp.groups...)
 	if fp.loftMirrorJoin != nil && fp.mirrorCapGroups == nil {

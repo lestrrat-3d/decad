@@ -1383,6 +1383,12 @@ An exact faceted copy carries no analytic surface tags: every face reads as
 refuse it. It also stops being a point-loft source and a loft mirror join copy,
 so cone trims and the loft mirror cylinder joins treat it as any other faceted
 body. A copy that needs those readings uses `WithCopyPlacement`.
+`VerifyMotion` and `VerifyLinkage` refuse to re-place an exact faceted copy, or
+any body that descends from one by `Copy`, `Transform` or `ScaledAt`, with
+`ErrUnsupported`: the check has no pose proof for a re-placed exact rotation.
+The refusal applies where a mover is placed, so a mover that is fixed, or that
+has no evaluated pair, does not reach it. A copy made with `WithCopyPlacement`
+is not affected.
 A nil option is `ErrDegenerate`, and a body this evaluator did not build is
 `ErrUnsupported`. Cancellation during a faceted rebuild leaves the source
 and live-body set unchanged.

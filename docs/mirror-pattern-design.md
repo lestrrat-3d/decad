@@ -239,6 +239,15 @@ placement. Its faces read as `Faceted`. The loft mirror cap roles survive as
 provenance. Only a copy made directly from the source records the rotation in
 its lineage; `Transform` and a copy of a copy record none.
 
+Every exact placement, at any angle including zero, also marks the payload
+`exactPlaced`. Every later placement, `Copy`, `Transform` and `ScaledAt` keeps
+the mark, whatever happens to the lineage and whether the source stays live.
+`VerifyMotion` and `VerifyLinkage` refuse to re-place a marked body with
+`ErrUnsupported` (`motionRun.place`): the pose deviation model describes a
+mover as a float pose applied to its record points, which does not cover
+re-placing `Q*S + t`. The refusal is on re-placement, so a fixed mover or one
+with no evaluated pair never reaches it.
+
 `PatternCopies` is not equivalent: its instances denote the float matrix.
 Other payloads place by `r3.RotationAround(center, axis, angle)`, exactly as
 `WithCopyPlacement` of that transform. §4.3's rule that non-frame-keeping

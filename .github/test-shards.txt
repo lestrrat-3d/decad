@@ -1461,3 +1461,6 @@
 10	0.00	TestCopyRotationExactSourceVertsDropForRotation
 10	0.00	TestPlacedWithChargesTheGapToExactRotation
 10	0.00	TestPlacedWithDropsFloatPlacementRecords
+10	0.00	TestCopyRotationMotionRefusalSurvivesDescendants
+10	0.00	TestCopyRotationExactPlacedMarkFollowsPlacementOnly
+10	0.00	TestCopyRotationRoundTripDropsPointSource

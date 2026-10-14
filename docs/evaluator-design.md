@@ -794,7 +794,11 @@ mirror join is a separate record, so each exact copy still mints both outer-cap
 roles under its own identity. The zero-bound exact source mesh survives only an
 exactly identity record. The copy lineage keeps the rotation only for a copy
 made directly from the source's own payload; `Transform` and a copy of a copy
-record none.
+record none. Every exact placement sets the payload's `exactPlaced` mark, and
+every later placement, `Copy`, `Transform` and `ScaledAt` keeps it. The motion
+checks (`VerifyMotion`, `VerifyLinkage`) refuse to re-place a marked mover with
+`ErrUnsupported`, because their pose deviation model does not describe a
+re-placed `Q*S + t`.
 When a zero-bound faceted Boolean undergoes translation-only placement, its
 payload also carries the original exact mesh beside the rebuilt held mesh.
 The contact reader may use that source to prove an exact support plane after
