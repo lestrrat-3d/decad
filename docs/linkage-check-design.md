@@ -767,7 +767,9 @@ Any other normal is skipped when a float upper bound on both candidates is below
 the floor. That bound drops every motion term, which only raise an extent, and rounds every operation
 outward, so it can only skip. Both rules need a nonnegative span on the box form and a nonnegative
 remainder, and a side that breaks them is evaluated in full. Every evaluated direction runs the exact
-rational path, so the bound, its direction, its norm and its sense are the unfiltered ones.
+rational path. When the unfiltered bound exceeds the floor, the result is that bound with its direction,
+norm and sense, unchanged. Otherwise the result is nil or a bound at most the floor, which may differ from
+the unfiltered one, and every caller discards it.
 
 **Two bounds, the larger.** For each pair the projection bound is the larger of the box-corner bound over
 the six coordinate directions and the hull-point bound over every candidate direction: two proven lower

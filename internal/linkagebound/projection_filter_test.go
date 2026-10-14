@@ -755,3 +755,46 @@ func TestAxialCandidatesNeverBeatCoordinateDirections(t *testing.T) {
 	}
 	require.Positive(t, checked)
 }
+
+// TestHullWitnessOfTurnedBoxes pins a witness by value, so a change in the
+// face normals' signs or order cannot hide behind a reference that shares
+// the normal generator. Two stationary boxes with edges (3,4,0), (-4,3,0)
+// and (0,0,1), at the origin and at (6,8,0), are separated by 5 along the
+// first edge of the first box; the coordinate directions only reach 2 and 1.
+func TestHullWitnessOfTurnedBoxes(t *testing.T) {
+	box := func(shift [3]float64) Side {
+		edges := [3][3]float64{{3, 4, 0}, {-4, 3, 0}, {0, 0, 1}}
+		reading := Reading{Pos: make([]motionbound.IvVec, 8), Vel: make([][]motionbound.IvVec, 8)}
+		for i := range 8 {
+			p := shift
+			for axis, e := range edges {
+				if i&(1<<axis) != 0 {
+					for d := range 3 {
+						p[d] += e[d]
+					}
+				}
+			}
+			for d := range 3 {
+				reading.Pos[i][d] = floatInterval(p[d], p[d])
+			}
+		}
+		corners, ok := RoundCorners(reading)
+		require.True(t, ok)
+		return Side{Corners: corners}
+	}
+	a, b := box([3]float64{}), box([3]float64{6, 8, 0})
+	want := func(w HullWitness) {
+		t.Helper()
+		require.Zero(t, w.Bound.Cmp(big.NewRat(5, 1)))
+		for d, c := range []int64{3, 4, 0} {
+			require.Zero(t, w.Axis[d].Cmp(big.NewRat(c, 1)), "axis %d", d)
+		}
+		require.Zero(t, w.Norm.Cmp(big.NewRat(5, 1)))
+		require.Equal(t, 1, w.Sense)
+	}
+	want(LowerHullWithWitness(a, b))
+	want(LowerHullWithWitnessAbove(a, b, big.NewRat(4, 1)))
+	// Literal bounds without float copies give the same witness.
+	a.Corners.LoF, a.Corners.HiF, b.Corners.LoF, b.Corners.HiF = nil, nil, nil, nil
+	want(LowerHullWithWitness(a, b))
+}
