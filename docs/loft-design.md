@@ -1370,7 +1370,8 @@ before the candidate pass and keeps the smallest, the sweep on a tie:
   holding the maximum of its two lower corners, a point of both boxes; its
   work is the (box, cell) incidences plus those comparisons, and it is built
   only when its incidences fit under the ceiling and under the current
-  smallest count;
+  smallest count, and its count stops, and the grid is dropped, once its work
+  reaches the current smallest count;
 - the balanced box tree splits member indices into disjoint halves until
   each leaf holds at most eight. Each node's box is the coordinatewise
   min/max of all descendant triangle boxes. A pair of disjoint node boxes
