@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -36,9 +37,9 @@ import (
 // bodies are resolved at the call and tracked by private producer identities.
 //
 // The evaluation this call drives is spread over three sibling files, each
-// with its own doc comment: prism_payload.go holds the record and the
-// coordinate readings taken off it, prism_build.go builds the body, and
-// prism_extent.go answers the extent questions asked of the result. The
+// with its own doc comment: internal/prismrecord holds the record and the
+// coordinate readings taken off it, internal/prismrecord/build.go builds the body, and
+// internal/prismrecord/extent.go answers the extent questions asked of the result. The
 // prism they produce is analytic — Plane and Cylinder faces — for every
 // line/circle/arc boundary segment, and a NURBSSurface
 // (docs/spline-design.md §7) for a Tier A free-form one, with bounded mass
@@ -226,7 +227,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if certificate != nil {
 		sectionDelta = certificate.Delta
 	}
-	body, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+	body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
 		Profile:       profile,
 		Frame:         frame,
 		SectionDelta:  sectionDelta,
@@ -236,7 +237,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 		Z1Delta:       sweep.z1Delta,
 		Xform:         r3.Identity(),
 		SurfaceResult: surfaceResult,
-	}}, work)
+	}, work))
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +447,7 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // Extrude's — and reads its recorded walk through recordChain (seam.go)
 // rather than sectioncert.RecordProfile. It builds a chain of any segment count and kind
 // Table G's per-kind construction admits, through buildChainSides
-// (prism_build.go's buildWallGeometry, shared with the profile-fed prism
+// (internal/prismrecord/build.go's prismrecord.BuildWallGeometry, shared with the profile-fed prism
 // build) — the same evaluator, over an open rather than a closed walk.
 
 // chainPayload is chain Extrude's own record of a ribbon body: the recorded
@@ -479,9 +480,9 @@ func (pp chainPayload) z1Scalar() proofbound.BoundedScalar {
 
 // prism is a *view* of pp as a zero-section-delta prismPayload — never a body
 // this evaluator builds — used only to feed pp.point/pp.dir/reflected and
-// prismBoundsContext, none of which cares whether the section it reads
+// prismrecord.Bounds, none of which cares whether the section it reads
 // closes. sectionDelta stays zero in THIS view deliberately: prismPayload's
-// own Bounds reading (prismBoundsContext) charges a nonzero sectionDelta as a
+// own Bounds reading (prismrecord.Bounds) charges a nonzero sectionDelta as a
 // BLANKET term, δ outward on every face regardless of which candidate wins
 // each extreme, which is sound for an ordinary prismPayload but would widen a
 // trimmed ribbon's UNTOUCHED extremes too — exactly the ones T170 requires to
@@ -497,13 +498,13 @@ func (pp chainPayload) prism() prismPayload {
 	for _, c := range pp.chains[1:] {
 		profile.Holes = append(profile.Holes, loopRecord(c))
 	}
-	return prismPayload{Payload: prismrecord.Payload{
+	return prismrecord.Payload{
 		Profile: profile,
 		Frame:   pp.frame,
 		Z0:      pp.z0, Z1: pp.z1,
 		Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
 		Xform: pp.xform,
-	}}
+	}
 }
 
 // Transform is the accumulated rigid placement.
@@ -621,7 +622,7 @@ func refuseChainExtrudeOptions(opts []ExtrudeOption) error {
 // segment of every walk in pp.chains, both rims of each walk and the one
 // sweep edge at each of its two free ends (docs/surface-design.md §13.4,
 // Table G row 1), and the measurements the finished body publishes. It
-// mirrors evalPrismContext's own order (prism_build.go) without ever
+// mirrors prismrecord.Build's own order (internal/prismrecord/build.go) without ever
 // building a solid or a closing cap: an open chain mints neither. Each walk
 // is its own lump — surface §2.2's one-lump-per-connected-boundary rule,
 // which docs/surface-intersection-design.md §3.4 is the first construction
@@ -659,7 +660,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 		allFaces = append(allFaces, faces...)
 		total = proofbound.BoundedAdd(total, area)
 	}
-	body.n.Lumps = lumpNodes(sheetLumps(allFaces))
+	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(allFaces))
 
 	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(total.Value),
@@ -667,7 +668,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 		Bound:     units.SquareMillimeters(total.Bound),
 	}
 	// volume and centroid stay at their zero value: finite, so
-	// validateAnalyticBodyMeasurements below passes, and neither is
+	// topobuild.ValidateAnalyticMeasurements below passes, and neither is
 	// reachable through Body.Volume/Body.Centroid while solid is false
 	// (docs/surface-design.md §8), exactly as patch.go's evalPatchContext
 	// leaves them.
@@ -692,15 +693,15 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	} else {
 		boundsWalks = chainBoundsWalks(view.Profile, captures)
 	}
-	bounds, err := prismBoundsContext(ctx, view, work, boundsWalks)
+	bounds, err := prismrecord.Bounds(ctx, view, work, boundsWalks)
 	if err != nil {
 		return nil, err
 	}
-	body.n.Bounds = boxToInternal(bounds)
-	if err := chargePrismMap(body, pp.frame, pp.xform); err != nil {
+	body.n.Bounds = bounds
+	if err := prismrecord.ChargeMap(bodyNode(body), pp.frame, pp.xform); err != nil {
 		return nil, err
 	}
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 	body.n.Payload = pp
@@ -732,13 +733,13 @@ func chainBoundsWalks(profile profileRecord, captures []chainWalkCapture) *momen
 // buildChainSides builds ONE walk's whole wall set with shared vertices and
 // edges: one wall face per recorded segment (Table G row 1), never a cap and
 // never a wraparound junction. chainIdx names which of pp.chains this is,
-// feeding sideOriginsContext's roleLoop exactly as a prism's loop index does,
+// feeding prismrecord.SideOrigins's roleLoop exactly as a prism's loop index does,
 // so two different walks' faces never collide on one role string. n segments
 // place n+1 rim posts at each sweep level, so the walk's two FREE ends (post
 // 0 and post n) each carry a sweep edge touched by exactly one wall — Free()
 // resolves them (Edge.IsFree, topology.go) — while every INTERIOR post
 // (1..n-1) shares its sweep edge between the two walls it joins, exactly as
-// buildLoopSidesAs's own junction verticals do for a closed loop
+// prismrecord.BuildLoopSidesAs's own junction verticals do for a closed loop
 // (docs/surface-design.md §13.4). It returns the faces and the walk's own
 // total wall area, folded through proofbound.BoundedAdd rather than summed as raw
 // floats.
@@ -746,7 +747,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	prismView := pp.prism()
 	// Every coordinate this walk's segments read sits within pp's own section
 	// displacement of the section it denotes, so each segment's own length
-	// carries that displacement too — buildLoopSidesAs's identical charge,
+	// carries that displacement too — prismrecord.BuildLoopSidesAs's identical charge,
 	// prism-boolean §7's 12·π·δ per walk (internal/proofbound/bounds.go's
 	// proofbound.SectionDisplacementLength), zero for every payload chain Extrude builds
 	// directly.
@@ -786,7 +787,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	// displacement is zDelta, beside the post's own exact frame lift and
 	// placement rounding (prismPayload.LiftedVertex) — zero wherever that lift
 	// is exact, which is what keeps a plain chain Extrude's rim vertices Exact,
-	// mirroring buildLoopSidesAs's own rimVertex.
+	// mirroring prismrecord.BuildLoopSidesAs's own rimVertex.
 	rimVertex := func(u, v, z, zDelta, extra float64) *Vertex {
 		held, lift := prismView.LiftedVertex(u, v, z)
 		return bornVertex(&Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(zDelta, lift), extra))}})
@@ -797,7 +798,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	// ends. A free end charges its one walk end's own bound against the point
 	// its segment denotes there (boundarywalk.DenotedStartBound and
 	// DenotedEndBound); an interior post charges both neighbours' ends
-	// (boundarywalk.JunctionVertexAt), exactly as buildLoopSidesAs does for a closed
+	// (boundarywalk.JunctionVertexAt), exactly as prismrecord.BuildLoopSidesAs does for a closed
 	// loop's junctions.
 	bottomV := make([]*Vertex, n+1)
 	topV := make([]*Vertex, n+1)
@@ -822,7 +823,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	}
 
 	// Sweep edges at every post, free-end and interior alike. Convexity from
-	// the 2D turn, exactly as buildLoopSidesAs's own junction verticals: only
+	// the 2D turn, exactly as prismrecord.BuildLoopSidesAs's own junction verticals: only
 	// an interior post has both a leaving and an entering tangent to cross,
 	// so a free end's carries no turn of its own and keeps its zero
 	// (concave) default — Table G assigns it no sense.
@@ -851,11 +852,11 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
-		bottomEdge, topEdge, surf, faceReversed, err := buildWallGeometry(prismView, w, convex, false, bottomV[i], bottomV[i+1], topV[i], topV[i+1])
+		bottomEdge, topEdge, surf, faceReversed, err := prismrecord.BuildWallGeometry(handleAlloc{}, prismView, w, convex, false, vertexNode(bottomV[i]), vertexNode(bottomV[i+1]), vertexNode(topV[i]), vertexNode(topV[i+1]))
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
-		origins, err := sideOriginsContext(ctx, ref, chainIdx, w.Segs)
+		origins, err := prismrecord.SideOrigins(ctx, ref, chainIdx, w.Segs)
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
@@ -869,16 +870,16 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 				Origins:   origins,
 				Body:      bodyNode(body),
 				Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-					{Edge: edgeNode(bottomEdge), Forward: true},
+					{Edge: bottomEdge, Forward: true},
 					{Edge: edgeNode(vertical[i+1]), Forward: true},
-					{Edge: edgeNode(topEdge), Forward: false},
+					{Edge: topEdge, Forward: false},
 					{Edge: edgeNode(vertical[i]), Forward: false},
 				},
 				}}))},
 			},
 		})
-		for _, e := range []*Edge{bottomEdge, topEdge, vertical[i], vertical[i+1]} {
-			e.n.Faces = append(e.n.Faces, faceNode(face))
+		for _, e := range []*topo.Edge{bottomEdge, topEdge, edgeNode(vertical[i]), edgeNode(vertical[i+1])} {
+			e.Faces = append(e.Faces, faceNode(face))
 		}
 		faces = append(faces, face)
 		total = proofbound.BoundedAdd(total, faceArea)

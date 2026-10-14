@@ -11,12 +11,14 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -265,7 +267,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			Loops:         loopNodes(endLoops),
 		},
 	})
-	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, []*topo.Face{faceNode(capStart), faceNode(capEnd)}); err != nil {
 		return nil, err
 	}
 	faces = append(faces, capStart, capEnd)
@@ -285,7 +287,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 // draftNearRim builds one loop's near rim at level z: a vertex at every
 // junction of the coalesced walks (one seam vertex for a lone closed walk) and
 // one rim edge per walk, in walk order, exactly the bottom rim
-// buildLoopSidesAs builds for a prism's wall at the same level. Each vertex
+// prismrecord.BuildLoopSidesAs builds for a prism's wall at the same level. Each vertex
 // carries its junction bound, the level's own displacement and its frame lift
 // rounding; each edge the walk's own length and convexity. buildCapBand reads
 // these as the band's side directrix, so wall i's near edge is coedge i.
@@ -339,11 +341,11 @@ func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord,
 		if err != nil {
 			return nil, err
 		}
-		edge, _, _, _, err := buildWallGeometry(level, w, convex, singleClosed, start, end, start, end)
+		edge, _, _, _, err := prismrecord.BuildWallGeometry(handleAlloc{}, level, w, convex, singleClosed, vertexNode(start), vertexNode(end), vertexNode(start), vertexNode(end))
 		if err != nil {
 			return nil, err
 		}
-		co[i] = topo.CoEdge{Edge: edgeNode(edge), Forward: true}
+		co[i] = topo.CoEdge{Edge: edge, Forward: true}
 	}
 	return co, nil
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -468,7 +469,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		role := f.Origins()[0].Role
 		group := -1
 		switch role {
-		case prismOuterFirstSideRole:
+		case prismrecord.OuterFirstSideRole:
 			group = 0
 		case provenance.RoleCapStart:
 			group = 1

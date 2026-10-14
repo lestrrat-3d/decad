@@ -17,6 +17,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -209,7 +210,7 @@ func closedBossShellLumps(faces []*Face, outerFaceCount int) ([]*Lump, error) {
 	for _, face := range faces[:outerFaceCount] {
 		outerFaces[face] = struct{}{}
 	}
-	groups := splitConnectedFaces(faces)
+	groups := faceGroupHandles(topobuild.SplitConnectedFaces(faceNodes(faces)))
 	if len(groups) != 2 {
 		return nil, fmt.Errorf("%w: a closed boss shell has %d face components, expected an exterior and one cavity",
 			ErrUnsupported, len(groups))
@@ -232,7 +233,7 @@ func closedBossShellLumps(faces []*Face, outerFaceCount int) ([]*Lump, error) {
 		}
 	}
 	if len(outer) != outerFaceCount || len(cavity) != len(faces)-outerFaceCount ||
-		shellIsOpen(outer) || shellIsOpen(cavity) ||
+		topobuild.ShellIsOpen(faceNodes(outer)) || topobuild.ShellIsOpen(faceNodes(cavity)) ||
 		!closedBossShellEdgePairs(outer) || !closedBossShellEdgePairs(cavity) {
 		return nil, fmt.Errorf("%w: a closed boss shell needs two closed face components", ErrUnsupported)
 	}
@@ -274,7 +275,7 @@ func bossShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology
 		profile profileRecord
 		z       float64
 	}{{band.SideProfile(), band.LowerZ}, {band.CapProfile(), band.InterfaceZ}} {
-		view := prismPayload{Payload: prismrecord.Payload{Frame: band.Frame, Xform: bp.xform, Z0: spec.z, Z1: spec.z}}
+		view := prismrecord.Payload{Frame: band.Frame, Xform: bp.xform, Z0: spec.z, Z1: spec.z}
 		for _, seg := range spec.profile.Outer.Segments {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -405,5 +406,5 @@ func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
 		return err
 	}
 	body.n.Bounds = boxToInternal(box)
-	return validateAnalyticBodyMeasurements(body)
+	return topobuild.ValidateAnalyticMeasurements(bodyNode(body))
 }

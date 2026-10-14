@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
@@ -43,7 +44,7 @@ func twistShellFacetedBody(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	groups := []facetGroup{
-		{origins: []provenance.Ref{{Producer: ref, Role: prismOuterFirstSideRole}}},
+		{origins: []provenance.Ref{{Producer: ref, Role: prismrecord.OuterFirstSideRole}}},
 		{origins: []provenance.Ref{{Producer: ref, Role: "shellSide(0,0)"}}},
 		{origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}}, planar: true},
 		{origins: []provenance.Ref{{Producer: ref, Role: roleShellCap}}, planar: true},

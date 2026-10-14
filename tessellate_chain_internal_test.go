@@ -113,7 +113,7 @@ search:
 // determinant-negative transform still produces a mesh whose triangles wind
 // outward — CCW as seen from the wall's own positive side — never backward,
 // which the payload's own reversed field never states for a straight wall
-// (buildWallGeometry's default-case return stays false), so this proof
+// (prismrecord.BuildWallGeometry's default-case return stays false), so this proof
 // cannot come from that field and instead confirms it directly against the
 // wall's own Face.NormalAt.
 func TestTessellateChainReflectedPlacementFlipsWinding(t *testing.T) {

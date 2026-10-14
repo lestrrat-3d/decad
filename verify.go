@@ -747,7 +747,7 @@ func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutc
 //
 // A prismPayload with surfaceResult true and sectionDelta zero is proven by
 // construction: `sketch` already decided the recorded segments form the
-// stated simple closed planar region; evalPrismContext already refuses a
+// stated simple closed planar region; prismrecord.Build already refuses a
 // non-positive height; a simple planar curve crossed with a positive
 // interval does not self-intersect; and pp.xform is rigid, so it preserves
 // that. A nonzero sectionDelta denotes a set the record is only WITHIN that

@@ -106,8 +106,8 @@ func extendSceneCarrier(t *testing.T, seg curveSegment) sketch.Entity {
 	t.Helper()
 	full, err := prismcells.FullExtendSegment(seg)
 	require.NoError(t, err)
-	view := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{full}}}}}
-	tool := prismPayload{Payload: prismrecord.Payload{Profile: extendTestSquare()}}
+	view := prismrecord.Payload{Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{full}}}}
+	tool := prismrecord.Payload{Profile: extendTestSquare()}
 	reexpress, err := prismcells.NewReexpression(view.PlacementOperand(), tool.PlacementOperand())
 	require.NoError(t, err)
 	require.True(t, reexpress.Identity)

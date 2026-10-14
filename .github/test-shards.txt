@@ -1527,4 +1527,4 @@
 10	0.00	TestDocumentHandleAndNodeIdentity
 10	0.00	TestLoftSectionCircularHoleClearanceAcrossLevels
 10	0.00	TestPrismIntersectArrangedRecordMatchesAuthenticated
-10	0.00	TestPrismPortMatchesRootBuilder
+10	0.00	TestPrismBodyNodesAreBorn

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -274,7 +275,7 @@ type brepOpenSet struct {
 // and the side contour's are orig's segments at the side level, directed
 // along orig's walk, which the face beside each walks forward or back. Each
 // edge is built in F's frame by the prism rim construction
-// (buildWallGeometry) over the face's own displacements, and takes the
+// (prismrecord.BuildWallGeometry) over the face's own displacements, and takes the
 // walked-boundary convexity of the loop it runs along (topology.go's
 // Edge.IsConvex): a circular walk by its own turn, a straight one by the
 // loop's role. Every non-closed end is a vertex the record's own use already
@@ -444,12 +445,12 @@ func brepBandEdge(view prismPayload, w survey2d.SegmentWalk, hole bool, start, e
 	if w.IsCircular() {
 		convex = w.Th1 >= w.Th0
 	}
-	edge, _, _, _, err := buildWallGeometry(view, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, convex, w.Closed, start, end, start, end) //nolint:dogsled // only the rim at view's level is read
+	edge, _, _, _, err := prismrecord.BuildWallGeometry(handleAlloc{}, view, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, convex, w.Closed, vertexNode(start), vertexNode(end), vertexNode(start), vertexNode(end)) //nolint:dogsled // only the rim at view's level is read
 	if err != nil {
 		return nil, err
 	}
-	edge.n.LengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(view.SectionDelta, 1))
-	return edge, nil
+	edge.LengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(view.SectionDelta, 1))
+	return edgeHandle(edge), nil
 }
 
 // brepBandMass is what the bands add to a brep body's divergence sums

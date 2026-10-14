@@ -205,7 +205,7 @@ column's displacement:
 
 | Face | Built from | Surface | Role |
 |---|---|---|---|
-| wall | one column, through `buildLoopSidesAs` over a `prismPayload` view of that column (the payload's frame, placement and `sectionDelta`; the column's interval and level displacements) | `Plane` or `Cylinder` per segment | `slab(k).region(r).side(i,j)` — `k` the slab the column starts in, `r` the region (0 outside a prism group), `i` the loop's index in that region, `j` the segment |
+| wall | one column, through `prismrecord.BuildLoopSidesAs` over a `prismPayload` view of that column (the payload's frame, placement and `sectionDelta`; the column's interval and level displacements) | `Plane` or `Cylinder` per segment | `slab(k).region(r).side(i,j)` — `k` the slab the column starts in, `r` the region (0 outside a prism group), `i` the loop's index in that region, `j` the segment |
 | bottom cap | the first slab's region | `Plane` at `slabs[0].z0`, outward `-N` | `capStart` |
 | top cap | the last slab's region | `Plane` at the last `z1`, outward `+N` | `capEnd` |
 | floor | `interfaces[i].lowerExposed[e]` | `Plane` at the interface level, outward `+N` | `floor(i,e)` |
@@ -252,7 +252,7 @@ needed.
 | `Volume` | `Σ_k A_k · h_k` — each slab's region area (with `sectionDisplacementArea(sectionDelta, walks_k, perimeter_k)` folded into its bound, as `evalPrism` does) times its bounded height |
 | `Area` | the first region's area (bottom cap) + the last region's area (top cap) + each exposed record's area (`momentinput.LoopEnclosedArea` of its outer loop) + `Σ_columns perimeter · height` |
 | `Centroid` | `Σ_k m_k · c_k / Σ_k m_k`, with `m_k = A_k · h_k` and `c_k` the region's centroid lifted to the slab's bounded midpoint through `prismPayload.Point`; taken component by component in bounded arithmetic, each `c_k` component carrying `prismrecord.Payload.PointBound`'s radius as its bound, and the three component bounds folded into one radius through `radius3D`. `prismrecord.Payload.CentroidGeometryBound`, the largest over the outer runs, plus `sectionDelta`, caps the result as `evalPrism`'s does |
-| `Bounds` | the union of `prismBoundsContext` over each outer run: one outer-only prism per run of slabs sharing an outer record, over that run's interval with its end levels' displacements and the payload's `sectionDelta`, the largest run bound covering the union. A cut-built stack is one run, the outer-only prism on the full interval |
+| `Bounds` | the union of `prismrecord.Bounds` over each outer run: one outer-only prism per run of slabs sharing an outer record, over that run's interval with its end levels' displacements and the payload's `sectionDelta`, the largest run bound covering the union. A cut-built stack is one run, the outer-only prism on the full interval |
 | `ExtentAlong` | the extreme over every outer run's reading |
 | `AxialDelta` | the largest level displacement over every slab |
 

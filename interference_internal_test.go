@@ -544,8 +544,8 @@ func TestAnalyticBodiesEqualCancellationIsBounded(t *testing.T) {
 		segs[i] = lineSeg{Start: planePoint{U: float64(i)}, End: planePoint{U: float64(i + 1)}, TEnd: 1}
 	}
 	profile := profileRecord{Outer: loopRecord{Segments: segs}}
-	a := bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}}})
-	b := bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}}})
+	a := bornBody(&Body{n: topo.Body{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}})
+	b := bornBody(&Body{n: topo.Body{Payload: prismrecord.Payload{Profile: profile, Z1: 1}}})
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "ExactLoopEqual"}
 
 	_, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)

@@ -13,7 +13,7 @@ import (
 )
 
 // This file is docs/surface-design.md §15's T96-T100: the vertex-bound
-// repair for prism_build.go, revolve_build.go and capblend_geom.go, the
+// repair for internal/prismrecord/build.go, revolve_build.go and capblend_geom.go, the
 // three analytic builders that published Vertex.Position() Exact with a
 // zero bound for a placed body or a body on a tilted sketch plane, although
 // pp.point/rp.point's own frame lift and accumulated placement rounds under
@@ -42,7 +42,7 @@ func exactApplyRat(xform r3.Transform, local [3]*big.Rat) [3]*big.Rat {
 
 // exactFramePoint computes, entirely over big.Rat, the world point a
 // plane-local (u, v, z) denotes under frame then xform — prismPayload.point's
-// own construction (prism_payload.go), reproduced without its float
+// own construction (internal/prismrecord), reproduced without its float
 // rounding, so it states the value a published Vertex.Bound must cover the
 // gap to.
 func exactFramePoint(frame r3.Frame, xform r3.Transform, u, v, z float64) [3]*big.Rat {
@@ -169,7 +169,7 @@ func requireEnclosedVertex(t *testing.T, vs []*decad.Vertex, truth [3]*big.Rat) 
 // encloses the true displacement between the held (float) vertex and the
 // exact-rational point the record, frame and placement denote (computed over
 // math/big.Rat, never a second float answer). Shown-to-fail: deleting the
-// lift term prism_build.go's rimVertex charges (buildLoopSidesAs) turns every
+// lift term internal/prismrecord/build.go's rimVertex charges (prismrecord.BuildLoopSidesAs) turns every
 // vertex back to Exact with a zero bound, and the enclosure assertions below
 // go red.
 func TestVertexPlacedPrismBoundEnclosesDisplacement(t *testing.T) {

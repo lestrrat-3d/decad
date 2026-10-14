@@ -578,7 +578,7 @@ func (rp chainRevolvePayload) revolve() revolvePayload {
 }
 
 // walkView is the single-walk view the wall build takes: chain ci alone as the
-// outer loop, so sideOriginsContext's segment indices and revolvemass.WallAxisMoment's own
+// outer loop, so prismrecord.SideOrigins's segment indices and revolvemass.WallAxisMoment's own
 // rp.profile.Outer read reach exactly that walk's segments. loopIdx feeds the
 // face role, so two walks' faces never collide on one role string.
 func (rp chainRevolvePayload) walkView(ci int) revolvePayload {

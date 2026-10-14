@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -39,8 +40,8 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	if _, ok := edges[0].n.Curve.(surfacegeom.FacetedCurve); !ok {
 		return nil, true, fmt.Errorf("%w: the selected cross-bore mouth has no faceted edge witness", ErrUnsupported)
 	}
-	outer, outerOK := crossBoreFaceGroup(rec.target, prismOuterFirstSideRole)
-	bore, boreOK := crossBoreFaceGroup(rec.tool, prismOuterFirstSideRole)
+	outer, outerOK := crossBoreFaceGroup(rec.target, prismrecord.OuterFirstSideRole)
+	bore, boreOK := crossBoreFaceGroup(rec.tool, prismrecord.OuterFirstSideRole)
 	if !outerOK || !boreOK || !crossBoreEdgeHasOrigins(edges[0], outer, bore) ||
 		!(edges[0].n.Start.Position.X > rec.radius/2) {
 		return nil, true, fmt.Errorf("%w: the selected edge is not the positive cross-bore mouth", ErrUnsupported)

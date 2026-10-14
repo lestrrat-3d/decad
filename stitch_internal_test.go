@@ -88,7 +88,7 @@ func TestStitchClosureRefusesNonManifoldEdge(t *testing.T) {
 // square face — its own four fresh vertices and edges, all zero-bound, one
 // outer loop walked counter-clockwise as viewed from +Z with reversed
 // false, exactly the invariant every real wall or patch face already
-// satisfies (prism_build.go, patch.go): CCW-as-stored viewed from the
+// satisfies (internal/prismrecord/build.go, patch.go): CCW-as-stored viewed from the
 // face's own +frame.N(), reversed only ever toggled by a LATER derivation,
 // never set true at first build. corner is the loop's first vertex, and the
 // square runs corner -> (corner+10,0,0) -> (corner+10,10,0) -> (corner,10,0)
@@ -168,8 +168,8 @@ func TestStitchAuditRefusesOverlappingAssembly(t *testing.T) {
 // into a closed set at all.
 func TestStitchRuleSRefusesMultipleSourceBodies(t *testing.T) {
 	t.Parallel()
-	bodyA := bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}}})
-	bodyB := bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true}}}})
+	bodyA := bornBody(&Body{n: topo.Body{Payload: prismrecord.Payload{SurfaceResult: true}}})
+	bodyB := bornBody(&Body{n: topo.Body{Payload: prismrecord.Payload{SurfaceResult: true}}})
 	faceA := bornFace(&Face{n: topo.Face{Body: bodyNode(bodyA)}})
 	faceB := bornFace(&Face{n: topo.Face{Body: bodyNode(bodyB)}})
 

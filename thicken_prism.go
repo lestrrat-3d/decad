@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -18,7 +19,7 @@ import (
 
 // thickenPrism builds a through-height wall around a recorded prism sheet.
 // This arm first proves that its generated section coordinates denote the
-// exact offset of the source section; evalPrismContext can then keep its
+// exact offset of the source section; prismrecord.Build can then keep its
 // zero-displacement section certificate.
 func thickenPrism(ctx context.Context, d *Document, pp prismPayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
 	if !pp.SurfaceResult || pp.SectionDelta != 0 || len(pp.Profile.Holes) != 0 {
@@ -50,7 +51,7 @@ func thickenPrism(ctx context.Context, d *Document, pp prismPayload, side Thicke
 	pp.Profile = annulus
 	pp.SurfaceResult = false
 	pp.Walks = nil
-	return evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
+	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), pp, freeform.NewFreeformWork()))
 }
 
 // thickenAmount is the per-side offset magnitude: the whole thickness for a

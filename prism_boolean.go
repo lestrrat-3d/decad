@@ -164,8 +164,8 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 
 	switch op {
 	case meshbool.OpUnion:
-		result, ok, err := prismcells.ResolveAndBuildUnion(ctx, budget, pa.Payload, pb.Payload, reexpress)
-		return prismPayload{Payload: result}, ok, err
+		result, ok, err := prismcells.ResolveAndBuildUnion(ctx, budget, pa, pb, reexpress)
+		return result, ok, err
 	default: // meshbool.OpCut
 		return resolveAndBuildPrismCut(ctx, budget, pa, pb, reexpress)
 	}
@@ -286,7 +286,7 @@ func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKi
 		return prismPayload{}, prismPayload{}, false, nil
 	}
 	shared := prismplacement.SharedAxisOf(pa.PlacementOperand(), pb.PlacementOperand())
-	if shared.OK && pa.Xform != pb.Xform && !prismcells.PlacedAxisProfileAdmitted(op, pa.Payload, pb.Payload) {
+	if shared.OK && pa.Xform != pb.Xform && !prismcells.PlacedAxisProfileAdmitted(op, pa, pb) {
 		return prismPayload{}, prismPayload{}, false, nil
 	}
 	if !shared.OK { // G3

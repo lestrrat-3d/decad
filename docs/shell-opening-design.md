@@ -441,7 +441,7 @@ Gate order, after modify §4's stage 1 and reach SX10:
 | 3. levels | SO3's height half (inward, kept caps) |
 | 4. chain | `offsetOpenChain` over `K`: S11a per walk, SO1/SO2/SO4 per end; each cut on a removed arc placed in the arc's parameterisation (SO5) |
 | 5. regions | §4.7 steps 2–3: S8 (SO3's section half), S11b, S9, the area identity |
-| 6. record | both caps removed → `evalPrismContext` over `W`; else the engine, §4.7 step 4 |
+| 6. record | both caps removed → `prismrecord.Build` over `W`; else the engine, §4.7 step 4 |
 
 No section limit (modify S10, S18) runs: the cavity opens through the removed
 faces, so the inradius of `P` bounds nothing. A cavity that closes by

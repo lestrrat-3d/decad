@@ -34,7 +34,7 @@ import (
 // below its stated degree, a RUN of consecutive collapsed spans, the joint a
 // subdivision creates, and a reversed recorded range over an unreversed chain.
 //
-// The certificate is wired into the build by extrude.go's buildLoopSidesAs
+// The certificate is wired into the build by extrude.go's prismrecord.BuildLoopSidesAs
 // (§10 P4b); apitest/extrude_freeform_test.go's TestExtrudeFreeformR19RefusesTheBuild
 // pins two of these same nets as BUILD refusals through the public Extrude.
 // What these tests pin is the exact-rational geometry underneath it, computed

@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -416,10 +417,10 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	if err != nil {
 		return nil, err
 	}
-	if err := attachFaceLoopsContext(ctx, walls); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, faceNodes(walls)); err != nil {
 		return nil, err
 	}
-	body.n.Lumps = lumpNodes(sheetLumps(walls))
+	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(walls))
 
 	mass := newLoftMassAccumulator(anchor, delta, 0, 0)
 	for _, t := range tris {
@@ -437,7 +438,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	// volume and centroid stay at their zero value: finite, so the validation
 	// below passes, and neither is reachable through Body.Volume/Body.Centroid
 	// while solid is false, exactly as evalChainExtrudeContext leaves them.
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 	body.n.Payload = lp

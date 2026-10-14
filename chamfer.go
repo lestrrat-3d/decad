@@ -27,7 +27,7 @@ import (
 // feet (a LineSeg), never a tangent arc, so the bevel wall is a PLANE (§7). It
 // then shares everything downstream with the fillet — the §5 audit
 // (offset2d.AuditRewriteBudget, S8/S6/S7/S9), the profile rewrite (rewriteProfile), evalPrism,
-// and the blend-role machinery (addBlendRoles) — via the common cornerBlend.
+// and the blend-role machinery (topobuild.AddBlendRoles) — via the common cornerBlend.
 //
 // The setback d is measured along the adjacent boundary curve, d from the
 // corner along EACH walk; WithAsymmetricChamfer instead sets back d along the
@@ -452,7 +452,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	// opens its one counter here (docs/spline-design.md §5.2).
 	// A section rewrite is a change of the SECTION: both sweep levels come
 	// through unchanged, and so does each one's own axial displacement.
-	body, err := evalPrismContext(ctx, doc, ref, prismPayload{Payload: prismrecord.Payload{
+	body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(doc), ref), prismrecord.Payload{
 		Profile:   profile,
 		Frame:     pp.Frame,
 		Z0:        pp.Z0,
@@ -462,7 +462,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		Xform:     pp.Xform,
 		BlendSegs: chamferSegs,
 		BlendKind: "chamfer",
-	}}, freeform.NewFreeformWork())
+	}, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, err
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/patternrecord"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -263,7 +264,7 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 		p.Profile = moved
 		p.SectionDelta = patternrecord.WithDelta(p.SectionDelta, delta)
 		p.Walks = nil
-		return evalPrismContext(ctx, d, ref, p, freeform.NewFreeformWork())
+		return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), p, freeform.NewFreeformWork()))
 	case stackedPrismPayload:
 		slabs := make([]stackedrecord.Slab, len(p.slabs))
 		delta := 0.0

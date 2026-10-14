@@ -155,12 +155,12 @@ func recognisePrism(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 		return brepPrismRead{}, false, err
 	}
 	return brepPrismRead{
-		pp: prismPayload{Payload: prismrecord.Payload{
+		pp: prismrecord.Payload{
 			Profile: caps.Section, Frame: caps.Frame, Xform: bp.xform,
 			Z0: caps.Zlo, Z1: caps.Zhi,
 			Z0Delta: max(bp.faces[caps.Bottom].z0Delta, walls.ZloDelta),
 			Z1Delta: max(bp.faces[caps.Top].z0Delta, walls.ZhiDelta),
-		}},
+		},
 		bottom: caps.Bottom, top: caps.Top, bottomLoop: caps.BottomLoop,
 	}, true, nil
 }

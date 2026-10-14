@@ -600,7 +600,7 @@ cap-blend view. Then:
 6. **Closure.** The record's faces pair by `brepTopologyContext` as before;
    the band's patches each bound two faces by construction (the contour edge
    on `F`, the side edge on the adjacent face, the corner rulings between
-   neighbouring patches), and `attachFaceLoopsContext` proves every edge
+   neighbouring patches), and `topobuild.AttachFaceLoops` proves every edge
    bounds exactly two faces over the whole body.
 
 The contour displacement (reach §8.4, `capband.ContourDisplacement`) is

@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -416,7 +417,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	faces = append(faces, bore)
-	if err := attachFaceLoopsContext(ctx, faces); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, faceNodes(faces)); err != nil {
 		return nil, err
 	}
 	for _, e := range lines {
@@ -424,7 +425,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf(`%w: all-edge chamfer has an unsewn planar edge`, ErrUnsupported)
 		}
 	}
-	body.n.Lumps = lumpNodes(sheetLumps(faces))
+	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(faces))
 	if len(body.n.Lumps) != 1 || body.n.Lumps[0].Shells[0].Open {
 		return nil, fmt.Errorf(`%w: all-edge chamfer has an open shell`, ErrUnsupported)
 	}
@@ -528,5 +529,5 @@ func (p allEdgeChamferPayload) measure(body *Body, polygons []allEdgePolygon) er
 	body.n.Bounds = measurement.Box{Min: r3.NewVec(p.box[0][0], p.box[1][0], p.box[2][0]),
 		Max:   r3.NewVec(p.box[0][1], p.box[1][1], p.box[2][1]),
 		Bound: units.Millimeters(0), Exactness: measurement.Exact}
-	return validateAnalyticBodyMeasurements(body)
+	return topobuild.ValidateAnalyticMeasurements(bodyNode(body))
 }

@@ -13,6 +13,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -270,5 +271,5 @@ func measureCounterboreShell(ctx context.Context, bp brepPayload, body *Body) er
 		return err
 	}
 	body.n.Bounds = boxToInternal(box)
-	return validateAnalyticBodyMeasurements(body)
+	return topobuild.ValidateAnalyticMeasurements(bodyNode(body))
 }

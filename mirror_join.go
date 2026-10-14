@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -89,7 +90,7 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 		if err != nil {
 			return nil, err
 		}
-		body, err = evalPrismContext(ctx, d, ref, joined, freeform.NewFreeformWork())
+		body, err = bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), joined, freeform.NewFreeformWork()))
 		if err != nil {
 			return nil, err
 		}

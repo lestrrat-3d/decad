@@ -113,7 +113,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 		// prismcells.ResolveAndBuildIntersectCrossing's, taken over THIS cell's
 		// own cutDelta.
 		sectionDelta := sceneDelta.Merged(pa.SectionDelta, pb.SectionDelta, reexpress.Delta, cutDelta)
-		pp := prismPayload{Payload: prismrecord.Payload{
+		pp := prismrecord.Payload{
 			Profile:      cellProfile,
 			Frame:        pa.Frame,
 			Xform:        pa.Xform,
@@ -122,9 +122,9 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 			Z0Delta:      z0Delta,
 			Z1Delta:      z1Delta,
 			SectionDelta: sectionDelta,
-		}}
+		}
 
-		body, err := evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
+		body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), pp, freeform.NewFreeformWork()))
 		if err != nil {
 			if errors.Is(err, ErrDegenerate) || errors.Is(err, ErrUnsupported) {
 				// The region integrals refuse this cell's own section as

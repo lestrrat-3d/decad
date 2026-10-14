@@ -31,7 +31,7 @@ import (
 // What this file does NOT build: the wall edge's `convex` bool itself. §6.5's
 // own orientation convention folds this certificate's sign against the loop's
 // own walk role (outer counter-clockwise, hole clockwise) — a topology-level
-// decision — which is wired in extrude.go's buildLoopSidesAs (§10 P4b, Table R
+// decision — which is wired in extrude.go's prismrecord.BuildLoopSidesAs (§10 P4b, Table R
 // row R6 retired), the one evaluator that owns Table R row R6's build path.
 
 // FreeformConvexitySign is one wall edge's fold verdict: whether the chain's

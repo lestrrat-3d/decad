@@ -55,7 +55,7 @@ func evalClosedCircleSweep(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	witness := prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: frame, Xform: r3.Identity()}}
+	witness := prismrecord.Payload{Profile: profile, Frame: frame, Xform: r3.Identity()}
 	finishArcSweepBody(body, sweepPayload{
 		prism:        witness,
 		revolve:      revolve,

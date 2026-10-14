@@ -53,12 +53,12 @@ func TestEvalPrismCollapsedSpanRunStillBuilds(t *testing.T) {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 
-	body, err := evalPrism(New(), 0, prismPayload{Payload: prismrecord.Payload{
+	body, err := evalPrism(New(), 0, prismrecord.Payload{
 		Profile: profile,
 		Frame:   frame,
 		Z1:      3,
 		Xform:   r3.Identity(),
-	}}, freeform.NewFreeformWork())
+	}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.NotNil(t, body)
 	require.Greater(t, body.n.Volume.Value.Mag(), 0.0, "the walk's own length stays positive despite the collapsed run")
@@ -403,9 +403,9 @@ func walkEndFromModel(w survey2d.SegmentWalk) planePoint {
 }
 
 // This file pins the fix for docs/spline-design.md §5.2's own discipline:
-// within ONE evalPrismContext call, buildLoopSidesAs,
+// within ONE prismrecord.Build call, prismrecord.BuildLoopSidesAs,
 // momentinput.CoordinateEnvelope (via prismrecord.Payload.CentroidGeometryBound and, four times
-// over, prismBoundsContext's per-axis extentBoundedAlong) and
+// over, prismrecord.Bounds's per-axis extentBoundedAlong) and
 // prismextent.ProfileBoundaryExtremes (three times, also via extentBoundedAlong)
 // each used to call walkOf on the SAME recorded segment, so one free-form
 // segment's conversion-and-bracket charge was spent eight times over instead
@@ -421,7 +421,7 @@ func walkEndFromModel(w survey2d.SegmentWalk) planePoint {
 // apitest/spline_fit_test.go's own TestFitSplineTerminalDedupRefusesUnclosedLoopReversed
 // uses to reproduce a real recorded record exactly, and it is what gives this
 // loop positive net area: the forward pairing (spline first, chord back)
-// winds the opposite way and evalPrismContext refuses it as ErrDegenerate.
+// winds the opposite way and prismrecord.Build refuses it as ErrDegenerate.
 func involuteFitProfile() profileRecord {
 	fit := involuteFitPoints()
 	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
@@ -437,17 +437,17 @@ func involuteFitProfile() profileRecord {
 // since no evaluator path builds one through a live sketch profile yet.
 func involuteFitPrismPayload(t *testing.T) prismPayload {
 	t.Helper()
-	return prismPayload{Payload: prismrecord.Payload{
+	return prismrecord.Payload{
 		Profile: involuteFitProfile(),
 		Frame:   identityFrame(t),
 		Z1:      5,
 		Xform:   r3.Identity(),
-	}}
+	}
 }
 
 // TestPrismWalkOnceInvoluteRecordFitsWorkBudget is the observable fix itself:
 // before momentinput.ProfileWalks, this exact record's walk was resolved eight times
-// over within one evalPrismContext call (230,168 units each), for
+// over within one prismrecord.Build call (230,168 units each), for
 // 1,841,344 units against a 1,048,576 ceiling — refused as ErrUnsupported.
 // With the walk resolved once and every consumer reading it back, the whole
 // build's charge fits comfortably inside the ceiling and the body builds.
@@ -458,11 +458,11 @@ func involuteFitPrismPayload(t *testing.T) prismPayload {
 // LOWER than the 975,600 the bug report measured on the requester's real
 // record by exactly one moments-preflight charge (16,192,
 // momentinput.Profile.EvaluatorIntegralsUncheckedContext's own — see its
-// call in evalPrismContext): the requester's number was measured through the
+// call in prismrecord.Build): the requester's number was measured through the
 // public Extrude path, whose RecordProfile seam runs its own
 // independent-implementation area check (§5.2's "sketch computes its own
 // free-form area... decad integrates its OWN records... the two agreeing is
-// the §1 falsifier") before Extrude's own evalPrismContext runs its own
+// the §1 falsifier") before Extrude's own prismrecord.Build runs its own
 // preflight — a second whole-record preflight this synthetic-payload fixture
 // never pays, since it calls evalPrism directly on a hand-built
 // prismPayload/ProfileRecord rather than through RecordProfile. What both
@@ -611,9 +611,9 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
 	t.Run("buildLoopSidesAs", func(t *testing.T) {
-		pp := prismPayload{Payload: prismrecord.Payload{Profile: near, Frame: identityFrame(t), Z1: 5, Xform: r3.Identity()}}
+		pp := prismrecord.Payload{Profile: near, Frame: identityFrame(t), Z1: 5, Xform: r3.Identity()}
 		body := bornBody(&Body{n: topo.Body{Solid: true, Doc: documentNode(New())}})
-		_, _, _, _, err := buildLoopSidesAs(t.Context(), body, 0, pp, 0, false, far.Outer, freeform.NewFreeformWork(), pw, levelToken{}, levelToken{}, false)
+		_, _, _, _, err := prismrecord.BuildLoopSidesAs(t.Context(), envOf(body.n.Doc, 0), bodyNode(body), pp, 0, false, far.Outer, freeform.NewFreeformWork(), pw, levelToken{}, levelToken{}, false)
 		require.ErrorIs(t, err, momentinput.ErrResolvedWalksMismatch)
 	})
 	t.Run("one ulp apart", func(t *testing.T) {
@@ -681,12 +681,12 @@ func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 
-	body, err := evalPrism(New(), 0, prismPayload{Payload: prismrecord.Payload{
+	body, err := evalPrism(New(), 0, prismrecord.Payload{
 		Profile: profile,
 		Frame:   frame,
 		Z1:      1,
 		Xform:   r3.Identity(),
-	}}, work)
+	}, work)
 	require.NoError(t, err, "a Tier A free-form side face now builds (§10 P4b)")
 	require.NotNil(t, body)
 	require.Greater(t, work.Spent, spent)
@@ -1087,7 +1087,7 @@ func TestPublishedWalksAreReadOnlyAcrossGoroutines(t *testing.T) {
 		go func() {
 			pp := source
 			pp.Xform = motion
-			body, err := evalPrismContext(t.Context(), New(), 0, pp, freeform.NewFreeformWork())
+			body, err := bodyResult(prismrecord.Build(t.Context(), envOf(documentNode(New()), 0), pp, freeform.NewFreeformWork()))
 			results <- outcome{body: body, err: err}
 		}()
 	}
@@ -1108,7 +1108,7 @@ func benchInvoluteFitPayload(b *testing.B) prismPayload {
 	b.Helper()
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(b, err)
-	return prismPayload{Payload: prismrecord.Payload{Profile: involuteFitProfile(), Frame: frame, Z1: 5, Xform: r3.Identity()}}
+	return prismrecord.Payload{Profile: involuteFitProfile(), Frame: frame, Z1: 5, Xform: r3.Identity()}
 }
 
 // BenchmarkPlacedFreeformPrism measures the placement this reuse is for: a

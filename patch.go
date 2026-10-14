@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -26,7 +27,7 @@ import (
 // This file is PatchProfile of docs/surface-design.md §5.1: a single planar
 // face built from a recorded profile, on the sketch plane's own frame. It is
 // the seam call (sectioncert.RecordProfile) plus one evaluation, evalPatchContext, that
-// mirrors evalPrismContext's order without ever building a solid.
+// mirrors prismrecord.Build's order without ever building a solid.
 //
 // patchPayload records what the body was built from — profile, frame and
 // placement — exactly as prismPayload does for an extrude, so Transform and
@@ -36,8 +37,8 @@ import (
 // ok-guarded or carrying a default arm, so a patch falls through to the
 // existing refusal there instead of being silently handed a zero-height
 // prism. prism() below is the one bridge — a *view*, never routed through
-// evalPrismContext, which rejects h <= 0 with ErrDegenerate — that lets a
-// patch reuse Payload.CapFrame, prismPayload.point and prismBoundsContext, each of
+// prismrecord.Build, which rejects h <= 0 with ErrDegenerate — that lets a
+// patch reuse Payload.CapFrame, prismPayload.point and prismrecord.Bounds, each of
 // which is correct at zero height.
 type patchPayload struct {
 	profile profileRecord
@@ -58,13 +59,13 @@ func (pp patchPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tra
 
 // prism is a *view* of pp as a zero-height prismPayload — never a body this
 // evaluator builds — used only to feed Payload.CapFrame, prismPayload.point and
-// prismBoundsContext, each of which reads a section and a placement and is
+// prismrecord.Bounds, each of which reads a section and a placement and is
 // correct at z0 == z1 == 0. Every prismPayload field this view leaves at its
 // zero value (z0Delta, z1Delta, sectionDelta, blend roles, surfaceResult)
 // is meaningless for a patch, which denotes its own recorded section exactly
 // as a plain extrude does.
 func (pp patchPayload) prism() prismPayload {
-	return prismPayload{Payload: prismrecord.Payload{Profile: pp.profile, Frame: pp.frame, Xform: pp.xform, Walks: pp.walks}}
+	return prismrecord.Payload{Profile: pp.profile, Frame: pp.frame, Xform: pp.xform, Walks: pp.walks}
 }
 
 // PatchProfile records p through the seam exactly as Extrude does — the same
@@ -126,8 +127,8 @@ func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 
 // evalPatchContext builds the patch body from the payload: one planar face
 // carrying one loop per recorded loop, the free edges that bound it, and the
-// measurements the finished body publishes. It mirrors evalPrismContext's own
-// order (prism_build.go) without ever building a solid.
+// measurements the finished body publishes. It mirrors prismrecord.Build's own
+// order (internal/prismrecord/build.go) without ever building a solid.
 func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patchPayload, work *freeform.FreeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -146,7 +147,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 	// pw resolves every boundary segment's walk exactly once for this whole
 	// build (internal/momentinput/profile_walks.go), read back by every
 	// buildPatchLoop call below instead of each one resolving afresh — the
-	// same reuse evalPrismContext runs for its own loops.
+	// same reuse prismrecord.Build runs for its own loops.
 	pw := pp.walks
 	if pw.Reusable(pp.profile) {
 		if err := pw.Charge(work); err != nil {
@@ -194,7 +195,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 			Loops:         loopNodes(faceLoops),
 		},
 	})
-	if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, []*topo.Face{faceNode(face)}); err != nil {
 		return nil, err
 	}
 
@@ -207,21 +208,21 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		Bound:     units.SquareMillimeters(ig.AreaBound),
 	}
 	// volume and centroid stay at their zero value: finite, so
-	// validateAnalyticBodyMeasurements below passes, and neither is
+	// topobuild.ValidateAnalyticMeasurements below passes, and neither is
 	// reachable through Body.Volume/Body.Centroid while solid is false
 	// (docs/surface-design.md §8).
-	bounds, err := prismBoundsContext(ctx, prismView, work, pw)
+	bounds, err := prismrecord.Bounds(ctx, prismView, work, pw)
 	if err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body.n.Bounds = boxToInternal(bounds)
-	if err := chargePrismMap(body, pp.frame, pp.xform); err != nil {
+	body.n.Bounds = bounds
+	if err := prismrecord.ChargeMap(bodyNode(body), pp.frame, pp.xform); err != nil {
 		return nil, err
 	}
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -236,13 +237,13 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 // junction, one edge per coalesced walk, and exactly one coedge per edge
 // (forward: true) — a patch has no side wall and no cap to share an edge
 // with, so every edge it mints is free by construction. It reuses
-// buildLoopSidesAs's own per-kind curve construction and its circular
-// edgeSign rule (prism_build.go), which buildLoopSidesAs's own doc comment
+// prismrecord.BuildLoopSidesAs's own per-kind curve construction and its circular
+// edgeSign rule (internal/prismrecord/build.go), which prismrecord.BuildLoopSidesAs's own doc comment
 // notes is a template rather than a callable for exactly this reason: a
 // patch's loop has no bottom/top pair, no vertical edge and no per-walk face.
 //
 // pp is patchPayload.prism()'s zero-height view. holeLoop is li != 0, the
-// same convention buildLoopSides derives it by. resolved is pp.profile's
+// same convention prismrecord.BuildLoopSides derives it by. resolved is pp.profile's
 // pre-resolved segment walks, or nil to resolve each segment through walkOf
 // as before (internal/momentinput/profile_walks.go).
 func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks) ([]topo.CoEdge, error) {
@@ -291,7 +292,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 
 	// A patch's own record is its own denotation (patchPayload carries no
 	// section displacement), so the section and level terms below are always
-	// zero; they are composed anyway, exactly as buildLoopSidesAs composes its
+	// zero; they are composed anyway, exactly as prismrecord.BuildLoopSidesAs composes its
 	// rim vertices, so a later field this payload gains is charged the same way
 	// rather than silently skipped. Beside them every rim vertex carries its
 	// own exact frame lift and placement rounding (prismPayload.LiftedVertex),
@@ -335,7 +336,7 @@ func buildPatchLoop(ctx context.Context, pp prismPayload, li int, loop loopRecor
 		var curve surfacegeom.Curve
 		switch w.Kind {
 		case survey2d.WalkCircular:
-			// The same circular edgeSign rule buildLoopSidesAs's survey2d.WalkCircular
+			// The same circular edgeSign rule prismrecord.BuildLoopSidesAs's survey2d.WalkCircular
 			// arm applies to its own rim edges: an Arc3/Circle3 is CCW from
 			// start to end about its axis, and a clockwise walk (or a
 			// reflected placement) inverts that sense.

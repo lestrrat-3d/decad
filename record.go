@@ -2,6 +2,7 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
@@ -39,6 +40,12 @@ func point2ToRecordSlice(points []planePoint) []sectionrecord.Point2 {
 }
 
 type profileRecord = momentinput.Profile
+
+// prismPayload is the evaluator's own record of a straight extrude: the
+// internal/prismrecord payload, which prismrecord.Build evaluates over
+// topology nodes and which implements topo.Payload (docs/evaluator-design.md
+// §5, §8).
+type prismPayload = prismrecord.Payload
 
 type loopRecord = sectionrecord.LoopRecord
 

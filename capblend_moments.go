@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -25,7 +26,7 @@ import (
 // internal/capband. See docs/modify-reach-design.md §8.4.
 
 // evalCapBlendContext builds the analytic cap-blend body from the payload
-// (BX3): the trimmed prism side walls (buildLoopSidesAs, unmodified) plus,
+// (BX3): the trimmed prism side walls (prismrecord.BuildLoopSidesAs, unmodified) plus,
 // for every chamfered loop, the chamfer band patches and the offset cap
 // boundary; every other loop and every unchamfered cap keeps the ordinary
 // prism construction. One shell, one lump, watertight by the same argument
@@ -94,21 +95,21 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		// end's displacement goes in with it: the wall vertices, the vertical
 		// edge lengths and the side face areas all read a level the setback
 		// computed, never one they can claim was recorded.
-		ppFor := prismPayload{Payload: prismrecord.Payload{
+		ppFor := prismrecord.Payload{
 			Frame:   cbp.frame,
 			Z0:      zLo.Value,
 			Z1:      zHi.Value,
 			Z0Delta: zLo.Bound,
 			Z1Delta: zHi.Bound,
 			Xform:   cbp.xform,
-		}}
-		sideFaces, bottomCo, topCo, loopLen, err := buildLoopSidesAs(ctx, body, ref, ppFor, li, li != 0, loop, work, nil, levelToken{}, levelToken{}, false)
+		}
+		sideFaces, bottomCo, topCo, loopLen, err := prismrecord.BuildLoopSidesAs(ctx, envOf(body.n.Doc, ref), bodyNode(body), ppFor, li, li != 0, loop, work, nil, levelToken{}, levelToken{}, false)
 		if err != nil {
 			return nil, err
 		}
-		faces = append(faces, sideFaces...)
+		faces = append(faces, faceHandles(sideFaces)...)
 		for _, f := range sideFaces {
-			sideArea = proofbound.BoundedAdd(sideArea, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
+			sideArea = proofbound.BoundedAdd(sideArea, proofbound.MeasuredScalar(f.Area, f.AreaBound))
 		}
 		_ = loopLen
 
@@ -255,7 +256,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		endArea = proofbound.BoundedAdd(endArea, proofbound.MeasuredScalar(sign*eArea.Value, eBound))
 	}
 
-	pl := prismPayload{Payload: prismrecord.Payload{Frame: cbp.frame, Xform: cbp.xform}}
+	pl := prismrecord.Payload{Frame: cbp.frame, Xform: cbp.xform}
 	startFrame, err := pl.CapFrame(cbp.z0, true)
 	if err != nil {
 		return nil, err
@@ -290,7 +291,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			Loops:         loopNodes(endLoopObjs),
 		},
 	})
-	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, []*topo.Face{faceNode(capStart), faceNode(capEnd)}); err != nil {
 		return nil, err
 	}
 	faces = append(faces, capStart, capEnd)
@@ -331,7 +332,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		Bound:     units.Millimeters(centroidBound),
 	}
 	body.n.Bounds = boxToInternal(bounds)
-	if err := chargePrismMap(body, cbp.frame, cbp.xform); err != nil {
+	if err := prismrecord.ChargeMap(bodyNode(body), cbp.frame, cbp.xform); err != nil {
 		return nil, err
 	}
 	if cbp.loftSource != nil {
@@ -339,7 +340,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			return nil, err
 		}
 	}
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 	cbp.patches = patchGeoms
@@ -442,7 +443,7 @@ func readBandMassWithSideArea(ctx context.Context, li int, loop loopRecord, cbp 
 
 // capBlendBoundsContext is the placed body's axis-aligned bounding box, read
 // along each world axis from the payload's OWN patch extrema
-// (extentBoundedAlong, Table DX row DX5) exactly as prismBoundsContext reads a
+// (extentBoundedAlong, Table DX row DX5) exactly as prismrecord.Bounds reads a
 // prism's — so every face of the box is a value the body attains. Min and Max
 // are positions and Bound is the absolute error on them (measurement.go), so a
 // box widened outward by the setback d would be a Min sitting d millimetres

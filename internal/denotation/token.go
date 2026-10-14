@@ -47,13 +47,13 @@ import "github.com/lestrrat-3d/r3"
 // tilted from the true one by that same float rounding, with no term in
 // axialDelta to cover it — axialDelta only ever states the OFFSET
 // displacement along an already-exact normal, on the same terms
-// prism_build.go's own cap axialDelta does, never a tilt of the normal
+// internal/prismrecord/build.go's own cap axialDelta does, never a tilt of the normal
 // itself. Carrying origin/normal on the token, and reading them instead of
 // fitting one, is what keeps that promise: the published normal is exactly
 // pp.dir(0, 0, 1) under whatever placement composes onto it, and only its
 // ORIGIN'S position along that exact direction is ever in question.
 //
-// MintLevel's (internal/topo Document) one caller today — prism_build.go's evalPrismContext — mints
+// MintLevel's (internal/topo Document) one caller today — internal/prismrecord/build.go's prismrecord.Build — mints
 // only when pp.sectionDelta == 0 AND the payload's frame axes are RECORDED
 // rather than computed: a straight prism's frame is always the sketch
 // plane's own frame, carried through unchanged from
@@ -72,7 +72,7 @@ import "github.com/lestrrat-3d/r3"
 //
 // Every mint is fresh: two separate evaluator calls — two separate Extrude
 // calls building the identical profile at the identical extent, or one call
-// and a later Transform/Copy rebuild of it (evalPrismContext is
+// and a later Transform/Copy rebuild of it (prismrecord.Build is
 // their shared entry point) — never share an id, because the document's own
 // counter never resets and never repeats. A caller cannot manufacture two
 // edges that share a level by any means but having this evaluator stamp them

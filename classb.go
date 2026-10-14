@@ -248,11 +248,11 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload topo.Payload, place
 	if len(y.Profile.Holes) != 0 {
 		return classBPair{}, false, nil
 	}
-	shifted, ok := classbgeom.ShiftedTool(ref, y.Payload, g)
+	shifted, ok := classbgeom.ShiftedTool(ref, y, g)
 	if !ok {
 		return classBPair{}, false, nil
 	}
-	cp.y = prismPayload{Payload: shifted}
+	cp.y = shifted
 	cp.tool = classbgeom.ToolRecord{
 		Profile: shifted.Profile, Z0: shifted.Z0, Z1: shifted.Z1,
 		Z0Delta: shifted.Z0Delta, Z1Delta: shifted.Z1Delta, Axis: cp.axis, Sign: cp.sign,
@@ -331,8 +331,8 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 		outside = [][2]end{{a, inside[0]}}
 	}
 	if op == meshbool.OpIntersect {
-		return prismPayload{Payload: prismrecord.Payload{Profile: cp.y.Profile, Frame: cp.g, Xform: cp.x.xform,
-			Z0: inside[0].level, Z1: inside[1].level, Z0Delta: inside[0].delta, Z1Delta: inside[1].delta}}, true, nil
+		return prismrecord.Payload{Profile: cp.y.Profile, Frame: cp.g, Xform: cp.x.xform,
+			Z0: inside[0].level, Z1: inside[1].level, Z0Delta: inside[0].delta, Z1Delta: inside[1].delta}, true, nil
 	}
 	// Point of no return (prism-boolean §3.4).
 	drop := map[int]struct{}{}
@@ -401,8 +401,8 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 // is false when the scene returned no such match.
 func classBPerpendicularRegion(ctx context.Context, cp classBPair, region profileRecord) (profileRecord, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	target := prismPayload{Payload: prismrecord.Payload{Profile: region, Frame: cp.g, Xform: cp.x.xform, Z0: 0, Z1: 1}}
-	tool := prismPayload{Payload: prismrecord.Payload{Profile: cp.y.Profile, Frame: cp.g, Xform: cp.x.xform, Z0: 0, Z1: 1}}
+	target := prismrecord.Payload{Profile: region, Frame: cp.g, Xform: cp.x.xform, Z0: 0, Z1: 1}
+	tool := prismrecord.Payload{Profile: cp.y.Profile, Frame: cp.g, Xform: cp.x.xform, Z0: 0, Z1: 1}
 	segments, within, err := prismcells.RegionsWithinWorkCap(budget, target.Profile, tool.Profile)
 	if err != nil {
 		return profileRecord{}, false, err

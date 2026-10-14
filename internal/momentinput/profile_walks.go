@@ -19,9 +19,9 @@ import (
 // ProfileWalks is one profile's segment walks resolved ONCE, so that every
 // consumer within a single prism evaluation reads the same resolution back
 // instead of paying walkOf's own §5.2 charge again for it. Within one
-// evalPrismContext call, buildLoopSidesAs, CoordinateEnvelope (called
+// prismrecord.Build call, prismrecord.BuildLoopSidesAs, CoordinateEnvelope (called
 // from prismrecord.Payload.CentroidGeometryBound and, four times over, from
-// prismBoundsContext's per-axis extentBoundedAlong) and
+// prismrecord.Bounds's per-axis extentBoundedAlong) and
 // prismextent.ProfileBoundaryExtremes (three times, also from extentBoundedAlong)
 // each used to call walkOf on the SAME recorded segment — eight resolutions of
 // one segment, each recharging §5.2's exact-rational counter in full. On a
@@ -36,7 +36,7 @@ import (
 // DIFFERENT profile (a cap contour, an offset loop) or hold no resolution worth
 // sharing.
 //
-// A metered set outlives the evaluation that resolved it. evalPrismContext
+// A metered set outlives the evaluation that resolved it. prismrecord.Build
 // publishes the one it resolved onto the body's own prismPayload, so a rigid
 // re-evaluation of that record — Transform, Copy — reads the
 // plane-local walks back instead of bracketing every free-form arc again. What
@@ -143,7 +143,7 @@ func (pw *ProfileWalks) At(loopIndex, segIndex int) survey2d.SegmentWalk {
 
 // LoopWalks returns the resolved walk slice for loop index loopIndex (the
 // same convention as At), or nil if loopIndex is out of range for pw. A
-// single-loop consumer (buildLoopSidesAs) uses this instead of At plus its
+// single-loop consumer (prismrecord.BuildLoopSidesAs) uses this instead of At plus its
 // own per-segment loop, since it already owns the per-segment index into the
 // slice it gets back.
 func (pw *ProfileWalks) LoopWalks(loopIndex int) []survey2d.SegmentWalk {
@@ -183,7 +183,7 @@ func (pw *ProfileWalks) Matches(profile Profile) bool {
 
 // LoopMatches reports whether pw holds, at loop index loopIndex (the same
 // convention as At), the walks resolved from exactly this loop's recorded
-// segments. It is Matches for the single-loop consumer buildLoopSidesAs,
+// segments. It is Matches for the single-loop consumer prismrecord.BuildLoopSidesAs,
 // which is handed one LoopRecord and a role index rather than the whole
 // profile, and it refuses on the same exact-comparison terms.
 func (pw *ProfileWalks) LoopMatches(loopIndex int, loop LoopRecord) bool {

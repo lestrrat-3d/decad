@@ -28,11 +28,11 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 		thickness      = 0.1
 		thicknessDelta = 0.03125
 	)
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Z0:      0,
 		Z1:      1e12,
 		Z1Delta: 0.25,
-	}}
+	}
 	floorDelta := func(from, sourceDelta, by float64) float64 {
 		to := from + by
 		return proofbound.AbsSumUpper(sourceDelta, thicknessDelta, proofarith.AddRoundError(from, by, to))
@@ -106,7 +106,7 @@ func requireCupPrismLevelBounds(t *testing.T, prism prismPayload, a, b proofboun
 //   - stackedPatchArea's per-loop column term: the inward shellCap area
 //     misses.
 //   - The column's own section displacement in the stacked wall build
-//     (cupPlan.columnDelta into buildLoopSidesAs): each offset wall face's
+//     (cupPlan.columnDelta into prismrecord.BuildLoopSidesAs): each offset wall face's
 //     area misses, inward and outward.
 //   - stackedBoundsContext's outer-run displacement: the outward Bounds
 //     miss.

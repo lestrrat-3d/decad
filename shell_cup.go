@@ -114,24 +114,24 @@ func (cp cupView) cavityScalar() proofbound.BoundedScalar {
 // basePrism shares the cup's frame and placement with the prism helpers that
 // need no axial level.
 func (cp cupView) basePrism() prismPayload {
-	return prismPayload{Payload: prismrecord.Payload{Frame: cp.frame, Xform: cp.xform}}
+	return prismrecord.Payload{Frame: cp.frame, Xform: cp.xform}
 }
 
 // prismBetween builds an ordered prism from two cup levels, preserving each
 // level's own axial displacement at the matching prism end.
 func (cp cupView) prismBetween(a, b proofbound.BoundedScalar) prismPayload {
 	if a.Value <= b.Value {
-		return prismPayload{Payload: prismrecord.Payload{
+		return prismrecord.Payload{
 			Frame: cp.frame, Z0: a.Value, Z1: b.Value,
 			Z0Delta: a.Bound, Z1Delta: b.Bound,
 			Xform: cp.xform,
-		}}
+		}
 	}
-	return prismPayload{Payload: prismrecord.Payload{
+	return prismrecord.Payload{
 		Frame: cp.frame, Z0: b.Value, Z1: a.Value,
 		Z0Delta: b.Bound, Z1Delta: a.Bound,
 		Xform: cp.xform,
-	}}
+	}
 }
 
 // outerPrism and cavityPrism are the cup's two prisms, without their
@@ -436,7 +436,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 }
 
 // renameCavityRoles rewrites the cavity walls' provenance from the
-// buildLoopSidesAs default side(i,j) to shellSide(i,j) — the role Table B
+// prismrecord.BuildLoopSidesAs default side(i,j) to shellSide(i,j) — the role Table B
 // (B5/B6) gives a cavity wall, indexing loop i of the cavity region Q in the
 // result's own record (§11). The cavity walls are built with roleLoop equal to
 // their Q loop index, so the rename keeps the index and only swaps the tag.

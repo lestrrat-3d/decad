@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 )
 
 // evalPrism builds the analytic prism body from the payload: side faces per
@@ -16,5 +17,5 @@ import (
 // and every walkOf under it charge the same ceiling, and a caller that already
 // spent part of it on this record passes it in rather than opening a second one.
 func evalPrism(d *Document, ref producerID, pp prismPayload, work *freeform.FreeformWork) (*Body, error) {
-	return evalPrismContext(context.Background(), d, ref, pp, work)
+	return bodyResult(prismrecord.Build(context.Background(), envOf(documentNode(d), ref), pp, work))
 }

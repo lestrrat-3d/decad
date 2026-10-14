@@ -1048,7 +1048,7 @@ same split rather than a kind-based exemption: it keeps its zero bound and
 `Exact` where every extreme is a value its record states — a straight wall's
 endpoint, an arc's own recorded endpoint, an exactly representable circular apex
 — and publishes a width where one is held by a candidate this evaluator computed,
-a trimmed circular endpoint or a computed arc radius among them. `prismBoundsContext` reports
+a trimmed circular endpoint or a computed arc radius among them. `prismrecord.Bounds` reports
 exactly that split (P4a) — reachable through the public surface now that §10
 P4b retires R6.
 
@@ -1236,7 +1236,7 @@ refinement is a measured-target loop, so it carries §6.1's iteration cap.
 `stops.go` reads each payload's `ExtentAlong` interval beside its displacement,
 charges that displacement to the level it resolves, and refuses only where it
 straddles the sketch plane in the travel sense. The wider refusal — ANY nonzero
-bracket bound — survives in `prismPayload.extentAlongWork` and its revolve twin,
+bracket bound — survives in `prismrecord.Payload.ExtentAlongWork` and its revolve twin,
 which serve the one consumer that has no bound to widen and falls back rather
 than fails: `clearance.go`'s separating-plane short-circuit. The §4.1
 analytic-corner slice's general prism/chamfer audit gate is not implemented yet

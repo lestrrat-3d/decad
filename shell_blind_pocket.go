@@ -17,6 +17,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -170,7 +171,7 @@ func pocketShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopolo
 		loop loopRecord
 		z    float64
 	}{{band.Rounded.Outer, band.FloorZ}, {band.CapProfile().Outer, band.LowerZ}} {
-		view := prismPayload{Payload: prismrecord.Payload{Frame: band.Frame, Xform: bp.xform, Z0: spec.z, Z1: spec.z}}
+		view := prismrecord.Payload{Frame: band.Frame, Xform: bp.xform, Z0: spec.z, Z1: spec.z}
 		for _, seg := range spec.loop.Segments {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -306,5 +307,5 @@ func measurePocketShell(ctx context.Context, bp brepPayload, body *Body) error {
 		return err
 	}
 	body.n.Bounds = boxToInternal(box)
-	return validateAnalyticBodyMeasurements(body)
+	return topobuild.ValidateAnalyticMeasurements(bodyNode(body))
 }

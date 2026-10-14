@@ -851,20 +851,20 @@ func TestLinkageHullPointsInsideRestBox(t *testing.T) {
 	tilted, err := Copy(t.Context(), internalBoxBody(t, doc, 0, 0, 10, 10, 5), WithCopyPlacement(tilt))
 	require.NoError(t, err)
 	frame := canonicalPrismFrame(t)
-	inner := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(2, 2, 8, 8)}, Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}}
+	inner := prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(2, 2, 8, 8)}, Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}
 	const shift = 1e8
 	far, err := r3.Translation(r3.NewVec(shift, 0, 0))
 	require.NoError(t, err)
-	containing := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)}, Frame: frame, Z0: 0, Z1: 10, Xform: far}}
+	containing := prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)}, Frame: frame, Z0: 0, Z1: 10, Xform: far}
 	union, ok, err := tryPrismBoolean(t.Context(), meshbool.OpUnion, bornBody(&Body{n: topo.Body{Payload: inner}}), bornBody(&Body{n: topo.Body{Payload: containing}}))
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Positive(t, union.SectionDelta)
-	unionBox, err := prismBoundsContext(t.Context(), union, nil, nil)
+	unionBox, err := prismrecord.Bounds(t.Context(), union, nil, nil)
 	require.NoError(t, err)
 	for name, body := range map[string]*Body{
 		"a box": block, "a box turned about Z and lifted": turned, "a box turned about (1, 1, 1)": tilted,
-		"a displaced union": bornBody(&Body{n: topo.Body{Bounds: boxToInternal(unionBox), Payload: union}}),
+		"a displaced union": bornBody(&Body{n: topo.Body{Bounds: unionBox, Payload: union}}),
 	} {
 		points, pad, _, ok := prismHullPointsForTest(body)
 		require.True(t, ok, name)

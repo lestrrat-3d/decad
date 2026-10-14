@@ -127,7 +127,7 @@ func TestPrismPatternFilletSectorRejectsAnotherConnector(t *testing.T) {
 	// Both roots lie inside R=3 and clear one another's 0.15 mm disks.
 	// The other connector ends outside R inside this selected sector.
 	require.Greater(t, math.Hypot(2.995-2.98, 0.33), 0.3)
-	part := prismPatternPart{prism: prismPayload{Payload: prismrecord.Payload{Xform: r3.Identity()}}}
+	part := prismPatternPart{prism: prismrecord.Payload{Xform: r3.Identity()}}
 	connector, err := prismPatternFilletConnectorSector(part, lineSeg{
 		Start: planePoint{U: 2.98, V: 0.33}, End: planePoint{U: 3.05, V: 0.01}})
 	require.NoError(t, err)

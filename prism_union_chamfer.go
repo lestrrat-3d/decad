@@ -86,10 +86,10 @@ func chamferPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
 		}
 		return nil, fmt.Errorf("%w: the rectangular source chamfer failed its section audit: %v", ErrUnsupported, err)
 	}
-	return evalPrismContext(ctx, d, d.nextProducerID(), prismPayload{Payload: prismrecord.Payload{
+	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), prismrecord.Payload{
 		Profile: profile, Frame: pp.Frame, Z0: pp.Z0, Z1: pp.Z1,
 		Xform: pp.Xform, BlendSegs: connectors, BlendKind: string(brepBandChamfer),
-	}}, freeform.NewFreeformWork())
+	}, freeform.NewFreeformWork()))
 }
 
 // Exact directed feet and a whole line connector prove that the rewrite

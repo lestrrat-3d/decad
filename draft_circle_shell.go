@@ -85,8 +85,8 @@ func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense Sh
 	// point by the same affine parameter. Each coordinate's interval reaches
 	// the true endpoint, so the endpoint maximum reaches its entire edge.
 	// Include the existing draft's far-contour displacement and frame lift.
-	point := prismPayload{Payload: prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
-		Z0Delta: dp.z0Delta, Xform: r3.Identity()}}
+	point := prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
+		Z0Delta: dp.z0Delta, Xform: r3.Identity()}
 	originDelta := point.PointBound(proofbound.ExactScalar(nearCircle.Center.U),
 		proofbound.ExactScalar(nearCircle.Center.V), proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
 

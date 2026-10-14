@@ -286,7 +286,7 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 			beforeBodies := doc.Bodies()
 			ctx := &cancelOnSecondDirectCallContext{
 				Context: t.Context(),
-				target:  "attachFaceLoopsContext",
+				target:  "AttachFaceLoops",
 			}
 
 			got, err := decad.Transform(ctx, body, shift)
@@ -312,7 +312,7 @@ func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
 	}{
 		{
 			name:   "Prism",
-			target: "sideOriginsContext",
+			target: "SideOrigins",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := plateSketch(t)
 				doc := decad.New()
@@ -323,7 +323,7 @@ func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
 		},
 		{
 			name:   "FullRevolve",
-			target: "sideOriginsContext",
+			target: "SideOrigins",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := solidSketch(t)
 				doc := decad.New()
@@ -395,7 +395,7 @@ func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
 	}{
 		{
 			name:   "BlendRoles",
-			target: "addBlendRoles",
+			target: "AddBlendRoles",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := filletBox(t)
 				body, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(10))

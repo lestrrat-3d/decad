@@ -1,9 +1,9 @@
 // Package prismrecord owns the plain data of the evaluator's prism record: the
 // recorded section, the plane frame it lifts through, the two sweep levels with
 // their proven displacements, the accumulated rigid placement, the blend-role
-// descriptors and the walk cache. The root package wraps it as prismPayload,
-// which adds the re-evaluation methods that need a Document
-// (docs/evaluator-design.md §8).
+// descriptors and the walk cache, with the builder that evaluates it over
+// topology nodes (Build) and its topo.Payload methods. The root package
+// names it prismPayload (docs/evaluator-design.md §5, §8).
 package prismrecord
 
 import (
@@ -14,8 +14,8 @@ import (
 // Payload is the plain record a straight extrude evaluates from: the recorded
 // region, the plane frame it lifts through, the signed sweep interval, and the
 // accumulated rigid placement. Every measurement and the whole topology derive
-// from it, which is what makes Transform exact: the root wrapper re-evaluates
-// the same record under the composed motion (docs/evaluator-design.md §8).
+// from it, which is what makes Transform exact: Placed re-evaluates the same
+// record under the composed motion (docs/evaluator-design.md §8).
 //
 // A prism-derived modify body (a filleted or chamfered prism, modify §2) also
 // carries the blend-role descriptors of its own rewritten section: BlendSegs
@@ -59,7 +59,7 @@ import (
 //
 // Walks is the plane-local walk resolution of THIS payload's own profile,
 // published by the evaluation that built the body and carried through every
-// rigid re-evaluation of it (the root wrapper's placed). It is a pure cache: it
+// rigid re-evaluation of it (Placed). It is a pure cache: it
 // holds nothing the record does not already determine, nothing
 // placement-dependent, and every read of it is guarded by
 // momentinput.ProfileWalks.reusable, so a payload whose profile differs by one

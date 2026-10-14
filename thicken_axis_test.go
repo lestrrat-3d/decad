@@ -26,10 +26,10 @@ func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 	for i := range points {
 		segments[i] = lineSeg{Start: points[i], End: points[(i+1)%len(points)], TStart: 0, TEnd: 1}
 	}
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Profile: profileRecord{Outer: loopRecord{Segments: segments}},
 		Z0:      0, Z1: 10, SurfaceResult: true,
-	}}
+	}
 	budget := proofbound.NewWorkBudget(t.Context())
 	loops, err := offset2d.ProfileCornerLoopsBudget(budget, pp.Profile)
 	require.NoError(t, err)

@@ -10,12 +10,12 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `topology.go` | Topology types from `Body` to `Vertex` and public surface and curve variants. See API §6.1 and evaluator §3. |
-| `topology_handles.go` | Born-handle constructors and the node-to-handle mapping of linked topology nodes, and `placePayload`, the root path into `topo.Payload.Placed`. See evaluator §3, §8. |
+| `topology_handles.go` | Born-handle constructors, the node-to-handle mapping of linked topology nodes, `handleAlloc` and `envOf` for internal builders, `bodyResult`, and `placePayload`, the root path into `topo.Payload.Placed`. See evaluator §3, §8. |
 | `document.go` | `Document`: live body set, commit, `Remove`, liveness gates, `Transform` and `Copy`. See evaluator §8. |
 | `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
 | `mirror_join.go` | `WithJoin` adapters over `internal/mirrorjoin/`'s splice and section audit. See mirror-pattern §5. |
 | `pattern.go` | Public pattern specs, entry points and payload adapters. See mirror-pattern §4.3, §6. |
-| `surface.go` | `WithSurfaceResult`, sheet refusal, shell/lump and free-edge adapters over `internal/surfacegroup/`. See surface §2-§4, §7, §11. |
+| `surface.go` | `WithSurfaceResult`, sheet refusal and per-face free-edge chain counts over `internal/surfacegroup/`; `internal/topobuild/` builds shells and lumps. See surface §2-§4, §7, §11. |
 | `feature_options.go` | Public feature option tiers and adapters to `internal/featureoption/`. See surface §4, sweep §2 and loft §2. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Thicken`. See surface §16. |
@@ -55,9 +55,6 @@ The rules for rows live in `docs/layout.md`.
 | `sweep_mitre_body.go` | Builds Table BM's topology and publishes §16.6's readings. See sweep §16.5–§16.6. |
 | `coil.go` | `Coil`, `CoilOption`, Table CS gates, payload and placement. See helix §2, §4, §5.6. |
 | `coil_body.go` | The coil's Table CB topology and Table CM readings. See helix §6–§7. |
-| `prism_payload.go` | `prismPayload`, the root wrapper of `prismrecord.Payload`: re-evaluation and root-interface readings. See evaluator §8. |
-| `prism_build.go` | `evalPrismContext`, caps, and side faces. See evaluator §5. |
-| `prism_extent.go` | Adapts prism extents and box readings. See evaluator §5. |
 | `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents. See evaluator §6 and surface §13.2. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_cap_edge_blend.go` | Bounded quarter-turn radial cap-rim fillet and chamfer with faceted proofs. See modify-reach §7.2. |

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -107,7 +108,7 @@ func loftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID,
 	// blank has the same circle and exact caps over both half intervals.
 	half := pp
 	half.Z1 = middle
-	halfBlank, err := evalPrismContext(ctx, d, ref, half, freeform.NewFreeformWork())
+	halfBlank, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), half, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, true, err
 	}

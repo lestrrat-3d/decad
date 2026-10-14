@@ -47,7 +47,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/coil/` | Coil magnitude, profile side and pitch gates, preflight gates, stations, axis coordinates, moments and closed forms. See helix §4, §5, §7. |
 | `internal/coilshell/` | Builds the held coil shell, mesh proofs and wall-area enclosures. See helix §5, §7, §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames over recorded line and arc spans, and frames along a recorded path. See sweep §3.2. |
-| `internal/prismrecord/` | Plain data of the prism record and its plane-local lifts, point bounds, lift factor, centroid envelope, placement operand, cap frames, mass record, exact box, section-plane test and the modify exact-section gate; root `prismPayload` embeds it. See evaluator §5, §8. |
+| `internal/prismrecord/` | The prism record and its builder over nodes (`Build`, `Placed`, extents, map charge); plane-local lifts, point bounds, lift factor, centroid envelope, placement operand, cap frames, mass record, exact box, section-plane test, exact-section gate. Root `prismPayload` aliases it. See evaluator §5, §8. |
 | `internal/momentinput/` | Profile records, exact record comparison, rectangle bounds, axis-aligned rectangle footprints, moments, loop enclosed areas and first moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |

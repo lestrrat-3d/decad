@@ -192,7 +192,7 @@ func TestStitchCurvedVolumeBoundWidensWhenPlaced(t *testing.T) {
 // the closure: the receiver's own prismPayload proves simple under Rule S
 // (a plain Distance extrude, sectionDelta zero), and each of the two new
 // chains is the receiver's own COMPLETE end rim under its own shared level
-// id, minted once per end by prism_build.go's evalPrismContext regardless
+// id, minted once per end by internal/prismrecord/build.go's prismrecord.Build regardless
 // of the end's own bound.
 func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 	t.Parallel()

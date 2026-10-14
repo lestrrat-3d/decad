@@ -64,10 +64,10 @@ func prismReflectDiscBody(t *testing.T, doc *Document, cx, cy, r float64) *Body 
 func TestPrismBooleanGateG2AdmitsAReflectedOperand(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Profile: profileRecord{Outer: synthLineLoop()},
 		Frame:   frame, Z0: 0, Z1: 10, Xform: r3.Identity(),
-	}}
+	}
 	reflected := pp
 	reflected.Xform = prismMirrorAcrossX(t, 0)
 
@@ -114,8 +114,8 @@ func TestPrismReexpressionRewound(t *testing.T) {
 		}}},
 	}
 	frame := canonicalPrismFrame(t)
-	pa := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-20, -20, 20, 20)}, Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}}
-	pb := prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: frame, Z0: 0, Z1: 10, Xform: prismMirrorAcrossX(t, 0)}}
+	pa := prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-20, -20, 20, 20)}, Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}
+	pb := prismrecord.Payload{Profile: profile, Frame: frame, Z0: 0, Z1: 10, Xform: prismMirrorAcrossX(t, 0)}
 	re, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.True(t, re.Reflected)
@@ -182,8 +182,8 @@ func TestPrismReexpressionRewound(t *testing.T) {
 func TestPrismReflectedSceneClassifiesTheRewoundWinding(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
-	pa := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)}, Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}}
-	pb := prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}, Frame: frame, Z0: 0, Z1: 10, Xform: prismMirrorAcrossX(t, 0)}}
+	pa := prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(0, 0, 10, 10)}, Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}
+	pb := prismrecord.Payload{Profile: profileRecord{Outer: synthRectLoop(-15, 5, -5, 15)}, Frame: frame, Z0: 0, Z1: 10, Xform: prismMirrorAcrossX(t, 0)}
 	re, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	require.NoError(t, err)
 	require.True(t, re.Reflected)

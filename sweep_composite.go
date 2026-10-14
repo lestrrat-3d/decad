@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegroup"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
 // compositeSpanPart is one closed single-span reduction before its internal
@@ -64,9 +65,9 @@ func compositeSpanPartOf(body *Body) (compositeSpanPart, error) {
 //
 // Ordering matters and getting it wrong is silent: lumps must be set once
 // with the provisional single shell so body.Edges()/body.Faces() traversal
-// works, then the live-face filter runs, and only THEN may sheetLumps run,
+// works, then the live-face filter runs, and only THEN may topobuild.SheetLumps run,
 // because it reads the adjacency the filter produces. Running it earlier
-// would have every shell wrongly report open — shellIsOpen would see every
+// would have every shell wrongly report open — topobuild.ShellIsOpen would see every
 // discarded per-span face still on each edge's face list.
 func assembleCompositeSweepBody(
 	ctx context.Context,
@@ -192,12 +193,12 @@ func assembleCompositeSweepBodyWithJoinMode(
 		edge.n.Faces = liveCompositeFaces(edge.n.Faces, body)
 	}
 	if surfaceResult {
-		// sheetLumps splits by connectivity (docs/surface-design.md §2.2): a
+		// topobuild.SheetLumps splits by connectivity (docs/surface-design.md §2.2): a
 		// holed profile's outer and hole wall tubes touch nowhere once the two
 		// outer caps that used to bridge them are gone, so each becomes its own
 		// Lump. It must run after the live-face filter above, per this
 		// function's own doc comment.
-		body.n.Lumps = lumpNodes(sheetLumps(faces))
+		body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(faces))
 	}
 	if err := auditCompositeBoundary(ctx, body, sewnEdges); err != nil {
 		return nil, err

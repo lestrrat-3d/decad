@@ -37,8 +37,8 @@ import (
 // objects evalChainExtrudeContext placed directly on the recorded boundary —
 // so the mesh is read straight off Face -> Loop -> CoEdge -> Vertex, with no
 // chording decision of its own. A straight wall's own published
-// topo.Face.Reversed is always false (buildWallGeometry's default-case return,
-// prism_build.go), so this restatement's only degree of freedom is a
+// topo.Face.Reversed is always false (prismrecord.BuildWallGeometry's default-case return,
+// internal/prismrecord/build.go), so this restatement's only degree of freedom is a
 // REFLECTED placement: the walk order every wall's coedges are built in
 // (bottomV[i] -> bottomV[i+1] -> topV[i+1] -> topV[i]) is fixed independent
 // of the transform, so lifting it through a determinant-negative one flips

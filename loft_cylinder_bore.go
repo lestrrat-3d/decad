@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -84,7 +85,7 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 	var wall *Face
 	for _, face := range tool.Faces() {
 		for _, origin := range face.Origins() {
-			if origin.Role != prismOuterFirstSideRole {
+			if origin.Role != prismrecord.OuterFirstSideRole {
 				continue
 			}
 			if wall != nil {

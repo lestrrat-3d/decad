@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -178,7 +179,7 @@ func offsetPatch(ctx context.Context, d *Document, pp patchPayload, side OffsetS
 // section. The frame, both levels and their displacements, the accumulated
 // placement and surfaceResult all travel unchanged; only the section is
 // replaced, and the exact-generation gate below is what keeps the payload's
-// sectionDelta == 0 truthful, so evalPrismContext's existing moment and extent
+// sectionDelta == 0 truthful, so prismrecord.Build's existing moment and extent
 // proofs apply to the offset section as they do to a recorded one.
 func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetSide, dmm, dDelta float64) (*Body, error) {
 	if !pp.SurfaceResult || pp.SectionDelta != 0 || len(pp.Profile.Holes) != 0 {
@@ -207,11 +208,11 @@ func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetS
 	}
 	pp.Profile = section
 	// The walk cache resolves THIS payload's old profile; the new section
-	// resolves afresh (prism_payload.go's walks doc comment).
+	// resolves afresh (internal/prismrecord's walks doc comment).
 	pp.Walks = nil
 	// No source face role is inherited (§17.3): a blend descriptor names (loop,
 	// segment) indices of the SOURCE record, and the offset mints its own
 	// segment list, so carrying them over would name arbitrary result walls.
 	pp.BlendSegs, pp.BlendKind = nil, ""
-	return evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
+	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), pp, freeform.NewFreeformWork()))
 }

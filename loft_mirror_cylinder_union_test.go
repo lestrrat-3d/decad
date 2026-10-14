@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -560,7 +561,7 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 	// blank has the same circle and exact caps over both half intervals.
 	half := pp
 	half.Z1 = middle
-	halfBlank, err := evalPrismContext(ctx, d, ref, half, freeform.NewFreeformWork())
+	halfBlank, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), half, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, true, err
 	}

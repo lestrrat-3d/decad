@@ -33,7 +33,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 			return nil, err
 		}
 		toothArea = proofbound.AbsSumUpper(toothArea, area.Value.Base(), area.Bound.Base())
-		reach, err := prismpattern.ConnectorReach(part.prism.Payload, source.rootArc, radius,
+		reach, err := prismpattern.ConnectorReach(part.prism, source.rootArc, radius,
 			source.rootIndex)
 
 		if err != nil {

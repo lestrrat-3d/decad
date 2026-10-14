@@ -43,9 +43,9 @@ func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload
 	}
 	d := documentHandle(body.n.Doc)
 	ref := d.nextProducerID()
-	tool, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+	tool, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
 		Profile: capedge.QuarterCutter(radius), Frame: frame, Z0: -42, Z1: 42, Xform: r3.Identity(),
-	}}, freeform.NewFreeformWork())
+	}, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, true, err
 	}

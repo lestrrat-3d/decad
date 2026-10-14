@@ -2850,7 +2850,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Delivers `Body.Tessellate` of a one-span straight sweep (a `sweepPayload` with no spans, no arc and no
   surface result) as the prism it reduced to (`sweepPayload.prism`), its wall roles read through the span
   prefix `prefixSweepSpanZeroRole` minted (`side(0,i,j)`); `docs/sweep-design.md` D2 gains that exception.
-  The reduction builds through `evalPrismContext`, so the prism's mesh and proofs are the sweep's.
+  The reduction builds through `prismrecord.Build`, so the prism's mesh and proofs are the sweep's.
 - Files: `tessellate.go`, `docs/sweep-design.md`.
 - Test (`apitest`): `apitest/sweep_tessellate_test.go`: the §2 hexagon sweep's mesh has the vertex set, triangle count,
   zero `Bound()`, `BoundaryVerified` and `VolumeVerified` of the same profile's `Extrude`, and every wall

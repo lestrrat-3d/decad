@@ -17,6 +17,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -370,7 +371,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, area, areaBound)
 		face.n.AxialDelta, face.n.HasAxialDelta = delta, true
 	}
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 	body.n.Payload = compositeTwistedSweepPayload{
@@ -546,7 +547,7 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 		edge.n.Faces = nil
 	}
 	body.n.Lumps[0].Shells[0].Faces = faceNodes(merged)
-	if err := attachFaceLoopsContext(ctx, merged); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, faceNodes(merged)); err != nil {
 		return err
 	}
 	if err := auditCompositeBoundary(ctx, body, nil); err != nil {

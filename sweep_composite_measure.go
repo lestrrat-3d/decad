@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/sweeptransport"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -147,11 +148,11 @@ func evalCompositeSweepContextWithClosure(
 	// from the published face set after every span has built solid
 	// (docs/surface-design.md §4).
 	payload := sweepPayload{
-		prism: prismPayload{Payload: prismrecord.Payload{
+		prism: prismrecord.Payload{
 			Profile: profile,
 			Frame:   frame,
 			Xform:   r3.Identity(),
-		}},
+		},
 		spans:           make([]sweepSpanPayload, len(path.Records)),
 		path:            path,
 		surfaceResult:   surfaceResult,
@@ -210,13 +211,13 @@ func compositeLineSweepSpan(
 	if math.IsInf(heightBound, 0) || math.IsNaN(heightBound) {
 		return sweepSpanPayload{}, fmt.Errorf(`%w: the sweep line's length has no finite error bound`, ErrUnsupported)
 	}
-	return sweepSpanPayload{prism: prismPayload{Payload: prismrecord.Payload{
+	return sweepSpanPayload{prism: prismrecord.Payload{
 		Profile: profile,
 		Frame:   frame,
 		Z1:      height,
 		Z1Delta: heightBound,
 		Xform:   r3.Identity(),
-	}}}, nil
+	}}, nil
 }
 
 func compositeArcSweepSpan(
@@ -289,7 +290,7 @@ func (span *sweepSpanPayload) build(
 		}
 		return body, nil
 	}
-	body, err := evalPrismContext(ctx, d, ref, span.prism, work)
+	body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), span.prism, work))
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +326,7 @@ func restoreSweepArcCapRoles(body *Body, reverse bool) {
 // (cap-inclusive) sum minus the two omitted caps, each already-computed
 // quantity contributing its own bound. So the two omitted caps are summed
 // into the running total and then subtracted back out, exactly as
-// prism_build.go/revolve_build.go compose theirs, rather than being left out
+// internal/prismrecord/build.go and revolve_build.go compose theirs, rather than being left out
 // of the sum from the start.
 func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts []compositeSpanPart, surfaceResult bool) error {
 	if body == nil || len(parts) == 0 {
@@ -368,7 +369,7 @@ func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts 
 	}
 	body.n.Bounds = boxToInternal(compositeSweepBox(readings.Min[0], readings.Min[1], readings.Min[2],
 		readings.Max[0], readings.Max[1], readings.Max[2]))
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return fmt.Errorf(`%w: a composite sweep computed a non-finite measurement`, ErrUnsupported)
 	}
 	return budget.Err()

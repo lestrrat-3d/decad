@@ -28,7 +28,7 @@ import (
 // along d. Legs shown to fail by deleting them and watching this test go red,
 // then restoring them (on amd64):
 //
-//   - chargePrismMap in evalPrismContext: the prism, mirror, edge fillet and
+//   - prismrecord.ChargeMap in prismrecord.Build: the prism, mirror, edge fillet and
 //     line sweep went red in every variant, publishing their volume, areas
 //     and lengths Exact, and so did the tilted unstitch and body patch whose
 //     source sheet is a prism;

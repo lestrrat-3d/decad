@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -169,8 +170,8 @@ func crossBoreMeshGroups(rec *crossCylinderBoreRecord) ([]facetGroup, error) {
 	}{
 		{rec.target, provenance.RoleCapStart},
 		{rec.target, provenance.RoleCapEnd},
-		{rec.target, prismOuterFirstSideRole},
-		{rec.tool, prismOuterFirstSideRole},
+		{rec.target, prismrecord.OuterFirstSideRole},
+		{rec.tool, prismrecord.OuterFirstSideRole},
 	} {
 		group, ok := crossBoreFaceGroup(source.body, source.role)
 		if !ok {

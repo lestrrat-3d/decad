@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -67,7 +68,7 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 	if err != nil {
 		return nil, err
 	}
-	if err := attachFaceLoopsContext(ctx, faces); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, faceNodes(faces)); err != nil {
 		return nil, err
 	}
 	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}

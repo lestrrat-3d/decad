@@ -155,7 +155,7 @@ func growAll(points []Point2, grow func(Point2)) {
 // them before any tier is decided, ahead of where walkOf's own free-form arm
 // would even run (validateFreeformMomentSegment), so they are read directly
 // from the same conversion the build's own survey2d.WalkKind ==
-// survey2d.WalkFreeform arm reads (extrude.go's buildLoopSidesAs).
+// survey2d.WalkFreeform arm reads (extrude.go's prismrecord.BuildLoopSidesAs).
 func validateMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, segmentEnds, Plan, error) {
 	segment, err := sectionrecord.NormalizeSegment(segment)
 	if err != nil {

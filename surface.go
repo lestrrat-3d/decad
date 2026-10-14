@@ -5,7 +5,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/surfacegroup"
-	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // This file is the shared surface-result vocabulary of docs/surface-design.md
@@ -20,8 +19,8 @@ import (
 // stops.go consume refuseSheetOperand at their own gates.
 //
 // Its topology adapters read face and edge adjacency for internal/surfacegroup:
-// shellIsOpen reads a shell's open state from its edges, while
-// splitConnectedFaces/sheetLumps build one Lump per connected face group.
+// topobuild.ShellIsOpen reads a shell's open state from its edges, while
+// topobuild.SplitConnectedFaces/topobuild.SheetLumps build one Lump per connected face group.
 
 // SurfaceResultOption configures every feature WithSurfaceResult reaches
 // (docs/surface-design.md §3). A feature this evaluator cannot yet build as a
@@ -52,47 +51,6 @@ func refuseSheetOperand(b *Body, operation string) error {
 	return nil
 }
 
-// shellIsOpen reports whether faces holds at least one free edge: an edge
-// with exactly one adjacent face (docs/surface-design.md §2.2). It is
-// derived from an edge that actually exists and never from the option that
-// built the shell, so it reads the same on a hand-built fixture as it does
-// on a feature's own output. Every caller MUST run it AFTER
-// attachFaceLoopsContext has registered each face on its edges: called
-// earlier, every edge reports zero adjacent faces and this reports every
-// shell open, including a solid's.
-func shellIsOpen(faces []*Face) bool {
-	for _, f := range faces {
-		for _, l := range f.n.Loops {
-			for _, ce := range l.CoEdges {
-				if len(ce.Edge.Faces) == 1 {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-// splitConnectedFaces partitions faces into its connected pieces, two faces
-// joined whenever a loop of one shares an Edge with a loop of the other
-// (docs/surface-design.md §2.2: a lump is a connected piece of a body, not a
-// connected SOLID piece — a sheet's wall groups that touch nowhere, once
-// their closing caps are omitted, are separate pieces even though a solid
-// built from the same record is one). Each returned slice keeps faces' own
-// order; the slices themselves are ordered by the first face of theirs that
-// appears in faces.
-func splitConnectedFaces(faces []*Face) [][]*Face {
-	byEdge := map[*topo.Edge][]*Face{}
-	for _, f := range faces {
-		for _, l := range f.n.Loops {
-			for _, ce := range l.CoEdges {
-				byEdge[ce.Edge] = append(byEdge[ce.Edge], f)
-			}
-		}
-	}
-	return surfacegroup.Connected(faces, byEdge)
-}
-
 // freeChainCountsByFace groups the body's own recorded free Edges by their
 // single adjacent face and counts, per face, the CONNECTED COMPONENTS its
 // free Edges form over their own Vertex pointers — one boundary CHAIN per
@@ -121,20 +79,4 @@ func freeChainCountsByFace(b *Body) map[*Face]int {
 		counts[face] = surfacegroup.ChainCount(edges)
 	}
 	return counts
-}
-
-// sheetLumps builds one Lump per connected piece of faces, each holding one
-// Shell whose IsOpen is shellIsOpen's own reading and whose IsVoid stays
-// false — a sheet bounds no cavity (docs/surface-design.md §2.2), so nothing
-// here plays the void role a solid's own nested shell does. It must run
-// AFTER every face in faces has been registered on its edges
-// (shellIsOpen's own contract): the prism and revolve surface-result builds
-// both call it once their walls are fully assembled, never before.
-func sheetLumps(faces []*Face) []*Lump {
-	groups := splitConnectedFaces(faces)
-	lumps := make([]*Lump, len(groups))
-	for i, g := range groups {
-		lumps[i] = bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen(g), Faces: faceNodes(g)}}))}}})
-	}
-	return lumps
 }

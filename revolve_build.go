@@ -19,6 +19,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -152,7 +153,7 @@ func requireExactRevolveSection(rp revolvePayload, what string) error {
 // angular interval is S6's business, never the private 2D scene's, and the
 // levels a prismPayload would carry have no meaning for a meridian.
 func (rp revolvePayload) meridian() prismPayload {
-	return prismPayload{Payload: prismrecord.Payload{Profile: rp.profile, Frame: rp.frame, Xform: rp.xform}}
+	return prismrecord.Payload{Profile: rp.profile, Frame: rp.frame, Xform: rp.xform}
 }
 
 // Transform is the accumulated rigid placement.
@@ -506,21 +507,21 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// rim-specific code.
 		if !rp.surfaceResult {
 			faces = append(faces, capStart, capEnd)
-			if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
+			if err := topobuild.AttachFaceLoops(ctx, []*topo.Face{faceNode(capStart), faceNode(capEnd)}); err != nil {
 				return nil, err
 			}
 		}
 		if rp.surfaceResult {
-			// sheetLumps splits by connectivity (decision A): a holed
+			// topobuild.SheetLumps splits by connectivity (decision A): a holed
 			// profile's loops touch nowhere once their caps are omitted, so
 			// each becomes its own Lump instead of one shell regardless.
-			lumps = sheetLumps(faces)
+			lumps = lumpHandles(topobuild.SheetLumps(handleAlloc{}, faceNodes(faces)))
 		} else {
-			lumps = []*Lump{bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen(faces), Faces: faceNodes(faces)}}))}}})}
+			lumps = []*Lump{bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Open: topobuild.ShellIsOpen(faceNodes(faces)), Faces: faceNodes(faces)}}))}}})}
 		}
 	}
 	body.n.Lumps = lumpNodes(lumps)
-	if err := addBlendRoles(ctx, body, ref, rp.blendSegs, rp.blendKind); err != nil {
+	if err := topobuild.AddBlendRoles(ctx, bodyNode(body), ref, rp.blendSegs, rp.blendKind); err != nil {
 		return nil, err
 	}
 	if rp.draftCircleCaps {
@@ -551,7 +552,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			// Face fields the construction above stamped, and the
 			// subtraction runs here — as the LAST thing that touches area,
 			// since revolve carries no per-cap bound re-stamp the way the
-			// prism's evalPrismContext does, so nothing after this point may
+			// prism's prismrecord.Build does, so nothing after this point may
 			// still widen capStart's or capEnd's own bound out from under a
 			// value already composed from them. Collapsing this to sideArea
 			// alone would hold the same value but a smaller, uncomposed
@@ -602,7 +603,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		return nil, err
 	}
 	body.n.Bounds = boxToInternal(bounds)
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 	body.n.Payload = rp
@@ -871,7 +872,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 		if err != nil {
 			return revLoopParts{}, err
 		}
-		origins, err := sideOriginsContext(ctx, ref, li, w.Segs)
+		origins, err := prismrecord.SideOrigins(ctx, ref, li, w.Segs)
 		if err != nil {
 			return revLoopParts{}, err
 		}
@@ -924,7 +925,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			}
 			face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: co}}))}
 		}
-		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
+		if err := topobuild.AttachFaceLoops(ctx, []*topo.Face{faceNode(face)}); err != nil {
 			return revLoopParts{}, err
 		}
 		parts.faces = append(parts.faces, face)
@@ -943,7 +944,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 // turn sweeps each into its own closed surface (a hollow cylinder's meridian
 // sweeps an outer skin and a cavity wall); every other loop is one run. sheet
 // is rp.surfaceResult: a full revolution's wall set already closes on itself,
-// so every shell built here is closed regardless of kind, but shellIsOpen
+// so every shell built here is closed regardless of kind, but topobuild.ShellIsOpen
 // still runs rather than assuming it — the same discipline every other shell
 // in this build follows (docs/surface-design.md §2.2). On a solid, a hole
 // loop's run bounds its own toroidal cavity (evaluator §6), and so does every
@@ -973,7 +974,7 @@ func fullRevolveShellsContext(ctx context.Context, perLoop []revLoopParts, sheet
 				continue
 			}
 			void := !sheet && (li != 0 || r != parts.outerRun)
-			shells = append(shells, bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen(group), Void: void, Faces: faceNodes(group)}}))
+			shells = append(shells, bornFaceShell(&FaceShell{n: topo.FaceShell{Open: topobuild.ShellIsOpen(faceNodes(group)), Void: void, Faces: faceNodes(group)}}))
 		}
 	}
 	return shells, nil
@@ -1165,7 +1166,7 @@ func (rp revolvePayload) denotationInput() revolveaxis.DenotationInput {
 
 // This section is chain Revolve's own build (docs/surface-design.md §13.4):
 // the open chain's counterpart of evalRevolveContextWork/buildRevolveLoop
-// above, reusing rp.wallSurface, rp.capEdge, sideOriginsContext and
+// above, reusing rp.wallSurface, rp.capEdge, prismrecord.SideOrigins and
 // revolvemass.WallAxisMoment unchanged. It differs only in TOPOLOGY: n segments place
 // n+1 junctions with no wraparound, and neither cap face nor cap coedge
 // collection is ever built — a chain mints no cap.
@@ -1198,7 +1199,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	area := proofbound.BoundedScalar{}
 	for ci := range rp.chains {
 		// Each walk builds from its OWN single-walk view, so
-		// sideOriginsContext's segment indices and revolvemass.WallAxisMoment's own
+		// prismrecord.SideOrigins's segment indices and revolvemass.WallAxisMoment's own
 		// rp.profile.Outer read reach exactly that walk's segments, and ci
 		// feeds the face role so two walks never collide on one role string
 		// (docs/surface-intersection-design.md §3.4).
@@ -1221,7 +1222,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 		allFaces = append(allFaces, faces...)
 		area = proofbound.BoundedAdd(area, walkArea)
 	}
-	body.n.Lumps = lumpNodes(sheetLumps(allFaces))
+	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(allFaces))
 	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(area.Value),
 		Exactness: measurement.ExactnessOf(area.Bound),
@@ -1236,7 +1237,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 		return nil, err
 	}
 	body.n.Bounds = boxToInternal(bounds)
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 	body.n.Payload = rp
@@ -1372,7 +1373,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
-		origins, err := sideOriginsContext(ctx, ref, loopIdx, w.Segs)
+		origins, err := prismrecord.SideOrigins(ctx, ref, loopIdx, w.Segs)
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
@@ -1412,7 +1413,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			}
 			face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: co}}))}
 		}
-		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
+		if err := topobuild.AttachFaceLoops(ctx, []*topo.Face{faceNode(face)}); err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
 		faces = append(faces, face)

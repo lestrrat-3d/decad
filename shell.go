@@ -669,7 +669,7 @@ func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismP
 	// opens its one counter here (docs/spline-design.md §5.2).
 	// A tube keeps the receiver's sweep, so each end keeps its own axial
 	// displacement too.
-	return evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
 		Profile: section,
 		Frame:   pp.Frame,
 		Z0:      pp.Z0,
@@ -677,5 +677,5 @@ func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismP
 		Z0Delta: pp.Z0Delta,
 		Z1Delta: pp.Z1Delta,
 		Xform:   pp.Xform,
-	}}, freeform.NewFreeformWork())
+	}, freeform.NewFreeformWork()))
 }

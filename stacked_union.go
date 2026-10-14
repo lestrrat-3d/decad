@@ -65,11 +65,11 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 			return stackedUnionOperand{}, false
 		}
 		first, last := p.stack.slabs[0], p.stack.slabs[len(p.stack.slabs)-1]
-		return stackedUnionOperand{proxy: prismPayload{Payload: prismrecord.Payload{
+		return stackedUnionOperand{proxy: prismrecord.Payload{
 			Profile: profileRecord{Outer: first.Regions[0].Outer},
 			Frame:   p.faces[0].frame, Xform: p.xform, SectionDelta: p.stack.delta,
 			Z0: first.Z0, Z0Delta: first.Z0Delta, Z1: last.Z1, Z1Delta: last.Z1Delta,
-		}}, slabs: p.stack.slabs, brep: true}, true
+		}, slabs: p.stack.slabs, brep: true}, true
 	default:
 		return stackedUnionOperand{}, false
 	}
@@ -339,7 +339,7 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (profil
 	if fallBack, err := prismcells.AmplifiedFallback(m.sceneDelta.Amplified, err); fallBack || err != nil || !resolved {
 		return profileRecord{}, false, err
 	}
-	if fallBack, err := prismcells.AmplifiedFallback(m.sceneDelta.Amplified, prismcells.AuditMergeSection(st.budget, pa.Payload, merged)); fallBack || err != nil {
+	if fallBack, err := prismcells.AmplifiedFallback(m.sceneDelta.Amplified, prismcells.AuditMergeSection(st.budget, pa, merged)); fallBack || err != nil {
 		return profileRecord{}, false, err
 	}
 	st.cutDelta = max(st.cutDelta, cutDelta)

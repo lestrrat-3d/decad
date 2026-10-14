@@ -20,7 +20,7 @@ type Vertex struct {
 	Level denotation.LevelToken
 	// Denot is the CURVE half of the shared-denotation certificate
 	// (root denotation.go): non-zero only for a vertex a builder minted one for —
-	// today a straight prism's rim corner (prism_build.go) and a revolve's
+	// today a straight prism's rim corner (internal/prismrecord/build.go) and a revolve's
 	// own internal junction vertex (revolve_build.go; a partial revolve's
 	// own SEAM — its boundary copy at phi0/phi1 — mints none) — and
 	// propagated unchanged,

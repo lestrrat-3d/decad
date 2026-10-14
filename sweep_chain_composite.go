@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/sweeptransport"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -138,7 +139,7 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 		rewriteCompositeSideRoles(face, i)
 		face.n.Body = bodyNode(body)
 	}
-	body.n.Lumps = lumpNodes(sheetLumps(faces))
+	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(faces))
 	if err := auditCompositeBoundary(ctx, body, map[*Edge]struct{}{following.start: {}}); err != nil {
 		return nil, err
 	}
@@ -147,7 +148,7 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 		proofbound.MeasuredScalar(faces[1].n.Area, faces[1].n.AreaBound))
 	body.n.Area = measurementToInternal(scalarMeasurement(area, units.SquareMillimeter))
 	body.n.Bounds = boxToInternal(compositeChainBox(boxFromInternal(parts[0].n.Bounds), boxFromInternal(parts[1].n.Bounds)))
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 	body.n.Payload = payload
@@ -198,7 +199,7 @@ func (e chainSweepExtent) AuditExtent(ctx context.Context, direction r3.Vec,
 	if e.span.arc {
 		return e.span.revolve.revolve().extentBoundedAlong(ctx, direction, work)
 	}
-	return e.span.chain.prism().extentBoundedAlong(ctx, direction, work, nil)
+	return e.span.chain.prism().ExtentBoundedAlong(ctx, direction, work, nil)
 }
 
 func auditCompositeChainSeparation(ctx context.Context, payload chainSweepPayload, parts []*Body) error {

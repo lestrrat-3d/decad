@@ -27,7 +27,7 @@ import (
 // increment 3) reaches every one of Sweep's three build paths, but not through
 // one shared mechanism: a one-span straight or arc path sets the flag on its
 // reduced prismPayload/revolvePayload and gets the whole sheet behaviour for
-// free from prism_build.go/revolve_build.go, while a composite path's spans
+// free from internal/prismrecord/build.go and revolve_build.go, while a composite path's spans
 // stay solid (sweepSpanPayload never carries the flag) and
 // assembleCompositeSweepBody (sweep_composite.go) consumes sweepPayload's own
 // flag to omit the two outer caps after every span has built solid.
@@ -208,19 +208,19 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 				return nil, lineErr
 			}
 			// The flag rides the REDUCED prismPayload, not just the finishing
-			// sweepPayload literal below: prism_build.go's evalPrismContext reads
-			// pp.surfaceResult to decide Kind()/solid, cap omission, sheetLumps and
+			// sweepPayload literal below: internal/prismrecord/build.go's prismrecord.Build reads
+			// pp.surfaceResult to decide Kind()/solid, cap omission, topobuild.SheetLumps and
 			// the area subtraction, which is what gives the line reduction the
 			// whole sheet behaviour for free (docs/surface-design.md §4).
-			prism := prismPayload{Payload: prismrecord.Payload{
+			prism := prismrecord.Payload{
 				Profile:       profile,
 				Frame:         frame,
 				Z1:            height,
 				Z1Delta:       heightBound,
 				Xform:         r3.Identity(),
 				SurfaceResult: surfaceResult,
-			}}
-			body, err = evalPrismContext(ctx, d, ref, prism, work)
+			}
+			body, err = bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prism, work))
 			if err == nil {
 				finishStraightSweepBody(body, sweepPayload{prism: prism, path: path, surfaceResult: surfaceResult})
 			}
@@ -249,7 +249,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 // read only off prism/revolve: every finishing step below overwrites the
 // built body's payload with this struct, so a flag that rode only the reduced
 // prism/revolve payload would still reach Kind()/solid correctly on first
-// build (evalPrismContext/evalRevolveContextWork read it there) but would give
+// build (prismrecord.Build/evalRevolveContextWork read it there) but would give
 // a later consumer — auditSheetBoundary's own sweepPayload case
 // (verify.go) — no uniform field to read across all three build paths. For
 // the composite path it is the ONLY place the flag lives at all: every span
@@ -315,7 +315,7 @@ func (sp sweepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tra
 		return bodyNode(body), nil
 	}
 	sp.prism.Xform = composed
-	body, err := evalPrismContext(ctx, d, ref, sp.prism, freeform.NewFreeformWork())
+	body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), sp.prism, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, err
 	}

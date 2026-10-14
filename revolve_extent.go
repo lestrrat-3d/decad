@@ -41,7 +41,7 @@ func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (floa
 }
 
 // extentAlongWork is extentBoundedAlong's refusing wrapper, the same shape
-// prismPayload.extentAlongWork already takes: the reading for a consumer that
+// prismrecord.Payload.ExtentAlongWork already takes: the reading for a consumer that
 // takes the interval as an exact one and has nowhere to put a displacement —
 // clearance.go's separating-plane short-circuit, which falls back rather than
 // fails. A direction whose extreme is held to a bracket rather than proven

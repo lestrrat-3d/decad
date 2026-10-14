@@ -117,14 +117,14 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 	regions := make([]profileRecord, len(loops))
 	for i, loop := range loops {
 		regions[i] = profileRecord{Outer: loop}
-		if err := prismcells.AuditMergeSection(budget, first.Payload, regions[i]); err != nil {
+		if err := prismcells.AuditMergeSection(budget, first, regions[i]); err != nil {
 			return nil, true, err
 		}
 	}
 	if len(regions) == 1 {
-		p := prismPayload{Payload: prismrecord.Payload{Profile: regions[0], Frame: first.Frame, Xform: first.Xform,
+		p := prismrecord.Payload{Profile: regions[0], Frame: first.Frame, Xform: first.Xform,
 			Z0: first.Z0, Z1: first.Z1, Z0Delta: z0Delta, Z1Delta: z1Delta,
-			SectionDelta: cutDelta}}
+			SectionDelta: cutDelta}
 		body, err := analyticBooleanBody(ctx, d, ref, p)
 		return body, true, err
 	}
