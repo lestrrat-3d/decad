@@ -122,22 +122,18 @@ type NearContacts struct {
 	Spans          []ContactSpan
 }
 
-// nearContactBatchSize is the gate's batch: a stop or an error leaves at most
-// this many classified and measured pairs unread, and nothing reads them. A
-// larger batch than ContactBatchSize pays one goroutine start-up per 4096
-// pairs instead of per 256.
-const nearContactBatchSize = 4096
-
 // GatherNearContacts classifies every facet pair of two faces whose boxes come
 // within slack and collects the pairs that meet or stay within slack. deferred
 // reports a coplanar face-on-face overlap, which FacesNearMiss leaves to the
 // mesh pass's own refusal.
 func GatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo) (NearContacts, bool, error) {
-	return gatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo, NearContactRunner(), nearContactBatchSize)
+	return gatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo, NearContactRunner(), ContactBatchSize)
 }
 
 // gatherNearContacts is GatherNearContacts with the batch runner and the batch
 // size as parameters, so tests can observe batches and cancel between them.
+// The gate uses ContactBatchSize: the batch size fixes where ctx.Err is polled
+// relative to each read, and the poll schedule is the one the gate always had.
 // run must fill Measured and Dist as NearContactRunner does.
 func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo, run ContactBatchRunner, limit int) (NearContacts, bool, error) {
 	var nc NearContacts

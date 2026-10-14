@@ -219,7 +219,7 @@ func TestGatherNearContactsCancelAtEveryPoll(t *testing.T) {
 	fa, fb := allFacets(ma), allFacets(mb)
 	const slack = 0.8
 	for _, workers := range []int{1, 4} {
-		for _, limit := range []int{16, nearContactBatchSize} {
+		for _, limit := range []int{16, ContactBatchSize} {
 			base := WithContactWorkers(t.Context(), workers)
 			want, wantDeferred, err := legacyGatherNearContacts(base, ma, fa, mb, fb, slack, NewContactMemo(ma, mb))
 			require.NoError(t, err)
@@ -266,7 +266,7 @@ func TestGatherNearContactsCancelBetweenBatches(t *testing.T) {
 			cancel()
 			return nil
 		}
-		got, deferred, err := gatherNearContacts(ctx, ma, fa, mb, fb, 3, NewContactMemo(ma, mb), run, 4096)
+		got, deferred, err := gatherNearContacts(ctx, ma, fa, mb, fb, 3, NewContactMemo(ma, mb), run, ContactBatchSize)
 		cancel()
 		require.ErrorIs(t, err, context.Canceled, "workers=%d", workers)
 		require.False(t, deferred)
@@ -329,7 +329,7 @@ func TestNearContactExecutorOrderAndBatches(t *testing.T) {
 	// Every 5th pair is a memo hit: the executor must keep it in order.
 	hit := func(k int) bool { return k%5 == 2 }
 	for _, workers := range []int{1, 4} {
-		for _, limit := range []int{4096, 256} {
+		for _, limit := range []int{4096, ContactBatchSize} {
 			for _, n := range []int{0, 1, 2, 255, 256, 257, 4095, 4096, 4097} {
 				label := fmt.Sprintf("workers=%d limit=%d n=%d", workers, limit, n)
 				memo := NewContactMemo(ma, mb)
@@ -424,6 +424,71 @@ func TestNearContactExecutorFirstErrorWins(t *testing.T) {
 			}
 			require.Equal(t, errFirst, e.Done(), label)
 			require.Len(t, seen, first, label)
+		}
+	}
+}
+
+// pollRecorder counts ctx.Err polls and cancels from the (limit+1)-th on.
+type pollRecorder struct {
+	context.Context //nolint:containedctx // test double wrapping a call context.
+	cancel          context.CancelFunc
+	limit           int64
+	polls           atomic.Int64
+}
+
+func (c *pollRecorder) Err() error {
+	if c.polls.Add(1) > c.limit {
+		c.cancel()
+	}
+	return c.Context.Err()
+}
+
+func newPollRecorder(parent context.Context, limit int64) *pollRecorder {
+	ctx, cancel := context.WithCancel(parent)
+	return &pollRecorder{Context: ctx, cancel: cancel, limit: limit}
+}
+
+// TestGatherNearContactsPollScheduleMatchesLegacy cancels the gate and the
+// legacy gate at the same poll N, for every N around the end of the walk, on
+// a face pair of 256 disjoint facets followed by a coplanar overlap. The
+// gate's batch size fixes where it polls relative to each read, so a changed
+// schedule gives a different result or poll count at some N.
+func TestGatherNearContactsPollScheduleMatchesLegacy(t *testing.T) {
+	t.Parallel()
+	flat := func(_, _ float64) float64 { return 0 }
+	ma := nearGridMesh(t, 20, 0, 0, flat)
+	mb := nearGridMesh(t, 20, 0.5, 0.5, flat)
+	far := len(mb.Tris) - 1
+	ma.PrepareFloatNormal(0)
+	mb.PrepareFloatNormal(far)
+	mb.PrepareFloatNormal(0)
+	c := classifyContactPair(ma, mb, ContactPair{I: 0, J: far})
+	require.NoError(t, c.Err)
+	require.Equal(t, ContactNone, c.Contact.Kind)
+	c = classifyContactPair(ma, mb, ContactPair{I: 0, J: 0})
+	require.NoError(t, c.Err)
+	require.Equal(t, ContactRegion, c.Contact.Kind)
+	for _, tail := range []int{256, 300, 513} {
+		fjs := make([]int, tail+1)
+		for i := range tail {
+			fjs[i] = far
+		}
+		fjs[tail] = 0 // the coplanar pair comes last
+		base := WithContactWorkers(t.Context(), 1)
+		free := newPollRecorder(base, math.MaxInt64)
+		_, freeDeferred, err := legacyGatherNearContacts(free, ma, []int{0}, mb, fjs, 100, NewContactMemo(ma, mb))
+		require.NoError(t, err)
+		require.True(t, freeDeferred)
+		total := free.polls.Load()
+		for n := int64(0); n <= total+3; n++ {
+			label := fmt.Sprintf("tail=%d cancel at poll %d of %d", tail, n, total)
+			oldCtx := newPollRecorder(base, n)
+			newCtx := newPollRecorder(base, n)
+			_, od, oe := legacyGatherNearContacts(oldCtx, ma, []int{0}, mb, fjs, 100, NewContactMemo(ma, mb))
+			_, nd, ne := GatherNearContacts(newCtx, ma, []int{0}, mb, fjs, 100, NewContactMemo(ma, mb))
+			require.Equal(t, od, nd, label)
+			require.Equal(t, fmt.Sprint(oe), fmt.Sprint(ne), label)
+			require.Equal(t, oldCtx.polls.Load(), newCtx.polls.Load(), label)
 		}
 	}
 }
