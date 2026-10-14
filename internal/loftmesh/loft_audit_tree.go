@@ -1,6 +1,7 @@
 package loftmesh
 
 import (
+	"math"
 	"reflect"
 	"slices"
 
@@ -36,13 +37,42 @@ func newTreeScan(boxes [][2]r3.Vec, members []int) treeScan {
 		t.order[k] = int32(i)
 	}
 	if len(members) != 0 {
-		t.build(0, len(members))
+		t.build(0, len(members), t.hasNaNMidpoint())
 	}
 	t.flat = newFlatTree(&t)
 	return t
 }
 
-func (t *treeScan) build(start, end int) int {
+// hasNaNMidpoint reports whether a member's box has a NaN midpoint on some
+// axis, which is the only way the build comparator stops being a strict total
+// order. A NaN coordinate or a -Inf..+Inf extent makes one.
+func (t *treeScan) hasNaNMidpoint() bool {
+	for _, i := range t.order {
+		b := t.boxes[i]
+		for axis := range 3 {
+			lo, hi := boxAxis(b, axis)
+			if math.IsNaN(lo/2 + hi/2) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// build appends the node over order[start:end] and its subtree and returns the
+// node's index. A node splits at the median of its widest axis. The comparator
+// orders by box midpoint on that axis and breaks ties by member id, so it is a
+// strict total order and the left half is exactly the smallest members, in the
+// order a full sort of the node's range puts them. build therefore selects the
+// median (selectNth) instead of sorting the range, and sorts a child's range
+// only when that child is a leaf, because a leaf keeps the order its parent
+// gave it. An inner child reorders its own range, so the order selection left
+// in it does not matter, and a node's box, range and maxID do not depend on
+// the order either. The tree equals the one built by a full sort at every
+// node. fullSort is for member sets whose comparator is not a total order
+// (NaN midpoints); there the result depends on the input order, so every node
+// sorts its whole range, as it always has.
+func (t *treeScan) build(start, end int, fullSort bool) int {
 	box := t.boxes[t.order[start]]
 	maxID := t.order[start]
 	for _, i := range t.order[start+1 : end] {
@@ -62,7 +92,7 @@ func (t *treeScan) build(start, end int) int {
 			axis = a
 		}
 	}
-	slices.SortFunc(t.order[start:end], func(a, b int32) int {
+	cmp := func(a, b int32) int {
 		alo, ahi := boxAxis(t.boxes[a], axis)
 		blo, bhi := boxAxis(t.boxes[b], axis)
 		// Comparing halves avoids overflow in a midpoint sum.
@@ -75,10 +105,20 @@ func (t *treeScan) build(start, end int) int {
 		default:
 			return int(a) - int(b)
 		}
-	})
+	}
 	mid := start + (end-start)/2
-	left := t.build(start, mid)
-	right := t.build(mid, end)
+	if fullSort {
+		slices.SortFunc(t.order[start:end], cmp)
+	} else {
+		selectNth(t.order[start:end], mid-start, cmp)
+		for _, r := range [2][2]int{{start, mid}, {mid, end}} {
+			if r[1]-r[0] <= treeLeafSize {
+				slices.SortFunc(t.order[r[0]:r[1]], cmp)
+			}
+		}
+	}
+	left := t.build(start, mid, fullSort)
+	right := t.build(mid, end, fullSort)
 	t.nodes[index].left, t.nodes[index].right = left, right
 	return index
 }
