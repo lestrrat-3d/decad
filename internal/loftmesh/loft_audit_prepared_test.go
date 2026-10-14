@@ -2,13 +2,31 @@ package loftmesh
 
 import (
 	"math"
+	"math/big"
 	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPlaneSignsExactLiftsKeepSubnormalSide(t *testing.T) {
+	verts := []r3.Vec{{}, {X: 1}, {Y: 1}, {}}
+	exact := []proof.Xpt{
+		proof.XptOf(verts[0]), proof.XptOf(verts[1]), proof.XptOf(verts[2]),
+		{X: big.NewInt(0), Y: big.NewInt(0), Z: big.NewInt(1), W: new(big.Int).Lsh(big.NewInt(1), 1076)},
+	}
+	tris := [][3]int{{0, 1, 2}, {3, 1, 2}}
+	data := NewLoftAuditDataWithExact(verts, exact, tris)
+	xother, other := data.xtri(1), data.corners(1)
+	want := TrianglePlaneSigns(data.Planes[0], xother)
+	require.Equal(t, [3]int{1, 0, 0}, want)
+	require.Equal(t, want, data.planeSigns(0, xother, other))
+	_, _, broadSigns := loftPlaneSeparatedSigns(data, 0, 1)
+	require.Equal(t, want, broadSigns)
+}
 
 func TestCompactLoftAuditDataMatchesFullPairResults(t *testing.T) {
 	t.Parallel()

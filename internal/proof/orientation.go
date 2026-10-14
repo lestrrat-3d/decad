@@ -54,10 +54,10 @@ func OrientSignPrepared(a, b, c, d r3.Vec, xa, xd, n Xpt) int {
 }
 
 // OrientSignFloat gives the same adaptive float decision to both plane-side
-// callers. Outside the exact-zero coordinate-plane shortcut, any nonzero
-// difference with absolute value outside [2^-300, 2^250] makes the result
-// uncertain, so callers use the exact path. An uncertain sign must be decided
-// by exact integer arithmetic.
+// callers. All input coordinates must be finite. Outside the exact-zero
+// coordinate-plane shortcut, any nonzero difference with absolute value outside
+// [2^-300, 2^250] makes the result uncertain, so callers use the exact path. An
+// uncertain sign must be decided by exact integer arithmetic.
 func OrientSignFloat(a, b, c, d r3.Vec) (int, bool) {
 	bax, bay, baz := b.X-a.X, b.Y-a.Y, b.Z-a.Z
 	cax, cay, caz := c.X-a.X, c.Y-a.Y, c.Z-a.Z
