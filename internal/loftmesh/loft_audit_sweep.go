@@ -938,6 +938,12 @@ func sweepCandidates(budget *proofbound.WorkBudget, s pairScan, starts []int, co
 	return c, nil
 }
 
+// loftRowPairScan is a scan that walks by pairs and by rows.
+type loftRowPairScan interface {
+	pairScan
+	loftRowScan
+}
+
 // sweepCandidatesByRows is sweepCandidates for keepEveryPair. A row scan with
 // at least loftRowParallelMin members fills the list by rows on several
 // goroutines (sweepCandidatesRowsWorkers); every other scan, or fewer members,
@@ -946,7 +952,7 @@ func sweepCandidates(budget *proofbound.WorkBudget, s pairScan, starts []int, co
 func sweepCandidatesByRows(budget *proofbound.WorkBudget, s pairScan, members, starts []int,
 	count, scanned uint64) (loftCandidates, error) {
 	workers := orderedwork.EachWorkers(len(members), loftRowParallelMin)
-	if rows, ok := s.(loftRowScan); ok && workers >= 2 {
+	if rows, ok := s.(loftRowPairScan); ok && workers >= 2 {
 		return sweepCandidatesRowsWorkers(budget, rows, members, starts, count, scanned, workers)
 	}
 	return sweepCandidates(budget, s, starts, count, keepEveryPair)
@@ -960,8 +966,11 @@ func sweepCandidatesByRows(budget *proofbound.WorkBudget, s pairScan, members, s
 // steps budget scanned times, the units visit steps over the same complete
 // walk, so a budget fails at the same step with the same error. A row whose
 // partner count differs from starts is refused, and no partner is written
-// outside its row's slots.
-func sweepCandidatesRowsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
+// outside its row's slots. If a cancellation poll stops the workers, the
+// serial walk runs on the same budget, because the serial walk polls only every
+// WorkPollInterval steps and may finish the list, or reach a later refusal,
+// before it sees the cancellation.
+func sweepCandidatesRowsWorkers(budget *proofbound.WorkBudget, tree loftRowPairScan, members, starts []int,
 	count, scanned uint64, workers int) (loftCandidates, error) {
 	c := loftCandidates{starts: starts, js: make([]int32, count)}
 	mismatch := make([]bool, len(members))
@@ -982,7 +991,7 @@ func sweepCandidatesRowsWorkers(budget *proofbound.WorkBudget, tree loftRowScan,
 		slices.Sort(row)
 		return nil
 	}); err != nil {
-		return loftCandidates{}, err
+		return sweepCandidates(budget, tree, starts, count, keepEveryPair)
 	}
 	if _, err := budget.StepN(scanned); err != nil {
 		return loftCandidates{}, err

@@ -1,10 +1,13 @@
 package loftmesh
 
 import (
+	"context"
 	"errors"
 	"math"
 	"runtime"
 	"slices"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -20,6 +23,22 @@ type rowFillCase struct {
 	}
 	members []int
 	count   sweepCount
+}
+
+// rowWitness wraps a scan to count the row walks of each triangle and, when
+// hold is set, to block every row walk until hold closes.
+type rowWitness struct {
+	loftRowPairScan
+	visits []atomic.Int32
+	hold   <-chan struct{}
+}
+
+func (w *rowWitness) walkRow(i int, limit uint64, fn func(j int)) (uint64, bool) {
+	if w.hold != nil {
+		<-w.hold
+	}
+	w.visits[i].Add(1)
+	return w.loftRowPairScan.walkRow(i, limit, fn)
 }
 
 // rowFillCases builds the cases: every grouped fixture, then a plain tree. With
@@ -53,9 +72,14 @@ func TestRowFillMatchesSweepCandidates(t *testing.T) {
 			require.Positive(t, sc.count)
 			want, err := sweepCandidates(unlimitedBudget(t), c.scan, sc.starts, sc.count, keepEveryPair)
 			require.NoError(t, err)
-			got, err := sweepCandidatesRowsWorkers(unlimitedBudget(t), c.scan, c.members, sc.starts, sc.count,
+			w := &rowWitness{loftRowPairScan: c.scan, visits: make([]atomic.Int32, len(sc.starts))}
+			got, err := sweepCandidatesRowsWorkers(unlimitedBudget(t), w, c.members, sc.starts, sc.count,
 				sc.scanned, 4)
 			require.NoError(t, err)
+			// Every member row is walked exactly once, empty rows included.
+			for _, i := range c.members {
+				require.EqualValues(t, 1, w.visits[i].Load(), "row %d", i)
+			}
 			require.Equal(t, want.starts, got.starts)
 			require.Equal(t, want.js, got.js)
 			for i := range len(got.starts) - 1 {
@@ -136,4 +160,29 @@ func TestRowFillDispatch(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, want, got)
 	})
+}
+
+// A cancellation poll that stops the workers leaves the serial walk's outcome:
+// with a step budget that never fails, the full list.
+func TestRowFillCancelledPollRunsSerialWalk(t *testing.T) {
+	c := rowFillCases(t, true)[0]
+	sc := c.count
+	var wantSteps uint64
+	want, wantErr := sweepCandidates(countingBudget(math.MaxUint64, &wantSteps), c.scan, sc.starts, sc.count,
+		keepEveryPair)
+	require.NoError(t, wantErr)
+
+	hold := make(chan struct{})
+	var once sync.Once
+	var gotSteps uint64
+	budget := countingBudget(math.MaxUint64, &gotSteps)
+	budget.ErrFn = func() error {
+		once.Do(func() { close(hold) })
+		return context.Canceled
+	}
+	w := &rowWitness{loftRowPairScan: c.scan, visits: make([]atomic.Int32, len(sc.starts)), hold: hold}
+	got, err := sweepCandidatesRowsWorkers(budget, w, c.members, sc.starts, sc.count, sc.scanned, 4)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+	require.Equal(t, wantSteps, gotSteps)
 }
