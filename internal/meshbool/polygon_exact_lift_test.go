@@ -149,3 +149,22 @@ func TestFloatRatLiftEqualsSetFloat64(t *testing.T) {
 		require.Zero(t, want.Denom().Cmp(got.Denom()), "%g", f)
 	}
 }
+
+// TestXP2FromFloatsZeroKeepsStoredDenominator requires a zero projection to
+// hold its denominator as SetFloat64 does: Denom returns the same pointer on
+// repeated calls. A zero Rat from proof.FloatRat returns a fresh detached 1
+// each call, so lifting zero through it would fail this test.
+func TestXP2FromFloatsZeroKeepsStoredDenominator(t *testing.T) {
+	for _, z := range []float64{0, math.Copysign(0, -1)} {
+		for name, xp := range map[string]Xp2{
+			"legacy": legacyXP2FromFloats(z, z),
+			"new":    newXP2FromFloats(z, z),
+		} {
+			for _, r := range []*big.Rat{xp.U, xp.V} {
+				require.Same(t, r.Denom(), r.Denom(), "%s zero %v", name, z)
+				require.Zero(t, r.Num().Sign(), "%s zero %v", name, z)
+				require.Zero(t, r.Denom().Cmp(big.NewInt(1)), "%s zero %v", name, z)
+			}
+		}
+	}
+}

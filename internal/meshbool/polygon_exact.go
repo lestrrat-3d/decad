@@ -59,8 +59,11 @@ func newXP2FromFloats(fu, fv float64) Xp2 {
 }
 
 // liftProjectionFloat lifts a nonzero finite float with proof.FloatRat. Zero
-// and non-finite input take MustRatOf, so a zero keeps the representation
-// SetFloat64 gives it and a non-finite float panics as before.
+// and non-finite input take MustRatOf. The zero guard exists for the Rat
+// representation: FloatRat(0) is an uninitialised Rat whose Denom returns a
+// fresh detached 1 on every call, while SetFloat64(0) stores the denominator,
+// so Denom returns the same pointer each time. A non-finite float panics as
+// before.
 func liftProjectionFloat(f float64) *big.Rat {
 	if f == 0 || math.IsNaN(f) || math.IsInf(f, 0) {
 		return polynomial.MustRatOf(f)
