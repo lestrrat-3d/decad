@@ -235,8 +235,11 @@ func TestParityIndexListsEveryFacetThatMatters(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(0x31d7, 0x0c55))
 	for _, fx := range parityIndexFixtures() {
+		// Queries are drawn in fixture order from the one source, so the
+		// subtests can run in parallel on identical inputs.
+		queries := parityIndexQueries(rng, fx)
 		t.Run(fx.name, func(t *testing.T) {
-			queries := parityIndexQueries(rng, fx)
+			t.Parallel()
 			pruned, mattered := 0, 0
 			for _, ray := range AxisRays {
 				pm := NewParityMesh(fx.verts, fx.tris)
@@ -318,14 +321,16 @@ func TestParityIndexMatchesTheUnindexedScan(t *testing.T) {
 	ctx := t.Context()
 	rng := rand.New(rand.NewPCG(0x77a3, 0x1f09))
 	for _, fx := range parityIndexFixtures() {
+		queries := parityIndexQueries(rng, fx)
 		t.Run(fx.name, func(t *testing.T) {
+			t.Parallel()
 			all := parityAllFacets(len(fx.tris))
 			indexed := NewParityMesh(fx.verts, fx.tris)
 			filtered := NewParityMesh(fx.verts, fx.tris)
 			plain := NewParityMesh(fx.verts, fx.tris)
 			plain.Unfiltered = true
 			kinds := map[parityAnswer]int{}
-			for qi, p := range parityIndexQueries(rng, fx) {
+			for qi, p := range queries {
 				want := answerOf(MeshParityPreparedContext(ctx, p, plain, all))
 				require.Equal(t, want, answerOf(MeshParityPreparedContext(ctx, p, filtered, all)), `query %d`, qi)
 				require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, indexed)), `query %d`, qi)
@@ -825,32 +830,43 @@ func TestParityIndexMembershipCap(t *testing.T) {
 
 // TestParityIndexSkipsUnusableFloatProjections requires a query whose first-ray
 // projection is not FloatFinite to take the plain scan: the answer and error
-// equal the unindexed scan's and the first ray's index is not even built.
+// equal the unindexed scan's and the first ray's index is not even built. Every
+// query is compared with the plain scan, and every query, usable or not, also runs
+// on a fresh mesh, because whether the index was built is a property of one
+// mesh's first use. A usable query additionally runs on one shared indexed mesh
+// (the index kept across queries).
 func TestParityIndexSkipsUnusableFloatProjections(t *testing.T) {
 	t.Parallel()
-	ctx := t.Context()
 	rng := rand.New(rand.NewPCG(0x31d7, 0x0c55))
 	for _, fx := range parityIndexFixtures() {
+		queries := parityIndexQueries(rng, fx)
 		t.Run(fx.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := t.Context()
 			all := parityAllFacets(len(fx.tris))
+			plain := NewParityMesh(fx.verts, fx.tris)
+			plain.Unfiltered = true
+			shared := NewParityMesh(fx.verts, fx.tris)
+			first := AxisRays[0]
 			skipped, indexed := 0, 0
-			for qi, p := range parityIndexQueries(rng, fx) {
-				first := AxisRays[0]
+			for qi, p := range queries {
+				want := answerOf(MeshParityPreparedContext(ctx, p, plain, all))
 				pa := NewXP2(RatCoordOf(p, first.U), RatCoordOf(p, first.V))
-				pm := NewParityMesh(fx.verts, fx.tris)
-				plain := NewParityMesh(fx.verts, fx.tris)
-				plain.Unfiltered = true
-				require.Equal(t, answerOf(MeshParityPreparedContext(ctx, p, plain, all)),
-					answerOf(MeshParityAllContext(ctx, p, pm)), `query %d`, qi)
-				if pa.FloatFinite {
-					indexed++
-					require.True(t, pm.indexBuilt[first.Axis], `query %d: a usable projection uses the index`, qi)
+				if !pa.FloatFinite {
+					skipped++
+					pm := NewParityMesh(fx.verts, fx.tris)
+					require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, pm)), `query %d`, qi)
+					require.False(t, pm.indexBuilt[first.Axis], `query %d: an unusable projection must skip the index`, qi)
 					continue
 				}
-				skipped++
-				require.False(t, pm.indexBuilt[first.Axis], `query %d: an unusable projection must skip the index`, qi)
+				indexed++
+				pm := NewParityMesh(fx.verts, fx.tris)
+				require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, pm)), `query %d`, qi)
+				require.True(t, pm.indexBuilt[first.Axis], `query %d: a usable projection uses the index`, qi)
+				require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, shared)), `query %d`, qi)
 			}
 			require.Positive(t, indexed, `some queries must take the indexed path`)
+			require.True(t, shared.indexBuilt[first.Axis], `the shared mesh must have built its index`)
 			t.Logf(`%d indexed, %d skipped`, indexed, skipped)
 		})
 	}
