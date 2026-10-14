@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -340,14 +341,14 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		center0 := pp.Point(w.CU, w.CV, pp.Z0)
 		center1 := pp.Point(w.CU, w.CV, pp.Z1)
 		radius := units.Millimeters(w.Radius)
-		var curve0, curve1 Curve
+		var curve0, curve1 surfacegeom.Curve
 		if closed {
 			// A full circle's edge closes on itself: one vertex per cap
 			// edge, start == end (topology.go's Circle3 contract) — the
 			// seamBottom/seamTop pair the caller already built.
-			curve0, curve1 = Circle3{Center: center0, Axis: edgeAxis, Radius: radius}, Circle3{Center: center1, Axis: edgeAxis, Radius: radius}
+			curve0, curve1 = surfacegeom.Circle3{Center: center0, Axis: edgeAxis, Radius: radius}, surfacegeom.Circle3{Center: center1, Axis: edgeAxis, Radius: radius}
 		} else {
-			curve0, curve1 = Arc3{Center: center0, Axis: edgeAxis, Radius: radius}, Arc3{Center: center1, Axis: edgeAxis, Radius: radius}
+			curve0, curve1 = surfacegeom.Arc3{Center: center0, Axis: edgeAxis, Radius: radius}, surfacegeom.Arc3{Center: center1, Axis: edgeAxis, Radius: radius}
 		}
 		// The rim edges read the same WALK: a clockwise wall's material
 		// lies outside its cylinder, so the boundary turns into the metal
@@ -356,8 +357,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// counter-clockwise round keeps its convex rim. The loop's role
 		// decides nothing here. convex is boundarywalk.RimConvexity's own answer for
 		// this walk, computed by the caller.
-		bottomEdge := &Edge{curve: curve0, start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
-		topEdge := &Edge{curve: curve1, start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
+		bottomEdge := &Edge{start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve0}}
+		topEdge := &Edge{start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve1}}
 		bottomEdge.n.CurveBound, bottomEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
 		topEdge.n.CurveBound, topEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
 		surf := Cylinder{Origin: center0, Axis: axis, Radius: radius}
@@ -375,8 +376,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// concavity falls out of the clockwise walk itself, exactly as it
 		// does for a circular hole wall. An R19 refusal already returned
 		// from boundarywalk.RimConvexity, before this switch ever ran.
-		bottomEdge := &Edge{curve: NURBSCurve{}, start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
-		topEdge := &Edge{curve: NURBSCurve{}, start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
+		bottomEdge := &Edge{start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}}}
+		topEdge := &Edge{start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}}}
 		// faceReversed stays false: an opaque NURBSSurface publishes no
 		// normal at all (§7's NormalAt refusal, topology.go), so
 		// topo.Face.Reversed — "the outward normal is the surface's geometric
@@ -387,8 +388,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// loop's: which side its material lies on is decided by the sense
 		// the whole loop is walked, and that sense IS the loop's role —
 		// the outer loop counter-clockwise, holes clockwise (moments.go).
-		bottomEdge := &Edge{curve: Line3{}, start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
-		topEdge := &Edge{curve: Line3{}, start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
+		bottomEdge := &Edge{start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}}}
+		topEdge := &Edge{start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}}}
 		mid := pp.Point((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, pp.Z0)
 		// tangent × N is the outward normal for a CCW outer walk (and a
 		// CW hole walk); a reflection flips the cross product, so the
@@ -596,13 +597,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			prev := walks[(i+n-1)%n]
 			cross := prev.TanOutU*walks[i].TanInV - prev.TanOutV*walks[i].TanInU
 			vertical[i] = &Edge{
-				curve: Line3{},
 				start: bottomV[i],
 				end:   topV[i],
 				n: topo.Edge{
 					Convex:      cross > 0,
 					Length:      pp.Z1 - pp.Z0,
 					LengthBound: height.Bound,
+					Curve:       surfacegeom.Line3{},
 				},
 			}
 		}

@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -279,8 +280,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				}
 				axis = tangent
 			}
-			return &Edge{curve: Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)},
-				start: capV, end: sideV, n: topo.Edge{Convex: convex, Length: meridianLen, LengthBound: meridianBound}}
+			return &Edge{
+				start: capV, end: sideV, n: topo.Edge{Convex: convex, Length: meridianLen, LengthBound: meridianBound, Curve: surfacegeom.Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)}}}
 		}
 		lead, trail := make([]*Edge, n), make([]*Edge, n)
 		for k := range n {
@@ -308,8 +309,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 						ErrUnsupported, renderCoord(w.StartU), renderCoord(w.StartV))
 				}
 				held, bound := heldOf(length)
-				lead[k] = &Edge{curve: FilletMiter3{}, start: capAt(k), end: sideV,
-					n: topo.Edge{Convex: convex, Length: held, LengthBound: bound}}
+				lead[k] = &Edge{start: capAt(k), end: sideV,
+					n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.FilletMiter3{}}}
 				trail[k] = lead[k]
 			default:
 				kappa, err := filletband.Kappa(fr.loop.Walks[(k+n-1)%n], fr.loop.Walks[k])
@@ -326,9 +327,9 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				major := pl.Dir(bu/semi, bv/semi, 0)
 				axis, _ := major.Cross(up).Normalize()
 				lead[k] = &Edge{
-					curve: Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis, Major: major,
+					start: capAt(k), end: sideV, n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis, Major: major,
 						SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
-					start: capAt(k), end: sideV, n: topo.Edge{Convex: convex, Length: held, LengthBound: bound},
+					},
 				}
 				trail[k] = lead[k]
 			}

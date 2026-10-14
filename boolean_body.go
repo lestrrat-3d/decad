@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -789,7 +790,6 @@ func buildFacetedTopology(
 	edgeObj := map[*facetedtopology.Edge]*Edge{}
 	for _, chain := range plan.Edges {
 		e := &Edge{
-			curve: FacetedCurve{Bound: units.Millimeters(chain.Bound)},
 			start: vertexOf(chain.Vertices[0]),
 			end:   vertexOf(chain.Vertices[len(chain.Vertices)-1]),
 			faces: []*Face{faces[chain.Faces[0]], faces[chain.Faces[1]]},
@@ -798,6 +798,7 @@ func buildFacetedTopology(
 				Length:          chain.Length,
 				LengthBound:     chain.LengthBound,
 				LengthUnbounded: chain.LengthUnbounded,
+				Curve:           surfacegeom.FacetedCurve{Bound: units.Millimeters(chain.Bound)},
 			},
 		}
 		if axialSectionJoin {

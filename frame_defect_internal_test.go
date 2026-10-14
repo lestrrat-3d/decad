@@ -254,7 +254,7 @@ func requireCoversMappedReference(t *testing.T, ref, b *Body, m fdMap) {
 	re, be := ref.Edges(), b.Edges()
 	require.Len(t, be, len(re))
 	for i := range re {
-		if _, ok := re[i].curve.(Line3); !ok || re[i].start == nil || re[i].n.LengthUnbounded {
+		if _, ok := re[i].n.Curve.(surfacegeom.Line3); !ok || re[i].start == nil || re[i].n.LengthUnbounded {
 			continue
 		}
 		l0, err := re[i].Length()
@@ -834,14 +834,14 @@ func TestCurveBoundsCoverMappedReference(t *testing.T) {
 					require.Len(t, be, len(re))
 					circles := 0
 					for i := range re {
-						c0, a0, r0, ok := surfacegeom.CircleOf(internalCurve(re[i].curve))
+						c0, a0, r0, ok := surfacegeom.CircleOf(re[i].n.Curve)
 						if !ok {
 							continue
 						}
 						circles++
 						require.True(t, re[i].n.CurveBounded, "reference edge %d carries no curve bound", i)
 						require.True(t, be[i].n.CurveBounded, "edge %d carries no curve bound", i)
-						c1, a1, r1, ok := surfacegeom.CircleOf(internalCurve(be[i].curve))
+						c1, a1, r1, ok := surfacegeom.CircleOf(be[i].n.Curve)
 						require.True(t, ok)
 						an := fdVecOf(a0).unit()
 						e1 := fdVecOf(r3.NewVec(1, 0, 0)).cross(an)

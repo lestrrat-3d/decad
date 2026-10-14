@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -133,7 +134,7 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 	require.NoError(t, err)
 	circular := 0
 	for _, edge := range prism.Edges() {
-		if _, ok := edge.Curve().(Circle3); !ok {
+		if _, ok := edge.n.Curve.(surfacegeom.Circle3); !ok {
 			continue
 		}
 		circular++
@@ -161,7 +162,7 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 	full, err := evalRevolve(New(), producerID(0), rp)
 	require.NoError(t, err)
 	for _, edge := range full.Edges() {
-		if _, ok := edge.Curve().(Circle3); !ok {
+		if _, ok := edge.n.Curve.(surfacegeom.Circle3); !ok {
 			continue
 		}
 		length, err := edge.Length()
@@ -174,7 +175,7 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 	partial, err := evalRevolve(New(), producerID(0), rp)
 	require.NoError(t, err)
 	for _, edge := range partial.Edges() {
-		if _, ok := edge.Curve().(Arc3); !ok {
+		if _, ok := edge.n.Curve.(surfacegeom.Arc3); !ok {
 			continue
 		}
 		length, err := edge.Length()

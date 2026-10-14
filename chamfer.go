@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -480,7 +481,7 @@ func straightPrismCapEdge(caps prismCaps, edges []*Edge) bool {
 	if len(edges) != 1 {
 		return false
 	}
-	if _, straight := edges[0].Curve().(Line3); !straight {
+	if _, straight := edges[0].n.Curve.(surfacegeom.Line3); !straight {
 		return false
 	}
 	for _, face := range edges[0].Faces() {

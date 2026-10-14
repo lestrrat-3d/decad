@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -53,7 +54,7 @@ func TestCoilFullTurnArcClosesLikeACircle(t *testing.T) {
 	require.Len(t, b.Edges(), 2)
 	require.Len(t, b.Vertices(), 2)
 	for _, e := range b.Edges() {
-		_, ok := e.Curve().(Circle3)
+		_, ok := e.n.Curve.(surfacegeom.Circle3)
 		require.True(t, ok, "a closed rim is a Circle3")
 		require.Equal(t, e.Start(), e.End())
 		require.Len(t, e.Faces(), 2)
@@ -185,10 +186,10 @@ func TestCoilRimCurveBoundHoldsTheDenotedCircle(t *testing.T) {
 			for _, e := range b.Edges() {
 				var centre, axis r3.Vec
 				var radius float64
-				switch cv := e.Curve().(type) {
-				case Circle3:
+				switch cv := e.n.Curve.(type) {
+				case surfacegeom.Circle3:
 					centre, axis, radius = cv.Center, cv.Axis, cv.Radius.Base()
-				case Arc3:
+				case surfacegeom.Arc3:
 					centre, axis, radius = cv.Center, cv.Axis, cv.Radius.Base()
 				default:
 					continue

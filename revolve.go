@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -348,7 +349,7 @@ func (d *Document) resolveEdgeAxis(ea EdgeAxis) (ConstructionAxis, error) {
 		return ConstructionAxis{}, impliedOneEdge(body, q, len(edges))
 	}
 	e := edges[0]
-	if _, ok := e.Curve().(Line3); !ok {
+	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok {
 		return ConstructionAxis{}, fmt.Errorf(`%w: a non-linear edge named as a revolve axis spins about no line`, ErrDegenerate)
 	}
 	dir := e.end.n.Position.Sub(e.start.n.Position)

@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -50,7 +51,7 @@ func TestPrismPatternUnionSelectsProvenAxialChains(t *testing.T) {
 	require.Len(t, selected, 12)
 	require.Equal(t, 24, len(joined.Edges())-len(selected))
 	for _, edge := range selected {
-		_, faceted := edge.Curve().(FacetedCurve)
+		_, faceted := edge.n.Curve.(surfacegeom.FacetedCurve)
 		require.True(t, faceted)
 		start, end := edge.Start().Position().Value, edge.End().Position().Value
 		require.Equal(t, start.X, end.X)

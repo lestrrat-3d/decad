@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -95,7 +96,7 @@ func edgesQuery(edges []*Edge) *EdgeQuery {
 	for _, e := range edges {
 		a, b := e.Start().Position().Value, e.End().Position().Value
 		preds := []EdgePredicate{EndpointAt(a), EndpointAt(b)}
-		if _, line := e.Curve().(Line3); line {
+		if _, line := e.n.Curve.(surfacegeom.Line3); line {
 			preds = append(preds, ParallelTo(b.Sub(a)))
 		} else {
 			preds = append(preds, Circular())
@@ -372,7 +373,7 @@ func TestBrepLoopChamferBossRimAndRoot(t *testing.T) {
 	require.Equal(t, [][2]float64{{11, 25}}, sweptFaceLevels(bp, bossWall), "the boss wall")
 	found := 0
 	for _, e := range root.Edges() {
-		c, ok := e.Curve().(Circle3)
+		c, ok := e.n.Curve.(surfacegeom.Circle3)
 		if ok && c.Center == r3.NewVec(20, 20, 11) {
 			found++
 			require.Equal(t, 5.0, c.Radius.Base())

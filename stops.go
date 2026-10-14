@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -386,8 +387,8 @@ func (st angularStops) stopGeometry() extent.AngularStop {
 }
 
 func angularStopEdge(e *Edge) extent.AngularEdge {
-	curve := e.Curve()
-	record := extent.AngularEdge{CurveType: fmt.Sprintf("%T", curve)}
+	curve := e.n.Curve
+	record := extent.AngularEdge{CurveType: fmt.Sprintf("%T", publicCurve(curve))}
 	if e.start != nil {
 		record.Start = &e.start.n.Position
 	}
@@ -395,12 +396,12 @@ func angularStopEdge(e *Edge) extent.AngularEdge {
 		record.End = &e.end.n.Position
 	}
 	switch c := curve.(type) {
-	case Line3:
+	case surfacegeom.Line3:
 		record.Kind = extent.AngularEdgeLine
-	case Circle3:
+	case surfacegeom.Circle3:
 		record.Kind, record.Center, record.Axis, record.Radius =
 			extent.AngularEdgeCircle, c.Center, c.Axis, c.Radius
-	case Arc3:
+	case surfacegeom.Arc3:
 		record.Kind, record.Center, record.Axis, record.Radius =
 			extent.AngularEdgeArc, c.Center, c.Axis, c.Radius
 	}

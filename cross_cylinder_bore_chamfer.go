@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -35,7 +36,7 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 		edges[0].start != edges[0].end || len(body.Edges()) != 4 {
 		return nil, true, fmt.Errorf("%w: the cross-bore chamfer needs one complete unplaced mouth loop", ErrUnsupported)
 	}
-	if _, ok := edges[0].curve.(FacetedCurve); !ok {
+	if _, ok := edges[0].n.Curve.(surfacegeom.FacetedCurve); !ok {
 		return nil, true, fmt.Errorf("%w: the selected cross-bore mouth has no faceted edge witness", ErrUnsupported)
 	}
 	outer, outerOK := crossBoreFaceGroup(rec.target, prismOuterFirstSideRole)

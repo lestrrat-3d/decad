@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -322,12 +323,12 @@ func (r *brepEdgeRoute) cornerLoops(fi int) ([]cornerLoop, error) {
 // a prism; it identifies the edge and admits no geometry.
 func (r *brepEdgeRoute) admitEdge(ordinal int, e *Edge) (*brepEdgeBlend, error) {
 	eb := &brepEdgeBlend{ordinal: ordinal, edge: e}
-	switch e.curve.(type) {
-	case Line3:
-	case Circle3, Arc3:
+	switch e.n.Curve.(type) {
+	case surfacegeom.Line3:
+	case surfacegeom.Circle3, surfacegeom.Arc3:
 		return nil, r.refuse(eb, "SB4", `the edge is a circle or an arc (a hole rim or a boss root), and a cone or torus band is not a face this record holds`)
 	default:
-		return nil, r.refuse(eb, "SB4", fmt.Sprintf(`the edge is a %T, not a straight line`, e.curve))
+		return nil, r.refuse(eb, "SB4", fmt.Sprintf(`the edge is a %T, not a straight line`, publicCurve(e.n.Curve)))
 	}
 	if e.start == nil || e.end == nil {
 		return nil, r.refuse(eb, "SB4", `the edge has no vertices`)

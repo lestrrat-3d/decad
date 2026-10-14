@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -312,7 +313,7 @@ func TestRevolveReadingsCoverFrameDefect(t *testing.T) {
 			edges := b.Edges()
 			require.Len(t, edges, 4)
 			for _, e := range edges {
-				circle, ok := e.curve.(Circle3)
+				circle, ok := e.n.Curve.(surfacegeom.Circle3)
 				require.True(t, ok)
 				l, err := e.Length()
 				require.NoError(t, err)

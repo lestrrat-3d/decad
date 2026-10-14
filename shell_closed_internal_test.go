@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -43,7 +44,7 @@ func TestShellClosedPrismLevelsCarryThicknessConversion(t *testing.T) {
 	vertical := 0
 	for _, f := range closed.Shells()[1].Faces() {
 		for _, e := range f.Edges() {
-			_, ok := e.Curve().(Line3)
+			_, ok := e.n.Curve.(surfacegeom.Line3)
 			if !ok || math.Abs(e.End().n.Position.Z-e.Start().n.Position.Z) < 1 {
 				continue
 			}

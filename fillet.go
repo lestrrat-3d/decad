@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -489,11 +490,11 @@ func selectedEdgeContext(ordinal int, edge *Edge) string {
 	if edge == nil || edge.start == nil || edge.end == nil {
 		return fmt.Sprintf(`selected edge[%d]`, ordinal)
 	}
-	if c, ok := edge.curve.(Circle3); ok {
+	if c, ok := edge.n.Curve.(surfacegeom.Circle3); ok {
 		return fmt.Sprintf(`selected edge[%d] closed circle through (%s), centre (%s), radius %s`,
 			ordinal, renderVec(edge.start.n.Position), renderVec(c.Center), c.Radius)
 	}
-	if c, ok := edge.curve.(Ellipse3); ok {
+	if c, ok := edge.n.Curve.(surfacegeom.Ellipse3); ok {
 		return fmt.Sprintf(`selected edge[%d] ellipse arc from (%s) to (%s), centre (%s), semi-axes %s and %s`,
 			ordinal, renderVec(edge.start.n.Position), renderVec(edge.end.n.Position), renderVec(c.Center),
 			c.SemiMajor, c.SemiMinor)
@@ -533,7 +534,7 @@ func wrapModifyAuditError(sel EdgeSelector, matched []matchedCorner, err error) 
 // endpoints share a cap plane), which is exactly S1's honest reading of the
 // class.
 func matchCornerBudget(budget *proofbound.WorkBudget, pp prismPayload, loops []cornerLoop, e *Edge) (int, int, bool, error) {
-	if _, ok := e.curve.(Line3); !ok {
+	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok {
 		return 0, 0, false, nil
 	}
 	if e.start == nil || e.end == nil {

@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -409,8 +410,8 @@ func patchChainVertices(edges []*Edge) []*Vertex {
 // even a bound on the edge's length could not be proven, which only a
 // construction this gate has no other reason to trust would raise.
 func patchEdgeGeometryExact(e *Edge) bool {
-	switch e.curve.(type) {
-	case Circle3, Arc3:
+	switch e.n.Curve.(type) {
+	case surfacegeom.Circle3, surfacegeom.Arc3:
 		return !e.n.LengthUnbounded
 	default:
 		return e.n.LengthBound == 0 && !e.n.LengthUnbounded
@@ -423,10 +424,10 @@ func patchEdgeGeometryExact(e *Edge) bool {
 // whole edge, docs/surface-design.md §6.2's Table J amendment) reports false:
 // it has no carrier plane narrower than the chain's own.
 func patchCurveCarrier(e *Edge) (center, axis r3.Vec, curved bool) {
-	switch c := e.curve.(type) {
-	case Circle3:
+	switch c := e.n.Curve.(type) {
+	case surfacegeom.Circle3:
 		return c.Center, c.Axis, true
-	case Arc3:
+	case surfacegeom.Arc3:
 		return c.Center, c.Axis, true
 	default:
 		return r3.Vec{}, r3.Vec{}, false
@@ -630,7 +631,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if ne, ok := newEdgeByOld[old]; ok {
 			return ne, nil
 		}
-		curve, err := surfaceplace.TransformCurve(internalCurve(old.curve), xform)
+		curve, err := surfaceplace.TransformCurve(old.n.Curve, xform)
 		if err != nil {
 			return nil, err
 		}
@@ -648,7 +649,6 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		}
 		lengthBound = place.LengthBound(old.n.Length, lengthBound)
 		ne := &Edge{
-			curve: publicCurve(curve),
 			start: start,
 			end:   end,
 			n: topo.Edge{
@@ -657,10 +657,11 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 				LengthBound:     lengthBound,
 				LengthUnbounded: old.n.LengthUnbounded,
 				Denot:           old.n.Denot.Compose(xform),
+				Curve:           curve,
 			},
 		}
 		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
-			internalCurve(old.curve), old.n.CurveBound, old.n.CurveBounded, curve, xform)
+			old.n.Curve, old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}
@@ -793,7 +794,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	for i, oe := range ordered {
 		ne := edgeCopy[oe.old]
 		areaEdges[i] = patchchain.AreaEdge{
-			Curve: internalCurve(ne.curve), Forward: oe.forward,
+			Curve: ne.n.Curve, Forward: oe.forward,
 			Start:  patchchain.AreaVertex{Position: ne.start.n.Position, Bound: ne.start.n.Bound.Base()},
 			End:    patchchain.AreaVertex{Position: ne.end.n.Position, Bound: ne.end.n.Bound.Base()},
 			Length: ne.n.Length, LengthBound: ne.n.LengthBound, LengthUnbounded: ne.n.LengthUnbounded,
@@ -915,15 +916,15 @@ func patchGeometryEdges(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) [
 	for i, oe := range ordered {
 		ne := edgeCopy[oe.old]
 		g := patchchain.GeometryEdge{Start: ne.start.n.Position, End: ne.end.n.Position, Forward: oe.forward}
-		switch c := ne.curve.(type) {
-		case Line3:
+		switch c := ne.n.Curve.(type) {
+		case surfacegeom.Line3:
 			g.Kind = patchchain.Line
-		case Circle3:
+		case surfacegeom.Circle3:
 			g.Kind, g.Center, g.Axis, g.Radius = patchchain.Circle, c.Center, c.Axis, c.Radius
-		case Arc3:
+		case surfacegeom.Arc3:
 			g.Kind, g.Center, g.Axis = patchchain.Arc, c.Center, c.Axis
 		default:
-			g.Kind, g.CurveName = patchchain.Unsupported, fmt.Sprintf("%T", c)
+			g.Kind, g.CurveName = patchchain.Unsupported, fmt.Sprintf("%T", publicCurve(c))
 		}
 		out[i] = g
 	}

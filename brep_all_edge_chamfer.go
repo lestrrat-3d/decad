@@ -10,6 +10,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -79,7 +80,7 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 				if len(f.loops) != 2 || len(f.loops[1].coedges) != 1 {
 					return nil, false, nil
 				}
-				circle, ok := f.loops[1].coedges[0].edge.curve.(Circle3)
+				circle, ok := f.loops[1].coedges[0].edge.n.Curve.(surfacegeom.Circle3)
 				if !ok || circle.Center.Y != p.box[1][side] ||
 					circle.Axis != (r3.Vec{Y: 1}) && circle.Axis != (r3.Vec{Y: -1}) {
 					return nil, false, nil
@@ -113,7 +114,7 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 			return nil, false, nil
 		}
 		edge := loop.coedges[0].edge
-		circle, ok := edge.curve.(Circle3)
+		circle, ok := edge.n.Curve.(surfacegeom.Circle3)
 		if !ok || !edge.n.CurveBounded || edge.n.CurveBound != 0 ||
 			circle.Radius.Base() != p.radius {
 			return nil, false, nil
@@ -197,7 +198,7 @@ func rationalMidpointEquals(interval [2]float64, held float64) bool {
 }
 
 func (p allEdgeChamferPayload) outerBoxEdge(e *Edge) bool {
-	if _, ok := e.curve.(Line3); !ok || e.start.n.Bound.Base() != 0 || e.end.n.Bound.Base() != 0 {
+	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok || e.start.n.Bound.Base() != 0 || e.end.n.Bound.Base() != 0 {
 		return false
 	}
 	a, b := e.start.n.Position, e.end.n.Position
@@ -243,7 +244,7 @@ func (p allEdgeChamferPayload) boxPlane(f *Face, plane Plane) (int, int, bool) {
 	}
 	seen := map[[3]float64]struct{}{}
 	for _, ce := range f.loops[0].coedges {
-		if _, ok := ce.edge.curve.(Line3); !ok || ce.Start().n.Bound.Base() != 0 {
+		if _, ok := ce.edge.n.Curve.(surfacegeom.Line3); !ok || ce.Start().n.Bound.Base() != 0 {
 			return 0, 0, false
 		}
 		v := ce.Start().n.Position
@@ -395,10 +396,11 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 						proofbound.BoundedMul(v, v))
 				}
 				length := proofbound.BoundedSqrt(lengthSquared)
-				e = &Edge{curve: Line3{}, start: vertex(a), end: vertex(b), n: topo.Edge{
+				e = &Edge{start: vertex(a), end: vertex(b), n: topo.Edge{
 					Convex:      true,
 					Length:      length.Value,
 					LengthBound: length.Bound,
+					Curve:       surfacegeom.Line3{},
 				}}
 				lines[key] = e
 			}
@@ -456,12 +458,13 @@ func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces
 		center := r3.NewVec(p.center[0], p.box[1][side], p.center[1])
 		seam := vertex(center.Add(r3.NewVec(p.radius, 0, 0)))
 		circumference := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), pi), r)
-		edge := &Edge{curve: Circle3{Center: center, Axis: r3.NewVec(0, -1, 0),
-			Radius: units.Millimeters(p.radius)}, start: seam, end: seam, n: topo.Edge{
+		edge := &Edge{start: seam, end: seam, n: topo.Edge{
 			Convex:       false,
 			Length:       circumference.Value,
 			LengthBound:  circumference.Bound,
 			CurveBounded: true,
+			Curve: surfacegeom.Circle3{Center: center, Axis: r3.NewVec(0, -1, 0),
+				Radius: units.Millimeters(p.radius)},
 		}}
 		face.loops = append(face.loops, &Loop{coedges: []coedge{{edge: edge, forward: side == 1}}})
 		bore.loops = append(bore.loops, &Loop{coedges: []coedge{{edge: edge, forward: side == 0}}, n: topo.Loop{Outer: true}})

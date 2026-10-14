@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -149,7 +150,7 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 
 		var arc *Edge
 		for _, e := range chamfered.Edges() {
-			if c, ok := e.curve.(Arc3); ok && c.Radius.Mag() == capRadius {
+			if c, ok := e.n.Curve.(surfacegeom.Arc3); ok && c.Radius.Mag() == capRadius {
 				arc = e
 			}
 		}

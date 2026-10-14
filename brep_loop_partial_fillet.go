@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
@@ -79,11 +80,12 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		if axis.Dot(tangent) < 0 {
 			tangent = tangent.Scale(-1)
 		}
-		return &Edge{curve: Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: tangent,
-			Radius: units.Millimeters(r)}, start: capV, end: sideV, n: topo.Edge{
+		return &Edge{start: capV, end: sideV, n: topo.Edge{
 			Convex:      convex,
 			Length:      meridianLen,
 			LengthBound: meridianBound,
+			Curve: surfacegeom.Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: tangent,
+				Radius: units.Millimeters(r)},
 		}}
 	}
 	for k := range n {
@@ -158,9 +160,10 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		semi := math.Hypot(bu, bv)
 		major := pl.Dir(bu/semi, bv/semi, 0)
 		axis, _ := major.Cross(up).Normalize()
-		lead[k] = &Edge{curve: Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis,
-			Major: major, SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
-			start: capV, end: sideV, n: topo.Edge{Convex: convex, Length: held, LengthBound: bound}}
+		lead[k] = &Edge{
+			start: capV, end: sideV, n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis,
+				Major: major, SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
+			}}
 		trail[k] = lead[k]
 	}
 	var patches []*Face

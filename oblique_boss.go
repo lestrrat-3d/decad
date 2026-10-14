@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -81,7 +82,7 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 	sourceBound := 0.0
 	capCount := 0
 	for _, edge := range boss.Edges() {
-		if _, ok := edge.curve.(Circle3); !ok {
+		if _, ok := edge.n.Curve.(surfacegeom.Circle3); !ok {
 			continue
 		}
 		if !edge.n.CurveBounded {

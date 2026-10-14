@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -52,7 +53,7 @@ func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edge
 	if len(edges) != 1 || reachDelta != 0 || pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 {
 		return nil, false, nil
 	}
-	if _, ok := edges[0].curve.(Line3); !ok || edges[0].start == nil || edges[0].end == nil {
+	if _, ok := edges[0].n.Curve.(surfacegeom.Line3); !ok || edges[0].start == nil || edges[0].end == nil {
 		return nil, false, nil
 	}
 	if len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) < 3 ||

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -236,13 +237,13 @@ func newRevolveJunction(rp revolvePayload, basis revolvemesh.RevolveBasis, z, rh
 func matchRevolveJunction(rp revolvePayload, junctions [][]revolveJunction, loops []cornerLoop, e *Edge) (int, int, bool, error) {
 	var center, axis r3.Vec
 	var radius units.Value
-	switch c := e.curve.(type) {
-	case Circle3:
+	switch c := e.n.Curve.(type) {
+	case surfacegeom.Circle3:
 		if !rp.full {
 			return 0, 0, false, nil
 		}
 		center, axis, radius = c.Center, c.Axis, c.Radius
-	case Arc3:
+	case surfacegeom.Arc3:
 		if rp.full {
 			return 0, 0, false, nil
 		}

@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -42,7 +43,7 @@ func loftVertex(p r3.Vec, delta float64) *Vertex {
 // with the given walked-boundary convexity.
 func loftEdge(vertexObjs []*Vertex, positions []r3.Vec, a, b int, convex bool, delta float64) *Edge {
 	held, bound := loftmesh.EdgeLength(positions[a], positions[b], delta)
-	return &Edge{curve: Line3{}, start: vertexObjs[a], end: vertexObjs[b], n: topo.Edge{Convex: convex, Length: held, LengthBound: bound}}
+	return &Edge{start: vertexObjs[a], end: vertexObjs[b], n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Line3{}}}
 }
 
 // planeFromTriangle builds a face's Plane surface directly from one of its

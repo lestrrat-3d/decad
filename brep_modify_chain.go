@@ -13,13 +13,14 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 )
 
 // selectedStraightEdgesShareVertex gates the restatement retry to straight
 // edge selections whose topology has a common corner.
 func selectedStraightEdgesShareVertex(edges []*Edge) bool {
 	for i, edge := range edges {
-		if _, ok := edge.curve.(Line3); !ok {
+		if _, ok := edge.n.Curve.(surfacegeom.Line3); !ok {
 			return false
 		}
 		for _, earlier := range edges[:i] {

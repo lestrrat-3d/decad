@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -138,12 +139,12 @@ func capBuiltApexPatch(apex *Vertex, capEdge *Edge, capEnds []*Vertex) capPatchB
 func capDirectrixFromEdge(e *Edge, ends ...*Vertex) capDirectrixRef {
 	var out capDirectrixRef
 	var radius units.Value
-	switch c := e.curve.(type) {
-	case Arc3:
+	switch c := e.n.Curve.(type) {
+	case surfacegeom.Arc3:
 		out.Center, out.Axis, radius = c.Center, c.Axis, c.Radius
-	case Circle3:
+	case surfacegeom.Circle3:
 		out.Center, out.Axis, radius = c.Center, c.Axis, c.Radius
-	case Line3:
+	case surfacegeom.Line3:
 		out.Straight = true
 	default:
 		return capDirectrixRef{}

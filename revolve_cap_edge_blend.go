@@ -10,6 +10,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -94,7 +95,7 @@ func revolveRimSourceOf(rp revolvePayload, edges []*Edge, setback, setbackDelta 
 		return revolvemesh.RimSource{}, false
 	}
 	e := edges[0]
-	if _, ok := e.curve.(Line3); !ok || e.start == nil || e.end == nil {
+	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok || e.start == nil || e.end == nil {
 		return revolvemesh.RimSource{}, false
 	}
 	a, b := e.start.n.Position, e.end.n.Position

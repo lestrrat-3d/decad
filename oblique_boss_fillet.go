@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -108,7 +109,7 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 	if len(edges) != 1 || edges[0].start != edges[0].end {
 		return nil, fmt.Errorf("%w: an oblique boss fillet needs its one complete junction edge", ErrUnsupported)
 	}
-	if _, ok := edges[0].curve.(FacetedCurve); !ok {
+	if _, ok := edges[0].n.Curve.(surfacegeom.FacetedCurve); !ok {
 		return nil, fmt.Errorf("%w: the selected oblique junction has no faceted edge witness", ErrUnsupported)
 	}
 	plateTop, topOK := obliqueBossFaceGroup(rec.plate, roleCapEnd)

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
@@ -832,7 +833,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 			prev, w := walks[i-1], walks[i]
 			convex = prev.TanOutU*w.TanInV-prev.TanOutV*w.TanInU > 0
 		}
-		vertical[i] = &Edge{curve: Line3{}, start: bottomV[i], end: topV[i], n: topo.Edge{Convex: convex, Length: pp.z1 - pp.z0, LengthBound: height.Bound}}
+		vertical[i] = &Edge{start: bottomV[i], end: topV[i], n: topo.Edge{Convex: convex, Length: pp.z1 - pp.z0, LengthBound: height.Bound, Curve: surfacegeom.Line3{}}}
 	}
 
 	faces := make([]*Face, 0, n)
