@@ -892,17 +892,17 @@ func (r *motionRun) settleConstant(i, k int) error {
 		return err
 	}
 	switch {
-	case res.verdict == pairDisjoint:
+	case res.verdict == reportvocab.PairDisjoint:
 		pair.once = &constantOutcome{res: res}
 		return nil
-	case res.verdict == pairTouching || boxProven:
+	case res.verdict == reportvocab.PairTouching || boxProven:
 		return nil
 	}
 	volume, outcome, err := measuredInterference(r.ctx, mover, partner, res, pairMeshes{})
 	if err != nil {
 		return err
 	}
-	if outcome != interferenceMeasured {
+	if outcome != reportvocab.InterferenceMeasured {
 		return nil
 	}
 	publishedInternal, ok := motionbound.TransferredOverlap(measurementToInternal(volume), true, 0)
@@ -1022,7 +1022,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 	if err := r.ctx.Err(); err != nil {
 		return err
 	}
-	if res.verdict == pairDisjoint || res.verdict == pairTouching {
+	if res.verdict == reportvocab.PairDisjoint || res.verdict == reportvocab.PairTouching {
 		r.recordGap(mp, i, k, res, a.eta, etaB)
 		return nil
 	}
@@ -1038,7 +1038,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 	if err != nil {
 		return err
 	}
-	if outcome != interferenceMeasured && res.verdict != pairOverlapping {
+	if outcome != reportvocab.InterferenceMeasured && res.verdict != reportvocab.PairOverlapping {
 		if declared {
 			return nil
 		}
@@ -1047,13 +1047,13 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		r.poseDiag(mp, mp.stamp(diag))
 		return nil
 	}
-	publishedInternal, ok := motionbound.TransferredOverlap(measurementToInternal(volume), outcome == interferenceMeasured, allowance)
+	publishedInternal, ok := motionbound.TransferredOverlap(measurementToInternal(volume), outcome == reportvocab.InterferenceMeasured, allowance)
 	if !ok && declared {
 		return nil
 	}
 	if !ok {
 		msg := "the pair is proven to overlap at the evaluated float pose, but the overlap volume is unmeasured, so it cannot be carried to the ideal pose and no collision is proven at this parameter"
-		if outcome == interferenceMeasured {
+		if outcome == reportvocab.InterferenceMeasured {
 			msg = fmt.Sprintf("the pair is proven to overlap at the evaluated float pose, but the measured volume %s does not clear the %v mm^3 the pose's deviation from the ideal motion can sweep, so no collision is proven at this parameter", volume.Value, allowance)
 		}
 		r.poseDiag(mp, mp.stamp(pairDiagNone(mover, partner, DiagUndecidedInterference, msg)))
@@ -1198,7 +1198,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, et
 // and the gap feeds neither an interval certificate nor the whole-path
 // reading.
 func (r *motionRun) recordDeclaredGap(mp *motionPose, mover, partner *Body, res pairResult, etaA, etaB float64) {
-	if res.verdict != pairDisjoint || proofbound.IsNonFinite(etaA) || proofbound.IsNonFinite(etaB) {
+	if res.verdict != reportvocab.PairDisjoint || proofbound.IsNonFinite(etaA) || proofbound.IsNonFinite(etaB) {
 		return
 	}
 	lo, hi, exact := clearanceDeltaWiden(res.lo, res.hi, res.exact, etaA, etaB)

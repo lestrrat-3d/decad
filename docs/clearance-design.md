@@ -92,7 +92,7 @@ admissible only when every crossing is certified transversal and interior to
 its face; a cast that grazes an edge, a vertex or a tangency retries the next
 direction on a fixed ladder — deterministic, never random, so a replay
 resolves identically (evaluator §8). Interference PR 1 MUST return any witness
-strictly inside as proven nesting — `pairOverlapping`, never the same state as
+strictly inside as proven nesting — `reportvocab.PairOverlapping`, never the same state as
 a failed cast; all
 witnesses mutually outside, with `g > 0`, is the disjointness proof. Preserve
 inside / outside / undecided for the shipped single-lump analytic payloads, per
@@ -827,9 +827,9 @@ the caller is owed unasked; no rung needs a gap the caller never asked for.
 - **Interference PR 1 makes overlap and uncertainty distinct.** `lo` that
   cannot clear zero with no certified contact, a budget-exhausted refinement
   whose `lo ≤ 0`, and an
-  uncertified cast are `pairUndecided`. An admitted boundary crossing, an
+  uncertified cast are `reportvocab.PairUndecided`. An admitted boundary crossing, an
   aligned-normal contact whose material sides prove shared interior, or a
-  nesting witness is `pairOverlapping`. Neither emits a `Clearance` row. The
+  nesting witness is `reportvocab.PairOverlapping`. Neither emits a `Clearance` row. The
   overlap relation proceeds to the containment-volume or read-only intersection
   path of `docs/interference-design.md`; if neither bounds the complete overlap
   volume, the pair makes the report `Suspect` without losing the relation the
@@ -916,7 +916,7 @@ carrier model, §2's `addStitchFaces`, once every vertex of the body carries a
 proven bound of exactly zero — the identical gate (`stitchweld.ZeroBound`)
 that lets its mesh publish a zero occupied-volume proof
 (`docs/tessellation-design.md` §2's `stitchPayload` row), so a pair the
-kernel proves `pairOverlapping` for such a body now reaches a real
+kernel proves `reportvocab.PairOverlapping` for such a body now reaches a real
 `Interference` row through the ordinary mesh boolean: `requireVolumeProvingPayload`
 (`boolean.go`) no longer refuses the operand once its own carrier model
 exists. A placed stitched solid, or one closed by the CURVE weld certificate

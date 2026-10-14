@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -625,7 +626,7 @@ func TestPairGateDiameterReadsStations(t *testing.T) {
 		a, b := build(t, 6, 8)
 		res, err := clearancePair(t.Context(), a, b, false)
 		require.NoError(t, err)
-		require.Equal(t, pairDisjoint, res.verdict)
+		require.Equal(t, reportvocab.PairDisjoint, res.verdict)
 		requireGateDiameterWithin(t, res.diam, lower, upper)
 
 		d, err := interferencePairDiameter(t.Context(), a, b)

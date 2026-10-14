@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -65,7 +66,7 @@ func TestMotionPoseDeviationReachesThePoseGap(t *testing.T) {
 		require.False(t, fast, `a rotated arm is not an axis box`)
 		res, err := clearancePair(t.Context(), transient, wall, boxesDisjoint(transient.bounds, wall.bounds))
 		require.NoError(t, err)
-		require.Equal(t, pairDisjoint, res.verdict)
+		require.Equal(t, reportvocab.PairDisjoint, res.verdict)
 
 		eta, _ := motionbound.PoseDeviation(composed, placement, run.spec.Frame.At(pose.param), run.movers[0].r0)
 		require.Greater(t, eta, 0.0)
@@ -317,7 +318,7 @@ func farCornerFixture(t *testing.T, pivot, depth float64) (*Document, *Body, *Bo
 // farCornerOverlap measures, through the production pieces, what the 45°
 // pose of farCornerFixture proves: the read-only overlap volume at the float
 // pose and the swept-volume allowance that pose's η charges.
-func farCornerOverlap(t *testing.T, doc *Document, arm, block *Body, swing Revolute) (Measurement, interferenceOutcome, float64) {
+func farCornerOverlap(t *testing.T, doc *Document, arm, block *Body, swing Revolute) (Measurement, reportvocab.InterferenceOutcome, float64) {
 	t.Helper()
 	run := motionRunFor(t, doc, []*Body{arm}, swing)
 	pose, err := swing.PoseAt(swing.To)
@@ -349,7 +350,7 @@ func TestMotionCollisionTransferWidensTheBound(t *testing.T) {
 	t.Parallel()
 	doc, arm, block, swing := farCornerFixture(t, 1e9, 0.02)
 	volume, outcome, allowance := farCornerOverlap(t, doc, arm, block, swing)
-	require.Equal(t, interferenceMeasured, outcome)
+	require.Equal(t, reportvocab.InterferenceMeasured, outcome)
 	require.Greater(t, allowance, 0.0)
 	require.Greater(t, volume.Value.Base()-volume.Bound.Base(), allowance, `the fixture's overlap clears the allowance`)
 
@@ -404,7 +405,7 @@ func TestMotionOverlapThatDoesNotTransferIsUndecided(t *testing.T) {
 		t.Parallel()
 		doc, arm, block, swing := farCornerFixture(t, 2e9, 0.008)
 		volume, outcome, allowance := farCornerOverlap(t, doc, arm, block, swing)
-		require.Equal(t, interferenceMeasured, outcome)
+		require.Equal(t, reportvocab.InterferenceMeasured, outcome)
 		lower := volume.Value.Base() - volume.Bound.Base()
 		require.Greater(t, lower, 0.0, `the float pose's overlap is proven positive`)
 		require.Less(t, lower, allowance, `but its lower end does not clear the allowance`)

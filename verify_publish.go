@@ -118,15 +118,15 @@ type validityEvidence struct {
 	Clean bool
 	Built bool
 	Solid bool
-	Sheet sheetAuditOutcome
+	Sheet reportvocab.SheetAuditOutcome
 }
 
 // publishValidityResult adapts the body kind and sheet audit to the shared verdict.
 func publishValidityResult(body *Body, ev validityEvidence) ValidityResult {
 	return validityResultFromInternal(reportvocab.PublishValidity[*Body, JointCell](body, reportvocab.ValidityEvidence{
 		Sheet:         ev.Kind == BodySheet,
-		SheetProven:   ev.Sheet == sheetAuditProven,
-		SheetViolated: ev.Sheet == sheetAuditViolated,
+		SheetProven:   ev.Sheet == reportvocab.SheetAuditProven,
+		SheetViolated: ev.Sheet == reportvocab.SheetAuditViolated,
 		Clean:         ev.Clean,
 		Built:         ev.Built,
 		Solid:         ev.Solid,

@@ -2,6 +2,7 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -39,5 +40,5 @@ func clearanceAxisBoxes(a, b *Body) (pairResult, bool) {
 	if !ok {
 		return pairResult{}, false
 	}
-	return pairResult{verdict: pairDisjoint, lo: gap.Lo, hi: gap.Hi, exact: gap.Exact, diam: gap.Diameter}, true
+	return pairResult{verdict: reportvocab.PairDisjoint, lo: gap.Lo, hi: gap.Hi, exact: gap.Exact, diam: gap.Diameter}, true
 }

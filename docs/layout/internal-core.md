@@ -24,7 +24,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/selectorquery/` | Selector matching, query rendering, residual counts, and face-role indexes. See API §9. |
 | `internal/surfacegeom/` | Private face and edge geometry carriers. Public surface and curve variants live in `topology.go`. See API §6.1, surface §6. |
 | `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |
-| `internal/reportvocab/` | Contact and sweep enums; Verify reports, motion verification records and survey diagnostics. |
+| `internal/reportvocab/` | Contact and sweep enums; Verify reports, motion verification records, survey diagnostics, and pair, interference and sheet outcomes. |
 | `internal/extent/` | Unit bounds and stop levels for extents. See API §8.1, evaluator §5/§6. |
 | `internal/patchchain/` | `Body.Patch` chain partition, plane proof, orientation, segment record and area bounds. See surface §5.2. |
 | `internal/sectionaudit/` | Rewrite audit order, signed area, cutback, crossing, contact and nesting checks. See modify §5. |

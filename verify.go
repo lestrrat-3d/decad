@@ -305,31 +305,31 @@ func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
 // by box separation or the sheet decision procedure (sheetSolidPair,
 // clearance.go), and takes DiagUnsupportedPairSheet or DiagSheetSolidCrossing
 // instead (docs/surface-design.md §9.3).
-func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutcome) Diagnostic {
+func undecidedPairDiag(a, b *Body, verdict reportvocab.PairVerdict, outcome reportvocab.InterferenceOutcome) Diagnostic {
 	switch {
-	case outcome == interferenceUnsupportedPayloadFirst:
+	case outcome == reportvocab.InterferenceUnsupportedPayloadFirst:
 		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
 			"the first operand cannot enter the read-only intersection at the chord tolerance this check derives from the pair's own size, which no option sets: its tessellation refused that tolerance, or its held facets where the pair meets are coarser than it; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach")
-	case outcome == interferenceUnsupportedPayloadSecond:
+	case outcome == reportvocab.InterferenceUnsupportedPayloadSecond:
 		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
 			"the second operand cannot enter the read-only intersection at the chord tolerance this check derives from the pair's own size, which no option sets: its tessellation refused that tolerance, or its held facets where the pair meets are coarser than it; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach")
-	case outcome == interferenceUnsupportedVolumeProofFirst:
+	case outcome == reportvocab.InterferenceUnsupportedVolumeProofFirst:
 		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
 			"the first operand tessellates, but its mesh carries no proof of the volume it and the body it stands for differ by, so no read-only intersection may compose it; keep this body out of overlapping pairs, or wait for its occupied-volume proof")
-	case outcome == interferenceUnsupportedVolumeProofSecond:
+	case outcome == reportvocab.InterferenceUnsupportedVolumeProofSecond:
 		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
 			"the second operand tessellates, but its mesh carries no proof of the volume it and the body it stands for differ by, so no read-only intersection may compose it; keep this body out of overlapping pairs, or wait for its occupied-volume proof")
-	case outcome == interferenceUnsupportedContact:
+	case outcome == reportvocab.InterferenceUnsupportedContact:
 		if sharesFacePlane(a, b) {
 			return pairDiagNone(a, b, DiagUnsupportedPairContact,
 				"the pair reaches a contact or near-contact that the read-only intersection cannot classify, and the operands share a face plane; offset the operands so no face plane is shared, or adjust the geometry to create clear separation or deeper overlap, or wait for contact support")
 		}
 		return pairDiagNone(a, b, DiagUnsupportedPairContact,
 			"the pair reaches a contact or near-contact that the read-only intersection cannot classify; adjust the geometry to create clear separation or deeper overlap, or wait for contact support")
-	case outcome == interferenceUnsupportedPipeline:
+	case outcome == reportvocab.InterferenceUnsupportedPipeline:
 		return pairDiagNone(a, b, DiagUnsupportedPairPipeline,
 			"both operands tessellate, but later read-only intersection geometry exceeds the boolean pipeline's reach; simplify the boolean geometry or wait for pipeline support")
-	case outcome == interferenceUndecided && verdict == pairOverlapping:
+	case outcome == reportvocab.InterferenceUndecided && verdict == reportvocab.PairOverlapping:
 		return pairDiagNone(a, b, DiagUndecidedInterference,
 			"the pair is proven to overlap but the overlap volume is unmeasured")
 	default:
@@ -651,20 +651,6 @@ func auditBoundary(b *Body) bool {
 	return true
 }
 
-// sheetAuditOutcome is auditSheetBoundary's three-way verdict.
-type sheetAuditOutcome int
-
-const (
-	// sheetAuditProven — every structural leg holds and non-self-intersection
-	// is admitted by construction.
-	sheetAuditProven sheetAuditOutcome = iota
-	// sheetAuditViolated — a structural leg is proven to fail.
-	sheetAuditViolated
-	// sheetAuditUndecided — every structural leg holds, but this payload does
-	// not admit non-self-intersection by construction.
-	sheetAuditUndecided
-)
-
 // auditSheetBoundary decides Table V's sheet validity audit
 // (docs/surface-design.md §9.1): three structural legs read off the recorded
 // topology, plus non-self-intersection admitted BY CONSTRUCTION alone. It is
@@ -695,26 +681,26 @@ const (
 // Leg 4 — non-self-intersection, decided by payloadProvesSimple on the
 // body's own payload. See that function's doc comment for the admission rule,
 // one payload at a time.
-func auditSheetBoundary(ctx context.Context, b *Body) sheetAuditOutcome {
+func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutcome {
 	faces := b.Faces()
 	if len(faces) == 0 {
-		return sheetAuditViolated
+		return reportvocab.SheetAuditViolated
 	}
 	for _, f := range faces {
 		loops := f.Loops()
 		if len(loops) == 0 {
-			return sheetAuditViolated
+			return reportvocab.SheetAuditViolated
 		}
 		for _, l := range loops {
 			if len(l.Edges()) == 0 {
-				return sheetAuditViolated
+				return reportvocab.SheetAuditViolated
 			}
 		}
 	}
 
 	for _, e := range b.Edges() {
 		if len(e.faces) == 0 || len(e.faces) > 2 {
-			return sheetAuditViolated
+			return reportvocab.SheetAuditViolated
 		}
 	}
 
@@ -736,17 +722,17 @@ func auditSheetBoundary(ctx context.Context, b *Body) sheetAuditOutcome {
 	}
 	for _, e := range b.Edges() {
 		if uses[e] != len(e.faces) {
-			return sheetAuditViolated
+			return reportvocab.SheetAuditViolated
 		}
 		if len(e.faces) == 2 && (forward[e] != 1 || backward[e] != 1) {
-			return sheetAuditViolated
+			return reportvocab.SheetAuditViolated
 		}
 	}
 
 	if payloadProvesSimple(ctx, b.payload) {
-		return sheetAuditProven
+		return reportvocab.SheetAuditProven
 	}
-	return sheetAuditUndecided
+	return reportvocab.SheetAuditUndecided
 }
 
 // payloadProvesSimple decides, in the one place both callers share, whether

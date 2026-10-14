@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/clearance/facepair"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -148,7 +149,7 @@ func TestEnumeratePrunedRodsMatchTheFullWalk(t *testing.T) {
 
 	res, err := clearancePair(t.Context(), a, b, false)
 	require.NoError(t, err)
-	require.Equal(t, pairDisjoint, res.verdict)
+	require.Equal(t, reportvocab.PairDisjoint, res.verdict)
 	require.LessOrEqual(t, res.lo, 6.0)
 	require.GreaterOrEqual(t, res.hi, 6.0)
 }

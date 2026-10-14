@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/units"
 )
@@ -97,8 +98,8 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		if err != nil {
 			return verifyPairOutcome{}, err
 		}
-		switch sres.verdict {
-		case sheetSolidCrossing:
+		switch sres.Verdict {
+		case reportvocab.SheetSolidCrossing:
 			out.diagnostics = append(out.diagnostics, Diagnostic{
 				Code:    DiagSheetSolidCrossing,
 				Status:  Interfering,
@@ -106,12 +107,12 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 				Reading: ReadingNone,
 				Message: "the sheet crosses the solid's boundary; no Interference row is emitted because a sheet encloses no region and there is no overlap volume to report",
 			})
-		case sheetSolidContained, sheetSolidOutside:
+		case reportvocab.SheetSolidContained, reportvocab.SheetSolidOutside:
 			if cfg.Clearances {
-				pr := pairResult{lo: sres.lo, hi: sres.hi, exact: sres.exact, diam: sres.diam}
+				pr := pairResult{lo: sres.Lo, hi: sres.Hi, exact: sres.Exact, diam: sres.Diam}
 				out.appendClearance(a, b, pr, cfg.Rel)
 			}
-		case sheetSolidUndecided:
+		case reportvocab.SheetSolidUndecided:
 			if boxProven {
 				// Box separation already proves the sheet lies outside the
 				// solid; only the requested gap itself is unmeasured, the
@@ -138,7 +139,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 			return verifyPairOutcome{}, err
 		}
 	}
-	if res.verdict == pairUndecided {
+	if res.verdict == reportvocab.PairUndecided {
 		// The exact planar relation (clearance_planar.go) answers what the
 		// analytic kernel left open — a pair an operand has no carrier model
 		// in, or one its enumeration could not settle — and only ever adds a
@@ -160,7 +161,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 	// (DiagUndecidedClearance) but never sends a proven-disjoint pair to
 	// intersection.
 	if boxProven {
-		if res.verdict == pairDisjoint || res.verdict == pairTouching {
+		if res.verdict == reportvocab.PairDisjoint || res.verdict == reportvocab.PairTouching {
 			out.appendClearance(a, b, res, cfg.Rel)
 			return out, nil
 		}
@@ -171,7 +172,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		return out, nil
 	}
 
-	if res.verdict == pairDisjoint || res.verdict == pairTouching {
+	if res.verdict == reportvocab.PairDisjoint || res.verdict == reportvocab.PairTouching {
 		if cfg.Clearances {
 			out.appendClearance(a, b, res, cfg.Rel)
 		}
@@ -182,7 +183,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 	if err != nil {
 		return verifyPairOutcome{}, err
 	}
-	if outcome != interferenceMeasured {
+	if outcome != reportvocab.InterferenceMeasured {
 		out.diagnostics = append(out.diagnostics, undecidedPairDiag(a, b, res.verdict, outcome))
 		out.undecided = true
 		return out, nil
