@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -21,7 +22,7 @@ type crossCylinderBoreRecord struct {
 
 func crossCylinderCircleSource(body *Body, u, v r3.Vec) (prismPayload, circleSeg, bool) {
 	pp, ok := body.payload.(prismPayload)
-	if !ok || !body.n.Solid || body.kind != BodySolid || pp.SurfaceResult ||
+	if !ok || !body.n.Solid || body.n.Kind != topo.BodySolid || pp.SurfaceResult ||
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		pp.Xform != r3.Identity() || pp.Frame.Origin() != (r3.Vec{}) ||
 		pp.Frame.U() != u || pp.Frame.V() != v ||

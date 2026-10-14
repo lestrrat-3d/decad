@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -92,15 +93,15 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 	nearCap.n.Area, nearCap.n.AreaBound = nearArea.Value, nearArea.Bound
 	farCap.n.Area, farCap.n.AreaBound = farArea.Value, farArea.Bound
 
-	body.volume = Measurement{
+	body.n.Volume = measurement.Measurement{
 		Value:     units.CubicMillimeters(volume.Value),
-		Exactness: exactnessOf(volume.Bound),
+		Exactness: measurement.ExactnessOf(volume.Bound),
 		Bound:     units.CubicMillimeters(volume.Bound),
 	}
 	total := proofbound.BoundedAdd(proofbound.BoundedAdd(nearArea, farArea), patchArea)
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(total.Value),
-		Exactness: exactnessOf(total.Bound),
+		Exactness: measurement.ExactnessOf(total.Bound),
 		Bound:     units.SquareMillimeters(total.Bound),
 	}
 
@@ -114,12 +115,12 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 	cz := proofbound.BoundedQuotient(mz.Value, mz.Bound, volume.Value, volume.Bound)
 	centroid := pl.Point(cu.Value, cv.Value, cz.Value)
 	centroidBound := math.Min(pl.PointBound(cu, cv, cz), capband.CentroidGeometryBound(centroid, boxToInternal(bounds)))
-	body.centroid = VecMeasurement{
+	body.n.Centroid = measurement.VecMeasurement{
 		Value:     centroid,
-		Exactness: exactnessOf(centroidBound),
+		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 	if err := chargePrismMap(body, dp.frame, dp.xform); err != nil {
 		return err
 	}

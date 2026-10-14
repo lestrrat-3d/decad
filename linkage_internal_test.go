@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 
@@ -364,7 +365,7 @@ func TestLinkagePairGapCarriesBothDeviations(t *testing.T) {
 	tb, etaB := placed(fore, 1)
 	require.Greater(t, etaA, 0.0)
 	require.Greater(t, etaB, 0.0)
-	res, err := clearancePair(t.Context(), ta, tb, boxesDisjoint(ta.bounds, tb.bounds))
+	res, err := clearancePair(t.Context(), ta, tb, boxesDisjoint(boxFromInternal(ta.n.Bounds), boxFromInternal(tb.n.Bounds)))
 	require.NoError(t, err)
 	require.Equal(t, reportvocab.PairDisjoint, res.verdict)
 	require.LessOrEqual(t, got.lo, res.lo-etaA-etaB)
@@ -405,7 +406,7 @@ func TestVerifyLinkageKeepsTheNextProducerIdentity(t *testing.T) {
 func TestVerifyLinkageRefusesABodyItDidNotBuild(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	foreignBuilt := &Body{doc: doc, kind: BodySolid}
+	foreignBuilt := &Body{doc: doc, n: topo.Body{Kind: topo.BodySolid}}
 	doc.commit(foreignBuilt)
 	l := NewLinkage()
 	slide, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*Body{foreignBuilt})
@@ -520,7 +521,7 @@ func TestLinkageSecondDerivativeBound(t *testing.T) {
 			for _, q3 := range []float64{0.1, 0.7} {
 				q := [4]float64{q1, q2, q3, -3}
 				for k := range spec.joints {
-					box := spec.joints[k].link.bodies[0].bounds
+					box := spec.joints[k].link.bodies[0].n.Bounds
 					for _, c := range []r3.Vec{box.Max, box.Min, r3.NewVec(box.Max.X, box.Min.Y, box.Max.Z)} {
 						for m := 0; m <= k; m++ {
 							for n := m; n <= k; n++ {
@@ -573,7 +574,7 @@ func TestLinkageCornerVelocity(t *testing.T) {
 	dr := run.drive.(*linkageDriver)
 	s := big.NewRat(1, 3)
 	params := []motionbound.MotionParam{jointParam(dr.spec.joints[0], s), jointParam(dr.spec.joints[1], s)}
-	lo, hi, ok := motionbound.BoxCornersExact(boxToInternal(fore.bounds), new(big.Rat))
+	lo, hi, ok := motionbound.BoxCornersExact(fore.n.Bounds, new(big.Rat))
 	require.True(t, ok)
 	reading := readCorners(dr.spec, dr.frames, params, dr.bounds[1], 0, lo, hi)
 	c30, s30 := math.Cos(math.Pi/6), math.Sin(math.Pi/6)
@@ -863,11 +864,11 @@ func TestLinkageHullPointsInsideRestBox(t *testing.T) {
 	require.NoError(t, err)
 	for name, body := range map[string]*Body{
 		"a box": block, "a box turned about Z and lifted": turned, "a box turned about (1, 1, 1)": tilted,
-		"a displaced union": {payload: union, bounds: unionBox},
+		"a displaced union": {payload: union, n: topo.Body{Bounds: boxToInternal(unionBox)}},
 	} {
 		points, pad, _, ok := prismHullPointsForTest(body)
 		require.True(t, ok, name)
-		lo, hi, ok := motionbound.BoxCornersExact(boxToInternal(body.bounds), new(big.Rat))
+		lo, hi, ok := motionbound.BoxCornersExact(body.n.Bounds, new(big.Rat))
 		require.True(t, ok, name)
 		for n, p := range points {
 			for i := range 3 {
@@ -875,7 +876,7 @@ func TestLinkageHullPointsInsideRestBox(t *testing.T) {
 			}
 		}
 		if name == "a displaced union" {
-			bound := proofarith.FloatRat(body.bounds.Bound.Base())
+			bound := proofarith.FloatRat(body.n.Bounds.Bound.Base())
 			require.Positive(t, pad.Cmp(bound), `the pad exceeds the box's Bound, so the containment is not the pad's doing`)
 		}
 	}

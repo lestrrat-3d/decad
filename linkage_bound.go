@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -107,7 +108,7 @@ func (s reachSource) RestBox(i int) (motionbound.RatVec, motionbound.RatVec, boo
 	bodies := s.spec.joints[i].link.bodies
 	boxes := make([]measurement.Box, len(bodies))
 	for n, body := range bodies {
-		boxes[n] = boxToInternal(body.bounds)
+		boxes[n] = body.n.Bounds
 	}
 	return linkagebound.RestBox(boxes)
 }
@@ -223,7 +224,7 @@ func linkStandings(spec *linkageSpec, bounds []linkBound) []linkStanding {
 
 // layerExtent reads a body's inflated rest box and delegates its exact a-extents.
 func layerExtent(b *Body, a motionbound.RatVec) (lo, hi *big.Rat, ok bool) {
-	boxLo, boxHi, ok := motionbound.BoxCornersExact(boxToInternal(b.bounds), new(big.Rat))
+	boxLo, boxHi, ok := motionbound.BoxCornersExact(b.n.Bounds, new(big.Rat))
 	if !ok {
 		return nil, nil, false
 	}
@@ -275,7 +276,7 @@ func bodySymmetryAxis(b *Body) (point, dir motionbound.RatVec, ok bool) {
 		return motionbound.RatVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
 	}
 	if rp, isRevolve := b.payload.(revolvePayload); isRevolve {
-		if !b.n.Solid || b.kind != BodySolid || rp.surfaceResult || !rp.full || rp.sectionDelta != 0 ||
+		if !b.n.Solid || b.n.Kind != topo.BodySolid || rp.surfaceResult || !rp.full || rp.sectionDelta != 0 ||
 			!pairbox.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) || !signedAxisTransform(rp.xform) ||
 			!proofbound.FiniteVec(rp.frame.Origin()) || !finiteMeasurementValues(rp.ax.AU, rp.ax.AV, rp.ax.DU, rp.ax.DV) ||
 			rp.ax.AUBound != 0 || rp.ax.AVBound != 0 || rp.ax.DUBound != 0 || rp.ax.DVBound != 0 ||

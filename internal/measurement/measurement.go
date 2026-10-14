@@ -74,3 +74,12 @@ type Box = struct {
 	Exactness Exactness
 	Bound     units.Value
 }
+
+// ExactnessOf reports Exact for a zero bound and Approximate otherwise: a
+// held value is exact only when its proven error bound is zero.
+func ExactnessOf(bound float64) Exactness {
+	if bound == 0 {
+		return Exact
+	}
+	return Approximate
+}

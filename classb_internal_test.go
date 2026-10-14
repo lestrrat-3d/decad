@@ -86,15 +86,15 @@ func TestClassBCutCrossDrilledBox(t *testing.T) {
 	require.Equal(t, 2, holed, `the walls at y = 0 and y = 20 each carry one hole`)
 	// 16000 − 9π·20, with a bound below 1e-9 mm³ (§9).
 	lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(-180, 1))
-	requireCoversInterval(t, result.volume, lo, hi)
-	require.Equal(t, Approximate, result.volume.Exactness)
-	require.Less(t, result.volume.Bound.Base(), 1e-9)
+	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
+	require.Equal(t, Approximate, Exactness(result.n.Volume.Exactness))
+	require.Less(t, result.n.Volume.Bound.Base(), 1e-9)
 	// Caps 2·800, x walls 2·400, y walls 2·(800 − 9π), the hole 6π·20.
 	lo, hi = piEnclosed(big.NewRat(4000, 1), big.NewRat(102, 1))
-	requireCoversInterval(t, result.area, lo, hi)
-	requireCentroidCovers(t, result.centroid, [3]*big.Rat{big.NewRat(20, 1), big.NewRat(10, 1), big.NewRat(10, 1)})
-	require.Equal(t, r3.NewVec(0, 0, 0), result.bounds.Min)
-	require.Equal(t, r3.NewVec(40, 20, 20), result.bounds.Max)
+	requireCoversInterval(t, measurementFromInternal(result.n.Area), lo, hi)
+	requireCentroidCovers(t, vecMeasurementFromInternal(result.n.Centroid), [3]*big.Rat{big.NewRat(20, 1), big.NewRat(10, 1), big.NewRat(10, 1)})
+	require.Equal(t, r3.NewVec(0, 0, 0), result.n.Bounds.Min)
+	require.Equal(t, r3.NewVec(40, 20, 20), result.n.Bounds.Max)
 	// The hole's wall runs exactly between the two walls it pierces.
 	for _, f := range bp.faces {
 		if f.planar() {
@@ -141,13 +141,13 @@ func TestClassBCutCrossSlot(t *testing.T) {
 		require.True(t, planar)
 	}
 	require.Len(t, result.Edges(), 24)
-	require.Equal(t, 14000.0, result.volume.Value.Base())
-	require.Equal(t, Exact, result.volume.Exactness)
+	require.Equal(t, 14000.0, result.n.Volume.Value.Base())
+	require.Equal(t, Exact, Exactness(result.n.Volume.Exactness))
 	// 2·800 + 2·400 + 2·(800 − 100) + the slot's 4·10·20.
-	require.Equal(t, 4600.0, result.area.Value.Base())
-	require.Equal(t, Exact, result.area.Exactness)
-	require.Equal(t, r3.NewVec(20, 10, 10), result.centroid.Value)
-	require.Equal(t, Exact, result.centroid.Exactness)
+	require.Equal(t, 4600.0, result.n.Area.Value.Base())
+	require.Equal(t, Exact, Exactness(result.n.Area.Exactness))
+	require.Equal(t, r3.NewVec(20, 10, 10), result.n.Centroid.Value)
+	require.Equal(t, Exact, Exactness(result.n.Centroid.Exactness))
 }
 
 // TestClassBRootedCutKeepsThePrismsConvexity drills a blind Ø6 hole along
@@ -182,7 +182,7 @@ func TestClassBRootedCutKeepsThePrismsConvexity(t *testing.T) {
 	requireClosedTopology(t, result)
 	// 24000 − 9π·8: the drill reaches y = 12 inside the arm x 20..40.
 	lo, hi := piEnclosed(big.NewRat(24000, 1), big.NewRat(-72, 1))
-	requireCoversInterval(t, result.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 	pierced := 0
 	for _, f := range bp.faces {
 		if f.planar() && f.sweep != (r3.Vec{}) {
@@ -248,7 +248,7 @@ func TestClassBCutExactOffsetPlane(t *testing.T) {
 			require.True(t, ok)
 			require.Equal(t, x.Frame.Origin(), bp.faces[len(bp.faces)-1].frame.Origin(), `the tool's walls share the box's origin`)
 			lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(-180, 1))
-			requireCoversInterval(t, result.volume, lo, hi)
+			requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 		})
 	}
 }

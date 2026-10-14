@@ -4,6 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 )
@@ -31,4 +32,32 @@ type Body struct {
 	// Origin is the producing feature's role. Root Body.Origin converts it to
 	// the public FeatureRef form.
 	Origin provenance.Ref
+	// The evaluator computes measurements at build time; a Body never
+	// recomputes (immutability is what makes it goroutine-safe to read).
+	// Volume is the body's enclosed volume. Root Body.Volume converts it to
+	// the public Measurement form.
+	Volume measurement.Measurement
+	// Area is the body's total surface area. Root Body.Area converts it to
+	// the public Measurement form.
+	Area measurement.Measurement
+	// Centroid is the body's volume centroid. Root Body.Centroid converts it
+	// to the public VecMeasurement form.
+	Centroid measurement.VecMeasurement
+	// Bounds is the body's axis-aligned bounding box. Root Body.Bounds
+	// converts it to the public Box form.
+	Bounds measurement.Box
+	// Kind says whether the body is a solid or a sheet. Root Body.Kind
+	// converts it to the public BodyKind form.
+	Kind BodyKind
 }
+
+// BodyKind is the root BodyKind's node form, with the same constant values:
+// whether the body's boundary encloses a material region.
+type BodyKind int
+
+const (
+	// BodySolid is root BodySolid.
+	BodySolid BodyKind = iota
+	// BodySheet is root BodySheet.
+	BodySheet
+)

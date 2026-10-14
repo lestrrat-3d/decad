@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -142,7 +143,7 @@ func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error) {
 		return nil, err
 	}
 	ref := d.nextProducerID()
-	body, err := evalBodyPatchContext(ctx, d, ref, b.Faces(), b.bounds, chains, r3.Identity())
+	body, err := evalBodyPatchContext(ctx, d, ref, b.Faces(), boxFromInternal(b.n.Bounds), chains, r3.Identity())
 	if err != nil {
 		return nil, err
 	}
@@ -521,7 +522,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	// solid: closing a sheet's last free edge leaves a CLOSED sheet reporting
 	// BodySheet with IsSolid() false, since Stitch alone makes the material
 	// claim (docs/surface-design.md §2.1).
-	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}}
 	for _, f := range allFaces {
 		f.body = body
 	}
@@ -536,9 +537,9 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	for _, f := range allFaces {
 		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
 	}
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(areaAcc.Value),
-		Exactness: exactnessOf(areaAcc.Bound),
+		Exactness: measurement.ExactnessOf(areaAcc.Bound),
 		Bound:     units.SquareMillimeters(areaAcc.Bound),
 	}
 
@@ -551,7 +552,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	if err != nil {
 		return nil, err
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err

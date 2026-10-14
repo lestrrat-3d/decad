@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
@@ -343,7 +344,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 			solid, kind = true, BodySolid
 		} else if delta > 0 {
 			// This accumulator instance only ever feeds perturbAreaSum below
-			// (open means solid stays false, so body.volume/centroid never
+			// (open means solid stays false, so body.n.Volume/Centroid never
 			// read it): Area needs no massDelta charge of its own — each
 			// face's own areaBound already covers a bounded weld
 			// (docs/surface-design.md §6.4's amendment) — so this stays the
@@ -406,7 +407,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	default:
 	}
 
-	body := &Body{doc: d, n: topo.Body{Solid: solid, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: kind}
+	body := &Body{doc: d, n: topo.Body{Solid: solid, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}}
 	for _, f := range newFaces {
 		f.body = body
 	}
@@ -424,9 +425,9 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	if acc != nil && delta > 0 {
 		areaAcc.Bound = proofbound.AbsSumUpper(areaAcc.Bound, acc.PerturbAreaSum)
 	}
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(areaAcc.Value),
-		Exactness: exactnessOf(areaAcc.Bound),
+		Exactness: measurement.ExactnessOf(areaAcc.Bound),
 		Bound:     units.SquareMillimeters(areaAcc.Bound),
 	}
 
@@ -434,20 +435,20 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	if err != nil {
 		return nil, err
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 
 	if solid {
 		switch {
 		case acc != nil:
-			body.volume = acc.volume(verts, tris)
+			body.n.Volume = measurementToInternal(acc.volume(verts, tris))
 			cen, err := acc.centroid(verts, tris)
 			if err != nil {
 				return nil, err
 			}
-			body.centroid = cen
+			body.n.Centroid = vecMeasurementToInternal(cen)
 		case haveCurved:
-			body.volume = curvedVolume
-			body.centroid = curvedCentroid
+			body.n.Volume = measurementToInternal(curvedVolume)
+			body.n.Centroid = vecMeasurementToInternal(curvedCentroid)
 		}
 	}
 
@@ -962,7 +963,7 @@ func stitchBounds(srcFaces []*Face, xform r3.Transform, delta float64) (Box, err
 	have := false
 	var lo, hi r3.Vec
 	for _, b := range bodies {
-		box := b.bounds
+		box := b.n.Bounds
 		inflate := box.Bound.Base()
 		for _, c := range stitchweld.BoxCorners(box.Min, box.Max, inflate) {
 			p := xform.Apply(c)

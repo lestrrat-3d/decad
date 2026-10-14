@@ -400,7 +400,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 		return nil, err
 	}
 
-	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}}
 	walls, err := buildChainLoftTopology(ctx, body, ref, verts, tris, vIdx, wIdx, delta)
 	if err != nil {
 		return nil, err
@@ -417,12 +417,12 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	// No cap rational is passed: this build mints no cap, so the reading is
 	// the wall sum alone rather than a sum with the two caps subtracted back
 	// off it the way a surface-result Loft's is (docs/loft-design.md §16.5).
-	body.area = mass.area()
+	body.n.Area = measurementToInternal(mass.area())
 	bounds, ok := mass.bounds()
 	if !ok {
 		return nil, fmt.Errorf(`%w: the chain loft has no vertices to bound`, ErrDegenerate)
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 	// volume and centroid stay at their zero value: finite, so the validation
 	// below passes, and neither is reachable through Body.Volume/Body.Centroid
 	// while solid is false, exactly as evalChainExtrudeContext leaves them.

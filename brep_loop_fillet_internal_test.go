@@ -99,8 +99,8 @@ func filletSelection(t *testing.T, body *Body, sel *EdgeQuery, r float64, bands 
 func requireVolumePi(t *testing.T, body *Body, v piPoly) {
 	t.Helper()
 	lo, hi := v.enclosed()
-	requireCoversInterval(t, body.volume, lo, hi)
-	require.Equal(t, Approximate, body.volume.Exactness)
+	requireCoversInterval(t, measurementFromInternal(body.n.Volume), lo, hi)
+	require.Equal(t, Approximate, Exactness(body.n.Volume.Exactness))
 }
 
 // filletPatchesOf lists the body's faces carrying a filletLoop(f,l,p) role.
@@ -245,16 +245,16 @@ func TestBrepLoopFilletCrossDrilled(t *testing.T) {
 		out, bp := filletLoopOfFace(t, s1, routeEZ, r3.NewVec(0, 0, 20), 0, 2)
 		v := pp(q(46720, 3), q(-76, 1), q(0, 1))
 		requireVolumePi(t, out, v)
-		requireCentroidPi(t, out.centroid, [3]piPoly{
+		requireCentroidPi(t, vecMeasurementFromInternal(out.n.Centroid), [3]piPoly{
 			pp(q(20*46720, 3), q(-20*76, 1), q(0, 1)),
 			pp(q(10*46720, 3), q(-10*76, 1), q(0, 1)),
 			pp(q(456496, 3), q(72, 1), q(0, 1)),
 		}, v, noOffset())
 		lo, hi := pp(q(3568, 1), q(206, 1), q(0, 1)).enclosed()
-		requireCoversInterval(t, out.area, lo, hi)
-		require.Equal(t, Exact, out.bounds.Exactness)
-		require.Equal(t, r3.Vec{}, out.bounds.Min)
-		require.Equal(t, r3.NewVec(40, 20, 20), out.bounds.Max)
+		requireCoversInterval(t, measurementFromInternal(out.n.Area), lo, hi)
+		require.Equal(t, Exact, Exactness(out.n.Bounds.Exactness))
+		require.Equal(t, r3.Vec{}, out.n.Bounds.Min)
+		require.Equal(t, r3.NewVec(40, 20, 20), out.n.Bounds.Max)
 
 		patches := requireFilletPatches(t, out, 4, 0)
 		ellipses, meridians, _ := filletEndCurves(out)
@@ -291,7 +291,7 @@ func TestBrepLoopFilletCrossDrilled(t *testing.T) {
 		out, _ := filletSelection(t, s1, edgesQuery(append(top.Loops()[0].Edges(), bottom.Loops()[0].Edges()...)), 2, 2)
 		v := pp(q(45440, 3), q(28, 1), q(0, 1))
 		requireVolumePi(t, out, v)
-		requireCentroidPi(t, out.centroid, [3]piPoly{
+		requireCentroidPi(t, vecMeasurementFromInternal(out.n.Centroid), [3]piPoly{
 			pp(q(20*45440, 3), q(20*28, 1), q(0, 1)),
 			pp(q(10*45440, 3), q(10*28, 1), q(0, 1)),
 			pp(q(10*45440, 3), q(10*28, 1), q(0, 1)),
@@ -347,7 +347,7 @@ func TestBrepLoopFilletPocket(t *testing.T) {
 		out, bp := filletLoopOfFace(t, pocket, routeEZ, r3.NewVec(0, 0, 10), 1, 1.5)
 		v := pp(q(14865, 1), q(225, 8), q(27, 16))
 		requireVolumePi(t, out, v)
-		requireCentroidPi(t, out.centroid, [3]piPoly{
+		requireCentroidPi(t, vecMeasurementFromInternal(out.n.Centroid), [3]piPoly{
 			pp(q(20*14865, 1), q(20*225, 8), q(20*27, 16)),
 			pp(q(20*14865, 1), q(20*225, 8), q(20*27, 16)),
 			pp(q(285275, 4), q(15273, 64), q(459, 32)),
@@ -443,7 +443,7 @@ func TestBrepLoopFilletRoundBoss(t *testing.T) {
 		out, bp := filletLoopOfFace(t, internalRoundBoss(t), routeEZ, r3.NewVec(0, 0, 10), 1, 1)
 		v := pp(q(16000, 1), q(1160, 3), q(-3, 1))
 		requireVolumePi(t, out, v)
-		requireCentroidPi(t, out.centroid, [3]piPoly{
+		requireCentroidPi(t, vecMeasurementFromInternal(out.n.Centroid), [3]piPoly{
 			pp(q(20*16000, 1), q(20*1160, 3), q(-60, 1)),
 			pp(q(20*16000, 1), q(20*1160, 3), q(-60, 1)),
 			pp(q(80000, 1), q(80269, 12), q(-33, 1)),
@@ -736,7 +736,7 @@ func TestVertexBlendObliqueTopEdge(t *testing.T) {
 	_, faceted := out.payload.(facetedPayload)
 	require.True(t, faceted)
 	wantVolume := 32400 - 53*(1-math.Pi/4)
-	require.LessOrEqual(t, math.Abs(out.volume.Value.Base()-wantVolume), out.volume.Bound.Base()+1e-6)
+	require.LessOrEqual(t, math.Abs(out.n.Volume.Value.Base()-wantVolume), out.n.Volume.Bound.Base()+1e-6)
 	requireClosedTopology(t, out)
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -760,7 +760,7 @@ func TestVertexBlendEdgeBesideObliqueWalls(t *testing.T) {
 	_, faceted := out.payload.(facetedPayload)
 	require.True(t, faceted)
 	wantVolume := 32400 - 44*(1-math.Pi/4) - (28.0/45.0)*(5.0/3.0-math.Pi/2)
-	require.LessOrEqual(t, math.Abs(out.volume.Value.Base()-wantVolume), out.volume.Bound.Base()+1e-6)
+	require.LessOrEqual(t, math.Abs(out.n.Volume.Value.Base()-wantVolume), out.n.Volume.Bound.Base()+1e-6)
 	requireClosedTopology(t, out)
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -781,7 +781,7 @@ func TestVertexBlendObliqueBottomEdge(t *testing.T) {
 	require.NoError(t, err)
 	requireClosedTopology(t, out)
 	wantVolume := 32400 - 53*(1-math.Pi/4)
-	require.LessOrEqual(t, math.Abs(out.volume.Value.Base()-wantVolume), out.volume.Bound.Base()+1e-6)
+	require.LessOrEqual(t, math.Abs(out.n.Volume.Value.Base()-wantVolume), out.n.Volume.Bound.Base()+1e-6)
 }
 
 func TestVertexBlendCrossFaceTwoEdgeCorner(t *testing.T) {
@@ -1118,13 +1118,13 @@ func TestBrepLoopFilletBoundFixture(t *testing.T) {
 	}
 	axial := add(scale(strip, q(9, 1)), pp(new(big.Rat).Add(new(big.Rat).Quo(a[0], q(6, 1)), new(big.Rat).Quo(a[1], q(12, 1))), q(0, 1), q(0, 1)))
 	mBody[2] = add(pp(recv[2], q(0, 1), q(0, 1)), scale(axial, q(-1, 1)))
-	requireCentroidPi(t, out.centroid, mBody, v, noOffset())
+	requireCentroidPi(t, vecMeasurementFromInternal(out.n.Centroid), mBody, v, noOffset())
 
 	move, err := r3.Translation(r3.NewVec(1e6, 1e6, 1e6))
 	require.NoError(t, err)
 	placed, err := Copy(t.Context(), out, WithCopyPlacement(move))
 	require.NoError(t, err)
-	requireCentroidPi(t, placed.centroid, mBody, v, [3]*big.Rat{q(1000000, 1), q(1000000, 1), q(1000000, 1)})
+	requireCentroidPi(t, vecMeasurementFromInternal(placed.n.Centroid), mBody, v, [3]*big.Rat{q(1000000, 1), q(1000000, 1), q(1000000, 1)})
 }
 
 // internalSemicircularBite builds a plate whose top loop has two sharp
@@ -1175,8 +1175,8 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 		removed += strip * math.Cos(phi) * math.Pi / (2 * steps)
 	}
 	wantVolume := 10*(800-25*math.Pi/2) - removed
-	require.LessOrEqual(t, math.Abs(out.volume.Value.Base()-wantVolume), out.volume.Bound.Base()+1e-5)
-	require.Less(t, out.volume.Bound.Base(), 0.01*wantVolume)
+	require.LessOrEqual(t, math.Abs(out.n.Volume.Value.Base()-wantVolume), out.n.Volume.Bound.Base()+1e-5)
+	require.Less(t, out.n.Volume.Bound.Base(), 0.01*wantVolume)
 	box, err := out.Bounds()
 	require.NoError(t, err)
 	require.LessOrEqual(t, box.Min.X-box.Bound.Base(), 0.0)
@@ -1382,8 +1382,8 @@ func TestBrepLoopFilletConsumers(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := Copy(t.Context(), out, WithCopyPlacement(move))
 	require.NoError(t, err)
-	require.Equal(t, out.volume.Value.Base(), placed.volume.Value.Base())
-	require.InDelta(t, out.area.Value.Base(), placed.area.Value.Base(), 1e-9)
+	require.Equal(t, out.n.Volume.Value.Base(), placed.n.Volume.Value.Base())
+	require.InDelta(t, out.n.Area.Value.Base(), placed.n.Area.Value.Base(), 1e-9)
 	require.ElementsMatch(t, filletRoles(out), filletRoles(placed))
 
 	lo, hi, bound, err := bp.extentAlong(r3.NewVec(1, 0, 1).Scale(1 / math.Sqrt2))
@@ -1399,13 +1399,13 @@ func TestBrepLoopFilletConsumers(t *testing.T) {
 	require.NoError(t, err)
 	// The x = 40 patch's farthest point along x after the turn is its
 	// (1, 0, 1)/√2 stationary point.
-	require.GreaterOrEqual(t, turned.bounds.Max.X+turned.bounds.Bound.Base(), want-1e-9)
+	require.GreaterOrEqual(t, turned.n.Bounds.Max.X+turned.n.Bounds.Bound.Base(), want-1e-9)
 	for _, f := range filletPatchesOf(turned) {
 		for _, e := range f.Edges() {
 			for _, v := range []*Vertex{e.Start(), e.End()} {
 				p := v.n.Position
-				require.GreaterOrEqual(t, p.X, turned.bounds.Min.X-1e-9)
-				require.LessOrEqual(t, p.X, turned.bounds.Max.X+1e-9)
+				require.GreaterOrEqual(t, p.X, turned.n.Bounds.Min.X-1e-9)
+				require.LessOrEqual(t, p.X, turned.n.Bounds.Max.X+1e-9)
 			}
 		}
 	}

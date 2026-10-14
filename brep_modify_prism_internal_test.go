@@ -83,7 +83,7 @@ func TestBrepModifyRoutePFilletsS1LateralEdges(t *testing.T) {
 	// The section is 800 less four corners of 4 − π and the Ø6 hole, swept
 	// over 20: 20·(784 − 5π).
 	lo, hi := piEnclosed(big.NewRat(15680, 1), big.NewRat(-100, 1))
-	requireCoversInterval(t, result.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 	roles := facesByRole(result)
 	fillets := 0
 	for role := range roles {
@@ -112,7 +112,7 @@ func TestBrepModifyRoutePChamfersS1HoleRim(t *testing.T) {
 	_, ok := result.payload.(capBlendPayload)
 	require.True(t, ok, "route P builds a cap-loop chamfer, got %T", result.payload)
 	lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(-550, 3))
-	requireCoversInterval(t, result.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 	var cones []*Face
 	for _, f := range result.Faces() {
 		if _, ok := f.n.Surface.(surfacegeom.Cone); ok {
@@ -158,7 +158,7 @@ func TestBrepModifyRoutePShellsS1(t *testing.T) {
 		_, ok := result.payload.(cupPayload)
 		require.True(t, ok, "route P builds a cup, got %T", result.payload)
 		lo, hi := piEnclosed(big.NewRat(5632, 1), big.NewRat(270, 1))
-		requireCoversInterval(t, result.volume, lo, hi)
+		requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 		// Open at y = 20: the outer rim and the hole's post top there, and
 		// the cavity floor at y = 2, face +y.
 		up, err := Faces(Facing(y)).SelectFaces(result)
@@ -193,9 +193,9 @@ func TestBrepModifyRoutePChamfersB1SquareHole(t *testing.T) {
 	require.NoError(t, err)
 	_, ok := result.payload.(prismPayload)
 	require.True(t, ok, "route P builds a prism, got %T", result.payload)
-	require.Equal(t, Exact, result.volume.Exactness)
-	require.Equal(t, 14160.0, result.volume.Value.Base())
-	require.Zero(t, result.volume.Bound.Base())
+	require.Equal(t, Exact, Exactness(result.n.Volume.Exactness))
+	require.Equal(t, 14160.0, result.n.Volume.Value.Base())
+	require.Zero(t, result.n.Volume.Bound.Base())
 }
 
 // TestBrepModifyRecognisesThePrism pins §4.1. S1 reads as a prism along y
@@ -327,7 +327,7 @@ func TestBrepModifyRoutePMapsTheStartCapsHoles(t *testing.T) {
 	result, err := Chamfer(t.Context(), body, Edges(Circular(), EndpointAt(rim.start.n.Position)).Exactly(1), units.Millimeters(1))
 	require.NoError(t, err)
 	lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(-1090, 3))
-	requireCoversInterval(t, result.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 	cones := 0
 	for _, f := range result.Faces() {
 		cone, ok := f.n.Surface.(surfacegeom.Cone)

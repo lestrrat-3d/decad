@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
@@ -339,10 +340,10 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	}
 	volume, volumeBound := mitredEnclosure(volumeIv.Lo, volumeIv.Hi)
 	area, areaBound := mitredEnclosure(trueAreaIv.Lo, trueAreaIv.Hi)
-	body.volume = Measurement{Value: units.CubicMillimeters(volume), Bound: units.CubicMillimeters(volumeBound),
-		Exactness: exactnessOf(volumeBound)}
-	body.area = Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
-		Exactness: exactnessOf(areaBound)}
+	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(volume), Bound: units.CubicMillimeters(volumeBound),
+		Exactness: measurement.ExactnessOf(volumeBound)}
+	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
+		Exactness: measurement.ExactnessOf(areaBound)}
 	if err := publishCompositeTwistCentroid(body, xform, geometry, poly, length); err != nil {
 		return nil, err
 	}
@@ -351,7 +352,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		minV.X, minV.Y, minV.Z = min(minV.X, vertex.X), min(minV.Y, vertex.Y), min(minV.Z, vertex.Z)
 		maxV.X, maxV.Y, maxV.Z = max(maxV.X, vertex.X), max(maxV.Y, vertex.Y), max(maxV.Z, vertex.Z)
 	}
-	body.bounds = Box{Min: minV, Max: maxV, Bound: units.Millimeters(delta), Exactness: Approximate}
+	body.n.Bounds = measurement.Box{Min: minV, Max: maxV, Bound: units.Millimeters(delta), Exactness: measurement.Approximate}
 	for _, vertex := range body.Vertices() {
 		vertex.n.Bound = units.Millimeters(proofbound.AbsSumUpper(vertex.n.Bound.Base(), delta))
 	}
@@ -409,7 +410,7 @@ func publishCompositeTwistCentroid(body *Body, xform r3.Transform,
 	if proofbound.IsNonFinite(bound) || !proofbound.FiniteVec(world) {
 		return fmt.Errorf(`%w: twisted sweep centroid has no finite bound`, ErrUnsupported)
 	}
-	body.centroid = VecMeasurement{Value: world, Bound: units.Millimeters(bound), Exactness: exactnessOf(bound)}
+	body.n.Centroid = measurement.VecMeasurement{Value: world, Bound: units.Millimeters(bound), Exactness: measurement.ExactnessOf(bound)}
 	return nil
 }
 

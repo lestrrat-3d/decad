@@ -130,7 +130,7 @@ func brepBlendEdges(ctx context.Context, d *Document, bp brepPayload, call brepM
 		return nil, fmt.Errorf(`%w; the %s's rewritten brep record (brep-modify §5.3 step 7); selector %s matched [%s]`,
 			err, call.blend.kind, call.sel, selectedEdgesContext(call.edges))
 	}
-	if body.volume.Value.Base() <= 0 {
+	if body.n.Volume.Value.Base() <= 0 {
 		return nil, fmt.Errorf(`%w: the %s's rewritten brep record encloses no volume (brep-modify §5.3 step 7); selector %s matched [%s]`,
 			ErrDegenerate, call.blend.kind, call.sel, selectedEdgesContext(call.edges))
 	}

@@ -65,7 +65,7 @@ func TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs(t *testing.T) {
 	require.ErrorIs(t, auditCompositeSweep(t.Context(), adjacentOverlap), ErrUnsupported)
 
 	remoteTouch := []sweepAuditSpan{build(0, 1), build(1, 2), build(2, 3)}
-	remoteTouch[2].body.bounds = remoteTouch[0].body.bounds
+	remoteTouch[2].body.n.Bounds = remoteTouch[0].body.n.Bounds
 	require.ErrorIs(t, auditCompositeSweep(t.Context(), remoteTouch), ErrUnsupported)
 }
 

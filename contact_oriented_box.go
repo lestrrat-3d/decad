@@ -5,6 +5,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -20,7 +21,7 @@ type orientedSourceBox struct {
 
 func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, bool) {
 	pp, ok := body.payload.(prismPayload)
-	if !ok || !body.n.Solid || body.kind != BodySolid || pp.SurfaceResult ||
+	if !ok || !body.n.Solid || body.n.Kind != topo.BodySolid || pp.SurfaceResult ||
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		!signedAxisTransform(pp.Xform) {
 		return orientedSourceBox{}, false

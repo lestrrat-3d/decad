@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -296,16 +297,16 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
 
 	volume := proofbound.BoundedAdd(slabVolume, bandVolume)
-	body.volume = Measurement{
+	body.n.Volume = measurement.Measurement{
 		Value:     units.CubicMillimeters(volume.Value),
-		Exactness: exactnessOf(volume.Bound),
+		Exactness: measurement.ExactnessOf(volume.Bound),
 		Bound:     units.CubicMillimeters(volume.Bound),
 	}
 
 	totalArea := proofbound.BoundedAdd(proofbound.BoundedAdd(proofbound.BoundedAdd(startArea, endArea), sideArea), patchArea)
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(totalArea.Value),
-		Exactness: exactnessOf(totalArea.Bound),
+		Exactness: measurement.ExactnessOf(totalArea.Bound),
 		Bound:     units.SquareMillimeters(totalArea.Bound),
 	}
 
@@ -324,12 +325,12 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	formulaBound := pl.PointBound(cu, cv, cz)
 	geometryBound := capband.CentroidGeometryBound(centroidValue, boxToInternal(bounds))
 	centroidBound := math.Min(formulaBound, geometryBound)
-	body.centroid = VecMeasurement{
+	body.n.Centroid = measurement.VecMeasurement{
 		Value:     centroidValue,
-		Exactness: exactnessOf(centroidBound),
+		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 	if err := chargePrismMap(body, cbp.frame, cbp.xform); err != nil {
 		return nil, err
 	}

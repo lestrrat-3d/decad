@@ -27,7 +27,7 @@ func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
 		liveFaces: []*Face{{n: topo.Face{Surface: surfacegeom.Plane{}}}, {n: topo.Face{Surface: surfacegeom.NURBSSurface{}}}},
 		plan:      &stitchWeldPlan{table: newStitchVertexTable()},
 	}
-	_, err := tessellateStitchCurved(t.Context(), &Body{kind: BodySheet}, sp, 0.1, VerifyAll)
+	_, err := tessellateStitchCurved(t.Context(), &Body{n: topo.Body{Kind: topo.BodySheet}}, sp, 0.1, VerifyAll)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "NURBSSurface")
 }
@@ -450,7 +450,7 @@ func TestTessellateStitchRefusesARepeatedDirectedEdge(t *testing.T) {
 		tris:      [][3]int{{0, 1, 2}, {0, 1, 2}},
 		triFaces:  []*Face{f, f},
 	}
-	b := &Body{kind: BodySolid, n: topo.Body{Solid: true}}
+	b := &Body{n: topo.Body{Solid: true, Kind: topo.BodySolid}}
 
 	mesh, err := tessellateStitch(t.Context(), b, sp)
 	require.ErrorIs(t, err, ErrUnsupported)

@@ -166,8 +166,8 @@ func TestSideOpeningBrepChargesInexactThickness(t *testing.T) {
 	cavity.Mul(cavity, new(big.Rat).Sub(big.NewRat(20, 1), new(big.Rat).Mul(two, exact)))
 	cavity.Mul(cavity, new(big.Rat).Sub(big.NewRat(10, 1), new(big.Rat).Mul(two, exact)))
 	want := new(big.Rat).Sub(big.NewRat(8000, 1), cavity)
-	got := new(big.Rat).Sub(proofarith.FloatRat(body.volume.Value.Base()), want)
-	require.LessOrEqual(t, got.Abs(got).Cmp(proofarith.FloatRat(body.volume.Bound.Base())), 0)
+	got := new(big.Rat).Sub(proofarith.FloatRat(body.n.Volume.Value.Base()), want)
+	require.LessOrEqual(t, got.Abs(got).Cmp(proofarith.FloatRat(body.n.Volume.Bound.Base())), 0)
 }
 
 // TestRequireAreaIdentityRefuses feeds §4.7's area identity regions that do

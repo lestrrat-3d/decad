@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
@@ -263,7 +264,7 @@ func measurePocketShell(ctx context.Context, bp brepPayload, body *Body) error {
 		return fmt.Errorf("%w: blind-pocket shell has no proven positive volume", ErrUnsupported)
 	}
 	v, ve := heldOf(volume)
-	body.volume = Measurement{Value: units.CubicMillimeters(v), Bound: units.CubicMillimeters(ve), Exactness: exactnessOf(ve)}
+	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(v), Bound: units.CubicMillimeters(ve), Exactness: measurement.ExactnessOf(ve)}
 	outerCZ := scale(add(point(b.Z0), point(b.TopZ)), 1, 2)
 	pocketCZ := scale(add(point(b.FloorZ), point(b.TopZ)), 1, 2)
 	innerCZ := scale(add(add(point(b.Z0), t), point(b.TopZ)), 1, 2)
@@ -290,18 +291,18 @@ func measurePocketShell(ctx context.Context, bp brepPayload, body *Body) error {
 	}
 	ref := bp.refView()
 	cb := ref.PointBound(c[0], c[1], c[2])
-	body.centroid = VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value),
-		Bound: units.Millimeters(cb), Exactness: exactnessOf(cb)}
+	body.n.Centroid = measurement.VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value),
+		Bound: units.Millimeters(cb), Exactness: measurement.ExactnessOf(cb)}
 	var areaTotal proofbound.BoundedScalar
 	for _, f := range body.Faces() {
 		areaTotal = proofbound.BoundedAdd(areaTotal, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
 	}
-	body.area = Measurement{Value: units.SquareMillimeters(areaTotal.Value),
-		Bound: units.SquareMillimeters(areaTotal.Bound), Exactness: exactnessOf(areaTotal.Bound)}
+	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(areaTotal.Value),
+		Bound: units.SquareMillimeters(areaTotal.Bound), Exactness: measurement.ExactnessOf(areaTotal.Bound)}
 	box, err := brepBoundsContext(ctx, bp)
 	if err != nil {
 		return err
 	}
-	body.bounds = box
+	body.n.Bounds = boxToInternal(box)
 	return validateAnalyticBodyMeasurements(body)
 }

@@ -132,7 +132,7 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 	rewriteCompositeEdge(parts[0], previous.end, following.start)
 	following.start.faces = append(following.start.faces, previous.end.faces...)
 
-	body := &Body{doc: d, n: topo.Body{Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}}
 	faces := []*Face{parts[0].Faces()[0], parts[1].Faces()[0]}
 	for i, face := range faces {
 		rewriteCompositeSideRoles(face, i)
@@ -145,8 +145,8 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 	area := proofbound.BoundedAdd(
 		proofbound.MeasuredScalar(faces[0].n.Area, faces[0].n.AreaBound),
 		proofbound.MeasuredScalar(faces[1].n.Area, faces[1].n.AreaBound))
-	body.area = scalarMeasurement(area, units.SquareMillimeter)
-	body.bounds = compositeChainBox(parts[0].bounds, parts[1].bounds)
+	body.n.Area = measurementToInternal(scalarMeasurement(area, units.SquareMillimeter))
+	body.n.Bounds = boxToInternal(compositeChainBox(boxFromInternal(parts[0].n.Bounds), boxFromInternal(parts[1].n.Bounds)))
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func auditCompositeChainSeparation(ctx context.Context, payload chainSweepPayloa
 	}
 	audit := make([]compositesweep.AuditSpan, 2)
 	for i := range audit {
-		box := parts[i].bounds
+		box := parts[i].n.Bounds
 		// Audit takes the incoming start-cap normal. A chain span has no cap,
 		// so derive that opposite-tangent plane from its certified frame.
 		incoming, frameErr := r3.NewFrame(frames[i].Frame.Origin(),

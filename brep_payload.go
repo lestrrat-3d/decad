@@ -541,7 +541,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySolid}
+	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}}
 	refView := bp.refView()
 
 	// Vertices are shared by reference coordinates. Each carries the largest

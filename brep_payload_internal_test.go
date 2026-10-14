@@ -198,16 +198,16 @@ func TestBrepFaceViewOfAllLinePrismMatchesItsMeasurements(t *testing.T) {
 		require.Len(t, brep.Edges(), len(prism.Edges()))
 		require.Len(t, brep.Vertices(), len(prism.Vertices()))
 		requireSameConvexity(t, prism, brep)
-		require.Equal(t, prism.volume, brep.volume)
-		require.Equal(t, Exact, brep.volume.Exactness)
-		require.Equal(t, prism.area, brep.area)
+		require.Equal(t, measurementFromInternal(prism.n.Volume), measurementFromInternal(brep.n.Volume))
+		require.Equal(t, Exact, Exactness(brep.n.Volume.Exactness))
+		require.Equal(t, measurementFromInternal(prism.n.Area), measurementFromInternal(brep.n.Area))
 		// The centroid is the same rounded rational. Its bound is that
 		// rounding's own exact error, which no valid bound on the same held
 		// value undercuts.
-		require.Equal(t, prism.centroid.Value, brep.centroid.Value)
-		require.Equal(t, prism.centroid.Exactness, brep.centroid.Exactness)
-		require.LessOrEqual(t, brep.centroid.Bound.Base(), prism.centroid.Bound.Base())
-		require.Equal(t, prism.bounds, brep.bounds)
+		require.Equal(t, prism.n.Centroid.Value, brep.n.Centroid.Value)
+		require.Equal(t, Exactness(prism.n.Centroid.Exactness), Exactness(brep.n.Centroid.Exactness))
+		require.LessOrEqual(t, brep.n.Centroid.Bound.Base(), prism.n.Centroid.Bound.Base())
+		require.Equal(t, boxFromInternal(prism.n.Bounds), boxFromInternal(brep.n.Bounds))
 		for _, f := range brep.Faces() {
 			_, isPlane := f.n.Surface.(surfacegeom.Plane)
 			require.True(t, isPlane)
@@ -240,22 +240,22 @@ func TestBrepFaceViewOfCircularPrismCoversItsMeasurements(t *testing.T) {
 
 	// 100×60×8 plate less a radius-10 hole: 48000 − 800π.
 	lo, hi := piEnclosed(big.NewRat(48000, 1), big.NewRat(-800, 1))
-	requireCoversInterval(t, brep.volume, lo, hi)
-	requireCoversInterval(t, prism.volume, lo, hi)
-	require.Equal(t, Approximate, brep.volume.Exactness)
-	require.Less(t, brep.volume.Bound.Base(), 1e-9*brep.volume.Value.Base())
+	requireCoversInterval(t, measurementFromInternal(brep.n.Volume), lo, hi)
+	requireCoversInterval(t, measurementFromInternal(prism.n.Volume), lo, hi)
+	require.Equal(t, Approximate, Exactness(brep.n.Volume.Exactness))
+	require.Less(t, brep.n.Volume.Bound.Base(), 1e-9*brep.n.Volume.Value.Base())
 	// Area: two caps of 6000 − 100π, the outline's 320·8, the hole's 20π·8.
 	lo, hi = piEnclosed(big.NewRat(2*6000+320*8, 1), big.NewRat(-200+160, 1))
-	requireCoversInterval(t, brep.area, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(brep.n.Area), lo, hi)
 	// Centroid: x = (6000·50 − 100π·70)/(6000 − 100π), y = 30, z = 4.
 	for _, pi := range []*big.Rat{proofbound.PiLower, proofbound.PiUpper} {
 		num := new(big.Rat).Sub(big.NewRat(300000, 1), new(big.Rat).Mul(big.NewRat(7000, 1), pi))
 		den := new(big.Rat).Sub(big.NewRat(6000, 1), new(big.Rat).Mul(big.NewRat(100, 1), pi))
 		exact := [3]*big.Rat{num.Quo(num, den), big.NewRat(30, 1), big.NewRat(4, 1)}
-		requireCentroidCovers(t, brep.centroid, exact)
+		requireCentroidCovers(t, vecMeasurementFromInternal(brep.n.Centroid), exact)
 	}
-	require.Equal(t, prism.bounds.Min, brep.bounds.Min)
-	require.Equal(t, prism.bounds.Max, brep.bounds.Max)
+	require.Equal(t, prism.n.Bounds.Min, brep.n.Bounds.Min)
+	require.Equal(t, prism.n.Bounds.Max, brep.n.Bounds.Max)
 }
 
 func TestBrepFaceViewOfStackedPrismMatchesItsMeasurements(t *testing.T) {
@@ -267,15 +267,15 @@ func TestBrepFaceViewOfStackedPrismMatchesItsMeasurements(t *testing.T) {
 	require.Len(t, brep.Edges(), len(pocket.Edges()))
 	requireSameConvexity(t, pocket, brep)
 	// A 10×10×10 plate with a 4×4 pocket 4 deep: 1000 − 64, exactly.
-	require.Equal(t, pocket.volume, brep.volume)
-	require.Equal(t, Exact, brep.volume.Exactness)
-	require.Equal(t, 936.0, brep.volume.Value.Base())
-	require.Equal(t, pocket.area, brep.area)
+	require.Equal(t, measurementFromInternal(pocket.n.Volume), measurementFromInternal(brep.n.Volume))
+	require.Equal(t, Exact, Exactness(brep.n.Volume.Exactness))
+	require.Equal(t, 936.0, brep.n.Volume.Value.Base())
+	require.Equal(t, measurementFromInternal(pocket.n.Area), measurementFromInternal(brep.n.Area))
 	// Slab moments: 600 at z = 3 and 336 at z = 8, over 936.
 	exact := [3]*big.Rat{big.NewRat(5, 1), big.NewRat(5, 1), big.NewRat(600*3+336*8, 936)}
-	requireCentroidCovers(t, brep.centroid, exact)
-	requireCentroidCovers(t, pocket.centroid, exact)
-	require.Equal(t, pocket.bounds, brep.bounds)
+	requireCentroidCovers(t, vecMeasurementFromInternal(brep.n.Centroid), exact)
+	requireCentroidCovers(t, vecMeasurementFromInternal(pocket.n.Centroid), exact)
+	require.Equal(t, boxFromInternal(pocket.n.Bounds), boxFromInternal(brep.n.Bounds))
 	floors := 0
 	for _, f := range brep.Faces() {
 		if f.n.HasAxialDelta && f.n.Surface.(surfacegeom.Plane).Frame.Origin().Z == 6 {
@@ -301,16 +301,16 @@ func TestBrepCrossDrilledBoxMeasuresAcrossPermutedFrames(t *testing.T) {
 	require.Equal(t, 1, cylinders)
 	// 16000 − 9π·20, with a bound below 1e-9 mm³ (general-boolean §9).
 	lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(-180, 1))
-	requireCoversInterval(t, brep.volume, lo, hi)
-	require.Positive(t, brep.volume.Bound.Base())
-	require.Less(t, brep.volume.Bound.Base(), 1e-9)
+	requireCoversInterval(t, measurementFromInternal(brep.n.Volume), lo, hi)
+	require.Positive(t, brep.n.Volume.Bound.Base())
+	require.Less(t, brep.n.Volume.Bound.Base(), 1e-9)
 	// Area: caps 2·800, x walls 2·400, y walls 2·(800 − 9π), the hole 6π·20.
 	lo, hi = piEnclosed(big.NewRat(4000, 1), big.NewRat(102, 1))
-	requireCoversInterval(t, brep.area, lo, hi)
-	requireCentroidCovers(t, brep.centroid, [3]*big.Rat{big.NewRat(20, 1), big.NewRat(10, 1), big.NewRat(10, 1)})
-	require.Equal(t, r3.NewVec(0, 0, 0), brep.bounds.Min)
-	require.Equal(t, r3.NewVec(40, 20, 20), brep.bounds.Max)
-	require.Equal(t, Exact, brep.bounds.Exactness)
+	requireCoversInterval(t, measurementFromInternal(brep.n.Area), lo, hi)
+	requireCentroidCovers(t, vecMeasurementFromInternal(brep.n.Centroid), [3]*big.Rat{big.NewRat(20, 1), big.NewRat(10, 1), big.NewRat(10, 1)})
+	require.Equal(t, r3.NewVec(0, 0, 0), brep.n.Bounds.Min)
+	require.Equal(t, r3.NewVec(40, 20, 20), brep.n.Bounds.Max)
+	require.Equal(t, Exact, Exactness(brep.n.Bounds.Exactness))
 	// Each y wall carries the hole as its one inner loop, and the hole's two
 	// rims are whole circles of radius 3 about the drill axis.
 	circles := 0
@@ -385,12 +385,12 @@ func TestBrepPlacementReEvaluatesUnderMotion(t *testing.T) {
 		require.Len(t, placed.Faces(), len(brep.Faces()))
 		// Volume is read in the record's own frame; its bound also charges the
 		// motion's own departure from orthonormal (docs/evaluator-design.md §5.1).
-		require.Equal(t, brep.volume.Value, placed.volume.Value, `volume is read in the record's own frame`)
-		require.GreaterOrEqual(t, placed.volume.Bound.Base(), brep.volume.Bound.Base())
+		require.Equal(t, brep.n.Volume.Value, placed.n.Volume.Value, `volume is read in the record's own frame`)
+		require.GreaterOrEqual(t, placed.n.Volume.Bound.Base(), brep.n.Volume.Bound.Base())
 		// The two placed centroids each lie within their bound of the truth,
 		// so they lie within the sum of the bounds of each other.
-		gap := placed.centroid.Value.Sub(placedPrism.centroid.Value).Len()
-		require.LessOrEqual(t, gap, placed.centroid.Bound.Base()+placedPrism.centroid.Bound.Base())
+		gap := placed.n.Centroid.Value.Sub(placedPrism.n.Centroid.Value).Len()
+		require.LessOrEqual(t, gap, placed.n.Centroid.Bound.Base()+placedPrism.n.Centroid.Bound.Base())
 		mesh, err := tessellateContext(t.Context(), placed, units.Millimeters(0.05), VerifyAll)
 		require.NoError(t, err)
 		require.Positive(t, internalMeshVolumeRat(mesh).Sign(), `a placed mesh still faces outward`)
@@ -467,7 +467,7 @@ func TestBrepMeshPathCutTakesABrepOperand(t *testing.T) {
 	// The tool removes x ≥ 30 of the box, clear of the hole: 30·20·20 less
 	// the hole's 9π·20.
 	lo, hi := piEnclosed(big.NewRat(12000, 1), big.NewRat(-180, 1))
-	requireCoversInterval(t, result.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 }
 
 func TestBrepFaceViewChargesSectionDisplacement(t *testing.T) {
@@ -487,9 +487,9 @@ func TestBrepFaceViewChargesSectionDisplacement(t *testing.T) {
 	brep := internalBrepBody(t, pocket)
 	// The denoted pocket is exact: 1000 − 64. Every wall's band 2·δ·L over its
 	// height is in the bound: the outline's 40·10 and the pocket's 16·4.
-	requireCoversInterval(t, brep.volume, big.NewRat(936, 1), big.NewRat(936, 1))
-	require.GreaterOrEqual(t, brep.volume.Bound.Base(), 2*delta*(40*10+16*4))
-	require.GreaterOrEqual(t, brep.area.Bound.Base(), 2*delta*(40+40+16+16))
+	requireCoversInterval(t, measurementFromInternal(brep.n.Volume), big.NewRat(936, 1), big.NewRat(936, 1))
+	require.GreaterOrEqual(t, brep.n.Volume.Bound.Base(), 2*delta*(40*10+16*4))
+	require.GreaterOrEqual(t, brep.n.Area.Bound.Base(), 2*delta*(40+40+16+16))
 	_, err = tessellateContext(t.Context(), brep, units.Millimeters(delta/2), VerifyAll)
 	require.ErrorIs(t, err, ErrUnsupported, `a tolerance below the displacement leaves no chord budget`)
 	mesh, err := tessellateContext(t.Context(), brep, units.Millimeters(0.05), VerifyAll)
@@ -511,10 +511,10 @@ func TestBrepMeasurementsChargeFaceDisplacements(t *testing.T) {
 	// Moving the 20×20 wall by its level sweeps 400·level; the hole's band is
 	// 2·section times its 6π circumference over its 20 mm length.
 	band := 20 * 2 * section * 6 * math.Pi
-	require.GreaterOrEqual(t, brep.volume.Bound.Base(), 400*level+band)
-	require.GreaterOrEqual(t, brep.bounds.Bound.Base(), level+section)
+	require.GreaterOrEqual(t, brep.n.Volume.Bound.Base(), 400*level+band)
+	require.GreaterOrEqual(t, brep.n.Bounds.Bound.Base(), level+section)
 	lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(-180, 1))
-	requireCoversInterval(t, brep.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(brep.n.Volume), lo, hi)
 	mesh, err := tessellateContext(t.Context(), brep, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, mesh.n.VolSymDiff, 400*level+band)
@@ -589,15 +589,15 @@ func TestBrepFaceViewOfStackedUnionCoversItsMeasurements(t *testing.T) {
 			require.Equal(t, 1, cylinders)
 			// 40×40×10 plate plus a radius-5 boss 15 above it: 16000 + 375π.
 			lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(375, 1))
-			requireCoversInterval(t, brep.volume, lo, hi)
-			requireCoversInterval(t, union.volume, lo, hi)
-			require.Less(t, brep.volume.Bound.Base(), 1e-9)
+			requireCoversInterval(t, measurementFromInternal(brep.n.Volume), lo, hi)
+			requireCoversInterval(t, measurementFromInternal(union.n.Volume), lo, hi)
+			require.Less(t, brep.n.Volume.Bound.Base(), 1e-9)
 			// Area: plate 2·1600 + 160·10, less the boss's footprint, plus the
 			// boss's top 25π and wall 10π·15.
 			lo, hi = piEnclosed(big.NewRat(4800, 1), big.NewRat(150, 1))
-			requireCoversInterval(t, brep.area, lo, hi)
-			require.Equal(t, union.bounds.Min, brep.bounds.Min)
-			require.Equal(t, union.bounds.Max, brep.bounds.Max)
+			requireCoversInterval(t, measurementFromInternal(brep.n.Area), lo, hi)
+			require.Equal(t, union.n.Bounds.Min, brep.n.Bounds.Min)
+			require.Equal(t, union.n.Bounds.Max, brep.n.Bounds.Max)
 			mesh, err := tessellateContext(t.Context(), brep, units.Millimeters(0.05), VerifyAll)
 			require.NoError(t, err)
 			lo, hi = piEnclosed(big.NewRat(16000, 1), big.NewRat(375, 1))
@@ -625,11 +625,11 @@ func TestBrepFaceViewOfSquareBossUnionMatchesItsMeasurements(t *testing.T) {
 	// those rims keep the boss wall's own outer-loop convexity.
 	requireSameConvexity(t, union, brep)
 	// 16000 + 10·10·15, exactly.
-	require.Equal(t, union.volume, brep.volume)
-	require.Equal(t, 17500.0, brep.volume.Value.Base())
-	require.Equal(t, Exact, brep.volume.Exactness)
-	require.Equal(t, union.area, brep.area)
-	require.Equal(t, union.bounds, brep.bounds)
+	require.Equal(t, measurementFromInternal(union.n.Volume), measurementFromInternal(brep.n.Volume))
+	require.Equal(t, 17500.0, brep.n.Volume.Value.Base())
+	require.Equal(t, Exact, Exactness(brep.n.Volume.Exactness))
+	require.Equal(t, measurementFromInternal(union.n.Area), measurementFromInternal(brep.n.Area))
+	require.Equal(t, boxFromInternal(union.n.Bounds), boxFromInternal(brep.n.Bounds))
 }
 
 func TestBrepFaceViewJoinsACrossingBuiltPrism(t *testing.T) {
@@ -651,8 +651,8 @@ func TestBrepFaceViewJoinsACrossingBuiltPrism(t *testing.T) {
 	require.Len(t, brep.Faces(), len(prism.Faces()))
 	// 40·20·10 less a quarter of a radius-5 disc over the 10 mm height.
 	lo, hi := piEnclosed(big.NewRat(8000, 1), big.NewRat(-125, 2))
-	requireCoversInterval(t, brep.volume, lo, hi)
-	requireCoversInterval(t, prism.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(brep.n.Volume), lo, hi)
+	requireCoversInterval(t, measurementFromInternal(prism.n.Volume), lo, hi)
 	for _, f := range brep.payload.(brepPayload).faces {
 		require.GreaterOrEqual(t, f.delta, pp.SectionDelta, `every face keeps the record's own displacement`)
 	}

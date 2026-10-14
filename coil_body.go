@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coil"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -61,7 +62,7 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 		return nil, err
 	}
 
-	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySolid}
+	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}}
 	faces, err := buildCoilTopology(ctx, body, ref, rec, sh, m.Area, walls)
 	if err != nil {
 		return nil, err
@@ -124,9 +125,9 @@ func publishCoilReadings(body *Body, rec coilshell.Record, sh coilshell.Shell, m
 	if err != nil {
 		return err
 	}
-	body.volume = Measurement{
+	body.n.Volume = measurement.Measurement{
 		Value:     units.CubicMillimeters(vol),
-		Exactness: exactnessOf(volBound),
+		Exactness: measurement.ExactnessOf(volBound),
 		Bound:     units.CubicMillimeters(volBound),
 	}
 
@@ -150,9 +151,9 @@ func publishCoilReadings(body *Body, rec coilshell.Record, sh coilshell.Shell, m
 		worst = math.Max(worst, bound)
 	}
 	centroidBound := proofbound.Radius3D(worst)
-	body.centroid = VecMeasurement{
+	body.n.Centroid = measurement.VecMeasurement{
 		Value:     r3.NewVec(cv[0], cv[1], cv[2]),
-		Exactness: exactnessOf(centroidBound),
+		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
 
@@ -164,13 +165,13 @@ func publishCoilReadings(body *Body, rec coilshell.Record, sh coilshell.Shell, m
 	if err != nil {
 		return err
 	}
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(area),
-		Exactness: exactnessOf(areaBound),
+		Exactness: measurement.ExactnessOf(areaBound),
 		Bound:     units.SquareMillimeters(areaBound),
 	}
 
-	body.bounds = coilBounds(sh)
+	body.n.Bounds = boxToInternal(coilBounds(sh))
 	return validateLoftBodyMeasurements(body)
 }
 

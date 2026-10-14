@@ -190,7 +190,7 @@ func (r *brepLoopRead) buildPartialFillet(ctx context.Context, d *Document, sel 
 		return nil, fmt.Errorf(`%w; the partial-loop fillet's rewritten brep record; selector %s matched [%s]`,
 			err, r.call.sel, selectedEdgesContext(r.call.edges))
 	}
-	if body.volume.Value.Base() <= 0 {
+	if body.n.Volume.Value.Base() <= 0 {
 		return nil, fmt.Errorf(`%w: the partial-loop fillet encloses no volume`, ErrDegenerate)
 	}
 	return body, nil

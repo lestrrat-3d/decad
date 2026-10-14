@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,7 @@ import (
 func TestUnstitchNoPayloadIsDegenerate(t *testing.T) {
 	t.Parallel()
 	d := &Document{}
-	b := &Body{doc: d, kind: BodySheet}
+	b := &Body{doc: d, n: topo.Body{Kind: topo.BodySheet}}
 	d.bodies = append(d.bodies, b)
 
 	_, err := Unstitch(t.Context(), b)

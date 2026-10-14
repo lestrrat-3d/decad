@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
@@ -272,11 +273,11 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref producerID, c
 // loftmesh.ValidateBodyReadings owns the rule.
 func validateLoftBodyMeasurements(body *Body) error {
 	return loftmesh.ValidateBodyReadings(loftmesh.BodyReadings{
-		Volume: body.volume.Value.Base(), VolumeBound: body.volume.Bound.Base(),
-		Area:     body.area.Value.Base(),
-		Centroid: body.centroid.Value, CentroidBound: body.centroid.Bound.Base(),
-		BoundsMin: body.bounds.Min, BoundsMax: body.bounds.Max,
-		BoundsBound: body.bounds.Bound.Base(),
+		Volume: body.n.Volume.Value.Base(), VolumeBound: body.n.Volume.Bound.Base(),
+		Area:     body.n.Area.Value.Base(),
+		Centroid: body.n.Centroid.Value, CentroidBound: body.n.Centroid.Bound.Base(),
+		BoundsMin: body.n.Bounds.Min, BoundsMax: body.n.Bounds.Max,
+		BoundsBound: body.n.Bounds.Bound.Base(),
 	})
 }
 
@@ -404,7 +405,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	if pl.surfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: !pl.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: kind}
+	body := &Body{doc: d, n: topo.Body{Solid: !pl.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}}
 
 	capStart, capEnd, walls, err := buildLoftTopology(ctx, body, ref, a, cap0Rat, cap1Rat)
 	if err != nil {
@@ -455,18 +456,18 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	}
 
 	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
-	body.volume = mass.volume(a.Verts, a.Tris)
+	body.n.Volume = measurementToInternal(mass.volume(a.Verts, a.Tris))
 	centroid, err := mass.centroid(a.Verts, a.Tris)
 	if err != nil {
 		return nil, err
 	}
-	body.centroid = centroid
+	body.n.Centroid = vecMeasurementToInternal(centroid)
 	bounds, ok := mass.bounds()
 	if !ok {
 		return nil, fmt.Errorf(`%w: the loft has no vertices to bound`, ErrDegenerate)
 	}
-	body.bounds = bounds
-	body.area = mass.area(cap0Rat, cap1Rat)
+	body.n.Bounds = boxToInternal(bounds)
+	body.n.Area = measurementToInternal(mass.area(cap0Rat, cap1Rat))
 	if pl.surfaceResult {
 		// §4.3: a surface result's area is the solid's area minus the two
 		// omitted caps'. Each cap's area and bound are read back from the
@@ -483,7 +484,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		// carries none of the two caps' own rounding, which §4.3 requires
 		// the sheet's bound to include.
 		areaScalar := proofbound.BoundedSub(
-			proofbound.BoundedSub(measurementScalar(body.area), proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound)),
+			proofbound.BoundedSub(measurementScalar(measurementFromInternal(body.n.Area)), proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound)),
 			proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound),
 		)
 		// Published Approximate EXPLICITLY, never derived from the composed
@@ -492,9 +493,9 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		// never exactly representable), and a sheet built from the SAME wall
 		// triangles must never claim more exactness than the body it came
 		// from, whatever its own composed bound happens to round to.
-		body.area = Measurement{
+		body.n.Area = measurement.Measurement{
 			Value:     units.SquareMillimeters(areaScalar.Value),
-			Exactness: Approximate,
+			Exactness: measurement.Approximate,
 			Bound:     units.SquareMillimeters(areaScalar.Bound),
 		}
 	}

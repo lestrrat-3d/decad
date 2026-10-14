@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -51,7 +52,7 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 // A rigid placement cannot change its radius or isotropic centroidal inertia.
 func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 	rp, ok := b.payload.(revolvePayload)
-	if !ok || !b.n.Solid || b.kind != BodySolid || rp.surfaceResult || !rp.full ||
+	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || rp.surfaceResult || !rp.full ||
 		rp.sectionDelta != 0 || len(rp.profile.Holes) != 0 ||
 		len(rp.profile.Outer.Segments) != 2 ||
 		!proofbound.FiniteVec(rp.frame.Origin()) ||

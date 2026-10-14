@@ -1,6 +1,7 @@
 package topo
 
 import (
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
@@ -101,4 +102,8 @@ type Face struct {
 	// were merged. A merged face carries all contributing roles. Root
 	// Face.Origins converts it to the public FeatureRef form.
 	Origins []provenance.Ref
+	// Centroid is present only for a face with its own proved area-centroid
+	// certificate; whole-group readings are not copied onto split patches.
+	// Root Face.Centroid converts it to the public VecMeasurement form.
+	Centroid measurement.VecMeasurement
 }

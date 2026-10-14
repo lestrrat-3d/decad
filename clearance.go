@@ -191,7 +191,7 @@ func clearanceDeltaWiden(lo, hi float64, exact bool, deltaA, deltaB float64) (fl
 func newPairKernel(ctx context.Context, ga, gb *bodyGeom) *pairKernel {
 	scale := 1.0
 	for _, g := range []*bodyGeom{ga, gb} {
-		for _, p := range []r3.Vec{g.body.bounds.Min, g.body.bounds.Max} {
+		for _, p := range []r3.Vec{g.body.n.Bounds.Min, g.body.n.Bounds.Max} {
 			for _, c := range []float64{p.X, p.Y, p.Z} {
 				if v := math.Abs(c); v > scale {
 					scale = v

@@ -54,7 +54,7 @@ func meshLadderRevolve(t *testing.T, extent AngularExtent, build func(s *sketch.
 // meshLadderStep reads the ladder's k-th step for body.
 func meshLadderStep(t *testing.T, body *Body, k int) (MassProperties, error) {
 	t.Helper()
-	diameter := body.bounds.Max.Sub(body.bounds.Min).Len()
+	diameter := body.n.Bounds.Max.Sub(body.n.Bounds.Min).Len()
 	return meshMassPropertiesAt(t.Context(), body, math.Ldexp(diameter, -k), meshLadderDensity)
 }
 
@@ -182,10 +182,9 @@ func TestMeshMassReadsARevolveTheAnalyticPathRefuses(t *testing.T) {
 	rp.sectionDelta = 1.0 / 1024
 	displaced := &Body{
 		doc: quarter.doc, lumps: quarter.lumps,
-		volume: quarter.volume, area: quarter.area, centroid: quarter.centroid, bounds: quarter.bounds,
-		n: topo.Body{Solid: quarter.n.Solid, Origin: quarter.n.Origin}, kind: quarter.kind, payload: rp,
+		n: topo.Body{Solid: quarter.n.Solid, Origin: quarter.n.Origin, Volume: quarter.n.Volume, Area: quarter.n.Area, Centroid: quarter.n.Centroid, Bounds: quarter.n.Bounds, Kind: quarter.n.Kind}, payload: rp,
 	}
-	_, err := massmoment.RevolveProperties(t.Context(), massRevolveRecord(rp), vecMeasurementToInternal(displaced.centroid), meshLadderDensity)
+	_, err := massmoment.RevolveProperties(t.Context(), massRevolveRecord(rp), displaced.n.Centroid, meshLadderDensity)
 	require.ErrorIs(t, err, ErrUnsupported, "premise: the analytic path refuses the displacement")
 
 	got, err := displaced.MassProperties(t.Context(), meshLadderDensity)

@@ -82,9 +82,9 @@ func TestStackedUnionBrepOperandSecondBoss(t *testing.T) {
 			require.NoError(t, err)
 			requireClosedTopology(t, got)
 			require.Len(t, got.Faces(), 12)
-			require.Equal(t, Exact, got.volume.Exactness)
-			require.Equal(t, 19000.0, got.volume.Value.Base())
-			require.Equal(t, 6000.0, got.area.Value.Base())
+			require.Equal(t, Exact, Exactness(got.n.Volume.Exactness))
+			require.Equal(t, 19000.0, got.n.Volume.Value.Base())
+			require.Equal(t, 6000.0, got.n.Area.Value.Base())
 			floors := 0
 			floorLevel := bp.stack.slabs[0].Z1
 			for _, f := range bp.faces {
@@ -120,8 +120,8 @@ func TestStackedUnionBrepOperandThirdBoss(t *testing.T) {
 	require.NoError(t, err)
 	bp := requireBrep(t, got)
 	require.Len(t, bp.stack.slabs[1].Regions, 3)
-	require.Equal(t, Exact, got.volume.Exactness)
-	require.Equal(t, 20500.0, got.volume.Value.Base())
+	require.Equal(t, Exact, Exactness(got.n.Volume.Exactness))
+	require.Equal(t, 20500.0, got.n.Volume.Value.Base())
 	// Three top caps, the floor, the bottom, and 4 + 4 + 4 + 4 walls, with
 	// the y = 20 wall one face across the plate and two bosses.
 	require.Len(t, got.Faces(), 16)
@@ -145,8 +145,8 @@ func TestStackedUnionBrepOperandOverlappingBoss(t *testing.T) {
 	require.NoError(t, err)
 	bp := requireBrep(t, got)
 	require.Len(t, bp.stack.slabs[1].Regions, 1, "overlapping bosses merge into one region")
-	require.Equal(t, Exact, got.volume.Exactness)
-	require.Equal(t, 18625.0, got.volume.Value.Base())
+	require.Equal(t, Exact, Exactness(got.n.Volume.Exactness))
+	require.Equal(t, 18625.0, got.n.Volume.Value.Base())
 	mesh, err := tessellateContext(t.Context(), got, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	require.True(t, mesh.VolumeVerified())

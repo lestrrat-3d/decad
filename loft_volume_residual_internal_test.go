@@ -180,7 +180,7 @@ func TestLoftVolumeResidualIsPerCellWallLegPlusSkirt(t *testing.T) {
 			}
 			if tc.target == 0 {
 				body := evalLoftFixture(t, tc.pl)
-				require.Equal(t, body.volume, m.volume(a.Verts, a.Tris), "the helper reads the build evalLoft publishes")
+				require.Equal(t, measurementFromInternal(body.n.Volume), m.volume(a.Verts, a.Tris), "the helper reads the build evalLoft publishes")
 			}
 
 			// The per-cell wall leg and the every-cell seam perimeter, in the
@@ -369,8 +369,8 @@ func TestLoftPlacedVolumeNeedsTheVertexSweep(t *testing.T) {
 	require.Positive(t, b.sectionDelta, "the corner arc is chorded")
 	require.Positive(t, b.a.Delta, "the placement rounds the held vertices")
 	body := evalLoftFixture(t, pl)
-	got := body.volume
-	require.Equal(t, got, m.volume(b.a.Verts, b.a.Tris))
+	got := body.n.Volume
+	require.Equal(t, measurementFromInternal(got), m.volume(b.a.Verts, b.a.Tris))
 
 	// V = h·(100 − r²·(1 − π/4)), enclosed through π's bracket.
 	rr := new(big.Rat).Mul(proofarith.FloatRat(r), proofarith.FloatRat(r))

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -638,7 +639,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}}
 	var allFaces []*Face
 	total := proofbound.BoundedScalar{}
 	var captures []chainWalkCapture
@@ -659,9 +660,9 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	}
 	body.lumps = sheetLumps(allFaces)
 
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(total.Value),
-		Exactness: exactnessOf(total.Bound),
+		Exactness: measurement.ExactnessOf(total.Bound),
 		Bound:     units.SquareMillimeters(total.Bound),
 	}
 	// volume and centroid stay at their zero value: finite, so
@@ -694,7 +695,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	if err != nil {
 		return nil, err
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 	if err := chargePrismMap(body, pp.frame, pp.xform); err != nil {
 		return nil, err
 	}

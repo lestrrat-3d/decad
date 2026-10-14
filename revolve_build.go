@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -367,7 +368,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if rp.surfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: !rp.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: kind}
+	body := &Body{doc: d, n: topo.Body{Solid: !rp.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}}
 
 	// Partial sweeps get two planar cap faces; a full revolution has none.
 	var capStart, capEnd *Face
@@ -564,14 +565,14 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// The Pappus volume is the plane-coordinate solid's; L scales it by
 	// exactly |det L| (frameCharge).
 	volume = frame.VolumeOf(volume)
-	body.volume = Measurement{
+	body.n.Volume = measurement.Measurement{
 		Value:     units.CubicMillimeters(volume.Value),
-		Exactness: exactnessOf(volume.Bound),
+		Exactness: measurement.ExactnessOf(volume.Bound),
 		Bound:     units.CubicMillimeters(volume.Bound),
 	}
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(area.Value),
-		Exactness: exactnessOf(area.Bound),
+		Exactness: measurement.ExactnessOf(area.Bound),
 		Bound:     units.SquareMillimeters(area.Bound),
 	}
 
@@ -586,9 +587,9 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		CoordUpper: coordUpper, SectionDelta: rp.sectionDelta,
 		RadialAdmit: rp.ax.RadialAdmitAllow, AxialExtentUpper: rp.ax.AxialExtentUpper,
 	})
-	body.centroid = VecMeasurement{
+	body.n.Centroid = measurement.VecMeasurement{
 		Value:     centroidValue,
-		Exactness: exactnessOf(centroidBound),
+		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
 
@@ -599,7 +600,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}
@@ -1190,7 +1191,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}}
 	b := rev.basis()
 	var allFaces []*Face
 	area := proofbound.BoundedScalar{}
@@ -1220,9 +1221,9 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 		area = proofbound.BoundedAdd(area, walkArea)
 	}
 	body.lumps = sheetLumps(allFaces)
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(area.Value),
-		Exactness: exactnessOf(area.Bound),
+		Exactness: measurement.ExactnessOf(area.Bound),
 		Bound:     units.SquareMillimeters(area.Bound),
 	}
 	// volume and centroid stay at their zero value: a chain bounds no region
@@ -1233,7 +1234,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	if err != nil {
 		return nil, err
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}

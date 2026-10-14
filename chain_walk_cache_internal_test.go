@@ -56,14 +56,14 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 		fresh, err := prismBoundsContext(t.Context(), payload.prism(), &freshWork, nil)
 		require.NoError(t, err)
 		require.Equal(t, fresh, cached)
-		require.Equal(t, fresh, body.bounds)
+		require.Equal(t, fresh, boxFromInternal(body.n.Bounds))
 		for _, pair := range [][2]float64{
 			{fresh.Min.X, cached.Min.X}, {fresh.Min.Y, cached.Min.Y}, {fresh.Min.Z, cached.Min.Z},
 			{fresh.Max.X, cached.Max.X}, {fresh.Max.Y, cached.Max.Y}, {fresh.Max.Z, cached.Max.Z},
 			{fresh.Bound.Base(), cached.Bound.Base()},
-			{fresh.Min.X, body.bounds.Min.X}, {fresh.Min.Y, body.bounds.Min.Y}, {fresh.Min.Z, body.bounds.Min.Z},
-			{fresh.Max.X, body.bounds.Max.X}, {fresh.Max.Y, body.bounds.Max.Y}, {fresh.Max.Z, body.bounds.Max.Z},
-			{fresh.Bound.Base(), body.bounds.Bound.Base()},
+			{fresh.Min.X, body.n.Bounds.Min.X}, {fresh.Min.Y, body.n.Bounds.Min.Y}, {fresh.Min.Z, body.n.Bounds.Min.Z},
+			{fresh.Max.X, body.n.Bounds.Max.X}, {fresh.Max.Y, body.n.Bounds.Max.Y}, {fresh.Max.Z, body.n.Bounds.Max.Z},
+			{fresh.Bound.Base(), body.n.Bounds.Bound.Base()},
 		} {
 			require.Equal(t, math.Float64bits(pair[0]), math.Float64bits(pair[1]))
 		}

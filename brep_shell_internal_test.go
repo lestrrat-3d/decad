@@ -215,7 +215,7 @@ func requireThroughShellLumps(t *testing.T, body *Body, sel FaceSelector, th uni
 	bp, ok := result.payload.(brepPayload)
 	require.True(t, ok, "route S builds a brep, got %T", result.payload)
 	lo, hi := piEnclosed(a, b)
-	requireCoversInterval(t, result.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 	require.Len(t, result.Lumps(), lumps)
 	for _, e := range result.Edges() {
 		require.Len(t, e.Faces(), 2)
@@ -378,8 +378,8 @@ func TestBrepShellThroughCutBothCaps(t *testing.T) {
 	placed, err := Transform(t.Context(), s1, move)
 	require.NoError(t, err)
 	moved, _ := requireThroughShell(t, placed, both, units.Millimeters(2), big.NewRat(4480, 1), big.NewRat(220, 1))
-	require.Equal(t, result.volume, moved.volume)
-	require.Equal(t, r3.NewVec(5, -7, 3), moved.bounds.Min)
+	require.Equal(t, measurementFromInternal(result.n.Volume), measurementFromInternal(moved.n.Volume))
+	require.Equal(t, r3.NewVec(5, -7, 3), moved.n.Bounds.Min)
 }
 
 // TestBrepShellThroughCutP6 pins P6 with its top removed at 2 mm: 23 faces,
@@ -540,7 +540,7 @@ func TestBrepShellThroughCutNotchedCap(t *testing.T) {
 	base := big.NewRat(5632, 1)
 	lo := sub(add(base, mul(big.NewRat(220, 1), proofbound.PiLower)), mul(big.NewRat(16, 1), segHi))
 	hi := sub(add(base, mul(big.NewRat(220, 1), proofbound.PiUpper)), mul(big.NewRat(16, 1), segLo))
-	requireCoversInterval(t, result.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 }
 
 // shellInchClosedForm is P8 shelled at its top by t = 127/50 mm (0.1 in):
@@ -1156,9 +1156,9 @@ func TestBrepShellThroughCutDisplacedWallGap(t *testing.T) {
 			areaHi = upper
 		}
 		denotedHi := sub(areaHi, lossLo)
-		held, bound := rat(result.area.Value.Base()), rat(result.area.Bound.Base())
+		held, bound := rat(result.n.Area.Value.Base()), rat(result.n.Area.Bound.Base())
 		require.LessOrEqual(t, sub(held, bound).Cmp(denotedHi), 0,
-			"%s ± %s lies above the denoted area, at most %s", result.area.Value, result.area.Bound, denotedHi.FloatString(12))
+			"%s ± %s lies above the denoted area, at most %s", result.n.Area.Value, result.n.Area.Bound, denotedHi.FloatString(12))
 	}
 	requireRefusesUnchanged(t, body, before, err, "modify-general SG6")
 }

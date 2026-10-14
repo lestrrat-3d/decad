@@ -198,7 +198,7 @@ func TestBrepModifyEdgeFilletS1VerticalEdge(t *testing.T) {
 	require.Error(t, doc.requireLive(s1), "the receiver is retired")
 	bp := requireBrepResult(t, out, 8)
 	lo, hi := piEnclosed(big.NewRat(15920, 1), big.NewRat(-160, 1))
-	requireCoversInterval(t, out.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 
 	yFace := planarFaceAt(t, bp, r3.NewVec(0, -1, 0), 0)
 	require.Contains(t, yFace.region.Outer.Segments,
@@ -228,8 +228,8 @@ func TestBrepModifyEdgeChamferB1VerticalEdge(t *testing.T) {
 	out, err := Chamfer(t.Context(), b1, edgeAt(routeEZ, r3.Vec{}), units.Millimeters(2))
 	require.NoError(t, err)
 	requireBrepResult(t, out, 11)
-	require.Equal(t, Exact, out.volume.Exactness)
-	require.Equal(t, 13960.0, out.volume.Value.Base())
+	require.Equal(t, Exact, Exactness(out.n.Volume.Exactness))
+	require.Equal(t, 13960.0, out.n.Volume.Value.Base())
 	require.Len(t, blendFaces(out, "chamfer"), 1)
 }
 
@@ -250,7 +250,7 @@ func TestBrepModifyEdgeFilletPocketCorners(t *testing.T) {
 	require.NoError(t, err)
 	bp := requireBrepResult(t, out, 15)
 	lo, hi := piEnclosed(big.NewRat(15080, 1), big.NewRat(-20, 1))
-	requireCoversInterval(t, out.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 
 	centres := []planePoint{{U: 12, V: 17}, {U: 28, V: 17}, {U: 28, V: 23}, {U: 12, V: 23}}
 	centresOf := func(arcs []arcEnds) []planePoint {
@@ -289,8 +289,8 @@ func TestBrepModifyEdgeChamferCornerBoss(t *testing.T) {
 	out, err := Chamfer(t.Context(), boss, edgeAt(routeEZ, r3.NewVec(10, -10, 25)), units.Millimeters(2))
 	require.NoError(t, err)
 	bp := requireBrepResult(t, out, 10)
-	require.Equal(t, Exact, out.volume.Exactness)
-	require.Equal(t, 17470.0, out.volume.Value.Base())
+	require.Equal(t, Exact, Exactness(out.n.Volume.Exactness))
+	require.Equal(t, 17470.0, out.n.Volume.Value.Base())
 	for _, z := range []float64{10, 25} {
 		requireChord(t, planarFaceAt(t, bp, routeEZ, z).region.Outer, planePoint{U: 10, V: -12}, planePoint{U: 12, V: -10})
 	}
@@ -313,7 +313,7 @@ func TestBrepModifyEdgeFilletConcavePlanarEdge(t *testing.T) {
 	require.NoError(t, err)
 	requireBrepResult(t, out, 12)
 	lo, hi := piEnclosed(big.NewRat(17140, 1), big.NewRat(-15, 4))
-	requireCoversInterval(t, out.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 }
 
 // pocketFloorEdges selects the Pocket's floor edges along dir, or all four
@@ -347,7 +347,7 @@ func TestBrepModifyEdgeFilletPocketFloorEdges(t *testing.T) {
 	require.NoError(t, err)
 	bp := requireBrepResult(t, out, 13)
 	lo, hi := piEnclosed(big.NewRat(15040, 1), big.NewRat(-10, 1))
-	requireCoversInterval(t, out.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 	require.Len(t, blendFaces(out, "fillet"), 2)
 
 	swept := 0
@@ -417,7 +417,7 @@ func TestBrepModifyEdgeChamferS1AlongX(t *testing.T) {
 	require.NoError(t, err)
 	bp := requireBrepResult(t, out, 8)
 	lo, hi := piEnclosed(big.NewRat(15920, 1), big.NewRat(-180, 1))
-	requireCoversInterval(t, out.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 	require.Len(t, blendFaces(out, "chamfer"), 1)
 	// x = 0: u along z, v along y; x = 40: u along y, v along z.
 	for _, f := range []brepFace{planarFaceAt(t, bp, routeEX.Scale(-1), 0), planarFaceAt(t, bp, routeEX, 40)} {
@@ -462,7 +462,7 @@ func internalSplitWallS1(t *testing.T) *Body {
 	region.Outer = loopRecord{Segments: segs}
 	bp.faces[side].region = &region
 	body := internalCommitBrep(t, doc, bp)
-	require.Equal(t, s1.volume, body.volume)
+	require.Equal(t, measurementFromInternal(s1.n.Volume), measurementFromInternal(body.n.Volume))
 	return body
 }
 
@@ -603,8 +603,8 @@ func TestBrepModifyEdgeConsumersOnS1Fillet(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := Copy(t.Context(), out, WithCopyPlacement(move))
 	require.NoError(t, err)
-	require.Equal(t, out.volume, placed.volume)
-	require.Equal(t, out.area, placed.area)
+	require.Equal(t, measurementFromInternal(out.n.Volume), measurementFromInternal(placed.n.Volume))
+	require.Equal(t, measurementFromInternal(out.n.Area), measurementFromInternal(placed.n.Area))
 	requireRoles(t, placed, blendFaces(placed, "fillet"), "wall(7)", "fillet(7)")
 }
 
