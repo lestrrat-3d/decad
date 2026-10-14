@@ -70,7 +70,7 @@ func TestStackedLumpsNeedsOneOuterShellForACavity(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lumps, 1)
 	require.Len(t, lumps[0].shells, 2)
-	require.True(t, lumps[0].shells[1].void)
+	require.True(t, lumps[0].shells[1].n.Void)
 	_, err = stackedLumps([]*Face{outerA, outerB, cavity}, anchors)
 	require.ErrorIs(t, err, ErrUnsupported)
 	lumps, err = stackedLumps([]*Face{outerA, outerB}, anchors)

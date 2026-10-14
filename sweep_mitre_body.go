@@ -117,8 +117,8 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 			capStartCo[m-1-j] = coedge{edge: sec[0][v], forward: false}
 			capEndCo[j] = coedge{edge: sec[a.Spans][v], forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{outer: i == 0, coedges: loftLoopCoedges(capStartCo, a.Reversed)})
-		capEndLoops = append(capEndLoops, &Loop{outer: i == 0, coedges: loftLoopCoedges(capEndCo, a.Reversed)})
+		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: i == 0}, coedges: loftLoopCoedges(capStartCo, a.Reversed)})
+		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: i == 0}, coedges: loftLoopCoedges(capEndCo, a.Reversed)})
 	}
 	capStartSurf, err := planeFromTriangle(verts, a.Tris[a.Walls])
 	if err != nil {
@@ -175,7 +175,7 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 						AreaBound: bound,
 					},
 				}
-				face.loops = []*Loop{{outer: true, coedges: loftLoopCoedges([]coedge{
+				face.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
 					{edge: sec[k][v], forward: true},
 					{edge: lon[k][next[v]], forward: true},
 					{edge: sec[k+1][v], forward: false},

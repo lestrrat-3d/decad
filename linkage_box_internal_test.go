@@ -178,14 +178,14 @@ func TestVerifyJointBoxKeepsTheNextProducerIdentity(t *testing.T) {
 	slide, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*Body{cube})
 	require.NoError(t, err)
 	before := doc.nextProducerID()
-	levelBefore, curveBefore := doc.nextLevel, doc.nextCurve
+	levelBefore, curveBefore := doc.n.NextLevel, doc.n.NextCurve
 	report, err := doc.VerifyJointBox(t.Context(), l, JointBox{{Link: slide, Min: units.Millimeters(0), Max: units.Millimeters(30)}},
 		WithResolution(units.Scalar(1.0/4)))
 	require.NoError(t, err)
 	require.Greater(t, report.CellsEvaluated, 1)
 	require.Equal(t, before, doc.nextProducerID())
-	require.Equal(t, levelBefore, doc.nextLevel)
-	require.Equal(t, curveBefore, doc.nextCurve)
+	require.Equal(t, levelBefore, doc.n.NextLevel)
+	require.Equal(t, curveBefore, doc.n.NextCurve)
 }
 
 // TestVerifyJointBoxRefusesABodyItDidNotBuild is §8's row the public API

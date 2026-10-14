@@ -166,8 +166,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		}
 		faces = append(faces, sideFaces...)
 		perimeter = proofbound.BoundedAdd(perimeter, loopLen)
-		capStart.loops = append(capStart.loops, &Loop{coedges: bottom, outer: li == 0})
-		capEnd.loops = append(capEnd.loops, &Loop{coedges: top, outer: li == 0})
+		capStart.loops = append(capStart.loops, &Loop{coedges: bottom, n: topo.Loop{Outer: li == 0}})
+		capEnd.loops = append(capEnd.loops, &Loop{coedges: top, n: topo.Loop{Outer: li == 0}})
 	}
 	// A surface result omits both caps from the shell (Table W,
 	// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
@@ -675,8 +675,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			// A closed cylindrical band has TWO boundary loops — one circle
 			// per cap — not one loop holding both.
 			face.loops = []*Loop{
-				{coedges: []coedge{{edge: bottomEdge, forward: true}}, outer: true},
-				{coedges: []coedge{{edge: topEdge, forward: false}}, outer: true},
+				{coedges: []coedge{{edge: bottomEdge, forward: true}}, n: topo.Loop{Outer: true}},
+				{coedges: []coedge{{edge: topEdge, forward: false}}, n: topo.Loop{Outer: true}},
 			}
 		} else {
 			face.loops = []*Loop{{coedges: []coedge{
@@ -684,7 +684,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 				{edge: vertical[(i+1)%n], forward: true},
 				{edge: topEdge, forward: false},
 				{edge: vertical[i], forward: false},
-			}, outer: true}}
+			}, n: topo.Loop{Outer: true}}}
 		}
 
 		bottomEdge.faces = append(bottomEdge.faces, face)

@@ -185,7 +185,7 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
 			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
 		}
-		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, outer: true}
+		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
 		face := &Face{surface: Plane{Frame: planeFrame}, loops: []*Loop{loop}}
 
 		_, err := st.faceHalfPlane(face)
@@ -199,7 +199,7 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
 			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
 		}
-		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, outer: true}
+		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
 		face := &Face{surface: Plane{Frame: planeFrame}, loops: []*Loop{loop}}
 
 		_, err := st.faceHalfPlane(face)
@@ -216,7 +216,7 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 			start: &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}},
 			end:   &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 5)}},
 		}
-		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, outer: true}
+		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, n: topo.Loop{Outer: true}}
 		face := &Face{surface: Plane{Frame: planeFrame}, loops: []*Loop{loop}}
 
 		phi, err := st.faceHalfPlane(face)

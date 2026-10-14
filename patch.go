@@ -166,7 +166,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		if err != nil {
 			return nil, err
 		}
-		faceLoops = append(faceLoops, &Loop{coedges: coedges, outer: li == 0})
+		faceLoops = append(faceLoops, &Loop{coedges: coedges, n: topo.Loop{Outer: li == 0}})
 	}
 
 	// The positive side is the sketch plane's own normal — the sense
@@ -193,7 +193,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, err
 	}
 
-	shell := &FaceShell{faces: []*Face{face}, open: true}
+	shell := &FaceShell{faces: []*Face{face}, n: topo.FaceShell{Open: true}}
 	body.lumps = []*Lump{{shells: []*FaceShell{shell}}}
 
 	body.area = Measurement{

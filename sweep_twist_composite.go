@@ -568,7 +568,7 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 				return fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
 			}
 			face := &Face{
-				surface: Faceted{}, loops: []*Loop{{outer: true, coedges: outline}},
+				surface: Faceted{}, loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: outline}},
 				origins: []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}},
 				body:    body, n: topo.Face{Area: area, AreaBound: areaBound},
 			}

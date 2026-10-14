@@ -71,7 +71,7 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 		selected[edge] = struct{}{}
 	}
 	for _, cap := range caps {
-		if len(cap.loops) == 0 || !cap.loops[0].outer {
+		if len(cap.loops) == 0 || !cap.loops[0].n.Outer {
 			return nil, false, nil
 		}
 		for _, edge := range cap.loops[0].Edges() {
@@ -115,7 +115,7 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 // replaced by the other end's polygon when the cap band is built.
 func matchingLoftHeldCapOuters(frame r3.Frame, start, end *Face) bool {
 	if len(start.loops) == 0 || len(end.loops) == 0 ||
-		!start.loops[0].outer || !end.loops[0].outer ||
+		!start.loops[0].n.Outer || !end.loops[0].n.Outer ||
 		len(start.loops[0].coedges) != len(end.loops[0].coedges) {
 		return false
 	}

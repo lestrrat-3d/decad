@@ -630,7 +630,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				}
 				coedges[j] = coedge{edge: eb.edge, forward: forward}
 			}
-			nf.loops = append(nf.loops, &Loop{coedges: coedges, outer: l.outer})
+			nf.loops = append(nf.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: l.n.Outer}})
 		}
 		newFaces[i] = nf
 	}
@@ -832,7 +832,7 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 			loopIdx[li] = idxs
 		}
 		for li, l := range f.loops {
-			wantCCW := l.outer
+			wantCCW := l.n.Outer
 			isCCW := shoelace(pts, loopIdx[li]) > 0
 			if wantCCW != isCCW {
 				reverseIntSlice(loopIdx[li])

@@ -190,7 +190,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			lowerFace.loops = []*Loop{{outer: true, coedges: loftLoopCoedges([]coedge{
+			lowerFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
 				{edge: rimBottom[j], forward: true},
 				{edge: rungE[jn], forward: true},
 				{edge: diagE[j], forward: false},
@@ -201,7 +201,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			upperFace.loops = []*Loop{{outer: true, coedges: loftLoopCoedges([]coedge{
+			upperFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
 				{edge: diagE[j], forward: true},
 				{edge: rimTop[j], forward: false},
 				{edge: rungE[j], forward: false},
@@ -211,8 +211,8 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			capStartCo[n-1-j] = coedge{edge: rimBottom[j], forward: false}
 			capEndCo[j] = coedge{edge: rimTop[j], forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{outer: isOuter, coedges: loftLoopCoedges(capStartCo, a.Reversed)})
-		capEndLoops = append(capEndLoops, &Loop{outer: isOuter, coedges: loftLoopCoedges(capEndCo, a.Reversed)})
+		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: isOuter}, coedges: loftLoopCoedges(capStartCo, a.Reversed)})
+		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: isOuter}, coedges: loftLoopCoedges(capEndCo, a.Reversed)})
 	}
 
 	capStartSurf, err := planeFromTriangle(a.Verts, a.Tris[a.Walls])

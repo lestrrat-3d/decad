@@ -471,8 +471,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		perLoop[li] = parts
 		sideArea = proofbound.BoundedAdd(sideArea, parts.area)
 		if !rp.full {
-			capStart.loops = append(capStart.loops, &Loop{coedges: parts.startCo, outer: li == 0})
-			capEnd.loops = append(capEnd.loops, &Loop{coedges: parts.endCo, outer: li == 0})
+			capStart.loops = append(capStart.loops, &Loop{coedges: parts.startCo, n: topo.Loop{Outer: li == 0}})
+			capEnd.loops = append(capEnd.loops, &Loop{coedges: parts.endCo, n: topo.Loop{Outer: li == 0}})
 		}
 	}
 
@@ -522,7 +522,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			// each becomes its own Lump instead of one shell regardless.
 			lumps = sheetLumps(faces)
 		} else {
-			lumps = []*Lump{{shells: []*FaceShell{{faces: faces, open: shellIsOpen(faces)}}}}
+			lumps = []*Lump{{shells: []*FaceShell{{faces: faces, n: topo.FaceShell{Open: shellIsOpen(faces)}}}}}
 		}
 	}
 	body.lumps = lumps
@@ -916,8 +916,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			// copies — two loops, one whole closed edge each, mirroring the
 			// prism's whole-circle two-loop discipline.
 			face.loops = []*Loop{
-				{coedges: []coedge{{edge: cap0[i], forward: true}}, outer: true},
-				{coedges: []coedge{{edge: cap1[i], forward: false}}, outer: true},
+				{coedges: []coedge{{edge: cap0[i], forward: true}}, n: topo.Loop{Outer: true}},
+				{coedges: []coedge{{edge: cap1[i], forward: false}}, n: topo.Loop{Outer: true}},
 			}
 		default:
 			co := []coedge{{edge: cap0[i], forward: true}}
@@ -928,7 +928,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			if a := js[i].arc; a != nil {
 				co = append(co, coedge{edge: a, forward: false})
 			}
-			face.loops = []*Loop{{coedges: co, outer: true}}
+			face.loops = []*Loop{{coedges: co, n: topo.Loop{Outer: true}}}
 		}
 		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
 			return revLoopParts{}, err
@@ -979,7 +979,7 @@ func fullRevolveShellsContext(ctx context.Context, perLoop []revLoopParts, sheet
 				continue
 			}
 			void := !sheet && (li != 0 || r != parts.outerRun)
-			shells = append(shells, &FaceShell{faces: group, open: shellIsOpen(group), void: void})
+			shells = append(shells, &FaceShell{faces: group, n: topo.FaceShell{Open: shellIsOpen(group), Void: void}})
 		}
 	}
 	return shells, nil
@@ -1001,12 +1001,12 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 	}
 	var loops []*Loop
 	if j0.lat != nil {
-		loops = append(loops, &Loop{coedges: []coedge{{edge: j0.lat, forward: true}}, outer: outer0})
+		loops = append(loops, &Loop{coedges: []coedge{{edge: j0.lat, forward: true}}, n: topo.Loop{Outer: outer0}})
 	}
 	if j1.lat != nil {
-		loops = append(loops, &Loop{coedges: []coedge{{edge: j1.lat, forward: false}}, outer: outer1})
+		loops = append(loops, &Loop{coedges: []coedge{{edge: j1.lat, forward: false}}, n: topo.Loop{Outer: outer1}})
 	}
-	if len(loops) == 2 && !loops[0].outer {
+	if len(loops) == 2 && !loops[0].n.Outer {
 		loops[0], loops[1] = loops[1], loops[0]
 	}
 	return loops
@@ -1416,7 +1416,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 			if a := js[i].arc; a != nil {
 				co = append(co, coedge{edge: a, forward: false})
 			}
-			face.loops = []*Loop{{coedges: co, outer: true}}
+			face.loops = []*Loop{{coedges: co, n: topo.Loop{Outer: true}}}
 		}
 		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
 			return nil, proofbound.BoundedScalar{}, err

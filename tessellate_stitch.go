@@ -97,7 +97,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 		}
 		for li, loop := range copied.loops {
 			oldLoop := original.loops[li]
-			if len(loop.coedges) != len(oldLoop.coedges) || loop.outer != oldLoop.outer {
+			if len(loop.coedges) != len(oldLoop.coedges) || loop.n.Outer != oldLoop.n.Outer {
 				return nil, nil, "an unstitched face changed its coedge layout"
 			}
 			for ci, ce := range loop.coedges {

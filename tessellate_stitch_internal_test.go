@@ -373,13 +373,13 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 	f = &Face{
 		surface: Plane{Frame: frame},
 		loops: []*Loop{
-			{outer: true, coedges: []coedge{
+			{n: topo.Loop{Outer: true}, coedges: []coedge{
 				{edge: outerEdges[0], forward: true},
 				{edge: outerEdges[1], forward: true},
 				{edge: outerEdges[2], forward: true},
 				{edge: outerEdges[3], forward: true},
 			}},
-			{outer: false, coedges: []coedge{
+			{n: topo.Loop{Outer: false}, coedges: []coedge{
 				{edge: holeEdges[0], forward: true},
 				{edge: holeEdges[1], forward: true},
 				{edge: holeEdges[2], forward: true},

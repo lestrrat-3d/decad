@@ -40,13 +40,13 @@ func TestStitchOrientationRefusesMobiusAssembly(t *testing.T) {
 	e23 := &Edge{curve: Line3{}, start: &Vertex{}, end: &Vertex{}}
 	e31 := &Edge{curve: Line3{}, start: &Vertex{}, end: &Vertex{}}
 
-	f1 := &Face{loops: []*Loop{{outer: true, coedges: []coedge{
+	f1 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 		{edge: e12, forward: true}, {edge: e31, forward: true},
 	}}}}
-	f2 := &Face{loops: []*Loop{{outer: true, coedges: []coedge{
+	f2 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 		{edge: e12, forward: true}, {edge: e23, forward: true},
 	}}}}
-	f3 := &Face{loops: []*Loop{{outer: true, coedges: []coedge{
+	f3 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 		{edge: e23, forward: true}, {edge: e31, forward: true},
 	}}}}
 	e12.faces = []*Face{f1, f2}
@@ -66,9 +66,9 @@ func TestStitchOrientationRefusesMobiusAssembly(t *testing.T) {
 func TestStitchClosureRefusesNonManifoldEdge(t *testing.T) {
 	t.Parallel()
 	e := &Edge{curve: Line3{}, start: &Vertex{}, end: &Vertex{}}
-	f1 := &Face{loops: []*Loop{{outer: true, coedges: []coedge{{edge: e, forward: true}}}}}
-	f2 := &Face{loops: []*Loop{{outer: true, coedges: []coedge{{edge: e, forward: false}}}}}
-	f3 := &Face{loops: []*Loop{{outer: true, coedges: []coedge{{edge: e, forward: true}}}}}
+	f1 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}}}
+	f2 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: false}}}}}
+	f3 := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}}}
 	e.faces = []*Face{f1, f2, f3}
 
 	err := checkStitchClosure([]*Face{f1, f2, f3})
@@ -105,7 +105,7 @@ func stitchTestSquareFace(corner r3.Vec) *Face {
 	}
 	f := &Face{
 		surface: Plane{Frame: frame},
-		loops: []*Loop{{outer: true, coedges: []coedge{
+		loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 			{edge: edges[0], forward: true},
 			{edge: edges[1], forward: true},
 			{edge: edges[2], forward: true},
@@ -195,7 +195,7 @@ func stitchTestFanAroundVertex(v *Vertex, outer [3]*Vertex) [3]*Face {
 		// Triangle (v, outer[i], outer[j]): v -> outer[i] via radial[i]
 		// forward, outer[i] -> outer[j] via rim[i] forward, outer[j] -> v
 		// via radial[j] backward.
-		faces[i] = &Face{loops: []*Loop{{outer: true, coedges: []coedge{
+		faces[i] = &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 			{edge: radial[i], forward: true},
 			{edge: rim[i], forward: true},
 			{edge: radial[j], forward: false},
@@ -371,8 +371,8 @@ func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound flo
 	f := &Face{
 		surface: Cylinder{Origin: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)},
 		loops: []*Loop{
-			{outer: true, coedges: []coedge{{edge: e0, forward: true}}},
-			{outer: true, coedges: []coedge{{edge: e1, forward: true}}},
+			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e0, forward: true}}},
+			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e1, forward: true}}},
 		},
 		n: topo.Face{
 			Area:      area,
@@ -455,7 +455,7 @@ func stitchTestPlaneDiskFace(r, rimBound float64) *Face {
 	e := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v, end: v, n: topo.Edge{Length: 2 * math.Pi * r, LengthBound: rimBound}}
 	f := &Face{
 		surface: Plane{Frame: frame},
-		loops:   []*Loop{{outer: true, coedges: []coedge{{edge: e, forward: true}}}},
+		loops:   []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}},
 	}
 	e.faces = []*Face{f}
 	return f
@@ -508,7 +508,7 @@ func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
 	}
 	face := &Face{
 		surface: Plane{Frame: frame},
-		loops:   []*Loop{{outer: true, coedges: []coedge{{edge: edge, forward: true}}}},
+		loops:   []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: edge, forward: true}}}},
 	}
 	edge.faces = []*Face{face}
 
@@ -567,8 +567,8 @@ func stitchTestConeFace(halfAngle, r0, z0, r1, z1, rimBound float64) *Face {
 	f := &Face{
 		surface: Cone{Origin: r3.NewVec(0, 0, 0), Axis: axis, Radius: units.Millimeters(0), HalfAngle: units.Radians(halfAngle)},
 		loops: []*Loop{
-			{outer: true, coedges: []coedge{{edge: e0, forward: true}}},
-			{outer: true, coedges: []coedge{{edge: e1, forward: true}}},
+			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e0, forward: true}}},
+			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e1, forward: true}}},
 		},
 	}
 	e0.faces, e1.faces = []*Face{f}, []*Face{f}
@@ -854,7 +854,7 @@ func TestStitchSphereFluxRefusesFaceWithABoundaryLoop(t *testing.T) {
 	}
 	f := &Face{
 		surface: Sphere{Center: r3.NewVec(5, 0, 0), Radius: units.Millimeters(5)},
-		loops:   []*Loop{{outer: true, coedges: []coedge{{edge: e, forward: true}}}},
+		loops:   []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e, forward: true}}}},
 		n:       topo.Face{Area: 4 * math.Pi * 25},
 	}
 	e.faces = []*Face{f}
@@ -980,8 +980,8 @@ func stitchTestTorusFace(center, axis r3.Vec, major, minor, e0, e1 float64) *Fac
 	f := &Face{
 		surface: Torus{Center: center, Axis: axis, Major: units.Millimeters(major), Minor: units.Millimeters(minor)},
 		loops: []*Loop{
-			{outer: true, coedges: []coedge{{edge: e0Edge, forward: true}}},
-			{outer: true, coedges: []coedge{{edge: e1Edge, forward: true}}},
+			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e0Edge, forward: true}}},
+			{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: e1Edge, forward: true}}},
 		},
 	}
 	e0Edge.faces, e1Edge.faces = []*Face{f}, []*Face{f}
@@ -1217,7 +1217,7 @@ func stitchTestLumpFace(vs []*Vertex) *Face {
 		e := &Edge{curve: Line3{}, start: vs[i], end: vs[(i+1)%len(vs)]}
 		coedges[i] = coedge{edge: e, forward: true}
 	}
-	return &Face{loops: []*Loop{{outer: true, coedges: coedges}}}
+	return &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: coedges}}}
 }
 
 // TestTessellateStitchClearsSymDiffForOverlappingLumps is docs/surface-design.md's

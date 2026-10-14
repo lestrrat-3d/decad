@@ -701,7 +701,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 				}
 				coedges[j] = coedge{edge: ne, forward: ce.forward}
 			}
-			nf.loops = append(nf.loops, &Loop{coedges: coedges, outer: l.outer})
+			nf.loops = append(nf.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: l.n.Outer}})
 		}
 		newFaces[i] = nf
 	}
@@ -831,7 +831,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 	return &Face{
 		surface: Plane{Frame: frame},
 		origins: []FeatureRef{{producer: ref, Role: rolePatch}},
-		loops:   []*Loop{{coedges: coedges, outer: true}},
+		loops:   []*Loop{{coedges: coedges, n: topo.Loop{Outer: true}}},
 		n: topo.Face{
 			Area:      ig.Area,
 			AreaBound: ig.AreaBound,

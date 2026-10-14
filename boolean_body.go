@@ -536,7 +536,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		shells[ci] = &FaceShell{faces: compFaces[ci], void: compVol[ci].Sign() < 0}
+		shells[ci] = &FaceShell{faces: compFaces[ci], n: topo.FaceShell{Void: compVol[ci].Sign() < 0}}
 		if compVol[ci].Sign() > 0 {
 			l := &Lump{shells: []*FaceShell{shells[ci]}}
 			lumpOf[ci] = l
@@ -806,7 +806,7 @@ func buildFacetedTopology(
 	for fi, loops := range plan.FaceLoops {
 		f := faces[fi]
 		for _, planned := range loops {
-			loop := &Loop{outer: planned.Outer}
+			loop := &Loop{n: topo.Loop{Outer: planned.Outer}}
 			for _, ce := range planned.Coedges {
 				loop.coedges = append(loop.coedges, coedge{edge: edgeObj[ce.Edge], forward: ce.Forward})
 			}

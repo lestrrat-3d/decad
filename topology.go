@@ -493,12 +493,13 @@ func (e *Edge) Length() (Measurement, error) {
 // Loop is one boundary loop of a face.
 type Loop struct {
 	coedges []coedge
-	outer   bool
+	// n is the node data internal packages read and build (internal/topo).
+	n topo.Loop
 }
 
 // IsOuter reports whether this is the face's outer boundary; false for a
 // hole.
-func (l *Loop) IsOuter() bool { return l.outer }
+func (l *Loop) IsOuter() bool { return l.n.Outer }
 
 // CoEdges returns the loop's directed edge uses in walk order. The returned
 // slice is a copy; each CoEdge is an immutable view of the loop's stored use.
@@ -710,15 +711,15 @@ func (f *Face) Origins() []FeatureRef { return append([]FeatureRef(nil), f.origi
 // FaceShell is a connected set of faces.
 type FaceShell struct {
 	faces []*Face
-	void  bool
-	open  bool
+	// n is the node data internal packages read and build (internal/topo).
+	n topo.FaceShell
 }
 
 // IsVoid reports whether the shell bounds an internal cavity. IsVoid and
 // IsOpen are independent questions and neither implies the other
 // (docs/surface-design.md §2.2): a void solid shell and an open sheet shell
 // are both ordinary states, and nothing rules out either combination.
-func (s *FaceShell) IsVoid() bool { return s.void }
+func (s *FaceShell) IsVoid() bool { return s.n.Void }
 
 // IsOpen reports whether the shell has at least one free edge
 // (docs/surface-design.md §2.2). IsOpen and IsVoid are independent questions
@@ -727,7 +728,7 @@ func (s *FaceShell) IsVoid() bool { return s.void }
 // omitted a closing face and left a rim with no second face to pair it with
 // (extrude.go, revolve_build.go), and false for a closed sheet that mints no
 // such rim — a full revolution (docs/surface-design.md Table W).
-func (s *FaceShell) IsOpen() bool { return s.open }
+func (s *FaceShell) IsOpen() bool { return s.n.Open }
 
 // Faces returns the shell's faces.
 func (s *FaceShell) Faces() []*Face { return append([]*Face(nil), s.faces...) }

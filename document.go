@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-go/option/v3"
 )
@@ -18,18 +18,10 @@ import (
 // concurrently with one another. The bodies it hands out are immutable and
 // safe to read from anywhere.
 type Document struct {
-	// mu guards bodies alone. Every reader takes a snapshot under it
-	// (liveBodies) and works on that copy, so a Remove racing a Verify never
-	// shifts the slice a reader is walking.
-	mu           sync.RWMutex
+	// n is the node data internal packages read and build (internal/topo).
+	n            topo.Document
 	bodies       []*Body
 	nextProducer producerID
-	// nextLevel is denotation.go's own counter behind mintLevel: the LEVEL
-	// half of the shared-denotation certificate.
-	nextLevel levelID
-	// nextCurve is denotation.go's own counter behind mintCurve: the CURVE
-	// half of the shared-denotation certificate.
-	nextCurve curveID
 }
 
 // DocumentOption is a placeholder option tier for New. No options exist yet;
@@ -52,8 +44,8 @@ func (d *Document) Bodies() []*Body {
 
 // liveBodies is the snapshot every internal reader of the live set walks.
 func (d *Document) liveBodies() []*Body {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
+	d.n.Mu.RLock()
+	defer d.n.Mu.RUnlock()
 	return append([]*Body(nil), d.bodies...)
 }
 
@@ -80,8 +72,8 @@ func (d *Document) Remove(b *Body) error {
 	if b.doc != d {
 		return ErrForeignBody
 	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.n.Mu.Lock()
+	defer d.n.Mu.Unlock()
 	if !slices.Contains(d.bodies, b) {
 		return ErrRetiredBody
 	}
@@ -95,8 +87,8 @@ func (d *Document) Remove(b *Body) error {
 // a rejected operation leaves the document untouched.
 func (d *Document) commit(produced *Body, consumed ...*Body) {
 	d.nextProducer++
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.n.Mu.Lock()
+	defer d.n.Mu.Unlock()
 	for _, c := range consumed {
 		d.retire(c)
 	}
@@ -115,8 +107,8 @@ func (d *Document) commit(produced *Body, consumed ...*Body) {
 // producer.
 func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
 	d.nextProducer += producerID(len(produced))
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.n.Mu.Lock()
+	defer d.n.Mu.Unlock()
 	for _, c := range consumed {
 		d.retire(c)
 	}
@@ -131,8 +123,8 @@ func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
 // producer never repeats one a result's provenance can carry.
 func (d *Document) commitSpan(produced *Body, span producerID, consumed ...*Body) {
 	d.nextProducer += span
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.n.Mu.Lock()
+	defer d.n.Mu.Unlock()
 	for _, c := range consumed {
 		d.retire(c)
 	}
@@ -154,8 +146,8 @@ func (d *Document) retire(b *Body) {
 
 // isLive reports whether b is currently part of the model.
 func (d *Document) isLive(b *Body) bool {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
+	d.n.Mu.RLock()
+	defer d.n.Mu.RUnlock()
 	return slices.Contains(d.bodies, b)
 }
 

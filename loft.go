@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -488,7 +489,7 @@ func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, ver
 		if err != nil {
 			return nil, err
 		}
-		lowerFace.loops = []*Loop{{outer: true, coedges: []coedge{
+		lowerFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 			{edge: rimBottom[j], forward: true},
 			{edge: rungE[j+1], forward: true},
 			{edge: diagE[j], forward: false},
@@ -499,7 +500,7 @@ func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, ver
 		if err != nil {
 			return nil, err
 		}
-		upperFace.loops = []*Loop{{outer: true, coedges: []coedge{
+		upperFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 			{edge: diagE[j], forward: true},
 			{edge: rimTop[j], forward: false},
 			{edge: rungE[j], forward: false},

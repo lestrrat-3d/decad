@@ -478,7 +478,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				{edge: arc, forward: true},
 				{edge: slantOut[i], forward: true},
 				{edge: slantIn[i], forward: false},
-			}, outer: true}},
+			}, n: topo.Loop{Outer: true}}},
 		}
 		// Orientation: a corner's own offset carrier is an EROSION, and at a
 		// REFLEX corner the eroded boundary is the arc of radius dc about the
@@ -667,7 +667,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 				{edge: trailSlant, forward: false},
 				{edge: capEdge, forward: false},
 				{edge: leadSlant, forward: true},
-			}, outer: true}},
+			}, n: topo.Loop{Outer: true}}},
 		}
 		// Orientation: the reference is the ORIGINAL wall's own outward
 		// convention (the same "tangent rotated a quarter turn" rule
@@ -1094,8 +1094,8 @@ func capPatchWindowSkew(g capPatchGeom) float64 {
 func buildConePatch(pl prismPayload, body *Body, origins []FeatureRef, cu, cv, sideRadius, capRadius, sideZ, capZ float64, reversed bool, sideEdge, capEdge *Edge) *Face {
 	surf := coneSurface(pl, cu, cv, sideRadius, capRadius, sideZ, capZ)
 	loops := []*Loop{
-		{coedges: []coedge{{edge: sideEdge, forward: true}}, outer: true},
-		{coedges: []coedge{{edge: capEdge, forward: false}}, outer: true},
+		{coedges: []coedge{{edge: sideEdge, forward: true}}, n: topo.Loop{Outer: true}},
+		{coedges: []coedge{{edge: capEdge, forward: false}}, n: topo.Loop{Outer: true}},
 	}
 	face := &Face{surface: surf, origins: origins, body: body, n: topo.Face{Reversed: reversed}, loops: loops}
 	sideEdge.faces = append(sideEdge.faces, face)

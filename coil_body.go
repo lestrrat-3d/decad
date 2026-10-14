@@ -280,8 +280,8 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			startCo[m-1-k] = coedge{edge: rimStart[i], forward: false}
 			endCo[k] = coedge{edge: rimEnd[i], forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{outer: loop == 0, coedges: loftLoopCoedges(startCo, sh.Reversed)})
-		capEndLoops = append(capEndLoops, &Loop{outer: loop == 0, coedges: loftLoopCoedges(endCo, sh.Reversed)})
+		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: loop == 0}, coedges: loftLoopCoedges(startCo, sh.Reversed)})
+		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: loop == 0}, coedges: loftLoopCoedges(endCo, sh.Reversed)})
 	}
 	capStartSurf, err := planeFromTriangle(sh.Verts, sh.Tris[sh.Walls])
 	if err != nil {
@@ -346,11 +346,11 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		}
 		if seg.Closed {
 			face.loops = []*Loop{
-				{outer: true, coedges: loftLoopCoedges([]coedge{{edge: rimStart[i], forward: true}}, sh.Reversed)},
-				{outer: true, coedges: loftLoopCoedges([]coedge{{edge: rimEnd[i], forward: false}}, sh.Reversed)},
+				{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{{edge: rimStart[i], forward: true}}, sh.Reversed)},
+				{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{{edge: rimEnd[i], forward: false}}, sh.Reversed)},
 			}
 		} else {
-			face.loops = []*Loop{{outer: true, coedges: loftLoopCoedges([]coedge{
+			face.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
 				{edge: rimStart[i], forward: true},
 				{edge: helix[next], forward: true},
 				{edge: rimEnd[i], forward: false},

@@ -461,7 +461,7 @@ func (e selectorEdge) SelectorOnOuterLoop(ref FeatureRef) bool {
 			continue
 		}
 		for _, loop := range face.loops {
-			if !loop.outer {
+			if !loop.n.Outer {
 				continue
 			}
 			for _, ce := range loop.coedges {

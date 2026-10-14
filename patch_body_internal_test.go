@@ -178,7 +178,7 @@ func TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta(t *testing.
 	edges, tok := boundedSquareChain(1, units.Millimeters(0.002))
 	edgeCopy := map[*Edge]*Edge{}
 	for _, e := range edges {
-		f := &Face{loops: []*Loop{{coedges: []coedge{{edge: e, forward: true}}, outer: true}}}
+		f := &Face{loops: []*Loop{{coedges: []coedge{{edge: e, forward: true}}, n: topo.Loop{Outer: true}}}}
 		e.faces = []*Face{f}
 		edgeCopy[e] = e
 	}
@@ -240,7 +240,7 @@ func TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame(t *
 	}
 	edgeCopy := map[*Edge]*Edge{}
 	for _, e := range edges {
-		f := &Face{loops: []*Loop{{coedges: []coedge{{edge: e, forward: true}}, outer: true}}}
+		f := &Face{loops: []*Loop{{coedges: []coedge{{edge: e, forward: true}}, n: topo.Loop{Outer: true}}}}
 		e.faces = []*Face{f}
 		edgeCopy[e] = e
 	}
@@ -278,8 +278,8 @@ func TestOrientPatchChainRejectsDisagreeingAdjacentFaces(t *testing.T) {
 	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}}
 	a := &Edge{curve: Line3{}, start: v1, end: v2}
 	b := &Edge{curve: Line3{}, start: v1, end: v2}
-	faceA := &Face{loops: []*Loop{{coedges: []coedge{{edge: a, forward: true}}, outer: true}}}
-	faceB := &Face{loops: []*Loop{{coedges: []coedge{{edge: b, forward: true}}, outer: true}}}
+	faceA := &Face{loops: []*Loop{{coedges: []coedge{{edge: a, forward: true}}, n: topo.Loop{Outer: true}}}}
+	faceB := &Face{loops: []*Loop{{coedges: []coedge{{edge: b, forward: true}}, n: topo.Loop{Outer: true}}}}
 	a.faces = []*Face{faceA}
 	b.faces = []*Face{faceB}
 
@@ -309,7 +309,7 @@ func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 	edges := []*Edge{e1, e2, e3, e4}
 	edgeCopy := map[*Edge]*Edge{}
 	for _, e := range edges {
-		f := &Face{loops: []*Loop{{coedges: []coedge{{edge: e, forward: true}}, outer: true}}}
+		f := &Face{loops: []*Loop{{coedges: []coedge{{edge: e, forward: true}}, n: topo.Loop{Outer: true}}}}
 		e.faces = []*Face{f}
 		edgeCopy[e] = e
 	}
@@ -339,7 +339,7 @@ func TestBodyPatchRejectsAReceiverWithNoPayload(t *testing.T) {
 // thing under test and the other two must hold cleanly for the isolation to
 // mean anything.
 func patchTestReceiverWithOneChain(payload featurePayload, edges []*Edge) *Body {
-	loop := &Loop{outer: true}
+	loop := &Loop{n: topo.Loop{Outer: true}}
 	for _, e := range edges {
 		loop.coedges = append(loop.coedges, coedge{edge: e, forward: true})
 	}
@@ -390,7 +390,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 		start: cv, end: cv, n: topo.Edge{Level: tok},
 	}
 
-	outerLoop := &Loop{outer: true}
+	outerLoop := &Loop{n: topo.Loop{Outer: true}}
 	for _, e := range outer {
 		outerLoop.coedges = append(outerLoop.coedges, coedge{edge: e, forward: true})
 	}
@@ -398,7 +398,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	for _, e := range outer {
 		e.faces = []*Face{outerFace}
 	}
-	innerFace := &Face{loops: []*Loop{{outer: true, coedges: []coedge{{edge: inner, forward: true}}}}}
+	innerFace := &Face{loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{{edge: inner, forward: true}}}}}
 	inner.faces = []*Face{innerFace}
 
 	receiver := &Body{payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}}

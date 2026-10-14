@@ -216,8 +216,8 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			return nil, wrapStageError(`the tapered extrude's walls`, err)
 		}
 		faces = append(faces, band.patches...)
-		nearLoops[li] = &Loop{coedges: nearCo, outer: li == 0}
-		farLoops[li] = &Loop{coedges: band.capCo, outer: li == 0}
+		nearLoops[li] = &Loop{coedges: nearCo, n: topo.Loop{Outer: li == 0}}
+		farLoops[li] = &Loop{coedges: band.capCo, n: topo.Loop{Outer: li == 0}}
 		bands[li] = band
 		dp.farDelta = math.Max(dp.farDelta, band.delta)
 		dp.bandDelta[capBandKey{loop: li, start: !dp.nearStart}] = band.delta

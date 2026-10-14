@@ -865,7 +865,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 				AreaBound: faceArea.Bound,
 				Reversed:  faceReversed,
 			},
-			loops: []*Loop{{outer: true, coedges: []coedge{
+			loops: []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
 				{edge: bottomEdge, forward: true},
 				{edge: vertical[i+1], forward: true},
 				{edge: topEdge, forward: false},

@@ -157,7 +157,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	if err := attachFaceLoopsContext(ctx, []*Face{nf}); err != nil {
 		return nil, err
 	}
-	shell := &FaceShell{faces: []*Face{nf}, open: shellIsOpen([]*Face{nf})}
+	shell := &FaceShell{faces: []*Face{nf}, n: topo.FaceShell{Open: shellIsOpen([]*Face{nf})}}
 	body.lumps = []*Lump{{shells: []*FaceShell{shell}}}
 
 	// Area is the face's own reading, unaffected by delta: this evaluator
@@ -329,7 +329,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			}
 			coedges[i] = coedge{edge: ne, forward: ce.forward}
 		}
-		nf.loops = append(nf.loops, &Loop{coedges: coedges, outer: l.outer})
+		nf.loops = append(nf.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: l.n.Outer}})
 	}
 	return nf, nil
 }
