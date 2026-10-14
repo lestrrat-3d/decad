@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -242,24 +243,70 @@ func buildLoftVaryingCircularHoleTopology(ctx context.Context, pl loftPayload,
 	return append(kept, wall), wall, nil
 }
 
+// loftBoreHasExactAxis compares the recorded frames' denoted lifts over
+// rationals. The proposed cylinder uses frame0's axis and the rounded level,
+// so both section origins and circle centers must lie exactly on that axis.
+func loftBoreHasExactAxis(frame0, frame1 r3.Frame, u, v, level float64) bool {
+	z := proofarith.FloatRat(level)
+	if z == nil || z.Sign() <= 0 {
+		return false
+	}
+	axis0, err := massmoment.PlaneMap(frame0, r3.Identity())
+	if err != nil {
+		return false
+	}
+	axis1, err := massmoment.PlaneMap(frame1, r3.Identity())
+	if err != nil {
+		return false
+	}
+	for i := range axis0 {
+		if axis0[i][2].Cmp(axis1[i][2]) != 0 {
+			return false
+		}
+	}
+	for _, center := range [][2]float64{{0, 0}, {u, v}} {
+		bottom, err := massmoment.RevolveAnchor(frame0, center[0], center[1])
+		if err != nil {
+			return false
+		}
+		top, err := massmoment.RevolveAnchor(frame1, center[0], center[1])
+		if err != nil {
+			return false
+		}
+		for i := range bottom {
+			lift := new(big.Rat).Add(bottom[i], new(big.Rat).Mul(z, axis0[i][2]))
+			if lift.Cmp(top[i]) != 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func loftBoreTopologyCircle(pl loftPayload, a loftmesh.Assembly, start, end *Face, walls []*Face) (circleSeg, bool) {
+	if len(pl.profile0.Holes) != 1 || len(pl.profile0.Holes[0].Segments) != 1 ||
+		len(a.VIdx) != 2 || len(start.loops) != 2 || len(end.loops) != 2 || len(walls) != a.Walls {
+		return circleSeg{}, false
+	}
+	circle, ok := pl.profile0.Holes[0].Segments[0].(circleSeg)
+	if !ok || circle.CCW || circle.TStart != 1 || circle.TEnd != 0 {
+		return circleSeg{}, false
+	}
+	return circle, true
+}
+
 // buildLoftAnalyticBoreTopology replaces only the certified hole's triangle
 // faces. The loft assembly and its mass and tessellation proofs stay intact:
 // each former hole triangle role maps to the one cylindrical source face.
 func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producerID, pl loftPayload,
 	a loftmesh.Assembly, start, end *Face, walls []*Face) ([]*Face, error) {
-	if len(pl.profile0.Holes) != 1 || len(pl.profile0.Holes[0].Segments) != 1 ||
-		len(a.VIdx) != 2 || len(start.loops) != 2 || len(end.loops) != 2 || len(walls) != a.Walls {
+	circle, ok := loftBoreTopologyCircle(pl, a, start, end, walls)
+	if !ok {
 		return nil, fmt.Errorf("%w: a through-bore loft lost its certified hole", ErrUnsupported)
 	}
-	circle, ok := pl.profile0.Holes[0].Segments[0].(circleSeg)
-	if !ok || circle.CCW || circle.TStart != 1 || circle.TEnd != 0 {
-		return nil, fmt.Errorf("%w: a through-bore loft has no whole circle", ErrUnsupported)
-	}
 	level := pl.frame0.ToLocal(pl.frame1.Origin())
-	if level.X != 0 || level.Y != 0 || level.Z <= 0 ||
-		pl.frame0.ToWorld(r3.NewVec(0, 0, level.Z)) != pl.frame1.Origin() ||
-		pl.frame0.ToWorld(r3.NewVec(circle.Center.U, circle.Center.V, level.Z)) !=
-			pl.frame1.ToWorldUV(circle.Center.U, circle.Center.V) {
+	if level.X != 0 || level.Y != 0 ||
+		!loftBoreHasExactAxis(pl.frame0, pl.frame1, circle.Center.U, circle.Center.V, level.Z) {
 		return nil, fmt.Errorf("%w: a through-bore loft has no common circle axis", ErrUnsupported)
 	}
 	pp := prismPayload{Payload: prismrecord.Payload{

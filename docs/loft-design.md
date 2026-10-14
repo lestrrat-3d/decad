@@ -2780,9 +2780,12 @@ both sections and runs the normal loft evaluator. A pair outside these gates
 uses the general boolean path; the global sketch reconstruction ceiling is
 unchanged.
 
-When both sections place the circle's upper center at exactly the same world
-coordinate, the certified Cut marks the resulting Loft for analytic bore
-topology. Otherwise the accepted Cut keeps its tessellated Loft topology.
+The certified Cut marks the resulting Loft for analytic bore topology only
+when exact rational lifts of both section origins and circle centers agree
+with one common axis and sweep level. It compares the recorded frames' exact
+axis directions as well. Rounded `Frame.ToLocal` and `Frame.ToWorld` readings
+cannot establish this proof. An accepted Cut without the proof keeps its
+tessellated Loft topology.
 The evaluator keeps the held polygonal outer walls, assembly, mass and
 tessellation proofs. It replaces only the hole-wall triangles with one
 cylindrical face and their cap rim chords with one full `Circle3` per cap.

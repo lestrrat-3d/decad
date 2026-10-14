@@ -2,14 +2,159 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestLoftCircleBoreRoundedAxisDoesNotPublishCylinder(t *testing.T) {
+	baseFrame, err := r3.NewFrame(r3.NewVec(1e9, 0, 0), r3.NewVec(3, 0, 4), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	world := sketch.NewWorld()
+	basePlane, err := world.CreatePlaneFromFrame(baseFrame)
+	require.NoError(t, err)
+	topPlane, err := world.CreateOffsetPlane(basePlane, 3.125)
+	require.NoError(t, err)
+	topFrame, err := topPlane.Frame()
+	require.NoError(t, err)
+	level := baseFrame.ToLocal(topFrame.Origin())
+	require.Equal(t, r3.NewVec(0, 0, 3.125), level)
+	require.Equal(t, topFrame.Origin(), baseFrame.ToWorld(level))
+	baseAnchor, err := massmoment.RevolveAnchor(baseFrame, 0, 0)
+	require.NoError(t, err)
+	topAnchor, err := massmoment.RevolveAnchor(topFrame, 0, 0)
+	require.NoError(t, err)
+	axis, err := massmoment.PlaneMap(baseFrame, r3.Identity())
+	require.NoError(t, err)
+	exactLift := new(big.Rat).Add(baseAnchor[2], new(big.Rat).Mul(axis[2][2], proofarith.FloatRat(level.Z)))
+	require.NotZero(t, exactLift.Cmp(topAnchor[2]), "the exact section centers must differ")
+
+	section := func(plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
+		s, err := world.CreateSketch(plane)
+		require.NoError(t, err)
+		rect := s.CreateRectangle(-5, -5, 5, 5)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		return s, s.Profiles()[0]
+	}
+	s0, p0 := section(basePlane)
+	s1, p1 := section(topPlane)
+	doc := decad.New()
+	blank, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+	toolWorld := sketch.NewWorld()
+	toolPlane, err := toolWorld.CreatePlaneFromFrame(baseFrame)
+	require.NoError(t, err)
+	toolSketch, err := toolWorld.CreateSketch(toolPlane)
+	require.NoError(t, err)
+	center := toolSketch.CreatePoint(0, 0)
+	toolSketch.Fix(center)
+	toolSketch.CreateCircle(center, 1)
+	_, err = toolSketch.Solve(t.Context())
+	require.NoError(t, err)
+	tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+	require.NoError(t, err)
+	cut, err := decad.Cut(t.Context(), blank, tool)
+	require.NoError(t, err)
+	requireLoftBoreFaceted(t, cut, 3.125)
+}
+
+func TestLoftCircleBoreRoundedAdmissionRefusals(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		origin     float64
+		u, v       r3.Vec
+		height     float64
+		center     float64
+		wantOrigin bool
+		wantCenter bool
+	}{
+		{"origin check", 1e9, r3.NewVec(3, 0, 4), r3.NewVec(0, 1, 0), 0.625, 1.3, false, true},
+		{"center check", 1e5, r3.NewVec(5, 0, 1), r3.NewVec(0, 1, 0), 9.394, 0.427, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base, err := r3.NewFrame(r3.NewVec(tc.origin, 0, 0), tc.u, tc.v)
+			require.NoError(t, err)
+			world := sketch.NewWorld()
+			basePlane, err := world.CreatePlaneFromFrame(base)
+			require.NoError(t, err)
+			topPlane, err := world.CreateOffsetPlane(basePlane, tc.height)
+			require.NoError(t, err)
+			top, err := topPlane.Frame()
+			require.NoError(t, err)
+			require.Equal(t, base.U(), top.U())
+			require.Equal(t, base.V(), top.V())
+			level := base.ToLocal(top.Origin())
+			require.Zero(t, level.X)
+			require.Zero(t, level.Y)
+			require.Positive(t, level.Z)
+			require.Equal(t, tc.wantOrigin, base.ToWorld(r3.NewVec(0, 0, level.Z)) == top.Origin())
+			require.Equal(t, tc.wantCenter,
+				base.ToWorld(r3.NewVec(tc.center, 0, level.Z)) == top.ToWorldUV(tc.center, 0))
+			worldCenter := base.ToWorldUV(tc.center, 0)
+			require.Equal(t, worldCenter, base.ToWorld(base.ToLocal(worldCenter)))
+
+			section := func(plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
+				s, err := world.CreateSketch(plane)
+				require.NoError(t, err)
+				rect := s.CreateRectangle(-5, -5, 5, 5)
+				s.Fix(rect.A)
+				_, err = s.Solve(t.Context())
+				require.NoError(t, err)
+				return s, s.Profiles()[0]
+			}
+			s0, p0 := section(basePlane)
+			s1, p1 := section(topPlane)
+			doc := decad.New()
+			blank, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+			require.NoError(t, err)
+			toolWorld := sketch.NewWorld()
+			toolPlane, err := toolWorld.CreatePlaneFromFrame(base)
+			require.NoError(t, err)
+			toolSketch, err := toolWorld.CreateSketch(toolPlane)
+			require.NoError(t, err)
+			center := toolSketch.CreatePoint(tc.center, 0)
+			toolSketch.Fix(center)
+			toolSketch.CreateCircle(center, 1)
+			_, err = toolSketch.Solve(t.Context())
+			require.NoError(t, err)
+			tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
+				decad.Distance{D: units.Millimeters(tc.height + 2), Dir: decad.Along})
+			require.NoError(t, err)
+			cut, err := decad.Cut(t.Context(), blank, tool)
+			require.NoError(t, err)
+			requireLoftBoreFaceted(t, cut, tc.height)
+		})
+	}
+}
+
+func requireLoftBoreFaceted(t *testing.T, cut *decad.Body, height float64) {
+	t.Helper()
+	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(cut)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+	require.Empty(t, cylinders)
+	for _, role := range []decad.FeatureRef{decad.CapStart(cut), decad.CapEnd(cut)} {
+		faces, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(cut)
+		require.NoError(t, err)
+		require.Len(t, faces[0].Loops(), 2)
+		require.Greater(t, len(faces[0].Loops()[1].Edges()), 1)
+		for _, edge := range faces[0].Loops()[1].Edges() {
+			require.IsType(t, decad.Line3{}, edge.Curve())
+		}
+	}
+	volume, err := cut.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-height*(100-math.Pi)), volume.Bound.Base())
+}
 
 func TestLoftThroughBoreCutPublishesCircularTopology(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
