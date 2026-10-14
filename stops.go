@@ -159,10 +159,14 @@ func builtinFaceQuery(sel FaceSelector, what string) (*FaceQuery, error) {
 // at. The resolved face must be usable
 // as a prism cap — the §5 build table's stop is the closed-form intersection
 // of the sweep direction with the target surface, and the cap it emits is
-// planar and perpendicular to the sweep — so the face must be PLANAR with
-// its normal parallel to the sweep direction; a non-planar stop face, or a
-// planar one not perpendicular to the sweep, is a solid this evaluator
-// cannot build (ErrUnsupported, staged). A face coplanar with the sketch
+// planar and perpendicular to the sweep — so the face must be an analytic
+// Plane whose held normal is EXACTLY parallel to the sweep normal (a zero
+// rational cross product, never a tolerance) and which states no departure
+// of its surface from that tag (no normal bound, no denoted surface). A
+// non-planar stop face, a planar one not exactly perpendicular to the sweep,
+// or one stating a departure is a solid this evaluator cannot build, because
+// the perpendicular cap would charge none of the tilt (ErrUnsupported,
+// staged). A face coplanar with the sketch
 // plane stops the sweep before it starts (ErrDegenerate).
 //
 // travel is 0 for a standalone ToFace — the target face supplies the sense
@@ -192,8 +196,11 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 		return 0, 0, 0, fmt.Errorf(`%w: ToFace requires a stop face with an analytic Plane surface whose normal is parallel to the sweep direction, not merely a flat face; this face's surface is %T, which this evaluator cannot use as a stop even when flat — choose any analytic planar face with that orientation, or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported, face.Surface())
 	}
 	n := frame.N()
-	if !parallelDirs(pl.Frame.N(), n) {
-		return 0, 0, 0, fmt.Errorf(`%w: ToFace requires the stop face's normal parallel to the sweep direction (the face perpendicular to the sweep); this face is tilted — choose a perpendicular face or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
+	if !extent.ExactlyParallel(pl.Frame.N(), n) {
+		return 0, 0, 0, fmt.Errorf(`%w: ToFace requires the stop face's normal exactly parallel to the sweep direction; this face's normal is tilted from it, however slightly, and the perpendicular cap this evaluator builds would charge nothing for the tilt — choose a face exactly perpendicular to the sweep or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
+	}
+	if face.n.NormalBound != 0 || face.n.Denoted != nil {
+		return 0, 0, 0, fmt.Errorf(`%w: ToFace cannot use this face: its surface departs from its planar tag by a stated tilt, which a perpendicular cap does not charge; use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
 	}
 	zFace := pl.Frame.Origin().Sub(frame.Origin()).Dot(n)
 	tol := extent.RelativeStopTolerance(math.Max(pl.Frame.Origin().Len(), frame.Origin().Len()))
