@@ -297,8 +297,8 @@ func TestCellExactReadingsMatchTheRationalReference(t *testing.T) {
 
 // TestCellAllowsOfMatchesThePerBoundHelpers pins proofbound.CellAllowsOf's whole
 // contract. That reader exists only to certify one cell's four spans and its
-// |T|/4 endpoint ONCE for all three of the cell's bounds instead of once per
-// bound, so each of its three fields must equal — BIT FOR BIT, never within a
+// |T|/4 endpoint ONCE for all four of the cell's bounds instead of once per
+// bound, so each of its four fields must equal — BIT FOR BIT, never within a
 // tolerance — what the corresponding helper publishes for the same cell. A
 // difference of any size would mean the two entry points disagree about a
 // published bound, which is what makes the sharing a change of WHICH
@@ -311,7 +311,7 @@ func TestCellExactReadingsMatchTheRationalReference(t *testing.T) {
 // (0,0,0) in float while its exact T is nonzero (the case
 // proofbound.CellTwistQuarterUpper exists for); a wholly degenerate cell; a cell whose
 // SCALAR claims are broken, where only the area reading may refuse; and a
-// cell with a non-finite corner, where all three must. The randomized sweep
+// cell with a non-finite corner, where all four must. The randomized sweep
 // then covers ordinary cells, with arc-length claims deliberately straddling
 // their own chords so both the admitting and the refusing side of the premise
 // gate are exercised.
@@ -323,6 +323,7 @@ func TestCellAllowsOfMatchesThePerBoundHelpers(t *testing.T) {
 		require.Equal(t, proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, matchedDelta), got.ChordCurveAreaUpper, "chordCurveAreaUpper")
 		require.Equal(t, proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, wHi), got.TwistVolumeAllow, "twistVolumeAllow")
 		require.Equal(t, proofbound.CellTwistOffsetUpper(vLo, vHi, wLo, wHi), got.TwistOffsetUpper, "twistOffsetUpper")
+		require.Equal(t, proofbound.CellTwistAreaAllow(vLo, vHi, wLo, wHi), got.TwistAreaAllow, "twistAreaAllow")
 	}
 
 	// The float chain vLo−vHi−wLo+wHi cancels to exactly (0,0,0) here, since

@@ -1390,24 +1390,25 @@ type CellAllows struct {
 	ChordCurveAreaUpper float64 // CellChordCurveAreaUpper
 	TwistVolumeAllow    float64 // CellTwistVolumeAllow
 	TwistOffsetUpper    float64 // CellTwistOffsetUpper
+	TwistAreaAllow      float64 // CellTwistAreaAllow
 }
 
-// CellAllowsOf reads all three bounds one wall cell publishes. It shares the
-// certified spans and |T|/4 endpoint used by the area and offset readings;
+// CellAllowsOf reads all four bounds one wall cell publishes. It shares the
+// certified spans and |T|/4 endpoint used by the area and twist readings;
 // the exact determinant volume reading has its own rational reduction.
 //
 // It is a sharing of computation, never a bound of its own: each field is
-// produced by the same CellChordCurveAreaFromSpans / CellTwistVolumeAllow /
-// XtwistQuarterUpper helpers the individual entry points call, under the same gates in
-// the same order, so the three numbers are identical to the three helpers' own
-// by construction (TestCellAllowsOfMatchesThePerBoundHelpers pins it over a
-// randomized sweep). A broken SCALAR claim refuses the area reading alone: the
-// twist readings do not take those operands and are not spoken for by them,
-// while a non-finite CORNER is unstateable geometry and refuses all three.
+// produced by the same CellChordCurveAreaFromSpans, CellTwistVolumeAllow,
+// XtwistQuarterUpper, and cellTwistAreaFromSpans helpers the individual entry
+// points call, under the same gates in the same order. All four numbers equal
+// their helpers' outputs; TestCellAllowsOfMatchesThePerBoundHelpers pins this
+// over a randomized sweep. A broken SCALAR claim refuses the chord-curve area
+// reading alone: the twist readings do not take those operands, while a
+// non-finite CORNER refuses all four.
 func CellAllowsOf(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matchedDeltaUpper float64) CellAllows {
 	if !FiniteVec(vLo) || !FiniteVec(vHi) || !FiniteVec(wLo) || !FiniteVec(wHi) {
 		inf := math.Inf(1)
-		return CellAllows{ChordCurveAreaUpper: inf, TwistVolumeAllow: inf, TwistOffsetUpper: inf}
+		return CellAllows{ChordCurveAreaUpper: inf, TwistVolumeAllow: inf, TwistOffsetUpper: inf, TwistAreaAllow: inf}
 	}
 	corners := CellCornersOf(vLo, vHi, wLo, wHi)
 	spans := corners.Spans()
@@ -1421,6 +1422,7 @@ func CellAllowsOf(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matched
 		ChordCurveAreaUpper: area,
 		TwistVolumeAllow:    CellTwistVolumeAllow(vLo, vHi, wLo, wHi),
 		TwistOffsetUpper:    twistUpper,
+		TwistAreaAllow:      cellTwistAreaFromSpans(spans, twistUpper, vLo, vHi, wLo, wHi),
 	}
 }
 
@@ -1440,7 +1442,11 @@ func CellTwistAreaAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 		return math.Inf(1)
 	}
 	corners := CellCornersOf(vLo, vHi, wLo, wHi)
-	linear := CellTwistAreaLinearFromSpans(corners.Spans(), XtwistQuarterUpper(corners))
+	return cellTwistAreaFromSpans(corners.Spans(), XtwistQuarterUpper(corners), vLo, vHi, wLo, wHi)
+}
+
+func cellTwistAreaFromSpans(spans CellSpans, twistUpper float64, vLo, vHi, wLo, wHi r3.Vec) float64 {
+	linear := CellTwistAreaLinearFromSpans(spans, twistUpper)
 	quadratic := CellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi)
 	return math.Min(linear, quadratic)
 }
