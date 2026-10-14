@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
@@ -31,7 +32,7 @@ func revolveLoftFacesSimpleSourceLoop(ctx context.Context,
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
-	fresh, plane, _, err := recordProfile(trim.source.source.sketch,
+	fresh, plane, _, err := sectioncert.RecordProfile(trim.source.source.sketch,
 		trim.source.source.profile)
 	if err != nil {
 		return nil, false, err

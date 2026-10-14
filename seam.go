@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sketchrecord"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -23,7 +24,7 @@ type MeasuredProfile struct {
 // boundary for 2D measurement. It returns the feature calls' profile admission
 // errors. Neither s nor p may be nil.
 func MeasureProfile(s *sketch.Sketch, p *sketch.Profile) (MeasuredProfile, error) {
-	record, _, _, err := recordProfile(s, p)
+	record, _, _, err := sectioncert.RecordProfile(s, p)
 	if err != nil {
 		return MeasuredProfile{}, err
 	}
@@ -53,48 +54,6 @@ func (p MeasuredProfile) SecondMoments() (SecondMoments, error) {
 		UU: measurementFromInternal(uu), UV: measurementFromInternal(uv),
 		VV: measurementFromInternal(vv),
 	}, nil
-}
-
-// recordProfile converts a sketch profile into the structural records
-// the evaluator carries: the region as a profile record — the entity's own
-// defining data per boundary edge, plus the recorded range — and the sketch
-// plane, read through s.Plane().Frame(), as the plane record that lifts the
-// plane-local region into world space. The feature calls run this conversion.
-//
-// Admission consumes only a fresh snapshot authenticated against sketch's own
-// answers (docs/api-design.md §7): p must name s (Profile.Sketch, else
-// [ErrForeignProfile]), be current (Profile.IsStale, else [ErrStaleProfile]),
-// and exactly match one fresh result from s.Profiles. Every boundary entity
-// must be non-nil and owned by s. A caller-altered snapshot is
-// [ErrInvalidProfile], and a foreign boundary entity is [ErrForeignProfile].
-// A profile whose Valid is false is also never silently swept
-// ([ErrInvalidProfile]). The one further rejection is not a validity judgement:
-// an authenticated valid profile whose boundary cannot be recorded exactly —
-// a Partial fragment sketch could not certify
-// (BoundaryEdge.TExact == false), a certified range the seam's reject-only
-// falsifier disproves, or a loop whose source-aware junction check finds a
-// contradiction — is [ErrUnrecordableProfile]. decad never repairs, projects
-// or fits a point sketch handed over, and it never solves for one.
-//
-// That last rejection is the one a caller meets by drawing rather than by
-// hitting an upstream limit. sketch admits a region on its own proximity
-// threshold, so entities whose ends miss by a fraction of a nanometre still
-// arrange into one valid profile. At a whole-to-whole join, decad records each
-// entity's own points verbatim, so a loop whose recorded coordinates do not
-// meet bounds no region. A certified mixed join at a genuinely cut bound
-// instead compares the record endpoint with sketch's evaluated node at the
-// range falsifier's relative tolerance. An uncut Partial bound uses the
-// record's own endpoint, so it remains an exact check. Ends merely driven
-// together by a coincidence constraint remain a whole-to-whole exact check:
-// the solver converges to within its residual, not to the same coordinate.
-// The return value includes authenticated area so feature callers never read
-// a caller-mutable field after admission.
-func recordProfile(s *sketch.Sketch, p *sketch.Profile) (profileRecord, planeRecord, float64, error) {
-	if boundedSectionSketch(s) {
-		return profileRecord{}, planeRecord{}, 0,
-			fmt.Errorf("%w: this bounded Section profile needs a consumer that carries its source bound", ErrUnsupported)
-	}
-	return momentinput.RecordProfileWithArea(s, p)
 }
 
 // recordArrangedProfile records a profile from a fresh sketch arrangement.
@@ -135,7 +94,7 @@ func recordArrangedProfile(p *sketch.Profile) (profileRecord, error) {
 // *Arc or *Circle fragment and a sampling-convergent underestimate otherwise,
 // with no bound stated for the gap (docs/surface-design.md §13.3).
 func recordChain(s *sketch.Sketch, ch *sketch.Chain) (chainRecord, planeRecord, error) {
-	if boundedSectionSketch(s) {
+	if sectioncert.BoundedSectionSketch(s) {
 		return chainRecord{}, planeRecord{},
 			fmt.Errorf("%w: this bounded Section chain needs a consumer that carries its source bound", ErrUnsupported)
 	}

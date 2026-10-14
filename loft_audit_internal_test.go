@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -705,7 +706,7 @@ func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
 // chordedWedgeTriangles assembles the F~230 hand-chorded spline wedge's own
 // wall-and-cap triangle set — the very verts/tris loftmesh.LoftCrossingAudit is handed
 // inside a Document.Loft of that shape — by running the same pipeline evalLoft
-// runs ahead of the audit (recordProfile, loftmesh.ValidateLoftRecords, loftmesh.PairRecords,
+// runs ahead of the audit (sectioncert.RecordProfile, loftmesh.ValidateLoftRecords, loftmesh.PairRecords,
 // loftmesh.AssembleTriangulated) and stopping at its output. It reuses
 // loft_chord_calibration_internal_test.go's wedgePlanes/chordedWedgeProfile
 // harness, so the geometry is that file's own m=112-station wedge.
@@ -727,9 +728,9 @@ func chordedWedgeAssembly(t testing.TB, pts [][2]float64) loftmesh.Assembly {
 	s0, p0 := chordedWedgeProfile(t, w, base, pts)
 	s1, p1 := chordedWedgeProfile(t, w, top, pts)
 
-	profile0, plane0, _, err := recordProfile(s0, p0)
+	profile0, plane0, _, err := sectioncert.RecordProfile(s0, p0)
 	require.NoError(t, err)
-	profile1, plane1, _, err := recordProfile(s1, p1)
+	profile1, plane1, _, err := sectioncert.RecordProfile(s1, p1)
 	require.NoError(t, err)
 
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -111,11 +112,11 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 	alignment, surfaceResult := cfg.Alignment, cfg.SurfaceResult
 
 	// S9: both profiles through the unmodified seam gates, in argument order.
-	profile0, plane0, area0, err := recordProfile(s0, p0)
+	profile0, plane0, area0, err := sectioncert.RecordProfile(s0, p0)
 	if err != nil {
 		return nil, err
 	}
-	profile1, plane1, area1, err := recordProfile(s1, p1)
+	profile1, plane1, area1, err := sectioncert.RecordProfile(s1, p1)
 	if err != nil {
 		return nil, err
 	}

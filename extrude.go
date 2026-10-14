@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -151,7 +152,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	profile, plane, profileArea, certificate, err := recordExtrudeProfile(s, p)
+	profile, plane, profileArea, certificate, err := sectioncert.RecordExtrudeProfile(s, p)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +184,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if certificate != nil {
 		// The authenticated Sketch plane has this exact held frame. Rebuilding
 		// it may change an oblique basis by one bit and move the source plane.
-		frame = certificate.frame
+		frame = certificate.Frame
 	} else {
 		frame, err = r3.NewFrame(plane.Origin, plane.U, plane.V)
 		if err != nil {
@@ -219,7 +220,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	ref := d.nextProducerID()
 	var sectionDelta float64
 	if certificate != nil {
-		sectionDelta = certificate.delta
+		sectionDelta = certificate.Delta
 	}
 	body, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
 		Profile:       profile,
@@ -439,7 +440,7 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // chain's own sweep into a ribbon. It reuses resolveLinearExtent unchanged —
 // the extent vocabulary and the frame it resolves against are identical to
 // Extrude's — and reads its recorded walk through recordChain (seam.go)
-// rather than recordProfile. It builds a chain of any segment count and kind
+// rather than sectioncert.RecordProfile. It builds a chain of any segment count and kind
 // Table G's per-kind construction admits, through buildChainSides
 // (prism_build.go's buildWallGeometry, shared with the profile-fed prism
 // build) — the same evaluator, over an open rather than a closed walk.

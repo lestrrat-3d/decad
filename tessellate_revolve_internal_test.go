@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -70,7 +71,7 @@ func TestRevolveFreeformPartialCapAreaSlack(t *testing.T) {
 
 func TestRevolveFreeformDisplacedSectionRefuses(t *testing.T) {
 	s, profile := freeformRevolveSketch(t)
-	recorded, _, _, err := recordProfile(s, profile)
+	recorded, _, _, err := sectioncert.RecordProfile(s, profile)
 	require.NoError(t, err)
 	_, err = revolveaxis.ChargeOf(recorded, revolveaxis.Frame{}, 0.01, freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported)

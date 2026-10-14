@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coil"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -173,7 +174,7 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 
 	// CS2: the profile seam, with the live-profile area falsifier every
 	// profile-fed build runs.
-	profile, plane, profileArea, err := recordProfile(s, p)
+	profile, plane, profileArea, err := sectioncert.RecordProfile(s, p)
 	if err != nil {
 		return nil, err
 	}

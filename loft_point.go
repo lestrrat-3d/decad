@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -66,7 +67,7 @@ func pointSourceCurrent(record *pointSectionRecord) bool {
 		len(src.profile.Outer) != len(src.entities) {
 		return false
 	}
-	if _, _, _, err := recordProfile(src.sketch, src.profile); err != nil {
+	if _, _, _, err := sectioncert.RecordProfile(src.sketch, src.profile); err != nil {
 		return false
 	}
 	frame, err := src.sketch.Plane().Frame()
@@ -97,7 +98,7 @@ func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec,
 	if !proofbound.FiniteVec(apex) {
 		return nil, fmt.Errorf("%w: the point loft apex must be finite", ErrNotFinite)
 	}
-	profile, plane, sketchArea, err := recordProfile(s, p)
+	profile, plane, sketchArea, err := sectioncert.RecordProfile(s, p)
 	if err != nil {
 		return nil, err
 	}

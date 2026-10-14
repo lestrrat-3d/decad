@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -194,7 +195,7 @@ func revolveProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	profile, plane, profileArea, err := recordProfile(s, p)
+	profile, plane, profileArea, err := sectioncert.RecordProfile(s, p)
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +507,7 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 // revolve_axis.go's axis resolution and revolve_build.go/revolve_extent.go's
 // per-kind wall construction and extent readings unchanged — the same
 // evaluator Revolve runs, over an open rather than a closed walk — and reads
-// its recorded walk through recordChain (seam.go) rather than recordProfile.
+// its recorded walk through recordChain (seam.go) rather than sectioncert.RecordProfile.
 
 // chainRevolvePayload is chain Revolve's own record of a shell body: the
 // recorded open walk SET, the plane frame, the oriented plane-local axis, the

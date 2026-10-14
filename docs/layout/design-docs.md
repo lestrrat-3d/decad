@@ -79,7 +79,7 @@ The rules for rows live in `docs/layout.md`.
 | `measurement.go` | Public bounded reading types, internal adapters and analytic result gate. |
 | `identity.go` | Private document-local producer identities and the shared zero-vector predicate. |
 | `record.go` | Root-owned `Point2`, structural record aliases, and slice adapters. See sketch-seam §2. |
-| `seam.go` | Sketch recording adapters and `MeasureProfile`. See sketch-seam §1–§2. |
+| `seam.go` | Sketch chain recording adapters and `MeasureProfile`; profile recording lives in `internal/sectioncert/`. See sketch-seam §1–§2. |
 | `section.go` | Public planar section query over certified prism, stack-backed BRep, sphere and cone records. See section design. |
 | `section_circle_axis.go` | Exact whole-circle prism section on a cardinal plane with an exact chord. See section design. |
 | `section_cone_axis.go` | Exact full right-cone section on a cardinal plane with an exact circle. See section design. |
@@ -88,7 +88,6 @@ The rules for rows live in `docs/layout.md`.
 | `section_circle_cap.go` | One-cap oblique circle clip entry; the certified circle-line trim and cap polygon live in `internal/sectionclip/`. See section design. |
 | `section_rectangle_axis.go` | Exact rectangular-prism section on an interior cardinal vertical plane. See section design. |
 | `section_oblique_clip.go` | Exact rational clipping of a rectangular prism by an oblique plane; the rational point type and arithmetic live in `internal/sectionclip/`. See section design. |
-| `section_oblique_certificate.go` | Private bounded-section Sketch provenance and guarded Extrude recording. See section design. |
 | `path.go` | The immutable spatial `Path`, sealed segments and `internal/sweepinput/` record adapter. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |

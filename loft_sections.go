@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/smoothloft"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -53,7 +54,7 @@ func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*
 		if section.Sketch == nil || section.Profile == nil {
 			return nil, fmt.Errorf("%w: LoftSections section %d needs a sketch and profile", ErrDegenerate, i)
 		}
-		profile, plane, sketchArea, err := recordProfile(section.Sketch, section.Profile)
+		profile, plane, sketchArea, err := sectioncert.RecordProfile(section.Sketch, section.Profile)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +105,7 @@ func (d *Document) buildManyRectangularSections(ctx context.Context, sections []
 		if section.Sketch == nil || section.Profile == nil {
 			return nil, fmt.Errorf("%w: LoftSections section %d needs a sketch and profile", ErrDegenerate, i)
 		}
-		profile, plane, sketchArea, err := recordProfile(section.Sketch, section.Profile)
+		profile, plane, sketchArea, err := sectioncert.RecordProfile(section.Sketch, section.Profile)
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +128,7 @@ func (d *Document) buildFourRoundedSections(ctx context.Context, sections []Loft
 		if section.Sketch == nil || section.Profile == nil {
 			return nil, fmt.Errorf("%w: LoftSections section %d needs a sketch and profile", ErrDegenerate, i)
 		}
-		profile, plane, sketchArea, err := recordProfile(section.Sketch, section.Profile)
+		profile, plane, sketchArea, err := sectioncert.RecordProfile(section.Sketch, section.Profile)
 		if err != nil {
 			return nil, err
 		}

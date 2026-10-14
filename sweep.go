@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -112,7 +113,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	}
 	surfaceResult := cfg.SurfaceResult
 
-	profile, plane, profileArea, err := recordProfile(s, p)
+	profile, plane, profileArea, err := sectioncert.RecordProfile(s, p)
 	if err != nil {
 		return nil, err
 	}

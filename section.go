@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionclip"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -69,7 +70,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 				ErrUnsupported)
 		}
 		if polygon != nil {
-			s, result, err := reconstructBoundedSection(ctx, polygon, plane, delta)
+			s, result, err := sectioncert.ReconstructBoundedSection(ctx, polygon, plane, delta)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -104,7 +105,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 				polygon, delta, clipped = obliqueCircleCapClip(ctx, pp, plane)
 			}
 			if clipped {
-				s, result, err := reconstructBoundedSection(ctx, polygon, plane, delta)
+				s, result, err := sectioncert.ReconstructBoundedSection(ctx, polygon, plane, delta)
 				if err != nil {
 					return nil, nil, err
 				}
