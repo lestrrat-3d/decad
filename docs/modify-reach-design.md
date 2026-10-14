@@ -31,7 +31,7 @@ or to a finite set of named analytic patches:
 
 The extension does **not** add a general B-rep kernel:
 
-- no multi-edge partial cap-loop `Chamfer` with free endpoints;
+- no partial cap-loop `Chamfer` beyond modify-general §4.3a's straight chains;
 - no mixed lateral-edge + cap-edge blend in one call;
 - no variable-radius fillet;
 - no topology-changing offset;
@@ -1936,7 +1936,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | **C3** (landed) | revolve shell side opening, full and partial turn, right-angle rims (§9.3.2) | a slanted rim; cap loops |
 | **C4** (landed) | the side opening of `docs/shell-opening-design.md` §12, six PRs: the rim rule and the revolve's slanted rim (PR 1, landed), the rectilinear prism side opening as a `brepPayload` (PR 2, landed), circular walks (PR 3, landed), oblique walks (PR 4, landed), arc–arc corners and oblique arc joins (PR 5, landed), a kept arc extended past its end (PR 6, landed) | per that document's increment table; cap loops |
 | **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | a side opening, full or partial turn (C3 lands it); cap loops |
-| **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; multi-edge partial cap-loop chamfers; mixed edge classes; faceted receivers |
+| **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap-loop chamfers beyond modify-general §4.3a; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, and
 tests together. A PR may leave a DX question staged only where
