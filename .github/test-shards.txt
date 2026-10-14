@@ -1418,3 +1418,7 @@
 10	0.00	TestLoftCylinderChamferReachFanOutMatchesSerial
 8	0.00	TestCrossBoreSignTestsMatchReference
 8	0.00	TestCurvedCensusMeridianMemoMatchesDirect
+0	0.00	TestZZCPUProbeShard0
+1	0.00	TestZZCPUProbeShard1
+8	0.00	TestZZCPUProbeShard8
+10	0.00	TestZZCPUProbeShard10
