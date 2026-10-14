@@ -239,7 +239,10 @@ boundary, mass, and topology proofs. A refusal leaves all input bodies live.
 Before the Union, each true tooth sector is enclosed by its held facets and
 their two-sided local bounds. Exact rational YZ projections prove separation
 over 64 closed X slabs, with convex-hull axes used only to suggest directions
-that are rechecked exactly. The first tooth and one copy supply a reference
+that are rechecked exactly. Outward float enclosures of every clipped-facet
+candidate pick which candidates can be a slab's least or greatest projected
+value; only those are evaluated exactly, so each slab's exact extremes are
+unchanged and no float decides a separation. The first tooth and one copy supply a reference
 certificate for each needed angular offset. The recorded matrices transfer
 that clearance to other copies after charging matrix error and the one-ULP
 axial drift. A separate certificate proves held-shell separation against the
