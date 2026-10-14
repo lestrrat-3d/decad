@@ -116,7 +116,7 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	}
 
 	// Closure audit: each directed edge exactly once, each with its reverse.
-	directed := map[[2]int]int{}
+	directed := make(map[[2]int]int, 3*min(len(tris), 1024))
 	for _, tri := range tris {
 		for k := range 3 {
 			directed[[2]int{tri[k], tri[(k+1)%3]}]++
@@ -215,7 +215,13 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	}
 	out.DropArea = proofbound.PerturbedAreaUpper(out.Verts, droppedTris, out.Round)
 
-	directed = map[[2]int]int{}
+	// Keep the first audit's storage only while its size stays bounded.
+	// A very large exact mesh may weld down to a much smaller rounded one.
+	if len(tris) <= 4096 {
+		clear(directed)
+	} else {
+		directed = make(map[[2]int]int, 3*min(len(out.Tris), 1024))
+	}
 	for _, tri := range out.Tris {
 		for k := range 3 {
 			directed[[2]int{tri[k], tri[(k+1)%3]}]++
