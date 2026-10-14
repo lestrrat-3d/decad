@@ -312,7 +312,7 @@ func capHeldBody(t *testing.T, section func(*sketch.Sketch), h, d float64) capBl
 	require.Len(t, s.Profiles(), 1)
 	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
+	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
 	cbp, ok := chamfered.payload.(capBlendPayload)
 	require.True(t, ok)

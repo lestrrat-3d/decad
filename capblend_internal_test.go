@@ -651,7 +651,7 @@ func chamferedCircularBand(t *testing.T, section func(*sketch.Sketch), h, d floa
 	doc := New()
 	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
+	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
 	if motion != nil {
 		chamfered, err = Transform(t.Context(), chamfered, *motion)
@@ -731,7 +731,7 @@ func chamferedRectFlatPatches(t *testing.T, motion r3.Transform) []bandUnderTest
 	doc := New()
 	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(3))
+	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(3))
 	require.NoError(t, err)
 	placed, err := Transform(t.Context(), chamfered, motion)
 	require.NoError(t, err)
@@ -1276,7 +1276,7 @@ func TestCapBandConeAreaBoundEnclosesBuiltRuledPatch(t *testing.T) {
 			}
 			body, err := Extrude(t.Context(), New(), s, prof, Distance{D: units.Millimeters(tc.h), Dir: Along})
 			require.NoError(t, err)
-			out, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(tc.dc),
+			out, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(tc.dc),
 				WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(tc.ds)))
 			require.NoError(t, err)
 			cbp, ok := out.payload.(capBlendPayload)
@@ -1338,7 +1338,7 @@ func TestCapBandConePatchChargesItsCornerSlivers(t *testing.T) {
 			require.NoError(t, err)
 			body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(100), Dir: Along})
 			require.NoError(t, err)
-			out, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(tc.dc),
+			out, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(tc.dc),
 				WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(tc.ds)))
 			require.NoError(t, err)
 			cbp, ok := out.payload.(capBlendPayload)

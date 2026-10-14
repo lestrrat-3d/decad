@@ -887,7 +887,7 @@ func partsBinCup(t *testing.T, doc *decad.Document) *decad.Body {
 func partsBinBlock(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	box := makeBox(t, doc, -6, -6, 6, 6, 0, 12)
-	block, err := box.Chamfer(t.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.3))
+	block, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.3))
 	require.NoError(t, err)
 	return block
 }

@@ -63,7 +63,7 @@ func Example_decad_asymmetric_stacked_chamfer() {
 			edges.Or(predicates...)
 		}
 	}
-	beveled, err := pocket.Chamfer(context.Background(), edges.Exactly(len(loop.Edges())), units.Millimeters(1.5),
+	beveled, err := decad.Chamfer(context.Background(), pocket, edges.Exactly(len(loop.Edges())), units.Millimeters(1.5),
 		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(top.Origins()[0])), units.Millimeters(2)))
 	if err != nil {
 		fmt.Println(err)

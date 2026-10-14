@@ -179,7 +179,7 @@ func TestShellClosedPrismGatesAndConsumers(t *testing.T) {
 	})
 	t.Run("a modify op on the closed shell has no face view", func(t *testing.T) {
 		doc, closed := closedShellBox(t, 5)
-		_, err := closed.Fillet(t.Context(), verticalEdges(), units.Millimeters(1))
+		_, err := decad.Fillet(t.Context(), closed, verticalEdges(), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "cavity")
 		require.Equal(t, []*decad.Body{closed}, doc.Bodies())

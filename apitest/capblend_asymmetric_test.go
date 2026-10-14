@@ -33,7 +33,7 @@ func boxSideWalls() *decad.FaceQuery {
 // along the faces beside them.
 func asymChamfer(t *testing.T, b *decad.Body, sel decad.EdgeSelector, d, other float64, ref decad.FaceSelector) (*decad.Body, error) {
 	t.Helper()
-	return b.Chamfer(t.Context(), sel, units.Millimeters(d), decad.WithAsymmetricChamfer(ref, units.Millimeters(other)))
+	return decad.Chamfer(t.Context(), b, sel, units.Millimeters(d), decad.WithAsymmetricChamfer(ref, units.Millimeters(other)))
 }
 
 // boxCapBandVolume is the 100x60x20 plate's volume after one cap loop is set back
@@ -265,7 +265,7 @@ func TestCapBlendAsymmetricEqualDistancesAreTheEqualChamfer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			plainBody := tc.build(t)
-			plain, err := plainBody.Chamfer(t.Context(), capLoopEdges(plainBody), units.Millimeters(tc.d))
+			plain, err := decad.Chamfer(t.Context(), plainBody, capLoopEdges(plainBody), units.Millimeters(tc.d))
 			require.NoError(t, err)
 			for _, ref := range []struct {
 				name string
@@ -417,7 +417,7 @@ func TestCapBlendAsymmetricSideLevelCarriesOtherDistanceRounding(t *testing.T) {
 			if !tc.capRef {
 				ref = boxSideWalls()
 			}
-			out, err := box.Chamfer(t.Context(), capLoopEdgesOn(box, false), units.Millimeters(0.5), decad.WithAsymmetricChamfer(ref, inch))
+			out, err := decad.Chamfer(t.Context(), box, capLoopEdgesOn(box, false), units.Millimeters(0.5), decad.WithAsymmetricChamfer(ref, inch))
 			require.NoError(t, err)
 			ds := held
 			if !tc.capRef {
@@ -712,7 +712,7 @@ func TestCapBlendCapContourCarriesInPlaneDistanceRounding(t *testing.T) {
 			if !tc.equal {
 				opts = append(opts, decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(decad.CapStart(box))), units.Millimeters(2)))
 			}
-			out, err := box.Chamfer(t.Context(), capLoopEdgesOn(box, false), inch, opts...)
+			out, err := decad.Chamfer(t.Context(), box, capLoopEdgesOn(box, false), inch, opts...)
 			require.NoError(t, err)
 			requireManifold(t, out)
 
@@ -784,7 +784,7 @@ func TestCapBlendCapCircleCarriesInPlaneDistanceRounding(t *testing.T) {
 	inch := units.Inches(0.1)
 	dc, exactDC := inchConversion(t, inch)
 	body := circleProfile(t, r, h)
-	out, err := body.Chamfer(t.Context(), capLoopEdges(body), inch)
+	out, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), inch)
 	require.NoError(t, err)
 	requireManifold(t, out)
 

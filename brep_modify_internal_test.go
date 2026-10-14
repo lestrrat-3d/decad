@@ -23,11 +23,11 @@ func requireBrepModifyRefuses(t *testing.T, body *Body, want string) {
 	doc := body.doc
 	before := doc.Bodies()
 	edges := Edges(Convex()).AtLeast(1)
-	_, err := body.Fillet(t.Context(), edges, units.Millimeters(1))
+	_, err := Fillet(t.Context(), body, edges, units.Millimeters(1))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, want)
 	require.ErrorContains(t, err, "fillets")
-	_, err = body.Chamfer(t.Context(), edges, units.Millimeters(1))
+	_, err = Chamfer(t.Context(), body, edges, units.Millimeters(1))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, want)
 	require.ErrorContains(t, err, "chamfers")
@@ -49,7 +49,7 @@ func requireSB1Names(t *testing.T, body *Body) {
 	delta := bp.sectionDelta()
 	require.Positive(t, delta, "the fixture's record carries a section displacement")
 	requireBrepModifyRefuses(t, body, "brep-modify SB1")
-	_, err = body.Fillet(t.Context(), Edges(Convex()).AtLeast(1), units.Millimeters(1))
+	_, err = Fillet(t.Context(), body, Edges(Convex()).AtLeast(1), units.Millimeters(1))
 	require.ErrorContains(t, err, fmt.Sprintf("displacement of %g mm", delta))
 }
 
@@ -72,7 +72,7 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 		t.Helper()
 		before := body.doc.Bodies()
 		edges := Edges(Convex(), EndpointAt(r3.NewVec(0, 0, 0))).Exactly(3)
-		_, err := body.Chamfer(t.Context(), edges, units.Millimeters(1))
+		_, err := Chamfer(t.Context(), body, edges, units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, rowSL1, "chamfers")
 		_, err = body.Shell(t.Context(), Faces(Planar()).AtLeast(1), units.Millimeters(1))
 		requireRefusesUnchanged(t, body, before, err, shell...)
@@ -165,6 +165,6 @@ func TestBrepModifySB2RefusesAPrismGroup(t *testing.T) {
 	requireBrepModifyRefuses(t, group, "brep-modify SB2")
 	_, err := brepOfStacked(t.Context(), sp)
 	require.ErrorIs(t, err, ErrUnsupported)
-	_, err = group.Fillet(t.Context(), Edges(Convex()).AtLeast(1), units.Millimeters(1))
+	_, err = Fillet(t.Context(), group, Edges(Convex()).AtLeast(1), units.Millimeters(1))
 	require.ErrorContains(t, err, "a prism group of 2 disjoint regions has no face view")
 }

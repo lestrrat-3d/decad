@@ -49,12 +49,12 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 	bore := circleBodyAtZ(t, doc, 0, 0.5, -1, 4)
 	cut, err := decad.Cut(t.Context(), joined, bore)
 	require.NoError(t, err)
-	_, err = cut.Chamfer(t.Context(), decad.Edges(decad.OuterLoopOf(decad.CapStart(cut))),
+	_, err = decad.Chamfer(t.Context(), cut, decad.Edges(decad.OuterLoopOf(decad.CapStart(cut))),
 		units.Millimeters(0.03))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	outerCaps := decad.Edges(decad.OuterLoopOf(decad.CapStart(cut))).
 		Or(decad.OuterLoopOf(decad.CapEnd(cut)))
-	chamfered, err := cut.Chamfer(t.Context(), outerCaps, units.Millimeters(0.03))
+	chamfered, err := decad.Chamfer(t.Context(), cut, outerCaps, units.Millimeters(0.03))
 	require.NoError(t, err)
 	for _, role := range []decad.FeatureRef{decad.CapStart(chamfered), decad.CapEnd(chamfered)} {
 		faces, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(chamfered)

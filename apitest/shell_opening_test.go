@@ -410,7 +410,7 @@ func TestShellSideOpeningLPrism(t *testing.T) {
 		t.Parallel()
 		_, body := shellL(t)
 		sel := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.Vec{})).Exactly(1)
-		chamfered, err := body.Chamfer(t.Context(), sel, units.Millimeters(1))
+		chamfered, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(1))
 		require.NoError(t, err)
 		vol, err := chamfered.Volume()
 		require.NoError(t, err)

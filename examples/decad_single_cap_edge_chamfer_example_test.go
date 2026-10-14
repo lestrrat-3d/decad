@@ -35,7 +35,7 @@ func Example_decad_single_cap_edge_chamfer() {
 
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(0, 0, 10))).Exactly(1)
-	body, err := box.Chamfer(context.Background(), edge, units.Millimeters(2))
+	body, err := decad.Chamfer(context.Background(), box, edge, units.Millimeters(2))
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)
 		return

@@ -453,7 +453,7 @@ func chamferedQuarterDiskBody(t *testing.T, r, h, d float64) *Body {
 	doc := New()
 	body, err := Extrude(t.Context(), doc, s, profiles[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
+	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
 	return chamfered
 }
@@ -559,7 +559,7 @@ func capBlendPlateBody(t *testing.T) *Body {
 	t.Helper()
 	doc := New()
 	body := axisBoxBody(t, doc, 0, 0, 100, 60, 20)
-	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(5))
+	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(5))
 	require.NoError(t, err)
 	return chamfered
 }

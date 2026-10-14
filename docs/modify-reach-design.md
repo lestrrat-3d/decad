@@ -268,7 +268,7 @@ expansion.
 
 ### 5.1 Implementation
 
-`tangent_chain.go` runs this section; `Body.Fillet` and `Body.Chamfer` call it
+`tangent_chain.go` runs this section; `Fillet` and `Chamfer` call it
 right after the seed query resolves. The oracle is the clearance kernel's
 `Oracle.ParallelExact` (`internal/clearance/oracle.go`): an exact zero cross
 product over the held floats proves "parallel", a cross above `ClrAngTol`
@@ -377,7 +377,7 @@ result record's index space.
 
 ### 7.1 Implementation
 
-`revolve_blend.go` runs this section; `Body.Fillet` and `Body.Chamfer` route a
+`revolve_blend.go` runs this section; `Fillet` and `Chamfer` route a
 `revolvePayload` receiver to it after stage 1 and SX10/SX16. Both operations
 try §7.2's source-specific radial rim first.
 

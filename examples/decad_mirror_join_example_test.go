@@ -65,7 +65,7 @@ func Example_decad_mirror_join() {
 		return
 	}
 	// The joined body fillets like any drawn prism.
-	rounded, err := tee.Fillet(ctx, decad.Edges(decad.Convex(), decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(1))
+	rounded, err := decad.Fillet(ctx, tee, decad.Edges(decad.Convex(), decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(1))
 	if err != nil {
 		fmt.Printf("failed to fillet: %s\n", err)
 		return

@@ -16,7 +16,7 @@ import (
 )
 
 // These fixtures pin route L of docs/modify-general-design.md (§4, §9)
-// through the public API: Body.Chamfer of a complete loop of a planar face
+// through the public API: Chamfer of a complete loop of a planar face
 // of a stacked or brep boolean result builds a brep body whose band patches
 // are faces of the body, and the mesh, STEP and boolean consumers read them.
 
@@ -91,7 +91,7 @@ func TestBrepLoopChamferPublicPlateTopLoop(t *testing.T) {
 	pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
 	require.NoError(t, err)
 	top := planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
-	got, err := pocket.Chamfer(t.Context(), loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5))
+	got, err := decad.Chamfer(t.Context(), pocket, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5))
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1, "the receiver is retired")
 	require.Len(t, got.Faces(), 15)
@@ -155,7 +155,7 @@ func TestBrepLoopChamferPublicBossRoot(t *testing.T) {
 
 	top := planeFacing(t, part, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
 	require.Len(t, top.Loops(), 2)
-	got, err := part.Chamfer(t.Context(), loopEdgeQuery(top.Loops()[1]), units.Millimeters(1))
+	got, err := decad.Chamfer(t.Context(), part, loopEdgeQuery(top.Loops()[1]), units.Millimeters(1))
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	patches := chamferLoopPatches(got)
@@ -194,7 +194,7 @@ func roundedDrilledPlate(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
-	rounded, err := box.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3))
+	rounded, err := decad.Fillet(t.Context(), box, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3))
 	require.NoError(t, err)
 
 	plane, err := w.CreateOffsetPlane(w.XZ(), -10)
@@ -240,7 +240,7 @@ func TestBrepLoopChamferPublicRoundedPlateExports(t *testing.T) {
 			t.Parallel()
 			plate := roundedDrilledPlate(t)
 			doc := plate.Document()
-			got, err := plate.Chamfer(t.Context(), loopEdgeQuery(tc.face(t, plate).Loops()[tc.loop]), units.Millimeters(1))
+			got, err := decad.Chamfer(t.Context(), plate, loopEdgeQuery(tc.face(t, plate).Loops()[tc.loop]), units.Millimeters(1))
 			require.NoError(t, err)
 			requireEveryEdgeOnTwoFaces(t, got)
 			planes, cones := 0, 0

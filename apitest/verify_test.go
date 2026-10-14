@@ -1374,7 +1374,7 @@ func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
 
 	t.Run("cap blend", func(t *testing.T) {
 		doc, pin, heldDiameter := computedToFacePin(t)
-		chamfered, err := pin.Chamfer(t.Context(), capLoopEdges(pin), units.Millimeters(1))
+		chamfered, err := decad.Chamfer(t.Context(), pin, capLoopEdges(pin), units.Millimeters(1))
 		require.NoError(t, err)
 		requireComputedToFaceDiameterThresholds(t, doc, chamfered, heldDiameter)
 	})
@@ -1428,7 +1428,7 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 func TestVerifyCapBlendChamferAreaVolumeCentroidAllPass(t *testing.T) {
 	t.Parallel()
 	doc, box := capBlendBox(t)
-	_, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
+	_, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())

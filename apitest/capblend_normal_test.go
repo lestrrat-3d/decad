@@ -31,7 +31,7 @@ func TestCapBlendPlanePatchNormalOutwardBothCaps(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, box := capBlendBox(t)
-			chamfered, err := box.Chamfer(t.Context(), capLoopEdgesOn(box, tc.end), units.Millimeters(5))
+			chamfered, err := decad.Chamfer(t.Context(), box, capLoopEdgesOn(box, tc.end), units.Millimeters(5))
 			require.NoError(t, err)
 			prefix := "chamferCap(end,"
 			if !tc.end {
@@ -67,7 +67,7 @@ func TestCapBlendConePatchNormalOutwardBothCaps(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			const R, H = 30.0, 20.0
 			disk := circleProfile(t, R, H)
-			chamfered, err := disk.Chamfer(t.Context(), capLoopEdgesOn(disk, tc.end), units.Millimeters(5))
+			chamfered, err := decad.Chamfer(t.Context(), disk, capLoopEdgesOn(disk, tc.end), units.Millimeters(5))
 			require.NoError(t, err)
 			prefix := "chamferCap(end,"
 			if !tc.end {
@@ -117,7 +117,7 @@ func TestCapBlendReflexApexNormalOutward(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			const d = 3.0
 			body := reflexLBody(t)
-			chamfered, err := body.Chamfer(t.Context(), capLoopEdgesOn(body, tc.end), units.Millimeters(d))
+			chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdgesOn(body, tc.end), units.Millimeters(d))
 			require.NoError(t, err)
 
 			prefix := "chamferCap(end,"
@@ -230,7 +230,7 @@ func TestCapBlendPatchNormalBoundCoversDenotedWall(t *testing.T) {
 			require.Len(t, s.Profiles(), 1)
 			body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 			require.NoError(t, err)
-			chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
+			chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(d))
 			require.NoError(t, err)
 
 			var patches []*decad.Face

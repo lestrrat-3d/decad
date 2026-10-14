@@ -492,7 +492,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 
-	filleted, err := got.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(1))
+	filleted, err := decad.Fillet(t.Context(), got, verticalConvexEdge(), units.Millimeters(1))
 	require.NoError(t, err)
 	filletVol, err := filleted.Volume()
 	require.NoError(t, err)
@@ -513,7 +513,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(cutGot), "the analytic reduction must still own this pair")
 
-	_, err = cutGot.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(1))
+	_, err = decad.Fillet(t.Context(), cutGot, verticalConvexEdge(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "proven displacement")
 
@@ -537,7 +537,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, anyFaceIsFaceted(meshGot), "expected the mesh path to run and produce a Faceted body")
 
-	_, err = meshGot.Fillet(t.Context(), decad.Edges().AtLeast(1), units.Millimeters(1))
+	_, err = decad.Fillet(t.Context(), meshGot, decad.Edges().AtLeast(1), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	meshReport, err := meshDoc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))

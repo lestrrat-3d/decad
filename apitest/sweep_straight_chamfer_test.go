@@ -32,7 +32,7 @@ func TestStraightSweepChamferSelectedWallsAndVerifyAll(t *testing.T) {
 	t.Parallel()
 	doc, source := straightSweepChamferBox(t)
 	vertical := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()).Exactly(4)
-	beveled, err := source.Chamfer(t.Context(), vertical, units.Millimeters(1))
+	beveled, err := decad.Chamfer(t.Context(), source, vertical, units.Millimeters(1))
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{beveled}, doc.Bodies())
 	decadtest.MeasuresVolume(t, beveled, units.CubicMillimeters(3980), decadtest.Exactly())
@@ -70,7 +70,7 @@ func TestStraightSweepChamferSingleCapEdgeAndVerifyAll(t *testing.T) {
 			edges, err := corner.SelectEdges(source)
 			require.NoError(t, err)
 			require.Len(t, edges, 1)
-			beveled, err := source.Chamfer(t.Context(), corner, units.Millimeters(1))
+			beveled, err := decad.Chamfer(t.Context(), source, corner, units.Millimeters(1))
 			require.NoError(t, err)
 			decadtest.MeasuresVolume(t, beveled, units.CubicMillimeters(3990), decadtest.Exactly())
 			require.Len(t, beveled.Faces(), 7)
@@ -94,7 +94,7 @@ func TestStraightSweepChamferOneEdgeAndPlacedReplay(t *testing.T) {
 	require.NoError(t, err)
 	corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(5, -3, 7))).Exactly(1)
-	beveled, err := placed.Chamfer(t.Context(), corner, units.Millimeters(1))
+	beveled, err := decad.Chamfer(t.Context(), placed, corner, units.Millimeters(1))
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, beveled, units.CubicMillimeters(3995), decadtest.Exactly())
 	decadtest.MeasuresBounds(t, beveled, r3.NewVec(5, -3, 7),
@@ -126,7 +126,7 @@ func TestStraightSweepChamferRefusesOtherEdges(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc, source := straightSweepChamferBox(t)
-			out, err := source.Chamfer(t.Context(), tc.sel, units.Millimeters(1))
+			out, err := decad.Chamfer(t.Context(), source, tc.sel, units.Millimeters(1))
 			require.Nil(t, out)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, []*decad.Body{source}, doc.Bodies())
@@ -140,7 +140,7 @@ func TestStraightSweepChamferRefusesAsymmetricReference(t *testing.T) {
 	corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.Vec{})).Exactly(1)
 	wall := decad.Faces(decad.Facing(r3.NewVec(-1, 0, 0))).Exactly(1)
-	out, err := source.Chamfer(t.Context(), corner, units.Millimeters(1),
+	out, err := decad.Chamfer(t.Context(), source, corner, units.Millimeters(1),
 		decad.WithAsymmetricChamfer(wall, units.Millimeters(2)))
 	require.Nil(t, out)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -185,7 +185,7 @@ func TestStraightSweepChamferRefusesOtherSweeps(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc, source := tc.build(t)
-			out, err := source.Chamfer(t.Context(), decad.Edges().AtLeast(1), units.Millimeters(1))
+			out, err := decad.Chamfer(t.Context(), source, decad.Edges().AtLeast(1), units.Millimeters(1))
 			require.Nil(t, out)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, []*decad.Body{source}, doc.Bodies())

@@ -56,7 +56,7 @@ func bandDrilledBox(t *testing.T, round float64) *decad.Body {
 	body := bandBox(t, doc, 0, 0, 40, 20, 20)
 	if round > 0 {
 		var err error
-		body, err = body.Fillet(t.Context(), decad.Edges(decad.ParallelTo(bandUp)).Exactly(4), units.Millimeters(round))
+		body, err = decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(bandUp)).Exactly(4), units.Millimeters(round))
 		require.NoError(t, err)
 	}
 	w := sketch.NewWorld()
@@ -143,7 +143,7 @@ func bandLoopQuery(loop *decad.Loop) *decad.EdgeQuery {
 func bandFillet(t *testing.T, body *decad.Body, level float64, li int, r float64) *decad.Body {
 	t.Helper()
 	face := bandFacing(t, body, bandUp, level)
-	out, err := body.Fillet(t.Context(), bandLoopQuery(face.Loops()[li]), units.Millimeters(r))
+	out, err := decad.Fillet(t.Context(), body, bandLoopQuery(face.Loops()[li]), units.Millimeters(r))
 	require.NoError(t, err)
 	return out
 }

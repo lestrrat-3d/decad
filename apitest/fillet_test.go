@@ -135,7 +135,7 @@ func TestFilletContextCancellationAtCommitLeavesReceiverLive(t *testing.T) {
 	doc, box := filletBox(t)
 	ctx := &commitBoundaryCancelContext{Context: t.Context()}
 
-	body, err := box.Fillet(ctx, verticalEdges(), units.Millimeters(10))
+	body, err := decad.Fillet(ctx, box, verticalEdges(), units.Millimeters(10))
 
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
@@ -147,7 +147,7 @@ func TestFilletContextCancellationDuringPreAuditLeavesReceiverLive(t *testing.T)
 	doc, box := filletBox(t)
 	ctx := &preAuditScanCancelContext{Context: t.Context()}
 
-	body, err := box.Fillet(ctx, verticalEdges(), units.Millimeters(10))
+	body, err := decad.Fillet(ctx, box, verticalEdges(), units.Millimeters(10))
 
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
@@ -162,7 +162,7 @@ func TestFilletContextCancellationDuringAuditPreservesError(t *testing.T) {
 			doc, box := manySidedPrism(t, 300)
 			ctx := &auditScanCancelContext{Context: t.Context(), cancelErr: cancelErr}
 
-			body, err := box.Fillet(ctx, verticalEdges(), units.Millimeters(10))
+			body, err := decad.Fillet(ctx, box, verticalEdges(), units.Millimeters(10))
 
 			require.Nil(t, body)
 			require.Equal(t, cancelErr, err)
@@ -177,7 +177,7 @@ func TestFilletSelectorAdmission(t *testing.T) {
 	t.Run("BuiltInQuery", func(t *testing.T) {
 		_, box := filletBox(t)
 
-		_, err := box.Fillet(t.Context(), verticalEdges(), units.Millimeters(5))
+		_, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(5))
 		require.NoError(t, err)
 	})
 
@@ -189,7 +189,7 @@ func TestFilletSelectorAdmission(t *testing.T) {
 			calls:     &calls,
 		}
 
-		_, err := box.Fillet(t.Context(), foreign, units.Millimeters(5))
+		_, err := decad.Fillet(t.Context(), box, foreign, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Zero(t, calls, `Fillet rejects a foreign selector before it can retire the receiver`)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a rejected selector leaves the receiver live`)
@@ -200,7 +200,7 @@ func TestFilletSelectorAdmission(t *testing.T) {
 		var query *decad.EdgeQuery
 		var selector decad.EdgeSelector = query
 
-		_, err := box.Fillet(t.Context(), selector, units.Millimeters(5))
+		_, err := decad.Fillet(t.Context(), box, selector, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a typed nil selector leaves the receiver live`)
 	})
@@ -218,7 +218,7 @@ func TestFilletBoxAllConvexEdges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, edges, 4, `a box has four lateral edges`)
 
-	body, err := box.Fillet(t.Context(), verticalEdges(), units.Millimeters(r))
+	body, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(r))
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireManifold(t, body)
@@ -323,7 +323,7 @@ func TestFilletConcaveEdgeReadsMinRadius(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, picked, 1, `an L has one reflex corner`)
 
-	filleted, err := body.Fillet(t.Context(), concave, units.Millimeters(r))
+	filleted, err := decad.Fillet(t.Context(), body, concave, units.Millimeters(r))
 	require.NoError(t, err)
 	requireManifold(t, filleted)
 
@@ -389,7 +389,7 @@ func TestFilletLineArcCorner(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, before)
 
-	filleted, err := body.Fillet(t.Context(), corner, units.Millimeters(4))
+	filleted, err := decad.Fillet(t.Context(), body, corner, units.Millimeters(4))
 	require.NoError(t, err)
 	requireManifold(t, filleted)
 
@@ -445,7 +445,7 @@ func TestFilletArcArcCorner(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, picked, 2, `a lens has two arc/arc corners`)
 
-	filleted, err := body.Fillet(t.Context(), corners, units.Millimeters(3))
+	filleted, err := decad.Fillet(t.Context(), body, corners, units.Millimeters(3))
 	require.NoError(t, err)
 	requireManifold(t, filleted)
 
@@ -472,19 +472,19 @@ func TestFilletRefusals(t *testing.T) {
 	_, box := filletBox(t)
 
 	// A zero radius is the body the caller already holds: S13.
-	_, err := box.Fillet(t.Context(), verticalEdges(), units.Millimeters(0))
+	_, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(0))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 
 	// A wrong-kind magnitude is S15.
-	_, err = box.Fillet(t.Context(), verticalEdges(), units.Degrees(5))
+	_, err = decad.Fillet(t.Context(), box, verticalEdges(), units.Degrees(5))
 	require.ErrorIs(t, err, decad.ErrUnitKind)
 
 	// A negative magnitude is S15.
-	_, err = box.Fillet(t.Context(), verticalEdges(), units.Millimeters(-1))
+	_, err = decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(-1))
 	require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
 
 	// A selector matching nothing is loud: S16.
-	_, err = box.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Concave()), units.Millimeters(5))
+	_, err = decad.Fillet(t.Context(), box, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Concave()), units.Millimeters(5))
 	require.ErrorIs(t, err, decad.ErrNoMatch, `a box has no concave lateral edge`)
 
 	// The refusals left the document untouched — the box is still live.
@@ -514,7 +514,7 @@ func TestFilletTooLargeRadius(t *testing.T) {
 	require.NoError(t, err)
 
 	corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()).AtLeast(1)
-	_, err = body.Fillet(t.Context(), corner, units.Millimeters(25))
+	_, err = decad.Fillet(t.Context(), body, corner, units.Millimeters(25))
 	require.ErrorIs(t, err, decad.ErrDegenerate, `no blend of radius 25 fits inside a wall of radius 20`)
 	require.ErrorContains(t, err, `selector `+corner.String(),
 		`a multi-edge construction failure retains the query that selected the corners`)
@@ -533,7 +533,7 @@ func TestFilletOverLargeRadiusFlippingLoopIsUnsupported(t *testing.T) {
 	// is a different refusal from TestFilletTooLargeRadius, whose S5 rejects a
 	// radius that exceeds a CIRCULAR carrier before any audit runs.)
 	_, box := filletBox(t)
-	_, err := box.Fillet(t.Context(), verticalEdges(), units.Millimeters(120))
+	_, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(120))
 	require.ErrorIs(t, err, decad.ErrUnsupported, `an overrun that also flips the loop is still S6`)
 	require.NotErrorIs(t, err, decad.ErrDegenerate, `the overrun must not read as the S8 inside-out verdict`)
 	require.Equal(t, []*decad.Body{box}, box.Document().Bodies(), `a refused fillet retires nothing`)
@@ -585,7 +585,7 @@ func TestFilletBoundaryContactRefused(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, picked, 4, `the four outer corners are the convex lateral edges`)
 
-	_, err = body.Fillet(t.Context(), convex, units.Millimeters(r))
+	_, err = decad.Fillet(t.Context(), body, convex, units.Millimeters(r))
 	require.Error(t, err, `a fillet that pinches two boundaries must be refused, not returned`)
 	require.ErrorIs(t, err, decad.ErrUnsupported, `boundary contact is the boundary case of a crossing: S7, ErrUnsupported`)
 	require.ErrorContains(t, err, `selector `+convex.String(),
@@ -604,7 +604,7 @@ func TestFilletClearOfHoleBuilds(t *testing.T) {
 	off := 20 * (1 - 1/math.Sqrt2) // the hole that r = 20 would have touched
 	doc, body := plateWithSquareHole(t, off)
 
-	filleted, err := body.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()), units.Millimeters(r))
+	filleted, err := decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()), units.Millimeters(r))
 	require.NoError(t, err, `a fillet clear of the hole must still build`)
 	requireManifold(t, filleted)
 
@@ -660,7 +660,7 @@ func TestFilletHoleOutsideRoundedLoopRefused(t *testing.T) {
 	_, body := plateWithDiskHole(t, 3, 3, 1)
 
 	convex := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
-	_, err := body.Fillet(t.Context(), convex, units.Millimeters(20))
+	_, err := decad.Fillet(t.Context(), body, convex, units.Millimeters(20))
 	require.Error(t, err, `a fillet that leaves the hole outside the outer loop must be refused, not returned`)
 	require.ErrorIs(t, err, decad.ErrDegenerate,
 		`a hole proven outside the rounded outer loop is nesting decidably broken: no such body, ErrDegenerate`)
@@ -680,7 +680,7 @@ func TestFilletHoleWellInsideRoundedLoopBuilds(t *testing.T) {
 	doc, body := plateWithDiskHole(t, 50, 50, 5)
 
 	convex := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
-	filleted, err := body.Fillet(t.Context(), convex, units.Millimeters(5))
+	filleted, err := decad.Fillet(t.Context(), body, convex, units.Millimeters(5))
 	require.NoError(t, err, `a fillet with the hole well inside the outer loop must build`)
 	requireManifold(t, filleted)
 
@@ -739,7 +739,7 @@ func scaledDiskInCornerFillet(t *testing.T, k, gapMult float64) error {
 	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(20 * k), Dir: decad.Along})
 	require.NoError(t, err)
 
-	_, err = body.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()), units.Millimeters(r*k))
+	_, err = decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()), units.Millimeters(r*k))
 	return err
 }
 
@@ -802,7 +802,7 @@ func TestFilletNonPrismReceiver(t *testing.T) {
 	// fillet of it is staged: S3. Its closed rims are FacetedCurve edges, which
 	// render closed from their shared vertex.
 	sel := decad.Edges()
-	_, err := booleanRimBody(t, decad.New()).Fillet(t.Context(), sel, units.Millimeters(1))
+	_, err := decad.Fillet(t.Context(), booleanRimBody(t, decad.New()), sel, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, `this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only`,
 		`the refusal states its own reason`)
@@ -830,11 +830,11 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 	// selector and the entities it matched, so the operative words are not buried
 	// behind a per-edge dump. errors.Is still branches on the sentinel.
 	t.Run(`non-prism receiver`, func(t *testing.T) {
-		_, err := booleanRimBody(t, decad.New()).Fillet(t.Context(), decad.Edges(), units.Millimeters(1))
+		_, err := decad.Fillet(t.Context(), booleanRimBody(t, decad.New()), decad.Edges(), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only`)
 
-		_, err = booleanRimBody(t, decad.New()).Chamfer(t.Context(), decad.Edges(), units.Millimeters(1))
+		_, err = decad.Chamfer(t.Context(), booleanRimBody(t, decad.New()), decad.Edges(), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only`)
 	})
@@ -843,7 +843,7 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 		// A partial cap loop still refuses a chamfer with a leading reason.
 		capEdges := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)))
 		_, box := filletBox(t)
-		_, err := box.Chamfer(t.Context(), capEdges, units.Millimeters(5))
+		_, err := decad.Chamfer(t.Context(), box, capEdges, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `the selection covers only part of a cap loop`)
 	})
@@ -852,7 +852,7 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 		// The S6 overrun of TestChamferOverLargeSetbackRefused: the audit's own
 		// reason leads, the four corner mappings follow it.
 		_, box := filletBox(t)
-		_, err := box.Chamfer(t.Context(), verticalEdges(), units.Millimeters(40))
+		_, err := decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(40))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `is consumed by its corner setbacks`)
 		require.Equal(t, 4, strings.Count(err.Error(), `selected edge[`),
@@ -869,7 +869,7 @@ func TestModifyRefusalRendersAClosedCircleAsClosed(t *testing.T) {
 	// what its two coordinates say. A radius-6 fillet at every corner of the
 	// ring's 10 × 10 meridian claims each wall from both ends (base S6), and the
 	// refusal names every matched latitude circle.
-	_, err := revolvedRing(t).Fillet(t.Context(), decad.Edges(decad.Circular()), units.Millimeters(6))
+	_, err := decad.Fillet(t.Context(), revolvedRing(t), decad.Edges(decad.Circular()), units.Millimeters(6))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err,
 		`selected edge[0] closed circle through (0,5,0), centre (0,0,0), radius 5 mm`,
@@ -882,7 +882,7 @@ func TestModifyRefusalRendersAClosedCircleAsClosed(t *testing.T) {
 	// The two renderings are distinguishable: a straight cap edge still reads
 	// from/to, with the two distinct coordinates it really has.
 	_, box := filletBox(t)
-	_, err = box.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))), units.Millimeters(60))
+	_, err = decad.Fillet(t.Context(), box, decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))), units.Millimeters(60))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, `selected edge[0] from (0,0,0) to (100,0,0)`,
 		`a non-circular edge keeps the from/to form`)
@@ -894,7 +894,7 @@ func TestModifyRefusalRendersAClosedCircleAsClosed(t *testing.T) {
 	// from the edge's own shared start/end vertex, not from its curve type.
 	// booleanRimBody's bar crosses the disc strictly between its caps, so both
 	// cap rims survive the boolean untouched.
-	_, err = booleanRimBody(t, decad.New()).Fillet(t.Context(), decad.Edges(), units.Millimeters(1))
+	_, err = decad.Fillet(t.Context(), booleanRimBody(t, decad.New()), decad.Edges(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.NotContains(t, err.Error(), `closed circle`,
 		`every rim of a boolean-built body is a FacetedCurve, so the Circle3 branch never fires`)
@@ -952,7 +952,7 @@ func TestFilletSmallRadiusArcRadiiRoundApart(t *testing.T) {
 				prism, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 				require.NoError(t, err)
 
-				body, err := prism.Fillet(t.Context(), verticalEdges(), units.Millimeters(r))
+				body, err := decad.Fillet(t.Context(), prism, verticalEdges(), units.Millimeters(r))
 				require.NoError(t, err)
 				require.True(t, body.IsSolid())
 

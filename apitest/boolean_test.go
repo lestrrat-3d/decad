@@ -994,7 +994,7 @@ func TestUnionOfAdmittedCapBlendBodies(t *testing.T) {
 	// A line-line cap chamfer carries a zero occupied-volume bound, so a
 	// disjoint union must retain both bodies' exact volume.
 	doc, box := capBlendBox(t)
-	blended, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
+	blended, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
 	other := boxBody(t, doc, 200, 0, 210, 10, 10)
 

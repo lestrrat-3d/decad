@@ -840,7 +840,7 @@ func TestExtrudeToFaceInheritsCapBlendComputedLevelBound(t *testing.T) {
 		Offset: units.Millimeters(-shortBy),
 	})
 	require.NoError(t, err)
-	chamfered, err := pin.Chamfer(t.Context(),
+	chamfered, err := decad.Chamfer(t.Context(), pin,
 		decad.Edges(decad.CreatedBy(decad.CapStart(pin))),
 		units.Millimeters(shortBy),
 	)

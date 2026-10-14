@@ -111,9 +111,9 @@ func TestModifyOptionGates(t *testing.T) {
 	t.Parallel()
 	t.Run("NilOption", func(t *testing.T) {
 		doc, box := filletBox(t)
-		_, err := box.Fillet(t.Context(), verticalEdges(), units.Millimeters(5), nil)
+		_, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(5), nil)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		_, err = box.Chamfer(t.Context(), verticalEdges(), units.Millimeters(5), nil)
+		_, err = decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(5), nil)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		_, err = box.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5), nil)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -122,7 +122,7 @@ func TestModifyOptionGates(t *testing.T) {
 	t.Run("DuplicateAsymmetric", func(t *testing.T) {
 		doc, box := filletBox(t)
 		ref := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))
-		_, err := box.Chamfer(t.Context(), verticalEdges(), units.Millimeters(3),
+		_, err := decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(3),
 			decad.WithAsymmetricChamfer(ref, units.Millimeters(5)),
 			decad.WithAsymmetricChamfer(ref, units.Millimeters(5)))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -156,7 +156,7 @@ func TestModifyOptionGates(t *testing.T) {
 		doc, box := filletBox(t)
 		ref := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))
 		for _, other := range []units.Value{units.Millimeters(0), units.Millimeters(-1), units.Degrees(3)} {
-			_, err := box.Chamfer(t.Context(), cornerEdge(), units.Millimeters(3), decad.WithAsymmetricChamfer(ref, other))
+			_, err := decad.Chamfer(t.Context(), box, cornerEdge(), units.Millimeters(3), decad.WithAsymmetricChamfer(ref, other))
 			require.Error(t, err)
 		}
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
@@ -165,7 +165,7 @@ func TestModifyOptionGates(t *testing.T) {
 
 func mustChamfer(t *testing.T, b *decad.Body, sel decad.EdgeSelector, d float64, opts ...decad.ChamferOption) *decad.Body {
 	t.Helper()
-	out, err := b.Chamfer(t.Context(), sel, units.Millimeters(d), opts...)
+	out, err := decad.Chamfer(t.Context(), b, sel, units.Millimeters(d), opts...)
 	require.NoError(t, err)
 	return out
 }
@@ -243,7 +243,7 @@ func TestTangentChainSlotCapLoop(t *testing.T) {
 
 	// Without the chain the single edge reaches route E, whose straight-wall
 	// admission refuses the slot's curved terminal wall (SB7).
-	_, err := slot.Chamfer(t.Context(), slotSeed(slot), units.Millimeters(d))
+	_, err := decad.Chamfer(t.Context(), slot, slotSeed(slot), units.Millimeters(d))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "brep-modify SB7")
 
@@ -299,7 +299,7 @@ func TestTangentChainNearTangentStops(t *testing.T) {
 	// to the top wall and stops at both near-tangent joins: three of the four
 	// top edges, a partial loop.
 	doc, slot := slotBody(t, [2]float64{9.9, 5})
-	_, err := slot.Chamfer(t.Context(), slotSeed(slot), units.Millimeters(1), decad.WithTangentChain())
+	_, err := decad.Chamfer(t.Context(), slot, slotSeed(slot), units.Millimeters(1), decad.WithTangentChain())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "only part of a cap loop")
 	require.NotContains(t, err.Error(), "SX2")
@@ -312,10 +312,10 @@ func TestTangentChainUndecidedRefused(t *testing.T) {
 	// cross product is exactly nonzero and below the oracle's noise floor, so
 	// the continuation is undecided — SX2, never a silent stop.
 	doc, slot := slotBody(t, [2]float64{9.9999999999, 5})
-	_, err := slot.Chamfer(t.Context(), slotSeed(slot), units.Millimeters(1), decad.WithTangentChain())
+	_, err := decad.Chamfer(t.Context(), slot, slotSeed(slot), units.Millimeters(1), decad.WithTangentChain())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "SX2")
-	_, err = slot.Fillet(t.Context(), slotSeed(slot), units.Millimeters(1), decad.WithTangentChain())
+	_, err = decad.Fillet(t.Context(), slot, slotSeed(slot), units.Millimeters(1), decad.WithTangentChain())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "SX2")
 	require.Equal(t, []*decad.Body{slot}, doc.Bodies())
@@ -448,7 +448,7 @@ func TestAsymmetricChamferReferenceRefused(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			doc, box := filletBox(t)
-			_, err := box.Chamfer(t.Context(), cornerEdge(), units.Millimeters(3), decad.WithAsymmetricChamfer(tc.ref, units.Millimeters(5)))
+			_, err := decad.Chamfer(t.Context(), box, cornerEdge(), units.Millimeters(3), decad.WithAsymmetricChamfer(tc.ref, units.Millimeters(5)))
 			require.ErrorIs(t, err, tc.want)
 			require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a refused chamfer leaves the receiver live`)
 		})
@@ -462,13 +462,13 @@ func TestAsymmetricChamferOverrunEachSide(t *testing.T) {
 	// faces S6 on its own wall.
 	for _, c := range []struct{ d, other float64 }{{61, 5}, {3, 101}} {
 		doc, box := filletBox(t)
-		_, err := box.Chamfer(t.Context(), cornerEdge(), units.Millimeters(c.d), decad.WithAsymmetricChamfer(ref, units.Millimeters(c.other)))
+		_, err := decad.Chamfer(t.Context(), box, cornerEdge(), units.Millimeters(c.d), decad.WithAsymmetricChamfer(ref, units.Millimeters(c.other)))
 		require.ErrorIs(t, err, decad.ErrUnsupported, `d=%v other=%v`, c.d, c.other)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	}
 	// Both setbacks fit: 59 and 99 build.
 	_, box := filletBox(t)
-	_, err := box.Chamfer(t.Context(), cornerEdge(), units.Millimeters(59), decad.WithAsymmetricChamfer(ref, units.Millimeters(99)))
+	_, err := decad.Chamfer(t.Context(), box, cornerEdge(), units.Millimeters(59), decad.WithAsymmetricChamfer(ref, units.Millimeters(99)))
 	require.NoError(t, err)
 }
 
@@ -543,7 +543,7 @@ func TestAsymmetricChamferOnPrismCapEdge(t *testing.T) {
 			edge := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 				decad.EndpointAt(r3.NewVec(0, 0, 10))).Exactly(1)
 			face := planeFacing(t, box, tc.normal, r3.NewVec(0, 0, 10))
-			result, err := box.Chamfer(t.Context(), edge, units.Millimeters(2),
+			result, err := decad.Chamfer(t.Context(), box, edge, units.Millimeters(2),
 				decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(face.Origins()[0])), units.Millimeters(3)))
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{result}, doc.Bodies())
@@ -592,7 +592,7 @@ func TestAsymmetricChamferOnObliquePrismCapEdge(t *testing.T) {
 				}
 				require.NotSame(t, top, ref)
 			}
-			result, err := part.Chamfer(t.Context(), edge, units.Millimeters(1),
+			result, err := decad.Chamfer(t.Context(), part, edge, units.Millimeters(1),
 				decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(ref.Origins()[0])), units.Millimeters(1.5)))
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{result}, doc.Bodies())
@@ -642,7 +642,7 @@ func TestAsymmetricChamferOnBrepStraightEdge(t *testing.T) {
 			edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(40, 0, 0))).Exactly(1)
 			refFace := planeFacing(t, part, tc.normal, r3.NewVec(40, 0, 0))
 			reference := decad.Faces(decad.FaceCreatedBy(refFace.Origins()[0]))
-			beveled, err := part.Chamfer(t.Context(), edge, units.Millimeters(2),
+			beveled, err := decad.Chamfer(t.Context(), part, edge, units.Millimeters(2),
 				decad.WithAsymmetricChamfer(reference, units.Millimeters(3)))
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{beveled}, doc.Bodies())
@@ -679,7 +679,7 @@ func TestAsymmetricChamferOnBrepRestatedEndFaces(t *testing.T) {
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(1)
 	bottom := planeFacing(t, part, r3.NewVec(0, 0, -1), r3.NewVec(0, 0, 0))
-	result, err := part.Chamfer(t.Context(), edge, units.Millimeters(2),
+	result, err := decad.Chamfer(t.Context(), part, edge, units.Millimeters(2),
 		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(bottom.Origins()[0])), units.Millimeters(3)))
 	require.NoError(t, err)
 	volume, err := result.Volume()
@@ -722,7 +722,7 @@ func TestAsymmetricChamferOnBrepLoop(t *testing.T) {
 					}
 				}
 			}
-			result, err := part.Chamfer(t.Context(), loopEdgeQuery(loop), units.Millimeters(1.5),
+			result, err := decad.Chamfer(t.Context(), part, loopEdgeQuery(loop), units.Millimeters(1.5),
 				decad.WithAsymmetricChamfer(reference, units.Millimeters(2)))
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{result}, doc.Bodies())
@@ -744,7 +744,7 @@ func TestAsymmetricChamferOnBrepLoopSideOverrun(t *testing.T) {
 	part := roundedDrilledPlate(t)
 	doc := part.Document()
 	top := planeFacing(t, part, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 20))
-	_, err := part.Chamfer(t.Context(), loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5),
+	_, err := decad.Chamfer(t.Context(), part, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5),
 		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(top.Origins()[0])), units.Millimeters(20)))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "SX7")
@@ -784,7 +784,7 @@ func TestAsymmetricChamferOnStackedLoop(t *testing.T) {
 					}
 				}
 			}
-			result, err := pocket.Chamfer(t.Context(), loopEdgeQuery(loop), units.Millimeters(1.5),
+			result, err := decad.Chamfer(t.Context(), pocket, loopEdgeQuery(loop), units.Millimeters(1.5),
 				decad.WithAsymmetricChamfer(reference, units.Millimeters(2)))
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{result}, doc.Bodies())
@@ -808,7 +808,7 @@ func TestAsymmetricChamferOnStackedEdge(t *testing.T) {
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(1)
 	front := planeFacing(t, pocket, r3.NewVec(0, -1, 0), r3.NewVec(0, 0, 0))
-	result, err := pocket.Chamfer(t.Context(), edge, units.Millimeters(1),
+	result, err := decad.Chamfer(t.Context(), pocket, edge, units.Millimeters(1),
 		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(front.Origins()[0])), units.Millimeters(2)))
 	require.NoError(t, err)
 	volume, err := result.Volume()

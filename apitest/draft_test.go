@@ -150,7 +150,7 @@ func TestDraftPlacedAndFilleted(t *testing.T) {
 	// all draft.
 	box2 := plainBox(t, doc, decad.Along)
 	const r = 3.0
-	rounded, err := box2.Fillet(t.Context(),
+	rounded, err := decad.Fillet(t.Context(), box2,
 		decad.Edges(decad.EndpointAt(r3.NewVec(boxSide/2, boxSide/2, 0)), decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(1),
 		units.Millimeters(r))
 	require.NoError(t, err)

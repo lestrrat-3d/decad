@@ -76,7 +76,7 @@ func TestCrossCylinderBoreMouthChamferVerified(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc, target, bored := crossCylinderBore(t, tc.R, tc.r, tc.H, tc.c)
-			out, err := bored.Chamfer(t.Context(),
+			out, err := decad.Chamfer(t.Context(), bored,
 				crossBoreMouth(t, bored, tc.c, tc.r, true), units.Millimeters(tc.setback))
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
@@ -145,7 +145,7 @@ func TestCrossCylinderBoreMouthChamferRefusesUnprovedCases(t *testing.T) {
 				opts = append(opts, decad.WithAsymmetricChamfer(
 					decad.Faces(decad.FaceCreatedBy(side)).Exactly(1), units.Millimeters(0.25)))
 			}
-			_, err := receiver.Chamfer(t.Context(),
+			_, err := decad.Chamfer(t.Context(), receiver,
 				crossBoreMouth(t, receiver, centerZ, 1, tc.positive), units.Millimeters(tc.setback), opts...)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, receiver, doc.Bodies()[len(doc.Bodies())-1])

@@ -16,7 +16,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the chamfer of docs/modify-design.md §7: Body.Chamfer bevels the
+// This file is the chamfer of docs/modify-design.md §7: Chamfer bevels the
 // convex or concave lateral edges of a straight prism (Table R, R1). It is the
 // fillet's sibling under the §2 reduction — a lateral edge is a CORNER of the
 // recorded 2D section, and bevelling it is a rewrite of that section, fed back
@@ -59,8 +59,8 @@ type ChamferOption interface{ chamferOption() }
 
 // Chamfer bevels the selected lateral edges of a straight prism with a straight
 // chord set back a distance d along each adjacent wall, returning the new body
-// and retiring the receiver (docs/modify-design.md §7, core §8). sel is resolved
-// against the live receiver; a query matching nothing is loud (ErrNoMatch /
+// and retiring b (docs/modify-design.md §7, core §8). A nil b is ErrDegenerate.
+// sel is resolved against the live b; a query matching nothing is loud (ErrNoMatch /
 // ErrCardinality, S16). d is a length magnitude, gated like every other (S15); a
 // zero d is S13. The rewritten section faces the §5 audit before anything is
 // built, so no unproven body is ever made and an over-large setback is refused
@@ -152,7 +152,7 @@ type ChamferOption interface{ chamferOption() }
 // oblique, split or on both sides of the loop's face is SL2, and a band
 // reaching a far face end is SX7 (each ErrUnsupported); a setback that
 // empties a loop's offset is SX6 (ErrDegenerate).
-func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
+func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a chamfer`, ErrDegenerate)
 	}

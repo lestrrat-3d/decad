@@ -298,7 +298,7 @@ func letterBody(ctx context.Context, loops [][]point, chamferCap bool) (*decad.B
 	if !chamferCap {
 		// Round the exposed outside corners while keeping the counters and
 		// interior cut-ins crisp for a legible wordmark.
-		filleted, err := extruded.Fillet(ctx, decad.Edges(
+		filleted, err := decad.Fillet(ctx, extruded, decad.Edges(
 			decad.ParallelTo(r3.NewVec(0, 1, 0)),
 			decad.Convex(),
 		), units.Millimeters(letterFilletRadius))
@@ -307,7 +307,7 @@ func letterBody(ctx context.Context, loops [][]point, chamferCap bool) (*decad.B
 		}
 		return filleted, nil
 	}
-	beveled, err := extruded.Chamfer(ctx, decad.Edges(decad.CreatedBy(decad.CapEnd(extruded))), units.Millimeters(letterCapChamfer))
+	beveled, err := decad.Chamfer(ctx, extruded, decad.Edges(decad.CreatedBy(decad.CapEnd(extruded))), units.Millimeters(letterCapChamfer))
 	if err != nil {
 		return nil, fmt.Errorf("chamfer letter cap: %w", err)
 	}

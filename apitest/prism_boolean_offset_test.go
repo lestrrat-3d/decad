@@ -86,7 +86,7 @@ func TestPrismCutOffsetPlaneToolsChainAnalytically(t *testing.T) {
 		// A fillet needs an analytic body with an exact section, so its
 		// success is the public reading of the chained result's zero section
 		// displacement.
-		filleted, err := got.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(2))
+		filleted, err := decad.Fillet(t.Context(), got, verticalConvexEdge(), units.Millimeters(2))
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)

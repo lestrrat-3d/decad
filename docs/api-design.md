@@ -304,7 +304,7 @@ while `Document.Bodies()` stays truthful: `Union(ctx, a, b)` reaches the documen
 the operation, with no `*Document` argument and no caller bookkeeping. Operands
 themselves are untouched: retiring is a change of *document* membership, not of
 the body, which stays immutable and readable. The rule is uniform — every
-operation that consumes a body (the booleans of §8, `Body.Fillet` /
+operation that consumes a body (the booleans of §8, `Fillet` /
 `Chamfer` / `Shell`, the surface operations `Thicken` / `Body.Patch` /
 `Stitch` / `Unstitch`, and `Transform`) retires its input body or
 bodies from the document and registers every body it returns. A retired body
@@ -743,7 +743,7 @@ components are not proven separate, rather than publish an unrecorded cavity.
 
 An operation is a package-level function. A query is a method. This section
 owns the rule; a companion design that writes an operation as a method
-(`func (b *Body) Fillet(...)`, `func (d *Document) Loft(...)`) means the
+(`func (b *Body) Shell(...)`, `func (d *Document) Loft(...)`) means the
 free function the table below names for it.
 
 **An operation is any call that builds a body, retires a body, or registers a
@@ -781,7 +781,6 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 
 | Shipped method form | Free function |
 |---|---|
-| `Body.Fillet`, `Body.Chamfer` | `Fillet(ctx, b, sel, r, opts...)`, `Chamfer(ctx, b, sel, d, opts...)` |
 | `Body.Shell` | `Shell(ctx, b, sel, t, opts...)` |
 | `Body.Offset`, `Body.Thicken` | `Offset(ctx, b, ...)`, `Thicken(ctx, b, ...)` |
 | `Body.Trim`, `Body.Extend` | `Trim(ctx, b, tool, side)`, `Extend(ctx, b, edges, tool)` |
@@ -1227,8 +1226,8 @@ retried.
 Modify operations return a new body, retiring the receiver, on the same terms:
 
 ```go
-func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
-func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
+func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
+func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
 func (b *Body) Shell(ctx context.Context, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
 ```
 
@@ -1668,7 +1667,7 @@ invalidate a hand-typed number, and the one selection style that survives a
 rebuild is the geometric one selectors exist to provide.
 
 ```go
-body, err = body.Fillet(ctx,
+body, err = decad.Fillet(ctx, body,
     decad.Edges(decad.Convex(), decad.ParallelTo(r3.NewVec(0, 0, 1))),
     units.Millimeters(2),
 )

@@ -165,7 +165,7 @@ func chamferLoopOf(t *testing.T, body *Body, n, p r3.Vec, li int, d float64) (*B
 		before = len(bp.loopBands)
 	}
 	f := planarBodyFace(t, body, n, p)
-	out, err := body.Chamfer(t.Context(), loopQuery(f.Loops()[li]), units.Millimeters(d))
+	out, err := Chamfer(t.Context(), body, loopQuery(f.Loops()[li]), units.Millimeters(d))
 	require.NoError(t, err)
 	require.Error(t, body.doc.requireLive(body), "the receiver is retired")
 	bp, ok := out.payload.(brepPayload)
@@ -298,7 +298,7 @@ func TestBrepLoopChamferCrossDrilledBothLoops(t *testing.T) {
 		a, b := e.Start().Position().Value, e.End().Position().Value
 		q.Or(EndpointAt(a), EndpointAt(b), ParallelTo(b.Sub(a)))
 	}
-	out, err := s1.Chamfer(t.Context(), q.Exactly(8), units.Millimeters(1.5))
+	out, err := Chamfer(t.Context(), s1, q.Exactly(8), units.Millimeters(1.5))
 	require.NoError(t, err)
 	requireClosedTopology(t, out)
 	lo, hi := piEnclosed(big.NewRat(15739, 1), big.NewRat(-180, 1))
@@ -500,7 +500,7 @@ func TestBrepLoopChamferContourBound(t *testing.T) {
 
 	before := out.doc.Bodies()
 	floor := planarBodyFace(t, out, routeEZ, r3.NewVec(0, 0, 5))
-	_, err := out.Chamfer(t.Context(), loopQuery(floor.Loops()[0]), units.Millimeters(1))
+	_, err := Chamfer(t.Context(), out, loopQuery(floor.Loops()[0]), units.Millimeters(1))
 	requireRefusesUnchanged(t, out, before, err, "brep-modify SB1")
 }
 
@@ -577,9 +577,9 @@ func TestBrepLoopChamferRefusals(t *testing.T) {
 			var err error
 			switch {
 			case tc.fillet:
-				_, err = body.Fillet(t.Context(), sel, units.Millimeters(tc.size))
+				_, err = Fillet(t.Context(), body, sel, units.Millimeters(tc.size))
 			default:
-				_, err = body.Chamfer(t.Context(), sel, units.Millimeters(tc.size))
+				_, err = Chamfer(t.Context(), body, sel, units.Millimeters(tc.size))
 			}
 			requireRefusesUnchanged(t, body, before, err, tc.want...)
 		})
@@ -590,7 +590,7 @@ func TestBrepLoopChamferRefusals(t *testing.T) {
 		body := plate(t)
 		before := body.doc.Bodies()
 		top := planarBodyFace(t, body, routeEZ, r3.NewVec(0, 0, 20))
-		_, err := body.Chamfer(t.Context(), loopQuery(top.Loops()[0]), units.Millimeters(3))
+		_, err := Chamfer(t.Context(), body, loopQuery(top.Loops()[0]), units.Millimeters(3))
 		require.ErrorIs(t, err, ErrDegenerate)
 		require.ErrorContains(t, err, "no regular cap contour")
 		require.NoError(t, body.doc.requireLive(body))

@@ -88,7 +88,7 @@ func TestMirrorJoinOneWallMakesATee(t *testing.T) {
 	report, err := sc.doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status, "diagnostics: %v", report.Diagnostics)
-	_, err = tee.Fillet(t.Context(), decad.Edges(decad.Convex(), decad.ParallelTo(joinPlusZ)), units.Millimeters(1))
+	_, err = decad.Fillet(t.Context(), tee, decad.Edges(decad.Convex(), decad.ParallelTo(joinPlusZ)), units.Millimeters(1))
 	require.NoError(t, err)
 }
 

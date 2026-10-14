@@ -1186,7 +1186,7 @@ func TestVoidRevolveModifyOps(t *testing.T) {
 	// its corner: two corners at ρ = 5 and two at ρ = 15, so the four removed
 	// centroids' radii sum to 40 and the volume drops by 2π·40·(1 − π/4).
 	_, body := voidRevolve(t)
-	filleted, err := body.Fillet(t.Context(), decad.Edges(decad.Circular()).Exactly(4), units.Millimeters(1))
+	filleted, err := decad.Fillet(t.Context(), body, decad.Edges(decad.Circular()).Exactly(4), units.Millimeters(1))
 	require.NoError(t, err)
 	requireManifold(t, filleted)
 	require.Len(t, filleted.Shells(), 2)

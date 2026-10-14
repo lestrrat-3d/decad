@@ -220,7 +220,7 @@ func TestBrepChordWallReachesArcNaturalEnd(t *testing.T) {
 func TestCapBlendSideRingReachesArcNaturalEnd(t *testing.T) {
 	t.Parallel()
 	pie := arcEndPie(t, New())
-	chamfered, err := pie.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(pie))), units.Millimeters(1))
+	chamfered, err := Chamfer(t.Context(), pie, Edges(CreatedBy(CapEnd(pie))), units.Millimeters(1))
 	require.NoError(t, err)
 	cbp, ok := chamfered.payload.(capBlendPayload)
 	require.True(t, ok, `got %T`, chamfered.payload)
@@ -303,7 +303,7 @@ func TestRevolveJunctionReachesArcNaturalEnd(t *testing.T) {
 func TestCapBlendCornerChordReachesArcNaturalEnd(t *testing.T) {
 	t.Parallel()
 	pie := arcEndPie(t, New())
-	chamfered, err := pie.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(pie))), units.Millimeters(1))
+	chamfered, err := Chamfer(t.Context(), pie, Edges(CreatedBy(CapEnd(pie))), units.Millimeters(1))
 	require.NoError(t, err)
 	cbp, ok := chamfered.payload.(capBlendPayload)
 	require.True(t, ok, `got %T`, chamfered.payload)

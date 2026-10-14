@@ -878,7 +878,7 @@ func chamferedBlock(ctx context.Context, doc *decad.Document) (*decad.Body, erro
 	if err != nil {
 		return nil, err
 	}
-	return box.Chamfer(ctx, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.3))
+	return decad.Chamfer(ctx, box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.3))
 }
 
 // fixedPolygon sketches the closed polygon corners on plane, every corner

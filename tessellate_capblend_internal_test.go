@@ -49,7 +49,7 @@ func chamferedSectionBody(t *testing.T, section func(*sketch.Sketch), d float64)
 	}
 	body, err := Extrude(t.Context(), doc, s, prof, Distance{D: units.Millimeters(capBlendMeshHeight), Dir: Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
+	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
 	cbp, ok := chamfered.payload.(capBlendPayload)
 	require.True(t, ok)
@@ -476,7 +476,7 @@ func TestCapBlendMeshMotionCarriesEachLevelBound(t *testing.T) {
 		Offset: units.Millimeters(-1e-3),
 	})
 	require.NoError(t, err)
-	chamfered, err := pin.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(pin))), units.Millimeters(1))
+	chamfered, err := Chamfer(t.Context(), pin, Edges(CreatedBy(CapEnd(pin))), units.Millimeters(1))
 	require.NoError(t, err)
 	cbp, ok := chamfered.payload.(capBlendPayload)
 	require.True(t, ok)
@@ -633,7 +633,7 @@ func asymChamferedSectionBody(t *testing.T, section func(*sketch.Sketch), dc, ds
 	doc := New()
 	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(capBlendMeshHeight), Dir: Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(dc),
+	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), units.Millimeters(dc),
 		WithAsymmetricChamfer(Faces(FaceCreatedBy(CapEnd(body))), units.Millimeters(ds)))
 	require.NoError(t, err)
 	cbp, ok := chamfered.payload.(capBlendPayload)
@@ -737,7 +737,7 @@ func TestCapBlendMeshCapMotionCarriesSetbackRounding(t *testing.T) {
 	require.NoError(t, err)
 	body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), inch)
+	chamfered, err := Chamfer(t.Context(), body, Edges(CreatedBy(CapEnd(body))), inch)
 	require.NoError(t, err)
 	cbp, ok := chamfered.payload.(capBlendPayload)
 	require.True(t, ok)

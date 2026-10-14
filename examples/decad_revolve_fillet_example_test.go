@@ -51,7 +51,7 @@ func Example_decad_revolve_fillet() {
 	// The shoulder's inner corner is the shaft's one concave junction. A 2 mm
 	// fillet there relieves the stress riser where the journals meet.
 	const r = 2.0
-	filleted, err := shaft.Fillet(context.Background(), decad.Edges(decad.Circular(), decad.Concave()), units.Millimeters(r))
+	filleted, err := decad.Fillet(context.Background(), shaft, decad.Edges(decad.Circular(), decad.Concave()), units.Millimeters(r))
 	if err != nil {
 		fmt.Printf("failed to fillet: %s\n", err)
 		return

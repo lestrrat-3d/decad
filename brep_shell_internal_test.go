@@ -102,7 +102,7 @@ func internalRoundedPlate(t *testing.T) *Body {
 	t.Helper()
 	doc := New()
 	box := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
-	rounded, err := box.Fillet(t.Context(), Edges(ParallelTo(shellUp)).Exactly(4), units.Millimeters(3))
+	rounded, err := Fillet(t.Context(), box, Edges(ParallelTo(shellUp)).Exactly(4), units.Millimeters(3))
 	require.NoError(t, err)
 	out, err := Cut(t.Context(), rounded, internalDrillAlongY(t, doc, 20, 10, 3))
 	require.NoError(t, err)
@@ -921,7 +921,7 @@ func internalHalfRoundedPlate(t *testing.T) *Body {
 	doc := New()
 	box := internalBoxBody(t, doc, 0, 0, 40, 20, 20)
 	at := func(x float64) EdgePredicate { return EndpointAt(r3.NewVec(x, 20, 0)) }
-	rounded, err := box.Fillet(t.Context(), Edges(ParallelTo(shellUp), at(0)).Or(ParallelTo(shellUp), at(40)).Exactly(2), units.Millimeters(3))
+	rounded, err := Fillet(t.Context(), box, Edges(ParallelTo(shellUp), at(0)).Or(ParallelTo(shellUp), at(40)).Exactly(2), units.Millimeters(3))
 	require.NoError(t, err)
 	out, err := Cut(t.Context(), rounded, internalDrillAlongY(t, doc, 20, 10, 3))
 	require.NoError(t, err)

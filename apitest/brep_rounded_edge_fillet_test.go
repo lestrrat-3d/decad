@@ -22,7 +22,7 @@ func roundedPlateFrontTopEdge() decad.EdgeSelector {
 func TestBrepRoundedEdgeFilletPublicP8(t *testing.T) {
 	t.Parallel()
 	plate := roundedDrilledPlate(t)
-	got, err := plate.Fillet(t.Context(), roundedPlateFrontTopEdge(), units.Millimeters(1))
+	got, err := decad.Fillet(t.Context(), plate, roundedPlateFrontTopEdge(), units.Millimeters(1))
 	require.NoError(t, err)
 	require.Len(t, got.Faces(), 12)
 	requireEveryEdgeOnTwoFaces(t, got)
@@ -74,7 +74,7 @@ func TestBrepRoundedEdgeFilletPublicP8(t *testing.T) {
 func checkBrepRoundedEdgeFilletRadius(t *testing.T, radius float64, low, high string) {
 	t.Helper()
 	plate := roundedDrilledPlate(t)
-	got, err := plate.Fillet(t.Context(), roundedPlateFrontTopEdge(), units.Millimeters(radius))
+	got, err := decad.Fillet(t.Context(), plate, roundedPlateFrontTopEdge(), units.Millimeters(radius))
 	require.NoError(t, err)
 	require.Len(t, got.Faces(), 12)
 	requireEveryEdgeOnTwoFaces(t, got)
@@ -126,20 +126,20 @@ func TestBrepRoundedEdgeFilletPublicAdmission(t *testing.T) {
 	t.Parallel()
 	plate := roundedDrilledPlate(t)
 	for _, radius := range []float64{0.125, 0.1, 1.25} {
-		_, err := plate.Fillet(t.Context(), roundedPlateFrontTopEdge(), units.Millimeters(radius))
+		_, err := decad.Fillet(t.Context(), plate, roundedPlateFrontTopEdge(), units.Millimeters(radius))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	}
 	backTop := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(3, 20, 20))).Exactly(1)
-	_, err := plate.Fillet(t.Context(), backTop, units.Millimeters(0.5))
+	_, err := decad.Fillet(t.Context(), plate, backTop, units.Millimeters(0.5))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	// A bore whose top reaches the cutter's z=19 boundary is outside the
 	// admitted source. The producer still uses the public Sketch and Cut.
 	near := roundedDrilledPlateWithBoreZ(t, 16)
-	_, err = near.Fillet(t.Context(), roundedPlateFrontTopEdge(), units.Millimeters(1))
+	_, err = decad.Fillet(t.Context(), near, roundedPlateFrontTopEdge(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	// Refusals leave the exact source live for the admitted request.
-	_, err = plate.Fillet(t.Context(), roundedPlateFrontTopEdge(), units.Millimeters(1))
+	_, err = decad.Fillet(t.Context(), plate, roundedPlateFrontTopEdge(), units.Millimeters(1))
 	require.NoError(t, err)
 }
 
@@ -155,7 +155,7 @@ func roundedDrilledPlateWithBoreZ(t *testing.T, boreZ float64) *decad.Body {
 	require.NoError(t, err)
 	box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
-	rounded, err := box.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4),
+	rounded, err := decad.Fillet(t.Context(), box, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4),
 		units.Millimeters(3))
 	require.NoError(t, err)
 	plane, err := w.CreateOffsetPlane(w.XZ(), -10)

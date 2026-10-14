@@ -902,7 +902,7 @@ func TestShellRefusals(t *testing.T) {
 
 	t.Run("a topology-changing offset is S11 unsupported", func(t *testing.T) {
 		_, box := shellBox(t)
-		rounded, err := box.Fillet(t.Context(), verticalEdges(), units.Millimeters(2))
+		rounded, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(2))
 		require.NoError(t, err)
 		// A 5 mm inward wall erodes the 2 mm corner arcs past zero — a dropped
 		// feature, which needs a trimmed-offset kernel.

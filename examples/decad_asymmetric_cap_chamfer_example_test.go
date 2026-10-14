@@ -43,7 +43,7 @@ func Example_decad_asymmetric_cap_chamfer() {
 	// names, and 6 mm down the side walls.
 	loop := decad.Edges(decad.CreatedBy(decad.CapEnd(box)))
 	capFace := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box)))
-	body, err := box.Chamfer(context.Background(), loop, units.Millimeters(3),
+	body, err := decad.Chamfer(context.Background(), box, loop, units.Millimeters(3),
 		decad.WithAsymmetricChamfer(capFace, units.Millimeters(6)))
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)

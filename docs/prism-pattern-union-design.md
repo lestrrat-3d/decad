@@ -83,7 +83,7 @@ selector certificate until that placed result has its own proof.
 ## Local root Fillet
 
 The joined body retains its authenticated circular blank, copied section
-records, source meshes and audited shell. `Body.Fillet` admits selected
+records, source meshes and audited shell. `Fillet` admits selected
 source-root axial chains on that body. Other faceted chains and placed joins
 refuse. The radius must have zero input displacement.
 

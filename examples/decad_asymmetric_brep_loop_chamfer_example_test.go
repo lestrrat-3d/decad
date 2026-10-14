@@ -32,7 +32,7 @@ func Example_decad_asymmetric_brep_loop_chamfer() {
 		fmt.Printf("failed to extrude plate: %s\n", err)
 		return
 	}
-	rounded, err := plate.Fillet(context.Background(),
+	rounded, err := decad.Fillet(context.Background(), plate,
 		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3))
 	if err != nil {
 		fmt.Printf("failed to round plate: %s\n", err)
@@ -90,7 +90,7 @@ func Example_decad_asymmetric_brep_loop_chamfer() {
 			edges.Or(predicates...)
 		}
 	}
-	beveled, err := part.Chamfer(context.Background(), edges.Exactly(len(loop.Edges())),
+	beveled, err := decad.Chamfer(context.Background(), part, edges.Exactly(len(loop.Edges())),
 		units.Millimeters(1.5),
 		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(top.Origins()[0])),
 			units.Millimeters(2)))

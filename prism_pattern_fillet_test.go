@@ -19,7 +19,7 @@ func TestPrismPatternFilletOfCopiedExtrudes(t *testing.T) {
 	before, err := joined.Volume()
 	require.NoError(t, err)
 	selection := prismPatternRootSelection(t, joined)
-	rounded, err := joined.Fillet(t.Context(), selection, units.Millimeters(0.05))
+	rounded, err := Fillet(t.Context(), joined, selection, units.Millimeters(0.05))
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	after, err := rounded.Volume()
@@ -46,7 +46,7 @@ func TestPrismPatternFilletAcrossCircularWallStations(t *testing.T) {
 		multiStation = multiStation || len(contact.ringCut.positions) > 2
 	}
 	require.True(t, multiStation)
-	rounded, err := joined.Fillet(t.Context(), selection,
+	rounded, err := Fillet(t.Context(), joined, selection,
 		units.Millimeters(0.14))
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
@@ -65,7 +65,7 @@ func TestPrismPatternFilletSectorBeyondRootDisk(t *testing.T) {
 	const radius = 0.055
 	require.Greater(t, 3+3*radius, 3.15)
 	require.Greater(t, 2*3*math.Sin(0.14), 6*radius)
-	rounded, err := joined.Fillet(t.Context(), prismPatternRootSelection(t, joined),
+	rounded, err := Fillet(t.Context(), joined, prismPatternRootSelection(t, joined),
 		units.Millimeters(radius))
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
@@ -156,11 +156,11 @@ func TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius(t *testing.T) {
 		}
 	}
 	require.NotNil(t, exterior)
-	_, err = joined.Fillet(t.Context(), Edges(ParallelTo(r3.Vec{Z: 1}),
+	_, err = Fillet(t.Context(), joined, Edges(ParallelTo(r3.Vec{Z: 1}),
 		EndpointAt(exterior.Start().Position().Value)), units.Millimeters(0.05))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Len(t, doc.Bodies(), 1)
-	_, err = joined.Fillet(t.Context(), prismPatternRootSelection(t, joined), units.Millimeters(0.2))
+	_, err = Fillet(t.Context(), joined, prismPatternRootSelection(t, joined), units.Millimeters(0.2))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Len(t, doc.Bodies(), 1)
 }

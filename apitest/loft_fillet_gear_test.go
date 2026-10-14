@@ -42,7 +42,7 @@ func TestLoftFilletRectangleCorner(t *testing.T) {
 	require.NoError(t, err)
 	query := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(1)
-	rounded, err := body.Fillet(t.Context(), query, units.Millimeters(1))
+	rounded, err := decad.Fillet(t.Context(), body, query, units.Millimeters(1))
 	require.NoError(t, err)
 	volume, err := rounded.Volume()
 	require.NoError(t, err)
@@ -209,7 +209,7 @@ func TestLoftFilletCurvedRootJunctions(t *testing.T) {
 		}
 	}
 	require.Equal(t, 2*lobes, len(roots))
-	_, err = body.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
+	_, err = decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(roots[0])).Exactly(1), units.Millimeters(100))
 	require.Error(t, err)
 	var splineStation r3.Vec
@@ -222,14 +222,14 @@ func TestLoftFilletCurvedRootJunctions(t *testing.T) {
 		}
 	}
 	require.NotEqual(t, r3.Vec{}, splineStation)
-	_, err = body.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
+	_, err = decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(splineStation)).Exactly(1), units.Millimeters(radius))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	query := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(roots[0]))
 	for _, point := range roots[1:] {
 		query.Or(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(point))
 	}
-	rounded, err := body.Fillet(t.Context(), query.Exactly(2*lobes), units.Millimeters(radius))
+	rounded, err := decad.Fillet(t.Context(), body, query.Exactly(2*lobes), units.Millimeters(radius))
 	require.NoError(t, err)
 	require.True(t, rounded.IsSolid())
 	after, err := rounded.Volume()

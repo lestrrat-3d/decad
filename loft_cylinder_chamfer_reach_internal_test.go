@@ -114,7 +114,7 @@ func reachTestInput(t *testing.T) loftCylinderChamferReachInput {
 	}
 	t.Cleanup(func() { loftCylinderChamferReachHook = nil })
 	outerCaps := Edges(OuterLoopOf(CapStart(cut))).Or(OuterLoopOf(CapEnd(cut)))
-	_, err = cut.Chamfer(t.Context(), outerCaps, units.Millimeters(0.03))
+	_, err = Chamfer(t.Context(), cut, outerCaps, units.Millimeters(0.03))
 	require.NoError(t, err)
 	loftCylinderChamferReachHook = nil
 	require.NotNil(t, captured)

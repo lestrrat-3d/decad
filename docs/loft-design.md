@@ -1795,7 +1795,7 @@ correction, then spends the measure legs alone in its shift form; §8's
 | **D5** | `Wall` / `Undercut` / `ConcaveRadius` (verification §6, `internal/survey2d/wall_kernel.go`) | one constant 2D cross-section (a prism's section, a revolve's meridian) | The corresponding requested survey reports the staged refusal (`DiagUnsupportedSurveyPayload`, its matching `Survey`, `Suspect`) until its loft implementation lands — a loft is a payload class `runSurveys`' three type switches do not name, so it falls to their `default` arm rather than a numerically undecided result. In increment 1, a loft's cross-section varies continuously between the two profiles, so the existing spanning-disk / meridian-walk reduction does not reach it; `docs/modify-reach-design.md` DX9 states the identical cap-blend reason: "not one constant section at one height… the existing 2D spanning-disk proof does not decide them" |
 | **D6** | `Verify` — structural audit + tolerance gate | topology + measurements | valid by construction once §6's audit has passed (modify §1's standard; §4's gate-order paragraph owns where that audit sits); the tolerance gate judges `Volume`/`Area`/`Centroid`/`Bounds` on the terms §8 derives, and wherever the payload's `delta` is positive all four carry it. A **surface-result** sheet takes `docs/surface-design.md` §9.1's own validity audit instead: it reads `ValidityValid` whenever `sectionDelta` is exactly zero and the build holds no CHORDED cell, since §6's crossing audit already ran over the complete held triangle set — walls and both omitted caps together — before the body could be returned at all, and non-self-intersection of the walls alone follows from that. A positive `sectionDelta` leaves `ValidityUndecided`: the held chords are only within that displacement of the curved surface the body denotes, so the audit's proof does not transfer. A CHORDED build (§5.2's `maxTwistOffsetUpper` row) at zero `sectionDelta` — a degree-1 free-form pair — leaves it undecided too: each wall cell denotes a bilinear ruled patch, and the audit cleared the triangle pair instead |
 | **D7** | `Transform` / `Copy` | the payload | landed (§12 PR 2a): `Transform` retires the input; `Copy` leaves it live. No geometry-specific payload case is needed (§7) — every reading composes the payload's own proven displacement `delta` (§5, §8). |
-| **D8** | `Body.Fillet` | matching axial solid loft sections | §17 rewrites selected analytic corners on both records, re-audits the section and rebuilds through `evalLoft`. The result carries the same loft measurements and tessellation proofs as D1/D6. |
+| **D8** | `Fillet` | matching axial solid loft sections | §17 rewrites selected analytic corners on both records, re-audits the section and rebuilds through `evalLoft`. The result carries the same loft measurements and tessellation proofs as D1/D6. |
 
 ## 10. Provenance and deterministic evaluation
 
@@ -2678,7 +2678,7 @@ geometry, and each bound assertion is shown to fail before it is trusted.
 
 ## 17. Fillet of a matching axial loft
 
-`Body.Fillet` accepts a solid loft whose two recorded profiles are identical,
+`Fillet` accepts a solid loft whose two recorded profiles are identical,
 have no holes, use the same segment alignment, and occupy planes with the same
 in-plane axes and an axial translation. It accepts selected rung edges at
 `LineSeg`/`ArcSeg` analytic corners and at `FitSplineSeg`/`CircleSeg` root
