@@ -164,10 +164,20 @@ func TileCorners(u0, u1, v0, v1 *big.Rat) [4][2]*big.Rat {
 }
 
 // ScalarRange returns the interval of row . m(u, v) over the corners of a tile.
+//
+// Over the rationals row . F(u, v) = row . Constant + (row . Q0 + u row . QU +
+// v row . QV) / G(u, v): the dot product is linear, and F(u, v) is Constant
+// plus Q(u, v) scaled by 1/G(u, v). The four row dot products do not depend on
+// the corner, so each is taken once. Every operation is exact, so the value is
+// the same lowest-terms rational the corner-by-corner form gives. A zero
+// denominator panics in the division, as it does in Map.At.
 func ScalarRange(m Map, row RatVec, corners [4][2]*big.Rat) Interval {
+	c, q0, qu, qv := VDot(row, m.Constant), VDot(row, m.Q0), VDot(row, m.QU), VDot(row, m.QV)
 	var out Interval
 	for i, corner := range corners {
-		value := VDot(row, m.At(corner[0], corner[1]))
+		u, v := corner[0], corner[1]
+		num := ratAdd(ratAdd(q0, ratMul(qu, u)), ratMul(qv, v))
+		value := ratAdd(c, ratDiv(num, m.Denominator(u, v)))
 		if i == 0 {
 			out = Interval{value, value}
 			continue
