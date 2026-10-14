@@ -535,8 +535,9 @@ A Loft wall cell normally has two distinct faces, `side(i,j,0)` and
 provenance-role mechanism and loft §7 owns what a loft's `i`, `j` and `k`
 index. No ordinary Loft wall triangle coalesces with one in another cell, so
 a flat split rung keeps its two source faces. A certified whole-circle
-through-Cut is the sole exception: all held triangles on its hole wall map
-to one cylindrical face carrying their original roles. Missing or conflicting
+through-Cut or direct Loft is the exception: all held triangles on its hole
+wall map to one curved face carrying their original roles. Direct Loft admits
+a cylinder, cone or rational ruled surface under loft §18. Missing or conflicting
 roles are an evaluator invariant failure and no mesh is returned.
 
 Assign sources by patch:

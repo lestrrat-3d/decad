@@ -1876,7 +1876,9 @@
 10	0.01	TestCopyRotationPrismMatchesPlacement
 10	21.79	TestCrossCylinderBoreMouthChamferVerified
 10	0.00	TestDocumentSweptBoxRefusals
-10	0.00	TestDirectLoftCircleHoleDoesNotClaimThroughCutTopology
+10	0.00	TestDirectLoftWholeCircleHolePublishesCircularTopology
+10	0.00	TestDirectLoftVaryingCircleHolesPublishCurvedWalls
+10	0.00	TestDirectLoftVaryingHoleKeepsFacetedTopologyWithCurvedOuterWall
 10	0.06	TestDraftCircleEndRimFilletVerified
 10	0.04	TestDraftCircleShellVerified
 10	0.01	TestDraftRetires
