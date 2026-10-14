@@ -2070,3 +2070,10 @@
 10	0.00	TestSectionRuledLoftRefusesDisplacedVertices
 10	0.00	TestBodyDocumentIsTheDocument
 10	0.00	TestZeroAndNilBodyOperandsAreRejected
+10	0.00	TestSectionDirectLoftVaryingCircleFeedsExtrude
+10	0.00	TestSectionDirectLoftVaryingCircleTranslatedFrameFeedsExtrude
+10	0.00	TestSectionDirectLoftMovingCircleTracksCenter
+10	0.00	TestSectionDirectLoftVaryingAnnulusFeedsExtrude
+10	0.00	TestSectionDirectLoftVaryingCircleWithTwoHolesFeedsExtrude
+10	0.00	TestSectionDirectLoftVaryingCircleRefusesUnprovedPlanes
+10	0.00	TestSectionDirectLoftVaryingCircleRefusesPlacement
