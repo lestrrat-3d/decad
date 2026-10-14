@@ -79,6 +79,18 @@ func loftCylinderRingToothOf(body *Body, radius float64) (loftCylinderRingTooth,
 	return result, nil
 }
 
+// loftCylinderRingToothKey names the inputs of loftCylinderRingToothOf.
+type loftCylinderRingToothKey struct {
+	body   *Body
+	radius float64
+}
+
+// loftCylinderRingTeeth holds the tooth records one near-band proof has
+// built. A record is a function of its body's payload and the radius
+// alone, and every reader only reads it. Only successes are kept. A nil
+// map keeps nothing.
+type loftCylinderRingTeeth map[loftCylinderRingToothKey]loftCylinderRingTooth
+
 // loftCylinderSourceRingInside proves that an unordered exact split ring lies
 // inside the original blank-and-teeth union at one strict interior height.
 // Each edge avoids every true wall; one point inside the exact blank fixes
@@ -89,7 +101,7 @@ func loftCylinderRingToothOf(body *Body, radius float64) (loftCylinderRingTooth,
 // exact radius. The caller separately proves its cutter band's full surface,
 // both cap planes, and either root collar.
 func loftCylinderSourceRingInside(ctx context.Context, fp facetedPayload,
-	edges [][2]proofarith.Xpt) (loftcylinder.RingOccupancy, error) {
+	edges [][2]proofarith.Xpt, teeth loftCylinderRingTeeth) (loftcylinder.RingOccupancy, error) {
 	if !fp.contactAudited || fp.xform != r3.Identity() {
 		return loftcylinder.RingOccupancy{},
 			fmt.Errorf("%w: split ring has no audited source body", ErrUnsupported)
@@ -102,11 +114,11 @@ func loftCylinderSourceRingInside(ctx context.Context, fp facetedPayload,
 	if err := loftCylinderChamferBridgeSources(&source); err != nil {
 		return loftcylinder.RingOccupancy{}, err
 	}
-	return loftCylinderSourceRingInsideInputs(ctx, source, edges)
+	return loftCylinderSourceRingInsideInputs(ctx, source, edges, teeth)
 }
 
 func loftCylinderSourceRingInsideInputs(ctx context.Context, source loftCylinderChamferSource,
-	edges [][2]proofarith.Xpt) (loftcylinder.RingOccupancy, error) {
+	edges [][2]proofarith.Xpt, teeth loftCylinderRingTeeth) (loftcylinder.RingOccupancy, error) {
 	var result loftcylinder.RingOccupancy
 	refuse := func(reason string) (loftcylinder.RingOccupancy, error) {
 		return result, fmt.Errorf("%w: %s", ErrUnsupported, reason)
@@ -127,9 +139,17 @@ func loftCylinderSourceRingInsideInputs(ctx context.Context, source loftCylinder
 	}
 	toothRecords := make([]loftcylinder.RingToothLevel, len(source.teeth))
 	for i, body := range source.teeth {
-		tooth, err := loftCylinderRingToothOf(body, source.blankRadius)
-		if err != nil {
-			return result, err
+		key := loftCylinderRingToothKey{body: body, radius: source.blankRadius}
+		tooth, cached := teeth[key]
+		if !cached {
+			var err error
+			tooth, err = loftCylinderRingToothOf(body, source.blankRadius)
+			if err != nil {
+				return result, err
+			}
+			if teeth != nil {
+				teeth[key] = tooth
+			}
 		}
 		if tooth.circle.Z0.Cmp(proofarith.FloatRat(source.z0)) != 0 ||
 			tooth.circle.Z1.Cmp(proofarith.FloatRat(source.z1)) != 0 {

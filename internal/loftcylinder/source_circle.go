@@ -502,6 +502,12 @@ func (r SourceCircle) ContainsTriangleSector(zLo, zHi *big.Rat,
 	if err != nil {
 		return false
 	}
+	return triangleInSector(boxes, zLo, zHi, tri)
+}
+
+// triangleInSector is ContainsTriangleSector after its CrossingBox(zLo, zHi)
+// call returned boxes without an error.
+func triangleInSector(boxes [2]XYBox, zLo, zHi *big.Rat, tri [3]proofarith.Xpt) bool {
 	for _, p := range tri {
 		if p.X == nil || p.Y == nil || p.Z == nil || p.W == nil || p.W.Sign() <= 0 {
 			return false

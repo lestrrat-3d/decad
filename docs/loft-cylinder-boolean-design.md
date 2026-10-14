@@ -389,7 +389,13 @@ of old wall facets, and the inset caps lie inside the old held cap loops.
 Those checks give `C⊂H` and make the ideal held result exactly `H∩C=C`.
 
 A complete rational split ring through each bevel band lies strictly inside
-`S` by the source-ring certificate above. Each ideal band facet has a
+`S` by the source-ring certificate above. One near-band proof builds each
+tooth's ring record, its source circle and wall records, once and reads it
+for every split ring it checks, the reflected checks included. One ring
+check builds each tooth's crossing boxes and connector slices at the ring
+level once for all its seam edges, on the first seam edge that reads them.
+Each is a function of the immutable tooth, the blank radius and the level
+alone. Each ideal band facet has a
 certified distance below the published boundary allowance to that ring.
 Since the ring is also on `∂C`, every band point has a nearby point on
 `∂(S∩C)`. The cap proof separates the exact blank disk, a narrow root-seam

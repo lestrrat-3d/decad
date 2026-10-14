@@ -27,6 +27,7 @@ func loftCylinderChamferNearBandReach(ctx context.Context, mesh *joinedMesh,
 	if multipleRings {
 		fractions = []*big.Rat{big.NewRat(1, 4), big.NewRat(1, 2), big.NewRat(3, 4)}
 	}
+	teeth := make(loftCylinderRingTeeth)
 	for cap, band := range bands {
 		if band[0] == band[1] {
 			continue
@@ -55,13 +56,13 @@ func loftCylinderChamferNearBandReach(ctx context.Context, mesh *joinedMesh,
 				edges = append(edges, edge)
 				sourceEdges = append(sourceEdges, [2]proofarith.Xpt{edge.A, edge.B})
 			}
-			if _, err := loftCylinderSourceRingInside(ctx, fp, sourceEdges); err != nil {
+			if _, err := loftCylinderSourceRingInside(ctx, fp, sourceEdges, teeth); err != nil {
 				return err
 			}
 			if len(reflectedShift) != 0 {
 				shifted := source
 				shifted.ringLevelShift = reflectedShift
-				if _, err := loftCylinderSourceRingInsideInputs(ctx, shifted, sourceEdges); err != nil {
+				if _, err := loftCylinderSourceRingInsideInputs(ctx, shifted, sourceEdges, teeth); err != nil {
 					return fmt.Errorf("reflected cap split ring: %w", err)
 				}
 			}
