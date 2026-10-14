@@ -36,10 +36,9 @@ import "math/big"
 // large constant-factor speedup, and TestTurnSinCosIntervalEnclosesMathSincos
 // / BenchmarkTurnSinCosInterval are this file's own measurement of both the
 // resulting enclosure width and the per-call cost, rather than a number
-// asserted here: this primitive runs once or twice per fractional-turn
-// CircleSeg endpoint, never in a per-segment or per-vertex loop, so it is not
-// the cost bottleneck of the bracket it serves regardless of the exact
-// figure.
+// asserted here. A caller that evaluates many stations in one call reads
+// the primitive through TurnTrigMemo, which runs each distinct first-octant
+// residual once.
 
 // TrigFixedBits is the fixed-point scale exponent P: the package's shared
 // fixed-point grid, every value on it an integer count of 2^-TrigFixedBits.
@@ -207,6 +206,49 @@ func TurnFirstOctantSinCos(u *big.Rat) (RatInterval, RatInterval) {
 // returned intervals enclose the true values whatever the platform's own
 // libm does — nothing here depends on Go's Sin/Cos.
 func TurnSinCosInterval(t *big.Rat) (RatInterval, RatInterval) {
+	return turnSinCosInterval(t, TurnFirstOctantSinCos)
+}
+
+// TurnTrigMemo answers TurnSinCosInterval for many turns inside one call,
+// evaluating TurnFirstOctantSinCos once per distinct first-octant residual.
+// That evaluation is a pure function of the residual, and the period and
+// octant reductions are exact, so every answer equals TurnSinCosInterval's
+// for the same turn. A memo lives inside the call that made it and is never
+// stored past it, and it is not safe for concurrent use. Every answer
+// carries freshly allocated endpoints; the memo never hands out the values it
+// holds. The memo assumes PiLower, PiUpper and TrigFixedOne do not change
+// during its lifetime, so the equality with TurnSinCosInterval holds under
+// that assumption; nothing in the tree writes them after initialization.
+type TurnTrigMemo struct {
+	octant map[string][2]RatInterval
+}
+
+// NewTurnTrigMemo returns an empty memo.
+func NewTurnTrigMemo() *TurnTrigMemo {
+	return &TurnTrigMemo{octant: map[string][2]RatInterval{}}
+}
+
+// SinCos is TurnSinCosInterval(t), read through the memo.
+func (m *TurnTrigMemo) SinCos(t *big.Rat) (RatInterval, RatInterval) {
+	return turnSinCosInterval(t, func(u *big.Rat) (RatInterval, RatInterval) {
+		key := radSinCosKey(u)
+		e, ok := m.octant[key]
+		if !ok {
+			s, c := TurnFirstOctantSinCos(u)
+			e = [2]RatInterval{s, c}
+			m.octant[key] = e
+		}
+		return copyInterval(e[0]), copyInterval(e[1])
+	})
+}
+
+func copyInterval(x RatInterval) RatInterval {
+	return IntervalOwned(new(big.Rat).Set(x.Lo), new(big.Rat).Set(x.Hi))
+}
+
+// turnSinCosInterval is TurnSinCosInterval with the first-octant evaluation
+// supplied by the caller.
+func turnSinCosInterval(t *big.Rat, firstOctant func(*big.Rat) (RatInterval, RatInterval)) (RatInterval, RatInterval) {
 	f := new(big.Rat).Set(t)
 	fl := new(big.Int).Quo(f.Num(), f.Denom())
 	if new(big.Rat).SetInt(fl).Cmp(f) > 0 {
@@ -225,9 +267,9 @@ func TurnSinCosInterval(t *big.Rat) (RatInterval, RatInterval) {
 	// only the pair the switch below returns is evaluated.
 	var sn, cs, snC, csC RatInterval
 	if k%2 == 0 {
-		sn, cs = TurnFirstOctantSinCos(s)
+		sn, cs = firstOctant(s)
 	} else {
-		snC, csC = TurnFirstOctantSinCos(sc)
+		snC, csC = firstOctant(sc)
 	}
 	// Octant symmetry: within octant k the true angle is k*pi/4 + x for even
 	// k (x = 2*pi*s) or (k+1)*pi/4 - x' for odd k (x' = 2*pi*sc), so odd

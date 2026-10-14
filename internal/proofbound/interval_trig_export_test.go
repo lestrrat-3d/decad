@@ -13,3 +13,6 @@ func RadSinCosMemoHolds(x *big.Rat) bool {
 	_, ok := radSinCosMemo.entries[radSinCosKey(x)]
 	return ok
 }
+
+// TurnTrigMemoLen reports how many first-octant residuals m holds.
+func TurnTrigMemoLen(m *TurnTrigMemo) int { return len(m.octant) }

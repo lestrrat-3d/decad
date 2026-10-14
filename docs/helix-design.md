@@ -231,7 +231,10 @@ is a rational, `t_0 = 0` and `t_N = turns` exactly. The angle at station
 `j` is `θ_j = 2π t_j`, enclosed through `coil.TurnSinCos(t_j)`: a multiple
 of a quarter turn reads its exact sine and cosine, and every other turn reads
 `proofbound.TurnSinCosInterval(t_j)`, whose series margin keeps even an
-octant boundary a few `2^-200` grid steps wide. A whole, half or quarter turn
+octant boundary a few `2^-200` grid steps wide. The build reads it through one
+`proofbound.TurnTrigMemo` per build, so each distinct first-octant residual is
+evaluated once and every station reads the same enclosure the direct call
+gives. A whole, half or quarter turn
 is therefore exact. The slide at station `j` is `pitch · t_j`, an exact
 rational.
 
@@ -748,8 +751,9 @@ sum of §5.3's station evaluation is rounded by an explicit conversion, so no
 step reads a transcendental library or depends on FMA contraction. The build polls `ctx`
 per station ring, inside the audit's pair loop, per segment of the area
 sum and per piece of §11.1's bracket, and returns `ctx.Err()` unchanged. CS8's caps bound `N` and the facet
-count before any allocation; the trig enclosure runs once per station
-(`N + 1` calls, each a fixed 200-bit series), every vertex costs a dozen
+count before any allocation; the trig enclosure runs once per distinct
+first-octant residual (at most `N + 1` fixed 200-bit series, 33 for a whole
+number of turns at 256 stations per turn), every vertex costs a dozen
 float operations, and the audit's work is charged against
 `proofbound.MaxFacetPairTestsPerCall`. The crossing audit's exact pair
 classifications take most of a build's time.
@@ -787,7 +791,8 @@ integrals certified sines and cosines at the ends), and the remainder
 `h = a₀ + a₁·A + a₂·A² + a₃·B²` with `a₀ = r²ρ_c²`, `a₁ = 2r³ρ_c`,
 `a₂ = r⁴` and `a₃ = k²r²`. It cuts the arc into `coil.ArcAreaPieces = 1024`
 equal pieces and reads `A` and `B` at every piece's two ends and midpoint:
-a whole circle at exact turn fractions through `TurnSinCos`, an arc by
+a whole circle at exact turn fractions through `TurnSinCos`, read through one
+`proofbound.TurnTrigMemo` per segment, an arc by
 turning its `Start` direction step by step through one enclosed sine and
 cosine of the step. Over a piece of width `Δ`, `h_m = g²` with `g` the
 float nearest `√h` at the midpoint, so `√h_m` is exact; `∫A`, `∫A²`, `∫B²`,
