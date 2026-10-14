@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -16,8 +17,8 @@ import (
 // NaN or infinite value never proves anything, because every proving
 // comparison is false for it.
 
-func fDown(x float64) float64 { return math.Nextafter(x, math.Inf(-1)) }
-func fUp(x float64) float64   { return math.Nextafter(x, math.Inf(1)) }
+func fDown(x float64) float64 { return proofarith.NextDown(x) }
+func fUp(x float64) float64   { return proofarith.NextUp(x) }
 
 // Each primitive below is an enclosure of the real-number result of its
 // operation: down is at most it and up is at least it, whatever the operands'
