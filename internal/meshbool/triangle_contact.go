@@ -548,8 +548,21 @@ func PointOnTri(p proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) bool {
 	return (s0 >= 0 && s1 >= 0 && s2 >= 0) || (s0 <= 0 && s1 <= 0 && s2 <= 0)
 }
 
+// PlaneSide is the sign of ((b-a) x (p-a)) . n. It returns 0 without exact
+// work when p holds the same four coordinate pointers as a or as b: p-a is then
+// the zero vector, or p-a equals b-a and their cross product is zero.
 func PlaneSide(a, b, p, n proof.Xpt) int {
+	if xptShared(p, a) || xptShared(p, b) {
+		return 0
+	}
 	return proof.XdotSign(proof.Xcross(proof.Xsub(b, a), proof.Xsub(p, a)), n)
+}
+
+// xptShared reports whether p and q hold the same four coordinate pointers,
+// which makes them one exact point. A nil pointer never matches.
+func xptShared(p, q proof.Xpt) bool {
+	return p.X != nil && p.Y != nil && p.Z != nil && p.W != nil &&
+		p.X == q.X && p.Y == q.Y && p.Z == q.Z && p.W == q.W
 }
 
 func PointOnSegment3D(a, b, p proof.Xpt) bool {
@@ -622,6 +635,11 @@ func SegTriOverlap2(a, b, ta, tb, tc Xp2) bool {
 		case sa >= 0 && sb >= 0:
 			continue
 		case sa < 0 && sb < 0:
+			return false
+		case sa < 0 && sb == 0, sa == 0 && sb < 0:
+			// The clip parameter is exactly 1 (a raised lower bound) or
+			// exactly 0 (a lowered upper bound). Every bound stays in
+			// [0, 1], so lo < hi fails at the end whatever later edges do.
 			return false
 		}
 		// Exactly one of the two signs is negative here, so fa ≠ fb and the

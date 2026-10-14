@@ -241,6 +241,11 @@ func HomCross2Frac(e0 Xp2, baU, baV *big.Int, p Xp2) ClipFrac {
 // Thus the error is below gamma6/(1-u)^6 times the computed scale, less
 // than 7e-16 times it. A positive scale is at least 2^-600, so the 1e-12
 // threshold stays normal and dominates that bound, including its rounding.
+//
+// Once the filter abstains, two of the three points holding the same
+// coordinate pointers return 0 without big.Int work: (b-a) x (c-a) is zero
+// whenever a==b, a==c or b==c as exact points, and the exact paths below give
+// that same 0 for such inputs.
 func Cross2xSign(a, b, c Xp2) int {
 	au, av, bu, bv, cu, cv := a.Fu, a.Fv, b.Fu, b.Fv, c.Fu, c.Fv
 	if a.FloatFinite && b.FloatFinite && c.FloatFinite {
@@ -258,7 +263,14 @@ func Cross2xSign(a, b, c Xp2) int {
 		}
 	}
 	if a.Hu != nil && b.Hu != nil && c.Hu != nil {
+		if homSharedPoint(a, b) || homSharedPoint(a, c) || homSharedPoint(b, c) {
+			return 0
+		}
 		return cross2xHomNumerator(a, b, c).Sign()
+	}
+	// Two points that hold the same coordinate pointers are one exact point.
+	if ratSharedPoint(a, b) || ratSharedPoint(a, c) || ratSharedPoint(b, c) {
+		return 0
 	}
 	// A shared exact coordinate removes one product from the determinant.
 	if au == bu && a.U.Cmp(b.U) == 0 {
@@ -274,6 +286,22 @@ func Cross2xSign(a, b, c Xp2) int {
 		return -b.V.Cmp(a.V) * c.U.Cmp(a.U)
 	}
 	return cross2xRatSign(a, b, c)
+}
+
+// homSharedPoint reports whether p and q hold the same three homogeneous
+// integer pointers. A *big.Int at one address has one value, so p and q are
+// the same exact point, and in cross2xHomNumerator two equal points make a
+// factor of the determinant the integer x*y - x*y, which is exactly zero
+// (see Cross2xSign). A nil pointer never matches, so a malformed point still
+// reaches the exact path that dereferences it. Equal values at distinct
+// addresses do not match and take the exact path.
+func homSharedPoint(p, q Xp2) bool {
+	return p.Hu != nil && p.Hv != nil && p.Hw != nil && p.Hu == q.Hu && p.Hv == q.Hv && p.Hw == q.Hw
+}
+
+// ratSharedPoint is homSharedPoint for the rational coordinates U and V.
+func ratSharedPoint(p, q Xp2) bool {
+	return p.U != nil && p.V != nil && p.U == q.U && p.V == q.V
 }
 
 // PointInTriX reports whether p lies inside or on the closed triangle a, b,
