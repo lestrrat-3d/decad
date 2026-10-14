@@ -420,7 +420,7 @@ func TestSelectEdgesPredicates(t *testing.T) {
 // on a solid, Free() matches nothing — an ordinary ErrNoMatch when unasserted,
 // ErrCardinality (never ErrNoMatch) once a cardinality assertion is added —
 // and the SelectionError's Query rendering is what catches a missing render()
-// arm for predKindFree.
+// arm for the free-edge predicate kind.
 func TestFreePredicateMatchesNothingOnASolid(t *testing.T) {
 	t.Parallel()
 	body := holePlateBody(t)

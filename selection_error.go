@@ -103,11 +103,6 @@ func newSelectionError(kind SelectorKind, query string, body *Body, expected str
 // ToFaceAngular, EdgeAxis) renders.
 const expectedExactlyOne = "exactly 1"
 
-// expected renders the recorded cardinality for a selection error.
-func (c cardinality) expected() string {
-	return (selectorquery.Cardinality{Kind: c.kind, N: c.n}).Expected()
-}
-
 // String renders the query canonically:
 // edges(<pred>, <pred>, …).or(<pred>, …)…<cardinality>, one .or(…) per Or
 // call in call order and the cardinality last. The rendering is a deterministic function of the recorded content — equal
@@ -146,8 +141,8 @@ func (q *FaceQuery) String() string {
 }
 
 // renderQuery assembles the ordered selector branches.
-func renderQuery(kind string, branches [][]string, card cardinality) string {
-	return selectorquery.Render(kind, branches, selectorquery.Cardinality{Kind: card.kind, N: card.n})
+func renderQuery(kind string, branches [][]string, card selectorquery.Cardinality) string {
+	return selectorquery.Render(kind, branches, card)
 }
 
 func (p EdgePredicate) render() string { return p.clause().Render(renderRef) }

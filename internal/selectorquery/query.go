@@ -9,20 +9,29 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
+// CardKind discriminates the cardinality assertion a query carries.
 type CardKind int
 
 const (
+	// CardNone asserts nothing.
 	CardNone CardKind = iota
+	// CardExactly asserts exactly n matches; anything else is ErrCardinality.
 	CardExactly
+	// CardAtLeast asserts at least n matches; fewer is ErrCardinality.
 	CardAtLeast
 )
 
+// Cardinality is the recorded cardinality assertion of a query. The zero
+// value asserts nothing.
 type Cardinality struct {
 	Kind CardKind
 	N    int
 }
 
-// Enforce checks the count after all branches have been combined.
+// Enforce applies the recorded cardinality assertion to a match count after
+// all branches have been combined: a failed assertion is ErrCardinality even
+// at zero matches, and ErrNoMatch is reserved for a query that asserts
+// nothing and matched nothing (core §12).
 func (c Cardinality) Enforce(n int, what string) error {
 	if c.Kind != CardNone && c.N <= 0 {
 		return fmt.Errorf(`%w: a cardinality assertion needs a positive count, got %d`, decaderr.ErrDegenerate, c.N)
