@@ -87,3 +87,45 @@ func TestSectionDirectLoftAnnulusRefusesCapAndTilt(t *testing.T) {
 		})
 	}
 }
+
+func requireDirectLoftSectionUnsupported(t *testing.T, body *decad.Body, origin r3.Vec) {
+	t.Helper()
+	frame, err := r3.NewFrame(origin, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	section, profiles, err := body.Section(t.Context(), frame)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Nil(t, section)
+	require.Nil(t, profiles)
+}
+
+func TestSectionDirectLoftRefusesPlacementAndShiftedOrigin(t *testing.T) {
+	source := directLoftCircles(t, true, 1, 2, 1, 0)
+	requireDirectLoftSectionUnsupported(t, source, r3.NewVec(1, 0, 1))
+	move, err := r3.Translation(r3.NewVec(10, 0, 0))
+	require.NoError(t, err)
+	placed, err := decad.Transform(t.Context(), source, move)
+	require.NoError(t, err)
+	requireDirectLoftSectionUnsupported(t, placed, r3.NewVec(0, 0, 1))
+}
+
+func TestSectionDirectLoftRefusesNonExactCenter(t *testing.T) {
+	source := directLoftCircles(t, false, 1, 1, 3, 0)
+	requireDirectLoftSectionUnsupported(t, source, r3.NewVec(0, 0, 0.2))
+}
+
+func TestSectionDirectLoftRefusesHoleFreeAndCutSources(t *testing.T) {
+	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
+	doc := decad.New()
+	blank, err := doc.Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	require.NoError(t, err)
+	requireDirectLoftSectionUnsupported(t, blank, r3.NewVec(0, 0, 1))
+
+	tool := verticalCylinder(t, doc, 0, 0, 1)
+	cut, err := decad.Cut(t.Context(), blank, tool)
+	require.NoError(t, err)
+	faces, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(cut))).Exactly(1).SelectFaces(cut)
+	require.NoError(t, err)
+	require.Len(t, faces[0].Loops(), 2)
+	require.IsType(t, decad.Circle3{}, faces[0].Loops()[1].Edges()[0].Curve())
+	requireDirectLoftSectionUnsupported(t, cut, r3.NewVec(0, 0, 1))
+}

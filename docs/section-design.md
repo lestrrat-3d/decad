@@ -67,6 +67,8 @@ whole circular hole in each section and zero segment alignment may return an
 exact section. The direct Loft circle-pair gate first proves the section
 origins' exact axial relation. The sections must use matching canonical
 world-XY axes, identity placement and zero blend-construction displacement.
+Cut-rewritten Lofts are excluded because their tool-to-Loft center conversion
+does not yet carry an exact displacement certificate.
 The requested frame must have those same axes and in-plane origin, at a level
 strictly between the two sections.
 

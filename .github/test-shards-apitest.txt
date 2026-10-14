@@ -2034,3 +2034,6 @@
 10	0.00	TestSectionDirectLoftAnnulusFeedsExtrude
 10	0.00	TestSectionDirectLoftRectangularOuterFeedsExtrude
 10	0.00	TestSectionDirectLoftAnnulusRefusesCapAndTilt
+10	0.00	TestSectionDirectLoftRefusesPlacementAndShiftedOrigin
+10	0.00	TestSectionDirectLoftRefusesNonExactCenter
+10	0.00	TestSectionDirectLoftRefusesHoleFreeAndCutSources
