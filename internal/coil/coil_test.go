@@ -53,6 +53,34 @@ func TestStationsAndTrig(t *testing.T) {
 	requireHolds(t, c, math.Sqrt(3)/2, "cos 30°")
 }
 
+func TestTurnSinCosMemoMatchesTurnSinCos(t *testing.T) {
+	memo := proofbound.NewTurnTrigMemo()
+	exact := [4][2]int64{{0, 1}, {1, 0}, {0, -1}, {-1, 0}}
+	for q := int64(-8); q <= 8; q++ {
+		want := exact[((q%4)+4)%4]
+		turn := big.NewRat(q, 4)
+		for _, m := range []*proofbound.TurnTrigMemo{memo, nil} {
+			s, c := coil.TurnSinCosMemo(m, turn)
+			requirePoint(t, s, big.NewRat(want[0], 1), "sin")
+			requirePoint(t, c, big.NewRat(want[1], 1), "cos")
+		}
+	}
+	for j := range int64(513) {
+		turn := big.NewRat(j, 256)
+		if new(big.Rat).Mul(turn, big.NewRat(4, 1)).IsInt() {
+			continue
+		}
+		wantS, wantC := proofbound.TurnSinCosInterval(turn)
+		for _, m := range []*proofbound.TurnTrigMemo{memo, nil} {
+			s, c := coil.TurnSinCosMemo(m, turn)
+			require.Zero(t, wantS.Lo.Cmp(s.Lo), "sin lo %v", turn)
+			require.Zero(t, wantS.Hi.Cmp(s.Hi), "sin hi %v", turn)
+			require.Zero(t, wantC.Lo.Cmp(c.Lo), "cos lo %v", turn)
+			require.Zero(t, wantC.Hi.Cmp(c.Hi), "cos hi %v", turn)
+		}
+	}
+}
+
 func TestCoordsAndMoments(t *testing.T) {
 	ax := vAxis()
 	rho, zeta := ax.Coords(big.NewRat(3, 1), big.NewRat(1, 1))

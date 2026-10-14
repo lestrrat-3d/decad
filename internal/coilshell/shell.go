@@ -291,12 +291,13 @@ func Build(ctx context.Context, rec Record) (Shell, error) {
 	total := int(n+1) * stride
 	sh.Verts = make([]r3.Vec, total)
 	round := make([]float64, total)
+	trig := proofbound.NewTurnTrigMemo()
 	for j := int64(0); j <= n; j++ {
 		if err := ctx.Err(); err != nil {
 			return Shell{}, err
 		}
 		t := coil.Fraction(rec.Turns, j, n)
-		sinT, cosT := coil.TurnSinCos(t)
+		sinT, cosT := coil.TurnSinCosMemo(trig, t)
 		cm1, err := held(proofbound.IntervalSub(cosT, one))
 		if err != nil {
 			return Shell{}, err

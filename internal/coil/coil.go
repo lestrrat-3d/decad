@@ -86,6 +86,13 @@ func Fraction(turns *big.Rat, j, n int64) *big.Rat {
 // answered exactly; every other turn reads proofbound.TurnSinCosInterval,
 // whose series margin keeps even an octant boundary a few grid steps wide.
 func TurnSinCos(t *big.Rat) (Iv, Iv) {
+	return TurnSinCosMemo(nil, t)
+}
+
+// TurnSinCosMemo is TurnSinCos with the series read through memo, a
+// proofbound.TurnTrigMemo owned by the calling function; a nil memo
+// evaluates directly. The answer equals TurnSinCos(t).
+func TurnSinCosMemo(memo *proofbound.TurnTrigMemo, t *big.Rat) (Iv, Iv) {
 	four := new(big.Rat).Mul(t, big.NewRat(4, 1))
 	if four.IsInt() {
 		q := new(big.Int).Mod(four.Num(), big.NewInt(4)).Int64()
@@ -100,6 +107,9 @@ func TurnSinCos(t *big.Rat) (Iv, Iv) {
 		default:
 			return Point(neg), Point(zero)
 		}
+	}
+	if memo != nil {
+		return memo.SinCos(t)
 	}
 	return proofbound.TurnSinCosInterval(t)
 }

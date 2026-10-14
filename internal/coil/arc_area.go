@@ -220,8 +220,9 @@ func arcStations(seg Segment, n int) ([][2]Iv, Iv, bool) {
 	out := make([][2]Iv, n+1)
 	switch s := seg.Record.(type) {
 	case sectionrecord.CircleSeg:
+		memo := proofbound.NewTurnTrigMemo()
 		for i := range n + 1 {
-			sin, cos := TurnSinCos(big.NewRat(int64(i), int64(n)))
+			sin, cos := TurnSinCosMemo(memo, big.NewRat(int64(i), int64(n)))
 			out[i] = [2]Iv{gridOut(cos), gridOut(sin)}
 		}
 		return out, proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(2, int64(n))), true
