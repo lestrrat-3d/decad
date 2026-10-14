@@ -101,9 +101,10 @@ func requireDirectLoftSectionUnsupported(t *testing.T, body *decad.Body, origin 
 func TestSectionDirectLoftRefusesPlacementAndShiftedOrigin(t *testing.T) {
 	source := directLoftCircles(t, true, 1, 2, 1, 0)
 	requireDirectLoftSectionUnsupported(t, source, r3.NewVec(1, 0, 1))
+	constant := directLoftCircles(t, false, 1, 1, 0, 0)
 	move, err := r3.Translation(r3.NewVec(10, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, move)
+	placed, err := decad.Transform(t.Context(), constant, move)
 	require.NoError(t, err)
 	requireDirectLoftSectionUnsupported(t, placed, r3.NewVec(0, 0, 1))
 }
