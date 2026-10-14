@@ -1,6 +1,7 @@
 package meshbool_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -79,11 +80,26 @@ func (c *adjacencyCancelContext) Err() error {
 func TestFacetAdjacencyKeepsBothPhaseCancellationPolls(t *testing.T) {
 	tris := adjacencyPairedTriangles(256)
 	stopped := errors.New("stopped")
-	for stopAt := 1; stopAt <= 4; stopAt++ {
+	for stopAt := 1; stopAt <= 7; stopAt++ {
 		ctx := &adjacencyCancelContext{stopAt: stopAt, err: stopped}
 		got, err := meshbool.FacetAdjacencyContext(ctx, tris)
 		require.ErrorIs(t, err, stopped)
 		require.Nil(t, got)
 		require.Equal(t, stopAt, ctx.polls)
 	}
+}
+
+func TestFacetAdjacencyPreCanceledAvoidsReservation(t *testing.T) {
+	tris := make([][3]int, 8192)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	var got [][]int
+	var err error
+	allocs := testing.AllocsPerRun(1, func() {
+		got, err = meshbool.FacetAdjacencyContext(ctx, tris)
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, got)
+	require.Zero(t, allocs)
 }

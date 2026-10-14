@@ -609,6 +609,9 @@ func AllFacets(m *BoolMesh) []int {
 // FacetAdjacencyContext maps each facet to its edge neighbors through the
 // watertight mesh's paired directed edges, with bounded cancellation checks.
 func FacetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	owner := make(map[[2]int]int, 3*len(tris))
 	for i, tri := range tris {
 		if i%256 == 0 {
@@ -620,8 +623,11 @@ func FacetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) 
 			owner[[2]int{tri[k], tri[(k+1)%3]}] = i
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	adj := make([][]int, len(tris))
-	neighbors := make([]int, 3*len(tris))
+	var neighbors []int
 	for i, tri := range tris {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -631,6 +637,12 @@ func FacetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) 
 		for k := range 3 {
 			if twin, ok := owner[[2]int{tri[(k+1)%3], tri[k]}]; ok && twin != i {
 				if adj[i] == nil {
+					if neighbors == nil {
+						if err := ctx.Err(); err != nil {
+							return nil, err
+						}
+						neighbors = make([]int, 3*len(tris))
+					}
 					adj[i] = neighbors[3*i : 3*i : 3*i+3]
 				}
 				adj[i] = append(adj[i], twin)
