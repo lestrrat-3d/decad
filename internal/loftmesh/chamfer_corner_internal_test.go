@@ -335,7 +335,7 @@ func TestChamferMiddlePrismCornersMatchLegacy(t *testing.T) {
 			grid, err := ChamferBoxGridOf(boxes, 0, 1)
 			require.NoError(t, err)
 			if newForm {
-				return ChamferMiddlePrism(t.Context(), len(tris), old, boxes, grid, parity, indices,
+				return ChamferMiddlePrism(t.Context(), len(tris), old, boxes, grid, parity,
 					s.base, q, shiftPt, corners)
 			}
 			return legacyChamferMiddlePrism(t.Context(), len(tris), old, boxes, grid, parity, indices,

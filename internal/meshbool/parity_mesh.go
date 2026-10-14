@@ -104,6 +104,14 @@ type ParityMesh struct {
 	// same query both ways and require the same answer; nothing in production
 	// sets it.
 	Unfiltered bool
+	// index[axis] is that axis's parity index, built by MeshParityAllContext
+	// on the axis's first sweep; indexBuilt marks the attempt, since a mesh
+	// the grid would not help keeps a nil index.
+	index      [3]*ParityIndex
+	indexBuilt [3]bool
+	// maxMemberships overrides ParityIndexMaxMemberships when positive; only
+	// tests set it.
+	maxMemberships int
 }
 
 // ParityAreaErrCoef and ParityAreaFloor bound projectedFacetBox's own float
@@ -299,52 +307,15 @@ func MeshParityPreparedContext(ctx context.Context, p proof.Xpt, prepared *Parit
 					continue
 				}
 			}
-			tri := prepared.Tris[ti]
-			qa := prepared.VertexProjection(ray.Axis, ray.U, ray.V, tri[0])
-			qb := prepared.VertexProjection(ray.Axis, ray.U, ray.V, tri[1])
-			qc := prepared.VertexProjection(ray.Axis, ray.U, ray.V, tri[2])
-			s1 := Cross2xSign(qa, qb, pa)
-			s2 := Cross2xSign(qb, qc, pa)
-			if s1*s2 < 0 {
-				continue // two opposite edge signs already prove strictly outside
-			}
-			s3 := Cross2xSign(qc, qa, pa)
-			neg := s1 < 0 || s2 < 0 || s3 < 0
-			pos := s1 > 0 || s2 > 0 || s3 > 0
-			if neg && pos {
-				continue // strictly outside the projection
-			}
-			if s1 == 0 || s2 == 0 || s3 == 0 {
-				// On the projected boundary: the ray may graze an edge or a
-				// vertex, and the count would be unreliable — try another axis.
-				ambiguous = true
-				break
-			}
-			// Strictly inside the projection: the projected area is nonzero,
-			// so the plane normal's swept component cannot vanish.
-			a, b, c := prepared.Verts[tri[0]], prepared.Verts[tri[1]], prepared.Verts[tri[2]]
-			xa, xb, xc := proof.XptOf(a), proof.XptOf(b), proof.XptOf(c)
-			n := proof.Xcross(proof.Xsub(xb, xa), proof.Xsub(xc, xa))
-			nAxis := XIntCoordOf(n, ray.Axis)
-			if nAxis.Sign() == 0 {
-				ambiguous = true
-				break
-			}
-			// t = tNum/nAxis decides the crossing; nAxis is already proven
-			// nonzero above, so its sign alone tells the division's sign
-			// without ever forming the quotient — only t's sign is read, and
-			// proof.XdotNum's raw numerator carries that sign with no normalisation
-			// anywhere in the chain (docs/evaluator-design.md §9's
-			// reject-only discipline extends to never paying for a value
-			// nothing but Sign() consumes).
-			tNum := proof.XdotNum(proof.Xsub(xa, p), n)
-			switch s := tNum.Sign() * nAxis.Sign() * ray.Dir; {
-			case s > 0:
+			switch prepared.classifyFacet(p, pa, ray.Axis, ray.U, ray.V, ray.Dir, ti) {
+			case facetCrossing:
 				crossings++
-			case tNum.Sign() == 0:
+			case facetAmbiguous:
+				ambiguous = true
+			case facetOnBoundary:
 				onBoundary = true
 			}
-			if onBoundary {
+			if ambiguous || onBoundary {
 				break
 			}
 		}
@@ -353,6 +324,156 @@ func MeshParityPreparedContext(ctx context.Context, p proof.Xpt, prepared *Parit
 		}
 		if ambiguous {
 			continue
+		}
+		return crossings%2 == 1, false, nil
+	}
+	return false, false, fmt.Errorf(`%w: every parity ray was ambiguous`, decaderr.ErrBooleanFailed)
+}
+
+type facetOutcome int8
+
+const (
+	facetOutside facetOutcome = iota
+	facetCrossing
+	facetMiss
+	facetAmbiguous
+	facetOnBoundary
+)
+
+// classifyFacet is the exact per-facet step of the parity scan: facet ti
+// against the query p (projected as pa) on one ray.
+func (prepared *ParityMesh) classifyFacet(p proof.Xpt, pa Xp2, axis, u, v, dir, ti int) facetOutcome {
+	tri := prepared.Tris[ti]
+	qa := prepared.VertexProjection(axis, u, v, tri[0])
+	qb := prepared.VertexProjection(axis, u, v, tri[1])
+	qc := prepared.VertexProjection(axis, u, v, tri[2])
+	s1 := Cross2xSign(qa, qb, pa)
+	s2 := Cross2xSign(qb, qc, pa)
+	if s1*s2 < 0 {
+		return facetOutside
+	}
+	s3 := Cross2xSign(qc, qa, pa)
+	neg := s1 < 0 || s2 < 0 || s3 < 0
+	pos := s1 > 0 || s2 > 0 || s3 > 0
+	if neg && pos {
+		return facetOutside
+	}
+	if s1 == 0 || s2 == 0 || s3 == 0 {
+		return facetAmbiguous
+	}
+	a, b, c := prepared.Verts[tri[0]], prepared.Verts[tri[1]], prepared.Verts[tri[2]]
+	xa, xb, xc := proof.XptOf(a), proof.XptOf(b), proof.XptOf(c)
+	n := proof.Xcross(proof.Xsub(xb, xa), proof.Xsub(xc, xa))
+	nAxis := XIntCoordOf(n, axis)
+	if nAxis.Sign() == 0 {
+		return facetAmbiguous
+	}
+	tNum := proof.XdotNum(proof.Xsub(xa, p), n)
+	switch s := tNum.Sign() * nAxis.Sign() * dir; {
+	case s > 0:
+		return facetCrossing
+	case tNum.Sign() == 0:
+		return facetOnBoundary
+	}
+	return facetMiss
+}
+
+// MeshParityAllContext is MeshParityPreparedContext over every facet of the
+// prepared mesh in index order, answered through the axis's parity index when
+// one applies. The result, including the error text, is identical to
+// MeshParityPreparedContext over the subset 0..n-1. The index is built once
+// per ParityMesh on the first sweep of an axis (the mesh is single-goroutine)
+// and lists, per grid cell, only the facets that can do more than continue; it
+// is skipped for meshes under ParityIndexMinFacets and for any projection the
+// grid cannot place. A listed facet runs the unchanged box filter and
+// classifyFacet in ascending order. Three kinds of facet are left out of a
+// cell, each because it ends strictly outside in the exact scan:
+//
+// A facet with nonzero projected area is left out of the cells its closed
+// projected triangle, widened by the margin of ParityLineErrCoef, cannot
+// reach: a query strictly outside the closed triangle gets both edge signs.
+//
+// A facet projecting to a segment is left out of the cells its whole line,
+// widened by the margin, does not pass through: a query off the line gets both
+// signs, and a query on the line is ambiguous.
+//
+// Of the segment facets on one axis-parallel line only the first in index
+// order is listed: for a query on the line that first facet is ambiguous and
+// ends the scan before any later one, and off the line each one continues.
+//
+// The grid only places facets into cells, outward by the margin and by one
+// float step around every cell edge; it decides no sign.
+func MeshParityAllContext(ctx context.Context, p proof.Xpt, prepared *ParityMesh) (bool, bool, error) {
+	n := len(prepared.Tris)
+	for _, ray := range AxisRays {
+		if n == 0 {
+			return false, false, nil
+		}
+		if err := ctx.Err(); err != nil {
+			return false, false, err
+		}
+		pa := NewXP2(RatCoordOf(p, ray.U), RatCoordOf(p, ray.V))
+		boxFilter := !prepared.Unfiltered && pa.FloatFinite
+		var boxes []ParityFacetBox
+		var cands []int32
+		indexed := false
+		if boxFilter {
+			boxes = prepared.FacetBoxes(ray.Axis)
+			if idx := prepared.parityIndex(ray.Axis, ray.U, ray.V); idx != nil {
+				cands, indexed = idx.candidates(pa.Fu, pa.Fv), true
+			}
+		}
+		count := n
+		if indexed {
+			count = len(cands)
+		}
+		crossings := 0
+		ambiguous, onBoundary := false, false
+		// The context is polled at every multiple of 256 in ORIGINAL facet
+		// position, the schedule of MeshParityPreparedContext, whether or not
+		// the facets between two listed ones were skipped.
+		nextPoll := 256
+		for i := range count {
+			ti := i
+			if indexed {
+				ti = int(cands[i])
+			}
+			for ; nextPoll <= ti; nextPoll += 256 {
+				if err := ctx.Err(); err != nil {
+					return false, false, err
+				}
+			}
+			if boxFilter {
+				box := &boxes[ti]
+				if !box.Built {
+					*box = prepared.BuildFacetBox(ray.Axis, ray.U, ray.V, ti)
+				}
+				if box.Rejects(pa.Fu, pa.Fv) {
+					continue
+				}
+			}
+			switch prepared.classifyFacet(p, pa, ray.Axis, ray.U, ray.V, ray.Dir, ti) {
+			case facetCrossing:
+				crossings++
+			case facetAmbiguous:
+				ambiguous = true
+			case facetOnBoundary:
+				onBoundary = true
+			}
+			if ambiguous || onBoundary {
+				break
+			}
+		}
+		if onBoundary {
+			return false, true, nil
+		}
+		if ambiguous {
+			continue
+		}
+		for ; nextPoll < n; nextPoll += 256 {
+			if err := ctx.Err(); err != nil {
+				return false, false, err
+			}
 		}
 		return crossings%2 == 1, false, nil
 	}

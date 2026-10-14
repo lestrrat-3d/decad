@@ -344,7 +344,7 @@ var chamferPrismFaceCorners = [7][3]int{
 func ChamferMiddlePrism(ctx context.Context, triCount int,
 	old *LoftAuditData, oldBoxes [][2]r3.Vec, oldGrid *ChamferBoxGrid,
 	oldParity *meshbool.ParityMesh,
-	oldIndices []int, base, q [3]proofarith.Xpt, shift proofarith.Xpt,
+	base, q [3]proofarith.Xpt, shift proofarith.Xpt,
 	corners [6]ChamferCorner) error {
 	if len(oldBoxes) != triCount || oldGrid == nil ||
 		meshbool.RatCoordOf(shift, 2).Sign() != 0 {
@@ -413,7 +413,7 @@ func ChamferMiddlePrism(ctx context.Context, triCount int,
 		}
 	}
 	witness := meshbool.XCentroid(q[0], q[1], q[2])
-	inside, on, err := meshbool.MeshParityPreparedContext(ctx, witness, oldParity, oldIndices)
+	inside, on, err := meshbool.MeshParityAllContext(ctx, witness, oldParity)
 	if err != nil || !inside || on {
 		return fmt.Errorf("%w: retained middle collar ends outside the old solid", decaderr.ErrUnsupported)
 	}

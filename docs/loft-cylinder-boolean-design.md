@@ -432,6 +432,54 @@ only when it overlaps that interval. A later slab inside the interval needs no
 new clip: each clipped part is a subset of the parts already proved inside the
 disk. A gap between proved slabs is never covered, so a slab spanning it runs
 the exact clip.
+The prism witness against the old shell and the held-tooth witnesses scan
+only the facets that a per-axis grid over the projection plane lists for the
+query's cell. A facet is omitted from a cell only if its closed projection,
+widened by the margin, is disjoint from the cell, and the margin exceeds the
+maximum float error of the placement arithmetic, so float placement can only
+add facets to a list. For a facet projecting to a segment the whole line is
+listed. Such an omitted facet ends strictly outside in the exact scan. Of the
+facets on one axis-parallel line only the first is listed, since it is the one
+that ends the scan.
+
+The placement runs under a range guard. Each projected vertex coordinate is
+zero or between `2⁻³⁰⁰` and `2²⁴⁰` in magnitude; each coordinate difference
+and run offset is zero or between `2⁻³⁰⁰` and `2²⁵⁰`; each slope and product
+is between `2⁻⁶⁰⁰` and `2⁵⁰⁰`, a slope being zero exactly when its
+difference is zero and a product exactly when a factor is. A mesh with any
+quantity outside the guard gets no index on that swept axis, and the scan on
+that axis is the plain all-facets scan, so the guard can only choose the
+exact scan. Inside it no multiplication or division underflows or overflows
+and a subtraction with a subnormal result is exact, so every operation has a
+relative error of at most `2⁻⁵³` and the computed slope has the exact slope's
+sign. On a line through `(a, b)` with float slope `s`, the margin is
+`1e-12·K + 2⁻¹⁰⁰⁰` with `K = |b| + (|x|+|a|)·(1+|s|)`. The computed height is
+within `8·2⁻⁵³·K` of the exact one, and rounding a band end adds at most
+`2⁻⁵³` of its magnitude plus of the margin, so the total is below
+`9.5·2⁻⁵³·K` plus `2⁻⁵³` of the margin. `K` is zero or at least `2⁻³⁰⁰`, so
+`1e-12·K` is a normal float. The computed margin is within a relative
+`7·2⁻⁵³` of the real `1e-12·K + 2⁻¹⁰⁰⁰` (four roundings in the computed `K`,
+two more for the product and the floor sum), so it is at least
+`(1-7·2⁻⁵³)·1e-12·K`, about 900 times the total; the floor only serves the
+case `K = 0`. Every cell strip is also widened by one
+float step on each side (`2⁻²⁹⁹` around an edge of magnitude at most `2⁻³⁰⁰`),
+because the query's coordinate is the nearest float to an exact value that
+may lie just outside a cell edge. The grid is built once per parity mesh and
+decides no sign: the exact scan visits the listed facets in ascending order
+and polls the context at every multiple of 256 in original facet position,
+as the plain scan does.
+
+An axis whose placement would list more than `2²³` (cell, facet) memberships
+gets no index and the scan on that axis is the plain one. The lists cost 8
+bytes per membership while they are collected (16 with slice growth) and 4
+bytes once built, so the cap bounds the membership lists at about 130 MB
+while collected (a facet may append up to 66 564 more before the check) and a
+built index at 32 MB; the shells here list about 43 thousand per index. This
+bounds the memberships only: the build also holds the facet boxes (40 bytes
+per facet) and the vertex projection cache of segment facets, allocated before
+the check. The count is
+checked after every facet, before any offset is summed, so the 32-bit offsets
+cannot overflow, and an index of exactly the cap is built.
 An outward-rounded box gap can omit a held wall triangle only when it strictly
 exceeds that tooth's matched Loft departure; all remaining pairs use the exact
 triangle clearance check.
