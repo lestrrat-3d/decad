@@ -307,7 +307,8 @@ func ChamferCornerOf(p proofarith.Xpt) ChamferCorner {
 }
 
 // ChamferCornersBox is ChamferExactTriBox of the triangle with these
-// corners: the same box, and false exactly when that returns false.
+// corners: the same box when accepted, and false exactly when that returns
+// false. The box returned with a refusal is unspecified and must be ignored.
 func ChamferCornersBox(a, b, c ChamferCorner) ([2]r3.Vec, bool) {
 	box := [2]r3.Vec{
 		{X: min(a.Box[0].X, b.Box[0].X, c.Box[0].X), Y: min(a.Box[0].Y, b.Box[0].Y, c.Box[0].Y),
