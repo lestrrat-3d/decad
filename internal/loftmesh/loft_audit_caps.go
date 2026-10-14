@@ -24,11 +24,12 @@ type LoftCapLayout struct {
 // LoftCrossingAuditWithCaps returns exactly what
 // LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris) returns.
 // When the layout is well formed, at least one cap is exactly planar and the
-// mesh is small enough that the generic audit's S8 ceiling cannot refuse, it
-// first runs the structured audit over the triangles reordered as walls,
-// Cap0, Cap1, so each planar cap is decided by CapFamilyProof. A structured
-// pass that succeeds is the generic audit's verdict; any error reruns the
-// generic audit, so a refusal and its text are the generic audit's.
+// mesh is small enough that the generic audit cannot reach its streamed row
+// preflight or any S8 ceiling (capsAuditFits), it first runs the structured
+// audit over the triangles reordered as walls, Cap0, Cap1, so each planar cap
+// is decided by CapFamilyProof. A structured pass that succeeds is the
+// generic audit's verdict; any error reruns the generic audit on the same
+// budget, so a refusal and its text are the generic audit's.
 func LoftCrossingAuditWithCaps(ctx context.Context, verts []r3.Vec, tris [][3]int, layout LoftCapLayout) error {
 	_, _, err := LoftCrossingAuditWithCapsWork(ctx, verts, tris, layout)
 	return err
@@ -39,19 +40,30 @@ func LoftCrossingAuditWithCaps(ctx context.Context, verts []r3.Vec, tris [][3]in
 // the generic audit directly.
 func LoftCrossingAuditWithCapsWork(ctx context.Context, verts []r3.Vec, tris [][3]int,
 	layout LoftCapLayout) (LoftAuditWork, bool, error) {
+	return loftCrossingAuditWithCaps(proofbound.NewWorkBudget(ctx), verts, tris, layout)
+}
+
+// loftCrossingAuditWithCaps runs both passes on one budget, so the generic
+// rerun after a structured pass that stopped on cancellation sees that
+// cancellation the way a direct generic call would: a context stays
+// cancelled, and the rerun never starts from a fresh, uncancelled count.
+func loftCrossingAuditWithCaps(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
+	layout LoftCapLayout) (LoftAuditWork, bool, error) {
 	generic := func() error {
-		return LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris)
+		_, err := loftCrossingAuditLimited(budget, verts, tris, nil, loftGenericShortcuts,
+			proofbound.MaxFacetPairTestsPerCall, MaxLoftAuditTriangles, true)
+		return err
 	}
 	if !capsAuditFits(len(tris)) {
 		return LoftAuditWork{}, false, generic()
 	}
-	order, ok := capsReorder(tris, layout)
+	order, ok := capsReorder(len(verts), tris, layout)
 	if !ok || !capsPlanar(verts, order, layout) {
 		return LoftAuditWork{}, false, generic()
 	}
 	structure := LoftAuditStructure{Walls: layout.Walls, CapStartCount: len(layout.Cap0),
 		Loops0: layout.Loops0, Loops1: layout.Loops1, Interior: layout.Interior}
-	work, err := loftCrossingAuditLimited(proofbound.NewWorkBudget(ctx), verts, order, &structure,
+	work, err := loftCrossingAuditLimited(budget, verts, order, &structure,
 		loftStructuredShortcuts, proofbound.MaxFacetPairTestsPerCall, MaxLoftAuditTriangles, true)
 	if err == nil {
 		return work, true, nil
@@ -59,21 +71,31 @@ func LoftCrossingAuditWithCapsWork(ctx context.Context, verts []r3.Vec, tris [][
 	return work, true, generic()
 }
 
-// capsAuditFits reports that f triangles have at most MaxFacetPairTestsPerCall
-// pairs, so the generic audit's S8 count (candidates and enumeration work,
-// both at most C(f, 2)) cannot refuse.
+// capsAuditFits reports that f triangles have at most
+// loftAuditCandidateBatchSize pairs. The generic audit streams its rows, and
+// runs the row preflight that charges tree nodes beside pairs, only for more
+// candidates than that, and its candidate count and enumeration work are each
+// at most C(f, 2), far below the S8 ceiling. So for such a mesh the generic
+// audit has no resource refusal the structured pass could skip.
 func capsAuditFits(f int) bool {
 	if f < 2 {
 		return true
 	}
 	n := uint64(f)
-	return n*(n-1)/2 <= proofbound.MaxFacetPairTestsPerCall
+	return n*(n-1)/2 <= loftAuditCandidateBatchSize
 }
 
 // capsReorder validates the layout and returns a private copy of tris ordered
-// as walls, Cap0, Cap1. ok is false unless the layout names every triangle
-// once.
-func capsReorder(tris [][3]int, layout LoftCapLayout) ([][3]int, bool) {
+// as walls, Cap0, Cap1. ok is false unless every triangle vertex index is
+// below vertexCount and the layout names every triangle once.
+func capsReorder(vertexCount int, tris [][3]int, layout LoftCapLayout) ([][3]int, bool) {
+	for _, tri := range tris {
+		for _, v := range tri {
+			if v < 0 || v >= vertexCount {
+				return nil, false
+			}
+		}
+	}
 	f := len(tris)
 	walls := layout.Walls
 	if walls < 0 || walls > f || walls+len(layout.Cap0)+len(layout.Cap1) != f {

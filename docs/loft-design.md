@@ -1327,8 +1327,10 @@ entry, which runs the sweep and the cap proofs. A point loft's apex fan, both
 slabs of a point-plane split and a face-fed loft call the caps entry: it
 reorders the caller's triangles as walls, first cap, second cap, runs the
 structured audit when a cap is exactly planar and the mesh has at most
-`maxFacetPairTestsPerCall` triangle pairs, and runs the generic audit instead,
-or after any refusal, so its verdict and refusal are the generic audit's. The
+1,000,000 triangle pairs (the most the generic audit takes without streaming
+its rows, so its row preflight and every S8 ceiling are out of reach), and
+runs the generic audit instead, or after any refusal on the same budget, so
+its verdict and refusal are the generic audit's. The
 generic entry — the mitred sweep, `Stitch`, `LoftChain` and the mesh
 mass-properties reading — runs the sweep and tests every candidate pairwise. The zero shortcut set still tests
 every pair of every triangle through the exact classification, and every

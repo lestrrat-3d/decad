@@ -1,6 +1,7 @@
 package loftmesh
 
 import (
+	"context"
 	"errors"
 	"math"
 	"math/rand/v2"
@@ -318,7 +319,7 @@ func TestLoftCrossingAuditWithCapsRandomMeshes(t *testing.T) {
 func TestCapFamilyProofInteriorSide(t *testing.T) {
 	t.Parallel()
 	prove := func(m capsMesh, which int, interior []int) LoftCapCondition {
-		order, ok := capsReorder(m.tris, m.layout)
+		order, ok := capsReorder(len(m.verts), m.tris, m.layout)
 		require.True(t, ok)
 		structure := LoftAuditStructure{Walls: m.layout.Walls, CapStartCount: len(m.layout.Cap0),
 			Loops0: m.layout.Loops0, Loops1: m.layout.Loops1, Interior: interior}
@@ -424,14 +425,14 @@ func TestLoftCrossingAuditWithCapsFallsBack(t *testing.T) {
 	})
 }
 
-func TestCapsAuditFitsMatchesTheGenericCeiling(t *testing.T) {
+func TestCapsAuditFitsStaysBelowTheStreamedPreflight(t *testing.T) {
 	t.Parallel()
 	require.True(t, capsAuditFits(0))
 	require.True(t, capsAuditFits(1))
-	require.True(t, capsAuditFits(4000))
-	require.False(t, capsAuditFits(4001))
-	require.True(t, uint64(4000)*3999/2 <= proofbound.MaxFacetPairTestsPerCall)
-	require.True(t, uint64(4001)*4000/2 > proofbound.MaxFacetPairTestsPerCall)
+	require.True(t, capsAuditFits(1414))
+	require.False(t, capsAuditFits(1415))
+	require.True(t, uint64(1414)*1413/2 <= loftAuditCandidateBatchSize)
+	require.True(t, uint64(1415)*1414/2 > loftAuditCandidateBatchSize)
 }
 
 func TestFanRing(t *testing.T) {
@@ -457,4 +458,196 @@ func TestFanRing(t *testing.T) {
 		_, ok := FanRing(sides)
 		require.False(t, ok, name)
 	}
+}
+
+// capsDenseCone is the review's valid cone: a centre vertex 0, an apex 1 and
+// 2000 square-ring points, 2000 apex walls then 2000 cap triangles. Every
+// triangle's box contains the centre, so the generic audit has C(4000, 2)
+// candidates, streams them and refuses at its row preflight, which charges
+// 4000 root visits beside the pairs.
+func capsDenseCone() capsMesh {
+	const side = 500
+	verts := []r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)}
+	for j := range side {
+		verts = append(verts, r3.NewVec(side, -side+2*float64(j), 0))
+	}
+	for j := range side {
+		verts = append(verts, r3.NewVec(side-2*float64(j), side, 0))
+	}
+	for j := range side {
+		verts = append(verts, r3.NewVec(-side, side-2*float64(j), 0))
+	}
+	for j := range side {
+		verts = append(verts, r3.NewVec(-side+2*float64(j), -side, 0))
+	}
+	ring := len(verts) - 2
+	m := capsMesh{verts: verts}
+	loop := make([]int, ring)
+	for k := range ring {
+		loop[k] = 2 + k
+		m.tris = append(m.tris, [3]int{1, 2 + k, 2 + (k+1)%ring})
+	}
+	m.layout = LoftCapLayout{Walls: ring, Loops0: [][]int{loop}, Loops1: [][]int{{1}}}
+	for k := range ring {
+		m.layout.Cap0 = append(m.layout.Cap0, len(m.tris))
+		m.tris = append(m.tris, [3]int{0, 2 + (k+1)%ring, 2 + k})
+	}
+	return m
+}
+
+func TestLoftCrossingAuditWithCapsKeepsTheGenericRowCeiling(t *testing.T) {
+	t.Parallel()
+	m := capsDenseCone()
+	require.Len(t, m.tris, 4000)
+	want := capsGeneric(t, m)
+	require.Error(t, want, "the generic audit refuses this mesh at its row preflight")
+	_, structured, got := requireSameVerdict(t, m)
+	require.False(t, structured)
+	require.Error(t, got)
+}
+
+// capsLeadingZero is the review's five-vertex mesh: the apex (vertex 0) lies
+// on the cap's plane and Interior holds one vertex above it. Its three walls
+// tile the cap triangle, so skipping the wall-cap pairs would hide an
+// overlap.
+func capsLeadingZero() capsMesh {
+	return capsMesh{
+		verts: []r3.Vec{r3.NewVec(0.5, 0.5, 0), r3.NewVec(0, 0, 0), r3.NewVec(2, 0, 0),
+			r3.NewVec(0, 2, 0), r3.NewVec(0, 0, 1)},
+		tris: [][3]int{{0, 1, 2}, {0, 2, 3}, {0, 3, 1}, {1, 2, 3}},
+		layout: LoftCapLayout{Walls: 3, Cap0: []int{3}, Loops0: [][]int{{1, 2, 3}},
+			Loops1: [][]int{{0}}, Interior: []int{4}},
+	}
+}
+
+func TestCapFamilyProofRejectsLeadingZeroSign(t *testing.T) {
+	t.Parallel()
+	m := capsLeadingZero()
+	order, ok := capsReorder(len(m.verts), m.tris, m.layout)
+	require.True(t, ok)
+	structure := LoftAuditStructure{Walls: 3, CapStartCount: 1, Loops0: m.layout.Loops0,
+		Loops1: m.layout.Loops1, Interior: m.layout.Interior}
+	require.Equal(t, LoftCapOtherSide,
+		CapFamilyProof(NewLoftAuditData(m.verts, order), order, structure, 0))
+	require.Error(t, capsGeneric(t, m), "the walls overlap the cap")
+	_, _, err := requireSameVerdict(t, m)
+	require.Error(t, err)
+}
+
+// TestLoftCrossingAuditWithCapsNearPlaneApex moves the cone's apex onto the
+// cap plane, then one float step to either side of it: the exact sign has no
+// tolerance, so a representable separation is a strict side, and the caps
+// entry must still return the generic verdict at each position.
+func TestLoftCrossingAuditWithCapsNearPlaneApex(t *testing.T) {
+	t.Parallel()
+	for _, z := range []float64{0, math.SmallestNonzeroFloat64, -math.SmallestNonzeroFloat64,
+		math.Nextafter(0.5, 0), 0.5} {
+		m := capsTestCone(32)
+		m.verts[0] = r3.NewVec(0.25, 0.25, z)
+		requireSameVerdict(t, m)
+	}
+	m := capsTestCone(32)
+	m.verts[0] = r3.NewVec(0.25, 0.25, 0)
+	_, _, err := requireSameVerdict(t, m)
+	require.Error(t, err)
+}
+
+// TestLoftCrossingAuditWithCapsMislabeledPartition relabels triangles under
+// a layout that is a complete, unique partition: a wall named as a cap, and
+// a cap named as a wall. The proof owns the meaning of the labels, so the
+// verdict must still be the generic audit's, including on corrupted meshes.
+func TestLoftCrossingAuditWithCapsMislabeledPartition(t *testing.T) {
+	t.Parallel()
+	mutations := append([]capsMutation{{"intact", func(*capsMesh) {}}}, capsMutations()...)
+	for name, base := range capsBases() {
+		for _, mutation := range mutations {
+			t.Run(name+"/"+mutation.name, func(t *testing.T) {
+				t.Parallel()
+				wallAsCap := base.clone()
+				mutation.mutate(&wallAsCap)
+				wallAsCap.layout.Walls--
+				wallAsCap.layout.Cap0 = append([]int{wallAsCap.layout.Walls}, wallAsCap.layout.Cap0...)
+				requireSameVerdict(t, wallAsCap)
+
+				capAsWall := base.clone()
+				mutation.mutate(&capAsWall)
+				first := capAsWall.layout.Cap0[0]
+				capAsWall.tris[first], capAsWall.tris[capAsWall.layout.Walls] =
+					capAsWall.tris[capAsWall.layout.Walls], capAsWall.tris[first]
+				capAsWall.layout.Walls++
+				capAsWall.layout.Cap0 = capAsWall.layout.Cap0[1:]
+				requireSameVerdict(t, capAsWall)
+			})
+		}
+	}
+}
+
+func TestLoftCrossingAuditWithCapsInvalidIndexNeverPanics(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	m := capsTestFrustum(20)
+	m.tris[m.layout.Cap0[0]][1] = len(m.verts) + 5
+	require.NotPanics(t, func() {
+		_, structured, err := LoftCrossingAuditWithCapsWork(ctx, m.verts, m.tris, m.layout)
+		require.False(t, structured)
+		require.ErrorIs(t, err, context.Canceled)
+	})
+	m = capsTestFrustum(20)
+	m.tris[m.layout.Cap1[0]][2] = -1
+	require.NotPanics(t, func() {
+		_, _, err := LoftCrossingAuditWithCapsWork(ctx, m.verts, m.tris, m.layout)
+		require.ErrorIs(t, err, context.Canceled)
+	})
+}
+
+// cancelAfter is a budget whose context reports cancellation from the
+// n-th step on and stays cancelled, as a deadline does.
+func cancelAfter(n int) *proofbound.WorkBudget {
+	steps, cancelled := 0, false
+	return &proofbound.WorkBudget{
+		StepFn: func() error {
+			steps++
+			if steps >= n {
+				cancelled = true
+			}
+			if cancelled {
+				return context.DeadlineExceeded
+			}
+			return nil
+		},
+		ErrFn: func() error {
+			if cancelled {
+				return context.DeadlineExceeded
+			}
+			return nil
+		},
+	}
+}
+
+// TestLoftCrossingAuditWithCapsCancelledStructuredPass cancels the budget at
+// every step of the structured pass of a mesh the generic audit refuses on
+// geometry. A cancelled context stays cancelled, so the generic rerun on the
+// same budget must report the cancellation, never the geometric refusal from
+// a fresh, uncancelled count.
+func TestLoftCrossingAuditWithCapsCancelledStructuredPass(t *testing.T) {
+	t.Parallel()
+	m := capsTestFrustum(20)
+	capsMutations()[0].mutate(&m)
+	require.Error(t, capsGeneric(t, m))
+	sawCancel := false
+	for n := 1; n < 400; n++ {
+		_, _, err := loftCrossingAuditWithCaps(cancelAfter(n), m.verts, m.tris, m.layout)
+		require.Error(t, err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			sawCancel = true
+			continue
+		}
+		var contact *LoftContactError
+		if !errors.As(err, &contact) {
+			// An S6 refusal is the generic audit's text.
+			require.Equal(t, capsGeneric(t, m).Error(), err.Error())
+		}
+	}
+	require.True(t, sawCancel)
 }
