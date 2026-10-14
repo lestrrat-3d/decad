@@ -208,3 +208,90 @@ func TestLoftAuditFansOwnTheirCornerOrder(t *testing.T) {
 		require.Equal(t, before, decide(slices.Clone(original)), layout)
 	}
 }
+
+// ownedVertexFixture is two triangles that overlap over a region: they share
+// the edge (0,0)-(2,0) and both lie on the plane z = 0.
+func ownedVertexFixture() ([]r3.Vec, [][3]int) {
+	return []r3.Vec{{}, {X: 2}, {Y: 2}, {X: 1, Y: 1}}, [][3]int{{0, 1, 2}, {0, 1, 3}}
+}
+
+// ownedLayouts builds each layout from the caller's verts, an exact slice of
+// proof.XptOf(verts) that the caller may later mutate, and tris.
+var ownedLayouts = map[string]func(verts []r3.Vec, exact []proof.Xpt, tris [][3]int) *LoftAuditData{
+	"full":    func(v []r3.Vec, _ []proof.Xpt, t [][3]int) *LoftAuditData { return NewLoftAuditData(v, t) },
+	"compact": func(v []r3.Vec, _ []proof.Xpt, t [][3]int) *LoftAuditData { return newCompactLoftAuditData(v, t) },
+	"exact":   NewLoftAuditDataWithExact,
+	"selected": func(v []r3.Vec, _ []proof.Xpt, t [][3]int) *LoftAuditData {
+		return newLoftAuditDataForCandidates(v, t, loftCandidates{starts: []int{0, 1, 1}, js: []int32{1}})
+	},
+}
+
+// ownedAudit is the audit the owned-vertex tests repeat after a mutation.
+func ownedAudit(data *LoftAuditData, tris [][3]int) (LoftPairOutcome, error) {
+	return AuditLoftPairData(data, tris, 0, 1, LoftAuditShortcuts{Certificates: true, ExactInput: true})
+}
+
+// TestLoftAuditTableOwnsItsVertices changes the caller's vertex after the
+// table is built. The table's exact points, triangles and projections were
+// built from the old vertex, so the audit must keep refusing the overlap.
+func TestLoftAuditTableOwnsItsVertices(t *testing.T) {
+	t.Parallel()
+	for layout, build := range ownedLayouts {
+		t.Run(layout, func(t *testing.T) {
+			t.Parallel()
+			verts, tris := ownedVertexFixture()
+			exact := make([]proof.Xpt, len(verts))
+			for i, v := range verts {
+				exact[i] = proof.XptOf(v)
+			}
+			data := build(verts, exact, tris)
+			_, err := ownedAudit(data, tris)
+			require.ErrorIs(t, err, decaderr.ErrDegenerate)
+			verts[3].Z = 1
+			out, err := ownedAudit(data, tris)
+			require.ErrorIs(t, err, decaderr.ErrDegenerate, "outcome %v, err %v after verts[3].Z = 1", out, err)
+		})
+	}
+}
+
+// TestLoftAuditExactTableOwnsItsPoints replaces a caller exact point, and
+// writes into another point's integer, after NewLoftAuditDataWithExact. Every
+// cached exact triple, normal and homogeneous projection keeps its value.
+func TestLoftAuditExactTableOwnsItsPoints(t *testing.T) {
+	t.Parallel()
+	mutations := map[string]func(exact []proof.Xpt){
+		"replace point": func(exact []proof.Xpt) { exact[3] = proof.XptOf(r3.Vec{X: 1, Y: 1, Z: 1}) },
+		"write integer": func(exact []proof.Xpt) { exact[3].Z.SetInt64(1) },
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			verts, tris := ownedVertexFixture()
+			exact := make([]proof.Xpt, len(verts))
+			for i, v := range verts {
+				exact[i] = proof.XptOf(v)
+			}
+			data := NewLoftAuditDataWithExact(verts, exact, tris)
+			snapshot := func() []string {
+				var out []string
+				for _, p := range data.Xverts {
+					out = append(out, p.Key())
+				}
+				for i := range tris {
+					for k := range 3 {
+						out = append(out, data.Xtris[i][k].Key(), data.Projections[i][k].Hu.String(),
+							data.Projections[i][k].Hv.String(), data.Projections[i][k].Hw.String())
+					}
+				}
+				return out
+			}
+			before := snapshot()
+			_, err := ownedAudit(data, tris)
+			require.ErrorIs(t, err, decaderr.ErrDegenerate)
+			mutate(exact)
+			require.Equal(t, before, snapshot())
+			out, err := ownedAudit(data, tris)
+			require.ErrorIs(t, err, decaderr.ErrDegenerate, "outcome %v, err %v after the mutation", out, err)
+		})
+	}
+}

@@ -144,9 +144,27 @@ func NewLoftAuditData(verts []r3.Vec, tris [][3]int) *LoftAuditData {
 // broad-phase boxes by its certified exact-to-float error before omitting a
 // pair and use LoftAuditShortcuts.ExactInput to disable float-only filters.
 func NewLoftAuditDataWithExact(verts []r3.Vec, exact []proof.Xpt, tris [][3]int) *LoftAuditData {
-	d := newLoftAuditDataSelected(verts, exact, tris, nil, false, loftDataWorkers(verts, len(tris)))
+	d := newLoftAuditDataSelected(verts, cloneXpts(exact), tris, nil, false, loftDataWorkers(verts, len(tris)))
 	d.exactLifts = true
 	return d
+}
+
+// cloneXpts returns a copy of exact whose points own fresh big integers, so a
+// caller that later writes to its points or to their integers cannot reach any
+// table built from the copy.
+func cloneXpts(exact []proof.Xpt) []proof.Xpt {
+	out := make([]proof.Xpt, len(exact))
+	for i, p := range exact {
+		out[i] = proof.Xpt{X: cloneBigInt(p.X), Y: cloneBigInt(p.Y), Z: cloneBigInt(p.Z), W: cloneBigInt(p.W)}
+	}
+	return out
+}
+
+func cloneBigInt(x *big.Int) *big.Int {
+	if x == nil {
+		return nil
+	}
+	return new(big.Int).Set(x)
 }
 
 // newCompactLoftAuditData retains one projection per vertex and axis. The
@@ -232,7 +250,8 @@ func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
 	// cannot reach the corners every certificate and the entry check read.
 	d.tris = slices.Clone(tris)
 	if compact {
-		d.verts = verts
+		// The compact table reads float corners from verts for its whole life.
+		d.verts = slices.Clone(verts)
 	} else {
 		d.Corners = make([][3]r3.Vec, len(tris))
 		d.Xtris = make([][3]proof.Xpt, len(tris))
