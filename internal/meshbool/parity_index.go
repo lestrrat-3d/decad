@@ -9,31 +9,103 @@ import (
 // ParityIndexMinFacets is the smallest mesh the parity index is built for.
 const ParityIndexMinFacets = 64
 
+// The range guard. Every float quantity the placement rounds is zero or lies
+// in a fixed range of magnitudes:
+//
+//   - each projected vertex coordinate: zero or in [2⁻³⁰⁰, parityCoordHi = 2²⁴⁰];
+//   - each coordinate difference du, dv and run offset t = x-a: zero or in
+//     [parityGuardLo, parityGuardHi] = [2⁻³⁰⁰, 2²⁵⁰];
+//   - each slope s = dv/du and product p = t·s: in [parityResultLo,
+//     parityResultHi] = [2⁻⁶⁰⁰, 2⁵⁰⁰], except that s is zero exactly when dv
+//     is zero and p is zero exactly when t or s is zero.
+//
+// A mesh with any quantity outside the guard, on one swept axis, gets no
+// index for that axis (buildParityIndex returns nil) and the scan on that axis
+// is the plain all-facets scan, so the answer is the old one. Inside the guard
+// no multiplication or division underflows, overflows or turns a nonzero
+// operand pair into zero, and a subtraction whose result is subnormal is
+// exact; so every rounded result carries a relative error of at most
+// ε = 2⁻⁵³ per operation and the exact slope's sign is the computed slope's
+// sign. The guard never changes an answer: it only chooses "use the exact
+// scan".
+const (
+	parityGuardLo  = 0x1p-300
+	parityGuardHi  = 0x1p250
+	parityCoordHi  = 0x1p240
+	parityResultLo = 0x1p-600
+	parityResultHi = 0x1p500
+)
+
+// parityGuarded reports whether f is zero or has magnitude in [2⁻³⁰⁰, 2²⁵⁰]. NaN
+// and the infinities are outside.
+func parityGuarded(f float64) bool {
+	x := absf(f)
+	return f == 0 || (x >= parityGuardLo && x <= parityGuardHi)
+}
+
+// parityResultInRange reports whether the nonzero quotient or product f has
+// magnitude in [2⁻⁶⁰⁰, 2⁵⁰⁰]. Two operands of magnitude at least 2⁻³⁰⁰ give a
+// result of at least 2⁻⁶⁰⁰, far above the subnormal range, so a result below
+// it is an underflow of operands outside the guard.
+func parityResultInRange(f float64) bool {
+	x := absf(f)
+	return x >= parityResultLo && x <= parityResultHi
+}
+
+// parityCoordGuarded reports whether the projected vertex coordinate f is zero
+// or in [2⁻³⁰⁰, parityCoordHi].
+func parityCoordGuarded(f float64) bool {
+	x := absf(f)
+	return f == 0 || (x >= parityGuardLo && x <= parityCoordHi)
+}
+
+// parityLineSlope returns the slope dv/du, with ok false when du, dv or the
+// quotient is outside the range guard. du must be nonzero. The slope is zero
+// exactly when dv is zero.
+func parityLineSlope(du, dv float64) (float64, bool) {
+	if du == 0 || !parityGuarded(du) || !parityGuarded(dv) {
+		return 0, false
+	}
+	if dv == 0 {
+		return 0, true
+	}
+	s := float64(dv / du)
+	return s, parityResultInRange(s)
+}
+
 // ParityLineErrCoef and ParityLineFloor define the margin m that widens every
 // float band the index places (lineAt):
 //
-//	m = ParityLineErrCoef·(|b| + (|x|+|a|)·(1+|s|)) + ParityLineFloor
-//	  = 1e-12·(|b| + (|x|+|a|)·(1+|s|)) + 2⁻¹⁰⁰⁰.
+//	m = ParityLineErrCoef·K + ParityLineFloor,  K = |b| + (|x|+|a|)·(1+|s|),
+//	  = 1e-12·K + 2⁻¹⁰⁰⁰.
 //
-// The slope (two subtractions and a division) and the band's height y (a
-// subtraction, a product and a sum) are separately rounded float64 operations,
-// each forced by an explicit conversion so no fused multiply-add enters and
-// amd64 and arm64 build identical lists. With ε = 2⁻⁵³ the
-// total error of y and of the rounded band end y±m is below
-// 10ε·(|b| + (|x|+|a|)·(1+|s|)) + 2⁻¹⁰⁷¹, so the first term of m is about 900
-// times the proven rounding error (1e-12 / (10·2⁻⁵³) ≈ 900) and the floor is
-// far above the gradual-underflow crumb. A band widened by m therefore always
-// contains the exact height. The second widening is one float step: every
-// cell keeps lo[k] = down(b[k]) and hi[k] = up(b[k+1]), one step outside its
-// edges, so a query whose exact coordinate rounds onto an edge is still inside
-// the strip the lists were built for.
+// Inside the range guard above, with ε = 2⁻⁵³: the slope has relative error at
+// most 3ε, t = x-a at most ε, p = t·s at most ε and y = b+p at most ε, so
+// |y - exact| <= ε|b| + 6.1ε(|x|+|a|)|s| + ε|p| <= 8ε·K. Rounding the band
+// end y±m adds at most ε(|y|+m) (nothing when the result is subnormal), so
+// the computed band end lies within 9.5ε·K + εm of the exact height's side.
+// The margin covers this: when K = 0 every quantity is exact; otherwise
+// K >= 2⁻³⁰⁰ (b, a and x are each zero or at least 2⁻³⁰⁰ in magnitude, and
+// they are not all zero: a widened cell edge x is never zero, and x = a = 0
+// is the vertex case that never reaches lineAt), so 1e-12·K is a normal float whose own rounding changes it by
+// a relative 2ε at most, and 1e-12·K·(1-3ε) >= 900·10ε·K·(1-3ε) exceeds 9.5ε·K
+// + εm with a factor of about 900 to spare. The floor is for K = 0 only; it
+// does not enter the bound. The slope, y and the band ends are separately
+// rounded float64 operations, each forced by an explicit conversion, so no
+// fused multiply-add enters and amd64 and arm64 build identical lists.
+//
+// The second widening is one float step: every cell keeps lo[k] = down(b[k])
+// and hi[k] = up(b[k+1]), one step outside its edges (for |b| <= 2⁻³⁰⁰ the
+// step is 2⁻²⁹⁹, which keeps x inside the guard), so a query whose exact
+// coordinate rounds onto an edge is still inside the strip the lists were built
+// for.
 //
 // Invariant: a facet is omitted from a cell only if its closed projection,
 // widened by the margin, is disjoint from the cell, and the margin exceeds the
 // maximum float error of the placement arithmetic. Float placement can thus
 // only ADD facets to a cell's list, never drop one that can reach a query in
 // it. TestParityLineMarginCoversTheError demands a 256-fold headroom of the
-// margin over the measured error.
+// margin over the measured error inside the guard.
 const (
 	ParityLineErrCoef = 1e-12
 	ParityLineFloor   = 0x1p-1000
@@ -66,11 +138,25 @@ func newParityGridAxis(first, last float64, inner int) parityGridAxis {
 		ax.b[k+1] = math.Min(math.Max(x, ax.b[k]), last)
 	}
 	for k := range c {
-		ax.lo[k] = math.Nextafter(ax.b[k], math.Inf(-1))
-		ax.hi[k] = math.Nextafter(ax.b[k+1], math.Inf(1))
+		ax.lo[k] = parityStepOut(ax.b[k], math.Inf(-1))
+		ax.hi[k] = parityStepOut(ax.b[k+1], math.Inf(1))
 		ax.abs[2*k], ax.abs[2*k+1] = absf(ax.lo[k]), absf(ax.hi[k])
 	}
 	return ax
+}
+
+// parityStepOut moves the cell edge b one float step toward the infinity inf,
+// or, for |b| <= 2⁻³⁰⁰ (including zero, whose neighbours are subnormal), by
+// 2⁻²⁹⁹: either is outward of b, and the result is zero-free and inside the
+// range guard. An infinite b stays infinite.
+func parityStepOut(b, inf float64) float64 {
+	if math.IsInf(b, 0) {
+		return b
+	}
+	if absf(b) <= parityGuardLo {
+		return b + math.Copysign(0x1p-299, inf)
+	}
+	return math.Nextafter(b, inf)
 }
 
 func absf(x float64) float64 {
@@ -128,6 +214,12 @@ func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
 			boxes[ti] = pm.BuildFacetBox(axis, u, v, ti)
 		}
 		b := &boxes[ti]
+		for _, vi := range pm.Tris[ti] {
+			vert := pm.Verts[vi]
+			if !parityCoordGuarded(CoordOf(vert, u)) || !parityCoordGuarded(CoordOf(vert, v)) {
+				return nil
+			}
+		}
 		if proofbound.IsNonFinite(b.MinU) || proofbound.IsNonFinite(b.MaxU) ||
 			proofbound.IsNonFinite(b.MinV) || proofbound.IsNonFinite(b.MaxV) {
 			return nil
@@ -146,7 +238,11 @@ func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
 	for ti, tri := range pm.Tris {
 		b := &boxes[ti]
 		if b.Nondegenerate {
-			cells, facets = idx.addTriangle(pm, tri, u, v, ti, b, cells, facets)
+			var ok bool
+			cells, facets, ok = idx.addTriangle(pm, tri, u, v, ti, b, cells, facets)
+			if !ok {
+				return nil
+			}
 			continue
 		}
 		// Facets on one axis-parallel line answer alike: off the line every
@@ -228,9 +324,8 @@ func (idx *ParityIndex) addLine(pm *ParityMesh, tri [3]int, u, v, ti int,
 		a, b, ra, rb = b, a, rb, ra
 		run, cross = &idx.v, &idx.u
 	}
-	du, dv := float64(ra-a), float64(rb-b)
-	s := float64(dv / du)
-	if proofbound.IsNonFinite(du) || proofbound.IsNonFinite(dv) || proofbound.IsNonFinite(s) {
+	s, ok := parityLineSlope(float64(ra-a), float64(rb-b))
+	if !ok {
 		return cells, facets, false
 	}
 	absB, onePlusS := absf(b), 1+absf(s)
@@ -248,7 +343,10 @@ func (idx *ParityIndex) addLine(pm *ParityMesh, tri [3]int, u, v, ti int,
 			if math.IsInf(x1, 1) {
 				xf, xa = x0, run.abs[2*i]
 			}
-			y, m := lineAt(a, b, s, absB, onePlusS, xf, xa)
+			y, m, ok := lineAt(a, b, s, absB, onePlusS, xf, xa)
+			if !ok {
+				return cells, facets, false
+			}
 			lo, hi = y-m, y+m
 			if s != 0 {
 				if (s > 0) == math.IsInf(x1, 1) {
@@ -258,8 +356,11 @@ func (idx *ParityIndex) addLine(pm *ParityMesh, tri [3]int, u, v, ti int,
 				}
 			}
 		default:
-			y0, m0 := lineAt(a, b, s, absB, onePlusS, x0, run.abs[2*i])
-			y1, m1 := lineAt(a, b, s, absB, onePlusS, x1, run.abs[2*i+1])
+			y0, m0, ok0 := lineAt(a, b, s, absB, onePlusS, x0, run.abs[2*i])
+			y1, m1, ok1 := lineAt(a, b, s, absB, onePlusS, x1, run.abs[2*i+1])
+			if !ok0 || !ok1 {
+				return cells, facets, false
+			}
 			m := math.Max(m0, m1)
 			lo, hi = math.Min(y0, y1)-m, math.Max(y0, y1)+m
 		}
@@ -283,10 +384,10 @@ func (idx *ParityIndex) addLine(pm *ParityMesh, tri [3]int, u, v, ti int,
 // of its box column range that the closed projected triangle may reach: per
 // column, the union of its three edges' height bands over the column's exact
 // strip, clipped to the box. A query outside the closed triangle classifies
-// strictly outside. When an edge band is not finite, the facet's box cells are
-// listed instead, which the box filter already justifies.
+// strictly outside. It reports false when a slope or band is outside the
+// range guard, which refuses the index.
 func (idx *ParityIndex) addTriangle(pm *ParityMesh, tri [3]int, u, v, ti int, box *ParityFacetBox,
-	cells, facets []int32) ([]int32, []int32) {
+	cells, facets []int32) ([]int32, []int32, bool) {
 	c := len(idx.v.lo)
 	var pu, pv [3]float64
 	for k := range 3 {
@@ -294,12 +395,9 @@ func (idx *ParityIndex) addTriangle(pm *ParityMesh, tri [3]int, u, v, ti int, bo
 		pu[k], pv[k] = CoordOf(vert, u), CoordOf(vert, v)
 	}
 	i0, i1 := idx.u.cellOf(box.MinU), idx.u.cellOf(box.MaxU)
-	j0, j1 := idx.v.cellOf(box.MinV), idx.v.cellOf(box.MaxV)
-	mark := len(cells)
 	for i := i0; i <= i1; i++ {
 		x0, x1 := math.Max(idx.u.lo[i], box.MinU), math.Min(idx.u.hi[i], box.MaxU)
 		lo, hi := math.Inf(1), math.Inf(-1)
-		ok := true
 		for k := range 3 {
 			l := (k + 1) % 3
 			au, av, bu, bv := pu[k], pv[k], pu[l], pv[l]
@@ -313,7 +411,10 @@ func (idx *ParityIndex) addTriangle(pm *ParityMesh, tri [3]int, u, v, ti int, bo
 				lo, hi = math.Min(lo, math.Min(av, bv)), math.Max(hi, math.Max(av, bv))
 				continue
 			}
-			s := float64(float64(bv-av) / float64(bu-au))
+			s, ok := parityLineSlope(float64(bu-au), float64(bv-av))
+			if !ok {
+				return cells, facets, false
+			}
 			absB, onePlusS := absf(av), 1+absf(s)
 			for _, x := range [2]float64{math.Max(x0, au), math.Min(x1, bu)} {
 				switch x {
@@ -322,23 +423,16 @@ func (idx *ParityIndex) addTriangle(pm *ParityMesh, tri [3]int, u, v, ti int, bo
 				case bu:
 					lo, hi = math.Min(lo, bv), math.Max(hi, bv)
 				default:
-					y, m := lineAt(au, av, s, absB, onePlusS, x, absf(x))
-					if proofbound.IsNonFinite(y) || proofbound.IsNonFinite(m) {
-						ok = false
+					y, m, ok := lineAt(au, av, s, absB, onePlusS, x, absf(x))
+					if !ok {
+						return cells, facets, false
 					}
 					lo, hi = math.Min(lo, y-m), math.Max(hi, y+m)
 				}
 			}
 		}
-		if !ok || lo != lo || hi != hi {
-			cells, facets = cells[:mark], facets[:mark]
-			for i := i0; i <= i1; i++ {
-				for j := j0; j <= j1; j++ {
-					cells = append(cells, int32(i*c+j))
-					facets = append(facets, int32(ti))
-				}
-			}
-			return cells, facets
+		if lo != lo || hi != hi {
+			return cells, facets, false
 		}
 		lo, hi = math.Max(lo, box.MinV), math.Min(hi, box.MaxV)
 		if lo > hi {
@@ -349,23 +443,28 @@ func (idx *ParityIndex) addTriangle(pm *ParityMesh, tri [3]int, u, v, ti int, bo
 			facets = append(facets, int32(ti))
 		}
 	}
-	return cells, facets
+	return cells, facets, true
 }
 
 // lineAt evaluates the line through (a, b) with slope s at the finite x, with
-// the margin of ParityLineErrCoef bounding the evaluation's error. A
-// non-finite result makes the band NaN or infinite, which addLine refuses and
-// addTriangle answers with the box fallback.
-//
-// With S the exact slope, ε = 2⁻⁵³ and s within 4ε of S relative, the computed
-// y is within 8ε·(|b| + (|x|+|a|)·|s|) of the exact height, and rounding the
-// band ends adds at most ε of their magnitude; the margin is about 900 times
-// that. absB is |b| and onePlusS is 1+|s|, fixed per line; xa is |x|.
-func lineAt(a, b, s, absB, onePlusS, x, xa float64) (float64, float64) {
+// the margin of ParityLineErrCoef bounding the evaluation's error. It reports
+// false when t = x-a or the product t·s is outside the range guard (zero is
+// allowed only as an exact zero: t·s is zero exactly when t or s is zero).
+// Inside the guard the error is at most 8ε·(|b| + (|x|+|a|)·|s|) before
+// rounding the band ends; see ParityLineErrCoef for the margin's proof.
+// absB is |b| and onePlusS is 1+|s|, fixed per line; xa is |x|.
+func lineAt(a, b, s, absB, onePlusS, x, xa float64) (float64, float64, bool) {
 	t := float64(x - a)
+	if !parityGuarded(t) {
+		return 0, 0, false
+	}
 	p := float64(t * s)
+	if t != 0 && s != 0 && !parityResultInRange(p) {
+		return 0, 0, false
+	}
 	y := float64(b + p)
-	return y, float64(ParityLineErrCoef*float64(absB+float64(float64(xa+absf(a))*onePlusS))) + ParityLineFloor
+	m := float64(ParityLineErrCoef*float64(absB+float64(float64(xa+absf(a))*onePlusS))) + ParityLineFloor
+	return y, m, true
 }
 
 // candidates returns the cell list for a finite float projection.

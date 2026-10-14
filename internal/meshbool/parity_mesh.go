@@ -426,15 +426,19 @@ func MeshParityAllContext(ctx context.Context, p proof.Xpt, prepared *ParityMesh
 		}
 		crossings := 0
 		ambiguous, onBoundary := false, false
+		// The context is polled at every multiple of 256 in ORIGINAL facet
+		// position, the schedule of MeshParityPreparedContext, whether or not
+		// the facets between two listed ones were skipped.
+		nextPoll := 256
 		for i := range count {
-			if i > 0 && i%256 == 0 {
-				if err := ctx.Err(); err != nil {
-					return false, false, err
-				}
-			}
 			ti := i
 			if indexed {
 				ti = int(cands[i])
+			}
+			for ; nextPoll <= ti; nextPoll += 256 {
+				if err := ctx.Err(); err != nil {
+					return false, false, err
+				}
 			}
 			if boxFilter {
 				box := &boxes[ti]
@@ -462,6 +466,11 @@ func MeshParityAllContext(ctx context.Context, p proof.Xpt, prepared *ParityMesh
 		}
 		if ambiguous {
 			continue
+		}
+		for ; nextPoll < n; nextPoll += 256 {
+			if err := ctx.Err(); err != nil {
+				return false, false, err
+			}
 		}
 		return crossings%2 == 1, false, nil
 	}

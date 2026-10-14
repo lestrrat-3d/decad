@@ -440,14 +440,31 @@ maximum float error of the placement arithmetic, so float placement can only
 add facets to a list. For a facet projecting to a segment the whole line is
 listed. Such an omitted facet ends strictly outside in the exact scan. Of the
 facets on one axis-parallel line only the first is listed, since it is the one
-that ends the scan. The margin is `1e-12·(|b| + (|x|+|a|)·(1+|s|)) + 2⁻¹⁰⁰⁰`
-on a line through `(a, b)` with float slope `s`, about 900 times the proven
-rounding error `10·2⁻⁵³·(|b| + (|x|+|a|)·(1+|s|)) + 2⁻¹⁰⁷¹` of the
-separately rounded operations that compute it. Every cell strip is also
-widened by one float step on each side, because the query's coordinate is
-the nearest float to an exact value that may lie just outside a cell edge.
-The grid is built once per parity mesh and decides no sign: the exact scan
-visits the listed facets in ascending order.
+that ends the scan.
+
+The placement runs under a range guard. Each projected vertex coordinate is
+zero or between `2⁻³⁰⁰` and `2²⁴⁰` in magnitude; each coordinate difference
+and run offset is zero or between `2⁻³⁰⁰` and `2²⁵⁰`; each slope and product
+is between `2⁻⁶⁰⁰` and `2⁵⁰⁰`, a slope being zero exactly when its
+difference is zero and a product exactly when a factor is. A mesh with any
+quantity outside the guard gets no index on that swept axis, and the scan on
+that axis is the plain all-facets scan, so the guard can only choose the
+exact scan. Inside it no multiplication or division underflows or overflows
+and a subtraction with a subnormal result is exact, so every operation has a
+relative error of at most `2⁻⁵³` and the computed slope has the exact slope's
+sign. On a line through `(a, b)` with float slope `s`, the margin is
+`1e-12·K + 2⁻¹⁰⁰⁰` with `K = |b| + (|x|+|a|)·(1+|s|)`. The computed height is
+within `8·2⁻⁵³·K` of the exact one, and rounding a band end adds at most
+`2⁻⁵³` of its magnitude plus of the margin, so the total is below
+`9.5·2⁻⁵³·K` plus `2⁻⁵³` of the margin. `K` is zero or at least `2⁻³⁰⁰`, so
+`1e-12·K` is a normal float and the margin is about 900 times the total; the
+floor only serves the case `K = 0`. Every cell strip is also widened by one
+float step on each side (`2⁻²⁹⁹` around an edge of magnitude at most `2⁻³⁰⁰`),
+because the query's coordinate is the nearest float to an exact value that
+may lie just outside a cell edge. The grid is built once per parity mesh and
+decides no sign: the exact scan visits the listed facets in ascending order
+and polls the context at every multiple of 256 in original facet position,
+as the plain scan does.
 An outward-rounded box gap can omit a held wall triangle only when it strictly
 exceeds that tooth's matched Loft departure; all remaining pairs use the exact
 triangle clearance check.
