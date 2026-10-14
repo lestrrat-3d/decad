@@ -189,8 +189,8 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, err
 	}
 
-	shell := &Shell{faces: []*Face{face}, open: true}
-	body.lumps = []*Lump{{shells: []*Shell{shell}}}
+	shell := &FaceShell{faces: []*Face{face}, open: true}
+	body.lumps = []*Lump{{shells: []*FaceShell{shell}}}
 
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(ig.Area),

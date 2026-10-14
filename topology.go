@@ -818,8 +818,8 @@ func (f *Face) isPlanar() bool {
 // contributing roles (core §6.1).
 func (f *Face) Origins() []FeatureRef { return append([]FeatureRef(nil), f.origins...) }
 
-// Shell is a connected set of faces.
-type Shell struct {
+// FaceShell is a connected set of faces.
+type FaceShell struct {
 	faces []*Face
 	void  bool
 	open  bool
@@ -829,7 +829,7 @@ type Shell struct {
 // IsOpen are independent questions and neither implies the other
 // (docs/surface-design.md §2.2): a void solid shell and an open sheet shell
 // are both ordinary states, and nothing rules out either combination.
-func (s *Shell) IsVoid() bool { return s.void }
+func (s *FaceShell) IsVoid() bool { return s.void }
 
 // IsOpen reports whether the shell has at least one free edge
 // (docs/surface-design.md §2.2). IsOpen and IsVoid are independent questions
@@ -838,18 +838,18 @@ func (s *Shell) IsVoid() bool { return s.void }
 // omitted a closing face and left a rim with no second face to pair it with
 // (extrude.go, revolve_build.go), and false for a closed sheet that mints no
 // such rim — a full revolution (docs/surface-design.md Table W).
-func (s *Shell) IsOpen() bool { return s.open }
+func (s *FaceShell) IsOpen() bool { return s.open }
 
 // Faces returns the shell's faces.
-func (s *Shell) Faces() []*Face { return append([]*Face(nil), s.faces...) }
+func (s *FaceShell) Faces() []*Face { return append([]*Face(nil), s.faces...) }
 
 // Lump is a connected solid piece of a body.
 type Lump struct {
-	shells []*Shell
+	shells []*FaceShell
 }
 
 // Shells returns the lump's shells, the outer shell first.
-func (l *Lump) Shells() []*Shell { return append([]*Shell(nil), l.shells...) }
+func (l *Lump) Shells() []*FaceShell { return append([]*FaceShell(nil), l.shells...) }
 
 // Body is an immutable solid: every operation returns a new one, and the
 // input body is retired from its document (core §6).
@@ -905,8 +905,8 @@ func (b *Body) Origin() FeatureRef { return b.origin }
 func (b *Body) Lumps() []*Lump { return append([]*Lump(nil), b.lumps...) }
 
 // Shells returns the body's shells across all lumps.
-func (b *Body) Shells() []*Shell {
-	var out []*Shell
+func (b *Body) Shells() []*FaceShell {
+	var out []*FaceShell
 	for _, l := range b.lumps {
 		out = append(out, l.Shells()...)
 	}

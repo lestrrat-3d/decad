@@ -45,7 +45,7 @@ func TestDraftKeptWallsReadsRoles(t *testing.T) {
 	require.False(t, foreign.isWallOf(7))
 	require.False(t, capStart.isWallOf(7))
 
-	b := &Body{lumps: []*Lump{{shells: []*Shell{{faces: []*Face{own, coalesced, capStart}}}}}}
+	b := &Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{own, coalesced, capStart}}}}}}
 	kept, err := draftKeptWalls(b, 7, []*Face{own, coalesced})
 	require.NoError(t, err)
 	require.Empty(t, kept)

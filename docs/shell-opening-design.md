@@ -370,7 +370,7 @@ is nil: the result is not an A1 operand (brep-modify DB11).
 The record is general-boolean §4.2's: every edge bounds exactly two faces by
 `brepTopologyContext`'s count, and a record that fails it is `ErrUnsupported`
 (SO5) — the proof that the three regions closed against each other. One lump,
-one shell, `Shell.IsVoid()` false: the cavity reaches the outside through the
+one shell, `FaceShell.IsVoid()` false: the cavity reaches the outside through the
 opening. Roles are the brep's, `face(k)` and `wall(k)` by result index,
 minted fresh under the shell's producer identity; no `capStart`/`capEnd`, no
 `rim`, no receiver role (modify §11, general-boolean §4.2). A caller names a
@@ -532,7 +532,7 @@ exported API live in `apitest/shell_opening_test.go` and
 - inward, both caps kept: cavity `(0,38)×(2,18)×(2,8)`, volume
   `8000 − 3648 = 4352`, area `2704 + 1768 = 4472`, centroid
   `(1417/68, 10, 5)`, 11 faces, the `x = 0` face one planar face with one
-  hole `y∈[2,18]`, `z∈[2,8]`, `Exact`, `delta = 0`, `Shell.IsVoid()` false,
+  hole `y∈[2,18]`, `z∈[2,8]`, `Exact`, `delta = 0`, `FaceShell.IsVoid()` false,
   one lump;
 - the `z = 10` cap removed too: cavity height 8, volume `3136`;
 - both caps removed: a `prismPayload` over `W`, volume `192·10 = 1920`,

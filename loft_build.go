@@ -445,7 +445,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		if err := attachFaceLoopsContext(ctx, faces); err != nil {
 			return nil, err
 		}
-		body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
+		body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
 	}
 
 	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
