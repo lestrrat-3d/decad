@@ -109,6 +109,9 @@ type ParityMesh struct {
 	// the grid would not help keeps a nil index.
 	index      [3]*ParityIndex
 	indexBuilt [3]bool
+	// maxMemberships overrides ParityIndexMaxMemberships when positive; only
+	// tests set it.
+	maxMemberships int
 }
 
 // ParityAreaErrCoef and ParityAreaFloor bound projectedFacetBox's own float

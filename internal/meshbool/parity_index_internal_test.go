@@ -764,3 +764,46 @@ func TestParityLineAtRefusesUnderflowAndOverflow(t *testing.T) {
 		require.Equal(t, c.ok, ok, c.name)
 	}
 }
+
+// TestParityIndexMembershipCap pins the membership cap: an index of exactly the
+// cap is built, one membership over it is refused, a refused axis scans plainly
+// with the answers and error of the old scan, and the default cap leaves room
+// below int32.
+func TestParityIndexMembershipCap(t *testing.T) {
+	t.Parallel()
+	require.Less(t, int64(ParityIndexMaxMemberships), int64(math.MaxInt32)/64)
+	for _, fx := range parityIndexFixtures()[:3] {
+		t.Run(fx.name, func(t *testing.T) {
+			full := NewParityMesh(fx.verts, fx.tris).buildParityIndex(0, 1, 2)
+			require.NotNil(t, full)
+			total := len(full.ids)
+			require.Greater(t, total, 1)
+
+			atCap := NewParityMesh(fx.verts, fx.tris)
+			atCap.maxMemberships = total
+			got := atCap.buildParityIndex(0, 1, 2)
+			require.NotNil(t, got, `an index of exactly the cap is built`)
+			require.Equal(t, full.ids, got.ids)
+
+			for _, limit := range []int{total - 1, total / 2, 1} {
+				over := NewParityMesh(fx.verts, fx.tris)
+				over.maxMemberships = limit
+				require.True(t, over.buildParityIndex(0, 1, 2) == nil, `limit %d refuses`, limit)
+			}
+
+			// The refused axis answers like the plain scan, error text included.
+			all := parityAllFacets(len(fx.tris))
+			refused := NewParityMesh(fx.verts, fx.tris)
+			refused.maxMemberships = total - 1
+			plain := NewParityMesh(fx.verts, fx.tris)
+			plain.Unfiltered = true
+			rng := rand.New(rand.NewPCG(0x77, 0x78))
+			for qi, p := range parityIndexQueries(rng, fx) {
+				require.Equal(t, answerOf(MeshParityPreparedContext(t.Context(), p, plain, all)),
+					answerOf(MeshParityAllContext(t.Context(), p, refused)), `query %d`, qi)
+			}
+			require.True(t, refused.indexBuilt[0], `the build was attempted`)
+			require.True(t, refused.index[0] == nil, `and refused`)
+		})
+	}
+}

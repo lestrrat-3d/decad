@@ -9,6 +9,19 @@ import (
 // ParityIndexMinFacets is the smallest mesh the parity index is built for.
 const ParityIndexMinFacets = 64
 
+// ParityIndexMaxMemberships caps the (cell, facet) memberships of one index:
+// an axis whose placement lists more gets no index and runs the plain scan.
+// Each membership costs 8 bytes while the lists are collected (a cell and a
+// facet id, up to 16 with slice growth) and 4 bytes once built, so the cap
+// bounds the build at about 130 MB and a built index at 32 MB. The real shells
+// list about 43 thousand memberships per index (3 996 facets, 129 by 129
+// cells), a factor of 190 below it. The count is taken on the int slices'
+// lengths while collecting and checked after every facet, before the int32
+// offsets are summed or any list is filled, so the offsets cannot overflow:
+// the cap is far below MaxInt32. The cap is a count compared with >, so an
+// index of exactly the cap is built.
+const ParityIndexMaxMemberships = 1 << 23
+
 // The range guard. Every float quantity the placement rounds is zero or lies
 // in a fixed range of magnitudes:
 //
@@ -87,10 +100,14 @@ func parityLineSlope(du, dv float64) (float64, bool) {
 // The margin covers this: when K = 0 every quantity is exact; otherwise
 // K >= 2⁻³⁰⁰ (b, a and x are each zero or at least 2⁻³⁰⁰ in magnitude, and
 // they are not all zero: a widened cell edge x is never zero, and x = a = 0
-// is the vertex case that never reaches lineAt), so 1e-12·K is a normal float whose own rounding changes it by
-// a relative 2ε at most, and 1e-12·K·(1-3ε) >= 900·10ε·K·(1-3ε) exceeds 9.5ε·K
-// + εm with a factor of about 900 to spare. The floor is for K = 0 only; it
-// does not enter the bound. The slope, y and the band ends are separately
+// is the vertex case that never reaches lineAt). The computed margin m̂ is not
+// the real 1e-12·K + 2⁻¹⁰⁰⁰: K̂ = |b| + (|x|+|a|)·(1+|s|) carries four
+// roundings (|x|+|a|, 1+|s|, their product, the sum with |b|), and the product
+// with 1e-12 and the sum with the floor add two more, so m̂ is within a relative
+// 7ε of 1e-12·K + 2⁻¹⁰⁰⁰ (each factor (1±ε), at most seven of them) and
+// m̂ >= (1-7ε)·1e-12·K. That exceeds the 9.5ε·K + εm̂ above with a factor of
+// about 900 to spare, since 1e-12 / (10·2⁻⁵³) ≈ 900. The floor is for K = 0
+// only; it does not enter the bound. The slope, y and the band ends are separately
 // rounded float64 operations, each forced by an explicit conversion, so no
 // fused multiply-add enters and amd64 and arm64 build identical lists.
 //
@@ -203,8 +220,12 @@ type ParityIndex struct {
 // the mesh is too small or has a facet the grid cannot place.
 func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
 	n := len(pm.Tris)
-	if n < ParityIndexMinFacets {
+	if n < ParityIndexMinFacets || n > math.MaxInt32 {
 		return nil
+	}
+	limit := ParityIndexMaxMemberships
+	if pm.maxMemberships > 0 {
+		limit = pm.maxMemberships
 	}
 	boxes := pm.FacetBoxes(axis)
 	umin, umax := math.Inf(1), math.Inf(-1)
@@ -236,6 +257,9 @@ func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
 	var cells, facets []int32
 	flat, upright := map[float64]struct{}{}, map[float64]struct{}{}
 	for ti, tri := range pm.Tris {
+		if len(cells) > limit {
+			return nil // too many memberships: the scan stays plain
+		}
 		b := &boxes[ti]
 		if b.Nondegenerate {
 			var ok bool
@@ -270,6 +294,9 @@ func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
 		if !ok {
 			return nil
 		}
+	}
+	if len(cells) > limit {
+		return nil
 	}
 	// Counting sort by cell; entries arrive in ascending facet order, so each
 	// cell's list stays ascending.

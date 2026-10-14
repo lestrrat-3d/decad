@@ -457,14 +457,25 @@ sign. On a line through `(a, b)` with float slope `s`, the margin is
 within `8·2⁻⁵³·K` of the exact one, and rounding a band end adds at most
 `2⁻⁵³` of its magnitude plus of the margin, so the total is below
 `9.5·2⁻⁵³·K` plus `2⁻⁵³` of the margin. `K` is zero or at least `2⁻³⁰⁰`, so
-`1e-12·K` is a normal float and the margin is about 900 times the total; the
-floor only serves the case `K = 0`. Every cell strip is also widened by one
+`1e-12·K` is a normal float. The computed margin is within a relative
+`7·2⁻⁵³` of the real `1e-12·K + 2⁻¹⁰⁰⁰` (four roundings in the computed `K`,
+two more for the product and the floor sum), so it is at least
+`(1-7·2⁻⁵³)·1e-12·K`, about 900 times the total; the floor only serves the
+case `K = 0`. Every cell strip is also widened by one
 float step on each side (`2⁻²⁹⁹` around an edge of magnitude at most `2⁻³⁰⁰`),
 because the query's coordinate is the nearest float to an exact value that
 may lie just outside a cell edge. The grid is built once per parity mesh and
 decides no sign: the exact scan visits the listed facets in ascending order
 and polls the context at every multiple of 256 in original facet position,
 as the plain scan does.
+
+An axis whose placement would list more than `2²³` (cell, facet) memberships
+gets no index and the scan on that axis is the plain one. The lists cost 8
+bytes per membership while they are collected (16 with slice growth) and 4
+bytes once built, so the cap bounds the build at about 130 MB and a built
+index at 32 MB; the shells here list about 43 thousand per index. The count is
+checked after every facet, before any offset is summed, so the 32-bit offsets
+cannot overflow, and an index of exactly the cap is built.
 An outward-rounded box gap can omit a held wall triangle only when it strictly
 exceeds that tooth's matched Loft departure; all remaining pairs use the exact
 triangle clearance check.
