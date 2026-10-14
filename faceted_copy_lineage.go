@@ -18,12 +18,16 @@ type facetedCopyLineage struct {
 	sourcePlacement r3.Transform
 	targetPlacement r3.Transform
 	motion          r3.Transform
+	// direct is true only when placed applied motion to the source payload
+	// itself, so the image's true solid is exactly motion of the source's.
+	direct bool
 }
 
 // bindFacetedCopyLineage records a rigid image only while its source remains
 // live. Losing an optional copy proof never prevents an otherwise valid Copy
-// or Transform from producing a body.
-func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform) {
+// or Transform from producing a body. direct is true only when image was
+// placed from source's own payload.
+func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, direct bool) {
 	if image == nil || source == nil || image.doc != source.doc ||
 		source.doc.requireLive(source) != nil {
 		return
@@ -44,7 +48,7 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform) {
 	placed.copyLineage = &facetedCopyLineage{
 		source: source, sourceProducer: source.origin.producer,
 		sourcePlacement: base.xform, targetPlacement: targetPlacement,
-		motion: motion,
+		motion: motion, direct: direct,
 	}
 	image.payload = placed
 }
@@ -130,6 +134,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 		set.faceOwner[0][face] = face
 	}
 	shells := make([]shellseparation.Shell, len(tools))
+	sourceLinked := true
 	heldCopies := make([]shellseparation.HeldCopy, len(tools))
 	for i, tool := range tools {
 		if err := ctx.Err(); err != nil {
@@ -168,12 +173,15 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 		}
 		set.faceOwner[i] = owners
 		set.moves[i] = record.motion
+		sourceLinked = sourceLinked && record.direct
 	}
 	for _, axis := range []shellseparation.Axis{
 		shellseparation.AxisX, shellseparation.AxisY, shellseparation.AxisZ,
 	} {
+		// Source-solid transfer needs each copy's true solid to be exactly its
+		// recorded motion of the source's, which holds only for direct copies.
 		if !shellseparation.Separate(ctx, shells, set.moves,
-			shellseparation.SourceShell, axis, false) {
+			shellseparation.SourceShell, axis, sourceLinked) {
 			continue
 		}
 		held, err := shellseparation.PlacedHeldShells(ctx, heldCopies, set.moves)

@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/shellseparation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -73,4 +74,47 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	_, err = certifyFacetedCopies(t.Context(), []*Body{source, image})
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "changed its recorded motion")
+}
+
+func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
+	_, source, _ := neutralArcSeamSource(t)
+	rotate := func(degrees float64) r3.Transform {
+		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(degrees))
+		require.NoError(t, err)
+		return turn
+	}
+	a, err := Copy(t.Context(), source, WithCopyPlacement(rotate(120)))
+	require.NoError(t, err)
+	b, err := Copy(t.Context(), source, WithCopyPlacement(rotate(240)))
+	require.NoError(t, err)
+	require.True(t, a.payload.(facetedPayload).copyLineage.direct)
+	require.True(t, b.payload.(facetedPayload).copyLineage.direct)
+
+	c, err := Copy(t.Context(), a, WithCopyPlacement(rotate(90)))
+	require.NoError(t, err)
+	cLineage := c.payload.(facetedPayload).copyLineage
+	require.Same(t, source, cLineage.source)
+	require.False(t, cLineage.direct)
+
+	set, err := certifyFacetedCopies(t.Context(), []*Body{source, a, b})
+	require.NoError(t, err)
+	require.Equal(t, shellseparation.AxisX, set.axis)
+
+	// Transfer and the direct pairwise check must agree on the direct set.
+	tools := []*Body{source, a, b}
+	shells := make([]shellseparation.Shell, len(tools))
+	for i, tool := range tools {
+		shells[i] = facetedShell(tool.payload.(facetedPayload))
+	}
+	for _, linked := range []bool{true, false} {
+		require.True(t, shellseparation.Separate(t.Context(), shells, set.moves,
+			shellseparation.SourceShell, shellseparation.AxisX, linked), "linked=%v", linked)
+	}
+
+	_, err = certifyFacetedCopies(t.Context(), []*Body{source, a, c})
+	require.NoError(t, err)
+
+	moved, err := Transform(t.Context(), a, rotate(30))
+	require.NoError(t, err)
+	require.False(t, moved.payload.(facetedPayload).copyLineage.direct)
 }
