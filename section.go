@@ -23,7 +23,8 @@ import (
 // chord, an authenticated sphere cut by a cardinal plane with an exact circle
 // or bounded polygon or by a central oblique plane, an authenticated right cone
 // cut by a cardinal plane with an exact circle,
-// a direct matching hole-free or circular-hole Loft cut by an exact world-XY interior plane,
+// a direct matching-profile or varying circular-hole Loft cut by an exact
+// world-XY interior plane,
 // a rectangular prism cut by an interior cardinal vertical plane, and
 // a bounded oblique cut of an exact rectangular or whole-circle prism,
 // including a certified crossing of one circle-prism cap. The
@@ -46,7 +47,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 	if pl, ok := b.payload.(loftPayload); ok {
 		profile, admitted := loftCircleSectionRecord(pl, plane)
 		if !admitted {
-			profile, admitted = loftHoleFreeSectionRecord(pl, plane)
+			profile, admitted = loftMatchingSectionRecord(pl, plane)
 		}
 		if !admitted {
 			return nil, nil, fmt.Errorf(`%w: section needs an exact parallel loft`, ErrUnsupported)

@@ -60,19 +60,21 @@ record through the same seam proof as an exact prism. This is an exact planar
 section, including any recorded holes, and can enter ordinary profile
 consumers. It does not treat a tessellated BRep face as a source profile.
 
-## Parallel section of an authenticated matching hole-free Loft
+## Parallel section of an authenticated matching-profile Loft
 
-An authenticated two-section solid Loft with identical hole-free profile
-records and zero segment alignment may return an exact interior section. The
-two source frames and requested frame must have canonical world-XY axes,
-matching in-plane origins and strictly ordered levels. Identity placement,
-zero blend-construction displacement and authenticated source records are required.
-Each paired boundary point has the same local coordinates in both records,
-so its ruled path is vertical. Every level strictly between the two caps has
+An authenticated two-section solid Loft with identical full profile records,
+including any recorded holes, and zero segment alignment may return an exact
+interior section. The two source frames and requested frame must have
+canonical world-XY axes, matching in-plane origins and strictly ordered
+levels. Identity placement, zero blend-construction displacement and
+authenticated source records are required.
+Each paired outer or hole boundary point has the same local coordinates in
+both records, so its ruled path is vertical. Every level strictly between the two caps has
 the recorded profile as its material region. Reconstruct that profile on a
 fresh Sketch and require its matching valid region before returning it.
 Cap-level, oblique, translated, twisted and differing-section requests return
-`ErrUnsupported`.
+`ErrUnsupported`. Cut and Fillet rewrites refuse because their inserted holes
+or connector arcs were not authenticated by both source Sketch profiles.
 
 ## Parallel section of an authenticated circular-hole Loft
 
@@ -81,8 +83,8 @@ whole circular hole in each section and zero segment alignment may return an
 exact section. The direct Loft circle-pair gate first proves the section
 origins' exact axial relation. The sections must use matching canonical
 world-XY axes, identity placement and zero blend-construction displacement.
-Cut-rewritten Lofts are excluded because their tool-to-Loft center conversion
-does not yet carry an exact displacement certificate.
+Cut-rewritten Lofts are excluded because their inserted holes do not come from
+both source Sketch profiles.
 The requested frame must have those same axes and in-plane origin, at a level
 strictly between the two sections.
 

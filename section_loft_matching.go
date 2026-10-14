@@ -6,14 +6,14 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// loftHoleFreeSectionRecord reads an interior parallel section from a direct
-// solid Loft whose two authenticated hole-free records are identical. Zero
-// alignment pairs each boundary point with itself, so every ruled wall is
-// vertical and the same profile bounds every intermediate material region.
-func loftHoleFreeSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
+// loftMatchingSectionRecord reads an interior parallel section from a direct
+// solid Loft whose two authenticated profile records are identical. Zero
+// alignment pairs every outer and hole boundary point with itself, so every
+// ruled wall is vertical and every intermediate material region matches.
+func loftMatchingSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
 	if !pl.authenticatedReconstruction || pl.surfaceResult ||
-		pl.constructionDelta != 0 || pl.analyticBore || pl.xform != r3.Identity() ||
-		len(pl.profile0.Holes) != 0 || len(pl.profile1.Holes) != 0 ||
+		pl.constructionDelta != 0 || len(pl.blendSegs) != 0 ||
+		pl.throughBoreCut || pl.analyticBore || pl.xform != r3.Identity() ||
 		!sectionrecord.IdenticalRecord(pl.profile0, pl.profile1) {
 		return profileRecord{}, false
 	}

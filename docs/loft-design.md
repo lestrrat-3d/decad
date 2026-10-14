@@ -2783,6 +2783,9 @@ authenticated outer loop. It inserts the same clockwise `CircleSeg` hole into
 both sections and runs the normal loft evaluator. A pair outside these gates
 uses the general boolean path; the global sketch reconstruction ceiling is
 unchanged.
+The rewritten payload records `throughBoreCut` whether or not it publishes
+analytic bore topology. `Body.Section` does not read the inserted hole as a
+pair of source Sketch-authenticated profiles.
 
 The certified Cut marks the resulting Loft for analytic bore topology only
 when exact rational lifts of both section origins and circle centers agree
