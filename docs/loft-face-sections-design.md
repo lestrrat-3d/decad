@@ -201,9 +201,12 @@ float direction `end.Radial = (0, y, z)`.
 `loftface.NewTangentEnd` chooses a unit vector `e = (e_y, e_z)` by the
 half-angle parameterisation: `e_y = (1-T^2)/(1+T^2)`, `e_z = 2T/(1+T^2)`, with
 `e_y` negated when the radial `y` is negative. The radial is scaled by its
-larger component before `T` is formed, so the choice cannot overflow or
-underflow. Float rounding only chooses the rational `T`; `e_y^2 + e_z^2 = 1`
-then holds exactly. `Rho` is the rational nearest `1/sqrt(1+k^2)`. The end map
+larger component before `T` is formed, so the norm and the half-angle
+denominator neither overflow nor collapse. A much smaller component can still
+underflow to zero after scaling, which only rounds the chosen direction.
+Float rounding only chooses the rational `T`; `e_y^2 + e_z^2 = 1` then holds
+exactly. `Rho` is the rational value of a float expression evaluated from the
+float of `k`; it is not the rational nearest `1/sqrt(1+k^2)`. The end map
 is
 
     P(u, v) = (A, 0, 0) + u*Rho*(k, -e_y, -e_z) + v*(0, -e_z, e_y)

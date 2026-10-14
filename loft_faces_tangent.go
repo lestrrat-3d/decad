@@ -43,6 +43,9 @@ func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ..
 			ErrDegenerate, maxLoftFacesSections-1)
 	}
 	d := end.Cone.doc
+	if d == nil {
+		return nil, fmt.Errorf("%w: the cone belongs to no document", ErrDegenerate)
+	}
 	if err := d.requireLive(end.Cone); err != nil {
 		return nil, err
 	}
