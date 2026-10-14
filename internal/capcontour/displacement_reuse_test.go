@@ -2,7 +2,6 @@ package capcontour
 
 import (
 	"math"
-	"reflect"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
@@ -10,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/stretchr/testify/require"
 )
 
 // displacementBeforeCarrierReuse freezes the miter proof's prior
@@ -138,23 +138,17 @@ func TestDisplacementCarrierReuseMatchesPriorProof(t *testing.T) {
 			beforeAmounts := append([]float64(nil), tc.amounts...)
 			want, wantOK := displacementBeforeCarrierReuse(walks, joins, tc.amounts, tc.width, tc.zero)
 			got, gotOK := displacementOver(walks, joins, tc.amounts, tc.width, tc.zero)
-			if gotOK != wantOK || math.Float64bits(got) != math.Float64bits(want) {
-				t.Fatalf("prior=(%g,%v), reused=(%g,%v)", want, wantOK, got, gotOK)
-			}
+			require.Equal(t, wantOK, gotOK, "prior=%g, reused=%g", want, got)
+			require.Equal(t, math.Float64bits(want), math.Float64bits(got), "prior=%g, reused=%g", want, got)
 			switch tc.name {
 			case "square", "reverse", "oblique", "mixed joins", "all feet":
-				if !gotOK {
-					t.Fatal("the fixture must reach a certified join proof")
-				}
+				require.True(t, gotOK, "the fixture must reach a certified join proof")
 			case "parallel refusal", "zero length refusal", "invalid span":
-				if gotOK {
-					t.Fatal("the degenerate fixture must be refused")
-				}
+				require.False(t, gotOK, "the degenerate fixture must be refused")
 			}
-			if !reflect.DeepEqual(walks, beforeWalks) || !reflect.DeepEqual(joins, beforeJoins) ||
-				!reflect.DeepEqual(tc.amounts, beforeAmounts) {
-				t.Fatal("the proof changed its input")
-			}
+			require.Equal(t, beforeWalks, walks, "the proof changed its walks")
+			require.Equal(t, beforeJoins, joins, "the proof changed its joins")
+			require.Equal(t, beforeAmounts, tc.amounts, "the proof changed its amounts")
 		})
 	}
 }
@@ -171,9 +165,7 @@ func TestDisplacementCarrierReuseMixedWalls(t *testing.T) {
 			arc.TStart, arc.TEnd = 1, 0
 		}
 		w, err := boundarywalk.WalkOf(arc, freeform.NewFreeformWork())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		walks[0].SegmentWalk = w
 		amounts := []float64{0.25, 0.25, 0.25, 0.25}
 		for _, invalidRadius := range []bool{false, true} {
@@ -182,15 +174,13 @@ func TestDisplacementCarrierReuseMixedWalls(t *testing.T) {
 			}
 			want, wantOK := displacementBeforeCarrierReuse(walks, joins, amounts, 0, false)
 			got, gotOK := displacementOver(walks, joins, amounts, 0, false)
-			if gotOK != wantOK || math.Float64bits(got) != math.Float64bits(want) {
-				t.Fatalf("reverse=%v invalidRadius=%v: prior=(%g,%v), reused=(%g,%v)",
-					reverse, invalidRadius, want, wantOK, got, gotOK)
-			}
-			if invalidRadius && gotOK {
-				t.Fatal("a non-finite circular radius bound must be refused")
-			}
-			if !invalidRadius && !gotOK {
-				t.Fatal("the mixed line-circle miter must be certified")
+			require.Equal(t, wantOK, gotOK, "reverse=%v invalidRadius=%v", reverse, invalidRadius)
+			require.Equal(t, math.Float64bits(want), math.Float64bits(got),
+				"reverse=%v invalidRadius=%v", reverse, invalidRadius)
+			if invalidRadius {
+				require.False(t, gotOK, "a non-finite circular radius bound must be refused")
+			} else {
+				require.True(t, gotOK, "the mixed line-circle miter must be certified")
 			}
 		}
 	}
@@ -201,7 +191,7 @@ func BenchmarkDisplacementMiterCarriers(b *testing.B) {
 	b.ReportAllocs()
 	for range b.N {
 		if _, ok := Displacement(walks, joins, 1, 0); !ok {
-			b.Fatal("the square's carrier proof refused")
+			require.FailNow(b, "the square's carrier proof refused")
 		}
 	}
 }
