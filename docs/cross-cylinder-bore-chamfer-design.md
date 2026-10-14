@@ -61,6 +61,27 @@ which makes every band cross-section advance around the bore. The two
 Jacobian endpoint coefficients have the same strict sign, excluding a band
 fold. Failed interval signs refuse the operation.
 
+Only the 1,025 cells of the first quarter turn, `0≤θ≤π/2`, are proved;
+every other cell is the exact mirror image of one of them. The admitted
+pose makes both walls, `x²+y²=R²` and `y²+(z-c)²=r²`, exactly symmetric
+under `y→−y` and `z−c→−(z−c)`, and the feet depend on `θ` only through
+`C` and `S`. With `θ_j=2πj/4096`, cell `j` has a base cell `k` with
+`θ_j=θ_k`, `π−θ_k`, `π+θ_k` or `2π−θ_k`, an identity of exact turns, so
+`θ→π−θ` (`C→−C`) negates every Y coordinate, `θ→−θ` (`S→−S`) negates
+every Z−c coordinate, and X keeps its value. The feet of cell `j` over its
+whole angular range are the feet of cell `k` with those coordinates negated,
+so negating base `k`'s enclosures, an exact rational step, encloses cell
+`j`. Interval width and absolute bounds do not change under negation. Each
+of the eight interval signs pairs coordinates or derivatives of equal
+parity, since a derivative gains one more sign under each map, so it takes
+the same value at both angles. Before any cell is proved, the record is
+rebuilt from its two source bodies by admission's exact comparisons and must
+equal itself; a pose that is symmetric only to rounding refuses. The
+normal-angle sine and cosine enclosures widen from the lower end of their
+angle interval, so the enclosures computed directly in the other quarters are
+valid but not the mirror images of the quarter-turn ones; the mirrored ones
+are the ones used.
+
 The held mesh has the two target caps, outer wall with two openings, bore
 wall, and one chamfer band. A full exact facet-contact and closed-shell
 audit checks it. The audit proposes each cap fan as a projected XY patch. It
@@ -72,7 +93,10 @@ can refuse on one route and not the other; every such refusal is still a refusal
 points use the same height or axial fraction. The band uses the same transverse
 fraction. Three cell coordinate diagonals enclose the source-to-facet
 departure, with separate charges for held sample rounding, source-circle
-displacement, and outer/bore cylinder chord sagitta. Every outer-ring vertex
+displacement, and outer/bore cylinder chord sagitta. The held sample charge
+compares every cell's own held outer foot, bore foot and negative-mouth
+vertex with that cell's enclosures, mirrored or not, reading Z as an exact
+shift of the Z−c enclosure by `c`. Every outer-ring vertex
 is compared with an outward trigonometric interval at its recorded angle;
 this charges radius and angle-conversion rounding. Exact rational differences
 between consecutive recorded angles, including the full-turn wrap, bound
@@ -93,6 +117,6 @@ bounds the surface-area difference. The held diameter plus boundary
 departure enters the usual volume-based centroid allowance.
 
 For the public `R=5, r=1, H=10, c=5, d=0.5 mm` case, the result has
-47,104 facets, a 0.044999 mm boundary bound, and a
-`753.228711±9.968473 mm³` volume reading. `Tessellate(0.1 mm, VerifyAll)`
+47,104 facets, a 0.046353 mm boundary bound, and a
+`753.228711±10.088197 mm³` volume reading. `Tessellate(0.1 mm, VerifyAll)`
 reports both boundary and volume verified.
