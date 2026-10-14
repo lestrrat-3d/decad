@@ -1602,13 +1602,14 @@ Both the extrusion and the revolution of a B-spline are EXACTLY NURBS surfaces:
 - revolved — the standard rational quadratic circle representation, degree
   `(p, 2)`, weights multiplied.
 
-Loft §18 also admits a direct Loft's moving-center whole-circle hole wall.
-Both authenticated circles use the same rational quadratic quarter-arc basis
-and exact station correspondence. The exact axial frame proof and world-XY
-center lifts in loft §18 gate this surface; rounded frame equality does not.
-Linear interpolation of their weighted controls yields an exact ruled
-degree `(2, 1)` net, derived from the two source records. This net remains
-private under the same public marker.
+Loft §18 also admits a direct Loft's moving-center or cardinal-quarter-turn
+whole-circle hole wall. Both authenticated circles use the same rational
+quadratic quarter-arc basis and exact station correspondence. Its exact
+axial frame proof and world-XY center lifts gate these surfaces; rounded
+frame equality does not. The recorded frames map each control into world
+space before linear interpolation of the weighted controls. This yields an
+exact ruled degree `(2, 1)` net, derived from the two source records. This
+net remains private under the same public marker.
 
 So core §6.1's promise holds unstrained: an analytic `Surface` variant is
 `Exact` by construction. A `NURBSSurface` built from a recorded or exactly

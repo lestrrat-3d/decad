@@ -2797,39 +2797,56 @@ same mark.
 
 A direct Loft also publishes one `Circle3` per cap rim and one curved hole
 wall when its authenticated sections have identical outer records, one whole
-clockwise circle hole each, the same in-plane frame axes, zero alignment and
-an exact common axial frame displacement. The exact rational lifts of both
-section origins must agree at one positive sweep level, and their frame axis
-directions must agree exactly. A pair with bit-identical circle records uses
-the cylindrical builder only when both circle-center lifts agree at that level
-as exact rationals. Rounded `ToLocal` and `ToWorld` equality does not prove
-either gate. Equal rounded radii without identical records keep faceted
-topology. Unequal circles need the additional gate of line-only outer loops,
-identity placement, exact world-XY section axes and an exactly representable
-axial height. These
-conditions make each retained outer wall planar with a bounded area. A fixed
-center with changing radius gives a `Cone`; a moving center gives a rational
-ruled `NURBSSurface`, including when its radius also changes. A moving-center
-wall is not a right cylinder or cone. The world-XY gate makes both unequal
-circles' recorded center lifts exact without requiring the moving centers to
-coincide.
+clockwise circle hole each, zero alignment and an exact common axial frame
+displacement. Exact rational lifts of both section origins must agree at one
+positive sweep level, and their frame axis directions must agree exactly.
+Rounded `ToLocal` and `ToWorld` equality does not prove either gate. A pair
+with bit-identical circle records and matching in-plane frame axes uses the
+cylindrical builder only when both circle-center lifts also agree as exact
+rationals. Equal rounded radii without identical records keep faceted
+topology. Changing circles with matching axes require identity placement,
+exact world-XY section axes and an exactly representable axial height. A
+fixed center with changing radius gives a `Cone` whose lateral area is
+enclosed directly by the frustum formula, so the outer loop may be curved.
+A moving center gives a rational ruled `NURBSSurface`, including when its
+radius also changes; this case requires line-only outer loops so the complete
+Loft area can isolate the hole wall. A moving-center wall is not a right
+cylinder or cone. The world-XY gate makes both changing circles' center lifts
+exact without requiring those centers to coincide.
+
+A second ruled case admits a cardinal quarter-turn of the upper in-plane
+frame around the common world-Z axis. Both circle centers must be the local
+origin; their radii may differ. Identity placement, exact world-XY lower
+axes and an exactly representable axial height are required. The upper axes
+must be `(0,1),(-1,0)` or `(0,-1),(1,0)`. The outer record may be curved:
+the hole wall's area comes directly from its exact circle pair. With radii
+`r0`, `r1`, height `h` and section parameter `t`, the area is
+`2π∫₀¹ sqrt(h²[(1−t)²r0²+t²r1²]+[(1−t)r0²−tr1²]²) dt`. The quantity under
+the root is a positive quadratic with its minimum at
+`t=r0²/(r0²+r1²)`. On each of 512 equal parameter intervals, the endpoint
+maximum and endpoint-or-minimum lower value enclose the integrand. Rational
+arithmetic, outward square roots and the bounded `2π` constant enclose the
+wall area. Other frame rotations keep faceted topology.
 
 The ruled surface follows directly from the two circle records. One quarter
 circle has homogeneous quadratic weights `[1,1,2]` and controls
 `[(1,0),(1,1),(0,1)]`. Its normalized coordinates are
 `((1-t²)/(1+t²), 2t/(1+t²))`; the identity
 `(1-t²)²+(2t)²=(1+t²)²` proves the exact circle. Rotate that quarter four
-times, then interpolate the two circles' weighted controls at equal parameter
-values. Shared frame axes and zero alignment prove correspondence, so the
-degree-(2,1) net describes exactly the line between corresponding circle
-points. The authenticated records determine this private net; the public
+times, map both sets of weighted controls through their recorded frames, then
+interpolate at equal parameters. Zero alignment proves correspondence, so
+the degree-(2,1) net describes exactly the line between corresponding circle
+points, including an admitted cardinal quarter-turn. The authenticated
+records determine this private net; the public
 `NURBSSurface` remains an opaque tag.
 
 The direct Loft retains its original held triangles, source roles and mass
-proof. Its complete bounded area minus both bounded cap areas and every
-retained planar outer face area bounds the one curved hole wall. The two cap
-areas use their respective whole-circle integrals. An unproved source pair,
-frame, placement or outer-wall area keeps the original faceted topology.
+proof. A moving-center wall with matching frame axes uses the complete
+bounded area minus both bounded cap areas and every retained planar outer
+face area. Coaxial cones and quarter-turn ruled walls use their direct
+bounded area formulas. The two cap areas use their respective whole-circle
+integrals. An unproved source pair, frame, placement or wall area keeps the
+original faceted topology.
 
 `OuterLoopOf(CapStart(body))` and `OuterLoopOf(CapEnd(body))` select only the
 held outer cap edges, excluding the circular bore rims. An equal-distance

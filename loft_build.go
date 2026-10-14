@@ -441,7 +441,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		}
 	} else if directCircle != loftCircleWallNone {
 		walls, circularWall, err = buildLoftVaryingCircularHoleTopology(ctx,
-			pl, directCircle, a, capStart, capEnd, walls)
+			body, pl, directCircle, a, capStart, capEnd, walls)
 		if err != nil {
 			return nil, err
 		}
@@ -487,20 +487,38 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	body.n.Bounds = boxToInternal(bounds)
 	body.n.Area = measurementToInternal(mass.area(cap0Rat, cap1Rat))
 	if circularWall != nil {
-		// The Loft mass proof bounds the complete true surface. The two
-		// circular-hole caps and every retained straight outer wall each
-		// bound their own true areas, so outward subtraction isolates the
-		// single curved hole wall without treating another face as exact.
-		wallArea := proofbound.BoundedSub(
-			proofbound.BoundedSub(measurementScalar(measurementFromInternal(body.n.Area)),
-				proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound)),
-			proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound))
-		for _, face := range walls {
-			if face == circularWall {
-				continue
+		var wallArea proofbound.BoundedScalar
+		if directCircle == loftCircleWallCone || directCircle == loftCircleWallQuarterTurn {
+			bottom, bottomOK := pl.profile0.Holes[0].Segments[0].(circleSeg)
+			top, topOK := pl.profile1.Holes[0].Segments[0].(circleSeg)
+			if !bottomOK || !topOK {
+				return nil, fmt.Errorf(`%w: a circular loft wall lost its circle pair`, ErrUnsupported)
 			}
-			wallArea = proofbound.BoundedSub(wallArea,
-				proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound))
+			var ok bool
+			if directCircle == loftCircleWallCone {
+				wallArea, ok = loftConeWallArea(pl, bottom, top)
+			} else {
+				wallArea, ok = loftQuarterTurnWallArea(pl, bottom, top)
+			}
+			if !ok {
+				return nil, fmt.Errorf(`%w: the circular loft wall area has no finite bound`, ErrUnsupported)
+			}
+		} else {
+			// The Loft mass proof bounds the complete true surface. The two
+			// circular-hole caps and every retained straight outer wall each
+			// bound their own true areas, so outward subtraction isolates the
+			// single curved hole wall without treating another face as exact.
+			wallArea = proofbound.BoundedSub(
+				proofbound.BoundedSub(measurementScalar(measurementFromInternal(body.n.Area)),
+					proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound)),
+				proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound))
+			for _, face := range walls {
+				if face == circularWall {
+					continue
+				}
+				wallArea = proofbound.BoundedSub(wallArea,
+					proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound))
+			}
 		}
 		if proofbound.IsNonFinite(wallArea.Value) || proofbound.IsNonFinite(wallArea.Bound) {
 			return nil, fmt.Errorf(`%w: the circular loft wall area has no finite bound`, ErrUnsupported)
