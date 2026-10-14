@@ -140,8 +140,8 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 
 	maxInputAbs := 0.0
 	for _, l := range srcFace.loops {
-		for _, ce := range l.coedges {
-			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.edge.n.Start.Position), proofbound.VecMaxAbs(ce.edge.n.End.Position))
+		for _, ce := range l.n.CoEdges {
+			maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.Edge.Start.Position), proofbound.VecMaxAbs(ce.Edge.End.Position))
 		}
 	}
 	delta := 0.0
@@ -283,7 +283,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if delta > 0 {
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
-		ne := &Edge{
+		ne := bornEdge(&Edge{
 			n: topo.Edge{
 				Convex:          old.n.Convex,
 				Length:          old.n.Length,
@@ -294,7 +294,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 				Start:           vertexNode(start),
 				End:             vertexNode(end),
 			},
-		}
+		})
 		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
 			old.n.Curve, old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		newEdgeByOld[old] = ne
@@ -328,15 +328,15 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		coedges := make([]coedge, len(l.coedges))
-		for i, ce := range l.coedges {
-			ne, err := edgeFor(ce.edge)
+		coedges := make([]topo.CoEdge, len(l.n.CoEdges))
+		for i, ce := range l.n.CoEdges {
+			ne, err := edgeFor(edgeHandle(ce.Edge))
 			if err != nil {
 				return nil, err
 			}
-			coedges[i] = coedge{edge: ne, forward: ce.forward}
+			coedges[i] = topo.CoEdge{Edge: edgeNode(ne), Forward: ce.Forward}
 		}
-		nf.loops = append(nf.loops, &Loop{coedges: coedges, n: topo.Loop{Outer: l.n.Outer}})
+		nf.loops = append(nf.loops, &Loop{n: topo.Loop{Outer: l.n.Outer, CoEdges: coedges}})
 	}
 	return nf, nil
 }
@@ -376,8 +376,8 @@ func faceBounds(srcFace, nf *Face, srcBounds Box, xform r3.Transform, delta floa
 // bounding box needs (see faceBounds).
 func faceIsStraightEdged(f *Face) bool {
 	for _, l := range f.loops {
-		for _, ce := range l.coedges {
-			if _, ok := ce.edge.n.Curve.(surfacegeom.Line3); !ok {
+		for _, ce := range l.n.CoEdges {
+			if _, ok := ce.Edge.Curve.(surfacegeom.Line3); !ok {
 				return false
 			}
 		}
@@ -413,11 +413,11 @@ func facePolygonBounds(nf *Face) (Box, error) {
 		return nil
 	}
 	for _, l := range nf.loops {
-		for _, ce := range l.coedges {
-			if err := fold(vertexHandle(ce.edge.n.Start)); err != nil {
+		for _, ce := range l.n.CoEdges {
+			if err := fold(vertexHandle(ce.Edge.Start)); err != nil {
 				return Box{}, err
 			}
-			if err := fold(vertexHandle(ce.edge.n.End)); err != nil {
+			if err := fold(vertexHandle(ce.Edge.End)); err != nil {
 				return Box{}, err
 			}
 		}

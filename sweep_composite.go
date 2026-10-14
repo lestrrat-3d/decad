@@ -230,18 +230,18 @@ func validateCompositeSweepRims(ctx context.Context, parts []compositeSpanPart) 
 			if err := budget.Step(); err != nil {
 				return err
 			}
-			if len(from.loops[li].coedges) != len(to.loops[li].coedges) {
+			if len(from.loops[li].n.CoEdges) != len(to.loops[li].n.CoEdges) {
 				return fmt.Errorf(`%w: adjacent sweep section loop %d has different edge counts`, ErrUnsupported, li)
 			}
-			for ci := range from.loops[li].coedges {
+			for ci := range from.loops[li].n.CoEdges {
 				if err := budget.Step(); err != nil {
 					return err
 				}
-				fromUse := from.loops[li].coedges[ci]
-				toUse := to.loops[li].coedges[ci]
-				fromEdge := fromUse.edge
-				toEdge := toUse.edge
-				if fromEdge == nil || toEdge == nil || fromEdge.n.Start == nil || fromEdge.n.End == nil || toEdge.n.Start == nil || toEdge.n.End == nil {
+				fromUse := from.loops[li].n.CoEdges[ci]
+				toUse := to.loops[li].n.CoEdges[ci]
+				fromEdge := fromUse.Edge
+				toEdge := toUse.Edge
+				if fromEdge == nil || toEdge == nil || fromEdge.Start == nil || fromEdge.End == nil || toEdge.Start == nil || toEdge.End == nil {
 					return fmt.Errorf(`%w: an adjacent sweep section carries incomplete rim topology`, ErrUnsupported)
 				}
 				if fromEdge == toEdge {
@@ -260,24 +260,24 @@ func sewCompositeSweepJoin(
 	sewn map[*Edge]struct{},
 ) error {
 	for li := range from.loops {
-		for ci := range from.loops[li].coedges {
+		for ci := range from.loops[li].n.CoEdges {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			fromUse := from.loops[li].coedges[ci]
-			toUse := to.loops[li].coedges[ci]
+			fromUse := from.loops[li].n.CoEdges[ci]
+			toUse := to.loops[li].n.CoEdges[ci]
 			// The next span's start rim is evaluated directly in the certified
 			// transported frame. Keep that edge and replace the preceding span's
 			// independently rotated end rim, so the published join reads the
 			// exact shared section rather than a second libm image of it.
-			shared, discarded := toUse.edge, fromUse.edge
-			fromStart, fromEnd := fromUse.Start(), fromUse.End()
-			toStart, toEnd := toUse.Start(), toUse.End()
+			shared, discarded := toUse.Edge, fromUse.Edge
+			fromStart, fromEnd := vertexHandle(coedgeStart(fromUse)), vertexHandle(coedgeEnd(fromUse))
+			toStart, toEnd := vertexHandle(coedgeStart(toUse)), vertexHandle(coedgeEnd(toUse))
 			rewriteCompositeVertex(previous, fromStart, toStart)
 			rewriteCompositeVertex(previous, fromEnd, toEnd)
-			rewriteCompositeEdge(previous, discarded, shared)
-			shared.n.Faces = append(shared.n.Faces, discarded.n.Faces...)
-			sewn[shared] = struct{}{}
+			rewriteCompositeEdge(previous, edgeHandle(discarded), edgeHandle(shared))
+			shared.Faces = append(shared.Faces, discarded.Faces...)
+			sewn[edgeHandle(shared)] = struct{}{}
 		}
 	}
 	return nil
@@ -300,9 +300,9 @@ func rewriteCompositeVertex(body *Body, old, replacement *Vertex) {
 func rewriteCompositeEdge(body *Body, old, replacement *Edge) {
 	for _, face := range body.Faces() {
 		for _, loop := range face.loops {
-			for i := range loop.coedges {
-				if loop.coedges[i].edge == old {
-					loop.coedges[i].edge = replacement
+			for i := range loop.n.CoEdges {
+				if loop.n.CoEdges[i].Edge == edgeNode(old) {
+					loop.n.CoEdges[i].Edge = edgeNode(replacement)
 				}
 			}
 		}
@@ -363,21 +363,21 @@ func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]stru
 			return fmt.Errorf(`%w: a composite sweep face has no boundary loop`, ErrUnsupported)
 		}
 		for _, loop := range face.loops {
-			if len(loop.coedges) == 0 {
+			if len(loop.n.CoEdges) == 0 {
 				return fmt.Errorf(`%w: a composite sweep face has an empty boundary loop`, ErrUnsupported)
 			}
-			for _, use := range loop.coedges {
+			for _, use := range loop.n.CoEdges {
 				if err := budget.Step(); err != nil {
 					return err
 				}
-				if use.edge == nil {
+				if use.Edge == nil {
 					return fmt.Errorf(`%w: a composite sweep loop has a nil edge`, ErrUnsupported)
 				}
-				uses[use.edge] = append(uses[use.edge], compositeCoedgeUse{face: face, forward: use.forward})
+				uses[edgeHandle(use.Edge)] = append(uses[edgeHandle(use.Edge)], compositeCoedgeUse{face: face, forward: use.Forward})
 			}
-			for i, use := range loop.coedges {
-				next := loop.coedges[(i+1)%len(loop.coedges)]
-				if use.End() != next.Start() {
+			for i, use := range loop.n.CoEdges {
+				next := loop.n.CoEdges[(i+1)%len(loop.n.CoEdges)]
+				if coedgeEnd(use) != coedgeStart(next) {
 					return fmt.Errorf(`%w: a composite sweep face loop is not endpoint-continuous`, ErrUnsupported)
 				}
 			}

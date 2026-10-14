@@ -158,8 +158,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		}
 		faces = append(faces, sideFaces...)
 		perimeter = proofbound.BoundedAdd(perimeter, loopLen)
-		capStart.loops = append(capStart.loops, &Loop{coedges: bottom, n: topo.Loop{Outer: li == 0}})
-		capEnd.loops = append(capEnd.loops, &Loop{coedges: top, n: topo.Loop{Outer: li == 0}})
+		capStart.loops = append(capStart.loops, &Loop{n: topo.Loop{Outer: li == 0, CoEdges: bottom}})
+		capEnd.loops = append(capEnd.loops, &Loop{n: topo.Loop{Outer: li == 0, CoEdges: top}})
 	}
 	// A surface result omits both caps from the shell (Table W,
 	// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
@@ -295,11 +295,11 @@ func attachFaceLoopsContext(ctx context.Context, faces []*Face) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			for _, ce := range l.coedges {
+			for _, ce := range l.n.CoEdges {
 				if err := ctx.Err(); err != nil {
 					return err
 				}
-				ce.edge.n.Faces = append(ce.edge.n.Faces, faceNode(f))
+				ce.Edge.Faces = append(ce.Edge.Faces, faceNode(f))
 			}
 		}
 	}
@@ -361,8 +361,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// counter-clockwise round keeps its convex rim. The loop's role
 		// decides nothing here. convex is boundarywalk.RimConvexity's own answer for
 		// this walk, computed by the caller.
-		bottomEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve0, Start: vertexNode(bStart), End: vertexNode(bEnd)}}
-		topEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve1, Start: vertexNode(tStart), End: vertexNode(tEnd)}}
+		bottomEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve0, Start: vertexNode(bStart), End: vertexNode(bEnd)}})
+		topEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve1, Start: vertexNode(tStart), End: vertexNode(tEnd)}})
 		bottomEdge.n.CurveBound, bottomEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
 		topEdge.n.CurveBound, topEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
 		surf := surfacegeom.Cylinder{Origin: center0, Axis: axis, Radius: radius}
@@ -380,8 +380,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// concavity falls out of the clockwise walk itself, exactly as it
 		// does for a circular hole wall. An R19 refusal already returned
 		// from boundarywalk.RimConvexity, before this switch ever ran.
-		bottomEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}, Start: vertexNode(bStart), End: vertexNode(bEnd)}}
-		topEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}, Start: vertexNode(tStart), End: vertexNode(tEnd)}}
+		bottomEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}, Start: vertexNode(bStart), End: vertexNode(bEnd)}})
+		topEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}, Start: vertexNode(tStart), End: vertexNode(tEnd)}})
 		// faceReversed stays false: an opaque NURBSSurface publishes no
 		// normal at all (§7's NormalAt refusal, topology.go), so
 		// topo.Face.Reversed — "the outward normal is the surface's geometric
@@ -392,8 +392,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// loop's: which side its material lies on is decided by the sense
 		// the whole loop is walked, and that sense IS the loop's role —
 		// the outer loop counter-clockwise, holes clockwise (moments.go).
-		bottomEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(bStart), End: vertexNode(bEnd)}}
-		topEdge := &Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(tStart), End: vertexNode(tEnd)}}
+		bottomEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(bStart), End: vertexNode(bEnd)}})
+		topEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(tStart), End: vertexNode(tEnd)}})
 		mid := pp.Point((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, pp.Z0)
 		// tangent × N is the outward normal for a CCW outer walk (and a
 		// CW hole walk); a reflection flips the cross product, so the
@@ -429,7 +429,7 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 // straight-prism build, false from every other caller (shell_cup.go,
 // capblend_moments.go), which mint no curve identity for their own rim and
 // so keep every certificate check refusing by default.
-func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
+func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
 	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens)
 }
 
@@ -465,7 +465,7 @@ func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPay
 // what keeps two separate builds from ever sharing one (denotation.go).
 // False for every OTHER caller of this function, which mints no curve
 // identity for their own rim.
-func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, proofbound.BoundedScalar, error) {
+func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
 	mintCurve := func() curveToken {
 		if !mintCurveTokens {
 			return curveToken{}
@@ -600,7 +600,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			}
 			prev := walks[(i+n-1)%n]
 			cross := prev.TanOutU*walks[i].TanInV - prev.TanOutV*walks[i].TanInU
-			vertical[i] = &Edge{
+			vertical[i] = bornEdge(&Edge{
 				n: topo.Edge{
 					Convex:      cross > 0,
 					Length:      pp.Z1 - pp.Z0,
@@ -609,14 +609,14 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 					Start:       vertexNode(bottomV[i]),
 					End:         vertexNode(topV[i]),
 				},
-			}
+			})
 		}
 	}
 
 	// Side faces with bottom/top edges; cap coedges accumulate in walk order.
 	faces := make([]*Face, 0, n)
-	bottomCo := make([]coedge, 0, n)
-	topCo := make([]coedge, 0, n)
+	bottomCo := make([]topo.CoEdge, 0, n)
+	topCo := make([]topo.CoEdge, 0, n)
 	for i, w := range walks {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
@@ -667,16 +667,17 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			// A closed cylindrical band has TWO boundary loops — one circle
 			// per cap — not one loop holding both.
 			face.loops = []*Loop{
-				{coedges: []coedge{{edge: bottomEdge, forward: true}}, n: topo.Loop{Outer: true}},
-				{coedges: []coedge{{edge: topEdge, forward: false}}, n: topo.Loop{Outer: true}},
+				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(bottomEdge), Forward: true}}}},
+				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(topEdge), Forward: false}}}},
 			}
 		} else {
-			face.loops = []*Loop{{coedges: []coedge{
-				{edge: bottomEdge, forward: true},
-				{edge: vertical[(i+1)%n], forward: true},
-				{edge: topEdge, forward: false},
-				{edge: vertical[i], forward: false},
-			}, n: topo.Loop{Outer: true}}}
+			face.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+				{Edge: edgeNode(bottomEdge), Forward: true},
+				{Edge: edgeNode(vertical[(i+1)%n]), Forward: true},
+				{Edge: edgeNode(topEdge), Forward: false},
+				{Edge: edgeNode(vertical[i]), Forward: false},
+			},
+			}}}
 		}
 
 		bottomEdge.n.Faces = append(bottomEdge.n.Faces, faceNode(face))
@@ -687,8 +688,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		}
 
 		faces = append(faces, face)
-		bottomCo = append(bottomCo, coedge{edge: bottomEdge, forward: true})
-		topCo = append(topCo, coedge{edge: topEdge, forward: true})
+		bottomCo = append(bottomCo, topo.CoEdge{Edge: edgeNode(bottomEdge), Forward: true})
+		topCo = append(topCo, topo.CoEdge{Edge: edgeNode(topEdge), Forward: true})
 	}
 	return faces, bottomCo, topCo, total, nil
 }

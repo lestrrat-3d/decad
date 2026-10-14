@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -137,9 +138,9 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 			}
 		}
 	}
-	selected := make(map[*Edge]struct{}, len(edges))
+	selected := make(map[*topo.Edge]struct{}, len(edges))
 	for _, edge := range edges {
-		selected[edge] = struct{}{}
+		selected[edgeNode(edge)] = struct{}{}
 	}
 	if len(selected) != len(edges) {
 		return fmt.Errorf("%w: mirrored cap chamfer repeats an edge", ErrUnsupported)
@@ -159,7 +160,8 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 			!loftCylinderChamferCapWalk(face.loops[0], fp.verts, record.outer[cap], cap == 0) {
 			return fmt.Errorf("%w: mirrored bore cap %d has no audited outer loop", ErrUnsupported, cap)
 		}
-		for _, edge := range face.loops[0].Edges() {
+		for _, ce := range face.loops[0].n.CoEdges {
+			edge := ce.Edge
 			if _, yes := selected[edge]; !yes {
 				return fmt.Errorf("%w: mirrored chamfer needs both complete outer cap loops", ErrUnsupported)
 			}

@@ -69,17 +69,17 @@ func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, rol
 // suppliedFilletCapWalls pairs the contour's edges with the original walks.
 // A collapsed inward arc has no cap edge; its two neighbouring edges share
 // the pole vertex at the arc's recorded centre.
-func suppliedFilletCapWalls(co []coedge, walks []survey2d.SideWalk, joins []cornerJoin, r float64) (suppliedCapEdges, error) {
+func suppliedFilletCapWalls(co []topo.CoEdge, walks []survey2d.SideWalk, joins []cornerJoin, r float64) (suppliedCapEdges, error) {
 	n := len(walks)
 	out := suppliedCapEdges{wall: make([]*Edge, n), arc: make([]*Edge, n)}
 	next := 0
 	take := func() (*Edge, error) {
-		if next >= len(co) || !co[next].forward {
+		if next >= len(co) || !co[next].Forward {
 			return nil, fmt.Errorf(`%w: a fillet band's cap contour does not match its walks`, ErrUnsupported)
 		}
-		e := co[next].edge
+		e := co[next].Edge
 		next++
-		return e, nil
+		return edgeHandle(e), nil
 	}
 	for i, w := range walks {
 		if !filletband.SphereWalk(w, r) {
@@ -197,8 +197,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			face.n.Reversed = !face.n.Reversed
 		}
 		for _, l := range loops {
-			for _, ce := range l.coedges {
-				ce.edge.n.Faces = append(ce.edge.n.Faces, faceNode(face))
+			for _, ce := range l.n.CoEdges {
+				ce.Edge.Faces = append(ce.Edge.Faces, faceNode(face))
 			}
 		}
 		patches = append(patches, face)
@@ -238,12 +238,12 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		if len(capCo) != 1 {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's cap contour is no one whole circle`, ErrUnsupported, bi)
 		}
-		side, capE := sideCo[0].edge, capCo[0].edge
-		side.n.Convex, capE.n.Convex = convex, convex
+		side, capE := sideCo[0].Edge, capCo[0].Edge
+		side.Convex, capE.Convex = convex, convex
 		if err := newPatch(walkSurface(fr.walks[0]), []*Loop{
-			{coedges: []coedge{{edge: side, forward: true}}, n: topo.Loop{Outer: true}},
-			{coedges: []coedge{{edge: capE, forward: false}}, n: topo.Loop{Outer: true}},
-		}, vertexHandle(capE.n.Start)); err != nil {
+			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: side, Forward: true}}}},
+			{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: capE, Forward: false}}}},
+		}, vertexHandle(capE.Start)); err != nil {
 			return nil, brepBandMass{}, err
 		}
 	} else {
@@ -281,13 +281,13 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				}
 				axis = tangent
 			}
-			return &Edge{n: topo.Edge{Convex: convex, Length: meridianLen, LengthBound: meridianBound, Curve: surfacegeom.Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)}, Start: vertexNode(capV), End: vertexNode(sideV)}}
+			return bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: meridianLen, LengthBound: meridianBound, Curve: surfacegeom.Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)}, Start: vertexNode(capV), End: vertexNode(sideV)}})
 		}
 		lead, trail := make([]*Edge, n), make([]*Edge, n)
 		for k := range n {
 			j := fr.joins[k]
 			w := fr.walks[k]
-			sideV := vertexHandle(sideCo[k].edge.n.Start)
+			sideV := vertexHandle(sideCo[k].Edge.Start)
 			switch fr.loop.Corners[k] {
 			case filletband.Reflex:
 				arc := supplied.arc[k]
@@ -309,8 +309,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 						ErrUnsupported, renderCoord(w.StartU), renderCoord(w.StartV))
 				}
 				held, bound := heldOf(length)
-				lead[k] = &Edge{
-					n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.FilletMiter3{}, Start: vertexNode(capAt(k)), End: vertexNode(sideV)}}
+				lead[k] = bornEdge(&Edge{
+					n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.FilletMiter3{}, Start: vertexNode(capAt(k)), End: vertexNode(sideV)}})
 				trail[k] = lead[k]
 			default:
 				kappa, err := filletband.Kappa(fr.loop.Walks[(k+n-1)%n], fr.loop.Walks[k])
@@ -326,12 +326,12 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				semi := math.Hypot(bu, bv)
 				major := pl.Dir(bu/semi, bv/semi, 0)
 				axis, _ := major.Cross(up).Normalize()
-				lead[k] = &Edge{n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis, Major: major,
+				lead[k] = bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis, Major: major,
 					SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
 					Start: vertexNode(capAt(k)),
 					End:   vertexNode(sideV),
 				},
-				}
+				})
 				trail[k] = lead[k]
 			}
 		}
@@ -341,41 +341,44 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			if wall == nil {
 				pole := capAt(i)
 				if pole != capAt(next) || vertexHandle(lead[i].n.Start) != pole || vertexHandle(trail[next].n.Start) != pole ||
-					sideCo[i].edge.n.Start != lead[i].n.End || sideCo[i].edge.n.End != trail[next].n.End {
+					sideCo[i].Edge.Start != lead[i].n.End || sideCo[i].Edge.End != trail[next].n.End {
 					return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's sphere patch %d does not close`, ErrUnsupported, bi, i)
 				}
-				sideCo[i].edge.n.Convex = convex
-				if err := newPatch(walkSurface(fr.walks[i]), []*Loop{{coedges: []coedge{
-					{edge: sideCo[i].edge, forward: true},
-					{edge: trail[next], forward: false},
-					{edge: lead[i], forward: true},
-				}, n: topo.Loop{Outer: true}}}, pole); err != nil {
+				sideCo[i].Edge.Convex = convex
+				if err := newPatch(walkSurface(fr.walks[i]), []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+					{Edge: sideCo[i].Edge, Forward: true},
+					{Edge: edgeNode(trail[next]), Forward: false},
+					{Edge: edgeNode(lead[i]), Forward: true},
+				},
+				}}}, pole); err != nil {
 					return nil, brepBandMass{}, err
 				}
 				continue
 			}
 			if wall.n.Start != lead[i].n.Start || wall.n.End != trail[next].n.Start ||
-				sideCo[i].edge.n.Start != lead[i].n.End || sideCo[i].edge.n.End != trail[next].n.End {
+				sideCo[i].Edge.Start != lead[i].n.End || sideCo[i].Edge.End != trail[next].n.End {
 				return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's walk %d does not close on its contour and side vertices`, ErrUnsupported, bi, i)
 			}
-			wall.n.Convex, sideCo[i].edge.n.Convex = convex, convex
-			if err := newPatch(walkSurface(fr.walks[i]), []*Loop{{coedges: []coedge{
-				{edge: sideCo[i].edge, forward: true},
-				{edge: trail[next], forward: false},
-				{edge: wall, forward: false},
-				{edge: lead[i], forward: true},
-			}, n: topo.Loop{Outer: true}}}, vertexHandle(wall.n.Start)); err != nil {
+			wall.n.Convex, sideCo[i].Edge.Convex = convex, convex
+			if err := newPatch(walkSurface(fr.walks[i]), []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+				{Edge: sideCo[i].Edge, Forward: true},
+				{Edge: edgeNode(trail[next]), Forward: false},
+				{Edge: edgeNode(wall), Forward: false},
+				{Edge: edgeNode(lead[i]), Forward: true},
+			},
+			}}}, vertexHandle(wall.n.Start)); err != nil {
 				return nil, brepBandMass{}, err
 			}
 			if fr.loop.Corners[next] != filletband.Reflex {
 				continue
 			}
 			v := fr.walks[next]
-			if err := newPatch(torus(v.StartU, v.StartV, r), []*Loop{{coedges: []coedge{
-				{edge: supplied.arc[next], forward: true},
-				{edge: lead[next], forward: true},
-				{edge: trail[next], forward: false},
-			}, n: topo.Loop{Outer: true}}}, vertexHandle(supplied.arc[next].n.Start)); err != nil {
+			if err := newPatch(torus(v.StartU, v.StartV, r), []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+				{Edge: edgeNode(supplied.arc[next]), Forward: true},
+				{Edge: edgeNode(lead[next]), Forward: true},
+				{Edge: edgeNode(trail[next]), Forward: false},
+			},
+			}}}, vertexHandle(supplied.arc[next].n.Start)); err != nil {
 				return nil, brepBandMass{}, err
 			}
 		}

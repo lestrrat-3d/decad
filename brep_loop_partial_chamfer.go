@@ -68,7 +68,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial chamfer has a curved selected walk`, ErrUnsupported)
 		}
 		capEdge := open.capBySeg[bi][b.capWalk[i]]
-		sideEdge := open.side[bi][sideOrdinal].edge
+		sideEdge := open.side[bi][sideOrdinal].Edge
 		if capEdge == nil || sideEdge == nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial chamfer lacks a band edge`, ErrUnsupported)
 		}
@@ -76,7 +76,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 			points: [4][3]float64{
 				e.Canon(ow.StartU, ow.StartV, sideZ), e.Canon(ow.EndU, ow.EndV, sideZ),
 				e.Canon(cw.EndU, cw.EndV, f.z0), e.Canon(cw.StartU, cw.StartV, f.z0),
-			}, cap: capEdge, side: sideEdge,
+			}, cap: capEdge, side: edgeHandle(sideEdge),
 		}
 		if err := partialband.ChamferQuadExact(quads[i].points, b.setback.dc, b.setback.ds, e); err != nil {
 			return nil, brepBandMass{}, err
@@ -139,9 +139,10 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		if err != nil {
 			return nil, brepBandMass{}, err
 		}
-		loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
-			{edge: end, forward: end.n.Start == sideE.n.End}, {edge: capE, forward: false},
-			{edge: start, forward: start.n.Start == capE.n.Start}}, n: topo.Loop{Outer: true}}
+		loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideE), Forward: true},
+			{Edge: edgeNode(end), Forward: end.n.Start == sideE.n.End}, {Edge: edgeNode(capE), Forward: false},
+			{Edge: edgeNode(start), Forward: start.n.Start == capE.n.Start}},
+		}}
 		areaIv, volume3, moments, err := partialband.ChamferQuadMass(quads[i].points)
 		if err != nil {
 			return nil, brepBandMass{}, err
@@ -168,8 +169,8 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 				moments[k].Neg(moments[k])
 			}
 		}
-		for _, ce := range loop.coedges {
-			ce.edge.n.Faces = append(ce.edge.n.Faces, faceNode(face))
+		for _, ce := range loop.n.CoEdges {
+			ce.Edge.Faces = append(ce.Edge.Faces, faceNode(face))
 		}
 		patches = append(patches, face)
 		mass.area = proofbound.BoundedAdd(mass.area, proofbound.MeasuredScalar(held, bound))

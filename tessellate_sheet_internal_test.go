@@ -184,9 +184,9 @@ func TestFreeChainCountsByFaceCountsConnectedComponentsNotEdges(t *testing.T) {
 	t.Parallel()
 	face := bornFace(&Face{})
 	vA, vB, vC := bornVertex(&Vertex{}), bornVertex(&Vertex{}), bornVertex(&Vertex{})
-	e1 := &Edge{n: topo.Edge{Start: vertexNode(vA), End: vertexNode(vB), Faces: []*topo.Face{faceNode(face)}}}
-	e2 := &Edge{n: topo.Edge{Start: vertexNode(vB), End: vertexNode(vC), Faces: []*topo.Face{faceNode(face)}}}
-	face.loops = []*Loop{{coedges: []coedge{{edge: e1}, {edge: e2}}}}
+	e1 := bornEdge(&Edge{n: topo.Edge{Start: vertexNode(vA), End: vertexNode(vB), Faces: []*topo.Face{faceNode(face)}}})
+	e2 := bornEdge(&Edge{n: topo.Edge{Start: vertexNode(vB), End: vertexNode(vC), Faces: []*topo.Face{faceNode(face)}}})
+	face.loops = []*Loop{{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(e1)}, {Edge: edgeNode(e2)}}}}}
 	body := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{face}}}}}})
 
 	counts := freeChainCountsByFace(body)
@@ -207,9 +207,9 @@ func TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet(t *testing.T) {
 	require.NoError(t, tessellation.RequireClosedMesh(mesh.n.Triangles), `premise: a tetrahedron is a closed mesh`)
 
 	faceA, faceB := bornFace(&Face{}), bornFace(&Face{})
-	sharedEdge := &Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(faceA), faceNode(faceB)}}}
-	faceA.loops = []*Loop{{coedges: []coedge{{edge: sharedEdge}}}}
-	faceB.loops = []*Loop{{coedges: []coedge{{edge: sharedEdge}}}}
+	sharedEdge := bornEdge(&Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(faceA), faceNode(faceB)}}})
+	faceA.loops = []*Loop{{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(sharedEdge)}}}}}
+	faceB.loops = []*Loop{{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(sharedEdge)}}}}}
 	body := bornBody(&Body{lumps: []*Lump{{shells: []*FaceShell{{faces: []*Face{faceA, faceB}}}}}})
 	require.Empty(t, freeChainCountsByFace(body), `premise: this body records no free edge`)
 

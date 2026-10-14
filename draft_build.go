@@ -218,8 +218,8 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			return nil, wrapStageError(`the tapered extrude's walls`, err)
 		}
 		faces = append(faces, band.patches...)
-		nearLoops[li] = &Loop{coedges: nearCo, n: topo.Loop{Outer: li == 0}}
-		farLoops[li] = &Loop{coedges: band.capCo, n: topo.Loop{Outer: li == 0}}
+		nearLoops[li] = &Loop{n: topo.Loop{Outer: li == 0, CoEdges: nearCo}}
+		farLoops[li] = &Loop{n: topo.Loop{Outer: li == 0, CoEdges: band.capCo}}
 		bands[li] = band
 		dp.farDelta = math.Max(dp.farDelta, band.delta)
 		dp.bandDelta[capBandKey{loop: li, start: !dp.nearStart}] = band.delta
@@ -289,7 +289,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 // carries its junction bound, the level's own displacement and its frame lift
 // rounding; each edge the walk's own length and convexity. buildCapBand reads
 // these as the band's side directrix, so wall i's near edge is coedge i.
-func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord, z, zDelta float64, work *freeform.FreeformWork) ([]coedge, error) {
+func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord, z, zDelta float64, work *freeform.FreeformWork) ([]topo.CoEdge, error) {
 	if len(loop.Segments) == 0 {
 		return nil, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
@@ -326,7 +326,7 @@ func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord,
 		u, v, extra := boundarywalk.JunctionVertexAt(loop.Segments, prev, w)
 		verts[i] = rimVertex(u, v, extra)
 	}
-	co := make([]coedge, n)
+	co := make([]topo.CoEdge, n)
 	for i, w := range walks {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -343,7 +343,7 @@ func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord,
 		if err != nil {
 			return nil, err
 		}
-		co[i] = coedge{edge: edge, forward: true}
+		co[i] = topo.CoEdge{Edge: edgeNode(edge), Forward: true}
 	}
 	return co, nil
 }

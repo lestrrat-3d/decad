@@ -28,17 +28,17 @@ func TestFreeEdgeAndOpenShellReadTheirOwnState(t *testing.T) {
 		two := []*Face{bornFace(&Face{}), bornFace(&Face{})}
 		three := []*Face{bornFace(&Face{}), bornFace(&Face{}), bornFace(&Face{})}
 
-		require.True(t, (&Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(one)}}}).IsFree(), `one adjacent face is a free edge`)
-		require.False(t, (&Edge{n: topo.Edge{Faces: faceNodes(two)}}).IsFree(), `two adjacent faces is interior`)
-		require.False(t, (&Edge{n: topo.Edge{Faces: faceNodes(three)}}).IsFree(), `three adjacent faces is non-manifold`)
-		require.False(t, (&Edge{}).IsFree(), `zero adjacent faces is not free`)
+		require.True(t, (bornEdge(&Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(one)}}})).IsFree(), `one adjacent face is a free edge`)
+		require.False(t, (bornEdge(&Edge{n: topo.Edge{Faces: faceNodes(two)}})).IsFree(), `two adjacent faces is interior`)
+		require.False(t, (bornEdge(&Edge{n: topo.Edge{Faces: faceNodes(three)}})).IsFree(), `three adjacent faces is non-manifold`)
+		require.False(t, (bornEdge(&Edge{})).IsFree(), `zero adjacent faces is not free`)
 	})
 
 	t.Run("FreePredicateMatchesOnTheEdgesOwnState", func(t *testing.T) {
 		t.Parallel()
 		pred := EdgePredicate{kind: selectorquery.FreeKind}
-		free := &Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(bornFace(&Face{}))}}}
-		interior := &Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(bornFace(&Face{})), faceNode(bornFace(&Face{}))}}}
+		free := bornEdge(&Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(bornFace(&Face{}))}}})
+		interior := bornEdge(&Edge{n: topo.Edge{Faces: []*topo.Face{faceNode(bornFace(&Face{})), faceNode(bornFace(&Face{}))}}})
 
 		require.True(t, pred.matches(free), `selectorquery.FreeKind must match a one-face edge`)
 		require.False(t, pred.matches(interior), `selectorquery.FreeKind must not match a two-face edge`)

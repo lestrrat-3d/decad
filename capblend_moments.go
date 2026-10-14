@@ -212,8 +212,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
 		}
 
-		startLoopObjs[li] = &Loop{coedges: startCo, n: topo.Loop{Outer: li == 0}}
-		endLoopObjs[li] = &Loop{coedges: endCo, n: topo.Loop{Outer: li == 0}}
+		startLoopObjs[li] = &Loop{n: topo.Loop{Outer: li == 0, CoEdges: startCo}}
+		endLoopObjs[li] = &Loop{n: topo.Loop{Outer: li == 0, CoEdges: endCo}}
 
 		startBoundary := loop
 		if onStart {
@@ -358,10 +358,10 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 // about which boundary they describe. A nil capCo (the loop is not chamfered
 // on this cap) sums to zero, which is what leaves proofbound.SectionDisplacementArea's
 // own delta<=0 guard as the only gate that matters.
-func capContourPerimeterUpper(capCo []coedge) float64 {
+func capContourPerimeterUpper(capCo []topo.CoEdge) float64 {
 	total := proofbound.BoundedScalar{}
 	for _, ce := range capCo {
-		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(ce.edge.n.Length, ce.edge.n.LengthBound))
+		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(ce.Edge.Length, ce.Edge.LengthBound))
 	}
 	return proofbound.AbsSumUpper(total.Value, total.Bound)
 }

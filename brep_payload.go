@@ -604,9 +604,9 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	if err != nil {
 		return nil, err
 	}
-	coedgeOf := func(ui int) coedge {
+	coedgeOf := func(ui int) topo.CoEdge {
 		if ei := btopo.edgeOf[ui]; ei >= 0 {
-			return coedge{edge: edges[ei], forward: btopo.forward(ui)}
+			return topo.CoEdge{Edge: edgeNode(edges[ei]), Forward: btopo.forward(ui)}
 		}
 		return open.coedge[ui]
 	}
@@ -629,18 +629,18 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 			}
 			for _, ui := range uses {
 				l := loops[btopo.uses[ui].Loop]
-				l.coedges = append(l.coedges, coedgeOf(ui))
+				l.n.CoEdges = append(l.n.CoEdges, coedgeOf(ui))
 			}
 			face.loops = loops
 		case len(uses) == 2:
 			face.loops = []*Loop{
-				{coedges: []coedge{coedgeOf(uses[0])}, n: topo.Loop{Outer: true}},
-				{coedges: []coedge{coedgeOf(uses[1])}, n: topo.Loop{Outer: true}},
+				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{coedgeOf(uses[0])}}},
+				{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{coedgeOf(uses[1])}}},
 			}
 		default:
 			l := &Loop{n: topo.Loop{Outer: true}}
 			for _, ui := range uses {
-				l.coedges = append(l.coedges, coedgeOf(ui))
+				l.n.CoEdges = append(l.n.CoEdges, coedgeOf(ui))
 			}
 			face.loops = []*Loop{l}
 		}
@@ -726,14 +726,14 @@ func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]
 			lo, hi = hi, lo
 		}
 		height := proofbound.BoundedSub(proofbound.MeasuredScalar(hi, owner.SideDelta[1]), proofbound.MeasuredScalar(lo, owner.SideDelta[0]))
-		return &Edge{n: topo.Edge{
+		return bornEdge(&Edge{n: topo.Edge{
 			Convex:      convex,
 			Length:      hi - lo,
 			LengthBound: height.Bound,
 			Curve:       surfacegeom.Line3{},
 			Start:       vertexNode(start),
 			End:         vertexNode(end),
-		}}, nil
+		}}), nil
 	case brepRim0, brepRim1:
 		w := btopo.walls[owner.Face]
 		pp := f.view(bp.xform)
@@ -750,14 +750,14 @@ func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]
 		return edge, nil
 	default:
 		w := owner.Walk
-		return &Edge{n: topo.Edge{
+		return bornEdge(&Edge{n: topo.Edge{
 			Convex:      convex,
 			Length:      w.Length,
 			LengthBound: proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1)),
 			Curve:       surfacegeom.Line3{},
 			Start:       vertexNode(start),
 			End:         vertexNode(end),
-		}}, nil
+		}}), nil
 	}
 }
 

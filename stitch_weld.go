@@ -3,6 +3,7 @@ package decad
 import (
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // This file adapts docs/surface-design.md §6.2's Table J to the held
@@ -41,32 +42,32 @@ func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 	table := newStitchVertexTable()
 	for _, f := range faces {
 		for _, l := range f.loops {
-			for _, ce := range l.coedges {
-				table.classOf(ce.Start())
-				table.classOf(ce.End())
+			for _, ce := range l.n.CoEdges {
+				table.classOf(vertexHandle(coedgeStart(ce)))
+				table.classOf(vertexHandle(coedgeEnd(ce)))
 			}
 		}
 	}
 
 	var candidates []stitchweld.Candidate[*Edge]
-	seen := map[*Edge]struct{}{}
+	seen := map[*topo.Edge]struct{}{}
 	for _, f := range faces {
 		for _, l := range f.loops {
-			for _, ce := range l.coedges {
-				e := ce.edge
+			for _, ce := range l.n.CoEdges {
+				e := ce.Edge
 				if _, dup := seen[e]; dup {
 					continue
 				}
 				seen[e] = struct{}{}
-				if !e.IsFree() { // J1
+				if len(e.Faces) != 1 { // J1
 					continue
 				}
-				_, isLine := e.n.Curve.(surfacegeom.Line3)
-				if !isLine && e.n.Denot.ID == 0 { // J2, then J5, or the certificate
+				_, isLine := e.Curve.(surfacegeom.Line3)
+				if !isLine && e.Denot.ID == 0 { // J2, then J5, or the certificate
 					continue
 				}
 				candidates = append(candidates, stitchweld.Candidate[*Edge]{
-					Edge: e, Start: table.classOf(vertexHandle(e.n.Start)), End: table.classOf(vertexHandle(e.n.End)),
+					Edge: edgeHandle(e), Start: table.classOf(vertexHandle(e.Start)), End: table.classOf(vertexHandle(e.End)),
 				})
 			}
 		}

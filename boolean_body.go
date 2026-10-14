@@ -411,9 +411,9 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 func facetedFacePerimeterUpper(f *Face, budget *proofbound.WorkBudget) (float64, error) {
 	var lengths, bounds []float64
 	for _, l := range f.loops {
-		for _, ce := range l.coedges {
-			lengths = append(lengths, ce.edge.n.Length)
-			bounds = append(bounds, ce.edge.n.LengthBound)
+		for _, ce := range l.n.CoEdges {
+			lengths = append(lengths, ce.Edge.Length)
+			bounds = append(bounds, ce.Edge.LengthBound)
 		}
 	}
 	return proofbound.PerimeterUpper(budget, lengths, bounds)
@@ -872,7 +872,7 @@ func buildFacetedTopology(
 	}
 	edgeObj := map[*facetedtopology.Edge]*Edge{}
 	for _, chain := range plan.Edges {
-		e := &Edge{
+		e := bornEdge(&Edge{
 			n: topo.Edge{
 				Convex:          chain.Convex,
 				Length:          chain.Length,
@@ -883,7 +883,7 @@ func buildFacetedTopology(
 				End:             vertexNode(vertexOf(chain.Vertices[len(chain.Vertices)-1])),
 				Faces:           []*topo.Face{faceNode(faces[chain.Faces[0]]), faceNode(faces[chain.Faces[1]])},
 			},
-		}
+		})
 		if axialSectionJoin {
 			e.n.SelectorDirection, e.n.SelectorDirectionProven =
 				facetedtopology.AxialChainDirection(verts, chain.Vertices)
@@ -895,7 +895,7 @@ func buildFacetedTopology(
 		for _, planned := range loops {
 			loop := &Loop{n: topo.Loop{Outer: planned.Outer}}
 			for _, ce := range planned.Coedges {
-				loop.coedges = append(loop.coedges, coedge{edge: edgeObj[ce.Edge], forward: ce.Forward})
+				loop.n.CoEdges = append(loop.n.CoEdges, topo.CoEdge{Edge: edgeNode(edgeObj[ce.Edge]), Forward: ce.Forward})
 			}
 			f.loops = append(f.loops, loop)
 		}

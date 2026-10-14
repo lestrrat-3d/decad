@@ -71,9 +71,9 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 	}
 	var originalBody *Body
 	paired := make(map[*Face]*Face, len(sp.faces))
-	originalEdgeOf := map[*Edge]*Edge{}
-	originalVertexOf := map[*Vertex]*Vertex{}
-	copiesByOriginalEdge := map[*Edge]map[*Edge]struct{}{}
+	originalEdgeOf := map[*topo.Edge]*topo.Edge{}
+	originalVertexOf := map[*topo.Vertex]*topo.Vertex{}
+	copiesByOriginalEdge := map[*topo.Edge]map[*topo.Edge]struct{}{}
 	for i, copied := range sp.faces {
 		piece := bodyHandle(copied.n.Body)
 		if piece == nil || len(piece.Faces()) != 1 || piece.Faces()[0] != copied {
@@ -99,23 +99,23 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 		}
 		for li, loop := range copied.loops {
 			oldLoop := original.loops[li]
-			if len(loop.coedges) != len(oldLoop.coedges) || loop.n.Outer != oldLoop.n.Outer {
+			if len(loop.n.CoEdges) != len(oldLoop.n.CoEdges) || loop.n.Outer != oldLoop.n.Outer {
 				return nil, nil, "an unstitched face changed its coedge layout"
 			}
-			for ci, ce := range loop.coedges {
-				old := oldLoop.coedges[ci]
-				if ce.forward != old.forward {
+			for ci, ce := range loop.n.CoEdges {
+				old := oldLoop.n.CoEdges[ci]
+				if ce.Forward != old.Forward {
 					return nil, nil, "an unstitched coedge changed direction"
 				}
-				if prev, exists := originalEdgeOf[ce.edge]; exists && prev != old.edge {
+				if prev, exists := originalEdgeOf[ce.Edge]; exists && prev != old.Edge {
 					return nil, nil, "a copied edge has two original identities"
 				}
-				originalEdgeOf[ce.edge] = old.edge
-				if copiesByOriginalEdge[old.edge] == nil {
-					copiesByOriginalEdge[old.edge] = map[*Edge]struct{}{}
+				originalEdgeOf[ce.Edge] = old.Edge
+				if copiesByOriginalEdge[old.Edge] == nil {
+					copiesByOriginalEdge[old.Edge] = map[*topo.Edge]struct{}{}
 				}
-				copiesByOriginalEdge[old.edge][ce.edge] = struct{}{}
-				for _, pair := range [][2]*Vertex{{ce.Start(), old.Start()}, {ce.End(), old.End()}} {
+				copiesByOriginalEdge[old.Edge][ce.Edge] = struct{}{}
+				for _, pair := range [][2]*topo.Vertex{{coedgeStart(ce), coedgeStart(old)}, {coedgeEnd(ce), coedgeEnd(old)}} {
 					if prev, exists := originalVertexOf[pair[0]]; exists && prev != pair[1] {
 						return nil, nil, "a copied vertex has two original identities"
 					}
@@ -139,9 +139,9 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 			return nil, nil, "the unstitched set omits an original face"
 		}
 	}
-	classOriginal := map[int]*Vertex{}
+	classOriginal := map[int]*topo.Vertex{}
 	for v, class := range sp.plan.table.Classes {
-		original, ok := originalVertexOf[v]
+		original, ok := originalVertexOf[vertexNode(v)]
 		if !ok {
 			return nil, nil, "a welded vertex has no original identity"
 		}
@@ -153,10 +153,10 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 	if len(originalVertexOf) != len(sp.plan.table.Classes) {
 		return nil, nil, "an unstitched vertex is absent from the weld plan"
 	}
-	groupOriginal := map[int]*Edge{}
+	groupOriginal := map[int]*topo.Edge{}
 	groupCount := map[int]int{}
 	for copied, gid := range sp.plan.group {
-		original, ok := originalEdgeOf[copied]
+		original, ok := originalEdgeOf[edgeNode(copied)]
 		if !ok {
 			return nil, nil, "a welded edge has no original identity"
 		}
@@ -172,13 +172,13 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 		}
 	}
 	for original, copies := range copiesByOriginalEdge {
-		if len(original.n.Faces) == 2 {
+		if len(original.Faces) == 2 {
 			if len(copies) != 2 {
 				return nil, nil, "an original two-face edge lacks two copies"
 			}
 			gid := -1
 			for copied := range copies {
-				got, ok := sp.plan.group[copied]
+				got, ok := sp.plan.group[edgeHandle(copied)]
 				if !ok || (gid >= 0 && got != gid) {
 					return nil, nil, "an original two-face edge was not re-welded"
 				}
@@ -190,7 +190,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 			return nil, nil, "an original free edge has multiple copies"
 		}
 		for copied := range copies {
-			if _, welded := sp.plan.group[copied]; welded {
+			if _, welded := sp.plan.group[edgeHandle(copied)]; welded {
 				return nil, nil, "an original free edge was newly welded"
 			}
 		}

@@ -490,10 +490,11 @@ func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, ver
 		if err != nil {
 			return nil, err
 		}
-		lowerFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
-			{edge: rimBottom[j], forward: true},
-			{edge: rungE[j+1], forward: true},
-			{edge: diagE[j], forward: false},
+		lowerFace.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			{Edge: edgeNode(rimBottom[j]), Forward: true},
+			{Edge: edgeNode(rungE[j+1]), Forward: true},
+			{Edge: edgeNode(diagE[j]), Forward: false},
+		},
 		}}}
 		walls = append(walls, lowerFace)
 
@@ -501,10 +502,11 @@ func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, ver
 		if err != nil {
 			return nil, err
 		}
-		upperFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: []coedge{
-			{edge: diagE[j], forward: true},
-			{edge: rimTop[j], forward: false},
-			{edge: rungE[j], forward: false},
+		upperFace.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			{Edge: edgeNode(diagE[j]), Forward: true},
+			{Edge: edgeNode(rimTop[j]), Forward: false},
+			{Edge: edgeNode(rungE[j]), Forward: false},
+		},
 		}}}
 		walls = append(walls, upperFace)
 	}

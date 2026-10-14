@@ -44,7 +44,7 @@ func loftVertex(p r3.Vec, delta float64) *Vertex {
 // with the given walked-boundary convexity.
 func loftEdge(vertexObjs []*Vertex, positions []r3.Vec, a, b int, convex bool, delta float64) *Edge {
 	held, bound := loftmesh.EdgeLength(positions[a], positions[b], delta)
-	return &Edge{n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Line3{}, Start: vertexNode(vertexObjs[a]), End: vertexNode(vertexObjs[b])}}
+	return bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Line3{}, Start: vertexNode(vertexObjs[a]), End: vertexNode(vertexObjs[b])}})
 }
 
 // planeFromTriangle builds a face's Plane surface directly from one of its
@@ -113,13 +113,13 @@ func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i
 // sense; nothing but the direction changes. The edge identities and their
 // count are untouched, so every edge still bounds exactly the same two faces
 // and Loop.Edges' undirected view is merely re-ordered.
-func loftLoopCoedges(co []coedge, reversed bool) []coedge {
+func loftLoopCoedges(co []topo.CoEdge, reversed bool) []topo.CoEdge {
 	if !reversed {
 		return co
 	}
-	out := make([]coedge, len(co))
+	out := make([]topo.CoEdge, len(co))
 	for i, ce := range co {
-		out[len(co)-1-i] = coedge{edge: ce.edge, forward: !ce.forward}
+		out[len(co)-1-i] = topo.CoEdge{Edge: ce.Edge, Forward: !ce.Forward}
 	}
 	return out
 }
@@ -190,8 +190,8 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			diagE[j] = loftEdge(vertexObjs, a.Verts, vIdx[j], wIdx[jn], diagConvex, a.Delta)
 		}
 
-		capStartCo := make([]coedge, n)
-		capEndCo := make([]coedge, n)
+		capStartCo := make([]topo.CoEdge, n)
+		capEndCo := make([]topo.CoEdge, n)
 		for j := range n {
 			jn := (j + 1) % n
 
@@ -200,11 +200,12 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			if err != nil {
 				return nil, nil, nil, nil, err
 			}
-			lowerFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
-				{edge: rimBottom[j], forward: true},
-				{edge: rungE[jn], forward: true},
-				{edge: diagE[j], forward: false},
-			}, a.Reversed)}}
+			lowerFace.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
+				{Edge: edgeNode(rimBottom[j]), Forward: true},
+				{Edge: edgeNode(rungE[jn]), Forward: true},
+				{Edge: edgeNode(diagE[j]), Forward: false},
+			}, a.Reversed),
+			}}}
 			walls = append(walls, lowerFace)
 			wallAreas = append(wallAreas, lowerArea)
 
@@ -213,19 +214,20 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			if err != nil {
 				return nil, nil, nil, nil, err
 			}
-			upperFace.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
-				{edge: diagE[j], forward: true},
-				{edge: rimTop[j], forward: false},
-				{edge: rungE[j], forward: false},
-			}, a.Reversed)}}
+			upperFace.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
+				{Edge: edgeNode(diagE[j]), Forward: true},
+				{Edge: edgeNode(rimTop[j]), Forward: false},
+				{Edge: edgeNode(rungE[j]), Forward: false},
+			}, a.Reversed),
+			}}}
 			walls = append(walls, upperFace)
 			wallAreas = append(wallAreas, upperArea)
 
-			capStartCo[n-1-j] = coedge{edge: rimBottom[j], forward: false}
-			capEndCo[j] = coedge{edge: rimTop[j], forward: true}
+			capStartCo[n-1-j] = topo.CoEdge{Edge: edgeNode(rimBottom[j]), Forward: false}
+			capEndCo[j] = topo.CoEdge{Edge: edgeNode(rimTop[j]), Forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: isOuter}, coedges: loftLoopCoedges(capStartCo, a.Reversed)})
-		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: isOuter}, coedges: loftLoopCoedges(capEndCo, a.Reversed)})
+		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: isOuter, CoEdges: loftLoopCoedges(capStartCo, a.Reversed)}})
+		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: isOuter, CoEdges: loftLoopCoedges(capEndCo, a.Reversed)}})
 	}
 
 	capStartSurf, err := planeFromTriangle(a.Verts, a.Tris[a.Walls])

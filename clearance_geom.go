@@ -503,16 +503,16 @@ func (g *bodyGeom) addStitchFaces(budget *proofbound.WorkBudget, b *Body, sp sti
 		var elems []survey2d.SurveyElem
 		var pts []r3.Vec
 		for _, l := range f.loops {
-			cnt := len(l.coedges)
+			cnt := len(l.n.CoEdges)
 			if cnt == 0 {
 				return false, nil
 			}
 			local := make([]r3.Vec, cnt)
-			for i, ce := range l.coedges {
+			for i, ce := range l.n.CoEdges {
 				if err := budget.Step(); err != nil {
 					return false, err
 				}
-				v := ce.Start().n.Position
+				v := coedgeStart(ce).Position
 				pts = append(pts, v)
 				local[i] = pl.Frame.ToLocal(v)
 			}

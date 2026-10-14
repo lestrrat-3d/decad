@@ -12,6 +12,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -274,8 +275,8 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 
 	require.Len(t, supplied.capCo, len(again.capCo))
 	for i, co := range supplied.capCo {
-		require.Same(t, again.capCo[i].edge, co.edge, "coedge %d is the supplied edge", i)
-		require.True(t, co.forward)
+		require.Same(t, again.capCo[i].Edge, co.Edge, "coedge %d is the supplied edge", i)
+		require.True(t, co.Forward)
 	}
 	require.Equal(t, again.geom, supplied.geom)
 	require.Equal(t, again.delta, supplied.delta)
@@ -290,12 +291,12 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 	_, err = buildCapBand(t.Context(), bornBody(&Body{doc: body.doc}), ref, cbp, 0, loop, cbp.z1, -1, topCo, short, work)
 	require.ErrorContains(t, err, "supplied cap boundary")
 
-	backward := append([]coedge(nil), again.capCo...)
-	backward[0].forward = false
+	backward := append([]topo.CoEdge(nil), again.capCo...)
+	backward[0].Forward = false
 	_, err = buildCapBand(t.Context(), bornBody(&Body{doc: body.doc}), ref, cbp, 0, loop, cbp.z1, -1, topCo, backward, work)
 	require.ErrorContains(t, err, "supplied cap boundary")
 
-	swapped := append([]coedge(nil), again.capCo...)
+	swapped := append([]topo.CoEdge(nil), again.capCo...)
 	swapped[0], swapped[2] = swapped[2], swapped[0]
 	_, err = buildCapBand(t.Context(), bornBody(&Body{doc: body.doc}), ref, cbp, 0, loop, cbp.z1, -1, topCo, swapped, work)
 	require.Error(t, err)

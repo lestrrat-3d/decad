@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -67,15 +68,16 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 	if !matchingLoftHeldCapOuters(pl.frame0, caps[0], caps[1]) {
 		return nil, false, nil
 	}
-	selected := make(map[*Edge]struct{}, len(edges))
+	selected := make(map[*topo.Edge]struct{}, len(edges))
 	for _, edge := range edges {
-		selected[edge] = struct{}{}
+		selected[edgeNode(edge)] = struct{}{}
 	}
 	for _, cap := range caps {
 		if len(cap.loops) == 0 || !cap.loops[0].n.Outer {
 			return nil, false, nil
 		}
-		for _, edge := range cap.loops[0].Edges() {
+		for _, ce := range cap.loops[0].n.CoEdges {
+			edge := ce.Edge
 			if _, ok := selected[edge]; !ok {
 				return nil, false, nil
 			}
@@ -85,10 +87,10 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 	if len(selected) != 0 {
 		return nil, false, nil
 	}
-	outer := make([]curveSegment, 0, len(caps[1].loops[0].coedges))
-	for _, ce := range caps[1].loops[0].coedges {
-		start := pl.frame0.ToLocal(ce.Start().n.Position)
-		stop := pl.frame0.ToLocal(ce.End().n.Position)
+	outer := make([]curveSegment, 0, len(caps[1].loops[0].n.CoEdges))
+	for _, ce := range caps[1].loops[0].n.CoEdges {
+		start := pl.frame0.ToLocal(coedgeStart(ce).Position)
+		stop := pl.frame0.ToLocal(coedgeEnd(ce).Position)
 		outer = append(outer, lineSeg{
 			Start:  sectionrecord.Point2{U: start.X, V: start.Y},
 			End:    sectionrecord.Point2{U: stop.X, V: stop.Y},
@@ -117,11 +119,11 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 func matchingLoftHeldCapOuters(frame r3.Frame, start, end *Face) bool {
 	if len(start.loops) == 0 || len(end.loops) == 0 ||
 		!start.loops[0].n.Outer || !end.loops[0].n.Outer ||
-		len(start.loops[0].coedges) != len(end.loops[0].coedges) {
+		len(start.loops[0].n.CoEdges) != len(end.loops[0].n.CoEdges) {
 		return false
 	}
-	keyOf := func(ce coedge) [2]planePoint {
-		a, b := frame.ToLocal(ce.Start().n.Position), frame.ToLocal(ce.End().n.Position)
+	keyOf := func(ce topo.CoEdge) [2]planePoint {
+		a, b := frame.ToLocal(coedgeStart(ce).Position), frame.ToLocal(coedgeEnd(ce).Position)
 		p := planePoint{U: a.X, V: a.Y}
 		q := planePoint{U: b.X, V: b.Y}
 		if p.U > q.U || (p.U == q.U && p.V > q.V) {
@@ -129,11 +131,11 @@ func matchingLoftHeldCapOuters(frame r3.Frame, start, end *Face) bool {
 		}
 		return [2]planePoint{p, q}
 	}
-	counts := make(map[[2]planePoint]int, len(start.loops[0].coedges))
-	for _, ce := range start.loops[0].coedges {
+	counts := make(map[[2]planePoint]int, len(start.loops[0].n.CoEdges))
+	for _, ce := range start.loops[0].n.CoEdges {
 		counts[keyOf(ce)]++
 	}
-	for _, ce := range end.loops[0].coedges {
+	for _, ce := range end.loops[0].n.CoEdges {
 		key := keyOf(ce)
 		if counts[key] == 0 {
 			return false

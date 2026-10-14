@@ -112,14 +112,14 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 	var capStartLoops, capEndLoops []*Loop
 	for i, idx := range a.LoopIdx {
 		m := len(idx)
-		capStartCo := make([]coedge, m)
-		capEndCo := make([]coedge, m)
+		capStartCo := make([]topo.CoEdge, m)
+		capEndCo := make([]topo.CoEdge, m)
 		for j, v := range idx {
-			capStartCo[m-1-j] = coedge{edge: sec[0][v], forward: false}
-			capEndCo[j] = coedge{edge: sec[a.Spans][v], forward: true}
+			capStartCo[m-1-j] = topo.CoEdge{Edge: edgeNode(sec[0][v]), Forward: false}
+			capEndCo[j] = topo.CoEdge{Edge: edgeNode(sec[a.Spans][v]), Forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: i == 0}, coedges: loftLoopCoedges(capStartCo, a.Reversed)})
-		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: i == 0}, coedges: loftLoopCoedges(capEndCo, a.Reversed)})
+		capStartLoops = append(capStartLoops, &Loop{n: topo.Loop{Outer: i == 0, CoEdges: loftLoopCoedges(capStartCo, a.Reversed)}})
+		capEndLoops = append(capEndLoops, &Loop{n: topo.Loop{Outer: i == 0, CoEdges: loftLoopCoedges(capEndCo, a.Reversed)}})
 	}
 	capStartSurf, err := planeFromTriangle(verts, a.Tris[a.Walls])
 	if err != nil {
@@ -176,12 +176,13 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 						Body:      bodyNode(body),
 					},
 				})
-				face.loops = []*Loop{{n: topo.Loop{Outer: true}, coedges: loftLoopCoedges([]coedge{
-					{edge: sec[k][v], forward: true},
-					{edge: lon[k][next[v]], forward: true},
-					{edge: sec[k+1][v], forward: false},
-					{edge: lon[k][v], forward: false},
-				}, a.Reversed)}}
+				face.loops = []*Loop{{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
+					{Edge: edgeNode(sec[k][v]), Forward: true},
+					{Edge: edgeNode(lon[k][next[v]]), Forward: true},
+					{Edge: edgeNode(sec[k+1][v]), Forward: false},
+					{Edge: edgeNode(lon[k][v]), Forward: false},
+				}, a.Reversed),
+				}}}
 				faces = append(faces, face)
 			}
 		}

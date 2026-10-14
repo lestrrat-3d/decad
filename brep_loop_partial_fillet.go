@@ -48,7 +48,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		if si >= len(open.side[bi]) {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet band lacks a selected contour edge`, ErrUnsupported)
 		}
-		capEdges[i], side[i] = open.capBySeg[bi][b.capWalk[i]], open.side[bi][si].edge
+		capEdges[i], side[i] = open.capBySeg[bi][b.capWalk[i]], edgeHandle(open.side[bi][si].Edge)
 		if b.capWalk[i] >= 0 && capEdges[i] == nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet band lacks a selected cap edge`, ErrUnsupported)
 		}
@@ -81,7 +81,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		if axis.Dot(tangent) < 0 {
 			tangent = tangent.Scale(-1)
 		}
-		return &Edge{n: topo.Edge{
+		return bornEdge(&Edge{n: topo.Edge{
 			Convex:      convex,
 			Length:      meridianLen,
 			LengthBound: meridianBound,
@@ -89,7 +89,7 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 				Radius: units.Millimeters(r)},
 			Start: vertexNode(capV),
 			End:   vertexNode(sideV),
-		}}
+		}})
 	}
 	for k := range n {
 		prev := (k + n - 1) % n
@@ -163,11 +163,11 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		semi := math.Hypot(bu, bv)
 		major := pl.Dir(bu/semi, bv/semi, 0)
 		axis, _ := major.Cross(up).Normalize()
-		lead[k] = &Edge{n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis,
+		lead[k] = bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Ellipse3{Center: pl.Point(j.M.U, j.M.V, sideZ), Axis: axis,
 			Major: major, SemiMajor: units.Millimeters(semi), SemiMinor: units.Millimeters(r)},
 			Start: vertexNode(capV),
 			End:   vertexNode(sideV),
-		}}
+		}})
 		trail[k] = lead[k]
 	}
 	var patches []*Face
@@ -186,8 +186,8 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		if b.sigma > 0 {
 			face.n.Reversed = !face.n.Reversed
 		}
-		for _, ce := range loop.coedges {
-			ce.edge.n.Faces = append(ce.edge.n.Faces, faceNode(face))
+		for _, ce := range loop.n.CoEdges {
+			ce.Edge.Faces = append(ce.Edge.Faces, faceNode(face))
 		}
 		patches = append(patches, face)
 		return nil
@@ -215,8 +215,9 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 				return nil, brepBandMass{}, fmt.Errorf(`%w: a partial fillet's sphere patch does not close`, ErrUnsupported)
 			}
 			surf := surfacegeom.Sphere{Center: pl.Point(w.CU, w.CV, sideZ), Radius: units.Millimeters(r)}
-			loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
-				{edge: end, forward: false}, {edge: start, forward: true}}, n: topo.Loop{Outer: true}}
+			loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideE), Forward: true},
+				{Edge: edgeNode(end), Forward: false}, {Edge: edgeNode(start), Forward: true}},
+			}}
 			if err := newPatch(surf, loop, pole, piece); err != nil {
 				return nil, brepBandMass{}, err
 			}
@@ -235,9 +236,10 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 			Axis: pl.Dir(tu, tv, 0), Radius: units.Millimeters(r)}
 		startForward := start.n.Start == capE.n.Start
 		endForward := end.n.Start == sideE.n.End
-		loop := &Loop{coedges: []coedge{{edge: sideE, forward: true},
-			{edge: end, forward: endForward}, {edge: capE, forward: false},
-			{edge: start, forward: startForward}}, n: topo.Loop{Outer: true}}
+		loop := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideE), Forward: true},
+			{Edge: edgeNode(end), Forward: endForward}, {Edge: edgeNode(capE), Forward: false},
+			{Edge: edgeNode(start), Forward: startForward}},
+		}}
 		if err := newPatch(surf, loop, vertexHandle(capE.n.Start), piece); err != nil {
 			return nil, brepBandMass{}, err
 		}
@@ -253,8 +255,9 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 		v := fr.walks[next]
 		torus := surfacegeom.Torus{Center: pl.Point(v.StartU, v.StartV, sideZ), Axis: pl.Dir(0, 0, 1),
 			Major: units.Millimeters(r), Minor: units.Millimeters(r)}
-		horn := &Loop{coedges: []coedge{{edge: arc, forward: true},
-			{edge: lead[next], forward: true}, {edge: trail[next], forward: false}}, n: topo.Loop{Outer: true}}
+		horn := &Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(arc), Forward: true},
+			{Edge: edgeNode(lead[next]), Forward: true}, {Edge: edgeNode(trail[next]), Forward: false}},
+		}}
 		if err := newPatch(torus, horn, vertexHandle(arc.n.Start), pieces[p]); err != nil {
 			return nil, brepBandMass{}, err
 		}

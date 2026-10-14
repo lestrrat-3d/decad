@@ -307,48 +307,29 @@ func (v *Vertex) Position() VecMeasurement {
 // the loop walk, which may oppose the underlying Edge's global Start-to-End
 // orientation.
 type CoEdge struct {
-	edge    *Edge
-	forward bool
+	// n is the node data internal packages read and build (internal/topo).
+	n topo.CoEdge
 }
 
-// coedge keeps the evaluator's internal construction spelling while CoEdge is
-// the public immutable view.
-type coedge = CoEdge
-
 // Edge returns the shared topological edge this loop use traverses.
-func (ce CoEdge) Edge() *Edge { return ce.edge }
+func (ce CoEdge) Edge() *Edge { return edgeHandle(ce.n.Edge) }
 
 // Start returns the vertex where this loop use starts. It returns nil for the
 // zero CoEdge.
-func (ce CoEdge) Start() *Vertex {
-	if ce.edge == nil {
-		return nil
-	}
-	if ce.forward {
-		return vertexHandle(ce.edge.n.Start)
-	}
-	return vertexHandle(ce.edge.n.End)
-}
+func (ce CoEdge) Start() *Vertex { return vertexHandle(coedgeStart(ce.n)) }
 
 // End returns the vertex where this loop use ends. It returns nil for the zero
 // CoEdge.
-func (ce CoEdge) End() *Vertex {
-	if ce.edge == nil {
-		return nil
-	}
-	if ce.forward {
-		return vertexHandle(ce.edge.n.End)
-	}
-	return vertexHandle(ce.edge.n.Start)
-}
+func (ce CoEdge) End() *Vertex { return vertexHandle(coedgeEnd(ce.n)) }
 
 // IsForward reports whether this loop use walks from Edge.Start to Edge.End.
 // False means it walks from Edge.End to Edge.Start.
-func (ce CoEdge) IsForward() bool { return ce.forward }
+func (ce CoEdge) IsForward() bool { return ce.n.Forward }
 
 // Edge is a topological edge: a tagged curve between two vertices, with the
 // faces adjacent to it.
 type Edge struct {
+	_ noCopy
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Edge
 }
@@ -431,7 +412,6 @@ func (e *Edge) Length() (Measurement, error) {
 
 // Loop is one boundary loop of a face.
 type Loop struct {
-	coedges []coedge
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Loop
 }
@@ -442,16 +422,14 @@ func (l *Loop) IsOuter() bool { return l.n.Outer }
 
 // CoEdges returns the loop's directed edge uses in walk order. The returned
 // slice is a copy; each CoEdge is an immutable view of the loop's stored use.
-func (l *Loop) CoEdges() []CoEdge {
-	return append([]CoEdge(nil), l.coedges...)
-}
+func (l *Loop) CoEdges() []CoEdge { return coedgeHandles(l.n.CoEdges) }
 
 // Edges returns the loop's edges in walk order. It is the compatibility view
 // of CoEdges: the same edge identities in the same order, without direction.
 func (l *Loop) Edges() []*Edge {
-	out := make([]*Edge, len(l.coedges))
-	for i, ce := range l.coedges {
-		out[i] = ce.edge
+	out := make([]*Edge, len(l.n.CoEdges))
+	for i, ce := range l.n.CoEdges {
+		out[i] = edgeHandle(ce.Edge)
 	}
 	return out
 }
@@ -729,15 +707,17 @@ func (b *Body) Faces() []*Face {
 
 // Edges returns the body's edges, deduplicated.
 func (b *Body) Edges() []*Edge {
-	seen := map[*Edge]struct{}{}
+	seen := map[*topo.Edge]struct{}{}
 	var out []*Edge
 	for _, f := range b.Faces() {
-		for _, e := range f.Edges() {
-			if _, ok := seen[e]; ok {
-				continue
+		for _, l := range f.loops {
+			for _, ce := range l.n.CoEdges {
+				if _, ok := seen[ce.Edge]; ok {
+					continue
+				}
+				seen[ce.Edge] = struct{}{}
+				out = append(out, edgeHandle(ce.Edge))
 			}
-			seen[e] = struct{}{}
-			out = append(out, e)
 		}
 	}
 	return out
