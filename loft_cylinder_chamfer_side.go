@@ -33,13 +33,15 @@ type middleSidePrep struct {
 
 // middleState is the mutable state one facet at a time may use: a grid, the
 // old shell's parity mesh and the tooth caches. The caches only memoise pure
-// functions of the read-only input, so any state gives the same answers.
+// functions of the read-only input, or, for the held-root memos, answers those
+// functions gave, so any state gives the same answers.
 type middleState struct {
 	grid         *loftmesh.ChamferBoxGrid
 	parity       *meshbool.ParityMesh
 	toothParity  map[*Body]*meshbool.ParityMesh
 	toothIndices map[*Body][]int
 	toothCircles map[*Body]loftcylinder.SourceCircle
+	toothRoots   map[*Body]*loftmesh.ChamferHeldRootMemo
 }
 
 func newMiddleState(grid *loftmesh.ChamferBoxGrid, parity *meshbool.ParityMesh) *middleState {
@@ -48,6 +50,7 @@ func newMiddleState(grid *loftmesh.ChamferBoxGrid, parity *meshbool.ParityMesh) 
 		toothParity:  make(map[*Body]*meshbool.ParityMesh),
 		toothIndices: make(map[*Body][]int),
 		toothCircles: make(map[*Body]loftcylinder.SourceCircle),
+		toothRoots:   make(map[*Body]*loftmesh.ChamferHeldRootMemo),
 	}
 }
 
@@ -170,7 +173,7 @@ func (prep *middleSidePrep) middleFacet(ctx context.Context, i int, st *middleSt
 					st.toothIndices[face.body] = indices
 				}
 				if err := loftCylinderChamferMiddleToothSource(ctx, q, face,
-					parity, st.toothIndices[face.body], source.blankRadius, st.toothCircles); err != nil {
+					parity, st.toothIndices[face.body], source.blankRadius, st.toothCircles, st.toothRoots); err != nil {
 					last = err.Error()
 					continue
 				}
@@ -200,7 +203,8 @@ func (prep *middleSidePrep) middleFacet(ctx context.Context, i int, st *middleSt
 // hidden root walls meet it, use the exact blank disk for that part instead.
 func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.Xpt,
 	face loftCylinderChamferToothFace, parity *meshbool.ParityMesh, indices []int,
-	blankRadius float64, circles map[*Body]loftcylinder.SourceCircle) error {
+	blankRadius float64, circles map[*Body]loftcylinder.SourceCircle,
+	roots map[*Body]*loftmesh.ChamferHeldRootMemo) error {
 	lp := face.loft
 	if lp.walls <= 0 || lp.walls > len(lp.tris) || face.root < 3 ||
 		face.scale == nil || face.scale.Sign() <= 0 ||
@@ -265,8 +269,13 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 	}
 	mappedLo := new(big.Rat).Quo(zLo, face.scale)
 	mappedHi := new(big.Rat).Quo(zHi, face.scale)
+	memo := roots[face.body]
+	if memo == nil {
+		memo = new(loftmesh.ChamferHeldRootMemo)
+		roots[face.body] = memo
+	}
 	if mappedLo.Cmp(circle.SafeBottom) <= 0 || mappedHi.Cmp(circle.SafeTop) >= 0 ||
-		!loftmesh.ChamferMiddleHeldRootInside(lp.verts, lp.tris, lp.walls, face.root, mappedLo, mappedHi, blankRadius) {
+		!memo.Inside(lp.verts, lp.tris, lp.walls, face.root, mappedLo, mappedHi, blankRadius) {
 		return fmt.Errorf("%w: inward patch has no hidden root-wall interval", ErrUnsupported)
 	}
 	r := proofarith.FloatRat(blankRadius)

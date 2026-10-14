@@ -118,6 +118,73 @@ func ChamferMiddleHeldRootInside(verts []r3.Vec, tris [][3]int, walls, root int,
 	return true
 }
 
+// ChamferHeldRootMemo remembers where ChamferMiddleHeldRootInside has
+// answered true for one tooth: the same verts, tris, walls, root and radius
+// on every call. It keeps one closed interval [lo, hi], the union of
+// answered slabs, each overlapping the interval when it was added, so every
+// point of the interval lies in an answered slab.
+//
+// The predicate is containment in one fixed convex region R, the open disk:
+// every wall triangle's part inside the slab must lie in R. The clip of a
+// triangle to a slab has that part as its convex hull and R is convex, so a
+// true answer proves the whole part inside R. A slab is a z interval, so
+// overlapping or touching slabs have exactly the interval [min lo, max hi]
+// as their union, which is also their convex hull in z. Each triangle's part
+// inside a slab within that interval is a subset of the union of the parts
+// inside the answered slabs, and each of those parts was proved inside R.
+// Containment in R needs no convexity of the union, only that every piece
+// was proved inside R. Inside returns true for such a slab without the clip.
+// A gap between answered slabs is never inside the interval, so a query
+// spanning one runs the exact check.
+// Every other query is computed. A memo belongs to one tooth in one proof
+// call; it checks that the tooth arguments did not change and computes
+// directly when they did. It is not safe for concurrent use.
+type ChamferHeldRootMemo struct {
+	verts  []r3.Vec
+	tris   [][3]int
+	walls  int
+	root   int
+	radius float64
+	lo, hi *big.Rat
+}
+
+// Inside returns ChamferMiddleHeldRootInside(verts, tris, walls, root, zLo,
+// zHi, radius).
+func (m *ChamferHeldRootMemo) Inside(verts []r3.Vec, tris [][3]int, walls, root int,
+	zLo, zHi *big.Rat, radius float64) bool {
+	same := m.lo != nil && m.sameTooth(verts, tris, walls, root, radius)
+	if same && zLo != nil && zHi != nil && zLo.Cmp(zHi) < 0 &&
+		zLo.Cmp(m.lo) >= 0 && zHi.Cmp(m.hi) <= 0 {
+		return true
+	}
+	if !ChamferMiddleHeldRootInside(verts, tris, walls, root, zLo, zHi, radius) {
+		return false
+	}
+	switch {
+	case m.lo == nil:
+		m.verts, m.tris, m.walls, m.root, m.radius = verts, tris, walls, root, radius
+		m.lo, m.hi = new(big.Rat).Set(zLo), new(big.Rat).Set(zHi)
+	case same && zLo.Cmp(m.hi) <= 0 && zHi.Cmp(m.lo) >= 0:
+		if zLo.Cmp(m.lo) < 0 {
+			m.lo = new(big.Rat).Set(zLo)
+		}
+		if zHi.Cmp(m.hi) > 0 {
+			m.hi = new(big.Rat).Set(zHi)
+		}
+	}
+	return true
+}
+
+// sameTooth reports whether the tooth arguments are the ones the memo's
+// interval was answered for: the same backing arrays, lengths, wall range
+// and radius.
+func (m *ChamferHeldRootMemo) sameTooth(verts []r3.Vec, tris [][3]int, walls, root int,
+	radius float64) bool {
+	return len(verts) == len(m.verts) && len(tris) == len(m.tris) &&
+		len(verts) > 0 && len(tris) > 0 && &verts[0] == &m.verts[0] && &tris[0] == &m.tris[0] &&
+		walls == m.walls && root == m.root && radius == m.radius
+}
+
 // chamferMiddleZCmp is the sign of p.z − n/d for a positive d.
 func chamferMiddleZCmp(p proofarith.Xpt, n, d *big.Int) int {
 	a := new(big.Int).Mul(p.Z, d)
