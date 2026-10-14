@@ -771,6 +771,15 @@ func TestParityLineAtRefusesUnderflowAndOverflow(t *testing.T) {
 // below int32.
 func TestParityIndexMembershipCap(t *testing.T) {
 	t.Parallel()
+	// An override can only lower the production cap.
+	for _, c := range []struct{ override, want int }{
+		{0, ParityIndexMaxMemberships}, {-5, ParityIndexMaxMemberships}, {7, 7},
+		{ParityIndexMaxMemberships, ParityIndexMaxMemberships},
+		{ParityIndexMaxMemberships + 1, ParityIndexMaxMemberships}, {math.MaxInt, ParityIndexMaxMemberships},
+	} {
+		pm := &ParityMesh{maxMemberships: c.override}
+		require.Equal(t, c.want, pm.membershipLimit(), `override %d`, c.override)
+	}
 	require.Less(t, int64(ParityIndexMaxMemberships), int64(math.MaxInt32)/64)
 	for _, fx := range parityIndexFixtures()[:3] {
 		t.Run(fx.name, func(t *testing.T) {

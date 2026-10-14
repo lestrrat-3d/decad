@@ -13,8 +13,12 @@ const ParityIndexMinFacets = 64
 // an axis whose placement lists more gets no index and runs the plain scan.
 // Each membership costs 8 bytes while the lists are collected (a cell and a
 // facet id, up to 16 with slice growth) and 4 bytes once built, so the cap
-// bounds the build at about 130 MB and a built index at 32 MB. The real shells
-// list about 43 thousand memberships per index (3 996 facets, 129 by 129
+// bounds the membership lists at about 130 MB while collected (one facet may
+// append up to c² = 66 564 more before the check) and a built index at 32 MB.
+// This is a bound on the memberships only: the build also holds the facet boxes
+// (40 bytes per facet) and, for facets that project to a segment, the vertex
+// projection cache, all allocated before the check, and they are not part of
+// the bound. The real shells list about 43 thousand memberships per index (3 996 facets, 129 by 129
 // cells), a factor of 190 below it. The count is taken on the int slices'
 // lengths while collecting and checked after every facet, before the int32
 // offsets are summed or any list is filled, so the offsets cannot overflow:
@@ -216,6 +220,15 @@ type ParityIndex struct {
 	ids   []int32
 }
 
+// membershipLimit is the membership cap in force: the production cap, or the
+// test override when that is positive and lower. An override can never raise it.
+func (pm *ParityMesh) membershipLimit() int {
+	if pm.maxMemberships > 0 {
+		return min(pm.maxMemberships, ParityIndexMaxMemberships)
+	}
+	return ParityIndexMaxMemberships
+}
+
 // buildParityIndex builds the index for one swept axis, or returns nil when
 // the mesh is too small or has a facet the grid cannot place.
 func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
@@ -223,10 +236,7 @@ func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
 	if n < ParityIndexMinFacets || n > math.MaxInt32 {
 		return nil
 	}
-	limit := ParityIndexMaxMemberships
-	if pm.maxMemberships > 0 {
-		limit = pm.maxMemberships
-	}
+	limit := pm.membershipLimit()
 	boxes := pm.FacetBoxes(axis)
 	umin, umax := math.Inf(1), math.Inf(-1)
 	vmin, vmax := math.Inf(1), math.Inf(-1)
