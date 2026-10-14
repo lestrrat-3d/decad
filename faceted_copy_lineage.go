@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
@@ -67,9 +68,14 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 // source solids and held shells are pairwise separate; it says nothing about
 // their contact with a separate Union blank.
 type facetedCopySet struct {
-	source    *Body
-	tools     []*Body
-	moves     []r3.Transform
+	source *Body
+	tools  []*Body
+	moves  []r3.Transform
+	// exact holds each copy's exact rotation record (index 0 and every ordinary
+	// copy nil). maps holds the matching true linear maps for shellseparation:
+	// the record's rotation where one exists, else nil for the float move.
+	exact     []*exactrotation.Rotation
+	maps      [][3][3]*big.Rat
 	axis      shellseparation.Axis
 	held      []shellseparation.Shell
 	faceOwner []map[*Face]*Face // source face to the corresponding live copy face
@@ -136,6 +142,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 	}
 	set := &facetedCopySet{source: source, tools: append([]*Body(nil), tools...),
 		moves:     make([]r3.Transform, len(tools)),
+		exact:     make([]*exactrotation.Rotation, len(tools)),
 		faceOwner: make([]map[*Face]*Face, len(tools))}
 	set.moves[0] = r3.Identity()
 	set.faceOwner[0] = make(map[*Face]*Face, len(source.Faces()))
@@ -143,6 +150,8 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 		set.faceOwner[0][face] = face
 	}
 	shells := make([]shellseparation.Shell, len(tools))
+	maps := make([][3][3]*big.Rat, len(tools))
+	anyExact := false
 	sourceLinked := true
 	heldCopies := make([]shellseparation.HeldCopy, len(tools))
 	for i, tool := range tools {
@@ -180,16 +189,33 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 		if !mapped {
 			return nil, fmt.Errorf("%w: copied tool %d lost source face ownership", ErrUnsupported, i+1)
 		}
+		if record.exact != nil && !record.direct {
+			return nil, fmt.Errorf("%w: copied tool %d carries an exact rotation without a direct placement",
+				ErrUnsupported, i+1)
+		}
 		set.faceOwner[i] = owners
 		set.moves[i] = record.motion
 		sourceLinked = sourceLinked && record.direct
+		if record.exact != nil {
+			set.exact[i] = record.exact
+			maps[i] = record.exact.Linear()
+			anyExact = true
+			// Transfer composes no translation, so an exact copy with a
+			// translation, even one the float move rounds to zero, turns it off.
+			for _, t := range record.exact.Translation() {
+				sourceLinked = sourceLinked && t.Sign() == 0
+			}
+		}
+	}
+	if anyExact {
+		set.maps = maps
 	}
 	for _, axis := range []shellseparation.Axis{
 		shellseparation.AxisX, shellseparation.AxisY, shellseparation.AxisZ,
 	} {
 		// Source-solid transfer needs each copy's true solid to be exactly its
 		// recorded motion of the source's, which holds only for direct copies.
-		if !shellseparation.Separate(ctx, shells, set.moves,
+		if !shellseparation.Separate(ctx, shells, set.moves, set.maps,
 			shellseparation.SourceShell, axis, sourceLinked) {
 			continue
 		}
@@ -208,7 +234,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 				}
 			}
 		}
-		if !shellseparation.Separate(ctx, held, set.moves,
+		if !shellseparation.Separate(ctx, held, set.moves, nil,
 			shellseparation.HeldCopyShell, axis, true) {
 			continue
 		}

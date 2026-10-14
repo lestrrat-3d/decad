@@ -262,7 +262,15 @@ transfer. `certifyFacetedCopies` checks live source and recorded `Copy` provenan
 allowing reference-gap transfer. Source-solid transfer also requires every copy to be
 placed directly from the source's own payload, because only then is the recorded motion
 exactly the placement applied to the source's true solid. A copy of a copy, or a moved
-copy, uses direct pairwise checks when needed. The first source's true departure, a held
+copy, uses direct pairwise checks when needed. A copy made with `WithCopyRotation` records
+the exact rational rotation it denotes. Transfer composes each copy's true linear map: the
+exact rotation where one is recorded, else the float motion read as exact rationals. The
+axial drift of an exact rotation is zero. Transfer runs only when every exact record has
+exactly zero translation and every float motion has none, because it composes no translation;
+otherwise the direct pairwise checks decide. Transfer through a canonicalized non-X axis
+composes float motions, so any exact record turns it off there. The cap proxy of an exact copy
+pays the gap between its rotation and the float placement in place of the float matrix's
+stretch. The first source's true departure, a held
 Copy's placement rounding, and a Boolean proxy's own displacement remain
 different shell inputs; the kernel does not upgrade one to another.
 

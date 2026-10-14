@@ -1464,3 +1464,6 @@
 10	0.00	TestCopyRotationMotionRefusalSurvivesDescendants
 10	0.00	TestCopyRotationExactPlacedMarkFollowsPlacementOnly
 10	0.00	TestCopyRotationRoundTripDropsPointSource
+10	0.00	TestCertifyFacetedCopiesPassesExactMaps
+10	0.00	TestExactRotationAtTinyAngleHasHiddenTranslation
+10	0.00	TestPlacedProxyShellsChargeExactCopies

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -79,17 +80,8 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 				return nil, fmt.Errorf("%w: copied proxy tool %d changed its source facets", ErrUnsupported, i+1)
 			}
 		}
-		linear, err := massmoment.PlacementRotation(set.moves[i])
-		if err != nil {
-			return nil, err
-		}
-		charge, err := massmoment.MapChargeOf(linear)
-		if err != nil {
-			return nil, err
-		}
-		placed[i], err = facetproof.PlaceMesh(ctx, budget, proxy.n.Vertices, proxy.n.Triangles,
-			proxy.n.VertexBound, proxy.n.VolSymDiff, proxy.n.AreaSlack,
-			charge.Stretch, charge.Volume, set.moves[i])
+		var err error
+		placed[i], err = set.placeProxy(ctx, budget, proxy, i, part.copyLineage.exact)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +96,7 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 	for _, axis := range []shellseparation.Axis{
 		set.axis, shellseparation.AxisX, shellseparation.AxisY, shellseparation.AxisZ,
 	} {
-		if shellseparation.Separate(ctx, held, set.moves,
+		if shellseparation.Separate(ctx, held, set.moves, nil,
 			shellseparation.ProxyShell, axis, true) {
 			return placed, nil
 		}
@@ -113,4 +105,36 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 		return nil, err
 	}
 	return nil, fmt.Errorf("%w: copied proxy shells are not separate", ErrUnsupported)
+}
+
+// placeProxy places the proxy for copy i. An exact copy's true solid is its
+// exact rotation of the source's, so the proxy pays the gap between that
+// rotation and the float move instead of the float matrix's stretch.
+func (set *facetedCopySet) placeProxy(ctx context.Context, budget *proofbound.WorkBudget, proxy *Mesh,
+	i int, record *exactrotation.Rotation) (facetproof.PlacedMesh, error) {
+	if record != set.exact[i] {
+		return facetproof.PlacedMesh{}, fmt.Errorf("%w: copied proxy tool %d changed its exact rotation",
+			ErrUnsupported, i+1)
+	}
+	if record != nil {
+		linearGap, translationGap, ok := record.Gap(set.moves[i])
+		if !ok {
+			return facetproof.PlacedMesh{}, fmt.Errorf("%w: copied proxy tool %d has no finite rotation gap",
+				ErrUnsupported, i+1)
+		}
+		return facetproof.PlaceMeshDenoting(ctx, budget, proxy.n.Vertices, proxy.n.Triangles,
+			proxy.n.VertexBound, proxy.n.VolSymDiff, proxy.n.AreaSlack, set.moves[i],
+			linearGap, translationGap)
+	}
+	linear, err := massmoment.PlacementRotation(set.moves[i])
+	if err != nil {
+		return facetproof.PlacedMesh{}, err
+	}
+	charge, err := massmoment.MapChargeOf(linear)
+	if err != nil {
+		return facetproof.PlacedMesh{}, err
+	}
+	return facetproof.PlaceMesh(ctx, budget, proxy.n.Vertices, proxy.n.Triangles,
+		proxy.n.VertexBound, proxy.n.VolSymDiff, proxy.n.AreaSlack,
+		charge.Stretch, charge.Volume, set.moves[i])
 }

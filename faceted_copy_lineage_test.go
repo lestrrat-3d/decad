@@ -108,7 +108,7 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 	}
 	for _, linked := range []bool{true, false} {
 		require.True(t, shellseparation.Separate(t.Context(), shells, set.moves,
-			shellseparation.SourceShell, shellseparation.AxisX, linked), "linked=%v", linked)
+			nil, shellseparation.SourceShell, shellseparation.AxisX, linked), "linked=%v", linked)
 	}
 
 	_, err = certifyFacetedCopies(t.Context(), []*Body{source, a, c})
@@ -119,10 +119,11 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 	require.False(t, moved.payload.(facetedPayload).copyLineage.direct)
 }
 
-// looseBounds widens every held bound of body by delta. A wider bound is
-// still a valid upper bound, so the held placement check accepts it, but a
-// direct pairwise slab check must charge it.
-func looseBounds(body *Body, delta float64) {
+// looseBounds widens every held bound of body by half a millimetre. A wider
+// bound is still a valid upper bound, so the held placement check accepts it,
+// but a direct pairwise slab check must charge it.
+func looseBounds(body *Body) {
+	const delta = 0.5
 	part := body.payload.(facetedPayload)
 	part.vertexBound = append([]float64(nil), part.vertexBound...)
 	for i := range part.vertexBound {
@@ -154,8 +155,8 @@ func TestFacetedCopyTransferSeparation(t *testing.T) {
 	require.False(t, nested.payload.(facetedPayload).copyLineage.direct)
 	// Only the second copy carries the wider bound, and both copies sit at the
 	// same 40 degree placement, so lineage is the only difference between sets.
-	looseBounds(direct, 0.5)
-	looseBounds(nested, 0.5)
+	looseBounds(direct)
+	looseBounds(nested)
 
 	t.Run("direct set takes transfer", func(t *testing.T) {
 		// Transfer ignores the second copy's own bound because a direct copy's
@@ -191,6 +192,6 @@ func TestFacetedCopyTransferSeparation(t *testing.T) {
 			}
 		}
 		require.False(t, shellseparation.Separate(t.Context(), shells, moves,
-			shellseparation.SourceShell, shellseparation.AxisX, true))
+			nil, shellseparation.SourceShell, shellseparation.AxisX, true))
 	})
 }

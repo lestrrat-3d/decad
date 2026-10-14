@@ -15,10 +15,24 @@ import (
 // the longitudinal Cartesian coordinate. Linked must be true only after the
 // caller verifies that every shell is an image of the first under its recorded
 // move; it permits a charged reference-gap transfer for repeated copies.
-func Separate(ctx context.Context, shells []Shell, moves []r3.Transform, kind Kind,
-	axis Axis, linked bool) bool {
-	if ctx == nil || len(shells) < 2 || len(shells) != len(moves) {
+//
+// maps holds each copy's true linear map where it differs from the float move.
+// A nil maps, or a nil entry, means PlacementRotation of that move. A non-nil
+// entry is an exactly orthogonal rational map the copy's true solid is the image
+// under. The caller must pass linked = false unless every such copy's true
+// translation is also exactly zero, because transfer composes no translation.
+// Transfer through canonicalized axes composes float moves, so any exact entry
+// switches it off there and the direct slab checks decide.
+func Separate(ctx context.Context, shells []Shell, moves []r3.Transform, maps [][3][3]*big.Rat,
+	kind Kind, axis Axis, linked bool) bool {
+	if ctx == nil || len(shells) < 2 || len(shells) != len(moves) ||
+		(maps != nil && len(maps) != len(moves)) {
 		return false
+	}
+	for _, m := range maps {
+		if !validMap(m) {
+			return false
+		}
 	}
 	if kind != SourceShell && kind != HeldCopyShell && kind != ProxyShell {
 		return false
@@ -34,14 +48,41 @@ func Separate(ctx context.Context, shells []Shell, moves []r3.Transform, kind Ki
 		}
 	}
 	if axis != AxisX {
+		for _, m := range maps {
+			if m[0][0] != nil {
+				linked = false
+			}
+		}
 		var ok bool
 		shells, moves, ok = canonicalize(shells, moves, axis)
 		if !ok {
 			return false
 		}
 	}
-	return separateCanonical(ctx, shells, moves, kind != SourceShell,
-		linked && transferableMoves(moves))
+	return separateCanonical(ctx, shells, moves, maps, kind != SourceShell,
+		linked && transferableMoves(moves, maps))
+}
+
+// validMap accepts the unset map, or a map whose nine entries are all set.
+func validMap(m [3][3]*big.Rat) bool {
+	set := 0
+	for _, row := range m {
+		for _, entry := range row {
+			if entry != nil {
+				set++
+			}
+		}
+	}
+	return set == 0 || set == 9
+}
+
+// moveMap is copy i's true linear map: the exact entry of maps when set, else
+// the exact reading of the float move's basis.
+func moveMap(moves []r3.Transform, maps [][3][3]*big.Rat, i int) ([3][3]*big.Rat, error) {
+	if maps != nil && maps[i][0][0] != nil {
+		return maps[i], nil
+	}
+	return massmoment.PlacementRotation(moves[i])
 }
 
 func validShell(p Shell) bool {
@@ -107,14 +148,22 @@ func canonicalize(shells []Shell, moves []r3.Transform, axis Axis) ([]Shell, []r
 	return localShells, localMoves, true
 }
 
-func transferableMoves(moves []r3.Transform) bool {
+func transferableMoves(moves []r3.Transform, maps [][3][3]*big.Rat) bool {
 	if len(moves) < 2 || moves[0] != r3.Identity() {
 		return false
 	}
-	for _, move := range moves[1:] {
+	for i, move := range moves[1:] {
+		if move.Translation() != (r3.Vec{}) || move.IsReflection() {
+			return false
+		}
+		if maps != nil && maps[i+1][0][0] != nil {
+			if !exactXRotation(maps[i+1]) {
+				return false
+			}
+			continue
+		}
 		basis := move.Basis()
-		if move.Translation() != (r3.Vec{}) || move.IsReflection() ||
-			basis.EX.X < math.Nextafter(1, 0) ||
+		if basis.EX.X < math.Nextafter(1, 0) ||
 			basis.EX.X > math.Nextafter(1, math.Inf(1)) ||
 			basis.EX.Y != 0 || basis.EX.Z != 0 || basis.EY.X != 0 || basis.EZ.X != 0 ||
 			basis.EY.Y != basis.EZ.Z || basis.EY.Z != -basis.EZ.Y {
@@ -124,8 +173,23 @@ func transferableMoves(moves []r3.Transform) bool {
 	return true
 }
 
+// exactXRotation reports whether m has the structure of a rotation about X:
+// no X cross terms, equal diagonal and opposite off-diagonal Y/Z terms, and an
+// X scale within 2^-52 of 1.
+func exactXRotation(m [3][3]*big.Rat) bool {
+	for _, entry := range []*big.Rat{m[0][1], m[0][2], m[1][0], m[2][0]} {
+		if entry.Sign() != 0 {
+			return false
+		}
+	}
+	limit := new(big.Rat).SetFloat64(0x1p-52)
+	return m[1][1].Cmp(m[2][2]) == 0 &&
+		m[1][2].Cmp(new(big.Rat).Neg(m[2][1])) == 0 &&
+		ratAbs(ratSub(m[0][0], ratOne())).Cmp(limit) <= 0
+}
+
 func separateCanonical(ctx context.Context, shells []Shell, moves []r3.Transform,
-	held, transfer bool) bool {
+	maps [][3][3]*big.Rat, held, transfer bool) bool {
 	maxHeld := 0.0
 	for _, part := range shells {
 		if proofbound.IsNonFinite(part.MeshBound) || part.MeshBound < 0 {
@@ -155,7 +219,7 @@ func separateCanonical(ctx context.Context, shells []Shell, moves []r3.Transform
 			}
 			angleOffset := j - i
 			if gap := referenceClearance[angleOffset]; transfer && gap > 0 &&
-				transferSeparation(shells[0], moves, i, j,
+				transferSeparation(shells[0], moves, maps, i, j,
 					angleOffset, gap, heldAllowance) {
 				continue
 			}
@@ -187,7 +251,7 @@ func separateCanonical(ctx context.Context, shells []Shell, moves []r3.Transform
 			if transfer && len(shells) > 2 {
 				gap := referenceClearance[angleOffset]
 				if gap == 0 {
-					axialExtra, valid := sourceAxialDrift(shells[0], moves, angleOffset)
+					axialExtra, valid := sourceAxialDrift(shells[0], moves, maps, angleOffset)
 					if valid {
 						// A held target point may be displaced in X from its source.
 						// Include that bound before transferring this offset's slice gap.
@@ -201,7 +265,7 @@ func separateCanonical(ctx context.Context, shells []Shell, moves []r3.Transform
 						}
 					}
 				}
-				if gap > 0 && !proofbound.IsNonFinite(gap) && transferSeparation(shells[0], moves, i, j,
+				if gap > 0 && !proofbound.IsNonFinite(gap) && transferSeparation(shells[0], moves, maps, i, j,
 					angleOffset, gap, heldAllowance) {
 					continue
 				}
@@ -217,7 +281,8 @@ func separateCanonical(ctx context.Context, shells []Shell, moves []r3.Transform
 // A target pair at one X maps back to two reference points at most this far
 // from that X. The first displacement compares Mi with its exact-X version;
 // the second compares Mj with that version of Mi composed with Mk.
-func sourceAxialDrift(p Shell, moves []r3.Transform, referenceIndex int) (float64, bool) {
+func sourceAxialDrift(p Shell, moves []r3.Transform, maps [][3][3]*big.Rat,
+	referenceIndex int) (float64, bool) {
 	if len(p.Verts) == 0 || referenceIndex <= 0 || referenceIndex >= len(moves) ||
 		proofbound.IsNonFinite(p.MeshBound) || p.MeshBound < 0 {
 		return 0, false
@@ -230,10 +295,20 @@ func sourceAxialDrift(p Shell, moves []r3.Transform, referenceIndex int) (float6
 		xReach = max(xReach, math.Abs(v.X))
 	}
 	xReach = proofbound.AbsSumUpper(xReach, p.MeshBound)
-	firstScale := ratF(moves[referenceIndex].Basis().EX.X)
+	xScale := func(i int) (*big.Rat, bool) {
+		m, err := moveMap(moves, maps, i)
+		return m[0][0], err == nil
+	}
+	firstScale, ok := xScale(referenceIndex)
+	if !ok {
+		return 0, false
+	}
 	defect := new(big.Rat)
-	for _, move := range moves {
-		scale := ratF(move.Basis().EX.X)
+	for i := range moves {
+		scale, ok := xScale(i)
+		if !ok {
+			return 0, false
+		}
 		for _, reference := range []*big.Rat{ratOne(), firstScale} {
 			gap := ratAbs(ratSub(scale, reference))
 			if gap.Cmp(defect) > 0 {
@@ -250,7 +325,7 @@ func sourceAxialDrift(p Shell, moves []r3.Transform, referenceIndex int) (float6
 // length defect and both target held-shell bounds. The canonical left map
 // leaves X unchanged; enlarged reference slices charge each actual X scale
 // and each target held shell's possible axial displacement.
-func transferSeparation(p Shell, moves []r3.Transform,
+func transferSeparation(p Shell, moves []r3.Transform, maps [][3][3]*big.Rat,
 	i, j, referenceIndex int, clearance, heldAllowance float64) bool {
 	if len(moves) < 2 || i == j || i < 0 || j < 0 ||
 		referenceIndex <= 0 || referenceIndex >= len(moves) ||
@@ -266,16 +341,20 @@ func transferSeparation(p Shell, moves []r3.Transform,
 		maxAbs = max(maxAbs, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
 	}
 	radius := proofbound.AbsSumUpper(proofbound.Radius3D(maxAbs), p.MeshBound)
-	mi, errI := massmoment.PlacementRotation(moves[i])
-	m1, err1 := massmoment.PlacementRotation(moves[referenceIndex])
-	mj, errJ := massmoment.PlacementRotation(moves[j])
+	mi, errI := moveMap(moves, maps, i)
+	m1, err1 := moveMap(moves, maps, referenceIndex)
+	mj, errJ := moveMap(moves, maps, j)
 	if errI != nil || err1 != nil || errJ != nil {
 		return false
 	}
 	// Replace only the left copy's one-ULP X scale. This exact-X map carries
 	// the reference's X slabs unchanged; sourceAxialDrift pays for the
-	// difference to the actual placed copy in the enlarged source slices.
-	mi[0][0] = ratOne()
+	// difference to the actual placed copy in the enlarged source slices. An
+	// exact rotation already has X scale 1, so mi is its own map. mi is an array
+	// value, so the replacement never touches the caller's rationals.
+	if mi[0][0].Cmp(ratOne()) != 0 {
+		mi[0][0] = ratOne()
+	}
 	charge, err := massmoment.MapChargeOf(mi)
 	if err != nil || charge.Stretch >= 1 {
 		return false
