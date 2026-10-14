@@ -1,6 +1,7 @@
 package loftmesh
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -226,8 +227,9 @@ func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
 		Planes:     make([]LoftExactPlane, len(tris)),
 		compact:    compact,
 	}
+	d.tris = tris
 	if compact {
-		d.verts, d.tris = verts, tris
+		d.verts = verts
 	} else {
 		d.Corners = make([][3]r3.Vec, len(tris))
 		d.Xtris = make([][3]proof.Xpt, len(tris))
@@ -340,6 +342,12 @@ func (d *LoftAuditData) projectionTriple(i int) [3]meshbool.Xp2 {
 func ErrLoftContact(i, j int, reason string) error {
 	return &LoftContactError{I: i, J: j, Reason: reason}
 }
+
+// ErrLoftAuditOrder is the error AuditLoftPairData returns when the caller's
+// corner list of triangle i or j is not equal, corner for corner and in order,
+// to the list the table was built from. The table owns the corner order: every
+// certificate pairs a corner position with the table's signs and corners.
+var ErrLoftAuditOrder = errors.New("loft audit: triangle corner list differs from the audit table's")
 
 // LoftContactError is ErrLoftContact's ErrDegenerate, carrying the two
 // triangle indices the audit classified.
@@ -565,7 +573,10 @@ func AuditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
 }
 
 // AuditLoftPairData classifies pair (i, j) and reports which decision path
-// settled it. PRECONDITION: both triangles have three DISTINCT vertex indices
+// settled it. tris[i] and tris[j] must equal the triangles the table was built
+// from, corner for corner and in order: the table owns the order, and any other
+// list returns ErrLoftAuditOrder before a path runs. PRECONDITION: both
+// triangles have three DISTINCT vertex indices
 // and are noncollapsed — S6 (TriangleCollapsed, run over every triangle before
 // the S7 pair loop starts) is what establishes that for the production caller,
 // and the test-only AuditLoftPair above is called with noncollapsed fixtures.
@@ -646,6 +657,10 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 // signs are read only for a pair sharing no vertex; nil means compute them.
 func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts,
 	knownA, knownB *[3]int) (LoftPairOutcome, error) {
+	if tris[i] != data.tris[i] || tris[j] != data.tris[j] {
+		return LoftPairClassified, fmt.Errorf("%w: pair %d,%d is %v,%v but the table holds %v,%v",
+			ErrLoftAuditOrder, i, j, tris[i], tris[j], data.tris[i], data.tris[j])
+	}
 	shared, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
 	if shortcuts.Certificates && sharedCount == 1 && data.fans != nil {
 		// Both triangles are flat at the common vertex's z, so they are exactly
