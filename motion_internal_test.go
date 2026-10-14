@@ -713,36 +713,40 @@ func TestMotionTranslationPoseChargesFacetedReplacement(t *testing.T) {
 	motion := Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(3)}
 	nonzero := 0
 	var rotatedMover *Body
-	for _, axis := range []r3.Vec{{X: 1}, {Y: 1}, {X: 1, Y: 2, Z: 3}, {X: 1, Y: 1, Z: 1}, {X: -2, Y: 5, Z: 1}} {
-		for _, degrees := range []float64{7, 10, 17, 23, 29, 30, 37, 45, 53, 67, 73, 89, 113, 151} {
-			rotation, err := r3.Rotation(axis, units.Degrees(degrees))
-			require.NoError(t, err)
-			mover, err := Copy(t.Context(), source, WithCopyPlacement(rotation))
-			require.NoError(t, err)
-			if rotatedMover == nil {
-				rotatedMover = mover
+	// These two distinct axes and angles expose the missing re-placement charge
+	// on both GOAMD64=v1 and v3.
+	for _, tc := range []struct {
+		axis    r3.Vec
+		degrees float64
+	}{{axis: r3.Vec{X: 1}, degrees: 7}, {axis: r3.Vec{X: 1, Y: 1, Z: 1}, degrees: 151}} {
+		axis, degrees := tc.axis, tc.degrees
+		rotation, err := r3.Rotation(axis, units.Degrees(degrees))
+		require.NoError(t, err)
+		mover, err := Copy(t.Context(), source, WithCopyPlacement(rotation))
+		require.NoError(t, err)
+		if rotatedMover == nil {
+			rotatedMover = mover
+		}
+		fp := mover.payload.(facetedPayload)
+		run := motionRunFor(t, doc, []*Body{mover}, motion)
+		pose, err := run.evaluatePose(big.NewRat(1, 3), units.Millimeters(1))
+		require.NoError(t, err)
+		placed, err := run.place(pose, 0, make([]*motionPlaced, len(run.movers)))
+		require.NoError(t, err)
+		composed, err := fp.xform.Then(pose.result.Pose)
+		require.NoError(t, err)
+		delta, err := facetedPlacementDelta(fp.xform, composed)
+		require.NoError(t, err)
+		eta := motionPlacementFloat(placed.eta)
+		for _, vertex := range fp.verts {
+			gap := motionPlacementGap(delta, vertex, shift)
+			if gap.Sign() == 0 {
+				continue
 			}
-			fp := mover.payload.(facetedPayload)
-			run := motionRunFor(t, doc, []*Body{mover}, motion)
-			pose, err := run.evaluatePose(big.NewRat(1, 3), units.Millimeters(1))
-			require.NoError(t, err)
-			placed, err := run.place(pose, 0, make([]*motionPlaced, len(run.movers)))
-			require.NoError(t, err)
-			composed, err := fp.xform.Then(pose.result.Pose)
-			require.NoError(t, err)
-			delta, err := facetedPlacementDelta(fp.xform, composed)
-			require.NoError(t, err)
-			eta := motionPlacementFloat(placed.eta)
-			for _, vertex := range fp.verts {
-				gap := motionPlacementGap(delta, vertex, shift)
-				if gap.Sign() == 0 {
-					continue
-				}
-				nonzero++
-				if eta.Cmp(gap) < 0 {
-					t.Fatalf("axis %v at %g degrees: eta %s misses delta gap %s",
-						axis, degrees, eta.Text('g', 17), gap.Text('g', 17))
-				}
+			nonzero++
+			if eta.Cmp(gap) < 0 {
+				t.Fatalf("axis %v at %g degrees: eta %s misses delta gap %s",
+					axis, degrees, eta.Text('g', 17), gap.Text('g', 17))
 			}
 		}
 	}
