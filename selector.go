@@ -52,23 +52,6 @@ type FaceSelector interface {
 	SelectFaces(*Body) ([]*Face, error)
 }
 
-// cardKind discriminates the cardinality assertion a query carries.
-type cardKind = selectorquery.CardKind
-
-const (
-	// cardExactly asserts exactly n matches; anything else is ErrCardinality.
-	cardExactly cardKind = selectorquery.CardExactly
-	// cardAtLeast asserts at least n matches; fewer is ErrCardinality.
-	cardAtLeast = selectorquery.CardAtLeast
-)
-
-// cardinality is the recorded cardinality assertion of a query. The zero
-// value asserts nothing.
-type cardinality struct {
-	kind cardKind
-	n    int
-}
-
 // EdgeQuery is the concrete edge selector: a union of branches, each a
 // conjunction of edge predicates, plus an optional cardinality assertion over
 // the union. Build one with Edges and add branches with Or.
@@ -77,7 +60,7 @@ type EdgeQuery struct {
 	// clause list Edges took, and each Or appends one more. Only a zero-value
 	// query holds none, and it reads as Edges(): one empty branch.
 	branches [][]EdgePredicate
-	card     cardinality
+	card     selectorquery.Cardinality
 }
 
 // FaceQuery is the concrete face selector: a union of branches, each a
@@ -86,7 +69,7 @@ type EdgeQuery struct {
 type FaceQuery struct {
 	// branches holds the conjunctions in query order, as EdgeQuery's does.
 	branches [][]FacePredicate
-	card     cardinality
+	card     selectorquery.Cardinality
 }
 
 // Edges returns a query matching every edge that satisfies all of preds; no
@@ -167,7 +150,7 @@ func (q *EdgeQuery) SelectEdges(body *Body) ([]*Edge, error) {
 		}
 		matched = append(matched, e)
 	}
-	if err := q.card.enforce(len(matched), "edges"); err != nil {
+	if err := q.card.Enforce(len(matched), "edges"); err != nil {
 		return nil, q.enrich(body, len(matched), err)
 	}
 	return matched, nil
@@ -180,9 +163,9 @@ func (q *EdgeQuery) SelectEdges(body *Body) ([]*Edge, error) {
 func (q *EdgeQuery) enrich(body *Body, matched int, err error) error {
 	switch {
 	case errors.Is(err, ErrNoMatch):
-		return q.selectionError(body, matched, q.card.expected(), ErrNoMatch)
+		return q.selectionError(body, matched, q.card.Expected(), ErrNoMatch)
 	case errors.Is(err, ErrCardinality):
-		return q.selectionError(body, matched, q.card.expected(), ErrCardinality)
+		return q.selectionError(body, matched, q.card.Expected(), ErrCardinality)
 	default:
 		return err
 	}
@@ -216,7 +199,7 @@ func (q *FaceQuery) SelectFaces(body *Body) ([]*Face, error) {
 		}
 		matched = append(matched, f)
 	}
-	if err := q.card.enforce(len(matched), "faces"); err != nil {
+	if err := q.card.Enforce(len(matched), "faces"); err != nil {
 		return nil, q.enrich(body, len(matched), err)
 	}
 	return matched, nil
@@ -226,26 +209,19 @@ func (q *FaceQuery) SelectFaces(body *Body) ([]*Face, error) {
 func (q *FaceQuery) enrich(body *Body, matched int, err error) error {
 	switch {
 	case errors.Is(err, ErrNoMatch):
-		return q.selectionError(body, matched, q.card.expected(), ErrNoMatch)
+		return q.selectionError(body, matched, q.card.Expected(), ErrNoMatch)
 	case errors.Is(err, ErrCardinality):
-		return q.selectionError(body, matched, q.card.expected(), ErrCardinality)
+		return q.selectionError(body, matched, q.card.Expected(), ErrCardinality)
 	default:
 		return err
 	}
-}
-
-// enforce applies the recorded cardinality assertion to a match count: a
-// failed assertion is ErrCardinality even at zero matches, and ErrNoMatch is
-// reserved for a query that asserts nothing and matched nothing (core §12).
-func (c cardinality) enforce(n int, what string) error {
-	return (selectorquery.Cardinality{Kind: c.kind, N: c.n}).Enforce(n, what)
 }
 
 // Exactly asserts the query resolves to exactly n matches; anything else —
 // zero included — is ErrCardinality at resolve. It replaces any earlier
 // cardinality assertion and returns the receiver for chaining.
 func (q *EdgeQuery) Exactly(n int) *EdgeQuery {
-	q.card = cardinality{kind: cardExactly, n: n}
+	q.card = selectorquery.Cardinality{Kind: selectorquery.CardExactly, N: n}
 	return q
 }
 
@@ -253,7 +229,7 @@ func (q *EdgeQuery) Exactly(n int) *EdgeQuery {
 // ErrCardinality at resolve. It replaces any earlier cardinality assertion
 // and returns the receiver for chaining.
 func (q *EdgeQuery) AtLeast(n int) *EdgeQuery {
-	q.card = cardinality{kind: cardAtLeast, n: n}
+	q.card = selectorquery.Cardinality{Kind: selectorquery.CardAtLeast, N: n}
 	return q
 }
 
@@ -261,7 +237,7 @@ func (q *EdgeQuery) AtLeast(n int) *EdgeQuery {
 // zero included — is ErrCardinality at resolve. It replaces any earlier
 // cardinality assertion and returns the receiver for chaining.
 func (q *FaceQuery) Exactly(n int) *FaceQuery {
-	q.card = cardinality{kind: cardExactly, n: n}
+	q.card = selectorquery.Cardinality{Kind: selectorquery.CardExactly, N: n}
 	return q
 }
 
@@ -269,7 +245,7 @@ func (q *FaceQuery) Exactly(n int) *FaceQuery {
 // ErrCardinality at resolve. It replaces any earlier cardinality assertion
 // and returns the receiver for chaining.
 func (q *FaceQuery) AtLeast(n int) *FaceQuery {
-	q.card = cardinality{kind: cardAtLeast, n: n}
+	q.card = selectorquery.Cardinality{Kind: selectorquery.CardAtLeast, N: n}
 	return q
 }
 
@@ -301,55 +277,36 @@ type FacePredicate struct {
 	ref  FeatureRef
 }
 
-// Stable predicate names are shared by query rendering and resolution.
-const (
-	predKindConvex        = selectorquery.ConvexKind
-	predKindConcave       = selectorquery.ConcaveKind
-	predKindParallelTo    = selectorquery.ParallelToKind
-	predKindEndpointAt    = selectorquery.EndpointAtKind
-	predKindLongerThan    = selectorquery.LongerThanKind
-	predKindCreatedBy     = selectorquery.CreatedByKind
-	predKindOuterLoopOf   = selectorquery.OuterLoopOfKind
-	predKindCircular      = selectorquery.CircularKind
-	predKindPlanar        = selectorquery.PlanarKind
-	predKindCylindrical   = selectorquery.CylindricalKind
-	predKindNormalTo      = selectorquery.NormalToKind
-	predKindFacing        = selectorquery.FacingKind
-	predKindFaceCreatedBy = selectorquery.FaceCreatedByKind
-	predKindWalls         = selectorquery.WallsKind
-	predKindFree          = selectorquery.FreeKind
-)
-
 // Convex matches edges Edge.IsConvex reports convex — the walked-boundary
 // convention, not the 3D material angle across the edge. Read Edge.IsConvex
 // before selecting on it: a hole's rim edges are CONCAVE, so this predicate
 // never picks them.
-func Convex() EdgePredicate { return EdgePredicate{kind: predKindConvex} }
+func Convex() EdgePredicate { return EdgePredicate{kind: selectorquery.ConvexKind} }
 
 // Concave matches edges Edge.IsConvex reports concave — the walked-boundary
 // convention, not the 3D material angle across the edge. This is the predicate
 // that picks a hole's rim edges, and the rim of a concave round bitten out of
 // the outer boundary.
-func Concave() EdgePredicate { return EdgePredicate{kind: predKindConcave} }
+func Concave() EdgePredicate { return EdgePredicate{kind: selectorquery.ConcaveKind} }
 
 // ParallelTo matches edges whose direction is parallel to v. The vector is
 // recorded exactly as given — a dimensionless direction (core §5.2); a
 // degenerate (zero or non-finite) direction is rejected at resolve, not here.
 func ParallelTo(v r3.Vec) EdgePredicate {
-	return EdgePredicate{kind: predKindParallelTo, dir: v}
+	return EdgePredicate{kind: selectorquery.ParallelToKind, dir: v}
 }
 
 // EndpointAt matches an edge whose stored start or end position equals p
 // component-wise. It uses no tolerance; a non-finite p fails at resolve.
 func EndpointAt(p r3.Vec) EdgePredicate {
-	return EdgePredicate{kind: predKindEndpointAt, point: p}
+	return EdgePredicate{kind: selectorquery.EndpointAtKind, point: p}
 }
 
 // LongerThan matches edges strictly longer than l. The quantity is recorded
 // exactly as given; a non-length or negative l is rejected at resolve
 // (ErrUnitKind / ErrNegativeMagnitude), not here.
 func LongerThan(l units.Value) EdgePredicate {
-	return EdgePredicate{kind: predKindLongerThan, length: l}
+	return EdgePredicate{kind: selectorquery.LongerThanKind, length: l}
 }
 
 // CreatedBy matches edges by provenance: edges created by the feature role f
@@ -357,17 +314,17 @@ func LongerThan(l units.Value) EdgePredicate {
 // (docs/evaluator-design.md §3). A negative producer identity or empty role is rejected at
 // resolve as ErrDegenerate.
 func CreatedBy(f FeatureRef) EdgePredicate {
-	return EdgePredicate{kind: predKindCreatedBy, ref: f}
+	return EdgePredicate{kind: selectorquery.CreatedByKind, ref: f}
 }
 
 // OuterLoopOf matches edges on the outer boundary loop of a face carrying f.
 // On a holed cap, it excludes every inner-loop rim edge, including a bore.
 func OuterLoopOf(f FeatureRef) EdgePredicate {
-	return EdgePredicate{kind: predKindOuterLoopOf, ref: f}
+	return EdgePredicate{kind: selectorquery.OuterLoopOfKind, ref: f}
 }
 
 // Circular matches edges whose curve is a full circle or a circular arc.
-func Circular() EdgePredicate { return EdgePredicate{kind: predKindCircular} }
+func Circular() EdgePredicate { return EdgePredicate{kind: selectorquery.CircularKind} }
 
 // Free matches edges Edge.IsFree reports free — exactly one adjacent face, a
 // sheet's boundary (docs/surface-design.md §2.2, §3.1). It composes with
@@ -376,21 +333,21 @@ func Circular() EdgePredicate { return EdgePredicate{kind: predKindCircular} }
 // body with no free edge — every solid, and a closed sheet — it matches
 // nothing, an ordinary ErrNoMatch at resolve or ErrCardinality under an
 // assertion, never an error in itself.
-func Free() EdgePredicate { return EdgePredicate{kind: predKindFree} }
+func Free() EdgePredicate { return EdgePredicate{kind: selectorquery.FreeKind} }
 
 // Planar matches faces whose surface is a plane.
-func Planar() FacePredicate { return FacePredicate{kind: predKindPlanar} }
+func Planar() FacePredicate { return FacePredicate{kind: selectorquery.PlanarKind} }
 
 // Cylindrical matches faces whose surface is a cylinder. On a Faceted body
 // the analytic identity is gone, so it matches nothing there — matching is
 // decided on what the face IS (docs/evaluator-design.md §7).
-func Cylindrical() FacePredicate { return FacePredicate{kind: predKindCylindrical} }
+func Cylindrical() FacePredicate { return FacePredicate{kind: selectorquery.CylindricalKind} }
 
 // NormalTo matches planar faces whose normal is parallel to v. The vector is
 // recorded exactly as given — a dimensionless direction (core §5.2); a
 // degenerate (zero or non-finite) direction is rejected at resolve, not here.
 func NormalTo(v r3.Vec) FacePredicate {
-	return FacePredicate{kind: predKindNormalTo, dir: v}
+	return FacePredicate{kind: selectorquery.NormalToKind, dir: v}
 }
 
 // Facing matches the planar face whose OUTWARD (material-leaving) normal points
@@ -400,7 +357,7 @@ func NormalTo(v r3.Vec) FacePredicate {
 // dimensionless direction (core §5.2); a degenerate (zero or non-finite)
 // direction is rejected at resolve, not here.
 func Facing(v r3.Vec) FacePredicate {
-	return FacePredicate{kind: predKindFacing, dir: v}
+	return FacePredicate{kind: selectorquery.FacingKind, dir: v}
 }
 
 // FaceCreatedBy matches faces by provenance — the face analog of CreatedBy.
@@ -409,7 +366,7 @@ func Facing(v r3.Vec) FacePredicate {
 // (docs/evaluator-design.md §3). A negative producer identity or empty role is rejected at
 // resolve as ErrDegenerate.
 func FaceCreatedBy(f FeatureRef) FacePredicate {
-	return FacePredicate{kind: predKindFaceCreatedBy, ref: f}
+	return FacePredicate{kind: selectorquery.FaceCreatedByKind, ref: f}
 }
 
 // CapStart names the start-cap role of b's own producing feature, so
@@ -439,7 +396,7 @@ func CapEnd(b *Body) FeatureRef {
 // (docs/draft-design.md §10). On a body whose producer mints no side roles it
 // matches nothing, an ordinary ErrNoMatch at resolve. b must not be nil.
 func Walls(b *Body) FacePredicate {
-	return FacePredicate{kind: predKindWalls, ref: FeatureRef{producer: b.Origin().producer, Role: roleSidePrefix}}
+	return FacePredicate{kind: selectorquery.WallsKind, ref: FeatureRef{producer: b.Origin().producer, Role: roleSidePrefix}}
 }
 
 // parallelDirs is shared with the body-relative stop adapter.

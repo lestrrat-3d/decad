@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -31,12 +32,12 @@ func TestFreeEdgeAndOpenShellReadTheirOwnState(t *testing.T) {
 
 	t.Run("FreePredicateMatchesOnTheEdgesOwnState", func(t *testing.T) {
 		t.Parallel()
-		pred := EdgePredicate{kind: predKindFree}
+		pred := EdgePredicate{kind: selectorquery.FreeKind}
 		free := &Edge{faces: []*Face{{}}}
 		interior := &Edge{faces: []*Face{{}, {}}}
 
-		require.True(t, pred.matches(free), `predKindFree must match a one-face edge`)
-		require.False(t, pred.matches(interior), `predKindFree must not match a two-face edge`)
+		require.True(t, pred.matches(free), `selectorquery.FreeKind must match a one-face edge`)
+		require.False(t, pred.matches(interior), `selectorquery.FreeKind must not match a two-face edge`)
 	})
 
 	t.Run("ShellIsOpenReadsItsOwnStoredField", func(t *testing.T) {

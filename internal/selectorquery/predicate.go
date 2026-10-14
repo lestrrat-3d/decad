@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// Stable predicate names are shared by query rendering and resolution.
 const (
 	ConvexKind        = "convex"
 	ConcaveKind       = "concave"
