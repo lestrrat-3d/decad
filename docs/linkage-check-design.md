@@ -758,6 +758,19 @@ met along. The numerator is exact, and it is divided by `|n|` rounded up when it
 down otherwise, so the quotient is a lower bound either way; the pads come off after the division. The
 remainder bounds a vector, so along `n` it is charged `Rem·|n|`, rounded up.
 
+**Directions that cannot matter are skipped, never decided.** A caller that keeps the hull bound only
+above a floor (the larger bound it already holds) passes it, and a face normal is not evaluated when it
+cannot be the first direction to attain a bound above that floor. A normal with one nonzero component `c`
+is a scaled coordinate direction: its extents are `|c|` times the axis extents (the remainder charge
+`Rem·|n|` is at least `|c|·Rem`), so its candidates are at most the coordinate candidates already taken.
+Any other normal is skipped when a float upper bound on both candidates is below the best bound so far or
+the floor. That bound drops every motion term, which only raise an extent, and rounds every operation
+outward, so it can only skip. Both rules need a nonnegative span on the box form and a nonnegative
+remainder, and a side that breaks them is evaluated in full. Every evaluated direction runs the exact
+rational path. When the unfiltered bound exceeds the floor, the result is that bound with its direction,
+norm and sense, unchanged. Otherwise the result is nil or a bound at most the floor, which may differ from
+the unfiltered one, and every caller discards it.
+
 **Two bounds, the larger.** For each pair the projection bound is the larger of the box-corner bound over
 the six coordinate directions and the hull-point bound over every candidate direction: two proven lower
 bounds, so their maximum is one, and no interval reads worse than under the box corners alone. The cell

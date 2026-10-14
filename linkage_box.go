@@ -937,7 +937,7 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 	if !okA || !okP {
 		return bound, shares
 	}
-	witness := linkagebound.LowerHullWithWitness(ah, ph)
+	witness := linkagebound.LowerHullWithWitnessAbove(ah, ph, bound)
 	hull := witness.Bound
 	if hull == nil || hull.Cmp(bound) <= 0 {
 		return bound, shares

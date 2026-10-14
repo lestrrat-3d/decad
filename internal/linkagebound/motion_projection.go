@@ -40,7 +40,7 @@ func MotionProjection(frame motionbound.MotionFrame, rho float64, a, b motionbou
 			side := Side{Corners: mine, H: []*big.Rat{span}, Seg: []proofbound.RatInterval{signed}, Rem: rem}
 			var lower *big.Rat
 			if hull {
-				lower = LowerHull(side, Side{Corners: stationary})
+				lower = LowerHullAbove(side, Side{Corners: stationary}, best)
 			} else {
 				lower = Lower(side, Side{Corners: stationary})
 			}
