@@ -647,3 +647,111 @@ func TestMotionBetweenFrameReachesTo(t *testing.T) {
 		})
 	}
 }
+
+const motionPlacementPrecision = 400
+
+type motionPlacementVec [3]*big.Float
+
+func motionPlacementFloat(x float64) *big.Float {
+	return new(big.Float).SetPrec(motionPlacementPrecision).SetFloat64(x)
+}
+
+func motionPlacementVector(v r3.Vec) motionPlacementVec {
+	return motionPlacementVec{motionPlacementFloat(v.X), motionPlacementFloat(v.Y), motionPlacementFloat(v.Z)}
+}
+
+// motionPlacementApply reads each stored transform entry exactly, then applies
+// it at enough precision to expose the re-placement error below one ulp.
+func motionPlacementApply(tr r3.Transform, v r3.Vec) motionPlacementVec {
+	result := motionPlacementVector(tr.Translation())
+	coords := motionPlacementVector(v)
+	basis := tr.Basis()
+	for j, col := range []r3.Vec{basis.EX, basis.EY, basis.EZ} {
+		for i, x := range []float64{col.X, col.Y, col.Z} {
+			term := new(big.Float).SetPrec(motionPlacementPrecision).Mul(motionPlacementFloat(x), coords[j])
+			result[i].Add(result[i], term)
+		}
+	}
+	return result
+}
+
+func motionPlacementGap(delta r3.Transform, held r3.Vec, shift r3.Vec) *big.Float {
+	actual := motionPlacementApply(delta, held)
+	want := motionPlacementVector(held)
+	s := motionPlacementVector(shift)
+	squared := motionPlacementFloat(0)
+	for i := range actual {
+		want[i].Add(want[i], s[i])
+		diff := new(big.Float).SetPrec(motionPlacementPrecision).Sub(actual[i], want[i])
+		squared.Add(squared, new(big.Float).SetPrec(motionPlacementPrecision).Mul(diff, diff))
+	}
+	return squared.Sqrt(squared)
+}
+
+// TestMotionTranslationPoseChargesFacetedReplacement checks the deviation
+// against the exact image of each held vertex under the same delta that the
+// transient faceted placement applies.
+func TestMotionTranslationPoseChargesFacetedReplacement(t *testing.T) {
+	doc := New()
+	a := internalBoxBody(t, doc, 0, 0, 10, 4, 3)
+	b := internalBoxBody(t, doc, 2, 1, 6, 9, 5)
+	tilt, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(30))
+	require.NoError(t, err)
+	up, err := r3.Translation(r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	tiltUp, err := tilt.Then(up)
+	require.NoError(t, err)
+	rotated, err := Copy(t.Context(), b, WithCopyPlacement(tiltUp))
+	require.NoError(t, err)
+	source, err := Union(t.Context(), a, rotated)
+	require.NoError(t, err)
+	_, ok := source.payload.(facetedPayload)
+	require.True(t, ok)
+
+	shift := r3.NewVec(1, 0, 0)
+	motion := Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(3)}
+	nonzero := 0
+	var rotatedMover *Body
+	for _, axis := range []r3.Vec{{X: 1}, {Y: 1}, {X: 1, Y: 2, Z: 3}, {X: 1, Y: 1, Z: 1}, {X: -2, Y: 5, Z: 1}} {
+		for _, degrees := range []float64{7, 10, 17, 23, 29, 30, 37, 45, 53, 67, 73, 89, 113, 151} {
+			rotation, err := r3.Rotation(axis, units.Degrees(degrees))
+			require.NoError(t, err)
+			mover, err := Copy(t.Context(), source, WithCopyPlacement(rotation))
+			require.NoError(t, err)
+			if rotatedMover == nil {
+				rotatedMover = mover
+			}
+			fp := mover.payload.(facetedPayload)
+			run := motionRunFor(t, doc, []*Body{mover}, motion)
+			pose, err := run.evaluatePose(big.NewRat(1, 3), units.Millimeters(1))
+			require.NoError(t, err)
+			placed, err := run.place(pose, 0, make([]*motionPlaced, len(run.movers)))
+			require.NoError(t, err)
+			composed, err := fp.xform.Then(pose.result.Pose)
+			require.NoError(t, err)
+			delta, err := facetedPlacementDelta(fp.xform, composed)
+			require.NoError(t, err)
+			eta := motionPlacementFloat(placed.eta)
+			for _, vertex := range fp.verts {
+				gap := motionPlacementGap(delta, vertex, shift)
+				if gap.Sign() == 0 {
+					continue
+				}
+				nonzero++
+				if eta.Cmp(gap) < 0 {
+					t.Fatalf("axis %v at %g degrees: eta %s misses delta gap %s",
+						axis, degrees, eta.Text('g', 17), gap.Text('g', 17))
+				}
+			}
+		}
+	}
+	require.Positive(t, nonzero, "the rotation grid must include a nonzero re-placement gap")
+
+	rotating := Revolute{Axis: r3.NewVec(0, 0, 1), From: units.Degrees(0), To: units.Degrees(30)}
+	run := motionRunFor(t, doc, []*Body{rotatedMover}, rotating)
+	pose, err := run.evaluatePose(big.NewRat(1, 2), units.Degrees(15))
+	require.NoError(t, err)
+	placed, err := run.place(pose, 0, make([]*motionPlaced, len(run.movers)))
+	require.NoError(t, err)
+	require.True(t, math.IsInf(placed.eta, 1), "faceted rotation poses remain unbounded")
+}

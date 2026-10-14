@@ -343,6 +343,14 @@ of interference §3 over every (placed mover, static) pair. Three rules make it 
   must be charged rather than argued away: a bound stops covering a value the moment unproven float ops touch
   it, and the pose is such an op.
 
+For a faceted mover, the transient placement applies the float delta
+`Δ = P0⁻¹ then C_k` to its current true solid. Its `η_k` is the larger of the
+record term above and `‖B(Δ) − B(T*)‖_F·ρ_h + |t(Δ) − (c − B(T*)·c + t*)|`,
+where `ρ_h` is the held vertices' largest L1 distance from the origin plus
+`meshBound`. The linear factor used for the swept-volume transfer is enlarged
+by the same maximum. A non-translation pose on a faceted mover still has an
+unbounded record term and cannot transfer a collision through `η_k`.
+
 **A `Between`'s ideal path is the exact screw of the READ parameters, applied after `From`.** `rel.Screw()`
 returns float values for `Axis`, `Point`, `Angle` and `Slide`; the ideal path takes each as the exact
 rational the float denotes and composes the exact screw they name onto `From`, itself taken as the exact

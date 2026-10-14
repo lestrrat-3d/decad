@@ -208,6 +208,20 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	return fp.placedWith(ctx, d, ref, composed, nil)
 }
 
+// facetedPlacementDelta is the float map applied to the held mesh. Motion
+// verification must charge this same map against its ideal pose.
+func facetedPlacementDelta(xform, composed r3.Transform) (r3.Transform, error) {
+	inv, err := xform.Inverse()
+	if err != nil {
+		return r3.Transform{}, fmt.Errorf(`decad: inverting the accumulated placement failed: %w`, err)
+	}
+	delta, err := inv.Then(composed)
+	if err != nil {
+		return r3.Transform{}, fmt.Errorf(`decad: composing the placement failed: %w`, err)
+	}
+	return delta, nil
+}
+
 // placedWith is placed for a copy that denotes the exact rotation exact, or
 // the float placement alone when exact is nil. With a record the result
 // denotes Q*S + t_Q, where S is fp's true solid: the held mesh is placed by
@@ -222,13 +236,9 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	inv, err := fp.xform.Inverse()
+	delta, err := facetedPlacementDelta(fp.xform, composed)
 	if err != nil {
-		return nil, fmt.Errorf(`decad: inverting the accumulated placement failed: %w`, err)
-	}
-	delta, err := inv.Then(composed)
-	if err != nil {
-		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
+		return nil, err
 	}
 	next := fp
 	next.axialSectionJoin = false

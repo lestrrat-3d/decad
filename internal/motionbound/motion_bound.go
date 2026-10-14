@@ -10,6 +10,24 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+// HeldRadiusUpper bounds the distance from the origin to every point of a
+// faceted mover's true solid. A held facet lies in its vertices' convex hull;
+// the true boundary departs from that facet by at most departure. L1 bounds
+// each held vertex's Euclidean norm and is convex along the facet.
+func HeldRadiusUpper(verts []r3.Vec, departure float64) float64 {
+	if proofbound.IsNonFinite(departure) || departure < 0 {
+		return math.Inf(1)
+	}
+	radius := 0.0
+	for _, vertex := range verts {
+		if proofbound.IsNonFinite(vertex.X) || proofbound.IsNonFinite(vertex.Y) || proofbound.IsNonFinite(vertex.Z) {
+			return math.Inf(1)
+		}
+		radius = math.Max(radius, proofbound.AbsSumUpper(vertex.X, vertex.Y, vertex.Z))
+	}
+	return proofbound.AbsSumUpper(radius, departure)
+}
+
 // PoseDeviation is docs/motion-check-design.md §5.1's η: a proven upper bound
 // on how far any point of a mover sits between where the kernel measured it —
 // under the float composed placement C = P0 then PoseAt — and where the ideal
