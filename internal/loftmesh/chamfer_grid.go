@@ -45,8 +45,11 @@ func ChamferEdgeGridOf(edges []ChamferSplitEdge,
 		return ChamferEdgeGrid{},
 			fmt.Errorf("%w: cap split ring exceeds the spatial work limit", decaderr.ErrUnsupported)
 	}
+	// Rat.Set keeps a caller's non-reduced form; SetFrac reduces. proof.QuoRat
+	// below needs lowest terms, so reach is rebuilt before any use.
+	reach = new(big.Rat).SetFrac(new(big.Int).Set(reach.Num()), new(big.Int).Set(reach.Denom()))
 	grid := ChamferEdgeGrid{
-		step:  new(big.Rat).Set(reach),
+		step:  reach,
 		cells: make(map[chamferGridCell][]int), edges: edges,
 	}
 	// Each source edge may occupy at most 128 grid cells on average. This

@@ -201,3 +201,37 @@ func TestCapPolygonAreaRatMatchesRawRat(t *testing.T) {
 		require.Equal(t, want.String(), got.String())
 	}
 }
+
+// A caller may hand ChamferEdgeGridOf a reach that is not in lowest terms.
+// The grid must treat it as its reduced value and store a reduced step.
+func TestChamferEdgeGridOfReducesANonReducedReach(t *testing.T) {
+	edges := []ChamferSplitEdge{
+		{A: proof.XptOf(r3.Vec{X: 0.1, Y: 0.2, Z: 0}), B: proof.XptOf(r3.Vec{X: 2.7, Y: 1.3, Z: 0})},
+		{A: proof.XptOf(r3.Vec{X: -1.9, Y: 0.4, Z: 0}), B: proof.XptOf(r3.Vec{X: 0.6, Y: -2.2, Z: 0})},
+	}
+	reduced := big.NewRat(1, 3)
+	unreduced := big.NewRat(1, 9)
+	unreduced.Num().SetInt64(3) // 3/9, as no production path builds it
+	require.Zero(t, reduced.Cmp(unreduced))
+
+	want, err := ChamferEdgeGridOf(edges, reduced)
+	require.NoError(t, err)
+	got, err := ChamferEdgeGridOf(edges, unreduced)
+	require.NoError(t, err)
+
+	wantStep := new(big.Rat).SetFrac(big.NewInt(1), big.NewInt(3))
+	require.Equal(t, wantStep.Num().String(), got.step.Num().String())
+	require.Equal(t, wantStep.Denom().String(), got.step.Denom().String())
+	require.Equal(t, want.step.String(), got.step.String())
+	require.Equal(t, want.cells, got.cells)
+	// The caller's value is left alone.
+	require.Equal(t, "3", unreduced.Num().String())
+	require.Equal(t, "9", unreduced.Denom().String())
+
+	for _, coord := range []*big.Rat{big.NewRat(-7, 2), big.NewRat(0, 1), big.NewRat(5, 3), big.NewRat(11, 1)} {
+		wantI, wantOK := chamferGridIndex(coord, reduced)
+		gotI, gotOK := chamferGridIndex(coord, got.step)
+		require.Equal(t, wantOK, gotOK)
+		require.Equal(t, wantI, gotI)
+	}
+}
