@@ -21,7 +21,7 @@ import (
 const maxStationedTwistCells = 64
 
 type straightTwistStation struct {
-	twistStation
+	twistsweep.TwistStation
 	axialError float64
 }
 
@@ -108,9 +108,9 @@ func straightTwistStations(height, heldAngle float64, angle proofbound.RatInterv
 			return nil, fmt.Errorf(`%w: twist station has no finite coordinate bound`, ErrUnsupported)
 		}
 		stations[index] = straightTwistStation{
-			twistStation: twistStation{
-				plane: planeRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()},
-				frame: frame, pointError: pointError,
+			TwistStation: twistsweep.TwistStation{
+				Plane: planeRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()},
+				Frame: frame, PointError: pointError,
 			},
 			axialError: axialError,
 		}
@@ -190,8 +190,8 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	for i := range parts {
 		part, buildErr := evalLoft(ctx, d, ref, loftPayload{
 			profile0: profile, profile1: profile,
-			plane0: stations[i].plane, plane1: stations[i+1].plane,
-			frame0: stations[i].frame, frame1: stations[i+1].frame,
+			plane0: stations[i].Plane, plane1: stations[i+1].Plane,
+			frame0: stations[i].Frame, frame1: stations[i+1].Frame,
 			xform: xform, recordArea: [2]float64{recordArea, recordArea},
 			retainTwistAreaCells: poly.HasArc,
 		}, budget, work0, work1)
@@ -238,7 +238,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	cellHeight := proofbound.RatFloatUp(new(big.Rat).Quo(twistsweep.TwistRat(path.End().Z), big.NewRat(int64(cells), 1)))
 	delta, volSymDiff := 0.0, 0.0
 	for i, loft := range held {
-		stationError := max(stations[i].pointError, stations[i+1].pointError)
+		stationError := max(stations[i].PointError, stations[i+1].PointError)
 		axialError := max(stations[i].axialError, stations[i+1].axialError)
 		ideal := straightTwistCellDeparture(poly, cellAngle, stationError)
 		// Loft's source-to-facet proof includes the arc chord and ruled-wall
@@ -272,7 +272,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	if poly.HasArc {
 		trueAreaIv, err = twistMixedAreaInterval(poly, twistsweep.TwistRat(path.End().Z), thetaIv)
 	} else {
-		trueAreaIv, err = twistAreaInterval(poly, twistsweep.TwistRat(path.End().Z), thetaIv)
+		trueAreaIv, err = twistsweep.TwistAreaInterval(poly, twistsweep.TwistRat(path.End().Z), thetaIv)
 	}
 	if err != nil {
 		return nil, err

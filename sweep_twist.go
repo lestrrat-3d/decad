@@ -40,64 +40,6 @@ func (p twistedSweepPayload) placed(ctx context.Context, d *Document, ref produc
 	return evalTwistedSweep(ctx, d, ref, p.profile, p.plane, p.path, p.angle, p.recordArea, xform)
 }
 
-// twistAreaInterval integrates |dS/ds x dS/dt|. On an edge p(s)=p0+s*v,
-// that norm is sqrt(h²|v|² + angle²(p(s)·v)²), independent of path station t.
-// The primitive of sqrt(a+u²) is
-// (u*sqrt(a+u²)+a*asinh(u/sqrt(a)))/2. All inputs and operations below are
-// exact rational intervals, including the stated angle and asinh enclosure.
-func twistAreaInterval(poly twistsweep.TwistPolygon, height *big.Rat, angle proofbound.RatInterval) (proofbound.RatInterval, error) {
-	result := proofbound.PointInterval(new(big.Rat).Mul(poly.Area, big.NewRat(2, 1)))
-	absAngle := angle
-	if angle.Hi.Sign() < 0 {
-		absAngle = proofbound.IntervalNeg(angle)
-	}
-	if absAngle.Lo.Sign() <= 0 {
-		return proofbound.RatInterval{}, fmt.Errorf(`%w: the twisted sweep's angle interval includes zero`, ErrUnsupported)
-	}
-	h2 := new(big.Rat).Mul(height, height)
-	for i, p := range poly.Points {
-		q := poly.Points[(i+1)%len(poly.Points)]
-		x, y := twistsweep.TwistRat(p.U), twistsweep.TwistRat(p.V)
-		dx, dy := new(big.Rat).Sub(twistsweep.TwistRat(q.U), x), new(big.Rat).Sub(twistsweep.TwistRat(q.V), y)
-		len2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
-		base := new(big.Rat).Mul(h2, len2)
-		rootA, ok := proofbound.SqrtInterval(proofbound.PointInterval(base))
-		if !ok || rootA.Lo.Sign() <= 0 {
-			return proofbound.RatInterval{}, fmt.Errorf(`%w: a twisted wall has no area bound`, ErrUnsupported)
-		}
-		primitive := func(dot *big.Rat) (proofbound.RatInterval, bool) {
-			u := proofbound.IntervalScale(absAngle, dot)
-			root, ok := proofbound.SqrtInterval(proofbound.IntervalAdd(
-				proofbound.PointInterval(base), proofbound.IntervalSquare(u)))
-			if !ok {
-				return proofbound.RatInterval{}, false
-			}
-			ratio, ok := proofbound.IntervalQuo(u, rootA)
-			if !ok {
-				return proofbound.RatInterval{}, false
-			}
-			return proofbound.IntervalScale(proofbound.IntervalAdd(
-				proofbound.IntervalMul(u, root),
-				proofbound.IntervalScale(proofbound.AsinhInterval(ratio), base),
-			), big.NewRat(1, 2)), true
-		}
-		initial := new(big.Rat).Add(new(big.Rat).Mul(x, dx), new(big.Rat).Mul(y, dy))
-		finish := new(big.Rat).Add(initial, len2)
-		f0, ok0 := primitive(initial)
-		f1, ok1 := primitive(finish)
-		if !ok0 || !ok1 {
-			return proofbound.RatInterval{}, fmt.Errorf(`%w: a twisted wall has no area integral`, ErrUnsupported)
-		}
-		term, ok := proofbound.IntervalQuo(proofbound.IntervalSub(f1, f0),
-			proofbound.IntervalScale(absAngle, len2))
-		if !ok {
-			return proofbound.RatInterval{}, fmt.Errorf(`%w: a twisted wall has no positive angle divisor`, ErrUnsupported)
-		}
-		result = proofbound.IntervalAdd(result, term)
-	}
-	return result, nil
-}
-
 // For an arc-length parameter s, a rotating vertical wall has Jacobian
 // sqrt(h² + theta²*(p dot dp/ds)²). The two-sided perimeter and source-radius
 // enclosures bound this non-cancelling integral for both lines and arcs.
@@ -338,7 +280,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	if proofbound.IsNonFinite(delta) || delta <= 0 {
 		return nil, fmt.Errorf(`%w: the twisted boundary has no finite displacement proof`, ErrUnsupported)
 	}
-	areaIv, err := twistAreaInterval(poly, twistsweep.TwistRat(path.End().Z), angleIv)
+	areaIv, err := twistsweep.TwistAreaInterval(poly, twistsweep.TwistRat(path.End().Z), angleIv)
 	if err != nil {
 		return nil, err
 	}

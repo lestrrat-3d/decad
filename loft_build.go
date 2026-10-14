@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/twistsweep"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -199,7 +200,7 @@ type loftPayload struct {
 	segment [][]int
 	// twistAreaCells retains only the certified per-cell readings needed by a
 	// private twisted Sweep comparison Loft. Ordinary Loft payloads omit them.
-	twistAreaCells       [][]twistAreaCellClaims
+	twistAreaCells       [][]twistsweep.TwistAreaCellClaims
 	retainTwistAreaCells bool
 
 	// proof is the mesh proof record docs/tessellation-design.md §2 states for
@@ -506,14 +507,14 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		pl.segment[i] = append([]int(nil), pairs[i].Segment...)
 	}
 	if pl.retainTwistAreaCells {
-		pl.twistAreaCells = make([][]twistAreaCellClaims, len(pairs))
+		pl.twistAreaCells = make([][]twistsweep.TwistAreaCellClaims, len(pairs))
 		for i, pair := range pairs {
-			pl.twistAreaCells[i] = make([]twistAreaCellClaims, len(pair.Segment))
+			pl.twistAreaCells[i] = make([]twistsweep.TwistAreaCellClaims, len(pair.Segment))
 			for j := range pair.Segment {
-				pl.twistAreaCells[i][j] = twistAreaCellClaims{
-					arcLength: max(pair.ArcUpperV[j], pair.ArcUpperW[j]),
-					energy:    max(pair.TangentEnergyV[j], pair.TangentEnergyW[j]),
-					matched:   pair.MatchedDelta[j],
+				pl.twistAreaCells[i][j] = twistsweep.TwistAreaCellClaims{
+					ArcLength: max(pair.ArcUpperV[j], pair.ArcUpperW[j]),
+					Energy:    max(pair.TangentEnergyV[j], pair.TangentEnergyW[j]),
+					Matched:   pair.MatchedDelta[j],
 				}
 			}
 		}
