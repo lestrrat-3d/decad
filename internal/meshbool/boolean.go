@@ -366,9 +366,9 @@ func PointRoundBound(p proof.Xpt, pf r3.Vec) float64 {
 	px, py, pz := proof.XhpRat(proof.Xhp(p))
 	worst := new(big.Rat)
 	for _, pair := range [][2]*big.Rat{{px, polynomial.MustRatOf(pf.X)}, {py, polynomial.MustRatOf(pf.Y)}, {pz, polynomial.MustRatOf(pf.Z)}} {
-		d := new(big.Rat).Sub(pair[0], pair[1])
+		d := proof.SubRat(new(big.Rat), pair[0], pair[1])
 		d.Abs(d)
-		if d.Cmp(worst) > 0 {
+		if proof.CmpRat(d, worst) > 0 {
 			worst = d
 		}
 	}

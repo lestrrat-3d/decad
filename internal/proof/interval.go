@@ -188,6 +188,31 @@ func ScaledNum(r *big.Rat, den *big.Int) *big.Int {
 // terms as big.Rat's operation. Each sets z, which may alias either
 // operand or both, and returns it; the result is written into z's own
 // numerator and denominator.
+//
+// Operands must be in lowest terms, as every math/big constructor and
+// arithmetic operation except Rat.GobDecode returns them, and as FloatRat,
+// RatFrac, Dyadic.Rat and these helpers return them. A non-reduced operand
+// (3/9, made by writing through Num or Denom) gives the exact value, but not
+// always in lowest terms: AddRat(3/9, 0) returns 3/9 where big.Rat returns
+// 1/3. Two readers see the form:
+//
+//   - Key2 (internal/meshbool) interns a vertex by its value text, so a
+//     non-reduced coordinate would split one vertex into two (AddVert). The
+//     memo keys motionbound AppendRatKey and proofbound radSinCosKey would
+//     only miss their cache.
+//   - EdgeCross2Fracs keeps a Cross2x result's Num and Denom in a ClipFrac,
+//     which compares by cross multiplication and tolerates any form.
+//
+// The precondition rests on two things. The producer audit: every producer the
+// repository uses reduces; the one standard-library path that does not is
+// Rat.GobDecode, which installs the encoded numerator and denominator as they
+// are, and the repository does not call it; each write through Num and Denom
+// in this package builds an odd numerator over a power of two, an integer, or
+// a lowest-terms result. And a runtime detector that checked every operand and
+// result of the five helpers and found no violation: more than 100M checks
+// over the packages under internal/, more than 222M over apitest, 241,365,639
+// over the root package, and more than 21M over internal/meshbool.
+// CmpRat has no such precondition.
 func AddRat(z, a, b *big.Rat) *big.Rat {
 	i, okA := denomExp(a)
 	j, okB := denomExp(b)

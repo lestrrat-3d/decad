@@ -80,6 +80,11 @@ func ratSplitMul(z, a, b *big.Rat) *big.Rat {
 
 // QuoRat sets z = a/b in lowest terms: g1 = gcd(p1, p2) and
 // g2 = gcd(q1, q2) cancel first. b must be nonzero.
+//
+// Operands must be in lowest terms, as for AddRat: a non-reduced operand gives
+// the exact quotient, but not always in lowest terms, and a key built from the
+// quotient's text (Key2 in internal/meshbool) would then name one value two
+// ways.
 func QuoRat(z, a, b *big.Rat) *big.Rat {
 	p1, q1 := a.Num(), a.Denom()
 	p2, q2 := b.Num(), b.Denom()

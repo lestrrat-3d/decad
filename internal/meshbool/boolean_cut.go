@@ -276,8 +276,8 @@ func (tc *TriCutter) ChainProbe(ch ChainPath) (Xp2, error) {
 	a, b := tc.Verts[ch.Verts[0]].P2, tc.Verts[ch.Verts[1]].P2
 	half := big.NewRat(1, 2)
 	return NewXP2(
-		new(big.Rat).Mul(half, new(big.Rat).Add(a.U, b.U)),
-		new(big.Rat).Mul(half, new(big.Rat).Add(a.V, b.V)),
+		proof.MulRat(new(big.Rat), half, proof.AddRat(new(big.Rat), a.U, b.U)),
+		proof.MulRat(new(big.Rat), half, proof.AddRat(new(big.Rat), a.V, b.V)),
 	), nil
 }
 

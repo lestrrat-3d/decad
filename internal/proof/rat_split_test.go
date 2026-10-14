@@ -97,6 +97,127 @@ func TestSplitGCDRatOpsMatchBigRat(t *testing.T) {
 			require.True(t, same(o.got(za, za, za), want), "%s z=a=b (%v)", o.name, a)
 		}
 	}
+
+	// Operands that are not in lowest terms (see AddRat): the value must equal
+	// big.Rat's by Cmp and the operands stay as they were. The representation
+	// of the result is NOT compared: AddRat(3/9, 0) returns 3/9 where big.Rat
+	// returns 1/3, and no production path passes such an operand.
+	for range 20000 {
+		a, b := nonReducedRat(rng), operand()
+		require.False(t, isReduced(a), "generator made the reduced %s", rawString(a))
+		switch rng.IntN(3) {
+		case 0:
+			a, b = b, a
+		case 1:
+			b = nonReducedRat(rng)
+		}
+		for _, o := range ops {
+			if o.name == "QuoRat" && b.Sign() == 0 {
+				continue
+			}
+			ar, br := rawCopy(a), rawCopy(b)
+			want := o.want(new(big.Rat), reduceCopy(a), reduceCopy(b))
+			got := o.got(new(big.Rat), a, b)
+			require.Zero(t, got.Cmp(want), "%s(%s, %s) = %v, want %v", o.name, rawString(ar), rawString(br), got, want)
+			require.Equal(t, rawString(ar), rawString(a), "%s changed operand a", o.name)
+			require.Equal(t, rawString(br), rawString(b), "%s changed operand b", o.name)
+
+			za := rawCopy(a)
+			require.Zero(t, o.got(za, za, b).Cmp(want), "%s z=a (%s, %s)", o.name, rawString(ar), rawString(br))
+			zb := rawCopy(b)
+			require.Zero(t, o.got(zb, a, zb).Cmp(want), "%s z=b (%s, %s)", o.name, rawString(ar), rawString(br))
+		}
+	}
+}
+
+// TestNonReducedWitness is the 3/9 operand the review used: the value is
+// exact, the representation is not lowest terms. Keys built from value text
+// would see 3/18 where big.Rat gives 1/6; no production path builds such an
+// operand (see the precondition on AddRat).
+func TestNonReducedWitness(t *testing.T) {
+	t.Parallel()
+	third := big.NewRat(1, 9)
+	third.Num().SetInt64(3) // 3/9, not reduced
+	require.Equal(t, "3/9", rawString(third))
+	zero := new(big.Rat)
+	half := proof.MulRat(new(big.Rat), big.NewRat(1, 2), proof.AddRat(new(big.Rat), third, zero))
+	require.Zero(t, half.Cmp(big.NewRat(1, 6)))
+	require.Zero(t, proof.CmpRat(half, big.NewRat(1, 6)))
+	require.Equal(t, 1, proof.CmpRat(third, big.NewRat(1, 4)))
+	require.Equal(t, -1, proof.CmpRat(third, big.NewRat(1, 2)))
+}
+
+// rawString is a Rat's stored numerator and denominator, with no reduction.
+func rawString(r *big.Rat) string { return r.Num().String() + "/" + r.Denom().String() }
+
+// rawCopy copies r's stored numerator and denominator without reducing them.
+func rawCopy(r *big.Rat) *big.Rat {
+	c := new(big.Rat).SetInt(r.Num())
+	c.Denom().Set(r.Denom())
+	return c
+}
+
+// reduceCopy is r's value in lowest terms.
+func reduceCopy(r *big.Rat) *big.Rat { return new(big.Rat).SetFrac(r.Num(), r.Denom()) }
+
+// nonReducedRat returns a value whose stored numerator and denominator share
+// a factor, made by scaling both in place by 2, 3, 2^k (small and large k) or a
+// random odd number, or by giving zero a denominator other than 1, or the
+// witness 3/9.
+func nonReducedRat(rng *rand.Rand) *big.Rat {
+	var r *big.Rat
+	switch rng.IntN(6) {
+	case 0:
+		r = big.NewRat(1, 9)
+		r.Num().SetInt64(3)
+		return r
+	case 1:
+		r = new(big.Rat).SetFrac(big.NewInt(0), big.NewInt(1))
+		r.Denom().SetInt64(1 + rng.Int64N(100)) // 0/d
+		if r.Denom().Cmp(big.NewInt(1)) == 0 {
+			r.Denom().SetInt64(2)
+		}
+		return r
+	}
+	n := randBits(rng, 1+rng.IntN(300))
+	if rng.IntN(2) == 0 {
+		n.Neg(n)
+	}
+	d := randBits(rng, 2+rng.IntN(100))
+	d.SetBit(d, 0, 1)
+	d.Add(d, big.NewInt(2))
+	r = new(big.Rat).SetFrac(n, d)
+	if r.IsInt() {
+		r = big.NewRat(5, 7)
+	}
+	var k *big.Int
+	switch rng.IntN(5) {
+	case 0:
+		k = big.NewInt(2)
+	case 1:
+		k = big.NewInt(3)
+	case 2:
+		k = new(big.Int).Lsh(big.NewInt(1), uint(1+rng.IntN(8)))
+	case 3:
+		k = new(big.Int).Lsh(big.NewInt(1), uint(64+rng.IntN(400)))
+	default:
+		k = randBits(rng, 2+rng.IntN(120))
+		k.SetBit(k, 0, 1)
+		k.Add(k, big.NewInt(2))
+	}
+	r.Num().Mul(r.Num(), k)
+	r.Denom().Mul(r.Denom(), k)
+	return r
+}
+
+// isReduced reports whether r's stored numerator and denominator are coprime
+// (zero is reduced only over 1).
+func isReduced(r *big.Rat) bool {
+	n, d := r.Num(), r.Denom()
+	if n.Sign() == 0 {
+		return d.Cmp(big.NewInt(1)) == 0
+	}
+	return new(big.Int).GCD(nil, nil, new(big.Int).Abs(n), d).Cmp(big.NewInt(1)) == 0
 }
 
 func TestSplitGCDQuoRatZeroDivisorPanics(t *testing.T) {
@@ -190,7 +311,15 @@ func TestCmpRatMatchesRatCmp(t *testing.T) {
 		return new(big.Rat)
 	}
 	pair := func() (*big.Rat, *big.Rat) {
-		switch rng.IntN(9) {
+		switch rng.IntN(11) {
+		case 9: // a Rat not in lowest terms against any Rat
+			return nonReducedRat(rng), anyRat()
+		case 10: // the same value in lowest terms and not
+			a := fraction()
+			c := rawCopy(a)
+			c.Num().Lsh(c.Num(), 3)
+			c.Denom().Lsh(c.Denom(), 3)
+			return a, c
 		case 0: // dyadic against dyadic
 			return dyadic(), dyadic()
 		case 1: // dyadic against fraction
@@ -247,5 +376,60 @@ func TestCmpRatMatchesRatCmp(t *testing.T) {
 		require.Same(t, sb.numPtr, b.Num())
 		require.Equal(t, sa, snap(a), "CmpRat changed %v", a)
 		require.Equal(t, sb, snap(b), "CmpRat changed %v", b)
+	}
+}
+
+// TestHelperOutputsStayReduced chains AddRat, SubRat, MulRat and QuoRat over
+// operands from FloatRat, Dyadic.Rat and RatFrac: each result feeds the next
+// call, and every result must carry the same numerator and denominator
+// big.Rat's own chain carries. A reduced operand therefore yields a reduced
+// result, which is why the helpers need no reduction step of their own.
+// 20,000 chains of 4 steps.
+func TestHelperOutputsStayReduced(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(19, 23))
+	family := func() *big.Rat {
+		switch rng.IntN(4) {
+		case 0:
+			return proof.FloatRat(math.Ldexp(rng.NormFloat64(), rng.IntN(121)-60))
+		case 1:
+			return proof.DyOfFinite(math.Ldexp(rng.NormFloat64(), rng.IntN(121)-60)).Rat()
+		case 2:
+			n := randBits(rng, 1+rng.IntN(120))
+			if rng.IntN(2) == 0 {
+				n.Neg(n)
+			}
+			d := randBits(rng, 1+rng.IntN(80))
+			d.Add(d, big.NewInt(1))
+			return proof.RatFrac(new(big.Rat), n, d)
+		}
+		n := randBits(rng, 1+rng.IntN(120))
+		return proof.RatFrac(new(big.Rat), n, new(big.Int).Lsh(big.NewInt(1), uint(rng.IntN(100))))
+	}
+	type op struct {
+		got  func(z, a, b *big.Rat) *big.Rat
+		want func(z, a, b *big.Rat) *big.Rat
+	}
+	ops := []op{
+		{proof.AddRat, (*big.Rat).Add},
+		{proof.SubRat, (*big.Rat).Sub},
+		{proof.MulRat, (*big.Rat).Mul},
+		{proof.QuoRat, (*big.Rat).Quo},
+	}
+	for range 20000 {
+		x := family()
+		xw := rawCopy(x)
+		for step := range 4 {
+			y := family()
+			o := ops[rng.IntN(len(ops))]
+			if y.Sign() == 0 {
+				o = ops[rng.IntN(3)]
+			}
+			yw := rawCopy(y)
+			x = o.got(new(big.Rat), x, y)
+			xw = o.want(new(big.Rat), xw, yw)
+			require.Equal(t, rawString(xw), rawString(x), "step %d", step)
+			require.True(t, isReduced(x), "step %d produced %s", step, rawString(x))
+		}
 	}
 }
