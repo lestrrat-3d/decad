@@ -152,6 +152,12 @@ func RimBound(deltaA, deltaB float64, sin2 *big.Rat) float64 {
 // gives a rim vertex — the figure the caller refuses at the pair diameter
 // (docs/faceted-vertex-bounds-design.md §3.2).
 func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo) ([]KeptFacet, float64, error) {
+	return meshBoolean(ctx, op, ma, mb, memo, newKeyMemo)
+}
+
+// meshBoolean is MeshBoolean with the exact-point key function KeepSide uses
+// supplied per call, so a test can hold the memoized keys to Xpt.Key.
+func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo, newKeyOf func() func(proof.Xpt) string) ([]KeptFacet, float64, error) {
 	wantA, wantB, flipB, err := BooleanKeep(op)
 	if err != nil {
 		return nil, 0, err
@@ -318,12 +324,12 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
-	keep, err := KeepSide(ctx, ma, mb, cutsA, blockedA, rims, wantA, false)
+	keep, err := keepSide(ctx, ma, mb, cutsA, blockedA, rims, wantA, false, newKeyOf())
 	if err != nil {
 		return nil, 0, err
 	}
 	kept = append(kept, keep...)
-	keep, err = KeepSide(ctx, mb, ma, cutsB, blockedB, rims, wantB, flipB)
+	keep, err = keepSide(ctx, mb, ma, cutsB, blockedB, rims, wantB, flipB, newKeyOf())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -405,6 +411,28 @@ func XtriCorners(m *BoolMesh, i int) [3]proof.Xpt {
 // an operand vertex keeps its own β, and a subdivision vertex takes rims'
 // bound when it is a rim vertex and its facet's δ otherwise (CutCornerBound).
 func KeepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, blocked map[[2]int]struct{}, rims map[string]float64, wantInside, flip bool) ([]KeptFacet, error) {
+	return keepSide(ctx, m, other, cuts, blocked, rims, wantInside, flip, newKeyMemo())
+}
+
+// newKeyMemo returns a function that reads an exact point's canonical Key
+// (a GCD) once per distinct integer pointer set. Cut pieces share corners, and
+// an exact point is immutable once built, so the same four pointers always
+// give the same key; the memo lives for one KeepSide call.
+func newKeyMemo() func(proof.Xpt) string {
+	keys := map[[4]*big.Int]string{}
+	return func(p proof.Xpt) string {
+		raw := [4]*big.Int{p.X, p.Y, p.Z, p.W}
+		k, ok := keys[raw]
+		if !ok {
+			k = p.Key()
+			keys[raw] = k
+		}
+		return k
+	}
+}
+
+// keepSide is KeepSide with the exact-point key function supplied.
+func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, blocked map[[2]int]struct{}, rims map[string]float64, wantInside, flip bool, keyOf func(proof.Xpt) string) ([]KeptFacet, error) {
 	var kept []KeptFacet
 	emit := func(tri [3]proof.Xpt, beta [3]float64, src int) {
 		if flip {
@@ -431,7 +459,7 @@ func KeepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 			return nil, err
 		}
 		corners := m.Tris[i]
-		cornerKeys := [3]string{m.Xverts[corners[0]].Key(), m.Xverts[corners[1]].Key(), m.Xverts[corners[2]].Key()}
+		cornerKeys := [3]string{keyOf(m.Xverts[corners[0]]), keyOf(m.Xverts[corners[1]]), keyOf(m.Xverts[corners[2]])}
 		for _, reg := range regions {
 			inside, err := ClassifyRegion(ctx, reg, other)
 			if err != nil {
@@ -443,7 +471,7 @@ func KeepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 			for _, tri := range reg.Tris {
 				var beta [3]float64
 				for k, p := range tri {
-					beta[k] = CutCornerBound(m, i, cornerKeys, p.Key(), rims)
+					beta[k] = CutCornerBound(m, i, cornerKeys, keyOf(p), rims)
 				}
 				emit(tri, beta, m.Src[i])
 			}

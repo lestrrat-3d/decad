@@ -179,7 +179,8 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	if err := RefuseWeldedAwayComponent(ctx, tris, dropped); err != nil {
 		return nil, err
 	}
-	if err := keepRoundedEmbedded(ctx, xverts, remap, out); err != nil {
+	gaps, err := keepRoundedEmbedded(ctx, xverts, remap, out)
+	if err != nil {
 		return nil, err
 	}
 	// worst is the max PER-COORDINATE distance from an exact vertex to the
@@ -190,13 +191,8 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	// proofbound.Radius3D). A positive rational error can round to zero as
 	// float64, so preserve that proof before widening it to a 3D radius.
 	worst := new(big.Rat)
-	for i, p := range xverts {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-		}
-		if d := CoordDistance(p, out.Verts[remap[i]]); d.Cmp(worst) > 0 {
+	for _, d := range gaps {
+		if d.Cmp(worst) > 0 {
 			worst = d
 		}
 	}
@@ -204,7 +200,7 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		w, _ := worst.Float64()
 		out.Round = proofbound.Radius3D(proofbound.ProvenUpRound(w))
 	}
-	vertexBound, err := HeldVertexBounds(ctx, xverts, xbeta, remap, out.Verts)
+	vertexBound, err := heldVertexBoundsFromGaps(ctx, gaps, xbeta, remap, len(out.Verts))
 	if err != nil {
 		return nil, err
 	}
@@ -242,8 +238,24 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 // the exact vertices welded into it. An exact vertex its float holds exactly
 // adds nothing and is not rounded up, so its bound passes through unchanged.
 func HeldVertexBounds(ctx context.Context, xverts []proof.Xpt, xbeta []float64, remap []int, held []r3.Vec) ([]float64, error) {
-	out := make([]float64, len(held))
+	gaps := make([]*big.Rat, len(xverts))
 	for i, p := range xverts {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		gaps[i] = CoordDistance(p, held[remap[i]])
+	}
+	return heldVertexBoundsFromGaps(ctx, gaps, xbeta, remap, len(held))
+}
+
+// heldVertexBoundsFromGaps is HeldVertexBounds over gaps already computed:
+// gaps[i] is CoordDistance from exact vertex i to the held float remap[i], and
+// n is the number of held vertices.
+func heldVertexBoundsFromGaps(ctx context.Context, gaps []*big.Rat, xbeta []float64, remap []int, n int) ([]float64, error) {
+	out := make([]float64, n)
+	for i, gap := range gaps {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return nil, err
@@ -251,7 +263,7 @@ func HeldVertexBounds(ctx context.Context, xverts []proof.Xpt, xbeta []float64, 
 		}
 		fi := remap[i]
 		beta := xbeta[i]
-		if gap := CoordDistance(p, held[fi]); gap.Sign() > 0 {
+		if gap.Sign() > 0 {
 			g, _ := gap.Float64()
 			beta = proofbound.AbsSumUpper(beta, proofbound.Radius3D(proofbound.ProvenUpRound(g)))
 		}
@@ -282,7 +294,8 @@ func CoordDistance(p proof.Xpt, v r3.Vec) *big.Rat {
 // and the search may place it only when it stands for exactly one exact
 // vertex: a welded vertex is checked where it sits, never moved, because no
 // single float box belongs to it.
-func keepRoundedEmbedded(ctx context.Context, xverts []proof.Xpt, remap []int, out *StitchedMesh) error {
+func keepRoundedEmbedded(ctx context.Context, xverts []proof.Xpt, remap []int, out *StitchedMesh) ([]*big.Rat, error) {
+	gaps := make([]*big.Rat, len(xverts))
 	h := HeldRounding{
 		Verts:   out.Verts,
 		Tris:    out.Tris,
@@ -294,13 +307,14 @@ func keepRoundedEmbedded(ctx context.Context, xverts []proof.Xpt, remap []int, o
 	for i, p := range xverts {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
-				return err
+				return nil, err
 			}
 		}
 		fi := remap[i]
 		count[fi]++
 		h.Exact[fi] = p
-		if CoordDistance(p, out.Verts[fi]).Sign() != 0 {
+		gaps[i] = CoordDistance(p, out.Verts[fi])
+		if gaps[i].Sign() != 0 {
 			h.Moved[fi] = true
 		}
 	}
@@ -310,8 +324,21 @@ func keepRoundedEmbedded(ctx context.Context, xverts []proof.Xpt, remap []int, o
 		}
 		h.Movable[fi] = n == 1 && h.Moved[fi]
 	}
-	_, err := EnforceHeldEmbedding(ctx, h)
-	return err
+	moved, err := EnforceHeldEmbedding(ctx, h)
+	if err != nil {
+		return nil, err
+	}
+	if moved > 0 {
+		for i, p := range xverts {
+			if i%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
+			gaps[i] = CoordDistance(p, out.Verts[remap[i]])
+		}
+	}
+	return gaps, nil
 }
 
 // RefuseWeldedAwayComponent refuses the one class of weld collapse no bound can

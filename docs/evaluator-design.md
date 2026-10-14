@@ -1151,7 +1151,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     facet is checked against every held facet whose box overlaps it. For at
     least 4096 query facets, the read-only first scan uses a tree of unchanged
     facet boxes; repair uses a uniform grid whose padded cells still cover
-    each permitted vertex move. Smaller checks use that grid directly.
+    each permitted vertex move. Smaller checks scan that grid once on the calling
+    goroutine without the pair memo, which only repair replays.
     Both scans use exact predicates over the held binary64 values: no shared
     vertex means no contact, one shared vertex means contact only there, one
     shared edge means contact only along it.
