@@ -146,13 +146,16 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 		Bound: units.Millimeters(bound)}, true, nil
 }
 
-// Each rounded coordinate is an upper bound on its exact difference. The
-// shared dyadic length proof then avoids a square root of the large projective
-// rational denominator while keeping a tight 3D distance bound.
+// Each coordinate's exact difference is rounded up once by
+// proofbound.RatDistanceUp, which never reduces the difference to lowest terms:
+// the centroid's denominator has about 15,000 bits, and the reduction's GCD
+// costs far more than the rounding. The shared dyadic length proof then avoids
+// a square root of the large projective rational denominator while keeping a
+// tight 3D distance bound.
 func pointCapDistanceUpper(a, b [3]*big.Rat) float64 {
 	var up [3]float64
 	for i := range a {
-		up[i] = proofbound.RatFloatUp(pointPlaneAbs(pointPlaneSub(a[i], b[i])))
+		up[i] = proofbound.RatDistanceUp(a[i], b[i])
 		if proofbound.IsNonFinite(up[i]) {
 			return math.Inf(1)
 		}

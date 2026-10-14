@@ -2,6 +2,7 @@ package proofbound
 
 import (
 	"math"
+	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
@@ -52,6 +53,17 @@ func LazyRatFloatUp(x proofarith.LazyRat) float64 {
 		return f
 	}
 	return proofarith.NextUp(f)
+}
+
+// RatDistanceUp is RatFloatUp(|a-b|) without reducing a-b to lowest terms:
+// LazySub forms the exact difference, LazyNeg makes it non-negative, and
+// LazyRatFloatUp rounds it up. a and b are only read.
+func RatDistanceUp(a, b *big.Rat) float64 {
+	d := proofarith.LazySub(proofarith.LazyOf(a), proofarith.LazyOf(b))
+	if d.Sign() < 0 {
+		d = proofarith.LazyNeg(d)
+	}
+	return LazyRatFloatUp(d)
 }
 
 // LazyIntervalWidthUp is RatFloatUp of the interval's width Hi-Lo.
