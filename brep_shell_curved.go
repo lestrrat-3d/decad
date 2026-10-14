@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 )
@@ -37,7 +38,7 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 		len(bp.faces[tool.w1].region.Holes) != 1 {
 		return refuse("needs one rectangular box and one through hole")
 	}
-	if _, ok := recordedBossRect(tc.caps.Section); !ok {
+	if _, ok := prismshell.RecordedBossRect(tc.caps.Section); !ok {
 		return refuse("needs a rectangular box section")
 	}
 	for _, face := range bp.faces {
@@ -52,20 +53,20 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 	if !ok {
 		return refuse("cannot restate the pierced rectangle in the tool frame")
 	}
-	rect, ok := recordedBossRect(profileRecord{Outer: outer})
+	rect, ok := prismshell.RecordedBossRect(profileRecord{Outer: outer})
 	if !ok {
 		return refuse("needs a rectangular pierced wall")
 	}
-	circle, ok := recordedBossCircle(tool.prism.Profile)
+	circle, ok := prismshell.RecordedBossCircle(tool.prism.Profile)
 	if !ok {
 		return refuse("needs one exact whole-circle through tool")
 	}
 	t := call.tmm
-	inner := rect.inset(t)
+	inner := rect.Inset(t)
 	loInner, hiInner := tool.lo+t, tool.hi-t
-	if !(loInner < hiInner && inner.width() > 0 && inner.height() > 0 &&
-		circle.center.U-circle.radius > inner.u0 && circle.center.U+circle.radius < inner.u1 &&
-		circle.center.V-circle.radius > inner.v0 && circle.center.V+circle.radius < inner.v1) {
+	if !(loInner < hiInner && inner.Width() > 0 && inner.Height() > 0 &&
+		circle.Center.U-circle.Radius > inner.U0 && circle.Center.U+circle.Radius < inner.U1 &&
+		circle.Center.V-circle.Radius > inner.V0 && circle.Center.V+circle.Radius < inner.V1) {
 		return refuse("has too little wall thickness or port clearance")
 	}
 	if !bossRectArithmeticExact(rect, t) ||
@@ -74,20 +75,20 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 		proofbound.ExactSumRound(tool.hi-tool.lo, tool.hi, -tool.lo) != 0 {
 		return refuse("needs exactly represented offset coordinates")
 	}
-	for _, c := range []float64{circle.center.U, circle.center.V} {
-		if proofbound.ExactSumRound(c-circle.radius, c, -circle.radius) != 0 ||
-			proofbound.ExactSumRound(c+circle.radius, c, circle.radius) != 0 {
+	for _, c := range []float64{circle.Center.U, circle.Center.V} {
+		if proofbound.ExactSumRound(c-circle.Radius, c, -circle.Radius) != 0 ||
+			proofbound.ExactSumRound(c+circle.Radius, c, circle.Radius) != 0 {
 			return refuse("needs exactly represented circle extents")
 		}
 	}
 	// The box around the circle is a strict recorded-coordinate proof that
 	// the circle is inside the inset rectangle. The interface ring has no
 	// crossings or tangency, so its outer and inner loops bound one face.
-	port, err := offset2d.ReverseLoopRecordContext(ctx, circle.outer.Outer)
+	port, err := offset2d.ReverseLoopRecordContext(ctx, circle.Outer.Outer)
 	if err != nil {
 		return nil, true, err
 	}
-	cavity, err := offset2d.ReverseLoopRecordContext(ctx, inner.profile().Outer)
+	cavity, err := offset2d.ReverseLoopRecordContext(ctx, inner.Profile().Outer)
 	if err != nil {
 		return nil, true, err
 	}

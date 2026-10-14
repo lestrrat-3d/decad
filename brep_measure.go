@@ -272,10 +272,10 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 	}
 	fillets := make([]radiussurvey.BrepFilletRadius, 0, len(bp.loopBands))
 	if bp.bossShell != nil {
-		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.bossShell.t})
+		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.bossShell.T})
 	}
 	if bp.pocketShell != nil {
-		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.pocketShell.t})
+		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.pocketShell.T})
 	}
 	for _, band := range bp.loopBands {
 		if band.kind == brepBandFillet && band.sigma > 0 {

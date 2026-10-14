@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ import (
 func TestBlindPocketFloorBandHasFourSphereOctants(t *testing.T) {
 	t.Parallel()
 	budget := proofbound.NewWorkBudget(t.Context())
-	pocket := bossRect{3, 3, 7, 7}.profile()
+	pocket := prismshell.BossRect{U0: 3, V0: 3, U1: 7, V1: 7}.Profile()
 	rounded, err := offsetProfile(budget, pocket, -1, 1)
 	require.NoError(t, err)
 	delta, err := offsetSectionDelta(budget, pocket, -1, 1, 0)

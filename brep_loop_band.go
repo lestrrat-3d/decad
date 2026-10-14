@@ -226,11 +226,11 @@ func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (
 	}
 	if bp.bossShell != nil {
 		band := bp.bossShell
-		e := embeds[band.ledgeFace]
+		e := embeds[band.LedgeFace]
 		for _, ring := range []struct {
 			profile profileRecord
 			z       float64
-		}{{band.sideProfile(), band.lowerZ}, {band.capProfile(), band.interfaceZ}} {
+		}{{band.SideProfile(), band.LowerZ}, {band.CapProfile(), band.InterfaceZ}} {
 			for _, seg := range ring.profile.Outer.Segments {
 				if err := add(e, seg, ring.z); err != nil {
 					return nil, err
@@ -240,11 +240,11 @@ func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (
 	}
 	if bp.pocketShell != nil {
 		band := bp.pocketShell
-		e := embeds[band.floorFace]
+		e := embeds[band.FloorFace]
 		for _, ring := range []struct {
 			loop loopRecord
 			z    float64
-		}{{band.rounded.Outer, band.floorZ}, {band.capProfile().Outer, band.lowerZ}} {
+		}{{band.Rounded.Outer, band.FloorZ}, {band.CapProfile().Outer, band.LowerZ}} {
 			for _, seg := range ring.loop.Segments {
 				if err := add(e, seg, ring.z); err != nil {
 					return nil, err

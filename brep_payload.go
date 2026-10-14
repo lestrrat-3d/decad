@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
@@ -93,8 +94,8 @@ type brepPayload struct {
 	xform       r3.Transform
 	stack       *brepStack
 	loopBands   []brepLoopBand
-	bossShell   *bossShellBand
-	pocketShell *pocketShellBand
+	bossShell   *prismshell.BossShellBand
+	pocketShell *prismshell.PocketShellBand
 	// loopPatches is each band's patch geometry, beside its role
 	// chamferLoop(f,l,p), in band order, nil for a fillet band, whose
 	// patches the readers take from the band record and the body's faces
@@ -664,8 +665,8 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		bands.patches = append(bands.patches, patches...)
 	}
 	allFaces := append(faces, bands.patches...)
-	if bp.bossShell != nil && bp.bossShell.closed {
-		body.lumps, err = closedBossShellLumps(allFaces, bp.bossShell.outerFaceCount)
+	if bp.bossShell != nil && bp.bossShell.Closed {
+		body.lumps, err = closedBossShellLumps(allFaces, bp.bossShell.OuterFaceCount)
 		if err != nil {
 			return nil, err
 		}

@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
@@ -23,7 +24,7 @@ const prismUnionBossShellStations = 16
 // mapped into the boss's local rectangle.
 type prismUnionBossShellSource struct {
 	plate, boss                                  prismPayload
-	plateRect, bossRect                          bossRect
+	plateRect, bossRect                          prismshell.BossRect
 	plateBottom, interfaceZ, bossBottom, bossTop float64
 	unitLo, unitHi                               float64
 	outer                                        [4]int
@@ -75,11 +76,11 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 		src.boss.Frame.V() != (r3.Vec{Y: 1}) || src.boss.Frame.N() != (r3.Vec{Z: 1}) {
 		return src, false
 	}
-	src.plateRect, ok = recordedBossRect(src.plate.Profile)
+	src.plateRect, ok = prismshell.RecordedBossRect(src.plate.Profile)
 	if !ok {
 		return src, false
 	}
-	src.bossRect, ok = recordedBossRect(src.boss.Profile)
+	src.bossRect, ok = prismshell.RecordedBossRect(src.boss.Profile)
 	if !ok {
 		return src, false
 	}
@@ -115,22 +116,22 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 		return src, false
 	}
 	if !prismUnionBossShellLevels(src, t) ||
-		!prismUnionBossShellRoom(src.bossRect.width(), src.unitLo, t) ||
-		!prismUnionBossShellRoom(src.bossRect.height(), src.unitLo, t) {
+		!prismUnionBossShellRoom(src.bossRect.Width(), src.unitLo, t) ||
+		!prismUnionBossShellRoom(src.bossRect.Height(), src.unitLo, t) {
 		return src, false
 	}
 	// The entire boss, enlarged by its source-point bound, must lie strictly
 	// inside the plate's inward wall. The root band then cannot meet an outer
 	// side or the lower floor.
-	plateInner := src.plateRect.inset(t)
+	plateInner := src.plateRect.Inset(t)
 	var corners [4]r3.Vec
-	for i, uv := range prismUnionBossShellCorners(src.bossRect) {
+	for i, uv := range prismshell.PrismUnionBossShellCorners(src.bossRect) {
 		p := src.boss.Point(uv[0], uv[1], src.boss.Z1)
 		beta := src.boss.PointBound(proofbound.ExactScalar(uv[0]),
 			proofbound.ExactScalar(uv[1]), proofbound.ExactScalar(src.boss.Z1))
 		if !proofbound.FiniteVec(p) || proofbound.IsNonFinite(beta) ||
-			!prismUnionBossShellInside(p.X, beta, plateInner.u0, plateInner.u1) ||
-			!prismUnionBossShellInside(p.Y, beta, plateInner.v0, plateInner.v1) ||
+			!prismUnionBossShellInside(p.X, beta, plateInner.U0, plateInner.U1) ||
+			!prismUnionBossShellInside(p.Y, beta, plateInner.V0, plateInner.V1) ||
 			p.Z != src.bossTop {
 			return src, false
 		}
@@ -264,10 +265,6 @@ func prismUnionBossShellSimilarity(src *prismUnionBossShellSource) bool {
 	return src.unitLo > 0.99 && src.unitHi < 1.01
 }
 
-func prismUnionBossShellCorners(r bossRect) [4][2]float64 {
-	return [4][2]float64{{r.u0, r.v0}, {r.u1, r.v0}, {r.u1, r.v1}, {r.u0, r.v1}}
-}
-
 type prismUnionBossShellMesh struct {
 	verts          []r3.Vec
 	tris           [][3]int
@@ -315,8 +312,8 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 	// occupied-volume change without using a same-Z horizontal gap, which
 	// becomes large near the quarter-circle's horizontal tangent. The lower
 	// cavity is exact; the upper cavity uses a fixed inset.
-	width := proofbound.ProductUpper(src.bossRect.width(), src.unitHi)
-	height := proofbound.ProductUpper(src.bossRect.height(), src.unitHi)
+	width := proofbound.ProductUpper(src.bossRect.Width(), src.unitHi)
+	height := proofbound.ProductUpper(src.bossRect.Height(), src.unitHi)
 	perimeter := proofbound.ProductUpper(2, proofbound.AbsSumUpper(width, height))
 	station := mesh.maxVertexError
 	rootGap := proofbound.AbsSumUpper(curve, proofbound.ProductUpper(4, station))
@@ -331,7 +328,7 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 			proofbound.ProductUpper(4, proofbound.ProductUpper(upperGap, upperGap))))
 	capArea := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(width, height),
-		proofbound.ProductUpper(src.plateRect.inset(t).width(), src.plateRect.inset(t).height()))
+		proofbound.ProductUpper(src.plateRect.Inset(t).Width(), src.plateRect.Inset(t).Height()))
 	levelVol := proofbound.ProductUpper(proofbound.ProductUpper(4, capArea), station)
 	volumeBound := proofbound.AbsSumUpper(fp.volSymDiff, rootVol, upperVol, levelVol)
 	heldVolume := audit.CompVol[0]
@@ -404,7 +401,7 @@ func prismUnionBossShellMeshOf(ctx context.Context, ref producerID, fp facetedPa
 		return groups
 	}
 	point := func(corner int, qWorld, qError, zWorld, zError float64) (int, error) {
-		uv := prismUnionBossShellCorners(src.bossRect)[corner]
+		uv := prismshell.PrismUnionBossShellCorners(src.bossRect)[corner]
 		sx, sy := 1.0, 1.0
 		if corner == 1 || corner == 2 {
 			sx = -1
@@ -490,8 +487,8 @@ func prismUnionBossShellMeshOf(ctx context.Context, ref producerID, fp facetedPa
 	}
 	root := prev
 	out.bossPointEnd = len(out.verts)
-	plateInner := src.plateRect.inset(t)
-	plateCorners := prismUnionBossShellCorners(plateInner)
+	plateInner := src.plateRect.Inset(t)
+	plateCorners := prismshell.PrismUnionBossShellCorners(plateInner)
 	var ledgeOuter, floor [4]int
 	for i, uv := range plateCorners {
 		ledgeOuter[i] = add(r3.Vec{X: uv[0], Y: uv[1], Z: src.bossBottom}, 0)
@@ -533,13 +530,13 @@ func prismUnionBossShellTrueVolume(src prismUnionBossShellSource, t float64) pro
 	point := func(v float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(v)) }
 	add, sub, mul := proofbound.IntervalAdd, proofbound.IntervalSub, proofbound.IntervalMul
 	scale := proofbound.Interval(proofarith.FloatRat(src.unitLo), proofarith.FloatRat(src.unitHi))
-	w := mul(point(src.bossRect.width()), scale)
-	h := mul(point(src.bossRect.height()), scale)
+	w := mul(point(src.bossRect.Width()), scale)
+	h := mul(point(src.bossRect.Height()), scale)
 	tv := point(t)
 	t2, t3 := mul(tv, tv), mul(mul(tv, tv), tv)
-	plateArea := mul(point(src.plateRect.width()), point(src.plateRect.height()))
-	lowerRect := src.plateRect.inset(t)
-	lowerArea := mul(point(lowerRect.width()), point(lowerRect.height()))
+	plateArea := mul(point(src.plateRect.Width()), point(src.plateRect.Height()))
+	lowerRect := src.plateRect.Inset(t)
+	lowerArea := mul(point(lowerRect.Width()), point(lowerRect.Height()))
 	outer := add(mul(plateArea, point(src.interfaceZ-src.plateBottom)),
 		mul(mul(w, h), point(src.bossTop-src.interfaceZ)))
 	lower := mul(lowerArea, point(src.bossBottom-src.plateBottom-t))

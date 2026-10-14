@@ -240,8 +240,8 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 				if _, ok := ringLoop[u.Loop]; ok {
 					continue
 				}
-				if bp.bossShell != nil && bp.bossShell.round != nil &&
-					fi == bp.bossShell.ledgeFace && u.Loop == 1 {
+				if bp.bossShell != nil && bp.bossShell.Round != nil &&
+					fi == bp.bossShell.LedgeFace && u.Loop == 1 {
 					bc := &bands[len(bp.loopBands)]
 					poly = append(slices.Clone(bc.sideV), bc.sideV[0])
 					slices.Reverse(poly) // the ledge walks this hole clockwise
@@ -250,8 +250,8 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 					loopSag[u.Loop] = math.Max(loopSag[u.Loop], sag)
 					capSlack = proofbound.AbsSumUpper(capSlack,
 						tessellation.WalkSegmentArea(bc.lm.walks[0].SegmentWalk, bc.lm.count[0]))
-				} else if bp.pocketShell != nil && bp.pocketShell.round != nil &&
-					fi == bp.pocketShell.floorFace && u.Loop == 0 {
+				} else if bp.pocketShell != nil && bp.pocketShell.Round != nil &&
+					fi == bp.pocketShell.FloorFace && u.Loop == 0 {
 					bc := &bands[len(bp.loopBands)]
 					poly = append(slices.Clone(bc.capV), bc.capV[0])
 					sag := bc.lm.capSag[0]

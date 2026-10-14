@@ -8,36 +8,11 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
-
-// counterboreShellRound is the source-authenticated two-level through bore.
-// Its shell uses pocketShellBand's whole-circle fillet between the larger
-// bore's shoulder and the new cavity wall. sign points from the kept far cap
-// toward the removed cap in the producer's frame.
-type counterboreShellRound struct {
-	small, large       roundBossCircle
-	plate, inset       bossRect
-	farZ, stepZ, nearZ float64
-	sign, t            float64
-	center             planePoint
-	frame              r3.Frame
-}
-
-func counterboreHoleCircle(ctx context.Context, p profileRecord) (roundBossCircle, bool, error) {
-	if len(p.Holes) != 1 {
-		return roundBossCircle{}, false, nil
-	}
-	loop, err := offset2d.ReverseLoopRecordContext(ctx, p.Holes[0])
-	if err != nil {
-		return roundBossCircle{}, false, err
-	}
-	c, ok := recordedBossCircle(profileRecord{Outer: loop})
-	return c, ok, nil
-}
 
 // shellCounterbore accepts exactly two coaxial whole-circle holes in one
 // rectangular plate, with the larger hole at the removed end. It reads only
@@ -53,23 +28,23 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 	if !brepgeom.LoopsEqual(lo.Outer, hi.Outer) {
 		return nil, false, nil
 	}
-	plate, ok := recordedBossRect(profileRecord{Outer: lo.Outer})
+	plate, ok := prismshell.RecordedBossRect(profileRecord{Outer: lo.Outer})
 	if !ok {
 		return nil, false, nil
 	}
-	lower, ok, err := counterboreHoleCircle(ctx, lo)
+	lower, ok, err := prismshell.CounterboreHoleCircle(ctx, lo)
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	upper, ok, err := counterboreHoleCircle(ctx, hi)
+	upper, ok, err := prismshell.CounterboreHoleCircle(ctx, hi)
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	if lower.center != upper.center || lower.radius == upper.radius ||
+	if lower.Center != upper.Center || lower.Radius == upper.Radius ||
 		call.sense != Inward || len(call.removed) != 1 {
 		return nil, false, nil
 	}
-	top := upper.radius > lower.radius
+	top := upper.Radius > lower.Radius
 	roles := facesByRole(source)
 	if top && call.removed[0] != roles[roleCapEnd] ||
 		!top && call.removed[0] != roles[roleCapStart] {
@@ -91,20 +66,20 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 	}
 	stepZ, t := a.Z1, call.tmm
 	farH, nearH := sign*(stepZ-farZ), sign*(nearZ-stepZ)
-	if !(t > 0 && farH > 2*t && nearH > 0 && plate.width() > 2*t && plate.height() > 2*t) {
+	if !(t > 0 && farH > 2*t && nearH > 0 && plate.Width() > 2*t && plate.Height() > 2*t) {
 		return refuse("has insufficient floor, counterbore depth, or outer wall")
 	}
-	inset := plate.inset(t)
-	smallR, largeR := small.radius+t, large.radius+t
-	c := small.center
-	if !(smallR < large.radius &&
-		c.U-largeR > inset.u0 && c.U+largeR < inset.u1 &&
-		c.V-largeR > inset.v0 && c.V+largeR < inset.v1) {
+	inset := plate.Inset(t)
+	smallR, largeR := small.Radius+t, large.Radius+t
+	c := small.Center
+	if !(smallR < large.Radius &&
+		c.U-largeR > inset.U0 && c.U+largeR < inset.U1 &&
+		c.V-largeR > inset.V0 && c.V+largeR < inset.V1) {
 		return refuse("has insufficient shoulder or bore-to-wall clearance")
 	}
 	farInnerZ, capZ := farZ+sign*t, stepZ-sign*t
-	if proofbound.ExactSumRound(smallR, small.radius, t) != 0 ||
-		proofbound.ExactSumRound(largeR, large.radius, t) != 0 ||
+	if proofbound.ExactSumRound(smallR, small.Radius, t) != 0 ||
+		proofbound.ExactSumRound(largeR, large.Radius, t) != 0 ||
 		proofbound.ExactSumRound(farInnerZ, farZ, sign*t) != 0 ||
 		proofbound.ExactSumRound(capZ, stepZ, -sign*t) != 0 ||
 		proofbound.ExactSumRound(farH, stepZ*sign, -farZ*sign) != 0 ||
@@ -112,7 +87,7 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 		!bossRectArithmeticExact(plate, t) {
 		return refuse("needs exactly represented offset coordinates")
 	}
-	for _, radius := range []float64{small.radius, large.radius, smallR, largeR} {
+	for _, radius := range []float64{small.Radius, large.Radius, smallR, largeR} {
 		if proofbound.ExactSumRound(c.U-radius, c.U, -radius) != 0 ||
 			proofbound.ExactSumRound(c.U+radius, c.U, radius) != 0 ||
 			proofbound.ExactSumRound(c.V-radius, c.V, -radius) != 0 ||
@@ -134,8 +109,8 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 	if openingIndex < 0 {
 		return refuse("has no opening cap")
 	}
-	makeCircle := func(orig roundBossCircle, radius float64) (profileRecord, bool) {
-		circle, ok := orig.outer.Outer.Segments[0].(circleSeg)
+	makeCircle := func(orig prismshell.RoundBossCircle, radius float64) (profileRecord, bool) {
+		circle, ok := orig.Outer.Outer.Segments[0].(circleSeg)
 		if !ok {
 			return profileRecord{}, false
 		}
@@ -177,33 +152,33 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: seg, z0: z0, z1: z1})
 		}
 	}
-	floor, err := annulus(inset.profile(), smallExpanded)
+	floor, err := annulus(inset.Profile(), smallExpanded)
 	if err != nil {
 		return nil, true, err
 	}
 	addPlane(floor, farInnerZ, openingOutward)
-	addWalls(inset.profile(), farInnerZ, nearZ, true)
-	outerRim, err := annulus(plate.profile(), inset.profile())
+	addWalls(inset.Profile(), farInnerZ, nearZ, true)
+	outerRim, err := annulus(plate.Profile(), inset.Profile())
 	if err != nil {
 		return nil, true, err
 	}
 	addPlane(outerRim, nearZ, openingOutward)
 	addWalls(smallExpanded, farInnerZ, capZ, false)
-	under, err := annulus(large.outer, smallExpanded)
+	under, err := annulus(large.Outer, smallExpanded)
 	if err != nil {
 		return nil, true, err
 	}
 	floorFace := addPlane(under, capZ, !openingOutward)
 	addWalls(largeExpanded, stepZ, nearZ, false)
-	innerRim, err := annulus(largeExpanded, large.outer)
+	innerRim, err := annulus(largeExpanded, large.Outer)
 	if err != nil {
 		return nil, true, err
 	}
 	addPlane(innerRim, nearZ, openingOutward)
-	result.pocketShell = &pocketShellBand{outer: plate, inner: inset, rounded: largeExpanded,
-		floorZ: stepZ, lowerZ: capZ, topZ: nearZ, z0: farZ, t: t, floorFace: floorFace, frame: sp.frame,
-		round: &counterboreShellRound{small: small, large: large, plate: plate, inset: inset,
-			farZ: farZ, stepZ: stepZ, nearZ: nearZ, sign: sign, t: t, center: c, frame: sp.frame}}
+	result.pocketShell = &prismshell.PocketShellBand{Outer: plate, Inner: inset, Rounded: largeExpanded,
+		FloorZ: stepZ, LowerZ: capZ, TopZ: nearZ, Z0: farZ, T: t, FloorFace: floorFace, Frame: sp.frame,
+		Round: &prismshell.CounterboreShellRound{Small: small, Large: large, Plate: plate, Inset: inset,
+			FarZ: farZ, StepZ: stepZ, NearZ: nearZ, Sign: sign, T: t, Center: c, Frame: sp.frame}}
 	result.assignRoles()
 	body, err := evalBrepContext(ctx, source.doc, source.doc.nextProducerID(), result)
 	return body, true, err
@@ -213,29 +188,29 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 // the dilation of the source's stepped through bore. The quarter-torus
 // transition is integrated as a circular radius over its axial interval.
 func measureCounterboreShell(ctx context.Context, bp brepPayload, body *Body) error {
-	b := bp.pocketShell.round
+	b := bp.pocketShell.Round
 	point := func(x float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(x)) }
 	add, sub, mul := proofbound.IntervalAdd, proofbound.IntervalSub, proofbound.IntervalMul
 	scale := func(a proofbound.RatInterval, n, d int64) proofbound.RatInterval {
 		return proofbound.IntervalScale(a, big.NewRat(n, d))
 	}
 	pi := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
-	area := func(r bossRect) proofbound.RatInterval {
-		return mul(sub(point(r.u1), point(r.u0)), sub(point(r.v1), point(r.v0)))
+	area := func(r prismshell.BossRect) proofbound.RatInterval {
+		return mul(sub(point(r.U1), point(r.U0)), sub(point(r.V1), point(r.V0)))
 	}
-	centerU := func(r bossRect) proofbound.RatInterval { return scale(add(point(r.u0), point(r.u1)), 1, 2) }
-	centerV := func(r bossRect) proofbound.RatInterval { return scale(add(point(r.v0), point(r.v1)), 1, 2) }
+	centerU := func(r prismshell.BossRect) proofbound.RatInterval { return scale(add(point(r.U0), point(r.U1)), 1, 2) }
+	centerV := func(r prismshell.BossRect) proofbound.RatInterval { return scale(add(point(r.V0), point(r.V1)), 1, 2) }
 	square := func(r proofbound.RatInterval) proofbound.RatInterval { return mul(r, r) }
-	t, rs, rl := point(b.t), point(b.small.radius), point(b.large.radius)
+	t, rs, rl := point(b.T), point(b.Small.Radius), point(b.Large.Radius)
 	rsExpanded, rlExpanded := add(rs, t), add(rl, t)
-	farH := point(math.Abs(b.stepZ - b.farZ))
-	nearH := point(math.Abs(b.nearZ - b.stepZ))
+	farH := point(math.Abs(b.StepZ - b.FarZ))
+	nearH := point(math.Abs(b.NearZ - b.StepZ))
 	h := add(farH, nearH)
-	outerV := mul(area(b.plate), h)
+	outerV := mul(area(b.Plate), h)
 	smallHoleV := mul(pi, mul(square(rs), farH))
 	largeHoleV := mul(pi, mul(square(rl), nearH))
 	sourceV := sub(sub(outerV, smallHoleV), largeHoleV)
-	innerV := mul(area(b.inset), sub(h, t))
+	innerV := mul(area(b.Inset), sub(h, t))
 	lowerH := sub(farH, scale(t, 2, 1))
 	lowerV := mul(pi, mul(square(rsExpanded), lowerH))
 	upperV := mul(pi, mul(square(rlExpanded), nearH))
@@ -263,12 +238,12 @@ func measureCounterboreShell(ctx context.Context, bp brepPayload, body *Body) er
 	transitionW := sub(mul(transitionV, farH), mul(pi, transitionVFirst))
 	upperW := mul(upperV, add(farH, scale(nearH, 1, 2)))
 	mw := add(sub(sourceW, innerW), add(add(lowerW, transitionW), upperW))
-	mu := sub(mul(outerV, centerU(b.plate)), mul(innerV, centerU(b.inset)))
-	mv := sub(mul(outerV, centerV(b.plate)), mul(innerV, centerV(b.inset)))
+	mu := sub(mul(outerV, centerU(b.Plate)), mul(innerV, centerU(b.Inset)))
+	mv := sub(mul(outerV, centerV(b.Plate)), mul(innerV, centerV(b.Inset)))
 	holesV := add(smallHoleV, largeHoleV)
-	mu = add(sub(mu, mul(holesV, point(b.center.U))), mul(obstacleV, point(b.center.U)))
-	mv = add(sub(mv, mul(holesV, point(b.center.V))), mul(obstacleV, point(b.center.V)))
-	mz := add(mul(point(b.farZ), volume), mul(point(b.sign), mw))
+	mu = add(sub(mu, mul(holesV, point(b.Center.U))), mul(obstacleV, point(b.Center.U)))
+	mv = add(sub(mv, mul(holesV, point(b.Center.V))), mul(obstacleV, point(b.Center.V)))
+	mz := add(mul(point(b.FarZ), volume), mul(point(b.Sign), mw))
 	var c [3]proofbound.BoundedScalar
 	for i, iv := range []proofbound.RatInterval{mu, mv, mz} {
 		q, ok := proofbound.IntervalQuo(iv, volume)

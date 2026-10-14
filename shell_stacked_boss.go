@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
@@ -11,104 +10,13 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
-
-// bossShellBand records the one rounded cavity transition of an inward shell
-// on a two-slab rectangular boss. The two open rings belong to the inner
-// ledge at lowerZ and the upper cavity walls at interfaceZ.
-type bossShellBand struct {
-	plate, boss, lower, upper                bossRect
-	round                                    *roundBossCircle
-	z0, interfaceZ, topZ, cavityTopZ, lowerZ float64
-	t                                        float64
-	ledgeFace                                int
-	outerFaceCount                           int
-	closed                                   bool
-	frame                                    r3.Frame
-}
-
-func (b *bossShellBand) sideProfile() profileRecord {
-	if b.round != nil {
-		return b.round.outer
-	}
-	return b.boss.profile()
-}
-
-func (b *bossShellBand) capProfile() profileRecord {
-	if b.round != nil {
-		return b.round.inner
-	}
-	return b.upper.profile()
-}
-
-type bossRect struct{ u0, v0, u1, v1 float64 }
-
-func (r bossRect) width() float64  { return r.u1 - r.u0 }
-func (r bossRect) height() float64 { return r.v1 - r.v0 }
-func (r bossRect) inset(t float64) bossRect {
-	return bossRect{r.u0 + t, r.v0 + t, r.u1 - t, r.v1 - t}
-}
-func (r bossRect) profile() profileRecord {
-	pts := [4]planePoint{{U: r.u0, V: r.v0}, {U: r.u1, V: r.v0}, {U: r.u1, V: r.v1}, {U: r.u0, V: r.v1}}
-	segs := make([]curveSegment, 4)
-	for i := range segs {
-		segs[i] = lineSeg{Start: pts[i], End: pts[(i+1)%4], TEnd: 1}
-	}
-	return profileRecord{Outer: loopRecord{Segments: segs}}
-}
-
-// recordedBossRect accepts a complete, counter-clockwise axis-aligned
-// rectangle only. It reads the producer's segments, never a sampled outline.
-func recordedBossRect(p profileRecord) (bossRect, bool) {
-	if len(p.Holes) != 0 || len(p.Outer.Segments) != 4 {
-		return bossRect{}, false
-	}
-	var r bossRect
-	var pts [4]planePoint
-	for i, seg := range p.Outer.Segments {
-		line, ok := seg.(lineSeg)
-		if !ok || line.TStart != 0 || line.TEnd != 1 {
-			return bossRect{}, false
-		}
-		if (line.Start.U == line.End.U) == (line.Start.V == line.End.V) {
-			return bossRect{}, false
-		}
-		pts[i] = line.Start
-		if i > 0 {
-			prev, ok := p.Outer.Segments[i-1].(lineSeg)
-			if !ok || prev.End != line.Start {
-				return bossRect{}, false
-			}
-		}
-		if i == 0 {
-			r = bossRect{line.Start.U, line.Start.V, line.Start.U, line.Start.V}
-		}
-		r.u0, r.u1 = math.Min(r.u0, line.Start.U), math.Max(r.u1, line.Start.U)
-		r.v0, r.v1 = math.Min(r.v0, line.Start.V), math.Max(r.v1, line.Start.V)
-		if i == 3 && line.End != pts[0] {
-			return bossRect{}, false
-		}
-	}
-	if !(r.width() > 0 && r.height() > 0) {
-		return bossRect{}, false
-	}
-	seen := map[planePoint]bool{}
-	for _, p := range pts {
-		if seen[p] || !((p.U == r.u0 || p.U == r.u1) && (p.V == r.v0 || p.V == r.v1)) {
-			return bossRect{}, false
-		}
-		seen[p] = true
-	}
-	a, b := pts[0], pts[1]
-	c := pts[2]
-	cross := (b.U-a.U)*(c.V-b.V) - (b.V-a.V)*(c.U-b.U)
-	return r, cross > 0 && !proofbound.IsNonFinite(r.width()) && !proofbound.IsNonFinite(r.height())
-}
 
 // reverseClosedBossStack makes a narrow lower slab the upper boss of the
 // existing certified construction. Flipping the frame's V axis, each section's
@@ -119,10 +27,10 @@ func reverseClosedBossStack(ctx context.Context, sp stackedPrismPayload) (stacke
 		len(sp.slabs[0].Regions) != 1 || len(sp.slabs[1].Regions) != 1 {
 		return stackedPrismPayload{}, false, nil
 	}
-	inner, innerOK := recordedBossRect(sp.slabs[0].Regions[0])
-	outer, outerOK := recordedBossRect(sp.slabs[1].Regions[0])
-	if !innerOK || !outerOK || !(inner.u0 > outer.u0 && inner.v0 > outer.v0 &&
-		inner.u1 < outer.u1 && inner.v1 < outer.v1) {
+	inner, innerOK := prismshell.RecordedBossRect(sp.slabs[0].Regions[0])
+	outer, outerOK := prismshell.RecordedBossRect(sp.slabs[1].Regions[0])
+	if !innerOK || !outerOK || !(inner.U0 > outer.U0 && inner.V0 > outer.V0 &&
+		inner.U1 < outer.U1 && inner.V1 < outer.V1) {
 		return stackedPrismPayload{}, false, nil
 	}
 	frame, err := r3.NewFrame(sp.frame.Origin(), sp.frame.U(), sp.frame.V().Scale(-1))
@@ -135,8 +43,8 @@ func reverseClosedBossStack(ctx context.Context, sp stackedPrismPayload) (stacke
 		return stackedPrismPayload{}, true, fmt.Errorf("%w: the closed boss shell needs an exact reversed section frame",
 			ErrUnsupported)
 	}
-	reflectRect := func(r bossRect) profileRecord {
-		return (bossRect{u0: r.u0, v0: -r.v1, u1: r.u1, v1: -r.v0}).profile()
+	reflectRect := func(r prismshell.BossRect) profileRecord {
+		return (prismshell.BossRect{U0: r.U0, V0: -r.V1, U1: r.U1, V1: -r.V0}).Profile()
 	}
 	exposed, err := stackedrecord.UnionExposed(ctx, reflectRect(outer), reflectRect(inner))
 	if err != nil {
@@ -163,9 +71,9 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	if len(sp.slabs) != 2 || len(sp.interfaces) != 1 || len(sp.slabs[0].Regions) != 1 || len(sp.slabs[1].Regions) != 1 {
 		return nil, false, nil
 	}
-	plate, pOK := recordedBossRect(sp.slabs[0].Regions[0])
-	boss, bOK := recordedBossRect(sp.slabs[1].Regions[0])
-	if !pOK || !bOK || !(boss.u0 > plate.u0 && boss.v0 > plate.v0 && boss.u1 < plate.u1 && boss.v1 < plate.v1) {
+	plate, pOK := prismshell.RecordedBossRect(sp.slabs[0].Regions[0])
+	boss, bOK := prismshell.RecordedBossRect(sp.slabs[1].Regions[0])
+	if !pOK || !bOK || !(boss.U0 > plate.U0 && boss.V0 > plate.V0 && boss.U1 < plate.U1 && boss.V1 < plate.V1) {
 		return nil, false, nil
 	}
 	closed := len(call.removed) == 0
@@ -182,14 +90,14 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 		return refuse("requires exact slab sections, levels, and thickness")
 	}
 	t := call.tmm
-	if !(a.Z1-a.Z0 > 2*t && boss.width() > 2*t && boss.height() > 2*t &&
-		boss.u0 > plate.u0+t && boss.v0 > plate.v0+t && boss.u1 < plate.u1-t && boss.v1 < plate.v1-t) {
+	if !(a.Z1-a.Z0 > 2*t && boss.Width() > 2*t && boss.Height() > 2*t &&
+		boss.U0 > plate.U0+t && boss.V0 > plate.V0+t && boss.U1 < plate.U1-t && boss.V1 < plate.V1-t) {
 		return refuse("has insufficient floor, wall, or root clearance")
 	}
 	if closed && b.Z1-b.Z0 <= t {
 		return refuse("has no cavity below the kept boss roof")
 	}
-	lower, upper := plate.inset(t), boss.inset(t)
+	lower, upper := plate.Inset(t), boss.Inset(t)
 	lowerZ := a.Z1 - t
 	cavityTopZ := b.Z1
 	if closed {
@@ -232,15 +140,15 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 		result.faces = append(result.faces, brepFace{frame: sp.frame, region: &p, z0: z, z1: z, outward: outward})
 		return len(result.faces) - 1
 	}
-	addWalls := func(r bossRect, z0, z1 float64) {
-		for _, seg := range r.profile().Outer.Segments {
+	addWalls := func(r prismshell.BossRect, z0, z1 float64) {
+		for _, seg := range r.Profile().Outer.Segments {
 			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: reverseSegment(seg), z0: z0, z1: z1})
 		}
 	}
-	addPlane(lower.profile(), a.Z0+t, true)
+	addPlane(lower.Profile(), a.Z0+t, true)
 	addWalls(lower, a.Z0+t, lowerZ)
-	ledge := profileRecord{Outer: lower.profile().Outer}
-	hole, err := offset2d.ReverseLoopRecordContext(ctx, boss.profile().Outer)
+	ledge := profileRecord{Outer: lower.Profile().Outer}
+	hole, err := offset2d.ReverseLoopRecordContext(ctx, boss.Profile().Outer)
 	if err != nil {
 		return nil, true, err
 	}
@@ -248,38 +156,38 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	ledgeFace := addPlane(ledge, lowerZ, false)
 	addWalls(upper, b.Z0, cavityTopZ)
 	if closed {
-		addPlane(upper.profile(), cavityTopZ, false)
+		addPlane(upper.Profile(), cavityTopZ, false)
 	} else {
-		rim := profileRecord{Outer: boss.profile().Outer}
-		hole, err = offset2d.ReverseLoopRecordContext(ctx, upper.profile().Outer)
+		rim := profileRecord{Outer: boss.Profile().Outer}
+		hole, err = offset2d.ReverseLoopRecordContext(ctx, upper.Profile().Outer)
 		if err != nil {
 			return nil, true, err
 		}
 		rim.Holes = []loopRecord{hole}
 		addPlane(rim, b.Z1, true)
 	}
-	result.bossShell = &bossShellBand{plate: plate, boss: boss, lower: lower, upper: upper,
-		z0: a.Z0, interfaceZ: a.Z1, topZ: b.Z1, cavityTopZ: cavityTopZ,
-		lowerZ: lowerZ, t: t, ledgeFace: ledgeFace, frame: sp.frame,
-		outerFaceCount: outerFaceCount, closed: closed}
+	result.bossShell = &prismshell.BossShellBand{Plate: plate, Boss: boss, Lower: lower, Upper: upper,
+		Z0: a.Z0, InterfaceZ: a.Z1, TopZ: b.Z1, CavityTopZ: cavityTopZ,
+		LowerZ: lowerZ, T: t, LedgeFace: ledgeFace, Frame: sp.frame,
+		OuterFaceCount: outerFaceCount, Closed: closed}
 	result.assignRoles()
 	body, err := evalBrepContext(ctx, source.doc, source.doc.nextProducerID(), result)
 	return body, true, err
 }
 
-func bossRectArithmeticExact(r bossRect, t float64) bool {
-	if proofbound.ExactSumRound(r.width(), r.u1, -r.u0) != 0 ||
-		proofbound.ExactSumRound(r.height(), r.v1, -r.v0) != 0 {
+func bossRectArithmeticExact(r prismshell.BossRect, t float64) bool {
+	if proofbound.ExactSumRound(r.Width(), r.U1, -r.U0) != 0 ||
+		proofbound.ExactSumRound(r.Height(), r.V1, -r.V0) != 0 {
 		return false
 	}
-	for _, x := range [4]float64{r.u0, r.v0, r.u1, r.v1} {
+	for _, x := range [4]float64{r.U0, r.V0, r.U1, r.V1} {
 		if proofbound.ExactSumRound(x+t, x, t) != 0 || proofbound.ExactSumRound(x-t, x, -t) != 0 {
 			return false
 		}
 	}
-	in := r.inset(t)
-	if proofbound.ExactSumRound(in.width(), in.u1, -in.u0) != 0 ||
-		proofbound.ExactSumRound(in.height(), in.v1, -in.v0) != 0 {
+	in := r.Inset(t)
+	if proofbound.ExactSumRound(in.Width(), in.U1, -in.U0) != 0 ||
+		proofbound.ExactSumRound(in.Height(), in.V1, -in.V0) != 0 {
 		return false
 	}
 	return true
@@ -358,12 +266,12 @@ func bossShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology
 	placeVertex func([3]float64, float64, float64, float64) *Vertex,
 	out *brepOpenSet, bi int) error {
 	band := bp.bossShell
-	e := btopo.embeds[band.ledgeFace]
+	e := btopo.embeds[band.LedgeFace]
 	for ring, spec := range []struct {
 		profile profileRecord
 		z       float64
-	}{{band.sideProfile(), band.lowerZ}, {band.capProfile(), band.interfaceZ}} {
-		view := prismPayload{Payload: prismrecord.Payload{Frame: band.frame, Xform: bp.xform, Z0: spec.z, Z1: spec.z}}
+	}{{band.SideProfile(), band.LowerZ}, {band.CapProfile(), band.InterfaceZ}} {
+		view := prismPayload{Payload: prismrecord.Payload{Frame: band.Frame, Xform: bp.xform, Z0: spec.z, Z1: spec.z}}
 		for _, seg := range spec.profile.Outer.Segments {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -402,20 +310,20 @@ func bossShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology
 func attachBossShellBand(ctx context.Context, body *Body, ref producerID, bp brepPayload, open brepOpenSet) ([]*Face, error) {
 	band := bp.bossShell
 	bi := len(bp.loopBands)
-	b := brepLoopBand{face: band.ledgeFace, loop: 0, orig: band.sideProfile().Outer,
-		setback: capSetback{dc: band.t, ds: band.t}, sigma: 1, kind: brepBandFillet}
-	upper := band.capProfile()
-	fake := brepFace{frame: band.frame, region: &upper,
-		z0: band.interfaceZ, z1: band.interfaceZ, outward: false, role: "bossShellBand"}
+	b := brepLoopBand{face: band.LedgeFace, loop: 0, orig: band.SideProfile().Outer,
+		setback: capSetback{dc: band.T, ds: band.T}, sigma: 1, kind: brepBandFillet}
+	upper := band.CapProfile()
+	fake := brepFace{frame: band.Frame, region: &upper,
+		z0: band.InterfaceZ, z1: band.InterfaceZ, outward: false, role: "bossShellBand"}
 	copyBP := bp
 	copyBP.faces = append([]brepFace(nil), bp.faces...)
-	copyBP.faces[band.ledgeFace] = fake
+	copyBP.faces[band.LedgeFace] = fake
 	copyBP.loopBands = append(append([]brepLoopBand(nil), bp.loopBands...), b)
 	embeds, err := brepEmbeds(bp.faces)
 	if err != nil {
 		return nil, err
 	}
-	patches, _, err := attachFilletBand(ctx, body, ref, copyBP, bi, open, embeds[band.ledgeFace], freeform.NewFreeformWork())
+	patches, _, err := attachFilletBand(ctx, body, ref, copyBP, bi, open, embeds[band.LedgeFace], freeform.NewFreeformWork())
 	return patches, err
 }
 
@@ -423,7 +331,7 @@ func attachBossShellBand(ctx context.Context, body *Body, ref producerID, bp bre
 // enclosed by proofbound's rational interval. Face areas already carry each
 // planar or cylindrical patch's own independent bound.
 func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
-	if bp.bossShell.round != nil {
+	if bp.bossShell.Round != nil {
 		return measureRoundBossShell(ctx, bp, body)
 	}
 	b := bp.bossShell
@@ -433,23 +341,23 @@ func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
 		return proofbound.IntervalScale(a, big.NewRat(n, d))
 	}
 	pi := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
-	area := func(r bossRect) proofbound.RatInterval {
-		return mul(sub(point(r.u1), point(r.u0)), sub(point(r.v1), point(r.v0)))
+	area := func(r prismshell.BossRect) proofbound.RatInterval {
+		return mul(sub(point(r.U1), point(r.U0)), sub(point(r.V1), point(r.V0)))
 	}
-	centerU := func(r bossRect) proofbound.RatInterval { return scale(add(point(r.u0), point(r.u1)), 1, 2) }
-	centerV := func(r bossRect) proofbound.RatInterval { return scale(add(point(r.v0), point(r.v1)), 1, 2) }
-	t := point(b.t)
-	h := sub(point(b.interfaceZ), point(b.z0))
-	hb := sub(point(b.topZ), point(b.interfaceZ))
-	bw, bh := point(b.boss.width()), point(b.boss.height())
-	plateV, bossV := mul(area(b.plate), h), mul(area(b.boss), hb)
-	lowerV := mul(area(b.lower), sub(h, scale(t, 2, 1)))
-	upperHeight := sub(point(b.cavityTopZ), point(b.interfaceZ))
-	upperV := mul(area(b.upper), upperHeight)
+	centerU := func(r prismshell.BossRect) proofbound.RatInterval { return scale(add(point(r.U0), point(r.U1)), 1, 2) }
+	centerV := func(r prismshell.BossRect) proofbound.RatInterval { return scale(add(point(r.V0), point(r.V1)), 1, 2) }
+	t := point(b.T)
+	h := sub(point(b.InterfaceZ), point(b.Z0))
+	hb := sub(point(b.TopZ), point(b.InterfaceZ))
+	bw, bh := point(b.Boss.Width()), point(b.Boss.Height())
+	plateV, bossV := mul(area(b.Plate), h), mul(area(b.Boss), hb)
+	lowerV := mul(area(b.Lower), sub(h, scale(t, 2, 1)))
+	upperHeight := sub(point(b.CavityTopZ), point(b.InterfaceZ))
+	upperV := mul(area(b.Upper), upperHeight)
 	t2, t3, t4 := mul(t, t), mul(mul(t, t), t), mul(mul(t, t), mul(t, t))
 	widths := add(bw, bh)
 	bandV := add(
-		add(sub(mul(area(b.boss), t), scale(mul(widths, t2), 2, 1)),
+		add(sub(mul(area(b.Boss), t), scale(mul(widths, t2), 2, 1)),
 			scale(mul(mul(widths, pi), t2), 1, 2)),
 		sub(scale(t3, 20, 3), scale(mul(pi, t3), 2, 1)),
 	)
@@ -460,15 +368,15 @@ func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
 	v, ve := heldOf(volume)
 	body.volume = Measurement{Value: units.CubicMillimeters(v), Bound: units.CubicMillimeters(ve), Exactness: exactnessOf(ve)}
 	// z is measured from the recorded frame origin, not from the plate base.
-	plateCZ := scale(add(point(b.z0), point(b.interfaceZ)), 1, 2)
-	bossCZ := scale(add(point(b.interfaceZ), point(b.topZ)), 1, 2)
-	upperCZ := scale(add(point(b.interfaceZ), point(b.cavityTopZ)), 1, 2)
-	bandZ := add(mul(point(b.lowerZ), bandV),
-		add(sub(scale(mul(area(b.boss), t2), 1, 2), scale(mul(widths, t3), 1, 3)), scale(t4, 1, 3)))
-	mu := sub(sub(add(mul(plateV, centerU(b.plate)), mul(bossV, centerU(b.boss))),
-		add(mul(lowerV, centerU(b.lower)), mul(upperV, centerU(b.upper)))), mul(bandV, centerU(b.boss)))
-	mv := sub(sub(add(mul(plateV, centerV(b.plate)), mul(bossV, centerV(b.boss))),
-		add(mul(lowerV, centerV(b.lower)), mul(upperV, centerV(b.upper)))), mul(bandV, centerV(b.boss)))
+	plateCZ := scale(add(point(b.Z0), point(b.InterfaceZ)), 1, 2)
+	bossCZ := scale(add(point(b.InterfaceZ), point(b.TopZ)), 1, 2)
+	upperCZ := scale(add(point(b.InterfaceZ), point(b.CavityTopZ)), 1, 2)
+	bandZ := add(mul(point(b.LowerZ), bandV),
+		add(sub(scale(mul(area(b.Boss), t2), 1, 2), scale(mul(widths, t3), 1, 3)), scale(t4, 1, 3)))
+	mu := sub(sub(add(mul(plateV, centerU(b.Plate)), mul(bossV, centerU(b.Boss))),
+		add(mul(lowerV, centerU(b.Lower)), mul(upperV, centerU(b.Upper)))), mul(bandV, centerU(b.Boss)))
+	mv := sub(sub(add(mul(plateV, centerV(b.Plate)), mul(bossV, centerV(b.Boss))),
+		add(mul(lowerV, centerV(b.Lower)), mul(upperV, centerV(b.Upper)))), mul(bandV, centerV(b.Boss)))
 	mz := sub(sub(add(mul(plateV, plateCZ), mul(bossV, bossCZ)),
 		add(mul(lowerV, plateCZ), mul(upperV, upperCZ))), bandZ)
 	ivs := []proofbound.RatInterval{mu, mv, mz}
