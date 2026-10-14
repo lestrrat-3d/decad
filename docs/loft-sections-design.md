@@ -143,9 +143,10 @@ The faceted area and face readings add their own held arithmetic charges.
 
 `Tessellate(VerifyAll)`, mesh booleans, placement, and export use the standard
 faceted proof payload. Placement carries the certified mesh and source-face
-groups through the existing faceted placement proof; a placed planar tag gets
-a conservative unit-normal departure bound. `Face.NormalAt` on a quadratic
-wall remains `ErrUnsupported`, as for every `NURBSSurface`.
+groups through the existing faceted placement proof. Unless the placement is exactly the
+identity, a placed analytic tag moves to its float image and gets a conservative unit-normal
+departure bound. `Face.NormalAt` on a quadratic wall remains `ErrUnsupported`, as for every
+`NURBSSurface`.
 
 The admitted classes are increments, not a claim that general multi-section
 interpolation is determined by profile boundaries. Nonhomothetic profiles
