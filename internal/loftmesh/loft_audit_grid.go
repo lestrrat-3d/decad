@@ -1,6 +1,7 @@
 package loftmesh
 
 import (
+	"cmp"
 	"math"
 	"slices"
 	"sort"
@@ -65,21 +66,38 @@ func (s sweepOrder) work() uint64 {
 	return total
 }
 
-// gridScan is a uniform grid over the member boxes. Every box is registered
-// in each cell its extent meets; a pair whose boxes overlap meets in the
-// cell holding the componentwise maximum of their two lower corners, a point
-// of both boxes, and is reported from that cell alone.
+// gridScan is a uniform grid over the member boxes. A box meets the block of
+// cells between the cells of its two corners; the grid records it once per
+// (x, y) column of that block, with the block's z cell range, so two boxes in
+// one column share exactly the cells where their z ranges meet. A pair whose
+// boxes overlap meets in the cell holding the componentwise maximum of their
+// two lower corners, a point of both boxes, and is reported from that cell's
+// column alone.
 type gridScan struct {
 	boxes [][2]r3.Vec
 	lo    [3]float64
 	size  [3]float64
 	n     [3]int
-	keys  []int64
-	cells [][]int32
-	// registrations counts every (box, cell) incidence; work adds every
-	// in-cell pair comparison, so work is what a complete visit counts.
+	// columns holds every occupied (x, y) column in ascending column key;
+	// a column's entries run in ascending zLo, ties in member order.
+	columns []gridColumn
+	// registrations counts every (box, cell) incidence; work adds, for every
+	// cell, one comparison per pair of boxes sharing it, so work is what a
+	// complete visit counts.
 	registrations uint64
 	work          uint64
+}
+
+// gridColumn is one occupied (x, y) column: key is x·n[1] + y.
+type gridColumn struct {
+	key     int64
+	entries []gridEntry
+}
+
+// gridEntry is one box's z cell range [zLo, zHi] in one column.
+type gridEntry struct {
+	box      int32
+	zLo, zHi int32
 }
 
 func vecAxis(v r3.Vec, axis int) float64 {
@@ -93,11 +111,11 @@ func vecAxis(v r3.Vec, axis int) float64 {
 	}
 }
 
-// newGridScan sizes the grid and registers every member. Each axis's cell
-// is the larger of the members' median extent on it and the members' span
-// over ⌈∛F⌉, so no axis has more than ⌈∛F⌉ + 1 cells. ok is false when the
-// members span no finite extent, or when registering them would pass budget
-// incidences; the caller then keeps the sweep.
+// newGridScan sizes the grid and records every member. Each axis's cell is
+// the members' median extent on it when that exceeds the members' span over
+// F, else the span over ⌈∛F⌉, so no axis has more than F + 1 cells. ok is
+// false when the members span no finite extent, or when they meet more than
+// budget cells; the caller then keeps the sweep.
 func newGridScan(boxes [][2]r3.Vec, members []int, budget uint64) (gridScan, bool) {
 	g := gridScan{boxes: boxes}
 	if len(members) < 2 {
@@ -130,42 +148,62 @@ func newGridScan(boxes [][2]r3.Vec, members []int, budget uint64) (gridScan, boo
 	}
 	// Count the incidences before registering any, so a grid that would cost
 	// more than budget is never built.
-	total := uint64(0)
+	total, columnTotal := uint64(0), uint64(0)
 	for _, i := range members {
 		lo, hi := g.cellRange(boxes[i])
-		count := uint64(1)
-		for axis := range 3 {
-			count *= uint64(hi[axis] - lo[axis] + 1)
-		}
-		total += count
+		columns := uint64(hi[0]-lo[0]+1) * uint64(hi[1]-lo[1]+1)
+		total += columns * uint64(hi[2]-lo[2]+1)
+		columnTotal += columns
 		if total > budget {
 			return g, false
 		}
 	}
 	g.registrations = total
-	byKey := map[int64][]int32{}
-	for _, i := range members {
+	// One item per (box, column) incidence: at most total, already within
+	// budget. start is the key of the box's lowest cell in the column, so
+	// sorting by (start, member position) orders the columns by key and each
+	// column's boxes by zLo, ties in member order.
+	type gridItem struct {
+		start int64
+		pos   int32
+		zHi   int32
+	}
+	items := make([]gridItem, 0, columnTotal)
+	for k, i := range members {
 		lo, hi := g.cellRange(boxes[i])
 		for x := lo[0]; x <= hi[0]; x++ {
 			for y := lo[1]; y <= hi[1]; y++ {
-				for z := lo[2]; z <= hi[2]; z++ {
-					key := g.key([3]int{x, y, z})
-					byKey[key] = append(byKey[key], int32(i))
-				}
+				items = append(items, gridItem{start: g.key([3]int{x, y, lo[2]}), pos: int32(k), zHi: int32(hi[2])})
 			}
 		}
 	}
-	g.keys = make([]int64, 0, len(byKey))
-	for key := range byKey {
-		g.keys = append(g.keys, key)
-	}
-	slices.Sort(g.keys)
-	g.cells = make([][]int32, len(g.keys))
+	slices.SortFunc(items, func(p, q gridItem) int {
+		if p.start != q.start {
+			return cmp.Compare(p.start, q.start)
+		}
+		return cmp.Compare(p.pos, q.pos)
+	})
+	nz := int64(g.n[2])
+	entries := make([]gridEntry, len(items))
 	g.work = g.registrations
-	for k, key := range g.keys {
-		g.cells[k] = byKey[key]
-		m := uint64(len(g.cells[k]))
-		g.work += m * (m - 1) / 2
+	for a := 0; a < len(items); {
+		key := items[a].start / nz
+		b := a
+		for b < len(items) && items[b].start/nz == key {
+			entries[b] = gridEntry{box: int32(members[items[b].pos]), zLo: int32(items[b].start % nz), zHi: items[b].zHi}
+			b++
+		}
+		col := entries[a:b:b]
+		for p, ep := range col {
+			for _, eq := range col[p+1:] {
+				if eq.zLo > ep.zHi {
+					break
+				}
+				g.work += uint64(min(ep.zHi, eq.zHi) - eq.zLo + 1)
+			}
+		}
+		g.columns = append(g.columns, gridColumn{key: key, entries: col})
+		a = b
 	}
 	return g, true
 }
@@ -191,27 +229,36 @@ func (g gridScan) key(c [3]int) int64 {
 	return (int64(c[0])*int64(g.n[1])+int64(c[1]))*int64(g.n[2]) + int64(c[2])
 }
 
-// visit charges the registrations, then compares every pair sharing a cell,
-// in key order, reporting an overlapping pair only from the cell that holds
-// the maximum of its two lower corners.
+// visit charges the registrations, then, column by column, every pair of
+// boxes whose z ranges meet: one unit per cell the pair shares, the same
+// comparisons a cell-by-cell pass makes. An overlapping pair is reported
+// only from the column holding the maximum of its two lower corners; that
+// point's z cell lies in both boxes' z ranges, so the pair is reported once.
 func (g gridScan) visit(budget *proofbound.WorkBudget, limit uint64, fn func(i, j int)) (uint64, bool, error) {
 	scanned := g.registrations
 	if scanned > limit {
 		return scanned, true, nil
 	}
-	for k, cell := range g.cells {
-		key := g.keys[k]
-		for a, ia := range cell {
-			boxA := g.boxes[ia]
-			for _, ib := range cell[a+1:] {
-				if err := budget.Step(); err != nil {
-					return scanned, false, err
+	ny := int64(g.n[1])
+	for _, col := range g.columns {
+		x, y := int(col.key/ny), int(col.key%ny)
+		for a, ea := range col.entries {
+			boxA := g.boxes[ea.box]
+			for _, eb := range col.entries[a+1:] {
+				if eb.zLo > ea.zHi {
+					break
 				}
-				scanned++
-				if scanned > limit {
-					return scanned, true, nil
+				zHi := min(ea.zHi, eb.zHi)
+				for range zHi - eb.zLo + 1 {
+					if err := budget.Step(); err != nil {
+						return scanned, false, err
+					}
+					scanned++
+					if scanned > limit {
+						return scanned, true, nil
+					}
 				}
-				boxB := g.boxes[ib]
+				boxB := g.boxes[eb.box]
 				if !meshbool.BoxesOverlap(boxA, boxB) {
 					continue
 				}
@@ -219,10 +266,10 @@ func (g gridScan) visit(budget *proofbound.WorkBudget, limit uint64, fn func(i, 
 				for axis := range 3 {
 					c[axis] = g.index(axis, math.Max(vecAxis(boxA[0], axis), vecAxis(boxB[0], axis)))
 				}
-				if g.key(c) != key {
+				if c[0] != x || c[1] != y {
 					continue
 				}
-				i, j := int(ia), int(ib)
+				i, j := int(ea.box), int(eb.box)
 				if i > j {
 					i, j = j, i
 				}
