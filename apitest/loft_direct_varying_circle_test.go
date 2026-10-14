@@ -2,14 +2,70 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestLoftDirectCircleRoundedAxisKeepsFacetedTopology(t *testing.T) {
+	base, err := r3.NewFrame(r3.NewVec(1e9, 0, 0), r3.NewVec(3, 0, 4), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	world := sketch.NewWorld()
+	bottomPlane, err := world.CreatePlaneFromFrame(base)
+	require.NoError(t, err)
+	topPlane, err := world.CreateOffsetPlane(bottomPlane, 3.125)
+	require.NoError(t, err)
+	top, err := topPlane.Frame()
+	require.NoError(t, err)
+	level := base.ToLocal(top.Origin())
+	require.Equal(t, r3.NewVec(0, 0, 3.125), level)
+	require.Equal(t, top.Origin(), base.ToWorld(level))
+	bottomAnchor, err := massmoment.RevolveAnchor(base, 0, 0)
+	require.NoError(t, err)
+	topAnchor, err := massmoment.RevolveAnchor(top, 0, 0)
+	require.NoError(t, err)
+	axis, err := massmoment.PlaneMap(base, r3.Identity())
+	require.NoError(t, err)
+	exactLift := new(big.Rat).Add(bottomAnchor[2],
+		new(big.Rat).Mul(axis[2][2], proofarith.FloatRat(level.Z)))
+	require.NotZero(t, exactLift.Cmp(topAnchor[2]))
+
+	section := func(plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
+		s, err := world.CreateSketch(plane)
+		require.NoError(t, err)
+		rect := s.CreateRectangle(-5, -5, 5, 5)
+		s.Fix(rect.A)
+		center := s.CreatePoint(0, 0)
+		s.Fix(center)
+		s.CreateCircle(center, 1)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		return s, s.Profiles()[0]
+	}
+	s0, p0 := section(bottomPlane)
+	s1, p1 := section(topPlane)
+	body, err := decad.New().Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(body)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+	require.Empty(t, cylinders)
+	for _, role := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
+		faces, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(body)
+		require.NoError(t, err)
+		require.Len(t, faces[0].Loops(), 2)
+		require.Greater(t, len(faces[0].Loops()[1].Edges()), 1)
+		for _, edge := range faces[0].Loops()[1].Edges() {
+			require.IsType(t, decad.Line3{}, edge.Curve())
+		}
+	}
+}
 
 func directLoftCircles(t *testing.T, outerCircle bool, r0, r1, x1, y1 float64) *decad.Body {
 	t.Helper()

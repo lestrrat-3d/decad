@@ -129,7 +129,8 @@ Rules:
   merge with another face. A certified whole-circle through-Cut or direct Loft
   replaces only its hole-wall triangles with one curved face that retains their
   roles. Direct Loft admits a cylinder, cone or rational ruled surface under
-  loft §18's source and area gates.
+  loft §18's exact axis and center proof, source and area gates. A pair whose
+  frame lifts agree only after rounding keeps its separate faceted walls.
   This keeps
   `side(i,j,0)`/`side(i,j,1)` distinct within a cell and preserves every
   cross-cell rung between coplanar Loft triangles. A full cylinder is one

@@ -2798,15 +2798,21 @@ same mark.
 A direct Loft also publishes one `Circle3` per cap rim and one curved hole
 wall when its authenticated sections have identical outer records, one whole
 clockwise circle hole each, the same in-plane frame axes, zero alignment and
-an exact common axial frame displacement. A pair with bit-identical circle
-records uses the cylindrical builder above. Equal rounded radii without
-identical records keep faceted topology. Unequal circles
-need the additional gate of line-only outer loops, identity placement, exact
-world-XY section axes and an exactly representable axial height. These
+an exact common axial frame displacement. The exact rational lifts of both
+section origins must agree at one positive sweep level, and their frame axis
+directions must agree exactly. A pair with bit-identical circle records uses
+the cylindrical builder only when both circle-center lifts agree at that level
+as exact rationals. Rounded `ToLocal` and `ToWorld` equality does not prove
+either gate. Equal rounded radii without identical records keep faceted
+topology. Unequal circles need the additional gate of line-only outer loops,
+identity placement, exact world-XY section axes and an exactly representable
+axial height. These
 conditions make each retained outer wall planar with a bounded area. A fixed
 center with changing radius gives a `Cone`; a moving center gives a rational
 ruled `NURBSSurface`, including when its radius also changes. A moving-center
-wall is not a right cylinder or cone.
+wall is not a right cylinder or cone. The world-XY gate makes both unequal
+circles' recorded center lifts exact without requiring the moving centers to
+coincide.
 
 The ruled surface follows directly from the two circle records. One quarter
 circle has homogeneous quadratic weights `[1,1,2]` and controls

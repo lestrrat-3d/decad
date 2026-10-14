@@ -75,7 +75,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_point.go` | Point-section Loft entry, live Sketch source check, apex fan and proof. See loft-point design. |
 | `loft_build.go` | Loft payload, evaluation, placement and tessellation adapter. See loft §5, §8, §12. |
 | `loft_topology.go` | Builds loft `Body` topology over `internal/loftmesh/` assembly. See loft §5.1, §7. |
-| `loft_circle_bore_topology.go` | Publishes analytic circular rims and a cylindrical, conical or ruled hole wall for certified direct Loft circles; retains the certified through-Cut cylinder path. See loft §18. |
+| `loft_circle_bore_topology.go` | Proves exact section axes and circle-center lifts before publishing direct Loft curved walls and circular rims; retains the certified through-Cut cylinder path. See loft §18. |
 | `loft_moments.go` | Loft mass adapters and chord proofs. See loft §8, §12. |
 
 ### Cap-loop chamfer

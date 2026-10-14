@@ -537,8 +537,10 @@ index. No ordinary Loft wall triangle coalesces with one in another cell, so
 a flat split rung keeps its two source faces. A certified whole-circle
 through-Cut or direct Loft is the exception: all held triangles on its hole
 wall map to one curved face carrying their original roles. Direct Loft admits
-a cylinder, cone or rational ruled surface under loft §18. Missing or conflicting
-roles are an evaluator invariant failure and no mesh is returned.
+a cylinder, cone or rational ruled surface only after loft §18's exact frame
+and circle-center proof. An unproved pair keeps separate faceted source faces.
+Missing or conflicting roles are an evaluator invariant failure and no mesh
+is returned.
 
 Assign sources by patch:
 

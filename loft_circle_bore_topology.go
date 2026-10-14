@@ -56,15 +56,15 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 		return loftCircleWallNone
 	}
 	level := pl.frame0.ToLocal(pl.frame1.Origin())
-	if level.X != 0 || level.Y != 0 || level.Z <= 0 ||
-		pl.frame0.ToWorld(r3.NewVec(0, 0, level.Z)) != pl.frame1.Origin() {
+	if level.X != 0 || level.Y != 0 ||
+		!loftBoreHasExactAxis(pl.frame0, pl.frame1, 0, 0, level.Z) {
 		return loftCircleWallNone
 	}
 	// The cylindrical builder uses the first section's entire circle record
 	// for both rims, so equal world radii alone do not authorize that reuse.
 	if sectionrecord.IdenticalRecord(bottom, top) {
-		if pl.frame0.ToWorld(r3.NewVec(bottom.Center.U, bottom.Center.V, level.Z)) ==
-			pl.frame1.ToWorldUV(top.Center.U, top.Center.V) {
+		if loftBoreHasExactAxis(pl.frame0, pl.frame1,
+			bottom.Center.U, bottom.Center.V, level.Z) {
 			return loftCircleWallCylinder
 		}
 		return loftCircleWallNone
@@ -244,8 +244,8 @@ func buildLoftVaryingCircularHoleTopology(ctx context.Context, pl loftPayload,
 }
 
 // loftBoreHasExactAxis compares the recorded frames' denoted lifts over
-// rationals. The proposed cylinder uses frame0's axis and the rounded level,
-// so both section origins and circle centers must lie exactly on that axis.
+// rationals. The proposed axial sweep uses frame0's axis and the rounded
+// level, so both section origins and the selected centers must agree exactly.
 func loftBoreHasExactAxis(frame0, frame1 r3.Frame, u, v, level float64) bool {
 	z := proofarith.FloatRat(level)
 	if z == nil || z.Sign() <= 0 {
