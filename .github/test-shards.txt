@@ -1454,6 +1454,8 @@
 10	0.00	TestAngularStopEdgeNamesPublicCurveType
 10	0.00	TestPlacedCapCentroidByExactRotation
 10	0.00	TestPlacedCapCentroidReadsPlacementAsExactMap
+10	0.00	TestPointPlaneCapCentroidMatchesThreeMoments
+10	0.00	TestPointPlaneCapCentroidRefusalsMatchThreeMoments
 10	0.00	TestCopyRotationRecordsExactPlacementOnDirectCopy
 10	0.00	TestCopyRotationLineageExactIsDirectOnly
 10	0.00	TestCopyRotationOrdinaryCopyOfExactCopyKeepsNoTags
@@ -1474,5 +1476,3 @@
 10	0.00	TestLoftFacesToConeTangentCancelledDuringEvaluation
 10	0.00	TestLoftFacesToConeTangentRefusalKeepsProvenance
 10	0.00	TestResolveToFaceRefusesStatedNormalDeparture
-10	0.00	TestPointPlaneCapCentroidMatchesThreeMoments
-10	0.00	TestPointPlaneCapCentroidRefusalsMatchThreeMoments
