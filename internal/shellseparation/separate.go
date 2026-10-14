@@ -175,17 +175,17 @@ func transferableMoves(moves []r3.Transform, maps [][3][3]*big.Rat) bool {
 
 // exactXRotation reports whether m has the structure of a rotation about X:
 // no X cross terms, equal diagonal and opposite off-diagonal Y/Z terms, and an
-// X scale within 2^-52 of 1.
+// X scale of exactly 1. A rotation about X fixes X, so any other X scale is
+// malformed.
 func exactXRotation(m [3][3]*big.Rat) bool {
 	for _, entry := range []*big.Rat{m[0][1], m[0][2], m[1][0], m[2][0]} {
 		if entry.Sign() != 0 {
 			return false
 		}
 	}
-	limit := new(big.Rat).SetFloat64(0x1p-52)
 	return m[1][1].Cmp(m[2][2]) == 0 &&
 		m[1][2].Cmp(new(big.Rat).Neg(m[2][1])) == 0 &&
-		ratAbs(ratSub(m[0][0], ratOne())).Cmp(limit) <= 0
+		m[0][0].Cmp(ratOne()) == 0
 }
 
 func separateCanonical(ctx context.Context, shells []Shell, moves []r3.Transform,

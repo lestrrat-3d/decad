@@ -31,9 +31,14 @@ func TestExactXRotationStructure(t *testing.T) {
 	scaled[0][0].Add(scaled[0][0], new(big.Rat).SetFloat64(0x1p-50))
 	require.False(t, exactXRotation(scaled), "an X scale beyond 2^-52")
 
-	edge := quarter
-	edge[0][0] = new(big.Rat).Add(big.NewRat(1, 1), new(big.Rat).SetFloat64(0x1p-52))
-	require.True(t, exactXRotation(edge), "an X scale of exactly 2^-52 is within the limit")
+	// An exact X rotation fixes X, so the X scale must be 1 exactly.
+	for _, tiny := range []float64{0x1p-60, 0x1p-52} {
+		off := quarter
+		off[0][0] = new(big.Rat).Add(big.NewRat(1, 1), new(big.Rat).SetFloat64(tiny))
+		require.False(t, exactXRotation(off), "an X scale of 1 + %g is malformed", tiny)
+		off[0][0] = new(big.Rat).Sub(big.NewRat(1, 1), new(big.Rat).SetFloat64(tiny))
+		require.False(t, exactXRotation(off), "an X scale of 1 - %g is malformed", tiny)
+	}
 
 	skew := quarter
 	skew[2][1] = big.NewRat(2, 1)
