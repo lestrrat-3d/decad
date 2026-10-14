@@ -3,6 +3,7 @@ package loftmesh
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"math/rand/v2"
 	"slices"
@@ -650,4 +651,37 @@ func TestLoftCrossingAuditWithCapsCancelledStructuredPass(t *testing.T) {
 		}
 	}
 	require.True(t, sawCancel)
+}
+
+// TestLoftCrossingAuditWithCapsCollapsedWallMatchesGeneric is the review's
+// mesh with one collapsed wall: without cancellation the caps entry returns
+// the generic audit's refusal, text and triangle index included.
+func TestLoftCrossingAuditWithCapsCollapsedWallMatchesGeneric(t *testing.T) {
+	t.Parallel()
+	m := capsMesh{
+		verts: []r3.Vec{r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
+		tris:  [][3]int{{0, 1, 1}, {0, 2, 3}, {0, 3, 1}, {1, 2, 3}},
+		layout: LoftCapLayout{Walls: 3, Cap0: []int{3}, Loops0: [][]int{{1, 2, 3}},
+			Loops1: [][]int{{0}}},
+	}
+	want := capsGeneric(t, m)
+	require.ErrorContains(t, want, "loft triangle 0 has collapsed to zero area")
+	_, structured, got := requireSameVerdict(t, m)
+	require.True(t, structured)
+	require.Equal(t, want.Error(), got.Error())
+}
+
+// TestLoftCrossingAuditWithCapsCollapsedCapNamesOriginalIndex collapses a
+// triangle of the interleaved second cap: the structured pass numbers it in
+// its reordered copy, so only the generic rerun names the caller's index.
+func TestLoftCrossingAuditWithCapsCollapsedCapNamesOriginalIndex(t *testing.T) {
+	t.Parallel()
+	m := capsTestFrustum(20)
+	index := m.layout.Cap1[3]
+	m.tris[index][1] = m.tris[index][0]
+	want := capsGeneric(t, m)
+	require.ErrorContains(t, want, fmt.Sprintf("loft triangle %d has collapsed to zero area", index))
+	_, structured, got := requireSameVerdict(t, m)
+	require.True(t, structured)
+	require.Equal(t, want.Error(), got.Error())
 }

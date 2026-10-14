@@ -1329,8 +1329,11 @@ reorders the caller's triangles as walls, first cap, second cap, runs the
 structured audit when a cap is exactly planar and the mesh has at most
 1,000,000 triangle pairs (the most the generic audit takes without streaming
 its rows, so its row preflight and every S8 ceiling are out of reach), and
-runs the generic audit instead, or after any refusal on the same budget, so
-its verdict and refusal are the generic audit's. The
+runs the generic audit instead, or after any refusal on the same budget.
+Without cancellation its verdict and refusal text equal a direct generic
+call's; under cancellation the result may be the cancellation error in place
+of a geometric refusal, and the audit never accepts a mesh the generic audit
+refuses. The
 generic entry — the mitred sweep, `Stitch`, `LoftChain` and the mesh
 mass-properties reading — runs the sweep and tests every candidate pairwise. The zero shortcut set still tests
 every pair of every triangle through the exact classification, and every

@@ -21,15 +21,21 @@ type LoftCapLayout struct {
 	Interior []int   // vertices of interior section rings (LoftAuditStructure.Interior)
 }
 
-// LoftCrossingAuditWithCaps returns exactly what
-// LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris) returns.
-// When the layout is well formed, at least one cap is exactly planar and the
-// mesh is small enough that the generic audit cannot reach its streamed row
-// preflight or any S8 ceiling (capsAuditFits), it first runs the structured
-// audit over the triangles reordered as walls, Cap0, Cap1, so each planar cap
-// is decided by CapFamilyProof. A structured pass that succeeds is the
-// generic audit's verdict; any error reruns the generic audit on the same
-// budget, so a refusal and its text are the generic audit's.
+// LoftCrossingAuditWithCaps returns what
+// LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris) returns,
+// provided ctx is not cancelled during the call: then the verdict and the
+// refusal text are a direct generic call's. When the layout is well formed,
+// at least one cap is exactly planar and the mesh is small enough that the
+// generic audit cannot reach its streamed row preflight or any S8 ceiling
+// (capsAuditFits), it first runs the structured audit over the triangles
+// reordered as walls, Cap0, Cap1, so each planar cap is decided by
+// CapFamilyProof. A structured pass that succeeds is the generic audit's
+// verdict; any error reruns the generic audit on the same budget. Under
+// cancellation the result may be the cancellation error in place of a
+// geometric refusal: a context that expires during the structured pass makes
+// the rerun's entry poll report it, where a direct generic call could have
+// reached its refusal first. The audit never accepts a mesh the generic audit
+// refuses.
 func LoftCrossingAuditWithCaps(ctx context.Context, verts []r3.Vec, tris [][3]int, layout LoftCapLayout) error {
 	_, _, err := LoftCrossingAuditWithCapsWork(ctx, verts, tris, layout)
 	return err
