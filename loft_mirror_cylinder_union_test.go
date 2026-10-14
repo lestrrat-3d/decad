@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -177,7 +179,9 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	require.Equal(t, want.matched, o.matched)
 	if want.err != nil {
 		require.EqualError(t, o.err, want.err.Error())
-		require.ErrorIs(t, o.err, errors.Unwrap(want.err))
+		if sentinel := errors.Unwrap(want.err); sentinel != nil {
+			require.ErrorIs(t, o.err, sentinel)
+		}
 	} else {
 		require.NoError(t, o.err)
 	}
@@ -197,6 +201,69 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	require.Equal(t, want.body.bounds, o.body.bounds)
 	require.Equal(t, wantPayload.vertexBound, gotPayload.vertexBound)
 	require.Equal(t, wantPayload.meshBound, gotPayload.meshBound)
+	// Every other payload field the old loop's result carries (provenance
+	// groups src and mirrorCapGroups, source mapping, the proof fields, the
+	// Join records) by deep comparison. The cylinder Join record holds the lower
+	// half body, whose lazy caches differ by address, so it is split off and
+	// compared field by field with the lower half's own payload.
+	wantRecord, gotRecord := wantPayload.loftMirrorCylinderJoin, gotPayload.loftMirrorCylinderJoin
+	require.NotNil(t, wantRecord)
+	require.NotNil(t, gotRecord)
+	wantPayload.loftMirrorCylinderJoin, gotPayload.loftMirrorCylinderJoin = nil, nil
+	require.Equal(t, wantPayload, gotPayload)
+	require.Same(t, wantRecord.blank, gotRecord.blank)
+	require.Same(t, wantRecord.source, gotRecord.source)
+	require.Equal(t, wantRecord.pairs, gotRecord.pairs)
+	require.Equal(t, wantRecord.capGroups, gotRecord.capGroups)
+	require.Equal(t, wantRecord.capOutlines, gotRecord.capOutlines)
+	require.Equal(t, wantRecord.bridgeBound, gotRecord.bridgeBound)
+	require.Equal(t, wantRecord.bridgeVolume, gotRecord.bridgeVolume)
+	wantHalf := wantRecord.lowerHalf.payload.(facetedPayload)
+	gotHalf := gotRecord.lowerHalf.payload.(facetedPayload)
+	wantJoin, gotJoin := wantHalf.loftCylinderJoin, gotHalf.loftCylinderJoin
+	require.NotNil(t, wantJoin)
+	require.NotNil(t, gotJoin)
+	wantHalf.loftCylinderJoin, gotHalf.loftCylinderJoin = nil, nil
+	require.Equal(t, wantHalf, gotHalf)
+	// The lower half's Join record holds the placed teeth, the part this
+	// change computes on goroutines: every tooth body and its proof witness.
+	// The half blank is evaluated afresh by each call.
+	require.Equal(t, wantJoin.blank.payload, gotJoin.blank.payload)
+	require.Equal(t, wantJoin.blank.volume, gotJoin.blank.volume)
+	require.Equal(t, wantJoin.blank.bounds, gotJoin.blank.bounds)
+	require.Equal(t, wantJoin.axialBridge, gotJoin.axialBridge)
+	require.Equal(t, wantJoin.capOutlines, gotJoin.capOutlines)
+	require.Equal(t, wantJoin.capGroups, gotJoin.capGroups)
+	require.Equal(t, []float64{wantJoin.minSideRadius, wantJoin.radius, wantJoin.innerInset, wantJoin.outerExcess,
+		wantJoin.rootCollar, wantJoin.z0, wantJoin.z1},
+		[]float64{gotJoin.minSideRadius, gotJoin.radius, gotJoin.innerInset, gotJoin.outerExcess,
+			gotJoin.rootCollar, gotJoin.z0, gotJoin.z1})
+	for _, pair := range [][2][]*Body{{wantJoin.teeth, gotJoin.teeth}, {wantJoin.proofTeeth, gotJoin.proofTeeth}} {
+		require.Len(t, pair[1], len(pair[0]))
+		for i := range pair[0] {
+			require.Equal(t, pair[0][i].payload, pair[1][i].payload, "tooth %d payload", i)
+			require.Equal(t, pair[0][i].volume, pair[1][i].volume, "tooth %d volume", i)
+			require.Equal(t, pair[0][i].bounds, pair[1][i].bounds, "tooth %d bounds", i)
+		}
+	}
+	require.Equal(t, wantRecord.lowerHalf.volume, gotRecord.lowerHalf.volume)
+	require.Equal(t, wantRecord.lowerHalf.bounds, gotRecord.lowerHalf.bounds)
+	// The topology: every face's origins, area and surface kind, in order.
+	wantFaces, gotFaces := want.body.Faces(), o.body.Faces()
+	require.Len(t, gotFaces, len(wantFaces))
+	for i := range wantFaces {
+		require.Equal(t, wantFaces[i].Origins(), gotFaces[i].Origins(), "face %d origins", i)
+		require.Equal(t, wantFaces[i].n.Area, gotFaces[i].n.Area, "face %d area", i)
+		require.Equal(t, wantFaces[i].n.AreaBound, gotFaces[i].n.AreaBound, "face %d area bound", i)
+		require.Equal(t, len(wantFaces[i].Loops()), len(gotFaces[i].Loops()), "face %d loops", i)
+	}
+	require.Equal(t, want.body.origin, o.body.origin)
+}
+
+// callOld answers as the pre-PR interleaved loop does.
+func (f teethFixture) callOld(ctx context.Context, ref producerID, pairs []*Body) pairsOutcome {
+	body, matched, err := oracleLoftMirrorCylinderPairs(ctx, f.d, ref, f.blank, pairs, nil)
+	return pairsOutcome{body: body, matched: matched, err: err}
 }
 
 func (f teethFixture) call(ctx context.Context, ref producerID, pairs []*Body, workers int) pairsOutcome {
@@ -235,7 +302,7 @@ func TestLoftMirrorCylinderPairsParallelMatchesSerial(t *testing.T) {
 		return pairs
 	}
 	t.Run("all pairs", func(t *testing.T) {
-		serial := f.call(t.Context(), ref, f.pairs, 1)
+		serial := f.callOld(t.Context(), ref, f.pairs)
 		require.NoError(t, serial.err)
 		require.True(t, serial.matched)
 		require.NotNil(t, serial.body)
@@ -255,7 +322,7 @@ func TestLoftMirrorCylinderPairsParallelMatchesSerial(t *testing.T) {
 		"zero pairs":            nil,
 	} {
 		t.Run(name, func(t *testing.T) {
-			serial := f.call(t.Context(), ref, pairs, 1)
+			serial := f.callOld(t.Context(), ref, pairs)
 			f.call(t.Context(), ref, pairs, 4).requireSame(t, serial)
 		})
 	}
@@ -268,7 +335,7 @@ func TestLoftMirrorCylinderPairsParallelMatchesSerial(t *testing.T) {
 		fp.loftMirrorCopy = &loftMirrorPlacementRecord{source: &loftMirrorJoinRecord{}, motion: fp.loftMirrorCopy.motion}
 		pairs[2].payload = fp
 		t.Cleanup(func() { pairs[2].payload = good })
-		serial := f.call(t.Context(), ref, pairs, 1)
+		serial := f.callOld(t.Context(), ref, pairs)
 		require.ErrorIs(t, serial.err, ErrUnsupported)
 		require.ErrorContains(t, serial.err, "pair 3 has no authenticated axial placement")
 		require.True(t, serial.matched)
@@ -328,10 +395,14 @@ func TestLoftMirrorCylinderPairsRefusalPlacesNothingPastIt(t *testing.T) {
 	pairs[2] = f.blank
 	count := func(workers int) (int64, pairsOutcome) {
 		ctx := &pollCancelContext{Context: t.Context(), cancelAt: math.MaxInt64}
+		if workers == 0 {
+			out := f.callOld(ctx, ref, pairs)
+			return ctx.calls.Load(), out
+		}
 		out := f.call(ctx, ref, pairs, workers)
 		return ctx.calls.Load(), out
 	}
-	serialPolls, want := count(1)
+	serialPolls, want := count(0)
 	parallelPolls, got := count(4)
 	got.requireSame(t, want)
 	require.False(t, got.matched)
@@ -340,11 +411,15 @@ func TestLoftMirrorCylinderPairsRefusalPlacesNothingPastIt(t *testing.T) {
 	// The refusal ends the call right after the placements, so a cancellation
 	// in the last tenth of the polls lands in a placement. It must surface, not
 	// the refusal.
+	// The old loop's answer is the oracle: pair 3's refusal must not replace
+	// pair 2's placement error.
+	cancelAt := serialPolls * 9 / 10
+	oldOut := f.callOld(&pollCancelContext{Context: t.Context(), cancelAt: cancelAt}, ref, pairs)
+	require.ErrorIs(t, oldOut.err, context.Canceled)
+	require.Nil(t, oldOut.body)
 	for _, workers := range []int{1, 4} {
-		ctx := &pollCancelContext{Context: t.Context(), cancelAt: serialPolls * 9 / 10}
-		out := f.call(ctx, ref, pairs, workers)
-		require.ErrorIs(t, out.err, context.Canceled, "%d workers", workers)
-		require.Nil(t, out.body)
+		ctx := &pollCancelContext{Context: t.Context(), cancelAt: cancelAt}
+		f.call(ctx, ref, pairs, workers).requireSame(t, oldOut)
 	}
 }
 
@@ -439,4 +514,98 @@ func TestLoftMirrorCylinderPlaceTeethFirstError(t *testing.T) {
 			}
 		}
 	}
+}
+
+// oracleLoftMirrorCylinderPairs is the interleaved loop as it was before the
+// placements ran side by side, kept verbatim as the test oracle: each pair is
+// checked and placed in pair order, and the first refusal or placement error
+// ends the call. Test-only; the production function must answer as it does.
+func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID,
+	blank *Body, pairs []*Body, source *loftMirrorJoinRecord) (*Body, bool, error) {
+	pp, blankOK := blank.payload.(prismPayload)
+	if !blankOK || !loftMirrorCylinderBlank(pp) || len(pairs) == 0 || len(pairs) > 32 {
+		return nil, false, nil
+	}
+	first, firstOK := pairs[0].payload.(facetedPayload)
+	if !firstOK || first.loftMirrorJoin == nil || first.xform != r3.Identity() ||
+		!first.contactAudited || source != nil && source != first.loftMirrorJoin {
+		return nil, false, nil
+	}
+	record := first.loftMirrorJoin
+	if record.lower == nil || record.upper == nil || record.stationCount < 3 ||
+		record.lower.doc != d || record.upper.doc != d {
+		return nil, false, nil
+	}
+	lower, lowOK := record.lower.payload.(loftPayload)
+	upper, upOK := record.upper.payload.(loftPayload)
+	if !lowOK || !upOK || !lower.authenticatedReconstruction ||
+		!upper.authenticatedReconstruction || lower.sourceIdentity == nil ||
+		lower.sourceIdentity != upper.sourceIdentity ||
+		lower.xform != r3.Identity() || !loftMirrorAxialSource(lower) {
+		return nil, false, nil
+	}
+	reflection, err := r3.Reflection(lower.frame1)
+	if err != nil {
+		return nil, true, fmt.Errorf("%w: mirrored cylinder source has no reflection: %s", ErrUnsupported, err)
+	}
+	if upper.xform != reflection {
+		return nil, false, nil
+	}
+	z0, middle, z2 := pp.Z0, lower.frame1.Origin().Z, pp.Z1
+	if lower.frame0.Origin().Z != z0 || !(z0 < middle && middle < z2) ||
+		!loftMirrorCylinderLevels(z0, middle, z2) {
+		return nil, false, nil
+	}
+	// The first-stage source relation proves upper=reflection(lower). The
+	// blank has the same circle and exact caps over both half intervals.
+	half := pp
+	half.Z1 = middle
+	halfBlank, err := evalPrismContext(ctx, d, ref, half, freeform.NewFreeformWork())
+	if err != nil {
+		return nil, true, err
+	}
+	lowerTeeth := make([]*Body, len(pairs))
+	upperBridges := make([]float64, len(pairs))
+	var bridgeBound, bridgeVolume float64
+	for i, pair := range pairs {
+		payload, ok := pair.payload.(facetedPayload)
+		if !ok || !payload.contactAudited || pair.doc != d {
+			return nil, false, nil
+		}
+		motion, ok := loftMirrorCylinderPairMotion(payload, record)
+		if !ok {
+			return nil, true, fmt.Errorf("%w: mirrored cylinder pair %d has no authenticated axial placement", ErrUnsupported, i+1)
+		}
+		if !loftCylinderAxialPlacement(motion) {
+			shift, swept, ok, err := loftMirrorCylinderUpperBridge(pair, motion, middle)
+			if err != nil {
+				return nil, true, err
+			}
+			if !ok {
+				return nil, true, fmt.Errorf("%w: mirrored cylinder pair %d has no upper axial bridge", ErrUnsupported, i+1)
+			}
+			bridgeBound = max(bridgeBound, shift)
+			bridgeVolume = proofbound.AbsSumUpper(bridgeVolume, swept)
+			upperBridges[i] = shift
+		}
+		tooth := record.lower
+		if motion != r3.Identity() {
+			tooth, err = lower.placed(ctx, d, ref, motion)
+			if err != nil {
+				return nil, true, err
+			}
+		}
+		lowerTeeth[i] = tooth
+	}
+	lowerJoin, admitted, err := tryLoftCylinderUnionTeethWithUpperBridge(
+		ctx, d, ref, halfBlank, lowerTeeth, upperBridges)
+	if err != nil {
+		return nil, true, err
+	}
+	if !admitted {
+		return nil, true, fmt.Errorf("%w: mirrored cylinder's lower slab lacks a certified circular Join", ErrUnsupported)
+	}
+	result, err := buildLoftMirrorCylinderUnion(ctx, d, ref, blank, pairs, record,
+		lowerJoin, reflection, bridgeBound, bridgeVolume)
+	return result, true, err
 }
