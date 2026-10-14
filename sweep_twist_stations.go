@@ -317,7 +317,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	}
 	body.bounds = Box{Min: minV, Max: maxV, Bound: units.Millimeters(delta), Exactness: Approximate}
 	for _, vertex := range body.Vertices() {
-		vertex.bound = units.Millimeters(proofbound.AbsSumUpper(vertex.bound.Base(), delta))
+		vertex.n.Bound = units.Millimeters(proofbound.AbsSumUpper(vertex.n.Bound.Base(), delta))
 	}
 	upperTheta := proofbound.RatFloatUp(absTheta)
 	for _, edge := range body.Edges() {

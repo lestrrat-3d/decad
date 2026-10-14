@@ -10,6 +10,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -196,10 +197,10 @@ func rationalMidpointEquals(interval [2]float64, held float64) bool {
 }
 
 func (p allEdgeChamferPayload) outerBoxEdge(e *Edge) bool {
-	if _, ok := e.curve.(Line3); !ok || e.start.bound.Base() != 0 || e.end.bound.Base() != 0 {
+	if _, ok := e.curve.(Line3); !ok || e.start.n.Bound.Base() != 0 || e.end.n.Bound.Base() != 0 {
 		return false
 	}
-	a, b := e.start.position, e.end.position
+	a, b := e.start.n.Position, e.end.n.Position
 	x, y := [3]float64{a.X, a.Y, a.Z}, [3]float64{b.X, b.Y, b.Z}
 	varying := 0
 	for axis := range 3 {
@@ -242,10 +243,10 @@ func (p allEdgeChamferPayload) boxPlane(f *Face, plane Plane) (int, int, bool) {
 	}
 	seen := map[[3]float64]struct{}{}
 	for _, ce := range f.loops[0].coedges {
-		if _, ok := ce.edge.curve.(Line3); !ok || ce.Start().bound.Base() != 0 {
+		if _, ok := ce.edge.curve.(Line3); !ok || ce.Start().n.Bound.Base() != 0 {
 			return 0, 0, false
 		}
-		v := ce.Start().position
+		v := ce.Start().n.Position
 		c := [3]float64{v.X, v.Y, v.Z}
 		if c[axis] != p.box[axis][side] {
 			return 0, 0, false
@@ -358,7 +359,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 		if found := vertices[v]; found != nil {
 			return found
 		}
-		made := &Vertex{position: v, bound: units.Millimeters(0)}
+		made := &Vertex{n: topo.Vertex{Position: v, Bound: units.Millimeters(0)}}
 		vertices[v] = made
 		return made
 	}

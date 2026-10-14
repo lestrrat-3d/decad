@@ -133,7 +133,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 			!edgeConnects(end, capE.end, sideE.end) {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d does not close`, ErrUnsupported, i)
 		}
-		plane, err := planeFromThree(sideE.start.position, sideE.end.position, capE.end.position)
+		plane, err := planeFromThree(sideE.start.n.Position, sideE.end.n.Position, capE.end.n.Position)
 		if err != nil {
 			return nil, brepBandMass{}, err
 		}
@@ -147,7 +147,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 		held, bound := heldOf(areaIv)
 		face := &Face{surface: plane, origins: []FeatureRef{{producer: ref, Role: b.patchRole(len(patches))}},
 			body: body, loops: []*Loop{loop}, area: held, areaBound: bound}
-		normal, err := face.NormalAt(sideE.start.position)
+		normal, err := face.NormalAt(sideE.start.n.Position)
 		if err != nil {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d has no normal: %v`,
 				ErrUnsupported, i, err)

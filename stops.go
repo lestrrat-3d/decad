@@ -389,10 +389,10 @@ func angularStopEdge(e *Edge) extent.AngularEdge {
 	curve := e.Curve()
 	record := extent.AngularEdge{CurveType: fmt.Sprintf("%T", curve)}
 	if e.start != nil {
-		record.Start = &e.start.position
+		record.Start = &e.start.n.Position
 	}
 	if e.end != nil {
-		record.End = &e.end.position
+		record.End = &e.end.n.Position
 	}
 	switch c := curve.(type) {
 	case Line3:

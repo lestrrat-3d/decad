@@ -51,9 +51,9 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		mesh.vertices[i] = v.position
+		mesh.vertices[i] = v.n.Position
 		classOf[v] = i
-		store[i] = v.bound.Base()
+		store[i] = v.n.Bound.Base()
 	}
 	if _, err := tessellation.StoreMax(store); err != nil {
 		return nil, err

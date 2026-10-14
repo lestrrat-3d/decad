@@ -249,20 +249,20 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 			if far == corner {
 				far = original.end
 			}
-			oldDir := original.end.position.Sub(original.start.position)
+			oldDir := original.end.n.Position.Sub(original.start.n.Position)
 			for _, edge := range loopEdges {
 				if _, ok := edge.curve.(Line3); !ok {
 					continue
 				}
 				other := edge.start
 				switch {
-				case edge.start.position.Sub(far.position).Len() <= 1e-6:
+				case edge.start.n.Position.Sub(far.n.Position).Len() <= 1e-6:
 					other = edge.end
-				case edge.end.position.Sub(far.position).Len() <= 1e-6:
+				case edge.end.n.Position.Sub(far.n.Position).Len() <= 1e-6:
 				default:
 					continue
 				}
-				newDir := edge.end.position.Sub(edge.start.position)
+				newDir := edge.end.n.Position.Sub(edge.start.n.Position)
 				if oldDir.Cross(newDir).Len() > 1e-6*oldDir.Len()*newDir.Len() {
 					continue
 				}
@@ -549,7 +549,7 @@ func brepEdgeMatches(refView prismPayload, owner brepUse, e *Edge, tol float64) 
 	default:
 		return false
 	}
-	return matchEndpoints(e.start.position, e.end.position, lift(owner.DirFrom), lift(owner.DirTo), tol)
+	return matchEndpoints(e.start.n.Position, e.end.n.Position, lift(owner.DirFrom), lift(owner.DirTo), tol)
 }
 
 // singleStraightEdges reports whether the selection is route E's class: every

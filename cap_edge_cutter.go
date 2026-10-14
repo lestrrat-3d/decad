@@ -64,7 +64,7 @@ func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edge
 		return nil, false, nil
 	}
 	var sideNormal, capNormal r3.Vec
-	mid := edges[0].start.position.Add(edges[0].end.position).Scale(0.5)
+	mid := edges[0].start.n.Position.Add(edges[0].end.n.Position).Scale(0.5)
 	axis := pp.Dir(0, 0, 1)
 	for _, face := range facing {
 		if _, ok := face.Surface().(Plane); !ok {
@@ -87,7 +87,7 @@ func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edge
 	if err != nil {
 		return nil, true, fmt.Errorf(`%w: the cap-edge cutter has no frame: %v`, ErrUnsupported, err)
 	}
-	span := proofbound.AbsSumUpper(edges[0].end.position.Sub(edges[0].start.position).Len(), 8*reach)
+	span := proofbound.AbsSumUpper(edges[0].end.n.Position.Sub(edges[0].start.n.Position).Len(), 8*reach)
 	if proofbound.IsNonFinite(span) {
 		return nil, true, fmt.Errorf(`%w: the cap-edge cutter has no finite sweep span`, ErrNotFinite)
 	}
@@ -121,7 +121,7 @@ func obliqueCapEdgeProfile(pp prismPayload, edge *Edge, radius float64) bool {
 	for i, a := range vertices {
 		b := vertices[(i+1)%len(vertices)]
 		for _, level := range []float64{pp.Z0, pp.Z1} {
-			if !matchEndpoints(edge.start.position, edge.end.position,
+			if !matchEndpoints(edge.start.n.Position, edge.end.n.Position,
 				pp.Point(a.U, a.V, level), pp.Point(b.U, b.V, level), 1e-6) {
 				continue
 			}

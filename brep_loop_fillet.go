@@ -183,7 +183,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		// capV, a cap contact vertex, lies on the patch's surface; the outward
 		// normal there is F's own, which faces −m along F's normal for a band
 		// that removes material.
-		nrm, err := face.NormalAt(capV.position)
+		nrm, err := face.NormalAt(capV.n.Position)
 		if err != nil {
 			return fmt.Errorf(`%w: a loop fillet band patch's outward orientation cannot be certified; its own normal reading refuses at its cap contact (%v)`, ErrUnsupported, err)
 		}

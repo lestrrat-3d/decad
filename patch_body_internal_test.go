@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -25,10 +26,10 @@ import (
 // never a residual against a fitted plane.
 func TestProvePatchChainPlaneRejectsANonPlanarChain(t *testing.T) {
 	t.Parallel()
-	v0 := &Vertex{position: r3.NewVec(0, 0, 0)}
-	v1 := &Vertex{position: r3.NewVec(1, 0, 0)}
-	v2 := &Vertex{position: r3.NewVec(1, 1, 1)}
-	v3 := &Vertex{position: r3.NewVec(0, 1, 0)}
+	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}}
+	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}}
+	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 1)}}
+	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 0)}}
 	edges := []*Edge{
 		{curve: Line3{}, start: v0, end: v1},
 		{curve: Line3{}, start: v1, end: v2},
@@ -47,10 +48,10 @@ func TestProvePatchChainPlaneRejectsANonPlanarChain(t *testing.T) {
 // and nothing else about the fixture's shape.
 func TestProvePatchChainPlaneAcceptsAPlanarChain(t *testing.T) {
 	t.Parallel()
-	v0 := &Vertex{position: r3.NewVec(0, 0, 0)}
-	v1 := &Vertex{position: r3.NewVec(1, 0, 0)}
-	v2 := &Vertex{position: r3.NewVec(1, 1, 0)}
-	v3 := &Vertex{position: r3.NewVec(0, 1, 0)}
+	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}}
+	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}}
+	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 0)}}
+	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 0)}}
 	edges := []*Edge{
 		{curve: Line3{}, start: v0, end: v1},
 		{curve: Line3{}, start: v1, end: v2},
@@ -76,10 +77,10 @@ func boundedSquareChain(id levelID, bound units.Value) ([]*Edge, levelToken) {
 	if id != 0 {
 		tok = levelToken{ID: id, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	}
-	v0 := &Vertex{position: r3.NewVec(0, 0, 10), bound: bound, level: tok}
-	v1 := &Vertex{position: r3.NewVec(1, 0, 10), bound: bound, level: tok}
-	v2 := &Vertex{position: r3.NewVec(1, 1, 10), bound: bound, level: tok}
-	v3 := &Vertex{position: r3.NewVec(0, 1, 10), bound: bound, level: tok}
+	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 10), Bound: bound, Level: tok}}
+	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Bound: bound, Level: tok}}
+	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Bound: bound, Level: tok}}
+	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Bound: bound, Level: tok}}
 	return []*Edge{
 		{curve: Line3{}, start: v0, end: v1, level: tok},
 		{curve: Line3{}, start: v1, end: v2, level: tok},
@@ -147,14 +148,14 @@ func TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels
 	levelB := levelToken{ID: 2, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	bound := units.Millimeters(0.002)
 
-	v1 := &Vertex{position: r3.NewVec(1, 0, 10), bound: bound}
-	v1Twin := &Vertex{position: r3.NewVec(1, 0, 10), bound: bound, level: levelB}
-	require.Equal(t, v1.position, v1Twin.position, "the two vertices' held coordinates are bit-identical")
-	require.Equal(t, v1.bound, v1Twin.bound, "the two vertices' held bounds are bit-identical")
+	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Bound: bound}}
+	v1Twin := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Bound: bound, Level: levelB}}
+	require.Equal(t, v1.n.Position, v1Twin.n.Position, "the two vertices' held coordinates are bit-identical")
+	require.Equal(t, v1.n.Bound, v1Twin.n.Bound, "the two vertices' held bounds are bit-identical")
 
-	v0 := &Vertex{position: r3.NewVec(0, 0, 10), bound: bound, level: levelA}
-	v2 := &Vertex{position: r3.NewVec(1, 1, 10), bound: bound, level: levelA}
-	v3 := &Vertex{position: r3.NewVec(0, 1, 10), bound: bound, level: levelA}
+	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 10), Bound: bound, Level: levelA}}
+	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Bound: bound, Level: levelA}}
+	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Bound: bound, Level: levelA}}
 	edges := []*Edge{
 		{curve: Line3{}, start: v0, end: v1Twin, level: levelA},
 		{curve: Line3{}, start: v1Twin, end: v2, level: levelA},
@@ -223,14 +224,14 @@ func TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame(t *
 	tok := levelToken{ID: 1, Origin: corner(0, 0), Normal: axis}
 
 	bound := units.Millimeters(0.002)
-	v0 := &Vertex{position: corner(0, 0), bound: bound, level: tok}
-	v1 := &Vertex{position: corner(10, 0), bound: bound, level: tok}
-	v2 := &Vertex{position: corner(10, 10), bound: bound, level: tok}
+	v0 := &Vertex{n: topo.Vertex{Position: corner(0, 0), Bound: bound, Level: tok}}
+	v1 := &Vertex{n: topo.Vertex{Position: corner(10, 0), Bound: bound, Level: tok}}
+	v2 := &Vertex{n: topo.Vertex{Position: corner(10, 10), Bound: bound, Level: tok}}
 	// v3's held position is perturbed off the true plane by 1e-6 mm along the
 	// axis — far more than any float64 evaluation of corner() itself could
 	// ever depart from it, standing in for "held data this arm never
 	// verifies coplanar".
-	v3 := &Vertex{position: corner(0, 10).Add(axis.Scale(1e-6)), bound: bound, level: tok}
+	v3 := &Vertex{n: topo.Vertex{Position: corner(0, 10).Add(axis.Scale(1e-6)), Bound: bound, Level: tok}}
 	edges := []*Edge{
 		{curve: Line3{}, start: v0, end: v1, level: tok},
 		{curve: Line3{}, start: v1, end: v2, level: tok},
@@ -273,8 +274,8 @@ func TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame(t *
 // none.
 func TestOrientPatchChainRejectsDisagreeingAdjacentFaces(t *testing.T) {
 	t.Parallel()
-	v1 := &Vertex{position: r3.NewVec(0, 0, 0)}
-	v2 := &Vertex{position: r3.NewVec(1, 0, 0)}
+	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}}
+	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}}
 	a := &Edge{curve: Line3{}, start: v1, end: v2}
 	b := &Edge{curve: Line3{}, start: v1, end: v2}
 	faceA := &Face{loops: []*Loop{{coedges: []coedge{{edge: a, forward: true}}, outer: true}}}
@@ -297,10 +298,10 @@ func TestOrientPatchChainRejectsDisagreeingAdjacentFaces(t *testing.T) {
 // boundary (docs/surface-design.md Table R row R5).
 func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 	t.Parallel()
-	a := &Vertex{position: r3.NewVec(0, 0, 0)}
-	b := &Vertex{position: r3.NewVec(1, 1, 0)}
-	c := &Vertex{position: r3.NewVec(1, 0, 0)}
-	d := &Vertex{position: r3.NewVec(0, 1, 0)}
+	a := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}}
+	b := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 0)}}
+	c := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}}
+	d := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 0)}}
 	e1 := &Edge{curve: Line3{}, start: a, end: b}
 	e2 := &Edge{curve: Line3{}, start: b, end: c}
 	e3 := &Edge{curve: Line3{}, start: c, end: d}
@@ -383,7 +384,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	t.Parallel()
 	tok := levelToken{ID: 1, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	outer, _ := boundedSquareChain(1, units.Millimeters(0))
-	cv := &Vertex{position: r3.NewVec(5, 5, 10), level: tok}
+	cv := &Vertex{n: topo.Vertex{Position: r3.NewVec(5, 5, 10), Level: tok}}
 	inner := &Edge{
 		curve: Circle3{Center: r3.NewVec(5, 5, 10), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(1)},
 		start: cv, end: cv, level: tok,
@@ -425,10 +426,10 @@ func TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch(t *testing.T) {
 	t.Parallel()
 	levelA := levelToken{ID: 1, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
 	levelB := levelToken{ID: 2, Origin: r3.NewVec(0, 0, 10), Normal: r3.NewVec(0, 0, 1)}
-	v0 := &Vertex{position: r3.NewVec(0, 0, 10), level: levelA}
-	v1 := &Vertex{position: r3.NewVec(1, 0, 10), level: levelA}
-	v2 := &Vertex{position: r3.NewVec(1, 1, 10), level: levelB}
-	v3 := &Vertex{position: r3.NewVec(0, 1, 10), level: levelA}
+	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 10), Level: levelA}}
+	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 10), Level: levelA}}
+	v2 := &Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 10), Level: levelB}}
+	v3 := &Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 10), Level: levelA}}
 	edges := []*Edge{
 		{curve: Line3{}, start: v0, end: v1, level: levelA},
 		{curve: Line3{}, start: v1, end: v2, level: levelA},

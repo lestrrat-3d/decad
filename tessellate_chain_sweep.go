@@ -52,7 +52,7 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	store := make([]float64, 0, 2*n+4)
 	for i, nominal := range []r3.Vec{{}, {X: w}, {X: w, Z: height}, {Z: height}} {
 		v := lineCo[i].Start()
-		mesh.vertices = append(mesh.vertices, v.position)
+		mesh.vertices = append(mesh.vertices, v.n.Position)
 		store = append(store, chainSweepVertexGap(v, nominal))
 	}
 	mesh.addTriangle([3]int{0, 1, 2}, straight)
@@ -69,7 +69,7 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 			var gap float64
 			if j == n {
 				v := arcCo[3-k].Start()
-				p = v.position
+				p = v.n.Position
 				x := new(big.Rat).Mul(proofarith.FloatRat(radius), big.NewRat(2, 1))
 				if k == 1 {
 					x.Sub(x, proofarith.FloatRat(w))
@@ -233,13 +233,13 @@ func chainSweepVertexGap(v *Vertex, ideal r3.Vec) float64 {
 }
 
 func chainSweepVertexGapRat(v *Vertex, x, y, z *big.Rat) float64 {
-	if v == nil || !proofbound.FiniteVec(v.position) {
+	if v == nil || !proofbound.FiniteVec(v.n.Position) {
 		return math.Inf(1)
 	}
-	dx := proofarith.RationalFloatError(x, v.position.X)
-	dy := proofarith.RationalFloatError(y, v.position.Y)
-	dz := proofarith.RationalFloatError(z, v.position.Z)
-	return proofbound.AbsSumUpper(v.bound.Mag(), dx, dy, dz)
+	dx := proofarith.RationalFloatError(x, v.n.Position.X)
+	dy := proofarith.RationalFloatError(y, v.n.Position.Y)
+	dz := proofarith.RationalFloatError(z, v.n.Position.Z)
+	return proofbound.AbsSumUpper(v.n.Bound.Mag(), dx, dy, dz)
 }
 
 type chainSweepAreaInterval struct{ lo, hi *big.Rat }

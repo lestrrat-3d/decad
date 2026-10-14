@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/r3"
@@ -223,7 +224,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// existing proof, never a second one.
 	vertBound := make([]float64, len(verts))
 	for v, class := range classOf {
-		vertBound[class] = v.bound.Base()
+		vertBound[class] = v.n.Bound.Base()
 	}
 	if err := attachFaceLoopsContext(ctx, newFaces); err != nil {
 		return nil, err
@@ -520,7 +521,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
-		nv := &Vertex{position: verts[class], bound: units.Millimeters(bound), denot: plan.table.Tokens[class].Compose(xform)}
+		nv := &Vertex{n: topo.Vertex{Position: verts[class], Bound: units.Millimeters(bound), Denot: plan.table.Tokens[class].Compose(xform)}}
 		newVertByClass[class] = nv
 		classOf[nv] = class
 		return nv
@@ -761,7 +762,7 @@ func stitchLumpsProvenSeparate(components [][]*Face) bool {
 			if v == nil {
 				return r3.Vec{}, 0, false
 			}
-			return v.position, v.bound.Base(), true
+			return v.n.Position, v.n.Bound.Base(), true
 		})
 }
 
@@ -912,7 +913,7 @@ func fixWeldedEdgeConvexity(welded map[*Edge]struct{}) {
 		if bwd.reversed {
 			nb = nb.Scale(-1)
 		}
-		d := e.end.position.Sub(e.start.position)
+		d := e.end.n.Position.Sub(e.start.n.Position)
 		e.convex = na.Cross(nb).Dot(d) > 0
 	}
 }
