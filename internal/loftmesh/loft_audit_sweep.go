@@ -857,22 +857,30 @@ func (s sweepOrder) visit(budget *proofbound.WorkBudget, limit uint64, fn func(i
 // pass fills (starts[i] is where triangle i's partners begin; len f+1) and
 // the total, which is the count S8 compares, beside the number of pairs the
 // pass scanned. It reports true instead when the pass scans more than limit
-// pairs (visit).
+// pairs (visit). A tree scan or grouped tree scan with enough members counts
+// on up to orderedwork.MaxEachWorkers goroutines.
 func sweepCandidateCounts(budget *proofbound.WorkBudget, s pairScan, f int, keep func(i, j int) bool, limit uint64) (sweepCount, error) {
 	workers := 1
-	if tree, ok := s.(treeScan); ok {
-		workers = orderedwork.EachWorkers(len(tree.order), loftTreeParallelMin)
+	switch scan := s.(type) {
+	case treeScan:
+		workers = orderedwork.EachWorkers(len(scan.order), loftTreeParallelMin)
+	case groupedTreeScan:
+		workers = orderedwork.EachWorkers(scan.members(), loftTreeParallelMin)
 	}
 	return sweepCandidateCountsWorkers(budget, s, f, keep, limit, workers)
 }
 
 // sweepCandidateCountsWorkers is sweepCandidateCounts with an explicit worker
-// count. A tree scan with workers >= 2 and at least loftTreeParallelMin
-// members counts in parallel; every other case is the serial walk.
+// count. A tree scan or grouped tree scan with workers >= 2 and at least
+// loftTreeParallelMin members counts in parallel; every other case is the
+// serial walk.
 func sweepCandidateCountsWorkers(budget *proofbound.WorkBudget, s pairScan, f int, keep func(i, j int) bool,
 	limit uint64, workers int) (sweepCount, error) {
 	if tree, ok := s.(treeScan); ok && workers >= 2 && len(tree.order) >= loftTreeParallelMin {
 		return tree.countParallel(budget, f, keep, limit, workers)
+	}
+	if g, ok := s.(groupedTreeScan); ok && workers >= 2 && g.members() >= loftTreeParallelMin {
+		return g.countParallel(budget, f, keep, limit, workers)
 	}
 	starts := make([]int, f+1)
 	scanned, exceeded, err := s.visit(budget, limit, func(i, j int) {
