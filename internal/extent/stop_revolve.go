@@ -8,12 +8,12 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// RevolvedPlaneStop returns the exact sweep level of a straight revolved wall
-// only when its recorded meridian has one fixed axial coordinate. The record
-// encloses the real wall, including axis and section displacement; requiring
-// every relevant interval to be a point leaves no uncharged plane tilt.
+// RevolvedPlaneStop returns the exact sweep level of a planar revolved wall or
+// angular cap. The wall needs one recorded axial coordinate; the cap needs one
+// recorded radial direction. Requiring every relevant interval to be a point
+// leaves no uncharged plane tilt or level displacement.
 func RevolvedPlaneStop(r surfacenormal.Revolved, sweep r3.Frame) (*big.Rat, bool) {
-	if !r.Valid || r.Cap || r.Circular || len(r.Ends) == 0 {
+	if !r.Valid || r.Circular || (!r.Cap && len(r.Ends) == 0) {
 		return nil, false
 	}
 	var origin [3]*big.Rat
@@ -32,19 +32,39 @@ func RevolvedPlaneStop(r surfacenormal.Revolved, sweep r3.Frame) (*big.Rat, bool
 			basis[i][axis] = v
 		}
 	}
-	z, ok := intervalPoint(r.Ends[0][0][0])
-	if !ok {
-		return nil, false
-	}
-	for _, ends := range r.Ends {
-		for _, end := range ends {
-			at, exact := intervalPoint(end[0])
-			if !exact || at.Cmp(z) != 0 {
-				return nil, false
+	point := origin
+	var m [3]*big.Rat
+	if r.Cap {
+		d0, ok0 := intervalPoint(r.CapDir[0])
+		d1, ok1 := intervalPoint(r.CapDir[1])
+		if !ok0 || !ok1 {
+			return nil, false
+		}
+		var radial [3]*big.Rat
+		for i := range radial {
+			radial[i] = proofbound.RatAdd(
+				proofbound.RatMul(basis[1][i], d0),
+				proofbound.RatMul(basis[0][i], new(big.Rat).Neg(d1)))
+		}
+		m = ratCross(basis[2], radial)
+	} else {
+		z, ok := intervalPoint(r.Ends[0][0][0])
+		if !ok {
+			return nil, false
+		}
+		for _, ends := range r.Ends {
+			for _, end := range ends {
+				at, exact := intervalPoint(end[0])
+				if !exact || at.Cmp(z) != 0 {
+					return nil, false
+				}
 			}
 		}
+		m = ratCross(basis[0], basis[1])
+		for i := range point {
+			point[i] = proofbound.RatAdd(origin[i], proofbound.RatMul(basis[2][i], z))
+		}
 	}
-	m := ratCross(basis[0], basis[1])
 	if m[0].Sign() == 0 && m[1].Sign() == 0 && m[2].Sign() == 0 {
 		return nil, false
 	}
@@ -63,7 +83,7 @@ func RevolvedPlaneStop(r surfacenormal.Revolved, sweep r3.Frame) (*big.Rat, bool
 	}
 	var rel [3]*big.Rat
 	for i := range rel {
-		rel[i] = new(big.Rat).Sub(proofbound.RatAdd(origin[i], proofbound.RatMul(basis[2][i], z)), so[i])
+		rel[i] = new(big.Rat).Sub(point[i], so[i])
 	}
 	return new(big.Rat).Quo(ratDot(m, rel), mn), true
 }

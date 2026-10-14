@@ -2092,3 +2092,5 @@
 10	0.00	TestExtrudeToNearlyPlanarRevolveFaceRefuses
 10	0.00	TestExtrudeToRevolveFaceWithUncertainAxisRefuses
 10	0.00	TestExtrudeToPlacedRevolveFaceWithTiltedRecordRefuses
+10	0.00	TestExtrudeToPartialRevolveStartCap
+10	0.00	TestExtrudeToPartialRevolveStartCapWithUncertainAxisRefuses

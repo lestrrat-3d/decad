@@ -485,12 +485,19 @@ exactly 1 when the frames and the placement are exactly orthonormal. A planar
 Revolve wall can instead use its `Denoted` record. Every straight meridian end
 must have the same exact axial coordinate, and both radial basis vectors must
 span one exact level set of the sweep. `extent.RevolvedPlaneStop` computes that
-level from the record. `StopLevelError` charges the held plane tag's distance
-from it; the record has no remaining axial displacement. Any other face is
+level from the record. An angular Revolve cap can use its `Denoted` record when
+the placed axis origin `A`, basis `(E0, E1, W)`, and angular direction
+`d = (d0, d1)` are exact interval points. Its plane passes through `A` and is
+spanned by `W` and `R = d0·E1 − d1·E0`; hence `m = W × R`. Require
+`m·U' = m·V' = 0` and `m·N' ≠ 0`, then take
+`c = m·(A − O') / (m·N')`. `StopLevelError` charges the held plane tag's
+distance from either denoted level; neither record has a remaining axial
+displacement. Any other face is
 `ErrUnsupported`, however small its tilt, because nothing would charge
 it. That includes a stop body whose placement rounds its normal, a revolve
 wall with an uncertain axis or nonconstant meridian level, an angular revolve
-cap, a cap-loop chamfer band patch, a stop plane that is not an exact level set
+cap with an uncertain axis or angle, a cap-loop chamfer band patch, a stop plane
+that is not an exact level set
 of the sweep, a face of a faceted boolean (a mirrored-loft union, a loft or
 cylinder union), a copied cap placed by a non-identity transform
 (`CapRecord.Under` keeps the record only under the identity placement), and a
