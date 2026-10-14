@@ -343,6 +343,25 @@ func spiralHeelRatio(box [3]loftFaceInterval) (loftFaceInterval, bool) {
 	return loftFaceInterval{Lo: lo, Hi: hi}, true
 }
 
+// spiralTangentCapEightOutsideBlank is the cone-tangent branch of
+// spiralHeelCapEightOutside. It runs only when the trim record carries a
+// cone-tangent end that matches the heel tool cone and the final cap map
+// exactly. The cap plane then lies in the closed outside of the tool cone,
+// and the tool cone nests strictly outside the unit-slope blank heel cone
+// x + r = coneC, so the cap lies strictly outside the blank cone over the
+// whole source box (loftface.CapOutsideNestedCone).
+func spiralTangentCapEightOutsideBlank(trim *loftFacesTrimRecord, coneC *big.Rat) bool {
+	if trim == nil || trim.tangent == nil || !spiralTangentRecordCurrent(trim) || len(trim.maps) != 9 {
+		return false
+	}
+	box, err := lfSourceBox(trim.source)
+	if err != nil {
+		return false
+	}
+	return loftface.CapOutsideNestedCone(trim.maps[8], box, trim.heel.apex, trim.heel.slope,
+		trim.heel.far, coneC, lfOne())
+}
+
 func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource) (*spiralHeelRootSeam, bool, error) {
 	if ctx == nil || proof == nil || proof.tooth == nil || proof.blank == nil {
 		return nil, false, nil
@@ -362,7 +381,8 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 		return nil, false, nil
 	}
 	mapOK, negative := spiralHeelMapCharge(trim.maps[7], trim.maps[8], box, radiusBound, coneC)
-	if !mapOK || !spiralHeelCapEightOutside(trim.maps[8], coneC) {
+	if !mapOK || (!spiralHeelCapEightOutside(trim.maps[8], coneC) &&
+		!spiralTangentCapEightOutsideBlank(trim, coneC)) {
 		return nil, false, nil
 	}
 	if ok, err := spiralHeelRootCells(ctx, trim, coneC); err != nil || !ok {

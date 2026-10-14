@@ -241,7 +241,8 @@ one transverse blank-root crossing on each fitted flank through all eight
 bands. The other profile edges stay strictly on one side of the root, and the
 crossings advance from toe to heel. The complete original toe cap lies before
 its tool/root circle in X. The complete original heel cap lies in an exact
-plane that misses its entire tool/root circle. These whole-cap checks rule out
+plane that misses its entire tool/root circle, or, for a tangent heel record,
+touches it at exactly one point. These whole-cap checks rule out
 contacts through an end-cap interior. A caller may also request an exact box
 around either moving flank/root crossing over a narrow X interval; the local
 rim proof uses that box to decide which source surface remains exposed.
@@ -267,6 +268,32 @@ pairs have strict source separation: each matching blank/tool cap pair, the
 blank toe cap against the heel tool cap, and the finite blank root against
 both tool caps. Their held facets must also be disjoint. Every unlisted
 near pair keeps the ordinary refusal.
+
+Two checks of the first join have an exact cone-tangent branch beside the
+strict one. Each runs only when the trimmed tooth carries a cone-tangent end
+record that equals the cap record's by value, matches the heel tool cone's
+exact apex and slope, and reproduces the final cap map (`spiralTangentRecordCurrent`).
+A tooth without that record takes the strict branch alone.
+
+- L2, the heel cap against the heel tool/root circle. The strict branch needs
+  the final cap plane to miss the circle. The tangent branch needs the plane to
+  meet the circle at exactly one point: with `phi = a + y*cos(theta) +
+  z*sin(theta)` on the circle, `a² = y² + z²` and `a != 0`, and `a` has the sign
+  that `phi` has at all four source corners of the preceding cap. Band
+  interpolation then keeps the source on that side up to the cap, so the circle
+  does not cross the source boundary at the touch point. Its membership in the
+  source still changes only at the two transverse flank junctions. The toe cap
+  half is shared by both branches.
+- L3, the heel seam. The strict branch proves the final cap strictly outside
+  the blank heel cone from the unit-slope two-term form. The tangent branch
+  nests the cap in the closed outside of the tool cone, whose gap to the blank
+  cone is positive over the tool cone's whole radius range, so the cap lies
+  strictly outside the blank cone over the source rectangle.
+
+A Union of a patterned copy of a cone-tangent first tooth refuses with
+`ErrUnsupported`: no proof carries the exact tangency and the one-step gaps to
+a copy of the tooth. The generic Revolve-and-LoftFaces route
+also declines a tooth with a tangent record.
 
 The root arc also crosses each finite blank end cap. The toe and heel source
 certificates bound the crossing of the authenticated Sketch arc with the

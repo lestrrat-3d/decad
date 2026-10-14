@@ -206,7 +206,8 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	if proof.toeOffset.Sign() >= 0 || proof.heelOffset.Sign() <= 0 {
 		return nil, false, nil
 	}
-	if !spiralOriginalCapsAvoidToolRootCircles(trim, m, b, toeX, heelX) {
+	if !spiralOriginalCapsAvoidToolRootCircles(trim, m, b, toeX, heelX) &&
+		!spiralTangentCapTouchesHeelCircle(trim, m, b, toeX, heelX) {
 		return nil, false, nil
 	}
 	for side, group := range [...]int{0, 2} {
@@ -271,9 +272,13 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	}
 	// The embedded source solid's boundary meets each tool/root circle only
 	// at these two flank junctions. All other contour groups stay on one side.
-	// The whole original cap 0 is below toeX. The whole cap-8 plane misses
-	// its heel tool/root circle. Thus neither end-cap interior can create an
-	// extra contact, even though cap 8 spans the heelX coordinate.
+	// The whole original cap 0 is below toeX. The whole cap-8 plane either
+	// misses its heel tool/root circle (the strict branch), or, for a
+	// cone-tangent end with a matching record, touches that circle at one
+	// point with the circle on the source side of the plane
+	// (spiralTangentCapTouchesHeelCircle). Either way neither end-cap
+	// interior can create an extra contact, even though cap 8 spans the
+	// heelX coordinate.
 	// Q_s and J make both junctions transverse. Circle membership therefore
 	// changes at each junction. The long connecting arc crosses Y<0, where
 	// the entire source is absent, so the short arc is inside the source.
@@ -303,12 +308,57 @@ func spiralOriginalCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
 			return false
 		}
 	}
-	corners := loftface.BoxCorners(box)
+	return spiralToeCapBeforeToeCircle(trim, box, toeX) &&
+		loftface.CapPlaneAvoidsRootCircle(trim.maps[8], loftface.BoxCorners(box), m, b, heelX)
+}
+
+// spiralToeCapBeforeToeCircle reports whether the whole original cap 0 lies
+// below toeX. The caller has proved cap 0's denominator positive over box.
+func spiralToeCapBeforeToeCircle(trim *loftFacesTrimRecord, box [4]*big.Rat, toeX *big.Rat) bool {
 	xAxis := loftFaceRatVec{lfOne(), lfZero(), lfZero()}
-	if loftface.ScalarRange(trim.maps[0], xAxis, corners).Hi.Cmp(toeX) >= 0 {
+	return loftface.ScalarRange(trim.maps[0], xAxis, loftface.BoxCorners(box)).Hi.Cmp(toeX) < 0
+}
+
+// spiralTangentCapTouchesHeelCircle is the cone-tangent branch of the heel
+// half of spiralOriginalCapsAvoidToolRootCircles. It runs only when the trim
+// record carries a cone-tangent end that matches the heel cone and the final
+// cap map exactly. The cap-8 plane then touches the heel tool/root circle at
+// one point instead of missing it, which loftface.CapPlaneTouchesRootCircle
+// decides exactly, with the circle on the side of the preceding cap.
+func spiralTangentCapTouchesHeelCircle(trim *loftFacesTrimRecord, m, b, toeX, heelX *big.Rat) bool {
+	if trim == nil || trim.tangent == nil || !spiralTangentRecordCurrent(trim) || len(trim.maps) != 9 {
 		return false
 	}
-	return loftface.CapPlaneAvoidsRootCircle(trim.maps[8], corners, m, b, heelX)
+	box, err := lfSourceBox(trim.source)
+	if err != nil {
+		return false
+	}
+	for _, end := range [...]int{0, 7, 8} {
+		if loftface.PositiveDenominator(trim.maps[end], box) != nil {
+			return false
+		}
+	}
+	return spiralToeCapBeforeToeCircle(trim, box, toeX) &&
+		loftface.CapPlaneTouchesRootCircle(trim.maps[8], loftface.BoxCorners(box), m, b, heelX, trim.maps[7])
+}
+
+// spiralTangentRecordCurrent reports whether the cone-tangent record of trim
+// is present on both the trim and its base cap record, equal on both by
+// exact value, built for exactly the heel cone's apex and slope, and
+// reproduces the recorded final cap map. Every comparison is an exact Cmp of
+// immutable values, never a pointer or a flag. It is false when either
+// record is missing, so the tangent branches run only for a matching record;
+// a trim with no tangent record on either side is not tangent, and the
+// strict branches decide it.
+func spiralTangentRecordCurrent(trim *loftFacesTrimRecord) bool {
+	if trim == nil || trim.tangent == nil || trim.heel == nil || len(trim.maps) == 0 ||
+		trim.base.loftFacesCap == nil || trim.base.loftFacesCap.tangent == nil {
+		return false
+	}
+	end := trim.tangent
+	return end.Equal(*trim.base.loftFacesCap.tangent) &&
+		end.MatchesCone(trim.heel.apex, trim.heel.slope) &&
+		loftface.MapEqual(end.Map(), trim.maps[len(trim.maps)-1])
 }
 
 func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
@@ -322,6 +372,11 @@ func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
 		len(trim.base.loftFacesCap.stationGroup) != len(trim.source.sourceStation) ||
 		len(trim.source.profile.Outer.Segments) != 6 || len(trim.source.source.entities) != 6 ||
 		len(trim.source.profile.Holes) != 0 {
+		return false
+	}
+	// A tangent record on either side must be the same one, current for the
+	// heel cone and the final map. No record on either side is the strict case.
+	if (trim.tangent != nil || trim.base.loftFacesCap.tangent != nil) && !spiralTangentRecordCurrent(trim) {
 		return false
 	}
 	for _, entry := range trim.source.source.profile.Outer {
