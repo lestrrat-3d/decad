@@ -332,9 +332,18 @@ func revolveAuditRows(budget *proofbound.WorkBudget, data []RevolveAuditTri, tri
 // failure any worker has recorded, so the lowest failing index is always
 // found. The caller then replays the budget steps in list order up to that
 // index, so the returned error is the one the serial loop returns first. Only
-// the caller touches the budget; workers never do.
+// the caller touches the budget; workers never do. If cancellation interrupts
+// the workers, the caller runs the serial walk because stopped workers may not
+// have found an earlier facet error.
 func revolveAuditRowsParallel(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, rows [][]int32,
 	delta, margin float64) error {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	return revolveAuditRowsParallelWithPoll(budget, data, tris, rows, delta, margin, ticker.C, nil)
+}
+
+func revolveAuditRowsParallelWithPoll(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int,
+	rows [][]int32, delta, margin float64, poll <-chan time.Time, beforeWorker func()) error {
 	total := revolveRowsLen(rows)
 	is := make([]int32, 0, total)
 	js := make([]int32, 0, total)
@@ -357,6 +366,9 @@ func revolveAuditRowsParallel(budget *proofbound.WorkBudget, data []RevolveAudit
 		end := total * (w + 1) / workers
 		go func() {
 			defer group.Done()
+			if beforeWorker != nil {
+				beforeWorker()
+			}
 			axes := newRevolveAxisCache(len(data))
 			for k := start; k < end; k++ {
 				if k%proofbound.WorkPollInterval == 0 && stopped.Load() {
@@ -388,17 +400,15 @@ func revolveAuditRowsParallel(budget *proofbound.WorkBudget, data []RevolveAudit
 		group.Wait()
 		close(done)
 	}()
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
 	for running := true; running; {
 		select {
 		case <-done:
 			running = false
-		case <-ticker.C:
+		case <-poll:
 			if err := budget.Err(); err != nil {
 				stopped.Store(true)
 				<-done
-				return err
+				return revolveAuditRows(budget, data, tris, rows, delta, margin, false)
 			}
 		}
 	}
