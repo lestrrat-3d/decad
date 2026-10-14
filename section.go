@@ -22,7 +22,7 @@ import (
 // Other classes are a whole-circle prism cut by a cardinal plane with an exact
 // chord, an authenticated sphere cut by a cardinal plane with an exact circle
 // or bounded polygon or by a central oblique plane, an authenticated right cone
-// cut by a cardinal plane with an exact circle,
+// cut by a cardinal plane with an exact circle or bounded polygon,
 // a direct matching-profile, full line-boundary or varying circular-boundary Loft
 // cut by an exact world-XY interior plane,
 // an original rectangular LoftSections cut by an exact world-XY interior plane,
@@ -76,7 +76,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 					}
 				}
 				if cone == 1 && planar == 1 {
-					profile, admitted = cardinalConeSectionRecord(rp, plane)
+					profile, polygon, delta, admitted = cardinalConeSection(rp, plane)
 				}
 			}
 		}

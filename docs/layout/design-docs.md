@@ -85,7 +85,7 @@ The rules for rows live in `docs/layout.md`.
 | `section_loft_matching.go` | Exact parallel section of an authenticated Loft with matching profiles. See section design. |
 | `section_loft_ruled_lines.go` | Exact parallel section of an authenticated Loft with full line boundaries. See section design. |
 | `section_circle_axis.go` | Exact whole-circle prism section on a cardinal plane with an exact chord. See section design. |
-| `section_cone_axis.go` | Exact full right-cone section on a cardinal plane with an exact circle. See section design. |
+| `section_cone_axis.go` | Full right-cone section on a cardinal plane with an exact circle or bounded polygon. See section design. |
 | `section_sphere_axis.go` | Authenticated source-sphere section on a cardinal plane with an exact circle or bounded polygon. See section design. |
 | `section_circle_oblique.go` | Oblique full-ellipse clip of an exact whole-circle prism; the rational polygon helpers live in `internal/sectionclip/`. See section design. |
 | `section_circle_cap.go` | One-cap oblique circle clip entry; the certified circle-line trim and cap polygon live in `internal/sectionclip/`. See section design. |

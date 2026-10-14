@@ -5,6 +5,20 @@ profiles denote the material in that plane. It does not change the body or its
 document. An exact returned Sketch may enter any admitted profile consumer. A
 bounded section may enter only the straight solid `Extrude` path below.
 
+The bounded classes using `ObliqueCirclePolygon` use exact station polygons
+for their geometric proofs, then round station coordinates for Sketch. The
+rounded Sketch polygon is a two-sided proxy: a vertex may lie outside the
+exact circle or ellipse.
+`sectionclip.ObliqueCirclePolygon` bounds each rounded vertex against its exact
+station in local and world coordinates and proves that their matched convex
+rings remain convex through interpolation. Matching convex combinations extend
+the vertex bound to both occupied polygon regions. The chord and radial terms
+then bound both directions between the exact station region and the source
+section. Their sum is the two-sided `sectionDelta`. Only `Extrude` accepts the
+revision-bound Sketch and carries `sectionDelta` into its prism; direct profile
+consumers refuse it. The prism's volume, bounds, mesh and later admitted
+operations charge or refuse that displacement without assuming containment.
+
 ## Public result
 
 ```go
@@ -192,19 +206,20 @@ Otherwise find the downward and upward binary64 square-root brackets by exact
 square comparisons. Refuse a zero lower radius or a nonfinite upper radius.
 Sample the lower circle at the same rational half-angle stations and with the
 same strict-convexity, feature-scale and 0.05 mm gates as the bounded complete
-ellipse below. This polygon lies inside the true disk. Its lower-circle chords
-have the rational `d²/4` unit-circle sagitta bound. Every point of the true
-disk can first move radially to the lower disk within the upper-minus-lower
+ellipse below. The exact station polygon lies inside the true disk; its rounded
+Sketch proxy need not. The lower-circle chords have the rational `d²/4`
+unit-circle sagitta bound. Every point of the true disk can first move
+radially to the lower disk within the upper-minus-lower
 radius gap, then move to the lower polygon within the chord gap. Twice the
 radius gap bounds the plane-local L1 displacement; multiplying by the larger
 held basis length upper bound covers world displacement. Add these gaps and
 the rounded polygon-vertex errors without cancellation to `sectionDelta`.
-The same radial map and convex combinations of matching chord endpoints cover
-both occupied regions, not only their boundaries.
+The same radial map and matching convex combinations cover both occupied
+regions, not only their boundaries.
 
 Reconstruct the polygon through fresh Sketch reference lines and attach the
-private revision-bound certificate below. The Sketch polygon is an inner
-approximation, not an exact circle. Only straight solid `Extrude` with an
+private revision-bound certificate below. The Sketch polygon is a two-sided
+proxy, not an exact circle. Only straight solid `Extrude` with an
 independent `Distance` may consume it; all other profile consumers refuse it.
 
 ## Cardinal plane of an authenticated right cone
@@ -223,13 +238,27 @@ sides of the plane; a cap, apex, tangent or exterior cut returns
 `ErrUnsupported`. The three lines enclose a disk whose radius decreases
 linearly from the base radius to zero at the apex. Divide the exact signed
 base-plane distance by the exact base-to-apex height, and calculate the cut
-radius as a rational value. Require that radius and the projected circle
-centre have finite, exactly representable binary64 coordinates. A radius such
-as 10/3 mm returns `ErrUnsupported` instead of a rounded Sketch circle.
+radius as a rational value. Require the projected circle centre to have
+finite, exactly representable binary64 coordinates. An exactly representable
+positive radius reconstructs one complete counterclockwise circle in Sketch.
+Require Sketch's fresh profile record to match before returning it. That exact
+profile can enter ordinary profile consumers, including `Extrude`.
 
-Reconstruct one complete counterclockwise circle in Sketch and require its
-fresh profile record to match before returning it. The exact profile can
-enter ordinary profile consumers, including `Extrude`.
+For an inexact radius, round the rational value down and up to binary64 with
+exact rational comparisons. Refuse a zero lower radius or a nonfinite upper
+radius. The lower disk lies inside the true section, which lies inside the
+upper disk. The gap between their radii bounds radial displacement; twice
+that gap bounds plane-local L1 displacement. The held plane-basis lengths
+convert it to a world-distance bound. Sample the lower circle with the same
+rational half-angle stations, chord bound, convexity check, feature-scale gate
+and 0.05 mm limit as the bounded sphere section. The radial map and convex
+combinations of matched chord endpoints cover both occupied regions.
+Round the station coordinates for Sketch; the held polygon may cross the true
+circle, and its rational-to-binary64 vertex errors join the radial and chord
+terms in the two-sided `sectionDelta`. Reconstruct the bounded polygon through
+the private revision-bound Sketch certificate. Only straight solid `Extrude`
+with an independent `Distance` may consume this bounded profile; its prism
+proof carries the displacement.
 
 ## Oblique plane of an authenticated source sphere
 
@@ -256,8 +285,10 @@ rational center `c`. The inner disk lies inside the true section, which lies
 inside the outer disk.
 Sample the inner circle with the rational half-angle stations and convexity,
 feature-scale and 0.05 mm gates of the bounded circle polygon above. The
-outer-minus-inner radius bounds radial movement from the true section to the
-inner disk. Twice that gap bounds its local L1 move; multiplying by the larger
+rounded Sketch polygon is a two-sided proxy even though the exact station
+polygon lies inside the inner disk. The outer-minus-inner radius bounds radial
+movement from the true section to the inner disk. Twice that gap bounds its
+local L1 move; multiplying by the larger
 held basis length upper bound covers world movement. Add the chord and rounded
 vertex errors without cancellation to `sectionDelta`. The radial mapping and
 convexity cover both occupied planar regions and their boundaries.
@@ -557,6 +588,15 @@ reusing its bound.
   16π mm² section; its 2 mm Extrude encloses 32π mm³ and passes the same mesh
   check. A frame shifted along its own plane retains the same section. Refuse
   tangent and exterior cuts.
+- A full Revolve cone with a 5 mm base radius and 3 mm height cut 1 mm from its
+  base returns a bounded 10/3 mm radius section. Its 2 mm Extrude encloses
+  200π/9 mm³ and passes `Tessellate(0.1 mm, VerifyAll)`; `MeasureProfile`
+  refuses the bounded Sketch. Place its axis at X = 1,048,576 mm while keeping
+  the plane origin at X = 0 and compare the rounded polygon vertices against
+  the exact circle. Vertices may lie outside, and the volume and mesh bounds
+  must still enclose the source. With a 10 mm cone shifted by X = 0.1 mm or
+  Y = 0.1 mm, a plane origin at 1,048,576 mm in the corresponding local axis
+  must refuse when that projected centre is not exactly representable.
 - Check translated and rigidly placed rectangular prisms, reversed section
   axes, triangle through hexagon section rings, and cuts that refuse at a
   source vertex, tangent, exterior or uncertain topology.
