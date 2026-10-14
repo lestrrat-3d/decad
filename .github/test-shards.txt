@@ -1449,3 +1449,5 @@
 10	0.00	TestPointLoftAuditsDecideCapsAsFamilies
 10	0.00	TestLoftCylinderRingTeethReuseMatchesFresh
 10	0.00	TestFacetedPlacementMovesCurvedTags
+10	0.00	TestFacetedPlacementKeepsDenotedProof
+10	0.00	TestFacetedPlacementReflectsPlaneTag

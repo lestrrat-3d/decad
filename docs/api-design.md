@@ -570,11 +570,11 @@ analytic variant may instead be a bounded stand-in and carry its departure in
 computed measurements (`docs/modify-reach-design.md` §8.3). A face whose held
 geometry is faceted is `Faceted`, and `Faceted` is the flag; the one exception
 is a tagged analytic variant on a faceted face, a float-image stand-in whose
-departure is carried in `NormalAt` and the other computed measurements, never
-in `Surface()`'s parameters. `Transform` and `Copy` carry such a tag to the float
-image of the source tag, and `NormalAt` charges a placed group that has no
-denoted patch a direction bound of 2 (`docs/faceted-vertex-bounds-design.md`
-§4.3). So a `Cylinder.Axis`
+departure is carried in `NormalAt`, never in `Surface()`'s parameters.
+`Transform` and `Copy` carry such a tag to the float image of the source tag,
+and unless the placement is exactly the identity, `NormalAt` charges a placed
+group that has no denoted patch a direction bound of 2
+(`docs/faceted-vertex-bounds-design.md` §4.3). So a `Cylinder.Axis`
 or a `Sphere.Center` is an exact parameter of its named surface, while
 `Face.NormalAt(p)` — a quantity the evaluator *computes*, on a face that may be
 a bounded analytic stand-in — is a measurement and reports its `Exactness` like
