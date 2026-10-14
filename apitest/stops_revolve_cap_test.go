@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -39,6 +40,124 @@ func TestExtrudeToFullRevolveAxialFace(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 }
 
+func TestExtrudeToPartialRevolveStartCap(t *testing.T) {
+	t.Parallel()
+	s, profile := solidSketch(t)
+	doc := decad.New()
+	host, err := decad.Revolve(t.Context(), doc, s, profile, uAxis,
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	query := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(0, 0, -1)))
+	stopSketch := stopSketchBehindRevolveFace(t, host, query, 1)
+	pin, err := decad.Extrude(t.Context(), doc, stopSketch, stopSketch.Profiles()[0], decad.ToFace{
+		Body: host, Face: query,
+	})
+	require.NoError(t, err)
+	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(4))
+	mesh, err := pin.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+}
+
+func TestExtrudeToPartialRevolveStartCapWithUncertainAxisRefuses(t *testing.T) {
+	t.Parallel()
+	world := sketch.NewWorld()
+	frame, err := r3.NewFrame(r3.NewVec(0.1, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	plane, err := world.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	s, err := world.CreateSketch(plane)
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 8)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	doc := decad.New()
+	host, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.ConstructionAxis{
+		Origin: r3.NewVec(1e9, 0, 0), Dir: r3.NewVec(1, 0, 0),
+	}, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	query := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(0, 0, -1)))
+	// The distant anchor scales the coplanarity tolerance to 1 mm.
+	stopSketch := stopSketchBehindRevolveFace(t, host, query, 10)
+	_, err = decad.Extrude(t.Context(), doc, stopSketch, stopSketch.Profiles()[0], decad.ToFace{
+		Body: host, Face: query,
+	})
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "one plane")
+}
+
+func TestExtrudeToPartialRevolveStartCapWithUncertainAngleRefuses(t *testing.T) {
+	t.Parallel()
+	s, profile := solidSketch(t)
+	doc := decad.New()
+	// The start cap of this two-sided sweep lies at -2 radians. Its recorded
+	// sine and cosine are intervals, rather than exact quarter-turn values.
+	host, err := decad.Revolve(t.Context(), doc, s, profile, uAxis,
+		decad.SymmetricAngle{A: units.Radians(2)})
+	require.NoError(t, err)
+	query := capStartFace(host)
+	stopSketch := stopSketchBehindRevolveFace(t, host, query, 1)
+	before := len(doc.Bodies())
+	_, err = decad.Extrude(t.Context(), doc, stopSketch, stopSketch.Profiles()[0], decad.ToFace{
+		Body: host, Face: query,
+	})
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "one plane")
+	require.Len(t, doc.Bodies(), before)
+}
+
+func TestExtrudeToTranslatedRevolveStartCapChargesStopLevel(t *testing.T) {
+	t.Parallel()
+	world := sketch.NewWorld()
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0.1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	plane, err := world.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	s, err := world.CreateSketch(plane)
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 8)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	host, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis,
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	const shift = 1e9
+	move, err := r3.Translation(r3.NewVec(0, 0, shift))
+	require.NoError(t, err)
+	host, err = decad.Transform(t.Context(), host, move)
+	require.NoError(t, err)
+	query := capStartFace(host)
+	stopSketch := stopSketchBehindRevolveFace(t, host, query, 10)
+	startFrame, err := stopSketch.Plane().Frame()
+	require.NoError(t, err)
+	pin, err := decad.Extrude(t.Context(), doc, stopSketch, stopSketch.Profiles()[0], decad.ToFace{
+		Body: host, Face: query,
+	})
+	require.NoError(t, err)
+
+	// The translated cap denotes Rat(0.1) + 1e9, while its tag and the
+	// sketch 10 mm behind it use held floats. Compare the published volume
+	// bound with the volume of that exact denoted prism.
+	exactCap := new(big.Rat).Add(tiltRat(0.1), big.NewRat(shift, 1))
+	height := tiltRatAbs(new(big.Rat).Sub(tiltRat(startFrame.Origin().Z), exactCap))
+	trueVolume := new(big.Rat).Mul(big.NewRat(4, 1), height)
+	vol, err := pin.Volume()
+	require.NoError(t, err)
+	value, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	bound, err := vol.Bound.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	gap := tiltRatAbs(new(big.Rat).Sub(tiltRat(value), trueVolume))
+	require.Positive(t, gap.Sign(), "the fixture must expose the held-to-denoted gap")
+	require.LessOrEqual(t, gap.Cmp(tiltRat(bound)), 0, "the volume bound must cover the exact stop")
+}
+
 func TestExtrudeToNearlyPlanarRevolveFaceRefuses(t *testing.T) {
 	t.Parallel()
 	world := sketch.NewWorld()
@@ -75,7 +194,7 @@ func TestExtrudeToNearlyPlanarRevolveFaceRefuses(t *testing.T) {
 	require.ErrorContains(t, err, "one plane")
 }
 
-func stopSketchBehindRevolveFace(t *testing.T, host *decad.Body, query *decad.FaceQuery) *sketch.Sketch {
+func stopSketchBehindRevolveFace(t *testing.T, host *decad.Body, query *decad.FaceQuery, distance float64) *sketch.Sketch {
 	t.Helper()
 	faces, err := query.SelectFaces(host)
 	require.NoError(t, err)
@@ -85,7 +204,7 @@ func stopSketchBehindRevolveFace(t *testing.T, host *decad.Body, query *decad.Fa
 	world := sketch.NewWorld()
 	base, err := world.CreatePlaneFromFrame(plane.Frame)
 	require.NoError(t, err)
-	behind, err := world.CreateOffsetPlane(base, -1)
+	behind, err := world.CreateOffsetPlane(base, -distance)
 	require.NoError(t, err)
 	s, err := world.CreateSketch(behind)
 	require.NoError(t, err)
@@ -117,7 +236,7 @@ func TestExtrudeToRevolveFaceWithUncertainAxisRefuses(t *testing.T) {
 	}, decad.FullRevolution{})
 	require.NoError(t, err)
 	query := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(1, 0, 0)))
-	stopSketch := stopSketchBehindRevolveFace(t, host, query)
+	stopSketch := stopSketchBehindRevolveFace(t, host, query, 1)
 	_, err = decad.Extrude(t.Context(), doc, stopSketch, stopSketch.Profiles()[0], decad.ToFace{
 		Body: host, Face: query,
 	})
@@ -149,7 +268,7 @@ func TestExtrudeToPlacedRevolveFaceWithTiltedRecordRefuses(t *testing.T) {
 	}
 	require.NotEqual(t, r3.Frame{}, farFrame)
 	query := decad.Faces(decad.Planar(), decad.Facing(farFrame.N()))
-	stopSketch := stopSketchBehindRevolveFace(t, rotated, query)
+	stopSketch := stopSketchBehindRevolveFace(t, rotated, query, 1)
 	_, err = decad.Extrude(t.Context(), doc, stopSketch, stopSketch.Profiles()[0], decad.ToFace{
 		Body: rotated, Face: query,
 	})
