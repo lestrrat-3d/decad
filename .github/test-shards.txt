@@ -1487,3 +1487,8 @@
 10	0.00	TestConeFromFaceCancelledDuringConstruction
 10	0.00	TestResolveToFaceChargesDenotedPlaneOnGenericFrame
 10	0.00	TestResolveToFaceRefusesFootprintDependentStop
+10	0.00	TestLoftMirrorCylinderPlaceTeethFirstError
+10	0.00	TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement
+10	0.00	TestLoftMirrorCylinderPlaceTeethCancelled
+10	0.00	TestLoftMirrorCylinderPairsParallelMatchesSerial
+10	0.00	TestLoftMirrorCylinderPairsRefusalPlacesNothingPastIt
