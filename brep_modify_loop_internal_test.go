@@ -206,7 +206,7 @@ func TestBrepLoopChamferPocketMouth(t *testing.T) {
 	_, pocket := internalRouteEPocket(t)
 	out, bp := chamferLoopOf(t, pocket, routeEZ, r3.NewVec(0, 0, 10), 1, 1.5)
 	lo, hi := piEnclosed(big.NewRat(29865, 2), big.NewRat(-9, 8))
-	requireCoversInterval(t, out.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 	require.Len(t, out.Faces(), len(bp.faces)+8)
 	requirePatchKinds(t, out, 4, 4)
 
@@ -264,8 +264,8 @@ func TestBrepLoopChamferPlateTopLoop(t *testing.T) {
 	t.Parallel()
 	_, pocket := internalRouteEPocket(t)
 	out, bp := chamferLoopOf(t, pocket, routeEZ, r3.NewVec(0, 0, 10), 0, 1.5)
-	require.Equal(t, Exact, out.volume.Exactness)
-	require.Equal(t, 14824.5, out.volume.Value.Base())
+	require.Equal(t, Exact, Exactness(out.n.Volume.Exactness))
+	require.Equal(t, 14824.5, out.n.Volume.Value.Base())
 	requirePatchKinds(t, out, 4, 0)
 	top := planarFaceAt(t, bp, routeEZ, 10)
 	requireChord(t, top.region.Outer, planePoint{U: 1.5, V: 1.5}, planePoint{U: 38.5, V: 1.5})
@@ -303,7 +303,7 @@ func TestBrepLoopChamferCrossDrilledBothLoops(t *testing.T) {
 	require.NoError(t, err)
 	requireClosedTopology(t, out)
 	lo, hi := piEnclosed(big.NewRat(15739, 1), big.NewRat(-180, 1))
-	requireCoversInterval(t, out.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 	requirePatchKinds(t, out, 8, 0)
 	bp := out.payload.(brepPayload)
 	require.Len(t, bp.loopBands, 2)
@@ -322,7 +322,7 @@ func TestBrepLoopChamferCrossDrilledBothLoops(t *testing.T) {
 	_, again := internalCrossDrilled(t)
 	first, _ := chamferLoopOf(t, again, routeEZ, r3.NewVec(0, 0, 20), 0, 1.5)
 	second, _ := chamferLoopOf(t, first, routeEZ.Scale(-1), r3.Vec{}, 0, 1.5)
-	require.Equal(t, out.volume, second.volume)
+	require.Equal(t, measurementFromInternal(out.n.Volume), measurementFromInternal(second.n.Volume))
 	requirePatchKinds(t, second, 8, 0)
 }
 
@@ -343,7 +343,7 @@ func TestBrepLoopChamferBossRimAndRoot(t *testing.T) {
 	boss := internalRoundBoss(t)
 	rim, _ := chamferLoopOf(t, boss, routeEZ, r3.NewVec(0, 0, 25), 0, 1)
 	lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(1111, 3))
-	requireCoversInterval(t, rim.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(rim.n.Volume), lo, hi)
 	cones := requirePatchKinds(t, rim, 0, 1)
 	n, err := cones[0].NormalAt(r3.NewVec(24.5, 20, 24.5))
 	require.NoError(t, err)
@@ -352,7 +352,7 @@ func TestBrepLoopChamferBossRimAndRoot(t *testing.T) {
 	boss = internalRoundBoss(t)
 	root, bp := chamferLoopOf(t, boss, routeEZ, r3.NewVec(0, 0, 10), 1, 1)
 	lo, hi = piEnclosed(big.NewRat(16000, 1), big.NewRat(1141, 3))
-	requireCoversInterval(t, root.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(root.n.Volume), lo, hi)
 	cones = requirePatchKinds(t, root, 0, 1)
 	n, err = cones[0].NormalAt(r3.NewVec(25.5, 20, 10.5))
 	require.NoError(t, err)
@@ -396,7 +396,7 @@ func TestBrepLoopChamferBlindPortMouth(t *testing.T) {
 	port := internalBlindPort(t)
 	out, _ := chamferLoopOf(t, port, r3.NewVec(1, 0, 0), r3.NewVec(60, 0, 0), 1, 1.5)
 	lo, hi := piEnclosed(big.NewRat(138665, 2), big.NewRat(-9, 8))
-	requireCoversInterval(t, out.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 	requirePatchKinds(t, out, 4, 4)
 }
 
@@ -409,7 +409,7 @@ func TestBrepLoopChamferLBracketTopLoop(t *testing.T) {
 	bracket := internalLBracket(t)
 	out, _ := chamferLoopOf(t, bracket, routeEZ, r3.NewVec(0, 0, 30), 0, 1)
 	lo, hi := piEnclosed(big.NewRat(51605, 3), big.NewRat(-865, 12))
-	requireCoversInterval(t, out.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 	cones := requirePatchKinds(t, out, 6, 1)
 	cone, ok := cones[len(cones)-1].n.Surface.(surfacegeom.Cone)
 	if !ok {
@@ -432,13 +432,13 @@ func TestBrepLoopChamferRoundedPlate(t *testing.T) {
 	plate := internalRoundedPlate(t)
 	rim, _ := chamferLoopOf(t, plate, r3.NewVec(0, -1, 0), r3.Vec{}, 1, 1)
 	lo, hi := piEnclosed(big.NewRat(15280, 1), big.NewRat(-10, 3))
-	requireCoversInterval(t, rim.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(rim.n.Volume), lo, hi)
 	requirePatchKinds(t, rim, 0, 1)
 
 	plate = internalRoundedPlate(t)
 	top, _ := chamferLoopOf(t, plate, routeEZ, r3.NewVec(0, 0, 20), 0, 1)
 	lo, hi = piEnclosed(big.NewRat(15232, 1), big.NewRat(-8, 3))
-	requireCoversInterval(t, top.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(top.n.Volume), lo, hi)
 	requirePatchKinds(t, top, 4, 4)
 }
 
@@ -627,23 +627,23 @@ func TestBrepLoopChamferConsumers(t *testing.T) {
 	// 37×37 less the 20×10 mouth, the plate walls 8.5 high, the bottom, the
 	// pocket's walls and floor, and four trapezoids running 37 to 40 across
 	// a slant of 1.5√2, so 4629 + 231√2 in all.
-	require.Equal(t, Exact, out.volume.Exactness)
-	require.Equal(t, 14824.5, out.volume.Value.Base())
+	require.Equal(t, Exact, Exactness(out.n.Volume.Exactness))
+	require.Equal(t, 14824.5, out.n.Volume.Value.Base())
 	sqrt2Lo, _ := new(big.Rat).SetString("1.4142135623730950488")
 	sqrt2Hi, _ := new(big.Rat).SetString("1.4142135623730950489")
 	lo := new(big.Rat).Add(big.NewRat(4629, 1), new(big.Rat).Mul(big.NewRat(231, 1), sqrt2Lo))
 	hi := new(big.Rat).Add(big.NewRat(4629, 1), new(big.Rat).Mul(big.NewRat(231, 1), sqrt2Hi))
-	requireCoversInterval(t, out.area, lo, hi)
-	require.Equal(t, Exact, out.bounds.Exactness)
-	require.Equal(t, r3.Vec{}, out.bounds.Min)
-	require.Equal(t, r3.NewVec(40, 40, 10), out.bounds.Max)
+	requireCoversInterval(t, measurementFromInternal(out.n.Area), lo, hi)
+	require.Equal(t, Exact, Exactness(out.n.Bounds.Exactness))
+	require.Equal(t, r3.Vec{}, out.n.Bounds.Min)
+	require.Equal(t, r3.NewVec(40, 40, 10), out.n.Bounds.Max)
 
 	move, err := r3.Translation(r3.NewVec(5, -7, 3))
 	require.NoError(t, err)
 	placed, err := Copy(t.Context(), out, WithCopyPlacement(move))
 	require.NoError(t, err)
-	require.Equal(t, out.volume, placed.volume)
-	require.Equal(t, out.area, placed.area)
+	require.Equal(t, measurementFromInternal(out.n.Volume), measurementFromInternal(placed.n.Volume))
+	require.Equal(t, measurementFromInternal(out.n.Area), measurementFromInternal(placed.n.Area))
 	require.Len(t, loopPatches(placed), 4)
 
 	_, err = tessellateContext(t.Context(), out, units.Millimeters(0.05), VerifyAll)
@@ -676,6 +676,6 @@ func TestBrepLoopChamferConsumers(t *testing.T) {
 
 	both, _ := chamferLoopOf(t, out, routeEZ, r3.NewVec(0, 0, 10), 1, 1.5)
 	lo, hi = piEnclosed(big.NewRat(14757, 1), big.NewRat(-9, 8))
-	requireCoversInterval(t, both.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(both.n.Volume), lo, hi)
 	requirePatchKinds(t, both, 8, 4)
 }

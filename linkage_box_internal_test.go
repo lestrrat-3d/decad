@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -193,7 +194,7 @@ func TestVerifyJointBoxKeepsTheNextProducerIdentity(t *testing.T) {
 func TestVerifyJointBoxRefusesABodyItDidNotBuild(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	foreignBuilt := &Body{doc: doc, kind: BodySolid}
+	foreignBuilt := &Body{doc: doc, n: topo.Body{Kind: topo.BodySolid}}
 	doc.commit(foreignBuilt)
 	l := NewLinkage()
 	slide, err := l.Ground().Prismatic(r3.NewVec(1, 0, 0), []*Body{foreignBuilt})

@@ -663,7 +663,7 @@ func TestCapBlendChordVolumeChargesEachCapsBandHeight(t *testing.T) {
 		a, b, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 		meshVol += a.Dot(b.Cross(c)) / 6
 	}
-	bodyVol := chamfered.volume.Value.Mag()
+	bodyVol := chamfered.n.Volume.Value.Mag()
 	deficit := bodyVol - meshVol
 	require.Positive(t, deficit, `an inscribed mesh holds less than the body`)
 

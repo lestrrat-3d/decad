@@ -360,7 +360,7 @@ func (r *motionRun) setup(moving []*Body) {
 	for i := range r.movers {
 		mv := &r.movers[i]
 		if r.spec.Kind != motionbound.MotionPrismatic {
-			mv.rho = motionbound.MoverAxisRadius(boxToInternal(mv.body.bounds), r.spec.Frame)
+			mv.rho = motionbound.MoverAxisRadius(mv.body.n.Bounds, r.spec.Frame)
 		}
 		// The swept box covers every pose from where the path's box was read:
 		// for a Revolute or a Prismatic that is the mover at rest — the
@@ -371,7 +371,7 @@ func (r *motionRun) setup(moving []*Body) {
 			motionbound.MoverTravel(r.spec.Frame, mv.rho, zero, r.spec.FromP),
 			motionbound.MoverTravel(r.spec.Frame, mv.rho, zero, r.spec.ToP),
 		)
-		lo, hi, ok := motionbound.MoverSweptBox(boxToInternal(mv.body.bounds), r.spec.Frame, travel)
+		lo, hi, ok := motionbound.MoverSweptBox(mv.body.n.Bounds, r.spec.Frame, travel)
 		swept[i] = motionSweptBox{lo: lo, hi: hi, ok: ok}
 	}
 	r.formPairs(swept)
@@ -413,7 +413,7 @@ func (r *motionRun) readBodies(groups [][]*Body) {
 		if fp, ok := mv.body.payload.(facetedPayload); ok {
 			mv.heldRadius = motionbound.HeldRadiusUpper(fp.verts, fp.meshBound)
 		}
-		mv.area = proofbound.AbsSumUpper(mv.body.area.Value.Base(), mv.body.area.Bound.Base())
+		mv.area = proofbound.AbsSumUpper(mv.body.n.Area.Value.Base(), mv.body.n.Area.Bound.Base())
 		mv.sigma = motionbound.BasisSigmaLower(mv.body.payload.transform())
 	}
 }
@@ -465,7 +465,7 @@ func staticPair(mv motionMover, st motionStatic, swept motionSweptBox) motionPai
 		return pair
 	}
 	if swept.ok {
-		if lower, ok := motionbound.SweptBoxLower(swept.lo, swept.hi, boxToInternal(st.body.bounds)); ok {
+		if lower, ok := motionbound.SweptBoxLower(swept.lo, swept.hi, st.body.n.Bounds); ok {
 			pair.excluded, pair.lower = true, lower
 			return pair
 		}
@@ -885,7 +885,7 @@ func (r *motionRun) settleConstant(i, k int) error {
 	pair := &r.pairs[i][k]
 	pair.constant = false
 	mover, partner := r.movers[i].body, r.partner(i, k)
-	boxProven := boxesDisjoint(mover.bounds, partner.bounds)
+	boxProven := boxesDisjoint(boxFromInternal(mover.n.Bounds), boxFromInternal(partner.n.Bounds))
 	res, fast := clearanceAxisBoxes(mover, partner)
 	if !fast {
 		var err error
@@ -1039,7 +1039,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 	if b != nil {
 		target, etaB, allowance = b.body, b.eta, proofbound.AbsSumUpper(a.allowance, b.allowance)
 	}
-	boxProven := boxesDisjoint(a.body.bounds, target.bounds)
+	boxProven := boxesDisjoint(boxFromInternal(a.body.n.Bounds), boxFromInternal(target.n.Bounds))
 	res, fast := clearanceAxisBoxes(a.body, target)
 	if !fast {
 		var err error

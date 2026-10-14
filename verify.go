@@ -404,8 +404,8 @@ func sharesFacePlane(a, b *Body) bool {
 // a body directly and assert on the returned BodyReport (task-list §4
 // item 4's validity fixtures).
 func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyRequest) (*BodyReport, error) {
-	area := b.area
-	bounds := b.bounds
+	area := b.n.Area
+	bounds := b.n.Bounds
 
 	// The held topology's lump and void counts (proposal §9): descriptive
 	// data every body carries, using the current count definitions,
@@ -435,8 +435,8 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	case ValidityInvalid:
 		status = Unsound
 	case ValidityValid:
-		vol = b.volume
-		cen = b.centroid
+		vol = measurementFromInternal(b.n.Volume)
+		cen = vecMeasurementFromInternal(b.n.Centroid)
 	default:
 		// A body this evaluator did not build (unreachable through the
 		// public API) has a validity the audit alone cannot prove:
@@ -455,7 +455,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	// alone, without a Surveys record.
 	if validity.Outcome == ValidityInvalid {
 		if _, _, err := bodyReadingDiagnostics(ctx, b, bodyReadingSet{
-			Area: measurementToInternal(area), Bounds: boxToInternal(bounds),
+			Area: area, Bounds: bounds,
 		}, cfg.Rel); err != nil {
 			return nil, err
 		}
@@ -464,8 +464,8 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 			Status:   status,
 			Validity: validity,
 			Topology: topology,
-			Area:     ScalarReading{Measurement: area},
-			Bounds:   BoundsReading{Box: bounds},
+			Area:     ScalarReading{Measurement: measurementFromInternal(area)},
+			Bounds:   BoundsReading{Box: boxFromInternal(bounds)},
 			Request:  req,
 		}), nil
 	}
@@ -539,8 +539,8 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		volPtr, cenPtr = &vol, &cen
 	}
 	readings := bodyReadingSet{
-		Area:     measurementToInternal(area),
-		Bounds:   boxToInternal(bounds),
+		Area:     area,
+		Bounds:   bounds,
 		Volume:   measurementPtrToInternal(volPtr),
 		Centroid: vecMeasurementPtrToInternal(cenPtr),
 		Wall:     measurementPtrToInternal(wallReading),
@@ -580,8 +580,8 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		Status:              status,
 		Validity:            validity,
 		Topology:            topology,
-		Area:                ScalarReading{Measurement: area, Tolerance: toleranceResultFromInternal(verdicts.Area)},
-		Bounds:              BoundsReading{Box: bounds, Tolerance: toleranceResultFromInternal(verdicts.Bounds)},
+		Area:                ScalarReading{Measurement: measurementFromInternal(area), Tolerance: toleranceResultFromInternal(verdicts.Area)},
+		Bounds:              BoundsReading{Box: boxFromInternal(bounds), Tolerance: toleranceResultFromInternal(verdicts.Bounds)},
 		Region:              region,
 		Request:             req,
 		Surveys:             surveys,

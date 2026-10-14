@@ -77,7 +77,7 @@ identity; no other rule of this section changes.
 
 | Type | Holds |
 |---|---|
-| `Body` | owning `*Document`, origin (a `provenance.Ref` in the node; `Body.Origin()` converts it to `FeatureRef`), `BodyKind`, `[]*Lump`, cached measurements (computed at build, immutable after) |
+| `Body` | owning `*Document`, origin (a `provenance.Ref` in the node; `Body.Origin()` converts it to `FeatureRef`), `BodyKind` (a `topo.BodyKind` in the node; `Body.Kind()` converts it), `[]*Lump`, cached measurements (computed at build, immutable after; `measurement.Measurement`, `VecMeasurement` and `Box` in the node, which `Volume`, `Area`, `Centroid` and `Bounds` convert) |
 | `Lump` | `[]*FaceShell` — a connected piece of a body, solid or sheet; a sheet lump holds exactly one shell (`docs/surface-design.md` §2.2) |
 | `FaceShell` | `[]*Face`, `void bool`, `open bool` — `open` is true when the shell has a free edge (`docs/surface-design.md` §2.2) |
 | `Face` | tagged `Surface` (the `surfacegeom` variant in the node; `Face.Surface()` converts to the public one), `[]*Loop` (first outer), origin roles (≥1 `provenance.Ref`s in the node, exposed as `FeatureRef`s by `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body |

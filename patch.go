@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -138,7 +139,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}}
 	prismView := pp.prism()
 
 	// pw resolves every boundary segment's walk exactly once for this whole
@@ -199,9 +200,9 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 	shell := &FaceShell{faces: []*Face{face}, n: topo.FaceShell{Open: true}}
 	body.lumps = []*Lump{{shells: []*FaceShell{shell}}}
 
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(ig.Area),
-		Exactness: exactnessOf(ig.AreaBound),
+		Exactness: measurement.ExactnessOf(ig.AreaBound),
 		Bound:     units.SquareMillimeters(ig.AreaBound),
 	}
 	// volume and centroid stay at their zero value: finite, so
@@ -215,7 +216,7 @@ func evalPatchContext(ctx context.Context, d *Document, ref producerID, pp patch
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 	if err := chargePrismMap(body, pp.frame, pp.xform); err != nil {
 		return nil, err
 	}

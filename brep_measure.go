@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
@@ -124,21 +125,21 @@ func measureBrepContext(ctx context.Context, bp brepPayload, btopo *brepTopology
 	if err != nil {
 		return err
 	}
-	body.volume = Measurement{Value: units.CubicMillimeters(readings.Volume.Value),
-		Exactness: exactnessOf(readings.Volume.Bound), Bound: units.CubicMillimeters(readings.Volume.Bound)}
-	body.area = Measurement{Value: units.SquareMillimeters(readings.Area.Value),
-		Exactness: exactnessOf(readings.Area.Bound), Bound: units.SquareMillimeters(readings.Area.Bound)}
+	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(readings.Volume.Value),
+		Exactness: measurement.ExactnessOf(readings.Volume.Bound), Bound: units.CubicMillimeters(readings.Volume.Bound)}
+	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(readings.Area.Value),
+		Exactness: measurement.ExactnessOf(readings.Area.Bound), Bound: units.SquareMillimeters(readings.Area.Bound)}
 	refView := bp.refView()
 	c := readings.Centroid
 	centroidBound := refView.PointBound(c[0], c[1], c[2])
-	body.centroid = VecMeasurement{Value: refView.Point(c[0].Value, c[1].Value, c[2].Value),
-		Exactness: exactnessOf(centroidBound), Bound: units.Millimeters(centroidBound)}
+	body.n.Centroid = measurement.VecMeasurement{Value: refView.Point(c[0].Value, c[1].Value, c[2].Value),
+		Exactness: measurement.ExactnessOf(centroidBound), Bound: units.Millimeters(centroidBound)}
 
 	box, err := brepBoundsContext(ctx, bp)
 	if err != nil {
 		return err
 	}
-	body.bounds = box
+	body.n.Bounds = boxToInternal(box)
 	return validateAnalyticBodyMeasurements(body)
 }
 

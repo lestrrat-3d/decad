@@ -10,7 +10,7 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
-| `internal/measurement/` | Private bounded reading carriers. Public types live in `measurement.go`. See API §5.3, §6. |
+| `internal/measurement/` | Private bounded reading carriers and `ExactnessOf`. Public types live in `measurement.go`. See API §5.3, §6. |
 | `internal/pair/` | Shared contact relation and reading types. |
 | `internal/pair/box/` | Exact box paths, contact, oriented, sphere-box and cylinder-box proofs, patches, clips and witnesses. |
 | `internal/pair/sphere/` | Exact sphere-pair relation, gap and bounded response witness. See contact-geometry §4.3. |
@@ -63,4 +63,4 @@ The rules for rows live in `docs/layout.md`.
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds, and chain-arc source points and area density. See tessellation §8–§11, sweep §15.9. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
 | `internal/loftcylinder/` | Exact cap XY audits, source circle and connector gates, ring distances and occupancy, cap chamfer clearance, triangles, band strips, compaction and audits, triangle radii, root radius gaps, and radial and wedge gates of the loft/cylinder Union. See loft-cylinder-boolean design. |
-| `internal/topo/` | Vertex, Edge (with its curve), Face (with its surface and origin roles), Loop, FaceShell, Document, Mesh and Body node data the root handles hold by value. See evaluator §3. |
+| `internal/topo/` | Vertex, Edge (with its curve), Face (with its surface, origin roles and centroid), Loop, FaceShell, Document, Mesh and Body (with its measurements and kind) node data the root handles hold by value. See evaluator §3. |

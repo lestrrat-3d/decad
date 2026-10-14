@@ -135,8 +135,8 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 			}
 			return Measurement{}, false, err
 		}
-		values = append(values, body.volume.Value.Base())
-		boundTerms = append(boundTerms, body.volume.Bound.Base())
+		values = append(values, body.n.Volume.Value.Base())
+		boundTerms = append(boundTerms, body.n.Volume.Bound.Base())
 	}
 
 	// The sum (§4.5's own "The sum" paragraph): the value is the cells'

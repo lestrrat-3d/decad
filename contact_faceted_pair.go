@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -179,7 +180,7 @@ func planarConvexity(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 func planarSolidAtPose(ctx context.Context, budget *proofbound.WorkBudget, b *Body,
 	pose r3.Transform, chord float64) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
 	none := proofarith.DyZero()
-	if b == nil || !b.n.Solid || b.kind != BodySolid || !positiveAffine(pose) {
+	if b == nil || !b.n.Solid || b.n.Kind != topo.BodySolid || !positiveAffine(pose) {
 		return planar.PlanarSolid{}, none, false, nil
 	}
 	snapshot, err := planarSnapshotOf(ctx, budget, b, chord)

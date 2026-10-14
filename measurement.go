@@ -186,10 +186,10 @@ func validateAnalyticBodyMeasurements(body *Body) error {
 		name string
 		ok   bool
 	}{
-		{name: "volume", ok: finiteMeasurement(body.volume)},
-		{name: "area", ok: finiteMeasurement(body.area)},
-		{name: "centroid", ok: finiteVecMeasurement(body.centroid)},
-		{name: "bounds", ok: finiteBox(body.bounds)},
+		{name: "volume", ok: finiteMeasurement(measurementFromInternal(body.n.Volume))},
+		{name: "area", ok: finiteMeasurement(measurementFromInternal(body.n.Area))},
+		{name: "centroid", ok: finiteVecMeasurement(vecMeasurementFromInternal(body.n.Centroid))},
+		{name: "bounds", ok: finiteBox(boxFromInternal(body.n.Bounds))},
 	}
 	for _, check := range checks {
 		if !check.ok {
@@ -238,13 +238,13 @@ func chargeBodyMap(body *Body, c massmoment.MapCharge) {
 		return
 	}
 	if body.n.Solid {
-		v := c.VolumeOf(proofbound.MeasuredScalar(body.volume.Value.Base(), body.volume.Bound.Base()))
-		body.volume.Bound = units.CubicMillimeters(v.Bound)
-		body.volume.Exactness = exactnessOf(v.Bound)
+		v := c.VolumeOf(proofbound.MeasuredScalar(body.n.Volume.Value.Base(), body.n.Volume.Bound.Base()))
+		body.n.Volume.Bound = units.CubicMillimeters(v.Bound)
+		body.n.Volume.Exactness = measurement.ExactnessOf(v.Bound)
 	}
-	a := c.AreaOf(proofbound.MeasuredScalar(body.area.Value.Base(), body.area.Bound.Base()))
-	body.area.Bound = units.SquareMillimeters(a.Bound)
-	body.area.Exactness = exactnessOf(a.Bound)
+	a := c.AreaOf(proofbound.MeasuredScalar(body.n.Area.Value.Base(), body.n.Area.Bound.Base()))
+	body.n.Area.Bound = units.SquareMillimeters(a.Bound)
+	body.n.Area.Exactness = measurement.ExactnessOf(a.Bound)
 	for _, f := range body.Faces() {
 		f.n.AreaBound = c.AreaOf(proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound)).Bound
 	}

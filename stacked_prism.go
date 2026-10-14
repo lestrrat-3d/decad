@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -377,7 +378,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySolid}
+	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}}
 	work := freeform.NewFreeformWork()
 	base := sp.outerPrism()
 	colDelta := make([]float64, len(columns))
@@ -543,9 +544,9 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	if volume.Value <= 0 {
 		return nil, fmt.Errorf(`%w: a stacked prism encloses no volume`, ErrDegenerate)
 	}
-	body.volume = Measurement{Value: units.CubicMillimeters(volume.Value), Exactness: exactnessOf(volume.Bound),
+	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(volume.Value), Exactness: measurement.ExactnessOf(volume.Bound),
 		Bound: units.CubicMillimeters(volume.Bound)}
-	body.area = Measurement{Value: units.SquareMillimeters(area.Value), Exactness: exactnessOf(area.Bound),
+	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(area.Value), Exactness: measurement.ExactnessOf(area.Bound),
 		Bound: units.SquareMillimeters(area.Bound)}
 	x, y, z := proofbound.BoundedDiv(moment[0], volume), proofbound.BoundedDiv(moment[1], volume), proofbound.BoundedDiv(moment[2], volume)
 	centroid := r3.Vec{X: x.Value, Y: y.Value, Z: z.Value}
@@ -579,7 +580,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 			centroidBound = math.Min(centroidBound, geometryBound)
 		}
 	}
-	body.centroid = VecMeasurement{Value: centroid, Exactness: exactnessOf(centroidBound), Bound: units.Millimeters(centroidBound)}
+	body.n.Centroid = measurement.VecMeasurement{Value: centroid, Exactness: measurement.ExactnessOf(centroidBound), Bound: units.Millimeters(centroidBound)}
 	outerDelta := 0.0
 	for _, entries := range bySlab {
 		for _, e := range entries {
@@ -592,7 +593,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 	if err != nil {
 		return nil, err
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 	if err := chargePrismMap(body, sp.frame, sp.xform); err != nil {
 		return nil, err
 	}

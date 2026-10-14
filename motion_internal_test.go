@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -64,7 +65,7 @@ func TestMotionPoseDeviationReachesThePoseGap(t *testing.T) {
 		require.NoError(t, err)
 		_, fast := clearanceAxisBoxes(transient, wall)
 		require.False(t, fast, `a rotated arm is not an axis box`)
-		res, err := clearancePair(t.Context(), transient, wall, boxesDisjoint(transient.bounds, wall.bounds))
+		res, err := clearancePair(t.Context(), transient, wall, boxesDisjoint(boxFromInternal(transient.n.Bounds), boxFromInternal(wall.n.Bounds)))
 		require.NoError(t, err)
 		require.Equal(t, reportvocab.PairDisjoint, res.verdict)
 
@@ -204,7 +205,7 @@ func TestMotionAxisRadiusReadsTheBox(t *testing.T) {
 	} {
 		spec, err := resolveMotion(Revolute{Center: tc.center, Axis: r3.NewVec(0, 0, 3), From: units.Degrees(0), To: units.Degrees(90)})
 		require.NoError(t, err)
-		rho := motionbound.MoverAxisRadius(boxToInternal(arm.bounds), spec.Frame)
+		rho := motionbound.MoverAxisRadius(arm.n.Bounds, spec.Frame)
 		require.GreaterOrEqual(t, rho, tc.want)
 		require.InDelta(t, tc.want, rho, 1e-12)
 	}
@@ -283,7 +284,7 @@ func TestVerifyMotionRevolveKeepsLiveDenotationIdentities(t *testing.T) {
 func TestVerifyMotionRefusesABodyItDidNotBuild(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	foreignBuilt := &Body{doc: doc, kind: BodySolid}
+	foreignBuilt := &Body{doc: doc, n: topo.Body{Kind: topo.BodySolid}}
 	doc.commit(foreignBuilt)
 	before := doc.Bodies()
 	report, err := doc.VerifyMotion(t.Context(), []*Body{foreignBuilt}, Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(1)})

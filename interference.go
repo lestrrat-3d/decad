@@ -109,7 +109,7 @@ func cupViewsEqual(budget *proofbound.WorkBudget, pa, pb cupView) (bool, error) 
 // or pairMeshes{} where a caller measures one pair on its own.
 func measuredInterference(ctx context.Context, a, b *Body, res pairResult, meshes operandMeshes) (Measurement, reportvocab.InterferenceOutcome, error) {
 	if res.contained != nil {
-		return res.contained.volume, reportvocab.InterferenceMeasured, nil
+		return measurementFromInternal(res.contained.n.Volume), reportvocab.InterferenceMeasured, nil
 	}
 	equal, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)
 	if err != nil {
@@ -117,7 +117,7 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult, meshe
 	}
 	if equal {
 		// Stable pair order chooses A when the represented sets are equal.
-		return a.volume, reportvocab.InterferenceMeasured, nil
+		return measurementFromInternal(a.n.Volume), reportvocab.InterferenceMeasured, nil
 	}
 
 	analytic, ok, err := evaluateAnalyticIntersect(ctx, a, b)
@@ -128,10 +128,10 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult, meshe
 		return Measurement{}, reportvocab.InterferenceUndecided, err
 	}
 	if ok {
-		if !positiveVolume(analytic.volume) {
+		if !positiveVolume(measurementFromInternal(analytic.n.Volume)) {
 			return Measurement{}, reportvocab.InterferenceUndecided, nil
 		}
-		return analytic.volume, reportvocab.InterferenceMeasured, nil
+		return measurementFromInternal(analytic.n.Volume), reportvocab.InterferenceMeasured, nil
 	}
 
 	overlap, ok, err := prismOverlapVolume(ctx, a, b)
@@ -185,7 +185,7 @@ func interferencePairDiameter(ctx context.Context, a, b *Body) (float64, error) 
 // rather than the transient intersection mesh.
 func interferenceToleranceRef(volume Measurement, a, b *Body, pairD, rel float64) (bool, float64, bool) {
 	const eps = 1e-9
-	area := math.Abs(a.area.Value.Base()) + math.Abs(b.area.Value.Base())
+	area := math.Abs(a.n.Area.Value.Base()) + math.Abs(b.n.Area.Value.Base())
 	quantum := eps * pairD * area
 	return tolerance.Scalar(volume.Value, volume.Bound, rel, func(value float64) (float64, bool) {
 		ref := math.Max(value, quantum)

@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -298,10 +299,10 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	}
 	volume, volumeBound := mitredEnclosure(volumeIv.Lo, volumeIv.Hi)
 	area, areaBound := mitredEnclosure(trueAreaIv.Lo, trueAreaIv.Hi)
-	body.volume = Measurement{Value: units.CubicMillimeters(volume), Bound: units.CubicMillimeters(volumeBound),
-		Exactness: exactnessOf(volumeBound)}
-	body.area = Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
-		Exactness: exactnessOf(areaBound)}
+	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(volume), Bound: units.CubicMillimeters(volumeBound),
+		Exactness: measurement.ExactnessOf(volumeBound)}
+	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
+		Exactness: measurement.ExactnessOf(areaBound)}
 	center := r3.NewVec(0, 0, path.End.Z/2)
 	worldCenter := xform.Apply(center)
 	centerBound := 0.0
@@ -310,14 +311,14 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 		centerBound = proofbound.RigidRoundAllow(path.End.Z/2,
 			max(math.Abs(tr.X), math.Abs(tr.Y), math.Abs(tr.Z)))
 	}
-	body.centroid = VecMeasurement{Value: worldCenter, Bound: units.Millimeters(centerBound),
-		Exactness: exactnessOf(centerBound)}
+	body.n.Centroid = measurement.VecMeasurement{Value: worldCenter, Bound: units.Millimeters(centerBound),
+		Exactness: measurement.ExactnessOf(centerBound)}
 	minV, maxV := mesh.n.Vertices[0], mesh.n.Vertices[0]
 	for _, vertex := range mesh.n.Vertices[1:] {
 		minV.X, minV.Y, minV.Z = min(minV.X, vertex.X), min(minV.Y, vertex.Y), min(minV.Z, vertex.Z)
 		maxV.X, maxV.Y, maxV.Z = max(maxV.X, vertex.X), max(maxV.Y, vertex.Y), max(maxV.Z, vertex.Z)
 	}
-	body.bounds = Box{Min: minV, Max: maxV, Bound: units.Millimeters(delta), Exactness: Approximate}
+	body.n.Bounds = measurement.Box{Min: minV, Max: maxV, Bound: units.Millimeters(delta), Exactness: measurement.Approximate}
 	for _, vertex := range body.Vertices() {
 		vertex.n.Bound = units.Millimeters(proofbound.AbsSumUpper(vertex.n.Bound.Base(), delta))
 	}

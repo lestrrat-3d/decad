@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -541,7 +542,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			}
 			group := pp.groups[pp.src[i]]
 			if group.hasCentroid && groupPatch[pp.src[i]] == patch[i] {
-				f.centroid, f.n.HasCentroid = group.centroid, true
+				f.n.Centroid, f.n.HasCentroid = vecMeasurementToInternal(group.centroid), true
 			}
 			faceIdx[patch[i]] = f
 			facePlanar[f] = pp.groups[pp.src[i]].planar
@@ -650,7 +651,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			return nil, err
 		}
 	}
-	body.volume = volume
+	body.n.Volume = measurementToInternal(volume)
 	moments, err := facetproof.FirstMomentsFromAudit(budget, audit, tris)
 	if err != nil {
 		return nil, err
@@ -674,9 +675,9 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// stays tiny — and never zero, which would claim an exactness a float sum of
 	// square roots does not have.
 	areaBound := proofbound.AbsSumUpper(bodyGeom, pp.areaSlack, proofbound.SumSlop(len(tris), areaF), termSlop)
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(areaF),
-		Exactness: exactnessOf(areaBound),
+		Exactness: measurement.ExactnessOf(areaBound),
 		Bound:     units.SquareMillimeters(areaBound),
 	}
 
@@ -695,9 +696,9 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// is a 3D radius (internal/proofbound/bounds.go, proofbound.Radius3D).
 	cenRound := proofbound.Radius3D(math.Max(proofbound.RatAbsDiff(cx, cxF), math.Max(proofbound.RatAbsDiff(cy, cyF), proofbound.RatAbsDiff(cz, czF))))
 	centroidBound := proofbound.AbsSumUpper(cenBound, cenRound)
-	body.centroid = VecMeasurement{
+	body.n.Centroid = measurement.VecMeasurement{
 		Value:     r3.Vec{X: cxF, Y: cyF, Z: czF},
-		Exactness: exactnessOf(centroidBound),
+		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
 
@@ -721,9 +722,9 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	boxBound := proofbound.Radius3D(extremeErr)
-	body.bounds = Box{
+	body.n.Bounds = measurement.Box{
 		Min: lo, Max: hi,
-		Exactness: exactnessOf(boxBound),
+		Exactness: measurement.ExactnessOf(boxBound),
 		Bound:     units.Millimeters(boxBound),
 	}
 

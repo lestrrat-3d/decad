@@ -61,7 +61,7 @@ func TestEvalPrismCollapsedSpanRunStillBuilds(t *testing.T) {
 	}}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.NotNil(t, body)
-	require.Greater(t, body.volume.Value.Mag(), 0.0, "the walk's own length stays positive despite the collapsed run")
+	require.Greater(t, body.n.Volume.Value.Mag(), 0.0, "the walk's own length stays positive despite the collapsed run")
 }
 
 // A recorded segment's walk states the record's own endpoints at the two
@@ -478,7 +478,7 @@ func TestPrismWalkOnceInvoluteRecordFitsWorkBudget(t *testing.T) {
 	body, err := evalPrism(New(), 0, pp, work)
 	require.NoError(t, err, "the deduplicated charge must fit inside the work budget")
 	require.NotNil(t, body)
-	require.Greater(t, body.volume.Value.Mag(), 0.0, "the built prism must enclose positive volume")
+	require.Greater(t, body.n.Volume.Value.Mag(), 0.0, "the built prism must enclose positive volume")
 
 	require.Less(t, work.Spent, freeform.FreeformWorkLimit,
 		"the whole build's deduplicated charge must sit strictly below the ceiling")
@@ -774,10 +774,10 @@ func placementMotions(t *testing.T) []struct {
 func requireSamePrismBuild(t *testing.T, want, got *Body) {
 	t.Helper()
 	require.Equal(t, want.n.Solid, got.n.Solid, "solidity")
-	require.Equal(t, want.volume, got.volume, "volume, its exactness and its bound")
-	require.Equal(t, want.area, got.area, "area, its exactness and its bound")
-	require.Equal(t, want.centroid, got.centroid, "centroid, its exactness and its bound")
-	require.Equal(t, want.bounds, got.bounds, "bounding box, its exactness and its bound")
+	require.Equal(t, measurementFromInternal(want.n.Volume), measurementFromInternal(got.n.Volume), "volume, its exactness and its bound")
+	require.Equal(t, measurementFromInternal(want.n.Area), measurementFromInternal(got.n.Area), "area, its exactness and its bound")
+	require.Equal(t, vecMeasurementFromInternal(want.n.Centroid), vecMeasurementFromInternal(got.n.Centroid), "centroid, its exactness and its bound")
+	require.Equal(t, boxFromInternal(want.n.Bounds), boxFromInternal(got.n.Bounds), "bounding box, its exactness and its bound")
 
 	wantFaces, gotFaces := want.Faces(), got.Faces()
 	require.Len(t, gotFaces, len(wantFaces), "face count")
@@ -956,11 +956,11 @@ func TestRepeatedPlacementAccumulatesNoError(t *testing.T) {
 	// premise that the copies genuinely moved rather than composing back.
 	// The values hold; the bounds also charge the composed rotation's own
 	// departure from orthonormal (docs/evaluator-design.md §5.1).
-	require.Equal(t, built.volume.Value, reused.volume.Value, "ten rotations about the sweep axis change no volume value")
-	require.Equal(t, built.area.Value, reused.area.Value, "nor any area value")
-	require.GreaterOrEqual(t, reused.volume.Bound.Base(), built.volume.Bound.Base())
-	require.GreaterOrEqual(t, reused.area.Bound.Base(), built.area.Bound.Base())
-	require.NotEqual(t, built.centroid.Value, reused.centroid.Value, "premise: the copies genuinely moved")
+	require.Equal(t, built.n.Volume.Value, reused.n.Volume.Value, "ten rotations about the sweep axis change no volume value")
+	require.Equal(t, built.n.Area.Value, reused.n.Area.Value, "nor any area value")
+	require.GreaterOrEqual(t, reused.n.Volume.Bound.Base(), built.n.Volume.Bound.Base())
+	require.GreaterOrEqual(t, reused.n.Area.Bound.Base(), built.n.Area.Bound.Base())
+	require.NotEqual(t, built.n.Centroid.Value, reused.n.Centroid.Value, "premise: the copies genuinely moved")
 }
 
 // TestChangedRecordRefusesPublishedWalks is the matrix's third and fourth rows
@@ -1098,8 +1098,8 @@ func TestPublishedWalksAreReadOnlyAcrossGoroutines(t *testing.T) {
 			"both concurrent builds read the one shared resolution")
 		// A placement keeps the value; its bound also charges the placement's
 		// own departure from orthonormal (docs/evaluator-design.md §5.1).
-		require.Equal(t, built.volume.Value, got.body.volume.Value, "a placement changes no volume value")
-		require.GreaterOrEqual(t, got.body.volume.Bound.Base(), built.volume.Bound.Base())
+		require.Equal(t, built.n.Volume.Value, got.body.n.Volume.Value, "a placement changes no volume value")
+		require.GreaterOrEqual(t, got.body.n.Volume.Bound.Base(), built.n.Volume.Bound.Base())
 	}
 }
 

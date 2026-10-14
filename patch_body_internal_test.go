@@ -327,7 +327,7 @@ func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 func TestBodyPatchRejectsAReceiverWithNoPayload(t *testing.T) {
 	t.Parallel()
 	d := New()
-	b := &Body{doc: d, n: topo.Body{Origin: provenance.Ref{Role: roleBody}}, kind: BodySheet}
+	b := &Body{doc: d, n: topo.Body{Origin: provenance.Ref{Role: roleBody}, Kind: topo.BodySheet}}
 	d.bodies = append(d.bodies, b)
 
 	_, err := PatchEdges(t.Context(), b, Edges(Free()))

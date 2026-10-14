@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
@@ -122,7 +123,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySolid}
+	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}}
 	faces, err := buildMitredTopology(ctx, body, ref, a, exact, verts, areas, delta)
 	if err != nil {
 		return nil, err
@@ -132,20 +133,22 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	}
 	body.lumps = []*Lump{{shells: []*FaceShell{{faces: faces}}}}
 
-	body.volume = mitredVolume(vol6)
-	if body.centroid, err = mitredCentroid(anchor, vol6, moments); err != nil {
+	body.n.Volume = measurementToInternal(mitredVolume(vol6))
+	centroid, err := mitredCentroid(anchor, vol6, moments)
+	if err != nil {
 		return nil, err
 	}
-	body.bounds = mitredBounds(exact)
+	body.n.Centroid = vecMeasurementToInternal(centroid)
+	body.n.Bounds = boxToInternal(mitredBounds(exact))
 	areaLo, areaHi := new(big.Rat), new(big.Rat)
 	for _, enclosure := range areas {
 		areaLo.Add(areaLo, enclosure[0])
 		areaHi.Add(areaHi, enclosure[1])
 	}
 	value, bound := mitredEnclosure(areaLo, areaHi)
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(value),
-		Exactness: exactnessOf(bound),
+		Exactness: measurement.ExactnessOf(bound),
 		Bound:     units.SquareMillimeters(bound),
 	}
 	if err := validateLoftBodyMeasurements(body); err != nil {

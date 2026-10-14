@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -59,7 +60,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	if pp.SurfaceResult {
 		kind = BodySheet
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: !pp.SurfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: kind}
+	body := &Body{doc: d, n: topo.Body{Solid: !pp.SurfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)}}
 
 	// The LEVEL half of the shared-denotation certificate (denotation.go):
 	// minted only when this payload's own section is drawn straight from its
@@ -217,14 +218,14 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// finite for validateAnalyticBodyMeasurements below — but Body.Volume and
 	// Body.Centroid gate on solid and answer ErrNotSolid for a sheet, so these
 	// two stay held and unpublished then (docs/surface-design.md §8).
-	body.volume = Measurement{
+	body.n.Volume = measurement.Measurement{
 		Value:     units.CubicMillimeters(volume.Value),
-		Exactness: exactnessOf(volume.Bound),
+		Exactness: measurement.ExactnessOf(volume.Bound),
 		Bound:     units.CubicMillimeters(volume.Bound),
 	}
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(area.Value),
-		Exactness: exactnessOf(area.Bound),
+		Exactness: measurement.ExactnessOf(area.Bound),
 		Bound:     units.SquareMillimeters(area.Bound),
 	}
 	cu := proofbound.BoundedQuotient(ig.Mu, ig.MuBound, ig.Area, ig.AreaBound)
@@ -245,9 +246,9 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		return nil, err
 	}
 	centroidBound = math.Min(centroidBound, proofbound.AbsSumUpper(geometryBound, delta))
-	body.centroid = VecMeasurement{
+	body.n.Centroid = measurement.VecMeasurement{
 		Value:     centroidValue,
-		Exactness: exactnessOf(centroidBound),
+		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
 	bounds, err := prismBoundsContext(ctx, pp, work, pw)
@@ -257,7 +258,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 	if err := chargePrismMap(body, pp.Frame, pp.Xform); err != nil {
 		return nil, err
 	}

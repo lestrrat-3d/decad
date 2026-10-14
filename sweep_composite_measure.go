@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
@@ -337,9 +338,9 @@ func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts 
 			continue
 		}
 		spans[i] = compositesweep.Span{
-			Solid: span.n.Solid, Volume: measurementScalar(span.volume),
-			Centroid: span.centroid.Value, CentroidBound: span.centroid.Bound.Base(),
-			Min: span.bounds.Min, Max: span.bounds.Max, BoxBound: span.bounds.Bound.Base(),
+			Solid: span.n.Solid, Volume: measurementScalar(measurementFromInternal(span.n.Volume)),
+			Centroid: span.n.Centroid.Value, CentroidBound: span.n.Centroid.Bound.Base(),
+			Min: span.n.Bounds.Min, Max: span.n.Bounds.Max, BoxBound: span.n.Bounds.Bound.Base(),
 		}
 	}
 	faces := body.Faces()
@@ -357,15 +358,15 @@ func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts 
 		return err
 	}
 	centroidBound := proofbound.Radius3D(max(readings.Centroid[0].Bound, readings.Centroid[1].Bound, readings.Centroid[2].Bound))
-	body.volume = scalarMeasurement(readings.Volume, units.CubicMillimeter)
-	body.area = scalarMeasurement(readings.Area, units.SquareMillimeter)
-	body.centroid = VecMeasurement{
+	body.n.Volume = measurementToInternal(scalarMeasurement(readings.Volume, units.CubicMillimeter))
+	body.n.Area = measurementToInternal(scalarMeasurement(readings.Area, units.SquareMillimeter))
+	body.n.Centroid = measurement.VecMeasurement{
 		Value:     r3.NewVec(readings.Centroid[0].Value, readings.Centroid[1].Value, readings.Centroid[2].Value),
-		Exactness: exactnessOf(centroidBound),
+		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
-	body.bounds = compositeSweepBox(readings.Min[0], readings.Min[1], readings.Min[2],
-		readings.Max[0], readings.Max[1], readings.Max[2])
+	body.n.Bounds = boxToInternal(compositeSweepBox(readings.Min[0], readings.Min[1], readings.Min[2],
+		readings.Max[0], readings.Max[1], readings.Max[2]))
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return fmt.Errorf(`%w: a composite sweep computed a non-finite measurement`, ErrUnsupported)
 	}

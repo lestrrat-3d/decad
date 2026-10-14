@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
@@ -72,7 +73,7 @@ func Unstitch(ctx context.Context, b *Body) ([]*Body, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		body, err := evalUnstitchFaceContext(ctx, d, base+producerID(i), f, b.bounds, r3.Identity())
+		body, err := evalUnstitchFaceContext(ctx, d, base+producerID(i), f, boxFromInternal(b.n.Bounds), r3.Identity())
 		if err != nil {
 			return nil, err
 		}
@@ -153,7 +154,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 		return nil, err
 	}
 
-	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySheet}
+	body := &Body{doc: d, n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySheet}}
 	nf.body = body
 	if err := attachFaceLoopsContext(ctx, []*Face{nf}); err != nil {
 		return nil, err
@@ -166,9 +167,9 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	// value the source face already carried (copyFaceUnderContext). The
 	// placement's held basis is orthonormal only to rounding, so
 	// chargePlacement widens the copied area and lengths for it.
-	body.area = Measurement{
+	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(nf.n.Area),
-		Exactness: exactnessOf(nf.n.AreaBound),
+		Exactness: measurement.ExactnessOf(nf.n.AreaBound),
 		Bound:     units.SquareMillimeters(nf.n.AreaBound),
 	}
 	if err := chargePlacement(body, xform); err != nil {
@@ -179,7 +180,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	if err != nil {
 		return nil, err
 	}
-	body.bounds = bounds
+	body.n.Bounds = boxToInternal(bounds)
 
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err

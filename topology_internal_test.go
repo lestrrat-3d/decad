@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -51,7 +52,7 @@ func TestFreeEdgeAndOpenShellReadTheirOwnState(t *testing.T) {
 
 	t.Run("BodyKindReadsItsOwnStoredField", func(t *testing.T) {
 		t.Parallel()
-		require.Equal(t, BodySheet, (&Body{kind: BodySheet}).Kind())
+		require.Equal(t, BodySheet, (&Body{n: topo.Body{Kind: topo.BodySheet}}).Kind())
 		require.Equal(t, BodySolid, (&Body{}).Kind(), `BodySolid is the iota zero, so the zero value reads solid`)
 	})
 }
@@ -108,4 +109,16 @@ func TestFaceOriginsConvertsTheNodeRoles(t *testing.T) {
 		x := FeatureRef{producer: 7, Role: "capStart"}
 		require.Equal(t, x, featureRefOf(refOf(x)))
 	})
+}
+
+// TestTwinEnumsMatch pins the constant values the root BodyKind and Exactness
+// share with their node forms: the generated conversions between the two are
+// plain integer casts (docs/evaluator-design.md §3).
+func TestTwinEnumsMatch(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, int(BodySolid), int(topo.BodySolid))
+	require.Equal(t, int(BodySheet), int(topo.BodySheet))
+	require.Equal(t, int(Exact), int(measurement.Exact))
+	require.Equal(t, int(Approximate), int(measurement.Approximate))
 }

@@ -189,14 +189,14 @@ func TestMitredSweepReadingsEncloseExactValues(t *testing.T) {
 		}
 	}
 	vol := new(big.Rat).Quo(vol6, big.NewRat(6, 1))
-	require.Positive(t, body.volume.Bound.Base())
-	require.True(t, ratDistanceAtMost(vol, body.volume.Value.Base(), body.volume.Bound.Base()))
+	require.Positive(t, body.n.Volume.Bound.Base())
+	require.True(t, ratDistanceAtMost(vol, body.n.Volume.Value.Base(), body.n.Volume.Bound.Base()))
 
-	centroid := []float64{body.centroid.Value.X, body.centroid.Value.Y, body.centroid.Value.Z}
-	require.Positive(t, body.centroid.Bound.Base())
+	centroid := []float64{body.n.Centroid.Value.X, body.n.Centroid.Value.Y, body.n.Centroid.Value.Z}
+	require.Positive(t, body.n.Centroid.Bound.Base())
 	for i := range 3 {
 		c := new(big.Rat).Quo(moments[i], new(big.Rat).Mul(big.NewRat(4, 1), vol6))
-		require.True(t, ratDistanceAtMost(c, centroid[i], body.centroid.Bound.Base()), `centroid axis %d`, i)
+		require.True(t, ratDistanceAtMost(c, centroid[i], body.n.Centroid.Bound.Base()), `centroid axis %d`, i)
 	}
 
 	const prec = 256
@@ -208,12 +208,12 @@ func TestMitredSweepReadingsEncloseExactValues(t *testing.T) {
 		total.Add(total, new(big.Float).SetPrec(prec).Quo(new(big.Float).SetPrec(prec).Sqrt(q), big.NewFloat(2)))
 	}
 	ref, _ := total.Float64()
-	gap := math.Abs(ref - body.area.Value.Base())
-	require.Positive(t, body.area.Bound.Base())
-	require.LessOrEqual(t, gap, body.area.Bound.Base()+ref*1e-30)
+	gap := math.Abs(ref - body.n.Area.Value.Base())
+	require.Positive(t, body.n.Area.Bound.Base())
+	require.LessOrEqual(t, gap, body.n.Area.Bound.Base()+ref*1e-30)
 
-	lo := []float64{body.bounds.Min.X, body.bounds.Min.Y, body.bounds.Min.Z}
-	hi := []float64{body.bounds.Max.X, body.bounds.Max.Y, body.bounds.Max.Z}
+	lo := []float64{body.n.Bounds.Min.X, body.n.Bounds.Min.Y, body.n.Bounds.Min.Z}
+	hi := []float64{body.n.Bounds.Max.X, body.n.Bounds.Max.Y, body.n.Bounds.Max.Z}
 	var exactLo, exactHi [3]*big.Rat
 	for _, p := range mp.exact {
 		for i := range 3 {
@@ -229,8 +229,8 @@ func TestMitredSweepReadingsEncloseExactValues(t *testing.T) {
 	}
 	rounded := false
 	for i := range 3 {
-		require.True(t, ratDistanceAtMost(exactLo[i], lo[i], body.bounds.Bound.Base()), `min axis %d`, i)
-		require.True(t, ratDistanceAtMost(exactHi[i], hi[i], body.bounds.Bound.Base()), `max axis %d`, i)
+		require.True(t, ratDistanceAtMost(exactLo[i], lo[i], body.n.Bounds.Bound.Base()), `min axis %d`, i)
+		require.True(t, ratDistanceAtMost(exactHi[i], hi[i], body.n.Bounds.Bound.Base()), `max axis %d`, i)
 		rounded = rounded || !ratDistanceAtMost(exactLo[i], lo[i], 0) || !ratDistanceAtMost(exactHi[i], hi[i], 0)
 	}
 	require.True(t, rounded, `this fixture has an extreme that is not a float`)
@@ -296,7 +296,7 @@ func TestMitredSweepDeltaAndMeshProofs(t *testing.T) {
 		heldArea += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
 	require.Positive(t, mesh.n.AreaSlack)
-	require.LessOrEqual(t, math.Abs(heldArea-body.area.Value.Base()), mesh.n.AreaSlack+body.area.Bound.Base()+1e-12)
+	require.LessOrEqual(t, math.Abs(heldArea-body.n.Area.Value.Base()), mesh.n.AreaSlack+body.n.Area.Bound.Base()+1e-12)
 }
 
 // TestMitredSweepPublishesPerVertexBounds is docs/faceted-vertex-bounds-

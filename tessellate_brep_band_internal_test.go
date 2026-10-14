@@ -282,7 +282,7 @@ func TestBrepBandBooleanAdmission(t *testing.T) {
 	got, err := Cut(t.Context(), top, corner)
 	require.NoError(t, err)
 	want := big.NewRat(14584625, 1000)
-	requireCoversInterval(t, got.volume, want, want)
+	requireCoversInterval(t, measurementFromInternal(got.n.Volume), want, want)
 
 	_, pocket = internalRouteEPocket(t)
 	mouth, _ := chamferLoopOf(t, pocket, routeEZ, r3.NewVec(0, 0, 10), 1, 1.5)

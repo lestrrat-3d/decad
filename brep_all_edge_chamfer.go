@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -52,9 +53,9 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 	var p allEdgeChamferPayload
 	p.xform = r3.Identity()
 	p.d = distance
-	p.box = [3][2]float64{{source.bounds.Min.X, source.bounds.Max.X},
-		{source.bounds.Min.Y, source.bounds.Max.Y}, {source.bounds.Min.Z, source.bounds.Max.Z}}
-	if source.bounds.Bound.Base() != 0 || !p.admitBox() {
+	p.box = [3][2]float64{{source.n.Bounds.Min.X, source.n.Bounds.Max.X},
+		{source.n.Bounds.Min.Y, source.n.Bounds.Max.Y}, {source.n.Bounds.Min.Z, source.n.Bounds.Max.Z}}
+	if source.n.Bounds.Bound.Base() != 0 || !p.admitBox() {
 		return nil, false, nil
 	}
 	selected := map[*Edge]struct{}{}
@@ -354,7 +355,7 @@ func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}}, kind: BodySolid}
+	body := &Body{doc: d, n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodySolid}}
 	polygons := geometry.polygons()
 	vertices := map[r3.Vec]*Vertex{}
 	vertex := func(v r3.Vec) *Vertex {
@@ -491,8 +492,8 @@ func (p allEdgeChamferPayload) measure(body *Body, polygons []allEdgePolygon) er
 	if volume.Value-volume.Bound <= 0 {
 		return fmt.Errorf(`%w: the all-edge chamfer has no proven positive volume`, ErrUnsupported)
 	}
-	body.volume = Measurement{Value: units.CubicMillimeters(volume.Value), Bound: units.CubicMillimeters(volume.Bound),
-		Exactness: exactnessOf(volume.Bound)}
+	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(volume.Value), Bound: units.CubicMillimeters(volume.Bound),
+		Exactness: measurement.ExactnessOf(volume.Bound)}
 	area := proofbound.ExactScalar(0)
 	for _, poly := range polygons {
 		area = proofbound.BoundedAdd(area, poly.area)
@@ -502,8 +503,8 @@ func (p allEdgeChamferPayload) measure(body *Body, polygons []allEdgePolygon) er
 	wall := proofbound.BoundedMul(proofbound.ExactScalar(2),
 		proofbound.BoundedMul(pi, proofbound.BoundedMul(r, ly)))
 	area = proofbound.BoundedAdd(proofbound.BoundedSub(area, disks), wall)
-	body.area = Measurement{Value: units.SquareMillimeters(area.Value), Bound: units.SquareMillimeters(area.Bound),
-		Exactness: exactnessOf(area.Bound)}
+	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(area.Value), Bound: units.SquareMillimeters(area.Bound),
+		Exactness: measurement.ExactnessOf(area.Bound)}
 	// The admitted bore is centered in x and z and traverses the full y range.
 	// The twelve edge wedges are symmetric about all three box midplanes.
 	if !rationalMidpointEquals(p.box[0], p.center[0]) ||
@@ -518,10 +519,10 @@ func (p allEdgeChamferPayload) measure(body *Body, polygons []allEdgePolygon) er
 		centroidBound = math.Max(centroidBound, midpoint[axis].Bound)
 	}
 	centroid := r3.NewVec(midpoint[0].Value, midpoint[1].Value, midpoint[2].Value)
-	body.centroid = VecMeasurement{Value: centroid, Bound: units.Millimeters(centroidBound),
-		Exactness: exactnessOf(centroidBound)}
-	body.bounds = Box{Min: r3.NewVec(p.box[0][0], p.box[1][0], p.box[2][0]),
+	body.n.Centroid = measurement.VecMeasurement{Value: centroid, Bound: units.Millimeters(centroidBound),
+		Exactness: measurement.ExactnessOf(centroidBound)}
+	body.n.Bounds = measurement.Box{Min: r3.NewVec(p.box[0][0], p.box[1][0], p.box[2][0]),
 		Max:   r3.NewVec(p.box[0][1], p.box[1][1], p.box[2][1]),
-		Bound: units.Millimeters(0), Exactness: Exact}
+		Bound: units.Millimeters(0), Exactness: measurement.Exact}
 	return validateAnalyticBodyMeasurements(body)
 }

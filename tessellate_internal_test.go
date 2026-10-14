@@ -446,14 +446,14 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 	require.NotEmpty(t, reused.n.Triangles)
 
 	withoutResolution := &Body{
-		doc:      body.doc,
-		lumps:    body.lumps,
-		volume:   body.volume,
-		area:     body.area,
-		centroid: body.centroid,
-		bounds:   body.bounds,
-		n:        topo.Body{Solid: body.n.Solid, Origin: body.n.Origin},
-		payload:  withoutWalks(published),
+		doc:   body.doc,
+		lumps: body.lumps,
+		n: topo.Body{Solid: body.n.Solid, Origin: body.n.Origin, Volume: body.n.Volume,
+			Area:     body.n.Area,
+			Centroid: body.n.Centroid,
+			Bounds:   body.n.Bounds,
+		},
+		payload: withoutWalks(published),
 	}
 	resolvedAgain, err := withoutResolution.Tessellate(t.Context(), tol)
 	require.NoError(t, err)

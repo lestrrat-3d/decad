@@ -437,7 +437,7 @@ func (r *brepLoopRead) buildSelectedLoops(ctx context.Context, d *Document, loop
 		return nil, fmt.Errorf(`%w; the %s's rewritten brep record (modify-general §4.2 step 6); selector %s matched [%s]`,
 			err, call.loopKind, call.sel, selectedEdgesContext(call.edges))
 	}
-	if body.volume.Value.Base() <= 0 {
+	if body.n.Volume.Value.Base() <= 0 {
 		return nil, fmt.Errorf(`%w: the %s's rewritten brep record encloses no volume (modify-general §4.2 step 6); selector %s matched [%s]`,
 			ErrDegenerate, call.loopKind, call.sel, selectedEdgesContext(call.edges))
 	}

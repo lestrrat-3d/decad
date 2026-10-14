@@ -469,9 +469,6 @@ type Face struct {
 	body  *Body
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Face
-	// centroid is present only for a face with its own proved area-centroid
-	// certificate; whole-group readings are not copied onto split patches.
-	centroid VecMeasurement
 }
 
 // denotedUnder carries a face's denoted surface onto a copy placed by xform:
@@ -637,7 +634,7 @@ func (f *Face) Centroid() (VecMeasurement, error) {
 	if !f.n.HasCentroid {
 		return VecMeasurement{}, fmt.Errorf("%w: this face has no bounded area centroid", ErrUnsupported)
 	}
-	return f.centroid, nil
+	return vecMeasurementFromInternal(f.n.Centroid), nil
 }
 
 // isPlanar reports whether the face this evaluator holds is FLAT: an analytic
@@ -691,15 +688,8 @@ type Body struct {
 	doc   *Document
 	lumps []*Lump
 
-	// The evaluator computes measurements at build time; a Body never
-	// recomputes (immutability is what makes it goroutine-safe to read).
-	volume   Measurement
-	area     Measurement
-	centroid VecMeasurement
-	bounds   Box
 	// n is the node data internal packages read and build (internal/topo).
-	n    topo.Body
-	kind BodyKind
+	n topo.Body
 
 	// payload is the evaluator's own record of how this body was built —
 	// what Transform re-evaluates under a composed motion
@@ -783,7 +773,7 @@ func (b *Body) Vertices() []*Vertex {
 // (docs/surface-design.md §2.1). Kind says what the body is; IsSolid says
 // whether it is sound. A BodySheet with IsSolid() == true is never produced —
 // a sheet encloses no material region, so no evaluator may prove one a solid.
-func (b *Body) Kind() BodyKind { return b.kind }
+func (b *Body) Kind() BodyKind { return BodyKind(b.n.Kind) }
 
 // IsSolid reports whether the body is a valid solid — a decided answer
 // (core §6).
@@ -791,7 +781,7 @@ func (b *Body) IsSolid() bool { return b.n.Solid }
 
 // Bounds returns the body's axis-aligned bounding box, as tight as the
 // evaluator can prove, reporting its own exactness (core §6).
-func (b *Body) Bounds() (Box, error) { return b.bounds, nil }
+func (b *Body) Bounds() (Box, error) { return boxFromInternal(b.n.Bounds), nil }
 
 // Volume returns the enclosed volume. A body that is not a solid encloses
 // none: ErrNotSolid, never zero (core §4/§6).
@@ -799,11 +789,11 @@ func (b *Body) Volume() (Measurement, error) {
 	if !b.n.Solid {
 		return Measurement{}, ErrNotSolid
 	}
-	return b.volume, nil
+	return measurementFromInternal(b.n.Volume), nil
 }
 
 // Area returns the total surface area of the body's boundary.
-func (b *Body) Area() (Measurement, error) { return b.area, nil }
+func (b *Body) Area() (Measurement, error) { return measurementFromInternal(b.n.Area), nil }
 
 // Centroid returns the centroid of the enclosed region. A body that is not a
 // solid has none: ErrNotSolid.
@@ -811,7 +801,7 @@ func (b *Body) Centroid() (VecMeasurement, error) {
 	if !b.n.Solid {
 		return VecMeasurement{}, ErrNotSolid
 	}
-	return b.centroid, nil
+	return vecMeasurementFromInternal(b.n.Centroid), nil
 }
 
 // originRefs returns a copy of the face's origin roles in their internal form,

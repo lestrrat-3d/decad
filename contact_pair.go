@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -182,7 +183,7 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
-	if !a.n.Solid || a.kind != BodySolid || !b.n.Solid || b.kind != BodySolid {
+	if !a.n.Solid || a.n.Kind != topo.BodySolid || !b.n.Solid || b.n.Kind != topo.BodySolid {
 		return nil, ErrNotSolid
 	}
 	if !poseA.IsValid() || !poseB.IsValid() {

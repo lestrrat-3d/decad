@@ -246,7 +246,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		// by the box's own proven Bound so the box's uncertainty can only
 		// tighten the gate, never loosen it (docs/surface-design.md §5.1,
 		// verification §3).
-		box := body.bounds
+		box := body.n.Bounds
 		d := math.Max(box.Max.X-box.Min.X, math.Max(box.Max.Y-box.Min.Y, box.Max.Z-box.Min.Z))
 		d, ok := diameter.LowerForDisplacement(d, box.Bound.Base())
 		return d, ok, nil
@@ -256,7 +256,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		// above verbatim: its Bounds is the rebuilt receiver's own box
 		// (docs/surface-design.md §5.2), so the same box-based lower bound
 		// applies for the same reason.
-		box := body.bounds
+		box := body.n.Bounds
 		d := math.Max(box.Max.X-box.Min.X, math.Max(box.Max.Y-box.Min.Y, box.Max.Z-box.Min.Z))
 		d, ok := diameter.LowerForDisplacement(d, box.Bound.Base())
 		return d, ok, nil

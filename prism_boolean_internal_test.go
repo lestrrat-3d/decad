@@ -502,9 +502,9 @@ func TestPrismUnionReexpressedSplitChargesTheCrossing(t *testing.T) {
 	truth := new(big.Rat).Mul(area, prismRatOf(t, 10))
 	body, err := evalPrismContext(t.Context(), New(), 1, result, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	residual := prismExactResidual(t, body.volume.Value.Base(), truth)
-	require.LessOrEqualf(t, residual, body.volume.Bound.Base(),
-		"the published volume bound %g must contain the true error %g", body.volume.Bound.Base(), residual)
+	residual := prismExactResidual(t, body.n.Volume.Value.Base(), truth)
+	require.LessOrEqualf(t, residual, body.n.Volume.Bound.Base(),
+		"the published volume bound %g must contain the true error %g", body.n.Volume.Bound.Base(), residual)
 }
 
 // ratXY lifts an exact float point.
@@ -2071,9 +2071,9 @@ func TestPrismOverlapVolumeMatchesEvalPrismOnASingleCell(t *testing.T) {
 	got, ok, err := prismOverlapVolume(t.Context(), a, b)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, want.volume.Value, got.Value)
-	require.Equal(t, want.volume.Exactness, got.Exactness)
-	require.GreaterOrEqual(t, got.Bound.Base(), want.volume.Bound.Base(),
+	require.Equal(t, want.n.Volume.Value, got.Value)
+	require.Equal(t, Exactness(want.n.Volume.Exactness), got.Exactness)
+	require.GreaterOrEqual(t, got.Bound.Base(), want.n.Volume.Bound.Base(),
 		"the sum's own accumulated rounding can only widen the bound, never narrow it")
 	require.InDelta(t, 125.0, got.Value.Base(), 1e-9)
 	require.Less(t, got.Bound.Base(), 1e-9)

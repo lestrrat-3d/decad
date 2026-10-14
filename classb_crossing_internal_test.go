@@ -20,7 +20,7 @@ func requireCrossingBrep(t *testing.T, result *Body, want float64) brepPayload {
 	bp, ok := result.payload.(brepPayload)
 	require.True(t, ok, `the pair builds a brep body, got %T`, result.payload)
 	requireClosedTopology(t, result)
-	require.InDelta(t, want, result.volume.Value.Base(), result.volume.Bound.Base()+1e-9*want)
+	require.InDelta(t, want, result.n.Volume.Value.Base(), result.n.Volume.Bound.Base()+1e-9*want)
 	// The mesh closes and its occupied-volume proof covers its distance from
 	// the closed form.
 	mesh, err := tessellateContext(t.Context(), result, units.Millimeters(0.05), VerifyAll)
@@ -54,7 +54,7 @@ func requireKeyedCharge(t *testing.T, result *Body, bp brepPayload) {
 		require.NoError(t, err)
 		band = math.Max(band, 2*f.delta*w.Length*(f.z1-f.z0))
 	}
-	require.GreaterOrEqual(t, result.volume.Bound.Base(), band)
+	require.GreaterOrEqual(t, result.n.Volume.Bound.Base(), band)
 }
 
 func TestClassBCrossingKeyway(t *testing.T) {
@@ -99,7 +99,7 @@ func TestClassBCrossingBlindCrossHole(t *testing.T) {
 	_, ok := result.payload.(brepPayload)
 	require.True(t, ok, `got %T`, result.payload)
 	requireClosedTopology(t, result)
-	requireCoversInterval(t, result.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 	// The hole's floor is a whole disc at y = 11, and its wall runs from the
 	// box's face at y = 0 to it.
 	require.Len(t, result.Faces(), 8)
@@ -138,7 +138,7 @@ func TestClassBCrossingToolCrossingAWall(t *testing.T) {
 	// The slot removes x 35..40 and z 5..15 of the box from y = 0 to where
 	// it ends, 4.65 + 5.65 along y.
 	end := 4.65 + 5.65
-	require.InDelta(t, 16000-5*10*end, result.volume.Value.Base(), result.volume.Bound.Base()+1e-9)
+	require.InDelta(t, 16000-5*10*end, result.n.Volume.Value.Base(), result.n.Volume.Bound.Base()+1e-9)
 }
 
 // TestClassBCrossingSlotFloorCornersReadConcave cuts a 10 mm wide, 5 mm deep
@@ -168,7 +168,7 @@ func TestClassBCrossingSlotFloorCornersReadConcave(t *testing.T) {
 	_, ok := result.payload.(brepPayload)
 	require.True(t, ok, `got %T`, result.payload)
 	requireClosedTopology(t, result)
-	require.Equal(t, 16000.0-10*5*20, result.volume.Value.Base())
+	require.Equal(t, 16000.0-10*5*20, result.n.Volume.Value.Base())
 	require.Len(t, result.Faces(), 10)
 
 	floor := map[[2]r3.Vec]struct{}{

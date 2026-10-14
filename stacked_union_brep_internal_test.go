@@ -70,12 +70,12 @@ func TestStackedUnionBrepFlushCornerBoss(t *testing.T) {
 	require.NoError(t, err)
 	requireClosedTopology(t, got)
 	require.Len(t, got.Faces(), 9)
-	require.Equal(t, Exact, got.volume.Exactness)
-	require.Equal(t, 17500.0, got.volume.Value.Base())
-	require.Equal(t, Exact, got.area.Exactness)
-	require.Equal(t, 5400.0, got.area.Value.Base())
-	require.Equal(t, r3.NewVec(-20, -20, 0), got.bounds.Min)
-	require.Equal(t, r3.NewVec(20, 20, 25), got.bounds.Max)
+	require.Equal(t, Exact, Exactness(got.n.Volume.Exactness))
+	require.Equal(t, 17500.0, got.n.Volume.Value.Base())
+	require.Equal(t, Exact, Exactness(got.n.Area.Exactness))
+	require.Equal(t, 5400.0, got.n.Area.Value.Base())
+	require.Equal(t, r3.NewVec(-20, -20, 0), got.n.Bounds.Min)
+	require.Equal(t, r3.NewVec(20, 20, 25), got.n.Bounds.Max)
 	// 14 vertices and 9 faces: 21 edges, every one convex under evaluator
 	// §3's walked boundary (a straight wall reads its outer loop's role).
 	require.Len(t, got.Edges(), 21)
@@ -136,8 +136,8 @@ func TestStackedUnionBrepLBossReflexCornerReadsConcave(t *testing.T) {
 	got, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
 	requireClosedTopology(t, got)
-	require.Equal(t, Exact, got.volume.Exactness)
-	require.Equal(t, 16000.0+300*5, got.volume.Value.Base())
+	require.Equal(t, Exact, Exactness(got.n.Volume.Exactness))
+	require.Equal(t, 16000.0+300*5, got.n.Volume.Value.Base())
 
 	reflex := [2]r3.Vec{r3.NewVec(10, -10, 10), r3.NewVec(10, -10, 15)}
 	convexity := internalConvexityByEnds(t, got)
@@ -174,9 +174,9 @@ func TestStackedUnionBrepFlushEdgeBoss(t *testing.T) {
 	require.NoError(t, err)
 	requireClosedTopology(t, got)
 	require.Len(t, got.Faces(), 10)
-	require.Equal(t, Exact, got.volume.Exactness)
-	require.Equal(t, 17500.0, got.volume.Value.Base())
-	require.Equal(t, 5400.0, got.area.Value.Base())
+	require.Equal(t, Exact, Exactness(got.n.Volume.Exactness))
+	require.Equal(t, 17500.0, got.n.Volume.Value.Base())
+	require.Equal(t, 5400.0, got.n.Area.Value.Base())
 	mesh, err := tessellateContext(t.Context(), got, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	require.Equal(t, big.NewRat(17500, 1), internalMeshVolumeRat(mesh))
@@ -219,12 +219,12 @@ func TestStackedUnionBrepCrossingBoss(t *testing.T) {
 	require.Len(t, got.Faces(), 10)
 	require.Len(t, got.Edges(), 20)
 	lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(375, 1))
-	requireCoversInterval(t, got.volume, lo, hi)
-	require.Less(t, got.volume.Bound.Base(), 1e-9)
+	requireCoversInterval(t, measurementFromInternal(got.n.Volume), lo, hi)
+	require.Less(t, got.n.Volume.Bound.Base(), 1e-9)
 	segment := 25*math.Acos(0.4) - 2*math.Sqrt(21)
 	wantArea := 4800 + 150*math.Pi + 2*segment
-	require.LessOrEqual(t, math.Abs(got.area.Value.Base()-wantArea), got.area.Bound.Base())
-	require.Less(t, got.area.Bound.Base(), 1e-9)
+	require.LessOrEqual(t, math.Abs(got.n.Area.Value.Base()-wantArea), got.n.Area.Bound.Base())
+	require.Less(t, got.n.Area.Bound.Base(), 1e-9)
 	mesh, err := tessellateContext(t.Context(), got, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	require.True(t, mesh.VolumeVerified())
@@ -252,8 +252,8 @@ func TestStackedUnionBrepRootedFlushBoss(t *testing.T) {
 	require.NoError(t, err)
 	requireClosedTopology(t, got)
 	require.Len(t, got.Edges(), 21)
-	require.Equal(t, Exact, got.volume.Exactness)
-	require.Equal(t, 17500.0, got.volume.Value.Base())
+	require.Equal(t, Exact, Exactness(got.n.Volume.Exactness))
+	require.Equal(t, 17500.0, got.n.Volume.Value.Base())
 	long := 0
 	for _, e := range got.Edges() {
 		if e.n.Length == 25 {
@@ -325,10 +325,10 @@ func TestStackedUnionBrepPlacedResult(t *testing.T) {
 	require.NoError(t, err)
 	moved, err := Transform(t.Context(), got, move)
 	require.NoError(t, err)
-	require.Equal(t, 17500.0, moved.volume.Value.Base())
-	require.Equal(t, Exact, moved.volume.Exactness)
-	require.Equal(t, r3.NewVec(80, -20, 0), moved.bounds.Min)
-	require.Equal(t, r3.NewVec(120, 20, 25), moved.bounds.Max)
+	require.Equal(t, 17500.0, moved.n.Volume.Value.Base())
+	require.Equal(t, Exact, Exactness(moved.n.Volume.Exactness))
+	require.Equal(t, r3.NewVec(80, -20, 0), moved.n.Bounds.Min)
+	require.Equal(t, r3.NewVec(120, 20, 25), moved.n.Bounds.Max)
 }
 
 // TestStackedUnionBrepRootedCrossingBoss roots the Ø10 boss inside the
@@ -378,11 +378,11 @@ func TestStackedUnionBrepRootedCrossingBoss(t *testing.T) {
 	require.Len(t, got.Edges(), 22)
 	segment := 25*math.Acos(0.4) - 2*math.Sqrt(21)
 	wantVolume := 16000 + 375*math.Pi + 5*segment
-	require.LessOrEqual(t, math.Abs(got.volume.Value.Base()-wantVolume), got.volume.Bound.Base())
-	require.Less(t, got.volume.Bound.Base(), 1e-9)
+	require.LessOrEqual(t, math.Abs(got.n.Volume.Value.Base()-wantVolume), got.n.Volume.Bound.Base())
+	require.Less(t, got.n.Volume.Bound.Base(), 1e-9)
 	wantArea := 4800 + 150*math.Pi + 100*math.Acos(0.4) - 14*math.Sqrt(21)
-	require.LessOrEqual(t, math.Abs(got.area.Value.Base()-wantArea), got.area.Bound.Base())
-	require.Less(t, got.area.Bound.Base(), 1e-8)
+	require.LessOrEqual(t, math.Abs(got.n.Area.Value.Base()-wantArea), got.n.Area.Bound.Base())
+	require.Less(t, got.n.Area.Bound.Base(), 1e-8)
 	// The overhang's side lines are two edges each: 5..10, shared with the
 	// notched wall x = 20, and 10..25, shared with the inside piece.
 	short, long := 0, 0

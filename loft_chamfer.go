@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -153,24 +154,24 @@ func widenLoftCapBandMeasurements(body *Body, source loftmesh.MeshProof) error {
 		proofbound.IsNonFinite(source.VolSymDiff) || source.VolSymDiff < 0 {
 		return fmt.Errorf("%w: loft cap band has no finite source proof", ErrUnsupported)
 	}
-	volumeBound := proofbound.AbsSumUpper(body.volume.Bound.Base(), source.VolSymDiff)
-	body.volume.Bound = units.CubicMillimeters(volumeBound)
-	body.volume.Exactness = exactnessOf(volumeBound)
-	areaBound := proofbound.AbsSumUpper(body.area.Bound.Base(), source.AreaSlack)
-	body.area.Bound = units.SquareMillimeters(areaBound)
-	body.area.Exactness = exactnessOf(areaBound)
-	boxBound := proofbound.AbsSumUpper(body.bounds.Bound.Base(), source.FacetDeparture)
-	body.bounds.Bound = units.Millimeters(boxBound)
-	body.bounds.Exactness = exactnessOf(boxBound)
-	dx := proofbound.BoundedSub(proofbound.ExactScalar(body.bounds.Max.X), proofbound.ExactScalar(body.bounds.Min.X))
-	dy := proofbound.BoundedSub(proofbound.ExactScalar(body.bounds.Max.Y), proofbound.ExactScalar(body.bounds.Min.Y))
-	dz := proofbound.BoundedSub(proofbound.ExactScalar(body.bounds.Max.Z), proofbound.ExactScalar(body.bounds.Min.Z))
+	volumeBound := proofbound.AbsSumUpper(body.n.Volume.Bound.Base(), source.VolSymDiff)
+	body.n.Volume.Bound = units.CubicMillimeters(volumeBound)
+	body.n.Volume.Exactness = measurement.ExactnessOf(volumeBound)
+	areaBound := proofbound.AbsSumUpper(body.n.Area.Bound.Base(), source.AreaSlack)
+	body.n.Area.Bound = units.SquareMillimeters(areaBound)
+	body.n.Area.Exactness = measurement.ExactnessOf(areaBound)
+	boxBound := proofbound.AbsSumUpper(body.n.Bounds.Bound.Base(), source.FacetDeparture)
+	body.n.Bounds.Bound = units.Millimeters(boxBound)
+	body.n.Bounds.Exactness = measurement.ExactnessOf(boxBound)
+	dx := proofbound.BoundedSub(proofbound.ExactScalar(body.n.Bounds.Max.X), proofbound.ExactScalar(body.n.Bounds.Min.X))
+	dy := proofbound.BoundedSub(proofbound.ExactScalar(body.n.Bounds.Max.Y), proofbound.ExactScalar(body.n.Bounds.Min.Y))
+	dz := proofbound.BoundedSub(proofbound.ExactScalar(body.n.Bounds.Max.Z), proofbound.ExactScalar(body.n.Bounds.Min.Z))
 	diameter := proofbound.Radius3D(math.Max(proofbound.AbsSumUpper(dx.Value, dx.Bound),
 		math.Max(proofbound.AbsSumUpper(dy.Value, dy.Bound), proofbound.AbsSumUpper(dz.Value, dz.Bound))))
-	floor := math.Nextafter(body.volume.Value.Base()-volumeBound, math.Inf(-1))
-	centroidBound := proofbound.AbsSumUpper(body.centroid.Bound.Base(), source.FacetDeparture,
+	floor := math.Nextafter(body.n.Volume.Value.Base()-volumeBound, math.Inf(-1))
+	centroidBound := proofbound.AbsSumUpper(body.n.Centroid.Bound.Base(), source.FacetDeparture,
 		facetedCentroidAllowance(source.VolSymDiff, diameter, floor))
-	body.centroid.Bound = units.Millimeters(centroidBound)
-	body.centroid.Exactness = exactnessOf(centroidBound)
+	body.n.Centroid.Bound = units.Millimeters(centroidBound)
+	body.n.Centroid.Exactness = measurement.ExactnessOf(centroidBound)
 	return nil
 }

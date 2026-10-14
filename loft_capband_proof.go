@@ -105,7 +105,7 @@ func loftCapBandFiniteMotion(outer capBlendLoopMesh, vertices []r3.Vec, motion [
 // floating-point level motion as well as every reflex apex fan.
 func loftCapBandSlabVolume(ctx context.Context, body *Body, mesh *Mesh, cbp capBlendPayload) (float64, error) {
 	center := cbp.prismLike(0, 0).Point(0, 0, cbp.z0)
-	boxError := body.bounds.Bound.Base()
+	boxError := body.n.Bounds.Bound.Base()
 	axisMax := 0.0
 	include := func(p [3]float64, errorBound float64) {
 		coords := [3]float64{center.X, center.Y, center.Z}
@@ -115,8 +115,8 @@ func loftCapBandSlabVolume(ctx context.Context, body *Body, mesh *Mesh, cbp capB
 			axisMax = math.Max(axisMax, proofbound.AbsSumUpper(diff.Value, diff.Bound))
 		}
 	}
-	include([3]float64{body.bounds.Min.X, body.bounds.Min.Y, body.bounds.Min.Z}, boxError)
-	include([3]float64{body.bounds.Max.X, body.bounds.Max.Y, body.bounds.Max.Z}, boxError)
+	include([3]float64{body.n.Bounds.Min.X, body.n.Bounds.Min.Y, body.n.Bounds.Min.Z}, boxError)
+	include([3]float64{body.n.Bounds.Max.X, body.n.Bounds.Max.Y, body.n.Bounds.Max.Z}, boxError)
 	for i, p := range mesh.n.Vertices {
 		if i%1024 == 0 {
 			if err := ctx.Err(); err != nil {

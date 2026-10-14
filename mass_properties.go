@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -77,7 +78,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	if density.Mag() == 0 {
 		return MassProperties{}, fmt.Errorf("%w: density is zero", ErrDegenerate)
 	}
-	if !b.n.Solid || b.kind != BodySolid {
+	if !b.n.Solid || b.n.Kind != topo.BodySolid {
 		return MassProperties{}, ErrNotSolid
 	}
 	if b.payload == nil {
@@ -87,18 +88,18 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
-		return massPropertiesFromReadings(massmoment.SourceSphere(ctx, sphere.radius, vecMeasurementToInternal(b.centroid), density))
+		return massPropertiesFromReadings(massmoment.SourceSphere(ctx, sphere.radius, b.n.Centroid, density))
 	}
 	if cylinder, ok := sourceRevolvedCylinderAtPose(b, r3.Identity()); ok {
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
 		return massPropertiesFromReadings(massmoment.SourceCylinder(ctx, cylinder.axis, cylinder.box.lo, cylinder.box.hi,
-			vecMeasurementToInternal(b.centroid), density))
+			b.n.Centroid, density))
 	}
 	if revolve, ok := b.payload.(revolvePayload); ok {
 		result, err := massPropertiesFromReadings(
-			massmoment.RevolveProperties(ctx, massRevolveRecord(revolve), vecMeasurementToInternal(b.centroid), density))
+			massmoment.RevolveProperties(ctx, massRevolveRecord(revolve), b.n.Centroid, density))
 		if err == nil || !errors.Is(err, ErrUnsupported) || ctx.Err() != nil {
 			return result, err
 		}
@@ -110,12 +111,12 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return facetedMassProperties(ctx, b, faceted, density)
 	}
 	if sweep, ok := b.payload.(sweepPayload); ok {
-		result, err := massPropertiesFromReadings(massmoment.SweepProperties(ctx, massSweepRecord(sweep), vecMeasurementToInternal(b.centroid), density))
+		result, err := massPropertiesFromReadings(massmoment.SweepProperties(ctx, massSweepRecord(sweep), b.n.Centroid, density))
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	if cup, ok := b.payload.(cupPayload); ok {
 		outer, cavity := massCupRecords(cup.view())
-		result, err := massPropertiesFromReadings(massmoment.CupProperties(ctx, outer, cavity, vecMeasurementToInternal(b.centroid), density))
+		result, err := massPropertiesFromReadings(massmoment.CupProperties(ctx, outer, cavity, b.n.Centroid, density))
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	pp, ok := b.payload.(prismPayload)
@@ -132,16 +133,16 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	if pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		!pairbox.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) ||
 		!pairbox.CardinalBasis(basis.EX, basis.EY, basis.EZ) {
-		return massPropertiesFromReadings(massmoment.GeneralPrismProperties(ctx, pp.MassRecord(), vecMeasurementToInternal(b.centroid), density))
+		return massPropertiesFromReadings(massmoment.GeneralPrismProperties(ctx, pp.MassRecord(), b.n.Centroid, density))
 	}
 	if !pairbox.RectangularProfile(pp.Profile) {
-		return massPropertiesFromReadings(massmoment.CardinalPrismProperties(ctx, pp.MassRecord(), vecMeasurementToInternal(b.centroid), density))
+		return massPropertiesFromReadings(massmoment.CardinalPrismProperties(ctx, pp.MassRecord(), b.n.Centroid, density))
 	}
 
 	// The recorded rectangle and levels are the source solid. Translation does
 	// not change its centroidal inertia, and a signed-permutation basis only
 	// reorders its three dimensions. Work in exact dyadics until division by 12.
-	return massPropertiesFromReadings(massmoment.CardinalBoxProperties(ctx, pp.MassRecord(), vecMeasurementToInternal(b.centroid), density))
+	return massPropertiesFromReadings(massmoment.CardinalBoxProperties(ctx, pp.MassRecord(), b.n.Centroid, density))
 }
 
 // massCupRecords reads the two prism records whose difference forms a cup.

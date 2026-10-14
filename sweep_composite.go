@@ -162,9 +162,8 @@ func assembleCompositeSweepBodyWithJoinMode(
 		kind = BodySheet
 	}
 	body := &Body{
-		doc:  d,
-		n:    topo.Body{Solid: !surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}},
-		kind: kind,
+		doc: d,
+		n:   topo.Body{Solid: !surfaceResult, Origin: provenance.Ref{Producer: ref, Role: roleBody}, Kind: topo.BodyKind(kind)},
 	}
 	var faces []*Face
 	if !surfaceResult && !closed {

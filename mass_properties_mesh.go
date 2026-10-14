@@ -48,7 +48,7 @@ var errMassIntervalUnproved = massmoment.ErrMeshIntervalUnproved
 // failed embedding audit ends the ladder at once: a finer mesh of the same
 // payload is refused, or carries no proof, the same way.
 func verifiedMeshMassProperties(ctx context.Context, b *Body, density units.Value) (MassProperties, error) {
-	diameter := b.bounds.Max.Sub(b.bounds.Min).Len()
+	diameter := b.n.Bounds.Max.Sub(b.n.Bounds.Min).Len()
 	if proofbound.IsNonFinite(diameter) || diameter <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: mesh mass has no finite positive diameter", ErrUnsupported)
 	}
@@ -80,7 +80,7 @@ func meshMassPropertiesAt(ctx context.Context, b *Body, tol float64, density uni
 	if err := massmoment.AuditMesh(ctx, mesh.n.Vertices, mesh.n.Triangles, payloadAuditsFacetContact(b.payload)); err != nil {
 		return MassProperties{}, err
 	}
-	anchor := b.bounds.Min.Add(b.bounds.Max).Scale(.5)
+	anchor := b.n.Bounds.Min.Add(b.n.Bounds.Max).Scale(.5)
 	return massPropertiesFromReadings(
-		massmoment.HeldMeshMassProperties(ctx, boxToInternal(b.bounds), anchor, mesh.n.Vertices, mesh.n.Triangles, mesh.n.VolSymDiff, density))
+		massmoment.HeldMeshMassProperties(ctx, b.n.Bounds, anchor, mesh.n.Vertices, mesh.n.Triangles, mesh.n.VolSymDiff, density))
 }

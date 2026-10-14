@@ -173,23 +173,23 @@ func TestEvalLoftUnitBoxMeasurements(t *testing.T) {
 	t.Parallel()
 	body := evalLoftFixture(t, boxLoftPayload(t))
 
-	require.InDelta(t, 1.0, body.volume.Value.Base(), 1e-12)
-	require.Equal(t, 0.0, body.volume.Bound.Base())
-	require.Equal(t, Exact, body.volume.Exactness)
+	require.InDelta(t, 1.0, body.n.Volume.Value.Base(), 1e-12)
+	require.Equal(t, 0.0, body.n.Volume.Bound.Base())
+	require.Equal(t, Exact, Exactness(body.n.Volume.Exactness))
 
-	require.InDelta(t, 0.5, body.centroid.Value.X, 1e-12)
-	require.InDelta(t, 0.5, body.centroid.Value.Y, 1e-12)
-	require.InDelta(t, 0.5, body.centroid.Value.Z, 1e-12)
-	require.Equal(t, Exact, body.centroid.Exactness)
+	require.InDelta(t, 0.5, body.n.Centroid.Value.X, 1e-12)
+	require.InDelta(t, 0.5, body.n.Centroid.Value.Y, 1e-12)
+	require.InDelta(t, 0.5, body.n.Centroid.Value.Z, 1e-12)
+	require.Equal(t, Exact, Exactness(body.n.Centroid.Exactness))
 
-	require.Equal(t, r3.NewVec(0, 0, 0), body.bounds.Min)
-	require.Equal(t, r3.NewVec(1, 1, 1), body.bounds.Max)
-	require.Equal(t, Exact, body.bounds.Exactness)
-	require.Equal(t, 0.0, body.bounds.Bound.Base())
+	require.Equal(t, r3.NewVec(0, 0, 0), body.n.Bounds.Min)
+	require.Equal(t, r3.NewVec(1, 1, 1), body.n.Bounds.Max)
+	require.Equal(t, Exact, Exactness(body.n.Bounds.Exactness))
+	require.Equal(t, 0.0, body.n.Bounds.Bound.Base())
 
-	require.InDelta(t, 6.0, body.area.Value.Base(), 1e-9)
-	require.Equal(t, Approximate, body.area.Exactness)
-	require.Greater(t, body.area.Bound.Base(), 0.0)
+	require.InDelta(t, 6.0, body.n.Area.Value.Base(), 1e-9)
+	require.Equal(t, Approximate, Exactness(body.n.Area.Exactness))
+	require.Greater(t, body.n.Area.Bound.Base(), 0.0)
 }
 
 // TestEvalLoftFaceAreasSumToBodyArea proves every face's own Area().Value
@@ -206,7 +206,7 @@ func TestEvalLoftFaceAreasSumToBodyArea(t *testing.T) {
 		require.NoError(t, err)
 		sum += a.Value.Base()
 	}
-	require.InDelta(t, body.area.Value.Base(), sum, body.area.Bound.Base()+1e-9)
+	require.InDelta(t, body.n.Area.Value.Base(), sum, body.n.Area.Bound.Base()+1e-9)
 }
 
 // TestEvalLoftWholeShellOrientationCorrectsSign proves the whole-shell
@@ -217,8 +217,8 @@ func TestEvalLoftFaceAreasSumToBodyArea(t *testing.T) {
 func TestEvalLoftWholeShellOrientationCorrectsSign(t *testing.T) {
 	t.Parallel()
 	body := evalLoftFixture(t, boxLoftPayloadOn(t, 1, 0))
-	require.InDelta(t, 1.0, body.volume.Value.Base(), 1e-12)
-	require.Equal(t, Exact, body.volume.Exactness)
+	require.InDelta(t, 1.0, body.n.Volume.Value.Base(), 1e-12)
+	require.Equal(t, Exact, Exactness(body.n.Volume.Exactness))
 }
 
 // TestEvalLoftLoopWalksFollowTheFaceNormal proves §5's whole-shell

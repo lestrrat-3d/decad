@@ -69,7 +69,7 @@ func TestTessellateBrepFilletBands(t *testing.T) {
 				a, b, c := m.n.Vertices[tri[0]], m.n.Vertices[tri[1]], m.n.Vertices[tri[2]]
 				meshArea += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 			}
-			require.LessOrEqual(t, math.Abs(meshArea-out.area.Value.Base()), m.n.AreaSlack+out.area.Bound.Base())
+			require.LessOrEqual(t, math.Abs(meshArea-out.n.Area.Value.Base()), m.n.AreaSlack+out.n.Area.Bound.Base())
 		})
 	}
 }
@@ -189,7 +189,7 @@ func TestBrepFilletBooleanOperand(t *testing.T) {
 		got, err := Cut(t.Context(), out, tool)
 		require.NoError(t, err)
 		lo, hi := pp(q(45500, 3), q(-98, 1), q(0, 1)).enclosed()
-		requireCoversInterval(t, got.volume, lo, hi)
+		requireCoversInterval(t, measurementFromInternal(got.n.Volume), lo, hi)
 	})
 	t.Run("P2 mouth", func(t *testing.T) {
 		t.Parallel()
@@ -199,7 +199,7 @@ func TestBrepFilletBooleanOperand(t *testing.T) {
 		got, err := Cut(t.Context(), out, tool)
 		require.NoError(t, err)
 		lo, hi := pp(q(12865, 1), q(225, 8), q(27, 16)).enclosed()
-		requireCoversInterval(t, got.volume, lo, hi)
+		requireCoversInterval(t, measurementFromInternal(got.n.Volume), lo, hi)
 	})
 }
 

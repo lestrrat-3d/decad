@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
@@ -291,7 +292,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		return nil, err
 	}
 	trueArea, trueAreaBound := mitredEnclosure(areaIv.Lo, areaIv.Hi)
-	heldArea := heldBody.area
+	heldArea := heldBody.n.Area
 	heldAreaIv := proofbound.Interval(
 		new(big.Rat).Sub(twistsweep.TwistRat(heldArea.Value.Base()), twistsweep.TwistRat(heldArea.Bound.Base())),
 		new(big.Rat).Add(twistsweep.TwistRat(heldArea.Value.Base()), twistsweep.TwistRat(heldArea.Bound.Base())),
@@ -311,8 +312,8 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	}
 	volume := new(big.Rat).Mul(poly.Area, twistsweep.TwistRat(path.End.Z))
 	vol, volBound := mitredEnclosure(volume, volume)
-	heldBody.volume = Measurement{Value: units.CubicMillimeters(vol), Exactness: exactnessOf(volBound), Bound: units.CubicMillimeters(volBound)}
-	heldBody.area = Measurement{Value: units.SquareMillimeters(trueArea), Exactness: Approximate, Bound: units.SquareMillimeters(trueAreaBound)}
+	heldBody.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(vol), Exactness: measurement.ExactnessOf(volBound), Bound: units.CubicMillimeters(volBound)}
+	heldBody.n.Area = measurement.Measurement{Value: units.SquareMillimeters(trueArea), Exactness: measurement.Approximate, Bound: units.SquareMillimeters(trueAreaBound)}
 	center := r3.NewVec(0, 0, path.End.Z/2)
 	heldCenter := xform.Apply(center)
 	centerBound := 0.0
@@ -320,9 +321,9 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		tr := xform.Translation()
 		centerBound = proofbound.RigidRoundAllow(path.End.Z/2, max(math.Abs(tr.X), math.Abs(tr.Y), math.Abs(tr.Z)))
 	}
-	heldBody.centroid = VecMeasurement{Value: heldCenter, Exactness: exactnessOf(centerBound), Bound: units.Millimeters(centerBound)}
-	heldBody.bounds.Bound = units.Millimeters(proofbound.AbsSumUpper(heldBody.bounds.Bound.Base(), delta))
-	heldBody.bounds.Exactness = Approximate
+	heldBody.n.Centroid = measurement.VecMeasurement{Value: heldCenter, Exactness: measurement.ExactnessOf(centerBound), Bound: units.Millimeters(centerBound)}
+	heldBody.n.Bounds.Bound = units.Millimeters(proofbound.AbsSumUpper(heldBody.n.Bounds.Bound.Base(), delta))
+	heldBody.n.Bounds.Exactness = measurement.Approximate
 	for _, vertex := range heldBody.Vertices() {
 		vertex.n.Bound = units.Millimeters(proofbound.AbsSumUpper(vertex.n.Bound.Base(), delta))
 	}

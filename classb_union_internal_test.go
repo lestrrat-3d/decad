@@ -45,7 +45,7 @@ func requireBrep(t *testing.T, body *Body) brepPayload {
 func requireVolumeCovers(t *testing.T, body *Body, a, b int64) {
 	t.Helper()
 	lo, hi := piEnclosed(big.NewRat(a, 1), big.NewRat(b, 1))
-	requireCoversInterval(t, body.volume, lo, hi)
+	requireCoversInterval(t, measurementFromInternal(body.n.Volume), lo, hi)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
 	require.True(t, mesh.VolumeVerified())
@@ -259,8 +259,8 @@ func TestClassBBreakingOutHole(t *testing.T) {
 	require.NoError(t, err)
 	requireBrep(t, got)
 	want := 12000 - 20*(8*math.Pi/3+math.Sqrt(3))
-	require.InDelta(t, want, got.volume.Value.Base(), got.volume.Bound.Base()+1e-9*want)
-	require.Less(t, got.volume.Bound.Base(), 1e-6)
+	require.InDelta(t, want, got.n.Volume.Value.Base(), got.n.Volume.Bound.Base()+1e-9*want)
+	require.Less(t, got.n.Volume.Bound.Base(), 1e-6)
 }
 
 // TestClassBStackedTarget cuts a cross hole under the pocket of a blind-cut

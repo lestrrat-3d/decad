@@ -119,7 +119,7 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 		fullCentroid, fullExact := full.ExactCentroid()
 		require.True(t, firstExact)
 		require.True(t, fullExact)
-		require.Equal(t, fullCentroid, firstCentroid)
+		require.Equal(t, vecMeasurementFromInternal(fullCentroid), vecMeasurementFromInternal(firstCentroid))
 	})
 
 	t.Run("area with overflowing higher moments", func(t *testing.T) {

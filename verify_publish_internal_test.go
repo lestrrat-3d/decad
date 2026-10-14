@@ -804,13 +804,13 @@ func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
 	t.Parallel()
 	built := rectangularPrism(t, 100, 60, 10)
 	body := &Body{
-		doc:      built.doc,
-		lumps:    built.lumps,
-		volume:   built.volume,
-		area:     built.area,
-		centroid: built.centroid,
-		bounds:   built.bounds,
-		n:        topo.Body{Solid: built.n.Solid, Origin: built.n.Origin},
+		doc:   built.doc,
+		lumps: built.lumps,
+		n: topo.Body{Solid: built.n.Solid, Origin: built.n.Origin, Volume: built.n.Volume,
+			Area:     built.n.Area,
+			Centroid: built.n.Centroid,
+			Bounds:   built.n.Bounds,
+		},
 	}
 
 	res := publishBody(t, body,
@@ -833,7 +833,7 @@ func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
 // without the rest of verifyBody's plumbing.
 func TestVerifyPublishUndercutRunsOnAProvenSheet(t *testing.T) {
 	t.Parallel()
-	body := &Body{kind: BodySheet}
+	body := &Body{n: topo.Body{Kind: topo.BodySheet}}
 	req := VerifyRequest{Undercut: &UndercutRequest{PullDirection: r3.NewVec(0, 0, 1)}}
 	surveys := surveyResults{Undercut: undercutOutcome{ok: true, faces: []*Face{}}}
 

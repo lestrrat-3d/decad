@@ -44,7 +44,7 @@ func auditCompositeSweepWithClosure(ctx context.Context, spans []sweepAuditSpan,
 		}
 		startPlane, startPlanar := span.startCap.n.Surface.(surfacegeom.Plane)
 		_, endPlanar := span.endCap.n.Surface.(surfacegeom.Plane)
-		bounds := span.body.bounds
+		bounds := span.body.n.Bounds
 		audit[i] = compositesweep.AuditSpan{
 			StartPlane:       startPlane,
 			StartPlanar:      startPlanar,

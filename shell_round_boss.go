@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -146,7 +147,7 @@ func measureRoundBossShell(ctx context.Context, bp brepPayload, body *Body) erro
 		return fmt.Errorf("%w: round boss shell has no proven positive volume", ErrUnsupported)
 	}
 	v, ve := heldOf(volume)
-	body.volume = Measurement{Value: units.CubicMillimeters(v), Bound: units.CubicMillimeters(ve), Exactness: exactnessOf(ve)}
+	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(v), Bound: units.CubicMillimeters(ve), Exactness: measurement.ExactnessOf(ve)}
 	plateCZ := scale(add(point(b.Z0), point(b.InterfaceZ)), 1, 2)
 	bossCZ := scale(add(point(b.InterfaceZ), point(b.TopZ)), 1, 2)
 	bandFirst := add(add(scale(mul(mul(ri, ri), t2), 1, 2), scale(mul(ri, t3), 2, 3)), scale(t4, 1, 4))
@@ -170,18 +171,18 @@ func measureRoundBossShell(ctx context.Context, bp brepPayload, body *Body) erro
 	}
 	ref := bp.refView()
 	cb := ref.PointBound(c[0], c[1], c[2])
-	body.centroid = VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value),
-		Bound: units.Millimeters(cb), Exactness: exactnessOf(cb)}
+	body.n.Centroid = measurement.VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value),
+		Bound: units.Millimeters(cb), Exactness: measurement.ExactnessOf(cb)}
 	var surfaceArea proofbound.BoundedScalar
 	for _, face := range body.Faces() {
 		surfaceArea = proofbound.BoundedAdd(surfaceArea, proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound))
 	}
-	body.area = Measurement{Value: units.SquareMillimeters(surfaceArea.Value),
-		Bound: units.SquareMillimeters(surfaceArea.Bound), Exactness: exactnessOf(surfaceArea.Bound)}
+	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(surfaceArea.Value),
+		Bound: units.SquareMillimeters(surfaceArea.Bound), Exactness: measurement.ExactnessOf(surfaceArea.Bound)}
 	box, err := brepBoundsContext(ctx, bp)
 	if err != nil {
 		return err
 	}
-	body.bounds = box
+	body.n.Bounds = boxToInternal(box)
 	return validateAnalyticBodyMeasurements(body)
 }
