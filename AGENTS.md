@@ -7,3 +7,7 @@ Read [Splitting oversized agent files](docs/layout.md#splitting-oversized-agent-
 when a file size or layout cell budget fails.
 
 The single copy is intentional: two sets of agent instructions drift apart.
+
+## GitHub merge method
+
+Use `gh pr merge <number> --squash` for PRs. GitHub disables merge commits and rebase merges here.
