@@ -34,7 +34,7 @@ func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp p
 			return nil, offset2d.ErrUnbounded
 		}
 	}
-	return evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
 		Profile:      sec.Wall,
 		Frame:        pp.Frame,
 		Z0:           pp.Z0,
@@ -43,7 +43,7 @@ func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp p
 		Z1Delta:      pp.Z1Delta,
 		Xform:        pp.Xform,
 		SectionDelta: delta,
-	}}, freeform.NewFreeformWork())
+	}, freeform.NewFreeformWork()))
 }
 
 // sideOpeningBrep records the stack's built faces under the receiver frame and

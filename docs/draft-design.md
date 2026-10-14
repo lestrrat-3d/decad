@@ -295,7 +295,7 @@ sketch plane and no straight slab remains. Its `draft` flag makes
 (`offset2d.SharpJoinsBudget`), stamp `side(i, j)` roles, give rulings and far
 rims the prism's convexity, and flip the axial half of the orientation
 reference for a negative taper. The near rim is `draftNearRim`'s: the bottom
-rim `buildLoopSidesAs` builds for a prism's wall, at the sketch plane.
+rim `prismrecord.BuildLoopSidesAs` builds for a prism's wall, at the sketch plane.
 
 For a crossing extent, `draft_two_sided.go` builds the negative and positive
 slabs independently with steps 1–9. It checks that their held sketch rims
@@ -330,7 +330,7 @@ operand slab.
 | Volume | the divergence theorem in plane-local coordinates: the near disk's area at its level, the far disk's area at its level, and `Σ capband.RawFlux(patch)`, divided by 3 (`capband.BandVolume`). A Plane patch's flux is the exact rational tetrahedron identity; a Cone patch's is the closed-form polynomial-plus-trig flux over rationals with certified `sin`/`cos` enclosures | `internal/capband/band_mass.go` |
 | Area | the two disks' region areas plus `Σ capband.AreaOf(patch)`: a Plane patch's two-triangle sum, a Cone patch's frustum sector `(αc/2)(R0 + R1)·L` with `L = √(ΔR² + H²)` | `internal/capband/area.go` |
 | Centroid | the first moment by the same divergence theorem (`capband.BandMoment`), divided by the volume and lifted to world through the frame and placement; the geometric safety-net bound (the centroid lies within `Bounds`) as a ceiling | `internal/capband/band_mass.go`, `internal/capband/moment.go` |
-| `Bounds` | per direction the extreme over both records' analytic extremes at their levels, each charged with its own displacement and the lift rounding; a placed body charges the placement's rounding as evaluator §5 states | `prism_extent.go`'s readers over both records |
+| `Bounds` | per direction the extreme over both records' analytic extremes at their levels, each charged with its own displacement and the lift rounding; a placed body charges the placement's rounding as evaluator §5 states | `internal/prismrecord/extent.go`'s readers over both records |
 
 **Bounds compose as modify-reach §8.4 states, with the same four helpers.**
 The far cap's area composes `sectionDisplacementArea(farDelta, walks,

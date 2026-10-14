@@ -16,7 +16,7 @@ import (
 // four features to take the option. Sweep has three distinct build paths, and
 // none of them are alike: a one-span straight path reduces to the prism
 // builder and a one-span arc reduces to the revolve builder, so each gets the
-// whole sheet behaviour for free from prism_build.go/revolve_build.go; a
+// whole sheet behaviour for free from internal/prismrecord/build.go and revolve_build.go; a
 // composite path has its own join topology (sweep_composite.go) and is the
 // only path with real new evaluator work. Every fixture reuses plateSketch
 // (extrude_test.go), the arc fixture sweep_arc_test.go's own
@@ -56,7 +56,7 @@ func sweepArcPath(t *testing.T) *decad.Path {
 
 // TestSurfaceSweepLineIsASheet is Table W's line row over the one-span
 // straight reduction: the flag rides the reduced prismPayload, so the sheet
-// behaviour is prism_build.go's own (docs/surface-design.md §4.3).
+// behaviour is internal/prismrecord/build.go's own (docs/surface-design.md §4.3).
 func TestSurfaceSweepLineIsASheet(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)

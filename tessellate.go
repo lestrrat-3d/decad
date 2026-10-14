@@ -522,7 +522,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	return tessellatePrism(ctx, b, pp, prismWallRole, chord, verify)
 }
 
-// prismWallRole names the wall face evalPrismContext minted for segment seg
+// prismWallRole names the wall face prismrecord.Build minted for segment seg
 // of section loop loop: Table B's side(i,j).
 func prismWallRole(loop, seg int) string { return fmt.Sprintf("side(%d,%d)", loop, seg) }
 
@@ -561,7 +561,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 	wallRole func(loop, seg int) string, chord float64, verify Verification,
 	countFloor func(loop, seg int) int, freeformTarget float64) (*Mesh, error) {
 	// sheet is docs/surface-design.md §4.1's own flag, read once: a surface
-	// result omits both caps from its wall build (prism_build.go), and every
+	// result omits both caps from its wall build (internal/prismrecord/build.go), and every
 	// arm below that would otherwise touch a cap face, a cap triangulation or
 	// a cap's own area/volume term reads it to skip that half of the work
 	// rather than fault a role the build never minted.
@@ -610,7 +610,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 		return f, nil
 	}
 	// A sheet's build never attaches capStart/capEnd to the shell
-	// (prism_build.go), so byRole carries no such role for one: leave both
+	// (internal/prismrecord/build.go), so byRole carries no such role for one: leave both
 	// nil and skip every cap-only step below rather than fault a role this
 	// evaluator's own reach never minted.
 	var capStart, capEnd *Face
@@ -639,7 +639,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 		work.RaiseLimit(compositeFitSweepWorkLimit)
 	}
 	// The build that produced this body already resolved every boundary
-	// segment's walk and published the set onto the payload (prism_build.go,
+	// segment's walk and published the set onto the payload (internal/prismrecord/build.go,
 	// docs/evaluator-design.md §8). A tessellation is one of the passes
 	// docs/spline-design.md §5.2 names as free to REPLAY that recorded charge
 	// instead of doing the work again: chording reads the walks back and

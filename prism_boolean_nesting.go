@@ -106,8 +106,8 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 		// §4.2's crossing sub-case (prismcells.ResolveAndBuildCutCrossing): the tool's
 		// boundary genuinely crosses the target's, rather than leaving both
 		// operands' loops untouched.
-		result, ok, err := prismcells.ResolveAndBuildCutCrossing(ctx, budget, target.Payload, tool.Payload, reexpress)
-		return prismPayload{Payload: result}, ok, err
+		result, ok, err := prismcells.ResolveAndBuildCutCrossing(ctx, budget, target, tool, reexpress)
+		return result, ok, err
 	}
 
 	// Point of no return (§3.4): every further problem is a genuine refusal
@@ -117,7 +117,7 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil {
 		return prismPayload{}, false, err
 	}
-	result := prismPayload{Payload: prismrecord.Payload{
+	result := prismrecord.Payload{
 		Profile: profile,
 		// The record carries the TARGET's own frame/xform (operand A's — the
 		// private scene's own reference plane, §4.1). The scene's returned
@@ -143,7 +143,7 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *proofbound.WorkBudget,
 			proofbound.AbsSumUpper(target.SectionDelta, sceneDelta.A),
 			proofbound.AbsSumUpper(tool.SectionDelta, sceneDelta.B, reexpress.Delta),
 		),
-	}}
+	}
 	return result, true, nil
 }
 
@@ -163,8 +163,8 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 		// §4.2's crossing sub-case (prismcells.ResolveAndBuildIntersectCrossing): a
 		// general-position overlap, rather than one operand's boundary
 		// leaving the other's fully untouched.
-		result, ok, err := prismcells.ResolveAndBuildIntersectCrossing(ctx, budget, pa.Payload, pb.Payload, reexpress)
-		return prismPayload{Payload: result}, ok, err
+		result, ok, err := prismcells.ResolveAndBuildIntersectCrossing(ctx, budget, pa, pb, reexpress)
+		return result, ok, err
 	}
 
 	profile, err := prismcells.RecordArrangedProfileContext(ctx, match)
@@ -191,7 +191,7 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 		sectionDelta = proofbound.AbsSumUpper(pb.SectionDelta, sceneDelta.B, reexpress.Delta)
 	}
 
-	result := prismPayload{Payload: prismrecord.Payload{
+	result := prismrecord.Payload{
 		Profile: profile,
 		// The private scene's reference plane is always operand A's (§4.1),
 		// regardless of which operand turned out to be nested — B's own
@@ -204,6 +204,6 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *proofbound.WorkB
 		Z0Delta:      z0Delta,
 		Z1Delta:      z1Delta,
 		SectionDelta: sectionDelta,
-	}}
+	}
 	return result, true, nil
 }

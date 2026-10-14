@@ -23,7 +23,7 @@ func FitCoords(points []Point2) [][2]float64   { return fitCoords(points) }
 // sketch's own EXPORTED interpolant — never by re-running the interpolation
 // solve, which seam §2 and record.go's own FitSplineSeg doc comment forbid.
 // Table R row R6, the BUILD-path refusal, is retired by extrude.go's
-// buildLoopSidesAs (§10 P4b); nothing in this file's own reduction changed to
+// prismrecord.BuildLoopSidesAs (§10 P4b); nothing in this file's own reduction changed to
 // retire it.
 //
 // It consumes geom.FitInterpolant's Params/Points/SecondDerivs triple, NEVER

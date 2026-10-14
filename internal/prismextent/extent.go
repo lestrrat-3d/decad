@@ -102,7 +102,7 @@ func DecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) float
 	// coordUpper being 10 for that section — while every sibling term answers
 	// zero: proofbound.ExactIsometryDotRound on base/gu/gv/gz under the identity xform,
 	// proofbound.ExactSumRound on base 0 with levels 0 and 1, and both displacement terms
-	// prismBoundsContext composes. A zero bound on that fixture would be
+	// prismrecord.Bounds composes. A zero bound on that fixture would be
 	// unsound rather than tighter, because the extremes it would call exact are
 	// not: summing this frame's OWN held entries over the rationals against the
 	// section corners {0,5}^2 gives X-min = -5*float64(0.8), X-max =

@@ -395,7 +395,7 @@ rounding: `xform.Apply`/`xform.ApplyDir` are isometries only in EXACT
 arithmetic, so a frame that is not axis-aligned or a placement that is not the
 identity rounds, and `Bounds` (a `capBlendPayload` result's included) charges
 that rounding rather than reading the placed extreme as an exact leaf. Every
-rim and side vertex `buildLoopSidesAs` places charges its OWN frame/placement
+rim and side vertex `prismrecord.BuildLoopSidesAs` places charges its OWN frame/placement
 lift rounding, measured exactly for that vertex (`prismPayload.LiftedVertex`,
 `internal/proofbound/bounds.go`'s `ExactFrameLiftRound`: the held point
 against the same origin + u·U + v·V + z·N chain and placement over dyadic
@@ -509,7 +509,7 @@ and (−1, 1, 1) reads det L − 1 ≈ 4.8e-17. `massmoment.MapCharge` reads two
 numbers off L exactly, each rounded up: ||det L| − 1|, and the orthonormality
 defect e, the entrywise absolute sum of LᵀL − I. Every eigenvalue of LᵀL lies
 in [1 − e, 1 + e], so L scales an area, and for e ≤ 1 a length, by a factor in
-that range, and a volume by exactly |det L|. `chargePrismMap` keeps every held
+that range, and a volume by exactly |det L|. `prismrecord.ChargeMap` keeps every held
 value and widens the bounds: `Volume` by ||det L| − 1|·(|V| + bound), the
 body's and every face's `Area` and every edge's `Length` by e·(|x| + bound)
 (`proofbound.BoundedStretch`). The prism, the chain extrude, the planar patch,
@@ -817,23 +817,21 @@ for concurrent mutation (core §12).
 
 Every payload implements `topo.Payload`, and the body node holds it
 (`Payload`). `Placed` takes the builder environment `topo.Env` (the document
-node, which mints level and curve identities and owns the result, and the
-producer the result's roles are minted under) and returns a body node; it never
-commits. `Transform`, `Copy`, a pattern instance and a motion check reach it
-through `placePayload` (`topology_handles.go`), which builds the environment
-and maps the node back to its handle; the caller commits. A payload that still
-lives in the root package recovers its document handle from the node's `Owner`
-in `Placed` and runs its root builder. Where such a payload's plain data has an
-internal owner, the root type embeds that owner by value and keeps only what
-needs the root package: `Transform`, `Placed`, methods that satisfy root
-interfaces, and fields that hold root types. `prismPayload` is
-`struct{ prismrecord.Payload }`; the owner's exported fields (`Profile`,
-`Frame`, `Z0`/`Z1`, `Z0Delta`/`Z1Delta`, `Xform`, `BlendSegs`,
-`BlendKind`, `SectionDelta`, `Walks`, `SurfaceResult`) are promoted.
-Readings that read nothing but the record (`Point`, `Dir`, `LiftedVertex`,
-the point bounds and the lift factor) are methods of the owner and are
-promoted as well. A value copy of the wrapper copies the record exactly as a copy of the flat
-struct did, so `Placed`'s copy-then-set-`Xform` is unchanged.
+node, which mints level and curve identities and owns the result, the
+producer the result's roles are minted under, and the node allocator `Alloc`)
+and returns a body node; it never commits. `Transform`, `Copy`, a pattern
+instance and a motion check reach it through `placePayload`
+(`topology_handles.go`), which builds the environment (`envOf`) and maps the
+node back to its handle (`bodyResult`); the caller commits. A builder in an
+internal package links nodes only and allocates every node through
+`env.Alloc`: root's `handleAlloc` returns the node of a freshly born handle,
+so each node's `Owner` is set before the builder stores a pointer to it, and
+internal unit tests allocate bare nodes (`topotest.Alloc`). `prismPayload` is
+an alias of `prismrecord.Payload`: its `Placed` sets `Xform` on its own value
+copy and runs `prismrecord.Build`, which every other root caller of the prism
+builder calls through `envOf` too. A payload that still lives in the root
+package recovers its document handle from the node's `Owner` in `Placed` and
+runs its root builder.
 
 `Transform` and `Copy` pass the caller's context through payload re-evaluation.
 Faceted placement polls that context while transforming vertices, auditing and
@@ -909,7 +907,7 @@ charge, zero exactly for an axis-aligned frame under the identity placement.
 A placement changes the MOTION and nothing else, so a prism's re-evaluation
 reuses the plane-local walk resolution the original build published rather than
 resolving the same section again. `prismPayload` carries a private
-`*momentinput.ProfileWalks` (`Walks`) for its own record; `evalPrismContext` publishes the set it
+`*momentinput.ProfileWalks` (`Walks`) for its own record; `prismrecord.Build` publishes the set it
 resolved onto the body it just built, and `Placed` — the one path that carries a
 payload forward unchanged but for `Xform` — hands it back to the next build.
 What makes it sound is that a walk holds nothing placement-dependent: `walkOf`
@@ -921,7 +919,7 @@ only the arc-length bracketing under it is not repeated.
 A tessellation reads the same published set. `tessellateContext`'s prism arm
 chords the very loops the build resolved, so it replays the recorded charge onto
 its own counter and hands the walks to `chordLoop`, which reads them exactly as
-`buildLoopSidesAs` does. It is where the resolution dominates: chording a
+`prismrecord.BuildLoopSidesAs` does. It is where the resolution dominates: chording a
 free-form section would otherwise spend almost all of its time in the
 arc-length bracket under `walkOf`, while the chording itself — `chainStations`
 over the Bézier chain the walk already holds — is cheap.

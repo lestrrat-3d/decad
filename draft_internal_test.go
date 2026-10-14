@@ -19,7 +19,7 @@ func TestDraftReceiverClasses(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, prismPayload{}, pp)
 
-	_, err = draftReceiver(bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{SectionDelta: 1e-6}}}}))
+	_, err = draftReceiver(bornBody(&Body{n: topo.Body{Payload: prismrecord.Payload{SectionDelta: 1e-6}}}))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "proven displacement")
 

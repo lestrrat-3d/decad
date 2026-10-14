@@ -221,14 +221,14 @@ func internalPinThroughS1(t *testing.T, doc *Document) *Body {
 	t.Helper()
 	xz, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1))
 	require.NoError(t, err)
-	pinPayload := prismPayload{Payload: prismrecord.Payload{
+	pinPayload := prismrecord.Payload{
 		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			circleSeg{Center: planePoint{U: 20, V: 10}, Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1},
 		}}},
 		// The frame's normal is −y: z ∈ [−25, 5] spans y ∈ [−5, 25].
 		Frame: xz, Z0: -25, Z1: 5, Xform: r3.Identity(),
-	}}
-	pin, err := evalPrismContext(t.Context(), doc, doc.nextProducerID(), pinPayload, freeform.NewFreeformWork())
+	}
+	pin, err := bodyResult(prismrecord.Build(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), pinPayload, freeform.NewFreeformWork()))
 	require.NoError(t, err)
 	doc.commit(pin)
 	return pin

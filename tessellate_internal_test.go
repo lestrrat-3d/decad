@@ -406,7 +406,7 @@ func TestChordLoopReadsResolvedWalks(t *testing.T) {
 
 // TestChordLoopRefusesMismatchedResolvedWalks pins the guard on that read:
 // a resolution of another record is a plumbing bug, and tessellation.ChordLoop refuses it
-// rather than chording one section's geometry as another's — buildLoopSidesAs'
+// rather than chording one section's geometry as another's — prismrecord.BuildLoopSidesAs'
 // own refusal, on the same exact-comparison terms.
 func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 	t.Parallel()

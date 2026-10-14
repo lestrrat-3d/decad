@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -513,7 +514,7 @@ func filletBandExtent(ctx context.Context, b brepLoopBand, f brepFace, xform r3.
 	}
 	coordUpper := filletband.WalkCoordUpper(fr.walks, b.setback.axialUpper())
 	zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(f.z0), math.Abs(sideZ)), sideDelta)
-	placeAllow := prismPlacementCoeffAllow(pl, g, base, coeff[0], coeff[1], coeff[2], coordUpper, zUpper)
+	placeAllow := prismrecord.PlacementCoeffAllow(pl, g, base, coeff[0], coeff[1], coeff[2], coordUpper, zUpper)
 	lo, loErr := heldOf(loIv)
 	hi, hiErr := heldOf(hiIv)
 	loEnd, hiEnd := base+lo, base+hi

@@ -4,8 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,7 +29,7 @@ func TestSideOriginsContextPollsEachSegment(t *testing.T) {
 	t.Parallel()
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 3}
 
-	origins, err := sideOriginsContext(ctx, producerID(1), 2, []int{4, 5, 6})
+	origins, err := prismrecord.SideOrigins(ctx, producerID(1), 2, []int{4, 5, 6})
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, origins)
@@ -53,7 +55,7 @@ func TestAddBlendRolesContextPollsNestedMetadata(t *testing.T) {
 	body := bornBody(&Body{n: topo.Body{Lumps: []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: []*topo.Face{faceNode(face)}}}))}}}))}}})
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 5}
 
-	err := addBlendRoles(ctx, body, ref, []map[int]struct{}{{0: {}}}, "fillet")
+	err := topobuild.AddBlendRoles(ctx, bodyNode(body), ref, []map[int]struct{}{{0: {}}}, "fillet")
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 5, ctx.calls)

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -50,13 +51,13 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 		}
 		cachedWork, freshWork := *work, *work
 		cachedWalks := chainBoundsWalks(profile, captures)
-		cached, err := prismBoundsContext(t.Context(), payload.prism(), &cachedWork,
+		cached, err := prismrecord.Bounds(t.Context(), payload.prism(), &cachedWork,
 			cachedWalks)
 		require.NoError(t, err)
-		fresh, err := prismBoundsContext(t.Context(), payload.prism(), &freshWork, nil)
+		fresh, err := prismrecord.Bounds(t.Context(), payload.prism(), &freshWork, nil)
 		require.NoError(t, err)
 		require.Equal(t, fresh, cached)
-		require.Equal(t, fresh, boxFromInternal(body.n.Bounds))
+		require.Equal(t, fresh, body.n.Bounds)
 		for _, pair := range [][2]float64{
 			{fresh.Min.X, cached.Min.X}, {fresh.Min.Y, cached.Min.Y}, {fresh.Min.Z, cached.Min.Z},
 			{fresh.Max.X, cached.Max.X}, {fresh.Max.Y, cached.Max.Y}, {fresh.Max.Z, cached.Max.Z},
@@ -71,8 +72,8 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 		cancelled, cancel := context.WithCancel(t.Context())
 		cancel()
 		cachedCancelled, freshCancelled := *work, *work
-		_, cachedErr := prismBoundsContext(cancelled, payload.prism(), &cachedCancelled, cachedWalks)
-		_, freshErr := prismBoundsContext(cancelled, payload.prism(), &freshCancelled, nil)
+		_, cachedErr := prismrecord.Bounds(cancelled, payload.prism(), &cachedCancelled, cachedWalks)
+		_, freshErr := prismrecord.Bounds(cancelled, payload.prism(), &freshCancelled, nil)
 		require.ErrorIs(t, cachedErr, context.Canceled)
 		require.EqualError(t, cachedErr, freshErr.Error())
 		require.Equal(t, freshCancelled, cachedCancelled)

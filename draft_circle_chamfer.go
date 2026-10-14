@@ -69,8 +69,8 @@ func tryDraftCircleRimChamfer(ctx context.Context, b *Body, edges []*Edge, setba
 	// A line's true-to-held distance is at most its endpoints' maximum
 	// distance when both are read at the same parameter. The source circle,
 	// axial levels, taper and setback supply all five meridian endpoints.
-	point := prismPayload{Payload: prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
-		Z0Delta: dp.z0Delta, Xform: r3.Identity()}}
+	point := prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
+		Z0Delta: dp.z0Delta, Xform: r3.Identity()}
 	originDelta := point.PointBound(proofbound.ExactScalar(circle.Center.U),
 		proofbound.ExactScalar(circle.Center.V), proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
 

@@ -1,13 +1,14 @@
-package decad
+package prismrecord
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismextent"
-
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -23,11 +24,11 @@ import (
 // walk's own bound. A direction whose extreme cannot be bracketed refuses
 // rather than publishing the held value. See docs/evaluator-design.md §5.
 
-// ExtentAlong is the through-all stop's reading of the prism (stops.go): the
+// ExtentAlong is the through-all stop's reading of the prism (root stops.go): the
 // extent interval along an arbitrary world direction g — the lifted linear
 // functional point·g = origin·g + u·(U'·g) + v·(V'·g) + z·(N'·g), primes the
 // placed directions, extremized over the region boundary and the sweep —
-// beside the proven displacement extentBoundedAlong states for its two ends.
+// beside the proven displacement ExtentBoundedAlong states for its two ends.
 // The stop charges that displacement to the level it resolves and decides its
 // own in-path test outside it, so a boundary extreme held by a bracket
 // (docs/spline-design.md §6.2) still answers rather than refusing.
@@ -35,27 +36,28 @@ import (
 // The section displacement is NOT one of the terms this reading carries — it
 // moves a coordinate IN the plane, and the interval is stated over the
 // recorded section — so a prism holding one refuses instead
-// (docs/prism-boolean-design.md §12). prismBoundsContext reads
-// extentBoundedAlong directly and composes both terms into its own outward
+// (docs/prism-boolean-design.md §12). Bounds reads
+// ExtentBoundedAlong directly and composes both terms into its own outward
 // bound.
 // The stop and clearance callers hold no preflight counter for this record, so
 // the interface forms open the record's own — one per extent reading, never one
 // per segment.
-func (pp prismPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
+func (pp Payload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 	if pp.SectionDelta != 0 {
-		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a prism with a proven section displacement`, ErrUnsupported)
+		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a prism with a proven section displacement`, decaderr.ErrUnsupported)
 	}
-	return pp.extentBoundedAlong(context.Background(), g, freeform.NewFreeformWork(), nil)
+	return pp.ExtentBoundedAlong(context.Background(), g, freeform.NewFreeformWork(), nil)
 }
 
-func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
-	return pp.extentAlongWork(ctx, g, freeform.NewFreeformWork())
+// ExtentAlongContext is ExtentAlongWork with a fresh free-form counter.
+func (pp Payload) ExtentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
+	return pp.ExtentAlongWork(ctx, g, freeform.NewFreeformWork())
 }
 
-// extentAlongWork is extentBoundedAlong's refusing wrapper, mirroring
-// revolvePayload.extentAlongWork word for word: the reading for a consumer that
+// ExtentAlongWork is ExtentBoundedAlong's refusing wrapper, mirroring
+// revolvePayload.ExtentAlongWork word for word: the reading for a consumer that
 // takes the interval as an exact one and has nowhere to put a displacement.
-// clearance.go's payloadExtent is that consumer — its separating-plane
+// root clearance.go's payloadExtent is that consumer — its separating-plane
 // short-circuit compares two bodies' intervals and simply loses the
 // short-circuit where it cannot get an exact one — so a direction whose extreme
 // only a bracket holds refuses here rather than publish a held coordinate as the
@@ -64,23 +66,23 @@ func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float6
 // endpoint the record does not state all reach this wrapper the same way,
 // through one nonzero bound. A through-all stop does not read through this wrapper:
 // it consumes the bounded reading and charges the displacement to its own level
-// (stops.go, docs/spline-design.md §6.4).
-func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, error) {
-	lo, hi, bound, err := pp.extentBoundedAlong(ctx, g, work, nil)
+// (root stops.go, docs/spline-design.md §6.4).
+func (pp Payload) ExtentAlongWork(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, error) {
+	lo, hi, bound, err := pp.ExtentBoundedAlong(ctx, g, work, nil)
 	if err != nil {
 		return 0, 0, err
 	}
 	if bound != 0 {
-		return 0, 0, fmt.Errorf(`%w: this prism's extent along this direction is known only to a proven displacement of %v mm; this reading has no bound to widen`, ErrUnsupported, bound)
+		return 0, 0, fmt.Errorf(`%w: this prism's extent along this direction is known only to a proven displacement of %v mm; this reading has no bound to widen`, decaderr.ErrUnsupported, bound)
 	}
 	return lo, hi, nil
 }
 
-// extentBoundedAlong passes the payload's placement coefficients to
+// ExtentBoundedAlong passes the payload's placement coefficients to
 // prismextent.ExtentAlong. Its bound covers the section candidates, frame
 // and placement rounding, and the final endpoint sums. A non-nil walks
 // reuses the profile's resolved segments across all three box axes.
-func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, float64, float64, error) {
+func (pp Payload) ExtentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (float64, float64, float64, error) {
 	base := pp.Xform.Apply(pp.Frame.Origin()).Dot(g)
 	gu := pp.Dir(1, 0, 0).Dot(g)
 	gv := pp.Dir(0, 1, 0).Dot(g)
@@ -92,22 +94,22 @@ func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *f
 	}, work, walks, prismextent.ProfileBoundaryExtremes)
 }
 
-// prismPlacementCoeffAllow adapts the held prism frame for prismextent.
-func prismPlacementCoeffAllow(pp prismPayload, g r3.Vec, base, gu, gv, gz, coordUpper, zUpper float64) float64 {
+// PlacementCoeffAllow adapts the held prism frame for prismextent.
+func PlacementCoeffAllow(pp Payload, g r3.Vec, base, gu, gv, gz, coordUpper, zUpper float64) float64 {
 	return prismextent.PlacementCoeffAllow(pp.Xform, pp.Frame, g, base, gu, gv, gz, coordUpper, zUpper)
 }
 
-// prismBoundsContext adapts the internal three-axis reading to Box. A cached
+// Bounds adapts the three-axis reading to a measurement.Box. A cached
 // walk set is reused across axes; nil resolves each axis as before.
-func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (Box, error) {
-	low, high, bound, err := prismextent.Bounds(ctx, work, walks, pp.SectionDelta, pp.AxialDelta(), pp.extentBoundedAlong)
+func Bounds(ctx context.Context, pp Payload, work *freeform.FreeformWork, walks *momentinput.ProfileWalks) (measurement.Box, error) {
+	low, high, bound, err := prismextent.Bounds(ctx, work, walks, pp.SectionDelta, pp.AxialDelta(), pp.ExtentBoundedAlong)
 	if err != nil {
-		return Box{}, err
+		return measurement.Box{}, err
 	}
-	return Box{
+	return measurement.Box{
 		Min:       low,
 		Max:       high,
-		Exactness: exactnessOf(bound),
+		Exactness: measurement.ExactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}, nil
 }

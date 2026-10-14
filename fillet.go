@@ -273,7 +273,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
 	// edge is a lateral edge mapped to a section corner (S1).
 	pp, ok := b.n.Payload.(prismPayload)
-	// A one-span straight solid Sweep builds through evalPrismContext and keeps
+	// A one-span straight solid Sweep builds through prismrecord.Build and keeps
 	// that exact reduction beside its path. Its original edges can be matched
 	// against the reduction's corners without replacing the public selector.
 	sweepReduction := false
@@ -391,7 +391,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	// opens its one counter here (docs/spline-design.md §5.2).
 	// A section rewrite is a change of the SECTION: both sweep levels come
 	// through unchanged, and so does each one's own axial displacement.
-	body, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+	body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
 		Profile:   profile,
 		Frame:     pp.Frame,
 		Z0:        pp.Z0,
@@ -401,7 +401,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 		Xform:     pp.Xform,
 		BlendSegs: filletArcs,
 		BlendKind: "fillet",
-	}}, freeform.NewFreeformWork())
+	}, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, err
 	}
@@ -613,41 +613,4 @@ func rewriteLoop(budget *proofbound.WorkBudget, loop cornerLoop, blends map[int]
 // walkSegment re-emits a coalesced walk trimmed to its two endpoints.
 func walkSegment(w survey2d.SideWalk, sU, sV, eU, eV float64) curveSegment {
 	return offset2d.OriginalSegment(w, sU, sV, eU, eV)
-}
-
-// addBlendRoles gives every blend wall its second kind(i,j) role (Table B): the
-// wall built from a blend connector already carries side(i,j); the second role —
-// "fillet" for Fillet, "chamfer" for Chamfer — names the same (loop, segment) of
-// the rewritten record.
-func addBlendRoles(ctx context.Context, body *Body, ref producerID, blendSegs []map[int]struct{}, kind string) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	for li, segs := range blendSegs {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		for sj := range segs {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			side := fmt.Sprintf("side(%d,%d)", li, sj)
-			blend := fmt.Sprintf("%s(%d,%d)", kind, li, sj)
-			for _, f := range body.Faces() {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				for _, o := range f.n.Origins {
-					if err := ctx.Err(); err != nil {
-						return err
-					}
-					if o.Producer == ref && o.Role == side {
-						f.n.Origins = append(f.n.Origins, provenance.Ref{Producer: ref, Role: blend})
-						break
-					}
-				}
-			}
-		}
-	}
-	return nil
 }

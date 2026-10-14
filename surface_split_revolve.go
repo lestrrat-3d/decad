@@ -27,7 +27,7 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 	if err != nil {
 		return nil, err
 	}
-	cells, err := prismcells.SplitPieces(ctx, budget, rcvView.Payload, tlView.Payload)
+	cells, err := prismcells.SplitPieces(ctx, budget, rcvView, tlView)
 	if err != nil {
 		return nil, err
 	}

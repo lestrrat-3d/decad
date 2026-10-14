@@ -174,7 +174,7 @@ the same plane-local region at its own Z level. This route defines the
 interpolation as the straight prism of the first profile over that total
 height; it meets the middle profile exactly and creates no middle seam face.
 
-`evalPrismContext` builds the prism from the first authenticated record with
+`prismrecord.Build` builds the prism from the first authenticated record with
 one free-form work counter continued from its area falsifier. Its existing
 segment gates remain in force: line and circular arcs and Tier A free-form
 curves can build; unsupported tiers, curvature changes, unproven endpoint

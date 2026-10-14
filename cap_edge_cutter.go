@@ -94,9 +94,9 @@ func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edge
 	}
 	d := documentHandle(body.n.Doc)
 	ref := d.nextProducerID()
-	tool, err := evalPrismContext(ctx, d, ref, prismPayload{Payload: prismrecord.Payload{
+	tool, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
 		Profile: profile, Frame: frame, Z0: -span, Z1: span, Xform: r3.Identity(),
-	}}, freeform.NewFreeformWork())
+	}, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, true, err
 	}

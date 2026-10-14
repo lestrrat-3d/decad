@@ -57,7 +57,7 @@ func prismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismPayload, d
 	work := freeform.NewFreeformWork()
 	var g gatePoints
 	for _, pp := range prisms {
-		points, stationAllow, read, err := diameter.PrismStationWitnessesMemo(budget, pp.Payload, work, stations)
+		points, stationAllow, read, err := diameter.PrismStationWitnessesMemo(budget, pp, work, stations)
 		if err != nil || !read {
 			return gatePoints{}, false, err
 		}
@@ -263,7 +263,7 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 	}
 	work := freeform.NewFreeformWork()
 	for _, f := range bp.faces {
-		stations, stationAllow, read, err := diameter.PrismStationWitnesses(budget, f.view(bp.xform).Payload, work)
+		stations, stationAllow, read, err := diameter.PrismStationWitnesses(budget, f.view(bp.xform), work)
 		if err != nil {
 			return gatePoints{}, false, err
 		}

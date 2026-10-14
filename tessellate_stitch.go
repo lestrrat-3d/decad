@@ -47,7 +47,7 @@ import (
 // arm), whatever the exact tetrahedron sum itself already proves about
 // signed volume.
 // stitchLumpFaceGroups returns b's own lumps' constituent faces, one slice
-// per lump: sheetLumps builds exactly one shell per lump
+// per lump: topobuild.SheetLumps builds exactly one shell per lump
 // (docs/surface-design.md §2.2), so this is a direct read of b's own
 // recorded connectivity, never a second split.
 func stitchLumpFaceGroups(b *Body) [][]*Face {

@@ -47,7 +47,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/coil/` | Coil magnitude, profile side and pitch gates, preflight gates, stations, axis coordinates, moments and closed forms. See helix §4, §5, §7. |
 | `internal/coilshell/` | Builds the held coil shell, mesh proofs and wall-area enclosures. See helix §5, §7, §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames over recorded line and arc spans, and frames along a recorded path. See sweep §3.2. |
-| `internal/prismrecord/` | Plain data of the prism record and its plane-local lifts, point bounds, lift factor, centroid envelope, placement operand, cap frames, mass record, exact box, section-plane test and the modify exact-section gate; root `prismPayload` embeds it. See evaluator §5, §8. |
+| `internal/prismrecord/` | The prism record and its builder over nodes (`Build`, `Placed`, extents, map charge); plane-local lifts, point bounds, lift factor, centroid envelope, placement operand, cap frames, mass record, exact box, section-plane test, exact-section gate. Root `prismPayload` aliases it. See evaluator §5, §8. |
 | `internal/momentinput/` | Profile records, exact record comparison, rectangle bounds, axis-aligned rectangle footprints, moments, loop enclosed areas and first moments, walk cache and coordinate envelopes. See evaluator §4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
@@ -63,4 +63,5 @@ The rules for rows live in `docs/layout.md`.
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds, and chain-arc source points and area density. See tessellation §8–§11, sweep §15.9. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
 | `internal/loftcylinder/` | Exact cap XY audits, source circle and connector gates, ring distances and occupancy, cap chamfer clearance, triangles, band strips, compaction and audits, triangle radii, root radius gaps, and radial and wedge gates of the loft/cylinder Union. See loft-cylinder-boolean design. |
-| `internal/topo/` | Node data the root topology handles hold by value (Vertex, Edge, CoEdge, Loop, Face, FaceShell, Lump, Body, Document, Mesh), with their links and the document node's identity minting and liveness reads; `Payload`, which every feature payload implements, and `Env`. See evaluator §3 and §8. |
+| `internal/topo/` | Node data the root topology handles hold by value (Vertex, Edge, CoEdge, Loop, Face, FaceShell, Lump, Body, Document, Mesh), with their links and the document node's minting and liveness reads; `Payload`, `Env` and the builders' `Alloc`; `topotest` allocates bare nodes. See evaluator §3, §8. |
+| `internal/topobuild/` | Topology assembly builders share over nodes: face-loop attachment, open shells, connected lumps, node literals through `Alloc`, the body walkers, blend roles and the analytic finiteness gate. See evaluator §3, §5, surface §2.2. |

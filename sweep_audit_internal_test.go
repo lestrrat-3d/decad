@@ -24,13 +24,13 @@ func TestSweepAuditAcceptsSeparatedStraightSpans(t *testing.T) {
 	doc := bornDocument(&Document{})
 	spans := make([]sweepAuditSpan, 3)
 	for i := range spans {
-		body, buildErr := evalPrismContext(t.Context(), doc, producerID(i+1), prismPayload{Payload: prismrecord.Payload{
+		body, buildErr := bodyResult(prismrecord.Build(t.Context(), envOf(documentNode(doc), producerID(i+1)), prismrecord.Payload{
 			Profile: profile,
 			Frame:   frame,
 			Z0:      float64(i),
 			Z1:      float64(i + 1),
 			Xform:   r3.Identity(),
-		}}, freeform.NewFreeformWork())
+		}, freeform.NewFreeformWork()))
 		require.NoError(t, buildErr)
 		spans[i] = sweepAuditSpan{
 			body:     body,
@@ -48,13 +48,13 @@ func TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs(t *testing.T) {
 	profile := unitSquareProfile()
 	doc := bornDocument(&Document{})
 	build := func(z0, z1 float64) sweepAuditSpan {
-		body, buildErr := evalPrismContext(t.Context(), doc, 1, prismPayload{Payload: prismrecord.Payload{
+		body, buildErr := bodyResult(prismrecord.Build(t.Context(), envOf(documentNode(doc), 1), prismrecord.Payload{
 			Profile: profile,
 			Frame:   frame,
 			Z0:      z0,
 			Z1:      z1,
 			Xform:   r3.Identity(),
-		}}, freeform.NewFreeformWork())
+		}, freeform.NewFreeformWork()))
 		require.NoError(t, buildErr)
 		return sweepAuditSpan{
 			body:     body,

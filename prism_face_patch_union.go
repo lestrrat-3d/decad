@@ -40,10 +40,10 @@ func tryPrismFacePatchUnion(ctx context.Context, a, b *Body) (topo.Payload, bool
 			if equalLevels != (pass == 1) {
 				continue
 			}
-			yReframed := prismPayload{Payload: prismrecord.Payload{
+			yReframed := prismrecord.Payload{
 				Profile: prismplacement.BoxProfile(yBox), Frame: x.Frame, Xform: x.Xform,
 				Z0: yBox.Lo[2], Z1: yBox.Hi[2],
-			}}
+			}
 			var payload topo.Payload
 			var built bool
 			var err error

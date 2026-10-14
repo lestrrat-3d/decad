@@ -265,12 +265,12 @@ func freeformTriangleProfile() profileRecord {
 
 func freeformTrianglePayload(t *testing.T, z0, z1 float64) prismPayload {
 	t.Helper()
-	return prismPayload{Payload: prismrecord.Payload{
+	return prismrecord.Payload{
 		Profile: freeformTriangleProfile(),
 		Frame:   identityFrame(t),
 		Z0:      z0, Z1: z1,
 		Xform: r3.Identity(),
-	}}
+	}
 }
 
 // sCurveFreeformProfile is a single cubic SplineSeg (one raw Bézier span, its
@@ -347,7 +347,7 @@ func TestBodyGateDiameterFreeformArmAnswersHandComputedMaximum(t *testing.T) {
 // pair farther apart than the arm's own witness-only reading.
 func TestBodyGateDiameterFreeformArmUnderstatesNeverOverstates(t *testing.T) {
 	t.Parallel()
-	pp := prismPayload{Payload: prismrecord.Payload{Profile: sCurveFreeformProfile(), Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
+	pp := prismrecord.Payload{Profile: sCurveFreeformProfile(), Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}
 	body := bornBody(&Body{n: topo.Body{Payload: pp}})
 
 	d, ok, err := bodyGateDiameter(t.Context(), body)
@@ -363,17 +363,17 @@ func TestBodyGateDiameterFreeformArmUnderstatesNeverOverstates(t *testing.T) {
 
 // 3. The arm is not a box diagonal: on the same bulging S-curve section, the
 // reported diameter sits below the section's own computed bounding-box
-// diagonal (prismBoundsContext, P4a's already-landed free-form Box).
+// diagonal (prismrecord.Bounds, P4a's already-landed free-form Box).
 func TestBodyGateDiameterFreeformArmBelowBoxDiagonal(t *testing.T) {
 	t.Parallel()
-	pp := prismPayload{Payload: prismrecord.Payload{Profile: sCurveFreeformProfile(), Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
+	pp := prismrecord.Payload{Profile: sCurveFreeformProfile(), Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}
 	body := bornBody(&Body{n: topo.Body{Payload: pp}})
 
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	box, err := prismBoundsContext(t.Context(), pp, freeform.NewFreeformWork(), nil)
+	box, err := prismrecord.Bounds(t.Context(), pp, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
 	diagonal := box.Max.Sub(box.Min).Len()
 	require.Less(t, d, diagonal, "the diameter arm must read tighter than the section's own bounding-box diagonal")
@@ -386,12 +386,12 @@ func TestBodyGateDiameterFreeformArmBelowBoxDiagonal(t *testing.T) {
 func TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain(t *testing.T) {
 	t.Parallel()
 	build := func(fit []planePoint) prismPayload {
-		return prismPayload{Payload: prismrecord.Payload{
+		return prismrecord.Payload{
 			Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 				fitSplineSeg{Fit: point2ToRecordSlice(fit), TStart: 0, TEnd: 1},
 			}}},
 			Frame: identityFrame(t), Z0: 0, Z1: 10, Xform: r3.Identity(),
-		}}
+		}
 	}
 	deduped := build([]planePoint{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}, {U: 10 + 5e-13, V: 0}})
 	clean := build([]planePoint{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}})
@@ -459,7 +459,7 @@ func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
 			TStart:  0, TEnd: 1,
 		},
 	}}}
-	pp := prismPayload{Payload: prismrecord.Payload{Profile: collapsed, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
+	pp := prismrecord.Payload{Profile: collapsed, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}
 	_, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: pp}}))
 	require.NoError(t, err)
 	require.False(t, ok, "a curve this arm cannot certify must never publish a diameter")
@@ -472,7 +472,7 @@ func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
 // is zero, so the body ends with no gate diameter at all.
 func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T) {
 	t.Parallel()
-	collapsedSpan := prismPayload{Payload: prismrecord.Payload{
+	collapsedSpan := prismrecord.Payload{
 		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			splineSeg{
 				Control: point2ToRecordSlice([]planePoint{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}),
@@ -480,7 +480,7 @@ func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T
 			},
 		}}},
 		Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity(),
-	}}
+	}
 
 	collapsedShrink := freeformTrianglePayload(t, 0, 10)
 	baseD, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: collapsedShrink}}))
@@ -493,7 +493,7 @@ func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T
 		"collapsed shrink":    collapsedShrink,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, armOK, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.AxialDelta)
+			_, armOK, err := diameter.PrismFreeformSection(t.Context(), pp, pp.AxialDelta)
 			require.NoError(t, err)
 			require.False(t, armOK, "the arm must withhold on this path")
 
@@ -550,12 +550,12 @@ func TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism(t *testing.T) {
 		lineSeg{Start: planePoint{U: 10, V: 10}, End: planePoint{U: 0, V: 10}, TStart: 0, TEnd: 1},
 		lineSeg{Start: planePoint{U: 0, V: 10}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Profile: analytic, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity(),
 		SectionDelta: 0.1,
-	}}
+	}
 
-	armD, armOK, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.AxialDelta)
+	armD, armOK, err := diameter.PrismFreeformSection(t.Context(), pp, pp.AxialDelta)
 	require.NoError(t, err)
 	require.False(t, armOK, "no free-form segment is present, so the new arm must decline outright")
 	require.Zero(t, armD)
@@ -627,24 +627,24 @@ func (c *cancelAfterPolls) Err() error {
 // into the arm's structural "no arm" answer.
 func TestBodyGateDiameterFreeformArmCancelsDuringWitnessMaximum(t *testing.T) {
 	t.Parallel()
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Profile: freeformLargeProfile(800),
 		Frame:   identityFrame(t),
 		Z0:      0, Z1: 10,
 		Xform: r3.Identity(),
-	}}
+	}
 	segments := len(pp.Profile.Outer.Segments)
 
 	// The fixture really does answer, so the cancelled run below cannot pass
 	// by declining: its witnesses span (0,0,0) to (10,0,10), sqrt(200) apart.
-	d, ok, err := diameter.PrismFreeformSection(t.Context(), pp.Payload, pp.AxialDelta)
+	d, ok, err := diameter.PrismFreeformSection(t.Context(), pp, pp.AxialDelta)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.InDelta(t, math.Sqrt(200), d, 1e-9)
 
 	// One poll per segment, then the maximum's own first budget poll.
 	ctx := &cancelAfterPolls{Context: t.Context(), pass: segments}
-	d, ok, err = diameter.PrismFreeformSection(ctx, pp.Payload, pp.AxialDelta)
+	d, ok, err = diameter.PrismFreeformSection(ctx, pp, pp.AxialDelta)
 	require.ErrorIs(t, err, context.Canceled, "cancellation must propagate as an error, not as (0, false, nil)")
 	require.False(t, ok)
 	require.Zero(t, d)

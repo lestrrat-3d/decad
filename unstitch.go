@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -157,10 +158,10 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 
 	body := bornBody(&Body{n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet, Doc: documentNode(d)}})
 	nf.n.Body = bodyNode(body)
-	if err := attachFaceLoopsContext(ctx, []*Face{nf}); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, []*topo.Face{faceNode(nf)}); err != nil {
 		return nil, err
 	}
-	shell := bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen([]*Face{nf}), Faces: []*topo.Face{faceNode(nf)}}})
+	shell := bornFaceShell(&FaceShell{n: topo.FaceShell{Open: topobuild.ShellIsOpen([]*topo.Face{faceNode(nf)}), Faces: []*topo.Face{faceNode(nf)}}})
 	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(shell)}}}))}
 
 	// Area is the face's own reading, unaffected by delta: this evaluator
@@ -183,7 +184,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 	}
 	body.n.Bounds = boxToInternal(bounds)
 
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 
@@ -199,7 +200,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 // mirrors stitch.go's rebuildStitchTopology per-face walk with no weld plan:
 // a single unstitched face never merges an edge or a vertex with anything
 // else, so every new edge ends up free by construction once
-// attachFaceLoopsContext registers it on this one face alone. A vertex or
+// topobuild.AttachFaceLoops registers it on this one face alone. A vertex or
 // edge reached twice within the SAME face (a coedge revisiting a shared
 // corner, or a full circle's own single coedge using its edge once) still
 // resolves to the SAME new object, keyed by the old pointer, so the copy

@@ -32,11 +32,11 @@ func JunctionVertexAt(segs []sectionrecord.CurveSegment, prev, next survey2d.Sid
 // RimConvexity decides one walk's rim-edge convexity — evaluator §3's
 // walked-boundary rule (topology.go's Edge.IsConvex doc comment) —
 // independently of the curve, surface and faceReversed construction
-// buildLoopSidesAs still runs for its own kind right after it. holeLoop is
+// prismrecord.BuildLoopSidesAs still runs for its own kind right after it. holeLoop is
 // the loop's material side; a walk with no turn of its own (a straight wall,
 // or a free-form chain §6.5 proves straight) reads it, and a walk that DOES
 // turn — circular or genuinely curved free-form — decides convexity from its
-// own turn instead, exactly as buildLoopSidesAs's per-kind switch did before
+// own turn instead, exactly as prismrecord.BuildLoopSidesAs's per-kind switch did before
 // this was pulled out of it.
 func RimConvexity(ctx context.Context, w survey2d.SideWalk, holeLoop bool, work *freeform.FreeformWork) (bool, error) {
 	switch w.Kind {

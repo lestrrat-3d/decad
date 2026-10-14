@@ -1,4 +1,4 @@
-package decad
+package prismrecord
 
 import (
 	"context"
@@ -6,36 +6,41 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/denotation"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
-	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/topo"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// This file builds a straight extrude's body from its prismPayload: the two
+// This file builds a straight extrude's body from its Payload: the two
 // cap faces, one side face per recorded segment, and the topology that joins
 // them, together with the measurements the finished body publishes.
 //
-// evalPrismContext is the whole build and states the order; buildLoopSidesAs
+// Build is the whole build and states the order; BuildLoopSidesAs
 // is the per-loop walk it runs once per outer loop and once per hole, with
 // the hole's orientation reversed. Every face this file stamps carries the
 // displacement its own surface was built from. See
 // docs/evaluator-design.md §5.
 
-// prismOuterFirstSideRole names the wall built from the first segment of a
+// OuterFirstSideRole names the wall built from the first segment of a
 // prism's outer profile. A single-circle extrusion has only this side wall.
-const prismOuterFirstSideRole = "side(0,0)"
+const OuterFirstSideRole = "side(0,0)"
 
-func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, work *freeform.FreeformWork) (*Body, error) {
+// Build evaluates pp into a new body allocated through env.Alloc, minting
+// its level and curve identities through env.Doc and its roles under
+// env.Ref. It never commits: the caller maps the result to its handle and
+// commits it.
+func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.FreeformWork) (*topo.Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -44,25 +49,29 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		return nil, err
 	}
 	if ig.Area <= 0 {
-		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, decaderr.ErrDegenerate)
 	}
 	height := proofbound.BoundedSub(pp.Z1Scalar(), pp.Z0Scalar())
 	h := height.Value
 	if h <= 0 {
-		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: the sweep interval is empty`, decaderr.ErrDegenerate)
 	}
 
 	// A surface result publishes a sheet, never a solid: solid false is what
 	// makes Volume() and Centroid() answer ErrNotSolid through their existing
 	// guards, and kind BodySheet is what Kind() reports
 	// (docs/surface-design.md §4.3).
-	kind := BodySolid
+	kind := topo.BodySolid
 	if pp.SurfaceResult {
-		kind = BodySheet
+		kind = topo.BodySheet
 	}
-	body := bornBody(&Body{n: topo.Body{Solid: !pp.SurfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind), Doc: documentNode(d)}})
+	body := env.Alloc.NewBody()
+	body.Solid = !pp.SurfaceResult
+	body.Origin = provenance.Ref{Producer: env.Ref, Role: provenance.RoleBody}
+	body.Kind = kind
+	body.Doc = env.Doc
 
-	// The LEVEL half of the shared-denotation certificate (denotation.go):
+	// The LEVEL half of the shared-denotation certificate (root denotation.go):
 	// minted only when this payload's own section is drawn straight from its
 	// record — a section the analytic prism boolean re-expresses sets
 	// sectionDelta nonzero and mints neither — so every vertex and rim edge
@@ -73,15 +82,15 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// for the solid's own caps (pp.point/pp.dir), never fitted to held vertex
 	// coordinates — the two ends share one normal (a prism does not tilt
 	// between them), so it is computed once.
-	var levelZ0, levelZ1 levelToken
+	var levelZ0, levelZ1 denotation.LevelToken
 	if pp.SectionDelta == 0 {
 		levelNormal := pp.Dir(0, 0, 1)
-		levelZ0 = d.n.MintLevel(pp.Point(0, 0, pp.Z0), levelNormal)
-		levelZ1 = d.n.MintLevel(pp.Point(0, 0, pp.Z1), levelNormal)
+		levelZ0 = env.Doc.MintLevel(pp.Point(0, 0, pp.Z0), levelNormal)
+		levelZ1 = env.Doc.MintLevel(pp.Point(0, 0, pp.Z1), levelNormal)
 	}
 
 	// Topology: one shell over every loop's side faces plus the two caps.
-	var faces []*Face
+	var faces []*topo.Face
 	// The start cap faces −N (its outward normal leaves the material at the
 	// bottom), so its frame swaps the in-plane axes; the end cap keeps them.
 	startFrame, err := pp.CapFrame(pp.Z0, true)
@@ -92,43 +101,39 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	if err != nil {
 		return nil, err
 	}
-	capStart := bornFace(&Face{
-		n: topo.Face{
-			Area:          ig.Area,
-			AreaBound:     ig.AreaBound,
-			AxialDelta:    pp.Z0Delta,
-			HasAxialDelta: true,
-			Surface:       surfacegeom.Plane{Frame: startFrame},
-			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z0},
-			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
-			Body:          bodyNode(body),
-		},
+	capStart := topobuild.NewFace(env.Alloc, topo.Face{
+		Area:          ig.Area,
+		AreaBound:     ig.AreaBound,
+		AxialDelta:    pp.Z0Delta,
+		HasAxialDelta: true,
+		Surface:       surfacegeom.Plane{Frame: startFrame},
+		CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z0},
+		Origins:       []provenance.Ref{{Producer: env.Ref, Role: provenance.RoleCapStart}},
+		Body:          body,
 	})
-	capEnd := bornFace(&Face{
-		n: topo.Face{
-			Area:          ig.Area,
-			AreaBound:     ig.AreaBound,
-			AxialDelta:    pp.Z1Delta,
-			HasAxialDelta: true,
-			Surface:       surfacegeom.Plane{Frame: endFrame},
-			CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z1},
-			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
-			Body:          bodyNode(body),
-		},
+	capEnd := topobuild.NewFace(env.Alloc, topo.Face{
+		Area:          ig.Area,
+		AreaBound:     ig.AreaBound,
+		AxialDelta:    pp.Z1Delta,
+		HasAxialDelta: true,
+		Surface:       surfacegeom.Plane{Frame: endFrame},
+		CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z1},
+		Origins:       []provenance.Ref{{Producer: env.Ref, Role: provenance.RoleCapEnd}},
+		Body:          body,
 	})
 
 	perimeter := proofbound.BoundedScalar{}
 	walks := 0
-	loops := append([]loopRecord{pp.Profile.Outer}, pp.Profile.Holes...)
+	loops := append([]sectionrecord.LoopRecord{pp.Profile.Outer}, pp.Profile.Holes...)
 	for _, loop := range loops {
 		walks += len(loop.Segments)
 	}
 	// pw resolves every boundary segment's walk exactly ONCE for this whole
-	// build (internal/momentinput/profile_walks.go): buildLoopSides below,
-	// prismrecord.Payload.CentroidGeometryBound and prismBoundsContext's three per-axis
-	// extentBoundedAlong calls all read it back instead of each calling
+	// build (internal/momentinput/profile_walks.go): BuildLoopSides below,
+	// prismrecord.Payload.CentroidGeometryBound and Bounds's three per-axis
+	// ExtentBoundedAlong calls all read it back instead of each calling
 	// walkOf itself, which is what let one free-form segment's §5.2 charge be
-	// spent eight times over in a single evalPrismContext call.
+	// spent eight times over in a single Build call.
 	//
 	// A payload that already carries the resolution of THIS record hands it
 	// straight over — a rigid re-evaluation (placed) is the case, since a
@@ -152,14 +157,14 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		sideFaces, bottom, top, loopLen, err := buildLoopSides(ctx, body, ref, pp, li, loop, work, pw, levelZ0, levelZ1, true)
+		sideFaces, bottom, top, loopLen, err := BuildLoopSides(ctx, env, body, pp, li, loop, work, pw, levelZ0, levelZ1, true)
 		if err != nil {
 			return nil, err
 		}
 		faces = append(faces, sideFaces...)
 		perimeter = proofbound.BoundedAdd(perimeter, loopLen)
-		capStart.n.Loops = append(capStart.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: bottom}})))
-		capEnd.n.Loops = append(capEnd.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: top}})))
+		capStart.Loops = append(capStart.Loops, topobuild.NewLoop(env.Alloc, topo.Loop{Outer: li == 0, CoEdges: bottom}))
+		capEnd.Loops = append(capEnd.Loops, topobuild.NewLoop(env.Alloc, topo.Loop{Outer: li == 0, CoEdges: top}))
 	}
 	// A surface result omits both caps from the shell (Table W,
 	// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
@@ -169,12 +174,12 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// free edges with no rim-specific code.
 	if !pp.SurfaceResult {
 		faces = append(faces, capStart, capEnd)
-		if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
+		if err := topobuild.AttachFaceLoops(ctx, []*topo.Face{capStart, capEnd}); err != nil {
 			return nil, err
 		}
 	}
 
-	// sheetLumps derives IsOpen from the faces' own edge adjacency rather than
+	// topobuild.SheetLumps derives IsOpen from the faces' own edge adjacency rather than
 	// the option that built them, and splits the face set by connectivity
 	// rather than assuming one shell holds the whole body regardless of it
 	// (docs/surface-design.md §2.2). A solid's faces are always one connected
@@ -182,7 +187,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// reproduces the previous single-shell, single-lump body for a solid
 	// unchanged; a surface result's holed profile, whose loops touch nowhere
 	// once their caps are omitted, is what actually needs more than one.
-	body.n.Lumps = lumpNodes(sheetLumps(faces))
+	body.Lumps = topobuild.SheetLumps(env.Alloc, faces)
 
 	// Measurements carry the closed forms' proven float bounds
 	// (docs/evaluator-design.md §5), plus — where the payload carries one — the
@@ -191,14 +196,14 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// internal/proofbound/bounds.go's proofbound.SectionDisplacementArea, charged once into the region area, so
 	// the volume takes it through the height and each cap takes it once; the
 	// walls take it through the perimeter, which every walk already charged its
-	// own length displacement into (buildLoopSidesAs).
+	// own length displacement into (BuildLoopSidesAs).
 	delta := pp.SectionDelta
 	regionArea := proofbound.MeasuredScalar(ig.Area, proofbound.AbsSumUpper(
 		ig.AreaBound,
 		proofbound.SectionDisplacementArea(delta, walks, proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound)),
 	))
-	capStart.n.AreaBound = regionArea.Bound
-	capEnd.n.AreaBound = regionArea.Bound
+	capStart.AreaBound = regionArea.Bound
+	capEnd.AreaBound = regionArea.Bound
 	volume := proofbound.BoundedMul(regionArea, height)
 	caps := proofbound.BoundedMul(proofbound.ExactScalar(2), regionArea)
 	sides := proofbound.BoundedMul(perimeter, height)
@@ -211,19 +216,19 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		// re-stamped from regionArea.bound just above — so it composes the
 		// POST-displacement bound rather than the one the caps carried before
 		// that re-stamp.
-		area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capStart.n.Area, capStart.n.AreaBound))
-		area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capEnd.n.Area, capEnd.n.AreaBound))
+		area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capStart.Area, capStart.AreaBound))
+		area = proofbound.BoundedSub(area, proofbound.MeasuredScalar(capEnd.Area, capEnd.AreaBound))
 	}
 	// volume and centroid are always computed and stored — a sheet needs them
-	// finite for validateAnalyticBodyMeasurements below — but Body.Volume and
+	// finite for topobuild.ValidateAnalyticMeasurements below — but Body.Volume and
 	// Body.Centroid gate on solid and answer ErrNotSolid for a sheet, so these
 	// two stay held and unpublished then (docs/surface-design.md §8).
-	body.n.Volume = measurement.Measurement{
+	body.Volume = measurement.Measurement{
 		Value:     units.CubicMillimeters(volume.Value),
 		Exactness: measurement.ExactnessOf(volume.Bound),
 		Bound:     units.CubicMillimeters(volume.Bound),
 	}
-	body.n.Area = measurement.Measurement{
+	body.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(area.Value),
 		Exactness: measurement.ExactnessOf(area.Bound),
 		Bound:     units.SquareMillimeters(area.Bound),
@@ -246,29 +251,29 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		return nil, err
 	}
 	centroidBound = math.Min(centroidBound, proofbound.AbsSumUpper(geometryBound, delta))
-	body.n.Centroid = measurement.VecMeasurement{
+	body.Centroid = measurement.VecMeasurement{
 		Value:     centroidValue,
 		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
-	bounds, err := prismBoundsContext(ctx, pp, work, pw)
+	bounds, err := Bounds(ctx, pp, work, pw)
 	if err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body.n.Bounds = boxToInternal(bounds)
-	if err := chargePrismMap(body, pp.Frame, pp.Xform); err != nil {
+	body.Bounds = bounds
+	if err := ChargeMap(body, pp.Frame, pp.Xform); err != nil {
 		return nil, err
 	}
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(body); err != nil {
 		return nil, err
 	}
 	// A prism-derived modify body re-mints its blend roles from its own record
 	// under this build's ref, so a copy or placement reproduces them (modify §9).
 	// A plain extrude carries no descriptors and this is a no-op.
-	if err := addBlendRoles(ctx, body, ref, pp.BlendSegs, pp.BlendKind); err != nil {
+	if err := topobuild.AddBlendRoles(ctx, body, env.Ref, pp.BlendSegs, pp.BlendKind); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -279,44 +284,21 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// later rigid re-evaluation read it back; the record itself is unchanged, so
 	// the payload the body carries denotes exactly what it did before.
 	pp.Walks = pw
-	body.n.Payload = pp
+	body.Payload = pp
 	return body, nil
 }
 
-// attachFaceLoopsContext links each coedge's shared edge to its face. The
-// assembly is private until the caller commits the body, but it can be large
-// for a recorded region with many loops, so every nesting level polls ctx.
-func attachFaceLoopsContext(ctx context.Context, faces []*Face) error {
-	for _, f := range faces {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		for _, l := range f.n.Loops {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			for _, ce := range l.CoEdges {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				ce.Edge.Faces = append(ce.Edge.Faces, faceNode(f))
-			}
-		}
-	}
-	return nil
-}
-
-// buildWallGeometry builds one wall's two rim curves and the surface it
-// sweeps, from its walk alone: convex is boundarywalk.RimConvexity's own answer for this
+// BuildWallGeometry builds one wall's two rim curves and the surface it
+// sweeps, from its walk alone, allocating both edges through alloc: convex is boundarywalk.RimConvexity's own answer for this
 // walk, and closed marks a single whole closed walk sharing one seam vertex
 // at each cap (bStart==bEnd, tStart==tEnd) — never true for a chain, since
 // RecordChain admits no whole closed segment
 // (docs/sketch-seam-design.md §2.2). It is the one per-kind construction a
-// closed loop's own wall (buildLoopSidesAs) and an open chain's own wall
-// (buildChainSides, extrude.go) share; the two differ only in the TOPOLOGY
+// closed loop's own wall (BuildLoopSidesAs) and an open chain's own wall
+// (buildChainSides, root extrude.go) share; the two differ only in the TOPOLOGY
 // around it — wraparound junctions and cap coedges for a loop, neither for a
 // chain (docs/surface-design.md §13.4).
-func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool, bStart, bEnd, tStart, tEnd *Vertex) (*Edge, *Edge, surfacegeom.Surface, bool, error) {
+func BuildWallGeometry(alloc topo.Alloc, pp Payload, w survey2d.SideWalk, convex, closed bool, bStart, bEnd, tStart, tEnd *topo.Vertex) (*topo.Edge, *topo.Edge, surfacegeom.Surface, bool, error) {
 	switch w.Kind {
 	case survey2d.WalkCircular:
 		axis := pp.Dir(0, 0, 1)
@@ -348,7 +330,7 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		var curve0, curve1 surfacegeom.Curve
 		if closed {
 			// A full circle's edge closes on itself: one vertex per cap
-			// edge, start == end (topology.go's Circle3 contract) — the
+			// edge, start == end (root topology.go's Circle3 contract) — the
 			// seamBottom/seamTop pair the caller already built.
 			curve0, curve1 = surfacegeom.Circle3{Center: center0, Axis: edgeAxis, Radius: radius}, surfacegeom.Circle3{Center: center1, Axis: edgeAxis, Radius: radius}
 		} else {
@@ -361,10 +343,10 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// counter-clockwise round keeps its convex rim. The loop's role
 		// decides nothing here. convex is boundarywalk.RimConvexity's own answer for
 		// this walk, computed by the caller.
-		bottomEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve0, Start: vertexNode(bStart), End: vertexNode(bEnd)}})
-		topEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve1, Start: vertexNode(tStart), End: vertexNode(tEnd)}})
-		bottomEdge.n.CurveBound, bottomEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
-		topEdge.n.CurveBound, topEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
+		bottomEdge := topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve0, Start: bStart, End: bEnd})
+		topEdge := topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve1, Start: tStart, End: tEnd})
+		bottomEdge.CurveBound, bottomEdge.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
+		topEdge.CurveBound, topEdge.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
 		surf := surfacegeom.Cylinder{Origin: center0, Axis: axis, Radius: radius}
 		// A clockwise-walked wall has its material OUTSIDE the cylinder,
 		// so its outward normal is the radial direction negated.
@@ -380,10 +362,10 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// concavity falls out of the clockwise walk itself, exactly as it
 		// does for a circular hole wall. An R19 refusal already returned
 		// from boundarywalk.RimConvexity, before this switch ever ran.
-		bottomEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}, Start: vertexNode(bStart), End: vertexNode(bEnd)}})
-		topEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}, Start: vertexNode(tStart), End: vertexNode(tEnd)}})
+		bottomEdge := topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}, Start: bStart, End: bEnd})
+		topEdge := topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.NURBSCurve{}, Start: tStart, End: tEnd})
 		// faceReversed stays false: an opaque NURBSSurface publishes no
-		// normal at all (§7's NormalAt refusal, topology.go), so
+		// normal at all (§7's NormalAt refusal, root topology.go), so
 		// topo.Face.Reversed — "the outward normal is the surface's geometric
 		// normal negated" — names nothing for this variant.
 		return bottomEdge, topEdge, surfacegeom.NURBSSurface{}, false, nil
@@ -391,9 +373,9 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// A straight wall has no turn of its own to disagree with the
 		// loop's: which side its material lies on is decided by the sense
 		// the whole loop is walked, and that sense IS the loop's role —
-		// the outer loop counter-clockwise, holes clockwise (moments.go).
-		bottomEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(bStart), End: vertexNode(bEnd)}})
-		topEdge := bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(tStart), End: vertexNode(tEnd)}})
+		// the outer loop counter-clockwise, holes clockwise (root moments.go).
+		bottomEdge := topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: bStart, End: bEnd})
+		topEdge := topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: tStart, End: tEnd})
 		mid := pp.Point((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, pp.Z0)
 		// tangent × N is the outward normal for a CCW outer walk (and a
 		// CW hole walk); a reflection flips the cross product, so the
@@ -404,13 +386,13 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		}
 		f, err := r3.NewFrame(mid, pp.Dir(tu, tv, 0), pp.Dir(0, 0, 1))
 		if err != nil {
-			return nil, nil, nil, false, fmt.Errorf(`%w: a boundary segment has no direction`, ErrDegenerate)
+			return nil, nil, nil, false, fmt.Errorf(`%w: a boundary segment has no direction`, decaderr.ErrDegenerate)
 		}
 		return bottomEdge, topEdge, surfacegeom.Plane{Frame: f}, false, nil
 	}
 }
 
-// buildLoopSides builds one loop's side faces with shared vertices and
+// BuildLoopSides builds one loop's side faces with shared vertices and
 // edges, returning the faces, the bottom and top cap coedges in walk order,
 // and the loop's perimeter length. A loop's index is both its role index and,
 // via li != 0, its orientation: loop 0 is an outer loop (material inside),
@@ -418,22 +400,22 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 //
 // resolved is pp.profile's pre-resolved segment walks, or nil to resolve each
 // segment through walkOf as before (internal/momentinput/profile_walks.go).
-// buildLoopSides's own li IS resolved's loop index here — li walks the same
+// BuildLoopSides's own li IS resolved's loop index here — li walks the same
 // append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) order a
 // *momentinput.ProfileWalks was resolved from — so it is passed straight through as
-// buildLoopSidesAs's roleLoop, which resolved is read against.
+// BuildLoopSidesAs's roleLoop, which resolved is read against.
 //
 // mintCurveTokens is the CURVE half of the shared-denotation certificate's
 // own opt-in, read the same way levelZ0/levelZ1's zero value already opts a
-// caller out of the LEVEL half: true only from evalPrismContext's own
-// straight-prism build, false from every other caller (shell_cup.go,
-// capblend_moments.go), which mint no curve identity for their own rim and
+// caller out of the LEVEL half: true only from Build's own
+// straight-prism build, false from every other caller (root shell_cup.go,
+// root capblend_moments.go), which mint no curve identity for their own rim and
 // so keep every certificate check refusing by default.
-func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
-	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens)
+func BuildLoopSides(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, li int, loop sectionrecord.LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 denotation.LevelToken, mintCurveTokens bool) ([]*topo.Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
+	return BuildLoopSidesAs(ctx, env, body, pp, li, li != 0, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens)
 }
 
-// buildLoopSidesAs is buildLoopSides with the role index and the orientation
+// BuildLoopSidesAs is BuildLoopSides with the role index and the orientation
 // decoupled: roleLoop names the walls' side(roleLoop,j) role, and holeLoop
 // picks the material side of a straight wall independently. A cup's cavity
 // walks each loop of the void the SOLID wraps — the void's outer boundary is a
@@ -447,36 +429,36 @@ func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPay
 // exactly this loop's recorded segments (LoopMatches — the segments
 // themselves, not their count) is a plumbing bug and refuses rather than
 // silently resolving anyway — the only caller that ever passes non-nil is
-// buildLoopSides from evalPrismContext, where roleLoop already IS the loop
+// BuildLoopSides from Build, where roleLoop already IS the loop
 // index the *momentinput.ProfileWalks was resolved at.
 //
 // levelZ0 and levelZ1 are the LEVEL half of the shared-denotation certificate
-// (denotation.go), minted once per build by the caller's own evalPrismContext
+// (root denotation.go), minted once per build by the caller's own Build
 // and stamped here onto every vertex and rim edge this loop places at its
 // respective end — the zero value declines for every OTHER caller of this
-// function (shell_cup.go, capblend_moments.go), which mint neither and so
+// function (root shell_cup.go, root capblend_moments.go), which mint neither and so
 // leave every certificate check refusing by default.
 //
 // mintCurveTokens is the CURVE half of the shared-denotation certificate:
-// true mints a fresh curveID (body.n.Doc.MintCurve) for every rim vertex and
+// true mints a fresh curveID (body.Doc.MintCurve) for every rim vertex and
 // rim edge this loop places, at EITHER end, unconditionally — unlike the
 // LEVEL half, minting a curve identity claims nothing about the section
 // itself, so it needs no sectionDelta==0 precondition; freshness alone is
-// what keeps two separate builds from ever sharing one (denotation.go).
+// what keeps two separate builds from ever sharing one (root denotation.go).
 // False for every OTHER caller of this function, which mints no curve
 // identity for their own rim.
-func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop loopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
-	mintCurve := func() curveToken {
+func BuildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, roleLoop int, holeLoop bool, loop sectionrecord.LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 denotation.LevelToken, mintCurveTokens bool) ([]*topo.Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
+	mintCurve := func() denotation.CurveToken {
 		if !mintCurveTokens {
-			return curveToken{}
+			return denotation.CurveToken{}
 		}
-		return body.n.Doc.MintCurve()
+		return body.Doc.MintCurve()
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, proofbound.BoundedScalar{}, err
 	}
 	if len(loop.Segments) == 0 {
-		return nil, nil, nil, proofbound.BoundedScalar{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
+		return nil, nil, nil, proofbound.BoundedScalar{}, fmt.Errorf(`%w: a recorded loop holds no segments`, decaderr.ErrDegenerate)
 	}
 	var loopWalks []survey2d.SegmentWalk
 	if resolved != nil {
@@ -498,7 +480,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}
-		seg, err := normalizeSegment(seg)
+		seg, err := sectionrecord.NormalizeSegment(seg)
 		if err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}
@@ -533,7 +515,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// The sweep height is read from the two BOUNDED levels, so a level the
 	// evaluator computed carries its own displacement into the vertical edge
 	// lengths and the side face areas built from it below — a ToFace or
-	// ThroughAll stop's float arithmetic (stops.go), a non-base unit's rescale,
+	// ThroughAll stop's float arithmetic (root stops.go), a non-base unit's rescale,
 	// and a chamfered end's setback alike.
 	height := proofbound.BoundedSub(pp.Z1Scalar(), pp.Z0Scalar())
 	// A side vertex sits at one recorded boundary coordinate and one sweep level,
@@ -541,35 +523,35 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// plane, and its own end's, which moves it along the normal. Each is zero for
 	// a coordinate the payload recorded from what the caller stated. Beside them
 	// every rim vertex carries its OWN frame lift and accumulated placement
-	// rounding, measured exactly for that vertex (prismPayload.LiftedVertex;
-	// topology.go's Vertex.Position contract) — zero wherever the lift is exact
+	// rounding, measured exactly for that vertex (Payload.LiftedVertex;
+	// root topology.go's Vertex.Position contract) — zero wherever the lift is exact
 	// for the coordinates at hand, which is what keeps an ordinary extrude's
 	// vertices Exact. None of the three is a claim about another's axis, so
 	// they compose rather than one standing in for another.
 	// rimVertex places one rim vertex at (u, v) on level z, whose own axial
 	// displacement is zDelta, charging the section's displacement, that level's,
 	// the vertex's own exact lift rounding and the walk-end term extra.
-	rimVertex := func(u, v, z, zDelta, extra float64, level levelToken) *Vertex {
+	rimVertex := func(u, v, z, zDelta, extra float64, level denotation.LevelToken) *topo.Vertex {
 		held, lift := pp.LiftedVertex(u, v, z)
 		base := proofbound.AbsSumUpper(delta, zDelta, lift)
-		return bornVertex(&Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, extra)), Level: level, Denot: mintCurve()}})
+		return topobuild.NewVertex(env.Alloc, topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, extra)), Level: level, Denot: mintCurve()})
 	}
-	var bottomV, topV []*Vertex
+	var bottomV, topV []*topo.Vertex
 	// seamBottom/seamTop are the SINGLE seam vertex a lone closed walk's rim
 	// edges share at each cap — one per cap, no junction vertex at all — the
 	// free-form twin of a whole CircleSeg's own seam vertex. Hoisted out of the
 	// per-kind switch below (§10 P4b): a closed free-form walk reaches
 	// singleClosed on the same terms a whole circle does, and the switch's
 	// survey2d.WalkFreeform arm needs the SAME seam pair the survey2d.WalkCircular arm builds.
-	var seamBottom, seamTop *Vertex
+	var seamBottom, seamTop *topo.Vertex
 	if singleClosed {
 		w := walks[0]
 		u, v, extra := boundarywalk.JunctionVertexAt(loop.Segments, w, w)
 		seamBottom = rimVertex(u, v, pp.Z0, pp.Z0Delta, extra, levelZ0)
 		seamTop = rimVertex(u, v, pp.Z1, pp.Z1Delta, extra, levelZ1)
 	} else {
-		bottomV = make([]*Vertex, n)
-		topV = make([]*Vertex, n)
+		bottomV = make([]*topo.Vertex, n)
+		topV = make([]*topo.Vertex, n)
 		for i, w := range walks {
 			if err := ctx.Err(); err != nil {
 				return nil, nil, nil, proofbound.BoundedScalar{}, err
@@ -591,37 +573,35 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// founded as the circular walk's own tangent, whose bound is +Inf by
 	// survey2d.SegmentWalk's convention because it comes from trig at a computed
 	// angle. This cross needs no change for either kind.
-	var vertical []*Edge
+	var vertical []*topo.Edge
 	if !singleClosed {
-		vertical = make([]*Edge, n)
+		vertical = make([]*topo.Edge, n)
 		for i := range walks {
 			if err := ctx.Err(); err != nil {
 				return nil, nil, nil, proofbound.BoundedScalar{}, err
 			}
 			prev := walks[(i+n-1)%n]
 			cross := prev.TanOutU*walks[i].TanInV - prev.TanOutV*walks[i].TanInU
-			vertical[i] = bornEdge(&Edge{
-				n: topo.Edge{
-					Convex:      cross > 0,
-					Length:      pp.Z1 - pp.Z0,
-					LengthBound: height.Bound,
-					Curve:       surfacegeom.Line3{},
-					Start:       vertexNode(bottomV[i]),
-					End:         vertexNode(topV[i]),
-				},
+			vertical[i] = topobuild.NewEdge(env.Alloc, topo.Edge{
+				Convex:      cross > 0,
+				Length:      pp.Z1 - pp.Z0,
+				LengthBound: height.Bound,
+				Curve:       surfacegeom.Line3{},
+				Start:       bottomV[i],
+				End:         topV[i],
 			})
 		}
 	}
 
 	// Side faces with bottom/top edges; cap coedges accumulate in walk order.
-	faces := make([]*Face, 0, n)
+	faces := make([]*topo.Face, 0, n)
 	bottomCo := make([]topo.CoEdge, 0, n)
 	topCo := make([]topo.CoEdge, 0, n)
 	for i, w := range walks {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}
-		var bStart, bEnd, tStart, tEnd *Vertex
+		var bStart, bEnd, tStart, tEnd *topo.Vertex
 		if singleClosed {
 			bStart, bEnd = seamBottom, seamBottom
 			tStart, tEnd = seamTop, seamTop
@@ -633,68 +613,68 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		if err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}
-		bottomEdge, topEdge, surf, faceReversed, err := buildWallGeometry(pp, w, convex, singleClosed, bStart, bEnd, tStart, tEnd)
+		bottomEdge, topEdge, surf, faceReversed, err := BuildWallGeometry(env.Alloc, pp, w, convex, singleClosed, bStart, bEnd, tStart, tEnd)
 		if err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}
 		// The LEVEL certificate travels uniformly, whatever curve kind this
 		// rim edge carries: every rim edge at one end is stamped by the SAME
-		// evalPrismContext call over the SAME recorded frame and level.
-		bottomEdge.n.Level = levelZ0
-		topEdge.n.Level = levelZ1
+		// Build call over the SAME recorded frame and level.
+		bottomEdge.Level = levelZ0
+		topEdge.Level = levelZ1
 		// The CURVE certificate is minted fresh per rim edge, never shared:
 		// each rim edge denotes its OWN curve (a different wall's own top or
 		// bottom boundary), unlike the level, which many rim edges share.
-		bottomEdge.n.Denot = mintCurve()
-		topEdge.n.Denot = mintCurve()
+		bottomEdge.Denot = mintCurve()
+		topEdge.Denot = mintCurve()
 
-		origins, err := sideOriginsContext(ctx, ref, roleLoop, w.Segs)
+		origins, err := SideOrigins(ctx, env.Ref, roleLoop, w.Segs)
 		if err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}
 		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
-		face := bornFace(&Face{
-			n: topo.Face{
-				Area:      faceArea.Value,
-				AreaBound: faceArea.Bound,
-				Reversed:  faceReversed,
-				Surface:   surf,
-				Origins:   origins,
-				Body:      bodyNode(body),
-			},
+		face := topobuild.NewFace(env.Alloc, topo.Face{
+			Area:      faceArea.Value,
+			AreaBound: faceArea.Bound,
+			Reversed:  faceReversed,
+			Surface:   surf,
+			Origins:   origins,
+			Body:      body,
 		})
 		if singleClosed {
 			// A closed cylindrical band has TWO boundary loops — one circle
 			// per cap — not one loop holding both.
-			face.n.Loops = []*topo.Loop{
-				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(bottomEdge), Forward: true}}}})),
-				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(topEdge), Forward: false}}}})),
+			face.Loops = []*topo.Loop{
+				topobuild.NewLoop(env.Alloc, topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: bottomEdge, Forward: true}}}),
+				topobuild.NewLoop(env.Alloc, topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: topEdge, Forward: false}}}),
 			}
 		} else {
-			face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-				{Edge: edgeNode(bottomEdge), Forward: true},
-				{Edge: edgeNode(vertical[(i+1)%n]), Forward: true},
-				{Edge: edgeNode(topEdge), Forward: false},
-				{Edge: edgeNode(vertical[i]), Forward: false},
+			face.Loops = []*topo.Loop{topobuild.NewLoop(env.Alloc, topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+				{Edge: bottomEdge, Forward: true},
+				{Edge: vertical[(i+1)%n], Forward: true},
+				{Edge: topEdge, Forward: false},
+				{Edge: vertical[i], Forward: false},
 			},
-			}}))}
+			})}
 		}
 
-		bottomEdge.n.Faces = append(bottomEdge.n.Faces, faceNode(face))
-		topEdge.n.Faces = append(topEdge.n.Faces, faceNode(face))
+		bottomEdge.Faces = append(bottomEdge.Faces, face)
+		topEdge.Faces = append(topEdge.Faces, face)
 		if !singleClosed {
-			vertical[i].n.Faces = append(vertical[i].n.Faces, faceNode(face))
-			vertical[(i+1)%n].n.Faces = append(vertical[(i+1)%n].n.Faces, faceNode(face))
+			vertical[i].Faces = append(vertical[i].Faces, face)
+			vertical[(i+1)%n].Faces = append(vertical[(i+1)%n].Faces, face)
 		}
 
 		faces = append(faces, face)
-		bottomCo = append(bottomCo, topo.CoEdge{Edge: edgeNode(bottomEdge), Forward: true})
-		topCo = append(topCo, topo.CoEdge{Edge: edgeNode(topEdge), Forward: true})
+		bottomCo = append(bottomCo, topo.CoEdge{Edge: bottomEdge, Forward: true})
+		topCo = append(topCo, topo.CoEdge{Edge: topEdge, Forward: true})
 	}
 	return faces, bottomCo, topCo, total, nil
 }
 
-func sideOriginsContext(ctx context.Context, ref producerID, roleLoop int, segs []int) ([]provenance.Ref, error) {
+// SideOrigins names the side(roleLoop,j) role of each recorded segment j a
+// wall was built from, under ref.
+func SideOrigins(ctx context.Context, ref provenance.Producer, roleLoop int, segs []int) ([]provenance.Ref, error) {
 	origins := make([]provenance.Ref, len(segs))
 	for oi, si := range segs {
 		if err := ctx.Err(); err != nil {

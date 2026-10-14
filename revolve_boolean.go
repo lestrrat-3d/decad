@@ -100,7 +100,7 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 	if err != nil || !resolved {
 		return nil, false, err
 	}
-	if err := prismcells.AuditMergeSection(budget, ra.meridian().Payload, profile); err != nil {
+	if err := prismcells.AuditMergeSection(budget, ra.meridian(), profile); err != nil {
 		return nil, false, err
 	}
 	sources, ok, err := revolveBooleanSources(ctx, a, b, ra, rb, tags, coincident, chain)

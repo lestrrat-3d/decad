@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/r3"
@@ -230,7 +231,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	for v, class := range classOf {
 		vertBound[class] = v.n.Bound.Base()
 	}
-	if err := attachFaceLoopsContext(ctx, newFaces); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, faceNodes(newFaces)); err != nil {
 		return nil, err
 	}
 	if err := deriveStitchOrientation(newFaces); err != nil {
@@ -263,7 +264,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// publishes no volume at all (Table C's first row), so there is nothing
 	// for a nested or interlocking pair of components to double-count. This
 	// evaluator cannot express a cavity at all — FaceShell.void is hardcoded
-	// false and sheetLumps builds one shell per lump, so admitting a nested
+	// false and topobuild.SheetLumps builds one shell per lump, so admitting a nested
 	// pair would need a new recorded fact, a new shell-assembly rule and a
 	// per-component orientation derivation this increment does not add —
 	// and a refusal needs none of that. Strict axis-aligned bounding-box
@@ -280,7 +281,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// fixture in this tree builds it, and a refusal is the sound answer
 	// until this evaluator can decide the case on its own terms.
 	if !open {
-		if components := splitConnectedFaces(newFaces); len(components) > 1 && !stitchLumpsProvenSeparate(components) {
+		if components := faceGroupHandles(topobuild.SplitConnectedFaces(faceNodes(newFaces))); len(components) > 1 && !stitchLumpsProvenSeparate(components) {
 			return nil, fmt.Errorf(`%w: Stitch refuses a multi-lump assembly whose lumps are not proven mutually separate (docs/surface-design.md Table R row R20)`, ErrUnsupported)
 		}
 	}
@@ -412,7 +413,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	for _, f := range newFaces {
 		f.n.Body = bodyNode(body)
 	}
-	body.n.Lumps = lumpNodes(sheetLumps(newFaces))
+	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(newFaces))
 
 	// Area is the sum of the constituent faces' own area/areaBound through
 	// proofbound.BoundedAdd (correction 2, docs/surface-design.md §6.4/§8): never a
@@ -453,7 +454,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		}
 	}
 
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 

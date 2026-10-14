@@ -122,8 +122,8 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 			j: read.Axis, w0: read.LowerFace, w1: read.UpperFace,
 			loop0: read.LowerLoop, loop1: read.UpperLoop,
 			lo: read.Lo, hi: read.Hi, walls: read.Walls, frameEmb: read.FrameEmbed,
-			prism: prismPayload{Payload: prismrecord.Payload{Profile: profileRecord{Outer: read.Outer},
-				Frame: read.Frame, Z0: read.Lo, Z1: read.Hi, Xform: bp.xform}},
+			prism: prismrecord.Payload{Profile: profileRecord{Outer: read.Outer},
+				Frame: read.Frame, Z0: read.Lo, Z1: read.Hi, Xform: bp.xform},
 		})
 	}
 	return tc, "", true, nil
@@ -418,12 +418,12 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded profileR
 		z1, z1Delta = step(z1, z1Delta, -call.tmm)
 	}
 	charge := max(delta, z0Delta, z1Delta)
-	var cut topo.Payload = prismPayload{Payload: prismrecord.Payload{Profile: eroded, Frame: tc.caps.Frame, Z0: z0, Z1: z1, Xform: bp.xform}}
+	var cut topo.Payload = prismrecord.Payload{Profile: eroded, Frame: tc.caps.Frame, Z0: z0, Z1: z1, Xform: bp.xform}
 	for i, tool := range tc.tools {
 		lo, loDelta := step(tool.lo, 0, -call.tmm)
 		hi, hiDelta := step(tool.hi, 0, call.tmm)
-		tp := prismPayload{Payload: prismrecord.Payload{Profile: dilated[i], Frame: tool.prism.Frame, Xform: bp.xform,
-			Z0: lo, Z1: hi, Z0Delta: loDelta, Z1Delta: hiDelta}}
+		tp := prismrecord.Payload{Profile: dilated[i], Frame: tool.prism.Frame, Xform: bp.xform,
+			Z0: lo, Z1: hi, Z0Delta: loDelta, Z1Delta: hiDelta}
 		out, ok, err := classBOfPayloads(ctx, meshbool.OpCut, cut, tp, bp.xform, charge)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {

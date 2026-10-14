@@ -430,7 +430,7 @@ wall, and no role: a wall face of the sheet is the same face, with the same
 
 That is the whole of the evaluator work, and it is deliberately small. Every
 builder this option reaches already constructs its walls and its closing faces
-separately — `prism_build.go`'s `buildLoopSidesAs` walk beside its two caps,
+separately — `internal/prismrecord/build.go`'s `prismrecord.BuildLoopSidesAs` walk beside its two caps,
 `revolve_build.go`'s swept walls beside its caps and seams — so the option
 selects among faces the evaluator already has rather than asking it for new
 geometry. No new surface is derived, so no new bound is derived either.
@@ -475,12 +475,12 @@ revolution, and it needs no new rule.
 box face. Every cap is a compact region whose boundary lies in the wall set,
 and a box extreme over a compact region is attained on its boundary, so no
 cap interior point reaches past the walls in any axis direction. The
-evaluator reuses the existing per-payload extent readings (`prism_extent.go`,
+evaluator reuses the existing per-payload extent readings (`internal/prismrecord/extent.go`,
 `revolve_extent.go`) verbatim, including their bounds.
 
 **`Area` is the solid's area minus the omitted caps' areas.** Each cap area is
 already computed and already carries its own bound
-(`prism_build.go` stamps `capStart.areaBound`), so the sheet's area is a
+(`internal/prismrecord/build.go` stamps `capStart.areaBound`), so the sheet's area is a
 subtraction of two quantities the builder holds, and its bound is their sum.
 No area is re-integrated.
 
@@ -575,7 +575,7 @@ Four gates, in this order, and each is reject-only:
    ADMISSION decision never reads a coordinate, a residual or a bound
    magnitude. It requires every chain vertex, and every chain edge, to carry
    a `levelToken` (`internal/denotation/token.go`) with the SAME non-zero id: a minted
-   identity a straight prism build (`prism_build.go`) stamps once per swept
+   identity a straight prism build (`internal/prismrecord/build.go`) stamps once per swept
    end, only when its own record is drawn straight from the profile
    (`sectionDelta == 0`) and its frame axes are RECORDED rather than
    computed, so the only displacement in play is axial. A shared id proves
@@ -621,7 +621,7 @@ Four gates, in this order, and each is reject-only:
    approximately-coplanar data would carry, are discarded, never published.
    `buildPatchFace` then sets the new face's `AxialDelta`/`hasAxialDelta`
    from the token's own bound (folded with any placement rounding), the same
-   fields `prism_build.go` already sets on a prism's own caps (no new field
+   fields `internal/prismrecord/build.go` already sets on a prism's own caps (no new field
    on `Face`). A chain the first, exact arm admits keeps its existing plane
    (fitted from its own proven-exact vertices) and a zero `AxialDelta`,
    unchanged.
@@ -716,7 +716,7 @@ faces the patch mints on top of it; gate 3's own proof is never replayed,
 for the same reason `Stitch`'s Table J admission never is (§6.4): a rigid
 motion preserves planarity exactly, so re-proving it would only make a
 placement refuse for no soundness gain. `Kind`, lumps and shells come from
-the existing `sheetLumps`, run only after every face — the receiver's own
+the existing `topobuild.SheetLumps`, run only after every face — the receiver's own
 copies and every new one — is attached. A patch that closes a sheet's last
 free edge leaves a **closed sheet** reporting `BodySheet` with `IsSolid()`
 `false`: `Stitch` alone makes the material claim (§2.1). `Bounds` is the
@@ -815,7 +815,7 @@ other.
 
 A `curveToken` (`internal/denotation/token.go`) is minted once per denoted curve or point by
 the evaluator that first builds it — today a straight prism's own rim edge
-and rim vertex (`prism_build.go`, minted fresh per edge and per vertex, with
+and rim vertex (`internal/prismrecord/build.go`, minted fresh per edge and per vertex, with
 no `sectionDelta == 0` precondition: unlike coplanarity, an identity claims
 nothing about the section itself) and a revolve's own internal junction edge
 and its shared vertex (`revolve_build.go`; a revolve's SEAM — its boundary
@@ -855,7 +855,7 @@ the permanent proof that bit-identity alone never admits, and it stays green
 unchanged by this certificate).
 
 A rebuild from a record — `Transform`/`Copy` re-evaluating a
-straight prism or a revolve from `evalPrismContext`/`evalRevolveContextWork`
+straight prism or a revolve from `prismrecord.Build`/`evalRevolveContextWork`
 — mints fresh ids every time, which is safe because a fresh id only ever
 declines: two builds of the identical profile at the identical extent, one
 placed and one not, never share a token regardless. A copy path — Unstitch
@@ -1249,8 +1249,8 @@ as every other Rule S arm.
 
 Conditions 2 and 3 are both decided through the LEVEL half of the
 shared-denotation certificate (`internal/denotation/token.go`, §5.2), never by a coordinate
-or a residual: a straight prism build (`prism_build.go`'s
-`evalPrismContext`) stamps every rim vertex and edge at one end with the
+or a residual: a straight prism build (`internal/prismrecord/build.go`'s
+`prismrecord.Build`) stamps every rim vertex and edge at one end with the
 SAME level token, minted fresh per build and per end whenever the build's
 own section is drawn straight from its record (`sectionDelta == 0`) —
 regardless of whether that end's own coordinate ends up zero-bound or not,
@@ -1698,7 +1698,7 @@ disagrees with the edge's own adjacent-face count also a violation — plus a
 fourth leg, non-self-intersection, admitted by construction alone and never by
 a residual or a chord test. A surface-extruded sheet earns the fourth leg
 because `sketch` already proved the recorded section a simple closed planar
-region, `evalPrismContext` already refuses a non-positive sweep height, a
+region, `prismrecord.Build` already refuses a non-positive sweep height, a
 simple planar region crossed with a positive interval cannot self-intersect,
 and the rigid placement that follows preserves that. A surface-result loft
 earns it on a STRONGER argument: the evaluator cannot return a loft body at
@@ -2519,10 +2519,10 @@ path does not have and give one built surface two admissible orientations.
 | faces | one per recorded segment, Table G |
 | `Edges(Free())` | Table G's own count: a full-turn chain with one pole has one free rim; a partial turn with one pole and one segment has two free meridian edges plus one off-axis sweep arc |
 | `Area` | the sum of each wall's own area through `boundedAdd`: `segment length · h` for an extrude, `boundedMul(walkAxisMoment, sweep)` for a revolve. A pole adds zero area. `walkAxisMoment` charges the snapped radial endpoint's bound and the segment-length bound, and that length bound itself carries what the snap discarded: moving an endpoint onto the axis moves the wall's two ends APART as well as inward, by at most the sum of the two discarded radial magnitudes, and the recorded length is the unsnapped one (`axisFrame.walk`). Charging only the radial endpoint would leave a nearly RADIAL wall short — a disk spends the whole discarded radius on its length where a steep cone spends a fraction of it. The sweep carries its angle-denotation bound; `boundedMul` charges the product and `boundedAdd` charges the wall sum. A circular wall also carries its proven integral enclosure, and a free-form wall carries `internal/freeform/spline_length.go`'s proven bracket |
-| `Bounds` | the recorded walk's per-segment analytic extremes swept over the signed interval, from `prism_extent.go` and `revolve_extent.go` verbatim, charging the frame and placement rounding those readings already charge |
+| `Bounds` | the recorded walk's per-segment analytic extremes swept over the signed interval, from `internal/prismrecord/extent.go` and `revolve_extent.go` verbatim, charging the frame and placement rounding those readings already charge |
 
 No bound in that table is new, because no geometry is: every wall is built by
-the identical per-segment construction — `buildLoopSidesAs` for a prism,
+the identical per-segment construction — `prismrecord.BuildLoopSidesAs` for a prism,
 `revolve_build.go`'s wall walk for a revolve — so its surface, its area and its
 bound are the ones that construction already proves. The tolerance gate's
 reference diameter comes from the same extent readings a profile-fed payload
@@ -2533,7 +2533,7 @@ unchanged.
 with one word changed.** A chain-fed prism earns it because `sketch` already
 proved the recorded walk a simple planar curve — `Valid` true means the walk
 neither crosses nor touches itself, and a walk whose two ends met would be a
-closed run `sketch` publishes as a `Profile` instead — `evalPrismContext`
+closed run `sketch` publishes as a `Profile` instead — `prismrecord.Build`
 already refuses a non-positive sweep height, and a simple planar curve crossed
 with a positive interval cannot self-intersect. A chain-fed revolve earns it on
 the full-turn argument §9.1 already carries: away from a free pole, two distinct
@@ -2832,7 +2832,7 @@ The row-9 curved-mesh obligations are:
 | T93 | `resolveAxisSide` against the SAME exact axis with the near edge dipped 1e-7 mm below it (internal — `TestRevolveAxisBandRefusesProvenNegativeRadialMinimumUnderExactAxis`; the fixture the investigation measured admitted under the pre-repair tolerance) | `ErrDegenerate`, never an admission with a widened bound — the strict half of the repair: an admission gate may not rest on a tolerance once the radial bound is proven zero. Shown-to-fail: removing the strict refusal turns this assertion red |
 | T94 | `resolveAxisSide` against an axis anchored far from the origin (`aV = 1e10`) on a direction whose components are not exactly representable, mirroring `TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift`'s own fixture one level up (internal — `TestRevolveAxisBandChargesTheOffsetSubtraction`) | the axis-offset subtraction's own rounding is charged into the bound the "ambiguous side" refusal states, which is never zero. Shown-to-fail: reverting to a bare `rlo -= roff` drops the charge and the fixture wrongly reaches an unrefused, uncharged admission |
 | T95 | a real sketch-solver-resolved shaft profile whose near edge sits AT (not below) `tiltedAxis` (`apitest/revolve_bounds_test.go`'s own anchor/direction), built end to end through `Revolve` (internal — `TestRevolveAxisBandRealGeometryChargedPathVolumeContainment`) | `axisFrame.radialAdmitAllow` is confirmed positive (the charged path, not the strict one, fires on real geometry — `resolveAxisSide`'s own `planeDotDecompositionRoundAllow` charge on its scan arithmetic is what makes this reading agree across architectures instead of one proving the same true-zero radial minimum negative); `Volume`'s published interval contains the plain cylinder its snapped topology encloses; rebuilding the SAME payload with `radialAdmitAllow` zeroed publishes a bound smaller by less than one part in a million, establishing rather than assuming that this real fixture's own charge is swamped by the build's other analytic-rounding terms — T90/T91 are what make the charge itself load-bearing, at a magnitude no real sketch-resolved fixture in this tree reaches. Shown-to-fail: moving the near edge off the axis turns the `radialAdmitAllow` positivity assertion red; comparing the no-charge bound against an arbitrary literal instead of the real one turns the relative-magnitude assertion red |
-| T96 | a 100×60×40 mm axis-aligned box transformed under a rotation about the normalized (1, 2, 3) composed with a 500 mm translation (`apitest/vertex_placement_test.go`'s `TestVertexPlacedPrismBoundEnclosesDisplacement`) | for each of the eight rim vertices, the L∞ residual between the held value and the corner the record, frame and placement denote — computed entirely over `math/big.Rat` and rounded UP into a float64, never a second float answer — sits inside the published `Vertex.Position()` `Bound`. At least one vertex is genuinely displaced, so it reads `Approximate` over a strictly positive bound; a corner whose lift happens to be exact reads `Exact` with a zero bound and a zero residual. No bound is compared against a literal. Shown-to-fail: deleting the lift term `prism_build.go`'s `rimVertex` charges in `buildLoopSidesAs` turns every vertex `Exact` at a zero bound and the enclosure assertions go red |
+| T96 | a 100×60×40 mm axis-aligned box transformed under a rotation about the normalized (1, 2, 3) composed with a 500 mm translation (`apitest/vertex_placement_test.go`'s `TestVertexPlacedPrismBoundEnclosesDisplacement`) | for each of the eight rim vertices, the L∞ residual between the held value and the corner the record, frame and placement denote — computed entirely over `math/big.Rat` and rounded UP into a float64, never a second float answer — sits inside the published `Vertex.Position()` `Bound`. At least one vertex is genuinely displaced, so it reads `Approximate` over a strictly positive bound; a corner whose lift happens to be exact reads `Exact` with a zero bound and a zero residual. No bound is compared against a literal. Shown-to-fail: deleting the lift term `internal/prismrecord/build.go`'s `rimVertex` charges in `prismrecord.BuildLoopSidesAs` turns every vertex `Exact` at a zero bound and the enclosure assertions go red |
 | T97 | the same 100×60 rectangle extruded 40 mm with NO placement, drawn on a tilted, non-origin sketch plane — origin (7, −3, 11), normal the normalized (1, 2, 3) (`TestVertexTiltedPlaneUnplacedBoundEnclosesDisplacement`) | the same reading under the identity transform: lifting a plane-local coordinate through a non-axis-aligned frame rounds with no placement in play, so each rim vertex's bound encloses its exact-rational truth and at least one is `Approximate` over a strictly positive bound. Shown-to-fail: charging the lift only under a non-identity `xform` — the loft/stitch/patch/unstitch pattern, which never has to consider its own frame lift — turns this row red while T100 stays green, so this is the row that isolates the frame lift from the placement |
 | T98 | `annularSketch` revolved a quarter turn `Along` about `uAxis`, then transformed under a rotation about the normalized (1, 2, 3) (`TestVertexPlacedRevolveBoundEnclosesDisplacement`) | the four cap vertices at φ = 0 sit inside their own published bounds, and at least one reads `Approximate` over a strictly positive bound. The sweep starts where sine and cosine evaluate to exactly (1, 0), so the row charges the frame lift and the placement alone and not the angular denotation `apitest/revolve_bounds_test.go` already covers. Shown-to-fail: replacing `revolve_build.go`'s `sweptVertex` comparison with a zero bound turns the assertions red |
 | T99 | a 100×60×20 mm box `Chamfer`ed 5 mm on its complete end-cap loop, then transformed under T96's own motion (`TestVertexPlacedCapBlendBoundEnclosesDisplacement`) | the four cap-level corners sit inside their own published bounds, and at least one reads `Approximate` over a strictly positive bound. A 5 mm chamfer sets each corner back exactly 5 mm along both adjacent edges, so the cap-level corners are the plane-local (5, 5), (95, 5), (95, 55) and (5, 55) at z = 20 by construction and the truth needs no offset-solve reproduction. Shown-to-fail: deleting the lift term `capblend_geom.go`'s `capVertexAt` charges in `buildCapBand` turns the assertions red |
@@ -3047,7 +3047,7 @@ its construction and its readings:
 
 | Sheet family and payload | Result at the call | Deciding record or missing proof |
 |---|---|---|
-| `PatchProfile`, `patchPayload` | admitted (§16.2) | one recorded profile accepted by `evalPrismContext`, including holes; extrude it over §16.2's signed normal interval |
+| `PatchProfile`, `patchPayload` | admitted (§16.2) | one recorded profile accepted by `prismrecord.Build`, including holes; extrude it over §16.2's signed normal interval |
 | profile-fed prism sheet, `prismPayload` with `surfaceResult == true` | admitted (§16.2) | one outer loop, no holes; either all `LineSeg` walks parallel to recorded U or V, or one whole `CircleSeg`; `sectionDelta == 0` |
 | profile-fed revolve sheet, `revolvePayload` with `surfaceResult == true` | admitted (§16.5) | §16.2's section class again, plus an axis stated exactly along a recorded plane axis and a proven strictly positive radius over the whole offset interval |
 | chain ribbon, `chainPayload` | admitted (§16.6) | one recorded open walk of axis-parallel `LineSeg`s with right-angle interior corners; `sectionDelta == 0` |
@@ -3078,7 +3078,7 @@ For a patch, set the signed prism levels to `[0,t]` (positive), `[-t,0]`
 the patch's profile, frame and accumulated placement. Pass the millimetre
 conversion's own bound through the computed level's `z0Delta`/`z1Delta`,
 including the division and negation for centered or negative, then run
-`evalPrismContext`. A planar face translated along its fixed normal cannot
+`prismrecord.Build`. A planar face translated along its fixed normal cannot
 self-intersect through the interval; the authenticated simple profile and a
 proven positive interval supply that proof. A collapsed or undecidable held
 interval is R27. `PatchEdges`'s extra face set is not this construction.
@@ -3098,8 +3098,8 @@ never shifted by changing the source prism's axial levels.
 `offset2d.AuditOffsetSectionBudget` checks each one. Its `reverseLoopRecordContext`
 and `shell.go`'s `evalTubeContext` already form and build the one-sided,
 hole-free annulus. A centered call forms the analogous annulus from TWO
-offsets and uses `evalPrismContext`. `shell_cup.go`'s calls to
-`prism_build.go`'s `buildLoopSidesAs`, its `renameCavityRoles` and bounded region-prism
+offsets and uses `prismrecord.Build`. `shell_cup.go`'s calls to
+`internal/prismrecord/build.go`'s `prismrecord.BuildLoopSidesAs`, its `renameCavityRoles` and bounded region-prism
 measurements show how to assemble the skins, but `evalCupContext` itself
 adds a kept cap and a floor at a second axial level: calling it would make a
 cup, not this through-height wall. A holed prism sheet would produce one
@@ -3154,13 +3154,13 @@ result with that exact value using `dyadic`/`rationalFloatError`; refuse R27
 when one is not representable or the required half-thickness vanishes.
 Never infer exactness from a small residual or from `math.Hypot`, `Atan2`,
 `Sin` or `Cos`: none has an accuracy contract here. This gate keeps
-`prismPayload.SectionDelta == 0` truthful, so `evalPrismContext`'s existing
+`prismPayload.SectionDelta == 0` truthful, so `prismrecord.Build`'s existing
 moment and extent proofs apply, and it is what lets §16.5's and §16.7's
 results hold a revolve record whose own section carries no displacement
 term at all. A future increment may carry a proven
 nonzero generated-section displacement through EVERY downstream reading
 instead of refusing it. The rejected alternative is feeding rounded offset
-coordinates to `evalPrismContext` with a zero `sectionDelta` and publishing
+coordinates to `prismrecord.Build` with a zero `sectionDelta` and publishing
 measurements of a more precise wall than the record denotes.
 
 Gate order is fixed: check context, liveness, owned options and magnitude;
@@ -3198,7 +3198,7 @@ section's prism box, since the inner region is strictly contained. A
 circle of radius 10 mm thickened outward by 2 mm over 10 mm height has
 volume `440π mm³`, whereas its sheet area times 2 mm is `400π mm³`.
 
-`evalPrismContext`'s region integrals, segment lengths, `boundedAdd`/
+`prismrecord.Build`'s region integrals, segment lengths, `boundedAdd`/
 `boundedSub`/`boundedMul`/`boundedQuotient`, point lift and extent readers
 publish `Volume`, `Area`, `Centroid` and `Bounds` with their existing
 outward bounds, including every source axial displacement and placement
@@ -3396,7 +3396,7 @@ its source section, and a ribbon has no source section.
 entries refuses a crossing, a tangency or a shared boundary point at the
 requested thickness — R26. Nesting is vacuous: the section is one loop.
 
-**The build** is `evalPrismContext` over a `prismPayload` holding the assembled
+**The build** is `prismrecord.Build` over a `prismPayload` holding the assembled
 section beside the ribbon's own `frame`, `z0`, `z1`, `z0Delta`, `z1Delta` and
 `xform`. No level moves, so the solid occupies the ribbon's own interval.
 
@@ -3412,7 +3412,7 @@ sweep height R27.
 one lump, and `N + 2` faces for an `N`-segment assembled section: one wall per
 segment plus the two planar caps. `Volume = A·h`, `Area = 2A + L·h`, the
 centroid is the section centroid lifted to the interval midpoint and `Bounds`
-is the swept section box — every one `evalPrismContext`'s own reading under its
+is the swept section box — every one `prismrecord.Build`'s own reading under its
 existing bound origins: the region integrals' own bounds, both axial
 displacements, the frame lift and the accumulated placement rounding. A section
 with no corner arc publishes `Exact` readings; one with a corner arc publishes
@@ -3644,7 +3644,7 @@ and the exact sum or difference of its radius and `d`. Never infer exactness
 from a small residual or from `math.Hypot`, `Atan2`, `Sin` or `Cos`: none has
 an accuracy contract here. A generated value that is not representable is R39.
 Because the gate holds, the result carries `sectionDelta == 0`, so
-`evalPrismContext`'s existing moment and extent proofs apply to the offset
+`prismrecord.Build`'s existing moment and extent proofs apply to the offset
 section as they do to a recorded one, and no reading describes a more precise
 wall than the record denotes.
 
@@ -3690,9 +3690,9 @@ Where each reading and each bound comes from:
 | Reading | Value | Bound |
 |---|---|---|
 | `Area`, patch arm | the source's, unchanged | the source's, unchanged: the recorded profile and its region integral are the same ones, and a rigid motion moves no area |
-| `Bounds`, patch arm | the recorded boundary's box under the composed motion | the frame and placement rounding `prismBoundsContext` already charges, as `Copy` charges it |
-| `Area`, prism arm | `evalPrismContext`'s wall sum over `Q`, the omitted caps subtracted as §4.3 states | the perimeter and height terms that builder already composes; the section term is zero by §17.2's gate |
-| `Bounds`, prism arm | `prism_extent.go`'s reading over `Q` | the source's `z0Delta`/`z1Delta` unchanged, plus the frame and placement rounding |
+| `Bounds`, patch arm | the recorded boundary's box under the composed motion | the frame and placement rounding `prismrecord.Bounds` already charges, as `Copy` charges it |
+| `Area`, prism arm | `prismrecord.Build`'s wall sum over `Q`, the omitted caps subtracted as §4.3 states | the perimeter and height terms that builder already composes; the section term is zero by §17.2's gate |
+| `Bounds`, prism arm | `internal/prismrecord/extent.go`'s reading over `Q` | the source's `z0Delta`/`z1Delta` unchanged, plus the frame and placement rounding |
 | `Volume`, `Centroid` | `ErrNotSolid`, both arms | — §8, by kind, not by soundness |
 
 A zero bound is a positive claim of exactness and is published only where the

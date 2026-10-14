@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 )
@@ -75,7 +76,7 @@ func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, 
 			return nil, err
 		}
 		widened, delta, err := prismcells.ResolveSurfaceExtend(ctx, budget,
-			prismcells.SurfaceOperandOf(rcv.prism().Payload), prismcells.SurfaceOperandOf(tl.Payload), chains[ci].Segments[si], atStart)
+			prismcells.SurfaceOperandOf(rcv.prism()), prismcells.SurfaceOperandOf(tl), chains[ci].Segments[si], atStart)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +163,7 @@ func admitExtendPair(budget *proofbound.WorkBudget, receiver, tool *Body) (chain
 	}
 	view := rcv.prism()
 	if err := prismcells.AdmitSurfacePair(budget, prismcells.SurfaceExtend,
-		prismcells.SurfaceOperandOf(view.Payload), prismcells.SurfaceOperandOf(tl.Payload)); err != nil {
+		prismcells.SurfaceOperandOf(view), prismcells.SurfaceOperandOf(tl)); err != nil {
 		return chainPayload{}, prismPayload{}, err
 	}
 	return rcv, tl, nil
@@ -242,7 +243,7 @@ func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error
 	}
 
 	chains, sectionDelta, err := prismcells.ResolveSurfaceTrim(ctx, budget,
-		prismcells.SurfaceOperandOf(rcv.Payload), prismcells.SurfaceOperandOf(tl.Payload), side == KeepInside)
+		prismcells.SurfaceOperandOf(rcv), prismcells.SurfaceOperandOf(tl), side == KeepInside)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +379,7 @@ func admitTrimPair(budget *proofbound.WorkBudget, receiver, tool *Body) (rcv, tl
 	}
 
 	if err := prismcells.AdmitSurfacePair(budget, prismcells.SurfaceTrim,
-		prismcells.SurfaceOperandOf(rcv.Payload), prismcells.SurfaceOperandOf(tl.Payload)); err != nil {
+		prismcells.SurfaceOperandOf(rcv), prismcells.SurfaceOperandOf(tl)); err != nil {
 		return prismPayload{}, prismPayload{}, err
 	}
 
@@ -432,7 +433,7 @@ func Split(ctx context.Context, target, tool *Body) ([]*Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	pieces, err := prismcells.SplitPieces(ctx, budget, rcv.Payload, tl.Payload)
+	pieces, err := prismcells.SplitPieces(ctx, budget, rcv, tl)
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +443,7 @@ func Split(ctx context.Context, target, tool *Body) ([]*Body, error) {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		bodies[i], err = evalPrismContext(ctx, d, ref+producerID(i), prismPayload{Payload: piece}, freeform.NewFreeformWork())
+		bodies[i], err = bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref+producerID(i)), piece, freeform.NewFreeformWork()))
 		if err != nil {
 			return nil, err
 		}
@@ -485,7 +486,7 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 			`%w: Split does not admit an operand carrying its own section displacement`, ErrUnsupported)
 	}
 	if err := prismcells.AdmitSurfacePair(budget, prismcells.SurfaceSplit,
-		prismcells.SurfaceOperandOf(rcv.Payload), prismcells.SurfaceOperandOf(tl.Payload)); err != nil {
+		prismcells.SurfaceOperandOf(rcv), prismcells.SurfaceOperandOf(tl)); err != nil {
 		return prismPayload{}, prismPayload{}, err
 	}
 	return rcv, tl, nil
@@ -512,7 +513,7 @@ func (b *Body) trimRevolve(ctx context.Context, budget *proofbound.WorkBudget, t
 		return nil, err
 	}
 	chains, sectionDelta, err := prismcells.ResolveSurfaceTrim(ctx, budget,
-		prismcells.SurfaceOperandOf(rcvView.Payload), prismcells.SurfaceOperandOf(tlView.Payload), keepInside)
+		prismcells.SurfaceOperandOf(rcvView), prismcells.SurfaceOperandOf(tlView), keepInside)
 	if err != nil {
 		return nil, err
 	}
@@ -734,7 +735,7 @@ func (b *Body) extendRevolve(ctx context.Context, budget *proofbound.WorkBudget,
 			return nil, err
 		}
 		widened, delta, err := prismcells.ResolveSurfaceExtend(ctx, budget,
-			prismcells.SurfaceOperandOf(rcvView.Payload), prismcells.SurfaceOperandOf(tlView.Payload), chains[ci].Segments[si], atStart)
+			prismcells.SurfaceOperandOf(rcvView), prismcells.SurfaceOperandOf(tlView), chains[ci].Segments[si], atStart)
 		if err != nil {
 			return nil, err
 		}
@@ -891,7 +892,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 //
 // The loop indexes b.lumps and reads pp.chains at the SAME index, on
 // extendEndSegment's own terms: evalChainRevolveContext appends each chain's
-// faces in chain order and sheetLumps preserves first-appearance order, so the
+// faces in chain order and topobuild.SheetLumps preserves first-appearance order, so the
 // body's i-th lump is the payload's i-th chain. A producer that emits a lump
 // per connected PIECE rather than per chain owes this function a recorded map
 // rather than the shared index.

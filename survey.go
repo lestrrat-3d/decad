@@ -129,7 +129,7 @@ func facesByRole(b *Body) map[string]*Face {
 // oppose (docs/verification-design.md §6).
 //
 // A surface result (pp.surfaceResult) publishes no cap face at all
-// (prism_build.go), so the cap loop below is skipped for one rather than
+// (internal/prismrecord/build.go), so the cap loop below is skipped for one rather than
 // probed and refused on a nil role lookup: on a SOLID a nil provenance.RoleCapStart or
 // provenance.RoleCapEnd is a real build defect and the existing total refusal must
 // still catch it, so the guard reads pp.surfaceResult, never f == nil. Every

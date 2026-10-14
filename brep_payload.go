@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
@@ -131,11 +132,11 @@ func (f brepFace) reversed() brepFace {
 // face's carries its one wall segment as an open single-segment loop, which
 // only the per-segment readings (extents, witnesses) consume.
 func (f brepFace) view(xform r3.Transform) prismPayload {
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Frame: f.frame, Xform: xform,
 		Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta,
 		SectionDelta: f.delta,
-	}}
+	}
 	if f.planar() {
 		pp.Profile = *f.region
 	} else {
@@ -647,7 +648,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		}
 		faces[fi] = face
 	}
-	if err := attachFaceLoopsContext(ctx, faces); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, faceNodes(faces)); err != nil {
 		return nil, err
 	}
 	bands, err := attachBrepLoopBands(ctx, body, ref, bp, open)
@@ -677,7 +678,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 			return nil, err
 		}
 	} else {
-		body.n.Lumps = lumpNodes(sheetLumps(allFaces))
+		body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(allFaces))
 	}
 	if bp.bossShell != nil {
 		err = measureBossShell(ctx, bp, body)
@@ -691,7 +692,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	}
 	// Every face frame is a signed permutation of the first (brepEmbeds), so
 	// each face's map has the first face's determinant and defect.
-	if err := chargePrismMap(body, bp.faces[0].frame, bp.xform); err != nil {
+	if err := prismrecord.ChargeMap(bodyNode(body), bp.faces[0].frame, bp.xform); err != nil {
 		return nil, err
 	}
 	bp.loopPatches = bands.geom
@@ -703,7 +704,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 // the placement: the one map every vertex, centroid and mesh point is lifted
 // through.
 func (bp brepPayload) refView() prismPayload {
-	return prismPayload{Payload: prismrecord.Payload{Frame: bp.faces[0].frame, Xform: bp.xform}}
+	return prismrecord.Payload{Frame: bp.faces[0].frame, Xform: bp.xform}
 }
 
 // brepEdge builds one edge from its owner use: a rim takes its wall's curve and
@@ -740,8 +741,7 @@ func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]
 	case brepRim0, brepRim1:
 		w := btopo.walls[owner.Face]
 		pp := f.view(bp.xform)
-		bottom, top, _, _, err := buildWallGeometry(pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}},
-			convex, w.Closed, start, end, start, end)
+		bottom, top, _, _, err := prismrecord.BuildWallGeometry(handleAlloc{}, pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, convex, w.Closed, vertexNode(start), vertexNode(end), vertexNode(start), vertexNode(end))
 		if err != nil {
 			return nil, err
 		}
@@ -749,8 +749,8 @@ func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]
 		if owner.Part == brepRim1 {
 			edge = top
 		}
-		edge.n.LengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1))
-		return edge, nil
+		edge.LengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1))
+		return edgeHandle(edge), nil
 	default:
 		w := owner.Walk
 		return bornEdge(&Edge{n: topo.Edge{

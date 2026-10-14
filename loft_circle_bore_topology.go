@@ -114,7 +114,7 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 // The shared cylinder builder publishes no normal departure. Use it only
 // when its held center and the exact frame map denote a true round cylinder.
 func loftBoreCylinderExactGeometry(frame r3.Frame, xform r3.Transform, u, v float64) bool {
-	pp := prismPayload{Payload: prismrecord.Payload{Frame: frame, Xform: xform}}
+	pp := prismrecord.Payload{Frame: frame, Xform: xform}
 	center := pp.Point(u, v, 0)
 	if pp.PointRound(u, v, 0, center) != 0 {
 		return false
@@ -278,10 +278,10 @@ func loftCircularRim(pl loftPayload, a loftmesh.Assembly, side int) (*Edge, bool
 	if err != nil {
 		return nil, false, err
 	}
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Frame: frame, Z0: 0, Z1: 1, Xform: pl.xform,
 		Z0Delta: a.Delta, Z1Delta: a.Delta,
-	}}
+	}
 	center := pp.Point(circle.Center.U, circle.Center.V, 0)
 	axis := pp.Dir(0, 0, 1)
 	curveBound, bounded := pp.CircleCurveBound(circle.Center.U, circle.Center.V, 0,
@@ -319,8 +319,8 @@ func loftCircularWallSurface(pl loftPayload, bottom, top circleSeg,
 		return surfacegeom.NURBSSurface{}, 0
 	}
 	r0, r1 := bottom.Radius.Base(), top.Radius.Base()
-	pp0 := prismPayload{Payload: prismrecord.Payload{Frame: pl.frame0, Xform: pl.xform}}
-	pp1 := prismPayload{Payload: prismrecord.Payload{Frame: pl.frame1, Xform: pl.xform}}
+	pp0 := prismrecord.Payload{Frame: pl.frame0, Xform: pl.xform}
+	pp1 := prismrecord.Payload{Frame: pl.frame1, Xform: pl.xform}
 	if kind == loftCircleWallCylinder {
 		return surfacegeom.Cylinder{Origin: pp0.Point(bottom.Center.U, bottom.Center.V, 0),
 			Axis: pp0.Dir(0, 0, 1), Radius: bottom.Radius}, 0
@@ -465,12 +465,11 @@ func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producer
 	if !loftBoreHasExactAxis(pl.frame0, pl.frame1, circle.Center.U, circle.Center.V, level.Z) {
 		return nil, fmt.Errorf("%w: a through-bore loft has no common circle axis", ErrUnsupported)
 	}
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Frame: pl.frame0, Z0: 0, Z1: level.Z, Xform: pl.xform,
 		Z0Delta: a.Delta, Z1Delta: a.Delta,
-	}}
-	faces, bottom, top, _, err := buildLoopSidesAs(ctx, body, ref, pp, 1, true,
-		pl.profile0.Holes[0], freeform.NewFreeformWork(), nil, levelToken{}, levelToken{}, false)
+	}
+	faces, bottom, top, _, err := prismrecord.BuildLoopSidesAs(ctx, envOf(body.n.Doc, ref), bodyNode(body), pp, 1, true, pl.profile0.Holes[0], freeform.NewFreeformWork(), nil, levelToken{}, levelToken{}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -478,14 +477,14 @@ func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producer
 		return nil, fmt.Errorf("%w: a through-bore circle did not build one wall", ErrUnsupported)
 	}
 	wall := faces[0]
-	wall.n.Origins = nil
+	wall.Origins = nil
 	// The prism builder states these circle loops in its local sweep order.
 	// Carry the Loft assembly's whole-shell reversal onto the cylinder too;
 	// the cap loops below already receive the same reversal.
-	for _, loop := range wall.n.Loops {
+	for _, loop := range wall.Loops {
 		loop.CoEdges = loftLoopCoedges(loop.CoEdges, a.Reversed)
 	}
-	// buildLoopSidesAs links its side face immediately, while evalLoft links
+	// prismrecord.BuildLoopSidesAs links its side face immediately, while evalLoft links
 	// every live face after this rewrite. Clear those two private links once.
 	bottom[0].Edge.Faces = nil
 	top[0].Edge.Faces = nil
@@ -495,15 +494,15 @@ func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producer
 			return nil, err
 		}
 		if a.Cell[k][0] == 1 {
-			wall.n.Origins = append(wall.n.Origins, face.n.Origins...)
+			wall.Origins = append(wall.Origins, face.n.Origins...)
 			continue
 		}
 		filtered = append(filtered, face)
 	}
-	if len(wall.n.Origins) < 2 {
+	if len(wall.Origins) < 2 {
 		return nil, fmt.Errorf("%w: a through-bore has no source wall cells", ErrUnsupported)
 	}
-	filtered = append(filtered, wall)
+	filtered = append(filtered, faceHandle(wall))
 	start.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: start.n.Loops[1].Outer, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: bottom[0].Edge, Forward: false}}, a.Reversed)}}))
 	end.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: end.n.Loops[1].Outer, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: top[0].Edge, Forward: true}}, a.Reversed)}}))
 	if err := loftCircleCapAreas(ctx, pl, a, start, end); err != nil {

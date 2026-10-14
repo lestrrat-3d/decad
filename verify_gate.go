@@ -283,7 +283,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return 0, false, nil
 	}
 	if payload, isPrism := body.n.Payload.(prismPayload); isPrism {
-		if d, ok, err := diameter.PrismFreeformSection(ctx, payload.Payload, payload.AxialDelta); ok || err != nil {
+		if d, ok, err := diameter.PrismFreeformSection(ctx, payload, payload.AxialDelta); ok || err != nil {
 			return d, ok, err
 		}
 	}
@@ -420,7 +420,7 @@ func draftGateDiameter(ctx context.Context, body *Body, dp draftPayload) (float6
 func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
 	nearZ, _, farZ, _ := dp.levels()
 	level := func(profile profileRecord, z float64) prismPayload {
-		return prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: dp.frame, Z0: z, Z1: z, Xform: dp.xform}}
+		return prismrecord.Payload{Profile: profile, Frame: dp.frame, Z0: z, Z1: z, Xform: dp.xform}
 	}
 	return []prismPayload{level(dp.profile, nearZ), level(dp.far, farZ)}, proofbound.AbsSumUpper(dp.AxialDelta(), dp.farDelta)
 }

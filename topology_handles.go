@@ -414,11 +414,7 @@ func documentNode(d *Document) *topo.Document {
 // topo.Payload.Placed: it builds the environment from d and maps the node
 // back. It never commits.
 func placePayload(ctx context.Context, p topo.Payload, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
-	nb, err := p.Placed(ctx, topo.Env{Doc: &d.n, Ref: ref}, composed)
-	if err != nil {
-		return nil, err
-	}
-	return bodyHandle(nb), nil
+	return bodyResult(p.Placed(ctx, envOf(&d.n, ref), composed))
 }
 
 // placedNode is the node form of a root builder's result, for a root payload's
@@ -428,4 +424,60 @@ func placedNode(b *Body, err error) (*topo.Body, error) {
 		return nil, err
 	}
 	return bodyNode(b), nil
+}
+
+// handleAlloc is the node allocator root hands internal builders (topo.Alloc):
+// every node is born inside a fresh root handle, so its Owner is set before
+// any builder stores a pointer to it. It has no state, so the interface
+// conversion allocates nothing.
+type handleAlloc struct{}
+
+// NewBody returns the node of a fresh born Body handle.
+func (handleAlloc) NewBody() *topo.Body { return &bornBody(new(Body)).n }
+
+// NewLump returns the node of a fresh born Lump handle.
+func (handleAlloc) NewLump() *topo.Lump { return &bornLump(new(Lump)).n }
+
+// NewFaceShell returns the node of a fresh born FaceShell handle.
+func (handleAlloc) NewFaceShell() *topo.FaceShell { return &bornFaceShell(new(FaceShell)).n }
+
+// NewFace returns the node of a fresh born Face handle.
+func (handleAlloc) NewFace() *topo.Face { return &bornFace(new(Face)).n }
+
+// NewLoop returns the node of a fresh born Loop handle.
+func (handleAlloc) NewLoop() *topo.Loop { return &bornLoop(new(Loop)).n }
+
+// NewEdge returns the node of a fresh born Edge handle.
+func (handleAlloc) NewEdge() *topo.Edge { return &bornEdge(new(Edge)).n }
+
+// NewVertex returns the node of a fresh born Vertex handle.
+func (handleAlloc) NewVertex() *topo.Vertex { return &bornVertex(new(Vertex)).n }
+
+// envOf is the builder environment root hands an internal builder: the
+// document node d (nil for a body built outside any document), the producer
+// ref, and handleAlloc.
+func envOf(d *topo.Document, ref producerID) topo.Env {
+	return topo.Env{Doc: d, Ref: ref, Alloc: handleAlloc{}}
+}
+
+// bodyResult is an internal builder's result as a handle: the handle that
+// holds n, or the error unchanged.
+func bodyResult(n *topo.Body, err error) (*Body, error) {
+	if err != nil {
+		return nil, err
+	}
+	return bodyHandle(n), nil
+}
+
+// faceGroupHandles returns the handles of each group of ns in order, or nil
+// for an empty ns.
+func faceGroupHandles(ns [][]*topo.Face) [][]*Face {
+	if len(ns) == 0 {
+		return nil
+	}
+	out := make([][]*Face, len(ns))
+	for i, g := range ns {
+		out[i] = faceHandles(g)
+	}
+	return out
 }

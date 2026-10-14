@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -203,7 +204,7 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 		edge.n.Faces = nil
 	}
 	body.n.Lumps[0].Shells[0].Faces = faceNodes(merged)
-	if err := attachFaceLoopsContext(ctx, merged); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, faceNodes(merged)); err != nil {
 		return nil, err
 	}
 	return sources, nil

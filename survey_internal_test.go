@@ -570,7 +570,7 @@ func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
 	// The prism path must apply the same rule as the revolve path: a
 	// near-concentric annular profile whose 2e-8 web sits under the kernel
 	// floor reads undecided — never a proven absence or a positive wall.
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Profile: profileRecord{
 			Outer: loopRecord{Segments: []curveSegment{
 				circleSeg{Center: planePoint{U: 0, V: 0}, Radius: units.Millimeters(10), CCW: true, TStart: 0, TEnd: 1},
@@ -580,7 +580,7 @@ func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
 			}}},
 		},
 		Z0: 0, Z1: 10,
-	}}
+	}
 	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 	require.NoError(t, err)
 	require.False(t, out.OK, `undecided, never a silent pass`)
@@ -1188,7 +1188,7 @@ func freeformWallSection() profileRecord {
 // sub-tolerance-web test above does, to isolate the survey from the build.
 func TestPrismWallFreeformSectionReadsUndecided(t *testing.T) {
 	t.Parallel()
-	pp := prismPayload{Payload: prismrecord.Payload{Profile: freeformWallSection(), Z0: 0, Z1: 10}}
+	pp := prismrecord.Payload{Profile: freeformWallSection(), Z0: 0, Z1: 10}
 	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 	require.NoError(t, err, `a free-form section must not error out of Verify`)
 	require.False(t, out.OK, `undecided, never a silent pass`)
@@ -1201,7 +1201,7 @@ func TestPrismWallFreeformSectionReadsUndecided(t *testing.T) {
 // not as an undecided reading.
 func TestPrismWallFreeformSectionPropagatesCancellation(t *testing.T) {
 	t.Parallel()
-	pp := prismPayload{Payload: prismrecord.Payload{Profile: freeformWallSection(), Z0: 0, Z1: 10}}
+	pp := prismrecord.Payload{Profile: freeformWallSection(), Z0: 0, Z1: 10}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err := testPrismWall(proofbound.NewWorkBudget(ctx), pp)
@@ -1266,10 +1266,10 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			pp := prismPayload{Payload: prismrecord.Payload{
+			pp := prismrecord.Payload{
 				Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{tc.seg}}},
 				Z0:      0, Z1: 10,
-			}}
+			}
 			out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 			require.Error(t, err, `a section the survey never read is a failure, never an undecided reading`)
 			if tc.is != nil {
@@ -1303,7 +1303,7 @@ func TestPrismWallAnalyticSectionRegression(t *testing.T) {
 	line := func(u0, v0, u1, v1 float64) curveSegment {
 		return lineSeg{Start: planePoint{U: u0, V: v0}, End: planePoint{U: u1, V: v1}, TStart: 0, TEnd: 1}
 	}
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			line(0, 0, 10, 0),
 			line(10, 0, 10, 10),
@@ -1311,7 +1311,7 @@ func TestPrismWallAnalyticSectionRegression(t *testing.T) {
 			line(0, 10, 0, 0),
 		}}},
 		Z0: 0, Z1: 10,
-	}}
+	}
 	out, err := testPrismWall(proofbound.NewWorkBudget(t.Context()), pp)
 	require.NoError(t, err)
 	require.True(t, out.OK)

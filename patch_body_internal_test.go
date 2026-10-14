@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -70,7 +71,7 @@ func TestProvePatchChainPlaneAcceptsAPlanarChain(t *testing.T) {
 // carrying bound — the shape a straight prism's own rim carries once gate
 // 3's first (exact) arm has already been shown to refuse it. The token's
 // own origin/normal match the fixture's own frame ((0,0,10), (0,0,1)),
-// mirroring what prism_build.go's mint actually stamps. id == 0 reproduces
+// mirroring what internal/prismrecord/build.go's mint actually stamps. id == 0 reproduces
 // what an untouched builder (a revolve seam, a cap-loop chamfer, a one-cap
 // shell's open rim) leaves behind: a bounded chain with no certificate, and
 // returns the zero levelToken to match.
@@ -94,7 +95,7 @@ func boundedSquareChain(id levelID, bound units.Value) ([]*Edge, levelToken) {
 // TestProvePatchChainPlaneAdmitsABoundedCoLevelChain is
 // docs/surface-design.md §15's T27: gate 3's second (LEVEL) arm admits a
 // bounded chain whose every vertex and edge shares one non-zero levelID —
-// the shape a straight prism build (prism_build.go) stamps onto a rim at one
+// the shape a straight prism build (internal/prismrecord/build.go) stamps onto a rim at one
 // swept end — and returns the SAME token, never a value fitted to the
 // chain's own held vertex coordinates.
 func TestProvePatchChainPlaneAdmitsABoundedCoLevelChain(t *testing.T) {
@@ -174,7 +175,7 @@ func TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels
 // docs/surface-design.md §15's T29: buildPatchFace over a chain gate 3's
 // level arm admitted sets the new face's own AxialDelta/hasAxialDelta from
 // the chain's proven bound — the same fields a prism cap already carries
-// (prism_build.go) — rather than leaving them at their zero value.
+// (internal/prismrecord/build.go) — rather than leaving them at their zero value.
 func TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta(t *testing.T) {
 	t.Parallel()
 	edges, tok := boundedSquareChain(1, units.Millimeters(0.002))
@@ -350,7 +351,7 @@ func patchTestReceiverWithOneChain(payload topo.Payload, edges []*Edge) *Body {
 		e.n.Faces = []*topo.Face{faceNode(face)}
 	}
 	receiver := bornBody(&Body{n: topo.Body{Payload: payload}})
-	receiver.n.Lumps = lumpNodes(sheetLumps([]*Face{face}))
+	receiver.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes([]*Face{face}))
 	face.n.Body = bodyNode(receiver)
 	return receiver
 }
@@ -367,7 +368,7 @@ func patchTestReceiverWithOneChain(payload topo.Payload, edges []*Edge) *Body {
 func TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver(t *testing.T) {
 	t.Parallel()
 	edges, _ := boundedSquareChain(1, units.Millimeters(0))
-	receiver := patchTestReceiverWithOneChain(prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 5}}, edges)
+	receiver := patchTestReceiverWithOneChain(prismrecord.Payload{SurfaceResult: true, SectionDelta: 5}, edges)
 
 	pp := bodyPatchPayload{faces: receiver.Faces(), chains: []bodyPatchChain{{edges: edges}}}
 	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))
@@ -400,8 +401,8 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	innerFace := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(inner), Forward: true}}}}))}}})
 	inner.n.Faces = []*topo.Face{faceNode(innerFace)}
 
-	receiver := bornBody(&Body{n: topo.Body{Payload: prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}}})
-	receiver.n.Lumps = lumpNodes(sheetLumps([]*Face{outerFace, innerFace}))
+	receiver := bornBody(&Body{n: topo.Body{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}})
+	receiver.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes([]*Face{outerFace, innerFace}))
 	outerFace.n.Body = bodyNode(receiver)
 	innerFace.n.Body = bodyNode(receiver)
 
@@ -435,7 +436,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch(t *testing.T) {
 		bornEdge(&Edge{n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}, Start: vertexNode(v2), End: vertexNode(v3)}}),
 		bornEdge(&Edge{n: topo.Edge{Level: levelA, Curve: surfacegeom.Line3{}, Start: vertexNode(v3), End: vertexNode(v0)}}),
 	}
-	receiver := patchTestReceiverWithOneChain(prismPayload{Payload: prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}}, edges)
+	receiver := patchTestReceiverWithOneChain(prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}, edges)
 
 	pp := bodyPatchPayload{faces: receiver.Faces(), chains: []bodyPatchChain{{edges: edges}}}
 	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))

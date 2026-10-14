@@ -75,8 +75,8 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 	// sweep of at most a quarter turn, and adding centre and radius motion,
 	// moves every arc point by less than 16*epsilon. The 64-fold charge also
 	// covers every constructed line and the frame-origin lift.
-	point := prismPayload{Payload: prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
-		Z0Delta: dp.z0Delta, Xform: r3.Identity()}}
+	point := prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
+		Z0Delta: dp.z0Delta, Xform: r3.Identity()}
 	originDelta := point.PointBound(proofbound.ExactScalar(circle.Center.U),
 		proofbound.ExactScalar(circle.Center.V), proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
 

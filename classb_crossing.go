@@ -363,8 +363,8 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 		return nil
 	}
 	tool := profileRecord{Outer: toLoop(other[0])}
-	target := prismPayload{Payload: prismrecord.Payload{Profile: a}}
-	toolP := prismPayload{Payload: prismrecord.Payload{Profile: tool}}
+	target := prismrecord.Payload{Profile: a}
+	toolP := prismrecord.Payload{Profile: tool}
 	if _, within, err := prismcells.RegionsWithinWorkCap(b.budget, target.Profile, toolP.Profile); err != nil || !within {
 		if err != nil {
 			return err

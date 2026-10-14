@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -50,12 +51,12 @@ func (sp stackedPrismPayload) AxialDelta() float64 {
 
 func (sp stackedPrismPayload) outerPrism() prismPayload {
 	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
-	return prismPayload{Payload: prismrecord.Payload{
+	return prismrecord.Payload{
 		Profile: profileRecord{Outer: first.Regions[0].Outer},
 		Frame:   sp.frame, Xform: sp.xform, SectionDelta: sp.sectionDelta,
 		Z0: first.Z0, Z0Delta: first.Z0Delta,
 		Z1: last.Z1, Z1Delta: last.Z1Delta,
-	}}
+	}
 }
 
 // outerRuns is one outer-only prism per maximal run of consecutive slabs that
@@ -110,13 +111,13 @@ func stackedBoundsContext(ctx context.Context, sp stackedPrismPayload, outerDelt
 		if outerDelta > 0 {
 			run.SectionDelta = proofbound.AbsSumUpper(run.SectionDelta, outerDelta)
 		}
-		box, err := prismBoundsContext(ctx, run, work, nil)
+		box, err := prismrecord.Bounds(ctx, run, work, nil)
 		if err != nil {
 			return Box{}, err
 		}
 		bound = max(bound, box.Bound.Base())
 		if i == 0 {
-			out = box
+			out = boxFromInternal(box)
 			continue
 		}
 		out.Min = r3.NewVec(min(out.Min.X, box.Min.X), min(out.Min.Y, box.Min.Y), min(out.Min.Z, box.Min.Z))
@@ -201,7 +202,7 @@ func stackedColumns(sp stackedPrismPayload) ([]stackedColumn, [][]stackedrecord.
 // cup's public roles and charges its offset loops their proven offset
 // displacement, loop by loop.
 type stackedPlan interface {
-	// wallRoleLoop is the loop index buildLoopSidesAs mints into column
+	// wallRoleLoop is the loop index prismrecord.BuildLoopSidesAs mints into column
 	// col's side(i,j) roles, and nameWalls rewrites the roles minted on that
 	// column's walls.
 	wallRoleLoop(col stackedColumn) int
@@ -276,7 +277,7 @@ func stackedEnclosesCavity(sp stackedPrismPayload) (bool, error) {
 func stackedLumps(faces []*Face, anchors map[*Face]struct{}) ([]*Lump, error) {
 	var outer []*Lump
 	var voids []*FaceShell
-	for _, group := range splitConnectedFaces(faces) {
+	for _, group := range faceGroupHandles(topobuild.SplitConnectedFaces(faceNodes(faces))) {
 		anchored := false
 		for _, f := range group {
 			if _, ok := anchors[f]; ok {
@@ -285,10 +286,10 @@ func stackedLumps(faces []*Face, anchors map[*Face]struct{}) ([]*Lump, error) {
 			}
 		}
 		if !anchored {
-			voids = append(voids, bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen(group), Void: true, Faces: faceNodes(group)}}))
+			voids = append(voids, bornFaceShell(&FaceShell{n: topo.FaceShell{Open: topobuild.ShellIsOpen(faceNodes(group)), Void: true, Faces: faceNodes(group)}}))
 			continue
 		}
-		outer = append(outer, bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Open: shellIsOpen(group), Faces: faceNodes(group)}}))}}}))
+		outer = append(outer, bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Open: topobuild.ShellIsOpen(faceNodes(group)), Faces: faceNodes(group)}}))}}}))
 	}
 	switch {
 	case len(voids) == 0:
@@ -399,18 +400,18 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		if colDelta[ci] > 0 {
 			pp.SectionDelta = proofbound.AbsSumUpper(sp.sectionDelta, colDelta[ci])
 		}
-		wallFaces, bottom, top, perimeter, err := buildLoopSidesAs(ctx, body, ref, pp,
-			plan.wallRoleLoop(*col), col.LoopIndex != 0, col.Loop, work, nil, levelToken{}, levelToken{}, false)
+		wallFaces, bottom, top, perimeter, err := prismrecord.BuildLoopSidesAs(ctx, envOf(body.n.Doc, ref), bodyNode(body), pp, plan.wallRoleLoop(*col), col.LoopIndex != 0, col.Loop, work, nil, levelToken{}, levelToken{}, false)
 		if err != nil {
 			return nil, err
 		}
-		if err := plan.nameWalls(ctx, *col, wallFaces, ref); err != nil {
+		walls := faceHandles(wallFaces)
+		if err := plan.nameWalls(ctx, *col, walls, ref); err != nil {
 			return nil, err
 		}
 		col.bottom, col.top, col.perimeter = bottom, top, perimeter
-		faces = append(faces, wallFaces...)
+		faces = append(faces, walls...)
 		if col.LoopIndex == 0 {
-			for _, f := range wallFaces {
+			for _, f := range walls {
 				anchors[f] = struct{}{}
 			}
 		}
@@ -511,7 +512,7 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 			planar = append(planar, f)
 		}
 	}
-	if err := attachFaceLoopsContext(ctx, planar); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, faceNodes(planar)); err != nil {
 		return nil, err
 	}
 	faces = append(faces, planar...)
@@ -597,12 +598,16 @@ func evalStackedPlanContext(ctx context.Context, d *Document, ref producerID, sp
 		return nil, err
 	}
 	body.n.Bounds = boxToInternal(bounds)
-	if err := chargePrismMap(body, sp.frame, sp.xform); err != nil {
+	if err := prismrecord.ChargeMap(bodyNode(body), sp.frame, sp.xform); err != nil {
 		return nil, err
 	}
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 	body.n.Payload = sp
 	return body, nil
+}
+
+func vecL1(v r3.Vec) float64 {
+	return proofbound.AbsSumUpper(v.X, v.Y, v.Z)
 }

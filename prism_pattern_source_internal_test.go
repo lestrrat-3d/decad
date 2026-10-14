@@ -16,14 +16,14 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 	require.NoError(t, err)
 	root := math.Sqrt(10)
 	blank := bornBody(&Body{n: topo.Body{
-		Payload: prismPayload{Payload: prismrecord.Payload{
+		Payload: prismrecord.Payload{
 			Frame: frame, Xform: r3.Identity(), Z1: 2,
 			Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 				circleSeg{Center: planePoint{}, Radius: units.Millimeters(root), TStart: 0, TEnd: 1},
 			}}},
-		}},
+		},
 	}})
-	section := prismPayload{Payload: prismrecord.Payload{
+	section := prismrecord.Payload{
 		Frame: frame, Xform: r3.Identity(), Z1: 2,
 		Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{
 			arcSeg{Center: planePoint{}, Start: planePoint{U: 3, V: -1},
@@ -37,7 +37,7 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 				TStart: 0, TEnd: 1},
 			lineSeg{Start: planePoint{U: 4, V: -1}, End: planePoint{U: 3, V: -1}, TStart: 0, TEnd: 1},
 		}}},
-	}}
+	}
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/2))
 	require.NoError(t, err)
 	copySection := section

@@ -22,7 +22,7 @@ func TestPrismPlacementCoeffAllowIdentityWorldAxes(t *testing.T) {
 	require.NoError(t, err)
 	frames = append(frames, rotated)
 	for _, frame := range frames {
-		pp := prismPayload{Payload: prismrecord.Payload{Frame: frame, Xform: r3.Identity()}}
+		pp := prismrecord.Payload{Frame: frame, Xform: r3.Identity()}
 		for _, g := range []r3.Vec{
 			r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1),
 		} {
@@ -35,7 +35,7 @@ func TestPrismPlacementCoeffAllowIdentityWorldAxes(t *testing.T) {
 			require.Zero(t, proofbound.ExactIsometryDotRound(pp.Xform, frame.V(), g, false, gv))
 			require.Zero(t, proofbound.ExactIsometryDotRound(pp.Xform, frame.N(), g, false, gz))
 			want := proofbound.AbsSumUpper(0, 0, 0, 0, prismDecompositionRoundAllow(gu, gv, gz, base, 23, 9))
-			require.Equal(t, want, prismPlacementCoeffAllow(pp, g, base, gu, gv, gz, 23, 9))
+			require.Equal(t, want, prismrecord.PlacementCoeffAllow(pp, g, base, gu, gv, gz, 23, 9))
 		}
 	}
 }
@@ -56,7 +56,7 @@ func TestPrismPlacementCoeffAllowKeepsGeneralProof(t *testing.T) {
 		{r3.Identity(), r3.NewVec(0.6, 0.8, 0)},
 		{rotation, r3.NewVec(1, 0, 0)},
 	} {
-		pp := prismPayload{Payload: prismrecord.Payload{Frame: frame, Xform: tc.transform}}
+		pp := prismrecord.Payload{Frame: frame, Xform: tc.transform}
 		g := tc.direction
 		base := pp.Xform.Apply(frame.Origin()).Dot(g)
 		gu := pp.Dir(1, 0, 0).Dot(g)
@@ -69,7 +69,7 @@ func TestPrismPlacementCoeffAllowKeepsGeneralProof(t *testing.T) {
 			proofbound.DirectionalPerturbationAllow(proofbound.ExactIsometryDotRound(pp.Xform, frame.N(), g, false, gz), 9),
 			prismDecompositionRoundAllow(gu, gv, gz, base, 23, 9),
 		)
-		require.Equal(t, want, prismPlacementCoeffAllow(pp, g, base, gu, gv, gz, 23, 9))
+		require.Equal(t, want, prismrecord.PlacementCoeffAllow(pp, g, base, gu, gv, gz, 23, 9))
 	}
 }
 

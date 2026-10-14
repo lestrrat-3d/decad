@@ -373,7 +373,7 @@ func (k *pairKernel) coplanarContactCertified(ctx context.Context) (bool, error)
 func payloadExtent(ctx context.Context, b *Body, g r3.Vec) (float64, float64, bool) {
 	switch pl := b.n.Payload.(type) {
 	case prismPayload:
-		lo, hi, err := pl.extentAlongContext(ctx, g)
+		lo, hi, err := pl.ExtentAlongContext(ctx, g)
 		if err != nil {
 			return 0, 0, false
 		}

@@ -42,11 +42,11 @@ func TestOffsetPrismUnrepresentableOffset(t *testing.T) {
 	}
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Profile: profileRecord{Outer: loopRecord{Segments: segments}},
 		Frame:   frame, Xform: r3.Identity(),
 		Z0: 0, Z1: 10, SurfaceResult: true,
-	}}
+	}
 
 	budget := proofbound.NewWorkBudget(t.Context())
 	generated, offErr := offsetProfile(budget, pp.Profile, +1, 1)
@@ -164,9 +164,9 @@ func offsetNeckPayload(t *testing.T) prismPayload {
 			TStart: 0, TEnd: 1,
 		}
 	}
-	return prismPayload{Payload: prismrecord.Payload{
+	return prismrecord.Payload{
 		Profile: profileRecord{Outer: loopRecord{Segments: segments}},
 		Frame:   frame, Xform: r3.Identity(),
 		Z0: 0, Z1: 10, SurfaceResult: true,
-	}}
+	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -90,7 +91,7 @@ type loftPayload struct {
 	// §4): true when the build must omit both section caps and publish a
 	// sheet instead of a solid. It is part of the re-evaluable record for the
 	// same reason prismPayload's and revolvePayload's own copies are
-	// (prism_payload.go, revolve_build.go), so Transform and Copy
+	// (internal/prismrecord, revolve_build.go), so Transform and Copy
 	// reproduce the sheet with no further code — a plain solid
 	// loft leaves it false.
 	surfaceResult bool
@@ -407,7 +408,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// makes Volume() and Centroid() answer ErrNotSolid through their existing
 	// guards, and kind BodySheet is what Kind() reports
 	// (docs/surface-design.md §4.3), the same rule prismPayload's and
-	// revolvePayload's own builds already follow (prism_build.go,
+	// revolvePayload's own builds already follow (internal/prismrecord/build.go,
 	// revolve_build.go).
 	kind := BodySolid
 	if pl.surfaceResult {
@@ -458,20 +459,20 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
 	// so the area accumulation below can still read their area fields, but
 	// neither joins the attached or published face set, which is what leaves
-	// each section-plane rim edge with only its wall face free. sheetLumps
+	// each section-plane rim edge with only its wall face free. topobuild.SheetLumps
 	// splits the walls by connectivity — a holed loft's outer and hole wall
 	// tubes touch nowhere once their shared cap is gone — and MUST run after
-	// attachFaceLoopsContext has registered every wall face on its own edges
-	// (surface.go's shellIsOpen/sheetLumps doc comments); a solid loft keeps
+	// topobuild.AttachFaceLoops has registered every wall face on its own edges
+	// (topobuild.ShellIsOpen's and topobuild.SheetLumps's doc comments); a solid loft keeps
 	// the single-shell, single-lump body PR 1 already published, unchanged.
 	if pl.surfaceResult {
-		if err := attachFaceLoopsContext(ctx, walls); err != nil {
+		if err := topobuild.AttachFaceLoops(ctx, faceNodes(walls)); err != nil {
 			return nil, err
 		}
-		body.n.Lumps = lumpNodes(sheetLumps(walls))
+		body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(walls))
 	} else {
 		faces := append([]*Face{capStart, capEnd}, walls...)
-		if err := attachFaceLoopsContext(ctx, faces); err != nil {
+		if err := topobuild.AttachFaceLoops(ctx, faceNodes(faces)); err != nil {
 			return nil, err
 		}
 		body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}

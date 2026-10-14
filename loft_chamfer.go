@@ -101,7 +101,7 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 		Outer: loopRecord{Segments: outer},
 		Holes: pl.profile0.Holes,
 	}
-	pp := prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: pl.frame0, Z0: 0, Z1: end.Z, Xform: r3.Identity()}}
+	pp := prismrecord.Payload{Profile: profile, Frame: pl.frame0, Z0: 0, Z1: end.Z, Xform: r3.Identity()}
 	setback := capSetback{dc: d, dcDelta: dDelta, ds: d, dsDelta: dDelta}
 	source := &loftCapBandSource{profile: pl.profile0, proof: pl.proof}
 	result, err := buildCapBlendWithLoftSource(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, pp, setback, setback,

@@ -115,7 +115,7 @@ type SegmentWalk struct {
 	//
 	// The chain is SHARED and MUST NOT be mutated in place. A SegmentWalk
 	// copies only the slice header, so every reader of one ProfileWalks set
-	// holds the same ratPoints: the build (buildLoopSidesAs), the tessellation
+	// holds the same ratPoints: the build (prismrecord.BuildLoopSidesAs), the tessellation
 	// (tessellation.ChordLoop), the extent readings, and a rigid re-evaluation that reads
 	// the published set back. Writing through any of them writes through all
 	// of them.
@@ -169,7 +169,7 @@ type SideWalk struct {
 }
 
 // CornerLoop is one boundary loop resolved into its coalesced corner walk, the
-// same decomposition the root buildLoopSides and the surveys use: a lateral
+// same decomposition the root prismrecord.BuildLoopSides and the surveys use: a lateral
 // edge is a junction between two consecutive walks.
 type CornerLoop struct {
 	Walks []SideWalk

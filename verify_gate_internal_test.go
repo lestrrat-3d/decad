@@ -387,7 +387,7 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			require.NoError(t, err)
 			pdp := placed.n.Payload.(draftPayload)
 			nearZ, _, farZ, _ := pdp.levels()
-			view := prismPayload{Payload: prismrecord.Payload{Frame: pdp.frame, Xform: pdp.xform, Z0: nearZ, Z1: farZ}}
+			view := prismrecord.Payload{Frame: pdp.frame, Xform: pdp.xform, Z0: nearZ, Z1: farZ}
 			least := new(big.Rat).Sub(new(big.Rat).SetFloat64(dp.d), new(big.Rat).SetFloat64(dp.dDelta))
 			upper := exactDraftSquareDiameterSquare(view, 5, least)
 			requireGateDiameterWithin(t, read(t, placed), floatSqrtOf(upper)-gateFarSlack(), upper)

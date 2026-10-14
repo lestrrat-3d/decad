@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/prismextent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -315,33 +316,33 @@ func TestRequireFiniteDirectionAllocatesNothing(t *testing.T) {
 	require.Zero(t, allocs, "the accepted direction gate must allocate nothing")
 }
 
-// 8. prismPayload.extentAlongWork over a free-form section whose extreme
+// 8. prismrecord.Payload.ExtentAlongWork over a free-form section whose extreme
 // along the direction read is an interior root refuses ErrUnsupported (the
 // clearance short-circuit reads this coordinate as exact and has no bound to
-// widen), while prismBoundsContext over the identical payload answers with Approximate
+// widen), while prismrecord.Bounds over the identical payload answers with Approximate
 // and a positive Bound instead of refusing — a Box has one to widen into. Both
 // readings key on the BRACKET's width and not on the section being free-form;
 // test 8b is the same two readings on a section whose bracket has none.
 func TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate(t *testing.T) {
 	t.Parallel()
 	control := []planePoint{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Profile: splineProfile(control),
 		Frame:   identityFrame(t),
 		Z0:      0, Z1: 5,
 		Xform: r3.Identity(),
-	}}
+	}
 
 	// The Y axis: this fixture's control U values are strictly increasing
 	// (monotone, so extentAlongWork along X would answer exactly), but its V
 	// values rise and fall — a genuine interior extreme.
-	_, _, err := pp.extentAlongWork(t.Context(), r3.NewVec(0, 1, 0), freeform.NewFreeformWork())
+	_, _, err := pp.ExtentAlongWork(t.Context(), r3.NewVec(0, 1, 0), freeform.NewFreeformWork())
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 
-	box, err := prismBoundsContext(t.Context(), pp, freeform.NewFreeformWork(), nil)
+	box, err := prismrecord.Bounds(t.Context(), pp, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
-	require.Equal(t, Approximate, box.Exactness)
+	require.Equal(t, measurement.Approximate, box.Exactness)
 	require.Positive(t, box.Bound.Base())
 }
 
@@ -356,23 +357,23 @@ func TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate(t *testing.T) 
 func TestPrismBoundsFreeformEndpointHeldExtremesStayExact(t *testing.T) {
 	t.Parallel()
 	control := []planePoint{{U: 0, V: 0}, {U: 1, V: 1}, {U: 2, V: 2}, {U: 3, V: 3}}
-	pp := prismPayload{Payload: prismrecord.Payload{
+	pp := prismrecord.Payload{
 		Profile: splineProfile(control),
 		Frame:   identityFrame(t),
 		Z0:      0, Z1: 5,
 		Xform: r3.Identity(),
-	}}
+	}
 
 	// The refusing wrapper keys on that same width, so this section's extent
 	// along X answers outright where test 8's interior-root fixture refuses.
-	lo, hi, err := pp.extentAlongWork(t.Context(), r3.NewVec(1, 0, 0), freeform.NewFreeformWork())
+	lo, hi, err := pp.ExtentAlongWork(t.Context(), r3.NewVec(1, 0, 0), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, 0.0, lo)
 	require.Equal(t, 3.0, hi)
 
-	box, err := prismBoundsContext(t.Context(), pp, freeform.NewFreeformWork(), nil)
+	box, err := prismrecord.Bounds(t.Context(), pp, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
-	require.Equal(t, Exact, box.Exactness, "an endpoint-held free-form extreme has no width to report")
+	require.Equal(t, measurement.Exact, box.Exactness, "an endpoint-held free-form extreme has no width to report")
 	require.Zero(t, box.Bound.Base())
 	require.Equal(t, r3.NewVec(0, 0, 0), box.Min)
 	require.Equal(t, r3.NewVec(3, 3, 5), box.Max)
@@ -392,8 +393,8 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, bound, 0.0, "an interior free-form extreme is held by a bracket, never exactly")
 
-	free := prismPayload{Payload: prismrecord.Payload{Profile: splineProfile(control), Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
-	_, _, err = free.extentAlongWork(t.Context(), r3.NewVec(0, 1, 0), freeform.NewFreeformWork())
+	free := prismrecord.Payload{Profile: splineProfile(control), Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}
+	_, _, err = free.ExtentAlongWork(t.Context(), r3.NewVec(0, 1, 0), freeform.NewFreeformWork())
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 
@@ -403,10 +404,10 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 		lineSeg{Start: planePoint{U: 10, V: 10}, End: planePoint{U: 0, V: 10}, TStart: 0, TEnd: 1},
 		lineSeg{Start: planePoint{U: 0, V: 10}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
-	pp := prismPayload{Payload: prismrecord.Payload{Profile: analytic, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
-	box, err := prismBoundsContext(t.Context(), pp, freeform.NewFreeformWork(), nil)
+	pp := prismrecord.Payload{Profile: analytic, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}
+	box, err := prismrecord.Bounds(t.Context(), pp, freeform.NewFreeformWork(), nil)
 	require.NoError(t, err)
-	require.Equal(t, Exact, box.Exactness)
+	require.Equal(t, measurement.Exact, box.Exactness)
 	require.Zero(t, box.Bound.Base())
 }
 
@@ -437,20 +438,20 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 
 	// The refusing wrapper over the same scan keeps that sentinel: it answers a
 	// free-form section it cannot state exactly with ErrUnsupported.
-	pp := prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}}
-	_, _, err = pp.extentAlongWork(t.Context(), r3.NewVec(1, 1, 0), freeform.NewFreeformWork())
+	pp := prismrecord.Payload{Profile: profile, Frame: identityFrame(t), Z0: 0, Z1: 5, Xform: r3.Identity()}
+	_, _, err = pp.ExtentAlongWork(t.Context(), r3.NewVec(1, 1, 0), freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.NotErrorIs(t, err, ErrDegenerate)
 
 	// A Box has a bound to widen into, but not an infinite one. A world axis
 	// reads this section through the payload's own frame, so a rotated frame
 	// puts both components of one axis on the section and saturates that
-	// axis's own enclosure: the same refusal reaches prismBoundsContext rather
+	// axis's own enclosure: the same refusal reaches prismrecord.Bounds rather
 	// than publishing a non-finite Min/Max or Bound.
 	rotated, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(0.6, 0.8, 0), r3.NewVec(-0.8, 0.6, 0))
 	require.NoError(t, err)
-	tilted := prismPayload{Payload: prismrecord.Payload{Profile: profile, Frame: rotated, Z0: 0, Z1: 5, Xform: r3.Identity()}}
-	_, err = prismBoundsContext(t.Context(), tilted, freeform.NewFreeformWork(), nil)
+	tilted := prismrecord.Payload{Profile: profile, Frame: rotated, Z0: 0, Z1: 5, Xform: r3.Identity()}
+	_, err = prismrecord.Bounds(t.Context(), tilted, freeform.NewFreeformWork(), nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	// The identical fixture read along a direction whose enclosure IS

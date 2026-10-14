@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -265,7 +266,8 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 	work := freeform.NewFreeformWork()
 	// The supplied boundary hangs off the vertices the slant edges start
 	// from, which the first build mints beside the side coedges it reads.
-	_, _, topCo, _, err := buildLoopSidesAs(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, pp, 0, false, loop, work, nil, levelToken{}, levelToken{}, false) //nolint:dogsled // only the top coedges are read
+	scratch := bornBody(&Body{n: topo.Body{Doc: body.n.Doc}})
+	_, _, topCo, _, err := prismrecord.BuildLoopSidesAs(t.Context(), envOf(scratch.n.Doc, ref), bodyNode(scratch), pp, 0, false, loop, work, nil, levelToken{}, levelToken{}, false) //nolint:dogsled // only the top coedges are read
 	require.NoError(t, err)
 	again, err := buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.z1, -1, topCo, nil, work)
 	require.NoError(t, err)

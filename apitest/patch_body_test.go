@@ -294,7 +294,7 @@ func TestBodyPatchReproducesThroughPlacement(t *testing.T) {
 // in one call: the bottom rim's vertices are recorded directly and carry a
 // zero bound, so its chain passes gate 3's first (exact) arm unchanged; the
 // top rim's are computed through the inch conversion and do not, but every
-// one of them shares the SAME level token prism_build.go stamped for that
+// one of them shares the SAME level token internal/prismrecord/build.go stamped for that
 // end, so its chain now passes the second (LEVEL) arm in the very same
 // call — a shape this evaluator refused before this certificate existed.
 func TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne(t *testing.T) {

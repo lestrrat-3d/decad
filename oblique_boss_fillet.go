@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -115,7 +116,7 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 		return nil, fmt.Errorf("%w: the selected oblique junction has no faceted edge witness", ErrUnsupported)
 	}
 	plateTop, topOK := obliqueBossFaceGroup(rec.plate, provenance.RoleCapEnd)
-	bossSide, sideOK := obliqueBossFaceGroup(rec.boss, prismOuterFirstSideRole)
+	bossSide, sideOK := obliqueBossFaceGroup(rec.boss, prismrecord.OuterFirstSideRole)
 	if !topOK || !sideOK || len(edges[0].n.Faces) != 2 {
 		return nil, fmt.Errorf("%w: the selected edge is not the complete plate-to-cylinder junction", ErrUnsupported)
 	}
@@ -301,7 +302,7 @@ func buildObliqueBossFilletMesh(ctx context.Context,
 		{rec.plate, wallRoles[0]}, {rec.plate, wallRoles[1]},
 		{rec.plate, wallRoles[2]}, {rec.plate, wallRoles[3]},
 		{rec.plate, provenance.RoleCapEnd},
-		{rec.boss, prismOuterFirstSideRole}, {rec.boss, provenance.RoleCapEnd},
+		{rec.boss, prismrecord.OuterFirstSideRole}, {rec.boss, provenance.RoleCapEnd},
 	}
 	for _, role := range roles {
 		group, ok := obliqueBossFaceGroup(role.body, role.role)

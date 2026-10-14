@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -700,7 +701,7 @@ func (b *Body) Faces() []*Face {
 
 // Edges returns the body's edges, deduplicated.
 func (b *Body) Edges() []*Edge {
-	nodes := bodyEdgeNodes(&b.n)
+	nodes := topobuild.Edges(&b.n)
 	if len(nodes) == 0 {
 		return nil
 	}
@@ -711,35 +712,11 @@ func (b *Body) Edges() []*Edge {
 	return out
 }
 
-// bodyEdgeNodes returns the nodes of n's edges, each once, in the order
-// Body.Edges returns their handles: first seen walking lumps, shells, faces,
-// loops and their uses.
-func bodyEdgeNodes(n *topo.Body) []*topo.Edge {
-	seen := map[*topo.Edge]struct{}{}
-	var out []*topo.Edge
-	for _, l := range n.Lumps {
-		for _, s := range l.Shells {
-			for _, f := range s.Faces {
-				for _, lp := range f.Loops {
-					for _, ce := range lp.CoEdges {
-						if _, ok := seen[ce.Edge]; ok {
-							continue
-						}
-						seen[ce.Edge] = struct{}{}
-						out = append(out, ce.Edge)
-					}
-				}
-			}
-		}
-	}
-	return out
-}
-
 // Vertices returns the body's vertices, deduplicated.
 func (b *Body) Vertices() []*Vertex {
 	seen := map[*topo.Vertex]struct{}{}
 	var out []*Vertex
-	for _, e := range bodyEdgeNodes(&b.n) {
+	for _, e := range topobuild.Edges(&b.n) {
 		for _, v := range [2]*topo.Vertex{e.Start, e.End} {
 			if v == nil {
 				continue

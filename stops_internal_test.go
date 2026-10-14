@@ -82,13 +82,13 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 	profile := profileRecord{Outer: synthRectLoop(0, 0, 1, 1)}
 	stopBody := func(ref producerID, z1, z1Delta float64) *Body {
 		return bornBody(&Body{
-			n: topo.Body{Origin: provenance.Ref{Producer: ref}, Payload: prismPayload{Payload: prismrecord.Payload{
+			n: topo.Body{Origin: provenance.Ref{Producer: ref}, Payload: prismrecord.Payload{
 				Profile: profile,
 				Frame:   frame,
 				Z1:      z1,
 				Z1Delta: z1Delta,
 				Xform:   r3.Identity(),
-			}},
+			},
 			},
 		})
 	}
@@ -252,13 +252,13 @@ func TestResolveToFaceRefusesStatedNormalDeparture(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := bornDocument(&Document{})
-			host, err := evalPrism(doc, 1, prismPayload{Payload: prismrecord.Payload{
+			host, err := evalPrism(doc, 1, prismrecord.Payload{
 				Profile: profileRecord{Outer: synthRectLoop(0, 0, 1, 1)},
 				Frame:   frame,
 				Z0:      10,
 				Z1:      20,
 				Xform:   r3.Identity(),
-			}}, freeform.NewFreeformWork())
+			}, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			doc.n.LiveSet = []*topo.Body{bodyNode(host)}
 			ref := Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: 1, Role: provenance.RoleCapEnd})))
@@ -285,14 +285,14 @@ func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	doc := bornDocument(&Document{})
-	host, err := evalPrism(doc, 1, prismPayload{Payload: prismrecord.Payload{
+	host, err := evalPrism(doc, 1, prismrecord.Payload{
 		Profile: profileRecord{Outer: synthRectLoop(0, 0, 1, 1)},
 		Frame:   frame,
 		Z0:      10,
 		Z1:      20,
 		Z1Delta: 0.25,
 		Xform:   r3.Identity(),
-	}}, freeform.NewFreeformWork())
+	}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	doc.n.LiveSet = []*topo.Body{bodyNode(host)}
 
@@ -333,13 +333,13 @@ func TestAngularStopEdgeNamesPublicCurveType(t *testing.T) {
 func genericPlateHost(t *testing.T, f r3.Frame, z1 float64) (*Document, *Body, *FaceQuery) {
 	t.Helper()
 	doc := bornDocument(&Document{})
-	host, err := evalPrism(doc, 1, prismPayload{Payload: prismrecord.Payload{
+	host, err := evalPrism(doc, 1, prismrecord.Payload{
 		Profile: profileRecord{Outer: synthRectLoop(0, 0, 20, 20)},
 		Frame:   f,
 		Z0:      0,
 		Z1:      z1,
 		Xform:   r3.Identity(),
-	}}, freeform.NewFreeformWork())
+	}, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	doc.n.LiveSet = []*topo.Body{bodyNode(host)}
 	return doc, host, Faces(FaceCreatedBy(featureRefOf(provenance.Ref{Producer: 1, Role: provenance.RoleCapEnd})))

@@ -56,7 +56,7 @@ func evalArcSweepContext(
 	}
 	// The flag rides the REDUCED revolvePayload, not just the finishing
 	// sweepPayload literal below: revolve_build.go's evalRevolveContextWork
-	// reads rp.surfaceResult to decide Kind()/solid, cap omission, sheetLumps
+	// reads rp.surfaceResult to decide Kind()/solid, cap omission, topobuild.SheetLumps
 	// and the area subtraction — including Table W's profile-meets-axis row —
 	// which is what gives the arc reduction the whole sheet behaviour for free
 	// (docs/surface-design.md §4).
@@ -79,11 +79,11 @@ func evalArcSweepContext(
 	// Every one of its points lies on the real start cap, so its point-set
 	// diameter is a sound lower bound on the swept body's diameter. It is not
 	// itself built, so its own surfaceResult stays at its zero value.
-	witness := prismPayload{Payload: prismrecord.Payload{
+	witness := prismrecord.Payload{
 		Profile: profile,
 		Frame:   frame,
 		Xform:   r3.Identity(),
-	}}
+	}
 	payload := sweepPayload{
 		prism:          witness,
 		revolve:        revolve,

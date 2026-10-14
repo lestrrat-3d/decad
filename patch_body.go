@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -171,7 +172,7 @@ type bodyPatchChain struct {
 	edges []*Edge
 	// axialBound and hasAxialBound are the proven axial displacement gate 3's
 	// LEVEL arm (provePatchChainPlaneLevel) admitted this chain under —
-	// stamped onto the new face's own AxialDelta exactly as prism_build.go
+	// stamped onto the new face's own AxialDelta exactly as internal/prismrecord/build.go
 	// stamps a prism cap's (buildPatchFace, docs/surface-design.md §5.2).
 	// hasAxialBound stays false, and axialBound zero, whenever gate 3 instead
 	// admitted the chain through its existing exact (zero-bound) arm.
@@ -514,11 +515,11 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	allFaces := make([]*Face, 0, len(newFaces)+len(patchFaces))
 	allFaces = append(allFaces, newFaces...)
 	allFaces = append(allFaces, patchFaces...)
-	if err := attachFaceLoopsContext(ctx, allFaces); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, faceNodes(allFaces)); err != nil {
 		return nil, err
 	}
 
-	// Kind and lumps/shells come from the existing sheetLumps, run only AFTER
+	// Kind and lumps/shells come from the existing topobuild.SheetLumps, run only AFTER
 	// every face is attached (its own contract). PatchEdges never publishes a
 	// solid: closing a sheet's last free edge leaves a CLOSED sheet reporting
 	// BodySheet with IsSolid() false, since Stitch alone makes the material
@@ -527,7 +528,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	for _, f := range allFaces {
 		f.n.Body = bodyNode(body)
 	}
-	body.n.Lumps = lumpNodes(sheetLumps(allFaces))
+	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(allFaces))
 
 	// Area is the receiver's own faces' area plus each new face's, composed
 	// through proofbound.BoundedAdd — never a re-derived reading — exactly the sum
@@ -555,7 +556,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 	}
 	body.n.Bounds = boxToInternal(bounds)
 
-	if err := validateAnalyticBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
 
@@ -838,7 +839,7 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 			Area:      ig.Area,
 			AreaBound: ig.AreaBound,
 			// A chain gate 3's level arm admitted has a proven-bounded plane
-			// origin, never a zero one: the same fields prism_build.go already
+			// origin, never a zero one: the same fields internal/prismrecord/build.go already
 			// sets on a prism's own caps (docs/surface-design.md §5.2). A chain
 			// the exact arm admitted instead carries a zero, unset bound here.
 			AxialDelta:    axialDelta,
@@ -965,7 +966,7 @@ func planeFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
 //
 // Conditions 2 and 3 are both decided through the LEVEL half of the
 // shared-denotation certificate (denotation.go), never by a coordinate or a
-// residual: prism_build.go's evalPrismContext stamps every rim vertex and
+// residual: internal/prismrecord/build.go's prismrecord.Build stamps every rim vertex and
 // edge at one end with the SAME level token, minted once per build per end
 // whenever the build's own section is drawn straight from its record
 // (sectionDelta == 0) — regardless of whether that end's own coordinate

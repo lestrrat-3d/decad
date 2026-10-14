@@ -379,7 +379,7 @@ func offAxisPlateSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 // zero-bound bottom rim would legitimately weld through the EXISTING
 // zero-bound route regardless of any certificate, proving nothing about it.
 // Stitch still refuses every one of the 16 rim/rim corner pairs: each
-// call's own evalPrismContext mints a FRESH curveID, so no pair ever shares
+// call's own prismrecord.Build mints a FRESH curveID, so no pair ever shares
 // one, whatever their held data says. This is the test that would go green
 // if the certificate were ever swapped for a bound-magnitude comparison.
 func TestStitchRefusesIdenticalBoundedRimsWithNoSharedDenotation(t *testing.T) {

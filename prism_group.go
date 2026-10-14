@@ -51,9 +51,9 @@ func prismGroupOperandOf(b *Body) (prismGroupOperand, bool) {
 			return prismGroupOperand{}, false
 		}
 		slab := p.slabs[0]
-		proxy := prismPayload{Payload: prismrecord.Payload{Profile: slab.Regions[0], Frame: p.frame, Xform: p.xform,
+		proxy := prismrecord.Payload{Profile: slab.Regions[0], Frame: p.frame, Xform: p.xform,
 			Z0: slab.Z0, Z1: slab.Z1, Z0Delta: slab.Z0Delta, Z1Delta: slab.Z1Delta,
-			SectionDelta: p.sectionDelta}}
+			SectionDelta: p.sectionDelta}
 		return prismGroupOperand{proxy: proxy, regions: slab.Regions, group: true}, true
 	default:
 		return prismGroupOperand{}, false
@@ -108,8 +108,8 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 		return prismPayload{}, false, err
 	}
 	sceneDelta := scene.Delta
-	result := prismPayload{Payload: prismrecord.Payload{Frame: target.Frame, Xform: target.Xform,
-		Z0: target.Z0, Z1: target.Z1, Z0Delta: target.Z0Delta, Z1Delta: target.Z1Delta}}
+	result := prismrecord.Payload{Frame: target.Frame, Xform: target.Xform,
+		Z0: target.Z0, Z1: target.Z1, Z0Delta: target.Z0Delta, Z1Delta: target.Z1Delta}
 	inA, inB := sceneDelta.Incoming(target.SectionDelta, tool.proxy.SectionDelta, scene.ReexpressionDelta)
 	inputDelta := max(inA, inB)
 
@@ -141,7 +141,7 @@ func tryPrismGroupCut(ctx context.Context, a, b *Body) (prismPayload, bool, erro
 	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil || !resolved {
 		return prismPayload{}, false, err
 	}
-	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, prismcells.AuditMergeSection(budget, target.Payload, merged)); fallBack || err != nil {
+	if fallBack, err := prismcells.AmplifiedFallback(sceneDelta.Amplified, prismcells.AuditMergeSection(budget, target, merged)); fallBack || err != nil {
 		return prismPayload{}, false, err
 	}
 	result.Profile = merged
@@ -198,15 +198,15 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, sce
 	for i, loop := range loops {
 		regions[i] = profileRecord{Outer: loop}
 		// Point of no return (§3.4): §6's audit on each assembled loop.
-		if err := prismcells.AuditMergeSection(budget, oa.proxy.Payload, regions[i]); err != nil {
+		if err := prismcells.AuditMergeSection(budget, oa.proxy, regions[i]); err != nil {
 			return nil, false, err
 		}
 	}
 	z0Delta, z1Delta := max(oa.proxy.Z0Delta, ob.proxy.Z0Delta), max(oa.proxy.Z1Delta, ob.proxy.Z1Delta)
 	if len(regions) == 1 {
-		return prismPayload{Payload: prismrecord.Payload{Profile: regions[0], Frame: oa.proxy.Frame, Xform: oa.proxy.Xform,
+		return prismrecord.Payload{Profile: regions[0], Frame: oa.proxy.Frame, Xform: oa.proxy.Xform,
 			Z0: oa.proxy.Z0, Z1: oa.proxy.Z1, Z0Delta: z0Delta, Z1Delta: z1Delta,
-			SectionDelta: proofbound.AbsSumUpper(inputDelta, cutDelta)}}, true, nil
+			SectionDelta: proofbound.AbsSumUpper(inputDelta, cutDelta)}, true, nil
 	}
 	disjoint, disjointWalk, err := prismcells.ProveGroupDisjoint(ctx, budget, regions)
 	if err != nil || !disjoint {

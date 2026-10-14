@@ -46,7 +46,7 @@ import (
 // neighboring patches meet directly along the shared slanted edge from the
 // offset corner down to the original corner, so a convex corner needs no
 // third patch). The prism's own side wall for a chamfered loop is trimmed to
-// the interval below the band, built with the unmodified buildLoopSidesAs —
+// the interval below the band, built with the unmodified prismrecord.BuildLoopSidesAs —
 // the wall's near-cap edge IS the band's side-level boundary, shared, never
 // re-derived.
 
@@ -213,11 +213,11 @@ func (cbp capBlendPayload) Placed(ctx context.Context, env topo.Env, composed r3
 // placement over [z0, z1], so the point/dir machinery already built for
 // prisms serves the cap-blend build too.
 func (cbp capBlendPayload) prismLike(z0, z1 float64) prismPayload {
-	return prismPayload{Payload: prismrecord.Payload{
+	return prismrecord.Payload{
 		Frame: cbp.frame, Z0: z0, Z1: z1,
 		Z0Delta: cbp.z0Delta, Z1Delta: cbp.z1Delta,
 		Xform: cbp.xform,
-	}}
+	}
 }
 
 // capBandLevel preserves the selected end's axial displacement while a
@@ -295,7 +295,7 @@ func (cbp capBlendPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, err
 // contributes nothing to the reported bound. Three mechanisms displace a
 // candidate: an inherited end displacement, the cap contour's own in-plane
 // displacement, and the rounding of a chamfered end's trimmed straight level.
-// A fourth, prismPlacementCoeffAllow, displaces every candidate the SAME way
+// A fourth, prismrecord.PlacementCoeffAllow, displaces every candidate the SAME way
 // — the frame and placement's own rounding of base/gu/gv/gz — and so composes
 // outward with the per-candidate maximum rather than folding into it. A fifth
 // does the same one step later: the reading's own summation of base with the
@@ -409,11 +409,11 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		return 0, 0, 0, err
 	}
 	zUpper := math.Max(math.Abs(cbp.z0), math.Abs(cbp.z1))
-	placeAllow := prismPlacementCoeffAllow(pl, g, base, gu, gv, gz, coordUpper, zUpper)
+	placeAllow := prismrecord.PlacementCoeffAllow(pl, g, base, gu, gv, gz, coordUpper, zUpper)
 	// A FIFTH mechanism displaces both ends and composes outward with the rest:
 	// the reading's own recombination base + lo (and base + hi), charged exactly
 	// against those two terms by proofbound.ExactSumRound (internal/proofbound/bounds.go). It is the one term
-	// prismPlacementCoeffAllow's coefficient check cannot reach — a pure
+	// prismrecord.PlacementCoeffAllow's coefficient check cannot reach — a pure
 	// translation leaves base/gu/gv/gz each exactly right and the addition that
 	// follows still rounds — and it is charged per END, since the two ends are
 	// summed from different terms.

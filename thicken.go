@@ -168,7 +168,7 @@ func thickenPatch(ctx context.Context, d *Document, pp patchPayload, side Thicke
 	prism.Z0, prism.Z0Delta = z0.Value, z0.Bound
 	prism.Z1, prism.Z1Delta = z1.Value, z1.Bound
 	ref := d.nextProducerID()
-	return evalPrismContext(ctx, d, ref, prism, freeform.NewFreeformWork())
+	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prism, freeform.NewFreeformWork()))
 }
 
 // thickenRadial is the revolve arm's radial-axis gate (docs/surface-design.md
@@ -292,13 +292,13 @@ func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side
 	if err != nil {
 		return nil, err
 	}
-	return evalPrismContext(ctx, d, d.nextProducerID(), prismPayload{Payload: prismrecord.Payload{
+	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), prismrecord.Payload{
 		Profile: section,
 		Frame:   cp.frame,
 		Z0:      cp.z0, Z1: cp.z1,
 		Z0Delta: cp.z0Delta, Z1Delta: cp.z1Delta,
 		Xform: cp.xform,
-	}}, work)
+	}, work))
 }
 
 // thickenChainRevolve builds a solid of revolution from an uncapped chain

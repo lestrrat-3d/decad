@@ -196,7 +196,7 @@ rDelta, dsDelta: rDelta}`), sense `σ` from LB6:
    structural (§7 DF7); placement rounding of the tag's direction is
    `Face.NormalAt`'s own arithmetic term (`normal_bound.go`), as on a prism's
    cylinder wall.
-6. **Closure.** `attachFaceLoopsContext` proves every edge bounds exactly two
+6. **Closure.** `topobuild.AttachFaceLoops` proves every edge bounds exactly two
    faces, as for a chamfer band.
 
 Where the walls rise off `F` (`σ = +1`: a boss root, a pocket floor's outer

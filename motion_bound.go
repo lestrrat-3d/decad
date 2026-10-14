@@ -19,7 +19,7 @@ import (
 // bound on |p| for every point p of the mover's record before its own
 // placement applies, read off the payload's own envelopes. It is an L1 bound,
 // which dominates the Euclidean one. A prism reads its profile coordinate
-// envelope (prism_payload.go) widened by its section displacement, and its
+// envelope (internal/prismrecord) widened by its section displacement, and its
 // sweep levels widened by their axial displacement; a revolve reads the
 // generator envelope and axis anchor revolvemass.Centroid already
 // bounds a rotated material point with. Any other payload states no record

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
@@ -14,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -32,7 +34,7 @@ type brepRegion = brepgeom.Region
 // brepFaceBody builds one face's own geometry, role and area; the caller
 // attaches its loops. A planar face's plane is the cap frame its view states
 // at its level, turned to its outward normal; a swept face's surface is the
-// prism wall's own (buildWallGeometry).
+// prism wall's own (prismrecord.BuildWallGeometry).
 func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi int, body *Body, ref producerID) (*Face, error) {
 	f := bp.faces[fi]
 	pp := f.view(bp.xform)
@@ -62,8 +64,7 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 			}}), nil
 	}
 	w := btopo.walls[fi]
-	_, _, surf, reversed, err := buildWallGeometry(pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}},
-		false, w.Closed, nil, nil, nil, nil)
+	_, _, surf, reversed, err := prismrecord.BuildWallGeometry(handleAlloc{}, pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, false, w.Closed, nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -142,12 +143,12 @@ func measureBrepContext(ctx context.Context, bp brepPayload, btopo *brepTopology
 		return err
 	}
 	body.n.Bounds = boxToInternal(box)
-	return validateAnalyticBodyMeasurements(body)
+	return topobuild.ValidateAnalyticMeasurements(bodyNode(body))
 }
 
 // brepBoundsContext is the union of every face's own box (§4.3): each face's
 // prism view read along the three world axes, composed with the largest
-// section and level displacement as prismBoundsContext composes a prism's. A
+// section and level displacement as prismrecord.Bounds composes a prism's. A
 // fillet band's patches bulge past their directrices along an oblique axis,
 // so each adds its own extents (filletBandExtent).
 func brepBoundsContext(ctx context.Context, bp brepPayload) (Box, error) {
@@ -168,7 +169,7 @@ func brepBoundsContext(ctx context.Context, bp brepPayload) (Box, error) {
 func (bp brepPayload) extentAt(ctx context.Context, item int, axis r3.Vec,
 	work *freeform.FreeformWork) (float64, float64, float64, bool, error) {
 	if item < len(bp.faces) {
-		lo, hi, bound, err := bp.faces[item].view(bp.xform).extentBoundedAlong(ctx, axis, work, nil)
+		lo, hi, bound, err := bp.faces[item].view(bp.xform).ExtentBoundedAlong(ctx, axis, work, nil)
 		return lo, hi, bound, true, err
 	}
 	band := bp.loopBands[item-len(bp.faces)]

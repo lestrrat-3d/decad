@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -301,7 +302,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		}
 		return nil, err
 	} else if ok {
-		body, err := evalPrismContext(ctx, d, ref, pp, freeform.NewFreeformWork())
+		body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), pp, freeform.NewFreeformWork()))
 		if err != nil {
 			return nil, err
 		}
@@ -470,7 +471,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 // performBoolean's analytic dispatch (docs/prism-boolean-design.md §14 PR4;
 // docs/interference-design.md §5.2, §12): it runs the same admission and
 // resolution an meshbool.OpIntersect performBoolean call would — tryPrismBoolean, then
-// evalPrismContext over the admitted payload — under a producerID it mints for
+// prismrecord.Build over the admitted payload — under a producerID it mints for
 // itself, but it never calls Document.commit, so it writes nothing to the
 // document and consumes neither operand (docs/interference-design.md §5:
 // "MUST NOT call nextProducerID, append a Step, retire an operand, register a
@@ -494,7 +495,7 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 		return nil, false, nil
 	}
 	d := documentHandle(a.n.Doc)
-	body, err := evalPrismContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
+	body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), pp, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, false, err
 	}
@@ -1358,7 +1359,7 @@ func coordDisplacementOf(ctx context.Context, b *Body) float64 {
 func analyticBooleanBody(ctx context.Context, d *Document, ref producerID, payload topo.Payload) (*Body, error) {
 	switch p := payload.(type) {
 	case prismPayload:
-		return evalPrismContext(ctx, d, ref, p, freeform.NewFreeformWork())
+		return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), p, freeform.NewFreeformWork()))
 	case stackedPrismPayload:
 		return evalStackedContext(ctx, d, ref, p)
 	case brepPayload:

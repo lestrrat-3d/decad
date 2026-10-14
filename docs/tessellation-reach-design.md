@@ -496,7 +496,7 @@ the cap's `ds` and `dsDelta`. A loop chamfered on both caps takes one pair on bo
 gap serves either cap.
 
 Faces the body holds (`evalCapBlendContext`, `capblend_moments.go`): per loop, trimmed side walls over
-`[zLo, zHi]` where a chamfered end pulls its level in by `d` (`buildLoopSidesAs` over `prismLike`); per
+`[zLo, zHi]` where a chamfered end pulls its level in by `d` (`prismrecord.BuildLoopSidesAs` over `prismLike`); per
 chamfered `(loop, cap)`, one band of patches; two cap faces whose boundary is the offset contour for a
 chamfered loop and the original loop otherwise (the `mixed` profile of `mixedOffsetProfile`).
 
@@ -758,7 +758,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    a quarter-turn `CircleSeg` sample at `k/n = 1/2` publishes a bound within 4 ulps of `r`; an `ArcSeg` sample
    publishes a finite positive bound; a non-derivable enclosure answers `+Inf`.
 4. **Files:** `tessellate.go`. **What:** `deltaStore` for prism and cup — max over emitted vertices of
-   `walkEndBoundAllow(stationbound.ChordStationBound)` and `prismrecord.Payload.PointRound` (`prism_payload.go`); per-face `faceBound`
+   `walkEndBoundAllow(stationbound.ChordStationBound)` and `prismrecord.Payload.PointRound` (`internal/prismrecord`); per-face `faceBound`
    per §3's table; `perturbedTriangleAreaAllow` per triangle into `areaSlack`. **Depends on:** 1, 3.
    **Tests:** `apitest/tessellate_test.go`: §3's plate/rotated-plate assertions; `Bound()` under identity axis-aligned
    placement is unchanged from today's value for `holedPlateBody`.

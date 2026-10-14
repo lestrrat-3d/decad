@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -116,7 +117,7 @@ type capPatchGeom = capband.Patch
 // the side contour (the original loop, at capZ + matSign*ds), and the
 // cap-level coedges that replace the loop's boundary in the cap face. The
 // side-level boundary reuses the trimmed side wall's own near-cap coedges
-// (sideCo, from buildLoopSidesAs) — shared, never re-derived.
+// (sideCo, from prismrecord.BuildLoopSidesAs) — shared, never re-derived.
 //
 // suppliedCap is the cap level's boundary when the caller owns it
 // (docs/modify-general-design.md §4.2 step 5): the cap contour's coedges in
@@ -202,7 +203,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// prism's own wall carries (docs/draft-design.md Table BD).
 	wallOrigins := func(segs []int, p int) ([]provenance.Ref, error) {
 		if cbp.draft {
-			return sideOriginsContext(ctx, ref, li, segs)
+			return prismrecord.SideOrigins(ctx, ref, li, segs)
 		}
 		return []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, p)}}, nil
 	}
@@ -328,7 +329,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	capLevelDelta := proofbound.AbsSumUpper(delta, capDelta)
 
 	// sideVertexAt(i) is the ORIGINAL corner point before wall i, at sideZ —
-	// buildLoopSidesAs's own shared vertex (sideCo[i].edge.Start() ==
+	// prismrecord.BuildLoopSidesAs's own shared vertex (sideCo[i].edge.Start() ==
 	// sideCo[i-1].edge.End()), reused rather than re-created, so a reflex
 	// corner's apex patch and its two neighboring wall patches close on the
 	// SAME vertex.
@@ -379,7 +380,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			if cbp.draft {
 				// A draft's ruling is a prism's lateral edge tilted: its
 				// convexity is the 2D turn of the two walks it joins, the rule
-				// buildLoopSidesAs applies to a vertical edge.
+				// prismrecord.BuildLoopSidesAs applies to a vertical edge.
 				e.n.Convex = prev.TanOutU*cur.TanInV-prev.TanOutV*cur.TanInU > 0
 			}
 			slantIn[i], slantOut[i] = e, e
