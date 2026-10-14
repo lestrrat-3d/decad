@@ -12,6 +12,62 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// A heel tool can clear the finite blank outer line while its apex lies just
+// inside the blank's whole heel cone. The tangent cap must then be declined.
+func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) {
+	doc := New()
+	blank, tooth, _ := spiralTangentBlankAndTooth(t, doc)
+	section, ok := exactSpiralBlank(blank)
+	require.True(t, ok)
+	trim := tooth.payload.(facetedPayload).loftFacesTrim
+	require.NotNil(t, trim)
+	require.True(t, spiralTangentRecordCurrent(trim))
+	m, b := section.section.meridianEquation()
+	toeX, ok := spiralRootToolX(m, b, trim.toe)
+	require.True(t, ok)
+	heelX, ok := spiralRootToolX(m, b, trim.heel)
+	require.True(t, ok)
+	_, ok = spiralToolOuterGap(trim.heel, section.ded, section.heelOuter, -1)
+	require.True(t, ok, "the finite heel gap admits this producer-built tool")
+	require.True(t, spiralTangentCapTouchesHeelCircle(trim, m, b, toeX, heelX))
+	require.False(t, spiralHeelCapEightOutside(trim.maps[8],
+		lfAdd(lfF(section.ded.U), lfF(section.ded.V))))
+
+	proof, accepted, err := certifySpiralFirstJoin(t.Context(), blank, tooth)
+	require.NoError(t, err)
+	require.False(t, accepted, "the tangent heel cap cannot certify the whole blank cone")
+	require.Nil(t, proof)
+}
+
+// The toe tool can reach cap 0 while the tangent heel-circle test still
+// passes. The whole original toe cap must stay before the tool/root circle.
+func TestSpiralFirstJoinDeclinesTangentToeCapPastToeCircle(t *testing.T) {
+	blank, tooth, _ := spiralTangentBlankAndToothWithTools(t, New(), -3.02, false)
+	section, ok := exactSpiralBlank(blank)
+	require.True(t, ok)
+	trim := tooth.payload.(facetedPayload).loftFacesTrim
+	require.NotNil(t, trim)
+	require.True(t, spiralTangentRecordCurrent(trim))
+	m, b := section.section.meridianEquation()
+	toeX, ok := spiralRootToolX(m, b, trim.toe)
+	require.True(t, ok)
+	heelX, ok := spiralRootToolX(m, b, trim.heel)
+	require.True(t, ok)
+	box, err := lfSourceBox(trim.source)
+	require.NoError(t, err)
+	capX := loftface.ScalarRange(trim.maps[0], loftFaceRatVec{lfOne(), lfZero(), lfZero()},
+		loftface.BoxCorners(box))
+	require.GreaterOrEqual(t, capX.Hi.Cmp(toeX), 0, "cap 0 reaches the toe tool/root circle")
+	require.True(t, loftface.CapPlaneTouchesRootCircle(trim.maps[8], loftface.BoxCorners(box),
+		m, b, heelX, trim.maps[7]), "the heel-circle leg still passes")
+	require.False(t, spiralOriginalCapsAvoidToolRootCircles(trim, m, b, toeX, heelX))
+
+	proof, accepted, err := certifySpiralFirstJoin(t.Context(), blank, tooth)
+	require.NoError(t, err)
+	require.False(t, accepted, "the tangent branch must check the whole toe cap")
+	require.Nil(t, proof)
+}
+
 func TestSpiralRootTubePropagatesCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
