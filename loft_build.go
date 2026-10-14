@@ -569,9 +569,7 @@ func buildLoftMass(pl loftPayload, a loftmesh.Assembly, pairs []loftmesh.LoopPai
 		matchedDelta = loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.Delta)
 	}
 	mass := newLoftMassAccumulator(anchor, a.Delta, sectionDelta, matchedDelta)
-	for k, t := range a.Tris {
-		mass.add(a.Verts[t[0]], a.Verts[t[1]], a.Verts[t[2]], k < a.Walls)
-	}
+	mass.AddMesh(a.Verts, a.Tris, a.Walls)
 	if chorded {
 		mass.Chorded = loftmesh.ComputeLoftChordedAllow(pairs, a.VIdx, a.WIdx, a.Verts, anchor, matchedDelta, a.Delta, a.Reversed)
 	}
