@@ -99,29 +99,3 @@ func (k *pairKernel) captureSpine(e *spine.Engine) {
 	}
 	k.clearanceRefused = k.clearanceRefused || e.Refused
 }
-
-func (k *pairKernel) pointCircleCrits(p, c, axis, refU, refV r3.Vec, rad float64, win clearance.AngWindow) ([]clearance.SpineCrit, bool) {
-	e := k.spineEngine()
-	out, ok := e.PointCircleCrits(p, c, axis, refU, refV, rad, win)
-	k.captureSpine(e)
-	return out, ok
-}
-
-func (k *pairKernel) circleCircleCrits(f, g *clearance.CFace) ([]clearance.SpineCrit, bool) {
-	e := k.spineEngine()
-	out, ok := e.CircleCircleCrits(f, g)
-	k.captureSpine(e)
-	return out, ok
-}
-
-func (k *pairKernel) planeCrossesRevolved(f, g *clearance.CFace, sink *cellSink) {
-	cells := facepair.New(k.ctx, k.tol, k.slack)
-	cells.PlaneCrossesRevolved(f, g, sink)
-	k.captureFaceCells(cells)
-}
-
-func (k *pairKernel) planeSphere(f, g *clearance.CFace, sink *cellSink) {
-	cells := facepair.New(k.ctx, k.tol, k.slack)
-	cells.PlaneSphere(f, g, sink)
-	k.captureFaceCells(cells)
-}

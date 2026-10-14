@@ -27,13 +27,6 @@ func (k *pairKernel) eeCell(ea, eb *clearance.CEdge, sink *cellSink) {
 	k.captureCurveCells(cells)
 }
 
-func (k *pairKernel) principalCircleEdgeGap(ea, eb *clearance.CEdge, sink *cellSink) bool {
-	cells := curvecells.New(k.ctx, k.tol, k.slack)
-	ok := cells.PrincipalCircleEdgeGap(ea, eb, sink)
-	k.captureCurveCells(cells)
-	return ok
-}
-
 func (k *pairKernel) captureCurveCells(cells *curvecells.Kernel) {
 	if err := cells.Err(); err != nil {
 		k.err = err

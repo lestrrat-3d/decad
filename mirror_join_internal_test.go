@@ -107,3 +107,7 @@ func TestMirrorJoinCircleImageKeepsItsSense(t *testing.T) {
 	_, err = boundarywalk.WalkOf(flipped, nil)
 	require.Error(t, err, "the premise: a flipped flag contradicts the range")
 }
+
+func (l mirrorLine) mirrorReversedRun(budget *proofbound.WorkBudget, run []curveSegment) ([]curveSegment, float64, error) {
+	return l.line.ReverseRun(budget, run)
+}
