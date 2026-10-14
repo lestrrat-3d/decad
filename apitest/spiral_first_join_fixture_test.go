@@ -142,12 +142,14 @@ func spiralInvolute(pitch, base, tip, effectiveTeeth float64) ([][2]float64, [][
 	return left, right
 }
 
-// spiralPointTooth lofts one fitted back-cone tooth from the common apex.
-func spiralPointTooth(t *testing.T, doc *decad.Document, d spiralDims) *decad.Body {
+// spiralPointTooth lofts one fitted back-cone tooth from the common apex. tilt
+// turns the heel cap plane away from the back cone: the legacy path passes
+// spiralCapTilt, the exact-tangent path passes 0.
+func spiralPointTooth(t *testing.T, doc *decad.Document, d spiralDims, tilt float64) *decad.Body {
 	t.Helper()
 	world := sketch.NewWorld()
 	center := r3.NewVec(d.coneDist/math.Cos(d.coneAngle), 0, 0)
-	tilted := d.coneAngle + spiralCapTilt
+	tilted := d.coneAngle + tilt
 	frame, err := r3.NewFrame(center, r3.NewVec(math.Sin(tilted), -math.Cos(tilted), 0),
 		r3.NewVec(0, 0, 1))
 	require.NoError(t, err)
@@ -310,21 +312,29 @@ func spiralHeelFace(t *testing.T, slab *decad.Body, f spiralFrame) (*decad.Face,
 	return heel, center.Value.Dot(f.coneVec)
 }
 
-// spiralTwistSlabs applies the heel-keyed shaft rotation to every slab.
-func spiralTwistSlabs(t *testing.T, slabs []*decad.Body, f spiralFrame, total float64) []*decad.Body {
+// spiralTwistSlabs applies the heel-keyed shaft rotation to every slab. It also
+// returns the turn applied to the heel-most slab, the one with the largest
+// pre-twist heel distance.
+func spiralTwistSlabs(t *testing.T, slabs []*decad.Body, f spiralFrame,
+	total float64) ([]*decad.Body, r3.Transform) {
 	t.Helper()
 	shaft := r3.NewVec(1, 0, 0)
 	out := make([]*decad.Body, 0, len(slabs))
+	var heelTurn r3.Transform
+	heelDistance := math.Inf(-1)
 	for _, slab := range slabs {
 		_, distance := spiralHeelFace(t, slab, f)
 		angle := -total * (f.mean - distance) / f.span
 		turn, err := r3.RotationAround(r3.Vec{}, shaft, units.Radians(angle))
 		require.NoError(t, err)
+		if distance > heelDistance {
+			heelDistance, heelTurn = distance, turn
+		}
 		placed, err := decad.Transform(t.Context(), slab, turn)
 		require.NoError(t, err)
 		out = append(out, placed)
 	}
-	return out
+	return out, heelTurn
 }
 
 // spiralRootAnchor is the midpoint of the two root corners of a heel face.
@@ -427,11 +437,12 @@ func spiralBlankAndTooth(t *testing.T, doc *decad.Document) (*decad.Body, *decad
 	section := spiralBlankSection(d)
 	blank := spiralRevolve(t, doc, section)
 
-	point := spiralPointTooth(t, doc, d)
+	point := spiralPointTooth(t, doc, d, spiralCapTilt)
 	f := spiralSlabFrame(section)
 	slabs := spiralSlabs(t, doc, d, f, point)
 	total := spiralTraceTotal(t, d, f)
-	crowned := spiralCrownSlabs(t, spiralTwistSlabs(t, slabs, f, total), f, total)
+	twisted, _ := spiralTwistSlabs(t, slabs, f, total)
+	crowned := spiralCrownSlabs(t, twisted, f, total)
 	curved, err := doc.LoftFaces(t.Context(), spiralLoftSections(t, crowned, f)...)
 	require.NoError(t, err)
 	for _, slab := range crowned {
@@ -445,4 +456,75 @@ func spiralBlankAndTooth(t *testing.T, doc *decad.Document) (*decad.Body, *decad
 	trimmed, err := decad.Intersect(t.Context(), toeKeeper, heelCone)
 	require.NoError(t, err)
 	return blank, trimmed
+}
+
+// spiralBlankConeRef names the blank's cone face whose meridian runs from p0
+// to p1. The expected apex is x0 + r0*(x1-x0)/(r0-r1); the face is the unique
+// Cone-tagged one whose Origin.X lies within 1e-9 mm of it. This chooses
+// intent through a public read and proves nothing.
+func spiralBlankConeRef(t *testing.T, blank *decad.Body, p0, p1 spiralAxial) decad.FeatureRef {
+	t.Helper()
+	apex := p0.station + p0.radius*(p1.station-p0.station)/(p0.radius-p1.radius)
+	var found []*decad.Face
+	for _, face := range blank.Faces() {
+		cone, ok := face.Surface().(decad.Cone)
+		if ok && math.Abs(cone.Origin.X-apex) <= 1e-9 {
+			found = append(found, face)
+		}
+	}
+	require.Len(t, found, 1, "exactly one blank cone face has the expected apex")
+	require.NotEmpty(t, found[0].Origins())
+	return found[0].Origins()[0]
+}
+
+// spiralTangentBlankAndTooth builds the blank and the spiral tooth with an
+// exact heel cap: the heel and toe trimming cones come from the blank's own
+// faces (ConeFromFace), and the tooth's last section is built tangent to the
+// heel cone (LoftFacesToConeTangent) along the heel-most slab's twisted ruling.
+// Neither body has been combined yet. It also returns the tangent loft, whose
+// CapEnd role must not survive on the trimmed tooth.
+func spiralTangentBlankAndTooth(t *testing.T, doc *decad.Document) (blank, trimmed, curved *decad.Body) {
+	t.Helper()
+	d := spiralDerive()
+	section := spiralBlankSection(d)
+	blank = spiralRevolve(t, doc, section)
+
+	far := units.Millimeters(-0.1 * d.coneDist)
+	coneOf := func(a, b spiralAxial) *decad.Body {
+		ref := spiralBlankConeRef(t, blank, a, b)
+		cone, err := decad.ConeFromFace(t.Context(), blank, decad.Faces(decad.FaceCreatedBy(ref)).Exactly(1), far)
+		require.NoError(t, err)
+		return cone
+	}
+	heel := coneOf(section[3], section[2])
+	toe := coneOf(section[4], section[5])
+
+	point := spiralPointTooth(t, doc, d, 0)
+	f := spiralSlabFrame(section)
+	slabs := spiralSlabs(t, doc, d, f, point)
+	total := spiralTraceTotal(t, d, f)
+	twisted, heelTurn := spiralTwistSlabs(t, slabs, f, total)
+	crowned := spiralCrownSlabs(t, twisted, f, total)
+	faces := spiralLoftSections(t, crowned, f)
+
+	// The heel-most selected cap is the one the constructed tangent section
+	// replaces. It must belong to the heel-most slab, whose turn gives the
+	// tangent ruling's radial direction.
+	dropped := faces[len(faces)-1]
+	require.Contains(t, crowned[len(crowned)-1].Faces(), dropped,
+		"the dropped cap belongs to the heel-most slab")
+	var err error
+	curved, err = decad.LoftFacesToConeTangent(t.Context(),
+		decad.ConeTangentEnd{Cone: heel, Radial: heelTurn.ApplyDir(r3.NewVec(0, 1, 0))},
+		faces[:len(faces)-1]...)
+	require.NoError(t, err)
+	for _, slab := range crowned {
+		require.NoError(t, decad.Remove(slab))
+	}
+
+	toeKeeper, err := decad.Cut(t.Context(), curved, toe)
+	require.NoError(t, err)
+	trimmed, err = decad.Intersect(t.Context(), toeKeeper, heel)
+	require.NoError(t, err)
+	return blank, trimmed, curved
 }
