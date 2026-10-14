@@ -25,7 +25,7 @@ func Centre(seg coil.Segment) (*big.Rat, *big.Rat) {
 }
 
 // RimCircle is one held rim circle: its centre and unit axis, and the
-// Edge.curveBound of the circle the record denotes about it.
+// topo.Edge.CurveBound of the circle the record denotes about it.
 type RimCircle struct {
 	Centre, Axis r3.Vec
 	Bound        float64
@@ -106,7 +106,7 @@ func RimCircles(rec Record, cu, cv *big.Rat, radius coil.Iv, heldRadius float64)
 	return out, nil
 }
 
-// rimCurveBound is Edge.curveBound for a coil rim: how far the denoted
+// rimCurveBound is topo.Edge.CurveBound for a coil rim: how far the denoted
 // circle {centre + r·(cos α·u + sin α·v)}, r in radius and u, v the images of
 // two orthonormal plane vectors under the denoted map, lies from the held
 // circle (heldCentre, the unit heldAxis, heldRadius). With D = centre −

@@ -410,51 +410,8 @@ type Edge struct {
 	start *Vertex
 	end   *Vertex
 	faces []*Face
-	// A source-proven straight generator can have a faceted held curve.
-	// ParallelTo reads this direction without changing Curve or its bound.
-	selectorDirection       r3.Vec
-	selectorDirectionProven bool
-	convex                  bool    // the walked-boundary convexity — see IsConvex
-	length                  float64 // held millimetres for the analytic curve set
-	// lengthBound is the proven error bound on length: zero only when the
-	// analytic curve's held result is exact, otherwise its evaluation bound;
-	// boolean-built chains carry their proven chord bound.
-	lengthBound float64
-	// lengthUnbounded marks an edge whose true length this evaluator cannot
-	// bound, so Length refuses rather than understate: a boolean rim on a
-	// curved source, whose chord chain understates the true curve's length
-	// by an amount no chord bound can cover, or a cap-blend miter ruling
-	// adjacent to a circular wall whose corner-foot locus this evaluator
-	// cannot enclose (docs/modify-reach-design.md §8.3).
-	lengthUnbounded bool
-	// curveBound, valid only where curveBounded is set, bounds how far the
-	// curve a Circle3 or Arc3 edge denotes lies from its held circle — the
-	// circle of the held Radius about the held Center, normal to the held
-	// Axis: every denoted point is within curveBound of that circle, and
-	// curveBound is below half the held radius, so projecting radially about
-	// the held centre carries the denoted curve continuously onto the held
-	// circle. It says nothing about where along the circle the curve ends;
-	// the end vertices' own bounds say that. A builder that proves it sets
-	// both (prismPayload.CircleCurveBound); every copier carries it through
-	// its placement (surfaceplace.PlacedCurveBound). An edge no builder bounds
-	// leaves curveBounded false, and a reading that needs the bound refuses.
-	curveBound   float64
-	curveBounded bool
-	// level is the LEVEL half of the shared-denotation certificate
-	// (denotation.go): non-zero only for a rim edge a builder stamped at one
-	// denoted sweep level, and zero ("no certificate") for every edge no
-	// builder in this package mints one for.
-	level levelToken
-	// denot is the CURVE half of the shared-denotation certificate
-	// (denotation.go): non-zero only for an edge a builder minted one for —
-	// today a straight prism's rim edge (prism_build.go) and a revolve's
-	// junction edge (revolve_build.go) — and propagated unchanged, composing
-	// xform, by every copier that reproduces the same curve (stitch.go's
-	// rebuildStitchTopology, unstitch.go's copyFaceUnderContext,
-	// patch_body.go's copyPatchFacesUnder). It is what stitch_weld.go's
-	// buildStitchWeldPlan reads to lift Table J's J5 for a bounded pair. Zero
-	// ("no certificate") for every edge no builder or copier stamps.
-	denot curveToken
+	// n is the node data internal packages read and build (internal/topo).
+	n topo.Edge
 }
 
 // Curve returns the edge's tagged geometry.
@@ -501,7 +458,7 @@ func (e *Edge) Faces() []*Face { return append([]*Face(nil), e.faces...) }
 // such a rim is a plain quarter-turn wedge a chamfer could take. Convexity
 // here is the walk's answer, not the wedge's: Concave() picks a hole's rim,
 // Convex() never does.
-func (e *Edge) IsConvex() bool { return e.convex }
+func (e *Edge) IsConvex() bool { return e.n.Convex }
 
 // IsFree reports whether exactly one face is adjacent to this edge — a
 // sheet's boundary, and the expected shape there (docs/surface-design.md
@@ -523,13 +480,13 @@ func (e *Edge) IsFree() bool { return len(e.faces) == 1 }
 // evaluator cannot build refuses the same way rather than publish an
 // understated Bound.
 func (e *Edge) Length() (Measurement, error) {
-	if e.lengthUnbounded {
+	if e.n.LengthUnbounded {
 		return Measurement{}, fmt.Errorf(`%w: this edge's true length has no proven bound this evaluator can publish`, ErrUnsupported)
 	}
 	return Measurement{
-		Value:     units.Millimeters(e.length),
-		Exactness: exactnessOf(e.lengthBound),
-		Bound:     units.Millimeters(e.lengthBound),
+		Value:     units.Millimeters(e.n.Length),
+		Exactness: exactnessOf(e.n.LengthBound),
+		Bound:     units.Millimeters(e.n.LengthBound),
 	}, nil
 }
 

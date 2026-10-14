@@ -42,7 +42,7 @@ func loftVertex(p r3.Vec, delta float64) *Vertex {
 // with the given walked-boundary convexity.
 func loftEdge(vertexObjs []*Vertex, positions []r3.Vec, a, b int, convex bool, delta float64) *Edge {
 	held, bound := loftmesh.EdgeLength(positions[a], positions[b], delta)
-	return &Edge{curve: Line3{}, start: vertexObjs[a], end: vertexObjs[b], convex: convex, length: held, lengthBound: bound}
+	return &Edge{curve: Line3{}, start: vertexObjs[a], end: vertexObjs[b], n: topo.Edge{Convex: convex, Length: held, LengthBound: bound}}
 }
 
 // planeFromTriangle builds a face's Plane surface directly from one of its

@@ -660,7 +660,7 @@ continuous correspondence keeping them within κ of each other their areas
 differ by at most Σ κ·(1.5·len_lifted + 0.5·len_denoted). A line's κ is its
 larger end gap (the held vertex's bound plus its exact distance from the
 lifted record point). A circular edge's κ runs through its held circle: the
-edge's own curve bound (`Edge.curveBound`), the lifted record circle's
+edge's own curve bound (`topo.Edge.CurveBound`), the lifted record circle's
 centre gap and `massmoment.CircleImageGap`, and twice the larger end gap. A
 prism-family build stamps that curve bound on its cap rims and a cap
 blend on its whole, trimmed and apex arcs (`prismPayload.CircleCurveBound`,

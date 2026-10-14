@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 
@@ -29,7 +30,7 @@ func TestFacetedAreaBoundCompositionRoundsOutward(t *testing.T) {
 	for _, length := range lengths {
 		bound := proofbound.ChainLengthBound(1, 0, length)
 		face.loops[0].coedges = append(face.loops[0].coedges, coedge{edge: &Edge{
-			length: length, lengthBound: bound,
+			n: topo.Edge{Length: length, LengthBound: bound},
 		}})
 		exactPerimeter.Add(exactPerimeter, new(big.Rat).SetFloat64(length))
 		exactPerimeter.Add(exactPerimeter, new(big.Rat).SetFloat64(bound))

@@ -51,11 +51,11 @@ func (in *bodyToleranceInputs) edgeLength() (float64, bool) {
 	in.edgeLengthLoaded = true
 	in.edgeLengthOK = true
 	for _, edge := range in.body.Edges() {
-		if edge == nil || !tolerance.UsableMagnitude(edge.length) {
+		if edge == nil || !tolerance.UsableMagnitude(edge.n.Length) {
 			in.edgeLengthOK = false
 			break
 		}
-		in.edgeLengthValue += edge.length
+		in.edgeLengthValue += edge.n.Length
 		if !tolerance.UsableMagnitude(in.edgeLengthValue) {
 			in.edgeLengthOK = false
 			break

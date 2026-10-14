@@ -273,22 +273,24 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if err != nil {
 			return nil, err
 		}
-		lengthBound := old.lengthBound
+		lengthBound := old.n.LengthBound
 		if delta > 0 {
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
-			curve:           publicCurve(curve),
-			start:           start,
-			end:             end,
-			convex:          old.convex,
-			length:          old.length,
-			lengthBound:     lengthBound,
-			lengthUnbounded: old.lengthUnbounded,
-			denot:           old.denot.Compose(xform),
+			curve: publicCurve(curve),
+			start: start,
+			end:   end,
+			n: topo.Edge{
+				Convex:          old.n.Convex,
+				Length:          old.n.Length,
+				LengthBound:     lengthBound,
+				LengthUnbounded: old.n.LengthUnbounded,
+				Denot:           old.n.Denot.Compose(xform),
+			},
 		}
-		ne.curveBound, ne.curveBounded = surfaceplace.PlacedCurveBound(
-			internalCurve(old.curve), old.curveBound, old.curveBounded, curve, xform)
+		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
+			internalCurve(old.curve), old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}

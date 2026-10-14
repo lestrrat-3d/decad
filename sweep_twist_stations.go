@@ -322,7 +322,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	upperTheta := proofbound.RatFloatUp(absTheta)
 	for _, edge := range body.Edges() {
 		edge.curve = FacetedCurve{Bound: units.Millimeters(delta)}
-		edge.lengthBound = proofbound.AbsSumUpper(edge.lengthBound, edge.length,
+		edge.n.LengthBound = proofbound.AbsSumUpper(edge.n.LengthBound, edge.n.Length,
 			path.End().Z, proofbound.ProductUpper(poly.MaxRadiusL1, upperTheta), poly.PerimeterUpper)
 	}
 	for _, face := range body.Faces() {

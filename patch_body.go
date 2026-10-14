@@ -321,7 +321,7 @@ func provePatchChainPlaneLevel(edges []*Edge) (levelToken, float64, bool) {
 		bound = math.Max(bound, v.n.Bound.Base())
 	}
 	for _, e := range edges {
-		if !sameLevel(e.level, lvl) {
+		if !sameLevel(e.n.Level, lvl) {
 			return levelToken{}, 0, false
 		}
 	}
@@ -411,9 +411,9 @@ func patchChainVertices(edges []*Edge) []*Vertex {
 func patchEdgeGeometryExact(e *Edge) bool {
 	switch e.curve.(type) {
 	case Circle3, Arc3:
-		return !e.lengthUnbounded
+		return !e.n.LengthUnbounded
 	default:
-		return e.lengthBound == 0 && !e.lengthUnbounded
+		return e.n.LengthBound == 0 && !e.n.LengthUnbounded
 	}
 }
 
@@ -642,23 +642,25 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if err != nil {
 			return nil, err
 		}
-		lengthBound := old.lengthBound
+		lengthBound := old.n.LengthBound
 		if delta > 0 {
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
-		lengthBound = place.LengthBound(old.length, lengthBound)
+		lengthBound = place.LengthBound(old.n.Length, lengthBound)
 		ne := &Edge{
-			curve:           publicCurve(curve),
-			start:           start,
-			end:             end,
-			convex:          old.convex,
-			length:          old.length,
-			lengthBound:     lengthBound,
-			lengthUnbounded: old.lengthUnbounded,
-			denot:           old.denot.Compose(xform),
+			curve: publicCurve(curve),
+			start: start,
+			end:   end,
+			n: topo.Edge{
+				Convex:          old.n.Convex,
+				Length:          old.n.Length,
+				LengthBound:     lengthBound,
+				LengthUnbounded: old.n.LengthUnbounded,
+				Denot:           old.n.Denot.Compose(xform),
+			},
 		}
-		ne.curveBound, ne.curveBounded = surfaceplace.PlacedCurveBound(
-			internalCurve(old.curve), old.curveBound, old.curveBounded, curve, xform)
+		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
+			internalCurve(old.curve), old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		newEdgeByOld[old] = ne
 		return ne, nil
 	}
@@ -792,8 +794,8 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 			Curve: internalCurve(ne.curve), Forward: oe.forward,
 			Start:  patchchain.AreaVertex{Position: ne.start.n.Position, Bound: ne.start.n.Bound.Base()},
 			End:    patchchain.AreaVertex{Position: ne.end.n.Position, Bound: ne.end.n.Bound.Base()},
-			Length: ne.length, LengthBound: ne.lengthBound, LengthUnbounded: ne.lengthUnbounded,
-			CurveBound: ne.curveBound, CurveBounded: ne.curveBounded,
+			Length: ne.n.Length, LengthBound: ne.n.LengthBound, LengthUnbounded: ne.n.LengthUnbounded,
+			CurveBound: ne.n.CurveBound, CurveBounded: ne.n.CurveBounded,
 		}
 	}
 	if bound, ok := patchchain.PolygonAreaBound(ig.Area, areaEdges); ok {
@@ -1002,10 +1004,10 @@ func bodyPatchPayloadProvesSimple(ctx context.Context, pp bodyPatchPayload) bool
 	// certificate" would prove nothing about which plane it belongs to.
 	receiverFreeByLevel := map[levelID][]*Edge{}
 	for _, e := range receiver.Edges() {
-		if !e.IsFree() || e.level.ID == 0 {
+		if !e.IsFree() || e.n.Level.ID == 0 {
 			continue
 		}
-		receiverFreeByLevel[e.level.ID] = append(receiverFreeByLevel[e.level.ID], e)
+		receiverFreeByLevel[e.n.Level.ID] = append(receiverFreeByLevel[e.n.Level.ID], e)
 	}
 
 	for _, chain := range pp.chains {
@@ -1032,12 +1034,12 @@ func patchChainSharedLevel(edges []*Edge) (levelID, bool) {
 	if len(edges) == 0 {
 		return 0, false
 	}
-	id := edges[0].level.ID
+	id := edges[0].n.Level.ID
 	if id == 0 {
 		return 0, false
 	}
 	for _, e := range edges {
-		if e.level.ID != id || e.start.n.Level.ID != id || e.end.n.Level.ID != id {
+		if e.n.Level.ID != id || e.start.n.Level.ID != id || e.end.n.Level.ID != id {
 			return 0, false
 		}
 	}

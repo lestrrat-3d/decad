@@ -432,11 +432,11 @@ func (p FacePredicate) matches(f *Face) bool { return p.clause().Matches(selecto
 // selectorEdge exposes only the analytic facts a predicate reads.
 type selectorEdge struct{ *Edge }
 
-func (e selectorEdge) SelectorConvex() bool { return e.convex }
+func (e selectorEdge) SelectorConvex() bool { return e.n.Convex }
 func (e selectorEdge) SelectorFree() bool   { return e.IsFree() }
 func (e selectorEdge) SelectorLineDirection() (r3.Vec, bool) {
-	if e.selectorDirectionProven {
-		return e.selectorDirection, true
+	if e.n.SelectorDirectionProven {
+		return e.n.SelectorDirection, true
 	}
 	if _, ok := e.curve.(Line3); !ok {
 		return r3.Vec{}, false
@@ -446,7 +446,7 @@ func (e selectorEdge) SelectorLineDirection() (r3.Vec, bool) {
 func (e selectorEdge) SelectorEndpoints() (r3.Vec, r3.Vec) {
 	return e.start.n.Position, e.end.n.Position
 }
-func (e selectorEdge) SelectorLengthMM() float64 { return e.length }
+func (e selectorEdge) SelectorLengthMM() float64 { return e.n.Length }
 func (e selectorEdge) SelectorHasOrigin(ref FeatureRef) bool {
 	for _, face := range e.faces {
 		if slices.Contains(face.origins, ref) {

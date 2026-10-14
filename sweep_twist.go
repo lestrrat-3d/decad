@@ -324,8 +324,8 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		// A helix edge is not the chord the held Loft exposes. Its true length
 		// is at most h+R|angle|; a cap edge is shorter than the perimeter.
 		edge.curve = FacetedCurve{Bound: units.Millimeters(delta)}
-		edge.lengthBound = proofbound.AbsSumUpper(edge.lengthBound,
-			edge.length, path.End().Z, proofbound.UpRound(poly.MaxRadiusL1*upper), poly.PerimeterUpper)
+		edge.n.LengthBound = proofbound.AbsSumUpper(edge.n.LengthBound,
+			edge.n.Length, path.End().Z, proofbound.UpRound(poly.MaxRadiusL1*upper), poly.PerimeterUpper)
 	}
 	for _, face := range heldBody.Faces() {
 		if face.origins[0].Role != roleCapStart && face.origins[0].Role != roleCapEnd {

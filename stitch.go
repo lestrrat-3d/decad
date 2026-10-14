@@ -552,26 +552,28 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if err != nil {
 			return nil, err
 		}
-		lengthBound := old.lengthBound
+		lengthBound := old.n.LengthBound
 		if delta > 0 {
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
 		ne := &Edge{
-			curve:           publicCurve(curve),
-			start:           vertexForClass(startClass),
-			end:             vertexForClass(endClass),
-			convex:          old.convex,
-			length:          old.length,
-			lengthBound:     lengthBound,
-			lengthUnbounded: old.lengthUnbounded,
-			// A welded pair's two edges are already proven to denote the same
-			// curve (Table J), so the FIRST one reached here — the only one
-			// that ever builds a new Edge for the group, per buildByGroup
-			// above — is a sound representative for the other's identity too.
-			denot: old.denot.Compose(xform),
+			curve: publicCurve(curve),
+			start: vertexForClass(startClass),
+			end:   vertexForClass(endClass),
+			n: topo.Edge{
+				Convex:          old.n.Convex,
+				Length:          old.n.Length,
+				LengthBound:     lengthBound,
+				LengthUnbounded: old.n.LengthUnbounded,
+				// A welded pair's two edges are already proven to denote the same
+				// curve (Table J), so the FIRST one reached here — the only one
+				// that ever builds a new Edge for the group, per buildByGroup
+				// above — is a sound representative for the other's identity too.
+				Denot: old.n.Denot.Compose(xform),
+			},
 		}
-		ne.curveBound, ne.curveBounded = surfaceplace.PlacedCurveBound(
-			internalCurve(old.curve), old.curveBound, old.curveBounded, curve, xform)
+		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
+			internalCurve(old.curve), old.n.CurveBound, old.n.CurveBounded, curve, xform)
 		eb := &edgeBuild{edge: ne, startClass: startClass, endClass: endClass}
 		buildByOld[old] = eb
 		if isWelded {
@@ -914,7 +916,7 @@ func fixWeldedEdgeConvexity(welded map[*Edge]struct{}) {
 			nb = nb.Scale(-1)
 		}
 		d := e.end.n.Position.Sub(e.start.n.Position)
-		e.convex = na.Cross(nb).Dot(d) > 0
+		e.n.Convex = na.Cross(nb).Dot(d) > 0
 	}
 }
 

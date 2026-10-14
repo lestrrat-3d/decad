@@ -365,10 +365,10 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// counter-clockwise round keeps its convex rim. The loop's role
 		// decides nothing here. convex is boundarywalk.RimConvexity's own answer for
 		// this walk, computed by the caller.
-		bottomEdge := &Edge{curve: curve0, start: bStart, end: bEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
-		topEdge := &Edge{curve: curve1, start: tStart, end: tEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
-		bottomEdge.curveBound, bottomEdge.curveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
-		topEdge.curveBound, topEdge.curveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
+		bottomEdge := &Edge{curve: curve0, start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
+		topEdge := &Edge{curve: curve1, start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
+		bottomEdge.n.CurveBound, bottomEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
+		topEdge.n.CurveBound, topEdge.n.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
 		surf := Cylinder{Origin: center0, Axis: axis, Radius: radius}
 		// A clockwise-walked wall has its material OUTSIDE the cylinder,
 		// so its outward normal is the radial direction negated.
@@ -384,8 +384,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// concavity falls out of the clockwise walk itself, exactly as it
 		// does for a circular hole wall. An R19 refusal already returned
 		// from boundarywalk.RimConvexity, before this switch ever ran.
-		bottomEdge := &Edge{curve: NURBSCurve{}, start: bStart, end: bEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
-		topEdge := &Edge{curve: NURBSCurve{}, start: tStart, end: tEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
+		bottomEdge := &Edge{curve: NURBSCurve{}, start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
+		topEdge := &Edge{curve: NURBSCurve{}, start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
 		// faceReversed stays false: an opaque NURBSSurface publishes no
 		// normal at all (§7's NormalAt refusal, topology.go), so
 		// Face.reversed — "the outward normal is the surface's geometric
@@ -396,8 +396,8 @@ func buildWallGeometry(pp prismPayload, w survey2d.SideWalk, convex, closed bool
 		// loop's: which side its material lies on is decided by the sense
 		// the whole loop is walked, and that sense IS the loop's role —
 		// the outer loop counter-clockwise, holes clockwise (moments.go).
-		bottomEdge := &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
-		topEdge := &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: convex, length: w.Length, lengthBound: w.LengthBound}
+		bottomEdge := &Edge{curve: Line3{}, start: bStart, end: bEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
+		topEdge := &Edge{curve: Line3{}, start: tStart, end: tEnd, n: topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound}}
 		mid := pp.Point((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, pp.Z0)
 		// tangent × N is the outward normal for a CCW outer walk (and a
 		// CW hole walk); a reflection flips the cross product, so the
@@ -605,12 +605,14 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			prev := walks[(i+n-1)%n]
 			cross := prev.TanOutU*walks[i].TanInV - prev.TanOutV*walks[i].TanInU
 			vertical[i] = &Edge{
-				curve:       Line3{},
-				start:       bottomV[i],
-				end:         topV[i],
-				convex:      cross > 0,
-				length:      pp.Z1 - pp.Z0,
-				lengthBound: height.Bound,
+				curve: Line3{},
+				start: bottomV[i],
+				end:   topV[i],
+				n: topo.Edge{
+					Convex:      cross > 0,
+					Length:      pp.Z1 - pp.Z0,
+					LengthBound: height.Bound,
+				},
 			}
 		}
 	}
@@ -642,13 +644,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		// The LEVEL certificate travels uniformly, whatever curve kind this
 		// rim edge carries: every rim edge at one end is stamped by the SAME
 		// evalPrismContext call over the SAME recorded frame and level.
-		bottomEdge.level = levelZ0
-		topEdge.level = levelZ1
+		bottomEdge.n.Level = levelZ0
+		topEdge.n.Level = levelZ1
 		// The CURVE certificate is minted fresh per rim edge, never shared:
 		// each rim edge denotes its OWN curve (a different wall's own top or
 		// bottom boundary), unlike the level, which many rim edges share.
-		bottomEdge.denot = mintCurve()
-		topEdge.denot = mintCurve()
+		bottomEdge.n.Denot = mintCurve()
+		topEdge.n.Denot = mintCurve()
 
 		origins, err := sideOriginsContext(ctx, ref, roleLoop, w.Segs)
 		if err != nil {

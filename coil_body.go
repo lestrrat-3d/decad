@@ -257,7 +257,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		helix[i] = &Edge{
 			curve: FacetedCurve{Bound: units.Millimeters(chain)},
 			start: startV[i], end: endV[i],
-			convex: cross.Sign() > 0, length: hLength, lengthBound: hBound,
+			n: topo.Edge{Convex: cross.Sign() > 0, Length: hLength, LengthBound: hBound},
 		}
 	}
 
@@ -375,8 +375,8 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 		if err != nil {
 			return nil, nil, err
 		}
-		return &Edge{curve: Line3{}, start: s0, end: s1, convex: loopOuter, length: length, lengthBound: lengthBound},
-			&Edge{curve: Line3{}, start: e0, end: e1, convex: loopOuter, length: length, lengthBound: lengthBound}, nil
+		return &Edge{curve: Line3{}, start: s0, end: s1, n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound}},
+			&Edge{curve: Line3{}, start: e0, end: e1, n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound}}, nil
 	}
 	length, lengthBound, err := coilshell.Held(rec.Stretched(seg.Length), "rim length")
 	if err != nil {
@@ -411,9 +411,19 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 	} else {
 		c0, c1 = Arc3{Center: centre0, Axis: axis0.Scale(sign), Radius: r}, Arc3{Center: centre1, Axis: axis1.Scale(sign), Radius: r}
 	}
-	start := &Edge{curve: c0, start: s0, end: s1, convex: convex, length: length, lengthBound: lengthBound,
-		curveBound: rims[0].Bound, curveBounded: rims[0].Bounded}
-	end := &Edge{curve: c1, start: e0, end: e1, convex: convex, length: length, lengthBound: lengthBound,
-		curveBound: rims[1].Bound, curveBounded: rims[1].Bounded}
+	start := &Edge{curve: c0, start: s0, end: s1, n: topo.Edge{
+		Convex:       convex,
+		Length:       length,
+		LengthBound:  lengthBound,
+		CurveBound:   rims[0].Bound,
+		CurveBounded: rims[0].Bounded,
+	}}
+	end := &Edge{curve: c1, start: e0, end: e1, n: topo.Edge{
+		Convex:       convex,
+		Length:       length,
+		LengthBound:  lengthBound,
+		CurveBound:   rims[1].Bound,
+		CurveBounded: rims[1].Bounded,
+	}}
 	return start, end, nil
 }

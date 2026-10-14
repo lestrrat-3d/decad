@@ -366,8 +366,8 @@ func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound flo
 	v0 := &Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, 0)}}
 	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, height)}}
 	length := 2 * math.Pi * r
-	e0 := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v0, end: v0, length: length, lengthBound: rimBound}
-	e1 := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, height), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v1, end: v1, length: length, lengthBound: rimBound}
+	e0 := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v0, end: v0, n: topo.Edge{Length: length, LengthBound: rimBound}}
+	e1 := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, height), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v1, end: v1, n: topo.Edge{Length: length, LengthBound: rimBound}}
 	f := &Face{
 		surface: Cylinder{Origin: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)},
 		loops: []*Loop{
@@ -450,7 +450,7 @@ func stitchTestPlaneDiskFace(r, rimBound float64) *Face {
 		panic(err)
 	}
 	v := &Vertex{n: topo.Vertex{Position: r3.NewVec(r, 0, 0)}}
-	e := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v, end: v, length: 2 * math.Pi * r, lengthBound: rimBound}
+	e := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v, end: v, n: topo.Edge{Length: 2 * math.Pi * r, LengthBound: rimBound}}
 	f := &Face{
 		surface: Plane{Frame: frame},
 		loops:   []*Loop{{outer: true, coedges: []coedge{{edge: e, forward: true}}}},
@@ -502,7 +502,7 @@ func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
 	vertex := &Vertex{n: topo.Vertex{Position: center.Add(frame.U().Scale(radius))}}
 	edge := &Edge{
 		curve: Circle3{Center: center, Axis: frame.N(), Radius: units.Millimeters(radius)},
-		start: vertex, end: vertex, length: 2 * math.Pi * radius,
+		start: vertex, end: vertex, n: topo.Edge{Length: 2 * math.Pi * radius},
 	}
 	face := &Face{
 		surface: Plane{Frame: frame},
@@ -526,7 +526,7 @@ func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
 	require.InDelta(t, n.Y*(area*centerDelta.Y*centerDelta.Y+fourth*(u.Y*u.Y+v.Y*v.Y))/2, my.Value, 1e-10)
 	require.InDelta(t, n.Z*(area*centerDelta.Z*centerDelta.Z+fourth*(u.Z*u.Z+v.Z*v.Z))/2, mz.Value, 1e-10)
 
-	edge.lengthBound = 0.5
+	edge.n.LengthBound = 0.5
 	_, _, myWide, mzWide, err := stitchFaceFluxAndMoment(face, anchor)
 	require.NoError(t, err)
 	require.Greater(t, myWide.Bound, my.Bound)
@@ -560,8 +560,8 @@ func stitchTestConeFace(halfAngle, r0, z0, r1, z1, rimBound float64) *Face {
 	v1 := &Vertex{n: topo.Vertex{Position: r3.NewVec(r1, 0, z1)}}
 	length0 := 2 * math.Pi * r0
 	length1 := 2 * math.Pi * r1
-	e0 := &Edge{curve: Circle3{Center: center0, Axis: axis, Radius: units.Millimeters(r0)}, start: v0, end: v0, length: length0, lengthBound: rimBound}
-	e1 := &Edge{curve: Circle3{Center: center1, Axis: axis, Radius: units.Millimeters(r1)}, start: v1, end: v1, length: length1, lengthBound: rimBound}
+	e0 := &Edge{curve: Circle3{Center: center0, Axis: axis, Radius: units.Millimeters(r0)}, start: v0, end: v0, n: topo.Edge{Length: length0, LengthBound: rimBound}}
+	e1 := &Edge{curve: Circle3{Center: center1, Axis: axis, Radius: units.Millimeters(r1)}, start: v1, end: v1, n: topo.Edge{Length: length1, LengthBound: rimBound}}
 	f := &Face{
 		surface: Cone{Origin: r3.NewVec(0, 0, 0), Axis: axis, Radius: units.Millimeters(0), HalfAngle: units.Radians(halfAngle)},
 		loops: []*Loop{
@@ -841,10 +841,10 @@ func TestStitchSphereFluxRefusesFaceWithABoundaryLoop(t *testing.T) {
 	t.Parallel()
 	v := &Vertex{n: topo.Vertex{Position: r3.NewVec(5, 5, 0)}}
 	e := &Edge{
-		curve:  Circle3{Center: r3.NewVec(5, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(5)},
-		start:  v,
-		end:    v,
-		length: 2 * math.Pi * 5,
+		curve: Circle3{Center: r3.NewVec(5, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(5)},
+		start: v,
+		end:   v,
+		n:     topo.Edge{Length: 2 * math.Pi * 5},
 	}
 	f := &Face{
 		surface: Sphere{Center: r3.NewVec(5, 0, 0), Radius: units.Millimeters(5)},
@@ -967,7 +967,7 @@ func stitchTestTorusFace(center, axis r3.Vec, major, minor, e0, e1 float64) *Fac
 		return &Edge{
 			curve: Circle3{Center: rimCenter, Axis: axis, Radius: units.Millimeters(major)},
 			start: v, end: v,
-			length: 2 * math.Pi * major,
+			n: topo.Edge{Length: 2 * math.Pi * major},
 		}
 	}
 	e0Edge, e1Edge := rim(e0), rim(e1)

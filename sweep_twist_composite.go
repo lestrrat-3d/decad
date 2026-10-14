@@ -389,7 +389,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		proofbound.AbsSumUpper(proofbound.RatFloatUp(proofbound.HalfPiIv.Hi), upperTheta))
 	for _, edge := range body.Edges() {
 		edge.curve = FacetedCurve{Bound: units.Millimeters(delta)}
-		edge.lengthBound = proofbound.AbsSumUpper(edge.lengthBound, edge.length,
+		edge.n.LengthBound = proofbound.AbsSumUpper(edge.n.LengthBound, edge.n.Length,
 			proofbound.RatFloatUp(length.Hi), longitudinalExtra, poly.PerimeterUpper)
 	}
 	for _, face := range body.Faces() {

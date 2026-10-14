@@ -329,8 +329,8 @@ func facetedFacePerimeterUpper(f *Face, budget *proofbound.WorkBudget) (float64,
 	var lengths, bounds []float64
 	for _, l := range f.loops {
 		for _, ce := range l.coedges {
-			lengths = append(lengths, ce.edge.length)
-			bounds = append(bounds, ce.edge.lengthBound)
+			lengths = append(lengths, ce.edge.n.Length)
+			bounds = append(bounds, ce.edge.n.LengthBound)
 		}
 	}
 	return proofbound.PerimeterUpper(budget, lengths, bounds)
@@ -784,17 +784,19 @@ func buildFacetedTopology(
 	edgeObj := map[*facetedtopology.Edge]*Edge{}
 	for _, chain := range plan.Edges {
 		e := &Edge{
-			curve:           FacetedCurve{Bound: units.Millimeters(chain.Bound)},
-			start:           vertexOf(chain.Vertices[0]),
-			end:             vertexOf(chain.Vertices[len(chain.Vertices)-1]),
-			faces:           []*Face{faces[chain.Faces[0]], faces[chain.Faces[1]]},
-			convex:          chain.Convex,
-			length:          chain.Length,
-			lengthBound:     chain.LengthBound,
-			lengthUnbounded: chain.LengthUnbounded,
+			curve: FacetedCurve{Bound: units.Millimeters(chain.Bound)},
+			start: vertexOf(chain.Vertices[0]),
+			end:   vertexOf(chain.Vertices[len(chain.Vertices)-1]),
+			faces: []*Face{faces[chain.Faces[0]], faces[chain.Faces[1]]},
+			n: topo.Edge{
+				Convex:          chain.Convex,
+				Length:          chain.Length,
+				LengthBound:     chain.LengthBound,
+				LengthUnbounded: chain.LengthUnbounded,
+			},
 		}
 		if axialSectionJoin {
-			e.selectorDirection, e.selectorDirectionProven =
+			e.n.SelectorDirection, e.n.SelectorDirectionProven =
 				facetedtopology.AxialChainDirection(verts, chain.Vertices)
 		}
 		edgeObj[chain] = e

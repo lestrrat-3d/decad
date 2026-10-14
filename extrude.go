@@ -832,7 +832,7 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 			prev, w := walks[i-1], walks[i]
 			convex = prev.TanOutU*w.TanInV-prev.TanOutV*w.TanInU > 0
 		}
-		vertical[i] = &Edge{curve: Line3{}, start: bottomV[i], end: topV[i], convex: convex, length: pp.z1 - pp.z0, lengthBound: height.Bound}
+		vertical[i] = &Edge{curve: Line3{}, start: bottomV[i], end: topV[i], n: topo.Edge{Convex: convex, Length: pp.z1 - pp.z0, LengthBound: height.Bound}}
 	}
 
 	faces := make([]*Face, 0, n)
