@@ -135,14 +135,17 @@ between its cap levels, every boundary is therefore a circle whose center
 and radius are the linear interpolation of its paired source records. The
 fraction comes from the exact rational cap and request levels. Each center
 coordinate and radius must be finite and exactly representable as binary64.
-The radius must remain positive. Endpoint hole containment and pairwise
-separation persist between the caps: center distances are bounded by the
-interpolation of their endpoint distances, while the radii interpolate
-linearly. Reconstruct all circles on a fresh Sketch and require one valid
-matching material region before returning it. The source Loft's sound-solid
-gate and Sketch's valid-region check reject an invalid arrangement. A
-cap-level or oblique request, a shifted request origin, a placed Loft or an
-inexact interpolated circle returns `ErrUnsupported`.
+The radius must remain positive. Prove containment of each hole in the outer
+circle and separation of every hole pair over the entire cap interval.
+Each signed gap is a quadratic in the sweep fraction: the squared radius
+gap minus squared center distance for containment, or squared center
+distance minus squared radius sum for separation. Require both endpoints
+and any interior minimum to be strictly positive in exact rational
+arithmetic. Endpoint separation alone does not prove that moving holes
+stay apart. Reconstruct all circles on a fresh Sketch and require one valid
+matching material region before returning it. A cap-level or oblique
+request, a shifted request origin, a placed Loft or an inexact interpolated
+circle returns `ErrUnsupported`.
 
 ## Cardinal plane of an authenticated source sphere
 
