@@ -40,7 +40,7 @@ func newPairScan(boxes [][2]r3.Vec, members []int, limit uint64) pairScan {
 			best, bestWork = tree, treeWork
 		}
 	}
-	grid, ok := newGridScan(boxes, members, min(bestWork, limit))
+	grid, ok := newGridScanBelow(boxes, members, min(bestWork, limit), bestWork)
 	if ok && grid.work < bestWork {
 		best = grid
 	}
@@ -117,6 +117,14 @@ func vecAxis(v r3.Vec, axis int) float64 {
 // false when the members span no finite extent, or when they meet more than
 // budget cells; the caller then keeps the sweep.
 func newGridScan(boxes [][2]r3.Vec, members []int, budget uint64) (gridScan, bool) {
+	return newGridScanBelow(boxes, members, budget, math.MaxUint64)
+}
+
+// newGridScanBelow is newGridScan for a caller that keeps the grid only when
+// its work is below beat. ok is also false as soon as the work counted so far
+// reaches beat: the count only grows, so the finished grid could not be kept.
+// A grid returned with ok false is partly built and must be dropped.
+func newGridScanBelow(boxes [][2]r3.Vec, members []int, budget, beat uint64) (gridScan, bool) {
 	g := gridScan{boxes: boxes}
 	if len(members) < 2 {
 		return g, false
@@ -200,6 +208,9 @@ func newGridScan(boxes [][2]r3.Vec, members []int, budget uint64) (gridScan, boo
 					break
 				}
 				g.work += uint64(min(ep.zHi, eq.zHi) - eq.zLo + 1)
+			}
+			if g.work >= beat {
+				return g, false
 			}
 		}
 		g.columns = append(g.columns, gridColumn{key: key, entries: col})
