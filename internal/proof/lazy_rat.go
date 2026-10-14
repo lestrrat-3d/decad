@@ -11,10 +11,11 @@ import (
 // immutable: operations never write an operand's integers, so results may
 // share them.
 //
-// LazyRat exists for one caller, the cross-bore cell proof, whose
-// intermediate values feed the next operation and are read only at a few
-// points. Every value that leaves that proof goes through Rat, so a callee
-// sees the lowest-terms rational big.Rat's own operations would have produced.
+// LazyRat serves exact computations whose intermediate values are read only
+// at a few points: the cross-bore cell proof, and proofbound.RatDistanceUp's
+// one subtraction. Every value that leaves either goes through Rat, or
+// through a rounding equal to the lowest-terms one (proofbound.LazyRatFloatUp),
+// so a callee sees what big.Rat's own operations would have produced.
 type LazyRat struct{ n, d *big.Int }
 
 var lazyOne = big.NewInt(1)

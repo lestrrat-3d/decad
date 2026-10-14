@@ -168,3 +168,155 @@ func TestLazyRadSinCosSpanMatchesRadSinCosSpan(t *testing.T) {
 	requireLazyBoundEqual(t, ws, s)
 	requireLazyBoundEqual(t, wc, c)
 }
+
+// ratDistanceReference is the lowest-terms computation RatDistanceUp replaces.
+func ratDistanceReference(a, b *big.Rat) float64 {
+	return proofbound.RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(a, b)))
+}
+
+// ratDistanceDyadic is m * 2^e.
+func ratDistanceDyadic(m *big.Int, e int) *big.Rat {
+	if e >= 0 {
+		return new(big.Rat).SetInt(new(big.Int).Lsh(m, uint(e)))
+	}
+	return new(big.Rat).SetFrac(m, new(big.Int).Lsh(big.NewInt(1), uint(-e)))
+}
+
+// ratDistanceBigDen is a rational with an odd denominator of about bits bits,
+// the shape of a projective cap centroid.
+func ratDistanceBigDen(rng *rand.Rand, numBits, denBits int) *big.Rat {
+	n := lazyBoundInt(rng, numBits)
+	d := lazyBoundInt(rng, denBits)
+	d.Abs(d).SetBit(d, denBits, 1).SetBit(d, 0, 1)
+	return new(big.Rat).SetFrac(n, d)
+}
+
+// ratDistanceTargets are exact non-negative differences at every rounding
+// edge: zero, representable values, exact halfway points, one unit of a large
+// odd denominator past a float, the subnormal range and below it, both ends of
+// LazyRat.Float64's range, the top binade and overflow.
+func ratDistanceTargets(rng *rand.Rand) []*big.Rat {
+	out := []*big.Rat{new(big.Rat)}
+	odd := ratDistanceBigDen(rng, 8, 200)
+	odd.Abs(odd)
+	if odd.Sign() == 0 {
+		odd.SetFrac64(1, 3)
+	}
+	for _, e := range []int{-1200, -1130, -1100, -1080, -1076, -1075, -1074, -1073, -1060, -1023,
+		-1022, -1021, -1020, -1000, -600, -54, -53, -1, 0, 1, 52, 53, 600, 970, 1000, 1020, 1021, 1022, 1023} {
+		for _, m := range []*big.Int{
+			big.NewInt(1), big.NewInt(3),
+			big.NewInt(1<<53 - 1), big.NewInt(1<<53 + 1), big.NewInt(1<<54 - 1),
+			new(big.Int).SetUint64(rng.Uint64() | 1),
+		} {
+			x := ratDistanceDyadic(m, e-53)
+			out = append(out, x)
+			// A strict hair above and below x moves an exact or halfway value
+			// to the side the rounding must respect.
+			hair := ratDistanceDyadic(big.NewInt(1), e-200)
+			hair.Mul(hair, odd)
+			out = append(out, new(big.Rat).Add(x, hair))
+			if lo := new(big.Rat).Sub(x, hair); lo.Sign() > 0 {
+				out = append(out, lo)
+			}
+		}
+	}
+	maxF := new(big.Rat).SetFloat64(math.MaxFloat64)
+	halfULP := ratDistanceDyadic(big.NewInt(1), 1023-53)
+	out = append(out,
+		maxF,
+		new(big.Rat).Add(maxF, ratDistanceDyadic(big.NewInt(1), 900)),
+		new(big.Rat).Add(maxF, halfULP),
+		new(big.Rat).Sub(new(big.Rat).Add(maxF, halfULP), ratDistanceDyadic(big.NewInt(1), 900)),
+		ratDistanceDyadic(big.NewInt(3), 1024),
+		new(big.Rat).Quo(big.NewRat(1, 1), new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(3), 1100))),
+	)
+	return out
+}
+
+// requireRatUnwritten checks r still has the value, sign and lowest-terms
+// parts of its snapshot.
+func requireRatUnwritten(t *testing.T, before, r *big.Rat, name string) {
+	t.Helper()
+	require.Zero(t, before.Num().Cmp(r.Num()), "%s's numerator was written", name)
+	require.Zero(t, before.Denom().Cmp(r.Denom()), "%s's denominator was written", name)
+}
+
+func requireRatDistanceMatches(t *testing.T, a, b *big.Rat) {
+	t.Helper()
+	aBefore, bBefore := new(big.Rat).Set(a), new(big.Rat).Set(b)
+	exact := new(big.Rat).Abs(new(big.Rat).Sub(a, b))
+	want := ratDistanceReference(a, b)
+	got := proofbound.RatDistanceUp(a, b)
+	require.Equal(t, math.Float64bits(want), math.Float64bits(got), "|%s - %s|", aBefore, bBefore)
+	requireRatUnwritten(t, aBefore, a, "a")
+	requireRatUnwritten(t, bBefore, b, "b")
+	if math.IsInf(got, 1) {
+		return
+	}
+	require.GreaterOrEqual(t, proofarith.FloatRat(got).Cmp(exact), 0, "underestimates |%s - %s|", aBefore, bBefore)
+	if got > 0 {
+		require.Negative(t, proofarith.FloatRat(proofarith.NextDown(got)).Cmp(exact), "not the least upper float")
+	}
+}
+
+func TestRatDistanceUpMatchesRatFloatUp(t *testing.T) {
+	rng := rand.New(rand.NewPCG(53, 1074))
+	var fast, fallback int
+	countPath := func(a, b *big.Rat) {
+		d := proofarith.LazySub(proofarith.LazyOf(a), proofarith.LazyOf(b))
+		if _, _, ok := d.Float64(); ok {
+			fast++
+		} else {
+			fallback++
+		}
+	}
+	check := func(a, b *big.Rat) {
+		countPath(a, b)
+		requireRatDistanceMatches(t, a, b)
+		requireRatDistanceMatches(t, b, a)
+	}
+	t.Run("equal inputs", func(t *testing.T) {
+		for range 50 {
+			a := ratDistanceBigDen(rng, 200, 1+rng.IntN(3000))
+			check(a, a)
+			check(a, new(big.Rat).Set(a))
+		}
+		check(new(big.Rat), new(big.Rat))
+		check(&big.Rat{}, big.NewRat(0, 7))
+	})
+	t.Run("edge differences", func(t *testing.T) {
+		for _, x := range ratDistanceTargets(rng) {
+			for _, b := range []*big.Rat{
+				new(big.Rat),
+				big.NewRat(-5, 1),
+				ratDistanceBigDen(rng, 160, 200),
+				ratDistanceBigDen(rng, 1000, 1000),
+			} {
+				// b + x and b - x both differ from b by exactly x, so the
+				// difference cancels b's large numerator and denominator.
+				check(new(big.Rat).Add(b, x), b)
+				check(new(big.Rat).Sub(b, x), b)
+			}
+		}
+	})
+	t.Run("shared denominator", func(t *testing.T) {
+		for range 300 {
+			d := lazyBoundInt(rng, 4000)
+			d.Abs(d).SetBit(d, 0, 1)
+			a := new(big.Rat).SetFrac(lazyBoundInt(rng, 4000), d)
+			b := new(big.Rat).SetFrac(lazyBoundInt(rng, 4000), d)
+			check(a, b)
+		}
+	})
+	t.Run("unequal large denominators", func(t *testing.T) {
+		for range 40 {
+			check(ratDistanceBigDen(rng, 160, 200), ratDistanceBigDen(rng, 15000, 15000))
+		}
+		for range 300 {
+			check(lazyBoundRat(rng), lazyBoundRat(rng))
+		}
+	})
+	require.Positive(t, fast, "no pair took the unreduced path")
+	require.Positive(t, fallback, "no pair took the lowest-terms fallback")
+}
