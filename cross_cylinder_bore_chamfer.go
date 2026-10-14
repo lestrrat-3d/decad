@@ -58,8 +58,12 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	if err != nil {
 		return nil, true, err
 	}
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewPollWorkBudget(ctx),
-		mesh.verts, mesh.tris, loftmesh.MaxLoftAuditTriangles, crossBoreAuditScans); err != nil {
+	// Each cap fan is proposed as a projected XY patch. A cap whose proof
+	// fails keeps all its pairs in the exact pairwise audit, and cap-to-cap,
+	// cap-to-wall and every other pair is always classified exactly.
+	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewPollWorkBudget(ctx),
+		mesh.verts, mesh.tris, crossBoreCapPatches(mesh.src), loftmesh.MaxLoftAuditTriangles,
+		crossBoreAuditScans); err != nil {
 		return nil, true, err
 	}
 	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.verts, mesh.tris)
