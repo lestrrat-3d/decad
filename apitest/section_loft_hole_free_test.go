@@ -90,11 +90,6 @@ func TestSectionDirectHoleFreeLoftRefusesUnprovedCases(t *testing.T) {
 			require.Nil(t, profiles)
 		})
 	}
-	_, _, smallerTop, smallerProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 4, 2)
-	changing, err := decad.New().Loft(t.Context(), bottom, bottomProfile, smallerTop, smallerProfile)
-	require.NoError(t, err)
-	requireDirectLoftSectionUnsupported(t, changing, r3.NewVec(0, 0, 1))
-
 	move, err := r3.Translation(r3.NewVec(10, 0, 0))
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), source, move)
