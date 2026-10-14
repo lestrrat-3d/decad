@@ -239,7 +239,9 @@ orthogonal and would scale the blank, so a copy without the record is refused
 at the entrance ("carries no exact X-axis rotation"). A moved copy or a copy of
 a copy carries no such record and is refused. The call builds
 one transient tool operand and commits only after one Union and complete
-boundary, mass, and topology proofs. A refusal leaves all input bodies live.
+boundary, mass, and topology proofs. A refusal leaves all input bodies live. A first tooth that carries a
+cone-tangent end record has no patterned-copy proof and refuses with
+`ErrUnsupported` before any copy is examined.
 
 Before the Union, each true tooth sector is enclosed by its held facets and
 their two-sided local bounds. Exact rational YZ projections prove separation

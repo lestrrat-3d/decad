@@ -130,6 +130,12 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 	if !ok || p.loftFacesTrim != trim {
 		return false
 	}
+	// A cone-tangent tooth is decided by the first-join certificate only;
+	// this generic route defers it explicitly.
+	if trim != nil && (trim.tangent != nil ||
+		(trim.base.loftFacesCap != nil && trim.base.loftFacesCap.tangent != nil)) {
+		return false
+	}
 	if p.xform != r3.Identity() || trim == nil || trim.source == nil ||
 		!pointSourceCurrent(trim.source) ||
 		!revolveLoftFacesConeCurrent(trim.toeTool, trim.toe) ||

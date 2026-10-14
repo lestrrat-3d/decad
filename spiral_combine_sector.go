@@ -27,6 +27,11 @@ func spiralCombineInputs(ctx context.Context, blank *Body, tools []*Body) (*spir
 	if !ok {
 		return nil, fmt.Errorf("%w: target and first tool have no spiral source certificate", ErrUnsupported)
 	}
+	// No proof carries the exact tangency and the one-step gaps of a
+	// cone-tangent first tooth to a copy of it.
+	if first.tooth != nil && first.tooth.tangent != nil {
+		return nil, fmt.Errorf("%w: a cone-tangent first tooth has no patterned-copy proof", ErrUnsupported)
+	}
 	copies, err := certifyFacetedCopies(ctx, tools)
 	if err != nil {
 		return nil, err
