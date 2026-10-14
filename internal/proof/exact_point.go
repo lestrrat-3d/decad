@@ -333,7 +333,20 @@ func XhpOrientSign(a, b, c, d Xhp) int {
 
 // XhpRat materialises p's three coordinates as big.Rat — the one place a
 // homogeneous point pays a normalisation, and only when a caller genuinely
-// needs a rational VALUE rather than a sign.
+// needs a rational VALUE rather than a sign. Each coordinate is in lowest
+// terms, as SetFrac returns it; a power-of-two W reduces by a shift.
 func XhpRat(p Xhp) (x, y, z *big.Rat) {
-	return new(big.Rat).SetFrac(p.X, p.W), new(big.Rat).SetFrac(p.Y, p.W), new(big.Rat).SetFrac(p.Z, p.W)
+	return xhpCoordRat(p.X, p.W), xhpCoordRat(p.Y, p.W), xhpCoordRat(p.Z, p.W)
+}
+
+// xhpCoordRat is n/w in lowest terms through RatFrac. An integer value, zero
+// included, gets a stored denominator of 1, as SetFrac leaves it: RatFrac may
+// leave a zero denominator unstored, and Denom would then return a fresh
+// detached 1 on every call.
+func xhpCoordRat(n, w *big.Int) *big.Rat {
+	r := RatFrac(new(big.Rat), n, w)
+	if r.IsInt() {
+		r.SetInt(r.Num())
+	}
+	return r
 }

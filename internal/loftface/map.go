@@ -38,7 +38,7 @@ type Map struct {
 type Interval struct{ Lo, Hi *big.Rat }
 
 func ratZero() *big.Rat             { return new(big.Rat) }
-func ratOne() *big.Rat              { return big.NewRat(1, 1) }
+func ratOne() *big.Rat              { return new(big.Rat).SetInt64(1) }
 func ratF(v float64) *big.Rat       { return proofarith.FloatRat(v) }
 func ratAdd(a, b *big.Rat) *big.Rat { return proofarith.AddRat(new(big.Rat), a, b) }
 func ratSub(a, b *big.Rat) *big.Rat { return proofarith.SubRat(new(big.Rat), a, b) }

@@ -89,3 +89,57 @@ func TestXdotRatMatchesSetFrac(t *testing.T) {
 		requireSameRat(t, want, proof.XdotRat(a, b), "XdotRat")
 	}
 }
+
+// denomStored reports whether r holds its denominator, so that Denom returns
+// the same pointer on every call, rather than a fresh detached Int.
+func denomStored(r *big.Rat) bool {
+	first, second := r.Denom(), r.Denom()
+	return first == second
+}
+
+func TestXhpRatMatchesSetFrac(t *testing.T) {
+	rng := rand.New(rand.NewPCG(43, 47))
+	coord := func() *big.Int {
+		n := new(big.Int)
+		if rng.IntN(6) != 0 {
+			for range rng.IntN(4) + 1 {
+				n.Lsh(n, 64).Add(n, new(big.Int).SetUint64(rng.Uint64()))
+			}
+			n.Lsh(n, uint(rng.IntN(100)))
+			if rng.IntN(2) == 0 {
+				n.Neg(n)
+			}
+		}
+		return n
+	}
+	for range 3000 {
+		var w *big.Int
+		switch rng.IntN(3) {
+		case 0:
+			w = new(big.Int).Lsh(big.NewInt(1), uint(rng.IntN(300)))
+		case 1:
+			w = new(big.Int).SetUint64(rng.Uint64() | 1)
+		default:
+			w = new(big.Int).Lsh(big.NewInt(int64(rng.IntN(1000)*2+1)), uint(rng.IntN(20)))
+		}
+		p := proof.Xhp{X: coord(), Y: coord(), Z: coord(), W: w}
+		x, y, z := proof.XhpRat(p)
+		requireSameRat(t, new(big.Rat).SetFrac(p.X, p.W), x, "x")
+		requireSameRat(t, new(big.Rat).SetFrac(p.Y, p.W), y, "y")
+		requireSameRat(t, new(big.Rat).SetFrac(p.Z, p.W), z, "z")
+		for _, c := range []struct {
+			n   *big.Int
+			got *big.Rat
+		}{{p.X, x}, {p.Y, y}, {p.Z, z}} {
+			want := new(big.Rat).SetFrac(c.n, p.W)
+			require.Equal(t, want.IsInt(), c.got.IsInt())
+			// SetFrac stores the denominator, so Denom returns one pointer.
+			require.Equal(t, denomStored(want), denomStored(c.got), "stored denominator")
+		}
+		// The results own their storage: changing the point must not change them.
+		wantX := new(big.Rat).Set(x)
+		p.X.Add(p.X, big.NewInt(1))
+		p.W.Add(p.W, big.NewInt(2))
+		requireSameRat(t, wantX, x, "aliasing")
+	}
+}
