@@ -217,7 +217,7 @@ covers the path the corner foot takes as the offset grows (§8.3): the slant
 ruling's length and the circular patch's chord-locus term both bound it, and a
 corner whose carriers meet in a double root at the corner, or in a root pair
 closer than the radius enclosure resolves, has no such bound.
-`requireCapBlendCornerLoci` decides it after the other stage-6 audits and
+`capblend.RequireCornerLoci` decides it after the other stage-6 audits and
 before the body is assembled, so the refusal names the corner.
 
 SX15 is decided as each patch is constructed, like SX13's radial half: the
@@ -824,7 +824,7 @@ halves of the departure proven exactly zero: the coinciding window buys back
 only the skew half, and the placement's own independent rounding of every
 emitted coordinate leaves the other half in place on any placed band. So a
 coinciding window alone no longer answers DX8. Only a patch whose own stamped
-departure (`capblend_geom.go`'s `f.n.NormalBound`, derived in
+departure (`internal/capblend/band.go`'s `f.n.NormalBound`, derived in
 `internal/capband/departure.go`, plus `capband.DenotedNormalAllow`) is an exact
 zero does — an axis-aligned `Plane` patch of an unplaced band whose cap contour
 and levels are held exactly reaches that, and nothing else does. `Face.NormalAt` and DX7
@@ -953,7 +953,7 @@ SX6 and the stage-6 audit (SX7/SX12, S8/S9) reject at one offset and certify
 every smaller one: SX12's monotonicity argument above runs one way. So
 `buildCapBlend` runs them a second time on the section offset by the top of
 the span, the smallest float at or above `dc + dcDelta`
-(`auditCapBlendSetbackSpan`). A section that passes at `dc` and fails there is
+(`capblend.AuditSetbackSpan`). A section that passes at `dc` and fails there is
 `ErrUnsupported` whichever sentinel the second run raised, since the stated
 setback lies somewhere in the span and this evaluator cannot decide which
 side of the failure it is on. The contact floor (`1e-9` of the section's
@@ -1035,7 +1035,7 @@ patches meet along a corner ruling only to within a gap: the held ends two
 walks meet at need not be one float, a walk end names its denoted point only
 to within its end bound, an `ArcSeg`'s `End` need not lie at its `Start`'s
 radius, and a cap arc is recorded through one foot while the other sits at its
-own distance. `capBandClosure` (`internal/capband/closure.go`) sums those gaps per
+own distance. `capband.Closure` (`internal/capband/closure.go`) sums those gaps per
 corner. Two rulings at most `gap` apart and at most `slant` long bound a
 sliver of area at most `(slant + gap)·gap`, whose flux is at most that area
 times `|P|` over the band and whose first moment is at most that area times
@@ -1198,7 +1198,7 @@ its two circles at their seams and keeps that pairing all the way round, so
 both skews are the seams' one angle, zero when both seams lie on one ray.
 
 Every other reader of a patch's skew reads the same two proven numbers
-(`capPatchWindowSkew`, the larger of them): the chord-versus-locus volume and
+(`capblend.PatchWindowSkew`, the larger of them): the chord-versus-locus volume and
 region terms (§8.3), the mesh's `skewGap` and the gate on its per-cell twist term
 (`docs/tessellation-reach-design.md` §7), and DX8's undecided gate. None reads
 a difference of the held windows `th0`, `th1`, `capTh0`, `capTh1`.
@@ -1948,20 +1948,20 @@ RX6's SX9 exceptions. Brep and stacked receivers are
 
 ## Implementation notes
 
-### capblend_contour.go
+### internal/capblend contour
 
 The cap-loop chamfer's cap contour displacement (§8.4) and
 `docs/prism-boolean-design.md` §7's `sectionDelta` are the same idea applied to
 two different constructions, and they are independent terms with separate
 owners: `internal/capcontour/` derives the cap contour's own displacement;
-`capblend_contour.go` maps it to the cap-band construction and refusal, and
-the cap-blend build/measurement code (`capblend_geom.go`, `capblend.go`,
-`capblend_moments.go`) carries it into every reading that needs it. No
+`internal/capblend` maps it to the cap-band construction and refusal, and its
+build/measurement code (`band.go`, `payload.go`, `build.go`, `measure.go`)
+carries it into every reading that needs it. No
 cap-blend reading composes `sectionDelta`, and no `sectionDelta` consumer reads
 the cap contour's displacement. `capBlendPayload` separately preserves its
 receiver's per-end axial displacement and the selected-end setback rounding.
-`capblend_contour.go` also states each circular patch's held allowances
+`internal/capblend` also states each circular patch's held allowances
 (`capWallHeldAllow`, `capApexHeldAllow`). `internal/capband/closure.go` bounds
-each band's closure slivers (`capBandClosure`), which
+each band's closure slivers (`capband.Closure`), which
 `internal/capband/band_mass.go` charges beside the patch integrals (§8.4's held
 numbers paragraph).

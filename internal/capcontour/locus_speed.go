@@ -191,7 +191,7 @@ func lineWallFrameOf(w survey2d.SideWalk) (lineWallFrame, bool) {
 // line touches the circle with both walls running the same way at that point,
 // so offset2d.CornerJoin classifies the corner as a G1 join: its held
 // tangents' cross product is within the construction's tolerance and their
-// dot product is positive. capSlantEdge, capband.PatchCornerFlux and
+// dot product is positive. capblend.SlantEdge, capband.PatchCornerFlux and
 // tessellation.CapBlendCornerLocusGap step a G1 join's foot along the shared normal and
 // never ask for a locus speed. Every corner that reaches this function is not
 // a G1 join, so its Δ1 is nonzero and the general bound below decides. A
@@ -305,7 +305,7 @@ func (k lineCircleCorner) deltaAt(t *big.Rat) proofbound.RatInterval {
 // (LineCircleLocusSpeedUpper) where one carrier is straight and the other
 // circular, or the generic interval solve (CircleCircleLocusSpeedUpper)
 // where both are circular. At least one of prev, cur must be circular — the
-// caller (capSlantEdge) never reaches here for a line-line miter, whose
+// caller (capblend.SlantEdge) never reaches here for a line-line miter, whose
 // locus is already exact.
 func MiterLocusSpeedUpper(prev, cur survey2d.SideWalk, t0, t1, vU, vV float64) (float64, bool) {
 	switch {

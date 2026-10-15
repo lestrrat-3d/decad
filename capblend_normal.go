@@ -1,17 +1,11 @@
 package decad
 
 import (
-	"math/big"
-
 	"github.com/lestrrat-3d/decad/internal/capband"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // This file reads cap-blend face tags and placed frames for the
@@ -21,7 +15,7 @@ type capPatchModel = capband.NormalModel
 
 // capPatchNormalModel adapts the published face and placed frame for capband.
 func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (capPatchModel, bool) {
-	sinH, cosH, origin, axis, ok := coneTagTerms(f)
+	sinH, cosH, origin, axis, ok := capblend.ConeTagTerms(&f.n)
 	if !ok {
 		return capPatchModel{}, false
 	}
@@ -34,33 +28,4 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 		World: world, CU: g.CU, CV: g.CV, CapZ: g.CapZ,
 		Radius: g.CapRadius, Th0: g.Th0, Reversed: f.n.Reversed,
 	})
-}
-
-// coneTagTerms reads the sine and cosine of a circular patch's own half angle
-// beside the axis they lean against. A `Cylinder` is the zero-half-angle member
-// of the same family — `Face.NormalAt` hands back the bare radial direction
-// there — so it takes the exact pair rather than a second code path. Any other
-// tag refuses: a patch whose surface this file cannot state exactly gets no
-// model at all, and DX7 answers undecided.
-func coneTagTerms(f *Face) (proofbound.RatInterval, proofbound.RatInterval, r3.Vec, r3.Vec, bool) {
-	switch s := f.n.Surface.(type) {
-	case surfacegeom.Cone:
-		half, err := s.HalfAngle.In(units.Radian)
-		if err != nil {
-			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
-		}
-		rHalf := proofarith.FloatRat(half)
-		if rHalf == nil {
-			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
-		}
-		sin, cos, ok := proofbound.RadSinCosInterval(rHalf)
-		if !ok {
-			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
-		}
-		return sin, cos, s.Origin, s.Axis, true
-	case surfacegeom.Cylinder:
-		return proofbound.PointInterval(new(big.Rat)), proofbound.PointInterval(big.NewRat(1, 1)), s.Origin, s.Axis, true
-	default:
-		return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
-	}
 }

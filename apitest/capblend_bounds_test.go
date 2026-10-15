@@ -22,7 +22,7 @@ import (
 // distance must give the SAME volume (the loop offset and the band's own
 // closed-form integral do not depend on which end the band sits at). This is
 // REFERENCE-FREE — it needs no independent formula, only that mirroring the
-// band does not change what it measures — so it catches capblend_geom.go's
+// band does not change what it measures — so it catches internal/capblend/band.go's
 // side-window/cap-window defect (docs/modify-reach-design.md §8.3) even
 // without a value to check the result against: the quarter-disk case's
 // circular wall meets its two line neighbours at a non-tangential miter on
@@ -539,7 +539,7 @@ func heldAngleSection(t *testing.T, draw func(s *sketch.Sketch), d float64) *dec
 // (capband.WallHeldAllow and capband.ApexHeldAllow answering a zero HeldAllow), the
 // L's volume misses by 7.854e-13 mm³ against a 7.852e-13 mm³ bound. The
 // slot's misses by 6.11e-08 mm³ against 5.72e-08 mm³ only with the band's
-// closure charge (capBandClosure) zeroed as well: its G1 feet sit an ulp off
+// closure charge (capband.Closure) zeroed as well: its G1 feet sit an ulp off
 // their exact positions, and the charge for that gap alone covers the held
 // angles' error there.
 func TestCapBlendVolumeBoundCoversHeldAngles(t *testing.T) {
@@ -1692,7 +1692,7 @@ func concentricDiskWithHole(t *testing.T, R, r, h float64) *decad.Body {
 	return body
 }
 
-// TestCapBlendFarPlacementOrientationRefusal pins fu153: fixPatchOrientation
+// TestCapBlendFarPlacementOrientationRefusal pins fu153: capblend.FixPatchOrientation
 // used to drop Face.NormalAt's own error and leave a patch's outward
 // orientation whatever it was constructed with. A holed disk's end-cap
 // chamfer placed 2^60 mm along one plane axis rounds the build's own
@@ -1716,7 +1716,7 @@ func TestCapBlendFarPlacementOrientationRefusal(t *testing.T) {
 
 	// The near placement is unaffected: the build's orientation sample stays
 	// far from the cone axis, so this is the hole patch's outward normal as
-	// fixPatchOrientation decides it when NormalAt succeeds.
+	// capblend.FixPatchOrientation decides it when NormalAt succeeds.
 	near, err := r3.Translation(r3.NewVec(1000, 0, 0))
 	require.NoError(t, err)
 	nearBody, err := decad.Transform(t.Context(), chamfered, near)

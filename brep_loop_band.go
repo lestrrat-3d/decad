@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -22,9 +23,9 @@ import (
 // This file is route L's band (docs/modify-general-design.md §4.2 step 5 and
 // §4.3, "modify-general §N" below): the record a brepPayload keeps for each
 // chamfered loop, the band boundary edges the record bounds on one side only,
-// the adapter that hands both directrices to modify-reach §8.3's buildCapBand
+// the adapter that hands both directrices to modify-reach §8.3's capblend.BuildBand
 // in the loop's own face frame, and the band's mass terms, read through
-// modify-reach §8.4's readers (readBandMass).
+// modify-reach §8.4's readers (capblend.ReadBandMass).
 
 // brepLoopBand is one chamfered loop of a route L result. face is the index
 // of the planar face F that holds the loop, and loop the index of the cap
@@ -62,7 +63,7 @@ const (
 )
 
 // matSign is the band's material sense in F's frame, the sign
-// buildCapBand reads: the side level is F's level plus matSign·ds. A
+// capblend.BuildBand reads: the side level is F's level plus matSign·ds. A
 // descending loop's side level lies against F's outward normal, and a rising
 // loop's along it.
 func (b brepLoopBand) matSign(f brepFace) float64 {
@@ -83,7 +84,7 @@ func (b brepLoopBand) sideLevel(f brepFace) (float64, float64) {
 
 // view is the band read as a one-loop cap blend in F's own frame: its
 // profile is orig, both levels are F's, and it is chamfered on the cap its
-// material sense names. buildCapBand and readBandMass read the band through
+// material sense names. capblend.BuildBand and capblend.ReadBandMass read the band through
 // it exactly as they read a prism's cap band.
 func (b brepLoopBand) view(f brepFace, xform r3.Transform) capBlendPayload {
 	cbp := capBlendPayload{
@@ -260,7 +261,7 @@ func (bp brepPayload) loopBandKeys(embeds []brepEmbed, walk func(curveSegment) (
 
 // brepOpenSet is every band boundary edge of one body build: coedge is the
 // record face's coedge for each open use, and cap and side hold, per band,
-// the coedges buildCapBand reads as the cap contour (F's loop, in loop order)
+// the coedges capblend.BuildBand reads as the cap contour (F's loop, in loop order)
 // and the side contour (orig at the side level, in orig's walk order), each
 // walked forward along its loop.
 type brepOpenSet struct {
@@ -280,7 +281,7 @@ type brepOpenSet struct {
 // Edge.IsConvex): a circular walk by its own turn, a straight one by the
 // loop's role. Every non-closed end is a vertex the record's own use already
 // placed; a whole circle's seam is placed here at its walk's start, which is
-// where buildCapBand reads the band's seam.
+// where capblend.BuildBand reads the band's seam.
 func brepOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology, placeVertex func(c [3]float64, faceDelta, levelDelta, endAllow float64) *Vertex) (brepOpenSet, error) {
 	n := len(bp.loopBands)
 	if bp.bossShell != nil {
@@ -352,7 +353,7 @@ func brepOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology, pla
 		}
 
 		sideZ, _ := b.sideLevel(f)
-		cl, err := oneLoopCornerLoop(budget, b.orig, work)
+		cl, err := capblend.OneLoopCornerLoop(budget, b.orig, work)
 		if err != nil {
 			return brepOpenSet{}, err
 		}
@@ -487,7 +488,7 @@ type brepBandsBuilt struct {
 }
 
 // attachBrepLoopBands attaches every band of the record to the body
-// (modify-general §4.2 step 5): buildCapBand runs in F's own frame over the
+// (modify-general §4.2 step 5): capblend.BuildBand runs in F's own frame over the
 // band's cap blend view, handed the cap contour and the side contour as the
 // record's own coedges (brepOpenEdges), and mints the slant rulings, the
 // reflex connectors' apex cones and the patches between. Its orientation
@@ -537,20 +538,21 @@ func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp bre
 			continue
 		}
 		cbp := b.view(f, bp.xform)
-		band, err := buildCapBand(ctx, body, ref, cbp, 0, b.orig, f.z0, b.matSign(f), open.side[bi], open.cap[bi], work)
+		band, err := capblend.BuildBand(ctx, envOf(body.n.Doc, ref),
+			bodyNode(body), cbp, 0, b.orig, f.z0, b.matSign(f), open.side[bi], open.cap[bi], work)
 		if err != nil {
 			return brepBandsBuilt{}, err
 		}
 		geom := make([]capPatch, len(band.Patches))
 		for p, patch := range band.Patches {
 			role := b.patchRole(p)
-			patch.n.Origins = []provenance.Ref{{Producer: ref, Role: role}}
+			patch.Origins = []provenance.Ref{{Producer: ref, Role: role}}
 			if b.sigma > 0 {
-				patch.n.Reversed = !patch.n.Reversed
+				patch.Reversed = !patch.Reversed
 			}
 			geom[p] = capPatch{Role: role, Geom: band.Geom[p]}
 		}
-		out.patches = append(out.patches, band.Patches...)
+		out.patches = append(out.patches, faceHandles(band.Patches)...)
 		out.geom = append(out.geom, geom)
 		mass, err := brepBandMassOf(ctx, b, f, embeds[b.face], cbp, band, work)
 		if err != nil {
@@ -562,7 +564,7 @@ func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp bre
 }
 
 // brepBandMassOf is one band's terms in the record's divergence sums
-// (modify-general §4.3). readBandMass, capband.BandVolume and
+// (modify-general §4.3). capblend.ReadBandMass, capband.BandVolume and
 // capband.BandMoment read the closed band region B — the band's patches
 // closed by the cap contour's disk at F's level and orig's disk at the side
 // level — with its volume, its first moments about F's frame origin, the
@@ -578,7 +580,7 @@ func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp bre
 // signed permutation.
 func brepBandMassOf(ctx context.Context, b brepLoopBand, f brepFace, e brepEmbed, cbp capBlendPayload, band capBandResult, work *freeform.FreeformWork) (brepBandMass, error) {
 	m := b.matSign(f)
-	in, err := readBandMass(ctx, 0, b.orig, cbp, band.Geom, f.z0, m, band.Delta, band.Closure)
+	in, err := capblend.ReadBandMass(ctx, 0, b.orig, cbp, band.Geom, f.z0, m, band.Delta, band.Closure)
 	if err != nil {
 		return brepBandMass{}, err
 	}

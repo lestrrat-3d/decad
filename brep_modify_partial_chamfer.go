@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -39,7 +40,7 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 			(walks[0]+1)%len(selected) != walks[1] && (walks[1]+1)%len(selected) != walks[0] {
 		return nil, initial.refuse("SL1", `a partial chamfer's selected walks are not one chain`)
 	}
-	cl, err := oneLoopCornerLoop(initial.budget, bp.faces[sel.face].regionLoop(sel.loop), freeform.NewFreeformWork())
+	cl, err := capblend.OneLoopCornerLoop(initial.budget, bp.faces[sel.face].regionLoop(sel.loop), freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +135,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 	}
 	f := r.bp.faces[sel.face]
 	orig := f.regionLoop(sel.loop)
-	cl, err := oneLoopCornerLoop(r.budget, orig, freeform.NewFreeformWork())
+	cl, err := capblend.OneLoopCornerLoop(r.budget, orig, freeform.NewFreeformWork())
 	if err != nil {
 		return brepPayload{}, err
 	}
@@ -298,11 +299,11 @@ func (r *brepLoopRead) partialTerminalChamfer(sel brepLoopSel, orig, contour loo
 		return r.refuse("SL1", `a terminal has no selected cap segment`)
 	}
 	work := freeform.NewFreeformWork()
-	ow, err := oneLoopCornerLoop(r.budget, loopRecord{Segments: []curveSegment{orig.Segments[seg]}}, work)
+	ow, err := capblend.OneLoopCornerLoop(r.budget, loopRecord{Segments: []curveSegment{orig.Segments[seg]}}, work)
 	if err != nil {
 		return err
 	}
-	cw, err := oneLoopCornerLoop(r.budget, loopRecord{Segments: []curveSegment{contour.Segments[capWalk[seg]]}}, work)
+	cw, err := capblend.OneLoopCornerLoop(r.budget, loopRecord{Segments: []curveSegment{contour.Segments[capWalk[seg]]}}, work)
 	if err != nil {
 		return err
 	}

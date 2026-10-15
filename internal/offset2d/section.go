@@ -14,6 +14,13 @@ var (
 	ErrNoIntersection = errors.New("offset carriers do not meet")
 )
 
+// ShellTol is the closed-form degeneracy tolerance of the shell and cap-band
+// offsets: a limit reached within it is treated as reached. The section is
+// decad's own exact geometry, so this only absorbs float noise, never an
+// admission. The builder and the tessellator read the same value, so a join
+// one recomputes is the join the other stored.
+const ShellTol = 1e-9
+
 // Point is a held point in the section plane.
 type Point = sectionrecord.Point2
 

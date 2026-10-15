@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -100,15 +101,15 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 				quads[prev].points[1] != quads[i].points[0] {
 				return nil, brepBandMass{}, fmt.Errorf(`%w: two partial chamfer strips disagree at their shared corner`, ErrUnsupported)
 			}
-			slant, _, err := capSlantEdge(proofbound.NewWorkBudget(ctx),
+			slant, _, err := capblend.SlantEdge(handleAlloc{}, proofbound.NewWorkBudget(ctx),
 				planePoint{U: e.Local(quads[i].points[3])[0], V: e.Local(quads[i].points[3])[1]},
-				vertexHandle(quads[i].cap.n.Start), vertexHandle(quads[i].side.n.Start),
+				quads[i].cap.n.Start, quads[i].side.n.Start,
 				e.Local(quads[i].points[0])[0], e.Local(quads[i].points[0])[1],
 				f.z0, sideZ, 0, 0, survey2d.SideWalk{}, survey2d.SideWalk{}, b.setback, true)
 			if err != nil {
 				return nil, brepBandMass{}, err
 			}
-			lead[i], trail[i] = slant, slant
+			lead[i], trail[i] = edgeHandle(slant), edgeHandle(slant)
 		}
 		if !b.selected[prev] {
 			lead[i] = partialChamferTerminal(open.terminal[bi], vertexHandle(quads[i].cap.n.Start), vertexHandle(quads[i].side.n.Start))
@@ -135,7 +136,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 			!edgeConnects(end, vertexHandle(capE.n.End), vertexHandle(sideE.n.End)) {
 			return nil, brepBandMass{}, fmt.Errorf(`%w: partial chamfer patch %d does not close`, ErrUnsupported, i)
 		}
-		plane, err := planeFromThree(sideE.n.Start.Position, sideE.n.End.Position, capE.n.End.Position)
+		plane, err := capblend.PlaneFromThree(sideE.n.Start.Position, sideE.n.End.Position, capE.n.End.Position)
 		if err != nil {
 			return nil, brepBandMass{}, err
 		}

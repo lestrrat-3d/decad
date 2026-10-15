@@ -52,7 +52,7 @@ func loopRegionIntegrals(ctx context.Context, l LoopRecord, order freeform.Momen
 // LoopEnclosedArea's positive reading turns its first moments
 // consistently too, and orient*ig.Area equals math.Abs(ig.Area) exactly, so
 // this function's own area field always matches LoopEnclosedArea's.
-// The caller (evalCapBlendContext) applies its own per-loop sign
+// The caller (capblend.Build) applies its own per-loop sign
 // (outer/hole, by loop index) on top of this canonicalized triple, exactly as
 // it already does to LoopEnclosedArea's |area| for the slab volume.
 func LoopEnclosedMoments(ctx context.Context, l LoopRecord) (area, mu, mv proofbound.BoundedScalar, err error) {

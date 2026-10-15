@@ -3,26 +3,12 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
-
-// loftCapBandSource retains the fit-spline section and its already certified
-// approximation. The modifier acts on the loft's held cap edges, so its new
-// band is polygonal while the original spline remains available as the flank
-// source and its displacement and mass allowances remain attached.
-type loftCapBandSource struct {
-	Profile profileRecord
-	Proof   loftmesh.MeshProof
-}
 
 // tryLoftCapChamfer is the matching axial loft's complete outer-cap loop
 // route. Its cap contour follows the loft's certified held station polygon.
@@ -143,37 +129,4 @@ func matchingLoftHeldCapOuters(frame r3.Frame, start, end *Face) bool {
 		counts[key]--
 	}
 	return true
-}
-
-// widenLoftCapBandMeasurements adds the source loft's approximation allowances
-// to the polygon band's global readings. The band's own area and geometry
-// proofs describe its held-polygon offset, not an offset of the fit spline.
-// Source allowances are extra bounds on comparison to the unchanged spline
-// flanks and the loft from which that polygon was certified.
-func widenLoftCapBandMeasurements(body *Body, source loftmesh.MeshProof) error {
-	if proofbound.IsNonFinite(source.FacetDeparture) || source.FacetDeparture < 0 ||
-		proofbound.IsNonFinite(source.AreaSlack) || source.AreaSlack < 0 ||
-		proofbound.IsNonFinite(source.VolSymDiff) || source.VolSymDiff < 0 {
-		return fmt.Errorf("%w: loft cap band has no finite source proof", ErrUnsupported)
-	}
-	volumeBound := proofbound.AbsSumUpper(body.n.Volume.Bound.Base(), source.VolSymDiff)
-	body.n.Volume.Bound = units.CubicMillimeters(volumeBound)
-	body.n.Volume.Exactness = measurement.ExactnessOf(volumeBound)
-	areaBound := proofbound.AbsSumUpper(body.n.Area.Bound.Base(), source.AreaSlack)
-	body.n.Area.Bound = units.SquareMillimeters(areaBound)
-	body.n.Area.Exactness = measurement.ExactnessOf(areaBound)
-	boxBound := proofbound.AbsSumUpper(body.n.Bounds.Bound.Base(), source.FacetDeparture)
-	body.n.Bounds.Bound = units.Millimeters(boxBound)
-	body.n.Bounds.Exactness = measurement.ExactnessOf(boxBound)
-	dx := proofbound.BoundedSub(proofbound.ExactScalar(body.n.Bounds.Max.X), proofbound.ExactScalar(body.n.Bounds.Min.X))
-	dy := proofbound.BoundedSub(proofbound.ExactScalar(body.n.Bounds.Max.Y), proofbound.ExactScalar(body.n.Bounds.Min.Y))
-	dz := proofbound.BoundedSub(proofbound.ExactScalar(body.n.Bounds.Max.Z), proofbound.ExactScalar(body.n.Bounds.Min.Z))
-	diameter := proofbound.Radius3D(math.Max(proofbound.AbsSumUpper(dx.Value, dx.Bound),
-		math.Max(proofbound.AbsSumUpper(dy.Value, dy.Bound), proofbound.AbsSumUpper(dz.Value, dz.Bound))))
-	floor := math.Nextafter(body.n.Volume.Value.Base()-volumeBound, math.Inf(-1))
-	centroidBound := proofbound.AbsSumUpper(body.n.Centroid.Bound.Base(), source.FacetDeparture,
-		facetedCentroidAllowance(source.VolSymDiff, diameter, floor))
-	body.n.Centroid.Bound = units.Millimeters(centroidBound)
-	body.n.Centroid.Exactness = measurement.ExactnessOf(centroidBound)
-	return nil
 }

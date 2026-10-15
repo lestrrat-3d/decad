@@ -78,7 +78,7 @@ func ContourJoins(joins []offset2d.Join) []capcontour.Join {
 
 // LoopContourDelta re-derives one loop's contour displacement from its record
 // for readings that hold no built band. It uses the same walks and joins as
-// buildCapBand.
+// capblend.BuildBand.
 func LoopContourDelta(ctx context.Context, loop sectionrecord.LoopRecord, d, dDelta, tol float64) (float64, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
@@ -138,7 +138,7 @@ func ChamferDropError(err error) error {
 
 // ChamferAuditError relabels the shared offset audit's refusal with the
 // wording of the stage-6 row it came from, and preserves the sentinel that row
-// already decided. SX6 (drop) is settled by mixedOffsetProfile's own call to
+// already decided. SX6 (drop) is settled by capblend.MixedOffsetProfile's own call to
 // offset2d.BuildLoop before the audit runs, so a refusal reaching here is one of
 // the audit's own: the base S8/S9 nesting rows, which say the offset section is
 // decidably broken and therefore that no such body exists (ErrDegenerate), or

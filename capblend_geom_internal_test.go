@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -51,7 +52,7 @@ func cornerAngleLower(cU, cV float64, side, capEnd planePoint) float64 {
 // falls below the larger exact corner angle (120 of 568 patches in a
 // 600-sector sweep did, by up to 9.1e-15 of the angle).
 //
-// Shown to fail: with capPatchWindowSkew reading the two held windows'
+// Shown to fail: with capblend.PatchWindowSkew reading the two held windows'
 // difference again, every row fails.
 func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 	t.Parallel()
@@ -67,7 +68,7 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 			t.Parallel()
 			_, cbp := chamferedSectionBody(t, sectorSection(tc.cx, tc.cy, tc.r, tc.phi), tc.d)
 			budget := proofbound.NewWorkBudget(t.Context())
-			cl, err := oneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
+			cl, err := capblend.OneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
 			require.NoError(t, err)
 			joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.LoopOffset(0), shellTol)
 			require.NoError(t, err)
@@ -76,7 +77,7 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 			found := 0
 			for _, p := range cbp.Patches {
 				if p.Geom.Circular && p.Geom.SideRadius != 0 {
-					skew = capPatchWindowSkew(p.Geom)
+					skew = capblend.PatchWindowSkew(p.Geom)
 					found++
 				}
 			}
@@ -88,7 +89,7 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 				if !w.IsCircular() {
 					continue
 				}
-				start, end := capWallFoot(joins, i, n)
+				start, end := capblend.WallFoot(joins, i, n)
 				capTh0, capTh1, _ := capband.WallSweep(w.CU, w.CV, start, end, w.Th1-w.Th0)
 				c0, c1 := capband.WindowOnBranch(capTh0, capTh1, w.Th0)
 				for _, corner := range []struct {
@@ -117,7 +118,7 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 // The turn term moves the arc's ends along the held circle and does not cover
 // a radius that is off along the whole sweep.
 //
-// Shown to fail: with buildCapBand passing dcDelta (zero here) as the radial
+// Shown to fail: with capblend.BuildBand passing dcDelta (zero here) as the radial
 // shift again, the published bound equals the bound with no radial term.
 func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 	t.Parallel()
@@ -126,7 +127,7 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 	setback := cbp.LoopSetback(0)
 	require.Zero(t, setback.DcDelta, `a setback stated in millimetres converts exactly`)
 	budget := proofbound.NewWorkBudget(t.Context())
-	cl, err := oneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
+	cl, err := capblend.OneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
 	joins, err := capband.OffsetJoins(budget, cl.Walks, dc, shellTol)
 	require.NoError(t, err)
@@ -139,7 +140,7 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 		if !w.IsCircular() {
 			continue
 		}
-		start, end := capWallFoot(joins, i, n)
+		start, end := capblend.WallFoot(joins, i, n)
 		capRadius, err := capband.BandRadius(w, dc, shellTol)
 		require.NoError(t, err)
 		radius, ok := capband.OffsetRadiusSpan(w, dc, 0)
@@ -208,7 +209,7 @@ func TestCapMiterLocusUpperReadsTheStatedAxialRise(t *testing.T) {
 	const dc = 2
 	_, cbp := chamferedSectionBody(t, quarterDiskSection(10), dc)
 	budget := proofbound.NewWorkBudget(t.Context())
-	cl, err := oneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
+	cl, err := capblend.OneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
 	joins, err := capband.OffsetJoins(budget, cl.Walks, dc, shellTol)
 	require.NoError(t, err)
@@ -235,7 +236,7 @@ func TestCapMiterLocusUpperReadsTheStatedAxialRise(t *testing.T) {
 
 // TestBuildCapBandTakesSuppliedCapCoedges pins the hook of
 // docs/modify-general-design.md §4.2 step 5: handed the cap-level coedges a
-// first build minted, buildCapBand mints none of its own. The L section's end
+// first build minted, capblend.BuildBand mints none of its own. The L section's end
 // loop has six line walls, five miter corners and one reflex corner, so the
 // supplied boundary holds both wall edges and a connector arc. The result
 // carries the supplied edges themselves and reads, patch for patch and bit
@@ -243,7 +244,7 @@ func TestCapMiterLocusUpperReadsTheStatedAxialRise(t *testing.T) {
 // reversed coedge, and one whose edges do not meet the band's vertices are
 // each refused.
 //
-// Shown to fail: with buildCapBand ignoring suppliedCap the pointer
+// Shown to fail: with capblend.BuildBand ignoring suppliedCap the pointer
 // comparison fails on every coedge; with the vertex join check deleted the
 // swapped boundary builds.
 func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
@@ -269,10 +270,12 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 	scratch := bornBody(&Body{n: topo.Body{Doc: body.n.Doc}})
 	_, _, topCo, _, err := prismrecord.BuildLoopSidesAs(t.Context(), envOf(scratch.n.Doc, ref), bodyNode(scratch), pp, 0, false, loop, work, nil, levelToken{}, levelToken{}, false) //nolint:dogsled // only the top coedges are read
 	require.NoError(t, err)
-	again, err := buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.Z1, -1, topCo, nil, work)
+	again, err := capblend.BuildBand(t.Context(), envOf(body.n.Doc, ref),
+		bodyNode(bornBody(&Body{n: topo.Body{Doc: body.n.Doc}})), cbp, 0, loop, cbp.Z1, -1, topCo, nil, work)
 	require.NoError(t, err)
 	require.Len(t, again.CapCo, 7, "six walls and the reflex corner's arc")
-	supplied, err := buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.Z1, -1, topCo, again.CapCo, work)
+	supplied, err := capblend.BuildBand(t.Context(), envOf(body.n.Doc, ref),
+		bodyNode(bornBody(&Body{n: topo.Body{Doc: body.n.Doc}})), cbp, 0, loop, cbp.Z1, -1, topCo, again.CapCo, work)
 	require.NoError(t, err)
 
 	require.Len(t, supplied.CapCo, len(again.CapCo))
@@ -284,22 +287,25 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 	require.Equal(t, again.Delta, supplied.Delta)
 	require.Len(t, supplied.Patches, len(again.Patches))
 	for i, f := range supplied.Patches {
-		require.Equal(t, again.Patches[i].n.Area, f.n.Area, "patch %d", i)
-		require.Equal(t, again.Patches[i].n.AreaBound, f.n.AreaBound, "patch %d", i)
-		require.Equal(t, again.Patches[i].n.NormalBound, f.n.NormalBound, "patch %d", i)
+		require.Equal(t, again.Patches[i].Area, f.Area, "patch %d", i)
+		require.Equal(t, again.Patches[i].AreaBound, f.AreaBound, "patch %d", i)
+		require.Equal(t, again.Patches[i].NormalBound, f.NormalBound, "patch %d", i)
 	}
 
 	short := again.CapCo[:len(again.CapCo)-1]
-	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.Z1, -1, topCo, short, work)
+	_, err = capblend.BuildBand(t.Context(), envOf(body.n.Doc, ref),
+		bodyNode(bornBody(&Body{n: topo.Body{Doc: body.n.Doc}})), cbp, 0, loop, cbp.Z1, -1, topCo, short, work)
 	require.ErrorContains(t, err, "supplied cap boundary")
 
 	backward := append([]topo.CoEdge(nil), again.CapCo...)
 	backward[0].Forward = false
-	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.Z1, -1, topCo, backward, work)
+	_, err = capblend.BuildBand(t.Context(), envOf(body.n.Doc, ref),
+		bodyNode(bornBody(&Body{n: topo.Body{Doc: body.n.Doc}})), cbp, 0, loop, cbp.Z1, -1, topCo, backward, work)
 	require.ErrorContains(t, err, "supplied cap boundary")
 
 	swapped := append([]topo.CoEdge(nil), again.CapCo...)
 	swapped[0], swapped[2] = swapped[2], swapped[0]
-	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.Z1, -1, topCo, swapped, work)
+	_, err = capblend.BuildBand(t.Context(), envOf(body.n.Doc, ref),
+		bodyNode(bornBody(&Body{n: topo.Body{Doc: body.n.Doc}})), cbp, 0, loop, cbp.Z1, -1, topCo, swapped, work)
 	require.Error(t, err)
 }

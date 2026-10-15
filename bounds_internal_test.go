@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -700,9 +701,9 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 
 	t.Run("faceted centroid", func(t *testing.T) {
 		require.Zero(t, tiny*0.25, `the raw numerator must flush to zero`)
-		require.GreaterOrEqual(t, facetedCentroidAllowance(tiny, 0.25, 0.125), 2*tiny)
-		require.Zero(t, facetedCentroidAllowance(0, 0.25, 0.125))
-		require.Equal(t, 0.25, facetedCentroidAllowance(tiny, 0.25, 0))
+		require.GreaterOrEqual(t, facetproof.FacetedCentroidAllowance(tiny, 0.25, 0.125), 2*tiny)
+		require.Zero(t, facetproof.FacetedCentroidAllowance(0, 0.25, 0.125))
+		require.Equal(t, 0.25, facetproof.FacetedCentroidAllowance(tiny, 0.25, 0))
 	})
 
 	t.Run("quotient", func(t *testing.T) {

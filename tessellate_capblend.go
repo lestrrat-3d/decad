@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -57,7 +58,7 @@ import (
 //
 // A loop chamfered on either cap carries a cap contour ring as well as its side
 // ring. The contour does not depend on WHICH cap the loop is chamfered on — the
-// in-plane offset is the same either way (capblend.go's mixedOffsetProfile) —
+// in-plane offset is the same either way (capblend.MixedOffsetProfile) —
 // so the samples are resolved once and lifted to whichever cap level(s) the
 // selection named.
 type capBlendLoopMesh struct {
@@ -234,7 +235,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 
 	// Cap faces. Each is bounded, per loop, by that loop's contour ring where it
 	// is chamfered on this cap and by its original ring where it is not — the
-	// mixed profile evalCapBlendContext builds the same two faces from.
+	// mixed profile capblend.Build builds the same two faces from.
 	if err := emitCapBlendCap(ctx, mesh, cbp, lms, true, capStart, bump); err != nil {
 		return nil, err
 	}
@@ -446,7 +447,7 @@ func capBlendChordVolume(cbp capBlendPayload, lms []capBlendLoopMesh) float64 {
 	return tessellation.CapBlendChordVolume(height, loops)
 }
 
-// chordCapBlendLoop resolves ONE loop's walks the way buildCapBand does and
+// chordCapBlendLoop resolves ONE loop's walks the way capblend.BuildBand does and
 // chords each of them ONCE, at the single count every level of that loop then
 // reads (docs/tessellation-reach-design.md §7).
 //
@@ -461,7 +462,7 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 	if err := ctx.Err(); err != nil {
 		return capBlendLoopMesh{}, err
 	}
-	cl, err := oneLoopCornerLoop(budget, loop, work)
+	cl, err := capblend.OneLoopCornerLoop(budget, loop, work)
 	if err != nil {
 		return capBlendLoopMesh{}, err
 	}
@@ -583,7 +584,7 @@ func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm
 	}
 	levelDelta := proofbound.AbsSumUpper(setback.DsDelta, proofarith.AddRoundError(capZ, matSign*setback.Ds, sideZ))
 	axial := cbp.CapBandLevel(capZ, matSign).Bound
-	capName := capNameOf(matSign)
+	capName := capblend.CapNameOf(matSign)
 	patchFace := func(p int) (*Face, tessellation.CapBlendBandPatch, error) {
 		role := fmt.Sprintf("chamferCap(%s,%d,%d)", capName, lm.li, p)
 		if cbp.Draft {
@@ -604,7 +605,7 @@ func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm
 		}
 		return f, tessellation.CapBlendBandPatch{
 			Circular: g.Circular, SideRadius: g.SideRadius, CapRadius: g.CapRadius,
-			Skew: capPatchWindowSkew(g), AreaAllow: capband.DisplacementAreaAllow(g),
+			Skew: capblend.PatchWindowSkew(g), AreaAllow: capband.DisplacementAreaAllow(g),
 		}, nil
 	}
 	return tessellation.EmitCapBlendBand[*Face](budget, capBlendBandWriter{m: m, bump: bump},

@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -218,7 +219,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 	}
 	f := r.bp.faces[sel.face]
 	orig := f.regionLoop(sel.loop)
-	cl, err := oneLoopCornerLoop(r.budget, orig, freeform.NewFreeformWork())
+	cl, err := capblend.OneLoopCornerLoop(r.budget, orig, freeform.NewFreeformWork())
 	if err != nil {
 		return brepPayload{}, err
 	}

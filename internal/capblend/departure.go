@@ -1,4 +1,4 @@
-package decad
+package capblend
 
 import (
 	"math"
@@ -7,27 +7,24 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// capPatchNormalAllow adapts built cap-band faces to the exact departure
+// patchNormalAllow adapts built cap-band faces to the exact departure
 // bounds in internal/capband/departure.go.
 
 // ruledNormalAllowUnbounded is the trivial bound on the distance between two
 // unit vectors: any two of them differ by at most 2. It is what
-// capPatchNormalAllow returns wherever its own derivation degenerates — an
+// patchNormalAllow returns wherever its own derivation degenerates — an
 // honest "this reading proves nothing" rather than a smaller number nothing
 // supports. Every consumer treats it as undecided rather than as a width.
 const ruledNormalAllowUnbounded = 2.0
 
-type capDirectrixRef = capband.DirectrixRef
-
-type capPatchBuilt = capband.PatchBuilt
-
-// capPatchNormalAllow is the file's answer for one patch: the proven bound on
+// patchNormalAllow is the file's answer for one patch: the proven bound on
 // how far the RULED surface the build assembles can carry a normal differing
 // from the surface the patch publishes.
 //
@@ -39,10 +36,10 @@ type capPatchBuilt = capband.PatchBuilt
 // of those four corners states. How far the built patch turns from the denoted
 // one is a separate term (capband.DenotedNormalAllow), which setPatchReadings
 // adds.
-func capPatchNormalAllow(f *Face, g capPatchGeom, b capPatchBuilt) float64 {
-	departure := capPlaneDeparture
+func patchNormalAllow(f *topo.Face, g capband.Patch, b capband.PatchBuilt) float64 {
+	departure := planeDeparture
 	if g.Circular {
-		departure = capPatchDeparture
+		departure = patchDeparture
 	}
 	allow, ok := departure(f, b)
 	if !ok || proofbound.IsNonFinite(allow) || allow < 0 {
@@ -51,18 +48,18 @@ func capPatchNormalAllow(f *Face, g capPatchGeom, b capPatchBuilt) float64 {
 	return math.Min(ruledNormalAllowUnbounded, allow)
 }
 
-// capPlaneDeparture reads the published plane tag before bounding its built patch.
-func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
-	tag, okTag := f.n.Surface.(surfacegeom.Plane)
+// planeDeparture reads the published plane tag before bounding its built patch.
+func planeDeparture(f *topo.Face, b capband.PatchBuilt) (float64, bool) {
+	tag, okTag := f.Surface.(surfacegeom.Plane)
 	if !okTag {
 		return 0, false
 	}
 	return capband.PlaneDeparture(tag.Frame.U(), tag.Frame.V(), b)
 }
 
-// capPatchDeparture reads the published cone tag before bounding its built patch.
-func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
-	sinH, cosH, originVec, axisVec, ok := coneTagTerms(f)
+// patchDeparture reads the published cone tag before bounding its built patch.
+func patchDeparture(f *topo.Face, b capband.PatchBuilt) (float64, bool) {
+	sinH, cosH, originVec, axisVec, ok := ConeTagTerms(f)
 	if !ok {
 		return 0, false
 	}
@@ -77,9 +74,9 @@ func capPatchDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 // — zero for every tag the cap band builds, since coneSurface anchors a Cone at
 // its apex. It is read rather than assumed, so the signed distance κ this file
 // measures stays the tag's own implicit function whatever radius a tag states.
-func coneTagRadius(f *Face) (*big.Rat, bool) {
+func coneTagRadius(f *topo.Face) (*big.Rat, bool) {
 	var value units.Value
-	switch s := f.n.Surface.(type) {
+	switch s := f.Surface.(type) {
 	case surfacegeom.Cone:
 		value = s.Radius
 	case surfacegeom.Cylinder:
@@ -98,48 +95,48 @@ func coneTagRadius(f *Face) (*big.Rat, bool) {
 	return r, true
 }
 
-// capBuiltPatch names one band patch's built ruled surface from the two
+// builtPatch names one band patch's built ruled surface from the two
 // published directrix edges and the boundary vertices that pair them: ruling k
 // joins sideEnds[k] to capEnds[k]. A directrix this evaluator cannot read
 // leaves its own reference empty, which either departure derivation refuses and
 // the caller publishes the trivial bound for, rather than a number no reading
 // supports.
-func capBuiltPatch(sideEdge, capEdge *Edge, sideEnds, capEnds []*Vertex) capPatchBuilt {
-	return capPatchBuilt{
-		SideDir: capDirectrixFromEdge(sideEdge, sideEnds...),
-		CapDir:  capDirectrixFromEdge(capEdge, capEnds...),
+func builtPatch(sideEdge, capEdge *topo.Edge, sideEnds, capEnds []*topo.Vertex) capband.PatchBuilt {
+	return capband.PatchBuilt{
+		SideDir: directrixFromEdge(sideEdge, sideEnds...),
+		CapDir:  directrixFromEdge(capEdge, capEnds...),
 	}
 }
 
-// capBuiltApexPatch is the same for a reflex corner's apex patch, whose side
+// builtApexPatch is the same for a reflex corner's apex patch, whose side
 // directrix is the single original corner VERTEX the rulings all leave: a
-// circle of radius zero, which capPatchDeparture admits only where that vertex
+// circle of radius zero, which patchDeparture admits only where that vertex
 // is the tag's own origin held for held.
-func capBuiltApexPatch(apex *Vertex, capEdge *Edge, capEnds []*Vertex) capPatchBuilt {
-	capped := capDirectrixFromEdge(capEdge, capEnds...)
+func builtApexPatch(apex *topo.Vertex, capEdge *topo.Edge, capEnds []*topo.Vertex) capband.PatchBuilt {
+	capped := directrixFromEdge(capEdge, capEnds...)
 	if apex == nil {
-		return capPatchBuilt{CapDir: capped}
+		return capband.PatchBuilt{CapDir: capped}
 	}
 	ends := make([]r3.Vec, len(capped.Ends))
 	for i := range ends {
-		ends[i] = apex.n.Position
+		ends[i] = apex.Position
 	}
-	return capPatchBuilt{
-		SideDir: capDirectrixRef{Center: apex.n.Position, Ends: ends},
+	return capband.PatchBuilt{
+		SideDir: capband.DirectrixRef{Center: apex.Position, Ends: ends},
 		CapDir:  capped,
 	}
 }
 
-// capDirectrixFromEdge reads one published directrix edge. Only the three curve
+// directrixFromEdge reads one published directrix edge. Only the three curve
 // kinds a band's directrix is ever built as are admitted — the two circular ones
 // a wall over an arc gives, and the `Line3` a straight wall gives, which carries
 // no circle and is read through its ruling endpoints alone; anything else leaves
 // the patch without a stated built surface and the caller publishes the trivial
 // bound.
-func capDirectrixFromEdge(e *Edge, ends ...*Vertex) capDirectrixRef {
-	var out capDirectrixRef
+func directrixFromEdge(e *topo.Edge, ends ...*topo.Vertex) capband.DirectrixRef {
+	var out capband.DirectrixRef
 	var radius units.Value
-	switch c := e.n.Curve.(type) {
+	switch c := e.Curve.(type) {
 	case surfacegeom.Arc3:
 		out.Center, out.Axis, radius = c.Center, c.Axis, c.Radius
 	case surfacegeom.Circle3:
@@ -147,20 +144,49 @@ func capDirectrixFromEdge(e *Edge, ends ...*Vertex) capDirectrixRef {
 	case surfacegeom.Line3:
 		out.Straight = true
 	default:
-		return capDirectrixRef{}
+		return capband.DirectrixRef{}
 	}
 	if !out.Straight {
 		mm, err := radius.In(units.Millimeter)
 		if err != nil {
-			return capDirectrixRef{}
+			return capband.DirectrixRef{}
 		}
 		out.Radius = mm
 	}
 	for _, v := range ends {
 		if v == nil {
-			return capDirectrixRef{}
+			return capband.DirectrixRef{}
 		}
-		out.Ends = append(out.Ends, v.n.Position)
+		out.Ends = append(out.Ends, v.Position)
 	}
 	return out
+}
+
+// ConeTagTerms reads the sine and cosine of a circular patch's own half angle
+// beside the axis they lean against. A `Cylinder` is the zero-half-angle member
+// of the same family — `Face.NormalAt` hands back the bare radial direction
+// there — so it takes the exact pair rather than a second code path. Any other
+// tag refuses: a patch whose surface this file cannot state exactly gets no
+// model at all, and DX7 answers undecided.
+func ConeTagTerms(f *topo.Face) (proofbound.RatInterval, proofbound.RatInterval, r3.Vec, r3.Vec, bool) {
+	switch s := f.Surface.(type) {
+	case surfacegeom.Cone:
+		half, err := s.HalfAngle.In(units.Radian)
+		if err != nil {
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
+		}
+		rHalf := proofarith.FloatRat(half)
+		if rHalf == nil {
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
+		}
+		sin, cos, ok := proofbound.RadSinCosInterval(rHalf)
+		if !ok {
+			return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
+		}
+		return sin, cos, s.Origin, s.Axis, true
+	case surfacegeom.Cylinder:
+		return proofbound.PointInterval(new(big.Rat)), proofbound.PointInterval(big.NewRat(1, 1)), s.Origin, s.Axis, true
+	default:
+		return proofbound.RatInterval{}, proofbound.RatInterval{}, r3.Vec{}, r3.Vec{}, false
+	}
 }

@@ -32,7 +32,7 @@ import (
 //     line sweep went red in every variant, publishing their volume, areas
 //     and lengths Exact, and so did the tilted unstitch and body patch whose
 //     source sheet is a prism;
-//   - in measureDraftBody, evalCapBlendContext, patchchain.Build and
+//   - in measureDraftBody, capblend.Build, patchchain.Build and
 //     chainrecord.Build: the draft, the cap chamfer, the patch and the
 //     chain extrude went red in every variant;
 //   - in stackedrecord.Build: the union, the blind cut and the cup went

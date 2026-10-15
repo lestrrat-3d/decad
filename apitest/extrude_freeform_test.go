@@ -1088,7 +1088,7 @@ func TestFreeformPrismShellRefuses(t *testing.T) {
 }
 
 // TestFreeformPrismCapLoopChamferRefuses pins the complete-cap-loop chamfer
-// path (capblend_geom.go's oneLoopCornerLoop), reached by selecting every
+// path (capblend.OneLoopCornerLoop), reached by selecting every
 // edge of one cap rather than a single corner.
 func TestFreeformPrismCapLoopChamferRefuses(t *testing.T) {
 	t.Parallel()

@@ -411,7 +411,7 @@ and a body built far away and placed back keeps the far lift's rounding. A
 lift exact for the coordinates at hand — an integer origin and integer
 coordinates under the identity placement, for one — charges zero. A cap-loop
 chamfer's own cap-level vertices take the same per-vertex charge in
-`capblend_geom.go`'s `buildCapBand` (`capVertexAt`), beside their own contour
+`capblend.BuildBand` (`capVertexAt`), beside their own contour
 displacement, never inside the value an edge's own length bound still reads
 unwidened; chain `Extrude`'s rim posts, a brep record's vertices and a patch's
 rim vertices take it too. The cost is one exact dyadic evaluation per vertex,
@@ -860,7 +860,8 @@ are aliases of `patchchain.Payload` and `patchchain.BodyPayload`: their `Placed`
 `sweepmitre.Payload`: its `Placed` runs `sweepmitre.Build`. `coilPayload` is an alias of
 `coilshell.Payload`: its `Placed` runs `coilshell.BuildBody`. `loftPayload` and
 `chainLoftPayload` are aliases of `loftrecord.Payload` and `loftrecord.ChainPayload`:
-their `Placed` runs `loftrecord.Build` and `loftrecord.BuildChain`. A payload that still lives in the root
+their `Placed` runs `loftrecord.Build` and `loftrecord.BuildChain`. `capBlendPayload` is an alias of
+`capblend.Payload`: its `Placed` runs `capblend.Build`. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and
 runs its root builder.
 

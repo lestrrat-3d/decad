@@ -1490,10 +1490,10 @@ section as held exactly. See `facesOfMesh`'s own doc comment. The other is
 `verify.go`'s `gateWitnessPrism` above, which charges `δ` as a shrink on the
 tolerance gate's reference diameter.
 
-### capblend_contour.go (boundary note)
+### internal/capblend contour (boundary note)
 
 The cap-loop chamfer's cap contour displacement (`docs/modify-reach-design.md`
-§8.4) is a separate term with its own owner, derived by `capblend_contour.go`
-and read by `capblend_geom.go`/`capblend.go`/`capblend_moments.go`. It is not
+§8.4) is a separate term with its own owner, derived and read in
+`internal/capblend` (`band.go`, `payload.go`, `build.go`). It is not
 `sectionDelta`: nothing in this design's own consumers reads the cap contour
 term, and nothing on the cap-loop chamfer path reads `sectionDelta`.

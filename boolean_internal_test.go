@@ -778,7 +778,7 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 			new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 54)))
 		round := proofbound.Radius3D(proofbound.RatAbsDiff(trueCenterX, body.n.Centroid.Value.X))
 		volume := new(big.Rat).Quo(new(big.Rat).SetFloat64(width), big.NewRat(6, 1))
-		allowance := facetedCentroidAllowance(tiny, payload.dPair, volFloor(volume, tiny))
+		allowance := facetproof.FacetedCentroidAllowance(tiny, payload.dPair, volFloor(volume, tiny))
 		wantBound := new(big.Rat).Add(new(big.Rat).SetFloat64(round), new(big.Rat).SetFloat64(allowance))
 		require.GreaterOrEqual(t, new(big.Rat).SetFloat64(body.n.Centroid.Bound.Base()).Cmp(wantBound), 0)
 	})

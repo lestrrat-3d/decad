@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -35,7 +36,7 @@ func equalCapSetback(d, dDelta float64) capSetback {
 func capBandVolume(ctx context.Context, loop loopRecord, cbp capBlendPayload,
 	geom []capPatchGeom, capZ, matSign float64,
 	work *freeform.FreeformWork) (proofbound.BoundedScalar, error) {
-	in, err := readBandMass(ctx, 0, loop, cbp, geom, capZ, matSign, 0, capBandClosure{})
+	in, err := capblend.ReadBandMass(ctx, 0, loop, cbp, geom, capZ, matSign, 0, capband.Closure{})
 	if err != nil {
 		return proofbound.BoundedScalar{}, err
 	}
@@ -47,7 +48,7 @@ func capBandMoment(ctx context.Context, loop loopRecord, cbp capBlendPayload,
 	work *freeform.FreeformWork) (
 	proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error,
 ) {
-	in, err := readBandMass(ctx, 0, loop, cbp, geom, capZ, matSign, delta, capBandClosure{})
+	in, err := capblend.ReadBandMass(ctx, 0, loop, cbp, geom, capZ, matSign, delta, capband.Closure{})
 	if err != nil {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 	}
@@ -137,7 +138,7 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 		"mv.bound %v must reach the offset boundary's own coordinate envelope, not just the pre-fix one", mv.Bound)
 }
 
-// TestFixPatchOrientation pins fu153: fixPatchOrientation must not swallow
+// TestFixPatchOrientation pins fu153: capblend.FixPatchOrientation must not swallow
 // its own Face.NormalAt error and leave face.n.Reversed at whatever the caller
 // constructed it with. Both cases build a fresh whole-turn Cone band patch
 // (chamferedCircularBand, capblend_normal_internal_test.go), read the TRUE
@@ -147,7 +148,7 @@ func TestFixPatchOrientation(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name string
-		// sample returns the point fixPatchOrientation is called with. The
+		// sample returns the point capblend.FixPatchOrientation is called with. The
 		// "decides the sign" case reuses the build's own valid sample point;
 		// "refuses an unreadable sample" uses the cone's own apex, where
 		// NormalAt's radial direction is zero.
@@ -182,7 +183,7 @@ func TestFixPatchOrientation(t *testing.T) {
 			band.face.n.Reversed = !before // give the function real work to do
 
 			sample := tc.sample(band, valid, cone)
-			err = fixPatchOrientation(band.face, band.pl, sample, refU, refV, refZ)
+			err = capblend.FixPatchOrientation(faceNode(band.face), band.pl, sample, refU, refV, refZ)
 
 			if tc.name == "refuses an unreadable sample" {
 				require.ErrorIs(t, err, ErrUnsupported)
@@ -347,8 +348,8 @@ func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
 		start map[int]bool
 		end   map[int]bool
 	}{
-		{name: capNameStart, capZ: 0, sideZ: d, start: map[int]bool{0: true}},
-		{name: capNameEnd, capZ: 10, sideZ: 10 - d, end: map[int]bool{0: true}},
+		{name: capblend.CapNameStart, capZ: 0, sideZ: d, start: map[int]bool{0: true}},
+		{name: capblend.CapNameEnd, capZ: 10, sideZ: 10 - d, end: map[int]bool{0: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cbp := capBlendPayload{
@@ -362,7 +363,7 @@ func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
 				StartLoops: tc.start,
 				EndLoops:   tc.end,
 			}
-			body, err := evalCapBlendContext(t.Context(), New(), 0, cbp)
+			body, err := bodyResult(capblend.Build(t.Context(), envOf(documentNode(New()), 0), cbp))
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, cbp.AxialDelta(), dDelta)
 
@@ -812,7 +813,7 @@ func TestCapPatchNormalRangeCoversWhatAFlatPatchTakes(t *testing.T) {
 			_, _, allow, ok := capPatchNormalRange(band.face, band.pl, band.geom, pull)
 			require.True(t, ok)
 
-			// The quad's own walk order (capblend_geom.go): sideA -> sideB
+			// The quad's own walk order (internal/capblend/band.go): sideA -> sideB
 			// along the original wall, sideB -> capB up the trailing slant,
 			// capB -> capA along the cap contour, capA -> sideA down the
 			// leading slant.
@@ -848,7 +849,7 @@ func TestCapPatchNormalRangeCoversWhatAFlatPatchTakes(t *testing.T) {
 //
 // The second bound is the ARM's own half of the same reading. Face.NormalAt
 // publishes the arm's arithmetic proof composed with the face's own departure
-// from its tag (capblend_departure.go), and only the first is what a reading
+// from its tag (internal/capblend/departure.go), and only the first is what a reading
 // that charged its arithmetic alone would have had — which is the figure the
 // sample-displacement ratios below are measured against.
 func (b bandUnderTest) componentAt(t *testing.T, theta float64, pull r3.Vec) (float64, float64, float64) {
@@ -1286,7 +1287,7 @@ func TestCapBandConeAreaBoundEnclosesBuiltRuledPatch(t *testing.T) {
 			mitered := 0
 			for _, p := range cbp.Patches {
 				g := p.Geom
-				if !g.Circular || g.SideRadius == 0 || g.WholeTurn || capPatchWindowSkew(g) == 0 {
+				if !g.Circular || g.SideRadius == 0 || g.WholeTurn || capblend.PatchWindowSkew(g) == 0 {
 					continue
 				}
 				mitered++
@@ -1318,7 +1319,7 @@ func TestCapBandConeAreaBoundEnclosesBuiltRuledPatch(t *testing.T) {
 // true error holds none of it. The term is owed because the chord-locus bound
 // is taken about the arc's own axis, where the side patch's share is not.
 //
-// Shown to fail on 2026-10-09: with buildCapBand leaving CornerFlux unset,
+// Shown to fail on 2026-10-09: with capblend.BuildBand leaving CornerFlux unset,
 // both rows' charge is zero.
 func TestCapBandConePatchChargesItsCornerSlivers(t *testing.T) {
 	t.Parallel()

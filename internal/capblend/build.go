@@ -1,47 +1,48 @@
-package decad
+package capblend
 
 import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/denotation"
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
-
-	"github.com/lestrrat-3d/decad/internal/capband"
-	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
 // This file assembles the cap-blend body and adapts its mass readings to
 // internal/capband. See docs/modify-reach-design.md §8.4.
 
-// evalCapBlendContext builds the analytic cap-blend body from the payload
+// Build builds the analytic cap-blend body from the payload
 // (BX3): the trimmed prism side walls (prismrecord.BuildLoopSidesAs, unmodified) plus,
 // for every chamfered loop, the chamfer band patches and the offset cap
 // boundary; every other loop and every unchamfered cap keeps the ordinary
 // prism construction. One shell, one lump, watertight by the same argument
 // evalPrism's is (every edge bounds exactly two faces).
-func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp capBlendPayload) (*Body, error) {
+func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	ref := env.Ref
 	work := freeform.NewFreeformWork()
 	loops := cbp.Loops()
-	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Doc: documentNode(d)}})
+	body := env.Alloc.NewBody()
+	body.Solid = true
+	body.Origin = provenance.Ref{Producer: ref, Role: provenance.RoleBody}
+	body.Doc = env.Doc
 
-	var faces []*Face
-	startLoopObjs := make([]*Loop, len(loops))
-	endLoopObjs := make([]*Loop, len(loops))
+	var faces []*topo.Face
+	startLoopObjs := make([]*topo.Loop, len(loops))
+	endLoopObjs := make([]*topo.Loop, len(loops))
 	var startArea, endArea, sideArea, patchArea, slabVolume, bandVolume proofbound.BoundedScalar
 	// muTotal, mvTotal, mzTotal accumulate the body's own plane-local first
 	// moments (docs/modify-reach-design.md §8.4's fourth reading): the SAME
@@ -52,18 +53,18 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	// Appended in build order — loop index, then the chamfered cap, then each
 	// band's own patch index — which IS Table BX row BX3's deterministic patch
 	// order, the order the DX7 survey then reports its faces in.
-	var patchGeoms []capPatch
+	var patchGeoms []Patch
 	// bandDeltas carries each band's own contour displacement onto the payload,
 	// keyed by the (loop, cap) it was built for. The tessellator reads it so its
 	// cap-level facets charge the SAME displacement this build's own vertices,
 	// edges and areas already did.
-	bandDeltas := map[capBandKey]float64{}
-	collectPatchGeoms := func(band capBandResult) {
+	bandDeltas := map[BandKey]float64{}
+	collectPatchGeoms := func(band BandResult) {
 		for i, f := range band.Patches {
-			if len(f.n.Origins) == 0 {
+			if len(f.Origins) == 0 {
 				continue
 			}
-			patchGeoms = append(patchGeoms, capPatch{Role: f.n.Origins[0].Role, Geom: band.Geom[i]})
+			patchGeoms = append(patchGeoms, Patch{Role: f.Origins[0].Role, Geom: band.Geom[i]})
 		}
 	}
 
@@ -103,11 +104,11 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			Z1Delta: zHi.Bound,
 			Xform:   cbp.Xform,
 		}
-		sideFaces, bottomCo, topCo, loopLen, err := prismrecord.BuildLoopSidesAs(ctx, envOf(body.n.Doc, ref), bodyNode(body), ppFor, li, li != 0, loop, work, nil, levelToken{}, levelToken{}, false)
+		sideFaces, bottomCo, topCo, loopLen, err := prismrecord.BuildLoopSidesAs(ctx, env, body, ppFor, li, li != 0, loop, work, nil, denotation.LevelToken{}, denotation.LevelToken{}, false)
 		if err != nil {
 			return nil, err
 		}
-		faces = append(faces, faceHandles(sideFaces)...)
+		faces = append(faces, sideFaces...)
 		for _, f := range sideFaces {
 			sideArea = proofbound.BoundedAdd(sideArea, proofbound.MeasuredScalar(f.Area, f.AreaBound))
 		}
@@ -136,20 +137,20 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 
 		startCo, endCo := bottomCo, topCo
 
-		// startBand/endBand default to the zero capBandResult (delta 0, capCo
+		// startBand/endBand default to the zero BandResult (delta 0, capCo
 		// nil) where the loop is not chamfered on that cap, which is what
 		// leaves the area correction below at its own zero — the delta<=0
 		// guards in proofbound.SectionDisplacementArea and proofbound.BandPatchAreaAllow, not a
 		// separate onStart/onEnd branch.
-		var startBand, endBand capBandResult
+		var startBand, endBand BandResult
 		if onStart {
-			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.Z0, +1, bottomCo, nil, work)
+			band, err := BuildBand(ctx, env, body, cbp, li, loop, cbp.Z0, +1, bottomCo, nil, work)
 			if err != nil {
 				return nil, err
 			}
 			faces = append(faces, band.Patches...)
 			collectPatchGeoms(band)
-			bandDeltas[capBandKey{Loop: li, Start: true}] = band.Delta
+			bandDeltas[BandKey{Loop: li, Start: true}] = band.Delta
 			startCo = band.CapCo
 			startBand = band
 			mass, err := readBandMassWithSideArea(ctx, li, loop, cbp, band.Geom, cbp.Z0, +1,
@@ -178,13 +179,13 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
 		}
 		if onEnd {
-			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.Z1, -1, topCo, nil, work)
+			band, err := BuildBand(ctx, env, body, cbp, li, loop, cbp.Z1, -1, topCo, nil, work)
 			if err != nil {
 				return nil, err
 			}
 			faces = append(faces, band.Patches...)
 			collectPatchGeoms(band)
-			bandDeltas[capBandKey{Loop: li, Start: false}] = band.Delta
+			bandDeltas[BandKey{Loop: li, Start: false}] = band.Delta
 			endCo = band.CapCo
 			endBand = band
 			mass, err := readBandMassWithSideArea(ctx, li, loop, cbp, band.Geom, cbp.Z1, -1,
@@ -213,12 +214,12 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
 		}
 
-		startLoopObjs[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: startCo}})
-		endLoopObjs[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: endCo}})
+		startLoopObjs[li] = topobuild.NewLoop(env.Alloc, topo.Loop{Outer: li == 0, CoEdges: startCo})
+		endLoopObjs[li] = topobuild.NewLoop(env.Alloc, topo.Loop{Outer: li == 0, CoEdges: endCo})
 
 		startBoundary := loop
 		if onStart {
-			startBoundary, err = capband.LoopBoundary(ctx, loop, cbp.Start.Dc, shellTol)
+			startBoundary, err = capband.LoopBoundary(ctx, loop, cbp.Start.Dc, offset2d.ShellTol)
 			if err != nil {
 				return nil, err
 			}
@@ -234,15 +235,15 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		// composes (docs/prism-boolean-design.md §7, one dimension down from
 		// proofbound.SweptVolumeAllow above): a set bound, sound even where the
 		// displacement changes which regions the offset merged, charged
-		// against this loop's own held boundary via capContourPerimeterUpper
+		// against this loop's own held boundary via ContourPerimeterUpper
 		// so it stands whatever the corner geometry did.
 		sBound := proofbound.AbsSumUpper(sArea.Bound,
-			proofbound.SectionDisplacementArea(startBand.Delta, len(loop.Segments), capContourPerimeterUpper(startBand.CapCo)))
+			proofbound.SectionDisplacementArea(startBand.Delta, len(loop.Segments), ContourPerimeterUpper(startBand.CapCo)))
 		startArea = proofbound.BoundedAdd(startArea, proofbound.MeasuredScalar(sign*sArea.Value, sBound))
 
 		endBoundary := loop
 		if onEnd {
-			endBoundary, err = capband.LoopBoundary(ctx, loop, cbp.End.Dc, shellTol)
+			endBoundary, err = capband.LoopBoundary(ctx, loop, cbp.End.Dc, offset2d.ShellTol)
 			if err != nil {
 				return nil, err
 			}
@@ -252,7 +253,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			return nil, err
 		}
 		eBound := proofbound.AbsSumUpper(eArea.Bound,
-			proofbound.SectionDisplacementArea(endBand.Delta, len(loop.Segments), capContourPerimeterUpper(endBand.CapCo)))
+			proofbound.SectionDisplacementArea(endBand.Delta, len(loop.Segments), ContourPerimeterUpper(endBand.CapCo)))
 		endArea = proofbound.BoundedAdd(endArea, proofbound.MeasuredScalar(sign*eArea.Value, eBound))
 	}
 
@@ -265,47 +266,47 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	if err != nil {
 		return nil, err
 	}
-	capStart := bornFace(&Face{
-		n: topo.Face{
-			Area:          startArea.Value,
-			AreaBound:     startArea.Bound,
-			AxialDelta:    cbp.Z0Delta,
-			HasAxialDelta: true,
-			Surface:       surfacegeom.Plane{Frame: startFrame},
-			CapRecord:     &topo.CapRecord{Frame: cbp.Frame, Xform: cbp.Xform, Z: cbp.Z0},
-			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
-			Body:          bodyNode(body),
-			Loops:         loopNodes(startLoopObjs),
-		},
+	capStart := topobuild.NewFace(env.Alloc, topo.Face{
+		Area:          startArea.Value,
+		AreaBound:     startArea.Bound,
+		AxialDelta:    cbp.Z0Delta,
+		HasAxialDelta: true,
+		Surface:       surfacegeom.Plane{Frame: startFrame},
+		CapRecord:     &topo.CapRecord{Frame: cbp.Frame, Xform: cbp.Xform, Z: cbp.Z0},
+		Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
+		Body:          body,
+		Loops:         startLoopObjs,
 	})
-	capEnd := bornFace(&Face{
-		n: topo.Face{
-			Area:          endArea.Value,
-			AreaBound:     endArea.Bound,
-			AxialDelta:    cbp.Z1Delta,
-			HasAxialDelta: true,
-			Surface:       surfacegeom.Plane{Frame: endFrame},
-			CapRecord:     &topo.CapRecord{Frame: cbp.Frame, Xform: cbp.Xform, Z: cbp.Z1},
-			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
-			Body:          bodyNode(body),
-			Loops:         loopNodes(endLoopObjs),
-		},
+	capEnd := topobuild.NewFace(env.Alloc, topo.Face{
+		Area:          endArea.Value,
+		AreaBound:     endArea.Bound,
+		AxialDelta:    cbp.Z1Delta,
+		HasAxialDelta: true,
+		Surface:       surfacegeom.Plane{Frame: endFrame},
+		CapRecord:     &topo.CapRecord{Frame: cbp.Frame, Xform: cbp.Xform, Z: cbp.Z1},
+		Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
+		Body:          body,
+		Loops:         endLoopObjs,
 	})
-	if err := topobuild.AttachFaceLoops(ctx, []*topo.Face{faceNode(capStart), faceNode(capEnd)}); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, []*topo.Face{capStart, capEnd}); err != nil {
 		return nil, err
 	}
 	faces = append(faces, capStart, capEnd)
-	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}
+	shell := env.Alloc.NewFaceShell()
+	shell.Faces = faces
+	lump := env.Alloc.NewLump()
+	lump.Shells = []*topo.FaceShell{shell}
+	body.Lumps = []*topo.Lump{lump}
 
 	volume := proofbound.BoundedAdd(slabVolume, bandVolume)
-	body.n.Volume = measurement.Measurement{
+	body.Volume = measurement.Measurement{
 		Value:     units.CubicMillimeters(volume.Value),
 		Exactness: measurement.ExactnessOf(volume.Bound),
 		Bound:     units.CubicMillimeters(volume.Bound),
 	}
 
 	totalArea := proofbound.BoundedAdd(proofbound.BoundedAdd(proofbound.BoundedAdd(startArea, endArea), sideArea), patchArea)
-	body.n.Area = measurement.Measurement{
+	body.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(totalArea.Value),
 		Exactness: measurement.ExactnessOf(totalArea.Bound),
 		Bound:     units.SquareMillimeters(totalArea.Bound),
@@ -315,7 +316,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	// volume (docs/modify-reach-design.md §8.4), lifted to world through the
 	// SAME frame/placement lift a prism centroid uses, backed by the
 	// geometry safety-net ceiling every analytic centroid falls back to.
-	bounds, err := capBlendBoundsContext(ctx, cbp, work)
+	bounds, err := Bounds(ctx, cbp, work)
 	if err != nil {
 		return nil, err
 	}
@@ -324,33 +325,33 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	cz := proofbound.BoundedQuotient(mzTotal.Value, mzTotal.Bound, volume.Value, volume.Bound)
 	centroidValue := pl.Point(cu.Value, cv.Value, cz.Value)
 	formulaBound := pl.PointBound(cu, cv, cz)
-	geometryBound := capband.CentroidGeometryBound(centroidValue, boxToInternal(bounds))
+	geometryBound := capband.CentroidGeometryBound(centroidValue, bounds)
 	centroidBound := math.Min(formulaBound, geometryBound)
-	body.n.Centroid = measurement.VecMeasurement{
+	body.Centroid = measurement.VecMeasurement{
 		Value:     centroidValue,
 		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
-	body.n.Bounds = boxToInternal(bounds)
-	if err := prismrecord.ChargeMap(bodyNode(body), cbp.Frame, cbp.Xform); err != nil {
+	body.Bounds = bounds
+	if err := prismrecord.ChargeMap(body, cbp.Frame, cbp.Xform); err != nil {
 		return nil, err
 	}
 	if cbp.LoftSource != nil {
-		if err := widenLoftCapBandMeasurements(body, cbp.LoftSource.Proof); err != nil {
+		if err := widenLoftMeasurements(body, cbp.LoftSource.Proof); err != nil {
 			return nil, err
 		}
 	}
-	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(body); err != nil {
 		return nil, err
 	}
 	cbp.Patches = patchGeoms
 	cbp.BandDelta = bandDeltas
-	body.n.Payload = cbp
+	body.Payload = cbp
 	return body, nil
 }
 
-// capContourPerimeterUpper is a proven upper bound on the total length of a
-// chamfer band's own cap-level boundary, read off the coedges buildCapBand
+// ContourPerimeterUpper is a proven upper bound on the total length of a
+// chamfer band's own cap-level boundary, read off the coedges BuildBand
 // already built for it (band.capCo) rather than re-walked: each edge on that
 // boundary already carries its own held length and proven bound (a wall's
 // straight or circular capEdge, a reflex corner's connector arc), computed
@@ -359,125 +360,10 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 // about which boundary they describe. A nil capCo (the loop is not chamfered
 // on this cap) sums to zero, which is what leaves proofbound.SectionDisplacementArea's
 // own delta<=0 guard as the only gate that matters.
-func capContourPerimeterUpper(capCo []topo.CoEdge) float64 {
+func ContourPerimeterUpper(capCo []topo.CoEdge) float64 {
 	total := proofbound.BoundedScalar{}
 	for _, ce := range capCo {
 		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(ce.Edge.Length, ce.Edge.LengthBound))
 	}
 	return proofbound.AbsSumUpper(total.Value, total.Bound)
-}
-
-// contourOf is capband.LoopBoundary read under cbp's corner rule for loop li: a
-// draft view's far section is the loop's sharp offset
-// (offset2d.BuildSharpLoop), every corner mitered and each walk moved its own
-// amount (walkAmounts), where a chamfer's cap contour closes a reflex corner
-// with an arc.
-func (cbp capBlendPayload) ContourOf(ctx context.Context, li int, loop loopRecord, d float64) (loopRecord, error) {
-	if !cbp.Draft {
-		return capband.LoopBoundary(ctx, loop, d, shellTol)
-	}
-	budget := proofbound.NewWorkBudget(ctx)
-	cl, err := oneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
-	if err != nil {
-		return loopRecord{}, err
-	}
-	segs, _, err := offset2d.BuildSharpLoop(budget, cl.Walks, cbp.WalkAmounts(li, cl.Walks, d), shellTol)
-	if err != nil {
-		return loopRecord{}, offset2d.DraftOffsetError(err)
-	}
-	return loopRecord{Segments: segs}, nil
-}
-
-// readBandMass adapts the payload and built band to the recorded readings both
-// mass integrals consume. The root package owns the offset contour and the
-// authenticated loop areas; internal/capband owns their flux composition.
-func readBandMass(ctx context.Context, li int, loop loopRecord, cbp capBlendPayload,
-	geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure) (capband.BandMassInput, error) {
-	return readBandMassWithSideArea(ctx, li, loop, cbp, geom, capZ, matSign, delta, closure, nil)
-}
-
-// readBandMassWithSideArea reuses the area already computed with a loop's slab
-// moments. Other callers pass nil and read the area from the loop as before.
-func readBandMassWithSideArea(ctx context.Context, li int, loop loopRecord, cbp capBlendPayload,
-	geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure,
-	knownSideArea *proofbound.BoundedScalar) (capband.BandMassInput, error) {
-	setback := cbp.SetbackAt(matSign)
-	capZB := cbp.CapBandLevel(capZ, matSign)
-	sideZB := proofbound.BoundedAdd(capZB,
-		proofbound.MeasuredScalar(matSign*setback.Ds, setback.DsDelta))
-	signedArea, err := sectionaudit.LoopSignedArea(proofbound.NewWorkBudget(ctx), loop)
-	if err != nil {
-		return capband.BandMassInput{}, err
-	}
-	orient := 1.0
-	if signedArea < 0 {
-		orient = -1
-	}
-	var sideArea proofbound.BoundedScalar
-	if knownSideArea != nil {
-		if err := ctx.Err(); err != nil {
-			return capband.BandMassInput{}, err
-		}
-		sideArea = *knownSideArea
-	} else {
-		sideArea, err = momentinput.LoopEnclosedArea(ctx, loop)
-		if err != nil {
-			return capband.BandMassInput{}, err
-		}
-	}
-	capBoundary, err := cbp.ContourOf(ctx, li, loop, setback.Dc)
-	if err != nil {
-		return capband.BandMassInput{}, err
-	}
-	capArea, err := momentinput.LoopEnclosedArea(ctx, capBoundary)
-	if err != nil {
-		return capband.BandMassInput{}, err
-	}
-	return capband.BandMassInput{
-		Loop: loop, CapBoundary: capBoundary, Patches: geom,
-		CapLevel: capZB, SideLevel: sideZB, SideArea: sideArea, CapArea: capArea,
-		MaterialSign: matSign, Orientation: orient, Delta: delta,
-		LevelDelta: capband.BandLevelDelta(capZ, matSign, setback.Ds, setback.DsDelta), Closure: closure,
-	}, nil
-}
-
-// capBlendBoundsContext is the placed body's axis-aligned bounding box, read
-// along each world axis from the payload's OWN patch extrema
-// (extentBoundedAlong, Table DX row DX5) exactly as prismrecord.Bounds reads a
-// prism's — so every face of the box is a value the body attains. Min and Max
-// are positions and Bound is the absolute error on them (measurement.go), so a
-// box widened outward by the setback d would be a Min sitting d millimetres
-// from the true extreme while claiming an error of zero; §8.4 asks for bounds
-// from patch extrema for that reason, and capblend.go's ExtentAlong already
-// states why padding the receiver prism by d proves nothing about attainment.
-//
-// The Bound is the reading's own, never a fixed zero. An extreme held by a
-// recorded coordinate really does have none, which is the ordinary case on an
-// unplaced body whose plane is axis aligned — a placement's own arithmetic can
-// round it even so, and the reading charges that; an extreme held by the COMPUTED cap
-// contour is known only to that contour's proven displacement, and publishing
-// it as an Exact position would assert an accuracy the offset solve never had.
-// extentBoundedAlong keeps the two apart per candidate, so a contour that loses
-// the extremization contributes nothing here.
-func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freeform.FreeformWork) (Box, error) {
-	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
-	var minC, maxC [3]float64
-	bound := 0.0
-	for i, axis := range axes {
-		if err := ctx.Err(); err != nil {
-			return Box{}, err
-		}
-		lo, hi, axisBound, err := cbp.ExtentBoundedAlong(ctx, axis, work)
-		if err != nil {
-			return Box{}, err
-		}
-		minC[i], maxC[i] = lo, hi
-		bound = math.Max(bound, axisBound)
-	}
-	return Box{
-		Min:       r3.NewVec(minC[0], minC[1], minC[2]),
-		Max:       r3.NewVec(maxC[0], maxC[1], maxC[2]),
-		Exactness: exactnessOf(bound),
-		Bound:     units.Millimeters(bound),
-	}, nil
 }

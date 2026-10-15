@@ -50,7 +50,7 @@ type Patch struct {
 	// normalized (and swapped, where Th0/Th1 are) the SAME way — CapTh0
 	// paired with Th0's own corner, CapTh1 with Th1's. A regular wall's cap
 	// contour is the offset arc TRIMMED at the mitered corner feet
-	// (capWallFoot), which sit at a DIFFERENT angle than the wall's own
+	// (capblend.WallFoot), which sit at a DIFFERENT angle than the wall's own
 	// endpoints wherever the corner is a genuine (non-tangent) miter
 	// (docs/modify-reach-design.md §8.3): Th0/Th1 above stay the wall's own
 	// full recorded sweep — the SIDE directrix, which the DX7 survey reads
@@ -86,7 +86,7 @@ type Patch struct {
 	// LevelDelta is the SIDE level's conversion and float-sum rounding: SideZ
 	// is the single float sum CapZ + matSign*ds, so this patch's whole side
 	// directrix sits that far from the level it denotes — the same term
-	// capSlantEdge charges into a slant edge's length and BandVolume charges
+	// capblend.SlantEdge charges into a slant edge's length and BandVolume charges
 	// for the identical level.
 	// patchAreaOf reads it as the axial half of its own displacement
 	// allowance (internal/proofbound/bounds.go's proofbound.BandLevelAreaAllow), beside ContourAllow's
@@ -97,7 +97,7 @@ type Patch struct {
 	// CapThAllow is the proven bound on |held (CapTh1−CapTh0) − true window|,
 	// derived at build time from the same proofbound.Atan2Interval bracket capcontour.CapWallArcBound
 	// builds for this wall's own cap-level arc (capcontour.CapSweepAllow,
-	// capblend_contour.go), or from proofbound.PiLower/proofbound.PiUpper directly for the one
+	// internal/capblend), or from proofbound.PiLower/proofbound.PiUpper directly for the one
 	// whole-turn circle, whose cap-level sweep is a structural fact of that
 	// construction (WholeTurn) rather than an offset corner's own computed
 	// feet. patchAreaOf's Cone arm reads it to bracket the frustum-sector

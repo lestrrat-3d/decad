@@ -465,7 +465,7 @@ invariant becomes mandatory for line-only fixtures, after R4 for all.
 It earns an export increment for every band and a boolean increment for the bands whose held cells
 reproduce the exact offset family slice by slice ("Occupied volume" below). Every term its proof record
 needs is either an existing published term (`band.delta`, `g.levelDelta`, `capBandLevel`,
-`capPatchWindowSkew`, `cellTwistOffsetUpper`, `chordSagitta`, `miterLocusSpeedUpper`) or a one-step
+`capblend.PatchWindowSkew`, `cellTwistOffsetUpper`, `chordSagitta`, `miterLocusSpeedUpper`) or a one-step
 derivation from one, stated below. The occupied-volume proof is complete for a band whose every corner is a
 line-line miter or an exactly tangent (G1) join, and for the cornerless whole turn: there the band's true
 section at every axial fraction is the exact offset section, and the held cells' section is its chord polygon
@@ -481,7 +481,7 @@ patch and the cap contour (below).
 displacements, each chamfered cap's two setbacks (`capSetback`: `dc` across the cap and `ds` down the side,
 each with its conversion rounding `dcDelta`, `dsDelta`; `docs/modify-reach-design.md` §8.3.1), the selected
 `startLoops`/`endLoops`, and `patches []capPatch` — every
-`chamferCap(cap, loop, k)` role beside its plane-local `capPatchGeom` (`capblend_geom.go`): a `Plane` patch's
+`chamferCap(cap, loop, k)` role beside its plane-local `capPatchGeom` (`internal/capblend/band.go`): a `Plane` patch's
 four corners, or a `Cone` patch's centre, `sideRadius`/`capRadius`, side window `th0..th1`, cap window
 `capTh0..capTh1`, `sideZ`/`capZ`, `sweepCCW`, `wholeTurn`, `contourAllow`, `levelDelta`, `capThAllow`. Each
 band's cap contour displacement `band.delta` is `capBandResult.delta`; it must also be stored per band on the
@@ -495,10 +495,10 @@ term — a level pulled in by `d`, the band height `dUpper = d + dDelta`, a mite
 the cap's `ds` and `dsDelta`. A loop chamfered on both caps takes one pair on both, so a per-loop count or
 gap serves either cap.
 
-Faces the body holds (`evalCapBlendContext`, `capblend_moments.go`): per loop, trimmed side walls over
+Faces the body holds (`capblend.Build`, `internal/capblend/build.go`): per loop, trimmed side walls over
 `[zLo, zHi]` where a chamfered end pulls its level in by `d` (`prismrecord.BuildLoopSidesAs` over `prismLike`); per
 chamfered `(loop, cap)`, one band of patches; two cap faces whose boundary is the offset contour for a
-chamfered loop and the original loop otherwise (the `mixed` profile of `mixedOffsetProfile`).
+chamfered loop and the original loop otherwise (the `mixed` profile of `capblend.MixedOffsetProfile`).
 
 ### Chording — one count per wall walk, shared three ways
 
@@ -523,7 +523,7 @@ azimuths.
 
 Rings: side ring per loop per level (shared with the trimmed side wall exactly as the cup shares its rings);
 cap contour ring per chamfered `(loop, cap)` at `capZ`, built from the cap arcs' samples joined at the miter
-feet (`capWallFoot`) and apex arcs. The cap face at `capZ` triangulates through `triangulate2DContext` over
+feet (`capblend.WallFoot`) and apex arcs. The cap face at `capZ` triangulates through `triangulate2DContext` over
 the contour rings of chamfered loops and the original rings of unchamfered ones, after `requireLoopClearance`
 over all of them.
 
@@ -547,11 +547,11 @@ publishes in another dimension):
   chord point is within its own uniform-angle sagitta of the arc point (loft §5.2's matched paragraph: "a
   circular arc's uniform-angle matched departure equals its sagitta"), and a convex combination of two
   displacements is bounded by their max.
-- `skewGap = productUpper(capRadius, capPatchWindowSkew(g))` — ruled-between-arcs to the denoted cone: the
+- `skewGap = productUpper(capRadius, capblend.PatchWindowSkew(g))` — ruled-between-arcs to the denoted cone: the
   ruling from side point at azimuth `θ` to cap point at `θ + σ` differs from the cone's generator through
   the side point (which reaches the cap circle at `θ`) by `s·|P_cap(θ+σ) − P_cap(θ)| <= capRadius·σ`, and
   the generator point lies on the cone. `σ` is linear between the two corners, so the larger corner skew
-  bounds it everywhere. `capPatchWindowSkew` is the larger of the patch's two PROVEN corner skews
+  bounds it everywhere. `capblend.PatchWindowSkew` is the larger of the patch's two PROVEN corner skews
   (modify-reach §8.4's `CornerSkewUpper`), never a difference of its held float windows, which can fall
   below the exact corner angle. The same number gates `twist`: a patch whose proven skew is positive
   charges it, even where the skew is rounding-level. Zero where both held ends of each corner lie on one
@@ -568,7 +568,7 @@ publishes in another dimension):
   neighbouring walks' records denote there (`boundarywalk.JunctionStartBound`), which adds an arc's radial
   residual at its natural `t = 1` end, where the record holds `End` off Start's radius. The held chord alone is not one,
   since the held foot and `ds` can sit farther apart than the denoted ones. A millimetre setback on a
-  recorded section with exact feet subtracts nothing. `speedUpper` is `miterLocusSpeedUpper` (`capblend_contour.go`), the same input
+  recorded section with exact feet subtracts nothing. `speedUpper` is `miterLocusSpeedUpper` (`internal/capcontour`), the same input
   `chordLocusLengthAllow` reads. Zero at a line-line miter, every reflex foot and every G1 join (modify §7's
   dead-zone rule; all three loci affine). Charged on BOTH patches sharing the ruling.
 - `capRadiusRound = addRoundError(r, ∓d, capRadius)` — the held cap directrix radius against `r ∓ d`
@@ -679,7 +679,7 @@ refuses reflex corners in other receivers.
 
 | Condition | Result |
 |---|---|
-| any term above non-finite (`miterLocusSpeedUpper` answering `false`, `capPatchWindowSkew` non-finite) | `ErrUnsupported` |
+| any term above non-finite (`miterLocusSpeedUpper` answering `false`, `capblend.PatchWindowSkew` non-finite) | `ErrUnsupported` |
 | a chamfered loop's contour ring and its original ring at the other cap cannot clear each other's sagitta tubes | `ErrDegenerate` via `tessellation.ExpectedError` (`requireLoopClearance`) |
 | `n(w)` exceeds `maxChordsPerWalk` | `ErrUnsupported` (`errTooManyChords`) |
 | directed-edge, link, or zero-area audit fails | `ErrUnsupported` |
@@ -815,7 +815,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
     `deltaC` (`revolvemesh.IdealBasis`/`revolveMeridianEnclosure`/`revolveIdealPoint`), `deltaR`
     (`exactRigidPointRound`), `revolveBudget`, `revolveContactAudit`, `tessellation.RequireVertexLinks`, `Ecell` by sign
     decomposition, coordinate-stage area terms. **Pattern:** `internal/loftmesh/loft_audit.go` for the pair audit;
-    `capblend_contour.go` for `ratInterval`. **Depends on:** 15. **Tests:** internal: `absLinearIntegral`
+    `internal/capblend` for `ratInterval`. **Depends on:** 15. **Tests:** internal: `absLinearIntegral`
     against a dense reference; `Ecell` against the closed form on a cylinder cell and a pole fan; `deltaR`
     zero under identity and positive under a rotation; a pinched link and a crossing pair both refuse.
 17. **Files:** `export.go` doc comments, `tessellate.go`'s `Body.Tessellate` doc, `doc.go`, `boolean.go` and
@@ -846,7 +846,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 
 ### R6 — cap-loop chamfer
 
-23. **Files:** `capblend.go`, `capblend_geom.go`. **What:** store each band's `delta` on the payload
+23. **Files:** `capblend.go`, `internal/capblend/band.go`. **What:** store each band's `delta` on the payload
     (`bandDelta`), keyed by `(loop, cap)`. **Tests:** internal: the stored value equals `capBandResult.delta`.
 24. **Files:** new `tessellate_capblend.go`. **What:** shared count `n(w)`, rings, cap contour rings, patch
     cells, apex fans, cap faces, the §7 term table, refusals; dispatch. **Pattern:** `tessellateCup` for

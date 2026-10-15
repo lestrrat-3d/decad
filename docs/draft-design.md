@@ -184,7 +184,7 @@ any evaluator?) and the sentinel that follows from it.
 | **SD13** | a `d` that rounds to zero, a far vertex bit-identical to its near vertex, or a far radius bit-identical to its near radius (`capband.BandRadius`) | yes — float64 cannot name the far section at this scale | `ErrUnsupported` (modify-reach SX13) |
 | **SD14** | a far corner whose displacement enclosure cannot be built (`offset2d.ErrUnbounded`) | yes | `ErrUnsupported` (SX14) |
 | **SD15** | a corner whose two moved carriers have no intersection — a cusp (`|cross| ≤ tol`, `dot ≤ 0`) between two lines | yes | `ErrUnsupported` (`offset2d.ErrTopology`, modify S11's row) |
-| **SD16** | a wall patch whose outward orientation `fixPatchOrientation` cannot certify | yes | `ErrUnsupported` (SX15) |
+| **SD16** | a wall patch whose outward orientation `capblend.FixPatchOrientation` cannot certify | yes | `ErrUnsupported` (SX15) |
 | **SD17** | `Draft` of a retired operand, or of a sheet | — | `ErrRetiredBody`; a sheet as `Fillet`'s `refuseSheetOperand` refuses it |
 | **SD18** | `Draft` with a zero angle | it exists and is the operand (modify S13) | `ErrDegenerate` |
 | **SD19** | a neutral selector resolving to zero or several faces; a curved neutral face; a `Faceted` neutral face | — | `ErrCardinality` (Expected "exactly 1"); `ErrDegenerate`; `ErrUnsupported` — `MirrorFace`'s own three rules |
@@ -245,8 +245,8 @@ reads the record and not the surface.
 `draft_build.go` builds the body from the payload. The steps, in order:
 
 1. **Resolve the walks.** `boundarywalk.WalkOf`, `RequireAnalyticWalk` (SD3)
-   and `CoalesceWalksBudget` over every loop of `P`, as `capblend_geom.go`'s
-   `oneLoopCornerLoop` does.
+   and `CoalesceWalksBudget` over every loop of `P`, as
+   `capblend.OneLoopCornerLoop` does.
 2. **Compute `d` and its span** (§8.1).
 3. **Classify every corner** with `offset2d.CornerJoin`'s held-tangent rule.
    A corner at a circular walk that is not G1 is SD4.
@@ -260,7 +260,7 @@ reads the record and not the surface.
    `[]CurveSegment` per loop, assembled into a `ProfileRecord` with the same
    loop order as `P`.
 5. **Audit `Q`** with `offset2d.AuditOffsetSectionBudget` (modify §5): SD6, SD8, SD9.
-   Re-run steps 4–5 at the top of `d`'s span (`auditCapBlendSetbackSpan`'s
+   Re-run steps 4–5 at the top of `d`'s span (`capblend.AuditSetbackSpan`'s
    rule): SD10.
 6. **Enclose the far corners.** `capband.ContourDisplacement`
    (`capcontour.Displacement` over the sharp joins, across the span of `d`)
@@ -277,10 +277,10 @@ reads the record and not the surface.
    patch with `SideA/B` the near segment and `CapA/B` the far one; a circular
    walk gives a Cone patch with `SideRadius = R`, `CapRadius = R ∓ d` and
    `CapTh0/CapTh1 = Th0/Th1` (one window). The surface is
-   `capblend_geom.go`'s `planeFromThree` or `coneSurface(pl, cu, cv, R,
+   `capblend.PlaneFromThree` or `coneSurface(pl, cu, cv, R,
    R ∓ d, zNear, zFar)`; the rims are `arcEdge` / `wholeCircleEdge` / line
    edges; the rulings are `Line3` between corresponding corners; the
-   orientation is certified by `fixPatchOrientation` (SD16). Each patch
+   orientation is certified by `capblend.FixPatchOrientation` (SD16). Each patch
    carries `ContourAllow = farDelta`, `LevelDelta` = the far end's axial
    displacement, and its `HeldAllow` as modify-reach §8.4's table states.
 9. **Stamp roles and convexity**: `side(i, j)` per walk, `capStart`/`capEnd`,
@@ -291,7 +291,7 @@ Steps 7–9 run through the cap-loop band itself. `draftPayload.band()` is a
 `capBlendPayload` view with every loop chamfered on the far cap, `dc = d`
 across the cap and `ds = h` down the sweep, so the band's side level is the
 sketch plane and no straight slab remains. Its `draft` flag makes
-`buildCapBand` (`capblend_geom.go`) take the sharp joins
+`capblend.BuildBand` (`internal/capblend/band.go`) take the sharp joins
 (`offset2d.SharpJoinsBudget`), stamp `side(i, j)` roles, give rulings and far
 rims the prism's convexity, and flip the axial half of the orientation
 reference for a negative taper. The near rim is `draftNearRim`'s: the bottom
@@ -351,7 +351,7 @@ through its exact near edge and one far corner, and moving that corner by `e`
 turns the normal by at most `2|e|/h`; a Cone wall's half angle moves by at most
 `(e_r + |Δr|·e_z/h)/h`. `capband.DenotedNormalAllow` charges
 `2·(δ + δ_z·max(1, |Δr|/h))/h` with `h` at the bottom of its span, and
-`setPatchReadings` (`capblend_geom.go`) adds it to every draft wall and chamfer
+`setPatchReadings` (`internal/capblend/band.go`) adds it to every draft wall and chamfer
 patch alike. `δ_z` is the far level's displacement beside the near level's
 rounding, and no near-level displacement enters. Every admitted one-sided
 extent puts its near end on the sketch plane at exactly zero with a zero
