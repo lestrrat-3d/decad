@@ -210,7 +210,7 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 	trim *loftFacesTrimRecord, section revolveSectionCertificate) (
 	*revolveLoftFacesSourceCertificate, bool, error,
 ) {
-	m, b := section.meridianEquation()
+	m, b := section.MeridianEquation()
 	if !spiralSourcePhysicalSector(trim, m, b) {
 		return nil, false, nil
 	}
@@ -220,10 +220,10 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 	}
 	heelX, ok := spiralRootToolX(m, b, trim.Heel)
 	if !ok || toeX.Cmp(heelX) >= 0 ||
-		lfF(section.rootStart.U).Cmp(toeX) <= 0 ||
-		lfF(section.rootEnd.U).Cmp(heelX) >= 0 ||
-		!spiralFiniteConeSide(trim.Toe, section.rootStart, section.rootEnd, 1) ||
-		!spiralFiniteConeSide(trim.Heel, section.rootStart, section.rootEnd, -1) ||
+		lfF(section.RootStart.U).Cmp(toeX) <= 0 ||
+		lfF(section.RootEnd.U).Cmp(heelX) >= 0 ||
+		!spiralFiniteConeSide(trim.Toe, section.RootStart, section.RootEnd, 1) ||
+		!spiralFiniteConeSide(trim.Heel, section.RootStart, section.RootEnd, -1) ||
 		!revolveLoftFacesCapsAvoidToolRootCircles(trim, m, b, toeX, heelX) {
 		return nil, false, nil
 	}
@@ -265,7 +265,7 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		}
 		if _, arc := segment.(arcSeg); arc {
 			finiteSide, certified := mappedArcFiniteSide(ctx, trim, i,
-				section.spans[section.rootSpan])
+				section.Spans[section.RootSpan])
 			if !certified || finiteSide != loftface.ArcMiss && finiteSide != side {
 				return nil, false, nil
 			}

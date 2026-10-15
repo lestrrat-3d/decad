@@ -67,9 +67,9 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 		event = candidate
 	}
 	if event == nil || event.sectionIndex < 0 ||
-		event.sectionIndex >= len(proof.section.spans) ||
-		proof.section.spans[event.sectionIndex].start.U !=
-			proof.section.spans[event.sectionIndex].end.U {
+		event.sectionIndex >= len(proof.section.Spans) ||
+		proof.section.Spans[event.sectionIndex].Start.U !=
+			proof.section.Spans[event.sectionIndex].End.U {
 		return nil, false, nil
 	}
 	for i := range shell.capRings {

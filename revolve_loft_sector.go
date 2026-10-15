@@ -11,40 +11,40 @@ import (
 )
 
 type revolveSectorContact struct {
-	segment int
-	line    sketch.ConeLineCrossing
-	fit     sketch.ConeFitCrossing
+	Segment int
+	Line    sketch.ConeLineCrossing
+	Fit     sketch.ConeFitCrossing
 }
 
 type revolveSectorBoundary struct {
-	insideSegment, outsideWitness int
-	contacts                      [2]revolveSectorContact
-	fitRoute                      bool
-	sides                         []sketch.ConeCurveSide
-	sourceRevision                uint64
+	InsideSegment, OutsideWitness int
+	Contacts                      [2]revolveSectorContact
+	FitRoute                      bool
+	Sides                         []sketch.ConeCurveSide
+	SourceRevision                uint64
 }
 
 // revolveLoftSectorCertificate keeps the immutable source records and the
 // Sketch answers that identify one connected exposed sector of a point loft.
 // Mesh stations and their displacement remain a separate construction proof.
 type revolveLoftSectorCertificate struct {
-	blank         *Body
-	section       revolveSectionCertificate
-	trimmed       facetedPayload
-	trim          *pointConeTrimRecord
-	base          facetedPayload
-	boundary      revolveSectorBoundary
-	sector        [2]float64
-	loop          []revolveSectorNode
-	crossingBound float64
+	Blank         *Body
+	Section       revolveSectionCertificate
+	Trimmed       facetedPayload
+	Trim          *pointConeTrimRecord
+	Base          facetedPayload
+	Boundary      revolveSectorBoundary
+	Sector        [2]float64
+	Loop          []revolveSectorNode
+	CrossingBound float64
 }
 
 type revolveSectorNode struct {
-	point        r3.Vec
-	groupToNext  int
-	crossing     int
-	rootBoundary bool
-	angle        float64
+	Point        r3.Vec
+	GroupToNext  int
+	Crossing     int
+	RootBoundary bool
+	Angle        float64
 }
 
 // certifyRevolveLoftSector tries each authenticated finite conical face of
@@ -80,8 +80,8 @@ func certifyRevolveLoftSector(blank, sector *Body) (*revolveLoftSectorCertificat
 		if selected != nil {
 			return nil, false
 		}
-		selected = &revolveLoftSectorCertificate{blank: blank, section: section,
-			trimmed: fp, trim: trim, base: trim.base, boundary: boundary}
+		selected = &revolveLoftSectorCertificate{Blank: blank, Section: section,
+			Trimmed: fp, Trim: trim, Base: trim.base, Boundary: boundary}
 	}
 	return selected, selected != nil
 }
@@ -97,10 +97,10 @@ func certifyRevolveConnectorBoundary(record *pointSectionRecord,
 	if !ok {
 		return empty, false
 	}
-	cone := section.coneSection()
+	cone := section.ConeSection()
 	src := record.source
-	result := revolveSectorBoundary{insideSegment: -1, outsideWitness: -1,
-		sides: make([]sketch.ConeCurveSide, len(src.entities)), sourceRevision: src.revision}
+	result := revolveSectorBoundary{InsideSegment: -1, OutsideWitness: -1,
+		Sides: make([]sketch.ConeCurveSide, len(src.entities)), SourceRevision: src.revision}
 	count := 0
 	for i, entity := range src.entities {
 		// Sketch's approximate Partial has no admissible exact endpoint. A
@@ -115,7 +115,7 @@ func certifyRevolveConnectorBoundary(record *pointSectionRecord,
 			}
 			cert, err := src.sketch.CertifyConeLineCrossing(typed, cone)
 			if err == nil {
-				if count >= len(result.contacts) || cert.Line() != typed ||
+				if count >= len(result.Contacts) || cert.Line() != typed ||
 					cert.Cone() != cone || cert.SketchRevision() != src.revision ||
 					cert.IsStale() || !cert.TExact() {
 					return empty, false
@@ -126,7 +126,7 @@ func certifyRevolveConnectorBoundary(record *pointSectionRecord,
 					!proofbound.FiniteVec(r3.Vec{X: cert.T(), Y: point[0], Z: point[1]}) {
 					return empty, false
 				}
-				result.contacts[count] = revolveSectorContact{segment: i, line: cert}
+				result.Contacts[count] = revolveSectorContact{Segment: i, Line: cert}
 				count++
 				continue
 			}
@@ -149,24 +149,24 @@ func certifyRevolveConnectorBoundary(record *pointSectionRecord,
 		}
 		switch cert.Side() {
 		case sketch.ConeInside:
-			if _, isArc := entity.(*sketch.Arc); !isArc || result.insideSegment >= 0 {
+			if _, isArc := entity.(*sketch.Arc); !isArc || result.InsideSegment >= 0 {
 				return empty, false
 			}
-			result.insideSegment = i
+			result.InsideSegment = i
 		case sketch.ConeOutside:
-			result.outsideWitness = i
+			result.OutsideWitness = i
 		default:
 			return empty, false
 		}
-		result.sides[i] = cert
+		result.Sides[i] = cert
 	}
-	if count != 2 || result.insideSegment < 0 || result.outsideWitness < 0 {
+	if count != 2 || result.InsideSegment < 0 || result.OutsideWitness < 0 {
 		return empty, false
 	}
-	left := (result.insideSegment + len(src.entities) - 1) % len(src.entities)
-	right := (result.insideSegment + 1) % len(src.entities)
-	if (result.contacts[0].segment != left || result.contacts[1].segment != right) &&
-		(result.contacts[0].segment != right || result.contacts[1].segment != left) {
+	left := (result.InsideSegment + len(src.entities) - 1) % len(src.entities)
+	right := (result.InsideSegment + 1) % len(src.entities)
+	if (result.Contacts[0].Segment != left || result.Contacts[1].Segment != right) &&
+		(result.Contacts[0].Segment != right || result.Contacts[1].Segment != left) {
 		return empty, false
 	}
 	return result, true
@@ -177,7 +177,7 @@ func certifyRevolveConnectorBoundary(record *pointSectionRecord,
 func revolveImplicitDisplacement(section revolveSectionCertificate,
 	base facetedPayload) (float64, bool) {
 	if !proofbound.FiniteVec(r3.Vec{X: base.MeshBound}) || base.MeshBound < 0 ||
-		section.rootStart.U <= 0 || len(base.Verts) < 4 {
+		section.RootStart.U <= 0 || len(base.Verts) < 4 {
 		return 0, false
 	}
 	minX, maxX, reach := math.Inf(1), math.Inf(-1), 0.0
@@ -190,10 +190,10 @@ func revolveImplicitDisplacement(section revolveSectionCertificate,
 	}
 	minX = math.Nextafter(minX-base.MeshBound, math.Inf(-1))
 	maxX = proofbound.AbsSumUpper(maxX, base.MeshBound)
-	if !(minX > section.rootCone.Origin.X) {
+	if !(minX > section.RootCone.Origin.X) {
 		return 0, false
 	}
-	slope := section.coneSection().Slope
+	slope := section.ConeSection().Slope
 	d := proofbound.AbsSumUpper(base.MeshBound,
 		revolveMeridianExtensionGap(section, minX, maxX))
 	r := proofbound.AbsSumUpper(reach, d)
@@ -204,12 +204,12 @@ func revolveImplicitDisplacement(section revolveSectionCertificate,
 }
 
 func revolveMeridianExtensionGap(section revolveSectionCertificate, xLo, xHi float64) float64 {
-	x0, x1 := proofarith.FloatRat(section.rootStart.U), proofarith.FloatRat(section.rootEnd.U)
-	r0, r1 := proofarith.FloatRat(section.rootStart.V), proofarith.FloatRat(section.rootEnd.V)
+	x0, x1 := proofarith.FloatRat(section.RootStart.U), proofarith.FloatRat(section.RootEnd.U)
+	r0, r1 := proofarith.FloatRat(section.RootStart.V), proofarith.FloatRat(section.RootEnd.V)
 	m := new(big.Rat).Quo(new(big.Rat).Sub(r1, r0), new(big.Rat).Sub(x1, x0))
 	b := new(big.Rat).Sub(r0, new(big.Rat).Mul(m, x0))
-	slope := proofarith.FloatRat(section.coneSection().Slope)
-	originX := proofarith.FloatRat(section.rootCone.Origin.X)
+	slope := proofarith.FloatRat(section.ConeSection().Slope)
+	originX := proofarith.FloatRat(section.RootCone.Origin.X)
 	gap := func(x float64) *big.Rat {
 		value := new(big.Rat).Add(new(big.Rat).Mul(new(big.Rat).Sub(m, slope), proofarith.FloatRat(x)),
 			new(big.Rat).Add(b, new(big.Rat).Mul(slope, originX)))

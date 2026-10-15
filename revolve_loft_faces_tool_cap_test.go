@@ -32,18 +32,18 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 			lfMul(tool.slope, circle.radius)), tool.apex).Sign())
 	}
 	t.Run("changed non-root Revolve surface", func(t *testing.T) {
-		for index, span := range proof.section.spans {
-			if index == proof.section.rootSpan || span.face == nil {
+		for index, span := range proof.section.Spans {
+			if index == proof.section.RootSpan || span.Face == nil {
 				continue
 			}
-			cone, ok := span.face.n.Surface.(surfacegeom.Cone)
+			cone, ok := span.Face.n.Surface.(surfacegeom.Cone)
 			if !ok {
 				continue
 			}
-			original := span.face.n.Surface
-			defer func() { span.face.n.Surface = original }()
+			original := span.Face.n.Surface
+			defer func() { span.Face.n.Surface = original }()
 			cone.Origin.X += 0.125
-			span.face.n.Surface = cone
+			span.Face.n.Surface = cone
 			_, accepted := revolveLoftFacesToolCapSidesOf(proof)
 			require.False(t, accepted)
 			return
@@ -52,8 +52,8 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	})
 	changed := *proof
 	changed.section = proof.section
-	changed.section.spans = append([]revolveSectionSpan(nil), proof.section.spans...)
-	changed.section.spans[proof.section.rootSpan].end.V += 0.125
+	changed.section.Spans = append([]revolveSectionSpan(nil), proof.section.Spans...)
+	changed.section.Spans[proof.section.RootSpan].End.V += 0.125
 	_, accepted := revolveLoftFacesToolCapSidesOf(&changed)
 	require.False(t, accepted)
 	changed = *proof
@@ -114,7 +114,7 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
 	tool := &pointConeLimit{apex: big.NewRat(8, 1), far: big.NewRat(-2, 1),
 		slope: big.NewRat(1, 1)}
-	section := revolveSectionSpan{start: planePoint{U: 5, V: 2}, end: planePoint{U: 6, V: 4}}
+	section := revolveSectionSpan{Start: planePoint{U: 5, V: 2}, End: planePoint{U: 6, V: 4}}
 	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(tool, section)
 	require.True(t, decided)
 	require.True(t, crosses)
@@ -130,7 +130,7 @@ func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
 	require.Zero(t, lfSub(lfAdd(x, radius), tool.apex).Sign())
 
 	// A vertical Revolve side can also meet the cone at an interior circle.
-	section = revolveSectionSpan{start: planePoint{U: 6, V: 1}, end: planePoint{U: 6, V: 3}}
+	section = revolveSectionSpan{Start: planePoint{U: 6, V: 1}, End: planePoint{U: 6, V: 3}}
 	x, radius, crosses, decided = revolveLoftFacesToolCircleOnSpan(tool, section)
 	require.True(t, decided)
 	require.True(t, crosses)
@@ -140,13 +140,13 @@ func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
 	requireReducedRat(radius)
 
 	// A complete generator on one strict side has no contact circle.
-	section = revolveSectionSpan{start: planePoint{U: 5, V: 1}, end: planePoint{U: 6, V: 1}}
+	section = revolveSectionSpan{Start: planePoint{U: 5, V: 1}, End: planePoint{U: 6, V: 1}}
 	_, _, crosses, decided = revolveLoftFacesToolCircleOnSpan(tool, section)
 	require.True(t, decided)
 	require.False(t, crosses)
 
 	// A shared endpoint needs a separate topology proof.
-	section.end = planePoint{U: 7, V: 1}
+	section.End = planePoint{U: 7, V: 1}
 	_, _, crosses, decided = revolveLoftFacesToolCircleOnSpan(tool, section)
 	require.False(t, decided)
 	require.False(t, crosses)

@@ -49,8 +49,8 @@ func revolveSectorCapBoundary(path []pointcone.SectorNode, section revolveSectio
 		}
 	}
 	appendRoot := func(angle float64) error {
-		point, ok := revolveFarRootPoint(frame, section.rootCone,
-			section.coneSection().Slope, angle)
+		point, ok := revolveFarRootPoint(frame, section.RootCone,
+			section.ConeSection().Slope, angle)
 		if !ok {
 			return fmt.Errorf("%w: root generator misses the source plane", ErrUnsupported)
 		}

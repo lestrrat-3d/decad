@@ -100,9 +100,9 @@ func revolveSeatPoint(src *pointSectionSource, cert sketch.ConeLineCrossing,
 		d[i] = new(big.Rat).Add(new(big.Rat).Mul(fr[i][1], du),
 			new(big.Rat).Mul(fr[i][2], dv))
 	}
-	slope := proofarith.FloatRat(section.coneSection().Slope)
+	slope := proofarith.FloatRat(section.ConeSection().Slope)
 	slope2 := new(big.Rat).Mul(slope, slope)
-	originX := proofarith.FloatRat(section.rootCone.Origin.X)
+	originX := proofarith.FloatRat(section.RootCone.Origin.X)
 	form := func(p [3]*big.Rat) *big.Rat {
 		x := new(big.Rat).Sub(p[0], originX)
 		return new(big.Rat).Sub(new(big.Rat).Add(
@@ -125,7 +125,7 @@ func revolveSeatPoint(src *pointSectionSource, cert sketch.ConeLineCrossing,
 	if d0.Sign() == 0 || d0.Sign() != d1.Sign() || f0.Sign() == f1.Sign() {
 		return r3.Vec{}, 0, false
 	}
-	m, intercept := section.meridianEquation()
+	m, intercept := section.MeridianEquation()
 	sourceRadius := func(p [3]*big.Rat) *big.Rat {
 		return new(big.Rat).Add(new(big.Rat).Mul(m, p[0]), intercept)
 	}

@@ -15,14 +15,14 @@ import (
 func revolveSectionAngles(section revolveSectionCertificate, sector [2]float64,
 	maxSag float64) ([]float64, [2]float64, error) {
 	var empty [2]float64
-	if len(section.spans) < 4 || maxSag <= 0 || proofbound.IsNonFinite(maxSag) ||
+	if len(section.Spans) < 4 || maxSag <= 0 || proofbound.IsNonFinite(maxSag) ||
 		!proofbound.FiniteVec(r3.Vec{X: sector[0], Y: sector[1]}) ||
 		sector[0] >= sector[1] || sector[1]-sector[0] >= math.Pi {
 		return nil, empty, fmt.Errorf("%w: section has no bounded angular plan", ErrUnsupported)
 	}
 	radius := 0.0
-	for _, span := range section.spans {
-		radius = max(radius, span.start.V, span.end.V)
+	for _, span := range section.Spans {
+		radius = max(radius, span.Start.V, span.End.V)
 	}
 	if radius <= 0 || proofbound.IsNonFinite(radius) {
 		return nil, empty, fmt.Errorf("%w: section has no finite radius", ErrUnsupported)

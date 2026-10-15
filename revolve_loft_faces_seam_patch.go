@@ -34,9 +34,9 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 	if ctx == nil || trim == nil || trim.Source == nil ||
 		band < 0 || band+1 >= len(trim.Maps) || segment < 0 ||
 		len(seam) < 2 || len(trim.StationGroup) != len(trim.Source.sourceStation) ||
-		section.face == nil || len(section.origins) == 0 ||
-		section.start.U == section.end.U ||
-		section.start.V <= 0 || section.end.V <= 0 ||
+		section.Face == nil || len(section.Origins) == 0 ||
+		section.Start.U == section.End.U ||
+		section.Start.V <= 0 || section.End.V <= 0 ||
 		len(trim.Source.profile.Outer.Segments) == 0 {
 		return blank, loft, false, nil
 	}
@@ -59,7 +59,7 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 		len(trim.Base.Groups[group].Origins) == 0 {
 		return blank, loft, false, nil
 	}
-	blank.origins = append([]provenance.Ref(nil), section.origins...)
+	blank.origins = append([]provenance.Ref(nil), section.Origins...)
 	loft.origins = append([]provenance.Ref(nil), trim.Base.Groups[group].Origins...)
 	blank.vertices, loft.vertices = make([]r3.Vec, 3*len(seam)), make([]r3.Vec, 3*len(seam))
 	blank.vertexBounds = make([]float64, 3*len(seam))
@@ -84,7 +84,7 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 			loft.vertexBounds[position+j] = proofbound.AbsSumUpper(round,
 				proofbound.ProductUpper(trim.Source.sourceStationRound, mapped.Stretch))
 		}
-		for row, end := range [...]planePoint{section.start, section.end} {
+		for row, end := range [...]planePoint{section.Start, section.End} {
 			position := row * 2 * len(seam)
 			if row == 1 {
 				position = 2 * len(seam)

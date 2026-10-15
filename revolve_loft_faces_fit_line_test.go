@@ -28,8 +28,8 @@ func TestFiniteRevolveFitLineJointKeepsBothLiveSourceSides(t *testing.T) {
 	z1, _ := last[2].Float64()
 	r0, r1 := math.Hypot(y0, z0), math.Hypot(y1, z1)
 	require.NotEqual(t, r0, r1)
-	section := revolveSectionSpan{start: planePoint{U: math.Min(x0, x1) - 0.05, V: (r0 + r1) / 2},
-		end: planePoint{U: math.Max(x0, x1) + 0.05, V: (r0 + r1) / 2}}
+	section := revolveSectionSpan{Start: planePoint{U: math.Min(x0, x1) - 0.05, V: (r0 + r1) / 2},
+		End: planePoint{U: math.Max(x0, x1) + 0.05, V: (r0 + r1) / 2}}
 	joint, ok := certifyRevolveLoftFacesFitLineJoint(t.Context(), trim, section, 0, 5, band, false)
 	require.True(t, ok)
 	require.Len(t, joint.roots, 1)

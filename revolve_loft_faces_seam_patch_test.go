@@ -60,14 +60,14 @@ func neutralArcSeamContact(t *testing.T, blank, trimmed *Body, trim *loftFacesTr
 				mapped.jointKind != revolveLoftFacesWholeArcContact || found {
 				continue
 			}
-			section = proof.section.spans[pair.sectionIndex]
+			section = proof.section.Spans[pair.sectionIndex]
 			sectionIndex = pair.sectionIndex
 			contact = mapped
 			found = true
 		}
 	}
 	require.True(t, found)
-	require.NotNil(t, section.face)
+	require.NotNil(t, section.Face)
 	require.NotNil(t, contact.jointArc)
 	require.NotNil(t, contact.tLo)
 	require.NotNil(t, contact.tHi)

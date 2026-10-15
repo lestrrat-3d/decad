@@ -56,21 +56,21 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 	*revolveLoftFacesVerticalSide, revolveLoftFacesVerticalOutcome, error,
 ) {
 	if ctx == nil || proof == nil || proof.trim == nil || proof.blank == nil ||
-		proof.tooth == nil || sectionIndex < 0 || sectionIndex >= len(proof.section.spans) {
+		proof.tooth == nil || sectionIndex < 0 || sectionIndex >= len(proof.section.Spans) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, revolveLoftFacesVerticalRefusal, err
 	}
 	trim := proof.trim
-	section := proof.section.spans[sectionIndex]
-	if section.start.U != section.end.U || section.start.V == section.end.V ||
-		section.start.V < 0 || section.end.V < 0 || section.face == nil ||
-		len(section.origins) == 0 || !revolveLoftFacesSectionCurrent(proof) {
+	section := proof.section.Spans[sectionIndex]
+	if section.Start.U != section.End.U || section.Start.V == section.End.V ||
+		section.Start.V < 0 || section.End.V < 0 || section.Face == nil ||
+		len(section.Origins) == 0 || !revolveLoftFacesSectionCurrent(proof) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
 	face, ok := revolveSpanFace(proof.blank, section)
-	if !ok || face != section.face || !verticalOriginsMatch(face.originRefs(), section.origins) {
+	if !ok || face != section.Face || !verticalOriginsMatch(face.originRefs(), section.Origins) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
 	payload, ok := proof.tooth.n.Payload.(facetedPayload)
@@ -78,7 +78,7 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 		!revolveLoftFacesSourceRefsCurrent(trim, proof.tooth, proof.sourceRefs) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
-	x := lfF(section.start.U)
+	x := lfF(section.Start.U)
 	lower, upper, limitOutcome := revolveLoftFacesVerticalLimits(trim, section, x)
 	if limitOutcome != revolveLoftFacesVerticalContact {
 		return nil, limitOutcome, nil
@@ -89,7 +89,7 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 	}
 	return &revolveLoftFacesVerticalSide{
 		revolveLoftFacesConstantXSource: source, face: face,
-		origins: append([]provenance.Ref(nil), section.origins...),
+		origins: append([]provenance.Ref(nil), section.Origins...),
 	}, revolveLoftFacesVerticalContact, nil
 }
 
@@ -101,20 +101,20 @@ func revolveLoftFacesSectionCurrent(proof *revolveLoftFacesSourceCertificate) bo
 	}
 	want := proof.section
 	for _, live := range revolveRootCandidates(proof.blank) {
-		if live.blank != want.blank || live.rootSpan != want.rootSpan ||
-			live.axisSpan != want.axisSpan || live.frame != want.frame ||
-			live.rootStart != want.rootStart || live.rootEnd != want.rootEnd ||
-			live.rootCone != want.rootCone || live.coneGap != want.coneGap ||
-			len(live.spans) != len(want.spans) {
+		if live.Blank != want.Blank || live.RootSpan != want.RootSpan ||
+			live.AxisSpan != want.AxisSpan || live.Frame != want.Frame ||
+			live.RootStart != want.RootStart || live.RootEnd != want.RootEnd ||
+			live.RootCone != want.RootCone || live.ConeGap != want.ConeGap ||
+			len(live.Spans) != len(want.Spans) {
 			continue
 		}
 		current := true
-		for i, span := range live.spans {
-			recorded := want.spans[i]
-			if span.start != recorded.start || span.end != recorded.end ||
-				span.face != recorded.face ||
-				!slices.Equal(span.sourceEdges, recorded.sourceEdges) ||
-				!slices.Equal(span.origins, recorded.origins) {
+		for i, span := range live.Spans {
+			recorded := want.Spans[i]
+			if span.Start != recorded.Start || span.End != recorded.End ||
+				span.Face != recorded.Face ||
+				!slices.Equal(span.SourceEdges, recorded.SourceEdges) ||
+				!slices.Equal(span.Origins, recorded.Origins) {
 				current = false
 				break
 			}
@@ -271,7 +271,7 @@ func revolveLoftFacesVerticalLimits(trim *loftFacesTrimRecord,
 		x.Cmp(trim.Heel.apex) >= 0 {
 		return nil, nil, revolveLoftFacesVerticalRefusal
 	}
-	lower, upper := lfF(section.start.V), lfF(section.end.V)
+	lower, upper := lfF(section.Start.V), lfF(section.End.V)
 	if lower.Cmp(upper) > 0 {
 		lower, upper = upper, lower
 	}
@@ -339,7 +339,7 @@ func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 	x *big.Rat, segment, band int, time, lower, upper *big.Rat,
 	ref provenance.Ref) (revolveLoftFacesVerticalCell, bool) {
 	cell := revolveLoftFacesVerticalCell{segment: segment, band: band, ref: ref}
-	unit := revolveSectionSpan{start: planePoint{V: 1}, end: planePoint{U: 1, V: 1}}
+	unit := revolveSectionSpan{Start: planePoint{V: 1}, End: planePoint{U: 1, V: 1}}
 	radial, ok := mappedArcRadialTimeBand(ctx, trim, segment, band, unit)
 	if !ok || radial.arc == nil {
 		return cell, false

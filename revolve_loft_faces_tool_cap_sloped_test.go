@@ -14,10 +14,10 @@ func TestRevolveLoftFacesSlopedRadialInsideNeedsUniqueOuterCrossing(t *testing.T
 	points := []planePoint{{U: 3.2}, {U: 6}, {U: 6, V: 3.5},
 		{U: 5.8, V: 3.3}, {U: 5.7, V: 2.28},
 		{U: 4.7, V: 1.88}, {U: 3.2, V: 3.2}}
-	section := revolveSectionCertificate{axisSpan: 0}
+	section := revolveSectionCertificate{AxisSpan: 0}
 	for i, start := range points {
-		section.spans = append(section.spans, revolveSectionSpan{
-			start: start, end: points[(i+1)%len(points)]})
+		section.Spans = append(section.Spans, revolveSectionSpan{
+			Start: start, End: points[(i+1)%len(points)]})
 	}
 	x := lfF(5.75)
 	fraction := lfDiv(lfSub(x, lfF(5.8)), lfSub(lfF(5.7), lfF(5.8)))
@@ -27,19 +27,19 @@ func TestRevolveLoftFacesSlopedRadialInsideNeedsUniqueOuterCrossing(t *testing.T
 		"a section vertex at the circle X needs another proof")
 	require.False(t, revolveLoftFacesSlopedRadialInside(section, 2, x, radius),
 		"the selected face must be the sole positive-radius crossing")
-	section.spans[5].start.U = 5.9
+	section.Spans[5].Start.U = 5.9
 	require.False(t, revolveLoftFacesSlopedRadialInside(section, 3, x, radius),
 		"another side crossing leaves the radial fill undecided")
 }
 
 func TestRevolveLoftFacesSlopedRadialInsideRequiresAxisWalkDirection(t *testing.T) {
-	section := revolveSectionCertificate{axisSpan: 0,
-		spans: []revolveSectionSpan{
-			{start: planePoint{U: 3}, end: planePoint{U: 6}},
-			{start: planePoint{U: 6, V: 2}, end: planePoint{U: 3, V: 2}},
+	section := revolveSectionCertificate{AxisSpan: 0,
+		Spans: []revolveSectionSpan{
+			{Start: planePoint{U: 3}, End: planePoint{U: 6}},
+			{Start: planePoint{U: 6, V: 2}, End: planePoint{U: 3, V: 2}},
 		}}
 	require.True(t, revolveLoftFacesSlopedRadialInside(section, 1, lfF(4), lfF(2)))
-	section.spans[0].start.U, section.spans[0].end.U = 6, 3
+	section.Spans[0].Start.U, section.Spans[0].End.U = 6, 3
 	require.False(t, revolveLoftFacesSlopedRadialInside(section, 1, lfF(4), lfF(2)))
 }
 
@@ -56,8 +56,8 @@ func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
 	require.True(t, ok)
 	found := 0
 	for _, circle := range sides.circles {
-		span := proof.section.spans[circle.span]
-		if circle.tool != 1 || circle.sourceMiss || span.start.U == span.end.U {
+		span := proof.section.Spans[circle.span]
+		if circle.tool != 1 || circle.sourceMiss || span.Start.U == span.End.U {
 			continue
 		}
 		arc, certified, arcErr := revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, circle)

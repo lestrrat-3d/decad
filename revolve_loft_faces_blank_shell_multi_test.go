@@ -85,11 +85,11 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 			require.True(t, graph.endpointCellMatches(arc, &ring, endpoint, cellID))
 		}
 	}
-	sectionGroup := make([]int, len(proof.section.spans))
+	sectionGroup := make([]int, len(proof.section.Spans))
 	group := 0
-	for i, span := range proof.section.spans {
+	for i, span := range proof.section.Spans {
 		sectionGroup[i] = -1
-		if span.face != nil {
+		if span.Face != nil {
 			sectionGroup[i] = group
 			group++
 		}

@@ -27,12 +27,12 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 	motion r3.Transform, placedGroups []facetGroup, samples *revolveSectorSamples) (float64, float64, error) {
 	if mesh == nil || record == nil || record.base.pointSection == nil ||
 		len(nodes) != len(rootNode) || len(nodes) != len(original) || len(nodes) < 3 ||
-		section.rootSpan < 0 || section.rootSpan >= len(ring.rings) {
+		section.RootSpan < 0 || section.RootSpan >= len(ring.Rings) {
 		return 0, 0, fmt.Errorf("%w: sector cap has invalid source records", ErrUnsupported)
 	}
-	root := section.spans[section.rootSpan]
-	lowSpan, highSpan := section.rootSpan, (section.rootSpan+1)%len(section.spans)
-	if root.start.U > root.end.U {
+	root := section.Spans[section.RootSpan]
+	lowSpan, highSpan := section.RootSpan, (section.RootSpan+1)%len(section.Spans)
+	if root.Start.U > root.End.U {
 		lowSpan, highSpan = highSpan, lowSpan
 	}
 	baseGroup := len(mesh.Groups)
@@ -115,10 +115,10 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		}
 		if rootNode[i] >= 0 {
 			j := rootNode[i]
-			if j >= len(ring.angles) {
+			if j >= len(ring.Angles) {
 				return 0, 0, fmt.Errorf("%w: sector root station is missing", ErrUnsupported)
 			}
-			upper[i], lower[i] = ring.vertex(highSpan, j), ring.vertex(lowSpan, j)
+			upper[i], lower[i] = ring.Vertex(highSpan, j), ring.Vertex(lowSpan, j)
 			maxSnap = max(maxSnap,
 				proofbound.DvLenUpper(proofbound.HeldDelta(upperPoint, mesh.Verts[upper[i]])),
 				proofbound.DvLenUpper(proofbound.HeldDelta(lowerPoint, mesh.Verts[lower[i]])))

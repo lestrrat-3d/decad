@@ -13,12 +13,12 @@ import (
 // bounds published by its joined mesh. Later placed sectors and cap-ring
 // rewrites can authenticate against the same immutable source.
 type revolveLoftJoinRecord struct {
-	certificate                           *revolveLoftSectorCertificate
-	blank                                 *Body
-	first                                 facetedPayload
-	placed                                []facetedPayload
-	capRing                               *revolvedSectionRing
-	boundaryBound, volumeBound, areaBound float64
+	Certificate                           *revolveLoftSectorCertificate
+	Blank                                 *Body
+	First                                 facetedPayload
+	Placed                                []facetedPayload
+	CapRing                               *revolvedSectionRing
+	BoundaryBound, VolumeBound, AreaBound float64
 }
 
 // tryRevolveLoftSectorUnionMany admits one Revolve and one authentic point
@@ -35,8 +35,8 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 			if !ok {
 				continue
 			}
-			path, bound, err := revolveExteriorPath(cert.base, cert.boundary,
-				cert.trim.base.pointSection.source, cert.section)
+			path, bound, err := revolveExteriorPath(cert.Base, cert.Boundary,
+				cert.Trim.base.pointSection.source, cert.Section)
 			if err != nil {
 				return nil, true, err
 			}
@@ -44,18 +44,18 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 			if !ok {
 				return nil, true, ErrUnsupported
 			}
-			cert.sector, cert.crossingBound = [2]float64{lo, hi}, bound
-			cert.loop = path
+			cert.Sector, cert.CrossingBound = [2]float64{lo, hi}, bound
+			cert.Loop = path
 			sources := make([]facetedPayload, 0, len(operands)-1)
-			sources = append(sources, cert.trimmed)
+			sources = append(sources, cert.Trimmed)
 			for i, operand := range operands {
 				if i == blankIndex || i == firstIndex {
 					continue
 				}
 				placed, ok := operand.n.Payload.(facetedPayload)
-				if !ok || placed.revolveLoftSector == nil ||
-					placed.revolveLoftSector.source != cert.trim ||
-					placed.Xform != placed.revolveLoftSector.motion {
+				if !ok || placed.RevolveLoftSector == nil ||
+					placed.RevolveLoftSector.Source != cert.Trim ||
+					placed.Xform != placed.RevolveLoftSector.Motion {
 					return nil, true, fmt.Errorf("%w: placed sector lost its source", ErrUnsupported)
 				}
 				sources = append(sources, placed)
@@ -71,11 +71,11 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 			if !ok {
 				return nil, true, ErrUnsupported
 			}
-			payload.revolveLoftJoin = &revolveLoftJoinRecord{certificate: cert,
-				blank: blank, first: sources[0],
-				placed: append([]facetedPayload(nil), sources[1:]...), capRing: ring,
-				boundaryBound: payload.MeshBound, volumeBound: payload.VolSymDiff,
-				areaBound: payload.AreaSlack}
+			payload.RevolveLoftJoin = &revolveLoftJoinRecord{Certificate: cert,
+				Blank: blank, First: sources[0],
+				Placed: append([]facetedPayload(nil), sources[1:]...), CapRing: ring,
+				BoundaryBound: payload.MeshBound, VolumeBound: payload.VolSymDiff,
+				AreaBound: payload.AreaSlack}
 			body.n.Payload = payload
 			return body, true, nil
 		}
@@ -84,8 +84,8 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 }
 
 type revolveLoftSectorPlacement struct {
-	source *pointConeTrimRecord
-	motion r3.Transform
+	Source *pointConeTrimRecord
+	Motion r3.Transform
 }
 
 // tryRevolveLoftSectorUnion authenticates source geometry before construction.
@@ -103,8 +103,8 @@ func tryRevolveLoftSectorUnion(ctx context.Context, op meshbool.OperationKind,
 			return nil, false, nil
 		}
 	}
-	path, bound, err := revolveExteriorPath(cert.base, cert.boundary,
-		cert.trim.base.pointSection.source, cert.section)
+	path, bound, err := revolveExteriorPath(cert.Base, cert.Boundary,
+		cert.Trim.base.pointSection.source, cert.Section)
 	if err != nil {
 		return nil, true, err
 	}
@@ -112,10 +112,10 @@ func tryRevolveLoftSectorUnion(ctx context.Context, op meshbool.OperationKind,
 	if !ok {
 		return nil, true, ErrUnsupported
 	}
-	cert.sector, cert.crossingBound = [2]float64{lo, hi}, bound
-	cert.loop = path
+	cert.Sector, cert.CrossingBound = [2]float64{lo, hi}, bound
+	cert.Loop = path
 	body, ring, err := buildRevolveLoftSectorsJoin(ctx, d, ref, cert,
-		[]facetedPayload{cert.trimmed})
+		[]facetedPayload{cert.Trimmed})
 	if err != nil {
 		return nil, true, err
 	}
@@ -123,9 +123,9 @@ func tryRevolveLoftSectorUnion(ctx context.Context, op meshbool.OperationKind,
 	if !ok {
 		return nil, true, ErrUnsupported
 	}
-	payload.revolveLoftJoin = &revolveLoftJoinRecord{certificate: cert, blank: blank,
-		first: cert.trimmed, capRing: ring, boundaryBound: payload.MeshBound,
-		volumeBound: payload.VolSymDiff, areaBound: payload.AreaSlack}
+	payload.RevolveLoftJoin = &revolveLoftJoinRecord{Certificate: cert, Blank: blank,
+		First: cert.Trimmed, CapRing: ring, BoundaryBound: payload.MeshBound,
+		VolumeBound: payload.VolSymDiff, AreaBound: payload.AreaSlack}
 	body.n.Payload = payload
 	return body, true, nil
 }
@@ -140,29 +140,29 @@ func tryRevolveLoftNextSectorUnion(ctx context.Context, op meshbool.OperationKin
 	}
 	joined, placed := a, b
 	jp, ok := joined.n.Payload.(facetedPayload)
-	if !ok || jp.revolveLoftJoin == nil {
+	if !ok || jp.RevolveLoftJoin == nil {
 		joined, placed = b, a
 		jp, ok = joined.n.Payload.(facetedPayload)
 	}
 	p, placedOK := placed.n.Payload.(facetedPayload)
-	if !ok || !placedOK || jp.revolveLoftJoin == nil ||
-		jp.Xform != r3.Identity() || p.revolveLoftSector == nil ||
-		p.revolveLoftSector.source == nil ||
-		jp.revolveLoftJoin.certificate == nil ||
-		jp.revolveLoftJoin.certificate.trim != p.revolveLoftSector.source ||
-		p.Xform != p.revolveLoftSector.motion ||
-		!massmoment.XAxisRotation(p.revolveLoftSector.motion) {
+	if !ok || !placedOK || jp.RevolveLoftJoin == nil ||
+		jp.Xform != r3.Identity() || p.RevolveLoftSector == nil ||
+		p.RevolveLoftSector.Source == nil ||
+		jp.RevolveLoftJoin.Certificate == nil ||
+		jp.RevolveLoftJoin.Certificate.Trim != p.RevolveLoftSector.Source ||
+		p.Xform != p.RevolveLoftSector.Motion ||
+		!massmoment.XAxisRotation(p.RevolveLoftSector.Motion) {
 		return nil, false, nil
 	}
-	record := jp.revolveLoftJoin
-	sectors := make([]facetedPayload, 0, len(record.placed)+2)
-	sectors = append(sectors, record.first)
-	sectors = append(sectors, record.placed...)
+	record := jp.RevolveLoftJoin
+	sectors := make([]facetedPayload, 0, len(record.Placed)+2)
+	sectors = append(sectors, record.First)
+	sectors = append(sectors, record.Placed...)
 	sectors = append(sectors, p)
 	if !revolveSectorSourcesSeparate(sectors) {
 		return nil, false, nil
 	}
-	body, ring, err := buildRevolveLoftSectorsJoin(ctx, d, ref, record.certificate, sectors)
+	body, ring, err := buildRevolveLoftSectorsJoin(ctx, d, ref, record.Certificate, sectors)
 	if err != nil {
 		return nil, true, err
 	}
@@ -170,11 +170,11 @@ func tryRevolveLoftNextSectorUnion(ctx context.Context, op meshbool.OperationKin
 	if !ok {
 		return nil, true, ErrUnsupported
 	}
-	result.revolveLoftJoin = &revolveLoftJoinRecord{certificate: record.certificate,
-		blank: record.blank, first: record.first,
-		placed: append([]facetedPayload(nil), sectors[1:]...), capRing: ring,
-		boundaryBound: result.MeshBound, volumeBound: result.VolSymDiff,
-		areaBound: result.AreaSlack}
+	result.RevolveLoftJoin = &revolveLoftJoinRecord{Certificate: record.Certificate,
+		Blank: record.Blank, First: record.First,
+		Placed: append([]facetedPayload(nil), sectors[1:]...), CapRing: ring,
+		BoundaryBound: result.MeshBound, VolumeBound: result.VolSymDiff,
+		AreaBound: result.AreaSlack}
 	body.n.Payload = result
 	return body, true, nil
 }

@@ -27,11 +27,11 @@ func revolveLoftFacesToolCapOccupiedArcCurrent(ctx context.Context,
 		if !revolveLoftFacesToolCapCircleEqual(circle, recorded.circle) {
 			continue
 		}
-		span := proof.section.spans[circle.span]
+		span := proof.section.Spans[circle.span]
 		var fresh *revolveLoftFacesToolCapOccupiedArc
 		var proved bool
 		var err error
-		if span.start.U == span.end.U {
+		if span.Start.U == span.End.U {
 			fresh, proved, err = revolveLoftFacesHeelVerticalOccupiedArc(ctx, proof, circle)
 		} else {
 			fresh, proved, err = revolveLoftFacesHeelSlopedOccupiedArc(ctx, proof, circle)

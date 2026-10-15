@@ -249,7 +249,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	require.Nil(t, exact.pointPlane)
 	require.Nil(t, exact.pointSimilarity)
 	require.Nil(t, exact.pointCone)
-	require.Nil(t, exact.revolveLoftSector)
+	require.Nil(t, exact.RevolveLoftSector)
 	require.Nil(t, exact.LoftMirrorCopy)
 	require.Zero(t, exact.pointPlaneCapDisplacement)
 
@@ -260,7 +260,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	float := body.n.Payload.(facetedPayload)
 	require.Nil(t, float.pointSection)
 	require.NotNil(t, float.pointSimilarity)
-	require.NotNil(t, float.revolveLoftSector)
+	require.NotNil(t, float.RevolveLoftSector)
 	require.NotNil(t, float.LoftMirrorCopy)
 
 	t.Run("identity delta", func(t *testing.T) {

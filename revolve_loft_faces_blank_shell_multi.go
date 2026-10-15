@@ -16,14 +16,14 @@ func revolveLoftFacesShellSeamCutOf(ctx context.Context,
 ) (revolveLoftFacesShellCut, []revolveLoftFacesSeamVertex, bool, error) {
 	var empty revolveLoftFacesShellCut
 	sectionIndex, cellIndex := selector.sectionIndex, selector.cellIndex
-	if sectionIndex < 0 || sectionIndex >= len(proof.section.spans) ||
+	if sectionIndex < 0 || sectionIndex >= len(proof.section.Spans) ||
 		sectionIndex >= len(manifest.sideOutcome) ||
 		manifest.sideOutcome[sectionIndex] != revolveLoftFacesSideSourceCandidate {
 		return empty, nil, false, nil
 	}
-	section := proof.section.spans[sectionIndex]
-	if section.face == nil || section.start.U == section.end.U ||
-		section.start.V <= 0 || section.end.V <= 0 {
+	section := proof.section.Spans[sectionIndex]
+	if section.Face == nil || section.Start.U == section.End.U ||
+		section.Start.V <= 0 || section.End.V <= 0 {
 		return empty, nil, false, nil
 	}
 	var side *revolveLoftFacesNonverticalSide
@@ -35,8 +35,8 @@ func revolveLoftFacesShellSeamCutOf(ctx context.Context,
 			side = &manifest.nonvertical[i]
 		}
 	}
-	if side == nil || side.face != section.face ||
-		!slices.Equal(side.origins, section.origins) ||
+	if side == nil || side.face != section.Face ||
+		!slices.Equal(side.origins, section.Origins) ||
 		cellIndex < 0 || cellIndex >= len(side.cells) {
 		return empty, nil, false, nil
 	}

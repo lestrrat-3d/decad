@@ -375,9 +375,9 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 	if !ok {
 		return nil, false, nil
 	}
-	coneC := lfAdd(lfF(proof.Blank.ded.U), lfF(proof.Blank.ded.V))
-	if lfAdd(lfF(proof.Blank.heelOuter.U), lfF(proof.Blank.heelOuter.V)).Cmp(coneC) != 0 ||
-		coneC.Sign() <= 0 || lfF(proof.Blank.ded.U).Cmp(lfF(proof.Blank.heelOuter.U)) >= 0 {
+	coneC := lfAdd(lfF(proof.Blank.Ded.U), lfF(proof.Blank.Ded.V))
+	if lfAdd(lfF(proof.Blank.HeelOuter.U), lfF(proof.Blank.HeelOuter.V)).Cmp(coneC) != 0 ||
+		coneC.Sign() <= 0 || lfF(proof.Blank.Ded.U).Cmp(lfF(proof.Blank.HeelOuter.U)) >= 0 {
 		return nil, false, nil
 	}
 	mapOK, negative := spiralHeelMapCharge(trim.Maps[7], trim.Maps[8], box, radiusBound, coneC)
@@ -443,8 +443,8 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 		ConeC:    coneC,
 		Negative: negative,
 	}
-	if seam.X.Lo.Cmp(lfF(proof.Blank.ded.U)) <= 0 ||
-		seam.X.Hi.Cmp(lfF(proof.Blank.heelOuter.U)) >= 0 {
+	if seam.X.Lo.Cmp(lfF(proof.Blank.Ded.U)) <= 0 ||
+		seam.X.Hi.Cmp(lfF(proof.Blank.HeelOuter.U)) >= 0 {
 		return nil, false, nil
 	}
 	for end, point := range [...]planePoint{arc.Start, arc.End} {

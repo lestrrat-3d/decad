@@ -26,7 +26,7 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 ) {
 	var out revolveLoftFacesNonverticalJoints
 	if ctx == nil || trim == nil || trim.Source == nil || trim.Source.source == nil ||
-		section.start.U == section.end.U || section.start.V <= 0 || section.end.V <= 0 {
+		section.Start.U == section.End.U || section.Start.V <= 0 || section.End.V <= 0 {
 		return out, false, nil
 	}
 	segments := trim.Source.profile.Outer.Segments

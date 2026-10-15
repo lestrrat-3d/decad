@@ -57,7 +57,7 @@ func revolveLoftFacesKnotRootCellWith(memo *loftface.MeridianMemo, trim *loftFac
 	} else if loSign != -root.Direction || hiSign != root.Direction {
 		return empty, false
 	}
-	startX, endX := lfF(section.start.U), lfF(section.end.U)
+	startX, endX := lfF(section.Start.U), lfF(section.End.U)
 	if startX.Cmp(endX) > 0 {
 		startX, endX = endX, startX
 	}

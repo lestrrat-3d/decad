@@ -75,7 +75,7 @@ func certifyRevolveLoftFacesFitKnotJoint(ctx context.Context, trim *loftFacesTri
 ) {
 	var empty revolveLoftFacesFitKnotJoint
 	if ctx == nil || ctx.Err() != nil || trim == nil || band < 0 || band+1 >= len(trim.Maps) ||
-		section.start.U == section.end.U || section.start.V <= 0 || section.end.V <= 0 {
+		section.Start.U == section.End.U || section.Start.V <= 0 || section.End.V <= 0 {
 		return empty, false
 	}
 	vertex, ok := revolveLoftFacesFitKnotVertex(trim, segmentIndex, leftIndex)

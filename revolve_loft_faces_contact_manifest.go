@@ -47,7 +47,7 @@ func revolveLoftFacesAllSideManifest(ctx context.Context,
 	}
 	manifest := &revolveLoftFacesContactManifest{
 		nonvertical: nonvertical,
-		sideOutcome: make([]revolveLoftFacesSideOutcome, len(proof.section.spans)),
+		sideOutcome: make([]revolveLoftFacesSideOutcome, len(proof.section.Spans)),
 	}
 	for _, side := range nonvertical {
 		if side.sectionIndex < 0 || side.sectionIndex >= len(manifest.sideOutcome) ||
@@ -57,17 +57,17 @@ func revolveLoftFacesAllSideManifest(ctx context.Context,
 		}
 		manifest.sideOutcome[side.sectionIndex] = revolveLoftFacesSideSourceCandidate
 	}
-	for index, span := range proof.section.spans {
+	for index, span := range proof.section.Spans {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		if span.face == nil {
+		if span.Face == nil {
 			continue // the authenticated Revolve axis has no boundary face
 		}
 		if manifest.sideOutcome[index] != revolveLoftFacesSideRefusal {
 			continue
 		}
-		if span.start.U != span.end.U {
+		if span.Start.U != span.End.U {
 			return nil, false, fmt.Errorf("%w: finite Revolve side %d has no source cells",
 				ErrUnsupported, index)
 		}
@@ -103,14 +103,14 @@ func revolveLoftFacesSectionFacesComplete(proof *revolveLoftFacesSourceCertifica
 		return false
 	}
 	seen := make(map[*Face]bool, len(faces))
-	for _, span := range proof.section.spans {
-		if span.face == nil {
+	for _, span := range proof.section.Spans {
+		if span.Face == nil {
 			continue // the Revolve axis has no boundary face
 		}
-		if span.face.n.Body != bodyNode(proof.blank) || seen[span.face] {
+		if span.Face.n.Body != bodyNode(proof.blank) || seen[span.Face] {
 			return false
 		}
-		seen[span.face] = true
+		seen[span.Face] = true
 	}
 	if len(seen) != len(faces) {
 		return false

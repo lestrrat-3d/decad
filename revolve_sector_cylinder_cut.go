@@ -38,56 +38,56 @@ type revolveSectorBoreCaps struct {
 // planar radial caps, regardless of the number of intervening section spans.
 func revolveSectorBoreCapRecord(joined facetedPayload) (revolveSectorBoreCaps, bool) {
 	var caps revolveSectorBoreCaps
-	record := joined.revolveLoftJoin
-	if record == nil || record.certificate == nil || record.blank == nil ||
-		record.capRing == nil || record.certificate.section.blank != record.blank ||
-		record.boundaryBound != joined.MeshBound ||
-		record.volumeBound != joined.VolSymDiff || record.areaBound != joined.AreaSlack ||
+	record := joined.RevolveLoftJoin
+	if record == nil || record.Certificate == nil || record.Blank == nil ||
+		record.CapRing == nil || record.Certificate.Section.Blank != record.Blank ||
+		record.BoundaryBound != joined.MeshBound ||
+		record.VolumeBound != joined.VolSymDiff || record.AreaBound != joined.AreaSlack ||
 		joined.Xform != r3.Identity() || !joined.ContactAudited {
 		return caps, false
 	}
-	section, ring := record.certificate.section, record.capRing
-	spans := section.spans
-	count, n := len(spans), len(ring.angles)
-	if count < 4 || len(ring.rings) != count || len(ring.groups) != count ||
-		section.axisSpan < 0 || section.axisSpan >= count ||
+	section, ring := record.Certificate.Section, record.CapRing
+	spans := section.Spans
+	count, n := len(spans), len(ring.Angles)
+	if count < 4 || len(ring.Rings) != count || len(ring.Groups) != count ||
+		section.AxisSpan < 0 || section.AxisSpan >= count ||
 		n < 16 || n > revolvemesh.SectorBoreMaxStations ||
 		len(joined.Tris) != len(joined.Src) ||
 		len(joined.Verts) != len(joined.VertexBound) {
 		return caps, false
 	}
-	axis := section.axisSpan
+	axis := section.AxisSpan
 	caps.low, caps.high = (axis+count-1)%count, (axis+1)%count
 	low, high := spans[caps.low], spans[caps.high]
-	if spans[axis].start.V != 0 || spans[axis].end.V != 0 ||
-		low.end != spans[axis].start || high.start != spans[axis].end ||
-		low.start.V <= 0 || high.end.V <= 0 ||
-		low.start.U != low.end.U || high.start.U != high.end.U ||
-		low.start.U >= high.start.U ||
-		low.face == nil || high.face == nil ||
-		len(low.origins) == 0 || len(high.origins) == 0 {
+	if spans[axis].Start.V != 0 || spans[axis].End.V != 0 ||
+		low.End != spans[axis].Start || high.Start != spans[axis].End ||
+		low.Start.V <= 0 || high.End.V <= 0 ||
+		low.Start.U != low.End.U || high.Start.U != high.End.U ||
+		low.Start.U >= high.Start.U ||
+		low.Face == nil || high.Face == nil ||
+		len(low.Origins) == 0 || len(high.Origins) == 0 {
 		return caps, false
 	}
-	if _, ok := low.face.n.Surface.(surfacegeom.Plane); !ok {
+	if _, ok := low.Face.n.Surface.(surfacegeom.Plane); !ok {
 		return caps, false
 	}
-	if _, ok := high.face.n.Surface.(surfacegeom.Plane); !ok {
+	if _, ok := high.Face.n.Surface.(surfacegeom.Plane); !ok {
 		return caps, false
 	}
-	caps.lowX, caps.highX = low.start.U, high.start.U
-	caps.lowRadius, caps.highRadius = low.start.V, high.end.V
-	caps.lowGroup, caps.highGroup = ring.groups[caps.low], ring.groups[caps.high]
+	caps.lowX, caps.highX = low.Start.U, high.Start.U
+	caps.lowRadius, caps.highRadius = low.Start.V, high.End.V
+	caps.lowGroup, caps.highGroup = ring.Groups[caps.low], ring.Groups[caps.high]
 	if caps.lowGroup < 0 || caps.highGroup < 0 ||
 		caps.lowGroup >= len(joined.Groups) || caps.highGroup >= len(joined.Groups) ||
 		caps.lowGroup == caps.highGroup ||
-		len(ring.rings[axis]) != 1 || len(ring.rings[caps.high]) != 1 ||
-		len(ring.rings[caps.low]) != n ||
-		len(ring.rings[(caps.high+1)%count]) != n {
+		len(ring.Rings[axis]) != 1 || len(ring.Rings[caps.high]) != 1 ||
+		len(ring.Rings[caps.low]) != n ||
+		len(ring.Rings[(caps.high+1)%count]) != n {
 		return caps, false
 	}
-	caps.lowAxis, caps.highAxis = ring.vertex(axis, 0), ring.vertex(caps.high, 0)
-	caps.lowOuter = ring.rings[caps.low]
-	caps.highOuter = ring.rings[(caps.high+1)%count]
+	caps.lowAxis, caps.highAxis = ring.Vertex(axis, 0), ring.Vertex(caps.high, 0)
+	caps.lowOuter = ring.Rings[caps.low]
+	caps.highOuter = ring.Rings[(caps.high+1)%count]
 	if caps.lowAxis == caps.highAxis ||
 		caps.lowAxis < 0 || caps.highAxis < 0 ||
 		caps.lowAxis >= len(joined.Verts) || caps.highAxis >= len(joined.Verts) ||
@@ -107,7 +107,7 @@ func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, nil
 	}
 	joined, ok := target.n.Payload.(facetedPayload)
-	if !ok || joined.revolveLoftJoin == nil {
+	if !ok || joined.RevolveLoftJoin == nil {
 		return nil, false, nil
 	}
 	caps, ok := revolveSectorBoreCapRecord(joined)
@@ -184,17 +184,17 @@ func revolveSectorTriangleClear(t [3]int, verts []r3.Vec, clearance float64) boo
 
 func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producerID,
 	joined facetedPayload, caps revolveSectorBoreCaps, radius float64, wall *Face) (*Body, bool, error) {
-	ring := joined.revolveLoftJoin.capRing
-	n := len(ring.angles)
+	ring := joined.RevolveLoftJoin.CapRing
+	n := len(ring.Angles)
 	if len(joined.Tris) > revolveSectorBoreMaxAuditTriangles-4*n ||
 		radius >= min(caps.lowRadius, caps.highRadius) {
 		return nil, true, fmt.Errorf("%w: bore does not fit inside both radial caps", ErrUnsupported)
 	}
-	maxStep, ok := revolvemesh.SectorRingMaxStep(ring.angles)
+	maxStep, ok := revolvemesh.SectorRingMaxStep(ring.Angles)
 	if !ok {
 		return nil, true, fmt.Errorf("%w: joined section ring has no bounded station plan", ErrUnsupported)
 	}
-	inner, boreBound, err := circularbounds.BoreRingAtStep(ctx, radius, ring.angles, maxStep)
+	inner, boreBound, err := circularbounds.BoreRingAtStep(ctx, radius, ring.Angles, maxStep)
 	if err != nil {
 		return nil, true, err
 	}
@@ -205,12 +205,12 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		return nil, true, fmt.Errorf("%w: bore has no separate cap ring", ErrUnsupported)
 	}
 	clearance := proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound)
-	section := joined.revolveLoftJoin.certificate.section
-	for i, span := range section.spans {
-		if i == section.axisSpan || i == caps.low || i == caps.high {
+	section := joined.RevolveLoftJoin.Certificate.Section
+	for i, span := range section.Spans {
+		if i == section.AxisSpan || i == caps.low || i == caps.high {
 			continue
 		}
-		if min(span.start.V, span.end.V) <= clearance {
+		if min(span.Start.V, span.End.V) <= clearance {
 			return nil, true, fmt.Errorf("%w: section meridian may enter the bore", ErrUnsupported)
 		}
 	}
@@ -327,7 +327,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	if err != nil {
 		return nil, true, err
 	}
-	oldArea, err := joined.revolveLoftJoin.blank.Area()
+	oldArea, err := joined.RevolveLoftJoin.Blank.Area()
 	if err != nil {
 		return nil, true, err
 	}
@@ -342,7 +342,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	result.Verts, result.Tris, result.Src, result.Groups = mesh.Verts, mesh.Tris, mesh.Src, mesh.Groups
 	result.VertexBound, result.MeshBound = vertexBound, bound
 	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
-	result.revolveLoftJoin = nil
+	result.RevolveLoftJoin = nil
 	result.ContactAudited = true
 	body, err := buildFacetedBody(ctx, d, ref, result)
 	return body, true, err

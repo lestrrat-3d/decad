@@ -79,7 +79,7 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 	}
 	walk := make([][2]float64, len(spans))
 	for i, s := range spans {
-		walk[i] = [2]float64{s.start.U, s.start.V}
+		walk[i] = [2]float64{s.Start.U, s.Start.V}
 	}
 	orientation := pointcone.WalkOrientation(walk)
 	if orientation == 0 {
@@ -89,11 +89,11 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 	// o*(dr, -dx), and (1, k).n = o*(dr^2+dx^2)/dr, so the face's empty side has
 	// the sign of o*dr.
 	side := orientation
-	if span.end.V < span.start.V {
+	if span.End.V < span.Start.V {
 		side = -side
 	}
-	apex, radius, _, _, err := pointcone.OffsetMeridian(span.start.U, span.start.V,
-		span.end.U, span.end.V, farMM, side)
+	apex, radius, _, _, err := pointcone.OffsetMeridian(span.Start.U, span.Start.V,
+		span.End.U, span.End.V, farMM, side)
 	if err != nil {
 		if errors.Is(err, pointcone.ErrNonFiniteMeridian) {
 			return nil, fmt.Errorf(`%w: ConeFromFace input is not finite`, ErrDegenerate)
@@ -137,7 +137,7 @@ func commitExactPointCone(ctx context.Context, d *Document, cone *Body) error {
 // face.
 func revolveSpanOfFace(spans []revolveSectionSpan, face *Face) (revolveSectionSpan, bool) {
 	for _, span := range spans {
-		if span.face == face {
+		if span.Face == face {
 			return span, true
 		}
 	}

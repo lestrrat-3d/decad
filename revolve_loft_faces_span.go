@@ -36,8 +36,8 @@ type revolveLoftFacesMappedCell struct {
 func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRecord,
 	section revolveSectionSpan) ([]revolveLoftFacesMappedCell, bool, error) {
 	if ctx == nil || trim == nil || trim.Source == nil ||
-		len(trim.Maps) < 2 || section.start.U == section.end.U ||
-		section.start.V <= 0 || section.end.V <= 0 {
+		len(trim.Maps) < 2 || section.Start.U == section.End.U ||
+		section.Start.V <= 0 || section.End.V <= 0 {
 		return nil, false, nil
 	}
 	m, b := revolveLoftFacesMeridian(section)
@@ -171,8 +171,8 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 }
 
 func revolveLoftFacesMeridian(section revolveSectionSpan) (*big.Rat, *big.Rat) {
-	x0, x1 := lfF(section.start.U), lfF(section.end.U)
-	r0, r1 := lfF(section.start.V), lfF(section.end.V)
+	x0, x1 := lfF(section.Start.U), lfF(section.End.U)
+	r0, r1 := lfF(section.Start.V), lfF(section.End.V)
 	m := lfDiv(lfSub(r1, r0), lfSub(x1, x0))
 	return m, lfSub(r0, lfMul(m, x0))
 }
@@ -271,7 +271,7 @@ func revolveLoftFacesEndpointAxialClass(root loftface.EndpointRoot,
 		xLo, xHi = xHi, xLo
 	}
 	root.X = loftFaceInterval{Lo: xLo, Hi: xHi}
-	start, end := lfF(section.start.U), lfF(section.end.U)
+	start, end := lfF(section.Start.U), lfF(section.End.U)
 	if start.Cmp(end) > 0 {
 		start, end = end, start
 	}
@@ -297,7 +297,7 @@ func revolveLoftFacesEndpointFiniteRootsWith(memo *loftface.MeridianMemo, trim *
 	[]loftface.EndpointRoot, bool,
 ) {
 	if trim == nil || band < 0 || band+1 >= len(trim.Maps) || len(span) == 0 ||
-		section.start.U == section.end.U {
+		section.Start.U == section.End.U {
 		return nil, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
@@ -328,7 +328,7 @@ func revolveLoftFacesSpanAxialMiss(first, last loftFaceMap, span freeform.Bezier
 	if !ok {
 		return false
 	}
-	start, end := lfF(section.start.U), lfF(section.end.U)
+	start, end := lfF(section.Start.U), lfF(section.End.U)
 	if start.Cmp(end) > 0 {
 		start, end = end, start
 	}

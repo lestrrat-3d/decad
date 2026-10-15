@@ -60,8 +60,8 @@ func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 	if err != nil {
 		return 0, false
 	}
-	x0, x1 := lfF(meridian.start.U), lfF(meridian.end.U)
-	r0, r1 := lfF(meridian.start.V), lfF(meridian.end.V)
+	x0, x1 := lfF(meridian.Start.U), lfF(meridian.End.U)
+	r0, r1 := lfF(meridian.Start.V), lfF(meridian.End.V)
 	if x0.Cmp(x1) == 0 || r0.Sign() < 0 || r1.Sign() < 0 {
 		return 0, false
 	}

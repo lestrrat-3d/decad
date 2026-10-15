@@ -76,8 +76,8 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 		x, radius := ring.arc.circle.x, ring.arc.circle.radius
 		xf, _ := x.Float64()
 		rf, _ := radius.Float64()
-		span := proof.section.spans[ring.sectionIndex]
-		if span.start.U == span.end.U {
+		span := proof.section.Spans[ring.sectionIndex]
+		if span.Start.U == span.End.U {
 			vertical++
 		} else {
 			sloped++

@@ -45,9 +45,9 @@ func coneFromFaceSelector(t *testing.T, blank *Body, a, b planePoint) FaceSelect
 	spans, _, _, ok := recordedRevolveSection(blank)
 	require.True(t, ok)
 	for _, span := range spans {
-		if span.face != nil && (span.start == a && span.end == b || span.start == b && span.end == a) {
-			require.NotEmpty(t, span.origins)
-			return Faces(FaceCreatedBy(featureRefOf(span.origins[0]))).Exactly(1)
+		if span.Face != nil && (span.Start == a && span.End == b || span.Start == b && span.End == a) {
+			require.NotEmpty(t, span.Origins)
+			return Faces(FaceCreatedBy(featureRefOf(span.Origins[0]))).Exactly(1)
 		}
 	}
 	require.FailNow(t, "section side not found")

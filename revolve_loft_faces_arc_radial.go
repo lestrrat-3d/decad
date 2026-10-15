@@ -28,8 +28,8 @@ func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 		segmentIndex < 0 || segmentIndex >= len(trim.Source.profile.Outer.Segments) ||
 		segmentIndex >= len(trim.Source.source.entities) ||
 		band < 0 || band+1 >= len(trim.Maps) ||
-		meridian.start.U == meridian.end.U ||
-		meridian.start.V <= 0 || meridian.end.V <= 0 {
+		meridian.Start.U == meridian.End.U ||
+		meridian.Start.V <= 0 || meridian.End.V <= 0 {
 		return empty, false
 	}
 	segment, ok := trim.Source.profile.Outer.Segments[segmentIndex].(arcSeg)
@@ -85,8 +85,8 @@ func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 	}
 	x0, x2 := mappedCaps[0].X, mappedCaps[1].X
 	xMid := lfMul(big.NewRat(1, 2), lfAdd(x0, x2))
-	sectionX0, sectionX1 := lfF(meridian.start.U), lfF(meridian.end.U)
-	sectionR0, sectionR1 := lfF(meridian.start.V), lfF(meridian.end.V)
+	sectionX0, sectionX1 := lfF(meridian.Start.U), lfF(meridian.End.U)
+	sectionR0, sectionR1 := lfF(meridian.Start.V), lfF(meridian.End.V)
 	m := lfDiv(lfSub(sectionR1, sectionR0), lfSub(sectionX1, sectionX0))
 	b := lfSub(sectionR0, lfMul(m, sectionX0))
 	implicit := func(lambda, x *big.Rat) *big.Rat {

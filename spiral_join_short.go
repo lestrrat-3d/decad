@@ -318,10 +318,10 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 			return out, false, err
 		}
 		band := 1
-		first, last := proof.Blank.toeRoot, proof.Blank.toeOuter
+		first, last := proof.Blank.ToeRoot, proof.Blank.ToeOuter
 		if end == 1 {
 			band = 7
-			first, last = proof.Blank.ded, proof.Blank.heelOuter
+			first, last = proof.Blank.Ded, proof.Blank.HeelOuter
 		}
 		m := lfDiv(lfSub(lfF(last.V), lfF(first.V)), lfSub(lfF(last.U), lfF(first.U)))
 		b := lfSub(lfF(first.V), lfMul(m, lfF(first.U)))

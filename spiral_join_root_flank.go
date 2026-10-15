@@ -25,10 +25,10 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 	if err := ctx.Err(); err != nil {
 		return empty, false, err
 	}
-	toeRoot := lfF(proof.Blank.toeRoot.U)
+	toeRoot := lfF(proof.Blank.ToeRoot.U)
 	cap2 := loftface.CapXRange(proof.Tooth.Maps[2], proof.Flank[side], proof.Crossings[side][2])
 	if cap2.Lo == nil || cap2.Hi == nil || toeRoot.Cmp(cap2.Lo) >= 0 ||
-		cap2.Hi.Cmp(lfF(proof.Blank.ded.U)) >= 0 {
+		cap2.Hi.Cmp(lfF(proof.Blank.Ded.U)) >= 0 {
 		return empty, false, nil
 	}
 	low, ok := spiralIsolateJunction(ctx, proof.Tooth.Maps, proof.Flank[side],
@@ -114,7 +114,7 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 			return 0, false, nil
 		}
 	}
-	toeRoot := lfF(proof.Blank.toeRoot.U)
+	toeRoot := lfF(proof.Blank.ToeRoot.U)
 	cap2 := loftface.CapXRange(proof.Tooth.Maps[2], proof.Flank[side], proof.Crossings[side][2])
 	if lfF(held[0].X).Cmp(toeRoot) != 0 || lfF(held[len(held)-1].X).Cmp(cap2.Hi) < 0 {
 		return 0, false, nil
@@ -232,7 +232,7 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	toeRoot := lfF(proof.Blank.toeRoot.U)
+	toeRoot := lfF(proof.Blank.ToeRoot.U)
 	cap2 := loftface.CapXRange(proof.Tooth.Maps[2], proof.Flank[side], proof.Crossings[side][2])
 	if rootBox[0].Lo.Cmp(toeRoot) != 0 || rootBox[0].Hi.Cmp(cap2.Hi) != 0 {
 		return nil, false, nil

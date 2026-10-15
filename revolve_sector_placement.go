@@ -16,12 +16,12 @@ func revolveSectorSourcesSeparate(sectors []facetedPayload) bool {
 	for i, sector := range sectors {
 		charge := massmoment.MapCharge{}
 		if i != 0 {
-			if sector.revolveLoftSector == nil ||
-				sector.Xform != sector.revolveLoftSector.motion {
+			if sector.RevolveLoftSector == nil ||
+				sector.Xform != sector.RevolveLoftSector.Motion {
 				return false
 			}
 			var err error
-			charge, err = massmoment.XAxisPlacementCharge(sector.revolveLoftSector.motion)
+			charge, err = massmoment.XAxisPlacementCharge(sector.RevolveLoftSector.Motion)
 			if err != nil {
 				return false
 			}
@@ -38,5 +38,5 @@ func revolveSectorSeam(path []revolveSectorNode, motions []r3.Transform) (float6
 	if len(path) < 2 || len(motions) == 0 {
 		return 0, fmt.Errorf("%w: sector source has no root contacts", ErrUnsupported)
 	}
-	return facetproof.SectorSeam(path[0].point, path[len(path)-1].point, motions)
+	return facetproof.SectorSeam(path[0].Point, path[len(path)-1].Point, motions)
 }

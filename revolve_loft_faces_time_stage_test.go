@@ -126,7 +126,7 @@ func legacyRevolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 	} else if loSign != -root.Direction || hiSign != root.Direction {
 		return empty, false
 	}
-	startX, endX := lfF(section.start.U), lfF(section.end.U)
+	startX, endX := lfF(section.Start.U), lfF(section.End.U)
 	if startX.Cmp(endX) > 0 {
 		startX, endX = endX, startX
 	}
@@ -315,7 +315,7 @@ func requireTimeStageKnotRootCellsMatch(t *testing.T) {
 		}
 		start := 0.05 + float64(rng.IntN(45))/100
 		end := start + 0.02 + float64(rng.IntN(45))/100
-		section := revolveSectionSpan{start: planePoint{U: start, V: 1.5}, end: planePoint{U: end, V: 1.5}}
+		section := revolveSectionSpan{Start: planePoint{U: start, V: 1.5}, End: planePoint{U: end, V: 1.5}}
 		for _, atEnd := range []bool{false, true} {
 			roots, ok := revolveLoftFacesEndpointFiniteRoots(trim, section, span, band, atEnd)
 			if !ok {

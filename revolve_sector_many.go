@@ -53,9 +53,9 @@ func (r *revolveSectorContactRefineError) Unwrap() error { return r.cause }
 // authenticated Revolve source. The joined mesh is never an input geometry.
 func buildRevolveLoftSectorsJoin(ctx context.Context, d *Document, ref producerID,
 	cert *revolveLoftSectorCertificate, sources []facetedPayload) (*Body, *revolvedSectionRing, error) {
-	if cert == nil || cert.trim == nil || cert.blank == nil ||
+	if cert == nil || cert.Trim == nil || cert.Blank == nil ||
 		len(sources) == 0 || len(sources) > 128 ||
-		!pointSourceCurrent(cert.trim.base.pointSection) {
+		!pointSourceCurrent(cert.Trim.base.pointSection) {
 		return nil, nil, fmt.Errorf("%w: sector source is incomplete or stale", ErrUnsupported)
 	}
 	sag := 0.01
@@ -96,15 +96,15 @@ func buildRevolveLoftSectorsJoin(ctx context.Context, d *Document, ref producerI
 func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producerID,
 	cert *revolveLoftSectorCertificate, sources []facetedPayload,
 	sagAllowance, capLimit float64) (*Body, *revolvedSectionRing, error) {
-	section, record, base := cert.section, cert.trim, cert.base
-	regularSource, sourceSector, err := revolveSectionAngles(section, cert.sector, sagAllowance)
+	section, record, base := cert.Section, cert.Trim, cert.Base
+	regularSource, sourceSector, err := revolveSectionAngles(section, cert.Sector, sagAllowance)
 	if err != nil {
 		return nil, nil, err
 	}
-	path := make([]pointcone.SectorNode, len(cert.loop))
-	for i, node := range cert.loop {
-		path[i] = pointcone.SectorNode{P: node.point, GroupToNext: node.groupToNext,
-			Crossing: node.crossing, RootBoundary: node.rootBoundary, Angle: node.angle}
+	path := make([]pointcone.SectorNode, len(cert.Loop))
+	for i, node := range cert.Loop {
+		path[i] = pointcone.SectorNode{P: node.Point, GroupToNext: node.GroupToNext,
+			Crossing: node.Crossing, RootBoundary: node.RootBoundary, Angle: node.Angle}
 	}
 	original, err := revolveSectorCapBoundary(path, section,
 		base.pointSection.source.frame, regularSource, sourceSector)
@@ -149,17 +149,17 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	}
 	for i := 1; i < len(sources); i++ {
 		placed := sources[i]
-		if placed.revolveLoftSector == nil || placed.revolveLoftSector.source != record ||
-			placed.Xform != placed.revolveLoftSector.motion {
+		if placed.RevolveLoftSector == nil || placed.RevolveLoftSector.Source != record ||
+			placed.Xform != placed.RevolveLoftSector.Motion {
 			return nil, nil, fmt.Errorf("%w: placed sector lost its source", ErrUnsupported)
 		}
-		motions[i] = placed.revolveLoftSector.motion
+		motions[i] = placed.RevolveLoftSector.Motion
 		charges[i], err = massmoment.XAxisPlacementCharge(motions[i])
 		if err != nil {
 			return nil, nil, err
 		}
 	}
-	seam, err := revolveSectorSeam(cert.loop, motions)
+	seam, err := revolveSectorSeam(cert.Loop, motions)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -190,12 +190,12 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		}
 		plan.sector = [2]float64{min(a, b), max(a, b)}
 		plan.crossingBound = proofbound.AbsSumUpper(
-			massmoment.PlacedBound(cert.crossingBound, charges[i]), plan.placedRound)
+			massmoment.PlacedBound(cert.CrossingBound, charges[i]), plan.placedRound)
 		if !pointcone.SectorRootEdgeOrdered(plan.nodes, edges, plan.sector) {
 			return nil, nil, fmt.Errorf("%w: placed root stations lose angular order", ErrUnsupported)
 		}
 	}
-	minRadius := min(section.rootStart.V, section.rootEnd.V)
+	minRadius := min(section.RootStart.V, section.RootEnd.V)
 	for i := range plans {
 		for j := i + 1; j < len(plans); j++ {
 			seamCost := proofbound.AbsSumUpper(plans[i].crossingBound,
@@ -298,7 +298,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 			return nil, nil, err
 		}
 		seamAllowance := proofbound.AbsSumUpper(base.MeshBound, sectionSag,
-			section.coneGap, plan.crossingBound, toolGap, plan.placedRound)
+			section.ConeGap, plan.crossingBound, toolGap, plan.placedRound)
 		if plan.snap > seamAllowance {
 			return nil, nil, fmt.Errorf("%w: placed cap misses the finite root patch (sector %d snap %.9g allowance %.9g)",
 				ErrUnsupported, i, plan.snap, seamAllowance)
@@ -310,7 +310,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 			plan.crossingBound, plan.placedRound), lip)
 		capTerm := proofbound.ProductUpper(max(upperBound, lowerBound), stretch)
 		otherBound := proofbound.AbsSumUpper(plan.snap, plan.nodeRound,
-			farTerm, baseTerm, section.coneGap, toolGap)
+			farTerm, baseTerm, section.ConeGap, toolGap)
 		remaining := 0.1 - sectionSag - otherBound
 		if remaining <= 0 || proofbound.IsNonFinite(remaining) {
 			capRefinePossible = false
@@ -318,11 +318,11 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 			refineCapLimit = min(refineCapLimit, 0.9*remaining/stretch)
 		}
 		localBound = max(localBound, proofbound.AbsSumUpper(plan.snap, plan.nodeRound,
-			farTerm, baseTerm, capTerm, section.coneGap, toolGap))
+			farTerm, baseTerm, capTerm, section.ConeGap, toolGap))
 		localRound = max(localRound, proofbound.AbsSumUpper(plan.snap, plan.nodeRound,
 			proofbound.ProductUpper(proofbound.ProductUpper(farRound, stretch), lip),
 			proofbound.ProductUpper(proofbound.AbsSumUpper(
-				plan.crossingBound, plan.placedRound), lip), section.coneGap, toolGap))
+				plan.crossingBound, plan.placedRound), lip), section.ConeGap, toolGap))
 		volumePart := proofbound.AbsSumUpper(base.VolSymDiff,
 			proofbound.ProductUpper(proofbound.ProductUpper(capArea,
 				proofbound.AbsSumUpper(upperBound, lowerBound)), capFactor))
@@ -354,7 +354,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		return nil, nil, err
 	}
 	count := len(mesh.Tris)
-	ringLimit := uint64(2) * uint64(len(section.spans)-1) * uint64(len(angles))
+	ringLimit := uint64(2) * uint64(len(section.Spans)-1) * uint64(len(angles))
 	capTriangleLimit := uint64(len(sources)) * uint64(2*len(caps)+2*len(edges))
 	maxTriangles, sumOK := proofbound.WallCheckedAdd(ringLimit, capTriangleLimit)
 	if !sumOK || count == 0 || uint64(count) > maxTriangles || maxTriangles > revolveSectorMaxAuditTriangles {
@@ -398,7 +398,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	}
 	volumeGap := proofbound.AbsSumUpper(sourceVolume,
 		proofbound.SweptVolumeAllow(roundEnvelope, area))
-	blankArea, err := cert.blank.Area()
+	blankArea, err := cert.Blank.Area()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -419,7 +419,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	if err != nil {
 		return nil, nil, err
 	}
-	blankVolume, err := cert.blank.Volume()
+	blankVolume, err := cert.Blank.Volume()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -444,14 +444,14 @@ func revolveRootCapContact(mesh *joinedMesh, ring revolvedSectionRing,
 		contact.Reason != "share no recorded vertex, but make contact" ||
 		contact.I < 0 || contact.J < 0 ||
 		contact.I >= len(mesh.Src) || contact.J >= len(mesh.Src) ||
-		len(plans) == 0 || section.rootSpan < 0 ||
-		section.rootSpan >= len(ring.groups) {
+		len(plans) == 0 || section.RootSpan < 0 ||
+		section.RootSpan >= len(ring.Groups) {
 		return false
 	}
-	prev := (section.rootSpan + len(ring.groups) - 1) % len(ring.groups)
-	next := (section.rootSpan + 1) % len(ring.groups)
+	prev := (section.RootSpan + len(ring.Groups) - 1) % len(ring.Groups)
+	next := (section.RootSpan + 1) % len(ring.Groups)
 	isNeighbor := func(group int) bool {
-		return group >= 0 && (group == ring.groups[prev] || group == ring.groups[next])
+		return group >= 0 && (group == ring.Groups[prev] || group == ring.Groups[next])
 	}
 	isCap := func(group int) bool {
 		for _, plan := range plans {

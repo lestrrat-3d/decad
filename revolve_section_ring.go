@@ -15,16 +15,16 @@ import (
 // revolvedSectionRing shares every angular station across the section's
 // recorded faces. An on-axis corner has one vertex rather than a full ring.
 type revolvedSectionRing struct {
-	angles []float64
-	rings  [][]int
-	groups []int
+	Angles []float64
+	Rings  [][]int
+	Groups []int
 }
 
-func (r revolvedSectionRing) vertex(span, station int) int {
-	if len(r.rings[span]) == 1 {
-		return r.rings[span][0]
+func (r revolvedSectionRing) Vertex(span, station int) int {
+	if len(r.Rings[span]) == 1 {
+		return r.Rings[span][0]
 	}
-	return r.rings[span][station]
+	return r.Rings[span][station]
 }
 
 // buildRevolvedSectionRing meshes every authenticated meridian span except
@@ -34,22 +34,22 @@ func (r revolvedSectionRing) vertex(span, station int) int {
 func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificate,
 	angles []float64, sectors [][2]float64, maxSag float64) (revolvedSectionRing, float64, error) {
 	var empty revolvedSectionRing
-	spans := section.spans
+	spans := section.Spans
 	if mesh == nil || len(spans) < 4 || len(angles) < 3 ||
-		section.axisSpan < 0 || section.axisSpan >= len(spans) ||
-		section.rootSpan < 0 || section.rootSpan >= len(spans) ||
-		section.rootSpan == section.axisSpan ||
+		section.AxisSpan < 0 || section.AxisSpan >= len(spans) ||
+		section.RootSpan < 0 || section.RootSpan >= len(spans) ||
+		section.RootSpan == section.AxisSpan ||
 		maxSag <= 0 || proofbound.IsNonFinite(maxSag) {
 		return empty, 0, fmt.Errorf("%w: revolved section ring has invalid inputs", ErrUnsupported)
 	}
-	if spans[section.axisSpan].start.V != 0 || spans[section.axisSpan].end.V != 0 ||
-		spans[section.rootSpan].start.V <= 0 || spans[section.rootSpan].end.V <= 0 {
+	if spans[section.AxisSpan].Start.V != 0 || spans[section.AxisSpan].End.V != 0 ||
+		spans[section.RootSpan].Start.V <= 0 || spans[section.RootSpan].End.V <= 0 {
 		return empty, 0, fmt.Errorf("%w: revolved section has no finite root ring", ErrUnsupported)
 	}
 	for i, span := range spans {
-		if span.end != spans[(i+1)%len(spans)].start ||
-			span.start.V < 0 || proofbound.IsNonFinite(span.start.U) ||
-			proofbound.IsNonFinite(span.start.V) {
+		if span.End != spans[(i+1)%len(spans)].Start ||
+			span.Start.V < 0 || proofbound.IsNonFinite(span.Start.U) ||
+			proofbound.IsNonFinite(span.Start.V) {
 			return empty, 0, fmt.Errorf("%w: revolved section walk is incomplete", ErrUnsupported)
 		}
 	}
@@ -75,8 +75,8 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 		}
 	}()
 
-	ring := revolvedSectionRing{angles: append([]float64(nil), angles...),
-		rings: make([][]int, len(spans))}
+	ring := revolvedSectionRing{Angles: append([]float64(nil), angles...),
+		Rings: make([][]int, len(spans))}
 	cosHeld, sinHeld := make([]float64, len(angles)), make([]float64, len(angles))
 	cosIv, sinIv := make([]proofbound.RatInterval, len(angles)),
 		make([]proofbound.RatInterval, len(angles))
@@ -90,14 +90,14 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 	}
 	maxRadius, maxRound := 0.0, 0.0
 	for i, span := range spans {
-		p := span.start
+		p := span.Start
 		if p.V == 0 {
-			ring.rings[i] = []int{len(mesh.Verts)}
+			ring.Rings[i] = []int{len(mesh.Verts)}
 			mesh.Verts = append(mesh.Verts, r3.Vec{X: p.U})
 			continue
 		}
 		maxRadius = max(maxRadius, p.V)
-		ring.rings[i] = make([]int, len(angles))
+		ring.Rings[i] = make([]int, len(angles))
 		radius := proofarith.FloatRat(p.V)
 		for j := range angles {
 			held := r3.Vec{X: p.U, Y: p.V * cosHeld[j], Z: p.V * sinHeld[j]}
@@ -107,7 +107,7 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 			yError := proofbound.IntervalFloatError(proofbound.IntervalScale(cosIv[j], radius), held.Y)
 			zError := proofbound.IntervalFloatError(proofbound.IntervalScale(sinIv[j], radius), held.Z)
 			maxRound = max(maxRound, proofbound.Radius3D(max(yError, zError)))
-			ring.rings[i][j] = len(mesh.Verts)
+			ring.Rings[i][j] = len(mesh.Verts)
 			mesh.Verts = append(mesh.Verts, held)
 		}
 	}
@@ -118,21 +118,21 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 	groupForSpan := make([]int, len(spans))
 	for i, span := range spans {
 		groupForSpan[i] = -1
-		if i == section.axisSpan {
+		if i == section.AxisSpan {
 			continue
 		}
-		if span.face == nil || len(span.origins) == 0 {
+		if span.Face == nil || len(span.Origins) == 0 {
 			return empty, 0, fmt.Errorf("%w: revolved section face is missing", ErrUnsupported)
 		}
-		_, planar := span.face.n.Surface.(surfacegeom.Plane)
+		_, planar := span.Face.n.Surface.(surfacegeom.Plane)
 		groupForSpan[i] = len(mesh.Groups)
 		mesh.Groups = append(mesh.Groups, facetGroup{
-			Origins: append([]provenance.Ref(nil), span.origins...),
-			Surface: span.face.n.Surface, Denoted: span.face.n.Denoted,
-			Reversed: span.face.n.Reversed, Planar: planar,
+			Origins: append([]provenance.Ref(nil), span.Origins...),
+			Surface: span.Face.n.Surface, Denoted: span.Face.n.Denoted,
+			Reversed: span.Face.n.Reversed, Planar: planar,
 		})
 	}
-	ring.groups = groupForSpan
+	ring.Groups = groupForSpan
 
 	maxStep := 0.0
 	for j := range angles {
@@ -150,19 +150,19 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 		}
 		maxStep = max(maxStep, stepUp)
 		for i, span := range spans {
-			if i == section.axisSpan {
+			if i == section.AxisSpan {
 				continue
 			}
-			if i == section.rootSpan && k != 0 && sectionSectorCovered(angles[j], angles[k], sectors) {
+			if i == section.RootSpan && k != 0 && sectionSectorCovered(angles[j], angles[k], sectors) {
 				continue
 			}
-			a, b := ring.vertex(i, j), ring.vertex((i+1)%len(spans), j)
-			c, d := ring.vertex((i+1)%len(spans), k), ring.vertex(i, k)
+			a, b := ring.Vertex(i, j), ring.Vertex((i+1)%len(spans), j)
+			c, d := ring.Vertex((i+1)%len(spans), k), ring.Vertex(i, k)
 			group := groupForSpan[i]
 			switch {
-			case span.start.V == 0:
+			case span.Start.V == 0:
 				mesh.Add([3]int{a, b, c}, group)
-			case span.end.V == 0:
+			case span.End.V == 0:
 				mesh.Add([3]int{a, b, d}, group)
 			default:
 				mesh.Add([3]int{a, b, c}, group)

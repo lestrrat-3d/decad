@@ -154,12 +154,12 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, complete)
 		var face *Face
-		for index, span := range proof.section.spans {
-			if index == proof.section.rootSpan || span.face == nil {
+		for index, span := range proof.section.Spans {
+			if index == proof.section.RootSpan || span.Face == nil {
 				continue
 			}
-			if _, ok := span.face.n.Surface.(surfacegeom.Cone); ok {
-				face = span.face
+			if _, ok := span.Face.n.Surface.(surfacegeom.Cone); ok {
+				face = span.Face
 				break
 			}
 		}

@@ -30,16 +30,16 @@ func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFac
 ) ([]revolveLoftFacesSeamVertex, bool, error) {
 	if ctx == nil || trim == nil || trim.Source == nil ||
 		band < 0 || band+1 >= len(trim.Maps) || len(stations) < 2 ||
-		root.Lo == nil || root.Hi == nil || section.start.U == section.end.U ||
-		section.start.V <= 0 || section.end.V <= 0 ||
+		root.Lo == nil || root.Hi == nil || section.Start.U == section.End.U ||
+		section.Start.V <= 0 || section.End.V <= 0 ||
 		root.Lo.Sign() < 0 || root.Hi.Cmp(lfOne()) > 0 || root.Lo.Cmp(root.Hi) > 0 ||
 		proofbound.IsNonFinite(trim.Source.sourceStationRound) ||
 		trim.Source.sourceStationRound < 0 {
 		return nil, false, nil
 	}
 	first, last := trim.Maps[band], trim.Maps[band+1]
-	xStart, xEnd := lfF(section.start.U), lfF(section.end.U)
-	rStart, rEnd := lfF(section.start.V), lfF(section.end.V)
+	xStart, xEnd := lfF(section.Start.U), lfF(section.End.U)
+	rStart, rEnd := lfF(section.Start.V), lfF(section.End.V)
 	meridianSlope := lfDiv(lfSub(rEnd, rStart), lfSub(xEnd, xStart))
 	meridianOffset := lfSub(rStart, lfMul(meridianSlope, xStart))
 	xLo, xHi := xStart, xEnd

@@ -24,10 +24,10 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 		if circle.tool != 1 || circle.sourceMiss {
 			continue
 		}
-		span := proof.section.spans[circle.span]
+		span := proof.section.Spans[circle.span]
 		var arc *revolveLoftFacesToolCapOccupiedArc
 		var certified bool
-		if span.start.U == span.end.U {
+		if span.Start.U == span.End.U {
 			arc, certified, err = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, circle)
 		} else {
 			arc, certified, err = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, circle)
@@ -41,7 +41,7 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 		current, currentErr := revolveLoftFacesToolCapOccupiedArcCurrent(t.Context(), proof, arc)
 		require.NoError(t, currentErr)
 		require.True(t, current)
-		if span.start.U != span.end.U {
+		if span.Start.U != span.End.U {
 			lower := lfZero()
 			if circle.x.Cmp(proof.trim.Toe.apex) < 0 {
 				lower = lfDiv(lfSub(proof.trim.Toe.apex, circle.x), proof.trim.Toe.slope)

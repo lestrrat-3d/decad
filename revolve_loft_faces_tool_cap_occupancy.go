@@ -47,7 +47,7 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 	if ctx == nil || proof == nil || proof.tooth == nil || proof.trim == nil || proof.trim.Source == nil ||
 		proof.trim.Source.source == nil || proof.trim.Source.source.profile == nil ||
 		circle.tool != 1 || circle.sourceMiss || circle.x == nil || circle.radius == nil ||
-		circle.span < 0 || circle.span >= len(proof.section.spans) ||
+		circle.span < 0 || circle.span >= len(proof.section.Spans) ||
 		circle.blankFace == nil || circle.capFace != proof.heelFace ||
 		!revolveLoftFacesSectionFacesComplete(proof) ||
 		!proof.trim.Source.source.profile.Valid ||
@@ -55,7 +55,7 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 		return nil, false, nil
 	}
 	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(
-		proof.trim.Heel, proof.section.spans[circle.span])
+		proof.trim.Heel, proof.section.Spans[circle.span])
 	if !decided || !crosses || x.Cmp(circle.x) != 0 ||
 		radius.Cmp(circle.radius) != 0 {
 		return nil, false, nil
@@ -187,12 +187,12 @@ func revolveLoftFacesToolCapSourceCurrent(ctx context.Context,
 		}
 	}
 	if !matched || circle.sourceMiss || circle.span < 0 ||
-		circle.span >= len(proof.section.spans) {
+		circle.span >= len(proof.section.Spans) {
 		return false, nil
 	}
-	span := proof.section.spans[circle.span]
+	span := proof.section.Spans[circle.span]
 	var fresh *revolveLoftFacesConstantXSource
-	if span.start.U == span.end.U {
+	if span.Start.U == span.End.U {
 		vertical, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, circle.span)
 		if err != nil || outcome != revolveLoftFacesVerticalContact || vertical == nil ||
 			vertical.face != circle.blankFace || vertical.x.Cmp(circle.x) != 0 ||

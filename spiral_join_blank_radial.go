@@ -16,15 +16,15 @@ import (
 func spiralHeldBlankRadialAllowance(ctx context.Context, blank *Body,
 	held *meshbool.BoolMesh, source *spiralBlankSource, edge int) (float64, bool, error) {
 	if ctx == nil || blank == nil || held == nil || source == nil ||
-		edge < 0 || edge >= len(source.edgeIndex) || len(held.Src) != len(held.Tris) {
+		edge < 0 || edge >= len(source.EdgeIndex) || len(held.Src) != len(held.Tris) {
 		return 0, false, nil
 	}
 	group := spiralBlankFaceGroup(blank, source, edge)
 	if group < 0 {
 		return 0, false, nil
 	}
-	cycle := [6]planePoint{source.toeAxis, source.heelAxis, source.heelOuter,
-		source.ded, source.toeRoot, source.toeOuter}
+	cycle := [6]planePoint{source.ToeAxis, source.HeelAxis, source.HeelOuter,
+		source.Ded, source.ToeRoot, source.ToeOuter}
 	a, z := cycle[edge], cycle[(edge+1)%len(cycle)]
 	if a.U == z.U {
 		return 0, false, nil
