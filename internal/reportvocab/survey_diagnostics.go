@@ -102,7 +102,12 @@ func surveyRefusalDiagnostic[BodyT comparable, CellT any](body BodyT, payload an
 	}
 }
 
+// payloadClassName names a payload class in a staged-survey message: the class
+// the payload states through SurveyClass, else its Go type name.
 func payloadClassName(payload any) string {
+	if named, ok := payload.(interface{ SurveyClass() string }); ok {
+		return named.SurveyClass()
+	}
 	name := fmt.Sprintf("%T", payload)
 	if i := strings.LastIndexByte(name, '.'); i >= 0 {
 		return name[i+1:]

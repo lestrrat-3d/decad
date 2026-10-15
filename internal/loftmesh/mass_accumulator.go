@@ -48,7 +48,7 @@ type MassAccumulator struct {
 	sectionDelta float64
 
 	// sectionMatchedDelta is docs/loft-design.md §5.2's own matchedDelta term,
-	// composed by evalLoft as proofbound.AbsSumUpper(sectionDelta, delta) over that
+	// composed by loftrecord.Build as proofbound.AbsSumUpper(sectionDelta, delta) over that
 	// table's sectionDelta and delta rows: how far one point of a HELD chord
 	// sits from the point the recorded curve denotes at the SAME arc-length
 	// parameter. It is a DIFFERENT, strictly stronger quantity than
@@ -66,7 +66,7 @@ type MassAccumulator struct {
 
 	// chorded holds the corrections and residuals ComputeLoftChordedAllow derives from the
 	// composed sectionMatchedDelta and the delta above (loft_build.go): every
-	// field stays its zero value unless evalLoft calls ComputeLoftChordedAllow,
+	// field stays its zero value unless loftrecord.Build calls ComputeLoftChordedAllow,
 	// which it does exactly when the build holds a cell that is not faceted
 	// (a circular or free-form cell) or a positive section term. A degree-1
 	// free-form build reaches it with both section terms zero, so the readings
@@ -248,7 +248,7 @@ func (m *MassAccumulator) foldBounds(p r3.Vec) {
 
 // PerturbedAreaUpper is proofbound.PerturbedAreaUpper over the held mesh at
 // the accumulator's own delta, computed once and reused by Volume, Centroid
-// and the tessellation proof, which all read it over the one mesh evalLoft
+// and the tessellation proof, which all read it over the one mesh loftrecord.Build
 // folded into this accumulator. verts and tris must be that mesh.
 func (m *MassAccumulator) PerturbedAreaUpper(verts []r3.Vec, tris [][3]int) float64 {
 	if !m.haveAreaUpper {

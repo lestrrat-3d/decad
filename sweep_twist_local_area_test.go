@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
@@ -78,13 +79,13 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 		candidateStations, stationErr := straightTwistStations(source.path.End.Z, angle,
 			angleIv, poly, candidate)
 		require.NoError(t, stationErr)
-		part, buildErr := evalLoft(t.Context(), doc, body.n.Origin.Producer, loftPayload{
+		part, buildErr := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(doc), body.n.Origin.Producer), loftPayload{
 			Profile0: source.profile, Profile1: source.profile,
 			Plane0: candidateStations[0].Plane, Plane1: candidateStations[1].Plane,
 			Frame0: candidateStations[0].Frame, Frame1: candidateStations[1].Frame,
 			Xform: source.xform, RecordArea: [2]float64{source.recordArea, source.recordArea},
 			RetainTwistAreaCells: true,
-		}, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork())
+		}, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 		require.NoError(t, buildErr)
 		candidateHeld, ok := part.n.Payload.(loftPayload)
 		require.True(t, ok)
@@ -163,13 +164,13 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	heldCells := make([]loftPayload, cells)
 	heldCells[0] = held
 	for i := 1; i < cells; i++ {
-		part, err := evalLoft(t.Context(), doc, body.n.Origin.Producer, loftPayload{
+		part, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(doc), body.n.Origin.Producer), loftPayload{
 			Profile0: source.profile, Profile1: source.profile,
 			Plane0: stations[i].Plane, Plane1: stations[i+1].Plane,
 			Frame0: stations[i].Frame, Frame1: stations[i+1].Frame,
 			Xform: source.xform, RecordArea: [2]float64{source.recordArea, source.recordArea},
 			RetainTwistAreaCells: true,
-		}, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork())
+		}, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 		require.NoError(t, err)
 		heldCells[i], ok = part.n.Payload.(loftPayload)
 		require.True(t, ok)

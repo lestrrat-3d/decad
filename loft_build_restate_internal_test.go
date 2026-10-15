@@ -14,7 +14,7 @@ import (
 )
 
 // This file covers the record-level half of docs/tessellation-reach-design.md
-// §4: the loftmesh.MeshProof evalLoft composes, and the restatement tessellateLoft
+// §4: the loftmesh.MeshProof loftrecord.Build composes, and the restatement tessellateLoft
 // publishes from it. The public half — mesh shape, boolean admission, export
 // determinism — stays in apitest/tessellate_loft_test.go.
 
@@ -205,7 +205,7 @@ func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
 
 // TestTessellateLoftRefusesAnUnrestatablePayload covers the two refusal
 // families docs/tessellation-reach-design.md §4 assigns this path. Neither is
-// reachable from a build — evalLoft copies all five fields from one assembly
+// reachable from a build — loftrecord.Build copies all five fields from one assembly
 // and composes the proof beside them — so each is driven by handing
 // tessellateLoft a payload no evaluator wrote.
 func TestTessellateLoftRefusesAnUnrestatablePayload(t *testing.T) {

@@ -159,13 +159,13 @@ answering `+Inf` for an underivable enclosure is the same refusal.
 `loftPayload` (`loft_build.go`) holds `verts`, `tris`, `walls`. `tris[:walls]` are the wall triangles in
 `loftAssembly.cell`/`side` order; `tris[walls:walls+capStartCount]` are `capStart`'s, the rest `capEnd`'s.
 `capStartCount`, `cell` and `side` live on `loftAssembly` only. `matchedDelta` and
-`loftChordedAllow.maxTwistOffsetUpper` are locals of `evalLoft`; the payload's own doc comment says
+`loftChordedAllow.maxTwistOffsetUpper` are locals of `loftrecord.Build`; the payload's own doc comment says
 `matchedDelta` is deliberately not stored because nothing stored needed it. The restatement needs it, so the
-payload gains the COMPOSED proof terms, regenerated on every `Placed` (which re-runs `evalLoft`), never the
+payload gains the COMPOSED proof terms, regenerated on every `Placed` (which re-runs `loftrecord.Build`), never the
 raw `matchedDelta`:
 
 ```go
-// loftmesh.MeshProof is tess §2's loftPayload row, composed once by evalLoft.
+// loftmesh.MeshProof is tess §2's loftPayload row, composed once by loftrecord.Build.
 type MeshProof struct {
     FacetDeparture float64 // absSumUpper(matchedDelta, maxTwistOffsetUpper)
     AreaSlack      float64
@@ -174,10 +174,10 @@ type MeshProof struct {
 ```
 
 `loftPayload` gains `capStartCount int`, `cell [][2]int`, `side []uint8`, `proof loftmesh.MeshProof`. All four are
-copied from `loftAssembly` / composed at the end of `evalLoft`; `Placed` already nils the triangle fields and
+copied from `loftAssembly` / composed at the end of `loftrecord.Build`; `Placed` already nils the triangle fields and
 re-evaluates, so nothing stored can disagree with the records.
 
-### Composition (in `evalLoft`, after `mass.chorded` is set)
+### Composition (in `loftrecord.Build`, after `mass.chorded` is set)
 
 | Term | Composition | Owner of each input |
 |---|---|---|
@@ -777,7 +777,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    `loft_moments_internal_test.go`: zero for a `LineSeg`-only build, positive for an `ArcSeg` pair with a
    twisted cell, exactly the per-cell sum.
 8. **Files:** `loft_build.go`, `internal/loftmesh/mass_proof.go`. **What:** `loftmesh.MeshProof`; `loftPayload` gains `capStartCount`, `cell`, `side`,
-   `proof`; `evalLoft` composes §4's three terms after `mass.chorded` and stores them; rewrite the
+   `proof`; `loftrecord.Build` composes §4's three terms after `mass.chorded` and stores them; rewrite the
    `sectionDelta` doc comment paragraph §8 names. **Depends on:** 7. **Tests:** internal: `proof.FacetDeparture
    == delta` for a placed `LineSeg`-only loft; `== 0` unplaced pinned; `> sectionDelta` for a chorded pair
    with twist.

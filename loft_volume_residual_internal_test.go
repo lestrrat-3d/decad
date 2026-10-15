@@ -17,7 +17,7 @@ import (
 // This file tests docs/loft-gear-bounds-design.md §2's volume residual —
 // sweptLeg + wallLeg + skirtLeg — and §4's per-cell cap tube, over the
 // production path: loftmesh.ValidateLoftRecords, loftmesh.PairRecords, loftmesh.AssembleTriangulated and
-// buildLoftMass, the same steps evalLoft runs, at a chord target the test
+// buildLoftMass, the same steps loftrecord.Build runs, at a chord target the test
 // chooses.
 
 // loftMassBuild is one build's accumulator and the inputs it was folded from.
@@ -40,7 +40,7 @@ func (b loftMassBuild) matchedDelta() float64 {
 // stationsPerLoop is the number of wall cells on the outer loop.
 func (b loftMassBuild) stationsPerLoop() int { return len(b.pairs[0].V) }
 
-// loftMassAtTarget runs evalLoft's own record, pairing, assembly and mass
+// loftMassAtTarget runs loftrecord.Build's own record, pairing, assembly and mass
 // steps at chord target target; a target of 0 reads the production target.
 func loftMassAtTarget(t *testing.T, pl loftPayload, target float64) loftMassBuild {
 	t.Helper()
@@ -180,7 +180,7 @@ func TestLoftVolumeResidualIsPerCellWallLegPlusSkirt(t *testing.T) {
 			}
 			if tc.target == 0 {
 				body := evalLoftFixture(t, tc.pl)
-				require.Equal(t, measurementFromInternal(body.n.Volume), m.volume(a.Verts, a.Tris), "the helper reads the build evalLoft publishes")
+				require.Equal(t, measurementFromInternal(body.n.Volume), m.volume(a.Verts, a.Tris), "the helper reads the build loftrecord.Build publishes")
 			}
 
 			// The per-cell wall leg and the every-cell seam perimeter, in the

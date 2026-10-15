@@ -3,15 +3,11 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -23,11 +19,11 @@ import (
 )
 
 // This file is docs/loft-design.md PR 1b: the public entry point over PR 1a's
-// evaluator (loft_build.go). It owns the LoftOption surface, gates S9-S10,
+// evaluator (internal/loftrecord). It owns the LoftOption surface, gates S9-S10,
 // and the atomic record->evaluate->commit tail (§10). internal/featureoption
 // owns S11 and S4's arity half. The other gates — S1-S8 and S13's coordinate-range
 // gate — is loftmesh.ValidateLoftRecords', loftmesh.AssembleTriangulated's and loftmesh.LoftCrossingAuditStructured's, run
-// inside evalLoft in §4's stated order.
+// inside loftrecord.Build in §4's stated order.
 
 // LoftOption configures Loft.
 type LoftOption interface {
@@ -127,12 +123,12 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 	// evaluator §1's one live-profile read, reject-only (not a new gate —
 	// docs/loft-design.md §2 states no new gate here; both Extrude and
 	// Revolve run the identical falsifier on their own recorded profile). One
-	// counter per profile, threaded through to evalLoft so a single loft
+	// counter per profile, threaded through to loftrecord.Build so a single loft
 	// operation opens exactly two R7 ceilings — one per record — rather than
 	// four (docs/spline-design.md §5.2).
 	// The two integrals the falsifier computes are also the records' own
 	// areas the chord target reads (docs/loft-gear-bounds-design.md §5), so
-	// they ride on the payload rather than being integrated again in evalLoft.
+	// they ride on the payload rather than being integrated again in loftrecord.Build.
 	work0 := freeform.NewFreeformWork()
 	work1 := freeform.NewFreeformWork()
 	// The profile area falsifier spends the same record-wide counter as the
@@ -169,7 +165,7 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 
 	ref := d.nextProducerID()
 
-	body, err := evalLoft(ctx, d, ref, loftPayload{
+	body, err := bodyResult(loftrecord.Build(ctx, envOf(documentNode(d), ref), loftPayload{
 		Profile0: profile0, Profile1: profile1,
 		Plane0: plane0, Plane1: plane1,
 		Frame0: frame0, Frame1: frame1,
@@ -178,7 +174,7 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 		AuthenticatedReconstruction: true,
 		SurfaceResult:               surfaceResult,
 		RecordArea:                  [2]float64{recordArea0, recordArea1},
-	}, proofbound.NewWorkBudget(ctx), work0, work1)
+	}, proofbound.NewWorkBudget(ctx), work0, work1))
 	if err != nil {
 		return nil, err
 	}
@@ -220,31 +216,6 @@ func falsifyLoftRecordedArea(profile profileRecord, sketchArea float64, work *fr
 type ChainLoftOption interface {
 	option.Interface
 	chainLoftOption()
-}
-
-// chainLoftPayload is LoftChain's own record of a ribbon body: the two
-// recorded open walks, the two planes and frames they lift through, and the
-// accumulated rigid placement. It stays DISTINCT from loftPayload because a
-// chain-fed build mints no cap, carries no volume and runs no whole-shell
-// orientation step, so a consumer dispatching on loftPayload would read three
-// facts about it that are not true.
-type chainLoftPayload struct {
-	Chain0, Chain1 chainRecord
-	Plane0, Plane1 planeRecord
-	Frame0, Frame1 r3.Frame
-	Xform          r3.Transform
-}
-
-// Transform is the accumulated rigid placement.
-func (lp chainLoftPayload) Transform() r3.Transform { return lp.Xform }
-
-// Placed re-evaluates the same two records under the composed motion (core
-// §8), re-running every gate decided from the records and rebuilding from
-// scratch, exactly as docs/loft-design.md §4 states a loft placement does.
-func (lp chainLoftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
-	d, ref := documentHandle(env.Doc), env.Ref
-	lp.Xform = composed
-	return placedNode(evalChainLoftContext(ctx, d, ref, lp, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 }
 
 // LoftChain builds a sheet ruled between the open chains c0 (of s0) and c1 (of
@@ -312,12 +283,12 @@ func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.
 	}
 
 	ref := d.nextProducerID()
-	body, err := evalChainLoftContext(ctx, d, ref, chainLoftPayload{
+	body, err := bodyResult(loftrecord.BuildChain(ctx, envOf(documentNode(d), ref), chainLoftPayload{
 		Chain0: chain0, Chain1: chain1,
 		Plane0: plane0, Plane1: plane1,
 		Frame0: frame0, Frame1: frame1,
 		Xform: r3.Identity(),
-	}, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	}, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, err
 	}
@@ -326,201 +297,4 @@ func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.
 	}
 	d.commit(body)
 	return body, nil
-}
-
-// evalChainLoftContext builds the ribbon body: the two station chains, the two
-// wall triangles per chord cell, the crossing audit over that set, the B-rep
-// topology with no cap, and the two readings a sheet publishes
-// (docs/loft-design.md §16.5).
-//
-// It never runs §5's whole-shell orientation step. That step reads the signed
-// tetrahedron sum over a CLOSED triangle set, which this build does not
-// assemble; loftmesh.ChainLoftPlaneSideGate is what states the side instead, and the
-// local winding below is emitted unflipped because that gate has already
-// proven it correct.
-func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp chainLoftPayload, budget *proofbound.WorkBudget, work0, work1 *freeform.FreeformWork) (*Body, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	walks0, walks1, err := loftmesh.ValidateChainLoftRecords(lp.Chain0, lp.Chain1, lp.Plane0, lp.Plane1, work0, work1)
-	if err != nil {
-		return nil, err
-	}
-	v, w, stationRound, err := loftmesh.ChainLoftStations(walks0, walks1)
-	if err != nil {
-		return nil, err
-	}
-
-	// S13, decided before the first coordinate is lifted into an exact dyadic,
-	// exactly as loftmesh.AssembleTriangulated decides it: tessellation.OrientationSign is not run here,
-	// but the mass accumulator and the audit both lift every vertex through
-	// dyVec, whose mustDyOf PANICS on a non-finite float.
-	anchor := lp.Xform.Apply(lp.Plane0.Origin)
-	if !proofbound.FiniteVec(anchor) {
-		return nil, loftmesh.ErrPointUnrepresentable("placed plane origin")
-	}
-
-	verts := make([]r3.Vec, 0, 2*len(v))
-	maxInputAbs := 0.0
-	for _, side := range []struct {
-		pts   []sectionrecord.Point2
-		frame r3.Frame
-		what  string
-	}{{v, lp.Frame0, "first"}, {w, lp.Frame1, "second"}} {
-		for j, pt := range side.pts {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			lifted := side.frame.ToWorldUV(pt.U, pt.V)
-			maxInputAbs = math.Max(maxInputAbs, proofbound.VecMaxAbs(lifted))
-			placed := lp.Xform.Apply(lifted)
-			if !proofbound.FiniteVec(placed) {
-				return nil, loftmesh.ErrPointUnrepresentable(fmt.Sprintf("placed station %d on the %s walk", j, side.what))
-			}
-			verts = append(verts, placed)
-		}
-	}
-
-	// placeAllow is zero exactly when xform is the identity transform — an
-	// exact struct comparison, never a tolerance — and stationRound is the
-	// independent leg beside it, exactly as loftmesh.AssembleTriangulated composes the two.
-	placeAllow := 0.0
-	if lp.Xform != r3.Identity() {
-		placeAllow = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(lp.Xform.Translation()))
-	}
-	delta := proofbound.AbsSumUpper(stationRound, placeAllow)
-
-	n := len(v) - 1
-	vIdx := make([]int, len(v))
-	wIdx := make([]int, len(w))
-	for j := range v {
-		vIdx[j] = j
-		wIdx[j] = len(v) + j
-	}
-	tris := make([][3]int, 0, 2*n)
-	for j := range n {
-		tris = append(tris,
-			[3]int{vIdx[j], vIdx[j+1], wIdx[j+1]},
-			[3]int{vIdx[j], wIdx[j+1], wIdx[j]},
-		)
-	}
-
-	if err := loftmesh.LoftCrossingAudit(budget, verts, tris); err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	body := bornBody(&Body{n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet, Doc: documentNode(d)}})
-	walls, err := buildChainLoftTopology(ctx, body, ref, verts, tris, vIdx, wIdx, delta)
-	if err != nil {
-		return nil, err
-	}
-	if err := topobuild.AttachFaceLoops(ctx, faceNodes(walls)); err != nil {
-		return nil, err
-	}
-	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(walls))
-
-	mass := newLoftMassAccumulator(anchor, delta, 0, 0)
-	for _, t := range tris {
-		mass.add(verts[t[0]], verts[t[1]], verts[t[2]], true)
-	}
-	// No cap rational is passed: this build mints no cap, so the reading is
-	// the wall sum alone rather than a sum with the two caps subtracted back
-	// off it the way a surface-result Loft's is (docs/loft-design.md §16.5).
-	body.n.Area = measurementToInternal(mass.area())
-	bounds, ok := mass.bounds()
-	if !ok {
-		return nil, fmt.Errorf(`%w: the chain loft has no vertices to bound`, ErrDegenerate)
-	}
-	body.n.Bounds = boxToInternal(bounds)
-	// volume and centroid stay at their zero value: finite, so the validation
-	// below passes, and neither is reachable through Body.Volume/Body.Centroid
-	// while solid is false, exactly as chainrecord.Build leaves them.
-	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
-		return nil, err
-	}
-	body.n.Payload = lp
-	return body, nil
-}
-
-// buildChainLoftTopology builds the ribbon's B-rep over the assembled triangle
-// set: the same four edge families buildLoftTopology builds for a closed loft
-// — bottom rim, top rim, diagonal and rung — with the wrap dropped everywhere.
-//
-// An n-cell walk carries n bottom rims, n top rims, n diagonals and n+1 rungs.
-// Every diagonal and every INTERIOR rung bounds two triangles; the n rims of
-// each walk and the two END rungs bound one each, which is the 2n+2 free edges
-// docs/loft-design.md §16.5 states. No loop is closed back to its first
-// station and no cap loop is built, so nothing here reads a wrap index.
-//
-// A free end rung takes the concave default rather than a measured sense: only
-// an interior rung has two incident triangles to cross, so a free end carries
-// no turn of its own — the identical rule chainrecord's buildSides applies to a chain
-// prism's own free-end sweep edges. Each walk's rims take the outer-loop
-// convexity convention, since a chain walk is loop 0 throughout
-// (docs/surface-design.md §13.4).
-func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, verts []r3.Vec, tris [][3]int, vIdx, wIdx []int, delta float64) ([]*Face, error) {
-	n := len(vIdx) - 1
-	vertexObjs := make([]*topo.Vertex, len(verts))
-	for i, p := range verts {
-		vertexObjs[i] = topobuild.LoftVertex(handleAlloc{}, p, delta)
-	}
-
-	lowerTri := make([][3]int, n)
-	upperTri := make([][3]int, n)
-	for j := range n {
-		lowerTri[j] = tris[2*j]
-		upperTri[j] = tris[2*j+1]
-	}
-
-	rimBottom := make([]*topo.Edge, n)
-	rimTop := make([]*topo.Edge, n)
-	diagE := make([]*topo.Edge, n)
-	rungE := make([]*topo.Edge, n+1)
-	for j := range n {
-		rimBottom[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, verts, vIdx[j], vIdx[j+1], true, delta)
-		rimTop[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, verts, wIdx[j], wIdx[j+1], true, delta)
-		diagE[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, verts, vIdx[j], wIdx[j+1],
-			loftmesh.JunctionConvex(verts, lowerTri[j], upperTri[j], vIdx[j], wIdx[j+1]), delta)
-	}
-	for j := 0; j <= n; j++ {
-		convex := false
-		if j > 0 && j < n {
-			convex = loftmesh.JunctionConvex(verts, lowerTri[j-1], upperTri[j], vIdx[j], wIdx[j])
-		}
-		rungE[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, verts, vIdx[j], wIdx[j], convex, delta)
-	}
-
-	walls := make([]*Face, 0, 2*n)
-	for j := range n {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		lowerFace, err := buildLoftWallFace(body, ref, verts, lowerTri[j], 0, j, 0, delta, nil)
-		if err != nil {
-			return nil, err
-		}
-		lowerFace.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-			{Edge: rimBottom[j], Forward: true},
-			{Edge: rungE[j+1], Forward: true},
-			{Edge: diagE[j], Forward: false},
-		},
-		}}))}
-		walls = append(walls, lowerFace)
-
-		upperFace, err := buildLoftWallFace(body, ref, verts, upperTri[j], 0, j, 1, delta, nil)
-		if err != nil {
-			return nil, err
-		}
-		upperFace.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-			{Edge: diagE[j], Forward: true},
-			{Edge: rimTop[j], Forward: false},
-			{Edge: rungE[j], Forward: false},
-		},
-		}}))}
-		walls = append(walls, upperFace)
-	}
-	return walls, nil
 }

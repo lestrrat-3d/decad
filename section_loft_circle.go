@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -19,7 +20,7 @@ func loftCircleSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, boo
 	// reject-only backstops if those gates change.
 	if pl.ConstructionDelta != 0 || len(pl.BlendSegs) != 0 ||
 		pl.ThroughBoreCut || pl.AnalyticBore || pl.Xform != r3.Identity() ||
-		directLoftCircularHole(pl) == loftCircleWallNone {
+		loftrecord.DirectCircularHole(pl) == loftrecord.WallNone {
 		return profileRecord{}, false
 	}
 	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)

@@ -13,12 +13,12 @@ import (
 // ComputeLoftChordedAllow derives LoftChordedAllow's corrections and bounds by walking
 // every wall cell of every loop pairs holds, over the SAME cell corner
 // convention AssembleTriangulated's own Table B split uses (vLo, vHi = section-0's
-// two corners; wLo, wHi = section-1's) — verts/vIdx/wIdx are evalLoft's own
+// two corners; wLo, wHi = section-1's) — verts/vIdx/wIdx are loftrecord.Build's own
 // assembled Assembly fields. anchor is the accumulator's own anchor (p0's
 // placed plane origin), read by the exact first-moment correction.
 //
 // matchedDelta is docs/loft-design.md §5.2's own matchedDelta term, already
-// COMPOSED by evalLoft as proofbound.AbsSumUpper(sectionDelta, delta) over that table's
+// COMPOSED by loftrecord.Build as proofbound.AbsSumUpper(sectionDelta, delta) over that table's
 // sectionDelta and delta rows — the build-wide PARAMETER-MATCHED displacement.
 // The skirt leg reads it. delta is that same table's delta row on its own —
 // the held vertex displacement — passed alongside so each cell can compose its

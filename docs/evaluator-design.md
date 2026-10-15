@@ -858,7 +858,9 @@ are aliases of `patchchain.Payload` and `patchchain.BodyPayload`: their `Placed`
 `revolveplan.ChainPayload`: their `Placed` runs `revolveplan.Build` and
 `revolveplan.BuildChain`. `mitredSweepPayload` is an alias of
 `sweepmitre.Payload`: its `Placed` runs `sweepmitre.Build`. `coilPayload` is an alias of
-`coilshell.Payload`: its `Placed` runs `coilshell.BuildBody`. A payload that still lives in the root
+`coilshell.Payload`: its `Placed` runs `coilshell.BuildBody`. `loftPayload` and
+`chainLoftPayload` are aliases of `loftrecord.Payload` and `loftrecord.ChainPayload`:
+their `Placed` runs `loftrecord.Build` and `loftrecord.BuildChain`. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and
 runs its root builder.
 

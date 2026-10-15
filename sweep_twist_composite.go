@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -245,12 +246,12 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	budget := proofbound.NewWorkBudget(ctx)
 	for i := range parts {
-		part, buildErr := evalLoft(ctx, d, ref, loftPayload{
+		part, buildErr := bodyResult(loftrecord.Build(ctx, envOf(documentNode(d), ref), loftPayload{
 			Profile0: profile, Profile1: profile,
 			Plane0: stations[i].Plane, Plane1: stations[i+1].Plane,
 			Frame0: stations[i].Frame, Frame1: stations[i+1].Frame,
 			Xform: xform, RecordArea: [2]float64{recordArea, recordArea},
-		}, budget, work0, work1)
+		}, budget, work0, work1))
 		if buildErr != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, buildErr)
 		}

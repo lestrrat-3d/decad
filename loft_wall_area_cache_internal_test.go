@@ -6,10 +6,12 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch"
-	"github.com/stretchr/testify/require"
 )
 
 // TestLoftWallAreaCacheMatchesHeldTriangles pins the topology-to-mass area
@@ -41,7 +43,7 @@ func TestLoftWallAreaCacheMatchesHeldTriangles(t *testing.T) {
 	verts, tris := slices.Clone(a.Verts), slices.Clone(a.Tris)
 	cap0 := loftmesh.CapPolygonAreaRat(a.Pts0, a.LoopIdx0)
 	cap1 := loftmesh.CapPolygonAreaRat(a.Pts1, a.LoopIdx1)
-	_, _, walls, areas, err := buildLoftTopology(t.Context(), body, body.n.Origin.Producer, a, cap0, cap1)
+	_, _, walls, areas, err := loftrecord.BuildTopology(t.Context(), envOf(body.n.Doc, body.n.Origin.Producer), bodyNode(body), a, cap0, cap1)
 	require.NoError(t, err)
 	require.Equal(t, a.Walls, len(walls))
 	require.Equal(t, a.Walls, len(areas))
@@ -53,7 +55,7 @@ func TestLoftWallAreaCacheMatchesHeldTriangles(t *testing.T) {
 		lo, hi := loftmesh.WallTriangleArea(proofarith.Xsub(y, x), proofarith.Xsub(z, x))
 		require.Equal(t, math.Float64bits(lo), math.Float64bits(areas[k].Lo), "lower wall %d", k)
 		require.Equal(t, math.Float64bits(hi), math.Float64bits(areas[k].Hi), "upper wall %d", k)
-		require.Equal(t, math.Float64bits(lo), math.Float64bits(walls[k].n.Area), "face %d", k)
+		require.Equal(t, math.Float64bits(lo), math.Float64bits(walls[k].Area), "face %d", k)
 		require.Equal(t, uint8(k%2), a.Side[k])
 		if k%2 == 1 {
 			require.Equal(t, a.Cell[k-1], a.Cell[k])
@@ -68,7 +70,7 @@ func TestLoftWallAreaCacheMatchesHeldTriangles(t *testing.T) {
 	require.Equal(t, tris, a.Tris)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	cancelStart, cancelEnd, cancelWalls, noAreas, err := buildLoftTopology(ctx, body, body.n.Origin.Producer, a, cap0, cap1)
+	cancelStart, cancelEnd, cancelWalls, noAreas, err := loftrecord.BuildTopology(ctx, envOf(body.n.Doc, body.n.Origin.Producer), bodyNode(body), a, cap0, cap1)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, cancelStart)
 	require.Nil(t, cancelEnd)

@@ -6,12 +6,26 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+
+	"github.com/stretchr/testify/require"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
-	"github.com/stretchr/testify/require"
 )
+
+// buildLoftMass is loftrecord.BuildMass over every wall triangle, read through
+// the root accumulator adapter the tests compare against.
+func buildLoftMass(pl loftPayload, a loftmesh.Assembly, pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta float64) *loftMassAccumulator {
+	return buildLoftMassWithWallAreas(pl, a, pairs, sectionDelta, sectionMatchedDelta, nil)
+}
+
+// buildLoftMassWithWallAreas is loftrecord.BuildMass with the wall areas
+// BuildTopology already stamped.
+func buildLoftMassWithWallAreas(pl loftPayload, a loftmesh.Assembly, pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta float64, wallAreas []loftmesh.WallArea) *loftMassAccumulator {
+	return &loftMassAccumulator{MassAccumulator: loftrecord.BuildMass(pl, a, pairs, sectionDelta, sectionMatchedDelta, wallAreas)}
+}
 
 // addBoxFaces folds a closed, outward-oriented axis-aligned box [0,a]x[0,b]x
 // [0,c] into the accumulator as 12 wall triangles (2 per face, split along
