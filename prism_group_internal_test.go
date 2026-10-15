@@ -19,7 +19,7 @@ func internalBoxGroup(t *testing.T, doc *Document) (*Body, stackedPrismPayload) 
 	require.NoError(t, err)
 	sp, ok := group.n.Payload.(stackedPrismPayload)
 	require.True(t, ok)
-	require.True(t, sp.isGroup())
+	require.True(t, sp.IsGroup())
 	return group, sp
 }
 
@@ -50,23 +50,23 @@ func TestPrismGroupRegionsDisjointProof(t *testing.T) {
 func TestPrismGroupPayloadAudit(t *testing.T) {
 	doc := New()
 	_, base := internalBoxGroup(t, doc)
-	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: base.slabs, Interfaces: base.interfaces}))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: base.Slabs, Interfaces: base.Interfaces}))
 	cases := []struct {
 		name   string
 		change func(*stackedPrismPayload)
 		want   error
 	}{
 		{"an interface", func(sp *stackedPrismPayload) {
-			sp.interfaces = []stackedrecord.Interface{{}}
+			sp.Interfaces = []stackedrecord.Interface{{}}
 		}, ErrUnsupported},
-		{"empty interval", func(sp *stackedPrismPayload) { sp.slabs[0].Z1 = sp.slabs[0].Z0 }, ErrDegenerate},
-		{"empty region", func(sp *stackedPrismPayload) { sp.slabs[0].Regions[1] = profileRecord{} }, ErrDegenerate},
+		{"empty interval", func(sp *stackedPrismPayload) { sp.Slabs[0].Z1 = sp.Slabs[0].Z0 }, ErrDegenerate},
+		{"empty region", func(sp *stackedPrismPayload) { sp.Slabs[0].Regions[1] = profileRecord{} }, ErrDegenerate},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			sp := cloneStackedForAudit(base)
 			tc.change(&sp)
-			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}), tc.want)
+			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.Slabs, Interfaces: sp.Interfaces}), tc.want)
 		})
 	}
 }
@@ -88,8 +88,8 @@ func TestPrismGroupSixHoleCutIsUndisplaced(t *testing.T) {
 		require.NoError(t, err)
 	}
 	sp := group.n.Payload.(stackedPrismPayload)
-	require.Len(t, sp.slabs[0].Regions, 6)
-	require.Zero(t, sp.sectionDelta)
+	require.Len(t, sp.Slabs[0].Regions, 6)
+	require.Zero(t, sp.SectionDelta)
 	pp, ok, err := tryPrismGroupCut(t.Context(), plate, group)
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -167,7 +167,7 @@ func TestPrismGroupDisplacedToolChargesTheCrossing(t *testing.T) {
 		require.NoError(t, err)
 		sp, ok := tool.n.Payload.(stackedPrismPayload)
 		require.True(t, ok)
-		require.True(t, sp.isGroup())
+		require.True(t, sp.IsGroup())
 
 		// δ_B: the re-expression's own rounding over the group's regions.
 		target := plate.n.Payload.(prismPayload)

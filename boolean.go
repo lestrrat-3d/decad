@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -361,7 +362,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			}
 			return nil, err
 		} else if ok {
-			body, err := evalStackedContext(ctx, d, ref, sp)
+			body, err := bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), sp, stackedrecord.OwnPlan{}))
 			if err != nil {
 				return nil, err
 			}
@@ -376,7 +377,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			}
 			return nil, err
 		} else if ok {
-			body, err := evalStackedContext(ctx, d, ref, sp)
+			body, err := bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), sp, stackedrecord.OwnPlan{}))
 			if err != nil {
 				return nil, err
 			}
@@ -396,7 +397,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			}
 			return nil, err
 		} else if ok {
-			body, err := evalStackedContext(ctx, d, ref, sp)
+			body, err := bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), sp, stackedrecord.OwnPlan{}))
 			if err != nil {
 				return nil, err
 			}
@@ -1239,7 +1240,7 @@ func sectionDisplacementOf(b *Body) float64 {
 	case prismPayload:
 		return p.SectionDelta
 	case stackedPrismPayload:
-		return p.sectionDelta
+		return p.SectionDelta
 	case brepPayload:
 		return p.sectionDelta()
 	default:
@@ -1363,7 +1364,7 @@ func analyticBooleanBody(ctx context.Context, d *Document, ref producerID, paylo
 	case prismPayload:
 		return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), p, freeform.NewFreeformWork()))
 	case stackedPrismPayload:
-		return evalStackedContext(ctx, d, ref, p)
+		return bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), p, stackedrecord.OwnPlan{}))
 	case brepPayload:
 		return evalBrepContext(ctx, d, ref, p)
 	default:

@@ -473,7 +473,7 @@ func TestExtrudeFreeformVerifySound(t *testing.T) {
 
 // TestExtrudeFreeformPlacementReproducesVolume asserts observable test 15:
 // Transform and Copy of a free-form prism each reproduce the
-// unplaced volume. Each mints its own R7 work ceiling (prismPayload.placed
+// unplaced volume. Each mints its own R7 work ceiling (prismPayload.Placed
 // carries no preflight counter across the call), so each re-spends the full
 // budget — cheap for this fixture, but the reason a caller placing a large
 // free-form body many times pays for it every time.

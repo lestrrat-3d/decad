@@ -172,7 +172,7 @@ func (cp cupView) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 	if err != nil || displaced == 0 {
 		return lo, hi, delta, err
 	}
-	return lo, hi, proofbound.AbsSumUpper(delta, proofbound.ProductUpper(displaced, vecL1(g))), nil
+	return lo, hi, proofbound.AbsSumUpper(delta, proofbound.ProductUpper(displaced, stackedrecord.VecL1(g))), nil
 }
 
 // cupPayloadFor assembles the cup record from the receiver prism, its offset
@@ -253,12 +253,12 @@ type cupPayload struct {
 }
 
 // Transform is the accumulated rigid placement.
-func (cp cupPayload) Transform() r3.Transform { return cp.stack.xform }
+func (cp cupPayload) Transform() r3.Transform { return cp.stack.Xform }
 
 // Placed re-evaluates the same cup under the composed motion (evaluator §8).
 func (cp cupPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	d, ref := documentHandle(env.Doc), env.Ref
-	cp.stack.xform = composed
+	cp.stack.Xform = composed
 	return placedNode(evalCupContext(ctx, d, ref, cp))
 }
 
@@ -273,14 +273,14 @@ func (cp cupPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 // floorSlab is the index of the slab holding the outer region: the first
 // when the cup opens at the top, the second when it opens at the bottom.
 func (cp cupPayload) floorSlab() int {
-	if len(cp.stack.slabs[0].Regions) == 1 && len(cp.stack.slabs[1].Regions) == 1 {
+	if len(cp.stack.Slabs[0].Regions) == 1 && len(cp.stack.Slabs[1].Regions) == 1 {
 		// A hole-free cup: the floor is the slab whose region has no hole.
-		if len(cp.stack.slabs[0].Regions[0].Holes) == 0 {
+		if len(cp.stack.Slabs[0].Regions[0].Holes) == 0 {
 			return 0
 		}
 		return 1
 	}
-	if len(cp.stack.slabs[0].Regions) == 1 {
+	if len(cp.stack.Slabs[0].Regions) == 1 {
 		return 0
 	}
 	return 1
@@ -292,16 +292,16 @@ func (cp cupPayload) floorSlab() int {
 // and the wall slab's far end is zOpen.
 func (cp cupPayload) view() cupView {
 	f := cp.floorSlab()
-	floor, wall := cp.stack.slabs[f], cp.stack.slabs[1-f]
-	boundary := cp.stack.interfaces[0]
+	floor, wall := cp.stack.Slabs[f], cp.stack.Slabs[1-f]
+	boundary := cp.stack.Interfaces[0]
 	v := cupView{
 		outer:          floor.Regions[0],
-		frame:          cp.stack.frame,
+		frame:          cp.stack.Frame,
 		thickness:      cp.thickness,
 		thicknessDelta: cp.thicknessDelta,
 		offsetDelta:    cp.offsetDelta,
 		sense:          cp.sense,
-		xform:          cp.stack.xform,
+		xform:          cp.stack.Xform,
 	}
 	if f == 0 {
 		v.cavity = boundary.LowerExposed[0]
@@ -332,7 +332,7 @@ func (cp cupView) payload(ctx context.Context) (cupPayload, error) {
 	wall := stackedrecord.Slab{Regions: bands}
 	exposed := []profileRecord{cp.cavity}
 	out := cupPayload{
-		stack:          stackedPrismPayload{frame: cp.frame, xform: cp.xform},
+		stack:          stackedPrismPayload{Frame: cp.frame, Xform: cp.xform},
 		thickness:      cp.thickness,
 		thicknessDelta: cp.thicknessDelta,
 		offsetDelta:    cp.offsetDelta,
@@ -341,13 +341,13 @@ func (cp cupView) payload(ctx context.Context) (cupPayload, error) {
 	if cp.zOpen > cp.zOuter { // open at the top
 		floor.Z0, floor.Z0Delta, floor.Z1, floor.Z1Delta = cp.zOuter, cp.zOuterDelta, cp.zCav, cp.zCavDelta
 		wall.Z0, wall.Z0Delta, wall.Z1, wall.Z1Delta = cp.zCav, cp.zCavDelta, cp.zOpen, cp.zOpenDelta
-		out.stack.slabs = []stackedrecord.Slab{floor, wall}
-		out.stack.interfaces = []stackedrecord.Interface{{LowerExposed: exposed}}
+		out.stack.Slabs = []stackedrecord.Slab{floor, wall}
+		out.stack.Interfaces = []stackedrecord.Interface{{LowerExposed: exposed}}
 	} else {
 		wall.Z0, wall.Z0Delta, wall.Z1, wall.Z1Delta = cp.zOpen, cp.zOpenDelta, cp.zCav, cp.zCavDelta
 		floor.Z0, floor.Z0Delta, floor.Z1, floor.Z1Delta = cp.zCav, cp.zCavDelta, cp.zOuter, cp.zOuterDelta
-		out.stack.slabs = []stackedrecord.Slab{wall, floor}
-		out.stack.interfaces = []stackedrecord.Interface{{UpperExposed: exposed}}
+		out.stack.Slabs = []stackedrecord.Slab{wall, floor}
+		out.stack.Interfaces = []stackedrecord.Interface{{UpperExposed: exposed}}
 	}
 	return out, nil
 }
@@ -364,44 +364,44 @@ type cupPlan struct {
 	offsetDelta float64
 }
 
-// wallRoleLoop is the column's loop index in O, or in C for a cavity column.
+// WallRoleLoop is the column's loop index in O, or in C for a cavity column.
 // A wall-slab region m >= 1 lines O's hole m-1 with C's hole m-1, so loop m
 // of either region; region 0 holds both outers, loop 0 of each.
-func (p cupPlan) wallRoleLoop(col stackedColumn) int {
+func (p cupPlan) WallRoleLoop(col stackedrecord.WallColumn) int {
 	if col.Start != col.End && col.Start == p.floor {
 		return col.LoopIndex
 	}
 	return col.Region
 }
 
-func (p cupPlan) nameWalls(ctx context.Context, col stackedColumn, faces []*Face, ref producerID) error {
+func (p cupPlan) NameWalls(ctx context.Context, col stackedrecord.WallColumn, faces []*topo.Face, ref producerID) error {
 	if col.Start != col.End {
 		return nil
 	}
 	return renameCavityRoles(ctx, faces, ref)
 }
 
-func (p cupPlan) capRole(slab, region int, _ bool) string {
+func (p cupPlan) CapRole(slab, region int, _ bool) string {
 	if slab == p.floor {
 		return provenance.RoleCapStart
 	}
 	return fmt.Sprintf("rim(%d)", region)
 }
 
-func (cupPlan) patchRole(stackedrecord.Patch) string { return roleShellCap }
+func (cupPlan) PatchRole(stackedrecord.Patch) string { return roleShellCap }
 
-func (p cupPlan) columnDelta(col stackedColumn) float64 {
+func (p cupPlan) ColumnDelta(col stackedrecord.WallColumn) float64 {
 	if (col.Start == col.End) == (p.sense != Outward) {
 		return p.offsetDelta
 	}
 	return 0
 }
 
-// order lists the faces as the cup always has: outer walls, cavity walls, the
-// kept cap, the pocket floor, then the rims, each group in build order.
-func (cupPlan) order(faces []*Face) []*Face {
-	rank := func(f *Face) int {
-		role := f.n.Origins[0].Role
+// Order lists the faces as the cup always has: outer walls, cavity walls, the
+// kept cap, the pocket floor, then the rims, each group in build Order.
+func (cupPlan) Order(faces []*topo.Face) []*topo.Face {
+	rank := func(f *topo.Face) int {
+		role := f.Origins[0].Role
 		switch {
 		case strings.HasPrefix(role, "side("):
 			return 0
@@ -416,7 +416,7 @@ func (cupPlan) order(faces []*Face) []*Face {
 		}
 	}
 	out := slices.Clone(faces)
-	slices.SortStableFunc(out, func(a, b *Face) int { return rank(a) - rank(b) })
+	slices.SortStableFunc(out, func(a, b *topo.Face) int { return rank(a) - rank(b) })
 	return out
 }
 
@@ -426,8 +426,8 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body, err := evalStackedPlanContext(ctx, d, ref, cp.stack,
-		cupPlan{floor: cp.floorSlab(), sense: cp.sense, offsetDelta: cp.offsetDelta})
+	body, err := bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), cp.stack,
+		cupPlan{floor: cp.floorSlab(), sense: cp.sense, offsetDelta: cp.offsetDelta}))
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +440,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 // (B5/B6) gives a cavity wall, indexing loop i of the cavity region Q in the
 // result's own record (§11). The cavity walls are built with roleLoop equal to
 // their Q loop index, so the rename keeps the index and only swaps the tag.
-func renameCavityRoles(ctx context.Context, faces []*Face, ref producerID) error {
+func renameCavityRoles(ctx context.Context, faces []*topo.Face, ref producerID) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -448,7 +448,7 @@ func renameCavityRoles(ctx context.Context, faces []*Face, ref producerID) error
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		for i, o := range f.n.Origins {
+		for i, o := range f.Origins {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
@@ -457,7 +457,7 @@ func renameCavityRoles(ctx context.Context, faces []*Face, ref producerID) error
 			}
 			var li, j int
 			if n, _ := fmt.Sscanf(o.Role, "side(%d,%d)", &li, &j); n == 2 {
-				f.n.Origins[i] = provenance.Ref{Producer: ref, Role: fmt.Sprintf("shellSide(%d,%d)", li, j)}
+				f.Origins[i] = provenance.Ref{Producer: ref, Role: fmt.Sprintf("shellSide(%d,%d)", li, j)}
 			}
 		}
 	}

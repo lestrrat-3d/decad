@@ -101,7 +101,7 @@ const (
 // readable and unmodified for any caller still holding it.
 //
 // A nil context or a nil b is [ErrDegenerate]. A b this evaluator did not
-// build (b.payload == nil) is [ErrUnsupported] (Table R row R19): a body reads
+// build (b.n.Payload == nil) is [ErrUnsupported] (Table R row R19): a body reads
 // its readable topology regardless of payload, but PatchEdges's own
 // re-evaluation contract — a placed copy replays from the recorded plane
 // rather than re-proving it — needs the same payload-carrying contract every

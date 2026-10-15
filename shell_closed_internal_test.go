@@ -26,9 +26,9 @@ func TestShellClosedPrismLevelsCarryThicknessConversion(t *testing.T) {
 	closed, err := Shell(t.Context(), box, nil, units.Inches(0.1), WithNoOpenings())
 	require.NoError(t, err)
 	sp := closed.n.Payload.(stackedPrismPayload)
-	require.Len(t, sp.slabs, 3)
-	require.Positive(t, sp.slabs[0].Z1Delta, `z0 + t carries the conversion`)
-	require.Positive(t, sp.slabs[2].Z0Delta, `z1 − t carries the conversion`)
+	require.Len(t, sp.Slabs, 3)
+	require.Positive(t, sp.Slabs[0].Z1Delta, `z0 + t carries the conversion`)
+	require.Positive(t, sp.Slabs[2].Z0Delta, `z1 − t carries the conversion`)
 
 	th := big.NewRat(254, 100)
 	two := big.NewRat(2, 1)
@@ -59,22 +59,4 @@ func TestShellClosedPrismLevelsCarryThicknessConversion(t *testing.T) {
 	centroid, err := closed.Centroid()
 	require.NoError(t, err)
 	requireVecCovered(t, centroid, [3]*big.Rat{big.NewRat(50, 1), big.NewRat(30, 1), big.NewRat(10, 1)})
-}
-
-// TestStackedLumpsNeedsOneOuterShellForACavity reads stackedLumps directly: a
-// connected face set with no anchor is a void, attached to the one outer
-// shell, and several outer shells beside a cavity are ErrUnsupported.
-func TestStackedLumpsNeedsOneOuterShellForACavity(t *testing.T) {
-	outerA, outerB, cavity := bornFace(&Face{}), bornFace(&Face{}), bornFace(&Face{})
-	anchors := map[*Face]struct{}{outerA: {}, outerB: {}}
-	lumps, err := stackedLumps([]*Face{outerA, cavity}, anchors)
-	require.NoError(t, err)
-	require.Len(t, lumps, 1)
-	require.Len(t, lumps[0].n.Shells, 2)
-	require.True(t, lumps[0].n.Shells[1].Void)
-	_, err = stackedLumps([]*Face{outerA, outerB, cavity}, anchors)
-	require.ErrorIs(t, err, ErrUnsupported)
-	lumps, err = stackedLumps([]*Face{outerA, outerB}, anchors)
-	require.NoError(t, err)
-	require.Len(t, lumps, 2)
 }

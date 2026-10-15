@@ -136,12 +136,12 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 		return nil, true, fmt.Errorf("%w: Union's prism regions are not proven disjoint", ErrUnsupported)
 	}
 	sp := stackedPrismPayload{
-		slabs: []stackedrecord.Slab{{Regions: regions, Z0: first.Z0, Z1: first.Z1,
+		Slabs: []stackedrecord.Slab{{Regions: regions, Z0: first.Z0, Z1: first.Z1,
 			Z0Delta: z0Delta, Z1Delta: z1Delta}},
-		frame: first.Frame, xform: first.Xform,
-		sectionDelta: proofbound.AbsSumUpper(disjointWalk, cutDelta),
+		Frame: first.Frame, Xform: first.Xform,
+		SectionDelta: proofbound.AbsSumUpper(disjointWalk, cutDelta),
 	}
-	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.Slabs, Interfaces: sp.Interfaces}); err != nil {
 		return nil, true, err
 	}
 	body, err := analyticBooleanBody(ctx, d, ref, sp)

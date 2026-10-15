@@ -25,13 +25,13 @@ import (
 // top cap is removed inward. A different stack retains route S's SG3 refusal.
 func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload, view brepPayload,
 	call brepShellCall) (*Body, bool, error) {
-	if len(sp.slabs) != 2 || len(sp.interfaces) != 1 ||
-		len(sp.slabs[0].Regions) != 1 || len(sp.slabs[1].Regions) != 1 {
+	if len(sp.Slabs) != 2 || len(sp.Interfaces) != 1 ||
+		len(sp.Slabs[0].Regions) != 1 || len(sp.Slabs[1].Regions) != 1 {
 		return nil, false, nil
 	}
-	lower, upper := sp.slabs[0], sp.slabs[1]
+	lower, upper := sp.Slabs[0], sp.Slabs[1]
 	if len(lower.Regions[0].Holes) != 0 || len(upper.Regions[0].Holes) != 1 ||
-		len(sp.interfaces[0].LowerExposed) != 1 || len(sp.interfaces[0].UpperExposed) != 0 ||
+		len(sp.Interfaces[0].LowerExposed) != 1 || len(sp.Interfaces[0].UpperExposed) != 0 ||
 		!brepgeom.LoopsEqual(lower.Regions[0].Outer, upper.Regions[0].Outer) {
 		return nil, false, nil
 	}
@@ -52,7 +52,7 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 	refuse := func(why string) (*Body, bool, error) {
 		return nil, true, fmt.Errorf("%w: rectangular blind-pocket shell %s", ErrUnsupported, why)
 	}
-	if sp.sectionDelta != 0 || lower.Z0Delta != 0 || lower.Z1Delta != 0 ||
+	if sp.SectionDelta != 0 || lower.Z0Delta != 0 || lower.Z1Delta != 0 ||
 		upper.Z0Delta != 0 || upper.Z1Delta != 0 || lower.Z1 != upper.Z0 ||
 		!(lower.Z0 < lower.Z1 && upper.Z0 < upper.Z1) || call.tDelta != 0 {
 		return refuse("requires exact slab sections, levels, and thickness")
@@ -121,7 +121,7 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 	result.faces = append(result.faces, view.faces[:topCapIdx]...)
 	result.faces = append(result.faces, view.faces[topCapIdx+1:]...)
 	addPlane := func(p profileRecord, z float64, outward bool) int {
-		result.faces = append(result.faces, brepFace{frame: sp.frame, region: &p, z0: z, z1: z, outward: outward})
+		result.faces = append(result.faces, brepFace{frame: sp.Frame, region: &p, z0: z, z1: z, outward: outward})
 		return len(result.faces) - 1
 	}
 	addWalls := func(p profileRecord, z0, z1 float64, reversed bool) {
@@ -129,7 +129,7 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 			if reversed {
 				seg = brepgeom.ReverseSegment(seg)
 			}
-			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: seg, z0: z0, z1: z1})
+			result.faces = append(result.faces, brepFace{frame: sp.Frame, wall: seg, z0: z0, z1: z1})
 		}
 	}
 	addPlane(inner.Profile(), lower.Z0+t, true)
@@ -153,7 +153,7 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 	floorFace := addPlane(pocket.Profile(), lowerZ, false)
 	result.pocketShell = &prismshell.PocketShellBand{Outer: outer, Pocket: pocket, Inner: inner, Rounded: rounded,
 		Z0: lower.Z0, FloorZ: lower.Z1, TopZ: upper.Z1, LowerZ: lowerZ, T: t,
-		FloorFace: floorFace, Frame: sp.frame}
+		FloorFace: floorFace, Frame: sp.Frame}
 	result.assignRoles()
 	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
 	return body, true, err

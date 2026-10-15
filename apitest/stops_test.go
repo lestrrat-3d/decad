@@ -636,7 +636,7 @@ func TestRevolveToFaceAngularGates(t *testing.T) {
 
 // TestExtrudeThroughAllCupStop proves docs/modify-design.md Table D, D5: a
 // ThroughAll stop reads a live cup's OUTER prism extent via cupPayload's own
-// extentAlong (the cavity being interior), rather than refusing with
+// ExtentAlong (the cavity being interior), rather than refusing with
 // ErrUnsupported because the cup lacks a directional extent.
 func TestExtrudeThroughAllCupStop(t *testing.T) {
 	t.Parallel()

@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -280,7 +281,7 @@ func TestDraftMoverRecordRadiusEnclosesTheBody(t *testing.T) {
 			require.NoError(t, err)
 			worst := 0.0
 			for _, v := range mesh.n.Vertices {
-				worst = max(worst, vecL1(v))
+				worst = max(worst, stackedrecord.VecL1(v))
 			}
 			require.False(t, math.IsInf(radius, 1), "a draft body states a finite record radius")
 			require.LessOrEqual(t, worst, radius, fmt.Sprintf("%s: record radius %g below a vertex at %g", fx.name, radius, worst))

@@ -25,22 +25,22 @@ import (
 )
 
 func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, chord float64, verify Verification) (*Mesh, error) {
-	if !sp.opposedSectionExact() {
+	if !sp.OpposedSectionExact() {
 		return nil, fmt.Errorf(`%w: opposed holes at a stacked interface carry section displacement`, ErrUnsupported)
 	}
-	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.Slabs, Interfaces: sp.Interfaces}); err != nil {
 		return nil, err
 	}
-	columns, bySlab, err := stackedColumns(sp)
+	columns, bySlab, err := sp.Columns()
 	if err != nil {
 		return nil, err
 	}
 	budget := chord
-	if sp.sectionDelta > 0 {
-		budget = freeform.DownRound(freeform.DownRound(chord - sp.sectionDelta))
+	if sp.SectionDelta > 0 {
+		budget = freeform.DownRound(freeform.DownRound(chord - sp.SectionDelta))
 		if budget <= 0 {
 			return nil, fmt.Errorf(`%w: requested tolerance %s leaves no chord budget above the body's own section displacement %s`,
-				ErrUnsupported, units.Millimeters(chord), units.Millimeters(sp.sectionDelta))
+				ErrUnsupported, units.Millimeters(chord), units.Millimeters(sp.SectionDelta))
 		}
 	}
 	byRole := map[string]*topo.Face{}
@@ -57,7 +57,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		return face, nil
 	}
 	mesh := bornMesh(new(Mesh))
-	base := sp.outerPrism()
+	base := sp.OuterPrism()
 	work := freeform.NewFreeformWork()
 	var vertexStore []float64
 	faceTrim := map[*topo.Face]float64{}
@@ -74,7 +74,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		first, last := sp.slabs[col.Start], sp.slabs[col.End]
+		first, last := sp.Slabs[col.Start], sp.Slabs[col.End]
 		cl, err := tessellation.ChordLoop(ctx, col.Loop, budget, last.Z1-first.Z0, work, nil, col.LoopIndex,
 			func(w survey2d.SideWalk) (*topo.Face, error) {
 				return faceOfRole(fmt.Sprintf("slab(%d).region(%d).side(%d,%d)",
@@ -148,15 +148,15 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		}
 		return loops
 	}
-	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
+	first, last := sp.Slabs[0], sp.Slabs[len(sp.Slabs)-1]
 	for _, end := range []struct {
 		slab    int
 		role    string
 		top     bool
 		reverse bool
 		axial   float64
-	}{{0, provenance.RoleCapStart, false, true, first.Z0Delta}, {len(sp.slabs) - 1, provenance.RoleCapEnd, true, false, last.Z1Delta}} {
-		for r := range sp.slabs[end.slab].Regions {
+	}{{0, provenance.RoleCapStart, false, true, first.Z0Delta}, {len(sp.Slabs) - 1, provenance.RoleCapEnd, true, false, last.Z1Delta}} {
+		for r := range sp.Slabs[end.slab].Regions {
 			face, err := stackedCapFace(b, sp, faceOfRole, end.role, end.slab, r)
 			if err != nil {
 				return nil, err
@@ -166,8 +166,8 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			}
 		}
 	}
-	for k := range sp.interfaces {
-		patches, err := stackedInterfacePatches(sp, columns, bySlab, k)
+	for k := range sp.Interfaces {
+		patches, err := sp.InterfacePatches(columns, bySlab, k)
 		if err != nil {
 			return nil, err
 		}
@@ -176,7 +176,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			if err != nil {
 				return nil, err
 			}
-			if err := emitPatch(face, patch.Loops, !patch.Floor, sp.slabs[k].Z1Delta); err != nil {
+			if err := emitPatch(face, patch.Loops, !patch.Floor, sp.Slabs[k].Z1Delta); err != nil {
 				return nil, err
 			}
 		}
@@ -189,7 +189,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
 		return nil, err
 	}
-	if err := composeFaceBounds(mesh, faceTrim, faceAxial, vertexStore, sp.sectionDelta); err != nil {
+	if err := composeFaceBounds(mesh, faceTrim, faceAxial, vertexStore, sp.SectionDelta); err != nil {
 		return nil, err
 	}
 	if verify < VerifyAll {
@@ -197,11 +197,11 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	}
 	columnHeights := make([]float64, len(columns))
 	for i, column := range columns {
-		columnHeights[i] = sp.slabs[column.End].Z1 - sp.slabs[column.Start].Z0
+		columnHeights[i] = sp.Slabs[column.End].Z1 - sp.Slabs[column.Start].Z0
 	}
-	slabHeights := make([]float64, len(sp.slabs))
+	slabHeights := make([]float64, len(sp.Slabs))
 	slabColumns := make([][]int, len(bySlab))
-	for k, slab := range sp.slabs {
+	for k, slab := range sp.Slabs {
 		slabHeights[k] = slab.Z1 - slab.Z0
 		slabColumns[k] = make([]int, len(bySlab[k]))
 		for i, entry := range bySlab[k] {
@@ -210,7 +210,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	}
 	proof := tessellation.ProveStacked(tessellation.StackedProofInput[*topo.Face]{
 		Rings: rings, ColumnHeights: columnHeights, SlabHeights: slabHeights,
-		SlabColumns: slabColumns, SectionDelta: sp.sectionDelta,
+		SlabColumns: slabColumns, SectionDelta: sp.SectionDelta,
 		Faces: topobuild.Faces(&b.n), Source: mesh.n.Source, FaceAxial: faceAxial,
 		IsPlanar: func(face *topo.Face) bool { _, ok := face.Surface.(surfacegeom.Plane); return ok },
 		Vertices: mesh.n.Vertices, Triangles: mesh.n.Triangles,
@@ -228,7 +228,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 // same role, so its cap is the one sharing an edge with a wall the build
 // named for that region (slab(k).region(r).side(i,j)).
 func stackedCapFace(b *Body, sp stackedPrismPayload, faceOfRole func(string) (*topo.Face, error), role string, slab, region int) (*topo.Face, error) {
-	if !sp.isGroup() {
+	if !sp.IsGroup() {
 		return faceOfRole(role)
 	}
 	prefix := fmt.Sprintf("slab(%d).region(%d).", slab, region)

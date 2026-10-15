@@ -4,6 +4,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 )
 
 // Structural curve records stay in internal packages. Their aliases keep the
@@ -46,6 +47,12 @@ type profileRecord = momentinput.Profile
 // topology nodes and which implements topo.Payload (docs/evaluator-design.md
 // §5, §8).
 type prismPayload = prismrecord.Payload
+
+// stackedPrismPayload is the evaluator's own record of a stacked prism: the
+// internal/stackedrecord payload, which stackedrecord.Build evaluates over
+// topology nodes and which implements topo.Payload
+// (docs/stacked-prism-design.md, docs/evaluator-design.md §8).
+type stackedPrismPayload = stackedrecord.Payload
 
 type loopRecord = sectionrecord.LoopRecord
 

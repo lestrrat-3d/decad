@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -34,7 +35,7 @@ func TestPrismMoverRecordRadiusReadsArcsTightly(t *testing.T) {
 	require.NoError(t, err)
 	worst := 0.0
 	for _, v := range mesh.n.Vertices {
-		worst = max(worst, vecL1(v))
+		worst = max(worst, stackedrecord.VecL1(v))
 	}
 	require.LessOrEqual(t, worst, radius)
 	require.LessOrEqual(t, radius, 2*worst)

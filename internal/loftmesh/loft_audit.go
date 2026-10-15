@@ -488,7 +488,7 @@ type LoftAuditShortcuts struct {
 // It is per-call state, held in LoftCrossingAuditWork's own frame and
 // returned by value — never a package-level counter. The audit runs on the
 // production path of every exported entry point that builds or re-lifts a
-// loft (Document.Loft, Transform, and Copy through loftPayload.placed),
+// loft (Document.Loft, Transform, and Copy through loftPayload.Placed),
 // and two goroutines holding two
 // independent Documents may each be inside it at once, so a counter shared
 // across calls would both race and mis-count. Nothing outside the call frame

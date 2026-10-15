@@ -13,11 +13,11 @@ import (
 // the additional facet audit proves the held mesh is embedded before its
 // positive similarity reuses that mesh.
 func stackedScaleSource(ctx context.Context, b *Body, source stackedPrismPayload) (facetedPayload, error) {
-	if b.Kind() != BodySolid || !b.IsSolid() || !source.xform.IsValid() ||
-		source.sectionDelta != 0 || len(source.slabs) == 0 {
+	if b.Kind() != BodySolid || !b.IsSolid() || !source.Xform.IsValid() ||
+		source.SectionDelta != 0 || len(source.Slabs) == 0 {
 		return facetedPayload{}, fmt.Errorf("%w: scale needs an exact line-section solid stack", ErrUnsupported)
 	}
-	for _, slab := range source.slabs {
+	for _, slab := range source.Slabs {
 		if slab.Z0Delta != 0 || slab.Z1Delta != 0 {
 			return facetedPayload{}, fmt.Errorf("%w: a stack level carries displacement", ErrUnsupported)
 		}
@@ -27,7 +27,7 @@ func stackedScaleSource(ctx context.Context, b *Body, source stackedPrismPayload
 			}
 		}
 	}
-	for _, boundary := range source.interfaces {
+	for _, boundary := range source.Interfaces {
 		for _, exposed := range append(append([]profileRecord(nil), boundary.LowerExposed...), boundary.UpperExposed...) {
 			if !scaleLineProfile(exposed) {
 				return facetedPayload{}, fmt.Errorf("%w: a stack interface is not line-only", ErrUnsupported)

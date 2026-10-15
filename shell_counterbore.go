@@ -22,11 +22,11 @@ import (
 // the stacked Cut record and refuses any offset it cannot represent exactly.
 func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload, view brepPayload,
 	call brepShellCall) (*Body, bool, error) {
-	if len(sp.slabs) != 2 || len(sp.interfaces) != 1 ||
-		len(sp.slabs[0].Regions) != 1 || len(sp.slabs[1].Regions) != 1 {
+	if len(sp.Slabs) != 2 || len(sp.Interfaces) != 1 ||
+		len(sp.Slabs[0].Regions) != 1 || len(sp.Slabs[1].Regions) != 1 {
 		return nil, false, nil
 	}
-	a, b := sp.slabs[0], sp.slabs[1]
+	a, b := sp.Slabs[0], sp.Slabs[1]
 	lo, hi := a.Regions[0], b.Regions[0]
 	if !brepgeom.LoopsEqual(lo.Outer, hi.Outer) {
 		return nil, false, nil
@@ -56,7 +56,7 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 	refuse := func(why string) (*Body, bool, error) {
 		return nil, true, fmt.Errorf("%w: coaxial counterbore shell %s", ErrUnsupported, why)
 	}
-	if sp.sectionDelta != 0 || a.Z0Delta != 0 || a.Z1Delta != 0 ||
+	if sp.SectionDelta != 0 || a.Z0Delta != 0 || a.Z1Delta != 0 ||
 		b.Z0Delta != 0 || b.Z1Delta != 0 || a.Z1 != b.Z0 ||
 		!(a.Z0 < a.Z1 && b.Z0 < b.Z1) || call.tDelta != 0 {
 		return refuse("requires exact slab sections, levels, and thickness")
@@ -141,7 +141,7 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 		return p, nil
 	}
 	addPlane := func(p profileRecord, z float64, outward bool) int {
-		result.faces = append(result.faces, brepFace{frame: sp.frame, region: &p, z0: z, z1: z, outward: outward})
+		result.faces = append(result.faces, brepFace{frame: sp.Frame, region: &p, z0: z, z1: z, outward: outward})
 		return len(result.faces) - 1
 	}
 	addWalls := func(p profileRecord, z0, z1 float64, reverse bool) {
@@ -152,7 +152,7 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 			if reverse {
 				seg = brepgeom.ReverseSegment(seg)
 			}
-			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: seg, z0: z0, z1: z1})
+			result.faces = append(result.faces, brepFace{frame: sp.Frame, wall: seg, z0: z0, z1: z1})
 		}
 	}
 	floor, err := annulus(inset.Profile(), smallExpanded)
@@ -179,9 +179,9 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 	}
 	addPlane(innerRim, nearZ, openingOutward)
 	result.pocketShell = &prismshell.PocketShellBand{Outer: plate, Inner: inset, Rounded: largeExpanded,
-		FloorZ: stepZ, LowerZ: capZ, TopZ: nearZ, Z0: farZ, T: t, FloorFace: floorFace, Frame: sp.frame,
+		FloorZ: stepZ, LowerZ: capZ, TopZ: nearZ, Z0: farZ, T: t, FloorFace: floorFace, Frame: sp.Frame,
 		Round: &prismshell.CounterboreShellRound{Small: small, Large: large, Plate: plate, Inset: inset,
-			FarZ: farZ, StepZ: stepZ, NearZ: nearZ, Sign: sign, T: t, Center: c, Frame: sp.frame}}
+			FarZ: farZ, StepZ: stepZ, NearZ: nearZ, Sign: sign, T: t, Center: c, Frame: sp.Frame}}
 	result.assignRoles()
 	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
 	return body, true, err

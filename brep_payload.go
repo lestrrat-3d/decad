@@ -237,7 +237,7 @@ func brepOfPrismWithRoles(pp prismPayload) (brepPayload, []string, error) {
 // audited first, so a stack its own build refuses has no face view either. A
 // prism group (one slab of several disjoint regions) has no face view and is
 // ErrUnsupported: the record states one region per cap. So is a stack
-// enclosing a cavity (a closed shell, stackedEnclosesCavity).
+// enclosing a cavity (a closed shell, EnclosesCavity).
 func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, error) {
 	bp, _, err := brepOfStackedWithRoles(ctx, sp)
 	return bp, err
@@ -246,13 +246,13 @@ func brepOfStacked(ctx context.Context, sp stackedPrismPayload) (brepPayload, er
 // brepOfStackedWithRoles also returns each record face's role on the source
 // stacked body. Chamfer uses the roles only while resolving a public face.
 func brepOfStackedWithRoles(ctx context.Context, sp stackedPrismPayload) (brepPayload, []string, error) {
-	if sp.isGroup() {
-		return brepPayload{}, nil, fmt.Errorf(`%w: a prism group of %d disjoint regions has no face view`, ErrUnsupported, len(sp.slabs[0].Regions))
+	if sp.IsGroup() {
+		return brepPayload{}, nil, fmt.Errorf(`%w: a prism group of %d disjoint regions has no face view`, ErrUnsupported, len(sp.Slabs[0].Regions))
 	}
-	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.Slabs, Interfaces: sp.Interfaces}); err != nil {
 		return brepPayload{}, nil, err
 	}
-	cavity, err := stackedEnclosesCavity(sp)
+	cavity, err := sp.EnclosesCavity()
 	if err != nil {
 		return brepPayload{}, nil, err
 	}
@@ -265,33 +265,33 @@ func brepOfStackedWithRoles(ctx context.Context, sp stackedPrismPayload) (brepPa
 	if err != nil {
 		return brepPayload{}, nil, err
 	}
-	columns, _, err := stackedColumns(sp)
+	columns, _, err := sp.Columns()
 	if err != nil {
 		return brepPayload{}, nil, err
 	}
-	bp := brepPayload{xform: sp.xform}
+	bp := brepPayload{xform: sp.Xform}
 	var sourceRoles []string
 	for _, col := range columns {
-		first, last := sp.slabs[col.Start], sp.slabs[col.End]
+		first, last := sp.Slabs[col.Start], sp.Slabs[col.End]
 		for segment, seg := range col.Loop.Segments {
 			bp.faces = append(bp.faces, brepFace{
-				frame: sp.frame, wall: seg, z0: first.Z0, z1: last.Z1,
-				z0Delta: first.Z0Delta, z1Delta: last.Z1Delta, delta: sp.sectionDelta,
+				frame: sp.Frame, wall: seg, z0: first.Z0, z1: last.Z1,
+				z0Delta: first.Z0Delta, z1Delta: last.Z1Delta, delta: sp.SectionDelta,
 			})
 			sourceRoles = append(sourceRoles, fmt.Sprintf("slab(%d).region(%d).side(%d,%d)",
 				col.Start, col.Region, col.LoopIndex, segment))
 		}
 	}
 	addPlanar := func(region profileRecord, z, zDelta float64, outward bool, sourceRole string) {
-		bp.faces = append(bp.faces, brepFace{frame: sp.frame, region: &region, outward: outward,
-			z0: z, z1: z, z0Delta: zDelta, z1Delta: zDelta, delta: sp.sectionDelta})
+		bp.faces = append(bp.faces, brepFace{frame: sp.Frame, region: &region, outward: outward,
+			z0: z, z1: z, z0Delta: zDelta, z1Delta: zDelta, delta: sp.SectionDelta})
 		sourceRoles = append(sourceRoles, sourceRole)
 	}
-	first, last := sp.slabs[0], sp.slabs[len(sp.slabs)-1]
+	first, last := sp.Slabs[0], sp.Slabs[len(sp.Slabs)-1]
 	addPlanar(first.Regions[0], first.Z0, first.Z0Delta, false, provenance.RoleCapStart)
 	addPlanar(last.Regions[0], last.Z1, last.Z1Delta, true, provenance.RoleCapEnd)
-	for k, boundary := range sp.interfaces {
-		z, zDelta := sp.slabs[k].Z1, sp.slabs[k].Z1Delta
+	for k, boundary := range sp.Interfaces {
+		z, zDelta := sp.Slabs[k].Z1, sp.Slabs[k].Z1Delta
 		for e, region := range boundary.LowerExposed {
 			addPlanar(region, z, zDelta, true, fmt.Sprintf("floor(%d,%d)", k, e))
 		}
@@ -311,7 +311,7 @@ func brepJoinProfile(p profileRecord) (profileRecord, float64, error) {
 
 // brepJoinStacked joins every region and exposed record of a
 // stack, charging the largest allow to its section displacement. Equal loops
-// join alike, so the columns stackedColumns derives are unchanged.
+// join alike, so the columns Payload.Columns derives are unchanged.
 func brepJoinStacked(sp stackedPrismPayload) (stackedPrismPayload, error) {
 	allow := 0.0
 	join := func(p profileRecord) (profileRecord, error) {
@@ -320,37 +320,37 @@ func brepJoinStacked(sp stackedPrismPayload) (stackedPrismPayload, error) {
 		return out, err
 	}
 	out := sp
-	out.slabs = make([]stackedrecord.Slab, len(sp.slabs))
-	for k, slab := range sp.slabs {
-		out.slabs[k] = slab
-		out.slabs[k].Regions = make([]profileRecord, len(slab.Regions))
+	out.Slabs = make([]stackedrecord.Slab, len(sp.Slabs))
+	for k, slab := range sp.Slabs {
+		out.Slabs[k] = slab
+		out.Slabs[k].Regions = make([]profileRecord, len(slab.Regions))
 		for r, region := range slab.Regions {
 			joined, err := join(region)
 			if err != nil {
 				return stackedPrismPayload{}, err
 			}
-			out.slabs[k].Regions[r] = joined
+			out.Slabs[k].Regions[r] = joined
 		}
 	}
-	out.interfaces = make([]stackedrecord.Interface, len(sp.interfaces))
-	for k, boundary := range sp.interfaces {
+	out.Interfaces = make([]stackedrecord.Interface, len(sp.Interfaces))
+	for k, boundary := range sp.Interfaces {
 		for _, region := range boundary.LowerExposed {
 			joined, err := join(region)
 			if err != nil {
 				return stackedPrismPayload{}, err
 			}
-			out.interfaces[k].LowerExposed = append(out.interfaces[k].LowerExposed, joined)
+			out.Interfaces[k].LowerExposed = append(out.Interfaces[k].LowerExposed, joined)
 		}
 		for _, region := range boundary.UpperExposed {
 			joined, err := join(region)
 			if err != nil {
 				return stackedPrismPayload{}, err
 			}
-			out.interfaces[k].UpperExposed = append(out.interfaces[k].UpperExposed, joined)
+			out.Interfaces[k].UpperExposed = append(out.Interfaces[k].UpperExposed, joined)
 		}
 	}
 	if allow > 0 {
-		out.sectionDelta = proofbound.AbsSumUpper(sp.sectionDelta, allow)
+		out.SectionDelta = proofbound.AbsSumUpper(sp.SectionDelta, allow)
 	}
 	return out, nil
 }

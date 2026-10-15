@@ -35,7 +35,7 @@ import (
 //   - in measureDraftBody, evalCapBlendContext, evalPatchContext and
 //     evalChainExtrudeContext: the draft, the cap chamfer, the patch and the
 //     chain extrude went red in every variant;
-//   - in evalStackedPlanContext: the union, the blind cut and the cup went
+//   - in stackedrecord.Build: the union, the blind cut and the cup went
 //     red in every variant;
 //   - in evalBrepContext: the rotated drilled block went red;
 //   - chargePlacement in evalUnstitchFaceContext and the copy charge in

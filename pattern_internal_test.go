@@ -178,18 +178,18 @@ func TestPatternCopiesUnionStackArm(t *testing.T) {
 			require.NoError(t, err)
 			sp, ok := part.n.Payload.(stackedPrismPayload)
 			require.True(t, ok)
-			runs := sp.outerRuns()
+			runs := sp.OuterRuns()
 			require.Len(t, runs, 2, "the premise: the outer loop changes between slabs")
 			copies, err := PatternCopies(t.Context(), part, LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: tc.Step, Count: 2})
 			require.NoError(t, err)
 			inst, ok := copies[0].n.Payload.(stackedPrismPayload)
 			require.True(t, ok)
 			if tc.Keep {
-				require.Equal(t, r3.Identity(), inst.xform)
-				require.Zero(t, inst.sectionDelta)
+				require.Equal(t, r3.Identity(), inst.Xform)
+				require.Zero(t, inst.SectionDelta)
 				return
 			}
-			require.NotEqual(t, r3.Identity(), inst.xform)
+			require.NotEqual(t, r3.Identity(), inst.Xform)
 		})
 	}
 }
