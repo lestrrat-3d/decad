@@ -82,11 +82,11 @@ func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, 
 		}
 	}
 	body, err := bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, false,
-		auditCompositeSweep, compositesweep.SewJoin, false))
+		compositesweep.AuditBodies, compositesweep.SewJoin, false))
 	if err != nil {
 		return nil, err
 	}
-	if err := aggregateCompositeSweepMeasurements(ctx, body, parts, false); err != nil {
+	if err := compositesweep.AggregateBody(ctx, bodyNode(body), parts, false); err != nil {
 		return nil, err
 	}
 	dp.negative = negativePayload

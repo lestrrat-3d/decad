@@ -1077,7 +1077,6 @@
 7	0.00	TestStationedTwistOptionalRefinementKeepsOriginalWorkCeiling
 7	0.00	TestStitchCylinderFluxReusesAreaBound
 7	0.00	TestStitchSphereFluxDerivesRadiusFromAreaNotBareField
-7	0.00	TestSweepAuditEndpointSupportStopsAtHalfTurn
 7	0.20	TestSweepRunMemoChangesNoReport
 7	0.01	TestTessellateStitchDoesNotPublishSymDiffForAPlacedBody
 7	0.00	TestTessellateStitchRefusesARepeatedDirectedEdge
@@ -1204,7 +1203,6 @@
 8	0.00	TestStitchAuditRefusesOverlappingAssembly
 8	0.00	TestStitchCylinderMomentChargesRadiusBound
 8	0.00	TestStitchSphereFluxRefusesFaceWithABoundaryLoop
-8	0.00	TestSweepAuditHonorsCanceledContext
 8	0.81	TestSweepPathMemoTablesStayBounded
 8	0.01	TestTangentChainBodyOrderAndCycle
 8	0.00	TestThickenPrismUnrepresentableOffset

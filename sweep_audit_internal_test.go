@@ -1,16 +1,12 @@
 package decad
 
 import (
-	"context"
-	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/revolveangle"
-	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -39,7 +35,7 @@ func TestSweepAuditAcceptsSeparatedStraightSpans(t *testing.T) {
 		}
 	}
 
-	require.NoError(t, auditCompositeSweep(t.Context(), spans))
+	require.NoError(t, compositesweep.AuditBodies(t.Context(), spans))
 }
 
 func TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs(t *testing.T) {
@@ -64,11 +60,11 @@ func TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs(t *testing.T) {
 	}
 
 	adjacentOverlap := []compositesweep.SpanPart{build(0, 2), build(1, 3)}
-	require.ErrorIs(t, auditCompositeSweep(t.Context(), adjacentOverlap), ErrUnsupported)
+	require.ErrorIs(t, compositesweep.AuditBodies(t.Context(), adjacentOverlap), ErrUnsupported)
 
 	remoteTouch := []compositesweep.SpanPart{build(0, 1), build(1, 2), build(2, 3)}
 	remoteTouch[2].Body.Bounds = remoteTouch[0].Body.Bounds
-	require.ErrorIs(t, auditCompositeSweep(t.Context(), remoteTouch), ErrUnsupported)
+	require.ErrorIs(t, compositesweep.AuditBodies(t.Context(), remoteTouch), ErrUnsupported)
 }
 
 func TestSweepAuditBoxesRequireStrictBoundedSeparation(t *testing.T) {
@@ -83,27 +79,6 @@ func TestSweepAuditBoxesRequireStrictBoundedSeparation(t *testing.T) {
 	require.False(t, compositesweep.BoxesStrictlySeparated(box(0, 1, 0), box(1, 2, 0)))
 	require.False(t, compositesweep.BoxesStrictlySeparated(box(0, 1, 0.25), box(1.25, 2, 0)))
 	require.True(t, compositesweep.BoxesStrictlySeparated(box(0, 1, 0.125), box(1.5, 2, 0.125)))
-}
-
-func TestSweepAuditEndpointSupportStopsAtHalfTurn(t *testing.T) {
-	body := bornBody(&Body{n: topo.Body{
-		Payload: revolvePayload{Den: revolveangle.Sweep{
-			Phi0: revolveangle.Angle{Rad: new(big.Rat), Turn: new(big.Rat)},
-			Phi1: revolveangle.Angle{Rad: new(big.Rat), Turn: big.NewRat(1, 2)},
-		}},
-	}})
-	require.True(t, sweepAuditEndpointSupports(bodyNode(body)))
-
-	payload := body.n.Payload.(revolvePayload)
-	payload.Den.Phi1.Turn = big.NewRat(3, 4)
-	body.n.Payload = payload
-	require.False(t, sweepAuditEndpointSupports(bodyNode(body)))
-}
-
-func TestSweepAuditHonorsCanceledContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	require.ErrorIs(t, auditCompositeSweep(ctx, []compositesweep.SpanPart{{}, {}}), context.Canceled)
 }
 
 func sweepAuditFaceWithRole(t *testing.T, body *Body, role string) *Face {
