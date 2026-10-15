@@ -3,16 +3,13 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
-	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -115,76 +112,6 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 		Z0: a.Z0, InterfaceZ: a.Z1, TopZ: b.Z1, LowerZ: lowerZ,
 		T: t, LedgeFace: ledgeFace, Frame: sp.Frame}
 	result.AssignRoles()
-	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
+	body, err := bodyResult(breprecord.Build(ctx, envOf(source.n.Doc, source.n.Doc.NextProducer), result))
 	return body, true, err
-}
-
-// The void below the circular boss's inset wall has radius
-// (r-t)+sqrt(t²-u²) at height u above lowerZ. Its area and first height
-// moment integrate to the intervals below; pi is enclosed rationally.
-func measureRoundBossShell(ctx context.Context, bp brepPayload, body *Body) error {
-	b, circle := bp.BossShell, bp.BossShell.Round
-	point := func(x float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(x)) }
-	add, sub, mul := proofbound.IntervalAdd, proofbound.IntervalSub, proofbound.IntervalMul
-	scale := func(a proofbound.RatInterval, n, d int64) proofbound.RatInterval {
-		return proofbound.IntervalScale(a, big.NewRat(n, d))
-	}
-	pi := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
-	area := func(r prismshell.BossRect) proofbound.RatInterval {
-		return mul(sub(point(r.U1), point(r.U0)), sub(point(r.V1), point(r.V0)))
-	}
-	h := sub(point(b.InterfaceZ), point(b.Z0))
-	hb := sub(point(b.TopZ), point(b.InterfaceZ))
-	t, r := point(b.T), point(circle.Radius)
-	ri := sub(r, t)
-	t2, t3, t4 := mul(t, t), mul(mul(t, t), t), mul(mul(t, t), mul(t, t))
-	plateV := mul(area(b.Plate), h)
-	bossV := mul(pi, mul(mul(r, r), hb))
-	lowerV := mul(area(b.Lower), sub(h, scale(t, 2, 1)))
-	upperV := mul(pi, mul(mul(ri, ri), hb))
-	bandAreaIntegral := add(add(mul(mul(ri, ri), t), scale(mul(mul(ri, pi), t2), 1, 2)), scale(t3, 2, 3))
-	bandV := mul(pi, bandAreaIntegral)
-	volume := sub(sub(add(plateV, bossV), add(lowerV, upperV)), bandV)
-	if volume.Lo.Sign() <= 0 {
-		return fmt.Errorf("%w: round boss shell has no proven positive volume", ErrUnsupported)
-	}
-	v, ve := heldOf(volume)
-	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(v), Bound: units.CubicMillimeters(ve), Exactness: measurement.ExactnessOf(ve)}
-	plateCZ := scale(add(point(b.Z0), point(b.InterfaceZ)), 1, 2)
-	bossCZ := scale(add(point(b.InterfaceZ), point(b.TopZ)), 1, 2)
-	bandFirst := add(add(scale(mul(mul(ri, ri), t2), 1, 2), scale(mul(ri, t3), 2, 3)), scale(t4, 1, 4))
-	bandZ := add(mul(point(b.LowerZ), bandV), mul(pi, bandFirst))
-	plateNet := sub(plateV, lowerV)
-	bossNet := sub(sub(bossV, upperV), bandV)
-	plateU := scale(add(point(b.Plate.U0), point(b.Plate.U1)), 1, 2)
-	plateVCenter := scale(add(point(b.Plate.V0), point(b.Plate.V1)), 1, 2)
-	mu := add(mul(plateNet, plateU), mul(bossNet, point(circle.Center.U)))
-	mv := add(mul(plateNet, plateVCenter), mul(bossNet, point(circle.Center.V)))
-	mz := sub(sub(add(mul(plateV, plateCZ), mul(bossV, bossCZ)),
-		add(mul(lowerV, plateCZ), mul(upperV, bossCZ))), bandZ)
-	var c [3]proofbound.BoundedScalar
-	for i, iv := range []proofbound.RatInterval{mu, mv, mz} {
-		q, ok := proofbound.IntervalQuo(iv, volume)
-		if !ok {
-			return fmt.Errorf("%w: round boss centroid has no finite enclosure", ErrUnsupported)
-		}
-		value, bound := heldOf(q)
-		c[i] = proofbound.MeasuredScalar(value, bound)
-	}
-	ref := bp.RefView()
-	cb := ref.PointBound(c[0], c[1], c[2])
-	body.n.Centroid = measurement.VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value),
-		Bound: units.Millimeters(cb), Exactness: measurement.ExactnessOf(cb)}
-	var surfaceArea proofbound.BoundedScalar
-	for _, face := range body.Faces() {
-		surfaceArea = proofbound.BoundedAdd(surfaceArea, proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound))
-	}
-	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(surfaceArea.Value),
-		Bound: units.SquareMillimeters(surfaceArea.Bound), Exactness: measurement.ExactnessOf(surfaceArea.Bound)}
-	box, err := brepBoundsContext(ctx, bp)
-	if err != nil {
-		return err
-	}
-	body.n.Bounds = boxToInternal(box)
-	return topobuild.ValidateAnalyticMeasurements(bodyNode(body))
 }

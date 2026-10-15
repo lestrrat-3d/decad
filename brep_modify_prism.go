@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -66,7 +67,7 @@ func brepPrismRoute(ctx context.Context, b *Body, bp brepPayload, req brepModify
 		}
 		return brepRoute{}, nil, nil
 	}
-	embeds, err := brepEmbeds(bp.Faces)
+	embeds, err := breprecord.Embeds(bp.Faces)
 	if err != nil {
 		// A record the build took has embeds; one that has none reads as no
 		// prism, and the caller's own refusal follows.

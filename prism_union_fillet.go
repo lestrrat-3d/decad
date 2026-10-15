@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -240,7 +241,7 @@ func filletPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
 	}
 	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), prismrecord.Payload{
 		Profile: profile, Frame: pp.Frame, Z0: pp.Z0, Z1: pp.Z1,
-		Xform: pp.Xform, BlendSegs: arcs, BlendKind: string(brepBandFillet),
+		Xform: pp.Xform, BlendSegs: arcs, BlendKind: string(breprecord.BandFillet),
 	}, freeform.NewFreeformWork()))
 }
 

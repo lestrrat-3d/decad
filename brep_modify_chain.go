@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
@@ -183,7 +184,7 @@ func (r *brepLoopRead) buildPartialFillet(ctx context.Context, d *Document, sel 
 	if err != nil {
 		return nil, err
 	}
-	body, err := evalBrepContext(ctx, d, d.nextProducerID(), out)
+	body, err := bodyResult(breprecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), out))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
@@ -232,7 +233,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 			amounts[i] = r.call.loop.Dc
 		}
 	}
-	fr, err := filletLoopOf(r.budget, orig, r.call.loop.Dc, f.Role, freeform.NewFreeformWork())
+	fr, err := breprecord.FilletLoopOf(r.budget, orig, r.call.loop.Dc, f.Role, freeform.NewFreeformWork())
 	if err != nil {
 		return brepPayload{}, err
 	}
@@ -287,7 +288,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 	faces[sel.face].Region = &profile
 	faces[sel.face].Delta = math.Max(faces[sel.face].Delta, delta)
 	band := brepLoopBand{Face: sel.face, Loop: sel.loop, Orig: cloneLoopRecord(orig),
-		Setback: *r.call.loop, Sigma: sel.sigma, Kind: brepBandFillet,
+		Setback: *r.call.loop, Sigma: sel.sigma, Kind: breprecord.BandFillet,
 		Selected: slices.Clone(selected), CapWalk: capWalk, CapArc: capArc, Restore: restore}
 	eF := r.btopo.Embeds[sel.face]
 	n := eF.Axis[2]

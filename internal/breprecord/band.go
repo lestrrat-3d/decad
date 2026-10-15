@@ -1,0 +1,662 @@
+package breprecord
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/r3"
+)
+
+// This file is route L's band (docs/modify-general-design.md §4.2 step 5 and
+// §4.3, "modify-general §N" below): the record a Payload keeps for each
+// chamfered loop, the band boundary edges the record bounds on one side only,
+// the adapter that hands both directrices to modify-reach §8.3's capblend.BuildBand
+// in the loop's own face frame, and the band's mass terms, read through
+// modify-reach §8.4's readers (capblend.ReadBandMass).
+
+// LoopBand is one chamfered loop of a route L result. face is the index
+// of the planar face F that holds the loop, and loop the index of the cap
+// contour in F's region (0 the outer loop, 1+i hole i). orig is the loop as
+// the receiver recorded it, in F's frame: the band's side directrix is orig
+// moved along F's normal to the side level. setback holds its contour and
+// side distances (modify-general §4.2). sigma is −1 when the walls beside
+// the loop descend into the body, so the band removes a wedge, and +1 when
+// they rise off F, so the band fills the concave corner (Table LB, LB6). kind
+// is the band's surface family (docs/loop-fillet-design.md §4 step 3).
+type LoopBand struct {
+	Face, Loop int
+	Orig       sectionrecord.LoopRecord
+	Setback    capblend.Setback
+	Sigma      float64
+	Kind       BandKind
+	Selected   []bool
+	CapWalk    []int
+	CapArc     []int
+	Terminals  []BandTerminal
+	Restore    map[int]Face
+}
+
+// BandTerminal names an open terminal arc on an ordinary planar face of
+// a partial fillet band. The arc pairs that face with one band patch.
+type BandTerminal struct{ Face, Loop, Seg int }
+
+// BandKind is a loop band's surface family: a chamfer's ruled patches or a
+// fillet's pipe patches (docs/loop-fillet-design.md).
+type BandKind string
+
+const (
+	BandChamfer BandKind = "chamfer"
+	BandFillet  BandKind = "fillet"
+)
+
+// matSign is the band's material sense in F's frame, the sign
+// capblend.BuildBand reads: the side level is F's level plus matSign·ds. A
+// descending loop's side level lies against F's outward normal, and a rising
+// loop's along it.
+func (b LoopBand) MatSign(f Face) float64 {
+	outward := -1.0
+	if f.Outward {
+		outward = 1
+	}
+	return b.Sigma * outward
+}
+
+// sideLevel is the band's side level in F's frame, F's level plus
+// matSign·ds, beside its displacement: F's own level displacement plus the
+// setback's conversion and the float sum's rounding (capband.BandLevelDelta).
+func (b LoopBand) SideLevel(f Face) (float64, float64) {
+	m := b.MatSign(f)
+	return f.Z0 + m*b.Setback.Ds, proofbound.AbsSumUpper(f.Z0Delta, capband.BandLevelDelta(f.Z0, m, b.Setback.Ds, b.Setback.DsDelta))
+}
+
+// view is the band read as a one-loop cap blend in F's own frame: its
+// profile is orig, both levels are F's, and it is chamfered on the cap its
+// material sense names. capblend.BuildBand and capblend.ReadBandMass read the band through
+// it exactly as they read a prism's cap band.
+func (b LoopBand) view(f Face, xform r3.Transform) capblend.Payload {
+	cbp := capblend.Payload{
+		Profile: momentinput.Profile{Outer: b.Orig}, Frame: f.Frame, Xform: xform,
+		Z0: f.Z0, Z1: f.Z0, Z0Delta: f.Z0Delta, Z1Delta: f.Z0Delta,
+		Start: b.Setback, End: b.Setback,
+		StartLoops: map[int]bool{}, EndLoops: map[int]bool{},
+		Fillet: b.Kind == BandFillet,
+	}
+	if b.MatSign(f) > 0 {
+		cbp.StartLoops[0] = true
+	} else {
+		cbp.EndLoops[0] = true
+	}
+	return cbp
+}
+
+// patchRole is the role of the band's patch p: chamferLoop(f,l,p) for a
+// chamfer band's face f and loop l (modify-general BG2), filletLoop(f,l,p) for
+// a fillet band's (docs/loop-fillet-design.md BF1).
+func (b LoopBand) PatchRole(p int) string {
+	return fmt.Sprintf("%sLoop(%d,%d,%d)", b.Kind, b.Face, b.Loop, p)
+}
+
+// validate refuses a band no route L build records: one naming no planar face
+// or no loop of it, a sigma other than ±1, non-positive or non-finite
+// setbacks, unequal fillet setbacks, or an empty loop.
+func (b LoopBand) Validate(bp Payload, bi int) error {
+	refuse := func(why string) error {
+		return fmt.Errorf(`%w: loop band %d of a brep record %s`, decaderr.ErrUnsupported, bi, why)
+	}
+	switch {
+	case b.Face < 0 || b.Face >= len(bp.Faces) || !bp.Faces[b.Face].Planar():
+		return refuse(`names no planar face of the record`)
+	case b.Loop < 0 || b.Loop > len(bp.Faces[b.Face].Region.Holes):
+		return refuse(`names no loop of its face`)
+	case b.Kind != BandChamfer && b.Kind != BandFillet:
+		return refuse(`is neither a chamfer nor a fillet band, the two kinds route L builds`)
+	case b.Sigma != 1 && b.Sigma != -1:
+		return refuse(`states no side of its face`)
+	case !(b.Setback.Dc > 0) || !(b.Setback.Ds > 0) ||
+		math.IsInf(b.Setback.Dc, 1) || math.IsInf(b.Setback.Ds, 1) ||
+		(b.Kind == BandFillet && b.Setback.Dc != b.Setback.Ds):
+		return refuse(`states no positive finite setbacks for its band kind`)
+	case len(b.Orig.Segments) == 0:
+		return refuse(`holds no loop`)
+	case b.Selected != nil && len(b.Selected) != len(b.Orig.Segments):
+		return refuse(`has no selection for every original segment`)
+	case b.Selected != nil && (len(b.CapWalk) != len(b.Selected) || len(b.CapArc) != len(b.Selected)):
+		return refuse(`has no cap contour map for every selected segment`)
+	}
+	for _, t := range b.Terminals {
+		if t.Face < 0 || t.Face >= len(bp.Faces) || !bp.Faces[t.Face].Planar() ||
+			t.Loop < 0 || t.Loop > len(bp.Faces[t.Face].Region.Holes) ||
+			t.Seg < 0 || t.Seg >= len(bp.Faces[t.Face].RegionLoop(t.Loop).Segments) {
+			return refuse(`names no terminal segment of a planar face`)
+		}
+	}
+	return nil
+}
+
+// regionLoop is loop li of a planar face's region: 0 the outer loop, 1+i
+// hole i.
+func (f Face) RegionLoop(li int) sectionrecord.LoopRecord {
+	if li == 0 {
+		return f.Region.Outer
+	}
+	return f.Region.Holes[li-1]
+}
+
+// loopBandKeys is the set of edge keys the record bounds on one side only
+// (modify-general §4.2 step 6): every band's cap contour, the segments of
+// F's loop at F's level, and its side contour, orig's segments at the side
+// level. walk is the topology's own segment walk, so each key is the one the
+// face beside it states. The set is empty for a record with no band.
+func (bp Payload) LoopBandKeys(embeds []brepgeom.Embed, walk func(sectionrecord.CurveSegment) (survey2d.SegmentWalk, error)) (map[brepgeom.EdgeKey]struct{}, error) {
+	open := map[brepgeom.EdgeKey]struct{}{}
+	if len(bp.LoopBands) == 0 && bp.BossShell == nil && bp.PocketShell == nil {
+		return open, nil
+	}
+	add := func(e brepgeom.Embed, seg sectionrecord.CurveSegment, z float64) error {
+		w, err := walk(seg)
+		if err != nil {
+			return err
+		}
+		key, _ := brepgeom.CurveKey(e, w, z)
+		if _, dup := open[key]; dup {
+			return fmt.Errorf(`%w: two chamfer band boundary edges of a brep record coincide`, decaderr.ErrUnsupported)
+		}
+		open[key] = struct{}{}
+		return nil
+	}
+	for bi, b := range bp.LoopBands {
+		if err := b.Validate(bp, bi); err != nil {
+			return nil, err
+		}
+		f := bp.Faces[b.Face]
+		capSegs := f.RegionLoop(b.Loop).Segments
+		if b.Selected == nil {
+			for _, seg := range capSegs {
+				if err := add(embeds[b.Face], seg, f.Z0); err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			for i, on := range b.Selected {
+				if !on {
+					continue
+				}
+				if b.CapWalk[i] < -1 || b.CapWalk[i] >= len(capSegs) {
+					return nil, fmt.Errorf(`%w: a partial fillet band's cap walk is missing`, decaderr.ErrUnsupported)
+				}
+				if b.CapWalk[i] >= 0 {
+					if err := add(embeds[b.Face], capSegs[b.CapWalk[i]], f.Z0); err != nil {
+						return nil, err
+					}
+				}
+				if k := (i + 1) % len(b.Selected); b.CapArc[k] >= 0 {
+					if b.CapArc[k] >= len(capSegs) {
+						return nil, fmt.Errorf(`%w: a partial fillet band's cap arc is missing`, decaderr.ErrUnsupported)
+					}
+					if err := add(embeds[b.Face], capSegs[b.CapArc[k]], f.Z0); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+		sideZ, _ := b.SideLevel(f)
+		for i, seg := range b.Orig.Segments {
+			if b.Selected != nil && !b.Selected[i] {
+				continue
+			}
+			if err := add(embeds[b.Face], seg, sideZ); err != nil {
+				return nil, err
+			}
+		}
+		for _, t := range b.Terminals {
+			face := bp.Faces[t.Face]
+			if err := add(embeds[t.Face], face.RegionLoop(t.Loop).Segments[t.Seg], face.Z0); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if bp.BossShell != nil {
+		band := bp.BossShell
+		e := embeds[band.LedgeFace]
+		for _, ring := range []struct {
+			profile momentinput.Profile
+			z       float64
+		}{{band.SideProfile(), band.LowerZ}, {band.CapProfile(), band.InterfaceZ}} {
+			for _, seg := range ring.profile.Outer.Segments {
+				if err := add(e, seg, ring.z); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	if bp.PocketShell != nil {
+		band := bp.PocketShell
+		e := embeds[band.FloorFace]
+		for _, ring := range []struct {
+			loop sectionrecord.LoopRecord
+			z    float64
+		}{{band.Rounded.Outer, band.FloorZ}, {band.CapProfile().Outer, band.LowerZ}} {
+			for _, seg := range ring.loop.Segments {
+				if err := add(e, seg, ring.z); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return open, nil
+}
+
+// openSet is every band boundary edge of one body build: coedge is the
+// record face's coedge for each open use, and cap and side hold, per band,
+// the coedges capblend.BuildBand reads as the cap contour (F's loop, in loop order)
+// and the side contour (orig at the side level, in orig's walk order), each
+// walked forward along its loop.
+type openSet struct {
+	coedge    map[int]topo.CoEdge
+	cap, side [][]topo.CoEdge
+	capBySeg  []map[int]*topo.Edge
+	terminal  []map[BandTerminal]*topo.Edge
+}
+
+// openEdges builds every band boundary edge (modify-general §4.2 step 5):
+// the cap contour's edges are F's own loop segments, directed along F's walk,
+// and the side contour's are orig's segments at the side level, directed
+// along orig's walk, which the face beside each walks forward or back. Each
+// edge is built in F's frame by the prism rim construction
+// (prismrecord.BuildWallGeometry) over the face's own displacements, and takes the
+// walked-boundary convexity of the loop it runs along (root topology.go's
+// Edge.IsConvex): a circular walk by its own turn, a straight one by the
+// loop's role. Every non-closed end is a vertex the record's own use already
+// placed; a whole circle's seam is placed here at its walk's start, which is
+// where capblend.BuildBand reads the band's seam.
+func openEdges(ctx context.Context, alloc topo.Alloc, bp Payload, btopo *Topology, placeVertex func(c [3]float64, faceDelta, levelDelta, endAllow float64) *topo.Vertex) (openSet, error) {
+	n := len(bp.LoopBands)
+	if bp.BossShell != nil {
+		n++
+	}
+	if bp.PocketShell != nil {
+		n++
+	}
+	out := openSet{coedge: map[int]topo.CoEdge{}, cap: make([][]topo.CoEdge, n),
+		side: make([][]topo.CoEdge, n), capBySeg: make([]map[int]*topo.Edge, n),
+		terminal: make([]map[BandTerminal]*topo.Edge, n)}
+	if n == 0 {
+		return out, nil
+	}
+	openAt := map[brepgeom.EdgeKey]int{}
+	for _, ui := range btopo.Open {
+		openAt[btopo.Uses[ui].Key] = ui
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	work := freeform.NewFreeformWork()
+	for bi, b := range bp.LoopBands {
+		if err := ctx.Err(); err != nil {
+			return openSet{}, err
+		}
+		f := bp.Faces[b.Face]
+		e := btopo.Embeds[b.Face]
+		hole := b.Loop != 0
+		capView := f.View(bp.Xform)
+		capSelected := map[int]bool{}
+		if b.Selected != nil {
+			out.capBySeg[bi] = map[int]*topo.Edge{}
+			for i, on := range b.Selected {
+				if on {
+					if b.CapWalk[i] >= 0 {
+						capSelected[b.CapWalk[i]] = true
+					}
+					if arc := b.CapArc[(i+1)%len(b.Selected)]; arc >= 0 {
+						capSelected[arc] = true
+					}
+				}
+			}
+		}
+		for _, ui := range btopo.FaceUses[b.Face] {
+			u := btopo.Uses[ui]
+			if u.Loop != b.Loop {
+				continue
+			}
+			if b.Selected != nil && !capSelected[u.Seg] {
+				continue
+			}
+			if btopo.EdgeOf[ui] >= 0 {
+				return openSet{}, fmt.Errorf(`%w: chamfer band %d's cap contour pairs with a face of the record`, decaderr.ErrUnsupported, bi)
+			}
+			start, end := placeVertex(u.DirFrom, 0, 0, 0), placeVertex(u.DirTo, 0, 0, 0)
+			if u.Key.Closed {
+				start = placeVertex(u.DirFrom, f.Delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.StartBound()))
+				end = start
+			}
+			edge, err := bandEdge(alloc, capView, u.Walk, hole, start, end)
+			if err != nil {
+				return openSet{}, err
+			}
+			co := topo.CoEdge{Edge: edge, Forward: true}
+			out.coedge[ui] = co
+			out.cap[bi] = append(out.cap[bi], co)
+			if b.Selected != nil {
+				out.capBySeg[bi][u.Seg] = edge
+			}
+		}
+
+		sideZ, _ := b.SideLevel(f)
+		cl, err := capblend.OneLoopCornerLoop(budget, b.Orig, work)
+		if err != nil {
+			return openSet{}, err
+		}
+		if len(cl.Walks) != len(b.Orig.Segments) {
+			return openSet{}, fmt.Errorf(`%w: chamfer band %d's loop holds two consecutive segments on one carrier`, decaderr.ErrUnsupported, bi)
+		}
+		for i, w := range cl.Walks {
+			if b.Selected != nil && !b.Selected[i] {
+				continue
+			}
+			key, ccw := brepgeom.CurveKey(e, w.SegmentWalk, sideZ)
+			ui, ok := openAt[key]
+			if !ok {
+				return openSet{}, fmt.Errorf(`%w: chamfer band %d's side contour is not a boundary of the record`, decaderr.ErrUnsupported, bi)
+			}
+			u := btopo.Uses[ui]
+			beside := bp.Faces[u.Face]
+			from, to := e.Canon(w.StartU, w.StartV, sideZ), e.Canon(w.EndU, w.EndV, sideZ)
+			var start, end *topo.Vertex
+			forward := u.From == from && u.To == to
+			if u.Key.Closed {
+				seg := b.Orig.Segments[w.Segs[0]]
+				start = placeVertex(from, beside.Delta, u.LevelDelta,
+					proofbound.WalkEndBoundAllow(boundarywalk.DenotedStartBound(seg, w.SegmentWalk)))
+				end = start
+				forward = u.Sense == ccw
+			} else {
+				start, end = placeVertex(from, 0, 0, 0), placeVertex(to, 0, 0, 0)
+			}
+			sideView := f.View(bp.Xform)
+			sideView.Z0, sideView.Z1 = sideZ, sideZ
+			sideView.Z0Delta, sideView.Z1Delta = u.LevelDelta, u.LevelDelta
+			sideView.SectionDelta = beside.Delta
+			edge, err := bandEdge(alloc, sideView, w.SegmentWalk, hole, start, end)
+			if err != nil {
+				return openSet{}, err
+			}
+			out.coedge[ui] = topo.CoEdge{Edge: edge, Forward: forward}
+			out.side[bi] = append(out.side[bi], topo.CoEdge{Edge: edge, Forward: true})
+		}
+		if len(b.Terminals) > 0 {
+			out.terminal[bi] = map[BandTerminal]*topo.Edge{}
+		}
+		for _, t := range b.Terminals {
+			ui := -1
+			for _, candidate := range btopo.FaceUses[t.Face] {
+				u := btopo.Uses[candidate]
+				if u.Part == brepgeom.LoopSeg && u.Loop == t.Loop && u.Seg == t.Seg {
+					ui = candidate
+					break
+				}
+			}
+			if ui < 0 || btopo.EdgeOf[ui] >= 0 {
+				return openSet{}, fmt.Errorf(`%w: fillet band %d's terminal is not an open planar edge`, decaderr.ErrUnsupported, bi)
+			}
+			u := btopo.Uses[ui]
+			start, end := placeVertex(u.DirFrom, 0, 0, 0), placeVertex(u.DirTo, 0, 0, 0)
+			view := bp.Faces[t.Face].View(bp.Xform)
+			edge, err := bandEdge(alloc, view, u.Walk, t.Loop != 0, start, end)
+			if err != nil {
+				return openSet{}, err
+			}
+			out.coedge[ui] = topo.CoEdge{Edge: edge, Forward: true}
+			out.terminal[bi][t] = edge
+		}
+	}
+	if bp.BossShell != nil {
+		if err := bossShellOpenEdges(ctx, alloc, bp, btopo, openAt, placeVertex, &out, len(bp.LoopBands)); err != nil {
+			return openSet{}, err
+		}
+	}
+	if bp.PocketShell != nil {
+		if err := pocketShellOpenEdges(ctx, alloc, bp, btopo, openAt, placeVertex, &out, len(bp.LoopBands)); err != nil {
+			return openSet{}, err
+		}
+	}
+	if len(out.coedge) != len(btopo.Open) {
+		return openSet{}, fmt.Errorf(`%w: the record's chamfer bands bound %d of its %d one-sided edges`, decaderr.ErrUnsupported, len(out.coedge), len(btopo.Open))
+	}
+	return out, nil
+}
+
+// bandEdge builds one band boundary edge: w walked at view's level from
+// start to end, sharing one seam vertex when w is a whole circle, with the
+// walked-boundary convexity of a loop whose role hole names. Its length
+// carries view's section displacement, as a brep loop segment's does
+// (buildEdge).
+func bandEdge(alloc topo.Alloc, view prismrecord.Payload, w survey2d.SegmentWalk, hole bool, start, end *topo.Vertex) (*topo.Edge, error) {
+	convex := !hole
+	if w.IsCircular() {
+		convex = w.Th1 >= w.Th0
+	}
+	edge, _, _, _, err := prismrecord.BuildWallGeometry(alloc, view, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, convex, w.Closed, start, end, start, end) //nolint:dogsled // only the rim at view's level is read
+	if err != nil {
+		return nil, err
+	}
+	edge.LengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(view.SectionDelta, 1))
+	return edge, nil
+}
+
+// bandMass is what the bands add to a brep body's divergence sums
+// (modify-general §4.3), in the record's reference frame: vol3 is the patches'
+// share of 3V, moments their share of the first moment along each reference
+// axis, and area their summed areas.
+type bandMass struct {
+	vol3    proofbound.RatInterval
+	moments [3]proofbound.RatInterval
+	area    proofbound.BoundedScalar
+}
+
+// zeroBandMass is the sums of a body with no band.
+func zeroBandMass() bandMass {
+	zero := proofbound.PointInterval(new(big.Rat))
+	return bandMass{vol3: zero, moments: [3]proofbound.RatInterval{zero, zero, zero}}
+}
+
+func (m *bandMass) add(o bandMass) {
+	m.vol3 = proofbound.IntervalAdd(m.vol3, o.vol3)
+	for i := range m.moments {
+		m.moments[i] = proofbound.IntervalAdd(m.moments[i], o.moments[i])
+	}
+	m.area = proofbound.BoundedAdd(m.area, o.area)
+}
+
+// bandsBuilt is every band a body build attached: the patch faces, in
+// band order and each band's own patch order, and their mass sums.
+type bandsBuilt struct {
+	patches []*topo.Face
+	// geom is each band's patch roles beside their geometry, in band order.
+	geom [][]capblend.Patch
+	mass bandMass
+}
+
+// attachLoopBands attaches every band of the record to the body
+// (modify-general §4.2 step 5): capblend.BuildBand runs in F's own frame over the
+// band's cap blend view, handed the cap contour and the side contour as the
+// record's own coedges (openEdges), and mints the slant rulings, the
+// reflex connectors' apex cones and the patches between. Its orientation
+// reference is the wall's outward normal turned toward the cap; beside a
+// rising loop the wall's material lies on the loop's other side, so the
+// reference is the true normal negated and every patch is turned over. Each
+// patch carries chamferLoop(f,l,p) for the band's face f, loop l and its own
+// index p in the band. The band's mass terms are read as bandMassOf
+// states. A fillet band is attachFilletBand's, and its geom entry is nil.
+func attachLoopBands(ctx context.Context, alloc topo.Alloc, body *topo.Body, ref provenance.Producer, bp Payload, open openSet) (bandsBuilt, error) {
+	out := bandsBuilt{mass: zeroBandMass()}
+	if len(bp.LoopBands) == 0 {
+		return out, nil
+	}
+	embeds, err := Embeds(bp.Faces)
+	if err != nil {
+		return bandsBuilt{}, err
+	}
+	work := freeform.NewFreeformWork()
+	for bi, b := range bp.LoopBands {
+		f := bp.Faces[b.Face]
+		if b.Kind == BandFillet {
+			var patches []*topo.Face
+			var mass bandMass
+			var err error
+			if b.Selected != nil {
+				patches, mass, err = attachPartialFilletBand(ctx, alloc, body, ref, bp, bi, open, embeds[b.Face], work)
+			} else {
+				patches, mass, err = attachFilletBand(ctx, alloc, body, ref, bp, bi, open, embeds[b.Face], work)
+			}
+			if err != nil {
+				return bandsBuilt{}, err
+			}
+			out.patches = append(out.patches, patches...)
+			out.geom = append(out.geom, nil)
+			out.mass.add(mass)
+			continue
+		}
+		if b.Selected != nil {
+			patches, mass, err := attachPartialChamferBand(ctx, alloc, body, ref, bp, bi, open, embeds[b.Face])
+			if err != nil {
+				return bandsBuilt{}, err
+			}
+			out.patches = append(out.patches, patches...)
+			out.geom = append(out.geom, nil)
+			out.mass.add(mass)
+			continue
+		}
+		cbp := b.view(f, bp.Xform)
+		band, err := capblend.BuildBand(ctx, topo.Env{Doc: body.Doc, Ref: ref, Alloc: alloc},
+			body, cbp, 0, b.Orig, f.Z0, b.MatSign(f), open.side[bi], open.cap[bi], work)
+		if err != nil {
+			return bandsBuilt{}, err
+		}
+		geom := make([]capblend.Patch, len(band.Patches))
+		for p, patch := range band.Patches {
+			role := b.PatchRole(p)
+			patch.Origins = []provenance.Ref{{Producer: ref, Role: role}}
+			if b.Sigma > 0 {
+				patch.Reversed = !patch.Reversed
+			}
+			geom[p] = capblend.Patch{Role: role, Geom: band.Geom[p]}
+		}
+		out.patches = append(out.patches, band.Patches...)
+		out.geom = append(out.geom, geom)
+		mass, err := bandMassOf(ctx, b, f, embeds[b.Face], cbp, band, work)
+		if err != nil {
+			return bandsBuilt{}, err
+		}
+		out.mass.add(mass)
+	}
+	return out, nil
+}
+
+// bandMassOf is one band's terms in the record's divergence sums
+// (modify-general §4.3). capblend.ReadBandMass, capband.BandVolume and
+// capband.BandMoment read the closed band region B — the band's patches
+// closed by the cap contour's disk at F's level and orig's disk at the side
+// level — with its volume, its first moments about F's frame origin, the
+// chord-versus-locus terms, the closure slivers and the side level's
+// displacement. The patches' own share of the body's sums is B's less its two
+// disks, each disk's flux and axial moment taken exactly against B's outward
+// normal (along −matSign at the cap level, +matSign at the side level), and
+// signed by whether B is material of the body: B is material beside an outer
+// loop that descends and a hole that rises, and void beside a hole that
+// descends and an outer loop that rises, so the sign is −sigma times orig's
+// orientation. Every face frame shares the reference origin bit for bit
+// (Embeds), so F's first moments map onto the reference axes by F's
+// signed permutation.
+func bandMassOf(ctx context.Context, b LoopBand, f Face, e brepgeom.Embed, cbp capblend.Payload, band capblend.BandResult, work *freeform.FreeformWork) (bandMass, error) {
+	m := b.MatSign(f)
+	in, err := capblend.ReadBandMass(ctx, 0, b.Orig, cbp, band.Geom, f.Z0, m, band.Delta, band.Closure)
+	if err != nil {
+		return bandMass{}, err
+	}
+	volume, err := capband.BandVolume(in, work)
+	if err != nil {
+		return bandMass{}, err
+	}
+	mu, mv, mz, err := capband.BandMoment(in, work)
+	if err != nil {
+		return bandMass{}, err
+	}
+	enclose := func(s proofbound.BoundedScalar) (proofbound.RatInterval, error) {
+		return brepgeom.Enclosure(s.Value, s.Bound, nil)
+	}
+	capArea, err := enclose(in.CapArea)
+	if err != nil {
+		return bandMass{}, err
+	}
+	sideArea, err := enclose(in.SideArea)
+	if err != nil {
+		return bandMass{}, err
+	}
+	capZ, sideZ := proofarith.FloatRat(in.CapLevel.Value), proofarith.FloatRat(in.SideLevel.Value)
+	if capZ == nil || sideZ == nil {
+		return bandMass{}, fmt.Errorf(`%w: a chamfer band's levels are not finite`, decaderr.ErrNotFinite)
+	}
+	mRat, eps := big.NewRat(int64(m), 1), big.NewRat(int64(-b.Sigma*in.Orientation), 1)
+	negM, half := new(big.Rat).Neg(mRat), big.NewRat(1, 2)
+	disks := proofbound.IntervalAdd(
+		proofbound.IntervalScale(capArea, proofbound.RatMul(negM, capZ)),
+		proofbound.IntervalScale(sideArea, proofbound.RatMul(mRat, sideZ)))
+	diskMoment := proofbound.IntervalAdd(
+		proofbound.IntervalScale(capArea, proofbound.RatMul(half, negM, capZ, capZ)),
+		proofbound.IntervalScale(sideArea, proofbound.RatMul(half, mRat, sideZ, sideZ)))
+
+	volumeIv, err := enclose(volume)
+	if err != nil {
+		return bandMass{}, err
+	}
+	minus := big.NewRat(-1, 1)
+	out := zeroBandMass()
+	out.vol3 = proofbound.IntervalScale(proofbound.IntervalAdd(
+		proofbound.IntervalScale(volumeIv, big.NewRat(3, 1)), proofbound.IntervalScale(disks, minus)), eps)
+	var local [3]proofbound.RatInterval
+	for i, s := range [2]proofbound.BoundedScalar{mu, mv} {
+		iv, err := enclose(s)
+		if err != nil {
+			return bandMass{}, err
+		}
+		local[i] = iv
+	}
+	mzIv, err := enclose(mz)
+	if err != nil {
+		return bandMass{}, err
+	}
+	local[2] = proofbound.IntervalAdd(mzIv, proofbound.IntervalScale(diskMoment, minus))
+	for i := range local {
+		scale := proofbound.RatMul(eps, big.NewRat(int64(e.Sign[i]), 1))
+		out.moments[e.Axis[i]] = proofbound.IntervalScale(local[i], scale)
+	}
+	for _, g := range band.Geom {
+		pa, pb := capband.AreaOf(g)
+		out.area = proofbound.BoundedAdd(out.area, proofbound.MeasuredScalar(pa, pb))
+	}
+	return out, nil
+}
+
+// tessView is the band read as a one-loop cap blend in F's own frame
+// (LoopBand.view) beside its contour displacement, which the record
+// charges into F's displacement (modify-general §4.2): the larger charge only
+// widens what the tessellator's readers add.
+func (b LoopBand) TessView(f Face, xform r3.Transform) capblend.Payload {
+	cbp := b.view(f, xform)
+	cbp.BandDelta = map[capblend.BandKey]float64{{Loop: 0, Start: b.MatSign(f) > 0}: f.Delta}
+	return cbp
+}

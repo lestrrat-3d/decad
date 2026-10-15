@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -405,7 +406,7 @@ func TestStackedUnionBrepRootedCrossingBoss(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 }
 
-// TestBrepSideSplitRecordAudit pins falsifyBrepPayload's split rules: a
+// TestBrepSideSplitRecordAudit pins breprecord.Falsify's split rules: a
 // split outside the interval, or out of order, is ErrDegenerate.
 func TestBrepSideSplitRecordAudit(t *testing.T) {
 	t.Parallel()
@@ -421,7 +422,7 @@ func TestBrepSideSplitRecordAudit(t *testing.T) {
 			bp := base
 			bp.Faces = append([]brepFace{}, base.Faces...)
 			bp.Faces[6].Side1 = splits
-			require.ErrorIs(t, falsifyBrepPayload(t.Context(), bp), ErrDegenerate)
+			require.ErrorIs(t, breprecord.Falsify(t.Context(), bp), ErrDegenerate)
 		})
 	}
 }

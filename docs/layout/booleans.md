@@ -62,7 +62,7 @@ The rules for rows live in `docs/layout.md`.
 | `stacked_union.go` / `stacked_union_brep.go` | A1 `Union`: slabs or a brep. See general-boolean A1. |
 | `prism_face_patch_union.go` | Re-expresses exact rectangular face-patch Union operands for prism or A1 scenes. See general-boolean A1. |
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`. See its doc comment. |
-| `brep_payload.go` / `brep_measure.go` | BRep face views, topology and readings. See general-boolean §4. |
+| `brep_payload.go` / `brep_measure.go` | BRep face views of prisms and stacked prisms, and the brep surveys; `internal/breprecord` builds and measures the record. See general-boolean §4. |
 | `classb.go` | Class-B admission and result adapters. See general-boolean §3 B. |
 | `classb_crossing.go` | Class-B scene and BRep adapters. See general-boolean §5, §10. |
 | `oblique_boss.go` | Retains two prism sources after a complete oblique cylinder and plate Union. See oblique-boss-fillet design. |

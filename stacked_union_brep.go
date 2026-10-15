@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -619,7 +620,7 @@ func stackedBrepRecord(ctx context.Context, budget *proofbound.WorkBudget, geom 
 	}
 	out.AssignRoles()
 	// The record must close by counting (§4.2).
-	if _, err := brepTopologyContext(ctx, out); err != nil {
+	if _, err := breprecord.TopologyContext(ctx, out); err != nil {
 		return brepPayload{}, err
 	}
 	return out, nil

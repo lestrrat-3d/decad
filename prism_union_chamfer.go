@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -88,7 +89,7 @@ func chamferPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
 	}
 	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), prismrecord.Payload{
 		Profile: profile, Frame: pp.Frame, Z0: pp.Z0, Z1: pp.Z1,
-		Xform: pp.Xform, BlendSegs: connectors, BlendKind: string(brepBandChamfer),
+		Xform: pp.Xform, BlendSegs: connectors, BlendKind: string(breprecord.BandChamfer),
 	}, freeform.NewFreeformWork()))
 }
 

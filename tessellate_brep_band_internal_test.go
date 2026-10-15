@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -363,7 +364,7 @@ func TestBrepBandMotionCoversContourDisplacement(t *testing.T) {
 	delta := bp.Faces[bp.LoopBands[0].Face].Delta
 	require.Positive(t, delta)
 
-	btopo, err := brepTopologyContext(t.Context(), bp)
+	btopo, err := breprecord.TopologyContext(t.Context(), bp)
 	require.NoError(t, err)
 	bands, _, err := brepChordBands(t.Context(), bp, btopo, 0.05)
 	require.NoError(t, err)

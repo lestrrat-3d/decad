@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
@@ -105,7 +106,7 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 	if err != nil {
 		return nil, err
 	}
-	body, err := evalBrepContext(ctx, d, d.nextProducerID(), out)
+	body, err := bodyResult(breprecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), out))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
@@ -183,7 +184,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 	faces[sel.face].Region = &profile
 	faces[sel.face].Delta = math.Max(faces[sel.face].Delta, delta)
 	band := brepLoopBand{Face: sel.face, Loop: sel.loop, Orig: cloneLoopRecord(orig),
-		Setback: *r.call.loop, Sigma: sel.sigma, Kind: brepBandChamfer,
+		Setback: *r.call.loop, Sigma: sel.sigma, Kind: breprecord.BandChamfer,
 		Selected: slices.Clone(selected), CapWalk: capWalk, CapArc: capArc, Restore: restore}
 	eF := r.btopo.Embeds[sel.face]
 	n := eF.Axis[2]

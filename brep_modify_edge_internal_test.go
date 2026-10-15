@@ -188,7 +188,7 @@ func blendFaces(body *Body, kind string) []*Face {
 // 16000 − 180π less the corner's (4 − π)·20. Shown to fail with the (pl)
 // trim deleted from rewrite (the record then did not pair) and with
 // rewriteLoop inserting a nil connector for the trim (the y = 0 face's audit
-// then read a nil segment), and with brepFaceBody's blend role deleted (no
+// then read a nil segment), and with breprecord's faceBody blend role deleted (no
 // face carried fillet(7)).
 func TestBrepModifyEdgeFilletS1VerticalEdge(t *testing.T) {
 	t.Parallel()

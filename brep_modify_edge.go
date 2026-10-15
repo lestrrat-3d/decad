@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -122,7 +123,7 @@ func brepBlendEdges(ctx context.Context, d *Document, bp brepPayload, call brepM
 
 	// Stage 6: the closure. The body build pairs every edge of the rewritten
 	// record again; an edge that does not pair refuses there.
-	body, err := evalBrepContext(ctx, d, d.nextProducerID(), out)
+	body, err := bodyResult(breprecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), out))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
@@ -172,7 +173,7 @@ func (r *brepEdgeRoute) requireBlendMaterialWedge(eb *brepEdgeBlend) error {
 // its patch construction then has to close every such corner itself.
 func prepareBrepEdgeBlends(ctx context.Context, bp brepPayload, call brepModifyRequest, shared bool,
 	terminals map[[3]float64]bool) (*brepEdgeRoute, []*brepEdgeBlend, error) {
-	btopo, err := brepTopologyContext(ctx, bp)
+	btopo, err := breprecord.TopologyContext(ctx, bp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -474,7 +475,7 @@ func (r *brepEdgeRoute) withRestated(ctx context.Context, restated map[int]brepR
 	for fi, rs := range restated {
 		bp.Faces[fi] = rs.face
 	}
-	btopo, err := brepTopologyContext(ctx, bp)
+	btopo, err := breprecord.TopologyContext(ctx, bp)
 	if err != nil {
 		return nil, fmt.Errorf(`%w; the restated brep record (brep-modify §5.2); selector %s matched [%s]`,
 			err, r.call.sel, selectedEdgesContext(r.call.edges))
@@ -694,7 +695,7 @@ func (r *brepEdgeRoute) locateCorners(eb *brepEdgeBlend) error {
 // (sw) face, or the (pl) face's segment next to the edge.
 func (r *brepEdgeRoute) traces(eb *brepEdgeBlend, j int, mate brepUse) bool {
 	if eb.side[j] == brepSideSwept {
-		return brepIsRim(mate.Part)
+		return brepgeom.IsRim(mate.Part)
 	}
 	self := r.btopo.Uses[eb.pair[j]]
 	n := len(r.btopo.Planar[self.Face][self.Loop])

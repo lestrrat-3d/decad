@@ -198,7 +198,7 @@ func sweptFaceLevels(bp brepPayload, wall curveSegment) [][2]float64 {
 // the band carries an apex cone there, as a prism's hole loop does
 // (TestCapBlendPolygonalHoleChamferVolume): four Plane and four Cone
 // patches, and a removed volume of 30d² + πd³/3. Shown to fail with
-// brepBandMassOf's sign read from sigma alone (the volume then gained the
+// breprecord's bandMassOf sign read from sigma alone (the volume then gained the
 // band's void) and with loopBandKeys leaving out the side contour (the
 // trimmed pocket walls' rims then paired with nothing and the build refused).
 func TestBrepLoopChamferPocketMouth(t *testing.T) {
@@ -334,9 +334,9 @@ func TestBrepLoopChamferCrossDrilledBothLoops(t *testing.T) {
 // corner, adding the ring of section ½ at radius 5 + 1/3, 16000 + 375π +
 // 16π/3: the plate top's hole widens to radius 6, the boss wall starts at
 // z = 11, and the boss circle there reads concave as the plate's hole loop
-// is walked. Shown to fail with attachBrepLoopBands' turn of a rising band's
+// is walked. Shown to fail with breprecord's attachLoopBands turn of a rising band's
 // patches deleted (the root cone's outward normal then pointed into the
-// material) and with brepBandMassOf's sign ignoring sigma (the root's volume
+// material) and with breprecord's bandMassOf sign ignoring sigma (the root's volume
 // then lost the fill).
 func TestBrepLoopChamferBossRimAndRoot(t *testing.T) {
 	t.Parallel()

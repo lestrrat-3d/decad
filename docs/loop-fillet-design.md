@@ -176,8 +176,8 @@ rDelta, dsDelta: rDelta}`), sense `σ` from LB6:
    the record stores `(face, loop, orig, setback, sigma, kind)` as route L
    does. No face record holds a cylinder with an in-plane axis, a torus or an
    ellipse (modify-general §8).
-4. **Build.** After `evalBrepContext` has built the record's faces and edges,
-   `attachFilletBand` (`brep_loop_fillet.go`) runs in `F`'s frame over
+4. **Build.** After `breprecord.Build` has built the record's faces and edges,
+   `attachFilletBand` (`internal/breprecord/fillet.go`) runs in `F`'s frame over
    `brepLoopBand.view`, with the cap contour's coedges supplied as route L
    supplies them and the side contour's coedges the trimmed walls' rims at
    `sideZ`. Per walk `i` it mints the LF1–LF3 patch face whose loop is: the
@@ -295,7 +295,7 @@ M_body   = M_receiver + σ·M_strip
 record RESTORED: `F` read over its region with `orig` in the contour's place,
 each face beside the loop read over its untrimmed level `L_F` instead of
 `sideZ` (`brepPayload.filletRestored`, a view), every other face as it is.
-`measureBrepContext` therefore sums the restored faces, which carry no
+`breprecord`'s `measureBody` therefore sums the restored faces, which carry no
 contour displacement (SB1 holds `delta = 0` on the receiver), then adds
 `σ·V_strip` and `σ·M_strip` per fillet band. The patches' own flux is never
 integrated: `Σ_patches flux = V_body − Σ_rewritten faces = (F's strip term)
@@ -533,7 +533,7 @@ revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
 - **STEP stays faceted until `step` ships `TOROIDAL_SURFACE` and `ELLIPSE`.**
   DF10, §12.
 - **Restored faces keep the rewritten record's displacements.**
-  `measureBrepContext` reads each face a fillet band rewrote restored to the
+  `breprecord`'s `measureBody` reads each face a fillet band rewrote restored to the
   receiver's level and region (`filletRestored`), but with the level and
   section displacements the rewritten record states, which are never less
   than the receiver's: sound, and zero for every fixture of §8.
@@ -592,7 +592,7 @@ functions' doc comments, a `docs/layout/` row per new root file, and
 | PR | Model | Lands | Files and functions | Proves | After |
 |---|---|---|---|---|---|
 | **F-0** | Sonnet, file-by-file | `Ellipse3` (api §4; `surfacegeom/geometry.go`, `surfaceplace/placement.go`, `topology.go` alias, `selectedEdgeContext`, `brepEdgeMatches` default); `brepLoopBand.kind`; `brepLoopRoute`'s fillet arm as a stub keeping SL3's refusal; `fillet.go`'s cap-edge arm calling `brepOfPrism` into the stub | `internal/surfacegeom/`, `internal/surfaceplace/`, `topology.go`, `fillet.go`, `brep_loop_band.go`, `brep_modify_loop.go`, `docs/api-design.md` | every existing fillet, chamfer, brep-modify and route L fixture bit for bit; an `Ellipse3` placed and mirrored | — |
-| **F-1** | Opus, proof spec | the fillet arm: LF classification (SF1), `attachFilletBand` (LF1–LF7 faces, `Ellipse3`/`Arc3`/`Circle3` edges, shared vertices, roles), `internal/filletband/` (Table CF coefficients with interval enclosures, `J_k`/`H_k`, patch areas, extents), `measureBrepContext`'s restored-face sum plus `σ·V_strip`/`σ·M_strip`, `ExtentAlong`; tessellation, surveys and the boolean operand refuse a fillet-banded body (`ErrUnsupported`, naming F-2); reach §8.2, modify-general §6/SL3, brep-modify SB4/SB5/SB7 text, `missing-features.md`, `doc.go` | `brep_loop_fillet.go` (new), `brep_loop_band.go`, `brep_measure.go`, `brep_payload.go`, `brep_modify_loop.go`, `fillet.go`, `internal/filletband/` (new), `brep_loop_fillet_internal_test.go`, `apitest/brep_loop_fillet_test.go` | §8's volumes, areas, centroids, topology and roles; the bound fixture's two legs; every refusal | F-0 |
+| **F-1** | Opus, proof spec | the fillet arm: LF classification (SF1), `attachFilletBand` (LF1–LF7 faces, `Ellipse3`/`Arc3`/`Circle3` edges, shared vertices, roles), `internal/filletband/` (Table CF coefficients with interval enclosures, `J_k`/`H_k`, patch areas, extents), `breprecord`'s `measureBody`'s restored-face sum plus `σ·V_strip`/`σ·M_strip`, `ExtentAlong`; tessellation, surveys and the boolean operand refuse a fillet-banded body (`ErrUnsupported`, naming F-2); reach §8.2, modify-general §6/SL3, brep-modify SB4/SB5/SB7 text, `missing-features.md`, `doc.go` | `brep_loop_fillet.go` (new), `brep_loop_band.go`, `brep_measure.go`, `brep_payload.go`, `brep_modify_loop.go`, `fillet.go`, `internal/filletband/` (new), `brep_loop_fillet_internal_test.go`, `apitest/brep_loop_fillet_test.go` | §8's volumes, areas, centroids, topology and roles; the bound fixture's two legs; every refusal | F-0 |
 | **F-2** (landed) | Sonnet, file-by-file, copying `tessellate_brep_band.go` with §7.1 as its term table | DF4 rings and the proof terms, DF5 admission, DF7/DF8 surveys, DF12 re-attachment tests, DF10 export confirmed | `tessellate_brep_band.go`, `tessellate_brep_fillet.go` (new), `tessellate_brep.go`, `brep_loop_band.go` (admission), `brep_measure.go` and `internal/survey2d/fillet_pull.go` (surveys), tests | every §8 fixture's mesh closed and within its published bound; P2's floor loop reads `1.5` in the concave-radius survey; P3's root is listed by the undercut survey under a pull along `−z`; a `Cut` by a box over P1's filleted corner builds through the mesh path | F-1 |
 | **F-3** (landed) | Sonnet, file-by-file | analytic STEP: `TOROIDAL_SURFACE` faces bounded by `Circle3`/`Arc3` edges, `ELLIPSE` edges on partial cylinders, `supportsAnalyticSTEP` arms | `export/step_analytic.go`, `export/step_analytic_torus.go`, `export/step_analytic_band_internal_test.go` | P3's root and rim and P8's top loop export analytic STEP; P1's top loop exports analytic STEP with four `ELLIPSE` edges | F-1, and the `step` module release of §12 |
 

@@ -8,6 +8,8 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stationbound"
@@ -45,9 +47,9 @@ type brepWallMesh struct {
 // prism cap does, over the polylines of the edges it shares, so every edge is
 // chorded from one sample set and the mesh closes by construction;
 // RequireClosedMesh proves it. A mesh vertex is keyed by its reference
-// coordinates (brepEmbeds), which a signed permutation states exactly.
+// coordinates (breprecord.Embeds), which a signed permutation states exactly.
 func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64, verify Verification) (*Mesh, error) {
-	btopo, err := brepTopologyContext(ctx, bp)
+	btopo, err := breprecord.TopologyContext(ctx, bp)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +231,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 					poly = slices.Clone(poly)
 					slices.Reverse(poly)
 				}
-				if wm, ok := walls[owner.Face]; ok && brepIsRim(owner.Part) {
+				if wm, ok := walls[owner.Face]; ok && brepgeom.IsRim(owner.Part) {
 					trim = math.Max(trim, wm.sag)
 					loopSag[u.Loop] = math.Max(loopSag[u.Loop], wm.sag)
 					capSlack = proofbound.AbsSumUpper(capSlack, wm.capSlack)

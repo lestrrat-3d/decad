@@ -14,7 +14,7 @@ import (
 // chamfer and a loft. An Exact vertex's zero bound is a length like any other,
 // so the read never fails and never answers a negative number.
 //
-// Shown-to-fail: with evalBrepContext building its vertices without a
+// Shown-to-fail: with breprecord.Build building its vertices without a
 // millimetre bound, every Exact vertex of the brep body publishes a
 // dimensionless zero and In fails with "cannot express dimensionless in
 // length".
