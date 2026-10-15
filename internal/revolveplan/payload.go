@@ -57,8 +57,8 @@ import (
 // case, full sweep included (Table W). It is part of the re-evaluable record
 // for the same reason prismrecord.Payload.SurfaceResult is, so Transform and Copy
 // reproduce the sheet with no further code; a plain revolve leaves
-// it false. sweep_arc.go and sweep_composite_measure.go also build a
-// Payload literal and leave this field at its zero value.
+// it false. internal/sweeprecord/composite.go also builds a
+// Payload literal and leaves this field at its zero value.
 type Payload struct {
 	Profile       momentinput.Profile
 	Frame         r3.Frame

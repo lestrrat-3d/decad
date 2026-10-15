@@ -34,13 +34,10 @@ The rules for rows live in `docs/layout.md`.
 | `draft_build.go` | Tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7. |
 | `draft_survey.go` | Draft body undercut survey. See draft DD7. |
 | `section_input.go` | `Section`: the profile-or-chain constraint a section-fed operation is generic over. See surface §13.2. |
-| `sweep.go` | Generic `Sweep` over a profile or chain, path admission adapters and span payloads. See sweep design. |
-| `sweep_chain_composite.go` | Certified cardinal line/arc chain sheet, indexed rim join, separation and readings. See sweep §15.8. |
+| `sweep.go` | Generic `Sweep` over a profile or chain and path admission adapters; builds through `internal/sweeprecord/`. See sweep design. |
+| `sweep_chain_composite.go` | Admits the cardinal line/arc chain Sweep and builds it through `sweeprecord.ReplayChainWork`. See sweep §15.8. |
 | `sweep_arc_chain.go` | Reduces a one-arc chain Sweep to the authenticated chain Revolve wall. See sweep §15.9. |
-| `sweep_arc.go` | Adapts `internal/sweeparc/` to the one-span `ArcThrough` reduction and Revolve build. See sweep §3. |
 | `sweep_closed_circle.go` | Checks the exact two-arc full-circle path and evaluates its full Revolve reduction. See sweep §3.3. |
-| `sweep_closed_racetrack.go` | Admits exact-turn planar circular-section loops and routes the cyclic span build. See sweep §§3.4–3.5. |
-| `sweep_composite_measure.go` | Composite Sweep span replay into `internal/compositesweep/`'s assembler. See `docs/sweep-design.md` PR 4. |
 | `sweep_mitre.go` | Mitred options, entry adapters and restatement; builds through `sweepmitre.Build`. See sweep §16. |
 | `coil.go` | `Coil`, `CoilOption`, Table CS gates. Root `coilPayload` aliases `coilshell.Payload`. See helix §2, §4, §5.6. |
 | `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents. See evaluator §6 and surface §13.2. |

@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -280,7 +281,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	// that exact reduction beside its path. Its original edges can be matched
 	// against the reduction's corners without replacing the public selector.
 	sweepReduction := false
-	if reduction, admitted := straightSweepPrismReduction(b.n.Payload); admitted {
+	if reduction, admitted := sweeprecord.StraightPrismReduction(b.n.Payload); admitted {
 		pp, ok = reduction, true
 		sweepReduction = true
 	}

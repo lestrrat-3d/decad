@@ -402,3 +402,25 @@ func TestSweepTypedNilSectionIsDegenerate(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }
+
+// TestSweepChainStagedSurveyNamesPayloadClass pins the class name a chain
+// ribbon's staged pull survey prints: the pull survey has no chain sweep arm,
+// so the message names the payload class, not the Go type that holds it.
+//
+// Shown to fail first: with SurveyClass deleted from internal/sweeprecord's
+// ChainPayload, the message named ChainPayload.
+func TestSweepChainStagedSurveyNamesPayloadClass(t *testing.T) {
+	t.Parallel()
+	s, ch := lineChainSketch(t)
+	doc := decad.New()
+	body, err := decad.Sweep(t.Context(), doc, s, ch, straightSweepPath(t, 10))
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+	require.NoError(t, err)
+	reading, err := report.ForBody(body)
+	require.NoError(t, err)
+	diag, found := findDiagnostic(reading.Diagnostics, decad.DiagUnsupportedSurveyPayload)
+	require.True(t, found)
+	require.Equal(t, "chainSweepPayload pull survey support is not implemented; use an analytic body or wait for wider "+
+		"chainSweepPayload survey support", diag.Message)
+}

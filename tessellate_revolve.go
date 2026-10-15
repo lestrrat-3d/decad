@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/revolvesampling"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -217,7 +218,7 @@ func planRevolveWithRoleCountFloor(ctx context.Context, b *Body, rp revolvePaylo
 
 	workLimit := uint64(0)
 	if freeformTarget > 0 {
-		workLimit = compositeFitSweepWorkLimit
+		workLimit = sweeprecord.CompositeFitWorkLimit
 	}
 	res, err := resolveRevolveWithLimit(ctx, rp, workLimit)
 	if err != nil {

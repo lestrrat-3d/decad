@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -330,7 +331,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	// The selector has already resolved on the published Sweep. Only the
 	// certified one-line solid reads through its stored exact prism.
 	sweepStraight := false
-	if reduction, admitted := straightSweepPrismReduction(b.n.Payload); admitted {
+	if reduction, admitted := sweeprecord.StraightPrismReduction(b.n.Payload); admitted {
 		pp, ok, sweepStraight = reduction, true, true
 	}
 	if !ok {

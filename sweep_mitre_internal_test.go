@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -69,7 +70,7 @@ func testRatCross(a, b [3]*big.Rat) [3]*big.Rat {
 	return [3]*big.Rat{c(1, 2), c(2, 0), c(0, 1)}
 }
 
-func testRatOf(v sweepRatVec) [3]*big.Rat { return [3]*big.Rat{v[0], v[1], v[2]} }
+func testRatOf(v sweeparc.RatVec) [3]*big.Rat { return [3]*big.Rat{v[0], v[1], v[2]} }
 
 // testLengthLower is the largest float whose square is at most q, found by
 // walking from math.Sqrt rather than through the build's own helper.
@@ -369,23 +370,23 @@ func TestMitredSweepPublishesPerVertexBounds(t *testing.T) {
 // row's own check is exercised directly.
 func TestMitredSweepRequireWallsRefuses(t *testing.T) {
 	t.Parallel()
-	pt := func(x, y, z int64) sweepRatVec {
-		return sweepRatVec{big.NewRat(x, 1), big.NewRat(y, 1), big.NewRat(z, 1)}
+	pt := func(x, y, z int64) sweeparc.RatVec {
+		return sweeparc.RatVec{big.NewRat(x, 1), big.NewRat(y, 1), big.NewRat(z, 1)}
 	}
-	from := []sweepRatVec{pt(0, 0, 0), pt(1, 0, 0), pt(1, 1, 0), pt(0, 1, 0)}
+	from := []sweeparc.RatVec{pt(0, 0, 0), pt(1, 0, 0), pt(1, 1, 0), pt(0, 1, 0)}
 	loops := [][]int{{0, 1, 2, 3}}
 
 	err := sweepmitre.RequireWalls(2, loops, from, from)
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.ErrorContains(t, err, "span 2, loop 0, segment 0: its wall quad has zero area")
 
-	to := []sweepRatVec{pt(0, 0, 1), pt(1, 0, 1), pt(1, 0, 1), pt(0, 1, 1)}
+	to := []sweeparc.RatVec{pt(0, 0, 1), pt(1, 0, 1), pt(1, 0, 1), pt(0, 1, 1)}
 	err = sweepmitre.RequireWalls(0, loops, from, to)
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.ErrorContains(t, err, "two coincident vertices")
 
 	require.NoError(t, sweepmitre.RequireWalls(0, loops, from,
-		[]sweepRatVec{pt(0, 0, 1), pt(1, 0, 1), pt(1, 1, 1), pt(0, 1, 1)}))
+		[]sweeparc.RatVec{pt(0, 0, 1), pt(1, 0, 1), pt(1, 1, 1), pt(0, 1, 1)}))
 }
 
 // TestMitredSweepSpanLengthLower pins λ to the largest float whose square
@@ -405,14 +406,14 @@ func TestMitredSweepSpanLengthLower(t *testing.T) {
 // mitredVolumeMomentsRat is sweepmitre.VolumeMoments as a term-by-term rational
 // sum, every partial sum reduced: the reference the common-denominator sum
 // must reproduce exactly.
-func mitredVolumeMomentsRat(exact []sweepRatVec, tris [][3]int, anchor sweepRatVec) (*big.Rat, [3]*big.Rat) {
+func mitredVolumeMomentsRat(exact []sweeparc.RatVec, tris [][3]int, anchor sweeparc.RatVec) (*big.Rat, [3]*big.Rat) {
 	vol6 := new(big.Rat)
 	moments := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
 	for _, t := range tris {
-		a := sweepRatSub(exact[t[0]], anchor)
-		b := sweepRatSub(exact[t[1]], anchor)
-		c := sweepRatSub(exact[t[2]], anchor)
-		term := sweepRatDot(a, sweepRatCross(b, c))
+		a := sweeparc.Sub(exact[t[0]], anchor)
+		b := sweeparc.Sub(exact[t[1]], anchor)
+		c := sweeparc.Sub(exact[t[2]], anchor)
+		term := sweeparc.Dot(a, sweeparc.Cross(b, c))
 		vol6.Add(vol6, term)
 		for axis := range 3 {
 			sum := new(big.Rat).Add(a[axis], b[axis])
@@ -426,7 +427,7 @@ func mitredVolumeMomentsRat(exact []sweepRatVec, tris [][3]int, anchor sweepRatV
 // requireMitredSumsMatch asserts that the common-denominator sum and the
 // rational reference agree on six times the volume and every moment, both
 // as values and as canonical strings.
-func requireMitredSumsMatch(t *testing.T, exact []sweepRatVec, tris [][3]int, anchor sweepRatVec, label string) {
+func requireMitredSumsMatch(t *testing.T, exact []sweeparc.RatVec, tris [][3]int, anchor sweeparc.RatVec, label string) {
 	t.Helper()
 	wantVol, wantMom := mitredVolumeMomentsRat(exact, tris, anchor)
 	gotVol, gotMom := sweepmitre.VolumeMoments(exact, tris, anchor)
@@ -485,8 +486,8 @@ func TestMitredSweepMomentsMatchRationalSum(t *testing.T) {
 				}
 				return big.NewRat(int64(rng.Uint64()), d)
 			}
-			vertex := func() sweepRatVec { return sweepRatVec{coord(), coord(), coord()} }
-			exact := make([]sweepRatVec, 4+rng.IntN(8))
+			vertex := func() sweeparc.RatVec { return sweeparc.RatVec{coord(), coord(), coord()} }
+			exact := make([]sweeparc.RatVec, 4+rng.IntN(8))
 			for v := range exact {
 				exact[v] = vertex()
 			}
@@ -497,11 +498,11 @@ func TestMitredSweepMomentsMatchRationalSum(t *testing.T) {
 			requireMitredSumsMatch(t, exact, tris, vertex(), fmt.Sprintf("trial %d", trial))
 		}
 	})
-	point := func(x, y, z int64) sweepRatVec {
-		return sweepRatVec{big.NewRat(x, 2), big.NewRat(y, 3), big.NewRat(z, 5)}
+	point := func(x, y, z int64) sweeparc.RatVec {
+		return sweeparc.RatVec{big.NewRat(x, 2), big.NewRat(y, 3), big.NewRat(z, 5)}
 	}
-	local := []sweepRatVec{point(0, 0, 0), point(2, 0, 0), point(0, 3, 0), point(0, 0, 5)}
-	anchor := sweepRatVec{big.NewRat(1, 3), big.NewRat(2, 7), big.NewRat(3, 11)}
+	local := []sweeparc.RatVec{point(0, 0, 0), point(2, 0, 0), point(0, 3, 0), point(0, 0, 5)}
+	anchor := sweeparc.RatVec{big.NewRat(1, 3), big.NewRat(2, 7), big.NewRat(3, 11)}
 	tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
 	vol6, moments := sweepmitre.VolumeMoments(local, tris, anchor)
 	frame, err := r3.NewFrame(r3.NewVec(7, 11, 13), r3.NewVec(0, 1, 0), r3.NewVec(-1, 0, 0))
@@ -511,7 +512,7 @@ func TestMitredSweepMomentsMatchRationalSum(t *testing.T) {
 	reflection, err := r3.Reflection(identityFrame(t))
 	require.NoError(t, err)
 	for _, xform := range []r3.Transform{r3.Identity(), turn, reflection} {
-		placed := make([]sweepRatVec, len(local))
+		placed := make([]sweeparc.RatVec, len(local))
 		for i, p := range local {
 			placed[i] = sweepmitre.Place(xform, p)
 		}

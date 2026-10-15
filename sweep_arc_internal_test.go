@@ -15,9 +15,9 @@ import (
 func TestSweepArcAngleDenotationCarriesArbitraryInterval(t *testing.T) {
 	t.Parallel()
 
-	r0 := sweepRatVec{big.NewRat(1, 1), new(big.Rat), new(big.Rat)}
-	r1 := sweepRatVec{big.NewRat(3, 5), big.NewRat(4, 5), new(big.Rat)}
-	axis := sweepRatVec{new(big.Rat), new(big.Rat), big.NewRat(1, 1)}
+	r0 := sweeparc.RatVec{big.NewRat(1, 1), new(big.Rat), new(big.Rat)}
+	r1 := sweeparc.RatVec{big.NewRat(3, 5), big.NewRat(4, 5), new(big.Rat)}
+	axis := sweeparc.RatVec{new(big.Rat), new(big.Rat), big.NewRat(1, 1)}
 	held, den, err := sweeparc.ArcAngle(r0, r1, axis)
 	require.NoError(t, err)
 	require.NotNil(t, den.Span)

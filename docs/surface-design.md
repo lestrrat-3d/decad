@@ -3459,7 +3459,7 @@ full turn and thickened outward 2 mm has `Volume` enclosing `1760π mm³`
 span passes its reduced `prismPayload` to §16.2's offset construction; an arc
 passes its reduced `revolvePayload` to §16.5's construction and radial gate.
 The built solid keeps the new section and the original path in a `sweepPayload`.
-`finishStraightSweepBody` or `finishArcSweepBody` prefixes every wall role with
+`sweeprecord.FinishStraight` or `sweeprecord.FinishArc` prefixes every wall role with
 `side(0,...)`; the arc arm also restores path-order cap roles when its axis was
 reversed. A placed replay re-evaluates the new section through the same span.
 The reduction's own section, offset, axis, measurement and mesh refusals apply
@@ -3480,7 +3480,7 @@ every offset parameter: thickness moves only V. The arc axis is `U=R` along
 `+V`, so §16.5's exact radial interval gate proves least radius `R−w > 0`
 for the whole moving section. This prevents an offset hoop from folding.
 
-The ONE generated section goes through `evalCompositeSweepContext`, which
+The ONE generated section goes through `sweeprecord.BuildComposite`, which
 builds a prism and partial revolve, pairs their join caps by section-segment
 index, audits the closed topology and span separation, and adds their
 bounded volume, area, centroid and box. The line occupies `z≤L`; the arc

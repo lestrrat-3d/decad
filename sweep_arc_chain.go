@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -17,7 +18,7 @@ func (d *Document) sweepArcChain(ctx context.Context, chain chainRecord,
 	plane planeRecord, frame r3.Frame, path *sweepinput.Path) (*Body, error) {
 	work := freeform.NewFreeformWork()
 	view := profileRecord{Outer: loopRecord(chain)}
-	span, err := compositeArcSweepSpan(ctx, view, plane, frame, path.Records[0], work)
+	span, err := sweeprecord.ArcSpan(ctx, view, plane, frame, path.Records[0], work)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +35,7 @@ func (d *Document) sweepArcChain(ctx context.Context, chain chainRecord,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	finishChainSweepBody(body, chainSweepPayload{Revolve: reduction, Arc: true, Path: path})
+	sweeprecord.FinishChain(bodyNode(body), chainSweepPayload{Revolve: reduction, Arc: true, Path: path})
 	d.commit(body)
 	return body, nil
 }

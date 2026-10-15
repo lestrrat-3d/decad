@@ -3,16 +3,14 @@ package decad
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
-	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -38,8 +36,6 @@ import (
 // An open Sweep mints two section caps. The exact two-arc closed circle of
 // §3.3 reduces to a full Revolve. The §§3.4–3.5 circular-section loops sew
 // analytic spans cyclically. Neither closed build mints section caps.
-
-const compositeFitSweepWorkLimit = 8 * freeform.FreeformWorkLimit
 
 // SweepOption configures Sweep.
 type SweepOption interface {
@@ -123,7 +119,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	}
 	work := freeform.NewFreeformWork()
 	if len(path.Records) > 1 && !cfg.Mitred && !cfg.Scaled {
-		work = newCompositeSweepWork(profile)
+		work = sweeprecord.NewCompositeWork(profile)
 	}
 	recordArea, err := falsifyRecordedArea(profile, profileArea, work)
 	if err != nil {
@@ -187,7 +183,8 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 		if _, circle := sweepinput.ClosedCircle(path.Records); circle {
 			body, err = evalClosedCircleSweep(ctx, d, ref, profile, plane, frame, path, work)
 		} else {
-			body, err = evalClosedCyclicSweep(ctx, d, ref, profile, plane, frame, path, work)
+			body, err = bodyResult(sweeprecord.BuildClosedCyclic(ctx, envOf(documentNode(d), ref), profile, plane,
+				frame, path, work))
 		}
 		if err != nil {
 			return nil, err
@@ -202,7 +199,8 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 
 	var body *Body
 	if len(segments) > 1 {
-		body, err = evalCompositeSweepContext(ctx, d, ref, profile, plane, frame, path, work, surfaceResult)
+		body, err = bodyResult(sweeprecord.BuildComposite(ctx, envOf(documentNode(d), ref), profile, plane, frame,
+			path, work, surfaceResult))
 	} else {
 		switch segment := segments[0].(type) {
 		case LineTo:
@@ -225,10 +223,11 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 			}
 			body, err = bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prism, work))
 			if err == nil {
-				finishStraightSweepBody(body, sweepPayload{Prism: prism, Path: path, SurfaceResult: surfaceResult})
+				sweeprecord.FinishStraight(bodyNode(body), sweepPayload{Prism: prism, Path: path, SurfaceResult: surfaceResult})
 			}
 		case ArcThrough:
-			body, err = evalArcSweepContext(ctx, d, ref, profile, plane, frame, path, path.Records[0], work, surfaceResult)
+			body, err = bodyResult(sweeprecord.BuildArc(ctx, envOf(documentNode(d), ref), profile, plane, frame,
+				path, path.Records[0], work, surfaceResult))
 		default:
 			err = fmt.Errorf(`%w: sweep path span %T is not supported`, ErrUnsupported, segment)
 		}
@@ -243,89 +242,6 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	return body, nil
 }
 
-// sweepPayload deliberately remains distinct from prismPayload and
-// revolvePayload. Downstream consumers whose Sweep proof has not landed must
-// dispatch on this payload and refuse instead of treating the analytic
-// reduction as proof for the original operation.
-//
-// SurfaceResult is WithSurfaceResult's own flag, held here too rather than
-// read only off prism/revolve: every finishing step below overwrites the
-// built body's payload with this struct, so a flag that rode only the reduced
-// prism/revolve payload would still reach Kind()/solid correctly on first
-// build (prismrecord.Build/revolveplan.Build read it there) but would give
-// a later consumer — auditSheetBoundary's own sweepPayload case
-// (verify.go) — no uniform field to read across all three build paths. For
-// the composite path it is the ONLY place the flag lives at all: every span
-// stays solid (sweepSpanPayload carries no such field), and
-// compositesweep.Assemble reads this field alone to decide which two caps
-// to omit from the published face set.
-type sweepPayload struct {
-	Prism           prismPayload
-	Revolve         revolvePayload
-	Arc             bool
-	ClosedCircle    bool
-	ClosedComposite bool
-	ReverseArcCaps  bool
-	Spans           []sweepSpanPayload
-	Path            *sweepinput.Path
-	SurfaceResult   bool
-}
-
-// straightSweepPrismReduction returns the exact prism built for one solid,
-// zero-twist, one-line profile Sweep. Modifiers still apply their own edge or
-// face selection gates before using the reduction.
-func straightSweepPrismReduction(payload topo.Payload) (prismPayload, bool) {
-	sp, ok := payload.(sweepPayload)
-	if !ok || sp.SurfaceResult || sp.Arc || sp.ClosedCircle || sp.ClosedComposite ||
-		len(sp.Spans) != 0 || sp.Path == nil || len(sp.Path.Records) != 1 || len(sp.Path.Segments) != 1 {
-		return prismPayload{}, false
-	}
-	if sp.Path.Segments[0].Arc {
-		return prismPayload{}, false
-	}
-	return sp.Prism, true
-}
-
-func (sp sweepPayload) Transform() r3.Transform {
-	if len(sp.Spans) != 0 {
-		return sp.Spans[0].transform()
-	}
-	if sp.Arc {
-		return sp.Revolve.Xform
-	}
-	return sp.Prism.Xform
-}
-
-func (sp sweepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
-	d, ref := documentHandle(env.Doc), env.Ref
-	if len(sp.Spans) != 0 {
-		sp.Spans = append([]sweepSpanPayload(nil), sp.Spans...)
-		sp.Prism.Xform = composed
-		for i := range sp.Spans {
-			sp.Spans[i].Prism.Xform = composed
-			sp.Spans[i].Revolve.Xform = composed
-		}
-		return placedNode(replayCompositeSweep(ctx, d, ref, sp))
-	}
-	if sp.Arc {
-		sp.Revolve.Xform = composed
-		sp.Prism.Xform = composed
-		body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), sp.Revolve, freeform.NewFreeformWork()))
-		if err != nil {
-			return nil, err
-		}
-		finishArcSweepBody(body, sp)
-		return bodyNode(body), nil
-	}
-	sp.Prism.Xform = composed
-	body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), sp.Prism, freeform.NewFreeformWork()))
-	if err != nil {
-		return nil, err
-	}
-	finishStraightSweepBody(body, sp)
-	return bodyNode(body), nil
-}
-
 // This section is the chain-fed form of Sweep, docs/sweep-design.md §15: the open sketch
 // chain swept along a Path. §15.1 states why the composite join's pairing rule
 // survives an open walk — it pairs by recorded-segment index and reads no
@@ -335,57 +251,6 @@ func (sp sweepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tra
 // Extrude already builds, over the path's own height rather than a resolved
 // Extent. A one-span arc reduces to a chain Revolve. Composite paths outside
 // §15.8's cardinal class stay ErrUnsupported (Table SC row SC7).
-
-// chainSweepPayload is the chain Sweep's own record of a ribbon body: one chain
-// prism or Revolve reduction, or two built chain spans, beside its source Path.
-// It stays DISTINCT from chainPayload for the reason sweepPayload stays
-// distinct from prismPayload — a downstream consumer whose Sweep proof has not
-// landed dispatches on this type and refuses, rather than reading the analytic
-// reduction as proof for the original operation (docs/sweep-design.md §10).
-type chainSweepPayload struct {
-	Chain   chainPayload
-	Revolve chainRevolvePayload
-	Arc     bool
-	Path    *sweepinput.Path
-	Spans   []chainSweepSpanPayload
-}
-
-// Transform is the accumulated rigid placement.
-func (sp chainSweepPayload) Transform() r3.Transform {
-	if len(sp.Spans) != 0 {
-		return sp.Spans[0].transform()
-	}
-	if sp.Arc {
-		return sp.Revolve.Transform()
-	}
-	return sp.Chain.Transform()
-}
-
-// Placed re-evaluates either one-span reduction under the composed motion
-// (core §8). The cardinal composite refuses until its transformed join plane
-// and mesh stations have their own bound.
-func (sp chainSweepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
-	d, ref := documentHandle(env.Doc), env.Ref
-	if len(sp.Spans) != 0 {
-		return nil, fmt.Errorf(`%w: composite chain Sweep placement has no transformed separation proof`, ErrUnsupported)
-	}
-	if sp.Arc {
-		sp.Revolve.Xform = composed
-		body, err := bodyResult(revolveplan.BuildChain(ctx, envOf(documentNode(d), ref), sp.Revolve, freeform.NewFreeformWork()))
-		if err != nil {
-			return nil, err
-		}
-		finishChainSweepBody(body, sp)
-		return bodyNode(body), nil
-	}
-	sp.Chain.Xform = composed
-	body, err := bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), sp.Chain, freeform.NewFreeformWork()))
-	if err != nil {
-		return nil, err
-	}
-	finishChainSweepBody(body, sp)
-	return bodyNode(body), nil
-}
 
 // sweepChain is the chain-fed Sweep body (docs/sweep-design.md §15).
 func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, path *sweepinput.Path,
@@ -476,7 +341,7 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	finishChainSweepBody(body, chainSweepPayload{Chain: reduction, Path: path})
+	sweeprecord.FinishChain(bodyNode(body), chainSweepPayload{Chain: reduction, Path: path})
 	d.commit(body)
 	return body, nil
 }
@@ -502,39 +367,4 @@ func refuseChainSweepOptions(opts []SweepOption, segments int) error {
 		return fmt.Errorf(`%w: WithMitredJoins and WithSectionScale build a solid from a profile only`, ErrUnsupported)
 	}
 	return nil
-}
-
-func finishStraightSweepBody(body *Body, payload sweepPayload) {
-	if built, ok := body.n.Payload.(prismPayload); ok {
-		payload.Prism = built
-	}
-	prefixSweepSpanZeroRole(body)
-	body.n.Payload = payload
-}
-
-func finishChainSweepBody(body *Body, payload chainSweepPayload) {
-	if built, ok := body.n.Payload.(chainPayload); ok {
-		payload.Chain = built
-	}
-	if built, ok := body.n.Payload.(chainRevolvePayload); ok {
-		payload.Revolve = built
-	}
-	prefixSweepSpanZeroRole(body)
-	body.n.Payload = payload
-}
-
-// prefixSweepSpanZeroRole rewrites every wall role a one-span reduction minted
-// so it carries Table B's own path-span index ahead of the section's loop and
-// segment indices: side(i,j) becomes side(0,i,j). The reduction builds through
-// the prism or chain-prism evaluator, which knows nothing of a path span, so
-// the index is restored here rather than threaded through that builder.
-func prefixSweepSpanZeroRole(body *Body) {
-	for _, face := range body.Faces() {
-		for i, origin := range face.n.Origins {
-			if suffix, ok := strings.CutPrefix(origin.Role, "side("); ok {
-				origin.Role = "side(0," + suffix
-				face.n.Origins[i] = origin
-			}
-		}
-	}
 }

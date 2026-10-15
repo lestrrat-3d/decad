@@ -56,7 +56,7 @@ func SpanPartOf(body *topo.Body) (SpanPart, error) {
 //
 // surfaceResult additionally omits the first span's start cap and the last
 // span's end cap from the published face set (docs/surface-design.md §4):
-// every span still builds and sews solid (root sweepSpanPayload never
+// every span still builds and sews solid (sweeprecord.SpanPayload never
 // carries the flag, docs/surface-design.md's own span-pairing requirement —
 // both cap roles must exist for SpanPartOf and SewJoin to run), so this is
 // the ONLY place the flag is consumed. The two outer caps are simply never
