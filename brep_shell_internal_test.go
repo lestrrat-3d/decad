@@ -184,13 +184,13 @@ func shellFacePred(t *testing.T, body *Body, dir r3.Vec, level float64) FacePred
 // reference axis k at reference level.
 func shellRecordRole(t *testing.T, bp brepPayload, k int, level float64) string {
 	t.Helper()
-	embeds, err := brepEmbeds(bp.faces)
+	embeds, err := brepEmbeds(bp.Faces)
 	require.NoError(t, err)
 	role := ""
-	for fi, f := range bp.faces {
-		if f.planar() && embeds[fi].Axis[2] == k && brepLevel(f, embeds[fi]) == level {
+	for fi, f := range bp.Faces {
+		if f.Planar() && embeds[fi].Axis[2] == k && brepLevel(f, embeds[fi]) == level {
 			require.Empty(t, role, "one planar face lies across axis %d at %g", k, level)
-			role = f.role
+			role = f.Role
 		}
 	}
 	require.NotEmpty(t, role, "a planar face lies across axis %d at %g", k, level)
@@ -242,9 +242,9 @@ func shellCylinders(body *Body, r float64, dir r3.Vec) []*Face {
 // the record whose wall is a circle or arc of radius r.
 func shellWallLevels(bp brepPayload, r float64) [][2]float64 {
 	var out [][2]float64
-	for _, f := range bp.faces {
+	for _, f := range bp.Faces {
 		var radius float64
-		switch w := f.wall.(type) {
+		switch w := f.Wall.(type) {
 		case circleSeg:
 			radius = w.Radius.Base()
 		case arcSeg:
@@ -255,7 +255,7 @@ func shellWallLevels(bp brepPayload, r float64) [][2]float64 {
 		if radius != r {
 			continue
 		}
-		lo, hi := math.Abs(f.z0), math.Abs(f.z1)
+		lo, hi := math.Abs(f.Z0), math.Abs(f.Z1)
 		out = append(out, [2]float64{min(lo, hi), max(lo, hi)})
 	}
 	return out
@@ -272,7 +272,7 @@ func TestBrepShellThroughCutReadsP1(t *testing.T) {
 	t.Parallel()
 	_, s1 := internalCrossDrilled(t)
 	bp := s1.n.Payload.(brepPayload)
-	embeds, err := brepEmbeds(bp.faces)
+	embeds, err := brepEmbeds(bp.Faces)
 	require.NoError(t, err)
 	for k := range 2 {
 		_, _, ok, err := readThroughCut(t.Context(), bp, embeds, k)
@@ -316,15 +316,15 @@ func TestBrepShellThroughCutP1(t *testing.T) {
 	before := len(doc.Bodies())
 	result, bp := requireThroughShell(t, s1, Faces(Facing(shellUp)).Exactly(1), units.Millimeters(2),
 		big.NewRat(5632, 1), big.NewRat(220, 1))
-	require.Len(t, bp.faces, 13)
+	require.Len(t, bp.Faces, 13)
 	require.Len(t, doc.Bodies(), before)
 
-	rim := bp.faces[len(bp.faces)-1]
-	require.True(t, rim.planar())
-	require.Equal(t, 20.0, rim.z0)
-	require.Len(t, rim.region.Holes, 1)
+	rim := bp.Faces[len(bp.Faces)-1]
+	require.True(t, rim.Planar())
+	require.Equal(t, 20.0, rim.Z0)
+	require.Len(t, rim.Region.Holes, 1)
 	var corners []planePoint
-	for _, seg := range rim.region.Holes[0].Segments {
+	for _, seg := range rim.Region.Holes[0].Segments {
 		from, _, ok := brepgeom.NaturalLine(seg)
 		require.True(t, ok)
 		corners = append(corners, from)
@@ -362,12 +362,12 @@ func TestBrepShellThroughCutBothCaps(t *testing.T) {
 	both := Faces(NormalTo(shellUp)).Exactly(2)
 	_, s1 := internalCrossDrilled(t)
 	result, bp := requireThroughShell(t, s1, both, units.Millimeters(2), big.NewRat(4480, 1), big.NewRat(220, 1))
-	require.Len(t, bp.faces, 12)
+	require.Len(t, bp.Faces, 12)
 	var rims []float64
-	for _, f := range bp.faces[len(bp.faces)-2:] {
-		require.True(t, f.planar())
-		require.Len(t, f.region.Holes, 1)
-		rims = append(rims, f.z0)
+	for _, f := range bp.Faces[len(bp.Faces)-2:] {
+		require.True(t, f.Planar())
+		require.Len(t, f.Region.Holes, 1)
+		rims = append(rims, f.Z0)
 	}
 	slices.Sort(rims)
 	require.Equal(t, []float64{0, 20}, rims)
@@ -393,7 +393,7 @@ func TestBrepShellThroughCutP6(t *testing.T) {
 	p6 := internalEnclosure(t)
 	result, bp := requireThroughShell(t, p6, shellFaceAt(t, p6, shellUp, 30), units.Millimeters(2),
 		big.NewRat(21472, 1), big.NewRat(224, 1))
-	require.Len(t, bp.faces, 23)
+	require.Len(t, bp.Faces, 23)
 	require.Len(t, shellCylinders(result, 2, shellX), 4)
 	require.Equal(t, [][2]float64{{2, 58}, {2, 58}, {2, 58}, {2, 58}}, shellWallLevels(bp, 2))
 }
@@ -445,12 +445,12 @@ func TestBrepShellThroughCutBands(t *testing.T) {
 		_, body := internalBandedBox(t)
 		_, bp := requireThroughShell(t, body, Faces(Facing(shellUp)).Exactly(1), units.Millimeters(2),
 			big.NewRat(5632, 1), big.NewRat(428, 1))
-		rim, band := bp.faces[len(bp.faces)-2], bp.faces[len(bp.faces)-1]
-		require.Len(t, rim.region.Holes, 1)
-		require.Len(t, band.region.Holes, 1)
-		outer, ok := band.region.Outer.Segments[0].(circleSeg)
+		rim, band := bp.Faces[len(bp.Faces)-2], bp.Faces[len(bp.Faces)-1]
+		require.Len(t, rim.Region.Holes, 1)
+		require.Len(t, band.Region.Holes, 1)
+		outer, ok := band.Region.Outer.Segments[0].(circleSeg)
 		require.True(t, ok)
-		hole, ok := band.region.Holes[0].Segments[0].(circleSeg)
+		hole, ok := band.Region.Holes[0].Segments[0].(circleSeg)
 		require.True(t, ok)
 		require.Equal(t, [2]float64{4, 2}, [2]float64{outer.Radius.Base(), hole.Radius.Base()})
 		require.True(t, outer.CCW)
@@ -462,8 +462,8 @@ func TestBrepShellThroughCutBands(t *testing.T) {
 		_, bp := requireThroughShellLumps(t, body, Faces(NormalTo(shellUp)).Exactly(2), units.Millimeters(2),
 			big.NewRat(4480, 1), big.NewRat(460, 1), 2)
 		bands := 0
-		for _, f := range bp.faces {
-			if f.planar() && len(f.region.Outer.Segments) == 1 {
+		for _, f := range bp.Faces {
+			if f.Planar() && len(f.Region.Outer.Segments) == 1 {
 				bands++
 			}
 		}
@@ -522,9 +522,9 @@ func TestBrepShellThroughCutNotchedCap(t *testing.T) {
 	bp, ok := result.n.Payload.(brepPayload)
 	require.True(t, ok)
 	requireClosedTopology(t, result)
-	rim := bp.faces[len(bp.faces)-1]
-	require.Equal(t, 20.0, rim.z0)
-	require.Len(t, rim.region.Holes, 2)
+	rim := bp.Faces[len(bp.Faces)-1]
+	require.Equal(t, 20.0, rim.Z0)
+	require.Len(t, rim.Region.Holes, 2)
 
 	// acos(0.9) = atan(√0.19 / 0.9).
 	sLo, sHi := sqrtEnclosed(t, big.NewRat(19, 100))
@@ -598,7 +598,7 @@ func TestBrepShellThroughCutDisplacedOffset(t *testing.T) {
 			checked++
 		}
 		require.Equal(t, 4, checked)
-		require.Positive(t, bp.sectionDelta())
+		require.Positive(t, bp.SectionDelta())
 	})
 	t.Run("placed", func(t *testing.T) {
 		t.Parallel()
@@ -734,7 +734,7 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 	t.Parallel()
 	_, body := internalBandedBox(t)
 	bp := body.n.Payload.(brepPayload)
-	embeds, err := brepEmbeds(bp.faces)
+	embeds, err := brepEmbeds(bp.Faces)
 	require.NoError(t, err)
 	tc, reason, ok, err := readThroughCut(t.Context(), bp, embeds, 2)
 	require.NoError(t, err)
@@ -755,13 +755,13 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 
 	doctor := func(edit func(*profileRecord)) brepPayload {
 		out := cavity
-		out.faces = slices.Clone(cavity.faces)
-		for i, f := range out.faces {
-			if f.planar() && f.frame.N() == shellUp && f.z0 == 20 {
-				region := *f.region
+		out.Faces = slices.Clone(cavity.Faces)
+		for i, f := range out.Faces {
+			if f.Planar() && f.Frame.N() == shellUp && f.Z0 == 20 {
+				region := *f.Region
 				region.Holes = slices.Clone(region.Holes)
 				edit(&region)
-				out.faces[i].region = &region
+				out.Faces[i].Region = &region
 			}
 		}
 		return out
@@ -781,13 +781,13 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 // every line of one loop of record face fi.
 func shellLoopCorners(t *testing.T, bp brepPayload, fi int, loop loopRecord) [][3]float64 {
 	t.Helper()
-	embeds, err := brepEmbeds(bp.faces)
+	embeds, err := brepEmbeds(bp.Faces)
 	require.NoError(t, err)
 	out := make([][3]float64, 0, len(loop.Segments))
 	for _, seg := range loop.Segments {
 		from, _, ok := brepgeom.NaturalLine(seg)
 		require.True(t, ok, "a rim loop holds lines only, got %T", seg)
-		out = append(out, embeds[fi].Canon(from.U, from.V, bp.faces[fi].z0))
+		out = append(out, embeds[fi].Canon(from.U, from.V, bp.Faces[fi].Z0))
 	}
 	return out
 }
@@ -856,13 +856,13 @@ func TestBrepShellThroughCutWallRun(t *testing.T) {
 		p6 := internalEnclosure(t)
 		a, b := big.NewRat(22592, 1), big.NewRat(224, 1)
 		result, bp := requireThroughShell(t, p6, shellFaceAt(t, p6, shellY.Scale(-1), 0), mm2, a, b)
-		require.Len(t, bp.faces, 23)
-		fi := len(bp.faces) - 1
-		rim := bp.faces[fi]
-		require.True(t, rim.planar())
-		require.ElementsMatch(t, [][3]float64{{0, 0, 0}, {60, 0, 0}, {60, 0, 30}, {0, 0, 30}}, shellLoopCorners(t, bp, fi, rim.region.Outer))
-		require.Len(t, rim.region.Holes, 1)
-		require.ElementsMatch(t, [][3]float64{{2, 0, 2}, {58, 0, 2}, {58, 0, 28}, {2, 0, 28}}, shellLoopCorners(t, bp, fi, rim.region.Holes[0]))
+		require.Len(t, bp.Faces, 23)
+		fi := len(bp.Faces) - 1
+		rim := bp.Faces[fi]
+		require.True(t, rim.Planar())
+		require.ElementsMatch(t, [][3]float64{{0, 0, 0}, {60, 0, 0}, {60, 0, 30}, {0, 0, 30}}, shellLoopCorners(t, bp, fi, rim.Region.Outer))
+		require.Len(t, rim.Region.Holes, 1)
+		require.ElementsMatch(t, [][3]float64{{2, 0, 2}, {58, 0, 2}, {58, 0, 28}, {2, 0, 28}}, shellLoopCorners(t, bp, fi, rim.Region.Holes[0]))
 		require.Len(t, shellCylinders(result, 2, shellX), 4)
 		requireShellSound(t, result, a, b)
 	})
@@ -872,19 +872,19 @@ func TestBrepShellThroughCutWallRun(t *testing.T) {
 		a, b := big.NewRat(4336, 1), big.NewRat(270, 1)
 		sel := Faces(shellFacePred(t, s1, shellY.Scale(-1), 0)).Or(Facing(shellUp)).Exactly(2)
 		result, bp := requireThroughShell(t, s1, sel, mm2, a, b)
-		require.Len(t, bp.faces, 13)
-		n := len(bp.faces)
-		top, wall, band := bp.faces[n-3], bp.faces[n-2], bp.faces[n-1]
-		require.Empty(t, top.region.Holes)
+		require.Len(t, bp.Faces, 13)
+		n := len(bp.Faces)
+		top, wall, band := bp.Faces[n-3], bp.Faces[n-2], bp.Faces[n-1]
+		require.Empty(t, top.Region.Holes)
 		require.ElementsMatch(t, [][3]float64{{0, 0, 20}, {2, 0, 20}, {2, 18, 20}, {38, 18, 20}, {38, 0, 20}, {40, 0, 20}, {40, 20, 20}, {0, 20, 20}},
-			shellLoopCorners(t, bp, n-3, top.region.Outer))
-		require.Empty(t, wall.region.Holes)
+			shellLoopCorners(t, bp, n-3, top.Region.Outer))
+		require.Empty(t, wall.Region.Holes)
 		require.ElementsMatch(t, [][3]float64{{0, 0, 0}, {40, 0, 0}, {40, 0, 20}, {38, 0, 20}, {38, 0, 2}, {2, 0, 2}, {2, 0, 20}, {0, 0, 20}},
-			shellLoopCorners(t, bp, n-2, wall.region.Outer))
-		outer, ok := band.region.Outer.Segments[0].(circleSeg)
+			shellLoopCorners(t, bp, n-2, wall.Region.Outer))
+		outer, ok := band.Region.Outer.Segments[0].(circleSeg)
 		require.True(t, ok)
-		require.Len(t, band.region.Holes, 1)
-		hole, ok := band.region.Holes[0].Segments[0].(circleSeg)
+		require.Len(t, band.Region.Holes, 1)
+		hole, ok := band.Region.Holes[0].Segments[0].(circleSeg)
 		require.True(t, ok)
 		require.Equal(t, [2]float64{5, 3}, [2]float64{outer.Radius.Base(), hole.Radius.Base()})
 		requireShellSound(t, result, a, b)
@@ -895,10 +895,10 @@ func TestBrepShellThroughCutWallRun(t *testing.T) {
 		a, b := big.NewRat(3040, 1), big.NewRat(270, 1)
 		sel := Faces(shellFacePred(t, s1, shellY.Scale(-1), 0)).Or(NormalTo(shellUp)).Exactly(3)
 		result, bp := requireThroughShell(t, s1, sel, mm2, a, b)
-		n := len(bp.faces)
+		n := len(bp.Faces)
 		for fi := n - 3; fi < n-1; fi++ {
-			require.Empty(t, bp.faces[fi].region.Holes)
-			require.Len(t, shellLoopCorners(t, bp, fi, bp.faces[fi].region.Outer), 4)
+			require.Empty(t, bp.Faces[fi].Region.Holes)
+			require.Len(t, shellLoopCorners(t, bp, fi, bp.Faces[fi].Region.Outer), 4)
 		}
 		requireShellSound(t, result, a, b)
 	})
@@ -966,7 +966,7 @@ func TestBrepShellThroughCutWallOpeningDisplaced(t *testing.T) {
 	th := big.NewRat(127, 50)
 	body := internalHalfRoundedPlate(t)
 	result, bp := requireThroughShell(t, body, shellFaceAt(t, body, shellY.Scale(-1), 0), units.Inches(0.1), a, b)
-	require.Positive(t, bp.sectionDelta())
+	require.Positive(t, bp.SectionDelta())
 	x := new(big.Rat).Sub(big.NewRat(40, 1), th)
 	checked := 0
 	for _, v := range result.Vertices() {
@@ -999,7 +999,7 @@ func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
 	t.Parallel()
 	_, s1 := internalCrossDrilled(t)
 	bp := s1.n.Payload.(brepPayload)
-	embeds, err := brepEmbeds(bp.faces)
+	embeds, err := brepEmbeds(bp.Faces)
 	require.NoError(t, err)
 	tc, reason, ok, err := readThroughCut(t.Context(), bp, embeds, 2)
 	require.NoError(t, err)
@@ -1022,13 +1022,13 @@ func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
 	}
 	cavity, err := tc.cavity(t.Context(), bp, sec.eroded, dilated, rm, call, 0)
 	require.NoError(t, err)
-	require.Zero(t, cavity.sectionDelta())
+	require.Zero(t, cavity.SectionDelta())
 	out, err := throughCutRims(t.Context(), budget, bp, tc, cavity, sec.eroded, dilated, rm)
 	require.NoError(t, err)
-	n := len(out.faces)
-	require.Zero(t, out.faces[n-3].delta, "the cap's rim")
-	for _, f := range out.faces[n-2:] {
-		require.GreaterOrEqual(t, f.delta, 1e-9, "the wall's rim")
+	n := len(out.Faces)
+	require.Zero(t, out.Faces[n-3].Delta, "the cap's rim")
+	for _, f := range out.Faces[n-2:] {
+		require.GreaterOrEqual(t, f.Delta, 1e-9, "the wall's rim")
 	}
 }
 

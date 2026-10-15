@@ -96,12 +96,12 @@ func TestClassBCutCrossDrilledBox(t *testing.T) {
 	require.Equal(t, r3.NewVec(0, 0, 0), result.n.Bounds.Min)
 	require.Equal(t, r3.NewVec(40, 20, 20), result.n.Bounds.Max)
 	// The hole's wall runs exactly between the two walls it pierces.
-	for _, f := range bp.faces {
-		if f.planar() {
+	for _, f := range bp.Faces {
+		if f.Planar() {
 			continue
 		}
-		if _, ok := f.wall.(circleSeg); ok {
-			require.Equal(t, [2]float64{-20, 0}, [2]float64{f.z0, f.z1}, `the drill's frame normal is −y`)
+		if _, ok := f.Wall.(circleSeg); ok {
+			require.Equal(t, [2]float64{-20, 0}, [2]float64{f.Z0, f.Z1}, `the drill's frame normal is −y`)
 		}
 	}
 	report, err := doc.Verify(t.Context())
@@ -184,10 +184,10 @@ func TestClassBRootedCutKeepsThePrismsConvexity(t *testing.T) {
 	lo, hi := piEnclosed(big.NewRat(24000, 1), big.NewRat(-72, 1))
 	requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 	pierced := 0
-	for _, f := range bp.faces {
-		if f.planar() && f.sweep != (r3.Vec{}) {
+	for _, f := range bp.Faces {
+		if f.Planar() && f.Sweep != (r3.Vec{}) {
 			pierced++
-			require.Len(t, f.region.Holes, 1, "the pierced wall carries the hole")
+			require.Len(t, f.Region.Holes, 1, "the pierced wall carries the hole")
 		}
 	}
 	require.Equal(t, 1, pierced)
@@ -246,7 +246,7 @@ func TestClassBCutExactOffsetPlane(t *testing.T) {
 			}
 			bp, ok := result.n.Payload.(brepPayload)
 			require.True(t, ok)
-			require.Equal(t, x.Frame.Origin(), bp.faces[len(bp.faces)-1].frame.Origin(), `the tool's walls share the box's origin`)
+			require.Equal(t, x.Frame.Origin(), bp.Faces[len(bp.Faces)-1].Frame.Origin(), `the tool's walls share the box's origin`)
 			lo, hi := piEnclosed(big.NewRat(16000, 1), big.NewRat(-180, 1))
 			requireCoversInterval(t, measurementFromInternal(result.n.Volume), lo, hi)
 		})
@@ -366,10 +366,10 @@ func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
 
 	bp, ok := direct.(brepPayload)
 	require.True(t, ok)
-	require.Len(t, bp.faces, 7)
+	require.Len(t, bp.Faces, 7)
 	circles := 0
-	for _, f := range bp.faces {
-		if c, ok := f.wall.(circleSeg); ok {
+	for _, f := range bp.Faces {
+		if c, ok := f.Wall.(circleSeg); ok {
 			circles++
 			require.Equal(t, units.Millimeters(3), c.Radius)
 		}

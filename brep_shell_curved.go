@@ -23,33 +23,33 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 		return nil, false, nil
 	}
 	tool := tc.tools[0]
-	wall := bp.faces[tool.walls[0]]
-	if call.removed[0] != facesByRole(source)[wall.role] {
+	wall := bp.Faces[tool.walls[0]]
+	if call.removed[0] != facesByRole(source)[wall.Role] {
 		return nil, false, nil
 	}
 	refuse := func(reason string) (*Body, bool, error) {
 		return nil, true, fmt.Errorf(`%w: the removed circular through wall %s %s (modify-general SG4)`,
-			ErrUnsupported, wall.role, reason)
+			ErrUnsupported, wall.Role, reason)
 	}
 	// Seven source faces and the two rectangular cap readings certify that
 	// the one tool passes through a box. No other hole or curved outer wall
 	// can be discarded by the three-section rewrite.
-	if len(bp.faces) != 7 || len(tc.caps.Section.Holes) != 0 || len(bp.faces[tool.w0].region.Holes) != 1 ||
-		len(bp.faces[tool.w1].region.Holes) != 1 {
+	if len(bp.Faces) != 7 || len(tc.caps.Section.Holes) != 0 || len(bp.Faces[tool.w0].Region.Holes) != 1 ||
+		len(bp.Faces[tool.w1].Region.Holes) != 1 {
 		return refuse("needs one rectangular box and one through hole")
 	}
 	if _, ok := prismshell.RecordedBossRect(tc.caps.Section); !ok {
 		return refuse("needs a rectangular box section")
 	}
-	for _, face := range bp.faces {
-		if face.delta != 0 || face.z0Delta != 0 || face.z1Delta != 0 {
+	for _, face := range bp.Faces {
+		if face.Delta != 0 || face.Z0Delta != 0 || face.Z1Delta != 0 {
 			return refuse("needs exact source faces and levels")
 		}
 	}
 	if call.tDelta != 0 {
 		return refuse("needs an exactly converted thickness")
 	}
-	outer, ok := brepgeom.NewPrismMap(tc.embeds[tool.w0], tool.frameEmb).Loop(bp.faces[tool.w0].region.Outer)
+	outer, ok := brepgeom.NewPrismMap(tc.embeds[tool.w0], tool.frameEmb).Loop(bp.Faces[tool.w0].Region.Outer)
 	if !ok {
 		return refuse("cannot restate the pierced rectangle in the tool frame")
 	}
@@ -98,7 +98,7 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 	if err != nil {
 		return nil, true, err
 	}
-	sp := stackedPrismPayload{Frame: tool.prism.Frame, Xform: bp.xform,
+	sp := stackedPrismPayload{Frame: tool.prism.Frame, Xform: bp.Xform,
 		Slabs: []stackedrecord.Slab{
 			{Regions: []profileRecord{end}, Z0: tool.lo, Z1: loInner},
 			{Regions: []profileRecord{middle}, Z0: loInner, Z1: hiInner},

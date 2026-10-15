@@ -148,7 +148,7 @@ func classBFaceView(ctx context.Context, payload topo.Payload) (brepPayload, boo
 		// A route L body's band patches are no face of its record, so the
 		// record is no face view of the body (docs/modify-general-design.md
 		// Table DG's DG4): the pair takes the mesh path.
-		if len(p.loopBands) > 0 || p.bossShell != nil || p.pocketShell != nil {
+		if len(p.LoopBands) > 0 || p.BossShell != nil || p.PocketShell != nil {
 			return brepPayload{}, false, nil
 		}
 		return p, true, nil
@@ -175,17 +175,17 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload topo.Payload, place
 		return classBPair{}, false, err
 	}
 	// B5: no section displacement to amplify.
-	if x.sectionDelta() != 0 || y.SectionDelta != 0 {
+	if x.SectionDelta() != 0 || y.SectionDelta != 0 {
 		return classBPair{}, false, nil
 	}
-	if x.xform != placement || y.Xform != placement {
+	if x.Xform != placement || y.Xform != placement {
 		return classBPair{}, false, nil
 	}
-	embeds, err := brepEmbeds(x.faces)
+	embeds, err := brepEmbeds(x.Faces)
 	if err != nil {
 		return classBPair{}, false, nil //nolint:nilerr // frames with no exact map onto the reference are a silent miss, not a refusal
 	}
-	ref := x.faces[0].frame
+	ref := x.Faces[0].Frame
 	// B3 and B4: every axis dot is exactly 0 or ±1, and Y's axes are the
 	// reference axes, signed, bit for bit.
 	refAxes := [3]r3.Vec{ref.U(), ref.V(), ref.N()}
@@ -198,11 +198,11 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload topo.Payload, place
 		}
 	}
 	cp := classBPair{x: x, embeds: embeds, ref: ref}
-	cp.faces = make([]classbgeom.FaceRecord, len(x.faces))
-	for i, f := range x.faces {
+	cp.faces = make([]classbgeom.FaceRecord, len(x.Faces))
+	for i, f := range x.Faces {
 		cp.faces[i] = classbgeom.FaceRecord{
-			Region: f.region, Wall: f.wall, Z0: f.z0, Z1: f.z1,
-			Z0Delta: f.z0Delta, Z1Delta: f.z1Delta, Outward: f.outward,
+			Region: f.Region, Wall: f.Wall, Z0: f.Z0, Z1: f.Z1,
+			Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta, Outward: f.Outward,
 			Axis: embeds[i].Axis, Sign: embeds[i].Sign,
 		}
 	}
@@ -294,11 +294,11 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 	budget := proofbound.NewWorkBudget(ctx)
 	slabs := make([]classbgeom.SlabFace, len(reach))
 	for i, s := range reach {
-		f := cp.x.faces[s.Face]
+		f := cp.x.Faces[s.Face]
 		face, err := classbgeom.RestateSlabFace(budget, classbgeom.SlabFaceInput{
-			Region: f.region, Wall: f.wall, Z0: f.z0, Z1: f.z1,
-			Z0Delta: f.z0Delta, Z1Delta: f.z1Delta, Delta: f.delta,
-			Sweep: f.sweep, Normal: f.frame.N(),
+			Region: f.Region, Wall: f.Wall, Z0: f.Z0, Z1: f.Z1,
+			Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta, Delta: f.Delta,
+			Sweep: f.Sweep, Normal: f.Frame.N(),
 		}, cp.embeds[s.Face], cp.axis, cp.sign, s)
 		if err != nil {
 			return nil, false, err
@@ -331,7 +331,7 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 		outside = [][2]end{{a, inside[0]}}
 	}
 	if op == meshbool.OpIntersect {
-		return prismrecord.Payload{Profile: cp.y.Profile, Frame: cp.g, Xform: cp.x.xform,
+		return prismrecord.Payload{Profile: cp.y.Profile, Frame: cp.g, Xform: cp.x.Xform,
 			Z0: inside[0].level, Z1: inside[1].level, Z0Delta: inside[0].delta, Z1Delta: inside[1].delta}, true, nil
 	}
 	// Point of no return (prism-boolean §3.4).
@@ -339,29 +339,29 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 	for _, s := range reach {
 		drop[s.Face] = struct{}{}
 	}
-	out := brepPayload{xform: cp.x.xform}
-	for fi, f := range cp.x.faces {
+	out := brepPayload{Xform: cp.x.Xform}
+	for fi, f := range cp.x.Faces {
 		if _, gone := drop[fi]; gone {
 			continue
 		}
-		out.faces = append(out.faces, f)
+		out.Faces = append(out.Faces, f)
 	}
 	for _, s := range slabs {
 		region := s.Region
-		out.faces = append(out.faces, brepFace{frame: cp.g, region: &region, outward: s.Outward, sweep: s.Sweep,
-			z0: s.Level, z1: s.Level, z0Delta: s.LevelDelta, z1Delta: s.LevelDelta, delta: s.Delta})
+		out.Faces = append(out.Faces, brepFace{Frame: cp.g, Region: &region, Outward: s.Outward, Sweep: s.Sweep,
+			Z0: s.Level, Z1: s.Level, Z0Delta: s.LevelDelta, Z1Delta: s.LevelDelta, Delta: s.Delta})
 	}
 	walls := func(loop loopRecord, lo, hi end) {
 		for _, seg := range loop.Segments {
-			out.faces = append(out.faces, brepFace{frame: cp.g, wall: seg,
-				z0: lo.level, z1: hi.level, z0Delta: lo.delta, z1Delta: hi.delta})
+			out.Faces = append(out.Faces, brepFace{Frame: cp.g, Wall: seg,
+				Z0: lo.level, Z1: hi.level, Z0Delta: lo.delta, Z1Delta: hi.delta})
 		}
 	}
 	section := cp.y.Profile
 	addCap := func(at end, outward bool) {
 		region := section
-		out.faces = append(out.faces, brepFace{frame: cp.g, region: &region, outward: outward,
-			z0: at.level, z1: at.level, z0Delta: at.delta, z1Delta: at.delta})
+		out.Faces = append(out.Faces, brepFace{Frame: cp.g, Region: &region, Outward: outward,
+			Z0: at.level, Z1: at.level, Z0Delta: at.delta, Z1Delta: at.delta})
 	}
 	switch op {
 	case meshbool.OpCut:
@@ -391,7 +391,7 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 	default:
 		return nil, false, fmt.Errorf(`%w: class B has no %s`, ErrUnsupported, op)
 	}
-	out.assignRoles()
+	out.AssignRoles()
 	return out, true, nil
 }
 
@@ -401,8 +401,8 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp classBPair, 
 // is false when the scene returned no such match.
 func classBPerpendicularRegion(ctx context.Context, cp classBPair, region profileRecord) (profileRecord, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	target := prismrecord.Payload{Profile: region, Frame: cp.g, Xform: cp.x.xform, Z0: 0, Z1: 1}
-	tool := prismrecord.Payload{Profile: cp.y.Profile, Frame: cp.g, Xform: cp.x.xform, Z0: 0, Z1: 1}
+	target := prismrecord.Payload{Profile: region, Frame: cp.g, Xform: cp.x.Xform, Z0: 0, Z1: 1}
+	tool := prismrecord.Payload{Profile: cp.y.Profile, Frame: cp.g, Xform: cp.x.Xform, Z0: 0, Z1: 1}
 	segments, within, err := prismcells.RegionsWithinWorkCap(budget, target.Profile, tool.Profile)
 	if err != nil {
 		return profileRecord{}, false, err

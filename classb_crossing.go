@@ -263,19 +263,19 @@ func (b *cbBuild) run(ctx context.Context) (brepPayload, error) {
 			return brepPayload{}, err
 		}
 	}
-	out := brepPayload{xform: b.x.Xform}
+	out := brepPayload{Xform: b.x.Xform}
 	// The reference frame is X's: the first face's frame must be it.
 	for _, f := range b.faces {
 		if f.frame.axis == b.fX.axis && f.frame.sign == b.fX.sign {
-			out.faces = append(out.faces, b.brepFace(f))
+			out.Faces = append(out.Faces, b.brepFace(f))
 		}
 	}
-	if len(out.faces) == 0 {
+	if len(out.Faces) == 0 {
 		return brepPayload{}, errCBMiss
 	}
 	for _, f := range b.faces {
 		if f.frame.axis != b.fX.axis || f.frame.sign != b.fX.sign {
-			out.faces = append(out.faces, b.brepFace(f))
+			out.Faces = append(out.Faces, b.brepFace(f))
 		}
 	}
 	pieceFaces := make([]classbgeom.CrossingPieceFace[cbCarrier], len(b.faces))
@@ -296,11 +296,11 @@ func (b *cbBuild) run(ctx context.Context) (brepPayload, error) {
 		return brepPayload{}, err
 	}
 	for _, piece := range pieces {
-		out.faces = append(out.faces, brepFace{
-			frame: piece.Frame, wall: piece.Wall, z0: piece.Z0, z1: piece.Z1, delta: piece.Delta,
+		out.Faces = append(out.Faces, brepFace{
+			Frame: piece.Frame, Wall: piece.Wall, Z0: piece.Z0, Z1: piece.Z1, Delta: piece.Delta,
 		})
 	}
-	out.assignRoles()
+	out.AssignRoles()
 	return out, nil
 }
 
@@ -309,14 +309,14 @@ func (b *cbBuild) run(ctx context.Context) (brepPayload, error) {
 // records none (§4.2).
 func (b *cbBuild) brepFace(f cbFace) brepFace {
 	region := f.region
-	out := brepFace{frame: f.frame.frame, region: &region, outward: f.outward, z0: f.level, z1: f.level, delta: f.delta}
+	out := brepFace{Frame: f.frame.frame, Region: &region, Outward: f.outward, Z0: f.level, Z1: f.level, Delta: f.delta}
 	if f.carrier.idx >= 0 {
 		axes := [3]r3.Vec{b.x.Frame.U(), b.x.Frame.V(), b.x.Frame.N()}
 		sweep := b.fX.axis[2]
 		if f.carrier.op == cbY {
 			sweep = b.fG.axis[2]
 		}
-		out.sweep = axes[sweep]
+		out.Sweep = axes[sweep]
 	}
 	return out
 }

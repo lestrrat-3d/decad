@@ -78,20 +78,20 @@ func filletSelection(t *testing.T, body *Body, sel *EdgeQuery, r float64, bands 
 	t.Helper()
 	before := 0
 	if bp, ok := body.n.Payload.(brepPayload); ok {
-		before = len(bp.loopBands)
+		before = len(bp.LoopBands)
 	}
 	out, err := Fillet(t.Context(), body, sel, units.Millimeters(r))
 	require.NoError(t, err)
 	require.Error(t, documentHandle(body.n.Doc).requireLive(body), "the receiver is retired")
 	bp, ok := out.n.Payload.(brepPayload)
 	require.True(t, ok, "route L builds a brep, got %T", out.n.Payload)
-	require.Nil(t, bp.stack)
-	require.Len(t, bp.loopBands, before+bands)
-	for _, b := range bp.loopBands[before:] {
-		require.Equal(t, brepBandFillet, b.kind)
+	require.Nil(t, bp.Stack)
+	require.Len(t, bp.LoopBands, before+bands)
+	for _, b := range bp.LoopBands[before:] {
+		require.Equal(t, brepBandFillet, b.Kind)
 	}
 	requireClosedTopology(t, out)
-	require.Len(t, bp.loopPatches, len(bp.loopBands))
+	require.Len(t, bp.LoopPatches, len(bp.LoopBands))
 	return out, bp
 }
 
@@ -178,8 +178,8 @@ func requireRolesOf(t *testing.T, body *Body, b brepLoopBand, n int) {
 		got[r] = struct{}{}
 	}
 	for p := range n {
-		_, ok := got[fmt.Sprintf("filletLoop(%d,%d,%d)", b.face, b.loop, p)]
-		require.True(t, ok, "patch %d of band (%d, %d) carries its role", p, b.face, b.loop)
+		_, ok := got[fmt.Sprintf("filletLoop(%d,%d,%d)", b.Face, b.Loop, p)]
+		require.True(t, ok, "patch %d of band (%d, %d) carries its role", p, b.Face, b.Loop)
 	}
 }
 
@@ -275,8 +275,8 @@ func TestBrepLoopFilletCrossDrilled(t *testing.T) {
 			require.Equal(t, [][2]float64{{0, 18}}, sweptFaceLevels(bp, wall), "x wall %v", wall)
 		}
 		yWall := planarFaceAt(t, bp, r3.NewVec(0, -1, 0), 0)
-		requireChord(t, yWall.region.Outer, planePoint{U: 40, V: 18}, planePoint{U: 0, V: 18})
-		requireRolesOf(t, out, bp.loopBands[0], 4)
+		requireChord(t, yWall.Region.Outer, planePoint{U: 40, V: 18}, planePoint{U: 0, V: 18})
+		requireRolesOf(t, out, bp.LoopBands[0], 4)
 		requireBandEdgesConvex(t, out, true)
 		requireNormalFaces(t, patches, r3.NewVec(38+math.Sqrt2, 10, 18+math.Sqrt2), r3.NewVec(1, 0, 1))
 		for _, f := range patches {
@@ -322,7 +322,7 @@ func TestBrepLoopFilletCrossDrilled(t *testing.T) {
 			}
 		}
 		require.ElementsMatch(t, []float64{3, 4}, radii)
-		requireRolesOf(t, out, bp.loopBands[0], 1)
+		requireRolesOf(t, out, bp.LoopBands[0], 1)
 		requireBandEdgesConvex(t, out, true)
 		// At the hole's top meridian the patch faces out of the material,
 		// away from its ball centre (20, 1, 14): along −y and −z.
@@ -376,14 +376,14 @@ func TestBrepLoopFilletPocket(t *testing.T) {
 		}
 		require.ElementsMatch(t, []r3.Vec{{X: 10, Y: 15, Z: 8.5}, {X: 30, Y: 15, Z: 8.5}, {X: 30, Y: 25, Z: 8.5}, {X: 10, Y: 25, Z: 8.5}}, corners)
 		walls := 0
-		for _, f := range bp.faces {
-			if !f.planar() && f.z0 == 5 {
+		for _, f := range bp.Faces {
+			if !f.Planar() && f.Z0 == 5 {
 				walls++
-				require.Equal(t, 8.5, f.z1)
+				require.Equal(t, 8.5, f.Z1)
 			}
 		}
 		require.Equal(t, 4, walls)
-		requireRolesOf(t, out, bp.loopBands[0], 8)
+		requireRolesOf(t, out, bp.LoopBands[0], 8)
 		requireBandEdgesConvex(t, out, true)
 		// The x = 10 wall's patch faces into the pocket and up.
 		requireNormalFaces(t, patches, r3.NewVec(10-1.5+1.5/math.Sqrt2, 20, 8.5+1.5/math.Sqrt2), r3.NewVec(1, 0, 1))
@@ -408,7 +408,7 @@ func TestBrepLoopFilletPocket(t *testing.T) {
 		_, pocket := internalRouteEPocket(t)
 		out, bp := filletLoopOfFace(t, pocket, routeEZ, r3.NewVec(0, 0, 5), 0, 1.5)
 		requireVolumePi(t, out, pp(q(30225, 2), q(-27, 1), q(0, 1)))
-		require.Equal(t, sigmaRise, bp.loopBands[0].sigma)
+		require.Equal(t, sigmaRise, bp.LoopBands[0].Sigma)
 		patches := requireFilletPatches(t, out, 4, 0)
 		ellipses, _, edges := filletEndCurves(out)
 		require.Len(t, ellipses, 4)
@@ -417,10 +417,10 @@ func TestBrepLoopFilletPocket(t *testing.T) {
 		}
 		requireBandEdgesConvex(t, out, false)
 		walls := 0
-		for _, f := range bp.faces {
-			if !f.planar() && f.z1 == 10 && f.z0 != 0 {
+		for _, f := range bp.Faces {
+			if !f.Planar() && f.Z1 == 10 && f.Z0 != 0 {
 				walls++
-				require.Equal(t, 6.5, f.z0)
+				require.Equal(t, 6.5, f.Z0)
 			}
 		}
 		require.Equal(t, 4, walls)
@@ -454,7 +454,7 @@ func TestBrepLoopFilletRoundBoss(t *testing.T) {
 		require.Equal(t, r3.NewVec(20, 20, 11), tor.Center)
 		require.Equal(t, 6.0, tor.Major.Base())
 		plateTop := planarFaceAt(t, bp, routeEZ, 10)
-		hole, ok := plateTop.region.Holes[0].Segments[0].(circleSeg)
+		hole, ok := plateTop.Region.Holes[0].Segments[0].(circleSeg)
 		require.True(t, ok)
 		require.Equal(t, 6.0, hole.Radius.Base())
 		requireBandEdgesConvex(t, out, false)
@@ -894,7 +894,7 @@ func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
 	require.NoError(t, r.matchEdges())
 	sel, selected, ok := r.partialSelectedLoop()
 	require.True(t, ok)
-	cl, err := capblend.OneLoopCornerLoop(r.budget, bp.faces[sel.face].regionLoop(sel.loop), freeform.NewFreeformWork())
+	cl, err := capblend.OneLoopCornerLoop(r.budget, bp.Faces[sel.face].RegionLoop(sel.loop), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	amounts := make([]float64, len(selected))
 	sphere := make([]bool, len(selected))
@@ -1060,7 +1060,7 @@ func TestBrepLoopFilletBoundFixture(t *testing.T) {
 	body := internalTrapezoidPocket(t)
 	out, bp := filletLoopOfFace(t, body, routeEZ, r3.NewVec(0, 0, 10), 0, 1)
 	requireVolumePi(t, out, v)
-	require.Positive(t, planarFaceAt(t, bp, routeEZ, 10).delta, "the contour is a float solve")
+	require.Positive(t, planarFaceAt(t, bp, routeEZ, 10).Delta, "the contour is a float solve")
 	requireFilletPatches(t, out, 4, 0)
 
 	// Leg 1.

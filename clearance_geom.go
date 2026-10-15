@@ -343,18 +343,18 @@ func prismCarrierFrame(pp prismPayload) clearance.PrismCarrierFrame {
 func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (bool, error) {
 	// A record carrying route L chamfer bands has no model: its faces omit
 	// the band patches (docs/modify-general-design.md Table DG's DG6, PR L-2).
-	if bp.sectionDelta() != 0 || len(bp.loopBands) > 0 || bp.bossShell != nil || bp.pocketShell != nil {
+	if bp.SectionDelta() != 0 || len(bp.LoopBands) > 0 || bp.BossShell != nil || bp.PocketShell != nil {
 		return false, nil
 	}
 	pointTerm, tiltTerm := 0.0, 0.0
-	for _, f := range bp.faces {
+	for _, f := range bp.Faces {
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		pp := f.view(bp.xform)
+		pp := f.View(bp.Xform)
 		var face *clearance.CFace
-		if f.planar() {
-			loops, err := boundarywalk.SurveyLoops(budget, boundarywalk.Profile(*f.region))
+		if f.Planar() {
+			loops, err := boundarywalk.SurveyLoops(budget, boundarywalk.Profile(*f.Region))
 			if err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return false, err
@@ -372,12 +372,12 @@ func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (
 				}
 			}
 			sign := -1.0
-			if f.outward {
+			if f.Outward {
 				sign = 1
 			}
-			face = clearance.PrismPlaneCarrier(prismCarrierFrame(pp), f.z0, sign, clearance.NewRegion2(elems))
+			face = clearance.PrismPlaneCarrier(prismCarrierFrame(pp), f.Z0, sign, clearance.NewRegion2(elems))
 		} else {
-			w, ok := brepCarrierWalk(f.wall)
+			w, ok := brepCarrierWalk(f.Wall)
 			if !ok {
 				return false, nil
 			}
@@ -387,7 +387,7 @@ func (g *bodyGeom) addBrepFaces(budget *proofbound.WorkBudget, bp brepPayload) (
 		}
 		g.faces = append(g.faces, face)
 		pointTerm = math.Max(pointTerm, face.LiftRound)
-		tiltTerm = math.Max(tiltTerm, clearance.BodyFaceTiltDelta([]*clearance.CFace{face}, f.frame, bp.xform))
+		tiltTerm = math.Max(tiltTerm, clearance.BodyFaceTiltDelta([]*clearance.CFace{face}, f.Frame, bp.Xform))
 	}
 	g.delta = proofbound.AbsSumUpper(pointTerm, bp.AxialDelta(), tiltTerm)
 	g.carrierDelta = g.delta

@@ -176,7 +176,7 @@ func TestBrepModifyRoutePShellsS1(t *testing.T) {
 		_, s1 := internalCrossDrilled(t)
 		result, bp := requireThroughShell(t, s1, Faces(Facing(r3.NewVec(-1, 0, 0))).Exactly(1), units.Millimeters(2),
 			big.NewRat(6272, 1), big.NewRat(220, 1))
-		require.Len(t, bp.faces, 13)
+		require.Len(t, bp.Faces, 13)
 		// The rim at x = 0 faces out of the material, as the wall did.
 		shellFaceAt(t, result, r3.NewVec(-1, 0, 0), 0)
 	})
@@ -212,7 +212,7 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 	t.Parallel()
 	read := func(t *testing.T, bp brepPayload, k int) (brepPrismRead, bool) {
 		t.Helper()
-		embeds, err := brepEmbeds(bp.faces)
+		embeds, err := brepEmbeds(bp.Faces)
 		require.NoError(t, err)
 		r, ok, err := recognisePrism(t.Context(), bp, embeds, k)
 		require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 		}
 		r, ok := read(t, bp, 1)
 		require.True(t, ok)
-		frame, _, err := brepgeom.AxisFrame(bp.faces[0].frame, 1)
+		frame, _, err := brepgeom.AxisFrame(bp.Faces[0].Frame, 1)
 		require.NoError(t, err)
 		require.Equal(t, frame, r.pp.Frame)
 		require.Equal(t, r3.NewVec(0, 0, 1), r.pp.Frame.U())
@@ -248,7 +248,7 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 		require.Equal(t, want, r.pp.Profile)
 		require.Equal(t, [2]float64{0, 20}, [2]float64{r.pp.Z0, r.pp.Z1})
 		require.Zero(t, r.pp.SectionDelta)
-		require.Equal(t, bp.xform, r.pp.Xform)
+		require.Equal(t, bp.Xform, r.pp.Xform)
 	})
 	t.Run("hand-built", func(t *testing.T) {
 		t.Parallel()
@@ -258,14 +258,14 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 	t.Run("wall against its material", func(t *testing.T) {
 		t.Parallel()
 		bp := internalCrossDrilledBrep(t)
-		bp.faces[6].wall = circleSeg{Center: planePoint{U: 20, V: 10}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
+		bp.Faces[6].Wall = circleSeg{Center: planePoint{U: 20, V: 10}, Radius: units.Millimeters(3), CCW: true, TStart: 0, TEnd: 1}
 		_, ok := read(t, bp, 1)
 		require.False(t, ok)
 	})
 	t.Run("rectangle facing into the material", func(t *testing.T) {
 		t.Parallel()
 		bp := internalCrossDrilledBrep(t)
-		bp.faces[0].outward = true
+		bp.Faces[0].Outward = true
 		_, ok := read(t, bp, 1)
 		require.False(t, ok)
 	})
@@ -275,7 +275,7 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 	t.Run("displaced planar rectangle", func(t *testing.T) {
 		t.Parallel()
 		bp := internalCrossDrilledBrep(t)
-		bp.faces[0].z0Delta, bp.faces[0].z1Delta = 1e-9, 1e-9
+		bp.Faces[0].Z0Delta, bp.Faces[0].Z1Delta = 1e-9, 1e-9
 		_, ok := read(t, bp, 1)
 		require.False(t, ok)
 	})
@@ -283,10 +283,10 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 		t.Parallel()
 		_, s1 := internalCrossDrilled(t)
 		bp := s1.n.Payload.(brepPayload)
-		faces := slices.Clone(bp.faces)
-		require.False(t, faces[0].planar())
-		faces[0].z1Delta = 1e-9
-		bp.faces = faces
+		faces := slices.Clone(bp.Faces)
+		require.False(t, faces[0].Planar())
+		faces[0].Z1Delta = 1e-9
+		bp.Faces = faces
 		_, ok := read(t, bp, 1)
 		require.False(t, ok)
 	})
@@ -303,15 +303,15 @@ func internalTwoHoleBrep(t *testing.T) brepPayload {
 			circleSeg{Center: planePoint{U: x, V: 10}, Radius: units.Millimeters(3), CCW: false, TStart: 1, TEnd: 0},
 		}}
 	}
-	outer := bp.faces[4].region.Outer
+	outer := bp.Faces[4].Region.Outer
 	bottom := profileRecord{Outer: outer, Holes: []loopRecord{hole(30), hole(10)}}
 	top := profileRecord{Outer: outer, Holes: []loopRecord{hole(10), hole(30)}}
-	bp.faces[4].region, bp.faces[5].region = &bottom, &top
-	wallB := bp.faces[6]
-	bp.faces[6].wall = hole(10).Segments[0]
-	wallB.wall = hole(30).Segments[0]
-	bp.faces = append(bp.faces, wallB)
-	bp.assignRoles()
+	bp.Faces[4].Region, bp.Faces[5].Region = &bottom, &top
+	wallB := bp.Faces[6]
+	bp.Faces[6].Wall = hole(10).Segments[0]
+	wallB.Wall = hole(30).Segments[0]
+	bp.Faces = append(bp.Faces, wallB)
+	bp.AssignRoles()
 	return bp
 }
 
@@ -351,7 +351,7 @@ func TestBrepModifyRoutePMapsTheStartCapsHoles(t *testing.T) {
 func TestBrepModifySplitsThePrismReading(t *testing.T) {
 	t.Parallel()
 	bp := internalCrossDrilledBrep(t)
-	embeds, err := brepEmbeds(bp.faces)
+	embeds, err := brepEmbeds(bp.Faces)
 	require.NoError(t, err)
 
 	caps, ok := brepgeom.ReadPrismCaps(prismFaceRecords(bp), embeds, 1)

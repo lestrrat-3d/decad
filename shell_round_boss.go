@@ -70,8 +70,8 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 	inner.Radius = units.Millimeters(innerR)
 	circle.Inner = profileRecord{Outer: loopRecord{Segments: []curveSegment{inner}}}
 	topCapIdx := -1
-	for i, face := range view.faces {
-		if face.planar() && face.outward && face.z0 == b.Z1 {
+	for i, face := range view.Faces {
+		if face.Planar() && face.Outward && face.Z0 == b.Z1 {
 			if topCapIdx >= 0 {
 				return refuse("has more than one top cap")
 			}
@@ -81,16 +81,16 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 	if topCapIdx < 0 {
 		return refuse("has no top cap")
 	}
-	result := brepPayload{xform: view.xform, faces: make([]brepFace, 0, len(view.faces)+12)}
-	result.faces = append(result.faces, view.faces[:topCapIdx]...)
-	result.faces = append(result.faces, view.faces[topCapIdx+1:]...)
+	result := brepPayload{Xform: view.Xform, Faces: make([]brepFace, 0, len(view.Faces)+12)}
+	result.Faces = append(result.Faces, view.Faces[:topCapIdx]...)
+	result.Faces = append(result.Faces, view.Faces[topCapIdx+1:]...)
 	addPlane := func(p profileRecord, z float64, outward bool) int {
-		result.faces = append(result.faces, brepFace{frame: sp.Frame, region: &p, z0: z, z1: z, outward: outward})
-		return len(result.faces) - 1
+		result.Faces = append(result.Faces, brepFace{Frame: sp.Frame, Region: &p, Z0: z, Z1: z, Outward: outward})
+		return len(result.Faces) - 1
 	}
 	addWalls := func(p profileRecord, z0, z1 float64) {
 		for _, seg := range p.Outer.Segments {
-			result.faces = append(result.faces, brepFace{frame: sp.Frame, wall: brepgeom.ReverseSegment(seg), z0: z0, z1: z1})
+			result.Faces = append(result.Faces, brepFace{Frame: sp.Frame, Wall: brepgeom.ReverseSegment(seg), Z0: z0, Z1: z1})
 		}
 	}
 	lower := plate.Inset(t)
@@ -111,10 +111,10 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 	}
 	rim.Holes = []loopRecord{hole}
 	addPlane(rim, b.Z1, true)
-	result.bossShell = &prismshell.BossShellBand{Plate: plate, Lower: lower, Round: &circle,
+	result.BossShell = &prismshell.BossShellBand{Plate: plate, Lower: lower, Round: &circle,
 		Z0: a.Z0, InterfaceZ: a.Z1, TopZ: b.Z1, LowerZ: lowerZ,
 		T: t, LedgeFace: ledgeFace, Frame: sp.Frame}
-	result.assignRoles()
+	result.AssignRoles()
 	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
 	return body, true, err
 }
@@ -123,7 +123,7 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 // (r-t)+sqrt(t²-u²) at height u above lowerZ. Its area and first height
 // moment integrate to the intervals below; pi is enclosed rationally.
 func measureRoundBossShell(ctx context.Context, bp brepPayload, body *Body) error {
-	b, circle := bp.bossShell, bp.bossShell.Round
+	b, circle := bp.BossShell, bp.BossShell.Round
 	point := func(x float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(x)) }
 	add, sub, mul := proofbound.IntervalAdd, proofbound.IntervalSub, proofbound.IntervalMul
 	scale := func(a proofbound.RatInterval, n, d int64) proofbound.RatInterval {
@@ -171,7 +171,7 @@ func measureRoundBossShell(ctx context.Context, bp brepPayload, body *Body) erro
 		value, bound := heldOf(q)
 		c[i] = proofbound.MeasuredScalar(value, bound)
 	}
-	ref := bp.refView()
+	ref := bp.RefView()
 	cb := ref.PointBound(c[0], c[1], c[2])
 	body.n.Centroid = measurement.VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value),
 		Bound: units.Millimeters(cb), Exactness: measurement.ExactnessOf(cb)}

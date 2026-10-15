@@ -58,17 +58,17 @@ import (
 // face. The body build gives such a face a second role, fillet(k) or
 // chamfer(k) for its index k, so a placement re-mints it with the record.
 type brepFace struct {
-	frame            r3.Frame
-	region           *profileRecord
-	outward          bool
-	sweep            r3.Vec
-	wall             curveSegment
-	z0, z1           float64
-	z0Delta, z1Delta float64
-	side0, side1     []brepSplit
-	delta            float64
-	role             string
-	blend            string
+	Frame            r3.Frame
+	Region           *profileRecord
+	Outward          bool
+	Sweep            r3.Vec
+	Wall             curveSegment
+	Z0, Z1           float64
+	Z0Delta, Z1Delta float64
+	Side0, Side1     []brepSplit
+	Delta            float64
+	Role             string
+	Blend            string
 }
 
 // brepStack is the slabs an A1 result was built from
@@ -78,8 +78,8 @@ type brepFace struct {
 // operand's slabs (stackedUnionOperandOf); no consumer reads it, and a
 // placement leaves it unchanged, since it moves xform alone.
 type brepStack struct {
-	slabs []stackedrecord.Slab
-	delta float64
+	Slabs []stackedrecord.Slab
+	Delta float64
 }
 
 // brepSplit is one side-line split: a level and its displacement.
@@ -94,12 +94,12 @@ type brepSplit = brepgeom.Split
 // the body build attaches them (brep_loop_band.go, brep_loop_fillet.go). It
 // is nil for every record route L did not build.
 type brepPayload struct {
-	faces       []brepFace
-	xform       r3.Transform
-	stack       *brepStack
-	loopBands   []brepLoopBand
-	bossShell   *prismshell.BossShellBand
-	pocketShell *prismshell.PocketShellBand
+	Faces       []brepFace
+	Xform       r3.Transform
+	Stack       *brepStack
+	LoopBands   []brepLoopBand
+	BossShell   *prismshell.BossShellBand
+	PocketShell *prismshell.PocketShellBand
 	// loopPatches is each band's patch geometry, beside its role
 	// chamferLoop(f,l,p), in band order, nil for a fillet band, whose
 	// patches the readers take from the band record and the body's faces
@@ -107,23 +107,23 @@ type brepPayload struct {
 	// (attachBrepLoopBands); a record handed to the build carries none, and
 	// the tessellator and the surveys read it from the payload the build
 	// left on the body, as capBlendPayload.patches is read.
-	loopPatches [][]capPatch
+	LoopPatches [][]capPatch
 }
 
-func (f brepFace) planar() bool { return f.region != nil }
+func (f brepFace) Planar() bool { return f.Region != nil }
 
 // reversed is the face with its outward side exchanged, the rule a record
 // applies to a face of a cavity (docs/modify-general-design.md §3.3 step 5):
 // a planar face flips outward, and a swept face walks its wall the other way
 // and exchanges its start-line and end-line splits. Levels, frame and
 // displacements are unchanged.
-func (f brepFace) reversed() brepFace {
-	if f.planar() {
-		f.outward = !f.outward
+func (f brepFace) Reversed() brepFace {
+	if f.Planar() {
+		f.Outward = !f.Outward
 		return f
 	}
-	f.wall = brepgeom.ReverseSegment(f.wall)
-	f.side0, f.side1 = f.side1, f.side0
+	f.Wall = brepgeom.ReverseSegment(f.Wall)
+	f.Side0, f.Side1 = f.Side1, f.Side0
 	return f
 }
 
@@ -131,58 +131,58 @@ func (f brepFace) reversed() brepFace {
 // A planar face's view carries its whole region at a zero height; a swept
 // face's carries its one wall segment as an open single-segment loop, which
 // only the per-segment readings (extents, witnesses) consume.
-func (f brepFace) view(xform r3.Transform) prismPayload {
+func (f brepFace) View(xform r3.Transform) prismPayload {
 	pp := prismrecord.Payload{
-		Frame: f.frame, Xform: xform,
-		Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta,
-		SectionDelta: f.delta,
+		Frame: f.Frame, Xform: xform,
+		Z0: f.Z0, Z1: f.Z1, Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta,
+		SectionDelta: f.Delta,
 	}
-	if f.planar() {
-		pp.Profile = *f.region
+	if f.Planar() {
+		pp.Profile = *f.Region
 	} else {
-		pp.Profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{f.wall}}}
+		pp.Profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{f.Wall}}}
 	}
 	return pp
 }
 
-func (bp brepPayload) Transform() r3.Transform { return bp.xform }
+func (bp brepPayload) Transform() r3.Transform { return bp.Xform }
 
 // Placed re-evaluates the record under the composed motion. A reflection is
 // read at build time, as prismPayload.reflected() is, so the record itself is
 // unchanged.
 func (bp brepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	d, ref := documentHandle(env.Doc), env.Ref
-	bp.xform = composed
+	bp.Xform = composed
 	return placedNode(evalBrepContext(ctx, d, ref, bp))
 }
 
 // AxialDelta is the largest level displacement over every face.
 func (bp brepPayload) AxialDelta() float64 {
 	var out float64
-	for _, f := range bp.faces {
-		out = max(out, f.z0Delta, f.z1Delta)
+	for _, f := range bp.Faces {
+		out = max(out, f.Z0Delta, f.Z1Delta)
 	}
 	return out
 }
 
 // sectionDelta is the largest section displacement over every face.
-func (bp brepPayload) sectionDelta() float64 {
+func (bp brepPayload) SectionDelta() float64 {
 	var out float64
-	for _, f := range bp.faces {
-		out = max(out, f.delta)
+	for _, f := range bp.Faces {
+		out = max(out, f.Delta)
 	}
 	return out
 }
 
 // assignRoles names every face by its index in the record: face(k) for a
 // planar face and wall(k) for a swept one (§4.2).
-func (bp brepPayload) assignRoles() {
-	for k := range bp.faces {
-		if bp.faces[k].planar() {
-			bp.faces[k].role = fmt.Sprintf("face(%d)", k)
+func (bp brepPayload) AssignRoles() {
+	for k := range bp.Faces {
+		if bp.Faces[k].Planar() {
+			bp.Faces[k].Role = fmt.Sprintf("face(%d)", k)
 			continue
 		}
-		bp.faces[k].role = fmt.Sprintf("wall(%d)", k)
+		bp.Faces[k].Role = fmt.Sprintf("wall(%d)", k)
 	}
 }
 
@@ -208,26 +208,26 @@ func brepOfPrismWithRoles(pp prismPayload) (brepPayload, []string, error) {
 	if allow > 0 {
 		pp.SectionDelta = proofbound.AbsSumUpper(pp.SectionDelta, allow)
 	}
-	bp := brepPayload{xform: pp.Xform}
+	bp := brepPayload{Xform: pp.Xform}
 	var sourceRoles []string
 	for li, loop := range append([]loopRecord{pp.Profile.Outer}, pp.Profile.Holes...) {
 		for si, seg := range loop.Segments {
-			bp.faces = append(bp.faces, brepFace{
-				frame: pp.Frame, wall: seg, z0: pp.Z0, z1: pp.Z1,
-				z0Delta: pp.Z0Delta, z1Delta: pp.Z1Delta, delta: pp.SectionDelta,
+			bp.Faces = append(bp.Faces, brepFace{
+				Frame: pp.Frame, Wall: seg, Z0: pp.Z0, Z1: pp.Z1,
+				Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta, Delta: pp.SectionDelta,
 			})
 			sourceRoles = append(sourceRoles, fmt.Sprintf("side(%d,%d)", li, si))
 		}
 	}
 	region := pp.Profile
-	bp.faces = append(bp.faces,
-		brepFace{frame: pp.Frame, region: &region, z0: pp.Z0, z1: pp.Z0,
-			z0Delta: pp.Z0Delta, z1Delta: pp.Z0Delta, delta: pp.SectionDelta},
-		brepFace{frame: pp.Frame, region: &region, outward: true, z0: pp.Z1, z1: pp.Z1,
-			z0Delta: pp.Z1Delta, z1Delta: pp.Z1Delta, delta: pp.SectionDelta},
+	bp.Faces = append(bp.Faces,
+		brepFace{Frame: pp.Frame, Region: &region, Z0: pp.Z0, Z1: pp.Z0,
+			Z0Delta: pp.Z0Delta, Z1Delta: pp.Z0Delta, Delta: pp.SectionDelta},
+		brepFace{Frame: pp.Frame, Region: &region, Outward: true, Z0: pp.Z1, Z1: pp.Z1,
+			Z0Delta: pp.Z1Delta, Z1Delta: pp.Z1Delta, Delta: pp.SectionDelta},
 	)
 	sourceRoles = append(sourceRoles, provenance.RoleCapStart, provenance.RoleCapEnd)
-	bp.assignRoles()
+	bp.AssignRoles()
 	return bp, sourceRoles, nil
 }
 
@@ -269,22 +269,22 @@ func brepOfStackedWithRoles(ctx context.Context, sp stackedPrismPayload) (brepPa
 	if err != nil {
 		return brepPayload{}, nil, err
 	}
-	bp := brepPayload{xform: sp.Xform}
+	bp := brepPayload{Xform: sp.Xform}
 	var sourceRoles []string
 	for _, col := range columns {
 		first, last := sp.Slabs[col.Start], sp.Slabs[col.End]
 		for segment, seg := range col.Loop.Segments {
-			bp.faces = append(bp.faces, brepFace{
-				frame: sp.Frame, wall: seg, z0: first.Z0, z1: last.Z1,
-				z0Delta: first.Z0Delta, z1Delta: last.Z1Delta, delta: sp.SectionDelta,
+			bp.Faces = append(bp.Faces, brepFace{
+				Frame: sp.Frame, Wall: seg, Z0: first.Z0, Z1: last.Z1,
+				Z0Delta: first.Z0Delta, Z1Delta: last.Z1Delta, Delta: sp.SectionDelta,
 			})
 			sourceRoles = append(sourceRoles, fmt.Sprintf("slab(%d).region(%d).side(%d,%d)",
 				col.Start, col.Region, col.LoopIndex, segment))
 		}
 	}
 	addPlanar := func(region profileRecord, z, zDelta float64, outward bool, sourceRole string) {
-		bp.faces = append(bp.faces, brepFace{frame: sp.Frame, region: &region, outward: outward,
-			z0: z, z1: z, z0Delta: zDelta, z1Delta: zDelta, delta: sp.SectionDelta})
+		bp.Faces = append(bp.Faces, brepFace{Frame: sp.Frame, Region: &region, Outward: outward,
+			Z0: z, Z1: z, Z0Delta: zDelta, Z1Delta: zDelta, Delta: sp.SectionDelta})
 		sourceRoles = append(sourceRoles, sourceRole)
 	}
 	first, last := sp.Slabs[0], sp.Slabs[len(sp.Slabs)-1]
@@ -299,7 +299,7 @@ func brepOfStackedWithRoles(ctx context.Context, sp stackedPrismPayload) (brepPa
 			addPlanar(region, z, zDelta, false, fmt.Sprintf("ceiling(%d,%d)", k, e))
 		}
 	}
-	bp.assignRoles()
+	bp.AssignRoles()
 	return bp, sourceRoles, nil
 }
 
@@ -370,7 +370,7 @@ type brepEmbed = brepgeom.Embed
 func brepEmbeds(faces []brepFace) ([]brepEmbed, error) {
 	frames := make([]r3.Frame, len(faces))
 	for fi, f := range faces {
-		frames[fi] = f.frame
+		frames[fi] = f.Frame
 	}
 	return brepgeom.Embeds(frames, ErrUnsupported)
 }
@@ -382,17 +382,17 @@ func brepEmbeds(faces []brepFace) ([]brepEmbed, error) {
 // or repeated, or a segment other than a line, a circle or an arc (§3 B2). It
 // runs before topology and before chording, and repairs nothing.
 func falsifyBrepPayload(ctx context.Context, bp brepPayload) error {
-	return brepgeom.ValidateFaces(ctx, len(bp.faces), func(i int) brepgeom.FaceRecord {
-		f := bp.faces[i]
+	return brepgeom.ValidateFaces(ctx, len(bp.Faces), func(i int) brepgeom.FaceRecord {
+		f := bp.Faces[i]
 		var region *brepgeom.Profile
-		if f.region != nil {
-			region = &brepgeom.Profile{Outer: f.region.Outer, Holes: f.region.Holes}
+		if f.Region != nil {
+			region = &brepgeom.Profile{Outer: f.Region.Outer, Holes: f.Region.Holes}
 		}
 		return brepgeom.FaceRecord{
-			Frame: f.frame, Region: region, Wall: f.wall,
-			Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta,
-			Side0: f.side0, Side1: f.side1,
-			Delta: f.delta, Role: f.role,
+			Frame: f.Frame, Region: region, Wall: f.Wall,
+			Z0: f.Z0, Z1: f.Z1, Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta,
+			Side0: f.Side0, Side1: f.Side1,
+			Delta: f.Delta, Role: f.Role,
 		}
 	})
 }
@@ -415,33 +415,33 @@ type brepUse = brepgeom.Use
 // tessellator both take: each face's walks, every edge use, and how the uses
 // pair into edges.
 type brepTopology struct {
-	embeds []brepEmbed
+	Embeds []brepEmbed
 	// walls holds a swept face's walk, planar holds each planar face's walks
 	// per region loop.
-	walls  map[int]survey2d.SegmentWalk
-	planar map[int][][]survey2d.SegmentWalk
-	uses   []brepUse
+	Walls  map[int]survey2d.SegmentWalk
+	Planar map[int][][]survey2d.SegmentWalk
+	Uses   []brepUse
 	// edges lists the two use indices of every edge, the owner first: a rim use
 	// where the edge has one, then a side line, then a loop segment. The
 	// owner's natural direction is the edge's direction.
-	edges [][2]int
+	Edges [][2]int
 	// edgeOf maps a use index to its edge index, -1 for an open use.
-	edgeOf []int
+	EdgeOf []int
 	// open lists the uses on a route L band's boundary
 	// (docs/modify-general-design.md §4.2): the cap contour's segments on the
 	// band's face and the side contour's on the faces beside it. The record
 	// bounds each such edge on one side only, and the band's patches bound
 	// it on the other (brep_loop_band.go).
-	open []int
+	Open []int
 	// faceUses lists each face's use indices in loop order: a swept face's
 	// rim0, side1, rim1, side0 (a whole circle's rim0 and rim1 alone); a
 	// planar face's loops in record order.
-	faceUses [][]int
+	FaceUses [][]int
 	// coordUpper is the largest |u|+|v| over every walk and |z| over every
 	// level: the input magnitude the frame and placement lift rounds against.
-	coordUpper float64
+	CoordUpper float64
 	// regions caches each planar face's integrated region (brepTopology.region).
-	regions map[int]brepRegion
+	Regions map[int]brepRegion
 }
 
 // brepTopologyContext walks every face, keys every edge use, and pairs them.
@@ -454,11 +454,11 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 	if err := falsifyBrepPayload(ctx, bp); err != nil {
 		return nil, err
 	}
-	embeds, err := brepEmbeds(bp.faces)
+	embeds, err := brepEmbeds(bp.Faces)
 	if err != nil {
 		return nil, err
 	}
-	faces := make([]brepgeom.FaceWalks, len(bp.faces))
+	faces := make([]brepgeom.FaceWalks, len(bp.Faces))
 	work := freeform.NewFreeformWork()
 	walk := func(seg curveSegment) (survey2d.SegmentWalk, error) {
 		w, err := boundarywalk.WalkOf(seg, work)
@@ -470,23 +470,23 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 		}
 		return w, nil
 	}
-	for fi, f := range bp.faces {
+	for fi, f := range bp.Faces {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		face := brepgeom.FaceWalks{Embed: embeds[fi], IsPlanar: f.planar(),
-			Outward: f.outward, Sweep: brepgeom.NoSweep,
-			Z0: f.z0, Z1: f.z1, Z0Delta: f.z0Delta, Z1Delta: f.z1Delta,
-			Side0: f.side0, Side1: f.side1}
-		if f.planar() {
-			if f.sweep != (r3.Vec{}) {
-				axis, ok := brepgeom.SweepAxis(bp.faces[0].frame, f.sweep)
+		face := brepgeom.FaceWalks{Embed: embeds[fi], IsPlanar: f.Planar(),
+			Outward: f.Outward, Sweep: brepgeom.NoSweep,
+			Z0: f.Z0, Z1: f.Z1, Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta,
+			Side0: f.Side0, Side1: f.Side1}
+		if f.Planar() {
+			if f.Sweep != (r3.Vec{}) {
+				axis, ok := brepgeom.SweepAxis(bp.Faces[0].Frame, f.Sweep)
 				if !ok || axis == embeds[fi].Axis[2] {
 					return nil, fmt.Errorf(`%w: brep face %d's recorded sweep is not a reference axis in its plane`, ErrUnsupported, fi)
 				}
 				face.Sweep = axis
 			}
-			loops := append([]loopRecord{f.region.Outer}, f.region.Holes...)
+			loops := append([]loopRecord{f.Region.Outer}, f.Region.Holes...)
 			face.Planar = make([][]survey2d.SegmentWalk, len(loops))
 			face.PlanarSegs = make([][]curveSegment, len(loops))
 			for li, loop := range loops {
@@ -502,14 +502,14 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 			faces[fi] = face
 			continue
 		}
-		w, err := walk(f.wall)
+		w, err := walk(f.Wall)
 		if err != nil {
 			return nil, err
 		}
-		face.Wall, face.WallSeg = w, f.wall
+		face.Wall, face.WallSeg = w, f.Wall
 		faces[fi] = face
 	}
-	open, err := bp.loopBandKeys(embeds, walk)
+	open, err := bp.LoopBandKeys(embeds, walk)
 	if err != nil {
 		return nil, err
 	}
@@ -517,16 +517,16 @@ func brepTopologyContext(ctx context.Context, bp brepPayload) (*brepTopology, er
 	if err != nil {
 		return nil, err
 	}
-	return &brepTopology{embeds: embeds, walls: built.Walls, planar: built.Planar,
-		uses: built.Uses, edges: built.Edges, edgeOf: built.EdgeOf, open: built.Open,
-		faceUses: built.FaceUses, coordUpper: built.CoordUpper}, nil
+	return &brepTopology{Embeds: embeds, Walls: built.Walls, Planar: built.Planar,
+		Uses: built.Uses, Edges: built.Edges, EdgeOf: built.EdgeOf, Open: built.Open,
+		FaceUses: built.FaceUses, CoordUpper: built.CoordUpper}, nil
 }
 
 // forward reports whether use ui walks its edge in the edge's own direction,
 // which is its owner use's natural one. A whole circle compares senses: it has
 // no endpoints to compare.
-func (btopo *brepTopology) forward(ui int) bool {
-	return brepgeom.Forward(btopo.uses, btopo.edges, btopo.edgeOf, ui)
+func (btopo *brepTopology) Forward(ui int) bool {
+	return brepgeom.Forward(btopo.Uses, btopo.Edges, btopo.EdgeOf, ui)
 }
 
 func brepIsRim(p brepPart) bool { return brepgeom.IsRim(p) }
@@ -544,7 +544,7 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		return nil, err
 	}
 	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySolid, Doc: documentNode(d)}})
-	refView := bp.refView()
+	refView := bp.RefView()
 
 	// Vertices are shared by reference coordinates. Each carries the largest
 	// displacement any use placing it states — its face's section displacement,
@@ -578,24 +578,24 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		}
 		return pv.v
 	}
-	for ui, u := range btopo.uses {
+	for ui, u := range btopo.Uses {
 		// A whole circle's seam is its rim's: a loop that walks the same
 		// circle from another seam places no vertex of its own. A band's
 		// whole circle places its seam with its band edge (brepOpenEdges).
-		closedOpen := u.Key.Closed && btopo.edgeOf[ui] < 0
+		closedOpen := u.Key.Closed && btopo.EdgeOf[ui] < 0
 		if (u.Part != brepLoopSeg && !brepIsRim(u.Part)) || (u.Part == brepLoopSeg && u.Key.Closed) || closedOpen {
 			continue
 		}
-		f := bp.faces[u.Face]
-		placeVertex(u.DirFrom, f.delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.StartBound()))
-		placeVertex(u.DirTo, f.delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.EndBound()))
+		f := bp.Faces[u.Face]
+		placeVertex(u.DirFrom, f.Delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.StartBound()))
+		placeVertex(u.DirTo, f.Delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.EndBound()))
 	}
 	// vertexAt is the lookup brepEdge reads: every vertex it names was already
 	// placed by a use above, so it adds no displacement of its own.
 	vertexAt := func(c [3]float64) *Vertex { return placeVertex(c, 0, 0, 0) }
 
-	edges := make([]*Edge, len(btopo.edges))
-	for ei, pair := range btopo.edges {
+	edges := make([]*Edge, len(btopo.Edges))
+	for ei, pair := range btopo.Edges {
 		edge, err := brepEdge(ctx, bp, btopo, pair, vertexAt)
 		if err != nil {
 			return nil, err
@@ -607,14 +607,14 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		return nil, err
 	}
 	coedgeOf := func(ui int) topo.CoEdge {
-		if ei := btopo.edgeOf[ui]; ei >= 0 {
-			return topo.CoEdge{Edge: edgeNode(edges[ei]), Forward: btopo.forward(ui)}
+		if ei := btopo.EdgeOf[ui]; ei >= 0 {
+			return topo.CoEdge{Edge: edgeNode(edges[ei]), Forward: btopo.Forward(ui)}
 		}
 		return open.coedge[ui]
 	}
 
-	faces := make([]*Face, len(bp.faces))
-	for fi, f := range bp.faces {
+	faces := make([]*Face, len(bp.Faces))
+	for fi, f := range bp.Faces {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -622,15 +622,15 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		if err != nil {
 			return nil, err
 		}
-		uses := btopo.faceUses[fi]
+		uses := btopo.FaceUses[fi]
 		switch {
-		case f.planar():
-			loops := make([]*Loop, len(btopo.planar[fi]))
+		case f.Planar():
+			loops := make([]*Loop, len(btopo.Planar[fi]))
 			for li := range loops {
 				loops[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0}})
 			}
 			for _, ui := range uses {
-				l := loops[btopo.uses[ui].Loop]
+				l := loops[btopo.Uses[ui].Loop]
 				l.n.CoEdges = append(l.n.CoEdges, coedgeOf(ui))
 			}
 			face.n.Loops = loopNodes(loops)
@@ -655,14 +655,14 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	if err != nil {
 		return nil, err
 	}
-	if bp.bossShell != nil {
+	if bp.BossShell != nil {
 		patches, err := attachBossShellBand(ctx, body, ref, bp, open)
 		if err != nil {
 			return nil, err
 		}
 		bands.patches = append(bands.patches, patches...)
 	}
-	if bp.pocketShell != nil {
+	if bp.PocketShell != nil {
 		patches, err := attachPocketShellBand(ctx, body, ref, bp, open)
 		if err != nil {
 			return nil, err
@@ -670,9 +670,9 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 		bands.patches = append(bands.patches, patches...)
 	}
 	allFaces := append(faces, bands.patches...)
-	if bp.bossShell != nil && bp.bossShell.Closed {
+	if bp.BossShell != nil && bp.BossShell.Closed {
 		var lumps []*Lump
-		lumps, err = closedBossShellLumps(allFaces, bp.bossShell.OuterFaceCount)
+		lumps, err = closedBossShellLumps(allFaces, bp.BossShell.OuterFaceCount)
 		body.n.Lumps = lumpNodes(lumps)
 		if err != nil {
 			return nil, err
@@ -680,9 +680,9 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	} else {
 		body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(allFaces))
 	}
-	if bp.bossShell != nil {
+	if bp.BossShell != nil {
 		err = measureBossShell(ctx, bp, body)
-	} else if bp.pocketShell != nil {
+	} else if bp.PocketShell != nil {
 		err = measurePocketShell(ctx, bp, body)
 	} else {
 		err = measureBrepContext(ctx, bp, btopo, body, bands.mass)
@@ -692,10 +692,10 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 	}
 	// Every face frame is a signed permutation of the first (brepEmbeds), so
 	// each face's map has the first face's determinant and defect.
-	if err := prismrecord.ChargeMap(bodyNode(body), bp.faces[0].frame, bp.xform); err != nil {
+	if err := prismrecord.ChargeMap(bodyNode(body), bp.Faces[0].Frame, bp.Xform); err != nil {
 		return nil, err
 	}
-	bp.loopPatches = bands.geom
+	bp.LoopPatches = bands.geom
 	body.n.Payload = bp
 	return body, nil
 }
@@ -703,8 +703,8 @@ func evalBrepContext(ctx context.Context, d *Document, ref producerID, bp brepPa
 // refView is the prism view of the reference frame (the first face's) under
 // the placement: the one map every vertex, centroid and mesh point is lifted
 // through.
-func (bp brepPayload) refView() prismPayload {
-	return prismrecord.Payload{Frame: bp.faces[0].frame, Xform: bp.xform}
+func (bp brepPayload) RefView() prismPayload {
+	return prismrecord.Payload{Frame: bp.Faces[0].Frame, Xform: bp.Xform}
 }
 
 // brepEdge builds one edge from its owner use: a rim takes its wall's curve and
@@ -712,8 +712,8 @@ func (bp brepPayload) refView() prismPayload {
 // and a loop segment shared by two planar faces is a line of its walk's
 // length. Convexity reads evaluator §3's walked boundary (brepEdgeConvex).
 func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]int, vertexAt func([3]float64) *Vertex) (*Edge, error) {
-	owner := btopo.uses[pair[0]]
-	f := bp.faces[owner.Face]
+	owner := btopo.Uses[pair[0]]
+	f := bp.Faces[owner.Face]
 	start := vertexAt(owner.DirFrom)
 	end := vertexAt(owner.DirTo)
 	convex, err := brepEdgeConvex(ctx, btopo, pair)
@@ -724,7 +724,7 @@ func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]
 	case brepSide0, brepSide1:
 		// One piece of the side line: its own two levels, read along the
 		// sweep axis in reference coordinates.
-		axis := btopo.embeds[owner.Face].Axis[2]
+		axis := btopo.Embeds[owner.Face].Axis[2]
 		lo, hi := owner.DirFrom[axis], owner.DirTo[axis]
 		if lo > hi {
 			lo, hi = hi, lo
@@ -739,8 +739,8 @@ func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]
 			End:         vertexNode(end),
 		}}), nil
 	case brepRim0, brepRim1:
-		w := btopo.walls[owner.Face]
-		pp := f.view(bp.xform)
+		w := btopo.Walls[owner.Face]
+		pp := f.View(bp.Xform)
 		bottom, top, _, _, err := prismrecord.BuildWallGeometry(handleAlloc{}, pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, convex, w.Closed, vertexNode(start), vertexNode(end), vertexNode(start), vertexNode(end))
 		if err != nil {
 			return nil, err
@@ -749,14 +749,14 @@ func brepEdge(ctx context.Context, bp brepPayload, btopo *brepTopology, pair [2]
 		if owner.Part == brepRim1 {
 			edge = top
 		}
-		edge.LengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1))
+		edge.LengthBound = proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.Delta, 1))
 		return edgeHandle(edge), nil
 	default:
 		w := owner.Walk
 		return bornEdge(&Edge{n: topo.Edge{
 			Convex:      convex,
 			Length:      w.Length,
-			LengthBound: proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.delta, 1)),
+			LengthBound: proofbound.AbsSumUpper(w.LengthBound, proofbound.SectionDisplacementLength(f.Delta, 1)),
 			Curve:       surfacegeom.Line3{},
 			Start:       vertexNode(start),
 			End:         vertexNode(end),
@@ -779,5 +779,5 @@ func brepEdgeConvex(ctx context.Context, btopo *brepTopology, pair [2]int) (bool
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	return brepgeom.Convex(pair, btopo.uses, btopo.embeds, btopo.walls, ErrUnsupported)
+	return brepgeom.Convex(pair, btopo.Uses, btopo.Embeds, btopo.Walls, ErrUnsupported)
 }

@@ -33,8 +33,8 @@ func internalUnionBrep(t *testing.T, a, b *Body) brepPayload {
 func internalWallFace(t *testing.T, bp brepPayload, n r3.Vec) brepFace {
 	t.Helper()
 	var found []brepFace
-	for _, f := range bp.faces {
-		if f.planar() && f.frame.N() == n {
+	for _, f := range bp.Faces {
+		if f.Planar() && f.Frame.N() == n {
 			found = append(found, f)
 		}
 	}
@@ -55,17 +55,17 @@ func TestStackedUnionBrepFlushCornerBoss(t *testing.T) {
 	plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10)
 	boss := internalBoxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15)
 	bp := internalUnionBrep(t, plate, boss)
-	require.Len(t, bp.faces, 9)
-	for _, f := range bp.faces {
-		require.True(t, f.planar())
-		require.Zero(t, f.delta, "every carrier is a recorded plane")
+	require.Len(t, bp.Faces, 9)
+	for _, f := range bp.Faces {
+		require.True(t, f.Planar())
+		require.Zero(t, f.Delta, "every carrier is a recorded plane")
 	}
 	wall := internalWallFace(t, bp, r3.NewVec(1, 0, 0))
-	require.Len(t, wall.region.Outer.Segments, 6, "the flush wall x = 20 is one L-shaped face")
-	require.Equal(t, 20.0, wall.z0)
+	require.Len(t, wall.Region.Outer.Segments, 6, "the flush wall x = 20 is one L-shaped face")
+	require.Equal(t, 20.0, wall.Z0)
 	wall = internalWallFace(t, bp, r3.NewVec(0, -1, 0))
-	require.Len(t, wall.region.Outer.Segments, 6, "the flush wall y = −20 is one L-shaped face")
-	require.Equal(t, 20.0, wall.z0, "the level along −V is 20")
+	require.Len(t, wall.Region.Outer.Segments, 6, "the flush wall y = −20 is one L-shaped face")
+	require.Equal(t, 20.0, wall.Z0, "the level along −V is 20")
 
 	got, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
@@ -131,8 +131,8 @@ func TestStackedUnionBrepLBossReflexCornerReadsConcave(t *testing.T) {
 	plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10)
 	boss := internalPolyPrismBodyAtZ(t, doc, [][2]float64{{0, -20}, {20, -20}, {20, 0}, {10, 0}, {10, -10}, {0, -10}}, 10, 5)
 	bp := internalUnionBrep(t, plate, boss)
-	for _, f := range bp.faces {
-		require.True(t, f.planar())
+	for _, f := range bp.Faces {
+		require.True(t, f.Planar())
 	}
 	got, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
@@ -167,9 +167,9 @@ func TestStackedUnionBrepFlushEdgeBoss(t *testing.T) {
 	plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10)
 	boss := internalBoxBodyAtZ(t, doc, 10, -5, 20, 5, 10, 15)
 	bp := internalUnionBrep(t, plate, boss)
-	require.Len(t, bp.faces, 10)
+	require.Len(t, bp.Faces, 10)
 	wall := internalWallFace(t, bp, r3.NewVec(1, 0, 0))
-	require.Len(t, wall.region.Outer.Segments, 8, "the flush wall x = 20 is one T-shaped face")
+	require.Len(t, wall.Region.Outer.Segments, 8, "the flush wall x = 20 is one T-shaped face")
 
 	got, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
@@ -199,20 +199,20 @@ func TestStackedUnionBrepCrossingBoss(t *testing.T) {
 	t.Parallel()
 	plate, boss := internalBossOnPlate(t, 18, 10, 15)
 	bp := internalUnionBrep(t, plate, boss)
-	require.Len(t, bp.faces, 10)
+	require.Len(t, bp.Faces, 10)
 	swept := 0
-	for _, f := range bp.faces {
-		if !f.planar() {
+	for _, f := range bp.Faces {
+		if !f.Planar() {
 			swept++
-			require.Equal(t, [2]float64{10, 25}, [2]float64{f.z0, f.z1})
-			_, isArc := f.wall.(arcSeg)
+			require.Equal(t, [2]float64{10, 25}, [2]float64{f.Z0, f.Z1})
+			_, isArc := f.Wall.(arcSeg)
 			require.True(t, isArc, "each cylinder piece is an arc between the two crossings")
 		}
-		require.Positive(t, f.delta, "every face carries the crossings' cut displacement")
+		require.Positive(t, f.Delta, "every face carries the crossings' cut displacement")
 	}
 	require.Equal(t, 2, swept)
 	wall := internalWallFace(t, bp, r3.NewVec(1, 0, 0))
-	require.Len(t, wall.region.Outer.Segments, 6, "the plate's x = 20 wall's top edge is split at both crossings")
+	require.Len(t, wall.Region.Outer.Segments, 6, "the plate's x = 20 wall's top edge is split at both crossings")
 
 	got, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
@@ -248,7 +248,7 @@ func TestStackedUnionBrepRootedFlushBoss(t *testing.T) {
 	plate := internalBoxBody(t, doc, -20, -20, 20, 20, 10)
 	boss := internalBoxBodyAtZ(t, doc, 10, -20, 20, -10, 5, 20)
 	bp := internalUnionBrep(t, plate, boss)
-	require.Len(t, bp.faces, 9)
+	require.Len(t, bp.Faces, 9)
 	got, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
 	requireClosedTopology(t, got)
@@ -350,14 +350,14 @@ func TestStackedUnionBrepRootedCrossingBoss(t *testing.T) {
 	t.Parallel()
 	plate, boss := internalBossOnPlate(t, 18, 5, 20)
 	bp := internalUnionBrep(t, plate, boss)
-	require.Len(t, bp.faces, 10)
+	require.Len(t, bp.Faces, 10)
 	var outside, inside *brepFace
-	for i := range bp.faces {
-		f := &bp.faces[i]
-		if f.planar() {
+	for i := range bp.Faces {
+		f := &bp.Faces[i]
+		if f.Planar() {
 			continue
 		}
-		switch f.z0 {
+		switch f.Z0 {
 		case 5:
 			outside = f
 		case 10:
@@ -366,11 +366,11 @@ func TestStackedUnionBrepRootedCrossingBoss(t *testing.T) {
 	}
 	require.NotNil(t, outside)
 	require.NotNil(t, inside)
-	require.Equal(t, 25.0, outside.z1)
-	require.Equal(t, []brepSplit{{Z: 10}}, outside.side0, "the overhang's start line splits at the floor")
-	require.Equal(t, []brepSplit{{Z: 10}}, outside.side1, "the overhang's end line splits at the floor")
-	require.Empty(t, inside.side0)
-	require.Empty(t, inside.side1)
+	require.Equal(t, 25.0, outside.Z1)
+	require.Equal(t, []brepSplit{{Z: 10}}, outside.Side0, "the overhang's start line splits at the floor")
+	require.Equal(t, []brepSplit{{Z: 10}}, outside.Side1, "the overhang's end line splits at the floor")
+	require.Empty(t, inside.Side0)
+	require.Empty(t, inside.Side1)
 
 	got, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
@@ -419,8 +419,8 @@ func TestBrepSideSplitRecordAudit(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			bp := base
-			bp.faces = append([]brepFace{}, base.faces...)
-			bp.faces[6].side1 = splits
+			bp.Faces = append([]brepFace{}, base.Faces...)
+			bp.Faces[6].Side1 = splits
 			require.ErrorIs(t, falsifyBrepPayload(t.Context(), bp), ErrDegenerate)
 		})
 	}

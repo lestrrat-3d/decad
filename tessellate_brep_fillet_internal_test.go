@@ -144,7 +144,7 @@ func TestBrepFilletMotionCoversEnds(t *testing.T) {
 	t.Parallel()
 	out, _ := filletLoopOfFace(t, internalTrapezoidPocket(t), routeEZ, r3.NewVec(0, 0, 10), 0, 1)
 	bp := out.n.Payload.(brepPayload)
-	delta := bp.faces[bp.loopBands[0].face].delta
+	delta := bp.Faces[bp.LoopBands[0].Face].Delta
 	require.Positive(t, delta)
 
 	btopo, err := brepTopologyContext(t.Context(), bp)
@@ -153,7 +153,7 @@ func TestBrepFilletMotionCoversEnds(t *testing.T) {
 	require.NoError(t, err)
 	n := 0
 	add := func([3]float64, proofbound.WalkEndBound) int { n++; return n - 1 }
-	e := btopo.embeds[bands[0].band.face]
+	e := btopo.Embeds[bands[0].band.Face]
 	bands[0].place(e, add)
 	require.NoError(t, bands[0].placeRings(e, add))
 	store, round := make([]float64, n), make([]float64, n)

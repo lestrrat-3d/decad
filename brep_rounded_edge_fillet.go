@@ -121,19 +121,19 @@ func p8RoundedBrepRecord() (brepPayload, bool) {
 		line(3, 20, 3, 0), line(3, 0, 37, 0),
 	}}, Holes: []loopRecord{{Segments: []curveSegment{hole}}}}
 	faces := []brepFace{
-		{frame: xy, wall: outer.Segments[1], z1: 20},
-		{frame: xy, wall: outer.Segments[2], z1: 20},
-		{frame: xy, wall: outer.Segments[3], z1: 20},
-		{frame: xy, wall: outer.Segments[5], z1: 20},
-		{frame: xy, wall: outer.Segments[6], z1: 20},
-		{frame: xy, wall: outer.Segments[7], z1: 20},
-		{frame: xy, region: &profileRecord{Outer: outer}},
-		{frame: xy, region: &profileRecord{Outer: outer}, outward: true, z0: 20, z1: 20},
-		{frame: xz, region: &back, sweep: r3.NewVec(0, 0, 1), z0: -20, z1: -20},
-		{frame: xz, region: &front, outward: true, sweep: r3.NewVec(0, 0, 1)},
-		{frame: xz, wall: hole, z0: -20},
+		{Frame: xy, Wall: outer.Segments[1], Z1: 20},
+		{Frame: xy, Wall: outer.Segments[2], Z1: 20},
+		{Frame: xy, Wall: outer.Segments[3], Z1: 20},
+		{Frame: xy, Wall: outer.Segments[5], Z1: 20},
+		{Frame: xy, Wall: outer.Segments[6], Z1: 20},
+		{Frame: xy, Wall: outer.Segments[7], Z1: 20},
+		{Frame: xy, Region: &profileRecord{Outer: outer}},
+		{Frame: xy, Region: &profileRecord{Outer: outer}, Outward: true, Z0: 20, Z1: 20},
+		{Frame: xz, Region: &back, Sweep: r3.NewVec(0, 0, 1), Z0: -20, Z1: -20},
+		{Frame: xz, Region: &front, Outward: true, Sweep: r3.NewVec(0, 0, 1)},
+		{Frame: xz, Wall: hole, Z0: -20},
 	}
-	want := brepPayload{faces: faces, xform: r3.Identity()}
-	want.assignRoles()
+	want := brepPayload{Faces: faces, Xform: r3.Identity()}
+	want.AssignRoles()
 	return want, true
 }

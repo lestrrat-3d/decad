@@ -37,10 +37,10 @@ import (
 // receiver's cap levels as in-plane coordinates, carries the largest of that
 // and every cavity level's displacement.
 func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepPayload, tc throughCut, cavity brepPayload, eroded profileRecord, dilated []profileRecord, rm throughRemoval) (brepPayload, error) {
-	frames := make([]r3.Frame, 0, 1+len(cavity.faces))
-	frames = append(frames, bp.faces[0].frame)
-	for _, f := range cavity.faces {
-		frames = append(frames, f.frame)
+	frames := make([]r3.Frame, 0, 1+len(cavity.Faces))
+	frames = append(frames, bp.Faces[0].Frame)
+	for _, f := range cavity.Faces {
+		frames = append(frames, f.Frame)
 	}
 	embeds, err := brepgeom.Embeds(frames, ErrUnsupported)
 	if err != nil {
@@ -52,9 +52,9 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 	if err != nil {
 		return brepPayload{}, err
 	}
-	charge := cavity.sectionDelta()
-	for _, f := range cavity.faces {
-		charge = max(charge, f.z0Delta, f.z1Delta)
+	charge := cavity.SectionDelta()
+	for _, f := range cavity.Faces {
+		charge = max(charge, f.Z0Delta, f.Z1Delta)
 	}
 
 	var removed []int
@@ -84,7 +84,7 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 		}
 		r := rp.face
 		partner, reason, err := throughshell.NewRimPartner(ctx, throughshell.RimPartnerInput{
-			FaceIndex: fi, Wall: rp.wall, Holes: r.region.Holes, Embed: rp.e,
+			FaceIndex: fi, Wall: rp.wall, Holes: r.Region.Holes, Embed: rp.e,
 			Caps: tc.caps, Joined: joined, Tools: rimTools, Dilated: dilated,
 		})
 		if err != nil {
@@ -94,7 +94,7 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 			return brepPayload{}, throughRimError(r, reason)
 		}
 		trace, reason, err := throughshell.TraceRimFaces(ctx, throughshell.RimTraceInput{
-			Faces: cavFaces, Embeds: cavEmbeds, Holes: r.region.Holes,
+			Faces: cavFaces, Embeds: cavEmbeds, Holes: r.Region.Holes,
 			Embed: rp.e, Axis: rp.axis, Level: rp.level, Wall: rp.wall,
 			SweepAxis: tc.k, CapsEmbed: tc.caps.Embed, Partner: partner,
 		})
@@ -107,14 +107,14 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 		for _, ci := range trace.InPlane {
 			inPlane[ci] = struct{}{}
 		}
-		regions, reason, err := throughshell.RimRegions(ctx, budget, r.region.Outer, trace.Outers)
+		regions, reason, err := throughshell.RimRegions(ctx, budget, r.Region.Outer, trace.Outers)
 		if err != nil {
 			return brepPayload{}, shellCancelCause(err)
 		}
 		if reason != "" {
 			return brepPayload{}, throughRimError(r, reason)
 		}
-		delta := cavity.sectionDelta()
+		delta := cavity.SectionDelta()
 		if rp.wall {
 			delta = charge
 		}
@@ -123,25 +123,25 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 				return brepPayload{}, err
 			}
 			region := region
-			rims = append(rims, brepFace{frame: r.frame, region: &region, outward: r.outward, sweep: r.sweep,
-				z0: r.z0, z1: r.z0, z0Delta: r.z0Delta, z1Delta: r.z0Delta, delta: delta})
+			rims = append(rims, brepFace{Frame: r.Frame, Region: &region, Outward: r.Outward, Sweep: r.Sweep,
+				Z0: r.Z0, Z1: r.Z0, Z0Delta: r.Z0Delta, Z1Delta: r.Z0Delta, Delta: delta})
 		}
 	}
 
-	out := brepPayload{xform: bp.xform}
-	for fi, f := range bp.faces {
+	out := brepPayload{Xform: bp.Xform}
+	for fi, f := range bp.Faces {
 		if _, removed := gone[fi]; removed {
 			continue
 		}
-		out.faces = append(out.faces, f)
+		out.Faces = append(out.Faces, f)
 	}
-	for ci, f := range cavity.faces {
+	for ci, f := range cavity.Faces {
 		if _, in := inPlane[ci]; in {
 			continue
 		}
-		out.faces = append(out.faces, f.reversed())
+		out.Faces = append(out.Faces, f.Reversed())
 	}
-	out.faces = append(out.faces, rims...)
+	out.Faces = append(out.Faces, rims...)
 	return out, nil
 }
 
@@ -164,23 +164,23 @@ type throughRimPlane struct {
 // permutation frame across its normal axis whose normal is its outward
 // normal, restating a wall along k as a planar face does (brepFace.sweep).
 func (tc throughCut) rimPlane(bp brepPayload, fi int) (throughRimPlane, error) {
-	f, e := bp.faces[fi], tc.embeds[fi]
-	if f.planar() {
+	f, e := bp.Faces[fi], tc.embeds[fi]
+	if f.Planar() {
 		return throughRimPlane{face: f, e: e, axis: e.Axis[2], level: brepLevel(f, e), wall: tc.kinds[fi] == throughPierced}, nil
 	}
-	wall, reason := throughshell.RestateWall(f.wall, e, bp.faces[0].frame, tc.k, tc.caps.Zlo, tc.caps.Zhi)
+	wall, reason := throughshell.RestateWall(f.Wall, e, bp.Faces[0].Frame, tc.k, tc.caps.Zlo, tc.caps.Zhi)
 	if reason != "" {
 		return throughRimPlane{}, throughRimError(f, reason)
 	}
 	z := wall.Embed.Sign[2]*wall.Level + 0
-	face := brepFace{frame: wall.Frame, region: &wall.Region, outward: true,
-		sweep: tc.caps.Frame.N(), z0: z, z1: z, role: f.role}
+	face := brepFace{Frame: wall.Frame, Region: &wall.Region, Outward: true,
+		Sweep: tc.caps.Frame.N(), Z0: z, Z1: z, Role: f.Role}
 	return throughRimPlane{face: face, e: wall.Embed, axis: wall.Axis, level: wall.Level, wall: true}, nil
 }
 
 // throughRimError is SG7, naming the removed face.
 func throughRimError(r brepFace, what string) error {
-	return fmt.Errorf(`%w: the shell's rim at %s does not partner the cavity's trace: %s (modify-general SG7)`, ErrUnsupported, r.role, what)
+	return fmt.Errorf(`%w: the shell's rim at %s does not partner the cavity's trace: %s (modify-general SG7)`, ErrUnsupported, r.Role, what)
 }
 
 // auditThroughRim is modify §5's audit on one rim region or band: S8 (the

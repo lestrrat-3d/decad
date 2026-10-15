@@ -148,14 +148,14 @@ func TestSideOpeningBrepChargesInexactThickness(t *testing.T) {
 	require.NoError(t, err)
 	bp, ok := body.n.Payload.(brepPayload)
 	require.True(t, ok, "got %T", body.n.Payload)
-	require.Nil(t, bp.stack)
+	require.Nil(t, bp.Stack)
 	covers := func(bound float64) bool { return proofarith.FloatRat(bound).Cmp(gap) >= 0 }
 	floors := 0
-	for _, f := range bp.faces {
-		require.True(t, covers(f.delta), "face %s's delta %g covers the cut's gap", f.role, f.delta)
-		if f.planar() && f.frame.N() == r3.NewVec(0, 0, 1) && f.z0 == tmm {
+	for _, f := range bp.Faces {
+		require.True(t, covers(f.Delta), "face %s's delta %g covers the cut's gap", f.Role, f.Delta)
+		if f.Planar() && f.Frame.N() == r3.NewVec(0, 0, 1) && f.Z0 == tmm {
 			floors++
-			require.True(t, covers(f.z0Delta), "the floor level's delta %g covers the gap", f.z0Delta)
+			require.True(t, covers(f.Z0Delta), "the floor level's delta %g covers the gap", f.Z0Delta)
 		}
 	}
 	require.Equal(t, 1, floors)

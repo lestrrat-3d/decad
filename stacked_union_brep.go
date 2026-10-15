@@ -196,13 +196,13 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	if !b.cut {
 		// A1's union result keeps its slabs for a further co-directional
 		// Union (§4.1). The crossing Cut's holed slabs are not A1 operands.
-		stack := &brepStack{delta: delta}
+		stack := &brepStack{Delta: delta}
 		for k, regions := range b.slabs {
 			lo, hi := b.levels[k], b.levels[k+1]
-			stack.slabs = append(stack.slabs, stackedrecord.Slab{Regions: regions,
+			stack.Slabs = append(stack.Slabs, stackedrecord.Slab{Regions: regions,
 				Z0: lo.Held, Z1: hi.Held, Z0Delta: lo.Delta, Z1Delta: hi.Delta})
 		}
-		out.stack = stack
+		out.Stack = stack
 	}
 	return out, nil
 }
@@ -594,30 +594,30 @@ func stackedBrepRecord(ctx context.Context, budget *proofbound.WorkBudget, geom 
 	if err != nil {
 		return brepPayload{}, err
 	}
-	out := brepPayload{xform: xform}
+	out := brepPayload{Xform: xform}
 	for _, f := range faces {
 		var region *profileRecord
 		if f.Region != nil {
 			p := profileRecord{Outer: f.Region.Outer, Holes: f.Region.Holes}
 			region = &p
 		}
-		out.faces = append(out.faces, brepFace{
-			frame: f.Frame, region: region, outward: f.Outward, sweep: f.Sweep, wall: f.Wall,
-			z0: f.Z0, z1: f.Z1, z0Delta: f.Z0Delta, z1Delta: f.Z1Delta,
-			side0: f.Side0, side1: f.Side1, delta: f.Delta,
+		out.Faces = append(out.Faces, brepFace{
+			Frame: f.Frame, Region: region, Outward: f.Outward, Sweep: f.Sweep, Wall: f.Wall,
+			Z0: f.Z0, Z1: f.Z1, Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta,
+			Side0: f.Side0, Side1: f.Side1, Delta: f.Delta,
 		})
 	}
 	// Modify §5's audit per planar face record (general-boolean §5):
 	// simplicity, orientation and nesting. It refuses; it admits nothing.
-	for _, f := range out.faces {
-		if f.region == nil {
+	for _, f := range out.Faces {
+		if f.Region == nil {
 			continue
 		}
-		if err := prismcells.AuditMergeSection(budget, prismrecord.Payload{Profile: *f.region}, *f.region); err != nil {
+		if err := prismcells.AuditMergeSection(budget, prismrecord.Payload{Profile: *f.Region}, *f.Region); err != nil {
 			return brepPayload{}, err
 		}
 	}
-	out.assignRoles()
+	out.AssignRoles()
 	// The record must close by counting (§4.2).
 	if _, err := brepTopologyContext(ctx, out); err != nil {
 		return brepPayload{}, err

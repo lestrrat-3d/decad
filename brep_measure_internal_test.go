@@ -121,7 +121,7 @@ func TestBrepConcaveRadiusReadsConcaveWalls(t *testing.T) {
 	})
 	t.Run("displaced", func(t *testing.T) {
 		bp := internalCrossDrilledBrep(t)
-		bp.faces[6].delta = 1e-12
+		bp.Faces[6].Delta = 1e-12
 		_, ok := brepMinRadius(nil, bp)
 		require.False(t, ok)
 	})

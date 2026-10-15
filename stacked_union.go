@@ -61,15 +61,15 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 	case brepPayload:
 		// An A1 result keeps the slabs it was built from; a class-B result
 		// keeps none and is no operand here.
-		if p.stack == nil || len(p.stack.slabs) == 0 {
+		if p.Stack == nil || len(p.Stack.Slabs) == 0 {
 			return stackedUnionOperand{}, false
 		}
-		first, last := p.stack.slabs[0], p.stack.slabs[len(p.stack.slabs)-1]
+		first, last := p.Stack.Slabs[0], p.Stack.Slabs[len(p.Stack.Slabs)-1]
 		return stackedUnionOperand{proxy: prismrecord.Payload{
 			Profile: profileRecord{Outer: first.Regions[0].Outer},
-			Frame:   p.faces[0].frame, Xform: p.xform, SectionDelta: p.stack.delta,
+			Frame:   p.Faces[0].Frame, Xform: p.Xform, SectionDelta: p.Stack.Delta,
 			Z0: first.Z0, Z0Delta: first.Z0Delta, Z1: last.Z1, Z1Delta: last.Z1Delta,
-		}, slabs: p.stack.slabs, brep: true}, true
+		}, slabs: p.Stack.Slabs, brep: true}, true
 	default:
 		return stackedUnionOperand{}, false
 	}

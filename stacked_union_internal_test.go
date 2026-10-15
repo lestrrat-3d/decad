@@ -151,10 +151,10 @@ func TestStackedUnionFlushBossBuildsBrep(t *testing.T) {
 	bp, isBrep := payload.(brepPayload)
 	require.True(t, isBrep, "got %T", payload)
 	floors := 0
-	for _, f := range bp.faces {
-		if f.planar() && f.outward && f.z0 == 10 && f.frame == base.Frame {
+	for _, f := range bp.Faces {
+		if f.Planar() && f.Outward && f.Z0 == 10 && f.Frame == base.Frame {
 			floors++
-			area, err := loopSignedAreaCB(f.region.Outer)
+			area, err := loopSignedAreaCB(f.Region.Outer)
 			require.NoError(t, err)
 			require.Equal(t, 1500.0, area)
 		}

@@ -63,25 +63,25 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 		side[c] = lm.sidePts[index]
 	}
 	points, err := tessellation.FilletRingGeometry(tessellation.FilletRingInput{
-		Side: point2ToRecordSlice(side), Cap: point2ToRecordSlice(lm.capPts), Radius: bc.band.setback.Dc,
-		RadiusDelta: bc.band.setback.DcDelta, CapLevel: bc.face.z0,
-		CapLevelDelta: bc.face.z0Delta, SideLevel: bc.sideZ,
-		MaterialSign: bc.band.matSign(bc.face), Count: n,
+		Side: point2ToRecordSlice(side), Cap: point2ToRecordSlice(lm.capPts), Radius: bc.band.Setback.Dc,
+		RadiusDelta: bc.band.Setback.DcDelta, CapLevel: bc.face.Z0,
+		CapLevelDelta: bc.face.Z0Delta, SideLevel: bc.sideZ,
+		MaterialSign: bc.band.MatSign(bc.face), Count: n,
 		Noun: "a fillet band", RingNoun: "a fillet",
 	})
 	if err != nil {
 		return err
 	}
 	if len(bc.curved) > 0 {
-		rIv, err := filletband.RadiusInterval(bc.band.setback.Dc, bc.band.setback.DcDelta)
+		rIv, err := filletband.RadiusInterval(bc.band.Setback.Dc, bc.band.Setback.DcDelta)
 		if err != nil {
 			return err
 		}
 		bc.fillet.seamGap, err = tessellation.CurvedMiterRings(points, tessellation.CurvedMiterInput{
 			Walks: lm.walks, Curved: bc.curved, CapWallStart: lm.capWallStart,
-			Radius: rIv, HeldRadius: bc.band.setback.Dc,
-			CapLevel: bc.face.z0, CapLevelDelta: bc.face.z0Delta,
-			MaterialSign: bc.band.matSign(bc.face),
+			Radius: rIv, HeldRadius: bc.band.Setback.Dc,
+			CapLevel: bc.face.Z0, CapLevelDelta: bc.face.Z0Delta,
+			MaterialSign: bc.band.MatSign(bc.face),
 		})
 		if err != nil {
 			return err
@@ -143,7 +143,7 @@ func (bc *brepBandChord) emitFillet(m *Mesh, faceOfRole func(string) (*Face, err
 	first := make([]int, patches)
 	last := make([]int, patches)
 	for p := range patches {
-		face, err := faceOfRole(bc.band.patchRole(p))
+		face, err := faceOfRole(bc.band.PatchRole(p))
 		if err != nil {
 			return err
 		}
