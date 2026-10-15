@@ -32,23 +32,23 @@ import (
 //     line sweep went red in every variant, publishing their volume, areas
 //     and lengths Exact, and so did the tilted unstitch and body patch whose
 //     source sheet is a prism;
-//   - in measureDraftBody, evalCapBlendContext, evalPatchContext and
+//   - in measureDraftBody, evalCapBlendContext, patchchain.Build and
 //     chainrecord.Build: the draft, the cap chamfer, the patch and the
 //     chain extrude went red in every variant;
 //   - in stackedrecord.Build: the union, the blind cut and the cup went
 //     red in every variant;
 //   - in evalBrepContext: the rotated drilled block went red;
 //   - chargePlacement in evalUnstitchFaceContext and the copy charge in
-//     copyPatchFacesUnder: the rotated unstitch and body patch went red;
+//     patchchain.copyFacesUnder: the rotated unstitch and body patch went red;
 //   - massmoment.AffineInertia in massmoment.RevolveProperties, replaced by the
 //     rigid path: TestRevolveMassCoversFrameDefect went red;
 //   - the basis term of revolveaxis.FrameRoundAllow:
 //     TestRevolveBoxChargesTheBasisRounding went red;
-//   - buildPatchFace's fitted-frame charge: the tilted and the rotated body
+//   - patchchain.buildFace's fitted-frame charge: the tilted and the rotated body
 //     patch went red;
-//   - patchchain.PolygonAreaBound in buildPatchFace: the thin body patch's fitted
+//   - patchchain.PolygonAreaBound in patchchain.buildFace: the thin body patch's fitted
 //     face missed in every variant, by up to 870× its bound;
-//   - patchchain.CurvedAreaCharge in buildPatchFace: the thin slot body patch's
+//   - patchchain.CurvedAreaCharge in patchchain.buildFace: the thin slot body patch's
 //     fitted face missed by 74× its bound on the tilted plane, and its
 //     straight-edge leg alone by 12×. Its circular legs (the curve bound,
 //     the lifted circle's gap, the end matching) were each deleted without

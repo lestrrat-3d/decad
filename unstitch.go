@@ -232,7 +232,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 // rather than invent one — a narrowing is sound, but inventing an error
 // model is not. topo.Face.Denoted, a revolve face's denoted surface, is an exact
 // enclosure rather than a dimensionless figure, so it does compose: the copy
-// carries its exact image under xform (Face.denotedUnder). topo.Face.CapRecord,
+// carries its exact image under xform (topo.Face.DenotedUnder). topo.Face.CapRecord,
 // the plane a ToFace stop reads, is carried by CapRecord.Under: the same record
 // under the identity placement, and none under any other, since a held
 // composition of the record with the placement is not the exact image of its
@@ -320,7 +320,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			AxialDelta:    axialDelta,
 			HasAxialDelta: srcFace.n.HasAxialDelta,
 			NormalBound:   srcFace.n.NormalBound,
-			Denoted:       srcFace.denotedUnder(xform),
+			Denoted:       srcFace.n.DenotedUnder(xform),
 			Surface:       transformed,
 			CapRecord:     srcFace.n.CapRecord.Under(xform),
 			Origins:       append([]provenance.Ref(nil), srcFace.n.Origins...),
@@ -441,21 +441,9 @@ func facePolygonBounds(nf *Face) (Box, error) {
 // planar (see faceBounds's own doc comment for why the box it returns is
 // sound but not necessarily tight).
 func unstitchBounds(srcBounds Box, xform r3.Transform, delta float64) (Box, error) {
-	inflate := srcBounds.Bound.Base()
-	have := false
-	var lo, hi r3.Vec
-	for _, c := range stitchweld.BoxCorners(srcBounds.Min, srcBounds.Max, inflate) {
-		p := xform.Apply(c)
-		if !proofbound.FiniteVec(p) {
-			return Box{}, fmt.Errorf(`%w: a placed unstitch bound is not representable`, ErrUnsupported)
-		}
-		if !have {
-			lo, hi = p, p
-			have = true
-			continue
-		}
-		lo = r3.Vec{X: math.Min(lo.X, p.X), Y: math.Min(lo.Y, p.Y), Z: math.Min(lo.Z, p.Z)}
-		hi = r3.Vec{X: math.Max(hi.X, p.X), Y: math.Max(hi.Y, p.Y), Z: math.Max(hi.Z, p.Z)}
+	box, err := stitchweld.UnstitchBounds(boxToInternal(srcBounds), xform, delta)
+	if err != nil {
+		return Box{}, err
 	}
-	return Box{Min: lo, Max: hi, Exactness: exactnessOf(delta), Bound: units.Millimeters(delta)}, nil
+	return boxFromInternal(box), nil
 }

@@ -4,6 +4,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -73,6 +74,17 @@ type (
 
 // roleShellCap names a cup's pocket floor.
 const roleShellCap = cupwall.RoleShellCap
+
+// patchPayload and bodyPatchPayload are the evaluator's own records of a
+// PatchProfile body and a PatchEdges body: the internal/patchchain payloads,
+// which patchchain.Build and patchchain.BuildBody evaluate over topology nodes
+// and which implement topo.Payload. bodyPatchChain is one proven chain of the
+// latter (docs/surface-design.md §5, docs/evaluator-design.md §8).
+type (
+	patchPayload     = patchchain.Payload
+	bodyPatchPayload = patchchain.BodyPayload
+	bodyPatchChain   = patchchain.Chain
+)
 
 type loopRecord = sectionrecord.LoopRecord
 

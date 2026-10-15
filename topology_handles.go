@@ -128,6 +128,30 @@ func faceNodes(fs []*Face) []*topo.Face {
 	return out
 }
 
+// edgeNodes returns the nodes of es in order, or nil for an empty es.
+func edgeNodes(es []*Edge) []*topo.Edge {
+	if len(es) == 0 {
+		return nil
+	}
+	out := make([]*topo.Edge, len(es))
+	for i, e := range es {
+		out[i] = edgeNode(e)
+	}
+	return out
+}
+
+// edgeHandles returns the handles of ns in order, or nil for an empty ns.
+func edgeHandles(ns []*topo.Edge) []*Edge {
+	if len(ns) == 0 {
+		return nil
+	}
+	out := make([]*Edge, len(ns))
+	for i, n := range ns {
+		out[i] = edgeHandle(n)
+	}
+	return out
+}
+
 // bornEdge sets e's node Owner to e and returns e. Every root Edge is born
 // through it, so edgeHandle maps any edge node a loop's coedge links back to
 // the one handle that holds it.

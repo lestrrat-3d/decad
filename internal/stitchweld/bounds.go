@@ -1,11 +1,15 @@
 package stitchweld
 
 import (
+	"fmt"
 	"iter"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // lumpBox encloses one component's held vertices under their own bounds.
@@ -120,4 +124,31 @@ func MaxBound(budget *proofbound.WorkBudget, mags iter.Seq[float64]) (float64, e
 		}
 	}
 	return best, nil
+}
+
+// UnstitchBounds publishes one unstitched face's box as the retiring
+// receiver's own already-proven Bounds, inflated by its own Bound and then
+// carried through xform by its 8 corners (BoxCorners) — the reasoning
+// stitchBounds states for a curved Stitch operand, applied to a single face of
+// the body being split rather than a whole operand body. The published Bound
+// is exactly delta, on the terms stitchBounds publishes for a placed stitched
+// body. It is also the box PatchEdges reuses for its rebuilt face set.
+func UnstitchBounds(srcBounds measurement.Box, xform r3.Transform, delta float64) (measurement.Box, error) {
+	inflate := srcBounds.Bound.Base()
+	have := false
+	var lo, hi r3.Vec
+	for _, c := range BoxCorners(srcBounds.Min, srcBounds.Max, inflate) {
+		p := xform.Apply(c)
+		if !proofbound.FiniteVec(p) {
+			return measurement.Box{}, fmt.Errorf(`%w: a placed unstitch bound is not representable`, decaderr.ErrUnsupported)
+		}
+		if !have {
+			lo, hi = p, p
+			have = true
+			continue
+		}
+		lo = r3.Vec{X: math.Min(lo.X, p.X), Y: math.Min(lo.Y, p.Y), Z: math.Min(lo.Z, p.Z)}
+		hi = r3.Vec{X: math.Max(hi.X, p.X), Y: math.Max(hi.Y, p.Y), Z: math.Max(hi.Z, p.Z)}
+	}
+	return measurement.Box{Min: lo, Max: hi, Exactness: measurement.ExactnessOf(delta), Bound: units.Millimeters(delta)}, nil
 }

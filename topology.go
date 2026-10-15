@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
@@ -26,7 +27,7 @@ const (
 	// §5.1). It stays internal this increment: a one-face body is already
 	// selected by Faces(Planar()), and no public FeatureRef helper names it
 	// yet — Stitch is what decides the right shape for one.
-	rolePatch = "patch"
+	rolePatch = patchchain.RolePatch
 )
 
 // FeatureRef identifies the stable role that created a body, face, or edge.
@@ -434,17 +435,6 @@ type Face struct {
 	_ noCopy
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Face
-}
-
-// denotedUnder carries a face's denoted surface onto a copy placed by xform:
-// the exact image of the source face's own, never a re-reading of the copy's
-// rounded tag.
-func (f *Face) denotedUnder(xform r3.Transform) *surfacenormal.Revolved {
-	if f.n.Denoted == nil || xform == r3.Identity() {
-		return f.n.Denoted
-	}
-	out := f.n.Denoted.Transformed(xform)
-	return &out
 }
 
 // NormalAt returns the face's outward normal at p. Its bound combines the

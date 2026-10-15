@@ -43,7 +43,7 @@ import "github.com/lestrrat-3d/r3"
 // differently for each distinct (u, v), so two vertices sharing one level
 // generally do NOT land on bit-identical planes, even though their true
 // (unrounded) positions do. Fitting a normal to that approximately-coplanar
-// data (Newell's method, patchChainOrientedNormal) would publish a plane
+// data (Newell's method, patchchain.OrientedNormal) would publish a plane
 // tilted from the true one by that same float rounding, with no term in
 // axialDelta to cover it — axialDelta only ever states the OFFSET
 // displacement along an already-exact normal, on the same terms
@@ -111,7 +111,7 @@ func SameLevel(a, b LevelToken) bool {
 // document-local identity minted once per denoted curve or point by the
 // evaluator that FIRST builds it, and propagated unchanged — never re-minted
 // — by every copier that reproduces the same geometry: rebuildStitchTopology
-// (stitch.go), copyFaceUnderContext (unstitch.go) and copyPatchFacesUnder
+// (stitch.go), copyFaceUnderContext (unstitch.go) and patchchain.copyFacesUnder
 // (patch_body.go). Two edges (or two vertices) sharing one non-zero curveID
 // therefore descend from the SAME mint, and so denote the same curve or
 // point exactly, whatever bound each one's own held coordinate carries —

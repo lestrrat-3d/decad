@@ -53,7 +53,7 @@ type Edge struct {
 	// junction edge (root revolve_build.go) — and propagated unchanged, composing
 	// xform, by every copier that reproduces the same curve (root stitch.go's
 	// rebuildStitchTopology, root unstitch.go's copyFaceUnderContext,
-	// root patch_body.go's copyPatchFacesUnder). It is what root stitch_weld.go's
+	// patchchain's copyFacesUnder). It is what root stitch_weld.go's
 	// buildStitchWeldPlan reads to lift Table J's J5 for a bounded pair. Zero
 	// ("no certificate") for every edge no builder or copier stamps.
 	Denot denotation.CurveToken

@@ -28,15 +28,15 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 	}
 	face := faces[0]
 	work := freeform.NewFreeformWork()
-	pw := pp.walks
-	if pw.Reusable(pp.profile) {
+	pw := pp.Walks
+	if pw.Reusable(pp.Profile) {
 		if err := pw.Charge(work); err != nil {
 			return nil, err
 		}
 	} else {
 		pw = nil
 	}
-	loops := append([]loopRecord{pp.profile.Outer}, pp.profile.Holes...)
+	loops := append([]loopRecord{pp.Profile.Outer}, pp.Profile.Holes...)
 	var points []sectionrecord.Point2
 	var sampleBounds []proofbound.WalkEndBound
 	var loopIndices [][]int
@@ -69,7 +69,7 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 	if err != nil {
 		return nil, err
 	}
-	view := pp.prism()
+	view := pp.Prism()
 	mesh := bornMesh(&Mesh{
 		n: topo.Mesh{
 			Vertices:  make([]r3.Vec, len(points)),

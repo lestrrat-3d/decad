@@ -54,7 +54,7 @@ func surfaceTube(t *testing.T, doc *decad.Document) *decad.Body {
 // sheet's own sole (4-edge, free) boundary — the "hole" a flat sheet's own
 // free rim names, since nothing lies on its far side yet. Every edge is
 // traversed by the SAME one face's outer loop, reversal flips a CCW outer
-// walk into a CW one, and the new face's frame is chosen (patchChainOrientedNormal)
+// walk into a CW one, and the new face's frame is chosen (patchchain.OrientedNormal)
 // to make that reversed walk its OWN outer (CCW) loop — the composed effect
 // is the exact negation of the original face's normal.
 func TestBodyPatchDoublesAFlatSheetWithANegatedNormal(t *testing.T) {
@@ -522,7 +522,7 @@ func TestBodyPatchContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 // bounds the placement's rotation of the tag.
 //
 // Shown to fail: copying the band without its normalBound
-// (copyPatchFacesUnder) published bounds of 2.2e-16 and 3.1e-16 against the
+// (patchchain.copyFacesUnder) published bounds of 2.2e-16 and 3.1e-16 against the
 // sources' 8.7e-16 and 1.2e-15, and placed the copy without refusing.
 func TestBodyPatchCopyKeepsBandNormalBound(t *testing.T) {
 	t.Parallel()
@@ -582,7 +582,7 @@ func TestBodyPatchCopyKeepsBandNormalBound(t *testing.T) {
 // same stop read off the unstitched cap does (docs/surface-design.md's T81
 // for Unstitch).
 //
-// Shown to fail: copying the cap without its axialDelta (copyPatchFacesUnder)
+// Shown to fail: copying the cap without its axialDelta (patchchain.copyFacesUnder)
 // published the stop Exact, with a zero bound, where the unstitched cap's own
 // stop carries 7.1e-15 mm.
 func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {

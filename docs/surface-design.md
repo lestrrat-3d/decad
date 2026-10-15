@@ -604,7 +604,7 @@ Four gates, in this order, and each is reject-only:
    generally do not land on bit-identical planes even though their true
    (unrounded) positions do — trivially zero for an axis-aligned sketch
    plane, where every cross term is an exact multiplication by 0 or 1, but
-   not in general. A normal FITTED to that data (`patchChainOrientedNormal`'s
+   not in general. A normal FITTED to that data (`OrientedNormal`'s
    Newell sum, which the exact arm's own admitted chains use safely, because
    gate 3 there already proved those SAME coordinates bit-for-bit coplanar)
    would tilt the published plane away from the true one by that same
@@ -615,11 +615,11 @@ Four gates, in this order, and each is reject-only:
    `normal`, transformed by this evaluation's own placement) — the same
    frame-derived construction `prismrecord.Payload.CapFrame` already uses
    for a solid prism's caps, needing no fitting argument at all.
-   `patchChainOrientedNormal`'s fit still runs for such a chain, but only to
+   `OrientedNormal`'s fit still runs for such a chain, but only to
    settle which of the token's two normal directions matches the chain's own
-   walk sense (`patchChainLevelNormal`): its magnitude, and any tilt fitting
+   walk sense (`LevelNormal`): its magnitude, and any tilt fitting
    approximately-coplanar data would carry, are discarded, never published.
-   `buildPatchFace` then sets the new face's `AxialDelta`/`hasAxialDelta`
+   `buildFace` (`internal/patchchain/body.go`) then sets the new face's `AxialDelta`/`hasAxialDelta`
    from the token's own bound (folded with any placement rounding), the same
    fields `internal/prismrecord/build.go` already sets on a prism's own caps (no new field
    on `Face`). A chain the first, exact arm admits keeps its existing plane
@@ -631,7 +631,7 @@ Four gates, in this order, and each is reject-only:
    modify op's rewritten section passes. That audit's own refusal is
    `ErrUnsupported` (an evaluator-reach reading, §5's own convention), which
    is remapped to `ErrDegenerate` at this gate's own boundary
-   (`patchRemapCrossingError`, `patch_body.go`): a self-crossing chain is bad
+   (`remapCrossingError`, `internal/patchchain/body.go`): a self-crossing chain is bad
    input this evaluator will never admit under a finer tolerance, not a
    capability this evaluator merely has not reached yet. `ErrDegenerate` (R5).
 
@@ -720,7 +720,7 @@ the existing `topobuild.SheetLumps`, run only after every face — the receiver'
 copies and every new one — is attached. A patch that closes a sheet's last
 free edge leaves a **closed sheet** reporting `BodySheet` with `IsSolid()`
 `false`: `Stitch` alone makes the material claim (§2.1). `Bounds` is the
-rebuilt receiver's own box (`unstitchBounds`, reused verbatim): each new
+rebuilt receiver's own box (`stitchweld.UnstitchBounds`, reused verbatim): each new
 face's boundary is already receiver geometry, and a bounded planar region
 lies inside its own boundary's box, so the receiver's own box already
 bounds the patched result too. `Area` is the receiver's own faces' area plus
@@ -823,7 +823,7 @@ copy at `phi0`/`phi1` — mints none, since it never has a partner to weld
 against) — and propagated unchanged, composing the rigid motion it is applied
 under, by every copier that reproduces the same geometry:
 `rebuildStitchTopology` (`stitch.go`), `copyFaceUnderContext` (`unstitch.go`)
-and `copyPatchFacesUnder` (`patch_body.go`). Two edges (or two vertices)
+and `copyFacesUnder` (`internal/patchchain/body.go`). Two edges (or two vertices)
 admit under the certificate when both carry a non-zero token, the ids are
 equal, AND the motions they are stated under are equal
 (`sameCurve`) — a placement breaks the certificate: two edges that shared a
@@ -1270,7 +1270,7 @@ Rule P admits a `PatchEdges`-capped surface-extruded tube's rims and nothing
 wider yet: a loft, sweep or revolve receiver's own `PatchEdges`-capped sheet
 stays undecided until a later increment mints a level token for it too, as
 does a chain a SECOND `PatchEdges` call selects from an already-patched
-body — `copyPatchFacesUnder` does not propagate a level token onto the
+body — `patchchain.copyFacesUnder` does not propagate a level token onto the
 copies it mints, so nothing but the receiver's OWN first-hand rim ever
 carries one.
 
@@ -1454,7 +1454,7 @@ package carries no separate term bounding how far a placement's own rounding
 rotates the tag frame off the true rotation — so a placed copy of a face
 whose `normalBound` is nonzero is `ErrUnsupported` rather than an invented
 bound. `stitch.go`'s `rebuildStitchTopology` and `PatchEdges`'s
-`copyPatchFacesUnder` (`patch_body.go`) carry the same three fields the same
+`copyFacesUnder` (`internal/patchchain/body.go`) carry the same three fields the same
 way, refusals included, so neither a stitched nor a patched body's own later
 placement reopens this gap, and neither publishes a reading tighter than its
 source face's (§15's T209, T210).
@@ -1463,9 +1463,9 @@ source face's (§15's T209, T210).
 denotes** (`topo.Face.Denoted`, `docs/evaluator-design.md` §6), which `NormalAt`
 proves the face's normal against in place of its tag. Unlike `normalBound`, it composes
 with any placement: it is an exact enclosure, so a placed copy holds its exact
-image under the placement's held basis and translation (`Face.denotedUnder`),
+image under the placement's held basis and translation (`topo.Face.DenotedUnder`),
 never a re-reading of the copy's rounded tag. `copyFaceUnderContext`,
-`rebuildStitchTopology` and `PatchEdges`'s `copyPatchFacesUnder` all carry it.
+`rebuildStitchTopology` and `PatchEdges`'s `copyFacesUnder` (`internal/patchchain/body.go`) all carry it.
 
 **A planar cap's copy carries its source's `CapRecord` under the identity
 placement and none under any other.** The record is the plane the cap denotes,
@@ -2773,7 +2773,7 @@ The row-9 curved-mesh obligations are:
 | T26 | `PatchEdges` capping BOTH rims of a `Symmetric` (both ends unit-converted, so both bounded) surface-extruded wall in ONE call — the LEVEL certificate's own flagship | no error, where the same chain carried no level token would be R6; `Kind() == BodySheet`; 6 faces; `Edges(Free())` matches nothing; `Area` is `Approximate` with `Bound.Base() > 0` |
 | T27 | gate 3's level arm admits a chain whose vertices and edges all carry one shared, non-zero `levelID`, and refuses the same shape carrying no level token at all | direct unit coverage of `provePatchChainPlane`'s two arms (`patch_body_internal_test.go`), since a real body's own free-edge chain always carries a level token when its build minted one |
 | T28 | two vertices whose held coordinates and held bounds are bit-identical, minted under two different `levelID`s | `PatchEdges`'s own public seam cannot construct one chain spanning two independently built bodies — a chain requires two edges to SHARE a vertex pointer, which only one evaluator's own build or a zero-bound weld creates, and Table J refuses a zero-bound weld of a bounded pair — so this is pinned directly against `provePatchChainPlane`: still `ErrUnsupported`, proving the certificate is an identity check, never a tolerance |
-| T29 | `buildPatchFace` over a chain the level arm admitted | the new face's `AxialDelta`/`hasAxialDelta` carry the chain's own proven axial bound, the same fields a prism cap already publishes |
+| T29 | `buildFace` (`internal/patchchain/body.go`) over a chain the level arm admitted | the new face's `AxialDelta`/`hasAxialDelta` carry the chain's own proven axial bound, the same fields a prism cap already publishes |
 | T30 | `PatchEdges` capping both rims of a `Distance` (one end recorded, one end unit-converted) surface-extruded wall in one call — the single-bounded-end case | no error: the recorded end's chain passes gate 3's first (exact) arm, the computed end's chain passes the second (level) arm, in the same call |
 | T31 | `annularSketch` revolved a full turn as a surface, stitched alone | `Kind() == BodySolid`; `Volume` 2000π mm³, `Approximate`, enclosing the analytic value within its own `Bound`; `Area` 800π mm², bit-identical to the equivalent solid revolve's; `Centroid` (5, 0, 0), `Approximate`; `Edges(Free())` matches nothing |
 | T32 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, which proves the flux arms against the unrelated revolve engine rather than against its own arithmetic |
@@ -2993,8 +2993,8 @@ The copy and revolve-tag obligations are:
 
 | # | Fixture | Assertion |
 |---|---------|-----------|
-| T209 | a holed disk's end-cap chamfer, unstitched, each cone band sheet's free rims filled by `PatchEdges` | the copied band's `NormalAt` equals its source's, bound included, and placing the patched sheet is `ErrUnsupported`. Shown-to-fail: `copyPatchFacesUnder` without `normalBound` published 2.2e-16 against the source's 8.7e-16 and placed the copy |
-| T210 | a plate extruded 3 in, unstitched; its end cap and four walls stitched back into an open box whose bottom rim `PatchEdges` fills; a pin `ToFace` the patched cap | the pin's `Bounds` equal those of the same pin stopped at the unstitched cap, `Approximate`. Shown-to-fail: `copyPatchFacesUnder` without `AxialDelta` published the stop `Exact` with a zero bound |
+| T209 | a holed disk's end-cap chamfer, unstitched, each cone band sheet's free rims filled by `PatchEdges` | the copied band's `NormalAt` equals its source's, bound included, and placing the patched sheet is `ErrUnsupported`. Shown-to-fail: `patchchain.copyFacesUnder` without `normalBound` published 2.2e-16 against the source's 8.7e-16 and placed the copy |
+| T210 | a plate extruded 3 in, unstitched; its end cap and four walls stitched back into an open box whose bottom rim `PatchEdges` fills; a pin `ToFace` the patched cap | the pin's `Bounds` equal those of the same pin stopped at the unstitched cap, `Approximate`. Shown-to-fail: `patchchain.copyFacesUnder` without `AxialDelta` published the stop `Exact` with a zero bound |
 | T211 | full-turn revolve sheets of a quadrilateral whose side climbs 5e-10 over a unit run (tagged `Cylinder`), and of one whose side leans 5e-10 off perpendicular (tagged `Plane`) | `Stitch` is `ErrUnsupported` (R8); were it admitted, its volume and centroid would have to enclose the record's exact Pappus readings. Shown-to-fail: without `stitchFluxTagsDenoted` the volumes sat 2.1e-9 and 1.6e-9 mm³ off under 7.0e-15 and 5.7e-15 bounds |
 | T212 | a decimal trapezoid's full-turn sheet (two `Cylinder`, two `Cone` walls), stitched; and, internally, T46-style cone wall whose tag apex is moved 1e-6 mm along the axis with its record unchanged | the stitched volume and centroid enclose the record's exact Pappus readings; the moved apex's flux and moment bounds enclose the exact-apex readings. Shown-to-fail: dropping `ConeInput.ApexBound`'s widening left the moved flux 9.4e-6 off under a 3.6e-14 bound |
 | T213 | one-span straight and quarter-arc sweep sheets thickened on their admitted sides | the solid keeps `side(0,i,j)` roles and path-order caps, measures the reduced annulus's volume, verifies Sound, tessellates with a volume proof, and replays under placement; a composite sheet keeps R24 |

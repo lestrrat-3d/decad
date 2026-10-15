@@ -171,156 +171,6 @@ func TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels
 	require.False(t, hasAxialBound)
 }
 
-// TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta is
-// docs/surface-design.md §15's T29: buildPatchFace over a chain gate 3's
-// level arm admitted sets the new face's own AxialDelta/hasAxialDelta from
-// the chain's proven bound — the same fields a prism cap already carries
-// (internal/prismrecord/build.go) — rather than leaving them at their zero value.
-func TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta(t *testing.T) {
-	t.Parallel()
-	edges, tok := boundedSquareChain(1, units.Millimeters(0.002))
-	edgeCopy := map[*Edge]*Edge{}
-	for _, e := range edges {
-		f := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}}})
-		e.n.Faces = []*topo.Face{faceNode(f)}
-		edgeCopy[e] = e
-	}
-
-	chain := bodyPatchChain{edges: edges, axialBound: 0.002, hasAxialBound: true, level: tok}
-	face, err := buildPatchFace(context.Background(), 0, chain, edgeCopy, r3.Identity(), 0)
-	require.NoError(t, err)
-	require.True(t, face.n.HasAxialDelta, "the new face carries the level arm's own axial bound")
-	require.Equal(t, 0.002, face.n.AxialDelta)
-	plane, ok := face.n.Surface.(surfacegeom.Plane)
-	require.True(t, ok)
-	// orientPatchChain reverses each edge relative to this fixture's own
-	// dummy adjacent face, so the walk's own sense (and so the sign
-	// patchChainLevelNormal settles on) is a fixture artifact; either sign
-	// of the token's own EXACT direction is what "never fitted" claims.
-	require.True(t, plane.Frame.N() == tok.Normal || plane.Frame.N() == tok.Normal.Scale(-1),
-		"the published normal must be exactly the token's own direction (either sign), got %v", plane.Frame.N())
-}
-
-// TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame is
-// the coordinator's own concern, made concrete: for a chain admitted by the
-// level arm, held vertex coordinates at a common recorded level are only
-// APPROXIMATELY coplanar in float64 once the frame is not axis-aligned
-// (frame.ToWorldUV(u, v) rounds differently per (u, v) — see denotation.go's
-// own doc comment), so a normal FITTED to them (patchChainOrientedNormal's
-// Newell sum) would carry that same rounding as an unbounded tilt no
-// AxialDelta covers. This fixture deliberately perturbs one vertex's held
-// coordinate by far more than any float64 rounding could — 1e-6 mm, which a
-// genuine rotated-frame build would never actually produce — to prove the
-// PUBLISHED plane does not track that perturbation at all: it comes from the
-// token's own recorded normal, never from these (or any) held positions.
-func TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame(t *testing.T) {
-	t.Parallel()
-	axis, ok := r3.NewVec(1, 2, 3).Normalize()
-	require.True(t, ok)
-	u, ok := r3.NewVec(1, 0, 0).Sub(axis.Scale(axis.Dot(r3.NewVec(1, 0, 0)))).Normalize()
-	require.True(t, ok)
-	v := axis.Cross(u)
-
-	corner := func(s, t float64) r3.Vec {
-		return r3.NewVec(7, -3, 11).Add(u.Scale(s)).Add(v.Scale(t)).Add(axis.Scale(5))
-	}
-	tok := levelToken{ID: 1, Origin: corner(0, 0), Normal: axis}
-
-	bound := units.Millimeters(0.002)
-	v0 := bornVertex(&Vertex{n: topo.Vertex{Position: corner(0, 0), Bound: bound, Level: tok}})
-	v1 := bornVertex(&Vertex{n: topo.Vertex{Position: corner(10, 0), Bound: bound, Level: tok}})
-	v2 := bornVertex(&Vertex{n: topo.Vertex{Position: corner(10, 10), Bound: bound, Level: tok}})
-	// v3's held position is perturbed off the true plane by 1e-6 mm along the
-	// axis — far more than any float64 evaluation of corner() itself could
-	// ever depart from it, standing in for "held data this arm never
-	// verifies coplanar".
-	v3 := bornVertex(&Vertex{n: topo.Vertex{Position: corner(0, 10).Add(axis.Scale(1e-6)), Bound: bound, Level: tok}})
-	edges := []*Edge{
-		bornEdge(&Edge{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v0), End: vertexNode(v1)}}),
-		bornEdge(&Edge{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}}),
-		bornEdge(&Edge{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v2), End: vertexNode(v3)}}),
-		bornEdge(&Edge{n: topo.Edge{Level: tok, Curve: surfacegeom.Line3{}, Start: vertexNode(v3), End: vertexNode(v0)}}),
-	}
-	edgeCopy := map[*Edge]*Edge{}
-	for _, e := range edges {
-		f := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}}})
-		e.n.Faces = []*topo.Face{faceNode(f)}
-		edgeCopy[e] = e
-	}
-
-	chain := bodyPatchChain{edges: edges, axialBound: 0.002, hasAxialBound: true, level: tok}
-	face, err := buildPatchFace(context.Background(), 0, chain, edgeCopy, r3.Identity(), 0)
-	require.NoError(t, err)
-	plane, ok := face.n.Surface.(surfacegeom.Plane)
-	require.True(t, ok)
-	// See the sibling test's own comment: the walk's sense (and so which
-	// sign patchChainLevelNormal settles on) is this fixture's own artifact.
-	// planeFrameFromNormal's own Gram-Schmidt reprocesses whatever normal it
-	// is handed, introducing the SAME ordinary float64 rounding
-	// prismrecord.Payload.CapFrame already carries for any analytic Plane
-	// (a few ULPs, ~1e-16) — the claim under test is that the published
-	// normal tracks the TOKEN's axis to THAT floor, not the far larger 1e-6
-	// perturbation on v3's own held position: a fit to the held vertices
-	// would show error near 1e-6, not near 1e-16.
-	dPos := plane.Frame.N().Sub(axis).Len()
-	dNeg := plane.Frame.N().Sub(axis.Scale(-1)).Len()
-	require.Less(t, min(dPos, dNeg), 1e-9,
-		"the published normal must track the token's own axis, not the perturbed vertex; got %v vs axis %v", plane.Frame.N(), axis)
-}
-
-// TestOrientPatchChainRejectsDisagreeingAdjacentFaces is Table R row R18: two
-// free edges over the same vertex pair, each recorded in the SAME direction
-// (v1 to v2) and each traversed forward by its own one adjacent face.
-// Reversing each independently ("the opposite sense") then makes BOTH
-// directed edges start at v2 — a duplicate orientPatchChain's own
-// connectivity walk catches directly, by pigeonhole leaving v1 the start of
-// none.
-func TestOrientPatchChainRejectsDisagreeingAdjacentFaces(t *testing.T) {
-	t.Parallel()
-	v1 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}})
-	v2 := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})
-	a := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}})
-	b := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v1), End: vertexNode(v2)}})
-	faceA := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(a), Forward: true}}}}))}}})
-	faceB := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(b), Forward: true}}}}))}}})
-	a.n.Faces = []*topo.Face{faceNode(faceA)}
-	b.n.Faces = []*topo.Face{faceNode(faceB)}
-
-	_, err := orientPatchChain(bodyPatchChain{edges: []*Edge{a, b}})
-	require.ErrorIs(t, err, ErrDegenerate)
-}
-
-// TestBuildPatchFaceRemapsACrossingChainToErrDegenerate is gate 4 exercised
-// directly: a bowtie quadrilateral (A, B, C, D in order) whose two diagonals
-// — the two non-adjacent segment pairs a plain 4-cycle boundary walk never
-// puts in contact — cross at its center. orientPatchChain's own "opposite
-// sense" derivation succeeds (every builder here agrees, by construction: a
-// single adjacent face per edge, each walked forward), so this reaches gate
-// 4, whose ErrUnsupported crossing refusal (sectionaudit.Crossing) is
-// remapped to ErrDegenerate at PatchEdges's own
-// boundary (docs/surface-design.md Table R row R5).
-func TestBuildPatchFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
-	t.Parallel()
-	a := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 0, 0)}})
-	b := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 1, 0)}})
-	c := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(1, 0, 0)}})
-	d := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(0, 1, 0)}})
-	e1 := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(a), End: vertexNode(b)}})
-	e2 := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(b), End: vertexNode(c)}})
-	e3 := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(c), End: vertexNode(d)}})
-	e4 := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(d), End: vertexNode(a)}})
-	edges := []*Edge{e1, e2, e3, e4}
-	edgeCopy := map[*Edge]*Edge{}
-	for _, e := range edges {
-		f := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}}})
-		e.n.Faces = []*topo.Face{faceNode(f)}
-		edgeCopy[e] = e
-	}
-
-	_, err := buildPatchFace(context.Background(), 0, bodyPatchChain{edges: edges}, edgeCopy, r3.Identity(), 0)
-	require.ErrorIs(t, err, ErrDegenerate)
-}
-
 // TestBodyPatchRejectsAReceiverWithNoPayload is Table R row R19: a live body
 // this evaluator did not build (payload nil) — unreachable through the
 // public seam, since every builder here always sets one, on the same terms
@@ -370,7 +220,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver(t *testing.T) {
 	edges, _ := boundedSquareChain(1, units.Millimeters(0))
 	receiver := patchTestReceiverWithOneChain(prismrecord.Payload{SurfaceResult: true, SectionDelta: 5}, edges)
 
-	pp := bodyPatchPayload{faces: receiver.Faces(), chains: []bodyPatchChain{{edges: edges}}}
+	pp := bodyPatchPayload{Faces: faceNodes(receiver.Faces()), Chains: []bodyPatchChain{{Edges: edgeNodes(edges)}}}
 	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))
 }
 
@@ -407,8 +257,8 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 	innerFace.n.Body = bodyNode(receiver)
 
 	pp := bodyPatchPayload{
-		faces:  receiver.Faces(),
-		chains: []bodyPatchChain{{edges: []*Edge{inner}}},
+		Faces:  faceNodes(receiver.Faces()),
+		Chains: []bodyPatchChain{{Edges: edgeNodes([]*Edge{inner})}},
 	}
 	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))
 }
@@ -438,6 +288,6 @@ func TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch(t *testing.T) {
 	}
 	receiver := patchTestReceiverWithOneChain(prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}, edges)
 
-	pp := bodyPatchPayload{faces: receiver.Faces(), chains: []bodyPatchChain{{edges: edges}}}
+	pp := bodyPatchPayload{Faces: faceNodes(receiver.Faces()), Chains: []bodyPatchChain{{Edges: edgeNodes(edges)}}}
 	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))
 }

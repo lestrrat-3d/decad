@@ -86,7 +86,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	// volume and centroid stay at their zero value: finite, so
 	// topobuild.ValidateAnalyticMeasurements below passes, and neither is
 	// reachable through Body.Volume/Body.Centroid while solid is false
-	// (docs/surface-design.md §8), exactly as patch.go's evalPatchContext
+	// (docs/surface-design.md §8), exactly as patchchain.Build
 	// leaves them.
 	//
 	// A ribbon this design's Trim assembled (pp.SectionDelta != 0 — the only

@@ -17,13 +17,13 @@ The rules for rows live in `docs/layout.md`.
 | `pattern.go` | Public pattern specs, entry points and payload adapters. See mirror-pattern §4.3, §6. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal and per-face free-edge chain counts over `internal/surfacegroup/`; `internal/topobuild/` builds shells and lumps. See surface §2-§4, §7, §11. |
 | `feature_options.go` | Public feature option tiers and adapters to `internal/featureoption/`. See surface §4, sweep §2 and loft §2. |
-| `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
+| `patch.go` | `PatchProfile`: records the profile and builds its face through `patchchain.Build`. See surface §5.1. |
 | `thicken.go` | `Thicken`. See surface §16. |
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
 | `thicken_axis.go` | Assembles thicken sections. See surface §16. |
 | `thicken_chain_sweep.go` | Thickens admitted one-arc and cardinal composite chain sheets. See surface §16.8. |
 | `offset.go` | `Offset`: a second sheet at a normal distance. See surface §17. |
-| `patch_body.go` | `PatchEdges` topology adapter and face build. See surface §5.2. |
+| `patch_body.go` | `PatchEdges` selection, chain gates 1-3 and Rule P. See surface §5.2. |
 | `denotation.go` | Level and curve token names and comparisons; the document node mints them. |
 | `stitch_weld.go` | Adapts Stitch topology to Table J. See surface §6.2. |
 | `stitch.go` | `Stitch` evaluator and topology adapter. See surface §6.4. |
