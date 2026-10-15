@@ -237,7 +237,7 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	// rather than inherited from the sheet's: every one of them is an integral
 	// over the region, and the region changed.
 	work := freeform.NewFreeformWork()
-	ax, axisSide, err := resolveAxisSide(ctx, annulus, revolveaxis.Line2{
+	ax, axisSide, err := revolveplan.ResolveAxisSide(ctx, annulus, revolveaxis.Line2{
 		AU: rp.Ax.AU, AV: rp.Ax.AV, DU: rp.Ax.DU, DV: rp.Ax.DV,
 	}, work)
 	if err != nil {
@@ -338,7 +338,7 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	// snap allowances, radial admission charge and axial envelope are proven
 	// here rather than inherited from the shell's: every one of them is an
 	// integral over the region, and the shell had no region at all.
-	ax, axisSide, err := resolveAxisSide(ctx, section, revolveaxis.Line2{
+	ax, axisSide, err := revolveplan.ResolveAxisSide(ctx, section, revolveaxis.Line2{
 		AU: cp.Ax.AU, AV: cp.Ax.AV, DU: cp.Ax.DU, DV: cp.Ax.DV,
 	}, work)
 	if err != nil {

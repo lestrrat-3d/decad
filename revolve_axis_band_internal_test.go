@@ -20,7 +20,7 @@ import (
 )
 
 // This file is docs/surface-design.md §15's T90-T95: the revolve axis-band
-// repair (revolve_axis.go's resolveAxisSide, internal/revolveplan/build.go's
+// repair (revolveplan.ResolveAxisSide, internal/revolveplan/build.go's
 // revolvemass.AdmitBandCharge/revolvemass.AdmitVolumeCharge). Every fixture is
 // a straight-edged rectangle in plane-local (u, v), U the axial coordinate
 // and V the radial one, with every vertex an exact recorded coordinate —
@@ -30,7 +30,7 @@ import (
 // The axis is hand-built as a revolveaxis.Line2 rather than resolved from a
 // SketchLine or ConstructionAxis: aVBound is set directly to the proven
 // anchor uncertainty a tilted or offset axis would carry, which lets each
-// fixture below land deliberately on one side of resolveAxisSide's own
+// fixture below land deliberately on one side of revolveplan.ResolveAxisSide's own
 // strict/charged split without fighting floating-point geometry for it.
 
 // dipShaftRadius is every fixture's far (outer) edge in this file: no case
@@ -82,7 +82,7 @@ func quarterTurnDenotation() revolveangle.Sweep {
 // otherwise-exact axisFrame (every direction/anchor bound zero, so
 // revolvemass.AxisMoments' own use of aU/aV/dU/dV's bounds contributes nothing) carrying
 // ONLY the admitted-band charge (radialAdmitAllow, axialExtentUpper) set by
-// hand — the same shape resolveAxisSide itself produces whenever a boundary
+// hand — the same shape revolveplan.ResolveAxisSide itself produces whenever a boundary
 // scan's own candidate (an arc's computed radius, not the axis) is what
 // leaves the radial minimum unproven, isolated here from every OTHER source
 // of bound so the containment assertion below tests THIS charge and no
@@ -110,7 +110,7 @@ func buildDipShaftBodyCharged(t *testing.T, profile profileRecord, full bool, ph
 
 // T90: a dipped profile's published volume interval contains the volume its
 // own face set encloses. radialAdmitAllow/axialExtentUpper are the interval
-// resolveAxisSide's own charged path (proofbound.SurvStraddle in its admission switch)
+// revolveplan.ResolveAxisSide's own charged path (proofbound.SurvStraddle in its admission switch)
 // carries forward whenever the boundary scan itself — never the axis, held
 // zero-bound here — cannot prove the radial minimum clear of zero: the same
 // mechanism as the investigation's own 100 mm/1e-7 mm shaft (T93 below is
@@ -185,7 +185,7 @@ func TestRevolveAxisBandAllowanceZeroForExactAxis(t *testing.T) {
 	t.Parallel()
 	profile := dipShaftBandProfile(100, 0)
 	line := revolveaxis.Line2{DU: 1, DV: 0}
-	ax, side, err := resolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
+	ax, side, err := revolveplan.ResolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, 1.0, side)
 	require.Zero(t, ax.RadialAdmitAllow, "an exact axis proving the radial minimum non-negative charges nothing")
@@ -203,7 +203,7 @@ func TestRevolveAxisBandRefusesProvenNegativeRadialMinimumUnderExactAxis(t *test
 	t.Parallel()
 	profile := dipShaftBandProfile(100, 1e-7)
 	line := revolveaxis.Line2{DU: 1, DV: 0}
-	_, _, err := resolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
+	_, _, err := revolveplan.ResolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate)
 }
 
@@ -211,10 +211,10 @@ func TestRevolveAxisBandRefusesProvenNegativeRadialMinimumUnderExactAxis(t *test
 // the origin, with a direction whose components are not exactly
 // representable, commits real floating-point rounding computing roff =
 // nU*aU+nV*aV — the same fault TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift
-// pins one level up, only here it is resolveAxisSide's own build-time gate
+// pins one level up, only here it is revolveplan.ResolveAxisSide's own build-time gate
 // rather than a post-hoc review. The fixture mirrors that test's numbers
 // exactly (aV = 1e10, a profile edge at v = aV-1e-7 held to v = aV-1e-7+5),
-// which is far enough from the axis's own anchor that resolveAxisSide's
+// which is far enough from the axis's own anchor that revolveplan.ResolveAxisSide's
 // coarse side classification straddles rather than resolving cleanly — the
 // SAME rounding this test pins is what makes that straddle happen, so the
 // bound the accompanying error names is asserted nonzero rather than the
@@ -227,7 +227,7 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		lineSeg{Start: planePoint{U: 0, V: aV - eps}, End: planePoint{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
 	}}}
-	_, _, err := resolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
+	_, _, err := revolveplan.ResolveAxisSide(t.Context(), profile, line, freeform.NewFreeformWork())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "does not decide which side")
 	// The error's own stated bound is the roff charge itself: zero would mean
@@ -244,7 +244,7 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 // not exactly representable): a shaft profile whose near edge sits AT that
 // axis (rather than dipped below it) resolves with a genuinely nonzero
 // radialAdmitAllow — confirmed below rather than assumed — because
-// resolveAxisSide's own scan-arithmetic charge (proofbound.PlaneDotDecompositionRoundAllow,
+// revolveplan.ResolveAxisSide's own scan-arithmetic charge (proofbound.PlaneDotDecompositionRoundAllow,
 // the same mechanism revolveaxis.axisExtreme already uses) provably cannot rule
 // out either sign for a computed value this close to the true radial
 // minimum, whichever way the tilted axis's own rounding lands it on a given

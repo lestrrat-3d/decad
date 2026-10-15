@@ -399,7 +399,7 @@ The axis-local junction maps to it through the recorded segment its leaving
 walk starts at. Where the two coalescings disagree about that segment, the
 call refuses with `ErrUnsupported` rather than picking a neighbouring corner.
 
-**Axis gates.** `revolveBlendAxis` reruns `resolveAxisSide` — side gate,
+**Axis gates.** `revolveBlendAxis` reruns `revolveplan.ResolveAxisSide` — side gate,
 axis-contact audit, snap allowances — on the rewritten meridian about the
 receiver's oriented axis, and the build takes the axis frame it returns,
 `radialProof` included. A region the gate puts on the far side is

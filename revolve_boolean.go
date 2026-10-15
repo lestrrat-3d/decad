@@ -112,7 +112,7 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 		AU: ra.Ax.AU, AV: ra.Ax.AV, AUBound: ra.Ax.AUBound, AVBound: ra.Ax.AVBound,
 		DU: ra.Ax.DU, DV: ra.Ax.DV, DUBound: ra.Ax.DUBound, DVBound: ra.Ax.DVBound,
 	}
-	ax, side, err := resolveAxisSide(ctx, profile, line, freeform.NewFreeformWork())
+	ax, side, err := revolveplan.ResolveAxisSide(ctx, profile, line, freeform.NewFreeformWork())
 	if err != nil || side != 1 {
 		return nil, false, err
 	}

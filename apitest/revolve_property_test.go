@@ -18,7 +18,7 @@ import (
 // This file is randomized property testing for the increment-2 revolve
 // evaluator (revolve.go). It hardens the two areas two reviewers flagged as
 // hardest to verify by inspection: the axis-frame reorientation (axisFrame.walk,
-// resolveAxisSide) that must preserve walk order through an arbitrary axis
+// revolveplan.ResolveAxisSide) that must preserve walk order through an arbitrary axis
 // transform, and the cap-edge / wall convexity classification. The cardinal
 // defect it hunts is a silently inside-out face normal (the PR #28 bug).
 //
@@ -436,11 +436,11 @@ func newCone(rng *rand.Rand) setup {
 // produces whose sketch-solver-resolved geometry puts a boundary vertex on
 // the wrong side of the random axis by less than a ulp — a genuine (if
 // vanishingly small) defect in THAT draw's own geometry, which
-// resolveAxisSide's strict admission gate (revolve_axis.go, CLAUDE.md's
+// revolveplan.ResolveAxisSide's strict admission gate (revolve_axis.go, CLAUDE.md's
 // reject-only rule) would correctly refuse rather than silently admit under
 // the old tolerance.
 //
-// It is pinned EMPTY: once resolveAxisSide also charges its own scan
+// It is pinned EMPTY: once revolveplan.ResolveAxisSide also charges its own scan
 // arithmetic (planeDotDecompositionRoundAllow, the same mechanism
 // revolveaxis.axisExtreme already uses for the structurally identical scan,
 // closing the gap a real-geometry end-to-end test found — T95,

@@ -28,7 +28,7 @@ func evalClosedCircleSweep(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	ax, side, err := resolveAxisSide(ctx, profile, geometry.Line, work)
+	ax, side, err := revolveplan.ResolveAxisSide(ctx, profile, geometry.Line, work)
 	if err != nil {
 		return nil, err
 	}

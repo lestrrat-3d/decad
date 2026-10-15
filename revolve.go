@@ -265,7 +265,7 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	if err != nil {
 		return nil, err
 	}
-	ax, side, err := resolveAxisSide(ctx, profile, line, work)
+	ax, side, err := revolveplan.ResolveAxisSide(ctx, profile, line, work)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +592,7 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	// spend from the same ceiling.
 	work := freeform.NewFreeformWork()
 	chainProfile := profileRecord{Outer: loopRecord(chain)}
-	ax, side, err := resolveAxisSide(ctx, chainProfile, line, work)
+	ax, side, err := revolveplan.ResolveAxisSide(ctx, chainProfile, line, work)
 	if err != nil {
 		return nil, err
 	}

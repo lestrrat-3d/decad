@@ -46,7 +46,7 @@ The rules for rows live in `docs/layout.md`.
 | `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents. See evaluator §6 and surface §13.2. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_cap_edge_blend.go` | Bounded quarter-turn radial cap-rim fillet and chamfer with faceted proofs. See modify-reach §7.2. |
-| `revolve_axis.go` | Adapts the public axis and bounded profile scan to `internal/revolveaxis/`. See evaluator §6. |
+| `revolve_axis.go` | Adapts the public axis to `internal/revolveaxis/`. See evaluator §6. |
 | `stops.go` | Body-relative stop resolution. See evaluator §5/§6/§11. |
 | `internal/extent/stop_revolve.go` | Exact `ToFace` level for a planar Revolve wall or angular cap. See evaluator §5. |
 | `loft.go` | Loft and LoftChain entry points and options. Root `chainLoftPayload` aliases `loftrecord.ChainPayload`. See loft §2/§4/§10/§16. |

@@ -818,7 +818,7 @@ func rectangleProfile(vlo, vhi float64) profileRecord {
 // TestRevolvePayloadProvesSimple drives payloadProvesSimple's revolvePayload
 // arm directly against hand-built payloads, isolating each half of its
 // admission condition — full == true, and a radial minimum PROVEN
-// non-negative — from resolveAxisSide's own build-time gate, which admits
+// non-negative — from revolveplan.ResolveAxisSide's own build-time gate, which admits
 // down to a −tol band rather than proving the minimum clear of zero
 // (docs/surface-design.md §9.1). axis is aligned with plane-local u, so the
 // rectangle's v range IS the radial range this arm reads.
@@ -853,7 +853,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 	t.Run("build proof survives placement and respects cancellation", func(t *testing.T) {
 		t.Parallel()
 		profile := rectangleProfile(5, 15)
-		ax, side, err := resolveAxisSide(t.Context(), profile, revolveaxis.Line2{DU: 1}, freeform.NewFreeformWork())
+		ax, side, err := revolveplan.ResolveAxisSide(t.Context(), profile, revolveaxis.Line2{DU: 1}, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		require.Equal(t, 1.0, side)
 		require.True(t, ax.RadialProof)
@@ -883,7 +883,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 	t.Run("flipped axis and chain view keep the scan", func(t *testing.T) {
 		t.Parallel()
 		profile := rectangleProfile(-15, -5)
-		ax, side, err := resolveAxisSide(t.Context(), profile, revolveaxis.Line2{DU: 1}, freeform.NewFreeformWork())
+		ax, side, err := revolveplan.ResolveAxisSide(t.Context(), profile, revolveaxis.Line2{DU: 1}, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		require.Equal(t, -1.0, side)
 		require.False(t, ax.RadialProof)
