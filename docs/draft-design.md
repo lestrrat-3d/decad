@@ -242,7 +242,8 @@ reads the record and not the surface.
 
 ## 7. Construction
 
-`draft_build.go` builds the body from the payload. The steps, in order:
+`draftrecord.Build` (`internal/draftrecord/build.go`) builds the body from the
+payload over topology nodes. The steps, in order:
 
 1. **Resolve the walks.** `boundarywalk.WalkOf`, `RequireAnalyticWalk` (SD3)
    and `CoalesceWalksBudget` over every loop of `P`, as
@@ -294,10 +295,10 @@ sketch plane and no straight slab remains. Its `draft` flag makes
 `capblend.BuildBand` (`internal/capblend/band.go`) take the sharp joins
 (`offset2d.SharpJoinsBudget`), stamp `side(i, j)` roles, give rulings and far
 rims the prism's convexity, and flip the axial half of the orientation
-reference for a negative taper. The near rim is `draftNearRim`'s: the bottom
+reference for a negative taper. The near rim is `draftrecord`'s `nearRim`: the bottom
 rim `prismrecord.BuildLoopSidesAs` builds for a prism's wall, at the sketch plane.
 
-For a crossing extent, `draft_two_sided.go` builds the negative and positive
+For a crossing extent, `draftrecord.BuildTwoSided` builds the negative and positive
 slabs independently with steps 1–9. It checks that their held sketch rims
 match vertex for vertex, then removes both middle caps and reuses the same
 rim edges and vertices. The negative slab's published face loops are reversed
@@ -695,7 +696,7 @@ shown to fail first: the implementer deletes the leg, runs the fixture, records
 the red run's failing assertion in the test's comment, and restores the leg.
 
 **Extrude fixtures** (`apitest/extrude_taper_test.go`,
-`draft_build_internal_test.go`):
+`draft_build_internal_test.go`, `internal/draftrecord/build_test.go`):
 
 | Fixture | Section, sweep, taper | Asserts |
 |---|---|---|
@@ -863,13 +864,13 @@ every new root file. This document ships with PR 1.
 
 | PR | Lands | Files and functions | Proves | After |
 |---|---|---|---|---|
-| **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `Transform`/`Placed`; `draft_build.go` (§7); `draft_moments.go` (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class; `Tessellate` refuses the class through its default | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `draft_payload.go`, `draft_build.go`, `draft_moments.go`, `extrude.go`, `capblend*.go` (the band's `draft` view), `verify_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `draft_build_internal_test.go`, `internal/offset2d/sharp_test.go`, `examples/decad_extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
-| **2** | tessellation and the mesh volume proof (DD1), which opens DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `tessellate_draft.go`, `tessellate.go` (dispatch), `tessellate_capblend.go` and `capblend_admit.go` (§9.1's three differences), `draft_payload.go`/`draft_build.go` (`patches`, `bandDelta`), `boolean.go` (the admission arm), `mass_properties.go` (the mesh path needs no arm), `motion_bound.go`, `apitest/draft_mesh_test.go`, `tessellate_draft_internal_test.go` | the PR 2 fixtures | 1 |
+| **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `Transform`/`Placed`; `internal/draftrecord/build.go` (§7); `internal/draftrecord/measure.go` (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class; `Tessellate` refuses the class through its default | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `internal/draftrecord/` (`payload.go`, `build.go`, `measure.go`), `draft_build.go`, `extrude.go`, `capblend*.go` (the band's `draft` view), `verify_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `draft_build_internal_test.go`, `internal/offset2d/sharp_test.go`, `examples/decad_extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
+| **2** | tessellation and the mesh volume proof (DD1), which opens DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `tessellate_draft.go`, `tessellate.go` (dispatch), `tessellate_capblend.go` and `capblend_admit.go` (§9.1's three differences), `internal/draftrecord/payload.go`/`build.go` (`Patches`, `BandDelta`), `boolean.go` (the admission arm), `mass_properties.go` (the mesh path needs no arm), `motion_bound.go`, `apitest/draft_mesh_test.go`, `tessellate_draft_internal_test.go` | the PR 2 fixtures | 1 |
 | **3** | `Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `docs/api-design.md` §8/§12, `apitest/draft_test.go`, `draft_internal_test.go`, `examples/decad_draft_example_test.go` | D1–D5 | 1 |
 | **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `survey.go` (dispatch), `capblend_survey.go` (`capPatchUndercuts`, the patch loop both surveys run), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
-| **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `internal/capcontour/displacement.go`, `internal/capband/`, `draft.go`, `draft_build.go`, `draft_payload.go`, `capblend*.go` (the band view's per-walk amounts), `tessellate_capblend.go` and `internal/tessellation/` (the mesh's per-walk setbacks), `apitest/draft_subset_test.go` | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
+| **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `internal/capcontour/displacement.go`, `internal/capband/`, `draft.go`, `internal/draftrecord/build.go`, `internal/draftrecord/payload.go`, `capblend*.go` (the band view's per-walk amounts), `tessellate_capblend.go` and `internal/tessellation/` (the mesh's per-walk setbacks), `apitest/draft_subset_test.go` | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
 | **6** | RD1 with a one-sided `ToFace` or `ThroughAll`: resolve the stop through `resolveLinearExtent`, then build the existing single-slab draft with the stop's axial bound | `draft_build.go`, `apitest/extrude_taper_test.go` | the far-cap vertex and volume match the selected stop level within their bounds | 5 |
-| **7** | RD1 with `Symmetric` or `TwoSided`: build and sew the two slabs, combine bounded readings and meshes | `draft_two_sided.go`, `tessellate_draft_two_sided.go`, `draft_build.go`, `internal/compositesweep/body_audit.go` | public volume, manifold, curved mesh and placement cases | 6 |
+| **7** | RD1 with `Symmetric` or `TwoSided`: build and sew the two slabs, combine bounded readings and meshes | `internal/draftrecord/two_sided.go`, `tessellate_draft_two_sided.go`, `draft_build.go`, `internal/compositesweep/body_audit.go` | public volume, manifold, curved mesh and placement cases | 6 |
 
 PRs 2 and 3 run in parallel after PR 1; PR 4 follows 2; PR 5 follows 3.
 PRs 1, 2 and 4 are proof specifications (bounds, closure terms, the mesh

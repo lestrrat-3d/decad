@@ -2103,3 +2103,4 @@
 10	0.00	TestTessellateRefusalNamesChainLoftPayload
 10	0.05	TestBrepChamferAllStraightOuterEdgesStagedSurvey
 10	0.05	TestBrepPartialChamferStagedSurvey
+10	0.05	TestDraftStagedSurveyNamesPayloadClass

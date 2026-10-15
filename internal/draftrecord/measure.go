@@ -1,4 +1,4 @@
-package decad
+package draftrecord
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/units"
 )
@@ -27,9 +28,9 @@ import (
 // capband.Closure, and the far cap's area through
 // proofbound.SectionDisplacementArea.
 
-// measureDraftBody stamps the body's volume, area, centroid, bounds and its
+// measureBody stamps the body's volume, area, centroid, bounds and its
 // two cap faces' areas. bands are capblend.BuildBand's results in loop order.
-func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capBlendPayload, bands []capBandResult, nearCap, farCap *Face, work *freeform.FreeformWork) error {
+func measureBody(ctx context.Context, body *topo.Body, dp Payload, cbp capblend.Payload, bands []capblend.BandResult, nearCap, farCap *topo.Face, work *freeform.FreeformWork) error {
 	_, _, farZ, matSign := dp.Levels()
 	var nearArea, farArea, patchArea, volume proofbound.BoundedScalar
 	var mu, mv, mz proofbound.BoundedScalar
@@ -92,16 +93,16 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 			proofbound.SectionDisplacementArea(band.Delta, len(loop.Segments), capblend.ContourPerimeterUpper(band.CapCo)))
 		farArea = proofbound.BoundedAdd(farArea, signed(far))
 	}
-	nearCap.n.Area, nearCap.n.AreaBound = nearArea.Value, nearArea.Bound
-	farCap.n.Area, farCap.n.AreaBound = farArea.Value, farArea.Bound
+	nearCap.Area, nearCap.AreaBound = nearArea.Value, nearArea.Bound
+	farCap.Area, farCap.AreaBound = farArea.Value, farArea.Bound
 
-	body.n.Volume = measurement.Measurement{
+	body.Volume = measurement.Measurement{
 		Value:     units.CubicMillimeters(volume.Value),
 		Exactness: measurement.ExactnessOf(volume.Bound),
 		Bound:     units.CubicMillimeters(volume.Bound),
 	}
 	total := proofbound.BoundedAdd(proofbound.BoundedAdd(nearArea, farArea), patchArea)
-	body.n.Area = measurement.Measurement{
+	body.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(total.Value),
 		Exactness: measurement.ExactnessOf(total.Bound),
 		Bound:     units.SquareMillimeters(total.Bound),
@@ -117,14 +118,14 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 	cz := proofbound.BoundedQuotient(mz.Value, mz.Bound, volume.Value, volume.Bound)
 	centroid := pl.Point(cu.Value, cv.Value, cz.Value)
 	centroidBound := math.Min(pl.PointBound(cu, cv, cz), capband.CentroidGeometryBound(centroid, bounds))
-	body.n.Centroid = measurement.VecMeasurement{
+	body.Centroid = measurement.VecMeasurement{
 		Value:     centroid,
 		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
-	body.n.Bounds = bounds
-	if err := prismrecord.ChargeMap(bodyNode(body), dp.Frame, dp.Xform); err != nil {
+	body.Bounds = bounds
+	if err := prismrecord.ChargeMap(body, dp.Frame, dp.Xform); err != nil {
 		return err
 	}
-	return topobuild.ValidateAnalyticMeasurements(bodyNode(body))
+	return topobuild.ValidateAnalyticMeasurements(body)
 }

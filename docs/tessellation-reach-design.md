@@ -484,7 +484,7 @@ each with its conversion rounding `dcDelta`, `dsDelta`; `docs/modify-reach-desig
 `chamferCap(cap, loop, k)` role beside its plane-local `capPatchGeom` (`internal/capblend/band.go`): a `Plane` patch's
 four corners, or a `Cone` patch's centre, `sideRadius`/`capRadius`, side window `th0..th1`, cap window
 `capTh0..capTh1`, `sideZ`/`capZ`, `sweepCCW`, `wholeTurn`, `contourAllow`, `levelDelta`, `capThAllow`. Each
-band's cap contour displacement `band.delta` is `capBandResult.delta`; it must also be stored per band on the
+band's cap contour displacement `band.delta` is `capblend.BandResult.Delta`; it must also be stored per band on the
 payload (`bandDelta map[bandKey]float64`) for the tessellator to read.
 
 Below, `d` names the setback of whichever axis a term measures. An in-plane term — the cap contour, an
@@ -847,7 +847,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 ### R6 — cap-loop chamfer
 
 23. **Files:** `capblend.go`, `internal/capblend/band.go`. **What:** store each band's `delta` on the payload
-    (`bandDelta`), keyed by `(loop, cap)`. **Tests:** internal: the stored value equals `capBandResult.delta`.
+    (`bandDelta`), keyed by `(loop, cap)`. **Tests:** internal: the stored value equals `capblend.BandResult.Delta`.
 24. **Files:** new `tessellate_capblend.go`. **What:** shared count `n(w)`, rings, cap contour rings, patch
     cells, apex fans, cap faces, the §7 term table, refusals; dispatch. **Pattern:** `tessellateCup` for
     rings, `tessellate_revolve.go` for cone cells and fans. **Depends on:** 9 (twist helper use), 15, 23.

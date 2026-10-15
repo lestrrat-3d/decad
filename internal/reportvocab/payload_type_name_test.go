@@ -3,6 +3,7 @@ package reportvocab_test
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
@@ -16,5 +17,7 @@ func TestPayloadTypeName(t *testing.T) {
 	require.Equal(t, "decad.chainLoftPayload", reportvocab.PayloadTypeName(loftrecord.ChainPayload{}))
 	require.Equal(t, "decad.twistedSweepPayload", reportvocab.PayloadTypeName(twistsweep.Payload{}))
 	require.Equal(t, "decad.compositeTwistedSweepPayload", reportvocab.PayloadTypeName(twistsweep.CompositePayload{}))
+	require.Equal(t, "decad.draftPayload", reportvocab.PayloadTypeName(draftrecord.Payload{}))
+	require.Equal(t, "decad.twoSidedDraftPayload", reportvocab.PayloadTypeName(draftrecord.TwoSidedPayload{}))
 	require.Equal(t, "int", reportvocab.PayloadTypeName(3))
 }

@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -34,7 +35,7 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		part, err := evalDraftContext(ctx, documentHandle(body.n.Doc), body.n.Origin.Producer, payload)
+		part, err := bodyResult(draftrecord.Build(ctx, envOf(body.n.Doc, body.n.Origin.Producer), payload))
 		if err != nil {
 			return nil, err
 		}

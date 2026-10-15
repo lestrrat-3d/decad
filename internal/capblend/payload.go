@@ -85,7 +85,7 @@ type Payload struct {
 	// placement-invariant, exactly as patches is.
 	BandDelta map[BandKey]float64
 	// draft marks the view a draft body builds its wall band through
-	// (draftPayload.Band, draft_build.go): its corners take the sharp offset
+	// (draftrecord.Payload.Band): its corners take the sharp offset
 	// rule (offset2d.SharpJoinsBudget) rather than the reflex-corner arc, its
 	// wall patches carry the prism's side(i, j) roles, and its rim and ruling
 	// edges take the prism's convexity (docs/draft-design.md §2, §6). A

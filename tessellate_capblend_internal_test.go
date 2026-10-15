@@ -69,7 +69,7 @@ func TestCapBlendPayloadStoresEachBandsContourDisplacement(t *testing.T) {
 	stored, ok := cbp.BandDelta[capBandKey{Loop: 0, Start: false}]
 	require.True(t, ok, `the end cap's band must be keyed by its own loop and cap`)
 
-	// The same value, re-derived through the build's own capBandResult.
+	// The same value, re-derived through the build's own capblend.BandResult.
 	budget := proofbound.NewWorkBudget(t.Context())
 	work := freeform.NewFreeformWork()
 	cl, err := capblend.OneLoopCornerLoop(budget, cbp.Loops()[0], work)

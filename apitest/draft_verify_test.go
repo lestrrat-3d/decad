@@ -227,3 +227,42 @@ func TestDraftUndercutTangentPullUndecided(t *testing.T) {
 	require.NotContains(t, br.Undercut.Faces, wall)
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
 }
+
+// TestDraftStagedSurveyNamesPayloadClass pins the class name a draft body's
+// staged survey prints: the wall survey has no draft arm, and the pull survey
+// has none for a two-sided taper. Each message names the payload class, not
+// the Go type that holds it.
+//
+// Shown to fail first: with SurveyClass deleted from internal/draftrecord's
+// two payloads, the messages named Payload and TwoSidedPayload.
+func TestDraftStagedSurveyNamesPayloadClass(t *testing.T) {
+	t.Parallel()
+	staged := func(t *testing.T, doc *decad.Document, b *decad.Body, opt decad.VerifyOption) string {
+		t.Helper()
+		report, err := doc.Verify(t.Context(), opt)
+		require.NoError(t, err)
+		reading, err := report.ForBody(b)
+		require.NoError(t, err)
+		diag, found := findDiagnostic(reading.Diagnostics, decad.DiagUnsupportedSurveyPayload)
+		require.True(t, found)
+		return diag.Message
+	}
+	t.Run("wall survey", func(t *testing.T) {
+		t.Parallel()
+		s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
+		doc := decad.New()
+		b := taperExtrude(t, doc, s, p, boxHeight, 5, decad.Along)
+		require.Equal(t, "draftPayload wall survey support is not implemented; use an analytic body or wait for wider "+
+			"draftPayload survey support", staged(t, doc, b, decad.WithMinWallThickness(units.Millimeters(1))))
+	})
+	t.Run("two-sided pull survey", func(t *testing.T) {
+		t.Parallel()
+		s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
+		doc := decad.New()
+		b, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Millimeters(10)},
+			decad.WithTaper(units.Degrees(5)))
+		require.NoError(t, err)
+		require.Equal(t, "twoSidedDraftPayload pull survey support is not implemented; use an analytic body or wait for wider "+
+			"twoSidedDraftPayload survey support", staged(t, doc, b, decad.WithPullDirection(r3.NewVec(0, 0, 1))))
+	})
+}

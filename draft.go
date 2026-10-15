@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -17,7 +18,7 @@ import (
 // This file is Draft (docs/draft-design.md §10): the face draft of an
 // existing prism. It resolves the neutral cap and the wall selection against
 // b, then builds the same draftPayload a tapered Extrude builds
-// (draft_build.go) over b's recorded section.
+// (internal/draftrecord) over b's recorded section.
 
 // roleSidePrefix opens every wall role a sweep mints, side(i, j). Walls(b)
 // and the complete-wall-set test of Draft read it.
@@ -189,7 +190,7 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 
 	// Stages 3 to 7 are the tapered extrude's, over b's section.
 	ref := d.nextProducerID()
-	body, err := evalDraftContext(ctx, d, ref, draftPayload{
+	body, err := bodyResult(draftrecord.Build(ctx, envOf(documentNode(d), ref), draftPayload{
 		Profile:    pp.Profile,
 		Frame:      pp.Frame,
 		Z0:         pp.Z0,
@@ -201,7 +202,7 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 		TaperDelta: alphaDelta,
 		Xform:      pp.Xform,
 		Kept:       kept,
-	})
+	}))
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `internal/chainrecord/` | The chain ribbon record and its builder over nodes (`Build`, `Placed`, `Prism` view, walk capture and bounds walks); builds one wall face per recorded segment of every walk. Root `chainPayload` aliases it. See surface §13.4, evaluator §8. |
+| `internal/draftrecord/` | The draft and two-sided draft records and their builder over nodes (`Build`, `BuildTwoSided`, `Placed`, band view, offset span, measurements, gate and motion readings). Root `draftPayload` and `twoSidedDraftPayload` alias it. See draft §5–§8, evaluator §8. |
 | `internal/stackedrecord/` | The stacked prism record and its builder over nodes (`Build`, `Placed`, `Plan`, extents, outer runs, bounds); derives and audits slab interfaces, wall columns, and exposed patch rings. Root `stackedPrismPayload` aliases it. See stacked-prism §2.2–§3, evaluator §8. |
 | `internal/twistsweep/` | The twisted sweep payloads and their builder over nodes, with polygon admission, stations, Loft cell sewing, wall areas, offset source and cup mesh. Root `twistedSweepPayload` and `compositeTwistedSweepPayload` alias it. See sweep §17, evaluator §8. |
 | `internal/sectionclip/` | Exact rational section clip helpers: rational plane point and arithmetic, oblique ellipse and cap polygons, certified circle-line trim, oblique sphere polygon. See section design. |
