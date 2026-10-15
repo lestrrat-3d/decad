@@ -8,7 +8,7 @@ require (
 	github.com/lestrrat-3d/decad v0.0.0-20261007064417-8f8a717136d6
 	github.com/lestrrat-3d/kinetograph v0.0.0-20261007064922-225c09b246e9
 	github.com/lestrrat-3d/r3 v0.0.0-20261014125509-3c90eee135e1
-	github.com/lestrrat-3d/sketch v0.0.0-20261013214138-580c6ea26eb7
+	github.com/lestrrat-3d/sketch v0.0.0-20261015214910-8771218fbcfb
 	github.com/lestrrat-3d/solidlens v0.0.0-20261005044356-f626e847eb51
 	github.com/lestrrat-3d/units v0.0.0-20261004172310-91d157ffd2a9
 	github.com/stretchr/testify v1.12.1
