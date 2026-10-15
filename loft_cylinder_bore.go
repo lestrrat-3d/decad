@@ -45,6 +45,10 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 	if op != meshbool.OpCut {
 		return nil, false, nil
 	}
+	if joined, ok := target.n.Payload.(facetedPayload); ok &&
+		joined.loftCylinderJoin != nil && joined.loftCylinderJoin.placement != nil {
+		return tryPlacedLoftCylinderBoreCut(ctx, d, ref, target, tool)
+	}
 	joined, ok := target.n.Payload.(facetedPayload)
 	if !ok || joined.loftCylinderJoin == nil || !joined.contactAudited ||
 		joined.xform != r3.Identity() {

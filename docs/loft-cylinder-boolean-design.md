@@ -7,8 +7,42 @@ and one or more axial Loft copies. The circular prism has one centered circle,
 an XY frame, and no section displacement. The Loft copies share one
 authenticated source identity. Each copy has two flush XY sections, an axial
 rotation without translation, and six ordered outer curves: line, fitted
-spline, arc, fitted spline, line, centered root arc. A prior joined body is
-accepted only at identity placement; placing it clears its source record.
+spline, arc, fitted spline, line, centered root arc. The original admission
+arm accepts a prior joined body only at identity placement. Public placement
+clears that body's source record.
+
+A second admission arm accepts a common proper signed-axis rigid placement.
+It derives the pose from the blank's recorded frame and placement, then
+compares their exact rational affine composition with the stored pose. For
+each tooth, the two recorded source planes under its placement must equal the
+two canonical XY planes under one local axial rotation and that same pose,
+as exact rational affine maps. A rounded composition that changes this
+equality refuses this arm. The pose may carry a finite translation; a large
+one still refuses when the placed result exceeds the 0.1 mm boundary limit.
+Other rotations and unequal operand poses continue to the generic Boolean.
+In particular, `r3.Rotation` uses rounded sine and cosine. An ordinary
+90-degree call can carry a nonzero cosine entry and does not meet the exact
+signed-axis gate. The native YZ frame with U=+Y and V=+Z does meet it.
+Even with signed axes, a native plane height or accumulated translation whose
+float composition changes the exact rational source map misses this arm.
+
+The arm re-evaluates private canonical copies from each operand's recorded
+profile with the operand's producer identity and authenticated Loft source
+identity. It runs the unchanged local cylinder/Loft certificate, including
+the cap, crossing, separation, and occupied-volume audits. `PlaceMesh` maps
+the audited shell under the common pose and charges each vertex's coordinate
+rounding, boundary bound, volume allowance, and area allowance. The placed
+result must still meet the 0.1 mm boundary limit. Its source record names the
+actual blank and teeth plus the private local proof bodies and pose. A later
+tooth join rebuilds the local certificate from those proof bodies and an
+exactly matched new tooth. Ordinary `Transform` or `Copy` of the joined result
+clears the record as before.
+The source record keeps a private local joined mesh while the placed result
+is live so a later centered bore can use the same audited local shell.
+Nonmatching source shapes and exact-map mismatches leave the generic Boolean
+available before private reconstruction. A reconstruction or fixed work-limit
+error after those checks is returned, as in the original certified path;
+context cancellation is returned unchanged.
 
 When a placed tooth's Z basis is exactly the float immediately below one,
 `loftCylinderProofTooth` may build a private axial proxy with Z basis one.
@@ -304,6 +338,9 @@ exact blank, below the side clearance after the joined boundary bound, and
 inside the seam annulus's inner radius. The cap audit proves each recorded
 outline is one disk containing the axis. Placement clears the record, so a
 later Boolean cannot rebuild from unplaced operands.
+The common-placement arm stores the local audited join alongside the actual
+source identities. This record exists only on the result built by that arm;
+public placement still clears it.
 It also stores the private proxy teeth and each axial bridge distance. A
 later Union rebuilds proofs from the original teeth. A centered through-bore
 copies both tooth lists and the bridge distances into its own source record.
@@ -360,6 +397,15 @@ clearances place its exact cylinder inside the common blank of both the
 original and proxy unions. Thus the unchanged outer boundary keeps the joined
 bound, while the new bore wall and inner annular rims use `boreBound`.
 Placement clears this post-bore record.
+
+For a common-placement join, `Cut` first checks that the tool's recorded
+plane and placement equal a local centered bore plane under the same exact
+pose. It cuts the private local audited join with a private tool carrying the
+actual tool's producer identity. The existing bore audits and bounds run in
+local coordinates; `PlaceMesh` charges the final rigid placement, and the
+result must still meet the 0.1 mm boundary limit. The placed bore's face
+origins name the actual blank, teeth, and tool. The placed bore does not gain
+an unplaced chamfer source record.
 
 The bore record also retains the upward `boreBound` used in Cut's wall proof.
 That value bounds the two-way, same-height correspondence between the exact
