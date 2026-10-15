@@ -605,13 +605,13 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 	cavity, err := offsetProfile(proofbound.NewWorkBudget(t.Context()), outer, 1, 5)
 	require.NoError(t, err)
 	cp := cupView{
-		outer:     outer,
-		cavity:    cavity,
-		zOuter:    0,
-		zCav:      5,
-		zOpen:     20,
-		thickness: 5,
-		sense:     Inward,
+		Outer:     outer,
+		Cavity:    cavity,
+		ZOuter:    0,
+		ZCav:      5,
+		ZOpen:     20,
+		Thickness: 5,
+		Sense:     cupwall.Inward,
 	}
 
 	out, err := cupWall(proofbound.NewWorkBudget(t.Context()), cp)
@@ -624,19 +624,19 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 	// The loop stays closed with the same positive area and loop count, but the
 	// morphology certificate no longer holds, so the survey stays undecided.
 	bad := cp
-	bad.cavity.Outer.Segments = append([]curveSegment(nil), cp.cavity.Outer.Segments...)
-	for i, seg := range bad.cavity.Outer.Segments {
+	bad.Cavity.Outer.Segments = append([]curveSegment(nil), cp.Cavity.Outer.Segments...)
+	for i, seg := range bad.Cavity.Outer.Segments {
 		moved := seg.(lineSeg)
 		moved.Start.U += 0.25
 		moved.End.U += 0.25
-		bad.cavity.Outer.Segments[i] = moved
+		bad.Cavity.Outer.Segments[i] = moved
 	}
 
 	out, err = cupWall(proofbound.NewWorkBudget(t.Context()), bad)
 	require.NoError(t, err)
 	require.False(t, out.ok, `a malformed offset relation must not return the requested thickness`)
 
-	badRecord, err := bad.payload(t.Context())
+	badRecord, err := bad.Payload(t.Context())
 	require.NoError(t, err)
 	body := bornBody(&Body{n: topo.Body{Payload: badRecord}})
 	results, diags, err := runSurveys(proofbound.NewWorkBudget(t.Context()), body, verifyConfig{
@@ -722,13 +722,13 @@ func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 	cavity, err := offsetProfile(nil, outer, 1, 5)
 	require.NoError(t, err)
 	cp := cupView{
-		outer:     outer,
-		cavity:    cavity,
-		zOuter:    0,
-		zCav:      5,
-		zOpen:     20,
-		thickness: 5,
-		sense:     Inward,
+		Outer:     outer,
+		Cavity:    cavity,
+		ZOuter:    0,
+		ZCav:      5,
+		ZOpen:     20,
+		Thickness: 5,
+		Sense:     cupwall.Inward,
 	}
 	out, err := cupWall(proofbound.NewWorkBudget(t.Context()), cp)
 	require.NoError(t, err)
@@ -763,13 +763,13 @@ func TestCupWallCancellationDuringProfileIntegrals(t *testing.T) {
 	cavity, err := offsetProfile(proofbound.NewWorkBudget(t.Context()), outer, 1, 5)
 	require.NoError(t, err)
 	cp := cupView{
-		outer:     outer,
-		cavity:    cavity,
-		zOuter:    0,
-		zCav:      5,
-		zOpen:     20,
-		thickness: 5,
-		sense:     Inward,
+		Outer:     outer,
+		Cavity:    cavity,
+		ZOuter:    0,
+		ZCav:      5,
+		ZOpen:     20,
+		Thickness: 5,
+		Sense:     cupwall.Inward,
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "IntegralsBudget"}
 

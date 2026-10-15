@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -428,11 +429,11 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 		if derr != nil {
 			return nil, shellCancelCause(derr)
 		}
-		cup, perr := cupPayloadFor(pp, offset, s, tmm, tDelta, offsetDelta, removedEnd).payload(ctx)
+		cup, perr := cupwall.ViewFor(pp, offset, s, tmm, tDelta, offsetDelta, removedEnd).Payload(ctx)
 		if perr != nil {
 			return nil, perr
 		}
-		body, err = evalCupContext(ctx, d, ref, cup)
+		body, err = bodyResult(cupwall.Build(ctx, envOf(documentNode(d), ref), cup))
 	}
 	if err != nil {
 		return nil, err

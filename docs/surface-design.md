@@ -3098,9 +3098,9 @@ never shifted by changing the source prism's axial levels.
 `offset2d.AuditOffsetSectionBudget` checks each one. Its `reverseLoopRecordContext`
 and `shell.go`'s `evalTubeContext` already form and build the one-sided,
 hole-free annulus. A centered call forms the analogous annulus from TWO
-offsets and uses `prismrecord.Build`. `shell_cup.go`'s calls to
+offsets and uses `prismrecord.Build`. `internal/cupwall/payload.go`'s calls to
 `internal/prismrecord/build.go`'s `prismrecord.BuildLoopSidesAs`, its `renameCavityRoles` and bounded region-prism
-measurements show how to assemble the skins, but `evalCupContext` itself
+measurements show how to assemble the skins, but `cupwall.Build` itself
 adds a kept cap and a floor at a second axial level: calling it would make a
 cup, not this through-height wall. A holed prism sheet would produce one
 outer band plus one band per source hole, `1+k` disconnected pieces with no

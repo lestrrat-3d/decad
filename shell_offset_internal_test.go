@@ -124,14 +124,14 @@ func TestOffsetSectionDeltaEnclosesDenotedOffset(t *testing.T) {
 			require.NoError(t, err)
 			record, ok := cup.n.Payload.(cupPayload)
 			require.True(t, ok)
-			cp := record.view()
+			cp := record.View()
 			// offsetDelta is at least three times the reach, exactly.
-			reach := new(big.Rat).Quo(proofarith.FloatRat(cp.offsetDelta), big.NewRat(3, 1))
+			reach := new(big.Rat).Quo(proofarith.FloatRat(cp.OffsetDelta), big.NewRat(3, 1))
 			reach2 := new(big.Rat).Mul(reach, reach)
 
-			offset := cp.cavity
+			offset := cp.Cavity
 			if tt.sense == Outward {
-				offset = cp.outer
+				offset = cp.Outer
 			}
 			var radii []*big.Rat
 			for _, loop := range append([]loopRecord{offset.Outer}, offset.Holes...) {
@@ -163,7 +163,7 @@ func TestOffsetSectionDeltaEnclosesDenotedOffset(t *testing.T) {
 			// Every fixture's record differs from its denotation, so a zero
 			// displacement would be a claim the checks above only failed to
 			// catch.
-			require.Positive(t, cp.offsetDelta)
+			require.Positive(t, cp.OffsetDelta)
 		})
 	}
 }

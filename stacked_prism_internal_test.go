@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -208,8 +209,8 @@ func holedCupRecord(t *testing.T) cupPayload {
 	}
 	outer := profileRecord{Outer: rectangleRecord(0, 0, 100, 60).Outer, Holes: []loopRecord{hole(40, 20, 60, 40)}}
 	cavity := profileRecord{Outer: rectangleRecord(5, 5, 95, 55).Outer, Holes: []loopRecord{hole(35, 15, 65, 45)}}
-	cp, err := cupView{outer: outer, cavity: cavity, frame: frame, zOuter: 0, zCav: 5, zOpen: 20,
-		thickness: 5, sense: Inward, xform: r3.Identity()}.payload(t.Context())
+	cp, err := cupView{Outer: outer, Cavity: cavity, Frame: frame, ZOuter: 0, ZCav: 5, ZOpen: 20,
+		Thickness: 5, Sense: cupwall.Inward, Xform: r3.Identity()}.Payload(t.Context())
 	require.NoError(t, err)
 	return cp
 }
@@ -220,18 +221,18 @@ func holedCupRecord(t *testing.T) cupPayload {
 // own interface.
 func TestCupStackedRecord(t *testing.T) {
 	cp := holedCupRecord(t)
-	require.Len(t, cp.stack.Slabs, 2)
-	require.Len(t, cp.stack.Slabs[0].Regions, 1)
-	require.Len(t, cp.stack.Slabs[1].Regions, 2, `1 + k wall bands`)
-	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: cp.stack.Slabs, Interfaces: cp.stack.Interfaces}))
-	derived, err := stackedrecord.Derive(t.Context(), cp.stack.Slabs, cp.stack.Interfaces)
+	require.Len(t, cp.Stack.Slabs, 2)
+	require.Len(t, cp.Stack.Slabs[0].Regions, 1)
+	require.Len(t, cp.Stack.Slabs[1].Regions, 2, `1 + k wall bands`)
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: cp.Stack.Slabs, Interfaces: cp.Stack.Interfaces}))
+	derived, err := stackedrecord.Derive(t.Context(), cp.Stack.Slabs, cp.Stack.Interfaces)
 	require.NoError(t, err)
-	rederived := cp.stack
+	rederived := cp.Stack
 	rederived.Interfaces = derived
 	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: rederived.Slabs, Interfaces: rederived.Interfaces}), `the derived spelling passes the same audit`)
 
 	d := New()
-	body, err := evalCupContext(t.Context(), d, d.nextProducerID(), cp)
+	body, err := bodyResult(cupwall.Build(t.Context(), envOf(documentNode(d), d.nextProducerID()), cp))
 	require.NoError(t, err)
 	require.Len(t, body.Lumps(), 1)
 	require.Len(t, body.Shells(), 1)
@@ -243,16 +244,16 @@ func TestCupStackedRecord(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, Exact, volume.Exactness)
 	require.Equal(t, (100*60-20*20)*20.0-(90*50-30*30)*15.0, volume.Value.Base())
-	view := cp.view()
-	require.Equal(t, 0.0, view.zOuter)
-	require.Equal(t, 5.0, view.zCav)
-	require.Equal(t, 20.0, view.zOpen)
-	require.Equal(t, cp.stack.Slabs[0].Regions[0], view.outer)
-	require.Equal(t, cp.stack.Interfaces[0].LowerExposed[0], view.cavity)
+	view := cp.View()
+	require.Equal(t, 0.0, view.ZOuter)
+	require.Equal(t, 5.0, view.ZCav)
+	require.Equal(t, 20.0, view.ZOpen)
+	require.Equal(t, cp.Stack.Slabs[0].Regions[0], view.Outer)
+	require.Equal(t, cp.Stack.Interfaces[0].LowerExposed[0], view.Cavity)
 }
 
 func TestStackedLiningAuditRejectsBrokenRecords(t *testing.T) {
-	base := holedCupRecord(t).stack
+	base := holedCupRecord(t).Stack
 	other, err := offset2d.ReverseLoopRecordContext(t.Context(), rectangleRecord(1, 1, 2, 2).Outer)
 	require.NoError(t, err)
 	cases := []struct {

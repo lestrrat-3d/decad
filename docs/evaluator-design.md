@@ -438,8 +438,8 @@ chamfered end's setback). It is the axial twin of the section displacement:
 the two are tracked apart and neither stands in for the other — one moves a
 coordinate IN the plane, the other moves a level ALONG the normal — while a
 reading both displace, a side vertex or `Bounds`, sums them. The per-end pair
-is spelled `prismPayload.Z0Delta`/`Z1Delta`; `cupPayload.zDelta` is the cup's
-own spelling of it, and `capBlendPayload` preserves the pair and composes a
+is spelled `prismPayload.Z0Delta`/`Z1Delta`; `cupPayload`'s `ZOpenDelta`,
+`ZOuterDelta` and `ZCavDelta` are the cup's own spelling of it, and `capBlendPayload` preserves the pair and composes a
 selected end's setback rounding into it. Every
 level-derived reading takes it: `h` and the
 volume, wall area and centroid built on it, `Bounds`, the mesh bound, the side
@@ -848,8 +848,9 @@ an alias of `prismrecord.Payload`: its `Placed` sets `Xform` on its own value
 copy and runs `prismrecord.Build`, which every other root caller of the prism
 builder calls through `envOf` too. `stackedPrismPayload` is an alias of
 `stackedrecord.Payload` in the same way: its `Placed` runs `stackedrecord.Build`
-under the payload's own plan, and a cup builds through the same function under
-its own `stackedrecord.Plan`. `chainPayload` is an alias of `chainrecord.Payload`
+under the payload's own plan. `cupPayload` is an alias of `cupwall.Payload`:
+its `Placed` runs `cupwall.Build`, which builds through `stackedrecord.Build`
+under the cup's own `stackedrecord.Plan`. `chainPayload` is an alias of `chainrecord.Payload`
 likewise: its `Placed` runs `chainrecord.Build`. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and
 runs its root builder.

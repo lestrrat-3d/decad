@@ -747,10 +747,10 @@ recorded within the cup's offset displacement of the region it denotes
 (`docs/modify-design.md` §9), so its witnesses carry that displacement beside
 the axial one.
 
-`cupPayload` reads `pl.outer`, the cup's own outer region — the receiver's
+`cupPayload` reads `pl.Outer`, the cup's own outer region — the receiver's
 unmodified section for an INWARD shell, but the wider OFFSET (expanded) region
-for an OUTWARD one, since an outward shell adds material and `cupPayloadFor`
-(`shell_cup.go`) always assigns the wider of the two profiles to `outer`
+for an OUTWARD one, since an outward shell adds material and `cupwall.ViewFor`
+(`internal/cupwall/payload.go`) always assigns the wider of the two profiles to `Outer`
 regardless of sense. Its outer walls run the cup's full height, so every
 station on them is a point of the body.
 

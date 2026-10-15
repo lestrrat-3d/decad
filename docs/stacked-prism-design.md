@@ -190,7 +190,7 @@ hole `i`, the band between `C`'s hole `i` reversed (an outer) and `O`'s hole
 | no opening, `k = 0` (reach BX5, `WithNoOpenings`) | three slabs: the cap region (`P` inward, `Q` outward) under the band `{O.Outer, reverse(C.Outer)}` under the cap region, both interfaces monotone, each exposing `C`; `sectionDelta` is the offset's proven displacement; the cavity is a void shell (§3) |
 | one cap removed, any `k` (a cup, modify B5/B6) | a floor slab over `O` and a wall slab over the bands, meeting at a lining interface (`k >= 1`) or a monotone one (`k = 0`) whose one exposed record is `C` itself; `sectionDelta` is zero |
 
-A cup is not handed over as a bare `stackedPrismPayload`: `cupPayload` holds
+A cup is not handed over as a bare `stackedPrismPayload`: `cupPayload` (`internal/cupwall`) holds
 the record beside its shell morphology, and its consumers read the cup's own
 view of it (reach §9.1). Its offset loops carry the offset displacement column
 by column (§4).

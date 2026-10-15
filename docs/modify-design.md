@@ -715,7 +715,7 @@ denotes.** The denoted offset is `P ⊖ t*` (inward) or `P ⊕ t*` (outward), `t
 the caller's thickness in exact millimetres. The recorded region is that
 offset's float evaluation at the held thickness, so its corners can land a
 few units in the last place off the denoted ones (a `0.1 in` wall puts one
-cavity corner at `2.539999999999999`). `cupPayload.offsetDelta` is the proven
+cavity corner at `2.539999999999999`). `cupPayload.OffsetDelta` is the proven
 upper bound on how far any recorded boundary point of the offset region — the
 cavity inward, the outer region outward — sits from the denoted boundary; the
 receiver's own region carries none. It is derived once, at the shell, as an
