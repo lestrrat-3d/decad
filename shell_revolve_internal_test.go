@@ -67,12 +67,12 @@ func TestRevolveShellSectionDelta(t *testing.T) {
 			require.NoError(t, err)
 			rp := shelled.n.Payload.(revolvePayload)
 			if !tc.displaced {
-				require.Zero(t, rp.sectionDelta, `an exact offset publishes no displacement`)
-				require.False(t, rp.sectionWhole)
+				require.Zero(t, rp.SectionDelta, `an exact offset publishes no displacement`)
+				require.False(t, rp.SectionWhole)
 				return
 			}
-			require.Positive(t, rp.sectionDelta)
-			require.True(t, rp.sectionWhole)
+			require.Positive(t, rp.SectionDelta)
+			require.True(t, rp.SectionWhole)
 			// The wall survey reads the recorded meridian, so it stays
 			// undecided over a displaced one, as a displaced prism's does.
 			report, err := documentHandle(shelled.n.Doc).Verify(t.Context(), WithMinWallThickness(units.Millimeters(0.5)))
@@ -114,7 +114,7 @@ func TestRevolveShellDisplacedUndercutUndecided(t *testing.T) {
 			body := shellMeridianBody(t, [][2]float64{{0, 0}, {30, 0}, {20, 10}, {0, 10}}, tc.extent)
 			shelled, err := Shell(t.Context(), body, tc.faces, units.Millimeters(0.3), tc.opts...)
 			require.NoError(t, err)
-			require.Positive(t, shelled.n.Payload.(revolvePayload).sectionDelta)
+			require.Positive(t, shelled.n.Payload.(revolvePayload).SectionDelta)
 			report, err := documentHandle(shelled.n.Doc).Verify(t.Context(), WithPullDirection(tc.pull))
 			require.NoError(t, err)
 			require.Equal(t, CoverageUndecided, report.Bodies[0].Undercut.Coverage)

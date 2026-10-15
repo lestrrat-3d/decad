@@ -106,24 +106,24 @@ func displacedRevolve(t *testing.T, ref *Body, shift, grow float64) (*Body, floa
 	if shift != 0 || grow != 0 {
 		k = 1
 	}
-	moved, most := movedProfile(t, rp.profile, k, shift, grow)
+	moved, most := movedProfile(t, rp.Profile, k, shift, grow)
 	ax, err := revolveBlendAxis(t.Context(), rp, moved, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	rp.profile, rp.ax, rp.radialProof = moved, ax, ax.RadialProof
-	rp.sectionDelta = 2 * (revolveSectionScale*most + math.Abs(shift))
+	rp.Profile, rp.Ax, rp.RadialProof = moved, ax, ax.RadialProof
+	rp.SectionDelta = 2 * (revolveSectionScale*most + math.Abs(shift))
 	if shift != 0 {
-		rp.sectionDelta = 2 * math.Abs(shift)
+		rp.SectionDelta = 2 * math.Abs(shift)
 	}
 	if grow != 0 {
 		// Every point of a grown circle moves radially by grow, its centre by
 		// nothing; the factor covers the radius's own rounding and nothing
 		// more, so the charge is held to the figure the growth states.
-		rp.sectionDelta = math.Abs(grow) * (1 + 1e-9)
+		rp.SectionDelta = math.Abs(grow) * (1 + 1e-9)
 	}
-	rp.sectionWhole = true
+	rp.SectionWhole = true
 	body, err := evalRevolve(documentHandle(ref.n.Doc), ref.n.Doc.NextProducer, rp)
 	require.NoError(t, err)
-	return body, rp.sectionDelta
+	return body, rp.SectionDelta
 }
 
 func requireEncloses(t *testing.T, what string, got, want Measurement) {

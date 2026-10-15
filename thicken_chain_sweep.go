@@ -30,8 +30,8 @@ func thickenArcChainSweep(ctx context.Context, d *Document, sp chainSweepPayload
 	if sp.path == nil || len(sp.path.Records) != 1 {
 		return nil, fmt.Errorf(`%w: this chain Sweep has no one-arc Thicken path`, ErrUnsupported)
 	}
-	reverse := sp.revolve.phi0 < 0 && sp.revolve.phi1 == 0
-	if !reverse && (sp.revolve.phi0 != 0 || sp.revolve.phi1 <= 0) {
+	reverse := sp.revolve.Phi0 < 0 && sp.revolve.Phi1 == 0
+	if !reverse && (sp.revolve.Phi0 != 0 || sp.revolve.Phi1 <= 0) {
 		return nil, fmt.Errorf(`%w: this chain Sweep has no path-order cap proof`, ErrUnsupported)
 	}
 	body, err := thickenChainRevolve(ctx, d, sp.revolve, side, tmm, tDelta)
@@ -44,7 +44,7 @@ func thickenArcChainSweep(ctx context.Context, d *Document, sp chainSweepPayload
 	}
 	finishArcSweepBody(body, sweepPayload{
 		prism: prismrecord.Payload{
-			Profile: built.profile, Frame: built.frame, Xform: built.xform,
+			Profile: built.Profile, Frame: built.Frame, Xform: built.Xform,
 		},
 		revolve: built, arc: true, reverseArcCaps: reverse, path: sp.path,
 	})
@@ -56,9 +56,9 @@ func thickenArcChainSweep(ctx context.Context, d *Document, sp chainSweepPayload
 func thickenCompositeChainSweep(ctx context.Context, d *Document, sp chainSweepPayload,
 	side ThickenSide, tmm, tDelta float64) (*Body, error) {
 	if len(sp.spans) != 2 || sp.spans[0].arc || !sp.spans[1].arc || sp.path == nil ||
-		len(sp.spans[0].chain.Chains) != 1 || len(sp.spans[1].revolve.chains) != 1 ||
-		sp.spans[0].chain.SectionDelta != 0 || sp.spans[1].revolve.sectionDelta != 0 ||
-		sp.spans[0].chain.Xform != r3.Identity() || sp.spans[1].revolve.xform != r3.Identity() {
+		len(sp.spans[0].chain.Chains) != 1 || len(sp.spans[1].revolve.Chains) != 1 ||
+		sp.spans[0].chain.SectionDelta != 0 || sp.spans[1].revolve.SectionDelta != 0 ||
+		sp.spans[0].chain.Xform != r3.Identity() || sp.spans[1].revolve.Xform != r3.Identity() {
 		return nil, fmt.Errorf(`%w: this chain sweep has no admitted Thicken section`, ErrUnsupported)
 	}
 	straight := sp.spans[0].chain

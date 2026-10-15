@@ -33,10 +33,10 @@ import (
 // publishes that bracket's width, and the stop charges it to the level it
 // resolves (docs/evaluator-design.md §5/§6).
 func (rp revolvePayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
-	return rp.extentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
+	return rp.ExtentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
 }
 
-func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
+func (rp revolvePayload) ExtentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
 	return rp.extentAlongWork(ctx, g, freeform.NewFreeformWork())
 }
 
@@ -50,7 +50,7 @@ func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (floa
 // coordinate as the one it denotes. A through-all stop instead consumes the
 // bounded reading and charges the displacement to its own level (stops.go).
 func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, error) {
-	lo, hi, bound, err := rp.extentBoundedAlong(ctx, g, work)
+	lo, hi, bound, err := rp.ExtentBoundedAlong(ctx, g, work)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -63,7 +63,7 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 // extentBoundedAlong adapts the payload to revolveaxis.ExtentAlong. The
 // internal reader composes the boundary, sweep, frame and placement bounds
 // for both interval ends before any consumer uses them.
-func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, float64, error) {
+func (rp revolvePayload) ExtentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, float64, error) {
 	return rp.extentBoundedAlongProfile(ctx, g, work, nil)
 }
 
@@ -74,11 +74,11 @@ func (rp revolvePayload) extentBoundedAlongProfile(
 }
 
 func (rp revolvePayload) extentInput() revolveaxis.ExtentInput {
-	b := rp.basis()
+	b := rp.Basis()
 	return revolveaxis.ExtentInput{
-		Profile: rp.profile, Axis: rp.ax, SectionDelta: rp.sectionDelta,
-		Phi0: rp.phi0, Phi1: rp.phi1, Full: rp.full, Denotation: rp.den,
-		Transform: rp.xform, Basis: b, Lift: rp.lift(),
+		Profile: rp.Profile, Axis: rp.Ax, SectionDelta: rp.SectionDelta,
+		Phi0: rp.Phi0, Phi1: rp.Phi1, Full: rp.Full, Denotation: rp.Den,
+		Transform: rp.Xform, Basis: b, Lift: rp.Lift(),
 	}
 }
 

@@ -94,13 +94,13 @@ func buildDipShaftBodyCharged(t *testing.T, profile profileRecord, full bool, ph
 		den = fullTurnDenotation()
 	}
 	rp := revolvePayload{
-		profile: profile,
-		frame:   axisAlignedFrame(t),
-		ax:      ax,
-		phi0:    0, phi1: phi1,
-		full:  full,
-		den:   den,
-		xform: r3.Identity(),
+		Profile: profile,
+		Frame:   axisAlignedFrame(t),
+		Ax:      ax,
+		Phi0:    0, Phi1: phi1,
+		Full:  full,
+		Den:   den,
+		Xform: r3.Identity(),
 	}
 	body, err := evalRevolveContext(t.Context(), New(), producerID(0), rp)
 	require.NoError(t, err)
@@ -296,7 +296,7 @@ func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
 
 	rp, ok := body.n.Payload.(revolvePayload)
 	require.True(t, ok)
-	require.Positive(t, rp.ax.RadialAdmitAllow,
+	require.Positive(t, rp.Ax.RadialAdmitAllow,
 		"this fixture must actually exercise the charged (survStraddle) path, not the strict one")
 
 	vol, err := body.Volume()
@@ -329,7 +329,7 @@ func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
 	// rounding term already swamps this real fixture's charge" means made
 	// concrete rather than assumed.
 	rpNoCharge := rp
-	rpNoCharge.ax.RadialAdmitAllow = 0
+	rpNoCharge.Ax.RadialAdmitAllow = 0
 	bodyNoCharge, err := evalRevolveContext(t.Context(), New(), producerID(0), rpNoCharge)
 	require.NoError(t, err)
 	volNoCharge, err := bodyNoCharge.Volume()

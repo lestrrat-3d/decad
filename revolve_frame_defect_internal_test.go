@@ -39,12 +39,12 @@ type revolveDefectMap struct {
 
 func revolveDefectMapOf(t *testing.T, rp revolvePayload) revolveDefectMap {
 	t.Helper()
-	l, err := massmoment.PlaneMap(rp.frame, rp.xform)
+	l, err := massmoment.PlaneMap(rp.Frame, rp.Xform)
 	require.NoError(t, err)
-	b := rp.xform.Basis()
-	o, ok := massmoment.ExactVec(rp.frame.Origin())
+	b := rp.Xform.Basis()
+	o, ok := massmoment.ExactVec(rp.Frame.Origin())
 	require.True(t, ok)
-	tr, ok := massmoment.ExactVec(rp.xform.Translation())
+	tr, ok := massmoment.ExactVec(rp.Xform.Translation())
 	require.True(t, ok)
 	var origin [3]*big.Rat
 	for i := range 3 {
@@ -203,11 +203,11 @@ func TestRevolveReadingsCoverFrameDefect(t *testing.T) {
 			// The sketch's V axis is exact: z = ±v and ρ = ∓u, so the square
 			// reads ∫|ρ| dA = 5/2, ∫z|ρ| dA / ∫|ρ| dA = ±1/2 and
 			// ∫ρ|ρ| dA = ∓19/3.
-			require.Zero(t, rp.ax.AU)
-			require.Zero(t, rp.ax.AV)
-			require.Zero(t, rp.ax.DU)
-			require.Equal(t, 1.0, math.Abs(rp.ax.DV))
-			dV := new(big.Rat).SetFloat64(rp.ax.DV)
+			require.Zero(t, rp.Ax.AU)
+			require.Zero(t, rp.Ax.AV)
+			require.Zero(t, rp.Ax.DU)
+			require.Equal(t, 1.0, math.Abs(rp.Ax.DV))
+			dV := new(big.Rat).SetFloat64(rp.Ax.DV)
 			q := big.NewRat(5, 2)
 			rhoRho := new(big.Rat).Mul(big.NewRat(-19, 3), dV)
 			zero := new(big.Rat)
@@ -231,8 +231,8 @@ func TestRevolveReadingsCoverFrameDefect(t *testing.T) {
 			// e1·(cos φ0 − cos φ1)), with z̄ = v̄ = 1/2 along d̂ = ±V.
 			want := bigVec(m.point([3]*big.Rat{zero, big.NewRat(1, 2), zero}))
 			if !c.full {
-				s0, c0 := exactSinCos(t, rp.phi0)
-				s1, c1 := exactSinCos(t, rp.phi1)
+				s0, c0 := exactSinCos(t, rp.Phi0)
+				s1, c1 := exactSinCos(t, rp.Phi1)
 				var radial [3]*big.Rat
 				for i := range 3 {
 					radial[i] = new(big.Rat).Add(new(big.Rat).Mul(e0[i], new(big.Rat).Sub(s1, s0)), new(big.Rat).Mul(e1[i], new(big.Rat).Sub(c0, c1)))
@@ -254,11 +254,11 @@ func TestRevolveReadingsCoverFrameDefect(t *testing.T) {
 				// its end's angle, scaled by |L·d̂ × L·r̂(φ)|.
 				caps := 0
 				for _, f := range b.Faces() {
-					phi := rp.phi0
+					phi := rp.Phi0
 					switch f.n.Origins[0].Role {
 					case provenance.RoleCapStart:
 					case provenance.RoleCapEnd:
-						phi = rp.phi1
+						phi = rp.Phi1
 					default:
 						continue
 					}

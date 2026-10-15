@@ -22,8 +22,8 @@ func (d *Document) sweepArcChain(ctx context.Context, chain chainRecord,
 	}
 	arc := span.revolve
 	reduction := chainRevolvePayload{
-		chains: []chainRecord{chain}, frame: arc.frame, ax: arc.ax,
-		phi0: arc.phi0, phi1: arc.phi1, den: arc.den, xform: r3.Identity(),
+		Chains: []chainRecord{chain}, Frame: arc.Frame, Ax: arc.Ax,
+		Phi0: arc.Phi0, Phi1: arc.Phi1, Den: arc.Den, Xform: r3.Identity(),
 	}
 	ref := d.nextProducerID()
 	body, err := evalChainRevolveContext(ctx, d, ref, reduction, work)

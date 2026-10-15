@@ -139,9 +139,9 @@ func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense Sh
 		return nil, true, err
 	}
 	result, err := evalRevolveContextWork(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, revolvePayload{
-		profile: profile, frame: frame, ax: ax, phi0: phi0, phi1: phi1, full: full,
-		den: den, xform: dp.xform, radialProof: ax.RadialProof,
-		sectionDelta: sectionDelta, sectionWhole: true, draftCircleShellRoles: true,
+		Profile: profile, Frame: frame, Ax: ax, Phi0: phi0, Phi1: phi1, Full: full,
+		Den: den, Xform: dp.xform, RadialProof: ax.RadialProof,
+		SectionDelta: sectionDelta, SectionWhole: true, DraftCircleShellRoles: true,
 	}, work)
 	if err != nil {
 		return nil, true, err

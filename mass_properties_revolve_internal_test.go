@@ -33,12 +33,12 @@ func TestRevolveMassPropertiesRefusesUnchargedTerms(t *testing.T) {
 	require.NoError(t, err, `the unmodified payload is admitted`)
 
 	for name, edit := range map[string]func(*revolvePayload){
-		"section displacement": func(rp *revolvePayload) { rp.sectionDelta = 1e-9 },
-		"anchor bound":         func(rp *revolvePayload) { rp.ax.AUBound = 1e-15 },
-		"direction bound":      func(rp *revolvePayload) { rp.ax.DVBound = 1e-16 },
-		"admitted band":        func(rp *revolvePayload) { rp.ax.RadialAdmitAllow = 1e-12 },
-		"axis snap":            func(rp *revolvePayload) { rp.ax.Snap.Second = 1e-12 },
-		"undenoted sweep end":  func(rp *revolvePayload) { rp.den.Phi1 = revolveangle.Angle{} },
+		"section displacement": func(rp *revolvePayload) { rp.SectionDelta = 1e-9 },
+		"anchor bound":         func(rp *revolvePayload) { rp.Ax.AUBound = 1e-15 },
+		"direction bound":      func(rp *revolvePayload) { rp.Ax.DVBound = 1e-16 },
+		"admitted band":        func(rp *revolvePayload) { rp.Ax.RadialAdmitAllow = 1e-12 },
+		"axis snap":            func(rp *revolvePayload) { rp.Ax.Snap.Second = 1e-12 },
+		"undenoted sweep end":  func(rp *revolvePayload) { rp.Den.Phi1 = revolveangle.Angle{} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			rp := base

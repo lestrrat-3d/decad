@@ -438,11 +438,11 @@ func TestBodyGateDiameterFreeformArmDisplacementShrinksDiameter(t *testing.T) {
 func TestBodyGateDiameterFreeformArmDoesNotWidenRevolvePayload(t *testing.T) {
 	t.Parallel()
 	rp := revolvePayload{
-		profile: freeformTriangleProfile(),
-		frame:   identityFrame(t),
-		ax:      axisFrame{DU: 1},
-		phi0:    0, phi1: 2 * math.Pi, full: true,
-		xform: r3.Identity(),
+		Profile: freeformTriangleProfile(),
+		Frame:   identityFrame(t),
+		Ax:      axisFrame{DU: 1},
+		Phi0:    0, Phi1: 2 * math.Pi, Full: true,
+		Xform: r3.Identity(),
 	}
 	_, ok, err := bodyGateDiameter(t.Context(), bornBody(&Body{n: topo.Body{Payload: rp}}))
 	require.NoError(t, err)
@@ -827,25 +827,25 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 
 	t.Run("full turn clear of the axis admits", func(t *testing.T) {
 		t.Parallel()
-		rp := revolvePayload{profile: rectangleProfile(5, 15), ax: axis, full: true}
+		rp := revolvePayload{Profile: rectangleProfile(5, 15), Ax: axis, Full: true}
 		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
 	})
 
 	t.Run("partial turn never admits, however clear of the axis", func(t *testing.T) {
 		t.Parallel()
-		rp := revolvePayload{profile: rectangleProfile(5, 15), ax: axis, full: false}
+		rp := revolvePayload{Profile: rectangleProfile(5, 15), Ax: axis, Full: false}
 		require.False(t, revolvePayloadProvesSimple(t.Context(), rp))
 	})
 
 	t.Run("a proven-negative radial minimum never admits, full turn or not", func(t *testing.T) {
 		t.Parallel()
-		rp := revolvePayload{profile: rectangleProfile(-1, 9), ax: axis, full: true}
+		rp := revolvePayload{Profile: rectangleProfile(-1, 9), Ax: axis, Full: true}
 		require.False(t, revolvePayloadProvesSimple(t.Context(), rp))
 	})
 
 	t.Run("a radial minimum proven exactly zero admits", func(t *testing.T) {
 		t.Parallel()
-		rp := revolvePayload{profile: rectangleProfile(0, 8), ax: axis, full: true}
+		rp := revolvePayload{Profile: rectangleProfile(0, 8), Ax: axis, Full: true}
 		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
 	})
 
@@ -857,9 +857,9 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		require.Equal(t, 1.0, side)
 		require.True(t, ax.RadialProof)
 		rp := revolvePayload{
-			profile: profile, frame: axisAlignedFrame(t), ax: ax,
-			phi1: 2 * math.Pi, full: true, den: fullTurnDenotation(),
-			xform: r3.Identity(), surfaceResult: true, radialProof: ax.RadialProof,
+			Profile: profile, Frame: axisAlignedFrame(t), Ax: ax,
+			Phi1: 2 * math.Pi, Full: true, Den: fullTurnDenotation(),
+			Xform: r3.Identity(), SurfaceResult: true, RadialProof: ax.RadialProof,
 		}
 		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
 		motion, err := r3.Translation(r3.NewVec(1, 2, 3))
@@ -872,7 +872,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		require.NoError(t, err)
 		placedPayload, ok := placed.n.Payload.(revolvePayload)
 		require.True(t, ok)
-		require.True(t, placedPayload.radialProof)
+		require.True(t, placedPayload.RadialProof)
 		require.True(t, revolvePayloadProvesSimple(t.Context(), placedPayload))
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
@@ -886,10 +886,10 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, -1.0, side)
 		require.False(t, ax.RadialProof)
-		rp := revolvePayload{profile: profile, ax: ax, full: true}
+		rp := revolvePayload{Profile: profile, Ax: ax, Full: true}
 		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
-		chain := chainRevolvePayload{chains: []chainRecord{{Segments: profile.Outer.Segments}}, ax: ax, full: true}
-		require.False(t, chain.revolve().radialProof)
+		chain := chainRevolvePayload{Chains: []chainRecord{{Segments: profile.Outer.Segments}}, Ax: ax, Full: true}
+		require.False(t, chain.Revolve().RadialProof)
 	})
 }
 
@@ -923,7 +923,7 @@ func TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift(t *testing.T) {
 	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
 		lineSeg{Start: planePoint{U: 0, V: aV - eps}, End: planePoint{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
 	}}}
-	rp := revolvePayload{profile: profile, ax: ax, full: true}
+	rp := revolvePayload{Profile: profile, Ax: ax, Full: true}
 	require.False(t, revolvePayloadProvesSimple(t.Context(), rp),
 		"the true radial minimum here is negative (-8e-8); the offset shift's own rounding must not admit it")
 }

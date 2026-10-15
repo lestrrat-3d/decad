@@ -53,8 +53,8 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	}
 
 	// Stage 4 (reach §4): the receiver and its targets.
-	if len(rp.profile.Holes) > 0 {
-		return nil, fmt.Errorf(`%w: a shell of a revolve whose meridian holds %d hole(s) is not supported; its offset would carry a hole-lining wall (modify-reach SX8)`, ErrUnsupported, len(rp.profile.Holes))
+	if len(rp.Profile.Holes) > 0 {
+		return nil, fmt.Errorf(`%w: a shell of a revolve whose meridian holds %d hole(s) is not supported; its offset would carry a hole-lining wall (modify-reach SX8)`, ErrUnsupported, len(rp.Profile.Holes))
 	}
 	caps := prismCapsOf(b)
 	var start, end bool
@@ -73,7 +73,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 			}
 		}
 	}
-	if !rp.full && (!start || !end) {
+	if !rp.Full && (!start || !end) {
 		// A kept angular cap needs a wall at constant distance behind a plane
 		// through the axis; that offset plane is no constant-angle cap, so no
 		// change of the angular interval builds it (reach §9.3).
@@ -84,14 +84,14 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	loops, err := offset2d.ProfileCornerLoopsBudget(budget, rp.profile)
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, rp.Profile)
 	if err != nil {
 		return nil, err
 	}
 	walks := loops[0].Walks
 	axisAt := -1
 	for i, w := range walks {
-		if !rp.ax.IsAxis(rp.ax.Walk(w.SegmentWalk)) {
+		if !rp.Ax.IsAxis(rp.Ax.Walk(w.SegmentWalk)) {
 			continue
 		}
 		if axisAt >= 0 {
@@ -116,7 +116,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	// no section limit applies: the open chain's own offset, its S11a drop
 	// gate and the §5 audit of its wall section decide it.
 	if s > 0 && sides == 0 {
-		inradius, enough, err := revolveshell.Inradius(budget, rp.profile, rp.ax, axisAt >= 0, tmm, tDelta, shellTol)
+		inradius, enough, err := revolveshell.Inradius(budget, rp.Profile, rp.Ax, axisAt >= 0, tmm, tDelta, shellTol)
 		if err != nil {
 			return nil, err
 		}
@@ -129,12 +129,12 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	var delta float64
 	switch {
 	case sides > 0:
-		wall, delta, err = revolveshell.SideWall(budget, rp.profile, rp.ax, walks, axisAt, removedWalks,
+		wall, delta, err = revolveshell.SideWall(budget, rp.Profile, rp.Ax, walks, axisAt, removedWalks,
 			s, tmm, tDelta, shellTol, offset2d.AuditOffsetSectionBudget)
 	case axisAt < 0:
-		wall, delta, err = revolveshell.OffAxisWall(budget, rp.profile, s, tmm, tDelta, shellTol)
+		wall, delta, err = revolveshell.OffAxisWall(budget, rp.Profile, s, tmm, tDelta, shellTol)
 	default:
-		wall, delta, err = revolveshell.AxisWall(budget, rp.profile, rp.ax, walks, axisAt,
+		wall, delta, err = revolveshell.AxisWall(budget, rp.Profile, rp.Ax, walks, axisAt,
 			s, tmm, tDelta, shellTol, offset2d.AuditOffsetSectionBudget)
 	}
 	if err != nil {
@@ -163,17 +163,17 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 
 	ref := d.nextProducerID()
 	body, err := evalRevolveContextWork(ctx, d, ref, revolvePayload{
-		profile:      wall,
-		frame:        rp.frame,
-		ax:           ax,
-		phi0:         rp.phi0,
-		phi1:         rp.phi1,
-		full:         rp.full,
-		den:          rp.den,
-		xform:        rp.xform,
-		radialProof:  ax.RadialProof,
-		sectionDelta: delta,
-		sectionWhole: delta > 0,
+		Profile:      wall,
+		Frame:        rp.Frame,
+		Ax:           ax,
+		Phi0:         rp.Phi0,
+		Phi1:         rp.Phi1,
+		Full:         rp.Full,
+		Den:          rp.Den,
+		Xform:        rp.Xform,
+		RadialProof:  ax.RadialProof,
+		SectionDelta: delta,
+		SectionWhole: delta > 0,
 	}, work)
 	if err != nil {
 		return nil, err

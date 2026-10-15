@@ -48,16 +48,16 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 		return cupViewsEqual(budget, pa.View(), other.View())
 	case revolvePayload:
 		pb, ok := b.n.Payload.(revolvePayload)
-		if !ok || pa.frame != pb.frame || pa.ax != pb.ax || pa.phi0 != pb.phi0 ||
-			pa.phi1 != pb.phi1 || pa.full != pb.full || pa.xform != pb.xform {
+		if !ok || pa.Frame != pb.Frame || pa.Ax != pb.Ax || pa.Phi0 != pb.Phi0 ||
+			pa.Phi1 != pb.Phi1 || pa.Full != pb.Full || pa.Xform != pb.Xform {
 			return false, nil
 		}
-		if pa.sectionDelta != 0 || pb.sectionDelta != 0 {
+		if pa.SectionDelta != 0 || pb.SectionDelta != 0 {
 			// The prism arm's own reasoning: equal records certify equal sets
 			// only while each record is the set it denotes.
 			return false, nil
 		}
-		return momentinput.ExactProfileEqual(budget, pa.profile, pb.profile)
+		return momentinput.ExactProfileEqual(budget, pa.Profile, pb.Profile)
 	default:
 		return false, nil
 	}

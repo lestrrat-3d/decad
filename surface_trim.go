@@ -324,9 +324,9 @@ func trimOperandSectionDelta(b *Body) float64 {
 	case chainPayload:
 		return p.SectionDelta
 	case revolvePayload:
-		return p.sectionDelta
+		return p.SectionDelta
 	case chainRevolvePayload:
-		return p.sectionDelta
+		return p.SectionDelta
 	default:
 		return 0
 	}
@@ -519,18 +519,18 @@ func (b *Body) trimRevolve(ctx context.Context, budget *proofbound.WorkBudget, t
 		return nil, err
 	}
 	pp := chainRevolvePayload{
-		chains: chains,
-		frame:  rcv.frame,
-		ax:     rcv.ax,
-		phi0:   rcv.phi0,
-		phi1:   rcv.phi1,
-		full:   rcv.full,
-		den:    rcv.den,
-		xform:  rcv.xform,
+		Chains: chains,
+		Frame:  rcv.Frame,
+		Ax:     rcv.Ax,
+		Phi0:   rcv.Phi0,
+		Phi1:   rcv.Phi1,
+		Full:   rcv.Full,
+		Den:    rcv.Den,
+		Xform:  rcv.Xform,
 		// §7.1's fold reads this field as its gate, and ResolveSurfaceTrim's
 		// δ_cut is the whole of it: S4 and S7 zero every other term prism §7
 		// derives.
-		sectionDelta: sectionDelta,
+		SectionDelta: sectionDelta,
 	}
 	body, err := evalChainRevolveContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
 	if err != nil {
@@ -571,7 +571,7 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 		return fail(`%w: Trim's tool meridian is an open walk, which bounds no region to keep a side of`, ErrUnsupported)
 	}
 
-	rcvView, tlView := rcv.meridian(), tl.meridian()
+	rcvView, tlView := rcv.Meridian(), tl.Meridian()
 
 	// S2: neither operand's accumulated placement is a reflection.
 	if rcvView.Reflected() || tlView.Reflected() {
@@ -579,11 +579,11 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	}
 
 	// S3: every segment of both meridians is a LineSeg, CircleSeg or ArcSeg.
-	rcvAnalytic, err := prismcells.ProfileAnalytic(budget, rcv.profile)
+	rcvAnalytic, err := prismcells.ProfileAnalytic(budget, rcv.Profile)
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
-	tlAnalytic, err := prismcells.ProfileAnalytic(budget, tl.profile)
+	tlAnalytic, err := prismcells.ProfileAnalytic(budget, tl.Profile)
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
@@ -594,10 +594,10 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	// S4's revolve arm. The plane frames and the RESOLVED AXIS must agree
 	// component-wise on the stored floats, and both meridians must stand clear
 	// of that axis.
-	if rcv.frame != tl.frame {
+	if rcv.Frame != tl.Frame {
 		return fail(`%w: the receiver and tool do not spin about the same frame, exactly`, ErrUnsupported)
 	}
-	if !revolveAxisIdentical(rcv.ax, tl.ax) {
+	if !revolveAxisIdentical(rcv.Ax, tl.Ax) {
 		return fail(`%w: the receiver and tool do not spin about the same axis, exactly`, ErrUnsupported)
 	}
 	rcvClear, err := revolveMeridianClearOfAxis(ctx, rcv)
@@ -613,7 +613,7 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	}
 
 	// S5: for Trim, the tool's meridian is one closed hole-free loop.
-	if len(tl.profile.Holes) != 0 {
+	if len(tl.Profile.Holes) != 0 {
 		return fail(`%w: Trim's tool meridian carries a hole, whose interior this evaluator cannot yet distinguish as a side`, ErrUnsupported)
 	}
 
@@ -622,9 +622,9 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	// proven the two axes identical, so the prism arm's origin shift has no
 	// counterpart here and the comparison is on the stored endpoint floats
 	// alone.
-	if tl.phi0 > rcv.phi0 || tl.phi1 < rcv.phi1 {
+	if tl.Phi0 > rcv.Phi0 || tl.Phi1 < rcv.Phi1 {
 		return fail(`%w: the tool's angular span [%v, %v] does not cover the receiver's [%v, %v]`,
-			ErrUnsupported, tl.phi0, tl.phi1, rcv.phi0, rcv.phi1)
+			ErrUnsupported, tl.Phi0, tl.Phi1, rcv.Phi0, rcv.Phi1)
 	}
 
 	// S7's remaining two clauses.
@@ -635,11 +635,11 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	if !reexpress.Identity {
 		return fail(`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
-	rcvWhole, err := trimProfileFullyWhole(budget, rcv.profile)
+	rcvWhole, err := trimProfileFullyWhole(budget, rcv.Profile)
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
-	tlWhole, err := trimProfileFullyWhole(budget, tl.profile)
+	tlWhole, err := trimProfileFullyWhole(budget, tl.Profile)
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
@@ -676,9 +676,9 @@ func revolveAxisIdentical(a, b axisFrame) bool {
 // arm does not place.
 func revolveMeridianClearOfAxis(ctx context.Context, rp revolvePayload) (bool, error) {
 	work := freeform.NewFreeformWork()
-	for _, loop := range append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...) {
+	for _, loop := range append([]loopRecord{rp.Profile.Outer}, rp.Profile.Holes...) {
 		resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the trim axis-clearance gate",
-			rp.chargedWalk, rp.ax.SnapTol)
+			rp.ChargedWalk, rp.Ax.SnapTol)
 		if err != nil {
 			return false, err
 		}
@@ -698,10 +698,10 @@ func revolveMeridianClearOfAxis(ctx context.Context, rp revolvePayload) (bool, e
 // clearance clause has to see.
 func revolveChainClearOfAxis(ctx context.Context, rp chainRevolvePayload) (bool, error) {
 	work := freeform.NewFreeformWork()
-	for ci := range rp.chains {
-		view := rp.walkView(ci)
-		resolved, err := revolveaxis.ResolveChain(ctx, rp.chains[ci], work, "the revolve wall build",
-			view.chargedWalk, view.ax.SnapTol)
+	for ci := range rp.Chains {
+		view := rp.WalkView(ci)
+		resolved, err := revolveaxis.ResolveChain(ctx, rp.Chains[ci], work, "the revolve wall build",
+			view.ChargedWalk, view.Ax.SnapTol)
 		if err != nil {
 			return false, err
 		}
@@ -725,8 +725,8 @@ func (b *Body) extendRevolve(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil {
 		return nil, err
 	}
-	chains := make([]chainRecord, len(rcv.chains))
-	for i, chain := range rcv.chains {
+	chains := make([]chainRecord, len(rcv.Chains))
+	for i, chain := range rcv.Chains {
 		chains[i] = chainRecord{Segments: append([]curveSegment(nil), chain.Segments...)}
 	}
 	cutDelta := 0.0
@@ -743,10 +743,10 @@ func (b *Body) extendRevolve(ctx context.Context, budget *proofbound.WorkBudget,
 		chains[ci].Segments[si] = widened
 		cutDelta = math.Max(cutDelta, delta)
 	}
-	rcv.chains = chains
+	rcv.Chains = chains
 	// §7.1's fold reads this field as its gate, and ResolveSurfaceExtend's δ_cut is
 	// the whole of it: S4 and S7 zero every other term prism §7 derives.
-	rcv.sectionDelta = cutDelta
+	rcv.SectionDelta = cutDelta
 	result, err := evalChainRevolveContext(ctx, d, d.nextProducerID(), rcv, freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
@@ -791,7 +791,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	// gathering its two cap edges beside the swept arcs, and which member of it
 	// is the meridian's own free end is not a recorded fact — so the pair is
 	// refused rather than resolved by position.
-	if !rcv.full {
+	if !rcv.Full {
 		return fail(`%w: Extend over the revolve family admits a full revolution alone; a partially revolved ribbon's swept free edge shares one loop with its wall's two cap edges, and no recorded fact separates them`, ErrUnsupported)
 	}
 	var tl revolvePayload
@@ -799,13 +799,13 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	case revolvePayload:
 		tl = p
 	case chainRevolvePayload:
-		tl = p.revolve()
+		tl = p.Revolve()
 	default:
 		return fail(`%w: Extend's tool has no revolve meridian`, ErrUnsupported)
 	}
 
-	rcvRev := rcv.revolve()
-	rcvView, tlView := rcvRev.meridian(), tl.meridian()
+	rcvRev := rcv.Revolve()
+	rcvView, tlView := rcvRev.Meridian(), tl.Meridian()
 
 	// S2: neither operand's accumulated placement is a reflection.
 	if rcvView.Reflected() || tlView.Reflected() {
@@ -813,11 +813,11 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	}
 
 	// S3: every segment of both meridians is a LineSeg, CircleSeg or ArcSeg.
-	rcvAnalytic, err := prismcells.ProfileAnalytic(budget, rcvRev.profile)
+	rcvAnalytic, err := prismcells.ProfileAnalytic(budget, rcvRev.Profile)
 	if err != nil {
 		return pass(err)
 	}
-	tlAnalytic, err := prismcells.ProfileAnalytic(budget, tl.profile)
+	tlAnalytic, err := prismcells.ProfileAnalytic(budget, tl.Profile)
 	if err != nil {
 		return pass(err)
 	}
@@ -826,10 +826,10 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	}
 
 	// S4's revolve arm, the identical eight-field comparison Trim's own takes.
-	if rcv.frame != tl.frame {
+	if rcv.Frame != tl.Frame {
 		return fail(`%w: the receiver and tool do not spin about the same frame, exactly`, ErrUnsupported)
 	}
-	if !revolveAxisIdentical(rcv.ax, tl.ax) {
+	if !revolveAxisIdentical(rcv.Ax, tl.Ax) {
 		return fail(`%w: the receiver and tool do not spin about the same axis, exactly`, ErrUnsupported)
 	}
 	rcvClear, err := revolveChainClearOfAxis(ctx, rcv)
@@ -847,9 +847,9 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	// S6's revolve arm: S4 has proven the two axes identical, so the prism
 	// arm's origin shift has no counterpart and the comparison is on the
 	// stored endpoint floats alone.
-	if tl.phi0 > rcv.phi0 || tl.phi1 < rcv.phi1 {
+	if tl.Phi0 > rcv.Phi0 || tl.Phi1 < rcv.Phi1 {
 		return fail(`%w: the tool's angular span [%v, %v] does not cover the receiver's [%v, %v]`,
-			ErrUnsupported, tl.phi0, tl.phi1, rcv.phi0, rcv.phi1)
+			ErrUnsupported, tl.Phi0, tl.Phi1, rcv.Phi0, rcv.Phi1)
 	}
 
 	// S7's remaining two clauses. Only the TOOL is required whole: §3.1 puts
@@ -864,7 +864,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	if !reexpress.Identity {
 		return fail(`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
-	tlWhole, err := trimProfileFullyWhole(budget, tl.profile)
+	tlWhole, err := trimProfileFullyWhole(budget, tl.Profile)
 	if err != nil {
 		return pass(err)
 	}
@@ -906,7 +906,7 @@ func extendRevolveEndSegment(b *Body, pp chainRevolvePayload, edge *Edge) (int, 
 		return miss()
 	}
 	for ci, lump := range b.n.Lumps {
-		if ci >= len(pp.chains) || len(lump.Shells) != 1 || len(lump.Shells[0].Faces) == 0 {
+		if ci >= len(pp.Chains) || len(lump.Shells) != 1 || len(lump.Shells[0].Faces) == 0 {
 			continue
 		}
 		faces := lump.Shells[0].Faces
@@ -914,7 +914,7 @@ func extendRevolveEndSegment(b *Body, pp chainRevolvePayload, edge *Edge) (int, 
 			return ci, 0, true, nil
 		}
 		if named, ok := revolveLatitudeLoopEdge(faceHandle(faces[len(faces)-1]), false); ok && named == edge {
-			return ci, len(pp.chains[ci].Segments) - 1, false, nil
+			return ci, len(pp.Chains[ci].Segments) - 1, false, nil
 		}
 	}
 	return miss()

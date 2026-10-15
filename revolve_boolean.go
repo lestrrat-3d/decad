@@ -27,7 +27,7 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	for _, p := range []profileRecord{ra.profile, rb.profile} {
+	for _, p := range []profileRecord{ra.Profile, rb.Profile} {
 		if len(p.Holes) != 0 || len(p.Outer.Segments) == 0 {
 			return nil, false, nil
 		}
@@ -40,25 +40,25 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 			}
 		}
 	}
-	if _, within, err := prismcells.RegionsWithinWorkCap(budget, ra.profile, rb.profile); err != nil {
+	if _, within, err := prismcells.RegionsWithinWorkCap(budget, ra.Profile, rb.Profile); err != nil {
 		return nil, false, err
 	} else if !within {
 		return nil, false, nil
 	}
-	reexpress, err := prismcells.NewReexpression(ra.meridian().PlacementOperand(), rb.meridian().PlacementOperand())
+	reexpress, err := prismcells.NewReexpression(ra.Meridian().PlacementOperand(), rb.Meridian().PlacementOperand())
 	if err != nil {
 		return nil, false, err
 	}
 	if !reexpress.Identity {
 		return nil, false, nil
 	}
-	s, tags, sceneDelta, err := prismcells.BuildScene(budget, ra.profile, rb.profile, reexpress)
+	s, tags, sceneDelta, err := prismcells.BuildScene(budget, ra.Profile, rb.Profile, reexpress)
 	if err != nil {
 		return nil, false, err
 	}
 	// Provenance by segment index requires a distinct scene entity for each
 	// source segment. The scene may deduplicate segments within an operand.
-	if !revolveBooleanTaggedSegments(tags, len(ra.profile.Outer.Segments), len(rb.profile.Outer.Segments)) {
+	if !revolveBooleanTaggedSegments(tags, len(ra.Profile.Outer.Segments), len(rb.Profile.Outer.Segments)) {
 		return nil, false, nil
 	}
 	profiles, err := prismcells.CellProfiles(ctx, budget, s)
@@ -100,7 +100,7 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 	if err != nil || !resolved {
 		return nil, false, err
 	}
-	if err := prismcells.AuditMergeSection(budget, ra.meridian(), profile); err != nil {
+	if err := prismcells.AuditMergeSection(budget, ra.Meridian(), profile); err != nil {
 		return nil, false, err
 	}
 	sources, ok, err := revolveBooleanSources(ctx, a, b, ra, rb, tags, coincident, chain)
@@ -108,22 +108,22 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, err
 	}
 	line := revolveaxis.Line2{
-		AU: ra.ax.AU, AV: ra.ax.AV, AUBound: ra.ax.AUBound, AVBound: ra.ax.AVBound,
-		DU: ra.ax.DU, DV: ra.ax.DV, DUBound: ra.ax.DUBound, DVBound: ra.ax.DVBound,
+		AU: ra.Ax.AU, AV: ra.Ax.AV, AUBound: ra.Ax.AUBound, AVBound: ra.Ax.AVBound,
+		DU: ra.Ax.DU, DV: ra.Ax.DV, DUBound: ra.Ax.DUBound, DVBound: ra.Ax.DVBound,
 	}
 	ax, side, err := resolveAxisSide(ctx, profile, line, freeform.NewFreeformWork())
 	if err != nil || side != 1 {
 		return nil, false, err
 	}
 	result := ra
-	result.profile = profile
-	result.ax = ax
-	result.sectionDelta = sceneDelta.Merged(0, 0, reexpress.Delta, cutDelta)
-	result.sectionWhole = false
-	result.radialProof = ax.RadialProof
-	result.sourceSideOrigins = [][][]provenance.Ref{sources}
-	result.blendSegs = nil
-	result.blendKind = ""
+	result.Profile = profile
+	result.Ax = ax
+	result.SectionDelta = sceneDelta.Merged(0, 0, reexpress.Delta, cutDelta)
+	result.SectionWhole = false
+	result.RadialProof = ax.RadialProof
+	result.SourceSideOrigins = [][][]provenance.Ref{sources}
+	result.BlendSegs = nil
+	result.BlendKind = ""
 	body, err := evalRevolveContext(ctx, d, ref, result)
 	if err != nil {
 		return nil, false, err
@@ -132,15 +132,15 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 }
 
 func commonAxisRevolvePair(a, b revolvePayload) bool {
-	if !a.full || !b.full || a.surfaceResult || b.surfaceResult ||
-		a.sectionDelta != 0 || b.sectionDelta != 0 || a.sectionWhole || b.sectionWhole ||
-		a.frame != b.frame || a.xform != b.xform || a.phi0 != b.phi0 || a.phi1 != b.phi1 {
+	if !a.Full || !b.Full || a.SurfaceResult || b.SurfaceResult ||
+		a.SectionDelta != 0 || b.SectionDelta != 0 || a.SectionWhole || b.SectionWhole ||
+		a.Frame != b.Frame || a.Xform != b.Xform || a.Phi0 != b.Phi0 || a.Phi1 != b.Phi1 {
 		return false
 	}
-	return a.ax.AU == b.ax.AU && a.ax.AV == b.ax.AV &&
-		a.ax.DU == b.ax.DU && a.ax.DV == b.ax.DV &&
-		a.ax.AUBound == b.ax.AUBound && a.ax.AVBound == b.ax.AVBound &&
-		a.ax.DUBound == b.ax.DUBound && a.ax.DVBound == b.ax.DVBound
+	return a.Ax.AU == b.Ax.AU && a.Ax.AV == b.Ax.AV &&
+		a.Ax.DU == b.Ax.DU && a.Ax.DV == b.Ax.DV &&
+		a.Ax.AUBound == b.Ax.AUBound && a.Ax.AVBound == b.Ax.AVBound &&
+		a.Ax.DUBound == b.Ax.DUBound && a.Ax.DVBound == b.Ax.DVBound
 }
 
 func commonAxisKeep(op meshbool.OperationKind) func(bool, bool) bool {
@@ -217,15 +217,15 @@ func revolveBooleanSourceFace(a, b *Body, ra, rb revolvePayload,
 	if origin.IsB {
 		body, source = b, rb
 	}
-	if origin.Segment < 0 || origin.Segment >= len(source.profile.Outer.Segments) {
+	if origin.Segment < 0 || origin.Segment >= len(source.Profile.Outer.Segments) {
 		return nil, false, nil
 	}
-	seg := source.profile.Outer.Segments[origin.Segment]
+	seg := source.Profile.Outer.Segments[origin.Segment]
 	walk, err := boundarywalk.WalkOf(seg, nil)
 	if err != nil {
 		return nil, false, err
 	}
-	if source.ax.IsAxis(source.ax.Walk(walk)) {
+	if source.Ax.IsAxis(source.Ax.Walk(walk)) {
 		return nil, true, nil
 	}
 	ref := provenance.Ref{Producer: body.n.Origin.Producer, Role: prismWallRole(0, origin.Segment)}

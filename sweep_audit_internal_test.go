@@ -87,7 +87,7 @@ func TestSweepAuditBoxesRequireStrictBoundedSeparation(t *testing.T) {
 
 func TestSweepAuditEndpointSupportStopsAtHalfTurn(t *testing.T) {
 	body := bornBody(&Body{n: topo.Body{
-		Payload: revolvePayload{den: revolveangle.Sweep{
+		Payload: revolvePayload{Den: revolveangle.Sweep{
 			Phi0: revolveangle.Angle{Rad: new(big.Rat), Turn: new(big.Rat)},
 			Phi1: revolveangle.Angle{Rad: new(big.Rat), Turn: big.NewRat(1, 2)},
 		}},
@@ -95,7 +95,7 @@ func TestSweepAuditEndpointSupportStopsAtHalfTurn(t *testing.T) {
 	require.True(t, sweepAuditEndpointSupports(body))
 
 	payload := body.n.Payload.(revolvePayload)
-	payload.den.Phi1.Turn = big.NewRat(3, 4)
+	payload.Den.Phi1.Turn = big.NewRat(3, 4)
 	body.n.Payload = payload
 	require.False(t, sweepAuditEndpointSupports(body))
 }

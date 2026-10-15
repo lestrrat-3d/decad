@@ -157,13 +157,13 @@ func massCupRecords(cp cupView) (massmoment.PrismRecord, massmoment.PrismRecord)
 // massRevolveRecord presents a root revolve payload to the mass integrator.
 func massRevolveRecord(rp revolvePayload) massmoment.RevolveRecord {
 	return massmoment.RevolveRecord{
-		Profile: rp.profile, Frame: rp.frame, Transform: rp.xform,
-		Den: rp.den, Phi0: rp.phi0, Phi1: rp.phi1,
-		AU: rp.ax.AU, AV: rp.ax.AV, DU: rp.ax.DU, DV: rp.ax.DV,
-		AUBound: rp.ax.AUBound, AVBound: rp.ax.AVBound,
-		DUBound: rp.ax.DUBound, DVBound: rp.ax.DVBound,
-		SectionDelta: rp.sectionDelta, RadialAdmitAllow: rp.ax.RadialAdmitAllow,
-		AxisSnap: rp.ax.Snap != (regionSnapAllow{}),
+		Profile: rp.Profile, Frame: rp.Frame, Transform: rp.Xform,
+		Den: rp.Den, Phi0: rp.Phi0, Phi1: rp.Phi1,
+		AU: rp.Ax.AU, AV: rp.Ax.AV, DU: rp.Ax.DU, DV: rp.Ax.DV,
+		AUBound: rp.Ax.AUBound, AVBound: rp.Ax.AVBound,
+		DUBound: rp.Ax.DUBound, DVBound: rp.Ax.DVBound,
+		SectionDelta: rp.SectionDelta, RadialAdmitAllow: rp.Ax.RadialAdmitAllow,
+		AxisSnap: rp.Ax.Snap != (regionSnapAllow{}),
 	}
 }
 

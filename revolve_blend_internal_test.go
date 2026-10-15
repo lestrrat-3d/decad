@@ -48,10 +48,10 @@ func TestRevolveBlendAxisGate(t *testing.T) {
 	rp := blendAxisReceiver(t)
 
 	t.Run(`the receiver's own meridian re-resolves`, func(t *testing.T) {
-		ax, err := revolveBlendAxis(t.Context(), rp, rp.profile, freeform.NewFreeformWork())
+		ax, err := revolveBlendAxis(t.Context(), rp, rp.Profile, freeform.NewFreeformWork())
 		require.NoError(t, err)
-		require.Equal(t, rp.ax.DU, ax.DU, `the region stays on the receiver axis's own side`)
-		require.Equal(t, rp.ax.DV, ax.DV)
+		require.Equal(t, rp.Ax.DU, ax.DU, `the region stays on the receiver axis's own side`)
+		require.Equal(t, rp.Ax.DV, ax.DV)
 	})
 
 	t.Run(`a meridian across the axis`, func(t *testing.T) {

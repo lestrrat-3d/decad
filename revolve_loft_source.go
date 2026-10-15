@@ -46,16 +46,16 @@ func recordedRevolveSection(blank *Body) ([]revolveSectionSpan, int, r3.Frame, b
 		return nil, -1, empty, false
 	}
 	rp, ok := blank.n.Payload.(revolvePayload)
-	if !ok || !rp.full || rp.surfaceResult || rp.sectionDelta != 0 ||
-		rp.xform != r3.Identity() || len(rp.profile.Holes) != 0 ||
-		rp.frame.Origin() != (r3.Vec{}) || rp.frame.U() != (r3.Vec{X: 1}) ||
-		rp.frame.V() != (r3.Vec{Y: 1}) ||
-		rp.ax.AU != 0 || rp.ax.AV != 0 || rp.ax.DU != 1 || rp.ax.DV != 0 ||
-		rp.ax.AUBound != 0 || rp.ax.AVBound != 0 ||
-		rp.ax.DUBound != 0 || rp.ax.DVBound != 0 {
+	if !ok || !rp.Full || rp.SurfaceResult || rp.SectionDelta != 0 ||
+		rp.Xform != r3.Identity() || len(rp.Profile.Holes) != 0 ||
+		rp.Frame.Origin() != (r3.Vec{}) || rp.Frame.U() != (r3.Vec{X: 1}) ||
+		rp.Frame.V() != (r3.Vec{Y: 1}) ||
+		rp.Ax.AU != 0 || rp.Ax.AV != 0 || rp.Ax.DU != 1 || rp.Ax.DV != 0 ||
+		rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 ||
+		rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 {
 		return nil, -1, empty, false
 	}
-	segments := rp.profile.Outer.Segments
+	segments := rp.Profile.Outer.Segments
 	if len(segments) < 4 || len(segments) > 128 {
 		return nil, -1, empty, false
 	}
@@ -127,7 +127,7 @@ func recordedRevolveSection(blank *Body) ([]revolveSectionSpan, int, r3.Frame, b
 	if axisSpan < 0 {
 		return nil, -1, empty, false
 	}
-	return spans, axisSpan, rp.frame, true
+	return spans, axisSpan, rp.Frame, true
 }
 
 func revolveForwardCollinear(a, b, c planePoint) bool {
@@ -154,7 +154,7 @@ func revolveSpanFace(blank *Body, span revolveSectionSpan) (*Face, bool) {
 	} else if dr == 0 {
 		kind = wallCylinder
 	}
-	surface, reversed, err := rp.wallSurface(rp.basis(), w, kind)
+	surface, reversed, err := rp.WallSurface(rp.Basis(), w, kind)
 	if err != nil {
 		return nil, false
 	}

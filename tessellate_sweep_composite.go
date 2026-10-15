@@ -314,8 +314,8 @@ func compositeProfileCountPlan(ctx context.Context, sp sweepPayload, chord float
 			return nil, 0, 0, err
 		}
 		planned, err := revolveplan.PlanCounts(revolveplan.CountInput{
-			Resolution: res, Chord: chord, SectionDelta: span.revolve.sectionDelta,
-			Phi0: span.revolve.phi0, Phi1: span.revolve.phi1, Full: span.revolve.full,
+			Resolution: res, Chord: chord, SectionDelta: span.revolve.SectionDelta,
+			Phi0: span.revolve.Phi0, Phi1: span.revolve.Phi1, Full: span.revolve.Full,
 			WorkLimit: workLimit,
 		})
 		if err != nil {

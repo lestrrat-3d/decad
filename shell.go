@@ -210,7 +210,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 		}
 		// Reach §9.3: a full turn over a hole-free meridian keeps every face
 		// and sweeps its closed wall region over the whole turn.
-		if rp, ok := b.n.Payload.(revolvePayload); ok && rp.full && len(rp.profile.Holes) == 0 {
+		if rp, ok := b.n.Payload.(revolvePayload); ok && rp.Full && len(rp.Profile.Holes) == 0 {
 			return b.shellRevolve(ctx, rp, nil, s, t, tmm, tDelta)
 		}
 		// Reach BX5: a hole-free straight prism keeps both caps and lines
@@ -504,7 +504,7 @@ func refuseClosedShell(payload topo.Payload) error {
 		// that arrives here is holed.
 		return fmt.Errorf(`%w: a closed shell of a holed prism section is outside the shell extension (modify-reach SX8)`, ErrUnsupported)
 	case revolvePayload:
-		if len(p.profile.Holes) > 0 {
+		if len(p.Profile.Holes) > 0 {
 			return fmt.Errorf(`%w: a closed shell of a revolve whose meridian holds a hole is outside the shell extension (modify-reach SX8)`, ErrUnsupported)
 		}
 		// Shell routes a full turn over a hole-free meridian to shellRevolve,

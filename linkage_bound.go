@@ -276,20 +276,20 @@ func bodySymmetryAxis(b *Body) (point, dir motionbound.RatVec, ok bool) {
 		return motionbound.RatVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
 	}
 	if rp, isRevolve := b.n.Payload.(revolvePayload); isRevolve {
-		if !b.n.Solid || b.n.Kind != topo.BodySolid || rp.surfaceResult || !rp.full || rp.sectionDelta != 0 ||
-			!pairbox.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) || !signedAxisTransform(rp.xform) ||
-			!proofbound.FiniteVec(rp.frame.Origin()) || !measurement.FiniteValues(rp.ax.AU, rp.ax.AV, rp.ax.DU, rp.ax.DV) ||
-			rp.ax.AUBound != 0 || rp.ax.AVBound != 0 || rp.ax.DUBound != 0 || rp.ax.DVBound != 0 ||
-			(rp.ax.DU == 0 && rp.ax.DV == 0) {
+		if !b.n.Solid || b.n.Kind != topo.BodySolid || rp.SurfaceResult || !rp.Full || rp.SectionDelta != 0 ||
+			!pairbox.CardinalBasis(rp.Frame.U(), rp.Frame.V(), rp.Frame.N()) || !signedAxisTransform(rp.Xform) ||
+			!proofbound.FiniteVec(rp.Frame.Origin()) || !measurement.FiniteValues(rp.Ax.AU, rp.Ax.AV, rp.Ax.DU, rp.Ax.DV) ||
+			rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 || rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 ||
+			(rp.Ax.DU == 0 && rp.Ax.DV == 0) {
 			return motionbound.RatVec{}, motionbound.RatVec{}, false
 		}
-		anchor := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()), proofarith.DvAdd(
-			proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.AU)),
-			proofarith.DvScale(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.AV))))
-		w := proofarith.DvAdd(proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.DU)),
-			proofarith.DvScale(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.DV)))
-		far := proofarith.DvTransform(rp.xform, proofarith.DvAdd(anchor, w))
-		anchor = proofarith.DvTransform(rp.xform, anchor)
+		anchor := proofarith.DvAdd(proofarith.DyVec(rp.Frame.Origin()), proofarith.DvAdd(
+			proofarith.DvScale(proofarith.DyVec(rp.Frame.U()), proofarith.MustDyOf(rp.Ax.AU)),
+			proofarith.DvScale(proofarith.DyVec(rp.Frame.V()), proofarith.MustDyOf(rp.Ax.AV))))
+		w := proofarith.DvAdd(proofarith.DvScale(proofarith.DyVec(rp.Frame.U()), proofarith.MustDyOf(rp.Ax.DU)),
+			proofarith.DvScale(proofarith.DyVec(rp.Frame.V()), proofarith.MustDyOf(rp.Ax.DV)))
+		far := proofarith.DvTransform(rp.Xform, proofarith.DvAdd(anchor, w))
+		anchor = proofarith.DvTransform(rp.Xform, anchor)
 		var d motionbound.RatVec
 		for i := range 3 {
 			d[i] = new(big.Rat).Sub(far[i].Rat(), anchor[i].Rat())

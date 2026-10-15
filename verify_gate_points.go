@@ -81,10 +81,10 @@ func revolveGateDiameter(budget *proofbound.WorkBudget, rp revolvePayload) (floa
 // to the witness calculation used by its diameter gate.
 func revolveGatePoints(budget *proofbound.WorkBudget, rp revolvePayload) (gatePoints, bool, error) {
 	return diameter.RevolveWitnesses(budget, diameter.RevolveWitnessInput{
-		Phi0: rp.phi0, Phi1: rp.phi1, Den0: rp.den.Phi0, Den1: rp.den.Phi1,
-		Loops: append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...),
-		Lift:  rp.lift(), AxisBound: rp.axisBound(), Axis: rp.ax,
-		Transform: rp.xform, SectionDelta: rp.sectionDelta,
+		Phi0: rp.Phi0, Phi1: rp.Phi1, Den0: rp.Den.Phi0, Den1: rp.Den.Phi1,
+		Loops: append([]loopRecord{rp.Profile.Outer}, rp.Profile.Holes...),
+		Lift:  rp.Lift(), AxisBound: rp.AxisBound(), Axis: rp.Ax,
+		Transform: rp.Xform, SectionDelta: rp.SectionDelta,
 	})
 }
 

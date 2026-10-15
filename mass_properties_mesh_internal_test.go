@@ -179,7 +179,7 @@ func TestMeshMassReadsARevolveTheAnalyticPathRefuses(t *testing.T) {
 	})
 	rp, ok := quarter.n.Payload.(revolvePayload)
 	require.True(t, ok)
-	rp.sectionDelta = 1.0 / 1024
+	rp.SectionDelta = 1.0 / 1024
 	displaced := bornBody(&Body{
 		n: topo.Body{Solid: quarter.n.Solid, Origin: quarter.n.Origin, Volume: quarter.n.Volume, Area: quarter.n.Area, Centroid: quarter.n.Centroid, Bounds: quarter.n.Bounds, Kind: quarter.n.Kind, Lumps: quarter.n.Lumps, Doc: quarter.n.Doc, Payload: rp},
 	})

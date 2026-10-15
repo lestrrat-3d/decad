@@ -10,13 +10,13 @@ import (
 // held sweep carries — the angular twins of prismPayload.z0Delta/z1Delta,
 // read off the payload's own denotation against its own held float rather
 // than stored redundantly, since the payload already carries both.
-func (rp revolvePayload) phi0Delta() float64 { return rp.den.Phi0.Delta(rp.phi0) }
-func (rp revolvePayload) phi1Delta() float64 { return rp.den.Phi1.Delta(rp.phi1) }
+func (rp revolvePayload) phi0Delta() float64 { return rp.Den.Phi0.Delta(rp.Phi0) }
+func (rp revolvePayload) phi1Delta() float64 { return rp.Den.Phi1.Delta(rp.Phi1) }
 
 // angularDelta is the larger of the two ends' displacements: the figure a
 // reading that cannot attribute its error to one particular end takes,
 // mirroring prismPayload.AxialDelta().
-func (rp revolvePayload) angularDelta() float64 { return math.Max(rp.phi0Delta(), rp.phi1Delta()) }
+func (rp revolvePayload) AngularDelta() float64 { return math.Max(rp.phi0Delta(), rp.phi1Delta()) }
 
 // sweep is the proven bound on the sweep width every mass and edge reading
 // multiplies into its own quantity: the held float64 subtraction stays the
@@ -30,10 +30,10 @@ func (rp revolvePayload) angularDelta() float64 { return math.Max(rp.phi0Delta()
 // can only shrink the published bound, never widen it — so a ToFaceAngular
 // sweep or any other denotation this file cannot state keeps exactly the
 // envelope it always published.
-func (rp revolvePayload) sweep() proofbound.BoundedScalar {
-	held := proofbound.BoundedSub(proofbound.ExactScalar(rp.phi1), proofbound.ExactScalar(rp.phi0))
+func (rp revolvePayload) Sweep() proofbound.BoundedScalar {
+	held := proofbound.BoundedSub(proofbound.ExactScalar(rp.Phi1), proofbound.ExactScalar(rp.Phi0))
 	fallback := proofbound.ConservativeValueError(held.Value, proofbound.TwoPiUpper())
-	enc, ok := rp.den.WidthInterval()
+	enc, ok := rp.Den.WidthInterval()
 	if !ok {
 		return proofbound.MeasuredScalar(held.Value, fallback)
 	}

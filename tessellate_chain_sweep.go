@@ -164,12 +164,12 @@ func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float
 	if b.Kind() != BodySheet || len(sp.spans) != 2 || sp.spans[0].arc || !sp.spans[1].arc ||
 		sp.spans[1].reverseArcRims || sp.path == nil || len(sp.path.Segments) != 2 ||
 		sp.spans[0].chain.Xform != r3.Identity() ||
-		sp.spans[1].revolve.xform != r3.Identity() || len(sp.spans[0].chain.Chains) != 1 ||
-		len(sp.spans[1].revolve.chains) != 1 {
+		sp.spans[1].revolve.Xform != r3.Identity() || len(sp.spans[0].chain.Chains) != 1 ||
+		len(sp.spans[1].revolve.Chains) != 1 {
 		return refuse()
 	}
 	chain := sp.spans[0].chain.Chains[0]
-	if len(chain.Segments) != 1 || len(sp.spans[1].revolve.chains[0].Segments) != 1 {
+	if len(chain.Segments) != 1 || len(sp.spans[1].revolve.Chains[0].Segments) != 1 {
 		return refuse()
 	}
 	seg, ok := chain.Segments[0].(lineSeg)
@@ -197,14 +197,14 @@ func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float
 		return refuse()
 	}
 	if sp.spans[0].chain.Z0 != 0 || sp.spans[0].chain.Z1 != height ||
-		sp.spans[0].chain.SectionDelta != 0 || sp.spans[1].revolve.sectionDelta != 0 ||
-		sp.spans[1].revolve.frame.Origin() != (r3.Vec{Z: height}) ||
-		sp.spans[1].revolve.frame.U() != (r3.Vec{X: 1}) ||
-		sp.spans[1].revolve.frame.V() != (r3.Vec{Y: 1}) ||
-		sp.spans[1].revolve.ax.AU != radius || sp.spans[1].revolve.ax.AV != 0 ||
-		sp.spans[1].revolve.ax.DU != 0 || sp.spans[1].revolve.ax.DV != 1 ||
-		sp.spans[1].revolve.ax.AUBound != 0 || sp.spans[1].revolve.ax.AVBound != 0 ||
-		sp.spans[1].revolve.ax.DUBound != 0 || sp.spans[1].revolve.ax.DVBound != 0 {
+		sp.spans[0].chain.SectionDelta != 0 || sp.spans[1].revolve.SectionDelta != 0 ||
+		sp.spans[1].revolve.Frame.Origin() != (r3.Vec{Z: height}) ||
+		sp.spans[1].revolve.Frame.U() != (r3.Vec{X: 1}) ||
+		sp.spans[1].revolve.Frame.V() != (r3.Vec{Y: 1}) ||
+		sp.spans[1].revolve.Ax.AU != radius || sp.spans[1].revolve.Ax.AV != 0 ||
+		sp.spans[1].revolve.Ax.DU != 0 || sp.spans[1].revolve.Ax.DV != 1 ||
+		sp.spans[1].revolve.Ax.AUBound != 0 || sp.spans[1].revolve.Ax.AVBound != 0 ||
+		sp.spans[1].revolve.Ax.DUBound != 0 || sp.spans[1].revolve.Ax.DVBound != 0 {
 		return refuse()
 	}
 	var straight, curved *Face

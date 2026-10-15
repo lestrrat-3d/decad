@@ -30,10 +30,10 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 		return sourceSphereContactProof{}, false
 	}
 	rp, ok := b.n.Payload.(revolvePayload)
-	if !ok || !signedAxisTransform(rp.xform) || !pose.IsValid() || pose.IsReflection() {
+	if !ok || !signedAxisTransform(rp.Xform) || !pose.IsValid() || pose.IsReflection() {
 		return sourceSphereContactProof{}, false
 	}
-	center := proofarith.DvTransform(rp.xform, proof.center)
+	center := proofarith.DvTransform(rp.Xform, proof.center)
 	if !signedAxisTransform(pose) {
 		// A read rotation cannot move a ball centered at the query origin.
 		// Other centers need an exact rotation of their offset before admission.
@@ -53,20 +53,20 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 // A rigid placement cannot change its radius or isotropic centroidal inertia.
 func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 	rp, ok := b.n.Payload.(revolvePayload)
-	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || rp.surfaceResult || !rp.full ||
-		rp.sectionDelta != 0 || len(rp.profile.Holes) != 0 ||
-		len(rp.profile.Outer.Segments) != 2 ||
-		!proofbound.FiniteVec(rp.frame.Origin()) ||
-		!box.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
-		rp.ax.DU != 1 || rp.ax.DV != 0 ||
-		rp.ax.AUBound != 0 || rp.ax.AVBound != 0 ||
-		rp.ax.DUBound != 0 || rp.ax.DVBound != 0 {
+	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || rp.SurfaceResult || !rp.Full ||
+		rp.SectionDelta != 0 || len(rp.Profile.Holes) != 0 ||
+		len(rp.Profile.Outer.Segments) != 2 ||
+		!proofbound.FiniteVec(rp.Frame.Origin()) ||
+		!box.CardinalBasis(rp.Frame.U(), rp.Frame.V(), rp.Frame.N()) ||
+		rp.Ax.DU != 1 || rp.Ax.DV != 0 ||
+		rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 ||
+		rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 {
 		return sourceSphereContactProof{}, false
 	}
 	var arc arcSeg
 	var line lineSeg
 	arcSeen, lineSeen := false, false
-	for _, segment := range rp.profile.Outer.Segments {
+	for _, segment := range rp.Profile.Outer.Segments {
 		switch s := segment.(type) {
 		case arcSeg:
 			arc, arcSeen = s, true
@@ -79,7 +79,7 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 	sameEnds := line.Start == arc.Start && line.End == arc.End ||
 		line.Start == arc.End && line.End == arc.Start
 	if !arcSeen || !lineSeen || arc.TStart != 0 || arc.TEnd != 1 ||
-		line.TStart != 0 || line.TEnd != 1 || arc.Center.V != rp.ax.AV ||
+		line.TStart != 0 || line.TEnd != 1 || arc.Center.V != rp.Ax.AV ||
 		arc.Start.V != arc.Center.V || arc.End.V != arc.Center.V ||
 		arc.Start.U <= arc.Center.U || arc.End.U >= arc.Center.U ||
 		!sameEnds ||
@@ -98,9 +98,9 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 	if _, ok := faces[0].n.Surface.(surfacegeom.Sphere); !ok {
 		return sourceSphereContactProof{}, false
 	}
-	local := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()),
-		proofarith.DvAdd(proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(arc.Center.U)),
-			proofarith.DvScale(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(arc.Center.V))))
+	local := proofarith.DvAdd(proofarith.DyVec(rp.Frame.Origin()),
+		proofarith.DvAdd(proofarith.DvScale(proofarith.DyVec(rp.Frame.U()), proofarith.MustDyOf(arc.Center.U)),
+			proofarith.DvScale(proofarith.DyVec(rp.Frame.V()), proofarith.MustDyOf(arc.Center.V))))
 	return sourceSphereContactProof{
 		center: local,
 		radius: radius, face: faces[0],

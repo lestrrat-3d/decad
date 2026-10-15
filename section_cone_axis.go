@@ -18,28 +18,28 @@ import (
 // All comparisons use their exact recorded binary values. An inexact radius
 // is represented by a bounded polygon with a certified two-sided displacement.
 func cardinalConeSection(rp revolvePayload, plane r3.Frame) (profileRecord, []planePoint, float64, bool) {
-	if !rp.full || rp.surfaceResult || rp.sectionDelta != 0 ||
-		len(rp.profile.Holes) != 0 || len(rp.profile.Outer.Segments) != 3 ||
-		!box.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
+	if !rp.Full || rp.SurfaceResult || rp.SectionDelta != 0 ||
+		len(rp.Profile.Holes) != 0 || len(rp.Profile.Outer.Segments) != 3 ||
+		!box.CardinalBasis(rp.Frame.U(), rp.Frame.V(), rp.Frame.N()) ||
 		!box.CardinalBasis(plane.U(), plane.V(), plane.N()) ||
-		!signedAxisTransform(rp.xform) || !proofbound.FiniteVec(rp.frame.Origin()) ||
-		rp.ax.AUBound != 0 || rp.ax.AVBound != 0 ||
-		rp.ax.DUBound != 0 || rp.ax.DVBound != 0 ||
-		!((math.Abs(rp.ax.DU) == 1 && rp.ax.DV == 0) ||
-			(rp.ax.DU == 0 && math.Abs(rp.ax.DV) == 1)) ||
-		!measurement.FiniteValues(rp.ax.AU, rp.ax.AV) {
+		!signedAxisTransform(rp.Xform) || !proofbound.FiniteVec(rp.Frame.Origin()) ||
+		rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 ||
+		rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 ||
+		!((math.Abs(rp.Ax.DU) == 1 && rp.Ax.DV == 0) ||
+			(rp.Ax.DU == 0 && math.Abs(rp.Ax.DV) == 1)) ||
+		!measurement.FiniteValues(rp.Ax.AU, rp.Ax.AV) {
 		return profileRecord{}, nil, 0, false
 	}
 
 	var corners [3]planePoint
-	for i, segment := range rp.profile.Outer.Segments {
+	for i, segment := range rp.Profile.Outer.Segments {
 		line, ok := segment.(lineSeg)
 		if !ok || line.TStart != 0 || line.TEnd != 1 ||
 			!measurement.FiniteValues(line.Start.U, line.Start.V, line.End.U, line.End.V) {
 			return profileRecord{}, nil, 0, false
 		}
 		corners[i] = line.Start
-		next, ok := rp.profile.Outer.Segments[(i+1)%3].(lineSeg)
+		next, ok := rp.Profile.Outer.Segments[(i+1)%3].(lineSeg)
 		if !ok || line.End != next.Start {
 			return profileRecord{}, nil, 0, false
 		}
@@ -51,8 +51,8 @@ func cardinalConeSection(rp revolvePayload, plane r3.Frame) (profileRecord, []pl
 	// The resolved axis has a zero error bound, and the original meridian has
 	// zero section displacement. Exactly two triangle corners must lie on it;
 	// the third must share the base corner's axial coordinate.
-	au, av := proofarith.DyOfFinite(rp.ax.AU), proofarith.DyOfFinite(rp.ax.AV)
-	du, dv := proofarith.DyOfFinite(rp.ax.DU), proofarith.DyOfFinite(rp.ax.DV)
+	au, av := proofarith.DyOfFinite(rp.Ax.AU), proofarith.DyOfFinite(rp.Ax.AV)
+	du, dv := proofarith.DyOfFinite(rp.Ax.DU), proofarith.DyOfFinite(rp.Ax.DV)
 	var axial, radial [3]proofarith.Dyadic
 	axisCorners := make([]int, 0, 2)
 	outer := -1
@@ -85,12 +85,12 @@ func cardinalConeSection(rp revolvePayload, plane r3.Frame) (profileRecord, []pl
 	// Opposite strict signs prove an interior cut; the cone radius varies
 	// linearly along that axis, so the cut is one complete disk.
 	point := func(p planePoint) proofarith.DyV3 {
-		local := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()),
+		local := proofarith.DvAdd(proofarith.DyVec(rp.Frame.Origin()),
 			proofarith.DvAdd(
-				proofarith.DvScale(proofarith.DyVec(rp.frame.U()), proofarith.DyOfFinite(p.U)),
-				proofarith.DvScale(proofarith.DyVec(rp.frame.V()), proofarith.DyOfFinite(p.V)),
+				proofarith.DvScale(proofarith.DyVec(rp.Frame.U()), proofarith.DyOfFinite(p.U)),
+				proofarith.DvScale(proofarith.DyVec(rp.Frame.V()), proofarith.DyOfFinite(p.V)),
 			))
-		return proofarith.DvTransform(rp.xform, local)
+		return proofarith.DvTransform(rp.Xform, local)
 	}
 	baseWorld, apexWorld := point(corners[base]), point(corners[apex])
 	u, v, n := proofarith.DyVec(plane.U()), proofarith.DyVec(plane.V()), proofarith.DyVec(plane.N())

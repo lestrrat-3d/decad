@@ -42,7 +42,7 @@ func prismScaleSource(ctx context.Context, b *Body, prism prismPayload, factor f
 // tessellation proves both the boundary and occupied volume. The similarity
 // then carries those proofs through the same faceted path as a prism.
 func revolveScaleSource(ctx context.Context, b *Body, source revolvePayload, factor float64) (facetedPayload, error) {
-	if !source.full || source.surfaceResult || !source.xform.IsValid() || source.sectionDelta != 0 {
+	if !source.Full || source.SurfaceResult || !source.Xform.IsValid() || source.SectionDelta != 0 {
 		return facetedPayload{}, fmt.Errorf("%w: scale needs a complete exact solid Revolve", ErrUnsupported)
 	}
 	chord := math.Nextafter(0.05/math.Max(1, factor), 0)

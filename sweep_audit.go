@@ -70,7 +70,7 @@ func (span sweepAuditSpan) AuditExtent(
 	case prismPayload:
 		return payload.ExtentBoundedAlong(ctx, direction, work, payload.Walks)
 	case revolvePayload:
-		return payload.extentBoundedAlong(ctx, direction, work)
+		return payload.ExtentBoundedAlong(ctx, direction, work)
 	case draftPayload:
 		return payload.band().extentBoundedAlong(ctx, direction, work)
 	default:
@@ -91,10 +91,10 @@ func sweepAuditEndpointSupports(body *Body) bool {
 		// Each draft slab stays between its two axial cap planes.
 		return true
 	case revolvePayload:
-		if payload.full {
+		if payload.Full {
 			return false
 		}
-		from, to := payload.den.Phi0, payload.den.Phi1
+		from, to := payload.Den.Phi0, payload.Den.Phi1
 		if !from.Valid() || !to.Valid() || from.Span != nil || to.Span != nil ||
 			from.Rad.Sign() != 0 || to.Rad.Sign() != 0 {
 			return false

@@ -44,31 +44,31 @@ func TestChainArcSweepAxisErrorChangesPublicMeshBound(t *testing.T) {
 		t.Fatal(err)
 	}
 	sp := body.n.Payload.(chainSweepPayload)
-	rp := sp.revolve.revolve()
-	resolved, err := revolveaxis.ResolveChain(t.Context(), sp.revolve.chains[0],
-		freeform.NewFreeformWork(), "axis-charge test", rp.chargedWalk, rp.ax.SnapTol)
+	rp := sp.revolve.Revolve()
+	resolved, err := revolveaxis.ResolveChain(t.Context(), sp.revolve.Chains[0],
+		freeform.NewFreeformWork(), "axis-charge test", rp.ChargedWalk, rp.Ax.SnapTol)
 	if err != nil {
 		t.Fatal(err)
 	}
 	plane, held := resolved.Plane[0], resolved.Walks[0]
 	zero := rp
-	zero.ax.AUBound, zero.ax.AVBound, zero.ax.DUBound, zero.ax.DVBound = 0, 0, 0, 0
-	fullZ0, fullR0, ok := revolveproof.ChainArcSourcePoint(rp.ax, plane.StartU, plane.StartV, plane.StartBound)
+	zero.Ax.AUBound, zero.Ax.AVBound, zero.Ax.DUBound, zero.Ax.DVBound = 0, 0, 0, 0
+	fullZ0, fullR0, ok := revolveproof.ChainArcSourcePoint(rp.Ax, plane.StartU, plane.StartV, plane.StartBound)
 	if !ok {
 		t.Fatal("source start has no interval")
 	}
-	fullZ1, fullR1, ok := revolveproof.ChainArcSourcePoint(rp.ax, plane.EndU, plane.EndV, plane.EndBound)
+	fullZ1, fullR1, ok := revolveproof.ChainArcSourcePoint(rp.Ax, plane.EndU, plane.EndV, plane.EndBound)
 	if !ok {
 		t.Fatal("source end has no interval")
 	}
-	_, zeroR0, _ := revolveproof.ChainArcSourcePoint(zero.ax, plane.StartU, plane.StartV, plane.StartBound)
-	_, zeroR1, _ := revolveproof.ChainArcSourcePoint(zero.ax, plane.EndU, plane.EndV, plane.EndBound)
-	phi0, _ := rp.den.Phi0.Enclosure()
-	phi1, _ := rp.den.Phi1.Enclosure()
+	_, zeroR0, _ := revolveproof.ChainArcSourcePoint(zero.Ax, plane.StartU, plane.StartV, plane.StartBound)
+	_, zeroR1, _ := revolveproof.ChainArcSourcePoint(zero.Ax, plane.EndU, plane.EndV, plane.EndBound)
+	phi0, _ := rp.Den.Phi0.Enclosure()
+	phi1, _ := rp.Den.Phi1.Enclosure()
 	span := proofbound.IntervalSub(phi1, phi0)
 	n := len(mesh.n.Triangles) / 2
 	angular, err := revolvemesh.AngularSequence(revolvemesh.AngularInput{
-		Phi0: rp.phi0, Phi1: rp.phi1, Den: rp.den,
+		Phi0: rp.Phi0, Phi1: rp.Phi1, Den: rp.Den,
 	}, n)
 	if err != nil {
 		t.Fatal(err)
@@ -78,8 +78,8 @@ func TestChainArcSweepAxisErrorChangesPublicMeshBound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	zeroZ0, _, _ := revolveproof.ChainArcSourcePoint(zero.ax, plane.StartU, plane.StartV, plane.StartBound)
-	zeroZ1, _, _ := revolveproof.ChainArcSourcePoint(zero.ax, plane.EndU, plane.EndV, plane.EndBound)
+	zeroZ0, _, _ := revolveproof.ChainArcSourcePoint(zero.Ax, plane.StartU, plane.StartV, plane.StartBound)
+	zeroZ1, _, _ := revolveproof.ChainArcSourcePoint(zero.Ax, plane.EndU, plane.EndV, plane.EndBound)
 	zeroArea, err := revolveproof.ChainArcAreaDensityAllow(zeroZ0, zeroR0, zeroZ1, zeroR1,
 		held.StartU, held.StartV, held.EndU, held.EndV, span, angular.Step, n)
 	if err != nil {
@@ -99,7 +99,7 @@ func TestChainArcSweepAxisErrorChangesPublicMeshBound(t *testing.T) {
 		{plane.EndU, plane.EndV, plane.EndBound},
 	} {
 		for l := range angular.Samples {
-			gap := zero.lift().SweptPointGap(zero.axisBound(), zero.xform,
+			gap := zero.Lift().SweptPointGap(zero.AxisBound(), zero.Xform,
 				source.u, source.v, source.bound, angular.SinIv[l], angular.CosIv[l],
 				mesh.n.Vertices[j*(n+1)+l])
 			vertexGapWithout = math.Max(vertexGapWithout, gap)

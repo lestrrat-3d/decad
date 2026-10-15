@@ -26,17 +26,17 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if !sp.arc || len(sp.spans) != 0 || len(sp.revolve.chains) != 1 ||
-		len(sp.revolve.chains[0].Segments) != 1 || sp.revolve.full ||
-		sp.revolve.sectionDelta != 0 || b.Kind() != BodySheet || len(b.Faces()) != 1 {
+	if !sp.arc || len(sp.spans) != 0 || len(sp.revolve.Chains) != 1 ||
+		len(sp.revolve.Chains[0].Segments) != 1 || sp.revolve.Full ||
+		sp.revolve.SectionDelta != 0 || b.Kind() != BodySheet || len(b.Faces()) != 1 {
 		return refuse("a chain arc Sweep mesh needs one straight source and one partial arc wall")
 	}
-	if _, ok := sp.revolve.chains[0].Segments[0].(lineSeg); !ok {
+	if _, ok := sp.revolve.Chains[0].Segments[0].(lineSeg); !ok {
 		return refuse("the chain arc Sweep meridian is not a line")
 	}
-	rp := sp.revolve.revolve()
-	resolved, err := revolveaxis.ResolveChain(ctx, sp.revolve.chains[0],
-		freeform.NewFreeformWork(), "chain arc Sweep tessellation", rp.chargedWalk, rp.ax.SnapTol)
+	rp := sp.revolve.Revolve()
+	resolved, err := revolveaxis.ResolveChain(ctx, sp.revolve.Chains[0],
+		freeform.NewFreeformWork(), "chain arc Sweep tessellation", rp.ChargedWalk, rp.Ax.SnapTol)
 	if err != nil {
 		return nil, err
 	}
@@ -45,12 +45,12 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 		return refuse("the chain arc Sweep needs one line strictly clear of the axis")
 	}
 	w, plane := resolved.Walks[0], resolved.Plane[0]
-	lift := rp.lift()
-	trueStartZ, trueStartR, ok := revolveproof.ChainArcSourcePoint(rp.ax, plane.StartU, plane.StartV, plane.StartBound)
+	lift := rp.Lift()
+	trueStartZ, trueStartR, ok := revolveproof.ChainArcSourcePoint(rp.Ax, plane.StartU, plane.StartV, plane.StartBound)
 	if !ok || trueStartR.Lo.Sign() <= 0 {
 		return refuse("the chain arc Sweep start is not proven clear of the denoted axis")
 	}
-	trueEndZ, trueEndR, ok := revolveproof.ChainArcSourcePoint(rp.ax, plane.EndU, plane.EndV, plane.EndBound)
+	trueEndZ, trueEndR, ok := revolveproof.ChainArcSourcePoint(rp.Ax, plane.EndU, plane.EndV, plane.EndBound)
 	if !ok || trueEndR.Lo.Sign() <= 0 {
 		return refuse("the chain arc Sweep end is not proven clear of the denoted axis")
 	}
@@ -71,8 +71,8 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	if samples[0][0].Z == samples[0][1].Z && samples[0][0].Rho == samples[0][1].Rho {
 		return refuse("the chain arc Sweep's meridian collapses")
 	}
-	angle0, ok0 := rp.den.Phi0.Enclosure()
-	angle1, ok1 := rp.den.Phi1.Enclosure()
+	angle0, ok0 := rp.Den.Phi0.Enclosure()
+	angle1, ok1 := rp.Den.Phi1.Enclosure()
 	if !ok0 || !ok1 {
 		return refuse("the chain arc Sweep has no enclosed angular interval")
 	}
@@ -103,14 +103,14 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 			continue
 		}
 		angular, err := revolvemesh.AngularSequence(revolvemesh.AngularInput{
-			Phi0: rp.phi0, Phi1: rp.phi1, Den: rp.den,
+			Phi0: rp.Phi0, Phi1: rp.Phi1, Den: rp.Den,
 		}, n)
 		if err != nil {
 			return nil, err
 		}
 		budget := proofbound.NewWorkBudget(ctx)
 		verts, deltaC, deltaR, err := revolvemesh.EmitRings(samples, angular,
-			lift.Basis(), ideal, rp.xform, false, budget)
+			lift.Basis(), ideal, rp.Xform, false, budget)
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +127,7 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 				if err := budget.Step(); err != nil {
 					return nil, err
 				}
-				gap := lift.SweptPointGap(rp.axisBound(), rp.xform,
+				gap := lift.SweptPointGap(rp.AxisBound(), rp.Xform,
 					source.u, source.v, source.bound, angular.SinIv[l], angular.CosIv[l],
 					verts[samples[0][j].At(l)])
 				vertexGap = math.Max(vertexGap, gap)
@@ -141,7 +141,7 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 		revolvemesh.EmitCellTriangles(samples[0][0], samples[0][1], n, func(tri [3]int) {
 			mesh.addTriangle(tri, faceNode(face))
 		})
-		if rp.reflected() {
+		if rp.Reflected() {
 			for i := range mesh.n.Triangles {
 				mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 			}

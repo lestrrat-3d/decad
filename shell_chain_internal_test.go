@@ -111,12 +111,12 @@ func TestRevolveShellOpeningSectionDelta(t *testing.T) {
 			require.NoError(t, err)
 			rp := shelled.n.Payload.(revolvePayload)
 			if !tc.displaced {
-				require.Zero(t, rp.sectionDelta, `an exact rim publishes no displacement`)
-				require.False(t, rp.sectionWhole)
+				require.Zero(t, rp.SectionDelta, `an exact rim publishes no displacement`)
+				require.False(t, rp.SectionWhole)
 				return
 			}
-			require.Positive(t, rp.sectionDelta)
-			require.True(t, rp.sectionWhole)
+			require.Positive(t, rp.SectionDelta)
+			require.True(t, rp.SectionWhole)
 		})
 	}
 }
