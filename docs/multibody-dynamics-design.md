@@ -1043,7 +1043,7 @@ A solid loft's mesh is the exact restatement of its held triangles
 (`docs/tessellation-design.md` §2's `loftPayload` row), so its mass takes §8.5's path and settles at
 the ladder's first step: `mass_properties_mesh.go` integrates the held triangles through the
 `tetraMoments` sums (the `/120` form) it shares with `mass_properties_faceted.go`, widened by the
-mesh proof's `volSymDiff` as dynamic-mass §2.2 states. `loft_moments.go`'s accumulator is not
+mesh proof's `volSymDiff` as dynamic-mass §2.2 states. `loftmesh.MassAccumulator` is not
 reused: its Volume and Centroid apply the exact twist corrections of chorded cells, which have no
 second-moment counterpart, while the restated triangles are uncorrected and their four-leg
 `volSymDiff` covers that gap.

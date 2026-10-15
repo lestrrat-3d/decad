@@ -354,9 +354,9 @@ func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload)
 		displacement = max(displacement, bound)
 	}
 	faces := b.Faces()
-	faceAt := make(map[*Face]int, len(faces))
+	faceAt := make(map[*topo.Face]int, len(faces))
 	for i, face := range faces {
-		faceAt[face] = i
+		faceAt[faceNode(face)] = i
 	}
 	faceOf := make([]int, len(sp.Tris))
 	for t, face := range sp.TriFaces {

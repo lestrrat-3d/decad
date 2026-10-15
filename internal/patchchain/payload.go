@@ -87,7 +87,7 @@ type Chain struct {
 
 // BodyPayload is PatchEdges's own record: the retiring receiver's own faces,
 // its already-proven Bounds, and each chain's proven plane — never a built
-// topology (unstitch.go's "held-B-rep-under-a-rigid-motion" idea, widened here
+// topology (internal/stitchrecord/unstitch.go's "held-B-rep-under-a-rigid-motion" idea, widened here
 // from one face to a whole face set plus the faces the patch mints on top of
 // it). Placed replays BuildBody from these same values under the composed
 // transform, exactly as the unstitch payload replays its own face build.

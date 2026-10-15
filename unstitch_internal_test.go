@@ -53,7 +53,7 @@ func unstitchOneChamferBand(t *testing.T) (src *Face, results []*Body, idx int) 
 // TestUnstitchChamferBandNormalAtBoundCoversSource is
 // docs/surface-design.md's T80: an unstitched chamfer band patch's own
 // NormalAt bound must still cover the source face's own normalBound — the
-// public-facing half of copyFaceUnderContext carrying that field forward
+// public-facing half of stitchrecord's copyFaceUnder carrying that field forward
 // rather than dropping it to zero.
 func TestUnstitchChamferBandNormalAtBoundCoversSource(t *testing.T) {
 	t.Parallel()
@@ -73,7 +73,7 @@ func TestUnstitchChamferBandNormalAtBoundCoversSource(t *testing.T) {
 // TestUnstitchPlacementOfNonzeroNormalBoundFaceRefuses is
 // docs/surface-design.md's T82: normalBound is dimensionless and a
 // placement's own rounding is a length, so composing them is unsound;
-// copyFaceUnderContext refuses a placed copy of a face whose normalBound is
+// stitchrecord's copyFaceUnder refuses a placed copy of a face whose normalBound is
 // nonzero rather than invent the missing term.
 func TestUnstitchPlacementOfNonzeroNormalBoundFaceRefuses(t *testing.T) {
 	t.Parallel()

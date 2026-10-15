@@ -137,9 +137,9 @@ func stitchBoxSheetsAtOffset(t *testing.T, doc *decad.Document, x0, y0, x1, y1, 
 // T76: T1's box (x∈[0,100], y∈[0,60], z∈[0,10]) and a second, otherwise
 // disjoint box (x∈[100,200], y∈[60,120], z∈[10,20]) sharing exactly ONE
 // corner — (100,60,10) — with no edge at all joining the two boxes there.
-// The shared vertex table (stitch_weld.go) merges the two bit-identical
+// The shared vertex table (internal/stitchrecord/plan.go) merges the two bit-identical
 // corners into one entry whether or not any edge connects them, so both
-// boxes weld cleanly under Table J and checkStitchClosure's own
+// boxes weld cleanly under Table J and stitchrecord.CheckClosure's own
 // directed-edge parity leg sees nothing wrong either: every edge still
 // bounds exactly one or two faces with correct parity. Only the vertex-link
 // audit sees that the six faces meeting at the shared corner (three from
@@ -282,7 +282,7 @@ func TestStitchDisplacedPatchStaysASheet(t *testing.T) {
 // (every held value's bound is zero) tells the pairs apart, and J5 alone is
 // why the rim and the patch stay unwelded — welding them would claim a
 // meeting the wall's own unit-conversion rounding never proved. Removing
-// J5's zero-bound condition from stitch_weld.go's classOf collapses the
+// J5's zero-bound condition from internal/stitchrecord/plan.go's classOf collapses the
 // free-edge count below from 12 to 4, because the four rim/patch pairs then
 // wrongly join.
 func TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch(t *testing.T) {
@@ -858,7 +858,7 @@ func TestStitchBoundedStitchedSolidGetsClearance(t *testing.T) {
 // T69: T58's own zero-bound box, Placed under a non-identity rigid motion,
 // reaches the identical gate T68 does by the other route — the placement's
 // own rigidRoundAllow widens every vertex bound rather than a certificate
-// weld's own class bound (stitch.go's "recorded weld" comment). Neither
+// weld's own class bound (internal/stitchrecord/build.go's "recorded weld" comment). Neither
 // route alone would be trusted; together they prove the gate reads the
 // vertex bound itself, not one particular cause of it. It now gets a real
 // Approximate Clearance row, exactly as the CURVE-welded case above does.

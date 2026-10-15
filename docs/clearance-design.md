@@ -192,7 +192,7 @@ vertices, and the interior witnesses from the payload's own recorded triangle
 centroids for that face (`docs/surface-design.md` §6.4's `Tris`/`TriFaces`),
 filtered by the region's own `classify` call as a reject-only confirmation.
 It is admitted whenever the recorded triangle set exists (an all-planar body,
-open or closed); a placement's own widened vertex bound (`stitch.go`'s
+open or closed); a placement's own widened vertex bound (`internal/stitchrecord/build.go`'s
 `rigidRoundAllow`) or a certificate weld's own nonzero class bound no longer
 refuses it. Instead, `newBodyGeomBudget` charges the body's own largest
 proven vertex bound into `bodyGeom.delta` (`stitchweld.MaxBound`,

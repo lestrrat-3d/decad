@@ -51,10 +51,10 @@ type Edge struct {
 	// (root denotation.go): non-zero only for an edge a builder minted one for —
 	// today a straight prism's rim edge (internal/prismrecord/build.go) and a revolve's
 	// junction edge (internal/revolveplan/build.go) — and propagated unchanged, composing
-	// xform, by every copier that reproduces the same curve (root stitch.go's
-	// rebuildStitchTopology, root unstitch.go's copyFaceUnderContext,
-	// patchchain's copyFacesUnder). It is what root stitch_weld.go's
-	// buildStitchWeldPlan reads to lift Table J's J5 for a bounded pair. Zero
+	// xform, by every copier that reproduces the same curve (stitchrecord's
+	// rebuildTopology, stitchrecord's copyFaceUnder,
+	// patchchain's copyFacesUnder). It is what internal/stitchrecord/plan.go's
+	// BuildPlan reads to lift Table J's J5 for a bounded pair. Zero
 	// ("no certificate") for every edge no builder or copier stamps.
 	Denot denotation.CurveToken
 	// Curve is the edge's tagged geometry in its internal variant. Root

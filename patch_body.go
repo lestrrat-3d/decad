@@ -14,16 +14,16 @@ import (
 // This file is PatchEdges of docs/surface-design.md §5.2: a planar fill of
 // one or more closed chains of a body's own free edges, amended by this PR
 // from a one-chain rule to "one or more chains, each proven independently"
-// (§5.2's own amendment note). It reuses unstitch.go's held-B-rep-under-a-
+// (§5.2's own amendment note). It reuses internal/stitchrecord/unstitch.go's held-B-rep-under-a-
 // rigid-motion mechanism — record the receiver's own faces and a rigid
 // placement, never a built topology, and replay under a composed motion —
 // narrowed here to a whole face SET rather than one face, and extended with
-// the new faces a chain fill mints. It also reuses stitch.go's per-old-edge
-// sharing cache (rebuildStitchTopology's edgeFor) for copying a face SET
-// rather than welding one, stitch_weld.go's newStitchVertexTable is NOT
+// the new faces a chain fill mints. It also reuses internal/stitchrecord/build.go's per-old-edge
+// sharing cache (rebuildTopology's edgeFor) for copying a face SET
+// rather than welding one, internal/stitchrecord/plan.go's NewVertexTable is NOT
 // needed here — a patch never merges two DIFFERENT edges into one, it only
 // gives an already-free edge a SECOND face, so the same-pointer cache alone
-// (patchchain.copyFacesUnder's edgeFor) is what stitch.go's weld groups exist to
+// (patchchain.copyFacesUnder's edgeFor) is what stitchrecord's weld groups exist to
 // generalize beyond.
 //
 // Four gates decide the selection, in order, each reject-only

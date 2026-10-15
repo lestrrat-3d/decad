@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/measurement"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
@@ -145,21 +143,4 @@ func boxPtrToInternal(b *Box) *measurement.Box {
 	}
 	result := boxToInternal(*b)
 	return &result
-}
-
-// chargePlacement widens a face-copy body's readings for its placement's own
-// departure from orthonormal: the copy denotes the source face carried
-// through the placement's held basis read exactly, and its area and lengths
-// are the source's.
-func chargePlacement(body *Body, xform r3.Transform) error {
-	l, err := massmoment.PlacementRotation(xform)
-	if err != nil {
-		return err
-	}
-	c, err := massmoment.MapChargeOf(l)
-	if err != nil {
-		return err
-	}
-	prismrecord.ChargeBodyMap(bodyNode(body), c)
-	return nil
 }

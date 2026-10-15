@@ -709,7 +709,7 @@ solid has no hole to fill.
 receiver from its own face set, never by attaching the new face to the
 receiver's own topology in place: a retired body stays readable, and a
 caller may still hold it, so mutating its edges would corrupt what they
-read. This is `unstitch.go`'s own held-B-rep-under-a-rigid-motion mechanism
+read. This is `internal/stitchrecord/unstitch.go`'s own held-B-rep-under-a-rigid-motion mechanism
 — record the receiver's own faces, never a built topology, and replay under
 a composed motion — widened from one face to a whole face set, plus the
 faces the patch mints on top of it; gate 3's own proof is never replayed,
@@ -772,7 +772,7 @@ undecidable row admits nothing (`CLAUDE.md`'s reject-only rule). `Line3`
 alone answers it, and answers it **vacuously**: a straight edge's whole
 geometry lives in its two vertices, which J4 already compares, so J3 states
 nothing further about the variant itself to prove, and J5's vertex half is
-exactly what `stitchVertexTable`'s own merge rule enforces (`stitch_weld.go`)
+exactly what `stitchrecord.VertexTable`'s own merge rule enforces (`internal/stitchrecord/plan.go`)
 — two vertices merge into one table class only when both carry a zero bound,
 so a shared class already proves J4 and J5's vertex half together. A free
 edge whose `Curve` is `Circle3`, `Arc3`, `NURBSCurve` or `FacetedCurve`
@@ -822,11 +822,11 @@ and its shared vertex (`internal/revolveplan/build.go`; a revolve's SEAM — its
 copy at `phi0`/`phi1` — mints none, since it never has a partner to weld
 against) — and propagated unchanged, composing the rigid motion it is applied
 under, by every copier that reproduces the same geometry:
-`rebuildStitchTopology` (`stitch.go`), `copyFaceUnderContext` (`unstitch.go`)
+`stitchrecord`'s `rebuildTopology` (`internal/stitchrecord/build.go`), `stitchrecord`'s `copyFaceUnder` (`internal/stitchrecord/unstitch.go`)
 and `copyFacesUnder` (`internal/patchchain/body.go`). Two edges (or two vertices)
 admit under the certificate when both carry a non-zero token, the ids are
 equal, AND the motions they are stated under are equal
-(`sameCurve`) — a placement breaks the certificate: two edges that shared a
+(`denotation.SameCurve`) — a placement breaks the certificate: two edges that shared a
 denotation before one body moved no longer denote the same curve **at the
 same place**, so the motion is part of the comparison, not merely the
 identity. Two independently built bodies never share a token, whatever their
@@ -836,12 +836,12 @@ the same document-local counter, which never repeats and never resets.
 
 **The certificate admits; J3/J4's bit-identical comparison stays a
 reject-only guard layered on top of it, and bit-identity alone never
-admits.** `stitchVertexTable.classOf` (`stitch_weld.go`) gains a SECOND merge
+admits.** `stitchrecord.VertexTable.classOf` (`internal/stitchrecord/plan.go`) gains a SECOND merge
 route beside the existing zero-bound one: two vertices with the bit-identical
 held key that also carry an equal non-zero token merge into one class too,
 whatever bound either carries — narrowed by the same bit-identical key the
 zero-bound route already requires, so a token match at a DIFFERENT held
-coordinate never merges. `buildStitchWeldPlan`'s own edge gate widens from
+coordinate never merges. `stitchrecord.BuildPlan`'s own edge gate widens from
 "Line3 only" to "Line3, or a non-zero token": a `Line3` pair still joins
 vacuously (J3 states nothing beyond what the shared vertex class already
 proves), while any other pair — a revolve's own `Circle3`/`Arc3` junction,
@@ -914,8 +914,8 @@ itself (`docs/loft-design.md` §5's own paired-station walk can never leave a
 gap or a triple junction), so the loft audit's own doc comment never needed
 to claim more than contact. `Stitch` builds its triangle set by welding
 independently-authored faces, where closure is exactly the open question, so
-it runs its own explicit **directed-edge parity leg** (`stitch.go`'s
-`checkStitchClosure`) beside the reused audit: every edge must be adjacent to
+it runs its own explicit **directed-edge parity leg** (`internal/stitchrecord/build.go`'s
+`CheckClosure`) beside the reused audit: every edge must be adjacent to
 one or two faces, and a two-face edge must be traversed by exactly one
 forward and one backward coedge, with a coedge-use count that disagrees with
 the edge's own adjacent-face count also a violation (`ErrDegenerate`, Table
@@ -946,7 +946,7 @@ sheet, and `Stitch` reuses it unchanged for a solid: the box worked example
 sums to 15200 mm² at a zero bound, the four walls' 3200 mm² (T1) plus the two
 patches' 6000 mm² apiece (T2).
 
-**The volume is `loft_moments.go`'s exact-rational tetrahedron sum over the
+**The volume is `loftmesh.MassAccumulator`'s exact-rational tetrahedron sum over the
 assembled triangle set**, and its bound is zero only when every held vertex
 is exact AND that exact rational is itself representable in `units.Value`'s
 `float64` magnitude — never unconditionally. Every held vertex is exact
@@ -964,7 +964,7 @@ the certificate proves coincident by identity, rather than by a proven-zero
 bound, is no longer zero-bound itself — the triangle set the tetrahedron sum
 runs over is only within that class's own bound of the body's true vertices,
 never `Exact` regardless of what the exact-rational sum over the HELD
-vertices happens to round to. `evalStitchContext` charges this as
+vertices happens to round to. `stitchrecord.Build` charges this as
 `massDelta`, `sweptVolumeAllow(massDelta, areaUpper)` widening the same term
 a PLACEMENT's own rounding already widens (`delta`) rather than a second,
 parallel proof: `massDelta` is `delta` further widened by the largest bound
@@ -975,7 +975,7 @@ sums each already-built face's own `area`/`areaBound` through `boundedAdd`
 (this section, above), and each face's own bound already covers a bounded
 weld on its own boundary. `Centroid` and `Bounds` follow the identical rule
 over their own publication rounding, `Bounds` needing nothing further since
-`stitchBounds` already inflates each operand's own box by its own `Bound`.
+`stitchrecord`'s `bounds` already inflates each operand's own box by its own `Bound`.
 
 **A curved face's flux term is not a tetrahedron sum**, and a per-surface
 closed-form flux integral over an arbitrary trimmed analytic patch is its own
@@ -984,8 +984,8 @@ and `Torus`. Together they give a second admission rule beside the
 tetrahedron sum's: **every face is either a `Plane` bounded entirely by
 `Line3` edges (the tetrahedron path, unchanged), or a variant with a landed
 flux arm, and every face carries a zero `normalBound`, and every revolve
-face's tag is exactly its record.** `stitch_flux.go` owns the flux arms and
-the tag gate (below), `stitchRuleSAdmits` owns the second rule below.
+face's tag is exactly its record.** `internal/stitchrecord/flux.go` owns the flux arms and
+the tag gate (below), `stitchrecord.RuleSAdmits` owns the second rule below.
 
 **The `Cone` arm needs no general trimmed-boundary contour sum**, for the
 identical reason `Plane` and `Cylinder` do not: this evaluator's own scope
@@ -1064,9 +1064,9 @@ Because a zero-loop face has no boundary to sum `½∮p×dr` over, `S_F` is
 exactly the zero vector by construction — no trig integral to collapse,
 unlike `Cylinder`'s full-circumference argument — so the `(Center −
 anchor)·S_F` cross term vanishes for EVERY anchor, and `flux_F` is exactly
-`K_F` regardless of which anchor `stitchCurvedMass` is handed. That is what
-makes this arm safe to reach with the zero anchor `evalStitchContext`
-substitutes when the shared vertex table is empty (stitch.go's own doc
+`K_F` regardless of which anchor `stitchrecord.CurvedMass` is handed. That is what
+makes this arm safe to reach with the zero anchor `stitchrecord.Build`
+substitutes when the shared vertex table is empty (internal/stitchrecord/build.go's own doc
 comment at that substitution, written against exactly this fixture before
 this arm landed). The first moment follows the general shift-of-origin
 identity for a region of volume `V` centred at `Ĉ`: `∫_Ω(x_i−a_i)dV =
@@ -1074,11 +1074,11 @@ V·(Ĉ_i−a_i)`, valid here because a zero-loop `Sphere` face is never one of
 several faces sharing a boundary with others — it IS the whole closed
 boundary of the ball it bounds, on its own — so `M_i = (flux_F/3)·(Center_i
 − anchor_i)`, `flux_F/3` being this face's own signed volume by the same
-normalization `stitchCurvedMass`'s own `vol := fluxSum/3` uses for the
+normalization `stitchrecord.CurvedMass`'s own `vol := fluxSum/3` uses for the
 total.
 
-A zero-loop `Sphere` face also means `checkStitchClosure`'s directed-edge
-parity leg and the vertex-link audit (`auditVertexLinksForStitchFaces`) both
+A zero-loop `Sphere` face also means `stitchrecord.CheckClosure`'s directed-edge
+parity leg and the vertex-link audit (`stitchrecord.AuditVertexLinks`) both
 walk an empty edge set and pass VACUOUSLY — neither proves anything about
 this fixture's manifoldness, and closure and non-self-intersection rest
 entirely on Rule S's own construction proof (the revolve axis argument,
@@ -1167,8 +1167,8 @@ the tag and charge none of that, and no per-face term could: each arm reads its
 own numbers off its own tag, so a departed tag leaves the modelled boundary open
 by an amount whose flux depends on the anchor. A side climbing 5e-10 over a
 unit run, tagged a `Cylinder`, published a volume 2.1e-9 mm³ off its record's
-under a 7.0e-15 bound. So `stitch.go` runs `stitch_flux.go`'s
-`stitchFluxTagsDenoted` over the unplaced operand faces, after Rule S and
+under a 7.0e-15 bound. So `internal/stitchrecord/build.go` runs `internal/stitchrecord/flux.go`'s
+`fluxTagsDenoted` over the unplaced operand faces, after Rule S and
 before any arm: every face carrying a denoted surface must have every leaf of
 it a point and its basis exactly orthonormal, and then its tag must equal it
 in exact rationals in the terms its arm reads — a `Cylinder`'s every recorded
@@ -1202,7 +1202,7 @@ the arc's own bulge. No construction reaching `Stitch` today puts such a
 face through that path without ALSO putting a genuinely curved surface
 elsewhere in the same closed set (which already refused before
 triangulation), so the shape was latent rather than live — closed here
-regardless, by `faceIsTetrahedronEligible`'s own edge-kind check
+regardless, by `stitchrecord.FaceIsTetrahedronEligible`'s own edge-kind check
 (stitch.go), rather than left for a future fixture to discover it live.
 
 **Rule S — the construction-proof gate a curved closed set needs, since the
@@ -1216,7 +1216,7 @@ mesh can be wrong in both directions. So a curved closed set's only
 available proof of non-self-intersection is the one its own SOURCE
 feature's construction already carries: `internal/topo`'s `ProvesSimple`,
 built for `Verify`'s own Table V leg 4 and reused here unchanged. Before the
-flux arms ever run, `stitchRuleSAdmits` requires every operand face to
+flux arms ever run, `stitchrecord.RuleSAdmits` requires every operand face to
 descend from exactly ONE source body (`topobuild.OperandBodies`), whose own
 payload `topo.ProvesSimple` admits. A full-turn `revolvePayload` clear of
 the axis (an annular revolve sheet) admits; a `bodyPatchPayload` admits only
@@ -1277,7 +1277,7 @@ carries one.
 **The vertex-link audit — manifoldness's own remaining gap, reject-only on
 every arm.** Rule S proves non-self-intersection; it says nothing about
 whether the faces and edges meeting at one VERTEX stay in one connected
-piece, which `checkStitchClosure`'s own directed-edge parity leg does not
+piece, which `stitchrecord.CheckClosure`'s own directed-edge parity leg does not
 ask either (docs/surface-design.md's own record: a profile that touches its
 revolve axis at more than one isolated point can pinch a revolved boundary
 at those points, non-manifold there even though the parity leg and Rule S
@@ -1288,12 +1288,12 @@ way through the all-planar path). The composite sweep's own
 which takes no body because a vertex-count leg against one would prove
 nothing about its own two inputs, is the existing reject-only mechanism for
 exactly this, and `Stitch` runs it unconditionally, immediately after
-`checkStitchClosure` proves the directed-edge parity leg and before Table
+`stitchrecord.CheckClosure` proves the directed-edge parity leg and before Table
 C's own closure/curvature branches decide anything at all — on every build
 arm, all-planar or curved, open or closed alike, never the curved-closed
 arm alone. The all-planar arm has a reachable public fixture that trips it:
 two boxes sharing one corner vertex with no shared edge (§15's T76)
-weld cleanly under Table J, and both `checkStitchClosure` and the reused
+weld cleanly under Table J, and both `stitchrecord.CheckClosure` and the reused
 crossing audit admit the result, since neither one asks whether the faces
 meeting at the shared vertex stay in one connected piece — the vertex-link
 audit is the only leg standing between that shape and a falsely published
@@ -1354,7 +1354,7 @@ reused audit's own sentinel for the closed case: R9 and R10 are its
 
 **Placing a stitched body replays the recorded weld; it never re-derives
 it.** `stitchPayload` records the operand faces and Table J's own admission
-(`stitch_weld.go`'s `stitchWeldPlan`) — never a built topology — and
+(`internal/stitchrecord/plan.go`'s `Plan`) — never a built topology — and
 `Transform`/`Copy` re-evaluate from those same two values
 under the composed transform. A rigid motion rounds every coordinate, so
 re-running Table J against the PLACED, rounded values would admit nothing —
@@ -1407,7 +1407,7 @@ shape no caller asked for.
 `Unstitch` frees was welded from a proven-coincident pair, so Table J
 re-admits every one of them and re-stitching the results reproduces the body
 — now true for a BOUNDED weld too, not only an exact one, because
-`copyFaceUnderContext` propagates the CURVE half of the shared-denotation
+`stitchrecord`'s `copyFaceUnder` propagates the CURVE half of the shared-denotation
 certificate (composing the applied motion) rather than dropping it, so the
 second `Stitch`'s own certificate route re-admits exactly the pair the
 original build already proved coincident (§6.2's amendment, §15's T42).
@@ -1426,13 +1426,13 @@ trip, so it stays free either way: the round trip closes what was welded
 before Unstitch, and leaves free what was already free, reproducing the
 original sheet's own shape rather than losing it to every edge going free.
 
-**`unstitchPayload` (`unstitch.go`) is the held-B-rep-under-a-rigid-motion
+**`unstitchPayload` (`internal/stitchrecord/payload.go`) is the held-B-rep-under-a-rigid-motion
 mechanism restricted to one face**, `stitchPayload`'s own idea narrowed from a
-whole welded set to a single held `*Face`: it records that face and the
+whole welded set to a single held `*topo.Face`: it records that face and the
 retiring receiver's own already-proven `Bounds`, never a built topology, and
 `Placed()` deep-copies fresh surface, loop, edge and vertex geometry under the
 composed transform every time, exactly as `stitchPayload.Placed` replays
-`evalStitchContext`. Nothing in either result aliases the receiver's own
+`stitchrecord.Build`. Nothing in either result aliases the receiver's own
 `*Face`, `*Edge` or `*Vertex`, so a retired receiver stays readable and
 unmodified for any caller still holding it.
 
@@ -1453,7 +1453,7 @@ that displacement is a length, so no such composition covers it, and this
 package carries no separate term bounding how far a placement's own rounding
 rotates the tag frame off the true rotation — so a placed copy of a face
 whose `normalBound` is nonzero is `ErrUnsupported` rather than an invented
-bound. `stitch.go`'s `rebuildStitchTopology` and `PatchEdges`'s
+bound. `internal/stitchrecord/build.go`'s `rebuildTopology` and `PatchEdges`'s
 `copyFacesUnder` (`internal/patchchain/body.go`) carry the same three fields the same
 way, refusals included, so neither a stitched nor a patched body's own later
 placement reopens this gap, and neither publishes a reading tighter than its
@@ -1464,8 +1464,8 @@ denotes** (`topo.Face.Denoted`, `docs/evaluator-design.md` §6), which `NormalAt
 proves the face's normal against in place of its tag. Unlike `normalBound`, it composes
 with any placement: it is an exact enclosure, so a placed copy holds its exact
 image under the placement's held basis and translation (`topo.Face.DenotedUnder`),
-never a re-reading of the copy's rounded tag. `copyFaceUnderContext`,
-`rebuildStitchTopology` and `PatchEdges`'s `copyFacesUnder` (`internal/patchchain/body.go`) all carry it.
+never a re-reading of the copy's rounded tag. `stitchrecord`'s `copyFaceUnder`,
+`stitchrecord`'s `rebuildTopology` and `PatchEdges`'s `copyFacesUnder` (`internal/patchchain/body.go`) all carry it.
 
 **A planar cap's copy carries its source's `CapRecord` under the identity
 placement and none under any other.** The record is the plane the cap denotes,
@@ -1480,7 +1480,7 @@ entirely by straight (`Line3`) edges on a `Plane` surface, and the sound
 whole-receiver box otherwise.** A straight-edged planar face's enclosed
 region is the polygon its own held vertices describe: the extreme along any
 world axis is always attained at a vertex, so `faceBounds`
-(`unstitch.go`) reads that box directly off the already-placed copy's own
+(`internal/stitchrecord/unstitch.go`) reads that box directly off the already-placed copy's own
 vertex coordinates — no integration, no new proof, the same vertex-derived
 reading every other planar measurement already publishes. A box's T3 worked
 example is exactly this case: each of the six unstitched sheets reports its
@@ -1489,7 +1489,7 @@ own flat slab (the bottom `(0,0,0)`–`(100,60,0)`, the top
 whole box, and the six boxes' union still spans the original.
 
 Every other face falls back to the receiver's own whole box
-(`unstitchBounds`, `unstitch.go`) — sound, because a face's extent is always
+(`unstitchBounds`, `internal/stitchrecord/unstitch.go`) — sound, because a face's extent is always
 a subset of the body it came from, but not proven tight. This covers a
 CURVED surface (a cylinder wall bulges past the two seam vertices its own
 loop holds) and, less obviously, a PLANAR surface with any non-`Line3` edge:
@@ -1997,7 +1997,7 @@ occupied-volume proof.
 **A stitched `BodySolid` is a different case from every sheet above, and its
 own mesh follows §14 Table D row 5.** A
 stitched solid is not a sheet — Table X's whole subject — so nothing above
-governs it. A CLOSED, all-planar stitched body (`stitchAllTetrahedronEligible`,
+governs it. A CLOSED, all-planar stitched body (`stitchrecord.AllTetrahedronEligible`,
 §6.4: every face a `Plane` bounded entirely by `Line3` edges, zero
 `normalBound`) restates the triangle set `Stitch`'s own build already
 assembled and audited (`tessellate_stitch.go`), the same shape
@@ -2022,7 +2022,7 @@ vertex-link safety net for an open boundary vertex's path-shaped link.
 Attribution holds with no role lookup at all —
 `docs/tessellation-design.md` §4's own point about a stitched body's
 non-unique roles — because `stitchPayload.TriFaces` and `Body.Edges()`'s own
-`Faces()` both name the identical LIVE face pointer `rebuildStitchTopology`
+`Faces()` both name the identical LIVE face pointer `stitchrecord`'s `rebuildTopology`
 built, so the mesh side and the body side of the audit agree by construction,
 never by coincidence or by a second geometric test.
 
@@ -2778,10 +2778,10 @@ The row-9 curved-mesh obligations are:
 | T32 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, which proves the flux arms against the unrelated revolve engine rather than against its own arithmetic |
 | T33 | T31's fixture swept across a family of radii and heights | `\|published − analytic\| <= Bound` on `Volume` and each `Centroid` coordinate for every member |
 | T34 | a surface-extruded tube capped on both rims by `PatchEdges` in one call, stitched (`TestStitchPatchCappedTubeClosesToASolid`) | `Kind() == BodySolid`; `Volume` 1000π mm³, `Area` 400π mm², `Centroid` (0, 0, 5), all `Approximate`; `Edges(Free())` matches nothing — Rule P admits: the receiver's own `prismPayload` proves simple under Rule S, and each of the two chains is the receiver's own complete end rim under its own shared level id |
-| T35 | a hand-built two-body face set, driven directly at `stitchRuleSAdmits` (internal — Table J's own J5 admits a free `Line3` edge alone, so no two curved rims from different features ever weld into a closed set through the public seam to reach this gate at all) | `stitchRuleSAdmits` reports `false` |
+| T35 | a hand-built two-body face set, driven directly at `stitchrecord.RuleSAdmits` (internal — Table J's own J5 admits a free `Line3` edge alone, so no two curved rims from different features ever weld into a closed set through the public seam to reach this gate at all) | `stitchrecord.RuleSAdmits` reports `false` |
 | T36 | `offAxisSemicircleSketch` revolved a full turn as a surface, stitched alone | closes to a solid from T53 onward |
-| T37 | a hand-built face carrying a `NURBSSurface`, driven directly at `stitchFaceFluxAndMoment` (internal — `PatchEdges` itself refuses any chain carrying a `NURBSCurve` edge, so a free-form-walled sheet can never be closed through the public seam at all) | `ErrUnsupported` (R8), permanently: `NURBSSurface` exports no control net to integrate |
-| T38 | a hand-built face carrying a nonzero `normalBound`, driven directly at `stitchFaceFluxAndMoment` (internal — a fillet or chamfer's `Unstitch`-then-`Stitch` round trip never re-closes, §6.5's own "no further" limit for any non-all-planar body, so no public fixture reaches this gate) | `ErrUnsupported` (R8) |
+| T37 | a hand-built face carrying a `NURBSSurface`, driven directly at `stitchrecord.FaceFluxAndMoment` (internal — `PatchEdges` itself refuses any chain carrying a `NURBSCurve` edge, so a free-form-walled sheet can never be closed through the public seam at all) | `ErrUnsupported` (R8), permanently: `NURBSSurface` exports no control net to integrate |
+| T38 | a hand-built face carrying a nonzero `normalBound`, driven directly at `stitchrecord.FaceFluxAndMoment` (internal — a fillet or chamfer's `Unstitch`-then-`Stitch` round trip never re-closes, §6.5's own "no further" limit for any non-all-planar body, so no public fixture reaches this gate) | `ErrUnsupported` (R8) |
 | T39 | `annularSketch` revolved a full turn as a surface | `Verify` reads `Validity.Outcome == ValidityValid` with no `Validity.Diagnostics`, admitted by construction: `revolveplan.Payload.ProvesSimple` holds because the sweep is exactly one full turn and the radial minimum is proven clear of the axis |
 | T40 | `annularSketch` revolved a quarter turn as a surface | `Verify` stays `Validity.Outcome == ValidityUndecided` with one `DiagUndecidedValidity`: a partial turn earns no construction admission |
 | T41 | two INDEPENDENT `Extrude` calls building the identical profile at the identical Symmetric extent, both `WithSurfaceResult()` | first, the premise: a rim vertex of each holds a bit-identical coordinate and an identical non-zero bound; then `Stitch(a, b)`: `Kind() == BodySheet`, and `Edges(Free())` resolves to the full 16 edges, none welded — the proof the CURVE certificate is an identity check, never a tolerance, since each independent build mints its own fresh `curveID` |
@@ -2799,8 +2799,8 @@ The row-9 curved-mesh obligations are:
 | T53 | `offAxisSemicircleSketch` revolved a full turn as a surface, stitched alone — one `Cylinder` wall and one `Torus` wall spanning exactly the tube's own outer half, `φ ∈ [−π/2, π/2]` | `Kind() == BodySolid`; `Volume` and `Area`, `Approximate`, each enclosing its own hand-derived (Pappus, over the 2D half-disc profile) analytic value within `Bound`; `Centroid` (5, 0, 0), `Approximate`; `Edges(Free())` matches nothing — this replaces `TestStitchTorusFaceStaysUnsupported`, whose whole subject (T36) this row retires |
 | T54 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` agree within the two independently-composed bounds — the independent-producer cross-check, proving the `Torus` arm against the unrelated revolve engine rather than against its own arithmetic. The matching `Centroid` comparison is real but WEAK for this fixture: the direct revolve engine's own centroid bound comes out about 80 mm wide for this 20 mm-wide solid — clear of the roughly 460 mm the `Sphere` arm's own cross-check hits for a profile touching the axis at both poles, since this fixture stays off the axis, but still far too wide to be decisive on its own; T53 and T55 carry the tight, decisive centroid proof |
 | T55 | T53's fixture swept across a family of `Major`/`Minor` radii and axial centres | `\|published − analytic\| <= Bound` on `Volume` and `Centroid` for every member |
-| T56 | a hand-built `Torus` face whose `Axis` is not exactly a signed coordinate vector, or whose `Center` sits off that axis line, driven directly at `stitchFaceFluxAndMoment` (internal — every public fixture revolves about `uAxis`, coordinate-aligned through the origin, so no public fixture reaches this gate) | `ErrUnsupported` (R8): this evaluator has no sound bound for `Major`/`Minor`'s own rounding off a coordinate-aligned axis |
-| T57 | a hand-built `Torus` face whose two rims sit at axial offsets from `Center` other than exactly `±Minor` (a narrower window, a wider one, or both rims on the same side), driven directly at `stitchFaceFluxAndMoment` (internal — every reachable revolve wall junction in this tree happens to land on the exact half window, so no public fixture reaches this gate) | `ErrUnsupported` (R8): this evaluator has no sound way to recover a narrower angular window without an unbounded trig computation |
+| T56 | a hand-built `Torus` face whose `Axis` is not exactly a signed coordinate vector, or whose `Center` sits off that axis line, driven directly at `stitchrecord.FaceFluxAndMoment` (internal — every public fixture revolves about `uAxis`, coordinate-aligned through the origin, so no public fixture reaches this gate) | `ErrUnsupported` (R8): this evaluator has no sound bound for `Major`/`Minor`'s own rounding off a coordinate-aligned axis |
+| T57 | a hand-built `Torus` face whose two rims sit at axial offsets from `Center` other than exactly `±Minor` (a narrower window, a wider one, or both rims on the same side), driven directly at `stitchrecord.FaceFluxAndMoment` (internal — every reachable revolve wall junction in this tree happens to land on the exact half window, so no public fixture reaches this gate) | `ErrUnsupported` (R8): this evaluator has no sound way to recover a narrower angular window without an unbounded trig computation |
 | T58 | T3's stitched box (`stitchBoxSheets`), `Tessellate(0.1 mm)` | exactly 12 triangles and 8 vertices; every vertex bit-equal to one of the box's 8 corners; `len(SourceFaces()) == 12` over exactly 6 distinct faces, 2 triangles each; `Bound()` exactly zero; the tetrahedron sum over the mesh equals 60000 mm³ to the bit; every directed edge occurs once with its reverse once |
 | T59 | T58's box transformed by a translation far from the origin, then a rotation | `Bound()` is strictly positive and equals the body's own largest `Vertex.Bound()`; 12 triangles unchanged; the mesh's integrated volume encloses 60000 mm³ within the published bound — the placement-delta route to a nonzero per-face bound |
 | T60 | T42's bounded-rim stitched solid (`TestStitchClosesABoundedPatchedWallWithChargedVolumeBound`'s fixture: a `Symmetric` surface-extruded wall, `PatchEdges`-capped, welded by the CURVE certificate) at identity, no placement in play | `Bound()` strictly positive and equal to the largest vertex bound; `areaSlack` strictly positive — the independent, class-bound route to a nonzero per-face bound, which T59 alone cannot distinguish from a placement-only charge |
@@ -2813,18 +2813,18 @@ The row-9 curved-mesh obligations are:
 | T67 | a small stitched box wholly inside a large plain block, boxes meeting | the solid-solid path's own strict-containment certificate: `Interfering`, exactly one `Interference` row reusing the contained box's own `Volume`, no `Clearance` row — reached through the clearance kernel's own carrier model alone, with neither operand ever tessellated |
 | T68 | T42's own certificate-welded stitched solid (nonzero vertex bound at identity) against a plain block with a real box-proven gap, `Verify(WithClearances())` | a carrier model built from the body's own topology; `Sound` with exactly one `Clearance` row, honestly `Approximate` over a positive `Bound` — the body's own largest proven vertex bound (`stitchweld.MaxBound`) is charged into `bodyGeom.delta` and widens the interval once, rather than the bound refusing a model outright. Shown-to-fail: restoring the zero-vertex-bound gate on the `stitchPayload` arm turns this pair back to `Suspect` with `DiagUndecidedClearance` and no row |
 | T69 | T58's box transformed under a non-identity rigid motion, same pairing as T68 | identical outcome, reached by the other route: the placement's own `rigidRoundAllow` widens every vertex bound rather than a certificate weld's own class bound — neither T68 nor T69 alone would be trusted to test that the charge reads the vertex bound itself rather than one particular cause of it |
-| T70 | a hand-built stitched face set whose recorded triangle list repeats a directed edge, driven directly at `tessellateStitch` (internal — `checkStitchClosure` already catches this at build time, so no public fixture reaches this gate) | the audit refuses and no partial mesh is returned |
+| T70 | a hand-built stitched face set whose recorded triangle list repeats a directed edge, driven directly at `tessellateStitch` (internal — `stitchrecord.CheckClosure` already catches this at build time, so no public fixture reaches this gate) | the audit refuses and no partial mesh is returned |
 | T71 | `Union` of T58's box with a plain, disjoint `Extrude` block (`TestStitchSolidUnionComposesTheCorrectVolume`) | succeeds: `Exact` volume, the exact sum of both operands' own volumes, zero bound, two lumps — the mesh-boolean analog of `TestUnionDisjointCubes` over a stitched operand; `requireVolumeProvingPayload`'s `stitchPayload` arm no longer refuses a CLOSED, all-planar, zero-vertex-bound stitched operand. Shown-to-fail: reverting `tessellateStitch`'s `symDiffOK` publication to always `false` turns this `NoError` red with the volume-proof `ErrUnsupported` again |
 | T72 | T58's box and a plain block crossing it cleanly — no operand face landing on the other operand's own face plane, unlike T66's own fixture (`TestStitchOverlappingSolidReportsRealInterference`) | `Interfering`; exactly one `Interference` row whose proven interval encloses the analytic overlap volume; no `Clearance` row — this replaces `TestStitchOverlappingSolidStaysUndecided`, whose whole subject (a stitched solid's overlap ever reaching a real `Interference` row) this row retires |
 | T73 | T58's box transformed under a non-identity rigid motion, then `Union`ed with a plain block (`TestStitchPlacedSolidUnionStillRefusesOnTheVolumeProof`) | still `ErrUnsupported`, the volume-proof refusal: a placement's own `rigidRoundAllow` widens every vertex bound, so `stitchweld.ZeroBound` no longer holds |
 | T74 | T42's own certificate-welded stitched solid (nonzero vertex bound at identity), `Union`ed with a plain block (`TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof`) | still `ErrUnsupported`, the volume-proof refusal, reached by the CERTIFICATE-WELD route rather than T73's placement route — neither test alone would prove the gate reads the vertex bound itself rather than one particular cause of it |
-| T75 | a hand-built planar face bounded by a 10x10 outer square and a 2x2 hole square, driven directly at `triangulateStitchFaces` (internal — `TestTriangulateStitchFacesTilesAHoledFaceExactly`; every public stitched fixture in this tree happens to be hole-free) | every returned triangle has strictly positive area and attributes to the one face handed in; the triangles' own summed area is bit-exactly the analytic 96 mm² outer-minus-hole region — a gap or an overlap would miss it in one direction or the other. Shown-to-fail: dropping hole-bridging (`triangulate2DContext`'s own `holes` slice) turns the summed area into the outer square's whole 100 mm², missing the assertion |
+| T75 | a hand-built planar face bounded by a 10x10 outer square and a 2x2 hole square, driven directly at `stitchrecord.TriangulateFaces` (internal — `TestTriangulateStitchFacesTilesAHoledFaceExactly`; every public stitched fixture in this tree happens to be hole-free) | every returned triangle has strictly positive area and attributes to the one face handed in; the triangles' own summed area is bit-exactly the analytic 96 mm² outer-minus-hole region — a gap or an overlap would miss it in one direction or the other. Shown-to-fail: dropping hole-bridging (`triangulate2DContext`'s own `holes` slice) turns the summed area into the outer square's whole 100 mm², missing the assertion |
 | T76 | two axis-aligned boxes (T1's box and a second one offset to x∈[100,200], y∈[60,120], z∈[10,20]), each three surface-extruded-wall-plus-two-`PatchEdges`-cap sheets, sharing exactly one corner vertex — (100,60,10) — with no edge joining them, all six sheets `Stitch`ed in one call (`TestStitchRefusesTwoBoxesPinchedAtOneVertex`) | `ErrDegenerate` (R7); the document and every operand are unchanged |
 | T77 | the same two boxes as T76 translated apart so no vertex is shared, `Stitch`ed in one call (`TestStitchTwoDisjointBoxesFormATwoLumpSolid`) | `Kind() == BodySolid`; 16 vertices, 2 lumps, `Volume` `Exact` at 120000 mm³ — the narrowing T76 proves is a pinch refusal, not a blanket one |
 | T78 | T76's two boxes with both top patches omitted, leaving an open, all-planar assembly that still shares the one pinched corner vertex (`TestStitchRefusesOpenAssemblyPinchedAtOneVertex`) | `ErrDegenerate` (R7) even though free edges remain — the vertex-link audit refuses the open arm exactly as it does the closed one (§6.3's amended Table C, §6.4) |
-| T80 | a chamfered rectangular plate's own flat band patch (`normalBound` nonzero under a far placement), unstitched at identity | the unstitched face's `NormalAt` published bound at the patch's own held corner still covers the SOURCE face's own `normalBound` — asserted against that face's own value, never a literal, since the bound is architecture-dependent. Shown-to-fail: reverting `copyFaceUnderContext`'s carried `normalBound` to its old zero value turns this red, the published bound falling under the source's own `normalBound` |
-| T81 | a pin extruded `ToFace` against a plate's own cap, where the plate's own extrude depth is stated in inches (a genuine unit-conversion rounding, so the cap's own `AxialDelta` is nonzero) — once against the un-unstitched plate, once against that SAME plate unstitched into its six free sheets first | the two pins' own `Bounds` agree exactly, `Exactness` and `Bound` alike — the equality is the assertion, stronger than either number alone. Shown-to-fail: reverting `copyFaceUnderContext`'s carried `AxialDelta`/`hasAxialDelta` to their old zero value turns the unstitched-cap pin's own `Bounds` `Exact` at a zero bound while the un-unstitched pin's stays `Approximate`, breaking the equality |
-| T82 | the same far-placed chamfered plate's own flat band patch (T80's fixture), unstitched at identity then placed again under a second, non-identity motion | `ErrUnsupported`: `normalBound` is dimensionless and carries no term to absorb a placement's own length-scale rounding, so this evaluator refuses the placed copy rather than invent one. Shown-to-fail: removing `copyFaceUnderContext`'s placed-nonzero-`normalBound` refusal turns this `NoError`, publishing a placed copy whose `normalBound` no longer covers the tag's true departure |
+| T80 | a chamfered rectangular plate's own flat band patch (`normalBound` nonzero under a far placement), unstitched at identity | the unstitched face's `NormalAt` published bound at the patch's own held corner still covers the SOURCE face's own `normalBound` — asserted against that face's own value, never a literal, since the bound is architecture-dependent. Shown-to-fail: reverting `stitchrecord`'s `copyFaceUnder`'s carried `normalBound` to its old zero value turns this red, the published bound falling under the source's own `normalBound` |
+| T81 | a pin extruded `ToFace` against a plate's own cap, where the plate's own extrude depth is stated in inches (a genuine unit-conversion rounding, so the cap's own `AxialDelta` is nonzero) — once against the un-unstitched plate, once against that SAME plate unstitched into its six free sheets first | the two pins' own `Bounds` agree exactly, `Exactness` and `Bound` alike — the equality is the assertion, stronger than either number alone. Shown-to-fail: reverting `stitchrecord`'s `copyFaceUnder`'s carried `AxialDelta`/`hasAxialDelta` to their old zero value turns the unstitched-cap pin's own `Bounds` `Exact` at a zero bound while the un-unstitched pin's stays `Approximate`, breaking the equality |
+| T82 | the same far-placed chamfered plate's own flat band patch (T80's fixture), unstitched at identity then placed again under a second, non-identity motion | `ErrUnsupported`: `normalBound` is dimensionless and carries no term to absorb a placement's own length-scale rounding, so this evaluator refuses the placed copy rather than invent one. Shown-to-fail: removing `stitchrecord`'s `copyFaceUnder`'s placed-nonzero-`normalBound` refusal turns this `NoError`, publishing a placed copy whose `normalBound` no longer covers the tag's true departure |
 | T90 | a hand-built revolve payload for a dipped shaft profile (axis exact, an admitted nonzero radial-minimum interval charged by hand), driven directly at `revolveplan.Build` (internal — `TestRevolveAxisBandVolumeContainsEnclosedVolume`) | `Volume` is `Approximate` with a strictly positive `Bound`, and its interval contains the volume the body's own (snapped-topology) cylindrical faces enclose. Shown-to-fail: dropping `revolveAxisAdmitVolumeCharge`'s own charge turns the containment assertion red |
 | T91 | the same shape as T90, a quarter sweep instead of a full turn, driven directly at `revolveplan.Build` (internal — `TestRevolveAxisBandPartialSweepAreaContainsEnclosedArea`) | each of the two cap faces' `Area` is `Approximate` with a strictly positive `Bound`, and its interval contains the area the cap's own snapped loop encloses — the sharper of the two measured consequences, since a cap's loop and its published area come from two different profiles (snapped, unsnapped) whenever the charge is nonzero. Shown-to-fail: dropping the cap `areaBound`'s own charge turns the containment assertion red |
 | T92 | `revolveplan.ResolveAxisSide` against an axis-aligned, origin-anchored axis and a profile whose recorded near edge sits exactly on the axis (internal — `TestRevolveAxisBandAllowanceZeroForExactAxis`) | the returned `axisFrame.radialAdmitAllow` is exactly zero, and so are `revolveAxisAdmitBandCharge`/`revolveAxisAdmitVolumeCharge` off it — the charge never widens the common, exact-arithmetic case. Shown-to-fail: charging a spurious nonzero allowance regardless of admission turns this assertion red |
@@ -2843,7 +2843,7 @@ The row-9 curved-mesh obligations are:
 | T114 | `semicircleSketch`'s half-disc revolved a quarter turn (90°) about its own diameter, `Body.Centroid` (`TestRevolveSemicirclePartialSweepCentroidBoundTightens`) | the published bound is a tiny fraction of the body's own diameter and still encloses the centroid the half-disc's own analytic `q`/`mzr`/`mrr` (independently derived: `q = ⅔r³`, `mzr = ⅔r⁴`, `mrr = πr⁴/8`) predict through the same partial-sweep formula `TestRevolvePartialCentroidBoundTightens` uses — replacing the old 638.75 mm envelope, the quarter-turn case the investigation measured as the worse of the two. Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` reproduces the old 638.75 mm envelope and turns the tightness assertion red |
 | T120 | an inner box (`stitchBoxSheetsAtOffset`, x∈[20,40], y∈[20,40], z∈[2,3]) wholly inside T1's own outer box, all six sheets `Stitch`ed in one call (`TestStitchRefusesNestedBoxes`) | `ErrUnsupported` (R20); the document and every operand are unchanged — without the separation check this fixture publishes 60400 mm³ `Exact` against a true 60000 mm³, the point-set volume the nesting double-counts |
 | T121 | the same shape as T120 with the inner box shrunk 1 mm off every wall of the outer box (x∈[1,99], y∈[1,59], z∈[1,9] inside T1's box), all six sheets `Stitch`ed in one call (`TestStitchRefusesNestedBoxesWithAGap`) | `ErrUnsupported` (R20); without the separation check this fixture publishes 105472 mm³ `Exact` against a true 60000 mm³ — wrong by more than three quarters, nowhere near a rounding miss |
-| T122 | two hand-built, bit-identical (fully overlapping) zero-bound square faces, each its own single-face lump, driven directly at `tessellateStitch` on a hand-built `stitchPayload` — bypassing `Stitch`'s own public seam, since T120's own lump-separation gate refuses this shape before a body ever reaches tessellation (internal — `TestTessellateStitchClearsSymDiffForOverlappingLumps`) | `symDiffOK` is `false` even though `stitchweld.ZeroBound` holds: `tessellateStitch`'s own lump-separation reading refuses independently of `evalStitchContext`'s, so the zero occupied-volume claim stays sound even if that earlier gate were ever loosened or bypassed |
+| T122 | two hand-built, bit-identical (fully overlapping) zero-bound square faces, each its own single-face lump, driven directly at `tessellateStitch` on a hand-built `stitchPayload` — bypassing `Stitch`'s own public seam, since T120's own lump-separation gate refuses this shape before a body ever reaches tessellation (internal — `TestTessellateStitchClearsSymDiffForOverlappingLumps`) | `symDiffOK` is `false` even though `stitchweld.ZeroBound` holds: `tessellateStitch`'s own lump-separation reading refuses independently of `stitchrecord.Build`'s, so the zero occupied-volume claim stays sound even if that earlier gate were ever loosened or bypassed |
 
 | T130 | a single 40 mm line, the only non-construction entity in its sketch, chain `Extrude` 10 mm `Along` | `s.Profiles()` is empty and `s.Chains()` has length 1; `Kind() == BodySheet`, `IsSolid() == false`, `Volume()` is `ErrNotSolid`; exactly 1 face; `Area` exactly 400 mm² and `Exact`; `Edges(Free()).Exactly(4)` resolves; `Bounds` is the 40×0×10 slab, `Exact` |
 | T131 | an open three-segment walk — line, arc, line, each meeting the next at a shared point | 3 faces; `Edges(Free()).Exactly(8)`, the two junction edges matching nothing under `Free()`; the arc wall's `Area` is `Approximate` over `rθ`'s own bound while both line walls read `Exact`; the body's own `Area` equals the three walls' sum through `boundedAdd`, value and bound |
@@ -2994,7 +2994,7 @@ The copy and revolve-tag obligations are:
 |---|---------|-----------|
 | T209 | a holed disk's end-cap chamfer, unstitched, each cone band sheet's free rims filled by `PatchEdges` | the copied band's `NormalAt` equals its source's, bound included, and placing the patched sheet is `ErrUnsupported`. Shown-to-fail: `patchchain.copyFacesUnder` without `normalBound` published 2.2e-16 against the source's 8.7e-16 and placed the copy |
 | T210 | a plate extruded 3 in, unstitched; its end cap and four walls stitched back into an open box whose bottom rim `PatchEdges` fills; a pin `ToFace` the patched cap | the pin's `Bounds` equal those of the same pin stopped at the unstitched cap, `Approximate`. Shown-to-fail: `patchchain.copyFacesUnder` without `AxialDelta` published the stop `Exact` with a zero bound |
-| T211 | full-turn revolve sheets of a quadrilateral whose side climbs 5e-10 over a unit run (tagged `Cylinder`), and of one whose side leans 5e-10 off perpendicular (tagged `Plane`) | `Stitch` is `ErrUnsupported` (R8); were it admitted, its volume and centroid would have to enclose the record's exact Pappus readings. Shown-to-fail: without `stitchFluxTagsDenoted` the volumes sat 2.1e-9 and 1.6e-9 mm³ off under 7.0e-15 and 5.7e-15 bounds |
+| T211 | full-turn revolve sheets of a quadrilateral whose side climbs 5e-10 over a unit run (tagged `Cylinder`), and of one whose side leans 5e-10 off perpendicular (tagged `Plane`) | `Stitch` is `ErrUnsupported` (R8); were it admitted, its volume and centroid would have to enclose the record's exact Pappus readings. Shown-to-fail: without `stitchrecord`'s `fluxTagsDenoted` the volumes sat 2.1e-9 and 1.6e-9 mm³ off under 7.0e-15 and 5.7e-15 bounds |
 | T212 | a decimal trapezoid's full-turn sheet (two `Cylinder`, two `Cone` walls), stitched; and, internally, T46-style cone wall whose tag apex is moved 1e-6 mm along the axis with its record unchanged | the stitched volume and centroid enclose the record's exact Pappus readings; the moved apex's flux and moment bounds enclose the exact-apex readings. Shown-to-fail: dropping `ConeInput.ApexBound`'s widening left the moved flux 9.4e-6 off under a 3.6e-14 bound |
 | T213 | one-span straight and quarter-arc sweep sheets thickened on their admitted sides | the solid keeps `side(0,i,j)` roles and path-order caps, measures the reduced annulus's volume, verifies Sound, tessellates with a volume proof, and replays under placement; a composite sheet keeps R24 |
 | T214 | one real Sketch line swept through a half-circle, then thickened 1 mm | the solid measures 12π mm³ and 30π+8 mm², keeps start/end cap roles in path order, passes 0.1 mm `VerifyAll`, and replays under placement; negative and centered sides retain the same volume and move the Y interval |

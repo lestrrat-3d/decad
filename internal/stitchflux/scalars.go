@@ -16,7 +16,7 @@ import (
 // "assume no cancellation at all" fallback, which is sized for a quantity
 // this evaluator cannot otherwise bound and would overstate a well-known
 // constant's own error by many orders of magnitude: wide enough, on a thin
-// annulus, to starve stitchCurvedMass's own proofbound.BoundedQuotient calls of the
+// annulus, to starve stitchrecord.CurvedMass's own proofbound.BoundedQuotient calls of the
 // clearance they need and refuse a perfectly sound thin fixture. Every
 // multiply that follows charges its OWN rounding through proofbound.BoundedMul, so
 // this is the one place pi's own representation error is spent.

@@ -402,6 +402,14 @@ func documentNode(d *Document) *topo.Document {
 // topo.Payload.Placed: it builds the environment from d and maps the node
 // back. It never commits.
 func placePayload(ctx context.Context, p topo.Payload, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+	switch pl := p.(type) {
+	case stitchPayload:
+		documentHandle(&d.n)
+		assertPlacedStitchOwners(pl.Faces, composed)
+	case unstitchPayload:
+		documentHandle(&d.n)
+		assertUnstitchFaceOwners(pl.Face, composed)
+	}
 	return bodyResult(p.Placed(ctx, envOf(&d.n, ref), composed))
 }
 
@@ -455,19 +463,6 @@ func bodyResult(n *topo.Body, err error) (*Body, error) {
 		return nil, err
 	}
 	return bodyHandle(n), nil
-}
-
-// faceGroupHandles returns the handles of each group of ns in order, or nil
-// for an empty ns.
-func faceGroupHandles(ns [][]*topo.Face) [][]*Face {
-	if len(ns) == 0 {
-		return nil
-	}
-	out := make([][]*Face, len(ns))
-	for i, g := range ns {
-		out[i] = faceHandles(g)
-	}
-	return out
 }
 
 // bornMesh sets m's node Owner to m and returns m. Every root Mesh is born

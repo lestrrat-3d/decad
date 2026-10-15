@@ -25,8 +25,8 @@ type Vertex struct {
 	// own SEAM — its boundary copy at phi0/phi1 — mints none) — and
 	// propagated unchanged,
 	// composing xform, by every copier that reproduces the same point
-	// (stitch.go's rebuildStitchTopology, unstitch.go's
-	// copyFaceUnderContext, patchchain's copyFacesUnder). Zero ("no
+	// (stitchrecord's rebuildTopology, stitchrecord's
+	// copyFaceUnder, patchchain's copyFacesUnder). Zero ("no
 	// certificate") for every vertex no builder or copier stamps.
 	Denot denotation.CurveToken
 	// Owner is the root Vertex handle that holds this node by value. Root

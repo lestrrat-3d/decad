@@ -4,38 +4,17 @@ import (
 	"context"
 	"fmt"
 	"iter"
-	"math"
 
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/measurement"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/stitchweld"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/surfaceplace"
+	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
-	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // This file is Stitch of docs/surface-design.md §6: the one operation that
-// turns a boundary into a solid. stitch_weld.go owns Table J's admission
-// (which free edges join); this file owns the public entry point, the fresh
-// topology rebuild over the weld plan, the derived orientation, the closure
-// and manifold leg, Table C's outcome, and the measurements a stitched body
-// publishes.
-//
-// evalStitchContext is the whole evaluator and is shared, unchanged, by the
-// initial build and by every later Transform/Copy
-// re-evaluation: the payload records the operand faces and the weld plan,
-// never a built topology, and Placed() replays this same function under a
-// composed transform (docs/surface-design.md's "recorded weld" decision).
-// Table J's admission is never re-run on a placed (rounded) coordinate; the
-// crossing audit IS re-run, because a rigid motion can make two placed
-// triangles meet that the unplaced ones did not.
+// turns a boundary into a solid. Its evaluator is internal/stitchrecord's
+// Build.
 
 // Stitch welds every free-edge pair it can prove coincident
 // (docs/surface-design.md §6.2's Table J) across bodies, assembles the
@@ -91,14 +70,19 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 		return nil, err
 	}
 
-	var srcFaces []*Face
+	var srcFaces []*topo.Face
 	for _, b := range bodies {
-		srcFaces = append(srcFaces, b.Faces()...)
+		faces := topobuild.Faces(&b.n)
+		for _, f := range faces {
+			faceHandle(f)
+		}
+		srcFaces = append(srcFaces, faces...)
 	}
-	plan := buildStitchWeldPlan(srcFaces)
+	assertStitchSourceOwners(srcFaces)
+	plan := stitchrecord.BuildPlan(srcFaces)
 
 	ref := d.nextProducerID()
-	body, err := evalStitchContext(ctx, d, ref, srcFaces, plan, r3.Identity())
+	body, err := bodyResult(stitchrecord.Build(ctx, envOf(documentNode(d), ref), srcFaces, plan, r3.Identity()))
 	if err != nil {
 		return nil, err
 	}
@@ -109,667 +93,73 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 	return body, nil
 }
 
-// stitchPayload is Stitch's own record. It carries the operand faces
-// (readable even after the operands retire — a Body is never mutated or
-// freed on retirement, core §6) and the weld plan buildStitchWeldPlan
-// derived from them, never a previously built topology: Placed() replays
-// evalStitchContext from these same two values under the composed
-// transform, so the admission Table J proved is REPLAYED, never re-derived,
-// while the crossing audit and the global orientation sign are re-decided
-// fresh from the placed triangle set every time, exactly as a rigid motion
-// can change which pairs of placed triangles meet.
-type stitchPayload struct {
-	Xform r3.Transform
-	// Delta is the proven displacement proofbound.RigidRoundAllow charges against the
-	// placed shared vertex table — zero exactly when Xform is the identity
-	// transform, an exact struct comparison (docs/loft-design.md §5's
-	// identical fast path).
-	Delta float64
-	Faces []*Face
-	Plan  *stitchWeldPlan
-	// LiveFaces parallels Faces after the orientation and global sign passes.
-	// A curved source mesh uses this pairing without looking up copied roles.
-	LiveFaces []*Face
-	// Verts is the shared vertex table actually built for THIS body, in
-	// world coordinates — verify_gate.go's own diameter arm reads it back,
-	// modelled on loftPayload's identical field.
-	Verts []r3.Vec
-	// VertBound is Verts' own per-vertex proven bound (millimetres), the
-	// same widened class bound rebuildStitchTopology's vertexForClass
-	// stamps onto the live Vertex it builds for that class — read back here
-	// so tessellate_stitch.go can publish a per-face bound without
-	// recomputing it. Populated only alongside Tris/TriFaces below.
-	VertBound []float64
-	// Tris is the final wound triangle set (indices into Verts) an
-	// all-planar (stitchAllTetrahedronEligible) build assembled and
-	// audited, CLOSED or OPEN — the exact set tessellate_stitch.go restates
-	// with no chording. Nil for a curved or mixed stitched body: it has no
-	// triangle set to restate.
-	Tris [][3]int
-	// TriFaces is Tris' own per-triangle LIVE rebuilt face, parallel to
-	// Tris. It is never stitchPayload.Faces (the retired operand faces) and
-	// never attributed by role, since rebuildStitchTopology copies a welded
-	// operand's origins verbatim and two welded operands can share one role
-	// string.
-	TriFaces []*Face
-	// AuditClean records whether the crossing audit ran and passed for this
-	// body: true for a solid (Table C requires it) and for an open sheet
-	// whose audit was also run and admitted (the open-case decision,
-	// docs/surface-design.md §9.1's sheet validity leg 4). It is false for a
-	// non-planar body (no audit runs at all) and for an open sheet whose
-	// audit declined without erroring.
-	AuditClean bool
-}
-
-func (sp stitchPayload) Transform() r3.Transform { return sp.Xform }
-
-// ProvesSimple implements topo.SimpleProver. A stitchPayload is proven by an
-// explicit build-time audit: Stitch runs docs/loft-design.md §6's crossing
-// audit on the OPEN case too (docs/surface-design.md §6.3's open-case
-// decision), so a payload whose audit ran and passed (AuditClean) admits leg 4
-// the same as a proven-simple prism or loft does, letting a clean stitched
-// sheet read ValidityValid instead of being permanently Suspect.
-func (sp stitchPayload) ProvesSimple(context.Context) bool { return sp.AuditClean }
-
-func (sp stitchPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
-	d, ref := documentHandle(env.Doc), env.Ref
-	return placedNode(evalStitchContext(ctx, d, ref, sp.Faces, sp.Plan, composed))
-}
-
-// evalStitchContext is Stitch's whole evaluator, shared by the initial build
-// and every later placement. It places the shared vertex table exactly once
-// (never per operand), rebuilds fresh topology over the weld plan, derives
-// one consistent orientation, checks closure and manifoldness, decides
-// Table C, and publishes the resulting body's measurements.
-func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFaces []*Face, plan *stitchWeldPlan, xform r3.Transform) (*Body, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	// The single held vertex table, placed under the composed motion ONCE —
-	// never per operand (docs/surface-design.md's "recorded weld" decision).
-	maxInputAbs := 0.0
-	for _, p := range plan.Table.Vertices {
-		maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(p))
-	}
-	verts := make([]r3.Vec, len(plan.Table.Vertices))
-	for i, p := range plan.Table.Vertices {
-		v := xform.Apply(p)
-		if !proofbound.FiniteVec(v) {
-			return nil, fmt.Errorf(`%w: a placed stitch vertex is not representable`, ErrUnsupported)
-		}
-		verts[i] = v
-	}
-	delta := 0.0
-	if xform != r3.Identity() {
-		delta = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(xform.Translation()))
-	}
-	// massDelta is what the mass accumulator charges instead of delta alone:
-	// a welded vertex the shared-denotation certificate admitted (J5's
-	// bounded-pair lift, docs/surface-design.md §6.2's amendment) is no
-	// longer zero-bound, so the triangle set the tetrahedron sum runs over is
-	// no longer the body's own true vertices — it is only within
-	// maxClassBound of them. proofbound.SweptVolumeAllow already bounds exactly this
-	// shape of error (a uniform per-vertex displacement), so folding the
-	// widest class bound into the same delta the placement rounding uses is
-	// a reuse, not new proof machinery (§6.4's amendment: a bounded weld's
-	// volume is never Exact). It stays equal to delta whenever every welded
-	// class is zero-bound, which is every case this evaluator admitted
-	// before this increment.
-	maxClassBound := 0.0
-	for _, b := range plan.Table.Bounds {
-		maxClassBound = max(maxClassBound, b)
-	}
-	massDelta := delta
-	if maxClassBound > 0 {
-		massDelta = proofbound.AbsSumUpper(delta, maxClassBound)
-	}
-
-	newFaces, classOf, welded, err := rebuildStitchTopology(ctx, plan, xform, verts, delta, srcFaces)
-	if err != nil {
-		return nil, err
-	}
-	// vertBound reads back, per vertex CLASS index (the same index tris and
-	// verts share), the widened bound rebuildStitchTopology's vertexForClass
-	// already stamped onto the live Vertex it built for that class —
-	// tessellate_stitch.go's own per-face bound is the largest of these over
-	// the vertices a face's triangles touch, so this is a read of an
-	// existing proof, never a second one.
-	vertBound := make([]float64, len(verts))
-	for v, class := range classOf {
-		vertBound[class] = v.n.Bound.Base()
-	}
-	if err := topobuild.AttachFaceLoops(ctx, faceNodes(newFaces)); err != nil {
-		return nil, err
-	}
-	if err := deriveStitchOrientation(newFaces); err != nil {
-		return nil, err
-	}
-	if err := checkStitchClosure(newFaces); err != nil {
-		return nil, err
-	}
-	// The vertex-link audit runs unconditionally, on every build arm below —
-	// all-planar or curved, open or closed alike — never the curved-closed
-	// arm alone (docs/surface-design.md §6.4's vertex-link paragraph): a
-	// pinch at a shared-vertex-table entry with no connecting edge is
-	// reachable through the all-planar path exactly as it is through a
-	// curved one, and checkStitchClosure's own directed-edge parity leg does
-	// not see it either way.
-	if err := auditVertexLinksForStitchFaces(ctx, newFaces); err != nil {
-		return nil, err
-	}
-
-	open := stitchHasFreeEdge(newFaces)
-	allTetra := stitchAllTetrahedronEligible(newFaces)
-
-	// A fully welded multi-lump assembly whose components are not PROVEN
-	// mutually separate is refused outright, on both remaining Table C arms
-	// below — the all-planar tetrahedron sum and the curved flux integral
-	// alike sum one additive mass/flux term over the whole welded face set
-	// with no notion of which component a triangle or face belongs to, so a
-	// nested or interlocking pair double-counts the same way regardless of
-	// which arm Table C reaches. An open assembly earns no such check: it
-	// publishes no volume at all (Table C's first row), so there is nothing
-	// for a nested or interlocking pair of components to double-count. This
-	// evaluator cannot express a cavity at all — FaceShell.void is hardcoded
-	// false and topobuild.SheetLumps builds one shell per lump, so admitting a nested
-	// pair would need a new recorded fact, a new shell-assembly rule and a
-	// per-component orientation derivation this increment does not add —
-	// and a refusal needs none of that. Strict axis-aligned bounding-box
-	// separation on the held (placed) vertex coordinates, each widened on
-	// both sides by that vertex's OWN proven class bound, is the one
-	// question asked instead: it is exact and tolerance-free, unlike the
-	// clearance kernel's pointInBody ray cast, which settles crossings
-	// through a tolerance and a near-parallel guard and so may never serve
-	// as the ADMISSION gate for publishing an exact volume (CLAUDE.md's
-	// reject-only rule). Two lumps that are genuinely disjoint but whose
-	// boxes interlock in all three axes — a holed-profile extrude capped
-	// with annular patches, stitched with a plug sitting in its hole — also
-	// refuse here: for axis-aligned boxes that shape cannot arise, no
-	// fixture in this tree builds it, and a refusal is the sound answer
-	// until this evaluator can decide the case on its own terms.
-	if !open {
-		if components := faceGroupHandles(topobuild.SplitConnectedFaces(faceNodes(newFaces))); len(components) > 1 && !stitchLumpsProvenSeparate(components) {
-			return nil, fmt.Errorf(`%w: Stitch refuses a multi-lump assembly whose lumps are not proven mutually separate (docs/surface-design.md Table R row R20)`, ErrUnsupported)
-		}
-	}
-
-	kind, solid := BodySheet, false
-	auditClean := false
-	var tris [][3]int
-	var triFaces []*Face
-	var acc *loftMassAccumulator
-	var curvedVolume Measurement
-	var curvedCentroid VecMeasurement
-	haveCurved := false
-
-	switch {
-	case allTetra:
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		tris, triFaces, err = triangulateStitchFaces(ctx, newFaces, classOf)
-		if err != nil {
-			return nil, err
-		}
-
-		budget := proofbound.NewWorkBudget(ctx)
-		auditErr := loftmesh.LoftCrossingAudit(budget, verts, tris)
-		switch {
-		case auditErr != nil && !open:
-			// Closed plus a refusing audit surfaces R9/R10 unchanged — the
-			// decision at docs/surface-design.md §6.3/§6.4.
-			return nil, auditErr
-		case auditErr == nil:
-			auditClean = true
-		}
-		// auditErr != nil && open: leg 4 stays undecided and no error is
-		// raised — the open-case decision preserving §6.3's rule that a
-		// residual free edge is never an error.
-
-		if !open {
-			acc = newLoftMassAccumulator(verts[0], massDelta, 0, 0)
-			for _, t := range tris {
-				acc.add(verts[t[0]], verts[t[1]], verts[t[2]], false)
-			}
-			if acc.Vol6.Sign() < 0 {
-				// §5's whole-shell orientation step, re-decided fresh from
-				// this placed triangle set every time: the derived
-				// combinatorial orientation is consistent either way it
-				// lands, so a negative signed volume means the whole
-				// assembly is the globally reversed (inward) choice, fixed
-				// by reversing every face and re-triangulating.
-				for _, f := range newFaces {
-					reverseFaceOrientation(f)
-				}
-				tris, triFaces, err = triangulateStitchFaces(ctx, newFaces, classOf)
-				if err != nil {
-					return nil, err
-				}
-				acc = newLoftMassAccumulator(verts[0], massDelta, 0, 0)
-				for _, t := range tris {
-					acc.add(verts[t[0]], verts[t[1]], verts[t[2]], false)
-				}
-			}
-			solid, kind = true, BodySolid
-		} else if delta > 0 {
-			// This accumulator instance only ever feeds perturbAreaSum below
-			// (open means solid stays false, so body.n.Volume/Centroid never
-			// read it): Area needs no massDelta charge of its own — each
-			// face's own areaBound already covers a bounded weld
-			// (docs/surface-design.md §6.4's amendment) — so this stays the
-			// placement's own delta, unwidened.
-			acc = newLoftMassAccumulator(verts[0], delta, 0, 0)
-			for _, t := range tris {
-				acc.add(verts[t[0]], verts[t[1]], verts[t[2]], false)
-			}
-		}
-
-		// The welded edges' own convexity is a genuine dihedral-angle
-		// question once two faces from different operands share a seam
-		// (topology.go's Edge.IsConvex doc: "a JUNCTION edge... is also the
-		// material angle"), computed here — AFTER any global sign fix above
-		// — from the two adjacent faces' own outward normals rather than
-		// carried over from either original operand's now-meaningless walk.
-		fixWeldedEdgeConvexity(welded)
-
-	case !open:
-		// Table C's curved-closure arm (docs/surface-design.md §6.4): every
-		// edge is welded and at least one face is not tetrahedron-eligible,
-		// so the volume needs stitch_flux.go's per-surface flux integral
-		// rather than the exact triangle sum. Rule S gates admission on the
-		// single source body's own construction proof; manifoldness at every
-		// vertex is already proven above, unconditionally, since the reused
-		// crossing audit consumes triangles this set has none of.
-		if !stitchRuleSAdmits(ctx, srcFaces) {
-			return nil, fmt.Errorf(`%w: Stitch closes a boundary this evaluator cannot prove simple by construction (docs/surface-design.md Table R row R8)`, ErrUnsupported)
-		}
-		// The flux arms integrate each face's tag, so a revolve face is
-		// admitted only where its tag is exactly the surface its record
-		// denotes. srcFaces are the unplaced operand faces; this stitch's own
-		// placement rounding is delta, charged below.
-		if !stitchFluxTagsDenoted(srcFaces) {
-			return nil, fmt.Errorf(`%w: Stitch's flux path integrates each face's tag, and a revolve face's tag here is not proven to be the surface its record denotes (docs/surface-design.md Table R row R8)`, ErrUnsupported)
-		}
-		// verts[0] anchors the flux sum exactly as newLoftMassAccumulator
-		// anchors the tetrahedron sum — but a fully boundary-less analytic
-		// face (a complete Sphere or Torus, which mints no edge at all) can
-		// leave the shared vertex table empty, and every admitted arm this
-		// increment lands (Plane, Cylinder) is bounded by at least one full
-		// circle and so always has a vertex. An empty table therefore means
-		// the flux path is about to refuse on the sealed switch's own
-		// default arm regardless of the anchor's value, so a zero anchor is
-		// safe rather than a special-cased refusal here.
-		anchor := r3.Vec{}
-		if len(verts) > 0 {
-			anchor = verts[0]
-		}
-		vol, cen, err := stitchCurvedMass(ctx, newFaces, anchor, delta)
-		if err != nil {
-			return nil, err
-		}
-		curvedVolume, curvedCentroid, haveCurved = vol, cen, true
-		solid, kind = true, BodySolid
-
-	// open && !allTetra: an open curved (or mixed) sheet earns no volume
-	// attempt at all — Table C's first row, a residual free edge, and
-	// never an error (docs/surface-design.md §6.3).
-	default:
-	}
-
-	body := bornBody(&Body{n: topo.Body{Solid: solid, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind), Doc: documentNode(d)}})
-	for _, f := range newFaces {
-		f.n.Body = bodyNode(body)
-	}
-	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(newFaces))
-
-	// Area is the sum of the constituent faces' own area/areaBound through
-	// proofbound.BoundedAdd (correction 2, docs/surface-design.md §6.4/§8): never a
-	// triangle-sum reading, since a general planar triangle's area is a
-	// square root of a rational and so is never Exact the way a face's own
-	// analytically integrated area already is.
-	areaAcc := proofbound.BoundedScalar{}
-	for _, f := range newFaces {
-		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
-	}
-	if acc != nil && delta > 0 {
-		areaAcc.Bound = proofbound.AbsSumUpper(areaAcc.Bound, acc.PerturbAreaSum)
-	}
-	body.n.Area = measurement.Measurement{
-		Value:     units.SquareMillimeters(areaAcc.Value),
-		Exactness: measurement.ExactnessOf(areaAcc.Bound),
-		Bound:     units.SquareMillimeters(areaAcc.Bound),
-	}
-
-	bounds, err := stitchBounds(srcFaces, xform, delta)
-	if err != nil {
-		return nil, err
-	}
-	body.n.Bounds = boxToInternal(bounds)
-
-	if solid {
-		switch {
-		case acc != nil:
-			body.n.Volume = measurementToInternal(acc.volume(verts, tris))
-			cen, err := acc.centroid(verts, tris)
-			if err != nil {
-				return nil, err
-			}
-			body.n.Centroid = vecMeasurementToInternal(cen)
-		case haveCurved:
-			body.n.Volume = measurementToInternal(curvedVolume)
-			body.n.Centroid = vecMeasurementToInternal(curvedCentroid)
-		}
-	}
-
-	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
-		return nil, err
-	}
-
-	// tessellate_stitch.go's exact restatement is scoped to the all-planar
-	// case, CLOSED or OPEN (docs/surface-design.md §14 Table D row 5): the
-	// curved-closure arm's own faces have no triangle set to restate, but an
-	// OPEN all-planar sheet's own triangle set is exactly the one this arm
-	// already built (and audited via its own perturbed area sum) above, so
-	// it is recorded rather than discarded.
-	payloadTris, payloadTriFaces, payloadVertBound := tris, triFaces, vertBound
-	if !allTetra {
-		payloadTris, payloadTriFaces, payloadVertBound = nil, nil, nil
-	}
-	body.n.Payload = stitchPayload{
-		Xform:      xform,
-		Delta:      delta,
-		Faces:      srcFaces,
-		Plan:       plan,
-		LiveFaces:  newFaces,
-		Verts:      verts,
-		VertBound:  payloadVertBound,
-		Tris:       payloadTris,
-		TriFaces:   payloadTriFaces,
-		AuditClean: auditClean,
-	}
-	return body, nil
-}
-
-// rebuildStitchTopology deep-copies every operand face's surface, origins,
-// area, area bound and flags into a fresh Face, over fresh vertices and
-// edges built from the weld plan: a welded pair of free edges (plan.Group)
-// shares ONE new edge across both faces, and every other edge gets its own,
-// shared across whichever coedges of the SAME operand already pointed at
-// it. Reusing an operand face outright would corrupt the retired operand
-// through its body back-pointer and populated edge list (docs/surface-design.md
-// §6, correction 1's construction note), so nothing here aliases an operand's
-// own Face, Loop, CoEdge, Edge or Vertex.
-//
-// AxialDelta, hasAxialDelta and normalBound copy the same way
-// unstitch.go's copyFaceUnderContext does, and for the same reason: the copy
-// carries the operand's identical surface and identical tag, so both
-// readings stay exactly as true of the copy as they were of the operand.
-// hasAxialDelta and normalBound copy verbatim; AxialDelta additionally
-// widens by delta under a non-identity placement. A placed copy of an
-// operand face whose normalBound is nonzero refuses with [ErrUnsupported]
-// rather than invent the dimensionless term a sound composition would need
-// (unstitch.go's copyFaceUnderContext doc comment). A revolve face's denoted
-// surface (topo.Face.Denoted) carries over as its exact image under xform.
-func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.Transform, verts []r3.Vec, delta float64, srcFaces []*Face) ([]*Face, map[*Vertex]int, map[*Edge]struct{}, error) {
-	if xform != r3.Identity() {
-		for _, f := range srcFaces {
-			if f.n.NormalBound != 0 {
-				return nil, nil, nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
-			}
-		}
-	}
-	newVertByClass := map[int]*Vertex{}
-	classOf := map[*Vertex]int{}
-	// vertexForClass restates the class's own curve token (denotByClass,
-	// stitch_weld.go — the zero value for a class no member carries one for)
-	// under xform, composing rather than overwriting so a token nested
-	// through more than one placement still states the true accumulated
-	// motion (internal/denotation's CurveToken.Compose).
-	vertexForClass := func(class int) *Vertex {
-		if nv, ok := newVertByClass[class]; ok {
-			return nv
-		}
-		bound := plan.Table.Bounds[class]
-		if delta > 0 {
-			bound = proofbound.AbsSumUpper(bound, delta)
-		}
-		nv := bornVertex(&Vertex{n: topo.Vertex{Position: verts[class], Bound: units.Millimeters(bound), Denot: plan.Table.Tokens[class].Compose(xform)}})
-		newVertByClass[class] = nv
-		classOf[nv] = class
-		return nv
-	}
-
-	type edgeBuild struct {
-		edge                 *Edge
-		startClass, endClass int
-	}
-	buildByOld := map[*Edge]*edgeBuild{}
-	buildByGroup := map[int]*edgeBuild{}
-	welded := map[*Edge]struct{}{}
-
-	edgeFor := func(old *Edge) (*edgeBuild, error) {
-		if eb, ok := buildByOld[old]; ok {
-			return eb, nil
-		}
-		startClass := plan.Table.classOf(vertexHandle(old.n.Start))
-		endClass := plan.Table.classOf(vertexHandle(old.n.End))
-		gid, isWelded := plan.Group[old]
-		if isWelded {
-			if eb, ok := buildByGroup[gid]; ok {
-				buildByOld[old] = eb
-				return eb, nil
-			}
-		}
-		curve, err := surfaceplace.TransformCurve(old.n.Curve, xform)
-		if err != nil {
-			return nil, err
-		}
-		lengthBound := old.n.LengthBound
-		if delta > 0 {
-			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
-		}
-		ne := bornEdge(&Edge{
-			n: topo.Edge{
-				Convex:          old.n.Convex,
-				Length:          old.n.Length,
-				LengthBound:     lengthBound,
-				LengthUnbounded: old.n.LengthUnbounded,
-				// A welded pair's two edges are already proven to denote the same
-				// curve (Table J), so the FIRST one reached here — the only one
-				// that ever builds a new Edge for the group, per buildByGroup
-				// above — is a sound representative for the other's identity too.
-				Denot: old.n.Denot.Compose(xform),
-				Curve: curve,
-				Start: vertexNode(vertexForClass(startClass)),
-				End:   vertexNode(vertexForClass(endClass)),
-			},
-		})
-		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
-			old.n.Curve, old.n.CurveBound, old.n.CurveBounded, curve, xform)
-		eb := &edgeBuild{edge: ne, startClass: startClass, endClass: endClass}
-		buildByOld[old] = eb
-		if isWelded {
-			buildByGroup[gid] = eb
-			welded[ne] = struct{}{}
-		}
-		return eb, nil
-	}
-
-	newFaces := make([]*Face, len(srcFaces))
-	for i, f := range srcFaces {
-		if err := ctx.Err(); err != nil {
-			return nil, nil, nil, err
-		}
-		transformed, err := surfaceplace.TransformSurface(f.n.Surface, xform)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		axialDelta := f.n.AxialDelta
-		if delta > 0 {
-			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
-		}
-		nf := bornFace(&Face{
-			n: topo.Face{
-				Area:          f.n.Area,
-				AreaBound:     f.n.AreaBound,
-				Reversed:      f.n.Reversed,
-				HeldPlanar:    f.n.HeldPlanar,
-				AxialDelta:    axialDelta,
-				HasAxialDelta: f.n.HasAxialDelta,
-				NormalBound:   f.n.NormalBound,
-				Denoted:       f.n.DenotedUnder(xform),
-				Surface:       transformed,
-				CapRecord:     f.n.CapRecord.Under(xform),
-				Origins:       append([]provenance.Ref(nil), f.n.Origins...),
-			},
-		})
-		for _, l := range f.n.Loops {
-			coedges := make([]topo.CoEdge, len(l.CoEdges))
-			for j, ce := range l.CoEdges {
-				eb, err := edgeFor(edgeHandle(ce.Edge))
-				if err != nil {
-					return nil, nil, nil, err
-				}
-				// The old edge's own (start, end) may run either the same
-				// way as the canonical build's or opposite to it — a weld
-				// pairs two free edges whose two operands typically walked
-				// their shared rim in opposite senses — so the coedge's
-				// forward flag is restated against the CANONICAL edge's own
-				// direction rather than copied verbatim.
-				oldStartClass := plan.Table.classOf(vertexHandle(ce.Edge.Start))
-				forward := ce.Forward
-				if oldStartClass != eb.startClass {
-					forward = !forward
-				}
-				coedges[j] = topo.CoEdge{Edge: edgeNode(eb.edge), Forward: forward}
-			}
-			nf.n.Loops = append(nf.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: l.Outer, CoEdges: coedges}})))
-		}
-		newFaces[i] = nf
-	}
-	return newFaces, classOf, welded, nil
-}
-
-// reverseFaceOrientation reverses f's whole boundary walk in place: every
-// loop's coedges are reordered back to front with their forward flag
-// negated, and f.n.Reversed toggles with it — the outward side flips together
-// with the walk that names it.
-func reverseFaceOrientation(f *Face) {
-	for _, l := range f.n.Loops {
-		n := len(l.CoEdges)
-		rev := make([]topo.CoEdge, n)
-		for i, ce := range l.CoEdges {
-			rev[n-1-i] = topo.CoEdge{Edge: ce.Edge, Forward: !ce.Forward}
-		}
-		l.CoEdges = rev
-	}
-	f.n.Reversed = !f.n.Reversed
-}
-
-func stitchTopology(faces []*Face) stitchweld.Topology[*Face, *Edge] {
-	btopo := stitchweld.Topology[*Face, *Edge]{
-		Faces: faces, Uses: map[*Face][]stitchweld.Use[*Edge]{}, Adjacent: map[*Edge][]*Face{},
-	}
-	queue := append([]*Face(nil), faces...)
-	seen := map[*Face]struct{}{}
-	for len(queue) > 0 {
-		f := queue[0]
-		queue = queue[1:]
-		if _, ok := seen[f]; ok {
-			continue
-		}
-		seen[f] = struct{}{}
-		var uses []stitchweld.Use[*Edge]
-		for _, l := range f.n.Loops {
-			for _, ce := range l.CoEdges {
-				uses = append(uses, stitchweld.Use[*Edge]{Edge: edgeHandle(ce.Edge), Forward: ce.Forward})
-				adjacent := faceHandles(ce.Edge.Faces)
-				btopo.Adjacent[edgeHandle(ce.Edge)] = adjacent
-				queue = append(queue, adjacent...)
-			}
-		}
-		btopo.Uses[f] = uses
-	}
-	return btopo
-}
-
-// deriveStitchOrientation derives one consistent orientation across the
-// welded set by walking every two-face edge and requiring the two adjacent
-// faces to traverse it in opposite senses, flipping a whole face (never a
-// single coedge) whenever its component's arbitrary root choice disagrees
-// with it. A face reached twice with contradicting flips proves the
-// component non-orientable — [ErrDegenerate] (Table R row R7); the
-// three-triangle Möbius fixture in apitest/stitch_test.go exercises exactly this
-// path directly, on a hand-built face set, because Stitch's own public
-// gates admit no way to reach a non-orientable assembly through the seam.
-func deriveStitchOrientation(faces []*Face) error {
-	flip, ok := stitchTopology(faces).Orientation()
-	if !ok {
-		return fmt.Errorf(`%w: Stitch's welded set cannot be consistently oriented (docs/surface-design.md Table R row R7)`, ErrDegenerate)
-	}
-	for f, fl := range flip {
-		if fl {
-			reverseFaceOrientation(f)
-		}
-	}
-	return nil
-}
-
-// checkStitchClosure is docs/surface-design.md §6.4's closure and manifold
-// leg, the explicit directed-edge parity leg the reused loftmesh.LoftCrossingAudit
-// alone does not run (correction 1): every edge must be adjacent to one or
-// two faces, and a two-face edge must be traversed by exactly one forward
-// and one backward coedge, with a coedge-use count that disagrees with the
-// edge's own adjacent-face count also a violation. One face is an open
-// boundary — Table C's first row, and never an error here. Three or more,
-// or a disagreeing use count, is [ErrDegenerate] (Table R row R7): three
-// triangles sharing one edge would pass every pairwise contact test the
-// crossing audit alone runs, which is exactly the gap this leg closes.
-func checkStitchClosure(faces []*Face) error {
-	switch stitchTopology(faces).CheckClosure() {
-	case stitchweld.ClosureOneFaceUses:
-		return fmt.Errorf(`%w: a stitched edge's coedge-use count disagrees with its one adjacent face (docs/surface-design.md Table R row R7)`, ErrDegenerate)
-	case stitchweld.ClosureTwoFaceParity:
-		return fmt.Errorf(`%w: a stitched edge is not traversed by exactly one forward and one backward coedge (docs/surface-design.md Table R row R7)`, ErrDegenerate)
-	case stitchweld.ClosureTooManyFaces:
-		return fmt.Errorf(`%w: a stitched edge is adjacent to more than two faces (docs/surface-design.md Table R row R7)`, ErrDegenerate)
-	}
-	return nil
-}
-
-func stitchHasFreeEdge(faces []*Face) bool {
+// assertStitchSourceOwners maps every operand vertex node, then every operand
+// edge node, that Stitch's weld plan and topology rebuild read back to its
+// root handle, so a node whose Owner is not its handle fails the mapping's
+// assertion as it always has. It stops where the weld plan would dereference
+// a nil edge or vertex, leaving that panic to stitchrecord.BuildPlan. The edge
+// checks run here, ahead of the build's own context poll and placement and
+// surface refusals.
+func assertStitchSourceOwners(faces []*topo.Face) {
 	for _, f := range faces {
-		for _, l := range f.n.Loops {
+		for _, l := range f.Loops {
 			for _, ce := range l.CoEdges {
-				if len(ce.Edge.Faces) == 1 {
-					return true
+				start := coedgeStart(ce)
+				if start == nil {
+					return
 				}
+				vertexHandle(start)
+				end := coedgeEnd(ce)
+				if end == nil {
+					return
+				}
+				vertexHandle(end)
 			}
 		}
 	}
-	return false
+	for _, f := range faces {
+		for _, l := range f.Loops {
+			for _, ce := range l.CoEdges {
+				edgeHandle(ce.Edge)
+			}
+		}
+	}
 }
 
-// stitchLumpsProvenSeparate compares connected-face components using each
-// distinct vertex's held position and proven bound. A touching or nested pair
-// cannot prove separation (docs/surface-design.md Table C/R20).
-func stitchLumpsProvenSeparate(components [][]*Face) bool {
-	return stitchweld.LumpsProvenSeparate(components,
-		func(f *Face, visit func(*Vertex)) {
-			for _, l := range f.n.Loops {
-				for _, ce := range l.CoEdges {
-					visit(vertexHandle(ce.Edge.Start))
-					visit(vertexHandle(ce.Edge.End))
+// assertPlacedStitchOwners maps every operand edge and vertex node a stitch
+// payload's placement rebuild reads back to its root handle, in that rebuild's
+// order. It checks nothing when the rebuild refuses first (a placed operand
+// with a nonzero normalBound) and stops where the rebuild would dereference a
+// nil face, edge or vertex.
+func assertPlacedStitchOwners(faces []*topo.Face, xform r3.Transform) {
+	if xform != r3.Identity() {
+		for _, f := range faces {
+			if f == nil {
+				return
+			}
+			if f.NormalBound != 0 {
+				return
+			}
+		}
+	}
+	for _, f := range faces {
+		if f == nil {
+			return
+		}
+		for _, l := range f.Loops {
+			for _, ce := range l.CoEdges {
+				edgeHandle(ce.Edge)
+				if ce.Edge == nil || ce.Edge.Start == nil {
+					return
 				}
+				vertexHandle(ce.Edge.Start)
+				if ce.Edge.End == nil {
+					return
+				}
+				vertexHandle(ce.Edge.End)
 			}
-		},
-		func(v *Vertex) (r3.Vec, float64, bool) {
-			if v == nil {
-				return r3.Vec{}, 0, false
-			}
-			return v.n.Position, v.n.Bound.Base(), true
-		})
+		}
+	}
 }
 
 // stitchVertexBounds yields the proven bound magnitude of each of b's own
@@ -790,174 +180,4 @@ func stitchVertexBounds(b *Body) iter.Seq[float64] {
 			}
 		}
 	}
-}
-
-// triangulateStitchFaces triangulates each planar face in its own plane
-// frame through triangulate.go's existing cap triangulator and maps every
-// resulting index back through the shared vertex table (docs/surface-design.md
-// §6.4): ear clipping mints no new point, so no coordinate enters that the
-// body does not already hold, and the plane-local projection may round the
-// CHOICE of triangulation but the crossing audit that follows runs on the
-// exact 3D coordinates the table already carries — never on a
-// re-approximated one.
-//
-// It returns the LIVE face each returned triangle belongs to, parallel to
-// the triangle set, so a caller that must attribute a triangle to its face
-// (tessellate_stitch.go) reads it back directly rather than reconstructing
-// the mapping afterward — stitchPayload.Faces holds only the retired
-// operand faces, and a stitched body's faces carry no per-body-unique role
-// to recover it from either (docs/tessellation-design.md §4).
-func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Vertex]int) ([][3]int, []*Face, error) {
-	var tris [][3]int
-	var triFaces []*Face
-	for _, f := range faces {
-		if err := ctx.Err(); err != nil {
-			return nil, nil, err
-		}
-		pl, ok := f.n.Surface.(surfacegeom.Plane)
-		if !ok {
-			return nil, nil, fmt.Errorf(`%w: Stitch cannot triangulate a non-planar face`, ErrUnsupported)
-		}
-		frame := pl.Frame
-		var pts []planePoint
-		var verts []*Vertex
-		loopIdx := make([][]int, len(f.n.Loops))
-		for li, l := range f.n.Loops {
-			idxs := make([]int, len(l.CoEdges))
-			for i, ce := range l.CoEdges {
-				v := vertexHandle(coedgeStart(ce))
-				local := frame.ToLocal(v.Position().Value)
-				idxs[i] = len(pts)
-				pts = append(pts, planePoint{U: local.X, V: local.Y})
-				verts = append(verts, v)
-			}
-			loopIdx[li] = idxs
-		}
-		for li, l := range f.n.Loops {
-			wantCCW := l.Outer
-			isCCW := shoelace(pts, loopIdx[li]) > 0
-			if wantCCW != isCCW {
-				reverseIntSlice(loopIdx[li])
-			}
-		}
-		tris2D, err := triangulation.Triangulate(ctx, point2ToRecordSlice(pts), loopIdx)
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, t := range tris2D {
-			a, b, c := classOf[verts[t[0]]], classOf[verts[t[1]]], classOf[verts[t[2]]]
-			if f.n.Reversed {
-				b, c = c, b
-			}
-			tris = append(tris, [3]int{a, b, c})
-			triFaces = append(triFaces, f)
-		}
-	}
-	return tris, triFaces, nil
-}
-
-// shoelace returns twice the signed area of the polygon idx walks over pts —
-// its sign alone is what triangulateStitchFaces reads, to decide whether a
-// loop's stored walk is counter-clockwise in the face's own local frame.
-func shoelace(pts []planePoint, idx []int) float64 {
-	n := len(idx)
-	sum := 0.0
-	for i := range n {
-		a := pts[idx[i]]
-		b := pts[idx[(i+1)%n]]
-		sum += a.U*b.V - b.U*a.V
-	}
-	return sum
-}
-
-func reverseIntSlice(s []int) {
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
-	}
-}
-
-// fixWeldedEdgeConvexity computes IsConvex for every newly welded edge from
-// its two adjacent faces' own outward normals, rather than carrying over
-// either original operand's now-meaningless walk-based flag: a welded edge
-// is a genuine interior junction between two independently built faces, and
-// topology.go's own doc comment on Edge.IsConvex states that a junction
-// edge's convexity IS the material dihedral angle. Both adjacent faces are
-// guaranteed Plane: only a Line3 rim edge is ever welded (stitch_weld.go),
-// and only a planar face's straight boundary segment ever records one. It
-// must run AFTER any global orientation-sign fix, since that fix can invert
-// which side either face calls outward.
-func fixWeldedEdgeConvexity(welded map[*Edge]struct{}) {
-	for e := range welded {
-		if len(e.n.Faces) != 2 {
-			continue
-		}
-		var fwd, bwd *Face
-		for _, f := range e.n.Faces {
-			dir, ok := f.CoEdgeDirection(edgeNode(e))
-			if !ok {
-				continue
-			}
-			if dir {
-				fwd = faceHandle(f)
-			} else {
-				bwd = faceHandle(f)
-			}
-		}
-		if fwd == nil || bwd == nil {
-			continue
-		}
-		pa, okA := fwd.n.Surface.(surfacegeom.Plane)
-		pb, okB := bwd.n.Surface.(surfacegeom.Plane)
-		if !okA || !okB {
-			continue
-		}
-		na := pa.Frame.N()
-		if fwd.n.Reversed {
-			na = na.Scale(-1)
-		}
-		nb := pb.Frame.N()
-		if bwd.n.Reversed {
-			nb = nb.Scale(-1)
-		}
-		d := e.n.End.Position.Sub(e.n.Start.Position)
-		e.n.Convex = na.Cross(nb).Dot(d) > 0
-	}
-}
-
-// stitchBounds publishes the assembled body's box as the union of every
-// operand's own already-proven Bounds, each inflated by its own Bound before
-// the union so no per-operand slack has to be tracked separately, then
-// carried through xform by its 8 corners — a valid enclosing box under any
-// rigid motion, since the image of a box's convex hull under an affine map is
-// the convex hull of the transformed corners. This is sound for a curved
-// operand exactly as it is for a planar one, because it reuses each
-// operand's OWN extent proof rather than re-deriving one from vertices alone,
-// which would understate a curved wall's true box. The published Bound is
-// exactly delta: every corner is exact once inflated and transformed, so the
-// only remaining uncertainty is the placement's own rounding.
-func stitchBounds(srcFaces []*Face, xform r3.Transform, delta float64) (Box, error) {
-	bodies := topobuild.OperandBodies(faceNodes(srcFaces))
-	if len(bodies) == 0 {
-		return Box{}, fmt.Errorf(`%w: Stitch has no operand geometry to bound`, ErrDegenerate)
-	}
-	have := false
-	var lo, hi r3.Vec
-	for _, b := range bodies {
-		box := b.Bounds
-		inflate := box.Bound.Base()
-		for _, c := range stitchweld.BoxCorners(box.Min, box.Max, inflate) {
-			p := xform.Apply(c)
-			if !proofbound.FiniteVec(p) {
-				return Box{}, fmt.Errorf(`%w: a placed stitch bound is not representable`, ErrUnsupported)
-			}
-			if !have {
-				lo, hi = p, p
-				have = true
-				continue
-			}
-			lo = r3.Vec{X: math.Min(lo.X, p.X), Y: math.Min(lo.Y, p.Y), Z: math.Min(lo.Z, p.Z)}
-			hi = r3.Vec{X: math.Max(hi.X, p.X), Y: math.Max(hi.Y, p.Y), Z: math.Max(hi.Z, p.Z)}
-		}
-	}
-	return Box{Min: lo, Max: hi, Exactness: exactnessOf(delta), Bound: units.Millimeters(delta)}, nil
 }

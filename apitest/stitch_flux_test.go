@@ -14,7 +14,7 @@ import (
 )
 
 // This file is docs/surface-design.md §15's T31-T36, T46-T47 and T50-T52
-// public coverage for stitch_flux.go's per-surface flux integral: the
+// public coverage for internal/stitchrecord/flux.go's per-surface flux integral: the
 // `Plane`, `Cylinder`, `Cone` and `Sphere` arms that let `Stitch` close a
 // boundary holding a curved face. T37, T38, T48 and T49 are internal-only
 // (stitch_internal_test.go): a genuinely closed
@@ -90,7 +90,7 @@ func TestStitchAnnularRevolveSheetClosesToATube(t *testing.T) {
 // TestStitchAnnularSolidMatchesTheRevolveEngine is T32: the
 // independent-producer cross-check. The same profile built as a `BodySolid`
 // through `Revolve` with no option is an entirely different code path — the
-// Pappus-based analytic solid evaluator, never stitch_flux.go's own
+// Pappus-based analytic solid evaluator, never internal/stitchrecord/flux.go's own
 // arithmetic — so agreement here does not depend on this increment's own
 // derivation being right.
 func TestStitchAnnularSolidMatchesTheRevolveEngine(t *testing.T) {
@@ -149,7 +149,7 @@ func TestStitchCurvedVolumeBoundEncloses(t *testing.T) {
 // own shown-to-fail leg: a placed curved solid's own Bound must be strictly
 // larger than the identical unplaced shape's, since a rigid motion rounds
 // every coordinate the flux arms read. Deleting sweptVolumeAllow/
-// sweptMomentAllow from stitchCurvedMass collapses this to an equality and
+// sweptMomentAllow from stitchrecord.CurvedMass collapses this to an equality and
 // this test goes red — recorded in the PR body.
 func TestStitchCurvedVolumeBoundWidensWhenPlaced(t *testing.T) {
 	t.Parallel()
@@ -241,7 +241,7 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 // single-source restriction) is internal-only: docs/surface-design.md §6.2's
 // Table J admits a free Line3 edge alone (J5 is undecidable for Circle3,
 // Arc3, NURBSCurve and FacetedCurve, since none of them carries a bound
-// field to ask "zero bound" of — stitch_weld.go's own doc comment). So no
+// field to ask "zero bound" of — internal/stitchrecord/plan.go's own doc comment). So no
 // two curved rims from different features ever weld into a closed set
 // through the public seam at all — confirmed directly: a surface-extruded
 // cylinder wall plus two PatchProfile discs at its own exact end planes,
@@ -249,7 +249,7 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 // free after Stitch. Rule S's own single-source-body restriction is
 // pinned instead by TestStitchRuleSRefusesMultipleSourceBodies
 // (stitch_internal_test.go), on a hand-built face set the same way
-// TestStitchOrientationRefusesMobiusAssembly pins deriveStitchOrientation.
+// TestStitchOrientationRefusesMobiusAssembly pins stitchrecord.DeriveOrientation.
 
 // halfTorusAnalytics is the by-hand closed form for offAxisSemicircleSketch's
 // own shape: a straight chord at rho=Major (the tube's own equatorial
@@ -257,7 +257,7 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 // outward from Major to Major+Minor and back (revolving into a Torus wall
 // spanning exactly the tube's own outer half, phi in [-pi/2, pi/2]).
 // Volume and area are Pappus's theorem over the 2D half-disc profile
-// directly (a route independent of stitch_flux.go's own per-face flux
+// directly (a route independent of internal/stitchrecord/flux.go's own per-face flux
 // arms, matching how frustumShellAnalytics stays independent of the Cone
 // arm): a half-disc of radius Minor has area (pi/2)*Minor^2 and its own
 // centroid sits (4*Minor)/(3*pi) from the flat diameter, on the bulge side,
@@ -381,7 +381,7 @@ func TestStitchTorusRevolveSheetClosesToASolid(t *testing.T) {
 // TestStitchConicalSolidMatchesTheRevolveEngine and
 // TestStitchSphereSolidMatchesTheRevolveEngine. The same profile built as a
 // BodySolid through Revolve with no option is the Pappus-based analytic
-// solid evaluator, never stitch_flux.go's own arithmetic, so agreement here
+// solid evaluator, never internal/stitchrecord/flux.go's own arithmetic, so agreement here
 // does not depend on this PR's own derivation being right.
 func TestStitchTorusSolidMatchesTheRevolveEngine(t *testing.T) {
 	t.Parallel()
@@ -559,7 +559,7 @@ func TestStitchConicalRevolveSheetCloses(t *testing.T) {
 // independent-producer cross-check, TestStitchAnnularSolidMatchesTheRevolveEngine's
 // Cone-arm sibling. The same profile built as a BodySolid through Revolve
 // with no option is the Pappus-based analytic solid evaluator, never
-// stitch_flux.go's own arithmetic, so agreement here is the strongest
+// internal/stitchrecord/flux.go's own arithmetic, so agreement here is the strongest
 // available proof: it does not depend on this PR's own derivation being
 // right, only on the two independent producers agreeing.
 func TestStitchConicalSolidMatchesTheRevolveEngine(t *testing.T) {
@@ -675,7 +675,7 @@ func TestStitchSphereRevolveSheetClosesToABall(t *testing.T) {
 // TestStitchAnnularSolidMatchesTheRevolveEngine and
 // TestStitchConicalSolidMatchesTheRevolveEngine. The same profile built as a
 // BodySolid through Revolve with no option is the Pappus-based analytic
-// solid evaluator, never stitch_flux.go's own arithmetic, so agreement here
+// solid evaluator, never internal/stitchrecord/flux.go's own arithmetic, so agreement here
 // does not depend on this PR's own derivation being right.
 func TestStitchSphereSolidMatchesTheRevolveEngine(t *testing.T) {
 	t.Parallel()
@@ -797,7 +797,7 @@ func requireStitchedMassEncloses(t *testing.T, solid *decad.Body, vol *big.Float
 // 5e-10 over a unit run, tagged a Cylinder, and a side leaning 5e-10 off
 // perpendicular, tagged a Plane. The flux arms integrate the tag, so Stitch
 // refuses rather than publish the tag's volume (docs/surface-design.md §6.4,
-// stitch_flux.go's stitchFluxTagsDenoted).
+// internal/stitchrecord/flux.go's fluxTagsDenoted).
 //
 // Shown to fail: without that gate Stitch published volumes 2.1e-9 and
 // 1.6e-9 mm³ off the record's, under bounds of 7.0e-15 and 5.7e-15, and

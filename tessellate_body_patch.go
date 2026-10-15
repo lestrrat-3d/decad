@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -24,7 +25,14 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 	// curveBound applies only to Circle3 and Arc3. A Line3 follows its end
 	// vertices; the cap-band miter whose Line3 tag holds a curved locus has
 	// a ruled face with nonzero normalBound, so this gate rejects that case.
-	if !stitchAllTetrahedronEligible(faces) {
+	allEligible := true
+	for _, f := range faces {
+		if !stitchrecord.FaceIsTetrahedronEligible(faceNode(f)) {
+			allEligible = false
+			break
+		}
+	}
+	if !allEligible {
 		for _, f := range faces {
 			if _, ok := f.n.Surface.(surfacegeom.Plane); !ok {
 				return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a PatchEdges result's %T face`,
@@ -46,7 +54,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 	}
 	vertices := b.Vertices()
 	mesh := bornMesh(&Mesh{n: topo.Mesh{Vertices: make([]r3.Vec, len(vertices))}})
-	classOf := make(map[*Vertex]int, len(vertices))
+	classOf := make(map[*topo.Vertex]int, len(vertices))
 	store := make([]float64, len(vertices))
 	budget := proofbound.NewWorkBudget(ctx)
 	for i, v := range vertices {
@@ -54,16 +62,14 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 			return nil, err
 		}
 		mesh.n.Vertices[i] = v.n.Position
-		classOf[v] = i
+		classOf[vertexNode(v)] = i
 		store[i] = v.n.Bound.Base()
 	}
 	if _, err := tessellation.StoreMax(store); err != nil {
 		return nil, err
 	}
 	var err error
-	var src []*Face
-	mesh.n.Triangles, src, err = triangulateStitchFaces(ctx, faces, classOf)
-	mesh.n.Source = faceNodes(src)
+	mesh.n.Triangles, mesh.n.Source, err = stitchrecord.TriangulateFaces(ctx, faceNodes(faces), classOf)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +130,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 // feature's outward sense, including any reflection before PatchEdges. The
 // patch's new plane frame can have the opposite local handedness, so its
 // triangle winding is settled by the shared mesh edge, not that frame.
-func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budget *proofbound.WorkBudget) error {
+func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*topo.Vertex]int, budget *proofbound.WorkBudget) error {
 	byFace := make(map[*topo.Face][]int, len(b.Faces()))
 	for i, f := range m.n.Source {
 		byFace[f] = append(byFace[f], i)
@@ -140,7 +146,7 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budge
 			return fmt.Errorf(`%w: a PatchEdges fill has no boundary walk to orient`, ErrDegenerate)
 		}
 		ce := f.n.Loops[0].CoEdges[0]
-		start, end := classOf[vertexHandle(coedgeStart(ce))], classOf[vertexHandle(coedgeEnd(ce))]
+		start, end := classOf[coedgeStart(ce)], classOf[coedgeEnd(ce)]
 		var source *topo.Face
 		for _, adjacent := range ce.Edge.Faces {
 			if adjacent != &f.n {

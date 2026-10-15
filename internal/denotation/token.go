@@ -110,8 +110,9 @@ func SameLevel(a, b LevelToken) bool {
 // (docs/surface-design.md §6.2 Table J's amendment, §14 Table D row 3): a
 // document-local identity minted once per denoted curve or point by the
 // evaluator that FIRST builds it, and propagated unchanged — never re-minted
-// — by every copier that reproduces the same geometry: rebuildStitchTopology
-// (stitch.go), copyFaceUnderContext (unstitch.go) and patchchain.copyFacesUnder
+// — by every copier that reproduces the same geometry: stitchrecord's rebuildTopology
+// (internal/stitchrecord/build.go), stitchrecord's copyFaceUnder
+// (internal/stitchrecord/unstitch.go) and patchchain.copyFacesUnder
 // (patch_body.go). Two edges (or two vertices) sharing one non-zero curveID
 // therefore descend from the SAME mint, and so denote the same curve or
 // point exactly, whatever bound each one's own held coordinate carries —
@@ -136,7 +137,7 @@ type CurveID int
 // UNDER. A placement breaks the certificate: two edges that shared a
 // denotation before one body moved no longer denote the same curve AT THE
 // SAME PLACE, so xform is part of the comparison alongside id
-// (sameCurve, below) — the identical discipline stitch.go's own
+// (sameCurve, below) — the identical discipline internal/stitchrecord/build.go's own
 // `xform != r3.Identity()` placement check already applies to a whole
 // stitched body. A copier that applies an ADDITIONAL motion on top of
 // whatever a token already carries restates it with compose, never by
@@ -182,7 +183,7 @@ func (t CurveToken) Compose(applied r3.Transform) CurveToken {
 // under the same motion: both non-zero ids (the zero value is "no
 // certificate" and always declines), equal ids, and equal xform. It is one
 // of the comparisons this certificate ever makes to decide admission — the
-// other being stitch_weld.go's own bit-identical guard layered on top,
+// other being internal/stitchrecord/plan.go's own bit-identical guard layered on top,
 // which this comparison never substitutes for (docs/surface-design.md §6.2:
 // "the certificate admits; bit-identity further narrows; bit-identity alone
 // never admits").

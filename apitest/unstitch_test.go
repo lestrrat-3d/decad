@@ -164,7 +164,7 @@ func TestUnstitchRestitchRoundTripMatchesOriginal(t *testing.T) {
 
 // TestUnstitchRestitchRoundTripClosesABoundedBox is docs/surface-design.md
 // §15's T42's own copy-path leg: the CURVE half of the shared-denotation
-// certificate must survive Unstitch's own copy (copyFaceUnderContext) for a
+// certificate must survive Unstitch's own copy (stitchrecord's copyFaceUnder) for a
 // BOUNDED body, not only an exact one — TestUnstitchRestitchRoundTripMatchesOriginal
 // already covers the exact case. A Symmetric surface-extruded wall on an
 // off-axis, non-origin plane (offAxisPlateSketch) has both rims bounded;
