@@ -97,10 +97,20 @@ func (p PreparedEndpoint) CanShareCircleTurn(other PreparedEndpoint) bool {
 func (p PreparedEndpoint) AtSharedCircleTurn(other PreparedEndpoint, t *big.Rat) (
 	u0, v0, u1, v1 proofbound.RatInterval,
 ) {
-	sin, cos := quarterTurnSinCos(t)
-	u0 = proofbound.IntervalAdd(proofbound.PointInterval(p.cu), proofbound.IntervalScale(cos, p.radius.Lo))
-	v0 = proofbound.IntervalAdd(proofbound.PointInterval(p.cv), proofbound.IntervalScale(sin, p.radius.Lo))
-	u1 = proofbound.IntervalAdd(proofbound.PointInterval(other.cu), proofbound.IntervalScale(cos, other.radius.Lo))
-	v1 = proofbound.IntervalAdd(proofbound.PointInterval(other.cv), proofbound.IntervalScale(sin, other.radius.Lo))
+	return p.AtSharedCircleTurnWithMemo(other, t, nil)
+}
+
+// AtSharedCircleTurnWithMemo uses a caller-owned memo for repeated turns.
+// The caller checks CanShareCircleTurn and equal recorded parameters. A nil
+// memo keeps the independent evaluation path. The turn must not be nil, and
+// the caller must not share a non-nil memo across concurrent calls.
+func (p PreparedEndpoint) AtSharedCircleTurnWithMemo(other PreparedEndpoint, t *big.Rat,
+	memo *proofbound.TurnTrigMemo,
+) (proofbound.RatInterval, proofbound.RatInterval, proofbound.RatInterval, proofbound.RatInterval) {
+	sin, cos := quarterTurnSinCosWithMemo(t, memo)
+	u0 := proofbound.IntervalAdd(proofbound.PointInterval(p.cu), proofbound.IntervalScale(cos, p.radius.Lo))
+	v0 := proofbound.IntervalAdd(proofbound.PointInterval(p.cv), proofbound.IntervalScale(sin, p.radius.Lo))
+	u1 := proofbound.IntervalAdd(proofbound.PointInterval(other.cu), proofbound.IntervalScale(cos, other.radius.Lo))
+	v1 := proofbound.IntervalAdd(proofbound.PointInterval(other.cv), proofbound.IntervalScale(sin, other.radius.Lo))
 	return u0, v0, u1, v1
 }
