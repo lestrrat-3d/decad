@@ -46,18 +46,18 @@ func TestRevolveLoftFacesVerticalRefusesChangedBlankSection(t *testing.T) {
 func TestRevolveLoftFacesConstantXRejectsSubstitutedSourceRef(t *testing.T) {
 	const segmentCount = 2
 	trim := &loftFacesTrimRecord{
-		source: &pointSectionRecord{profile: profileRecord{Outer: loopRecord{
+		Source: &pointSectionRecord{profile: profileRecord{Outer: loopRecord{
 			Segments: []curveSegment{lineSeg{}, lineSeg{}},
 		}}},
-		maps: make([]loftFaceMap, 3),
+		Maps: make([]loftFaceMap, 3),
 	}
-	trim.base.Groups = make([]facetGroup, 2*segmentCount+2)
+	trim.Base.Groups = make([]facetGroup, 2*segmentCount+2)
 	bound := make([][]provenance.Ref, 2)
 	for band := range bound {
 		bound[band] = make([]provenance.Ref, segmentCount)
 		for segment := range bound[band] {
 			ref := provenance.Ref{Producer: 7, Role: fmt.Sprintf("side(%d,%d)", band, segment)}
-			trim.base.Groups[band*segmentCount+segment].Origins = []provenance.Ref{ref}
+			trim.Base.Groups[band*segmentCount+segment].Origins = []provenance.Ref{ref}
 			bound[band][segment] = ref
 		}
 	}
@@ -85,8 +85,8 @@ func TestRevolveLoftFacesVerticalConstantXAndTrimLimits(t *testing.T) {
 	require.False(t, ok)
 
 	trim := &loftFacesTrimRecord{
-		toe:  &pointConeLimit{apex: big.NewRat(13, 2), far: big.NewRat(-2, 1), slope: one},
-		heel: &pointConeLimit{apex: big.NewRat(8, 1), far: big.NewRat(-2, 1), slope: one},
+		Toe:  &pointConeLimit{apex: big.NewRat(13, 2), far: big.NewRat(-2, 1), slope: one},
+		Heel: &pointConeLimit{apex: big.NewRat(8, 1), far: big.NewRat(-2, 1), slope: one},
 	}
 	section := revolveSectionSpan{start: planePoint{U: 6}, end: planePoint{U: 6, V: 3.5}}
 	lower, upper, outcome := revolveLoftFacesVerticalLimits(trim, section, big.NewRat(6, 1))
@@ -159,7 +159,7 @@ func TestRevolveLoftFacesVerticalClipsLiveSourceSpan(t *testing.T) {
 		}
 	}
 	span := freeform.BezierSpan{{U: one, V: zero}, {U: big.NewRat(3, 1), V: zero}}
-	trim := &loftFacesTrimRecord{maps: []loftFaceMap{makeMap(big.NewRat(5, 1)), makeMap(big.NewRat(6, 1))}}
+	trim := &loftFacesTrimRecord{Maps: []loftFaceMap{makeMap(big.NewRat(5, 1)), makeMap(big.NewRat(6, 1))}}
 	cell, ok := revolveLoftFacesVerticalBezier(trim, 3, 0, 0,
 		big.NewRat(1, 2), big.NewRat(3, 2), big.NewRat(5, 2), provenance.Ref{}, span)
 	require.True(t, ok)

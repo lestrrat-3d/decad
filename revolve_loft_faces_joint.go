@@ -22,11 +22,11 @@ type revolveLoftFacesJointVertex struct {
 
 func revolveLoftFacesFitArcVertex(trim *loftFacesTrimRecord,
 	fitIndex, arcIndex int, fitAtEnd bool) (revolveLoftFacesJointVertex, bool) {
-	if trim == nil || trim.source == nil || trim.source.source == nil {
+	if trim == nil || trim.Source == nil || trim.Source.source == nil {
 		return revolveLoftFacesJointVertex{}, false
 	}
-	segments := trim.source.profile.Outer.Segments
-	entities := trim.source.source.entities
+	segments := trim.Source.profile.Outer.Segments
+	entities := trim.Source.source.entities
 	n := len(segments)
 	if n < 2 || len(entities) != n || fitIndex < 0 || arcIndex < 0 ||
 		fitIndex >= n || arcIndex >= n || fitIndex == arcIndex {

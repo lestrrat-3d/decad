@@ -15,7 +15,7 @@ import (
 // strict positive Bernstein bound. These are exact rational predicates.
 func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 	segmentIndex int, segment fitSplineSeg) (*revolveLoftFacesCrossing, int, bool) {
-	if _, ok := trim.source.source.entities[segmentIndex].(*sketch.FitSpline); !ok ||
+	if _, ok := trim.Source.source.entities[segmentIndex].(*sketch.FitSpline); !ok ||
 		!((segment.TStart == 0 && segment.TEnd == 1) ||
 			(segment.TStart == 1 && segment.TEnd == 0)) {
 		return nil, 0, false
@@ -31,8 +31,8 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 	for index, span := range spans {
 		var sign int
 		seenBand := false
-		for band := 0; band+1 < len(trim.maps); band++ {
-			q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
+		for band := 0; band+1 < len(trim.Maps); band++ {
+			q := loftface.MeridianQRows(trim.Maps[band], trim.Maps[band+1], span, m, b)
 			kind, signed := loftface.ClassifyRows(q)
 			if kind == 2 || seenBand && kind != sign {
 				return nil, 0, false
@@ -40,7 +40,7 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 			sign = kind
 			seenBand = true
 			if kind == loftface.SideCrossed &&
-				!polynomial.BernsteinRowsPositive(loftface.MeridianJRows(trim.maps[band], trim.maps[band+1], span, signed)) {
+				!polynomial.BernsteinRowsPositive(loftface.MeridianJRows(trim.Maps[band], trim.Maps[band+1], span, signed)) {
 				return nil, 0, false
 			}
 		}
@@ -50,8 +50,8 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 				return nil, 0, false
 			}
 			crossing = &revolveLoftFacesCrossing{segment: segmentIndex, span: span,
-				index: index, caps: make([]loftface.RootCrossing, len(trim.maps)),
-				x: make([]loftFaceInterval, len(trim.maps))}
+				index: index, caps: make([]loftface.RootCrossing, len(trim.Maps)),
+				x: make([]loftFaceInterval, len(trim.Maps))}
 		}
 	}
 	if crossing == nil {
@@ -62,7 +62,7 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 		}
 		return nil, sides[0], true
 	}
-	q := loftface.MeridianQRows(trim.maps[0], trim.maps[1], crossing.span, m, b)
+	q := loftface.MeridianQRows(trim.Maps[0], trim.Maps[1], crossing.span, m, b)
 	before, after := loftface.SideInside, loftface.SideOutside
 	if q[0][0].Sign() > 0 {
 		before, after = after, before
@@ -75,7 +75,7 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 			return nil, 0, false
 		}
 	}
-	for capIndex, mapped := range trim.maps {
+	for capIndex, mapped := range trim.Maps {
 		capQ := loftface.MeridianQRows(mapped, mapped, crossing.span, m, b)
 		kind, signedCap := loftface.ClassifyRows(capQ)
 		if kind != loftface.SideCrossed {

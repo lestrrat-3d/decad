@@ -25,7 +25,7 @@ import (
 // angle is ordered on the source curve.
 func spiralShortHeldBound(ctx context.Context, proof *spiralFirstJoinSource,
 	family spiralShortCapFamily, held []r3.Vec, minBound float64) (float64, bool, error) {
-	if ctx == nil || proof == nil || proof.tooth == nil || len(proof.tooth.maps) != 9 ||
+	if ctx == nil || proof == nil || proof.Tooth == nil || len(proof.Tooth.Maps) != 9 ||
 		len(family.pieces) != 1 || len(held) < 2 || len(held) > 1025 ||
 		proofbound.IsNonFinite(minBound) || minBound <= 0 ||
 		family.band != 1 && family.band != 7 ||
@@ -202,19 +202,19 @@ func spiralShortSourceCells(ctx context.Context, proof *spiralFirstJoinSource,
 	start, end := lfZero(), lfOne()
 	if len(part.span) == 4 {
 		clip := family.finiteClip
-		if clip.band != family.band || clip.sLo == nil || clip.sHi == nil ||
-			clip.sLo.Sign() <= 0 || clip.sLo.Cmp(clip.sHi) >= 0 ||
-			clip.sHi.Cmp(lfOne()) >= 0 || family.finiteEnd < 0 || family.finiteEnd > 1 {
+		if clip.Band != family.band || clip.SLo == nil || clip.SHi == nil ||
+			clip.SLo.Sign() <= 0 || clip.SLo.Cmp(clip.SHi) >= 0 ||
+			clip.SHi.Cmp(lfOne()) >= 0 || family.finiteEnd < 0 || family.finiteEnd > 1 {
 			return nil, false, nil
 		}
 		if family.finiteEnd == 0 {
-			end = clip.sHi
+			end = clip.SHi
 		} else {
-			start = clip.sLo
+			start = clip.SLo
 		}
 	}
 	width := lfDiv(lfSub(end, start), big.NewRat(16, 1))
-	first, second := proof.tooth.maps[family.band], proof.tooth.maps[family.band+1]
+	first, second := proof.Tooth.Maps[family.band], proof.Tooth.Maps[family.band+1]
 	boxes := make([][3]loftFaceInterval, 0, 16)
 	for cell := range 16 {
 		if cell%4 == 0 {
@@ -224,8 +224,8 @@ func spiralShortSourceCells(ctx context.Context, proof *spiralFirstJoinSource,
 		}
 		lo := lfAdd(start, lfMul(big.NewRat(int64(cell), 1), width))
 		hi := lfAdd(lo, width)
-		if len(part.span) == 4 && (family.finiteEnd == 0 && cell == 15 && lo.Cmp(family.finiteClip.sLo) >= 0 ||
-			family.finiteEnd == 1 && cell == 0 && hi.Cmp(family.finiteClip.sHi) <= 0) {
+		if len(part.span) == 4 && (family.finiteEnd == 0 && cell == 15 && lo.Cmp(family.finiteClip.SLo) >= 0 ||
+			family.finiteEnd == 1 && cell == 0 && hi.Cmp(family.finiteClip.SHi) <= 0) {
 			// The one enlarged clip cell must still contain a real, finite
 			// source arc; it cannot be only the excluded side of the cap.
 			return nil, false, nil

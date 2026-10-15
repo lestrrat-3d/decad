@@ -25,12 +25,12 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 	revolveLoftFacesNonverticalJoints, bool, error,
 ) {
 	var out revolveLoftFacesNonverticalJoints
-	if ctx == nil || trim == nil || trim.source == nil || trim.source.source == nil ||
+	if ctx == nil || trim == nil || trim.Source == nil || trim.Source.source == nil ||
 		section.start.U == section.end.U || section.start.V <= 0 || section.end.V <= 0 {
 		return out, false, nil
 	}
-	segments := trim.source.profile.Outer.Segments
-	entities := trim.source.source.entities
+	segments := trim.Source.profile.Outer.Segments
+	entities := trim.Source.source.entities
 	if len(segments) == 0 || len(segments) != len(entities) {
 		return out, false, nil
 	}
@@ -50,7 +50,7 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 			if !ok {
 				return out, false, nil
 			}
-			for band := 0; band+1 < len(trim.maps); band++ {
+			for band := 0; band+1 < len(trim.Maps); band++ {
 				roots, ok := revolveLoftFacesEndpointFiniteRootsWith(revolveLoftFacesMeridianMemoOf(ctx), trim, section,
 					vertex.left, band, true)
 				if !ok {
@@ -80,7 +80,7 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 				if !valid {
 					return out, false, nil
 				}
-				for band := 0; band+1 < len(trim.maps); band++ {
+				for band := 0; band+1 < len(trim.Maps); band++ {
 					roots, valid := revolveLoftFacesEndpointFiniteRootsWith(revolveLoftFacesMeridianMemoOf(ctx), trim, section,
 						vertex.fitSpan, band, vertex.fitAtEnd)
 					if !valid {
@@ -107,7 +107,7 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 			if !ok {
 				return out, false, nil
 			}
-			for band := 0; band+1 < len(trim.maps); band++ {
+			for band := 0; band+1 < len(trim.Maps); band++ {
 				radial, ok := mappedArcRadialTimeBand(ctx, trim, arcIndex, band, section)
 				if !ok {
 					continue // a nonradial arc is classified by its own source cells
@@ -143,7 +143,7 @@ func revolveLoftFacesRadialPartitionCells(ctx context.Context,
 		return nil, false, nil
 	}
 	spans, ok := revolveLoftFacesStraightOrFitSpans(trim, segment,
-		trim.source.profile.Outer.Segments[segment])
+		trim.Source.profile.Outer.Segments[segment])
 	if !ok || spanIndex < 0 || spanIndex >= len(spans) ||
 		joint.vertex.fitAtEnd && spanIndex != len(spans)-1 ||
 		!joint.vertex.fitAtEnd && spanIndex != 0 ||

@@ -106,7 +106,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		return nil, false, nil
 	}
 	payload, payloadOK := proof.tooth.n.Payload.(facetedPayload)
-	if !payloadOK || payload.loftFacesTrim != proof.trim ||
+	if !payloadOK || payload.LoftFacesTrim != proof.trim ||
 		!revolveLoftFacesTrimCurrent(proof.tooth, proof.trim) {
 		return nil, false, nil
 	}

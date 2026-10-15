@@ -74,7 +74,7 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
 	payload, ok := proof.tooth.n.Payload.(facetedPayload)
-	if !ok || payload.loftFacesTrim != trim || !revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
+	if !ok || payload.LoftFacesTrim != trim || !revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
 		!revolveLoftFacesSourceRefsCurrent(trim, proof.tooth, proof.sourceRefs) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
@@ -145,23 +145,23 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 	}
 	trim := proof.trim
 	payload, ok := proof.tooth.n.Payload.(facetedPayload)
-	if !ok || payload.loftFacesTrim != trim || !revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
+	if !ok || payload.LoftFacesTrim != trim || !revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
 		!revolveLoftFacesSourceRefsCurrent(trim, proof.tooth, proof.sourceRefs) {
 		return nil, false, nil
 	}
-	box, err := lfSourceBox(trim.source)
+	box, err := lfSourceBox(trim.Source)
 	if err != nil {
 		return nil, false, err
 	}
-	band, time, ok := loftface.ConstantXBand(trim.maps, box, x)
-	if !ok || len(proof.sourceRefs[band]) != len(trim.source.profile.Outer.Segments) {
+	band, time, ok := loftface.ConstantXBand(trim.Maps, box, x)
+	if !ok || len(proof.sourceRefs[band]) != len(trim.Source.profile.Outer.Segments) {
 		return nil, false, nil
 	}
 	result := &revolveLoftFacesConstantXSource{band: band,
 		time: time, x: x, lower: lower, upper: upper}
-	result.yzAffine, _ = loftface.VerticalAffineMap(trim.maps[band],
-		trim.maps[band+1], time)
-	for segment, source := range trim.source.profile.Outer.Segments {
+	result.yzAffine, _ = loftface.VerticalAffineMap(trim.Maps[band],
+		trim.Maps[band+1], time)
+	for segment, source := range trim.Source.profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
@@ -262,26 +262,26 @@ func verticalOriginsMatch(actual, recorded []provenance.Ref) bool {
 // inside of its cone. On an X-constant plane these become radial limits.
 func revolveLoftFacesVerticalLimits(trim *loftFacesTrimRecord,
 	section revolveSectionSpan, x *big.Rat) (*big.Rat, *big.Rat, revolveLoftFacesVerticalOutcome) {
-	if trim == nil || trim.toe == nil || trim.heel == nil || x == nil ||
-		trim.toe.apex == nil || trim.heel.apex == nil ||
-		trim.toe.far == nil || trim.heel.far == nil ||
-		trim.toe.slope == nil || trim.heel.slope == nil ||
-		trim.toe.slope.Sign() <= 0 || trim.heel.slope.Sign() <= 0 ||
-		x.Cmp(trim.toe.far) <= 0 || x.Cmp(trim.heel.far) <= 0 ||
-		x.Cmp(trim.heel.apex) >= 0 {
+	if trim == nil || trim.Toe == nil || trim.Heel == nil || x == nil ||
+		trim.Toe.apex == nil || trim.Heel.apex == nil ||
+		trim.Toe.far == nil || trim.Heel.far == nil ||
+		trim.Toe.slope == nil || trim.Heel.slope == nil ||
+		trim.Toe.slope.Sign() <= 0 || trim.Heel.slope.Sign() <= 0 ||
+		x.Cmp(trim.Toe.far) <= 0 || x.Cmp(trim.Heel.far) <= 0 ||
+		x.Cmp(trim.Heel.apex) >= 0 {
 		return nil, nil, revolveLoftFacesVerticalRefusal
 	}
 	lower, upper := lfF(section.start.V), lfF(section.end.V)
 	if lower.Cmp(upper) > 0 {
 		lower, upper = upper, lower
 	}
-	if x.Cmp(trim.toe.apex) < 0 {
-		toe := lfDiv(lfSub(trim.toe.apex, x), trim.toe.slope)
+	if x.Cmp(trim.Toe.apex) < 0 {
+		toe := lfDiv(lfSub(trim.Toe.apex, x), trim.Toe.slope)
 		if lower.Cmp(toe) < 0 {
 			lower = toe
 		}
 	}
-	heel := lfDiv(lfSub(trim.heel.apex, x), trim.heel.slope)
+	heel := lfDiv(lfSub(trim.Heel.apex, x), trim.Heel.slope)
 	if upper.Cmp(heel) > 0 {
 		upper = heel
 	}
@@ -306,7 +306,7 @@ func revolveLoftFacesVerticalBezierWith(memo *loftface.MeridianMemo, trim *loftF
 	ref provenance.Ref, span freeform.BezierSpan) (revolveLoftFacesVerticalCell, bool) {
 	cell := revolveLoftFacesVerticalCell{segment: segment, span: spanIndex,
 		band: band, source: span, ref: ref}
-	first, last := trim.maps[band], trim.maps[band+1]
+	first, last := trim.Maps[band], trim.Maps[band+1]
 	loQ := polynomial.BernsteinRowsAt(memo.QRows(first, last, span, lfZero(), lower), time)
 	hiQ := polynomial.BernsteinRowsAt(memo.QRows(first, last, span, lfZero(), upper), time)
 	var ok bool
@@ -372,15 +372,15 @@ func revolveLoftFacesVerticalArcBox(arc *sketch.Arc, trim *loftFacesTrimRecord,
 	if err != nil {
 		return box, false
 	}
-	sourceBox, err := lfSourceBox(trim.source)
+	sourceBox, err := lfSourceBox(trim.Source)
 	if err != nil || lfF(u.Lo).Cmp(sourceBox[0]) < 0 ||
 		lfF(u.Hi).Cmp(sourceBox[1]) > 0 ||
 		lfF(v.Lo).Cmp(sourceBox[2]) < 0 || lfF(v.Hi).Cmp(sourceBox[3]) > 0 {
 		return box, false
 	}
 	corners := loftface.TileCorners(lfF(u.Lo), lfF(u.Hi), lfF(v.Lo), lfF(v.Hi))
-	first, last := loftface.ArcCapRanges(trim.maps[band], corners),
-		loftface.ArcCapRanges(trim.maps[band+1], corners)
+	first, last := loftface.ArcCapRanges(trim.Maps[band], corners),
+		loftface.ArcCapRanges(trim.Maps[band+1], corners)
 	for axis := range box {
 		box[axis] = loftface.ArcBlend(first[axis], last[axis], time)
 	}

@@ -22,11 +22,11 @@ type revolveLoftFacesFitLineVertex struct {
 func revolveLoftFacesFitLineVertexAt(trim *loftFacesTrimRecord,
 	fitIndex, lineIndex int, fitAtWalkEnd bool) (revolveLoftFacesFitLineVertex, bool) {
 	var empty revolveLoftFacesFitLineVertex
-	if trim == nil || trim.source == nil || trim.source.source == nil {
+	if trim == nil || trim.Source == nil || trim.Source.source == nil {
 		return empty, false
 	}
-	segments := trim.source.profile.Outer.Segments
-	entities := trim.source.source.entities
+	segments := trim.Source.profile.Outer.Segments
+	entities := trim.Source.source.entities
 	n := len(segments)
 	if n < 2 || len(entities) != n || fitIndex < 0 || fitIndex >= n ||
 		lineIndex < 0 || lineIndex >= n || fitIndex == lineIndex ||
@@ -118,7 +118,7 @@ func certifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTri
 	revolveLoftFacesFitLineJoint, bool,
 ) {
 	var empty revolveLoftFacesFitLineJoint
-	if ctx == nil || ctx.Err() != nil || trim == nil || band < 0 || band+1 >= len(trim.maps) {
+	if ctx == nil || ctx.Err() != nil || trim == nil || band < 0 || band+1 >= len(trim.Maps) {
 		return empty, false
 	}
 	vertex, ok := revolveLoftFacesFitLineVertexAt(trim, fitIndex, lineIndex, fitAtWalkEnd)
@@ -127,8 +127,8 @@ func certifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTri
 	}
 	m, b := revolveLoftFacesMeridian(section)
 	memo := revolveLoftFacesMeridianMemoOf(ctx)
-	fitQ := memo.QRows(trim.maps[band], trim.maps[band+1], vertex.fitSpan, m, b)
-	lineQ := memo.QRows(trim.maps[band], trim.maps[band+1], vertex.lineSpan, m, b)
+	fitQ := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.fitSpan, m, b)
+	lineQ := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.lineSpan, m, b)
 	fitEndpoint, lineEndpoint := 0, 0
 	if vertex.fitAtEnd {
 		fitEndpoint = len(fitQ[0]) - 1

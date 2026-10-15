@@ -67,8 +67,8 @@ func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
 		require.Negative(t, arc.negativeZ.box[2].Hi.Sign())
 		require.Positive(t, arc.positiveZ.box[2].Lo.Sign())
 		lower := lfZero()
-		if circle.x.Cmp(proof.trim.toe.apex) < 0 {
-			lower = lfDiv(lfSub(proof.trim.toe.apex, circle.x), proof.trim.toe.slope)
+		if circle.x.Cmp(proof.trim.Toe.apex) < 0 {
+			lower = lfDiv(lfSub(proof.trim.Toe.apex, circle.x), proof.trim.Toe.slope)
 		}
 		section, sourceOK, sourceErr := revolveLoftFacesConstantXSourceCells(t.Context(), proof,
 			circle.x, lower, circle.radius)

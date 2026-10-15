@@ -132,14 +132,14 @@ func spiralShortCubicBox(ctx context.Context, first, second loftFaceMap,
 	span freeform.BezierSpan, q [3][]*big.Rat, clip spiralJunction,
 	finiteEnd int) ([3]loftFaceInterval, bool, error) {
 	var result [3]loftFaceInterval
-	if ctx == nil || len(span) != 4 || clip.sLo == nil || clip.sHi == nil ||
-		clip.sLo.Sign() <= 0 || clip.sLo.Cmp(clip.sHi) >= 0 ||
-		clip.sHi.Cmp(lfOne()) >= 0 || finiteEnd < 0 || finiteEnd > 1 {
+	if ctx == nil || len(span) != 4 || clip.SLo == nil || clip.SHi == nil ||
+		clip.SLo.Sign() <= 0 || clip.SLo.Cmp(clip.SHi) >= 0 ||
+		clip.SHi.Cmp(lfOne()) >= 0 || finiteEnd < 0 || finiteEnd > 1 {
 		return result, false, nil
 	}
-	sLo, sHi := lfZero(), clip.sHi
+	sLo, sHi := lfZero(), clip.SHi
 	if finiteEnd == 1 {
-		sLo, sHi = clip.sLo, lfOne()
+		sLo, sHi = clip.SLo, lfOne()
 	}
 	width := lfDiv(lfSub(sHi, sLo), big.NewRat(16, 1))
 	for cell := range 16 {
@@ -308,8 +308,8 @@ func spiralShortCapCrossingProof(first, second loftFaceMap, span freeform.Bezier
 func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 	[2][4]spiralShortCapFamily, bool, error) {
 	var out [2][4]spiralShortCapFamily
-	if ctx == nil || proof == nil || proof.blank == nil || proof.tooth == nil ||
-		proof.tooth.source == nil || len(proof.tooth.maps) != 9 {
+	if ctx == nil || proof == nil || proof.Blank == nil || proof.Tooth == nil ||
+		proof.Tooth.Source == nil || len(proof.Tooth.Maps) != 9 {
 		return out, false, nil
 	}
 	groups := [...]int{0, 2, 3, 5}
@@ -318,30 +318,30 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 			return out, false, err
 		}
 		band := 1
-		first, last := proof.blank.toeRoot, proof.blank.toeOuter
+		first, last := proof.Blank.toeRoot, proof.Blank.toeOuter
 		if end == 1 {
 			band = 7
-			first, last = proof.blank.ded, proof.blank.heelOuter
+			first, last = proof.Blank.ded, proof.Blank.heelOuter
 		}
 		m := lfDiv(lfSub(lfF(last.V), lfF(first.V)), lfSub(lfF(last.U), lfF(first.U)))
 		b := lfSub(lfF(first.V), lfMul(m, lfF(first.U)))
 		capStart, capEnd := lfF(first.U), lfF(last.U)
-		if m.Cmp(proof.rootM) >= 0 ||
-			lfAdd(lfMul(proof.rootM, capStart), proof.rootB).Cmp(lfF(first.V)) != 0 ||
-			lfAdd(lfMul(proof.rootM, capEnd), proof.rootB).Sign() <= 0 ||
+		if m.Cmp(proof.RootM) >= 0 ||
+			lfAdd(lfMul(proof.RootM, capStart), proof.RootB).Cmp(lfF(first.V)) != 0 ||
+			lfAdd(lfMul(proof.RootM, capEnd), proof.RootB).Sign() <= 0 ||
 			lfF(first.V).Sign() <= 0 || lfF(last.V).Sign() <= 0 {
 			return out, false, nil
 		}
 		for index, group := range groups {
 			var spans []freeform.BezierSpan
 			if index >= 2 {
-				span, ok := spiralShortCapSpan(proof.tooth.source, proof.tooth.stationGroup, group)
+				span, ok := spiralShortCapSpan(proof.Tooth.Source, proof.Tooth.StationGroup, group)
 				if !ok {
 					return out, false, nil
 				}
 				spans = []freeform.BezierSpan{span}
 			} else {
-				fit, ok := proof.tooth.source.profile.Outer.Segments[group].(fitSplineSeg)
+				fit, ok := proof.Tooth.Source.profile.Outer.Segments[group].(fitSplineSeg)
 				if !ok {
 					return out, false, nil
 				}
@@ -353,12 +353,12 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 					return out, false, err
 				}
 				if len(spans) == 0 || len(spans) > 64 ||
-					len(spans[0]) != len(proof.flank[index]) {
+					len(spans[0]) != len(proof.Flank[index]) {
 					return out, false, nil
 				}
 				for j := range spans[0] {
-					if spans[0][j].U.Cmp(proof.flank[index][j].U) != 0 ||
-						spans[0][j].V.Cmp(proof.flank[index][j].V) != 0 {
+					if spans[0][j].U.Cmp(proof.Flank[index][j].U) != 0 ||
+						spans[0][j].V.Cmp(proof.Flank[index][j].V) != 0 {
 						return out, false, nil
 					}
 				}
@@ -374,15 +374,15 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 					// Beyond the first fitted span the entire source cell lies
 					// outside the root. The finite cap is strictly inward of
 					// that root for every X after their shared start.
-					q := loftface.MeridianQRows(proof.tooth.maps[band],
-						proof.tooth.maps[band+1], span, proof.rootM, proof.rootB)
+					q := loftface.MeridianQRows(proof.Tooth.Maps[band],
+						proof.Tooth.Maps[band+1], span, proof.RootM, proof.RootB)
 					if !polynomial.BernsteinRowsPositive(q) {
 						return out, false, nil
 					}
 					continue
 				}
-				certificate, ok := spiralShortCapCrossingProof(proof.tooth.maps[band],
-					proof.tooth.maps[band+1], span, m, b, capStart, capEnd, index >= 2)
+				certificate, ok := spiralShortCapCrossingProof(proof.Tooth.Maps[band],
+					proof.Tooth.Maps[band+1], span, m, b, capStart, capEnd, index >= 2)
 				if !ok {
 					return out, false, nil
 				}
@@ -395,10 +395,10 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 				family.pieces = append(family.pieces, certificate)
 			}
 			if index < 2 {
-				left, leftOK := spiralShortCapEndpointX(proof.tooth.maps[band],
-					proof.tooth.maps[band+1], spans[0], family.pieces[0].q, 0)
-				right, rightOK := spiralShortCapEndpointX(proof.tooth.maps[band],
-					proof.tooth.maps[band+1], spans[0], family.pieces[0].q, 1)
+				left, leftOK := spiralShortCapEndpointX(proof.Tooth.Maps[band],
+					proof.Tooth.Maps[band+1], spans[0], family.pieces[0].q, 0)
+				right, rightOK := spiralShortCapEndpointX(proof.Tooth.Maps[band],
+					proof.Tooth.Maps[band+1], spans[0], family.pieces[0].q, 1)
 				if !leftOK || !rightOK {
 					return out, false, nil
 				}
@@ -417,17 +417,17 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 				// At capStart the blank cap and root meridians coincide. The
 				// authenticated root crossing is unique and X-ordered throughout
 				// this band, so this is the only finite-start clip of the cap arc.
-				clip, ok := spiralIsolateJunction(ctx, proof.tooth.maps, spans[0],
-					proof.rootM, proof.rootB, proof.crossings[index], capStart)
-				if !ok || clip.band != band {
+				clip, ok := spiralIsolateJunction(ctx, proof.Tooth.Maps, spans[0],
+					proof.RootM, proof.RootB, proof.Crossings[index], capStart)
+				if !ok || clip.Band != band {
 					if err := ctx.Err(); err != nil {
 						return out, false, err
 					}
 					return out, false, nil
 				}
 				family.finiteClip = clip
-				box, ok, err := spiralShortCubicBox(ctx, proof.tooth.maps[band],
-					proof.tooth.maps[band+1], spans[0], family.pieces[0].q,
+				box, ok, err := spiralShortCubicBox(ctx, proof.Tooth.Maps[band],
+					proof.Tooth.Maps[band+1], spans[0], family.pieces[0].q,
 					clip, family.finiteEnd)
 				if err != nil || !ok {
 					return out, false, err

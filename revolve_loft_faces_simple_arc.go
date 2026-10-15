@@ -13,13 +13,13 @@ import (
 func revolveLoftFacesSimpleArc(trim *loftFacesTrimRecord, segment int,
 	arc arcSeg, reversed bool) (loftface.SimpleCell, bool) {
 	var cell loftface.SimpleCell
-	if segment < 0 || segment >= len(trim.source.source.entities) ||
+	if segment < 0 || segment >= len(trim.Source.source.entities) ||
 		arc.TStart != 0 && arc.TStart != 1 ||
 		arc.TEnd != 0 && arc.TEnd != 1 ||
 		arc.TStart == arc.TEnd || (arc.TStart > arc.TEnd) != reversed {
 		return cell, false
 	}
-	if _, ok := trim.source.source.entities[segment].(*sketch.Arc); !ok {
+	if _, ok := trim.Source.source.entities[segment].(*sketch.Arc); !ok {
 		return cell, false
 	}
 	center := revolveLoftFacesSimplePoint(arc.Center)

@@ -30,7 +30,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 	}
 	t.Run("exact rows of live mapped span", func(t *testing.T) {
 		crossing := proof.crossings[0]
-		first, last := trim.maps[0], trim.maps[1]
+		first, last := trim.Maps[0], trim.Maps[1]
 		wantQ := spiralRootPolynomialRef(first, last, crossing.span, proof.rootM, proof.rootB)
 		gotQ := loftface.MeridianQRows(first, last, crossing.span, proof.rootM, proof.rootB)
 		for i := range gotQ {
@@ -52,11 +52,11 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 	})
 	t.Logf("root section %d mapped %d source cells", proof.section.rootSpan, len(cells))
 	radial := 0
-	for segment, entity := range trim.source.source.entities {
+	for segment, entity := range trim.Source.source.entities {
 		if _, isArc := entity.(*sketch.Arc); !isArc {
 			continue
 		}
-		for band := 0; band+1 < len(trim.maps); band++ {
+		for band := 0; band+1 < len(trim.Maps); band++ {
 			if _, certified := mappedArcRadialTimeBand(t.Context(), trim, segment, band, section); certified {
 				radial++
 			}

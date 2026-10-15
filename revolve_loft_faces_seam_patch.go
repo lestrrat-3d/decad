@@ -31,16 +31,16 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 	band, segment int, section revolveSectionSpan, seam []revolveLoftFacesSeamVertex,
 ) (revolveLoftFacesSeamPatch, revolveLoftFacesSeamPatch, bool, error) {
 	var blank, loft revolveLoftFacesSeamPatch
-	if ctx == nil || trim == nil || trim.source == nil ||
-		band < 0 || band+1 >= len(trim.maps) || segment < 0 ||
-		len(seam) < 2 || len(trim.stationGroup) != len(trim.source.sourceStation) ||
+	if ctx == nil || trim == nil || trim.Source == nil ||
+		band < 0 || band+1 >= len(trim.Maps) || segment < 0 ||
+		len(seam) < 2 || len(trim.StationGroup) != len(trim.Source.sourceStation) ||
 		section.face == nil || len(section.origins) == 0 ||
 		section.start.U == section.end.U ||
 		section.start.V <= 0 || section.end.V <= 0 ||
-		len(trim.source.profile.Outer.Segments) == 0 {
+		len(trim.Source.profile.Outer.Segments) == 0 {
 		return blank, loft, false, nil
 	}
-	count := len(trim.source.sourceStation)
+	count := len(trim.Source.sourceStation)
 	for i := range seam {
 		if seam[i].station < 0 || seam[i].station >= count ||
 			proofbound.IsNonFinite(seam[i].blankBound) ||
@@ -50,17 +50,17 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 		}
 		if i+1 < len(seam) &&
 			((seam[i].station+1)%count != seam[i+1].station ||
-				trim.stationGroup[seam[i].station] != segment) {
+				trim.StationGroup[seam[i].station] != segment) {
 			return blank, loft, false, nil
 		}
 	}
-	group := band*len(trim.source.profile.Outer.Segments) + segment
-	if group < 0 || group >= len(trim.base.Groups) ||
-		len(trim.base.Groups[group].Origins) == 0 {
+	group := band*len(trim.Source.profile.Outer.Segments) + segment
+	if group < 0 || group >= len(trim.Base.Groups) ||
+		len(trim.Base.Groups[group].Origins) == 0 {
 		return blank, loft, false, nil
 	}
 	blank.origins = append([]provenance.Ref(nil), section.origins...)
-	loft.origins = append([]provenance.Ref(nil), trim.base.Groups[group].Origins...)
+	loft.origins = append([]provenance.Ref(nil), trim.Base.Groups[group].Origins...)
 	blank.vertices, loft.vertices = make([]r3.Vec, 3*len(seam)), make([]r3.Vec, 3*len(seam))
 	blank.vertexBounds = make([]float64, 3*len(seam))
 	loft.vertexBounds = make([]float64, 3*len(seam))
@@ -69,9 +69,9 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 		if err := ctx.Err(); err != nil {
 			return blank, loft, false, err
 		}
-		station := trim.source.sourceStation[entry.station]
+		station := trim.Source.sourceStation[entry.station]
 		u, v := lfF(station.U), lfF(station.V)
-		for row, mapped := range [...]loftFaceMap{trim.maps[band], trim.maps[band+1]} {
+		for row, mapped := range [...]loftFaceMap{trim.Maps[band], trim.Maps[band+1]} {
 			position := row * 2 * len(seam)
 			if row == 1 {
 				position = 2 * len(seam)
@@ -82,7 +82,7 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 			}
 			loft.vertices[position+j] = point
 			loft.vertexBounds[position+j] = proofbound.AbsSumUpper(round,
-				proofbound.ProductUpper(trim.source.sourceStationRound, mapped.Stretch))
+				proofbound.ProductUpper(trim.Source.sourceStationRound, mapped.Stretch))
 		}
 		for row, end := range [...]planePoint{section.start, section.end} {
 			position := row * 2 * len(seam)

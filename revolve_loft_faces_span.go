@@ -35,8 +35,8 @@ type revolveLoftFacesMappedCell struct {
 // section side. This is a source certificate; it does not admit a held seam.
 func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRecord,
 	section revolveSectionSpan) ([]revolveLoftFacesMappedCell, bool, error) {
-	if ctx == nil || trim == nil || trim.source == nil ||
-		len(trim.maps) < 2 || section.start.U == section.end.U ||
+	if ctx == nil || trim == nil || trim.Source == nil ||
+		len(trim.Maps) < 2 || section.start.U == section.end.U ||
 		section.start.V <= 0 || section.end.V <= 0 {
 		return nil, false, nil
 	}
@@ -46,7 +46,7 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 		return nil, false, err
 	}
 	var cells []revolveLoftFacesMappedCell
-	for segment, source := range trim.source.profile.Outer.Segments {
+	for segment, source := range trim.Source.profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
@@ -64,7 +64,7 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 			return nil, false, nil
 		}
 		for index, span := range spans {
-			for band := 0; band+1 < len(trim.maps); band++ {
+			for band := 0; band+1 < len(trim.Maps); band++ {
 				if err := ctx.Err(); err != nil {
 					return nil, false, err
 				}
@@ -140,7 +140,7 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 					cells = append(cells, refined...)
 					continue
 				}
-				if revolveLoftFacesSpanAxialMiss(trim.maps[band], trim.maps[band+1],
+				if revolveLoftFacesSpanAxialMiss(trim.Maps[band], trim.Maps[band+1],
 					span, section, lfZero(), lfOne(), lfZero(), lfOne()) {
 					cells = append(cells, revolveLoftFacesMappedCell{segment: segment,
 						span: index, band: band, side: revolveLoftFacesAxialMiss,
@@ -179,12 +179,12 @@ func revolveLoftFacesMeridian(section revolveSectionSpan) (*big.Rat, *big.Rat) {
 
 func revolveLoftFacesStraightOrFitSpans(trim *loftFacesTrimRecord,
 	segment int, source curveSegment) ([]freeform.BezierSpan, bool) {
-	if segment >= len(trim.source.source.entities) {
+	if segment >= len(trim.Source.source.entities) {
 		return nil, false
 	}
 	switch typed := source.(type) {
 	case lineSeg:
-		if _, ok := trim.source.source.entities[segment].(*sketch.Line); !ok ||
+		if _, ok := trim.Source.source.entities[segment].(*sketch.Line); !ok ||
 			!((typed.TStart == 0 && typed.TEnd == 1) ||
 				(typed.TStart == 1 && typed.TEnd == 0)) {
 			return nil, false
@@ -194,7 +194,7 @@ func revolveLoftFacesStraightOrFitSpans(trim *loftFacesTrimRecord,
 			{U: lfF(typed.End.U), V: lfF(typed.End.V)},
 		}}, true
 	case fitSplineSeg:
-		if _, ok := trim.source.source.entities[segment].(*sketch.FitSpline); !ok ||
+		if _, ok := trim.Source.source.entities[segment].(*sketch.FitSpline); !ok ||
 			!((typed.TStart == 0 && typed.TEnd == 1) ||
 				(typed.TStart == 1 && typed.TEnd == 0)) {
 			return nil, false
@@ -210,7 +210,7 @@ func revolveLoftFacesStraightOrFitSpans(trim *loftFacesTrimRecord,
 
 func revolveLoftFacesMappedBezierCell(memo *loftface.MeridianMemo, trim *loftFacesTrimRecord, m, b *big.Rat,
 	segment, spanIndex, band int, span freeform.BezierSpan) (revolveLoftFacesMappedCell, bool) {
-	first, last := trim.maps[band], trim.maps[band+1]
+	first, last := trim.Maps[band], trim.Maps[band+1]
 	q := memo.QRows(first, last, span, m, b)
 	kind, signed := loftface.ClassifyRows(q)
 	cell := revolveLoftFacesMappedCell{segment: segment, span: spanIndex,
@@ -296,12 +296,12 @@ func revolveLoftFacesEndpointFiniteRootsWith(memo *loftface.MeridianMemo, trim *
 	section revolveSectionSpan, span freeform.BezierSpan, band int, atEnd bool) (
 	[]loftface.EndpointRoot, bool,
 ) {
-	if trim == nil || band < 0 || band+1 >= len(trim.maps) || len(span) == 0 ||
+	if trim == nil || band < 0 || band+1 >= len(trim.Maps) || len(span) == 0 ||
 		section.start.U == section.end.U {
 		return nil, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := memo.QRows(trim.maps[band], trim.maps[band+1], span, m, b)
+	q := memo.QRows(trim.Maps[band], trim.Maps[band+1], span, m, b)
 	roots, ok := loftface.EndpointTimeRoots(q, atEnd)
 	if !ok {
 		return nil, false
@@ -311,8 +311,8 @@ func revolveLoftFacesEndpointFiniteRootsWith(memo *loftface.MeridianMemo, trim *
 		s = lfOne()
 	}
 	point := loftface.BezierPoint(span, s)
-	x0 := trim.maps[band].At(point[0], point[1])[0]
-	x1 := trim.maps[band+1].At(point[0], point[1])[0]
+	x0 := trim.Maps[band].At(point[0], point[1])[0]
+	x1 := trim.Maps[band+1].At(point[0], point[1])[0]
 	for i, root := range roots {
 		roots[i], ok = revolveLoftFacesEndpointAxialClass(root, x0, x1, section)
 		if !ok {

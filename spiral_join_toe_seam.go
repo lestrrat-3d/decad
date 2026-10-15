@@ -101,35 +101,35 @@ func spiralToeFixedSlopeAtX(p spiralHeelPolys, x, slope *big.Rat) []*big.Rat {
 func spiralToeRootCells(ctx context.Context, trim *loftFacesTrimRecord,
 	capC *big.Rat) (bool, error) {
 	count := 0
-	for j, group := range trim.stationGroup {
+	for j, group := range trim.StationGroup {
 		if group != 4 {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}
-		if j >= len(trim.bounds[1].sourceDeparture) ||
-			j >= len(trim.bounds[2].sourceDeparture) ||
-			j >= len(trim.bounds[1].projectiveDeparture) ||
-			j >= len(trim.bounds[2].projectiveDeparture) {
+		if j >= len(trim.Bounds[1].SourceDeparture) ||
+			j >= len(trim.Bounds[2].SourceDeparture) ||
+			j >= len(trim.Bounds[1].ProjectiveDeparture) ||
+			j >= len(trim.Bounds[2].ProjectiveDeparture) {
 			return false, nil
 		}
-		lo, hi := trim.bounds[1], trim.bounds[2]
-		departure := math.Max(proofbound.AbsSumUpper(lo.sourceDeparture[j], lo.projectiveDeparture[j]),
-			proofbound.AbsSumUpper(hi.sourceDeparture[j], hi.projectiveDeparture[j]))
+		lo, hi := trim.Bounds[1], trim.Bounds[2]
+		departure := math.Max(proofbound.AbsSumUpper(lo.SourceDeparture[j], lo.ProjectiveDeparture[j]),
+			proofbound.AbsSumUpper(hi.SourceDeparture[j], hi.ProjectiveDeparture[j]))
 		if proofbound.IsNonFinite(departure) {
 			return false, nil
 		}
-		a := trim.source.sourceStation[j]
-		z := trim.source.sourceStation[(j+1)%len(trim.stationGroup)]
-		if !spiralCellSide(trim.maps[1], trim.maps[2], a, z, lfF(departure),
+		a := trim.Source.sourceStation[j]
+		z := trim.Source.sourceStation[(j+1)%len(trim.StationGroup)]
+		if !spiralCellSide(trim.Maps[1], trim.Maps[2], a, z, lfF(departure),
 			big.NewRat(-1, 1), capC, false, lfZero(), lfZero(), 0) ||
-			!spiralCellSide(trim.maps[1], trim.maps[2], a, z, lfF(departure),
+			!spiralCellSide(trim.Maps[1], trim.Maps[2], a, z, lfF(departure),
 				big.NewRat(-1, 1), capC, true, lfOne(), lfOne(), 0) {
 			return false, nil
 		}
 		var caps [2][3]loftFaceInterval
-		for index, mapped := range [...]loftFaceMap{trim.maps[1], trim.maps[2]} {
+		for index, mapped := range [...]loftFaceMap{trim.Maps[1], trim.Maps[2]} {
 			first := mapped.At(lfF(a.U), lfF(a.V))
 			second := mapped.At(lfF(z.U), lfF(z.V))
 			for axis := range 3 {
@@ -210,31 +210,31 @@ func spiralToeEndpointBox(ctx context.Context, first, second loftFaceMap,
 // blank toe cap, a finite X and angular-slope range, and both exact ends.
 func certifySpiralToeRootSeam(ctx context.Context,
 	proof *spiralFirstJoinSource) (*spiralToeRootSeam, bool, error) {
-	if ctx == nil || proof == nil || proof.tooth == nil || proof.blank == nil {
+	if ctx == nil || proof == nil || proof.Tooth == nil || proof.Blank == nil {
 		return nil, false, nil
 	}
-	trim := proof.tooth
-	arc, ok := trim.source.profile.Outer.Segments[4].(arcSeg)
-	if !ok || len(trim.maps) != 9 || len(trim.bounds) != 9 {
+	trim := proof.Tooth
+	arc, ok := trim.Source.profile.Outer.Segments[4].(arcSeg)
+	if !ok || len(trim.Maps) != 9 || len(trim.Bounds) != 9 {
 		return nil, false, nil
 	}
 	radius, radiusBound, box, ok := spiralHeelSourceBox(arc)
 	if !ok {
 		return nil, false, nil
 	}
-	capC := lfAdd(lfF(proof.blank.toeRoot.U), lfF(proof.blank.toeRoot.V))
-	if lfAdd(lfF(proof.blank.toeOuter.U), lfF(proof.blank.toeOuter.V)).Cmp(capC) != 0 ||
-		capC.Sign() <= 0 || lfF(proof.blank.toeRoot.U).Cmp(lfF(proof.blank.toeOuter.U)) >= 0 {
+	capC := lfAdd(lfF(proof.Blank.toeRoot.U), lfF(proof.Blank.toeRoot.V))
+	if lfAdd(lfF(proof.Blank.toeOuter.U), lfF(proof.Blank.toeOuter.V)).Cmp(capC) != 0 ||
+		capC.Sign() <= 0 || lfF(proof.Blank.toeRoot.U).Cmp(lfF(proof.Blank.toeOuter.U)) >= 0 {
 		return nil, false, nil
 	}
-	mapOK, negative := spiralToeMapCharge(trim.maps[1], trim.maps[2], box, radiusBound, capC)
+	mapOK, negative := spiralToeMapCharge(trim.Maps[1], trim.Maps[2], box, radiusBound, capC)
 	if !mapOK {
 		return nil, false, nil
 	}
 	if yes, err := spiralToeRootCells(ctx, trim, capC); err != nil || !yes {
 		return nil, false, err
 	}
-	p := spiralHeelBuildPolys(trim.maps[1], trim.maps[2], radius, capC)
+	p := spiralHeelBuildPolys(trim.Maps[1], trim.Maps[2], radius, capC)
 	for _, gate := range [...]struct {
 		coeff []*big.Rat
 		sign  int
@@ -272,28 +272,28 @@ func certifySpiralToeRootSeam(ctx context.Context,
 	}
 	coordCharge, slopeCharge := big.NewRat(1, 10_000_000_000), big.NewRat(1, 1_000_000_000)
 	seam := &spiralToeRootSeam{
-		x:        loftFaceInterval{Lo: lfSub(idealXLo, coordCharge), Hi: lfAdd(idealXHi, coordCharge)},
-		slope:    loftFaceInterval{Lo: lfSub(idealSLo, slopeCharge), Hi: lfAdd(idealSHi, slopeCharge)},
-		coneC:    capC,
-		negative: negative,
+		X:        loftFaceInterval{Lo: lfSub(idealXLo, coordCharge), Hi: lfAdd(idealXHi, coordCharge)},
+		Slope:    loftFaceInterval{Lo: lfSub(idealSLo, slopeCharge), Hi: lfAdd(idealSHi, slopeCharge)},
+		ConeC:    capC,
+		Negative: negative,
 	}
-	if seam.x.Lo.Cmp(lfF(proof.blank.toeRoot.U)) <= 0 ||
-		seam.x.Hi.Cmp(lfF(proof.blank.toeOuter.U)) >= 0 {
+	if seam.X.Lo.Cmp(lfF(proof.Blank.toeRoot.U)) <= 0 ||
+		seam.X.Hi.Cmp(lfF(proof.Blank.toeOuter.U)) >= 0 {
 		return nil, false, nil
 	}
 	for end, point := range [...]planePoint{arc.Start, arc.End} {
-		endpoint, yes, err := spiralToeEndpointBox(ctx, trim.maps[1], trim.maps[2],
+		endpoint, yes, err := spiralToeEndpointBox(ctx, trim.Maps[1], trim.Maps[2],
 			point, capC, coordCharge)
 		if err != nil || !yes {
 			return nil, false, err
 		}
 		ratio, yes := spiralHeelRatio(endpoint)
-		if !yes || endpoint[0].Lo.Cmp(seam.x.Lo) <= 0 ||
-			endpoint[0].Hi.Cmp(seam.x.Hi) >= 0 ||
-			ratio.Lo.Cmp(seam.slope.Lo) <= 0 || ratio.Hi.Cmp(seam.slope.Hi) >= 0 {
+		if !yes || endpoint[0].Lo.Cmp(seam.X.Lo) <= 0 ||
+			endpoint[0].Hi.Cmp(seam.X.Hi) >= 0 ||
+			ratio.Lo.Cmp(seam.Slope.Lo) <= 0 || ratio.Hi.Cmp(seam.Slope.Hi) >= 0 {
 			return nil, false, nil
 		}
-		seam.ends[end] = endpoint
+		seam.Ends[end] = endpoint
 	}
 	return seam, true, nil
 }

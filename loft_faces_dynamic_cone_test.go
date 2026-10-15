@@ -54,10 +54,10 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 	loft, err := doc.LoftFaces(t.Context(), section(near, refOf(CapStart(near))),
 		section(near, refOf(CapEnd(near))), section(far, refOf(CapEnd(far))))
 	require.NoError(t, err)
-	baseRecord := loft.n.Payload.(facetedPayload).loftFacesCap
-	require.Len(t, baseRecord.maps, 3)
-	require.Len(t, baseRecord.bounds, 3)
-	require.Len(t, baseRecord.stationGroup, len(baseRecord.source.sourceStation))
+	baseRecord := loft.n.Payload.(facetedPayload).LoftFacesCap
+	require.Len(t, baseRecord.Maps, 3)
+	require.Len(t, baseRecord.Bounds, 3)
+	require.Len(t, baseRecord.StationGroup, len(baseRecord.Source.sourceStation))
 	cone := func(apex float64) *Body {
 		cs, e := world.CreateSketch(world.XY())
 		require.NoError(t, e)
@@ -78,15 +78,15 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 	}
 	cut, err := Cut(t.Context(), loft, cone(7.5))
 	require.NoError(t, err)
-	require.NotNil(t, cut.n.Payload.(facetedPayload).loftFacesToe)
+	require.NotNil(t, cut.n.Payload.(facetedPayload).LoftFacesToe)
 	trim, err := Intersect(t.Context(), cut, cone(8))
 	require.NoError(t, err)
-	trimRecord := trim.n.Payload.(facetedPayload).loftFacesTrim
+	trimRecord := trim.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trimRecord)
-	require.Same(t, baseRecord.source, trimRecord.source)
-	require.Len(t, trimRecord.maps, 3)
-	require.Len(t, trimRecord.bounds, 3)
-	require.Equal(t, baseRecord.stationGroup, trimRecord.stationGroup)
+	require.Same(t, baseRecord.Source, trimRecord.Source)
+	require.Len(t, trimRecord.Maps, 3)
+	require.Len(t, trimRecord.Bounds, 3)
+	require.Equal(t, baseRecord.StationGroup, trimRecord.StationGroup)
 	loftVolume, err := loft.Volume()
 	require.NoError(t, err)
 	cutVolume, err := cut.Volume()

@@ -14,11 +14,11 @@ import (
 // crossing, refuses. No faceted station grants admission.
 func mappedArcFiniteSide(ctx context.Context, trim *loftFacesTrimRecord,
 	segmentIndex int, meridian revolveSectionSpan) (int, bool) {
-	if trim == nil || len(trim.maps) < 2 {
+	if trim == nil || len(trim.Maps) < 2 {
 		return 0, false
 	}
 	var side int
-	for band := 0; band+1 < len(trim.maps); band++ {
+	for band := 0; band+1 < len(trim.Maps); band++ {
 		bandSide, ok := mappedArcFiniteSideCell(ctx, trim, segmentIndex, meridian,
 			band, 0, 1, lfZero(), lfOne())
 		if !ok || side != 0 && bandSide != 0 && side != bandSide {
@@ -38,25 +38,25 @@ func mappedArcFiniteSide(ctx context.Context, trim *loftFacesTrimRecord,
 func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 	segmentIndex int, meridian revolveSectionSpan, band int,
 	sLo, sHi float64, tLo, tHi *big.Rat) (int, bool) {
-	if ctx == nil || trim == nil || trim.source == nil || trim.source.source == nil ||
-		segmentIndex < 0 || segmentIndex >= len(trim.source.profile.Outer.Segments) ||
-		segmentIndex >= len(trim.source.source.entities) ||
-		band < 0 || band+1 >= len(trim.maps) ||
+	if ctx == nil || trim == nil || trim.Source == nil || trim.Source.source == nil ||
+		segmentIndex < 0 || segmentIndex >= len(trim.Source.profile.Outer.Segments) ||
+		segmentIndex >= len(trim.Source.source.entities) ||
+		band < 0 || band+1 >= len(trim.Maps) ||
 		sLo < 0 || sHi > 1 || sLo > sHi ||
 		tLo == nil || tHi == nil || tLo.Sign() < 0 ||
 		tLo.Cmp(tHi) > 0 || tHi.Cmp(lfOne()) > 0 {
 		return 0, false
 	}
-	segment, ok := trim.source.profile.Outer.Segments[segmentIndex].(arcSeg)
+	segment, ok := trim.Source.profile.Outer.Segments[segmentIndex].(arcSeg)
 	if !ok || !((segment.TStart == 0 && segment.TEnd == 1) ||
 		(segment.TStart == 1 && segment.TEnd == 0)) {
 		return 0, false
 	}
-	arc, ok := trim.source.source.entities[segmentIndex].(*sketch.Arc)
+	arc, ok := trim.Source.source.entities[segmentIndex].(*sketch.Arc)
 	if !ok || !mappedArcRecordMatches(segment, arc) {
 		return 0, false
 	}
-	sourceBox, err := lfSourceBox(trim.source)
+	sourceBox, err := lfSourceBox(trim.Source)
 	if err != nil {
 		return 0, false
 	}
@@ -105,8 +105,8 @@ func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 		corners := loftface.BoxCorners(box)
 		var side int
 		undecided := false
-		first, second := loftface.ArcCapRanges(trim.maps[band], corners),
-			loftface.ArcCapRanges(trim.maps[band+1], corners)
+		first, second := loftface.ArcCapRanges(trim.Maps[band], corners),
+			loftface.ArcCapRanges(trim.Maps[band+1], corners)
 		bandSide, ok := loftface.ArcBandSide(first, second, x0, x1, m, b, tLo, tHi, 6)
 		if !ok {
 			undecided = true

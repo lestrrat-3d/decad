@@ -88,12 +88,12 @@ func revolveLoftFacesHeelBoundarySideTie(proof *revolveLoftFacesSourceCertificat
 	census *revolveLoftFacesPairCensus, arc *revolveLoftFacesToolCapOccupiedArc,
 	boundary revolveLoftFacesToolCapBoundary) (revolveLoftFacesCapSideTie, bool) {
 	var result revolveLoftFacesCapSideTie
-	if proof == nil || proof.trim == nil || proof.trim.source == nil ||
-		proof.trim.source.source == nil ||
+	if proof == nil || proof.trim == nil || proof.trim.Source == nil ||
+		proof.trim.Source.source == nil ||
 		census == nil || census.manifest == nil || arc == nil || arc.time == nil ||
 		arc.circle.span < 0 || arc.circle.span >= len(proof.section.spans) ||
 		boundary.face == nil || boundary.segment < 0 ||
-		boundary.segment >= len(proof.trim.source.profile.Outer.Segments) {
+		boundary.segment >= len(proof.trim.Source.profile.Outer.Segments) {
 		return result, false
 	}
 	section := proof.section.spans[arc.circle.span]
@@ -160,24 +160,24 @@ func revolveLoftFacesHeelBoundarySideTie(proof *revolveLoftFacesSourceCertificat
 func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificate,
 	arc *revolveLoftFacesToolCapOccupiedArc,
 	boundary revolveLoftFacesToolCapBoundary) bool {
-	if proof == nil || proof.trim == nil || proof.trim.source == nil ||
-		proof.trim.source.source == nil || arc == nil ||
+	if proof == nil || proof.trim == nil || proof.trim.Source == nil ||
+		proof.trim.Source.source == nil || arc == nil ||
 		arc.time == nil || arc.circle.x == nil || arc.circle.radius == nil ||
 		arc.circle.span < 0 || arc.circle.span >= len(proof.section.spans) ||
-		arc.band < 0 || arc.band+1 >= len(proof.trim.maps) {
+		arc.band < 0 || arc.band+1 >= len(proof.trim.Maps) {
 		return false
 	}
 	section := proof.section.spans[arc.circle.span]
 	if section.start.U == section.end.U ||
 		boundary.segment < 0 ||
-		boundary.segment >= len(proof.trim.source.profile.Outer.Segments) {
+		boundary.segment >= len(proof.trim.Source.profile.Outer.Segments) {
 		return false
 	}
-	box, err := lfSourceBox(proof.trim.source)
+	box, err := lfSourceBox(proof.trim.Source)
 	if err != nil {
 		return false
 	}
-	band, time, ok := loftface.ConstantXBand(proof.trim.maps, box, arc.circle.x)
+	band, time, ok := loftface.ConstantXBand(proof.trim.Maps, box, arc.circle.x)
 	if !ok || band != arc.band || time.Cmp(arc.time) != 0 {
 		return false
 	}
@@ -185,12 +185,12 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 	if lfAdd(lfMul(m, arc.circle.x), b).Cmp(arc.circle.radius) != 0 {
 		return false
 	}
-	segment := proof.trim.source.profile.Outer.Segments[boundary.segment]
+	segment := proof.trim.Source.profile.Outer.Segments[boundary.segment]
 	spans, ok := revolveLoftFacesStraightOrFitSpans(proof.trim, boundary.segment, segment)
 	if !ok || boundary.span < 0 || boundary.span >= len(spans) {
 		return false
 	}
-	first, last := proof.trim.maps[band], proof.trim.maps[band+1]
+	first, last := proof.trim.Maps[band], proof.trim.Maps[band+1]
 	side := polynomial.BernsteinRowsAt(loftface.MeridianQRows(first, last,
 		spans[boundary.span], m, b), time)
 

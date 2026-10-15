@@ -26,10 +26,10 @@ func revolveLoftFacesAdaptiveBezierCells(ctx context.Context, trim *loftFacesTri
 	section revolveSectionSpan) (
 	[]revolveLoftFacesMappedCell, bool, error,
 ) {
-	if ctx == nil || trim == nil || band < 0 || band+1 >= len(trim.maps) {
+	if ctx == nil || trim == nil || band < 0 || band+1 >= len(trim.Maps) {
 		return nil, false, nil
 	}
-	first, last := trim.maps[band], trim.maps[band+1]
+	first, last := trim.Maps[band], trim.Maps[band+1]
 	q := revolveLoftFacesMeridianMemoOf(ctx).QRows(first, last, span, m, b)
 	j := loftface.MeridianJRows(first, last, span, q)
 	remaining := revolveLoftFacesMaxBandCells

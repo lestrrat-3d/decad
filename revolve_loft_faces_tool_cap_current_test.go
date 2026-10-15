@@ -17,7 +17,7 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 	require.True(t, ok)
 	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
 	require.True(t, ok)
-	box, err := lfSourceBox(proof.trim.source)
+	box, err := lfSourceBox(proof.trim.Source)
 	require.NoError(t, err)
 	checked := 0
 	for _, circle := range sides.circles {
@@ -34,7 +34,7 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 		}
 		require.NoError(t, err)
 		require.True(t, certified)
-		band, time, unique := loftface.ConstantXBand(proof.trim.maps, box, circle.x)
+		band, time, unique := loftface.ConstantXBand(proof.trim.Maps, box, circle.x)
 		require.True(t, unique)
 		require.Equal(t, band, arc.band)
 		require.Zero(t, time.Cmp(arc.time))
@@ -43,8 +43,8 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 		require.True(t, current)
 		if span.start.U != span.end.U {
 			lower := lfZero()
-			if circle.x.Cmp(proof.trim.toe.apex) < 0 {
-				lower = lfDiv(lfSub(proof.trim.toe.apex, circle.x), proof.trim.toe.slope)
+			if circle.x.Cmp(proof.trim.Toe.apex) < 0 {
+				lower = lfDiv(lfSub(proof.trim.Toe.apex, circle.x), proof.trim.Toe.slope)
 			}
 			section, sourceOK, sourceErr := revolveLoftFacesConstantXSourceCells(t.Context(), proof,
 				circle.x, lower, circle.radius)

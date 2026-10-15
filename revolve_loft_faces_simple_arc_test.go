@@ -21,7 +21,7 @@ func TestRevolveLoftFacesShortArcSupportsOnlyItsChordOutside(t *testing.T) {
 func TestRevolveLoftFacesArcRefusesUnequalEndpointRadius(t *testing.T) {
 	s, profile := neutralSimpleSourceSketch(t, false)
 	trim := neutralSimpleSourceRecord(t, s, profile)
-	arc := trim.source.profile.Outer.Segments[1].(arcSeg)
+	arc := trim.Source.profile.Outer.Segments[1].(arcSeg)
 	arc.End.U += 0.01
 	_, certified := revolveLoftFacesSimpleArc(trim, 1, arc, false)
 	require.False(t, certified)

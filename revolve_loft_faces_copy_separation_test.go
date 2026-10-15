@@ -17,7 +17,7 @@ func TestCurvedLoftFacesRealCopySeparation(t *testing.T) {
 	require.NoError(t, err)
 	original := source.n.Payload.(facetedPayload)
 	placed := image.n.Payload.(facetedPayload)
-	require.Same(t, trim, original.loftFacesTrim)
+	require.Same(t, trim, original.LoftFacesTrim)
 	require.NotNil(t, placed.CopyLineage)
 	require.Same(t, source, placed.CopyLineage.Source)
 	require.Equal(t, turn, placed.CopyLineage.Motion)

@@ -29,7 +29,7 @@ func spiralCombineInputs(ctx context.Context, blank *Body, tools []*Body) (*spir
 	}
 	// No proof carries the exact tangency and the one-step gaps of a
 	// cone-tangent first tooth to a copy of it.
-	if first.tooth != nil && first.tooth.tangent != nil {
+	if first.Tooth != nil && first.Tooth.Tangent != nil {
 		return nil, fmt.Errorf("%w: a cone-tangent first tooth has no patterned-copy proof", ErrUnsupported)
 	}
 	copies, err := certifyFacetedCopies(ctx, tools)
@@ -50,6 +50,6 @@ func spiralCombineInputs(ctx context.Context, blank *Body, tools []*Body) (*spir
 			return nil, fmt.Errorf("%w: tool %d cannot use the legacy axial seam proof", ErrUnsupported, i+2)
 		}
 	}
-	return &spiralCombineSource{first: first, tools: tools,
-		moves: copies.Moves, copies: copies}, nil
+	return &spiralCombineSource{First: first, Tools: tools,
+		Moves: copies.Moves, Copies: copies}, nil
 }

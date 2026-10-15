@@ -36,13 +36,13 @@ func certifyRevolveLoftFacesRadialJoint(ctx context.Context, trim *loftFacesTrim
 	}
 	m, b := revolveLoftFacesMeridian(section)
 	memo := revolveLoftFacesMeridianMemoOf(ctx)
-	q := memo.QRows(trim.maps[band], trim.maps[band+1], vertex.fitSpan, m, b)
+	q := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.fitSpan, m, b)
 	index := 0
 	if vertex.fitAtEnd {
 		index = len(q[0]) - 1
 	}
-	g0 := trim.maps[band].Denominator(vertex.coordinate[0], vertex.coordinate[1])
-	g1 := trim.maps[band+1].Denominator(vertex.coordinate[0], vertex.coordinate[1])
+	g0 := trim.Maps[band].Denominator(vertex.coordinate[0], vertex.coordinate[1])
+	g1 := trim.Maps[band+1].Denominator(vertex.coordinate[0], vertex.coordinate[1])
 	if g0.Sign() <= 0 || g1.Sign() <= 0 {
 		return empty, false
 	}
@@ -53,7 +53,7 @@ func certifyRevolveLoftFacesRadialJoint(ctx context.Context, trim *loftFacesTrim
 			return empty, false
 		}
 	}
-	for capIndex, mapped := range [...]loftFaceMap{trim.maps[band], trim.maps[band+1]} {
+	for capIndex, mapped := range [...]loftFaceMap{trim.Maps[band], trim.Maps[band+1]} {
 		if mapped.At(vertex.coordinate[0], vertex.coordinate[1])[0].Cmp(radial.x[capIndex]) != 0 {
 			return empty, false
 		}

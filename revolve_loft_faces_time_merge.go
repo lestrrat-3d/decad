@@ -36,7 +36,7 @@ func revolveLoftFacesMergeEndpointCells(ctx context.Context,
 	knot *revolveLoftFacesFitKnotJoint, radial *revolveLoftFacesRadialJoint,
 	leftSpan bool) ([]revolveLoftFacesMappedCell, bool, error) {
 	if ctx == nil || trim == nil || knot == nil || radial == nil ||
-		band < 0 || band+1 >= len(trim.maps) ||
+		band < 0 || band+1 >= len(trim.Maps) ||
 		knot.vertex.segment != segment || knot.band != band ||
 		radial.vertex.fitSegment != segment || radial.radial.band != band ||
 		knot.vertex.point == nil || radial.vertex.point == nil ||
@@ -75,7 +75,7 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 	trim *loftFacesTrimRecord, section revolveSectionSpan,
 	segment, spanIndex, band int, span freeform.BezierSpan,
 	roots []revolveLoftFacesOwnedRoot) ([]revolveLoftFacesMappedCell, bool, error) {
-	if ctx == nil || trim == nil || band < 0 || band+1 >= len(trim.maps) ||
+	if ctx == nil || trim == nil || band < 0 || band+1 >= len(trim.Maps) ||
 		len(roots) == 0 || len(roots) > 4 || len(span) == 0 {
 		return nil, false, nil
 	}
@@ -83,8 +83,8 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 		return nil, false, nil
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := revolveLoftFacesMeridianMemoOf(ctx).QRows(trim.maps[band], trim.maps[band+1], span, m, b)
-	j := loftface.MeridianJRows(trim.maps[band], trim.maps[band+1], span, q)
+	q := revolveLoftFacesMeridianMemoOf(ctx).QRows(trim.Maps[band], trim.Maps[band+1], span, m, b)
+	j := loftface.MeridianJRows(trim.Maps[band], trim.Maps[band+1], span, q)
 	remaining := revolveLoftFacesMaxBandCells
 	previous := lfZero()
 	var cells []revolveLoftFacesMappedCell
@@ -93,7 +93,7 @@ func revolveLoftFacesPartitionOwnedEndpointCells(ctx context.Context,
 			return false, nil
 		}
 		gap, ok, err := revolveLoftFacesOpenTimeSlab(ctx, q, j,
-			trim.maps[band], trim.maps[band+1], span, section,
+			trim.Maps[band], trim.Maps[band+1], span, section,
 			segment, spanIndex, band, previous, hi,
 			loOpen, hiOpen, &remaining)
 		if err != nil {

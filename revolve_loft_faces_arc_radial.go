@@ -23,21 +23,21 @@ type mappedArcRadialBand struct {
 func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 	segmentIndex, band int, meridian revolveSectionSpan) (mappedArcRadialBand, bool) {
 	var empty mappedArcRadialBand
-	if ctx == nil || ctx.Err() != nil || trim == nil || trim.source == nil ||
-		trim.source.source == nil ||
-		segmentIndex < 0 || segmentIndex >= len(trim.source.profile.Outer.Segments) ||
-		segmentIndex >= len(trim.source.source.entities) ||
-		band < 0 || band+1 >= len(trim.maps) ||
+	if ctx == nil || ctx.Err() != nil || trim == nil || trim.Source == nil ||
+		trim.Source.source == nil ||
+		segmentIndex < 0 || segmentIndex >= len(trim.Source.profile.Outer.Segments) ||
+		segmentIndex >= len(trim.Source.source.entities) ||
+		band < 0 || band+1 >= len(trim.Maps) ||
 		meridian.start.U == meridian.end.U ||
 		meridian.start.V <= 0 || meridian.end.V <= 0 {
 		return empty, false
 	}
-	segment, ok := trim.source.profile.Outer.Segments[segmentIndex].(arcSeg)
+	segment, ok := trim.Source.profile.Outer.Segments[segmentIndex].(arcSeg)
 	if !ok || !((segment.TStart == 0 && segment.TEnd == 1) ||
 		(segment.TStart == 1 && segment.TEnd == 0)) {
 		return empty, false
 	}
-	arc, ok := trim.source.source.entities[segmentIndex].(*sketch.Arc)
+	arc, ok := trim.Source.source.entities[segmentIndex].(*sketch.Arc)
 	if !ok || !mappedArcRecordMatches(segment, arc) {
 		return empty, false
 	}
@@ -45,7 +45,7 @@ func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 	if err != nil {
 		return empty, false
 	}
-	sourceBox, err := lfSourceBox(trim.source)
+	sourceBox, err := lfSourceBox(trim.Source)
 	if err != nil || lfF(uBox.Lo).Cmp(sourceBox[0]) < 0 ||
 		lfF(uBox.Hi).Cmp(sourceBox[1]) > 0 ||
 		lfF(vBox.Lo).Cmp(sourceBox[2]) < 0 ||
@@ -61,7 +61,7 @@ func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 		return empty, false
 	}
 	var mappedCaps [2]loftface.RadialCap
-	for index, mapped := range [...]loftFaceMap{trim.maps[band], trim.maps[band+1]} {
+	for index, mapped := range [...]loftFaceMap{trim.Maps[band], trim.Maps[band+1]} {
 		if mapped.G0.Sign() <= 0 || mapped.GU.Sign() != 0 || mapped.GV.Sign() != 0 ||
 			mapped.QU[0].Sign() != 0 || mapped.QV[0].Sign() != 0 {
 			return empty, false

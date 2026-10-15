@@ -19,29 +19,29 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// The original LoftFaces proof authenticates this map over source.sourceBox.
+// The original LoftFaces proof authenticates this map over Source.sourceBox.
 // A later Boolean may use it only after proving that its far cap survived.
 type loftFacesCapRecord struct {
-	source       *pointSectionRecord
-	maps         []loftFaceMap
-	bounds       []loftFaceCapBounds
-	stationGroup []int
-	final        loftFaceMap
-	group        int
-	// tangent is set only when the last section is a constructed
+	Source       *pointSectionRecord
+	Maps         []loftFaceMap
+	Bounds       []loftFaceCapBounds
+	StationGroup []int
+	Final        loftFaceMap
+	Group        int
+	// Tangent is set only when the last section is a constructed
 	// cone-tangent end. It is nil for plain LoftFaces.
-	tangent *loftface.TangentEnd
+	Tangent *loftface.TangentEnd
 }
 
 // This record is issued to one unplaced Cut of the original LoftFaces mesh.
 // Placement drops it, and the following Intersect does not copy it.
 type loftFacesToeRecord struct {
-	base       facetedPayload
-	cap        *loftFacesCapRecord
-	capFace    *Face
-	toeCapFace *Face
-	toe        *pointConeLimit
-	toeTool    *Body
+	Base       facetedPayload
+	Cap        *loftFacesCapRecord
+	CapFace    *Face
+	ToeCapFace *Face
+	Toe        *pointConeLimit
+	ToeTool    *Body
 }
 
 // loftFacesTrimRecord retains the authenticated source of one unplaced
@@ -49,26 +49,26 @@ type loftFacesToeRecord struct {
 // The Boolean result remains faceted; this record only admits later
 // source-specific proofs after those source identities are checked again.
 type loftFacesTrimRecord struct {
-	base                      facetedPayload
-	source                    *pointSectionRecord
-	maps                      []loftFaceMap
-	bounds                    []loftFaceCapBounds
-	stationGroup              []int
-	toe, heel                 *pointConeLimit
-	toeTool, heelTool         *Body
-	toeCapGroup, heelCapGroup int
-	// tangent is the cone-tangent end of the lofted tooth, copied from its
+	Base                      facetedPayload
+	Source                    *pointSectionRecord
+	Maps                      []loftFaceMap
+	Bounds                    []loftFaceCapBounds
+	StationGroup              []int
+	Toe, Heel                 *pointConeLimit
+	ToeTool, HeelTool         *Body
+	ToeCapGroup, HeelCapGroup int
+	// Tangent is the cone-tangent end of the lofted tooth, copied from its
 	// cap record. It is nil unless the loft ended in a constructed section.
-	tangent *loftface.TangentEnd
+	Tangent *loftface.TangentEnd
 }
 
 func loftFacesCapRecordReady(record *loftFacesCapRecord) bool {
-	if record == nil || record.source == nil {
+	if record == nil || record.Source == nil {
 		return false
 	}
-	n := len(record.maps)
-	return n >= 2 && n <= maxLoftFacesSections && len(record.bounds) == n &&
-		len(record.stationGroup) == len(record.source.sourceStation) && len(record.stationGroup) >= 3
+	n := len(record.Maps)
+	return n >= 2 && n <= maxLoftFacesSections && len(record.Bounds) == n &&
+		len(record.StationGroup) == len(record.Source.sourceStation) && len(record.StationGroup) >= 3
 }
 
 func uniqueConeFace(body *Body) (*Face, bool) {
@@ -142,7 +142,7 @@ func uniquePayloadSourcePatches(ctx context.Context, p facetedPayload, adj [][]i
 
 func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) error {
 	base, ok := source.n.Payload.(facetedPayload)
-	if !ok || !base.LoftFacesPrimitive || !loftFacesCapRecordReady(base.loftFacesCap) ||
+	if !ok || !base.LoftFacesPrimitive || !loftFacesCapRecordReady(base.LoftFacesCap) ||
 		base.Xform != r3.Identity() {
 		return nil
 	}
@@ -150,17 +150,17 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 	if !ok || !pointcone.AboveFarCap(base.Verts, base.MeshBound, cone.far) {
 		return nil
 	}
-	box, err := lfSourceBox(base.loftFacesCap.source)
+	box, err := lfSourceBox(base.LoftFacesCap.Source)
 	if err != nil {
 		return err
 	}
-	if err := loftface.PositiveDenominator(base.loftFacesCap.final, box); err != nil {
+	if err := loftface.PositiveDenominator(base.LoftFacesCap.Final, box); err != nil {
 		return err
 	}
-	if !loftCapOutsideToeCone(base.loftFacesCap.final, box, cone) {
+	if !loftCapOutsideToeCone(base.LoftFacesCap.Final, box, cone) {
 		return nil
 	}
-	capFace, matched, err := unchangedLoftCap(ctx, source, result, base, base.loftFacesCap.group)
+	capFace, matched, err := unchangedLoftCap(ctx, source, result, base, base.LoftFacesCap.Group)
 	if err != nil {
 		return err
 	}
@@ -179,8 +179,8 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 	if !ok {
 		return nil
 	}
-	p.loftFacesToe = &loftFacesToeRecord{base: base, cap: base.loftFacesCap,
-		capFace: capFace, toeCapFace: toeCapFace, toe: cone, toeTool: tool}
+	p.LoftFacesToe = &loftFacesToeRecord{Base: base, Cap: base.LoftFacesCap,
+		CapFace: capFace, ToeCapFace: toeCapFace, Toe: cone, ToeTool: tool}
 	result.n.Payload = p
 	return nil
 }
@@ -224,27 +224,27 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		return nil, false, nil
 	}
 	p, ok := target.n.Payload.(facetedPayload)
-	if !ok || p.loftFacesToe == nil || !loftFacesCapRecordReady(p.loftFacesToe.cap) ||
+	if !ok || p.LoftFacesToe == nil || !loftFacesCapRecordReady(p.LoftFacesToe.Cap) ||
 		p.Xform != r3.Identity() ||
-		p.loftFacesToe.capFace == nil || p.loftFacesToe.capFace.n.Body != bodyNode(target) {
+		p.LoftFacesToe.CapFace == nil || p.LoftFacesToe.CapFace.n.Body != bodyNode(target) {
 		return nil, false, nil
 	}
 	cone, ok := exactPointCone(tool)
-	if !ok || cone.far.Cmp(p.loftFacesToe.toe.far) != 0 ||
-		!pointcone.AboveFarCap(p.loftFacesToe.base.Verts, p.loftFacesToe.base.MeshBound, cone.far) ||
-		!orderedLoftFacesConeLimits(p.loftFacesToe.toe, cone, p.loftFacesToe.base) {
+	if !ok || cone.far.Cmp(p.LoftFacesToe.Toe.far) != 0 ||
+		!pointcone.AboveFarCap(p.LoftFacesToe.Base.Verts, p.LoftFacesToe.Base.MeshBound, cone.far) ||
+		!orderedLoftFacesConeLimits(p.LoftFacesToe.Toe, cone, p.LoftFacesToe.Base) {
 		return nil, false, nil
 	}
-	box, err := lfSourceBox(p.loftFacesToe.cap.source)
+	box, err := lfSourceBox(p.LoftFacesToe.Cap.Source)
 	if err != nil {
 		return nil, true, asBooleanError(op, err)
 	}
-	if err := loftface.PositiveDenominator(p.loftFacesToe.cap.final, box); err != nil {
+	if err := loftface.PositiveDenominator(p.LoftFacesToe.Cap.Final, box); err != nil {
 		return nil, true, asBooleanError(op, err)
 	}
 	var plane *loftface.TangentPlane
-	if !loftCapOutsideHeelCone(p.loftFacesToe.cap.final, box, cone) {
-		tangent, err := loftCapTangentToHeelCone(p.loftFacesToe.cap, box, cone)
+	if !loftCapOutsideHeelCone(p.LoftFacesToe.Cap.Final, box, cone) {
+		tangent, err := loftCapTangentToHeelCone(p.LoftFacesToe.Cap, box, cone)
 		if err != nil {
 			return nil, true, asBooleanError(op, err)
 		}
@@ -259,7 +259,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	}
 	capSource := -1
 	for i, face := range target.Faces() {
-		if face == p.loftFacesToe.capFace {
+		if face == p.LoftFacesToe.CapFace {
 			capSource = i
 			break
 		}
@@ -267,7 +267,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	if capSource < 0 {
 		return nil, false, nil
 	}
-	toeCapSource := indexOfFace(target.Faces(), p.loftFacesToe.toeCapFace)
+	toeCapSource := indexOfFace(target.Faces(), p.LoftFacesToe.ToeCapFace)
 	if toeCapSource < 0 {
 		return nil, false, nil
 	}
@@ -280,12 +280,12 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	for scale := 4.0; scale <= 32; scale *= 2 {
 		if plane == nil {
 			eval, err = evaluateBooleanMeshesWithConeCap(ctx, op, target, tool, pairMeshes{}, scale,
-				p.loftFacesToe.capFace, coneFace)
+				p.LoftFacesToe.CapFace, coneFace)
 		} else {
 			// The tangent cap touches the cone, so no pair is exempted. The
 			// tooth enters the ordinary gate with an exact prism glued to its
 			// end cap (section 11 of the design; "Two-cone continuation").
-			meshes = &tangentHeelMeshes{target: target, toe: p.loftFacesToe, plane: *plane}
+			meshes = &tangentHeelMeshes{target: target, toe: p.LoftFacesToe, plane: *plane}
 			eval, err = evaluateBooleanMeshesWithConeCap(ctx, op, target, tool, meshes, scale, nil, nil)
 		}
 		if err == nil {
@@ -332,15 +332,15 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		uniqueResultSourceFace(body, heelCapSource) == nil {
 		return body, true, nil
 	}
-	result.loftFacesTrim = &loftFacesTrimRecord{
-		base: p.loftFacesToe.base, source: p.loftFacesToe.cap.source,
-		maps:         append([]loftFaceMap(nil), p.loftFacesToe.cap.maps...),
-		bounds:       append([]loftFaceCapBounds(nil), p.loftFacesToe.cap.bounds...),
-		stationGroup: append([]int(nil), p.loftFacesToe.cap.stationGroup...),
-		toe:          p.loftFacesToe.toe, heel: cone,
-		toeTool: p.loftFacesToe.toeTool, heelTool: tool,
-		toeCapGroup: toeCapSource, heelCapGroup: heelCapSource,
-		tangent: p.loftFacesToe.cap.tangent,
+	result.LoftFacesTrim = &loftFacesTrimRecord{
+		Base: p.LoftFacesToe.Base, Source: p.LoftFacesToe.Cap.Source,
+		Maps:         append([]loftFaceMap(nil), p.LoftFacesToe.Cap.Maps...),
+		Bounds:       append([]loftFaceCapBounds(nil), p.LoftFacesToe.Cap.Bounds...),
+		StationGroup: append([]int(nil), p.LoftFacesToe.Cap.StationGroup...),
+		Toe:          p.LoftFacesToe.Toe, Heel: cone,
+		ToeTool: p.LoftFacesToe.ToeTool, HeelTool: tool,
+		ToeCapGroup: toeCapSource, HeelCapGroup: heelCapSource,
+		Tangent: p.LoftFacesToe.Cap.Tangent,
 	}
 	body.n.Payload = result
 	return body, true, nil
@@ -381,26 +381,26 @@ func loftCapOutsideHeelCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit
 // See docs/loft-face-sections-design.md, "Two-cone continuation".
 func loftCapTangentToHeelCone(record *loftFacesCapRecord, box [4]*big.Rat,
 	cone *pointConeLimit) (*loftface.TangentPlane, error) {
-	rec := record.tangent
+	rec := record.Tangent
 	if rec == nil || !rec.MatchesCone(cone.apex, cone.slope) ||
-		!loftface.MapEqual(rec.Map(), record.final) ||
-		!loftface.ConeTangentAlongRuling(record.final, box, cone.apex, cone.slope) {
+		!loftface.MapEqual(rec.Map(), record.Final) ||
+		!loftface.ConeTangentAlongRuling(record.Final, box, cone.apex, cone.slope) {
 		return nil, nil //nolint:nilnil // nil plane with nil error means the record is not a tangent end for this cone.
 	}
-	if len(record.maps) < 2 {
+	if len(record.Maps) < 2 {
 		return nil, nil //nolint:nilnil // same: not a tangent end for this cone.
 	}
-	side, ok := loftface.ConeOnLoftSide(record.final, record.maps[len(record.maps)-2], box,
+	side, ok := loftface.ConeOnLoftSide(record.Final, record.Maps[len(record.Maps)-2], box,
 		cone.apex, cone.slope, cone.far)
 	if !ok {
 		return nil, fmt.Errorf("%w: the heel cone is not provably on the loft side of the tangent cap plane",
 			ErrUnsupported)
 	}
-	if !loftface.CapsOnSide(record.final, record.maps[:len(record.maps)-1], box, side) {
+	if !loftface.CapsOnSide(record.Final, record.Maps[:len(record.Maps)-1], box, side) {
 		return nil, fmt.Errorf("%w: an earlier cap is not provably on the loft side of the tangent cap plane",
 			ErrUnsupported)
 	}
-	plane, ok := loftface.NewTangentPlane(record.final, side)
+	plane, ok := loftface.NewTangentPlane(record.Final, side)
 	if !ok {
 		return nil, fmt.Errorf("%w: the tangent cap has no exact plane", ErrUnsupported)
 	}
@@ -492,7 +492,7 @@ func extendTangentCap(ctx context.Context, held *Mesh, toe *loftFacesToeRecord,
 	refuse := func(why string) (*Mesh, loftface.Slab, error) {
 		return nil, loftface.Slab{}, fmt.Errorf("%w: the tangent tooth %s", ErrUnsupported, why)
 	}
-	vertices, triangles, sources, capFace := held.n.Vertices, held.n.Triangles, held.n.Source, toe.capFace
+	vertices, triangles, sources, capFace := held.n.Vertices, held.n.Triangles, held.n.Source, toe.CapFace
 	if !held.n.BoundaryOK || !held.n.SymDiffOK {
 		return refuse("mesh is not verified")
 	}
@@ -556,15 +556,15 @@ func toeStationLink(vertices []r3.Vec, toe *loftFacesToeRecord) (loftface.Statio
 	refuse := func(why string) (loftface.StationLink, error) {
 		return loftface.StationLink{}, fmt.Errorf("%w: the tangent tooth %s", ErrUnsupported, why)
 	}
-	record := toe.cap
-	last := len(record.maps) - 1
-	n := len(record.source.sourceStation)
-	baseVerts := toe.base.Verts
-	if last < 1 || len(record.bounds) != len(record.maps) || len(baseVerts) < (last+1)*n || n < 3 {
+	record := toe.Cap
+	last := len(record.Maps) - 1
+	n := len(record.Source.sourceStation)
+	baseVerts := toe.Base.Verts
+	if last < 1 || len(record.Bounds) != len(record.Maps) || len(baseVerts) < (last+1)*n || n < 3 {
 		return refuse("has no station ring")
 	}
-	capBounds := record.bounds[last]
-	if len(capBounds.sourceDeparture) != n || len(capBounds.projectiveDeparture) != n {
+	capBounds := record.Bounds[last]
+	if len(capBounds.SourceDeparture) != n || len(capBounds.ProjectiveDeparture) != n {
 		return refuse("has no chord bounds")
 	}
 	stationOf := make(map[r3.Vec]int, n)
@@ -575,8 +575,8 @@ func toeStationLink(vertices []r3.Vec, toe *loftFacesToeRecord) (loftface.Statio
 			return refuse("has a repeated station vertex")
 		}
 		stationOf[v] = j
-		link.ChordBound[j] = proofbound.AbsSumUpper(capBounds.sourceDeparture[j],
-			capBounds.projectiveDeparture[j], capBounds.stationRound)
+		link.ChordBound[j] = proofbound.AbsSumUpper(capBounds.SourceDeparture[j],
+			capBounds.ProjectiveDeparture[j], capBounds.StationRound)
 	}
 	for i, v := range vertices {
 		j, ok := stationOf[v]

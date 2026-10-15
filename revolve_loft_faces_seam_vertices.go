@@ -28,16 +28,16 @@ type revolveLoftFacesSeamVertex struct {
 func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFacesTrimRecord,
 	band int, stations []int, root loftFaceInterval, section revolveSectionSpan,
 ) ([]revolveLoftFacesSeamVertex, bool, error) {
-	if ctx == nil || trim == nil || trim.source == nil ||
-		band < 0 || band+1 >= len(trim.maps) || len(stations) < 2 ||
+	if ctx == nil || trim == nil || trim.Source == nil ||
+		band < 0 || band+1 >= len(trim.Maps) || len(stations) < 2 ||
 		root.Lo == nil || root.Hi == nil || section.start.U == section.end.U ||
 		section.start.V <= 0 || section.end.V <= 0 ||
 		root.Lo.Sign() < 0 || root.Hi.Cmp(lfOne()) > 0 || root.Lo.Cmp(root.Hi) > 0 ||
-		proofbound.IsNonFinite(trim.source.sourceStationRound) ||
-		trim.source.sourceStationRound < 0 {
+		proofbound.IsNonFinite(trim.Source.sourceStationRound) ||
+		trim.Source.sourceStationRound < 0 {
 		return nil, false, nil
 	}
-	first, last := trim.maps[band], trim.maps[band+1]
+	first, last := trim.Maps[band], trim.Maps[band+1]
 	xStart, xEnd := lfF(section.start.U), lfF(section.end.U)
 	rStart, rEnd := lfF(section.start.V), lfF(section.end.V)
 	meridianSlope := lfDiv(lfSub(rEnd, rStart), lfSub(xEnd, xStart))
@@ -50,7 +50,7 @@ func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFac
 	if proofbound.IsNonFinite(stretch) || stretch < 0 {
 		return nil, false, nil
 	}
-	stationBound := proofbound.ProductUpper(trim.source.sourceStationRound, stretch)
+	stationBound := proofbound.ProductUpper(trim.Source.sourceStationRound, stretch)
 	if proofbound.IsNonFinite(stationBound) {
 		return nil, false, nil
 	}
@@ -62,14 +62,14 @@ func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFac
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		if stationIndex < 0 || stationIndex >= len(trim.source.sourceStation) {
+		if stationIndex < 0 || stationIndex >= len(trim.Source.sourceStation) {
 			return nil, false, nil
 		}
 		if _, exists := seen[stationIndex]; exists {
 			return nil, false, nil
 		}
 		seen[stationIndex] = struct{}{}
-		station := trim.source.sourceStation[stationIndex]
+		station := trim.Source.sourceStation[stationIndex]
 		u, v := lfF(station.U), lfF(station.V)
 		a, z := first.At(u, v), last.At(u, v)
 		for _, time := range []*big.Rat{root.Lo, root.Hi} {

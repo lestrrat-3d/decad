@@ -70,13 +70,13 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 // The station group labels identify source chords. A complete cyclic run
 // contains every chord of this Sketch arc and its next shared endpoint.
 func revolveLoftFacesCompleteArcRun(trim *loftFacesTrimRecord, segment int) ([]int, bool) {
-	if trim == nil || trim.source == nil || segment < 0 ||
-		segment >= len(trim.source.profile.Outer.Segments) ||
-		len(trim.stationGroup) != len(trim.source.sourceStation) ||
-		len(trim.stationGroup) < 3 {
+	if trim == nil || trim.Source == nil || segment < 0 ||
+		segment >= len(trim.Source.profile.Outer.Segments) ||
+		len(trim.StationGroup) != len(trim.Source.sourceStation) ||
+		len(trim.StationGroup) < 3 {
 		return nil, false
 	}
-	groups := trim.stationGroup
+	groups := trim.StationGroup
 	start, runs := -1, 0
 	for index, group := range groups {
 		if group == segment && groups[(index+len(groups)-1)%len(groups)] != segment {

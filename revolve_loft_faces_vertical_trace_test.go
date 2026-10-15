@@ -177,14 +177,14 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	_, centered := revolveLoftFacesVerticalTraceArcRadius(&wrongCenter, *pieces[1].arc)
 	require.False(t, centered, "a moved Sketch arc is not centered on the blank axis")
 	payload := tooth.n.Payload.(facetedPayload)
-	trim := *payload.loftFacesTrim
-	source := *trim.source
+	trim := *payload.LoftFacesTrim
+	source := *trim.Source
 	live := *source.source
 	live.entities = slices.Clone(live.entities)
 	live.entities[pieces[1].cell.segment] = nil
 	source.source = &live
-	trim.source = &source
-	payload.loftFacesTrim = &trim
+	trim.Source = &source
+	payload.LoftFacesTrim = &trim
 	partialTooth := bornBody(&Body{n: topo.Body{Payload: payload}})
 	partialGraph := *graph
 	partialGraph.tooth = partialTooth

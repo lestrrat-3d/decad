@@ -47,7 +47,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	third, err := Copy(t.Context(), image, WithCopyPlacement(quarter))
 	require.NoError(t, err)
 	thirdPayload := third.n.Payload.(facetedPayload)
-	require.Nil(t, thirdPayload.loftFacesTrim)
+	require.Nil(t, thirdPayload.LoftFacesTrim)
 	require.Same(t, source, thirdPayload.CopyLineage.Source)
 	set, err = certifyFacetedCopies(t.Context(), []*Body{source, image, third})
 	require.NoError(t, err)

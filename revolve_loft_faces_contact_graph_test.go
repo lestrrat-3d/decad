@@ -190,10 +190,10 @@ func TestCurvedContactGraphRejectsStaleSourceEvents(t *testing.T) {
 		graph.cells[0].source.mapped.tLoOpen = original
 	})
 	t.Run("changed live station", func(t *testing.T) {
-		original := trim.source.sourceStation[0]
-		trim.source.sourceStation[0].U += 0.001
+		original := trim.Source.sourceStation[0]
+		trim.Source.sourceStation[0].U += 0.001
 		require.False(t, current())
-		trim.source.sourceStation[0] = original
+		trim.Source.sourceStation[0] = original
 	})
 	t.Run("changed cap root", func(t *testing.T) {
 		original := graph.arcs[0].arc.negativeZ.parameter.Lo
