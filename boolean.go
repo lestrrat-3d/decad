@@ -1017,7 +1017,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 			// A route L body's mesh proves its occupied volume only for bands
 			// the cap-loop chamfer's rule admits (modify-general Table DG's
 			// DG4); a plain brep's proof is unconditional.
-			if len(pl.loopBands) == 0 {
+			if len(pl.LoopBands) == 0 {
 				return nil
 			}
 			refusal, aErr := brepBandsOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
@@ -1242,7 +1242,7 @@ func sectionDisplacementOf(b *Body) float64 {
 	case stackedPrismPayload:
 		return p.SectionDelta
 	case brepPayload:
-		return p.sectionDelta()
+		return p.SectionDelta()
 	default:
 		return 0
 	}

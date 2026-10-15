@@ -46,7 +46,7 @@ func requireSB1Names(t *testing.T, body *Body) {
 	bp, _, ok, err := brepModifyRecord(t.Context(), body.n.Payload, "fillets")
 	require.NoError(t, err)
 	require.True(t, ok)
-	delta := bp.sectionDelta()
+	delta := bp.SectionDelta()
 	require.Positive(t, delta, "the fixture's record carries a section displacement")
 	requireBrepModifyRefuses(t, body, "brep-modify SB1")
 	_, err = Fillet(t.Context(), body, Edges(Convex()).AtLeast(1), units.Millimeters(1))

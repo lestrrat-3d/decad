@@ -105,15 +105,15 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 		}
 		return throughCut{}, "the record does not pair its edges", false, nil
 	}
-	faces := make([]brepgeom.ThroughToolFace, len(bp.faces))
-	for i, f := range bp.faces {
+	faces := make([]brepgeom.ThroughToolFace, len(bp.Faces))
+	for i, f := range bp.Faces {
 		faces[i] = brepgeom.ThroughToolFace{
-			Region: f.region, Z0: f.z0, Z1: f.z1, Outward: f.outward, Role: f.role,
+			Region: f.Region, Z0: f.Z0, Z1: f.Z1, Outward: f.Outward, Role: f.Role,
 		}
 	}
 	reads, reason, err := brepgeom.ReadThroughTools(ctx,
-		&brepgeom.Topology{Uses: btopo.uses, Edges: btopo.edges, EdgeOf: btopo.edgeOf, FaceUses: btopo.faceUses},
-		faces, embeds, tc.kinds, bp.faces[0].frame)
+		&brepgeom.Topology{Uses: btopo.Uses, Edges: btopo.Edges, EdgeOf: btopo.EdgeOf, FaceUses: btopo.FaceUses},
+		faces, embeds, tc.kinds, bp.Faces[0].Frame)
 	if err != nil || reason != "" {
 		return throughCut{}, reason, false, err
 	}
@@ -123,7 +123,7 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 			loop0: read.LowerLoop, loop1: read.UpperLoop,
 			lo: read.Lo, hi: read.Hi, walls: read.Walls, frameEmb: read.FrameEmbed,
 			prism: prismrecord.Payload{Profile: profileRecord{Outer: read.Outer},
-				Frame: read.Frame, Z0: read.Lo, Z1: read.Hi, Xform: bp.xform},
+				Frame: read.Frame, Z0: read.Lo, Z1: read.Hi, Xform: bp.Xform},
 		})
 	}
 	return tc, "", true, nil
@@ -137,8 +137,8 @@ func (tc throughCut) removedFaces(b *Body, bp brepPayload, removed []*Face) (thr
 	index := map[*Face]int{}
 	if _, ok := b.n.Payload.(brepPayload); ok {
 		roles := facesByRole(b)
-		for fi, f := range bp.faces {
-			if face := roles[f.role]; face != nil {
+		for fi, f := range bp.Faces {
+			if face := roles[f.Role]; face != nil {
 				index[face] = fi
 			}
 		}
@@ -249,7 +249,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	// Stage 7: closure. evalBrepContext runs falsifyBrepPayload and
 	// brepTopologyContext (an unpaired edge is ErrUnsupported) and measures
 	// the body (a non-positive volume is ErrDegenerate).
-	out.assignRoles()
+	out.AssignRoles()
 	return evalBrepContext(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, out)
 }
 
@@ -323,7 +323,7 @@ func (tc throughCut) openingThroughSection(budget *proofbound.WorkBudget, rm thr
 // than two planar faces across it, else along axis 0.
 func readThroughCutAnyAxis(ctx context.Context, bp brepPayload, refusal error) (throughCut, error) {
 	reason := "its face frames have no exact map onto one reference frame"
-	if embeds, err := brepEmbeds(bp.faces); err == nil {
+	if embeds, err := brepEmbeds(bp.Faces); err == nil {
 		reasons := make([]string, 3)
 		rank := make([]int, 3)
 		for k := range 3 {
@@ -358,8 +358,8 @@ func readThroughCutAnyAxis(ctx context.Context, bp brepPayload, refusal error) (
 // throughCapsCount is the number of planar faces across reference axis k.
 func throughCapsCount(bp brepPayload, embeds []brepEmbed, k int) int {
 	n := 0
-	for fi, f := range bp.faces {
-		if f.planar() && embeds[fi].Axis[2] == k {
+	for fi, f := range bp.Faces {
+		if f.Planar() && embeds[fi].Axis[2] == k {
 			n++
 		}
 	}
@@ -385,7 +385,7 @@ func (tc throughCut) requireStripsClear(bp brepPayload, i int, dilated profileRe
 	if err != nil || separated {
 		return err
 	}
-	return fmt.Errorf(`%w: the tool through %s, dilated by the shell thickness, reaches past the wall it pierces into the material of the receiver, or this evaluator cannot separate it from there (modify-general SG6)`, ErrUnsupported, bp.faces[tool.w0].role)
+	return fmt.Errorf(`%w: the tool through %s, dilated by the shell thickness, reaches past the wall it pierces into the material of the receiver, or this evaluator cannot separate it from there (modify-general SG6)`, ErrUnsupported, bp.Faces[tool.w0].Role)
 }
 
 // cavity builds A' \ T₁' \ … \ Tₙ' (modify-general §3.3 step 4): A' is
@@ -409,8 +409,8 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded profileR
 		to := from + by
 		return to, proofbound.AbsSumUpper(d, call.tDelta, proofarith.AddRoundError(from, by, to))
 	}
-	z0, z0Delta := tc.caps.Zlo, max(tc.zloDelta, bp.faces[tc.caps.Bottom].z0Delta)
-	z1, z1Delta := tc.caps.Zhi, max(tc.zhiDelta, bp.faces[tc.caps.Top].z0Delta)
+	z0, z0Delta := tc.caps.Zlo, max(tc.zloDelta, bp.Faces[tc.caps.Bottom].Z0Delta)
+	z1, z1Delta := tc.caps.Zhi, max(tc.zhiDelta, bp.Faces[tc.caps.Top].Z0Delta)
 	if !rm.Bottom {
 		z0, z0Delta = step(z0, z0Delta, call.tmm)
 	}
@@ -418,13 +418,13 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded profileR
 		z1, z1Delta = step(z1, z1Delta, -call.tmm)
 	}
 	charge := max(delta, z0Delta, z1Delta)
-	var cut topo.Payload = prismrecord.Payload{Profile: eroded, Frame: tc.caps.Frame, Z0: z0, Z1: z1, Xform: bp.xform}
+	var cut topo.Payload = prismrecord.Payload{Profile: eroded, Frame: tc.caps.Frame, Z0: z0, Z1: z1, Xform: bp.Xform}
 	for i, tool := range tc.tools {
 		lo, loDelta := step(tool.lo, 0, -call.tmm)
 		hi, hiDelta := step(tool.hi, 0, call.tmm)
-		tp := prismrecord.Payload{Profile: dilated[i], Frame: tool.prism.Frame, Xform: bp.xform,
+		tp := prismrecord.Payload{Profile: dilated[i], Frame: tool.prism.Frame, Xform: bp.Xform,
 			Z0: lo, Z1: hi, Z0Delta: loDelta, Z1Delta: hiDelta}
-		out, ok, err := classBOfPayloads(ctx, meshbool.OpCut, cut, tp, bp.xform, charge)
+		out, ok, err := classBOfPayloads(ctx, meshbool.OpCut, cut, tp, bp.Xform, charge)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return brepPayload{}, ctxErr
@@ -432,10 +432,10 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded profileR
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return brepPayload{}, err
 			}
-			return brepPayload{}, fmt.Errorf(`%w; the shell's cavity is no class-B cut of the eroded prism by the tool through %s dilated by the thickness (modify-general SG6)`, err, bp.faces[tool.w0].role)
+			return brepPayload{}, fmt.Errorf(`%w; the shell's cavity is no class-B cut of the eroded prism by the tool through %s dilated by the thickness (modify-general SG6)`, err, bp.Faces[tool.w0].Role)
 		}
 		if _, isBrep := out.(brepPayload); !ok || !isBrep {
-			return brepPayload{}, fmt.Errorf(`%w: the shell's cavity is no class-B cut of the eroded prism by the tool through %s dilated by the thickness: two dilated tools meet, or a dilated tool reaches a cap of the cavity (modify-general SG6)`, ErrUnsupported, bp.faces[tool.w0].role)
+			return brepPayload{}, fmt.Errorf(`%w: the shell's cavity is no class-B cut of the eroded prism by the tool through %s dilated by the thickness: two dilated tools meet, or a dilated tool reaches a cap of the cavity (modify-general SG6)`, ErrUnsupported, bp.Faces[tool.w0].Role)
 		}
 		cut = out
 	}
@@ -451,12 +451,12 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded profileR
 			return brepPayload{}, err
 		}
 	}
-	faces := make([]brepFace, len(cavity.faces))
-	for i, f := range cavity.faces {
-		f.delta = max(f.delta, delta)
-		f.z0Delta, f.z1Delta = max(f.z0Delta, charge), max(f.z1Delta, charge)
+	faces := make([]brepFace, len(cavity.Faces))
+	for i, f := range cavity.Faces {
+		f.Delta = max(f.Delta, delta)
+		f.Z0Delta, f.Z1Delta = max(f.Z0Delta, charge), max(f.Z1Delta, charge)
 		faces[i] = f
 	}
-	cavity.faces = faces
+	cavity.Faces = faces
 	return cavity, nil
 }

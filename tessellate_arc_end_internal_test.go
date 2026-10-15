@@ -186,13 +186,13 @@ func TestBrepChordWallReachesArcNaturalEnd(t *testing.T) {
 	btopo, err := brepTopologyContext(t.Context(), bp)
 	require.NoError(t, err)
 	checked := 0
-	for fi, f := range bp.faces {
-		arc, ok := f.wall.(arcSeg)
-		if f.planar() || !ok {
+	for fi, f := range bp.Faces {
+		arc, ok := f.Wall.(arcSeg)
+		if f.Planar() || !ok {
 			continue
 		}
 		require.Equal(t, 1.0, arc.TEnd, `the wall keeps the arc's natural end`)
-		w, e := btopo.walls[fi], btopo.embeds[fi]
+		w, e := btopo.Walls[fi], btopo.Embeds[fi]
 		bounds := map[[3]float64]proofbound.WalkEndBound{}
 		var index int
 		capture := func(c [3]float64, b proofbound.WalkEndBound) int {
@@ -203,7 +203,7 @@ func TestBrepChordWallReachesArcNaturalEnd(t *testing.T) {
 		}
 		_, err := brepChordWall(t.Context(), f, w, e, nil, 0.2, freeform.NewFreeformWork(), nil, capture)
 		require.NoError(t, err)
-		for _, z := range []float64{f.z0, f.z1} {
+		for _, z := range []float64{f.Z0, f.Z1} {
 			bound, ok := bounds[e.Canon(w.EndU, w.EndV, z)]
 			require.True(t, ok, `the wall places a vertex at End at level %v`, z)
 			gap := requireReachesArcEnd(t, arc, w.EndU, w.EndV, bound)

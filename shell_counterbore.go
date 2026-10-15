@@ -101,8 +101,8 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 	openingZ := nearZ
 	openingOutward := sign > 0
 	openingIndex := -1
-	for i, face := range view.faces {
-		if face.planar() && face.outward == openingOutward && face.z0 == openingZ {
+	for i, face := range view.Faces {
+		if face.Planar() && face.Outward == openingOutward && face.Z0 == openingZ {
 			if openingIndex >= 0 {
 				return refuse("has more than one opening cap")
 			}
@@ -128,9 +128,9 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 	if !ok {
 		return refuse("has no authenticated larger circle")
 	}
-	result := brepPayload{xform: view.xform, faces: make([]brepFace, 0, len(view.faces)+15)}
-	result.faces = append(result.faces, view.faces[:openingIndex]...)
-	result.faces = append(result.faces, view.faces[openingIndex+1:]...)
+	result := brepPayload{Xform: view.Xform, Faces: make([]brepFace, 0, len(view.Faces)+15)}
+	result.Faces = append(result.Faces, view.Faces[:openingIndex]...)
+	result.Faces = append(result.Faces, view.Faces[openingIndex+1:]...)
 	annulus := func(outer, hole profileRecord) (profileRecord, error) {
 		p := outer
 		reversed, err := offset2d.ReverseLoopRecordContext(ctx, hole.Outer)
@@ -141,8 +141,8 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 		return p, nil
 	}
 	addPlane := func(p profileRecord, z float64, outward bool) int {
-		result.faces = append(result.faces, brepFace{frame: sp.Frame, region: &p, z0: z, z1: z, outward: outward})
-		return len(result.faces) - 1
+		result.Faces = append(result.Faces, brepFace{Frame: sp.Frame, Region: &p, Z0: z, Z1: z, Outward: outward})
+		return len(result.Faces) - 1
 	}
 	addWalls := func(p profileRecord, z0, z1 float64, reverse bool) {
 		if z0 > z1 {
@@ -152,7 +152,7 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 			if reverse {
 				seg = brepgeom.ReverseSegment(seg)
 			}
-			result.faces = append(result.faces, brepFace{frame: sp.Frame, wall: seg, z0: z0, z1: z1})
+			result.Faces = append(result.Faces, brepFace{Frame: sp.Frame, Wall: seg, Z0: z0, Z1: z1})
 		}
 	}
 	floor, err := annulus(inset.Profile(), smallExpanded)
@@ -178,11 +178,11 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 		return nil, true, err
 	}
 	addPlane(innerRim, nearZ, openingOutward)
-	result.pocketShell = &prismshell.PocketShellBand{Outer: plate, Inner: inset, Rounded: largeExpanded,
+	result.PocketShell = &prismshell.PocketShellBand{Outer: plate, Inner: inset, Rounded: largeExpanded,
 		FloorZ: stepZ, LowerZ: capZ, TopZ: nearZ, Z0: farZ, T: t, FloorFace: floorFace, Frame: sp.Frame,
 		Round: &prismshell.CounterboreShellRound{Small: small, Large: large, Plate: plate, Inset: inset,
 			FarZ: farZ, StepZ: stepZ, NearZ: nearZ, Sign: sign, T: t, Center: c, Frame: sp.Frame}}
-	result.assignRoles()
+	result.AssignRoles()
 	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
 	return body, true, err
 }
@@ -191,7 +191,7 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 // the dilation of the source's stepped through bore. The quarter-torus
 // transition is integrated as a circular radius over its axial interval.
 func measureCounterboreShell(ctx context.Context, bp brepPayload, body *Body) error {
-	b := bp.pocketShell.Round
+	b := bp.PocketShell.Round
 	point := func(x float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(x)) }
 	add, sub, mul := proofbound.IntervalAdd, proofbound.IntervalSub, proofbound.IntervalMul
 	scale := func(a proofbound.RatInterval, n, d int64) proofbound.RatInterval {
@@ -256,7 +256,7 @@ func measureCounterboreShell(ctx context.Context, bp brepPayload, body *Body) er
 		value, bound := heldOf(q)
 		c[i] = proofbound.MeasuredScalar(value, bound)
 	}
-	ref := bp.refView()
+	ref := bp.RefView()
 	cb := ref.PointBound(c[0], c[1], c[2])
 	body.n.Centroid = measurement.VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value),
 		Bound: units.Millimeters(cb), Exactness: measurement.ExactnessOf(cb)}

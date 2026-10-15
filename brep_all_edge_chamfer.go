@@ -14,9 +14,9 @@ import (
 // existing route L result or refusal.
 func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 	edges []*Edge, distance, distanceDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
-	if len(edges) != 12 || asym != nil || len(bp.faces) != 7 || bp.xform != r3.Identity() ||
-		bp.sectionDelta() != 0 || bp.AxialDelta() != 0 || len(bp.loopBands) != 0 ||
-		bp.bossShell != nil || bp.pocketShell != nil {
+	if len(edges) != 12 || asym != nil || len(bp.Faces) != 7 || bp.Xform != r3.Identity() ||
+		bp.SectionDelta() != 0 || bp.AxialDelta() != 0 || len(bp.LoopBands) != 0 ||
+		bp.BossShell != nil || bp.PocketShell != nil {
 		return nil, false, nil
 	}
 	if distanceDelta != 0 {

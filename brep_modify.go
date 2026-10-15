@@ -179,7 +179,7 @@ func commitModifyResult(ctx context.Context, b, body *Body) (*Body, error) {
 func brepModifyRecord(ctx context.Context, payload topo.Payload, op string) (brepPayload, []string, bool, error) {
 	switch p := payload.(type) {
 	case brepPayload:
-		if p.bossShell != nil || p.pocketShell != nil {
+		if p.BossShell != nil || p.PocketShell != nil {
 			return brepPayload{}, nil, true, fmt.Errorf(`%w: this evaluator does not modify a stacked shell's rounded cavity`, ErrUnsupported)
 		}
 		return p, nil, true, nil
@@ -205,7 +205,7 @@ func brepModifyRecord(ctx context.Context, payload topo.Payload, op string) (bre
 // displacements (z0Delta/z1Delta) are not read; no brep-modify construction
 // moves a level.
 func requireExactBrepSection(bp brepPayload, op string) error {
-	delta := bp.sectionDelta()
+	delta := bp.SectionDelta()
 	if delta == 0 {
 		return nil
 	}

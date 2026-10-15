@@ -360,7 +360,7 @@ func TestBrepBandMotionCoversContourDisplacement(t *testing.T) {
 	body := internalTrapezoidPocket(t)
 	out, _ := chamferLoopOf(t, body, routeEZ, r3.NewVec(0, 0, 10), 0, 1)
 	bp := out.n.Payload.(brepPayload)
-	delta := bp.faces[bp.loopBands[0].face].delta
+	delta := bp.Faces[bp.LoopBands[0].Face].Delta
 	require.Positive(t, delta)
 
 	btopo, err := brepTopologyContext(t.Context(), bp)
@@ -368,7 +368,7 @@ func TestBrepBandMotionCoversContourDisplacement(t *testing.T) {
 	bands, _, err := brepChordBands(t.Context(), bp, btopo, 0.05)
 	require.NoError(t, err)
 	n := 0
-	bands[0].place(btopo.embeds[bands[0].band.face], func([3]float64, proofbound.WalkEndBound) int { n++; return n - 1 })
+	bands[0].place(btopo.Embeds[bands[0].band.Face], func([3]float64, proofbound.WalkEndBound) int { n++; return n - 1 })
 	store, round := make([]float64, n), make([]float64, n)
 	motion, err := brepBandMotion(t.Context(), bands, store, round)
 	require.NoError(t, err)

@@ -65,16 +65,16 @@ func internalCrossDrilledBrep(t *testing.T) brepPayload {
 	plate := profileRecord{Outer: rect(0, 0, 40, 20)}
 	side := profileRecord{Outer: rect(0, 0, 20, 20)}
 	drilled := profileRecord{Outer: rect(0, 0, 40, 20), Holes: []loopRecord{{Segments: []curveSegment{hole}}}}
-	bp := brepPayload{xform: r3.Identity(), faces: []brepFace{
-		{frame: xy, region: &plate},
-		{frame: xy, region: &plate, outward: true, z0: 20, z1: 20},
-		{frame: yz, region: &side},
-		{frame: yz, region: &side, outward: true, z0: 40, z1: 40},
-		{frame: xz, region: &drilled, outward: true},
-		{frame: xz, region: &drilled, z0: -20, z1: -20},
-		{frame: xz, wall: hole, z0: -20, z1: 0},
+	bp := brepPayload{Xform: r3.Identity(), Faces: []brepFace{
+		{Frame: xy, Region: &plate},
+		{Frame: xy, Region: &plate, Outward: true, Z0: 20, Z1: 20},
+		{Frame: yz, Region: &side},
+		{Frame: yz, Region: &side, Outward: true, Z0: 40, Z1: 40},
+		{Frame: xz, Region: &drilled, Outward: true},
+		{Frame: xz, Region: &drilled, Z0: -20, Z1: -20},
+		{Frame: xz, Wall: hole, Z0: -20, Z1: 0},
 	}}
-	bp.assignRoles()
+	bp.AssignRoles()
 	return bp
 }
 
@@ -433,23 +433,23 @@ func TestBrepPayloadAuditRefusesBrokenRecords(t *testing.T) {
 		change func(*brepPayload)
 		want   error
 	}{
-		{"no face", func(bp *brepPayload) { bp.faces = nil }, ErrDegenerate},
-		{"region and wall", func(bp *brepPayload) { bp.faces[0].wall = bp.faces[6].wall }, ErrDegenerate},
-		{"planar face with two levels", func(bp *brepPayload) { bp.faces[0].z1 = 1 }, ErrDegenerate},
-		{"empty sweep", func(bp *brepPayload) { bp.faces[6].z1 = bp.faces[6].z0 }, ErrDegenerate},
-		{"negative displacement", func(bp *brepPayload) { bp.faces[6].delta = -1 }, ErrDegenerate},
-		{"repeated role", func(bp *brepPayload) { bp.faces[1].role = bp.faces[0].role }, ErrDegenerate},
+		{"no face", func(bp *brepPayload) { bp.Faces = nil }, ErrDegenerate},
+		{"region and wall", func(bp *brepPayload) { bp.Faces[0].Wall = bp.Faces[6].Wall }, ErrDegenerate},
+		{"planar face with two levels", func(bp *brepPayload) { bp.Faces[0].Z1 = 1 }, ErrDegenerate},
+		{"empty sweep", func(bp *brepPayload) { bp.Faces[6].Z1 = bp.Faces[6].Z0 }, ErrDegenerate},
+		{"negative displacement", func(bp *brepPayload) { bp.Faces[6].Delta = -1 }, ErrDegenerate},
+		{"repeated role", func(bp *brepPayload) { bp.Faces[1].Role = bp.Faces[0].Role }, ErrDegenerate},
 		{"elliptical wall", func(bp *brepPayload) {
-			bp.faces[6].wall = ellipseSeg{Center: planePoint{U: 20, V: 10}, Rx: units.Millimeters(3), Ry: units.Millimeters(2), CCW: true, TStart: 0, TEnd: 1}
+			bp.Faces[6].Wall = ellipseSeg{Center: planePoint{U: 20, V: 10}, Rx: units.Millimeters(3), Ry: units.Millimeters(2), CCW: true, TStart: 0, TEnd: 1}
 		}, ErrUnsupported},
-		{"missing wall", func(bp *brepPayload) { bp.faces = bp.faces[:6] }, ErrUnsupported},
-		{"missing planar face", func(bp *brepPayload) { bp.faces = append(bp.faces[:3:3], bp.faces[4:]...) }, ErrUnsupported},
-		{"tilted frame", func(bp *brepPayload) { bp.faces[1].frame = tilted }, ErrUnsupported},
-		{"shifted origin", func(bp *brepPayload) { bp.faces[1].frame = shifted }, ErrUnsupported},
+		{"missing wall", func(bp *brepPayload) { bp.Faces = bp.Faces[:6] }, ErrUnsupported},
+		{"missing planar face", func(bp *brepPayload) { bp.Faces = append(bp.Faces[:3:3], bp.Faces[4:]...) }, ErrUnsupported},
+		{"tilted frame", func(bp *brepPayload) { bp.Faces[1].Frame = tilted }, ErrUnsupported},
+		{"shifted origin", func(bp *brepPayload) { bp.Faces[1].Frame = shifted }, ErrUnsupported},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			bp := brepPayload{xform: base.xform, faces: append([]brepFace(nil), base.faces...)}
+			bp := brepPayload{Xform: base.Xform, Faces: append([]brepFace(nil), base.Faces...)}
 			tc.change(&bp)
 			_, err := brepTopologyContext(t.Context(), bp)
 			require.ErrorIs(t, err, tc.want)
@@ -505,8 +505,8 @@ func TestBrepMeasurementsChargeFaceDisplacements(t *testing.T) {
 	// The x = 40 wall's level and the hole wall's section are each held only
 	// within a displacement of what they denote.
 	const level, section = 0.5, 0.01
-	bp.faces[3].z0Delta, bp.faces[3].z1Delta = level, level
-	bp.faces[6].delta = section
+	bp.Faces[3].Z0Delta, bp.Faces[3].Z1Delta = level, level
+	bp.Faces[6].Delta = section
 	brep := internalCommitBrep(t, New(), bp)
 	// Moving the 20×20 wall by its level sweeps 400·level; the hole's band is
 	// 2·section times its 6π circumference over its 20 mm length.
@@ -537,18 +537,18 @@ func TestBrepTessellationRefusesWallsCloserThanTheirChords(t *testing.T) {
 	voidFace := circleSeg{Center: void.Center, Radius: void.Radius, CCW: true, TStart: 0, TEnd: 1}
 	plate := profileRecord{Outer: outline, Holes: []loopRecord{{Segments: []curveSegment{hole}}}}
 	disc := profileRecord{Outer: loopRecord{Segments: []curveSegment{voidFace}}}
-	bp := brepPayload{xform: r3.Identity(), faces: []brepFace{
-		{frame: frame, region: &plate},
-		{frame: frame, region: &plate, outward: true, z0: 10, z1: 10},
-		{frame: frame, wall: hole, z1: 10},
-		{frame: frame, wall: void, z0: 3, z1: 7},
-		{frame: frame, region: &disc, outward: true, z0: 3, z1: 3},
-		{frame: frame, region: &disc, z0: 7, z1: 7},
+	bp := brepPayload{Xform: r3.Identity(), Faces: []brepFace{
+		{Frame: frame, Region: &plate},
+		{Frame: frame, Region: &plate, Outward: true, Z0: 10, Z1: 10},
+		{Frame: frame, Wall: hole, Z1: 10},
+		{Frame: frame, Wall: void, Z0: 3, Z1: 7},
+		{Frame: frame, Region: &disc, Outward: true, Z0: 3, Z1: 3},
+		{Frame: frame, Region: &disc, Z0: 7, Z1: 7},
 	}}
 	for _, seg := range outline.Segments {
-		bp.faces = append(bp.faces, brepFace{frame: frame, wall: seg, z1: 10})
+		bp.Faces = append(bp.Faces, brepFace{Frame: frame, Wall: seg, Z1: 10})
 	}
-	bp.assignRoles()
+	bp.AssignRoles()
 	body := internalCommitBrep(t, New(), bp)
 	_, err = tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)
 	require.ErrorIs(t, err, ErrDegenerate)
@@ -653,8 +653,8 @@ func TestBrepFaceViewJoinsACrossingBuiltPrism(t *testing.T) {
 	lo, hi := piEnclosed(big.NewRat(8000, 1), big.NewRat(-125, 2))
 	requireCoversInterval(t, measurementFromInternal(brep.n.Volume), lo, hi)
 	requireCoversInterval(t, measurementFromInternal(prism.n.Volume), lo, hi)
-	for _, f := range brep.n.Payload.(brepPayload).faces {
-		require.GreaterOrEqual(t, f.delta, pp.SectionDelta, `every face keeps the record's own displacement`)
+	for _, f := range brep.n.Payload.(brepPayload).Faces {
+		require.GreaterOrEqual(t, f.Delta, pp.SectionDelta, `every face keeps the record's own displacement`)
 	}
 }
 
@@ -688,8 +688,8 @@ func TestBrepCoordinateEnvelopeReadsArcsTightly(t *testing.T) {
 		th := 2 * math.Pi * float64(i) / 4096
 		worst = math.Max(worst, 15+5*math.Abs(math.Cos(th))+5*math.Abs(math.Sin(th)))
 	}
-	require.LessOrEqual(t, worst, btopo.coordUpper)
-	require.InDelta(t, 15+5*math.Sqrt2, btopo.coordUpper, 1e-12)
+	require.LessOrEqual(t, worst, btopo.CoordUpper)
+	require.InDelta(t, 15+5*math.Sqrt2, btopo.CoordUpper, 1e-12)
 }
 
 // TestBrepFaceReversedFlipsTheOutwardSide pins the cavity rule of
@@ -702,27 +702,27 @@ func TestBrepFaceReversedFlipsTheOutwardSide(t *testing.T) {
 	t.Parallel()
 	bp := internalCrossDrilledBrep(t)
 
-	top := bp.faces[1]
-	flipped := top.reversed()
-	require.Equal(t, !top.outward, flipped.outward)
-	require.Same(t, top.region, flipped.region)
-	require.Equal(t, top.frame, flipped.frame)
-	require.Equal(t, [2]float64{top.z0, top.z1}, [2]float64{flipped.z0, flipped.z1})
-	require.Equal(t, top, flipped.reversed())
+	top := bp.Faces[1]
+	flipped := top.Reversed()
+	require.Equal(t, !top.Outward, flipped.Outward)
+	require.Same(t, top.Region, flipped.Region)
+	require.Equal(t, top.Frame, flipped.Frame)
+	require.Equal(t, [2]float64{top.Z0, top.Z1}, [2]float64{flipped.Z0, flipped.Z1})
+	require.Equal(t, top, flipped.Reversed())
 
-	wall := bp.faces[6]
-	wall.side0 = []brepSplit{{Z: -15}}
-	wall.side1 = []brepSplit{{Z: -10}, {Z: -5}}
-	back := wall.reversed()
-	circle, ok := back.wall.(circleSeg)
+	wall := bp.Faces[6]
+	wall.Side0 = []brepSplit{{Z: -15}}
+	wall.Side1 = []brepSplit{{Z: -10}, {Z: -5}}
+	back := wall.Reversed()
+	circle, ok := back.Wall.(circleSeg)
 	require.True(t, ok)
-	want := wall.wall.(circleSeg)
+	want := wall.Wall.(circleSeg)
 	require.Equal(t, want.Center, circle.Center)
 	require.Equal(t, want.Radius, circle.Radius)
 	require.Equal(t, !want.CCW, circle.CCW)
 	require.Equal(t, [2]float64{want.TEnd, want.TStart}, [2]float64{circle.TStart, circle.TEnd})
-	require.Equal(t, wall.side1, back.side0)
-	require.Equal(t, wall.side0, back.side1)
-	require.Equal(t, [2]float64{wall.z0, wall.z1}, [2]float64{back.z0, back.z1})
-	require.Equal(t, wall, back.reversed())
+	require.Equal(t, wall.Side1, back.Side0)
+	require.Equal(t, wall.Side0, back.Side1)
+	require.Equal(t, [2]float64{wall.Z0, wall.Z1}, [2]float64{back.Z0, back.Z1})
+	require.Equal(t, wall, back.Reversed())
 }

@@ -109,8 +109,8 @@ func requireBrepResult(t *testing.T, body *Body, n int) brepPayload {
 	t.Helper()
 	bp, ok := body.n.Payload.(brepPayload)
 	require.True(t, ok, "the result is a brep, got %T", body.n.Payload)
-	require.Len(t, bp.faces, n)
-	require.Nil(t, bp.stack)
+	require.Len(t, bp.Faces, n)
+	require.Nil(t, bp.Stack)
 	requireClosedTopology(t, body)
 	return bp
 }
@@ -120,8 +120,8 @@ func requireBrepResult(t *testing.T, body *Body, n int) brepPayload {
 func planarFaceAt(t *testing.T, bp brepPayload, n r3.Vec, z float64) brepFace {
 	t.Helper()
 	var found []brepFace
-	for _, f := range bp.faces {
-		if f.planar() && f.frame.N() == n && f.z0 == z {
+	for _, f := range bp.Faces {
+		if f.Planar() && f.Frame.N() == n && f.Z0 == z {
 			found = append(found, f)
 		}
 	}
@@ -201,16 +201,16 @@ func TestBrepModifyEdgeFilletS1VerticalEdge(t *testing.T) {
 	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 
 	yFace := planarFaceAt(t, bp, r3.NewVec(0, -1, 0), 0)
-	require.Contains(t, yFace.region.Outer.Segments,
+	require.Contains(t, yFace.Region.Outer.Segments,
 		curveSegment(lineSeg{Start: planePoint{U: 2, V: 20}, End: planePoint{U: 2, V: 0}, TStart: 0, TEnd: 1}),
 		"the y = 0 face's x = 0 segment moves to x = 2")
 	want := arcEnds{center: planePoint{U: 2, V: 2}, ends: [2]planePoint{{U: 0, V: 2}, {U: 2, V: 0}}}
 	for _, z := range []float64{0, 20} {
-		require.Equal(t, []arcEnds{want}, loopArcs(planarFaceAt(t, bp, routeEZ, z).region.Outer))
+		require.Equal(t, []arcEnds{want}, loopArcs(planarFaceAt(t, bp, routeEZ, z).Region.Outer))
 	}
-	wall := bp.faces[7]
-	require.Equal(t, "fillet", wall.blend)
-	require.Equal(t, curveSegment(arcSeg{Center: planePoint{U: 2, V: 2}, Start: planePoint{U: 0, V: 2}, End: planePoint{U: 2, V: 0}, TStart: 0, TEnd: 1}), wall.wall)
+	wall := bp.Faces[7]
+	require.Equal(t, "fillet", wall.Blend)
+	require.Equal(t, curveSegment(arcSeg{Center: planePoint{U: 2, V: 2}, Start: planePoint{U: 0, V: 2}, End: planePoint{U: 2, V: 0}, TStart: 0, TEnd: 1}), wall.Wall)
 	faces := blendFaces(out, "fillet")
 	require.Len(t, faces, 1)
 	requireRoles(t, out, faces, "wall(7)", "fillet(7)")
@@ -261,10 +261,10 @@ func TestBrepModifyEdgeFilletPocketCorners(t *testing.T) {
 		return out
 	}
 	top := planarFaceAt(t, bp, routeEZ, 10)
-	require.Len(t, top.region.Holes, 1)
-	require.ElementsMatch(t, centres, centresOf(loopArcs(top.region.Holes[0])))
+	require.Len(t, top.Region.Holes, 1)
+	require.ElementsMatch(t, centres, centresOf(loopArcs(top.Region.Holes[0])))
 	floor := planarFaceAt(t, bp, routeEZ, 5)
-	require.ElementsMatch(t, centres, centresOf(loopArcs(floor.region.Outer)))
+	require.ElementsMatch(t, centres, centresOf(loopArcs(floor.Region.Outer)))
 	require.Len(t, blendFaces(out, "fillet"), 4)
 
 	rep, err := doc.Verify(t.Context(), WithConcaveRadius())
@@ -292,7 +292,7 @@ func TestBrepModifyEdgeChamferCornerBoss(t *testing.T) {
 	require.Equal(t, Exact, Exactness(out.n.Volume.Exactness))
 	require.Equal(t, 17470.0, out.n.Volume.Value.Base())
 	for _, z := range []float64{10, 25} {
-		requireChord(t, planarFaceAt(t, bp, routeEZ, z).region.Outer, planePoint{U: 10, V: -12}, planePoint{U: 12, V: -10})
+		requireChord(t, planarFaceAt(t, bp, routeEZ, z).Region.Outer, planePoint{U: 10, V: -12}, planePoint{U: 12, V: -10})
 	}
 }
 
@@ -351,16 +351,16 @@ func TestBrepModifyEdgeFilletPocketFloorEdges(t *testing.T) {
 	require.Len(t, blendFaces(out, "fillet"), 2)
 
 	swept := 0
-	for _, f := range bp.faces {
-		if !f.planar() && f.blend == "" {
+	for _, f := range bp.Faces {
+		if !f.Planar() && f.Blend == "" {
 			swept++
 		}
 	}
 	require.Equal(t, 4, swept, "only the plate's four outer walls stay swept")
 	centres := func(f brepFace) []planePoint {
-		require.True(t, f.outward)
+		require.True(t, f.Outward)
 		var out []planePoint
-		for _, a := range loopArcs(f.region.Outer) {
+		for _, a := range loopArcs(f.Region.Outer) {
 			out = append(out, a.center)
 		}
 		return out
@@ -369,9 +369,9 @@ func TestBrepModifyEdgeFilletPocketFloorEdges(t *testing.T) {
 	require.ElementsMatch(t, []planePoint{{U: 6, V: 16}, {U: 6, V: 24}}, centres(planarFaceAt(t, bp, routeEX.Scale(-1), -30)))
 	// The y = 15 wall's frame has u along z and v along x; the y = 25
 	// wall's, u along x and v along z.
-	requireChord(t, planarFaceAt(t, bp, r3.NewVec(0, 1, 0), 15).region.Outer, planePoint{U: 6, V: 10}, planePoint{U: 6, V: 30})
-	requireChord(t, planarFaceAt(t, bp, r3.NewVec(0, -1, 0), -25).region.Outer, planePoint{U: 10, V: 6}, planePoint{U: 30, V: 6})
-	floor := planarFaceAt(t, bp, routeEZ, 5).region.Outer
+	requireChord(t, planarFaceAt(t, bp, r3.NewVec(0, 1, 0), 15).Region.Outer, planePoint{U: 6, V: 10}, planePoint{U: 6, V: 30})
+	requireChord(t, planarFaceAt(t, bp, r3.NewVec(0, -1, 0), -25).Region.Outer, planePoint{U: 10, V: 6}, planePoint{U: 30, V: 6})
+	floor := planarFaceAt(t, bp, routeEZ, 5).Region.Outer
 	requireChord(t, floor, planePoint{U: 10, V: 16}, planePoint{U: 30, V: 16})
 	requireChord(t, floor, planePoint{U: 10, V: 24}, planePoint{U: 30, V: 24})
 
@@ -421,8 +421,8 @@ func TestBrepModifyEdgeChamferS1AlongX(t *testing.T) {
 	require.Len(t, blendFaces(out, "chamfer"), 1)
 	// x = 0: u along z, v along y; x = 40: u along y, v along z.
 	for _, f := range []brepFace{planarFaceAt(t, bp, routeEX.Scale(-1), 0), planarFaceAt(t, bp, routeEX, 40)} {
-		require.True(t, f.outward)
-		requireChord(t, f.region.Outer, planePoint{U: 0, V: 2}, planePoint{U: 2, V: 0})
+		require.True(t, f.Outward)
+		requireChord(t, f.Region.Outer, planePoint{U: 0, V: 2}, planePoint{U: 2, V: 0})
 	}
 }
 
@@ -433,21 +433,21 @@ func internalSplitWallS1(t *testing.T) *Body {
 	t.Helper()
 	doc, s1 := internalCrossDrilled(t)
 	bp := s1.n.Payload.(brepPayload)
-	bp.faces = slices.Clone(bp.faces)
+	bp.Faces = slices.Clone(bp.Faces)
 	wall, side := -1, -1
-	for fi, f := range bp.faces {
-		if l, ok := f.wall.(lineSeg); ok && l.Start == (planePoint{U: 0, V: 20}) && l.End == (planePoint{}) {
+	for fi, f := range bp.Faces {
+		if l, ok := f.Wall.(lineSeg); ok && l.Start == (planePoint{U: 0, V: 20}) && l.End == (planePoint{}) {
 			wall = fi
 		}
-		if f.planar() && f.frame.N() == r3.NewVec(0, -1, 0) && f.z0 == 0 {
+		if f.Planar() && f.Frame.N() == r3.NewVec(0, -1, 0) && f.Z0 == 0 {
 			side = fi
 		}
 	}
 	require.GreaterOrEqual(t, wall, 0)
 	require.GreaterOrEqual(t, side, 0)
 	// The wall walks (0, 20) → (0, 0), so its side line at y = 0 is side1.
-	bp.faces[wall].side1 = []brepSplit{{Z: 10}}
-	region := *bp.faces[side].region
+	bp.Faces[wall].Side1 = []brepSplit{{Z: 10}}
+	region := *bp.Faces[side].Region
 	var segs []curveSegment
 	for _, seg := range region.Outer.Segments {
 		if seg == curveSegment(lineSeg{Start: planePoint{U: 0, V: 20}, End: planePoint{}, TStart: 0, TEnd: 1}) {
@@ -460,7 +460,7 @@ func internalSplitWallS1(t *testing.T) *Body {
 	}
 	require.Len(t, segs, len(region.Outer.Segments)+1)
 	region.Outer = loopRecord{Segments: segs}
-	bp.faces[side].region = &region
+	bp.Faces[side].Region = &region
 	body := internalCommitBrep(t, doc, bp)
 	require.Equal(t, measurementFromInternal(s1.n.Volume), measurementFromInternal(body.n.Volume))
 	return body

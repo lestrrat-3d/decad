@@ -17,27 +17,27 @@ func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
 	cbp capBlendPayload, chord float64) (brepBandChord, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
-	side, err := capblend.OneLoopCornerLoop(budget, b.orig, work)
+	side, err := capblend.OneLoopCornerLoop(budget, b.Orig, work)
 	if err != nil {
 		return brepBandChord{}, err
 	}
-	contour := f.regionLoop(b.loop)
-	partial, err := partialband.PartialFilletLayout(side.Walks, b.orig.Segments,
-		contour.Segments, b.selected, b.capWalk, b.capArc, b.setback.Dc, chord, work)
+	contour := f.RegionLoop(b.Loop)
+	partial, err := partialband.PartialFilletLayout(side.Walks, b.Orig.Segments,
+		contour.Segments, b.Selected, b.CapWalk, b.CapArc, b.Setback.Dc, chord, work)
 	if err != nil {
 		return brepBandChord{}, err
 	}
-	sideZ, sideDelta := b.sideLevel(f)
-	return brepBandChord{band: b, face: f, cbp: cbp, start: b.matSign(f) > 0,
+	sideZ, sideDelta := b.SideLevel(f)
+	return brepBandChord{band: b, face: f, cbp: cbp, start: b.MatSign(f) > 0,
 		sideZ: sideZ, sideDelta: sideDelta,
-		fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.AxialUpper(), chord)}, partial: partial}, nil
+		fillet: &filletRings{n: tessellation.FilletRingCount(b.Setback.AxialUpper(), chord)}, partial: partial}, nil
 }
 
 func (bc *brepBandChord) placePartial(e brepEmbed, addVertex func([3]float64, proofbound.WalkEndBound) int) {
 	for _, col := range bc.partial.Columns {
 		s, c := col.Side, col.Cap
 		bc.sideV = append(bc.sideV, addVertex(e.Canon(s.U, s.V, bc.sideZ), col.SideBound))
-		bc.capV = append(bc.capV, addVertex(e.Canon(c.U, c.V, bc.face.z0), col.CapBound))
+		bc.capV = append(bc.capV, addVertex(e.Canon(c.U, c.V, bc.face.Z0), col.CapBound))
 	}
 }
 
@@ -53,10 +53,10 @@ func (bc *brepBandChord) placePartialRings(e brepEmbed,
 		side[c], capPoints[c] = col.Side, col.Cap
 	}
 	points, err := tessellation.FilletRingGeometry(tessellation.FilletRingInput{
-		Side: point2ToRecordSlice(side), Cap: point2ToRecordSlice(capPoints), Radius: bc.band.setback.Dc,
-		RadiusDelta: bc.band.setback.DcDelta, CapLevel: bc.face.z0,
-		CapLevelDelta: bc.face.z0Delta, SideLevel: bc.sideZ,
-		MaterialSign: bc.band.matSign(bc.face), Count: n,
+		Side: point2ToRecordSlice(side), Cap: point2ToRecordSlice(capPoints), Radius: bc.band.Setback.Dc,
+		RadiusDelta: bc.band.Setback.DcDelta, CapLevel: bc.face.Z0,
+		CapLevelDelta: bc.face.Z0Delta, SideLevel: bc.sideZ,
+		MaterialSign: bc.band.MatSign(bc.face), Count: n,
 		Noun: "a partial fillet band", RingNoun: "a partial fillet",
 	})
 	if err != nil {
@@ -76,19 +76,19 @@ func (bc *brepBandChord) placePartialRings(e brepEmbed,
 
 // partialOpenPolys adapts recorded B-rep uses to the internal band layout.
 func (bc *brepBandChord) partialOpenPolys(btopo *brepTopology, canon [][3]float64) (map[int][]int, error) {
-	terminals := make([]partialband.Terminal, len(bc.band.terminals))
-	for i, terminal := range bc.band.terminals {
-		terminals[i] = partialband.Terminal{Face: terminal.face, Loop: terminal.loop, Seg: terminal.seg}
+	terminals := make([]partialband.Terminal, len(bc.band.Terminals))
+	for i, terminal := range bc.band.Terminals {
+		terminals[i] = partialband.Terminal{Face: terminal.Face, Loop: terminal.Loop, Seg: terminal.Seg}
 	}
 	ringV := [][]int{bc.sideV, bc.capV}
 	if bc.fillet != nil {
 		ringV = bc.fillet.ringV
 	}
 	return partialband.OpenPolys(partialband.OpenPolyInput{
-		Layout: bc.partial, Face: bc.band.face, Loop: bc.band.loop,
-		Orig: bc.band.orig.Segments, CapWalk: bc.band.capWalk, Terminals: terminals,
-		RingV: ringV, Canon: canon, Uses: btopo.uses, FaceUses: btopo.faceUses,
-		Open: btopo.open, Embed: btopo.embeds[bc.band.face], SideZ: bc.sideZ,
+		Layout: bc.partial, Face: bc.band.Face, Loop: bc.band.Loop,
+		Orig: bc.band.Orig.Segments, CapWalk: bc.band.CapWalk, Terminals: terminals,
+		RingV: ringV, Canon: canon, Uses: btopo.Uses, FaceUses: btopo.FaceUses,
+		Open: btopo.Open, Embed: btopo.Embeds[bc.band.Face], SideZ: bc.sideZ,
 	})
 }
 
@@ -96,14 +96,14 @@ func (bc *brepBandChord) emitPartialFillet(m *Mesh, faceOfRole func(string) (*Fa
 	bump func(*Face, float64)) error {
 	fr := bc.fillet
 	fr.patchEps = map[*Face]float64{}
-	r := bc.band.setback.AxialUpper()
+	r := bc.band.Setback.AxialUpper()
 	dphi := proofbound.UpRound(proofbound.UpRound(math.Pi/2*(1+1e-12)) / float64(fr.n))
 	sPhi := proofbound.ProductUpper(r, proofbound.UpRound(proofbound.ProductUpper(dphi, dphi)/8))
-	delta := bc.face.delta
-	levelDelta := proofbound.AbsSumUpper(bc.band.setback.DsDelta, bc.sideDelta)
-	axial := bc.cbp.CapBandLevel(bc.face.z0, bc.band.matSign(bc.face)).Bound
+	delta := bc.face.Delta
+	levelDelta := proofbound.AbsSumUpper(bc.band.Setback.DsDelta, bc.sideDelta)
+	axial := bc.cbp.CapBandLevel(bc.face.Z0, bc.band.MatSign(bc.face)).Bound
 	for p := range bc.partial.PatchSag {
-		face, err := faceOfRole(bc.band.patchRole(p))
+		face, err := faceOfRole(bc.band.PatchRole(p))
 		if err != nil {
 			return err
 		}
@@ -145,7 +145,7 @@ func (bc *brepBandChord) partialMotion(motion, store, round []float64) {
 		motion[vi] = math.Max(motion[vi], proofbound.AbsSumUpper(store[vi], bc.sideDelta))
 	}
 	for _, vi := range bc.capV {
-		motion[vi] = math.Max(motion[vi], proofbound.AbsSumUpper(store[vi], bc.face.delta, bc.face.z0Delta))
+		motion[vi] = math.Max(motion[vi], proofbound.AbsSumUpper(store[vi], bc.face.Delta, bc.face.Z0Delta))
 	}
 	if bc.fillet == nil {
 		return

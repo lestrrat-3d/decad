@@ -23,13 +23,13 @@ func TestBlindPocketFloorBandHasFourSphereOctants(t *testing.T) {
 	require.Zero(t, delta)
 	read, err := filletLoopOf(budget, rounded.Outer, 1, "pocket floor", freeform.NewFreeformWork())
 	require.NoError(t, err)
-	joins, err := filletband.OffsetJoins(budget, read.walks, 1, 0, shellTol)
+	joins, err := filletband.OffsetJoins(budget, read.Walks, 1, 0, shellTol)
 	require.NoError(t, err)
-	collapsed, err := filletband.OffsetLoop(budget, read.walks, joins, 1, shellTol)
+	collapsed, err := filletband.OffsetLoop(budget, read.Walks, joins, 1, shellTol)
 	require.NoError(t, err)
 	require.Equal(t, pocket.Outer.Segments, collapsed)
 	spheres := 0
-	for _, walk := range read.walks {
+	for _, walk := range read.Walks {
 		if filletband.SphereWalk(walk, 1) {
 			spheres++
 		}

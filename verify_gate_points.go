@@ -262,8 +262,8 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 		return gatePoints{}, false, err
 	}
 	work := freeform.NewFreeformWork()
-	for _, f := range bp.faces {
-		stations, stationAllow, read, err := diameter.PrismStationWitnesses(budget, f.view(bp.xform), work)
+	for _, f := range bp.Faces {
+		stations, stationAllow, read, err := diameter.PrismStationWitnesses(budget, f.View(bp.Xform), work)
 		if err != nil {
 			return gatePoints{}, false, err
 		}
@@ -271,7 +271,7 @@ func brepGatePoints(budget *proofbound.WorkBudget, body *Body, bp brepPayload) (
 			g.Join(gatePoints{Points: stations, Allow: stationAllow})
 		}
 	}
-	g.Allow = proofbound.AbsSumUpper(bp.sectionDelta(), bp.AxialDelta(), g.Allow)
+	g.Allow = proofbound.AbsSumUpper(bp.SectionDelta(), bp.AxialDelta(), g.Allow)
 	return g, true, nil
 }
 

@@ -235,7 +235,7 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 		var face *Face
 		for _, candidate := range step.Faces() {
 			for _, origin := range candidate.n.Origins {
-				if origin.Role == bp.faces[capSel.face].role {
+				if origin.Role == bp.Faces[capSel.face].Role {
 					face = candidate
 				}
 			}
@@ -322,7 +322,7 @@ func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) 
 			if ei < 0 {
 				return nil, nil, false, nil
 			}
-			owner := r.btopo.uses[r.btopo.edges[ei][0]]
+			owner := r.btopo.Uses[r.btopo.Edges[ei][0]]
 			along := !owner.Key.Circular && owner.DirFrom[axis] != owner.DirTo[axis]
 			for other := range 3 {
 				if other != axis && owner.DirFrom[other] != owner.DirTo[other] {
@@ -359,8 +359,8 @@ func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) 
 		if ei < 0 {
 			return nil, nil, false, nil // admitLoops gives the existing SL1 reason
 		}
-		for _, ui := range r.btopo.edges[ei] {
-			u := r.btopo.uses[ui]
+		for _, ui := range r.btopo.Edges[ei] {
+			u := r.btopo.Uses[ui]
 			if u.Part != brepLoopSeg {
 				continue
 			}
@@ -375,9 +375,9 @@ func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) 
 	var loopMatches, singleMatches []int
 	for i, ei := range r.matched {
 		covering := 0
-		for _, ui := range r.btopo.edges[ei] {
-			u := r.btopo.uses[ui]
-			if u.Part == brepLoopSeg && len(selected[faceLoop{u.Face, u.Loop}]) == len(r.btopo.planar[u.Face][u.Loop]) {
+		for _, ui := range r.btopo.Edges[ei] {
+			u := r.btopo.Uses[ui]
+			if u.Part == brepLoopSeg && len(selected[faceLoop{u.Face, u.Loop}]) == len(r.btopo.Planar[u.Face][u.Loop]) {
 				covering++
 			}
 		}
@@ -454,7 +454,7 @@ func newBrepLoopRead(ctx context.Context, bp brepPayload, call brepModifyRequest
 		return nil, err
 	}
 	r := &brepLoopRead{bp: bp, btopo: btopo, call: call, budget: proofbound.NewWorkBudget(ctx), loopUse: map[[3]int]int{}}
-	for ui, u := range btopo.uses {
+	for ui, u := range btopo.Uses {
 		if u.Part == brepLoopSeg {
 			r.loopUse[[3]int{u.Face, u.Loop, u.Seg}] = ui
 		}
@@ -487,7 +487,7 @@ func (r *brepLoopRead) refuse(row, reason string) error {
 
 // partner is the other use of use ui's edge.
 func (r *brepLoopRead) partner(ui int) int {
-	pair := r.btopo.edges[r.btopo.edgeOf[ui]]
+	pair := r.btopo.Edges[r.btopo.EdgeOf[ui]]
 	if pair[0] == ui {
 		return pair[1]
 	}
@@ -502,16 +502,16 @@ func (r *brepLoopRead) partner(ui int) int {
 // geometry. A band boundary edge of an earlier route L call pairs with no
 // record face and matches nothing.
 func (r *brepLoopRead) matchEdges() error {
-	refView := r.bp.refView()
+	refView := r.bp.RefView()
 	const tol = 1e-6
 	r.matched = make([]int, len(r.call.edges))
 	for i, e := range r.call.edges {
 		r.matched[i] = -1
-		for ei, pair := range r.btopo.edges {
+		for ei, pair := range r.btopo.Edges {
 			if err := survey2d.WallBudgetStep(r.budget); err != nil {
 				return err
 			}
-			if !brepEdgeMatches(refView, r.btopo.uses[pair[0]], e, tol) {
+			if !brepEdgeMatches(refView, r.btopo.Uses[pair[0]], e, tol) {
 				continue
 			}
 			if r.matched[i] != -1 {
@@ -564,7 +564,7 @@ func (r *brepLoopRead) singleStraightEdges() bool {
 		if ei < 0 {
 			return false
 		}
-		owner := r.btopo.uses[r.btopo.edges[ei][0]]
+		owner := r.btopo.Uses[r.btopo.Edges[ei][0]]
 		if owner.Key.Circular {
 			return false
 		}
@@ -605,8 +605,8 @@ func (r *brepLoopRead) admitLoops() ([]brepLoopSel, error) {
 		case -2:
 			return nil, r.refuse("SL1", fmt.Sprintf(`%s matches more than one edge of the receiver's face record`, selectedEdgeContext(i, r.call.edges[i])))
 		}
-		for _, ui := range r.btopo.edges[ei] {
-			u := r.btopo.uses[ui]
+		for _, ui := range r.btopo.Edges[ei] {
+			u := r.btopo.Uses[ui]
 			if u.Part != brepLoopSeg {
 				continue
 			}
@@ -618,7 +618,7 @@ func (r *brepLoopRead) admitLoops() ([]brepLoopSel, error) {
 			selected[fl][u.Seg] = struct{}{}
 		}
 	}
-	complete := func(fl faceLoop) bool { return len(selected[fl]) == len(r.btopo.planar[fl.face][fl.loop]) }
+	complete := func(fl faceLoop) bool { return len(selected[fl]) == len(r.btopo.Planar[fl.face][fl.loop]) }
 	chosen := map[faceLoop]struct{}{}
 	var out []brepLoopSel
 	for i := range r.call.edges {
@@ -632,10 +632,10 @@ func (r *brepLoopRead) admitLoops() ([]brepLoopSel, error) {
 		case len(loopsOf[i]) == 0:
 			return nil, r.refuse("SL1", fmt.Sprintf(`%s lies on no loop of a planar face, so it belongs to no complete loop; a %s of loops mixed with single edges needs a corner patch in no reference frame`, selectedEdgeContext(i, r.call.edges[i]), r.call.loopKind))
 		case len(covering) == 0:
-			return nil, r.refuse("SL1", fmt.Sprintf(`the selection covers only part of a loop of brep face %s; every geometric edge of a complete loop must be selected`, r.bp.faces[loopsOf[i][0].face].role))
+			return nil, r.refuse("SL1", fmt.Sprintf(`the selection covers only part of a loop of brep face %s; every geometric edge of a complete loop must be selected`, r.bp.Faces[loopsOf[i][0].face].Role))
 		case len(covering) > 1:
 			return nil, r.refuse("SL1", fmt.Sprintf(`%s lies on two selected complete loops, of brep faces %s and %s, which share it`,
-				selectedEdgeContext(i, r.call.edges[i]), r.bp.faces[covering[0].face].role, r.bp.faces[covering[1].face].role))
+				selectedEdgeContext(i, r.call.edges[i]), r.bp.Faces[covering[0].face].Role, r.bp.Faces[covering[1].face].Role))
 		}
 		fl := covering[0]
 		if _, ok := chosen[fl]; ok {
@@ -651,33 +651,33 @@ func (r *brepLoopRead) admitLoops() ([]brepLoopSel, error) {
 // range, and no loop of a planar face holds two consecutive segments on one
 // carrier (route E's EB5). It returns the reason a face fails, or "".
 func (r *brepLoopRead) naturalFaceLoops(fi int) (string, error) {
-	f := r.bp.faces[fi]
-	if !f.planar() {
-		if !brepgeom.NaturalRange(f.wall) {
-			return fmt.Sprintf(`brep face %s's wall runs over a narrowed range`, f.role), nil
+	f := r.bp.Faces[fi]
+	if !f.Planar() {
+		if !brepgeom.NaturalRange(f.Wall) {
+			return fmt.Sprintf(`brep face %s's wall runs over a narrowed range`, f.Role), nil
 		}
 		return "", nil
 	}
-	loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *f.region)
+	loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *f.Region)
 	if err != nil {
 		return "", err
 	}
-	for li, loop := range append([]loopRecord{f.region.Outer}, f.region.Holes...) {
+	for li, loop := range append([]loopRecord{f.Region.Outer}, f.Region.Holes...) {
 		for _, seg := range loop.Segments {
 			if !brepgeom.NaturalRange(seg) {
-				return fmt.Sprintf(`brep face %s holds a segment over a narrowed range`, f.role), nil
+				return fmt.Sprintf(`brep face %s holds a segment over a narrowed range`, f.Role), nil
 			}
 		}
 		walks := loops[li].Walks
 		if len(walks) != len(loop.Segments) {
-			return fmt.Sprintf(`brep face %s holds two consecutive segments on one line`, f.role), nil
+			return fmt.Sprintf(`brep face %s holds two consecutive segments on one line`, f.Role), nil
 		}
 		n := len(walks)
 		for i, w := range walks {
 			next := walks[(i+1)%n]
 			if n > 1 && w.IsCircular() && next.IsCircular() && !w.Closed && !next.Closed &&
 				w.CU == next.CU && w.CV == next.CV && w.Radius == next.Radius && (w.Th1 > w.Th0) == (next.Th1 > next.Th0) {
-				return fmt.Sprintf(`brep face %s holds two consecutive arcs on one circle`, f.role), nil
+				return fmt.Sprintf(`brep face %s holds two consecutive arcs on one circle`, f.Role), nil
 			}
 		}
 	}
@@ -693,12 +693,12 @@ func (r *brepLoopRead) naturalFaceLoops(fi int) (string, error) {
 // of F (LB6): against F's outward normal the walls descend into the body
 // (sigma −1), along it they rise off F (sigma +1).
 func (r *brepLoopRead) classifyLoop(sel *brepLoopSel) error {
-	f := r.bp.faces[sel.face]
-	eF := r.btopo.embeds[sel.face]
+	f := r.bp.Faces[sel.face]
+	eF := r.btopo.Embeds[sel.face]
 	n := eF.Axis[2]
-	level := eF.Canon(0, 0, f.z0)[n]
+	level := eF.Canon(0, 0, f.Z0)[n]
 	outward := -eF.Sign[2]
-	if f.outward {
+	if f.Outward {
 		outward = eF.Sign[2]
 	}
 	refuse := func(reason string) error { return r.refuse("SL2", reason) }
@@ -709,41 +709,41 @@ func (r *brepLoopRead) classifyLoop(sel *brepLoopSel) error {
 	if why != "" {
 		return refuse(why)
 	}
-	segs := len(r.btopo.planar[sel.face][sel.loop])
+	segs := len(r.btopo.Planar[sel.face][sel.loop])
 	sel.beside = make([]brepLoopBeside, segs)
 	for s := range segs {
 		if err := survey2d.WallBudgetStep(r.budget); err != nil {
 			return err
 		}
-		pu := r.btopo.uses[r.partner(r.loopUse[[3]int{sel.face, sel.loop, s}])]
-		a := r.bp.faces[pu.Face]
-		eA := r.btopo.embeds[pu.Face]
+		pu := r.btopo.Uses[r.partner(r.loopUse[[3]int{sel.face, sel.loop, s}])]
+		a := r.bp.Faces[pu.Face]
+		eA := r.btopo.Embeds[pu.Face]
 		b := brepLoopBeside{use: r.partner(r.loopUse[[3]int{sel.face, sel.loop, s}])}
 		switch {
-		case !a.planar() && eA.Axis[2] == n && brepIsRim(pu.Part):
-			if len(a.side0) > 0 || len(a.side1) > 0 {
-				return refuse(fmt.Sprintf(`brep face %s beside the loop has a split side line`, a.role))
+		case !a.Planar() && eA.Axis[2] == n && brepIsRim(pu.Part):
+			if len(a.Side0) > 0 || len(a.Side1) > 0 {
+				return refuse(fmt.Sprintf(`brep face %s beside the loop has a split side line`, a.Role))
 			}
-			far := a.z1
+			far := a.Z1
 			if pu.Part == brepRim1 {
-				far = a.z0
+				far = a.Z0
 			}
 			b.far = []float64{eA.Sign[2]*far + 0}
-		case a.planar() && eA.Axis[2] != n && pu.Part == brepLoopSeg:
+		case a.Planar() && eA.Axis[2] != n && pu.Part == brepLoopSeg:
 			b.planar = true
-			nA := len(r.btopo.planar[pu.Face][pu.Loop])
+			nA := len(r.btopo.Planar[pu.Face][pu.Loop])
 			for k, s2 := range [2]int{(pu.Seg + nA - 1) % nA, (pu.Seg + 1) % nA} {
 				ui := r.loopUse[[3]int{pu.Face, pu.Loop, s2}]
-				nu := r.btopo.uses[ui]
+				nu := r.btopo.Uses[ui]
 				far, ok := brepLineAlong(nu, n, level)
 				if !ok {
-					return refuse(fmt.Sprintf(`brep face %s beside the loop continues past the loop's vertex on a segment that is not a straight line along the face's normal`, a.role))
+					return refuse(fmt.Sprintf(`brep face %s beside the loop continues past the loop's vertex on a segment that is not a straight line along the face's normal`, a.Role))
 				}
 				b.far = append(b.far, far)
 				b.nb[k] = ui
 			}
 		default:
-			return refuse(fmt.Sprintf(`brep face %s beside the loop neither sweeps along brep face %s's normal nor holds the loop's edge as a plane across another axis`, a.role, f.role))
+			return refuse(fmt.Sprintf(`brep face %s beside the loop neither sweeps along brep face %s's normal nor holds the loop's edge as a plane across another axis`, a.Role, f.Role))
 		}
 		why, err := r.naturalFaceLoops(pu.Face)
 		if err != nil {
@@ -761,7 +761,7 @@ func (r *brepLoopRead) classifyLoop(sel *brepLoopSel) error {
 				sel.sigma = sense
 			}
 			if sel.sigma != sense {
-				return refuse(fmt.Sprintf(`the faces beside brep face %s's loop leave it on both sides`, f.role))
+				return refuse(fmt.Sprintf(`the faces beside brep face %s's loop leave it on both sides`, f.Role))
 			}
 		}
 		sel.beside[s] = b
@@ -816,13 +816,13 @@ func (r *brepLoopRead) assignLoopSetbacks(sels []brepLoopSel) error {
 		assignment := -1
 		for segment, beside := range sel.beside {
 			ui := r.loopUse[[3]int{sel.face, sel.loop, segment}]
-			edge := selected[r.btopo.edgeOf[ui]]
+			edge := selected[r.btopo.EdgeOf[ui]]
 			ref := r.call.asym.refs[edge]
 			capFace := r.call.asym.matchesRecordFace(ref, sel.face)
-			sideFace := r.call.asym.matchesRecordFace(ref, r.btopo.uses[beside.use].Face)
+			sideFace := r.call.asym.matchesRecordFace(ref, r.btopo.Uses[beside.use].Face)
 			if capFace == sideFace {
 				return r.refuseAsymmetricLoop("SX16", fmt.Sprintf(`the reference for brep face %s's loop segment %d has no single adjacent record-face identity`,
-					r.bp.faces[sel.face].role, segment))
+					r.bp.Faces[sel.face].Role, segment))
 			}
 			choice := 0
 			if sideFace {
@@ -830,13 +830,13 @@ func (r *brepLoopRead) assignLoopSetbacks(sels []brepLoopSel) error {
 			}
 			if assignment >= 0 && assignment != choice {
 				return r.refuseAsymmetricLoop("SX4", fmt.Sprintf(`brep face %s's loop mixes cap and side reference assignments`,
-					r.bp.faces[sel.face].role))
+					r.bp.Faces[sel.face].Role))
 			}
 			assignment = choice
 		}
 		if assignment < 0 {
 			return r.refuseAsymmetricLoop("SX16", fmt.Sprintf(`brep face %s's loop has no edges to assign a reference face`,
-				r.bp.faces[sel.face].role))
+				r.bp.Faces[sel.face].Role))
 		}
 		if assignment == 0 {
 			sel.setback = capSetback{Dc: r.call.asym.d, DcDelta: r.call.asym.dDelta,
@@ -845,16 +845,16 @@ func (r *brepLoopRead) assignLoopSetbacks(sels []brepLoopSel) error {
 			sel.setback = capSetback{Dc: r.call.asym.other, DcDelta: r.call.asym.otherDelta,
 				Ds: r.call.asym.d, DsDelta: r.call.asym.dDelta}
 		}
-		f := r.bp.faces[sel.face]
-		band := brepLoopBand{sigma: sel.sigma}
+		f := r.bp.Faces[sel.face]
+		band := brepLoopBand{Sigma: sel.sigma}
 		side := 0
-		if band.matSign(f) > 0 {
+		if band.MatSign(f) > 0 {
 			side = 1
 		}
 		key := [2]int{sel.face, side}
 		if old, ok := seen[key]; ok && old != sel.setback {
 			return r.refuseAsymmetricLoop("SX4", fmt.Sprintf(`brep face %s's loops on one material side use different cap and side setbacks`,
-				f.role))
+				f.Role))
 		}
 		seen[key] = sel.setback
 	}
@@ -869,13 +869,13 @@ func (r *brepLoopRead) requireBandReach(sels []brepLoopSel) error {
 	type piece struct{ face, use int }
 	reach := map[piece]float64{}
 	for _, sel := range sels {
-		f := r.bp.faces[sel.face]
-		eF := r.btopo.embeds[sel.face]
-		level := eF.Canon(0, 0, f.z0)[eF.Axis[2]]
+		f := r.bp.Faces[sel.face]
+		eF := r.btopo.Embeds[sel.face]
+		level := eF.Canon(0, 0, f.Z0)[eF.Axis[2]]
 		for _, b := range sel.beside {
-			a := r.bp.faces[r.btopo.uses[b.use].Face]
+			a := r.bp.Faces[r.btopo.Uses[b.use].Face]
 			for k, far := range b.far {
-				key := piece{face: r.btopo.uses[b.use].Face, use: -1}
+				key := piece{face: r.btopo.Uses[b.use].Face, use: -1}
 				height := math.Abs(far - level)
 				if b.planar {
 					key.use = b.nb[k]
@@ -883,7 +883,7 @@ func (r *brepLoopRead) requireBandReach(sels []brepLoopSel) error {
 				reach[key] += sel.setback.Ds
 				if reach[key] >= height {
 					return fmt.Errorf(`%w: the %s band on brep face %s's loop reaches or passes the far end of brep face %s beside it (%g mm of %g mm); a merging kernel is not available (modify-reach SX7); selector %s matched [%s]`,
-						ErrUnsupported, r.call.loopKind, f.role, a.role, reach[key], height, r.call.sel, selectedEdgesContext(r.call.edges))
+						ErrUnsupported, r.call.loopKind, f.Role, a.Role, reach[key], height, r.call.sel, selectedEdgesContext(r.call.edges))
 				}
 			}
 		}
@@ -896,10 +896,10 @@ func (r *brepLoopRead) requireBandReach(sels []brepLoopSel) error {
 // sense names, both caps at the call's setbacks. The shipped cap-loop gates
 // read F's loops through it exactly as they read a prism's cap loops.
 func (r *brepLoopRead) loopFaceView(fi int, sels []brepLoopSel) capBlendPayload {
-	f := r.bp.faces[fi]
+	f := r.bp.Faces[fi]
 	cbp := capBlendPayload{
-		Profile: *f.region, Frame: f.frame, Xform: r.bp.xform,
-		Z0: f.z0, Z1: f.z0, Z0Delta: f.z0Delta, Z1Delta: f.z0Delta,
+		Profile: *f.Region, Frame: f.Frame, Xform: r.bp.Xform,
+		Z0: f.Z0, Z1: f.Z0, Z0Delta: f.Z0Delta, Z1Delta: f.Z0Delta,
 		Start: *r.call.loop, End: *r.call.loop,
 		StartLoops: map[int]bool{}, EndLoops: map[int]bool{},
 		Fillet: r.call.loopKind == brepBandFillet,
@@ -908,8 +908,8 @@ func (r *brepLoopRead) loopFaceView(fi int, sels []brepLoopSel) capBlendPayload 
 		if sel.face != fi {
 			continue
 		}
-		band := brepLoopBand{sigma: sel.sigma, setback: sel.setback}
-		if band.matSign(f) > 0 {
+		band := brepLoopBand{Sigma: sel.sigma, Setback: sel.setback}
+		if band.MatSign(f) > 0 {
 			cbp.StartLoops[sel.loop] = true
 			cbp.Start = sel.setback
 		} else {
@@ -973,7 +973,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 	work := freeform.NewFreeformWork()
 	for _, sel := range sels {
 		setback := sel.setback
-		cl, err := capblend.OneLoopCornerLoop(r.budget, r.bp.faces[sel.face].regionLoop(sel.loop), work)
+		cl, err := capblend.OneLoopCornerLoop(r.budget, r.bp.Faces[sel.face].RegionLoop(sel.loop), work)
 		if err != nil {
 			return brepPayload{}, err
 		}
@@ -988,8 +988,8 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		// SF1 (loop-fillet §6): every corner of a fillet's loop takes a class of
 		// Table LF.
 		if r.call.loopKind == brepBandFillet {
-			f := r.bp.faces[sel.face]
-			if _, err := filletLoopOf(r.budget, f.regionLoop(sel.loop), setback.Dc, f.role, work); err != nil {
+			f := r.bp.Faces[sel.face]
+			if _, err := filletLoopOf(r.budget, f.RegionLoop(sel.loop), setback.Dc, f.Role, work); err != nil {
 				return brepPayload{}, r.wrapFace(sel.face, err)
 			}
 		}
@@ -1001,7 +1001,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		if err := capblend.RequireCornerLoci(r.budget, views[fi]); err != nil {
 			return brepPayload{}, r.wrapFace(fi, err)
 		}
-		region := *r.bp.faces[fi].region
+		region := *r.bp.Faces[fi].Region
 		if err := offset2d.AuditOffsetSectionBudget(r.budget, region, mixed[fi]); err != nil {
 			return brepPayload{}, r.wrapFace(fi, capband.ChamferAuditError(err))
 		}
@@ -1010,43 +1010,43 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		}
 	}
 
-	faces := slices.Clone(r.bp.faces)
+	faces := slices.Clone(r.bp.Faces)
 	for _, fi := range faceOrder {
 		region := mixed[fi]
-		faces[fi].region = &region
+		faces[fi].Region = &region
 	}
 	trims := map[int][]map[int]*cornerBlend{}
-	bands := slices.Clone(r.bp.loopBands)
+	bands := slices.Clone(r.bp.LoopBands)
 	for _, sel := range sels {
 		setback := sel.setback
-		f := r.bp.faces[sel.face]
-		eF := r.btopo.embeds[sel.face]
+		f := r.bp.Faces[sel.face]
+		eF := r.btopo.Embeds[sel.face]
 		n := eF.Axis[2]
-		band := brepLoopBand{face: sel.face, loop: sel.loop, orig: cloneLoopRecord(f.regionLoop(sel.loop)), setback: setback, sigma: sel.sigma, kind: r.call.loopKind}
-		delta, err := views[sel.face].LoopContourDelta(ctx, sel.loop, band.orig, setback.Dc, setback.DcDelta)
+		band := brepLoopBand{Face: sel.face, Loop: sel.loop, Orig: cloneLoopRecord(f.RegionLoop(sel.loop)), Setback: setback, Sigma: sel.sigma, Kind: r.call.loopKind}
+		delta, err := views[sel.face].LoopContourDelta(ctx, sel.loop, band.Orig, setback.Dc, setback.DcDelta)
 		if err != nil {
 			return brepPayload{}, r.wrapFace(sel.face, err)
 		}
-		faces[sel.face].delta = math.Max(faces[sel.face].delta, delta)
-		sideZ, sideDelta := band.sideLevel(f)
+		faces[sel.face].Delta = math.Max(faces[sel.face].Delta, delta)
+		sideZ, sideDelta := band.SideLevel(f)
 		sideRef := eF.Canon(0, 0, sideZ)[n]
 		for _, b := range sel.beside {
-			pu := r.btopo.uses[b.use]
-			eA := r.btopo.embeds[pu.Face]
+			pu := r.btopo.Uses[b.use]
+			eA := r.btopo.Embeds[pu.Face]
 			a := &faces[pu.Face]
 			if !b.planar {
 				local := eA.Sign[2]*sideRef + 0
 				if pu.Part == brepRim0 {
-					a.z0, a.z0Delta = local, proofbound.AbsSumUpper(math.Max(a.z0Delta, f.z0Delta), sideDelta)
+					a.Z0, a.Z0Delta = local, proofbound.AbsSumUpper(math.Max(a.Z0Delta, f.Z0Delta), sideDelta)
 				} else {
-					a.z1, a.z1Delta = local, proofbound.AbsSumUpper(math.Max(a.z1Delta, f.z0Delta), sideDelta)
+					a.Z1, a.Z1Delta = local, proofbound.AbsSumUpper(math.Max(a.Z1Delta, f.Z0Delta), sideDelta)
 				}
 				continue
 			}
 			if err := r.trimPlanar(trims, pu, n, sideRef, setback.Ds); err != nil {
 				return brepPayload{}, err
 			}
-			a.delta = math.Max(a.delta, sideDelta)
+			a.Delta = math.Max(a.Delta, sideDelta)
 		}
 		bands = append(bands, band)
 	}
@@ -1058,22 +1058,22 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 	}
 	slices.Sort(planarOrder)
 	for _, fi := range planarOrder {
-		f := r.bp.faces[fi]
-		loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *f.region)
+		f := r.bp.Faces[fi]
+		loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *f.Region)
 		if err != nil {
 			return brepPayload{}, err
 		}
-		profile, _, err := rewriteProfileBudget(r.budget, *f.region, loops, trims[fi])
+		profile, _, err := rewriteProfileBudget(r.budget, *f.Region, loops, trims[fi])
 		if err != nil {
 			return brepPayload{}, err
 		}
-		if err := offset2d.AuditRewriteBudget(r.budget, *f.region, profile, loops, trims[fi]); err != nil {
+		if err := offset2d.AuditRewriteBudget(r.budget, *f.Region, profile, loops, trims[fi]); err != nil {
 			return brepPayload{}, r.wrapFace(fi, renderAuditCoordinates(err))
 		}
-		faces[fi].region = &profile
+		faces[fi].Region = &profile
 	}
-	out := brepPayload{faces: faces, xform: r.bp.xform, loopBands: bands}
-	out.assignRoles()
+	out := brepPayload{Faces: faces, Xform: r.bp.Xform, LoopBands: bands}
+	out.AssignRoles()
 	return out, nil
 }
 
@@ -1082,8 +1082,8 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 // of its two corners whose foot is the moved end and whose cutback on the
 // neighbouring line is d. A corner two bands claim is SL2.
 func (r *brepLoopRead) trimPlanar(trims map[int][]map[int]*cornerBlend, pu brepUse, n int, sideRef, d float64) error {
-	f := r.bp.faces[pu.Face]
-	loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *f.region)
+	f := r.bp.Faces[pu.Face]
+	loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *f.Region)
 	if err != nil {
 		return err
 	}
@@ -1093,12 +1093,12 @@ func (r *brepLoopRead) trimPlanar(trims map[int][]map[int]*cornerBlend, pu brepU
 			trims[pu.Face][i] = map[int]*cornerBlend{}
 		}
 	}
-	e := r.btopo.embeds[pu.Face]
+	e := r.btopo.Embeds[pu.Face]
 	walks := loops[pu.Loop].Walks
 	count := len(walks)
 	seg := walks[pu.Seg]
 	for c, at := range [2][2]float64{{seg.StartU, seg.StartV}, {seg.EndU, seg.EndV}} {
-		moved := e.Canon(at[0], at[1], f.z0)
+		moved := e.Canon(at[0], at[1], f.Z0)
 		moved[n] = sideRef
 		local := e.Local(moved)
 		p := planePoint{U: local[0], V: local[1]}
@@ -1111,7 +1111,7 @@ func (r *brepLoopRead) trimPlanar(trims map[int][]map[int]*cornerBlend, pu brepU
 			ci = (pu.Seg + 1) % count
 		}
 		if trims[pu.Face][pu.Loop][ci] != nil {
-			return r.refuse("SL2", fmt.Sprintf(`a corner of brep face %s beside the loop is claimed by two bands`, f.role))
+			return r.refuse("SL2", fmt.Sprintf(`a corner of brep face %s beside the loop is claimed by two bands`, f.Role))
 		}
 		trims[pu.Face][pu.Loop][ci] = trim
 	}
@@ -1128,5 +1128,5 @@ func (r *brepLoopRead) wrapFace(fi int, err error) error {
 		return context.DeadlineExceeded
 	}
 	return fmt.Errorf(`%w; in brep face %s; selector %s matched [%s]`,
-		err, r.bp.faces[fi].role, r.call.sel, selectedEdgesContext(r.call.edges))
+		err, r.bp.Faces[fi].Role, r.call.sel, selectedEdgesContext(r.call.edges))
 }

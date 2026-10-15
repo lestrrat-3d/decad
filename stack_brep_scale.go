@@ -41,12 +41,12 @@ func stackedScaleSource(ctx context.Context, b *Body, source stackedPrismPayload
 // planar faces. A transformed source is accepted through its own certified
 // mesh, which already includes placement error in each face bound.
 func brepScaleSource(ctx context.Context, b *Body, source brepPayload) (facetedPayload, error) {
-	if b.Kind() != BodySolid || !b.IsSolid() || !source.xform.IsValid() ||
-		source.stack == nil || source.stack.delta != 0 || len(source.stack.slabs) == 0 ||
-		len(source.loopBands) != 0 || source.bossShell != nil || source.pocketShell != nil {
+	if b.Kind() != BodySolid || !b.IsSolid() || !source.Xform.IsValid() ||
+		source.Stack == nil || source.Stack.Delta != 0 || len(source.Stack.Slabs) == 0 ||
+		len(source.LoopBands) != 0 || source.BossShell != nil || source.PocketShell != nil {
 		return facetedPayload{}, fmt.Errorf("%w: scale needs an exact line-section stack BRep", ErrUnsupported)
 	}
-	for _, slab := range source.stack.slabs {
+	for _, slab := range source.Stack.Slabs {
 		if slab.Z0Delta != 0 || slab.Z1Delta != 0 {
 			return facetedPayload{}, fmt.Errorf("%w: a BRep stack level carries displacement", ErrUnsupported)
 		}
@@ -56,18 +56,18 @@ func brepScaleSource(ctx context.Context, b *Body, source brepPayload) (facetedP
 			}
 		}
 	}
-	for _, face := range source.faces {
-		if face.delta != 0 || face.z0Delta != 0 || face.z1Delta != 0 || face.blend != "" {
+	for _, face := range source.Faces {
+		if face.Delta != 0 || face.Z0Delta != 0 || face.Z1Delta != 0 || face.Blend != "" {
 			return facetedPayload{}, fmt.Errorf("%w: a BRep face has no exact line-section proof", ErrUnsupported)
 		}
-		if face.planar() {
-			if !scaleLineProfile(*face.region) {
+		if face.Planar() {
+			if !scaleLineProfile(*face.Region) {
 				return facetedPayload{}, fmt.Errorf("%w: a BRep face is not line-only", ErrUnsupported)
 			}
-		} else if _, ok := face.wall.(lineSeg); !ok {
+		} else if _, ok := face.Wall.(lineSeg); !ok {
 			return facetedPayload{}, fmt.Errorf("%w: a BRep wall is not line-only", ErrUnsupported)
 		}
-		for _, split := range append(append([]brepSplit(nil), face.side0...), face.side1...) {
+		for _, split := range append(append([]brepSplit(nil), face.Side0...), face.Side1...) {
 			if split.ZDelta != 0 {
 				return facetedPayload{}, fmt.Errorf("%w: a BRep wall split carries displacement", ErrUnsupported)
 			}

@@ -121,8 +121,8 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	// The source view has a single top cap. All its other faces keep their
 	// recorded geometry; the result gets new face(k)/wall(k) roles on rebuild.
 	topCapIdx := -1
-	for i, f := range view.faces {
-		if f.planar() && f.outward && f.z0 == b.Z1 {
+	for i, f := range view.Faces {
+		if f.Planar() && f.Outward && f.Z0 == b.Z1 {
 			if topCapIdx >= 0 {
 				return refuse("has more than one top cap")
 			}
@@ -132,21 +132,21 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	if topCapIdx < 0 {
 		return refuse("has no top cap")
 	}
-	result := brepPayload{xform: view.xform, faces: make([]brepFace, 0, len(view.faces)+16)}
+	result := brepPayload{Xform: view.Xform, Faces: make([]brepFace, 0, len(view.Faces)+16)}
 	if closed {
-		result.faces = append(result.faces, view.faces...)
+		result.Faces = append(result.Faces, view.Faces...)
 	} else {
-		result.faces = append(result.faces, view.faces[:topCapIdx]...)
-		result.faces = append(result.faces, view.faces[topCapIdx+1:]...)
+		result.Faces = append(result.Faces, view.Faces[:topCapIdx]...)
+		result.Faces = append(result.Faces, view.Faces[topCapIdx+1:]...)
 	}
-	outerFaceCount := len(result.faces)
+	outerFaceCount := len(result.Faces)
 	addPlane := func(p profileRecord, z float64, outward bool) int {
-		result.faces = append(result.faces, brepFace{frame: sp.Frame, region: &p, z0: z, z1: z, outward: outward})
-		return len(result.faces) - 1
+		result.Faces = append(result.Faces, brepFace{Frame: sp.Frame, Region: &p, Z0: z, Z1: z, Outward: outward})
+		return len(result.Faces) - 1
 	}
 	addWalls := func(r prismshell.BossRect, z0, z1 float64) {
 		for _, seg := range r.Profile().Outer.Segments {
-			result.faces = append(result.faces, brepFace{frame: sp.Frame, wall: brepgeom.ReverseSegment(seg), z0: z0, z1: z1})
+			result.Faces = append(result.Faces, brepFace{Frame: sp.Frame, Wall: brepgeom.ReverseSegment(seg), Z0: z0, Z1: z1})
 		}
 	}
 	addPlane(lower.Profile(), a.Z0+t, true)
@@ -170,11 +170,11 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 		rim.Holes = []loopRecord{hole}
 		addPlane(rim, b.Z1, true)
 	}
-	result.bossShell = &prismshell.BossShellBand{Plate: plate, Boss: boss, Lower: lower, Upper: upper,
+	result.BossShell = &prismshell.BossShellBand{Plate: plate, Boss: boss, Lower: lower, Upper: upper,
 		Z0: a.Z0, InterfaceZ: a.Z1, TopZ: b.Z1, CavityTopZ: cavityTopZ,
 		LowerZ: lowerZ, T: t, LedgeFace: ledgeFace, Frame: sp.Frame,
 		OuterFaceCount: outerFaceCount, Closed: closed}
-	result.assignRoles()
+	result.AssignRoles()
 	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
 	return body, true, err
 }
@@ -269,13 +269,13 @@ func bossShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology
 	openAt map[brepgeom.EdgeKey]int,
 	placeVertex func([3]float64, float64, float64, float64) *Vertex,
 	out *brepOpenSet, bi int) error {
-	band := bp.bossShell
-	e := btopo.embeds[band.LedgeFace]
+	band := bp.BossShell
+	e := btopo.Embeds[band.LedgeFace]
 	for ring, spec := range []struct {
 		profile profileRecord
 		z       float64
 	}{{band.SideProfile(), band.LowerZ}, {band.CapProfile(), band.InterfaceZ}} {
-		view := prismrecord.Payload{Frame: band.Frame, Xform: bp.xform, Z0: spec.z, Z1: spec.z}
+		view := prismrecord.Payload{Frame: band.Frame, Xform: bp.Xform, Z0: spec.z, Z1: spec.z}
 		for _, seg := range spec.profile.Outer.Segments {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -289,7 +289,7 @@ func bossShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology
 			if !ok {
 				return fmt.Errorf("%w: a boss shell ring has no open record edge", ErrUnsupported)
 			}
-			u := btopo.uses[ui]
+			u := btopo.Uses[ui]
 			from, to := e.Canon(w.StartU, w.StartV, spec.z), e.Canon(w.EndU, w.EndV, spec.z)
 			start, end := placeVertex(from, 0, 0, 0), placeVertex(to, 0, 0, 0)
 			edge, err := brepBandEdge(view, w, true, start, end)
@@ -312,18 +312,18 @@ func bossShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology
 // with a virtual cap at the upper ring. The cap is only a geometry datum:
 // its ring is actually bounded by the upper cavity walls.
 func attachBossShellBand(ctx context.Context, body *Body, ref producerID, bp brepPayload, open brepOpenSet) ([]*Face, error) {
-	band := bp.bossShell
-	bi := len(bp.loopBands)
-	b := brepLoopBand{face: band.LedgeFace, loop: 0, orig: band.SideProfile().Outer,
-		setback: capSetback{Dc: band.T, Ds: band.T}, sigma: 1, kind: brepBandFillet}
+	band := bp.BossShell
+	bi := len(bp.LoopBands)
+	b := brepLoopBand{Face: band.LedgeFace, Loop: 0, Orig: band.SideProfile().Outer,
+		Setback: capSetback{Dc: band.T, Ds: band.T}, Sigma: 1, Kind: brepBandFillet}
 	upper := band.CapProfile()
-	fake := brepFace{frame: band.Frame, region: &upper,
-		z0: band.InterfaceZ, z1: band.InterfaceZ, outward: false, role: "bossShellBand"}
+	fake := brepFace{Frame: band.Frame, Region: &upper,
+		Z0: band.InterfaceZ, Z1: band.InterfaceZ, Outward: false, Role: "bossShellBand"}
 	copyBP := bp
-	copyBP.faces = append([]brepFace(nil), bp.faces...)
-	copyBP.faces[band.LedgeFace] = fake
-	copyBP.loopBands = append(append([]brepLoopBand(nil), bp.loopBands...), b)
-	embeds, err := brepEmbeds(bp.faces)
+	copyBP.Faces = append([]brepFace(nil), bp.Faces...)
+	copyBP.Faces[band.LedgeFace] = fake
+	copyBP.LoopBands = append(append([]brepLoopBand(nil), bp.LoopBands...), b)
+	embeds, err := brepEmbeds(bp.Faces)
 	if err != nil {
 		return nil, err
 	}
@@ -335,10 +335,10 @@ func attachBossShellBand(ctx context.Context, body *Body, ref producerID, bp bre
 // enclosed by proofbound's rational interval. Face areas already carry each
 // planar or cylindrical patch's own independent bound.
 func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
-	if bp.bossShell.Round != nil {
+	if bp.BossShell.Round != nil {
 		return measureRoundBossShell(ctx, bp, body)
 	}
-	b := bp.bossShell
+	b := bp.BossShell
 	point := func(x float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(x)) }
 	add, sub, mul := proofbound.IntervalAdd, proofbound.IntervalSub, proofbound.IntervalMul
 	scale := func(a proofbound.RatInterval, n, d int64) proofbound.RatInterval {
@@ -393,7 +393,7 @@ func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
 		value, bound := heldOf(q)
 		c[i] = proofbound.MeasuredScalar(value, bound)
 	}
-	ref := bp.refView()
+	ref := bp.RefView()
 	cb := ref.PointBound(c[0], c[1], c[2])
 	body.n.Centroid = measurement.VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value), Bound: units.Millimeters(cb), Exactness: measurement.ExactnessOf(cb)}
 	var a proofbound.BoundedScalar

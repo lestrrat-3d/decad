@@ -20,8 +20,8 @@ import (
 func internalWallFaceAt(t *testing.T, bp brepPayload, n r3.Vec, level float64) brepFace {
 	t.Helper()
 	var found []brepFace
-	for _, f := range bp.faces {
-		if f.planar() && f.frame.N() == n && f.z0 == level {
+	for _, f := range bp.Faces {
+		if f.Planar() && f.Frame.N() == n && f.Z0 == level {
 			found = append(found, f)
 		}
 	}
@@ -39,7 +39,7 @@ func internalFlushCornerUnion(t *testing.T, doc *Document) *Body {
 	got, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
 	bp := requireBrep(t, got)
-	require.NotNil(t, bp.stack, "an A1 result keeps its stack")
+	require.NotNil(t, bp.Stack, "an A1 result keeps its stack")
 	return got
 }
 
@@ -69,14 +69,14 @@ func TestStackedUnionBrepOperandSecondBoss(t *testing.T) {
 			require.True(t, ok)
 			bp, isBrep := payload.(brepPayload)
 			require.True(t, isBrep, "got %T", payload)
-			require.Len(t, bp.faces, 12)
-			require.Len(t, bp.stack.slabs, 2)
-			require.Len(t, bp.stack.slabs[0].Regions, 1)
-			require.Len(t, bp.stack.slabs[1].Regions, 2, "the upper slab holds both bosses")
-			require.Zero(t, bp.stack.delta)
+			require.Len(t, bp.Faces, 12)
+			require.Len(t, bp.Stack.Slabs, 2)
+			require.Len(t, bp.Stack.Slabs[0].Regions, 1)
+			require.Len(t, bp.Stack.Slabs[1].Regions, 2, "the upper slab holds both bosses")
+			require.Zero(t, bp.Stack.Delta)
 			for _, n := range []r3.Vec{{X: 1}, {X: -1}, {Y: 1}, {Y: -1}} {
 				wall := internalWallFaceAt(t, bp, n, 20)
-				require.Len(t, wall.region.Outer.Segments, 6, "the flush wall facing %v is one L-shaped face", n)
+				require.Len(t, wall.Region.Outer.Segments, 6, "the flush wall facing %v is one L-shaped face", n)
 			}
 			got, err := Union(t.Context(), a, b)
 			require.NoError(t, err)
@@ -86,11 +86,11 @@ func TestStackedUnionBrepOperandSecondBoss(t *testing.T) {
 			require.Equal(t, 19000.0, got.n.Volume.Value.Base())
 			require.Equal(t, 6000.0, got.n.Area.Value.Base())
 			floors := 0
-			floorLevel := bp.stack.slabs[0].Z1
-			for _, f := range bp.faces {
-				if f.planar() && f.outward && f.z0 == floorLevel && f.frame == bp.faces[0].frame {
+			floorLevel := bp.Stack.Slabs[0].Z1
+			for _, f := range bp.Faces {
+				if f.Planar() && f.Outward && f.Z0 == floorLevel && f.Frame == bp.Faces[0].Frame {
 					floors++
-					area, err := loopSignedAreaCB(f.region.Outer)
+					area, err := loopSignedAreaCB(f.Region.Outer)
 					require.NoError(t, err)
 					require.Equal(t, 1400.0, area)
 				}
@@ -119,14 +119,14 @@ func TestStackedUnionBrepOperandThirdBoss(t *testing.T) {
 	got, err := Union(t.Context(), two, third)
 	require.NoError(t, err)
 	bp := requireBrep(t, got)
-	require.Len(t, bp.stack.slabs[1].Regions, 3)
+	require.Len(t, bp.Stack.Slabs[1].Regions, 3)
 	require.Equal(t, Exact, Exactness(got.n.Volume.Exactness))
 	require.Equal(t, 20500.0, got.n.Volume.Value.Base())
 	// Three top caps, the floor, the bottom, and 4 + 4 + 4 + 4 walls, with
 	// the y = 20 wall one face across the plate and two bosses.
 	require.Len(t, got.Faces(), 16)
 	wall := internalWallFaceAt(t, bp, r3.NewVec(0, 1, 0), 20)
-	require.Len(t, wall.region.Outer.Segments, 10, "the y = 20 wall carries the plate and two bosses")
+	require.Len(t, wall.Region.Outer.Segments, 10, "the y = 20 wall carries the plate and two bosses")
 	mesh, err := tessellateContext(t.Context(), got, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	require.True(t, mesh.VolumeVerified())
@@ -144,7 +144,7 @@ func TestStackedUnionBrepOperandOverlappingBoss(t *testing.T) {
 	got, err := Union(t.Context(), first, second)
 	require.NoError(t, err)
 	bp := requireBrep(t, got)
-	require.Len(t, bp.stack.slabs[1].Regions, 1, "overlapping bosses merge into one region")
+	require.Len(t, bp.Stack.Slabs[1].Regions, 1, "overlapping bosses merge into one region")
 	require.Equal(t, Exact, Exactness(got.n.Volume.Exactness))
 	require.Equal(t, 18625.0, got.n.Volume.Value.Base())
 	mesh, err := tessellateContext(t.Context(), got, units.Millimeters(0.05), VerifyAll)
@@ -212,7 +212,7 @@ func TestStackedUnionBrepOperandMisses(t *testing.T) {
 		pin := internalPinAlongX(t, doc, 30, 20)
 		classB, err := Union(t.Context(), plate, pin)
 		require.NoError(t, err)
-		require.Nil(t, requireBrep(t, classB).stack)
+		require.Nil(t, requireBrep(t, classB).Stack)
 		boss := internalBoxBodyAtZ(t, doc, 0, 0, 10, 10, 10, 5)
 		_, ok, err := tryStackedUnion(t.Context(), classB, boss)
 		require.NoError(t, err)
@@ -223,7 +223,7 @@ func TestStackedUnionBrepOperandMisses(t *testing.T) {
 		plate, round := internalBossOnPlate(t, 18, 10, 15)
 		crossing, err := Union(t.Context(), plate, round)
 		require.NoError(t, err)
-		require.Positive(t, requireBrep(t, crossing).stack.delta)
+		require.Positive(t, requireBrep(t, crossing).Stack.Delta)
 		second := internalBoxBodyAtZ(t, documentHandle(plate.n.Doc), -20, 10, -10, 20, 10, 15)
 		_, ok, err := tryStackedUnion(t.Context(), crossing, second)
 		require.NoError(t, err)

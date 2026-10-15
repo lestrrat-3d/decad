@@ -89,25 +89,25 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 	if err != nil {
 		return nil, true, err
 	}
-	joins, err := filletband.OffsetJoins(budget, read.walks, t, 0, shellTol)
+	joins, err := filletband.OffsetJoins(budget, read.Walks, t, 0, shellTol)
 	if err != nil {
 		return nil, true, err
 	}
-	collapsed, err := filletband.OffsetLoop(budget, read.walks, joins, t, shellTol)
+	collapsed, err := filletband.OffsetLoop(budget, read.Walks, joins, t, shellTol)
 	if err != nil {
 		return nil, true, err
 	}
-	if len(read.walks) != 8 || !brepgeom.LoopsEqual(loopRecord{Segments: collapsed}, pocket.Profile().Outer) {
+	if len(read.Walks) != 8 || !brepgeom.LoopsEqual(loopRecord{Segments: collapsed}, pocket.Profile().Outer) {
 		return refuse("does not collapse to the source pocket floor")
 	}
-	for _, walk := range read.walks {
+	for _, walk := range read.Walks {
 		if walk.IsCircular() && !filletband.SphereWalk(walk, t) {
 			return refuse("has a non-spherical floor corner")
 		}
 	}
 	topCapIdx := -1
-	for i, face := range view.faces {
-		if face.planar() && face.outward && face.z0 == upper.Z1 {
+	for i, face := range view.Faces {
+		if face.Planar() && face.Outward && face.Z0 == upper.Z1 {
 			if topCapIdx >= 0 {
 				return refuse("has more than one top cap")
 			}
@@ -117,19 +117,19 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 	if topCapIdx < 0 {
 		return refuse("has no top cap")
 	}
-	result := brepPayload{xform: view.xform, faces: make([]brepFace, 0, len(view.faces)+20)}
-	result.faces = append(result.faces, view.faces[:topCapIdx]...)
-	result.faces = append(result.faces, view.faces[topCapIdx+1:]...)
+	result := brepPayload{Xform: view.Xform, Faces: make([]brepFace, 0, len(view.Faces)+20)}
+	result.Faces = append(result.Faces, view.Faces[:topCapIdx]...)
+	result.Faces = append(result.Faces, view.Faces[topCapIdx+1:]...)
 	addPlane := func(p profileRecord, z float64, outward bool) int {
-		result.faces = append(result.faces, brepFace{frame: sp.Frame, region: &p, z0: z, z1: z, outward: outward})
-		return len(result.faces) - 1
+		result.Faces = append(result.Faces, brepFace{Frame: sp.Frame, Region: &p, Z0: z, Z1: z, Outward: outward})
+		return len(result.Faces) - 1
 	}
 	addWalls := func(p profileRecord, z0, z1 float64, reversed bool) {
 		for _, seg := range p.Outer.Segments {
 			if reversed {
 				seg = brepgeom.ReverseSegment(seg)
 			}
-			result.faces = append(result.faces, brepFace{frame: sp.Frame, wall: seg, z0: z0, z1: z1})
+			result.Faces = append(result.Faces, brepFace{Frame: sp.Frame, Wall: seg, Z0: z0, Z1: z1})
 		}
 	}
 	addPlane(inner.Profile(), lower.Z0+t, true)
@@ -151,10 +151,10 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 	addPlane(pocketRim, upper.Z1, true)
 	addWalls(rounded, lower.Z1, upper.Z1, false)
 	floorFace := addPlane(pocket.Profile(), lowerZ, false)
-	result.pocketShell = &prismshell.PocketShellBand{Outer: outer, Pocket: pocket, Inner: inner, Rounded: rounded,
+	result.PocketShell = &prismshell.PocketShellBand{Outer: outer, Pocket: pocket, Inner: inner, Rounded: rounded,
 		Z0: lower.Z0, FloorZ: lower.Z1, TopZ: upper.Z1, LowerZ: lowerZ, T: t,
 		FloorFace: floorFace, Frame: sp.Frame}
-	result.assignRoles()
+	result.AssignRoles()
 	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
 	return body, true, err
 }
@@ -165,13 +165,13 @@ func pocketShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopolo
 	openAt map[brepgeom.EdgeKey]int,
 	placeVertex func([3]float64, float64, float64, float64) *Vertex,
 	out *brepOpenSet, bi int) error {
-	band := bp.pocketShell
-	e := btopo.embeds[band.FloorFace]
+	band := bp.PocketShell
+	e := btopo.Embeds[band.FloorFace]
 	for ring, spec := range []struct {
 		loop loopRecord
 		z    float64
 	}{{band.Rounded.Outer, band.FloorZ}, {band.CapProfile().Outer, band.LowerZ}} {
-		view := prismrecord.Payload{Frame: band.Frame, Xform: bp.xform, Z0: spec.z, Z1: spec.z}
+		view := prismrecord.Payload{Frame: band.Frame, Xform: bp.Xform, Z0: spec.z, Z1: spec.z}
 		for _, seg := range spec.loop.Segments {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -185,7 +185,7 @@ func pocketShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopolo
 			if !ok {
 				return fmt.Errorf("%w: a blind-pocket shell ring has no open record edge", ErrUnsupported)
 			}
-			u := btopo.uses[ui]
+			u := btopo.Uses[ui]
 			from, to := e.Canon(w.StartU, w.StartV, spec.z), e.Canon(w.EndU, w.EndV, spec.z)
 			start, end := placeVertex(from, 0, 0, 0), placeVertex(to, 0, 0, 0)
 			edge, err := brepBandEdge(view, w, true, start, end)
@@ -208,18 +208,18 @@ func pocketShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopolo
 // the square cap ring; the virtual cap is only the band's frame datum.
 func attachPocketShellBand(ctx context.Context, body *Body, ref producerID,
 	bp brepPayload, open brepOpenSet) ([]*Face, error) {
-	band := bp.pocketShell
-	bi := len(bp.loopBands)
-	b := brepLoopBand{face: band.FloorFace, loop: 0, orig: band.Rounded.Outer,
-		setback: capSetback{Dc: band.T, Ds: band.T}, sigma: 1, kind: brepBandFillet}
+	band := bp.PocketShell
+	bi := len(bp.LoopBands)
+	b := brepLoopBand{Face: band.FloorFace, Loop: 0, Orig: band.Rounded.Outer,
+		Setback: capSetback{Dc: band.T, Ds: band.T}, Sigma: 1, Kind: brepBandFillet}
 	capRegion := band.CapProfile()
-	fake := brepFace{frame: band.Frame, region: &capRegion,
-		z0: band.LowerZ, z1: band.LowerZ, outward: band.CapOutward(), role: "pocketShellBand"}
+	fake := brepFace{Frame: band.Frame, Region: &capRegion,
+		Z0: band.LowerZ, Z1: band.LowerZ, Outward: band.CapOutward(), Role: "pocketShellBand"}
 	copyBP := bp
-	copyBP.faces = append([]brepFace(nil), bp.faces...)
-	copyBP.faces[band.FloorFace] = fake
-	copyBP.loopBands = append(append([]brepLoopBand(nil), bp.loopBands...), b)
-	embeds, err := brepEmbeds(bp.faces)
+	copyBP.Faces = append([]brepFace(nil), bp.Faces...)
+	copyBP.Faces[band.FloorFace] = fake
+	copyBP.LoopBands = append(append([]brepLoopBand(nil), bp.LoopBands...), b)
+	embeds, err := brepEmbeds(bp.Faces)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +231,7 @@ func attachPocketShellBand(ctx context.Context, body *Body, ref producerID,
 // measurePocketShell subtracts the eroded outer box and adds the exact
 // Minkowski expansion of the blind pocket within that cavity.
 func measurePocketShell(ctx context.Context, bp brepPayload, body *Body) error {
-	b := bp.pocketShell
+	b := bp.PocketShell
 	if b.Round != nil {
 		return measureCounterboreShell(ctx, bp, body)
 	}
@@ -292,7 +292,7 @@ func measurePocketShell(ctx context.Context, bp brepPayload, body *Body) error {
 		value, bound := heldOf(q)
 		c[i] = proofbound.MeasuredScalar(value, bound)
 	}
-	ref := bp.refView()
+	ref := bp.RefView()
 	cb := ref.PointBound(c[0], c[1], c[2])
 	body.n.Centroid = measurement.VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value),
 		Bound: units.Millimeters(cb), Exactness: measurement.ExactnessOf(cb)}

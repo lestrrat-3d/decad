@@ -41,18 +41,18 @@ func requireCrossingBrep(t *testing.T, result *Body, want float64) brepPayload {
 func requireKeyedCharge(t *testing.T, result *Body, bp brepPayload) {
 	t.Helper()
 	charged := 0.0
-	for _, f := range bp.faces {
-		charged = math.Max(charged, f.delta)
+	for _, f := range bp.Faces {
+		charged = math.Max(charged, f.Delta)
 	}
 	require.Positive(t, charged, `a face meeting a keyed crossing carries its displacement`)
 	band := 0.0
-	for _, f := range bp.faces {
-		if f.planar() || f.delta == 0 {
+	for _, f := range bp.Faces {
+		if f.Planar() || f.Delta == 0 {
 			continue
 		}
-		w, err := boundarywalk.WalkOf(f.wall, nil)
+		w, err := boundarywalk.WalkOf(f.Wall, nil)
 		require.NoError(t, err)
-		band = math.Max(band, 2*f.delta*w.Length*(f.z1-f.z0))
+		band = math.Max(band, 2*f.Delta*w.Length*(f.Z1-f.Z0))
 	}
 	require.GreaterOrEqual(t, result.n.Volume.Bound.Base(), band)
 }

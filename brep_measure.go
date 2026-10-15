@@ -37,18 +37,18 @@ type brepRegion = brepgeom.Region
 // at its level, turned to its outward normal; a swept face's surface is the
 // prism wall's own (prismrecord.BuildWallGeometry).
 func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi int, body *Body, ref producerID) (*Face, error) {
-	f := bp.faces[fi]
-	pp := f.view(bp.xform)
-	origins := []provenance.Ref{{Producer: ref, Role: f.role}}
-	if f.blend != "" {
-		origins = append(origins, provenance.Ref{Producer: ref, Role: fmt.Sprintf("%s(%d)", f.blend, fi)})
+	f := bp.Faces[fi]
+	pp := f.View(bp.Xform)
+	origins := []provenance.Ref{{Producer: ref, Role: f.Role}}
+	if f.Blend != "" {
+		origins = append(origins, provenance.Ref{Producer: ref, Role: fmt.Sprintf("%s(%d)", f.Blend, fi)})
 	}
-	if f.planar() {
-		frame, err := pp.CapFrame(f.z0, !f.outward)
+	if f.Planar() {
+		frame, err := pp.CapFrame(f.Z0, !f.Outward)
 		if err != nil {
 			return nil, err
 		}
-		region, err := btopo.region(ctx, bp, fi)
+		region, err := btopo.Region(ctx, bp, fi)
 		if err != nil {
 			return nil, err
 		}
@@ -56,20 +56,20 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 			n: topo.Face{
 				Area:          region.Published.Value,
 				AreaBound:     region.Published.Bound,
-				AxialDelta:    f.z0Delta,
+				AxialDelta:    f.Z0Delta,
 				HasAxialDelta: true,
 				Surface:       surfacegeom.Plane{Frame: frame},
-				CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: f.z0},
+				CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: f.Z0},
 				Origins:       origins,
 				Body:          bodyNode(body),
 			}}), nil
 	}
-	w := btopo.walls[fi]
+	w := btopo.Walls[fi]
 	_, _, surf, reversed, err := prismrecord.BuildWallGeometry(handleAlloc{}, pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, false, w.Closed, nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	area := brepgeom.WallArea(f.delta, f.z0, f.z1, f.z0Delta, f.z1Delta, w)
+	area := brepgeom.WallArea(f.Delta, f.Z0, f.Z1, f.Z0Delta, f.Z1Delta, w)
 	return bornFace(&Face{n: topo.Face{
 		Area:      area.Value,
 		AreaBound: area.Bound,
@@ -81,51 +81,51 @@ func brepFaceBody(ctx context.Context, bp brepPayload, btopo *brepTopology, fi i
 }
 
 // region reads a planar face's region once per topology.
-func (btopo *brepTopology) region(ctx context.Context, bp brepPayload, fi int) (brepRegion, error) {
-	if r, ok := btopo.regions[fi]; ok {
+func (btopo *brepTopology) Region(ctx context.Context, bp brepPayload, fi int) (brepRegion, error) {
+	if r, ok := btopo.Regions[fi]; ok {
 		return r, nil
 	}
-	f := bp.faces[fi]
-	r, err := brepgeom.RegionOf(ctx, f.region, f.delta, btopo.planar[fi])
+	f := bp.Faces[fi]
+	r, err := brepgeom.RegionOf(ctx, f.Region, f.Delta, btopo.Planar[fi])
 	if err != nil {
 		return brepRegion{}, err
 	}
-	if btopo.regions == nil {
-		btopo.regions = map[int]brepRegion{}
+	if btopo.Regions == nil {
+		btopo.Regions = map[int]brepRegion{}
 	}
-	btopo.regions[fi] = r
+	btopo.Regions[fi] = r
 	return r, nil
 }
 
 // measureBrepContext adapts the body's face records to brepgeom.IntegrateFaces
 // and publishes its readings, topology bounds and final validation.
 func measureBrepContext(ctx context.Context, bp brepPayload, btopo *brepTopology, body *Body, bands brepBandMass) error {
-	restored, err := bp.filletRestored(btopo)
+	restored, err := bp.FilletRestored(btopo)
 	if err != nil {
 		return err
 	}
-	readings, err := brepgeom.IntegrateFaces(ctx, len(bp.faces), func(fi int) (brepgeom.FaceMeasure, error) {
-		f, rf := bp.faces[fi], restored[fi]
+	readings, err := brepgeom.IntegrateFaces(ctx, len(bp.Faces), func(fi int) (brepgeom.FaceMeasure, error) {
+		f, rf := bp.Faces[fi], restored[fi]
 		record := brepgeom.FaceMeasure{
-			Embed: btopo.embeds[fi], Planar: f.planar(), Outward: f.outward,
-			Z0: f.z0, Z1: f.z1, RestoredZ0: rf.z0, RestoredZ1: rf.z1,
-			Z0Delta: f.z0Delta, Z1Delta: f.z1Delta, Delta: f.delta,
+			Embed: btopo.Embeds[fi], Planar: f.Planar(), Outward: f.Outward,
+			Z0: f.Z0, Z1: f.Z1, RestoredZ0: rf.Z0, RestoredZ1: rf.Z1,
+			Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta, Delta: f.Delta,
 		}
 		if !record.Planar {
-			record.Wall, record.Walk = f.wall, btopo.walls[fi]
+			record.Wall, record.Walk = f.Wall, btopo.Walls[fi]
 			return record, nil
 		}
-		region, err := btopo.region(ctx, bp, fi)
+		region, err := btopo.Region(ctx, bp, fi)
 		if err != nil {
 			return brepgeom.FaceMeasure{}, err
 		}
 		record.Region, record.RestoredRegion = region, region
-		if rf.region != f.region {
-			record.RestoredRegion, err = brepgeom.RestoredRegion(ctx, rf.region, rf.delta)
+		if rf.Region != f.Region {
+			record.RestoredRegion, err = brepgeom.RestoredRegion(ctx, rf.Region, rf.Delta)
 		}
 		return record, err
 	}, brepgeom.FaceMass{Vol3: bands.vol3, Moments: bands.moments, Area: bands.area},
-		btopo.coordUpper, bp.sectionDelta(), bp.AxialDelta())
+		btopo.CoordUpper, bp.SectionDelta(), bp.AxialDelta())
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func measureBrepContext(ctx context.Context, bp brepPayload, btopo *brepTopology
 		Exactness: measurement.ExactnessOf(readings.Volume.Bound), Bound: units.CubicMillimeters(readings.Volume.Bound)}
 	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(readings.Area.Value),
 		Exactness: measurement.ExactnessOf(readings.Area.Bound), Bound: units.SquareMillimeters(readings.Area.Bound)}
-	refView := bp.refView()
+	refView := bp.RefView()
 	c := readings.Centroid
 	centroidBound := refView.PointBound(c[0], c[1], c[2])
 	body.n.Centroid = measurement.VecMeasurement{Value: refView.Point(c[0].Value, c[1].Value, c[2].Value),
@@ -153,8 +153,8 @@ func measureBrepContext(ctx context.Context, bp brepPayload, btopo *brepTopology
 // fillet band's patches bulge past their directrices along an oblique axis,
 // so each adds its own extents (filletBandExtent).
 func brepBoundsContext(ctx context.Context, bp brepPayload) (Box, error) {
-	minC, maxC, bound, err := brepgeom.Bounds(ctx, len(bp.faces)+len(bp.loopBands), bp.extentAt,
-		bp.sectionDelta(), bp.AxialDelta())
+	minC, maxC, bound, err := brepgeom.Bounds(ctx, len(bp.Faces)+len(bp.LoopBands), bp.ExtentAt,
+		bp.SectionDelta(), bp.AxialDelta())
 	if err != nil {
 		return Box{}, err
 	}
@@ -167,17 +167,17 @@ func brepBoundsContext(ctx context.Context, bp brepPayload) (Box, error) {
 }
 
 // extentAt adapts one face or band to the shared BRep extent reader.
-func (bp brepPayload) extentAt(ctx context.Context, item int, axis r3.Vec,
+func (bp brepPayload) ExtentAt(ctx context.Context, item int, axis r3.Vec,
 	work *freeform.FreeformWork) (float64, float64, float64, bool, error) {
-	if item < len(bp.faces) {
-		lo, hi, bound, err := bp.faces[item].view(bp.xform).ExtentBoundedAlong(ctx, axis, work, nil)
+	if item < len(bp.Faces) {
+		lo, hi, bound, err := bp.Faces[item].View(bp.Xform).ExtentBoundedAlong(ctx, axis, work, nil)
 		return lo, hi, bound, true, err
 	}
-	band := bp.loopBands[item-len(bp.faces)]
-	if band.kind != brepBandFillet {
+	band := bp.LoopBands[item-len(bp.Faces)]
+	if band.Kind != brepBandFillet {
 		return 0, 0, 0, false, nil
 	}
-	lo, hi, bound, err := filletBandExtent(ctx, band, bp.faces[band.face], bp.xform, axis, work)
+	lo, hi, bound, err := filletBandExtent(ctx, band, bp.Faces[band.Face], bp.Xform, axis, work)
 	return lo, hi, bound, true, err
 }
 
@@ -187,10 +187,10 @@ func (bp brepPayload) extentAt(ctx context.Context, item int, axis r3.Vec,
 // a prism's, it refuses a record carrying a section displacement, which moves
 // a coordinate the interval is stated over.
 func (bp brepPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
-	if bp.sectionDelta() != 0 {
+	if bp.SectionDelta() != 0 {
 		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a brep body with a proven section displacement`, ErrUnsupported)
 	}
-	return brepgeom.ExtentAlong(context.Background(), len(bp.faces)+len(bp.loopBands), g, bp.extentAt)
+	return brepgeom.ExtentAlong(context.Background(), len(bp.Faces)+len(bp.LoopBands), g, bp.ExtentAt)
 }
 
 // brepUndercuts surveys a brep body's faces against the pull
@@ -206,7 +206,7 @@ func (bp brepPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 // The reading is a normal-direction membership, unaffected by a face's
 // displacements, as a prism's is (docs/prism-boolean-design.md §12).
 func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
-	if bp.bossShell != nil || bp.pocketShell != nil {
+	if bp.BossShell != nil || bp.PocketShell != nil {
 		return undercutOutcome{reason: surveyPayloadStaged}
 	}
 	p, ok := pull.Normalize()
@@ -217,14 +217,14 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 	faces := []*Face{}
 	undecided := false
 	work := freeform.NewFreeformWork()
-	for _, f := range bp.faces {
-		face := roles[f.role]
+	for _, f := range bp.Faces {
+		face := roles[f.Role]
 		if face == nil {
 			return undercutOutcome{}
 		}
 		verdict, ok := brepgeom.PullDecision(brepgeom.PullFace{
-			Frame: f.frame, Transform: bp.xform, Wall: f.wall,
-			Planar: f.planar(), Outward: f.outward,
+			Frame: f.Frame, Transform: bp.Xform, Wall: f.Wall,
+			Planar: f.Planar(), Outward: f.Outward,
 		}, pull, work)
 		if !listVerdict(&faces, &undecided, face, verdict, ok) {
 			return undercutOutcome{}
@@ -233,18 +233,18 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 	// A route L body's band patches are no face of the record: each is read
 	// through its own built Face.NormalAt in its band's face frame, by the
 	// reader a cap-blend body's patches take (modify-general Table DG's DG7).
-	for bi, band := range bp.loopBands {
-		if bi >= len(bp.loopPatches) {
+	for bi, band := range bp.LoopBands {
+		if bi >= len(bp.LoopPatches) {
 			return undercutOutcome{}
 		}
-		if band.kind == brepBandFillet {
+		if band.Kind == brepBandFillet {
 			if !brepFilletUndercuts(budget, roles, bp, band, pull, &faces, &undecided, work) {
 				return undercutOutcome{}
 			}
 			continue
 		}
-		pl := bp.faces[band.face].view(bp.xform)
-		if !capPatchUndercuts(roles, pl, bp.loopPatches[bi], p, &faces, &undecided) {
+		pl := bp.Faces[band.Face].View(bp.Xform)
+		if !capPatchUndercuts(roles, pl, bp.LoopPatches[bi], p, &faces, &undecided) {
 			return undercutOutcome{}
 		}
 	}
@@ -275,14 +275,14 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 // concave corner adds its tube radius exactly; one that removes material is
 // convex in its tube direction and adds none (loop-fillet Table DF's DF8).
 func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
-	if bp.sectionDelta() != 0 {
+	if bp.SectionDelta() != 0 {
 		return radiusOutcome{}, false
 	}
-	if len(bp.loopPatches) != len(bp.loopBands) {
+	if len(bp.LoopPatches) != len(bp.LoopBands) {
 		return radiusOutcome{}, false
 	}
 	roles := facesByRole(b)
-	for _, patches := range bp.loopPatches {
+	for _, patches := range bp.LoopPatches {
 		for _, patch := range patches {
 			f := roles[patch.Role]
 			if f == nil || capblend.PatchWindowSkew(patch.Geom) > 0 || f.n.NormalBound != 0 {
@@ -290,28 +290,28 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 			}
 		}
 	}
-	fillets := make([]radiussurvey.BrepFilletRadius, 0, len(bp.loopBands))
-	if bp.bossShell != nil {
-		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.bossShell.T})
+	fillets := make([]radiussurvey.BrepFilletRadius, 0, len(bp.LoopBands))
+	if bp.BossShell != nil {
+		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.BossShell.T})
 	}
-	if bp.pocketShell != nil {
-		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.pocketShell.T})
+	if bp.PocketShell != nil {
+		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.PocketShell.T})
 	}
-	for _, band := range bp.loopBands {
-		if band.kind == brepBandFillet && band.sigma > 0 {
+	for _, band := range bp.LoopBands {
+		if band.Kind == brepBandFillet && band.Sigma > 0 {
 			// The tag's Minor or Radius, which a placement leaves unchanged,
 			// within the radius's unit conversion.
 			fillets = append(fillets, radiussurvey.BrepFilletRadius{
-				Radius: band.setback.Dc, Bound: band.setback.DcDelta,
+				Radius: band.Setback.Dc, Bound: band.Setback.DcDelta,
 			})
 		}
 	}
-	walls := make([]sectionrecord.CurveSegment, 0, len(bp.faces))
-	for _, f := range bp.faces {
-		if !f.planar() {
-			walls = append(walls, f.wall)
+	walls := make([]sectionrecord.CurveSegment, 0, len(bp.Faces))
+	for _, f := range bp.Faces {
+		if !f.Planar() {
+			walls = append(walls, f.Wall)
 		}
 	}
-	reading := radiussurvey.Brep(walls, fillets, bp.sectionDelta())
+	reading := radiussurvey.Brep(walls, fillets, bp.SectionDelta())
 	return radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 }

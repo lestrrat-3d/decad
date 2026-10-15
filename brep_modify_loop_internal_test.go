@@ -163,7 +163,7 @@ func chamferLoopOf(t *testing.T, body *Body, n, p r3.Vec, li int, d float64) (*B
 	t.Helper()
 	before := 0
 	if bp, ok := body.n.Payload.(brepPayload); ok {
-		before = len(bp.loopBands)
+		before = len(bp.LoopBands)
 	}
 	f := planarBodyFace(t, body, n, p)
 	out, err := Chamfer(t.Context(), body, loopQuery(f.Loops()[li]), units.Millimeters(d))
@@ -171,8 +171,8 @@ func chamferLoopOf(t *testing.T, body *Body, n, p r3.Vec, li int, d float64) (*B
 	require.Error(t, documentHandle(body.n.Doc).requireLive(body), "the receiver is retired")
 	bp, ok := out.n.Payload.(brepPayload)
 	require.True(t, ok, "route L builds a brep, got %T", out.n.Payload)
-	require.Nil(t, bp.stack)
-	require.Len(t, bp.loopBands, before+1)
+	require.Nil(t, bp.Stack)
+	require.Len(t, bp.LoopBands, before+1)
 	requireClosedTopology(t, out)
 	return out, bp
 }
@@ -181,9 +181,9 @@ func chamferLoopOf(t *testing.T, body *Body, n, p r3.Vec, li int, d float64) (*B
 // whose wall is wall.
 func sweptFaceLevels(bp brepPayload, wall curveSegment) [][2]float64 {
 	var out [][2]float64
-	for _, f := range bp.faces {
-		if !f.planar() && f.wall == wall {
-			out = append(out, [2]float64{f.z0, f.z1})
+	for _, f := range bp.Faces {
+		if !f.Planar() && f.Wall == wall {
+			out = append(out, [2]float64{f.Z0, f.Z1})
 		}
 	}
 	return out
@@ -207,25 +207,25 @@ func TestBrepLoopChamferPocketMouth(t *testing.T) {
 	out, bp := chamferLoopOf(t, pocket, routeEZ, r3.NewVec(0, 0, 10), 1, 1.5)
 	lo, hi := piEnclosed(big.NewRat(29865, 2), big.NewRat(-9, 8))
 	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
-	require.Len(t, out.Faces(), len(bp.faces)+8)
+	require.Len(t, out.Faces(), len(bp.Faces)+8)
 	requirePatchKinds(t, out, 4, 4)
 
 	top := planarFaceAt(t, bp, routeEZ, 10)
-	require.Len(t, top.region.Holes, 1)
-	require.Zero(t, top.delta, "an axis-aligned loop at a millimetre setback has an exact contour")
+	require.Len(t, top.Region.Holes, 1)
+	require.Zero(t, top.Delta, "an axis-aligned loop at a millimetre setback has an exact contour")
 	centres := []planePoint{{U: 10, V: 15}, {U: 30, V: 15}, {U: 30, V: 25}, {U: 10, V: 25}}
 	var got []planePoint
-	for _, a := range loopArcs(top.region.Holes[0]) {
+	for _, a := range loopArcs(top.Region.Holes[0]) {
 		got = append(got, a.center)
 	}
 	require.ElementsMatch(t, centres, got)
-	requireChord(t, top.region.Holes[0], planePoint{U: 8.5, V: 15}, planePoint{U: 8.5, V: 25})
-	requireChord(t, top.region.Holes[0], planePoint{U: 10, V: 13.5}, planePoint{U: 30, V: 13.5})
+	requireChord(t, top.Region.Holes[0], planePoint{U: 8.5, V: 15}, planePoint{U: 8.5, V: 25})
+	requireChord(t, top.Region.Holes[0], planePoint{U: 10, V: 13.5}, planePoint{U: 30, V: 13.5})
 	pocketWalls := 0
-	for _, f := range bp.faces {
-		if !f.planar() && f.z0 == 5 {
+	for _, f := range bp.Faces {
+		if !f.Planar() && f.Z0 == 5 {
 			pocketWalls++
-			require.Equal(t, 8.5, f.z1, "pocket wall %v", f.wall)
+			require.Equal(t, 8.5, f.Z1, "pocket wall %v", f.Wall)
 		}
 	}
 	require.Equal(t, 4, pocketWalls)
@@ -236,8 +236,8 @@ func TestBrepLoopChamferPocketMouth(t *testing.T) {
 // patch counts read from the body.
 func loopBandRoles(bp brepPayload) map[string]struct{} {
 	out := map[string]struct{}{}
-	for _, b := range bp.loopBands {
-		out[fmt.Sprintf("chamferLoop(%d,%d,", b.face, b.loop)] = struct{}{}
+	for _, b := range bp.LoopBands {
+		out[fmt.Sprintf("chamferLoop(%d,%d,", b.Face, b.Loop)] = struct{}{}
 	}
 	return out
 }
@@ -268,12 +268,12 @@ func TestBrepLoopChamferPlateTopLoop(t *testing.T) {
 	require.Equal(t, 14824.5, out.n.Volume.Value.Base())
 	requirePatchKinds(t, out, 4, 0)
 	top := planarFaceAt(t, bp, routeEZ, 10)
-	requireChord(t, top.region.Outer, planePoint{U: 1.5, V: 1.5}, planePoint{U: 38.5, V: 1.5})
+	requireChord(t, top.Region.Outer, planePoint{U: 1.5, V: 1.5}, planePoint{U: 38.5, V: 1.5})
 	walls := 0
-	for _, f := range bp.faces {
-		if !f.planar() && f.z0 == 0 {
+	for _, f := range bp.Faces {
+		if !f.Planar() && f.Z0 == 0 {
 			walls++
-			require.Equal(t, 8.5, f.z1, "plate wall %v", f.wall)
+			require.Equal(t, 8.5, f.Z1, "plate wall %v", f.Wall)
 		}
 	}
 	require.Equal(t, 4, walls)
@@ -306,7 +306,7 @@ func TestBrepLoopChamferCrossDrilledBothLoops(t *testing.T) {
 	requireCoversInterval(t, measurementFromInternal(out.n.Volume), lo, hi)
 	requirePatchKinds(t, out, 8, 0)
 	bp := out.n.Payload.(brepPayload)
-	require.Len(t, bp.loopBands, 2)
+	require.Len(t, bp.LoopBands, 2)
 	for _, wall := range []curveSegment{
 		lineSeg{Start: planePoint{U: 40, V: 0}, End: planePoint{U: 40, V: 20}, TStart: 0, TEnd: 1},
 		lineSeg{Start: planePoint{U: 0, V: 20}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1},
@@ -315,9 +315,9 @@ func TestBrepLoopChamferCrossDrilledBothLoops(t *testing.T) {
 	}
 	// The y = 0 wall's frame has u along x and v along z.
 	yWall := planarFaceAt(t, bp, r3.NewVec(0, -1, 0), 0)
-	requireChord(t, yWall.region.Outer, planePoint{U: 40, V: 18.5}, planePoint{U: 0, V: 18.5})
-	requireChord(t, yWall.region.Outer, planePoint{U: 0, V: 1.5}, planePoint{U: 40, V: 1.5})
-	requireChord(t, yWall.region.Outer, planePoint{U: 0, V: 18.5}, planePoint{U: 0, V: 1.5})
+	requireChord(t, yWall.Region.Outer, planePoint{U: 40, V: 18.5}, planePoint{U: 0, V: 18.5})
+	requireChord(t, yWall.Region.Outer, planePoint{U: 0, V: 1.5}, planePoint{U: 40, V: 1.5})
+	requireChord(t, yWall.Region.Outer, planePoint{U: 0, V: 18.5}, planePoint{U: 0, V: 1.5})
 
 	_, again := internalCrossDrilled(t)
 	first, _ := chamferLoopOf(t, again, routeEZ, r3.NewVec(0, 0, 20), 0, 1.5)
@@ -357,17 +357,17 @@ func TestBrepLoopChamferBossRimAndRoot(t *testing.T) {
 	n, err = cones[0].NormalAt(r3.NewVec(25.5, 20, 10.5))
 	require.NoError(t, err)
 	require.Positive(t, n.Value.Dot(r3.NewVec(1, 0, 1)), "the root cone faces up and away from the boss")
-	require.Equal(t, sigmaRise, bp.loopBands[0].sigma)
+	require.Equal(t, sigmaRise, bp.LoopBands[0].Sigma)
 
 	plateTop := planarFaceAt(t, bp, routeEZ, 10)
-	require.Len(t, plateTop.region.Holes, 1)
-	hole, ok := plateTop.region.Holes[0].Segments[0].(circleSeg)
+	require.Len(t, plateTop.Region.Holes, 1)
+	hole, ok := plateTop.Region.Holes[0].Segments[0].(circleSeg)
 	require.True(t, ok)
 	require.Equal(t, 6.0, hole.Radius.Base())
 	var bossWall curveSegment
-	for _, f := range bp.faces {
-		if _, circle := f.wall.(circleSeg); circle {
-			bossWall = f.wall
+	for _, f := range bp.Faces {
+		if _, circle := f.Wall.(circleSeg); circle {
+			bossWall = f.Wall
 		}
 	}
 	require.Equal(t, [][2]float64{{11, 25}}, sweptFaceLevels(bp, bossWall), "the boss wall")
@@ -456,7 +456,7 @@ func TestBrepLoopChamferContourBound(t *testing.T) {
 	t.Parallel()
 	body := internalTrapezoidPocket(t)
 	out, bp := chamferLoopOf(t, body, routeEZ, r3.NewVec(0, 0, 10), 0, 1)
-	require.Positive(t, planarFaceAt(t, bp, routeEZ, 10).delta)
+	require.Positive(t, planarFaceAt(t, bp, routeEZ, 10).Delta)
 
 	// Each side (p, q) walked counter-clockwise, its integer length, and its
 	// offset line −dy·x + dx·y = −dy·px + dx·py + length.

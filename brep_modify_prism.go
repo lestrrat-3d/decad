@@ -60,13 +60,13 @@ func (c prismCaps) sectionLoop(start bool, li int) int {
 // route L over the record. A Shell of it refuses, since its erosion meets the
 // band patches, which no through-cut record holds (modify-general SG3).
 func brepPrismRoute(ctx context.Context, b *Body, bp brepPayload, req brepModifyRequest) (brepRoute, error, error) {
-	if len(bp.loopBands) > 0 {
+	if len(bp.LoopBands) > 0 {
 		if req.shell {
 			return brepRoute{}, nil, fmt.Errorf(`%w: this evaluator shells no brep body carrying route L loop bands; their patches are oblique planes, cones, cylinders and tori no through-cut record holds (modify-general SG3)`, ErrUnsupported)
 		}
 		return brepRoute{}, nil, nil
 	}
-	embeds, err := brepEmbeds(bp.faces)
+	embeds, err := brepEmbeds(bp.Faces)
 	if err != nil {
 		// A record the build took has embeds; one that has none reads as no
 		// prism, and the caller's own refusal follows.
@@ -119,23 +119,23 @@ func (r brepPrismRead) caps(b *Body, bp brepPayload) prismCaps {
 	}
 	roles := facesByRole(b)
 	return prismCaps{
-		start:     roles[bp.faces[r.bottom].role],
-		end:       roles[bp.faces[r.top].role],
+		start:     roles[bp.Faces[r.bottom].Role],
+		end:       roles[bp.Faces[r.top].Role],
 		startLoop: r.bottomLoop,
 	}
 }
 
 func prismFaceRecord(f brepFace) brepgeom.PrismRectFace {
 	return brepgeom.PrismRectFace{
-		Frame: f.frame, Region: f.region, Wall: f.wall, Z0: f.z0, Z1: f.z1,
-		Z0Delta: f.z0Delta, Z1Delta: f.z1Delta, Split0: len(f.side0) != 0,
-		Split1: len(f.side1) != 0, Outward: f.outward, Role: f.role,
+		Frame: f.Frame, Region: f.Region, Wall: f.Wall, Z0: f.Z0, Z1: f.Z1,
+		Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta, Split0: len(f.Side0) != 0,
+		Split1: len(f.Side1) != 0, Outward: f.Outward, Role: f.Role,
 	}
 }
 
 func prismFaceRecords(bp brepPayload) []brepgeom.PrismRectFace {
-	faces := make([]brepgeom.PrismRectFace, len(bp.faces))
-	for i, f := range bp.faces {
+	faces := make([]brepgeom.PrismRectFace, len(bp.Faces))
+	for i, f := range bp.Faces {
 		faces[i] = prismFaceRecord(f)
 	}
 	return faces
@@ -156,17 +156,17 @@ func recognisePrism(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 	}
 	return brepPrismRead{
 		pp: prismrecord.Payload{
-			Profile: caps.Section, Frame: caps.Frame, Xform: bp.xform,
+			Profile: caps.Section, Frame: caps.Frame, Xform: bp.Xform,
 			Z0: caps.Zlo, Z1: caps.Zhi,
-			Z0Delta: max(bp.faces[caps.Bottom].z0Delta, walls.ZloDelta),
-			Z1Delta: max(bp.faces[caps.Top].z0Delta, walls.ZhiDelta),
+			Z0Delta: max(bp.Faces[caps.Bottom].Z0Delta, walls.ZloDelta),
+			Z1Delta: max(bp.Faces[caps.Top].Z0Delta, walls.ZhiDelta),
 		},
 		bottom: caps.Bottom, top: caps.Top, bottomLoop: caps.BottomLoop,
 	}, true, nil
 }
 
 // brepLevel is a planar face's level as a reference coordinate.
-func brepLevel(f brepFace, e brepEmbed) float64 { return e.Sign[2]*f.z0 + 0 }
+func brepLevel(f brepFace, e brepEmbed) float64 { return e.Sign[2]*f.Z0 + 0 }
 
 // requireLateralEdges is Fillet's route P classification (brep-modify §4.2):
 // every selected edge is a lateral edge of pp, the junction at one corner of

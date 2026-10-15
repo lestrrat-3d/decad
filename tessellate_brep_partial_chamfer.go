@@ -17,13 +17,13 @@ import (
 func chordPartialChamferBand(ctx context.Context, b brepLoopBand, f brepFace,
 	cbp capBlendPayload, chord float64) (brepBandChord, error) {
 	work := freeform.NewFreeformWork()
-	side, err := capblend.OneLoopCornerLoop(proofbound.NewWorkBudget(ctx), b.orig, work)
+	side, err := capblend.OneLoopCornerLoop(proofbound.NewWorkBudget(ctx), b.Orig, work)
 	if err != nil {
 		return brepBandChord{}, err
 	}
-	partial, err := partialband.PartialFilletLayout(side.Walks, b.orig.Segments,
-		f.regionLoop(b.loop).Segments, b.selected, b.capWalk, b.capArc,
-		b.setback.Dc, chord, work)
+	partial, err := partialband.PartialFilletLayout(side.Walks, b.Orig.Segments,
+		f.RegionLoop(b.Loop).Segments, b.Selected, b.CapWalk, b.CapArc,
+		b.Setback.Dc, chord, work)
 	if err != nil {
 		return brepBandChord{}, err
 	}
@@ -32,15 +32,15 @@ func chordPartialChamferBand(ctx context.Context, b brepLoopBand, f brepFace,
 			return brepBandChord{}, fmt.Errorf(`%w: a selected chamfer walk is not straight`, ErrUnsupported)
 		}
 	}
-	sideZ, sideDelta := b.sideLevel(f)
+	sideZ, sideDelta := b.SideLevel(f)
 	return brepBandChord{band: b, face: f, cbp: cbp, partial: partial,
-		start: b.matSign(f) > 0, sideZ: sideZ, sideDelta: sideDelta}, nil
+		start: b.MatSign(f) > 0, sideZ: sideZ, sideDelta: sideDelta}, nil
 }
 
 func (bc *brepBandChord) emitPartialChamfer(m *Mesh, faceOfRole func(string) (*Face, error),
 	bump func(*Face, float64)) error {
 	for p := range bc.partial.PatchSag {
-		face, err := faceOfRole(bc.band.patchRole(p))
+		face, err := faceOfRole(bc.band.PatchRole(p))
 		if err != nil {
 			return err
 		}
